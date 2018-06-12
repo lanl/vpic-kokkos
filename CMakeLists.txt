@@ -79,6 +79,31 @@ string(REPLACE ";" " " string_libraries "${MPI_CXX_LIBRARIES} ${MPI_C_LIBRARIES}
 set(VPIC_CXX_LIBRARIES "${string_libraries}")
 
 #------------------------------------------------------------------------------#
+# OpenMP
+#------------------------------------------------------------------------------#
+
+find_package(OpenMP)
+if (OPENMP_FOUND)
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  #set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
+endif()
+
+#------------------------------------------------------------------------------#
+# Kokkos
+#------------------------------------------------------------------------------#
+
+# Example Kokkos Option
+set(KOKKOS_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP by default with Kokkos")
+
+# Disable platform specific options
+if (APPLE)
+  set(KOKKOS_ENABLE_LIBRT OFF CACHE BOOL "librt is not available on macOS")
+endif()
+
+add_subdirectory(kokkos)
+include_directories(${Kokkos_INCLUDE_DIRS_RET})
+
+#------------------------------------------------------------------------------#
 # OpenSSL
 #------------------------------------------------------------------------------#
 
@@ -183,7 +208,7 @@ else()
   install(TARGETS vpic LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 endif()
 target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS})
+target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} kokkos)
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS})
 
 macro(build_a_vpic name deck)
