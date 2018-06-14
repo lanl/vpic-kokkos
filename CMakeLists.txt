@@ -92,8 +92,30 @@ endif()
 # Kokkos
 #------------------------------------------------------------------------------#
 
-# Example Kokkos Option
-set(KOKKOS_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP by default with Kokkos")
+if (OPENMP_FOUND)
+  set(KOKKOS_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
+  set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
+endif()
+
+find_package(CUDA)
+if (CUDA_FOUND)
+  set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
+  set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
+  set(KOKKOS_INTERNAL_UVM force_uvm)
+  set(KOKKOS_INTERNAL_LAMBDA enable_lambda)
+
+
+  # Choose Architecture for Kokkos 
+  #set(KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
+  #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
+  set(KOKKOS_ARCH "BDW;Volta70")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
+
+
+  # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
+  # see https://github.com/UoB-HPC/BabelStream/issues/16
+  set(CMAKE_CXX_EXTENSIONS OFF)
+endif()
 
 # Disable platform specific options
 if (APPLE)
