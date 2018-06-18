@@ -1,6 +1,7 @@
 #define IN_sfa
 #define HAS_V4_PIPELINE
 #include "sfa_private.h"
+#include <Kokkos_Core.hpp>
 
 typedef struct pipeline_args {
   field_t      * ALIGNED(128) f;
@@ -8,9 +9,12 @@ typedef struct pipeline_args {
   float frac;
 } pipeline_args_t;
 
+ //Kokkos::View<field_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged f(args->f); 
+ //
+
 #define DECLARE_STENCIL()                                       \
-  /**/  field_t * ALIGNED(128) f = args->f;                     \
-  const grid_t  *              g = args->g;                     \
+  field_t * ALIGNED(128) f = args->f;                           \
+  const grid_t  *        g = args->g;                           \
                                                                 \
   const int   nx   = g->nx;                                     \
   const int   ny   = g->ny;                                     \
@@ -31,7 +35,7 @@ typedef struct pipeline_args {
   f0 = &f(x,  y,  z  ); \
   fx = &f(x+1,y,  z  ); \
   fy = &f(x,  y+1,z  ); \
-  fz = &f(x,  y,  z+1)
+  fz = &f(x,  y,  z+1);
 
 #define NEXT_STENCIL()                \
   f0++; fx++; fy++; fz++; x++;        \
@@ -51,10 +55,15 @@ typedef struct pipeline_args {
 #define UPDATE_CBY() f0->cby -= ( pz*( fz->ex-f0->ex ) - px*( fx->ez-f0->ez ) )
 #define UPDATE_CBZ() f0->cbz -= ( px*( fx->ey-f0->ey ) - py*( fy->ex-f0->ex ) )
 
+
 void
 advance_b_pipeline( pipeline_args_t * args,
                     int pipeline_rank,
                     int n_pipeline ) {
+
+  using ExecSpace = Kokkos::DefaultExecutionSpace;
+  using StaticSched = Kokkos::Schedule<Kokkos::Static>;
+  using Policy = Kokkos::RangePolicy<ExecSpace, StaticSched, int>;
   DECLARE_STENCIL();
 
   int n_voxel;
@@ -63,10 +72,11 @@ advance_b_pipeline( pipeline_args_t * args,
                      x, y, z, n_voxel );
 
   INIT_STENCIL();
-  for( ; n_voxel; n_voxel-- ) {
+  Kokkos::parallel_for(n_voxel, KOKKOS_LAMBDA (int i) {
+  //for( ; n_voxel; n_voxel-- ) {
     UPDATE_CBX(); UPDATE_CBY(); UPDATE_CBZ();
     NEXT_STENCIL();
-  }
+  });
 
 # undef LOAD_STENCIL
 

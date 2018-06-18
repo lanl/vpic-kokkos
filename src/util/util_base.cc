@@ -12,6 +12,7 @@
 #include <stdio.h>     // For vfprintf
 #include <stdarg.h>    // For va_list, va_start, va_end
 #include <string.h>    // for strstr
+#include <Kokkos_Core.hpp>
 
 /****************************************************************************/
 
@@ -171,7 +172,7 @@ util_malloc( const char * err,
   if( n==0 ) { *(char **)mem_ref = NULL; return; }
 
   // Allocate the memory ... abort if the allocation fails
-  mem = (char *)malloc(n);
+  mem = (char *)Kokkos::kokkos_malloc<CudaUVMSpace>(n);
   if( !mem ) ERROR(( err, (unsigned long)n ));
   *(char **)mem_ref = mem;
 }
@@ -181,7 +182,7 @@ util_free( void * mem_ref ) {
   char * mem;
   if( !mem_ref ) return;
   mem = *(char **)mem_ref;
-  if( mem ) free( mem );
+  if( mem ) Kokkos::kokkos_free( mem );
   *(char **)mem_ref = NULL;
 }
 
@@ -216,7 +217,7 @@ util_malloc_aligned( const char * err,
   a--;
 
   // Allocate the raw unaligned memory.  Abort if the allocation fails.
-  mem_u = (char *) malloc( n + a + sizeof(char *) );
+  mem_u = (char *)Kokkos::kokkos_malloc<CudaUVMSpace>( n + a + sizeof(char *) );
 
   if ( !mem_u )
     ERROR( ( err, (unsigned long) n, (unsigned long) a ) );
@@ -242,7 +243,7 @@ util_free_aligned( void * mem_ref ) {
   if( mem_a ) {
     mem_p = (char **)(mem_a - sizeof(char *));
     mem_u = mem_p[0];
-    free( mem_u );
+    Kokkos::kokkos_free( mem_u );
   }
   *(char **)mem_ref = NULL;
 }
