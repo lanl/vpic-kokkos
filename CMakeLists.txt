@@ -101,8 +101,8 @@ find_package(CUDA)
 if (CUDA_FOUND)
   set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
   set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
-  set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
-  set(KOKKOS_ENABLE_CUDA_UVM ON)
+  set(KOKKOS_INTERNAL_UVM force_uvm)
+  set(KOKKOS_INTERNAL_LAMBDA enable_lambda)
 
 
   # Choose Architecture for Kokkos 
@@ -115,13 +115,6 @@ if (CUDA_FOUND)
   # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
   # see https://github.com/UoB-HPC/BabelStream/issues/16
   set(CMAKE_CXX_EXTENSIONS OFF)
-
-  option(ENABLE_INTEGRATED_TESTS "enable integrated tests" OFF)
-
-  # Don't use intel intrinsics if we are using CUDA
-  option(USE_V4_ALTIVEC "Enable V4 Altivec" OFF)
-  option(USE_V4_PORTABLE "Enable V4 Portable" OFF)
-  option(USE_V4_SSE "Enable V4 SSE" OFF)
 endif()
 
 # Disable platform specific options
@@ -150,7 +143,7 @@ find_package(Threads REQUIRED)
 # Act on build options set in project.cmake
 #------------------------------------------------------------------------------#
 
-set(USE_V4 False)
+set(USE_V4)
 if(USE_V4_ALTIVEC)
   add_definitions(-DUSE_V4_ALTIVEC)
   set(USE_V4 True)

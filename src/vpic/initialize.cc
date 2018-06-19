@@ -1,5 +1,4 @@
 #include "vpic.h"
-#include <Kokkos_Core.hpp>
 #define FAK field_array->kernel
 
 void
@@ -8,9 +7,6 @@ vpic_simulation::initialize( int argc,
   double err;
   species_t * sp;
 
-  // Initialize Kokkos
-  Kokkos::initialize( argc, argv ); 
-  
   // Call the user initialize the simulation
 
   TIC user_initialization( argc, argv ); TOC( user_initialization, 1 );
@@ -69,7 +65,6 @@ vpic_simulation::initialize( int argc,
 
 void
 vpic_simulation::finalize( void ) {
-  Kokkos::finalize();
   barrier();
   update_profile( rank()==0 );
 }
