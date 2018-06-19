@@ -101,20 +101,26 @@ find_package(CUDA)
 if (CUDA_FOUND)
   set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
   set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
-  set(KOKKOS_INTERNAL_UVM force_uvm)
-  set(KOKKOS_INTERNAL_LAMBDA enable_lambda)
+  set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
+  set(KOKKOS_ENABLE_CUDA_UVM ON)
 
 
   # Choose Architecture for Kokkos 
   #set(KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
   #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
-  set(KOKKOS_ARCH "BDW;Volta70")
+  set(KOKKOS_ARCH "Power9;Volta70")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
 
 
   # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
   # see https://github.com/UoB-HPC/BabelStream/issues/16
   set(CMAKE_CXX_EXTENSIONS OFF)
+
+  # Don't use intel intrinsics if we are using CUDA
+  option(USE_V4_ALTIVEC "Enable V4 Altivec" OFF)
+  option(USE_V4_PORTABLE "Enable V4 Portable" OFF)
+  option(USE_V4_SSE "Enable V4 SSE" OFF)
+
 endif()
 
 # Disable platform specific options
