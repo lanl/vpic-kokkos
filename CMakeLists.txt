@@ -91,15 +91,15 @@ endif()
 #------------------------------------------------------------------------------#
 # Kokkos
 #------------------------------------------------------------------------------#
+#set(KOKKOS_ENABLE_DEBUG ON)
+set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
 
 if (OPENMP_FOUND)
   set(KOKKOS_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
-  set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
 endif()
 
 find_package(CUDA)
 if (CUDA_FOUND)
-  set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
   set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
   set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
   set(KOKKOS_ENABLE_CUDA_UVM ON)
