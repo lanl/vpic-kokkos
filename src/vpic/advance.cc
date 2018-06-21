@@ -205,7 +205,7 @@ int vpic_simulation::advance(void) {
 
   //TIC FAK->advance_b( k_field_d, k_field_edge_d, k_grid_d, field_array->params, field_array->kernel, 0.5);
   //TOC( advance_b, 1 );
-  //TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
+  TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
 
   Kokkos::deep_copy(k_field_d, k_field_h);
   Kokkos::deep_copy(k_field_edge_d, k_field_edge_h);
