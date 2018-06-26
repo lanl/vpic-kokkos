@@ -127,11 +127,20 @@ int vpic_simulation::advance(void) {
   using StaticSched = Kokkos::Schedule<Kokkos::Static>;
   using Policy = Kokkos::RangePolicy<Kokkos::OpenMP, StaticSched, int>;
 
+  #define INITIAL_KOKKOS_VIEW_BYTES 100000
+  #define FIELD_VAR_COUNT 16
+  #define FIELD_EDGE_COUNT 8
 
-  size_t n_fields = (size_t)(field_array->g)->nv;
-  Kokkos::View<float*[16], Kokkos::HostSpace> k_field_h (Kokkos::ViewAllocateWithoutInitializing("k_field_h"), 100000);
-  Kokkos::View<material_id*[8], Kokkos::HostSpace> k_field_edge_h (Kokkos::ViewAllocateWithoutInitializing("k_field_edge_h"), 100000);
-  Kokkos::View<grid_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> k_grid_h(field_array->g, 1);
+  int n_fields = (field_array->g)->nv;
+
+  // Capture the 16 field variables from the field array struct
+  Kokkos::View<float*[FIELD_VAR_COUNT], Kokkos::LayoutLeft, Kokkos::HostSpace> k_field_h (Kokkos::ViewAllocateWithoutInitializing("k_field_h"), INITIAL_KOKKOS_VIEW_BYTES);
+
+  // Capture the 8 edge material variables from the field array struct
+  Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::LayoutLeft, Kokkos::HostSpace> k_field_edge_h (Kokkos::ViewAllocateWithoutInitializing("k_field_edge_h"), INITIAL_KOKKOS_VIEW_BYTES);
+
+  // Capture the grid as a struct in kokkos directly
+  //Kokkos::View<grid_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> k_grid_h(field_array->g, 1);
 
 
   enum field_var { 
@@ -198,18 +207,17 @@ int vpic_simulation::advance(void) {
   });
 
   // Copy Host memory to Cuda or (d)evice
-  auto k_field_d = Kokkos::create_mirror_view_and_copy(Kokkos::CudaSpace(), k_field_h, "k_field_d");
-  auto k_field_edge_d = Kokkos::create_mirror_view_and_copy(Kokkos::CudaSpace(), k_field_edge_h, "k_field_edge_d");
-  auto k_grid_d = Kokkos::create_mirror_view_and_copy(Kokkos::CudaSpace(), k_grid_h, "k_grid_d");
+  k_field_d_t k_field_d = Kokkos::create_mirror_view_and_copy(Kokkos::CudaSpace(), k_field_h, "k_field_d");
+  k_field_edge_d_t k_field_edge_d = Kokkos::create_mirror_view_and_copy(Kokkos::CudaSpace(), k_field_edge_h, "k_field_edge_d");
+  //k_grid_d_t k_grid_d = Kokkos::create_mirror_view_and_copy(Kokkos::CudaSpace(), k_grid_h, "k_grid_d");
 
-
-  //TIC FAK->advance_b( k_field_d, k_field_edge_d, k_grid_d, field_array->params, field_array->kernel, 0.5);
-  //TOC( advance_b, 1 );
-  TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
+  TIC FAK->advance_b( &k_field_d, field_array->g, 0.5);
+  TOC( advance_b, 1 );
+  //TIC FAK->advance_b( field_array, 0.5, k_field_d ); TOC( advance_b, 1 );
 
   Kokkos::deep_copy(k_field_d, k_field_h);
   Kokkos::deep_copy(k_field_edge_d, k_field_edge_h);
-  Kokkos::deep_copy(k_grid_d, k_grid_h);
+  //Kokkos::deep_copy(k_grid_d, k_grid_h);
 
   // does this copy back automatically with deep_copy?
   //field_array->g = k_grid_h;
@@ -263,7 +271,7 @@ int vpic_simulation::advance(void) {
 
   // Half advance the magnetic field from B_{1/2} to B_1
 
-  TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
+  //TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
 
   // Divergence clean e
 
