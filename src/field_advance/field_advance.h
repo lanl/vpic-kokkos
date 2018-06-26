@@ -9,6 +9,7 @@
 #include <Kokkos_Core.hpp>
 #include "../grid/grid.h"
 #include "../material/material.h"
+#include "../vpic/kokkos_helpers.h"
 
 // FIXME: UPDATE THIS COMMENT BLOCK AND MOVE IT INTO APPROPRIATE LOCATIONS
 //
@@ -159,12 +160,6 @@ typedef struct field {
   material_id ematx, ematy, ematz, nmat; // Material at edge centers and nodes
   material_id fmatx, fmaty, fmatz, cmat; // Material at face and cell centers
 } field_t;
-
-#define FIELD_VAR_COUNT 16
-#define FIELD_EDGE_COUNT 8
-typedef Kokkos::View<float *[FIELD_VAR_COUNT], Kokkos::LayoutLeft, Kokkos::CudaSpace> k_field_d_t;
-typedef Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::LayoutLeft, Kokkos::CudaSpace> k_field_edge_d_t;
-typedef Kokkos::View<grid_t*, Kokkos::CudaSpace, Kokkos::MemoryUnmanaged> k_grid_d_t;
 
 // field_advance_kernels holds all the function pointers to all the
 // kernels used by a specific field_advance instance.

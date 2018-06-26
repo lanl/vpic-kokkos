@@ -3,27 +3,9 @@
 #include "sfa_private.h"
 #include <Kokkos_Core.hpp>
 
+KOKKOS_ENUMS
 
-enum field_var {
-  ex = 0,
-  ey = 1,
-  ez = 2,
-  div_e_err = 3,
-  cbx = 4,
-  cby = 5,
-  cbz = 6,
-  div_b_err = 7,
-  tcax = 8,
-  tcay = 9,
-  tcaz = 10,
-  rhob = 11,
-  jfx = 12,
-  jfy = 13,
-  jfz = 14,
-  rhof = 15
-};
-
-enum {
+enum local_mem {
   x = 0,
   y = 1,
   z = 2,
@@ -152,7 +134,7 @@ advance_b(
   });
 
   // Do left over bz
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::Cuda >(1, nz), KOKKOS_LAMBDA (int z) {
+  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::Cuda >(1, ny), KOKKOS_LAMBDA (int y) {
   //for( y=1; y<=ny; y++ ) {
     local_d(f0_index) = VOXEL(1,y,  nz+1,nx,ny,nz);
     local_d(fy_index) = VOXEL(2,y,  nz+1,nx,ny,nz);
@@ -166,5 +148,5 @@ advance_b(
   });
 
   // what does this do?
-  // local_adjust_norm_b( f, g );
+  //local_adjust_norm_b( f, g );
 }
