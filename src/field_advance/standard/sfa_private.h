@@ -354,6 +354,10 @@ local_adjust_div_e( field_t      * ALIGNED(128) f,
                     const grid_t *              g );
 
 void
+k_local_adjust_norm_b( k_field_d_t *k_field_d,
+                     const grid_t *              g );
+
+void
 local_adjust_norm_b( field_t      * ALIGNED(128) f,
                      const grid_t *              g );
 
