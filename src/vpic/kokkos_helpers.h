@@ -1,5 +1,6 @@
 #include <Kokkos_Core.hpp>
 
+#define USE_KOKKOS
 // This module implements kokkos macros
 
 #define FIELD_VAR_COUNT 16
@@ -38,7 +39,7 @@ enum field_edge_var { \
   cmat = 7 \
 };
 
-#define KOKKOS_COPY_MEM_TO_DEVICE() \
+#define KOKKOS_VARIABLES \
   using StaticSched = Kokkos::Schedule<Kokkos::Static>; \
   using Policy = Kokkos::RangePolicy<Kokkos::OpenMP, StaticSched, int>; \
   int n_fields = (field_array->g)->nv; \
@@ -46,7 +47,10 @@ enum field_edge_var { \
   \
   Kokkos::View<float*[FIELD_VAR_COUNT], Kokkos::LayoutLeft, Kokkos::HostSpace> k_field_h (Kokkos::ViewAllocateWithoutInitializing("k_field_h"), initial_view_bytes); \
   Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::LayoutLeft, Kokkos::HostSpace> k_field_edge_h (Kokkos::ViewAllocateWithoutInitializing("k_field_edge_h"), initial_view_bytes); \
-  \
+  k_field_d_t k_field_d = Kokkos::create_mirror_view_and_copy(Kokkos::CudaSpace(), k_field_h, "k_field_d"); \
+  k_field_edge_d_t k_field_edge_d = Kokkos::create_mirror_view_and_copy(Kokkos::CudaSpace(), k_field_edge_h, "k_field_edge_d");
+
+#define KOKKOS_COPY_MEM_TO_DEVICE() \
   Kokkos::parallel_for(Policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
           k_field_h(i,ex) = field_array->f[i].ex; \
           k_field_h(i,ey) = field_array->f[i].ey; \
@@ -79,8 +83,8 @@ enum field_edge_var { \
           k_field_edge_h(i, cmat) = field_array->f[i].cmat; \
   });     \
   \
-  k_field_d_t k_field_d = Kokkos::create_mirror_view_and_copy(Kokkos::CudaSpace(), k_field_h, "k_field_d"); \
-  k_field_edge_d_t k_field_edge_d = Kokkos::create_mirror_view_and_copy(Kokkos::CudaSpace(), k_field_edge_h, "k_field_edge_d");
+  Kokkos::deep_copy(k_field_h, k_field_d); \
+  Kokkos::deep_copy(k_field_edge_h, k_field_edge_d); 
 
 
 #define KOKKOS_COPY_MEM_TO_HOST() \

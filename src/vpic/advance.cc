@@ -120,6 +120,7 @@ int vpic_simulation::advance(void) {
   TIC user_current_injection(); TOC( user_current_injection, 1 );
 
   KOKKOS_ENUMS
+  KOKKOS_VARIABLES    
   KOKKOS_COPY_MEM_TO_DEVICE()
   // Half advance the magnetic field from B_0 to B_{1/2}
   TIC FAK->advance_b( &k_field_d, field_array->g, 0.5); TOC( advance_b, 1 );
@@ -138,7 +139,9 @@ int vpic_simulation::advance(void) {
 
   // Half advance the magnetic field from B_{1/2} to B_1
 
-  //TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
+  KOKKOS_COPY_MEM_TO_DEVICE()
+  TIC FAK->advance_b( &k_field_d, field_array->g,  0.5 ); TOC( advance_b, 1 );
+  KOKKOS_COPY_MEM_TO_HOST()
 
   // Divergence clean e
 
