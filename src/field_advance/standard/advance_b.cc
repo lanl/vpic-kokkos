@@ -33,11 +33,11 @@ enum local_mem {
   local(y) = 0;                                                 \
   local(z) = 0;
 
-#define INIT_STENCIL()                                                      \
-  local_d(f0_index) = VOXEL(local_d(x),local_d(y),local_d(z), nx,ny,nz);    \
-  local_d(fx_index) = VOXEL(local_d(x)+1,local_d(y),local_d(z), nx,ny,nz);  \
-  local_d(fy_index) = VOXEL(local_d(x),local_d(y)+1,local_d(z), nx,ny,nz);  \
-  local_d(fz_index) = VOXEL(local_d(x),local_d(y),local_d(z)+1, nx,ny,nz);  \
+#define INIT_STENCIL()                                                          \
+  local_d(f0_index) = VOXEL(local_d(x),  local_d(y),  local_d(z),   nx,ny,nz);  \
+  local_d(fx_index) = VOXEL(local_d(x)+1,local_d(y),  local_d(z),   nx,ny,nz);  \
+  local_d(fy_index) = VOXEL(local_d(x),  local_d(y)+1,local_d(z),   nx,ny,nz);  \
+  local_d(fz_index) = VOXEL(local_d(x),  local_d(y),  local_d(z)+1, nx,ny,nz);  \
 
 
 #define NEXT_STENCIL()                \
@@ -47,8 +47,12 @@ enum local_mem {
   local_d(fz_index)++;                \
   local_d(x)++;                       \
   if( local_d(x)>nx ) {               \
-    /**/       local_d(y)++;            local_d(x) = 1; \
-    if( local_d(y)>ny ) local_d(z)++; if( local_d(y)>ny ) local_d(y) = 1; \
+    /**/       local_d(y)++;          \
+    /**/       local_d(x) = 1;        \
+    if( local_d(y)>ny ) {             \
+        local_d(z)++;                 \
+        local_d(y) = 1;               \
+    }                                 \
     INIT_STENCIL();                   \
   };
 
@@ -56,21 +60,21 @@ enum local_mem {
 #define f0_cby k_field(local_d(f0_index), cby)
 #define f0_cbz k_field(local_d(f0_index), cbz)
 
-#define f0_ex k_field(local_d(f0_index), ex)
-#define f0_ey k_field(local_d(f0_index), ey)
-#define f0_ez k_field(local_d(f0_index), ez)
+#define f0_ex k_field(local_d(f0_index),  ex)
+#define f0_ey k_field(local_d(f0_index),  ey)
+#define f0_ez k_field(local_d(f0_index),  ez)
 
-#define fx_ex k_field(local_d(fx_index), ex)
-#define fx_ey k_field(local_d(fx_index), ey)
-#define fx_ez k_field(local_d(fx_index), ez)
+#define fx_ex k_field(local_d(fx_index),  ex)
+#define fx_ey k_field(local_d(fx_index),  ey)
+#define fx_ez k_field(local_d(fx_index),  ez)
 
-#define fy_ex k_field(local_d(fy_index), ex)
-#define fy_ey k_field(local_d(fy_index), ey)
-#define fy_ez k_field(local_d(fy_index), ez)
+#define fy_ex k_field(local_d(fy_index),  ex)
+#define fy_ey k_field(local_d(fy_index),  ey)
+#define fy_ez k_field(local_d(fy_index),  ez)
 
-#define fz_ex k_field(local_d(fz_index), ex)
-#define fz_ey k_field(local_d(fz_index), ey)
-#define fz_ez k_field(local_d(fz_index), ez)
+#define fz_ex k_field(local_d(fz_index),  ex)
+#define fz_ey k_field(local_d(fz_index),  ey)
+#define fz_ez k_field(local_d(fz_index),  ez)
 
 // WTF!  Under -ffast-math, gcc-4.1.1 thinks it is okay to treat the
 // below as
@@ -86,8 +90,8 @@ enum local_mem {
 void
 advance_b(
         k_field_d_t *k_field_d,
-        grid_t *g,
-        float                    frac) {
+        grid_t      *g,
+        float       frac) {
 
 
   auto k_field = *k_field_d;
@@ -110,6 +114,7 @@ advance_b(
   // handles stragglers.
 
   // While the pipelines are busy, do surface fields
+  //
 
   // Do left over bx
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::Cuda >(1, nz), KOKKOS_LAMBDA (int z) {
@@ -125,6 +130,7 @@ advance_b(
     local_d(f0_index) = VOXEL(1,ny+1,z,  nx,ny,nz);
     local_d(fy_index) = VOXEL(2,ny+1,z,  nx,ny,nz);
     local_d(fz_index) = VOXEL(1,ny+1,z+1,nx,ny,nz);
+    // TODO: Parallelize this nested loop
     for(int x=1; x<=nx; x++ ) {
       UPDATE_CBY();
       local_d(f0_index)++;
@@ -135,10 +141,10 @@ advance_b(
 
   // Do left over bz
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::Cuda >(1, ny), KOKKOS_LAMBDA (int y) {
-  //for( y=1; y<=ny; y++ ) {
     local_d(f0_index) = VOXEL(1,y,  nz+1,nx,ny,nz);
     local_d(fy_index) = VOXEL(2,y,  nz+1,nx,ny,nz);
     local_d(fy_index) = VOXEL(1,y+1,nz+1,nx,ny,nz);
+    // TODO: Parallelize this nested loop
     for(int x=1; x<=nx; x++ ) {
       UPDATE_CBZ();
       local_d(f0_index)++;
@@ -147,6 +153,5 @@ advance_b(
     }
   });
 
-  // what does this do?
-  //local_adjust_norm_b( f, g );
+  k_local_adjust_norm_b(k_field_d, g);
 }
