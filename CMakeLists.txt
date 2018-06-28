@@ -82,7 +82,7 @@ set(VPIC_CXX_LIBRARIES "${string_libraries}")
 # OpenMP
 #------------------------------------------------------------------------------#
 
-find_package(OpenMP)
+#find_package(OpenMP)
 if (OPENMP_FOUND)
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
   #set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
@@ -98,7 +98,7 @@ if (OPENMP_FOUND)
   set(KOKKOS_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
 endif()
 
-find_package(CUDA)
+#find_package(CUDA)
 if (CUDA_FOUND)
   set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
   set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
