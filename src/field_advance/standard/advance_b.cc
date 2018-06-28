@@ -125,41 +125,51 @@ advance_b(
   //
 
   // Do left over bx
+  printf("Update cbx \n");
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(1, nz+1), KOKKOS_LAMBDA (int z) {
     for(int y=1; y<=ny; y++ ) {
       local_d(f0_index) = VOXEL(nx+1,y,  z,  nx,ny,nz);
       local_d(fy_index) = VOXEL(nx+1,y+1,z,  nx,ny,nz);
       local_d(fz_index) = VOXEL(nx+1,y,  z+1,nx,ny,nz);
       UPDATE_CBX();
+      printf("%d %f %f %f %f %f %f %f %f %f\n", x, f0_cbx, f0_cby, f0_cbz, fy_ex, fy_ey, fy_ez, fz_ex, fz_ey, fz_ez);
     }
   });
+  printf("Updated cbx \n");
+
   // Do left over by
+  printf("Update cby \n");
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(1, nz+1), KOKKOS_LAMBDA (int z) {
     local_d(f0_index) = VOXEL(1,ny+1,z,  nx,ny,nz);
-    local_d(fy_index) = VOXEL(2,ny+1,z,  nx,ny,nz);
+    local_d(fx_index) = VOXEL(2,ny+1,z,  nx,ny,nz);
     local_d(fz_index) = VOXEL(1,ny+1,z+1,nx,ny,nz);
     // TODO: Parallelize this nested loop
     for(int x=1; x<=nx; x++ ) {
       UPDATE_CBY();
+      printf("%d %f %f %f %f %f %f %f %f %f\n", x, f0_cbx, f0_cby, f0_cbz, fx_ex, fx_ey, fx_ez, fz_ex, fz_ey, fz_ez);
       local_d(f0_index)++;
       local_d(fx_index)++;
       local_d(fz_index)++;
     }
   });
+  printf("Updated cby \n");
 
   // Do left over bz
+  printf("Update cbz \n");
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(1, ny+1), KOKKOS_LAMBDA (int y) {
     local_d(f0_index) = VOXEL(1,y,  nz+1,nx,ny,nz);
-    local_d(fy_index) = VOXEL(2,y,  nz+1,nx,ny,nz);
+    local_d(fx_index) = VOXEL(2,y,  nz+1,nx,ny,nz);
     local_d(fy_index) = VOXEL(1,y+1,nz+1,nx,ny,nz);
     // TODO: Parallelize this nested loop
     for(int x=1; x<=nx; x++ ) {
       UPDATE_CBZ();
+      printf("%d %f %f %f %f %f %f %f %f %f\n", x, f0_cbx, f0_cby, f0_cbz, fx_ex, fx_ey, fx_ez, fy_ex, fy_ey, fy_ez);
       local_d(f0_index)++;
       local_d(fx_index)++;
       local_d(fy_index)++;
     }
   });
+  printf("Updated cbz \n");
 
   k_local_adjust_norm_b(k_field_d, g);
 }
