@@ -119,6 +119,7 @@ int vpic_simulation::advance(void) {
 
   TIC user_current_injection(); TOC( user_current_injection, 1 );
 
+  //fprintf(stdout, "%f\n", field_array->f[VOXEL(1,1,1, (field_array->g)->nx,(field_array->g)->ny,(field_array->g)->nz)].ex);
   KOKKOS_ENUMS
   KOKKOS_VARIABLES    
   KOKKOS_COPY_MEM_TO_DEVICE()
@@ -209,6 +210,7 @@ int vpic_simulation::advance(void) {
   // (silly but it might happen), the test will be skipped on the restore. We
   // return true here so that the first call to advance after a restore
   // will act properly for this edge case.
+  dump_energies("energies.txt", 1);
 
   return 1;
 }

@@ -26,7 +26,7 @@ enum local_mem {
   const float py   = (ny>1) ? frac*g->cvac*g->dt*g->rdy : 0;    \
   const float pz   = (nz>1) ? frac*g->cvac*g->dt*g->rdz : 0;    \
                                                                 \
-  Kokkos::View<int[7], Kokkos::LayoutLeft, Kokkos::HostSpace>   \
+  Kokkos::View<int[7], Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace>   \
       local (Kokkos::ViewAllocateWithoutInitializing("local"),  \
       INITIAL_KOKKOS_VIEW_BYTES);                               \
   local(x) = 0;                                                 \
@@ -97,15 +97,23 @@ advance_b(
   auto k_field = *k_field_d;
   DECLARE_STENCIL();
 
+  int n_voxel;
+  DISTRIBUTE_VOXELS( 1,nx, 1,ny, 1,nz, 16,
+                     0, 1, local(x), local(y), 
+                     local(z), n_voxel );
+
   local(f0_index) = VOXEL(local(x),local(y),local(z), nx,ny,nz);
   local(fx_index) = VOXEL(local(x)+1,local(y),local(z), nx,ny,nz);
   local(fy_index) = VOXEL(local(x),local(y)+1,local(z), nx,ny,nz);
   local(fz_index) = VOXEL(local(x),local(y),local(z)+1, nx,ny,nz);
 
-  auto local_d = Kokkos::create_mirror_view_and_copy(Kokkos::CudaSpace(), local, "local_d");
+  auto local_d = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), local, "local_d");
 
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::Cuda >(0, g->nv), KOKKOS_LAMBDA (int i) {
+
+  //TODO: Think about if NV is the correct number
+  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(0, n_voxel), KOKKOS_LAMBDA (int i) {
     UPDATE_CBX(); UPDATE_CBY(); UPDATE_CBZ();
+    printf("%d %f %f %f %f %f %f %f %f %f %f %f %f\n", i, f0_cbx, f0_cby, f0_cbz, fx_ex, fx_ey, fx_ez, fy_ex, fy_ey, fy_ez, fz_ex, fz_ey, fz_ez);
     NEXT_STENCIL();  
   });
 
@@ -117,7 +125,7 @@ advance_b(
   //
 
   // Do left over bx
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::Cuda >(1, nz), KOKKOS_LAMBDA (int z) {
+  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(1, nz+1), KOKKOS_LAMBDA (int z) {
     for(int y=1; y<=ny; y++ ) {
       local_d(f0_index) = VOXEL(nx+1,y,  z,  nx,ny,nz);
       local_d(fy_index) = VOXEL(nx+1,y+1,z,  nx,ny,nz);
@@ -126,7 +134,7 @@ advance_b(
     }
   });
   // Do left over by
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::Cuda >(1, nz), KOKKOS_LAMBDA (int z) {
+  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(1, nz+1), KOKKOS_LAMBDA (int z) {
     local_d(f0_index) = VOXEL(1,ny+1,z,  nx,ny,nz);
     local_d(fy_index) = VOXEL(2,ny+1,z,  nx,ny,nz);
     local_d(fz_index) = VOXEL(1,ny+1,z+1,nx,ny,nz);
@@ -134,13 +142,13 @@ advance_b(
     for(int x=1; x<=nx; x++ ) {
       UPDATE_CBY();
       local_d(f0_index)++;
-      local_d(fy_index)++;
+      local_d(fx_index)++;
       local_d(fz_index)++;
     }
   });
 
   // Do left over bz
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::Cuda >(1, ny), KOKKOS_LAMBDA (int y) {
+  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(1, ny+1), KOKKOS_LAMBDA (int y) {
     local_d(f0_index) = VOXEL(1,y,  nz+1,nx,ny,nz);
     local_d(fy_index) = VOXEL(2,y,  nz+1,nx,ny,nz);
     local_d(fy_index) = VOXEL(1,y+1,nz+1,nx,ny,nz);

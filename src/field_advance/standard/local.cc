@@ -18,6 +18,7 @@
  *   - Directly enforces local boundary conditions on fields
  *****************************************************************************/
 #define IN_sfa
+#include <assert.h>
 #include "sfa_private.h"
 #include "../../vpic/kokkos_helpers.h"
 
@@ -297,8 +298,9 @@ k_local_adjust_norm_b( k_field_d_t *k_field_d,
              ERROR(("Bad boundary condition encountered."));            \
              break;                                                     \
          }                                                              \
+         assert(0);                                                     \
          Kokkos::parallel_for(Kokkos::RangePolicy                       \
-                 < Kokkos::Cuda >(zl, zh), KOKKOS_LAMBDA (int z) {      \
+                 < Kokkos::DefaultExecutionSpace >(zl, zh), KOKKOS_LAMBDA (int z) {      \
            for(int yi=yl; yi<=yh; yi++ ) {			                    \
              for(int xj=xl; xj<=xh; xj++ ) {                            \
 	             (*k_field_d)(VOXEL(xj,yi,z, nx,ny,nz), cb##X) = 0;     \
