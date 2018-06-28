@@ -1,8 +1,6 @@
 #include <Kokkos_Core.hpp>
 
-#define USE_KOKKOS
 // This module implements kokkos macros
-
 #define FIELD_VAR_COUNT 16
 #define FIELD_EDGE_COUNT 8
 typedef Kokkos::View<float *[FIELD_VAR_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultExecutionSpace> k_field_d_t;
