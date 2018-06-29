@@ -3,8 +3,8 @@
 // This module implements kokkos macros
 #define FIELD_VAR_COUNT 16
 #define FIELD_EDGE_COUNT 8
-typedef Kokkos::View<float *[FIELD_VAR_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultExecutionSpace> k_field_d_t;
-typedef Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultExecutionSpace> k_field_edge_d_t;
+typedef Kokkos::View<float *[FIELD_VAR_COUNT], Kokkos::DefaultExecutionSpace> k_field_d_t;
+typedef Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::DefaultExecutionSpace> k_field_edge_d_t;
 
 #define KOKKOS_ENUMS \
 enum field_var { \
@@ -41,10 +41,11 @@ enum field_edge_var { \
   using StaticSched = Kokkos::Schedule<Kokkos::Static>; \
   using Policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, StaticSched, int>; \
   int n_fields = (field_array->g)->nv; \
-  int initial_view_bytes = 100000; \
+  int initial_view_bytes = n_fields; \
+std::cout << " n_fields " << n_fields << std::endl; \
   \
-  Kokkos::View<float*[FIELD_VAR_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace> k_field_h (Kokkos::ViewAllocateWithoutInitializing("k_field_h"), initial_view_bytes); \
-  Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace> k_field_edge_h (Kokkos::ViewAllocateWithoutInitializing("k_field_edge_h"), initial_view_bytes); \
+  Kokkos::View<float*[FIELD_VAR_COUNT], Kokkos::DefaultHostExecutionSpace> k_field_h (Kokkos::ViewAllocateWithoutInitializing("k_field_h"), initial_view_bytes); \
+  Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::DefaultHostExecutionSpace> k_field_edge_h (Kokkos::ViewAllocateWithoutInitializing("k_field_edge_h"), initial_view_bytes); \
   k_field_d_t k_field_d = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_field_h, "k_field_d"); \
   k_field_edge_d_t k_field_edge_d = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_field_edge_h, "k_field_edge_d"); \
 /*

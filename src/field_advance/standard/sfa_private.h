@@ -46,6 +46,8 @@ clear_rhof( field_array_t * RESTRICT fa );
 // advance_b applies the following difference equation to the fields:
 //   c B_new = c B_old - frac c dt curl E
 
+    void call_local_adjust_norm_b( field_array_t * RESTRICT fa);
+
 void
 advance_b( 
       k_field_d_t *k_field_d,
@@ -398,6 +400,7 @@ begin_remote_ghost_div_b( field_t      * ALIGNED(128) f,
 void
 end_remote_ghost_div_b( field_t      * ALIGNED(128) f,
                         const grid_t *              g );
+
 
 END_C_DECLS
 

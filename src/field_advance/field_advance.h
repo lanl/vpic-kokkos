@@ -171,6 +171,8 @@ struct field_array;
 
 typedef struct field_advance_kernels {
 
+    void (*call_local_adjust_norm_b)( struct field_array * RESTRICT fa);
+
   // FIXME: DUMP.CXX SHOULD BE DECENTRALIZED AND DIAGNOSTIC DUMP
   // FOR FIELDS SHOULD BE ADDED TO THIS
   // FIXME: FOR SYSTEMS WITH MAGNETIC CURRENTS (E.G. PML LAYERS)
