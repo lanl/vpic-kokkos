@@ -9,9 +9,11 @@
  */
 
 #include "vpic.h"
+#include "../field_advance/field_advance.h"
 #include <Kokkos_Core.hpp>
 
 #define FAK field_array->kernel
+
 
 int vpic_simulation::advance(void) {
   species_t *sp;
@@ -127,6 +129,8 @@ int vpic_simulation::advance(void) {
   TIC FAK->advance_b( &k_field_d, field_array->g, 0.5); TOC( advance_b, 1 );
   //TIC FAK->advance_b( field_array, 0.5, k_field_d ); TOC( advance_b, 1 );
   KOKKOS_COPY_MEM_TO_HOST()
+
+  //FAK->call_local_adjust_norm_b( field_array);
 
   // Advance the electric field from E_0 to E_1
 

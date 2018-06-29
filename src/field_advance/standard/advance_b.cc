@@ -15,8 +15,6 @@ enum local_mem {
   fz_index = 6,
 };
 
-#define INITIAL_KOKKOS_VIEW_BYTES 1024
-
 #define DECLARE_STENCIL()                                       \
   const int   nx   = g->nx;                                     \
   const int   ny   = g->ny;                                     \
@@ -28,7 +26,7 @@ enum local_mem {
                                                                 \
   Kokkos::View<int[7], Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace>   \
       local (Kokkos::ViewAllocateWithoutInitializing("local"),  \
-      INITIAL_KOKKOS_VIEW_BYTES);                               \
+      1);                               \
   local(x) = 0;                                                 \
   local(y) = 0;                                                 \
   local(z) = 0;
@@ -86,6 +84,10 @@ enum local_mem {
 #define UPDATE_CBY() f0_cby -= ( pz*( fz_ex-f0_ex ) - px*( fx_ez-f0_ez ) );
 #define UPDATE_CBZ() f0_cbz -= ( px*( fx_ey-f0_ey ) - py*( fy_ex-f0_ex ) );
 
+
+    void call_local_adjust_norm_b( field_array_t * RESTRICT fa) { 
+        local_adjust_norm_b(fa->f, fa->g);
+    }
 
 void
 advance_b(
@@ -146,7 +148,7 @@ advance_b(
     // TODO: Parallelize this nested loop
     for(int x=1; x<=nx; x++ ) {
       UPDATE_CBY();
-      printf("%d %f %f %f %f %f %f %f %f %f\n", x, f0_cbx, f0_cby, f0_cbz, fx_ex, fx_ey, fx_ez, fz_ex, fz_ey, fz_ez);
+      printf("%d %f %f %f %f %f %f %f %f %f \n", x, f0_cbx, f0_cby, f0_cbz, fx_ex, fx_ey, fx_ez, fz_ex, fz_ey, fz_ez);
       local_d(f0_index)++;
       local_d(fx_index)++;
       local_d(fz_index)++;
