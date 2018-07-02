@@ -5,6 +5,7 @@
 #define FIELD_EDGE_COUNT 8
 typedef Kokkos::View<float *[FIELD_VAR_COUNT], Kokkos::DefaultExecutionSpace> k_field_d_t;
 typedef Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::DefaultExecutionSpace> k_field_edge_d_t;
+typedef typename Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>::member_type k_member_t;
 
 #define KOKKOS_ENUMS \
 enum field_var { \
@@ -64,10 +65,9 @@ enum field_edge_var { \
 
   #define KOKKOS_VIEW_INIT() \
     Kokkos::View<float*[FIELD_VAR_COUNT], Kokkos::DefaultExecutionSpace>  \
-        k_field_d (Kokkos::ViewAllocateWithoutInitializing("k_field_d"), view_size); \
+        k_field_d ("k_field_d", view_size); \
     Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::DefaultExecutionSpace> \
-        k_field_edge_d (Kokkos::ViewAllocateWithoutInitializing("k_field_edge_d"), \
-        view_size); \
+        k_field_edge_d ("k_field_edge_d", view_size); \
     \
     k_field_d_t k_field_h = k_field_d; \
     k_field_edge_d_t k_field_edge_h = k_field_edge_d; 
