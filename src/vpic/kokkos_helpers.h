@@ -37,17 +37,56 @@ enum field_edge_var { \
   cmat = 7 \
 };
 
+#ifdef ENABLE_KOKKOS_CUDA 
+
+  #define KOKKOS_VIEW_INIT() \
+    Kokkos::View<float*[FIELD_VAR_COUNT], Kokkos::LayoutLeft,\
+        Kokkos::DefaultHostExecutionSpace> k_field_h \
+        (Kokkos::ViewAllocateWithoutInitializing("k_field_h"), view_size); \
+    Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::LayoutLeft, \
+        Kokkos::DefaultHostExecutionSpace> k_field_edge_h \
+        (Kokkos::ViewAllocateWithoutInitializing("k_field_edge_h"), view_size); \
+    \
+    k_field_d_t k_field_d = Kokkos::create_mirror_view_and_copy( \
+        Kokkos::DefaultExecutionSpace(), k_field_h, "k_field_d"); \
+    k_field_edge_d_t k_field_edge_d = Kokkos::create_mirror_view_and_copy( \
+        Kokkos::DefaultExecutionSpace(), k_field_edge_h, "k_field_edge_d"); 
+
+  #define KOKKOS_MEMORY_COPY_TO_DEVICE() \
+    Kokkos::deep_copy(k_field_d, k_field_h); \
+    Kokkos::deep_copy(k_field_edge_d, k_field_edge_h); 
+
+  #define KOKKOS_MEMORY_COPY_FROM_DEVICE() \
+    Kokkos::deep_copy(k_field_h, k_field_d); \
+    Kokkos::deep_copy(k_field_edge_h, k_field_edge_d); 
+
+#else 
+
+  #define KOKKOS_VIEW_INIT() \
+    Kokkos::View<float*[FIELD_VAR_COUNT], Kokkos::DefaultExecutionSpace>  \
+        k_field_d (Kokkos::ViewAllocateWithoutInitializing("k_field_d"), view_size); \
+    Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::DefaultExecutionSpace> \
+        k_field_edge_d (Kokkos::ViewAllocateWithoutInitializing("k_field_edge_d"), \
+        view_size); \
+    \
+    k_field_d_t k_field_h = k_field_d; \
+    k_field_edge_d_t k_field_edge_h = k_field_edge_d; 
+
+  #define KOKKOS_MEMORY_COPY_TO_DEVICE()   
+
+  #define KOKKOS_MEMORY_COPY_FROM_DEVICE()  
+
+#endif
+
 #define KOKKOS_VARIABLES \
   using StaticSched = Kokkos::Schedule<Kokkos::Static>; \
   using Policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, StaticSched, int>; \
   int n_fields = (field_array->g)->nv; \
-  int initial_view_bytes = n_fields; \
-std::cout << " n_fields " << n_fields << std::endl; \
+  int view_size = n_fields; \
   \
-  Kokkos::View<float*[FIELD_VAR_COUNT], Kokkos::DefaultHostExecutionSpace> k_field_h (Kokkos::ViewAllocateWithoutInitializing("k_field_h"), initial_view_bytes); \
-  Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::DefaultHostExecutionSpace> k_field_edge_h (Kokkos::ViewAllocateWithoutInitializing("k_field_edge_h"), initial_view_bytes); \
-  k_field_d_t k_field_d = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_field_h, "k_field_d"); \
-  k_field_edge_d_t k_field_edge_d = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_field_edge_h, "k_field_edge_d"); \
+  KOKKOS_VIEW_INIT() \
+  \
+
 /*
   field_array->f[0].ex = 10.0; \
   field_array->f[0].ey = 11.0; \
@@ -86,8 +125,7 @@ std::cout << " n_fields " << n_fields << std::endl; \
           k_field_edge_h(i, fmatz) = field_array->f[i].fmatz; \
           k_field_edge_h(i, cmat) = field_array->f[i].cmat; \
   });     \
-  Kokkos::deep_copy(k_field_d, k_field_h); \
-  Kokkos::deep_copy(k_field_edge_d, k_field_edge_h); \
+  KOKKOS_MEMORY_COPY_TO_DEVICE()
 
 
           //printf("before deep copy host %f, %f, %f\n", k_field_h(i,ex), k_field_h(i,ey), k_field_h(i,ez)); 
@@ -95,9 +133,7 @@ std::cout << " n_fields " << n_fields << std::endl; \
           // printf("final field array %f, %f, %f\n", field_array->f[i].ex, field_array->f[i].ey, field_array->f[i].ez); 
           
 #define KOKKOS_COPY_MEM_TO_HOST() \
-  Kokkos::deep_copy(k_field_h, k_field_d); \
-  Kokkos::deep_copy(k_field_edge_h, k_field_edge_d); \
-  \
+  KOKKOS_MEMORY_COPY_FROM_DEVICE() \
   Kokkos::parallel_for(Policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
           field_array->f[i].ex = k_field_h(i,ex); \
           field_array->f[i].ey = k_field_h(i,ey); \
