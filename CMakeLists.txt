@@ -49,7 +49,7 @@ option(ENABLE_OPENSSL "Enable OpenSSL support for checksums" OFF)
 
 option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" ON)
 
-option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" ON)
+option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
@@ -108,6 +108,7 @@ endif()
 if(ENABLE_KOKKOS_CUDA)
   find_package(CUDA)
   if (CUDA_FOUND)
+    add_definitions(-DENABLE_KOKKOS_CUDA) 
     set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
     set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
     set(KOKKOS_ENABLE_CUDA_UVM ON)
