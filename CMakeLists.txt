@@ -47,7 +47,9 @@ option(USE_V4_SSE "Enable V4 SSE" OFF)
 
 option(ENABLE_OPENSSL "Enable OpenSSL support for checksums" OFF)
 
-option(USE_KOKKOS "Enable Kokkos" ON)
+option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" ON)
+
+option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" ON)
 
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
@@ -84,7 +86,7 @@ set(VPIC_CXX_LIBRARIES "${string_libraries}")
 # OpenMP
 #------------------------------------------------------------------------------#
 
-#find_package(OpenMP)
+find_package(OpenMP)
 if (OPENMP_FOUND)
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
   #set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
@@ -93,37 +95,39 @@ endif()
 #------------------------------------------------------------------------------#
 # Kokkos
 #------------------------------------------------------------------------------#
-if (USE_KOKKOS)
-
 set(KOKKOS_ENABLE_DEBUG OFF)
 
 set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
 
-if (OPENMP_FOUND)
-  set(KOKKOS_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
+if(ENABLE_KOKKOS_OPENMP)
+  if (OPENMP_FOUND)
+    set(KOKKOS_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
+  endif()
 endif()
 
-#find_package(CUDA)
-if (CUDA_FOUND)
-  set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
-  set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
-  set(KOKKOS_ENABLE_CUDA_UVM ON)
+if(ENABLE_KOKKOS_CUDA)
+  find_package(CUDA)
+  if (CUDA_FOUND)
+    set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
+    set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
+    set(KOKKOS_ENABLE_CUDA_UVM ON)
 
-  # Choose Architecture for Kokkos 
-  #set(KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
-  #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
-  set(KOKKOS_ARCH "Power9;Volta70")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
+    # Choose Architecture for Kokkos 
+    #set(KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
+    #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
+    set(KOKKOS_ARCH "Power9;Volta70")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
 
-  # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
-  # see https://github.com/UoB-HPC/BabelStream/issues/16
-  set(CMAKE_CXX_EXTENSIONS OFF)
+    # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
+    # see https://github.com/UoB-HPC/BabelStream/issues/16
+    set(CMAKE_CXX_EXTENSIONS OFF)
 
-  # Don't use intel intrinsics if we are using CUDA
-  option(USE_V4_ALTIVEC "Enable V4 Altivec" OFF)
-  option(USE_V4_PORTABLE "Enable V4 Portable" OFF)
-  option(USE_V4_SSE "Enable V4 SSE" OFF)
+    # Don't use intel intrinsics if we are using CUDA
+    option(USE_V4_ALTIVEC "Enable V4 Altivec" OFF)
+    option(USE_V4_PORTABLE "Enable V4 Portable" OFF)
+    option(USE_V4_SSE "Enable V4 SSE" OFF)
 
+  endif()
 endif()
 
 # Disable platform specific options
@@ -145,8 +149,6 @@ set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
 # Defines
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
-
-endif(USE_KOKKOS)
 
 #------------------------------------------------------------------------------#
 # OpenSSL
