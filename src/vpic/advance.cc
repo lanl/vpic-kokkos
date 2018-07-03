@@ -9,7 +9,6 @@
  */
 
 #include "vpic.h"
-#include "../field_advance/field_advance.h"
 #include <Kokkos_Core.hpp>
 
 #define FAK field_array->kernel
@@ -121,16 +120,14 @@ int vpic_simulation::advance(void) {
 
   TIC user_current_injection(); TOC( user_current_injection, 1 );
 
-  //fprintf(stdout, "%f\n", field_array->f[VOXEL(1,1,1, (field_array->g)->nx,(field_array->g)->ny,(field_array->g)->nz)].ex);
-  KOKKOS_ENUMS
-  KOKKOS_VARIABLES    
-  KOKKOS_COPY_MEM_TO_DEVICE()
+  KOKKOS_ENUMS();
+  KOKKOS_VARIABLES();    
+  KOKKOS_COPY_MEM_TO_DEVICE();
+
   // Half advance the magnetic field from B_0 to B_{1/2}
   TIC FAK->advance_b( &k_field_d, field_array->g, 0.5); TOC( advance_b, 1 );
-  //TIC FAK->advance_b( field_array, 0.5, k_field_d ); TOC( advance_b, 1 );
-  KOKKOS_COPY_MEM_TO_HOST()
 
-  //FAK->call_local_adjust_norm_b( field_array);
+  KOKKOS_COPY_MEM_TO_HOST();
 
   // Advance the electric field from E_0 to E_1
 
@@ -144,9 +141,11 @@ int vpic_simulation::advance(void) {
 
   // Half advance the magnetic field from B_{1/2} to B_1
 
-  KOKKOS_COPY_MEM_TO_DEVICE()
+  KOKKOS_COPY_MEM_TO_DEVICE();
+
   TIC FAK->advance_b( &k_field_d, field_array->g,  0.5 ); TOC( advance_b, 1 );
-  KOKKOS_COPY_MEM_TO_HOST()
+
+  KOKKOS_COPY_MEM_TO_HOST();
 
   // Divergence clean e
 

@@ -7,7 +7,7 @@ typedef Kokkos::View<float *[FIELD_VAR_COUNT], Kokkos::DefaultExecutionSpace> k_
 typedef Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::DefaultExecutionSpace> k_field_edge_d_t;
 typedef typename Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>::member_type k_member_t;
 
-#define KOKKOS_ENUMS \
+#define KOKKOS_ENUMS() \
 enum field_var { \
   ex = 0, \
   ey = 1, \
@@ -78,20 +78,14 @@ enum field_edge_var { \
 
 #endif
 
-#define KOKKOS_VARIABLES \
+#define KOKKOS_VARIABLES() \
   using StaticSched = Kokkos::Schedule<Kokkos::Static>; \
   using Policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, StaticSched, int>; \
   int n_fields = (field_array->g)->nv; \
   int view_size = n_fields; \
   \
-  KOKKOS_VIEW_INIT() \
-  \
+  KOKKOS_VIEW_INIT() 
 
-/*
-  field_array->f[0].ex = 10.0; \
-  field_array->f[0].ey = 11.0; \
-  field_array->f[0].ez = 12.0; 
-*/
   
 #define KOKKOS_COPY_MEM_TO_DEVICE() \
   Kokkos::parallel_for(Policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
@@ -127,11 +121,6 @@ enum field_edge_var { \
   });     \
   KOKKOS_MEMORY_COPY_TO_DEVICE()
 
-
-          //printf("before deep copy host %f, %f, %f\n", k_field_h(i,ex), k_field_h(i,ey), k_field_h(i,ez)); 
-          //printf("after deep copy host %f, %f, %f\n", k_field_h(i,ex), k_field_h(i,ey), k_field_h(i,ez)); 
-          // printf("final field array %f, %f, %f\n", field_array->f[i].ex, field_array->f[i].ey, field_array->f[i].ez); 
-          
 #define KOKKOS_COPY_MEM_TO_HOST() \
   KOKKOS_MEMORY_COPY_FROM_DEVICE() \
   Kokkos::parallel_for(Policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \

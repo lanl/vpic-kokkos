@@ -3,7 +3,7 @@
 #include "sfa_private.h"
 #include <Kokkos_Core.hpp>
 
-KOKKOS_ENUMS
+KOKKOS_ENUMS();
 
 #define DECLARE_STENCIL()                                       \
   const int   nx   = g->nx;                                     \
@@ -13,7 +13,6 @@ KOKKOS_ENUMS
   const float px   = (nx>1) ? frac*g->cvac*g->dt*g->rdx : 0;    \
   const float py   = (ny>1) ? frac*g->cvac*g->dt*g->rdy : 0;    \
   const float pz   = (nz>1) ? frac*g->cvac*g->dt*g->rdz : 0;    \
-  int x_, y_, z_;
 
 #define f0_cbx k_field(f0_index, cbx)
 #define f0_cby k_field(f0_index, cby)
@@ -45,10 +44,6 @@ KOKKOS_ENUMS
 #define UPDATE_CBY() f0_cby -= ( pz*( fz_ex-f0_ex ) - px*( fx_ez-f0_ez ) );
 #define UPDATE_CBZ() f0_cbz -= ( px*( fx_ey-f0_ey ) - py*( fy_ex-f0_ex ) );
 
-void call_local_adjust_norm_b( field_array_t * RESTRICT fa) {
-  local_adjust_norm_b(fa->f, fa->g);
-}
-
 void
 advance_b(
         k_field_d_t *k_field_d,
@@ -59,29 +54,22 @@ advance_b(
   auto k_field = *k_field_d;
   DECLARE_STENCIL()
 
-  fprintf(stdout, "ranges: %d %d %d\n", nx, ny, nz);
-  fprintf(stdout, "voxel math: %d %d\n", VOXEL(0,1,0,nx,ny,nz), VOXEL(65,0,0,nx,ny,nz));
-  //TODO: Think about if NV is the correct number
   Kokkos::parallel_for(Kokkos::TeamPolicy< Kokkos::DefaultExecutionSpace>
-      (nz, Kokkos::AUTO), KOKKOS_LAMBDA (const k_member_t &teamMember) {
-    const unsigned int z = teamMember.league_rank();
+      (nx, Kokkos::AUTO), KOKKOS_LAMBDA (const k_member_t &teamMember) {
+    const unsigned int x = teamMember.league_rank();
     const int offset = 1;
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(teamMember, ny), [=] (int y) {
 
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(teamMember, nx), [=] (int x) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(teamMember, nz), [=] (int z) {
 
-    int f0_index = VOXEL(x+offset,  y+offset,  z+offset,   nx,ny,nz);
-    int fx_index = VOXEL(x+offset+1,y+offset,  z+offset,   nx,ny,nz);
-    int fy_index = VOXEL(x+offset,  y+offset+1,z+offset,   nx,ny,nz);
-    int fz_index = VOXEL(x+offset,  y+offset,  z+offset+1, nx,ny,nz);
+      int f0_index = VOXEL(x+offset,  y+offset,  z+offset,   nx,ny,nz);
+      int fx_index = VOXEL(x+offset+1,y+offset,  z+offset,   nx,ny,nz);
+      int fy_index = VOXEL(x+offset,  y+offset+1,z+offset,   nx,ny,nz);
+      int fz_index = VOXEL(x+offset,  y+offset,  z+offset+1, nx,ny,nz);
 
-    //printf("%d %d %d\n", x,y,z);    
-    UPDATE_CBX(); UPDATE_CBY(); UPDATE_CBZ();
-    printf("%d %d %d\n", x+offset, y+offset, z+offset);
-    printf("%d %f %f %f %f %f %f %f %f %f %f %f %f\n", VOXEL(x,  y,  z,   nx,ny,nz), f0_cbx, f0_cby, f0_cbz, fx_ex, fx_ey, fx_ez, fy_ex, fy_ey, fy_ez, fz_ex, fz_ey, fz_ez);
-    //NEXT_STENCIL();
-    });
+      UPDATE_CBX(); UPDATE_CBY(); UPDATE_CBZ();
+      });
     });
   });
 
@@ -92,7 +80,6 @@ advance_b(
   //
 
   // Do left over bx
-  printf("Update cbx \n");
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(1, nz+1), KOKKOS_LAMBDA (int z) {
     // TODO: Parallelize this nested loop
     for(int y=1; y<=ny; y++ ) {
@@ -100,13 +87,10 @@ advance_b(
       int fy_index = VOXEL(nx+1,y+1,z,  nx,ny,nz);
       int fz_index = VOXEL(nx+1,y,  z+1,nx,ny,nz);
       UPDATE_CBX();
-      printf("%d %f %f %f %f %f %f %f %f %f\n", y, f0_cbx, f0_cby, f0_cbz, fy_ex, fy_ey, fy_ez, fz_ex, fz_ey, fz_ez);
     }
   });
-  printf("Updated cbx \n");
 
   // Do left over by
-  printf("Update cby \n");
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(1, nz+1), KOKKOS_LAMBDA (int z) {
     int f0_index = VOXEL(1,ny+1,z,  nx,ny,nz);
     int fx_index = VOXEL(2,ny+1,z,  nx,ny,nz);
@@ -114,16 +98,13 @@ advance_b(
     // TODO: Parallelize this nested loop
     for(int x=1; x<=nx; x++ ) {
       UPDATE_CBY();
-      printf("%d %f %f %f %f %f %f %f %f %f\n", x, f0_cbx, f0_cby, f0_cbz, fx_ex, fx_ey, fx_ez, fz_ex, fz_ey, fz_ez);
       f0_index++;
       fx_index++;
       fz_index++;
     }
   });
-  printf("Updated cby \n");
 
   // Do left over bz
-  printf("Update cbz \n");
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(1, ny+1), KOKKOS_LAMBDA (int y) {
     int f0_index = VOXEL(1,y,  nz+1,nx,ny,nz);
     int fx_index = VOXEL(2,y,  nz+1,nx,ny,nz);
@@ -131,13 +112,11 @@ advance_b(
     // TODO: Parallelize this nested loop
     for(int x=1; x<=nx; x++ ) {
       UPDATE_CBZ();
-      printf("%d %f %f %f %f %f %f %f %f %f\n", x, f0_cbx, f0_cby, f0_cbz, fx_ex, fx_ey, fx_ez, fy_ex, fy_ey, fy_ez);
       f0_index++;
       fx_index++;
       fy_index++;
     }
   });
-  printf("Updated cbz \n");
 
   k_local_adjust_norm_b(k_field_d, g);
   

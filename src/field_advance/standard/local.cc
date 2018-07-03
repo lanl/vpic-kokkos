@@ -315,7 +315,7 @@ k_local_adjust_norm_b( k_field_d_t *k_field_d,
     }                                                                   \
   } while(0)
 
-  KOKKOS_ENUMS
+  KOKKOS_ENUMS();
 
   K_ADJUST_NORM_B(-1, 0, 0,x,y,z);
   K_ADJUST_NORM_B( 0,-1, 0,y,z,x);

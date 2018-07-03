@@ -4,7 +4,6 @@
 static field_advance_kernels_t sfa_kernels = {
 
   // Destructor
-    call_local_adjust_norm_b,
   delete_standard_field_array,
 
   // Time stepping interfaces
