@@ -55,13 +55,13 @@ advance_b(
   DECLARE_STENCIL()
 
   Kokkos::parallel_for(Kokkos::TeamPolicy< Kokkos::DefaultExecutionSpace>
-      (nx, Kokkos::AUTO), KOKKOS_LAMBDA (const k_member_t &teamMember) {
-    const unsigned int x = teamMember.league_rank();
+      (nx, Kokkos::AUTO), KOKKOS_LAMBDA (const k_member_t &team_member) {
+    const unsigned int x = team_member.league_rank();
     const int offset = 1;
 
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(teamMember, ny), [=] (int y) {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny), [=] (int y) {
 
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(teamMember, nz), [=] (int z) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nz), [=] (int z) {
 
       int f0_index = VOXEL(x+offset,  y+offset,  z+offset,   nx,ny,nz);
       int fx_index = VOXEL(x+offset+1,y+offset,  z+offset,   nx,ny,nz);
@@ -80,7 +80,8 @@ advance_b(
   //
 
   // Do left over bx
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(1, nz+1), KOKKOS_LAMBDA (int z) {
+  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
+      (1, nz+1), KOKKOS_LAMBDA (int z) {
     // TODO: Parallelize this nested loop
     for(int y=1; y<=ny; y++ ) {
       int f0_index = VOXEL(nx+1,y,  z,  nx,ny,nz);
@@ -91,7 +92,8 @@ advance_b(
   });
 
   // Do left over by
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(1, nz+1), KOKKOS_LAMBDA (int z) {
+  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
+      (1, nz+1), KOKKOS_LAMBDA (int z) {
     int f0_index = VOXEL(1,ny+1,z,  nx,ny,nz);
     int fx_index = VOXEL(2,ny+1,z,  nx,ny,nz);
     int fz_index = VOXEL(1,ny+1,z+1,nx,ny,nz);
@@ -105,7 +107,8 @@ advance_b(
   });
 
   // Do left over bz
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >(1, ny+1), KOKKOS_LAMBDA (int y) {
+  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
+      (1, ny+1), KOKKOS_LAMBDA (int y) {
     int f0_index = VOXEL(1,y,  nz+1,nx,ny,nz);
     int fx_index = VOXEL(2,y,  nz+1,nx,ny,nz);
     int fy_index = VOXEL(1,y+1,nz+1,nx,ny,nz);
