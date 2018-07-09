@@ -13,6 +13,7 @@
 #define _species_advance_h_
 
 #include "../sf_interface/sf_interface.h"
+#include "../vpic/kokkos_helpers.h"
 
 typedef int32_t species_id; // Must be 32-bit wide for particle_injector_t
 
@@ -60,9 +61,13 @@ typedef struct species {
 
   int np, max_np;                     // Number and max local particles
   particle_t * ALIGNED(128) p;        // Array of particles for the species
+  k_particles_d_t *k_p;                // kokkos particles view on device
+  k_particles_h_t *k_p_h;              // kokkos particles view on host
 
   int nm, max_nm;                     // Number and max local movers in use
   particle_mover_t * ALIGNED(128) pm; // Particle movers
+  k_particle_movers_d_t *k_pm;         // kokkos particle movers on device
+  k_particle_movers_h_t *k_pm_h;       // kokkos particle movers on host
 
   int64_t last_sorted;                // Step when the particles were last
                                       // sorted.

@@ -22,6 +22,7 @@ int vpic_simulation::advance(void) {
 
   if( num_step>0 && step()>=num_step ) return 0;
 
+
   // Sort the particles for performance if desired.
 
   LIST_FOR_EACH( sp, species_list )
@@ -47,6 +48,12 @@ int vpic_simulation::advance(void) {
   if( collision_op_list )
     TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
   TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
+
+  KOKKOS_ENUMS();
+  KOKKOS_PARTICLE_VARIABLES();
+
+  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+  KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
 
   LIST_FOR_EACH( sp, species_list )
     TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
@@ -120,14 +127,13 @@ int vpic_simulation::advance(void) {
 
   TIC user_current_injection(); TOC( user_current_injection, 1 );
 
-  KOKKOS_ENUMS();
-  KOKKOS_VARIABLES();    
-  KOKKOS_COPY_MEM_TO_DEVICE();
+  KOKKOS_FIELD_VARIABLES();    
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 
   // Half advance the magnetic field from B_0 to B_{1/2}
   TIC FAK->advance_b( &k_field_d, field_array->g, 0.5); TOC( advance_b, 1 );
 
-  KOKKOS_COPY_MEM_TO_HOST();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST();
 
   // Advance the electric field from E_0 to E_1
 
@@ -141,11 +147,11 @@ int vpic_simulation::advance(void) {
 
   // Half advance the magnetic field from B_{1/2} to B_1
 
-  KOKKOS_COPY_MEM_TO_DEVICE();
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 
   TIC FAK->advance_b( &k_field_d, field_array->g,  0.5 ); TOC( advance_b, 1 );
 
-  KOKKOS_COPY_MEM_TO_HOST();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST();
 
   // Divergence clean e
 
