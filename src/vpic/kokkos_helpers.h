@@ -10,26 +10,26 @@
 #define ACCUMULATOR_VAR_COUNT 3
 #define ACCUMULATOR_ARRAY_LENGTH 4
 
-typedef Kokkos::View<float *[FIELD_VAR_COUNT], Kokkos::DefaultExecutionSpace> k_field_d_t;
-typedef Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::DefaultExecutionSpace> k_field_edge_d_t;
+using k_field_d_t = Kokkos::View<float *[FIELD_VAR_COUNT], Kokkos::DefaultExecutionSpace>;
+using k_field_edge_d_t = Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::DefaultExecutionSpace>;
 
-typedef Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::DefaultExecutionSpace> k_particles_d_t;
-typedef Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT], Kokkos::DefaultExecutionSpace> k_particle_movers_d_t;
+using k_particles_d_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::DefaultExecutionSpace>;
+using k_particle_movers_d_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT], Kokkos::DefaultExecutionSpace>;
 
 #ifdef ENABLE_KOKKOS_CUDA 
-  typedef Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace> k_particles_h_t;
-  typedef Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT],  Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace> k_particle_movers_h_t;
+  using k_particles_h_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace>;
+  using k_particle_movers_h_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT],  Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace>;
 #else
-  typedef k_particles_d_t k_particles_h_t;
-  typedef k_particle_movers_d_t k_particle_movers_h_t;
+  using k_particles_h_t = k_particles_d_t;
+  using k_particle_movers_h_t = k_particle_movers_d_t;
 #endif
   
-typedef Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::DefaultExecutionSpace> k_accumulators_d_t;
-
-typedef typename Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>::member_type k_member_t;
+using k_accumulators_d_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::DefaultExecutionSpace>;
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>; 
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>; 
+
+typedef typename Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>::member_type k_member_t;
 
 #define KOKKOS_ENUMS() \
 enum field_var { \
@@ -115,22 +115,11 @@ enum accumulator_var { \
 
   
   #define KOKKOS_PARTICLE_VIEW_INIT() \
-    k_particles_h_t k_particles_h (Kokkos::ViewAllocateWithoutInitializing("k_particles_h"), n_particles); \
-    k_particle_movers_h_t k_particle_movers_h (Kokkos::ViewAllocateWithoutInitializing("k_particle_movers_h"), max_pmovers); \
-    k_particles_d_t k_particles_d = Kokkos::create_mirror_view_and_copy( \
-       Kokkos::DefaultExecutionSpace(), k_particles_h, "k_particles_d"); \
-    k_particle_movers_d_t k_particle_movers_d = Kokkos::create_mirror_view_and_copy( \
-       Kokkos::DefaultExecutionSpace(), k_particle_movers_h, "k_particle_movers_d"); \
+    sp->k_p_h = new k_particles_h_t(Kokkos::ViewAllocateWithoutInitializing("k_particles_h"), n_particles); \
+    sp->k_p = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_particles_h, "k_particles_d"); \
     \
-    k_particles_d_list.push_back(k_particles_d); \
-    k_particle_movers_d_list.push_back(k_particle_movers_d); \
-    k_particles_h_list.push_back(k_particles_h); \
-    k_particle_movers_h_list.push_back(k_particle_movers_h); \
-    \
-    sp->k_p = &k_particles_d; \
-    sp->k_p_h = &k_particles_h; \
-    sp->k_pm = &k_particle_movers_d; \
-    sp->k_pm_h = &k_particle_movers_h; 
+    sp->k_pm_h = new k_particle_movers_h_t(Kokkos::ViewAllocateWithoutInitializing("k_particle_movers_h"), max_pmovers); \
+    sp->k_pm = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_particle_movers_h, "k_particle_movers_d");
 
 
   #define KOKKOS_MEMORY_COPY_PARTICLE_TO_DEVICE() \
@@ -143,23 +132,6 @@ enum accumulator_var { \
     Kokkos::deep_copy(*(sp->k_pm_h), *(sp->k_pm)); 
 
 
-  #define KOKKOS_ACCUMULATOR_VIEW_INIT() \
-    Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutLeft, \
-        Kokkos::DefaultHostExecutionSpace> k_accumulators_h \
-        (Kokkos::ViewAllocateWithoutInitializing("k_accumulators_h"), n_accumulators); \
-   \
-   k_accumulators_d_t k_accumulators_d = Kokkos::create_mirror_view_and_copy( \
-       Kokkos::DefaultExecutionSpace(), k_accumulators_h, "k_accumulators_d"); 
-
-
-  #define KOKKOS_MEMORY_COPY_ACCUMULATOR_FROM_DEVICE() \
-    Kokkos::deep_copy(k_accumulators_h, k_accumulators_d); 
-
-
-  #define KOKKOS_MEMORY_COPY_ACCUMULATOR_TO_DEVICE() \
-    Kokkos::deep_copy(k_accumulators_d, k_accumulators_h); 
-
-
 #else 
 
   #define KOKKOS_FIELD_VIEW_INIT() \
@@ -169,19 +141,16 @@ enum accumulator_var { \
     k_field_d_t k_field_h = k_field_d; \
     k_field_edge_d_t k_field_edge_h = k_field_edge_d;
 
+
   #define KOKKOS_MEMORY_COPY_FIELD_TO_DEVICE()   
+
 
   #define KOKKOS_MEMORY_COPY_FIELD_FROM_DEVICE()  
 
+
   #define KOKKOS_PARTICLE_VIEW_INIT() \
-    k_particles_d_t k_particles_d ("k_particles_d", n_particles); \
-    k_particle_movers_d_t k_particle_movers_d ("k_particle_movers_d", max_pmovers); \
-    \
-    k_particles_d_list.push_back(k_particles_d); \
-    k_particle_movers_d_list.push_back(k_particle_movers_d); \
-    \
-    sp->k_p = &k_particles_d; \
-    sp->k_pm = &k_particle_movers_d; \
+    sp->k_p = new k_particles_d_t("k_particles_d", n_particles); \
+    sp->k_pm = new k_particle_movers_d_t ("k_particle_movers_d", max_pmovers); \
     sp->k_p_h = sp->k_p; \
     sp->k_pm_h = sp->k_pm; 
 
@@ -190,18 +159,6 @@ enum accumulator_var { \
 
 
   #define KOKKOS_MEMORY_COPY_PARTICLE_FROM_DEVICE()  
-
-
-  #define KOKKOS_ACCUMULATOR_VIEW_INIT() \
-    k_accumulators_d_t k_accumulators_d ("k_accumulators_d", n_accumulators); \
-    \
-    k_accumulators_d_t k_accumulators_h = k_accumulators_d; 
-
-
-  #define KOKKOS_MEMORY_COPY_ACCUMULATOR_TO_DEVICE() 
-
-
-  #define KOKKOS_MEMORY_COPY_ACCUMULATOR_FROM_DEVICE()  
 
 
 #endif
@@ -247,6 +204,7 @@ enum accumulator_var { \
   });     \
   KOKKOS_MEMORY_COPY_FIELD_TO_DEVICE()
 
+
 #define KOKKOS_COPY_FIELD_MEM_TO_HOST() \
   KOKKOS_MEMORY_COPY_FIELD_FROM_DEVICE() \
   Kokkos::parallel_for(host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
@@ -282,17 +240,13 @@ enum accumulator_var { \
   });
 
 
-// Create lists to hold the kokkos shared_ptrs or will dealloc after being
-// assigned to struct.
 #define KOKKOS_PARTICLE_VARIABLES() \
   int n_particles; \
   int max_pmovers; \
   int n_pmovers; \
   \
-  std::vector<k_particles_d_t> k_particles_d_list; \
-  std::vector<k_particle_movers_d_t> k_particle_movers_d_list; \
-  std::vector<k_particles_h_t> k_particles_h_list; \
-  std::vector<k_particle_movers_h_t> k_particle_movers_h_list; \
+  k_particles_h_t k_particles_h; \
+  k_particle_movers_h_t k_particle_movers_h; \
   \
   LIST_FOR_EACH( sp, species_list ) {\
     n_particles = sp->np; \
@@ -303,15 +257,16 @@ enum accumulator_var { \
     KOKKOS_PARTICLE_VIEW_INIT() \
   };
 
+
 #define KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE() \
   LIST_FOR_EACH( sp, species_list ) {\
     n_particles = sp->np; \
     n_pmovers = sp->nm; \
     max_pmovers = sp->max_nm; \
     \
-    k_particles_h_t k_particles_h = *sp->k_p_h; \
-    k_particle_movers_h_t k_particle_movers_h = *sp->k_pm_h; \
-    Kokkos::parallel_for(host_execution_policy(0, n_particles - 1) , KOKKOS_LAMBDA (int i) { \
+    k_particles_h = *sp->k_p_h; \
+    k_particle_movers_h = *sp->k_pm_h; \
+    Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
       k_particles_h(i,dx) = sp->p[i].dx; \
       k_particles_h(i,dy) = sp->p[i].dy; \
       k_particles_h(i,dz) = sp->p[i].dz; \
@@ -322,14 +277,15 @@ enum accumulator_var { \
       k_particles_h(i,pi) = sp->p[i].i;  \
     });\
     \
-    Kokkos::parallel_for(host_execution_policy(0, n_pmovers - 1) , KOKKOS_LAMBDA (int i) { \
+    Kokkos::parallel_for(host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
       k_particle_movers_h(i,dispx) = sp->pm[i].dispx; \
       k_particle_movers_h(i,dispy) = sp->pm[i].dispy; \
       k_particle_movers_h(i,dispz) = sp->pm[i].dispz; \
       k_particle_movers_h(i,pmi)   = sp->pm[i].i;     \
     });\
     KOKKOS_MEMORY_COPY_PARTICLE_TO_DEVICE(); \
-  }; 
+  };
+
 
 #define KOKKOS_COPY_PARTICLE_MEM_TO_HOST() \
   LIST_FOR_EACH( sp, species_list ) {\
@@ -337,9 +293,9 @@ enum accumulator_var { \
     n_particles = sp->np; \
     n_pmovers = sp->nm; \
     max_pmovers = sp->max_nm; \
-    k_particles_h_t k_particles_h = *sp->k_p_h; \
-    k_particle_movers_h_t k_particle_movers_h = *sp->k_pm_h; \
-    Kokkos::parallel_for(host_execution_policy(0, n_particles - 1) , KOKKOS_LAMBDA (int i) { \
+    k_particles_h = *sp->k_p_h; \
+    k_particle_movers_h = *sp->k_pm_h; \
+    Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
       sp->p[i].dx = k_particles_h(i,dx); \
       sp->p[i].dy = k_particles_h(i,dy); \
       sp->p[i].dz = k_particles_h(i,dz); \
@@ -350,10 +306,11 @@ enum accumulator_var { \
       sp->p[i].i  = k_particles_h(i,pi); \
     });\
     \
-    Kokkos::parallel_for(host_execution_policy(0, n_pmovers - 1) , KOKKOS_LAMBDA (int i) { \
+    Kokkos::parallel_for(host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
       sp->pm[i].dispx = k_particle_movers_h(i,dispx); \
       sp->pm[i].dispy = k_particle_movers_h(i,dispy); \
       sp->pm[i].dispz = k_particle_movers_h(i,dispz); \
       sp->pm[i].i     = k_particle_movers_h(i,pmi);   \
     });\
   };
+
