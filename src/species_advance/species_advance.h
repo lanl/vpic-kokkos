@@ -12,6 +12,8 @@
 #ifndef _species_advance_h_
 #define _species_advance_h_
 
+#include <iostream> 
+
 #include "../sf_interface/sf_interface.h"
 #include "../vpic/kokkos_helpers.h"
 
@@ -55,11 +57,12 @@ typedef struct particle_injector {
 } particle_injector_t;
 
 typedef struct species {
+
   char * name;                        // Species name
   float q;                            // Species particle charge
   float m;                            // Species particle rest mass
 
-  int np, max_np;                     // Number and max local particles
+  int np = 0, max_np = 0;             // Number and max local particles
   particle_t * ALIGNED(128) p;        // Array of particles for the species
   k_particles_d_t *k_p;                // kokkos particles view on device
   k_particles_h_t *k_p_h;              // kokkos particles view on host
@@ -97,7 +100,27 @@ typedef struct species {
 
   grid_t * g;                         // Underlying grid
   species_id id;                      // Unique identifier for a species
-  struct species *next;               // Next species in the list
+  struct species *next = NULL;               // Next species in the list
+
+
+  //int n_particles = 100;
+  k_particles_d_t kp;
+  k_particles_d_t kp_mv;
+  species(int n_particles) :
+      kp(Kokkos::ViewAllocateWithoutInitializing("k_particles_h"), n_particles),
+      kp_mv(Kokkos::create_mirror_view( kp )),
+      //kp_mv(Kokkos::create_mirror_view_and_copy( Kokkos::DefaultExecutionSpace(), kp, "kp_mv") ) // Works
+      max_np(n_particles) // Not strictly needed
+    {
+        std::cout << "species consturctor " << std::endl;
+        kp(1, 1) = 1.0;
+        Kokkos::deep_copy(kp, kp_mv);
+        std::cout << "done copy" << std::endl;
+        std::cout << "Host " << kp(1,1) << std::endl;
+        std::cout << "Device " << kp_mv(1,1) << std::endl;
+    }
+
+
 } species_t;
 
 BEGIN_C_DECLS
