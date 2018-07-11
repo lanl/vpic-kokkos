@@ -64,13 +64,9 @@ typedef struct species {
 
   int np = 0, max_np = 0;             // Number and max local particles
   particle_t * ALIGNED(128) p;        // Array of particles for the species
-  k_particles_d_t *k_p;                // kokkos particles view on device
-  k_particles_h_t *k_p_h;              // kokkos particles view on host
 
   int nm, max_nm;                     // Number and max local movers in use
   particle_mover_t * ALIGNED(128) pm; // Particle movers
-  k_particle_movers_d_t *k_pm;         // kokkos particle movers on device
-  k_particle_movers_h_t *k_pm_h;       // kokkos particle movers on host
 
   int64_t last_sorted;                // Step when the particles were last
                                       // sorted.
@@ -103,23 +99,28 @@ typedef struct species {
   struct species *next = NULL;               // Next species in the list
 
 
-  //int n_particles = 100;
-  k_particles_d_t kp;
-  k_particles_d_t kp_mv;
-  species(int n_particles) :
-      kp(Kokkos::ViewAllocateWithoutInitializing("k_particles_h"), n_particles),
-      kp_mv(Kokkos::create_mirror_view( kp )),
-      //kp_mv(Kokkos::create_mirror_view_and_copy( Kokkos::DefaultExecutionSpace(), kp, "kp_mv") ) // Works
-      max_np(n_particles) // Not strictly needed
-    {
-        std::cout << "species consturctor " << std::endl;
-        kp(1, 1) = 1.0;
-        Kokkos::deep_copy(kp, kp_mv);
-        std::cout << "done copy" << std::endl;
-        std::cout << "Host " << kp(1,1) << std::endl;
-        std::cout << "Device " << kp_mv(1,1) << std::endl;
-    }
+  k_particles_d_t k_p_d;                // kokkos particles view on device
+  k_particles_h_t k_p_h;              // kokkos particles view on host
 
+  k_particle_movers_d_t k_pm_d;         // kokkos particle movers on device
+  k_particle_movers_h_t k_pm_h;       // kokkos particle movers on host
+#ifdef ENABLE_KOKKOS_CUDA
+  species(int n_particles, int n_pmovers) :
+      k_p_h(Kokkos::ViewAllocateWithoutInitializing("k_particles_h"), n_particles),
+      k_pm_h(Kokkos::ViewAllocateWithoutInitializing("k_particle_movers_h"), n_pmovers),
+      k_p_d(Kokkos::create_mirror_view_and_copy( Kokkos::DefaultExecutionSpace(), k_p_h, "k_particles_d") ),
+      k_pm_d(Kokkos::create_mirror_view_and_copy( Kokkos::DefaultExecutionSpace(), k_pm_h, "k_particle_movers_d") )
+  {
+  }
+#else
+  species(int n_particles, int n_pmovers) :
+      k_p_h(Kokkos::ViewAllocateWithoutInitializing("k_particles_h"), n_particles),
+      k_pm_h(Kokkos::ViewAllocateWithoutInitializing("k_particle_movers_h"), n_pmovers)
+  {
+      k_p_d = k_p_h;
+      k_pm_d = k_pm_h;
+  }
+#endif
 
 } species_t;
 

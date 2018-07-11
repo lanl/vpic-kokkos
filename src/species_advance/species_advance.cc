@@ -117,7 +117,7 @@ species( const char * name,
   if( max_local_np<1 ) max_local_np = 1;
   if( max_local_nm<1 ) max_local_nm = 1;
 
-  sp = new species_t(max_local_np);
+  sp = new species_t(max_local_np, max_local_nm);
   //MALLOC( sp, 1 );
   //CLEAR( sp, 1 );
 

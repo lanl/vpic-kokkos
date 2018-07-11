@@ -227,6 +227,10 @@ typedef struct field_advance_kernels {
 
 typedef struct field_array {
   field_t * ALIGNED(128) f;          // Local field data
+  k_field_d_t *k_f;                  // Kokkos field data on device
+  k_field_h_t *k_f_h;                // Kokkos field data on host
+  k_field_edge_d_t *k_fe;            // Kokkos field_edge data (part of field_t) on device
+  k_field_edge_h_t *k_fe_h;          // Kokkos field_edge data on host
   grid_t  * g;                       // Underlying grid
   void    * params;                  // Field advance specific parameters
   field_advance_kernels_t kernel[1]; // Field advance kernels
