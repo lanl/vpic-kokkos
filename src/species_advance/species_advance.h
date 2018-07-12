@@ -104,23 +104,16 @@ typedef struct species {
 
   k_particle_movers_d_t k_pm_d;         // kokkos particle movers on device
   k_particle_movers_h_t k_pm_h;       // kokkos particle movers on host
-#ifdef ENABLE_KOKKOS_CUDA
+
   species(int n_particles, int n_pmovers) :
-      k_p_h(Kokkos::ViewAllocateWithoutInitializing("k_particles_h"), n_particles),
-      k_pm_h(Kokkos::ViewAllocateWithoutInitializing("k_particle_movers_h"), n_pmovers),
-      k_p_d(Kokkos::create_mirror_view_and_copy( Kokkos::DefaultExecutionSpace(), k_p_h, "k_particles_d") ),
-      k_pm_d(Kokkos::create_mirror_view_and_copy( Kokkos::DefaultExecutionSpace(), k_pm_h, "k_particle_movers_d") )
+      k_p_d("k_particles", n_particles),
+      k_pm_d("k_particle_movers", n_pmovers),
+      k_p_h(Kokkos::create_mirror_view(k_p_h)),
+      k_pm_h(Kokkos::create_mirror_view(k_pm_h))
   {
+      Kokkos::deep_copy(k_p_d, k_p_h);
+      Kokkos::deep_copy(k_pm_d, k_pm_h);
   }
-#else
-  species(int n_particles, int n_pmovers) :
-      k_p_h(Kokkos::ViewAllocateWithoutInitializing("k_particles_h"), n_particles),
-      k_pm_h(Kokkos::ViewAllocateWithoutInitializing("k_particle_movers_h"), n_pmovers)
-  {
-      k_p_d = k_p_h;
-      k_pm_d = k_pm_h;
-  }
-#endif
 
 } species_t;
 

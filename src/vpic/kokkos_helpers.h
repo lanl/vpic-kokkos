@@ -17,20 +17,30 @@
   using k_field_h_t = Kokkos::View<float *[FIELD_VAR_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace>;
   using k_field_edge_h_t = Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace>;
 
-  using k_particles_d_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultExecutionSpace>;
-  using k_particle_movers_d_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultExecutionSpace>;
-  using k_particles_h_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace>;
-  using k_particle_movers_h_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT],  Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace>;
+
+  using k_particles_h_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::DefaultHostExecutionSpace>::HostMirror;
+  using k_particle_movers_h_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT],  Kokkos::DefaultHostExecutionSpace>::HostMirror;
+  using k_particles_d_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::DefaultExecutionSpace>;
+  using k_particle_movers_d_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT], Kokkos::DefaultExecutionSpace>;
+
+
 #else
   using k_field_d_t = Kokkos::View<float *[FIELD_VAR_COUNT], Kokkos::DefaultExecutionSpace>;
   using k_field_edge_d_t = Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::DefaultExecutionSpace>;
   using k_field_h_t = k_field_d_t;
   using k_field_edge_h_t = k_field_edge_d_t;
 
+  using k_particles_h_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::DefaultHostExecutionSpace>;
+  using k_particle_movers_h_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT],  Kokkos::DefaultHostExecutionSpace>;
+  using k_particles_d_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::DefaultExecutionSpace>::HostMirror;
+  using k_particle_movers_d_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT], Kokkos::DefaultExecutionSpace>::HostMirror;
+
+/*
   using k_particles_d_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::DefaultExecutionSpace>;
   using k_particle_movers_d_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT], Kokkos::DefaultExecutionSpace>;
   using k_particles_h_t = k_particles_d_t;
   using k_particle_movers_h_t = k_particle_movers_d_t;
+*/
 #endif
   
 using k_accumulators_d_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::DefaultExecutionSpace>;
@@ -39,26 +49,6 @@ using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>; 
 
 typedef typename Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>::member_type k_member_t;
-
-#define KOKKOS_VIEW_INIT()                                         \
-  class Kokkos_Views {                                             \
-    public:                                                        \
-      k_field_h_t *k_field_h;                                       \
-      k_field_d_t *k_field_d;                                       \
-                                                                   \
-      k_field_edge_h_t *k_field_h;                                  \
-      k_field_edge_d_t *k_field_edge_d;                             \
-                                                                   \
-      std::vector<k_particles_h_t> v_k_particles_h;                \
-      std::vector<k_particles_d_t> v_k_particles_d;                \
-                                                                  \
-      std::vector<k_particle_movers_h_t> v_k_particle_movers_h;    \
-      std::vector<k_particle_movers_d_t> v_k_particle_movers_d;    \
-  } \
-  \
-  static Kokkos_Views kv; 
-
-
 
 #define KOKKOS_ENUMS() \
 enum field_var { \
@@ -119,24 +109,24 @@ enum accumulator_var { \
 #ifdef ENABLE_KOKKOS_CUDA 
 
   #define KOKKOS_FIELD_VIEW_INIT() \
-        k_field_h_t *k_field_h = new k_field_h_t(Kokkos::ViewAllocateWithoutInitializing("k_field_h"), n_fields); \
+        k_field_h_t k_field_h = k_field_h_t(Kokkos::ViewAllocateWithoutInitializing("k_field_h"), n_fields); \
     \
-        k_field_edge_h_t *k_field_edge_h = new k_field_edge_h_t(Kokkos::ViewAllocateWithoutInitializing("k_field_edge_h"), n_fields); \
+        k_field_edge_h_t k_field_edge_h = k_field_edge_h_t(Kokkos::ViewAllocateWithoutInitializing("k_field_edge_h"), n_fields); \
     \
     k_field_d_t k_field_d = Kokkos::create_mirror_view_and_copy( \
-        Kokkos::DefaultExecutionSpace(), *k_field_h, "k_field_d"); \
+        Kokkos::DefaultExecutionSpace(), k_field_h, "k_field_d"); \
     k_field_edge_d_t k_field_edge_d = Kokkos::create_mirror_view_and_copy( \
-        Kokkos::DefaultExecutionSpace(), *k_field_edge_h, "k_field_edge_d"); 
+        Kokkos::DefaultExecutionSpace(), k_field_edge_h, "k_field_edge_d"); 
 
 
   #define KOKKOS_MEMORY_COPY_FIELD_TO_DEVICE() \
-    Kokkos::deep_copy(k_field_d, *k_field_h); \
-    Kokkos::deep_copy(k_field_edge_d, *k_field_edge_h);
+    Kokkos::deep_copy(k_field_d, k_field_h); \
+    Kokkos::deep_copy(k_field_edge_d, k_field_edge_h);
 
 
   #define KOKKOS_MEMORY_COPY_FIELD_FROM_DEVICE() \
-    Kokkos::deep_copy(*k_field_h, k_field_d); \
-    Kokkos::deep_copy(*k_field_edge_h, k_field_edge_d); 
+    Kokkos::deep_copy(k_field_h, k_field_d); \
+    Kokkos::deep_copy(k_field_edge_h, k_field_edge_d); 
 
   
   #define KOKKOS_PARTICLE_VIEW_INIT() \
@@ -154,16 +144,10 @@ enum accumulator_var { \
 #else 
 
   #define KOKKOS_FIELD_VIEW_INIT() \
-    k_field_d_t *k_field_d = new k_field_d_t("k_field_d", n_fields); \
-    k_field_edge_d_t *k_field_edge_d = new k_field_edge_d_t("k_field_edge_d", n_fields); \
+    k_field_d_t k_field_d = k_field_d_t("k_field_d", n_fields); \
+    k_field_edge_d_t k_field_edge_d = k_field_edge_d_t("k_field_edge_d", n_fields); \
     k_field_d_t *k_field_h = k_field_d; \
     k_field_edge_d_t *k_field_edge_h = k_field_edge_d; \
-    \
-    field_array->k_f = new k_field_d_t("k_field_d", n_fields); \
-    field_array->k_fe = new k_field_edge_d_t("k_field_edge_d", n_fields); \
-    \
-    field_array->k_f_h = field_array->k_f; \
-    field_array->k_fe_h = field_array->k_fe;
 
 
   #define KOKKOS_MEMORY_COPY_FIELD_TO_DEVICE()   
@@ -193,8 +177,8 @@ enum accumulator_var { \
 
   
 #define KOKKOS_COPY_FIELD_MEM_TO_DEVICE() \
-  k_field = *k_field_h; \
-  k_field_edge = *k_field_edge_h; \
+  k_field = k_field_h; \
+  k_field_edge = k_field_edge_h; \
   Kokkos::parallel_for(host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
           k_field(i,ex) = field_array->f[i].ex; \
           k_field(i,ey) = field_array->f[i].ey; \
@@ -231,8 +215,8 @@ enum accumulator_var { \
 
 #define KOKKOS_COPY_FIELD_MEM_TO_HOST() \
   KOKKOS_MEMORY_COPY_FIELD_FROM_DEVICE() \
-  k_field = *k_field_h; \
-  k_field_edge = *k_field_edge_h; \
+  k_field = k_field_h; \
+  k_field_edge = k_field_edge_h; \
   Kokkos::parallel_for(host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
           field_array->f[i].ex = k_field(i,ex); \
           field_array->f[i].ey = k_field(i,ey); \
