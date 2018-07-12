@@ -45,13 +45,13 @@ KOKKOS_ENUMS();
 #define UPDATE_CBZ() f0_cbz -= ( px*( fx_ey-f0_ey ) - py*( fy_ex-f0_ex ) );
 
 void
-advance_b(
-        k_field_d_t *k_field_d,
-        grid_t      *g,
-        float       frac) {
+advance_b(field_array_t * RESTRICT fa,
+          float       frac) {
 
 
-  auto k_field = *k_field_d;
+  auto k_field = fa->k_f_d;
+  auto g = fa->g;
+
   DECLARE_STENCIL()
 
   Kokkos::parallel_for(Kokkos::TeamPolicy< Kokkos::DefaultExecutionSpace>
@@ -121,6 +121,6 @@ advance_b(
     }
   });
 
-  k_local_adjust_norm_b(k_field_d, g);
+  k_local_adjust_norm_b( fa, g );
   
 }

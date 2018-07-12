@@ -96,15 +96,16 @@ typedef struct species {
 
   grid_t * g;                         // Underlying grid
   species_id id;                      // Unique identifier for a species
-  struct species *next = NULL;               // Next species in the list
+  struct species *next = NULL;        // Next species in the list
 
 
   k_particles_t k_p_d;                // kokkos particles view on device
-  k_particles_t::HostMirror k_p_h;              // kokkos particles view on host
+  k_particles_t::HostMirror k_p_h;    // kokkos particles view on host
 
   k_particle_movers_t k_pm_d;         // kokkos particle movers on device
-  k_particle_movers_t::HostMirror k_pm_h;       // kokkos particle movers on host
+  k_particle_movers_t::HostMirror k_pm_h;  // kokkos particle movers on host
 
+  // Init Kokkos Particle Arrays
   species(int n_particles, int n_pmovers) :
       k_p_d("k_particles", n_particles),
       k_pm_d("k_particle_movers", n_pmovers)

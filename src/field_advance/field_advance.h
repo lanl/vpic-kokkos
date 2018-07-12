@@ -180,10 +180,7 @@ typedef struct field_advance_kernels {
 
   // Time stepping interface
 
-  void (*advance_b)(
-          k_field_d_t *k_field_d,
-          grid_t *grid,
-          float frac );
+  void (*advance_b)( struct field_array * RESTRICT fa, float frac );
   void (*advance_e)( struct field_array * RESTRICT fa, float frac );
 
   // Diagnostic interface
@@ -226,14 +223,25 @@ typedef struct field_advance_kernels {
 // kernels used to advance them.
 
 typedef struct field_array {
-  field_t * ALIGNED(128) f;          // Local field data
-  k_field_d_t *k_f;                  // Kokkos field data on device
-  k_field_h_t *k_f_h;                // Kokkos field data on host
-  k_field_edge_d_t *k_fe;            // Kokkos field_edge data (part of field_t) on device
-  k_field_edge_h_t *k_fe_h;          // Kokkos field_edge data on host
-  grid_t  * g;                       // Underlying grid
-  void    * params;                  // Field advance specific parameters
-  field_advance_kernels_t kernel[1]; // Field advance kernels
+  field_t * ALIGNED(128) f;           // Local field data
+  grid_t  * g;                        // Underlying grid
+  void    * params;                   // Field advance specific parameters
+  field_advance_kernels_t kernel[1];  // Field advance kernels
+
+  k_field_t k_f_d;                   // Kokkos field data on device
+  k_field_t::HostMirror k_f_h;       // Kokkos field data on host
+  k_field_edge_t k_fe_d;             // Kokkos field_edge data (part of field_t) on device
+  k_field_edge_t::HostMirror k_fe_h; // Kokkos field_edge data on host
+
+  // Initialize Kokkos Field Array
+  field_array(int n_fields) :
+    k_f_d("k_fields", n_fields),
+    k_fe_d("k_field_edges", n_fields)
+  {
+    k_f_h = Kokkos::create_mirror_view(k_f_d);
+    k_fe_h = Kokkos::create_mirror_view(k_fe_d);
+  }
+
 } field_array_t;
 
 BEGIN_C_DECLS

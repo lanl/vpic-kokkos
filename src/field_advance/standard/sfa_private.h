@@ -48,8 +48,7 @@ clear_rhof( field_array_t * RESTRICT fa );
 
 void
 advance_b( 
-      k_field_d_t *k_field_d,
-      grid_t *grid,
+      field_array_t * RESTRICT fa,
       float                    frac);
 
 // In advance_e.c
@@ -354,7 +353,7 @@ local_adjust_div_e( field_t      * ALIGNED(128) f,
                     const grid_t *              g );
 
 void
-k_local_adjust_norm_b( k_field_d_t *k_field_d,
+k_local_adjust_norm_b( field_array_t * RESTRICT fa,
                      const grid_t *              g );
 
 void

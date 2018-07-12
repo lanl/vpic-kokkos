@@ -189,7 +189,8 @@ new_standard_field_array( grid_t           * RESTRICT g,
                           float                       damp ) {
   field_array_t * fa;
   if( !g || !m_list || damp<0 ) ERROR(( "Bad args" ));
-  MALLOC( fa, 1 );
+  fa = new field_array_t(g->nv);
+  //MALLOC( fa, 1 );
   MALLOC_ALIGNED( fa->f, g->nv, 128 );
   CLEAR( fa->f, g->nv );
   fa->g = g;

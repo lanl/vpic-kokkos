@@ -267,7 +267,7 @@ local_adjust_tang_e( field_t      * ALIGNED(128) f,
 }
 
 void
-k_local_adjust_norm_b( k_field_d_t *k_field_d,
+k_local_adjust_norm_b( field_array_t * RESTRICT fa,
                      const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int bc, face, x, y, z, xl, xh, yl, yh, zl, zh;
@@ -303,7 +303,7 @@ k_local_adjust_norm_b( k_field_d_t *k_field_d,
                  < Kokkos::DefaultExecutionSpace >(zl, zh), KOKKOS_LAMBDA (int z) {      \
            for(int yi=yl; yi<=yh; yi++ ) {			                    \
              for(int xj=xl; xj<=xh; xj++ ) {                            \
-	             (*k_field_d)(VOXEL(xj,yi,z, nx,ny,nz), cb##X) = 0;     \
+	             (fa->k_f_h)(VOXEL(xj,yi,z, nx,ny,nz), cb##X) = 0;     \
              }                                                          \
            }                                                            \
          });                                                            \
