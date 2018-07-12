@@ -99,20 +99,18 @@ typedef struct species {
   struct species *next = NULL;               // Next species in the list
 
 
-  k_particles_d_t k_p_d;                // kokkos particles view on device
-  k_particles_h_t k_p_h;              // kokkos particles view on host
+  k_particles_t k_p_d;                // kokkos particles view on device
+  k_particles_t::HostMirror k_p_h;              // kokkos particles view on host
 
-  k_particle_movers_d_t k_pm_d;         // kokkos particle movers on device
-  k_particle_movers_h_t k_pm_h;       // kokkos particle movers on host
+  k_particle_movers_t k_pm_d;         // kokkos particle movers on device
+  k_particle_movers_t::HostMirror k_pm_h;       // kokkos particle movers on host
 
   species(int n_particles, int n_pmovers) :
       k_p_d("k_particles", n_particles),
-      k_pm_d("k_particle_movers", n_pmovers),
-      k_p_h(Kokkos::create_mirror_view(k_p_h)),
-      k_pm_h(Kokkos::create_mirror_view(k_pm_h))
+      k_pm_d("k_particle_movers", n_pmovers)
   {
-      Kokkos::deep_copy(k_p_d, k_p_h);
-      Kokkos::deep_copy(k_pm_d, k_pm_h);
+      k_p_h = Kokkos::create_mirror_view(k_p_d);
+      k_pm_h = Kokkos::create_mirror_view(k_pm_d);
   }
 
 } species_t;

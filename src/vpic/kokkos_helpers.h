@@ -18,10 +18,8 @@
   using k_field_edge_h_t = Kokkos::View<material_id*[FIELD_EDGE_COUNT], Kokkos::LayoutLeft, Kokkos::DefaultHostExecutionSpace>;
 
 
-  using k_particles_h_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::DefaultHostExecutionSpace>::HostMirror;
-  using k_particle_movers_h_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT],  Kokkos::DefaultHostExecutionSpace>::HostMirror;
-  using k_particles_d_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::DefaultExecutionSpace>;
-  using k_particle_movers_d_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT], Kokkos::DefaultExecutionSpace>;
+  using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
+  using k_particle_movers_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT]>;
 
 
 #else
@@ -30,17 +28,9 @@
   using k_field_h_t = k_field_d_t;
   using k_field_edge_h_t = k_field_edge_d_t;
 
-  using k_particles_h_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::DefaultHostExecutionSpace>;
-  using k_particle_movers_h_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT],  Kokkos::DefaultHostExecutionSpace>;
-  using k_particles_d_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::DefaultExecutionSpace>::HostMirror;
-  using k_particle_movers_d_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT], Kokkos::DefaultExecutionSpace>::HostMirror;
+  using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
+  using k_particle_movers_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT]>;
 
-/*
-  using k_particles_d_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::DefaultExecutionSpace>;
-  using k_particle_movers_d_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT], Kokkos::DefaultExecutionSpace>;
-  using k_particles_h_t = k_particles_d_t;
-  using k_particle_movers_h_t = k_particle_movers_d_t;
-*/
 #endif
   
 using k_accumulators_d_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::DefaultExecutionSpace>;
@@ -255,8 +245,8 @@ enum accumulator_var { \
   int max_pmovers; \
   int n_pmovers; \
   \
-  k_particles_h_t k_particles_h; \
-  k_particle_movers_h_t k_particle_movers_h; \
+  k_particles_t::HostMirror k_particles_h; \
+  k_particle_movers_t::HostMirror k_particle_movers_h; \
   \
   LIST_FOR_EACH( sp, species_list ) {\
     n_particles = sp->np; \
