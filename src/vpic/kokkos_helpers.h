@@ -146,8 +146,8 @@ enum accumulator_var { \
   #define KOKKOS_FIELD_VIEW_INIT() \
     k_field_d_t k_field_d = k_field_d_t("k_field_d", n_fields); \
     k_field_edge_d_t k_field_edge_d = k_field_edge_d_t("k_field_edge_d", n_fields); \
-    k_field_d_t *k_field_h = k_field_d; \
-    k_field_edge_d_t *k_field_edge_h = k_field_edge_d; \
+    k_field_d_t k_field_h = k_field_d; \
+    k_field_edge_d_t k_field_edge_h = k_field_edge_d; \
 
 
   #define KOKKOS_MEMORY_COPY_FIELD_TO_DEVICE()   
