@@ -13,6 +13,7 @@
 #include "../field_advance/field_advance.h"
 // FIXME: SHOULD INCLUDE SPECIES_ADVANCE TOO ONCE READY
 #include "../vpic/kokkos_helpers.h"
+#include <Kokkos_Core.hpp>
 
 /*****************************************************************************/
 
@@ -35,10 +36,12 @@ typedef struct interpolator_array {
   interpolator_t * ALIGNED(128) i;
   grid_t * g;
   k_interpolator_t k_i_d;
+  k_interpolator_t k_i_h;
 
   interpolator_array(int nv) :
     k_i_d("k_interpolators", nv)
   {
+    k_i_h = Kokkos::create_mirror_view(k_i_d);
   }
 
 } interpolator_array_t;
