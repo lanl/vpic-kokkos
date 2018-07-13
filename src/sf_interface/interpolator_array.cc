@@ -26,8 +26,8 @@ new_interpolator_array( grid_t * g ) {
   if( !g ) ERROR(( "NULL grid" ));
   ia = new interpolator_array_t(g->nv);
   //MALLOC( ia, 1 );
-  //MALLOC_ALIGNED( ia->i, g->nv, 128 );
-  //CLEAR( ia->i, g->nv );
+  MALLOC_ALIGNED( ia->i, g->nv, 128 );
+  CLEAR( ia->i, g->nv );
   ia->g = g;
   REGISTER_OBJECT( ia, checkpt_interpolator_array, restore_interpolator_array,
                    NULL );
