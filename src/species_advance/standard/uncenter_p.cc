@@ -45,7 +45,7 @@ void uncenter_p_kokkos(k_particles_t k_particles, k_interpolator_t k_interp, int
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
       (0, np), KOKKOS_LAMBDA (int p_index) {
 
-    int ii = k_particles(p_index, ii);
+    int ii = k_particles(p_index, pi);
     float hax, hay, haz, l_cbx, l_cby, l_cbz;
     float v0, v1, v2, v3, v4;
 
