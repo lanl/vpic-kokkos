@@ -1,4 +1,3 @@
-#include <list>
 #include <Kokkos_Core.hpp>
 
 // This module implements kokkos macros
@@ -9,6 +8,7 @@
 #define PARTICLE_MOVER_VAR_COUNT 4
 #define ACCUMULATOR_VAR_COUNT 3
 #define ACCUMULATOR_ARRAY_LENGTH 4
+#define INTERPOLATOR_VAR_COUNT 18
 
 
 using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
@@ -16,6 +16,8 @@ using k_field_edge_t = Kokkos::View<material_id*[FIELD_EDGE_COUNT]>;
 
 using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
 using k_particle_movers_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT]>;
+
+using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 
 using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
@@ -29,10 +31,10 @@ enum field_var { \
   ex = 0, \
   ey = 1, \
   ez = 2, \
-  div_e_err = 3, \
-  cbx = 4, \
-  cby = 5, \
-  cbz = 6, \
+  cbx = 3, \
+  cby = 4, \
+  cbz = 5, \
+  div_e_err = 6, \
   div_b_err = 7, \
   tcax = 8, \
   tcay = 9, \
@@ -42,6 +44,23 @@ enum field_var { \
   jfy = 13, \
   jfz = 14, \
   rhof = 15 \
+}; \
+\
+/* Use first 6 params from 
+ field_var for interpolator */ \
+enum interpolator { \
+  dexdy = 6, \
+  dexdz = 7, \
+  d2exdydz = 8, \
+  deydz = 9, \
+  deydx = 10, \
+  d2eydzdx = 11, \
+  dezdx = 12, \
+  dezdy = 13, \
+  d2ezdxdy = 14, \
+  dcbxdx = 15, \
+  dcbydy = 16, \
+  dcbzdz = 17 \
 }; \
 \
 enum field_edge_var { \

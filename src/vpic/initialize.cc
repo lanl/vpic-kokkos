@@ -1,5 +1,6 @@
 #include "vpic.h"
 #include <Kokkos_Core.hpp>
+#include "kokkos_helpers.h"
 #define FAK field_array->kernel
 
 void
@@ -52,6 +53,9 @@ vpic_simulation::initialize( int argc,
     
   if( species_list ) {
     if( rank()==0 ) MESSAGE(( "Uncentering particles" ));
+    KOKKOS_ENUMS()
+    KOKKOS_FIELD_VARIABLES()
+    KOKKOS_COPY_FIELD_MEM_TO_DEVICE()
     TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
   }
   LIST_FOR_EACH( sp, species_list ) TIC uncenter_p( sp, interpolator_array ); TOC( uncenter_p, 1 );

@@ -12,6 +12,7 @@
 
 #include "../field_advance/field_advance.h"
 // FIXME: SHOULD INCLUDE SPECIES_ADVANCE TOO ONCE READY
+#include "../vpic/kokkos_helpers.h"
 
 /*****************************************************************************/
 
@@ -33,6 +34,13 @@ typedef struct interpolator {
 typedef struct interpolator_array {
   interpolator_t * ALIGNED(128) i;
   grid_t * g;
+  k_interpolator_t k_i_d;
+
+  interpolator_array(int nv) :
+    k_i_d("k_interpolators", nv)
+  {
+  }
+
 } interpolator_array_t;
 
 BEGIN_C_DECLS
