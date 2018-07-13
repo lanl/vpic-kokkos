@@ -5,15 +5,6 @@
 
 KOKKOS_ENUMS();
 
-#define DECLARE_STENCIL()                                       \
-  const int   nx   = g->nx;                                     \
-  const int   ny   = g->ny;                                     \
-  const int   nz   = g->nz;                                     \
-                                                                \
-  const float px   = (nx>1) ? frac*g->cvac*g->dt*g->rdx : 0;    \
-  const float py   = (ny>1) ? frac*g->cvac*g->dt*g->rdy : 0;    \
-  const float pz   = (nz>1) ? frac*g->cvac*g->dt*g->rdz : 0;    \
-
 #define f0_cbx k_field(f0_index, cbx)
 #define f0_cby k_field(f0_index, cby)
 #define f0_cbz k_field(f0_index, cbz)
@@ -44,15 +35,8 @@ KOKKOS_ENUMS();
 #define UPDATE_CBY() f0_cby -= ( pz*( fz_ex-f0_ex ) - px*( fx_ez-f0_ez ) );
 #define UPDATE_CBZ() f0_cbz -= ( px*( fx_ey-f0_ey ) - py*( fy_ex-f0_ex ) );
 
-void
-advance_b(field_array_t * RESTRICT fa,
-          float       frac) {
-
-
-  auto k_field = fa->k_f_d;
-  auto g = fa->g;
-
-  DECLARE_STENCIL()
+void advance_b_kokkos(k_field_t k_field, int nx, int ny, int nz,
+                      int px, int py, int pz) {
 
   Kokkos::parallel_for(Kokkos::TeamPolicy< Kokkos::DefaultExecutionSpace>
       (nx, Kokkos::AUTO), KOKKOS_LAMBDA (const k_member_t &team_member) {
@@ -121,6 +105,24 @@ advance_b(field_array_t * RESTRICT fa,
     }
   });
 
-  k_local_adjust_norm_b( fa, g );
   
+}
+
+void
+advance_b(field_array_t * RESTRICT fa,
+          float       frac) {
+
+  k_field_t k_field = fa->k_f_d;
+
+  grid_t *g   = fa->g;
+  int    nx   = g->nx;
+  int    ny   = g->ny;
+  int    nz   = g->nz;
+  float  px   = (nx>1) ? frac*g->cvac*g->dt*g->rdx : 0;
+  float  py   = (ny>1) ? frac*g->cvac*g->dt*g->rdy : 0;
+  float  pz   = (nz>1) ? frac*g->cvac*g->dt*g->rdz : 0;
+
+  advance_b_kokkos(k_field, nx, ny, nz, px, py, pz);
+
+  k_local_adjust_norm_b( fa, g );
 }

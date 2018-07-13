@@ -44,9 +44,6 @@ delete_interpolator_array( interpolator_array_t * ia ) {
 }
 
 
-#define fi(x,y,z) fi[   VOXEL(x,y,z, nx,ny,nz) ]
-#define f(x,y,z)  f [   VOXEL(x,y,z, nx,ny,nz) ]
-
 #define pi_ex       k_interp(pi_index, ex)
 #define pi_dexdy    k_interp(pi_index, dexdy)
 #define pi_dexdz    k_interp(pi_index, dexdz)
@@ -72,20 +69,7 @@ delete_interpolator_array( interpolator_array_t * ia ) {
 #define pi_cbz      k_interp(pi_index, cbz)
 #define pi_dcbzdz   k_interp(pi_index, dcbzdz)
 
-void
-load_interpolator_array( /**/  interpolator_array_t * RESTRICT ia,
-                         const field_array_t        * RESTRICT fa ) {
-//  DECLARE_ALIGNED_ARRAY( load_interpolator_pipeline_args_t, 128, args, 1 );
-
-  if( !ia || !fa || ia->g!=fa->g ) ERROR(( "Bad args" ));
-
-  auto k_interp = ia->k_i_d;
-  auto k_field = fa->k_f_d;
-  const grid_t *g = fa->g;
-  const int nx = g->nx;
-  const int ny = g->ny; 
-  const int nz = g->nz; 
-
+void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field, int nx, int ny, int nz) {
  
   //for( y=1; y<=ny; y++ ) {
   Kokkos::parallel_for(Kokkos::TeamPolicy< Kokkos::DefaultExecutionSpace>
@@ -225,3 +209,21 @@ load_interpolator_array( /**/  interpolator_array_t * RESTRICT ia,
     });
   });
 }
+
+void
+load_interpolator_array( /**/  interpolator_array_t * RESTRICT ia,
+                         const field_array_t        * RESTRICT fa ) {
+
+  if( !ia || !fa || ia->g!=fa->g ) ERROR(( "Bad args" ));
+
+  k_interpolator_t k_interp = ia->k_i_d;
+  k_field_t         k_field  = fa->k_f_d;
+  grid_t *g = fa->g;
+  int nx = g->nx;
+  int ny = g->ny; 
+  int nz = g->nz;
+
+  load_interpolator_array_kokkos(k_interp, k_field, nx, ny, nz); 
+
+} 
+
