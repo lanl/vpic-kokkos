@@ -244,3 +244,60 @@ enum accumulator_var { \
     });\
   };
 
+#define KOKKOS_INTERPOLATOR_VARIABLES() \
+  int nv; \
+  k_interpolator_t::HostMirror k_interpolator_h; \
+
+
+#define KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE() \
+  nv = interpolator_array->g->nv; \
+  \
+  k_interpolator_h = interpolator_array->k_i_h; \
+  Kokkos::parallel_for(host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
+    k_interpolator_h(i, ex)       = interpolator_array->i[i].ex; \
+    k_interpolator_h(i, ey)       = interpolator_array->i[i].ey; \
+    k_interpolator_h(i, ez)       = interpolator_array->i[i].ez; \
+    k_interpolator_h(i, dexdy)    = interpolator_array->i[i].dexdy; \
+    k_interpolator_h(i, dexdz)    = interpolator_array->i[i].dexdz; \
+    k_interpolator_h(i, d2exdydz) = interpolator_array->i[i].d2exdydz; \
+    k_interpolator_h(i, deydz)    = interpolator_array->i[i].deydz; \
+    k_interpolator_h(i, deydx)    = interpolator_array->i[i].deydx; \
+    k_interpolator_h(i, d2eydzdx) = interpolator_array->i[i].d2eydzdx; \
+    k_interpolator_h(i, dezdx)    = interpolator_array->i[i].dezdx; \
+    k_interpolator_h(i, dezdy)    = interpolator_array->i[i].dezdy; \
+    k_interpolator_h(i, d2ezdxdy) = interpolator_array->i[i].d2ezdxdy; \
+    k_interpolator_h(i, cbx)      = interpolator_array->i[i].cbx; \
+    k_interpolator_h(i, cby)      = interpolator_array->i[i].cby; \
+    k_interpolator_h(i, cbz)      = interpolator_array->i[i].cbz; \
+    k_interpolator_h(i, dcbxdx)   = interpolator_array->i[i].dcbxdx; \
+    k_interpolator_h(i, dcbydy)   = interpolator_array->i[i].dcbydy; \
+    k_interpolator_h(i, dcbzdz)   = interpolator_array->i[i].dcbzdz; \
+  });\
+  Kokkos::deep_copy(interpolator_array->k_i_d, interpolator_array->k_i_h);  
+
+
+#define KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST() \
+  Kokkos::deep_copy(interpolator_array->k_i_h, interpolator_array->k_i_d);  \
+  nv = interpolator_array->g->nv;; \
+  k_interpolator_h = interpolator_array->k_i_h; \
+  Kokkos::parallel_for(host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
+    interpolator_array->i[i].ex       = k_interpolator_h(i, ex); \
+    interpolator_array->i[i].ey       = k_interpolator_h(i, ey); \
+    interpolator_array->i[i].ez       = k_interpolator_h(i, ez); \
+    interpolator_array->i[i].dexdy    = k_interpolator_h(i, dexdy); \
+    interpolator_array->i[i].dexdz    = k_interpolator_h(i, dexdz); \
+    interpolator_array->i[i].d2exdydz = k_interpolator_h(i, d2exdydz); \
+    interpolator_array->i[i].deydz    = k_interpolator_h(i, deydz); \
+    interpolator_array->i[i].deydx    = k_interpolator_h(i, deydx); \
+    interpolator_array->i[i].d2eydzdx = k_interpolator_h(i, d2eydzdx); \
+    interpolator_array->i[i].dezdx    = k_interpolator_h(i, dezdx); \
+    interpolator_array->i[i].dezdy    = k_interpolator_h(i, dezdy); \
+    interpolator_array->i[i].d2ezdxdy = k_interpolator_h(i, d2ezdxdy); \
+    interpolator_array->i[i].cbx      = k_interpolator_h(i, cbx); \
+    interpolator_array->i[i].cby      = k_interpolator_h(i, cby); \
+    interpolator_array->i[i].cbz      = k_interpolator_h(i, cbz); \
+    interpolator_array->i[i].dcbxdx   = k_interpolator_h(i, dcbxdx); \
+    interpolator_array->i[i].dcbydy   = k_interpolator_h(i, dcbydy); \
+    interpolator_array->i[i].dcbzdz   = k_interpolator_h(i, dcbzdz); \
+  });
+
