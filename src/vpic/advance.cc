@@ -198,6 +198,8 @@ int vpic_simulation::advance(void) {
   // particle diagnostics in user_diagnostics if there are any particle
   // species to worry about
 
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+
   if( species_list ) TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
 
   step()++;
