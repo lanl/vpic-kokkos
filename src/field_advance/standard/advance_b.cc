@@ -3,38 +3,40 @@
 #include "sfa_private.h"
 #include <Kokkos_Core.hpp>
 
+KOKKOS_ENUMS();
+
+#define f0_cbx k_field(f0_index, cbx)
+#define f0_cby k_field(f0_index, cby)
+#define f0_cbz k_field(f0_index, cbz)
+
+#define f0_ex k_field(f0_index,   ex)
+#define f0_ey k_field(f0_index,   ey)
+#define f0_ez k_field(f0_index,   ez)
+
+#define fx_ex k_field(fx_index,   ex)
+#define fx_ey k_field(fx_index,   ey)
+#define fx_ez k_field(fx_index,   ez)
+
+#define fy_ex k_field(fy_index,   ex)
+#define fy_ey k_field(fy_index,   ey)
+#define fy_ez k_field(fy_index,   ez)
+
+#define fz_ex k_field(fz_index,   ex)
+#define fz_ey k_field(fz_index,   ey)
+#define fz_ez k_field(fz_index,   ez)
+
+// WTF!  Under -ffast-math, gcc-4.1.1 thinks it is okay to treat the
+// below as
+//   f0->cbx = ( f0->cbx + py*( blah ) ) - pz*( blah )
+// even with explicit parenthesis are in there!  Oh my ...
+// -fno-unsafe-math-optimizations must be used
+
+#define UPDATE_CBX() f0_cbx -= ( py*( fy_ez-f0_ez ) - pz*( fz_ey-f0_ey ) );
+#define UPDATE_CBY() f0_cby -= ( pz*( fz_ex-f0_ex ) - px*( fx_ez-f0_ez ) );
+#define UPDATE_CBZ() f0_cbz -= ( px*( fx_ey-f0_ey ) - py*( fy_ex-f0_ex ) );
+
 void advance_b_kokkos(k_field_t k_field, int nx, int ny, int nz,
-                      int px, int py, int pz) {
-
-  #define f0_cbx k_field(f0_index, field_var::cbx)
-  #define f0_cby k_field(f0_index, field_var::cby)
-  #define f0_cbz k_field(f0_index, field_var::cbz)
-
-  #define f0_ex k_field(f0_index,   field_var::ex)
-  #define f0_ey k_field(f0_index,   field_var::ey)
-  #define f0_ez k_field(f0_index,   field_var::ez)
-
-  #define fx_ex k_field(fx_index,   field_var::ex)
-  #define fx_ey k_field(fx_index,   field_var::ey)
-  #define fx_ez k_field(fx_index,   field_var::ez)
-
-  #define fy_ex k_field(fy_index,   field_var::ex)
-  #define fy_ey k_field(fy_index,   field_var::ey)
-  #define fy_ez k_field(fy_index,   field_var::ez)
-
-  #define fz_ex k_field(fz_index,   field_var::ex)
-  #define fz_ey k_field(fz_index,   field_var::ey)
-  #define fz_ez k_field(fz_index,   field_var::ez)
-
-  // WTF!  Under -ffast-math, gcc-4.1.1 thinks it is okay to treat the
-  // below as
-  //   f0->cbx = ( f0->cbx + py*( blah ) ) - pz*( blah )
-  // even with explicit parenthesis are in there!  Oh my ...
-  // -fno-unsafe-math-optimizations must be used
-  
-  #define UPDATE_CBX() f0_cbx -= ( py*( fy_ez-f0_ez ) - pz*( fz_ey-f0_ey ) );
-  #define UPDATE_CBY() f0_cby -= ( pz*( fz_ex-f0_ex ) - px*( fx_ez-f0_ez ) );
-  #define UPDATE_CBZ() f0_cbz -= ( px*( fx_ey-f0_ey ) - py*( fy_ex-f0_ex ) );
+                      float px, float py, float pz) {
 
   Kokkos::parallel_for(Kokkos::TeamPolicy< Kokkos::DefaultExecutionSpace>
       (nx, Kokkos::AUTO), KOKKOS_LAMBDA (const k_member_t &team_member) {
@@ -45,12 +47,12 @@ void advance_b_kokkos(k_field_t k_field, int nx, int ny, int nz,
 
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nz), [=] (int z) {
 
-        int f0_index = VOXEL(x+offset,  y+offset,  z+offset,   nx,ny,nz);
-        int fx_index = VOXEL(x+offset+1,y+offset,  z+offset,   nx,ny,nz);
-        int fy_index = VOXEL(x+offset,  y+offset+1,z+offset,   nx,ny,nz);
-        int fz_index = VOXEL(x+offset,  y+offset,  z+offset+1, nx,ny,nz);
+      int f0_index = VOXEL(x+offset,  y+offset,  z+offset,   nx,ny,nz);
+      int fx_index = VOXEL(x+offset+1,y+offset,  z+offset,   nx,ny,nz);
+      int fy_index = VOXEL(x+offset,  y+offset+1,z+offset,   nx,ny,nz);
+      int fz_index = VOXEL(x+offset,  y+offset,  z+offset+1, nx,ny,nz);
 
-        UPDATE_CBX(); UPDATE_CBY(); UPDATE_CBZ();
+      UPDATE_CBX(); UPDATE_CBY(); UPDATE_CBZ();
       });
     });
   });
