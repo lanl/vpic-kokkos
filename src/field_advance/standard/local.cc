@@ -20,7 +20,6 @@
 #define IN_sfa
 #include <assert.h>
 #include "sfa_private.h"
-#include "../../vpic/kokkos_helpers.h"
 
 #define f(x,y,z)         f[ VOXEL(x,y,z, nx,ny,nz) ]
 
@@ -272,8 +271,6 @@ k_local_adjust_norm_b( field_array_t * RESTRICT fa,
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int bc, face, x, y, z, xl, xh, yl, yh, zl, zh;
 
-
-
 // TODO: Test the macro unrolling and parallel_for here. This does not
 // get touched during a normal harris run
 # define K_ADJUST_NORM_B(i,j,k,X,Y,Z)                                   \
@@ -302,7 +299,6 @@ k_local_adjust_norm_b( field_array_t * RESTRICT fa,
          assert(0);                                                     \
          Kokkos::parallel_for(Kokkos::RangePolicy                       \
                  < Kokkos::DefaultExecutionSpace >(zl, zh), KOKKOS_LAMBDA (int z) {      \
-           KOKKOS_FIELD_ENUMS(); \
            for(int yi=yl; yi<=yh; yi++ ) {			                    \
              for(int xj=xl; xj<=xh; xj++ ) {                            \
 	             (fa->k_f_h)(VOXEL(xj,yi,z, nx,ny,nz), field_var::cb##X) = 0;     \

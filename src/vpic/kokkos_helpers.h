@@ -26,78 +26,84 @@ using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSp
 
 typedef typename Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>::member_type k_member_t;
 
-#define KOKKOS_FIELD_ENUMS() \
-enum class field_var { \
-  ex = 0, \
-  ey = 1, \
-  ez = 2, \
-  cbx = 3, \
-  cby = 4, \
-  cbz = 5, \
-  div_e_err = 6, \
-  div_b_err = 7, \
-  tcax = 8, \
-  tcay = 9, \
-  tcaz = 10, \
-  rhob = 11, \
-  jfx = 12, \
-  jfy = 13, \
-  jfz = 14, \
-  rhof = 15 \
-}; \
-\
-enum class field_edge_var { \
-  ematx = 0, \
-  ematy = 1, \
-  ematz = 2, \
-  nmat = 3, \
-  fmatx = 4, \
-  fmaty = 5, \
-  fmatz = 6, \
-  cmat = 7 \
+namespace field_var { 
+  enum f_v { 
+    ex = 0, 
+    ey = 1, 
+    ez = 2, 
+    cbx = 3, 
+    cby = 4, 
+    cbz = 5, 
+    div_e_err = 6, 
+    div_b_err = 7, 
+    tcax = 8, 
+    tcay = 9, 
+    tcaz = 10, 
+    rhob = 11, 
+    jfx = 12, 
+    jfy = 13, 
+    jfz = 14, 
+    rhof = 15
+  }; 
+}; 
+namespace field_edge_var { \
+  enum f_e_v { 
+    ematx = 0, 
+    ematy = 1, 
+    ematz = 2,
+    nmat = 3, 
+    fmatx = 4, 
+    fmaty = 5, 
+    fmatz = 6, 
+    cmat = 7 
+  }; 
+};
+
+namespace interpolator_var { 
+  enum i_r { 
+    ex = 0, 
+    ey = 1, 
+    ez = 2, 
+    cbx = 3, 
+    cby = 4, 
+    cbz = 5, 
+    dexdy = 6, 
+    dexdz = 7, 
+    d2exdydz = 8, 
+    deydz = 9, 
+    deydx = 10, 
+    d2eydzdx = 11, 
+    dezdx = 12, 
+    dezdy = 13, 
+    d2ezdxdy = 14, 
+    dcbxdx = 15, 
+    dcbydy = 16, 
+    dcbzdz = 17 
+  }; 
+};
+
+namespace particle_var { 
+  enum p_v { 
+    dx = 0, 
+    dy = 1, 
+    dz = 2, 
+    ux = 3, 
+    uy = 4, 
+    uz = 5, 
+    w = 6, 
+    pi = 7 
+  }; 
 }; 
 
-#define KOKKOS_INTERPOLATOR_ENUMS() \
-enum class interpolator_var { \
-  ex = 0, \
-  ey = 1, \
-  ez = 2, \
-  cbx = 3, \
-  cby = 4, \
-  cbz = 5, \
-  dexdy = 6, \
-  dexdz = 7, \
-  d2exdydz = 8, \
-  deydz = 9, \
-  deydx = 10, \
-  d2eydzdx = 11, \
-  dezdx = 12, \
-  dezdy = 13, \
-  d2ezdxdy = 14, \
-  dcbxdx = 15, \
-  dcbydy = 16, \
-  dcbzdz = 17 \
+namespace particle_mover_var { 
+  enum p_m_v { 
+     dispx = 0, 
+     dispy = 1, 
+     dispz = 2, 
+     pmi = 3, 
+  }; 
 }; 
-
-#define KOKKOS_PARTICLE_ENUMS() \
-enum class particle_var { \
-  dx = 0, \
-  dy = 1, \
-  dz = 2, \
-  ux = 3, \
-  uy = 4, \
-  uz = 5, \
-  w = 6, \
-  pi = 7 \
-}; \
-\
-enum class particle_mover_var { \
-  dispx = 0, \
-  dispy = 1, \
-  dispz = 2, \
-  pmi = 3, \
-}; 
-
+       
 /*
 enum class accumulator_var { \
   jx = 0, \
@@ -116,7 +122,6 @@ enum class accumulator_var { \
   k_field = field_array->k_f_h; \
   k_field_edge = field_array->k_fe_h; \
   Kokkos::parallel_for(host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
-          KOKKOS_FIELD_ENUMS(); \
           k_field(i, field_var::ex) = field_array->f[i].ex; \
           k_field(i, field_var::ey) = field_array->f[i].ey; \
           k_field(i, field_var::ez) = field_array->f[i].ez; \
@@ -157,7 +162,6 @@ enum class accumulator_var { \
   k_field = field_array->k_f_h; \
   k_field_edge = field_array->k_fe_h; \
   Kokkos::parallel_for(host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
-          KOKKOS_FIELD_ENUMS(); \
           field_array->f[i].ex = k_field(i, field_var::ex); \
           field_array->f[i].ey = k_field(i, field_var::ey); \
           field_array->f[i].ez = k_field(i, field_var::ez); \
@@ -205,7 +209,6 @@ enum class accumulator_var { \
     \
     k_particles_h = sp->k_p_h; \
     k_particle_movers_h = sp->k_pm_h; \
-    KOKKOS_PARTICLE_ENUMS(); \
     Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
       k_particles_h(i, particle_var::dx) = sp->p[i].dx; \
       k_particles_h(i, particle_var::dy) = sp->p[i].dy; \
@@ -236,7 +239,6 @@ enum class accumulator_var { \
     max_pmovers = sp->max_nm; \
     k_particles_h = sp->k_p_h; \
     k_particle_movers_h = sp->k_pm_h; \
-    KOKKOS_PARTICLE_ENUMS(); \
     Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
       sp->p[i].dx = k_particles_h(i, particle_var::dx); \
       sp->p[i].dy = k_particles_h(i, particle_var::dy); \
@@ -266,7 +268,6 @@ enum class accumulator_var { \
   \
   k_interpolator_h = interpolator_array->k_i_h; \
   Kokkos::parallel_for(host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
-    KOKKOS_INTERPOLATOR_ENUMS(); \
     k_interpolator_h(i, interpolator_var::ex)       = interpolator_array->i[i].ex; \
     k_interpolator_h(i, interpolator_var::ey)       = interpolator_array->i[i].ey; \
     k_interpolator_h(i, interpolator_var::ez)       = interpolator_array->i[i].ez; \
@@ -294,7 +295,6 @@ enum class accumulator_var { \
   nv = interpolator_array->g->nv;; \
   k_interpolator_h = interpolator_array->k_i_h; \
   Kokkos::parallel_for(host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
-    KOKKOS_INTERPOLATOR_ENUMS(); \
     interpolator_array->i[i].ex       = k_interpolator_h(i, interpolator_var::ex); \
     interpolator_array->i[i].ey       = k_interpolator_h(i, interpolator_var::ey); \
     interpolator_array->i[i].ez       = k_interpolator_h(i, interpolator_var::ez); \

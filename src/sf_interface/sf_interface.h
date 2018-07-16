@@ -12,8 +12,6 @@
 
 #include "../field_advance/field_advance.h"
 // FIXME: SHOULD INCLUDE SPECIES_ADVANCE TOO ONCE READY
-#include "../vpic/kokkos_helpers.h"
-#include <Kokkos_Core.hpp>
 
 /*****************************************************************************/
 

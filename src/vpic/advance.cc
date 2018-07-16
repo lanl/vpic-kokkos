@@ -9,10 +9,8 @@
  */
 
 #include "vpic.h"
-#include <Kokkos_Core.hpp>
 
 #define FAK field_array->kernel
-
 
 int vpic_simulation::advance(void) {
   species_t *sp;
@@ -49,7 +47,6 @@ int vpic_simulation::advance(void) {
     TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
   TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
-  KOKKOS_PARTICLE_ENUMS();
   KOKKOS_PARTICLE_VARIABLES();
   KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
@@ -126,7 +123,6 @@ int vpic_simulation::advance(void) {
 
   TIC user_current_injection(); TOC( user_current_injection, 1 );
 
-  KOKKOS_FIELD_ENUMS();
   KOKKOS_FIELD_VARIABLES();    
   KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 

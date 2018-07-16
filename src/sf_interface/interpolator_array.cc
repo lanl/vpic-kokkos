@@ -1,7 +1,6 @@
 #define IN_sf_interface
 #define HAS_V4_PIPELINE
 #include "sf_interface_private.h"
-#include "../vpic/kokkos_helpers.h"
 
 
 void
@@ -45,8 +44,6 @@ delete_interpolator_array( interpolator_array_t * ia ) {
 
 void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field, int nx, int ny, int nz) {
 
-  KOKKOS_INTERPOLATOR_ENUMS();
-
   #define pi_ex       k_interp(pi_index, interpolator_var::ex)
   #define pi_dexdy    k_interp(pi_index, interpolator_var::dexdy)
   #define pi_dexdz    k_interp(pi_index, interpolator_var::dexdz)
@@ -83,8 +80,6 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
        
       //for( x=1; x<=nx; x++ ) {
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nx), [=] (int x) {
-
-        KOKKOS_FIELD_ENUMS();
 
         //pi = &fi(1,y,z);
         int pi_index = VOXEL(1,y,z, nx,ny,nz) + x;

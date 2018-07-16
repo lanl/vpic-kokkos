@@ -2,13 +2,9 @@
 #define HAS_V4_PIPELINE
 #include "sfa_private.h"
 #include <Kokkos_Core.hpp>
-#include "../../vpic/kokkos_helpers.h"
 
 void advance_b_kokkos(k_field_t k_field, int nx, int ny, int nz,
                       int px, int py, int pz) {
-
-
-  KOKKOS_FIELD_ENUMS();
 
   #define f0_cbx k_field(f0_index, field_var::cbx)
   #define f0_cby k_field(f0_index, field_var::cby)

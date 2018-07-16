@@ -1,7 +1,5 @@
 #define IN_spa
 #include "spa_private.h"
-#include <Kokkos_Core.hpp>
-#include "../../vpic/kokkos_helpers.h"
 
 void uncenter_p_kokkos(k_particles_t k_particles, k_interpolator_t k_interp, int np, float qdt_2mc_c) {
   const float qdt_2mc        =     -qdt_2mc_c; // For backward half advance
@@ -10,7 +8,6 @@ void uncenter_p_kokkos(k_particles_t k_particles, k_interpolator_t k_interp, int
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
 
-  KOKKOS_PARTICLE_ENUMS();
   // Particle defines (p->x)
   #define p_dx    k_particles(p_index, particle_var::dx) 
   #define p_dy    k_particles(p_index, particle_var::dy)
@@ -20,7 +17,6 @@ void uncenter_p_kokkos(k_particles_t k_particles, k_interpolator_t k_interp, int
   #define p_uz    k_particles(p_index, particle_var::uz)
   #define pii     k_particles(p_index, particle_var::pi)
 
-  KOKKOS_INTERPOLATOR_ENUMS();
   // Interpolator Defines (f->x)
   #define f_cbx k_interp(ii, interpolator_var::cbx)
   #define f_cby k_interp(ii, interpolator_var::cby)
@@ -71,7 +67,7 @@ void uncenter_p_kokkos(k_particles_t k_particles, k_interpolator_t k_interp, int
     v3    = v0*(one+v2*(one_third+v2*two_fifteenths));
     v4    = v3/(one+v1*(v3*v3));
     v4   += v4;
-    v0    = p_ux + v3*( p_uy*l_cbz - uz*l_cby );      // Boris - uprime
+    v0    = p_ux + v3*( p_uy*l_cbz - p_uz*l_cby );      // Boris - uprime
     v1    = p_uy + v3*( p_uz*l_cbx - p_ux*l_cbz );
     v2    = p_uz + v3*( p_ux*l_cby - p_uy*l_cbx );
     p_ux += v4*( v1*l_cbz - v2*l_cby );           // Boris - rotation

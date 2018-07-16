@@ -15,7 +15,6 @@
 #include <iostream> 
 
 #include "../sf_interface/sf_interface.h"
-#include "../vpic/kokkos_helpers.h"
 
 typedef int32_t species_id; // Must be 32-bit wide for particle_injector_t
 

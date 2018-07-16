@@ -1,6 +1,5 @@
 #include "vpic.h"
-#include <Kokkos_Core.hpp>
-#include "kokkos_helpers.h"
+
 #define FAK field_array->kernel
 
 void
@@ -51,11 +50,9 @@ vpic_simulation::initialize( int argc,
   TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
   if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
     
-  KOKKOS_PARTICLE_ENUMS();
   KOKKOS_PARTICLE_VARIABLES();
   KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
 
-  KOKKOS_INTERPOLATOR_ENUMS();
   KOKKOS_INTERPOLATOR_VARIABLES();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
 

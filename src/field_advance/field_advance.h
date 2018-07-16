@@ -6,7 +6,6 @@
 // _LOCAL_ NUMBER OF CELLS).  THIS LATENT BUG IS NOT EXPECTED TO
 // AFFECT ANY PRACTICAL SIMULATIONS.
 
-#include <Kokkos_Core.hpp>
 #include "../grid/grid.h"
 #include "../material/material.h"
 #include "../vpic/kokkos_helpers.h"
