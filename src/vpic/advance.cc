@@ -197,7 +197,13 @@ int vpic_simulation::advance(void) {
 
   KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 
+  KOKKOS_INTERPOLATOR_VARIABLES();    
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+
   if( species_list ) TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
+
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST();
 
   step()++;
 
