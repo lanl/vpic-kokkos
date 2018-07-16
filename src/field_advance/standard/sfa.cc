@@ -218,7 +218,8 @@ delete_standard_field_array( field_array_t * fa ) {
   UNREGISTER_OBJECT( fa );
   destroy_sfa_params( (sfa_params_t *)fa->params );
   FREE_ALIGNED( fa->f );
-  FREE( fa );
+  //FREE( fa );
+  delete(fa);
 }
 
 /*****************************************************************************/
