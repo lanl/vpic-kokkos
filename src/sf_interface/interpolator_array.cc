@@ -182,7 +182,7 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         // w0 = pf0->cby;
         #define w0 k_field(pf0_index, field_var::cby)
         // w1 = pfy->cby;
-        #define w1 k_field(pfx_index, field_var::cby)
+        #define w1 k_field(pfy_index, field_var::cby)
         pi_cby    = 0.5*(  w0 + w1 );
         pi_dcbydy = 0.5*( -w0 + w1 );
 
@@ -194,7 +194,7 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         // w0 = pf0->cbz;
         #define w0 k_field(pf0_index, field_var::cbz)
         // w1 = pfz->cbz;
-        #define w1 k_field(pfx_index, field_var::cbz)
+        #define w1 k_field(pfz_index, field_var::cbz)
         pi_cbz    = 0.5*(  w0 + w1 );
         pi_dcbzdz = 0.5*( -w0 + w1 );
 
