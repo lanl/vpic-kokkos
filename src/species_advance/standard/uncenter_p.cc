@@ -10,70 +10,76 @@ void uncenter_p_kokkos(k_particles_t k_particles, k_interpolator_t k_interp, int
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
 
-  KOKKOS_ENUMS();
+  KOKKOS_PARTICLE_ENUMS();
   // Particle defines (p->x)
-  #define dx    k_particles(p_index, dx) 
-  #define dy    k_particles(p_index, dy)
-  #define dz    k_particles(p_index, dz)
-  #define ux    k_particles(p_index, ux) // Load momentum
-  #define uy    k_particles(p_index, uy)
-  #define uz    k_particles(p_index, uz)
+  #define p_dx    k_particles(p_index, particle_var::dx) 
+  #define p_dy    k_particles(p_index, particle_var::dy)
+  #define p_dz    k_particles(p_index, particle_var::dz)
+  #define p_ux    k_particles(p_index, particle_var::ux) // Load momentum
+  #define p_uy    k_particles(p_index, particle_var::uy)
+  #define p_uz    k_particles(p_index, particle_var::uz)
+  #define pii     k_particles(p_index, particle_var::pi)
 
+  KOKKOS_INTERPOLATOR_ENUMS();
   // Interpolator Defines (f->x)
-  #define f_cbx k_interp(ii, cbx)
-  #define f_cby k_interp(ii, cby)
-  #define f_cbz k_interp(ii, cbz)
-  #define f_ex  k_interp(ii, ex)
-  #define f_ey  k_interp(ii, ey)
-  #define f_ez  k_interp(ii, ez)
+  #define f_cbx k_interp(ii, interpolator_var::cbx)
+  #define f_cby k_interp(ii, interpolator_var::cby)
+  #define f_cbz k_interp(ii, interpolator_var::cbz)
+  #define f_ex  k_interp(ii, interpolator_var::ex)
+  #define f_ey  k_interp(ii, interpolator_var::ey)
+  #define f_ez  k_interp(ii, interpolator_var::ez)
 
-  #define f_dexdy    k_interp(ii, dexdy)
-  #define f_dexdz    k_interp(ii, dexdz)
-  #define f_d2exdydz k_interp(ii, d2exdydz)
-  #define f_deydx    k_interp(ii, deydx)
-  #define f_deydz    k_interp(ii, deydz)
-  #define f_d2eydzdx k_interp(ii, d2eydzdx)
-  #define f_dezdx    k_interp(ii, dezdx)
-  #define f_dezdy    k_interp(ii, dezdy)
-  #define f_d2ezdxdy k_interp(ii, d2ezdxdy)
-  #define f_dcbxdx   k_interp(ii, dcbxdx)
-  #define f_dcbydy   k_interp(ii, dcbydy)
-  #define f_dcbzdz   k_interp(ii, dcbzdz)
+  #define f_dexdy    k_interp(ii, interpolator_var::dexdy)
+  #define f_dexdz    k_interp(ii, interpolator_var::dexdz)
+
+  #define f_d2exdydz k_interp(ii, interpolator_var::d2exdydz)
+  #define f_deydx    k_interp(ii, interpolator_var::deydx)
+  #define f_deydz    k_interp(ii, interpolator_var::deydz)
+
+  #define f_d2eydzdx k_interp(ii, interpolator_var::d2eydzdx)
+  #define f_dezdx    k_interp(ii, interpolator_var::dezdx)
+  #define f_dezdy    k_interp(ii, interpolator_var::dezdy)
+
+  #define f_d2ezdxdy k_interp(ii, interpolator_var::d2ezdxdy)
+  #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
+  #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
+  #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
+
 
   // this goes to np using p_index
   // check for off by one errors
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
       (0, np), KOKKOS_LAMBDA (int p_index) {
 
-    int ii = k_particles(p_index, pi);
+    int ii = pii;
     float hax, hay, haz, l_cbx, l_cby, l_cbz;
     float v0, v1, v2, v3, v4;
 
-    hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
-                     dz*( f_dexdz + dy*f_d2exdydz ) );
-    hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
-                     dx*( f_deydx + dz*f_d2eydzdx ) );
-    haz  = qdt_2mc*(    ( f_ez    + dx*f_dezdx    ) +
-                     dy*( f_dezdy + dx*f_d2ezdxdy ) );
-    l_cbx  = f_cbx + dx*f_dcbxdx;            // Interpolate B
-    l_cby  = f_cby + dy*f_dcbydy;
-    l_cbz  = f_cbz + dz*f_dcbzdz;
-    v0   = qdt_4mc/(float)sqrt(one + (ux*ux + (uy*uy + uz*uz)));
+    hax  = qdt_2mc*(      ( f_ex    + p_dy*f_dexdy    ) +
+                     p_dz*( f_dexdz + p_dy*f_d2exdydz ) );
+    hay  = qdt_2mc*(      ( f_ey    + p_dz*f_deydz    ) +
+                     p_dx*( f_deydx + p_dz*f_d2eydzdx ) );
+    haz  = qdt_2mc*(      ( f_ez    + p_dx*f_dezdx    ) +
+                     p_dy*( f_dezdy + p_dx*f_d2ezdxdy ) );
+    l_cbx  = f_cbx + p_dx*f_dcbxdx;            // Interpolate B
+    l_cby  = f_cby + p_dy*f_dcbydy;
+    l_cbz  = f_cbz + p_dz*f_dcbzdz;
+    v0   = qdt_4mc/(float)sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
     /**/                                     // Boris - scalars
-    v1   = l_cbx*l_cbx + (l_cby*l_cby + l_cbz*l_cbz);
-    v2   = (v0*v0)*v1;
-    v3   = v0*(one+v2*(one_third+v2*two_fifteenths));
-    v4   = v3/(one+v1*(v3*v3));
-    v4  += v4;
-    v0   = ux + v3*( uy*l_cbz - uz*l_cby );      // Boris - uprime
-    v1   = uy + v3*( uz*l_cbx - ux*l_cbz );
-    v2   = uz + v3*( ux*l_cby - uy*l_cbx );
-    ux  += v4*( v1*l_cbz - v2*l_cby );           // Boris - rotation
-    uy  += v4*( v2*l_cbx - v0*l_cbz );
-    uz  += v4*( v0*l_cby - v1*l_cbx );
-    ux  += hax;                              // Half advance E
-    uy  += hay;
-    uz  += haz;
+    v1    = l_cbx*l_cbx + (l_cby*l_cby + l_cbz*l_cbz);
+    v2    = (v0*v0)*v1;
+    v3    = v0*(one+v2*(one_third+v2*two_fifteenths));
+    v4    = v3/(one+v1*(v3*v3));
+    v4   += v4;
+    v0    = p_ux + v3*( p_uy*l_cbz - uz*l_cby );      // Boris - uprime
+    v1    = p_uy + v3*( p_uz*l_cbx - p_ux*l_cbz );
+    v2    = p_uz + v3*( p_ux*l_cby - p_uy*l_cbx );
+    p_ux += v4*( v1*l_cbz - v2*l_cby );           // Boris - rotation
+    p_uy += v4*( v2*l_cbx - v0*l_cbz );
+    p_uz += v4*( v0*l_cby - v1*l_cbx );
+    p_ux += hax;                              // Half advance E
+    p_uy += hay;
+    p_uz += haz;
   });
 
 }
@@ -86,8 +92,8 @@ uncenter_p( /**/  species_t            * RESTRICT sp,
   if( !sp || !ia || sp->g!=ia->g ) ERROR(( "Bad args" ));
 
   k_particles_t    k_particles = sp->k_p_d;
-  k_interpolator_t k_interp     = ia->k_i_d;
-  const int np        = sp->np;
-  const float qdt_2mc      = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+  k_interpolator_t k_interp    = ia->k_i_d;
+  const int np                 = sp->np;
+  const float qdt_2mc          = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
   uncenter_p_kokkos(k_particles, k_interp, np, qdt_2mc);
 }

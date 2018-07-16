@@ -273,6 +273,7 @@ k_local_adjust_norm_b( field_array_t * RESTRICT fa,
   int bc, face, x, y, z, xl, xh, yl, yh, zl, zh;
 
 
+
 // TODO: Test the macro unrolling and parallel_for here. This does not
 // get touched during a normal harris run
 # define K_ADJUST_NORM_B(i,j,k,X,Y,Z)                                   \
@@ -301,9 +302,10 @@ k_local_adjust_norm_b( field_array_t * RESTRICT fa,
          assert(0);                                                     \
          Kokkos::parallel_for(Kokkos::RangePolicy                       \
                  < Kokkos::DefaultExecutionSpace >(zl, zh), KOKKOS_LAMBDA (int z) {      \
+           KOKKOS_FIELD_ENUMS(); \
            for(int yi=yl; yi<=yh; yi++ ) {			                    \
              for(int xj=xl; xj<=xh; xj++ ) {                            \
-	             (fa->k_f_h)(VOXEL(xj,yi,z, nx,ny,nz), cb##X) = 0;     \
+	             (fa->k_f_h)(VOXEL(xj,yi,z, nx,ny,nz), field_var::cb##X) = 0;     \
              }                                                          \
            }                                                            \
          });                                                            \
@@ -314,8 +316,6 @@ k_local_adjust_norm_b( field_array_t * RESTRICT fa,
       }                                                                 \
     }                                                                   \
   } while(0)
-
-  KOKKOS_ENUMS();
 
   K_ADJUST_NORM_B(-1, 0, 0,x,y,z);
   K_ADJUST_NORM_B( 0,-1, 0,y,z,x);

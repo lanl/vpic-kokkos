@@ -51,17 +51,25 @@ vpic_simulation::initialize( int argc,
   TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
   if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
     
-  KOKKOS_ENUMS()
+  KOKKOS_PARTICLE_ENUMS();
+  KOKKOS_PARTICLE_VARIABLES();
+  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+
+  KOKKOS_INTERPOLATOR_ENUMS();
+  KOKKOS_INTERPOLATOR_VARIABLES();
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+
   if( species_list ) {
+    KOKKOS_FIELD_VARIABLES();
+    KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+
     if( rank()==0 ) MESSAGE(( "Uncentering particles" ));
-    KOKKOS_FIELD_VARIABLES()
-    KOKKOS_COPY_FIELD_MEM_TO_DEVICE()
     TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
   }
-  KOKKOS_PARTICLE_VARIABLES()
-  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE()
   LIST_FOR_EACH( sp, species_list ) TIC uncenter_p( sp, interpolator_array ); TOC( uncenter_p, 1 );
-  KOKKOS_COPY_PARTICLE_MEM_TO_HOST()
+
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+  KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
 
   if( rank()==0 ) MESSAGE(( "Performing initial diagnostics" ));
 

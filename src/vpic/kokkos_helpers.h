@@ -26,8 +26,8 @@ using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSp
 
 typedef typename Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>::member_type k_member_t;
 
-#define KOKKOS_ENUMS() \
-enum field_var { \
+#define KOKKOS_FIELD_ENUMS() \
+enum class field_var { \
   ex = 0, \
   ey = 1, \
   ez = 2, \
@@ -46,9 +46,25 @@ enum field_var { \
   rhof = 15 \
 }; \
 \
-/* Use first 6 params from 
- field_var for interpolator */ \
-enum interpolator { \
+enum class field_edge_var { \
+  ematx = 0, \
+  ematy = 1, \
+  ematz = 2, \
+  nmat = 3, \
+  fmatx = 4, \
+  fmaty = 5, \
+  fmatz = 6, \
+  cmat = 7 \
+}; 
+
+#define KOKKOS_INTERPOLATOR_ENUMS() \
+enum class interpolator_var { \
+  ex = 0, \
+  ey = 1, \
+  ez = 2, \
+  cbx = 3, \
+  cby = 4, \
+  cbz = 5, \
   dexdy = 6, \
   dexdz = 7, \
   d2exdydz = 8, \
@@ -61,20 +77,10 @@ enum interpolator { \
   dcbxdx = 15, \
   dcbydy = 16, \
   dcbzdz = 17 \
-}; \
-\
-enum field_edge_var { \
-  ematx = 0, \
-  ematy = 1, \
-  ematz = 2, \
-  nmat = 3, \
-  fmatx = 4, \
-  fmaty = 5, \
-  fmatz = 6, \
-  cmat = 7 \
-}; \
-\
-enum particles_var { \
+}; 
+
+#define KOKKOS_PARTICLE_ENUMS() \
+enum class particle_var { \
   dx = 0, \
   dy = 1, \
   dz = 2, \
@@ -85,18 +91,20 @@ enum particles_var { \
   pi = 7 \
 }; \
 \
-enum particle_mover_var { \
+enum class particle_mover_var { \
   dispx = 0, \
   dispy = 1, \
   dispz = 2, \
   pmi = 3, \
-}; \
-\
-enum accumulator_var { \
+}; 
+
+/*
+enum class accumulator_var { \
   jx = 0, \
   jy = 1, \
   jz = 2, \
 };
+*/
 
 #define KOKKOS_FIELD_VARIABLES() \
   int n_fields = field_array->g->nv; \
@@ -108,35 +116,36 @@ enum accumulator_var { \
   k_field = field_array->k_f_h; \
   k_field_edge = field_array->k_fe_h; \
   Kokkos::parallel_for(host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
-          k_field(i,ex) = field_array->f[i].ex; \
-          k_field(i,ey) = field_array->f[i].ey; \
-          k_field(i,ez) = field_array->f[i].ez; \
-          k_field(i,div_e_err) = field_array->f[i].div_e_err; \
+          KOKKOS_FIELD_ENUMS(); \
+          k_field(i, field_var::ex) = field_array->f[i].ex; \
+          k_field(i, field_var::ey) = field_array->f[i].ey; \
+          k_field(i, field_var::ez) = field_array->f[i].ez; \
+          k_field(i, field_var::div_e_err) = field_array->f[i].div_e_err; \
           \
-          k_field(i,cbx) = field_array->f[i].cbx; \
-          k_field(i,cby) = field_array->f[i].cby; \
-          k_field(i,cbz) = field_array->f[i].cbz; \
-          k_field(i,div_b_err) = field_array->f[i].div_b_err; \
+          k_field(i, field_var::cbx) = field_array->f[i].cbx; \
+          k_field(i, field_var::cby) = field_array->f[i].cby; \
+          k_field(i, field_var::cbz) = field_array->f[i].cbz; \
+          k_field(i, field_var::div_b_err) = field_array->f[i].div_b_err; \
           \
-          k_field(i,tcax) = field_array->f[i].tcax; \
-          k_field(i,tcay) = field_array->f[i].tcay; \
-          k_field(i,tcaz) = field_array->f[i].tcaz; \
-          k_field(i,rhob) = field_array->f[i].rhob; \
+          k_field(i, field_var::tcax) = field_array->f[i].tcax; \
+          k_field(i, field_var::tcay) = field_array->f[i].tcay; \
+          k_field(i, field_var::tcaz) = field_array->f[i].tcaz; \
+          k_field(i, field_var::rhob) = field_array->f[i].rhob; \
           \
-          k_field(i,jfx) = field_array->f[i].jfx; \
-          k_field(i,jfy) = field_array->f[i].jfy; \
-          k_field(i,jfz) = field_array->f[i].jfz; \
-          k_field(i,rhof) = field_array->f[i].rhof; \
+          k_field(i, field_var::jfx) = field_array->f[i].jfx; \
+          k_field(i, field_var::jfy) = field_array->f[i].jfy; \
+          k_field(i, field_var::jfz) = field_array->f[i].jfz; \
+          k_field(i, field_var::rhof) = field_array->f[i].rhof; \
           \
-          k_field_edge(i, ematx) = field_array->f[i].ematx; \
-          k_field_edge(i, ematy) = field_array->f[i].ematy; \
-          k_field_edge(i, ematz) = field_array->f[i].ematz; \
-          k_field_edge(i, nmat) = field_array->f[i].nmat; \
+          k_field_edge(i, field_edge_var::ematx) = field_array->f[i].ematx; \
+          k_field_edge(i, field_edge_var::ematy) = field_array->f[i].ematy; \
+          k_field_edge(i, field_edge_var::ematz) = field_array->f[i].ematz; \
+          k_field_edge(i, field_edge_var::nmat) = field_array->f[i].nmat; \
           \
-          k_field_edge(i, fmatx) = field_array->f[i].fmatx; \
-          k_field_edge(i, fmaty) = field_array->f[i].fmaty; \
-          k_field_edge(i, fmatz) = field_array->f[i].fmatz; \
-          k_field_edge(i, cmat) = field_array->f[i].cmat; \
+          k_field_edge(i, field_edge_var::fmatx) = field_array->f[i].fmatx; \
+          k_field_edge(i, field_edge_var::fmaty) = field_array->f[i].fmaty; \
+          k_field_edge(i, field_edge_var::fmatz) = field_array->f[i].fmatz; \
+          k_field_edge(i, field_edge_var::cmat) = field_array->f[i].cmat; \
   });     \
   Kokkos::deep_copy(field_array->k_f_d, field_array->k_f_h); \
   Kokkos::deep_copy(field_array->k_fe_d, field_array->k_fe_h);
@@ -148,35 +157,36 @@ enum accumulator_var { \
   k_field = field_array->k_f_h; \
   k_field_edge = field_array->k_fe_h; \
   Kokkos::parallel_for(host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
-          field_array->f[i].ex = k_field(i,ex); \
-          field_array->f[i].ey = k_field(i,ey); \
-          field_array->f[i].ez = k_field(i,ez); \
-          field_array->f[i].div_e_err = k_field(i,div_e_err); \
+          KOKKOS_FIELD_ENUMS(); \
+          field_array->f[i].ex = k_field(i, field_var::ex); \
+          field_array->f[i].ey = k_field(i, field_var::ey); \
+          field_array->f[i].ez = k_field(i, field_var::ez); \
+          field_array->f[i].div_e_err = k_field(i, field_var::div_e_err); \
           \
-          field_array->f[i].cbx = k_field(i,cbx); \
-          field_array->f[i].cby = k_field(i,cby); \
-          field_array->f[i].cbz = k_field(i,cbz); \
-          field_array->f[i].div_b_err = k_field(i,div_b_err); \
+          field_array->f[i].cbx = k_field(i, field_var::cbx); \
+          field_array->f[i].cby = k_field(i, field_var::cby); \
+          field_array->f[i].cbz = k_field(i, field_var::cbz); \
+          field_array->f[i].div_b_err = k_field(i, field_var::div_b_err); \
           \
-          field_array->f[i].tcax = k_field(i,tcax); \
-          field_array->f[i].tcay = k_field(i,tcay); \
-          field_array->f[i].tcaz = k_field(i,tcaz); \
-          field_array->f[i].rhob = k_field(i,rhob); \
+          field_array->f[i].tcax = k_field(i, field_var::tcax); \
+          field_array->f[i].tcay = k_field(i, field_var::tcay); \
+          field_array->f[i].tcaz = k_field(i, field_var::tcaz); \
+          field_array->f[i].rhob = k_field(i, field_var::rhob); \
           \
-          field_array->f[i].jfx = k_field(i,jfx); \
-          field_array->f[i].jfy = k_field(i,jfy); \
-          field_array->f[i].jfz = k_field(i,jfz); \
-          field_array->f[i].rhof = k_field(i,rhof); \
+          field_array->f[i].jfx = k_field(i, field_var::jfx); \
+          field_array->f[i].jfy = k_field(i, field_var::jfy); \
+          field_array->f[i].jfz = k_field(i, field_var::jfz); \
+          field_array->f[i].rhof = k_field(i, field_var::rhof); \
           \
-          field_array->f[i].ematx = k_field_edge(i, ematx); \
-          field_array->f[i].ematy = k_field_edge(i, ematy); \
-          field_array->f[i].ematz = k_field_edge(i, ematz); \
-          field_array->f[i].nmat = k_field_edge(i, nmat); \
+          field_array->f[i].ematx = k_field_edge(i, field_edge_var::ematx); \
+          field_array->f[i].ematy = k_field_edge(i, field_edge_var::ematy); \
+          field_array->f[i].ematz = k_field_edge(i, field_edge_var::ematz); \
+          field_array->f[i].nmat = k_field_edge(i, field_edge_var::nmat); \
           \
-          field_array->f[i].fmatx = k_field_edge(i, fmatx); \
-          field_array->f[i].fmaty = k_field_edge(i, fmaty); \
-          field_array->f[i].fmatz = k_field_edge(i, fmatz); \
-          field_array->f[i].cmat = k_field_edge(i, cmat); \
+          field_array->f[i].fmatx = k_field_edge(i, field_edge_var::fmatx); \
+          field_array->f[i].fmaty = k_field_edge(i, field_edge_var::fmaty); \
+          field_array->f[i].fmatz = k_field_edge(i, field_edge_var::fmatz); \
+          field_array->f[i].cmat = k_field_edge(i, field_edge_var::cmat); \
   });
 
 
@@ -195,22 +205,23 @@ enum accumulator_var { \
     \
     k_particles_h = sp->k_p_h; \
     k_particle_movers_h = sp->k_pm_h; \
+    KOKKOS_PARTICLE_ENUMS(); \
     Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
-      k_particles_h(i,dx) = sp->p[i].dx; \
-      k_particles_h(i,dy) = sp->p[i].dy; \
-      k_particles_h(i,dz) = sp->p[i].dz; \
-      k_particles_h(i,ux) = sp->p[i].ux; \
-      k_particles_h(i,uy) = sp->p[i].uy; \
-      k_particles_h(i,uz) = sp->p[i].uz; \
-      k_particles_h(i,w)  = sp->p[i].w;  \
-      k_particles_h(i,pi) = sp->p[i].i;  \
+      k_particles_h(i, particle_var::dx) = sp->p[i].dx; \
+      k_particles_h(i, particle_var::dy) = sp->p[i].dy; \
+      k_particles_h(i, particle_var::dz) = sp->p[i].dz; \
+      k_particles_h(i, particle_var::ux) = sp->p[i].ux; \
+      k_particles_h(i, particle_var::uy) = sp->p[i].uy; \
+      k_particles_h(i, particle_var::uz) = sp->p[i].uz; \
+      k_particles_h(i, particle_var::w)  = sp->p[i].w;  \
+      k_particles_h(i, particle_var::pi) = sp->p[i].i;  \
     });\
     \
     Kokkos::parallel_for(host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
-      k_particle_movers_h(i,dispx) = sp->pm[i].dispx; \
-      k_particle_movers_h(i,dispy) = sp->pm[i].dispy; \
-      k_particle_movers_h(i,dispz) = sp->pm[i].dispz; \
-      k_particle_movers_h(i,pmi)   = sp->pm[i].i;     \
+      k_particle_movers_h(i, particle_mover_var::dispx) = sp->pm[i].dispx; \
+      k_particle_movers_h(i, particle_mover_var::dispy) = sp->pm[i].dispy; \
+      k_particle_movers_h(i, particle_mover_var::dispz) = sp->pm[i].dispz; \
+      k_particle_movers_h(i, particle_mover_var::pmi)   = sp->pm[i].i;     \
     });\
     Kokkos::deep_copy(sp->k_p_d, sp->k_p_h);  \
     Kokkos::deep_copy(sp->k_pm_d, sp->k_pm_h); \
@@ -225,22 +236,23 @@ enum accumulator_var { \
     max_pmovers = sp->max_nm; \
     k_particles_h = sp->k_p_h; \
     k_particle_movers_h = sp->k_pm_h; \
+    KOKKOS_PARTICLE_ENUMS(); \
     Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
-      sp->p[i].dx = k_particles_h(i,dx); \
-      sp->p[i].dy = k_particles_h(i,dy); \
-      sp->p[i].dz = k_particles_h(i,dz); \
-      sp->p[i].ux = k_particles_h(i,ux); \
-      sp->p[i].uy = k_particles_h(i,uy); \
-      sp->p[i].uz = k_particles_h(i,uz); \
-      sp->p[i].w  = k_particles_h(i,w);  \
-      sp->p[i].i  = k_particles_h(i,pi); \
+      sp->p[i].dx = k_particles_h(i, particle_var::dx); \
+      sp->p[i].dy = k_particles_h(i, particle_var::dy); \
+      sp->p[i].dz = k_particles_h(i, particle_var::dz); \
+      sp->p[i].ux = k_particles_h(i, particle_var::ux); \
+      sp->p[i].uy = k_particles_h(i, particle_var::uy); \
+      sp->p[i].uz = k_particles_h(i, particle_var::uz); \
+      sp->p[i].w  = k_particles_h(i, particle_var::w);  \
+      sp->p[i].i  = k_particles_h(i, particle_var::pi); \
     });\
     \
     Kokkos::parallel_for(host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
-      sp->pm[i].dispx = k_particle_movers_h(i,dispx); \
-      sp->pm[i].dispy = k_particle_movers_h(i,dispy); \
-      sp->pm[i].dispz = k_particle_movers_h(i,dispz); \
-      sp->pm[i].i     = k_particle_movers_h(i,pmi);   \
+      sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx); \
+      sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy); \
+      sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz); \
+      sp->pm[i].i     = k_particle_movers_h(i, particle_mover_var::pmi);   \
     });\
   };
 
@@ -254,24 +266,25 @@ enum accumulator_var { \
   \
   k_interpolator_h = interpolator_array->k_i_h; \
   Kokkos::parallel_for(host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
-    k_interpolator_h(i, ex)       = interpolator_array->i[i].ex; \
-    k_interpolator_h(i, ey)       = interpolator_array->i[i].ey; \
-    k_interpolator_h(i, ez)       = interpolator_array->i[i].ez; \
-    k_interpolator_h(i, dexdy)    = interpolator_array->i[i].dexdy; \
-    k_interpolator_h(i, dexdz)    = interpolator_array->i[i].dexdz; \
-    k_interpolator_h(i, d2exdydz) = interpolator_array->i[i].d2exdydz; \
-    k_interpolator_h(i, deydz)    = interpolator_array->i[i].deydz; \
-    k_interpolator_h(i, deydx)    = interpolator_array->i[i].deydx; \
-    k_interpolator_h(i, d2eydzdx) = interpolator_array->i[i].d2eydzdx; \
-    k_interpolator_h(i, dezdx)    = interpolator_array->i[i].dezdx; \
-    k_interpolator_h(i, dezdy)    = interpolator_array->i[i].dezdy; \
-    k_interpolator_h(i, d2ezdxdy) = interpolator_array->i[i].d2ezdxdy; \
-    k_interpolator_h(i, cbx)      = interpolator_array->i[i].cbx; \
-    k_interpolator_h(i, cby)      = interpolator_array->i[i].cby; \
-    k_interpolator_h(i, cbz)      = interpolator_array->i[i].cbz; \
-    k_interpolator_h(i, dcbxdx)   = interpolator_array->i[i].dcbxdx; \
-    k_interpolator_h(i, dcbydy)   = interpolator_array->i[i].dcbydy; \
-    k_interpolator_h(i, dcbzdz)   = interpolator_array->i[i].dcbzdz; \
+    KOKKOS_INTERPOLATOR_ENUMS(); \
+    k_interpolator_h(i, interpolator_var::ex)       = interpolator_array->i[i].ex; \
+    k_interpolator_h(i, interpolator_var::ey)       = interpolator_array->i[i].ey; \
+    k_interpolator_h(i, interpolator_var::ez)       = interpolator_array->i[i].ez; \
+    k_interpolator_h(i, interpolator_var::dexdy)    = interpolator_array->i[i].dexdy; \
+    k_interpolator_h(i, interpolator_var::dexdz)    = interpolator_array->i[i].dexdz; \
+    k_interpolator_h(i, interpolator_var::d2exdydz) = interpolator_array->i[i].d2exdydz; \
+    k_interpolator_h(i, interpolator_var::deydz)    = interpolator_array->i[i].deydz; \
+    k_interpolator_h(i, interpolator_var::deydx)    = interpolator_array->i[i].deydx; \
+    k_interpolator_h(i, interpolator_var::d2eydzdx) = interpolator_array->i[i].d2eydzdx; \
+    k_interpolator_h(i, interpolator_var::dezdx)    = interpolator_array->i[i].dezdx; \
+    k_interpolator_h(i, interpolator_var::dezdy)    = interpolator_array->i[i].dezdy; \
+    k_interpolator_h(i, interpolator_var::d2ezdxdy) = interpolator_array->i[i].d2ezdxdy; \
+    k_interpolator_h(i, interpolator_var::cbx)      = interpolator_array->i[i].cbx; \
+    k_interpolator_h(i, interpolator_var::cby)      = interpolator_array->i[i].cby; \
+    k_interpolator_h(i, interpolator_var::cbz)      = interpolator_array->i[i].cbz; \
+    k_interpolator_h(i, interpolator_var::dcbxdx)   = interpolator_array->i[i].dcbxdx; \
+    k_interpolator_h(i, interpolator_var::dcbydy)   = interpolator_array->i[i].dcbydy; \
+    k_interpolator_h(i, interpolator_var::dcbzdz)   = interpolator_array->i[i].dcbzdz; \
   });\
   Kokkos::deep_copy(interpolator_array->k_i_d, interpolator_array->k_i_h);  
 
@@ -281,23 +294,24 @@ enum accumulator_var { \
   nv = interpolator_array->g->nv;; \
   k_interpolator_h = interpolator_array->k_i_h; \
   Kokkos::parallel_for(host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
-    interpolator_array->i[i].ex       = k_interpolator_h(i, ex); \
-    interpolator_array->i[i].ey       = k_interpolator_h(i, ey); \
-    interpolator_array->i[i].ez       = k_interpolator_h(i, ez); \
-    interpolator_array->i[i].dexdy    = k_interpolator_h(i, dexdy); \
-    interpolator_array->i[i].dexdz    = k_interpolator_h(i, dexdz); \
-    interpolator_array->i[i].d2exdydz = k_interpolator_h(i, d2exdydz); \
-    interpolator_array->i[i].deydz    = k_interpolator_h(i, deydz); \
-    interpolator_array->i[i].deydx    = k_interpolator_h(i, deydx); \
-    interpolator_array->i[i].d2eydzdx = k_interpolator_h(i, d2eydzdx); \
-    interpolator_array->i[i].dezdx    = k_interpolator_h(i, dezdx); \
-    interpolator_array->i[i].dezdy    = k_interpolator_h(i, dezdy); \
-    interpolator_array->i[i].d2ezdxdy = k_interpolator_h(i, d2ezdxdy); \
-    interpolator_array->i[i].cbx      = k_interpolator_h(i, cbx); \
-    interpolator_array->i[i].cby      = k_interpolator_h(i, cby); \
-    interpolator_array->i[i].cbz      = k_interpolator_h(i, cbz); \
-    interpolator_array->i[i].dcbxdx   = k_interpolator_h(i, dcbxdx); \
-    interpolator_array->i[i].dcbydy   = k_interpolator_h(i, dcbydy); \
-    interpolator_array->i[i].dcbzdz   = k_interpolator_h(i, dcbzdz); \
+    KOKKOS_INTERPOLATOR_ENUMS(); \
+    interpolator_array->i[i].ex       = k_interpolator_h(i, interpolator_var::ex); \
+    interpolator_array->i[i].ey       = k_interpolator_h(i, interpolator_var::ey); \
+    interpolator_array->i[i].ez       = k_interpolator_h(i, interpolator_var::ez); \
+    interpolator_array->i[i].dexdy    = k_interpolator_h(i, interpolator_var::dexdy); \
+    interpolator_array->i[i].dexdz    = k_interpolator_h(i, interpolator_var::dexdz); \
+    interpolator_array->i[i].d2exdydz = k_interpolator_h(i, interpolator_var::d2exdydz); \
+    interpolator_array->i[i].deydz    = k_interpolator_h(i, interpolator_var::deydz); \
+    interpolator_array->i[i].deydx    = k_interpolator_h(i, interpolator_var::deydx); \
+    interpolator_array->i[i].d2eydzdx = k_interpolator_h(i, interpolator_var::d2eydzdx); \
+    interpolator_array->i[i].dezdx    = k_interpolator_h(i, interpolator_var::dezdx); \
+    interpolator_array->i[i].dezdy    = k_interpolator_h(i, interpolator_var::dezdy); \
+    interpolator_array->i[i].d2ezdxdy = k_interpolator_h(i, interpolator_var::d2ezdxdy); \
+    interpolator_array->i[i].cbx      = k_interpolator_h(i, interpolator_var::cbx); \
+    interpolator_array->i[i].cby      = k_interpolator_h(i, interpolator_var::cby); \
+    interpolator_array->i[i].cbz      = k_interpolator_h(i, interpolator_var::cbz); \
+    interpolator_array->i[i].dcbxdx   = k_interpolator_h(i, interpolator_var::dcbxdx); \
+    interpolator_array->i[i].dcbydy   = k_interpolator_h(i, interpolator_var::dcbydy); \
+    interpolator_array->i[i].dcbzdz   = k_interpolator_h(i, interpolator_var::dcbzdz); \
   });
 
