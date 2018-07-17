@@ -123,12 +123,6 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         pi_dexdz    = fourth*( (w3 - w0) - (w1 - w2) );
         pi_d2exdydz = fourth*( (w3 + w0) - (w1 + w2) );
 
-/*
-        pi_ex       = 0.25*(  w0 + w1 + w2 + w3 );
-        pi_dexdy    = 0.25*( -w0 + w1 - w2 + w3 );
-        pi_dexdz    = 0.25*( -w0 - w1 + w2 + w3 );
-        pi_d2exdydz = 0.25*(  w0 - w1 - w2 + w3 );
- */
         #undef w0
         #undef w1
         #undef w2
@@ -150,12 +144,6 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         pi_deydx    = fourth*( (w3 - w0) - (w1 - w2) );
         pi_d2eydzdx = fourth*( (w3 + w0) - (w1 + w2) );
 
-/*
-        pi_ey       = 0.25*(  w0 + w1 + w2 + w3 );
-        pi_deydz    = 0.25*( -w0 + w1 - w2 + w3 );
-        pi_deydx    = 0.25*( -w0 - w1 + w2 + w3 );
-        pi_d2eydzdx = 0.25*(  w0 - w1 - w2 + w3 );
-*/
         #undef w0
         #undef w1
         #undef w2
@@ -176,12 +164,6 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         pi_dezdy    = fourth*( (w3 - w0) - (w1 - w2) );
         pi_d2ezdxdy = fourth*( (w3 + w0) - (w1 + w2) );
 
-/*
-        pi_ez       = 0.25*(  w0 + w1 + w2 + w3 );
-        pi_dezdx    = 0.25*( -w0 + w1 - w2 + w3 );
-        pi_dezdy    = 0.25*( -w0 - w1 + w2 + w3 );
-        pi_d2ezdxdy = 0.25*(  w0 - w1 - w2 + w3 );
-*/
         #undef w0
         #undef w1
         #undef w2
@@ -195,10 +177,7 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         #define w1 k_field(pfx_index, field_var::cbx)
         pi_cbx    = half*( w1 + w0 );
         pi_dcbxdx = half*( w1 - w0 );
-/*
-        pi_cbx    = 0.5*(  w0 + w1 );
-        pi_dcbxdx = 0.5*( -w0 + w1 );
-*/
+
         #undef w0
         #undef w1
 
@@ -212,10 +191,6 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         pi_cby    = half*( w1 + w0 );
         pi_dcbydy = half*( w1 - w0 );
 
-/*
-        pi_cby    = 0.5*(  w0 + w1 );
-        pi_dcbydy = 0.5*( -w0 + w1 );
-*/
         #undef w0
         #undef w1
 
@@ -228,10 +203,6 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         pi_cbz    = half*( w1 + w0 );
         pi_dcbzdz = half*( w1 - w0 );
 
-/*
-        pi_cbz    = 0.5*(  w0 + w1 );
-        pi_dcbzdz = 0.5*( -w0 + w1 );
-*/
         #undef w0
         #undef w1
 
