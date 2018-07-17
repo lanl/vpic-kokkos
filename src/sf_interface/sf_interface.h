@@ -34,7 +34,7 @@ typedef struct interpolator_array {
   interpolator_t * ALIGNED(128) i;
   grid_t * g;
   k_interpolator_t k_i_d;
-  k_interpolator_t k_i_h;
+  k_interpolator_t::HostMirror k_i_h;
 
   interpolator_array(int nv) :
     k_i_d("k_interpolators", nv)
