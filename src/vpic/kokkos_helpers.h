@@ -1,3 +1,6 @@
+#ifndef _kokkos_helpers_h_
+#define _kokkos_helpers_h_
+
 #include <Kokkos_Core.hpp>
 
 // This module implements kokkos macros
@@ -21,89 +24,89 @@ using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 
 using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
-using static_sched = Kokkos::Schedule<Kokkos::Static>; 
-using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>; 
+using static_sched = Kokkos::Schedule<Kokkos::Static>;
+using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
 
 typedef typename Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>::member_type k_member_t;
 
-namespace field_var { 
-  enum f_v { 
-    ex = 0, 
-    ey = 1, 
-    ez = 2, 
-    cbx = 3, 
-    cby = 4, 
-    cbz = 5, 
-    div_e_err = 6, 
-    div_b_err = 7, 
-    tcax = 8, 
-    tcay = 9, 
-    tcaz = 10, 
-    rhob = 11, 
-    jfx = 12, 
-    jfy = 13, 
-    jfz = 14, 
+namespace field_var {
+  enum f_v {
+    ex = 0,
+    ey = 1,
+    ez = 2,
+    cbx = 3,
+    cby = 4,
+    cbz = 5,
+    div_e_err = 6,
+    div_b_err = 7,
+    tcax = 8,
+    tcay = 9,
+    tcaz = 10,
+    rhob = 11,
+    jfx = 12,
+    jfy = 13,
+    jfz = 14,
     rhof = 15
-  }; 
-}; 
+  };
+};
 namespace field_edge_var { \
-  enum f_e_v { 
-    ematx = 0, 
-    ematy = 1, 
+  enum f_e_v {
+    ematx = 0,
+    ematy = 1,
     ematz = 2,
-    nmat = 3, 
-    fmatx = 4, 
-    fmaty = 5, 
-    fmatz = 6, 
-    cmat = 7 
-  }; 
+    nmat = 3,
+    fmatx = 4,
+    fmaty = 5,
+    fmatz = 6,
+    cmat = 7
+  };
 };
 
-namespace interpolator_var { 
-  enum i_r { 
-    ex = 0, 
-    ey = 1, 
-    ez = 2, 
-    cbx = 3, 
-    cby = 4, 
-    cbz = 5, 
-    dexdy = 6, 
-    dexdz = 7, 
-    d2exdydz = 8, 
-    deydz = 9, 
-    deydx = 10, 
-    d2eydzdx = 11, 
-    dezdx = 12, 
-    dezdy = 13, 
-    d2ezdxdy = 14, 
-    dcbxdx = 15, 
-    dcbydy = 16, 
-    dcbzdz = 17 
-  }; 
+namespace interpolator_var {
+  enum i_r {
+    ex = 0,
+    ey = 1,
+    ez = 2,
+    cbx = 3,
+    cby = 4,
+    cbz = 5,
+    dexdy = 6,
+    dexdz = 7,
+    d2exdydz = 8,
+    deydz = 9,
+    deydx = 10,
+    d2eydzdx = 11,
+    dezdx = 12,
+    dezdy = 13,
+    d2ezdxdy = 14,
+    dcbxdx = 15,
+    dcbydy = 16,
+    dcbzdz = 17
+  };
 };
 
-namespace particle_var { 
-  enum p_v { 
-    dx = 0, 
-    dy = 1, 
-    dz = 2, 
-    ux = 3, 
-    uy = 4, 
-    uz = 5, 
-    w = 6, 
-    pi = 7 
-  }; 
-}; 
+namespace particle_var {
+  enum p_v {
+    dx = 0,
+    dy = 1,
+    dz = 2,
+    ux = 3,
+    uy = 4,
+    uz = 5,
+    w = 6,
+    pi = 7
+  };
+};
 
-namespace particle_mover_var { 
-  enum p_m_v { 
-     dispx = 0, 
-     dispy = 1, 
-     dispz = 2, 
-     pmi = 3, 
-  }; 
-}; 
-       
+namespace particle_mover_var {
+  enum p_m_v {
+     dispx = 0,
+     dispy = 1,
+     dispz = 2,
+     pmi = 3,
+  };
+};
+
 /*
 enum class accumulator_var { \
   jx = 0, \
@@ -117,7 +120,7 @@ enum class accumulator_var { \
   k_field_t::HostMirror k_field; \
   k_field_edge_t::HostMirror k_field_edge; \
 
-  
+
 #define KOKKOS_COPY_FIELD_MEM_TO_DEVICE() \
   k_field = field_array->k_f_h; \
   k_field_edge = field_array->k_fe_h; \
@@ -199,7 +202,7 @@ enum class accumulator_var { \
   int max_pmovers; \
   \
   k_particles_t::HostMirror k_particles_h; \
-  k_particle_movers_t::HostMirror k_particle_movers_h; 
+  k_particle_movers_t::HostMirror k_particle_movers_h;
 
 
 #define KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE() \
@@ -287,7 +290,7 @@ enum class accumulator_var { \
     k_interpolator_h(i, interpolator_var::dcbydy)   = interpolator_array->i[i].dcbydy; \
     k_interpolator_h(i, interpolator_var::dcbzdz)   = interpolator_array->i[i].dcbzdz; \
   });\
-  Kokkos::deep_copy(interpolator_array->k_i_d, interpolator_array->k_i_h);  
+  Kokkos::deep_copy(interpolator_array->k_i_d, interpolator_array->k_i_h);
 
 
 #define KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST() \
@@ -315,3 +318,4 @@ enum class accumulator_var { \
     interpolator_array->i[i].dcbzdz   = k_interpolator_h(i, interpolator_var::dcbzdz); \
   });
 
+#endif // _kokkos_helpers_h_
