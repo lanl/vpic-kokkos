@@ -5,6 +5,12 @@
 #define HAS_V4_PIPELINE
 #include "spa_private.h"
 
+
+// TODO: Tell bob to make this includable as a path from the root, ie:
+//#include "vpic/kokkos_helpers.h"
+#include "../../vpic/kokkos_helpers.h"
+#include <Kokkos_ScatterView.hpp>
+
 void
 advance_p_pipeline( advance_p_pipeline_args_t * args,
                     int pipeline_rank,
@@ -40,6 +46,42 @@ advance_p_pipeline( advance_p_pipeline_args_t * args,
 
   DISTRIBUTE( args->np, 16, pipeline_rank, n_pipeline, itmp, n );
   p = args->p0 + itmp;
+
+  const int accumulator_max = 10; // TODO: grab real value
+
+  // Local assumulator in Kokkos
+  k_accumulators_t k_accumulator("k_accumulator", accumulator_max); // Ostensibly "Device"
+  k_accumulators_t::HostMirror k_accumulator_h(k_accumulator); // "Host"
+
+  // Make scatter add
+  auto scatter_view = Kokkos::Experimental::create_scatter_view
+          < Kokkos::Experimental::ScatterSum
+          , Kokkos::Experimental::ScatterDuplicated
+          , Kokkos::Experimental::ScatterNonAtomic
+          >
+          (k_accumulator);
+
+
+  // Try and use the data
+  auto policy = Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace, int>(0, accumulator_max);
+  auto _lambda = KOKKOS_LAMBDA(int i) {
+      auto scatter_access = scatter_view.access();
+      auto scatter_access_atomic = scatter_view.template access<Kokkos::Experimental::ScatterAtomic>();
+          std::cout << "Writing to " << i << std::endl;
+          scatter_access(i, 0, 0) += 4.2;
+          //scatter_access_atomic(k, 1) += 2.0;
+          //scatter_access(k, 2) += 1.0;
+  };
+  Kokkos::parallel_for(policy, _lambda, "scatter_view_test");
+
+  // copy back
+  Kokkos::Experimental::contribute(k_accumulator, scatter_view);
+
+  // See if it has any values
+  for (int i = 0; i < accumulator_max; i++)
+  {
+      std::cout << "k_accumulator at " << i << " = " << k_accumulator(i, 0, 0) << std::endl;
+  }
 
   // Determine which movers are reserved for this pipeline
   // Movers (16 bytes) should be reserved for pipelines in at least

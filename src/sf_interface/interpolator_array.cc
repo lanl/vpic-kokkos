@@ -54,7 +54,7 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
   #define pi_deydx    k_interp(pi_index, interpolator_var::deydx)
   #define pi_d2eydzdx k_interp(pi_index, interpolator_var::d2eydzdx)
 
-  #define pi_ez       k_interp(pi_index, interpolator_var::ez) 
+  #define pi_ez       k_interp(pi_index, interpolator_var::ez)
   #define pi_dezdx    k_interp(pi_index, interpolator_var::dezdx)
   #define pi_dezdy    k_interp(pi_index, interpolator_var::dezdy)
   #define pi_d2ezdxdy k_interp(pi_index, interpolator_var::d2ezdxdy)
@@ -80,7 +80,7 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
     //for( z=1; z<=nz; z++ ) {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nz), [=] (int j) {
       const unsigned int z = team_member.team_rank() + 1;
-       
+
       //for( x=1; x<=nx; x++ ) {
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nx), [=] (int x) {
 
@@ -128,10 +128,10 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         pi_dexdy    = 0.25*( -w0 + w1 - w2 + w3 );
         pi_dexdz    = 0.25*( -w0 - w1 + w2 + w3 );
         pi_d2exdydz = 0.25*(  w0 - w1 - w2 + w3 );
- */       
-        #undef w0 
-        #undef w1 
-        #undef w2 
+ */
+        #undef w0
+        #undef w1
+        #undef w2
         #undef w3
 
         // ey interpolation coefficients
@@ -155,10 +155,10 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         pi_deydz    = 0.25*( -w0 + w1 - w2 + w3 );
         pi_deydx    = 0.25*( -w0 - w1 + w2 + w3 );
         pi_d2eydzdx = 0.25*(  w0 - w1 - w2 + w3 );
-*/        
-        #undef w0 
-        #undef w1 
-        #undef w2 
+*/
+        #undef w0
+        #undef w1
+        #undef w2
         #undef w3
 
         // ez interpolation coefficients
@@ -181,10 +181,10 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         pi_dezdx    = 0.25*( -w0 + w1 - w2 + w3 );
         pi_dezdy    = 0.25*( -w0 - w1 + w2 + w3 );
         pi_d2ezdxdy = 0.25*(  w0 - w1 - w2 + w3 );
-*/            
-        #undef w0 
-        #undef w1 
-        #undef w2 
+*/
+        #undef w0
+        #undef w1
+        #undef w2
         #undef w3
 
         // bx interpolation coefficients
@@ -198,9 +198,9 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
 /*
         pi_cbx    = 0.5*(  w0 + w1 );
         pi_dcbxdx = 0.5*( -w0 + w1 );
-*/        
-        #undef w0 
-        #undef w1 
+*/
+        #undef w0
+        #undef w1
 
         // by interpolation coefficients
 
@@ -216,9 +216,9 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         pi_cby    = 0.5*(  w0 + w1 );
         pi_dcbydy = 0.5*( -w0 + w1 );
 */
-        #undef w0 
-        #undef w1 
-        
+        #undef w0
+        #undef w1
+
         // bz interpolation coefficients
 
         // w0 = pf0->cbz;
@@ -232,12 +232,13 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         pi_cbz    = 0.5*(  w0 + w1 );
         pi_dcbzdz = 0.5*( -w0 + w1 );
 */
-        #undef w0 
-        #undef w1 
+        #undef w0
+        #undef w1
 
         //pi++; pf0++; pfx++; pfy++; pfz++; pfyz++; pfzx++; pfxy++;
       });
-    });
+    }
+    );
   });
 }
 
@@ -251,10 +252,10 @@ load_interpolator_array( /**/  interpolator_array_t * RESTRICT ia,
   k_field_t         k_field  = fa->k_f_d;
   grid_t *g = fa->g;
   int nx = g->nx;
-  int ny = g->ny; 
+  int ny = g->ny;
   int nz = g->nz;
 
-  load_interpolator_array_kokkos(k_interp, k_field, nx, ny, nz); 
+  load_interpolator_array_kokkos(k_interp, k_field, nx, ny, nz);
 
-} 
+}
 
