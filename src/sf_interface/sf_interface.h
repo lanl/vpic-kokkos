@@ -87,6 +87,7 @@ typedef struct accumulator_array {
   accumulator_t * ALIGNED(128) a;
   int n_pipeline; // Number of pipelines supported by this accumulator
   int stride;     // Stride be each pipeline's accumulator array
+  int na;         // Number of accumulators in a
   grid_t * g;
 
   k_accumulators_t k_a_d;

@@ -337,7 +337,7 @@ namespace accumulator_var {
   k_accumulators_t::HostMirror k_accumulators_h;
 
 #define KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE() \
-  na = (size_t)(accumulator_array->n_pipeline+1)*(size_t)accumulator_array->stride; \
+  na = accumulator_array->na; \
   \
   k_accumulators_h = accumulator_array->k_a_h; \
   Kokkos::parallel_for(KOKKOS_TEAM_POLICY_HOST \
@@ -354,7 +354,7 @@ namespace accumulator_var {
   });\
   
 #define KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST() \
-  na = (size_t)(accumulator_array->n_pipeline+1)*(size_t)accumulator_array->stride; \
+  na = accumulator_array->na; \
   \
   k_accumulators_h = accumulator_array->k_a_h; \
   Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h); \
