@@ -2,6 +2,7 @@
 #define _kokkos_helpers_h_
 
 #include <Kokkos_Core.hpp>
+#include <Kokkos_ScatterView.hpp>
 
 // This module implements kokkos macros
 
@@ -13,6 +14,15 @@
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
 
+#ifdef KOKKOS_ENABLE_CUDA
+  #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
+  #define KOKKOS_SCATTER_ATOMIC Kokkos::Experimental::ScatterAtomic
+  #define KOKKOS_LAYOUT Kokkos::LayoutLeft
+#else
+  #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterDuplicated
+  #define KOKKOS_SCATTER_ATOMIC Kokkos::Experimental::ScatterNonAtomic
+  #define KOKKOS_LAYOUT Kokkos::LayoutRight
+#endif
 
 using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
 using k_field_edge_t = Kokkos::View<material_id*[FIELD_EDGE_COUNT]>;
@@ -24,10 +34,13 @@ using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 
 using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
+using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], KOKKOS_LAYOUT, Kokkos::DefaultExecutionSpace, Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED, KOKKOS_SCATTER_ATOMIC>;
+
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
 
-typedef typename Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>::member_type k_member_t;
+#define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
+#define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
 
 namespace field_var {
   enum f_v {
@@ -107,13 +120,13 @@ namespace particle_mover_var {
   };
 };
 
-/*
-enum class accumulator_var { \
-  jx = 0, \
-  jy = 1, \
-  jz = 2, \
+namespace accumulator_var { 
+  enum a_v { \
+    jx = 0, \
+    jy = 1, \
+    jz = 2, \
+  };
 };
-*/
 
 #define KOKKOS_FIELD_VARIABLES() \
   int n_fields = field_array->g->nv; \
@@ -316,6 +329,46 @@ enum class accumulator_var { \
     interpolator_array->i[i].dcbxdx   = k_interpolator_h(i, interpolator_var::dcbxdx); \
     interpolator_array->i[i].dcbydy   = k_interpolator_h(i, interpolator_var::dcbydy); \
     interpolator_array->i[i].dcbzdz   = k_interpolator_h(i, interpolator_var::dcbzdz); \
+  });
+
+
+#define KOKKOS_ACCUMULATOR_VARIABLES() \
+  int na; \
+  k_accumulators_t::HostMirror k_accumulators_h;
+
+#define KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE() \
+  na = (size_t)(accumulator_array->n_pipeline+1)*(size_t)accumulator_array->stride; \
+  \
+  k_accumulators_h = accumulator_array->k_a_h; \
+  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_HOST \
+      (na, Kokkos::AUTO),                          \
+      KOKKOS_LAMBDA                                \
+      (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) { \
+    const unsigned int i = team_member.league_rank();              \
+    \
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) { \
+      k_accumulators_h(i, accumulator_var::jx, j)       = accumulator_array->a[i].jx[j]; \
+      k_accumulators_h(i, accumulator_var::jy, j)       = accumulator_array->a[i].jy[j]; \
+      k_accumulators_h(i, accumulator_var::jz, j)       = accumulator_array->a[i].jz[j]; \
+    }); \
+  });\
+  
+#define KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST() \
+  na = (size_t)(accumulator_array->n_pipeline+1)*(size_t)accumulator_array->stride; \
+  \
+  k_accumulators_h = accumulator_array->k_a_h; \
+  Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h); \
+  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_HOST \
+      (na, Kokkos::AUTO),                          \
+      KOKKOS_LAMBDA                                \
+      (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) { \
+    const unsigned int i = team_member.league_rank();              \
+    \
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) { \
+      accumulator_array->a[i].jx[j] = k_accumulators_h(i, accumulator_var::jx, j); \
+      accumulator_array->a[i].jy[j] = k_accumulators_h(i, accumulator_var::jy, j); \
+      accumulator_array->a[i].jz[j] = k_accumulators_h(i, accumulator_var::jz, j); \
+    }); \
   });
 
 #endif // _kokkos_helpers_h_

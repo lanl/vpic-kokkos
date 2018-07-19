@@ -36,8 +36,10 @@ void advance_b_kokkos(k_field_t k_field, int nx, int ny, int nz,
   #define UPDATE_CBY() f0_cby -= ( pz*( fz_ex-f0_ex ) - px*( fx_ez-f0_ez ) );
   #define UPDATE_CBZ() f0_cbz -= ( px*( fx_ey-f0_ey ) - py*( fy_ex-f0_ex ) );
 
-  Kokkos::parallel_for(Kokkos::TeamPolicy< Kokkos::DefaultExecutionSpace>
-      (nx, Kokkos::AUTO), KOKKOS_LAMBDA (const k_member_t &team_member) {
+    Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
+      (nx, Kokkos::AUTO),
+      KOKKOS_LAMBDA
+      (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
     const unsigned int x = team_member.league_rank();
     const int offset = 1;
 

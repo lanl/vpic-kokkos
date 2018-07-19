@@ -88,6 +88,22 @@ typedef struct accumulator_array {
   int n_pipeline; // Number of pipelines supported by this accumulator
   int stride;     // Stride be each pipeline's accumulator array
   grid_t * g;
+
+  k_accumulators_t k_a_d;
+  k_accumulators_t::HostMirror k_a_h;
+  k_accumulators_sa_t k_a_sa;
+
+  accumulator_array(int na) :
+    k_a_d("k_interpolators", na)
+    {
+      k_a_h  = Kokkos::create_mirror_view(k_a_d);
+      k_a_sa = Kokkos::Experimental::create_scatter_view
+        <Kokkos::Experimental::ScatterSum,
+         KOKKOS_SCATTER_DUPLICATED,
+         KOKKOS_SCATTER_ATOMIC>(k_a_d);
+    }
+
+
 } accumulator_array_t;
 
 BEGIN_C_DECLS
