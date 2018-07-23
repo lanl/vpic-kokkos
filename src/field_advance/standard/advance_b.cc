@@ -3,8 +3,8 @@
 #include "sfa_private.h"
 #include <Kokkos_Core.hpp>
 
-void advance_b_kokkos(k_field_t k_field, int nx, int ny, int nz,
-                      float px, float py, float pz) {
+void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const size_t nz, const size_t nv,
+                      const float px, const float py, const float pz) {
 
   #define f0_cbx k_field(f0_index, field_var::cbx)
   #define f0_cby k_field(f0_index, field_var::cby)
@@ -36,75 +36,100 @@ void advance_b_kokkos(k_field_t k_field, int nx, int ny, int nz,
   #define UPDATE_CBY() f0_cby -= ( pz*( fz_ex-f0_ex ) - px*( fx_ez-f0_ez ) );
   #define UPDATE_CBZ() f0_cbz -= ( px*( fx_ey-f0_ey ) - py*( fy_ex-f0_ex ) );
 
-    Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
+  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
       (nx, Kokkos::AUTO),
       KOKKOS_LAMBDA
       (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-    const unsigned int x = team_member.league_rank();
-    const int offset = 1;
+    const size_t x = team_member.league_rank() + 1;
 
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny), [=] (int y) {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny), [=] (size_t yi) {
+      const size_t y = yi + 1;
 
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nz), [=] (int z) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nz), [=] (size_t zi) {
+        const size_t z = zi + 1;
+        //printf("%d %d %d %d\n", x ,y,z, ny);
+        size_t f0_index = VOXEL(x,  y,  z,   nx,ny,nz);
+        size_t fx_index = VOXEL(x+1,y,  z,   nx,ny,nz);
+        size_t fy_index = VOXEL(x,  y+1,z,   nx,ny,nz);
+        size_t fz_index = VOXEL(x,  y,  z+1, nx,ny,nz);
 
-        int f0_index = VOXEL(x+offset,  y+offset,  z+offset,   nx,ny,nz);
-        int fx_index = VOXEL(x+offset+1,y+offset,  z+offset,   nx,ny,nz);
-        int fy_index = VOXEL(x+offset,  y+offset+1,z+offset,   nx,ny,nz);
-        int fz_index = VOXEL(x+offset,  y+offset,  z+offset+1, nx,ny,nz);
-
-        UPDATE_CBX(); UPDATE_CBY(); UPDATE_CBZ();
+        UPDATE_CBX(); 
+        UPDATE_CBY(); 
+        UPDATE_CBZ();
       });
     });
   });
+/*
+    Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
+        (nv, Kokkos::AUTO),
+        KOKKOS_LAMBDA
+        (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
+      const size_t v = team_member.league_rank();
 
+      size_t f0_index = VOXEL(1,  1,  1,   nx,ny,nz) + v;
+      size_t fx_index = VOXEL(2,  1,  1,   nx,ny,nz) + v;
+      size_t fy_index = VOXEL(1,  2,  1,   nx,ny,nz) + v;
+      size_t fz_index = VOXEL(1,  1,  2,   nx,ny,nz) + v;
 
+      UPDATE_CBX();
+      UPDATE_CBY();
+      UPDATE_CBZ();
+  });
+*/
   // Do the bulk of the magnetic fields in the pipelines.  The host
   // handles stragglers.
   // While the pipelines are busy, do surface fields
   //
 
   // Do left over bx
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
-      (1, nz+1), KOKKOS_LAMBDA (int z) {
-    // TODO: Parallelize this nested loop
-    for(int y=1; y<=ny; y++ ) {
-      int f0_index = VOXEL(nx+1,y,  z,  nx,ny,nz);
-      int fy_index = VOXEL(nx+1,y+1,z,  nx,ny,nz);
-      int fz_index = VOXEL(nx+1,y,  z+1,nx,ny,nz);
+  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
+      (nz, Kokkos::AUTO),
+      KOKKOS_LAMBDA
+      (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
+    const size_t z = team_member.league_rank() + 1;
+
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny), [=] (const size_t yi) {
+      const size_t y = yi + 1;
+
+      const size_t f0_index = VOXEL(nx+1,y,  z,  nx,ny,nz);
+      const size_t fy_index = VOXEL(nx+1,y+1,z,  nx,ny,nz);
+      const size_t fz_index = VOXEL(nx+1,y,  z+1,nx,ny,nz);
       UPDATE_CBX();
-    }
+    });
   });
 
   // Do left over by
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
-      (1, nz+1), KOKKOS_LAMBDA (int z) {
-    int f0_index = VOXEL(1,ny+1,z,  nx,ny,nz);
-    int fx_index = VOXEL(2,ny+1,z,  nx,ny,nz);
-    int fz_index = VOXEL(1,ny+1,z+1,nx,ny,nz);
-    // TODO: Parallelize this nested loop
-    for(int x=1; x<=nx; x++ ) {
+  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
+      (nz, Kokkos::AUTO),
+      KOKKOS_LAMBDA
+      (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
+    const size_t z = team_member.league_rank() + 1;
+
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (const size_t i) {
+      const size_t f0_index = VOXEL(1,ny+1,z,  nx,ny,nz) + i;
+      const size_t fx_index = VOXEL(2,ny+1,z,  nx,ny,nz) + i;
+      const size_t fz_index = VOXEL(1,ny+1,z+1,nx,ny,nz) + i;
+
       UPDATE_CBY();
-      f0_index++;
-      fx_index++;
-      fz_index++;
-    }
+
+    });
   });
 
   // Do left over bz
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
-      (1, ny+1), KOKKOS_LAMBDA (int y) {
-    int f0_index = VOXEL(1,y,  nz+1,nx,ny,nz);
-    int fx_index = VOXEL(2,y,  nz+1,nx,ny,nz);
-    int fy_index = VOXEL(1,y+1,nz+1,nx,ny,nz);
-    // TODO: Parallelize this nested loop
-    for(int x=1; x<=nx; x++ ) {
-      UPDATE_CBZ();
-      f0_index++;
-      fx_index++;
-      fy_index++;
-    }
-  });
+  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
+      (ny, Kokkos::AUTO),
+      KOKKOS_LAMBDA
+      (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
+    const size_t y = team_member.league_rank() + 1;
 
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (const size_t i) {
+      const size_t f0_index = VOXEL(1,y,  nz+1,nx,ny,nz) + i;
+      const size_t fx_index = VOXEL(2,y,  nz+1,nx,ny,nz) + i;
+      const size_t fy_index = VOXEL(1,y+1,nz+1,nx,ny,nz) + i;
+
+      UPDATE_CBZ();
+    });
+  });
   
 }
 
@@ -115,14 +140,15 @@ advance_b(field_array_t * RESTRICT fa,
   k_field_t k_field = fa->k_f_d;
 
   grid_t *g   = fa->g;
-  int    nx   = g->nx;
-  int    ny   = g->ny;
-  int    nz   = g->nz;
+  size_t nx   = g->nx;
+  size_t ny   = g->ny;
+  size_t nz   = g->nz;
+  size_t nv   = g->nv;
   float  px   = (nx>1) ? frac*g->cvac*g->dt*g->rdx : 0;
   float  py   = (ny>1) ? frac*g->cvac*g->dt*g->rdy : 0;
   float  pz   = (nz>1) ? frac*g->cvac*g->dt*g->rdz : 0;
 
-  advance_b_kokkos(k_field, nx, ny, nz, px, py, pz);
+  advance_b_kokkos(k_field, nx, ny, nz, nv, px, py, pz);
 
   k_local_adjust_norm_b( fa, g );
 }
