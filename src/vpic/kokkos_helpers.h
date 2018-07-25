@@ -103,11 +103,11 @@ namespace particle_var {
     dx = 0,
     dy = 1,
     dz = 2,
-    ux = 3,
-    uy = 4,
-    uz = 5,
-    w = 6,
-    pi = 7
+    pi = 3,
+    ux = 4,
+    uy = 5,
+    uz = 6,
+    w = 7
   };
 };
 
