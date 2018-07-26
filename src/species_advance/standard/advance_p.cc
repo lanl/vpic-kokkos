@@ -3,6 +3,7 @@
 
 #define IN_spa
 #define HAS_V4_PIPELINE
+#include <stdio.h>
 #include "spa_private.h"
 #include "../../vpic/kokkos_helpers.h"
 
@@ -30,7 +31,14 @@ advance_p_kokkos(k_particles_t k_particles,
   
   k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
   k_particle_movers_t  k_local_particle_movers   = *k_local_particle_movers_p;
-  Kokkos::View<int> k_nm("k_nm");
+
+  Kokkos::View<int[1]> *k_nm_p = new Kokkos::View<int[1]>("k_nm");
+  auto k_nm = *k_nm_p;
+
+  auto h_nm = Kokkos::create_mirror_view(k_nm);
+  h_nm(0) = 0;
+  Kokkos::deep_copy(k_nm, h_nm);
+
 
   // Determine which quads of particles quads this pipeline processes
 
@@ -130,7 +138,7 @@ advance_p_kokkos(k_particles_t k_particles,
   //for(;n;n--,p++) {
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np), 
     KOKKOS_LAMBDA (int p_index) { 
-
+    
     float v0, v1, v2, v3, v4, v5;
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
 
@@ -138,6 +146,8 @@ advance_p_kokkos(k_particles_t k_particles,
     float dy   = p_dy;
     float dz   = p_dz;
     int   ii   = pii;
+    printf("%d\n", nm);
+    printf("%d %d %d\n", p_index, pii, nm);
     float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
                            dz*( f_dexdz + dy*f_d2exdydz ) );
     float hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
@@ -187,6 +197,7 @@ advance_p_kokkos(k_particles_t k_particles,
     v3   = v0 + ux;                           // New position
     v4   = v1 + uy;
     v5   = v2 + uz;
+    //printf("%f %f %f\n", ux, uy, uz);
 
     // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
     if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
