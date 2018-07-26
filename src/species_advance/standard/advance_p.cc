@@ -131,8 +131,8 @@ advance_p_kokkos(k_particles_t k_particles,
 
   //for(;n;n--,p++) {
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np), 
-    KOKKOS_LAMBDA (int p_index) { 
-    
+    KOKKOS_LAMBDA (size_t p_index) { 
+
     float v0, v1, v2, v3, v4, v5;
     int   nm;
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
@@ -251,11 +251,16 @@ advance_p_kokkos(k_particles_t k_particles,
       local_pm_dispx = ux;
       local_pm_dispy = uy;
       local_pm_dispz = uz;
-      local_pm_i     = p_index;
+
+//      printf("%d\n",  p_index);
+      local_pm_i     = float(p_index);
+//      printf("%f\n",  local_pm_i);
+
+      //printf("pmi outside %d\n", int(k_particle_movers(nm, particle_mover_var::pmi)));
       if( move_p_kokkos( k_particles, k_local_particle_movers,
                          k_accumulators_sa, nm, g, qsp ) ) { // Unlikely
         if( nm<max_nm ) { 
-          nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+          nm = int(Kokkos::atomic_fetch_add( &k_nm(0), 1 ));
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
           copy_local_to_pm(nm);
         }
