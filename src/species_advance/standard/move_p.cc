@@ -1,5 +1,6 @@
 #define IN_spa
 #include "spa_private.h"
+#include "../../vpic/kokkos_helpers.h"
 
 // move_p moves the particle m->p by m->dispx, m->dispy, m->dispz
 // depositing particle current as it goes. If the particle was moved
@@ -353,47 +354,68 @@ move_p( particle_t       * ALIGNED(128) p0,
 
 #endif
 
-#if 0
 int
 move_p_kokkos(k_particles_t k_particles,
               k_particle_movers_t k_particle_movers,
               k_accumulators_sa_t k_accumulators_sa,
+              const int                       nm,
               const grid_t     *              g,
               const float                     qsp ) {
+
+  #define p_dx    k_particles(pi, particle_var::dx)
+  #define p_dy    k_particles(pi, particle_var::dy)
+  #define p_dz    k_particles(pi, particle_var::dz)
+  #define p_ux    k_particles(pi, particle_var::ux)
+  #define p_uy    k_particles(pi, particle_var::uy)
+  #define p_uz    k_particles(pi, particle_var::uz)
+  #define p_w     k_particles(pi, particle_var::w)
+  #define pii     k_particles(pi, particle_var::pi)
+
+  #define pm_dispx  k_particle_movers(nm, particle_mover_var::dispx)
+  #define pm_dispy  k_particle_movers(nm, particle_mover_var::dispy)
+  #define pm_dispz  k_particle_movers(nm, particle_mover_var::dispz)
+  #define pm_i      k_particle_movers(nm, particle_mover_var::pmi)
+
+  #define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
+  #define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
+  #define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
+  #define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
+
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
   float v0, v1, v2, v3, v4, v5, q;
   int axis, face;
   int64_t neighbor;
-  float *a;
-  particle_t * ALIGNED(32) p = p0 + pm->i;
+  int pi = pm_i;
+  int ii = pii;
+  auto  k_accumulators_scatter_access = k_accumulators_sa.access();
 
-  q = qsp*p->w;
+  q = qsp*p_w;
 
   for(;;) {
-    s_midx = p->dx;
-    s_midy = p->dy;
-    s_midz = p->dz;
+    s_midx = p_dx;
+    s_midy = p_dy;
+    s_midz = p_dz;
 
-    s_dispx = pm->dispx;
-    s_dispy = pm->dispy;
-    s_dispz = pm->dispz;
+    s_dispx = pm_dispx;
+    s_dispy = pm_dispy;
+    s_dispz = pm_dispz;
 
     s_dir[0] = (s_dispx>0) ? 1 : -1;
     s_dir[1] = (s_dispy>0) ? 1 : -1;
     s_dir[2] = (s_dispz>0) ? 1 : -1;
-    
+
     // Compute the twice the fractional distance to each potential
     // streak/cell face intersection.
-    v0 = (s_dispx==0) ? 3.4e38 : (s_dir[0]-s_midx)/s_dispx;
-    v1 = (s_dispy==0) ? 3.4e38 : (s_dir[1]-s_midy)/s_dispy;
-    v2 = (s_dispz==0) ? 3.4e38 : (s_dir[2]-s_midz)/s_dispz;
+    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
+    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
+    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
 
     // Determine the fractional length and axis of current streak. The
     // streak ends on either the first face intersected by the
     // particle track or at the end of the particle track.
-    // 
+    //
     //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
     //   axis 3        ... streak ends at end of the particle track
     /**/      v3=2,  axis=3;
@@ -413,8 +435,10 @@ move_p_kokkos(k_particles_t k_particles,
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
     // current quadrant in a time-step
-    v5 = q*s_dispx*s_dispy*s_dispz*(1./3.);
-    a = (float *)(a0 + p->i);
+    v5 = q*s_dispx*s_dispy*s_dispz*(1.f/3.f);
+
+    //a = (float *)(&d_accumulators[ci]);
+
 #   define accumulate_j(X,Y,Z)                                        \
     v4  = q*s_disp##X;    /* v2 = q ux                            */  \
     v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
@@ -430,24 +454,40 @@ move_p_kokkos(k_particles_t k_particles,
     v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
     v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
     v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-    a[0] += v0;                                                       \
-    a[1] += v1;                                                       \
-    a[2] += v2;                                                       \
-    a[3] += v3
-    accumulate_j(x,y,z); a += 4;
-    accumulate_j(y,z,x); a += 4;
+    //Kokkos::atomic_add(&a[0], v0); \
+    //Kokkos::atomic_add(&a[1], v1); \
+    //Kokkos::atomic_add(&a[2], v2); \
+    //Kokkos::atomic_add(&a[3], v3);
+
+    accumulate_j(x,y,z);
+    k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+    k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+    k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+    k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+
+    accumulate_j(y,z,x);
+    k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+    k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+    k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+    k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+
     accumulate_j(z,x,y);
+    k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+    k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+    k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+    k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+
 #   undef accumulate_j
 
     // Compute the remaining particle displacment
-    pm->dispx -= s_dispx;
-    pm->dispy -= s_dispy;
-    pm->dispz -= s_dispz;
+    pm_dispx -= s_dispx;
+    pm_dispy -= s_dispy;
+    pm_dispz -= s_dispz;
 
     // Compute the new particle offset
-    p->dx += s_dispx+s_dispx;
-    p->dy += s_dispy+s_dispy;
-    p->dz += s_dispz+s_dispz;
+    p_dx += s_dispx+s_dispx;
+    p_dy += s_dispy+s_dispy;
+    p_dz += s_dispz+s_dispz;
 
     // If an end streak, return success (should be ~50% of the time)
 
@@ -461,36 +501,47 @@ move_p_kokkos(k_particles_t k_particles,
     // +/-1 _exactly_ for the particle.
 
     v0 = s_dir[axis];
-    (&(p->dx))[axis] = v0; // Avoid roundoff fiascos--put the particle
+    k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
                            // _exactly_ on the boundary.
     face = axis; if( v0>0 ) face += 3;
-    neighbor = g->neighbor[ 6*p->i + face ];
-    
-    if( UNLIKELY( neighbor==reflect_particles ) ) {
+
+    // TODO: clean this fixed index to an enum
+    neighbor = g->neighbor[ 6*int(pii) + face ];
+
+    // TODO: these two if statements used to be marked UNLIKELY,
+    // but that intrinsic doesn't work on GPU.
+    // for performance portability, maybe specialize UNLIKELY
+    // for CUDA mode and put it back
+    if( neighbor==reflect_particles ) {
       // Hit a reflecting boundary condition.  Reflect the particle
       // momentum and remaining displacement and keep moving the
       // particle.
-      (&(p->ux    ))[axis] = -(&(p->ux    ))[axis];
-      (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
+      k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
+
+      // TODO: make this safer
+      //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
+      k_particle_movers(nm, particle_mover_var::dispx + axis) = -k_particle_movers(nm, particle_mover_var::dispx + axis);
+      
+
       continue;
     }
 
-    if( UNLIKELY( neighbor<g->rangel || neighbor>g->rangeh ) ) {
+    if( neighbor<g->rangel || neighbor>g->rangeh ) {
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
       // displacement in the particle mover.
-      p->i = 8*p->i + face;
+      pii = 8*int(pii) + face;
       return 1; // Return "mover still in use"
-    }
+      }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
-    
-    p->i = neighbor - g->rangel; // Compute local index of neighbor
-    /**/                         // Note: neighbor - g->rangel < 2^31 / 6
-    (&(p->dx))[axis] = -v0;      // Convert coordinate system
-  }
 
+    pii = neighbor - g->rangel; // Compute local index of neighbor
+    /**/                         // Note: neighbor - rangel < 2^31 / 6
+    k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+  }
   return 0; // Return "mover not in use"
 }
-#endif
+
+

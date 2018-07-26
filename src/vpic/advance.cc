@@ -52,7 +52,7 @@ int vpic_simulation::advance(void) {
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
   KOKKOS_ACCUMULATOR_VARIABLES();
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
-//  LIST_FOR_EACH( sp, species_list )
+  LIST_FOR_EACH( sp, species_list )
     TIC advance_p( species_list, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
 
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();

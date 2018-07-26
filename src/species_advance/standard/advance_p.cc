@@ -27,12 +27,10 @@ advance_p_kokkos(k_particles_t k_particles,
   const float one            = 1.;
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
-
-
   
-  //DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
-  k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("local_pm", 1);
+  k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
   k_particle_movers_t  k_local_particle_movers   = *k_local_particle_movers_p;
+  Kokkos::View<int> k_nm("k_nm");
 
   // Determine which quads of particles quads this pipeline processes
 
@@ -119,28 +117,27 @@ advance_p_kokkos(k_particles_t k_particles,
   #define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
   #define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
 
+  #define nm k_nm(0)
+
   #define copy_local_to_pm(index) \
-    k_particle_mover(index, particle_mover_var::dispx) = local_pm_dispx \
-    k_particle_mover(index, particle_mover_var::dispy) = local_pm_dispy \
-    k_particle_mover(index, particle_mover_var::dispz) = local_pm_dispz \
-    k_particle_mover(index, particle_mover_var::pmi)   = local_pm_i     \
+    k_particle_movers(index, particle_mover_var::dispx) = local_pm_dispx; \
+    k_particle_movers(index, particle_mover_var::dispy) = local_pm_dispy; \
+    k_particle_movers(index, particle_mover_var::dispz) = local_pm_dispz; \
+    k_particle_movers(index, particle_mover_var::pmi)   = local_pm_i;     
+
 
 
   //for(;n;n--,p++) {
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np), 
     KOKKOS_LAMBDA (int p_index) { 
 
-    auto  k_accumulators_scatter_access = k_accumulators_sa.access();
-    int   nm;
     float v0, v1, v2, v3, v4, v5;
-    int   ii   = pii;
+    auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+
     float dx   = p_dx;                             // Load position
     float dy   = p_dy;
     float dz   = p_dz;
-    float ux   = p_ux;                             // Load momentum
-    float uy   = p_uy;
-    float uz   = p_uz;
-    float q    = p_w;
+    int   ii   = pii;
     float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
                            dz*( f_dexdz + dy*f_d2exdydz ) );
     float hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
@@ -150,6 +147,10 @@ advance_p_kokkos(k_particles_t k_particles,
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby + dy*f_dcbydy;
     float cbz  = f_cbz + dz*f_dcbzdz;
+    float ux   = p_ux;                             // Load momentum
+    float uy   = p_uy;
+    float uz   = p_uz;
+    float q    = p_w;
     ux  += hax;                               // Half advance E
     uy  += hay;
     uz  += haz;
@@ -204,64 +205,8 @@ advance_p_kokkos(k_particles_t k_particles,
       dz = v2;
       v5 = q*ux*uy*uz*one_third;              // Compute correction
 
-      v4  = q*ux;   /* v2 = q ux                            */        
-      v1  = v4*dy;  /* v1 = q ux dy                         */        
-      v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        
-      v1 += v4;       /* v1 = q ux (1+dy)                     */        
-      v4  = one+dz; /* v4 = 1+dz                            */        
-      v2  = v0*v4;    /* v2 = q ux (1-dy)(1+dz)               */        
-      v3  = v1*v4;    /* v3 = q ux (1+dy)(1+dz)               */        
-      v4  = one-dz; /* v4 = 1-dz                            */        
-      v0 *= v4;       /* v0 = q ux (1-dy)(1-dz)               */        
-      v1 *= v4;       /* v1 = q ux (1+dy)(1-dz)               */        
-      v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */       
-      v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        
-      v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        
-      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */        
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
 
-      v4  = q*uy;   /* v2 = q ux                            */        
-      v1  = v4*dz;  /* v1 = q ux dy                         */        
-      v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        
-      v1 += v4;       /* v1 = q ux (1+dy)                     */        
-      v4  = one+dx; /* v4 = 1+dz                            */        
-      v2  = v0*v4;    /* v2 = q ux (1-dy)(1+dz)               */        
-      v3  = v1*v4;    /* v3 = q ux (1+dy)(1+dz)               */        
-      v4  = one-dx; /* v4 = 1-dz                            */        
-      v0 *= v4;       /* v0 = q ux (1-dy)(1-dz)               */        
-      v1 *= v4;       /* v1 = q ux (1+dy)(1-dz)               */        
-      v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */       
-      v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        
-      v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        
-      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */        
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
-
-      v4  = q*uz;   /* v2 = q ux                            */        
-      v1  = v4*dx;  /* v1 = q ux dy                         */        
-      v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        
-      v1 += v4;       /* v1 = q ux (1+dy)                     */        
-      v4  = one+dy; /* v4 = 1+dz                            */        
-      v2  = v0*v4;    /* v2 = q ux (1-dy)(1+dz)               */        
-      v3  = v1*v4;    /* v3 = q ux (1+dy)(1+dz)               */        
-      v4  = one-dy; /* v4 = 1-dz                            */        
-      v0 *= v4;       /* v0 = q ux (1-dy)(1-dz)               */        
-      v1 *= v4;       /* v1 = q ux (1+dy)(1-dz)               */        
-      v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */       
-      v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        
-      v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        
-      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */        
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
-
-#     define ACCUMULATE_J(X,Y,Z,offset)                                 \
+#     define ACCUMULATE_J(X,Y,Z)                                 \
       v4  = q*u##X;   /* v2 = q ux                            */        \
       v1  = v4*d##Y;  /* v1 = q ux dy                         */        \
       v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        \
@@ -275,17 +220,25 @@ advance_p_kokkos(k_particles_t k_particles,
       v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
       v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
       v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */        \
-      a[offset+0] += v0;                                                \
-      a[offset+1] += v1;                                                \
-      a[offset+2] += v2;                                                \
-      a[offset+3] += v3
+      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */        
 
-/*
-      ACCUMULATE_J( x,y,z, 0 );
-      ACCUMULATE_J( y,z,x, 4 );
-      ACCUMULATE_J( z,x,y, 8 );
-*/
+      ACCUMULATE_J( x,y,z );
+      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+
+      ACCUMULATE_J( y,z,x );
+      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+
+      ACCUMULATE_J( z,x,y );
+      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
 
 #     undef ACCUMULATE_J
 
@@ -294,20 +247,19 @@ advance_p_kokkos(k_particles_t k_particles,
       local_pm_dispy = uy;
       local_pm_dispz = uz;
       local_pm_i     = p_index;
-/*
       if( move_p_kokkos( k_particles, k_local_particle_movers,
-                         k_accumulators_sa, g, qsp ) ) { // Unlikely
-        if( nm<max_nm ) {
-          copy_local_to_pm(nm++);          
-        } else {
-	    //itmp++;                 // Unlikely
-	    } // if
-      } */
+                         k_accumulators_sa, nm, g, qsp ) ) { // Unlikely
+        if( nm<max_nm ) { 
+          if (nm >= max_nm) Kokkos::abort("overran max_nm");
+          copy_local_to_pm(nm);
+          Kokkos::atomic_fetch_add( &nm, 1 );
+          //copy_local_to_pm(nm++);          
+        }
+      } 
     }
-
   });
 /*
-  args->seg[pipeline_rank].pm        = pm;
+  argse>seg[pipeline_rank].pm        = pm;
   args->seg[pipeline_rank].max_nm    = max_nm;
   args->seg[pipeline_rank].nm        = nm;
   args->seg[pipeline_rank].n_ignored = itmp;
