@@ -2,6 +2,7 @@
 #define HAS_V4_PIPELINE
 #include "sfa_private.h"
 #include <Kokkos_Core.hpp>
+#include <iostream>
 
 void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const size_t nz, const size_t nv,
                       const float px, const float py, const float pz) {
@@ -31,32 +32,34 @@ void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const
   //   f0->cbx = ( f0->cbx + py*( blah ) ) - pz*( blah )
   // even with explicit parenthesis are in there!  Oh my ...
   // -fno-unsafe-math-optimizations must be used
-  
+
   #define UPDATE_CBX() f0_cbx -= ( py*( fy_ez-f0_ez ) - pz*( fz_ey-f0_ey ) );
   #define UPDATE_CBY() f0_cby -= ( pz*( fz_ex-f0_ex ) - px*( fx_ez-f0_ez ) );
   #define UPDATE_CBZ() f0_cbz -= ( px*( fx_ey-f0_ey ) - py*( fy_ex-f0_ex ) );
 
   Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
-      (nx, Kokkos::AUTO),
+      (nz, Kokkos::AUTO),
       KOKKOS_LAMBDA
-      (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-    const size_t x = team_member.league_rank() + 1;
+      (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member)
+  {
+    const size_t z = team_member.league_rank() + 1;
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny), [=] (size_t yi) {
       const size_t y = yi + 1;
 
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nz), [=] (size_t zi) {
-        const size_t z = zi + 1;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nx), [=] (size_t xi) {
+        const size_t x = xi + 1;
         //printf("%d %d %d %d\n", x ,y,z, ny);
         size_t f0_index = VOXEL(x,  y,  z,   nx,ny,nz);
         size_t fx_index = VOXEL(x+1,y,  z,   nx,ny,nz);
         size_t fy_index = VOXEL(x,  y+1,z,   nx,ny,nz);
         size_t fz_index = VOXEL(x,  y,  z+1, nx,ny,nz);
 
-        UPDATE_CBX(); 
-        UPDATE_CBY(); 
+        UPDATE_CBX();
+        UPDATE_CBY();
         UPDATE_CBZ();
-      });
+
+        });
     });
   });
 /*
@@ -130,7 +133,7 @@ void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const
       UPDATE_CBZ();
     });
   });
-  
+
 }
 
 void
