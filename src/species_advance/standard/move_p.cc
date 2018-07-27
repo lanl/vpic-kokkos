@@ -356,9 +356,8 @@ move_p( particle_t       * ALIGNED(128) p0,
 
 int
 move_p_kokkos(k_particles_t k_particles,
-              k_particle_movers_t k_particle_movers,
+              k_particle_movers_t k_local_particle_movers,
               k_accumulators_sa_t k_accumulators_sa,
-              const int                       nm,
               const grid_t     *              g,
               const float                     qsp ) {
 
@@ -371,11 +370,6 @@ move_p_kokkos(k_particles_t k_particles,
   #define p_w     k_particles(pi, particle_var::w)
   #define pii     k_particles(pi, particle_var::pi)
 
-  #define pm_dispx  k_particle_movers(nm, particle_mover_var::dispx)
-  #define pm_dispy  k_particle_movers(nm, particle_mover_var::dispy)
-  #define pm_dispz  k_particle_movers(nm, particle_mover_var::dispz)
-  #define pm_i      k_particle_movers(nm, particle_mover_var::pmi)
-
   #define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
   #define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
   #define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
@@ -387,10 +381,8 @@ move_p_kokkos(k_particles_t k_particles,
   float v0, v1, v2, v3, v4, v5, q;
   int axis, face;
   int64_t neighbor;
-  //printf("%d\n", nm);
-  //printf("%d\n", int(pm_i));
-  size_t pi = size_t(pm_i);
-  size_t ii = size_t(pii);
+  int pi = int(local_pm_i);
+  int ii = int(pii);
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
 
   q = qsp*p_w;
@@ -400,9 +392,9 @@ move_p_kokkos(k_particles_t k_particles,
     s_midy = p_dy;
     s_midz = p_dz;
 
-    s_dispx = pm_dispx;
-    s_dispy = pm_dispy;
-    s_dispz = pm_dispz;
+    s_dispx = local_pm_dispx;
+    s_dispy = local_pm_dispy;
+    s_dispz = local_pm_dispz;
 
     s_dir[0] = (s_dispx>0) ? 1 : -1;
     s_dir[1] = (s_dispy>0) ? 1 : -1;
@@ -482,9 +474,9 @@ move_p_kokkos(k_particles_t k_particles,
 #   undef accumulate_j
 
     // Compute the remaining particle displacment
-    pm_dispx -= s_dispx;
-    pm_dispy -= s_dispy;
-    pm_dispz -= s_dispz;
+    local_pm_dispx -= s_dispx;
+    local_pm_dispy -= s_dispy;
+    local_pm_dispz -= s_dispz;
 
     // Compute the new particle offset
     p_dx += s_dispx+s_dispx;
@@ -522,7 +514,7 @@ move_p_kokkos(k_particles_t k_particles,
 
       // TODO: make this safer
       //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
-      k_particle_movers(nm, particle_mover_var::dispx + axis) = -k_particle_movers(nm, particle_mover_var::dispx + axis);
+      k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
       
 
       continue;

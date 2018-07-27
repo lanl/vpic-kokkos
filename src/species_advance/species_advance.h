@@ -226,7 +226,6 @@ int
 move_p_kokkos(k_particles_t k_particles,
               k_particle_movers_t k_particle_movers,
               k_accumulators_sa_t k_accumulators_sa,
-              const int                       nm,
               const grid_t     *              g,
               const float                     qsp);
 
