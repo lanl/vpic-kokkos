@@ -34,11 +34,9 @@ advance_p_kokkos(k_particles_t k_particles,
 
   Kokkos::View<int[1]> *k_nm_p = new Kokkos::View<int[1]>("k_nm");
   auto k_nm = *k_nm_p;
-
   auto h_nm = Kokkos::create_mirror_view(k_nm);
   h_nm(0) = 0;
   Kokkos::deep_copy(k_nm, h_nm);
-
 
   // Determine which quads of particles quads this pipeline processes
 
@@ -125,29 +123,25 @@ advance_p_kokkos(k_particles_t k_particles,
   #define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
   #define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
 
-  #define nm k_nm(0)
-
   #define copy_local_to_pm(index) \
     k_particle_movers(index, particle_mover_var::dispx) = local_pm_dispx; \
     k_particle_movers(index, particle_mover_var::dispy) = local_pm_dispy; \
     k_particle_movers(index, particle_mover_var::dispz) = local_pm_dispz; \
     k_particle_movers(index, particle_mover_var::pmi)   = local_pm_i;     
 
-
-
   //for(;n;n--,p++) {
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np), 
-    KOKKOS_LAMBDA (int p_index) { 
-    
+    KOKKOS_LAMBDA (size_t p_index) { 
+
     float v0, v1, v2, v3, v4, v5;
+    int   nm;
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
 
     float dx   = p_dx;                             // Load position
     float dy   = p_dy;
     float dz   = p_dz;
-    int   ii   = pii;
-    printf("%d\n", nm);
-    printf("%d %d %d\n", p_index, pii, nm);
+    int   ii   = int(pii);
+//    printf("%d %d %d\n", p_index, ii, nm);
     float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
                            dz*( f_dexdz + dy*f_d2exdydz ) );
     float hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
@@ -257,14 +251,18 @@ advance_p_kokkos(k_particles_t k_particles,
       local_pm_dispx = ux;
       local_pm_dispy = uy;
       local_pm_dispz = uz;
-      local_pm_i     = p_index;
+
+//      printf("%d\n",  p_index);
+      local_pm_i     = float(p_index);
+//      printf("%f\n",  local_pm_i);
+
+      //printf("pmi outside %d\n", int(k_particle_movers(nm, particle_mover_var::pmi)));
       if( move_p_kokkos( k_particles, k_local_particle_movers,
                          k_accumulators_sa, nm, g, qsp ) ) { // Unlikely
         if( nm<max_nm ) { 
+          nm = int(Kokkos::atomic_fetch_add( &k_nm(0), 1 ));
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
           copy_local_to_pm(nm);
-          Kokkos::atomic_fetch_add( &nm, 1 );
-          //copy_local_to_pm(nm++);          
         }
       } 
     }

@@ -387,9 +387,11 @@ move_p_kokkos(k_particles_t k_particles,
   float v0, v1, v2, v3, v4, v5, q;
   int axis, face;
   int64_t neighbor;
-  int pi = pm_i;
-  int ii = pii;
-  auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+  //printf("%d\n", nm);
+  //printf("%d\n", int(pm_i));
+  size_t pi = size_t(pm_i);
+  size_t ii = size_t(pii);
+  auto k_accumulators_scatter_access = k_accumulators_sa.access();
 
   q = qsp*p_w;
 
