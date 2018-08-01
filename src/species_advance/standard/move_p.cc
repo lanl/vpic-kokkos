@@ -382,13 +382,13 @@ move_p_kokkos(k_particles_t k_particles,
   int axis, face;
   int64_t neighbor;
   int pi = int(local_pm_i);
-  int ii = int(pii);
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
 
   q = qsp*p_w;
 
   for(;;) {
-    s_midx = p_dx;
+      int ii = int(pii);
+      s_midx = p_dx;
     s_midy = p_dy;
     s_midz = p_dz;
 

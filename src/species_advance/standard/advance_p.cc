@@ -357,4 +357,5 @@ advance_p( /**/  species_t            * RESTRICT sp,
   }
   */
   Kokkos::Experimental::contribute(aa->k_a_d, aa->k_a_sa);
+  aa->k_a_sa.reset(); // TODO: we can actually do this contribute in the advance, not once per species
 }

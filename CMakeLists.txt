@@ -47,7 +47,7 @@ option(USE_V4_SSE "Enable V4 SSE" OFF)
 
 option(ENABLE_OPENSSL "Enable OpenSSL support for checksums" OFF)
 
-option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" ON)
+option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" OFF)
 
 option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 

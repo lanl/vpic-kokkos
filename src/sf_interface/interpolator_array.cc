@@ -77,11 +77,11 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
       (ny, Kokkos::AUTO),
       KOKKOS_LAMBDA
       (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-    const unsigned int y = team_member.league_rank() + 1;
+    const unsigned int z = team_member.league_rank() + 1;
 
     //for( z=1; z<=nz; z++ ) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nz), [=] (int zi) {
-      const unsigned int z = zi + 1;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nz), [=] (int yi) {
+      const unsigned int y = yi + 1;
 
       //for( x=1; x<=nx; x++ ) {
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nx), [=] (int x) {
