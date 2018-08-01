@@ -254,12 +254,12 @@ advance_p_kokkos(k_particles_t k_particles,
 
       if( move_p_kokkos( k_particles, k_local_particle_movers,
                          k_accumulators_sa, g, qsp ) ) { // Unlikely
-        if( nm<max_nm ) { 
+        if( nm<max_nm ) {
           nm = int(Kokkos::atomic_fetch_add( &k_nm(0), 1 ));
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
           copy_local_to_pm(nm);
         }
-      } 
+      }
     }
   });
 /*
@@ -356,6 +356,4 @@ advance_p( /**/  species_t            * RESTRICT sp,
     sp->nm += args->seg[rank].nm;
   }
   */
-  Kokkos::Experimental::contribute(aa->k_a_d, aa->k_a_sa);
-  aa->k_a_sa.reset(); // TODO: we can actually do this contribute in the advance, not once per species
 }
