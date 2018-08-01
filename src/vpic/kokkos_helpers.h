@@ -44,22 +44,22 @@ using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSp
 
 namespace field_var {
   enum f_v {
-    ex = 0,
-    ey = 1,
-    ez = 2,
-    cbx = 3,
-    cby = 4,
-    cbz = 5,
-    div_e_err = 6,
+    ex        = 0,
+    ey        = 1,
+    ez        = 2,
+    div_e_err = 3,
+    cbx       = 4,
+    cby       = 5,
+    cbz       = 6,
     div_b_err = 7,
-    tcax = 8,
-    tcay = 9,
-    tcaz = 10,
-    rhob = 11,
-    jfx = 12,
-    jfy = 13,
-    jfz = 14,
-    rhof = 15
+    tcax      = 8,
+    tcay      = 9,
+    tcaz      = 10,
+    rhob      = 11,
+    jfx       = 12,
+    jfy       = 13,
+    jfz       = 14,
+    rhof      = 15
   };
 };
 namespace field_edge_var { \
@@ -67,34 +67,34 @@ namespace field_edge_var { \
     ematx = 0,
     ematy = 1,
     ematz = 2,
-    nmat = 3,
+    nmat  = 3,
     fmatx = 4,
     fmaty = 5,
     fmatz = 6,
-    cmat = 7
+    cmat  = 7
   };
 };
 
 namespace interpolator_var {
   enum i_r {
-    ex = 0,
-    ey = 1,
-    ez = 2,
-    cbx = 3,
-    cby = 4,
-    cbz = 5,
-    dexdy = 6,
-    dexdz = 7,
-    d2exdydz = 8,
-    deydz = 9,
-    deydx = 10,
-    d2eydzdx = 11,
-    dezdx = 12,
-    dezdy = 13,
-    d2ezdxdy = 14,
-    dcbxdx = 15,
-    dcbydy = 16,
-    dcbzdz = 17
+    ex       = 0,
+    dexdy    = 1,
+    dexdz    = 2,
+    d2exdydz = 3,
+    ey       = 4,
+    deydz    = 5,
+    deydx    = 6,
+    d2eydzdx = 7,
+    ez       = 8,
+    dezdx    = 9,
+    dezdy    = 10,
+    d2ezdxdy = 11,
+    cbx      = 12,
+    dcbxdx   = 13,
+    cby      = 14,
+    dcbydy   = 15,
+    cbz      = 16,
+    dcbzdz   = 17
   };
 };
 
@@ -107,7 +107,7 @@ namespace particle_var {
     ux = 4,
     uy = 5,
     uz = 6,
-    w = 7
+    w  = 7
   };
 };
 
@@ -116,7 +116,7 @@ namespace particle_mover_var {
      dispx = 0,
      dispy = 1,
      dispz = 2,
-     pmi = 3,
+     pmi   = 3,
   };
 };
 

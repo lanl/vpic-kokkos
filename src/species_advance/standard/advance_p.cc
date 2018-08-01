@@ -141,7 +141,6 @@ advance_p_kokkos(k_particles_t k_particles,
     float dy   = p_dy;
     float dz   = p_dz;
     int   ii   = int(pii);
-//    printf("%d %d %d\n", p_index, ii, nm);
     float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
                            dz*( f_dexdz + dy*f_d2exdydz ) );
     float hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
@@ -191,7 +190,6 @@ advance_p_kokkos(k_particles_t k_particles,
     v3   = v0 + ux;                           // New position
     v4   = v1 + uy;
     v5   = v2 + uz;
-    //printf("%f %f %f\n", ux, uy, uz);
 
     // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
     if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
@@ -252,13 +250,10 @@ advance_p_kokkos(k_particles_t k_particles,
       local_pm_dispy = uy;
       local_pm_dispz = uz;
 
-//      printf("%d\n",  p_index);
       local_pm_i     = float(p_index);
-//      printf("%f\n",  local_pm_i);
 
-      //printf("pmi outside %d\n", int(k_particle_movers(nm, particle_mover_var::pmi)));
       if( move_p_kokkos( k_particles, k_local_particle_movers,
-                         k_accumulators_sa, nm, g, qsp ) ) { // Unlikely
+                         k_accumulators_sa, g, qsp ) ) { // Unlikely
         if( nm<max_nm ) { 
           nm = int(Kokkos::atomic_fetch_add( &k_nm(0), 1 ));
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
