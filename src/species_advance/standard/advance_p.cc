@@ -7,8 +7,8 @@
 #include "spa_private.h"
 #include "../../vpic/kokkos_helpers.h"
 
-void
-advance_p_kokkos(k_particles_t k_particles, 
+int
+advance_p_kokkos(k_particles_t k_particles,
                  k_particle_movers_t k_particle_movers,
                  k_accumulators_sa_t k_accumulators_sa,
                  k_interpolator_t k_interp,
@@ -28,7 +28,7 @@ advance_p_kokkos(k_particles_t k_particles,
   const float one            = 1.;
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
-  
+
   k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
   k_particle_movers_t  k_local_particle_movers   = *k_local_particle_movers_p;
 
@@ -46,7 +46,7 @@ advance_p_kokkos(k_particles_t k_particles,
   /*
   printf("original value %f\n\n", k_accumulators(0, 0, 0));
 
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int i) { 
+  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int i) {
 
       auto scatter_access = k_accumulators_sa.access();
       //auto scatter_access_atomic = scatter_view.template access<Kokkos::Experimental::ScatterAtomic>();
@@ -127,11 +127,10 @@ advance_p_kokkos(k_particles_t k_particles,
     k_particle_movers(index, particle_mover_var::dispx) = local_pm_dispx; \
     k_particle_movers(index, particle_mover_var::dispy) = local_pm_dispy; \
     k_particle_movers(index, particle_mover_var::dispz) = local_pm_dispz; \
-    k_particle_movers(index, particle_mover_var::pmi)   = local_pm_i;     
+    k_particle_movers(index, particle_mover_var::pmi)   = local_pm_i;
 
-  //for(;n;n--,p++) {
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np), 
-    KOKKOS_LAMBDA (size_t p_index) { 
+  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
+    KOKKOS_LAMBDA (size_t p_index) {
 
     float v0, v1, v2, v3, v4, v5;
     int   nm;
@@ -223,7 +222,7 @@ advance_p_kokkos(k_particles_t k_particles,
       v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
       v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
       v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */        
+      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
       ACCUMULATE_J( x,y,z );
       k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
@@ -262,12 +261,23 @@ advance_p_kokkos(k_particles_t k_particles,
       }
     }
   });
-/*
-  argse>seg[pipeline_rank].pm        = pm;
-  args->seg[pipeline_rank].max_nm    = max_nm;
-  args->seg[pipeline_rank].nm        = nm;
-  args->seg[pipeline_rank].n_ignored = itmp;
-*/
+
+  // TODO: abstract this manual data copy
+  Kokkos::deep_copy(h_nm, k_nm);
+  /*
+    Kokkos::parallel_for(host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
+      sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx); \
+      sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy); \
+      sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz); \
+      sp->pm[i].i     = k_particle_movers_h(i, particle_mover_var::pmi);   \
+    });\
+    */
+
+  //args->seg[pipeline_rank].pm        = pm;
+  //args->seg[pipeline_rank].max_nm    = max_nm;
+  //args->seg[pipeline_rank].nm        = h_nm(0);
+  //args->seg[pipeline_rank].n_ignored = 0; // TODO: update this
+  return h_nm(0);
 
 }
 
@@ -288,7 +298,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
-  advance_p_kokkos(sp->k_p_d, 
+  int nm = advance_p_kokkos(sp->k_p_d,
                    sp->k_pm_d,
                    aa->k_a_sa,
                    ia->k_i_d,
@@ -305,7 +315,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
                    sp->g->ny,
                    sp->g->nz);
 
-                 
+
 
 /*
   args->p0       = sp->p;
@@ -345,7 +355,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   // INSTALLED FOR DEALING WITH PIPELINES.  COMPACT THE PARTICLE
   // MOVERS TO ELIMINATE HOLES FROM THE PIPELINING.
 
-  
+
   sp->nm = 0;
   for( rank=0; rank<=N_PIPELINE; rank++ ) {
     if( args->seg[rank].n_ignored )
@@ -356,4 +366,5 @@ advance_p( /**/  species_t            * RESTRICT sp,
     sp->nm += args->seg[rank].nm;
   }
   */
+  sp->nm = nm;
 }
