@@ -24,6 +24,8 @@
   #define KOKKOS_LAYOUT Kokkos::LayoutRight
 #endif
 
+using k_iterator_t = Kokkos::View<int[1]>;
+
 using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
 using k_field_edge_t = Kokkos::View<material_id*[FIELD_EDGE_COUNT]>;
 
@@ -215,7 +217,8 @@ namespace accumulator_var {
   int max_pmovers; \
   \
   k_particles_t::HostMirror k_particles_h; \
-  k_particle_movers_t::HostMirror k_particle_movers_h;
+  k_particle_movers_t::HostMirror k_particle_movers_h; \
+  k_iterator_t::HostMirror k_nm_h;
 
 
 #define KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE() \
@@ -225,6 +228,8 @@ namespace accumulator_var {
     \
     k_particles_h = sp->k_p_h; \
     k_particle_movers_h = sp->k_pm_h; \
+    k_nm_h = sp->k_nm_h; \
+    k_nm_h(0) = sp->nm; \
     Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
       k_particles_h(i, particle_var::dx) = sp->p[i].dx; \
       k_particles_h(i, particle_var::dy) = sp->p[i].dy; \
@@ -244,6 +249,7 @@ namespace accumulator_var {
     });\
     Kokkos::deep_copy(sp->k_p_d, sp->k_p_h);  \
     Kokkos::deep_copy(sp->k_pm_d, sp->k_pm_h); \
+    Kokkos::deep_copy(sp->k_nm_d, sp->k_nm_h); \
   };
 
 
@@ -251,10 +257,13 @@ namespace accumulator_var {
   LIST_FOR_EACH( sp, species_list ) {\
     Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);  \
     Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d); \
+    Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d); \
     n_particles = sp->max_np; \
     max_pmovers = sp->max_nm; \
     k_particles_h = sp->k_p_h; \
     k_particle_movers_h = sp->k_pm_h; \
+    k_nm_h = sp->k_nm_h; \
+    sp->nm = k_nm_h(0); \
     Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
       sp->p[i].dx = k_particles_h(i, particle_var::dx); \
       sp->p[i].dy = k_particles_h(i, particle_var::dy); \
@@ -352,12 +361,15 @@ namespace accumulator_var {
       k_accumulators_h(i, accumulator_var::jz, j)       = accumulator_array->a[i].jz[j]; \
     }); \
   });\
-  
+  Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h); 
+ 
+
 #define KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST() \
   na = accumulator_array->na; \
   \
   k_accumulators_h = accumulator_array->k_a_h; \
-  Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h); \
+  \
+  Kokkos::deep_copy(accumulator_array->k_a_h, accumulator_array->k_a_d); \
   Kokkos::parallel_for(KOKKOS_TEAM_POLICY_HOST \
       (na, Kokkos::AUTO),                          \
       KOKKOS_LAMBDA                                \

@@ -95,13 +95,13 @@ typedef struct accumulator_array {
   k_accumulators_sa_t k_a_sa;
 
   accumulator_array(int na) :
-    k_a_d("k_interpolators", na)
+    k_a_d("k_accumulators", na)
     {
-      k_a_h  = Kokkos::create_mirror_view(k_a_d);
       k_a_sa = Kokkos::Experimental::create_scatter_view
         <Kokkos::Experimental::ScatterSum,
          KOKKOS_SCATTER_DUPLICATED,
          KOKKOS_SCATTER_ATOMIC>(k_a_d);
+      k_a_h  = Kokkos::create_mirror_view(k_a_d);
     }
 
 

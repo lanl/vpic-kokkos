@@ -104,13 +104,22 @@ typedef struct species {
   k_particle_movers_t k_pm_d;         // kokkos particle movers on device
   k_particle_movers_t::HostMirror k_pm_h;  // kokkos particle movers on host
 
+  k_particle_movers_t k_pm_l_d;      // local particle movers
+
+  k_iterator_t k_nm_d;               // nm iterator
+  k_iterator_t::HostMirror k_nm_h;
+
+
   // Init Kokkos Particle Arrays
   species(int n_particles, int n_pmovers) :
       k_p_d("k_particles", n_particles),
-      k_pm_d("k_particle_movers", n_pmovers)
+      k_pm_d("k_particle_movers", n_pmovers),
+      k_nm_d("k_nm"),
+      k_pm_l_d("k_local_particle_movers", 1)
   {
       k_p_h = Kokkos::create_mirror_view(k_p_d);
       k_pm_h = Kokkos::create_mirror_view(k_pm_d);
+      k_nm_h = Kokkos::create_mirror_view(k_nm_d);
   }
 
 } species_t;
@@ -221,13 +230,6 @@ move_p( particle_t       * ALIGNED(128) p0,    // Particle array
         accumulator_t    * ALIGNED(128) a0,    // Accumulator to use
         const grid_t     *              g,     // Grid parameters
         const float                     qsp ); // Species particle charge
-
-int
-move_p_kokkos(k_particles_t k_particles,
-              k_particle_movers_t k_particle_movers,
-              k_accumulators_sa_t k_accumulators_sa,
-              const grid_t     *              g,
-              const float                     qsp);
 
 END_C_DECLS
 

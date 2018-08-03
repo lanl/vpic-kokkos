@@ -59,7 +59,7 @@ int vpic_simulation::advance(void) {
     TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
 
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
-  accumulator_array->k_a_sa.reset(); 
+  accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d); 
 
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
