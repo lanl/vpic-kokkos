@@ -7,12 +7,17 @@
 #include "spa_private.h"
 #include "../../vpic/kokkos_helpers.h"
 
+static int GLOB = 0;
 KOKKOS_FORCEINLINE_FUNCTION
 int
 move_p_kokkos(k_particles_t k_particles,
-              k_particle_movers_t k_local_particle_movers,
+              //k_particle_movers_t k_local_particle_movers,
+              particle_mover_t * ALIGNED(16)  pm,
               k_accumulators_sa_t k_accumulators_sa,
               const grid_t     *              g,
+              Kokkos::View<int64_t*> const& d_neighbor,
+              int64_t rangel,
+              int64_t rangeh,
               const float                     qsp ) {
 
   #define p_dx    k_particles(pi, particle_var::dx)
@@ -36,20 +41,28 @@ move_p_kokkos(k_particles_t k_particles,
   float v0, v1, v2, v3, v4, v5, q;
   int axis, face;
   int64_t neighbor;
-  int pi = int(local_pm_i);
+  //int pi = int(local_pm_i);
+  int pi = pm->i;
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
 
   q = qsp*p_w;
 
+    //printf("in move %d \n", pi);
+
   for(;;) {
-    int ii = int(pii);
+    int ii = pii;
     s_midx = p_dx;
     s_midy = p_dy;
     s_midz = p_dz;
 
-    s_dispx = local_pm_dispx;
-    s_dispy = local_pm_dispy;
-    s_dispz = local_pm_dispz;
+
+    s_dispx = pm->dispx;
+    s_dispy = pm->dispy;
+    s_dispz = pm->dispz;
+
+    //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
+
+    //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
 
     s_dir[0] = (s_dispx>0) ? 1 : -1;
     s_dir[1] = (s_dispy>0) ? 1 : -1;
@@ -129,16 +142,18 @@ move_p_kokkos(k_particles_t k_particles,
 #   undef accumulate_j
 
     // Compute the remaining particle displacment
-    local_pm_dispx -= s_dispx;
-    local_pm_dispy -= s_dispy;
-    local_pm_dispz -= s_dispz;
+    pm->dispx -= s_dispx;
+    pm->dispy -= s_dispy;
+    pm->dispz -= s_dispz;
 
+    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset
     p_dx += s_dispx+s_dispx;
     p_dy += s_dispy+s_dispy;
     p_dz += s_dispz+s_dispz;
 
     // If an end streak, return success (should be ~50% of the time)
+    //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
 
     if( axis==3 ) break;
 
@@ -155,12 +170,15 @@ move_p_kokkos(k_particles_t k_particles,
     face = axis; if( v0>0 ) face += 3;
 
     // TODO: clean this fixed index to an enum
-    neighbor = g->neighbor[ 6*int(pii) + face ];
+    //neighbor = g->neighbor[ 6*ii + face ];
+    neighbor = d_neighbor[ 6*ii + face ];
 
     // TODO: these two if statements used to be marked UNLIKELY,
     // but that intrinsic doesn't work on GPU.
     // for performance portability, maybe specialize UNLIKELY
     // for CUDA mode and put it back
+
+
     if( neighbor==reflect_particles ) {
       // Hit a reflecting boundary condition.  Reflect the particle
       // momentum and remaining displacement and keep moving the
@@ -169,13 +187,17 @@ move_p_kokkos(k_particles_t k_particles,
 
       // TODO: make this safer
       //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
-      k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
+      //k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
+      // TODO: replace this, it's horrible
+      (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
 
 
+    //printf("end reflect %d \n", pi);
       continue;
     }
 
-    if( neighbor<g->rangel || neighbor>g->rangeh ) {
+    //printf("done reflect %d \n", pi);
+    if( neighbor<rangel || neighbor>rangeh ) {
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
       // displacement in the particle mover.
@@ -186,7 +208,7 @@ move_p_kokkos(k_particles_t k_particles,
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
 
-    pii = neighbor - g->rangel; // Compute local index of neighbor
+    pii = neighbor - rangel; // Compute local index of neighbor
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
   }
@@ -332,8 +354,21 @@ advance_p_kokkos(k_particles_t k_particles,
     k_particle_movers(index, particle_mover_var::dispz) = local_pm_dispz; \
     k_particle_movers(index, particle_mover_var::pmi)   = local_pm_i;
 
+
+  // copy local memmbers from grid
+  auto nfaces_per_voxel = 6;
+  auto nvoxels = g->nv;
+  Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
+      h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
+  auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
+
+  auto rangel = g->rangel;
+  auto rangeh = g->rangeh;
+
+
+
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
-    printf("how many times does this run %d", i);
+    //printf("how many times does this run %d", i);
     k_nm(0) = 0;
     local_pm_dispx = 0;
     local_pm_dispy = 0;
@@ -457,18 +492,33 @@ advance_p_kokkos(k_particles_t k_particles,
 
 #     undef ACCUMULATE_J
 
-    } else {                                    // Unlikely
-      local_pm_dispx = ux;
-      local_pm_dispy = uy;
-      local_pm_dispz = uz;
+    } else
+    {                                    // Unlikely
+        /*
+           local_pm_dispx = ux;
+           local_pm_dispy = uy;
+           local_pm_dispz = uz;
 
-      local_pm_i     = p_index;
+           local_pm_i     = p_index;
+        */
+      DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+      local_pm->dispx = ux;
+      local_pm->dispy = uy;
+      local_pm->dispz = uz;
+      local_pm->i     = p_index;
 
-      if( move_p_kokkos( k_particles, k_local_particle_movers,
-                         k_accumulators_sa, g, qsp ) ) { // Unlikely
+      //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
+      if( move_p_kokkos( k_particles, local_pm,
+                         k_accumulators_sa, g, d_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
         if( k_nm(0)<max_nm ) {
           nm = int(Kokkos::atomic_fetch_add( &k_nm(0), 1 ));
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
+
+          // Copy local local_pm back
+          local_pm_dispx = local_pm_dispx;
+          local_pm_dispy = local_pm_dispy;
+          local_pm_dispz = local_pm_dispz;
+          local_pm_i = local_pm_i;
           copy_local_to_pm(nm);
         }
       }
@@ -512,6 +562,8 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
+    printf("advance %d \n", GLOB);
+    GLOB++;
   advance_p_kokkos(sp->k_p_d,
                    sp->k_pm_d,
                    aa->k_a_sa,
