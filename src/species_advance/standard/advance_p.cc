@@ -562,8 +562,8 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
-    printf("advance %d \n", GLOB);
-    GLOB++;
+//    printf("advance %d \n", GLOB);
+//    GLOB++;
   advance_p_kokkos(sp->k_p_d,
                    sp->k_pm_d,
                    aa->k_a_sa,
