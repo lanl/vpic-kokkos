@@ -10,6 +10,8 @@
 #define IN_field_advance
 #include "../field_advance_private.h"
 
+#include <Kokkos_Core.hpp>
+
 typedef struct material_coefficient {
   float decayx, drivex;         // Decay of ex and drive of (curl H)x and Jx
   float decayy, drivey;         // Decay of ey and drive of (curl H)y and Jy
@@ -45,8 +47,9 @@ clear_rhof( field_array_t * RESTRICT fa );
 //   c B_new = c B_old - frac c dt curl E
 
 void
-advance_b( field_array_t * RESTRICT fa,
-           float                    frac );
+advance_b( 
+      field_array_t * RESTRICT fa,
+      float                    frac);
 
 // In advance_e.c
 
@@ -274,6 +277,7 @@ compute_rms_div_e_err( const field_array_t * RESTRICT fa );
 // clean_div_e applies the following difference equation:
 //   E_new = E_old + drive alpha dt grad div_e_err
 // div_e_err is not updated or recomputed by this function.
+// div_e_err is not updated or recomputed by this function.
 //
 // vacuum_clean_div_e is the high performance version for uniform regions
 
@@ -349,6 +353,10 @@ local_adjust_div_e( field_t      * ALIGNED(128) f,
                     const grid_t *              g );
 
 void
+k_local_adjust_norm_b( field_array_t * RESTRICT fa,
+                     const grid_t *              g );
+
+void
 local_adjust_norm_b( field_t      * ALIGNED(128) f,
                      const grid_t *              g );
 
@@ -389,6 +397,7 @@ begin_remote_ghost_div_b( field_t      * ALIGNED(128) f,
 void
 end_remote_ghost_div_b( field_t      * ALIGNED(128) f,
                         const grid_t *              g );
+
 
 END_C_DECLS
 

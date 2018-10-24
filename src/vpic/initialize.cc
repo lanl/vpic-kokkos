@@ -1,4 +1,5 @@
 #include "vpic.h"
+
 #define FAK field_array->kernel
 
 void
@@ -6,6 +7,8 @@ vpic_simulation::initialize( int argc,
                              char **argv ) {
   double err;
   species_t * sp;
+  // Initialize Kokkos
+  Kokkos::initialize( argc, argv ); 
 
   // Call the user initialize the simulation
 
@@ -47,11 +50,23 @@ vpic_simulation::initialize( int argc,
   TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
   if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
     
+  KOKKOS_PARTICLE_VARIABLES();
+  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+
+  KOKKOS_INTERPOLATOR_VARIABLES();
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+
   if( species_list ) {
+    KOKKOS_FIELD_VARIABLES();
+    KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+
     if( rank()==0 ) MESSAGE(( "Uncentering particles" ));
     TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
   }
   LIST_FOR_EACH( sp, species_list ) TIC uncenter_p( sp, interpolator_array ); TOC( uncenter_p, 1 );
+
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+  KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
 
   if( rank()==0 ) MESSAGE(( "Performing initial diagnostics" ));
 
@@ -66,6 +81,7 @@ vpic_simulation::initialize( int argc,
 void
 vpic_simulation::finalize( void ) {
   barrier();
+  Kokkos::finalize();
   update_profile( rank()==0 );
 }
 

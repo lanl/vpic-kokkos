@@ -8,6 +8,7 @@
 
 #include "../grid/grid.h"
 #include "../material/material.h"
+#include "../vpic/kokkos_helpers.h"
 
 // FIXME: UPDATE THIS COMMENT BLOCK AND MOVE IT INTO APPROPRIATE LOCATIONS
 //
@@ -142,6 +143,7 @@
 // Note: When setting the material IDs on the mesh, the material IDs
 // should be set in the ghost cells too. Further, these IDs should be
 // consistent with the neighboring domains (if any)!
+//
 
 // FIXME: MATERIAL-LESS FIELD_T SHOULD EVENTUALLY USE ITS OWN FIELD_T
 // WITH MORE COMPACT LAYOUT.
@@ -220,10 +222,25 @@ typedef struct field_advance_kernels {
 // kernels used to advance them.
 
 typedef struct field_array {
-  field_t * ALIGNED(128) f;          // Local field data
-  grid_t  * g;                       // Underlying grid
-  void    * params;                  // Field advance specific parameters
-  field_advance_kernels_t kernel[1]; // Field advance kernels
+  field_t * ALIGNED(128) f;           // Local field data
+  grid_t  * g;                        // Underlying grid
+  void    * params;                   // Field advance specific parameters
+  field_advance_kernels_t kernel[1];  // Field advance kernels
+
+  k_field_t k_f_d;                   // Kokkos field data on device
+  k_field_t::HostMirror k_f_h;       // Kokkos field data on host
+  k_field_edge_t k_fe_d;             // Kokkos field_edge data (part of field_t) on device
+  k_field_edge_t::HostMirror k_fe_h; // Kokkos field_edge data on host
+
+  // Initialize Kokkos Field Array
+  field_array(int n_fields) :
+    k_f_d("k_fields", n_fields),
+    k_fe_d("k_field_edges", n_fields)
+  {
+    k_f_h = Kokkos::create_mirror_view(k_f_d);
+    k_fe_h = Kokkos::create_mirror_view(k_fe_d);
+  }
+
 } field_array_t;
 
 BEGIN_C_DECLS

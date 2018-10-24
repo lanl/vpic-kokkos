@@ -82,8 +82,8 @@ begin_initialization {
   double Lx        = 16*L;  // How big should the box be in the x direction
   double Ly        = 16*L;  // How big should the box be in the y direction
   double Lz        = 16*L;  // How big should the box be in the z direction
-  double nx        = 64;    // Global resolution in the x direction
-  double ny        = 64;    // Global resolution in the y direction
+  double nx        = 32;    // Global resolution in the x direction
+  double ny        = 32;    // Global resolution in the y direction
   double nz        = 1;     // Global resolution in the z direction
   double nppc      = 64;    // Average number of macro particles per cell (both species combined!)
   double cfl_req   = 0.99;  // How close to Courant should we try to run
@@ -315,7 +315,7 @@ begin_initialization {
 
 begin_diagnostics {
 
-# define should_dump(x) (global->x##_interval>0 && remainder(step(),global->x##_interval)==0)
+# define should_dump(x)  0 // (global->x##_interval>0 && remainder(step(),global->x##_interval)==0)
 
   if( step()==-10 ) {
     // A grid dump contains all grid parameters, field boundary conditions,
@@ -392,7 +392,7 @@ begin_diagnostics {
   // the checkpt but before the next timestep will be missed on restore.
   // Restart dumps are in a binary format unique to the each simulation.
 
-  if( should_dump(restart) ) checkpt( "checkpt", step() );
+  //if( should_dump(restart) ) checkpt( "checkpt", step() );
 
   // If you want to write a checkpt after a certain amount of simulation time,
   // use uptime() in conjunction with checkpt.  For example, this will cause

@@ -1,5 +1,6 @@
 #define IN_spa
 #include "spa_private.h"
+#include "../../vpic/kokkos_helpers.h"
 
 // move_p moves the particle m->p by m->dispx, m->dispy, m->dispz
 // depositing particle current as it goes. If the particle was moved
@@ -352,3 +353,4 @@ move_p( particle_t       * ALIGNED(128) p0,
 }
 
 #endif
+

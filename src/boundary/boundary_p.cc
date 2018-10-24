@@ -326,6 +326,9 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         /**/                     // fragmentation)
         WARNING(( "Resizing local %s particle storage from %i to %i",
                   sp->name, sp->max_np, n ));
+        // TODO: KOKKOS REALLOC AS WELL ALSO FAIL HERE UNTIL THIS IS DONE
+        assert(0)
+
         MALLOC_ALIGNED( new_p, n, 128 );
         COPY( new_p, sp->p, sp->np );
         FREE_ALIGNED( sp->p );

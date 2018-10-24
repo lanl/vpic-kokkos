@@ -47,6 +47,10 @@ option(USE_V4_SSE "Enable V4 SSE" OFF)
 
 option(ENABLE_OPENSSL "Enable OpenSSL support for checksums" OFF)
 
+option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" OFF)
+
+option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
+
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
 #
@@ -91,9 +95,41 @@ endif()
 #------------------------------------------------------------------------------#
 # Kokkos
 #------------------------------------------------------------------------------#
+set(KOKKOS_ENABLE_DEBUG OFF)
 
-# Example Kokkos Option
-set(KOKKOS_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP by default with Kokkos")
+set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
+
+if(ENABLE_KOKKOS_OPENMP)
+  if (OPENMP_FOUND)
+    set(KOKKOS_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
+  endif()
+endif()
+
+if(ENABLE_KOKKOS_CUDA)
+  find_package(CUDA)
+  if (CUDA_FOUND)
+    add_definitions(-DENABLE_KOKKOS_CUDA) 
+    set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
+    set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
+    set(KOKKOS_ENABLE_CUDA_UVM ON)
+
+    # Choose Architecture for Kokkos 
+    #set(KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
+    #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
+    set(KOKKOS_ARCH "Power9;Volta70")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
+
+    # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
+    # see https://github.com/UoB-HPC/BabelStream/issues/16
+    set(CMAKE_CXX_EXTENSIONS OFF)
+
+    # Don't use intel intrinsics if we are using CUDA
+    option(USE_V4_ALTIVEC "Enable V4 Altivec" OFF)
+    option(USE_V4_PORTABLE "Enable V4 Portable" OFF)
+    option(USE_V4_SSE "Enable V4 SSE" OFF)
+
+  endif()
+endif()
 
 # Disable platform specific options
 if (APPLE)
@@ -102,6 +138,18 @@ endif()
 
 add_subdirectory(kokkos)
 include_directories(${Kokkos_INCLUDE_DIRS_RET})
+
+# Libs
+string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
+set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+
+# Includes (TODO: this is definitely abuse of the CXX variable..)
+string(REPLACE ";" " -I" string_libraries "-I${Kokkos_INCLUDE_DIRS_RET}")
+set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+
+# Defines
+add_definitions(-DUSE_KOKKOS)
+set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
 #------------------------------------------------------------------------------#
 # OpenSSL

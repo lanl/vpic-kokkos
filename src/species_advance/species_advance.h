@@ -12,6 +12,8 @@
 #ifndef _species_advance_h_
 #define _species_advance_h_
 
+#include <iostream> 
+
 #include "../sf_interface/sf_interface.h"
 
 typedef int32_t species_id; // Must be 32-bit wide for particle_injector_t
@@ -54,11 +56,12 @@ typedef struct particle_injector {
 } particle_injector_t;
 
 typedef struct species {
+
   char * name;                        // Species name
   float q;                            // Species particle charge
   float m;                            // Species particle rest mass
 
-  int np, max_np;                     // Number and max local particles
+  int np = 0, max_np = 0;             // Number and max local particles
   particle_t * ALIGNED(128) p;        // Array of particles for the species
 
   int nm, max_nm;                     // Number and max local movers in use
@@ -92,7 +95,33 @@ typedef struct species {
 
   grid_t * g;                         // Underlying grid
   species_id id;                      // Unique identifier for a species
-  struct species *next;               // Next species in the list
+  struct species *next = NULL;        // Next species in the list
+
+
+  k_particles_t k_p_d;                // kokkos particles view on device
+  k_particles_t::HostMirror k_p_h;    // kokkos particles view on host
+
+  k_particle_movers_t k_pm_d;         // kokkos particle movers on device
+  k_particle_movers_t::HostMirror k_pm_h;  // kokkos particle movers on host
+
+  k_particle_movers_t k_pm_l_d;      // local particle movers
+
+  k_iterator_t k_nm_d;               // nm iterator
+  k_iterator_t::HostMirror k_nm_h;
+
+
+  // Init Kokkos Particle Arrays
+  species(int n_particles, int n_pmovers) :
+      k_p_d("k_particles", n_particles),
+      k_pm_d("k_particle_movers", n_pmovers),
+      k_nm_d("k_nm"),
+      k_pm_l_d("k_local_particle_movers", 1)
+  {
+      k_p_h = Kokkos::create_mirror_view(k_p_d);
+      k_pm_h = Kokkos::create_mirror_view(k_pm_d);
+      k_nm_h = Kokkos::create_mirror_view(k_nm_d);
+  }
+
 } species_t;
 
 BEGIN_C_DECLS

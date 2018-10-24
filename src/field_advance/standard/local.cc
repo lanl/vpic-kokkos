@@ -18,6 +18,7 @@
  *   - Directly enforces local boundary conditions on fields
  *****************************************************************************/
 #define IN_sfa
+#include <assert.h>
 #include "sfa_private.h"
 
 #define f(x,y,z)         f[ VOXEL(x,y,z, nx,ny,nz) ]
@@ -42,6 +43,7 @@
 #define x_FACE_LOOP(x) XYZ_LOOP(x,x,1,ny,1,nz)
 #define y_FACE_LOOP(y) XYZ_LOOP(1,nx,y,y,1,nz)
 #define z_FACE_LOOP(z) XYZ_LOOP(1,nx,1,ny,z,z)
+
 
 /*****************************************************************************
  * Local ghosts
@@ -261,6 +263,62 @@ local_adjust_tang_e( field_t      * ALIGNED(128) f,
   ADJUST_TANG_E( 1, 0, 0,x,y,z);
   ADJUST_TANG_E( 0, 1, 0,y,z,x);
   ADJUST_TANG_E( 0, 0, 1,z,x,y);
+}
+
+void
+k_local_adjust_norm_b( field_array_t * RESTRICT fa,
+                     const grid_t *              g ) {
+  const int nx = g->nx, ny = g->ny, nz = g->nz;
+  int bc, face, x, y, z, xl, xh, yl, yh, zl, zh;
+
+// TODO: Test the macro unrolling and parallel_for here. This does not
+// get touched during a normal harris run
+# define K_ADJUST_NORM_B(i,j,k,X,Y,Z)                                   \
+  do {                                                                  \
+    bc = g->bc[BOUNDARY(i,j,k)];                                        \
+    if( bc<0 || bc>=world_size ) {                                      \
+      face = (i+j+k)<0 ? 1 : n##X+1;                                    \
+      switch(bc) {                                                      \
+      case anti_symmetric_fields: case pmc_fields: case absorb_fields:  \
+        break;                                                          \
+      case symmetric_fields:                                            \
+         switch(X) {                                                    \
+           case('x'):                                                   \
+             xl=face, xh=face, yl=1, yh=ny, zl=1, zh=nz;                \
+             break;                                                     \
+           case('y'):                                                   \
+             xl=1, xh=nx, yl=face, yh=face, zl=1, zh=nz;                \
+             break;                                                     \
+           case('z'):                                                   \
+             xl=1, xh=nx, yl=1, yh=ny, zl=face, zh=face;                \
+             break;                                                     \
+           default:                                                     \
+             ERROR(("Bad boundary condition encountered."));            \
+             break;                                                     \
+         }                                                              \
+         assert(0);                                                     \
+         Kokkos::parallel_for(Kokkos::RangePolicy                       \
+                 < Kokkos::DefaultExecutionSpace >(zl, zh), KOKKOS_LAMBDA (int z) {      \
+           for(int yi=yl; yi<=yh; yi++ ) {			                    \
+             for(int xj=xl; xj<=xh; xj++ ) {                            \
+	             (fa->k_f_h)(VOXEL(xj,yi,z, nx,ny,nz), field_var::cb##X) = 0;     \
+             }                                                          \
+           }                                                            \
+         });                                                            \
+        break;                                                          \
+      default:                                                          \
+        ERROR(("Bad boundary condition encountered."));                 \
+        break;                                                          \
+      }                                                                 \
+    }                                                                   \
+  } while(0)
+
+  K_ADJUST_NORM_B(-1, 0, 0,x,y,z);
+  K_ADJUST_NORM_B( 0,-1, 0,y,z,x);
+  K_ADJUST_NORM_B( 0, 0,-1,z,x,y);
+  K_ADJUST_NORM_B( 1, 0, 0,x,y,z);
+  K_ADJUST_NORM_B( 0, 1, 0,y,z,x);
+  K_ADJUST_NORM_B( 0, 0, 1,z,x,y);
 }
 
 void

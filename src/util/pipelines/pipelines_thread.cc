@@ -462,7 +462,7 @@ parallel_execute( pipeline_func_t func,
 
 static void *
 pipeline_mgr( void *_pipeline ) {
-  pipeline_state_t *pipeline = _pipeline;
+  pipeline_state_t *pipeline = (pipeline_state_t*)_pipeline;
 
   // Pipeline state is PIPELINE_ACK and the pipeline mutex is unlocked
   // when entering.  Since pthread_cond_wait unlockes the pipeline

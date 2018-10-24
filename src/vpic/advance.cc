@@ -20,6 +20,7 @@ int vpic_simulation::advance(void) {
 
   if( num_step>0 && step()>=num_step ) return 0;
 
+
   // Sort the particles for performance if desired.
 
   LIST_FOR_EACH( sp, species_list )
@@ -46,8 +47,24 @@ int vpic_simulation::advance(void) {
     TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
   TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
+  KOKKOS_INTERPOLATOR_VARIABLES();    
+  KOKKOS_ACCUMULATOR_VARIABLES();
+  KOKKOS_PARTICLE_VARIABLES();
+
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
+  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+
   LIST_FOR_EACH( sp, species_list )
     TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
+
+  Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
+  accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d); 
+
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
+  KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+
 
   // Because the partial position push when injecting aged particles might
   // place those particles onto the guard list (boundary interaction) and
@@ -118,9 +135,13 @@ int vpic_simulation::advance(void) {
 
   TIC user_current_injection(); TOC( user_current_injection, 1 );
 
-  // Half advance the magnetic field from B_0 to B_{1/2}
+  KOKKOS_FIELD_VARIABLES();    
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 
+  // Half advance the magnetic field from B_0 to B_{1/2}
   TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
+
+  KOKKOS_COPY_FIELD_MEM_TO_HOST();
 
   // Advance the electric field from E_0 to E_1
 
@@ -134,7 +155,11 @@ int vpic_simulation::advance(void) {
 
   // Half advance the magnetic field from B_{1/2} to B_1
 
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+
   TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
+
+  KOKKOS_COPY_FIELD_MEM_TO_HOST();
 
   // Divergence clean e
 
@@ -182,7 +207,14 @@ int vpic_simulation::advance(void) {
   // particle diagnostics in user_diagnostics if there are any particle
   // species to worry about
 
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+
   if( species_list ) TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
+
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST();
 
   step()++;
 
@@ -202,6 +234,7 @@ int vpic_simulation::advance(void) {
   // (silly but it might happen), the test will be skipped on the restore. We
   // return true here so that the first call to advance after a restore
   // will act properly for this edge case.
+  dump_energies("energies.txt", 1);
 
   return 1;
 }

@@ -33,6 +33,15 @@ typedef struct interpolator {
 typedef struct interpolator_array {
   interpolator_t * ALIGNED(128) i;
   grid_t * g;
+  k_interpolator_t k_i_d;
+  k_interpolator_t::HostMirror k_i_h;
+
+  interpolator_array(int nv) :
+    k_i_d("k_interpolators", nv)
+  {
+    k_i_h = Kokkos::create_mirror_view(k_i_d);
+  }
+
 } interpolator_array_t;
 
 BEGIN_C_DECLS
@@ -78,7 +87,24 @@ typedef struct accumulator_array {
   accumulator_t * ALIGNED(128) a;
   int n_pipeline; // Number of pipelines supported by this accumulator
   int stride;     // Stride be each pipeline's accumulator array
+  int na;         // Number of accumulators in a
   grid_t * g;
+
+  k_accumulators_t k_a_d;
+  k_accumulators_t::HostMirror k_a_h;
+  k_accumulators_sa_t k_a_sa;
+
+  accumulator_array(int na) :
+    k_a_d("k_accumulators", na)
+    {
+      k_a_sa = Kokkos::Experimental::create_scatter_view
+        <Kokkos::Experimental::ScatterSum,
+         KOKKOS_SCATTER_DUPLICATED,
+         KOKKOS_SCATTER_ATOMIC>(k_a_d);
+      k_a_h  = Kokkos::create_mirror_view(k_a_d);
+    }
+
+
 } accumulator_array_t;
 
 BEGIN_C_DECLS
