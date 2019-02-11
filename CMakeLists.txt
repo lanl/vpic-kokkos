@@ -44,6 +44,13 @@ option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" ON)
 
 option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" ON)
 
+option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" ON)
+
+option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
+
+add_definitions(-DUSE_KOKKOS)
+set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
+
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
 #
@@ -136,10 +143,12 @@ if (APPLE)
 endif()
 
 if (BUILD_INTERNAL_KOKKOS)
+  message("Building our own kokkos..")
   add_subdirectory(kokkos)
   #include_directories(${Kokkos_INCLUDE_DIRS_RET})
   set(KOKKOS_INCLUDE_DIRS ${Kokkos_INCLUDE_DIRS_RET})
 else()
+  # CONSIDER ADDING --expt-extended-lambda 
   find_package(KOKKOS REQUIRED)
   # TODO: I doubt this is the cmakey way to add this to includes
   get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INTERFACE_INCLUDE_DIRECTORIES)
@@ -158,10 +167,6 @@ set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
 # Includes (TODO: this is definitely abuse of the CXX variable..)
 string(REPLACE ";" " -I" string_libraries "-I${KOKKOS_INCLUDE_DIRS}")
 set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-
-# Defines
-add_definitions(-DUSE_KOKKOS)
-set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
 #------------------------------------------------------------------------------#
 # OpenSSL
