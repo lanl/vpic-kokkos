@@ -10,7 +10,6 @@ before_script:
     - module use /mnt/local/ssd/vpic/spack/share/spack/lmod/linux-centos7-x86_64
 
 stages:
-    - build_intel
     - build_gcc
 
 # TODO: add werror build
