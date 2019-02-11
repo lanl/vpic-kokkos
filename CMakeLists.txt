@@ -3,7 +3,7 @@
 # All rights reserved.
 #------------------------------------------------------------------------------#
 
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.9)
 
 #~----------------------------------------------------------------------------~#
 # VPIC project configuration
@@ -50,6 +50,8 @@ option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" ON)
 # NOTE: These must be set before creating the compile scripts below.
 #------------------------------------------------------------------------------#
 
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
+
 set(VPIC_CPPFLAGS)
 if(MPI_CPPFLAGS)
   string(REPLACE ";" " " string_cppflags "${MPI_CPPFLAGS}")
@@ -84,6 +86,9 @@ if (OPENMP_FOUND)
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
   #set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
 endif()
+
+# Allow files to be references from the root, (eg #include "src/vpic/vpic.h")
+include_directories(${PROJECT_SOURCE_DIR})
 
 #------------------------------------------------------------------------------#
 # Kokkos
@@ -130,15 +135,28 @@ if (APPLE)
   set(KOKKOS_ENABLE_LIBRT OFF CACHE BOOL "librt is not available on macOS")
 endif()
 
-add_subdirectory(kokkos)
-include_directories(${Kokkos_INCLUDE_DIRS_RET})
+if (BUILD_INTERNAL_KOKKOS)
+  add_subdirectory(kokkos)
+  #include_directories(${Kokkos_INCLUDE_DIRS_RET})
+  set(KOKKOS_INCLUDE_DIRS ${Kokkos_INCLUDE_DIRS_RET})
+else()
+  find_package(KOKKOS REQUIRED)
+  # TODO: I doubt this is the cmakey way to add this to includes
+  get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INTERFACE_INCLUDE_DIRECTORIES)
+  #get_target_property(KOKKOS_LIB_DIR Kokkos::kokkos INTERFACE_LINK_LIBRARIES)
+  #message(${KOKKOS_INCLUDE_DIRS})
+  link_directories(${KOKKOS_INCLUDE_DIRS}/../lib) # TODO: bad idea..
+endif(BUILD_INTERNAL_KOKKOS)
+
+message(dirs: ${KOKKOS_INCLUDE_DIRS})
+include_directories(${KOKKOS_INCLUDE_DIRS})
 
 # Libs
 string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
 set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
 
 # Includes (TODO: this is definitely abuse of the CXX variable..)
-string(REPLACE ";" " -I" string_libraries "-I${Kokkos_INCLUDE_DIRS_RET}")
+string(REPLACE ";" " -I" string_libraries "-I${KOKKOS_INCLUDE_DIRS}")
 set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
 
 # Defines
@@ -188,7 +206,7 @@ endif(ENABLE_OPENSSL)
 #------------------------------------------------------------------------------#
 
 # Allow files to be references from the root, (eg #include "src/vpic/vpic.h")
-include_directories(${PROJECT_SOURCE_DIR})
+#include_directories(${PROJECT_SOURCE_DIR})
 
 if(BUILD_SHARED_LIBS)
     set(VPIC_CXX_FLAGS "-rdynamic ${VPIC_CXX_FLAGS}")
@@ -299,7 +317,12 @@ if(ENABLE_UNIT_TESTS)
   # RNG tests
   add_executable(rng src/util/rng/test/rng.cc)
   target_link_libraries(rng vpic)
+  get_target_property(OUT rng LINK_LIBRARIES)
+  message(STATUS OUT ${OUT})
+
   add_test(NAME rng COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ./rng)
+
+  add_subdirectory(test/unit)
 
 endif(ENABLE_UNIT_TESTS)
 #~---------------------------------------------------------------------------~-#
