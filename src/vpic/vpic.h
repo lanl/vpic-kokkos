@@ -125,8 +125,6 @@ public:
   int advance( void );
   void finalize( void );
  
-private:
- 
   // Directly initialized by user
  
   int verbose;              // Should system be verbose

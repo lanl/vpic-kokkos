@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by:
  *   Kevin J. Bowers, Ph.D.
  *   Plasma Physics Group (X-1)
@@ -27,7 +27,7 @@ int vpic_simulation::advance(void) {
     if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) ) {
       if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
       TIC sort_p( sp ); TOC( sort_p, 1 );
-    } 
+    }
 
   // At this point, fields are at E_0 and B_0 and the particle positions
   // are at r_0 and u_{-1/2}.  Further the mover lists for the particles should
@@ -47,7 +47,7 @@ int vpic_simulation::advance(void) {
     TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
   TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
-  KOKKOS_INTERPOLATOR_VARIABLES();    
+  KOKKOS_INTERPOLATOR_VARIABLES();
   KOKKOS_ACCUMULATOR_VARIABLES();
   KOKKOS_PARTICLE_VARIABLES();
 
@@ -59,7 +59,7 @@ int vpic_simulation::advance(void) {
     TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
 
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
-  accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d); 
+  accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
 
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
@@ -135,7 +135,7 @@ int vpic_simulation::advance(void) {
 
   TIC user_current_injection(); TOC( user_current_injection, 1 );
 
-  KOKKOS_FIELD_VARIABLES();    
+  KOKKOS_FIELD_VARIABLES();
   KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 
   // Half advance the magnetic field from B_0 to B_{1/2}

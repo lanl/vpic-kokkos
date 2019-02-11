@@ -553,8 +553,26 @@ advance_p( /**/  species_t            * RESTRICT sp,
   //DECLARE_ALIGNED_ARRAY( particle_mover_seg_t, 128, seg, MAX_PIPELINE+1 );
   //int rank;
 
-  if( !sp || !aa || !ia || sp->g!=aa->g || sp->g!=ia->g )
+  if( !sp )
+  {
     ERROR(( "Bad args" ));
+  }
+  if( !aa )
+  {
+    ERROR(( "Bad args" ));
+  }
+  if( !ia  )
+  {
+    ERROR(( "Bad args" ));
+  }
+  if( sp->g!=aa->g )
+  {
+    ERROR(( "Bad args" ));
+  }
+  if( sp->g!=ia->g )
+  {
+    ERROR(( "Bad args" ));
+  }
 
 
   float qdt_2mc  = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);

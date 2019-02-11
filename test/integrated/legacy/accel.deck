@@ -48,36 +48,63 @@ begin_initialization {
   field(1,2,1).ez  = 3;
   field(2,2,1).ez  = 3;
 
-  species_t * sp =
+  species_t * this_sp =
     define_species( "test_species", 1., 1., npart, npart, 0, 0 );
 
+  sim_log("this_sp " << this_sp);
+
   repeat(npart)
-    inject_particle( sp,
+  {
+    inject_particle( this_sp,
                      uniform( rng(0), 0, L ),
                      uniform( rng(0), 0, L ),
                      uniform( rng(0), 0, L ),
                      0., 0., 0., 1., 0., 0 );
+  }
+
+  sim_log("inject this_sp " << this_sp);
 
   // Hack into vpic internals
   int failed = 0;
   load_interpolator_array( interpolator_array, field_array );
+
+  species_t* sp; // We use this to iterate over species
+
+  KOKKOS_INTERPOLATOR_VARIABLES();
+  sim_log("this_sp " << this_sp);
+  KOKKOS_ACCUMULATOR_VARIABLES();
+  sim_log("this_sp " << this_sp);
+  KOKKOS_PARTICLE_VARIABLES();
+
+  sim_log("this_sp " << this_sp);
+
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
+  sim_log("this_sp " << this_sp);
+  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+  sim_log("this_sp " << this_sp);
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+
+  sim_log("this_sp " << this_sp);
+
   for( int n=0; n<nstep; n++ ) {
-    advance_p( sp, accumulator_array, interpolator_array );
+
+    advance_p( this_sp, accumulator_array, interpolator_array );
+
     for( int m=0; m<npart; m++ ) {
-      if( sp->p[m].ux != 1*(n+1) ||
-          sp->p[m].uy != 2*(n+1) ||
-          sp->p[m].uz != 3*(n+1) ) {
+      if( this_sp->p[m].ux != 1*(n+1) ||
+          this_sp->p[m].uy != 2*(n+1) ||
+          this_sp->p[m].uz != 3*(n+1) ) {
         failed++;
         sim_log( n << " " <<
                  m << " " <<
-                 sp->p[m].i  << " " <<
-                 sp->p[m].dx << " " <<
-                 sp->p[m].dy << " " <<
-                 sp->p[m].dz << " " <<
-                 sp->p[m].ux << " " <<
-                 sp->p[m].uy << " " <<
-                 sp->p[m].uz << " " <<
-                 sp->p[m].w );
+                 this_sp->p[m].i  << " " <<
+                 this_sp->p[m].dx << " " <<
+                 this_sp->p[m].dy << " " <<
+                 this_sp->p[m].dz << " " <<
+                 this_sp->p[m].ux << " " <<
+                 this_sp->p[m].uy << " " <<
+                 this_sp->p[m].uz << " " <<
+                 this_sp->p[m].w << " ux should be exact multiples of " << (n+1) );
       }
     }
   }
