@@ -39,7 +39,7 @@ stages:
 .build_intel:
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
-  stage: build_intel
+    #stage: build_intel
   script:
     - module load Core/gcc/8.2.0-sxbf4jq
     - module load gcc/8.2.0/cmake/3.13.3-zd4lpat
