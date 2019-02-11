@@ -27,11 +27,12 @@ stages:
     - build_dir=build-${CI_JOB_NAME}-${CI_JOB_ID}
     - mkdir -p ${build_dir}
     - pushd ${build_dir}
-    - CC=${_CC} CXX=${_CXX} cmake
-      -DENABLE_INTEGRATED_TESTS=ON
-      -DENABLE_UNIT_TESTS=ON
-      -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-      ..
+      #- CC=${_CC} CXX=${_CXX} cmake
+      #-DENABLE_INTEGRATED_TESTS=ON
+      #-DENABLE_UNIT_TESTS=ON
+      #-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+      #..
+    - ../arch/gpu-Release
     - make -j ${j} -l ${l} VERBOSE=1
     - make test CTEST_OUTPUT_ON_FAILURE=1
     - make install DESTDIR=${PWD}/install

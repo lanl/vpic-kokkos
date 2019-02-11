@@ -19,13 +19,6 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #------------------------------------------------------------------------------#
-# Set C flags
-#------------------------------------------------------------------------------#
-
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-
-#------------------------------------------------------------------------------#
 # MPI detection
 #------------------------------------------------------------------------------#
 
@@ -47,9 +40,9 @@ option(USE_V4_SSE "Enable V4 SSE" OFF)
 
 option(ENABLE_OPENSSL "Enable OpenSSL support for checksums" OFF)
 
-option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" OFF)
+option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" ON)
 
-option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
+option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" ON)
 
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
@@ -108,16 +101,17 @@ endif()
 if(ENABLE_KOKKOS_CUDA)
   find_package(CUDA)
   if (CUDA_FOUND)
-    add_definitions(-DENABLE_KOKKOS_CUDA) 
+    add_definitions(-DENABLE_KOKKOS_CUDA)
     set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
     set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
     set(KOKKOS_ENABLE_CUDA_UVM ON)
 
-    # Choose Architecture for Kokkos 
-    #set(KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
-    #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
-    set(KOKKOS_ARCH "Power9;Volta70")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
+    # Choose Architecture for Kokkos
+    set(KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
+
+    #set(KOKKOS_ARCH "Power9;Volta70")
+    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
 
     # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
     # see https://github.com/UoB-HPC/BabelStream/issues/16
