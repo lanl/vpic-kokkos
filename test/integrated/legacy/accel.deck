@@ -16,6 +16,18 @@
 //   Los Alamos National Lab
 // March/April 2004 - conversion of c++ test code into an input deck
 
+////////////////////////////////////// RFB ////////////////////////////////////
+// The process for porting these legacy tests to work with Kokkos was as follows:
+// 1. Remove naming collision in `sp`. Some of the kokkos macros (currently)
+// iterate over them, and there for can trash the value in sp
+// 2. Add the below KOKKOS macros to ensure that:
+//  a) The particles are copied to the device arrays
+//  b) The fields are copied to the device arrays
+//  c) The load_interpolator functions, which uses kokkos, has the data in the right place
+//  d) The particles are brought back once we want to check their values
+///////////////////////////////////////////////////////////////////////////////
+
+
 begin_globals {
 };
 

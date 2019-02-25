@@ -222,6 +222,7 @@ namespace accumulator_var {
 
 
 // TODO: I don't like that these hard code use `sp`
+// perhaps it should cache old sp and put it back to what it was?
 #define KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE() \
   LIST_FOR_EACH( sp, species_list ) {\
     n_particles = sp->max_np; \
