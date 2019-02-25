@@ -32,6 +32,8 @@ include_directories(${MPI_C_INCLUDE_PATH})
 
 option(ENABLE_INTEGRATED_TESTS "enable integrated tests" OFF)
 
+option(ENABLE_UNIT_TESTS "enable unit tests" OFF)
+
 option(USE_V4_ALTIVEC "Enable V4 Altivec" OFF)
 
 option(USE_V4_PORTABLE "Enable V4 Portable" OFF)
@@ -42,9 +44,7 @@ option(ENABLE_OPENSSL "Enable OpenSSL support for checksums" OFF)
 
 option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" ON)
 
-option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" ON)
-
-option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" ON)
+option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 
 option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
 
