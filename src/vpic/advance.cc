@@ -44,7 +44,10 @@ int vpic_simulation::advance(void) {
   // order accurate factorization).
 
   if( collision_op_list )
+  {
     TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
+  }
+
   TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
   KOKKOS_INTERPOLATOR_VARIABLES();
@@ -56,7 +59,10 @@ int vpic_simulation::advance(void) {
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
 
   LIST_FOR_EACH( sp, species_list )
+  {
     TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
+  }
+
 
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
   accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);

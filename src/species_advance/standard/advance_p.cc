@@ -378,7 +378,8 @@ advance_p_kokkos(k_particles_t k_particles,
 
 
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
-    KOKKOS_LAMBDA (size_t p_index) {
+    KOKKOS_LAMBDA (size_t p_index)
+    {
 
     float v0, v1, v2, v3, v4, v5;
     int   nm;
@@ -423,6 +424,7 @@ advance_p_kokkos(k_particles_t k_particles,
     p_ux = ux;                               // Store momentum
     p_uy = uy;
     p_uz = uz;
+
     v0   = one/sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
     /**/                                      // Get norm displacement
     ux  *= cdt_dx;

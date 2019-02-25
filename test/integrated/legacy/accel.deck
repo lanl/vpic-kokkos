@@ -48,6 +48,11 @@ begin_initialization {
   field(1,2,1).ez  = 3;
   field(2,2,1).ez  = 3;
 
+  KOKKOS_FIELD_VARIABLES();
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+
+  species_t* sp; // We use this to iterate over species
+
   species_t * this_sp =
     define_species( "test_species", 1., 1., npart, npart, 0, 0 );
 
@@ -62,51 +67,53 @@ begin_initialization {
                      0., 0., 0., 1., 0., 0 );
   }
 
-  sim_log("inject this_sp " << this_sp);
+  KOKKOS_PARTICLE_VARIABLES();
+  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+
+
+  // We load this first, as the load_interpolator_array call uses device data
+  KOKKOS_INTERPOLATOR_VARIABLES();
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
 
   // Hack into vpic internals
   int failed = 0;
   load_interpolator_array( interpolator_array, field_array );
 
-  species_t* sp; // We use this to iterate over species
-
-  KOKKOS_INTERPOLATOR_VARIABLES();
-  sim_log("this_sp " << this_sp);
-  KOKKOS_ACCUMULATOR_VARIABLES();
-  sim_log("this_sp " << this_sp);
-  KOKKOS_PARTICLE_VARIABLES();
 
   sim_log("this_sp " << this_sp);
 
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
-  sim_log("this_sp " << this_sp);
-  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
-  sim_log("this_sp " << this_sp);
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+  for( int n=0; n<nstep; n++ )
+  {
 
-  sim_log("this_sp " << this_sp);
+      sim_log("STEP " << n);
 
-  for( int n=0; n<nstep; n++ ) {
+      advance_p( this_sp, accumulator_array, interpolator_array );
 
-    advance_p( this_sp, accumulator_array, interpolator_array );
+      //Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
+      //accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
 
-    for( int m=0; m<npart; m++ ) {
-      if( this_sp->p[m].ux != 1*(n+1) ||
-          this_sp->p[m].uy != 2*(n+1) ||
-          this_sp->p[m].uz != 3*(n+1) ) {
-        failed++;
-        sim_log( n << " " <<
-                 m << " " <<
-                 this_sp->p[m].i  << " " <<
-                 this_sp->p[m].dx << " " <<
-                 this_sp->p[m].dy << " " <<
-                 this_sp->p[m].dz << " " <<
-                 this_sp->p[m].ux << " " <<
-                 this_sp->p[m].uy << " " <<
-                 this_sp->p[m].uz << " " <<
-                 this_sp->p[m].w << " ux should be exact multiples of " << (n+1) );
+      // Copy data back for inspection on host
+      KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
+
+      for( int m=0; m<npart; m++ )
+      {
+          if( this_sp->p[m].ux != 1*(n+1) ||
+                  this_sp->p[m].uy != 2*(n+1) ||
+                  this_sp->p[m].uz != 3*(n+1) )
+          {
+              failed++;
+              sim_log( n << " " <<
+                      m << " " <<
+                      this_sp->p[m].i  << " " <<
+                      this_sp->p[m].dx << " " <<
+                      this_sp->p[m].dy << " " <<
+                      this_sp->p[m].dz << " " <<
+                      this_sp->p[m].ux << " " <<
+                      this_sp->p[m].uy << " " <<
+                      this_sp->p[m].uz << " " <<
+                      this_sp->p[m].w << " ux should be exact multiples of " << (n+1) );
+          }
       }
-    }
   }
 
   if( failed ) { sim_log( "FAIL" ); abort(1); }

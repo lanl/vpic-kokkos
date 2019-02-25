@@ -3,6 +3,7 @@
 
 #include <Kokkos_Core.hpp>
 #include <Kokkos_ScatterView.hpp>
+#include <iostream>
 
 // This module implements kokkos macros
 
@@ -122,7 +123,7 @@ namespace particle_mover_var {
   };
 };
 
-namespace accumulator_var { 
+namespace accumulator_var {
   enum a_v { \
     jx = 0, \
     jy = 1, \
@@ -134,7 +135,6 @@ namespace accumulator_var {
   int n_fields = field_array->g->nv; \
   k_field_t::HostMirror k_field; \
   k_field_edge_t::HostMirror k_field_edge; \
-
 
 #define KOKKOS_COPY_FIELD_MEM_TO_DEVICE() \
   k_field = field_array->k_f_h; \
@@ -361,8 +361,8 @@ namespace accumulator_var {
       k_accumulators_h(i, accumulator_var::jz, j)       = accumulator_array->a[i].jz[j]; \
     }); \
   });\
-  Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h); 
- 
+  Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
+
 
 #define KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST() \
   na = accumulator_array->na; \
