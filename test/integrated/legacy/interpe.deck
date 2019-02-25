@@ -1,5 +1,5 @@
 // Test electric field interpolation
-// 
+//
 // Written by:
 //   Kevin J. Bowers, Ph.D.
 //   Plasma Physics Group (X-1)
@@ -38,28 +38,41 @@ begin_initialization {
   field(1,2,1).ez  = 10;
   field(2,2,1).ez  = 11;
 
-  species_t * sp = define_species( "test_species", 0.5, 0.5, npart, npart, 0, 0 );
+  KOKKOS_FIELD_VARIABLES();
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 
-  // Hack into vpic internals 
+  species_t* sp; // We use this to iterate over species
+
+  species_t * this_sp = define_species( "test_species", 0.5, 0.5, npart, npart, 0, 0 );
+
+  // Hack into vpic internals
 
   int failed = 0;
-  load_interpolator_array( interpolator_array, field_array ); 
-  sp->np = npart; 
+
+  KOKKOS_INTERPOLATOR_VARIABLES();
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+  load_interpolator_array( interpolator_array, field_array );
+
+  this_sp->np = npart;
+
+  KOKKOS_PARTICLE_VARIABLES();
 
 # define test_e(X,DX,DY,DZ,VAL)                         \
   for( int n=0; n<npart; n++ ) {                        \
-    sp->p[n].i  = voxel(1,1,1);                         \
-    sp->p[n].dx = DX;                                   \
-    sp->p[n].dy = DY;                                   \
-    sp->p[n].dz = DZ;                                   \
-    sp->p[n].ux = 0;                                    \
-    sp->p[n].uy = 0;                                    \
-    sp->p[n].uz = 0;                                    \
-    sp->p[n].w  = fabs( normal( rng(0), 0, 1 ) );       \
+    this_sp->p[n].i  = voxel(1,1,1);                         \
+    this_sp->p[n].dx = DX;                                   \
+    this_sp->p[n].dy = DY;                                   \
+    this_sp->p[n].dz = DZ;                                   \
+    this_sp->p[n].ux = 0;                                    \
+    this_sp->p[n].uy = 0;                                    \
+    this_sp->p[n].uz = 0;                                    \
+    this_sp->p[n].w  = fabs( normal( rng(0), 0, 1 ) );       \
   }                                                     \
-  advance_p( sp, accumulator_array, interpolator_array ); \
+  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(); \
+  advance_p( this_sp, accumulator_array, interpolator_array ); \
+  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(); \
   for( int n=0; n<npart; n++ ) {                        \
-    if( sp->p[n].u##X != VAL ) {                        \
+    if( this_sp->p[n].u##X != VAL ) {                        \
       failed++;                                         \
       sim_log(  "e"#X << " "                            \
                 << DX << " "                            \
@@ -67,14 +80,14 @@ begin_initialization {
                 << DZ << " "                            \
                 << VAL << " "                           \
                 << n << " "                             \
-                << sp->p[n].i << " "                    \
-                << sp->p[n].dx << " "                   \
-                << sp->p[n].dy << " "                   \
-                << sp->p[n].dz << " "                   \
-                << sp->p[n].ux << " "                   \
-                << sp->p[n].uy << " "                   \
-                << sp->p[n].uz << " "                   \
-                << sp->p[n].w );                        \
+                << this_sp->p[n].i << " "                    \
+                << this_sp->p[n].dx << " "                   \
+                << this_sp->p[n].dy << " "                   \
+                << this_sp->p[n].dz << " "                   \
+                << this_sp->p[n].ux << " "                   \
+                << this_sp->p[n].uy << " "                   \
+                << this_sp->p[n].uz << " "                   \
+                << this_sp->p[n].w );                        \
     }                                                   \
   }
 
@@ -92,7 +105,7 @@ begin_initialization {
   test_e(z, 1,-1,0,9);
   test_e(z,-1, 1,0,10);
   test_e(z, 1, 1,0,11);
-  
+
   if( failed ) { sim_log( "FAIL" ); abort(1); }
   sim_log( "pass" );
   halt_mp();
