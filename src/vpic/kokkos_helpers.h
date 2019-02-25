@@ -221,6 +221,7 @@ namespace accumulator_var {
   k_iterator_t::HostMirror k_nm_h;
 
 
+// TODO: I don't like that these hard code use `sp`
 #define KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE() \
   LIST_FOR_EACH( sp, species_list ) {\
     n_particles = sp->max_np; \

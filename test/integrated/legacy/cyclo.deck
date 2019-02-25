@@ -36,8 +36,13 @@ begin_initialization {
   field(1,1,1).cbz  = 2*M_PI / (double)nstep;
   field(1,1,2).cbz  = 2*M_PI / (double)nstep;
 
-  species_t * sp = define_species( "test_species", 2, 1, npart, npart, 0, 0 );
-  repeat(npart) inject_particle( sp,
+  KOKKOS_FIELD_VARIABLES();
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+
+  species_t* sp; // We use this to iterate over species
+
+  species_t * this_sp = define_species( "test_species", 2, 1, npart, npart, 0, 0 );
+  repeat(npart) inject_particle( this_sp,
                                  uniform( rng(0), 0, L ),
                                  uniform( rng(0), 0, L ),
                                  uniform( rng(0), 0, L ),
@@ -45,34 +50,42 @@ begin_initialization {
                                  uniform( rng(0), 0, 1 ),
                                  0, 0 );
 
+  KOKKOS_PARTICLE_VARIABLES();
+  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+
+  KOKKOS_INTERPOLATOR_VARIABLES();
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
   // Hack into vpic internals
 
   int failed = 0;
   load_interpolator_array( interpolator_array, field_array );
   for( int n=0; n<nstep; n++ ) {
-    advance_p( sp, accumulator_array, interpolator_array );
+    advance_p( this_sp, accumulator_array, interpolator_array );
+
+    KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
+
     double ux = cos(2*M_PI*(0.125*nstep-(n+1))/(double)nstep) /
                 cos(2*M_PI*(0.125*nstep)      /(double)nstep);
     double uy = sin(2*M_PI*(0.125*nstep-(n+1))/(double)nstep) /
-                sin(2*M_PI*(0.125*nstep)      /(double)nstep); 
+                sin(2*M_PI*(0.125*nstep)      /(double)nstep);
     for( int m=0; m<npart; m++ ) {
-      if( fabs(sp->p[m].ux-ux)>0.6e-6 ||
-          fabs(sp->p[m].uy-uy)>0.6e-6 ||
-          sp->p[m].uz != 1 ) {
+      if( fabs(this_sp->p[m].ux-ux)>0.6e-6 ||
+          fabs(this_sp->p[m].uy-uy)>0.6e-6 ||
+          this_sp->p[m].uz != 1 ) {
         failed++;
         sim_log( n << " " << m << " " <<
-                 sp->p[m].i  << " " <<
-                 sp->p[m].dx << " " <<
-                 sp->p[m].dy << " " <<
-                 sp->p[m].dz << " " <<
-                 sp->p[m].ux << " " <<
-                 sp->p[m].uy << " " <<
-                 sp->p[m].uz << " " <<
-                 sp->p[m].w  << " " <<
+                 this_sp->p[m].i  << " " <<
+                 this_sp->p[m].dx << " " <<
+                 this_sp->p[m].dy << " " <<
+                 this_sp->p[m].dz << " " <<
+                 this_sp->p[m].ux << " " <<
+                 this_sp->p[m].uy << " " <<
+                 this_sp->p[m].uz << " " <<
+                 this_sp->p[m].w  << " " <<
                  ux << " " <<
-                 uy << " " << 
-                 sp->p[m].ux-ux << " " <<
-                 sp->p[m].uy-uy );
+                 uy << " " <<
+                 this_sp->p[m].ux-ux << " " <<
+                 this_sp->p[m].uy-uy );
       }
     }
   }
