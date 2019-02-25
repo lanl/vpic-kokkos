@@ -6,6 +6,8 @@
 // PROBABLY CHANGE N_ARRAY TO
 // max({serial,thread}.n_pipeline,spu.n_pipeline+1)
 
+// TODO RFB: this should be the sight for the array reduction
+
 void
 reduce_accumulators_pipeline( accumulators_pipeline_args_t * args,
                               int pipeline_rank,
