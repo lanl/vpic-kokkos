@@ -116,7 +116,7 @@ if(ENABLE_KOKKOS_CUDA)
     add_definitions(-DENABLE_KOKKOS_CUDA)
     set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
     set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
-    set(KOKKOS_ENABLE_CUDA_UVM ON)
+    set(KOKKOS_ENABLE_CUDA_UVM OFF)
 
     # Choose Architecture for Kokkos
     set(KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
