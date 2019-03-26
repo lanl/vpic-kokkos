@@ -26,12 +26,13 @@ foreach(test ${DEFAULT_ARG_TESTS})
         ${MPIEXEC_PREFLAGS} ${test} ${MPIEXEC_POSTFLAGS} ${ARGS})
 endforeach()
 
+# TODO: re-enable parallel run
 # Try a parallel run
-set (PARALLEL_TEST parallel)
-build_a_vpic(${PARALLEL_TEST} ${CMAKE_CURRENT_SOURCE_DIR}/simple.deck)
-add_test(${PARALLEL_TEST} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG}
-    ${MPIEXEC_NUMPROC_PARALLEL} ${MPIEXEC_PREFLAGS} ${PARALLEL_TEST}
-    ${MPIEXEC_POSTFLAGS} ${ARGS})
+#set (PARALLEL_TEST parallel)
+#build_a_vpic(${PARALLEL_TEST} ${CMAKE_CURRENT_SOURCE_DIR}/simple.deck)
+#add_test(${PARALLEL_TEST} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG}
+#${MPIEXEC_NUMPROC_PARALLEL} ${MPIEXEC_PREFLAGS} ${PARALLEL_TEST}
+#${MPIEXEC_POSTFLAGS} ${ARGS})
 
 # Try a threaded run
 set (THREADED_TEST threaded)
