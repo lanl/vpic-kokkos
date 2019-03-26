@@ -308,6 +308,8 @@ endif(ENABLE_INTEGRATED_TESTS)
 
 if(ENABLE_UNIT_TESTS)
 
+  enable_testing()
+
   # NOTE: This can also be done by a subdirectory (useful when we have multiple tests)
   # Add includes for Catch2
   set(TEST_DIR "./test/include")

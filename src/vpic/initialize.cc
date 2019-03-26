@@ -7,8 +7,9 @@ vpic_simulation::initialize( int argc,
                              char **argv ) {
   double err;
   species_t * sp;
+
   // Initialize Kokkos
-  Kokkos::initialize( argc, argv ); 
+  Kokkos::initialize( argc, argv );
 
   // Call the user initialize the simulation
 
