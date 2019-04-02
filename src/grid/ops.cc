@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by:
  *   Kevin J. Bowers, Ph.D.
  *   Plasma Physics Group (X-1)
@@ -20,7 +20,7 @@ size_grid( grid_t * g,
            int lnx, int lny, int lnz ) {
   int64_t x,y,z;
   int i, j, k;
-  int64_t ii, jj, kk; 
+  int64_t ii, jj, kk;
 
   if( !g || lnx<1 || lny<1 || lnz<1 ) ERROR(( "Bad args" ));
 
@@ -32,7 +32,7 @@ size_grid( grid_t * g,
   g->nx = lnx; g->ny = lny; g->nz = lnz;
   for( k=-1; k<=1; k++ )
     for( j=-1; j<=1; j++ )
-      for( i=-1; i<=1; i++ ) 
+      for( i=-1; i<=1; i++ )
         g->bc[ BOUNDARY(i,j,k) ] = pec_fields;
   g->bc[ BOUNDARY(0,0,0) ] = world_rank;
 
@@ -55,8 +55,8 @@ size_grid( grid_t * g,
   FREE_ALIGNED( g->neighbor );
   MALLOC_ALIGNED( g->neighbor, 6*g->nv, 128 );
 
-  for( z=0; z<=lnz+1; z++ )
-    for( y=0; y<=lny+1; y++ )
+  for( z=0; z<=lnz+1; z++ ) {
+    for( y=0; y<=lny+1; y++ ) {
       for( x=0; x<=lnx+1; x++ ) {
         i = 6*LOCAL_CELL_ID(x,y,z);
         g->neighbor[i+0] = g->rangel + LOCAL_CELL_ID(x-1,y,z);
@@ -84,6 +84,12 @@ size_grid( grid_t * g,
           g->neighbor[i+5] = reflect_particles;
         }
       }
+    }
+  }
+
+  // We want to call this once the neighbor is done
+  auto nfaces_per_voxel = 6;
+  g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
 # if 0
   // Setup the space filling curve
@@ -199,7 +205,7 @@ set_pbc( grid_t * g,
       return;                                                   \
     }                                                           \
   } END_PRIMITIVE
-  
+
   SET_PBC(0,-1, 0, 0,x,y,z);
   SET_PBC(1, 0,-1, 0,y,z,x);
   SET_PBC(2, 0, 0,-1,z,x,y);

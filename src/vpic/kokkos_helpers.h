@@ -5,6 +5,8 @@
 #include <Kokkos_ScatterView.hpp>
 #include <iostream>
 
+#include "../material/material.h" // Need material_t
+
 // This module implements kokkos macros
 
 #define FIELD_VAR_COUNT 16
@@ -25,13 +27,16 @@
   #define KOKKOS_LAYOUT Kokkos::LayoutRight
 #endif
 
+// TODO: we dont need the [1] here
 using k_iterator_t = Kokkos::View<int[1]>;
 
 using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
-using k_field_edge_t = Kokkos::View<material_id*[FIELD_EDGE_COUNT]>;
+using k_field_edge_t = Kokkos::View<material_id* [FIELD_EDGE_COUNT]>;
 
 using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
 using k_particle_movers_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT]>;
+
+using k_neighbor_t = Kokkos::View<int64_t*>;
 
 using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 

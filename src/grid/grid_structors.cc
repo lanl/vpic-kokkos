@@ -33,10 +33,12 @@ restore_grid( void ) {
 
 grid_t *
 new_grid( void ) {
-  grid_t *g;
   int i;
-  MALLOC( g, 1 );
-  CLEAR( g, 1 );
+
+  grid_t* g = new grid_t();
+  //MALLOC( g, 1 );
+  //CLEAR( g, 1 );
+
   for( i=0; i<27; i++ ) g->bc[i] = anti_symmetric_fields;
   g->bc[BOUNDARY(0,0,0)] = world_rank;
   g->mp = new_mp( 27 );

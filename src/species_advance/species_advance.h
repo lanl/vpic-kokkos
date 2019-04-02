@@ -106,6 +106,7 @@ typedef struct species {
 
   k_particle_movers_t k_pm_l_d;      // local particle movers
 
+  // TODO: what is an iterator here??
   k_iterator_t k_nm_d;               // nm iterator
   k_iterator_t::HostMirror k_nm_h;
 

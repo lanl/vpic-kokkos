@@ -7,9 +7,9 @@
  * March/April 2004 - Heavily revised and extended from earlier V4PIC versions
  *
  */
- 
+
 #include "vpic.h"
- 
+
 /* Note that, when a vpic_simulation is created (and thus registered
    with the checkpt service), it is created empty; none of the simulation
    objects on which it depends have been created yet. (These get created
@@ -85,7 +85,7 @@ vpic_simulation::vpic_simulation() {
 # if defined(CELL_PPU_BUILD) && defined(USE_CELL_SPUS)
   if( n_rng<spu.n_pipeline    ) n_rng = spu.n_pipeline;
 # endif
-  n_rng++; 
+  n_rng++;
 
   entropy      = new_rng_pool( n_rng, 0, 0 );
   sync_entropy = new_rng_pool( n_rng, 0, 1 );
@@ -94,7 +94,7 @@ vpic_simulation::vpic_simulation() {
   REGISTER_OBJECT( this, checkpt_vpic_simulation,
                    restore_vpic_simulation, reanimate_vpic_simulation );
 }
- 
+
 vpic_simulation::~vpic_simulation() {
   UNREGISTER_OBJECT( this );
   delete_emitter_list( emitter_list );
@@ -108,5 +108,6 @@ vpic_simulation::~vpic_simulation() {
   delete_grid( grid );
   delete_rng_pool( sync_entropy );
   delete_rng_pool( entropy );
+  Kokkos::finalize();
 }
- 
+

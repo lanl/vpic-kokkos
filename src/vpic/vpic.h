@@ -665,6 +665,9 @@ public:
   void user_field_injection(void);
   void user_diagnostics(void);
   void user_particle_collisions(void);
+
+  //Kokkos::ScopeGuard scope_guard; // (argc, argv);
+
 };
 
 #endif // vpic_h

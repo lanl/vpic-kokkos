@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by:
  *   Kevin J. Bowers, Ph.D.
  *   Plasma Physics Group (X-1)
@@ -12,6 +12,7 @@
 #define _grid_h_
 
 #include "../util/util.h"
+#include "../vpic/kokkos_helpers.h"
 
 #define BOUNDARY(i,j,k) (13+(i)+3*(j)+9*(k)) /* FORTRAN -1:1,-1:1,-1:1 */
 
@@ -46,7 +47,7 @@ enum grid_enums {
   // B_tang  -> Symmetric           | B_tang  -> Anti-symmetric
   // E_norm  -> Symmetric           | E_norm  -> Anti-symmetric (see note)
   // div B   -> Symmetric           | div B   -> Anti-symmetric
-  // 
+  //
   // Note: B_norm is tricky. For a symmetry plane, B_norm on the
   // boundary must be zero as there are no magnetic charges (a
   // non-zero B_norm would imply an infinitesimal layer of magnetic
@@ -80,7 +81,7 @@ typedef struct grid {
   int64_t step;             // Current timestep
   double t0;                // Simulation time corresponding to step 0
 
-  // Phase 2 grid data structures 
+  // Phase 2 grid data structures
   float x0, y0, z0;         // Min corner local domain (must be coherent)
   float x1, y1, z1;         // Max corner local domain (must be coherent)
   int   nx, ny, nz;         // Local voxel mesh resolution.  Voxels are
@@ -120,6 +121,13 @@ typedef struct grid {
                           // voxel with local index "lidx".  Negative
                           // if neighbor is a boundary condition.
 
+  //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
+      //h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
+  //auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
+  //
+  k_neighbor_t k_neighbor_d;                // kokkos neighbor view on device
+  k_neighbor_t::HostMirror k_neighbor_h;    // kokkos neighbor view on host
+
   int64_t rangel, rangeh; // Redundant for move_p performance reasons:
                           //   rangel = range[rank]
                           //   rangeh = range[rank+1]-1.
@@ -127,6 +135,21 @@ typedef struct grid {
 
   // Nearest neighbor communications ports
   mp_t * mp;
+
+  // We want to call this *only* once the neighbor is done
+  void init_kokkos_grid(int num_neighbor)
+  {
+      //k_neighbor_h = k_neighbor_t("k_neighbor", num_neighbor);
+      Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
+      k_neighbor_h(neighbor, num_neighbor);
+
+      // Copy data over
+      // currently implied by unmanaged view
+
+      //k_neighbor_d = Kokkos::create_mirror_view(k_neighbor_d);
+      k_neighbor_d = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_neighbor_d);
+  }
+
 
 } grid_t;
 
@@ -147,7 +170,7 @@ typedef struct grid {
 // inner loops.)
 //
 // This is written with seeming extraneously if tests in order to get
-// the compiler to generate branceless conditional move and add 
+// the compiler to generate branceless conditional move and add
 // instructions (none of the branches below are actual branches in
 // assembly).
 
@@ -311,7 +334,7 @@ end_send_port( int i, // x port coord ([-1,0,1])
 // ordering (e.g. inner loop increments x-index).
 //
 // jobs are indexed from 0 to n_job-1.  jobs are _always_ have the
-// number of voxels an integer multiple of the bundle size.  If job 
+// number of voxels an integer multiple of the bundle size.  If job
 // is set to n_job, this function will determine the parameters of
 // the final incomplete bundle.
 
