@@ -303,9 +303,6 @@ TEST_CASE( "Check if Weibel gives correct energy (within tol)", "[energy]" )
     ofs.open(energy_file_name, std::ofstream::out | std::ofstream::trunc);
     ofs.close();
 
-    int argc = 0;
-    Kokkos::ScopeGuard scope_guard(argc, NULL);
-
     // Init and run sim
     vpic_simulation simulation = vpic_simulation();
 
