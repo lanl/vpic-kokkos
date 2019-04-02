@@ -64,6 +64,8 @@ void checkpt(const char* fbase, int tag)
 int main(int argc, char** argv)
 {
 
+    Kokkos::ScopeGuard scope_guard(argc, argv);
+
     // Initialize underlying threads and services
     boot_services( &argc, &argv );
 

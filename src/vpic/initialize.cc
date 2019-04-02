@@ -9,7 +9,7 @@ vpic_simulation::initialize( int argc,
   species_t * sp;
 
   // Initialize Kokkos
-  Kokkos::initialize( argc, argv );
+  //Kokkos::initialize( argc, argv );
 
   // Call the user initialize the simulation
 
@@ -82,7 +82,7 @@ vpic_simulation::initialize( int argc,
 void
 vpic_simulation::finalize( void ) {
   barrier();
-  Kokkos::finalize();
+  //Kokkos::finalize();
   update_profile( rank()==0 );
 }
 
