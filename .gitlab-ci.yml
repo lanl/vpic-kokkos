@@ -46,6 +46,7 @@ stages:
     - make -j ${j} -l ${l} VERBOSE=1
     - make test CTEST_OUTPUT_ON_FAILURE=1
     - make install DESTDIR=${PWD}/install
+      #TODO: set OMP_PROC_BIND=spread and OMP_PLACES=threads (or similar)
 
       ##.build_intel:
       #variables:

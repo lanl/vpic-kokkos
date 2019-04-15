@@ -2,7 +2,7 @@
 set(MPI_NUM_RANKS 1)
 set(ARGS "1 1")
 
-list(APPEND DEFAULT_ARG_TESTS accel cyclo inbndj interpe outbndj)
+list(APPEND DEFAULT_ARG_TESTS accel cyclo inbndj interpe) # outbndj)
 list(APPEND ALL_TESTS ${DEFAULT_ARG_TESTS}) # pcomm)
 
 foreach(test ${ALL_TESTS})
