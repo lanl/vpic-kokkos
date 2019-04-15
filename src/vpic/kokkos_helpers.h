@@ -27,6 +27,8 @@
   #define KOKKOS_LAYOUT Kokkos::LayoutRight
 #endif
 
+using bobs_view = Kokkos::View<float>;
+
 // TODO: we dont need the [1] here
 using k_iterator_t = Kokkos::View<int[1]>;
 

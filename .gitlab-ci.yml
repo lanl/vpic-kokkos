@@ -34,7 +34,8 @@ stages:
       #-DENABLE_UNIT_TESTS=ON
       #-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
       #..
-    - ../arch/gpu-Release
+      #- ../arch/gpu-Release
+    - cmake -DCMAKE_PREFIX_PATH=/mnt/local/ssd/vpic/kokkos/build_gpu/install ..
     - make -j ${j} -l ${l} VERBOSE=1
     - make test CTEST_OUTPUT_ON_FAILURE=1
     - make install DESTDIR=${PWD}/install
