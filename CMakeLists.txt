@@ -121,6 +121,7 @@ if(ENABLE_KOKKOS_CUDA)
     # Choose Architecture for Kokkos
     set(KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
 
     #set(KOKKOS_ARCH "Power9;Volta70")
     #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
