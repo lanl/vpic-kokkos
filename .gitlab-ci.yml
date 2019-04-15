@@ -13,7 +13,7 @@ stages:
     GIT_SUBMODULE_STRATEGY: recursive
   stage: build_gcc
   script:
-     -echo ${_DEFINES}
+     -echo ${DEFINES}
     - module load gcc/8.2.0/gcc/6.3.0-hb3nk5o
     - module load cmake/3.13.3-lgbexfm
     - module load cuda/10.0.130-ohhc4zt
@@ -29,7 +29,7 @@ stages:
       -DENABLE_INTEGRATED_TESTS=ON
       -DENABLE_UNIT_TESTS=ON
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-      ${_DEFINES}
+      ${DEFINES}
       ..
     - make -j ${j} -l ${l} VERBOSE=1
     - make test CTEST_OUTPUT_ON_FAILURE=1
@@ -49,5 +49,5 @@ Release-GCC:
 Debug-GCC:
   variables:
     CMAKE_BUILD_TYPE: "Debug"
-    _DEFINES: "-DVPIC_KOKKOS_DEBUG=ON"
+    DEFINES: "-DVPIC_KOKKOS_DEBUG=ON"
   extends: .gcc
