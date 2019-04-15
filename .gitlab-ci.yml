@@ -36,7 +36,7 @@ stages:
       #..
       #- ../arch/gpu-Release
       #- CXX=/mnt/local/ssd/vpic/kokkos/bin/nvcc_wrapper cmake -DCMAKE_PREFIX_PATH=/mnt/local/ssd/vpic/kokkos/build_gpu/install ..
-    - CXX=/mnt/local/ssd/vpic/kokkos/bin/nvcc_wrapper cmake -DBUILD_INTERNAL_KOKKOS=ON ..
+    - CXX=/mnt/local/ssd/vpic/kokkos/bin/nvcc_wrapper cmake -DBUILD_INTERNAL_KOKKOS=ON -DENABLE_KOKKOS_CUDA=ON ..
     - make -j ${j} -l ${l} VERBOSE=1
     - make test CTEST_OUTPUT_ON_FAILURE=1
     - make install DESTDIR=${PWD}/install
