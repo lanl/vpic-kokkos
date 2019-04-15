@@ -171,7 +171,7 @@ move_p_kokkos(k_particles_t k_particles,
 
     // TODO: clean this fixed index to an enum
     //neighbor = g->neighbor[ 6*ii + face ];
-    neighbor = d_neighbor[ 6*ii + face ];
+    neighbor = d_neighbor( 6*ii + face );
 
     // TODO: these two if statements used to be marked UNLIKELY,
     // but that intrinsic doesn't work on GPU.
@@ -209,6 +209,7 @@ move_p_kokkos(k_particles_t k_particles,
     // particle coordinate system and keep moving the particle.
 
     pii = neighbor - rangel; // Compute local index of neighbor
+    printf("pii %d \n", pii);
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
   }

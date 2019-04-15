@@ -53,9 +53,9 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
   species_t * sp;
   int face;
 
-  // Check input args 
+  // Check input args
 
-  if( !sp_list ) return; // Nothing to do if no species 
+  if( !sp_list ) return; // Nothing to do if no species
   if( !fa || !aa || sp_list->g!=aa->g || fa->g!=aa->g )
     ERROR(( "Bad args" ));
 
@@ -92,7 +92,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
     bc[face] = g->bc[f2b[face]];
     shared[face] = (bc[face]>=0) && (bc[face]<world_size) &&
                    (bc[face]!=world_rank);
-    if( shared[face] ) range[face] = g->range[bc[face]]; 
+    if( shared[face] ) range[face] = g->range[bc[face]];
   }
 
   // Begin receiving the particle counts
@@ -104,7 +104,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
     }
 
   // Load the particle send and local injection buffers
-  
+
   do {
 
     particle_injector_t * RESTRICT ALIGNED(16) pi_send[6];
@@ -131,7 +131,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
     // be satisfied (if the handlers conform that it).  We should be
     // more flexible though in the future (especially given above the
     // above overalloc).
-    
+
     int nm = 0; LIST_FOR_EACH( sp, sp_list ) nm += sp->nm;
 
     for( face=0; face<6; face++ )
@@ -165,7 +165,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
       particle_injector_t * RESTRICT ALIGNED(16) pi;
       int i, voxel;
       int64_t nn;
-      
+
       // Note that particle movers for each species are processed in
       // reverse order.  This allows us to backfill holes in the
       // particle list created by boundary conditions and/or
@@ -178,11 +178,13 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
       for( ; nm; pm--, nm-- ) {
         i = pm->i;
         voxel = p0[i].i;
+        printf(" p0 i %d \n", voxel);
         face = voxel & 7;
         voxel >>= 3;
         p0[i].i = voxel;
         nn = neighbor[ 6*voxel + face ];
-        
+        printf("pre voxel %d face %d nn %d \n", voxel, face, nn);
+
         // Absorb
 
         if( nn==absorb_particles ) {
@@ -206,7 +208,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
           pi->ux=p0[i].ux; pi->uy=p0[i].uy; pi->uz=p0[i].uz; pi->w=p0[i].w;
           pi->dispx = pm->dispx; pi->dispy = pm->dispy; pi->dispz = pm->dispz;
           pi->sp_id = sp_id;
-#         endif 
+#         endif
           (&pi->dx)[axis[face]] = dir[face];
           pi->i                 = nn - range[face];
           pi->sp_id             = sp_id;
@@ -231,6 +233,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         // charge neutral, this means most boundary handlers do
         // nothing to rhob.
 
+        printf("nn %d nb %d \n", nn, nb);
         nn = -nn - 3; // Assumes reflective/absorbing are -1, -2
         if( (nn>=0) & (nn<nb) ) {
           n_ci += pbc_interact[nn]( pbc_params[nn], sp, p0+i, pm,
@@ -240,9 +243,10 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
 
         // Uh-oh: We fell through
 
+        printf("i %d pmi %d \n", nm, i);
+        printf("voxel %d face %d nn %d \n", voxel, face, nn);
         WARNING(( "Unknown boundary interaction ... dropping particle "
                   "(species=%s)", sp->name ));
-
       backfill:
 
         np--;
@@ -254,7 +258,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
 #       endif
 
       }
-      
+
       sp->np = np;
       sp->nm = 0;
     }
@@ -263,7 +267,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
 
   // Finish exchanging particle counts and start exchanging actual
   // particles.
-  
+
   // Note: This is wasteful of communications.  A better protocol
   // would fuse the exchange of the counts with the exchange of the
   // messages.  in a slightly more complex protocol.  However, the MP
@@ -272,7 +276,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
   // prohibits such (specifically, in both, you can't do the
   // equilvanet of a MPI_Getcount to determine how much data you
   // actually received.
-  
+
   for( face=0; face<6; face++ )
     if( shared[face] ) {
       *((int *)mp_send_buffer( mp, f2b[face] )) = n_send[face];
@@ -304,12 +308,12 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
 
   do {
     int n;
-    
+
     // Resize each species's particle and mover storage to be large
     // enough to guarantee successful injection.  (If we broke down
     // the n_recv[face] by species before sending it, we could be
     // tighter on memory footprint here.)
-    
+
     int max_inj = n_ci;
     for( face=0; face<6; face++ )
       if( shared[face] ) max_inj += n_recv[face];
@@ -317,7 +321,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
     LIST_FOR_EACH( sp, sp_list ) {
       particle_mover_t * new_pm;
       particle_t * new_p;
-      
+
       n = sp->np + max_inj;
       if( n>sp->max_np ) {
         n = n + (n>>2) + (n>>4); // Increase by 31.25% (~<"silver
@@ -334,7 +338,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         FREE_ALIGNED( sp->p );
         sp->p = new_p, sp->max_np = n;
       }
-      
+
       n = sp->nm + max_inj;
       if( n>sp->max_nm ) {
         n = n + (n>>2) + (n>>4); // See note above
@@ -365,7 +369,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
     int sp_max_nm[64], n_dropped_movers[64];
 #   endif
 
-    if( num_species( sp_list ) > MAX_SP ) 
+    if( num_species( sp_list ) > MAX_SP )
       ERROR(( "Update this to support more species" ));
     LIST_FOR_EACH( sp, sp_list ) {
       sp_p[  sp->id ] = sp->p;
@@ -388,7 +392,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
       /**/  particle_mover_t    * RESTRICT ALIGNED(16) pm;
       const particle_injector_t * RESTRICT ALIGNED(16) pi;
       int np, nm, n, id;
-  
+
       face++; if( face==7 ) face = 0;
       if( face==6 ) pi = ci, n = n_ci;
       else if( shared[face] ) {
@@ -397,7 +401,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
           (((char *)mp_recv_buffer(mp,f2b[face]))+16);
         n  = n_recv[face];
       } else continue;
-        
+
       // Reverse order injection is done to reduce thrashing of the
       // particle list (particles are removed reverse order so the
       // overall impact of removal + injection is to keep injected
@@ -405,7 +409,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
       //
       // WARNING: THIS TRUSTS THAT THE INJECTORS (INCLUDING THOSE
       // RECEIVED FROM OTHER NODES) HAVE VALID PARTICLE IDS.
-  
+
       pi += n-1;
       for( ; n; pi--, n-- ) {
         id = pi->sp_id;
@@ -437,7 +441,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
       }
     } while(face!=5);
-  
+
     LIST_FOR_EACH( sp, sp_list ) {
 #     ifdef DISABLE_DYNAMIC_RESIZING
       if( n_dropped_particles[sp->id] )
@@ -457,7 +461,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
     }
 
   } while(0);
-  
+
   for( face=0; face<6; face++ )
     if( shared[face] ) mp_end_send(mp,f2b[face]);
 }
