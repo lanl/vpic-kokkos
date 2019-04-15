@@ -46,6 +46,7 @@ add_test(${THREADED_TEST} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_NUMPROC}
 
 # Test Restart (restore) functionality
 
+# TODO: make the vpic on the local machine generate the checkpoint
 list(APPEND CHECKPOINT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/checkpt.1")
 list(APPEND RESTART_ARGS --restore ${CHECKPOINT_FILE})
 

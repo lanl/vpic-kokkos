@@ -102,6 +102,12 @@ include_directories(${PROJECT_SOURCE_DIR})
 #------------------------------------------------------------------------------#
 set(KOKKOS_ENABLE_DEBUG OFF)
 
+option(VPIC_KOKKOS_DEBUG "Enable Debug In Kokkos" OFF)
+
+if (VPIC_KOKKOS_DEBUG)
+    set(KOKKOS_ENABLE_DEBUG ON)
+endif(VPIC_KOKKOS_DEBUG)
+
 set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
 
 if(ENABLE_KOKKOS_OPENMP)
