@@ -4,7 +4,8 @@ set(MPIEXEC_NUMPROC 1)
 
 # TODO: If would be good if we could detect that the machine supports the
 # desired number of threads
-set(MPIEXEC_NUMPROC_PARALLEL 8)
+set(MPIEXEC_NUMPROC_PARALLEL 2)
+set(NUM_THREADS 8)
 
 set(ARGS "")
 
@@ -36,11 +37,17 @@ endforeach()
 
 # Try a threaded run
 set (THREADED_TEST threaded)
-list(APPEND THREADED_ARGS --tpp ${MPIEXEC_NUMPROC_PARALLEL})
+list(APPEND THREADED_ARGS --tpp ${NUM_THREADS})
 
 build_a_vpic(${THREADED_TEST} ${CMAKE_CURRENT_SOURCE_DIR}/simple.deck)
 add_test(${THREADED_TEST} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_NUMPROC}
     ${MPIEXEC_PREFLAGS} ${THREADED_TEST} ${MPIEXEC_POSTFLAGS} ${THREADED_ARGS})
+
+# Try an MPI run
+set (MPI_TEST mpi_test_run_2)
+build_a_vpic(${MPI_TEST} ${CMAKE_CURRENT_SOURCE_DIR}/simple.deck)
+add_test(${MPI_TEST} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_NUMPROC_PARALLEL}
+    ${MPIEXEC_PREFLAGS} ${MPI_TEST} ${MPIEXEC_POSTFLAGS})
 
 # TODO: Do we want to try an MPI + Threaded runs
 
