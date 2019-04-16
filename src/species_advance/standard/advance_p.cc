@@ -520,6 +520,7 @@ advance_p_kokkos(k_particles_t k_particles,
           local_pm_dispy = local_pm->dispy;
           local_pm_dispz = local_pm->dispz;
           local_pm_i = local_pm->i;
+          printf("copying to nm %d \n",nm);
           copy_local_to_pm(nm);
         }
       }
