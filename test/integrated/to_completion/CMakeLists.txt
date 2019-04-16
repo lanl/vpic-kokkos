@@ -44,10 +44,11 @@ add_test(${THREADED_TEST} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_NUMPROC}
     ${MPIEXEC_PREFLAGS} ${THREADED_TEST} ${MPIEXEC_POSTFLAGS} ${THREADED_ARGS})
 
 # Try an MPI run
-set (MPI_TEST mpi_test_run_2)
-build_a_vpic(${MPI_TEST} ${CMAKE_CURRENT_SOURCE_DIR}/simple.deck)
-add_test(${MPI_TEST} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_NUMPROC_PARALLEL}
-    ${MPIEXEC_PREFLAGS} ${MPI_TEST} ${MPIEXEC_POSTFLAGS})
+# This can hang if you over subscribe the gpu with mpi
+#set (MPI_TEST mpi_test_run_2)
+#build_a_vpic(${MPI_TEST} ${CMAKE_CURRENT_SOURCE_DIR}/simple.deck)
+#add_test(${MPI_TEST} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_NUMPROC_PARALLEL}
+    #${MPIEXEC_PREFLAGS} ${MPI_TEST} ${MPIEXEC_POSTFLAGS})
 
 # TODO: Do we want to try an MPI + Threaded runs
 

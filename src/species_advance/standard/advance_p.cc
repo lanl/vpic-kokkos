@@ -7,7 +7,6 @@
 #include "spa_private.h"
 #include "../../vpic/kokkos_helpers.h"
 
-static int GLOB = 0;
 KOKKOS_FORCEINLINE_FUNCTION
 int
 move_p_kokkos(k_particles_t k_particles,
@@ -29,10 +28,10 @@ move_p_kokkos(k_particles_t k_particles,
   #define p_w     k_particles(pi, particle_var::w)
   #define pii     k_particles(pi, particle_var::pi)
 
-  #define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
-  #define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
-  #define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
-  #define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
+  //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
+  //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
+  //#define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
+  //#define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
 
 
   float s_midx, s_midy, s_midz;
@@ -219,10 +218,10 @@ move_p_kokkos(k_particles_t k_particles,
   #undef p_w
   #undef pii
 
-  #undef local_pm_dispx
-  #undef local_pm_dispy
-  #undef local_pm_dispz
-  #undef local_pm_i
+  //#undef local_pm_dispx
+  //#undef local_pm_dispy
+  //#undef local_pm_dispz
+  //#undef local_pm_i
   return 0; // Return "mover not in use"
 }
 
@@ -232,7 +231,7 @@ advance_p_kokkos(k_particles_t k_particles,
                  k_particle_movers_t k_particle_movers,
                  k_accumulators_sa_t k_accumulators_sa,
                  k_interpolator_t k_interp,
-                 k_particle_movers_t k_local_particle_movers,
+                 //k_particle_movers_t k_local_particle_movers,
                  k_iterator_t k_nm,
                  k_neighbor_t k_neighbors,
                  const grid_t *g,
@@ -254,7 +253,7 @@ advance_p_kokkos(k_particles_t k_particles,
 
   /*
   k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
-  k_particle_movers_t  k_local_particle_movers("k_local_pm", 1); 
+  k_particle_movers_t  k_local_particle_movers("k_local_pm", 1);
 
   k_iterator_t k_nm("k_nm");
   k_iterator_t::HostMirror h_nm = Kokkos::create_mirror_view(k_nm);
@@ -341,17 +340,17 @@ advance_p_kokkos(k_particles_t k_particles,
   #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
   #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
 
-  #define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
-  #define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
-  #define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
-  #define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
+  //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
+  //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
+  //#define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
+  //#define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
 
 
-  #define copy_local_to_pm(index) \
-    k_particle_movers(index, particle_mover_var::dispx) = local_pm_dispx; \
-    k_particle_movers(index, particle_mover_var::dispy) = local_pm_dispy; \
-    k_particle_movers(index, particle_mover_var::dispz) = local_pm_dispz; \
-    k_particle_movers(index, particle_mover_var::pmi)   = local_pm_i;
+  //#define copy_local_to_pm(index) \
+    //k_particle_movers(index, particle_mover_var::dispx) = local_pm_dispx; \
+    //k_particle_movers(index, particle_mover_var::dispy) = local_pm_dispy; \
+    //k_particle_movers(index, particle_mover_var::dispz) = local_pm_dispz; \
+    //k_particle_movers(index, particle_mover_var::pmi)   = local_pm_i;
 
 
   // copy local memmbers from grid
@@ -369,10 +368,10 @@ advance_p_kokkos(k_particles_t k_particles,
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
     //printf("how many times does this run %d", i);
     k_nm(0) = 0;
-    local_pm_dispx = 0;
-    local_pm_dispy = 0;
-    local_pm_dispz = 0;
-    local_pm_i = 0;
+    //local_pm_dispx = 0;
+    //local_pm_dispy = 0;
+    //local_pm_dispz = 0;
+    //local_pm_i = 0;
   });
 
 
@@ -381,7 +380,6 @@ advance_p_kokkos(k_particles_t k_particles,
     {
 
     float v0, v1, v2, v3, v4, v5;
-    int   nm;
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
 
     float dx   = p_dx;                             // Load position
@@ -512,22 +510,28 @@ advance_p_kokkos(k_particles_t k_particles,
       if( move_p_kokkos( k_particles, local_pm,
                          k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
         if( k_nm(0)<max_nm ) {
-          nm = int(Kokkos::atomic_fetch_add( &k_nm(0), 1 ));
+          const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
+          printf("nm %d knm %d \n", nm, k_nm(0) );
+
+          k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+          k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+          k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+          k_particle_movers(nm, particle_mover_var::pmi)   = local_pm->i;
 
           // Copy local local_pm back
-          local_pm_dispx = local_pm->dispx;
-          local_pm_dispy = local_pm->dispy;
-          local_pm_dispz = local_pm->dispz;
-          local_pm_i = local_pm->i;
-          printf("rank %d copying to nm %d \n", world_rank, nm);
-          copy_local_to_pm(nm);
+          //local_pm_dispx = local_pm->dispx;
+          //local_pm_dispy = local_pm->dispy;
+          //local_pm_dispz = local_pm->dispz;
+          //local_pm_i = local_pm->i;
+          //printf("rank copying %d to nm %d \n", local_pm_i, nm);
+          //copy_local_to_pm(nm);
         }
       }
     }
   });
 
- 
+
   // TODO: abstract this manual data copy
   //Kokkos::deep_copy(h_nm, k_nm);
   /*
@@ -582,13 +586,11 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
-//    printf("advance %d \n", GLOB);
-//    GLOB++;
   advance_p_kokkos(sp->k_p_d,
                    sp->k_pm_d,
                    aa->k_a_sa,
                    ia->k_i_d,
-                   sp->k_pm_l_d,
+                   //sp->k_pm_l_d,
                    sp->k_nm_d,
                    sp->g->k_neighbor_d,
                    sp->g,
