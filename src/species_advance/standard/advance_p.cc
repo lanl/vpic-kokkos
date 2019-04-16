@@ -43,7 +43,6 @@ move_p_kokkos(k_particles_t k_particles,
   int64_t neighbor;
   //int pi = int(local_pm_i);
   int pi = pm->i;
-  printf("pmi %d \n", pi);
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
 
   q = qsp*p_w;
