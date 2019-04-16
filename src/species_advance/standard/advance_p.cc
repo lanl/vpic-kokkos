@@ -29,10 +29,10 @@ move_p_kokkos(k_particles_t k_particles,
   #define p_w     k_particles(pi, particle_var::w)
   #define pii     k_particles(pi, particle_var::pi)
 
-  #define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
-  #define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
-  #define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
-  #define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
+  //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
+  //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
+  //#define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
+  //#define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
 
 
   float s_midx, s_midy, s_midz;
@@ -219,10 +219,10 @@ move_p_kokkos(k_particles_t k_particles,
   #undef p_w
   #undef pii
 
-  #undef local_pm_dispx
-  #undef local_pm_dispy
-  #undef local_pm_dispz
-  #undef local_pm_i
+  //#undef local_pm_dispx
+  //#undef local_pm_dispy
+  //#undef local_pm_dispz
+  //#undef local_pm_i
   return 0; // Return "mover not in use"
 }
 
@@ -341,17 +341,17 @@ advance_p_kokkos(k_particles_t k_particles,
   #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
   #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
 
-  #define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
-  #define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
-  #define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
-  #define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
+  //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
+  //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
+  //#define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
+  //#define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
 
 
-  #define copy_local_to_pm(index) \
-    k_particle_movers(index, particle_mover_var::dispx) = local_pm_dispx; \
-    k_particle_movers(index, particle_mover_var::dispy) = local_pm_dispy; \
-    k_particle_movers(index, particle_mover_var::dispz) = local_pm_dispz; \
-    k_particle_movers(index, particle_mover_var::pmi)   = local_pm_i;
+  //#define copy_local_to_pm(index) \
+    //k_particle_movers(index, particle_mover_var::dispx) = local_pm_dispx; \
+    //k_particle_movers(index, particle_mover_var::dispy) = local_pm_dispy; \
+    //k_particle_movers(index, particle_mover_var::dispz) = local_pm_dispz; \
+    //k_particle_movers(index, particle_mover_var::pmi)   = local_pm_i;
 
 
   // copy local memmbers from grid
@@ -369,10 +369,10 @@ advance_p_kokkos(k_particles_t k_particles,
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
     //printf("how many times does this run %d", i);
     k_nm(0) = 0;
-    local_pm_dispx = 0;
-    local_pm_dispy = 0;
-    local_pm_dispz = 0;
-    local_pm_i = 0;
+    //local_pm_dispx = 0;
+    //local_pm_dispy = 0;
+    //local_pm_dispz = 0;
+    //local_pm_i = 0;
   });
 
 
@@ -515,13 +515,18 @@ advance_p_kokkos(k_particles_t k_particles,
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
           printf("nm %d knm %d \n", nm, k_nm(0) );
 
+          k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+          k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+          k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+          k_particle_movers(nm, particle_mover_var::pmi)   = local_pm->i;
+
           // Copy local local_pm back
-          local_pm_dispx = local_pm->dispx;
-          local_pm_dispy = local_pm->dispy;
-          local_pm_dispz = local_pm->dispz;
-          local_pm_i = local_pm->i;
-          printf("rank copying %d to nm %d \n", local_pm_i, nm);
-          copy_local_to_pm(nm);
+          //local_pm_dispx = local_pm->dispx;
+          //local_pm_dispy = local_pm->dispy;
+          //local_pm_dispz = local_pm->dispz;
+          //local_pm_i = local_pm->i;
+          //printf("rank copying %d to nm %d \n", local_pm_i, nm);
+          //copy_local_to_pm(nm);
         }
       }
     }
