@@ -209,7 +209,7 @@ move_p_kokkos(k_particles_t k_particles,
     // particle coordinate system and keep moving the particle.
 
     pii = neighbor - rangel; // Compute local index of neighbor
-    printf("pii %d \n", pii);
+    //printf("pii %d \n", pii);
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
   }
