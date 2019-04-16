@@ -185,8 +185,8 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         p0[i].i = voxel;
         nn = neighbor[ 6*voxel + face ];
 
+        printf("nn %d voxel %d face %d i %d pm %d \n", nn, voxel, face, i, pm);
         // Absorb
-
         if( nn==absorb_particles ) {
           // Ideally, we would batch all rhob accumulations together
           // for efficiency
