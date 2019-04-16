@@ -512,7 +512,7 @@ advance_p_kokkos(k_particles_t k_particles,
       if( move_p_kokkos( k_particles, local_pm,
                          k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
         if( k_nm(0)<max_nm ) {
-          int nm = int(Kokkos::atomic_fetch_add( &k_nm(0), 1 ));
+          int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
 
           // Copy local local_pm back
