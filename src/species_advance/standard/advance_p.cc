@@ -7,7 +7,6 @@
 #include "spa_private.h"
 #include "../../vpic/kokkos_helpers.h"
 
-static int GLOB = 0;
 KOKKOS_FORCEINLINE_FUNCTION
 int
 move_p_kokkos(k_particles_t k_particles,
@@ -232,7 +231,7 @@ advance_p_kokkos(k_particles_t k_particles,
                  k_particle_movers_t k_particle_movers,
                  k_accumulators_sa_t k_accumulators_sa,
                  k_interpolator_t k_interp,
-                 k_particle_movers_t k_local_particle_movers,
+                 //k_particle_movers_t k_local_particle_movers,
                  k_iterator_t k_nm,
                  k_neighbor_t k_neighbors,
                  const grid_t *g,
@@ -587,13 +586,11 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
-//    printf("advance %d \n", GLOB);
-//    GLOB++;
   advance_p_kokkos(sp->k_p_d,
                    sp->k_pm_d,
                    aa->k_a_sa,
                    ia->k_i_d,
-                   sp->k_pm_l_d,
+                   //sp->k_pm_l_d,
                    sp->k_nm_d,
                    sp->g->k_neighbor_d,
                    sp->g,
