@@ -18,6 +18,8 @@ int vpic_simulation::advance(void) {
 
   // Determine if we are done ... see note below why this is done here
 
+  printf("step %d \n", step());
+
   if( num_step>0 && step()>=num_step ) return 0;
 
   // Sort the particles for performance if desired.

@@ -185,7 +185,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         p0[i].i = voxel;
         nn = neighbor[ 6*voxel + face ];
 
-        printf("nm %d nn %d voxel %d face %d i %d pm->i %d p0[i].i %d \n", nm, nn, voxel, face, i, pm->i, p0[i].i);
+        printf("rank %d nm %d nn %d voxel %d face %d i %d pm->i %d p0[i].i %d \n", world_rank, nm, nn, voxel, face, i, pm->i, p0[i].i);
         // Absorb
         if( nn==absorb_particles ) {
           // Ideally, we would batch all rhob accumulations together
