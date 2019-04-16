@@ -255,7 +255,7 @@ advance_p_kokkos(k_particles_t k_particles,
 
   /*
   k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
-  k_particle_movers_t  k_local_particle_movers("k_local_pm", 1); 
+  k_particle_movers_t  k_local_particle_movers("k_local_pm", 1);
 
   k_iterator_t k_nm("k_nm");
   k_iterator_t::HostMirror h_nm = Kokkos::create_mirror_view(k_nm);
@@ -382,7 +382,6 @@ advance_p_kokkos(k_particles_t k_particles,
     {
 
     float v0, v1, v2, v3, v4, v5;
-    int   nm;
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
 
     float dx   = p_dx;                             // Load position
@@ -513,7 +512,7 @@ advance_p_kokkos(k_particles_t k_particles,
       if( move_p_kokkos( k_particles, local_pm,
                          k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
         if( k_nm(0)<max_nm ) {
-          nm = int(Kokkos::atomic_fetch_add( &k_nm(0), 1 ));
+          int nm = int(Kokkos::atomic_fetch_add( &k_nm(0), 1 ));
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
 
           // Copy local local_pm back
@@ -528,7 +527,7 @@ advance_p_kokkos(k_particles_t k_particles,
     }
   });
 
- 
+
   // TODO: abstract this manual data copy
   //Kokkos::deep_copy(h_nm, k_nm);
   /*
