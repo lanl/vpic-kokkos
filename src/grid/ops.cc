@@ -30,6 +30,7 @@ size_grid( grid_t * g,
   g->sz = (lny+2)*g->sy;
   g->nv = (lnz+2)*g->sz;
   g->nx = lnx; g->ny = lny; g->nz = lnz;
+
   for( k=-1; k<=1; k++ )
     for( j=-1; j<=1; j++ )
       for( i=-1; i<=1; i++ )
@@ -87,9 +88,6 @@ size_grid( grid_t * g,
     }
   }
 
-  // We want to call this once the neighbor is done
-  auto nfaces_per_voxel = 6;
-  g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
 # if 0
   // Setup the space filling curve

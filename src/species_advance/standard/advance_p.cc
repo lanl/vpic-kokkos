@@ -192,11 +192,9 @@ move_p_kokkos(k_particles_t k_particles,
       (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
 
 
-    //printf("end reflect %d \n", pi);
       continue;
     }
 
-    //printf("done reflect %d \n", pi);
     if( neighbor<rangel || neighbor>rangeh ) {
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
@@ -209,7 +207,6 @@ move_p_kokkos(k_particles_t k_particles,
     // particle coordinate system and keep moving the particle.
 
     pii = neighbor - rangel; // Compute local index of neighbor
-    //printf("pii %d \n", pii);
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
   }
@@ -237,7 +234,7 @@ advance_p_kokkos(k_particles_t k_particles,
                  k_interpolator_t k_interp,
                  k_particle_movers_t k_local_particle_movers,
                  k_iterator_t k_nm,
-                 k_neighbor_t k_neighbor,
+                 k_neighbor_t k_neighbors,
                  const grid_t *g,
                  const float qdt_2mc,
                  const float cdt_dx,
@@ -358,11 +355,11 @@ advance_p_kokkos(k_particles_t k_particles,
 
 
   // copy local memmbers from grid
-  auto nfaces_per_voxel = 6;
-  auto nvoxels = g->nv;
-  Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
-      h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
-  auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
+  //auto nfaces_per_voxel = 6;
+  //auto nvoxels = g->nv;
+  //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
+      //h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
+  //auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
 
   auto rangel = g->rangel;
   auto rangeh = g->rangeh;
@@ -513,16 +510,16 @@ advance_p_kokkos(k_particles_t k_particles,
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, local_pm,
-                         k_accumulators_sa, g, d_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
+                         k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
         if( k_nm(0)<max_nm ) {
           nm = int(Kokkos::atomic_fetch_add( &k_nm(0), 1 ));
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
 
           // Copy local local_pm back
-          local_pm_dispx = local_pm_dispx;
-          local_pm_dispy = local_pm_dispy;
-          local_pm_dispz = local_pm_dispz;
-          local_pm_i = local_pm_i;
+          local_pm_dispx = local_pm->dispx;
+          local_pm_dispy = local_pm->dispy;
+          local_pm_dispz = local_pm->dispz;
+          local_pm_i = local_pm->i;
           copy_local_to_pm(nm);
         }
       }

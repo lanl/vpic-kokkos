@@ -1,5 +1,6 @@
 #define IN_boundary
 #include "boundary_private.h"
+#include <cassert>
 
 // If this is defined particle and mover buffers will not resize dynamically
 // (This is the common case for the users)
@@ -175,15 +176,14 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
       // property if all aged particle injection occurs after
       // advance_p and before this
 
-      for( ; nm; pm--, nm-- ) {
+      for( ; nm; pm--, nm-- )
+      {
         i = pm->i;
         voxel = p0[i].i;
-        //printf(" p0 i %d \n", voxel);
         face = voxel & 7;
         voxel >>= 3;
         p0[i].i = voxel;
         nn = neighbor[ 6*voxel + face ];
-        //printf("pre voxel %d face %d nn %d \n", voxel, face, nn);
 
         // Absorb
 
@@ -233,7 +233,6 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         // charge neutral, this means most boundary handlers do
         // nothing to rhob.
 
-        //printf("nn %d nb %d \n", nn, nb);
         nn = -nn - 3; // Assumes reflective/absorbing are -1, -2
         if( (nn>=0) & (nn<nb) ) {
           n_ci += pbc_interact[nn]( pbc_params[nn], sp, p0+i, pm,
@@ -243,8 +242,6 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
 
         // Uh-oh: We fell through
 
-        //printf("i %d pmi %d \n", nm, i);
-        //printf("voxel %d face %d nn %d \n", voxel, face, nn);
         WARNING(( "Unknown boundary interaction ... dropping particle "
                   "(species=%s)", sp->name ));
       backfill:

@@ -20,7 +20,6 @@ int vpic_simulation::advance(void) {
 
   if( num_step>0 && step()>=num_step ) return 0;
 
-
   // Sort the particles for performance if desired.
 
   LIST_FOR_EACH( sp, species_list )

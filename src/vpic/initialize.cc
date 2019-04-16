@@ -51,7 +51,14 @@ vpic_simulation::initialize( int argc,
   if( rank()==0 ) MESSAGE(( "Rechecking interdomain synchronization" ));
   TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
   if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
-    
+
+  // We want to call this once the neighbor is done
+  // TODO: general grid handle
+
+  auto g = species_list->g;
+  auto nfaces_per_voxel = 6;
+  g->init_kokkos_grid(nfaces_per_voxel*g->nv);
+
   KOKKOS_PARTICLE_VARIABLES();
   KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
 

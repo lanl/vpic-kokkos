@@ -139,15 +139,21 @@ typedef struct grid {
   // We want to call this *only* once the neighbor is done
   void init_kokkos_grid(int num_neighbor)
   {
-      //k_neighbor_h = k_neighbor_t("k_neighbor", num_neighbor);
-      Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
-      k_neighbor_h(neighbor, num_neighbor);
+      k_neighbor_h = k_neighbor_t("k_neighbor", num_neighbor);
+
+      for (int i = 0; i < num_neighbor; i++)
+      {
+          k_neighbor_h(i) = neighbor[i];
+      }
+
+      //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
+      //k_neighbor_h(neighbor, num_neighbor);
 
       // Copy data over
       // currently implied by unmanaged view
 
       //k_neighbor_d = Kokkos::create_mirror_view(k_neighbor_d);
-      k_neighbor_d = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_neighbor_d);
+      k_neighbor_d = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_neighbor_h);
   }
 
 
