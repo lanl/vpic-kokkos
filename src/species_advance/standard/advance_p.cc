@@ -43,6 +43,7 @@ move_p_kokkos(k_particles_t k_particles,
   int64_t neighbor;
   //int pi = int(local_pm_i);
   int pi = pm->i;
+  printf("pmi %d \n", pi);
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
 
   q = qsp*p_w;
@@ -520,7 +521,7 @@ advance_p_kokkos(k_particles_t k_particles,
           local_pm_dispy = local_pm->dispy;
           local_pm_dispz = local_pm->dispz;
           local_pm_i = local_pm->i;
-          printf("rank copying to nm %d \n", nm);
+          printf("rank copying %d to nm %d \n", local_pm_i, nm);
           copy_local_to_pm(nm);
         }
       }
