@@ -66,7 +66,7 @@ int main(int argc, char** argv)
 
     // TODO: not everthing goes through the deck, so this may be better done
     // in simulation init
-    Kokkos::ScopeGuard scope_guard(argc, argv);
+    //Kokkos::ScopeGuard scope_guard(argc, argv);
 
     // Initialize underlying threads and services
     boot_services( &argc, &argv );
