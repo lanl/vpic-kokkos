@@ -125,9 +125,10 @@ if(ENABLE_KOKKOS_CUDA)
     set(KOKKOS_ENABLE_CUDA_UVM OFF)
 
     # Choose Architecture for Kokkos
-    set(KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
+    #set (KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xcudafe --diag_suppress=esa_on_defaulted_function_ignored") # supress express cuda warnings
 
     #set(KOKKOS_ARCH "Power9;Volta70")
     #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
