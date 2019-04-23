@@ -57,7 +57,7 @@
  * mean to be called from other field module functions (which presumably do
  * check input arguments).
  *****************************************************************************/
-
+/*
 void
 begin_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
                            const grid_t *              g ) {
@@ -94,9 +94,10 @@ begin_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
   BEGIN_SEND( 0, 0, 1,z,x,y);
 # undef BEGIN_SEND
 }
+*/
 
 void
-end_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
+end_remote_ghost_tang_b_test( field_t      * ALIGNED(128) field,
                          const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int face, x, y, z;
@@ -131,6 +132,220 @@ end_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
   END_SEND( 0, 1, 0,y,z,x);
   END_SEND( 0, 0, 1,z,x,y);
 # undef END_SEND
+}
+
+typedef class XYZ {} XYZ;
+typedef class YZX {} YZX;
+typedef class ZXY {} ZXY;
+/*
+template <typename T> void begin_recv(int i, int j, int k, int nX, int nY, int nZ, grid_t* g) {
+//    begin_recv_port(i,j,k,(1+nY*(nZ+1)+nZ*(nY+1))*sizeof(float),g);
+}
+template<> void begin_recv<XYZ>(int i, int j, int k, int nx, int ny, int nz, grid_t* g) {
+    begin_recv_port(i,j,k,(1+ny*(nz+1)+nz*(ny+1))*sizeof(float),g);
+}
+template<> void begin_recv<YZX>(int i, int j, int k, int nx, int ny, int nz, grid_t* g) {
+    begin_recv_port(i,j,k,(1+nz*(nx+1)+nx*(nz+1))*sizeof(float),g);
+}
+template<> void begin_recv<ZXY>(int i, int j, int k, int nx, int ny, int nz, grid_t* g) {
+    begin_recv_port(i,j,k,(1+nx*(ny+1)+ny*(nx+1))*sizeof(float),g);
+}
+*/
+void begin_recv(int i,int j,int k,int nx,int ny,int nz, const grid_t* g) {
+    begin_recv_port(i,j,k,(1+ny*(nz+1)+nz*(ny+1))*sizeof(float),g);
+}
+
+template <typename T> void begin_send(int i, int j, int k, int x, int y, int z, int nX, int nY, int nZ, field_t* ALIGNED(129=8) field, const grid_t* g) {
+/*
+    int size = (1+nY*(nZ+1)+nZ*(nY+1))*sizeof(float);
+    float* p = static_cast<float*>(size_send_port(i,j,k,size,g));
+    if(p){
+        (*(p++)) = g->dx;
+        int face = (i+j+k)<0 ? 1 : nX;
+        zy_EDGE_LOOP(face) (*(p++)) = field(x,y,z).cby;
+        yz_EDGE_LOOP(face) (*(p++)) = field(x,y,z).cbz;
+        begin_send_port(i,j,k,size,g);
+    }
+*/
+}
+template <> void begin_send<XYZ>(int i, int j, int k, int x, int y, int z, int nx, int ny, int nz, field_t* ALIGNED(128) field, const grid_t* g) {
+    int size = (1+ny*(nz+1)+nz*(ny+1))*sizeof(float);
+    float* p = static_cast<float*>(size_send_port(i,j,k,size,g));
+    if(p){
+        (*(p++)) = g->dx;
+        int face = (i+j+k)<0 ? 1 : nx;
+        zy_EDGE_LOOP(face) (*(p++)) = field(x,y,z).cby;
+        yz_EDGE_LOOP(face) (*(p++)) = field(x,y,z).cbz;
+        begin_send_port(i,j,k,size,g);
+    }
+}
+template <> void begin_send<YZX>(int i, int j, int k, int x, int y, int z, int nx, int ny, int nz, field_t* ALIGNED(128) field, const grid_t* g) {
+    int size = (1+nz*(nx+1)+nx*(nz+1))*sizeof(float);
+    float* p = static_cast<float*>(size_send_port(i,j,k,size,g));
+    if(p){
+        (*(p++)) = g->dy;
+        int face = (i+j+k)<0 ? 1 : ny;
+        xz_EDGE_LOOP(face) (*(p++)) = field(x,y,z).cbz;
+        zx_EDGE_LOOP(face) (*(p++)) = field(x,y,z).cbx;
+        begin_send_port(i,j,k,size,g);
+    }
+}
+template <> void begin_send<ZXY>(int i, int j, int k, int x, int y, int z, int nx, int ny, int nz, field_t* ALIGNED(128) field, const grid_t* g) {
+    int size = (1+nx*(ny+1)+ny*(nx+1))*sizeof(float);
+    float* p = static_cast<float*>(size_send_port(i,j,k,size,g));
+    if(p){
+        (*(p++)) = g->dz;
+        int face = (i+j+k)<0 ? 1 : nz;
+        yx_EDGE_LOOP(face) (*(p++)) = field(x,y,z).cbx;
+        xy_EDGE_LOOP(face) (*(p++)) = field(x,y,z).cby;
+        begin_send_port(i,j,k,size,g);
+    }
+}
+
+
+void
+begin_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
+                           const grid_t *              g ) {
+  const int nx = g->nx, ny = g->ny, nz = g->nz;
+  int size, face, x, y, z;
+  float *p;
+
+    begin_recv(-1,0,0,nx,ny,nz,g);
+    begin_recv(0,-1,0,ny,nz,nx,g);
+    begin_recv(0,0,-1,nz,nx,ny,g);
+    begin_recv(1,0,0,nx,ny,nz,g);
+    begin_recv(0,1,0,ny,nz,nx,g);
+    begin_recv(0,0,1,nz,nx,ny,g);
+/*
+# define BEGIN_RECV(i,j,k,X,Y,Z) \
+  begin_recv_port(i,j,k,(1+n##Y*(n##Z+1)+n##Z*(n##Y+1))*sizeof(float),g)
+  BEGIN_RECV(-1, 0, 0,x,y,z);
+  BEGIN_RECV( 0,-1, 0,y,z,x);
+  BEGIN_RECV( 0, 0,-1,z,x,y);
+  BEGIN_RECV( 1, 0, 0,x,y,z);
+  BEGIN_RECV( 0, 1, 0,y,z,x);
+  BEGIN_RECV( 0, 0, 1,z,x,y);
+# undef BEGIN_RECV
+*/
+    begin_send<XYZ>(-1,0,0,x,y,z,nx,ny,nz,field,g);
+    begin_send<YZX>(0,-1,0,x,y,z,nx,ny,nz,field,g);
+    begin_send<ZXY>(0,0,-1,x,y,z,nx,ny,nz,field,g);
+    begin_send<XYZ>(1,0,0,x,y,z,nx,ny,nz,field,g);
+    begin_send<YZX>(0,1,0,x,y,z,nx,ny,nz,field,g);
+    begin_send<ZXY>(0,0,1,x,y,z,nx,ny,nz,field,g);
+/*
+# define BEGIN_SEND(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {          \
+    size = (1+n##Y*(n##Z+1)+n##Z*(n##Y+1))*sizeof(float);   \
+    p = (float *)size_send_port( i, j, k, size, g );        \
+    if( p ) {                                               \
+      (*(p++)) = g->d##X;				    \
+      face = (i+j+k)<0 ? 1 : n##X;			    \
+      Z##Y##_EDGE_LOOP(face) (*(p++)) = field(x,y,z).cb##Y; \
+      Y##Z##_EDGE_LOOP(face) (*(p++)) = field(x,y,z).cb##Z; \
+      begin_send_port( i, j, k, size, g );                  \
+    }                                                       \
+  } END_PRIMITIVE
+/
+  BEGIN_SEND(-1, 0, 0,x,y,z);
+  BEGIN_SEND( 0,-1, 0,y,z,x);
+  BEGIN_SEND( 0, 0,-1,z,x,y);
+  BEGIN_SEND( 1, 0, 0,x,y,z);
+  BEGIN_SEND( 0, 1, 0,y,z,x);
+  BEGIN_SEND( 0, 0, 1,z,x,y);
+# undef BEGIN_SEND
+*/
+}
+
+template<typename T> void end_recv(int i, int j, int k, int x, int y, int z, int nx, int ny, int nz, field_t* ALIGNED(128) field, const grid_t* g) {
+}
+
+template<> void end_recv<XYZ>(int i, int j, int k, int x, int y, int z, int nx, int ny, int nz, field_t* ALIGNED(128) field, const grid_t* g) {
+    float* p = static_cast<float*>(end_recv_port(i,j,k,g));
+    if(p) {
+        float lw = (*(p++));
+        float rw = (2.*g->dx) / (lw+g->dx);
+        lw = (lw-g->dx)/(lw+g->dx);
+        int face = (i+j+k)<0 ? nx+1 : 0;
+        zy_EDGE_LOOP(face) field(x,y,z).cby = rw*(*(p++)) + lw*field(x+i,y+j,z+k).cby;
+        yz_EDGE_LOOP(face) field(x,y,z).cbz = rw*(*(p++)) + lw*field(x+i,y+j,z+k).cbz;
+    }
+}
+template<> void end_recv<YZX>(int i, int j, int k, int x, int y, int z, int nx, int ny, int nz, field_t* ALIGNED(128) field, const grid_t* g) {
+    float* p = static_cast<float*>(end_recv_port(i,j,k,g));
+    if(p) {
+        float lw = (*(p++));
+        float rw = (2.*g->dy) / (lw+g->dy);
+        lw = (lw-g->dy)/(lw+g->dy);
+        int face = (i+j+k)<0 ? ny+1 : 0;
+        xz_EDGE_LOOP(face) field(x,y,z).cbz = rw*(*(p++)) + lw*field(x+i,y+j,z+k).cbz;
+        zx_EDGE_LOOP(face) field(x,y,z).cbx = rw*(*(p++)) + lw*field(x+i,y+j,z+k).cbx;
+    }
+}
+template<> void end_recv<ZXY>(int i, int j, int k, int x, int y, int z, int nx, int ny, int nz, field_t* ALIGNED(128) field, const grid_t* g) {
+    float* p = static_cast<float*>(end_recv_port(i,j,k,g));
+    if(p) {
+        float lw = (*(p++));
+        float rw = (2.*g->dz) / (lw+g->dz);
+        lw = (lw-g->dz)/(lw+g->dz);
+        int face = (i+j+k)<0 ? nz+1 : 0;
+        yx_EDGE_LOOP(face) field(x,y,z).cbx = rw*(*(p++)) + lw*field(x+i,y+j,z+k).cbx;
+        xy_EDGE_LOOP(face) field(x,y,z).cby = rw*(*(p++)) + lw*field(x+i,y+j,z+k).cby;
+    }
+}
+
+void
+end_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
+                         const grid_t *              g ) {
+  const int nx = g->nx, ny = g->ny, nz = g->nz;
+  int face, x, y, z;
+  float *p, lw, rw;
+
+    end_recv<XYZ>(-1,0,0,x,y,z,nx,ny,nz,field,g);
+    end_recv<YZX>(0,-1,0,x,y,z,nx,ny,nz,field,g);
+    end_recv<ZXY>(0,0,-1,x,y,z,nx,ny,nz,field,g);
+    end_recv<XYZ>(1,0,0,x,y,z,nx,ny,nz,field,g);
+    end_recv<YZX>(0,1,0,x,y,z,nx,ny,nz,field,g);
+    end_recv<ZXY>(0,0,1,x,y,z,nx,ny,nz,field,g);
+
+# define END_RECV(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                        \
+    p = (float *)end_recv_port(i,j,k,g);                                \
+    if( p ) {                                                           \
+      lw = (*(p++));                 /* Remote g->d##X */               \
+      rw = (2.*g->d##X)/(lw+g->d##X);                                   \
+      lw = (lw-g->d##X)/(lw+g->d##X);                                   \
+      face = (i+j+k)<0 ? n##X+1 : 0; /* Interpolate */                  \
+      Z##Y##_EDGE_LOOP(face)                                            \ field(x,y,z).cb##Y = rw*(*(p++)) + lw*field(x+i,y+j,z+k).cb##Y; \
+      Y##Z##_EDGE_LOOP(face)                                            \
+        field(x,y,z).cb##Z = rw*(*(p++)) + lw*field(x+i,y+j,z+k).cb##Z; \
+    }                                                                   \
+  } END_PRIMITIVE
+/*
+  END_RECV(-1, 0, 0,x,y,z);
+  END_RECV( 0,-1, 0,y,z,x);
+  END_RECV( 0, 0,-1,z,x,y);
+  END_RECV( 1, 0, 0,x,y,z);
+  END_RECV( 0, 1, 0,y,z,x);
+  END_RECV( 0, 0, 1,z,x,y);
+*/
+# undef END_RECV
+
+end_send_port(-1,0,0,g);
+end_send_port(0,-1,0,g);
+end_send_port(0,0,-1,g);
+end_send_port(1,0,0,g);
+end_send_port(0,1,0,g);
+end_send_port(0,0,1,g);
+
+/*
+# define END_SEND(i,j,k,X,Y,Z) end_send_port(i,j,k,g)
+  END_SEND(-1, 0, 0,x,y,z);
+  END_SEND( 0,-1, 0,y,z,x);
+  END_SEND( 0, 0,-1,z,x,y);
+  END_SEND( 1, 0, 0,x,y,z);
+  END_SEND( 0, 1, 0,y,z,x);
+  END_SEND( 0, 0, 1,z,x,y);
+# undef END_SEND
+*/
 }
 
 void
@@ -622,4 +837,5 @@ synchronize_rho( field_array_t * RESTRICT fa ) {
 # undef END_RECV
 # undef END_SEND
 }
+
 

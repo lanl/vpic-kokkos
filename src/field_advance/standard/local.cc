@@ -48,7 +48,7 @@
 /*****************************************************************************
  * Local ghosts
  *****************************************************************************/
-
+/*
 void
 local_ghost_tang_b( field_t      * ALIGNED(128) f,
                     const grid_t *              g ) {
@@ -121,6 +121,271 @@ local_ghost_tang_b( field_t      * ALIGNED(128) f,
   APPLY_LOCAL_TANG_B( 1, 0, 0,x,y,z);
   APPLY_LOCAL_TANG_B( 0, 1, 0,y,z,x);
   APPLY_LOCAL_TANG_B( 0, 0, 1,z,x,y);
+}
+*/
+typedef class XYZ {} XYZ;
+typedef class YZX {} YZX;
+typedef class ZXY {} ZXY;
+
+template<typename T> void apply_local_tang_b(int i, int j, int k, 
+                                        int& x, int& y, int& z,
+                                        const int nx, const int ny, const int nz, 
+                                        const float cdt_dx, const float cdt_dy, const float cdt_dz,
+                                        float higend, field_t* ALIGNED(128) f, const grid_t* g) {
+}
+
+template<> void apply_local_tang_b<XYZ>(int i, int j, int k, 
+                                        int& x, int& y, int& z,
+                                        const int nx, const int ny, const int nz, 
+                                        const float cdt_dx, const float cdt_dy, const float cdt_dz,
+                                        float higend, field_t* ALIGNED(128) f, const grid_t* g) {
+    float drive, decay;
+    int bc = g->bc[BOUNDARY(i,j,k)];
+    if(bc < 0 || bc >= world_size) {
+        int ghost = (i+j+k)<0 ? 0 : nx+1;
+        int face = (i+j+k)<0 ? 1 : nx+1;
+        switch(bc) {
+            case anti_symmetric_fields:
+                zy_EDGE_LOOP(ghost) f(x,y,z).cby = f(x-i,y-j,z-k).cby;
+                yz_EDGE_LOOP(ghost) f(x,y,z).cbz = f(x-i,y-j,z-k).cbz;
+                break;
+            case symmetric_fields:
+            case pmc_fields:
+                zy_EDGE_LOOP(ghost) f(x,y,z).cby = -f(x-i,y-j,z-k).cby;
+                yz_EDGE_LOOP(ghost) f(x,y,z).cbz = -f(x-i,y-j,z-k).cbz;
+                break;
+            case absorb_fields:
+                drive = cdt_dx*higend;
+                decay = (1-drive)/(1+drive);
+                drive = 2*drive/(1+drive);
+                zy_EDGE_LOOP(ghost) {  
+                    field_t* fg = &f(x,y,z);
+                    field_t* fh = &f(x-i,y-j,z-k);
+                    x = face;
+                    float t1 = cdt_dx*( f(x-i,y-j,z-k).ez - f(x,y,z).ez);
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    x = ghost;
+                    z++;
+                    float t2 = f(x-i,y-j,z-k).ex;
+                    z--;
+                    t2 = cdt_dz*(t2 - fh->ex);
+                    fg->cby = decay*fg->cby + drive*fh->cby - t1 + t2;
+                }
+                yz_EDGE_LOOP(ghost) {  
+                    field_t* fg = &f(x,y,z);
+                    field_t* fh = &f(x-i,y-j,z-k);
+                    x = face;
+                    float t1 = cdt_dx*( f(x-i,y-j,z-k).ey - f(x,y,z).ey);
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    x = ghost;
+                    y++;
+                    float t2 = f(x-i,y-j,z-k).ex;
+                    y--;
+                    t2 = cdt_dy*(t2 - fh->ex);
+                    fg->cbz = decay*fg->cbz + drive*fh->cbz - t1 + t2;
+                }
+                break;
+            default:
+                ERROR(("Bad boundary condition encountered."));
+                break;
+        }
+    }
+}
+template<> void apply_local_tang_b<YZX>(int i, int j, int k, 
+                                        int& x, int& y, int& z,
+                                        const int nx, const int ny, const int nz, 
+                                        const float cdt_dx, const float cdt_dy, const float cdt_dz,
+                                        float higend, field_t* ALIGNED(128) f, const grid_t* g) {
+    float drive, decay;
+    int bc = g->bc[BOUNDARY(i,j,k)];
+    if(bc < 0 || bc >= world_size) {
+        int ghost = (i+j+k)<0 ? 0 : ny+1;
+        int face = (i+j+k)<0 ? 1 : ny+1;
+        switch(bc) {
+            case anti_symmetric_fields:
+                xz_EDGE_LOOP(ghost) f(x,y,z).cbz = f(x-i,y-j,z-k).cbz;
+                zx_EDGE_LOOP(ghost) f(x,y,z).cbx = f(x-i,y-j,z-k).cbx;
+                break;
+            case symmetric_fields:
+            case pmc_fields:
+                xz_EDGE_LOOP(ghost) f(x,y,z).cbz = -f(x-i,y-j,z-k).cbz;
+                zx_EDGE_LOOP(ghost) f(x,y,z).cbx = -f(x-i,y-j,z-k).cbx;
+                break;
+            case absorb_fields:
+                drive = cdt_dy*higend;
+                decay = (1-drive)/(1+drive);
+                drive = 2*drive/(1+drive);
+                xz_EDGE_LOOP(ghost) {  
+                    field_t* fg = &f(x,y,z);
+                    field_t* fh = &f(x-i,y-j,z-k);
+                    y = face;
+                    float t1 = cdt_dy*( f(x-i,y-j,z-k).ex - f(x,y,z).ex);
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    y = ghost;
+                    x++;
+                    float t2 = f(x-i,y-j,z-k).ey;
+                    x--;
+                    t2 = cdt_dx*(t2 - fh->ey);
+                    fg->cbz = decay*fg->cbz + drive*fh->cbz - t1 + t2;
+                }
+                zx_EDGE_LOOP(ghost) {  
+                    field_t* fg = &f(x,y,z);
+                    field_t* fh = &f(x-i,y-j,z-k);
+                    y = face;
+                    float t1 = cdt_dy*( f(x-i,y-j,z-k).ez - f(x,y,z).ez);
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    y = ghost;
+                    z++;
+                    float t2 = f(x-i,y-j,z-k).ey;
+                    z--;
+                    t2 = cdt_dz*(t2 - fh->ey);
+                    fg->cbx = decay*fg->cbx + drive*fh->cbx - t1 + t2;
+                }
+                break;
+            default:
+                ERROR(("Bad boundary condition encountered."));
+                break;
+        }
+    }
+}
+template<> void apply_local_tang_b<ZXY>(int i, int j, int k, 
+                                        int& x, int& y, int& z,
+                                        const int nx, const int ny, const int nz, 
+                                        const float cdt_dx, const float cdt_dy, const float cdt_dz,
+                                        float higend, field_t* ALIGNED(128) f, const grid_t* g) {
+    float drive, decay;
+    int bc = g->bc[BOUNDARY(i,j,k)];
+    if(bc < 0 || bc >= world_size) {
+        int ghost = (i+j+k)<0 ? 0 : nz+1;
+        int face = (i+j+k)<0 ? 1 : nz+1;
+        switch(bc) {
+            case anti_symmetric_fields:
+                yx_EDGE_LOOP(ghost) f(x,y,z).cbx = f(x-i,y-j,z-k).cbx;
+                xy_EDGE_LOOP(ghost) f(x,y,z).cby = f(x-i,y-j,z-k).cby;
+                break;
+            case symmetric_fields:
+            case pmc_fields:
+                yx_EDGE_LOOP(ghost) f(x,y,z).cbx = -f(x-i,y-j,z-k).cbx;
+                xy_EDGE_LOOP(ghost) f(x,y,z).cby = -f(x-i,y-j,z-k).cby;
+                break;
+            case absorb_fields:
+                drive = cdt_dz*higend;
+                decay = (1-drive)/(1+drive);
+                drive = 2*drive/(1+drive);
+                yx_EDGE_LOOP(ghost) {  
+                    field_t* fg = &f(x,y,z);
+                    field_t* fh = &f(x-i,y-j,z-k);
+                    z = face;
+                    float t1 = cdt_dz*( f(x-i,y-j,z-k).ey - f(x,y,z).ey);
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    z = ghost;
+                    y++;
+                    float t2 = f(x-i,y-j,z-k).ez;
+                    y--;
+                    t2 = cdt_dy*(t2 - fh->ez);
+                    fg->cbx = decay*fg->cbx + drive*fh->cbx - t1 + t2;
+                }
+                xy_EDGE_LOOP(ghost) {  
+                    field_t* fg = &f(x,y,z);
+                    field_t* fh = &f(x-i,y-j,z-k);
+                    z = face;
+                    float t1 = cdt_dz*( f(x-i,y-j,z-k).ex - f(x,y,z).ex);
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    z = ghost;
+                    x++;
+                    float t2 = f(x-i,y-j,z-k).ez;
+                    x--;
+                    t2 = cdt_dx*(t2 - fh->ez);
+                    fg->cby = decay*fg->cby + drive*fh->cby - t1 + t2;
+                }
+                break;
+            default:
+                ERROR(("Bad boundary condition encountered."));
+                break;
+        }
+    }
+}
+
+
+void
+local_ghost_tang_b( field_t      * ALIGNED(128) f,
+                    const grid_t *              g ) {
+  const int nx = g->nx, ny = g->ny, nz = g->nz;
+  const float cdt_dx = g->cvac*g->dt*g->rdx;
+  const float cdt_dy = g->cvac*g->dt*g->rdy;
+  const float cdt_dz = g->cvac*g->dt*g->rdz;
+  int bc, face, ghost, x, y, z;
+  float decay, drive, higend, t1, t2;
+  field_t *fg, *fh;
+
+  // Absorbing boundary condition is 2nd order accurate implementation
+  // of a 1st order Higend ABC with 15 degree annihilation cone except
+  // for 1d simulations where the 2nd order accurate implementation of
+  // a 1st order Mur boundary condition is used.
+  higend = ( nx>1 || ny>1 || nz>1 ) ? 1.03527618 : 1.;
+/*
+# define APPLY_LOCAL_TANG_B(i,j,k,X,Y,Z)                                 \
+  do {                                                                   \
+    bc = g->bc[BOUNDARY(i,j,k)];                                         \
+    if( bc<0 || bc>=world_size ) {                                       \
+      ghost = (i+j+k)<0 ? 0 : n##X+1;                                    \
+      face  = (i+j+k)<0 ? 1 : n##X+1;                                    \
+      switch(bc) {                                                       \
+      case anti_symmetric_fields:                                        \
+	Z##Y##_EDGE_LOOP(ghost) f(x,y,z).cb##Y= f(x-i,y-j,z-k).cb##Y;    \
+	Y##Z##_EDGE_LOOP(ghost) f(x,y,z).cb##Z= f(x-i,y-j,z-k).cb##Z;    \
+	break;                                                           \
+      case symmetric_fields: case pmc_fields:                            \
+	Z##Y##_EDGE_LOOP(ghost) f(x,y,z).cb##Y=-f(x-i,y-j,z-k).cb##Y;    \
+	Y##Z##_EDGE_LOOP(ghost) f(x,y,z).cb##Z=-f(x-i,y-j,z-k).cb##Z;    \
+	break;                                                           \
+      case absorb_fields:                                                \
+        drive = cdt_d##X*higend;                                         \
+        decay = (1-drive)/(1+drive);                                     \
+        drive = 2*drive/(1+drive);                                       \
+	Z##Y##_EDGE_LOOP(ghost) {                                        \
+          fg = &f(x,y,z);                                                \
+          fh = &f(x-i,y-j,z-k);                                          \
+          X = face;                                                      \
+          t1 = cdt_d##X*( f(x-i,y-j,z-k).e##Z - f(x,y,z).e##Z );         \
+          t1 = (i+j+k)<0 ? t1 : -t1;                                     \
+          X = ghost;                                                     \
+          Z++; t2 = f(x-i,y-j,z-k).e##X;                                 \
+          Z--; t2 = cdt_d##Z*( t2 - fh->e##X );                          \
+          fg->cb##Y = decay*fg->cb##Y + drive*fh->cb##Y - t1 + t2;       \
+        }                                                                \
+	Y##Z##_EDGE_LOOP(ghost) {                                        \
+          fg = &f(x,y,z);                                                \
+          fh = &f(x-i,y-j,z-k);                                          \
+          X = face;                                                      \
+          t1 = cdt_d##X*( f(x-i,y-j,z-k).e##Y - f(x,y,z).e##Y );         \
+          t1 = (i+j+k)<0 ? t1 : -t1;                                     \
+          X = ghost;                                                     \
+          Y++; t2 = f(x-i,y-j,z-k).e##X;                                 \
+          Y--; t2 = cdt_d##Y*( t2 - fh->e##X );                          \
+          fg->cb##Z = decay*fg->cb##Z + drive*fh->cb##Z + t1 - t2;       \
+        }                                                                \
+	break;                                                           \
+      default:                                                           \
+	ERROR(("Bad boundary condition encountered."));                  \
+	break;                                                           \
+      }                                                                  \
+    }                                                                    \
+  } while(0)
+
+  APPLY_LOCAL_TANG_B(-1, 0, 0,x,y,z);
+  APPLY_LOCAL_TANG_B( 0,-1, 0,y,z,x);
+  APPLY_LOCAL_TANG_B( 0, 0,-1,z,x,y);
+  APPLY_LOCAL_TANG_B( 1, 0, 0,x,y,z);
+  APPLY_LOCAL_TANG_B( 0, 1, 0,y,z,x);
+  APPLY_LOCAL_TANG_B( 0, 0, 1,z,x,y);
+*/
+    apply_local_tang_b<XYZ>(-1,0,0,x,y,z,nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
+    apply_local_tang_b<YZX>(0,-1,0,x,y,z,nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
+    apply_local_tang_b<ZXY>(0,0,-1,x,y,z,nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
+    apply_local_tang_b<XYZ>(1,0,0,x,y,z,nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
+    apply_local_tang_b<YZX>(0,1,0,x,y,z,nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
+    apply_local_tang_b<ZXY>(0,0,1,x,y,z,nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
 }
 
 // Note: local_adjust_div_e zeros the error on the boundaries for
