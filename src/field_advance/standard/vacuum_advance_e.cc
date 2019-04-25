@@ -61,7 +61,7 @@ KOKKOS_INLINE_FUNCTION void update_ex(const k_field_t& k_field, const size_t f0_
     const float fz_cby = k_field(fz_idx, field_var::cby);
     
     k_field(f0_idx, field_var::tcax) = (py_muz*(f0_cbz - fy_cbz) - pz_muy*(f0_cby - fz_cby)) - damp*f0_tcax;
-    k_field(f0_idx, field_var::ex) = decayx*f0_ex + drivex*(f0_tcax - cj*f0_jfx);
+    k_field(f0_idx, field_var::ex) = decayx*f0_ex + drivex*(k_field(f0_idx, field_var::tcax) - cj*f0_jfx);
 }
 KOKKOS_INLINE_FUNCTION void update_ey(const k_field_t& k_field, const size_t f0_idx, const size_t fx_idx, const size_t fy_idx, const size_t fz_idx,
                 const float px_muy, const float px_muz, const float py_mux, const float py_muz, const float pz_mux, const float pz_muy,
@@ -76,7 +76,7 @@ KOKKOS_INLINE_FUNCTION void update_ey(const k_field_t& k_field, const size_t f0_
     const float fz_cbx = k_field(fz_idx, field_var::cbx);
     
     k_field(f0_idx, field_var::tcay) = (pz_mux*(f0_cbx - fz_cbx) - px_muz*(f0_cbz - fx_cbz)) - damp*f0_tcay;
-    k_field(f0_idx, field_var::ey) = decayy*f0_ey + drivey*(f0_tcay - cj*f0_jfy);
+    k_field(f0_idx, field_var::ey) = decayy*f0_ey + drivey*(k_field(f0_idx, field_var::tcay) - cj*f0_jfy);
 }
 KOKKOS_INLINE_FUNCTION void update_ez(const k_field_t& k_field, const size_t f0_idx, const size_t fx_idx, const size_t fy_idx, const size_t fz_idx,
                 const float px_muy, const float px_muz, const float py_mux, const float py_muz, const float pz_mux, const float pz_muy,
@@ -91,7 +91,7 @@ KOKKOS_INLINE_FUNCTION void update_ez(const k_field_t& k_field, const size_t f0_
     const float fy_cbx = k_field(fy_idx, field_var::cbx);
     
     k_field(f0_idx, field_var::tcaz) = (px_muy*(f0_cby - fx_cby) - py_mux*(f0_cbx - fy_cbx)) - damp*f0_tcaz;
-    k_field(f0_idx, field_var::ez) = decayz*f0_ez + drivez*(f0_tcaz - cj*f0_jfz);
+    k_field(f0_idx, field_var::ez) = decayz*f0_ez + drivez*(k_field(f0_idx, field_var::tcaz) - cj*f0_jfz);
 }
 #define UPDATE_EX() \
   f0->tcax = ( py_muz*(f0->cbz-fy->cbz) - pz_muy*(f0->cby-fz->cby) ) - \

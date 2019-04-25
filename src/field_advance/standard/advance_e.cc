@@ -43,7 +43,7 @@ typedef struct pipeline_args {
     INIT_STENCIL();                   \
   }
 
-void update_ex(const k_field_t& k_field, const k_field_edge_t& k_field_edge, const material_coefficient_t* ALIGNED(128) m,
+KOKKOS_INLINE_FUNCTION void update_ex(const k_field_t& k_field, const k_field_edge_t& k_field_edge, const material_coefficient_t* ALIGNED(128) m,
                 const float damp, const float cj, size_t f0_idx, 
                 size_t fx_idx, size_t fy_idx, size_t fz_idx, 
                 const float px, const float py, const float pz) {
@@ -60,13 +60,13 @@ void update_ex(const k_field_t& k_field, const k_field_edge_t& k_field_edge, con
     float fz_cby    = k_field(fz_idx, field_var::cby);
     material_id fz_fmaty  = k_field_edge(fz_idx, field_edge_var::fmaty);
 
-    k_field(f0_idx, field_var::tcax) = ( py * (f0_cbz * m[f0_fmatz].rmuz - fy_cbz * m[fy_fmatz].rmuz)
-        - pz * (f0_cby * m[f0_fmaty].rmuy - fz_cby * m[fz_fmaty].rmuy) ) - damp * f0_tcax;
+    k_field(f0_idx, field_var::tcax) = (py * (f0_cbz * m[f0_fmatz].rmuz - fy_cbz * m[fy_fmatz].rmuz) -
+                                        pz * (f0_cby * m[f0_fmaty].rmuy - fz_cby * m[fz_fmaty].rmuy) ) - damp * f0_tcax;
 
-    k_field(f0_idx, field_var::ex) = m[f0_ematx].decayx * f0_ex + m[f0_ematx].drivex * (f0_tcax - cj * f0_jfx);
+    k_field(f0_idx, field_var::ex) = m[f0_ematx].decayx * f0_ex + m[f0_ematx].drivex * (k_field(f0_idx, field_var::tcax) - cj * f0_jfx);
 }
 
-void update_ey(const k_field_t& k_field, const k_field_edge_t& k_field_edge, const material_coefficient_t* ALIGNED(128) m,
+KOKKOS_INLINE_FUNCTION void update_ey(const k_field_t& k_field, const k_field_edge_t& k_field_edge, const material_coefficient_t* ALIGNED(128) m,
                 const float damp, const float cj, size_t f0_idx, 
                 size_t fx_idx, size_t fy_idx, size_t fz_idx, 
                 const float px, const float py, const float pz) {
@@ -87,10 +87,10 @@ void update_ey(const k_field_t& k_field, const k_field_edge_t& k_field_edge, con
                                         px * (f0_cbz * m[f0_fmatz].rmuz - fx_cbz * m[fx_fmatz].rmuz)) - 
                                         damp * f0_tcay;
 
-    k_field(f0_idx, field_var::ey) = m[f0_ematy].decayy * f0_ey + m[f0_ematy].drivey * (f0_tcay - cj * f0_jfy);
+    k_field(f0_idx, field_var::ey) = m[f0_ematy].decayy * f0_ey + m[f0_ematy].drivey * (k_field(f0_idx, field_var::tcay) - cj * f0_jfy);
 }
 
-void update_ez(const k_field_t& k_field, const k_field_edge_t& k_field_edge, const material_coefficient_t* ALIGNED(128) m,
+KOKKOS_INLINE_FUNCTION void update_ez(const k_field_t& k_field, const k_field_edge_t& k_field_edge, const material_coefficient_t* ALIGNED(128) m,
                 const float damp, const float cj, size_t f0_idx, 
                 size_t fx_idx, size_t fy_idx, size_t fz_idx, 
                 const float px, const float py, const float pz) {
@@ -111,7 +111,7 @@ void update_ez(const k_field_t& k_field, const k_field_edge_t& k_field_edge, con
                                         py * (f0_cbx * m[f0_fmatx].rmux - fy_cbx * m[fy_fmatx].rmux)) - 
                                         damp * f0_tcaz;
 
-    k_field(f0_idx, field_var::ez) = m[f0_ematz].decayz * f0_ez + m[f0_ematz].drivez * (f0_tcaz - cj * f0_jfz);
+    k_field(f0_idx, field_var::ez) = m[f0_ematz].decayz * f0_ez + m[f0_ematz].drivez * (k_field(f0_idx, field_var::tcaz) - cj * f0_jfz);
 }
 
 void advance_e_interior_kokkos(k_field_t& k_field, k_field_edge_t& k_field_edge, 
@@ -124,10 +124,10 @@ void advance_e_interior_kokkos(k_field_t& k_field, k_field_edge_t& k_field_edge,
     Kokkos::parallel_for("Majority of iterior", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
         const size_t z = team_member.league_rank() + 2;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny-1), [=] (const size_t i) {
-            const size_t y = i + 2;
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nx-1), [=] (const size_t j) {
-                const size_t x = j + 2;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny-1), [=] (const size_t j) {
+            const size_t y = j + 2;
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nx-1), [=] (const size_t i) {
+                const size_t x = i + 2;
 
                 const size_t f0_idx = VOXEL(x,   y,   z,   nx, ny, nz);
                 const size_t fx_idx = VOXEL(x+1, y,   z,   nx, ny, nz);
@@ -145,8 +145,7 @@ void advance_e_interior_kokkos(k_field_t& k_field, k_field_edge_t& k_field_edge,
     Kokkos::parallel_for("Left over interior ex", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
         const size_t z = team_member.league_rank() + 2;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny-1), [=] (const size_t i) {
-            const size_t y = i + 2;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, 2, ny+1), [=] (const size_t y) {
             const size_t f0_idx = VOXEL(1, y,   z, nx, ny, nz);
             const size_t fx_idx = 0;
             const size_t fy_idx = VOXEL(1, y-1, z, nx, ny, nz);
@@ -242,10 +241,10 @@ void advance_e_exterior_kokkos(k_field_t& k_field, k_field_edge_t& k_field_edge,
         
         const size_t y = team_member.league_rank() + 1;
         Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (const size_t i) {
-            const size_t f0_idx = VOXEL(1,y,nz+1,nx,ny,nz) + i;
+            const size_t f0_idx = VOXEL(1,y,  nz+1, nx,ny,nz) + i;
             const size_t fx_idx = 0; // Don't care about x index, not used in update_ex anyway.
-            const size_t fy_idx = VOXEL(1,y-1,nz+1,nx,ny,nz) + i;
-            const size_t fz_idx = VOXEL(1,y,nz,nx,ny,nz) + i;
+            const size_t fy_idx = VOXEL(1,y-1,nz+1, nx,ny,nz) + i;
+            const size_t fz_idx = VOXEL(1,y,  nz,   nx,ny,nz) + i;
             update_ex(k_field, k_field_edge, m, damp, cj, f0_idx, fx_idx, fy_idx, fz_idx, px, py, pz);
         });
     });
@@ -658,7 +657,7 @@ advance_e_pipeline_v4( pipeline_args_t * args,
 #endif
 
 void
-advance_e_host( field_array_t * RESTRICT fa,
+advance_e( field_array_t * RESTRICT fa,
            float frac ) {
   if( !fa     ) ERROR(( "Bad args" ));
   if( frac!=1 ) ERROR(( "standard advance_e does not support frac!=1 yet" ));
@@ -867,7 +866,7 @@ advance_e_host( field_array_t * RESTRICT fa,
   local_adjust_tang_e( fa->f, fa->g );
 }
 
-void advance_e(field_array_t* RESTRICT fa, float frac) {
+void advance_e_k(field_array_t* RESTRICT fa, float frac) {
     if( !fa     ) ERROR(( "Bad args" ));
     if( frac!=1 ) ERROR(( "standard advance_e does not support frac!=1 yet" ));
     pipeline_args_t args[1];
