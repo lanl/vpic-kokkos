@@ -127,8 +127,8 @@ if(ENABLE_KOKKOS_CUDA)
     # Choose Architecture for Kokkos
     if (BUILD_INTERNAL_KOKKOS)
         #set (KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
-        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
-        #set(KOKKOS_ARCH "Power9;Volta70")
+        #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
+        set(KOKKOS_ARCH "Power9;Volta70")
         #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
     endif (BUILD_INTERNAL_KOKKOS)
 
@@ -170,6 +170,7 @@ endif(BUILD_INTERNAL_KOKKOS)
 
 message(dirs: ${KOKKOS_INCLUDE_DIRS})
 include_directories(${KOKKOS_INCLUDE_DIRS})
+link_directories(${KOKKOS_INCLUDE_DIRS}/../lib) # TODO: bad idea..
 
 # Libs
 string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")

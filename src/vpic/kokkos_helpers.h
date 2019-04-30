@@ -270,7 +270,6 @@ namespace accumulator_var {
     k_particles_h = sp->k_p_h; \
     k_particle_movers_h = sp->k_pm_h; \
     k_nm_h = sp->k_nm_h; \
-      printf(" k_nm_h size %d \n", k_nm_h.size() );  \
     sp->nm = k_nm_h(0); \
     Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
       sp->p[i].dx = k_particles_h(i, particle_var::dx); \

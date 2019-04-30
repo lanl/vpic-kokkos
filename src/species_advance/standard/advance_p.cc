@@ -512,7 +512,6 @@ advance_p_kokkos(k_particles_t k_particles,
         if( k_nm(0)<max_nm ) {
           const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
-          printf("nm %d knm %d \n", nm, k_nm(0) );
 
           k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
           k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
