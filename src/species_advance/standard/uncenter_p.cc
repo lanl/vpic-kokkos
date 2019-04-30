@@ -43,7 +43,7 @@ void uncenter_p_kokkos(k_particles_t k_particles, k_interpolator_t k_interp, int
 
 
   // this goes to np using p_index
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
+  Kokkos::parallel_for("uncenter p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
       (0, np), KOKKOS_LAMBDA (int p_index) {
 
     int ii = pii;
