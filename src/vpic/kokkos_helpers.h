@@ -230,7 +230,7 @@ namespace accumulator_var {
 // perhaps it should cache old sp and put it back to what it was?
 #define KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE() \
   LIST_FOR_EACH( sp, species_list ) {\
-    n_particles = sp->max_np; \
+    n_particles = sp->np; \
     max_pmovers = sp->max_nm; \
     \
     k_particles_h = sp->k_p_h; \
@@ -265,7 +265,7 @@ namespace accumulator_var {
     Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);  \
     Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d); \
     Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d); \
-    n_particles = sp->max_np; \
+    n_particles = sp->np; \
     max_pmovers = sp->max_nm; \
     k_particles_h = sp->k_p_h; \
     k_particle_movers_h = sp->k_pm_h; \
