@@ -1,6 +1,7 @@
 #define IN_boundary
 #include "boundary_private.h"
 #include <cassert>
+#include <algorithm>
 
 // If this is defined particle and mover buffers will not resize dynamically
 // (This is the common case for the users)
@@ -15,6 +16,10 @@ using namespace v4;
 #endif
 
 enum { MAX_PBC = 32, MAX_SP = 32 };
+
+bool compareParticleMovers(particle_mover_t& a, particle_mover_t&b) {
+    return a.i < b.i;
+}
 
 void
 boundary_p( particle_bc_t       * RESTRICT pbc_list,
@@ -166,6 +171,8 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
       particle_injector_t * RESTRICT ALIGNED(16) pi;
       int i, voxel;
       int64_t nn;
+
+      std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers);
 
       // Note that particle movers for each species are processed in
       // reverse order.  This allows us to backfill holes in the
