@@ -144,7 +144,7 @@ namespace accumulator_var {
 #define KOKKOS_COPY_FIELD_MEM_TO_DEVICE() \
   k_field = field_array->k_f_h; \
   k_field_edge = field_array->k_fe_h; \
-  Kokkos::parallel_for(host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
+  Kokkos::parallel_for("copy field to device", host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
           k_field(i, field_var::ex) = field_array->f[i].ex; \
           k_field(i, field_var::ey) = field_array->f[i].ey; \
           k_field(i, field_var::ez) = field_array->f[i].ez; \
@@ -184,7 +184,7 @@ namespace accumulator_var {
   Kokkos::deep_copy(field_array->k_fe_h, field_array->k_fe_d); \
   k_field = field_array->k_f_h; \
   k_field_edge = field_array->k_fe_h; \
-  Kokkos::parallel_for(host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
+  Kokkos::parallel_for("copy field to host", host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
           field_array->f[i].ex = k_field(i, field_var::ex); \
           field_array->f[i].ey = k_field(i, field_var::ey); \
           field_array->f[i].ez = k_field(i, field_var::ez); \
@@ -237,7 +237,7 @@ namespace accumulator_var {
     k_particle_movers_h = sp->k_pm_h; \
     k_nm_h = sp->k_nm_h; \
     k_nm_h(0) = sp->nm; \
-    Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
+    Kokkos::parallel_for("copy particles to device", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
       k_particles_h(i, particle_var::dx) = sp->p[i].dx; \
       k_particles_h(i, particle_var::dy) = sp->p[i].dy; \
       k_particles_h(i, particle_var::dz) = sp->p[i].dz; \
@@ -248,7 +248,7 @@ namespace accumulator_var {
       k_particles_h(i, particle_var::pi) = sp->p[i].i;  \
     });\
     \
-    Kokkos::parallel_for(host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
+    Kokkos::parallel_for("copy movers to device", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
       k_particle_movers_h(i, particle_mover_var::dispx) = sp->pm[i].dispx; \
       k_particle_movers_h(i, particle_mover_var::dispy) = sp->pm[i].dispy; \
       k_particle_movers_h(i, particle_mover_var::dispz) = sp->pm[i].dispz; \
@@ -271,7 +271,7 @@ namespace accumulator_var {
     k_particle_movers_h = sp->k_pm_h; \
     k_nm_h = sp->k_nm_h; \
     sp->nm = k_nm_h(0); \
-    Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
+    Kokkos::parallel_for("copy particles to host", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
       sp->p[i].dx = k_particles_h(i, particle_var::dx); \
       sp->p[i].dy = k_particles_h(i, particle_var::dy); \
       sp->p[i].dz = k_particles_h(i, particle_var::dz); \
@@ -282,7 +282,7 @@ namespace accumulator_var {
       sp->p[i].i  = k_particles_h(i, particle_var::pi); \
     });\
     \
-    Kokkos::parallel_for(host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
+    Kokkos::parallel_for("copy_movers_to_host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
       sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx); \
       sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy); \
       sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz); \
@@ -299,7 +299,7 @@ namespace accumulator_var {
   nv = interpolator_array->g->nv; \
   \
   k_interpolator_h = interpolator_array->k_i_h; \
-  Kokkos::parallel_for(host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
+  Kokkos::parallel_for("Copy interpolators to device", host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
     k_interpolator_h(i, interpolator_var::ex)       = interpolator_array->i[i].ex; \
     k_interpolator_h(i, interpolator_var::ey)       = interpolator_array->i[i].ey; \
     k_interpolator_h(i, interpolator_var::ez)       = interpolator_array->i[i].ez; \
@@ -326,7 +326,7 @@ namespace accumulator_var {
   Kokkos::deep_copy(interpolator_array->k_i_h, interpolator_array->k_i_d);  \
   nv = interpolator_array->g->nv;; \
   k_interpolator_h = interpolator_array->k_i_h; \
-  Kokkos::parallel_for(host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
+  Kokkos::parallel_for("Copy interpolators to device", host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
     interpolator_array->i[i].ex       = k_interpolator_h(i, interpolator_var::ex); \
     interpolator_array->i[i].ey       = k_interpolator_h(i, interpolator_var::ey); \
     interpolator_array->i[i].ez       = k_interpolator_h(i, interpolator_var::ez); \
@@ -356,12 +356,12 @@ namespace accumulator_var {
   na = accumulator_array->na; \
   \
   k_accumulators_h = accumulator_array->k_a_h; \
-  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_HOST \
+  Kokkos::parallel_for("copy accumulator to device", KOKKOS_TEAM_POLICY_HOST \
       (na, Kokkos::AUTO),                          \
       KOKKOS_LAMBDA                                \
       (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) { \
     const unsigned int i = team_member.league_rank();              \
-    \
+    /* TODO: Do we really need a 2d loop here*/ \
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) { \
       k_accumulators_h(i, accumulator_var::jx, j)       = accumulator_array->a[i].jx[j]; \
       k_accumulators_h(i, accumulator_var::jy, j)       = accumulator_array->a[i].jy[j]; \
@@ -377,7 +377,7 @@ namespace accumulator_var {
   k_accumulators_h = accumulator_array->k_a_h; \
   \
   Kokkos::deep_copy(accumulator_array->k_a_h, accumulator_array->k_a_d); \
-  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_HOST \
+  Kokkos::parallel_for("copy accumulator to host", KOKKOS_TEAM_POLICY_HOST \
       (na, Kokkos::AUTO),                          \
       KOKKOS_LAMBDA                                \
       (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) { \

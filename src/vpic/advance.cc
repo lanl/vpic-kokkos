@@ -70,9 +70,6 @@ int vpic_simulation::advance(void) {
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
 
-  Kokkos::fence();
-
-
   // Because the partial position push when injecting aged particles might
   // place those particles onto the guard list (boundary interaction) and
   // because advance_p requires an empty guard list, particle injection must

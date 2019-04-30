@@ -365,7 +365,7 @@ advance_p_kokkos(k_particles_t k_particles,
 
 
 
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
+  Kokkos::parallel_for("clear nm", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
     //printf("how many times does this run %d", i);
     k_nm(0) = 0;
     //local_pm_dispx = 0;
@@ -375,7 +375,7 @@ advance_p_kokkos(k_particles_t k_particles,
   });
 
 
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
+  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index)
     {
 
