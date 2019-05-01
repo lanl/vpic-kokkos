@@ -13,11 +13,12 @@
 #define FAK field_array->kernel
 
 void print_particles_d(
-        k_particles_t particles
+        k_particles_t particles,
+        int np
         )
 {
     Kokkos::parallel_for("particle printer", Kokkos::RangePolicy <
-            Kokkos::DefaultExecutionSpace > (0, particles.size()), KOKKOS_LAMBDA (size_t i)
+            Kokkos::DefaultExecutionSpace > (0, np), KOKKOS_LAMBDA (size_t i)
     {
       printf("particles %d has %f %f %f \n", i,
                particles(i, particle_var::dx),
@@ -176,27 +177,28 @@ int vpic_simulation::advance(void) {
       boundary_p_kokkos( particle_bc_list, species_list, field_array, accumulator_array );
   TOC( boundary_p, num_comm_round );
 
+  // Boundary_p calls move_p, so we need to deal with the current
+  // TODO: this will likely break on device?
+  Kokkos::Experimental::contribute(accumulator_array->k_a_h, accumulator_array->k_a_sa);
+  accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_h);
+
   // Clean_up once boundary p is done
   // Copy back the right data to GPU
   LIST_FOR_EACH( sp, species_list ) {
 
       const int nm = sp->k_nm_h(0);
       printf("!!! NM %d vs sp nm %d \n", nm, sp->nm);
-      int np = sp->np;
 
       // TODO: this can be hoisted to the end of advance_p if desired
       compress_particle_data(
               sp->k_p_d,
               sp->k_pm_d,
               nm,
-              np
+              sp->np
       );
 
       // Update np now we removed them...
       sp->np -= nm;
-      np = sp->np;
-
-      printf("pre np %d post np %d \n", np, sp->np);
 
       // Copy data for copies back to device
       Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
@@ -212,7 +214,7 @@ int vpic_simulation::advance(void) {
               Kokkos::DefaultExecutionSpace > (0, num_to_copy), KOKKOS_LAMBDA
               (size_t i)
       {
-        int npi = np+i; // i goes from 0..n so no need for -1
+        int npi = sp->np+i; // i goes from 0..n so no need for -1
         particles(npi, particle_var::dx) = particle_copy(i, particle_var::dx);
         particles(npi, particle_var::dy) = particle_copy(i, particle_var::dy);
         particles(npi, particle_var::dz) = particle_copy(i, particle_var::dz);
@@ -226,13 +228,11 @@ int vpic_simulation::advance(void) {
       });
 
       // Reset this to zero now we've done the write back
-      np = sp->np;
       sp->np += num_to_copy;
-      printf("recv pre np %d post np %d \n", np, sp->np);
       sp->num_to_copy = 0;
 
       printf("Species np %d \n", sp->np);
-      print_particles_d(particles);
+      print_particles_d(particles, sp->np);
 
   }
 

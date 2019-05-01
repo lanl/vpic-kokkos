@@ -97,6 +97,7 @@ typedef struct accumulator_array {
   accumulator_array(int na) :
     k_a_d("k_accumulators", na)
     {
+        // TODO: kokkos can deduce these
       k_a_sa = Kokkos::Experimental::create_scatter_view
         <Kokkos::Experimental::ScatterSum,
          KOKKOS_SCATTER_DUPLICATED,
