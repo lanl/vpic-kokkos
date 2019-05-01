@@ -1142,10 +1142,10 @@ k_local_adjust_tang_e( field_array_t      * RESTRICT f,
   const int nx = g->nx, ny = g->ny, nz = g->nz;
 
     k_field_t k_field = f->k_f_d;
-    adjust_tang_e<XYZ>(k_field, g, -1, 0, 1, nx, ny, nz);
+    adjust_tang_e<XYZ>(k_field, g, -1, 0, 0, nx, ny, nz);
     adjust_tang_e<YZX>(k_field, g, 0, -1, 0, nx, ny, nz);
     adjust_tang_e<ZXY>(k_field, g, 0, 0, -1, nx, ny, nz);
-    adjust_tang_e<XYZ>(k_field, g, 1, 0, 1, nx, ny, nz);
+    adjust_tang_e<XYZ>(k_field, g, 1, 0, 0, nx, ny, nz);
     adjust_tang_e<YZX>(k_field, g, 0, 1, 0, nx, ny, nz);
     adjust_tang_e<ZXY>(k_field, g, 0, 0, 1, nx, ny, nz);
 /*

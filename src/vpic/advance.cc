@@ -150,11 +150,11 @@ int vpic_simulation::advance(void) {
   // Half advance the magnetic field from B_0 to B_{1/2}
   TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
 
-  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//  KOKKOS_COPY_FIELD_MEM_TO_HOST();
 
   // Advance the electric field from E_0 to E_1
   
-  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+//  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 
   TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
 

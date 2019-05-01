@@ -16,6 +16,7 @@
 #define ACCUMULATOR_VAR_COUNT 3
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
+#define MATERIAL_COEFFICIENT_VAR_COUNT 13
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -46,6 +47,8 @@ using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATO
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
+
+using k_material_coefficient_t = Kokkos::View<float* [MATERIAL_COEFFICIENT_VAR_COUNT]>;
 
 #define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
 #define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
@@ -134,6 +137,24 @@ namespace accumulator_var {
     jy = 1, \
     jz = 2, \
   };
+};
+
+namespace material_coeff_var {
+    enum mc_v {
+        decayx        = 0,
+        drivex        = 1,
+        decayy        = 2,
+        drivey        = 3,
+        decayz        = 4,
+        drivez        = 5,
+        rmux          = 6,
+        rmuy          = 7,
+        rmuz          = 8,
+        nonconductive = 9,
+        epsx          = 10,
+        epsy          = 11,
+        epsz          = 12,
+    };
 };
 
 #define KOKKOS_FIELD_VARIABLES() \

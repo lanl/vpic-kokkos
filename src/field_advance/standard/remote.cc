@@ -144,8 +144,18 @@ typedef class ZX {} ZX;
 typedef class YZ {} YZ;
 typedef class ZY {} ZY;
 
-template <typename T> void begin_recv(int i, int j, int k, int nX, int nY, int nZ, const grid_t* g) {}
-
+template <typename T> void begin_recv(int i, int j, int k, int nx, int ny, int nz, const grid_t* g) {
+    int nX, nY, nZ;
+    if (std::is_same<T, XYZ>::value) {
+        nX = nx, nY = ny, nZ = nz;
+    } else if (std::is_same<T, YZX>::value) {
+        nX = ny, nY = nz, nZ = nx;
+    } else if (std::is_same<T, ZXY>::value) {
+        nX = nz, nY = nx, nZ = ny;
+    }
+    begin_recv_port(i,j,k,(1 + nY*(nZ+1) + nZ*(nY+1))*sizeof(float),g);
+}
+/*
 template<> void begin_recv<XYZ>(int i, int j, int k, int nx, int ny, int nz, const grid_t* g) {
     begin_recv_port(i,j,k,(1+ny*(nz+1)+nz*(ny+1))*sizeof(float),g);
 }
@@ -155,7 +165,7 @@ template<> void begin_recv<YZX>(int i, int j, int k, int nx, int ny, int nz, con
 template<> void begin_recv<ZXY>(int i, int j, int k, int nx, int ny, int nz, const grid_t* g) {
     begin_recv_port(i,j,k,(1+nx*(ny+1)+ny*(nx+1))*sizeof(float),g);
 }
-
+*/
 template <typename T> void begin_send(int i, int j, int k, int nX, int nY, int nZ, field_array_t*  fa, const grid_t* g) {
 }
 template <> void begin_send<XYZ>(int i, int j, int k, int nx, int ny, int nz, field_array_t* field, const grid_t* g) {
@@ -477,7 +487,7 @@ template<> void end_recv<ZXY>(int i, int j, int k, int nx, int ny, int nz, field
 void
 k_end_remote_ghost_tang_b( field_array_t      * RESTRICT field,
                          const grid_t *              g ) {
-  const int nx = g->nx, ny = g->ny, nz = g->nz;
+    const int nx = g->nx, ny = g->ny, nz = g->nz;
 
     end_recv<XYZ>(-1,0,0,nx,ny,nz,field,g);
     end_recv<YZX>(0,-1,0,nx,ny,nz,field,g);
@@ -486,45 +496,12 @@ k_end_remote_ghost_tang_b( field_array_t      * RESTRICT field,
     end_recv<YZX>(0,1,0,nx,ny,nz,field,g);
     end_recv<ZXY>(0,0,1,nx,ny,nz,field,g);
 
-# define END_RECV(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                        \
-    p = (float *)end_recv_port(i,j,k,g);                                \
-    if( p ) {                                                           \
-      lw = (*(p++));                 /* Remote g->d##X */               \
-      rw = (2.*g->d##X)/(lw+g->d##X);                                   \
-      lw = (lw-g->d##X)/(lw+g->d##X);                                   \
-      face = (i+j+k)<0 ? n##X+1 : 0; /* Interpolate */                  \
-      Z##Y##_EDGE_LOOP(face)                                            \ field(x,y,z).cb##Y = rw*(*(p++)) + lw*field(x+i,y+j,z+k).cb##Y; \
-      Y##Z##_EDGE_LOOP(face)                                            \
-        field(x,y,z).cb##Z = rw*(*(p++)) + lw*field(x+i,y+j,z+k).cb##Z; \
-    }                                                                   \
-  } END_PRIMITIVE
-/*
-  END_RECV(-1, 0, 0,x,y,z);
-  END_RECV( 0,-1, 0,y,z,x);
-  END_RECV( 0, 0,-1,z,x,y);
-  END_RECV( 1, 0, 0,x,y,z);
-  END_RECV( 0, 1, 0,y,z,x);
-  END_RECV( 0, 0, 1,z,x,y);
-*/
-# undef END_RECV
-
-end_send_port(-1,0,0,g);
-end_send_port(0,-1,0,g);
-end_send_port(0,0,-1,g);
-end_send_port(1,0,0,g);
-end_send_port(0,1,0,g);
-end_send_port(0,0,1,g);
-
-/*
-# define END_SEND(i,j,k,X,Y,Z) end_send_port(i,j,k,g)
-  END_SEND(-1, 0, 0,x,y,z);
-  END_SEND( 0,-1, 0,y,z,x);
-  END_SEND( 0, 0,-1,z,x,y);
-  END_SEND( 1, 0, 0,x,y,z);
-  END_SEND( 0, 1, 0,y,z,x);
-  END_SEND( 0, 0, 1,z,x,y);
-# undef END_SEND
-*/
+    end_send_port(-1,0,0,g);
+    end_send_port(0,-1,0,g);
+    end_send_port(0,0,-1,g);
+    end_send_port(1,0,0,g);
+    end_send_port(0,1,0,g);
+    end_send_port(0,0,1,g);
 }
 
 void

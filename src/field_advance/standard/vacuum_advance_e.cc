@@ -857,5 +857,5 @@ printf("Ran k_end_remote_ghost_tang_b\n");
 printf("Ran vacuum_advance_e_exterior_kokkos\n");
 
     k_local_adjust_tang_e( fa, fa->g );
-printf("Ran k_local_adjust_tang_b\n");
+printf("Ran k_local_adjust_tang_e\n");
 }
