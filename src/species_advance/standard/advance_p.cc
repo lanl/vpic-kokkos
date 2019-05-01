@@ -702,6 +702,10 @@ advance_p( /**/  species_t            * RESTRICT sp,
   // Update np now we removed them...
   sp->np -= nm;
 
+  // Copy particle mirror movers back so we have their data safe. Ready for
+  // boundary_p_kokkos
+  Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
+
 /*
   args->p0       = sp->p;
   args->pm       = sp->pm;

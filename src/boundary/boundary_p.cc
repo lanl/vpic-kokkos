@@ -55,10 +55,10 @@ static const float dir[6] = { 1, 1, 1, -1, -1, -1 };
  *
  * This may actually simplify the logic, without being significantly slower
  *
- * @param pbc_list
- * @param sp_list
- * @param fa
- * @param aa
+ * @param pbc_list Particle boundary condition list
+ * @param sp_list Species list
+ * @param fa Field array
+ * @param aa Accumulator array
  */
 void
 boundary_p_kokkos(
@@ -189,9 +189,9 @@ boundary_p_kokkos(
       nm = sp->nm;
 
       particle_injector_t * RESTRICT ALIGNED(16) pi;
-      int i, voxel;
-      int64_t nn;
 
+      // TODO: the monotonic requirement should go away, thus we can (try)
+      // remove this
       std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers);
 
       // Note that particle movers for each species are processed in
@@ -203,42 +203,65 @@ boundary_p_kokkos(
       // property if all aged particle injection occurs after
       // advance_p and before this
 
+      // Here we essentially need to remove all accesses of the particle array (p0) and instead read from k_pc_h
       for( ; nm; pm--, nm-- )
       {
-        i = pm->i;
-        voxel = p0[i].i;
-        face = voxel & 7;
-        voxel >>= 3;
-        p0[i].i = voxel;
-        nn = neighbor[ 6*voxel + face ];
+        int i = pm->i;
 
+        //int voxel = p0[i].i;
+        int voxel = sp->k_pc_h(nm, particle_var::pi);
+
+        int face = voxel & 7;
+        voxel >>= 3;
+
+        //p0[i].i = voxel;
+        sp->k_pc_h(nm, particle_var::pi) = voxel;
+
+        int64_t nn = neighbor[ 6*voxel + face ];
+
+        // TODO: Allow for absorbing boundaries
         // Absorb
         if( nn==absorb_particles ) {
           // Ideally, we would batch all rhob accumulations together
           // for efficiency
+          Kokkos::abort("Not implemented yet");
           accumulate_rhob( f, p0+i, g, sp_q );
-          goto backfill;
+          //goto backfill;
+          continue;
         }
 
         // Send to a neighboring node
-
-        if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) ) {
+        if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
+        {
           pi = &pi_send[face][n_send[face]++];
-#         ifdef V4_ACCELERATION
-          copy_4x1( &pi->dx,    &p0[i].dx  );
-          copy_4x1( &pi->ux,    &p0[i].ux  );
-          copy_4x1( &pi->dispx, &pm->dispx );
-#         else
-          pi->dx=p0[i].dx; pi->dy=p0[i].dy; pi->dz=p0[i].dz;
+
+          //pi->dx=p0[i].dx;
+          //pi->dy=p0[i].dy;
+          //pi->dz=p0[i].dz;
+          pi->dx = sp->k_pc_h(nm, particle_var::dx);
+          pi->dy = sp->k_pc_h(nm, particle_var::dy);
+          pi->dz = sp->k_pc_h(nm, particle_var::dz);
+
           pi->i =nn - range[face];
-          pi->ux=p0[i].ux; pi->uy=p0[i].uy; pi->uz=p0[i].uz; pi->w=p0[i].w;
+
+          //pi->ux=p0[i].ux;
+          //pi->uy=p0[i].uy;
+          //pi->uz=p0[i].uz;
+          pi->ux = sp->k_pc_h(nm, particle_var::ux);
+          pi->uy = sp->k_pc_h(nm, particle_var::uy);
+          pi->uz = sp->k_pc_h(nm, particle_var::uz);
+
+          //pi->w=p0[i].w;
+          pi->w = sp->k_pc_h(nm, particle_var::w);
+
           pi->dispx = pm->dispx; pi->dispy = pm->dispy; pi->dispz = pm->dispz;
           pi->sp_id = sp_id;
-#         endif
+
           (&pi->dx)[axis[face]] = dir[face];
           pi->i                 = nn - range[face];
           pi->sp_id             = sp_id;
-          goto backfill;
+          //goto backfill;
+          continue;
         }
 
         // User-defined handling
@@ -261,24 +284,21 @@ boundary_p_kokkos(
 
         nn = -nn - 3; // Assumes reflective/absorbing are -1, -2
         if( (nn>=0) & (nn<nb) ) {
-          n_ci += pbc_interact[nn]( pbc_params[nn], sp, p0+i, pm,
-                                    ci+n_ci, 1, face );
-          goto backfill;
+            Kokkos::abort("Custom boundary not implemented");
+            n_ci += pbc_interact[nn]( pbc_params[nn], sp, p0+i, pm,
+                    ci+n_ci, 1, face );
+            continue;
         }
 
         // Uh-oh: We fell through
 
         WARNING(( "Unknown boundary interaction ... dropping particle "
                   "(species=%s)", sp->name ));
-      backfill:
 
-        np--;
-#       ifdef V4_ACCELERATION
-        copy_4x1( &p0[i].dx, &p0[np].dx );
-        copy_4x1( &p0[i].ux, &p0[np].ux );
-#       else
-        p0[i] = p0[np];
-#       endif
+        // No longer needed!
+        //backfill:
+            //np--;
+            //p0[i] = p0[np];
 
       }
 
@@ -326,59 +346,10 @@ boundary_p_kokkos(
                      bc[face], f2b[face] );
     }
 
-# ifndef DISABLE_DYNAMIC_RESIZING
-  // Resize particle storage to accomodate worst case inject
+  // TODO: add a check to see if we'll overflow the available size
+  // For now we assume we will just fit
 
   do {
-    int n;
-
-    // Resize each species's particle and mover storage to be large
-    // enough to guarantee successful injection.  (If we broke down
-    // the n_recv[face] by species before sending it, we could be
-    // tighter on memory footprint here.)
-
-    int max_inj = n_ci;
-    for( face=0; face<6; face++ )
-      if( shared[face] ) max_inj += n_recv[face];
-
-    LIST_FOR_EACH( sp, sp_list ) {
-      particle_mover_t * new_pm;
-      particle_t * new_p;
-
-      n = sp->np + max_inj;
-      if( n>sp->max_np ) {
-        n = n + (n>>2) + (n>>4); // Increase by 31.25% (~<"silver
-        /**/                     // ratio") to minimize resizes (max
-        /**/                     // rate that avoids excessive heap
-        /**/                     // fragmentation)
-        WARNING(( "Resizing local %s particle storage from %i to %i",
-                  sp->name, sp->max_np, n ));
-        // TODO: KOKKOS REALLOC AS WELL ALSO FAIL HERE UNTIL THIS IS DONE
-        assert(0)
-
-        MALLOC_ALIGNED( new_p, n, 128 );
-        COPY( new_p, sp->p, sp->np );
-        FREE_ALIGNED( sp->p );
-        sp->p = new_p, sp->max_np = n;
-      }
-
-      n = sp->nm + max_inj;
-      if( n>sp->max_nm ) {
-        n = n + (n>>2) + (n>>4); // See note above
-        WARNING(( "Resizing local %s mover storage from %i to %i",
-                  sp->name, sp->max_nm, n ));
-        MALLOC_ALIGNED( new_pm, n, 128 );
-        COPY( new_pm, sp->pm, sp->nm );
-        FREE_ALIGNED( sp->pm );
-        sp->pm = new_pm;
-        sp->max_nm = n;
-      }
-    }
-  } while(0);
-# endif
-
-  do {
-
     // Unpack the species list for random acesss
 
     particle_t       * RESTRICT ALIGNED(32) sp_p[ MAX_SP];
@@ -386,11 +357,6 @@ boundary_p_kokkos(
     float sp_q[MAX_SP];
     int sp_np[MAX_SP];
     int sp_nm[MAX_SP];
-
-#   ifdef DISABLE_DYNAMIC_RESIZING
-    int sp_max_np[64], n_dropped_particles[64];
-    int sp_max_nm[64], n_dropped_movers[64];
-#   endif
 
     if( num_species( sp_list ) > MAX_SP )
       ERROR(( "Update this to support more species" ));
@@ -400,10 +366,6 @@ boundary_p_kokkos(
       sp_q[  sp->id ] = sp->q;
       sp_np[ sp->id ] = sp->np;
       sp_nm[ sp->id ] = sp->nm;
-#     ifdef DISABLE_DYNAMIC_RESIZING
-      sp_max_np[sp->id]=sp->max_np; n_dropped_particles[sp->id]=0;
-      sp_max_nm[sp->id]=sp->max_nm; n_dropped_movers[sp->id]=0;
-#     endif
     }
 
     // Inject particles.  We do custom local injection first to
@@ -442,25 +404,15 @@ boundary_p_kokkos(
 #       ifdef DISABLE_DYNAMIC_RESIZING
         if( np>=sp_max_np[id] ) { n_dropped_particles[id]++; continue; }
 #       endif
-#       ifdef V4_ACCELERATION
-        copy_4x1(  &p[np].dx,    &pi->dx    );
-        copy_4x1(  &p[np].ux,    &pi->ux    );
-#       else
         p[np].dx=pi->dx; p[np].dy=pi->dy; p[np].dz=pi->dz; p[np].i=pi->i;
         p[np].ux=pi->ux; p[np].uy=pi->uy; p[np].uz=pi->uz; p[np].w=pi->w;
-#       endif
         sp_np[id] = np+1;
 
 #       ifdef DISABLE_DYNAMIC_RESIZING
         if( nm>=sp_max_nm[id] ) { n_dropped_movers[id]++;    continue; }
 #       endif
-#       ifdef V4_ACCELERATION
-        copy_4x1( &pm[nm].dispx, &pi->dispx );
-        pm[nm].i = np;
-#       else
         pm[nm].dispx=pi->dispx; pm[nm].dispy=pi->dispy; pm[nm].dispz=pi->dispz;
         pm[nm].i=np;
-#       endif
         sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
       }
     } while(face!=5);
@@ -636,7 +588,6 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
       nm = sp->nm;
 
       particle_injector_t * RESTRICT ALIGNED(16) pi;
-      int i, voxel;
       int64_t nn;
 
       std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers);
@@ -652,8 +603,8 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
 
       for( ; nm; pm--, nm-- )
       {
-        i = pm->i;
-        voxel = p0[i].i;
+        int i = pm->i;
+        int voxel = p0[i].i;
         face = voxel & 7;
         voxel >>= 3;
         p0[i].i = voxel;
