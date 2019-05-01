@@ -424,9 +424,8 @@ boundary_p_kokkos(
         //p[np].i=pi->i;
         //p[np].w=pi->w;
 
-        // TODO: if this doesn't work, it's likely because we weren't done with
-        // the data we overwrite here..but I think it's fine
-        // TODO:  because this can be called in a loop we need to write to something like nm not n?
+        // FIXME: if this doesn't work, it's likely because we weren't done with the
+        // data we overwrite here..but I think it's fine
         printf("writing to n=%d for %p \n", sp_[id]->num_to_copy, sp_[id]);
         particle_copy(write_index, particle_var::dx) = pi->dx;
         particle_copy(write_index, particle_var::dy) = pi->dy;
@@ -450,7 +449,6 @@ boundary_p_kokkos(
         //pm[nm].i=np;
         pm[nm].i=write_index; // Try tell it the index we wrote to
 
-        // TODO: port this call to move_p
         //sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
         sp_nm[id] = nm +
             move_p_kokkos(
