@@ -227,25 +227,28 @@ move_p_kokkos(k_particles_t k_particles,
 
 
 void
-advance_p_kokkos(k_particles_t k_particles,
-                 k_particle_movers_t k_particle_movers,
-                 k_accumulators_sa_t k_accumulators_sa,
-                 k_interpolator_t k_interp,
-                 //k_particle_movers_t k_local_particle_movers,
-                 k_iterator_t k_nm,
-                 k_neighbor_t k_neighbors,
-                 const grid_t *g,
-                 const float qdt_2mc,
-                 const float cdt_dx,
-                 const float cdt_dy,
-                 const float cdt_dz,
-                 const float qsp,
-                 const int na,
-                 const int np,
-                 const int max_nm,
-                 const int nx,
-                 const int ny,
-                 const int nz) {
+advance_p_kokkos(
+        k_particles_t k_particles,
+        k_particles_t k_particle_copy,
+        k_particle_movers_t k_particle_movers,
+        k_accumulators_sa_t k_accumulators_sa,
+        k_interpolator_t k_interp,
+        //k_particle_movers_t k_local_particle_movers,
+        k_iterator_t k_nm,
+        k_neighbor_t k_neighbors,
+        const grid_t *g,
+        const float qdt_2mc,
+        const float cdt_dx,
+        const float cdt_dy,
+        const float cdt_dz,
+        const float qsp,
+        const int na,
+        const int np,
+        const int max_nm,
+        const int nx,
+        const int ny,
+        const int nz)
+{
 
   const float one            = 1.;
   const float one_third      = 1./3.;
@@ -518,6 +521,16 @@ advance_p_kokkos(k_particles_t k_particles,
           k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
           k_particle_movers(nm, particle_mover_var::pmi)   = local_pm->i;
 
+          // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+          k_particle_copy(nm, particle_var::dx) = p_dx;
+          k_particle_copy(nm, particle_var::dy) = p_dy;
+          k_particle_copy(nm, particle_var::dz) = p_dz;
+          k_particle_copy(nm, particle_var::ux) = p_ux;
+          k_particle_copy(nm, particle_var::uy) = p_uy;
+          k_particle_copy(nm, particle_var::uz) = p_uz;
+          k_particle_copy(nm, particle_var::w) = p_w;
+          k_particle_copy(nm, particle_var::pi) = pii;
+
           // Copy local local_pm back
           //local_pm_dispx = local_pm->dispx;
           //local_pm_dispy = local_pm->dispy;
@@ -586,10 +599,10 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
   advance_p_kokkos(sp->k_p_d,
+                   sp->k_pc_d,
                    sp->k_pm_d,
                    aa->k_a_sa,
                    ia->k_i_d,
-                   //sp->k_pm_l_d,
                    sp->k_nm_d,
                    sp->g->k_neighbor_d,
                    sp->g,
@@ -603,7 +616,8 @@ advance_p( /**/  species_t            * RESTRICT sp,
                    sp->max_nm,
                    sp->g->nx,
                    sp->g->ny,
-                   sp->g->nz);
+                   sp->g->nz
+  );
 
 /*
   args->p0       = sp->p;
