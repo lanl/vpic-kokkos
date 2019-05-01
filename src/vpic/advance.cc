@@ -20,10 +20,13 @@ void print_particles_d(
     Kokkos::parallel_for("particle printer", Kokkos::RangePolicy <
             Kokkos::DefaultExecutionSpace > (0, np), KOKKOS_LAMBDA (size_t i)
     {
-      printf("particles %d has %f %f %f \n", i,
+      printf("%d has %f %f %f %f %f %f \n", i,
                particles(i, particle_var::dx),
                particles(i, particle_var::dy),
-               particles(i, particle_var::dz)
+               particles(i, particle_var::dz),
+               particles(i, particle_var::ux),
+               particles(i, particle_var::uy),
+               particles(i, particle_var::uz)
        );
     });
 
@@ -179,7 +182,7 @@ int vpic_simulation::advance(void) {
 
   // Boundary_p calls move_p, so we need to deal with the current
   // TODO: this will likely break on device?
-  Kokkos::Experimental::contribute(accumulator_array->k_a_h, accumulator_array->k_a_sa);
+  Kokkos::Experimental::contribute(accumulator_array->k_a_h, accumulator_array->k_a_sah);
   accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_h);
 
   // Clean_up once boundary p is done

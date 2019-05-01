@@ -454,7 +454,7 @@ boundary_p_kokkos(
             move_p_kokkos(
                     particle_copy,
                     &(pm[nm]),
-                    aa->k_a_sa,
+                    aa->k_a_sah,
                     g,
                     sp_[id]->g->k_neighbor_h,
                     rangel,
