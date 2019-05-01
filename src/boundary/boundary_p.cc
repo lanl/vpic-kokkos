@@ -352,15 +352,18 @@ boundary_p_kokkos(
   do {
     // Unpack the species list for random acesss
 
+    species_t*       sp_[ MAX_SP];
     particle_t       * RESTRICT ALIGNED(32) sp_p[ MAX_SP];
     particle_mover_t * RESTRICT ALIGNED(32) sp_pm[MAX_SP];
     float sp_q[MAX_SP];
     int sp_np[MAX_SP];
     int sp_nm[MAX_SP];
 
+    // TODO: I'm not sure this inpack buys us anything -- remove?
     if( num_species( sp_list ) > MAX_SP )
       ERROR(( "Update this to support more species" ));
     LIST_FOR_EACH( sp, sp_list ) {
+      sp_[  sp->id ] = sp;
       sp_p[  sp->id ] = sp->p;
       sp_pm[ sp->id ] = sp->pm;
       sp_q[  sp->id ] = sp->q;
@@ -387,50 +390,74 @@ boundary_p_kokkos(
         n  = n_recv[face];
       } else continue;
 
-      // Reverse order injection is done to reduce thrashing of the
-      // particle list (particles are removed reverse order so the
-      // overall impact of removal + injection is to keep injected
-      // particles in order).
-      //
       // WARNING: THIS TRUSTS THAT THE INJECTORS (INCLUDING THOSE
       // RECEIVED FROM OTHER NODES) HAVE VALID PARTICLE IDS.
 
+      // TODO: the benefit of doing this backwards goes away
       pi += n-1;
       for( ; n; pi--, n-- ) {
         id = pi->sp_id;
-        p  = sp_p[id];  np = sp_np[id];
-        pm = sp_pm[id]; nm = sp_nm[id];
 
-#       ifdef DISABLE_DYNAMIC_RESIZING
-        if( np>=sp_max_np[id] ) { n_dropped_particles[id]++; continue; }
-#       endif
-        p[np].dx=pi->dx; p[np].dy=pi->dy; p[np].dz=pi->dz; p[np].i=pi->i;
-        p[np].ux=pi->ux; p[np].uy=pi->uy; p[np].uz=pi->uz; p[np].w=pi->w;
+        //p  = sp_p[id];
+        np = sp_np[id];
+        pm = sp_pm[id];
+        nm = sp_nm[id];
+
+        auto& particle_copy = sp_[id]->k_pc_h;
+
+        int write_index = sp_[id]->num_to_copy;
+
+        // Write out received particle data
+        //p[np].dx=pi->dx;
+        //p[np].dy=pi->dy;
+        //p[np].dz=pi->dz;
+        //p[np].ux=pi->ux;
+        //p[np].uy=pi->uy;
+        //p[np].uz=pi->uz;
+        //p[np].i=pi->i;
+        //p[np].w=pi->w;
+
+        // TODO: if this doesn't work, it's likely because we weren't done with
+        // the data we overwrite here..but I think it's fine
+        // TODO:  because this can be called in a loop we need to write to something like nm not n?
+        printf("writing to n=%d maybe nm=%d is safe \n", sp_[id]->num_to_copy, nm);
+        particle_copy(write_index, particle_var::dx) = pi->dx;
+        particle_copy(write_index, particle_var::dy) = pi->dy;
+        particle_copy(write_index, particle_var::dz) = pi->dz;
+        particle_copy(write_index, particle_var::ux) = pi->ux;
+        particle_copy(write_index, particle_var::uy) = pi->uy;
+        particle_copy(write_index, particle_var::uz) = pi->uz;
+        particle_copy(write_index, particle_var::w)  = pi->w;
+        particle_copy(write_index, particle_var::pi) = pi->i;
+
+        // track how many particles we buffer up here
+        sp_[id]->num_to_copy++;
+
         sp_np[id] = np+1;
 
-#       ifdef DISABLE_DYNAMIC_RESIZING
-        if( nm>=sp_max_nm[id] ) { n_dropped_movers[id]++;    continue; }
-#       endif
         pm[nm].dispx=pi->dispx; pm[nm].dispy=pi->dispy; pm[nm].dispz=pi->dispz;
-        pm[nm].i=np;
-        sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
+
+        //pm[nm].i=np;
+        pm[nm].i=write_index; // Try tell it the index we wrote to
+
+        // TODO: port this call to move_p
+        //sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
+        sp_nm[id] = nm +
+            move_p_kokkos(
+                    particle_copy,
+                    &(pm[nm]),
+                    aa->k_a_sa,
+                    g,
+                    sp_[id]->g->k_neighbor_h,
+                    rangel,
+                    rangeh,
+                    sp_[id]->q
+            );
+
       }
     } while(face!=5);
 
     LIST_FOR_EACH( sp, sp_list ) {
-#     ifdef DISABLE_DYNAMIC_RESIZING
-      if( n_dropped_particles[sp->id] )
-        WARNING(( "Dropped %i particles from species \"%s\".  Use a larger "
-                  "local particle allocation in your simulation setup for "
-                  "this species on this node.",
-                  n_dropped_particles[sp->id], sp->name ));
-      if( n_dropped_movers[sp->id] )
-        WARNING(( "%i particles were not completed moved to their final "
-                  "location this timestep for species \"%s\".  Use a larger "
-                  "local particle mover buffer in your simulation setup "
-                  "for this species on this node.",
-                  n_dropped_movers[sp->id], sp->name ));
-#     endif
       sp->np=sp_np[sp->id];
       sp->nm=sp_nm[sp->id];
     }
@@ -438,7 +465,10 @@ boundary_p_kokkos(
   } while(0);
 
   for( face=0; face<6; face++ )
+  {
     if( shared[face] ) mp_end_send(mp,f2b[face]);
+  }
+
 }
 void
 boundary_p( particle_bc_t       * RESTRICT pbc_list,

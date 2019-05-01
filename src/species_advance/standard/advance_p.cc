@@ -7,7 +7,8 @@
 #include "spa_private.h"
 #include "../../vpic/kokkos_helpers.h"
 
-KOKKOS_FORCEINLINE_FUNCTION
+// TODO: think about if inlining matters?
+//KOKKOS_FORCEINLINE_FUNCTION
 int
 move_p_kokkos(k_particles_t k_particles,
               //k_particle_movers_t k_local_particle_movers,
@@ -337,7 +338,7 @@ advance_p_kokkos(
 
   /*
   printf("original value %f\n\n", k_accumulators(0, 0, 0));
-
+sp_[id]->
   Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int i) {
 
       auto scatter_access = k_accumulators_sa.access();

@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by:
  *   Kevin J. Bowers, Ph.D.
  *   Plasma Physics Group (X-1)
@@ -12,7 +12,7 @@
 #ifndef _species_advance_h_
 #define _species_advance_h_
 
-#include <iostream> 
+#include <iostream>
 
 #include "../sf_interface/sf_interface.h"
 
@@ -112,6 +112,9 @@ typedef struct species {
   k_iterator_t k_nm_d;               // nm iterator
   k_iterator_t::HostMirror k_nm_h;
 
+  // TODO: this should ultimatley be removeable.
+  // This tracks the number of particles we need to move back to the device
+  int num_to_copy = 0;
 
   // Init Kokkos Particle Arrays
   species(int n_particles, int n_pmovers) :
@@ -235,6 +238,17 @@ move_p( particle_t       * ALIGNED(128) p0,    // Particle array
         accumulator_t    * ALIGNED(128) a0,    // Accumulator to use
         const grid_t     *              g,     // Grid parameters
         const float                     qsp ); // Species particle charge
+
+int
+move_p_kokkos(k_particles_t k_particles,
+              //k_particle_movers_t k_local_particle_movers,
+              particle_mover_t * ALIGNED(16)  pm,
+              k_accumulators_sa_t k_accumulators_sa,
+              const grid_t     *              g,
+              Kokkos::View<int64_t*> const& d_neighbor,
+              int64_t rangel,
+              int64_t rangeh,
+              const float                     qsp );
 
 END_C_DECLS
 

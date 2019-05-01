@@ -93,9 +93,46 @@ int vpic_simulation::advance(void) {
 
   TIC
     for( int round=0; round<num_comm_round; round++ )
-      boundary_p( particle_bc_list, species_list,
-                  field_array, accumulator_array );
+      //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
+      boundary_p_kokkos( particle_bc_list, species_list, field_array, accumulator_array );
   TOC( boundary_p, num_comm_round );
+
+
+  // Clean_up once boundary p is done
+  // Copy back the right data to GPU
+  LIST_FOR_EACH( sp, species_list ) {
+
+      // Copy data for copies back to device
+      Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
+
+      auto& particles = sp->k_p_d;
+      auto& particle_copy = sp->k_pc_d;
+      const int np = sp->np;
+      int num_to_copy = sp->num_to_copy;
+
+      printf("Copying %d \n", num_to_copy);
+
+      // Append it to the particles
+      Kokkos::parallel_for("append moved particles", Kokkos::RangePolicy <
+              Kokkos::DefaultExecutionSpace > (0, num_to_copy), KOKKOS_LAMBDA
+              (size_t i)
+      {
+        particles(np+i, particle_var::dx) = particle_copy(i, particle_var::dx);
+        particles(np+i, particle_var::dy) = particle_copy(i, particle_var::dy);
+        particles(np+i, particle_var::dz) = particle_copy(i, particle_var::dz);
+        particles(np+i, particle_var::ux) = particle_copy(i, particle_var::ux);
+        particles(np+i, particle_var::uy) = particle_copy(i, particle_var::uy);
+        particles(np+i, particle_var::uz) = particle_copy(i, particle_var::uz);
+        particles(np+i, particle_var::w)  = particle_copy(i, particle_var::w);
+        particles(np+i, particle_var::pi) = particle_copy(i, particle_var::pi);
+      });
+
+      // Reset this to zero now we've done the write back
+      sp->num_to_copy = 0;
+
+  }
+
+
   LIST_FOR_EACH( sp, species_list ) {
     if( sp->nm && verbose )
       WARNING(( "Removing %i particles associated with unprocessed %s movers (increase num_comm_round)",
