@@ -177,7 +177,6 @@ boundary_p_kokkos(
     n_ci = 0;
 
     // For each species, load the movers
-
     LIST_FOR_EACH( sp, sp_list ) {
       const float   sp_q  = sp->q;
       const int32_t sp_id = sp->id;
@@ -192,7 +191,7 @@ boundary_p_kokkos(
 
       // TODO: the monotonic requirement should go away, thus we can (try)
       // remove this
-      std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers);
+      //std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers);
 
       // Note that particle movers for each species are processed in
       // reverse order.  This allows us to backfill holes in the
@@ -207,15 +206,18 @@ boundary_p_kokkos(
       for( ; nm; pm--, nm-- )
       {
         int i = pm->i;
+        int copy_index = nm -1;
+
+        printf("i %d p0i %d pi %f nm %d \n", pm->i, p0[i].i, sp->k_pc_h(copy_index, particle_var::pi), nm);
 
         //int voxel = p0[i].i;
-        int voxel = sp->k_pc_h(nm, particle_var::pi);
+        int voxel = sp->k_pc_h(copy_index, particle_var::pi);
 
         int face = voxel & 7;
         voxel >>= 3;
 
         //p0[i].i = voxel;
-        sp->k_pc_h(nm, particle_var::pi) = voxel;
+        sp->k_pc_h(copy_index, particle_var::pi) = voxel;
 
         int64_t nn = neighbor[ 6*voxel + face ];
 
@@ -225,7 +227,7 @@ boundary_p_kokkos(
           // Ideally, we would batch all rhob accumulations together
           // for efficiency
           Kokkos::abort("Not implemented yet");
-          accumulate_rhob( f, p0+i, g, sp_q );
+          //accumulate_rhob( f, p0+i, g, sp_q );
           //goto backfill;
           continue;
         }
@@ -233,35 +235,36 @@ boundary_p_kokkos(
         // Send to a neighboring node
         if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
         {
-          pi = &pi_send[face][n_send[face]++];
+            printf("send to neighbor \n");
+            pi = &pi_send[face][n_send[face]++];
 
-          //pi->dx=p0[i].dx;
-          //pi->dy=p0[i].dy;
-          //pi->dz=p0[i].dz;
-          pi->dx = sp->k_pc_h(nm, particle_var::dx);
-          pi->dy = sp->k_pc_h(nm, particle_var::dy);
-          pi->dz = sp->k_pc_h(nm, particle_var::dz);
+            //pi->dx=p0[i].dx;
+            //pi->dy=p0[i].dy;
+            //pi->dz=p0[i].dz;
+            pi->dx = sp->k_pc_h(copy_index, particle_var::dx);
+            pi->dy = sp->k_pc_h(copy_index, particle_var::dy);
+            pi->dz = sp->k_pc_h(copy_index, particle_var::dz);
 
-          pi->i =nn - range[face];
+            pi->i = nn - range[face];
 
-          //pi->ux=p0[i].ux;
-          //pi->uy=p0[i].uy;
-          //pi->uz=p0[i].uz;
-          pi->ux = sp->k_pc_h(nm, particle_var::ux);
-          pi->uy = sp->k_pc_h(nm, particle_var::uy);
-          pi->uz = sp->k_pc_h(nm, particle_var::uz);
+            //pi->ux=p0[i].ux;
+            //pi->uy=p0[i].uy;
+            //pi->uz=p0[i].uz;
+            pi->ux = sp->k_pc_h(copy_index, particle_var::ux);
+            pi->uy = sp->k_pc_h(copy_index, particle_var::uy);
+            pi->uz = sp->k_pc_h(copy_index, particle_var::uz);
 
-          //pi->w=p0[i].w;
-          pi->w = sp->k_pc_h(nm, particle_var::w);
+            //pi->w=p0[i].w;
+            pi->w = sp->k_pc_h(copy_index, particle_var::w);
 
-          pi->dispx = pm->dispx; pi->dispy = pm->dispy; pi->dispz = pm->dispz;
-          pi->sp_id = sp_id;
+            pi->dispx = pm->dispx; pi->dispy = pm->dispy; pi->dispz = pm->dispz;
+            pi->sp_id = sp_id;
 
-          (&pi->dx)[axis[face]] = dir[face];
-          pi->i                 = nn - range[face];
-          pi->sp_id             = sp_id;
-          //goto backfill;
-          continue;
+            (&pi->dx)[axis[face]] = dir[face];
+            pi->i                 = nn - range[face];
+            pi->sp_id             = sp_id;
+            //goto backfill;
+            continue;
         }
 
         // User-defined handling
@@ -285,12 +288,14 @@ boundary_p_kokkos(
         nn = -nn - 3; // Assumes reflective/absorbing are -1, -2
         if( (nn>=0) & (nn<nb) ) {
             Kokkos::abort("Custom boundary not implemented");
-            n_ci += pbc_interact[nn]( pbc_params[nn], sp, p0+i, pm,
-                    ci+n_ci, 1, face );
+            //n_ci += pbc_interact[nn]( pbc_params[nn], sp, p0+i, pm,
+                    //ci+n_ci, 1, face );
             continue;
         }
 
         // Uh-oh: We fell through
+        //if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
+        printf("nn %d rangel %ld rangeh %ld rangem %ld \n", nn, rangel, rangeh, rangem);
 
         WARNING(( "Unknown boundary interaction ... dropping particle "
                   "(species=%s)", sp->name ));
@@ -302,7 +307,9 @@ boundary_p_kokkos(
 
       }
 
-      sp->np = np;
+      printf(" would be np %d nm %d \n", sp->np, sp->nm);
+      //sp->np = np;
+      printf("Writing sp->nm = 0 \n");
       sp->nm = 0;
     }
 
@@ -379,7 +386,7 @@ boundary_p_kokkos(
       /**/  particle_t          * RESTRICT ALIGNED(32) p;
       /**/  particle_mover_t    * RESTRICT ALIGNED(16) pm;
       const particle_injector_t * RESTRICT ALIGNED(16) pi;
-      int np, nm, n, id;
+      int nm, n, id;
 
       face++; if( face==7 ) face = 0;
       if( face==6 ) pi = ci, n = n_ci;
@@ -399,7 +406,7 @@ boundary_p_kokkos(
         id = pi->sp_id;
 
         //p  = sp_p[id];
-        np = sp_np[id];
+        //np = sp_np[id];
         pm = sp_pm[id];
         nm = sp_nm[id];
 
@@ -420,7 +427,7 @@ boundary_p_kokkos(
         // TODO: if this doesn't work, it's likely because we weren't done with
         // the data we overwrite here..but I think it's fine
         // TODO:  because this can be called in a loop we need to write to something like nm not n?
-        printf("writing to n=%d maybe nm=%d is safe \n", sp_[id]->num_to_copy, nm);
+        printf("writing to n=%d for %p \n", sp_[id]->num_to_copy, sp_[id]);
         particle_copy(write_index, particle_var::dx) = pi->dx;
         particle_copy(write_index, particle_var::dy) = pi->dy;
         particle_copy(write_index, particle_var::dz) = pi->dz;
@@ -433,7 +440,10 @@ boundary_p_kokkos(
         // track how many particles we buffer up here
         sp_[id]->num_to_copy++;
 
-        sp_np[id] = np+1;
+        printf("sp_[id] np %d vs numcopy %d \n", sp_[id]->np,  sp_[id]->num_to_copy);
+
+        // Don't update np yet, we have not copied it back
+        //sp_np[id] = np+1;
 
         pm[nm].dispx=pi->dispx; pm[nm].dispy=pi->dispy; pm[nm].dispz=pi->dispz;
 
@@ -458,7 +468,7 @@ boundary_p_kokkos(
     } while(face!=5);
 
     LIST_FOR_EACH( sp, sp_list ) {
-      sp->np=sp_np[sp->id];
+      //sp->np=sp_np[sp->id];
       sp->nm=sp_nm[sp->id];
     }
 

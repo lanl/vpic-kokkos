@@ -226,6 +226,16 @@ move_p_kokkos(k_particles_t k_particles,
   return 0; // Return "mover not in use"
 }
 
+void print_nm(k_particle_movers_t particle_movers, int nm)
+{
+    Kokkos::parallel_for("nm printer", Kokkos::RangePolicy <
+            Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (size_t i)
+    {
+       printf(" %d has %f \n", i, particle_movers(i, particle_mover_var::pmi));
+    });
+
+}
+
 void print_particles_d(
         k_particles_t particles
         )
@@ -236,62 +246,6 @@ void print_particles_d(
        printf(" %d has %f \n", i, particles(i, particle_var::dx));
     });
 
-}
-/**
- * @brief This function takes k_particle_movers as a map to tell us where gaps
- * will be in the array, and fills those gaps in parallel
- *
- * This assumes the movers will not have any repeats in indexing, otherwise
- * it's not safe to do in parallel
- *
- * @param k_particles The array to compact
- * @param k_particle_movers The array holding the packing mask
- */
-void compress_particle_data(
-        k_particles_t particles,
-        k_particle_movers_t particle_movers,
-        const int32_t nm,
-        const int32_t np
-)
-{
-    // From particle_movers(nm, particle_mover_var::pmi), we know where the
-    // gaps in particle are
-
-    // We can safely back fill the gaps in parallel by looping over the movers,
-    // which are guaranteed to be unique, and sending np-i to that index
-
-    // WARNING: In SoA configuration this may get a bit cache thrashy?
-    // TODO: this may perform better if the index in the movers are sorted first..
-
-    Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
-            Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (size_t n)
-    {
-        int pull_from = np - n; // grab a particle from the end block
-        int write_to = particle_movers(n, particle_mover_var::pmi); // put it in a gap
-        // assert(write_to < pull_from);
-
-        // Move the particle from np-n to pm->i
-        particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
-        particles(write_to, particle_var::dy) = particles(pull_from, particle_var::dy);
-        particles(write_to, particle_var::dz) = particles(pull_from, particle_var::dz);
-        particles(write_to, particle_var::ux) = particles(pull_from, particle_var::ux);
-        particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
-        particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
-        particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
-        particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
-
-        // TODO: this isn't actually needed for production
-        // Zero out old value
-        particles(pull_from, particle_var::dx) = 0.0;
-        particles(pull_from, particle_var::dy) = 0.0;
-        particles(pull_from, particle_var::dz) = 0.0;
-        particles(pull_from, particle_var::ux) = 0.0;
-        particles(pull_from, particle_var::uy) = 0.0;
-        particles(pull_from, particle_var::uz) = 0.0;
-        particles(pull_from, particle_var::w)  = 0.0;
-        particles(pull_from, particle_var::pi) = 0.0;
-
-    });
 }
 
 void
@@ -690,22 +644,14 @@ advance_p( /**/  species_t            * RESTRICT sp,
   // I need to know the number of movers that got populated so I can call the
   // compress. Let's copy it back
   Kokkos::deep_copy(sp->k_nm_d, sp->k_nm_h);
-  int nm = sp->k_nm_h(0);
-  int np = sp->np;
 
-  // Calling this before we modify boundary_p will create some funkyness... care
-  compress_particle_data(
-          sp->k_p_d,
-          sp->k_pm_d,
-          nm,
-          np
-  );
-  // Update np now we removed them...
-  sp->np -= nm;
+  int nm = sp->k_nm_h(0);
 
   // Copy particle mirror movers back so we have their data safe. Ready for
   // boundary_p_kokkos
   Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
+
+  print_nm(sp->k_pm_d, nm);
 
 /*
   args->p0       = sp->p;

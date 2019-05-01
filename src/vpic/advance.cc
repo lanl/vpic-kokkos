@@ -12,12 +12,71 @@
 
 #define FAK field_array->kernel
 
+/**
+ * @brief This function takes k_particle_movers as a map to tell us where gaps
+ * will be in the array, and fills those gaps in parallel
+ *
+ * This assumes the movers will not have any repeats in indexing, otherwise
+ * it's not safe to do in parallel
+ *
+ * @param k_particles The array to compact
+ * @param k_particle_movers The array holding the packing mask
+ */
+void compress_particle_data(
+        k_particles_t particles,
+        k_particle_movers_t particle_movers,
+        const int32_t nm,
+        const int32_t np
+)
+{
+    // From particle_movers(nm, particle_mover_var::pmi), we know where the
+    // gaps in particle are
+
+    // We can safely back fill the gaps in parallel by looping over the movers,
+    // which are guaranteed to be unique, and sending np-i to that index
+
+    // WARNING: In SoA configuration this may get a bit cache thrashy?
+    // TODO: this may perform better if the index in the movers are sorted first..
+
+    Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
+            Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (size_t n)
+    {
+        // TODO: is this np or np-1?
+        int pull_from = (np-1) - n; // grab a particle from the end block
+        int write_to = particle_movers(n, particle_mover_var::pmi); // put it in a gap
+        // assert(write_to < pull_from);
+
+        // Move the particle from np-n to pm->i
+        particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
+        particles(write_to, particle_var::dy) = particles(pull_from, particle_var::dy);
+        particles(write_to, particle_var::dz) = particles(pull_from, particle_var::dz);
+        particles(write_to, particle_var::ux) = particles(pull_from, particle_var::ux);
+        particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
+        particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
+        particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
+        particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
+
+        // TODO: this isn't actually needed for production
+        // Zero out old value
+        particles(pull_from, particle_var::dx) = 0.0;
+        particles(pull_from, particle_var::dy) = 0.0;
+        particles(pull_from, particle_var::dz) = 0.0;
+        particles(pull_from, particle_var::ux) = 0.0;
+        particles(pull_from, particle_var::uy) = 0.0;
+        particles(pull_from, particle_var::uz) = 0.0;
+        particles(pull_from, particle_var::w)  = 0.0;
+        particles(pull_from, particle_var::pi) = 0.0;
+
+    });
+}
+
 int vpic_simulation::advance(void) {
   species_t *sp;
   double err;
 
   // Determine if we are done ... see note below why this is done here
 
+  printf("STEP %ld \n", step());
   if( num_step>0 && step()>=num_step ) return 0;
 
   // Sort the particles for performance if desired.
@@ -102,36 +161,65 @@ int vpic_simulation::advance(void) {
   // Copy back the right data to GPU
   LIST_FOR_EACH( sp, species_list ) {
 
+      const int nm = sp->k_nm_h(0);
+      printf("!!! NM %d vs sp nm %d \n", nm, sp->nm);
+      int np = sp->np;
+
+      // TODO: this can be hoisted to the end of advance_p if desired
+      compress_particle_data(
+              sp->k_p_d,
+              sp->k_pm_d,
+              nm,
+              np
+      );
+
+      // Update np now we removed them...
+      sp->np -= nm;
+
+      printf("pre np %d post np %d \n", np, sp->np);
+
       // Copy data for copies back to device
       Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
 
       auto& particles = sp->k_p_d;
       auto& particle_copy = sp->k_pc_d;
-      const int np = sp->np;
       int num_to_copy = sp->num_to_copy;
 
-      printf("Copying %d \n", num_to_copy);
+      printf("Copying %d for %p\n", num_to_copy, sp);
 
       // Append it to the particles
       Kokkos::parallel_for("append moved particles", Kokkos::RangePolicy <
               Kokkos::DefaultExecutionSpace > (0, num_to_copy), KOKKOS_LAMBDA
               (size_t i)
       {
-        particles(np+i, particle_var::dx) = particle_copy(i, particle_var::dx);
-        particles(np+i, particle_var::dy) = particle_copy(i, particle_var::dy);
-        particles(np+i, particle_var::dz) = particle_copy(i, particle_var::dz);
-        particles(np+i, particle_var::ux) = particle_copy(i, particle_var::ux);
-        particles(np+i, particle_var::uy) = particle_copy(i, particle_var::uy);
-        particles(np+i, particle_var::uz) = particle_copy(i, particle_var::uz);
-        particles(np+i, particle_var::w)  = particle_copy(i, particle_var::w);
-        particles(np+i, particle_var::pi) = particle_copy(i, particle_var::pi);
+        int npi = np+i; // i goes from 0..n so no need for -1
+        particles(npi, particle_var::dx) = particle_copy(i, particle_var::dx);
+        particles(npi, particle_var::dy) = particle_copy(i, particle_var::dy);
+        particles(npi, particle_var::dz) = particle_copy(i, particle_var::dz);
+        particles(npi, particle_var::ux) = particle_copy(i, particle_var::ux);
+        particles(npi, particle_var::uy) = particle_copy(i, particle_var::uy);
+        particles(npi, particle_var::uz) = particle_copy(i, particle_var::uz);
+        particles(npi, particle_var::w)  = particle_copy(i, particle_var::w);
+        particles(npi, particle_var::pi) = particle_copy(i, particle_var::pi);
+
+        printf("Writing to particle id %d \n", npi);
       });
 
       // Reset this to zero now we've done the write back
+      np = sp->np;
+      sp->np += num_to_copy;
+      printf("recv pre np %d post np %d \n", np, sp->np);
       sp->num_to_copy = 0;
 
   }
 
+  // TODO: this can be removed once the below does not rely on host memory
+  KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
+
+  // This copies over a val for nm, which is a lie
+  LIST_FOR_EACH( sp, species_list ) {
+      sp->nm = 0;
+  }
 
   LIST_FOR_EACH( sp, species_list ) {
     if( sp->nm && verbose )
