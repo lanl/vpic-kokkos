@@ -10,7 +10,7 @@
 // TODO: think about if inlining matters?
 //KOKKOS_FORCEINLINE_FUNCTION
 int
-move_p_kokkos(k_particles_t k_particles,
+move_p_kokkos(const k_particles_t& k_particles,
               //k_particle_movers_t k_local_particle_movers,
               particle_mover_t * ALIGNED(16)  pm,
               k_accumulators_sa_t k_accumulators_sa,
@@ -239,14 +239,14 @@ void print_nm(k_particle_movers_t particle_movers, int nm)
 
 void
 advance_p_kokkos(
-        k_particles_t k_particles,
-        k_particles_t k_particle_copy,
-        k_particle_movers_t k_particle_movers,
+        k_particles_t& k_particles,
+        k_particles_t& k_particle_copy,
+        k_particle_movers_t& k_particle_movers,
         k_accumulators_sa_t k_accumulators_sa,
-        k_interpolator_t k_interp,
+        k_interpolator_t& k_interp,
         //k_particle_movers_t k_local_particle_movers,
-        k_iterator_t k_nm,
-        k_neighbor_t k_neighbors,
+        k_iterator_t& k_nm,
+        k_neighbor_t& k_neighbors,
         const grid_t *g,
         const float qdt_2mc,
         const float cdt_dx,
@@ -577,7 +577,7 @@ sp_[id]->
 void
 advance_p( /**/  species_t            * RESTRICT sp,
            /**/  accumulator_array_t  * RESTRICT aa,
-           const interpolator_array_t * RESTRICT ia ) {
+           interpolator_array_t * RESTRICT ia ) {
   //DECLARE_ALIGNED_ARRAY( advance_p_pipeline_args_t, 128, args, 1 );
   //DECLARE_ALIGNED_ARRAY( particle_mover_seg_t, 128, seg, MAX_PIPELINE+1 );
   //int rank;

@@ -178,7 +178,7 @@ sort_p( species_t * RESTRICT sp );
 void
 advance_p( /**/  species_t            * RESTRICT sp,
            /**/  accumulator_array_t  * RESTRICT aa,
-           const interpolator_array_t * RESTRICT ia );
+                 interpolator_array_t * RESTRICT ia );
 
 // In center_p.cxx
 
@@ -240,7 +240,7 @@ move_p( particle_t       * ALIGNED(128) p0,    // Particle array
         const float                     qsp ); // Species particle charge
 
 int
-move_p_kokkos(k_particles_t k_particles,
+move_p_kokkos(const k_particles_t& k_particles,
               //k_particle_movers_t k_local_particle_movers,
               particle_mover_t * ALIGNED(16)  pm,
               k_accumulators_sa_t k_accumulators_sa,
