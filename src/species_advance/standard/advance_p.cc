@@ -236,17 +236,6 @@ void print_nm(k_particle_movers_t particle_movers, int nm)
 
 }
 
-void print_particles_d(
-        k_particles_t particles
-        )
-{
-    Kokkos::parallel_for("particle printer", Kokkos::RangePolicy <
-            Kokkos::DefaultExecutionSpace > (0, particles.size()), KOKKOS_LAMBDA (size_t i)
-    {
-       printf(" %d has %f \n", i, particles(i, particle_var::dx));
-    });
-
-}
 
 void
 advance_p_kokkos(

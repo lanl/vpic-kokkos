@@ -12,6 +12,22 @@
 
 #define FAK field_array->kernel
 
+void print_particles_d(
+        k_particles_t particles
+        )
+{
+    Kokkos::parallel_for("particle printer", Kokkos::RangePolicy <
+            Kokkos::DefaultExecutionSpace > (0, particles.size()), KOKKOS_LAMBDA (size_t i)
+    {
+      printf("particles %d has %f %f %f \n", i,
+               particles(i, particle_var::dx),
+               particles(i, particle_var::dy),
+               particles(i, particle_var::dz)
+       );
+    });
+
+}
+
 /**
  * @brief This function takes k_particle_movers as a map to tell us where gaps
  * will be in the array, and fills those gaps in parallel
@@ -41,9 +57,13 @@ void compress_particle_data(
     Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
             Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (size_t n)
     {
+
+
+
         // TODO: is this np or np-1?
-        int pull_from = (np-1) - n; // grab a particle from the end block
-        int write_to = particle_movers(n, particle_mover_var::pmi); // put it in a gap
+        // Doing this in the "inverse order" to match vpic
+        int pull_from = (np-1) - (n); // grab a particle from the end block
+        int write_to = particle_movers(nm-n-1, particle_mover_var::pmi); // put it in a gap
         // assert(write_to < pull_from);
 
         // Move the particle from np-n to pm->i
@@ -156,7 +176,6 @@ int vpic_simulation::advance(void) {
       boundary_p_kokkos( particle_bc_list, species_list, field_array, accumulator_array );
   TOC( boundary_p, num_comm_round );
 
-
   // Clean_up once boundary p is done
   // Copy back the right data to GPU
   LIST_FOR_EACH( sp, species_list ) {
@@ -175,6 +194,7 @@ int vpic_simulation::advance(void) {
 
       // Update np now we removed them...
       sp->np -= nm;
+      np = sp->np;
 
       printf("pre np %d post np %d \n", np, sp->np);
 
@@ -210,6 +230,9 @@ int vpic_simulation::advance(void) {
       sp->np += num_to_copy;
       printf("recv pre np %d post np %d \n", np, sp->np);
       sp->num_to_copy = 0;
+
+      printf("Species np %d \n", sp->np);
+      print_particles_d(particles);
 
   }
 
