@@ -398,12 +398,12 @@ int vpic_simulation::advance(void) {
 
   LIST_FOR_EACH( sp, species_list )
   {
-    printf("start push \n");
+    printf("accum start push \n");
     print_particles_d(sp->k_p_d, sp->np); // should not see any zeros
-    printf("do push \n");
+    printf("accum do push \n");
     TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
     print_particles_d(sp->k_p_d, sp->np); // should not see any zeros
-    printf("end push \n");
+    printf("accum end push \n");
   }
 
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
@@ -438,8 +438,8 @@ int vpic_simulation::advance(void) {
   // guard lists. Particles that absorbed are added to rhob (using a corrected
   // local accumulation).
 
+  // This should mean the kokkos accum data is up to date
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
-
 
   printf("accum pre boundary start \n");
   print_accumulator(accumulator_array->k_a_h, lna);
@@ -457,10 +457,13 @@ int vpic_simulation::advance(void) {
   //
   //print_fields(accumulator_array->k_a_h);
 
-  Kokkos::Experimental::contribute(accumulator_array->k_a_h, accumulator_array->k_a_sah);
-  Kokkos::deep_copy(accumulator_array->k_a_d, (accumulator_array->k_a_h));
-  accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_h);
+  //Kokkos::Experimental::contribute(accumulator_array->k_a_h, accumulator_array->k_a_sah);
+  //accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_h);
 
+  // Update device so we can pull it all the way back to the host
+  Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
+  /*
   // Move these value back to the real, on host, accum
   Kokkos::parallel_for("copy accumulator to host", KOKKOS_TEAM_POLICY_HOST \
       (na, Kokkos::AUTO),                          \
@@ -474,12 +477,9 @@ int vpic_simulation::advance(void) {
       accumulator_array->a[i].jz[j] = k_accumulators_h(i, accumulator_var::jz, j); \
     }); \
   });
-  
-  std::cout << "DONE CONTRIBUTE" << std::endl;
+  */
 
-  printf("accum post boundary start \n");
-  print_accumulator(accumulator_array->k_a_h, lna);
-  printf("accum post boundary end \n");
+  std::cout << "DONE CONTRIBUTE" << std::endl;
 
   // Clean_up once boundary p is done
   // Copy back the right data to GPU
@@ -501,7 +501,7 @@ int vpic_simulation::advance(void) {
       sp->np -= nm;
 
       auto& particles = sp->k_p_d;
-      print_particles_d(particles, sp->np); // should not see any zeros
+      //print_particles_d(particles, sp->np); // should not see any zeros
 
       // Copy data for copies back to device
       Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
@@ -534,7 +534,7 @@ int vpic_simulation::advance(void) {
       sp->num_to_copy = 0;
 
       printf("Species np %d \n", sp->np);
-      //print_particles_d(particles, sp->np);
+      print_particles_d(particles, sp->np);
 
   }
 
@@ -545,6 +545,10 @@ int vpic_simulation::advance(void) {
   LIST_FOR_EACH( sp, species_list ) {
       sp->nm = 0;
   }
+
+  printf("accum post boundary start \n");
+  print_accumulator(accumulator_array->k_a_h, lna);
+  printf("accum post boundary end \n");
 
   /*
   LIST_FOR_EACH( sp, species_list ) {

@@ -69,6 +69,15 @@ boundary_p_kokkos(
       )
 {
 
+  // TODO: this doesn't need to be made every time
+  // Make scatter add ON HOST
+  Kokkos::Experimental::ScatterView<float
+      *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight,
+      Kokkos::OpenMP, Kokkos::Experimental::ScatterSum,
+      Kokkos::Experimental::ScatterDuplicated ,
+      Kokkos::Experimental::ScatterNonAtomic > scatter_add =
+          Kokkos::Experimental::create_scatter_view(aa->k_a_h);
+
   // Temporary store for local particle injectors
   // FIXME: Ugly static usage
   static particle_injector_t * RESTRICT ALIGNED(16) ci = NULL;
@@ -455,7 +464,8 @@ boundary_p_kokkos(
         sp_nm[id] = nm + move_p_kokkos(
                     particle_copy,
                     &(pm[nm]),
-                    aa->k_a_sah,
+                    //aa->k_a_sah, // TODO: why does changing this to k_a_h break things?
+                    scatter_add,
                     g,
                     sp_[id]->g->k_neighbor_h,
                     rangel,
@@ -477,6 +487,9 @@ boundary_p_kokkos(
   {
     if( shared[face] ) mp_end_send(mp,f2b[face]);
   }
+
+  // contribute SA back
+  Kokkos::Experimental::contribute(aa->k_a_h, scatter_add);
 }
 
 void
