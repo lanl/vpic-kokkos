@@ -12,13 +12,31 @@
 
 #define FAK field_array->kernel
 
+void print_fields(k_accumulators_t fields)
+{
+    Kokkos::parallel_for("field printer", Kokkos::RangePolicy <
+            Kokkos::DefaultExecutionSpace > (0, fields.size()), KOKKOS_LAMBDA (int i)
+    {
+
+    for (int zz = 0; zz < ACCUMULATOR_VAR_COUNT; zz++)
+    {
+      printf("%d has %d %f %f %f %f \n", i, zz,
+               fields(i, zz, 0),
+               fields(i, zz, 1),
+               fields(i, zz, 2),
+               fields(i, zz, 3)
+       );
+      }
+    });
+
+}
 void print_particles_d(
         k_particles_t particles,
         int np
         )
 {
     Kokkos::parallel_for("particle printer", Kokkos::RangePolicy <
-            Kokkos::DefaultExecutionSpace > (0, np), KOKKOS_LAMBDA (size_t i)
+            Kokkos::DefaultExecutionSpace > (0, np), KOKKOS_LAMBDA (int i)
     {
       printf("%d has %f %f %f %f %f %f \n", i,
                particles(i, particle_var::dx),
@@ -58,17 +76,154 @@ void compress_particle_data(
     // WARNING: In SoA configuration this may get a bit cache thrashy?
     // TODO: this may perform better if the index in the movers are sorted first..
 
+
+    // This is a O(NP) solution. There likely exists a faster O(NM) solution
+    // but my attempt had a data race
+
+
+
+    // POSSIBLE IMPROVEMENT, A better way to do is this?:
+    //   Run the back fill loop but if a "pull_from" id is a gap (which can be
+    //   detected by setting a special flag in it's p->i value), then skip it.
+    //   Instead add the index of that guy to an (atomic) clean up list
+    //
+    //   Do a second pass over the cleanup list ? (care of repeated data race..)
+
+    // This is a little slow, but not a deal breaker
+    // Build a list of "safe" filling ids, to avoid data race
+        // we do this for the case where a "gap" exists in the backfill region (np-nm)
+
+    // TODO: prevent this malloc every time
+    // Track is the last 2*nm particles in np are "unsafe" to pull from (i.e
+    // are "gaps")
+    // We want unsafe_index to map up in reverse
+    // [ 0  , 1   , 2   , 3... 2nm ] is equal to
+    // [np-1, np-2, np-3... np-1-2nm]
+    // i.e 0 is the "last particle"
+    // This is annoying, but it will give a back fill order more consistent
+    // with VPIC's serial algorithm
+
+    Kokkos::View<int*> unsafe_index("safe index", 2*nm);
+
+    // Track (atomically) the id's we've tried to pull from when dealing with a
+    // gap in the "danger zone"
+    Kokkos::View<int> panic_counter("panic counter");
+
+    // We use this to store a list of things we bailed out on moving. Typically because the mapping of pull_from->write_to got skipped.
+
+    Kokkos::View<int> clean_up_to_count("clean up to count"); // todo: find an algorithm that doesn't need this
+    Kokkos::View<int> clean_up_from_count("clean up from count"); // todo: find an algorithm that doesn't need this
+
+    // TODO: we only need one of these
+    Kokkos::View<int>::HostMirror clean_up_to_count_h = Kokkos::create_mirror_view(clean_up_to_count);
+    Kokkos::View<int>::HostMirror clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
+
+    Kokkos::View<int*> clean_up_from("clean up from", nm);
+    Kokkos::View<int*> clean_up_to("clean up to", nm);
+
+    // Loop over 2*nm, which is enough to guarantee you `nm` non-gaps
+    // Build a list of safe lookups
+
+    // TODO: we can probably do this online while we do the advance_p
     Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
-            Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (size_t n)
+            Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int i)
     {
+        // If the id of this particle is in the danger zone, don't add it
+            // otherwise, do
+        int cut_off = np-(2*nm);
 
+        int pmi = static_cast<int>( particle_movers(i, particle_mover_var::pmi) );
 
+        // TODO: move this into conditional
+        int index = ((np-1) - pmi); // Map to the reverse indexing
+
+        // If it's less than the cut off, it's safe
+        if ( pmi >= cut_off) // danger zone
+        {
+              unsafe_index(index) = 1; // 1 marks it as unsafe
+              printf("Un safe index %d (really %d ) \n", index, pmi);
+        }
+        else {
+            printf("Safe %d at %f with cut off %d  from np=%d nm=%d would be index %d\n", i, particle_movers(i, particle_mover_var::pmi), cut_off, np, nm, index);
+        }
+    });
+
+    // We will use the first 0-nm of safe_index to pull from
+    // We will use the nm -> 2nm range for "panic picks", if the first wasn't safe (involves atomics..)
+
+    Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
+            Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int n)
+    {
 
         // TODO: is this np or np-1?
         // Doing this in the "inverse order" to match vpic
         int pull_from = (np-1) - (n); // grab a particle from the end block
         int write_to = particle_movers(nm-n-1, particle_mover_var::pmi); // put it in a gap
-        // assert(write_to < pull_from);
+        int danger_zone = np - nm;
+
+        // if they're the same, no need to do it. This can happen below in the
+        // danger zone and we want to avoid "cleaning it up"
+        if (pull_from == write_to) return;
+
+        // If the "gap" is in the danger zone, no need to back fill it
+        if (write_to >= danger_zone)
+        {
+            // TODO: we don't actually have to zero it out, we can just skip
+            printf("zeroing out %d for %d, not pulling from %d\n", write_to, n, pull_from);
+            particles(write_to, particle_var::dx) = 0.0;
+            particles(write_to, particle_var::dy) = 0.0;
+            particles(write_to, particle_var::dz) = 0.0;
+            particles(write_to, particle_var::ux) = 0.0;
+            particles(write_to, particle_var::uy) = 0.0;
+            particles(write_to, particle_var::uz) = 0.0;
+            particles(write_to, particle_var::w)  = 0.0;
+            particles(write_to, particle_var::pi) = 0.0;
+
+            // TODO: by skipping this move, we neglect to move the pull_from to somewhere sensible...
+            // For now we put it on a clean up list..but that sucks
+            int clean_up_from_index = Kokkos::atomic_fetch_add( &clean_up_from_count(), 1 );
+            clean_up_from(clean_up_from_index) = pull_from;
+
+            return;
+        }
+
+        int safe_index_offset = (np-nm);
+
+        // Detect if the index we want to pull from is safe
+        // Want to index this 0...nm
+        //if ( unsafe_index(pull_from - safe_index_offset ) )
+        if ( unsafe_index( n ) )
+        {
+            /*
+            // Draw from the panic picks until we get a safe one
+            printf("%d is NOT safe %d\n", n, pull_from);
+            while (true) {
+                int try_index = Kokkos::atomic_fetch_add( &panic_counter(), 1 ) + nm;
+                printf("will try %d where nm=%d\n", try_index, nm);
+                if ( ! unsafe_index(try_index) ) // i.e is safe
+                {
+                    // The panic pick was safe, use it
+                    pull_from = (np-1)-try_index;
+                    printf("looks safe %d => %d\n", try_index, pull_from);
+                    break;
+                }
+                else {
+                    printf("doesn't look safe %d \n", try_index);
+                }
+            }
+            */
+
+            // Instead we'll get this on the second pass
+            int clean_up_to_index = Kokkos::atomic_fetch_add( &clean_up_to_count(), 1 );
+            clean_up_to(clean_up_to_index) = write_to;
+
+            return;
+        }
+        else {
+            printf("%d is safe %d\n", n, pull_from);
+        }
+
+        printf("moving id %d to %d\n", pull_from, write_to);
 
         // Move the particle from np-n to pm->i
         particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
@@ -92,6 +247,31 @@ void compress_particle_data(
         particles(pull_from, particle_var::pi) = 0.0;
 
     });
+
+    Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
+    Kokkos::deep_copy(clean_up_to_count_h, clean_up_to_count);
+
+    printf("We have %d to clean up from\n", clean_up_from_count_h());
+    printf("We have %d to clean up to\n", clean_up_to_count_h());
+
+    Kokkos::parallel_for("compress clean up", Kokkos::RangePolicy <
+            Kokkos::DefaultExecutionSpace > (0, clean_up_from_count_h() ), KOKKOS_LAMBDA (int n)
+    {
+        int write_to = clean_up_to(n);
+        int pull_from = clean_up_from(n);
+
+        printf("clean up id %d to %d \n", pull_from, write_to);
+
+        particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
+        particles(write_to, particle_var::dy) = particles(pull_from, particle_var::dy);
+        particles(write_to, particle_var::dz) = particles(pull_from, particle_var::dz);
+        particles(write_to, particle_var::ux) = particles(pull_from, particle_var::ux);
+        particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
+        particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
+        particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
+        particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
+    });
+
 }
 
 int vpic_simulation::advance(void) {
@@ -149,6 +329,8 @@ int vpic_simulation::advance(void) {
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
   accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
 
+  //print_fields(accumulator_array->k_a_h);
+
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
@@ -182,8 +364,15 @@ int vpic_simulation::advance(void) {
 
   // Boundary_p calls move_p, so we need to deal with the current
   // TODO: this will likely break on device?
+  //
+  //print_fields(accumulator_array->k_a_h);
+
+  accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_h);
   Kokkos::Experimental::contribute(accumulator_array->k_a_h, accumulator_array->k_a_sah);
   accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_h);
+  std::cout << "DONE CONTRIBUTE" << std::endl;
+
+  //print_fields(accumulator_array->k_a_h);
 
   // Clean_up once boundary p is done
   // Copy back the right data to GPU
@@ -203,10 +392,12 @@ int vpic_simulation::advance(void) {
       // Update np now we removed them...
       sp->np -= nm;
 
+      auto& particles = sp->k_p_d;
+      print_particles_d(particles, sp->np); // should not see any zeros
+
       // Copy data for copies back to device
       Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
 
-      auto& particles = sp->k_p_d;
       auto& particle_copy = sp->k_pc_d;
       int num_to_copy = sp->num_to_copy;
 
@@ -215,7 +406,7 @@ int vpic_simulation::advance(void) {
       // Append it to the particles
       Kokkos::parallel_for("append moved particles", Kokkos::RangePolicy <
               Kokkos::DefaultExecutionSpace > (0, num_to_copy), KOKKOS_LAMBDA
-              (size_t i)
+              (int i)
       {
         int npi = sp->np+i; // i goes from 0..n so no need for -1
         particles(npi, particle_var::dx) = particle_copy(i, particle_var::dx);

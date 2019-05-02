@@ -181,7 +181,7 @@ boundary_p_kokkos(
       const float   sp_q  = sp->q;
       const int32_t sp_id = sp->id;
 
-      particle_t * RESTRICT ALIGNED(128) p0 = sp->p;
+      //particle_t * RESTRICT ALIGNED(128) p0 = sp->p;
       int np = sp->np;
 
       particle_mover_t * RESTRICT ALIGNED(16)  pm = sp->pm + sp->nm - 1;
@@ -208,7 +208,7 @@ boundary_p_kokkos(
         int i = pm->i;
         int copy_index = nm -1;
 
-        printf("i %d p0i %d pi %f nm %d \n", pm->i, p0[i].i, sp->k_pc_h(copy_index, particle_var::pi), nm);
+        //printf("i %d p0i %d pi %f nm %d \n", pm->i, p0[i].i, sp->k_pc_h(copy_index, particle_var::pi), nm);
 
         //int voxel = p0[i].i;
         int voxel = sp->k_pc_h(copy_index, particle_var::pi);
@@ -405,7 +405,7 @@ boundary_p_kokkos(
       for( ; n; pi--, n-- ) {
         id = pi->sp_id;
 
-        //p  = sp_p[id];
+        //p  = sp_p[id]; // We can remove this because we don't want to touch the real particle array
         //np = sp_np[id];
         pm = sp_pm[id];
         nm = sp_nm[id];
@@ -426,6 +426,8 @@ boundary_p_kokkos(
 
         // FIXME: if this doesn't work, it's likely because we weren't done with the
         // data we overwrite here..but I think it's fine
+
+        // Should write from 0..nm
         printf("writing to n=%d for %p \n", sp_[id]->num_to_copy, sp_[id]);
         particle_copy(write_index, particle_var::dx) = pi->dx;
         particle_copy(write_index, particle_var::dy) = pi->dy;
@@ -447,7 +449,7 @@ boundary_p_kokkos(
         pm[nm].dispx=pi->dispx; pm[nm].dispy=pi->dispy; pm[nm].dispz=pi->dispz;
 
         //pm[nm].i=np;
-        pm[nm].i=write_index; // Try tell it the index we wrote to
+        pm[nm].i = write_index; // Try tell it the index we wrote to
 
         //sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
         sp_nm[id] = nm +
@@ -476,8 +478,8 @@ boundary_p_kokkos(
   {
     if( shared[face] ) mp_end_send(mp,f2b[face]);
   }
-
 }
+
 void
 boundary_p( particle_bc_t       * RESTRICT pbc_list,
             species_t           * RESTRICT sp_list,
