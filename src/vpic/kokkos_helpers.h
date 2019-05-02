@@ -285,7 +285,7 @@ namespace accumulator_var {
       sp->p[i].i  = k_particles_h(i, particle_var::pi); \
     });\
     \
-    Kokkos::parallel_for("copy_movers_to_host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
+    Kokkos::parallel_for("copy movers to host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
       sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx); \
       sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy); \
       sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz); \

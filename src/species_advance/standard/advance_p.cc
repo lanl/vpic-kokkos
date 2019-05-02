@@ -542,6 +542,9 @@ sp_[id]->
           k_particle_copy(nm, particle_var::w) = p_w;
           k_particle_copy(nm, particle_var::pi) = pii;
 
+          // Tag this one as having left
+          //k_particles(p_index, particle_var::pi) = 999999;
+
           // Copy local local_pm back
           //local_pm_dispx = local_pm->dispx;
           //local_pm_dispy = local_pm->dispy;

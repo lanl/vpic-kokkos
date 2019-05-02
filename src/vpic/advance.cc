@@ -12,21 +12,25 @@
 
 #define FAK field_array->kernel
 
-void print_fields(k_accumulators_t fields)
+void print_accumulator(k_accumulators_t fields, int n)
 {
-    Kokkos::parallel_for("field printer", Kokkos::RangePolicy <
-            Kokkos::DefaultExecutionSpace > (0, fields.size()), KOKKOS_LAMBDA (int i)
-    {
 
-    for (int zz = 0; zz < ACCUMULATOR_VAR_COUNT; zz++)
-    {
-      printf("%d has %d %f %f %f %f \n", i, zz,
-               fields(i, zz, 0),
-               fields(i, zz, 1),
-               fields(i, zz, 2),
-               fields(i, zz, 3)
-       );
-      }
+    printf("size of accumulator is %d\n", fields.size() );
+
+    Kokkos::parallel_for("field printer", Kokkos::RangePolicy <
+            Kokkos::DefaultExecutionSpace > (0, n), KOKKOS_LAMBDA (int i)
+            {
+
+
+            for (int zz = 0; zz < ACCUMULATOR_VAR_COUNT; zz++)
+            {
+            printf("accum %d has %d %f %f %f %f \n", i, zz,
+                    fields(i, zz, 0),
+                    fields(i, zz, 1),
+                    fields(i, zz, 2),
+                    fields(i, zz, 3)
+                  );
+            }
     });
 
 }
@@ -38,7 +42,7 @@ void print_particles_d(
     Kokkos::parallel_for("particle printer", Kokkos::RangePolicy <
             Kokkos::DefaultExecutionSpace > (0, np), KOKKOS_LAMBDA (int i)
     {
-      printf("%d has %f %f %f %f %f %f \n", i,
+      printf("accum part %d has %f %f %f %f %f %f\n", i,
                particles(i, particle_var::dx),
                particles(i, particle_var::dy),
                particles(i, particle_var::dz),
@@ -48,6 +52,10 @@ void print_particles_d(
        );
     });
 
+}
+// TODO: delete
+bool compareParticleMovers2(particle_mover_t& a, particle_mover_t&b) {
+    return a.i < b.i;
 }
 
 /**
@@ -64,7 +72,8 @@ void compress_particle_data(
         k_particles_t particles,
         k_particle_movers_t particle_movers,
         const int32_t nm,
-        const int32_t np
+        const int32_t np,
+        species_t* sp
 )
 {
     // From particle_movers(nm, particle_mover_var::pmi), we know where the
@@ -103,6 +112,65 @@ void compress_particle_data(
     // This is annoying, but it will give a back fill order more consistent
     // with VPIC's serial algorithm
 
+
+//#define SIMPLE_COMPRESS 1
+
+#ifdef SIMPLE_COMPRESS
+
+    // TODO: implement this as a sort
+    // Do the sensible but slow version of the compress, to sanity check the
+    // correctness and performance.
+
+    // currently this is a serialized (read: slow) gpu backfill.. probably
+    // don't use it. But its useful to mirror VPIC functionality
+
+    // sort nm
+
+    //SortView( particles_movers, 0, nm );
+    //Kokkos::deep_copy( host_subarray , work_array );
+
+    std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers2);
+
+    Kokkos::parallel_for("copy movers to device", host_execution_policy(0, nm) , KOKKOS_LAMBDA (int i) { \
+      particle_movers(i, particle_mover_var::dispx) = sp->pm[i].dispx;
+      particle_movers(i, particle_mover_var::dispy) = sp->pm[i].dispy;
+      particle_movers(i, particle_mover_var::dispz) = sp->pm[i].dispz;
+      particle_movers(i, particle_mover_var::pmi)   = sp->pm[i].i;
+    });\
+
+
+    Kokkos::parallel_for("print nm", Kokkos::RangePolicy <
+            Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int i)
+    {
+          printf("%d has %f \n", i, particle_movers(i, particle_mover_var::pmi));
+    });
+
+    Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
+            Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int n)
+    {
+        for (int i = nm-1; i >= 0; i++)
+        {
+            // VPIC backfill
+            // p0[i] = p0[np];
+
+            int pmi = static_cast<int>( particle_movers(i, particle_mover_var::pmi) );
+            int pull_from = np - (nm-1-i);
+
+            //particles(pmi) = particles(np - (nm-1-i));
+            particles(pmi, particle_var::dx) = particles(pull_from, particle_var::dx);
+            particles(pmi, particle_var::dy) = particles(pull_from, particle_var::dy);
+            particles(pmi, particle_var::dz) = particles(pull_from, particle_var::dz);
+            particles(pmi, particle_var::ux) = particles(pull_from, particle_var::ux);
+            particles(pmi, particle_var::uy) = particles(pull_from, particle_var::uy);
+            particles(pmi, particle_var::uz) = particles(pull_from, particle_var::uz);
+            particles(pmi, particle_var::w)  = particles(pull_from, particle_var::w);
+            particles(pmi, particle_var::pi) = particles(pull_from, particle_var::pi);
+        }
+    });
+
+
+
+#else
     Kokkos::View<int*> unsafe_index("safe index", 2*nm);
 
     // Track (atomically) the id's we've tried to pull from when dealing with a
@@ -272,6 +340,8 @@ void compress_particle_data(
         particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
     });
 
+#endif
+
 }
 
 int vpic_simulation::advance(void) {
@@ -320,20 +390,32 @@ int vpic_simulation::advance(void) {
   KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
 
+  int lna = 180;
+
+  printf("accum pre push start \n");
+  print_accumulator(accumulator_array->k_a_h, lna);
+  printf("accum pre push end \n");
+
   LIST_FOR_EACH( sp, species_list )
   {
+    printf("start push \n");
+    print_particles_d(sp->k_p_d, sp->np); // should not see any zeros
+    printf("do push \n");
     TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
+    print_particles_d(sp->k_p_d, sp->np); // should not see any zeros
+    printf("end push \n");
   }
-
 
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
   accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
 
-  //print_fields(accumulator_array->k_a_h);
-
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+
+  //printf("pre regular contibute \n");
+  //print_fields(accumulator_array->k_a_h);
+  //printf("post regular contibute \n");
 
   // Because the partial position push when injecting aged particles might
   // place those particles onto the guard list (boundary interaction) and
@@ -356,6 +438,14 @@ int vpic_simulation::advance(void) {
   // guard lists. Particles that absorbed are added to rhob (using a corrected
   // local accumulation).
 
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
+
+
+  printf("accum pre boundary start \n");
+  print_accumulator(accumulator_array->k_a_h, lna);
+  printf("accum pre boundary end \n");
+
+
   TIC
     for( int round=0; round<num_comm_round; round++ )
       //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
@@ -367,12 +457,29 @@ int vpic_simulation::advance(void) {
   //
   //print_fields(accumulator_array->k_a_h);
 
-  accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_h);
   Kokkos::Experimental::contribute(accumulator_array->k_a_h, accumulator_array->k_a_sah);
+  Kokkos::deep_copy(accumulator_array->k_a_d, (accumulator_array->k_a_h));
   accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_h);
+
+  // Move these value back to the real, on host, accum
+  Kokkos::parallel_for("copy accumulator to host", KOKKOS_TEAM_POLICY_HOST \
+      (na, Kokkos::AUTO),                          \
+      KOKKOS_LAMBDA                                \
+      (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) { \
+    const unsigned int i = team_member.league_rank();              \
+    \
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) { \
+      accumulator_array->a[i].jx[j] = k_accumulators_h(i, accumulator_var::jx, j); \
+      accumulator_array->a[i].jy[j] = k_accumulators_h(i, accumulator_var::jy, j); \
+      accumulator_array->a[i].jz[j] = k_accumulators_h(i, accumulator_var::jz, j); \
+    }); \
+  });
+  
   std::cout << "DONE CONTRIBUTE" << std::endl;
 
-  //print_fields(accumulator_array->k_a_h);
+  printf("accum post boundary start \n");
+  print_accumulator(accumulator_array->k_a_h, lna);
+  printf("accum post boundary end \n");
 
   // Clean_up once boundary p is done
   // Copy back the right data to GPU
@@ -386,7 +493,8 @@ int vpic_simulation::advance(void) {
               sp->k_p_d,
               sp->k_pm_d,
               nm,
-              sp->np
+              sp->np,
+              sp
       );
 
       // Update np now we removed them...
@@ -426,7 +534,7 @@ int vpic_simulation::advance(void) {
       sp->num_to_copy = 0;
 
       printf("Species np %d \n", sp->np);
-      print_particles_d(particles, sp->np);
+      //print_particles_d(particles, sp->np);
 
   }
 
@@ -438,6 +546,7 @@ int vpic_simulation::advance(void) {
       sp->nm = 0;
   }
 
+  /*
   LIST_FOR_EACH( sp, species_list ) {
     if( sp->nm && verbose )
       WARNING(( "Removing %i particles associated with unprocessed %s movers (increase num_comm_round)",
@@ -462,6 +571,7 @@ int vpic_simulation::advance(void) {
     }
     sp->nm = 0;
   }
+  */
 
   // At this point, all particle positions are at r_1 and u_{1/2}, the
   // guard lists are empty and the accumulators on each processor are current.

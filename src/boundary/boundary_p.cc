@@ -452,8 +452,7 @@ boundary_p_kokkos(
         pm[nm].i = write_index; // Try tell it the index we wrote to
 
         //sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
-        sp_nm[id] = nm +
-            move_p_kokkos(
+        sp_nm[id] = nm + move_p_kokkos(
                     particle_copy,
                     &(pm[nm]),
                     aa->k_a_sah,
