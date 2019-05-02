@@ -171,6 +171,7 @@ endif(BUILD_INTERNAL_KOKKOS)
 message(dirs: ${KOKKOS_INCLUDE_DIRS})
 include_directories(${KOKKOS_INCLUDE_DIRS})
 link_directories(${KOKKOS_INCLUDE_DIRS}/../lib) # TODO: bad idea..
+link_directories(${KOKKOS_INCLUDE_DIRS}/lib) # TODO: bad idea..
 
 # Libs
 string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
