@@ -168,18 +168,33 @@ else()
   link_directories(${KOKKOS_INCLUDE_DIRS}/../lib) # TODO: bad idea..
 endif(BUILD_INTERNAL_KOKKOS)
 
-message(dirs: ${KOKKOS_INCLUDE_DIRS})
 include_directories(${KOKKOS_INCLUDE_DIRS})
-link_directories(${KOKKOS_INCLUDE_DIRS}/../lib) # TODO: bad idea..
-link_directories(${KOKKOS_INCLUDE_DIRS}/lib) # TODO: bad idea..
+#string(REPLACE ";" " " KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS}")
+#message(dirs: ${KOKKOS_INCLUDE_DIRS})
+
+#FOREACH (P ${KOKKOS_INCLUDE_DIRS})
+    #message(${P})
+    #include_directories(${P})
+    #link_directories(${P})
+    #ENDFOREACH(P)
+
+# TODO: bad idea.. at best, this is just going to add it to the last one in the
+# array
+link_directories(${KOKKOS_INCLUDE_DIRS}/../lib)
+link_directories(${KOKKOS_INCLUDE_DIRS}/lib) 
 
 # Libs
+message(${string_libraries})
 string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
 set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
 
 # Includes (TODO: this is definitely abuse of the CXX variable..)
 string(REPLACE ";" " -I" string_libraries "-I${KOKKOS_INCLUDE_DIRS}")
 set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+
+string(REPLACE ";" " -L" string_libraries "-L${KOKKOS_INCLUDE_DIRS}")
+set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+
 
 #------------------------------------------------------------------------------#
 # OpenSSL
