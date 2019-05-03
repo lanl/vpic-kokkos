@@ -328,9 +328,6 @@ void compress_particle_data(
     Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
     Kokkos::deep_copy(clean_up_to_count_h, clean_up_to_count);
 
-    printf("We have %d to clean up from\n", clean_up_from_count_h());
-    printf("We have %d to clean up to\n", clean_up_to_count_h());
-
     Kokkos::parallel_for("compress clean up", Kokkos::RangePolicy <
             Kokkos::DefaultExecutionSpace > (0, clean_up_from_count_h() ), KOKKOS_LAMBDA (int n)
     {
@@ -356,6 +353,7 @@ void compress_particle_data(
         particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
         particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
 
+        // TODO: we can remove this needless 0'ing
         particles(pull_from, particle_var::dx) = 0.0;
         particles(pull_from, particle_var::dy) = 0.0;
         particles(pull_from, particle_var::dz) = 0.0;
@@ -452,18 +450,9 @@ int vpic_simulation::advance(void) {
 
   int lna = 180;
 
-  printf("accum pre push start \n");
-  //print_accumulator(accumulator_array->k_a_h, lna);
-  printf("accum pre push end \n");
-
   LIST_FOR_EACH( sp, species_list )
   {
-    printf("accum start push \n");
-    //print_particles_d(sp->k_p_d, sp->np); // should not see any zeros
-    printf("accum do push \n");
     TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
-    //print_particles_d(sp->k_p_d, sp->np); // should not see any zeros
-    printf("accum end push \n");
   }
 
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
@@ -472,10 +461,6 @@ int vpic_simulation::advance(void) {
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
-
-  //printf("pre regular contibute \n");
-  //print_fields(accumulator_array->k_a_h);
-  //printf("post regular contibute \n");
 
   // Because the partial position push when injecting aged particles might
   // place those particles onto the guard list (boundary interaction) and
@@ -500,11 +485,6 @@ int vpic_simulation::advance(void) {
 
   // This should mean the kokkos accum data is up to date
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
-
-  printf("accum pre boundary start \n");
-  //print_accumulator(accumulator_array->k_a_h, lna);
-  printf("accum pre boundary end \n");
-
 
   TIC
     for( int round=0; round<num_comm_round; round++ )
@@ -539,14 +519,11 @@ int vpic_simulation::advance(void) {
   });
   */
 
-  std::cout << "DONE CONTRIBUTE" << std::endl;
-
   // Clean_up once boundary p is done
   // Copy back the right data to GPU
   LIST_FOR_EACH( sp, species_list ) {
 
       const int nm = sp->k_nm_h(0);
-      //printf("!!! NM %d vs sp nm %d \n", nm, sp->nm);
 
       // TODO: this can be hoisted to the end of advance_p if desired
       compress_particle_data(
@@ -569,8 +546,6 @@ int vpic_simulation::advance(void) {
       auto& particle_copy = sp->k_pc_d;
       int num_to_copy = sp->num_to_copy;
 
-      printf("Copying %d for %p\n", num_to_copy, sp);
-
       // Append it to the particles
       Kokkos::parallel_for("append moved particles", Kokkos::RangePolicy <
               Kokkos::DefaultExecutionSpace > (0, num_to_copy), KOKKOS_LAMBDA
@@ -585,21 +560,11 @@ int vpic_simulation::advance(void) {
         particles(npi, particle_var::uz) = particle_copy(i, particle_var::uz);
         particles(npi, particle_var::w)  = particle_copy(i, particle_var::w);
         particles(npi, particle_var::pi) = particle_copy(i, particle_var::pi);
-
-        printf("Writing to particle id %d \n", npi);
       });
 
       // Reset this to zero now we've done the write back
       sp->np += num_to_copy;
       sp->num_to_copy = 0;
-
-      //if (step() > 118)
-      if (step() > 18)
-      {
-          printf("Species np %d \n", sp->np);
-          print_particles_d(particles, sp->np);
-      }
-
   }
 
   // TODO: this can be removed once the below does not rely on host memory
@@ -609,10 +574,6 @@ int vpic_simulation::advance(void) {
   LIST_FOR_EACH( sp, species_list ) {
       sp->nm = 0;
   }
-
-  printf("accum post boundary start \n");
-  //print_accumulator(accumulator_array->k_a_h, lna);
-  printf("accum post boundary end \n");
 
   /*
   LIST_FOR_EACH( sp, species_list ) {
