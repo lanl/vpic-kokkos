@@ -69,6 +69,8 @@ void compress_particle_data(
 
 //#define SIMPLE_COMPRESS 1
 
+// Ignore this...
+/// TODO: delete this?
 #ifdef SIMPLE_COMPRESS
 
     // TODO: implement this as a sort
@@ -127,6 +129,8 @@ void compress_particle_data(
 #else
     Kokkos::View<int*> unsafe_index("safe index", 2*nm);
 
+    // TODO: prevent these allocations from being repeated.
+
     // Track (atomically) the id's we've tried to pull from when dealing with a
     // gap in the "danger zone"
     Kokkos::View<int> panic_counter("panic counter");
@@ -136,7 +140,6 @@ void compress_particle_data(
     Kokkos::View<int> clean_up_to_count("clean up to count"); // todo: find an algorithm that doesn't need this
     Kokkos::View<int> clean_up_from_count("clean up from count"); // todo: find an algorithm that doesn't need this
 
-    // TODO: we only need one of these
     Kokkos::View<int>::HostMirror clean_up_to_count_h = Kokkos::create_mirror_view(clean_up_to_count);
     Kokkos::View<int>::HostMirror clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
 
@@ -156,17 +159,11 @@ void compress_particle_data(
 
         int pmi = static_cast<int>( particle_movers(i, particle_mover_var::pmi) );
 
-        // TODO: move this into conditional
-        int index = ((np-1) - pmi); // Map to the reverse indexing
-
         // If it's less than the cut off, it's safe
         if ( pmi >= cut_off) // danger zone
         {
-              unsafe_index(index) = 1; // 1 marks it as unsafe
-              printf("Un safe index %d (really %d ) \n", index, pmi);
-        }
-        else {
-            printf("Safe %d at %f with cut off %d  from np=%d nm=%d would be index %d\n", i, particle_movers(i, particle_mover_var::pmi), cut_off, np, nm, index);
+          int index = ((np-1) - pmi); // Map to the reverse indexing
+          unsafe_index(index) = 1; // 1 marks it as unsafe
         }
     });
 
@@ -206,10 +203,13 @@ void compress_particle_data(
             {
                 if ( ! unsafe_index( (np-1) - pull_from ) )
                 {
-                    // TODO: if it's not in the danger zone, someone else will fill it..but then we don't want to move it???
+                    // FIXME: if it's not in the danger zone, someone else will
+                    // fill it..but then we don't want to move it??? is this
+                    // true, and a very subtle race condition?
 
-                    // TODO: by skipping this move, we neglect to move the pull_from to somewhere sensible...
-                    // For now we put it on a clean up list..but that sucks
+                    // TODO: by skipping this move, we neglect to move the
+                    // pull_from to somewhere sensible...  For now we put it on
+                    // a clean up list..but that sucks
                     int clean_up_from_index = Kokkos::atomic_fetch_add( &clean_up_from_count(), 1 );
                     clean_up_from(clean_up_from_index) = pull_from;
                 }
@@ -225,25 +225,6 @@ void compress_particle_data(
         //if ( unsafe_index(pull_from - safe_index_offset ) )
         if ( unsafe_index( n ) )
         {
-            /*
-            // Draw from the panic picks until we get a safe one
-            printf("%d is NOT safe %d\n", n, pull_from);
-            while (true) {
-                int try_index = Kokkos::atomic_fetch_add( &panic_counter(), 1 ) + nm;
-                printf("will try %d where nm=%d\n", try_index, nm);
-                if ( ! unsafe_index(try_index) ) // i.e is safe
-                {
-                    // The panic pick was safe, use it
-                    pull_from = (np-1)-try_index;
-                    printf("looks safe %d => %d\n", try_index, pull_from);
-                    break;
-                }
-                else {
-                    printf("doesn't look safe %d \n", try_index);
-                }
-            }
-            */
-
             // Instead we'll get this on the second pass
             int clean_up_to_index = Kokkos::atomic_fetch_add( &clean_up_to_count(), 1 );
             clean_up_to(clean_up_to_index) = write_to;
@@ -328,6 +309,7 @@ int vpic_simulation::advance(void) {
   sorter.create_permute_vector();
   sorter.template sort<ViewType1>(view1);
   */
+
 
   /*
   LIST_FOR_EACH( sp, species_list )
