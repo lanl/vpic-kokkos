@@ -311,18 +311,6 @@ void compress_particle_data(
         particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
         particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
         particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
-
-        // TODO: this isn't actually needed for production
-        // Zero out old value
-        particles(pull_from, particle_var::dx) = 0.0;
-        particles(pull_from, particle_var::dy) = 0.0;
-        particles(pull_from, particle_var::dz) = 0.0;
-        particles(pull_from, particle_var::ux) = 0.0;
-        particles(pull_from, particle_var::uy) = 0.0;
-        particles(pull_from, particle_var::uz) = 0.0;
-        particles(pull_from, particle_var::w)  = 0.0;
-        particles(pull_from, particle_var::pi) = 0.0;
-
     });
 
     Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
@@ -352,16 +340,6 @@ void compress_particle_data(
         particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
         particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
         particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
-
-        // TODO: we can remove this needless 0'ing
-        particles(pull_from, particle_var::dx) = 0.0;
-        particles(pull_from, particle_var::dy) = 0.0;
-        particles(pull_from, particle_var::dz) = 0.0;
-        particles(pull_from, particle_var::ux) = 0.0;
-        particles(pull_from, particle_var::uy) = 0.0;
-        particles(pull_from, particle_var::uz) = 0.0;
-        particles(pull_from, particle_var::w) = 0.0;
-        particles(pull_from, particle_var::pi) = 0.0;
     });
 
 #endif
