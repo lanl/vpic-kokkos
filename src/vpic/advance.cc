@@ -247,10 +247,19 @@ void compress_particle_data(
             particles(write_to, particle_var::w)  = 0.0;
             particles(write_to, particle_var::pi) = 0.0;
 
-            // TODO: by skipping this move, we neglect to move the pull_from to somewhere sensible...
-            // For now we put it on a clean up list..but that sucks
-            int clean_up_from_index = Kokkos::atomic_fetch_add( &clean_up_from_count(), 1 );
-            clean_up_from(clean_up_from_index) = pull_from;
+            // if pull from is unsafe, skip it
+            if (pull_from >= danger_zone) // We only have lookup for the danger zone
+            {
+                if ( ! unsafe_index( (np-1) - pull_from ) )
+                {
+                    // TODO: if it's not in the danger zone, someone else will fill it..but then we don't want to move it???
+
+                    // TODO: by skipping this move, we neglect to move the pull_from to somewhere sensible...
+                    // For now we put it on a clean up list..but that sucks
+                    int clean_up_from_index = Kokkos::atomic_fetch_add( &clean_up_from_count(), 1 );
+                    clean_up_from(clean_up_from_index) = pull_from;
+                }
+            }
 
             return;
         }
@@ -329,6 +338,14 @@ void compress_particle_data(
         int pull_from = clean_up_from(n);
 
         printf("clean up id %d to %d \n", pull_from, write_to);
+            printf("--> %f %f %f -> %f %f %f \n",
+                particles(pull_from, particle_var::dx),
+                particles(pull_from, particle_var::dy),
+                particles(pull_from, particle_var::dz),
+                particles(write_to, particle_var::dx),
+                particles(write_to, particle_var::dy),
+                particles(write_to, particle_var::dz)
+            );
 
         particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
         particles(write_to, particle_var::dy) = particles(pull_from, particle_var::dy);
@@ -338,6 +355,15 @@ void compress_particle_data(
         particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
         particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
         particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
+
+        particles(pull_from, particle_var::dx) = 0.0;
+        particles(pull_from, particle_var::dy) = 0.0;
+        particles(pull_from, particle_var::dz) = 0.0;
+        particles(pull_from, particle_var::ux) = 0.0;
+        particles(pull_from, particle_var::uy) = 0.0;
+        particles(pull_from, particle_var::uz) = 0.0;
+        particles(pull_from, particle_var::w) = 0.0;
+        particles(pull_from, particle_var::pi) = 0.0;
     });
 
 #endif
@@ -360,6 +386,40 @@ int vpic_simulation::advance(void) {
       if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
       TIC sort_p( sp ); TOC( sort_p, 1 );
     }
+
+  // Replace sort with a kokkos sort
+  // TODO: move this to a function
+  // TODO: I suspect there is a simpler way to do this?
+  /*
+  typedef Kokkos::BinOp1D< KeyViewType > BinOp;
+  BinOp bin_op(bin_max,min,max);
+  Kokkos::BinSort< KeyViewType , BinOp >
+  sorter(keys,bin_op,false);
+  sorter.create_permute_vector();
+  sorter.template sort<ViewType1>(view1);
+  */
+
+  /*
+  LIST_FOR_EACH( sp, species_list )
+    if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
+    {
+      if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
+          //TIC sort_p( sp ); TOC( sort_p, 1 );
+
+      // For now we need to grab the keys or use a complex comparitor
+      typedef decltype(sp->k_p_d) KeyViewType;
+      typedef Kokkos::BinOp1D< KeyViewType > BinOp;
+
+      // Pull out pi because I'm lazy
+      //
+
+      //Kokkos::BinSort<KeyViewType , BinOp > Sorter(element_,begin,end,binner,false);
+
+      Kokkos::BinSort<KeyViewType,Comparator> bin_sort(keys, begin, end, comp, sort_within_bins );
+      bin_sort.create_permute_vector();
+      bin_sort.sort(element_,begin,end);
+    }
+    */
 
   // At this point, fields are at E_0 and B_0 and the particle positions
   // are at r_0 and u_{-1/2}.  Further the mover lists for the particles should
@@ -393,16 +453,16 @@ int vpic_simulation::advance(void) {
   int lna = 180;
 
   printf("accum pre push start \n");
-  print_accumulator(accumulator_array->k_a_h, lna);
+  //print_accumulator(accumulator_array->k_a_h, lna);
   printf("accum pre push end \n");
 
   LIST_FOR_EACH( sp, species_list )
   {
     printf("accum start push \n");
-    print_particles_d(sp->k_p_d, sp->np); // should not see any zeros
+    //print_particles_d(sp->k_p_d, sp->np); // should not see any zeros
     printf("accum do push \n");
     TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
-    print_particles_d(sp->k_p_d, sp->np); // should not see any zeros
+    //print_particles_d(sp->k_p_d, sp->np); // should not see any zeros
     printf("accum end push \n");
   }
 
@@ -442,7 +502,7 @@ int vpic_simulation::advance(void) {
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
 
   printf("accum pre boundary start \n");
-  print_accumulator(accumulator_array->k_a_h, lna);
+  //print_accumulator(accumulator_array->k_a_h, lna);
   printf("accum pre boundary end \n");
 
 
@@ -486,7 +546,7 @@ int vpic_simulation::advance(void) {
   LIST_FOR_EACH( sp, species_list ) {
 
       const int nm = sp->k_nm_h(0);
-      printf("!!! NM %d vs sp nm %d \n", nm, sp->nm);
+      //printf("!!! NM %d vs sp nm %d \n", nm, sp->nm);
 
       // TODO: this can be hoisted to the end of advance_p if desired
       compress_particle_data(
@@ -533,8 +593,12 @@ int vpic_simulation::advance(void) {
       sp->np += num_to_copy;
       sp->num_to_copy = 0;
 
-      printf("Species np %d \n", sp->np);
-      print_particles_d(particles, sp->np);
+      //if (step() > 118)
+      if (step() > 18)
+      {
+          printf("Species np %d \n", sp->np);
+          print_particles_d(particles, sp->np);
+      }
 
   }
 
@@ -547,7 +611,7 @@ int vpic_simulation::advance(void) {
   }
 
   printf("accum post boundary start \n");
-  print_accumulator(accumulator_array->k_a_h, lna);
+  //print_accumulator(accumulator_array->k_a_h, lna);
   printf("accum post boundary end \n");
 
   /*

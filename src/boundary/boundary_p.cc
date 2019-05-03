@@ -244,7 +244,7 @@ boundary_p_kokkos(
         // Send to a neighboring node
         if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
         {
-            printf("send to neighbor \n");
+            //printf("send to neighbor \n");
             pi = &pi_send[face][n_send[face]++];
 
             //pi->dx=p0[i].dx;
@@ -316,9 +316,9 @@ boundary_p_kokkos(
 
       }
 
-      printf(" would be np %d nm %d \n", sp->np, sp->nm);
+      //printf(" would be np %d nm %d \n", sp->np, sp->nm);
       //sp->np = np;
-      printf("Writing sp->nm = 0 \n");
+      //printf("Writing sp->nm = 0 \n");
       sp->nm = 0;
     }
 
@@ -450,7 +450,7 @@ boundary_p_kokkos(
         // track how many particles we buffer up here
         sp_[id]->num_to_copy++;
 
-        printf("sp_[id] np %d vs numcopy %d \n", sp_[id]->np,  sp_[id]->num_to_copy);
+        //printf("sp_[id] np %d vs numcopy %d \n", sp_[id]->np,  sp_[id]->num_to_copy);
 
         // Don't update np yet, we have not copied it back
         //sp_np[id] = np+1;
