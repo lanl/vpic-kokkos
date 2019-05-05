@@ -41,8 +41,15 @@ int vpic_simulation::advance(void) {
       Comparator comp(max, 0, max);
 
       int sort_within_bins = 0;
-      Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, keys.size(), comp, sort_within_bins );
+      Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, sp->np, comp, sort_within_bins );
       bin_sort.create_permute_vector();
+      bin_sort.sort(sp->k_p_d);
+
+  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, sp->np),
+    KOKKOS_LAMBDA (size_t pi)
+    {
+      printf(" sp->k_p_d at %d = %f \n",  pi, sp->k_p_d(pi, particle_var::pi));
+    });
     }
 
   // At this point, fields are at E_0 and B_0 and the particle positions
