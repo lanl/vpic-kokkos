@@ -17,6 +17,9 @@ int vpic_simulation::advance(void) {
   species_t *sp;
   double err;
 
+  KOKKOS_PARTICLE_VARIABLES();
+  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+
   // Determine if we are done ... see note below why this is done here
 
   if( num_step>0 && step()>=num_step ) return 0;
@@ -62,17 +65,16 @@ int vpic_simulation::advance(void) {
 
   if( collision_op_list )
   {
-    TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
+      Kokkos::abort("Collision is not supported");
+      TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
   }
 
-  TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
+  //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
   KOKKOS_INTERPOLATOR_VARIABLES();
   KOKKOS_ACCUMULATOR_VARIABLES();
-  KOKKOS_PARTICLE_VARIABLES();
 
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
-  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
 
   LIST_FOR_EACH( sp, species_list )
