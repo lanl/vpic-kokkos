@@ -17,9 +17,6 @@ int vpic_simulation::advance(void) {
   species_t *sp;
   double err;
 
-  KOKKOS_PARTICLE_VARIABLES();
-  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
-
   // Determine if we are done ... see note below why this is done here
 
   if( num_step>0 && step()>=num_step ) return 0;
@@ -87,7 +84,6 @@ int vpic_simulation::advance(void) {
   accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
 
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
-  KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
 
   // Because the partial position push when injecting aged particles might
@@ -191,7 +187,19 @@ int vpic_simulation::advance(void) {
     if( rank()==0 ) MESSAGE(( "Divergence cleaning electric field" ));
 
     TIC FAK->clear_rhof( field_array ); TOC( clear_rhof,1 );
-    if( species_list ) TIC LIST_FOR_EACH( sp, species_list ) accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, species_list->id );
+    if( species_list ) {
+
+        KOKKOS_PARTICLE_VARIABLES();
+        KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+
+        LIST_FOR_EACH( sp, species_list )
+        {
+            accumulate_rho_p( field_array, sp ); //TOC( accumulate_rho_p, species_list->id );
+        }
+
+        KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
+    }
+
     TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
 
     for( int round=0; round<num_div_e_round; round++ ) {
