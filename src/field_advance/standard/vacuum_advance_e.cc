@@ -829,12 +829,16 @@ printf("Vacuum Advance E Kokkos Kernel\n");
   const float pz_muy = ((nz>1) ? (1+damp)*g->cvac*g->dt*g->rdz : 0)*m->rmuy; 
   const float pz_mux = ((nz>1) ? (1+damp)*g->cvac*g->dt*g->rdz : 0)*m->rmux; 
   const float cj     = g->dt/g->eps0;                                        
+    
+    // Field buffers for GPU - GPU communication
+    field_buffers_t f_buffers = field_buffers_t(nx,ny,nz);
 
   /***************************************************************************
    * Begin tangential B ghost setup
    ***************************************************************************/
   
-    k_begin_remote_ghost_tang_b( fa, fa->g );
+//    k_begin_remote_ghost_tang_b( fa, fa->g );
+    kokkos_begin_remote_ghost_tang_b(fa, fa->g, f_buffers);
 printf("Ran k_begin_remote_ghost_tang_b\n");
     k_local_ghost_tang_b( fa, fa->g );
 printf("Ran k_localghost_tang_b\n");
@@ -846,7 +850,8 @@ printf("Ran vacuum_advance_e_interior_kokkos\n");
    * Finish tangential B ghost setup
    ***************************************************************************/
 
-    k_end_remote_ghost_tang_b( fa, fa->g );
+//    k_end_remote_ghost_tang_b( fa, fa->g );
+    kokkos_end_remote_ghost_tang_b(fa, fa->g, f_buffers);
 printf("Ran k_end_remote_ghost_tang_b\n");
 
   /***************************************************************************
