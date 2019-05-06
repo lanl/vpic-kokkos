@@ -243,6 +243,38 @@ typedef struct field_array {
 
 } field_array_t;
 
+
+typedef struct field_buffers {
+    Kokkos::View<float*>   xyz_sbuf_pos;
+    Kokkos::View<float*>   yzx_sbuf_pos;
+    Kokkos::View<float*>   zxy_sbuf_pos;
+    Kokkos::View<float*>   xyz_rbuf_pos;
+    Kokkos::View<float*>   yzx_rbuf_pos;
+    Kokkos::View<float*>   zxy_rbuf_pos;
+    Kokkos::View<float*>   xyz_sbuf_neg;
+    Kokkos::View<float*>   yzx_sbuf_neg;
+    Kokkos::View<float*>   zxy_sbuf_neg;
+    Kokkos::View<float*>   xyz_rbuf_neg;
+    Kokkos::View<float*>   yzx_rbuf_neg;
+    Kokkos::View<float*>   zxy_rbuf_neg;
+
+    field_buffers(int nx, int ny, int nz) {
+        xyz_sbuf_pos = Kokkos::View<float*>("Send buffer for XYZ positive face", 1 + ny*(nz+1) + (ny+1)*nz);
+        xyz_rbuf_pos = Kokkos::View<float*>("Receive buffer for XYZ positive face", 1 + ny*(nz+1) + (ny+1)*nz);
+        yzx_sbuf_pos = Kokkos::View<float*>("Send buffer for YZX positive face", 1 + nx*(nz+1) + (nx+1)*nz);
+        yzx_rbuf_pos = Kokkos::View<float*>("Receive buffer for YZX positive face", 1 + nx*(nz+1) + (nx+1)*nz);
+        zxy_sbuf_pos = Kokkos::View<float*>("Send buffer for ZXY positive face", 1 + nx*(ny+1) + (nx+1)*ny);
+        zxy_rbuf_pos = Kokkos::View<float*>("Receive buffer for ZXY positive face", 1 + nx*(ny+1) + (nx+1)*ny);
+
+        xyz_sbuf_neg = Kokkos::View<float*>("Send buffer for XYZ negative face", 1 + ny*(nz+1) + (ny+1)*nz);
+        xyz_rbuf_neg = Kokkos::View<float*>("Receive buffer for XYZ negative face", 1 + ny*(nz+1) + (ny+1)*nz);
+        yzx_sbuf_neg = Kokkos::View<float*>("Send buffer for YZX negative face", 1 + nx*(nz+1) + (nx+1)*nz);
+        yzx_rbuf_neg = Kokkos::View<float*>("Receive buffer for YZX negative face", 1 + nx*(nz+1) + (nx+1)*nz);
+        zxy_sbuf_neg = Kokkos::View<float*>("Send buffer for ZXY negative face", 1 + nx*(ny+1) + (nx+1)*ny);
+        zxy_rbuf_neg = Kokkos::View<float*>("Receive buffer for ZXY negative face", 1 + nx*(ny+1) + (nx+1)*ny);
+    }
+} field_buffers_t;
+
 BEGIN_C_DECLS
 
 field_array_t *

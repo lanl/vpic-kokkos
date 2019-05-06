@@ -90,7 +90,7 @@ vpic_simulation::initialize( int argc,
 void
 vpic_simulation::finalize( void ) {
   barrier();
-  //Kokkos::finalize();
+  Kokkos::finalize();
   update_profile( rank()==0 );
 }
 

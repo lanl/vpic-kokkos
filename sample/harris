@@ -25,8 +25,6 @@
 // to zero before the user's initialization block is executed. Up to 16K
 // of global variables can be defined.
 
-#define ADD_EXTRA_MATERIAL
-
 begin_globals {
   double energies_interval;
   double fields_interval;
@@ -169,9 +167,7 @@ begin_initialization {
   // Tensor electronic, magnetic and conductive materials are supported
   // though. See "shapes" for how to define them and assign them to regions.
   // Also, space is initially filled with the first material defined.
-#ifdef ADD_EXTRA_MATERIAL
-    define_material("not-vacuum", 1);
-#endif
+
   // If you pass NULL to define field array, the standard field array will
   // be used (if damp is not provided, no radiation damping will be used).
   define_field_array( NULL, damp );

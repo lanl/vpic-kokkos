@@ -48,6 +48,51 @@ typedef struct pipeline_args {
     INIT_STENCIL();                   \
   }
 
+KOKKOS_INLINE_FUNCTION void update_ex(const k_field_t& k_field, const size_t f0_idx, const size_t fx_idx, const size_t fy_idx, const size_t fz_idx,
+                const float px_muy, const float px_muz, const float py_mux, const float py_muz, const float pz_mux, const float pz_muy,
+                const float damp, const float decayx, const float drivex, const float cj) {
+
+    const float f0_ex = k_field(f0_idx, field_var::ex);
+    const float f0_cby = k_field(f0_idx, field_var::cby);
+    const float f0_cbz = k_field(f0_idx, field_var::cbz);
+    const float f0_tcax = k_field(f0_idx, field_var::tcax);
+    const float f0_jfx = k_field(f0_idx, field_var::jfx);
+    const float fy_cbz = k_field(fy_idx, field_var::cbz);
+    const float fz_cby = k_field(fz_idx, field_var::cby);
+    
+    k_field(f0_idx, field_var::tcax) = (py_muz*(f0_cbz - fy_cbz) - pz_muy*(f0_cby - fz_cby)) - damp*f0_tcax;
+    k_field(f0_idx, field_var::ex) = decayx*f0_ex + drivex*(k_field(f0_idx, field_var::tcax) - cj*f0_jfx);
+}
+KOKKOS_INLINE_FUNCTION void update_ey(const k_field_t& k_field, const size_t f0_idx, const size_t fx_idx, const size_t fy_idx, const size_t fz_idx,
+                const float px_muy, const float px_muz, const float py_mux, const float py_muz, const float pz_mux, const float pz_muy,
+                const float damp, const float decayy, const float drivey, const float cj) {
+
+    const float f0_ey = k_field(f0_idx, field_var::ey);
+    const float f0_cbx = k_field(f0_idx, field_var::cbx);
+    const float f0_cbz = k_field(f0_idx, field_var::cbz);
+    const float f0_tcay = k_field(f0_idx, field_var::tcay);
+    const float f0_jfy = k_field(f0_idx, field_var::jfy);
+    const float fx_cbz = k_field(fx_idx, field_var::cbz);
+    const float fz_cbx = k_field(fz_idx, field_var::cbx);
+    
+    k_field(f0_idx, field_var::tcay) = (pz_mux*(f0_cbx - fz_cbx) - px_muz*(f0_cbz - fx_cbz)) - damp*f0_tcay;
+    k_field(f0_idx, field_var::ey) = decayy*f0_ey + drivey*(k_field(f0_idx, field_var::tcay) - cj*f0_jfy);
+}
+KOKKOS_INLINE_FUNCTION void update_ez(const k_field_t& k_field, const size_t f0_idx, const size_t fx_idx, const size_t fy_idx, const size_t fz_idx,
+                const float px_muy, const float px_muz, const float py_mux, const float py_muz, const float pz_mux, const float pz_muy,
+                const float damp, const float decayz, const float drivez, const float cj) {
+
+    const float f0_ez = k_field(f0_idx, field_var::ez);
+    const float f0_cbx = k_field(f0_idx, field_var::cbx);
+    const float f0_cby = k_field(f0_idx, field_var::cby);
+    const float f0_tcaz = k_field(f0_idx, field_var::tcaz);
+    const float f0_jfz = k_field(f0_idx, field_var::jfz);
+    const float fx_cby = k_field(fx_idx, field_var::cby);
+    const float fy_cbx = k_field(fy_idx, field_var::cbx);
+    
+    k_field(f0_idx, field_var::tcaz) = (px_muy*(f0_cby - fx_cby) - py_mux*(f0_cbx - fy_cbx)) - damp*f0_tcaz;
+    k_field(f0_idx, field_var::ez) = decayz*f0_ez + drivez*(k_field(f0_idx, field_var::tcaz) - cj*f0_jfz);
+}
 #define UPDATE_EX() \
   f0->tcax = ( py_muz*(f0->cbz-fy->cbz) - pz_muy*(f0->cby-fz->cby) ) - \
              damp*f0->tcax; \
@@ -153,10 +198,12 @@ vacuum_advance_e_pipeline_v4( pipeline_args_t * args,
 #endif
 
 void
-vacuum_advance_e( field_array_t * RESTRICT fa,
+vacuum_advance_e_host( field_array_t * RESTRICT fa,
                   float frac ) {
   if( !fa     ) ERROR(( "Bad args" ));
   if( frac!=1 ) ERROR(( "standard advance_e does not support frac!=1 yet" ));
+
+printf("Vacuum Advance E Kernel\n");
 
   /***************************************************************************
    * Begin tangential B ghost setup
@@ -361,8 +408,6 @@ vacuum_advance_e( field_array_t * RESTRICT fa,
 
   local_adjust_tang_e( fa->f, fa->g );
 }
-<<<<<<< Updated upstream
-=======
 
 void vacuum_advance_e_interior_kokkos(k_field_t& k_field, 
                                 const size_t nx, const size_t ny, const size_t nz,
@@ -785,14 +830,11 @@ printf("Vacuum Advance E Kokkos Kernel\n");
   const float pz_mux = ((nz>1) ? (1+damp)*g->cvac*g->dt*g->rdz : 0)*m->rmux; 
   const float cj     = g->dt/g->eps0;                                        
 
-    field_buffers_t f_buffers = field_buffers_t(nx,ny,nz);
-
   /***************************************************************************
    * Begin tangential B ghost setup
    ***************************************************************************/
   
-//    k_begin_remote_ghost_tang_b( fa, fa->g );
-    kokkos_begin_remote_ghost_tang_b(fa, fa->g, f_buffers);
+    k_begin_remote_ghost_tang_b( fa, fa->g );
 printf("Ran k_begin_remote_ghost_tang_b\n");
     k_local_ghost_tang_b( fa, fa->g );
 printf("Ran k_localghost_tang_b\n");
@@ -804,8 +846,7 @@ printf("Ran vacuum_advance_e_interior_kokkos\n");
    * Finish tangential B ghost setup
    ***************************************************************************/
 
-//    k_end_remote_ghost_tang_b( fa, fa->g );
-    kokkos_end_remote_ghost_tang_b(fa, fa->g, f_buffers);
+    k_end_remote_ghost_tang_b( fa, fa->g );
 printf("Ran k_end_remote_ghost_tang_b\n");
 
   /***************************************************************************
@@ -818,4 +859,3 @@ printf("Ran vacuum_advance_e_exterior_kokkos\n");
     k_local_adjust_tang_e( fa, fa->g );
 printf("Ran k_local_adjust_tang_e\n");
 }
->>>>>>> Stashed changes
