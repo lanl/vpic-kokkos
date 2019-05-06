@@ -42,6 +42,7 @@ new_grid( void ) {
   for( i=0; i<27; i++ ) g->bc[i] = anti_symmetric_fields;
   g->bc[BOUNDARY(0,0,0)] = world_rank;
   g->mp = new_mp( 27 );
+//    g->mp_k = new_mp_kokkos(27);
   REGISTER_OBJECT( g, checkpt_grid, restore_grid, NULL );
   return g;
 }
@@ -53,6 +54,7 @@ delete_grid( grid_t * g ) {
   FREE_ALIGNED( g->neighbor );
   FREE_ALIGNED( g->range );
   delete_mp( g->mp );
+//    delete_mp_kokkos(g->mp_k);
   FREE( g );
 }
 

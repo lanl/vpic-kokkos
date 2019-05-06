@@ -6,6 +6,7 @@
 #include <cstdlib>
 
 #include "../checkpt/checkpt.h"
+#include "Kokkos_Core.hpp"
 
 /* Define this comm and mp opaque handles */
 /* FIXME: PARENT, COLOR AND KEY ARE FOR FUTURE EXPANSION */
@@ -23,6 +24,16 @@ struct mp {
   int * rbuf_sz;              int * sbuf_sz;
   int * rreq_sz;              int * sreq_sz;
   MPI_Request * rreq;         MPI_Request * sreq;
+};
+
+struct mp_kokkos {
+    int n_port;
+    int* rbuf_size;
+    int* sbuf_size;
+    int* rreq_size;
+    int* sreq_size;
+    MPI_Request* rreq;
+    MPI_Request& sreq;
 };
 
 /* Create the world collective */
@@ -341,6 +352,65 @@ struct DMPPolicy {
     if( !mp || port<0 || port>=mp->n_port ) ERROR(( "Bad args" ));
     TRAP( MPI_Wait( &mp->sreq[port], MPI_STATUS_IGNORE ) );
   }
+
+//=============================================================================
+// Necessary MPI modifications for Kokkos port
+//=============================================================================
+/*
+    inline mp_kokkos_t* 
+    new_mp_kokkos(int n_port ) {
+      mp_kokkos_t * mp_k;
+      if( n_port<1 ) ERROR(( "Bad args" ));
+      MALLOC( mp_k, 1 );
+      mp_k->n_port = n_port;
+      MALLOC( mp_k->rbuf_size, n_port ); MALLOC( mp_k->sbuf_size, n_port ); 
+      MALLOC( mp_k->rreq_size, n_port ); MALLOC( mp_k->sreq_size, n_port ); 
+      MALLOC( mp_k->rreq,    n_port ); MALLOC( mp_k->sreq,    n_port ); 
+      CLEAR(  mp_k->rbuf_size, n_port ); CLEAR(  mp_k->sbuf_size, n_port ); 
+      CLEAR(  mp_k->rreq_size, n_port ); CLEAR(  mp_k->sreq_size, n_port ); 
+      CLEAR(  mp_k->rreq,    n_port ); CLEAR(  mp_k->sreq,    n_port ); 
+      REGISTER_OBJECT( mp_k, checkpt_mp, restore_mp, NULL );
+      return mp_k;
+    }
+    
+    inline void
+    delete_mp_kokkos( mp_kokkos_t * mp ) {
+      if( !mp ) return;
+      UNREGISTER_OBJECT( mp );
+      FREE( mp );
+    }
+*/
+    inline void
+    mp_begin_recv_kokkos(mp_t* mp_k, int port, int size, int src, int tag, char* ALIGNED(128) recv_buf) {
+        if( !mp_k || port < 0 || port >= mp_k->n_port || size < 1 || size > mp_k->rbuf_sz[port] || 
+            src < 0 || src >= world_size ) ERROR(( "Bad args" ));
+        mp_k->rreq_sz[port] = size;
+        TRAP( MPI_Irecv(recv_buf, size, MPI_BYTE, src, tag, world->comm, &mp_k->rreq[port]) );
+    }
+
+    inline void
+    mp_begin_send_kokkos(mp_t* mp_k, int port, int size, int dst, int tag, char* ALIGNED(128) send_buf) {
+        if( !mp_k || port<0 || port>=mp_k->n_port || dst<0 || dst>=world_size ||
+            size<1 || mp_k->sbuf_sz[port]<size ) ERROR(( "Bad args" ));
+        mp_k->sreq_sz[port] = size;
+        TRAP(MPI_Issend(send_buf,size, MPI_BYTE, dst, tag, world->comm, &mp_k->sreq[port]));
+    }
+
+    inline void
+    mp_end_recv_kokkos(mp_t* mp_k, int port) {
+        MPI_Status status;
+        int size;
+        if( !mp_k || port<0 || port>=mp_k->n_port ) ERROR(( "Bad args" ));
+        TRAP( MPI_Wait( &mp_k->rreq[port], &status ) );
+        TRAP( MPI_Get_count( &status, MPI_BYTE, &size ) );
+        if( mp_k->rreq_sz[port]!=size ) ERROR(( "Sizes do not match" ));
+    }
+
+    inline void
+    mp_end_send_kokkos(mp_t* mp_k, int port) {
+        if( !mp_k || port<0 || port>=mp_k->n_port ) ERROR(( "Bad args" ));
+        TRAP( MPI_Wait( &mp_k->sreq[port], MPI_STATUS_IGNORE ) );
+    }
   
 # undef RESIZE_FACTOR
 # undef TRAP

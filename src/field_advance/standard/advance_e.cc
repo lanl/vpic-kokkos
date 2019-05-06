@@ -742,9 +742,10 @@ printf("Advance_E kernel\n");
     const float cj   = g->dt/g->eps0;                              
 
     // Copy material coeficients to device
+    // FIXME: Does not belong here
     k_material_coefficient_t k_material_d = k_material_coefficient_t("Material coefficient view", args->p->n_mc);
     k_material_coefficient_t::HostMirror k_material_h = Kokkos::create_mirror_view(k_material_d);
-    for(int i=0; i<args->p->n_mc; i++) {
+    Kokkos::parallel_for("Copy materials to device", Kokkos::RangePolicy<Kokkos::OpenMP>(0, args->p->n_mc), KOKKOS_LAMBDA (const int & i) {
         k_material_h(i, material_coeff_var::decayx) = m[i].decayx;
         k_material_h(i, material_coeff_var::drivex) = m[i].drivex;
         k_material_h(i, material_coeff_var::decayy) = m[i].decayy;
@@ -758,14 +759,18 @@ printf("Advance_E kernel\n");
         k_material_h(i, material_coeff_var::epsx) = m[i].epsx;
         k_material_h(i, material_coeff_var::epsy) = m[i].epsy;
         k_material_h(i, material_coeff_var::epsz) = m[i].epsz;
-    }
+    });
     Kokkos::deep_copy(k_material_d, k_material_h);
+
+    // Field buffers for GPU - GPU communication
+    field_buffers_t f_buffers = field_buffers_t(nx,ny,nz);
 
     /***************************************************************************
     * Begin tangential B ghost setup
     ***************************************************************************/
   
-    k_begin_remote_ghost_tang_b( fa, fa->g );
+    kokkos_begin_remote_ghost_tang_b( fa, fa->g, f_buffers );
+//    k_begin_remote_ghost_tang_b( fa, fa->g );
     k_local_ghost_tang_b( fa, fa->g );
 
     advance_e_interior_kokkos(k_field, k_field_edge, k_material_d, nx, ny, nz, px, py, pz, damp, cj);
@@ -774,7 +779,8 @@ printf("Advance_E kernel\n");
     * Finish tangential B ghost setup
     ***************************************************************************/
 
-    k_end_remote_ghost_tang_b( fa, fa->g );
+    kokkos_end_remote_ghost_tang_b( fa, fa->g, f_buffers );
+//    k_end_remote_ghost_tang_b( fa, fa->g );
 
     /***************************************************************************
     * Update exterior fields

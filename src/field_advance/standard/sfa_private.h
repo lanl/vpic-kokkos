@@ -391,12 +391,22 @@ k_begin_remote_ghost_tang_b(field_array_t* RESTRICT f,
                             const grid_t* g);
 
 void
+kokkos_begin_remote_ghost_tang_b(field_array_t* RESTRICT f,
+                            const grid_t* g,
+                            field_buffers_t& f_buffers);
+
+void
 end_remote_ghost_tang_b( field_t      * ALIGNED(128) f,
                          const grid_t *              g );
 
 void
 k_end_remote_ghost_tang_b(field_array_t* RESTRICT f,
                             const grid_t* g);
+
+void
+kokkos_end_remote_ghost_tang_b(field_array_t* RESTRICT f,
+                            const grid_t* g,
+                            field_buffers_t& f_buffers);
 
 void
 begin_remote_ghost_norm_e( field_t      * ALIGNED(128) f,

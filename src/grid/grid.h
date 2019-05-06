@@ -135,6 +135,10 @@ typedef struct grid {
 
   // Nearest neighbor communications ports
   mp_t * mp;
+//  mp_kokkos_t* mp_k;
+//    int max_ports;
+//    k_mpi_t k_mpi_d;
+//    k_mpi_t::HostMirror k_mpi_h;
 
   // We want to call this *only* once the neighbor is done
   void init_kokkos_grid(int num_neighbor)
@@ -159,6 +163,10 @@ typedef struct grid {
       // currently implied by unmanaged view
 
       //k_neighbor_d = Kokkos::create_mirror_view(k_neighbor_d);
+      
+//        max_ports = 27;
+//      k_mpi_d = k_mpi_t("k_mpi_d");
+//      k_mpi_h = Kokkos::create_mirror_view(k_mpi_d);
   }
 
 
@@ -323,6 +331,8 @@ end_recv_port( int i, // x port coord ([-1,0,1])
                int k, // z port coord ([-1,0,1])
                const grid_t * g );
 
+// Kokkos versions
+
 // Complete the pending send on the given port.  Only valid to call if
 // there is a pending send on the port.  Note that this guarantees
 // that send port is available to the caller for additional use, not
@@ -334,6 +344,31 @@ end_send_port( int i, // x port coord ([-1,0,1])
                int j, // y port coord ([-1,0,1])
                int k, // z port coord ([-1,0,1])
                const grid_t * g );
+
+// Star receiving a message from the node.
+// Only one message recv may be pending at a time on a given port.
+// Must pass receive buffer of necessary size/
+void begin_recv_port_kokkos(const grid_t* g, int port, int size, int tag, char* ALIGNED(128) recv_buf);
+
+// Begin sending size bytes of the buffer out the given port.  Only
+// one message send may be pending at a time on a given port.  (FIXME:
+// WHAT HAPPENS IF SIZE_SEND_PORT size < begin_send_port
+// size??)
+void begin_send_port_kokkos(const grid_t* g, int port, int size, int tag, char* ALIGNED(128) send_buf);
+
+
+// Complete the pending recv on the given port.  Only valid to call if
+// there is a pending recv.  Received data put into original receive buffer
+// from begin_recv.   (FIXME: WHAT HAPPENS IF EXPECTED RECV SIZE
+// GIVEN IN BEGIN_RECV DOES NOT MATCH END_RECV??)
+void end_recv_port_kokkos(const grid_t* g, int port);
+
+// Complete the pending send on the given port.  Only valid to call if
+// there is a pending send on the port.  Note that this guarantees
+// that send port is available to the caller for additional use, not
+// necessarily that the message has arrived at the destination of the
+// port.
+void end_send_port_kokkos(const grid_t* g, int port);
 
 // In distribute_voxels.c
 

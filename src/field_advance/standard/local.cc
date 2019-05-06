@@ -55,75 +55,6 @@ typedef class ZX {} ZX;
 typedef class YZ {} YZ;
 typedef class ZY {} ZY;
 
-/*
-template<typename T> void edge_loop(const size_t nx, const size_t ny, const size_t nz, const size_t w, 
-                                std::function<void(const size_t, const size_t, const size_t)> lambda) {}
-
-template<> void edge_loop<XY>(const size_t nx, const size_t ny, const size_t nz, const size_t z, 
-                                std::function<void(size_t, size_t, size_t)> lambda) {
-    Kokkos::parallel_for("XY Edge loop", KOKKOS_TEAM_POLICY_DEVICE(ny+1,Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type & team_member) {
-        size_t y = team_member.league_rank() + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (size_t xi) {
-            lambda(xi+1,y,z);
-        });
-    });
-}
-template<> void edge_loop<YX>(const size_t nx, const size_t ny, const size_t nz, const size_t z, 
-                                std::function<void(size_t, size_t, size_t)> lambda) {
-    Kokkos::parallel_for("YX Edge loop", KOKKOS_TEAM_POLICY_DEVICE(ny,Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type & team_member) {
-        size_t y = team_member.league_rank() + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (size_t xi) {
-            lambda(xi+1,y,z);
-        });
-    });
-}
-template<> void edge_loop<YZ>(const size_t nx, const size_t ny, const size_t nz, const size_t x, 
-                                std::function<void(size_t, size_t, size_t)> lambda) {
-    Kokkos::parallel_for("YZ Edge loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1,Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type & team_member) {
-        size_t z = team_member.league_rank() + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny), [=] (size_t yi) {
-            lambda(x,yi+1,z);
-        });
-    });
-}
-template<> void edge_loop<ZY>(const size_t nx, const size_t ny, const size_t nz, const size_t x, 
-                                std::function<void(size_t, size_t, size_t)> lambda) {
-    const size_t ghost = x;
-    Kokkos::parallel_for("ZY Edge loop", KOKKOS_TEAM_POLICY_DEVICE(nz,ny+1),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type & team_member) {
-//        size_t z = team_member.league_rank() + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (size_t& yi) {
-            size_t z = team_member.league_rank() + 1;
-            const size_t y = yi+1;
-            lambda(ghost,y,z);
-        });
-    });
-}
-template<> void edge_loop<ZX>(const size_t nx, const size_t ny, const size_t nz, const size_t y, 
-                                std::function<void(size_t, size_t, size_t)> lambda) {
-    Kokkos::parallel_for("ZX Edge loop", KOKKOS_TEAM_POLICY_DEVICE(nz,Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type & team_member) {
-        size_t z = team_member.league_rank() + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (size_t xi) {
-            lambda(xi+1,y,z);
-        });
-    });
-}
-template<> void edge_loop<XZ>(const size_t nx, const size_t ny, const size_t nz, const size_t y, 
-                                std::function<void(size_t, size_t, size_t)> lambda) {
-    Kokkos::parallel_for("XZ Edge loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1,Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type & team_member) {
-        size_t z = team_member.league_rank() + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (size_t xi) {
-            lambda(xi+1,y,z);
-        });
-    });
-}
-*/
-
 /*****************************************************************************
  * Local ghosts
  *****************************************************************************/
@@ -664,43 +595,43 @@ template<> void apply_local_tang_b<ZXY>(int i, int j, int k,
                 decay = (1-drive)/(1+drive);
                 drive = 2*drive/(1+drive);
 
-Kokkos::parallel_for("single test", KOKKOS_TEAM_POLICY_DEVICE(1,1),
-KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-    for(int z=1; z<=nz; z++) {
-        for(int y=1; z<=ny+1; y++) {
-            for(int x=ghost; x<=ghost; x++) {
-                const int fg = VOXEL(x,y,z,nx,ny,nz);
-                const int fh = VOXEL(x-i,y-j,z-k,nx,ny,nz);
-                z = face;
-                float t1 = cdt_dz*(k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ey) - k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey));
-                t1 = (i+j+k)<0 ? t1 : -t1;
-                z = ghost;
-                y++;
-                float t2 = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ez);
-                y--;
-                t2 = cdt_dy * (t2 - k_field(fh, field_var::ez));
-                k_field(fg, field_var::cbx) = decay*k_field(fg, field_var::cbx) + drive * k_field(fh, field_var::cbx) - t1 + t2;
-            }
-        }
-    }
-    for(int z=1; z<=nz+1; z++) {
-        for(int y=1; z<=ny; y++) {
-            for(int x=ghost; x<=ghost; x++) {
-                const int fg = VOXEL(x,y,z,nx,ny,nz);
-                const int fh = VOXEL(x-i,y-j,z-k,nx,ny,nz);
-                z = face;
-                float t1 = cdt_dz*(k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ex) - k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex));
-                t1 = (i+j+k)<0 ? t1 : -t1;
-                z = ghost;
-                x++;
-                float t2 = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ez);
-                x--;
-                t2 = cdt_dy * (t2 - k_field(fh, field_var::ez));
-                k_field(fg, field_var::cby) = decay*k_field(fg, field_var::cby) + drive * k_field(fh, field_var::cby) - t1 + t2;
-            }
-        }
-    }
-});
+                Kokkos::parallel_for("single test", KOKKOS_TEAM_POLICY_DEVICE(1,1),
+                KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
+                    for(int z=1; z<=nz; z++) {
+                        for(int y=1; z<=ny+1; y++) {
+                            for(int x=ghost; x<=ghost; x++) {
+                                const int fg = VOXEL(x,y,z,nx,ny,nz);
+                                const int fh = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                                z = face;
+                                float t1 = cdt_dz*(k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ey) - k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey));
+                                t1 = (i+j+k)<0 ? t1 : -t1;
+                                z = ghost;
+                                y++;
+                                float t2 = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ez);
+                                y--;
+                                t2 = cdt_dy * (t2 - k_field(fh, field_var::ez));
+                                k_field(fg, field_var::cbx) = decay*k_field(fg, field_var::cbx) + drive * k_field(fh, field_var::cbx) - t1 + t2;
+                            }
+                        }
+                    }
+                    for(int z=1; z<=nz+1; z++) {
+                        for(int y=1; z<=ny; y++) {
+                            for(int x=ghost; x<=ghost; x++) {
+                                const int fg = VOXEL(x,y,z,nx,ny,nz);
+                                const int fh = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                                z = face;
+                                float t1 = cdt_dz*(k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ex) - k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex));
+                                t1 = (i+j+k)<0 ? t1 : -t1;
+                                z = ghost;
+                                x++;
+                                float t2 = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ez);
+                                x--;
+                                t2 = cdt_dy * (t2 - k_field(fh, field_var::ez));
+                                k_field(fg, field_var::cby) = decay*k_field(fg, field_var::cby) + drive * k_field(fh, field_var::cby) - t1 + t2;
+                            }
+                        }
+                    }
+                });
 /*
                 Kokkos::parallel_for("apply_local_tang_b<ZXY>: absorb_fields: YX edge loop", KOKKOS_TEAM_POLICY_DEVICE(ny,Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
@@ -953,7 +884,7 @@ template<> void adjust_tang_e<XYZ>(k_field_t& k_field, const grid_t* g, int i, i
         Kokkos::MDRangePolicy<Kokkos::Rank<3> > yz_policy({face,1,1}, {face,ny,nz+1});
         switch(bc) {
             case anti_symmetric_fields:
-/*
+
                 Kokkos::parallel_for("adjust_tang_e<XYZ>: YZ Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
                     const size_t zi = team_member.league_rank();
@@ -976,7 +907,7 @@ template<> void adjust_tang_e<XYZ>(k_field_t& k_field, const grid_t* g, int i, i
                         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcaz) = 0;
                     });
                 });
-*/
+/*
                 Kokkos::parallel_for("adjust_tang_e<XYZ>: ZY Edge loop", zy_policy, KOKKOS_LAMBDA(const size_t ii, const size_t jj, const size_t kk) {
                     k_field(VOXEL(ii,jj,kk,nx,ny,nz), field_var::ey) = 0;
                     k_field(VOXEL(ii,jj,kk,nx,ny,nz), field_var::tcay) = 0;
@@ -985,7 +916,7 @@ template<> void adjust_tang_e<XYZ>(k_field_t& k_field, const grid_t* g, int i, i
                     k_field(VOXEL(ii,jj,kk,nx,ny,nz), field_var::ez) = 0;
                     k_field(VOXEL(ii,jj,kk,nx,ny,nz), field_var::tcaz) = 0;
                 });
-
+*/
                 break;
             case symmetric_fields:
                 break;
@@ -1007,7 +938,7 @@ template<> void adjust_tang_e<YZX>(k_field_t& k_field, const grid_t* g, int i, i
         Kokkos::MDRangePolicy<Kokkos::Rank<3> > xz_policy({1,face,1},{nx,face,nz+1});
         switch(bc) {
             case anti_symmetric_fields:
-/*
+
                 Kokkos::parallel_for("adjust_tang_e<YZX>: ZX Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(nz, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
                     const size_t zi = team_member.league_rank();
@@ -1030,7 +961,7 @@ template<> void adjust_tang_e<YZX>(k_field_t& k_field, const grid_t* g, int i, i
                         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcax) = 0;
                     });
                 });
-*/
+/*
 
                 Kokkos::parallel_for("adjust_tang_e<YZX>: ZX edge loop", zx_policy, KOKKOS_LAMBDA(const size_t ii, const size_t jj, const size_t kk) {
                     k_field(VOXEL(ii,jj,kk,nx,ny,nz), field_var::ez) = 0;
@@ -1040,7 +971,7 @@ template<> void adjust_tang_e<YZX>(k_field_t& k_field, const grid_t* g, int i, i
                     k_field(VOXEL(ii,jj,kk,nx,ny,nz), field_var::ex) = 0;
                     k_field(VOXEL(ii,jj,kk,nx,ny,nz), field_var::tcax) = 0;
                 });
-
+*/
                 break;
             case symmetric_fields:
                 break;
@@ -1062,7 +993,7 @@ template<> void adjust_tang_e<ZXY>(k_field_t& k_field, const grid_t* g, int i, i
         Kokkos::MDRangePolicy<Kokkos::Rank<3> > xy_policy({1,1,face}, {nx,ny+1,face});
         switch(bc) {
             case anti_symmetric_fields:
-/*
+
                 Kokkos::parallel_for("adjust_tang_e<ZXY>: YX Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(ny, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
                     const size_t yi = team_member.league_rank();
@@ -1085,7 +1016,7 @@ template<> void adjust_tang_e<ZXY>(k_field_t& k_field, const grid_t* g, int i, i
                         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcay) = 0;
                     });
                 });
-*/
+/*
                 Kokkos::parallel_for("adjust_tang_e<ZXY>: XY edge loop", xy_policy, KOKKOS_LAMBDA(const size_t ii, const size_t jj, const size_t kk) {
                     k_field(VOXEL(ii,jj,kk,nx,ny,nz), field_var::ex) = 0;
                     k_field(VOXEL(ii,jj,kk,nx,ny,nz), field_var::tcax) = 0;
@@ -1094,7 +1025,7 @@ template<> void adjust_tang_e<ZXY>(k_field_t& k_field, const grid_t* g, int i, i
                     k_field(VOXEL(ii,jj,kk,nx,ny,nz), field_var::ey) = 0;
                     k_field(VOXEL(ii,jj,kk,nx,ny,nz), field_var::tcay) = 0;
                 });
-
+*/
                 break;
             case symmetric_fields:
                 break;
