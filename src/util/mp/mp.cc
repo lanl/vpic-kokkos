@@ -86,11 +86,6 @@ void mp_end_send( mp_t * mp, int sbuf ) {
 }
 
 // Kokkos stuff
-/*
-mp_kokkos_t* new_mp_kokkos(int n_port ) { return MPWrapper::instance().new_mp_kokkos( n_port ); }
-
-void delete_mp_kokkos( mp_kokkos_t * mp_k ) { MPWrapper::instance().delete_mp_kokkos( mp_k ); }
-*/
 void mp_begin_recv_kokkos( mp_t* mp_k, int port, int size, int sender, int tag, char* ALIGNED(128) recv_buf ) {
   MPWrapper::instance().mp_begin_recv_kokkos( mp_k, port, size, sender, tag, recv_buf );
 }

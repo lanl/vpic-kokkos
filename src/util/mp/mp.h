@@ -154,12 +154,6 @@ mp_end_send( mp_t * mp,
              int sbuf );
 
 // Kokkos mp stuff
-/*
-mp_kokkos_t* new_mp_kokkos(int n_port);
-
-void
-delete_mp_kokkos( mp_kokkos_t * mp_k );
-*/
 void
 mp_begin_recv_kokkos(mp_t* mp_k, int port, int size, int src, int tag, char* ALIGNED(128) recv_buf);
 

@@ -475,21 +475,7 @@ kokkos_begin_remote_ghost_tang_b( field_array_t      * RESTRICT fa,
                            const grid_t *              g,
                             field_buffers_t&            f_buffers) {
     const int nx = g->nx, ny = g->ny, nz = g->nz;
-/*
-    begin_recv<XYZ>(-1,0,0,nx,ny,nz,g);
-    begin_recv<YZX>(0,-1,0,nx,ny,nz,g);
-    begin_recv<ZXY>(0,0,-1,nx,ny,nz,g);
-    begin_recv<XYZ>(1,0,0,nx,ny,nz,g);
-    begin_recv<YZX>(0,1,0,nx,ny,nz,g);
-    begin_recv<ZXY>(0,0,1,nx,ny,nz,g);
 
-    begin_send<XYZ>(-1,0,0,nx,ny,nz,fa,g);
-    begin_send<YZX>(0,-1,0,nx,ny,nz,fa,g);
-    begin_send<ZXY>(0,0,-1,nx,ny,nz,fa,g);
-    begin_send<XYZ>(1,0,0,nx,ny,nz,fa,g);
-    begin_send<YZX>(0,1,0,nx,ny,nz,fa,g);
-    begin_send<ZXY>(0,0,1,nx,ny,nz,fa,g);
-*/
     begin_recv_kokkos<XYZ>(g,-1,0,0,nx,ny,nz, f_buffers.xyz_rbuf_neg);
     begin_recv_kokkos<YZX>(g,0,-1,0,nx,ny,nz, f_buffers.yzx_rbuf_neg);
     begin_recv_kokkos<ZXY>(g,0,0,-1,nx,ny,nz, f_buffers.zxy_rbuf_neg);
@@ -524,21 +510,6 @@ k_begin_remote_ghost_tang_b( field_array_t      * RESTRICT fa,
     begin_send<XYZ>(1,0,0,nx,ny,nz,fa,g);
     begin_send<YZX>(0,1,0,nx,ny,nz,fa,g);
     begin_send<ZXY>(0,0,1,nx,ny,nz,fa,g);
-/*
-    begin_recv_kokkos<XYZ>(g,-1,0,0,nx,ny,nz, xyz_rbuf_neg);
-    begin_recv_kokkos<YZX>(g,0,-1,0,nx,ny,nz, yzx_rbuf_neg);
-    begin_recv_kokkos<ZXY>(g,0,0,-1,nx,ny,nz, zxy_rbuf_neg);
-    begin_recv_kokkos<XYZ>(g,1,0,0,nx,ny,nz,  xyz_rbuf_pos);
-    begin_recv_kokkos<YZX>(g,0,1,0,nx,ny,nz,  yzx_rbuf_pos);
-    begin_recv_kokkos<ZXY>(g,0,0,1,nx,ny,nz,  zxy_rbuf_pos);
-
-    begin_send_kokkos<XYZ>(g,fa,-1,0,0,nx,ny,nz, xyz_sbuf_neg);
-    begin_send_kokkos<YZX>(g,fa,0,-1,0,nx,ny,nz, yzx_sbuf_neg);
-    begin_send_kokkos<ZXY>(g,fa,0,0,-1,nx,ny,nz, zxy_sbuf_neg);
-    begin_send_kokkos<XYZ>(g,fa,1,0,0,nx,ny,nz,  xyz_sbuf_pos);
-    begin_send_kokkos<YZX>(g,fa,0,1,0,nx,ny,nz,  yzx_sbuf_pos);
-    begin_send_kokkos<ZXY>(g,fa,0,0,1,nx,ny,nz,  zxy_sbuf_pos);
-*/
 }
 
 template<typename T> void end_recv_kokkos(const grid_t* g, field_array_t* RESTRICT field, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf) {}
@@ -764,21 +735,7 @@ void
 k_end_remote_ghost_tang_b( field_array_t      * RESTRICT field,
                          const grid_t *              g) {
     const int nx = g->nx, ny = g->ny, nz = g->nz;
-/*
-    end_recv_kokkos<XYZ>(g, field, -1, 0, 0, nx, ny, nz, xyz_rbuf_neg);
-    end_recv_kokkos<YZX>(g, field, 0, -1, 0, nx, ny, nz, yzx_rbuf_neg);
-    end_recv_kokkos<ZXY>(g, field, 0, 0, -1, nx, ny, nz, zxy_rbuf_neg);
-    end_recv_kokkos<XYZ>(g, field, 1, 0, 0, nx, ny, nz, xyz_rbuf_pos);
-    end_recv_kokkos<YZX>(g, field, 0, 1, 0, nx, ny, nz, yzx_rbuf_pos);
-    end_recv_kokkos<ZXY>(g, field, 0, 0, 1, nx, ny, nz, zxy_rbuf_pos);
 
-    end_send_kokkos<XYZ>(g, -1,0,0);
-    end_send_kokkos<YZX>(g, 0,-1,0);
-    end_send_kokkos<ZXY>(g, 0,0,-1);
-    end_send_kokkos<XYZ>(g, 1,0,0);
-    end_send_kokkos<YZX>(g, 0,1,0);
-    end_send_kokkos<ZXY>(g, 0,0,1);
-*/
     end_recv<XYZ>(-1,0,0,nx,ny,nz,field,g);
     end_recv<YZX>(0,-1,0,nx,ny,nz,field,g);
     end_recv<ZXY>(0,0,-1,nx,ny,nz,field,g);
@@ -813,21 +770,6 @@ kokkos_end_remote_ghost_tang_b( field_array_t      * RESTRICT field,
     end_send_kokkos<XYZ>(g, 1,0,0);
     end_send_kokkos<YZX>(g, 0,1,0);
     end_send_kokkos<ZXY>(g, 0,0,1);
-/*
-    end_recv<XYZ>(-1,0,0,nx,ny,nz,field,g);
-    end_recv<YZX>(0,-1,0,nx,ny,nz,field,g);
-    end_recv<ZXY>(0,0,-1,nx,ny,nz,field,g);
-    end_recv<XYZ>(1,0,0,nx,ny,nz,field,g);
-    end_recv<YZX>(0,1,0,nx,ny,nz,field,g);
-    end_recv<ZXY>(0,0,1,nx,ny,nz,field,g);
-
-    end_send_port(-1,0,0,g);
-    end_send_port(0,-1,0,g);
-    end_send_port(0,0,-1,g);
-    end_send_port(1,0,0,g);
-    end_send_port(0,1,0,g);
-    end_send_port(0,0,1,g);
-*/
 }
 
 void

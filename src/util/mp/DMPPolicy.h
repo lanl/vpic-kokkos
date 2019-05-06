@@ -26,16 +26,6 @@ struct mp {
   MPI_Request * rreq;         MPI_Request * sreq;
 };
 
-struct mp_kokkos {
-    int n_port;
-    int* rbuf_size;
-    int* sbuf_size;
-    int* rreq_size;
-    int* sreq_size;
-    MPI_Request* rreq;
-    MPI_Request& sreq;
-};
-
 /* Create the world collective */
 
 static collective_t __world = { NULL, 0, 0, MPI_COMM_SELF };
@@ -356,30 +346,6 @@ struct DMPPolicy {
 //=============================================================================
 // Necessary MPI modifications for Kokkos port
 //=============================================================================
-/*
-    inline mp_kokkos_t* 
-    new_mp_kokkos(int n_port ) {
-      mp_kokkos_t * mp_k;
-      if( n_port<1 ) ERROR(( "Bad args" ));
-      MALLOC( mp_k, 1 );
-      mp_k->n_port = n_port;
-      MALLOC( mp_k->rbuf_size, n_port ); MALLOC( mp_k->sbuf_size, n_port ); 
-      MALLOC( mp_k->rreq_size, n_port ); MALLOC( mp_k->sreq_size, n_port ); 
-      MALLOC( mp_k->rreq,    n_port ); MALLOC( mp_k->sreq,    n_port ); 
-      CLEAR(  mp_k->rbuf_size, n_port ); CLEAR(  mp_k->sbuf_size, n_port ); 
-      CLEAR(  mp_k->rreq_size, n_port ); CLEAR(  mp_k->sreq_size, n_port ); 
-      CLEAR(  mp_k->rreq,    n_port ); CLEAR(  mp_k->sreq,    n_port ); 
-      REGISTER_OBJECT( mp_k, checkpt_mp, restore_mp, NULL );
-      return mp_k;
-    }
-    
-    inline void
-    delete_mp_kokkos( mp_kokkos_t * mp ) {
-      if( !mp ) return;
-      UNREGISTER_OBJECT( mp );
-      FREE( mp );
-    }
-*/
     inline void
     mp_begin_recv_kokkos(mp_t* mp_k, int port, int size, int src, int tag, char* ALIGNED(128) recv_buf) {
         if( !mp_k || port < 0 || port >= mp_k->n_port || size < 1 || size > mp_k->rbuf_sz[port] || 

@@ -52,8 +52,6 @@ using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSp
 
 using k_material_coefficient_t = Kokkos::View<float* [MATERIAL_COEFFICIENT_VAR_COUNT]>;
 
-using k_mpi_t = Kokkos::View<int[27][6]>;
-
 #define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
 #define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
 
@@ -158,17 +156,6 @@ namespace material_coeff_var {
         epsx          = 10,
         epsy          = 11,
         epsz          = 12,
-    };
-};
-
-namespace mpi_var {
-    enum mpi_v {
-        rbuf_size = 0,
-        sbuf_size = 1,
-        rreq_size = 2,
-        sreq_size = 3,
-        rreq = 4,
-        sreq = 5,   
     };
 };
 
