@@ -73,7 +73,7 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
 
   //switched y and z
   //for( y=1; y<=ny; y++ ) {
-    Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
+    Kokkos::parallel_for("load interpolator", KOKKOS_TEAM_POLICY_DEVICE
       (nz, Kokkos::AUTO),
       KOKKOS_LAMBDA
       (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {

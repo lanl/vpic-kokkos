@@ -9,6 +9,7 @@
  */
 
 #include "vpic.h"
+#include <Kokkos_Sort.hpp>
 
 #define FAK field_array->kernel
 
@@ -18,8 +19,6 @@ int vpic_simulation::advance(void) {
 
   // Determine if we are done ... see note below why this is done here
 
-  printf("step %d \n", step());
-
   if( num_step>0 && step()>=num_step ) return 0;
 
   // Sort the particles for performance if desired.
@@ -27,7 +26,24 @@ int vpic_simulation::advance(void) {
   LIST_FOR_EACH( sp, species_list )
     if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) ) {
       if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-      TIC sort_p( sp ); TOC( sort_p, 1 );
+      //TIC sort_p( sp ); TOC( sort_p, 1 );
+
+      // Replace sort with kokkos sort
+      // Try grab the index's for a permute key
+      int pi = particle_var::pi; // TODO: can you really not pass an enum in??
+      auto keys = Kokkos::subview(sp->k_p_d, Kokkos::ALL, pi);
+      using key_type = decltype(keys);
+
+
+      // TODO: we can tighten the bounds on this
+      int max = accumulator_array->na;
+      using Comparator = Kokkos::BinOp1D<key_type>;
+      Comparator comp(max, 0, max);
+
+      int sort_within_bins = 0;
+      Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, sp->np, comp, sort_within_bins );
+      bin_sort.create_permute_vector();
+      bin_sort.sort(sp->k_p_d);
     }
 
   // At this point, fields are at E_0 and B_0 and the particle positions
@@ -46,17 +62,16 @@ int vpic_simulation::advance(void) {
 
   if( collision_op_list )
   {
-    TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
+      Kokkos::abort("Collision is not supported");
+      TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
   }
 
-  TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
+  //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
   KOKKOS_INTERPOLATOR_VARIABLES();
   KOKKOS_ACCUMULATOR_VARIABLES();
-  KOKKOS_PARTICLE_VARIABLES();
 
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
-  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
 
   LIST_FOR_EACH( sp, species_list )
@@ -69,11 +84,7 @@ int vpic_simulation::advance(void) {
   accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
 
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
-  KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
-
-  Kokkos::fence();
-
 
   // Because the partial position push when injecting aged particles might
   // place those particles onto the guard list (boundary interaction) and
@@ -150,15 +161,11 @@ int vpic_simulation::advance(void) {
   // Half advance the magnetic field from B_0 to B_{1/2}
   TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
 
-//  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST();
 
   // Advance the electric field from E_0 to E_1
-  
-//  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 
   TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
-
-  KOKKOS_COPY_FIELD_MEM_TO_HOST();
 
   // Let the user add their own contributions to the electric field. It is the
   // users responsibility to insure injected electric fields are consistent
@@ -180,7 +187,19 @@ int vpic_simulation::advance(void) {
     if( rank()==0 ) MESSAGE(( "Divergence cleaning electric field" ));
 
     TIC FAK->clear_rhof( field_array ); TOC( clear_rhof,1 );
-    if( species_list ) TIC LIST_FOR_EACH( sp, species_list ) accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, species_list->id );
+    if( species_list ) {
+
+        KOKKOS_PARTICLE_VARIABLES();
+        KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+
+        LIST_FOR_EACH( sp, species_list )
+        {
+            accumulate_rho_p( field_array, sp ); //TOC( accumulate_rho_p, species_list->id );
+        }
+
+        KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
+    }
+
     TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
 
     for( int round=0; round<num_div_e_round; round++ ) {

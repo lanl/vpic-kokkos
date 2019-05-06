@@ -11,6 +11,146 @@
 #define IN_spa
 #include "spa_private.h"
 
+// KOKKOS VERSION
+// accumulate_rho_p adds the charge density associated with the
+// supplied particle array to the rhof of the fields.  Trilinear
+// interpolation is used.  rhof is known at the nodes at the same time
+// as particle positions.  No effort is made to fix up edges of the
+// computational domain; see note in synchronize_rhob about why this
+// is done this way.  All particles on the list must be inbounds.
+void k_accumulate_rho_p(field_array_t* RESTRICT fa, const species_t * RESTRICT sp) {
+    if(!fa || !sp || fa->g != sp-> g) ERROR(( "Bad args" ));
+    k_field_t kfield = fa->k_f_d;
+    k_particles_t kparticles = sp->k_p_d;
+
+    const float q_8V = sp->q * sp->g->r8V;
+    const int num_part = sp->np;
+    const int sy = sp->g->sy;
+    const int sz = sp->g->sz;
+
+    Kokkos::parallel_for("accumulate_rho_p: load grid data", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,np),
+    KOKKOS_LAMBDA(const int n) {
+
+        float w0, w1, w2, w3, w4, w5, w6, w7, dz;
+        int v;
+
+        w0 = kparticles(n, particle_var::dx);
+        w1 = kparticles(n, particle_var::dy);
+        dz = kparticles(n, particle_var::dz);
+        v = kparticles(n, particle_var::pi);
+        w7 = kparticles(n, particle_var::w) * q_8V;
+
+        w6 = w7 - w0 * w7;
+        w7 = w7 + w0 * w7;
+        w4 = w6 - w1 * w6;
+        w5 = w7 - w1 * w7;
+        w6 = w6 + w1 * w6;
+        w7 = w7 + w1 * w7;
+        w0 = w4 - dz * w4;
+        w1 = w5 - dz * w5;
+        w2 = w6 - dz * w6;
+        w3 = w7 - dz * w7;
+        w4 = w4 + dz * w4;
+        w5 = w5 + dz * w5;
+        w6 = w6 + dz * w6;
+        w7 = w7 + dz * w7;
+
+        kfield(v,         field_var::rhof) += w0;
+        kfield(v+1,       field_var::rhof) += w1;
+        kfield(v+sy,      field_var::rhof) += w2;
+        kfield(v+sy+1,    field_var::rhof) += w3;
+        kfield(v+sz,      field_var::rhof) += w4;
+        kfield(v+sz+1,    field_var::rhof) += w5;
+        kfield(v+sz+sy,   field_var::rhof) += w6;
+        kfield(v+sz+sy+1, field_var::rhof) += w7;
+    });
+}
+
+void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, int part_idx, const grid_t* RESTRICT g, const float qsp) {
+    int sy = g->sy, sz = g->sz;
+    float r8V = g->r8V;
+    int nx = g->nx;
+    int ny = g->ny;
+    int nz = g->nz;
+    // Very inefficient, need to batch accumulations
+    Kokkos::parallel_for("accumulate_rhob", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,1),
+    KOKKOS_LAMBDA(const int slkfj) {
+        float w0 = kpart(part_idx, particle_var::dx);
+        float w1 = kpart(part_idx, particle_var::dy);
+        float w2, w3, w4, w5, w6;
+        float w7 = (qsp * r8V) * kpart(part_idx, particle_var::w);
+        float dz = kpart(part_idx, particle_var::dz);
+        int v = kpart(part_idx, particle_var::pi);
+        int x, y, z;
+        
+        w6 = w7 - w0 * w7;
+        w7 = w7 + w0 * w7;
+        w4 = w6 - w1 * w6;
+        w5 = w7 - w1 * w7;
+        w6 = w6 + w1 * w6;
+        w7 = w7 + w1 * w7;
+        w0 = w4 - dz * w4;
+        w1 = w5 - dz * w5;
+        w2 = w6 - dz * w6;
+        w3 = w7 - dz * w7;
+        w4 = w4 + dz * w4;
+        w5 = w5 + dz * w5;
+        w6 = w6 + dz * w6;
+        w7 = w7 + dz * w7;
+
+        x = v;
+        z = x/sz;
+        if(z == 1) {
+            w0 += w0;
+            w1 += w1;
+            w2 += w2;
+            w3 += w3;
+        }
+        if(z == nz) {
+            w4 += w4;
+            w5 += w5;
+            w6 += w6;
+            w7 += w7;
+        }
+        x -= sz * z;
+        y = x/sy;
+        if(y == 1) {
+            w0 += w0;
+            w1 += w1;
+            w4 += w4;
+            w5 += w5;
+        }
+        if(y == ny) {
+            w2 += w2;
+            w3 += w3;
+            w6 += w6;
+            w7 += w7;
+        }
+        x -= sy * y;
+        if(x == 1) {
+            w0 += w0;
+            w2 += w2;
+            w4 += w4;
+            w6 += w6;
+        }
+        if(x == nx) {
+            w1 += w1;
+            w3 += w3;
+            w5 += w5;
+            w7 += w7;
+        }
+        kfield(v,         field_var::rhob) += w0;
+        kfield(v+1,       field_var::rhob) += w1;
+        kfield(v+sy,      field_var::rhob) += w2;
+        kfield(v+sy+1,    field_var::rhob) += w3;
+        kfield(v+sz,      field_var::rhob) += w4;
+        kfield(v+sz+1,    field_var::rhob) += w5;
+        kfield(v+sz+sy,   field_var::rhob) += w6;
+        kfield(v+sz+sy+1, field_var::rhob) += w7;
+            
+    });
+}
+
 // accumulate_rho_p adds the charge density associated with the
 // supplied particle array to the rhof of the fields.  Trilinear
 // interpolation is used.  rhof is known at the nodes at the same time

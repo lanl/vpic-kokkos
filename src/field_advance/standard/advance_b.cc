@@ -37,7 +37,7 @@ void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const
   #define UPDATE_CBY() f0_cby -= ( pz*( fz_ex-f0_ex ) - px*( fx_ez-f0_ez ) );
   #define UPDATE_CBZ() f0_cbz -= ( px*( fx_ey-f0_ey ) - py*( fy_ex-f0_ex ) );
 
-  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
+  Kokkos::parallel_for("advance b", KOKKOS_TEAM_POLICY_DEVICE
       (nz, Kokkos::AUTO),
       KOKKOS_LAMBDA
       (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member)
@@ -85,7 +85,7 @@ void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const
   //
 
   // Do left over bx
-  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
+  Kokkos::parallel_for("advance b bx", KOKKOS_TEAM_POLICY_DEVICE
       (nz, Kokkos::AUTO),
       KOKKOS_LAMBDA
       (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
@@ -102,7 +102,7 @@ void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const
   });
 
   // Do left over by
-  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
+  Kokkos::parallel_for("advance b by", KOKKOS_TEAM_POLICY_DEVICE
       (nz, Kokkos::AUTO),
       KOKKOS_LAMBDA
       (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
@@ -119,7 +119,7 @@ void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const
   });
 
   // Do left over bz
-  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE
+  Kokkos::parallel_for("advance b bz", KOKKOS_TEAM_POLICY_DEVICE
       (ny, Kokkos::AUTO),
       KOKKOS_LAMBDA
       (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
@@ -150,7 +150,6 @@ advance_b(field_array_t * RESTRICT fa,
   float  px   = (nx>1) ? frac*g->cvac*g->dt*g->rdx : 0;
   float  py   = (ny>1) ? frac*g->cvac*g->dt*g->rdy : 0;
   float  pz   = (nz>1) ? frac*g->cvac*g->dt*g->rdz : 0;
-printf("Advance_B kernel\n");
 
   advance_b_kokkos(k_field, nx, ny, nz, nv, px, py, pz);
 

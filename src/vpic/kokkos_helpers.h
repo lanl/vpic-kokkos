@@ -16,7 +16,6 @@
 #define ACCUMULATOR_VAR_COUNT 3
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
-#define MATERIAL_COEFFICIENT_VAR_COUNT 13
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -27,8 +26,6 @@
   #define KOKKOS_SCATTER_ATOMIC Kokkos::Experimental::ScatterNonAtomic
   #define KOKKOS_LAYOUT Kokkos::LayoutRight
 #endif
-
-typedef int16_t material_id;
 
 // TODO: we dont need the [1] here
 using k_iterator_t = Kokkos::View<int[1]>;
@@ -49,8 +46,6 @@ using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATO
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
-
-using k_material_coefficient_t = Kokkos::View<float* [MATERIAL_COEFFICIENT_VAR_COUNT]>;
 
 #define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
 #define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
@@ -141,24 +136,6 @@ namespace accumulator_var {
   };
 };
 
-namespace material_coeff_var {
-    enum mc_v {
-        decayx        = 0,
-        drivex        = 1,
-        decayy        = 2,
-        drivey        = 3,
-        decayz        = 4,
-        drivez        = 5,
-        rmux          = 6,
-        rmuy          = 7,
-        rmuz          = 8,
-        nonconductive = 9,
-        epsx          = 10,
-        epsy          = 11,
-        epsz          = 12,
-    };
-};
-
 #define KOKKOS_FIELD_VARIABLES() \
   int n_fields = field_array->g->nv; \
   k_field_t::HostMirror k_field; \
@@ -167,7 +144,7 @@ namespace material_coeff_var {
 #define KOKKOS_COPY_FIELD_MEM_TO_DEVICE() \
   k_field = field_array->k_f_h; \
   k_field_edge = field_array->k_fe_h; \
-  Kokkos::parallel_for(host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
+  Kokkos::parallel_for("copy field to device", host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
           k_field(i, field_var::ex) = field_array->f[i].ex; \
           k_field(i, field_var::ey) = field_array->f[i].ey; \
           k_field(i, field_var::ez) = field_array->f[i].ez; \
@@ -207,7 +184,7 @@ namespace material_coeff_var {
   Kokkos::deep_copy(field_array->k_fe_h, field_array->k_fe_d); \
   k_field = field_array->k_f_h; \
   k_field_edge = field_array->k_fe_h; \
-  Kokkos::parallel_for(host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
+  Kokkos::parallel_for("copy field to host", host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) { \
           field_array->f[i].ex = k_field(i, field_var::ex); \
           field_array->f[i].ey = k_field(i, field_var::ey); \
           field_array->f[i].ez = k_field(i, field_var::ez); \
@@ -253,14 +230,14 @@ namespace material_coeff_var {
 // perhaps it should cache old sp and put it back to what it was?
 #define KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE() \
   LIST_FOR_EACH( sp, species_list ) {\
-    n_particles = sp->max_np; \
+    n_particles = sp->np; \
     max_pmovers = sp->max_nm; \
     \
     k_particles_h = sp->k_p_h; \
     k_particle_movers_h = sp->k_pm_h; \
     k_nm_h = sp->k_nm_h; \
     k_nm_h(0) = sp->nm; \
-    Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
+    Kokkos::parallel_for("copy particles to device", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
       k_particles_h(i, particle_var::dx) = sp->p[i].dx; \
       k_particles_h(i, particle_var::dy) = sp->p[i].dy; \
       k_particles_h(i, particle_var::dz) = sp->p[i].dz; \
@@ -271,7 +248,7 @@ namespace material_coeff_var {
       k_particles_h(i, particle_var::pi) = sp->p[i].i;  \
     });\
     \
-    Kokkos::parallel_for(host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
+    Kokkos::parallel_for("copy movers to device", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
       k_particle_movers_h(i, particle_mover_var::dispx) = sp->pm[i].dispx; \
       k_particle_movers_h(i, particle_mover_var::dispy) = sp->pm[i].dispy; \
       k_particle_movers_h(i, particle_mover_var::dispz) = sp->pm[i].dispz; \
@@ -288,14 +265,13 @@ namespace material_coeff_var {
     Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);  \
     Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d); \
     Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d); \
-    n_particles = sp->max_np; \
+    n_particles = sp->np; \
     max_pmovers = sp->max_nm; \
     k_particles_h = sp->k_p_h; \
     k_particle_movers_h = sp->k_pm_h; \
     k_nm_h = sp->k_nm_h; \
-      printf(" k_nm_h size %d \n", k_nm_h.size() );  \
     sp->nm = k_nm_h(0); \
-    Kokkos::parallel_for(host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
+    Kokkos::parallel_for("copy particles to host", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { \
       sp->p[i].dx = k_particles_h(i, particle_var::dx); \
       sp->p[i].dy = k_particles_h(i, particle_var::dy); \
       sp->p[i].dz = k_particles_h(i, particle_var::dz); \
@@ -306,7 +282,7 @@ namespace material_coeff_var {
       sp->p[i].i  = k_particles_h(i, particle_var::pi); \
     });\
     \
-    Kokkos::parallel_for(host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
+    Kokkos::parallel_for("copy_movers_to_host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
       sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx); \
       sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy); \
       sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz); \
@@ -323,7 +299,7 @@ namespace material_coeff_var {
   nv = interpolator_array->g->nv; \
   \
   k_interpolator_h = interpolator_array->k_i_h; \
-  Kokkos::parallel_for(host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
+  Kokkos::parallel_for("Copy interpolators to device", host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
     k_interpolator_h(i, interpolator_var::ex)       = interpolator_array->i[i].ex; \
     k_interpolator_h(i, interpolator_var::ey)       = interpolator_array->i[i].ey; \
     k_interpolator_h(i, interpolator_var::ez)       = interpolator_array->i[i].ez; \
@@ -350,7 +326,7 @@ namespace material_coeff_var {
   Kokkos::deep_copy(interpolator_array->k_i_h, interpolator_array->k_i_d);  \
   nv = interpolator_array->g->nv;; \
   k_interpolator_h = interpolator_array->k_i_h; \
-  Kokkos::parallel_for(host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
+  Kokkos::parallel_for("Copy interpolators to device", host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) { \
     interpolator_array->i[i].ex       = k_interpolator_h(i, interpolator_var::ex); \
     interpolator_array->i[i].ey       = k_interpolator_h(i, interpolator_var::ey); \
     interpolator_array->i[i].ez       = k_interpolator_h(i, interpolator_var::ez); \
@@ -380,12 +356,12 @@ namespace material_coeff_var {
   na = accumulator_array->na; \
   \
   k_accumulators_h = accumulator_array->k_a_h; \
-  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_HOST \
+  Kokkos::parallel_for("copy accumulator to device", KOKKOS_TEAM_POLICY_HOST \
       (na, Kokkos::AUTO),                          \
       KOKKOS_LAMBDA                                \
       (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) { \
     const unsigned int i = team_member.league_rank();              \
-    \
+    /* TODO: Do we really need a 2d loop here*/ \
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) { \
       k_accumulators_h(i, accumulator_var::jx, j)       = accumulator_array->a[i].jx[j]; \
       k_accumulators_h(i, accumulator_var::jy, j)       = accumulator_array->a[i].jy[j]; \
@@ -401,7 +377,7 @@ namespace material_coeff_var {
   k_accumulators_h = accumulator_array->k_a_h; \
   \
   Kokkos::deep_copy(accumulator_array->k_a_h, accumulator_array->k_a_d); \
-  Kokkos::parallel_for(KOKKOS_TEAM_POLICY_HOST \
+  Kokkos::parallel_for("copy accumulator to host", KOKKOS_TEAM_POLICY_HOST \
       (na, Kokkos::AUTO),                          \
       KOKKOS_LAMBDA                                \
       (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) { \

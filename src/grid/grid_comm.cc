@@ -59,34 +59,3 @@ end_send_port( int i, int j, int k,
   mp_end_send( g->mp, BOUNDARY(i,j,k) );
 }
 
-// Kokkos
-
-void begin_recv_port_kokkos(const grid_t* g, int port, int size, int tag, char * ALIGNED(128) recv_buf) {
-    int src = g->bc[port];
-    if(src < 0 || src >= world_size)
-        return;
-    mp_begin_recv_kokkos(g->mp, port, size, src, tag, recv_buf);
-}
-
-void end_recv_port_kokkos(const grid_t* g, int port) {
-    int src = g->bc[port];
-    if(src < 0 || src >= world_size)
-        return;
-    mp_end_recv_kokkos(g->mp, port);
-}
-
-void begin_send_port_kokkos(const grid_t* g, int port, int size, int tag, char* ALIGNED(128) send_buf) {
-    int dst = g->bc[port];
-    if(dst < 0 || dst >= world_size)
-        return;
-    mp_begin_send_kokkos(g->mp, port, size, dst, tag, send_buf);
-}
-
-void end_send_port_kokkos(const grid_t* g, int port) {
-    int dst = g->bc[port];
-    if(dst < 0 || dst >= world_size) 
-        return;
-    mp_end_send_kokkos(g->mp, port);
-}
-
-

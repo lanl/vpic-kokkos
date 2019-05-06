@@ -53,7 +53,6 @@ delete_grid( grid_t * g ) {
   FREE_ALIGNED( g->neighbor );
   FREE_ALIGNED( g->range );
   delete_mp( g->mp );
-//    delete_mp_kokkos(g->mp_k);
   FREE( g );
 }
 

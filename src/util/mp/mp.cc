@@ -85,20 +85,3 @@ void mp_end_send( mp_t * mp, int sbuf ) {
   MPWrapper::instance().mp_end_send( mp, sbuf );
 }
 
-// Kokkos stuff
-void mp_begin_recv_kokkos( mp_t* mp_k, int port, int size, int sender, int tag, char* ALIGNED(128) recv_buf ) {
-  MPWrapper::instance().mp_begin_recv_kokkos( mp_k, port, size, sender, tag, recv_buf );
-}
-
-void mp_begin_send_kokkos( mp_t* mp_k, int port, int size, int receiver, int tag, char* ALIGNED(128) send_buf ) {
-  MPWrapper::instance().mp_begin_send_kokkos( mp_k, port, size, receiver, tag, send_buf );
-}
-
-void mp_end_recv_kokkos( mp_t* mp_k, int port ) {
-  MPWrapper::instance().mp_end_recv_kokkos( mp_k, port );
-}
-
-void mp_end_send_kokkos( mp_t* mp_k, int port ) {
-  MPWrapper::instance().mp_end_send_kokkos( mp_k, port );
-}
-

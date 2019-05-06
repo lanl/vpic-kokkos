@@ -14,7 +14,7 @@ move_p_kokkos(k_particles_t k_particles,
               particle_mover_t * ALIGNED(16)  pm,
               k_accumulators_sa_t k_accumulators_sa,
               const grid_t     *              g,
-              k_neighbor_t                  d_neighbor,
+              Kokkos::View<int64_t*> const& d_neighbor,
               int64_t rangel,
               int64_t rangeh,
               const float                     qsp ) {
@@ -39,7 +39,7 @@ move_p_kokkos(k_particles_t k_particles,
   float s_dir[3];
   float v0, v1, v2, v3, v4, v5, q;
   int axis, face;
-  int64_t neighbor = 0;
+  int64_t neighbor;
   //int pi = int(local_pm_i);
   int pi = pm->i;
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
@@ -170,7 +170,7 @@ move_p_kokkos(k_particles_t k_particles,
 
     // TODO: clean this fixed index to an enum
     //neighbor = g->neighbor[ 6*ii + face ];
-    neighbor = d_neighbor( 6*static_cast<int>(pii) + face );
+    neighbor = d_neighbor( 6*ii + face );
 
     // TODO: these two if statements used to be marked UNLIKELY,
     // but that intrinsic doesn't work on GPU.
@@ -200,7 +200,7 @@ move_p_kokkos(k_particles_t k_particles,
       // displacement in the particle mover.
       pii = 8*int(pii) + face;
       return 1; // Return "mover still in use"
-    }
+      }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
@@ -365,7 +365,7 @@ advance_p_kokkos(k_particles_t k_particles,
 
 
 
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
+  Kokkos::parallel_for("clear nm", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
     //printf("how many times does this run %d", i);
     k_nm(0) = 0;
     //local_pm_dispx = 0;
@@ -373,30 +373,19 @@ advance_p_kokkos(k_particles_t k_particles,
     //local_pm_dispz = 0;
     //local_pm_i = 0;
   });
-/*
-Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(1,1);
-  Kokkos::parallel_for("Debug Kernel", policy,
-    KOKKOS_LAMBDA (Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>::member_type tsdlfjk)
-    {
-        for(int p_index=0; p_index<np; p_index++) {
-            int ii = static_cast<int>(pii);
-            if(ii > 20000) {
-                printf("HELP ME: ii: %d, p_index: %d\n", ii, p_index);
-            }
-        }
-    });
-*/
-  Kokkos::parallel_for("Problem Kernel", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,np),
+
+
+  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index)
     {
-//for(int p_index=0; p_index<np; p_index++) {
+
     float v0, v1, v2, v3, v4, v5;
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
 
     float dx   = p_dx;                             // Load position
     float dy   = p_dy;
     float dz   = p_dz;
-    int   ii   = static_cast<int>(pii);
+    int   ii   = int(pii);
     float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
                            dz*( f_dexdz + dy*f_d2exdydz ) );
     float hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
@@ -523,7 +512,6 @@ Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(1,1);
         if( k_nm(0)<max_nm ) {
           const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
-          printf("nm %d knm %d \n", nm, k_nm(0) );
 
           k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
           k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
@@ -540,7 +528,6 @@ Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(1,1);
         }
       }
     }
-//}
   });
 
 
@@ -561,7 +548,6 @@ Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(1,1);
   //args->seg[pipeline_rank].n_ignored = 0; // TODO: update this
   //delete(k_local_particle_movers_p);
   //return h_nm(0);
-
 }
 
 void

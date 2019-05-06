@@ -125,12 +125,16 @@ if(ENABLE_KOKKOS_CUDA)
     set(KOKKOS_ENABLE_CUDA_UVM OFF)
 
     # Choose Architecture for Kokkos
-    #set(KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
-    #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
+    if (BUILD_INTERNAL_KOKKOS)
+        #set (KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
+        #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
+        set(KOKKOS_ARCH "Power9;Volta70")
+        #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
+    endif (BUILD_INTERNAL_KOKKOS)
 
-    #set(KOKKOS_ARCH "Power9;Volta70")
-    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xcudafe --diag_suppress=esa_on_defaulted_function_ignored") # supress express cuda warnings
+
 
     # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
     # see https://github.com/UoB-HPC/BabelStream/issues/16
@@ -166,6 +170,7 @@ endif(BUILD_INTERNAL_KOKKOS)
 
 message(dirs: ${KOKKOS_INCLUDE_DIRS})
 include_directories(${KOKKOS_INCLUDE_DIRS})
+link_directories(${KOKKOS_INCLUDE_DIRS}/../lib) # TODO: bad idea..
 
 # Libs
 string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
