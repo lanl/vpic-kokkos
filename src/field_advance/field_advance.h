@@ -243,8 +243,6 @@ typedef struct field_array {
 
 } field_array_t;
 
-BEGIN_C_DECLS
-
 field_array_t *
 new_standard_field_array( grid_t           * RESTRICT g,
                           const material_t * RESTRICT m_list,
@@ -252,7 +250,5 @@ new_standard_field_array( grid_t           * RESTRICT g,
 
 void
 delete_field_array( field_array_t * fa );
-
-END_C_DECLS
 
 #endif // _field_advance_h_

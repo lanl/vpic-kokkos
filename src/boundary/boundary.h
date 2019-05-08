@@ -13,8 +13,6 @@ double n_out;		// number of writes so far on this node (double to
 						// accomodate long long runs)
 } link_boundary_t;
 
-BEGIN_C_DECLS
-
 /* In boundary.c */
 
 int
@@ -64,8 +62,6 @@ absorb_tally( /**/  species_t      * RESTRICT sp_list,
 
 int *
 get_absorb_tally( particle_bc_t * pbc );
-
-END_C_DECLS
 
 #endif /* _boundary_h_ */
 

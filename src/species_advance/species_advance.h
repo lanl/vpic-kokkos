@@ -55,84 +55,76 @@ typedef struct particle_injector {
   species_id sp_id;          // Species of particle
 } particle_injector_t;
 
-typedef struct species {
+class species_t {
+    public:
 
-  char * name;                        // Species name
-  float q;                            // Species particle charge
-  float m;                            // Species particle rest mass
+        char * name;                        // Species name
+        float q;                            // Species particle charge
+        float m;                            // Species particle rest mass
 
-  int np = 0, max_np = 0;             // Number and max local particles
-  particle_t * ALIGNED(128) p;        // Array of particles for the species
+        int np = 0, max_np = 0;             // Number and max local particles
+        particle_t * ALIGNED(128) p;        // Array of particles for the species
 
-  int nm, max_nm;                     // Number and max local movers in use
-  particle_mover_t * ALIGNED(128) pm; // Particle movers
+        int nm, max_nm;                     // Number and max local movers in use
+        particle_mover_t * ALIGNED(128) pm; // Particle movers
 
-  int64_t last_sorted;                // Step when the particles were last
-                                      // sorted.
-  int sort_interval;                  // How often to sort the species
-  int sort_out_of_place;              // Sort method
-  int * ALIGNED(128) partition;       // Static array indexed 0:
-  /**/                                // (nx+2)*(ny+2)*(nz+2).  Each value
-  /**/                                // corresponds to the associated particle
-  /**/                                // array index of the first particle in
-  /**/                                // the cell.  Array is allocated and
-  /**/                                // values computed in sort_p.  Purpose is
-  /**/                                // for implementing collision models
-  /**/                                // This is given in terms of the
-  /**/                                // underlying's grids space filling
-  /**/                                // curve indexing.  Thus, immediately
-  /**/                                // after a sort:
-  /**/                                //   sp->p[sp->partition[g->sfc[i]  ]:
-  /**/                                //         sp->partition[g->sfc[i]+1]-1]
-  /**/                                // are all the particles in voxel
-  /**/                                // with local index i, while:
-  /**/                                //   sp->p[ sp->partition[ j   ]:
-  /**/                                //          sp->partition[ j+1 ] ]
-  /**/                                // are all the particles in voxel
-  /**/                                // with space filling curve index j.
-  /**/                                // Note: SFC NOT IN USE RIGHT NOW THUS
-  /**/                                // g->sfc[i]=i ABOVE.
+        int64_t last_sorted;                // Step when the particles were last
+        // sorted.
+        int sort_interval;                  // How often to sort the species
+        int sort_out_of_place;              // Sort method
+        int * ALIGNED(128) partition;       // Static array indexed 0:
+        /**/                                // (nx+2)*(ny+2)*(nz+2).  Each value
+        /**/                                // corresponds to the associated particle
+        /**/                                // array index of the first particle in
+        /**/                                // the cell.  Array is allocated and
+        /**/                                // values computed in sort_p.  Purpose is
+        /**/                                // for implementing collision models
+        /**/                                // This is given in terms of the
+        /**/                                // underlying's grids space filling
+        /**/                                // curve indexing.  Thus, immediately
+        /**/                                // after a sort:
+        /**/                                //   sp->p[sp->partition[g->sfc[i]  ]:
+        /**/                                //         sp->partition[g->sfc[i]+1]-1]
+        /**/                                // are all the particles in voxel
+        /**/                                // with local index i, while:
+        /**/                                //   sp->p[ sp->partition[ j   ]:
+        /**/                                //          sp->partition[ j+1 ] ]
+        /**/                                // are all the particles in voxel
+        /**/                                // with space filling curve index j.
+        /**/                                // Note: SFC NOT IN USE RIGHT NOW THUS
+        /**/                                // g->sfc[i]=i ABOVE.
 
-  grid_t * g;                         // Underlying grid
-  species_id id;                      // Unique identifier for a species
-  struct species *next = NULL;        // Next species in the list
+        grid_t * g;                         // Underlying grid
+        species_id id;                      // Unique identifier for a species
+        species_t* next = NULL;        // Next species in the list
 
-  k_particles_t k_p_d;                // kokkos particles view on device
-  k_particles_t::HostMirror k_p_h;    // kokkos particles view on host
 
-  k_particles_t k_pc_d;               // kokkos particles copy for movers view on device
-  k_particles_t::HostMirror k_pc_h;   // kokkos particles copy for movers view on host
+        k_particles_t k_p_d;                // kokkos particles view on device
+        k_particles_t::HostMirror k_p_h;    // kokkos particles view on host
 
-  k_particle_movers_t k_pm_d;         // kokkos particle movers on device
-  k_particle_movers_t::HostMirror k_pm_h;  // kokkos particle movers on host
+        k_particle_movers_t k_pm_d;         // kokkos particle movers on device
+        k_particle_movers_t::HostMirror k_pm_h;  // kokkos particle movers on host
 
-  k_particle_movers_t k_pm_l_d;      // local particle movers
+        k_particle_movers_t k_pm_l_d;      // local particle movers
 
-  // TODO: what is an iterator here??
-  k_iterator_t k_nm_d;               // nm iterator
-  k_iterator_t::HostMirror k_nm_h;
+        // TODO: what is an iterator here??
+        k_iterator_t k_nm_d;               // nm iterator
+        k_iterator_t::HostMirror k_nm_h;
 
-  // TODO: this should ultimatley be removeable.
-  // This tracks the number of particles we need to move back to the device
-  int num_to_copy = 0;
 
-  // Init Kokkos Particle Arrays
-  species(int n_particles, int n_pmovers) :
-      k_p_d("k_particles", n_particles),
-      k_pm_d("k_particle_movers", n_pmovers),
-      k_pc_d("k_particle_copy_for_movers", n_pmovers),
-      k_nm_d("k_nm"),
-      k_pm_l_d("k_local_particle_movers", 1)
-  {
-      k_p_h = Kokkos::create_mirror_view(k_p_d);
-      k_pc_h = Kokkos::create_mirror_view(k_pc_d);
-      k_pm_h = Kokkos::create_mirror_view(k_pm_d);
-      k_nm_h = Kokkos::create_mirror_view(k_nm_d);
-  }
+        // Init Kokkos Particle Arrays
+        species_t(int n_particles, int n_pmovers) :
+            k_p_d("k_particles", n_particles),
+            k_pm_d("k_particle_movers", n_pmovers),
+            k_nm_d("k_nm"),
+            k_pm_l_d("k_local_particle_movers", 1)
+    {
+        k_p_h = Kokkos::create_mirror_view(k_p_d);
+        k_pm_h = Kokkos::create_mirror_view(k_pm_d);
+        k_nm_h = Kokkos::create_mirror_view(k_nm_d);
+    }
 
-} species_t;
-
-BEGIN_C_DECLS
+};
 
 // In species_advance.c
 
@@ -249,7 +241,5 @@ move_p_kokkos(const k_particles_t& k_particles,
               int64_t rangel,
               int64_t rangeh,
               const float                     qsp );
-
-END_C_DECLS
 
 #endif // _species_advance_h_
