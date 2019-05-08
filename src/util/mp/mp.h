@@ -45,8 +45,6 @@ typedef struct mp mp_t;
      mp_send_i( &_baton, 1, world_rank+_n_turnstile );  \
  } while(0)
 
-BEGIN_C_DECLS
-
 void
 boot_mp( int * pargc,
          char *** pargv );
@@ -149,7 +147,5 @@ mp_end_recv( mp_t * mp,
 void
 mp_end_send( mp_t * mp,
              int sbuf );
-
-END_C_DECLS
 
 #endif /* mp_h */

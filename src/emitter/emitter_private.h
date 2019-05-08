@@ -24,8 +24,6 @@ struct emitter {
   emitter_t * next;
 };
 
-BEGIN_C_DECLS
-
 // In emitter.c
 
 void
@@ -44,7 +42,5 @@ new_emitter_internal( void * params,
 
 void
 delete_emitter_internal( emitter_t * e );
-
-END_C_DECLS
 
 #endif // _emitter_private_h_
