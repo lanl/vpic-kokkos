@@ -235,7 +235,6 @@ struct accum_rho_p {
     
     KOKKOS_INLINE_FUNCTION
     void operator() (const int n) const {
-//for(int n=0; n<np; n++) {
         float w0, w1, w2, w3, w4, w5, w6, w7, dz;
         int v;
 
@@ -256,16 +255,22 @@ struct accum_rho_p {
 #   undef FNMS
 #   undef FMA
 
+        auto scatter_view = Kokkos::Experimental::create_scatter_view
+                                        <Kokkos::Experimental::ScatterSum,
+                                         KOKKOS_SCATTER_DUPLICATED,
+                                         KOKKOS_SCATTER_ATOMIC>(kfield);
+        auto scatter_view_access = scatter_view.access();
+
+        scatter_view_access(v,         field_var::rhof) += w0;
+        scatter_view_access(v+1,       field_var::rhof) += w1;
+        scatter_view_access(v+sy,      field_var::rhof) += w2;
+        scatter_view_access(v+sy+1,    field_var::rhof) += w3;
+        scatter_view_access(v+sz,      field_var::rhof) += w4;
+        scatter_view_access(v+sz+1,    field_var::rhof) += w5;
+        scatter_view_access(v+sz+sy,   field_var::rhof) += w6;
+        scatter_view_access(v+sz+sy+1, field_var::rhof) += w7;
+
 /*
-        kfield(v,         field_var::rhof) = kfield(v,         field_var::rhof) + w0;
-        kfield(v+1,       field_var::rhof) = kfield(v+1,       field_var::rhof) + w1;
-        kfield(v+sy,      field_var::rhof) = kfield(v+sy,      field_var::rhof) + w2;
-        kfield(v+sy+1,    field_var::rhof) = kfield(v+sy+1,    field_var::rhof) + w3;
-        kfield(v+sz,      field_var::rhof) = kfield(v+sz,      field_var::rhof) + w4;
-        kfield(v+sz+1,    field_var::rhof) = kfield(v+sz+1,    field_var::rhof) + w5;
-        kfield(v+sz+sy,   field_var::rhof) = kfield(v+sz+sy,   field_var::rhof) + w6;
-        kfield(v+sz+sy+1, field_var::rhof) = kfield(v+sz+sy+1, field_var::rhof) + w7;
-*/
         Kokkos::atomic_add(&kfield(v,         field_var::rhof), w0);
         Kokkos::atomic_add(&kfield(v+1,       field_var::rhof), w1);
         Kokkos::atomic_add(&kfield(v+sy,      field_var::rhof), w2);
@@ -274,102 +279,10 @@ struct accum_rho_p {
         Kokkos::atomic_add(&kfield(v+sz+1,    field_var::rhof), w5);
         Kokkos::atomic_add(&kfield(v+sz+sy,   field_var::rhof), w6);
         Kokkos::atomic_add(&kfield(v+sz+sy+1, field_var::rhof), w7);
-//}
+*/
     }
 };
 
-struct accum_rhob_single {
-    k_field_t kfield;
-    k_particles_t kpart;
-    int part_idx;
-    float qsp;
-    float r8V;
-    int nx;
-    int ny;
-    int nz;
-    int sy;
-    int sz;
-
-    KOKKOS_INLINE_FUNCTION
-    accum_rhob_single(k_field_t k_f_, k_particles_t k_p_, int part_idx_, float qsp_, float r8V_, int nx_, int ny_, int nz_, int sy_, int sz_) : 
-        kfield(k_f_), kpart(k_p_), part_idx(part_idx_), qsp(qsp_), r8V(r8V_), nx(nx_), ny(ny_), nz(nz_), sy(sy_), sz(sz_) {}
-    
-    KOKKOS_INLINE_FUNCTION
-    void operator() (const int n) const {
-        float w0 = kpart(part_idx, particle_var::dx);
-        float w1 = kpart(part_idx, particle_var::dy);
-        float w2, w3, w4, w5, w6;
-        float w7 = (qsp * r8V) * kpart(part_idx, particle_var::w);
-        float dz = kpart(part_idx, particle_var::dz);
-        int v = kpart(part_idx, particle_var::pi);
-        int x, y, z;
-        
-        w6 = w7 - w0 * w7;
-        w7 = w7 + w0 * w7;
-        w4 = w6 - w1 * w6;
-        w5 = w7 - w1 * w7;
-        w6 = w6 + w1 * w6;
-        w7 = w7 + w1 * w7;
-        w0 = w4 - dz * w4;
-        w1 = w5 - dz * w5;
-        w2 = w6 - dz * w6;
-        w3 = w7 - dz * w7;
-        w4 = w4 + dz * w4;
-        w5 = w5 + dz * w5;
-        w6 = w6 + dz * w6;
-        w7 = w7 + dz * w7;
-
-        x = v;
-        z = x/sz;
-        if(z == 1) {
-            w0 += w0;
-            w1 += w1;
-            w2 += w2;
-            w3 += w3;
-        }
-        if(z == nz) {
-            w4 += w4;
-            w5 += w5;
-            w6 += w6;
-            w7 += w7;
-        }
-        x -= sz * z;
-        y = x/sy;
-        if(y == 1) {
-            w0 += w0;
-            w1 += w1;
-            w4 += w4;
-            w5 += w5;
-        }
-        if(y == ny) {
-            w2 += w2;
-            w3 += w3;
-            w6 += w6;
-            w7 += w7;
-        }
-        x -= sy * y;
-        if(x == 1) {
-            w0 += w0;
-            w2 += w2;
-            w4 += w4;
-            w6 += w6;
-        }
-        if(x == nx) {
-            w1 += w1;
-            w3 += w3;
-            w5 += w5;
-            w7 += w7;
-        }
-        kfield(v,         field_var::rhob) += w0;
-        kfield(v+1,       field_var::rhob) += w1;
-        kfield(v+sy,      field_var::rhob) += w2;
-        kfield(v+sy+1,    field_var::rhob) += w3;
-        kfield(v+sz,      field_var::rhob) += w4;
-        kfield(v+sz+1,    field_var::rhob) += w5;
-        kfield(v+sz+sy,   field_var::rhob) += w6;
-        kfield(v+sz+sy+1, field_var::rhob) += w7;
-    }
-};
 struct accum_rhob {
     k_field_t kfield;
     k_particles_t kpart;
@@ -527,84 +440,5 @@ void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, k_particle_mover
     // Very inefficient, need to batch accumulations
     Kokkos::parallel_for("accumulate_rhob", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,nm), 
         accum_rhob(kfield, kpart, k_part_movers, qsp, r8V, nx, ny, nz, sy, sz));
-}
-
-void k_accumulate_rhob_single(const k_field_t& kfield, const k_particles_t& kpart, int part_idx, const float qsp, const int sy, const int sz, const float r8V, const int nx, const int ny, const int nz) {
-    Kokkos::parallel_for("accumulate_rhob_single", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,1), 
-        accum_rhob_single(kfield, kpart, part_idx, qsp, r8V, nx, ny, nz, sy, sz));
-/*
-    float w0 = kpart(part_idx, particle_var::dx);
-    float w1 = kpart(part_idx, particle_var::dy);
-    float w2, w3, w4, w5, w6;
-    float w7 = (qsp * r8V) * kpart(part_idx, particle_var::w);
-    float dz = kpart(part_idx, particle_var::dz);
-    int v = kpart(part_idx, particle_var::pi);
-    int x, y, z;
-    
-    w6 = w7 - w0 * w7;
-    w7 = w7 + w0 * w7;
-    w4 = w6 - w1 * w6;
-    w5 = w7 - w1 * w7;
-    w6 = w6 + w1 * w6;
-    w7 = w7 + w1 * w7;
-    w0 = w4 - dz * w4;
-    w1 = w5 - dz * w5;
-    w2 = w6 - dz * w6;
-    w3 = w7 - dz * w7;
-    w4 = w4 + dz * w4;
-    w5 = w5 + dz * w5;
-    w6 = w6 + dz * w6;
-    w7 = w7 + dz * w7;
-
-    x = v;
-    z = x/sz;
-    if(z == 1) {
-        w0 += w0;
-        w1 += w1;
-        w2 += w2;
-        w3 += w3;
-    }
-    if(z == nz) {
-        w4 += w4;
-        w5 += w5;
-        w6 += w6;
-        w7 += w7;
-    }
-    x -= sz * z;
-    y = x/sy;
-    if(y == 1) {
-        w0 += w0;
-        w1 += w1;
-        w4 += w4;
-        w5 += w5;
-    }
-    if(y == ny) {
-        w2 += w2;
-        w3 += w3;
-        w6 += w6;
-        w7 += w7;
-    }
-    x -= sy * y;
-    if(x == 1) {
-        w0 += w0;
-        w2 += w2;
-        w4 += w4;
-        w6 += w6;
-    }
-    if(x == nx) {
-        w1 += w1;
-        w3 += w3;
-        w5 += w5;
-        w7 += w7;
-    }
-    kfield(v,         field_var::rhob) += w0;
-    kfield(v+1,       field_var::rhob) += w1;
-    kfield(v+sy,      field_var::rhob) += w2;
-    kfield(v+sy+1,    field_var::rhob) += w3;
-    kfield(v+sz,      field_var::rhob) += w4;
-    kfield(v+sz+1,    field_var::rhob) += w5;
-    kfield(v+sz+sy,   field_var::rhob) += w6;
-    kfield(v+sz+sy+1, field_var::rhob) += w7;
-*/
 }
 
