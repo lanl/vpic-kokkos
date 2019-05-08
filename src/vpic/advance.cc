@@ -69,7 +69,7 @@ void remove_particles(k_particles_t& kparticles, k_particle_movers_t& k_part_mov
         if(i < np-nm) {
             int counter = n;
             // Linear search and find correct replacement
-            for(int j=0; j<np; j++) {
+            for(int j=0; j<nm; j++) {
                 if(safe_spots(j) == 0) {
                     // Skip spot
                     continue;
