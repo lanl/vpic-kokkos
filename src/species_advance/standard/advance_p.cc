@@ -363,8 +363,6 @@ advance_p_kokkos(k_particles_t k_particles,
   auto rangel = g->rangel;
   auto rangeh = g->rangeh;
 
-
-
   Kokkos::parallel_for("clear nm", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
     //printf("how many times does this run %d", i);
     k_nm(0) = 0;
