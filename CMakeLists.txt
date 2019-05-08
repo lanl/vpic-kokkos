@@ -22,6 +22,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # MPI detection
 #------------------------------------------------------------------------------#
 
+# TODO: it seems like Cmake version 3.12 (and likely others) have a bug/change
+# where it has a hard time detecting MPI. Cmake version. 3.9.0 works great
+# though..
 find_package(MPI REQUIRED)
 list(APPEND MPI_CXX_COMPILE_FLAGS -DOMPI_SKIP_MPICXX -DMPICH_SKIP_MPICXX )
 include_directories(${MPI_C_INCLUDE_PATH})
@@ -89,9 +92,15 @@ set(VPIC_CXX_LIBRARIES "${string_libraries}")
 #------------------------------------------------------------------------------#
 
 find_package(OpenMP)
+
+# FIXME: Sometimes OpenMP is not found fully, when it really should be. Is this
+# a CMAKE issue?
 if (OPENMP_FOUND)
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  set(VPIC_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${VPIC_CXX_FLAGS}")
   #set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
+else()
+  message("OpenMP not found...")
 endif()
 
 # Allow files to be references from the root, (eg #include "src/vpic/vpic.h")
@@ -296,6 +305,8 @@ if(NO_LIBVPIC)
   add_library(vpic INTERFACE)
 else()
   set(VPIC_EXPOSE "PRIVATE")
+  # TODO: this does a bad job of detecting when changes are need in ./bin/vpic
+  # for example if you delete ./bin/vpic it won't get rebuilt
   add_library(vpic ${VPIC_SRC})
   set(VPIC_SRC)
   install(TARGETS vpic LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)

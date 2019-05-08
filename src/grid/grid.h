@@ -194,8 +194,6 @@ typedef struct grid {
   if( (y)>(yh) ) (z)++;                                    \
   if( (y)>(yh) ) (y) = (yl)
 
-BEGIN_C_DECLS
-
 // In grid_structors.c
 
 grid_t *
@@ -364,7 +362,5 @@ end_send_port( int i, // x port coord ([-1,0,1])
     (z)  = _z+_z0;                                                      \
     (nv) = _nv;                                                         \
   } while(0)
-
-END_C_DECLS
 
 #endif

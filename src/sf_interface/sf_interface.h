@@ -44,8 +44,6 @@ typedef struct interpolator_array {
 
 } interpolator_array_t;
 
-BEGIN_C_DECLS
-
 // In interpolator_array.cxx
 
 interpolator_array_t *
@@ -64,8 +62,6 @@ delete_interpolator_array( interpolator_array_t * ALIGNED(128) ia );
 void
 load_interpolator_array( /**/  interpolator_array_t * RESTRICT ia,
                          const field_array_t        * RESTRICT fa );
-
-END_C_DECLS
 
 /*****************************************************************************/
 
@@ -107,8 +103,6 @@ typedef struct accumulator_array {
 
 } accumulator_array_t;
 
-BEGIN_C_DECLS
-
 // In sf_structors.c
 
 accumulator_array_t *
@@ -147,10 +141,8 @@ reduce_accumulator_array( accumulator_array_t * RESTRICT a );
 // accumulators have been reduced into the host accumulator.
 
 void
-unload_accumulator_array( /**/  field_array_t       * RESTRICT fa, 
+unload_accumulator_array( /**/  field_array_t       * RESTRICT fa,
                           const accumulator_array_t * RESTRICT aa );
-
-END_C_DECLS
 
 /*****************************************************************************/
 
@@ -171,8 +163,6 @@ typedef struct hydro_array {
   hydro_t * ALIGNED(128) h;
   grid_t * g;
 } hydro_array_t;
-
-BEGIN_C_DECLS
 
 // In hydro_array.c
 
@@ -198,7 +188,5 @@ clear_hydro_array( hydro_array_t * ha );
 
 void
 synchronize_hydro_array( hydro_array_t * ha );
-
-END_C_DECLS
 
 #endif // _sf_interface_h_

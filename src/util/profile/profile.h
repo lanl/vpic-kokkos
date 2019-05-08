@@ -80,8 +80,6 @@ typedef struct profile_internal_use_only_timer {
 
 extern profile_internal_use_only_timer_t profile_internal_use_only[];
 
-BEGIN_C_DECLS
-
 // Updates the cumulative profile, resets the local profile and, if
 // dump is true, writes the local and cumulative profiles to the log.
 
@@ -93,7 +91,5 @@ update_profile( int dump );
 
 double
 wallclock( void );
-
-END_C_DECLS
 
 #endif // _profile_h_
