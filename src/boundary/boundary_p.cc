@@ -72,9 +72,9 @@ boundary_p_kokkos(
   // TODO: this doesn't need to be made every time
   // Make scatter add ON HOST
   Kokkos::Experimental::ScatterView<float
-      *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight,
-      Kokkos::OpenMP, Kokkos::Experimental::ScatterSum,
-      Kokkos::Experimental::ScatterDuplicated ,
+      *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutLeft,
+      Kokkos::Serial, Kokkos::Experimental::ScatterSum,
+      Kokkos::Experimental::ScatterNonDuplicated ,
       Kokkos::Experimental::ScatterNonAtomic > scatter_add =
           Kokkos::Experimental::create_scatter_view(aa->k_a_h);
 
@@ -96,6 +96,7 @@ boundary_p_kokkos(
 
   // Unpack the particle boundary conditions
 
+  /*
   particle_bc_func_t pbc_interact[MAX_PBC];
   void * pbc_params[MAX_PBC];
   const int nb = num_particle_bc( pbc_list );
@@ -104,15 +105,16 @@ boundary_p_kokkos(
     pbc_interact[-pbc->id-3] = pbc->interact;
     pbc_params[  -pbc->id-3] = pbc->params;
    }
+   */
 
   // Unpack fields
 
-  field_t * RESTRICT ALIGNED(128) f = fa->f;
+  //field_t * RESTRICT ALIGNED(128) f = fa->f;
   grid_t  * RESTRICT              g = fa->g;
 
   // Unpack accumulator
 
-  accumulator_t * RESTRICT ALIGNED(128) a0 = aa->a;
+  //accumulator_t * RESTRICT ALIGNED(128) a0 = aa->a;
 
   // Unpack the grid
 
@@ -187,11 +189,11 @@ boundary_p_kokkos(
 
     // For each species, load the movers
     LIST_FOR_EACH( sp, sp_list ) {
-      const float   sp_q  = sp->q;
+      //const float   sp_q  = sp->q;
       const int32_t sp_id = sp->id;
 
       //particle_t * RESTRICT ALIGNED(128) p0 = sp->p;
-      int np = sp->np;
+      //int np = sp->np;
 
       particle_mover_t * RESTRICT ALIGNED(16)  pm = sp->pm + sp->nm - 1;
       nm = sp->nm;
@@ -214,7 +216,7 @@ boundary_p_kokkos(
       // Here we essentially need to remove all accesses of the particle array (p0) and instead read from k_pc_h
       for( ; nm; pm--, nm-- )
       {
-        int i = pm->i;
+        //int i = pm->i;
         int copy_index = nm -1;
 
         //printf("i %d p0i %d pi %f nm %d \n", pm->i, p0[i].i, sp->k_pc_h(copy_index, particle_var::pi), nm);
@@ -295,12 +297,14 @@ boundary_p_kokkos(
         // nothing to rhob.
 
         nn = -nn - 3; // Assumes reflective/absorbing are -1, -2
+        /*
         if( (nn>=0) & (nn<nb) ) {
             Kokkos::abort("Custom boundary not implemented");
             //n_ci += pbc_interact[nn]( pbc_params[nn], sp, p0+i, pm,
                     //ci+n_ci, 1, face );
             continue;
         }
+        */
 
         // Uh-oh: We fell through
         //if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
@@ -369,10 +373,10 @@ boundary_p_kokkos(
     // Unpack the species list for random acesss
 
     species_t*       sp_[ MAX_SP];
-    particle_t       * RESTRICT ALIGNED(32) sp_p[ MAX_SP];
+    //particle_t       * RESTRICT ALIGNED(32) sp_p[ MAX_SP];
     particle_mover_t * RESTRICT ALIGNED(32) sp_pm[MAX_SP];
-    float sp_q[MAX_SP];
-    int sp_np[MAX_SP];
+    //float sp_q[MAX_SP];
+    //int sp_np[MAX_SP];
     int sp_nm[MAX_SP];
 
     // TODO: I'm not sure this inpack buys us anything -- remove?
@@ -380,10 +384,10 @@ boundary_p_kokkos(
       ERROR(( "Update this to support more species" ));
     LIST_FOR_EACH( sp, sp_list ) {
       sp_[  sp->id ] = sp;
-      sp_p[  sp->id ] = sp->p;
+      //sp_p[  sp->id ] = sp->p;
       sp_pm[ sp->id ] = sp->pm;
-      sp_q[  sp->id ] = sp->q;
-      sp_np[ sp->id ] = sp->np;
+      //sp_q[  sp->id ] = sp->q;
+      //sp_np[ sp->id ] = sp->np;
       sp_nm[ sp->id ] = sp->nm;
     }
 
@@ -392,8 +396,8 @@ boundary_p_kokkos(
 
     face = 5;
     do {
-      /**/  particle_t          * RESTRICT ALIGNED(32) p;
-      /**/  particle_mover_t    * RESTRICT ALIGNED(16) pm;
+      //particle_t          * RESTRICT ALIGNED(32) p;
+      particle_mover_t    * RESTRICT ALIGNED(16) pm;
       const particle_injector_t * RESTRICT ALIGNED(16) pi;
       int nm, n, id;
 

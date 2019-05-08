@@ -8,14 +8,16 @@
 #include "../../vpic/kokkos_helpers.h"
 
 // TODO: think about if inlining matters?
-//KOKKOS_FORCEINLINE_FUNCTION
+template<class particle_view_t, class accumulator_sa_t, class neighbor_view_t>
 int
-move_p_kokkos(const k_particles_t& k_particles,
+KOKKOS_INLINE_FUNCTION
+move_p_kokkos(const particle_view_t& k_particles,
               //k_particle_movers_t k_local_particle_movers,
               particle_mover_t * ALIGNED(16)  pm,
-              k_accumulators_sa_t k_accumulators_sa,
+              accumulator_sa_t k_accumulators_sa,
               const grid_t     *              g,
-              Kokkos::View<int64_t*> const& d_neighbor,
+              //Kokkos::View<int64_t*> const& d_neighbor,
+              neighbor_view_t& d_neighbor,
               int64_t rangel,
               int64_t rangeh,
               const float                     qsp ) {
