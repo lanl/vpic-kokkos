@@ -60,8 +60,6 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     dz = p[n].dz;
     v  = p[n].i;
     w7 = p[n].w*q_8V;
-//if(n<100)
-//printf("h_accum_rho_p: n: %d \t w0: %f \t w1: %f \t dz: %f \t v: %d \t w7: %f \n", n, w0, w1, dz, v, w7);
 
     // Compute the trilinear weights
     // Though the PPE should have hardware fma/fmaf support, it was
@@ -223,7 +221,7 @@ accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
 
 // TODO replace with scatter add view
 struct accum_rho_p {
-    k_field_t kfield;
+    k_field_sa_t kfield;
     k_particles_t kparticles;
     int sy;
     int sz;
@@ -231,7 +229,7 @@ struct accum_rho_p {
     int np;
 
     KOKKOS_INLINE_FUNCTION
-    accum_rho_p(k_field_t k_f_, k_particles_t k_p_, int sy_, int sz_, float q_8V_, int np_) : kfield(k_f_), kparticles(k_p_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_) {}
+    accum_rho_p(k_field_sa_t k_f_sa_, k_particles_t k_p_, int sy_, int sz_, float q_8V_, int np_) : kfield(k_f_sa_), kparticles(k_p_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_) {}
     
     KOKKOS_INLINE_FUNCTION
     void operator() (const int n) const {
@@ -255,11 +253,7 @@ struct accum_rho_p {
 #   undef FNMS
 #   undef FMA
 
-        auto scatter_view = Kokkos::Experimental::create_scatter_view
-                                        <Kokkos::Experimental::ScatterSum,
-                                         KOKKOS_SCATTER_DUPLICATED,
-                                         KOKKOS_SCATTER_ATOMIC>(kfield);
-        auto scatter_view_access = scatter_view.access();
+        auto scatter_view_access = kfield.access();
 
         scatter_view_access(v,         field_var::rhof) += w0;
         scatter_view_access(v+1,       field_var::rhof) += w1;
@@ -390,45 +384,9 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
 
+    k_field_sa_t scatter_view = Kokkos::Experimental::create_scatter_view<Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED,KOKKOS_SCATTER_ATOMIC>(kfield);
     Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np), 
-        accum_rho_p(kfield, kparticles, sy, sz, q_8V, np));
-/*
-    Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,1),
-    KOKKOS_LAMBDA(const int n) {
-        float w0, w1, w2, w3, w4, w5, w6, w7, dz;
-        int v;
-
-        w0 = kparticles(n, particle_var::dx);
-        w1 = kparticles(n, particle_var::dy);
-        dz = kparticles(n, particle_var::dz);
-        v = kparticles(n, particle_var::pi);
-        w7 = kparticles(n, particle_var::w) * q_8V;
-
-        w6 = w7 - w0 * w7;
-        w7 = w7 + w0 * w7;
-        w4 = w6 - w1 * w6;
-        w5 = w7 - w1 * w7;
-        w6 = w6 + w1 * w6;
-        w7 = w7 + w1 * w7;
-        w0 = w4 - dz * w4;
-        w1 = w5 - dz * w5;
-        w2 = w6 - dz * w6;
-        w3 = w7 - dz * w7;
-        w4 = w4 + dz * w4;
-        w5 = w5 + dz * w5;
-        w6 = w6 + dz * w6;
-        w7 = w7 + dz * w7;
-
-        kfield(v,         field_var::rhof) += w0;
-        kfield(v+1,       field_var::rhof) += w1;
-        kfield(v+sy,      field_var::rhof) += w2;
-        kfield(v+sy+1,    field_var::rhof) += w3;
-        kfield(v+sz,      field_var::rhof) += w4;
-        kfield(v+sz+1,    field_var::rhof) += w5;
-        kfield(v+sz+sy,   field_var::rhof) += w6;
-        kfield(v+sz+sy+1, field_var::rhof) += w7;
-    });
-*/
+        accum_rho_p(scatter_view, kparticles, sy, sz, q_8V, np));
 }
 
 void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, k_particle_movers_t& k_part_movers, const grid_t* RESTRICT g, const float qsp, const int nm) {
@@ -437,7 +395,7 @@ void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, k_particle_mover
     int nx = g->nx;
     int ny = g->ny;
     int nz = g->nz;
-    // Very inefficient, need to batch accumulations
+
     Kokkos::parallel_for("accumulate_rhob", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,nm), 
         accum_rhob(kfield, kpart, k_part_movers, qsp, r8V, nx, ny, nz, sy, sz));
 }
