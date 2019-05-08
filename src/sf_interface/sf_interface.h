@@ -89,7 +89,7 @@ typedef struct accumulator_array {
   k_accumulators_t k_a_d;
   k_accumulators_t::HostMirror k_a_h;
   k_accumulators_sa_t k_a_sa;
-  k_accumulators_sa_t k_a_sah;
+  k_accumulators_sah_t k_a_sah;
 
   accumulator_array(int na) :
     k_a_d("k_accumulators", na)

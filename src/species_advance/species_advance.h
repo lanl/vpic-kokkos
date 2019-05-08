@@ -102,6 +102,10 @@ class species_t {
         k_particles_t k_p_d;                // kokkos particles view on device
         k_particles_t::HostMirror k_p_h;    // kokkos particles view on host
 
+        k_particles_t k_pc_d;               // kokkos particles copy for movers view on device
+        k_particles_t::HostMirror k_pc_h;   // kokkos particles copy for movers view on host
+
+
         k_particle_movers_t k_pm_d;         // kokkos particle movers on device
         k_particle_movers_t::HostMirror k_pm_h;  // kokkos particle movers on host
 
@@ -111,15 +115,21 @@ class species_t {
         k_iterator_t k_nm_d;               // nm iterator
         k_iterator_t::HostMirror k_nm_h;
 
+        // TODO: this should ultimatley be removeable.
+        // This tracks the number of particles we need to move back to the device
+        // And is basically the same as nm at certain times?
+        int num_to_copy = 0;
 
         // Init Kokkos Particle Arrays
         species_t(int n_particles, int n_pmovers) :
             k_p_d("k_particles", n_particles),
             k_pm_d("k_particle_movers", n_pmovers),
+            k_pc_d("k_particle_copy_for_movers", n_pmovers),
             k_nm_d("k_nm"),
             k_pm_l_d("k_local_particle_movers", 1)
     {
         k_p_h = Kokkos::create_mirror_view(k_p_d);
+        k_pc_h = Kokkos::create_mirror_view(k_pc_d);
         k_pm_h = Kokkos::create_mirror_view(k_pm_d);
         k_nm_h = Kokkos::create_mirror_view(k_nm_d);
     }
