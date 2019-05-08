@@ -218,7 +218,7 @@ void compress_particle_data(
             return;
         }
 
-        int safe_index_offset = (np-nm);
+        //int safe_index_offset = (np-nm);
 
         // Detect if the index we want to pull from is safe
         // Want to index this 0...nm
