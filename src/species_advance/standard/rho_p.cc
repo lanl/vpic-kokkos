@@ -43,10 +43,6 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     int n, v;
 
     // Load the grid data
-    Kokkos::parallel_for("test print", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np), KOKKOS_LAMBDA (size_t i) {
-            printf("how many times does this run %d", i);
-            });
-
     for( n=0; n<np; n++ ) {
 
 #   if 1
