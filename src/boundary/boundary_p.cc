@@ -71,12 +71,15 @@ boundary_p_kokkos(
 
   // TODO: this doesn't need to be made every time
   // Make scatter add ON HOST
+  // TODO: hard coding OpenMP here is not good
+  /*
   Kokkos::Experimental::ScatterView<float
       *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutLeft,
-      Kokkos::Serial, Kokkos::Experimental::ScatterSum,
-      Kokkos::Experimental::ScatterNonDuplicated ,
+      Kokkos::OpenMP, Kokkos::Experimental::ScatterSum,
+      Kokkos::Experimental::ScatterDuplicated ,
       Kokkos::Experimental::ScatterNonAtomic > scatter_add =
           Kokkos::Experimental::create_scatter_view(aa->k_a_h);
+          */
 
   // Temporary store for local particle injectors
   // FIXME: Ugly static usage
@@ -464,12 +467,14 @@ boundary_p_kokkos(
         //pm[nm].i=np;
         pm[nm].i = write_index; // Try tell it the index we wrote to
 
+        // TODO: this relies on serial for now -- maybe bad?
         //sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
-        sp_nm[id] = nm + move_p_kokkos(
+        sp_nm[id] = nm + move_p_kokkos_host_serial(
                     particle_copy,
                     &(pm[nm]),
+                    aa->k_a_h,
                     //aa->k_a_sah, // TODO: why does changing this to k_a_h break things?
-                    scatter_add,
+                    //scatter_add,
                     g,
                     sp_[id]->g->k_neighbor_h,
                     rangel,
@@ -493,7 +498,7 @@ boundary_p_kokkos(
   }
 
   // contribute SA back
-  Kokkos::Experimental::contribute(aa->k_a_h, scatter_add);
+  //Kokkos::Experimental::contribute(aa->k_a_h, scatter_add);
 }
 
 void

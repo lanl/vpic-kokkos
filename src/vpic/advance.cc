@@ -362,7 +362,7 @@ int vpic_simulation::advance(void) {
   KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
 
-  int lna = 180;
+  //int lna = 180;
 
   LIST_FOR_EACH( sp, species_list )
   {
