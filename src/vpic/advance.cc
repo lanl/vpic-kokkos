@@ -366,7 +366,9 @@ int vpic_simulation::advance(void) {
 
   LIST_FOR_EACH( sp, species_list )
   {
-    TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
+      auto& particles = sp->k_p_d;
+      print_particles_d(particles, sp->np); // should not see any zeros
+      TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
   }
 
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);

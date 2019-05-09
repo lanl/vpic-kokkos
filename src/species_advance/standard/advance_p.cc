@@ -158,8 +158,7 @@ sp_[id]->
   auto rangel = g->rangel;
   auto rangeh = g->rangeh;
 
-
-
+  // TODO: is this the right place to do this?
   Kokkos::parallel_for("clear nm", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
     //printf("how many times does this run %d", i);
     k_nm(0) = 0;

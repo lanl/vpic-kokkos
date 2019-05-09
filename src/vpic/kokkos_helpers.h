@@ -395,4 +395,10 @@ namespace accumulator_var {
     }); \
   });
 
+void print_particles_d(
+        k_particles_t particles,
+        int np
+        );
+void print_accumulator(k_accumulators_t fields, int n);
+
 #endif // _kokkos_helpers_h_
