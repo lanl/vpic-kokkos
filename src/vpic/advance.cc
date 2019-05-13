@@ -509,9 +509,9 @@ int vpic_simulation::advance(void) {
   }
 
   // TODO: this can be removed once the below does not rely on host memory
-  UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
-  UNSAFE_TOC( DATA_MOVEMENT, 1);
+//  UNSAFE_TIC(); // Time this data movement
+//  KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
+//  UNSAFE_TOC( DATA_MOVEMENT, 1);
 
   // This copies over a val for nm, which is a lie
   LIST_FOR_EACH( sp, species_list ) {
