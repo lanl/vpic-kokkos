@@ -149,6 +149,7 @@ void compress_particle_data(
 
       // This should leave just 0s at the start?
       auto& particles = sp->k_p_d;
+      printf("SORTER \n");
       print_particles_d(particles, sp->np); // should not see any zeros
 
 
@@ -261,7 +262,12 @@ void compress_particle_data(
             printf("%d is safe %d\n", n, pull_from);
         }
 
-        printf("moving id %d to %d\n", pull_from, write_to);
+        printf("moving id %d %f %f %f to %d\n",
+                pull_from,
+                particles(pull_from, particle_var::dx),
+                particles(pull_from, particle_var::dy),
+                particles(pull_from, particle_var::dz),
+                write_to);
 
         // Move the particle from np-n to pm->i
         particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
@@ -273,14 +279,14 @@ void compress_particle_data(
         particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
         particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
 
-        particles(write_to, particle_var::dx) = 0.0;
-        particles(write_to, particle_var::dy) = 0.0;
-        particles(write_to, particle_var::dz) = 0.0;
-        particles(write_to, particle_var::ux) = 0.0;
-        particles(write_to, particle_var::uy) = 0.0;
-        particles(write_to, particle_var::uz) = 0.0;
-        particles(write_to, particle_var::w)  = 0.0;
-        particles(write_to, particle_var::pi) = 0.0;
+        particles(pull_from, particle_var::dx) = 0.0;
+        particles(pull_from, particle_var::dy) = 0.0;
+        particles(pull_from, particle_var::dz) = 0.0;
+        particles(pull_from, particle_var::ux) = 0.0;
+        particles(pull_from, particle_var::uy) = 0.0;
+        particles(pull_from, particle_var::uz) = 0.0;
+        particles(pull_from, particle_var::w)  = 0.0;
+        particles(pull_from, particle_var::pi) = 0.0;
     });
 
     Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
@@ -494,7 +500,9 @@ int vpic_simulation::advance(void) {
       sp->np -= nm;
 
       auto& particles = sp->k_p_d;
-      //print_particles_d(particles, sp->np); // should not see any zeros
+      printf("Done compress, now print: \n");
+      print_particles_d(particles, sp->np); // should not see any zeros
+      printf("Done compress print: \n");
 
       // Copy data for copies back to device
       Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
@@ -511,6 +519,7 @@ int vpic_simulation::advance(void) {
               (int i)
       {
         int npi = sp->np+i; // i goes from 0..n so no need for -1
+        printf("append to %d \n", npi);
         particles(npi, particle_var::dx) = particle_copy(i, particle_var::dx);
         particles(npi, particle_var::dy) = particle_copy(i, particle_var::dy);
         particles(npi, particle_var::dz) = particle_copy(i, particle_var::dz);
