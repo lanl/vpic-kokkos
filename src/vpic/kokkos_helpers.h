@@ -17,7 +17,6 @@
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
 
-/*
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
   #define KOKKOS_SCATTER_ATOMIC Kokkos::Experimental::ScatterAtomic
@@ -27,7 +26,6 @@
   #define KOKKOS_SCATTER_ATOMIC Kokkos::Experimental::ScatterNonAtomic
   #define KOKKOS_LAYOUT Kokkos::LayoutRight
 #endif
-*/
 
 // TODO: we dont need the [1] here
 using k_iterator_t = Kokkos::View<int[1]>;

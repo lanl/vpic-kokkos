@@ -28,8 +28,7 @@ void compress_particle_data(
         k_particle_movers_t particle_movers,
         const int32_t nm,
         const int32_t np,
-        species_t* sp
-)
+        species_t* sp)
 {
     // From particle_movers(nm, particle_mover_var::pmi), we know where the
     // gaps in particle are
@@ -207,6 +206,8 @@ void compress_particle_data(
         particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
         particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
         particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
+    });
+}
 
 /*  Adjust particle indices and set which particles will fill in the holes.
  *  Fills starting from last mover to first
@@ -355,7 +356,7 @@ int vpic_simulation::advance(void) {
   UNSAFE_TIC(); // Time this data movement
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
-  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+//  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
   UNSAFE_TOC( DATA_MOVEMENT, 1);
 
   //int lna = 180;
@@ -540,7 +541,6 @@ int vpic_simulation::advance(void) {
     k_accumulate_rhob(field_array->k_f_d, sp->k_p_d, sp->k_pm_d, sp->g, sp->q, sp->nm);
     sp->np -= sp->nm;
     sp->nm = 0;
-*/
 
     int nm = sp->nm;
     particle_mover_t * RESTRICT ALIGNED(16)  pm = sp->pm + sp->nm - 1;
@@ -559,7 +559,7 @@ int vpic_simulation::advance(void) {
   }
 
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
-
+*/
   // At this point, all particle positions are at r_1 and u_{1/2}, the
   // guard lists are empty and the accumulators on each processor are current.
   // Convert the accumulators into currents.
@@ -632,8 +632,8 @@ int vpic_simulation::advance(void) {
     TIC FAK->clear_rhof( field_array ); TOC( clear_rhof,1 );
     if( species_list ) {
 
-        KOKKOS_PARTICLE_VARIABLES();
-        KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+//        KOKKOS_PARTICLE_VARIABLES();
+//        KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
         KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 
         TIC
