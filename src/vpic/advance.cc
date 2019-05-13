@@ -217,17 +217,6 @@ void compress_particle_data(
         // If the "gap" is in the danger zone, no need to back fill it
         if (write_to >= danger_zone)
         {
-            // TODO: we don't actually have to zero it out, we can just skip
-            printf("zeroing out %d for %d, not pulling from %d\n", write_to, n, pull_from);
-            particles(write_to, particle_var::dx) = 0.0;
-            particles(write_to, particle_var::dy) = 0.0;
-            particles(write_to, particle_var::dz) = 0.0;
-            particles(write_to, particle_var::ux) = 0.0;
-            particles(write_to, particle_var::uy) = 0.0;
-            particles(write_to, particle_var::uz) = 0.0;
-            particles(write_to, particle_var::w)  = 0.0;
-            particles(write_to, particle_var::pi) = 0.0;
-
             // if pull from is unsafe, skip it
             if (pull_from >= danger_zone) // We only have lookup for the danger zone
             {
@@ -262,15 +251,15 @@ void compress_particle_data(
             return;
         }
         else {
-            printf("%d is safe %d\n", n, pull_from);
+            //printf("%d is safe %d\n", n, pull_from);
         }
 
-        printf("moving id %d %f %f %f to %d\n",
-                pull_from,
-                particles(pull_from, particle_var::dx),
-                particles(pull_from, particle_var::dy),
-                particles(pull_from, particle_var::dz),
-                write_to);
+        //printf("moving id %d %f %f %f to %d\n",
+                //pull_from,
+                //particles(pull_from, particle_var::dx),
+                //particles(pull_from, particle_var::dy),
+                //particles(pull_from, particle_var::dz),
+                //write_to);
 
         // Move the particle from np-n to pm->i
         particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
@@ -281,15 +270,6 @@ void compress_particle_data(
         particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
         particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
         particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
-
-        particles(pull_from, particle_var::dx) = 0.0;
-        particles(pull_from, particle_var::dy) = 0.0;
-        particles(pull_from, particle_var::dz) = 0.0;
-        particles(pull_from, particle_var::ux) = 0.0;
-        particles(pull_from, particle_var::uy) = 0.0;
-        particles(pull_from, particle_var::uz) = 0.0;
-        particles(pull_from, particle_var::w)  = 0.0;
-        particles(pull_from, particle_var::pi) = 0.0;
     });
 
     Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
@@ -301,15 +281,15 @@ void compress_particle_data(
         int write_to = clean_up_to(n);
         int pull_from = clean_up_from(n);
 
-        printf("clean up id %d to %d \n", pull_from, write_to);
-            printf("--> %f %f %f -> %f %f %f \n",
-                particles(pull_from, particle_var::dx),
-                particles(pull_from, particle_var::dy),
-                particles(pull_from, particle_var::dz),
-                particles(write_to, particle_var::dx),
-                particles(write_to, particle_var::dy),
-                particles(write_to, particle_var::dz)
-            );
+        //printf("clean up id %d to %d \n", pull_from, write_to);
+            //printf("--> %f %f %f -> %f %f %f \n",
+                //particles(pull_from, particle_var::dx),
+                //particles(pull_from, particle_var::dy),
+                //particles(pull_from, particle_var::dz),
+                //particles(write_to, particle_var::dx),
+                //particles(write_to, particle_var::dy),
+                //particles(write_to, particle_var::dz)
+            //);
 
         particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
         particles(write_to, particle_var::dy) = particles(pull_from, particle_var::dy);
@@ -411,7 +391,7 @@ int vpic_simulation::advance(void) {
   LIST_FOR_EACH( sp, species_list )
   {
       auto& particles = sp->k_p_d;
-      print_particles_d(particles, sp->np); // should not see any zeros
+      //print_particles_d(particles, sp->np); // should not see any zeros
       TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
   }
 
@@ -503,20 +483,19 @@ int vpic_simulation::advance(void) {
       sp->np -= nm;
 
       auto& particles = sp->k_p_d;
-      printf("Done compress, now print: \n");
-      print_particles_d(particles, sp->np); // should not see any zeros
-      printf("Done compress print: \n");
+      //printf("Done compress, now print: \n");
+      //print_particles_d(particles, sp->np); // should not see any zeros
+      //printf("Done compress print: \n");
 
       // Copy data for copies back to device
       Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
 
       auto& particle_copy = sp->k_pc_d;
 
-      printf("particle copy size %ld particles size %ld max np %d \n", particle_copy.size() , particles.size(), sp->max_np);
-
+      //printf("particle copy size %ld particles size %ld max np %d \n", particle_copy.size() , particles.size(), sp->max_np);
 
       int num_to_copy = sp->num_to_copy;
-      printf("Trying to append %d from particle copy where np = %d max nm %d \n", num_to_copy, sp->np, sp->max_nm);
+      //printf("Trying to append %d from particle copy where np = %d max nm %d \n", num_to_copy, sp->np, sp->max_nm);
 
       int np = sp->np;
       // Append it to the particles
@@ -525,7 +504,7 @@ int vpic_simulation::advance(void) {
               (int i)
       {
         int npi = np+i; // i goes from 0..n so no need for -1
-        printf("append to %d from %d \n", npi, i);
+        //printf("append to %d from %d \n", npi, i);
         particles(npi, particle_var::dx) = particle_copy(i, particle_var::dx);
         particles(npi, particle_var::dy) = particle_copy(i, particle_var::dy);
         particles(npi, particle_var::dz) = particle_copy(i, particle_var::dz);
