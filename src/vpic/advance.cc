@@ -508,7 +508,7 @@ int vpic_simulation::advance(void) {
       printf("Done compress print: \n");
 
       // Copy data for copies back to device
-      //Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
+      Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
 
       auto& particle_copy = sp->k_pc_d;
 
@@ -521,7 +521,7 @@ int vpic_simulation::advance(void) {
       int np = sp->np;
       // Append it to the particles
       Kokkos::parallel_for("append moved particles", Kokkos::RangePolicy <
-              Kokkos::DefaultExecutionSpace > (0, sp->num_to_copy-1), KOKKOS_LAMBDA
+              Kokkos::DefaultExecutionSpace > (0, sp->num_to_copy), KOKKOS_LAMBDA
               (int i)
       {
         int npi = np+i; // i goes from 0..n so no need for -1
@@ -537,7 +537,7 @@ int vpic_simulation::advance(void) {
       });
 
       // Reset this to zero now we've done the write back
-      //sp->np += num_to_copy;
+      sp->np += num_to_copy;
       sp->num_to_copy = 0;
   }
 
