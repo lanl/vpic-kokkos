@@ -253,6 +253,8 @@ int vpic_simulation::advance(void) {
   // empty and all particles should be inside the local computational domain.
   // Advance the particle lists.
 
+// HOST
+// Touches accumulators
   if( species_list )
     TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
 
@@ -281,6 +283,8 @@ int vpic_simulation::advance(void) {
 
   //int lna = 180;
 
+// DEVICE function
+// Touches particles, particle movers, accumulators, interpolators
   LIST_FOR_EACH( sp, species_list )
   {
       TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
@@ -306,6 +310,8 @@ int vpic_simulation::advance(void) {
   // be done after advance_p and before guard list processing. Note:
   // user_particle_injection should be a stub if species_list is empty.
 
+// Probably needs to be on host due to user particle injection
+// May not touch memory?
   if( emitter_list )
     TIC apply_emitter_list( emitter_list ); TOC( emission_model, 1 );
   TIC user_particle_injection(); TOC( user_particle_injection, 1 );
@@ -313,6 +319,8 @@ int vpic_simulation::advance(void) {
   // This should be after the emission and injection to allow for the
   // possibility of thread parallelizing these operations
 
+// HOST
+// Touches accumulator memory
   if( species_list )
     TIC reduce_accumulator_array( accumulator_array ); TOC( reduce_accumulators, 1 );
 
@@ -324,6 +332,8 @@ int vpic_simulation::advance(void) {
   // This should mean the kokkos accum data is up to date
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
 
+// HOST
+// Touches particle copies, particle_movers, particle_injectors, accumulators (move_p), neighbors
   TIC
     for( int round=0; round<num_comm_round; round++ )
     {
@@ -364,6 +374,8 @@ int vpic_simulation::advance(void) {
 
   // Clean_up once boundary p is done
   // Copy back the right data to GPU
+// Device
+// Touches particles, particle_movers
   LIST_FOR_EACH( sp, species_list ) {
 
       const int nm = sp->k_nm_h(0);
@@ -459,6 +471,8 @@ int vpic_simulation::advance(void) {
   // guard lists are empty and the accumulators on each processor are current.
   // Convert the accumulators into currents.
 
+// HOST
+// Touches fields and accumulators
   TIC FAK->clear_jf( field_array ); TOC( clear_jf, 1 );
   if( species_list )
     TIC unload_accumulator_array( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
@@ -479,6 +493,8 @@ int vpic_simulation::advance(void) {
   KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
   UNSAFE_TOC( DATA_MOVEMENT, 1);
 
+// DEVICE
+// Touches fields
   // Half advance the magnetic field from B_0 to B_{1/2}
   TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
 
@@ -488,12 +504,15 @@ int vpic_simulation::advance(void) {
 
   // Advance the electric field from E_0 to E_1
 
+// HOST (Device in nphtan branch)
+// Touches fields
   TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
 
   // Let the user add their own contributions to the electric field. It is the
   // users responsibility to insure injected electric fields are consistent
   // across domains.
 
+// ??
   TIC user_field_injection(); TOC( user_field_injection, 1 );
 
   // Half advance the magnetic field from B_{1/2} to B_1
@@ -502,6 +521,8 @@ int vpic_simulation::advance(void) {
   KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
   UNSAFE_TOC( DATA_MOVEMENT, 1);
 
+// DEVICE
+// Touches fields
   TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
 
   UNSAFE_TIC(); // Time this data movement
@@ -513,10 +534,14 @@ int vpic_simulation::advance(void) {
   if( (clean_div_e_interval>0) && ((step() % clean_div_e_interval)==0) ) {
     if( rank()==0 ) MESSAGE(( "Divergence cleaning electric field" ));
 
+// HOST (Device in rho_p)
+// Touches fields and particles
     TIC FAK->clear_rhof( field_array ); TOC( clear_rhof,1 );
     if( species_list ) TIC LIST_FOR_EACH( sp, species_list ) accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, species_list->id );
     TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
 
+// HOST
+// Touches fields
     for( int round=0; round<num_div_e_round; round++ ) {
       TIC FAK->compute_div_e_err( field_array ); TOC( compute_div_e_err, 1 );
       if( round==0 || round==num_div_e_round-1 ) {
@@ -528,7 +553,8 @@ int vpic_simulation::advance(void) {
   }
 
   // Divergence clean b
-
+// HOST
+// Touches fields
   if( (clean_div_b_interval>0) && ((step() % clean_div_b_interval)==0) ) {
     if( rank()==0 ) MESSAGE(( "Divergence cleaning magnetic field" ));
 
@@ -543,7 +569,8 @@ int vpic_simulation::advance(void) {
   }
 
   // Synchronize the shared faces
-
+// HOST
+// Touches fields
   if( (sync_shared_interval>0) && ((step() % sync_shared_interval)==0) ) {
     if( rank()==0 ) MESSAGE(( "Synchronizing shared tang e, norm b, rho_b" ));
     TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
@@ -559,6 +586,8 @@ int vpic_simulation::advance(void) {
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
   UNSAFE_TOC( DATA_MOVEMENT, 1);
 
+// DEVICE
+// Touches fields, interpolators
   if( species_list ) TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
 
   UNSAFE_TIC(); // Time this data movement
