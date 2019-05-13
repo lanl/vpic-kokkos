@@ -401,4 +401,11 @@ void print_particles_d(
         );
 void print_accumulator(k_accumulators_t fields, int n);
 
+// The templating here is to defer the type until later in the head include chain
+template <class P>
+bool compareParticleMovers(P& a, P& b) {
+    return a.i < b.i;
+}
+
+
 #endif // _kokkos_helpers_h_

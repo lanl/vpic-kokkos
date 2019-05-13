@@ -32,13 +32,14 @@ void print_particles_d(
     Kokkos::parallel_for("particle printer", Kokkos::RangePolicy <
             Kokkos::DefaultExecutionSpace > (0, np), KOKKOS_LAMBDA (int i)
     {
-      printf("accum part %d has %f %f %f %f %f %f\n", i,
+      printf("accum part %d has %f %f %f %f %f %f at %f\n", i,
                particles(i, particle_var::dx),
                particles(i, particle_var::dy),
                particles(i, particle_var::dz),
                particles(i, particle_var::ux),
                particles(i, particle_var::uy),
-               particles(i, particle_var::uz)
+               particles(i, particle_var::uz),
+               particles(i, particle_var::pi)
        );
     });
 

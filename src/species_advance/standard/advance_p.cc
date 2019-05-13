@@ -186,6 +186,7 @@ sp_[id]->
                            dx*( f_deydx + dz*f_d2eydzdx ) );
     float haz  = qdt_2mc*(    ( f_ez    + dx*f_dezdx    ) +
                            dy*( f_dezdy + dx*f_d2ezdxdy ) );
+    printf(" inter %d vs %ld \n", ii, k_interp.size());
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby + dy*f_dcbydy;
     float cbz  = f_cbz + dz*f_dcbzdz;
@@ -415,9 +416,12 @@ advance_p( /**/  species_t            * RESTRICT sp,
 
   // I need to know the number of movers that got populated so I can call the
   // compress. Let's copy it back
-  Kokkos::deep_copy(sp->k_nm_d, sp->k_nm_h);
+  Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
+  // TODO: which way round should this copy be?
 
   int nm = sp->k_nm_h(0);
+  
+  printf("nm = %d \n", nm);
 
   // Copy particle mirror movers back so we have their data safe. Ready for
   // boundary_p_kokkos

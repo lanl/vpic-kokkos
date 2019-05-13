@@ -85,7 +85,7 @@ void compress_particle_data(
     //SortView( particles_movers, 0, nm );
     //Kokkos::deep_copy( host_subarray , work_array );
 
-    std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers2);
+    std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers<particle_mover_t>);
 
     Kokkos::parallel_for("copy movers to device", host_execution_policy(0, nm) , KOKKOS_LAMBDA (int i) { \
       particle_movers(i, particle_mover_var::dispx) = sp->pm[i].dispx;
@@ -124,6 +124,32 @@ void compress_particle_data(
         }
     });
 
+
+#endif
+
+
+//#define SORT_COMPRESS 1
+#ifdef SORT_COMPRESS
+
+
+      int pi = particle_var::pi; // TODO: can you really not pass an enum in??
+      auto keys = Kokkos::subview(sp->k_p_d, Kokkos::ALL, pi);
+      using key_type = decltype(keys);
+
+
+      // TODO: we can tighten the bounds on this
+      int max = accumulator_array->na;
+      using Comparator = Kokkos::BinOp1D<key_type>;
+      Comparator comp(max, 0, max);
+
+      int sort_within_bins = 0;
+      Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, sp->np, comp, sort_within_bins );
+      bin_sort.create_permute_vector();
+      bin_sort.sort(sp->k_p_d);
+
+      // This should leave just 0s at the start?
+      auto& particles = sp->k_p_d;
+      print_particles_d(particles, sp->np); // should not see any zeros
 
 
 #else
@@ -246,6 +272,15 @@ void compress_particle_data(
         particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
         particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
         particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
+
+        particles(write_to, particle_var::dx) = 0.0;
+        particles(write_to, particle_var::dy) = 0.0;
+        particles(write_to, particle_var::dz) = 0.0;
+        particles(write_to, particle_var::ux) = 0.0;
+        particles(write_to, particle_var::uy) = 0.0;
+        particles(write_to, particle_var::uz) = 0.0;
+        particles(write_to, particle_var::w)  = 0.0;
+        particles(write_to, particle_var::pi) = 0.0;
     });
 
     Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
@@ -375,8 +410,11 @@ int vpic_simulation::advance(void) {
   accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
 
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
-  KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
+  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(); // TODO: this can ultimatimely be removed
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+
+  // TODO: think about if this is needed? It's done in advance_p
+  //Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
 
   // Because the partial position push when injecting aged particles might
   // place those particles onto the guard list (boundary interaction) and
@@ -404,8 +442,10 @@ int vpic_simulation::advance(void) {
 
   TIC
     for( int round=0; round<num_comm_round; round++ )
+    {
       //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
       boundary_p_kokkos( particle_bc_list, species_list, field_array, accumulator_array );
+    }
   TOC( boundary_p, num_comm_round );
 
   // Boundary_p calls move_p, so we need to deal with the current
@@ -460,7 +500,10 @@ int vpic_simulation::advance(void) {
       Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
 
       auto& particle_copy = sp->k_pc_d;
+
+      printf("particle copy size %ld particles size %ld \n", particle_copy.size() , particles.size());
       int num_to_copy = sp->num_to_copy;
+      printf("Trying to append %d to particle copy where np = %d \n", num_to_copy, sp->np);
 
       // Append it to the particles
       Kokkos::parallel_for("append moved particles", Kokkos::RangePolicy <

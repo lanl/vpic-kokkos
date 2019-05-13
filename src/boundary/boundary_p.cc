@@ -17,10 +17,6 @@ using namespace v4;
 
 enum { MAX_PBC = 32, MAX_SP = 32 };
 
-bool compareParticleMovers(particle_mover_t& a, particle_mover_t&b) {
-    return a.i < b.i;
-}
-
 
 // Gives the local mp port associated with a local face
 static const int f2b[6]  = { BOUNDARY(-1, 0, 0),
@@ -122,12 +118,14 @@ boundary_p_kokkos(
   // Unpack the grid
 
   const int64_t * RESTRICT ALIGNED(128) neighbor = g->neighbor;
-  /**/  mp_t    * RESTRICT              mp       = g->mp;
+  mp_t* RESTRICT              mp       = g->mp;
   const int64_t rangel = g->rangel;
   const int64_t rangeh = g->rangeh;
   const int64_t rangem = g->range[world_size];
-  /*const*/ int bc[6], shared[6];
-  /*const*/ int64_t range[6];
+
+  int bc[6], shared[6];
+  int64_t range[6];
+
   for( face=0; face<6; face++ ) {
     bc[face] = g->bc[f2b[face]];
     shared[face] = (bc[face]>=0) && (bc[face]<world_size) &&
@@ -651,7 +649,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
       particle_injector_t * RESTRICT ALIGNED(16) pi;
       int64_t nn;
 
-      std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers);
+      std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers<particle_mover_t>);
 
       // Note that particle movers for each species are processed in
       // reverse order.  This allows us to backfill holes in the
