@@ -102,7 +102,6 @@ subsort_pipeline( sort_p_pipeline_args_t * args,
     for( i=i0; i<i1; i++ ) {
       v = p_src[i].i;
       j = next[v]++;
-      printf("particle at %d from ss %s src = %f %f %f v0 %d v1 %d \n", i, subsort, p_src[i].dx, p_src[i].dy, p_src[i].dz, v0, v1);
       p_dst[j] = p_src[i];
     }
   }
