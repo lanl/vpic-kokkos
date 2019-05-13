@@ -43,8 +43,6 @@ void compress_particle_data(
     // This is a O(NP) solution. There likely exists a faster O(NM) solution
     // but my attempt had a data race
 
-
-
     // POSSIBLE IMPROVEMENT, A better way to do is this?:
     //   Run the back fill loop but if a "pull_from" id is a gap (which can be
     //   detected by setting a special flag in it's p->i value), then skip it.
@@ -66,97 +64,6 @@ void compress_particle_data(
     // This is annoying, but it will give a back fill order more consistent
     // with VPIC's serial algorithm
 
-
-//#define SIMPLE_COMPRESS 1
-
-// Ignore this...
-/// TODO: delete this?
-#ifdef SIMPLE_COMPRESS
-
-    // TODO: implement this as a sort
-    // Do the sensible but slow version of the compress, to sanity check the
-    // correctness and performance.
-
-    // currently this is a serialized (read: slow) gpu backfill.. probably
-    // don't use it. But its useful to mirror VPIC functionality
-
-    // sort nm
-
-    //SortView( particles_movers, 0, nm );
-    //Kokkos::deep_copy( host_subarray , work_array );
-
-    std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers<particle_mover_t>);
-
-    Kokkos::parallel_for("copy movers to device", host_execution_policy(0, nm) , KOKKOS_LAMBDA (int i) { \
-      particle_movers(i, particle_mover_var::dispx) = sp->pm[i].dispx;
-      particle_movers(i, particle_mover_var::dispy) = sp->pm[i].dispy;
-      particle_movers(i, particle_mover_var::dispz) = sp->pm[i].dispz;
-      particle_movers(i, particle_mover_var::pmi)   = sp->pm[i].i;
-    });\
-
-
-    Kokkos::parallel_for("print nm", Kokkos::RangePolicy <
-            Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int _)
-    {
-      for (int i = 0; i < nm; i++)
-      {
-          printf("print nm %d has %f \n", i, particle_movers(i, particle_mover_var::pmi));
-      }
-    });
-
-    Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
-            Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int n)
-    {
-        for (int i = nm-1; i >= 0; i++)
-        {
-            // VPIC backfill
-            // p0[i] = p0[np];
-
-            int pmi = static_cast<int>( particle_movers(i, particle_mover_var::pmi) );
-            int pull_from = np - (nm-1-i);
-
-            //particles(pmi) = particles(np - (nm-1-i));
-            particles(pmi, particle_var::dx) = particles(pull_from, particle_var::dx);
-            particles(pmi, particle_var::dy) = particles(pull_from, particle_var::dy);
-            particles(pmi, particle_var::dz) = particles(pull_from, particle_var::dz);
-            particles(pmi, particle_var::ux) = particles(pull_from, particle_var::ux);
-            particles(pmi, particle_var::uy) = particles(pull_from, particle_var::uy);
-            particles(pmi, particle_var::uz) = particles(pull_from, particle_var::uz);
-            particles(pmi, particle_var::w)  = particles(pull_from, particle_var::w);
-            particles(pmi, particle_var::pi) = particles(pull_from, particle_var::pi);
-        }
-    });
-
-
-#endif
-
-
-//#define SORT_COMPRESS 1
-#ifdef SORT_COMPRESS
-
-
-      int pi = particle_var::pi; // TODO: can you really not pass an enum in??
-      auto keys = Kokkos::subview(sp->k_p_d, Kokkos::ALL, pi);
-      using key_type = decltype(keys);
-
-
-      // TODO: we can tighten the bounds on this
-      int max = accumulator_array->na;
-      using Comparator = Kokkos::BinOp1D<key_type>;
-      Comparator comp(max, 0, max);
-
-      int sort_within_bins = 0;
-      Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, sp->np, comp, sort_within_bins );
-      bin_sort.create_permute_vector();
-      bin_sort.sort(sp->k_p_d);
-
-      // This should leave just 0s at the start?
-      auto& particles = sp->k_p_d;
-      printf("SORTER \n");
-      print_particles_d(particles, sp->np); // should not see any zeros
-
-
-#else
     Kokkos::View<int*> unsafe_index("safe index", 2*nm);
 
     // TODO: prevent these allocations from being repeated.
@@ -300,9 +207,6 @@ void compress_particle_data(
         particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
         particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
     });
-
-#endif
-
 }
 
 int vpic_simulation::advance(void) {
@@ -321,19 +225,6 @@ int vpic_simulation::advance(void) {
       if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
       TIC sort_p( sp ); TOC( sort_p, 1 );
     }
-
-  // Replace sort with a kokkos sort
-  // TODO: move this to a function
-  // TODO: I suspect there is a simpler way to do this?
-  /*
-  typedef Kokkos::BinOp1D< KeyViewType > BinOp;
-  BinOp bin_op(bin_max,min,max);
-  Kokkos::BinSort< KeyViewType , BinOp >
-  sorter(keys,bin_op,false);
-  sorter.create_permute_vector();
-  sorter.template sort<ViewType1>(view1);
-  */
-
 
   /*
   LIST_FOR_EACH( sp, species_list )
