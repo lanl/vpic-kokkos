@@ -31,6 +31,7 @@ void print_particles_d(
         int np
         )
 {
+    printf("Particle printer from 0 to %d \n", np);
     Kokkos::parallel_for("particle printer", Kokkos::RangePolicy <
             Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int i)
     {

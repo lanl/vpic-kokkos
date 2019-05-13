@@ -96,9 +96,12 @@ void compress_particle_data(
 
 
     Kokkos::parallel_for("print nm", Kokkos::RangePolicy <
-            Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int i)
+            Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int _)
     {
-          printf("%d has %f \n", i, particle_movers(i, particle_mover_var::pmi));
+      for (int i = 0; i < nm; i++)
+      {
+          printf("print nm %d has %f \n", i, particle_movers(i, particle_mover_var::pmi));
+      }
     });
 
     Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
@@ -505,7 +508,7 @@ int vpic_simulation::advance(void) {
       printf("Done compress print: \n");
 
       // Copy data for copies back to device
-      Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
+      //Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
 
       auto& particle_copy = sp->k_pc_d;
 
@@ -515,13 +518,14 @@ int vpic_simulation::advance(void) {
       int num_to_copy = sp->num_to_copy;
       printf("Trying to append %d from particle copy where np = %d max nm %d \n", num_to_copy, sp->np, sp->max_nm);
 
+      int np = sp->np;
       // Append it to the particles
       Kokkos::parallel_for("append moved particles", Kokkos::RangePolicy <
-              Kokkos::DefaultExecutionSpace > (0, num_to_copy), KOKKOS_LAMBDA
+              Kokkos::DefaultExecutionSpace > (0, sp->num_to_copy-1), KOKKOS_LAMBDA
               (int i)
       {
-        int npi = sp->np+i; // i goes from 0..n so no need for -1
-        printf("append to %d \n", npi);
+        int npi = np+i; // i goes from 0..n so no need for -1
+        printf("append to %d from %d \n", npi, i);
         particles(npi, particle_var::dx) = particle_copy(i, particle_var::dx);
         particles(npi, particle_var::dy) = particle_copy(i, particle_var::dy);
         particles(npi, particle_var::dz) = particle_copy(i, particle_var::dz);
@@ -533,7 +537,7 @@ int vpic_simulation::advance(void) {
       });
 
       // Reset this to zero now we've done the write back
-      sp->np += num_to_copy;
+      //sp->np += num_to_copy;
       sp->num_to_copy = 0;
   }
 

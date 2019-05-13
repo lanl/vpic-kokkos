@@ -442,7 +442,8 @@ boundary_p_kokkos(
         // data we overwrite here..but I think it's fine
 
         // Should write from 0..nm
-        printf("writing to n=%d for %p \n", sp_[id]->num_to_copy, sp_[id]);
+        //printf("writing to n=%d for %p \n", sp_[id]->num_to_copy, sp_[id]);
+        printf("writing to n=%d for = %d \n", sp_[id]->num_to_copy, write_index);
         particle_copy(write_index, particle_var::dx) = pi->dx;
         particle_copy(write_index, particle_var::dy) = pi->dy;
         particle_copy(write_index, particle_var::dz) = pi->dz;
