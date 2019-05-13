@@ -509,9 +509,11 @@ int vpic_simulation::advance(void) {
 
       auto& particle_copy = sp->k_pc_d;
 
-      printf("particle copy size %ld particles size %ld \n", particle_copy.size() , particles.size());
+      printf("particle copy size %ld particles size %ld max np %d \n", particle_copy.size() , particles.size(), sp->max_np);
+
+
       int num_to_copy = sp->num_to_copy;
-      printf("Trying to append %d to particle copy where np = %d \n", num_to_copy, sp->np);
+      printf("Trying to append %d from particle copy where np = %d max nm %d \n", num_to_copy, sp->np, sp->max_nm);
 
       // Append it to the particles
       Kokkos::parallel_for("append moved particles", Kokkos::RangePolicy <
