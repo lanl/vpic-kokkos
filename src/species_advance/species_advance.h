@@ -224,6 +224,17 @@ accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
                  const particle_t * RESTRICT ALIGNED(32)  p,
                  const grid_t     * RESTRICT              g,
                  const float                              qsp );
+void
+k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
+                  const species_t     * RESTRICT sp );
+
+void 
+k_accumulate_rhob(k_field_t& kfield, 
+                  k_particles_t& kpart, 
+                  k_particle_movers_t& kpart_movers, 
+                  const grid_t* RESTRICT g, 
+                  const float qsp,
+                  const int nm);
 
 // In hydro_p.c
 

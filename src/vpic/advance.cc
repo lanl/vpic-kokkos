@@ -9,6 +9,7 @@
  */
 
 #include "vpic.h"
+#include <Kokkos_Sort.hpp>
 
 #define FAK field_array->kernel
 
@@ -206,6 +207,64 @@ void compress_particle_data(
         particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
         particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
         particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
+
+/*  Adjust particle indices and set which particles will fill in the holes.
+ *  Fills starting from last mover to first
+ */
+void remove_particles(k_particles_t& kparticles, k_particle_movers_t& k_part_movers, Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Atomic> >& replacements, int nm, int np) {
+    Kokkos::parallel_for("remove particles", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, nm),
+    KOKKOS_LAMBDA(const int n) {
+        int i = static_cast<int>(k_part_movers(n, particle_mover_var::pmi));
+        int pi = kparticles(i, particle_var::pi);
+        kparticles(i, particle_var::pi) = pi >> 3;
+        Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Atomic> >safe_spots("copy", nm);
+
+        // Set expected replacement particles
+        safe_spots(n) = (np + nm) + n;
+        // Set which particles to skip over
+        if(i >= np-nm)
+            safe_spots(i-(np-nm)) = 0;
+        // Remaining particles set correct replacements
+        if(i < np-nm) {
+            int counter = n;
+            // Linear search and find correct replacement
+            for(int j=0; j<nm; j++) {
+                if(safe_spots(j) == 0) {
+                    // Skip spot
+                    continue;
+                } else if(counter > 0) {
+                    // Spot belongs to someone else
+                    counter--;
+                } else {
+                    // Found correct replacement particle
+                    int spot = safe_spots(j);
+                    replacements(n) = spot;
+                    break;
+                }
+            }
+        }
+        
+    });
+}
+
+//  Fill in holes left by removing particles
+void fill_holes(k_particles_t& kparticles, k_particle_movers_t& k_part_movers, Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Atomic> >& replacements, int nm) {
+    Kokkos::parallel_for("fill holes", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,nm),
+    KOKKOS_LAMBDA(const int n) {
+        int i = static_cast<int>(k_part_movers(n, particle_mover_var::pmi));
+        // If particle is not skipped
+        if(replacements(n) != 0) {
+            // Grab replacement particle index and fill in hole.
+            int replace_idx = replacements(n);
+            kparticles(i, particle_var::dx) = kparticles(replace_idx, particle_var::dx);
+            kparticles(i, particle_var::dy) = kparticles(replace_idx, particle_var::dy);
+            kparticles(i, particle_var::dz) = kparticles(replace_idx, particle_var::dz);
+            kparticles(i, particle_var::pi) = kparticles(replace_idx, particle_var::pi);
+            kparticles(i, particle_var::ux) = kparticles(replace_idx, particle_var::ux);
+            kparticles(i, particle_var::uy) = kparticles(replace_idx, particle_var::uy);
+            kparticles(i, particle_var::uz) = kparticles(replace_idx, particle_var::uz);
+            kparticles(i, particle_var::w)  = kparticles(replace_idx, particle_var::w);
+        }
     });
 }
 
@@ -223,7 +282,24 @@ int vpic_simulation::advance(void) {
   LIST_FOR_EACH( sp, species_list )
     if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) ) {
       if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-      TIC sort_p( sp ); TOC( sort_p, 1 );
+      //TIC sort_p( sp ); TOC( sort_p, 1 );
+
+      // Replace sort with kokkos sort
+      // Try grab the index's for a permute key
+      int pi = particle_var::pi; // TODO: can you really not pass an enum in??
+      auto keys = Kokkos::subview(sp->k_p_d, Kokkos::ALL, pi);
+      using key_type = decltype(keys);
+
+
+      // TODO: we can tighten the bounds on this
+      int max = accumulator_array->na;
+      using Comparator = Kokkos::BinOp1D<key_type>;
+      Comparator comp(max, 0, max);
+
+      int sort_within_bins = 0;
+      Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, sp->np, comp, sort_within_bins );
+      bin_sort.create_permute_vector();
+      bin_sort.sort(sp->k_p_d);
     }
 
   /*
@@ -266,10 +342,11 @@ int vpic_simulation::advance(void) {
 
   if( collision_op_list )
   {
-    TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
+      Kokkos::abort("Collision is not supported");
+      TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
   }
 
-  TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
+  //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
   KOKKOS_INTERPOLATOR_VARIABLES();
   KOKKOS_ACCUMULATOR_VARIABLES();
@@ -277,8 +354,8 @@ int vpic_simulation::advance(void) {
 
   UNSAFE_TIC(); // Time this data movement
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
-  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
   UNSAFE_TOC( DATA_MOVEMENT, 1);
 
   //int lna = 180;
@@ -452,6 +529,19 @@ int vpic_simulation::advance(void) {
     // in fact go out of bounds of the voxel indexing space. Removal is in
     // reverse order for back filling. Particle charge is accumulated to the
     // mesh before removing the particle.
+
+    // Mostly parallel but probably breaks things...
+    // Particles should be monotonically increasing and there is a small
+    // chance that particle charge is distributed to the wrong places.
+
+    Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Atomic> > replacements("replacement indices", sp->nm);
+    remove_particles(sp->k_p_d, sp->k_pm_d, replacements, sp->nm, sp->np);
+    fill_holes(sp->k_p_d, sp->k_pm_d, replacements, sp->nm);
+    k_accumulate_rhob(field_array->k_f_d, sp->k_p_d, sp->k_pm_d, sp->g, sp->q, sp->nm);
+    sp->np -= sp->nm;
+    sp->nm = 0;
+*/
+
     int nm = sp->nm;
     particle_mover_t * RESTRICT ALIGNED(16)  pm = sp->pm + sp->nm - 1;
     particle_t * RESTRICT ALIGNED(128) p0 = sp->p;
@@ -460,12 +550,15 @@ int vpic_simulation::advance(void) {
       p0[i].i >>= 3; // shift particle voxel down
       // accumulate the particle's charge to the mesh
       accumulate_rhob( field_array->f, p0+i, sp->g, sp->q );
+//      k_accumulate_rhob( field_array->k_f_d, sp->k_p_d, i, sp->g, sp->q );
       p0[i] = p0[sp->np-1]; // put the last particle into position i
       sp->np--; // decrement the number of particles
     }
     sp->nm = 0;
+
   }
-  */
+
+  KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
 
   // At this point, all particle positions are at r_1 and u_{1/2}, the
   // guard lists are empty and the accumulators on each processor are current.
@@ -537,7 +630,23 @@ int vpic_simulation::advance(void) {
 // HOST (Device in rho_p)
 // Touches fields and particles
     TIC FAK->clear_rhof( field_array ); TOC( clear_rhof,1 );
-    if( species_list ) TIC LIST_FOR_EACH( sp, species_list ) accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, species_list->id );
+    if( species_list ) {
+
+        KOKKOS_PARTICLE_VARIABLES();
+        KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+        KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+
+        TIC
+        LIST_FOR_EACH( sp, species_list )
+        {
+//            accumulate_rho_p( field_array, sp ); //TOC( accumulate_rho_p, species_list->id );
+            k_accumulate_rho_p( field_array, sp ); //TOC( accumulate_rho_p, species_list->id );
+        }
+        TOC( accumulate_rho_p, species_list->id );
+
+        KOKKOS_COPY_FIELD_MEM_TO_HOST();
+    }
+
     TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
 
 // HOST
