@@ -40,7 +40,9 @@
   _( user_particle_injection ) \
   _( user_current_injection ) \
   _( user_field_injection ) \
-  _( DATA_MOVEMENT ) \
+  _( FIELD_DATA_MOVEMENT ) \
+  _( PARTICLE_DATA_MOVEMENT ) \
+  _( BACKFILL ) \
   _( user_diagnostics  )
 
 // TIC / TOC are used to update the timing profile.  For example:
