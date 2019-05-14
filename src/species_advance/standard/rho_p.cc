@@ -254,7 +254,7 @@ struct accum_rho_p {
 #   undef FNMS
 #   undef FMA
 
-        auto scatter_view_access = kfield.access();
+        auto scatter_view_access = kfield.access<Kokkos::Experimental::ScatterAtomic>();
 
         scatter_view_access(v,         field_var::rhof) += w0;
         scatter_view_access(v+1,       field_var::rhof) += w1;
@@ -388,6 +388,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     k_field_sa_t scatter_view = Kokkos::Experimental::create_scatter_view<Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED,KOKKOS_SCATTER_ATOMIC>(kfield);
     Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np), 
         accum_rho_p(scatter_view, kparticles, sy, sz, q_8V, np));
+    Kokkos::Experimental::contribute(kfield, scatter_view);
 }
 
 void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, k_particle_movers_t& k_part_movers, const grid_t* RESTRICT g, const float qsp, const int nm) {
