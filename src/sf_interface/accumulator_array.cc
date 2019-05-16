@@ -44,7 +44,7 @@ new_accumulator_array( grid_t * g ) {
   //MALLOC( aa, 1 );
 
   // TODO: this is likely too big
-  printf("Making %d copies of accumulator \n",aa_n_pipeline()+1 );
+  //printf("Making %d copies of accumulator \n",aa_n_pipeline()+1 );
   aa = new accumulator_array_t(
           //(size_t)(aa->n_pipeline+1)*(size_t)aa->stride,
           (size_t)(aa_n_pipeline()+1)*(size_t)(POW2_CEIL(g->nv,2))

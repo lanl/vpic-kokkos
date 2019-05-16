@@ -94,7 +94,7 @@ typedef struct accumulator_array {
   accumulator_array(int na) :
     k_a_d("k_accumulators", na)
     {
-        printf("Making accumulator of size %d", na);
+        //printf("Making accumulator of size %d", na);
         // TODO: kokkos can deduce these
       k_a_sa = Kokkos::Experimental::create_scatter_view(k_a_d);
         //<Kokkos::Experimental::ScatterSum,
@@ -103,7 +103,7 @@ typedef struct accumulator_array {
       k_a_h  = Kokkos::create_mirror_view(k_a_d);
 
       //k_a_sah = Kokkos::Experimental::create_scatter_view(k_a_h);
-      printf("k_a_h size = %d \n", k_a_h.size() );
+      //printf("k_a_h size = %d \n", k_a_h.size() );
     }
 
 

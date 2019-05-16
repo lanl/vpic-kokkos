@@ -420,14 +420,14 @@ advance_p( /**/  species_t            * RESTRICT sp,
   // TODO: which way round should this copy be?
 
   int nm = sp->k_nm_h(0);
-  
+
   printf("nm = %d \n", nm);
 
   // Copy particle mirror movers back so we have their data safe. Ready for
   // boundary_p_kokkos
   Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
 
-  print_nm(sp->k_pm_d, nm);
+  //print_nm(sp->k_pm_d, nm);
 
 /*
   args->p0       = sp->p;
