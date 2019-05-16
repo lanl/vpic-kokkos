@@ -840,7 +840,7 @@ begin_initialization {
   double f_H              = 1-f_He;   // Ratio of number density of H  to total ion density
 
   int load_particles = 1;         // Flag to turn off particle load for testing wave launch.
-  double nppc        = 128; //512;
+  double nppc        = 128; //64; //512;
 
 // Here _He is C+6
   double A_H                = 1;
@@ -1135,6 +1135,11 @@ begin_initialization {
   sim_log("Done setting up species.");
 
 
+  // Paint the simulation volume with materials and boundary conditions
+# define iv_region (   x<      hx*iv_thick || x>Lx  -hx*iv_thick  \
+                    || z<-Lz/2+hz*iv_thick || z>Lz/2-hz*iv_thick ) /* all boundaries are i.v. */
+
+#ifdef USE_MAXWELLIAN
   // SETUP PARTICLE BOUNDARY HANDLER ==============================================
 
   sim_log("Setting up Maxwellian reflux tally boundary condition.");
@@ -1156,6 +1161,7 @@ begin_initialization {
     }
   }
 
+
   // Set write interval to velocity interval for the time being
   set_reflux_write_interval( maxwellian_reinjection_tally, velocity_interval );
 
@@ -1169,16 +1175,13 @@ begin_initialization {
 
   sim_log("Done setting up Maxwellian reflux tally boundary condition.");
 
+  set_region_bc( iv_region, maxwellian_reinjection_tally, maxwellian_reinjection_tally, maxwellian_reinjection_tally );
+#endif
   // SETUP THE MATERIALS ============================================================================
   sim_log("Setting up materials. ");
   define_material( "vacuum", 1 );
   define_field_array( NULL, damp );
 
-  // Paint the simulation volume with materials and boundary conditions
-# define iv_region (   x<      hx*iv_thick || x>Lx  -hx*iv_thick  \
-                    || z<-Lz/2+hz*iv_thick || z>Lz/2-hz*iv_thick ) /* all boundaries are i.v. */
-
-  set_region_bc( iv_region, maxwellian_reinjection_tally, maxwellian_reinjection_tally, maxwellian_reinjection_tally );
 
   // LOAD THE PARTICLES =============================================================================
   //
