@@ -840,7 +840,7 @@ begin_initialization {
   double f_H              = 1-f_He;   // Ratio of number density of H  to total ion density
 
   int load_particles = 1;         // Flag to turn off particle load for testing wave launch.
-  double nppc        = 512;
+  double nppc        = 128; //512;
 
 // Here _He is C+6
   double A_H                = 1;
@@ -861,7 +861,7 @@ begin_initialization {
   double debye = uthe*delta;
   double wpe1ps=1e-12* speed_of_light/delta;
 
-  double nx = 9600; //8960; // 11232;
+  double nx = 2400; //4800; // 9600; //8960; // 11232;
   double ny = 1;    // 2D problem in x-z plane
   double nz = 54; // 756;  // was 549;
 
