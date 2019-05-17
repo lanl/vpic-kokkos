@@ -242,5 +242,28 @@ clear_rhof( field_array_t * RESTRICT fa ) {
   for( int v=0; v<nv; v++ ) f[v].rhof = 0;
 }
 
+// Kokkos versions
+void clear_jf_kokkos(field_array_t* RESTRICT fa) {
+    if(!fa) ERROR(("Bad args" ));
+    k_field_t kfield = fa->k_f_d;
+    const int nv = fa->g->nv;
+    Kokkos::parallel_for("clear_jf", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(nv),
+    KOKKOS_LAMBDA(const int v) {
+        kfield(v, field_var::jfx) = 0;
+        kfield(v, field_var::jfy) = 0;
+        kfield(v, field_var::jfz) = 0;
+    });
+}
+
+void clear_rhof_kokkos(field_array_t* RESTRICT fa) {
+    if(!fa) ERROR(("Bad args" ));
+    k_field_t kfield = fa->k_f_d;
+    const int nv = fa->g->nv;
+    Kokkos::parallel_for("clear_rhof", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(nv),
+    KOKKOS_LAMBDA(const int v) {
+        kfield(v, field_var::rhof) = 0;
+    });
+}
+
 // FIXME: ADD clear_jf_and_rhof CALL AND/OR ELIMINATE SOME OF THE ABOVE
 // (MORE EFFICIENT TOO).

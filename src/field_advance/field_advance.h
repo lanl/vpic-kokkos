@@ -274,7 +274,6 @@ typedef struct field_buffers {
     }
 } field_buffers_t;
 
-BEGIN_C_DECLS
 
 field_array_t *
 new_standard_field_array( grid_t           * RESTRICT g,

@@ -39,6 +39,12 @@ clear_jf( field_array_t * RESTRICT fa );
 void
 clear_rhof( field_array_t * RESTRICT fa );
 
+void
+clear_jf_kokkos( field_array_t * RESTRICT fa );
+
+void
+clear_rhof_kokkos( field_array_t * RESTRICT fa );
+
 // In advance_b.c
 
 // advance_b applies the following difference equation to the fields:

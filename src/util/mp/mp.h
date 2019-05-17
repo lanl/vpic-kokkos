@@ -165,6 +165,4 @@ void
 mp_end_send_kokkos(mp_t* mp_k, int port); 
 
 
-END_C_DECLS
-
 #endif /* mp_h */
