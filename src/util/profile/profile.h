@@ -42,6 +42,8 @@
   _( user_field_injection ) \
   _( FIELD_DATA_MOVEMENT ) \
   _( PARTICLE_DATA_MOVEMENT ) \
+  _( ACCUMULATOR_DATA_MOVEMENT ) \
+  _( INTERPOLATOR_DATA_MOVEMENT ) \
   _( BACKFILL ) \
   _( user_diagnostics  )
 
