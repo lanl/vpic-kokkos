@@ -10,8 +10,6 @@
 struct checkpt;
 typedef struct checkpt checkpt_t;
 
-BEGIN_C_DECLS
-
 checkpt_t *
 checkpt_open_rdonly( const char * name );
 
@@ -30,7 +28,5 @@ void
 checkpt_write( checkpt_t * checkpt,
                const void * data,
                size_t sz );
-
-END_C_DECLS
 
 #endif /* _checkpt_private_h_ */

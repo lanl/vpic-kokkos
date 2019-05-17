@@ -42,7 +42,13 @@ new_accumulator_array( grid_t * g ) {
   accumulator_array_t * aa;
   if( !g ) ERROR(( "Bad grid."));
   //MALLOC( aa, 1 );
-  aa = new accumulator_array_t((size_t)(aa_n_pipeline()+1)*(size_t)(POW2_CEIL(g->nv,2)));
+
+  // TODO: this is likely too big
+  //printf("Making %d copies of accumulator \n",aa_n_pipeline()+1 );
+  aa = new accumulator_array_t(
+          //(size_t)(aa->n_pipeline+1)*(size_t)aa->stride,
+          (size_t)(aa_n_pipeline()+1)*(size_t)(POW2_CEIL(g->nv,2))
+  );
   aa->n_pipeline = aa_n_pipeline();
   aa->stride     = POW2_CEIL(g->nv,2);
   aa->g          = g;

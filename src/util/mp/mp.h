@@ -48,8 +48,6 @@ typedef struct mp_kokkos mp_kokkos_t;
      mp_send_i( &_baton, 1, world_rank+_n_turnstile );  \
  } while(0)
 
-BEGIN_C_DECLS
-
 void
 boot_mp( int * pargc,
          char *** pargv );

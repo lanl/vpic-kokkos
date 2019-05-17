@@ -35,8 +35,6 @@ typedef void *
 typedef void
 (*reanimate_func_t)( void * obj );
 
-BEGIN_C_DECLS
-
 /* Boot up the checkpt service */
 
 void
@@ -331,7 +329,5 @@ restore_sym( void );
 void
 _cxx_illegal_ptr_copy( void * lv_ref,
                        const void * rv );
-
-END_C_DECLS
 
 #endif /* _checkpt_h_ */

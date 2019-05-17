@@ -243,7 +243,6 @@ typedef struct field_array {
 
 } field_array_t;
 
-
 typedef struct field_buffers {
     Kokkos::View<float*>   xyz_sbuf_pos;
     Kokkos::View<float*>   yzx_sbuf_pos;
@@ -284,7 +283,5 @@ new_standard_field_array( grid_t           * RESTRICT g,
 
 void
 delete_field_array( field_array_t * fa );
-
-END_C_DECLS
 
 #endif // _field_advance_h_

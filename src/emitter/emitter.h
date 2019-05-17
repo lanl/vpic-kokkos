@@ -28,8 +28,6 @@ typedef struct emitter emitter_t;
 #define EXTRACT_LOCAL_CELL( component_id )     ((component_id)>>5)
 #define EXTRACT_COMPONENT_TYPE( component_id ) ((component_id)&31)
 
-BEGIN_C_DECLS
-
 // In emitter.c
 
 int
@@ -74,7 +72,5 @@ child_langmuir( /**/  species_t            * RESTRICT sp,  // Species to emit
                 float ut_para,         // Parallel normalized thermal momentum
                 float thresh_e_norm,   // Only emit if E_norm>thresh_e_norm
                 float norm );          // Child-langmuir normalization
-
-END_C_DECLS
 
 #endif // _emitter_h_

@@ -44,8 +44,6 @@ typedef struct interpolator_array {
 
 } interpolator_array_t;
 
-BEGIN_C_DECLS
-
 // In interpolator_array.cxx
 
 interpolator_array_t *
@@ -64,8 +62,6 @@ delete_interpolator_array( interpolator_array_t * ALIGNED(128) ia );
 void
 load_interpolator_array( /**/  interpolator_array_t * RESTRICT ia,
                          const field_array_t        * RESTRICT fa );
-
-END_C_DECLS
 
 /*****************************************************************************/
 
@@ -93,21 +89,25 @@ typedef struct accumulator_array {
   k_accumulators_t k_a_d;
   k_accumulators_t::HostMirror k_a_h;
   k_accumulators_sa_t k_a_sa;
+  //k_accumulators_sah_t k_a_sah;
 
   accumulator_array(int na) :
     k_a_d("k_accumulators", na)
     {
-      k_a_sa = Kokkos::Experimental::create_scatter_view
-        <Kokkos::Experimental::ScatterSum,
-         KOKKOS_SCATTER_DUPLICATED,
-         KOKKOS_SCATTER_ATOMIC>(k_a_d);
+        //printf("Making accumulator of size %d", na);
+        // TODO: kokkos can deduce these
+      k_a_sa = Kokkos::Experimental::create_scatter_view(k_a_d);
+        //<Kokkos::Experimental::ScatterSum,
+         //KOKKOS_SCATTER_DUPLICATED,
+         //KOKKOS_SCATTER_ATOMIC>(k_a_d);
       k_a_h  = Kokkos::create_mirror_view(k_a_d);
+
+      //k_a_sah = Kokkos::Experimental::create_scatter_view(k_a_h);
+      //printf("k_a_h size = %d \n", k_a_h.size() );
     }
 
 
 } accumulator_array_t;
-
-BEGIN_C_DECLS
 
 // In sf_structors.c
 
@@ -147,10 +147,8 @@ reduce_accumulator_array( accumulator_array_t * RESTRICT a );
 // accumulators have been reduced into the host accumulator.
 
 void
-unload_accumulator_array( /**/  field_array_t       * RESTRICT fa, 
+unload_accumulator_array( /**/  field_array_t       * RESTRICT fa,
                           const accumulator_array_t * RESTRICT aa );
-
-END_C_DECLS
 
 /*****************************************************************************/
 
@@ -171,8 +169,6 @@ typedef struct hydro_array {
   hydro_t * ALIGNED(128) h;
   grid_t * g;
 } hydro_array_t;
-
-BEGIN_C_DECLS
 
 // In hydro_array.c
 
@@ -198,7 +194,5 @@ clear_hydro_array( hydro_array_t * ha );
 
 void
 synchronize_hydro_array( hydro_array_t * ha );
-
-END_C_DECLS
 
 #endif // _sf_interface_h_

@@ -143,7 +143,6 @@ typedef struct grid {
   // We want to call this *only* once the neighbor is done
   void init_kokkos_grid(int num_neighbor)
   {
-      printf("Num neighbor %d \n", num_neighbor);
       k_neighbor_d = k_neighbor_t("k_neighbor_d", num_neighbor);
       //k_neighbor_h = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_neighbor_d);
       k_neighbor_h = Kokkos::create_mirror_view(k_neighbor_d);
@@ -202,8 +201,6 @@ typedef struct grid {
   if( (y)>(yh) ) (v) += ((ny)-(yh)+(yl)+1)*((nx)+2);       \
   if( (y)>(yh) ) (z)++;                                    \
   if( (y)>(yh) ) (y) = (yl)
-
-BEGIN_C_DECLS
 
 // In grid_structors.c
 
@@ -400,7 +397,5 @@ void end_send_port_kokkos(const grid_t* g, int port);
     (z)  = _z+_z0;                                                      \
     (nv) = _nv;                                                         \
   } while(0)
-
-END_C_DECLS
 
 #endif
