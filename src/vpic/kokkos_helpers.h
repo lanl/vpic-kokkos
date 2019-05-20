@@ -42,10 +42,15 @@ using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 
 using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
-using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], KOKKOS_LAYOUT, Kokkos::DefaultExecutionSpace, Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED, KOKKOS_SCATTER_ATOMIC>;
+//using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], KOKKOS_LAYOUT, Kokkos::DefaultExecutionSpace, Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED, KOKKOS_SCATTER_ATOMIC>;
+using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
+
+using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
+
+using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT], KOKKOS_LAYOUT, Kokkos::DefaultExecutionSpace, Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED, KOKKOS_SCATTER_ATOMIC>;
 
 #define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
 #define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
@@ -282,7 +287,7 @@ namespace accumulator_var {
       sp->p[i].i  = k_particles_h(i, particle_var::pi); \
     });\
     \
-    Kokkos::parallel_for("copy_movers_to_host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
+    Kokkos::parallel_for("copy movers to host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
       sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx); \
       sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy); \
       sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz); \
@@ -389,5 +394,18 @@ namespace accumulator_var {
       accumulator_array->a[i].jz[j] = k_accumulators_h(i, accumulator_var::jz, j); \
     }); \
   });
+
+void print_particles_d(
+        k_particles_t particles,
+        int np
+        );
+void print_accumulator(k_accumulators_t fields, int n);
+
+// The templating here is to defer the type until later in the head include chain
+template <class P>
+bool compareParticleMovers(P& a, P& b) {
+    return a.i < b.i;
+}
+
 
 #endif // _kokkos_helpers_h_

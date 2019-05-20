@@ -40,6 +40,11 @@
   _( user_particle_injection ) \
   _( user_current_injection ) \
   _( user_field_injection ) \
+  _( FIELD_DATA_MOVEMENT ) \
+  _( PARTICLE_DATA_MOVEMENT ) \
+  _( ACCUMULATOR_DATA_MOVEMENT ) \
+  _( INTERPOLATOR_DATA_MOVEMENT ) \
+  _( BACKFILL ) \
   _( user_diagnostics  )
 
 // TIC / TOC are used to update the timing profile.  For example:
@@ -60,7 +65,21 @@
       wallclock() - _profile_tic;                                     \
     profile_internal_use_only[profile_internal_use_only_##timer].n += \
       (n_calls);                                                      \
-  } while(0)
+  } while(0); \
+  Kokkos::fence();
+
+// TODO: these unsafe macros should be removed, but I didn't want to fight with all the extra while loop and scoping crap.
+#define UNSAFE_TIC()                                                  \
+  do {                                                                \
+    double _profile_tic = wallclock();
+
+#define UNSAFE_TOC(timer,n_calls)                                   \
+    profile_internal_use_only[profile_internal_use_only_##timer].t += \
+      wallclock() - _profile_tic;                                     \
+    profile_internal_use_only[profile_internal_use_only_##timer].n += \
+      (n_calls);                                                      \
+  } while(0); \
+  Kokkos::fence();
 
 // Do not touch these
 
