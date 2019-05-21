@@ -119,6 +119,63 @@ energy_p_pipeline_v4( energy_p_pipeline_args_t * args,
 #endif
 
 double
+energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particles, const float qdt_2mc, const float msp, const int np) {
+//  const interpolator_t * RESTRICT ALIGNED(128) f = args->f;
+//  const particle_t     * RESTRICT ALIGNED(32)  p = args->p;
+//  const float qdt_2mc = args->qdt_2mc;
+//  const float msp     = args->msp;
+//  const float one     = 1;
+
+  double en = 0;
+
+  // Determine which particles this pipeline processes
+
+//  DISTRIBUTE( args->np, 16, pipeline_rank, n_pipeline, n0, n1 ); 
+/*
+    int _N = np, _b = 16, _p = pipeline_rank, _P = n_pipeline;
+    double _t = static_cast<double>(_N/_b) / static_cast<double>(_P);
+    int _i = _b * static_cast<int>(_t * static_cast<double>(_p) + 0.5);
+    n1 = (_p == _P) ? (_N % _b) : (_b * static_cast<int>(_t * static_cast<double>(_p+1) + 0.5) - _i;
+    n0 = _i
+    n1 += n0;
+*/
+  // Process particles quads for this pipeline
+/*
+  for( n=n0; n<n1; n++ ) {
+    dx  = p[n].dx;
+    dy  = p[n].dy;
+    dz  = p[n].dz;
+    i   = p[n].i;
+    v0  = p[n].ux + qdt_2mc*(    ( f[i].ex    + dy*f[i].dexdy    ) +
+                              dz*( f[i].dexdz + dy*f[i].d2exdydz ) );
+    v1  = p[n].uy + qdt_2mc*(    ( f[i].ey    + dz*f[i].deydz    ) +
+                              dx*( f[i].deydx + dz*f[i].d2eydzdx ) );
+    v2  = p[n].uz + qdt_2mc*(    ( f[i].ez    + dx*f[i].dezdx    ) +
+                              dy*( f[i].dezdy + dx*f[i].d2ezdxdy ) );
+    v0  = v0*v0 + v1*v1 + v2*v2;
+    v0  = (msp * p[n].w) * (v0 / (one + sqrtf(one + v0)));
+    en += (double)v0;
+  }
+*/
+    Kokkos::parallel_reduce(np, KOKKOS_LAMBDA(const int n, double& update) {
+        float dx = k_particles(n, particle_var::dx);
+        float dy = k_particles(n, particle_var::dy);
+        float dz = k_particles(n, particle_var::dz);
+        int i  = static_cast<int>(k_particles(n, particle_var::pi));
+        float v0 = k_particles(n, particle_var::ux) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
+                                dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
+        float v1 = k_particles(n, particle_var::uy) + qdt_2mc*(    ( k_interp(i, interpolator_var::ey)    + dz*k_interp(i, interpolator_var::deydz)    ) +
+                                dx*( k_interp(i, interpolator_var::deydx) + dz*k_interp(i, interpolator_var::d2eydzdx) ) );
+        float v2 = k_particles(n, particle_var::uz) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
+                                dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
+        v0 = v0*v0 + v1*v1 + v2*v2;
+        v0 = (msp * k_particles(n, particle_var::w)) * (v0 / (1 + sqrtf(1 + v0)));
+        update += static_cast<double>(v0);
+    }, en);
+    return en;
+}
+
+double
 energy_p( const species_t            * RESTRICT sp,
           const interpolator_array_t * RESTRICT ia ) {
   DECLARE_ALIGNED_ARRAY( energy_p_pipeline_args_t, 128, args, 1 );
@@ -144,4 +201,21 @@ energy_p( const species_t            * RESTRICT sp,
   local = 0; for( rank=0; rank<=N_PIPELINE; rank++ ) local += en[rank];
   mp_allsum_d( &local, &global, 1 );
   return global*((double)sp->g->cvac*(double)sp->g->cvac);
+}
+
+double
+energy_p_kokkos(const species_t* RESTRICT sp,
+         const interpolator_array_t* RESTRICT ia) {
+
+    double local, global;
+    
+    if(!sp || !ia || sp->g != ia->g) ERROR(("Bad args"));
+
+    float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+
+    local = energy_p_kernel(ia->k_i_d, sp->k_p_d, qdt_2mc, sp->m, sp->np);
+    Kokkos::fence();
+
+    mp_allsum_d( &local, &global, 1 );
+    return global*(static_cast<double>(sp->g->cvac) * static_cast<double>(sp->g->cvac));
 }
