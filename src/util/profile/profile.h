@@ -40,8 +40,12 @@
   _( user_particle_injection ) \
   _( user_current_injection ) \
   _( user_field_injection ) \
+  _( sort_particles ) \
+  _( accumulator_contributions ) \
   _( FIELD_DATA_MOVEMENT ) \
   _( PARTICLE_DATA_MOVEMENT ) \
+  _( ACCUMULATOR_DATA_MOVEMENT ) \
+  _( INTERPOLATOR_DATA_MOVEMENT ) \
   _( BACKFILL ) \
   _( user_diagnostics  )
 

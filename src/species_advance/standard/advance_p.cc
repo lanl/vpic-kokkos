@@ -20,7 +20,7 @@ void print_nm(k_particle_movers_t particle_movers, int nm)
 void
 advance_p_kokkos(
         k_particles_t& k_particles,
-        k_particles_t& k_particle_copy,
+        k_particle_copy_t& k_particle_copy,
         k_particle_movers_t& k_particle_movers,
         k_accumulators_sa_t k_accumulators_sa,
         k_interpolator_t& k_interp,
@@ -316,11 +316,11 @@ sp_[id]->
           k_particle_copy(nm, particle_var::dx) = p_dx;
           k_particle_copy(nm, particle_var::dy) = p_dy;
           k_particle_copy(nm, particle_var::dz) = p_dz;
+          k_particle_copy(nm, particle_var::pi) = pii;
           k_particle_copy(nm, particle_var::ux) = p_ux;
           k_particle_copy(nm, particle_var::uy) = p_uy;
           k_particle_copy(nm, particle_var::uz) = p_uz;
           k_particle_copy(nm, particle_var::w) = p_w;
-          k_particle_copy(nm, particle_var::pi) = pii;
 
           // Tag this one as having left
           //k_particles(p_index, particle_var::pi) = 999999;
@@ -417,12 +417,12 @@ advance_p( /**/  species_t            * RESTRICT sp,
 
   // I need to know the number of movers that got populated so I can call the
   // compress. Let's copy it back
-  Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
+//  Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
   // TODO: which way round should this copy be?
 
-  int nm = sp->k_nm_h(0);
+//  int nm = sp->k_nm_h(0);
 
-  printf("nm = %d \n", nm);
+//  printf("nm = %d \n", nm);
 
   // Copy particle mirror movers back so we have their data safe. Ready for
   // boundary_p_kokkos

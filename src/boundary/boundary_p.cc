@@ -447,11 +447,11 @@ boundary_p_kokkos(
         particle_copy(write_index, particle_var::dx) = pi->dx;
         particle_copy(write_index, particle_var::dy) = pi->dy;
         particle_copy(write_index, particle_var::dz) = pi->dz;
+        particle_copy(write_index, particle_var::pi) = pi->i;
         particle_copy(write_index, particle_var::ux) = pi->ux;
         particle_copy(write_index, particle_var::uy) = pi->uy;
         particle_copy(write_index, particle_var::uz) = pi->uz;
         particle_copy(write_index, particle_var::w)  = pi->w;
-        particle_copy(write_index, particle_var::pi) = pi->i;
 
         // track how many particles we buffer up here
         sp_[id]->num_to_copy++;

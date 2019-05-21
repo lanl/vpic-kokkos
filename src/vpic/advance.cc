@@ -10,6 +10,7 @@
 
 #include "vpic.h"
 #include <Kokkos_Sort.hpp>
+#include <Kokkos_DualView.hpp>
 
 #define FAK field_array->kernel
 
@@ -275,11 +276,11 @@ int vpic_simulation::advance(void) {
 
   // Determine if we are done ... see note below why this is done here
 
-  printf("STEP %ld \n", step());
+//  printf("STEP %ld \n", step());
   if( num_step>0 && step()>=num_step ) return 0;
 
   // Sort the particles for performance if desired.
-
+  UNSAFE_TIC();
   LIST_FOR_EACH( sp, species_list )
     if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) ) {
       if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
@@ -302,6 +303,7 @@ int vpic_simulation::advance(void) {
       bin_sort.create_permute_vector();
       bin_sort.sort(sp->k_p_d);
     }
+   UNSAFE_TOC( sort_particles, 1);
 
   /*
   LIST_FOR_EACH( sp, species_list )
@@ -355,9 +357,11 @@ int vpic_simulation::advance(void) {
 
   UNSAFE_TIC(); // Time this data movement
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
+  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  UNSAFE_TIC();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 //  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
-  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   //int lna = 180;
 
@@ -368,16 +372,73 @@ int vpic_simulation::advance(void) {
       TIC advance_p( sp, accumulator_array, interpolator_array ); TOC( advance_p, 1 );
   }
 
+  UNSAFE_TIC();
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
   accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
+  UNSAFE_TOC( accumulator_contributions, 1);
 
   UNSAFE_TIC(); // Time this data movement
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
+  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  UNSAFE_TIC()
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
-  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 
   UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(); // TODO: this can ultimatimely be removed
+  LIST_FOR_EACH( sp, species_list ) {
+//    Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);  
+//    Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d); 
+    Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d); 
+    n_particles = sp->np; 
+    max_pmovers = sp->max_nm; 
+//    k_particles_h = sp->k_p_h; 
+    k_particle_movers_h = sp->k_pm_h; 
+    k_nm_h = sp->k_nm_h; 
+    sp->nm = k_nm_h(0); 
+    Kokkos::View<float*> temp_view_d = Kokkos::View<float*>("Temp storage view", sp->nm*4);
+    auto temp_view_h = Kokkos::create_mirror_view(temp_view_d);
+    auto k_particle_movers_d = sp->k_pm_d;
+    Kokkos::parallel_for("Copy movers to temp storage", Kokkos::RangePolicy<>(0,sp->nm), KOKKOS_LAMBDA(const int i) {
+        temp_view_d(i*4)     = k_particle_movers_d(i, particle_mover_var::dispx);
+        temp_view_d(i*4 + 1) = k_particle_movers_d(i, particle_mover_var::dispy);
+        temp_view_d(i*4 + 2) = k_particle_movers_d(i, particle_mover_var::dispz);
+        temp_view_d(i*4 + 3) = k_particle_movers_d(i, particle_mover_var::pmi);
+    });
+    Kokkos::deep_copy(temp_view_h, temp_view_d);
+    Kokkos::parallel_for("Copy movers to host", host_execution_policy(0, sp->nm), KOKKOS_LAMBDA(const int i) {
+        sp->pm[i].dispx = temp_view_h(4*i);
+        sp->pm[i].dispy = temp_view_h(4*i + 1);
+        sp->pm[i].dispz = temp_view_h(4*i + 2);
+        sp->pm[i].i     = temp_view_h(4*i + 3);
+    });
+/*
+    k_pm_dual.modify_device();
+    k_pm_dual.sync_host();
+    auto pm_d_sub = Kokkos::subview(sp->k_pm_d, std::pair<size_t, size_t>(0, sp->nm), Kokkos::ALL());
+    auto pm_h_sub = Kokkos::subview(sp->k_pm_h, std::pair<size_t, size_t>(0, sp->nm), Kokkos::ALL());
+    Kokkos::deep_copy(pm_h_sub, pm_d_sub);
+*/
+/*
+    Kokkos::parallel_for("copy particles to host", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { 
+      sp->p[i].dx = k_particles_h(i, particle_var::dx); 
+      sp->p[i].dy = k_particles_h(i, particle_var::dy); 
+      sp->p[i].dz = k_particles_h(i, particle_var::dz); 
+      sp->p[i].ux = k_particles_h(i, particle_var::ux); 
+      sp->p[i].uy = k_particles_h(i, particle_var::uy); 
+      sp->p[i].uz = k_particles_h(i, particle_var::uz); 
+      sp->p[i].w  = k_particles_h(i, particle_var::w);  
+      sp->p[i].i  = k_particles_h(i, particle_var::pi); 
+    });
+*/    
+/*
+    Kokkos::parallel_for("copy movers to host", host_execution_policy(0, sp->nm) , KOKKOS_LAMBDA (int i) { 
+      sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx); 
+      sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy); 
+      sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz); 
+      sp->pm[i].i     = k_particle_movers_h(i, particle_mover_var::pmi);   
+    });
+*/
+  };
   UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   // TODO: think about if this is needed? It's done in advance_p
@@ -409,7 +470,9 @@ int vpic_simulation::advance(void) {
   // local accumulation).
 
   // This should mean the kokkos accum data is up to date
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
+//  UNSAFE_TIC();
+//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
+//  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
 // HOST
 // Touches particle copies, particle_movers, particle_injectors, accumulators (move_p), neighbors
@@ -433,7 +496,7 @@ int vpic_simulation::advance(void) {
   UNSAFE_TIC(); // Time this data movement
   Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
-  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   /*
   // Move these value back to the real, on host, accum
@@ -477,17 +540,57 @@ int vpic_simulation::advance(void) {
       //print_particles_d(particles, sp->np); // should not see any zeros
       //printf("Done compress print: \n");
 
+      int num_to_copy = sp->num_to_copy;
+      //printf("Trying to append %d from particle copy where np = %d max nm %d \n", num_to_copy, sp->np, sp->max_nm);
+
+      int np = sp->np;
+
       // Copy data for copies back to device
-      Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
+      UNSAFE_TIC();
+//      Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
+
+      auto pc_d_sub = Kokkos::subview(sp->k_pc_d, std::pair<size_t, size_t>(0, num_to_copy), Kokkos::ALL());
+      auto pc_h_sub = Kokkos::subview(sp->k_pc_h, std::pair<size_t, size_t>(0, num_to_copy), Kokkos::ALL());
+      Kokkos::deep_copy(pc_d_sub, pc_h_sub);
+      
+/*      
+      Kokkos::View<float*> temp_part_d = Kokkos::View<float*>("Temp storage for particle copy", 8*num_to_copy);
+      auto temp_part = Kokkos::create_mirror_view(temp_part_d);
+      auto& particle_copy = sp->k_pc_h;
+      Kokkos::parallel_for("Copy particles to temp", host_execution_policy(0, num_to_copy), KOKKOS_LAMBDA (const int i) {
+            temp_part(i*8)     = particle_copy(i, particle_var::dx);
+            temp_part(i*8 + 1) = particle_copy(i, particle_var::dy);
+            temp_part(i*8 + 2) = particle_copy(i, particle_var::dz);
+            temp_part(i*8 + 3) = particle_copy(i, particle_var::pi);
+            temp_part(i*8 + 4) = particle_copy(i, particle_var::ux);
+            temp_part(i*8 + 5) = particle_copy(i, particle_var::uy);
+            temp_part(i*8 + 6) = particle_copy(i, particle_var::uz);
+            temp_part(i*8 + 7) = particle_copy(i, particle_var::w);
+      });
+      Kokkos::deep_copy(temp_part_d, temp_part);
+      // Append it to the particles
+      Kokkos::parallel_for("append moved particles", Kokkos::RangePolicy <
+              Kokkos::DefaultExecutionSpace > (0, sp->num_to_copy), KOKKOS_LAMBDA
+              (int i)
+      {
+        int npi = np+i; // i goes from 0..n so no need for -1
+        //printf("append to %d from %d \n", npi, i);
+        particles(npi, particle_var::dx) = temp_part_d(i*8);
+        particles(npi, particle_var::dy) = temp_part_d(i*8 + 1);
+        particles(npi, particle_var::dz) = temp_part_d(i*8 + 2);
+        particles(npi, particle_var::pi) = temp_part_d(i*8 + 3);
+        particles(npi, particle_var::ux) = temp_part_d(i*8 + 4);
+        particles(npi, particle_var::uy) = temp_part_d(i*8 + 5);
+        particles(npi, particle_var::uz) = temp_part_d(i*8 + 6);
+        particles(npi, particle_var::w)  = temp_part_d(i*8 + 7);
+      });
+*/
+      UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
       auto& particle_copy = sp->k_pc_d;
 
       //printf("particle copy size %ld particles size %ld max np %d \n", particle_copy.size() , particles.size(), sp->max_np);
 
-      int num_to_copy = sp->num_to_copy;
-      //printf("Trying to append %d from particle copy where np = %d max nm %d \n", num_to_copy, sp->np, sp->max_nm);
-
-      int np = sp->np;
       // Append it to the particles
       Kokkos::parallel_for("append moved particles", Kokkos::RangePolicy <
               Kokkos::DefaultExecutionSpace > (0, sp->num_to_copy), KOKKOS_LAMBDA
@@ -498,11 +601,11 @@ int vpic_simulation::advance(void) {
         particles(npi, particle_var::dx) = particle_copy(i, particle_var::dx);
         particles(npi, particle_var::dy) = particle_copy(i, particle_var::dy);
         particles(npi, particle_var::dz) = particle_copy(i, particle_var::dz);
+        particles(npi, particle_var::pi) = particle_copy(i, particle_var::pi);
         particles(npi, particle_var::ux) = particle_copy(i, particle_var::ux);
         particles(npi, particle_var::uy) = particle_copy(i, particle_var::uy);
         particles(npi, particle_var::uz) = particle_copy(i, particle_var::uz);
         particles(npi, particle_var::w)  = particle_copy(i, particle_var::w);
-        particles(npi, particle_var::pi) = particle_copy(i, particle_var::pi);
       });
 
       // Reset this to zero now we've done the write back
@@ -512,9 +615,41 @@ int vpic_simulation::advance(void) {
   UNSAFE_TOC( BACKFILL, 1);
 
   // TODO: this can be removed once the below does not rely on host memory
-  UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
-  UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC(); // Time this data movement
+//  LIST_FOR_EACH( sp, species_list ) {\
+//    Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);  
+//    Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d); 
+//    Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d); 
+//    n_particles = sp->np; 
+//    max_pmovers = sp->max_nm; 
+//    k_particles_h = sp->k_p_h; 
+//    k_particle_movers_h = sp->k_pm_h; 
+/*
+    k_nm_h = sp->k_nm_h; 
+    sp->nm = k_nm_h(0); 
+*/
+/*
+    Kokkos::parallel_for("copy particles to host", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) { 
+      sp->p[i].dx = k_particles_h(i, particle_var::dx); 
+      sp->p[i].dy = k_particles_h(i, particle_var::dy); 
+      sp->p[i].dz = k_particles_h(i, particle_var::dz); 
+      sp->p[i].ux = k_particles_h(i, particle_var::ux); 
+      sp->p[i].uy = k_particles_h(i, particle_var::uy); 
+      sp->p[i].uz = k_particles_h(i, particle_var::uz); 
+      sp->p[i].w  = k_particles_h(i, particle_var::w);  
+      sp->p[i].i  = k_particles_h(i, particle_var::pi); 
+    });
+*/
+/*
+    Kokkos::parallel_for("copy movers to host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { 
+      sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx); 
+      sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy); 
+      sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz); 
+      sp->pm[i].i     = k_particle_movers_h(i, particle_mover_var::pmi);   
+    });
+*/
+//  };
+//  UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   // This copies over a val for nm, which is a lie
   LIST_FOR_EACH( sp, species_list ) {
@@ -641,7 +776,9 @@ int vpic_simulation::advance(void) {
 
 //        KOKKOS_PARTICLE_VARIABLES();
 //        KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+        UNSAFE_TIC();
         KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
         TIC
         LIST_FOR_EACH( sp, species_list )
@@ -651,7 +788,9 @@ int vpic_simulation::advance(void) {
         }
         TOC( accumulate_rho_p, species_list->id );
 
+        UNSAFE_TIC();
         KOKKOS_COPY_FIELD_MEM_TO_HOST();
+        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
     }
 
     TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
@@ -699,8 +838,10 @@ int vpic_simulation::advance(void) {
 
   UNSAFE_TIC(); // Time this data movement
   KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
   UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+  UNSAFE_TIC();
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 
 // DEVICE
 // Touches fields, interpolators
@@ -708,6 +849,8 @@ int vpic_simulation::advance(void) {
 
   UNSAFE_TIC(); // Time this data movement
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
+  UNSAFE_TIC();
   KOKKOS_COPY_FIELD_MEM_TO_HOST();
   UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
@@ -729,7 +872,7 @@ int vpic_simulation::advance(void) {
   // (silly but it might happen), the test will be skipped on the restore. We
   // return true here so that the first call to advance after a restore
   // will act properly for this edge case.
-  dump_energies("energies.txt", 1);
+  TIC dump_energies("energies.txt", 1); TOC( user_diagnostics, 1);
 
   return 1;
 }

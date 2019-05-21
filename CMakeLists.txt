@@ -96,13 +96,11 @@ find_package(OpenMP)
 # FIXME: Sometimes OpenMP is not found fully, when it really should be. Is this
 # a CMAKE issue?
 if (OPENMP_FOUND)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
   set(VPIC_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${VPIC_CXX_FLAGS}")
   #set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
 else()
-  message("OpenMP not found...guessing the flag") 
-  # you will need to change this if you use an exotic compiler!!
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
+  message("OpenMP not found...")
 endif()
 
 # Allow files to be references from the root, (eg #include "src/vpic/vpic.h")
@@ -122,9 +120,9 @@ endif(VPIC_KOKKOS_DEBUG)
 set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
 
 if(ENABLE_KOKKOS_OPENMP)
-  #if (OPENMP_FOUND)
+  if (OPENMP_FOUND)
     set(KOKKOS_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
-    #endif()
+  endif()
 endif()
 
 if(ENABLE_KOKKOS_CUDA)
@@ -137,12 +135,10 @@ if(ENABLE_KOKKOS_CUDA)
 
     # Choose Architecture for Kokkos
     if (BUILD_INTERNAL_KOKKOS)
-        set (KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
-        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
-        #set(KOKKOS_ARCH "Power9;Volta70")
+        #set (KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
+        #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
+        set(KOKKOS_ARCH "Power9;Volta70")
         #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
-        #set(KOKKOS_ARCH "Pascal61")
-        #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_61")
     endif (BUILD_INTERNAL_KOKKOS)
 
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")

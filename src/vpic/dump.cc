@@ -66,7 +66,7 @@ vpic_simulation::dump_energies( const char *fname,
                   en_f[3], en_f[4], en_f[5] );
  
   LIST_FOR_EACH(sp,species_list) {
-    en_p = energy_p( sp, interpolator_array );
+    en_p = energy_p_kokkos( sp, interpolator_array );
     if( rank()==0 && status!=fail ) fileIO.print( " %e", en_p );
   }
  
