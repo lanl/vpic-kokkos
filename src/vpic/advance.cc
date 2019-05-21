@@ -51,28 +51,6 @@ int vpic_simulation::advance(void) {
       bin_sort.sort(sp->k_p_d);
     }
 
-  /*
-  LIST_FOR_EACH( sp, species_list )
-    if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
-    {
-      if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-          //TIC sort_p( sp ); TOC( sort_p, 1 );
-
-      // For now we need to grab the keys or use a complex comparitor
-      typedef decltype(sp->k_p_d) KeyViewType;
-      typedef Kokkos::BinOp1D< KeyViewType > BinOp;
-
-      // Pull out pi because I'm lazy
-      //
-
-      //Kokkos::BinSort<KeyViewType , BinOp > Sorter(element_,begin,end,binner,false);
-
-      Kokkos::BinSort<KeyViewType,Comparator> bin_sort(keys, begin, end, comp, sort_within_bins );
-      bin_sort.create_permute_vector();
-      bin_sort.sort(element_,begin,end);
-    }
-    */
-
   // At this point, fields are at E_0 and B_0 and the particle positions
   // are at r_0 and u_{-1/2}.  Further the mover lists for the particles should
   // empty and all particles should be inside the local computational domain.
