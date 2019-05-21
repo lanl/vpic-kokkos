@@ -179,7 +179,7 @@ sp_[id]->
     float dx   = p_dx;                             // Load position
     float dy   = p_dy;
     float dz   = p_dz;
-    int   ii   = int(pii);
+    int   ii   = static_cast<int>(pii);
     float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
                            dz*( f_dexdz + dy*f_d2exdydz ) );
     float hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
@@ -317,11 +317,11 @@ sp_[id]->
           k_particle_copy(nm, particle_var::dx) = p_dx;
           k_particle_copy(nm, particle_var::dy) = p_dy;
           k_particle_copy(nm, particle_var::dz) = p_dz;
+          k_particle_copy(nm, particle_var::pi) = pii;
           k_particle_copy(nm, particle_var::ux) = p_ux;
           k_particle_copy(nm, particle_var::uy) = p_uy;
           k_particle_copy(nm, particle_var::uz) = p_uz;
           k_particle_copy(nm, particle_var::w) = p_w;
-          k_particle_copy(nm, particle_var::pi) = pii;
 
           // Tag this one as having left
           //k_particles(p_index, particle_var::pi) = 999999;
