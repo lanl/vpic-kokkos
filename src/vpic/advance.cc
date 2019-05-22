@@ -30,27 +30,30 @@ int vpic_simulation::advance(void) {
   // Sort the particles for performance if desired.
   UNSAFE_TIC();
   LIST_FOR_EACH( sp, species_list )
-    if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) ) {
-      if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-      //TIC sort_p( sp ); TOC( sort_p, 1 );
+  {
+      if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
+      {
+          if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
+          //TIC sort_p( sp ); TOC( sort_p, 1 );
 
-      // Replace sort with kokkos sort
-      // Try grab the index's for a permute key
-      int pi = particle_var::pi; // TODO: can you really not pass an enum in??
-      auto keys = Kokkos::subview(sp->k_p_d, Kokkos::ALL, pi);
-      using key_type = decltype(keys);
+          // Replace sort with kokkos sort
+          // Try grab the index's for a permute key
+          int pi = particle_var::pi; // TODO: can you really not pass an enum in??
+          auto keys = Kokkos::subview(sp->k_p_d, Kokkos::ALL, pi);
+          using key_type = decltype(keys);
 
 
-      // TODO: we can tighten the bounds on this
-      int max = accumulator_array->na;
-      using Comparator = Kokkos::BinOp1D<key_type>;
-      Comparator comp(max, 0, max);
+          // TODO: we can tighten the bounds on this
+          int max = accumulator_array->na;
+          using Comparator = Kokkos::BinOp1D<key_type>;
+          Comparator comp(max, 0, max);
 
-      int sort_within_bins = 0;
-      Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, sp->np, comp, sort_within_bins );
-      bin_sort.create_permute_vector();
-      bin_sort.sort(sp->k_p_d);
-    }
+          int sort_within_bins = 0;
+          Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, sp->np, comp, sort_within_bins );
+          bin_sort.create_permute_vector();
+          bin_sort.sort(sp->k_p_d);
+      }
+  }
    UNSAFE_TOC( sort_particles, 1);
 
   // At this point, fields are at E_0 and B_0 and the particle positions

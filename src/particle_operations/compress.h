@@ -203,6 +203,19 @@ struct DefaultCompress {
 
 };
 
+struct SortCompress {
+    static void compress(
+            k_particles_t particles,
+            k_particle_movers_t particle_movers,
+            const int32_t nm,
+            const int32_t np,
+            species_t* sp
+            )
+    {
+    }
+
+};
+
 template <typename Policy = DefaultCompress>
 struct ParticleCompressor : private Policy {
     using Policy::compress;

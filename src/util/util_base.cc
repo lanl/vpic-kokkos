@@ -12,6 +12,7 @@
 #include <stdio.h>     // For vfprintf
 #include <stdarg.h>    // For va_list, va_start, va_end
 #include <string.h>    // for strstr
+#include <string>
 
 /****************************************************************************/
 
