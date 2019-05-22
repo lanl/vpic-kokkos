@@ -80,129 +80,119 @@ struct DefaultCompress {
 
         // TODO: we can probably do this online while we do the advance_p
         Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
-                Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int i)
-                {
-                // If the id of this particle is in the danger zone, don't add it
-                // otherwise, do
-                int cut_off = np-(2*nm);
+        Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int i)
+        {
+            // If the id of this particle is in the danger zone, don't add it
+            // otherwise, do
+            int cut_off = np-(2*nm);
 
-                int pmi = static_cast<int>( particle_movers(i, particle_mover_var::pmi) );
+            int pmi = static_cast<int>( particle_movers(i, particle_mover_var::pmi) );
 
-                // If it's less than the cut off, it's safe
-                if ( pmi >= cut_off) // danger zone
-                {
-                int index = ((np-1) - pmi); // Map to the reverse indexing
-                unsafe_index(index) = 1; // 1 marks it as unsafe
-                }
-                });
+            // If it's less than the cut off, it's safe
+            if ( pmi >= cut_off) // danger zone
+            {
+            int index = ((np-1) - pmi); // Map to the reverse indexing
+            unsafe_index(index) = 1; // 1 marks it as unsafe
+            }
+        });
 
         // We will use the first 0-nm of safe_index to pull from
         // We will use the nm -> 2nm range for "panic picks", if the first wasn't safe (involves atomics..)
-
         Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
                 Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int n)
-                {
+        {
 
-                // TODO: is this np or np-1?
-                // Doing this in the "inverse order" to match vpic
-                int pull_from = (np-1) - (n); // grab a particle from the end block
-                int write_to = particle_movers(nm-n-1, particle_mover_var::pmi); // put it in a gap
-                int danger_zone = np - nm;
+            // TODO: is this np or np-1?
+            // Doing this in the "inverse order" to match vpic
+            int pull_from = (np-1) - (n); // grab a particle from the end block
+            int write_to = particle_movers(nm-n-1, particle_mover_var::pmi); // put it in a gap
+            int danger_zone = np - nm;
 
-                // if they're the same, no need to do it. This can happen below in the
-                // danger zone and we want to avoid "cleaning it up"
-                if (pull_from == write_to) return;
+            // if they're the same, no need to do it. This can happen below in the
+            // danger zone and we want to avoid "cleaning it up"
+            if (pull_from == write_to) return;
 
-                // If the "gap" is in the danger zone, no need to back fill it
-                if (write_to >= danger_zone)
-                {
-                // if pull from is unsafe, skip it
-                if (pull_from >= danger_zone) // We only have lookup for the danger zone
-                {
-                if ( ! unsafe_index( (np-1) - pull_from ) )
-                {
-                    // FIXME: if it's not in the danger zone, someone else will
-                    // fill it..but then we don't want to move it??? is this
-                    // true, and a very subtle race condition?
+            // If the "gap" is in the danger zone, no need to back fill it
+            if (write_to >= danger_zone)
+            {
+            // if pull from is unsafe, skip it
+            if (pull_from >= danger_zone) // We only have lookup for the danger zone
+            {
+            if ( ! unsafe_index( (np-1) - pull_from ) )
+            {
+                // FIXME: if it's not in the danger zone, someone else will
+                // fill it..but then we don't want to move it??? is this
+                // true, and a very subtle race condition?
 
-                    // TODO: by skipping this move, we neglect to move the
-                    // pull_from to somewhere sensible...  For now we put it on
-                    // a clean up list..but that sucks
-                    int clean_up_from_index = Kokkos::atomic_fetch_add( &clean_up_from_count(), 1 );
-                    clean_up_from(clean_up_from_index) = pull_from;
-                }
-                }
+                // TODO: by skipping this move, we neglect to move the
+                // pull_from to somewhere sensible...  For now we put it on
+                // a clean up list..but that sucks
+                int clean_up_from_index = Kokkos::atomic_fetch_add( &clean_up_from_count(), 1 );
+                clean_up_from(clean_up_from_index) = pull_from;
+            }
+            }
+
+            return;
+            }
+
+            //int safe_index_offset = (np-nm);
+
+            // Detect if the index we want to pull from is safe
+            // Want to index this 0...nm
+            //if ( unsafe_index(pull_from - safe_index_offset ) )
+            if ( unsafe_index( n ) )
+            {
+                // Instead we'll get this on the second pass
+                int clean_up_to_index = Kokkos::atomic_fetch_add( &clean_up_to_count(), 1 );
+                clean_up_to(clean_up_to_index) = write_to;
 
                 return;
-                }
+            }
+            else {
+                //printf("%d is safe %d\n", n, pull_from);
+            }
 
-                //int safe_index_offset = (np-nm);
+            //printf("moving id %d %f %f %f to %d\n",
+            //pull_from,
+            //particles(pull_from, particle_var::dx),
+            //particles(pull_from, particle_var::dy),
+            //particles(pull_from, particle_var::dz),
+            //write_to);
 
-                // Detect if the index we want to pull from is safe
-                // Want to index this 0...nm
-                //if ( unsafe_index(pull_from - safe_index_offset ) )
-                if ( unsafe_index( n ) )
-                {
-                    // Instead we'll get this on the second pass
-                    int clean_up_to_index = Kokkos::atomic_fetch_add( &clean_up_to_count(), 1 );
-                    clean_up_to(clean_up_to_index) = write_to;
-
-                    return;
-                }
-                else {
-                    //printf("%d is safe %d\n", n, pull_from);
-                }
-
-                //printf("moving id %d %f %f %f to %d\n",
-                //pull_from,
-                //particles(pull_from, particle_var::dx),
-                //particles(pull_from, particle_var::dy),
-                //particles(pull_from, particle_var::dz),
-                //write_to);
-
-                // Move the particle from np-n to pm->i
-                particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
-                particles(write_to, particle_var::dy) = particles(pull_from, particle_var::dy);
-                particles(write_to, particle_var::dz) = particles(pull_from, particle_var::dz);
-                particles(write_to, particle_var::ux) = particles(pull_from, particle_var::ux);
-                particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
-                particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
-                particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
-                particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
-                });
+            // Move the particle from np-n to pm->i
+            particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
+            particles(write_to, particle_var::dy) = particles(pull_from, particle_var::dy);
+            particles(write_to, particle_var::dz) = particles(pull_from, particle_var::dz);
+            particles(write_to, particle_var::ux) = particles(pull_from, particle_var::ux);
+            particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
+            particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
+            particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
+            particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
+        });
 
         Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
         Kokkos::deep_copy(clean_up_to_count_h, clean_up_to_count);
 
         Kokkos::parallel_for("compress clean up", Kokkos::RangePolicy <
-                Kokkos::DefaultExecutionSpace > (0, clean_up_from_count_h() ), KOKKOS_LAMBDA (int n)
-                {
-                int write_to = clean_up_to(n);
-                int pull_from = clean_up_from(n);
+        Kokkos::DefaultExecutionSpace > (0, clean_up_from_count_h() ), KOKKOS_LAMBDA (int n)
+        {
+            int write_to = clean_up_to(n);
+            int pull_from = clean_up_from(n);
 
-                //printf("clean up id %d to %d \n", pull_from, write_to);
-                //printf("--> %f %f %f -> %f %f %f \n",
-                //particles(pull_from, particle_var::dx),
-                //particles(pull_from, particle_var::dy),
-                //particles(pull_from, particle_var::dz),
-                //particles(write_to, particle_var::dx),
-                //particles(write_to, particle_var::dy),
-                //particles(write_to, particle_var::dz)
-                //);
-
-                particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
-                particles(write_to, particle_var::dy) = particles(pull_from, particle_var::dy);
-                particles(write_to, particle_var::dz) = particles(pull_from, particle_var::dz);
-                particles(write_to, particle_var::ux) = particles(pull_from, particle_var::ux);
-                particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
-                particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
-                particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
-                particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
-                });
+            particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
+            particles(write_to, particle_var::dy) = particles(pull_from, particle_var::dy);
+            particles(write_to, particle_var::dz) = particles(pull_from, particle_var::dz);
+            particles(write_to, particle_var::ux) = particles(pull_from, particle_var::ux);
+            particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
+            particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
+            particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
+            particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
+        });
     }
 
 };
 
+/*
 struct SortCompress {
     static void compress(
             k_particles_t particles,
@@ -215,6 +205,7 @@ struct SortCompress {
     }
 
 };
+*/
 
 template <typename Policy = DefaultCompress>
 struct ParticleCompressor : private Policy {
