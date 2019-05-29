@@ -735,8 +735,6 @@ int vpic_simulation::advance(void) {
 
   // Advance the electric field from E_0 to E_1
   
-//  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
-
 // HOST (Device in nphtan branch)
 // Touches fields
   TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
@@ -791,16 +789,16 @@ int vpic_simulation::advance(void) {
         }
         TOC( accumulate_rho_p, species_list->id );
 
-//        UNSAFE_TIC();
-//        KOKKOS_COPY_FIELD_MEM_TO_HOST();
-//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
-    }
-
-    TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
-//    TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
         UNSAFE_TIC();
         KOKKOS_COPY_FIELD_MEM_TO_HOST();
         UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+    }
+
+//    TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+    TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+//        UNSAFE_TIC();
+//        KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
 // HOST
 // Touches fields

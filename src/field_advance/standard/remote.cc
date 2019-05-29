@@ -10,6 +10,7 @@
 
 #define IN_sfa
 #include "sfa_private.h"
+#include "mpi.h"
 
 //#define TEST_MPI_KOKKOS
 
@@ -1255,16 +1256,16 @@ template<typename T> void begin_send_rho(const grid_t* g, field_array_t* fa, int
         end = {face+1, ny+2, nx+2};
     }
     Kokkos::MDRangePolicy<Kokkos::Rank<3> > node_policy(start,end);
-    int size = (1 + 2*(nY+1)*(nZ+1))*sizeof(float);
-    Kokkos::View<float*> d_buf("Device buffer", (size/sizeof(float)));
+    int size = (1 + 2*(nY+1)*(nZ+1));
+    Kokkos::View<float*> d_buf("Device buffer", size);
     Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-    float* p = reinterpret_cast<float*>(size_send_port(i,j,k,size,g));
+    float* p = reinterpret_cast<float*>(size_send_port(i,j,k,size*sizeof(float),g));
     if(p) {
         Kokkos::parallel_for("begin_send_rho", node_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
             int idx_f, idx_b;
-            if(x+y+z == face+2) {
-                d_buf(0) = leading_dim;
-            }
+//            if(x+y+z == face+2) {
+//                d_buf(0) = leading_dim;
+//            }
             if(std::is_same<T, XYZ>::value) {
                 idx_f = 1 + 2*((z-1)*(ny+1) + y-1);
                 idx_b = 1 + 2*((z-1)*(ny+1) + y-1) + 1;
@@ -1279,11 +1280,11 @@ template<typename T> void begin_send_rho(const grid_t* g, field_array_t* fa, int
             d_buf(idx_b) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
         });
         Kokkos::deep_copy(h_buf, d_buf);
-        Kokkos::parallel_for("Host copy to buffer", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0,size/sizeof(float)), KOKKOS_LAMBDA(const int idx) {
+        Kokkos::parallel_for("Host copy to buffer", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0,size), KOKKOS_LAMBDA(const int idx) {
             p[idx] = h_buf(idx);
         });
         p[0] = leading_dim;
-        begin_send_port(i,j,k,size,g);
+        begin_send_port(i,j,k,size*sizeof(float),g);
     }
 }
 template <typename T> void end_recv_rho(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz) {
@@ -1311,8 +1312,8 @@ template <typename T> void end_recv_rho(const grid_t* g, field_array_t* fa, int 
         end = {face+1, ny+2, nx+2};
     }
     Kokkos::MDRangePolicy<Kokkos::Rank<3> > node_policy(start,end);
-    int size = (1 + 2*(nY+1)*(nZ+1))*sizeof(float);
-    Kokkos::View<float*> d_buf("Device buffer", (size/sizeof(float)));
+    int size = (1 + 2*(nY+1)*(nZ+1));
+    Kokkos::View<float*> d_buf("Device buffer", size);
     Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
     float* p = reinterpret_cast<float*>(end_recv_port(i,j,k,g));
     if(p) {
@@ -1322,7 +1323,7 @@ template <typename T> void end_recv_rho(const grid_t* g, field_array_t* fa, int 
         hlw = leading_dim/hlw;
         float lw = hlw + hlw;
         float rw = hrw + hrw;
-        Kokkos::parallel_for("Copy buffer to host copy", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, size/sizeof(float)), KOKKOS_LAMBDA(const int idx) {
+        Kokkos::parallel_for("Copy buffer to host copy", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, size), KOKKOS_LAMBDA(const int idx) {
             h_buf(idx) = p[idx];
         });
         Kokkos::deep_copy(d_buf, h_buf);
@@ -1497,7 +1498,71 @@ void k_synchronize_rho(field_array_t* RESTRICT fa) {
 
     k_local_adjust_rhof(fa, g);
     k_local_adjust_rhob(fa, g);
+    //
+    // Exchange x-faces
+    begin_recv_rho<XYZ>(g, -1, 0, 0, nx, ny, nz);
+    begin_recv_rho<XYZ>(g,  1, 0, 0, nx, ny, nz);
+    begin_send_rho<XYZ>(g, fa, -1, 0, 0, nx, ny, nz);
+    begin_send_rho<XYZ>(g, fa,  1, 0, 0, nx, ny, nz);
+MPI_Barrier(MPI_COMM_WORLD);
+    end_recv_rho<XYZ>(g, fa, -1, 0, 0, nx, ny, nz);
+    end_recv_rho<XYZ>(g, fa,  1, 0, 0, nx, ny, nz);
+    end_send_rho<XYZ>(g, -1, 0, 0);
+    end_send_rho<XYZ>(g,  1, 0, 0);
 
+MPI_Barrier(MPI_COMM_WORLD);
+    // Exchange y-faces
+    begin_recv_rho<YZX>(g, 0, -1, 0, nx, ny, nz);
+    begin_recv_rho<YZX>(g, 0,  1, 0, nx, ny, nz);
+    begin_send_rho<YZX>(g, fa, 0, -1, 0, nx, ny, nz);
+    begin_send_rho<YZX>(g, fa, 0,  1, 0, nx, ny, nz);
+MPI_Barrier(MPI_COMM_WORLD);
+    end_recv_rho<YZX>(g, fa, 0, -1, 0, nx, ny, nz);
+    end_recv_rho<YZX>(g, fa, 0,  1, 0, nx, ny, nz);
+    end_send_rho<YZX>(g, 0, -1, 0);
+    end_send_rho<YZX>(g, 0,  1, 0);
+
+MPI_Barrier(MPI_COMM_WORLD);
+    // Exchange z-faces
+    begin_recv_rho<ZXY>(g, 0, 0, -1, nx, ny, nz);
+    begin_recv_rho<ZXY>(g, 0, 0,  1, nx, ny, nz);
+    begin_send_rho<ZXY>(g, fa, 0, 0, -1, nx, ny, nz);
+    begin_send_rho<ZXY>(g, fa, 0, 0,  1, nx, ny, nz);
+MPI_Barrier(MPI_COMM_WORLD);
+    end_recv_rho<ZXY>(g, fa, 0, 0, -1, nx, ny, nz);
+    end_recv_rho<ZXY>(g, fa, 0, 0,  1, nx, ny, nz);
+    end_send_rho<ZXY>(g, 0, 0, -1);
+    end_send_rho<ZXY>(g, 0, 0,  1);
+/*
+    begin_recv_rho<XYZ>(g, -1, 0, 0, nx, ny, nz);
+    begin_recv_rho<XYZ>(g,  1, 0, 0, nx, ny, nz);
+    begin_recv_rho<YZX>(g, 0, -1, 0, nx, ny, nz);
+    begin_recv_rho<YZX>(g, 0,  1, 0, nx, ny, nz);
+    begin_recv_rho<ZXY>(g, 0, 0, -1, nx, ny, nz);
+    begin_recv_rho<ZXY>(g, 0, 0,  1, nx, ny, nz);
+
+    begin_send_rho<XYZ>(g, fa, -1, 0, 0, nx, ny, nz);
+    begin_send_rho<XYZ>(g, fa,  1, 0, 0, nx, ny, nz);
+    begin_send_rho<YZX>(g, fa, 0, -1, 0, nx, ny, nz);
+    begin_send_rho<YZX>(g, fa, 0,  1, 0, nx, ny, nz);
+    begin_send_rho<ZXY>(g, fa, 0, 0, -1, nx, ny, nz);
+    begin_send_rho<ZXY>(g, fa, 0, 0,  1, nx, ny, nz);
+
+    end_recv_rho<XYZ>(g, fa, -1, 0, 0, nx, ny, nz);
+    end_recv_rho<XYZ>(g, fa,  1, 0, 0, nx, ny, nz);
+    end_recv_rho<YZX>(g, fa, 0, -1, 0, nx, ny, nz);
+    end_recv_rho<YZX>(g, fa, 0,  1, 0, nx, ny, nz);
+    end_recv_rho<ZXY>(g, fa, 0, 0, -1, nx, ny, nz);
+    end_recv_rho<ZXY>(g, fa, 0, 0,  1, nx, ny, nz);
+
+    end_send_rho<XYZ>(g, -1, 0, 0);
+    end_send_rho<XYZ>(g,  1, 0, 0);
+    end_send_rho<YZX>(g, 0, -1, 0);
+    end_send_rho<YZX>(g, 0,  1, 0);
+    end_send_rho<ZXY>(g, 0, 0, -1);
+    end_send_rho<ZXY>(g, 0, 0,  1);
+*/
+/*
     // Exchange x-faces
     begin_send_rho<XYZ>(g, fa, -1, 0, 0, nx, ny, nz);
     begin_send_rho<XYZ>(g, fa,  1, 0, 0, nx, ny, nz);
@@ -1527,4 +1592,5 @@ void k_synchronize_rho(field_array_t* RESTRICT fa) {
     end_recv_rho<ZXY>(g, fa, 0, 0,  1, nx, ny, nz);
     end_send_rho<ZXY>(g, 0, 0, -1);
     end_send_rho<ZXY>(g, 0, 0,  1);
+*/
 }
