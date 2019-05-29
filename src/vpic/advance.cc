@@ -351,15 +351,11 @@ int vpic_simulation::advance(void) {
 
   //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
-  KOKKOS_INTERPOLATOR_VARIABLES();
-  KOKKOS_ACCUMULATOR_VARIABLES();
-  KOKKOS_PARTICLE_VARIABLES();
-
   UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
   UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
   UNSAFE_TIC();
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
   UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 //  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
 
@@ -378,22 +374,23 @@ int vpic_simulation::advance(void) {
   UNSAFE_TOC( accumulator_contributions, 1);
 
   UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
   UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
   UNSAFE_TIC()
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array);
   UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 
   UNSAFE_TIC(); // Time this data movement
+  // TODO: make this into a function
   LIST_FOR_EACH( sp, species_list ) {
 //    Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
     Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d);
     Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
-    n_particles = sp->np;
-    max_pmovers = sp->max_nm;
+    auto n_particles = sp->np;
+    auto max_pmovers = sp->max_nm;
 //    k_particles_h = sp->k_p_h;
-    k_particle_movers_h = sp->k_pm_h;
-    k_nm_h = sp->k_nm_h;
+    auto& k_particle_movers_h = sp->k_pm_h;
+    auto& k_nm_h = sp->k_nm_h;
     sp->nm = k_nm_h(0);
 /*
     k_pm_dual.modify_device();
@@ -453,7 +450,7 @@ int vpic_simulation::advance(void) {
 
   // This should mean the kokkos accum data is up to date
   UNSAFE_TIC();
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
   UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
 // HOST
@@ -477,7 +474,7 @@ int vpic_simulation::advance(void) {
   // Update device so we can pull it all the way back to the host
   UNSAFE_TIC(); // Time this data movement
   Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
   UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   /*
@@ -662,10 +659,8 @@ int vpic_simulation::advance(void) {
 
   TIC user_current_injection(); TOC( user_current_injection, 1 );
 
-  KOKKOS_FIELD_VARIABLES();
-
   UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
   UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
 // DEVICE
@@ -674,7 +669,7 @@ int vpic_simulation::advance(void) {
   TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
 
   UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
   UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Advance the electric field from E_0 to E_1
@@ -693,7 +688,7 @@ int vpic_simulation::advance(void) {
   // Half advance the magnetic field from B_{1/2} to B_1
 
   UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
   UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
 // DEVICE
@@ -701,7 +696,7 @@ int vpic_simulation::advance(void) {
   TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
 
   UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
   UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Divergence clean e
@@ -714,10 +709,9 @@ int vpic_simulation::advance(void) {
     TIC FAK->clear_rhof( field_array ); TOC( clear_rhof,1 );
     if( species_list ) {
 
-//        KOKKOS_PARTICLE_VARIABLES();
 //        KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
         UNSAFE_TIC();
-        KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+        KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
         UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
         TIC
@@ -729,7 +723,7 @@ int vpic_simulation::advance(void) {
         TOC( accumulate_rho_p, species_list->id );
 
         UNSAFE_TIC();
-        KOKKOS_COPY_FIELD_MEM_TO_HOST();
+        KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
         UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
     }
 
@@ -777,10 +771,10 @@ int vpic_simulation::advance(void) {
   // species to worry about
 
   UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
   UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
   UNSAFE_TIC();
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
   UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 
 // DEVICE
@@ -788,10 +782,10 @@ int vpic_simulation::advance(void) {
   if( species_list ) TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
 
   UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array);
   UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
   UNSAFE_TIC();
-  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
   UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   step()++;
