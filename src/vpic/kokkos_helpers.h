@@ -242,7 +242,7 @@ template<class T> void KOKKOS_COPY_FIELD_MEM_TO_HOST(T* field_array)
 // TODO: abstract these so it in turn calls a function that operates on a single species
 template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(T* species_list)
 {
-  auto* sp = species_list];
+  auto* sp = species_list;
   LIST_FOR_EACH( sp, species_list ) {
     auto n_particles = sp->np;
     auto max_pmovers = sp->max_nm;
