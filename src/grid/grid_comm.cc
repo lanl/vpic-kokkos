@@ -89,4 +89,42 @@ void end_send_port_kokkos(const grid_t* g, int port) {
     mp_end_send_kokkos(g->mp, port);
 }
 
+void
+begin_recv_port_k( int i, int j, int k,
+                 int size,
+                 const grid_t * g,
+                 char* recv_buf ) {
+  int port = BOUNDARY(-i,-j,-k), src = g->bc[port];
+  if( src<0 || src>=world_size ) return;
+//  mp_size_recv_buffer( g->mp, BOUNDARY(-i,-j,-k), size );
+  mp_begin_recv_k( g->mp, port, size, src, BOUNDARY(i,j,k), recv_buf );
+}
+
+void
+end_recv_port_k( int i, int j, int k,
+               const grid_t * g ) {
+  int port = BOUNDARY(-i,-j,-k), src = g->bc[port];
+  if( src<0 || src>=world_size ) return;
+  mp_end_recv_k( g->mp, port );
+//  return mp_recv_buffer( g->mp, port );
+}
+
+void
+begin_send_port_k( int i, int j, int k,
+                 int size,
+                 const grid_t * g,
+                 char* send_buf) {
+  int port = BOUNDARY( i, j, k), dst = g->bc[port];
+  if( dst<0 || dst>=world_size ) return;
+  mp_begin_send_k( g->mp, port, size, dst, port, send_buf);
+}
+
+void
+end_send_port_k( int i, int j, int k,
+               const grid_t * g ) {
+  int port = BOUNDARY( i, j, k), dst = g->bc[port];
+  if( dst<0 || dst>=world_size ) return;
+  mp_end_send_k( g->mp, BOUNDARY(i,j,k) );
+}
+
 

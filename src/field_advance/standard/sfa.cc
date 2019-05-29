@@ -19,6 +19,8 @@ static field_advance_kernels_t sfa_kernels = {
 
   clear_jf,   synchronize_jf,
   clear_rhof, synchronize_rho,
+  clear_jf_kokkos, clear_rhof_kokkos,
+  k_synchronize_rho,
 
   // Initialize interface
 
@@ -247,7 +249,7 @@ void clear_jf_kokkos(field_array_t* RESTRICT fa) {
     if(!fa) ERROR(("Bad args" ));
     k_field_t kfield = fa->k_f_d;
     const int nv = fa->g->nv;
-    Kokkos::parallel_for("clear_jf", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(nv),
+    Kokkos::parallel_for("clear_jf", Kokkos::RangePolicy<>(0,nv),
     KOKKOS_LAMBDA(const int v) {
         kfield(v, field_var::jfx) = 0;
         kfield(v, field_var::jfy) = 0;
@@ -259,7 +261,7 @@ void clear_rhof_kokkos(field_array_t* RESTRICT fa) {
     if(!fa) ERROR(("Bad args" ));
     k_field_t kfield = fa->k_f_d;
     const int nv = fa->g->nv;
-    Kokkos::parallel_for("clear_rhof", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(nv),
+    Kokkos::parallel_for("clear_rhof", Kokkos::RangePolicy<>(0,nv),
     KOKKOS_LAMBDA(const int v) {
         kfield(v, field_var::rhof) = 0;
     });

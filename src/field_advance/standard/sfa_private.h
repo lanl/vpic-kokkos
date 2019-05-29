@@ -334,6 +334,9 @@ synchronize_jf( field_array_t * RESTRICT fa );
 void
 synchronize_rho( field_array_t * RESTRICT fa );
 
+void
+k_synchronize_rho(field_array_t* RESTRICT fa);
+
 // In local.c
 
 void
@@ -383,6 +386,14 @@ local_adjust_rhof( field_t      * ALIGNED(128) f,
 void
 local_adjust_rhob( field_t      * ALIGNED(128) f,
                    const grid_t *              g );
+
+void
+k_local_adjust_rhof(field_array_t* ALIGNED(128) f,
+                    const grid_t*               g);
+
+void
+k_local_adjust_rhob(field_array_t* ALIGNED(128) f,
+                    const grid_t*               g);
 
 // In remote.c
 

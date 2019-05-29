@@ -194,6 +194,10 @@ typedef struct field_advance_kernels {
   void (*synchronize_jf )( struct field_array * RESTRICT fa );
   void (*clear_rhof     )( struct field_array * RESTRICT fa );
   void (*synchronize_rho)( struct field_array * RESTRICT fa );
+  void (*clear_jf_kokkos)( struct field_array * RESTRICT fa );
+//  void (*synchronize_jf_kokkos )( struct field_array * RESTRICT fa );
+  void (*clear_rhof_kokkos     )( struct field_array * RESTRICT fa );
+  void (*k_synchronize_rho)( struct field_array * RESTRICT fa );
 
   // Initialization interface
 

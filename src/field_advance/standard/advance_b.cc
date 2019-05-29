@@ -150,7 +150,7 @@ advance_b(field_array_t * RESTRICT fa,
   float  px   = (nx>1) ? frac*g->cvac*g->dt*g->rdx : 0;
   float  py   = (ny>1) ? frac*g->cvac*g->dt*g->rdy : 0;
   float  pz   = (nz>1) ? frac*g->cvac*g->dt*g->rdz : 0;
-printf("Advance_B kernel\n");
+//printf("Advance_B kernel\n");
 
   advance_b_kokkos(k_field, nx, ny, nz, nv, px, py, pz);
 

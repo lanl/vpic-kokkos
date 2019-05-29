@@ -102,3 +102,18 @@ void mp_end_send_kokkos( mp_t* mp_k, int port ) {
   MPWrapper::instance().mp_end_send_kokkos( mp_k, port );
 }
 
+void mp_begin_recv_k( mp_t * mp, int rbuf, int size, int sender, int tag, char* recv_buf ) {
+  MPWrapper::instance().mp_begin_recv_k( mp, rbuf, size, sender, tag, recv_buf );
+}
+
+void mp_begin_send_k( mp_t * mp, int sbuf, int size, int receiver, int tag, char* recv_buf ) {
+  MPWrapper::instance().mp_begin_send_k( mp, sbuf, size, receiver, tag, recv_buf );
+}
+
+void mp_end_recv_k( mp_t * mp, int rbuf ) {
+  MPWrapper::instance().mp_end_recv_k( mp, rbuf );
+}
+
+void mp_end_send_k( mp_t * mp, int sbuf ) {
+  MPWrapper::instance().mp_end_send_k( mp, sbuf );
+}

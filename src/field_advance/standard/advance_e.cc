@@ -509,7 +509,7 @@ advance_e_pipeline_v4( pipeline_args_t * args,
 #endif
 
 void
-advance_e_host( field_array_t * RESTRICT fa,
+advance_e( field_array_t * RESTRICT fa,
            float frac ) {
   if( !fa     ) ERROR(( "Bad args" ));
   if( frac!=1 ) ERROR(( "standard advance_e does not support frac!=1 yet" ));
@@ -718,7 +718,7 @@ advance_e_host( field_array_t * RESTRICT fa,
   local_adjust_tang_e( fa->f, fa->g );
 }
 
-void advance_e(field_array_t* RESTRICT fa, float frac) {
+void advance_e_kokkos(field_array_t* RESTRICT fa, float frac) {
     if( !fa     ) ERROR(( "Bad args" ));
     if( frac!=1 ) ERROR(( "standard advance_e does not support frac!=1 yet" ));
     pipeline_args_t args[1];

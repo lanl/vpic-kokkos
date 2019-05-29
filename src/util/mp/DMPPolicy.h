@@ -346,11 +346,56 @@ struct DMPPolicy {
 //=============================================================================
 // Necessary MPI modifications for Kokkos port
 //=============================================================================
+  inline void
+  mp_begin_recv_k( mp_t * mp,
+                 int port,
+                 int sz,
+                 int src,
+                 int tag,
+                 char* recv_buf ) {
+    if( !mp || port<0 || port>=mp->n_port || sz<1 || sz>mp->rbuf_sz[port] ||
+        src<0 || src>=world_size ) ERROR(( "Bad args" ));
+    mp->rreq_sz[port] = sz;
+    TRAP(MPI_Irecv(recv_buf, sz, MPI_BYTE, src, tag, world->comm, &mp->rreq[port]));
+  }
+  
+  inline void
+  mp_begin_send_k( mp_t * mp,
+                 int port,
+                 int sz,
+                 int dst,
+                 int tag,
+                 char* send_buf ) {
+    if( !mp || port<0 || port>=mp->n_port || dst<0 || dst>=world_size ||
+        sz<1 || mp->sbuf_sz[port]<sz ) ERROR(( "Bad args" ));
+    mp->sreq_sz[port] = sz;
+    TRAP(MPI_Issend(send_buf,sz, MPI_BYTE, dst, tag, world->comm, &mp->sreq[port]));
+  }
+  
+  inline void
+  mp_end_recv_k( mp_t * mp,
+               int port ) {
+    MPI_Status status;
+    int sz;
+    if( !mp || port<0 || port>=mp->n_port ) ERROR(( "Bad args" ));
+    TRAP( MPI_Wait( &mp->rreq[port], &status ) );
+    TRAP( MPI_Get_count( &status, MPI_BYTE, &sz ) );
+    if( mp->rreq_sz[port]!=sz ) ERROR(( "Sizes do not match" ));
+  }
+  
+  inline void
+  mp_end_send_k( mp_t * mp,
+               int port ) {
+    if( !mp || port<0 || port>=mp->n_port ) ERROR(( "Bad args" ));
+    TRAP( MPI_Wait( &mp->sreq[port], MPI_STATUS_IGNORE ) );
+  }
+  
     inline void
     mp_begin_recv_kokkos(mp_t* mp_k, int port, int size, int src, int tag, char* ALIGNED(128) recv_buf) {
         if( !mp_k || port < 0 || port >= mp_k->n_port || size < 1 || size > mp_k->rbuf_sz[port] || 
             src < 0 || src >= world_size ) ERROR(( "Bad args" ));
         mp_k->rreq_sz[port] = size;
+        mp_k->rbuf[port] = recv_buf;
         TRAP( MPI_Irecv(recv_buf, size, MPI_BYTE, src, tag, world->comm, &mp_k->rreq[port]) );
     }
 
@@ -359,6 +404,7 @@ struct DMPPolicy {
         if( !mp_k || port<0 || port>=mp_k->n_port || dst<0 || dst>=world_size ||
             size<1 || mp_k->sbuf_sz[port]<size ) ERROR(( "Bad args" ));
         mp_k->sreq_sz[port] = size;
+        mp_k->sbuf[port] = send_buf;
         TRAP(MPI_Issend(send_buf,size, MPI_BYTE, dst, tag, world->comm, &mp_k->sreq[port]));
     }
 
@@ -377,7 +423,7 @@ struct DMPPolicy {
         if( !mp_k || port<0 || port>=mp_k->n_port ) ERROR(( "Bad args" ));
         TRAP( MPI_Wait( &mp_k->sreq[port], MPI_STATUS_IGNORE ) );
     }
-  
+
 # undef RESIZE_FACTOR
 # undef TRAP
 

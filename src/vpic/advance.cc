@@ -729,9 +729,9 @@ int vpic_simulation::advance(void) {
   // Half advance the magnetic field from B_0 to B_{1/2}
   TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
 
-  UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_HOST();
-  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC(); // Time this data movement
+//  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Advance the electric field from E_0 to E_1
   
@@ -741,7 +741,9 @@ int vpic_simulation::advance(void) {
 // Touches fields
   TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
 
+  UNSAFE_TIC();
   KOKKOS_COPY_FIELD_MEM_TO_HOST();
+  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Let the user add their own contributions to the electric field. It is the
   // users responsibility to insure injected electric fields are consistent
@@ -760,9 +762,9 @@ int vpic_simulation::advance(void) {
 // Touches fields
   TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
 
-  UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_HOST();
-  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC(); // Time this data movement
+//  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Divergence clean e
 
@@ -771,14 +773,15 @@ int vpic_simulation::advance(void) {
 
 // HOST (Device in rho_p)
 // Touches fields and particles
-    TIC FAK->clear_rhof( field_array ); TOC( clear_rhof,1 );
+//    TIC FAK->clear_rhof( field_array ); TOC( clear_rhof,1 );
+    TIC FAK->clear_rhof_kokkos( field_array ); TOC( clear_rhof,1 );
     if( species_list ) {
 
 //        KOKKOS_PARTICLE_VARIABLES();
 //        KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
-        UNSAFE_TIC();
-        KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
-        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//        UNSAFE_TIC();
+//        KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
         TIC
         LIST_FOR_EACH( sp, species_list )
@@ -788,12 +791,16 @@ int vpic_simulation::advance(void) {
         }
         TOC( accumulate_rho_p, species_list->id );
 
+//        UNSAFE_TIC();
+//        KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+    }
+
+    TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+//    TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
         UNSAFE_TIC();
         KOKKOS_COPY_FIELD_MEM_TO_HOST();
         UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
-    }
-
-    TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
 
 // HOST
 // Touches fields
@@ -805,6 +812,10 @@ int vpic_simulation::advance(void) {
       }
       TIC FAK->clean_div_e( field_array ); TOC( clean_div_e, 1 );
     }
+  } else {
+    UNSAFE_TIC();
+    KOKKOS_COPY_FIELD_MEM_TO_HOST();
+    UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
   }
 
   // Divergence clean b

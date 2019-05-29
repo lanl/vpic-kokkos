@@ -164,5 +164,28 @@ mp_end_recv_kokkos(mp_t* mp_k, int port);
 void
 mp_end_send_kokkos(mp_t* mp_k, int port); 
 
+void
+mp_begin_recv_k( mp_t * mp,
+               int port,
+               int sz,
+               int src,
+               int tag,
+               char* recv_buf );
+
+void
+mp_begin_send_k( mp_t * mp,
+               int port,
+               int sz,
+               int dst,
+               int tag,
+               char* send_buf );
+
+void
+mp_end_recv_k( mp_t * mp,
+             int rbuf );
+
+void
+mp_end_send_k( mp_t * mp,
+             int sbuf );
 
 #endif /* mp_h */
