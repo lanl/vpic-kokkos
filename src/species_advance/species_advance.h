@@ -15,6 +15,7 @@
 #include <iostream>
 
 #include "../sf_interface/sf_interface.h"
+#include "Kokkos_DualView.hpp"
 
 typedef int32_t species_id; // Must be 32-bit wide for particle_injector_t
 
@@ -102,8 +103,8 @@ class species_t {
         k_particles_t k_p_d;                // kokkos particles view on device
         k_particles_t::HostMirror k_p_h;    // kokkos particles view on host
 
-        k_particles_t k_pc_d;               // kokkos particles copy for movers view on device
-        k_particles_t::HostMirror k_pc_h;   // kokkos particles copy for movers view on host
+        k_particle_copy_t k_pc_d;               // kokkos particles copy for movers view on device
+        k_particle_copy_t::HostMirror k_pc_h;   // kokkos particles copy for movers view on host
 
 
         k_particle_movers_t k_pm_d;         // kokkos particle movers on device
@@ -211,6 +212,10 @@ uncenter_p( /**/  species_t            * RESTRICT sp,
 
 double
 energy_p( const species_t            * RESTRICT sp,
+          const interpolator_array_t * RESTRICT ia );
+
+double
+energy_p_kokkos( const species_t            * RESTRICT sp,
           const interpolator_array_t * RESTRICT ia );
 
 // In rho_p.cxx
