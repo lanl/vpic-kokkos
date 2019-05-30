@@ -149,6 +149,9 @@ reduce_accumulator_array( accumulator_array_t * RESTRICT a );
 void
 unload_accumulator_array( /**/  field_array_t       * RESTRICT fa,
                           const accumulator_array_t * RESTRICT aa );
+void
+unload_accumulator_array_kokkos( /**/  field_array_t       * RESTRICT fa,
+                          const accumulator_array_t * RESTRICT aa );
 
 /*****************************************************************************/
 

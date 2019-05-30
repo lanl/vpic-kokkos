@@ -115,3 +115,49 @@ unload_accumulator_array( /**/  field_array_t       * RESTRICT fa,
   EXEC_PIPELINES( unload_accumulator, args, 0 );
   WAIT_PIPELINES();
 }
+
+void
+unload_accumulator_array_kokkos(field_array_t* RESTRICT fa,
+                                const accumulator_array_t* RESTRICT aa) {
+  if( !fa || !aa || fa->g!=aa->g ) ERROR(( "Bad args" ));
+
+    k_field_t& k_field = fa->k_f_d;
+    const k_accumulators_t& k_accum = aa->k_a_d;
+    int nx = fa->g->nx;
+    int ny = fa->g->ny;
+    int nz = fa->g->nz;
+    float cx = 0.25 * fa->g->rdy * fa->g->rdz / fa->g->dt;
+    float cy = 0.25 * fa->g->rdz * fa->g->rdx / fa->g->dt;
+    float cz = 0.25 * fa->g->rdx * fa->g->rdy / fa->g->dt;
+    
+    Kokkos::parallel_for("unload_accumulator_array", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
+    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
+        const size_t z = team_member.league_rank() + 1;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (const size_t j) {
+            const size_t y = j + 1;
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nx+1), [=] (const size_t i) {
+                const size_t x = i + 1;
+                int f0 = VOXEL(1, y, z, nx, ny, nz) + i;
+                int a0 = VOXEL(1, y, z, nx, ny, nz) + i;
+                int ax = VOXEL(0, y, z, nx, ny, nz) + i;
+                int ay = VOXEL(1, y-1, z, nx, ny, nz) + i;
+                int az = VOXEL(1, y, z-1, nx, ny, nz) + i;
+                int ayz = VOXEL(1, y-1, z-1, nx, ny, nz) + i;
+                int azx = VOXEL(0, y, z-1, nx, ny, nz) + i;
+                int axy = VOXEL(0, y-1, z, nx, ny, nz) + i;
+                k_field(f0, field_var::jfx) += cx*( k_accum(a0, accumulator_var::jx, 0) + 
+                                                    k_accum(ay, accumulator_var::jx, 1) + 
+                                                    k_accum(az, accumulator_var::jx, 2) + 
+                                                    k_accum(ayz, accumulator_var::jx, 3) );
+                k_field(f0, field_var::jfy) += cy*( k_accum(a0, accumulator_var::jy, 0) + 
+                                                    k_accum(az, accumulator_var::jy, 1) + 
+                                                    k_accum(ax, accumulator_var::jy, 2) + 
+                                                    k_accum(azx, accumulator_var::jy, 3) );
+                k_field(f0, field_var::jfz) += cz*( k_accum(a0, accumulator_var::jz, 0) + 
+                                                    k_accum(ax, accumulator_var::jz, 1) + 
+                                                    k_accum(ay, accumulator_var::jz, 2) + 
+                                                    k_accum(axy, accumulator_var::jz, 3) );
+            });
+        });
+    });
+}

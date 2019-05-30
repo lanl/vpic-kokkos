@@ -702,11 +702,33 @@ int vpic_simulation::advance(void) {
   // guard lists are empty and the accumulators on each processor are current.
   // Convert the accumulators into currents.
 
+  KOKKOS_FIELD_VARIABLES();
+
+  UNSAFE_TIC(); // Time this data movement
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 // HOST
 // Touches fields and accumulators
-  TIC FAK->clear_jf( field_array ); TOC( clear_jf, 1 );
+//  TIC FAK->clear_jf( field_array ); TOC( clear_jf, 1 );
+  TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
+
+//  UNSAFE_TIC(); // Time this data movement
+//  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+
+  UNSAFE_TIC();
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
+  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+
   if( species_list )
-    TIC unload_accumulator_array( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
+    TIC unload_accumulator_array_kokkos( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
+//    TIC unload_accumulator_array( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
+  UNSAFE_TIC();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+  UNSAFE_TIC();
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
+  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
   TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
 
   // At this point, the particle currents are known at jf_{1/2}.
@@ -717,8 +739,6 @@ int vpic_simulation::advance(void) {
   // the user wants electric field divergence cleaning to work.
 
   TIC user_current_injection(); TOC( user_current_injection, 1 );
-
-  KOKKOS_FIELD_VARIABLES();
 
   UNSAFE_TIC(); // Time this data movement
   KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
@@ -789,16 +809,16 @@ int vpic_simulation::advance(void) {
         }
         TOC( accumulate_rho_p, species_list->id );
 
-        UNSAFE_TIC();
-        KOKKOS_COPY_FIELD_MEM_TO_HOST();
-        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
-    }
-
-//    TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
-    TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
 //        UNSAFE_TIC();
 //        KOKKOS_COPY_FIELD_MEM_TO_HOST();
 //        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+    }
+
+    TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+//    TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+        UNSAFE_TIC();
+        KOKKOS_COPY_FIELD_MEM_TO_HOST();
+        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
 // HOST
 // Touches fields
