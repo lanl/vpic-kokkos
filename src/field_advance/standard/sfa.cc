@@ -19,8 +19,8 @@ static field_advance_kernels_t sfa_kernels = {
 
   clear_jf,   synchronize_jf,
   clear_rhof, synchronize_rho,
-  clear_jf_kokkos, clear_rhof_kokkos,
-  k_synchronize_rho,
+  clear_jf_kokkos, k_synchronize_jf,
+  clear_rhof_kokkos,k_synchronize_rho,
 
   // Initialize interface
 

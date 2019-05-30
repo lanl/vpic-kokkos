@@ -550,73 +550,61 @@ local_adjust_tang_e( field_t      * ALIGNED(128) f,
 
 template<typename T>
 void adjust_tang_e(k_field_t& k_field, const grid_t* g, int i, int j, int k, int nx, int ny, int nz) {
+/*
     int face;
-//    std::initializer_list<int> start1, end1, start2, end2;
     int sx1,sy1,sz1,ex1,ey1,ez1;
     int sx2,sy2,sz2,ex2,ey2,ez2;
     field_var::f_v eY, tcaY, eZ, tcaZ;
     if(std::is_same<T, XYZ>::value) {
         face = (i+j+k)<0 ? 1 : nx + 1;
-//        start1 = {1, 1, face}; // YZ
-//        end1   = {nz+2, ny+1, face+1};
-//        start2 = {1, 1, face}; // ZY
-//        end2   = {nz+1, ny+2, face+1}; 
-sx1 = face;
-sy1 = 1;
-sz1 = 1;
-ex1 = face+1;
-ey1 = ny+1;
-ez1 = nz+2;
-sx2 = face;
-sy2 = 1;
-sz2 = 1;
-ex2 = face+1;
-ey2 = ny+2;
-ez2 = nz+1;
+        sx1 = face;
+        sy1 = 1;
+        sz1 = 1;
+        ex1 = face+1;
+        ey1 = ny+1;
+        ez1 = nz+2;
+        sx2 = face;
+        sy2 = 1;
+        sz2 = 1;
+        ex2 = face+1;
+        ey2 = ny+2;
+        ez2 = nz+1;
         eY = field_var::ey;
         tcaY = field_var::tcay;
         eZ = field_var::ez;
         tcaZ = field_var::tcaz;
     } else if (std::is_same<T, YZX>::value) {
         face = (i+j+k)<0 ? 1 : ny + 1;
-//        start1 = {1, face, 1}; // ZX
-//        end1   = {nz+1, face+1, nx+2};
-//        start2 = {1, face, 1}; // XZ
-//        end2   = {nz+2, face+1, nx+1};
-sx1 = 1;
-sy1 = face;
-sz1 = 1;
-ex1 = nx+2;
-ey1 = face+1;
-ez1 = nz+1;
-sx2 = 1;
-sy2 = face;
-sz2 = 1;
-ex2 = nx+1;
-ey2 = face+1;
-ez2 = nz+2;
+        sx1 = 1;
+        sy1 = face;
+        sz1 = 1;
+        ex1 = nx+2;
+        ey1 = face+1;
+        ez1 = nz+1;
+        sx2 = 1;
+        sy2 = face;
+        sz2 = 1;
+        ex2 = nx+1;
+        ey2 = face+1;
+        ez2 = nz+2;
         eY = field_var::ez;
         tcaY = field_var::tcaz;
         eZ = field_var::ex;
         tcaZ = field_var::tcax;
     } else if (std::is_same<T, ZXY>::value) {
         face = (i+j+k)<0 ? 1 : nz + 1;
-//        start1 = {face, 1, 1}; // XY
-//        end1   = {face+1, ny+2, nx+1};
-//        start2 = {face, 1, 1}; // YX
-//        end2   = {face+1, ny+1, nx+2};
-sx1 = 1;
-sy1 = 1;
-sz1 = face;
-ex1 = nx+1;
-ey1 = ny+2;
-ez1 = face+1;
-sx2 = 1;
-sy2 = 1;
-sz2 = face;
-ex2 = nx+2;
-ey2 = ny+1;
-ez2 = face+1;
+        sx1 = 1;
+        sy1 = 1;
+        sz1 = face;
+        ex1 = nx+1;
+        ey1 = ny+2;
+        ez1 = face+1;
+        sx2 = 1;
+        sy2 = 1;
+        sz2 = face;
+        ex2 = nx+2;
+        ey2 = ny+1;
+        ez2 = face+1;
         eY = field_var::ex;
         tcaY = field_var::tcax;
         eZ = field_var::ey;
@@ -625,8 +613,6 @@ ez2 = face+1;
         ERROR(("Bad template argument"));
     } 
     int bc = g->bc[BOUNDARY(i,j,k)];
-//    Kokkos::MDRangePolicy<Kokkos::Rank<3> > policy1(start1, end1);
-//    Kokkos::MDRangePolicy<Kokkos::Rank<3> > policy2(start2, end2);
     Kokkos::MDRangePolicy<Kokkos::Rank<3> > policy1({sz1,sy1,sx1}, {ez1,ey1,ex1});
     Kokkos::MDRangePolicy<Kokkos::Rank<3> > policy2({sz2,sy2,sx2}, {ez2,ey2,ex2});
     if(bc < 0 || bc >= world_size) {
@@ -652,8 +638,9 @@ ez2 = face+1;
                 break;
         }
     }
+*/
 }
-/*
+
 template<> void adjust_tang_e<XYZ>(k_field_t& k_field, const grid_t* g, int i, int j, int k, int nx, int ny, int nz) {
     int bc = g->bc[BOUNDARY(i,j,k)];
     if(bc < 0 || bc >= world_size) {
@@ -780,7 +767,7 @@ template<> void adjust_tang_e<ZXY>(k_field_t& k_field, const grid_t* g, int i, i
         }
     }
 }
-*/
+
 /*
 # define ADJUST_TANG_E(i,j,k,X,Y,Z)                                     \
   do {                                                                  \
@@ -991,6 +978,76 @@ local_adjust_jf( field_t      * ALIGNED(128) f,
   ADJUST_JF( 0, 0, 1,z,x,y);
 }
 
+template<typename T> void adjust_jf(field_array_t* fa, const grid_t* g, int i, int j, int k) {
+    int face;
+    int sx, sy, sz, ex1, ex2, ey1, ey2, ez1, ez2; // start and end indices
+    int nx = g->nx, ny = g->ny, nz = g->nz;
+    field_var::f_v jfY, jfZ;
+    if(std::is_same<T, XYZ>::value) {
+        face = (i+j+k)<0 ? 1 : nx+1;
+        jfY = field_var::jfy;
+        jfZ = field_var::jfz;
+        sx = face, sy = 1, sz = 1;
+        ex1 = face+1, ey1 = ny+1, ez1 = nz+2;
+        ex2 = face+1, ey2 = ny+2, ez2 = nz+1;
+    } else if(std::is_same<T, YZX>::value) {
+        face = (i+j+k)<0 ? 1 : ny+1;
+        jfY = field_var::jfz;
+        jfZ = field_var::jfx;
+        sx = 1, sy = face, sz = 1;
+        ex1 = nx+2, ey1 = face+1, ez1 = nz+1;
+        ex2 = nx+1, ey2 = face+1, ez2 = nz+2;
+    } else if(std::is_same<T, ZXY>::value) {
+        face = (i+j+k)<0 ? 1 : nz+1;
+        jfY = field_var::jfx;
+        jfZ = field_var::jfy;
+        sx = 1, sy = 1, sz = face;
+        ex1 = nx+1, ey1 = ny+2, ez1 = face+1;
+        ex2 = nx+2, ey2 = ny+1, ez2 = face+1;
+    }
+    int bc = g->bc[BOUNDARY(i,j,k)];
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>> policy1({sz, sy, sx}, {ez1, ey1, ex1});
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>> policy2({sz, sy, sx}, {ez2, ey2, ex2});
+    k_field_t& k_field = fa->k_f_d;
+    
+    if(bc < 0 || bc >= world_size) {
+        switch(bc) {
+            case anti_symmetric_fields:
+                Kokkos::parallel_for("adjust_jf: edge loop 1", policy1, KOKKOS_LAMBDA(const int kk, const int jj, const int ii) {
+                    k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfY) = 0;
+                });
+                Kokkos::parallel_for("adjust_jf: edge loop 2", policy2, KOKKOS_LAMBDA(const int kk, const int jj, const int ii) {
+                    k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfZ) = 0;
+                });
+                break;
+            case symmetric_fields:
+                break;
+            case pmc_fields:
+                break;
+            case absorb_fields:
+                Kokkos::parallel_for("adjust_jf: edge loop 1", policy1, KOKKOS_LAMBDA(const int kk, const int jj, const int ii) {
+                    k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfY) *= 2;
+                });
+                Kokkos::parallel_for("adjust_jf: edge loop 2", policy2, KOKKOS_LAMBDA(const int kk, const int jj, const int ii) {
+                    k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfZ) *= 2;
+                });
+                break;
+            default:
+                ERROR(("Bad boundary condition encountered."));
+                break;
+        }
+    }
+}
+
+void k_local_adjust_jf(field_array_t* fa, const grid_t* g) {
+    adjust_jf<XYZ>(fa, g, -1,  0,  0);
+    adjust_jf<YZX>(fa, g,  0, -1,  0);
+    adjust_jf<ZXY>(fa, g,  0,  0, -1);
+    adjust_jf<XYZ>(fa, g, 1, 0, 0);
+    adjust_jf<YZX>(fa, g, 0, 1, 0);
+    adjust_jf<ZXY>(fa, g, 0, 0, 1);
+}
+
 // anti_symmetric => Opposite sign image charges (zero rhof/rhob)
 // symmetric      => Same sign image charges (double rhof)
 //                => (double rhof, rhob is already correct)
@@ -1031,8 +1088,8 @@ local_adjust_rhof( field_t      * ALIGNED(128) f,
 }
 
 template<typename T> void adjust_rhof(field_array_t* fa, const grid_t* g, int i, int j, int k) {
+
     int nX, face, bc;
-//    std::initializer_list<int> start, end;
     int startx, starty, startz;
     int endx, endy, endz;
     int nx = g->nx, ny = g->ny, nz = g->nz;
@@ -1040,8 +1097,6 @@ template<typename T> void adjust_rhof(field_array_t* fa, const grid_t* g, int i,
     if(std::is_same<T, XYZ>::value) {
         nX = nx;
         face = (i+j+k)<0 ? 1 : nX+1;
-//        start = {1, 1, face};
-//        end = {nz+2, ny+2, face+1};
         startx = face;
         starty = 1;
         startz = 1;
@@ -1053,8 +1108,6 @@ template<typename T> void adjust_rhof(field_array_t* fa, const grid_t* g, int i,
     } else if (std::is_same<T, YZX>::value) {
         nX = ny;
         face = (i+j+k)<0 ? 1 : nX+1;
-//        start = {1, face, 1};
-//        end = {nz+2, face+1, nx+2};
         startx = 1;
         starty = face;
         startz = 1;
@@ -1066,8 +1119,6 @@ template<typename T> void adjust_rhof(field_array_t* fa, const grid_t* g, int i,
     } else if (std::is_same<T, ZXY>::value) {
         nX = nz;
         face = (i+j+k)<0 ? 1 : nX+1;
-//        start = {face, 1, 1};
-//        end = {face+1, ny+2, nz+2};
         startx = 1;
         starty = 1;
         startz = face;
@@ -1077,7 +1128,6 @@ template<typename T> void adjust_rhof(field_array_t* fa, const grid_t* g, int i,
         as_name = "adjust_rhof<ZXY>: anti_symmetric_fields: node loop";
         af_name = "adjust_rhof<ZXY>: absorb_fields: node loop";
     }
-//    Kokkos::MDRangePolicy<Kokkos::Rank<3> > node_policy(start,end);
     Kokkos::MDRangePolicy<Kokkos::Rank<3> > node_policy({startz, starty, startx}, {endz, endy, endx});
     k_field_t& k_field = fa->k_f_d;
 
@@ -1102,6 +1152,7 @@ template<typename T> void adjust_rhof(field_array_t* fa, const grid_t* g, int i,
                 break;
         }
     }
+
 }
 
 void k_local_adjust_rhof(field_array_t* fa, const grid_t* g) {
@@ -1152,15 +1203,12 @@ local_adjust_rhob( field_t      * ALIGNED(128) f,
 
 template<typename T> void adjust_rhob(field_array_t* fa, const grid_t* g, int i, int j, int k) {
     int nX, face, bc;
-//    std::initializer_list<int> start, end;
     int nx = g->nx, ny = g->ny, nz = g->nz;
     int startx, starty, startz;
     int endx, endy, endz;
     if(std::is_same<T, XYZ>::value) {
         nX = nx;
         face = (i+j+k)<0 ? 1 : nX+1;
-//        start = {1, 1, face};
-//        end = {nz+2, ny+2, face+1};
         startx = face;
         starty = 1;
         startz = 1;
@@ -1176,8 +1224,6 @@ template<typename T> void adjust_rhob(field_array_t* fa, const grid_t* g, int i,
         endx = nx+2;
         endy = face+1;
         endz = nz+2;
-//        start = {1, face, 1};
-//        end = {nz+2, face+1, nx+2};
     } else if (std::is_same<T, ZXY>::value) {
         nX = nz;
         face = (i+j+k)<0 ? 1 : nX+1;
@@ -1187,10 +1233,7 @@ template<typename T> void adjust_rhob(field_array_t* fa, const grid_t* g, int i,
         endx = nx+2;
         endy = ny+2;
         endz = face+1;
-//        start = {face, 1, 1};
-//        end = {face+1, ny+2, nz+2};
     }
-//    Kokkos::MDRangePolicy<Kokkos::Rank<3> > node_policy(start,end);
     Kokkos::MDRangePolicy<Kokkos::Rank<3> > node_policy({startz, starty, startx}, {endz, endy, endx});
     k_field_t& k_field = fa->k_f_d;
 

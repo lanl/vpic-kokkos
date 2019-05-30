@@ -723,14 +723,20 @@ int vpic_simulation::advance(void) {
   if( species_list )
     TIC unload_accumulator_array_kokkos( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
 //    TIC unload_accumulator_array( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
-  UNSAFE_TIC();
-  KOKKOS_COPY_FIELD_MEM_TO_HOST();
-  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC();
+//  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
   UNSAFE_TIC();
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
   UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
-  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
 
+//  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
+  TIC FAK->k_synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
+
+  UNSAFE_TIC();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+  
   // At this point, the particle currents are known at jf_{1/2}.
   // Let the user add their own current contributions. It is the users
   // responsibility to insure injected currents are consistent across domains.
