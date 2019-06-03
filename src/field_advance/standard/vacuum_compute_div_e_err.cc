@@ -44,6 +44,85 @@ typedef struct pipeline_args {
                                              py*( f0->ey - fy->ey ) +   \
                                              pz*( f0->ez - fz->ez ) -   \
                                              cj*( f0->rhof + f0->rhob ) )
+void copy_to_host(field_array_t* fa, const k_field_t& k_field_d, const k_field_t::HostMirror& k_field_h, const k_field_edge_t& k_field_edge_d, const k_field_edge_t::HostMirror& k_field_edge_h) {
+    Kokkos::deep_copy(k_field_h, k_field_d);
+    Kokkos::deep_copy(k_field_edge_h, k_field_edge_d);
+    for(int i=0; i<fa->g->nv; i++) {
+        fa->f[i].ex = k_field_h(i, field_var::ex); 
+        fa->f[i].ey = k_field_h(i, field_var::ey); 
+        fa->f[i].ez = k_field_h(i, field_var::ez); 
+        fa->f[i].div_e_err = k_field_h(i, field_var::div_e_err); 
+        
+        fa->f[i].cbx = k_field_h(i, field_var::cbx); 
+        fa->f[i].cby = k_field_h(i, field_var::cby); 
+        fa->f[i].cbz = k_field_h(i, field_var::cbz); 
+        fa->f[i].div_b_err = k_field_h(i, field_var::div_b_err); 
+        
+        fa->f[i].tcax = k_field_h(i, field_var::tcax); 
+        fa->f[i].tcay = k_field_h(i, field_var::tcay); 
+        fa->f[i].tcaz = k_field_h(i, field_var::tcaz); 
+        fa->f[i].rhob = k_field_h(i, field_var::rhob); 
+        
+        fa->f[i].jfx = k_field_h(i, field_var::jfx); 
+        fa->f[i].jfy = k_field_h(i, field_var::jfy); 
+        fa->f[i].jfz = k_field_h(i, field_var::jfz); 
+        fa->f[i].rhof = k_field_h(i, field_var::rhof); 
+        
+        fa->f[i].ematx = k_field_edge_h(i, field_edge_var::ematx); 
+        fa->f[i].ematy = k_field_edge_h(i, field_edge_var::ematy); 
+        fa->f[i].ematz = k_field_edge_h(i, field_edge_var::ematz); 
+        fa->f[i].nmat = k_field_edge_h(i, field_edge_var::nmat); 
+        
+        fa->f[i].fmatx = k_field_edge_h(i, field_edge_var::fmatx); 
+        fa->f[i].fmaty = k_field_edge_h(i, field_edge_var::fmaty); 
+        fa->f[i].fmatz = k_field_edge_h(i, field_edge_var::fmatz); 
+        fa->f[i].cmat = k_field_edge_h(i, field_edge_var::cmat); 
+    }
+}
+void copy_to_device(field_array_t* fa, const k_field_t& k_field_d, const k_field_t::HostMirror& k_field_h, const k_field_edge_t& k_field_edge_d, const k_field_edge_t::HostMirror& k_field_edge_h) {
+    for(int i=0; i<fa->g->nv; i++) {
+        k_field_h(i, field_var::ex) = fa->f[i].ex; 
+        k_field_h(i, field_var::ey) = fa->f[i].ey; 
+        k_field_h(i, field_var::ez) = fa->f[i].ez; 
+        k_field_h(i, field_var::div_e_err) = fa->f[i].div_e_err; 
+        
+        k_field_h(i, field_var::cbx) = fa->f[i].cbx; 
+        k_field_h(i, field_var::cby) = fa->f[i].cby; 
+        k_field_h(i, field_var::cbz) = fa->f[i].cbz; 
+        k_field_h(i, field_var::div_b_err) = fa->f[i].div_b_err; 
+        
+        k_field_h(i, field_var::tcax) = fa->f[i].tcax; 
+        k_field_h(i, field_var::tcay) = fa->f[i].tcay; 
+        k_field_h(i, field_var::tcaz) = fa->f[i].tcaz; 
+        k_field_h(i, field_var::rhob) = fa->f[i].rhob; 
+        
+        k_field_h(i, field_var::jfx) = fa->f[i].jfx; 
+        k_field_h(i, field_var::jfy) = fa->f[i].jfy; 
+        k_field_h(i, field_var::jfz) = fa->f[i].jfz; 
+        k_field_h(i, field_var::rhof) = fa->f[i].rhof; 
+
+        k_field_edge_h(i, field_edge_var::ematx) = fa->f[i].ematx; 
+        k_field_edge_h(i, field_edge_var::ematy) = fa->f[i].ematy; 
+        k_field_edge_h(i, field_edge_var::ematz) = fa->f[i].ematz; 
+        k_field_edge_h(i, field_edge_var::nmat) = fa->f[i].nmat; 
+        
+        k_field_edge_h(i, field_edge_var::fmatx) = fa->f[i].fmatx; 
+        k_field_edge_h(i, field_edge_var::fmaty) = fa->f[i].fmaty; 
+        k_field_edge_h(i, field_edge_var::fmatz) = fa->f[i].fmatz; 
+        k_field_edge_h(i, field_edge_var::cmat) = fa->f[i].cmat; 
+    }
+    Kokkos::deep_copy(k_field_d, k_field_h);
+    Kokkos::deep_copy(k_field_edge_d, k_field_edge_h);
+}
+
+KOKKOS_INLINE_FUNCTION void update_derr_e(const k_field_t& k_field, const k_field_edge_t& k_field_edge, const float nc, int f0, int fx, int fy, int fz, float px, float py, float pz, float cj) {
+    k_field(f0, field_var::div_e_err) = nc*( px*( k_field(f0, field_var::ex) - k_field(fx, field_var::ex) ) +
+                                             py*( k_field(f0, field_var::ey) - k_field(fy, field_var::ey) ) +
+                                             pz*( k_field(f0, field_var::ez) - k_field(fz, field_var::ez) ) -
+                                             cj*( k_field(f0, field_var::rhof) + k_field(f0, field_var::rhob) ) );
+}
+void vacuum_compute_div_e_err_interior_kokkos(field_array_t* fa, const grid_t* g); 
+void vacuum_compute_div_e_err_exterior_kokkos(field_array_t* fa, const grid_t* g);
 
 void
 vacuum_compute_div_e_err_pipeline( pipeline_args_t * args,
@@ -70,7 +149,7 @@ vacuum_compute_div_e_err_pipeline( pipeline_args_t * args,
 #endif
 
 void
-vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
+h_vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
   if( !fa ) ERROR(( "Bad args" ));
 
   // Have pipelines compute the interior of local domain (the host
@@ -78,16 +157,33 @@ vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
 
   // Begin setting normal e ghosts
 
-  begin_remote_ghost_norm_e( fa->f, fa->g );
-  local_ghost_norm_e( fa->f, fa->g );
+k_field_t& k_field_d = fa->k_f_d;
+k_field_t::HostMirror& k_field_h = fa->k_f_h;
+k_field_edge_t& k_field_edge_d = fa->k_fe_d;
+k_field_edge_t::HostMirror& k_field_edge_h = fa->k_fe_h;
 
+copy_to_device(fa, k_field_d, k_field_h, k_field_edge_d, k_field_edge_h);
+//  begin_remote_ghost_norm_e( fa->f, fa->g );
+  k_begin_remote_ghost_norm_e( fa, fa->g );
+copy_to_host(fa, k_field_d, k_field_h, k_field_edge_d, k_field_edge_h);
+
+// WORKS
+//copy_to_device(fa, k_field_d, k_field_h, k_field_edge_d, k_field_edge_h);
+  local_ghost_norm_e( fa->f, fa->g );
+//  k_local_ghost_norm_e( fa, fa->g );
+//copy_to_host(fa, k_field_d, k_field_h, k_field_edge_d, k_field_edge_h);
+  
   // Have pipelines compute interior of local domain
 
   pipeline_args_t args[1];  
   args->f = fa->f;
   args->p = (sfa_params_t *)fa->params;
   args->g = fa->g;
+
+//copy_to_device(fa, k_field_d, k_field_h, k_field_edge_d, k_field_edge_h);
   EXEC_PIPELINES( vacuum_compute_div_e_err, args, 0 );
+//    vacuum_compute_div_e_err_interior_kokkos(fa, fa->g); 
+//copy_to_host(fa, k_field_d, k_field_h, k_field_edge_d, k_field_edge_h);
 
   // While pipelines are busy, have host compute the exterior
   // of the local domain
@@ -95,7 +191,11 @@ vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
   DECLARE_STENCIL();
 
   // Finish setting normal e ghosts
-  end_remote_ghost_norm_e( fa->f, fa->g );
+copy_to_device(fa, k_field_d, k_field_h, k_field_edge_d, k_field_edge_h);
+//  end_remote_ghost_norm_e( fa->f, fa->g );
+  k_end_remote_ghost_norm_e( fa, fa->g );
+copy_to_host(fa, k_field_d, k_field_h, k_field_edge_d, k_field_edge_h);
+
 
   // z faces, x edges, y edges and all corners
   for( y=1; y<=ny+1; y++ ) {
@@ -168,10 +268,163 @@ vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
       UPDATE_DERR_E();
     }
   }
-
+/*
+copy_to_device(fa, k_field_d, k_field_h, k_field_edge_d, k_field_edge_h);
+    vacuum_compute_div_e_err_exterior_kokkos(fa, fa->g);
+copy_to_host(fa, k_field_d, k_field_h, k_field_edge_d, k_field_edge_h);
+*/
   // Finish up setting interior
 
   WAIT_PIPELINES();
 
+//copy_to_device(fa, k_field_d, k_field_h, k_field_edge_d, k_field_edge_h);
   local_adjust_div_e( fa->f, fa->g );
+//  k_local_adjust_div_e( fa, fa->g );
+//copy_to_host(fa, k_field_d, k_field_h, k_field_edge_d, k_field_edge_h);
+}
+
+void vacuum_compute_div_e_err_interior_kokkos(field_array_t* fa, const grid_t* g) {
+    const int nx = g->nx, ny = g->ny, nz = g->nz;
+    sfa_params_t* sfa_p = reinterpret_cast<sfa_params_t*>(fa->params);
+
+    const float nc = sfa_p->mc->nonconductive;
+    const float px = ((nx>1) ? g->rdx : 0)*sfa_p->mc->epsx;
+    const float py = ((ny>1) ? g->rdy : 0)*sfa_p->mc->epsy;
+    const float pz = ((nz>1) ? g->rdz : 0)*sfa_p->mc->epsz;
+    const float cj = 1./g->eps0;
+
+    k_field_t& k_field = fa->k_f_d;
+    k_field_edge_t& k_field_edge = fa->k_fe_d;
+    k_material_coefficient_t& k_matcoeff = sfa_p->k_mc_d;
+
+    Kokkos::parallel_for("compute_div_e interior", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
+    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
+        const int z = team_member.league_rank() + 2;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny-1), [=] (const int yi) {
+            const int y = yi + 2;
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nx-1), [=] (const int xi) {
+                const int x = xi + 2;
+
+                const int f0 = VOXEL(x,   y,    z, nx, ny, nz);
+                const int fx = VOXEL(x-1, y,    z, nx, ny, nz);
+                const int fy = VOXEL(x,   y-1,  z, nx, ny, nz);
+                const int fz = VOXEL(x,   y,    z-1, nx, ny, nz);
+                update_derr_e(k_field, k_field_edge, nc, f0, fx, fy, fz, px, py, pz, cj);
+            });
+        });
+    });
+}
+
+void vacuum_compute_div_e_err_exterior_kokkos(field_array_t* fa, const grid_t* g) {
+    const int nx = g->nx, ny = g->ny, nz = g->nz;
+    sfa_params_t* sfa_p = reinterpret_cast<sfa_params_t*>(fa->params);
+
+    const float nc = sfa_p->mc->nonconductive;
+    const float px = ((nx>1) ? g->rdx : 0)*sfa_p->mc->epsx;
+    const float py = ((ny>1) ? g->rdy : 0)*sfa_p->mc->epsy;
+    const float pz = ((nz>1) ? g->rdz : 0)*sfa_p->mc->epsz;
+    const float cj = 1./g->eps0;
+
+    k_field_t& k_field = fa->k_f_d;
+    k_field_edge_t& k_field_edge = fa->k_fe_d;
+    k_material_coefficient_t& k_matcoeff = sfa_p->k_mc_d;
+
+    // z faces, x edges, y edges and all corners
+    Kokkos::parallel_for("z faces, x edges, y edges and all corners", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
+    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
+            const int y = team_member.league_rank() + 1;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
+            const int f0 = VOXEL(1, y,   1, nx, ny, nz) + xi;
+            const int fx = VOXEL(0, y,   1, nx, ny, nz) + xi;
+            const int fy = VOXEL(1, y-1, 1, nx, ny, nz) + xi;
+            const int fz = VOXEL(1, y,   0, nx, ny, nz) + xi;
+            update_derr_e(k_field, k_field_edge, nc, f0, fx, fy, fz, px, py, pz, cj);
+        });
+    });
+
+    Kokkos::parallel_for("z faces, x edges, y edges and all corners: end of z", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
+    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
+            const int y = team_member.league_rank() + 1;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
+            const int f0 = VOXEL(1, y,   nz+1, nx, ny, nz) + xi;
+            const int fx = VOXEL(0, y,   nz+1, nx, ny, nz) + xi;
+            const int fy = VOXEL(1, y-1, nz+1, nx, ny, nz) + xi;
+            const int fz = VOXEL(1, y,   nz, nx, ny, nz) + xi;
+            update_derr_e(k_field, k_field_edge, nc, f0, fx, fy, fz, px, py, pz, cj);
+        });
+    });
+
+    // y faces, z edges
+    Kokkos::parallel_for("y faces, z edges start", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
+    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
+            const int z = team_member.league_rank() + 2;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
+            const int f0 = VOXEL(1, 1, z, nx, ny, nz) + xi;
+            const int fx = VOXEL(0, 1, z, nx, ny, nz) + xi;
+            const int fy = VOXEL(1, 0, z, nx, ny, nz) + xi;
+            const int fz = VOXEL(1, 1, z-1, nx, ny, nz) + xi;
+            update_derr_e(k_field, k_field_edge, nc, f0, fx, fy, fz, px, py, pz, cj);
+        });
+    });
+
+    Kokkos::parallel_for("y faces, z edges end", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
+    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
+            const int z = team_member.league_rank() + 2;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
+            const int f0 = VOXEL(1, ny+1, z, nx, ny, nz) + xi;
+            const int fx = VOXEL(0, ny+1, z, nx, ny, nz) + xi;
+            const int fy = VOXEL(1, ny,   z, nx, ny, nz) + xi;
+            const int fz = VOXEL(1, ny+1, z-1, nx, ny, nz) + xi;
+            update_derr_e(k_field, k_field_edge, nc, f0, fx, fy, fz, px, py, pz, cj);
+        });
+    });
+
+    // x faces
+    Kokkos::parallel_for("x faces", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
+    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
+            const int z = team_member.league_rank() + 2;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny-1), [=] (const int yi) {
+            const int y = yi + 2;
+            int f0 = VOXEL(1, y,   z, nx, ny, nz);
+            int fx = VOXEL(0, y,   z, nx, ny, nz);
+            int fy = VOXEL(1, y-1, z, nx, ny, nz);
+            int fz = VOXEL(1, y,   z-1, nx, ny, nz);
+            update_derr_e(k_field, k_field_edge, nc, f0, fx, fy, fz, px, py, pz, cj);
+
+            f0 = VOXEL(nx+1, y,   z, nx, ny, nz);
+            fx = VOXEL(nx  , y,   z, nx, ny, nz);
+            fy = VOXEL(nx+1, y-1, z, nx, ny, nz);
+            fz = VOXEL(nx+1, y,   z-1, nx, ny, nz);
+            update_derr_e(k_field, k_field_edge, nc, f0, fx, fy, fz, px, py, pz, cj);
+        });
+    });
+}
+
+void
+vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
+  if( !fa ) ERROR(( "Bad args" ));
+
+  // Have pipelines compute the interior of local domain (the host
+  // handles stragglers in the interior)
+
+  // Begin setting normal e ghosts
+
+  k_begin_remote_ghost_norm_e( fa, fa->g );
+  k_local_ghost_norm_e( fa, fa->g );
+
+  // Have pipelines compute interior of local domain
+
+    vacuum_compute_div_e_err_interior_kokkos(fa, fa->g);
+
+  // While pipelines are busy, have host compute the exterior
+  // of the local domain
+
+  // Finish setting normal e ghosts
+  k_end_remote_ghost_norm_e( fa, fa->g );
+
+    vacuum_compute_div_e_err_exterior_kokkos(fa, fa->g);
+
+  // Finish up setting interior
+
+  k_local_adjust_div_e( fa, fa->g );
 }

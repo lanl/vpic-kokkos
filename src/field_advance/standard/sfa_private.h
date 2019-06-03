@@ -26,6 +26,13 @@ typedef struct sfa_params {
   material_coefficient_t * mc;
   int n_mc;
   float damp;
+
+    k_material_coefficient_t k_mc_d;
+    k_material_coefficient_t::HostMirror k_mc_h;
+
+    sfa_params(int n_materials) : k_mc_d("k_material_coefficents", n_materials) {
+        k_mc_h = Kokkos::create_mirror_view(k_mc_d);
+    }
 } sfa_params_t;
 
 // In standard_field_advance.c
@@ -260,6 +267,8 @@ vacuum_compute_rhob( field_array_t * RESTRICT fa );
 
 void
 compute_div_e_err( field_array_t * RESTRICT fa );
+void
+k_compute_div_e_err( field_array_t * RESTRICT fa );
 
 void
 vacuum_compute_div_e_err( field_array_t * RESTRICT fa );
@@ -353,6 +362,9 @@ k_local_ghost_tang_b(field_array_t * RESTRICT f,
 void
 local_ghost_norm_e( field_t      * ALIGNED(128) f,
                     const grid_t *              g );
+void
+k_local_ghost_norm_e( field_array_t      * ALIGNED(128) f,
+                    const grid_t *              g );
 
 void
 local_ghost_div_b( field_t      * ALIGNED(128) f,
@@ -368,6 +380,9 @@ k_local_adjust_tang_e(field_array_t* RESTRICT f,
 
 void
 local_adjust_div_e( field_t      * ALIGNED(128) f,
+                    const grid_t *              g );
+void
+k_local_adjust_div_e( field_array_t      * ALIGNED(128) f,
                     const grid_t *              g );
 
 void
@@ -435,7 +450,15 @@ begin_remote_ghost_norm_e( field_t      * ALIGNED(128) f,
                            const grid_t *              g );
 
 void
+k_begin_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
+                           const grid_t *              g );
+
+void
 end_remote_ghost_norm_e( field_t      * ALIGNED(128) f,
+                         const grid_t *              g );
+
+void
+k_end_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
                          const grid_t *              g );
 
 void

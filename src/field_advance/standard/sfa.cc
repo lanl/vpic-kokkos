@@ -36,6 +36,7 @@ static field_advance_kernels_t sfa_kernels = {
   compute_div_e_err,
   compute_rms_div_e_err,
   clean_div_e,
+  k_compute_div_e_err,
 
   // Magnetic field divergence cleaning interface
 
@@ -98,7 +99,8 @@ create_sfa_params( grid_t           * g,
 
   // Allocate the sfa parameters
 
-  MALLOC( p, 1 );
+    p = new sfa_params_t(n_mc);
+//  MALLOC( p, 1 );
   MALLOC_ALIGNED( p->mc, n_mc+2, 128 );
   p->n_mc = n_mc;
   p->damp = damp;
@@ -145,6 +147,22 @@ create_sfa_params( grid_t           * g,
     mc->epsz = m->epsz;
   }
 
+    Kokkos::parallel_for("Copy materials to device", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, n_mc), KOKKOS_LAMBDA (const int i) {
+        p->k_mc_h(i, material_coeff_var::decayx) = p->mc[i].decayx;
+        p->k_mc_h(i, material_coeff_var::drivex) = p->mc[i].drivex;
+        p->k_mc_h(i, material_coeff_var::decayy) = p->mc[i].decayy;
+        p->k_mc_h(i, material_coeff_var::drivey) = p->mc[i].drivey;
+        p->k_mc_h(i, material_coeff_var::decayz) = p->mc[i].decayz;
+        p->k_mc_h(i, material_coeff_var::drivez) = p->mc[i].drivez;
+        p->k_mc_h(i, material_coeff_var::rmux) = p->mc[i].rmux;
+        p->k_mc_h(i, material_coeff_var::rmuy) = p->mc[i].rmuy;
+        p->k_mc_h(i, material_coeff_var::rmuz) = p->mc[i].rmuz;
+        p->k_mc_h(i, material_coeff_var::nonconductive) = p->mc[i].nonconductive;
+        p->k_mc_h(i, material_coeff_var::epsx) = p->mc[i].epsx;
+        p->k_mc_h(i, material_coeff_var::epsy) = p->mc[i].epsy;
+        p->k_mc_h(i, material_coeff_var::epsz) = p->mc[i].epsz;
+    });
+    Kokkos::deep_copy(p->k_mc_d, p->k_mc_h);
   return p;
 }
 

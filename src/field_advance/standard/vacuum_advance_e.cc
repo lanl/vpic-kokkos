@@ -424,9 +424,9 @@ void vacuum_advance_e_interior_kokkos(k_field_t& k_field,
                 const size_t x = j + 2;
 
                 const size_t f0_idx = VOXEL(x,   y,   z,   nx, ny, nz);
-                const size_t fx_idx = VOXEL(x+1, y,   z,   nx, ny, nz);
-                const size_t fy_idx = VOXEL(x,   y+1, z,   nx, ny, nz);
-                const size_t fz_idx = VOXEL(x,   y,   z+1, nx, ny, nz);
+                const size_t fx_idx = VOXEL(x-1, y,   z,   nx, ny, nz);
+                const size_t fy_idx = VOXEL(x,   y-1, z,   nx, ny, nz);
+                const size_t fz_idx = VOXEL(x,   y,   z-1, nx, ny, nz);
 
                 update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
                 update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);

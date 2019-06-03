@@ -159,9 +159,9 @@ void advance_e_interior_kokkos(k_field_t& k_field, k_field_edge_t& k_field_edge,
                 const size_t x = j + 2;
 
                 const size_t f0_idx = VOXEL(x,   y,   z,   nx, ny, nz);
-                const size_t fx_idx = VOXEL(x+1, y,   z,   nx, ny, nz);
-                const size_t fy_idx = VOXEL(x,   y+1, z,   nx, ny, nz);
-                const size_t fz_idx = VOXEL(x,   y,   z+1, nx, ny, nz);
+                const size_t fx_idx = VOXEL(x-1, y,   z,   nx, ny, nz);
+                const size_t fy_idx = VOXEL(x,   y-1, z,   nx, ny, nz);
+                const size_t fz_idx = VOXEL(x,   y,   z-1, nx, ny, nz);
 
                 update_ex(k_field, k_field_edge, k_material, damp, cj, f0_idx, fx_idx, fy_idx, fz_idx, px, py, pz);
                 update_ey(k_field, k_field_edge, k_material, damp, cj, f0_idx, fx_idx, fy_idx, fz_idx, px, py, pz);
