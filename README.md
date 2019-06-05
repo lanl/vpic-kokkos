@@ -64,6 +64,16 @@ something like:
 
 `CXX=$HOME/tools/kokkos_gpu/bin/nvcc_wrapper cmake -DENABLE_KOKKOS_CUDA=ON ..`
 
+## Known Issues
+
+1. CMake has a bug where MPI detection was changed, and is faulty. So far we've
+seen:
+  - Does *NOT* work: 3.12.1
+  - Does work: 3.12.4, 3.11.1, 3.7.1
+2. During a GPU compile, nvcc warns about multiply defined c-standard flags.
+   This warning can be safely ignored
+
+
 # VANILLA VPIC README
 
 ## Vector Particle-In-Cell (VPIC) Project
