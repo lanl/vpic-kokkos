@@ -10,7 +10,9 @@ kokkos, documented below.
 1) Do a *recursive* clone of this repo, this will pull down a copy of Kokkos for you
 2) Load modules for a) Cuda, and b) MPI
 3) Build the project by passing the CMake option `-DBUILD_INTERNAL_KOKKOS=ON`. This will request VPIC to build and handle Kokkos for you.
-4) If you want GPU functionally, also pass `-DENABLE_KOKKOS_CUDA=ON`.
+4) If you want GPU functionally, also pass `-DENABLE_KOKKOS_CUDA=ON`. One
+should manually revied the `set(KOKKOS_ARCH "...")` line in `CMakeLists.txt` to
+ensure it meets their needs (the default is for Volta)
 
 This should give you a simple working of the code, but be aware it does come
 with caveats. Most notably, one is expected to main a version of Kokkos per
@@ -27,6 +29,15 @@ citizen (set to change in early 2020)
 One can cherry pick the Kokkos specific details from
 [here](https://github.com/ECP-copa/Cabana/wiki/Build-Instructions) to get
 detailed build instructions for Kokkos (ignore the things about Cabana)
+
+The advanced user should review `CMakeLists.txt` for the Kokkos specific
+options that are available. These include:
+
+1. `ENABLE_KOKKOS_OPENMP`
+2. `ENABLE_KOKKOS_CUDA`
+3. `BUILD_INTERNAL_KOKKOS`
+4. `VPIC_KOKKOS_DEBUG`
+5. `KOKKOS_ARCH`
 
 # Vector Particle-In-Cell (VPIC) Project
 
