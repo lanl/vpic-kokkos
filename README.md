@@ -20,6 +20,14 @@ the above approach can be quite brittle when changing compile flags
 between builds because Kokkos doesn't treat CMake as a first class
 citizen (set to change in early 2020)
 
+### Manual Kokkos Install (more powerful, more effort)
+
+### Further Reading
+
+One can cherry pick the Kokkos specific details from
+[here](https://github.com/ECP-copa/Cabana/wiki/Build-Instructions) to get
+detailed build instructions for Kokkos (ignore the things about Cabana)
+
 # Vector Particle-In-Cell (VPIC) Project
 
 VPIC is a general purpose particle-in-cell simulation code for modeling
