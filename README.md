@@ -1,3 +1,19 @@
+# GPU Specific Instructions
+
+## Obtaining and Using Kokkos
+
+This project relies on Kokkos. There are a few options for a user to obtain
+kokkos, documented below.
+
+### Quickstart
+
+1) Do a *recursive* clone of this repo, this will pull down a copy of Kokkos for you
+2) Load modules for a) Cuda, and b) MPI
+3) Build the project by passing the CMake option `-DBUILD_INTERNAL_KOKKOS=ON`. This will request VPIC to build and handle Kokkos for you.
+4) If you want GPU functionally, also pass `-DENABLE_KOKKOS_CUDA=ON`.
+
+This should give you a simple working of the code, but be aware it does come with caveats.
+
 # Vector Particle-In-Cell (VPIC) Project
 
 VPIC is a general purpose particle-in-cell simulation code for modeling
