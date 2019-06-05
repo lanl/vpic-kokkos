@@ -12,7 +12,13 @@ kokkos, documented below.
 3) Build the project by passing the CMake option `-DBUILD_INTERNAL_KOKKOS=ON`. This will request VPIC to build and handle Kokkos for you.
 4) If you want GPU functionally, also pass `-DENABLE_KOKKOS_CUDA=ON`.
 
-This should give you a simple working of the code, but be aware it does come with caveats.
+This should give you a simple working of the code, but be aware it does come
+with caveats. Most notably, one is expected to main a version of Kokkos per
+target device (one per GPU device, one per CPU platform, etc), where as the
+above builds for the specific platform that you're currently on. Additionally,
+the above approach can be quite brittle when changing compile flags
+between builds because Kokkos doesn't treat CMake as a first class
+citizen (set to change in early 2020)
 
 # Vector Particle-In-Cell (VPIC) Project
 
