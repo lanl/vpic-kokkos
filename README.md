@@ -39,7 +39,9 @@ options that are available. These include:
 4. `VPIC_KOKKOS_DEBUG`
 5. `KOKKOS_ARCH`
 
-# Vector Particle-In-Cell (VPIC) Project
+# VANILLA VPIC README
+
+## Vector Particle-In-Cell (VPIC) Project
 
 VPIC is a general purpose particle-in-cell simulation code for modeling
 kinetic plasmas in one, two, or three spatial dimensions. It employs a
@@ -70,7 +72,7 @@ for VPIC employ low-order particles on rectilinear meshes, a framework
 exists to treat higher-order particles and curvilinear meshes, as well
 as more advanced field solvers.
 
-# Attribution
+## Attribution
 
 Researchers who use the VPIC code for scientific research are asked to cite
 the papers by Kevin Bowers listed below.
@@ -91,7 +93,7 @@ B. Bergen and T.J.T Kwan, Advances in petascale kinetic simulations
 with VPIC and Roadrunner, Journal of Physics: Conference Series 180,
 012055, 2009
 
-# Getting the Code
+## Getting the Code
 
 VPIC uses nested submodules.  This requires the addition of the *--recursive*
 flag when cloning the repository:
@@ -100,12 +102,12 @@ flag when cloning the repository:
 
 This command will check out the VPIC source code.
 
-# Requirements
+## Requirements
 
 The primary requirement to build VPIC is a C++11 capable compiler and
 an up-to-date version of MPI.
 
-# Build Instructions
+## Build Instructions
 
     % cd vpic 
 
@@ -129,7 +131,7 @@ GCC users should ensure the `-fno-strict-aliasing` compiler flag is set (as show
 
 After configuration, simply type 'make'.
 
-# Building an example input deck
+## Building an example input deck
 
 After you have successfully built VPIC, you should have an executable in
 the *bin* directory called *vpic*.  To build an executable from one of
@@ -146,7 +148,7 @@ source directory)*:
 
 Beginners are advised to read the harris deck thoroughly, as it provides many examples of common uses cases.
 
-# Command Line Arguments
+## Command Line Arguments
 
 Note: Historic VPIC users should note that the format of command line arguments was changed in the first open source release. The equals symbol is no longer accepted, and two dashes are mandatory. 
 
@@ -154,7 +156,7 @@ In general, command line arguments take the form `--command value`, in which two
 
 The following specific syntax is available to the users:
 
-## Threading
+### Threading
 
 Threading (per MPI rank) can be enabled using the following syntax: 
 
@@ -162,33 +164,33 @@ Threading (per MPI rank) can be enabled using the following syntax:
 
 Where n specifies the number of threads
 
-### Example:
+#### Example:
 
 `mpirun -n 2 ./binary.Linux --tpp 2`
 
 To run with VPIC with two threads per MPI rank.
 
-## Checkpoint Restart
+### Checkpoint Restart
 
 VPIC can restart from a checkpoint dump file, using the following syntax:
 
 `./binary.Linux --restore <path to file>`
 
-### Example:
+#### Example:
 
 `./binary.Linux --restore ./restart/restart0`
 
 To restart VPIC using the restart file `./restart/restart0`
 
-# Feedback
+## Feedback
 
 Feedback, comments, or issues can be raised through [GitHub issues](https://github.com/lanl/vpic/issues)
 
-# Release
+## Release
 
 This software has been approved for open source release and has been assigned **LA-CC-15-109**.
 
-# Copyright
+## Copyright
 
 Copyright (c) 2016, Los Alamos National Security, LLC
 All rights reserved.
