@@ -7,9 +7,11 @@ kokkos, documented below.
 
 ### Quickstart
 
-1) Do a *recursive* clone of this repo, this will pull down a copy of Kokkos for you
+1) Do a *recursive* clone of this repo, this will pull down a copy of Kokkos
+for you
 2) Load modules for a) Cuda, and b) MPI
-3) Build the project by passing the CMake option `-DBUILD_INTERNAL_KOKKOS=ON`. This will request VPIC to build and handle Kokkos for you.
+3) Build the project by passing the CMake option `-DBUILD_INTERNAL_KOKKOS=ON`.
+This will request VPIC to build and handle Kokkos for you.
 4) If you want GPU functionally, also pass `-DENABLE_KOKKOS_CUDA=ON`. One
 should manually revied the `set(KOKKOS_ARCH "...")` line in `CMakeLists.txt` to
 ensure it meets their needs (the default is for Volta)
@@ -23,6 +25,21 @@ between builds because Kokkos doesn't treat CMake as a first class
 citizen (set to change in early 2020)
 
 ### Manual Kokkos Install (more powerful, more effort)
+
+It is typical to maintain many different installs of Kokkos (CPU, older
+GPU, new GPU, Debug, etc), so it's worth while learning how to install Kokkos
+manually. Breifly:
+
+1) Clone Kokkos (or use ./kokkos in the recursive clone) from
+https://github.com/kokkos/kokkos
+2) Make a build folder, and execute `../generate_makefile.bash`, passing the
+appropriate options for platform and device architecture. These look something
+like:
+  - CPU: `../generate_makefile.bash --with-serial --with-openmp
+  --prefix=$KOKKOS_INSTALL_DIR`
+  - GPU: `../generate_makefile.bash --with-serial --with-openmp --with-cuda
+  --arch=Kepler30 --with-cuda-options=enable_lambda
+  --compiler=$KOKKOS_SRC_DIR/bin/nvcc_wrapper --prefix=$KOKKOS_INSTALL_DIR`
 
 ### Further Reading
 
@@ -38,6 +55,14 @@ options that are available. These include:
 3. `BUILD_INTERNAL_KOKKOS`
 4. `VPIC_KOKKOS_DEBUG`
 5. `KOKKOS_ARCH`
+
+## Building VPIC + Kokkos
+
+Then when we build VPIC we need to make sure we using the GPU, you need to
+specify the Kokkos `nvcc_wrapper` to be the compiler. This typically looks
+something like:
+
+`CXX=$HOME/tools/kokkos_gpu/bin/nvcc_wrapper cmake -DENABLE_KOKKOS_CUDA=ON ..`
 
 # VANILLA VPIC README
 
