@@ -404,12 +404,19 @@ void
 vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
   if( !fa ) ERROR(( "Bad args" ));
 
+    // Kokkos communication buffers
+    const grid_t* g = fa->g;
+  const int nx = g->nx, ny = g->ny, nz = g->nz;                              
+    field_buffers_t f_buffers = field_buffers_t(nx,ny,nz);
+
   // Have pipelines compute the interior of local domain (the host
   // handles stragglers in the interior)
 
   // Begin setting normal e ghosts
 
-  k_begin_remote_ghost_norm_e( fa, fa->g );
+//  k_begin_remote_ghost_norm_e( fa, fa->g );
+  kokkos_begin_remote_ghost_norm_e( fa, fa->g, f_buffers );
+
   k_local_ghost_norm_e( fa, fa->g );
 
   // Have pipelines compute interior of local domain
@@ -420,7 +427,8 @@ vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
   // of the local domain
 
   // Finish setting normal e ghosts
-  k_end_remote_ghost_norm_e( fa, fa->g );
+//  k_end_remote_ghost_norm_e( fa, fa->g );
+  kokkos_end_remote_ghost_norm_e( fa, fa->g, f_buffers );
 
     vacuum_compute_div_e_err_exterior_kokkos(fa, fa->g);
 

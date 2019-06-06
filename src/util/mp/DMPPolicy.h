@@ -356,7 +356,8 @@ struct DMPPolicy {
     if( !mp || port<0 || port>=mp->n_port || sz<1 || sz>mp->rbuf_sz[port] ||
         src<0 || src>=world_size ) ERROR(( "Bad args" ));
     mp->rreq_sz[port] = sz;
-    TRAP(MPI_Irecv(recv_buf, sz, MPI_BYTE, src, tag, world->comm, &mp->rreq[port]));
+//    TRAP(MPI_Irecv(recv_buf, sz, MPI_BYTE, src, tag, world->comm, &mp->rreq[port]));
+    TRAP(MPI_Irecv(mp->rbuf[port], sz, MPI_BYTE, src, tag, world->comm, &mp->rreq[port]));
   }
   
   inline void
@@ -369,7 +370,7 @@ struct DMPPolicy {
     if( !mp || port<0 || port>=mp->n_port || dst<0 || dst>=world_size ||
         sz<1 || mp->sbuf_sz[port]<sz ) ERROR(( "Bad args" ));
     mp->sreq_sz[port] = sz;
-    TRAP(MPI_Issend(send_buf,sz, MPI_BYTE, dst, tag, world->comm, &mp->sreq[port]));
+    TRAP(MPI_Issend(mp->sbuf[port],sz, MPI_BYTE, dst, tag, world->comm, &mp->sreq[port]));
   }
   
   inline void
@@ -422,6 +423,34 @@ struct DMPPolicy {
     mp_end_send_kokkos(mp_t* mp_k, int port) {
         if( !mp_k || port<0 || port>=mp_k->n_port ) ERROR(( "Bad args" ));
         TRAP( MPI_Wait( &mp_k->sreq[port], MPI_STATUS_IGNORE ) );
+    }
+
+    inline void
+    mp_set_send_buffer(mp_t* mp, int port, int size, char* buf) {
+        if(!mp || !buf || port < 0 || port >= mp->n_port) ERROR(("Bad args"));
+        mp->sbuf[port] = buf;
+        mp->sbuf_sz[port] = size;
+    }
+
+    inline void
+    mp_set_recv_buffer(mp_t* mp, int port, int size, char* buf) {
+        if(!mp || !buf || port < 0 || port >= mp->n_port) ERROR(("Bad args"));
+        mp->rbuf[port] = buf;
+        mp->rbuf_sz[port] = size;
+    }
+
+    inline void
+    mp_unset_send_buffer(mp_t* mp, int port) {
+        if(!mp || port < 0 || port >= mp->n_port) ERROR(("Bad args"));
+        mp->sbuf[port] = NULL;
+        mp->sbuf_sz[port] = 0;
+    }
+
+    inline void
+    mp_unset_recv_buffer(mp_t* mp, int port) {
+        if(!mp || port < 0 || port >= mp->n_port) ERROR(("Bad args"));
+        mp->rbuf[port] = NULL;
+        mp->rbuf_sz[port] = 0;
     }
 
 # undef RESIZE_FACTOR

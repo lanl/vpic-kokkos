@@ -737,8 +737,8 @@ vacuum_advance_e( field_array_t * RESTRICT fa,
    * Begin tangential B ghost setup
    ***************************************************************************/
   
-    k_begin_remote_ghost_tang_b( fa, fa->g );
-//    kokkos_begin_remote_ghost_tang_b(fa, fa->g, f_buffers);
+//    k_begin_remote_ghost_tang_b( fa, fa->g );
+    kokkos_begin_remote_ghost_tang_b(fa, fa->g, f_buffers);
 
     k_local_ghost_tang_b( fa, fa->g );
 
@@ -748,8 +748,8 @@ vacuum_advance_e( field_array_t * RESTRICT fa,
    * Finish tangential B ghost setup
    ***************************************************************************/
 
-    k_end_remote_ghost_tang_b( fa, fa->g );
-//    kokkos_end_remote_ghost_tang_b(fa, fa->g, f_buffers);
+//    k_end_remote_ghost_tang_b( fa, fa->g );
+    kokkos_end_remote_ghost_tang_b(fa, fa->g, f_buffers);
 
   /***************************************************************************
    * Update exterior fields

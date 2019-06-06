@@ -262,6 +262,19 @@ typedef struct field_buffers {
     Kokkos::View<float*>   yzx_rbuf_neg;
     Kokkos::View<float*>   zxy_rbuf_neg;
 
+    Kokkos::View<float*>::HostMirror   xyz_sbuf_pos_h;
+    Kokkos::View<float*>::HostMirror   yzx_sbuf_pos_h;
+    Kokkos::View<float*>::HostMirror   zxy_sbuf_pos_h;
+    Kokkos::View<float*>::HostMirror   xyz_rbuf_pos_h;
+    Kokkos::View<float*>::HostMirror   yzx_rbuf_pos_h;
+    Kokkos::View<float*>::HostMirror   zxy_rbuf_pos_h;
+    Kokkos::View<float*>::HostMirror   xyz_sbuf_neg_h;
+    Kokkos::View<float*>::HostMirror   yzx_sbuf_neg_h;
+    Kokkos::View<float*>::HostMirror   zxy_sbuf_neg_h;
+    Kokkos::View<float*>::HostMirror   xyz_rbuf_neg_h;
+    Kokkos::View<float*>::HostMirror   yzx_rbuf_neg_h;
+    Kokkos::View<float*>::HostMirror   zxy_rbuf_neg_h;
+
     field_buffers(int nx, int ny, int nz) {
         xyz_sbuf_pos = Kokkos::View<float*>("Send buffer for XYZ positive face", 1 + ny*(nz+1) + (ny+1)*nz);
         xyz_rbuf_pos = Kokkos::View<float*>("Receive buffer for XYZ positive face", 1 + ny*(nz+1) + (ny+1)*nz);
@@ -276,6 +289,20 @@ typedef struct field_buffers {
         yzx_rbuf_neg = Kokkos::View<float*>("Receive buffer for YZX negative face", 1 + nx*(nz+1) + (nx+1)*nz);
         zxy_sbuf_neg = Kokkos::View<float*>("Send buffer for ZXY negative face", 1 + nx*(ny+1) + (nx+1)*ny);
         zxy_rbuf_neg = Kokkos::View<float*>("Receive buffer for ZXY negative face", 1 + nx*(ny+1) + (nx+1)*ny);
+
+        xyz_sbuf_pos_h = Kokkos::create_mirror_view(xyz_sbuf_pos);
+        yzx_sbuf_pos_h = Kokkos::create_mirror_view(yzx_sbuf_pos);
+        zxy_sbuf_pos_h = Kokkos::create_mirror_view(zxy_sbuf_pos);
+        xyz_rbuf_pos_h = Kokkos::create_mirror_view(xyz_rbuf_pos);
+        yzx_rbuf_pos_h = Kokkos::create_mirror_view(yzx_rbuf_pos);
+        zxy_rbuf_pos_h = Kokkos::create_mirror_view(zxy_rbuf_pos);
+
+        xyz_sbuf_neg_h = Kokkos::create_mirror_view(xyz_sbuf_neg);
+        yzx_sbuf_neg_h = Kokkos::create_mirror_view(yzx_sbuf_neg);
+        zxy_sbuf_neg_h = Kokkos::create_mirror_view(zxy_sbuf_neg);
+        xyz_rbuf_neg_h = Kokkos::create_mirror_view(xyz_rbuf_neg);
+        yzx_rbuf_neg_h = Kokkos::create_mirror_view(yzx_rbuf_neg);
+        zxy_rbuf_neg_h = Kokkos::create_mirror_view(zxy_rbuf_neg);
     }
 } field_buffers_t;
 

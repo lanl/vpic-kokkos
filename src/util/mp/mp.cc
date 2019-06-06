@@ -117,3 +117,19 @@ void mp_end_recv_k( mp_t * mp, int rbuf ) {
 void mp_end_send_k( mp_t * mp, int sbuf ) {
   MPWrapper::instance().mp_end_send_k( mp, sbuf );
 }
+
+void mp_set_send_buffer(mp_t* mp, int port, int size, char* sbuf) {
+  MPWrapper::instance().mp_set_send_buffer(mp, port, size, sbuf);
+}
+
+void mp_set_recv_buffer(mp_t* mp, int port, int size, char* rbuf) {
+  MPWrapper::instance().mp_set_recv_buffer(mp, port, size, rbuf);
+}
+
+void mp_unset_send_buffer(mp_t* mp, int port) {
+  MPWrapper::instance().mp_unset_send_buffer(mp, port);
+}
+
+void mp_unset_recv_buffer(mp_t* mp, int port) {
+  MPWrapper::instance().mp_unset_recv_buffer(mp, port);
+}

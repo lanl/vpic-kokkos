@@ -135,6 +135,7 @@ typedef struct grid {
 
   // Nearest neighbor communications ports
   mp_t * mp;
+    mp_t* mp_k;
 //  mp_kokkos_t* mp_k;
 //    int max_ports;
 //    k_mpi_t k_mpi_d;
@@ -360,7 +361,7 @@ void begin_send_port_k(int i, int j, int k, int size, const grid_t* g, char* sen
 // from begin_recv.   (FIXME: WHAT HAPPENS IF EXPECTED RECV SIZE
 // GIVEN IN BEGIN_RECV DOES NOT MATCH END_RECV??)
 void end_recv_port_kokkos(const grid_t* g, int port);
-void end_recv_port_k(int i, int j, int k, const grid_t* g);
+void* end_recv_port_k(int i, int j, int k, const grid_t* g);
 
 // Complete the pending send on the given port.  Only valid to call if
 // there is a pending send on the port.  Note that this guarantees

@@ -188,4 +188,12 @@ void
 mp_end_send_k( mp_t * mp,
              int sbuf );
 
+void mp_set_send_buffer(mp_t* mp, int port, int size, char* buffer);
+
+void mp_set_recv_buffer(mp_t* mp, int port, int size, char* buffer);
+
+void mp_unset_send_buffer(mp_t* mp, int port);
+
+void mp_unset_recv_buffer(mp_t* mp, int port);
+
 #endif /* mp_h */
