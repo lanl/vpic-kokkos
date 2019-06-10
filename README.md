@@ -64,6 +64,13 @@ something like:
 
 `CXX=$HOME/tools/kokkos_gpu/bin/nvcc_wrapper cmake -DENABLE_KOKKOS_CUDA=ON ..`
 
+## Running on multiple GPUs
+
+To run on multiple GPU's, you can pass the flag: `--kokkos-ndevices=N`, where
+`N` specifies the number of GPUs (per node). This works by VPIC passing through
+options it doesn't understand to Kokkos, and thus VPIC will generate a warning
+as it thinks you may have tried to tell it something it doesn't understand...
+
 ## Known Issues
 
 1. CMake has a bug where MPI detection was changed, and is faulty. So far we've
