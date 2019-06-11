@@ -22,6 +22,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # MPI detection
 #------------------------------------------------------------------------------#
 
+# TODO: it seems like Cmake version 3.12 (and likely others) have a bug/change
+# where it has a hard time detecting MPI. Cmake version. 3.9.0 works great
+# though..
 find_package(MPI REQUIRED)
 list(APPEND MPI_CXX_COMPILE_FLAGS -DOMPI_SKIP_MPICXX -DMPICH_SKIP_MPICXX )
 include_directories(${MPI_C_INCLUDE_PATH})
@@ -89,9 +92,15 @@ set(VPIC_CXX_LIBRARIES "${string_libraries}")
 #------------------------------------------------------------------------------#
 
 find_package(OpenMP)
+
+# FIXME: Sometimes OpenMP is not found fully, when it really should be. Is this
+# a CMAKE issue?
 if (OPENMP_FOUND)
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  set(VPIC_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${VPIC_CXX_FLAGS}")
   #set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
+else()
+  message("OpenMP not found...")
 endif()
 
 # Allow files to be references from the root, (eg #include "src/vpic/vpic.h")
@@ -168,16 +177,33 @@ else()
   link_directories(${KOKKOS_INCLUDE_DIRS}/../lib) # TODO: bad idea..
 endif(BUILD_INTERNAL_KOKKOS)
 
-message(dirs: ${KOKKOS_INCLUDE_DIRS})
 include_directories(${KOKKOS_INCLUDE_DIRS})
+#string(REPLACE ";" " " KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS}")
+#message(dirs: ${KOKKOS_INCLUDE_DIRS})
+
+#FOREACH (P ${KOKKOS_INCLUDE_DIRS})
+    #message(${P})
+    #include_directories(${P})
+    #link_directories(${P})
+    #ENDFOREACH(P)
+
+# TODO: bad idea.. at best, this is just going to add it to the last one in the
+# array
+link_directories(${KOKKOS_INCLUDE_DIRS}/../lib)
+link_directories(${KOKKOS_INCLUDE_DIRS}/lib) 
 
 # Libs
+message(${string_libraries})
 string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
 set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
 
 # Includes (TODO: this is definitely abuse of the CXX variable..)
 string(REPLACE ";" " -I" string_libraries "-I${KOKKOS_INCLUDE_DIRS}")
 set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+
+string(REPLACE ";" " -L" string_libraries "-L${KOKKOS_INCLUDE_DIRS}")
+set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+
 
 #------------------------------------------------------------------------------#
 # OpenSSL
@@ -279,6 +305,8 @@ if(NO_LIBVPIC)
   add_library(vpic INTERFACE)
 else()
   set(VPIC_EXPOSE "PRIVATE")
+  # TODO: this does a bad job of detecting when changes are need in ./bin/vpic
+  # for example if you delete ./bin/vpic it won't get rebuilt
   add_library(vpic ${VPIC_SRC})
   set(VPIC_SRC)
   install(TARGETS vpic LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)

@@ -15,8 +15,6 @@ typedef struct rng_pool {
   int n_rng;    /* Number of random number generators in pool */
 } rng_pool_t;
 
-BEGIN_C_DECLS
-
 /* In rng_pool.c. */
 
 rng_pool_t *              /* New pool (already seeded via seed_rng_pool) */
@@ -215,7 +213,5 @@ shuffle( rng_t * RESTRICT r,       /* Generator to use */
          size_t           sz_ele,  /* Element _byte_ size */
          size_t           str_ele, /* Element _byte_ stride */
          size_t           n_ele ); /* Number of elements */
-
-END_C_DECLS
 
 #endif /* _rng_h_ */

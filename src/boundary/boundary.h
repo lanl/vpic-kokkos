@@ -13,8 +13,6 @@ double n_out;		// number of writes so far on this node (double to
 						// accomodate long long runs)
 } link_boundary_t;
 
-BEGIN_C_DECLS
-
 /* In boundary.c */
 
 int
@@ -34,6 +32,12 @@ get_particle_bc_id( particle_bc_t * pbc );
 
 void
 boundary_p( particle_bc_t       * RESTRICT pbc_list,
+            species_t           * RESTRICT sp_list,
+            field_array_t       * RESTRICT fa,
+            accumulator_array_t * RESTRICT aa );
+
+void
+boundary_p_kokkos( particle_bc_t       * RESTRICT pbc_list,
             species_t           * RESTRICT sp_list,
             field_array_t       * RESTRICT fa,
             accumulator_array_t * RESTRICT aa );
@@ -58,8 +62,6 @@ absorb_tally( /**/  species_t      * RESTRICT sp_list,
 
 int *
 get_absorb_tally( particle_bc_t * pbc );
-
-END_C_DECLS
 
 #endif /* _boundary_h_ */
 

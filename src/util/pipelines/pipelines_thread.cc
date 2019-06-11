@@ -537,7 +537,7 @@ pipeline_mgr( void *_pipeline ) {
 
   } // for
 
-  return NULL; // Never get here - Avoid compiler warning
+  //return NULL; // Never get here - Avoid compiler warning
 }
 
 static void

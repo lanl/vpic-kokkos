@@ -1,4 +1,94 @@
-# Vector Particle-In-Cell (VPIC) Project
+# GPU Specific Instructions
+
+## Obtaining and Using Kokkos
+
+This project relies on Kokkos. There are a few options for a user to obtain
+kokkos, documented below.
+
+### Quickstart
+
+1) Do a *recursive* clone of this repo, this will pull down a copy of Kokkos
+for you
+2) Load modules for a) Cuda, and b) MPI
+3) Build the project by passing the CMake option `-DBUILD_INTERNAL_KOKKOS=ON`.
+This will request VPIC to build and handle Kokkos for you.
+4) If you want GPU functionally, also pass `-DENABLE_KOKKOS_CUDA=ON`. One
+should manually revied the `set(KOKKOS_ARCH "...")` line in `CMakeLists.txt` to
+ensure it meets their needs (the default is for Volta)
+
+This should give you a simple working of the code, but be aware it does come
+with caveats. Most notably, one is expected to main a version of Kokkos per
+target device (one per GPU device, one per CPU platform, etc), where as the
+above builds for the specific platform that you're currently on. Additionally,
+the above approach can be quite brittle when changing compile flags
+between builds because Kokkos doesn't treat CMake as a first class
+citizen (set to change in early 2020)
+
+### Manual Kokkos Install (more powerful, more effort)
+
+It is typical to maintain many different installs of Kokkos (CPU, older
+GPU, new GPU, Debug, etc), so it's worth while learning how to install Kokkos
+manually. Breifly:
+
+1) Clone Kokkos (or use ./kokkos in the recursive clone) from
+https://github.com/kokkos/kokkos
+2) Make a build folder, and execute `../generate_makefile.bash`, passing the
+appropriate options for platform and device architecture. These look something
+like:
+  - CPU: `../generate_makefile.bash --with-serial --with-openmp
+  --prefix=$KOKKOS_INSTALL_DIR`
+  - GPU: `../generate_makefile.bash --with-serial --with-openmp --with-cuda
+  --arch=Kepler30 --with-cuda-options=enable_lambda
+  --compiler=$KOKKOS_SRC_DIR/bin/nvcc_wrapper --prefix=$KOKKOS_INSTALL_DIR`
+
+### Further Reading
+
+One can cherry pick the Kokkos specific details from
+[here](https://github.com/ECP-copa/Cabana/wiki/Build-Instructions) to get
+detailed build instructions for Kokkos (ignore the things about Cabana)
+
+The advanced user should review `CMakeLists.txt` for the Kokkos specific
+options that are available. These include:
+
+1. `ENABLE_KOKKOS_OPENMP`
+2. `ENABLE_KOKKOS_CUDA`
+3. `BUILD_INTERNAL_KOKKOS`
+4. `VPIC_KOKKOS_DEBUG`
+5. `KOKKOS_ARCH`
+
+## Building VPIC + Kokkos
+
+Then when we build VPIC we need to make sure we using the GPU, you need to
+specify the Kokkos `nvcc_wrapper` to be the compiler. This typically looks
+something like:
+
+`CXX=$HOME/tools/kokkos_gpu/bin/nvcc_wrapper cmake -DENABLE_KOKKOS_CUDA=ON ..`
+
+## Running on multiple GPUs
+
+To run on multiple GPU's, you can pass the flag: `--kokkos-ndevices=N`, where
+`N` specifies the number of GPUs (per node). This works by VPIC passing through
+options it doesn't understand to Kokkos, and thus VPIC will generate a warning
+as it thinks you may have tried to tell it something it doesn't understand...
+
+## Known Issues
+
+1. CMake has a bug where MPI detection was changed, and is faulty. So far we've
+seen:
+  - Does *NOT* work: 3.12.1
+  - Does work: 3.12.4, 3.11.1, 3.7.1
+2. During a GPU compile, nvcc warns about multiply defined c-standard flags.
+   This warning can be safely ignored
+3. If you see `../src/util/pipelines/pipelines_thread.cc:239: undefined
+   reference to `omp_get_num_threads'` when building a deck, it's because
+   `-fopenmp` (or equivelent) didn't get added to `./bin/vpic`. This happens
+   because of a cmake bug where it fails to detect OpenMP. To fix it, you can
+   manually add `-fopenmp` to the build flags in the file.
+
+
+# VANILLA VPIC README
+
+## Vector Particle-In-Cell (VPIC) Project
 
 VPIC is a general purpose particle-in-cell simulation code for modeling
 kinetic plasmas in one, two, or three spatial dimensions. It employs a
@@ -29,7 +119,7 @@ for VPIC employ low-order particles on rectilinear meshes, a framework
 exists to treat higher-order particles and curvilinear meshes, as well
 as more advanced field solvers.
 
-# Attribution
+## Attribution
 
 Researchers who use the VPIC code for scientific research are asked to cite
 the papers by Kevin Bowers listed below.
@@ -50,7 +140,7 @@ B. Bergen and T.J.T Kwan, Advances in petascale kinetic simulations
 with VPIC and Roadrunner, Journal of Physics: Conference Series 180,
 012055, 2009
 
-# Getting the Code
+## Getting the Code
 
 VPIC uses nested submodules.  This requires the addition of the *--recursive*
 flag when cloning the repository:
@@ -59,12 +149,12 @@ flag when cloning the repository:
 
 This command will check out the VPIC source code.
 
-# Requirements
+## Requirements
 
 The primary requirement to build VPIC is a C++11 capable compiler and
 an up-to-date version of MPI.
 
-# Build Instructions
+## Build Instructions
 
     % cd vpic 
 
@@ -88,7 +178,7 @@ GCC users should ensure the `-fno-strict-aliasing` compiler flag is set (as show
 
 After configuration, simply type 'make'.
 
-# Building an example input deck
+## Building an example input deck
 
 After you have successfully built VPIC, you should have an executable in
 the *bin* directory called *vpic*.  To build an executable from one of
@@ -105,7 +195,7 @@ source directory)*:
 
 Beginners are advised to read the harris deck thoroughly, as it provides many examples of common uses cases.
 
-# Command Line Arguments
+## Command Line Arguments
 
 Note: Historic VPIC users should note that the format of command line arguments was changed in the first open source release. The equals symbol is no longer accepted, and two dashes are mandatory. 
 
@@ -113,7 +203,7 @@ In general, command line arguments take the form `--command value`, in which two
 
 The following specific syntax is available to the users:
 
-## Threading
+### Threading
 
 Threading (per MPI rank) can be enabled using the following syntax: 
 
@@ -121,33 +211,33 @@ Threading (per MPI rank) can be enabled using the following syntax:
 
 Where n specifies the number of threads
 
-### Example:
+#### Example:
 
 `mpirun -n 2 ./binary.Linux --tpp 2`
 
 To run with VPIC with two threads per MPI rank.
 
-## Checkpoint Restart
+### Checkpoint Restart
 
 VPIC can restart from a checkpoint dump file, using the following syntax:
 
 `./binary.Linux --restore <path to file>`
 
-### Example:
+#### Example:
 
 `./binary.Linux --restore ./restart/restart0`
 
 To restart VPIC using the restart file `./restart/restart0`
 
-# Feedback
+## Feedback
 
 Feedback, comments, or issues can be raised through [GitHub issues](https://github.com/lanl/vpic/issues)
 
-# Release
+## Release
 
 This software has been approved for open source release and has been assigned **LA-CC-15-109**.
 
-# Copyright
+## Copyright
 
 Copyright (c) 2016, Los Alamos National Security, LLC
 All rights reserved.

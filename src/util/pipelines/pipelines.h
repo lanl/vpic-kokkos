@@ -116,11 +116,7 @@ typedef struct pipeline_dispatcher {
 
 } pipeline_dispatcher_t;
 
-BEGIN_C_DECLS
-
 extern pipeline_dispatcher_t serial; // For debugging purposes
 extern pipeline_dispatcher_t thread;
-
-END_C_DECLS
 
 #endif // _pipelines_h_

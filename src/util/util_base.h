@@ -11,15 +11,6 @@
 #ifndef _util_base_h_
 #define _util_base_h_
 
-#ifdef __cplusplus
-#define BEGIN_C_DECLS extern "C" {
-#define END_C_DECLS }
-
-#else
-#define BEGIN_C_DECLS
-#define END_C_DECLS
-#endif
-
 // C99 does requires some key macros of stdint to only be defined in
 // C++ implementations if explicitly requested. 
 
@@ -278,8 +269,6 @@ typedef struct collective collective_t;
 #define MOVE(  d, s, n ) do { size_t _sz = (n)*sizeof(*(d)); if( _sz>0 ) memmove( (d), (s), _sz ); } while(0)
 #define CLEAR( d,    n ) do { size_t _sz = (n)*sizeof(*(d)); if( _sz>0 ) memset(  (d),   0, _sz ); } while(0)
 
-BEGIN_C_DECLS
-
 // These variables indicate the world communicator, the number of
 // processes in it and the rank of this process in it.
 // (The macros turn these into rvals that can't be modified
@@ -396,7 +385,5 @@ log_printf( const char *fmt, ... );
 #define nanodelay(i) ((void)_nanodelay(i))
 uint32_t
 _nanodelay( uint32_t i );
-
-END_C_DECLS
 
 #endif // _util_base_h_
