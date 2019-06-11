@@ -62,7 +62,11 @@ Then when we build VPIC we need to make sure we using the GPU, you need to
 specify the Kokkos `nvcc_wrapper` to be the compiler. This typically looks
 something like:
 
-`CXX=$HOME/tools/kokkos_gpu/bin/nvcc_wrapper cmake -DENABLE_KOKKOS_CUDA=ON ..`
+`CXX=$HOME/tools/kokkos_gpu/bin/nvcc_wrapper cmake -DENABLE_KOKKOS_CUDA=ON -DCMAKE_BUILD_TYPE=Release ..`
+
+Note: As with any CMake application, it's critical that you set the
+CMAKE_BUILD_TYPE (and other optimization flags) appropriately for your target
+system
 
 ## Running on multiple GPUs
 
