@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by:
  *   Kevin J. Bowers, Ph.D.
  *   Plasma Physics Group (X-1)
@@ -231,7 +231,7 @@ struct accum_rho_p {
 
     KOKKOS_INLINE_FUNCTION
     accum_rho_p(k_field_sa_t k_f_sa_, k_particles_t k_p_, int sy_, int sz_, float q_8V_, int np_) : kfield(k_f_sa_), kparticles(k_p_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_) {}
-    
+
     KOKKOS_INLINE_FUNCTION
     void operator() (const int n) const {
         float w0, w1, w2, w3, w4, w5, w6, w7, dz;
@@ -254,7 +254,7 @@ struct accum_rho_p {
 #   undef FNMS
 #   undef FMA
 
-        auto scatter_view_access = kfield.access<Kokkos::Experimental::ScatterAtomic>();
+        auto scatter_view_access = kfield.access();
 
         scatter_view_access(v,         field_var::rhof) += w0;
         scatter_view_access(v+1,       field_var::rhof) += w1;
@@ -291,9 +291,9 @@ struct accum_rhob {
     int sz;
 
     KOKKOS_INLINE_FUNCTION
-    accum_rhob(k_field_t k_f_, k_particles_t k_p_, k_particle_movers_t kpart_movers_, float qsp_, float r8V_, int nx_, int ny_, int nz_, int sy_, int sz_) : 
+    accum_rhob(k_field_t k_f_, k_particles_t k_p_, k_particle_movers_t kpart_movers_, float qsp_, float r8V_, int nx_, int ny_, int nz_, int sy_, int sz_) :
         kfield(k_f_), kpart(k_p_), kpart_movers(kpart_movers_), qsp(qsp_), r8V(r8V_), nx(nx_), ny(ny_), nz(nz_), sy(sy_), sz(sz_) {}
-    
+
     KOKKOS_INLINE_FUNCTION
     void operator() (const int n) const {
         int part_idx = kpart_movers(n, particle_mover_var::pmi);
@@ -304,7 +304,7 @@ struct accum_rhob {
         float dz = kpart(part_idx, particle_var::dz);
         int v = kpart(part_idx, particle_var::pi);
         int x, y, z;
-        
+
         w6 = w7 - w0 * w7;
         w7 = w7 + w0 * w7;
         w4 = w6 - w1 * w6;
@@ -374,7 +374,8 @@ struct accum_rhob {
 
 void
 k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
-                  const species_t     * RESTRICT sp ) {
+                  const species_t     * RESTRICT sp )
+{
   if( !fa || !sp || fa->g!=sp->g ) ERROR(( "Bad args" ));
 
     k_field_t kfield = fa->k_f_d;
@@ -386,7 +387,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     const int sz = sp->g->sz;
 
     k_field_sa_t scatter_view = Kokkos::Experimental::create_scatter_view<Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED,KOKKOS_SCATTER_ATOMIC>(kfield);
-    Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np), 
+    Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
         accum_rho_p(scatter_view, kparticles, sy, sz, q_8V, np));
     Kokkos::Experimental::contribute(kfield, scatter_view);
 }
@@ -398,7 +399,7 @@ void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, k_particle_mover
     int ny = g->ny;
     int nz = g->nz;
 
-    Kokkos::parallel_for("accumulate_rhob", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,nm), 
+    Kokkos::parallel_for("accumulate_rhob", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,nm),
         accum_rhob(kfield, kpart, k_part_movers, qsp, r8V, nx, ny, nz, sy, sz));
 }
 

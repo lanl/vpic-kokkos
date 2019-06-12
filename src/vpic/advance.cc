@@ -213,9 +213,9 @@ int vpic_simulation::advance(void) {
   // Copy back the right data to GPU
   // Device
   // Touches particles, particle_movers
-  UNSAFE_TIC(); // Time this data movement
-  LIST_FOR_EACH( sp, species_list ) {
-
+  LIST_FOR_EACH( sp, species_list )
+  {
+      UNSAFE_TIC(); // Time this data movement
       const int nm = sp->k_nm_h(0);
 
       // TODO: this can be hoisted to the end of advance_p if desired
@@ -229,6 +229,7 @@ int vpic_simulation::advance(void) {
 
       // Update np now we removed them...
       sp->np -= nm;
+      UNSAFE_TOC( BACKFILL, 1);
 
       auto& particles = sp->k_p_d;
 
@@ -237,6 +238,7 @@ int vpic_simulation::advance(void) {
       Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
       UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
+      UNSAFE_TIC(); // Time this data movement
       auto& particle_copy = sp->k_pc_d;
       int num_to_copy = sp->num_to_copy;
       int np = sp->np;
@@ -261,8 +263,8 @@ int vpic_simulation::advance(void) {
       // Reset this to zero now we've done the write back
       sp->np += num_to_copy;
       sp->num_to_copy = 0;
+      UNSAFE_TOC( BACKFILL, 0); // Don't double count
   }
-  UNSAFE_TOC( BACKFILL, 1);
 
   // TODO: this can be removed once the below does not rely on host memory
 //  UNSAFE_TIC(); // Time this data movement
