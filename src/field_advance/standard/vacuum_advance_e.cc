@@ -415,6 +415,7 @@ void vacuum_advance_e_interior_kokkos(k_field_t& k_field,
                                 const float damp, const float decayx, const float decayy, const float decayz, const float drivex, const float drivey, const float drivez, const float cj) {
     
     // EXEC_PIPELINE
+/*
     Kokkos::parallel_for("Majority of interior", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
         const size_t z = team_member.league_rank() + 2;
@@ -434,111 +435,88 @@ void vacuum_advance_e_interior_kokkos(k_field_t& k_field,
             });
         });
     });
-    
-  // Do left over interior ex
-    Kokkos::parallel_for("Left over ex", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-        const size_t z = team_member.league_rank() + 2;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny-1), [=] (const size_t i) {
-            const size_t y = i + 2;
-            const size_t f0_idx = VOXEL(1, y,   z, nx, ny, nz);
-            const size_t fx_idx = 0;
-            const size_t fy_idx = VOXEL(1, y-1, z, nx, ny, nz);
-            const size_t fz_idx = VOXEL(1, y, z-1, nx, ny ,nz);
-            update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
-        });
-    });
-  
-  // Do left over interior ey
-    Kokkos::parallel_for("Left over ey", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-        const size_t z = team_member.league_rank() + 2;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx-1), [=] (const size_t i) {
-            const size_t f0_idx = VOXEL(2, 1, z, nx, ny, nz) + i;
-            const size_t fx_idx = VOXEL(1, 1, z, nx, ny, nz) + i;
-            const size_t fy_idx = 0;
-            const size_t fz_idx = VOXEL(2, 1, z-1, nx, ny ,nz) + i;
-            update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
-        });
-    });
-  
-  // Do left over interior ez
-    Kokkos::parallel_for("Left over ez", KOKKOS_TEAM_POLICY_DEVICE(ny-1, Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-        const size_t y = team_member.league_rank() + 2;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx-1), [=] (const size_t i) {
-            const size_t f0_idx = VOXEL(2, y,   1, nx, ny, nz) + i;
-            const size_t fx_idx = VOXEL(1, y,   1, nx, ny, nz) + i;
-            const size_t fy_idx = VOXEL(2, y-1, 1, nx, ny, nz) + i;
-            const size_t fz_idx = 0;
-            update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
-        });
-    });
-    // WAIT_PIPELINES
-/*    
-    // EXEC_PIPELINE
-    Kokkos::parallel_for("Majority of interior", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-        const size_t z = team_member.league_rank() + 2;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny-1), [=] (const size_t i) {
-            const size_t y = i + 2;
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nx-1), [=] (const size_t j) {
-                const size_t x = j + 2;
-
-                const size_t f0_idx = VOXEL(x,   y,   z,   nx, ny, nz);
-                const size_t fx_idx = VOXEL(x+1, y,   z,   nx, ny, nz);
-                const size_t fy_idx = VOXEL(x,   y+1, z,   nx, ny, nz);
-                const size_t fz_idx = VOXEL(x,   y,   z+1, nx, ny, nz);
-
-                update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
-                update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
-                update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
-
-            });
-        });
-    });
-    
-  // Do left over interior ex
-    Kokkos::parallel_for("Left over ex", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-        const size_t z = team_member.league_rank() + 2;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny-1), [=] (const size_t i) {
-            const size_t y = i + 2;
-            const size_t f0_idx = VOXEL(1, y,   z, nx, ny, nz);
-            const size_t fx_idx = 0;
-            const size_t fy_idx = VOXEL(1, y-1, z, nx, ny, nz);
-            const size_t fz_idx = VOXEL(1, y, z-1, nx, ny ,nz);
-            update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
-        });
-    });
-  
-  // Do left over interior ey
-    Kokkos::parallel_for("Left over ey", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-        const size_t z = team_member.league_rank() + 2;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx-1), [=] (const size_t i) {
-            const size_t f0_idx = VOXEL(2, 1, z, nx, ny, nz) + i;
-            const size_t fx_idx = VOXEL(1, 1, z, nx, ny, nz) + i;
-            const size_t fy_idx = 0;
-            const size_t fz_idx = VOXEL(2, 1, z-1, nx, ny ,nz) + i;
-            update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
-        });
-    });
-  
-  // Do left over interior ez
-    Kokkos::parallel_for("Left over ez", KOKKOS_TEAM_POLICY_DEVICE(ny-1, Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-        const size_t y = team_member.league_rank() + 2;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx-1), [=] (const size_t i) {
-            const size_t f0_idx = VOXEL(2, y,   1, nx, ny, nz) + i;
-            const size_t fx_idx = VOXEL(1, y,   1, nx, ny, nz) + i;
-            const size_t fy_idx = VOXEL(2, y-1, 1, nx, ny, nz) + i;
-            const size_t fz_idx = 0;
-            update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
-        });
-    });
-    // WAIT_PIPELINES
 */
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>> zyx_policy({2, 2, 2}, {nz+1, ny+1, nx+1});
+    Kokkos::parallel_for("vacuum_advance_e: Majority of interior", zyx_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
+        const int f0 = VOXEL(x,   y,   z,   nx, ny, nz);
+        const int fx = VOXEL(x-1, y,   z,   nx, ny, nz);
+        const int fy = VOXEL(x,   y-1, z,   nx, ny, nz);
+        const int fz = VOXEL(x,   y,   z-1, nx, ny, nz);
+        update_ex(k_field, f0, fx, fy, fz, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+        update_ey(k_field, f0, fx, fy, fz, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+        update_ez(k_field, f0, fx, fy, fz, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+    });
+    
+  // Do left over interior ex
+/*
+    Kokkos::parallel_for("Left over ex", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
+    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
+        const size_t z = team_member.league_rank() + 2;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny-1), [=] (const size_t i) {
+            const size_t y = i + 2;
+            const size_t f0_idx = VOXEL(1, y,   z, nx, ny, nz);
+            const size_t fx_idx = 0;
+            const size_t fy_idx = VOXEL(1, y-1, z, nx, ny, nz);
+            const size_t fz_idx = VOXEL(1, y, z-1, nx, ny ,nz);
+            update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+        });
+    });
+*/
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ex_policy({2, 2}, {nz+1, ny+1});
+    Kokkos::parallel_for("vacuum_advance_e: left over interior ex", ex_policy, KOKKOS_LAMBDA(const int z, const int y) {
+        const size_t f0_idx = VOXEL(1, y,   z, nx, ny, nz);
+        const size_t fx_idx = 0;
+        const size_t fy_idx = VOXEL(1, y-1, z, nx, ny, nz);
+        const size_t fz_idx = VOXEL(1, y,   z-1, nx, ny ,nz);
+        update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+    });
+  
+  // Do left over interior ey
+/*
+    Kokkos::parallel_for("Left over ey", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
+    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
+        const size_t z = team_member.league_rank() + 2;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx-1), [=] (const size_t i) {
+            const size_t f0_idx = VOXEL(2, 1, z, nx, ny, nz) + i;
+            const size_t fx_idx = VOXEL(1, 1, z, nx, ny, nz) + i;
+            const size_t fy_idx = 0;
+            const size_t fz_idx = VOXEL(2, 1, z-1, nx, ny ,nz) + i;
+            update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+        });
+    });
+*/
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ey_policy({2, 2}, {nz+1, nx+1});
+    Kokkos::parallel_for("vacuum_advance_e: left over interior ey", ey_policy, KOKKOS_LAMBDA(const int z, const int x) {
+        const size_t f0_idx = VOXEL(2, 1, z, nx, ny, nz) + (x-2);
+        const size_t fx_idx = VOXEL(1, 1, z, nx, ny, nz) + (x-2);
+        const size_t fy_idx = 0;
+        const size_t fz_idx = VOXEL(2, 1, z-1, nx, ny ,nz) + (x-2);
+        update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+    });
+  
+  // Do left over interior ez
+/*
+    Kokkos::parallel_for("Left over ez", KOKKOS_TEAM_POLICY_DEVICE(ny-1, Kokkos::AUTO),
+    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
+        const size_t y = team_member.league_rank() + 2;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx-1), [=] (const size_t i) {
+            const size_t f0_idx = VOXEL(2, y,   1, nx, ny, nz) + i;
+            const size_t fx_idx = VOXEL(1, y,   1, nx, ny, nz) + i;
+            const size_t fy_idx = VOXEL(2, y-1, 1, nx, ny, nz) + i;
+            const size_t fz_idx = 0;
+            update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+        });
+    });
+*/
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ez_policy({2, 2}, {ny+1, nx+1});
+    Kokkos::parallel_for("vacuum_advance_e: left over interior ez", ez_policy, KOKKOS_LAMBDA(const int y, const int x) {
+        const size_t f0_idx = VOXEL(2, y,   1, nx, ny, nz) + (x-2);
+        const size_t fx_idx = VOXEL(1, y,   1, nx, ny, nz) + (x-2);
+        const size_t fy_idx = VOXEL(2, y-1, 1, nx, ny, nz) + (x-2);
+        const size_t fz_idx = 0;
+        update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+    });
+
 }
 
 void vacuum_advance_e_exterior_kokkos(k_field_t& k_field, 
@@ -546,9 +524,9 @@ void vacuum_advance_e_exterior_kokkos(k_field_t& k_field,
                                 const float px_muy, const float px_muz, const float py_mux, const float py_muz, const float pz_mux, const float pz_muy,
                                 const float damp, const float decayx, const float decayy, const float decayz, const float drivex, const float drivey, const float drivez, const float cj) {
   // Do exterior ex
+/*
     Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-
         const size_t y = team_member.league_rank() + 1;
         Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (const size_t i) {
             const size_t f0_idx = VOXEL(1, y,   1,nx,ny,nz) + i;
@@ -561,7 +539,6 @@ void vacuum_advance_e_exterior_kokkos(k_field_t& k_field,
 
     Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-        
         const size_t y = team_member.league_rank() + 1;
         Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (const size_t i) {
             const size_t f0_idx = VOXEL(1,y,  nz+1, nx,ny,nz) + i;
@@ -574,7 +551,6 @@ void vacuum_advance_e_exterior_kokkos(k_field_t& k_field,
 
     Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-        
         const size_t z = team_member.league_rank() + 2;
         Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (const size_t i) {
             const size_t f0_idx = VOXEL(1,1,z,nx,ny,nz) + i;
@@ -587,7 +563,6 @@ void vacuum_advance_e_exterior_kokkos(k_field_t& k_field,
 
     Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-        
         const size_t z = team_member.league_rank() + 2;
         Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (const size_t i) {
             const size_t f0_idx = VOXEL(1,ny+1,z,nx,ny,nz) + i;
@@ -597,8 +572,40 @@ void vacuum_advance_e_exterior_kokkos(k_field_t& k_field,
             update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
         });
     });
+*/
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ex_yx_policy({1, 1}, {ny+2, nx+1});
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ex_zx_policy({2, 1}, {nz+1, nx+1});
+    Kokkos::parallel_for("vacuum_advance_e: exterior ex loop 1", ex_yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+        const size_t f0_idx = VOXEL(1, y,   1,nx,ny,nz) + (x-1);
+        const size_t fx_idx = 0; 
+        const size_t fy_idx = VOXEL(1, y-1, 1,nx,ny,nz) + (x-1);
+        const size_t fz_idx = VOXEL(1, y,   0,nx,ny,nz) + (x-1);
+        update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ex loop 2", ex_yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+        const size_t f0_idx = VOXEL(1,y,  nz+1, nx,ny,nz) + (x-1);
+        const size_t fx_idx = 0; 
+        const size_t fy_idx = VOXEL(1,y-1,nz+1, nx,ny,nz) + (x-1);
+        const size_t fz_idx = VOXEL(1,y,  nz,   nx,ny,nz) + (x-1);
+        update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ex loop 3", ex_zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+        const size_t f0_idx = VOXEL(1,1,z,nx,ny,nz) + (x-1);
+        const size_t fx_idx = 0; // Don't care about x index, not used in update_ex anyway.
+        const size_t fy_idx = VOXEL(1,0,z,nx,ny,nz) + (x-1);
+        const size_t fz_idx = VOXEL(1,1,z-1,nx,ny,nz) + (x-1);
+        update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ex loop 4", ex_zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+        const size_t f0_idx = VOXEL(1,ny+1,z,nx,ny,nz) + (x-1);
+        const size_t fx_idx = 0; // Don't care about x index, not used in update_ex anyway.
+        const size_t fy_idx = VOXEL(1,ny,z,nx,ny,nz) + (x-1);
+        const size_t fz_idx = VOXEL(1,ny+1,z-1,nx,ny,nz) + (x-1);
+        update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+    });
   
   // Do exterior ey
+/*
     Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
         
@@ -649,8 +656,40 @@ void vacuum_advance_e_exterior_kokkos(k_field_t& k_field,
             update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
         });
     });
+*/
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ey_zy_policy({1, 1}, {nz+2, ny+1});
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ey_yx_policy({1, 2}, {ny+1, nx+1});
+    Kokkos::parallel_for("vacuum_advance_e: exterior ey loop 1", ey_zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+            const size_t f0_idx = VOXEL(1,y,z,nx,ny,nz);
+            const size_t fx_idx = VOXEL(0,y,z,nx,ny,nz);
+            const size_t fy_idx = 0;
+            const size_t fz_idx = VOXEL(1,y,z-1,nx,ny,nz);
+            update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ey loop 2", ey_zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+            const size_t f0_idx = VOXEL(nx+1,y,z,nx,ny,nz);
+            const size_t fx_idx = VOXEL(nx,y,z,nx,ny,nz);
+            const size_t fy_idx = 0;
+            const size_t fz_idx = VOXEL(nx+1,y,z-1,nx,ny,nz);
+            update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ey loop 3", ey_yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+            const size_t f0_idx = VOXEL(2,y,1,nx,ny,nz) + (x-2);
+            const size_t fx_idx = VOXEL(1,y,1,nx,ny,nz) + (x-2);
+            const size_t fy_idx = 0;
+            const size_t fz_idx = VOXEL(2,y,0,nx,ny,nz) + (x-2);
+            update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ey loop 4", ey_yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+            const size_t f0_idx = VOXEL(2,y,nz+1,nx,ny,nz) + (x-2);
+            const size_t fx_idx = VOXEL(1,y,nz+1,nx,ny,nz) + (x-2);
+            const size_t fy_idx = 0;
+            const size_t fz_idx = VOXEL(2,y,nz,nx,ny,nz) + (x-2);
+            update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+    });
 
   // Do exterior ez
+/*
     Kokkos::parallel_for(KOKKOS_TEAM_POLICY_DEVICE(nz, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
         
@@ -701,6 +740,38 @@ void vacuum_advance_e_exterior_kokkos(k_field_t& k_field,
             update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
         });
     });
+*/
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ez_zx_policy({1, 1}, {nz+1, nx+2});
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ez_zy_policy({1, 2}, {nz+1, ny+1});
+    Kokkos::parallel_for("vacuum_advance_e: exterior ez loop 1", ez_zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+        const size_t f0_idx = VOXEL(1,1,z,nx,ny,nz) + (x-1);
+        const size_t fx_idx = VOXEL(0,1,z,nx,ny,nz) + (x-1);
+        const size_t fy_idx = VOXEL(1,0,z,nx,ny,nz) + (x-1);
+        const size_t fz_idx = 0;
+        update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ez loop 2", ez_zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+        const size_t f0_idx = VOXEL(1,ny+1,z,nx,ny,nz) + (x-1);
+        const size_t fx_idx = VOXEL(0,ny+1,z,nx,ny,nz) + (x-1);
+        const size_t fy_idx = VOXEL(1,ny  ,z,nx,ny,nz) + (x-1);
+        const size_t fz_idx = 0;
+        update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ez loop 3", ez_zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+        const size_t f0_idx = VOXEL(1,y,z,nx,ny,nz);
+        const size_t fx_idx = VOXEL(0,y,z,nx,ny,nz);
+        const size_t fy_idx = VOXEL(1,y-1,z,nx,ny,nz);
+        const size_t fz_idx = 0;
+        update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ez loop 4", ez_zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+        const size_t f0_idx = VOXEL(nx+1, y,   z,nx,ny,nz);
+        const size_t fx_idx = VOXEL(nx,   y,   z,nx,ny,nz);
+        const size_t fy_idx = VOXEL(nx+1, y-1, z,nx,ny,nz);
+        const size_t fz_idx = 0;
+        update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+    });
+
 }
 
 void

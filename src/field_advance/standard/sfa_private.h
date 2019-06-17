@@ -285,6 +285,9 @@ vacuum_compute_div_e_err( field_array_t * RESTRICT fa );
 double
 compute_rms_div_e_err( const field_array_t * RESTRICT fa );
 
+double
+compute_rms_div_e_err_kokkos( const field_array_t * RESTRICT fa );
+
 // In clean_div_e.c
 
 // clean_div_e applies the following difference equation:
@@ -298,7 +301,13 @@ void
 clean_div_e( field_array_t * RESTRICT fa );
 
 void
+clean_div_e_kokkos( field_array_t * RESTRICT fa );
+
+void
 vacuum_clean_div_e( field_array_t * RESTRICT fa );
+
+void
+vacuum_clean_div_e_kokkos( field_array_t * RESTRICT fa );
 
 // In compute_div_b_err.c
 

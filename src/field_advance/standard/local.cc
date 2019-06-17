@@ -470,8 +470,17 @@ template <> void apply_local_norm_e<XYZ>(field_array_t* fa, const grid_t* g, con
     if(bc < 0 || bc >= world_size) {
         int face = (i+j+k) < 0 ? 0 : nx+1;
         k_field_t& k_field = fa->k_f_d;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> zy_policy({1, 1}, {nz+2, ny+2});
         switch(bc) {
             case anti_symmetric_fields:
+                Kokkos::parallel_for("apply_local_norm_e<XYZ>", zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    const int f0 = VOXEL(x,y,z,nx,ny,nz);
+                    const int f1 = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    k_field(f0, field_var::ex)   = k_field(f1, field_var::ex);
+                    k_field(f0, field_var::tcax) = k_field(f1, field_var::tcax);
+                });
+/*
                 Kokkos::parallel_for("apply_local_norm_e<XYZ>", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
                     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (const int yi) {
@@ -485,10 +494,19 @@ template <> void apply_local_norm_e<XYZ>(field_array_t* fa, const grid_t* g, con
                         k_field(f0, field_var::tcax) = k_field(f1, field_var::tcax);
                     });
                 });
+*/
                 break;
             case symmetric_fields:
                 break;
             case pmc_fields:
+                Kokkos::parallel_for("apply_local_norm_e<XYZ>", zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    const int f0 = VOXEL(x,y,z,nx,ny,nz);
+                    const int f1 = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    k_field(f0, field_var::ex)   = -k_field(f1, field_var::ex);
+                    k_field(f0, field_var::tcax) = -k_field(f1, field_var::tcax);
+                });
+/*
                 Kokkos::parallel_for("apply_local_norm_e<XYZ>", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
                     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (const int yi) {
@@ -502,8 +520,18 @@ template <> void apply_local_norm_e<XYZ>(field_array_t* fa, const grid_t* g, con
                         k_field(f0, field_var::tcax) = -k_field(f1, field_var::tcax);
                     });
                 });
+*/
                 break;
             case absorb_fields:
+                Kokkos::parallel_for("apply_local_norm_e<XYZ>", zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    const int f0 = VOXEL(x,y,z,nx,ny,nz);
+                    const int f1 = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    const int f2 = VOXEL(x-i*2,y-j*2,z-k*2,nx,ny,nz);
+                    k_field(f0, field_var::ex)   = 2*k_field(f1, field_var::ex)   - k_field(f2, field_var::ex);
+                    k_field(f0, field_var::tcax) = 2*k_field(f1, field_var::tcax) - k_field(f2, field_var::tcax);
+                });
+/*
                 Kokkos::parallel_for("apply_local_norm_e<XYZ>", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
                     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (const int yi) {
@@ -518,6 +546,7 @@ template <> void apply_local_norm_e<XYZ>(field_array_t* fa, const grid_t* g, con
                         k_field(f0, field_var::tcax) = 2*k_field(f1, field_var::tcax) - k_field(f2, field_var::tcax);
                     });
                 });
+*/
                 break;
             default:
                 ERROR(("Bad boundary condition encountered."));
@@ -531,8 +560,17 @@ template <> void apply_local_norm_e<YZX>(field_array_t* fa, const grid_t* g, con
     if(bc < 0 || bc >= world_size) {
         int face = (i+j+k) < 0 ? 0 : ny+1;
         k_field_t& k_field = fa->k_f_d;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> zx_policy({1, 1}, {nz+2, nx+2});
         switch(bc) {
             case anti_symmetric_fields:
+                Kokkos::parallel_for("apply_local_norm_e<YZX>", zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    const int f0 = VOXEL(x,y,z,nx,ny,nz);
+                    const int f1 = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    k_field(f0, field_var::ey)   = k_field(f1, field_var::ey);
+                    k_field(f0, field_var::tcay) = k_field(f1, field_var::tcay);
+                });
+/*
                 Kokkos::parallel_for("apply_local_norm_e<YZX>", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
                     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
@@ -546,10 +584,19 @@ template <> void apply_local_norm_e<YZX>(field_array_t* fa, const grid_t* g, con
                         k_field(f0, field_var::tcay) = k_field(f1, field_var::tcay);
                     });
                 });
+*/
                 break;
             case symmetric_fields:
                 break;
             case pmc_fields:
+                Kokkos::parallel_for("apply_local_norm_e<YZX>", zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    const int f0 = VOXEL(x,y,z,nx,ny,nz);
+                    const int f1 = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    k_field(f0, field_var::ey)   = -k_field(f1, field_var::ey);
+                    k_field(f0, field_var::tcay) = -k_field(f1, field_var::tcay);
+                });
+/*
                 Kokkos::parallel_for("apply_local_norm_e<YZX>", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
                     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
@@ -563,8 +610,18 @@ template <> void apply_local_norm_e<YZX>(field_array_t* fa, const grid_t* g, con
                         k_field(f0, field_var::tcay) = -k_field(f1, field_var::tcay);
                     });
                 });
+*/
                 break;
             case absorb_fields:
+                Kokkos::parallel_for("apply_local_norm_e<YZX>", zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    const int f0 = VOXEL(x,y,z,nx,ny,nz);
+                    const int f1 = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    const int f2 = VOXEL(x-i*2,y-j*2,z-k*2,nx,ny,nz);
+                    k_field(f0, field_var::ey)   = 2*k_field(f1, field_var::ey)   - k_field(f2, field_var::ey);
+                    k_field(f0, field_var::tcay) = 2*k_field(f1, field_var::tcay) - k_field(f2, field_var::tcay);
+                });
+/*
                 Kokkos::parallel_for("apply_local_norm_e<YZX>", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
                     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
@@ -579,6 +636,7 @@ template <> void apply_local_norm_e<YZX>(field_array_t* fa, const grid_t* g, con
                         k_field(f0, field_var::tcay) = 2*k_field(f1, field_var::tcay) - k_field(f2, field_var::tcay);
                     });
                 });
+*/
                 break;
             default:
                 ERROR(("Bad boundary condition encountered."));
@@ -592,8 +650,17 @@ template <> void apply_local_norm_e<ZXY>(field_array_t* fa, const grid_t* g, con
     if(bc < 0 || bc >= world_size) {
         int face = (i+j+k) < 0 ? 0 : nz+1;
         k_field_t& k_field = fa->k_f_d;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> yx_policy({1,1}, {ny+2, nx+2});
         switch(bc) {
             case anti_symmetric_fields:
+                Kokkos::parallel_for("apply_local_norm_e<ZXY>", yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    const int f0 = VOXEL(x,y,z,nx,ny,nz);
+                    const int f1 = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    k_field(f0, field_var::ez)   = k_field(f1, field_var::ez);
+                    k_field(f0, field_var::tcaz) = k_field(f1, field_var::tcaz);
+                });
+/*
                 Kokkos::parallel_for("apply_local_norm_e<ZXY>", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
                     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
@@ -607,10 +674,19 @@ template <> void apply_local_norm_e<ZXY>(field_array_t* fa, const grid_t* g, con
                         k_field(f0, field_var::tcaz) = k_field(f1, field_var::tcaz);
                     });
                 });
+*/
                 break;
             case symmetric_fields:
                 break;
             case pmc_fields:
+                Kokkos::parallel_for("apply_local_norm_e<ZXY>", yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    const int f0 = VOXEL(x,y,z,nx,ny,nz);
+                    const int f1 = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    k_field(f0, field_var::ez)   = -k_field(f1, field_var::ez);
+                    k_field(f0, field_var::tcaz) = -k_field(f1, field_var::tcaz);
+                });
+/*
                 Kokkos::parallel_for("apply_local_norm_e<ZXY>", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
                     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
@@ -624,8 +700,18 @@ template <> void apply_local_norm_e<ZXY>(field_array_t* fa, const grid_t* g, con
                         k_field(f0, field_var::tcaz) = -k_field(f1, field_var::tcaz);
                     });
                 });
+*/
                 break;
             case absorb_fields:
+                Kokkos::parallel_for("apply_local_norm_e<ZXY>", yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    const int f0 = VOXEL(x,y,z,nx,ny,nz);
+                    const int f1 = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    const int f2 = VOXEL(x-i*2,y-j*2,z-k*2,nx,ny,nz);
+                    k_field(f0, field_var::ez)   = 2*k_field(f1, field_var::ez)   - k_field(f2, field_var::ez);
+                    k_field(f0, field_var::tcaz) = 2*k_field(f1, field_var::tcaz) - k_field(f2, field_var::tcaz);
+                });
+/*
                 Kokkos::parallel_for("apply_local_norm_e<ZXY>", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
                     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
@@ -640,6 +726,7 @@ template <> void apply_local_norm_e<ZXY>(field_array_t* fa, const grid_t* g, con
                         k_field(f0, field_var::tcaz) = 2*k_field(f1, field_var::tcaz) - k_field(f2, field_var::tcaz);
                     });
                 });
+*/
                 break;
             default:
                 ERROR(("Bad boundary condition encountered."));
@@ -841,9 +928,16 @@ template<> void adjust_tang_e<XYZ>(k_field_t& k_field, const grid_t* g, int i, i
     int bc = g->bc[BOUNDARY(i,j,k)];
     if(bc < 0 || bc >= world_size) {
         int face = (i+j+k) < 0 ? 1 : nx + 1;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> yz_policy({1, 1}, {nz+2, ny+1});
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> zy_policy({1, 1}, {nz+1, ny+2});
         switch(bc) {
             case anti_symmetric_fields:
-
+                Kokkos::parallel_for("adjust_tang_e<XYZ>: YZ Edge Loop", yz_policy, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = 0;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcay) = 0;
+                });
+/*
                 Kokkos::parallel_for("adjust_tang_e<XYZ>: YZ Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
                     const size_t zi = team_member.league_rank();
@@ -855,6 +949,13 @@ template<> void adjust_tang_e<XYZ>(k_field_t& k_field, const grid_t* g, int i, i
                         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcay) = 0;
                     });
                 });
+*/
+                Kokkos::parallel_for("adjust_tang_e<XYZ>: ZY Edge Loop", zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = 0;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcaz) = 0;
+                });
+/*
                 Kokkos::parallel_for("adjust_tang_e<XYZ>: ZY Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(nz, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
                     const size_t zi = team_member.league_rank();
@@ -866,6 +967,7 @@ template<> void adjust_tang_e<XYZ>(k_field_t& k_field, const grid_t* g, int i, i
                         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcaz) = 0;
                     });
                 });
+*/
                 break;
             case symmetric_fields:
                 break;
@@ -883,9 +985,16 @@ template<> void adjust_tang_e<YZX>(k_field_t& k_field, const grid_t* g, int i, i
     int bc = g->bc[BOUNDARY(i,j,k)];
     if(bc < 0 || bc >= world_size) {
         int face = (i+j+k) < 0 ? 1 : ny + 1;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> zx_policy({1, 1}, {nz+1, nx+2});
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> xz_policy({1, 1}, {nz+2, nx+1});
         switch(bc) {
             case anti_symmetric_fields:
-
+                Kokkos::parallel_for("adjust_tang_e<YZX>: ZX Edge Loop", zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = 0;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcaz) = 0;
+                });
+/*
                 Kokkos::parallel_for("adjust_tang_e<YZX>: ZX Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(nz, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
                     const size_t zi = team_member.league_rank();
@@ -897,6 +1006,13 @@ template<> void adjust_tang_e<YZX>(k_field_t& k_field, const grid_t* g, int i, i
                         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcaz) = 0;
                     });
                 });
+*/
+                Kokkos::parallel_for("adjust_tang_e<YZX>: XZ Edge Loop", xz_policy, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = 0;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcax) = 0;
+                });
+/*
                 Kokkos::parallel_for("adjust_tang_e<YZX>: XZ Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
                     const size_t zi = team_member.league_rank();
@@ -908,6 +1024,7 @@ template<> void adjust_tang_e<YZX>(k_field_t& k_field, const grid_t* g, int i, i
                         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcax) = 0;
                     });
                 });
+*/
                 break;
             case symmetric_fields:
                 break;
@@ -925,9 +1042,16 @@ template<> void adjust_tang_e<ZXY>(k_field_t& k_field, const grid_t* g, int i, i
     int bc = g->bc[BOUNDARY(i,j,k)];
     if(bc < 0 || bc >= world_size) {
         int face = (i+j+k) < 0 ? 1 : nz + 1;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> xy_policy({1, 1}, {ny+2, nx+1});
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> yx_policy({1, 1}, {ny+1, nx+2});
         switch(bc) {
             case anti_symmetric_fields:
-
+                Kokkos::parallel_for("adjust_tang_e<ZXY>: XY Edge Loop", xy_policy, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = 0;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcax) = 0;
+                });
+/*
                 Kokkos::parallel_for("adjust_tang_e<ZXY>: XY Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
                     const size_t yi = team_member.league_rank();
@@ -939,6 +1063,13 @@ template<> void adjust_tang_e<ZXY>(k_field_t& k_field, const grid_t* g, int i, i
                         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcax) = 0;
                     });
                 });
+*/
+                Kokkos::parallel_for("adjust_tang_e<ZXY>: YX Edge Loop", yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = 0;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcay) = 0;
+                });
+/*
                 Kokkos::parallel_for("adjust_tang_e<ZXY>: YX Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(ny, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
                     const size_t yi = team_member.league_rank();
@@ -950,6 +1081,7 @@ template<> void adjust_tang_e<ZXY>(k_field_t& k_field, const grid_t* g, int i, i
                         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tcay) = 0;
                     });
                 });
+*/
                 break;
             case symmetric_fields:
                 break;
@@ -1109,10 +1241,16 @@ template <> void adjust_div_e_err<XYZ>(field_array_t* fa, const grid_t* g, const
         const int nx = g->nx, ny = g->ny, nz = g->nz;
         int face = (i+j+k)<0 ? 1 : nx+1;
         k_field_t& k_field = fa->k_f_d;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> zy_policy({1,1}, {nz+2, ny+2});
         switch(bc) {
             case anti_symmetric_fields:
 //                break;
             case absorb_fields:
+                Kokkos::parallel_for("adjust_div_e_err<XYZ>", zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_e_err) = 0;
+                }); 
+/*
                 Kokkos::parallel_for("adjust_div_e_err<XYZ>", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
                     const int zi = team_member.league_rank();
@@ -1123,6 +1261,7 @@ template <> void adjust_div_e_err<XYZ>(field_array_t* fa, const grid_t* g, const
                         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_e_err) = 0;
                     });
                 });
+*/
                 break;
             case symmetric_fields:
                 break;
@@ -1140,10 +1279,16 @@ template <> void adjust_div_e_err<YZX>(field_array_t* fa, const grid_t* g, const
         const int nx = g->nx, ny = g->ny, nz = g->nz;
         int face = (i+j+k)<0 ? 1 : ny+1;
         k_field_t& k_field = fa->k_f_d;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> zx_policy({1,1}, {nz+2, nx+2});
         switch(bc) {
             case anti_symmetric_fields:
 //                break;
             case absorb_fields:
+                Kokkos::parallel_for("adjust_div_e_err<YZX>", zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_e_err) = 0;
+                }); 
+/*
                 Kokkos::parallel_for("adjust_div_e_err<YZX>", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
                     const int zi = team_member.league_rank();
@@ -1154,6 +1299,7 @@ template <> void adjust_div_e_err<YZX>(field_array_t* fa, const grid_t* g, const
                         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_e_err) = 0;
                     });
                 });
+*/
                 break;
             case symmetric_fields:
                 break;
@@ -1171,10 +1317,16 @@ template <> void adjust_div_e_err<ZXY>(field_array_t* fa, const grid_t* g, const
         const int nx = g->nx, ny = g->ny, nz = g->nz;
         int face = (i+j+k)<0 ? 1 : nz+1;
         k_field_t& k_field = fa->k_f_d;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> yx_policy({1,1}, {ny+2, nx+2});
         switch(bc) {
             case anti_symmetric_fields:
 //                break;
             case absorb_fields:
+                Kokkos::parallel_for("adjust_div_e_err<ZXY>", yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_e_err) = 0;
+                }); 
+/*
                 Kokkos::parallel_for("adjust_div_e_err<ZXY>", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
                     const int yi = team_member.league_rank();
@@ -1185,6 +1337,7 @@ template <> void adjust_div_e_err<ZXY>(field_array_t* fa, const grid_t* g, const
                         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_e_err) = 0;
                     });
                 });
+*/
                 break;
             case symmetric_fields:
                 break;

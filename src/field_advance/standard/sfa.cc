@@ -37,6 +37,8 @@ static field_advance_kernels_t sfa_kernels = {
   compute_rms_div_e_err,
   clean_div_e,
   k_compute_div_e_err,
+  compute_rms_div_e_err_kokkos,
+//  clean_div_e_kokkos,
 
   // Magnetic field divergence cleaning interface
 

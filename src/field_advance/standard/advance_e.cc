@@ -170,7 +170,18 @@ void advance_e_interior_kokkos(k_field_t& k_field, k_field_edge_t& k_field_edge,
             });
         });
     });
-    
+/*
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>> zyx_policy({2,2,2},{nz+1,ny+1,nx+1});
+    Kokkos::parallel_for("advance_e: interior loop", zyx_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
+        const size_t f0_idx = VOXEL(x,   y,   z,   nx, ny, nz);
+        const size_t fx_idx = VOXEL(x-1, y,   z,   nx, ny, nz);
+        const size_t fy_idx = VOXEL(x,   y-1, z,   nx, ny, nz);
+        const size_t fz_idx = VOXEL(x,   y,   z-1, nx, ny, nz);
+        update_ex(k_field, k_field_edge, k_material, damp, cj, f0_idx, fx_idx, fy_idx, fz_idx, px, py, pz);
+        update_ey(k_field, k_field_edge, k_material, damp, cj, f0_idx, fx_idx, fy_idx, fz_idx, px, py, pz);
+        update_ez(k_field, k_field_edge, k_material, damp, cj, f0_idx, fx_idx, fy_idx, fz_idx, px, py, pz);
+    });
+*/    
   // Do left over interior ex
     Kokkos::parallel_for("Left over ex", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
@@ -745,7 +756,7 @@ printf("Advance_E kernel\n");
     // FIXME: Does not belong here
     k_material_coefficient_t k_material_d = k_material_coefficient_t("Material coefficient view", args->p->n_mc);
     k_material_coefficient_t::HostMirror k_material_h = Kokkos::create_mirror_view(k_material_d);
-    Kokkos::parallel_for("Copy materials to device", Kokkos::RangePolicy<Kokkos::OpenMP>(0, args->p->n_mc), KOKKOS_LAMBDA (const int & i) {
+    Kokkos::parallel_for("Copy materials to device", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, args->p->n_mc), KOKKOS_LAMBDA (const int & i) {
         k_material_h(i, material_coeff_var::decayx) = m[i].decayx;
         k_material_h(i, material_coeff_var::drivex) = m[i].drivex;
         k_material_h(i, material_coeff_var::decayy) = m[i].decayy;
