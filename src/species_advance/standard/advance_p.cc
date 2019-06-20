@@ -7,17 +7,6 @@
 #include "spa_private.h"
 #include "../../vpic/kokkos_helpers.h"
 
-void print_nm(k_particle_movers_t particle_movers, int nm)
-{
-    Kokkos::parallel_for("nm printer", Kokkos::RangePolicy <
-            Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (size_t i)
-    {
-       printf(" %d has %f \n", i, particle_movers(i, particle_mover_var::pmi));
-    });
-
-}
-
-
 void
 advance_p_kokkos(
         k_particles_t& k_particles,
@@ -134,19 +123,6 @@ sp_[id]->
   #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
   #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
   #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
-
-  //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
-  //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
-  //#define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
-  //#define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
-
-
-  //#define copy_local_to_pm(index) \
-    //k_particle_movers(index, particle_mover_var::dispx) = local_pm_dispx; \
-    //k_particle_movers(index, particle_mover_var::dispy) = local_pm_dispy; \
-    //k_particle_movers(index, particle_mover_var::dispz) = local_pm_dispz; \
-    //k_particle_movers(index, particle_mover_var::pmi)   = local_pm_i;
-
 
   // copy local memmbers from grid
   //auto nfaces_per_voxel = 6;
@@ -323,6 +299,8 @@ sp_[id]->
           k_particle_copy(nm, particle_var::w) = p_w;
           k_particle_copy(nm, particle_var::pi) = pii; // FIXME: float to float assignment is fine without casts?
 
+          printf("Writing pii to particle copy %d \n", reinterpret_cast<int&>(pii));
+
           // Tag this one as having left
           //k_particles(p_index, particle_var::pi) = 999999;
 
@@ -341,14 +319,6 @@ sp_[id]->
 
   // TODO: abstract this manual data copy
   //Kokkos::deep_copy(h_nm, k_nm);
-  /*
-    Kokkos::parallel_for(host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
-      sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx); \
-      sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy); \
-      sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz); \
-      sp->pm[i].i     = k_particle_movers_h(i, particle_mover_var::pmi);   \
-    });\
-    */
 
   //args->seg[pipeline_rank].pm        = pm;
   //args->seg[pipeline_rank].max_nm    = max_nm;

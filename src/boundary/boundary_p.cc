@@ -224,6 +224,7 @@ boundary_p_kokkos(
 
         //int voxel = p0[i].i;
         int voxel = reinterpret_cast<int&>(sp->k_pc_h(copy_index, particle_var::pi));
+        printf("pid %d pif %e \n", sp->k_pc_h(copy_index, particle_var::pi), reinterpret_cast<int&>(sp->k_pc_h(copy_index, particle_var::pi)));
 
         int face = voxel & 7;
         voxel >>= 3;
@@ -257,7 +258,9 @@ boundary_p_kokkos(
             pi->dy = sp->k_pc_h(copy_index, particle_var::dy);
             pi->dz = sp->k_pc_h(copy_index, particle_var::dz);
 
+
             pi->i = nn - range[face];
+            printf("Sending with pii = %d \n", pi->i);
 
             //pi->ux=p0[i].ux;
             //pi->uy=p0[i].uy;
