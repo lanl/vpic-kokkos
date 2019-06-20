@@ -451,7 +451,7 @@ move_p_kokkos(const particle_view_t& k_particles,
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
       // displacement in the particle mover.
-      int new_pii = 8*int(pii) + face;
+      int new_pii = 8* reinterpret_cast<int&>(pii) + face;
       pii = reinterpret_cast<float&>(new_pii);
       return 1; // Return "mover still in use"
       }
@@ -674,7 +674,7 @@ move_p_kokkos_host_serial(const particle_view_t& k_particles,
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
       // displacement in the particle mover.
-      int new_pii = 8*int(pii) + face;
+      int new_pii = 8*reinterpret_cast<int&>(pii) + face;
       pii = reinterpret_cast<float&>(new_pii);
       return 1; // Return "mover still in use"
       }

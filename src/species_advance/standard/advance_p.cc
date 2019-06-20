@@ -299,8 +299,6 @@ sp_[id]->
           k_particle_copy(nm, particle_var::w) = p_w;
           k_particle_copy(nm, particle_var::pi) = pii; // FIXME: float to float assignment is fine without casts?
 
-          printf("Writing pii to particle copy %d \n", reinterpret_cast<int&>(pii));
-
           // Tag this one as having left
           //k_particles(p_index, particle_var::pi) = 999999;
 
