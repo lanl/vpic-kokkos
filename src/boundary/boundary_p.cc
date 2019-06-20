@@ -296,7 +296,7 @@ boundary_p_kokkos(
         // Since most boundary handlers do local reinjection and are
         // charge neutral, this means most boundary handlers do
         // nothing to rhob.
-
+        int old_nn = nn;
         nn = -nn - 3; // Assumes reflective/absorbing are -1, -2
         /*
         if( (nn>=0) & (nn<nb) ) {
@@ -307,9 +307,10 @@ boundary_p_kokkos(
         }
         */
 
+
         // Uh-oh: We fell through
         //if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
-        printf("nn %d rangel %ld rangeh %ld rangem %ld \n", nn, rangel, rangeh, rangem);
+        printf("nn %d rangel %ld rangeh %ld rangem %ld voxel %d face %d old_nn %d \n", nn, rangel, rangeh, rangem, voxel, face, old_nn);
 
         WARNING(( "Unknown boundary interaction ... dropping particle "
                   "(species=%s)", sp->name ));

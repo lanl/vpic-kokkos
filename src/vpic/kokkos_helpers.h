@@ -267,7 +267,7 @@ template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(T* species_list)
       k_particle_movers_h(i, particle_mover_var::dispx) = sp->pm[i].dispx;
       k_particle_movers_h(i, particle_mover_var::dispy) = sp->pm[i].dispy;
       k_particle_movers_h(i, particle_mover_var::dispz) = sp->pm[i].dispz;
-      k_particle_movers_h(i, particle_mover_var::pmi)   = sp->pm[i].i;
+      k_particle_movers_h(i, particle_mover_var::pmi)   = reinterpret_cast<float&>(sp->pm[i].i);
     });
     Kokkos::deep_copy(sp->k_p_d, sp->k_p_h);
     Kokkos::deep_copy(sp->k_pm_d, sp->k_pm_h);
@@ -307,7 +307,7 @@ template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_HOST(T* species_list)
       sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
       sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
       sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
-      sp->pm[i].i     = k_particle_movers_h(i, particle_mover_var::pmi);
+      sp->pm[i].i     = reinterpret_cast<int&>(k_particle_movers_h(i, particle_mover_var::pmi));
     });
   }
 }

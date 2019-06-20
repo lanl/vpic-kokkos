@@ -131,7 +131,7 @@ int vpic_simulation::advance(void) {
       sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
       sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
       sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
-      sp->pm[i].i     = k_particle_movers_h(i, particle_mover_var::pmi);
+      sp->pm[i].i     = reinterpret_cast<int&>(k_particle_movers_h(i, particle_mover_var::pmi));
     });
   };
   UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
