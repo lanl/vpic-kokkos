@@ -86,13 +86,13 @@ struct DefaultCompress {
             // otherwise, do
             int cut_off = np-(2*nm);
 
-            int pmi = static_cast<int>( particle_movers(i, particle_mover_var::pmi) );
+            int pmi = reinterpret_cast<int&>( particle_movers(i, particle_mover_var::pmi) );
 
             // If it's less than the cut off, it's safe
             if ( pmi >= cut_off) // danger zone
             {
-            int index = ((np-1) - pmi); // Map to the reverse indexing
-            unsafe_index(index) = 1; // 1 marks it as unsafe
+                int index = ((np-1) - pmi); // Map to the reverse indexing
+                unsafe_index(index) = 1; // 1 marks it as unsafe
             }
         });
 
@@ -105,7 +105,7 @@ struct DefaultCompress {
             // TODO: is this np or np-1?
             // Doing this in the "inverse order" to match vpic
             int pull_from = (np-1) - (n); // grab a particle from the end block
-            int write_to = particle_movers(nm-n-1, particle_mover_var::pmi); // put it in a gap
+            int write_to = reinterpret_cast<int&>( particle_movers(nm-n-1, particle_mover_var::pmi)); // put it in a gap
             int danger_zone = np - nm;
 
             // if they're the same, no need to do it. This can happen below in the
@@ -213,69 +213,3 @@ struct ParticleCompressor : private Policy {
 };
 
 #endif //guard
-
-// The below is old code of Nigel's.
-// TODO: integrate or delete
-
-/*  Adjust particle indices and set which particles will fill in the holes.
- *  Fills starting from last mover to first
- */
-/*
-void remove_particles(k_particles_t& kparticles, k_particle_movers_t& k_part_movers, Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Atomic> >& replacements, int nm, int np) {
-    Kokkos::parallel_for("remove particles", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, nm),
-    KOKKOS_LAMBDA(const int n) {
-        int i = static_cast<int>(k_part_movers(n, particle_mover_var::pmi));
-        int pi = kparticles(i, particle_var::pi);
-        kparticles(i, particle_var::pi) = pi >> 3;
-        Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Atomic> >safe_spots("copy", nm);
-
-        // Set expected replacement particles
-        safe_spots(n) = (np + nm) + n;
-        // Set which particles to skip over
-        if(i >= np-nm)
-            safe_spots(i-(np-nm)) = 0;
-        // Remaining particles set correct replacements
-        if(i < np-nm) {
-            int counter = n;
-            // Linear search and find correct replacement
-            for(int j=0; j<nm; j++) {
-                if(safe_spots(j) == 0) {
-                    // Skip spot
-                    continue;
-                } else if(counter > 0) {
-                    // Spot belongs to someone else
-                    counter--;
-                } else {
-                    // Found correct replacement particle
-                    int spot = safe_spots(j);
-                    replacements(n) = spot;
-                    break;
-                }
-            }
-        }
-        
-    });
-}
-
-//  Fill in holes left by removing particles
-void fill_holes(k_particles_t& kparticles, k_particle_movers_t& k_part_movers, Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Atomic> >& replacements, int nm) {
-    Kokkos::parallel_for("fill holes", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,nm),
-    KOKKOS_LAMBDA(const int n) {
-        int i = static_cast<int>(k_part_movers(n, particle_mover_var::pmi));
-        // If particle is not skipped
-        if(replacements(n) != 0) {
-            // Grab replacement particle index and fill in hole.
-            int replace_idx = replacements(n);
-            kparticles(i, particle_var::dx) = kparticles(replace_idx, particle_var::dx);
-            kparticles(i, particle_var::dy) = kparticles(replace_idx, particle_var::dy);
-            kparticles(i, particle_var::dz) = kparticles(replace_idx, particle_var::dz);
-            kparticles(i, particle_var::pi) = kparticles(replace_idx, particle_var::pi);
-            kparticles(i, particle_var::ux) = kparticles(replace_idx, particle_var::ux);
-            kparticles(i, particle_var::uy) = kparticles(replace_idx, particle_var::uy);
-            kparticles(i, particle_var::uz) = kparticles(replace_idx, particle_var::uz);
-            kparticles(i, particle_var::w)  = kparticles(replace_idx, particle_var::w);
-        }
-    });
-}
-
-*/

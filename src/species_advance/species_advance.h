@@ -302,7 +302,7 @@ move_p_kokkos(const particle_view_t& k_particles,
     //printf("in move %d \n", pi);
 
   for(;;) {
-    int ii = pii;
+    int ii = reinterpret_cast<int&>(pii);
     s_midx = p_dx;
     s_midy = p_dy;
     s_midz = p_dz;
@@ -451,14 +451,16 @@ move_p_kokkos(const particle_view_t& k_particles,
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
       // displacement in the particle mover.
-      pii = 8*int(pii) + face;
+      int new_pii = 8*int(pii) + face;
+      pii = reinterpret_cast<float&>(new_pii);
       return 1; // Return "mover still in use"
       }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
 
-    pii = neighbor - rangel; // Compute local index of neighbor
+    int nmr = neighbor - rangel;
+    pii = reinterpret_cast<float&>(nmr); // Compute local index of neighbor
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
   }
@@ -523,7 +525,7 @@ move_p_kokkos_host_serial(const particle_view_t& k_particles,
     //printf("in move %d \n", pi);
 
   for(;;) {
-    int ii = pii;
+    int ii = reinterpret_cast<int&>(pii);
     s_midx = p_dx;
     s_midy = p_dy;
     s_midz = p_dz;
@@ -672,14 +674,16 @@ move_p_kokkos_host_serial(const particle_view_t& k_particles,
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
       // displacement in the particle mover.
-      pii = 8*int(pii) + face;
+      int new_pii = 8*int(pii) + face;
+      pii = reinterpret_cast<float&>(new_pii);
       return 1; // Return "mover still in use"
       }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
 
-    pii = neighbor - rangel; // Compute local index of neighbor
+    int nmr = neighbor - rangel;
+    pii = reinterpret_cast<float&>(nmr); // Compute local index of neighbor
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
   }

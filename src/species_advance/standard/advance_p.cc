@@ -179,7 +179,7 @@ sp_[id]->
     float dx   = p_dx;                             // Load position
     float dy   = p_dy;
     float dz   = p_dz;
-    int   ii   = int(pii);
+    int   ii   = reinterpret_cast<int&>(pii);
     float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
                            dz*( f_dexdz + dy*f_d2exdydz ) );
     float hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
@@ -311,7 +311,7 @@ sp_[id]->
           k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
           k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
           k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
-          k_particle_movers(nm, particle_mover_var::pmi)   = local_pm->i;
+          k_particle_movers(nm, particle_mover_var::pmi)   = reinterpret_cast<float&>(local_pm->i);
 
           // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
           k_particle_copy(nm, particle_var::dx) = p_dx;
@@ -321,7 +321,7 @@ sp_[id]->
           k_particle_copy(nm, particle_var::uy) = p_uy;
           k_particle_copy(nm, particle_var::uz) = p_uz;
           k_particle_copy(nm, particle_var::w) = p_w;
-          k_particle_copy(nm, particle_var::pi) = pii;
+          k_particle_copy(nm, particle_var::pi) = pii; // FIXME: float to float assignment is fine without casts?
 
           // Tag this one as having left
           //k_particles(p_index, particle_var::pi) = 999999;

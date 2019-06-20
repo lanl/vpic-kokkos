@@ -223,13 +223,13 @@ boundary_p_kokkos(
         //printf("i %d p0i %d pi %f nm %d \n", pm->i, p0[i].i, sp->k_pc_h(copy_index, particle_var::pi), nm);
 
         //int voxel = p0[i].i;
-        int voxel = sp->k_pc_h(copy_index, particle_var::pi);
+        int voxel = reinterpret_cast<int&>(sp->k_pc_h(copy_index, particle_var::pi));
 
         int face = voxel & 7;
         voxel >>= 3;
 
         //p0[i].i = voxel;
-        sp->k_pc_h(copy_index, particle_var::pi) = voxel;
+        sp->k_pc_h(copy_index, particle_var::pi) = reinterpret_cast<float&>(voxel);
 
         int64_t nn = neighbor[ 6*voxel + face ];
 
@@ -406,7 +406,7 @@ boundary_p_kokkos(
       if( face==6 ) pi = ci, n = n_ci;
       else if( shared[face] ) {
         mp_end_recv( mp, f2b[face] );
-        pi = (const particle_injector_t *)
+        pi = (particle_injector_t *)
           (((char *)mp_recv_buffer(mp,f2b[face]))+16);
         n  = n_recv[face];
       } else continue;
@@ -451,7 +451,9 @@ boundary_p_kokkos(
         particle_copy(write_index, particle_var::uy) = pi->uy;
         particle_copy(write_index, particle_var::uz) = pi->uz;
         particle_copy(write_index, particle_var::w)  = pi->w;
-        particle_copy(write_index, particle_var::pi) = pi->i;
+
+        int pii = pi->i;
+        particle_copy(write_index, particle_var::pi) = reinterpret_cast<float&>(pii);
 
         // track how many particles we buffer up here
         sp_[id]->num_to_copy++;

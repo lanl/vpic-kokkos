@@ -260,7 +260,7 @@ template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(T* species_list)
       k_particles_h(i, particle_var::uy) = sp->p[i].uy;
       k_particles_h(i, particle_var::uz) = sp->p[i].uz;
       k_particles_h(i, particle_var::w)  = sp->p[i].w;
-      k_particles_h(i, particle_var::pi) = sp->p[i].i;
+      k_particles_h(i, particle_var::pi) = reinterpret_cast<float&>(sp->p[i].i);
     });
 
     Kokkos::parallel_for("copy movers to device", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {
@@ -300,7 +300,7 @@ template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_HOST(T* species_list)
       sp->p[i].uy = k_particles_h(i, particle_var::uy);
       sp->p[i].uz = k_particles_h(i, particle_var::uz);
       sp->p[i].w  = k_particles_h(i, particle_var::w);
-      sp->p[i].i  = k_particles_h(i, particle_var::pi);
+      sp->p[i].i  = reinterpret_cast<int&>(k_particles_h(i, particle_var::pi));
     });
 
     Kokkos::parallel_for("copy movers to host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {
