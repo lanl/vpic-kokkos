@@ -20,7 +20,6 @@ int vpic_simulation::advance(void) {
   species_t *sp;
   double err;
 
-  printf("step %d \n", step());
   // Use default policy, for now
   ParticleCompressor<> compressor;
   ParticleSorter<> sorter;
