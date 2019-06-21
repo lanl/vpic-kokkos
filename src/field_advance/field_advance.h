@@ -207,6 +207,7 @@ typedef struct field_advance_kernels {
   // Local/remote shared face cleaning
 
   double (*synchronize_tang_e_norm_b)( struct field_array * RESTRICT fa );
+  double (*synchronize_tang_e_norm_b_kokkos)( struct field_array * RESTRICT fa );
 
   // Electric field divergence cleaning interface
 
@@ -222,6 +223,9 @@ typedef struct field_advance_kernels {
   void   (*compute_div_b_err    )( /**/  struct field_array * RESTRICT fa );
   double (*compute_rms_div_b_err)( const struct field_array * RESTRICT fa );
   void   (*clean_div_b          )( /**/  struct field_array * RESTRICT fa );
+  void   (*compute_div_b_err_kokkos)( struct field_array* RESTRICT fa );
+  double (*compute_rms_div_b_err_kokkos)( const struct field_array * RESTRICT fa );
+  void   (*clean_div_b_kokkos   )( /**/  struct field_array * RESTRICT fa );
 
 } field_advance_kernels_t;
 
@@ -277,20 +281,20 @@ typedef struct field_buffers {
     Kokkos::View<float*>::HostMirror   yzx_rbuf_neg_h;
     Kokkos::View<float*>::HostMirror   zxy_rbuf_neg_h;
 
-    field_buffers(int nx, int ny, int nz) {
-        xyz_sbuf_pos = Kokkos::View<float*>("Send buffer for XYZ positive face", 1 + ny*(nz+1) + (ny+1)*nz);
-        xyz_rbuf_pos = Kokkos::View<float*>("Receive buffer for XYZ positive face", 1 + ny*(nz+1) + (ny+1)*nz);
-        yzx_sbuf_pos = Kokkos::View<float*>("Send buffer for YZX positive face", 1 + nx*(nz+1) + (nx+1)*nz);
-        yzx_rbuf_pos = Kokkos::View<float*>("Receive buffer for YZX positive face", 1 + nx*(nz+1) + (nx+1)*nz);
-        zxy_sbuf_pos = Kokkos::View<float*>("Send buffer for ZXY positive face", 1 + nx*(ny+1) + (nx+1)*ny);
-        zxy_rbuf_pos = Kokkos::View<float*>("Receive buffer for ZXY positive face", 1 + nx*(ny+1) + (nx+1)*ny);
+    field_buffers(int xyz_size, int yzx_size, int zxy_size) {
+        xyz_sbuf_pos = Kokkos::View<float*>("Send buffer for XYZ positive face", xyz_size);
+        xyz_rbuf_pos = Kokkos::View<float*>("Receive buffer for XYZ positive face", xyz_size);
+        yzx_sbuf_pos = Kokkos::View<float*>("Send buffer for YZX positive face", yzx_size);
+        yzx_rbuf_pos = Kokkos::View<float*>("Receive buffer for YZX positive face", yzx_size);
+        zxy_sbuf_pos = Kokkos::View<float*>("Send buffer for ZXY positive face", zxy_size);
+        zxy_rbuf_pos = Kokkos::View<float*>("Receive buffer for ZXY positive face", zxy_size);
 
-        xyz_sbuf_neg = Kokkos::View<float*>("Send buffer for XYZ negative face", 1 + ny*(nz+1) + (ny+1)*nz);
-        xyz_rbuf_neg = Kokkos::View<float*>("Receive buffer for XYZ negative face", 1 + ny*(nz+1) + (ny+1)*nz);
-        yzx_sbuf_neg = Kokkos::View<float*>("Send buffer for YZX negative face", 1 + nx*(nz+1) + (nx+1)*nz);
-        yzx_rbuf_neg = Kokkos::View<float*>("Receive buffer for YZX negative face", 1 + nx*(nz+1) + (nx+1)*nz);
-        zxy_sbuf_neg = Kokkos::View<float*>("Send buffer for ZXY negative face", 1 + nx*(ny+1) + (nx+1)*ny);
-        zxy_rbuf_neg = Kokkos::View<float*>("Receive buffer for ZXY negative face", 1 + nx*(ny+1) + (nx+1)*ny);
+        xyz_sbuf_neg = Kokkos::View<float*>("Send buffer for XYZ negative face", xyz_size);
+        xyz_rbuf_neg = Kokkos::View<float*>("Receive buffer for XYZ negative face", xyz_size);
+        yzx_sbuf_neg = Kokkos::View<float*>("Send buffer for YZX negative face", yzx_size);
+        yzx_rbuf_neg = Kokkos::View<float*>("Receive buffer for YZX negative face", yzx_size);
+        zxy_sbuf_neg = Kokkos::View<float*>("Send buffer for ZXY negative face", zxy_size);
+        zxy_rbuf_neg = Kokkos::View<float*>("Receive buffer for ZXY negative face", zxy_size);
 
         xyz_sbuf_pos_h = Kokkos::create_mirror_view(xyz_sbuf_pos);
         yzx_sbuf_pos_h = Kokkos::create_mirror_view(yzx_sbuf_pos);

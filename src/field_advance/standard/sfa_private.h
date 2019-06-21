@@ -317,6 +317,9 @@ vacuum_clean_div_e_kokkos( field_array_t * RESTRICT fa );
 void
 compute_div_b_err( field_array_t * RESTRICT fa );
 
+void
+compute_div_b_err_kokkos( field_array_t * RESTRICT fa );
+
 // In compute_rms_div_b_err.c
 
 // compute_rms_div_b_err returns
@@ -330,6 +333,9 @@ compute_div_b_err( field_array_t * RESTRICT fa );
 double
 compute_rms_div_b_err( const field_array_t * RESTRICT fa );
 
+double
+compute_rms_div_b_err_kokkos( const field_array_t * RESTRICT fa );
+
 // In clean_div_b.c
 
 // clean_div_b applies the following difference equation:
@@ -339,12 +345,18 @@ compute_rms_div_b_err( const field_array_t * RESTRICT fa );
 void
 clean_div_b( field_array_t * RESTRICT fa );
 
+void
+clean_div_b_kokkos( field_array_t * RESTRICT fa );
+
 // Internode functions
 
 // In remote.c
 
 double
 synchronize_tang_e_norm_b( field_array_t * RESTRICT fa );
+
+double
+synchronize_tang_e_norm_b_kokkos( field_array_t * RESTRICT fa );
 
 void
 synchronize_jf( field_array_t * RESTRICT fa );
@@ -377,6 +389,10 @@ k_local_ghost_norm_e( field_array_t      * ALIGNED(128) f,
 
 void
 local_ghost_div_b( field_t      * ALIGNED(128) f,
+                   const grid_t *              g );
+
+void
+k_local_ghost_div_b( field_array_t      * ALIGNED(128) f,
                    const grid_t *              g );
 
 void
@@ -484,8 +500,18 @@ begin_remote_ghost_div_b( field_t      * ALIGNED(128) f,
                           const grid_t *              g );
 
 void
+k_begin_remote_ghost_div_b( field_array_t      * ALIGNED(128) f,
+                            const grid_t *              g,
+                            field_buffers_t& f_buffers );
+
+void
 end_remote_ghost_div_b( field_t      * ALIGNED(128) f,
                         const grid_t *              g );
+
+void
+k_end_remote_ghost_div_b( field_array_t      * ALIGNED(128) f,
+                        const grid_t *              g,
+                        field_buffers_t& f_buffers );
 
 
 #endif // _sfa_private_h_

@@ -173,3 +173,98 @@ reduce_accumulator_array( accumulator_array_t * RESTRICT aa ) {
   EXEC_PIPELINES( reduce_accumulators, args, 0 );
   WAIT_PIPELINES();
 }
+/*
+void op1(float* a, float* b, const int k) {
+    a[k] = a[k] + b[k];
+}
+
+void
+reduce_accumulator_array_kokkos( accumulators_array_t* RESTRICT aa) {
+  int i, i1, si = sizeof(accumulator_t) / sizeof(float);
+  int r, nr = args->n_array-1, sr = si*args->s_array;
+  int j, k;
+
+  DISTRIBUTE( args->n, accumulators_n_block,
+              pipeline_rank, n_pipeline, i, i1 ); i1 += i;
+
+  // a is broken into restricted rw and ro parts to allow the compiler
+  // to do more aggresive optimizations
+
+  //    float * RESTRICT ALIGNED(16) a = args->a->jx;
+  const float * RESTRICT ALIGNED(16) b = a + sr;
+
+
+  float f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11;
+
+# define LOOP(OP)                               \
+  for( ; i<i1; i++ ) {                          \
+    k = i*si;                                   \
+    OP(k   );OP(k+ 1);OP(k+ 2);OP(k+ 3);        \
+    OP(k+ 4);OP(k+ 5);OP(k+ 6);OP(k+ 7);        \
+    OP(k+ 8);OP(k+ 9);OP(k+10);OP(k+11);        \
+  }
+# define O1(k) a[k] =    a[k     ] + b[k     ]
+# define O2(k) a[k] =   (a[k     ] + b[k     ]) +  b[k+  sr]
+# define O3(k) a[k] =   (a[k     ] + b[k     ]) + (b[k+  sr] + b[k+2*sr])
+# define O4(k) a[k] =  ((a[k     ] + b[k     ]) + (b[k+  sr] + b[k+2*sr]))  + \
+//                     b[k+3*sr]
+//# define O5(k) a[k] =  ((a[k     ] + b[k     ]) + (b[k+  sr] + b[k+2*sr]))  + \
+//                    (b[k+3*sr] + b[k+4*sr])
+//# define O6(k) a[k] =  ((a[k     ] + b[k     ]) + (b[k+  sr] + b[k+2*sr]))  + \
+//                   ((b[k+3*sr] + b[k+4*sr]) +  b[k+5*sr]          )
+//# define O7(k) a[k] =  ((a[k     ] + b[k     ]) + (b[k+  sr] + b[k+2*sr]))  + \
+//                   ((b[k+3*sr] + b[k+4*sr]) + (b[k+5*sr] + b[k+6*sr]))
+//# define O8(k) a[k] = (((a[k     ] + b[k     ]) + (b[k+  sr] + b[k+2*sr]))  + \
+//                   ((b[k+3*sr] + b[k+4*sr]) + (b[k+5*sr] + b[k+6*sr]))) + \
+//                     b[k+7*sr]
+//# define O9(k) a[k] = (((a[k     ] + b[k     ]) + (b[k+  sr] + b[k+2*sr]))  + \
+//                   ((b[k+3*sr] + b[k+4*sr]) + (b[k+5*sr] + b[k+6*sr]))) + \
+//                    (b[k+7*sr] + b[k+8*sr])
+  
+  switch( nr ) {        
+  case 0:           break;
+  case 1: LOOP(O1); break;
+  case 2: LOOP(O2); break;
+  case 3: LOOP(O3); break;
+  case 4: LOOP(O4); break;
+  case 5: LOOP(O5); break;
+  case 6: LOOP(O6); break;
+  case 7: LOOP(O7); break;
+  case 8: LOOP(O8); break;
+  case 9: LOOP(O9); break;
+  default:
+
+    for( ; i<i1; i++ ) {
+      j = i*si;
+      f0  = a[j+ 0]; f1  = a[j+ 1]; f2  = a[j+ 2]; f3  = a[j+ 3];
+      f4  = a[j+ 4]; f5  = a[j+ 5]; f6  = a[j+ 6]; f7  = a[j+ 7];
+      f8  = a[j+ 8]; f9  = a[j+ 9]; f10 = a[j+10]; f11 = a[j+11];
+      for( r=0; r<nr; r++ ) {
+        k = j + r*sr;
+        f0  += b[k+ 0]; f1  += b[k+ 1]; f2  += b[k+ 2]; f3  += b[k+ 3];
+        f4  += b[k+ 4]; f5  += b[k+ 5]; f6  += b[k+ 6]; f7  += b[k+ 7];
+        f8  += b[k+ 8]; f9  += b[k+ 9]; f10 += b[k+10]; f11 += b[k+11];
+      }
+      a[j+ 0] =  f0; a[j+ 1] =  f1; a[j+ 2] =  f2; a[j+ 3] =  f3;
+      a[j+ 4] =  f4; a[j+ 5] =  f5; a[j+ 6] =  f6; a[j+ 7] =  f7;
+      a[j+ 8] =  f8; a[j+ 9] =  f9; a[j+10] = f10; a[j+11] = f11;
+    }
+    break;
+  }
+
+# undef O9
+# undef O8
+# undef O7
+# undef O6
+# undef O5
+# undef O4
+# undef O3
+# undef O2
+# undef O1
+# undef C
+# undef B
+# undef A
+# undef LOOP
+
+}
+*/

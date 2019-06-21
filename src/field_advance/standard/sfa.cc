@@ -30,6 +30,7 @@ static field_advance_kernels_t sfa_kernels = {
   // Shared face cleaning interface
 
   synchronize_tang_e_norm_b,
+  synchronize_tang_e_norm_b_kokkos,
   
   // Electric field divergence cleaning interface
 
@@ -44,7 +45,10 @@ static field_advance_kernels_t sfa_kernels = {
 
   compute_div_b_err,
   compute_rms_div_b_err,
-  clean_div_b
+  clean_div_b,
+  compute_div_b_err_kokkos,
+  compute_rms_div_b_err_kokkos,
+  clean_div_b_kokkos
 
 };
 

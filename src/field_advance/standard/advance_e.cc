@@ -774,7 +774,10 @@ printf("Advance_E kernel\n");
     Kokkos::deep_copy(k_material_d, k_material_h);
 
     // Field buffers for GPU - GPU communication
-    field_buffers_t f_buffers = field_buffers_t(nx,ny,nz);
+    const int xyz_sz = 1 + ny*(nz+1) + nz*(ny+1);
+    const int yzx_sz = 1 + nz*(nx+1) + nx*(nz+1);
+    const int zxy_sz = 1 + nx*(ny+1) + ny*(nx+1);
+    field_buffers_t f_buffers = field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
 
     /***************************************************************************
     * Begin tangential B ghost setup

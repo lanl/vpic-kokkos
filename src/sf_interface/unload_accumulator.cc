@@ -129,7 +129,31 @@ unload_accumulator_array_kokkos(field_array_t* RESTRICT fa,
     float cx = 0.25 * fa->g->rdy * fa->g->rdz / fa->g->dt;
     float cy = 0.25 * fa->g->rdz * fa->g->rdx / fa->g->dt;
     float cz = 0.25 * fa->g->rdx * fa->g->rdy / fa->g->dt;
-    
+
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nz+2, ny+2, nx+2});
+    Kokkos::parallel_for("unload accumulator array", unload_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
+        int f0 = VOXEL(1, y, z, nx, ny, nz) + x-1;
+        int a0 = VOXEL(1, y, z, nx, ny, nz) + x-1;
+        int ax = VOXEL(0, y, z, nx, ny, nz) + x-1;
+        int ay = VOXEL(1, y-1, z, nx, ny, nz) + x-1;
+        int az = VOXEL(1, y, z-1, nx, ny, nz) + x-1;
+        int ayz = VOXEL(1, y-1, z-1, nx, ny, nz) + x-1;
+        int azx = VOXEL(0, y, z-1, nx, ny, nz) + x-1;
+        int axy = VOXEL(0, y-1, z, nx, ny, nz) + x-1;
+        k_field(f0, field_var::jfx) += cx*( k_accum(a0, accumulator_var::jx, 0) + 
+                                            k_accum(ay, accumulator_var::jx, 1) + 
+                                            k_accum(az, accumulator_var::jx, 2) + 
+                                            k_accum(ayz, accumulator_var::jx, 3) );
+        k_field(f0, field_var::jfy) += cy*( k_accum(a0, accumulator_var::jy, 0) + 
+                                            k_accum(az, accumulator_var::jy, 1) + 
+                                            k_accum(ax, accumulator_var::jy, 2) + 
+                                            k_accum(azx, accumulator_var::jy, 3) );
+        k_field(f0, field_var::jfz) += cz*( k_accum(a0, accumulator_var::jz, 0) + 
+                                            k_accum(ax, accumulator_var::jz, 1) + 
+                                            k_accum(ay, accumulator_var::jz, 2) + 
+                                            k_accum(axy, accumulator_var::jz, 3) );
+    });
+/*    
     Kokkos::parallel_for("unload_accumulator_array", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
         const size_t z = team_member.league_rank() + 1;
@@ -160,4 +184,5 @@ unload_accumulator_array_kokkos(field_array_t* RESTRICT fa,
             });
         });
     });
+*/
 }

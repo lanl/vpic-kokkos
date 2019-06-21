@@ -802,7 +802,10 @@ vacuum_advance_e( field_array_t * RESTRICT fa,
   const float cj     = g->dt/g->eps0;                                        
     
     // Field buffers for GPU - GPU communication
-    field_buffers_t f_buffers = field_buffers_t(nx,ny,nz);
+    const int xyz_sz = 1 + ny*(nz+1) + nz*(ny+1);
+    const int yzx_sz = 1 + nz*(nx+1) + nx*(nz+1);
+    const int zxy_sz = 1 + nx*(ny+1) + ny*(nx+1);
+    field_buffers_t f_buffers = field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
 
   /***************************************************************************
    * Begin tangential B ghost setup

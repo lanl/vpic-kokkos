@@ -124,6 +124,9 @@ delete_accumulator_array( accumulator_array_t * a );
 void
 clear_accumulator_array( accumulator_array_t * RESTRICT a );
 
+void
+clear_accumulator_array_kokkos( accumulator_array_t * RESTRICT a );
+
 // In reduce_accumulators.c
 
 // Going into reduce_accumulators, the host cores and the pipeline

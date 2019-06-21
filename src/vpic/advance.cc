@@ -327,6 +327,10 @@ int vpic_simulation::advance(void) {
     }
     */
 
+  KOKKOS_INTERPOLATOR_VARIABLES();
+  KOKKOS_ACCUMULATOR_VARIABLES();
+  KOKKOS_PARTICLE_VARIABLES();
+
   // At this point, fields are at E_0 and B_0 and the particle positions
   // are at r_0 and u_{-1/2}.  Further the mover lists for the particles should
   // empty and all particles should be inside the local computational domain.
@@ -335,7 +339,11 @@ int vpic_simulation::advance(void) {
 // HOST
 // Touches accumulators
   if( species_list )
-    TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
+//    TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
+    TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
+  UNSAFE_TIC();
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
+  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   // Note: Particles should not have moved since the last performance sort
   // when calling collision operators.
@@ -350,10 +358,6 @@ int vpic_simulation::advance(void) {
   }
 
   //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
-
-  KOKKOS_INTERPOLATOR_VARIABLES();
-  KOKKOS_ACCUMULATOR_VARIABLES();
-  KOKKOS_PARTICLE_VARIABLES();
 
   UNSAFE_TIC(); // Time this data movement
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
@@ -833,9 +837,9 @@ int vpic_simulation::advance(void) {
 //        KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 //        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
       TIC FAK->compute_div_e_err( field_array ); TOC( compute_div_e_err, 1 );
-        UNSAFE_TIC();
-        KOKKOS_COPY_FIELD_MEM_TO_HOST();
-        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//        UNSAFE_TIC();
+//        KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
       if( round==0 || round==num_div_e_round-1 ) {
 //        TIC err = FAK->compute_rms_div_e_err( field_array ); TOC( compute_rms_div_e_err, 1 );
         TIC err = FAK->compute_rms_div_e_err_kokkos( field_array ); TOC( compute_rms_div_e_err, 1 );
@@ -845,18 +849,20 @@ int vpic_simulation::advance(void) {
         if( rank()==0 ) MESSAGE(( "%s rms error = %e (charge/volume)", round==0 ? "Initial" : "Cleaned", err ));
       }
       TIC FAK->clean_div_e( field_array ); TOC( clean_div_e, 1 );
-        UNSAFE_TIC();
-        KOKKOS_COPY_FIELD_MEM_TO_HOST();
-        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 //        UNSAFE_TIC();
 //        KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 //        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//        UNSAFE_TIC();
+//        KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
     }
-  } else {
-    UNSAFE_TIC();
-    KOKKOS_COPY_FIELD_MEM_TO_HOST();
-    UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//    UNSAFE_TIC();
+//    KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//    UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
   }
+//    UNSAFE_TIC();
+//    KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//    UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Divergence clean b
 // HOST
@@ -865,14 +871,32 @@ int vpic_simulation::advance(void) {
     if( rank()==0 ) MESSAGE(( "Divergence cleaning magnetic field" ));
 
     for( int round=0; round<num_div_b_round; round++ ) {
-      TIC FAK->compute_div_b_err( field_array ); TOC( compute_div_b_err, 1 );
+//      TIC FAK->compute_div_b_err( field_array ); TOC( compute_div_b_err, 1 );
+      TIC FAK->compute_div_b_err_kokkos( field_array ); TOC( compute_div_b_err, 1 );
+//      UNSAFE_TIC();
+//      KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//      UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
       if( round==0 || round==num_div_b_round-1 ) {
-        TIC err = FAK->compute_rms_div_b_err( field_array ); TOC( compute_rms_div_b_err, 1 );
+//        TIC err = FAK->compute_rms_div_b_err( field_array ); TOC( compute_rms_div_b_err, 1 );
+        TIC err = FAK->compute_rms_div_b_err_kokkos( field_array ); TOC( compute_rms_div_b_err, 1 );
+//        UNSAFE_TIC();
+//        KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
         if( rank()==0 ) MESSAGE(( "%s rms error = %e (charge/volume)", round==0 ? "Initial" : "Cleaned", err ));
       }
-      TIC FAK->clean_div_b( field_array ); TOC( clean_div_b, 1 );
+//        UNSAFE_TIC();
+//        KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//      TIC FAK->clean_div_b( field_array ); TOC( clean_div_b, 1 );
+      TIC FAK->clean_div_b_kokkos( field_array ); TOC( clean_div_b, 1 );
+//        UNSAFE_TIC();
+//        KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
     }
   }
+  UNSAFE_TIC();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Synchronize the shared faces
 // HOST

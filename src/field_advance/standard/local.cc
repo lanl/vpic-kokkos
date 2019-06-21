@@ -746,6 +746,124 @@ k_local_ghost_norm_e( field_array_t      * ALIGNED(128) f,
     apply_local_norm_e<ZXY>(f, g, 0, 0, 1);
 }
 
+template<typename T> void apply_local_div_b(field_array_t* fa, const int i, const int j, const int k) {}
+template<> void apply_local_div_b<XYZ>(field_array_t* fa, const int i, const int j, const int k) {
+    const grid_t* g = fa->g;
+    const int nx = g->nx, ny = g->ny, nz = g->nz;
+    const int bc = g->bc[BOUNDARY(i,j,k)];
+    if(bc < 0 || bc >= world_size) {
+        const int face = (i+j+k)<0 ? 0 : nx+1;
+        k_field_t& k_field = fa->k_f_d;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_face({1, 1}, {nz+1, ny+1});
+        switch(bc) {
+            case anti_symmetric_fields:
+                Kokkos::parallel_for("apply_local_div_b<XYZ>: anti_symmetric_fields", x_face, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_b_err) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::div_b_err);
+                });
+                break;
+            case symmetric_fields:
+                break;
+            case pmc_fields:
+                Kokkos::parallel_for("apply_local_div_b<XYZ>: pmc_fields", x_face, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_b_err) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::div_b_err);
+                });
+                break;
+            case absorb_fields:
+                Kokkos::parallel_for("apply_local_div_b<XYZ>: absorb_fields", x_face, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_b_err) = 0.f;
+                });
+                break;
+            default:
+                ERROR(("Bad boundary condition encountered."));
+                break;
+        }
+    }
+}
+template<> void apply_local_div_b<YZX>(field_array_t* fa, const int i, const int j, const int k) {
+    const grid_t* g = fa->g;
+    const int nx = g->nx, ny = g->ny, nz = g->nz;
+    const int bc = g->bc[BOUNDARY(i,j,k)];
+    if(bc < 0 || bc >= world_size) {
+        const int face = (i+j+k)<0 ? 0 : ny+1;
+        k_field_t& k_field = fa->k_f_d;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> y_face({1, 1}, {nz+1, nx+1});
+        switch(bc) {
+            case anti_symmetric_fields:
+                Kokkos::parallel_for("apply_local_div_b<YZX>: anti_symmetric_fields", y_face, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_b_err) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::div_b_err);
+                });
+                break;
+            case symmetric_fields:
+                break;
+            case pmc_fields:
+                Kokkos::parallel_for("apply_local_div_b<YZX>: pmc_fields", y_face, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_b_err) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::div_b_err);
+                });
+                break;
+            case absorb_fields:
+                Kokkos::parallel_for("apply_local_div_b<YZX>: absorb_fields", y_face, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_b_err) = 0.f;
+                });
+                break;
+            default:
+                ERROR(("Bad boundary condition encountered."));
+                break;
+        }
+    }
+}
+template<> void apply_local_div_b<ZXY>(field_array_t* fa, const int i, const int j, const int k) {
+    const grid_t* g = fa->g;
+    const int nx = g->nx, ny = g->ny, nz = g->nz;
+    const int bc = g->bc[BOUNDARY(i,j,k)];
+    if(bc < 0 || bc >= world_size) {
+        const int face = (i+j+k)<0 ? 0 : nz+1;
+        k_field_t& k_field = fa->k_f_d;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> z_face({1, 1}, {ny+1, nx+1});
+        switch(bc) {
+            case anti_symmetric_fields:
+                Kokkos::parallel_for("apply_local_div_b<ZXY>: anti_symmetric_fields", z_face, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_b_err) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::div_b_err);
+                });
+                break;
+            case symmetric_fields:
+                break;
+            case pmc_fields:
+                Kokkos::parallel_for("apply_local_div_b<ZXY>: pmc_fields", z_face, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_b_err) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::div_b_err);
+                });
+                break;
+            case absorb_fields:
+                Kokkos::parallel_for("apply_local_div_b<ZXY>: absorb_fields", z_face, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_b_err) = 0.f;
+                });
+                break;
+            default:
+                ERROR(("Bad boundary condition encountered."));
+                break;
+        }
+    }
+}
+
+void
+k_local_ghost_div_b( field_array_t      * ALIGNED(128) fa,
+                   const grid_t *              g ) {
+    apply_local_div_b<XYZ>(fa, -1,  0,  0);
+    apply_local_div_b<YZX>(fa,  0, -1,  0);
+    apply_local_div_b<ZXY>(fa,  0,  0, -1);
+    apply_local_div_b<XYZ>(fa,  1,  0,  0);
+    apply_local_div_b<YZX>(fa,  0,  1,  0);
+    apply_local_div_b<ZXY>(fa,  0,  0,  1);
+}
+
 void
 local_ghost_div_b( field_t      * ALIGNED(128) f,
                    const grid_t *              g ) {
@@ -1434,6 +1552,7 @@ local_adjust_jf( field_t      * ALIGNED(128) f,
 }
 
 template<typename T> void adjust_jf(field_array_t* fa, const grid_t* g, int i, int j, int k) {
+/*
     int face;
     int sx, sy, sz, ex1, ex2, ey1, ey2, ez1, ez2; // start and end indices
     int nx = g->nx, ny = g->ny, nz = g->nz;
@@ -1485,6 +1604,124 @@ template<typename T> void adjust_jf(field_array_t* fa, const grid_t* g, int i, i
                 });
                 Kokkos::parallel_for("adjust_jf: edge loop 2", policy2, KOKKOS_LAMBDA(const int kk, const int jj, const int ii) {
                     k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfZ) *= 2;
+                });
+                break;
+            default:
+                ERROR(("Bad boundary condition encountered."));
+                break;
+        }
+    }
+*/
+}
+template<> void adjust_jf<XYZ>(field_array_t* fa, const grid_t* g, int i, int j, int k) {
+    const k_field_t& k_field = fa->k_f_d;
+    const int nx = g->nx, ny = g->ny, nz = g->nz;
+    const int bc = g->bc[BOUNDARY(i,j,k)];
+    if( bc < 0 || bc >= world_size ) {
+        const int face = (i+j+k)<0 ? 1 : nx+1;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> yz_edge({1, 1}, {nz+2, ny+1});
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> zy_edge({1, 1}, {nz+1, ny+2});
+        switch(bc) {
+            case anti_symmetric_fields:
+                Kokkos::parallel_for("adjust_jf<XYZ>: yz_edge_loop", yz_edge, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = 0;
+                });
+                Kokkos::parallel_for("adjust_jf<XYZ>: zy_edge_loop", zy_edge, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = 0;
+                });
+                break;
+            case symmetric_fields:
+                break;
+            case pmc_fields:
+                break;
+            case absorb_fields:
+                Kokkos::parallel_for("adjust_jf<XYZ>: yz_edge_loop", yz_edge, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) * 2.;
+                });
+                Kokkos::parallel_for("adjust_jf<XYZ>: zy_edge_loop", zy_edge, KOKKOS_LAMBDA(const int z, const int y) {
+                    const int x = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) * 2.;
+                });
+                break;
+            default:
+                ERROR(("Bad boundary condition encountered."));
+                break;
+        }
+    }
+}
+template<> void adjust_jf<YZX>(field_array_t* fa, const grid_t* g, int i, int j, int k) {
+    const k_field_t& k_field = fa->k_f_d;
+    const int nx = g->nx, ny = g->ny, nz = g->nz;
+    const int bc = g->bc[BOUNDARY(i,j,k)];
+    if( bc < 0 || bc >= world_size ) {
+        const int face = (i+j+k)<0 ? 1 : ny+1;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> zx_edge({1, 1}, {nz+1, nx+2});
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> xz_edge({1, 1}, {nz+2, nx+1});
+        switch(bc) {
+            case anti_symmetric_fields:
+                Kokkos::parallel_for("adjust_jf<YZX>: zx_edge_loop", zx_edge, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = 0;
+                });
+                Kokkos::parallel_for("adjust_jf<YZX>: xz_edge_loop", xz_edge, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) = 0;
+                });
+                break;
+            case symmetric_fields:
+                break;
+            case pmc_fields:
+                break;
+            case absorb_fields:
+                Kokkos::parallel_for("adjust_jf<YZX>: zx_edge_loop", zx_edge, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) * 2.;
+                });
+                Kokkos::parallel_for("adjust_jf<YZX>: xz_edge_loop", xz_edge, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) * 2.;
+                });
+                break;
+            default:
+                ERROR(("Bad boundary condition encountered."));
+                break;
+        }
+    }
+}
+template<> void adjust_jf<ZXY>(field_array_t* fa, const grid_t* g, int i, int j, int k) {
+    const k_field_t& k_field = fa->k_f_d;
+    const int nx = g->nx, ny = g->ny, nz = g->nz;
+    const int bc = g->bc[BOUNDARY(i,j,k)];
+    if( bc < 0 || bc >= world_size ) {
+        const int face = (i+j+k)<0 ? 1 : nz+1;
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> xy_edge({1, 1}, {ny+2, nx+1});
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>> yx_edge({1, 1}, {ny+1, nx+2});
+        switch(bc) {
+            case anti_symmetric_fields:
+                Kokkos::parallel_for("adjust_jf<ZXY>: yz_edge_loop", xy_edge, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) = 0;
+                });
+                Kokkos::parallel_for("adjust_jf<ZXY>: zy_edge_loop", yx_edge, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = 0;
+                });
+                break;
+            case symmetric_fields:
+                break;
+            case pmc_fields:
+                break;
+            case absorb_fields:
+                Kokkos::parallel_for("adjust_jf<ZXY>: yz_edge_loop", xy_edge, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) * 2.;
+                });
+                Kokkos::parallel_for("adjust_jf<ZXY>: zy_edge_loop", yx_edge, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = face;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) * 2.;
                 });
                 break;
             default:

@@ -174,3 +174,27 @@ compute_div_b_err( field_array_t * RESTRICT fa ) {
   EXEC_PIPELINES( compute_div_b_err, args, 0 );
   WAIT_PIPELINES();
 }
+
+void
+compute_div_b_err_kokkos( field_array_t * RESTRICT fa ) {
+
+    if( !fa ) ERROR(( "Bad args" ));
+
+    const grid_t* g = fa->g;
+    const int nx = g->nx, ny = g->ny, nz = g->nz;
+    const float px = (nx>1) ? g->rdx : 0;
+    const float py = (ny>1) ? g->rdy : 0;
+    const float pz = (nz>1) ? g->rdz : 0;
+
+    k_field_t& k_field = fa->k_f_d;
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>> zyx_policy({1, 1, 1}, {nz+1, ny+1, nx+1});
+    Kokkos::parallel_for("compute_div_b_err", zyx_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
+        const int f0 = VOXEL(1, y,   z,   nx, ny, nz) + (x-1);
+        const int fx = VOXEL(2, y,   z,   nx, ny, nz) + (x-1);
+        const int fy = VOXEL(1, y+1, z,   nx, ny, nz) + (x-1);
+        const int fz = VOXEL(1, y,   z+1, nx, ny, nz) + (x-1);
+        k_field(f0, field_var::div_b_err) = px*( k_field(fx, field_var::cbx) - k_field(f0, field_var::cbx) ) +
+                                            py*( k_field(fy, field_var::cby) - k_field(f0, field_var::cby) ) +
+                                            pz*( k_field(fz, field_var::cbz) - k_field(f0, field_var::cbz) );
+    });
+}
