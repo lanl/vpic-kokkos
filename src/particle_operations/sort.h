@@ -33,6 +33,7 @@ struct DefaultSort {
         Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, np, comp, sort_within_bins );
         bin_sort.create_permute_vector();
         bin_sort.sort(particles);
+        bin_sort.sort(particles_i);
     }
 
 };
