@@ -216,7 +216,7 @@ typedef struct field_advance_kernels {
   void   (*clean_div_e          )( /**/  struct field_array * RESTRICT fa );
   void   (*k_compute_div_e_err  )( /**/  struct field_array * RESTRICT fa );
   double (*compute_rms_div_e_err_kokkos)(const struct field_array * RESTRICT fa);
-//  void   (*clean_div_e_kokkos   )( /**/  struct field_array * RESTRICT fa );
+  void   (*clean_div_e_kokkos   )( /**/  struct field_array * RESTRICT fa );
 
   // Magnetic field divergence cleaning interface
 

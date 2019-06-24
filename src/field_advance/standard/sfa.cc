@@ -39,7 +39,7 @@ static field_advance_kernels_t sfa_kernels = {
   clean_div_e,
   k_compute_div_e_err,
   compute_rms_div_e_err_kokkos,
-//  clean_div_e_kokkos,
+  clean_div_e_kokkos,
 
   // Magnetic field divergence cleaning interface
 
@@ -231,6 +231,7 @@ new_standard_field_array( grid_t           * RESTRICT g,
     fa->kernel->compute_curl_b    = vacuum_compute_curl_b;
     fa->kernel->compute_div_e_err = vacuum_compute_div_e_err;
     fa->kernel->clean_div_e       = vacuum_clean_div_e;
+    fa->kernel->clean_div_e_kokkos= vacuum_clean_div_e_kokkos;
   }
 
   REGISTER_OBJECT( fa, checkpt_standard_field_array,

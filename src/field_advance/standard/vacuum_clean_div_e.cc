@@ -80,7 +80,7 @@ vacuum_clean_div_e_pipeline( pipeline_args_t * args,
 #endif
 
 void
-vacuum_clean_div_e_host( field_array_t * fa ) {
+vacuum_clean_div_e( field_array_t * fa ) {
   if( !fa ) ERROR(( "Bad args" ));
 
   // Do majority of field components in single pass on the pipelines.
@@ -154,7 +154,7 @@ vacuum_clean_div_e_host( field_array_t * fa ) {
 }
 
 void
-vacuum_clean_div_e( field_array_t * fa ) {
+vacuum_clean_div_e_kokkos( field_array_t * fa ) {
   if( !fa ) ERROR(( "Bad args" ));
 
   // Do majority of field components in single pass on the pipelines.

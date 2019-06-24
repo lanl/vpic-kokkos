@@ -853,7 +853,7 @@ int vpic_simulation::advance(void) {
 //        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
         if( rank()==0 ) MESSAGE(( "%s rms error = %e (charge/volume)", round==0 ? "Initial" : "Cleaned", err ));
       }
-      TIC FAK->clean_div_e( field_array ); TOC( clean_div_e, 1 );
+      TIC FAK->clean_div_e_kokkos( field_array ); TOC( clean_div_e, 1 );
 //        UNSAFE_TIC();
 //        KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 //        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
