@@ -138,6 +138,9 @@ clear_accumulator_array_kokkos( accumulator_array_t * RESTRICT a );
 void
 reduce_accumulator_array( accumulator_array_t * RESTRICT a );
 
+void
+reduce_accumulator_array_kokkos( accumulator_array_t * RESTRICT a );
+
 // In unload_accumulator.c
 
 // Going into unload_accumulator, the accumulator contains 4 times the

@@ -341,9 +341,9 @@ int vpic_simulation::advance(void) {
   if( species_list )
 //    TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
     TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
-  UNSAFE_TIC();
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
-  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC();
+//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
+//  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   // Note: Particles should not have moved since the last performance sort
   // when calling collision operators.
@@ -359,12 +359,12 @@ int vpic_simulation::advance(void) {
 
   //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
-  UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
-  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
-  UNSAFE_TIC();
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
-  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC(); // Time this data movement
+//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
+//  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC();
+//  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+//  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 //  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
 
   //int lna = 180;
@@ -384,9 +384,9 @@ int vpic_simulation::advance(void) {
   UNSAFE_TIC(); // Time this data movement
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
   UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
-  UNSAFE_TIC()
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
-  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC()
+//  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+//  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 
   UNSAFE_TIC(); // Time this data movement
   LIST_FOR_EACH( sp, species_list ) {
@@ -463,10 +463,15 @@ int vpic_simulation::advance(void) {
   // This should be after the emission and injection to allow for the
   // possibility of thread parallelizing these operations
 
+  UNSAFE_TIC();
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
+  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+
 // HOST
 // Touches accumulator memory
   if( species_list )
-    TIC reduce_accumulator_array( accumulator_array ); TOC( reduce_accumulators, 1 );
+//    TIC reduce_accumulator_array( accumulator_array ); TOC( reduce_accumulators, 1 );
+    TIC reduce_accumulator_array_kokkos( accumulator_array ); TOC( reduce_accumulators, 1 );
 
   // At this point, most particle positions are at r_1 and u_{1/2}. Particles
   // that had boundary interactions are now on the guard list. Process the
@@ -499,7 +504,7 @@ int vpic_simulation::advance(void) {
   // Update device so we can pull it all the way back to the host
   UNSAFE_TIC(); // Time this data movement
   Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
+//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
   UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   /*
@@ -720,9 +725,9 @@ int vpic_simulation::advance(void) {
 //  KOKKOS_COPY_FIELD_MEM_TO_HOST();
 //  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
-  UNSAFE_TIC();
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
-  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC();
+//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
+//  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   if( species_list )
     TIC unload_accumulator_array_kokkos( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
@@ -730,9 +735,9 @@ int vpic_simulation::advance(void) {
 //  UNSAFE_TIC();
 //  KOKKOS_COPY_FIELD_MEM_TO_HOST();
 //  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
-  UNSAFE_TIC();
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
-  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC();
+//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
+//  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
 //  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
   TIC FAK->k_synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
@@ -894,16 +899,17 @@ int vpic_simulation::advance(void) {
 //        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
     }
   }
-  UNSAFE_TIC();
-  KOKKOS_COPY_FIELD_MEM_TO_HOST();
-  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC();
+//  KOKKOS_COPY_FIELD_MEM_TO_HOST();
+//  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Synchronize the shared faces
 // HOST
 // Touches fields
   if( (sync_shared_interval>0) && ((step() % sync_shared_interval)==0) ) {
     if( rank()==0 ) MESSAGE(( "Synchronizing shared tang e, norm b, rho_b" ));
-    TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+//    TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+    TIC err = FAK->synchronize_tang_e_norm_b_kokkos( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
     if( rank()==0 ) MESSAGE(( "Domain desynchronization error = %e (arb units)", err ));
   }
 
@@ -911,20 +917,20 @@ int vpic_simulation::advance(void) {
   // particle diagnostics in user_diagnostics if there are any particle
   // species to worry about
 
-  UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
-  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
-  UNSAFE_TIC();
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
-  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC(); // Time this data movement
+//  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+//  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC();
+//  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+//  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 
 // DEVICE
 // Touches fields, interpolators
   if( species_list ) TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
 
-  UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
-  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC(); // Time this data movement
+//  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+//  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
   UNSAFE_TIC();
   KOKKOS_COPY_FIELD_MEM_TO_HOST();
   UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);

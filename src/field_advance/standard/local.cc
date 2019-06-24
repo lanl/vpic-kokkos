@@ -146,30 +146,32 @@ template<> void apply_local_tang_b<XYZ>(int i, int j, int k,
     float drive, decay;
     int bc = g->bc[BOUNDARY(i,j,k)];
     k_field_t k_field = f->k_f_d;
-    Kokkos::MDRangePolicy<Kokkos::Rank<2> > zy_policy({1,1},{nz+1,ny+2});
-    Kokkos::MDRangePolicy<Kokkos::Rank<2> > yz_policy({1,1},{nz+2,ny+1});
+    Kokkos::MDRangePolicy<Kokkos::Rank<2> > zy_edge({1,1},{nz+1,ny+2});
+    Kokkos::MDRangePolicy<Kokkos::Rank<2> > yz_edge({1,1},{nz+2,ny+1});
+//    Kokkos::View<float**> cby_copy = Kokkos::View<float**>("temporary buffer for XYZ absorb fields: zy edge", nz+2, ny+2);
+
 
     if(bc < 0 || bc >= world_size) {
         int ghost = (i+j+k)<0 ? 0 : nx+1;
         int face  = (i+j+k)<0 ? 1 : nx+1;
         switch(bc) {
             case anti_symmetric_fields:
-                Kokkos::parallel_for("apply_local_tang_b<XYZ>: anti_symmetric_fields: ZY Edge loop", zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+                Kokkos::parallel_for("apply_local_tang_b<XYZ>: anti_symmetric_fields: ZY Edge loop", zy_edge, KOKKOS_LAMBDA(const int z, const int y) {
                     k_field(VOXEL(ghost,y,z,nx,ny,nz), field_var::cby) = k_field(VOXEL(ghost-i,y-j,z-k,nx,ny,nz), field_var::cby);
                 });
 
-                Kokkos::parallel_for("apply_local_tang_b<XYZ>: anti_symmetric_fields: YZ Edge loop", yz_policy, KOKKOS_LAMBDA(const int z, const int y) {
+                Kokkos::parallel_for("apply_local_tang_b<XYZ>: anti_symmetric_fields: YZ Edge loop", yz_edge, KOKKOS_LAMBDA(const int z, const int y) {
                     k_field(VOXEL(ghost,y,z,nx,ny,nz), field_var::cbz) = k_field(VOXEL(ghost-i,y-j,z-k,nx,ny,nz), field_var::cbz);
                 });
 
                 break;
             case symmetric_fields:
             case pmc_fields:
-                Kokkos::parallel_for("apply_local_tang_b<XYZ>: pmc_fields: ZY Edge loop", zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+                Kokkos::parallel_for("apply_local_tang_b<XYZ>: pmc_fields: ZY Edge loop", zy_edge, KOKKOS_LAMBDA(const int z, const int y) {
                     k_field(VOXEL(ghost,y,z,nx,ny,nz), field_var::cby) = -k_field(VOXEL(ghost-i,y-j,z-k,nx,ny,nz), field_var::cby);
                 });
 
-                Kokkos::parallel_for("apply_local_tang_b<XYZ>: pmc_fields: YZ Edge loop", yz_policy, KOKKOS_LAMBDA(const int z, const int y) {
+                Kokkos::parallel_for("apply_local_tang_b<XYZ>: pmc_fields: YZ Edge loop", yz_edge, KOKKOS_LAMBDA(const int z, const int y) {
                     k_field(VOXEL(ghost,y,z,nx,ny,nz), field_var::cbz) = -k_field(VOXEL(ghost-i,y-j,z-k,nx,ny,nz), field_var::cbz);
                 });
 
@@ -179,6 +181,80 @@ template<> void apply_local_tang_b<XYZ>(int i, int j, int k,
                 decay = (1-drive)/(1+drive);
                 drive = 2*drive/(1+drive);
 
+                Kokkos::parallel_for("XYZ absorb_fields: zy_edge", zy_edge, KOKKOS_LAMBDA(int z, int y) {
+                    int x = ghost;
+                    const int fg = VOXEL(x,y,z,nx,ny,nz);
+                    const int fh = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    const float fg_cby = k_field(fg, field_var::cby);
+                    const float fh_cby = k_field(fh, field_var::cby);
+                    x = face;
+                    float t1 = cdt_dx*(k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ez) - k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez));
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    x = ghost;
+                    z++;
+                    float t2 = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ex);
+                    z--;
+                    t2 = cdt_dz * (t2 - k_field(fh, field_var::ex));
+                    Kokkos::memory_fence();
+                    k_field(fg, field_var::cby) = decay*fg_cby + drive * fh_cby - t1 + t2;
+                });
+                Kokkos::parallel_for("XYZ absorb_fields: yz_edge", yz_edge, KOKKOS_LAMBDA(int z, int y) {
+                    int x = ghost;
+                    const int fg = VOXEL(x,y,z,nx,ny,nz);
+                    const int fh = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    const float fg_cbz = k_field(fg, field_var::cbz);
+                    const float fh_cbz = k_field(fh, field_var::cbz);
+                    x = face;
+                    float t1 = cdt_dx*(k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ey) - k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey));
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    x = ghost;
+                    y++;
+                    float t2 = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ex);
+                    y--;
+                    t2 = cdt_dy * (t2 - k_field(fh, field_var::ex));
+                    Kokkos::memory_fence();
+                    k_field(fg, field_var::cbz) = decay*fg_cbz + drive * fh_cbz + t1 - t2;
+                });
+/*
+                Kokkos::parallel_for("XYZ absorb_fields: zy_edge", zy_edge, KOKKOS_LAMBDA(int z, int y) {
+                    int x = ghost;
+                    const int fg = VOXEL(x,y,z,nx,ny,nz);
+                    const int fh = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    x = face;
+                    float t1 = cdt_dx*(k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ez) - k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez));
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    x = ghost;
+                    z++;
+                    float t2 = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ex);
+                    z--;
+                    t2 = cdt_dz * (t2 - k_field(fh, field_var::ex));
+                    cby_copy(y,z) = decay*k_field(fg, field_var::cby) + drive * k_field(fh, field_var::cby) - t1 + t2;
+                });
+                Kokkos::parallel_for("XYZ absorb_fields set: zy_edge", zy_edge, KOKKOS_LAMBDA(int z, int y) {
+                    const int x = ghost;
+                    k_field(VOXEL(x,y,z,nx,ny,nz),field_var::cby) = cby_copy(y,z);
+                });
+
+                Kokkos::parallel_for("XYZ absorb_fields: yz_edge", yz_edge, KOKKOS_LAMBDA(int z, int y) {
+                    int x = ghost;
+                    const int fg = VOXEL(x,y,z,nx,ny,nz);
+                    const int fh = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    x = face;
+                    float t1 = cdt_dx*(k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ey) - k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey));
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    x = ghost;
+                    y++;
+                    float t2 = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ex);
+                    y--;
+                    t2 = cdt_dy * (t2 - k_field(fh, field_var::ex));
+                    cby_copy(y,z) = decay*k_field(fg, field_var::cbz) + drive * k_field(fh, field_var::cbz) + t1 - t2;
+                });
+                Kokkos::parallel_for("XYZ absorb_fields set: yz_edge", yz_edge, KOKKOS_LAMBDA(int z, int y) {
+                    const int x = ghost;
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = cby_copy(y,z);
+                });
+*/
+/*
                 Kokkos::parallel_for("XYZ absorb_fields serial", 1, KOKKOS_LAMBDA(const int idx) {
                     for(int z=1; z<=nz; z++) {
                         for(int y=1; y<=ny+1; y++) {
@@ -215,6 +291,7 @@ template<> void apply_local_tang_b<XYZ>(int i, int j, int k,
                         }
                     }
                 });
+*/
                 break;
             default:
                 ERROR(("Bad boundary condition encountered."));
@@ -232,24 +309,28 @@ template<> void apply_local_tang_b<YZX>(int i, int j, int k,
     if(bc < 0 || bc >= world_size) {
         int ghost = (i+j+k)<0 ? 0 : ny+1;
         int face = (i+j+k)<0 ? 1 : ny+1;
-        Kokkos::MDRangePolicy<Kokkos::Rank<3> > xz_policy({1,ghost,1},{nx+1,ghost+1,nz+2});
-        Kokkos::MDRangePolicy<Kokkos::Rank<3> > zx_policy({1,ghost,1},{nx+2,ghost+1,nz+1});
+        Kokkos::MDRangePolicy<Kokkos::Rank<2> > xz_edge({1,1},{nz+2,nx+1});
+        Kokkos::MDRangePolicy<Kokkos::Rank<2> > zx_edge({1,1},{nz+1,nx+2});
         switch(bc) {
             case anti_symmetric_fields:
-                Kokkos::parallel_for("apply_local_tang_b<YZX>: anti_symmetric_fields: XZ Edge loop", xz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+                Kokkos::parallel_for("apply_local_tang_b<YZX>: anti_symmetric_fields: XZ Edge loop", xz_edge, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = ghost;
                     k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cbz);
                 });
-                Kokkos::parallel_for("apply_local_tang_b<YZX>: anti_symmetric_fields: ZX Edge loop", zx_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+                Kokkos::parallel_for("apply_local_tang_b<YZX>: anti_symmetric_fields: ZX Edge loop", zx_edge, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = ghost;
                     k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cbx);
                 });
 
                 break;
             case symmetric_fields:
             case pmc_fields:
-                Kokkos::parallel_for("apply_local_tang_b<XYZ>: pmc_fields: XZ Edge loop", xz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+                Kokkos::parallel_for("apply_local_tang_b<XYZ>: pmc_fields: XZ Edge loop", xz_edge, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = ghost;
                     k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cbz);
                 });
-                Kokkos::parallel_for("apply_local_tang_b<XYZ>: pmc_fields: ZX Edge loop", zx_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+                Kokkos::parallel_for("apply_local_tang_b<XYZ>: pmc_fields: ZX Edge loop", zx_edge, KOKKOS_LAMBDA(const int z, const int x) {
+                    const int y = ghost;
                     k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cbx);
                 });
 
@@ -259,6 +340,41 @@ template<> void apply_local_tang_b<YZX>(int i, int j, int k,
                 decay = (1-drive)/(1+drive);
                 drive = 2*drive/(1+drive);
 
+                Kokkos::parallel_for("YZX absorb_fields: xz_edge", xz_edge, KOKKOS_LAMBDA(int z, int x) {
+                    int y = ghost;
+                    const int fg = VOXEL(x,y,z,nx,ny,nz);
+                    const int fh = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    const float fg_cbz = k_field(fg, field_var::cbz);
+                    const float fh_cbz = k_field(fh, field_var::cbz);
+                    y = face;
+                    float t1 = cdt_dy*(k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ex) - k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex));
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    y = ghost;
+                    x++;
+                    float t2 = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ey);
+                    x--;
+                    t2 = cdt_dx * (t2 - k_field(fh, field_var::ey));
+                    Kokkos::memory_fence();
+                    k_field(fg, field_var::cbz) = decay*fg_cbz + drive * fh_cbz - t1 + t2;
+                });
+                Kokkos::parallel_for("YZX absorb_fields: zx_edge", zx_edge, KOKKOS_LAMBDA(int z, int x) {
+                    int y = ghost;
+                    const int fg = VOXEL(x,y,z,nx,ny,nz);
+                    const int fh = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    const float fg_cbx = k_field(fg, field_var::cbx);
+                    const float fh_cbx = k_field(fh, field_var::cbx);
+                    y = face;
+                    float t1 = cdt_dy*(k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ez) - k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez));
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    y = ghost;
+                    z++;
+                    float t2 = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ey);
+                    z--;
+                    t2 = cdt_dz * (t2 - k_field(fh, field_var::ey));
+                    Kokkos::memory_fence();
+                    k_field(fg, field_var::cbx) = decay*fg_cbx + drive * fh_cbx + t1 - t2;
+                });
+/*
                 Kokkos::parallel_for("YZX absorb_fields serial", 1, KOKKOS_LAMBDA(const int idx) {
                     for(int z=1; z<=nz+1; z++) {
                         for(int y=ghost; y<=ghost; y++) {
@@ -295,6 +411,7 @@ template<> void apply_local_tang_b<YZX>(int i, int j, int k,
                         }
                     }
                 });
+*/
                 break;
             default:
                 ERROR(("Bad boundary condition encountered."));
@@ -312,24 +429,28 @@ template<> void apply_local_tang_b<ZXY>(int i, int j, int k,
     if(bc < 0 || bc >= world_size) {
         int ghost = (i+j+k)<0 ? 0 : nz+1;
         int face = (i+j+k)<0 ? 1 : nz+1;
-        Kokkos::MDRangePolicy<Kokkos::Rank<3> > yx_policy({1,1,ghost},{nx+2,ny+1,ghost});
-        Kokkos::MDRangePolicy<Kokkos::Rank<3> > xy_policy({1,1,ghost},{nx+1,ny+2,ghost});
+        Kokkos::MDRangePolicy<Kokkos::Rank<2> > yx_edge({1,1},{ny+1,nx+2});
+        Kokkos::MDRangePolicy<Kokkos::Rank<2> > xy_edge({1,1},{ny+2,nx+1});
         switch(bc) {
             case anti_symmetric_fields:
-                Kokkos::parallel_for("apply_local_tang_b<ZXY>: anti_symmetric_fields: YX Edge loop", yx_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+                Kokkos::parallel_for("apply_local_tang_b<ZXY>: anti_symmetric_fields: YX Edge loop", yx_edge, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = ghost;
                     k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cbx);
                 });
-                Kokkos::parallel_for("apply_local_tang_b<ZXY>: anti_symmetric_fields: XY Edge loop", xy_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+                Kokkos::parallel_for("apply_local_tang_b<ZXY>: anti_symmetric_fields: XY Edge loop", xy_edge, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = ghost;
                     k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cby);
                 });
 
                 break;
             case symmetric_fields:
             case pmc_fields:
-                Kokkos::parallel_for("apply_local_tang_b<XYZ>: pmc_fields: YX Edge loop", yx_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+                Kokkos::parallel_for("apply_local_tang_b<XYZ>: pmc_fields: YX Edge loop", yx_edge, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = ghost;
                     k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cbx);
                 });
-                Kokkos::parallel_for("apply_local_tang_b<XYZ>: pmc_fields: XY Edge loop", xy_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+                Kokkos::parallel_for("apply_local_tang_b<XYZ>: pmc_fields: XY Edge loop", xy_edge, KOKKOS_LAMBDA(const int y, const int x) {
+                    const int z = ghost;
                     k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cby);
                 });
 
@@ -339,6 +460,41 @@ template<> void apply_local_tang_b<ZXY>(int i, int j, int k,
                 decay = (1-drive)/(1+drive);
                 drive = 2*drive/(1+drive);
 
+                Kokkos::parallel_for("ZXY absorb_fields: yx_edge", yx_edge, KOKKOS_LAMBDA(int y, int x) {
+                    int z = ghost;
+                    const int fg = VOXEL(x,y,z,nx,ny,nz);
+                    const int fh = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    const float fg_cbx = k_field(fg, field_var::cbx);
+                    const float fh_cbx = k_field(fh, field_var::cbx);
+                    z = face;
+                    float t1 = cdt_dz*(k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ey) - k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey));
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    z = ghost;
+                    y++;
+                    float t2 = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ez);
+                    y--;
+                    t2 = cdt_dy * (t2 - k_field(fh, field_var::ez));
+                    Kokkos::memory_fence();
+                    k_field(fg, field_var::cbx) = decay*fg_cbx + drive * fh_cbx - t1 + t2;
+                });
+                Kokkos::parallel_for("ZXY absorb_fields: xy_edge", xy_edge, KOKKOS_LAMBDA(int y, int x) {
+                    int z = ghost;
+                    const int fg = VOXEL(x,y,z,nx,ny,nz);
+                    const int fh = VOXEL(x-i,y-j,z-k,nx,ny,nz);
+                    const float fg_cby = k_field(fg, field_var::cby);
+                    const float fh_cby = k_field(fh, field_var::cby);
+                    z = face;
+                    float t1 = cdt_dz*(k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ex) - k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex));
+                    t1 = (i+j+k)<0 ? t1 : -t1;
+                    z = ghost;
+                    x++;
+                    float t2 = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ez);
+                    x--;
+                    t2 = cdt_dx * (t2 - k_field(fh, field_var::ez));
+                    Kokkos::memory_fence();
+                    k_field(fg, field_var::cby) = decay*fg_cby + drive * fh_cby + t1 - t2;
+                });
+/*
                 Kokkos::parallel_for("ZXY absorb_fields serial", 1, KOKKOS_LAMBDA(const int idx) {
                     for(int z=ghost; z<=ghost; z++) {
                         for(int y=1; y<=ny; y++) {
@@ -375,6 +531,7 @@ template<> void apply_local_tang_b<ZXY>(int i, int j, int k,
                         }
                     }
                 });
+*/
                 break;
             default:
                 ERROR(("Bad boundary condition encountered."));
@@ -1614,10 +1771,10 @@ template<typename T> void adjust_jf(field_array_t* fa, const grid_t* g, int i, i
 */
 }
 template<> void adjust_jf<XYZ>(field_array_t* fa, const grid_t* g, int i, int j, int k) {
-    const k_field_t& k_field = fa->k_f_d;
-    const int nx = g->nx, ny = g->ny, nz = g->nz;
     const int bc = g->bc[BOUNDARY(i,j,k)];
     if( bc < 0 || bc >= world_size ) {
+        const k_field_t& k_field = fa->k_f_d;
+        const int nx = g->nx, ny = g->ny, nz = g->nz;
         const int face = (i+j+k)<0 ? 1 : nx+1;
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> yz_edge({1, 1}, {nz+2, ny+1});
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> zy_edge({1, 1}, {nz+1, ny+2});
@@ -1653,10 +1810,10 @@ template<> void adjust_jf<XYZ>(field_array_t* fa, const grid_t* g, int i, int j,
     }
 }
 template<> void adjust_jf<YZX>(field_array_t* fa, const grid_t* g, int i, int j, int k) {
-    const k_field_t& k_field = fa->k_f_d;
-    const int nx = g->nx, ny = g->ny, nz = g->nz;
     const int bc = g->bc[BOUNDARY(i,j,k)];
     if( bc < 0 || bc >= world_size ) {
+        const k_field_t& k_field = fa->k_f_d;
+        const int nx = g->nx, ny = g->ny, nz = g->nz;
         const int face = (i+j+k)<0 ? 1 : ny+1;
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> zx_edge({1, 1}, {nz+1, nx+2});
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> xz_edge({1, 1}, {nz+2, nx+1});
@@ -1692,10 +1849,10 @@ template<> void adjust_jf<YZX>(field_array_t* fa, const grid_t* g, int i, int j,
     }
 }
 template<> void adjust_jf<ZXY>(field_array_t* fa, const grid_t* g, int i, int j, int k) {
-    const k_field_t& k_field = fa->k_f_d;
-    const int nx = g->nx, ny = g->ny, nz = g->nz;
     const int bc = g->bc[BOUNDARY(i,j,k)];
     if( bc < 0 || bc >= world_size ) {
+        const k_field_t& k_field = fa->k_f_d;
+        const int nx = g->nx, ny = g->ny, nz = g->nz;
         const int face = (i+j+k)<0 ? 1 : nz+1;
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> xy_edge({1, 1}, {ny+2, nx+1});
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> yx_edge({1, 1}, {ny+1, nx+2});
