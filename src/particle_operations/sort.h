@@ -44,7 +44,7 @@ template<class KeyViewType> struct Casted_BinOp1D {
       int b = keys(i2);
       int _a = reinterpret_cast<int&>(a);
       int _b = reinterpret_cast<int&>(b);
-      return a < b;
+      return _a < _b;
   }
 };
 
