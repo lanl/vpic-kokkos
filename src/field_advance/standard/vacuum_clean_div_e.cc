@@ -222,8 +222,8 @@ vacuum_clean_div_e( field_array_t * fa ) {
         marder_ez(k_field, pz, f0, fz);
     });
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> ez_zy_pol({1, 1}, {nz+1, ny+1});
-    Kokkos::parallel_for("vacuum_clean_div_e: left over ey: yx loop", ey_yx_pol, KOKKOS_LAMBDA(const int z, const int y) {
-        const int f0 = VOXEL(nx+1, y, z, nx, ny, nz);
+    Kokkos::parallel_for("vacuum_clean_div_e: left over ez: zy loop", ez_zy_pol, KOKKOS_LAMBDA(const int z, const int y) {
+        const int f0 = VOXEL(nx+1, y, z,   nx, ny, nz);
         const int fz = VOXEL(nx+1, y, z+1, nx, ny, nz);
         marder_ez(k_field, pz, f0, fz);
     });
