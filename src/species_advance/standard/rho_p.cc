@@ -235,12 +235,11 @@ struct accum_rho_p {
     KOKKOS_INLINE_FUNCTION
     void operator() (const int n) const {
         float w0, w1, w2, w3, w4, w5, w6, w7, dz;
-        int v;
 
         w0 = kparticles(n, particle_var::dx);
         w1 = kparticles(n, particle_var::dy);
         dz = kparticles(n, particle_var::dz);
-        v  = static_cast<int>(kparticles(n, particle_var::pi));
+        int v = reinterpret_cast<int&>(kparticles(n, particle_var::pi));
         w7 = kparticles(n, particle_var::w) * q_8V;
 
 #   define FMA( x,y,z) ((z)+(x)*(y))
@@ -302,7 +301,7 @@ struct accum_rhob {
         float w2, w3, w4, w5, w6;
         float w7 = (qsp * r8V) * kpart(part_idx, particle_var::w);
         float dz = kpart(part_idx, particle_var::dz);
-        int v = kpart(part_idx, particle_var::pi);
+        int v = reinterpret_cast<int&>(kpart(part_idx, particle_var::pi));
         int x, y, z;
 
         w6 = w7 - w0 * w7;

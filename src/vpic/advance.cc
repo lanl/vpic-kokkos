@@ -115,23 +115,11 @@ int vpic_simulation::advance(void) {
     auto pm_h_sub = Kokkos::subview(sp->k_pm_h, std::pair<size_t, size_t>(0, sp->nm), Kokkos::ALL());
     Kokkos::deep_copy(pm_h_sub, pm_d_sub);
 */
-/*
-    Kokkos::parallel_for("copy particles to host", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) {
-      sp->p[i].dx = k_particles_h(i, particle_var::dx);
-      sp->p[i].dy = k_particles_h(i, particle_var::dy);
-      sp->p[i].dz = k_particles_h(i, particle_var::dz);
-      sp->p[i].ux = k_particles_h(i, particle_var::ux);
-      sp->p[i].uy = k_particles_h(i, particle_var::uy);
-      sp->p[i].uz = k_particles_h(i, particle_var::uz);
-      sp->p[i].w  = k_particles_h(i, particle_var::w);
-      sp->p[i].i  = k_particles_h(i, particle_var::pi);
-    });
-*/
     Kokkos::parallel_for("copy movers to host", host_execution_policy(0, sp->nm) , KOKKOS_LAMBDA (int i) {
       sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
       sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
       sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
-      sp->pm[i].i     = k_particle_movers_h(i, particle_mover_var::pmi);
+      sp->pm[i].i     = reinterpret_cast<int&>(k_particle_movers_h(i, particle_mover_var::pmi));
     });
   };
   UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
@@ -279,26 +267,6 @@ int vpic_simulation::advance(void) {
 /*
     k_nm_h = sp->k_nm_h;
     sp->nm = k_nm_h(0);
-*/
-/*
-    Kokkos::parallel_for("copy particles to host", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) {
-      sp->p[i].dx = k_particles_h(i, particle_var::dx);
-      sp->p[i].dy = k_particles_h(i, particle_var::dy);
-      sp->p[i].dz = k_particles_h(i, particle_var::dz);
-      sp->p[i].ux = k_particles_h(i, particle_var::ux);
-      sp->p[i].uy = k_particles_h(i, particle_var::uy);
-      sp->p[i].uz = k_particles_h(i, particle_var::uz);
-      sp->p[i].w  = k_particles_h(i, particle_var::w);
-      sp->p[i].i  = k_particles_h(i, particle_var::pi);
-    });
-*/
-/*
-    Kokkos::parallel_for("copy movers to host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {
-      sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
-      sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
-      sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
-      sp->pm[i].i     = k_particle_movers_h(i, particle_mover_var::pmi);
-    });
 */
 //  };
 //  UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);

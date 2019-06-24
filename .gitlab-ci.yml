@@ -29,6 +29,7 @@ stages:
       -DENABLE_INTEGRATED_TESTS=ON
       -DENABLE_UNIT_TESTS=ON
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+      -DKOKKOS_ARCH=Kepler35
       ${DEFINES:+${DEFINES}}
       ..
     - make -j ${j} -l ${l} VERBOSE=1

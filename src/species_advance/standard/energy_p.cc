@@ -106,7 +106,7 @@ energy_p_pipeline_v4( energy_p_pipeline_args_t * args,
     // Accumulate energy
 
     v0 = fma( v0,v0, fma( v1,v1, v2*v2 ) );
-    v0 = (msp * w) * (v0 / (one + sqrt(one + v0))); 
+    v0 = (msp * w) * (v0 / (one + sqrt(one + v0)));
     en0 += (double)v0(0);
     en1 += (double)v0(1);
     en2 += (double)v0(2);
@@ -130,7 +130,7 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
 
   // Determine which particles this pipeline processes
 
-//  DISTRIBUTE( args->np, 16, pipeline_rank, n_pipeline, n0, n1 ); 
+//  DISTRIBUTE( args->np, 16, pipeline_rank, n_pipeline, n0, n1 );
 /*
     int _N = np, _b = 16, _p = pipeline_rank, _P = n_pipeline;
     double _t = static_cast<double>(_N/_b) / static_cast<double>(_P);
@@ -161,7 +161,7 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
         float dx = k_particles(n, particle_var::dx);
         float dy = k_particles(n, particle_var::dy);
         float dz = k_particles(n, particle_var::dz);
-        int i  = static_cast<int>(k_particles(n, particle_var::pi));
+        int i  = reinterpret_cast<int&>(k_particles(n, particle_var::pi));
         float v0 = k_particles(n, particle_var::ux) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
                                 dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
         float v1 = k_particles(n, particle_var::uy) + qdt_2mc*(    ( k_interp(i, interpolator_var::ey)    + dz*k_interp(i, interpolator_var::deydz)    ) +
@@ -208,7 +208,7 @@ energy_p_kokkos(const species_t* RESTRICT sp,
          const interpolator_array_t* RESTRICT ia) {
 
     double local, global;
-    
+
     if(!sp || !ia || sp->g != ia->g) ERROR(("Bad args"));
 
     float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
