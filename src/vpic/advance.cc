@@ -37,7 +37,7 @@ int vpic_simulation::advance(void) {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
           //TIC sort_p( sp ); TOC( sort_p, 1 );
           UNSAFE_TIC();
-          sorter.sort( sp->k_p_d, sp->np, accumulator_array->na);
+          sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
           UNSAFE_TOC( sort_particles, 1);
 
       }
@@ -101,11 +101,13 @@ int vpic_simulation::advance(void) {
   LIST_FOR_EACH( sp, species_list ) {
 //    Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
     Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d);
+    Kokkos::deep_copy(sp->k_pm_i_h, sp->k_pm_i_d);
     Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
     auto n_particles = sp->np;
     auto max_pmovers = sp->max_nm;
 //    k_particles_h = sp->k_p_h;
     auto& k_particle_movers_h = sp->k_pm_h;
+    auto& k_particle_i_movers_h = sp->k_pm_i_h;
     auto& k_nm_h = sp->k_nm_h;
     sp->nm = k_nm_h(0);
 /*
@@ -119,7 +121,7 @@ int vpic_simulation::advance(void) {
       sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
       sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
       sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
-      sp->pm[i].i     = reinterpret_cast<int&>(k_particle_movers_h(i, particle_mover_var::pmi));
+      sp->pm[i].i     = k_particle_i_movers_h(i);
     });
   };
   UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
@@ -209,7 +211,8 @@ int vpic_simulation::advance(void) {
       // TODO: this can be hoisted to the end of advance_p if desired
       compressor.compress(
               sp->k_p_d,
-              sp->k_pm_d,
+              sp->k_p_i_d,
+              sp->k_pm_i_d,
               nm,
               sp->np,
               sp
@@ -220,14 +223,17 @@ int vpic_simulation::advance(void) {
       UNSAFE_TOC( BACKFILL, 1);
 
       auto& particles = sp->k_p_d;
+      auto& particles_i = sp->k_p_i_d;
 
       // Copy data for copies back to device
       UNSAFE_TIC();
       Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
+      Kokkos::deep_copy(sp->k_pc_i_d, sp->k_pc_i_h);
       UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
       UNSAFE_TIC(); // Time this data movement
       auto& particle_copy = sp->k_pc_d;
+      auto& particle_copy_i = sp->k_pc_i_d;
       int num_to_copy = sp->num_to_copy;
       int np = sp->np;
 
@@ -245,7 +251,7 @@ int vpic_simulation::advance(void) {
         particles(npi, particle_var::uy) = particle_copy(i, particle_var::uy);
         particles(npi, particle_var::uz) = particle_copy(i, particle_var::uz);
         particles(npi, particle_var::w)  = particle_copy(i, particle_var::w);
-        particles(npi, particle_var::pi) = particle_copy(i, particle_var::pi);
+        particles_i(npi) = particle_copy_i(i);
       });
 
       // Reset this to zero now we've done the write back

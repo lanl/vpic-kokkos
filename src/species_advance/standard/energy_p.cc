@@ -119,7 +119,7 @@ energy_p_pipeline_v4( energy_p_pipeline_args_t * args,
 #endif
 
 double
-energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particles, const float qdt_2mc, const float msp, const int np) {
+energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particles, const k_particles_i_t& k_particles_i, const float qdt_2mc, const float msp, const int np) {
 //  const interpolator_t * RESTRICT ALIGNED(128) f = args->f;
 //  const particle_t     * RESTRICT ALIGNED(32)  p = args->p;
 //  const float qdt_2mc = args->qdt_2mc;
@@ -161,7 +161,7 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
         float dx = k_particles(n, particle_var::dx);
         float dy = k_particles(n, particle_var::dy);
         float dz = k_particles(n, particle_var::dz);
-        int i  = reinterpret_cast<int&>(k_particles(n, particle_var::pi));
+        int   i  = k_particles_i(n);
         float v0 = k_particles(n, particle_var::ux) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
                                 dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
         float v1 = k_particles(n, particle_var::uy) + qdt_2mc*(    ( k_interp(i, interpolator_var::ey)    + dz*k_interp(i, interpolator_var::deydz)    ) +
@@ -213,7 +213,7 @@ energy_p_kokkos(const species_t* RESTRICT sp,
 
     float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
 
-    local = energy_p_kernel(ia->k_i_d, sp->k_p_d, qdt_2mc, sp->m, sp->np);
+    local = energy_p_kernel(ia->k_i_d, sp->k_p_d, sp->k_p_i_d, qdt_2mc, sp->m, sp->np);
     Kokkos::fence();
 
     mp_allsum_d( &local, &global, 1 );

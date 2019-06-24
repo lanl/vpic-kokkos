@@ -34,8 +34,14 @@ using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
 using k_field_edge_t = Kokkos::View<material_id* [FIELD_EDGE_COUNT]>;
 
 using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
+using k_particles_i_t = Kokkos::View<int*>;
+
+// TODO: think about the layout here
 using k_particle_copy_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutRight>;
+using k_particle_i_copy_t = Kokkos::View<int*, Kokkos::LayoutRight>;
+
 using k_particle_movers_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT]>;
+using k_particle_i_movers_t = Kokkos::View<int*>;
 
 using k_neighbor_t = Kokkos::View<int64_t*>;
 
@@ -115,13 +121,13 @@ namespace interpolator_var {
 namespace particle_var {
   enum p_v {
     dx = 0,
-    dy = 1,
-    dz = 2,
-    pi = 3,
-    ux = 4,
-    uy = 5,
-    uz = 6,
-    w  = 7
+    dy,
+    dz,
+    //pi = 3,
+    ux,
+    uy,
+    uz,
+    w,
   };
 };
 
@@ -130,7 +136,7 @@ namespace particle_mover_var {
      dispx = 0,
      dispy = 1,
      dispz = 2,
-     pmi   = 3,
+     //pmi   = 3,
   };
 };
 
@@ -248,7 +254,9 @@ template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(T* species_list)
     auto max_pmovers = sp->max_nm;
 
     auto& k_particles_h = sp->k_p_h;
+    auto& k_particles_i_h = sp->k_p_i_h;
     auto& k_particle_movers_h = sp->k_pm_h;
+    auto& k_particle_movers_i_h = sp->k_pm_i_h;
     auto& k_nm_h = sp->k_nm_h;
     k_nm_h(0) = sp->nm;
 
@@ -260,17 +268,19 @@ template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(T* species_list)
       k_particles_h(i, particle_var::uy) = sp->p[i].uy;
       k_particles_h(i, particle_var::uz) = sp->p[i].uz;
       k_particles_h(i, particle_var::w)  = sp->p[i].w;
-      k_particles_h(i, particle_var::pi) = reinterpret_cast<float&>(sp->p[i].i);
+      k_particles_i_h(i) = sp->p[i].i;
     });
 
     Kokkos::parallel_for("copy movers to device", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {
       k_particle_movers_h(i, particle_mover_var::dispx) = sp->pm[i].dispx;
       k_particle_movers_h(i, particle_mover_var::dispy) = sp->pm[i].dispy;
       k_particle_movers_h(i, particle_mover_var::dispz) = sp->pm[i].dispz;
-      k_particle_movers_h(i, particle_mover_var::pmi)   = reinterpret_cast<float&>(sp->pm[i].i);
+      k_particle_movers_i_h(i) = sp->pm[i].i;
     });
     Kokkos::deep_copy(sp->k_p_d, sp->k_p_h);
+    Kokkos::deep_copy(sp->k_p_i_d, sp->k_p_i_h);
     Kokkos::deep_copy(sp->k_pm_d, sp->k_pm_h);
+    Kokkos::deep_copy(sp->k_pm_i_d, sp->k_pm_i_h);
     Kokkos::deep_copy(sp->k_nm_d, sp->k_nm_h);
   }
 }
@@ -280,14 +290,20 @@ template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_HOST(T* species_list)
   auto* sp = species_list;
   LIST_FOR_EACH( sp, species_list ) {
     Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
+    Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
     Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d);
+    Kokkos::deep_copy(sp->k_pm_i_h, sp->k_pm_i_d);
     Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
 
     auto n_particles = sp->np;
     auto max_pmovers = sp->max_nm;
 
     auto& k_particles_h = sp->k_p_h;
+    auto& k_particles_i_h = sp->k_p_i_h;
+
     auto& k_particle_movers_h = sp->k_pm_h;
+    auto& k_particle_movers_i_h = sp->k_pm_i_h;
+
     auto& k_nm_h = sp->k_nm_h;
 
     sp->nm = k_nm_h(0);
@@ -300,14 +316,14 @@ template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_HOST(T* species_list)
       sp->p[i].uy = k_particles_h(i, particle_var::uy);
       sp->p[i].uz = k_particles_h(i, particle_var::uz);
       sp->p[i].w  = k_particles_h(i, particle_var::w);
-      sp->p[i].i  = reinterpret_cast<int&>(k_particles_h(i, particle_var::pi));
+      sp->p[i].i  = k_particles_i_h(i);
     });
 
     Kokkos::parallel_for("copy movers to host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {
       sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
       sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
       sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
-      sp->pm[i].i     = reinterpret_cast<int&>(k_particle_movers_h(i, particle_mover_var::pmi));
+      sp->pm[i].i     = k_particle_movers_i_h(i);
     });
   }
 }
