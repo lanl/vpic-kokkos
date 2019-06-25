@@ -10,6 +10,7 @@ static field_advance_kernels_t sfa_kernels = {
 
   advance_b,
   advance_e,
+  advance_e_kokkos,
 
   // Diagnostic interfaces
 
@@ -37,7 +38,7 @@ static field_advance_kernels_t sfa_kernels = {
   compute_div_e_err,
   compute_rms_div_e_err,
   clean_div_e,
-  k_compute_div_e_err,
+  compute_div_e_err_kokkos,
   compute_rms_div_e_err_kokkos,
   clean_div_e_kokkos,
 
@@ -231,6 +232,8 @@ new_standard_field_array( grid_t           * RESTRICT g,
     fa->kernel->compute_curl_b    = vacuum_compute_curl_b;
     fa->kernel->compute_div_e_err = vacuum_compute_div_e_err;
     fa->kernel->clean_div_e       = vacuum_clean_div_e;
+    fa->kernel->advance_e_kokkos  = vacuum_advance_e_kokkos;
+    fa->kernel->compute_div_e_err_kokkos = vacuum_compute_div_e_err_kokkos;
     fa->kernel->clean_div_e_kokkos= vacuum_clean_div_e_kokkos;
   }
 

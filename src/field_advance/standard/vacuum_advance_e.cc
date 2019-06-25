@@ -198,7 +198,7 @@ vacuum_advance_e_pipeline_v4( pipeline_args_t * args,
 #endif
 
 void
-vacuum_advance_e_host( field_array_t * RESTRICT fa,
+vacuum_advance_e( field_array_t * RESTRICT fa,
                   float frac ) {
   if( !fa     ) ERROR(( "Bad args" ));
   if( frac!=1 ) ERROR(( "standard advance_e does not support frac!=1 yet" ));
@@ -775,7 +775,7 @@ void vacuum_advance_e_exterior_kokkos(k_field_t& k_field,
 }
 
 void
-vacuum_advance_e( field_array_t * RESTRICT fa,
+vacuum_advance_e_kokkos( field_array_t * RESTRICT fa,
                   float frac ) {
   if( !fa     ) ERROR(( "Bad args" ));
   if( frac!=1 ) ERROR(( "standard advance_e does not support frac!=1 yet" ));

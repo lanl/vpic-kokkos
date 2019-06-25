@@ -215,9 +215,9 @@ template <> void begin_send_kokkos<XYZ>(const grid_t* g, field_array_t* fa, int 
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> yz_edge({1, 1}, {nz+2, ny+1});
         
         Kokkos::parallel_for("begin_send<XYZ>: ZY Edge Loop", zy_edge, KOKKOS_LAMBDA(const int z, const int y) {
-            if(z+y == 2) {
-                sbuf_d(0) = dx;
-            }
+//            if(z+y == 2) {
+//                sbuf_d(0) = dx;
+//            }
             const int x = face;
             sbuf_d(1 + (z-1)*(ny+1) + (y-1)) = k_field(VOXEL(x,y,z, nx,ny,nz), field_var::cby);
         });
@@ -252,6 +252,7 @@ template <> void begin_send_kokkos<XYZ>(const grid_t* g, field_array_t* fa, int 
 */
 // CPU
         Kokkos::deep_copy(sbuf_h, sbuf_d);
+        sbuf_h(0) = dx;
         begin_send_port_k(i,j,k,size*sizeof(float), g, reinterpret_cast<char*>(sbuf_h.data()));
 //        for(int i=0; i < size; i++) {
 //if(sbuf_h(i) != 0)
@@ -276,9 +277,9 @@ template <> void begin_send_kokkos<YZX>(const grid_t* g, field_array_t* fa, int 
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> zx_edge({1, 1}, {nz+1, nx+2});
 
     Kokkos::parallel_for("begin_send<YZX>: XZ Edge Loop", xz_edge, KOKKOS_LAMBDA(const int z, const int x) {
-        if(z+x == 2) {
-            sbuf_d(0) = dy;
-        }
+//        if(z+x == 2) {
+//            sbuf_d(0) = dy;
+//        }
         const int y = face;
         sbuf_d(1 + (z-1)*nx + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz);
     });
@@ -314,6 +315,7 @@ template <> void begin_send_kokkos<YZX>(const grid_t* g, field_array_t* fa, int 
 */
 // CPU
     Kokkos::deep_copy(sbuf_h, sbuf_d);
+    sbuf_h(0) = dy;
     begin_send_port_k(i, j, k, size*sizeof(float), g, reinterpret_cast<char*>(sbuf_h.data()));
 // GPU
 //    begin_send_port_k(i, j, k, size*sizeof(float), g, reinterpret_cast<char*>(sbuf_d.data()));
@@ -328,9 +330,9 @@ template <> void begin_send_kokkos<ZXY>(const grid_t* g, field_array_t* fa, int 
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> xy_edge({1, 1}, {ny+2, nx+1});
 
     Kokkos::parallel_for("begin_send<ZXY>: YX Edge Loop", yx_edge, KOKKOS_LAMBDA(const int y, const int x) {
-        if(y+x == 2) {
-            sbuf_d(0) = dz;
-        }
+//        if(y+x == 2) {
+//            sbuf_d(0) = dz;
+//        }
         const int z = face;
         sbuf_d(1 + (nx+1)*(y-1) + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx);
     });
@@ -365,6 +367,7 @@ template <> void begin_send_kokkos<ZXY>(const grid_t* g, field_array_t* fa, int 
 */
 // CPU
     Kokkos::deep_copy(sbuf_h, sbuf_d);
+    sbuf_h(0) = dz;
     begin_send_port_k(i,j,k,size*sizeof(float), g, reinterpret_cast<char*>(sbuf_h.data()));
 // GPU
 //    begin_send_port_k(i,j,k,size*sizeof(float), g, reinterpret_cast<char*>(sbuf_d.data()));
@@ -561,18 +564,22 @@ template<> void end_recv_kokkos<XYZ>(const grid_t* g, field_array_t* RESTRICT fi
         int face = (i+j+k)<0 ? nx+1 : 0;
         float dx = g->dx;
 
+            float lw = rbuf_h(0);
+            const float rw = (2.*dx) / (lw + dx);
+            lw = (lw - dx)/(lw + dx);
+
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> zy_edge({1, 1}, {nz+1, ny+2});
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> yz_edge({1, 1}, {nz+2, ny+1});
         Kokkos::parallel_for("end_recv<XYZ>: ZY Edge loop", zy_edge, KOKKOS_LAMBDA(const int z, const int y) {
-            float lw = rbuf_d(0);
-            const float rw = (2.*dx) / (lw + dx);
-            lw = (lw - dx)/(lw + dx);
+//            float lw = rbuf_d(0);
+//            const float rw = (2.*dx) / (lw + dx);
+//            lw = (lw - dx)/(lw + dx);
             k_field(VOXEL(face,y,z,nx,ny,nz), field_var::cby) = rw*rbuf_d((z-1)*(ny+1) + (y-1) + 1) + lw*k_field(VOXEL(face+i,y+j,z+k,nx,ny,nz), field_var::cby);
         });
         Kokkos::parallel_for("end_recv<XYZ>: YZ Edge loop", yz_edge, KOKKOS_LAMBDA(const int z, const int y) {
-            float lw = rbuf_d(0);
-            const float rw = (2.*dx) / (lw + dx);
-            lw = (lw - dx)/(lw + dx);
+//            float lw = rbuf_d(0);
+//            const float rw = (2.*dx) / (lw + dx);
+//            lw = (lw - dx)/(lw + dx);
             k_field(VOXEL(face,y,z,nx,ny,nz), field_var::cbz) = rw*rbuf_d((ny+1)*nz + (z-1)*ny + (y-1) + 1) + lw*k_field(VOXEL(face+i,y+j,z+k,nx,ny,nz), field_var::cbz);
         });
 
@@ -615,20 +622,24 @@ template<> void end_recv_kokkos<YZX>(const grid_t* g, field_array_t* RESTRICT fi
         int face = (i+j+k)<0 ? ny+1 : 0;
         float dy = g->dy;
 
+            float lw = rbuf_h(0);
+            const float rw = (2.*dy) / (lw+dy);
+            lw = (lw-dy)/(lw+dy);
+
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> xz_edge({1, 1}, {nz+2, nx+1});
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> zx_edge({1, 1}, {nz+1, nx+2});
         Kokkos::parallel_for("end_recv<YZX>: XZ Edge loop", xz_edge, KOKKOS_LAMBDA(const int z, const int x) {
             const int y = face;
-            float lw = rbuf_d(0);
-            const float rw = (2.*dy) / (lw+dy);
-            lw = (lw-dy)/(lw+dy);
+//            float lw = rbuf_d(0);
+//            const float rw = (2.*dy) / (lw+dy);
+//            lw = (lw-dy)/(lw+dy);
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = rw*rbuf_d(1 + (z-1)*nx + (x-1)) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::cbz);
         });
         Kokkos::parallel_for("end_recv<YZX>: ZX Edge loop", zx_edge, KOKKOS_LAMBDA(const int z, const int x) {
             const int y = face;
-            float lw = rbuf_d(0);
-            const float rw = (2.*dy) / (lw+dy);
-            lw = (lw-dy)/(lw+dy);
+//            float lw = rbuf_d(0);
+//            const float rw = (2.*dy) / (lw+dy);
+//            lw = (lw-dy)/(lw+dy);
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rw*rbuf_d(1 + nx*(nz+1) + (z-1)*(nx+1) + (x-1)) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::cbx);
         });
 
@@ -676,20 +687,24 @@ template<> void end_recv_kokkos<ZXY>(const grid_t* g, field_array_t* RESTRICT fi
         int face = (i+j+k)<0 ? nz+1 : 0;
         float dz = g->dz;
 
+            float lw = rbuf_h(0);
+            const float rw = (2.*dz) / (lw+dz);
+            lw = (lw-dz)/(lw+dz);
+
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> yx_edge({1, 1}, {ny+1, nx+2});
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> xy_edge({1, 1}, {ny+2, nx+1});
         Kokkos::parallel_for("end_recv<ZXY>: YX Edge loop", yx_edge, KOKKOS_LAMBDA(const int y, const int x) {
             const int z = face;
-            float lw = rbuf_d(0);
-            const float rw = (2.*dz) / (lw+dz);
-            lw = (lw-dz)/(lw+dz);
+//            float lw = rbuf_d(0);
+//            const float rw = (2.*dz) / (lw+dz);
+//            lw = (lw-dz)/(lw+dz);
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rw*rbuf_d(1 + (y-1)*(nx+1) + (x-1)) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::cbx);
         });
         Kokkos::parallel_for("end_recv<ZXY>: XY Edge loop", xy_edge, KOKKOS_LAMBDA(const int y, const int x) {
             const int z = face;
-            float lw = rbuf_d(0);
-            const float rw = (2.*dz) / (lw+dz);
-            lw = (lw-dz)/(lw+dz);
+//            float lw = rbuf_d(0);
+//            const float rw = (2.*dz) / (lw+dz);
+//            lw = (lw-dz)/(lw+dz);
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rw*rbuf_d(1 + ny*(nx+1) + (y-1)*nx + (x-1)) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::cby);
         });
 
@@ -2892,30 +2907,30 @@ void k_synchronize_jf(field_array_t* RESTRICT fa) {
     field_buffers_t fb = field_buffers(xyz_sz, yzx_sz, zxy_sz);
 
     // Exchange x-faces
-    begin_send_jf<XYZ>(g, fa, -1, 0, 0, nx, ny, nz, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
-    begin_send_jf<XYZ>(g, fa,  1, 0, 0, nx, ny, nz, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
     begin_recv_jf<XYZ>(g, -1, 0, 0, nx, ny, nz, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
     begin_recv_jf<XYZ>(g,  1, 0, 0, nx, ny, nz, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    begin_send_jf<XYZ>(g, fa, -1, 0, 0, nx, ny, nz, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
+    begin_send_jf<XYZ>(g, fa,  1, 0, 0, nx, ny, nz, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
     end_recv_jf<XYZ>(g, fa, -1, 0, 0, nx, ny, nz, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
     end_recv_jf<XYZ>(g, fa,  1, 0, 0, nx, ny, nz, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
     end_send_jf<XYZ>(g, -1, 0, 0);
     end_send_jf<XYZ>(g,  1, 0, 0);
 
     // Exchange y-faces
-    begin_send_jf<YZX>(g, fa, 0, -1, 0, nx, ny, nz, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
-    begin_send_jf<YZX>(g, fa, 0,  1, 0, nx, ny, nz, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
     begin_recv_jf<YZX>(g, 0, -1, 0, nx, ny, nz, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
     begin_recv_jf<YZX>(g, 0,  1, 0, nx, ny, nz, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    begin_send_jf<YZX>(g, fa, 0, -1, 0, nx, ny, nz, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
+    begin_send_jf<YZX>(g, fa, 0,  1, 0, nx, ny, nz, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
     end_recv_jf<YZX>(g, fa, 0, -1, 0, nx, ny, nz, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
     end_recv_jf<YZX>(g, fa, 0,  1, 0, nx, ny, nz, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
     end_send_jf<YZX>(g, 0, -1, 0);
     end_send_jf<YZX>(g, 0,  1, 0);
 
     // Exchange z-faces
-    begin_send_jf<ZXY>(g, fa, 0, 0, -1, nx, ny, nz, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
-    begin_send_jf<ZXY>(g, fa, 0, 0,  1, nx, ny, nz, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
     begin_recv_jf<ZXY>(g, 0, 0, -1, nx, ny, nz, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
     begin_recv_jf<ZXY>(g, 0, 0,  1, nx, ny, nz, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+    begin_send_jf<ZXY>(g, fa, 0, 0, -1, nx, ny, nz, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
+    begin_send_jf<ZXY>(g, fa, 0, 0,  1, nx, ny, nz, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
     end_recv_jf<ZXY>(g, fa, 0, 0, -1, nx, ny, nz, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
     end_recv_jf<ZXY>(g, fa, 0, 0,  1, nx, ny, nz, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
     end_send_jf<ZXY>(g, 0, 0, -1);

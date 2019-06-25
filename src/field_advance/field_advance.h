@@ -181,6 +181,7 @@ typedef struct field_advance_kernels {
 
   void (*advance_b)( struct field_array * RESTRICT fa, float frac );
   void (*advance_e)( struct field_array * RESTRICT fa, float frac );
+  void (*advance_e_kokkos)( struct field_array * RESTRICT fa, float frac );
 
   // Diagnostic interface
   // FIXME: MAY NEED MORE CAREFUL THOUGHT FOR CURVILINEAR SYSTEMS
@@ -214,7 +215,7 @@ typedef struct field_advance_kernels {
   void   (*compute_div_e_err    )( /**/  struct field_array * RESTRICT fa );
   double (*compute_rms_div_e_err)( const struct field_array * RESTRICT fa );
   void   (*clean_div_e          )( /**/  struct field_array * RESTRICT fa );
-  void   (*k_compute_div_e_err  )( /**/  struct field_array * RESTRICT fa );
+  void   (*compute_div_e_err_kokkos  )( /**/  struct field_array * RESTRICT fa );
   double (*compute_rms_div_e_err_kokkos)(const struct field_array * RESTRICT fa);
   void   (*clean_div_e_kokkos   )( /**/  struct field_array * RESTRICT fa );
 

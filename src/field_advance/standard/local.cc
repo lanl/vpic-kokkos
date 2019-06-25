@@ -148,8 +148,6 @@ template<> void apply_local_tang_b<XYZ>(int i, int j, int k,
     k_field_t k_field = f->k_f_d;
     Kokkos::MDRangePolicy<Kokkos::Rank<2> > zy_edge({1,1},{nz+1,ny+2});
     Kokkos::MDRangePolicy<Kokkos::Rank<2> > yz_edge({1,1},{nz+2,ny+1});
-//    Kokkos::View<float**> cby_copy = Kokkos::View<float**>("temporary buffer for XYZ absorb fields: zy edge", nz+2, ny+2);
-
 
     if(bc < 0 || bc >= world_size) {
         int ghost = (i+j+k)<0 ? 0 : nx+1;

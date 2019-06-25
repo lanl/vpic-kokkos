@@ -79,7 +79,7 @@ vacuum_compute_div_e_err_pipeline( pipeline_args_t * args,
 #endif
 
 void
-vacuum_compute_div_e_err_host( field_array_t * RESTRICT fa ) {
+vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
   if( !fa ) ERROR(( "Bad args" ));
 
   // Have pipelines compute the interior of local domain (the host
@@ -305,7 +305,7 @@ void vacuum_compute_div_e_err_exterior_kokkos(field_array_t* fa, const grid_t* g
 }
 
 void
-vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
+vacuum_compute_div_e_err_kokkos( field_array_t * RESTRICT fa ) {
   if( !fa ) ERROR(( "Bad args" ));
 
     // Kokkos communication buffers

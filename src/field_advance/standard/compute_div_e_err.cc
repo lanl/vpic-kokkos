@@ -321,7 +321,7 @@ void compute_div_e_err_exterior_kokkos(field_array_t* fa, const grid_t* g) {
 }
 
 void
-k_compute_div_e_err( field_array_t * RESTRICT fa ) {
+compute_div_e_err_kokkos( field_array_t * RESTRICT fa ) {
   if( !fa ) ERROR(( "Bad args" ));
 
   // Have pipelines compute the interior of local domain (the host

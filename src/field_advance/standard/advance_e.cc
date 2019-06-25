@@ -737,8 +737,6 @@ void advance_e_kokkos(field_array_t* RESTRICT fa, float frac) {
     args->p = (sfa_params_t *)fa->params;
     args->g = fa->g;
 
-printf("Advance_E kernel\n");
-
 // DECLARE_STENCIL
     k_field_t k_field = fa->k_f_d;
     k_field_edge_t k_field_edge = fa->k_fe_d;
@@ -752,26 +750,8 @@ printf("Advance_E kernel\n");
     const float pz   = (nz>1) ? (1+damp)*g->cvac*g->dt*g->rdz : 0; 
     const float cj   = g->dt/g->eps0;                              
 
-    // Copy material coeficients to device
-    // FIXME: Does not belong here
-    k_material_coefficient_t k_material_d = k_material_coefficient_t("Material coefficient view", args->p->n_mc);
-    k_material_coefficient_t::HostMirror k_material_h = Kokkos::create_mirror_view(k_material_d);
-    Kokkos::parallel_for("Copy materials to device", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, args->p->n_mc), KOKKOS_LAMBDA (const int & i) {
-        k_material_h(i, material_coeff_var::decayx) = m[i].decayx;
-        k_material_h(i, material_coeff_var::drivex) = m[i].drivex;
-        k_material_h(i, material_coeff_var::decayy) = m[i].decayy;
-        k_material_h(i, material_coeff_var::drivey) = m[i].drivey;
-        k_material_h(i, material_coeff_var::decayz) = m[i].decayz;
-        k_material_h(i, material_coeff_var::drivez) = m[i].drivez;
-        k_material_h(i, material_coeff_var::rmux) = m[i].rmux;
-        k_material_h(i, material_coeff_var::rmuy) = m[i].rmuy;
-        k_material_h(i, material_coeff_var::rmuz) = m[i].rmuz;
-        k_material_h(i, material_coeff_var::nonconductive) = m[i].nonconductive;
-        k_material_h(i, material_coeff_var::epsx) = m[i].epsx;
-        k_material_h(i, material_coeff_var::epsy) = m[i].epsy;
-        k_material_h(i, material_coeff_var::epsz) = m[i].epsz;
-    });
-    Kokkos::deep_copy(k_material_d, k_material_h);
+    sfa_params_t* sfa = reinterpret_cast<sfa_params_t *>(fa->params);
+    const k_material_coefficient_t& k_material_d = sfa->k_mc_d;
 
     // Field buffers for GPU - GPU communication
     const int xyz_sz = 1 + ny*(nz+1) + nz*(ny+1);

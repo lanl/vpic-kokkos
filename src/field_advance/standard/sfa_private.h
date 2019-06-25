@@ -86,7 +86,15 @@ advance_e( field_array_t * RESTRICT fa,
            float                    frac );
 
 void
+advance_e_kokkos( field_array_t * RESTRICT fa,
+           float                    frac );
+
+void
 vacuum_advance_e( field_array_t * RESTRICT fa,
+                  float                    frac );
+
+void
+vacuum_advance_e_kokkos( field_array_t * RESTRICT fa,
                   float                    frac );
 
 // In energy_f.c
@@ -268,10 +276,13 @@ vacuum_compute_rhob( field_array_t * RESTRICT fa );
 void
 compute_div_e_err( field_array_t * RESTRICT fa );
 void
-k_compute_div_e_err( field_array_t * RESTRICT fa );
+compute_div_e_err_kokkos( field_array_t * RESTRICT fa );
 
 void
 vacuum_compute_div_e_err( field_array_t * RESTRICT fa );
+
+void
+vacuum_compute_div_e_err_kokkos( field_array_t * RESTRICT fa );
 
 // In compute_rms_div_e_err.c
 

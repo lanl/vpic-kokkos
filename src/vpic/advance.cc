@@ -772,7 +772,7 @@ int vpic_simulation::advance(void) {
   
 // HOST (Device in nphtan branch)
 // Touches fields
-  TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
+  TIC FAK->advance_e_kokkos( field_array, 1.0 ); TOC( advance_e, 1 );
 
   UNSAFE_TIC();
   KOKKOS_COPY_FIELD_MEM_TO_HOST();
@@ -841,7 +841,7 @@ int vpic_simulation::advance(void) {
 //        UNSAFE_TIC();
 //        KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
 //        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
-      TIC FAK->compute_div_e_err( field_array ); TOC( compute_div_e_err, 1 );
+      TIC FAK->compute_div_e_err_kokkos( field_array ); TOC( compute_div_e_err, 1 );
 //        UNSAFE_TIC();
 //        KOKKOS_COPY_FIELD_MEM_TO_HOST();
 //        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
