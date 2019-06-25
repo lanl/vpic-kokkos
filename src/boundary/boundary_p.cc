@@ -223,13 +223,13 @@ boundary_p_kokkos(
         //printf("i %d p0i %d pi %f nm %d \n", pm->i, p0[i].i, sp->k_pc_h(copy_index, particle_var::pi), nm);
 
         //int voxel = p0[i].i;
-        int voxel = reinterpret_cast<int&>(sp->k_pc_h(copy_index, particle_var::pi));
+        int voxel = sp->k_pc_i_h(copy_index);
 
         int face = voxel & 7;
         voxel >>= 3;
 
         //p0[i].i = voxel;
-        sp->k_pc_h(copy_index, particle_var::pi) = reinterpret_cast<float&>(voxel);
+        sp->k_pc_i_h(copy_index) = voxel;
 
         int64_t nn = neighbor[ 6*voxel + face ];
 
@@ -427,6 +427,7 @@ boundary_p_kokkos(
         nm = sp_nm[id];
 
         auto& particle_copy = sp_[id]->k_pc_h;
+        auto& particle_copy_i = sp_[id]->k_pc_i_h;
 
         int write_index = sp_[id]->num_to_copy;
 
@@ -455,7 +456,7 @@ boundary_p_kokkos(
         particle_copy(write_index, particle_var::w)  = pi->w;
 
         int pii = pi->i;
-        particle_copy(write_index, particle_var::pi) = reinterpret_cast<float&>(pii);
+        particle_copy_i(write_index) = pii;
 
         // track how many particles we buffer up here
         sp_[id]->num_to_copy++;
@@ -474,6 +475,7 @@ boundary_p_kokkos(
         //sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
         sp_nm[id] = nm + move_p_kokkos_host_serial(
                     particle_copy,
+                    particle_copy_i,
                     &(pm[nm]),
                     aa->k_a_h,
                     //aa->k_a_sah, // TODO: why does changing this to k_a_h break things?

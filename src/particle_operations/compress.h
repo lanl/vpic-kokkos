@@ -17,7 +17,8 @@
 struct DefaultCompress {
     static void compress(
             k_particles_t particles,
-            k_particle_movers_t particle_movers,
+            k_particles_i_t particles_i,
+            k_particle_i_movers_t particle_movers_i,
             const int32_t nm,
             const int32_t np,
             species_t* sp
@@ -86,7 +87,7 @@ struct DefaultCompress {
             // otherwise, do
             int cut_off = np-(2*nm);
 
-            int pmi = reinterpret_cast<int&>( particle_movers(i, particle_mover_var::pmi) );
+            int pmi = particle_movers_i(i);
 
             // If it's less than the cut off, it's safe
             if ( pmi >= cut_off) // danger zone
@@ -105,7 +106,7 @@ struct DefaultCompress {
             // TODO: is this np or np-1?
             // Doing this in the "inverse order" to match vpic
             int pull_from = (np-1) - (n); // grab a particle from the end block
-            int write_to = reinterpret_cast<int&>( particle_movers(nm-n-1, particle_mover_var::pmi)); // put it in a gap
+            int write_to = particle_movers_i(nm-n-1); // put it in a gap
             int danger_zone = np - nm;
 
             // if they're the same, no need to do it. This can happen below in the
@@ -167,7 +168,7 @@ struct DefaultCompress {
             particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
             particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
             particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
-            particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
+            particles_i(write_to) = particles_i(pull_from);
         });
 
         Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
@@ -186,7 +187,7 @@ struct DefaultCompress {
             particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
             particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
             particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
-            particles(write_to, particle_var::pi) = particles(pull_from, particle_var::pi);
+            particles_i(write_to) = particles_i(pull_from);
         });
     }
 

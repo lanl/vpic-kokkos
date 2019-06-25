@@ -37,14 +37,13 @@ void print_particles_d(
     {
         for (int z = 0; z < np; z++)
         {
-            printf("accum part %d has %f %f %f %f %f %f at %f\n", z,
+            printf("accum part %d has %f %f %f %f %f %f \n", z,
                     particles(z, particle_var::dx),
                     particles(z, particle_var::dy),
                     particles(z, particle_var::dz),
                     particles(z, particle_var::ux),
                     particles(z, particle_var::uy),
-                    particles(z, particle_var::uz),
-                    particles(z, particle_var::pi)
+                    particles(z, particle_var::uz)
                   );
         }
     });

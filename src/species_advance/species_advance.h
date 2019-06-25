@@ -97,20 +97,25 @@ class species_t {
 
         grid_t * g;                         // Underlying grid
         species_id id;                      // Unique identifier for a species
-        species_t* next = NULL;        // Next species in the list
+        species_t* next = NULL;             // Next species in the list
 
+        k_particles_t k_p_d;                 // kokkos particles view on device
+        k_particles_i_t k_p_i_d;             // kokkos particles view on device
 
-        k_particles_t k_p_d;                // kokkos particles view on device
-        k_particles_t::HostMirror k_p_h;    // kokkos particles view on host
+        k_particles_t::HostMirror k_p_h;     // kokkos particles view on host
+        k_particles_i_t::HostMirror k_p_i_h; // kokkos particles view on host
 
-        k_particle_copy_t k_pc_d;               // kokkos particles copy for movers view on device
-        k_particle_copy_t::HostMirror k_pc_h;   // kokkos particles copy for movers view on host
+        k_particle_copy_t k_pc_d;            // kokkos particles copy for movers view on device
+        k_particle_i_copy_t k_pc_i_d;        // kokkos particles copy for movers view on device
 
+        k_particle_copy_t::HostMirror k_pc_h;      // kokkos particles copy for movers view on host
+        k_particle_i_copy_t::HostMirror k_pc_i_h;  // kokkos particles i copy for movers view on host
 
         k_particle_movers_t k_pm_d;         // kokkos particle movers on device
-        k_particle_movers_t::HostMirror k_pm_h;  // kokkos particle movers on host
+        k_particle_i_movers_t k_pm_i_d;         // kokkos particle movers on device
 
-        k_particle_movers_t k_pm_l_d;      // local particle movers
+        k_particle_movers_t::HostMirror k_pm_h;  // kokkos particle movers on host
+        k_particle_i_movers_t::HostMirror k_pm_i_h;  // kokkos particle movers on host
 
         // TODO: what is an iterator here??
         k_iterator_t k_nm_d;               // nm iterator
@@ -124,14 +129,22 @@ class species_t {
         // Init Kokkos Particle Arrays
         species_t(int n_particles, int n_pmovers) :
             k_p_d("k_particles", n_particles),
+            k_p_i_d("k_particles_i", n_particles),
             k_pm_d("k_particle_movers", n_pmovers),
+            k_pm_i_d("k_particle_movers_i", n_pmovers),
             k_pc_d("k_particle_copy_for_movers", n_pmovers),
-            k_nm_d("k_nm"),
-            k_pm_l_d("k_local_particle_movers", 1)
+            k_pc_i_d("k_particle_copy_for_movers_i", n_pmovers),
+            k_nm_d("k_nm")
     {
         k_p_h = Kokkos::create_mirror_view(k_p_d);
+        k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
+
         k_pc_h = Kokkos::create_mirror_view(k_pc_d);
+        k_pc_i_h = Kokkos::create_mirror_view(k_pc_i_d);
+
         k_pm_h = Kokkos::create_mirror_view(k_pm_d);
+        k_pm_i_h = Kokkos::create_mirror_view(k_pm_i_d);
+
         k_nm_h = Kokkos::create_mirror_view(k_nm_d);
     }
 
@@ -257,19 +270,20 @@ move_p( particle_t       * ALIGNED(128) p0,    // Particle array
         const grid_t     *              g,     // Grid parameters
         const float                     qsp ); // Species particle charge
 
-template<class particle_view_t, class accumulator_sa_t, class neighbor_view_t>
+template<class particle_view_t, class particle_i_view_t, class accumulator_sa_t, class neighbor_view_t>
 int
 KOKKOS_INLINE_FUNCTION
-move_p_kokkos(const particle_view_t& k_particles,
-              //k_particle_movers_t k_local_particle_movers,
-              particle_mover_t * ALIGNED(16)  pm,
-              accumulator_sa_t k_accumulators_sa,
-              const grid_t     *              g,
-              //Kokkos::View<int64_t*> const& d_neighbor,
-              neighbor_view_t& d_neighbor,
-              int64_t rangel,
-              int64_t rangeh,
-              const float                     qsp )
+move_p_kokkos(
+    const particle_view_t& k_particles,
+    const particle_i_view_t& k_particles_i,
+    particle_mover_t* ALIGNED(16)  pm,
+    accumulator_sa_t k_accumulators_sa,
+    const grid_t* g,
+    neighbor_view_t& d_neighbor,
+    int64_t rangel,
+    int64_t rangeh,
+    const float qsp
+)
 {
 
   #define p_dx    k_particles(pi, particle_var::dx)
@@ -279,7 +293,7 @@ move_p_kokkos(const particle_view_t& k_particles,
   #define p_uy    k_particles(pi, particle_var::uy)
   #define p_uz    k_particles(pi, particle_var::uz)
   #define p_w     k_particles(pi, particle_var::w)
-  #define pii     k_particles(pi, particle_var::pi)
+  #define pii     k_particles_i(pi)
 
   //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
   //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
@@ -302,7 +316,7 @@ move_p_kokkos(const particle_view_t& k_particles,
     //printf("in move %d \n", pi);
 
   for(;;) {
-    int ii = reinterpret_cast<int&>(pii);
+    int ii = pii;
     s_midx = p_dx;
     s_midy = p_dy;
     s_midz = p_dz;
@@ -451,16 +465,14 @@ move_p_kokkos(const particle_view_t& k_particles,
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
       // displacement in the particle mover.
-      int new_pii = 8* reinterpret_cast<int&>(pii) + face;
-      pii = reinterpret_cast<float&>(new_pii);
+      pii = 8*pii + face;
       return 1; // Return "mover still in use"
       }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
 
-    int nmr = neighbor - rangel;
-    pii = reinterpret_cast<float&>(nmr); // Compute local index of neighbor
+    pii = neighbor - rangel;
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
   }
@@ -481,18 +493,19 @@ move_p_kokkos(const particle_view_t& k_particles,
 }
 
 // this has no data race protection for write into the accumulators
-template<class particle_view_t, class accumulator_t, class neighbor_view_t>
+template<class particle_view_t, class particle_i_view_t, class accumulator_t, class neighbor_view_t>
 int
-move_p_kokkos_host_serial(const particle_view_t& k_particles,
-              //k_particle_movers_t k_local_particle_movers,
-              particle_mover_t * ALIGNED(16)  pm,
-              accumulator_t k_accumulators,
-              const grid_t     *              g,
-              //Kokkos::View<int64_t*> const& d_neighbor,
-              neighbor_view_t& d_neighbor,
-              int64_t rangel,
-              int64_t rangeh,
-              const float                     qsp )
+move_p_kokkos_host_serial(
+    const particle_view_t& k_particles,
+    const particle_i_view_t& k_particles_i,
+    particle_mover_t* ALIGNED(16) pm,
+    accumulator_t k_accumulators,
+    const grid_t* g,
+    neighbor_view_t& d_neighbor,
+    int64_t rangel,
+    int64_t rangeh,
+    const float qsp
+)
 {
 
   #define p_dx    k_particles(pi, particle_var::dx)
@@ -502,7 +515,7 @@ move_p_kokkos_host_serial(const particle_view_t& k_particles,
   #define p_uy    k_particles(pi, particle_var::uy)
   #define p_uz    k_particles(pi, particle_var::uz)
   #define p_w     k_particles(pi, particle_var::w)
-  #define pii     k_particles(pi, particle_var::pi)
+  #define pii     k_particles_i(pi)
 
   //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
   //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
@@ -525,7 +538,7 @@ move_p_kokkos_host_serial(const particle_view_t& k_particles,
     //printf("in move %d \n", pi);
 
   for(;;) {
-    int ii = reinterpret_cast<int&>(pii);
+    int ii = pii;
     s_midx = p_dx;
     s_midy = p_dy;
     s_midz = p_dz;
@@ -674,16 +687,14 @@ move_p_kokkos_host_serial(const particle_view_t& k_particles,
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
       // displacement in the particle mover.
-      int new_pii = 8*reinterpret_cast<int&>(pii) + face;
-      pii = reinterpret_cast<float&>(new_pii);
+      pii = 8*pii + face;
       return 1; // Return "mover still in use"
       }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
 
-    int nmr = neighbor - rangel;
-    pii = reinterpret_cast<float&>(nmr); // Compute local index of neighbor
+    pii = neighbor - rangel;
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
   }

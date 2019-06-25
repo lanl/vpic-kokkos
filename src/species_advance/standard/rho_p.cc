@@ -224,13 +224,14 @@ accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
 struct accum_rho_p {
     k_field_sa_t kfield;
     k_particles_t kparticles;
+    k_particles_i_t kparticles_i;
     int sy;
     int sz;
     float q_8V;
     int np;
 
     KOKKOS_INLINE_FUNCTION
-    accum_rho_p(k_field_sa_t k_f_sa_, k_particles_t k_p_, int sy_, int sz_, float q_8V_, int np_) : kfield(k_f_sa_), kparticles(k_p_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_) {}
+    accum_rho_p(k_field_sa_t k_f_sa_, k_particles_t k_p_, k_particles_i_t k_p_i_, int sy_, int sz_, float q_8V_, int np_) : kfield(k_f_sa_), kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_) {}
 
     KOKKOS_INLINE_FUNCTION
     void operator() (const int n) const {
@@ -239,7 +240,7 @@ struct accum_rho_p {
         w0 = kparticles(n, particle_var::dx);
         w1 = kparticles(n, particle_var::dy);
         dz = kparticles(n, particle_var::dz);
-        int v = reinterpret_cast<int&>(kparticles(n, particle_var::pi));
+        int v = kparticles_i(n);
         w7 = kparticles(n, particle_var::w) * q_8V;
 
 #   define FMA( x,y,z) ((z)+(x)*(y))
@@ -280,7 +281,8 @@ struct accum_rho_p {
 struct accum_rhob {
     k_field_t kfield;
     k_particles_t kpart;
-    k_particle_movers_t kpart_movers;
+    k_particles_i_t kpart_i;
+    k_particle_i_movers_t kpart_movers_i;
     float qsp;
     float r8V;
     int nx;
@@ -290,18 +292,18 @@ struct accum_rhob {
     int sz;
 
     KOKKOS_INLINE_FUNCTION
-    accum_rhob(k_field_t k_f_, k_particles_t k_p_, k_particle_movers_t kpart_movers_, float qsp_, float r8V_, int nx_, int ny_, int nz_, int sy_, int sz_) :
-        kfield(k_f_), kpart(k_p_), kpart_movers(kpart_movers_), qsp(qsp_), r8V(r8V_), nx(nx_), ny(ny_), nz(nz_), sy(sy_), sz(sz_) {}
+    accum_rhob(k_field_t k_f_, k_particles_t k_p_, k_particles_i_t k_p_i_, k_particle_i_movers_t kpart_movers_i_, float qsp_, float r8V_, int nx_, int ny_, int nz_, int sy_, int sz_) :
+        kfield(k_f_), kpart(k_p_), kpart_i(k_p_i_), kpart_movers_i(kpart_movers_i_), qsp(qsp_), r8V(r8V_), nx(nx_), ny(ny_), nz(nz_), sy(sy_), sz(sz_) {}
 
     KOKKOS_INLINE_FUNCTION
     void operator() (const int n) const {
-        int part_idx = kpart_movers(n, particle_mover_var::pmi);
+        int part_idx = kpart_movers_i(n);
         float w0 = kpart(part_idx, particle_var::dx);
         float w1 = kpart(part_idx, particle_var::dy);
         float w2, w3, w4, w5, w6;
         float w7 = (qsp * r8V) * kpart(part_idx, particle_var::w);
         float dz = kpart(part_idx, particle_var::dz);
-        int v = reinterpret_cast<int&>(kpart(part_idx, particle_var::pi));
+        int v = kpart_i(part_idx);
         int x, y, z;
 
         w6 = w7 - w0 * w7;
@@ -379,6 +381,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
     k_field_t kfield = fa->k_f_d;
     k_particles_t kparticles = sp->k_p_d;
+    k_particles_i_t kparticles_i = sp->k_p_i_d;
 
     const float q_8V = (sp->q)*(sp->g->r8V);
     const int np = sp->np;
@@ -387,11 +390,11 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
     k_field_sa_t scatter_view = Kokkos::Experimental::create_scatter_view<Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED,KOKKOS_SCATTER_ATOMIC>(kfield);
     Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
-        accum_rho_p(scatter_view, kparticles, sy, sz, q_8V, np));
+        accum_rho_p(scatter_view, kparticles, kparticles_i, sy, sz, q_8V, np));
     Kokkos::Experimental::contribute(kfield, scatter_view);
 }
 
-void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, k_particle_movers_t& k_part_movers, const grid_t* RESTRICT g, const float qsp, const int nm) {
+void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, k_particles_i_t& kpart_i, k_particle_i_movers_t& k_part_movers_i, const grid_t* RESTRICT g, const float qsp, const int nm) {
     int sy = g->sy, sz = g->sz;
     float r8V = g->r8V;
     int nx = g->nx;
@@ -399,6 +402,6 @@ void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, k_particle_mover
     int nz = g->nz;
 
     Kokkos::parallel_for("accumulate_rhob", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,nm),
-        accum_rhob(kfield, kpart, k_part_movers, qsp, r8V, nx, ny, nz, sy, sz));
+        accum_rhob(kfield, kpart, kpart_i, k_part_movers_i, qsp, r8V, nx, ny, nz, sy, sz));
 }
 
