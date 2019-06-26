@@ -111,6 +111,10 @@ class species_t {
         k_particle_copy_t::HostMirror k_pc_h;      // kokkos particles copy for movers view on host
         k_particle_i_copy_t::HostMirror k_pc_i_h;  // kokkos particles i copy for movers view on host
 
+        // Only need host versions
+        k_particle_copy_t::HostMirror k_pr_h;      // kokkos particles copy for received particles
+        k_particle_i_copy_t::HostMirror k_pr_i_h;  // kokkos particles i copy for received particles
+
         k_particle_movers_t k_pm_d;         // kokkos particle movers on device
         k_particle_i_movers_t k_pm_i_d;         // kokkos particle movers on device
 
@@ -134,7 +138,9 @@ class species_t {
             k_pm_i_d("k_particle_movers_i", n_pmovers),
             k_pc_d("k_particle_copy_for_movers", n_pmovers),
             k_pc_i_d("k_particle_copy_for_movers_i", n_pmovers),
-            k_nm_d("k_nm")
+            k_pr_h("k_particle_send_for_movers", n_pmovers),
+            k_pr_i_h("k_particle_send_for_movers_i", n_pmovers),
+            k_nm_d("k_nm") // size 1
     {
         k_p_h = Kokkos::create_mirror_view(k_p_d);
         k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
