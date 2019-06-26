@@ -218,13 +218,10 @@ boundary_p_kokkos(
         // advance_p and before this
 
         // Here we essentially need to remove all accesses of the particle array (p0) and instead read from k_pc_h
-        printf("Sending %d \n", nm);
         for( ; nm; pm--, nm-- )
         {
             //int i = pm->i;
             int copy_index = nm -1;
-
-            //printf("i %d p0i %d pi %f nm %d \n", pm->i, p0[i].i, sp->k_pc_h(copy_index, particle_var::pi), nm);
 
             //int voxel = p0[i].i;
             int voxel = particle_send(copy_index);
@@ -251,7 +248,6 @@ boundary_p_kokkos(
             // Send to a neighboring node
             if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
             {
-                //printf("send to neighbor \n");
                 pi = &pi_send[face][n_send[face]++];
 
                 //pi->dx=p0[i].dx;
@@ -500,7 +496,6 @@ boundary_p_kokkos(
 
         if (ret_code)
         {
-            printf("Move_p true. Putting this guy into send(%d) \n", keep_id);
             // We don't want to keep this guy, so nudge him off the end
             sp_[id]->num_to_copy--;
 

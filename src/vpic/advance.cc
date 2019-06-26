@@ -20,14 +20,14 @@ int vpic_simulation::advance(void) {
   species_t *sp;
   double err;
 
-  printf("%d: Step %d \n", rank(), step());
+  //printf("%d: Step %d \n", rank(), step());
+
   // Use default policy, for now
   ParticleCompressor<> compressor;
   ParticleSorter<> sorter;
 
   // Determine if we are done ... see note below why this is done here
 
-//  printf("STEP %ld \n", step());
   if( num_step>0 && step()>=num_step ) return 0;
 
   // Sort the particles for performance if desired.
@@ -165,7 +165,6 @@ int vpic_simulation::advance(void) {
   TIC
     for( int round=0; round<num_comm_round; round++ )
     {
-       printf("%d round %d \n", rank(), round);
       //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
       boundary_p_kokkos( particle_bc_list, species_list, field_array, accumulator_array );
     }
