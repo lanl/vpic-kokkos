@@ -53,6 +53,9 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 
+set(KOKKOS_ARCH "Power9;Volta70" CACHE STRING "Architecture to use with Kokkos")
+
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -135,17 +138,8 @@ if(ENABLE_KOKKOS_CUDA)
     set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
     set(KOKKOS_ENABLE_CUDA_UVM OFF)
 
-    # Choose Architecture for Kokkos
-    if (BUILD_INTERNAL_KOKKOS AND NOT KOKKOS_ARCH)
-        #set (KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
-        #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
-        set(KOKKOS_ARCH "Power9;Volta70")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
-    endif (BUILD_INTERNAL_KOKKOS AND NOT KOKKOS_ARCH)
-
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xcudafe --diag_suppress=esa_on_defaulted_function_ignored") # supress express cuda warnings
-
 
     # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
     # see https://github.com/UoB-HPC/BabelStream/issues/16
