@@ -42,6 +42,7 @@
   _( user_field_injection ) \
   _( sort_particles ) \
   _( accumulator_contributions ) \
+  _( dump_energies ) \
   _( FIELD_DATA_MOVEMENT ) \
   _( PARTICLE_DATA_MOVEMENT ) \
   _( ACCUMULATOR_DATA_MOVEMENT ) \
@@ -49,6 +50,13 @@
   _( BACKFILL ) \
   _( user_diagnostics  )
 
+enum profile_internal_use_only_timers {
+  profile_internal_use_only_invalid_timer = -1,
+# define PROFILE_INTERNAL_USE_ONLY( timer ) profile_internal_use_only_##timer,
+  PROFILE_TIMERS( PROFILE_INTERNAL_USE_ONLY )
+# undef PROFILE_INTERNAL_USE_ONLY
+  profile_internal_use_only_n_timer
+};
 // TIC / TOC are used to update the timing profile.  For example:
 //
 //   TIC { for( n=0; n<n_iter; n++ ) foo(); } TOC( foo, n_iter );
@@ -64,34 +72,33 @@
 #define TOC(timer,n_calls)                                            \
     while(0);                                                         \
     profile_internal_use_only[profile_internal_use_only_##timer].t += \
-      wallclock() - _profile_tic;                                     \
+    wallclock() - _profile_tic;                                       \
     profile_internal_use_only[profile_internal_use_only_##timer].n += \
       (n_calls);                                                      \
-  } while(0); \
-  Kokkos::fence();
+  } while(0);
 
 // TODO: these unsafe macros should be removed, but I didn't want to fight with all the extra while loop and scoping crap.
-#define UNSAFE_TIC()                                                  \
+#define KOKKOS_TIC()                                                  \
   do {                                                                \
     double _profile_tic = wallclock();
 
-#define UNSAFE_TOC(timer,n_calls)                                   \
+// This macro:
+// 1) is more flexible but stronger scoped than the normal TIC
+// 2) calls kokkos::fence, and thus has performance over head
+#define KOKKOS_TOC_(timer,n_calls, should_barrier)                     \
     profile_internal_use_only[profile_internal_use_only_##timer].t += \
       wallclock() - _profile_tic;                                     \
     profile_internal_use_only[profile_internal_use_only_##timer].n += \
       (n_calls);                                                      \
   } while(0); \
-  Kokkos::fence();
+  if (should_barrier) Kokkos::fence();
+
+#define KOKKOS_TOC(timer,n_calls) KOKKOS_TOC_(timer, n_calls, 1)
+// N for no barrier
+#define KOKKOS_TOCN(timer,n_calls) KOKKOS_TOC_(timer, n_calls, 0)
 
 // Do not touch these
 
-enum profile_internal_use_only_timers {
-  profile_internal_use_only_invalid_timer = -1,
-# define PROFILE_INTERNAL_USE_ONLY( timer ) profile_internal_use_only_##timer,
-  PROFILE_TIMERS( PROFILE_INTERNAL_USE_ONLY )
-# undef PROFILE_INTERNAL_USE_ONLY
-  profile_internal_use_only_n_timer
-};
 
 typedef struct profile_internal_use_only_timer {
   const char * name;

@@ -51,6 +51,8 @@ option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 
 option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
 
+option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -222,6 +224,10 @@ find_package(Threads REQUIRED)
 #------------------------------------------------------------------------------#
 # Act on build options set in project.cmake
 #------------------------------------------------------------------------------#
+
+if (VPIC_DUMP_ENERGIES)
+    add_definitions(-DDUMP_ENERGIES)
+endif(VPIC_DUMP_ENERGIES)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)
