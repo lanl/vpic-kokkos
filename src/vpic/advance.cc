@@ -44,10 +44,6 @@ int vpic_simulation::advance(void) {
       }
   }
 
-  KOKKOS_INTERPOLATOR_VARIABLES();
-  KOKKOS_ACCUMULATOR_VARIABLES();
-  KOKKOS_PARTICLE_VARIABLES();
-
   // At this point, fields are at E_0 and B_0 and the particle positions
   // are at r_0 and u_{-1/2}.  Further the mover lists for the particles should
   // empty and all particles should be inside the local computational domain.
@@ -355,8 +351,6 @@ int vpic_simulation::advance(void) {
   // At this point, all particle positions are at r_1 and u_{1/2}, the
   // guard lists are empty and the accumulators on each processor are current.
   // Convert the accumulators into currents.
-
-  KOKKOS_FIELD_VARIABLES();
 
 //  UNSAFE_TIC(); // Time this data movement
 //  KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
