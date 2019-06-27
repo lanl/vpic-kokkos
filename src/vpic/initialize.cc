@@ -60,22 +60,33 @@ vpic_simulation::initialize( int argc,
   g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
   KOKKOS_PARTICLE_VARIABLES();
+  UNSAFE_TIC();
   KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
+  UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   KOKKOS_INTERPOLATOR_VARIABLES();
+  UNSAFE_TIC();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE();
+  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 
   if( species_list ) {
     KOKKOS_FIELD_VARIABLES();
+    UNSAFE_TIC();
     KOKKOS_COPY_FIELD_MEM_TO_DEVICE();
+    UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
     if( rank()==0 ) MESSAGE(( "Uncentering particles" ));
     TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
   }
   LIST_FOR_EACH( sp, species_list ) TIC uncenter_p( sp, interpolator_array ); TOC( uncenter_p, 1 );
 
+  UNSAFE_TIC();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST();
+  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
+
+  UNSAFE_TIC();
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST();
+  UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   if( rank()==0 ) MESSAGE(( "Performing initial diagnostics" ));
 
