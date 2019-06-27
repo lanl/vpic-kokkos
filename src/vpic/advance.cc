@@ -98,15 +98,17 @@ int vpic_simulation::advance(void) {
   UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 
   UNSAFE_TIC(); // Time this data movement
+
   // TODO: make this into a function
-  LIST_FOR_EACH( sp, species_list ) {
-//    Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
+  LIST_FOR_EACH( sp, species_list )
+  {
+    //Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
     Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d);
     Kokkos::deep_copy(sp->k_pm_i_h, sp->k_pm_i_d);
     Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
-    auto n_particles = sp->np;
-    auto max_pmovers = sp->max_nm;
-//    k_particles_h = sp->k_p_h;
+    //auto n_particles = sp->np;
+    //auto max_pmovers = sp->max_nm;
+    //k_particles_h = sp->k_p_h;
     auto& k_particle_movers_h = sp->k_pm_h;
     auto& k_particle_i_movers_h = sp->k_pm_i_h;
     auto& k_nm_h = sp->k_nm_h;
