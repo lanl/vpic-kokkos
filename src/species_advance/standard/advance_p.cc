@@ -7,21 +7,14 @@
 #include "spa_private.h"
 #include "../../vpic/kokkos_helpers.h"
 
-void print_nm(k_particle_movers_t particle_movers, int nm)
-{
-    Kokkos::parallel_for("nm printer", Kokkos::RangePolicy <
-            Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (size_t i)
-    {
-       printf(" %d has %f \n", i, particle_movers(i, particle_mover_var::pmi));
-    });
-}
-
-
 void
 advance_p_kokkos(
         k_particles_t& k_particles,
+        k_particles_i_t& k_particles_i,
         k_particle_copy_t& k_particle_copy,
+        k_particle_i_copy_t& k_particle_i_copy,
         k_particle_movers_t& k_particle_movers,
+        k_particle_i_movers_t& k_particle_movers_i,
         k_accumulators_sa_t k_accumulators_sa,
         k_interpolator_t& k_interp,
         //k_particle_movers_t k_local_particle_movers,
@@ -109,7 +102,7 @@ sp_[id]->
   #define p_uy    k_particles(p_index, particle_var::uy)
   #define p_uz    k_particles(p_index, particle_var::uz)
   #define p_w     k_particles(p_index, particle_var::w)
-  #define pii     k_particles(p_index, particle_var::pi)
+  #define pii     k_particles_i(p_index)
 
   #define f_cbx k_interp(ii, interpolator_var::cbx)
   #define f_cby k_interp(ii, interpolator_var::cby)
@@ -133,19 +126,6 @@ sp_[id]->
   #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
   #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
   #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
-
-  //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
-  //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
-  //#define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
-  //#define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
-
-
-  //#define copy_local_to_pm(index) \
-    //k_particle_movers(index, particle_mover_var::dispx) = local_pm_dispx; \
-    //k_particle_movers(index, particle_mover_var::dispy) = local_pm_dispy; \
-    //k_particle_movers(index, particle_mover_var::dispz) = local_pm_dispz; \
-    //k_particle_movers(index, particle_mover_var::pmi)   = local_pm_i;
-
 
   // copy local memmbers from grid
   //auto nfaces_per_voxel = 6;
@@ -178,7 +158,7 @@ sp_[id]->
     float dx   = p_dx;                             // Load position
     float dy   = p_dy;
     float dz   = p_dz;
-    int   ii   = static_cast<int>(pii);
+    int   ii   = pii;
     float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
                            dz*( f_dexdz + dy*f_d2exdydz ) );
     float hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
@@ -301,7 +281,7 @@ sp_[id]->
       local_pm->i     = p_index;
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
-      if( move_p_kokkos( k_particles, local_pm,
+      if( move_p_kokkos( k_particles, k_particles_i, local_pm,
                          k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
         if( k_nm(0)<max_nm ) {
           const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
@@ -310,17 +290,17 @@ sp_[id]->
           k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
           k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
           k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
-          k_particle_movers(nm, particle_mover_var::pmi)   = local_pm->i;
+          k_particle_movers_i(nm)   = local_pm->i;
 
           // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
           k_particle_copy(nm, particle_var::dx) = p_dx;
           k_particle_copy(nm, particle_var::dy) = p_dy;
           k_particle_copy(nm, particle_var::dz) = p_dz;
-          k_particle_copy(nm, particle_var::pi) = pii;
           k_particle_copy(nm, particle_var::ux) = p_ux;
           k_particle_copy(nm, particle_var::uy) = p_uy;
           k_particle_copy(nm, particle_var::uz) = p_uz;
           k_particle_copy(nm, particle_var::w) = p_w;
+          k_particle_i_copy(nm) = pii;
 
           // Tag this one as having left
           //k_particles(p_index, particle_var::pi) = 999999;
@@ -341,14 +321,6 @@ sp_[id]->
 
   // TODO: abstract this manual data copy
   //Kokkos::deep_copy(h_nm, k_nm);
-  /*
-    Kokkos::parallel_for(host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) { \
-      sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx); \
-      sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy); \
-      sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz); \
-      sp->pm[i].i     = k_particle_movers_h(i, particle_mover_var::pmi);   \
-    });\
-    */
 
   //args->seg[pipeline_rank].pm        = pm;
   //args->seg[pipeline_rank].max_nm    = max_nm;
@@ -394,25 +366,29 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
-  advance_p_kokkos(sp->k_p_d,
-                   sp->k_pc_d,
-                   sp->k_pm_d,
-                   aa->k_a_sa,
-                   ia->k_i_d,
-                   sp->k_nm_d,
-                   sp->g->k_neighbor_d,
-                   sp->g,
-                   qdt_2mc,
-                   cdt_dx,
-                   cdt_dy,
-                   cdt_dz,
-                   sp->q,
-                   aa->na,
-                   sp->np,
-                   sp->max_nm,
-                   sp->g->nx,
-                   sp->g->ny,
-                   sp->g->nz
+  advance_p_kokkos(
+          sp->k_p_d,
+          sp->k_p_i_d,
+          sp->k_pc_d,
+          sp->k_pc_i_d,
+          sp->k_pm_d,
+          sp->k_pm_i_d,
+          aa->k_a_sa,
+          ia->k_i_d,
+          sp->k_nm_d,
+          sp->g->k_neighbor_d,
+          sp->g,
+          qdt_2mc,
+          cdt_dx,
+          cdt_dy,
+          cdt_dz,
+          sp->q,
+          aa->na,
+          sp->np,
+          sp->max_nm,
+          sp->g->nx,
+          sp->g->ny,
+          sp->g->nz
   );
 
   // I need to know the number of movers that got populated so I can call the
@@ -427,6 +403,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   // Copy particle mirror movers back so we have their data safe. Ready for
   // boundary_p_kokkos
   Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
+  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
 
   //print_nm(sp->k_pm_d, nm);
 

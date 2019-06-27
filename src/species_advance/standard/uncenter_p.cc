@@ -1,7 +1,8 @@
 #define IN_spa
 #include "spa_private.h"
 
-void uncenter_p_kokkos(k_particles_t k_particles, k_interpolator_t k_interp, int np, float qdt_2mc_c) {
+// TODO: these should be refs?
+void uncenter_p_kokkos(k_particles_t k_particles, k_particles_i_t k_particles_i, k_interpolator_t k_interp, int np, float qdt_2mc_c) {
   const float qdt_2mc        =     -qdt_2mc_c; // For backward half advance
   const float qdt_4mc        = -0.5*qdt_2mc_c; // For backward half rotate
   const float one            = 1.;
@@ -15,7 +16,7 @@ void uncenter_p_kokkos(k_particles_t k_particles, k_interpolator_t k_interp, int
   #define p_ux    k_particles(p_index, particle_var::ux) // Load momentum
   #define p_uy    k_particles(p_index, particle_var::uy)
   #define p_uz    k_particles(p_index, particle_var::uz)
-  #define pii     k_particles(p_index, particle_var::pi)
+  #define pii     k_particles_i(p_index)
 
   // Interpolator Defines (f->x)
   #define f_cbx k_interp(ii, interpolator_var::cbx)
@@ -86,9 +87,10 @@ uncenter_p( /**/  species_t            * RESTRICT sp,
 
   if( !sp || !ia || sp->g!=ia->g ) ERROR(( "Bad args" ));
 
-  k_particles_t    k_particles = sp->k_p_d;
+  k_particles_t k_particles = sp->k_p_d;
+  k_particles_i_t k_particles_i = sp->k_p_i_d;
   k_interpolator_t k_interp    = ia->k_i_d;
   const int np                 = sp->np;
   const float qdt_2mc          = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-  uncenter_p_kokkos(k_particles, k_interp, np, qdt_2mc);
+  uncenter_p_kokkos(k_particles, k_particles_i, k_interp, np, qdt_2mc);
 }

@@ -536,6 +536,7 @@ shuffle( rng_t * RESTRICT r,
 
 # undef SWAP_IJ
 
-  return _x;
+  // Unreachable?
+  //return _x;
 }
 

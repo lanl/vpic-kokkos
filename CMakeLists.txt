@@ -134,12 +134,12 @@ if(ENABLE_KOKKOS_CUDA)
     set(KOKKOS_ENABLE_CUDA_UVM OFF)
 
     # Choose Architecture for Kokkos
-    if (BUILD_INTERNAL_KOKKOS)
+    if (BUILD_INTERNAL_KOKKOS AND NOT KOKKOS_ARCH)
         #set (KOKKOS_ARCH "HSW;Kepler35") # only works for Cuda Capability > 5.0
         #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_35")
         set(KOKKOS_ARCH "Power9;Volta70")
-        #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
-    endif (BUILD_INTERNAL_KOKKOS)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
+    endif (BUILD_INTERNAL_KOKKOS AND NOT KOKKOS_ARCH)
 
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
 

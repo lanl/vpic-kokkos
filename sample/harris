@@ -158,7 +158,6 @@ begin_initialization {
   // Override some of the boundary conditions to put a particle reflecting
   // perfect electrical conductor on the -x and +x boundaries
   set_domain_field_bc( BOUNDARY(-1,0,0), pec_fields );
-#endif
   set_domain_field_bc( BOUNDARY( 1,0,0), pec_fields );
   set_domain_particle_bc( BOUNDARY(-1,0,0), reflect_particles );
   set_domain_particle_bc( BOUNDARY( 1,0,0), reflect_particles );

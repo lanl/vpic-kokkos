@@ -189,142 +189,144 @@ boundary_p_kokkos(
     n_ci = 0;
 
     // For each species, load the movers
-    LIST_FOR_EACH( sp, sp_list ) {
-      //const float   sp_q  = sp->q;
-      const int32_t sp_id = sp->id;
+    LIST_FOR_EACH( sp, sp_list )
+    {
+        auto& particle_send = sp->k_pc_i_h;
 
-      //particle_t * RESTRICT ALIGNED(128) p0 = sp->p;
-      //int np = sp->np;
+        //const float   sp_q  = sp->q;
+        const int32_t sp_id = sp->id;
 
-      particle_mover_t * RESTRICT ALIGNED(16)  pm = sp->pm + sp->nm - 1;
-      nm = sp->nm;
+        //particle_t * RESTRICT ALIGNED(128) p0 = sp->p;
+        //int np = sp->np;
 
-      particle_injector_t * RESTRICT ALIGNED(16) pi;
+        particle_mover_t * RESTRICT ALIGNED(16)  pm = sp->pm + sp->nm - 1;
+        nm = sp->nm;
 
-      // TODO: the monotonic requirement should go away, thus we can (try)
-      // remove this
-      //std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers);
+        particle_injector_t * RESTRICT ALIGNED(16) pi;
 
-      // Note that particle movers for each species are processed in
-      // reverse order.  This allows us to backfill holes in the
-      // particle list created by boundary conditions and/or
-      // communication.  This assumes particle on the mover list are
-      // monotonically increasing.  That is: pm[n].i > pm[n-1].i for
-      // n=1...nm-1.  advance_p and inject_particle create movers with
-      // property if all aged particle injection occurs after
-      // advance_p and before this
+        // TODO: the monotonic requirement should go away, thus we can (try)
+        // remove this
+        //std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers);
 
-      // Here we essentially need to remove all accesses of the particle array (p0) and instead read from k_pc_h
-      for( ; nm; pm--, nm-- )
-      {
-        //int i = pm->i;
-        int copy_index = nm -1;
+        // Note that particle movers for each species are processed in
+        // reverse order.  This allows us to backfill holes in the
+        // particle list created by boundary conditions and/or
+        // communication.  This assumes particle on the mover list are
+        // monotonically increasing.  That is: pm[n].i > pm[n-1].i for
+        // n=1...nm-1.  advance_p and inject_particle create movers with
+        // property if all aged particle injection occurs after
+        // advance_p and before this
 
-        //printf("i %d p0i %d pi %f nm %d \n", pm->i, p0[i].i, sp->k_pc_h(copy_index, particle_var::pi), nm);
-
-        //int voxel = p0[i].i;
-        int voxel = sp->k_pc_h(copy_index, particle_var::pi);
-
-        int face = voxel & 7;
-        voxel >>= 3;
-
-        //p0[i].i = voxel;
-        sp->k_pc_h(copy_index, particle_var::pi) = voxel;
-
-        int64_t nn = neighbor[ 6*voxel + face ];
-
-        // TODO: Allow for absorbing boundaries
-        // Absorb
-        if( nn==absorb_particles ) {
-          // Ideally, we would batch all rhob accumulations together
-          // for efficiency
-          Kokkos::abort("Not implemented yet");
-          //accumulate_rhob( f, p0+i, g, sp_q );
-          //goto backfill;
-          continue;
-        }
-
-        // Send to a neighboring node
-        if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
+        // Here we essentially need to remove all accesses of the particle array (p0) and instead read from k_pc_h
+        for( ; nm; pm--, nm-- )
         {
-            //printf("send to neighbor \n");
-            pi = &pi_send[face][n_send[face]++];
+            //int i = pm->i;
+            int copy_index = nm -1;
 
-            //pi->dx=p0[i].dx;
-            //pi->dy=p0[i].dy;
-            //pi->dz=p0[i].dz;
-            pi->dx = sp->k_pc_h(copy_index, particle_var::dx);
-            pi->dy = sp->k_pc_h(copy_index, particle_var::dy);
-            pi->dz = sp->k_pc_h(copy_index, particle_var::dz);
+            //int voxel = p0[i].i;
+            int voxel = particle_send(copy_index);
 
-            pi->i = nn - range[face];
+            int face = voxel & 7;
+            voxel >>= 3;
 
-            //pi->ux=p0[i].ux;
-            //pi->uy=p0[i].uy;
-            //pi->uz=p0[i].uz;
-            pi->ux = sp->k_pc_h(copy_index, particle_var::ux);
-            pi->uy = sp->k_pc_h(copy_index, particle_var::uy);
-            pi->uz = sp->k_pc_h(copy_index, particle_var::uz);
+            //p0[i].i = voxel;
+            particle_send(copy_index) = voxel;
 
-            //pi->w=p0[i].w;
-            pi->w = sp->k_pc_h(copy_index, particle_var::w);
+            int64_t nn = neighbor[ 6*voxel + face ];
 
-            pi->dispx = pm->dispx; pi->dispy = pm->dispy; pi->dispz = pm->dispz;
-            pi->sp_id = sp_id;
+            // TODO: Allow for absorbing boundaries
+            // Absorb
+            if( nn==absorb_particles ) {
+                // Ideally, we would batch all rhob accumulations together
+                // for efficiency
+                Kokkos::abort("Not implemented yet");
+                //accumulate_rhob( f, p0+i, g, sp_q );
+                //goto backfill;
+                continue;
+            }
 
-            (&pi->dx)[axis[face]] = dir[face];
-            pi->i                 = nn - range[face];
-            pi->sp_id             = sp_id;
-            //goto backfill;
-            continue;
-        }
+            // Send to a neighboring node
+            if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
+            {
+                pi = &pi_send[face][n_send[face]++];
 
-        // User-defined handling
+                //pi->dx=p0[i].dx;
+                //pi->dy=p0[i].dy;
+                //pi->dz=p0[i].dz;
+                pi->dx = sp->k_pc_h(copy_index, particle_var::dx);
+                pi->dy = sp->k_pc_h(copy_index, particle_var::dy);
+                pi->dz = sp->k_pc_h(copy_index, particle_var::dz);
 
-        // After a particle interacts with a boundary it is removed
-        // from the local particle list.  Thus, if a boundary handler
-        // does not want a particle destroyed,  it is the boundary
-        // handler's job to append the destroyed particle to the list
-        // of particles to inject.
-        //
-        // Note that these destruction and creation processes do _not_
-        // adjust rhob by default.  Thus, a boundary handler is
-        // responsible for insuring that the rhob is updated
-        // appropriate for the incident particle it destroys and for
-        // any particles it injects as a result too.
-        //
-        // Since most boundary handlers do local reinjection and are
-        // charge neutral, this means most boundary handlers do
-        // nothing to rhob.
 
-        nn = -nn - 3; // Assumes reflective/absorbing are -1, -2
-        /*
-        if( (nn>=0) & (nn<nb) ) {
-            Kokkos::abort("Custom boundary not implemented");
+                pi->i = nn - range[face];
+
+                //pi->ux=p0[i].ux;
+                //pi->uy=p0[i].uy;
+                //pi->uz=p0[i].uz;
+                pi->ux = sp->k_pc_h(copy_index, particle_var::ux);
+                pi->uy = sp->k_pc_h(copy_index, particle_var::uy);
+                pi->uz = sp->k_pc_h(copy_index, particle_var::uz);
+
+                //pi->w=p0[i].w;
+                pi->w = sp->k_pc_h(copy_index, particle_var::w);
+
+                pi->dispx = pm->dispx; pi->dispy = pm->dispy; pi->dispz = pm->dispz;
+                pi->sp_id = sp_id;
+
+                (&pi->dx)[axis[face]] = dir[face];
+                pi->i                 = nn - range[face];
+                pi->sp_id             = sp_id;
+                //goto backfill;
+                continue;
+            }
+
+            // User-defined handling
+
+            // After a particle interacts with a boundary it is removed
+            // from the local particle list.  Thus, if a boundary handler
+            // does not want a particle destroyed,  it is the boundary
+            // handler's job to append the destroyed particle to the list
+            // of particles to inject.
+            //
+            // Note that these destruction and creation processes do _not_
+            // adjust rhob by default.  Thus, a boundary handler is
+            // responsible for insuring that the rhob is updated
+            // appropriate for the incident particle it destroys and for
+            // any particles it injects as a result too.
+            //
+            // Since most boundary handlers do local reinjection and are
+            // charge neutral, this means most boundary handlers do
+            // nothing to rhob.
+            int old_nn = nn;
+            nn = -nn - 3; // Assumes reflective/absorbing are -1, -2
+            /*
+               if( (nn>=0) & (nn<nb) ) {
+               Kokkos::abort("Custom boundary not implemented");
             //n_ci += pbc_interact[nn]( pbc_params[nn], sp, p0+i, pm,
-                    //ci+n_ci, 1, face );
+            //ci+n_ci, 1, face );
             continue;
-        }
-        */
+            }
+            */
 
-        // Uh-oh: We fell through
-        //if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
-        printf("nn %d rangel %ld rangeh %ld rangem %ld \n", nn, rangel, rangeh, rangem);
 
-        WARNING(( "Unknown boundary interaction ... dropping particle "
-                  "(species=%s)", sp->name ));
+            // Uh-oh: We fell through
+            //if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
+            printf("nn %d rangel %ld rangeh %ld rangem %ld voxel %d face %d old_nn %d \n", nn, rangel, rangeh, rangem, voxel, face, old_nn);
 
-        // No longer needed!
-        //backfill:
+            WARNING(( "Unknown boundary interaction ... dropping particle "
+                        "(species=%s)", sp->name ));
+
+            // No longer needed!
+            //backfill:
             //np--;
             //p0[i] = p0[np];
 
-      }
+        }
 
-      //printf(" would be np %d nm %d \n", sp->np, sp->nm);
-      //sp->np = np;
-      //printf("Writing sp->nm = 0 \n");
-      sp->nm = 0;
+        //printf(" would be np %d nm %d \n", sp->np, sp->nm);
+        //sp->np = np;
+        //printf("Writing sp->nm = 0 \n");
+        sp->nm = 0;
     }
 
   } while(0);
@@ -406,7 +408,7 @@ boundary_p_kokkos(
       if( face==6 ) pi = ci, n = n_ci;
       else if( shared[face] ) {
         mp_end_recv( mp, f2b[face] );
-        pi = (const particle_injector_t *)
+        pi = (particle_injector_t *)
           (((char *)mp_recv_buffer(mp,f2b[face]))+16);
         n  = n_recv[face];
       } else continue;
@@ -424,7 +426,12 @@ boundary_p_kokkos(
         pm = sp_pm[id];
         nm = sp_nm[id];
 
-        auto& particle_copy = sp_[id]->k_pc_h;
+        //auto& particle_copy = sp_[id]->k_pc_h;
+        //auto& particle_copy_i = sp_[id]->k_pc_i_h;
+        auto& particle_recv = sp_[id]->k_pr_h;
+        auto& particle_recv_i = sp_[id]->k_pr_i_h;
+        auto& particle_send = sp_[id]->k_pc_h;
+        auto& particle_send_i = sp_[id]->k_pc_i_h;
 
         int write_index = sp_[id]->num_to_copy;
 
@@ -444,14 +451,16 @@ boundary_p_kokkos(
         // Should write from 0..nm
         //printf("writing to n=%d for %p \n", sp_[id]->num_to_copy, sp_[id]);
         //printf("writing to n=%d for = %d \n", sp_[id]->num_to_copy, write_index);
-        particle_copy(write_index, particle_var::dx) = pi->dx;
-        particle_copy(write_index, particle_var::dy) = pi->dy;
-        particle_copy(write_index, particle_var::dz) = pi->dz;
-        particle_copy(write_index, particle_var::pi) = pi->i;
-        particle_copy(write_index, particle_var::ux) = pi->ux;
-        particle_copy(write_index, particle_var::uy) = pi->uy;
-        particle_copy(write_index, particle_var::uz) = pi->uz;
-        particle_copy(write_index, particle_var::w)  = pi->w;
+        particle_recv(write_index, particle_var::dx) = pi->dx;
+        particle_recv(write_index, particle_var::dy) = pi->dy;
+        particle_recv(write_index, particle_var::dz) = pi->dz;
+        particle_recv(write_index, particle_var::ux) = pi->ux;
+        particle_recv(write_index, particle_var::uy) = pi->uy;
+        particle_recv(write_index, particle_var::uz) = pi->uz;
+        particle_recv(write_index, particle_var::w)  = pi->w;
+
+        int pii = pi->i;
+        particle_recv_i(write_index) = pii;
 
         // track how many particles we buffer up here
         sp_[id]->num_to_copy++;
@@ -468,18 +477,38 @@ boundary_p_kokkos(
 
         // TODO: this relies on serial for now -- maybe bad?
         //sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
-        sp_nm[id] = nm + move_p_kokkos_host_serial(
-                    particle_copy,
-                    &(pm[nm]),
-                    aa->k_a_h,
-                    //aa->k_a_sah, // TODO: why does changing this to k_a_h break things?
-                    //scatter_add,
-                    g,
-                    sp_[id]->g->k_neighbor_h,
-                    rangel,
-                    rangeh,
-                    sp_[id]->q
-            );
+        int ret_code = move_p_kokkos_host_serial(
+                particle_recv,
+                particle_recv_i,
+                &(pm[nm]),
+                aa->k_a_h,
+                //aa->k_a_sah, // TODO: why does changing this to k_a_h break things?
+                //scatter_add,
+                g,
+                sp_[id]->g->k_neighbor_h,
+                rangel,
+                rangeh,
+                sp_[id]->q
+        );
+
+        int keep_id = nm + ret_code - 1;
+        sp_nm[id] = keep_id+1; // +1 to convert from index to count:w
+
+        if (ret_code)
+        {
+            // We don't want to keep this guy, so nudge him off the end
+            sp_[id]->num_to_copy--;
+
+            // And more him to the "send" array for next iter
+            particle_send(keep_id, particle_var::dx) = particle_recv(write_index, particle_var::dx);
+            particle_send(keep_id, particle_var::dy) = particle_recv(write_index, particle_var::dy);
+            particle_send(keep_id, particle_var::dz) = particle_recv(write_index, particle_var::dz);
+            particle_send(keep_id, particle_var::ux) = particle_recv(write_index, particle_var::ux);
+            particle_send(keep_id, particle_var::uy) = particle_recv(write_index, particle_var::uy);
+            particle_send(keep_id, particle_var::uz) = particle_recv(write_index, particle_var::uz);
+            particle_send(keep_id, particle_var::w)  = particle_recv(write_index, particle_var::w);
+            particle_send_i(keep_id)  = particle_recv_i(write_index);
+        }
 
       }
     } while(face!=5);
