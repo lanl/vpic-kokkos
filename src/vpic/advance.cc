@@ -20,13 +20,14 @@ int vpic_simulation::advance(void) {
   species_t *sp;
   double err;
 
+  //printf("%d: Step %d \n", rank(), step());
+
   // Use default policy, for now
   ParticleCompressor<> compressor;
   ParticleSorter<> sorter;
 
   // Determine if we are done ... see note below why this is done here
 
-//  printf("STEP %ld \n", step());
   if( num_step>0 && step()>=num_step ) return 0;
 
   // Sort the particles for performance if desired.
@@ -168,6 +169,13 @@ int vpic_simulation::advance(void) {
       boundary_p_kokkos( particle_bc_list, species_list, field_array, accumulator_array );
     }
   TOC( boundary_p, num_comm_round );
+
+  // currently the recv particles are in particles_recv, not particle_copy
+  LIST_FOR_EACH( sp, species_list )
+  {
+      Kokkos::deep_copy(sp->k_pc_h, sp->k_pr_h);
+      Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pr_i_h);
+  }
 
   // Boundary_p calls move_p, so we need to deal with the current
   // TODO: this will likely break on device?
