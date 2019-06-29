@@ -297,7 +297,7 @@ template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(T* species_list)
 {
   auto* sp = species_list;
   LIST_FOR_EACH( sp, species_list ) {
-      KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(sp);
+      KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(sp);
   }
 }
 
@@ -356,7 +356,7 @@ template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_HOST(T* species_list)
 {
   auto* sp = species_list;
   LIST_FOR_EACH( sp, species_list ) {
-      KOKKOS_COPY_PARTICLE_MEM_TO_HOST(sp);
+      KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
   }
 }
 
