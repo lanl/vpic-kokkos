@@ -78,13 +78,10 @@ vpic_simulation::initialize( int argc,
   LIST_FOR_EACH( sp, species_list ) TIC uncenter_p( sp, interpolator_array ); TOC( uncenter_p, 1 );
 
   UNSAFE_TIC(); // Time this data movement
-  // TODO :think about if this is really needed
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array);
   UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 
   UNSAFE_TIC();
-  // TODO :think about if this is really needed
-  // TODO: does the host need to view the particles here? probably not..
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
   UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
