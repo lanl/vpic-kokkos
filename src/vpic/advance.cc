@@ -544,9 +544,9 @@ int vpic_simulation::advance(void) {
 //        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 //      TIC FAK->clean_div_b( field_array ); TOC( clean_div_b, 1 );
       TIC FAK->clean_div_b_kokkos( field_array ); TOC( clean_div_b, 1 );
-        UNSAFE_TIC();
-        KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
-        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//        UNSAFE_TIC();
+//        KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
     }
   }
 //  UNSAFE_TIC();
@@ -558,18 +558,21 @@ int vpic_simulation::advance(void) {
 // Touches fields
   if( (sync_shared_interval>0) && ((step() % sync_shared_interval)==0) ) {
     if( rank()==0 ) MESSAGE(( "Synchronizing shared tang e, norm b, rho_b" ));
-    TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
-//    TIC err = FAK->synchronize_tang_e_norm_b_kokkos( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+//    TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+    TIC err = FAK->synchronize_tang_e_norm_b_kokkos( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
     if( rank()==0 ) MESSAGE(( "Domain desynchronization error = %e (arb units)", err ));
   }
+//        UNSAFE_TIC();
+//        KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Fields are updated ... load the interpolator for next time step and
   // particle diagnostics in user_diagnostics if there are any particle
   // species to worry about
 
-  UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
-  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC(); // Time this data movement
+//  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+//  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
   UNSAFE_TIC();
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
   UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
