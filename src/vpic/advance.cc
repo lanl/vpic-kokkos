@@ -446,8 +446,11 @@ int vpic_simulation::advance(void) {
 
 // HOST (Device in rho_p)
 // Touches fields and particles
-    TIC FAK->clear_rhof( field_array ); TOC( clear_rhof,1 );
-//    TIC FAK->clear_rhof_kokkos( field_array ); TOC( clear_rhof,1 );
+//    TIC FAK->clear_rhof( field_array ); TOC( clear_rhof,1 );
+    TIC FAK->clear_rhof_kokkos( field_array ); TOC( clear_rhof,1 );
+    UNSAFE_TIC(); // Time this data movement
+    KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+    UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
     if( species_list ) {
 
 //        KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
