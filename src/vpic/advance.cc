@@ -492,11 +492,11 @@ int vpic_simulation::advance(void) {
         KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
         UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
       if( round==0 || round==num_div_e_round-1 ) {
-        TIC err = FAK->compute_rms_div_e_err( field_array ); TOC( compute_rms_div_e_err, 1 );
-//        TIC err = FAK->compute_rms_div_e_err_kokkos( field_array ); TOC( compute_rms_div_e_err, 1 );
-//        UNSAFE_TIC();
-//        KOKKOS_COPY_FIELD_MEM_TO_HOST();
-//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//        TIC err = FAK->compute_rms_div_e_err( field_array ); TOC( compute_rms_div_e_err, 1 );
+        TIC err = FAK->compute_rms_div_e_err_kokkos( field_array ); TOC( compute_rms_div_e_err, 1 );
+        UNSAFE_TIC();
+        KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
         if( rank()==0 ) MESSAGE(( "%s rms error = %e (charge/volume)", round==0 ? "Initial" : "Cleaned", err ));
       }
       TIC FAK->clean_div_e( field_array ); TOC( clean_div_e, 1 );
