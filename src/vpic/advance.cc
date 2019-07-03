@@ -360,20 +360,20 @@ int vpic_simulation::advance(void) {
 //  TIC FAK->clear_jf( field_array ); TOC( clear_jf, 1 );
   TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
 
-  UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
-  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC(); // Time this data movement
+//  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+//  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
-//  UNSAFE_TIC();
-//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
-//  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  UNSAFE_TIC();
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
+  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   if( species_list )
-//    TIC unload_accumulator_array_kokkos( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
-    TIC unload_accumulator_array( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
-//  UNSAFE_TIC();
-//  KOKKOS_COPY_FIELD_MEM_TO_HOST();
-//  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+    TIC unload_accumulator_array_kokkos( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
+//    TIC unload_accumulator_array( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
+  UNSAFE_TIC();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 //  UNSAFE_TIC();
 //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
 //  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
