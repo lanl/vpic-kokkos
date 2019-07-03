@@ -448,15 +448,15 @@ int vpic_simulation::advance(void) {
 // Touches fields and particles
 //    TIC FAK->clear_rhof( field_array ); TOC( clear_rhof,1 );
     TIC FAK->clear_rhof_kokkos( field_array ); TOC( clear_rhof,1 );
-    UNSAFE_TIC(); // Time this data movement
-    KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
-    UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//    UNSAFE_TIC(); // Time this data movement
+//    KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+//    UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
     if( species_list ) {
 
 //        KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
-        UNSAFE_TIC();
-        KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
-        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//        UNSAFE_TIC();
+//        KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
         TIC
         LIST_FOR_EACH( sp, species_list )
@@ -466,16 +466,19 @@ int vpic_simulation::advance(void) {
         }
         TOC( accumulate_rho_p, species_list->id );
 
+//        UNSAFE_TIC();
+//        KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+    }
+//    UNSAFE_TIC();
+//    KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+//    UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+
+    TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+//    TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
         UNSAFE_TIC();
         KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
         UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
-    }
-
-//    TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
-    TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
-//        UNSAFE_TIC();
-//        KOKKOS_COPY_FIELD_MEM_TO_HOST();
-//        UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
 // HOST
 // Touches fields
