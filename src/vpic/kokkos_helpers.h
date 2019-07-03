@@ -62,7 +62,8 @@ using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSp
 
 using k_material_coefficient_t = Kokkos::View<float* [MATERIAL_COEFFICIENT_VAR_COUNT]>;
 
-using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT], KOKKOS_LAYOUT, Kokkos::DefaultExecutionSpace, Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED, KOKKOS_SCATTER_ATOMIC>;
+//using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT], KOKKOS_LAYOUT, Kokkos::DefaultExecutionSpace, Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED, KOKKOS_SCATTER_ATOMIC>;
+using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
 
 #define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
 #define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
