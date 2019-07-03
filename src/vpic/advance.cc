@@ -52,11 +52,11 @@ int vpic_simulation::advance(void) {
 // HOST
 // Touches accumulators
   if( species_list )
-    TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
-//    TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
-//  UNSAFE_TIC();
-//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
-//  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+//    TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
+    TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
+  UNSAFE_TIC();
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
+  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   // Note: Particles should not have moved since the last performance sort
   // when calling collision operators.
@@ -575,6 +575,9 @@ int vpic_simulation::advance(void) {
   UNSAFE_TIC();
   KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
   UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+  UNSAFE_TIC(); // Time this data movement
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
+  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   step()++;
 

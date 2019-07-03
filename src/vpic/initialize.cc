@@ -67,6 +67,10 @@ vpic_simulation::initialize( int argc,
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
   UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 
+  UNSAFE_TIC(); // Time this data movement
+  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
+  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+
   if( species_list ) {
     UNSAFE_TIC(); // Time this data movement
     KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
