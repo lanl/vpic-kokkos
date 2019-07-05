@@ -245,11 +245,14 @@ template<class T> void KOKKOS_COPY_FIELD_MEM_TO_HOST(T* field_array)
   });
 }
 
-// TODO: abstract these so it in turn calls a function that operates on a single species
-template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(T* species_list)
+/**
+ * @brief Copy all available particle memory from host to device, for a given
+ * species list
+ *
+ * @param sp the species_t to copy
+ */
+template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(T* sp)
 {
-  auto* sp = species_list;
-  LIST_FOR_EACH( sp, species_list ) {
     auto n_particles = sp->np;
     auto max_pmovers = sp->max_nm;
 
@@ -261,34 +264,51 @@ template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(T* species_list)
     k_nm_h(0) = sp->nm;
 
     Kokkos::parallel_for("copy particles to device", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) {
-      k_particles_h(i, particle_var::dx) = sp->p[i].dx;
-      k_particles_h(i, particle_var::dy) = sp->p[i].dy;
-      k_particles_h(i, particle_var::dz) = sp->p[i].dz;
-      k_particles_h(i, particle_var::ux) = sp->p[i].ux;
-      k_particles_h(i, particle_var::uy) = sp->p[i].uy;
-      k_particles_h(i, particle_var::uz) = sp->p[i].uz;
-      k_particles_h(i, particle_var::w)  = sp->p[i].w;
-      k_particles_i_h(i) = sp->p[i].i;
-    });
+            k_particles_h(i, particle_var::dx) = sp->p[i].dx;
+            k_particles_h(i, particle_var::dy) = sp->p[i].dy;
+            k_particles_h(i, particle_var::dz) = sp->p[i].dz;
+            k_particles_h(i, particle_var::ux) = sp->p[i].ux;
+            k_particles_h(i, particle_var::uy) = sp->p[i].uy;
+            k_particles_h(i, particle_var::uz) = sp->p[i].uz;
+            k_particles_h(i, particle_var::w)  = sp->p[i].w;
+            k_particles_i_h(i) = sp->p[i].i;
+            });
 
     Kokkos::parallel_for("copy movers to device", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {
-      k_particle_movers_h(i, particle_mover_var::dispx) = sp->pm[i].dispx;
-      k_particle_movers_h(i, particle_mover_var::dispy) = sp->pm[i].dispy;
-      k_particle_movers_h(i, particle_mover_var::dispz) = sp->pm[i].dispz;
-      k_particle_movers_i_h(i) = sp->pm[i].i;
-    });
+            k_particle_movers_h(i, particle_mover_var::dispx) = sp->pm[i].dispx;
+            k_particle_movers_h(i, particle_mover_var::dispy) = sp->pm[i].dispy;
+            k_particle_movers_h(i, particle_mover_var::dispz) = sp->pm[i].dispz;
+            k_particle_movers_i_h(i) = sp->pm[i].i;
+            });
     Kokkos::deep_copy(sp->k_p_d, sp->k_p_h);
     Kokkos::deep_copy(sp->k_p_i_d, sp->k_p_i_h);
     Kokkos::deep_copy(sp->k_pm_d, sp->k_pm_h);
     Kokkos::deep_copy(sp->k_pm_i_d, sp->k_pm_i_h);
     Kokkos::deep_copy(sp->k_nm_d, sp->k_nm_h);
-  }
 }
 
-template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_HOST(T* species_list)
+/**
+ * @brief Copy all available particle memory from host to device, for a given
+ * list of species
+ *
+ * @param sp the species list to copy
+ */
+template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(T* species_list)
 {
   auto* sp = species_list;
   LIST_FOR_EACH( sp, species_list ) {
+      KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(sp);
+  }
+}
+
+
+/**
+ * @brief Copy all available particle memory from device to host, for a given species
+ *
+ * @param sp the species_t to copy
+ */
+template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(T* sp)
+{
     Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
     Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
     Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d);
@@ -325,6 +345,18 @@ template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_HOST(T* species_list)
       sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
       sp->pm[i].i     = k_particle_movers_i_h(i);
     });
+}
+
+/**
+ * @brief Copy all available particle memory from device to host, for a given species
+ *
+ * @param species_list The list of species to copy
+ */
+template<class T> void KOKKOS_COPY_PARTICLE_MEM_TO_HOST(T* species_list)
+{
+  auto* sp = species_list;
+  LIST_FOR_EACH( sp, species_list ) {
+      KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
   }
 }
 
