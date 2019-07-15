@@ -1,5 +1,8 @@
 #include "util.h"
 
+#include <iostream>
+#include <omp.h>
+
 double _boot_timestamp = 0;
 
 double
@@ -33,10 +36,43 @@ boot_services( int * pargc,
   boot_mp( pargc, pargv );
 
   // Set the boot_timestamp
-
   mp_barrier();
   _boot_timestamp = 0;
   _boot_timestamp = uptime();
+
+  // Do some argument clean up to try and save us from ourselves
+  if (world_rank == 0)
+  {
+      // If we have arguments VPIC doesn't understand, notify the user and pass
+      // them to Kokkos
+      if (*pargc >= 2)
+      {
+          std::cerr << "Passing the following non-standard args to kokkos:" << std::endl;
+          for (int i = 1; i < *pargc; i++)
+          {
+              std::cerr << i << ") " <<  (*pargv)[i] << std::endl;
+          }
+          std::cerr << std::endl;
+      }
+
+      int nThreads = 0;
+#pragma omp parallel
+      {
+          nThreads = omp_get_num_threads();
+      }
+
+      if (nThreads != thread.n_pipeline)
+      {
+          std::cerr << "omp_get_num_threads != n_pipeline ";
+          std::cerr << "(" << nThreads << " != " << thread.n_pipeline << ")" << std::endl;
+      }
+
+      std::cerr << "-> Setting omp_get_num_threads to be tpp! " << thread.n_pipeline << std::endl;
+      std::cerr << std::endl;
+  }
+
+  omp_set_num_threads(thread.n_pipeline);
+
 }
 
 // This operates in reverse order from boot_services
