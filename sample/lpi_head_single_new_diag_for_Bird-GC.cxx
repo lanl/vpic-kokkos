@@ -841,6 +841,7 @@ begin_initialization {
 
   int load_particles = 1;         // Flag to turn off particle load for testing wave launch. 
   double nppc        = 512;
+//  double nppc        = 1;
 
 // Here _He is C+6
   double A_H                = 1;
@@ -1014,6 +1015,11 @@ begin_initialization {
   // SETUP HIGH-LEVEL SIMULATION PARMETERS
   sim_log("Setting up high-level simulation parameters. "); 
   num_step             = 100; //int(t_stop/(dt)); 
+  status_interval      = 200; 
+//  status_interval      = -1; 
+//  sync_shared_interval = status_interval/1;
+//  clean_div_e_interval = status_interval/1;
+//  clean_div_b_interval = status_interval/10;
   status_interval      = 200; 
   sync_shared_interval = status_interval/1;
   clean_div_e_interval = status_interval/1;

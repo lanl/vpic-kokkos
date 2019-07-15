@@ -157,8 +157,8 @@ int vpic_simulation::advance(void) {
 
 // HOST
 // Touches accumulator memory
-  if( species_list )
-    TIC reduce_accumulator_array( accumulator_array ); TOC( reduce_accumulators, 1 );
+//  if( species_list )
+//    TIC reduce_accumulator_array( accumulator_array ); TOC( reduce_accumulators, 1 );
 //    TIC reduce_accumulator_array_kokkos( accumulator_array ); TOC( reduce_accumulators, 1 );
 
   // At this point, most particle positions are at r_1 and u_{1/2}. Particles
@@ -167,9 +167,9 @@ int vpic_simulation::advance(void) {
   // local accumulation).
 
   // This should mean the kokkos accum data is up to date
-  UNSAFE_TIC();
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
-  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC();
+//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
+//  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
 // HOST
 // Touches particle copies, particle_movers, particle_injectors, accumulators (move_p), neighbors
