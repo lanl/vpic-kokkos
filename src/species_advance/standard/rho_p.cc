@@ -535,15 +535,12 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     });
 //    Kokkos::Experimental::contribute(kfield, scatter_view);
 
-/*
-    printf("Atomics\n");
     for(int i=0; i<fa->g->nv; i++) {
-        int rank = -1;
+        int rank = 0;
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        if(kfield(i, field_var::rhof) >= 0.00001 && rank == 0)
+        //if(kfield(i, field_var::rhof) >= 0.00001 && rank == 0)
             printf("field(%d): rhof: (%f)\n" , i, kfield(i, field_var::rhof));
     }
-*/
 
 }
 
