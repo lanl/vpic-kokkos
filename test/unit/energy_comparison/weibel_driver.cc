@@ -323,6 +323,27 @@ TEST_CASE( "Check if Weibel gives correct energy (within tol)", "[energy]" )
     const unsigned short b_mask = 0b0001110000;
     const unsigned short particle_mask = 0b011000000;
 
+    // Test just the step range 50-250, and have tight counts
+    REQUIRE(
+            test_utils::compare_energies(energy_file_name, energy_gold_file_name,
+                0.01, e_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.e.tight.out", 50, 200)
+           );
+
+    // Test the sum of the b_field
+    REQUIRE(
+            test_utils::compare_energies(energy_file_name, energy_gold_file_name,
+                0.01, b_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.b.tight.out", 50, 200)
+           );
+
+    // Test particle energies individually
+    REQUIRE(
+            test_utils::compare_energies(energy_file_name, energy_gold_file_name,
+                0.01, particle_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.p.tight.out", 50, 200)
+           );
+
+
+    // Test the entire file, using lose bouinds
+
     // Test the sum of the e_field
     REQUIRE(
             test_utils::compare_energies(energy_file_name, energy_gold_file_name,

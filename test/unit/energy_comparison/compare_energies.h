@@ -120,7 +120,8 @@ enum FIELD_ENUM {
  * @param sum_mask A mask to specify which fields in the file to sum and compare
  * @param write_err_output If you should write the error output to a file
  * @param err_file_base_name Base filename for writing output
- * @param num_lines_to_skip The number of lines to skup into the file
+ * @param num_lines_to_skip The number of lines to skip into the file
+ * @param lines_to_read The number of lines to read into the file (for partial file analysis). Default -1 means "all"
  *
  * @NOTE A typical energy file is:
  * <step> <ex> <ey> <ez> <bx> <by> <bz> <particle energies...>
@@ -139,7 +140,8 @@ bool compare_energies(
         const FIELD_ENUM field_enum = FIELD_ENUM::Individual, /// short has 16 bytes, assume all are true
         const int write_err_ouput = 0, // If the run should dump the errors to disk
         const std::string err_file_base_name =  "err.out", // File name to write errors to
-        const int num_lines_to_skip = 0 // Most energy files have 3 lines of padding
+        const int num_lines_to_skip = 0, // Most energy files have 3 lines of padding
+        const int lines_to_read = -1 // -1 => all.
 )
 {
     // TODO: I could easily have a policy here based on the type of the field_mask
@@ -262,9 +264,7 @@ bool compare_energies(
                         }
                         else // We can just compare this val
                         {
-
                             returned_err = compare_error(A, B, relative_tolerance);
-
                         }
 
                         if (returned_err.second != -1.0)  // Has some value set
@@ -298,6 +298,14 @@ bool compare_energies(
                 }
                 line_token_count = used_line_token_count;
                 counter++;
+
+                if (lines_to_read > 0) // Skipping is enabled
+                {
+                    if ( (counter - num_lines_to_skip) >= lines_to_read)
+                    {
+                        break;
+                    }
+                }
             }
 
             f1.close();
@@ -321,8 +329,6 @@ bool compare_energies(
             std::cout << "Writing error output " << errs.size() << std::endl;
             write_error_ouput( errs, err_per_line, err_file_base_name);
         }
-
-
         return match;
     }
     catch (const std::exception &exc) // Catching all is bad form, but OK for now..
