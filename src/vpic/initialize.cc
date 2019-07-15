@@ -67,9 +67,9 @@ vpic_simulation::initialize( int argc,
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
   KOKKOS_TOCN( INTERPOLATOR_DATA_MOVEMENT, 1);
 
-  UNSAFE_TIC(); // Time this data movement
+  KOKKOS_TIC(); // Time this data movement
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
-  UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   if( species_list ) {
     KOKKOS_TIC(); // Time this data movement
@@ -85,13 +85,13 @@ vpic_simulation::initialize( int argc,
       KOKKOS_TOC( uncenter_p, 1 );
   }
 
-//  UNSAFE_TIC(); // Time this data movement
+//  KOKKOS_TIC(); // Time this data movement
 //  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array);
-//  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
+//  KOKKOS_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 //
-//  UNSAFE_TIC();
+//  KOKKOS_TIC();
 //  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
-//  UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
+//  KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   if( rank()==0 ) MESSAGE(( "Performing initial diagnostics" ));
 
