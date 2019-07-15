@@ -188,6 +188,8 @@ typedef struct field_advance_kernels {
 
   void (*energy_f)( /**/  double        * RESTRICT en, // 6 elem
                     const struct field_array * RESTRICT fa );
+  void (*energy_f_kokkos)( /**/  double        * RESTRICT en, // 6 elem
+                    const struct field_array * RESTRICT fa );
 
   // Accumulator interface
 

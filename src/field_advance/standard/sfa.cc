@@ -15,6 +15,7 @@ static field_advance_kernels_t sfa_kernels = {
   // Diagnostic interfaces
 
   energy_f,
+  energy_f_kokkos,
 
   // Accumulator interfaces
 
@@ -235,6 +236,7 @@ new_standard_field_array( grid_t           * RESTRICT g,
     fa->kernel->advance_e_kokkos  = vacuum_advance_e_kokkos;
     fa->kernel->compute_div_e_err_kokkos = vacuum_compute_div_e_err_kokkos;
     fa->kernel->clean_div_e_kokkos= vacuum_clean_div_e_kokkos;
+    fa->kernel->energy_f_kokkos   = vacuum_energy_f_kokkos;
   }
 
   REGISTER_OBJECT( fa, checkpt_standard_field_array,

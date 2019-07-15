@@ -59,7 +59,8 @@ vpic_simulation::dump_energies( const char *fname,
     }
   }
  
-  field_array->kernel->energy_f( en_f, field_array );
+//  field_array->kernel->energy_f( en_f, field_array );
+  field_array->kernel->energy_f_kokkos( en_f, field_array );
   if( rank()==0 && status!=fail )
     fileIO.print( " %e %e %e %e %e %e",
                   en_f[0], en_f[1], en_f[2],

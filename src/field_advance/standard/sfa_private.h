@@ -120,6 +120,14 @@ void
 vacuum_energy_f( /**/  double        * RESTRICT en, // 6 elem array
                  const field_array_t * RESTRICT fa );
 
+void
+energy_f_kokkos( /**/  double        * RESTRICT en, // 6 elem array
+          const field_array_t * RESTRICT fa );
+
+void
+vacuum_energy_f_kokkos( /**/  double        * RESTRICT en, // 6 elem array
+                 const field_array_t * RESTRICT fa );
+
 // In compute_curl_b.c
 
 // compute_curl_b applies the following difference equations to the
