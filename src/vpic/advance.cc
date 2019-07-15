@@ -403,20 +403,20 @@ int vpic_simulation::advance(void) {
   // Half advance the magnetic field from B_0 to B_{1/2}
   TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
 
-  UNSAFE_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
-  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+//  UNSAFE_TIC(); // Time this data movement
+//  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+//  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Advance the electric field from E_0 to E_1
   
 // HOST (Device in nphtan branch)
 // Touches fields
-  TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
-//  TIC FAK->advance_e_kokkos( field_array, 1.0 ); TOC( advance_e, 1 );
+//  TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
+  TIC FAK->advance_e_kokkos( field_array, 1.0 ); TOC( advance_e, 1 );
 
-//  UNSAFE_TIC();
-//  KOKKOS_COPY_FIELD_MEM_TO_HOST();
-//  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+  UNSAFE_TIC();
+  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+  UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Let the user add their own contributions to the electric field. It is the
   // users responsibility to insure injected electric fields are consistent
