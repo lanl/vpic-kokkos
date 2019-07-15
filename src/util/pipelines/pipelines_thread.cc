@@ -38,7 +38,6 @@
 // (?) Timeouts in thread_halt, thread_boot (spin wait)
 
 #include <pthread.h>
-#include <omp.h>
 #include <iostream>
 
 #include "pipelines.h"
@@ -165,27 +164,22 @@ restore_thread( void ) {
  *
  ***************************************************************************/
 
-static void
-thread_boot( int * pargc,
-             char *** pargv ) {
+static void thread_boot(int * pargc, char *** pargv)
+{
   int i, n_pipeline;
 
   // Check if arguments are valid and dispatcher isn't already initialized
-
   if( thread.n_pipeline != 0 ) ERROR(( "Halt the thread dispatcher first!" ));
 
   // Attempt to detect if any old-style arguments exist, and if so warn the user.
   detect_old_style_arguments(pargc, pargv);
 
-# if defined(CELL_PPU_BUILD)
-  n_pipeline       = strip_cmdline_int( pargc, pargv, "--tpp",              2 );
-# else
   n_pipeline       = strip_cmdline_int( pargc, pargv, "--tpp",              1 );
-# endif
   Dispatch_To_Host = strip_cmdline_int( pargc, pargv, "--dispatch_to_host", 1 );
 
   if( n_pipeline<1 || n_pipeline>MAX_PIPELINE )
     ERROR(( "Invalid number of pipelines requested (%i)", n_pipeline ));
+
 
   // Initialize some global variables. Note: thread.n_pipeline = 0 here
 
@@ -232,26 +226,6 @@ thread_boot( int * pargc,
   }
 
   thread.n_pipeline = n_pipeline;
-
-  int nThreads = 0;
-  #pragma omp parallel
-  {
-  nThreads = omp_get_num_threads();
-  }
-
-  if (nThreads != n_pipeline)
-  {
-      std::cerr << "omp_get_num_threads != n_pipeline" << std::endl;
-      std::cerr << nThreads << " != " << n_pipeline << std::endl;
-  }
-
-  // FIXME: this may not be a good idea
-  // Try make sure num threads is set in a sane way
-  //if (n_pipeline > 1)
-  //{
-  std::cerr << "Setting omp_get_num_threads to be tpp! " << n_pipeline << std::endl;
-  omp_set_num_threads(n_pipeline);
-  //}
 
   REGISTER_OBJECT( &thread, checkpt_thread, restore_thread, NULL );
 }

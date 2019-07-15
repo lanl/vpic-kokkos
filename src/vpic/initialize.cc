@@ -59,27 +59,31 @@ vpic_simulation::initialize( int argc,
   auto nfaces_per_voxel = 6;
   g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
-  UNSAFE_TIC();
+  KOKKOS_TIC();
   KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
-  UNSAFE_TOC( PARTICLE_DATA_MOVEMENT, 1);
+  KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 
-  UNSAFE_TIC(); // Time this data movement
+  KOKKOS_TIC(); // Time this data movement
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
-  UNSAFE_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
+  KOKKOS_TOCN( INTERPOLATOR_DATA_MOVEMENT, 1);
 
   UNSAFE_TIC(); // Time this data movement
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
   UNSAFE_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   if( species_list ) {
-    UNSAFE_TIC(); // Time this data movement
+    KOKKOS_TIC(); // Time this data movement
     KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
-    UNSAFE_TOC( FIELD_DATA_MOVEMENT, 1);
+    KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
 
     if( rank()==0 ) MESSAGE(( "Uncentering particles" ));
     TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
   }
-  LIST_FOR_EACH( sp, species_list ) TIC uncenter_p( sp, interpolator_array ); TOC( uncenter_p, 1 );
+  LIST_FOR_EACH( sp, species_list ) {
+      KOKKOS_TIC();
+      uncenter_p( sp, interpolator_array );
+      KOKKOS_TOC( uncenter_p, 1 );
+  }
 
 //  UNSAFE_TIC(); // Time this data movement
 //  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array);
