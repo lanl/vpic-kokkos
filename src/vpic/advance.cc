@@ -106,9 +106,9 @@ int vpic_simulation::advance(void) {
 //  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array);
 //  KOKKOS_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 
-  KOKKOS_TIC()
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array);
-  KOKKOS_TOCN( INTERPOLATOR_DATA_MOVEMENT, 1);
+//  KOKKOS_TIC()
+//  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array);
+//  KOKKOS_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
 
   KOKKOS_TIC(); // Time this data movement
   // TODO: make this into a function
@@ -192,8 +192,14 @@ int vpic_simulation::advance(void) {
   KOKKOS_TIC();
   LIST_FOR_EACH( sp, species_list )
   {
-      Kokkos::deep_copy(sp->k_pc_h, sp->k_pr_h);
-      Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pr_i_h);
+        auto pr_h_subview = Kokkos::subview(sp->k_pr_h, std::make_pair(0, sp->num_to_copy), Kokkos::ALL);
+        auto pri_h_subview = Kokkos::subview(sp->k_pr_i_h, std::make_pair(0, sp->num_to_copy));
+        auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, sp->num_to_copy), Kokkos::ALL);
+        auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, sp->num_to_copy));
+      Kokkos::deep_copy(pc_h_subview, pr_h_subview);
+      Kokkos::deep_copy(pci_h_subview, pri_h_subview);
+//      Kokkos::deep_copy(sp->k_pc_h, sp->k_pr_h);
+//      Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pr_i_h);
   }
   KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 

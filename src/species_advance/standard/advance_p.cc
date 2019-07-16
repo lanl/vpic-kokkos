@@ -402,13 +402,15 @@ advance_p( /**/  species_t            * RESTRICT sp,
 
   // Copy particle mirror movers back so we have their data safe. Ready for
   // boundary_p_kokkos
-//  auto pc_d_subview = Kokkos::subview(sp->k_pc_d, make_pair(0, k_nm_h(0)), Kokkos::ALL);
-//  auto pci_d_subview = Kokkos::subview(sp->k_pci_d, make_pair(0, k_nm_h(0)), Kokkos::ALL);
-//  auto pc_h_subview = Kokkos::subview(sp->k_pc_h, make_pair(0, k_nm_h(0)), Kokkos::ALL);
-//  auto pci_h_subview = Kokkos::subview(sp->k_pci_h, make_pair(0, k_nm_h(0)), Kokkos::ALL);
+  auto pc_d_subview = Kokkos::subview(sp->k_pc_d, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
+  auto pci_d_subview = Kokkos::subview(sp->k_pc_i_d, std::make_pair(0, sp->k_nm_h(0)));
+  auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
+  auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, sp->k_nm_h(0)));
   KOKKOS_TIC();
-  Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
-  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
+    Kokkos::deep_copy(pc_h_subview, pc_d_subview);
+    Kokkos::deep_copy(pci_h_subview, pci_d_subview);
+//  Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
+//  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   //print_nm(sp->k_pm_d, nm);
