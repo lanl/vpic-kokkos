@@ -483,8 +483,23 @@ int vpic_simulation::advance(void) {
     update_profile( rank()==0 );
   }
 
-  // Let the user compute diagnostics
+  // Optionally move data back from the device, at user request
+  if ( (particle_copy_interval > 0) && ((step() % particle_copy_interval) == 0))
+  {
+      // Copy particles back
+      KOKKOS_TIC(); // Time this data movement
+      KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+      KOKKOS_TOC( user_diagnostics, 1);
+  }
+  if ( (field_copy_interval > 0) && ((step() % field_copy_interval) == 0))
+  {
+      // Copy fields back
+      KOKKOS_TIC(); // Time this data movement
+      KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+      KOKKOS_TOC( user_diagnostics, 1);
+  }
 
+  // Let the user compute diagnostics
   TIC user_diagnostics(); TOC( user_diagnostics, 1 );
 
   // "return step()!=num_step" is more intuitive. But if a checkpt
