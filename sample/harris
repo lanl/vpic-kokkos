@@ -37,7 +37,8 @@ begin_globals {
 
 begin_initialization {
 
-    particle_copy_interval = 2;
+  particle_copy_interval = 2;
+
   // At this point, there is an empty grid and the random number generator is
   // seeded with the rank. The grid, materials, species need to be defined.
   // Then the initial non-zero fields need to be loaded at time level 0 and the
@@ -317,7 +318,6 @@ begin_initialization {
 
 begin_diagnostics {
 
-
 # define should_dump(x)  0 // (global->x##_interval>0 && remainder(step(),global->x##_interval)==0)
 
   if( step()==-10 ) {
@@ -379,7 +379,7 @@ begin_diagnostics {
   // are tagged with step(). However, if a "0" is added to the call, the
   // filename will not be tagged. Particle dumps are in a binary format.
   // Each rank makes a particle dump.
-  dump_particles("electron","eparticle");
+  if( should_dump(eparticle) ) dump_particles("electron","eparticle");
   if( should_dump(iparticle) ) dump_particles("ion",     "iparticle");
 
   // A checkpt is made by calling checkpt( fbase, tag ) where fname is a string
