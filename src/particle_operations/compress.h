@@ -263,7 +263,7 @@ struct SortCompress {
 template <typename Policy = DefaultCompress>
 struct ParticleCompressor : private Policy {
     using Policy::compress;
-    using Policy::test_compress;
+//    using Policy::test_compress;
 };
 
 #endif //guard
