@@ -252,9 +252,18 @@ int vpic_simulation::advance(void) {
               sp
       );
 
+//      compressor.compress(
+//              sp->k_p_d,
+//              sp->k_p_i_d,
+//              sp->k_pm_i_d,
+//              nm,
+//              sp->np,
+//              sp
+//      );
+
       // Update np now we removed them...
       sp->np -= nm;
-      KOKKOS_TOC( BACKFILL, 1);
+      KOKKOS_TOC( BACKFILL_COMPRESS, 1);
 
       auto& particles = sp->k_p_d;
       auto& particles_i = sp->k_p_i_d;
@@ -266,8 +275,15 @@ int vpic_simulation::advance(void) {
 
       // Copy data for copies back to device
       KOKKOS_TIC();
-      Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
-      Kokkos::deep_copy(sp->k_pc_i_d, sp->k_pc_i_h);
+        auto pc_d_subview = Kokkos::subview(sp->k_pc_d, std::make_pair(0, num_to_copy), Kokkos::ALL);
+        auto pci_d_subview = Kokkos::subview(sp->k_pc_i_d, std::make_pair(0, num_to_copy));
+        auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, num_to_copy), Kokkos::ALL);
+        auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, num_to_copy));
+        Kokkos::deep_copy(pc_d_subview, pc_h_subview);
+        Kokkos::deep_copy(pci_d_subview, pci_h_subview);
+
+//      Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
+//      Kokkos::deep_copy(sp->k_pc_i_d, sp->k_pc_i_h);
       KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 
       KOKKOS_TIC(); // Time this data movement
@@ -296,7 +312,7 @@ int vpic_simulation::advance(void) {
       // Reset this to zero now we've done the write back
       sp->np += num_to_copy;
       sp->num_to_copy = 0;
-      KOKKOS_TOC( BACKFILL, 0); // Don't double count
+      KOKKOS_TOC( BACKFILL, 1); // Don't double count
   }
 
   // This copies over a val for nm, which is a lie
