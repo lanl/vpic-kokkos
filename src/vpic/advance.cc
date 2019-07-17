@@ -115,9 +115,24 @@ int vpic_simulation::advance(void) {
   LIST_FOR_EACH( sp, species_list )
   {
     //Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
-    Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d);
-    Kokkos::deep_copy(sp->k_pm_i_h, sp->k_pm_i_d);
     Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
+    {
+        auto pm_h_dispx = Kokkos::subview(sp->k_pm_h, std::make_pair(0, sp->k_nm_h(0)), 0);
+        auto pm_d_dispx = Kokkos::subview(sp->k_pm_d, std::make_pair(0, sp->k_nm_h(0)), 0);
+        auto pm_h_dispy = Kokkos::subview(sp->k_pm_h, std::make_pair(0, sp->k_nm_h(0)), 1);
+        auto pm_d_dispy = Kokkos::subview(sp->k_pm_d, std::make_pair(0, sp->k_nm_h(0)), 1);
+        auto pm_h_dispz = Kokkos::subview(sp->k_pm_h, std::make_pair(0, sp->k_nm_h(0)), 2);
+        auto pm_d_dispz = Kokkos::subview(sp->k_pm_d, std::make_pair(0, sp->k_nm_h(0)), 2);
+        auto pm_i_h_subview = Kokkos::subview(sp->k_pm_i_h, std::make_pair(0, sp->k_nm_h(0)));
+        auto pm_i_d_subview = Kokkos::subview(sp->k_pm_i_d, std::make_pair(0, sp->k_nm_h(0)));
+        Kokkos::deep_copy(pm_h_dispx, pm_d_dispx);
+        Kokkos::deep_copy(pm_h_dispy, pm_d_dispy);
+        Kokkos::deep_copy(pm_h_dispz, pm_d_dispz);
+        Kokkos::deep_copy(pm_i_h_subview, pm_i_d_subview);
+    }
+
+//    Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d);
+//    Kokkos::deep_copy(sp->k_pm_i_h, sp->k_pm_i_d);
 
     //auto n_particles = sp->np;
     //auto max_pmovers = sp->max_nm;
@@ -251,15 +266,6 @@ int vpic_simulation::advance(void) {
               sp->np,
               sp
       );
-
-//      compressor.compress(
-//              sp->k_p_d,
-//              sp->k_p_i_d,
-//              sp->k_pm_i_d,
-//              nm,
-//              sp->np,
-//              sp
-//      );
 
       // Update np now we removed them...
       sp->np -= nm;
