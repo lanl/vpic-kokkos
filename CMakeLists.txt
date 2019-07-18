@@ -9,7 +9,7 @@ cmake_minimum_required(VERSION 3.9)
 # VPIC project configuration
 #~----------------------------------------------------------------------------~#
 
-project(vpic)
+project(vpic CXX)
 
 #------------------------------------------------------------------------------#
 # If a C++11 compiler is available, then set the appropriate flags
