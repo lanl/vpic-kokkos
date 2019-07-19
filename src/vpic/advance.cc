@@ -12,7 +12,6 @@
 #include "../particle_operations/compress.h"
 #include "../particle_operations/sort.h"
 #include <Kokkos_Sort.hpp>
-#include <Kokkos_DualView.hpp>
 
 #define FAK field_array->kernel
 
@@ -211,8 +210,8 @@ int vpic_simulation::advance(void) {
         auto pri_h_subview = Kokkos::subview(sp->k_pr_i_h, std::make_pair(0, sp->num_to_copy));
         auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, sp->num_to_copy), Kokkos::ALL);
         auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, sp->num_to_copy));
-      Kokkos::deep_copy(pc_h_subview, pr_h_subview);
-      Kokkos::deep_copy(pci_h_subview, pri_h_subview);
+        Kokkos::deep_copy(pc_h_subview, pr_h_subview);
+        Kokkos::deep_copy(pci_h_subview, pri_h_subview);
 //      Kokkos::deep_copy(sp->k_pc_h, sp->k_pr_h);
 //      Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pr_i_h);
   }
@@ -269,7 +268,7 @@ int vpic_simulation::advance(void) {
 
       // Update np now we removed them...
       sp->np -= nm;
-      KOKKOS_TOC( BACKFILL_COMPRESS, 1);
+      KOKKOS_TOC( BACKFILL, 0);
 
       auto& particles = sp->k_p_d;
       auto& particles_i = sp->k_p_i_d;
@@ -401,9 +400,9 @@ int vpic_simulation::advance(void) {
 //  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
   TIC FAK->k_synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
 
-  KOKKOS_TIC();
-  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
-  KOKKOS_TOC( FIELD_DATA_MOVEMENT, 1);
+//  KOKKOS_TIC();
+//  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+//  KOKKOS_TOC( FIELD_DATA_MOVEMENT, 1);
   
   // At this point, the particle currents are known at jf_{1/2}.
   // Let the user add their own current contributions. It is the users
@@ -414,9 +413,9 @@ int vpic_simulation::advance(void) {
 
   TIC user_current_injection(); TOC( user_current_injection, 1 );
 
-  KOKKOS_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
-  KOKKOS_TOC( FIELD_DATA_MOVEMENT, 1);
+//  KOKKOS_TIC(); // Time this data movement
+//  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+//  KOKKOS_TOC( FIELD_DATA_MOVEMENT, 1);
 
 // DEVICE
 // Touches fields
@@ -436,9 +435,9 @@ int vpic_simulation::advance(void) {
 //  TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
   TIC FAK->advance_e_kokkos( field_array, 1.0 ); TOC( advance_e, 1 );
 
-  KOKKOS_TIC();
-  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
-  KOKKOS_TOC( FIELD_DATA_MOVEMENT, 1);
+//  KOKKOS_TIC();
+//  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+//  KOKKOS_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Let the user add their own contributions to the electric field. It is the
   // users responsibility to insure injected electric fields are consistent
@@ -449,9 +448,9 @@ int vpic_simulation::advance(void) {
 
   // Half advance the magnetic field from B_{1/2} to B_1
 
-  KOKKOS_TIC(); // Time this data movement
-  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
-  KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
+//  KOKKOS_TIC(); // Time this data movement
+//  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+//  KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
 
 // DEVICE
 // Touches fields

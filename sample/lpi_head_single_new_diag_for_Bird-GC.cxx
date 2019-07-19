@@ -2787,12 +2787,12 @@ begin_field_injection {
 
   // Inject from the left a field of the form ey = e0 sin( omega t )
 
-# define DY    ( grid->y0 + (iy-0.5)*grid->dy - global->ycenter )
-# define DZ    ( grid->z0 + (iz-1  )*grid->dz - global->zcenter )
-# define R2    ( DY*DY + DZ*DZ )                                   
-# define R2Z    ( DZ*DZ )                                   
-# define PHASE ( -global->omega_0*t + h*R2Z/(global->width*global->width) )
-# define MASK  ( R2Z<=pow(global->mask*global->width,2) ? 1 : 0 )
+//# define DY    ( grid->y0 + (iy-0.5)*grid->dy - global->ycenter )
+//# define DZ    ( grid->z0 + (iz-1  )*grid->dz - global->zcenter )
+//# define R2    ( DY*DY + DZ*DZ )                                   
+//# define R2Z    ( DZ*DZ )                                   
+//# define PHASE ( -global->omega_0*t + h*R2Z/(global->width*global->width) )
+//# define MASK  ( R2Z<=pow(global->mask*global->width,2) ? 1 : 0 )
 
   if ( grid->x0==0 ) {               // Node is on left boundary
     double alpha      = grid->cvac*grid->dt/grid->dx;
@@ -2810,13 +2810,42 @@ begin_field_injection {
     double h                  = -global->xfocus/rl;   // Distance / Rayleigh length
 
     // Loop over all Ey values on left edge of this node
-    for ( int iz=1; iz<=grid->nz+1; ++iz ) 
-      for ( int iy=1; iy<=grid->ny; ++iy )  
-        field(1,iy,iz).ey += prefactor 
-                             * cos(PHASE) 
-//                           * exp(-R2/(global->width*global->width))  // 3D
-                             * exp(-R2Z/(global->width*global->width))
-                             * MASK * pulse_shape_factor;
+//    for ( int iz=1; iz<=grid->nz+1; ++iz ) 
+//      for ( int iy=1; iy<=grid->ny; ++iy )  
+//        field(1,iy,iz).ey += prefactor 
+//                             * cos(PHASE) 
+////                           * exp(-R2/(global->width*global->width))  // 3D
+//                             * exp(-R2Z/(global->width*global->width))
+//                             * MASK * pulse_shape_factor;
+
+    const int ny = grid->ny;
+    const int nz = grid->nz;
+    const float dy = grid->dy;
+    const float dz = grid->dz;
+    const float y0 = grid->y0;
+    const float z0 = grid->z0;
+    const float ycenter = global->ycenter;
+    const float zcenter = global->zcenter;
+    const float width = global->width;
+    const float mask = global->mask;
+    const float omega_0 = global->omega_0;
+
+    k_field_t& kfield = k_field();
+
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> left_edge({1, 1}, {nz+2, ny+1});
+    Kokkos::parallel_for("Field injection", left_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
+        auto DY   =( y0 + (iy-0.5)*dy - ycenter );
+        auto DZ   =( z0 + (iz-1  )*dz - zcenter );
+        auto R2   =( DY*DY + DZ*DZ );
+        auto R2Z  = ( DZ*DZ );                                   
+        auto PHASE=( -omega_0*t + h*R2Z/(width*width) );
+        auto MASK =( R2Z<=pow(mask*width,2) ? 1 : 0 );
+        kfield(voxel(1,iy,iz), field_var::ey) += prefactor 
+                                     * cos(PHASE) 
+                                     * exp(-R2Z/(width*width))
+                                     * MASK * pulse_shape_factor;
+    });
+
   }
 }
 

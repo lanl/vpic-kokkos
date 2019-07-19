@@ -288,6 +288,10 @@ public:
     return field_array->f[ voxel(ix,iy,iz) ];
   }
 
+    inline k_field_t& k_field() {
+        return field_array->k_f_d;
+    }
+
   inline interpolator_t &
   interpolator( const int v ) {
     return interpolator_array->i[ v ];
