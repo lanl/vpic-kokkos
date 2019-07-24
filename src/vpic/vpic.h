@@ -15,6 +15,7 @@
 
 #include <vector>
 #include <cmath>
+#include <random>
 
 #include "../boundary/boundary.h"
 #include "../collision/collision.h"
@@ -116,6 +117,10 @@ struct DumpParameters {
 
 }; // struct DumpParameters
 
+#ifndef DEFAULT_SEED
+#define DEFAULT_SEED 3
+#endif
+
 class vpic_simulation {
 public:
   vpic_simulation();
@@ -124,6 +129,19 @@ public:
   void modify( const char *fname );
   int advance( void );
   void finalize( void );
+
+
+// Use std::rng by default, optionally use Kokkos or "original"
+// TODO: turn this into a policy
+#ifndef USE_ORIGINAL_RNG
+ #ifdef USE_KOKKOS_RNG
+  exit(1); // no implemented yet
+ #else
+   // TODO: move to constructor
+   std::default_random_engine uniform_generator;
+   std::default_random_engine normal_generator;
+ #endif
+#endif
 
   // Directly initialized by user
 
@@ -574,21 +592,37 @@ public:
   // FIXME: MTRAND DESPERATELY NEEDS A LARGER SEED SPACE!
 
   inline void seed_entropy( int base ) {
+#ifdef USE_ORIGINAL_RNG
     seed_rng_pool( entropy,      base, 0 );
     seed_rng_pool( sync_entropy, base, 1 );
+#else
+    uniform_generator = std::default_random_engine(base);
+    normal_generator = std::default_random_engine(base);
+#endif
   }
 
   // Uniform random number on (low,high) (open interval)
   // FIXME: IS THE INTERVAL STILL OPEN IN FINITE PRECISION
   //        AND IS THE OPEN INTERVAL REALLY WHAT USERS WANT??
   inline double uniform( rng_t * rng, double low, double high ) {
+#ifdef USE_ORIGINAL_RNG
     double dx = drand( rng );
     return low*(1-dx) + high*dx;
+#else
+    std::uniform_real_distribution<double> distribution(low, high);
+    return distribution(uniform_generator);
+#endif
   }
 
   // Normal random number with mean mu and standard deviation sigma
   inline double normal( rng_t * rng, double mu, double sigma ) {
+#ifdef USE_ORIGINAL_RNG
+    std::cout << "original rng " << std::endl;
     return mu + sigma*drandn( rng );
+#else
+    std::normal_distribution<double> distribution(mu, sigma);
+    return distribution(normal_generator);
+#endif
   }
 
   /////////////////////////////////

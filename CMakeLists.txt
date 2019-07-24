@@ -53,7 +53,9 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 
-set(KOKKOS_ARCH "Power9;Volta70" CACHE STRING "Architecture to use with Kokkos")
+option(USE_ORIGINAL_RNG "If the code should default back to hand implemented rng for uniform() and normal()" OFF)
+
+#set(KOKKOS_ARCH "Power9;Volta70" CACHE STRING "Architecture to use with Kokkos")
 
 
 add_definitions(-DUSE_KOKKOS)
@@ -219,7 +221,11 @@ find_package(Threads REQUIRED)
 # Act on build options set in project.cmake
 #------------------------------------------------------------------------------#
 
-if (VPIC_DUMP_ENERGIES)
+if(USE_ORIGINAL_RNG)
+    add_definitions(-DUSE_ORIGINAL_RNG)
+endif(USE_ORIGINAL_RNG)
+
+if(VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
 

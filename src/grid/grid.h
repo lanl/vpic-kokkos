@@ -71,97 +71,97 @@ enum grid_enums {
 
 };
 
-typedef struct grid {
+class grid_t {
+    public:
 
-  // System of units
-  float dt, cvac, eps0;
+        // System of units
+        float dt, cvac, eps0;
 
-  // Time stepper.  The simulation time is given by
-  // t = g->t0 + (double)g->dt*(double)g->step
-  int64_t step;             // Current timestep
-  double t0;                // Simulation time corresponding to step 0
+        // Time stepper.  The simulation time is given by
+        // t = g->t0 + (double)g->dt*(double)g->step
+        int64_t step;             // Current timestep
+        double t0;                // Simulation time corresponding to step 0
 
-  // Phase 2 grid data structures
-  float x0, y0, z0;         // Min corner local domain (must be coherent)
-  float x1, y1, z1;         // Max corner local domain (must be coherent)
-  int   nx, ny, nz;         // Local voxel mesh resolution.  Voxels are
-                            // indexed FORTRAN style 0:nx+1,0:ny+1,0:nz+1
-                            // with voxels 1:nx,1:ny,1:nz being non-ghost
-                            // voxels.
-  float dx, dy, dz, dV;     // Cell dimensions and volume (CONVENIENCE ...
-                            // USE x0,x1 WHEN DECIDING WHICH NODE TO USE!)
-  float rdx, rdy, rdz, r8V; // Inverse voxel dimensions and one over
-                            // eight times the voxel volume (CONVENIENCE)
-  int   sx, sy, sz, nv;     // Voxel indexing x-, y-,z- strides and the
-                            // number of local voxels (including ghosts,
-                            // (nx+2)(ny+2)(nz+2)), (CONVENIENCE)
-  int   bc[27];             // (-1:1,-1:1,-1:1) FORTRAN indexed array of
-                            // boundary conditions to apply at domain edge
-                            // 0 ... nproc-1 ... comm boundary condition
-                            // <0 ... locally applied boundary condition
+        // Phase 2 grid data structures
+        float x0, y0, z0;         // Min corner local domain (must be coherent)
+        float x1, y1, z1;         // Max corner local domain (must be coherent)
+        int   nx, ny, nz;         // Local voxel mesh resolution.  Voxels are
+        // indexed FORTRAN style 0:nx+1,0:ny+1,0:nz+1
+        // with voxels 1:nx,1:ny,1:nz being non-ghost
+        // voxels.
+        float dx, dy, dz, dV;     // Cell dimensions and volume (CONVENIENCE ...
+        // USE x0,x1 WHEN DECIDING WHICH NODE TO USE!)
+        float rdx, rdy, rdz, r8V; // Inverse voxel dimensions and one over
+        // eight times the voxel volume (CONVENIENCE)
+        int   sx, sy, sz, nv;     // Voxel indexing x-, y-,z- strides and the
+        // number of local voxels (including ghosts,
+        // (nx+2)(ny+2)(nz+2)), (CONVENIENCE)
+        int   bc[27];             // (-1:1,-1:1,-1:1) FORTRAN indexed array of
+        // boundary conditions to apply at domain edge
+        // 0 ... nproc-1 ... comm boundary condition
+        // <0 ... locally applied boundary condition
 
-  // Phase 3 grid data structures
-  // NOTE: VOXEL INDEXING LIMITS NUMBER OF VOXELS TO 2^31 (INCLUDING
-  // GHOSTS) PER NODE.  NEIGHBOR INDEXING FURTHER LIMITS TO
-  // (2^31)/6.  BOUNDARY CONDITION HANDLING LIMITS TO 2^28 PER NODE
-  // EMITTER COMPONENT ID INDEXING FURTHER LIMITS TO 2^26 PER NODE.
-  // THE LIMIT IS 2^63 OVER ALL NODES THOUGH.
-  int64_t * ALIGNED(16) range;
-                          // (0:nproc) indexed array giving range of
-                          // global indexes of voxel owned by each
-                          // processor.  Replicated on each processor.
-                          // (range[rank]:range[rank+1]-1) are global
-                          // voxels owned by processor "rank".  Note:
-                          // range[rank+1]-range[rank] <~ 2^31 / 6
+        // Phase 3 grid data structures
+        // NOTE: VOXEL INDEXING LIMITS NUMBER OF VOXELS TO 2^31 (INCLUDING
+        // GHOSTS) PER NODE.  NEIGHBOR INDEXING FURTHER LIMITS TO
+        // (2^31)/6.  BOUNDARY CONDITION HANDLING LIMITS TO 2^28 PER NODE
+        // EMITTER COMPONENT ID INDEXING FURTHER LIMITS TO 2^26 PER NODE.
+        // THE LIMIT IS 2^63 OVER ALL NODES THOUGH.
+        int64_t * ALIGNED(16) range;
+        // (0:nproc) indexed array giving range of
+        // global indexes of voxel owned by each
+        // processor.  Replicated on each processor.
+        // (range[rank]:range[rank+1]-1) are global
+        // voxels owned by processor "rank".  Note:
+        // range[rank+1]-range[rank] <~ 2^31 / 6
 
-  int64_t * ALIGNED(128) neighbor;
-                          // (0:5,0:local_num_voxel-1) FORTRAN indexed
-                          // array neighbor(0:5,lidx) are the global
-                          // indexes of neighboring voxels of the
-                          // voxel with local index "lidx".  Negative
-                          // if neighbor is a boundary condition.
+        int64_t * ALIGNED(128) neighbor;
+        // (0:5,0:local_num_voxel-1) FORTRAN indexed
+        // array neighbor(0:5,lidx) are the global
+        // indexes of neighboring voxels of the
+        // voxel with local index "lidx".  Negative
+        // if neighbor is a boundary condition.
 
-  //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
-      //h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
-  //auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
-  //
-  k_neighbor_t k_neighbor_d;                // kokkos neighbor view on device
-  k_neighbor_t::HostMirror k_neighbor_h;    // kokkos neighbor view on host
+        //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
+        //h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
+        //auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
+        //
+        k_neighbor_t k_neighbor_d;                // kokkos neighbor view on device
+        k_neighbor_t::HostMirror k_neighbor_h;    // kokkos neighbor view on host
 
-  int64_t rangel, rangeh; // Redundant for move_p performance reasons:
-                          //   rangel = range[rank]
-                          //   rangeh = range[rank+1]-1.
-                          // Note: rangeh-rangel <~ 2^26
+        int64_t rangel, rangeh; // Redundant for move_p performance reasons:
+        //   rangel = range[rank]
+        //   rangeh = range[rank+1]-1.
+        // Note: rangeh-rangel <~ 2^26
 
-  // Nearest neighbor communications ports
-  mp_t * mp;
+        // Nearest neighbor communications ports
+        mp_t * mp;
 
-  // We want to call this *only* once the neighbor is done
-  void init_kokkos_grid(int num_neighbor)
-  {
-      k_neighbor_d = k_neighbor_t("k_neighbor_d", num_neighbor);
-      //k_neighbor_h = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_neighbor_d);
-      k_neighbor_h = Kokkos::create_mirror_view(k_neighbor_d);
+        // We want to call this *only* once the neighbor is done
+        void init_kokkos_grid(int num_neighbor)
+        {
+            k_neighbor_d = k_neighbor_t("k_neighbor_d", num_neighbor);
+            //k_neighbor_h = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_neighbor_d);
+            k_neighbor_h = Kokkos::create_mirror_view(k_neighbor_d);
 
-      // TODO: make this a host parlalel for
-      for (int i = 0; i < num_neighbor; i++)
-      {
-          k_neighbor_h(i) = neighbor[i];
-      }
+            // TODO: make this a host parlalel for
+            for (int i = 0; i < num_neighbor; i++)
+            {
+                k_neighbor_h(i) = neighbor[i];
+            }
 
-      Kokkos::deep_copy(k_neighbor_d, k_neighbor_h);
+            Kokkos::deep_copy(k_neighbor_d, k_neighbor_h);
 
-      //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
-      //k_neighbor_h(neighbor, num_neighbor);
+            //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
+            //k_neighbor_h(neighbor, num_neighbor);
 
-      // Copy data over
-      // currently implied by unmanaged view
+            // Copy data over
+            // currently implied by unmanaged view
 
-      //k_neighbor_d = Kokkos::create_mirror_view(k_neighbor_d);
-  }
+            //k_neighbor_d = Kokkos::create_mirror_view(k_neighbor_d);
+        }
 
-
-} grid_t;
+};
 
 // Given a voxel mesh coordinates (on 0:nx+1,0:ny+1,0:nz+1) and
 // voxel mesh resolution (nx,ny,nz), return the index of that voxel.
