@@ -82,10 +82,6 @@ vpic_simulation::vpic_simulation() {
 
   int                           n_rng = serial.n_pipeline;
   if( n_rng<thread.n_pipeline ) n_rng = thread.n_pipeline;
-  // TODO: delete?
-# if defined(CELL_PPU_BUILD) && defined(USE_CELL_SPUS)
-  if( n_rng<spu.n_pipeline    ) n_rng = spu.n_pipeline;
-# endif
   n_rng++;
 
   entropy      = new_rng_pool( n_rng, 0, 0 );
@@ -94,13 +90,6 @@ vpic_simulation::vpic_simulation() {
 
   REGISTER_OBJECT( this, checkpt_vpic_simulation,
                    restore_vpic_simulation, reanimate_vpic_simulation );
-
-#ifndef USE_ORIGINAL_RNG
-      // TODO: move to constructor
-      std::cout << "init rng with seed " << DEFAULT_SEED << std::endl;
-      uniform_generator = std::default_random_engine(DEFAULT_SEED);
-      normal_generator = std::default_random_engine(DEFAULT_SEED);
-#endif
 }
 
 vpic_simulation::~vpic_simulation() {

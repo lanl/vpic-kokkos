@@ -57,10 +57,6 @@ option(USE_ORIGINAL_RNG "If the code should default back to hand implemented rng
 
 #set(KOKKOS_ARCH "Power9;Volta70" CACHE STRING "Architecture to use with Kokkos")
 
-
-add_definitions(-DUSE_KOKKOS)
-set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
-
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
 #
@@ -69,7 +65,6 @@ set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ fil
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 
-set(VPIC_CPPFLAGS)
 if(MPI_CPPFLAGS)
   string(REPLACE ";" " " string_cppflags "${MPI_CPPFLAGS}")
   set(VPIC_CPPFLAGS "${string_cppflags}")
@@ -268,6 +263,13 @@ endif(ENABLE_COVERAGE_BUILD)
 # local built exe wrapper, and has example deck/platform.
 configure_file(${CMAKE_SOURCE_DIR}/sample/Makefile.run.in
   ${CMAKE_BINARY_DIR}/bin/Makefile.run)
+
+# Append all defines to VPIC_CPPFLAGS, so it can be seen during input deck building
+get_directory_property(ALL_DEFINES DIRECTORY ${CMAKE_SOURCE_DIR} COMPILE_DEFINITIONS)
+#string(REPLACE ";" " -D" EEK "${ALL_DEFINES}")
+foreach(d ${ALL_DEFINES})
+    set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -D${d}")
+endforeach()
 
 # install script
 configure_file(${CMAKE_SOURCE_DIR}/bin/vpic.in
