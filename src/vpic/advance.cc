@@ -608,6 +608,9 @@ int vpic_simulation::advance(void) {
 //  KOKKOS_TIC();
 //  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
 //  KOKKOS_TOC( FIELD_DATA_MOVEMENT, 1);
+//  KOKKOS_TIC();
+//  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+//  KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 //  KOKKOS_TIC(); // Time this data movement
 //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
 //  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);

@@ -862,9 +862,9 @@ begin_initialization {
   double debye = uthe*delta;
   double wpe1ps=1e-12* speed_of_light/delta;
 
-  double nx                = 1200; //11232;
+  double nx                = 1200*nproc(); //11232;
   double ny                = 1;    // 2D problem in x-z plane
-  double nz                = 54; //756;  // was 549;
+  double nz                = 100; //756;  // was 549;
 
 #if 0
   // DEBUG - run on 64 proc. 
@@ -1014,13 +1014,13 @@ begin_initialization {
 
   // SETUP HIGH-LEVEL SIMULATION PARMETERS
   sim_log("Setting up high-level simulation parameters. "); 
-  num_step             = 100; //int(t_stop/(dt)); 
-  status_interval      = 200; 
+  num_step             = 500; //int(t_stop/(dt)); 
+  status_interval      = 2000; 
 //  status_interval      = -1; 
 //  sync_shared_interval = status_interval/1;
 //  clean_div_e_interval = status_interval/1;
 //  clean_div_b_interval = status_interval/10;
-  status_interval      = 200; 
+//  status_interval      = 200; 
   sync_shared_interval = status_interval/1;
   clean_div_e_interval = status_interval/1;
   clean_div_b_interval = status_interval/10;
@@ -2787,13 +2787,6 @@ begin_field_injection {
 
   // Inject from the left a field of the form ey = e0 sin( omega t )
 
-//# define DY    ( grid->y0 + (iy-0.5)*grid->dy - global->ycenter )
-//# define DZ    ( grid->z0 + (iz-1  )*grid->dz - global->zcenter )
-//# define R2    ( DY*DY + DZ*DZ )                                   
-//# define R2Z    ( DZ*DZ )                                   
-//# define PHASE ( -global->omega_0*t + h*R2Z/(global->width*global->width) )
-//# define MASK  ( R2Z<=pow(global->mask*global->width,2) ? 1 : 0 )
-
   if ( grid->x0==0 ) {               // Node is on left boundary
     double alpha      = grid->cvac*grid->dt/grid->dx;
     double emax_coeff = (4/(1+alpha))*global->omega_0*grid->dt*global->emax;
@@ -2809,6 +2802,14 @@ begin_field_injection {
     pulse_shape_factor        = ( t<pulse_length ? sin_t_tau : 1 );
     double h                  = -global->xfocus/rl;   // Distance / Rayleigh length
 
+// Original injection
+//# define DY    ( grid->y0 + (iy-0.5)*grid->dy - global->ycenter )
+//# define DZ    ( grid->z0 + (iz-1  )*grid->dz - global->zcenter )
+//# define R2    ( DY*DY + DZ*DZ )                                   
+//# define R2Z    ( DZ*DZ )                                   
+//# define PHASE ( -global->omega_0*t + h*R2Z/(global->width*global->width) )
+//# define MASK  ( R2Z<=pow(global->mask*global->width,2) ? 1 : 0 )
+
     // Loop over all Ey values on left edge of this node
 //    for ( int iz=1; iz<=grid->nz+1; ++iz ) 
 //      for ( int iy=1; iy<=grid->ny; ++iy )  
@@ -2818,32 +2819,34 @@ begin_field_injection {
 //                             * exp(-R2Z/(global->width*global->width))
 //                             * MASK * pulse_shape_factor;
 
-    const int ny = grid->ny;
-    const int nz = grid->nz;
-    const float dy = grid->dy;
-    const float dz = grid->dz;
-    const float y0 = grid->y0;
-    const float z0 = grid->z0;
-    const float ycenter = global->ycenter;
-    const float zcenter = global->zcenter;
-    const float width = global->width;
-    const float mask = global->mask;
-    const float omega_0 = global->omega_0;
+// Kokkos Port
+    int ny = grid->ny;
+    int nz = grid->nz;
+    float dy = grid->dy;
+    float dz = grid->dz;
+    float y0 = grid->y0;
+    float z0 = grid->z0;
+    float ycenter = global->ycenter;
+    float zcenter = global->zcenter;
+    float width = global->width;
+    float mask = global->mask;
+    float omega_0 = global->omega_0;
+    float dy_offset = y0 - ycenter;
+    float dz_offset = z0 - zcenter;
+    int sy = grid->sy;
+    int sz = grid->sz;
 
-    k_field_t& kfield = k_field();
+    k_field_t& kfield = field_array->k_f_d;
 
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> left_edge({1, 1}, {nz+2, ny+1});
     Kokkos::parallel_for("Field injection", left_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
-        auto DY   =( y0 + (iy-0.5)*dy - ycenter );
-        auto DZ   =( z0 + (iz-1  )*dz - zcenter );
+        auto DY   =( (iy-0.5)*dy + dy_offset );
+        auto DZ   =( (iz-1  )*dz + dz_offset );
         auto R2   =( DY*DY + DZ*DZ );
         auto R2Z  = ( DZ*DZ );                                   
         auto PHASE=( -omega_0*t + h*R2Z/(width*width) );
         auto MASK =( R2Z<=pow(mask*width,2) ? 1 : 0 );
-        kfield(voxel(1,iy,iz), field_var::ey) += prefactor 
-                                     * cos(PHASE) 
-                                     * exp(-R2Z/(width*width))
-                                     * MASK * pulse_shape_factor;
+        kfield(voxel(1, iy, iz, sy, sz), field_var::ey) += (prefactor * cos(PHASE) * exp(-R2Z/(width*width)) * MASK * pulse_shape_factor);
     });
 
   }

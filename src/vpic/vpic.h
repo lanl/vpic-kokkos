@@ -283,13 +283,22 @@ public:
     return ix + grid->sy*iy + grid->sz*iz;
   }
 
+  inline int
+  voxel( const int ix, const int iy, const int iz, const int sy, const int sz ) {
+    return ix + sy*iy +sz*iz;
+  }
+
   inline field_t &
   field( const int ix, const int iy, const int iz ) {
     return field_array->f[ voxel(ix,iy,iz) ];
   }
 
-    inline k_field_t& k_field() {
+    inline k_field_t& get_field() {
         return field_array->k_f_d;
+    }
+
+    inline float& k_field(const int ix, const int iy, const int iz, field_var::f_v member) {
+        return field_array->k_f_d(voxel(ix,iy,iz), member);
     }
 
   inline interpolator_t &
