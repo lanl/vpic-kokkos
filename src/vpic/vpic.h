@@ -127,17 +127,6 @@ public:
   int advance( void );
   void finalize( void );
 
-class P {
-    public:
-        inline double uniform( rng_t * rng, double low, double high ) {
-        }
-        inline double normal( rng_t * rng, double mu, double sigma ) {
-        }
-        void seed( rng_pool_t* entropy, rng_pool_t* sync_entropy, int seed, int sync ) {
-        }
-};
-
-
 // Use std::rng by default, optionally use Kokkos or "original"
 // TODO: turn this into a policy
 #ifndef USE_ORIGINAL_RNG
@@ -150,7 +139,6 @@ class P {
 #else
   _RNG::RandomNumberProvider<_RNG::OriginalRNG> rng_policy;
 #endif
-  _RNG::RandomNumberProvider<P> rng_policy2;
 
   // Directly initialized by user
 
