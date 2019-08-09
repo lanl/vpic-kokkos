@@ -142,22 +142,6 @@ typedef class YZX {} YZX;
 typedef class ZXY {} ZXY;
 
 template <typename T> void begin_recv_kokkos(const grid_t* g, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf, Kokkos::View<float*>::HostMirror& rbuf_h) {
-/*
-    int nX, nY, nZ;
-    if (std::is_same<T, XYZ>::value) {
-        nX = nx, nY = ny, nZ = nz;
-    } else if (std::is_same<T, YZX>::value) {
-        nX = ny, nY = nz, nZ = nx;
-    } else if (std::is_same<T, ZXY>::value) {
-        nX = nz, nY = nx, nZ = ny;
-    }
-    int size = (1 + nY*(nZ+1) + nZ*(nY+1)) * sizeof(float);
-    int port = BOUNDARY(-i,-j,-k);
-    int tag = BOUNDARY(i,j,k);
-//    begin_recv_port_kokkos(g, port, size, tag, reinterpret_cast<char*>(rbuf.data()));
-   begin_recv_port_k(i,j,k, size, g, reinterpret_cast<char*>(rbuf.data()));
-//    begin_recv_port(i,j,k,size, g);
-*/
 }
 template<> void begin_recv_kokkos<XYZ>(const grid_t* g, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
     int size = (1 + ny*(nz+1) + nz*(ny+1))*sizeof(float);
@@ -225,44 +209,10 @@ template <> void begin_send_kokkos<XYZ>(const grid_t* g, field_array_t* fa, int 
             const int x = face;
             sbuf_d(1 + nz*(ny+1) + (z-1)*ny + (y-1)) = k_field(VOXEL(x,y,z, nx,ny,nz), field_var::cbz);
         });
-/*
-        Kokkos::parallel_for("begin_send<XYZ>: ZY Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(nz,Kokkos::AUTO),
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-            size_t zi = team_member.league_rank();
-            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (size_t yi) {
-                if(zi == 0 && yi == 0) {
-                    sbuf_d(0) = dx;
-                }
-                size_t x = face;
-                size_t y = yi + 1;
-                size_t z = zi + 1;
-                sbuf_d(1 + zi*(ny+1) + yi) = k_field(VOXEL(x,y,z, nx,ny,nz), field_var::cby);
-            });
-        });
-        Kokkos::parallel_for("begin_send<XYZ>: YZ Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1,Kokkos::AUTO),
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-            size_t zi = team_member.league_rank();
-            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny), [=] (size_t yi) {
-                const size_t x = face;
-                const size_t y = yi + 1;
-                const size_t z = zi + 1;
-                sbuf_d(1 + nz*(ny+1) + zi*ny + yi) = k_field(VOXEL(x,y,z, nx,ny,nz), field_var::cbz);
-            });
-        });
-*/
 // CPU
         Kokkos::deep_copy(sbuf_h, sbuf_d);
         sbuf_h(0) = dx;
         begin_send_port_k(i,j,k,size*sizeof(float), g, reinterpret_cast<char*>(sbuf_h.data()));
-//        for(int i=0; i < size; i++) {
-//if(sbuf_h(i) != 0)
-//            printf("Begin send host: Index: %d\tvalue: %e\n", i, sbuf_h(i));
-//        }
-
-//        Kokkos::parallel_for("print loop", Kokkos::RangePolicy<>(0, size), KOKKOS_LAMBDA(int i) {
-//if(sbuf_d(i) != 0)
-//            printf("Begin send device: Index: %d\tvalue: %e\n", i, sbuf_d(i));
-//        });
 
 // GPU
 //        begin_send_port_k(i,j,k,size*sizeof(float), g, reinterpret_cast<char*>(sbuf_d.data()));
@@ -287,32 +237,6 @@ template <> void begin_send_kokkos<YZX>(const grid_t* g, field_array_t* fa, int 
         const int y = face;
         sbuf_d(1 + (nz+1)*nx + (nx+1)*(z-1) + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx);
     });
-/*    
-    Kokkos::parallel_for("begin_send<YZX>: XZ Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1,Kokkos::AUTO), 
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-        size_t zi = team_member.league_rank();
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (size_t xi) {
-            if(zi == 0 && xi == 0) {
-                sbuf_d(0) = dy;
-            }
-            size_t z = zi + 1;
-            size_t y = face;
-            size_t x = xi + 1;
-            sbuf_d(1 + zi*nx + xi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz);
-        });
-    });
-
-    Kokkos::parallel_for("begin_send<YZX>: ZX Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(nz,Kokkos::AUTO), 
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-        size_t zi = team_member.league_rank();
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (size_t xi) {
-            size_t x = xi + 1;
-            size_t y = face;
-            size_t z = zi + 1;
-            sbuf_d(1 + (nz+1)*nx + (nx+1)*zi + xi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx);
-        });
-    });
-*/
 // CPU
     Kokkos::deep_copy(sbuf_h, sbuf_d);
     sbuf_h(0) = dy;
@@ -340,31 +264,6 @@ template <> void begin_send_kokkos<ZXY>(const grid_t* g, field_array_t* fa, int 
         const int z = face;
         sbuf_d(1 + (nx+1)*ny + (y-1)*nx + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby);
     });
-/*
-    Kokkos::parallel_for("begin_send<ZXY>: YX Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(ny,Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type & team_member) {
-        size_t yi = team_member.league_rank();
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (size_t xi) {
-        if(yi == 0 && xi == 0) {
-            sbuf_d(0) = dz;
-        }
-            size_t x = xi + 1;
-            size_t y = yi + 1;
-            size_t z = face;
-            sbuf_d(1 + (nx+1)*yi + xi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx);
-        });
-    });
-    Kokkos::parallel_for("begin_send<ZXY>: XY Edge Loop", KOKKOS_TEAM_POLICY_DEVICE(ny+1,Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type & team_member) {
-        size_t yi = team_member.league_rank();
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (size_t xi) {
-            size_t x = xi + 1;
-            size_t y = yi + 1;
-            size_t z = face;
-            sbuf_d(1 + (nx+1)*ny + yi*nx + xi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby);
-        });
-    });
-*/
 // CPU
     Kokkos::deep_copy(sbuf_h, sbuf_d);
     sbuf_h(0) = dz;
@@ -547,16 +446,6 @@ template<> void end_recv_kokkos<XYZ>(const grid_t* g, field_array_t* RESTRICT fi
     float* p = static_cast<float*>(end_recv_port_k(i,j,k,g));
 //    size_t size = 1 + (ny+1)*nz + ny*(nz+1);
     if(p) {
-//        Kokkos::parallel_for("print loop", Kokkos::RangePolicy<>(0, size), KOKKOS_LAMBDA(int i) {
-//if(rbuf_d(i) != 0)
-//            printf("End recv device: Index: %d\tvalue: %e\n", i, rbuf_d(i));
-//        });
-//        Kokkos::deep_copy(rbuf_h, rbuf_d);
-//        for(int i=0; i < size; i++) {
-//if(rbuf_h(i) != 0)
-//            printf("End recv host: Index: %d\tvalue: %e\n", i, rbuf_h(i));
-//        }
-// CPU
         Kokkos::deep_copy(rbuf_d, rbuf_h);
 
         k_field_t k_field = field->k_f_d;
@@ -582,32 +471,6 @@ template<> void end_recv_kokkos<XYZ>(const grid_t* g, field_array_t* RESTRICT fi
 //            lw = (lw - dx)/(lw + dx);
             k_field(VOXEL(face,y,z,nx,ny,nz), field_var::cbz) = rw*rbuf_d((ny+1)*nz + (z-1)*ny + (y-1) + 1) + lw*k_field(VOXEL(face+i,y+j,z+k,nx,ny,nz), field_var::cbz);
         });
-
-//        float lw = rbuf_h(0);
-//        float rw = (2.*g->dx) / (lw+g->dx);
-//        lw = (lw-g->dx)/(lw+g->dx);
-/*        
-        Kokkos::parallel_for("end_recv<XYZ>: ZY Edge loop", KOKKOS_TEAM_POLICY_DEVICE(nz,Kokkos::AUTO),
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-            size_t zi = team_member.league_rank();
-            float lw = rbuf_d(0);
-            float rw = (2.*dx) / (lw + dx);
-            lw = (lw - dx)/(lw + dx);
-            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (size_t yi) {
-                k_field(VOXEL(face,yi+1,zi+1,nx,ny,nz), field_var::cby) = rw*rbuf_d(zi*(ny+1) + yi + 1) + lw*k_field(VOXEL(face+i,yi+1+j,zi+1+k,nx,ny,nz), field_var::cby);
-            });
-        });
-        Kokkos::parallel_for("end_recv<XYZ>: YZ Edge loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1,Kokkos::AUTO),
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-            size_t zi = team_member.league_rank();
-            float lw = rbuf_d(0);
-            float rw = (2.*dx) / (lw + dx);
-            lw = (lw - dx)/(lw + dx);
-            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny), [=] (size_t yi) {
-                k_field(VOXEL(face,yi+1,zi+1,nx,ny,nz), field_var::cbz) = rw*rbuf_d((ny+1)*nz + zi*ny + yi + 1) + lw*k_field(VOXEL(face+i,yi+1+j,zi+1+k,nx,ny,nz), field_var::cbz);
-            });
-        });
-*/
     }
 }
 template<> void end_recv_kokkos<YZX>(const grid_t* g, field_array_t* RESTRICT field, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
@@ -642,44 +505,11 @@ template<> void end_recv_kokkos<YZX>(const grid_t* g, field_array_t* RESTRICT fi
 //            lw = (lw-dy)/(lw+dy);
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rw*rbuf_d(1 + nx*(nz+1) + (z-1)*(nx+1) + (x-1)) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::cbx);
         });
-
-//        float lw = rbuf_h(0);
-//        float rw = (2.*dy) / (lw+dy);
-//        lw = (lw-dy)/(lw+dy);
-/*
-        Kokkos::parallel_for("end_recv<YZX>: XZ Edge loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1,Kokkos::AUTO),
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-            size_t zi = team_member.league_rank();
-            float lw = rbuf_d(0);
-            float rw = (2.*dy) / (lw+dy);
-            lw = (lw-dy)/(lw+dy);
-            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (size_t xi) {
-                const size_t x = xi + 1;
-                const size_t y = face;
-                const size_t z = zi + 1;
-                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = rw*rbuf_d(1 + zi*nx + xi) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::cbz);
-            });
-        });
-        Kokkos::parallel_for("end_recv<YZX>: ZX Edge loop", KOKKOS_TEAM_POLICY_DEVICE(nz,Kokkos::AUTO),
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-            size_t zi = team_member.league_rank();
-            float lw = rbuf_d(0);
-            float rw = (2.*dy) / (lw+dy);
-            lw = (lw-dy)/(lw+dy);
-            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (size_t xi) {
-                const size_t x = xi + 1;
-                const size_t y = face;
-                const size_t z = zi + 1;
-                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rw*rbuf_d(1 + nx*(nz+1) + zi*(nx+1) + xi) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::cbx);
-            });
-        });
-*/
     }
 }
 template<> void end_recv_kokkos<ZXY>(const grid_t* g, field_array_t* RESTRICT field, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
     float* p = static_cast<float*>(end_recv_port_k(i,j,k,g));
     if(p) {
-//        size_t size = 1 + (nx+1)*ny + nx*(ny+1);
         k_field_t k_field = field->k_f_d;
 // CPU
         Kokkos::deep_copy(rbuf_d, rbuf_h);
@@ -707,38 +537,6 @@ template<> void end_recv_kokkos<ZXY>(const grid_t* g, field_array_t* RESTRICT fi
 //            lw = (lw-dz)/(lw+dz);
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rw*rbuf_d(1 + ny*(nx+1) + (y-1)*nx + (x-1)) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::cby);
         });
-
-//        float lw = rbuf_h(0);
-//        float rw = (2.*dz) / (lw+dz);
-//        lw = (lw-dz)/(lw+dz);
-/*
-        Kokkos::parallel_for("end_recv<ZXY>: YX Edge loop", KOKKOS_TEAM_POLICY_DEVICE(ny,Kokkos::AUTO),
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-            size_t yi = team_member.league_rank();
-            float lw = rbuf_d(0);
-            float rw = (2.*dz) / (lw+dz);
-            lw = (lw-dz)/(lw+dz);
-            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (size_t xi) {
-                const size_t x = xi + 1;
-                const size_t y = yi + 1;
-                const size_t z = face;
-                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rw*rbuf_d(1 + yi*(nx+1) + xi) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::cbx);
-            });
-        });
-        Kokkos::parallel_for("end_recv<ZXY>: XY Edge loop", KOKKOS_TEAM_POLICY_DEVICE(ny+1,Kokkos::AUTO),
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-            size_t yi = team_member.league_rank();
-            float lw = rbuf_d(0);
-            float rw = (2.*dz) / (lw+dz);
-            lw = (lw-dz)/(lw+dz);
-            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (size_t xi) {
-                const size_t x = xi + 1;
-                const size_t y = yi + 1;
-                const size_t z = face;
-                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rw*rbuf_d(1 + ny*(nx+1) + yi*nx + xi) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::cby);
-            });
-        });
-*/
     }
 }
 
@@ -941,22 +739,6 @@ template<> void begin_send_ghost_norm_e_kokkos<XYZ>(field_array_t* fa, const gri
         const int x = face;
         sbuf_d(1 + (z-1)*(ny+1) + (y-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex);
     });
-/*
-    Kokkos::parallel_for("begin_send_ghost_norm_e_kokkos<XYZ>", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-        const int zi = team_member.league_rank();
-        if(zi == 0) {
-            sbuf_d(0) = dx;
-        }
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (const int yi) {
-            const int x = face;
-            const int y = yi + 1;
-            const int z = zi + 1;
-            sbuf_d(1 + zi*(ny+1) + yi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex);
-        });
-    });
-*/
-// CPU
     Kokkos::deep_copy(sbuf_h, sbuf_d);
     sbuf_h(0) = g->dx;
     begin_send_port_k(i,j,k,size,g,reinterpret_cast<char*>(sbuf_h.data()));
@@ -975,18 +757,6 @@ template<> void begin_send_ghost_norm_e_kokkos<YZX>(field_array_t* fa, const gri
         const int y = face;
         sbuf_d(1 + (z-1)*(nx+1) + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey);
     });
-/*
-    Kokkos::parallel_for("begin_send_ghost_norm_e_kokkos<XYZ>", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-        const int zi = team_member.league_rank();
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
-            const int x = xi + 1;
-            const int y = face;
-            const int z = zi + 1;
-            sbuf_d(1 + zi*(nx+1) + xi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey);
-        });
-    });
-*/
     Kokkos::deep_copy(sbuf_h, sbuf_d);
     sbuf_h(0) = g->dy;
     begin_send_port_k(i,j,k,size,g,reinterpret_cast<char*>(sbuf_h.data()));
@@ -1007,18 +777,6 @@ template<> void begin_send_ghost_norm_e_kokkos<ZXY>(field_array_t* fa, const gri
         const int z = face;
         sbuf_d(1 + (y-1)*(nx+1) + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez);
     });
-/*
-    Kokkos::parallel_for("begin_send_ghost_norm_e_kokkos<XYZ>", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
-    KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-        const int yi = team_member.league_rank();
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
-            const int x = xi + 1;
-            const int y = yi + 1;
-            const int z = face;
-            sbuf_d(1 + yi*(nx+1) + xi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez);
-        });
-    });
-*/
     Kokkos::deep_copy(sbuf_h, sbuf_d);
     sbuf_h(0) = g->dz;
     begin_send_port_k(i,j,k,size,g,reinterpret_cast<char*>(sbuf_h.data()));
@@ -1218,18 +976,6 @@ template<> void end_recv_ghost_norm_e_kokkos<XYZ>(field_array_t* fa, const grid_
             const int x = face;
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = rw*rbuf_d(1 + (z-1)*(ny+1) + (y-1)) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::ex);
         });
-/*
-        Kokkos::parallel_for("begin_send_ghost_norm_e_kokkos<XYZ>", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-            const int zi = team_member.league_rank();
-            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (const int yi) {
-                const int x = face;
-                const int y = yi + 1;
-                const int z = zi + 1;
-                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = rw*rbuf_d(1 + zi*(ny+1) + yi) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::ex);
-            });
-        });
-*/
     }
 }
 template<> void end_recv_ghost_norm_e_kokkos<YZX>(field_array_t* fa, const grid_t* g, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
@@ -1250,18 +996,6 @@ template<> void end_recv_ghost_norm_e_kokkos<YZX>(field_array_t* fa, const grid_
             const int y = face;
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = rw*rbuf_d(1 + (z-1)*(nx+1) + (x-1)) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::ey);
         });
-/*
-        Kokkos::parallel_for("begin_send_ghost_norm_e_kokkos<YZX>", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-            const int zi = team_member.league_rank();
-            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
-                const int x = xi + 1;
-                const int y = face;
-                const int z = zi + 1;
-                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = rw*rbuf_d(1 + zi*(nx+1) + xi) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::ey);
-            });
-        });
-*/
     }
 }
 template<> void end_recv_ghost_norm_e_kokkos<ZXY>(field_array_t* fa, const grid_t* g, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
@@ -1282,18 +1016,6 @@ template<> void end_recv_ghost_norm_e_kokkos<ZXY>(field_array_t* fa, const grid_
             const int z = face;
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = rw*rbuf_d(1 + (y-1)*(nx+1) + (x-1)) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::ez);
         });
-/*
-        Kokkos::parallel_for("begin_send_ghost_norm_e_kokkos<XYZ>", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
-        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-            const int yi = team_member.league_rank();
-            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
-                const int x = xi + 1;
-                const int y = yi + 1;
-                const int z = face;
-                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = rw*rbuf_d(1 + yi*(nx+1) + xi) + lw*k_field(VOXEL(x+i,y+j,z+k,nx,ny,nz), field_var::ez);
-            });
-        });
-*/
     }
 }
 template<typename T> void end_send_ghost_norm_e_kokkos(const grid_t* g, const int i, const int j, const int k) {
@@ -2095,16 +1817,6 @@ synchronize_tang_e_norm_b_kokkos( field_array_t * RESTRICT fa ) {
     err += end_recv_tang_e_norm_b<XYZ>(fa,   1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
     end_send_tang_e_norm_b<XYZ>(fa,  -1,  0,  0);
     end_send_tang_e_norm_b<XYZ>(fa,   1,  0,  0);
-/*
-  BEGIN_RECV(-1, 0, 0,x,y,z);
-  BEGIN_RECV( 1, 0, 0,x,y,z);
-  BEGIN_SEND(-1, 0, 0,x,y,z);
-  BEGIN_SEND( 1, 0, 0,x,y,z);
-  END_SEND(-1, 0, 0,x,y,z);
-  END_SEND( 1, 0, 0,x,y,z);
-  END_RECV(-1, 0, 0,x,y,z);
-  END_RECV( 1, 0, 0,x,y,z);
-*/
 
     // Exchange y-faces
     begin_recv_tang_e_norm_b<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
@@ -2115,16 +1827,6 @@ synchronize_tang_e_norm_b_kokkos( field_array_t * RESTRICT fa ) {
     err += end_recv_tang_e_norm_b<YZX>(fa,   0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
     end_send_tang_e_norm_b<YZX>(fa,   0, -1,  0);
     end_send_tang_e_norm_b<YZX>(fa,   0,  1,  0);
-/*
-  BEGIN_SEND( 0,-1, 0,y,z,x);
-  BEGIN_SEND( 0, 1, 0,y,z,x);
-  BEGIN_RECV( 0,-1, 0,y,z,x);
-  BEGIN_RECV( 0, 1, 0,y,z,x);
-  END_RECV( 0,-1, 0,y,z,x);
-  END_RECV( 0, 1, 0,y,z,x);
-  END_SEND( 0,-1, 0,y,z,x);
-  END_SEND( 0, 1, 0,y,z,x);
-*/
 
     // Exchange z-faces
     begin_recv_tang_e_norm_b<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
@@ -2135,38 +1837,12 @@ synchronize_tang_e_norm_b_kokkos( field_array_t * RESTRICT fa ) {
     err += end_recv_tang_e_norm_b<ZXY>(fa,   0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
     end_send_tang_e_norm_b<ZXY>(fa,   0,  0, -1);
     end_send_tang_e_norm_b<ZXY>(fa,   0,  0,  1);
-/*
-  BEGIN_SEND( 0, 0,-1,z,x,y);
-  BEGIN_SEND( 0, 0, 1,z,x,y);
-  BEGIN_RECV( 0, 0,-1,z,x,y);
-  BEGIN_RECV( 0, 0, 1,z,x,y);
-  END_RECV( 0, 0,-1,z,x,y);
-  END_RECV( 0, 0, 1,z,x,y);
-  END_SEND( 0, 0,-1,z,x,y);
-  END_SEND( 0, 0, 1,z,x,y);
-*/
 
   mp_allsum_d( &err, &gerr, 1 );
   return gerr;
 }
 
-template <typename T> void begin_recv_jf(const grid_t* g, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
-/*
-    int size;
-    if(std::is_same<T, XYZ>::value) {
-        size = ( ny*(nz+1) + nz*(ny+1) + 1 )*sizeof(float);
-    } else if(std::is_same<T, YZX>::value) {
-        size = ( nz*(nx+1) + nx*(nz+1) + 1 )*sizeof(float);
-    } else if(std::is_same<T, ZXY>::value) {
-        size = ( nx*(ny+1) + ny*(nx+1) + 1 )*sizeof(float);
-    }
-    begin_recv_port(i,j,k,size,g);
-// CPU
-//    begin_recv_port_k(i,j,k,size,g,reinterpret_cast<char*>(rbuf_h.data()));
-// GPU
-//    begin_recv_port_k(i,j,k,size,g,reinterpret_cast<char*>(rbuf_d.data()));
-*/
-}
+template <typename T> void begin_recv_jf(const grid_t* g, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
 template <> void begin_recv_jf<XYZ>(const grid_t* g, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
     const int size = (ny*(nz+1) + nz*(ny+1) + 1)*sizeof(float);
 // Original
@@ -2195,75 +1871,7 @@ template <> void begin_recv_jf<ZXY>(const grid_t* g, int i, int j, int k, int nx
 //    begin_recv_port_k(i,j,k,size,g,reinterpret_cast<char*>(rbuf_d.data()));
 }
 
-template <typename T> void begin_send_jf(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {
-/*
-    int size, dim, face;
-    field_var::f_v jfY, jfZ;
-    int sx, sy, sz, ex1, ey1, ez1, ex2, ey2, ez2;
-    if(std::is_same<T, XYZ>::value) {
-        size = ( ny*(nz+1) + nz*(ny+1) + 1 )*sizeof(float);
-        dim = g->dx;
-        face = (i+j+k)<0 ? 1 : nx+1;
-        jfY = field_var::jfy;
-        jfZ = field_var::jfz;
-        sx = face, sy = 1, sz = 1; // Start indices
-        ex1 = face+1, ey1 = ny+1, ez1 = nz+2; // policy 1 end indices
-        ex2 = face+1, ey2 = ny+2, ez2 = nz+1; // policy 2 end indices
-    } else if(std::is_same<T, YZX>::value) {
-        size = ( nz*(nx+1) + nx*(nz+1) + 1 )*sizeof(float);
-        dim = g->dy;
-        face = (i+j+k)<0 ? 1 : ny+1;
-        jfY = field_var::jfz;
-        jfZ = field_var::jfx;
-        sx = 1, sy = face, sz = 1; // Start indices
-        ex1 = nx+2, ey1 = face+1, ez1 = nz+1; // policy 1 end indices
-        ex2 = nx+1, ey2 = face+1, ez2 = nz+2; // policy 2 end indices
-    } else if(std::is_same<T, ZXY>::value) { 
-        size = ( nx*(ny+1) + ny*(nx+1) + 1 )*sizeof(float);
-        dim = g->dz;
-        face = (i+j+k)<0 ? 1 : nz+1;
-        jfY = field_var::jfx;
-        jfZ = field_var::jfy;
-        sx = 1, sy = 1, sz = face; // Start indices
-        ex1 = nx+1, ey1 = ny+2, ez1 = face+1; // policy 1 end indices
-        ex2 = nx+2, ey2 = ny+1, ez2 = face+1; // policy 1 end indices
-    }
-    float* p = reinterpret_cast<float*>(size_send_port(i,j,k,size,g));
-    if(p) {
-        p[0] = dim;
-        Kokkos::View<float*> d_buf("Device buffer", size/sizeof(float));
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>> policy1({sz, sy, sx}, {ez1, ey1, ex1});
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>> policy2({sz, sy, sx}, {ez2, ey2, ex2});
-        k_field_t& k_field = fa->k_f_d;
-        Kokkos::parallel_for("begin_send_jf: edge loop 1", policy1, KOKKOS_LAMBDA(const int kk, const int jj, const int ii) {
-            if(std::is_same<T, XYZ>::value) {
-                d_buf(1 + (kk-1)*ny + jj-1) = k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfY);
-            } else if(std::is_same<T, YZX>::value) {
-                d_buf(1 + (kk-1)*(nx+1) + ii-1) = k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfY);
-            } else if(std::is_same<T, ZXY>::value) {
-                d_buf(1 + (jj-1)*nx + ii-1) = k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfY);
-            }
-        });
-        Kokkos::parallel_for("begin_send_jf: edge loop 2", policy2, KOKKOS_LAMBDA(const int kk, const int jj, const int ii) {
-            if(std::is_same<T, XYZ>::value) {
-                d_buf(1 + ny*(nz+1) + (kk-1)*(ny+1) + jj-1) = k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfZ);
-            } else if(std::is_same<T, YZX>::value) {
-                d_buf(1 + (nx+1)*nz + (kk-1)*nx + ii-1) = k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfZ);
-            } else if(std::is_same<T, ZXY>::value) {
-                d_buf(1 + nx*(ny+1) + (jj-1)*(nx+1) + ii-1) = k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfZ);
-            }
-        });
-        Kokkos::deep_copy(h_buf, d_buf);
-        h_buf(0) = dim;
-        Kokkos::parallel_for("Copy host to mpi buffer", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, size/sizeof(float)), 
-        KOKKOS_LAMBDA(const int idx) {
-            p[idx] = h_buf(idx);
-        });
-        begin_send_port(i, j, k, size, g);
-    }
-*/
-}
+template <typename T> void begin_send_jf(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {}
 template<> void begin_send_jf<XYZ>(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {
 
     const int size = ( 1 + ny*(nz+1) + nz*(ny+1) )*sizeof(float);   
@@ -2282,55 +1890,6 @@ template<> void begin_send_jf<XYZ>(const grid_t* g, field_array_t* fa, int i, in
     Kokkos::deep_copy(sbuf_h, sbuf_d);
     sbuf_h(0) = g->dx;
     begin_send_port_k(i,j,k,size,g, reinterpret_cast<char*>(sbuf_h.data()));
-/*
-    const int size = ( 1 + ny*(nz+1) + nz*(ny+1) )*sizeof(float);   
-    float* p = (float *)size_send_port( i, j, k, size, g );    
-    k_field_t& k_field = fa->k_f_d;
-    if( p ) {                                           
-        p[0] = g->dx;                               
-        int face = (i+j+k)<0 ? 1 : nx+1;                    
-        Kokkos::View<float*> d_buf("Device buffer", size/sizeof(float));
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> yz_edge({1, 1}, {nz+2, ny+1});
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> zy_edge({1, 1}, {nz+1, ny+2});
-        Kokkos::parallel_for("begin_send_jf<XYZ>: yz_edge_loop", yz_edge, KOKKOS_LAMBDA(const int z, const int y) {
-            const int x = face;
-            d_buf(1 + (z-1)*ny + (y-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy);
-        });
-        Kokkos::parallel_for("begin_send_jf<XYZ>: zy_edge_loop", zy_edge, KOKKOS_LAMBDA(const int z, const int y) {
-            const int x = face;
-            d_buf(1 + (nz+1)*ny + (z-1)*(ny+1) + (y-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz);
-        });
-
-//        Kokkos::parallel_for("begin_send_jf<XYZ>: yz_edge_loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int z = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny), [=] (const int yi) {
-//                const int x = face;
-//                const int y = yi + 1;
-//                d_buf(1 + (z-1)*ny + yi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy);
-//            });
-//        });
-//        Kokkos::parallel_for("begin_send_jf<XYZ>: zy_edge_loop", KOKKOS_TEAM_POLICY_DEVICE(nz, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int z = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (const int yi) {
-//                const int x = face;
-//                const int y = yi + 1;
-//                d_buf(1 + (nz+1)*ny + (z-1)*(ny+1) + yi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz);
-//            });
-//        });
-
-        Kokkos::deep_copy(h_buf, d_buf);
-        h_buf(0) = g->dx;
-        for(int idx = 0; idx < size/sizeof(float); idx++) {
-            p[idx] = h_buf(idx);
-        }
-        p[0] = g->dx;
-        begin_send_port(i,j,k,size,g);
-    }
-*/
 }
 template<> void begin_send_jf<YZX>(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {
 
@@ -2350,56 +1909,6 @@ template<> void begin_send_jf<YZX>(const grid_t* g, field_array_t* fa, int i, in
     Kokkos::deep_copy(sbuf_h, sbuf_d);
     sbuf_h(0) = g->dy;
     begin_send_port_k(i,j,k,size,g, reinterpret_cast<char*>(sbuf_h.data()));
-/*
-    int size = ( 1 + nz*(nx+1) + nx*(nz+1) )*sizeof(float);   
-    float* p = (float *)size_send_port( i, j, k, size, g );    
-    k_field_t& k_field = fa->k_f_d;
-    if( p ) {                                           
-        p[0] = g->dy;                               
-        int face = (i+j+k)<0 ? 1 : ny+1;                    
-
-        Kokkos::View<float*> d_buf("Device buffer", size/sizeof(float));
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> zx_edge({1, 1}, {nz+1, nx+2});
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> xz_edge({1, 1}, {nz+2, nx+1});
-        Kokkos::parallel_for("begin_send_jf<YZX>: zx_edge_loop", zx_edge, KOKKOS_LAMBDA(const int z, const int x) {
-            const int y = face;
-            d_buf(1 + (z-1)*(nx+1) + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz);
-        });
-        Kokkos::parallel_for("begin_send_jf<YZX>: zx_edge_loop", xz_edge, KOKKOS_LAMBDA(const int z, const int x) {
-            const int y = face;
-            d_buf(1 + (nx+1)*nz + (z-1)*nx + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx);
-        });
-
-//        Kokkos::parallel_for("begin_send_jf<YZX>: zx_edge_loop", KOKKOS_TEAM_POLICY_DEVICE(nz, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int z = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
-//                const int y = face;
-//                const int x = xi + 1;
-//                d_buf(1 + (z-1)*(nx+1) + xi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz);
-//            });
-//        });
-//        Kokkos::parallel_for("begin_send_jf<YZX>: xz_edge_loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int z = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (const int xi) {
-//                const int y = face;
-//                const int x = xi + 1;
-//                d_buf(1 + (nx+1)*nz + (z-1)*nx + xi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx);
-//            });
-//        });
-
-        Kokkos::deep_copy(h_buf, d_buf);
-        h_buf(0) = g->dy;
-        for(int idx = 0; idx < size/sizeof(float); idx++) {
-            p[idx] = h_buf(idx);
-        }
-        p[0] = g->dy;
-        begin_send_port(i,j,k,size,g);
-    }
-*/
 }
 template<> void begin_send_jf<ZXY>(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {
 
@@ -2419,135 +1928,11 @@ template<> void begin_send_jf<ZXY>(const grid_t* g, field_array_t* fa, int i, in
     Kokkos::deep_copy(sbuf_h, sbuf_d);
     sbuf_h(0) = g->dz;
     begin_send_port_k(i, j, k, size, g, reinterpret_cast<char*>(sbuf_h.data()));
-/*
-    int size = ( 1 + nx*(ny+1) + ny*(nx+1) )*sizeof(float);   
-    float* p = (float *)size_send_port( i, j, k, size, g );    
-    k_field_t& k_field = fa->k_f_d;
-    if( p ) {                                           
-        p[0] = g->dz;                               
-        int face = (i+j+k)<0 ? 1 : nz+1;                    
-        Kokkos::View<float*> d_buf("Device buffer", size/sizeof(float));
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> xy_edge({1, 1}, {ny+2, nx+1});
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> yx_edge({1, 1}, {ny+1, nx+2});
-        Kokkos::parallel_for("begin_send_jf<ZXY>: xy_edge_loop", xy_edge, KOKKOS_LAMBDA(const int y, const int x) {
-            const int z = face;
-            d_buf(1 + (y-1)*nx + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx);
-        });
-        Kokkos::parallel_for("begin_send_jf<ZXY>: yx_edge_loop", yx_edge, KOKKOS_LAMBDA(const int y, const int x) {
-            const int z = face;
-            d_buf(1 + (ny+1)*nx + (y-1)*(nx+1) + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy);
-        });
-
-//        Kokkos::parallel_for("begin_send_jf<ZXY>: xy_edge_loop", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int y = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (const int xi) {
-//                const int z = face;
-//                const int x = xi + 1;
-//                d_buf(1 + (y-1)*nx + xi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx);
-//            });
-//        });
-//        Kokkos::parallel_for("begin_send_jf<ZXY>: yx_edge_loop", KOKKOS_TEAM_POLICY_DEVICE(ny, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int y = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
-//                const int z = face;
-//                const int x = xi + 1;
-//                d_buf(1 + (ny+1)*nx + (y-1)*(nx+1) + xi) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy);
-//            });
-//        });
-
-        Kokkos::deep_copy(h_buf, d_buf);
-        h_buf(0) = g->dz;
-        for(int idx = 0; idx < size/sizeof(float); idx++) {
-            p[idx] = h_buf(idx);
-        }
-        p[0] = g->dz;
-        begin_send_port(i,j,k,size,g);
-    }
-*/
 }
 
-template <typename T> void end_recv_jf(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
-/*
-    int face, dim, size;
-    float* p, rw, lw;
-    int sx, sy, sz; // start indices
-    int ex1, ey1, ez1, ex2, ey2, ez2; // end indices for policy 1 & 2
-    field_var::f_v jfY, jfZ;
-    if(std::is_same<T, XYZ>::value) {
-        dim = g->dx;
-        face = (i+j+k)<0 ? nx+1 : 1; // Twice weighted sum
-        size = 1 + ny*(nz+1) + (ny+1)*nz;
-        jfY = field_var::jfy;
-        jfZ = field_var::jfz;
-        sx = face, sy = 1, sz = 1;
-        ex1 = face+1, ey1 = ny+1, ez1 = nz+2;
-        ex2 = face+1, ey2 = ny+2, ez2 = nz+1;
-    } else if (std::is_same<T, YZX>::value) {
-        size = 1 + nz*(nx+1) + (nz+1)*nx;
-        dim = g->dy;
-        face = (i+j+k)<0 ? ny+1 : 1; // Twice weighted sum
-        jfY = field_var::jfz;
-        jfZ = field_var::jfx;
-        sx = 1, sy = face, sz = 1;
-        ex1 = nx+2, ey1 = face+1, ez1 = nz+1;
-        ex2 = nx+1, ey2 = face+1, ez2 = nz+2;
-    } else if (std::is_same<T, ZXY>::value) {
-        size = 1 + nx*(ny+1) + (nx+1)*ny;
-        dim = g->dz;
-        face = (i+j+k)<0 ? nz+1 : 1; // Twice weighted sum
-        jfY = field_var::jfx;
-        jfZ = field_var::jfy;
-        sx = face, sy = 1, sz = 1;
-        ex1 = nx+1, ey1 = ny+2, ez1 = face+1;
-        ex2 = nx+2, ey2 = ny+1, ez2 = face+1;
-    }
-    
-    p = reinterpret_cast<float*>(end_recv_port(i,j,k,g));
-    if(p) {
-        rw = p[0];
-        lw = rw +dim; 
-        rw /= lw;
-        lw = dim/lw;  
-        lw += lw;
-        rw += rw;
-        Kokkos::View<float*> d_buf("Device Buffer", size);
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>> policy1({sz, sy, sx}, {ez1, ey1, ex1});
-        Kokkos::MDRangePolicy<Kokkos::Rank<3>> policy2({sz, sy, sx}, {ez2, ey2, ex2});
-        k_field_t& k_field = fa->k_f_d;
-        Kokkos::parallel_for("Copy mpi buffer to host", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, size),
-        KOKKOS_LAMBDA(const int idx) {
-            h_buf(idx) = p[idx];
-        });
-        Kokkos::deep_copy(d_buf, h_buf);
-        Kokkos::parallel_for("end_recv_jf: edge loop 1", policy1, KOKKOS_LAMBDA(const int kk, const int jj, const int ii) {
-            if(std::is_same<T, XYZ>::value) {
-                k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfY) = lw * k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfY) + rw * d_buf(1 + (kk-1)*ny + jj-1);
-            } else if(std::is_same<T, YZX>::value) {
-                k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfY) = lw * k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfY) + rw * d_buf(1 + (kk-1)*(nx+1) + ii-1);
-            } else if(std::is_same<T, ZXY>::value) {
-                k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfY) = lw * k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfY) + rw * d_buf(1 + (jj-1)*nx + ii-1);
-            }
-        });
-        Kokkos::parallel_for("end_recv_jf: edge loop 2", policy2, KOKKOS_LAMBDA(const int kk, const int jj, const int ii) {
-            if(std::is_same<T, XYZ>::value) {
-                k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfZ) = lw * k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfZ) + rw * d_buf(1 + ny*(nz+1) + (kk-1)*(ny+1) + jj-1);
-            } else if(std::is_same<T, YZX>::value) {
-                k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfZ) = lw * k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfZ) + rw * d_buf(1 + (nx+1)*nz + (kk-1)*nx + ii-1);
-            } else if(std::is_same<T, ZXY>::value) {
-                k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfZ) = lw * k_field(VOXEL(ii,jj,kk,nx,ny,nz), jfZ) + rw * d_buf(1 + nx*(ny+1) + (jj-1)*(nx+1) + ii-1);
-            }
-            
-        });
-    }
-*/
-}
+template <typename T> void end_recv_jf(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
 
 template<> void end_recv_jf<XYZ>(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
-
     float* p = reinterpret_cast<float*> (end_recv_port_k(i,j,k,g));
     k_field_t& k_field = fa->k_f_d;
     if(p) {
@@ -2573,65 +1958,8 @@ template<> void end_recv_jf<XYZ>(const grid_t* g, field_array_t* fa, int i, int 
         });
         
     }
-/*
-    int size, face;
-    float lw, rw;
-    float* p = reinterpret_cast<float *>(end_recv_port(i,j,k,g));
-    k_field_t& k_field = fa->k_f_d;
-    if( p ) {                                                   
-        rw  = p[0]; 
-        lw  = rw + g->dx;                                     
-        rw /= lw;                                               
-        lw  = g->dx/lw;                                       
-        lw += lw;
-        rw += rw;
-        face = (i+j+k)<0 ? nx+1 : 1;                            
-        size = 1 + ny*(nz+1) + nz*(ny+1); 
-        Kokkos::View<float*> d_buf("Device_buffer", size);
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-        for(int idx = 0; idx < size; idx++) {
-            h_buf(idx) = p[idx];
-        }
-        Kokkos::deep_copy(d_buf, h_buf);
-
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> yz_edge({1, 1}, {nz+2, ny+1});
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> zy_edge({1, 1}, {nz+1, ny+2});
-        Kokkos::parallel_for("sync_jf: end_recv_jf<XYZ>: yz_edge_loop", yz_edge, KOKKOS_LAMBDA(const int z, const int y) {
-            const int x = face;
-            float jfy = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = lw*jfy + rw*d_buf(1 + (z-1)*ny + (y-1));
-        });
-        Kokkos::parallel_for("sync_jf: end_recv_jf<XYZ>: zy_edge_loop", zy_edge, KOKKOS_LAMBDA(const int z, const int y) {
-            const int x = face;
-            float jfz = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = lw*jfz + rw*d_buf(1 + (nz+1)*ny + (z-1)*(ny+1) + (y-1));
-        });
-
-//        Kokkos::parallel_for("sync_jf: end_recv_jf<XYZ>: yz_edge_loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int z = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny), [=] (const int yi) {
-//                const int y = yi + 1;
-//                const int x = face;
-//                float jfy = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy);
-//                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = lw*jfy + rw*d_buf(1 + (z-1)*ny + yi);
-//            });
-//        });
-//        Kokkos::parallel_for("sync_jf: end_recv_jf<XYZ>: zy_edge_loop", KOKKOS_TEAM_POLICY_DEVICE(nz, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int z = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (const int yi) {
-//                const int y = yi + 1;
-//                const int x = face;
-//                float jfz = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz);
-//                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = lw*jfz + rw*d_buf(1 + (nz+1)*ny + (z-1)*(ny+1) + yi);
-//            });
-//        });
-    }                                                           
-*/
 }
 template<> void end_recv_jf<YZX>(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
-
     float* p = reinterpret_cast<float*> (end_recv_port_k(i,j,k,g));
     k_field_t& k_field = fa->k_f_d;
     if(p) {
@@ -2656,62 +1984,6 @@ template<> void end_recv_jf<YZX>(const grid_t* g, field_array_t* fa, int i, int 
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx)  = lw * jfx + rw * rbuf_d(1 + nz*(nx+1) + (z-1)*nx + (x-1));
         });
     }
-/*
-    int size, face;
-    float lw, rw;
-    float* p = reinterpret_cast<float *>(end_recv_port(i,j,k,g));
-    k_field_t& k_field = fa->k_f_d;
-    if( p ) {                                                   
-      rw  = p[0];
-      lw  = rw + g->dy;                                     
-      rw /= lw;                                               
-      lw  = g->dy/lw;                                       
-      lw += lw;
-      rw += rw;
-      face = (i+j+k)<0 ? ny+1 : 1;                            
-        size = 1 + nz*(nx+1) + nx*(nz+1);
-        Kokkos::View<float*> d_buf("Device_buffer", size);
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-        for(int idx = 0; idx < size; idx++) {
-            h_buf(idx) = p[idx];
-        }
-        Kokkos::deep_copy(d_buf, h_buf);
-
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> zx_edge({1, 1}, {nz+1, nx+2});
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> xz_edge({1, 1}, {nz+2, nx+1});
-        Kokkos::parallel_for("sync_jf: end_recv_jf<YZX>: zx_edge_loop", zx_edge, KOKKOS_LAMBDA(const int z, const int x) {
-            const int y = face;
-            float jfz = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = lw * jfz + rw * d_buf(1 + (z-1)*(nx+1) + (x-1));
-        });
-        Kokkos::parallel_for("sync_jf: end_recv_jf<YZX>: xz_edge_loop", xz_edge, KOKKOS_LAMBDA(const int z, const int x) {
-            const int y = face;
-            float jfx = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx)  = lw * jfx + rw * d_buf(1 + nz*(nx+1) + (z-1)*nx + (x-1));
-        });
-
-//        Kokkos::parallel_for("sync_jf: end_recv_jf<YZX>: zx_edge_loop", KOKKOS_TEAM_POLICY_DEVICE(nz, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int z = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
-//                const int x = xi + 1;
-//                const int y = face;
-//                float jfz = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz);
-//                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = lw * jfz + rw * d_buf(1 + (z-1)*(nx+1) + xi);
-//            });
-//        });
-//        Kokkos::parallel_for("sync_jf: end_recv_jf<YZX>: xz_edge_loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int z = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (const int xi) {
-//                const int x = xi + 1;
-//                const int y = face;
-//                float jfx = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx);
-//                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx)  = lw * jfx + rw * d_buf(1 + nz*(nx+1) + (z-1)*nx + xi);
-//            });
-//        });
-    }                                                           
-*/
 }
 template<> void end_recv_jf<ZXY>(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
 
@@ -2739,66 +2011,8 @@ template<> void end_recv_jf<ZXY>(const grid_t* g, field_array_t* fa, int i, int 
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = lw * jfy + rw * rbuf_d(1 + (ny+1)*nx + (y-1)*(nx+1) + (x-1));
         });
     }
-/*
-    int size, face;
-    float lw, rw;
-    float* p = reinterpret_cast<float *>(end_recv_port(i,j,k,g));
-    k_field_t& k_field = fa->k_f_d;
-    if( p ) {                                                   
-      rw  = p[0];
-      lw  = rw + g->dz;                                     
-      rw /= lw;                                               
-      lw  = g->dz/lw;                                       
-      lw += lw;
-      rw += rw;
-      face = (i+j+k)<0 ? nz+1 : 1;                            
-        size = 1 + nx*(ny+1) + ny*(nx+1);
-        Kokkos::View<float*> d_buf("Device_buffer", size);
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-        for(int idx = 0; idx < size; idx++) {
-            h_buf(idx) = p[idx];
-        }
-        Kokkos::deep_copy(d_buf, h_buf);
-
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> xy_edge({1, 1}, {ny+2, nx+1});
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> yx_edge({1, 1}, {ny+1, nx+2});
-        Kokkos::parallel_for("sync_jf: end_recv_jf<ZXY>: xy_edge_loop", xy_edge, KOKKOS_LAMBDA(const int y, const int x) {
-            const int z = face;
-            float jfx = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) = lw * jfx + rw * d_buf(1 + (y-1)*nx + (x-1));
-        });
-        Kokkos::parallel_for("sync_jf: end_recv_jf<ZXY>: yx_edge_loop", yx_edge, KOKKOS_LAMBDA(const int y, const int x) {
-            const int z = face;
-            float jfy = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = lw * jfy + rw * d_buf(1 + (ny+1)*nx + (y-1)*(nx+1) + (x-1));
-        });
-
-//        Kokkos::parallel_for("sync_jf: end_recv_jf<ZXY>: xy_edge_loop", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int y = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx), [=] (const int xi) {
-//                const int x = xi + 1;
-//                const int z = face;
-//                float jfx = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx);
-//                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) = lw * jfx + rw * d_buf(1 + (y-1)*nx + xi);
-//            });
-//        });
-//        Kokkos::parallel_for("sync_jf: end_recv_jf<ZXY>: yx_edge_loop", KOKKOS_TEAM_POLICY_DEVICE(ny, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int y = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
-//                const int x = xi + 1;
-//                const int z = face;
-//                float jfy = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy);
-//                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = lw * jfy + rw * d_buf(1 + (ny+1)*nx + (y-1)*(nx+1) + xi);
-//            });
-//        });
-
-    }                                                           
-*/
 }
 template <typename T> void end_send_jf(const grid_t* g, int i, int j, int k) {
-//    end_send_port(i,j,k,g);
     end_send_port_k(i,j,k,g);
 }
 void
@@ -2938,88 +2152,17 @@ void k_synchronize_jf(field_array_t* RESTRICT fa) {
 
 }
 
-template <typename T> void begin_recv_rho(field_array* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
-}
+template <typename T> void begin_recv_rho(field_array* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
 template<> void begin_recv_rho<XYZ>(field_array* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
-//    begin_recv_port(i,j,k, ( 1 + 2*(ny+1)*(nz+1) )*sizeof(float), g);
     begin_recv_port_k(i,j,k, ( 1 + 2*(ny+1)*(nz+1) )*sizeof(float), fa->g, reinterpret_cast<char*>(rbuf_h.data()));
 }
 template<> void begin_recv_rho<YZX>(field_array* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
-//    begin_recv_port(i,j,k, ( 1 + 2*(nz+1)*(nx+1) )*sizeof(float), g);
     begin_recv_port_k(i,j,k, ( 1 + 2*(nz+1)*(nx+1) )*sizeof(float), fa->g, reinterpret_cast<char*>(rbuf_h.data()));
 }
 template<> void begin_recv_rho<ZXY>(field_array* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
-//    begin_recv_port(i,j,k, ( 1 + 2*(nx+1)*(ny+1) )*sizeof(float), g);
     begin_recv_port_k(i,j,k, ( 1 + 2*(nx+1)*(ny+1) )*sizeof(float), fa->g, reinterpret_cast<char*>(rbuf_h.data()));
 }
-template<typename T> void begin_send_rho(field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {
-/*
-    int nX, nY, nZ, face;
-    float leading_dim;
-    k_field_t& k_field = fa->k_f_d;
-    int startx, starty, startz;
-    int endx, endy, endz;
-    if (std::is_same<T, XYZ>::value) {
-        nX = nx, nY = ny, nZ = nz;
-        leading_dim = g->dx;
-        face = (i+j+k)<0 ? 1 : nx+1;
-        startx = face;
-        starty = 1;
-        startz = 1;
-        endx = face+1;
-        endy = ny+2;
-        endz = nz+2;
-    } else if (std::is_same<T, YZX>::value) {
-        nX = ny, nY = nz, nZ = nx;
-        leading_dim = g->dy;
-        face = (i+j+k)<0 ? 1 : ny+1;
-        startx = 1;
-        starty = face;
-        startz = 1;
-        endx = nx+2;
-        endy = face+1;
-        endz = nz+2;
-    } else if (std::is_same<T, ZXY>::value) {
-        nX = nz, nY = nx, nZ = ny;
-        leading_dim = g->dz;
-        face = (i+j+k)<0 ? 1 : nz+1;
-        startx = 1;
-        starty = 1;
-        startz = face;
-        endx = nx+2;
-        endy = ny+2;
-        endz = face+1;
-    }
-    Kokkos::MDRangePolicy<Kokkos::Rank<3> > node_policy({startz, starty, startx}, {endz, endy, endz});
-    int size = (1 + 2*(nY+1)*(nZ+1));
-    Kokkos::View<float*> d_buf("Device buffer", size);
-    Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-    float* p = reinterpret_cast<float*>(size_send_port(i,j,k,size*sizeof(float),g));
-    if(p) {
-        Kokkos::parallel_for("begin_send_rho", node_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
-            int idx_f, idx_b;
-            if(std::is_same<T, XYZ>::value) {
-                idx_f = 1 + 2*((z-1)*(ny+1) + y-1);
-                idx_b = 1 + 2*((z-1)*(ny+1) + y-1) + 1;
-            } else if (std::is_same<T, YZX>::value) {
-                idx_f = 1 + 2*((z-1)*(nx+1) + x-1);
-                idx_b = 1 + 2*((z-1)*(nx+1) + x-1) + 1;
-            } else if (std::is_same<T, ZXY>::value) {
-                idx_f = 1 + 2*((y-1)*(nx+1) + x-1);
-                idx_b = 1 + 2*((y-1)*(nx+1) + x-1) + 1;
-            }
-            d_buf(idx_f) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-            d_buf(idx_b) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-        });
-        Kokkos::deep_copy(h_buf, d_buf);
-        Kokkos::parallel_for("Host copy to buffer", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(1,size), KOKKOS_LAMBDA(const int idx) {
-            p[idx] = h_buf(idx);
-        });
-        p[0] = leading_dim;
-        begin_send_port(i,j,k,size*sizeof(float),g);
-    }
-*/
-}
+template<typename T> void begin_send_rho(field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {}
 
 template<> void begin_send_rho<XYZ>(field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {
     const int size = ( 1 + 2*(ny+1)*(nz+1) )*sizeof(float);   
@@ -3036,46 +2179,6 @@ template<> void begin_send_rho<XYZ>(field_array_t* fa, int i, int j, int k, int 
     Kokkos::deep_copy(sbuf_h, sbuf_d);
     sbuf_h(0) = fa->g->dx;
     begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
-/*
-    int size = ( 1 + 2*(ny+1)*(nz+1) )*sizeof(float);   
-    float* p = (float *)size_send_port( i, j, k, size, g );    
-    k_field_t& k_field = fa->k_f_d;
-    if( p ) {                                           
-      p[0] = g->dx;                               
-      int face = (i+j+k)<0 ? 1 : nx+1;                    
-        Kokkos::View<float*> d_buf("Device buffer", size/sizeof(float));
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_node({1, 1}, {nz+2, ny+2});
-        Kokkos::parallel_for("begin_send_rho<XYZ>: x_node_loop", x_node, KOKKOS_LAMBDA(const int z, const int y) {
-            const int x = face;
-            const int idx_f = 1 + 2*((z-1)*(ny+1) + (y-1));
-            const int idx_b = 1 + 2*((z-1)*(ny+1) + (y-1)) + 1;
-            d_buf(idx_f) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-            d_buf(idx_b) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-        });
-
-//        Kokkos::parallel_for("begin_send_rho<XYZ>: x_node_loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int z = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (const int yi) {
-//                const int x = face;
-//                const int y = yi + 1;
-//                const int idx_f = 1 + 2*((z-1)*(ny+1) + yi);
-//                const int idx_b = 1 + 2*((z-1)*(ny+1) + yi) + 1;
-//                d_buf(idx_f) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-//                d_buf(idx_b) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-//            });
-//        });
-
-        Kokkos::deep_copy(h_buf, d_buf);
-        h_buf(0) = g->dx;
-        for(int idx = 0; idx < size/sizeof(float); idx++) {
-            p[idx] = h_buf(idx);
-        }
-        p[0] = g->dx;
-        begin_send_port(i,j,k,size,g);
-    }
-*/
 }
 template<> void begin_send_rho<YZX>(field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {
     int size = ( 1 + 2*(nz+1)*(nx+1) )*sizeof(float);   
@@ -3092,46 +2195,6 @@ template<> void begin_send_rho<YZX>(field_array_t* fa, int i, int j, int k, int 
     Kokkos::deep_copy(sbuf_h, sbuf_d);
     sbuf_h(0) = fa->g->dy;
     begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
-/*
-    int size = ( 1 + 2*(nz+1)*(nx+1) )*sizeof(float);   
-    float* p = (float *)size_send_port( i, j, k, size, g );    
-    k_field_t& k_field = fa->k_f_d;
-    if( p ) {                                           
-      p[0] = g->dy;                               
-      int face = (i+j+k)<0 ? 1 : ny+1;                    
-        Kokkos::View<float*> d_buf("Device buffer", size/sizeof(float));
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> y_node({1, 1}, {nz+2, nx+2});
-        Kokkos::parallel_for("begin_send_rho<YZX>: y_node_loop", y_node, KOKKOS_LAMBDA(const int z, const int x) {
-            const int y = face;
-            const int idx_f = 1 + 2*((z-1)*(nx+1) + (x-1));
-            const int idx_b = 1 + 2*((z-1)*(nx+1) + (x-1)) + 1;
-            d_buf(idx_f) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-            d_buf(idx_b) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-        });
-
-//        Kokkos::parallel_for("begin_send_rho<YZX>: y_node_loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int z = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
-//                const int y = face;
-//                const int x = xi + 1;
-//                const int idx_f = 1 + 2*((z-1)*(nx+1) + xi);
-//                const int idx_b = 1 + 2*((z-1)*(nx+1) + xi) + 1;
-//                d_buf(idx_f) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-//                d_buf(idx_b) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-//            });
-//        });
-
-        Kokkos::deep_copy(h_buf, d_buf);
-        h_buf(0) = g->dy;
-        for(int idx = 0; idx < size/sizeof(float); idx++) {
-            p[idx] = h_buf(idx);
-        }
-        p[0] = g->dy;
-        begin_send_port(i,j,k,size,g);
-    }
-*/
 }
 template<> void begin_send_rho<ZXY>(field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {
     int size = ( 1 + 2*(nx+1)*(ny+1) )*sizeof(float);   
@@ -3148,128 +2211,9 @@ template<> void begin_send_rho<ZXY>(field_array_t* fa, int i, int j, int k, int 
     Kokkos::deep_copy(sbuf_h, sbuf_d);
     sbuf_h(0) = fa->g->dz;
     begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
-/*
-    int size = ( 1 + 2*(nx+1)*(ny+1) )*sizeof(float);   
-    float* p = (float *)size_send_port( i, j, k, size, g );    
-    k_field_t& k_field = fa->k_f_d;
-    if( p ) {                                           
-      p[0] = g->dz;                               
-      int face = (i+j+k)<0 ? 1 : nz+1;                    
-        Kokkos::View<float*> d_buf("Device buffer", size/sizeof(float));
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> z_node({1, 1}, {ny+2, nx+2});
-        Kokkos::parallel_for("begin_send_rho<ZXY>: z_node_loop", z_node, KOKKOS_LAMBDA(const int y, const int x) {
-            const int z = face;
-            const int idx_f = 1 + 2*((y-1)*(nx+1) + (x-1));
-            const int idx_b = 1 + 2*((y-1)*(nx+1) + (x-1)) + 1;
-            d_buf(idx_f) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-            d_buf(idx_b) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-        });
-
-//        Kokkos::parallel_for("begin_send_rho<ZXY>: z_node_loop", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int y = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
-//                const int z = face;
-//                const int x = xi + 1;
-//                const int idx_f = 1 + 2*((y-1)*(nx+1) + xi);
-//                const int idx_b = 1 + 2*((y-1)*(nx+1) + xi) + 1;
-//                d_buf(idx_f) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-//                d_buf(idx_b) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-//            });
-//        });
-
-        Kokkos::deep_copy(h_buf, d_buf);
-        h_buf(0) = g->dz;
-        for(int idx = 0; idx < size/sizeof(float); idx++) {
-            p[idx] = h_buf(idx);
-        }
-        p[0] = g->dz;
-        begin_send_port(i,j,k,size,g);
-    }
-*/
 }
 
-template <typename T> void end_recv_rho(field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
-/*
-    int nX, nY, nZ, face;
-    float leading_dim;
-//    std::initializer_list<int> start, end;
-    int startx, starty, startz;
-    int endx, endy, endz;
-    k_field_t& k_field = fa->k_f_d;
-    if(std::is_same<T, XYZ>::value) {
-        nX = nx, nY = ny, nZ = nz;
-        leading_dim = g->dx;
-        face = (i+j+k)<0 ? nx+1 : 1;
-//        start = {1, 1, face};
-//        end = {nz+2, ny+2, face+1};
-        startx = face;
-        starty = 1;
-        startz = 1;
-        endx = face+1;
-        endy = ny+2;
-        endz = nz+2;
-    } else if (std::is_same<T, YZX>::value) {
-        nX = ny, nY = nz, nZ = nx;
-        leading_dim = g->dy;
-        face = (i+j+k)<0 ? ny+1 : 1;
-//        start = {1, face, 1};
-//        end = {nz+2, face+1, nx+2};
-        startx = 1;
-        starty = face;
-        startz = 1;
-        endx = nx+2;
-        endy = face+1;
-        endz = nz+2;
-    } else if (std::is_same<T, ZXY>::value) {
-        nX = nz, nY = nx, nZ = ny;
-        leading_dim = g->dz;
-        face = (i+j+k)<0 ? nz+1 : 1;
-//        start = {face, 1, 1};
-//        end = {face+1, ny+2, nx+2};
-        startx = 1;
-        starty = 1;
-        startz = face;
-        endx = nx+2;
-        endy = ny+2;
-        endz = face+1;
-    }
-//    Kokkos::MDRangePolicy<Kokkos::Rank<3> > node_policy(start,end);
-    Kokkos::MDRangePolicy<Kokkos::Rank<3> > node_policy({startx, starty, startz}, {endx, endy, endz});
-    int size = (1 + 2*(nY+1)*(nZ+1));
-    Kokkos::View<float*> d_buf("Device buffer", size);
-    Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-    float* p = reinterpret_cast<float*>(end_recv_port(i,j,k,g));
-    if(p) {
-        float hrw = p[0];
-        float hlw = hrw + leading_dim;
-        hrw /= hlw;
-        hlw = leading_dim/hlw;
-        float lw = hlw + hlw;
-        float rw = hrw + hrw;
-        Kokkos::parallel_for("Copy buffer to host copy", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, size), KOKKOS_LAMBDA(const int idx) {
-            h_buf(idx) = p[idx];
-        });
-        Kokkos::deep_copy(d_buf, h_buf);
-        Kokkos::parallel_for("end_recv_rho", node_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
-            int idx_f, idx_b;
-            if(std::is_same<T, XYZ>::value) {
-                idx_f = 1 + 2*((z-1)*(ny+1) + y-1);
-                idx_b = 1 + 2*((z-1)*(ny+1) + y-1) + 1;
-            } else if (std::is_same<T, YZX>::value) {
-                idx_f = 1 + 2*((z-1)*(nx+1) + x-1);
-                idx_b = 1 + 2*((z-1)*(nx+1) + x-1) + 1;
-            } else if (std::is_same<T, ZXY>::value) {
-                idx_f = 1 + 2*((y-1)*(nx+1) + x-1);
-                idx_b = 1 + 2*((y-1)*(nx+1) + x-1) + 1;
-            }
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) = lw *  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) + rw *  d_buf(idx_f);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob) = hlw * k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob) + hrw * d_buf(idx_b);
-        });
-    }
-*/
-}
+template <typename T> void end_recv_rho(field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
 
 template<> void end_recv_rho<XYZ>(field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
     const int size = 1 + 2*(ny+1)*(nz+1);
@@ -3297,54 +2241,6 @@ template<> void end_recv_rho<XYZ>(field_array_t* fa, int i, int j, int k, int nx
         });
 
     }                                                           
-/*
-    int size, face;
-    float hlw, hrw, lw, rw;
-    float* p = (float *)end_recv_port(i,j,k,g);                        
-    k_field_t& k_field = fa->k_f_d;
-    if( p ) {                                                   
-      hrw  = p[0]; 
-      hlw  = hrw + g->dx;                                     
-      hrw /= hlw;                                               
-      hlw  = g->dx/hlw;                                       
-      lw   = hlw + hlw;                                         
-      rw   = hrw + hrw;                                         
-      face = (i+j+k)<0 ? nx+1 : 1;                            
-        size = 1 + 2*(ny+1)*(nz+1);
-        Kokkos::View<float*> d_buf("Device_buffer", size);
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-        for(int idx = 0; idx < size; idx++) {
-            h_buf(idx) = p[idx];
-        }
-        Kokkos::deep_copy(d_buf, h_buf);
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_node({1, 1}, {nz+2, ny+2});
-        Kokkos::parallel_for("sync_rho: end_recv_rho<XYZ>: x_node_loop", x_node, KOKKOS_LAMBDA(const int z, const int y) {
-            const int x = face;
-            const int idx_f = 1 + 2*((z-1)*(ny+1) + (y-1));
-            const int idx_b = 1 + 2*((z-1)*(ny+1) + (y-1)) + 1;
-            const float rhof = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-            const float rhob = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) = lw*rhof + rw*d_buf(idx_f);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob) = hlw*rhob + hrw*d_buf(idx_b);
-        });
-
-//        Kokkos::parallel_for("sync_rho: end_recv_rho<XYZ>: x_node_loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int z = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny+1), [=] (const int yi) {
-//                const int y = yi + 1;
-//                const int x = face;
-//                int idx_f = 1 + 2*((z-1)*(ny+1) + yi);
-//                int idx_b = 1 + 2*((z-1)*(ny+1) + yi) + 1;
-//                float rhof = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-//                float rhob = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-//                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) = lw*rhof + rw*d_buf(idx_f);
-//                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob) = hlw*rhob + hrw*d_buf(idx_b);
-//            });
-//        });
-
-    }                                                           
-*/
 }
 template<> void end_recv_rho<YZX>(field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
     const int face = (i+j+k)<0 ? ny+1 : 1;                            
@@ -3371,54 +2267,6 @@ template<> void end_recv_rho<YZX>(field_array_t* fa, int i, int j, int k, int nx
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob) = hlw*rhob + hrw*rbuf_d(idx_b);
         });
     }
-/*
-    int size, face;
-    float hlw, hrw, lw, rw;
-    float* p = (float *)end_recv_port(i,j,k,g);                        
-    k_field_t& k_field = fa->k_f_d;
-    if( p ) {                                                   
-      hrw  = p[0];
-      hlw  = hrw + g->dy;                                     
-      hrw /= hlw;                                               
-      hlw  = g->dy/hlw;                                       
-      lw   = hlw + hlw;                                         
-      rw   = hrw + hrw;                                         
-      face = (i+j+k)<0 ? ny+1 : 1;                            
-        size = 1 + 2*(nx+1)*(nz+1);
-        Kokkos::View<float*> d_buf("Device_buffer", size);
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-        for(int idx = 0; idx < size; idx++) {
-            h_buf(idx) = p[idx];
-        }
-        Kokkos::deep_copy(d_buf, h_buf);
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> y_node({1, 1}, {nz+2, nx+2});
-        Kokkos::parallel_for("sync_rho: end_recv_rho<YZX>: y_node_loop", y_node, KOKKOS_LAMBDA(const int z, const int x) {
-            const int y = face;
-            const int idx_f = 1 + 2*((z-1)*(nx+1) + (x-1));
-            const int idx_b = 1 + 2*((z-1)*(nx+1) + (x-1)) + 1;
-            const float rhof = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-            const float rhob = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) = lw*rhof + rw*d_buf(idx_f);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob) = hlw*rhob + hrw*d_buf(idx_b);
-        });
-
-//        Kokkos::parallel_for("sync_rho: end_recv_rho<YZX>: y_node_loop", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int z = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
-//                const int x = xi + 1;
-//                const int y = face;
-//                int idx_f = 1 + 2*((z-1)*(nx+1) + xi);
-//                int idx_b = 1 + 2*((z-1)*(nx+1) + xi) + 1;
-//                float rhof = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-//                float rhob = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-//                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) = lw*rhof + rw*d_buf(idx_f);
-//                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob) = hlw*rhob + hrw*d_buf(idx_b);
-//            });
-//        });
-
-    }                                                           
-*/
 }
 template<> void end_recv_rho<ZXY>(field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {
     const int face = (i+j+k)<0 ? nz+1 : 1;                            
@@ -3445,58 +2293,9 @@ template<> void end_recv_rho<ZXY>(field_array_t* fa, int i, int j, int k, int nx
             k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob) = hlw*rhob + hrw*rbuf_d(idx_b);
         });
     }                                                           
-/*
-    int size, face;
-    float hlw, hrw, lw, rw;
-    float* p = (float *)end_recv_port(i,j,k,g);                        
-    k_field_t& k_field = fa->k_f_d;
-    if( p ) {                                                   
-      hrw  = p[0];
-      hlw  = hrw + g->dz;                                     
-      hrw /= hlw;                                               
-      hlw  = g->dz/hlw;                                       
-      lw   = hlw + hlw;                                         
-      rw   = hrw + hrw;                                         
-      face = (i+j+k)<0 ? nz+1 : 1;                            
-        size = 1 + 2*(nx+1)*(ny+1);
-        Kokkos::View<float*> d_buf("Device_buffer", size);
-        Kokkos::View<float*>::HostMirror h_buf = Kokkos::create_mirror_view(d_buf);
-        for(int idx = 0; idx < size; idx++) {
-            h_buf(idx) = p[idx];
-        }
-        Kokkos::deep_copy(d_buf, h_buf);
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>> z_node({1, 1}, {ny+2, nx+2});
-        Kokkos::parallel_for("sync_rho: end_recv_rho<ZXY>: z_node_loop", z_node, KOKKOS_LAMBDA(const int y, const int x) {
-            const int z = face;
-            const int idx_f = 1 + 2*((y-1)*(nx+1) + (x-1));
-            const int idx_b = 1 + 2*((y-1)*(nx+1) + (x-1)) + 1;
-            const float rhof = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-            const float rhob = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) = lw*rhof + rw*d_buf(idx_f);
-            k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob) = hlw*rhob + hrw*d_buf(idx_b);
-        });
-
-//        Kokkos::parallel_for("sync_rho: end_recv_rho<ZXY>: z_node_loop", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
-//        KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
-//            const int y = team_member.league_rank() + 1;
-//            Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nx+1), [=] (const int xi) {
-//                const int x = xi + 1;
-//                const int z = face;
-//                int idx_f = 1 + 2*((y-1)*(nx+1) + xi);
-//                int idx_b = 1 + 2*((y-1)*(nx+1) + xi) + 1;
-//                float rhof = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);
-//                float rhob = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob);
-//                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) = lw*rhof + rw*d_buf(idx_f);
-//                k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhob) = hlw*rhob + hrw*d_buf(idx_b);
-//            });
-//        });
-
-    }                                                           
-*/
 }
 
 template <typename T> void end_send_rho(field_array* fa, int i, int j, int k) {
-//    end_send_port(i,j,k,g);
     end_send_port_k(i,j,k,fa->g);
 }
 

@@ -164,7 +164,20 @@ int vpic_simulation::advance(void) {
 // May not touch memory?
   if( emitter_list )
     TIC apply_emitter_list( emitter_list ); TOC( emission_model, 1 );
-  TIC user_particle_injection(); TOC( user_particle_injection, 1 );
+
+    if((particle_injection_interval>0) && ((step() % particle_injection_interval)==0)) {
+        if(!kokkos_particle_injection) {
+            KOKKOS_TIC();
+            KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+            KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
+        }
+        TIC user_particle_injection(); TOC( user_particle_injection, 1 );
+        if(!kokkos_particle_injection) {
+            KOKKOS_TIC();
+            KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
+            KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
+        }
+    }
 
   // This should be after the emission and injection to allow for the
   // possibility of thread parallelizing these operations
@@ -411,8 +424,19 @@ int vpic_simulation::advance(void) {
   // rhob_1 = rhob_0 + div juser_{1/2} (corrected local accumulation) if
   // the user wants electric field divergence cleaning to work.
 
-  TIC user_current_injection(); TOC( user_current_injection, 1 );
-
+  if((current_injection_interval>0) && ((step() % current_injection_interval)==0)) {
+      if(!kokkos_current_injection) {
+          KOKKOS_TIC();
+          KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+          KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+      }
+      TIC user_current_injection(); TOC( user_current_injection, 1 );
+      if(!kokkos_current_injection) {
+          KOKKOS_TIC();
+          KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+          KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+      }
+  }
 //  KOKKOS_TIC(); // Time this data movement
 //  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
 //  KOKKOS_TOC( FIELD_DATA_MOVEMENT, 1);
@@ -443,8 +467,19 @@ int vpic_simulation::advance(void) {
   // users responsibility to insure injected electric fields are consistent
   // across domains.
 
-// ??
-  TIC user_field_injection(); TOC( user_field_injection, 1 );
+    if((field_injection_interval>0) && ((step() % field_injection_interval)==0)) {
+        if(!kokkos_field_injection) {
+            KOKKOS_TIC();
+            KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+            KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+        }
+        TIC user_field_injection(); TOC( user_field_injection, 1 );
+        if(!kokkos_field_injection) {
+            KOKKOS_TIC();
+            KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+            KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+        }
+    }
 
   // Half advance the magnetic field from B_{1/2} to B_1
 

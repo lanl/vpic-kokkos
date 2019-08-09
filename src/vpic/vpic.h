@@ -137,6 +137,14 @@ public:
   int num_div_b_round;      // How many clean div b rounds per div b interval
   int sync_shared_interval; // How often to synchronize shared faces
 
+  // Track whether injection functions necessary
+  int field_injection_interval = -1;
+  int current_injection_interval = -1;
+  int particle_injection_interval = -1;
+  // Track whether injection functions are ported to Kokkos
+  bool kokkos_field_injection = false;
+  bool kokkos_current_injection = false;
+  bool kokkos_particle_injection = false;
   // Track how often the user wants us to copy data back from device
   int field_copy_interval = -1;
   int particle_copy_interval = -1;

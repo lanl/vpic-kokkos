@@ -862,9 +862,9 @@ begin_initialization {
   double debye = uthe*delta;
   double wpe1ps=1e-12* speed_of_light/delta;
 
-  double nx                = 1200*nproc(); //11232;
+  double nx                = 1200; //11232;
   double ny                = 1;    // 2D problem in x-z plane
-  double nz                = 100; //756;  // was 549;
+  double nz                = 54; //756;  // was 549;
 
 #if 0
   // DEBUG - run on 64 proc. 
@@ -1014,7 +1014,7 @@ begin_initialization {
 
   // SETUP HIGH-LEVEL SIMULATION PARMETERS
   sim_log("Setting up high-level simulation parameters. "); 
-  num_step             = 500; //int(t_stop/(dt)); 
+  num_step             = 100; //int(t_stop/(dt)); 
   status_interval      = 2000; 
 //  status_interval      = -1; 
 //  sync_shared_interval = status_interval/1;
@@ -1024,6 +1024,10 @@ begin_initialization {
   sync_shared_interval = status_interval/1;
   clean_div_e_interval = status_interval/1;
   clean_div_b_interval = status_interval/10;
+    kokkos_field_injection = true;
+    field_injection_interval = 1;
+    particle_injection_interval = -1;
+    current_injection_interval = -1;
 
   // For maxwellian reinjection, we need more than the default number of
   // passes (3) through the boundary handler
