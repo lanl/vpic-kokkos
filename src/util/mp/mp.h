@@ -6,11 +6,14 @@
 #define mp_h
 
 #include "../util_base.h"
+#include "../../vpic/kokkos_helpers.h"
 
 /* Opaque handle to the message passing buffers */
 
 struct mp;
 typedef struct mp mp_t;
+struct mp_kokkos;
+typedef struct mp_kokkos mp_kokkos_t;
 
 /* Define a "turnstile".  At most up to n_turnstile processes can be
    in the turnstile at any given time.  Use this to implement
@@ -147,5 +150,50 @@ mp_end_recv( mp_t * mp,
 void
 mp_end_send( mp_t * mp,
              int sbuf );
+
+// Kokkos mp stuff
+void
+mp_begin_recv_kokkos(mp_t* mp_k, int port, int size, int src, int tag, char* ALIGNED(128) recv_buf);
+
+void
+mp_begin_send_kokkos(mp_t* mp_k, int port, int size, int src, int tag, char* ALIGNED(128) send_buf);
+
+void
+mp_end_recv_kokkos(mp_t* mp_k, int port);
+
+void
+mp_end_send_kokkos(mp_t* mp_k, int port); 
+
+void
+mp_begin_recv_k( mp_t * mp,
+               int port,
+               int sz,
+               int src,
+               int tag,
+               char* recv_buf );
+
+void
+mp_begin_send_k( mp_t * mp,
+               int port,
+               int sz,
+               int dst,
+               int tag,
+               char* send_buf );
+
+void
+mp_end_recv_k( mp_t * mp,
+             int rbuf );
+
+void
+mp_end_send_k( mp_t * mp,
+             int sbuf );
+
+void mp_set_send_buffer(mp_t* mp, int port, int size, char* buffer);
+
+void mp_set_recv_buffer(mp_t* mp, int port, int size, char* buffer);
+
+void mp_unset_send_buffer(mp_t* mp, int port);
+
+void mp_unset_recv_buffer(mp_t* mp, int port);
 
 #endif /* mp_h */

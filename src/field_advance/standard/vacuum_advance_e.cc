@@ -48,6 +48,51 @@ typedef struct pipeline_args {
     INIT_STENCIL();                   \
   }
 
+KOKKOS_INLINE_FUNCTION void update_ex(const k_field_t& k_field, const size_t f0_idx, const size_t fx_idx, const size_t fy_idx, const size_t fz_idx,
+                const float px_muy, const float px_muz, const float py_mux, const float py_muz, const float pz_mux, const float pz_muy,
+                const float damp, const float decayx, const float drivex, const float cj) {
+
+    const float f0_ex = k_field(f0_idx, field_var::ex);
+    const float f0_cby = k_field(f0_idx, field_var::cby);
+    const float f0_cbz = k_field(f0_idx, field_var::cbz);
+    const float f0_tcax = k_field(f0_idx, field_var::tcax);
+    const float f0_jfx = k_field(f0_idx, field_var::jfx);
+    const float fy_cbz = k_field(fy_idx, field_var::cbz);
+    const float fz_cby = k_field(fz_idx, field_var::cby);
+    
+    k_field(f0_idx, field_var::tcax) = (py_muz*(f0_cbz - fy_cbz) - pz_muy*(f0_cby - fz_cby)) - damp*f0_tcax;
+    k_field(f0_idx, field_var::ex) = decayx*f0_ex + drivex*(k_field(f0_idx, field_var::tcax) - cj*f0_jfx);
+}
+KOKKOS_INLINE_FUNCTION void update_ey(const k_field_t& k_field, const size_t f0_idx, const size_t fx_idx, const size_t fy_idx, const size_t fz_idx,
+                const float px_muy, const float px_muz, const float py_mux, const float py_muz, const float pz_mux, const float pz_muy,
+                const float damp, const float decayy, const float drivey, const float cj) {
+
+    const float f0_ey = k_field(f0_idx, field_var::ey);
+    const float f0_cbx = k_field(f0_idx, field_var::cbx);
+    const float f0_cbz = k_field(f0_idx, field_var::cbz);
+    const float f0_tcay = k_field(f0_idx, field_var::tcay);
+    const float f0_jfy = k_field(f0_idx, field_var::jfy);
+    const float fx_cbz = k_field(fx_idx, field_var::cbz);
+    const float fz_cbx = k_field(fz_idx, field_var::cbx);
+    
+    k_field(f0_idx, field_var::tcay) = (pz_mux*(f0_cbx - fz_cbx) - px_muz*(f0_cbz - fx_cbz)) - damp*f0_tcay;
+    k_field(f0_idx, field_var::ey) = decayy*f0_ey + drivey*(k_field(f0_idx, field_var::tcay) - cj*f0_jfy);
+}
+KOKKOS_INLINE_FUNCTION void update_ez(const k_field_t& k_field, const size_t f0_idx, const size_t fx_idx, const size_t fy_idx, const size_t fz_idx,
+                const float px_muy, const float px_muz, const float py_mux, const float py_muz, const float pz_mux, const float pz_muy,
+                const float damp, const float decayz, const float drivez, const float cj) {
+
+    const float f0_ez = k_field(f0_idx, field_var::ez);
+    const float f0_cbx = k_field(f0_idx, field_var::cbx);
+    const float f0_cby = k_field(f0_idx, field_var::cby);
+    const float f0_tcaz = k_field(f0_idx, field_var::tcaz);
+    const float f0_jfz = k_field(f0_idx, field_var::jfz);
+    const float fx_cby = k_field(fx_idx, field_var::cby);
+    const float fy_cbx = k_field(fy_idx, field_var::cbx);
+    
+    k_field(f0_idx, field_var::tcaz) = (px_muy*(f0_cby - fx_cby) - py_mux*(f0_cbx - fy_cbx)) - damp*f0_tcaz;
+    k_field(f0_idx, field_var::ez) = decayz*f0_ez + drivez*(k_field(f0_idx, field_var::tcaz) - cj*f0_jfz);
+}
 #define UPDATE_EX() \
   f0->tcax = ( py_muz*(f0->cbz-fy->cbz) - pz_muy*(f0->cby-fz->cby) ) - \
              damp*f0->tcax; \
@@ -157,6 +202,8 @@ vacuum_advance_e( field_array_t * RESTRICT fa,
                   float frac ) {
   if( !fa     ) ERROR(( "Bad args" ));
   if( frac!=1 ) ERROR(( "standard advance_e does not support frac!=1 yet" ));
+
+//printf("Vacuum Advance E Kernel\n");
 
   /***************************************************************************
    * Begin tangential B ghost setup
@@ -360,4 +407,215 @@ vacuum_advance_e( field_array_t * RESTRICT fa,
   }
 
   local_adjust_tang_e( fa->f, fa->g );
+}
+
+void vacuum_advance_e_interior_kokkos(k_field_t& k_field, 
+                                const size_t nx, const size_t ny, const size_t nz,
+                                const float px_muy, const float px_muz, const float py_mux, const float py_muz, const float pz_mux, const float pz_muy,
+                                const float damp, const float decayx, const float decayy, const float decayz, const float drivex, const float drivey, const float drivez, const float cj) {
+    
+    // EXEC_PIPELINE
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>> zyx_policy({2, 2, 2}, {nz+1, ny+1, nx+1});
+    Kokkos::parallel_for("vacuum_advance_e: Majority of interior", zyx_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
+        const int f0 = VOXEL(x,   y,   z,   nx, ny, nz);
+        const int fx = VOXEL(x-1, y,   z,   nx, ny, nz);
+        const int fy = VOXEL(x,   y-1, z,   nx, ny, nz);
+        const int fz = VOXEL(x,   y,   z-1, nx, ny, nz);
+        update_ex(k_field, f0, fx, fy, fz, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+        update_ey(k_field, f0, fx, fy, fz, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+        update_ez(k_field, f0, fx, fy, fz, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+    });
+    
+  // Do left over interior ex
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ex_policy({2, 2}, {nz+1, ny+1});
+    Kokkos::parallel_for("vacuum_advance_e: left over interior ex", ex_policy, KOKKOS_LAMBDA(const int z, const int y) {
+        const size_t f0_idx = VOXEL(1, y,   z, nx, ny, nz);
+        const size_t fx_idx = 0;
+        const size_t fy_idx = VOXEL(1, y-1, z, nx, ny, nz);
+        const size_t fz_idx = VOXEL(1, y,   z-1, nx, ny ,nz);
+        update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+    });
+  
+  // Do left over interior ey
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ey_policy({2, 2}, {nz+1, nx+1});
+    Kokkos::parallel_for("vacuum_advance_e: left over interior ey", ey_policy, KOKKOS_LAMBDA(const int z, const int x) {
+        const size_t f0_idx = VOXEL(2, 1, z, nx, ny, nz) + (x-2);
+        const size_t fx_idx = VOXEL(1, 1, z, nx, ny, nz) + (x-2);
+        const size_t fy_idx = 0;
+        const size_t fz_idx = VOXEL(2, 1, z-1, nx, ny ,nz) + (x-2);
+        update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+    });
+  
+  // Do left over interior ez
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ez_policy({2, 2}, {ny+1, nx+1});
+    Kokkos::parallel_for("vacuum_advance_e: left over interior ez", ez_policy, KOKKOS_LAMBDA(const int y, const int x) {
+        const size_t f0_idx = VOXEL(2, y,   1, nx, ny, nz) + (x-2);
+        const size_t fx_idx = VOXEL(1, y,   1, nx, ny, nz) + (x-2);
+        const size_t fy_idx = VOXEL(2, y-1, 1, nx, ny, nz) + (x-2);
+        const size_t fz_idx = 0;
+        update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+    });
+
+}
+
+void vacuum_advance_e_exterior_kokkos(k_field_t& k_field, 
+                                const size_t nx, const size_t ny, const size_t nz,
+                                const float px_muy, const float px_muz, const float py_mux, const float py_muz, const float pz_mux, const float pz_muy,
+                                const float damp, const float decayx, const float decayy, const float decayz, const float drivex, const float drivey, const float drivez, const float cj) {
+  // Do exterior ex
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ex_yx_policy({1, 1}, {ny+2, nx+1});
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ex_zx_policy({2, 1}, {nz+1, nx+1});
+    Kokkos::parallel_for("vacuum_advance_e: exterior ex loop 1", ex_yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+        const size_t f0_idx = VOXEL(1, y,   1,nx,ny,nz) + (x-1);
+        const size_t fx_idx = 0; 
+        const size_t fy_idx = VOXEL(1, y-1, 1,nx,ny,nz) + (x-1);
+        const size_t fz_idx = VOXEL(1, y,   0,nx,ny,nz) + (x-1);
+        update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ex loop 2", ex_yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+        const size_t f0_idx = VOXEL(1,y,  nz+1, nx,ny,nz) + (x-1);
+        const size_t fx_idx = 0; 
+        const size_t fy_idx = VOXEL(1,y-1,nz+1, nx,ny,nz) + (x-1);
+        const size_t fz_idx = VOXEL(1,y,  nz,   nx,ny,nz) + (x-1);
+        update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ex loop 3", ex_zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+        const size_t f0_idx = VOXEL(1,1,z,nx,ny,nz) + (x-1);
+        const size_t fx_idx = 0; // Don't care about x index, not used in update_ex anyway.
+        const size_t fy_idx = VOXEL(1,0,z,nx,ny,nz) + (x-1);
+        const size_t fz_idx = VOXEL(1,1,z-1,nx,ny,nz) + (x-1);
+        update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ex loop 4", ex_zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+        const size_t f0_idx = VOXEL(1,ny+1,z,nx,ny,nz) + (x-1);
+        const size_t fx_idx = 0; // Don't care about x index, not used in update_ex anyway.
+        const size_t fy_idx = VOXEL(1,ny,z,nx,ny,nz) + (x-1);
+        const size_t fz_idx = VOXEL(1,ny+1,z-1,nx,ny,nz) + (x-1);
+        update_ex(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, drivex, cj);
+    });
+  
+  // Do exterior ey
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ey_zy_policy({1, 1}, {nz+2, ny+1});
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ey_yx_policy({1, 2}, {ny+1, nx+1});
+    Kokkos::parallel_for("vacuum_advance_e: exterior ey loop 1", ey_zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+            const size_t f0_idx = VOXEL(1,y,z,nx,ny,nz);
+            const size_t fx_idx = VOXEL(0,y,z,nx,ny,nz);
+            const size_t fy_idx = 0;
+            const size_t fz_idx = VOXEL(1,y,z-1,nx,ny,nz);
+            update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ey loop 2", ey_zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+            const size_t f0_idx = VOXEL(nx+1,y,z,nx,ny,nz);
+            const size_t fx_idx = VOXEL(nx,y,z,nx,ny,nz);
+            const size_t fy_idx = 0;
+            const size_t fz_idx = VOXEL(nx+1,y,z-1,nx,ny,nz);
+            update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ey loop 3", ey_yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+            const size_t f0_idx = VOXEL(2,y,1,nx,ny,nz) + (x-2);
+            const size_t fx_idx = VOXEL(1,y,1,nx,ny,nz) + (x-2);
+            const size_t fy_idx = 0;
+            const size_t fz_idx = VOXEL(2,y,0,nx,ny,nz) + (x-2);
+            update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ey loop 4", ey_yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
+            const size_t f0_idx = VOXEL(2,y,nz+1,nx,ny,nz) + (x-2);
+            const size_t fx_idx = VOXEL(1,y,nz+1,nx,ny,nz) + (x-2);
+            const size_t fy_idx = 0;
+            const size_t fz_idx = VOXEL(2,y,nz,nx,ny,nz) + (x-2);
+            update_ey(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayy, drivey, cj);
+    });
+
+  // Do exterior ez
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ez_zx_policy({1, 1}, {nz+1, nx+2});
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> ez_zy_policy({1, 2}, {nz+1, ny+1});
+    Kokkos::parallel_for("vacuum_advance_e: exterior ez loop 1", ez_zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+        const size_t f0_idx = VOXEL(1,1,z,nx,ny,nz) + (x-1);
+        const size_t fx_idx = VOXEL(0,1,z,nx,ny,nz) + (x-1);
+        const size_t fy_idx = VOXEL(1,0,z,nx,ny,nz) + (x-1);
+        const size_t fz_idx = 0;
+        update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ez loop 2", ez_zx_policy, KOKKOS_LAMBDA(const int z, const int x) {
+        const size_t f0_idx = VOXEL(1,ny+1,z,nx,ny,nz) + (x-1);
+        const size_t fx_idx = VOXEL(0,ny+1,z,nx,ny,nz) + (x-1);
+        const size_t fy_idx = VOXEL(1,ny  ,z,nx,ny,nz) + (x-1);
+        const size_t fz_idx = 0;
+        update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ez loop 3", ez_zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+        const size_t f0_idx = VOXEL(1,y,z,nx,ny,nz);
+        const size_t fx_idx = VOXEL(0,y,z,nx,ny,nz);
+        const size_t fy_idx = VOXEL(1,y-1,z,nx,ny,nz);
+        const size_t fz_idx = 0;
+        update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+    });
+    Kokkos::parallel_for("vacuum_advance_e: exterior ez loop 4", ez_zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
+        const size_t f0_idx = VOXEL(nx+1, y,   z,nx,ny,nz);
+        const size_t fx_idx = VOXEL(nx,   y,   z,nx,ny,nz);
+        const size_t fy_idx = VOXEL(nx+1, y-1, z,nx,ny,nz);
+        const size_t fz_idx = 0;
+        update_ez(k_field, f0_idx, fx_idx, fy_idx, fz_idx, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayz, drivez, cj);
+    });
+
+}
+
+void
+vacuum_advance_e_kokkos( field_array_t * RESTRICT fa,
+                  float frac ) {
+  if( !fa     ) ERROR(( "Bad args" ));
+  if( frac!=1 ) ERROR(( "standard advance_e does not support frac!=1 yet" ));
+
+  pipeline_args_t args[1];
+  args->f = fa->f;
+  args->p = (sfa_params_t *)fa->params;
+  args->g = fa->g;
+  k_field_t k_field = fa->k_f_d;
+  const material_coefficient_t * ALIGNED(128) m = args->p->mc;               
+  const grid_t                 *              g = args->g;                   
+  const int nx = g->nx, ny = g->ny, nz = g->nz;                              
+                                                                             
+  const float decayx = m->decayx, drivex = m->drivex;                        
+  const float decayy = m->decayy, drivey = m->drivey;                        
+  const float decayz = m->decayz, drivez = m->drivez;                        
+  const float damp   = args->p->damp;                                        
+  const float px_muz = ((nx>1) ? (1+damp)*g->cvac*g->dt*g->rdx : 0)*m->rmuz; 
+  const float px_muy = ((nx>1) ? (1+damp)*g->cvac*g->dt*g->rdx : 0)*m->rmuy; 
+  const float py_mux = ((ny>1) ? (1+damp)*g->cvac*g->dt*g->rdy : 0)*m->rmux; 
+  const float py_muz = ((ny>1) ? (1+damp)*g->cvac*g->dt*g->rdy : 0)*m->rmuz; 
+  const float pz_muy = ((nz>1) ? (1+damp)*g->cvac*g->dt*g->rdz : 0)*m->rmuy; 
+  const float pz_mux = ((nz>1) ? (1+damp)*g->cvac*g->dt*g->rdz : 0)*m->rmux; 
+  const float cj     = g->dt/g->eps0;                                        
+    
+    // Field buffers for GPU - GPU communication
+    const int xyz_sz = 1 + ny*(nz+1) + nz*(ny+1);
+    const int yzx_sz = 1 + nz*(nx+1) + nx*(nz+1);
+    const int zxy_sz = 1 + nx*(ny+1) + ny*(nx+1);
+    field_buffers_t f_buffers = field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
+
+  /***************************************************************************
+   * Begin tangential B ghost setup
+   ***************************************************************************/
+  
+//    k_begin_remote_ghost_tang_b( fa, fa->g );
+    kokkos_begin_remote_ghost_tang_b(fa, fa->g, f_buffers);
+
+    k_local_ghost_tang_b( fa, fa->g );
+
+    vacuum_advance_e_interior_kokkos(k_field, nx, ny, nz, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, decayy, decayz, drivex, drivey, drivez, cj);
+  
+  /***************************************************************************
+   * Finish tangential B ghost setup
+   ***************************************************************************/
+
+//    k_end_remote_ghost_tang_b( fa, fa->g );
+    kokkos_end_remote_ghost_tang_b(fa, fa->g, f_buffers);
+
+  /***************************************************************************
+   * Update exterior fields
+   ***************************************************************************/
+
+    vacuum_advance_e_exterior_kokkos(k_field, nx, ny, nz, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, decayy, decayz, drivex, drivey, drivez, cj);
+
+    k_local_adjust_tang_e( fa, fa->g );
 }

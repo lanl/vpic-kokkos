@@ -173,3 +173,42 @@ reduce_accumulator_array( accumulator_array_t * RESTRICT aa ) {
   EXEC_PIPELINES( reduce_accumulators, args, 0 );
   WAIT_PIPELINES();
 }
+
+// FIXME use scatter view for performance
+void
+reduce_accumulator_array_kokkos( accumulator_array_t* RESTRICT aa) {
+    const k_accumulators_t& k_accum = aa->k_a_d;
+    const int start = (VOX(1,1,1)/2)*2;
+    const int end = (((VOX(aa->g->nx,aa->g->ny,aa->g->nz) - (VOX(1,1,1)/2)*2 + 1)+1)/2)*2;
+
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>> accum_policy({0, 0, start}, {4, 3, end});
+    Kokkos::parallel_for("reduce accumulator", accum_policy, KOKKOS_LAMBDA(const int i, const int j, const int v) {
+        auto k_accum_sa = aa->k_a_sa.access();
+        const float next = k_accum(v+1, j, i);
+        k_accum_sa(v,j,i) += next;
+    });
+    Kokkos::Experimental::contribute(aa->k_a_d, aa->k_a_sa);
+    aa->k_a_sa.reset_except(aa->k_a_d);
+
+/*
+    Kokkos::parallel_for("reduce accumulator", 1, KOKKOS_LAMBDA(const int i) {
+        for(int j=start; j<end ; j++) {
+            k_accum(j, accumulator_var::jx, 0) += k_accum(j+1, accumulator_var::jx, 0);
+            k_accum(j, accumulator_var::jx, 1) += k_accum(j+1, accumulator_var::jx, 1);
+            k_accum(j, accumulator_var::jx, 2) += k_accum(j+1, accumulator_var::jx, 2);
+            k_accum(j, accumulator_var::jx, 3) += k_accum(j+1, accumulator_var::jx, 3);
+
+            k_accum(j, accumulator_var::jy, 0) += k_accum(j+1, accumulator_var::jy, 0);
+            k_accum(j, accumulator_var::jy, 1) += k_accum(j+1, accumulator_var::jy, 1);
+            k_accum(j, accumulator_var::jy, 2) += k_accum(j+1, accumulator_var::jy, 2);
+            k_accum(j, accumulator_var::jy, 3) += k_accum(j+1, accumulator_var::jy, 3);
+
+            k_accum(j, accumulator_var::jz, 0) += k_accum(j+1, accumulator_var::jz, 0);
+            k_accum(j, accumulator_var::jz, 1) += k_accum(j+1, accumulator_var::jz, 1);
+            k_accum(j, accumulator_var::jz, 2) += k_accum(j+1, accumulator_var::jz, 2);
+            k_accum(j, accumulator_var::jz, 3) += k_accum(j+1, accumulator_var::jz, 3);
+        }
+    });
+*/
+}
+

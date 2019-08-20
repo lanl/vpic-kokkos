@@ -1,6 +1,8 @@
 #ifndef dumpmacros_h
 #define dumpmacros_h
 
+//#include "../util/io/FileIO.h"
+
 /* FIXME: WHEN THESE MACROS WERE HOISTED AND VARIOUS HACKS DONE TO THEm
    THEY BECAME _VERY_ _DANGEROUS. */
 
@@ -39,7 +41,28 @@
     WRITE( int,       sp_id,                  fileIO );  \
     WRITE( float,     q_m,                    fileIO );  \
   } while(0)
- 
+/*
+void write_header_v0(const int dump_type, const int sp_id, const float q_m, FileIO& fileIO) {
+    // Binary compatibility information
+    write<char>(CHAR_BIT, fileIO);
+    write<char>(sizeof(short int), fileIO);
+    write<char>(sizeof(int), fileIO);
+    write<char>(sizeof(float), fileIO);
+    write<char>(sizeof(double), fileIO);
+    write<short int>(0xcafe, fileIO);
+    write<int>(0xdeadbeef, fileIO);
+    write<float>(1.0f, fileIO);
+    write<double>(1.0, fileIO);
+    // Dump type and header format version
+    write<int>(0, fileIO);
+    write<int>(dump_type, fileIO);
+    // High level information
+    write<int>(step(), fileIO);
+    write<int>(nxout, fileIO);
+    write<int>(nyout, fileIO);
+    write<int>(nzout, fileIO);
+}
+*/ 
 // Note dim _MUST_ be a pointer to an int
  
 #define WRITE_ARRAY_HEADER(p,ndim,dim,fileIO) do { \
@@ -47,7 +70,13 @@
     WRITE( int, ndim,         fileIO );            \
     fileIO.write( dim, ndim );                     \
   } while(0)
- 
+/*
+template<typename T> void write_array_header(T& p, int ndim, int* dim, FileIO& fileIO) {
+    write<int>(sizeof(p[0]), fileIO);
+    write<int>(ndim, fileIO);
+    fileIO.write(dim, ndim);
+}
+*/ 
 // The WRITE macro copies the output "value" into a temporary variable
 // of the requested output "type" so that the write to the "file"
 // occurs from a known binary data type. For example, if grid.dx were
@@ -65,7 +94,12 @@
     type __WRITE_tmp = (type)(value); \
     fileIO.write( &__WRITE_tmp, 1 );  \
   } while(0)
- 
+/*
+template<typename T> void write(T& value, FileIO& fileIO) {
+    T temp = value;
+    filIO.write(&temp, 1);
+}
+*/ 
 // Note: strlen does not include the terminating \0
 #define WRITE_STRING(string,fileIO) do {                    \
     int __WRITE_STRING_len = 0;                             \

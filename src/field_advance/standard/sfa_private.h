@@ -26,6 +26,13 @@ typedef struct sfa_params {
   material_coefficient_t * mc;
   int n_mc;
   float damp;
+
+    k_material_coefficient_t k_mc_d;
+    k_material_coefficient_t::HostMirror k_mc_h;
+
+    sfa_params(int n_materials) : k_mc_d("k_material_coefficents", n_materials) {
+        k_mc_h = Kokkos::create_mirror_view(k_mc_d);
+    }
 } sfa_params_t;
 
 // In standard_field_advance.c
@@ -38,6 +45,12 @@ clear_jf( field_array_t * RESTRICT fa );
 
 void
 clear_rhof( field_array_t * RESTRICT fa );
+
+void
+clear_jf_kokkos( field_array_t * RESTRICT fa );
+
+void
+clear_rhof_kokkos( field_array_t * RESTRICT fa );
 
 // In advance_b.c
 
@@ -73,7 +86,15 @@ advance_e( field_array_t * RESTRICT fa,
            float                    frac );
 
 void
+advance_e_kokkos( field_array_t * RESTRICT fa,
+           float                    frac );
+
+void
 vacuum_advance_e( field_array_t * RESTRICT fa,
+                  float                    frac );
+
+void
+vacuum_advance_e_kokkos( field_array_t * RESTRICT fa,
                   float                    frac );
 
 // In energy_f.c
@@ -97,6 +118,14 @@ energy_f( /**/  double        * RESTRICT en, // 6 elem array
 
 void
 vacuum_energy_f( /**/  double        * RESTRICT en, // 6 elem array
+                 const field_array_t * RESTRICT fa );
+
+void
+energy_f_kokkos( /**/  double        * RESTRICT en, // 6 elem array
+          const field_array_t * RESTRICT fa );
+
+void
+vacuum_energy_f_kokkos( /**/  double        * RESTRICT en, // 6 elem array
                  const field_array_t * RESTRICT fa );
 
 // In compute_curl_b.c
@@ -254,9 +283,14 @@ vacuum_compute_rhob( field_array_t * RESTRICT fa );
 
 void
 compute_div_e_err( field_array_t * RESTRICT fa );
+void
+compute_div_e_err_kokkos( field_array_t * RESTRICT fa );
 
 void
 vacuum_compute_div_e_err( field_array_t * RESTRICT fa );
+
+void
+vacuum_compute_div_e_err_kokkos( field_array_t * RESTRICT fa );
 
 // In compute_rms_div_e_err.c
 
@@ -269,6 +303,9 @@ vacuum_compute_div_e_err( field_array_t * RESTRICT fa );
 
 double
 compute_rms_div_e_err( const field_array_t * RESTRICT fa );
+
+double
+compute_rms_div_e_err_kokkos( const field_array_t * RESTRICT fa );
 
 // In clean_div_e.c
 
@@ -283,7 +320,13 @@ void
 clean_div_e( field_array_t * RESTRICT fa );
 
 void
+clean_div_e_kokkos( field_array_t * RESTRICT fa );
+
+void
 vacuum_clean_div_e( field_array_t * RESTRICT fa );
+
+void
+vacuum_clean_div_e_kokkos( field_array_t * RESTRICT fa );
 
 // In compute_div_b_err.c
 
@@ -292,6 +335,9 @@ vacuum_clean_div_e( field_array_t * RESTRICT fa );
 
 void
 compute_div_b_err( field_array_t * RESTRICT fa );
+
+void
+compute_div_b_err_kokkos( field_array_t * RESTRICT fa );
 
 // In compute_rms_div_b_err.c
 
@@ -306,6 +352,9 @@ compute_div_b_err( field_array_t * RESTRICT fa );
 double
 compute_rms_div_b_err( const field_array_t * RESTRICT fa );
 
+double
+compute_rms_div_b_err_kokkos( const field_array_t * RESTRICT fa );
+
 // In clean_div_b.c
 
 // clean_div_b applies the following difference equation:
@@ -315,6 +364,9 @@ compute_rms_div_b_err( const field_array_t * RESTRICT fa );
 void
 clean_div_b( field_array_t * RESTRICT fa );
 
+void
+clean_div_b_kokkos( field_array_t * RESTRICT fa );
+
 // Internode functions
 
 // In remote.c
@@ -322,11 +374,20 @@ clean_div_b( field_array_t * RESTRICT fa );
 double
 synchronize_tang_e_norm_b( field_array_t * RESTRICT fa );
 
+double
+synchronize_tang_e_norm_b_kokkos( field_array_t * RESTRICT fa );
+
 void
 synchronize_jf( field_array_t * RESTRICT fa );
 
 void
 synchronize_rho( field_array_t * RESTRICT fa );
+
+void
+k_synchronize_rho(field_array_t* RESTRICT fa);
+
+void
+k_synchronize_jf( field_array_t * RESTRICT fa );
 
 // In local.c
 
@@ -335,7 +396,14 @@ local_ghost_tang_b( field_t      * ALIGNED(128) f,
                     const grid_t *              g );
 
 void
+k_local_ghost_tang_b(field_array_t * RESTRICT f,
+                    const grid_t * g);
+
+void
 local_ghost_norm_e( field_t      * ALIGNED(128) f,
+                    const grid_t *              g );
+void
+k_local_ghost_norm_e( field_array_t      * ALIGNED(128) f,
                     const grid_t *              g );
 
 void
@@ -343,11 +411,22 @@ local_ghost_div_b( field_t      * ALIGNED(128) f,
                    const grid_t *              g );
 
 void
+k_local_ghost_div_b( field_array_t      * ALIGNED(128) f,
+                   const grid_t *              g );
+
+void
 local_adjust_tang_e( field_t      * ALIGNED(128) f,
                      const grid_t *              g );
 
 void
+k_local_adjust_tang_e(field_array_t* RESTRICT f,
+                        const grid_t* g);
+
+void
 local_adjust_div_e( field_t      * ALIGNED(128) f,
+                    const grid_t *              g );
+void
+k_local_adjust_div_e( field_array_t      * ALIGNED(128) f,
                     const grid_t *              g );
 
 void
@@ -370,6 +449,18 @@ void
 local_adjust_rhob( field_t      * ALIGNED(128) f,
                    const grid_t *              g );
 
+void
+k_local_adjust_rhof(field_array_t* ALIGNED(128) f,
+                    const grid_t*               g);
+
+void
+k_local_adjust_rhob(field_array_t* ALIGNED(128) f,
+                    const grid_t*               g);
+
+void
+k_local_adjust_jf( field_array_t      * ALIGNED(128) f,
+                 const grid_t *              g );
+
 // In remote.c
 
 void
@@ -377,24 +468,69 @@ begin_remote_ghost_tang_b( field_t      * ALIGNED(128) f,
                            const grid_t *              g );
 
 void
+k_begin_remote_ghost_tang_b(field_array_t* RESTRICT f,
+                            const grid_t* g);
+
+void
+kokkos_begin_remote_ghost_tang_b(field_array_t* RESTRICT f,
+                            const grid_t* g,
+                            field_buffers_t& f_buffers);
+
+void
 end_remote_ghost_tang_b( field_t      * ALIGNED(128) f,
                          const grid_t *              g );
+
+void
+k_end_remote_ghost_tang_b(field_array_t* RESTRICT f,
+                            const grid_t* g);
+
+void
+kokkos_end_remote_ghost_tang_b(field_array_t* RESTRICT f,
+                            const grid_t* g,
+                            field_buffers_t& f_buffers);
 
 void
 begin_remote_ghost_norm_e( field_t      * ALIGNED(128) f,
                            const grid_t *              g );
 
 void
+k_begin_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
+                           const grid_t *              g );
+void
+kokkos_begin_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
+                           const grid_t *              g,
+                            field_buffers_t& f_buffers);
+
+void
 end_remote_ghost_norm_e( field_t      * ALIGNED(128) f,
                          const grid_t *              g );
+
+void
+k_end_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
+                         const grid_t *              g );
+
+void
+kokkos_end_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
+                         const grid_t *              g,
+                            field_buffers_t& f_buffers );
 
 void
 begin_remote_ghost_div_b( field_t      * ALIGNED(128) f,
                           const grid_t *              g );
 
 void
+k_begin_remote_ghost_div_b( field_array_t      * ALIGNED(128) f,
+                            const grid_t *              g,
+                            field_buffers_t& f_buffers );
+
+void
 end_remote_ghost_div_b( field_t      * ALIGNED(128) f,
                         const grid_t *              g );
+
+void
+k_end_remote_ghost_div_b( field_array_t      * ALIGNED(128) f,
+                        const grid_t *              g,
+                        field_buffers_t& f_buffers );
 
 
 #endif // _sfa_private_h_

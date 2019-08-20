@@ -139,7 +139,9 @@ if(ENABLE_KOKKOS_CUDA)
     set(KOKKOS_ENABLE_CUDA_UVM OFF)
 
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xcudafe --diag_suppress=esa_on_defaulted_function_ignored") # supress express cuda warnings
+
+    #set(KOKKOS_ARCH "Power9;Volta70")
+    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
 
     # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
     # see https://github.com/UoB-HPC/BabelStream/issues/16

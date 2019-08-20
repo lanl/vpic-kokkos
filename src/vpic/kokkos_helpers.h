@@ -12,10 +12,11 @@
 #define FIELD_VAR_COUNT 16
 #define FIELD_EDGE_COUNT 8
 #define PARTICLE_VAR_COUNT 7
-#define PARTICLE_MOVER_VAR_COUNT 4
+#define PARTICLE_MOVER_VAR_COUNT 3
 #define ACCUMULATOR_VAR_COUNT 3
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
+#define MATERIAL_COEFFICIENT_VAR_COUNT 13
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -26,6 +27,8 @@
   #define KOKKOS_SCATTER_ATOMIC Kokkos::Experimental::ScatterNonAtomic
   #define KOKKOS_LAYOUT Kokkos::LayoutRight
 #endif
+
+typedef int16_t material_id;
 
 // TODO: we dont need the [1] here
 using k_iterator_t = Kokkos::View<int[1]>;
@@ -49,7 +52,6 @@ using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 
 using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
-//using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], KOKKOS_LAYOUT, Kokkos::DefaultExecutionSpace, Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED, KOKKOS_SCATTER_ATOMIC>;
 using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
 using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
@@ -57,7 +59,9 @@ using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULAT
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
 
-using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT], KOKKOS_LAYOUT, Kokkos::DefaultExecutionSpace, Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED, KOKKOS_SCATTER_ATOMIC>;
+using k_material_coefficient_t = Kokkos::View<float* [MATERIAL_COEFFICIENT_VAR_COUNT]>;
+
+using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
 
 #define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
 #define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
@@ -141,14 +145,30 @@ namespace particle_mover_var {
 };
 
 namespace accumulator_var {
-  enum a_v { \
-    jx = 0, \
-    jy = 1, \
-    jz = 2, \
+  enum a_v { 
+    jx = 0, 
+    jy = 1, 
+    jz = 2, 
   };
 };
 
-
+namespace material_coeff_var {
+    enum mc_v {
+        decayx        = 0,
+        drivex        = 1,
+        decayy        = 2,
+        drivey        = 3,
+        decayz        = 4,
+        drivez        = 5,
+        rmux          = 6,
+        rmuy          = 7,
+        rmuz          = 8,
+        nonconductive = 9,
+        epsx          = 10,
+        epsy          = 11,
+        epsz          = 12,
+    };
+};
 
 void print_particles_d(
         k_particles_t particles,

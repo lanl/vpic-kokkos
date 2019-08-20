@@ -85,3 +85,51 @@ void mp_end_send( mp_t * mp, int sbuf ) {
   MPWrapper::instance().mp_end_send( mp, sbuf );
 }
 
+// Kokkos stuff
+void mp_begin_recv_kokkos( mp_t* mp_k, int port, int size, int sender, int tag, char* ALIGNED(128) recv_buf ) {
+  MPWrapper::instance().mp_begin_recv_kokkos( mp_k, port, size, sender, tag, recv_buf );
+}
+
+void mp_begin_send_kokkos( mp_t* mp_k, int port, int size, int receiver, int tag, char* ALIGNED(128) send_buf ) {
+  MPWrapper::instance().mp_begin_send_kokkos( mp_k, port, size, receiver, tag, send_buf );
+}
+
+void mp_end_recv_kokkos( mp_t* mp_k, int port ) {
+  MPWrapper::instance().mp_end_recv_kokkos( mp_k, port );
+}
+
+void mp_end_send_kokkos( mp_t* mp_k, int port ) {
+  MPWrapper::instance().mp_end_send_kokkos( mp_k, port );
+}
+
+void mp_begin_recv_k( mp_t * mp, int rbuf, int size, int sender, int tag, char* recv_buf ) {
+  MPWrapper::instance().mp_begin_recv_k( mp, rbuf, size, sender, tag, recv_buf );
+}
+
+void mp_begin_send_k( mp_t * mp, int sbuf, int size, int receiver, int tag, char* recv_buf ) {
+  MPWrapper::instance().mp_begin_send_k( mp, sbuf, size, receiver, tag, recv_buf );
+}
+
+void mp_end_recv_k( mp_t * mp, int rbuf ) {
+  MPWrapper::instance().mp_end_recv_k( mp, rbuf );
+}
+
+void mp_end_send_k( mp_t * mp, int sbuf ) {
+  MPWrapper::instance().mp_end_send_k( mp, sbuf );
+}
+
+void mp_set_send_buffer(mp_t* mp, int port, int size, char* sbuf) {
+  MPWrapper::instance().mp_set_send_buffer(mp, port, size, sbuf);
+}
+
+void mp_set_recv_buffer(mp_t* mp, int port, int size, char* rbuf) {
+  MPWrapper::instance().mp_set_recv_buffer(mp, port, size, rbuf);
+}
+
+void mp_unset_send_buffer(mp_t* mp, int port) {
+  MPWrapper::instance().mp_unset_send_buffer(mp, port);
+}
+
+void mp_unset_recv_buffer(mp_t* mp, int port) {
+  MPWrapper::instance().mp_unset_recv_buffer(mp, port);
+}

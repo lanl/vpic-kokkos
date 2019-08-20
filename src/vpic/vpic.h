@@ -137,6 +137,14 @@ public:
   int num_div_b_round;      // How many clean div b rounds per div b interval
   int sync_shared_interval; // How often to synchronize shared faces
 
+  // Track whether injection functions necessary
+  int field_injection_interval = -1;
+  int current_injection_interval = -1;
+  int particle_injection_interval = -1;
+  // Track whether injection functions are ported to Kokkos
+  bool kokkos_field_injection = false;
+  bool kokkos_current_injection = false;
+  bool kokkos_particle_injection = false;
   // Track how often the user wants us to copy data back from device
   int field_copy_interval = -1;
   int particle_copy_interval = -1;
@@ -290,10 +298,23 @@ public:
     return ix + grid->sy*iy + grid->sz*iz;
   }
 
+  inline int
+  voxel( const int ix, const int iy, const int iz, const int sy, const int sz ) {
+    return ix + sy*iy +sz*iz;
+  }
+
   inline field_t &
   field( const int ix, const int iy, const int iz ) {
     return field_array->f[ voxel(ix,iy,iz) ];
   }
+
+    inline k_field_t& get_field() {
+        return field_array->k_f_d;
+    }
+
+    inline float& k_field(const int ix, const int iy, const int iz, field_var::f_v member) {
+        return field_array->k_f_d(voxel(ix,iy,iz), member);
+    }
 
   inline interpolator_t &
   interpolator( const int v ) {

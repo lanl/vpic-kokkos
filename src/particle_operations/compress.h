@@ -191,6 +191,58 @@ struct DefaultCompress {
         });
     }
 
+//    static void test_compress(
+//            k_particles_t particles,
+//            k_particles_i_t particles_i,
+//            k_particle_i_movers_t particle_movers_i,
+//            const int32_t nm,
+//            const int32_t np,
+//            species_t* sp
+//            )
+//    {
+//        Kokkos::View<int*> replacements("replacement indices", nm);
+////        Kokkos::View<int*> safe_spots("copy", nm);
+//        Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Atomic> > safe_spots("copy", nm);
+//        Kokkos::parallel_for("remove particles", Kokkos::RangePolicy<>(0, nm), KOKKOS_LAMBDA(const int n) {
+//            int pm_i = particle_movers_i(n);
+//            int p_i = particles_i(n);
+//            particles_i(pm_i) = p_i >> 3;
+//
+//            safe_spots(n) = (np + nm) + n;
+//            if(pm_i >= np-nm) 
+//                safe_spots(pm_i-(np-nm)) = 0;
+//            if(pm_i < np-nm) {
+//                int counter = n;
+//                for(int j=0; j<nm; j++) {
+//                    if(safe_spots(j) == 0) {
+//                        continue;
+//                    } else if(counter > 0) {
+//                        counter--;
+//                    } else {
+//                        int spot = safe_spots(j);
+//                        replacements(n) = spot;
+//                        break;
+//                    }
+//                }
+//            }
+//        });
+//
+//        Kokkos::parallel_for("fill holes", Kokkos::RangePolicy<>(0, nm), KOKKOS_LAMBDA(const int n) {
+//            int pm_i = particle_movers_i(n);
+//            if(replacements(n) != 0) {
+//                int replace_id = replacements(n);
+//                particles(pm_i, particle_var::dx) = particles(replace_id, particle_var::dx);
+//                particles(pm_i, particle_var::dy) = particles(replace_id, particle_var::dy);
+//                particles(pm_i, particle_var::dz) = particles(replace_id, particle_var::dz);
+//                particles(pm_i, particle_var::ux) = particles(replace_id, particle_var::ux);
+//                particles(pm_i, particle_var::uy) = particles(replace_id, particle_var::uy);
+//                particles(pm_i, particle_var::uz) = particles(replace_id, particle_var::uz);
+//                particles(pm_i, particle_var::w)  = particles(replace_id, particle_var::w);
+//                particles_i(pm_i) = particles_i(replace_id);
+//            }
+//        });
+//    }
+
 };
 
 /*
@@ -211,6 +263,7 @@ struct SortCompress {
 template <typename Policy = DefaultCompress>
 struct ParticleCompressor : private Policy {
     using Policy::compress;
+//    using Policy::test_compress;
 };
 
 #endif //guard

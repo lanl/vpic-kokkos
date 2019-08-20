@@ -137,6 +137,10 @@ begin_initialization {
   clean_div_e_interval = status_interval;
   clean_div_b_interval = status_interval;
 
+    particle_injection_on = false;
+    current_injection_on = false;
+    field_injection_on = false;
+
   global->energies_interval  = status_interval;
   global->fields_interval    = status_interval;
   global->ehydro_interval    = status_interval;

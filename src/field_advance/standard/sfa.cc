@@ -10,15 +10,19 @@ static field_advance_kernels_t sfa_kernels = {
 
   advance_b,
   advance_e,
+  advance_e_kokkos,
 
   // Diagnostic interfaces
 
   energy_f,
+  energy_f_kokkos,
 
   // Accumulator interfaces
 
   clear_jf,   synchronize_jf,
   clear_rhof, synchronize_rho,
+  clear_jf_kokkos, k_synchronize_jf,
+  clear_rhof_kokkos,k_synchronize_rho,
 
   // Initialize interface
 
@@ -28,18 +32,25 @@ static field_advance_kernels_t sfa_kernels = {
   // Shared face cleaning interface
 
   synchronize_tang_e_norm_b,
+  synchronize_tang_e_norm_b_kokkos,
   
   // Electric field divergence cleaning interface
 
   compute_div_e_err,
   compute_rms_div_e_err,
   clean_div_e,
+  compute_div_e_err_kokkos,
+  compute_rms_div_e_err_kokkos,
+  clean_div_e_kokkos,
 
   // Magnetic field divergence cleaning interface
 
   compute_div_b_err,
   compute_rms_div_b_err,
-  clean_div_b
+  clean_div_b,
+  compute_div_b_err_kokkos,
+  compute_rms_div_b_err_kokkos,
+  clean_div_b_kokkos
 
 };
 
@@ -96,7 +107,8 @@ create_sfa_params( grid_t           * g,
 
   // Allocate the sfa parameters
 
-  MALLOC( p, 1 );
+    p = new sfa_params_t(n_mc);
+//  MALLOC( p, 1 );
   MALLOC_ALIGNED( p->mc, n_mc+2, 128 );
   p->n_mc = n_mc;
   p->damp = damp;
@@ -143,6 +155,22 @@ create_sfa_params( grid_t           * g,
     mc->epsz = m->epsz;
   }
 
+    Kokkos::parallel_for("Copy materials to device", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, n_mc), KOKKOS_LAMBDA (const int i) {
+        p->k_mc_h(i, material_coeff_var::decayx) = p->mc[i].decayx;
+        p->k_mc_h(i, material_coeff_var::drivex) = p->mc[i].drivex;
+        p->k_mc_h(i, material_coeff_var::decayy) = p->mc[i].decayy;
+        p->k_mc_h(i, material_coeff_var::drivey) = p->mc[i].drivey;
+        p->k_mc_h(i, material_coeff_var::decayz) = p->mc[i].decayz;
+        p->k_mc_h(i, material_coeff_var::drivez) = p->mc[i].drivez;
+        p->k_mc_h(i, material_coeff_var::rmux) = p->mc[i].rmux;
+        p->k_mc_h(i, material_coeff_var::rmuy) = p->mc[i].rmuy;
+        p->k_mc_h(i, material_coeff_var::rmuz) = p->mc[i].rmuz;
+        p->k_mc_h(i, material_coeff_var::nonconductive) = p->mc[i].nonconductive;
+        p->k_mc_h(i, material_coeff_var::epsx) = p->mc[i].epsx;
+        p->k_mc_h(i, material_coeff_var::epsy) = p->mc[i].epsy;
+        p->k_mc_h(i, material_coeff_var::epsz) = p->mc[i].epsz;
+    });
+    Kokkos::deep_copy(p->k_mc_d, p->k_mc_h);
   return p;
 }
 
@@ -205,6 +233,10 @@ new_standard_field_array( grid_t           * RESTRICT g,
     fa->kernel->compute_curl_b    = vacuum_compute_curl_b;
     fa->kernel->compute_div_e_err = vacuum_compute_div_e_err;
     fa->kernel->clean_div_e       = vacuum_clean_div_e;
+    fa->kernel->advance_e_kokkos  = vacuum_advance_e_kokkos;
+    fa->kernel->compute_div_e_err_kokkos = vacuum_compute_div_e_err_kokkos;
+    fa->kernel->clean_div_e_kokkos= vacuum_clean_div_e_kokkos;
+    fa->kernel->energy_f_kokkos   = vacuum_energy_f_kokkos;
   }
 
   REGISTER_OBJECT( fa, checkpt_standard_field_array,
@@ -240,6 +272,29 @@ clear_rhof( field_array_t * RESTRICT fa ) {
   field_t * RESTRICT ALIGNED(128) f = fa->f;
   const int nv = fa->g->nv;
   for( int v=0; v<nv; v++ ) f[v].rhof = 0;
+}
+
+// Kokkos versions
+void clear_jf_kokkos(field_array_t* RESTRICT fa) {
+    if(!fa) ERROR(("Bad args" ));
+    k_field_t kfield = fa->k_f_d;
+    const int nv = fa->g->nv;
+    Kokkos::parallel_for("clear_jf", Kokkos::RangePolicy<>(0,nv),
+    KOKKOS_LAMBDA(const int v) {
+        kfield(v, field_var::jfx) = 0;
+        kfield(v, field_var::jfy) = 0;
+        kfield(v, field_var::jfz) = 0;
+    });
+}
+
+void clear_rhof_kokkos(field_array_t* RESTRICT fa) {
+    if(!fa) ERROR(("Bad args" ));
+    k_field_t kfield = fa->k_f_d;
+    const int nv = fa->g->nv;
+    Kokkos::parallel_for("clear_rhof", Kokkos::RangePolicy<>(0,nv),
+    KOKKOS_LAMBDA(const int v) {
+        kfield(v, field_var::rhof) = 0;
+    });
 }
 
 // FIXME: ADD clear_jf_and_rhof CALL AND/OR ELIMINATE SOME OF THE ABOVE

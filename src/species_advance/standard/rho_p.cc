@@ -11,6 +11,7 @@
 #define IN_spa
 #include "spa_private.h"
 #include "Kokkos_Core.hpp"
+#include <mpi.h>
 
 
 #include "../../vpic/kokkos_helpers.h"
@@ -220,6 +221,88 @@ accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
 // computational domain; see note in synchronize_rhob about why this
 // is done this way.  All particles on the list must be inbounds.
 
+struct accum_rho_p_reduce {
+    typedef float value_type[];
+
+    k_field_t& kfield;
+    k_particles_t& kparticles;
+    k_particles_i_t& kparticles_i;
+    int sy;
+    int sz;
+    float q_8V;
+    int np;
+    int value_count;
+
+
+    KOKKOS_INLINE_FUNCTION
+    accum_rho_p_reduce(k_field_t& k_f_, k_particles_t& k_p_, k_particles_i_t& k_p_i_, int sy_, int sz_, float q_8V_, int np_, int nv_) : kfield(k_f_), kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_), value_count(nv_) {kfield = k_f_;}
+
+    KOKKOS_INLINE_FUNCTION
+    void init(value_type sums) const {
+        for(int j=0; j<value_count; ++j) { 
+            sums[j] = 0.0;
+        }
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    void join(volatile value_type dst, const volatile value_type src) const {
+        for(int i=0; i<value_count; i++) {
+            dst[i] += src[i];
+//            Kokkos::atomic_add(&(dst[i]),  src[i]);
+        }
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    void operator() (const int n, value_type sums) const {
+        float w0, w1, w2, w3, w4, w5, w6, w7, dz;
+
+        w0 = kparticles(n, particle_var::dx);
+        w1 = kparticles(n, particle_var::dy);
+        dz = kparticles(n, particle_var::dz);
+        int v = kparticles_i(n);
+        w7 = kparticles(n, particle_var::w) * q_8V;
+
+#   define FMA( x,y,z) ((z)+(x)*(y))
+#   define FNMS(x,y,z) ((z)-(x)*(y))
+        w6=FNMS(w0,w7,w7);                    // q(1-dx)
+        w7=FMA( w0,w7,w7);                    // q(1+dx)
+        w4=FNMS(w1,w6,w6); w5=FNMS(w1,w7,w7); // q(1-dx)(1-dy), q(1+dx)(1-dy)
+        w6=FMA( w1,w6,w6); w7=FMA( w1,w7,w7); // q(1-dx)(1+dy), q(1+dx)(1+dy)
+        w0=FNMS(dz,w4,w4); w1=FNMS(dz,w5,w5); w2=FNMS(dz,w6,w6); w3=FNMS(dz,w7,w7);
+        w4=FMA( dz,w4,w4); w5=FMA( dz,w5,w5); w6=FMA( dz,w6,w6); w7=FMA( dz,w7,w7);
+#   undef FNMS
+#   undef FMA
+
+        sums[v        ] += w0;
+        sums[v+1      ] += w1;
+        sums[v+sy     ] += w2;
+        sums[v+sy+1   ] += w3;
+        sums[v+sz     ] += w4;
+        sums[v+sz+1   ] += w5;
+        sums[v+sy+sz  ] += w6;
+        sums[v+sz+sy+1] += w7;
+/*
+        Kokkos::atomic_add(&(sums[v         ]), w0);
+        Kokkos::atomic_add(&(sums[v+1       ]), w1);
+        Kokkos::atomic_add(&(sums[v+sy      ]), w2);
+        Kokkos::atomic_add(&(sums[v+sy+1    ]), w3);
+        Kokkos::atomic_add(&(sums[v+sz      ]), w4);
+        Kokkos::atomic_add(&(sums[v+sz+1    ]), w5);
+        Kokkos::atomic_add(&(sums[v+sz+sy   ]), w6);
+        Kokkos::atomic_add(&(sums[v+sz+sy+1 ]), w7);
+*/
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    void final(value_type dst) const {
+        for(int i=0; i<value_count; i++) {
+            kfield(i, field_var::rhof) += dst[i];
+//            Kokkos::atomic_add(&(kfield(i, field_var::rhof)), dst[i]);
+        }
+    }
+};
+
+
 // TODO replace with scatter add view
 struct accum_rho_p {
     k_field_sa_t kfield;
@@ -231,7 +314,7 @@ struct accum_rho_p {
     int np;
 
     KOKKOS_INLINE_FUNCTION
-    accum_rho_p(k_field_sa_t k_f_sa_, k_particles_t k_p_, k_particles_i_t k_p_i_, int sy_, int sz_, float q_8V_, int np_) : kfield(k_f_sa_), kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_) {}
+    accum_rho_p(k_field_sa_t& k_f_sa_, k_particles_t& k_p_, k_particles_i_t& k_p_i_, int sy_, int sz_, float q_8V_, int np_) : kfield(k_f_sa_), kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_) {}
 
     KOKKOS_INLINE_FUNCTION
     void operator() (const int n) const {
@@ -387,11 +470,79 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     const int np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
+/*
+    float sums[sp->g->nv];
+    Kokkos::parallel_reduce("accumulate_rho_p", Kokkos::RangePolicy<>(0, np), accum_rho_p_reduce(kfield, kparticles, kparticles_i, sy, sz, q_8V, np, sp->g->nv), sums);
+*/
 
-    k_field_sa_t scatter_view = Kokkos::Experimental::create_scatter_view<Kokkos::Experimental::ScatterSum, KOKKOS_SCATTER_DUPLICATED,KOKKOS_SCATTER_ATOMIC>(kfield);
+    k_field_sa_t scatter_view = Kokkos::Experimental::create_scatter_view<>(kfield);
+/*
     Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
         accum_rho_p(scatter_view, kparticles, kparticles_i, sy, sz, q_8V, np));
+    Kokkos::fence();
     Kokkos::Experimental::contribute(kfield, scatter_view);
+    Kokkos::fence();
+*/
+/*
+    printf("Scatter View\n");
+    for(int i=0; i<fa->g->nv; i++) {
+        int rank = -1;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        if(kfield(i, field_var::rhof) >= 0.00001 && rank == 0)
+            printf("field(%d): rhof: (%f)\n" , i, kfield(i, field_var::rhof));
+    }
+*/
+
+    Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np), KOKKOS_LAMBDA(const int n) {
+        float w0, w1, w2, w3, w4, w5, w6, w7, dz;
+
+        w0 = kparticles(n, particle_var::dx);
+        w1 = kparticles(n, particle_var::dy);
+        dz = kparticles(n, particle_var::dz);
+        int v = kparticles_i(n);
+        w7 = kparticles(n, particle_var::w) * q_8V;
+
+#   define FMA( x,y,z) ((z)+(x)*(y))
+#   define FNMS(x,y,z) ((z)-(x)*(y))
+        w6=FNMS(w0,w7,w7);                    // q(1-dx)
+        w7=FMA( w0,w7,w7);                    // q(1+dx)
+        w4=FNMS(w1,w6,w6); w5=FNMS(w1,w7,w7); // q(1-dx)(1-dy), q(1+dx)(1-dy)
+        w6=FMA( w1,w6,w6); w7=FMA( w1,w7,w7); // q(1-dx)(1+dy), q(1+dx)(1+dy)
+        w0=FNMS(dz,w4,w4); w1=FNMS(dz,w5,w5); w2=FNMS(dz,w6,w6); w3=FNMS(dz,w7,w7);
+        w4=FMA( dz,w4,w4); w5=FMA( dz,w5,w5); w6=FMA( dz,w6,w6); w7=FMA( dz,w7,w7);
+#   undef FNMS
+#   undef FMA
+
+        auto scatter_view_access = scatter_view.access();
+
+        scatter_view_access(v,         field_var::rhof) += w0;
+        scatter_view_access(v+1,       field_var::rhof) += w1;
+        scatter_view_access(v+sy,      field_var::rhof) += w2;
+        scatter_view_access(v+sy+1,    field_var::rhof) += w3;
+        scatter_view_access(v+sz,      field_var::rhof) += w4;
+        scatter_view_access(v+sz+1,    field_var::rhof) += w5;
+        scatter_view_access(v+sz+sy,   field_var::rhof) += w6;
+        scatter_view_access(v+sz+sy+1, field_var::rhof) += w7;
+
+//        Kokkos::atomic_add(&kfield(v,         field_var::rhof), w0);
+//        Kokkos::atomic_add(&kfield(v+1,       field_var::rhof), w1);
+//        Kokkos::atomic_add(&kfield(v+sy,      field_var::rhof), w2);
+//        Kokkos::atomic_add(&kfield(v+sy+1,    field_var::rhof), w3);
+//        Kokkos::atomic_add(&kfield(v+sz,      field_var::rhof), w4);
+//        Kokkos::atomic_add(&kfield(v+sz+1,    field_var::rhof), w5);
+//        Kokkos::atomic_add(&kfield(v+sz+sy,   field_var::rhof), w6);
+//        Kokkos::atomic_add(&kfield(v+sz+sy+1, field_var::rhof), w7);
+
+    });
+    Kokkos::Experimental::contribute(kfield, scatter_view);
+
+//    for(int i=0; i<fa->g->nv; i++) {
+//        int rank = 0;
+//        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+//        //if(kfield(i, field_var::rhof) >= 0.00001 && rank == 0)
+//            printf("field(%d): rhof: (%f)\n" , i, kfield(i, field_var::rhof));
+//    }
+
 }
 
 void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, k_particles_i_t& kpart_i, k_particle_i_movers_t& k_part_movers_i, const grid_t* RESTRICT g, const float qsp, const int nm) {

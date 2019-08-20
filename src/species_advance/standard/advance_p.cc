@@ -34,9 +34,9 @@ advance_p_kokkos(
         const int nz)
 {
 
-  const float one            = 1.;
-  const float one_third      = 1./3.;
-  const float two_fifteenths = 2./15.;
+  constexpr float one            = 1.;
+  constexpr float one_third      = 1./3.;
+  constexpr float two_fifteenths = 2./15.;
 
   /*
   k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
@@ -151,7 +151,7 @@ sp_[id]->
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index)
     {
-
+//for(int p_index=0; p_index<np; p_index++) {
     float v0, v1, v2, v3, v4, v5;
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
 
@@ -315,6 +315,7 @@ sp_[id]->
         }
       }
     }
+//}
   });
 
 
@@ -327,6 +328,7 @@ sp_[id]->
   //args->seg[pipeline_rank].n_ignored = 0; // TODO: update this
   //delete(k_local_particle_movers_p);
   //return h_nm(0);
+
 }
 
 void
@@ -391,7 +393,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
 
   // I need to know the number of movers that got populated so I can call the
   // compress. Let's copy it back
-//  Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
+  Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
   // TODO: which way round should this copy be?
 
 //  int nm = sp->k_nm_h(0);
@@ -400,8 +402,16 @@ advance_p( /**/  species_t            * RESTRICT sp,
 
   // Copy particle mirror movers back so we have their data safe. Ready for
   // boundary_p_kokkos
-  Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
-  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
+  auto pc_d_subview = Kokkos::subview(sp->k_pc_d, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
+  auto pci_d_subview = Kokkos::subview(sp->k_pc_i_d, std::make_pair(0, sp->k_nm_h(0)));
+  auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
+  auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, sp->k_nm_h(0)));
+  KOKKOS_TIC();
+    Kokkos::deep_copy(pc_h_subview, pc_d_subview);
+    Kokkos::deep_copy(pci_h_subview, pci_d_subview);
+//  Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
+//  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
+  KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   //print_nm(sp->k_pm_d, nm);
 

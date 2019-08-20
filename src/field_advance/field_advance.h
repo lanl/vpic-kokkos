@@ -181,11 +181,14 @@ typedef struct field_advance_kernels {
 
   void (*advance_b)( struct field_array * RESTRICT fa, float frac );
   void (*advance_e)( struct field_array * RESTRICT fa, float frac );
+  void (*advance_e_kokkos)( struct field_array * RESTRICT fa, float frac );
 
   // Diagnostic interface
   // FIXME: MAY NEED MORE CAREFUL THOUGHT FOR CURVILINEAR SYSTEMS
 
   void (*energy_f)( /**/  double        * RESTRICT en, // 6 elem
+                    const struct field_array * RESTRICT fa );
+  void (*energy_f_kokkos)( /**/  double        * RESTRICT en, // 6 elem
                     const struct field_array * RESTRICT fa );
 
   // Accumulator interface
@@ -194,6 +197,10 @@ typedef struct field_advance_kernels {
   void (*synchronize_jf )( struct field_array * RESTRICT fa );
   void (*clear_rhof     )( struct field_array * RESTRICT fa );
   void (*synchronize_rho)( struct field_array * RESTRICT fa );
+  void (*clear_jf_kokkos)( struct field_array * RESTRICT fa );
+  void (*k_synchronize_jf )( struct field_array * RESTRICT fa );
+  void (*clear_rhof_kokkos     )( struct field_array * RESTRICT fa );
+  void (*k_synchronize_rho)( struct field_array * RESTRICT fa );
 
   // Initialization interface
 
@@ -203,18 +210,25 @@ typedef struct field_advance_kernels {
   // Local/remote shared face cleaning
 
   double (*synchronize_tang_e_norm_b)( struct field_array * RESTRICT fa );
+  double (*synchronize_tang_e_norm_b_kokkos)( struct field_array * RESTRICT fa );
 
   // Electric field divergence cleaning interface
 
   void   (*compute_div_e_err    )( /**/  struct field_array * RESTRICT fa );
   double (*compute_rms_div_e_err)( const struct field_array * RESTRICT fa );
   void   (*clean_div_e          )( /**/  struct field_array * RESTRICT fa );
+  void   (*compute_div_e_err_kokkos  )( /**/  struct field_array * RESTRICT fa );
+  double (*compute_rms_div_e_err_kokkos)(const struct field_array * RESTRICT fa);
+  void   (*clean_div_e_kokkos   )( /**/  struct field_array * RESTRICT fa );
 
   // Magnetic field divergence cleaning interface
 
   void   (*compute_div_b_err    )( /**/  struct field_array * RESTRICT fa );
   double (*compute_rms_div_b_err)( const struct field_array * RESTRICT fa );
   void   (*clean_div_b          )( /**/  struct field_array * RESTRICT fa );
+  void   (*compute_div_b_err_kokkos)( struct field_array* RESTRICT fa );
+  double (*compute_rms_div_b_err_kokkos)( const struct field_array * RESTRICT fa );
+  void   (*clean_div_b_kokkos   )( /**/  struct field_array * RESTRICT fa );
 
 } field_advance_kernels_t;
 
@@ -242,6 +256,65 @@ typedef struct field_array {
   }
 
 } field_array_t;
+
+typedef struct field_buffers {
+    Kokkos::View<float*>   xyz_sbuf_pos;
+    Kokkos::View<float*>   yzx_sbuf_pos;
+    Kokkos::View<float*>   zxy_sbuf_pos;
+    Kokkos::View<float*>   xyz_rbuf_pos;
+    Kokkos::View<float*>   yzx_rbuf_pos;
+    Kokkos::View<float*>   zxy_rbuf_pos;
+    Kokkos::View<float*>   xyz_sbuf_neg;
+    Kokkos::View<float*>   yzx_sbuf_neg;
+    Kokkos::View<float*>   zxy_sbuf_neg;
+    Kokkos::View<float*>   xyz_rbuf_neg;
+    Kokkos::View<float*>   yzx_rbuf_neg;
+    Kokkos::View<float*>   zxy_rbuf_neg;
+
+    Kokkos::View<float*>::HostMirror   xyz_sbuf_pos_h;
+    Kokkos::View<float*>::HostMirror   yzx_sbuf_pos_h;
+    Kokkos::View<float*>::HostMirror   zxy_sbuf_pos_h;
+    Kokkos::View<float*>::HostMirror   xyz_rbuf_pos_h;
+    Kokkos::View<float*>::HostMirror   yzx_rbuf_pos_h;
+    Kokkos::View<float*>::HostMirror   zxy_rbuf_pos_h;
+    Kokkos::View<float*>::HostMirror   xyz_sbuf_neg_h;
+    Kokkos::View<float*>::HostMirror   yzx_sbuf_neg_h;
+    Kokkos::View<float*>::HostMirror   zxy_sbuf_neg_h;
+    Kokkos::View<float*>::HostMirror   xyz_rbuf_neg_h;
+    Kokkos::View<float*>::HostMirror   yzx_rbuf_neg_h;
+    Kokkos::View<float*>::HostMirror   zxy_rbuf_neg_h;
+
+    field_buffers(int xyz_size, int yzx_size, int zxy_size) {
+        xyz_sbuf_pos = Kokkos::View<float*>("Send buffer for XYZ positive face", xyz_size);
+        xyz_rbuf_pos = Kokkos::View<float*>("Receive buffer for XYZ positive face", xyz_size);
+        yzx_sbuf_pos = Kokkos::View<float*>("Send buffer for YZX positive face", yzx_size);
+        yzx_rbuf_pos = Kokkos::View<float*>("Receive buffer for YZX positive face", yzx_size);
+        zxy_sbuf_pos = Kokkos::View<float*>("Send buffer for ZXY positive face", zxy_size);
+        zxy_rbuf_pos = Kokkos::View<float*>("Receive buffer for ZXY positive face", zxy_size);
+
+        xyz_sbuf_neg = Kokkos::View<float*>("Send buffer for XYZ negative face", xyz_size);
+        xyz_rbuf_neg = Kokkos::View<float*>("Receive buffer for XYZ negative face", xyz_size);
+        yzx_sbuf_neg = Kokkos::View<float*>("Send buffer for YZX negative face", yzx_size);
+        yzx_rbuf_neg = Kokkos::View<float*>("Receive buffer for YZX negative face", yzx_size);
+        zxy_sbuf_neg = Kokkos::View<float*>("Send buffer for ZXY negative face", zxy_size);
+        zxy_rbuf_neg = Kokkos::View<float*>("Receive buffer for ZXY negative face", zxy_size);
+
+        xyz_sbuf_pos_h = Kokkos::create_mirror_view(xyz_sbuf_pos);
+        yzx_sbuf_pos_h = Kokkos::create_mirror_view(yzx_sbuf_pos);
+        zxy_sbuf_pos_h = Kokkos::create_mirror_view(zxy_sbuf_pos);
+        xyz_rbuf_pos_h = Kokkos::create_mirror_view(xyz_rbuf_pos);
+        yzx_rbuf_pos_h = Kokkos::create_mirror_view(yzx_rbuf_pos);
+        zxy_rbuf_pos_h = Kokkos::create_mirror_view(zxy_rbuf_pos);
+
+        xyz_sbuf_neg_h = Kokkos::create_mirror_view(xyz_sbuf_neg);
+        yzx_sbuf_neg_h = Kokkos::create_mirror_view(yzx_sbuf_neg);
+        zxy_sbuf_neg_h = Kokkos::create_mirror_view(zxy_sbuf_neg);
+        xyz_rbuf_neg_h = Kokkos::create_mirror_view(xyz_rbuf_neg);
+        yzx_rbuf_neg_h = Kokkos::create_mirror_view(yzx_rbuf_neg);
+        zxy_rbuf_neg_h = Kokkos::create_mirror_view(zxy_rbuf_neg);
+    }
+} field_buffers_t;
+
 
 field_array_t *
 new_standard_field_array( grid_t           * RESTRICT g,
