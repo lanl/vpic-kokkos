@@ -136,6 +136,7 @@ if(ENABLE_KOKKOS_CUDA)
     add_definitions(-DENABLE_KOKKOS_CUDA)
     set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
     set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
+#    set(KOKKOS_ENABLE_CUDA_UVM ON)
     set(KOKKOS_ENABLE_CUDA_UVM OFF)
 
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
@@ -216,6 +217,12 @@ if(ENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
 
 find_package(Threads REQUIRED)
+
+#------------------------------------------------------------------------------#
+# CNL
+#------------------------------------------------------------------------------#
+include_directories(${CNL_DIR}/include/)
+
 
 #------------------------------------------------------------------------------#
 # Act on build options set in project.cmake

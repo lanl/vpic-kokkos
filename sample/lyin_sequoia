@@ -21,10 +21,15 @@ begin_globals {
   double e0;                   // peak amplitude of oscillating electric field
   double omega;                // angular freq. of the beam
   int field_interval;          // how often to dump field and hydro
+  int energies_interval;
   int particle_interval;       // how often to dump particle data
   int poynting_interval;       // how often to compute poynting flux on boundary
   int restart_interval;        // how often to write restart data
   int quota_check_interval;    // how often to check if quote exceeded
+  int eparticle_interval;       // how frequently to dump particle data
+  int ehydro_interval;
+  int Hhydro_interval;
+  int Hehydro_interval;
   double quota_sec;            // run quota in sec
   int rtoggle;                 // enable save of last 2 restart files for safety
   int load_particles;          // were particles loaded? 
@@ -221,8 +226,8 @@ begin_initialization {
   //double nppc               = 150;     // Ave. number of particles/cell in ea. species
   double nppc               = 10;     // Ave. number of particles/cell in ea. species
   int load_particles        = 1;      // Flag to turn on/off particle load 
-  int mobile_ions           = 0;      // Whether or not to push ions
-  double f_He               = 0;    // Ratio of number density of He to total ion density
+  int mobile_ions           = 1;      // Whether or not to push ions
+  double f_He               = 0.5;    // Ratio of number density of He to total ion density
   double f_H                = 1-f_He; // Ratio of number density of H  to total ion density
   int H_present             = ( (f_H !=0) ? 1 : 0 );  
   int He_present            = ( (f_He!=0) ? 1 : 0 );  
@@ -278,12 +283,23 @@ begin_initialization {
   double nsteps_cycle      = trunc_granular(2*M_PI/(dt*omega),1)+1; 
   dt                       = 2*M_PI/omega/nsteps_cycle; // nsteps_cycle time steps in one laser cycle
 
-  double t_stop            = 600001;               // Runtime in 1/wpe
-  int particle_interval    = 0; 
-  int poynting_interval    = int(M_PI/((omega+1.5)*dt));                  // Num. steps between dumping poynting flux
+//  double t_stop            = 600001;               // Runtime in 1/wpe
+  double t_stop            = 1001;               // Runtime in 1/wpe
+//  int particle_interval    = 0; 
+//  int poynting_interval    = int(M_PI/((omega+1.5)*dt));                  // Num. steps between dumping poynting flux
+////????????????????????????????????????????????????????????
+//  int field_interval       = int(100.0/dt);         // Num. steps between saving field, hydro data
+//  int velocity_interval    = int(100.0/dt);        // How frequently to dump binned velocity space data
+  int particle_interval    = 10; 
+  int poynting_interval    = 10;                  // Num. steps between dumping poynting flux
 //????????????????????????????????????????????????????????
-  int field_interval       = int(100.0/dt);         // Num. steps between saving field, hydro data
-  int velocity_interval    = int(100.0/dt);        // How frequently to dump binned velocity space data
+  int field_interval       = 10;         // Num. steps between saving field, hydro data
+  int energies_interval = field_interval;
+  int eparticle_interval = field_interval;       // how frequently to dump particle data
+  int ehydro_interval = field_interval;
+  int Hhydro_interval = field_interval;
+  int Hehydro_interval = field_interval;
+  int velocity_interval    = 10;        // How frequently to dump binned velocity space data
   int restart_interval     = int(150.0/dt);       // Num. steps between restart dumps
   int quota_check_interval = 20;
 
@@ -313,7 +329,6 @@ begin_initialization {
   double qi_He             = Z_He*f_He*Np_i/N_i;  // Charge per He macro ion 
   
   // Print simulation parameters
-
   sim_log("***** Simulation parameters *****");
   sim_log("* Processors:                     "<<nproc());
   sim_log("* Topology:                       "<<topology_x<<" "<<topology_y<<" "<<topology_z); 
@@ -358,7 +373,7 @@ begin_initialization {
   // Set up high level simulation parameters
 
   sim_log("Setting up high-level simulation parameters."); 
-  num_step             = int(t_stop/(dt)); 
+  num_step             = 1000; 
 
 //??????????????????????????????????????????????????????????
   status_interval      = 200; 
@@ -367,7 +382,7 @@ begin_initialization {
   clean_div_b_interval = status_interval/10; 
   
   // Turn off some of the spam
-  verbose = 1; 
+  verbose = 0; 
 
   // For maxwellian reinjectoin, we need more than the default number of 
   // passes (3) through the boundary handler
@@ -411,6 +426,11 @@ begin_initialization {
   global->vthi_H               = uthi_H; 
   global->vthi_He              = uthi_He; 
   global->velocity_interval    = velocity_interval; 
+
+  global->eparticle_interval = eparticle_interval;
+  global->ehydro_interval = ehydro_interval;
+  global->Hhydro_interval = Hhydro_interval;
+  global->Hehydro_interval = Hehydro_interval;
 
   // Set up the species
   // Allow additional local particles in case of non-uniformity.
@@ -594,7 +614,7 @@ begin_initialization {
 
   // Define strides and test that they evenly divide into grid->nx, ny, nz
   // ????????????????????????????????????????????????????????????????????????
-  int stride_x = 2, stride_y = 2, stride_z = 2; 
+  int stride_x = 1, stride_y = 1, stride_z = 1; 
   if ( int(grid->nx)%stride_x ) ERROR(("Stride doesn't evenly divide grid->nx.")); 
   if ( int(grid->ny)%stride_y ) ERROR(("Stride doesn't evenly divide grid->ny.")); 
   if ( int(grid->nz)%stride_z ) ERROR(("Stride doesn't evenly divide grid->nz.")); 
@@ -623,7 +643,7 @@ begin_initialization {
   // Electron hydro
 
   // relative path to electron species data from global header
-  sprintf(global->hedParams.baseDir, "ehydro");
+  sprintf(global->hedParams.baseDir, "hydro");
 
   // base file name for fields output
   sprintf(global->hedParams.baseFileName, "e_hydro");
@@ -643,7 +663,7 @@ begin_initialization {
   // Hydrogen hydro
 
   // relative path to electron species data from global header
-  sprintf(global->hHdParams.baseDir, "Hhydro");
+  sprintf(global->hHdParams.baseDir, "hydro");
 
   // base file name for fields output
   sprintf(global->hHdParams.baseFileName, "H_hydro");
@@ -663,7 +683,7 @@ begin_initialization {
   // Helium hydro
 
   // relative path to electron species data from global header
-  sprintf(global->hHedParams.baseDir, "Hehydro");
+  sprintf(global->hHedParams.baseDir, "hydro");
 
   // base file name for fields output
   sprintf(global->hHedParams.baseFileName, "He_hydro");
@@ -741,7 +761,10 @@ begin_initialization {
   sim_log ( "Electron species variable list: " << varlist );
 
   create_hydro_list(varlist, global->hHdParams);
-  sim_log ( "Ion species variable list: " << varlist );
+  sim_log ( "H species variable list: " << varlist );
+
+  create_hydro_list(varlist, global->hHedParams);
+  sim_log ( "He species variable list: " << varlist );
 
  /*------------------------------------------------------------------------*/
 
@@ -775,9 +798,77 @@ begin_initialization {
   // - (periodically) Print a status message
 } 
 
+#define should_dump(x)							\
+  (global->x##_interval>0 && remainder(step(), global->x##_interval) == 0)
 
 begin_diagnostics {
-  sim_log("step: " << step());
+//  sim_log("step: " << step());
+  /*--------------------------------------------------------------------------
+   * Normal rundata dump
+   *------------------------------------------------------------------------*/
+  if(step()==0) {
+    dump_mkdir("field");
+    dump_mkdir("hydro");
+    dump_mkdir("rundata");
+    dump_mkdir("particle");
+    
+    dump_grid("rundata/grid");
+    dump_materials("rundata/materials");
+    dump_species("rundata/species");
+    global_header("global", global->outputParams);
+  } // if
+  
+  /*--------------------------------------------------------------------------
+   * Normal rundata energies dump
+   *------------------------------------------------------------------------*/
+  if(should_dump(energies)) {
+    dump_energies("rundata/energies", step() == 0 ? 0 : 1);
+  } // if
+  
+  /*--------------------------------------------------------------------------
+   * Field data output
+   *------------------------------------------------------------------------*/
+  
+  if(step() == 1 || should_dump(field)) field_dump(global->fdParams);
+  
+  /*--------------------------------------------------------------------------
+   * Electron species output
+   *------------------------------------------------------------------------*/
+  
+  if(should_dump(ehydro)) hydro_dump("electron", global->hedParams);
+  
+  /*--------------------------------------------------------------------------
+   * Ion species output
+   *------------------------------------------------------------------------*/
+  
+  if(should_dump(Hhydro)) hydro_dump("H", global->hHdParams);
+
+  if(should_dump(Hehydro)) hydro_dump("He", global->hHedParams);
+  
+  /*--------------------------------------------------------------------------
+   * Energy Spectrum Output
+   *------------------------------------------------------------------------*/
+  
+  //#include "energy.cxx"   // Subroutine to compute energy spectrum diagnostic
+  
+  //Vadim: 
+  //#include "dissipation.cxx"
+  //#include "Ohms_exp_all_v2.cxx"
+  
+  /*--------------------------------------------------------------------------
+   * Restart dump
+   *------------------------------------------------------------------------*/
+  
+  // Dump particle data
+  char subdir[36];
+  if ( should_dump(eparticle) && step() !=0 &&
+       step() > 0*(global->field_interval)  ) {
+    sprintf(subdir,"particle/T.%d",step()); 
+    dump_mkdir(subdir);
+    sprintf(subdir,"particle/T.%d/eparticle",step()); 
+    dump_particles("electron",subdir);
+  }
+  
 } 
 
 begin_field_injection { 

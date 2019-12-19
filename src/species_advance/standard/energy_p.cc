@@ -157,7 +157,7 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
     en += (double)v0;
   }
 */
-    Kokkos::parallel_reduce(np, KOKKOS_LAMBDA(const int n, double& update) {
+    Kokkos::parallel_reduce("energy_p", np, KOKKOS_LAMBDA(const int n, double& update) {
         float dx = k_particles(n, particle_var::dx);
         float dy = k_particles(n, particle_var::dy);
         float dz = k_particles(n, particle_var::dz);

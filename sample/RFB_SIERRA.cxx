@@ -23,6 +23,8 @@
 // which only executes on a single processor, else deadlock will ensue.
 // Turn off logging by setting "#if 0"
 
+#define ENABLE_DIAGNOSTICS
+
 #if 0
 #  define DIAG_LOG(MSG)                                          \
    {                                                             \

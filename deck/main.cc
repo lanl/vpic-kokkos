@@ -124,7 +124,9 @@ int main(int argc, char** argv)
 
     // Call the actual advance until it's done
     // TODO: Can we make this into a bounded loop
+//Kokkos::Profiling::pushRegion("VPIC");
     while( simulation->advance() );
+//Kokkos::Profiling::popRegion();
 
     elapsed = wallclock() - elapsed;
 //    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();

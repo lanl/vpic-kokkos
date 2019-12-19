@@ -7,6 +7,11 @@
 
 #include "../material/material.h" // Need material_t
 
+//#include "cnl/all.h"
+//using cnl::fixed_point;
+#include "half.hpp"
+using half_float::half;
+
 // This module implements kokkos macros
 
 #define FIELD_VAR_COUNT 16
@@ -38,8 +43,12 @@ using k_field_edge_t = Kokkos::View<material_id* [FIELD_EDGE_COUNT]>;
 
 using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
 using k_particles_i_t = Kokkos::View<int*>;
+//using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT],Kokkos::CudaUVMSpace>;
+//using k_particles_i_t = Kokkos::View<int*,Kokkos::CudaUVMSpace>;
 
 // TODO: think about the layout here
+//using k_particle_copy_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutRight>;
+//using k_particle_i_copy_t = Kokkos::View<int*, Kokkos::LayoutRight>;
 using k_particle_copy_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutRight>;
 using k_particle_i_copy_t = Kokkos::View<int*, Kokkos::LayoutRight>;
 

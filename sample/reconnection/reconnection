@@ -315,7 +315,7 @@ begin_initialization {
   double ny = 64;
   double nz = 64;
 
-  nx /= 4; ny /= 4; nz /= 4; nppc /= 10;
+//  nx /= 4; ny /= 4; nz /= 4; nppc /= 10;
 
   // 128GB/node, 1 rank/core, 32 cores/node => 4GB/rank
   // rss (resident set size) as reported by aprun is maximum over ranks

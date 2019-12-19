@@ -682,6 +682,9 @@ begin_globals {
   int eparticle_interval;       // how frequently to dump particle data
   int Hparticle_interval;       //  
   int Heparticle_interval;      //
+//  int ehydro_interval;
+//  int Hhydro_interval;
+//  int Hehydro_interval;
   int mobile_ions;		// flag: 0 if ions are not to be pushed
   int H_present;                // flag nonzero when H ions are present. 
   int He_present;               // flag nonzero when He ions are present.  
@@ -864,7 +867,10 @@ begin_initialization {
 
   double nx                = 1200; //11232;
   double ny                = 1;    // 2D problem in x-z plane
-  double nz                = 54; //756;  // was 549;
+  double nz                = 145; //756;  // was 549;
+//  double nx                = 55; //11232;
+//  double ny                = 55;    // 2D problem in x-z plane
+//  double nz                = 55; //756;  // was 549;
 
 #if 0
   // DEBUG - run on 64 proc. 
@@ -917,7 +923,14 @@ begin_initialization {
   int fft_ex_interval     = poynting_interval ;       // Num steps between writing Ex in fft_slice
   int fft_ey_interval     = poynting_interval ;       // Num steps between writing Ey in fft_slice
   int fft_ez_interval     = poynting_interval ;       // Num steps between writing Ez in fft_slice
-  int field_interval       = int(0.25*wpe1ps/dt);         // Num. steps between saving field, hydro data
+//  int field_interval       = int(0.25*wpe1ps/dt);         // Num. steps between saving field, hydro data
+  int field_interval       = 1000000;         // Num. steps between saving field, hydro data
+//  int ehydro_interval = field_interval;
+//  int Hhydro_interval = field_interval;
+//  int Hehydro_interval = field_interval;
+//  int eparticle_interval = 200000*field_interval;
+//  int Hparticle_interval = 200000*field_interval;
+//  int Heparticle_interval = 200000*field_interval;
   int energies_interval = field_interval;
 // restart_interval has to be multiples of field_interval
   int restart_interval       = 8*field_interval;
@@ -928,6 +941,8 @@ begin_initialization {
 
   int ele_sort_freq       = 20*2; 
   int ion_sort_freq       = 5*ele_sort_freq; 
+//  int ele_sort_freq       = 10000000; 
+//  int ion_sort_freq       = 10000000; 
 
   double quota = 11.7;            // Run quota in hours.  
   double quota_sec = quota*3600;  // Run quota in seconds. 
@@ -1028,6 +1043,8 @@ begin_initialization {
     field_injection_interval = 1;
     particle_injection_interval = -1;
     current_injection_interval = -1;
+    field_copy_interval = -1;
+    particle_copy_interval = -1;
 
   // For maxwellian reinjection, we need more than the default number of
   // passes (3) through the boundary handler
@@ -1085,6 +1102,10 @@ begin_initialization {
   global->psum_integrated_poynting_flux_tally = 0; // initialization 
   global->psum_integration_offset             = psum_integration_offset; 
 
+//  global->ehydro_interval = ehydro_interval;
+//  global->Hhydro_interval = Hhydro_interval;
+//  global->Hehydro_interval = Hehydro_interval;
+
   // SETUP THE GRID ===============================================================
   sim_log("Setting up computational grid."); 
   grid->dx = hx;
@@ -1132,14 +1153,17 @@ begin_initialization {
   species_t *ion_H    = NULL;
   species_t *ion_He   = NULL;
   electron = define_species("electron", -1, 1, max_local_np, max_local_nm, ele_sort_freq, 1);
+//  electron = define_species("electron", -1, 1, max_local_np, max_local_nm, ele_sort_freq, 0);
   if ( mobile_ions ) {
     if ( H_present ) {
       sim_log("- Creating H species.");
       ion_H  = define_species("H",  Z_H,  mime_H,  max_local_np, max_local_nm, ion_sort_freq, 1);
+//      ion_H  = define_species("H",  Z_H,  mime_H,  max_local_np, max_local_nm, ion_sort_freq, 0);
     }
     if ( He_present ) {
       sim_log("- Creating He species.");
       ion_He = define_species("He", Z_He, mime_He, max_local_np, max_local_nm, ion_sort_freq, 1);
+//      ion_He = define_species("He", Z_He, mime_He, max_local_np, max_local_nm, ion_sort_freq, 0);
     }
   }
   // Light error checking on define_species 
@@ -1269,7 +1293,7 @@ begin_initialization {
     // sim_log( "ion_He   np = "<<ion_He  ->np ); 
   } // if 
 
-
+#ifdef PARAVIEW_DUMP
  /*--------------------------------------------------------------------------
   * New dump definition
   *------------------------------------------------------------------------*/
@@ -1291,13 +1315,10 @@ begin_initialization {
   *   ex0 ex1 ex2 ... exN ey0 ey1 ey2 ...
   *   
   *------------------------------------------------------------------------*/
-  sim_log("Setting up hydro and field diagnostics.");
+//  sim_log("Setting up hydro and field diagnostics.");
 
   global->fdParams.format = band;
   sim_log ( "Field output format          : band" );
-
-  // global->fdParams.format = band_interleave;
-  // sim_log ( "Field output format          : band_interleave" );
 
   global->hedParams.format = band;
   sim_log ( "Electron hydro output format : band" );
@@ -1357,7 +1378,7 @@ begin_initialization {
   // Fields
 
   // relative path to fields data from global header
-  sprintf(global->fdParams.baseDir, "field");
+  sprintf(global->fdParams.baseDir, "fields");
 
   // base file name for fields output
   sprintf(global->fdParams.baseFileName, "fields");
@@ -1377,7 +1398,7 @@ begin_initialization {
   // Electron hydro
 
   // relative path to electron species data from global header
-  sprintf(global->hedParams.baseDir, "ehydro");
+  sprintf(global->hedParams.baseDir, "hydro");
 
   // base file name for fields output
   sprintf(global->hedParams.baseFileName, "e_hydro");
@@ -1397,7 +1418,7 @@ begin_initialization {
   // Hydrogen hydro
 
   // relative path to electron species data from global header
-  sprintf(global->hHdParams.baseDir, "Hhydro");
+  sprintf(global->hHdParams.baseDir, "hydro");
 
   // base file name for fields output
   sprintf(global->hHdParams.baseFileName, "H_hydro");
@@ -1417,7 +1438,7 @@ begin_initialization {
   // Helium hydro
 
   // relative path to electron species data from global header
-  sprintf(global->hHedParams.baseDir, "Hehydro");
+  sprintf(global->hHedParams.baseDir, "hydro");
 
   // base file name for fields output
   sprintf(global->hHedParams.baseFileName, "He_hydro");
@@ -1495,7 +1516,10 @@ begin_initialization {
   sim_log ( "Electron species variable list: " << varlist );
 
   create_hydro_list(varlist, global->hHdParams);
-  sim_log ( "Ion species variable list: " << varlist );
+  sim_log ( "H species variable list: " << varlist );
+
+//  create_hydro_list(varlist, global->hHedParams);
+//  sim_log ( "He species variable list: " << varlist );
 
  /*------------------------------------------------------------------------*/
 
@@ -1527,8 +1551,11 @@ begin_initialization {
   // - Increment the time step
   // - Call user diagnostics
   // - (periodically) Print a status message
+#endif
 }
 
+#define should_dump(x)							\
+  (global->x##_interval>0 && remainder(step(), global->x##_interval) == 0)
 begin_diagnostics {
 #if 0 //disable DIAGNOSTICS 
    int mobile_ions=global->mobile_ions,
@@ -2765,6 +2792,203 @@ begin_diagnostics {
   sim_log( "All diagnostics done in begin_diagnostics" );
 #endif
 #endif 
+  
+//#ifdef PARAVIEW_DUMP  
+//  /*--------------------------------------------------------------------------
+//   * NOTE: YOU CANNOT DIRECTLY USE C FILE DESCRIPTORS OR SYSTEM CALLS ANYMORE
+//   *
+//   * To create a new directory, use:
+//   *
+//   *   dump_mkdir("full-path-to-directory/directoryname")
+//   *
+//   * To open a file, use: FileIO class
+//   *
+//   * Example for file creation and use:
+//   *
+//   *   // declare file and open for writing
+//   *   // possible modes are: io_write, io_read, io_append,
+//   *   // io_read_write, io_write_read, io_append_read
+//   *   FileIO fileIO;
+//   *   FileIOStatus status;
+//   *   status= fileIO.open("full-path-to-file/filename", io_write);
+//   *
+//   *   // formatted ASCII  output
+//   *   fileIO.print("format string", varg1, varg2, ...);
+//   *
+//   *   // binary output
+//   *   // Write n elements from array data to file.
+//   *   // T is the type, e.g., if T=double
+//   *   // fileIO.write(double * data, size_t n);
+//   *   // All basic types are supported.
+//   *   fileIO.write(T * data, size_t n);
+//   *
+//   *   // close file
+//   *   fileIO.close();
+//   *------------------------------------------------------------------------*/
+//  
+//  /*--------------------------------------------------------------------------
+//   * Data output directories
+//   * WARNING: The directory list passed to "global_header" must be
+//   * consistent with the actual directories where fields and species are
+//   * output using "field_dump" and "hydro_dump".
+//   *
+//   * DIRECTORY PATHES SHOULD BE RELATIVE TO
+//   * THE LOCATION OF THE GLOBAL HEADER!!!
+//   *------------------------------------------------------------------------*/
+//  
+//  
+//  /*--------------------------------------------------------------------------
+//   * Normal rundata dump
+//   *------------------------------------------------------------------------*/
+//  if(step()==0) {
+//    dump_mkdir("fields");
+//    dump_mkdir("hydro");
+//    dump_mkdir("rundata");
+//    dump_mkdir("restart1");  // 1st backup
+//    dump_mkdir("restart2");  // 2nd backup
+//    dump_mkdir("particle");
+//    
+//    dump_grid("rundata/grid");
+//    dump_materials("rundata/materials");
+//    dump_species("rundata/species");
+//    global_header("global", global->outputParams);
+//  } // if
+//  
+//  /*--------------------------------------------------------------------------
+//   * Normal rundata energies dump
+//   *------------------------------------------------------------------------*/
+//  if(should_dump(energies)) {
+//    dump_energies("rundata/energies", step() == 0 ? 0 : 1);
+//  } // if
+//  
+//  /*--------------------------------------------------------------------------
+//   * Field data output
+//   *------------------------------------------------------------------------*/
+//  
+//  if(step() == 1 || should_dump(field)) field_dump(global->fdParams);
+//  
+//  /*--------------------------------------------------------------------------
+//   * Electron species output
+//   *------------------------------------------------------------------------*/
+//  
+//  if(should_dump(ehydro)) hydro_dump("electron", global->hedParams);
+//  
+//  /*--------------------------------------------------------------------------
+//   * Ion species output
+//   *------------------------------------------------------------------------*/
+//  
+//  if(should_dump(Hhydro)) hydro_dump("H", global->hHdParams);
+//
+//  if(should_dump(Hehydro)) hydro_dump("He", global->hHedParams);
+//  
+//  /*--------------------------------------------------------------------------
+//   * Energy Spectrum Output
+//   *------------------------------------------------------------------------*/
+//  
+//  //#include "energy.cxx"   // Subroutine to compute energy spectrum diagnostic
+//  
+//  //Vadim: 
+//  //#include "dissipation.cxx"
+//  //#include "Ohms_exp_all_v2.cxx"
+//  
+//  /*--------------------------------------------------------------------------
+//   * Restart dump
+//   *------------------------------------------------------------------------*/
+///*
+//  // jgw: cannot write a restart every step with this logic, which is really
+//  //      only useful for debugging.
+//  // Vadim:
+//  if (step() && !(step()%global->restart_interval))
+//    global->write_restart = 1; // set restart flag. the actual restart files
+//                               // are written during the next step
+//  else
+//    if (global->write_restart) {
+//      
+//      global->write_restart = 0; // reset restart flag
+//      
+//      double dumpstart = uptime();
+//      
+//      if(!global->rtoggle) {
+//	global->rtoggle = 1;
+//	checkpt("restart1/restart", 0);
+//      }
+//      else {
+//	global->rtoggle = 0;
+//	checkpt("restart2/restart", 0);
+//      } // if
+//      
+//      mp_barrier(  ); // Just to be safe
+//      
+//      double dumpelapsed = uptime() - dumpstart;
+//      sim_log("Restart duration "<<dumpelapsed);
+//      
+//      //Vadim
+//      if (rank()==0) {
+//	
+//        FileIO fp_restart_info;
+//        if ( ! (fp_restart_info.open("latest_restart", io_write)==ok) )
+//	  ERROR(("Cannot open file."));
+//        if(!global->rtoggle) {
+//          fp_restart_info.print("restart restart2/restart\n");
+//        } else
+//          fp_restart_info.print("restart restart1/restart\n");
+//	
+//        fp_restart_info.close();
+//      }
+//      
+//    } // if
+//*/ 
+//  
+//  // Dump particle data
+//  char subdir[36];
+//  if ( should_dump(eparticle) && step() !=0 &&
+//       step() > 0*(global->field_interval)  ) {
+//    sprintf(subdir,"particle/T.%d",step()); 
+//    dump_mkdir(subdir);
+//    sprintf(subdir,"particle/T.%d/eparticle",step()); 
+//    dump_particles("electron",subdir);
+//  }
+//  
+//  // Shut down simulation when wall clock time exceeds global->quota_sec. 
+//  // Note that the mp_elapsed() is guaranteed to return the same value for all
+//  // processors (i.e., elapsed time on proc #0), and therefore the abort will 
+//  // be synchronized across processors. Note that this is only checked every
+//  // few timesteps to eliminate the expensive mp_elapsed call from every
+//  // timestep. mp_elapsed has an ALL_REDUCE in it!
+///* 
+//  //Vadim:
+//  if  (( step()>0 && global->quota_check_interval>0
+//	 && (step()&global->quota_check_interval)==0)
+//       || (global->write_end_restart) ) {
+//    if ( (global->write_end_restart) ) {
+//		   
+//      global->write_end_restart = 0; // reset restart flag
+//      
+//      sim_log( "Allowed runtime exceeded for this job.  Terminating....\n");
+//      double dumpstart = uptime();
+//      
+//      checkpt("restart0/restart",0);
+//      
+//      mp_barrier(  ); // Just to be safe
+//      sim_log( "Restart dump restart completed." );
+//      double dumpelapsed = uptime() - dumpstart;
+//      sim_log("Restart duration "<<dumpelapsed);
+//      
+//      //Vadim:
+//      if (rank()==0) {
+//	FileIO fp_restart_info;
+//	if ( ! (fp_restart_info.open("latest_restart", io_write)==ok) )
+//          ERROR(("Cannot open file."));
+//	fp_restart_info.print("restart restart0/restart");
+//	fp_restart_info.close();
+//      }
+//      
+//      exit(0); // Exit or abort?
+//    }
+//    if( uptime( ) > global->quota_sec )   global->write_end_restart = 1;
+//  }
+//*/  
+//#endif
 }// end diagnostics
 
 

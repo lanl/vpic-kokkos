@@ -25,41 +25,41 @@ vpic_simulation::initialize( int argc,
   auto nfaces_per_voxel = 6;
   g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
-//  // Do some consistency checks on user initialized fields
-//
-//  if( rank()==0 ) MESSAGE(( "Checking interdomain synchronization" ));
-//  TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
-//  if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
-//
-//  if( rank()==0 ) MESSAGE(( "Checking magnetic field divergence" ));
-//  TIC FAK->compute_div_b_err( field_array ); TOC( compute_div_b_err, 1 );
-//  TIC err = FAK->compute_rms_div_b_err( field_array ); TOC( compute_rms_div_b_err, 1 );
-//  if( rank()==0 ) MESSAGE(( "RMS error = %e (charge/volume)", err ));
-//  TIC FAK->clean_div_b( field_array ); TOC( clean_div_b, 1 );
-//
-//  // Load fields not initialized by the user
-//
-//  if( rank()==0 ) MESSAGE(( "Initializing radiation damping fields" ));
-//  TIC FAK->compute_curl_b( field_array ); TOC( compute_curl_b, 1 );
-//
-//  if( rank()==0 ) MESSAGE(( "Initializing bound charge density" ));
-//  TIC FAK->clear_rhof( field_array ); TOC( clear_rhof, 1 );
-//  LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
-//  TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
-//  TIC FAK->compute_rhob( field_array ); TOC( compute_rhob, 1 );
-//
-//  // Internal sanity checks
-//
-//  if( rank()==0 ) MESSAGE(( "Checking electric field divergence" ));
-//
-//  TIC FAK->compute_div_e_err( field_array ); TOC( compute_div_e_err, 1 );
-//  TIC err = FAK->compute_rms_div_e_err( field_array ); TOC( compute_rms_div_e_err, 1 );
-//  if( rank()==0 ) MESSAGE(( "RMS error = %e (charge/volume)", err ));
-//  TIC FAK->clean_div_e( field_array ); TOC( clean_div_e, 1 );
-//
-//  if( rank()==0 ) MESSAGE(( "Rechecking interdomain synchronization" ));
-//  TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
-//  if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
+  // Do some consistency checks on user initialized fields
+
+  if( rank()==0 ) MESSAGE(( "Checking interdomain synchronization" ));
+  TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+  if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
+
+  if( rank()==0 ) MESSAGE(( "Checking magnetic field divergence" ));
+  TIC FAK->compute_div_b_err( field_array ); TOC( compute_div_b_err, 1 );
+  TIC err = FAK->compute_rms_div_b_err( field_array ); TOC( compute_rms_div_b_err, 1 );
+  if( rank()==0 ) MESSAGE(( "RMS error = %e (charge/volume)", err ));
+  TIC FAK->clean_div_b( field_array ); TOC( clean_div_b, 1 );
+
+  // Load fields not initialized by the user
+
+  if( rank()==0 ) MESSAGE(( "Initializing radiation damping fields" ));
+  TIC FAK->compute_curl_b( field_array ); TOC( compute_curl_b, 1 );
+
+  if( rank()==0 ) MESSAGE(( "Initializing bound charge density" ));
+  TIC FAK->clear_rhof( field_array ); TOC( clear_rhof, 1 );
+  LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
+  TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+  TIC FAK->compute_rhob( field_array ); TOC( compute_rhob, 1 );
+
+  // Internal sanity checks
+
+  if( rank()==0 ) MESSAGE(( "Checking electric field divergence" ));
+
+  TIC FAK->compute_div_e_err( field_array ); TOC( compute_div_e_err, 1 );
+  TIC err = FAK->compute_rms_div_e_err( field_array ); TOC( compute_rms_div_e_err, 1 );
+  if( rank()==0 ) MESSAGE(( "RMS error = %e (charge/volume)", err ));
+  TIC FAK->clean_div_e( field_array ); TOC( clean_div_e, 1 );
+
+  if( rank()==0 ) MESSAGE(( "Rechecking interdomain synchronization" ));
+  TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+  if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
 
   KOKKOS_TIC();
   KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
@@ -79,48 +79,48 @@ vpic_simulation::initialize( int argc,
   
   // Do some consistency checks on user initialized fields
 
-  if( rank()==0 ) MESSAGE(( "Checking interdomain synchronization" ));
+//  if( rank()==0 ) MESSAGE(( "Checking interdomain synchronization" ));
+////  TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+//  TIC err = FAK->synchronize_tang_e_norm_b_kokkos( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+//  if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
+//
+//  if( rank()==0 ) MESSAGE(( "Checking magnetic field divergence" ));
+////  TIC FAK->compute_div_b_err( field_array ); TOC( compute_div_b_err, 1 );
+//  TIC FAK->compute_div_b_err_kokkos( field_array ); TOC( compute_div_b_err, 1 );
+////  TIC err = FAK->compute_rms_div_b_err( field_array ); TOC( compute_rms_div_b_err, 1 );
+//  TIC err = FAK->compute_rms_div_b_err_kokkos( field_array ); TOC( compute_rms_div_b_err, 1 );
+//  if( rank()==0 ) MESSAGE(( "RMS error = %e (charge/volume)", err ));
+////  TIC FAK->clean_div_b( field_array ); TOC( clean_div_b, 1 );
+//  TIC FAK->clean_div_b_kokkos( field_array ); TOC( clean_div_b, 1 );
+//
+//  // Load fields not initialized by the user
+//
+//  if( rank()==0 ) MESSAGE(( "Initializing radiation damping fields" ));
+////  TIC FAK->compute_curl_b( field_array ); TOC( compute_curl_b, 1 );
+//  TIC FAK->compute_curl_b_kokkos( field_array ); TOC( compute_curl_b, 1 );
+//
+//  if( rank()==0 ) MESSAGE(( "Initializing bound charge density" ));
+////  TIC FAK->clear_rhof( field_array ); TOC( clear_rhof, 1 );
+//  TIC FAK->clear_rhof_kokkos( field_array ); TOC( clear_rhof, 1 );
+////  LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
+//  LIST_FOR_EACH( sp, species_list ) TIC k_accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
+////  TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+//  TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+////  TIC FAK->compute_rhob( field_array ); TOC( compute_rhob, 1 );
+//  TIC FAK->compute_rhob_kokkos( field_array ); TOC( compute_rhob, 1 );
+//
+//  // Internal sanity checks
+//
+//  if( rank()==0 ) MESSAGE(( "Checking electric field divergence" ));
+//
+//  TIC FAK->compute_div_e_err( field_array ); TOC( compute_div_e_err, 1 );
+//  TIC err = FAK->compute_rms_div_e_err( field_array ); TOC( compute_rms_div_e_err, 1 );
+//  if( rank()==0 ) MESSAGE(( "RMS error = %e (charge/volume)", err ));
+//  TIC FAK->clean_div_e( field_array ); TOC( clean_div_e, 1 );
+//
+//  if( rank()==0 ) MESSAGE(( "Rechecking interdomain synchronization" ));
 //  TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
-  TIC err = FAK->synchronize_tang_e_norm_b_kokkos( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
-  if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
-
-  if( rank()==0 ) MESSAGE(( "Checking magnetic field divergence" ));
-//  TIC FAK->compute_div_b_err( field_array ); TOC( compute_div_b_err, 1 );
-  TIC FAK->compute_div_b_err_kokkos( field_array ); TOC( compute_div_b_err, 1 );
-//  TIC err = FAK->compute_rms_div_b_err( field_array ); TOC( compute_rms_div_b_err, 1 );
-  TIC err = FAK->compute_rms_div_b_err_kokkos( field_array ); TOC( compute_rms_div_b_err, 1 );
-  if( rank()==0 ) MESSAGE(( "RMS error = %e (charge/volume)", err ));
-//  TIC FAK->clean_div_b( field_array ); TOC( clean_div_b, 1 );
-  TIC FAK->clean_div_b_kokkos( field_array ); TOC( clean_div_b, 1 );
-
-  // Load fields not initialized by the user
-
-  if( rank()==0 ) MESSAGE(( "Initializing radiation damping fields" ));
-//  TIC FAK->compute_curl_b( field_array ); TOC( compute_curl_b, 1 );
-  TIC FAK->compute_curl_b_kokkos( field_array ); TOC( compute_curl_b, 1 );
-
-  if( rank()==0 ) MESSAGE(( "Initializing bound charge density" ));
-//  TIC FAK->clear_rhof( field_array ); TOC( clear_rhof, 1 );
-  TIC FAK->clear_rhof_kokkos( field_array ); TOC( clear_rhof, 1 );
-//  LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
-  LIST_FOR_EACH( sp, species_list ) TIC k_accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
-//  TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
-  TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
-//  TIC FAK->compute_rhob( field_array ); TOC( compute_rhob, 1 );
-  TIC FAK->compute_rhob_kokkos( field_array ); TOC( compute_rhob, 1 );
-
-  // Internal sanity checks
-
-  if( rank()==0 ) MESSAGE(( "Checking electric field divergence" ));
-
-  TIC FAK->compute_div_e_err( field_array ); TOC( compute_div_e_err, 1 );
-  TIC err = FAK->compute_rms_div_e_err( field_array ); TOC( compute_rms_div_e_err, 1 );
-  if( rank()==0 ) MESSAGE(( "RMS error = %e (charge/volume)", err ));
-  TIC FAK->clean_div_e( field_array ); TOC( clean_div_e, 1 );
-
-  if( rank()==0 ) MESSAGE(( "Rechecking interdomain synchronization" ));
-  TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
-  if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
+//  if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
 
   if( species_list ) {
 
@@ -151,6 +151,7 @@ vpic_simulation::initialize( int argc,
   update_profile( rank()==0 ); // Let the user know how initialization went
 }
 */
+
 void
 vpic_simulation::initialize( int argc,
                              char **argv ) {
@@ -252,6 +253,7 @@ vpic_simulation::initialize( int argc,
   if( rank()==0 ) MESSAGE(( "Initialization complete" ));
   update_profile( rank()==0 ); // Let the user know how initialization went
 }
+
 
 
 void
