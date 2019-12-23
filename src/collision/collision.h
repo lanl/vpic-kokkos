@@ -15,8 +15,6 @@
 struct collision_op;
 typedef struct collision_op collision_op_t;
 
-BEGIN_C_DECLS
-
 /* In collision.c */
 
 int
@@ -332,7 +330,5 @@ large_angle_coulomb( const char * RESTRICT name, /* Model name */
                      rng_pool_t * RESTRICT rp,   /* Entropy pool */
                      const double sample,        /* Sampling density */
                      const int interval );       /* How often to apply this */
-
-END_C_DECLS
 
 #endif /* _collision_h_ */

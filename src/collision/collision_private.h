@@ -20,8 +20,6 @@ struct collision_op {
   collision_op_t * next;
 };
 
-BEGIN_C_DECLS
-
 void
 checkpt_collision_op_internal( const collision_op_t * cop );
 
@@ -38,8 +36,6 @@ new_collision_op_internal( void * params,
 
 void
 delete_collision_op_internal( collision_op_t * cop );
-
-END_C_DECLS
 
 ///////////////////////////////////////////////////////////////////////////////
 // Langevin pipeline interface
