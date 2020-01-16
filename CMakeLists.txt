@@ -53,6 +53,10 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 
+option(VPIC_ENABLE_PROFILING "Whether to enable kokkos-tools profiling" OFF)
+
+option(VPIC_ENABLE_PAPI "Whether to enable papi profiling" OFF)
+
 set(KOKKOS_ARCH "Power9;Volta70" CACHE STRING "Architecture to use with Kokkos")
 
 
@@ -231,6 +235,14 @@ include_directories(${CNL_DIR}/include/)
 if (VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
+
+if (VPIC_ENABLE_PROFILING)
+    add_definitions(-DVPIC_ENABLE_PROFILING)
+endif(VPIC_ENABLE_PROFILING)
+
+if (VPIC_ENABLE_PAPI)
+    add_definitions(-DVPIC_ENABLE_PAPI)
+endif(VPIC_ENABLE_PAPI)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)

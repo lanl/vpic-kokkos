@@ -99,6 +99,12 @@ class species_t {
         species_id id;                      // Unique identifier for a species
         species_t* next = NULL;             // Next species in the list
 
+        k_particles_soa_t k_p_soa_d;
+        k_particles_host_soa_t k_p_soa_h;
+        k_particles_soa_t k_pc_soa_d;
+        k_particles_host_soa_t k_pc_soa_h;
+//        k_particles_host_soa_t k_pr_soa_h;
+
         k_particles_t k_p_d;                 // kokkos particles view on device
         k_particles_i_t k_p_i_d;             // kokkos particles view on device
 
@@ -142,6 +148,12 @@ class species_t {
             k_pr_i_h("k_particle_send_for_movers_i", n_pmovers),
             k_nm_d("k_nm") // size 1
     {
+        k_p_soa_d = k_particles_soa_t(n_particles);
+        k_p_soa_h = k_particles_host_soa_t(k_p_soa_d);
+        k_pc_soa_d = k_particles_soa_t(n_pmovers);
+        k_pc_soa_h = k_particles_host_soa_t(k_pc_soa_d);
+//        k_pr_soa_h = k_particles_host_soa_t(n_pmovers);
+
         k_p_h = Kokkos::create_mirror_view(k_p_d);
         k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
 
@@ -201,6 +213,11 @@ void
 advance_p( /**/  species_t            * RESTRICT sp,
            /**/  accumulator_array_t  * RESTRICT aa,
                  interpolator_array_t * RESTRICT ia );
+
+void
+advance_p_profiling( /**/  species_t            * RESTRICT sp,
+           /**/  accumulator_array_t  * RESTRICT aa,
+                 interpolator_array_t * RESTRICT ia, int64_t step);
 
 // In center_p.cxx
 
@@ -280,6 +297,7 @@ template<class particle_view_t, class particle_i_view_t, class accumulator_sa_t,
 int
 KOKKOS_INLINE_FUNCTION
 move_p_kokkos(
+//    const k_particles_soa_t& k_part,
     const particle_view_t& k_particles,
     const particle_i_view_t& k_particles_i,
     particle_mover_t* ALIGNED(16)  pm,
@@ -291,6 +309,15 @@ move_p_kokkos(
     const float qsp
 )
 {
+
+//  #define p_dx    k_part.dx(pi)
+//  #define p_dy    k_part.dy(pi)
+//  #define p_dz    k_part.dz(pi)
+//  #define p_ux    k_part.ux(pi)
+//  #define p_uy    k_part.uy(pi)
+//  #define p_uz    k_part.uz(pi)
+//  #define p_w     k_part.w(pi)
+//  #define pii     k_part.i(pi)
 
   #define p_dx    k_particles(pi, particle_var::dx)
   #define p_dy    k_particles(pi, particle_var::dy)
@@ -437,6 +464,13 @@ move_p_kokkos(
     // +/-1 _exactly_ for the particle.
 
     v0 = s_dir[axis];
+//if(axis == 0) {
+//    k_part.dx(pi) = v0; // Avoid roundoff fiascos--put the particle
+//} else if (axis == 1) {
+//    k_part.dy(pi) = v0; // Avoid roundoff fiascos--put the particle
+//} else {
+//    k_part.dz(pi) = v0; // Avoid roundoff fiascos--put the particle
+//}
     k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
                            // _exactly_ on the boundary.
     face = axis; if( v0>0 ) face += 3;
@@ -455,6 +489,13 @@ move_p_kokkos(
       // Hit a reflecting boundary condition.  Reflect the particle
       // momentum and remaining displacement and keep moving the
       // particle.
+//if(axis == 0) {
+//    k_part.ux(pi) = -k_part.ux(pi); // Avoid roundoff fiascos--put the particle
+//} else if (axis == 1) {
+//    k_part.uy(pi) = -k_part.uy(pi); // Avoid roundoff fiascos--put the particle
+//} else {
+//    k_part.uz(pi) = -k_part.uz(pi); // Avoid roundoff fiascos--put the particle
+//}
       k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
 
       // TODO: make this safer
@@ -480,6 +521,13 @@ move_p_kokkos(
 
     pii = neighbor - rangel;
     /**/                         // Note: neighbor - rangel < 2^31 / 6
+//if(axis == 0) {
+//    k_part.dx(pi) = -v0; // Avoid roundoff fiascos--put the particle
+//} else if (axis == 1) {
+//    k_part.dy(pi) = -v0; // Avoid roundoff fiascos--put the particle
+//} else {
+//    k_part.dz(pi) = -v0; // Avoid roundoff fiascos--put the particle
+//}
     k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
   }
   #undef p_dx

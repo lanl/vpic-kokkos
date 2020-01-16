@@ -16,6 +16,7 @@
  */
 struct DefaultCompress {
     static void compress(
+//            k_particles_soa_t part,
             k_particles_t particles,
             k_particles_i_t particles_i,
             k_particle_i_movers_t particle_movers_i,
@@ -75,6 +76,17 @@ struct DefaultCompress {
 
         Kokkos::View<int*> clean_up_from("clean up from", nm);
         Kokkos::View<int*> clean_up_to("clean up to", nm);
+
+//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
+//  part.dx(i) = particles(i, particle_var::dx);
+//  part.dy(i) = particles(i, particle_var::dy);
+//  part.dz(i) = particles(i, particle_var::dz);
+//  part.ux(i) = particles(i, particle_var::ux);
+//  part.uy(i) = particles(i, particle_var::uy);
+//  part.uz(i) = particles(i, particle_var::uz);
+//  part.w(i) = particles(i, particle_var::w);
+//  part.i(i) = particles_i(i);
+//});
 
         // Loop over 2*nm, which is enough to guarantee you `nm` non-gaps
         // Build a list of safe lookups
@@ -169,6 +181,15 @@ struct DefaultCompress {
             particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
             particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
             particles_i(write_to) = particles_i(pull_from);
+
+//            part.dx(write_to) = part.dx(pull_from);
+//            part.dy(write_to) = part.dy(pull_from);
+//            part.dz(write_to) = part.dz(pull_from);
+//            part.ux(write_to) = part.ux(pull_from);
+//            part.uy(write_to) = part.uy(pull_from);
+//            part.uz(write_to) = part.uz(pull_from);
+//            part.w(write_to) = part.w(pull_from);
+//            part.i(write_to) = part.i(pull_from);
         });
 
         Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
@@ -188,7 +209,27 @@ struct DefaultCompress {
             particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
             particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
             particles_i(write_to) = particles_i(pull_from);
+
+//            part.dx(write_to) = part.dx(pull_from);
+//            part.dy(write_to) = part.dy(pull_from);
+//            part.dz(write_to) = part.dz(pull_from);
+//            part.ux(write_to) = part.ux(pull_from);
+//            part.uy(write_to) = part.uy(pull_from);
+//            part.uz(write_to) = part.uz(pull_from);
+//            part.w(write_to) = part.w(pull_from);
+//            part.i(write_to) = part.i(pull_from);
         });
+
+//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
+//  particles(i, particle_var::dx) = part.dx(i);
+//  particles(i, particle_var::dy) = part.dy(i);
+//  particles(i, particle_var::dz) = part.dz(i);
+//  particles(i, particle_var::ux) = part.ux(i);
+//  particles(i, particle_var::uy) = part.uy(i);
+//  particles(i, particle_var::uz) = part.uz(i);
+//  particles(i, particle_var::w) = part.w(i);
+//  particles_i(i) = part.i(i);
+//});
     }
 
 //    static void test_compress(

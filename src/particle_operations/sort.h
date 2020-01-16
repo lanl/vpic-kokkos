@@ -11,6 +11,7 @@
 struct DefaultSort {
     // TODO: should the sort interface just take the sp?
     static void sort(
+//            k_particles_soa_t part,
             k_particles_t particles,
             k_particles_i_t particles_i,
             const int32_t np,
@@ -34,6 +35,15 @@ struct DefaultSort {
         bin_sort.create_permute_vector();
         bin_sort.sort(particles);
         bin_sort.sort(particles_i);
+
+//        bin_sort.sort(part.dx);
+//        bin_sort.sort(part.dy);
+//        bin_sort.sort(part.dz);
+//        bin_sort.sort(part.ux);
+//        bin_sort.sort(part.uy);
+//        bin_sort.sort(part.uz);
+//        bin_sort.sort(part.w);
+//        bin_sort.sort(part.i);
     }
 
 };

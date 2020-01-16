@@ -6,9 +6,11 @@
 #include <stdio.h>
 #include "spa_private.h"
 #include "../../vpic/kokkos_helpers.h"
+#include "../../vpic/vpic.h"
 
 void
 advance_p_kokkos(
+//        k_particles_soa_t& k_part,
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
         k_particle_copy_t& k_particle_copy,
@@ -37,6 +39,17 @@ advance_p_kokkos(
   constexpr float one            = 1.;
   constexpr float one_third      = 1./3.;
   constexpr float two_fifteenths = 2./15.;
+
+//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
+//  k_part.dx(i) = k_particles(i, particle_var::dx);
+//  k_part.dy(i) = k_particles(i, particle_var::dy);
+//  k_part.dz(i) = k_particles(i, particle_var::dz);
+//  k_part.ux(i) = k_particles(i, particle_var::ux);
+//  k_part.uy(i) = k_particles(i, particle_var::uy);
+//  k_part.uz(i) = k_particles(i, particle_var::uz);
+//  k_part.w(i) = k_particles(i, particle_var::w);
+//  k_part.i(i) = k_particles_i(i);
+//});
 
   /*
   k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
@@ -94,6 +107,15 @@ sp_[id]->
           POW2_CEIL((args->nx+2)*(args->ny+2)*(args->nz+2),2);
 */
   // Process particles for this pipeline
+
+//  #define p_dx    k_part.dx(p_index)
+//  #define p_dy    k_part.dy(p_index)
+//  #define p_dz    k_part.dz(p_index)
+//  #define p_ux    k_part.ux(p_index)
+//  #define p_uy    k_part.uy(p_index)
+//  #define p_uz    k_part.uz(p_index)
+//  #define p_w     k_part.w(p_index)
+//  #define pii     k_part.i(p_index)
 
   #define p_dx    k_particles(p_index, particle_var::dx)
   #define p_dy    k_particles(p_index, particle_var::dy)
@@ -281,7 +303,8 @@ sp_[id]->
       local_pm->i     = p_index;
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
-      if( move_p_kokkos( k_particles, k_particles_i, local_pm,
+//      if( move_p_kokkos(k_part, k_particles, k_particles_i, local_pm,
+      if( move_p_kokkos(k_particles, k_particles_i, local_pm,
                          k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
         if( k_nm(0)<max_nm ) {
           const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
@@ -317,6 +340,17 @@ sp_[id]->
     }
 //}
   });
+
+//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
+//  k_particles(i, particle_var::dx) = k_part.dx(i);
+//  k_particles(i, particle_var::dy) = k_part.dy(i);
+//  k_particles(i, particle_var::dz) = k_part.dz(i);
+//  k_particles(i, particle_var::ux) = k_part.ux(i);
+//  k_particles(i, particle_var::uy) = k_part.uy(i);
+//  k_particles(i, particle_var::uz) = k_part.uz(i);
+//  k_particles(i, particle_var::w) = k_part.w(i);
+//  k_particles_i(i) = k_part.i(i);
+//});
 
 
   // TODO: abstract this manual data copy
@@ -367,6 +401,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
   advance_p_kokkos(
+//          sp->k_p_soa_d,
           sp->k_p_d,
           sp->k_p_i_d,
           sp->k_pc_d,
@@ -412,6 +447,147 @@ advance_p( /**/  species_t            * RESTRICT sp,
 //  Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
 //  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+
+  //print_nm(sp->k_pm_d, nm);
+
+/*
+  args->p0       = sp->p;
+  args->pm       = sp->pm;
+  args->a0       = aa->a;
+  args->f0       = ia->i;
+  args->seg      = seg;
+  args->g        = sp->g;
+
+  args->qdt_2mc  = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+  args->cdt_dx   = sp->g->cvac*sp->g->dt*sp->g->rdx;
+  args->cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
+  args->cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
+  args->qsp      = sp->q;
+
+  args->np       = sp->np;
+  args->max_nm   = sp->max_nm;
+  args->nx       = sp->g->nx;
+  args->ny       = sp->g->ny;
+  args->nz       = sp->g->nz;
+
+  // Have the host processor do the last incomplete bundle if necessary.
+  // Note: This is overlapped with the pipelined processing.  As such,
+  // it uses an entire accumulator.  Reserving an entire accumulator
+  // for the host processor to handle at most 15 particles is wasteful
+  // of memory.  It is anticipated that it may be useful at some point
+  // in the future have pipelines accumulating currents while the host
+  // processor is doing other more substantive work (e.g. accumulating
+  // currents from particles received from neighboring nodes).
+  // However, it is worth reconsidering this at some point in the
+  // future.
+
+  EXEC_PIPELINES( advance_p, args, 0 );
+  WAIT_PIPELINES();
+
+  // FIXME: HIDEOUS HACK UNTIL BETTER PARTICLE MOVER SEMANTICS
+  // INSTALLED FOR DEALING WITH PIPELINES.  COMPACT THE PARTICLE
+  // MOVERS TO ELIMINATE HOLES FROM THE PIPELINING.
+
+
+  sp->nm = 0;
+  for( rank=0; rank<=N_PIPELINE; rank++ ) {
+    if( args->seg[rank].n_ignored )
+      WARNING(( "Pipeline %i ran out of storage for %i movers",
+                rank, args->seg[rank].n_ignored ));
+    if( sp->pm+sp->nm != args->seg[rank].pm )
+      MOVE( sp->pm+sp->nm, args->seg[rank].pm, args->seg[rank].nm );
+    sp->nm += args->seg[rank].nm;
+  }
+  */
+  //sp->nm = nm;
+}
+
+void
+advance_p_profiling( /**/  species_t            * RESTRICT sp,
+           /**/  accumulator_array_t  * RESTRICT aa,
+           interpolator_array_t * RESTRICT ia, int64_t step ) {
+  //DECLARE_ALIGNED_ARRAY( advance_p_pipeline_args_t, 128, args, 1 );
+  //DECLARE_ALIGNED_ARRAY( particle_mover_seg_t, 128, seg, MAX_PIPELINE+1 );
+  //int rank;
+
+  if( !sp )
+  {
+    ERROR(( "Bad args" ));
+  }
+  if( !aa )
+  {
+    ERROR(( "Bad args" ));
+  }
+  if( !ia  )
+  {
+    ERROR(( "Bad args" ));
+  }
+  if( sp->g!=aa->g )
+  {
+    ERROR(( "Bad args" ));
+  }
+  if( sp->g!=ia->g )
+  {
+    ERROR(( "Bad args" ));
+  }
+
+
+  float qdt_2mc  = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+  float cdt_dx   = sp->g->cvac*sp->g->dt*sp->g->rdx;
+  float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
+  float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
+
+Kokkos::Profiling::pushRegion(" " + std::to_string(step) + " " + std::string(sp->name) + " advance_p_kokkos");
+  advance_p_kokkos(
+//          sp->k_p_soa_d,
+          sp->k_p_d,
+          sp->k_p_i_d,
+          sp->k_pc_d,
+          sp->k_pc_i_d,
+          sp->k_pm_d,
+          sp->k_pm_i_d,
+          aa->k_a_sa,
+          ia->k_i_d,
+          sp->k_nm_d,
+          sp->g->k_neighbor_d,
+          sp->g,
+          qdt_2mc,
+          cdt_dx,
+          cdt_dy,
+          cdt_dz,
+          sp->q,
+          aa->na,
+          sp->np,
+          sp->max_nm,
+          sp->g->nx,
+          sp->g->ny,
+          sp->g->nz
+  );
+Kokkos::Profiling::popRegion();
+
+  // I need to know the number of movers that got populated so I can call the
+  // compress. Let's copy it back
+  Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
+  // TODO: which way round should this copy be?
+
+//  int nm = sp->k_nm_h(0);
+
+//  printf("nm = %d \n", nm);
+
+  // Copy particle mirror movers back so we have their data safe. Ready for
+  // boundary_p_kokkos
+  auto pc_d_subview = Kokkos::subview(sp->k_pc_d, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
+  auto pci_d_subview = Kokkos::subview(sp->k_pc_i_d, std::make_pair(0, sp->k_nm_h(0)));
+  auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
+  auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, sp->k_nm_h(0)));
+Kokkos::Profiling::pushRegion(" " + std::to_string(step) + " " + std::string(sp->name) + " advance_p Copy particle copies to host");
+  KOKKOS_TIC();
+    Kokkos::deep_copy(pc_h_subview, pc_d_subview);
+    Kokkos::deep_copy(pci_h_subview, pci_d_subview);
+//  Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
+//  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
+  KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+Kokkos::Profiling::popRegion();
 
   //print_nm(sp->k_pm_d, nm);
 

@@ -466,6 +466,8 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     k_particles_t kparticles = sp->k_p_d;
     k_particles_i_t kparticles_i = sp->k_p_i_d;
 
+//    k_particles_soa_t kpart = sp->k_p_soa_d;
+
     const float q_8V = (sp->q)*(sp->g->r8V);
     const int np = sp->np;
     const int sy = sp->g->sy;
@@ -493,6 +495,17 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     }
 */
 
+//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
+//  kpart.dx(i) = kparticles(i, particle_var::dx);
+//  kpart.dy(i) = kparticles(i, particle_var::dy);
+//  kpart.dz(i) = kparticles(i, particle_var::dz);
+//  kpart.ux(i) = kparticles(i, particle_var::ux);
+//  kpart.uy(i) = kparticles(i, particle_var::uy);
+//  kpart.uz(i) = kparticles(i, particle_var::uz);
+//  kpart.w(i) = kparticles(i, particle_var::w);
+//  kpart.i(i) = kparticles_i(i);
+//});
+
     Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np), KOKKOS_LAMBDA(const int n) {
         float w0, w1, w2, w3, w4, w5, w6, w7, dz;
 
@@ -501,6 +514,12 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         dz = kparticles(n, particle_var::dz);
         int v = kparticles_i(n);
         w7 = kparticles(n, particle_var::w) * q_8V;
+
+//        w0 = kpart.dx(n);
+//        w1 = kpart.dy(n);
+//        dz = kpart.dz(n);
+//        int v = kpart.i(n);
+//        w7 = kpart.w(n) * q_8V;
 
 #   define FMA( x,y,z) ((z)+(x)*(y))
 #   define FNMS(x,y,z) ((z)-(x)*(y))
