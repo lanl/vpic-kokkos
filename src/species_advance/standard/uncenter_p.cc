@@ -10,21 +10,21 @@ void uncenter_p_kokkos(k_particles_soa_t k_part, k_particles_t k_particles, k_pa
   const float two_fifteenths = 2./15.;
 
   // Particle defines (p->x)
-//  #define p_dx    k_particles(p_index, particle_var::dx) 
-//  #define p_dy    k_particles(p_index, particle_var::dy)
-//  #define p_dz    k_particles(p_index, particle_var::dz)
-//  #define p_ux    k_particles(p_index, particle_var::ux) // Load momentum
-//  #define p_uy    k_particles(p_index, particle_var::uy)
-//  #define p_uz    k_particles(p_index, particle_var::uz)
-//  #define pii     k_particles_i(p_index)
+  #define p_dx    k_particles(p_index, particle_var::dx) 
+  #define p_dy    k_particles(p_index, particle_var::dy)
+  #define p_dz    k_particles(p_index, particle_var::dz)
+  #define p_ux    k_particles(p_index, particle_var::ux) // Load momentum
+  #define p_uy    k_particles(p_index, particle_var::uy)
+  #define p_uz    k_particles(p_index, particle_var::uz)
+  #define pii     k_particles_i(p_index)
 
-  #define p_dx    k_part.dx(p_index) 
-  #define p_dy    k_part.dy(p_index)
-  #define p_dz    k_part.dz(p_index)
-  #define p_ux    k_part.ux(p_index) // Load momentum
-  #define p_uy    k_part.uy(p_index)
-  #define p_uz    k_part.uz(p_index)
-  #define pii     k_part.i(p_index)
+//  #define p_dx    k_part.dx(p_index) 
+//  #define p_dy    k_part.dy(p_index)
+//  #define p_dz    k_part.dz(p_index)
+//  #define p_ux    k_part.ux(p_index) // Load momentum
+//  #define p_uy    k_part.uy(p_index)
+//  #define p_uz    k_part.uz(p_index)
+//  #define pii     k_part.i(p_index)
 
   // Interpolator Defines (f->x)
   #define f_cbx k_interp(ii, interpolator_var::cbx)
@@ -50,16 +50,16 @@ void uncenter_p_kokkos(k_particles_soa_t k_part, k_particles_t k_particles, k_pa
   #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
   #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
 
-Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
-  k_part.dx(i) = k_particles(i, particle_var::dx);
-  k_part.dy(i) = k_particles(i, particle_var::dy);
-  k_part.dz(i) = k_particles(i, particle_var::dz);
-  k_part.ux(i) = k_particles(i, particle_var::ux);
-  k_part.uy(i) = k_particles(i, particle_var::uy);
-  k_part.uz(i) = k_particles(i, particle_var::uz);
-  k_part.w(i) = k_particles(i, particle_var::w);
-  k_part.i(i) = k_particles_i(i);
-});
+//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
+//  k_part.dx(i) = k_particles(i, particle_var::dx);
+//  k_part.dy(i) = k_particles(i, particle_var::dy);
+//  k_part.dz(i) = k_particles(i, particle_var::dz);
+//  k_part.ux(i) = k_particles(i, particle_var::ux);
+//  k_part.uy(i) = k_particles(i, particle_var::uy);
+//  k_part.uz(i) = k_particles(i, particle_var::uz);
+//  k_part.w(i) = k_particles(i, particle_var::w);
+//  k_part.i(i) = k_particles_i(i);
+//});
 
 
   // this goes to np using p_index
@@ -97,16 +97,16 @@ Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
     p_uz += haz;
   });
 
-Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
-  k_particles(i, particle_var::dx) = k_part.dx(i);
-  k_particles(i, particle_var::dy) = k_part.dy(i);
-  k_particles(i, particle_var::dz) = k_part.dz(i);
-  k_particles(i, particle_var::ux) = k_part.ux(i);
-  k_particles(i, particle_var::uy) = k_part.uy(i);
-  k_particles(i, particle_var::uz) = k_part.uz(i);
-  k_particles(i, particle_var::w) = k_part.w(i);
-  k_particles_i(i) = k_part.i(i);
-});
+//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
+//  k_particles(i, particle_var::dx) = k_part.dx(i);
+//  k_particles(i, particle_var::dy) = k_part.dy(i);
+//  k_particles(i, particle_var::dz) = k_part.dz(i);
+//  k_particles(i, particle_var::ux) = k_part.ux(i);
+//  k_particles(i, particle_var::uy) = k_part.uy(i);
+//  k_particles(i, particle_var::uz) = k_part.uz(i);
+//  k_particles(i, particle_var::w) = k_part.w(i);
+//  k_particles_i(i) = k_part.i(i);
+//});
 
 }
 

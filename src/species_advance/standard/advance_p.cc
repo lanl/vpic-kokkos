@@ -10,7 +10,7 @@
 
 void
 advance_p_kokkos(
-//        k_particles_soa_t& k_part,
+        k_particles_soa_t& k_part,
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
         k_particle_copy_t& k_particle_copy,
@@ -108,23 +108,23 @@ sp_[id]->
 */
   // Process particles for this pipeline
 
-//  #define p_dx    k_part.dx(p_index)
-//  #define p_dy    k_part.dy(p_index)
-//  #define p_dz    k_part.dz(p_index)
-//  #define p_ux    k_part.ux(p_index)
-//  #define p_uy    k_part.uy(p_index)
-//  #define p_uz    k_part.uz(p_index)
-//  #define p_w     k_part.w(p_index)
-//  #define pii     k_part.i(p_index)
+  #define p_dx    k_part.dx(p_index)
+  #define p_dy    k_part.dy(p_index)
+  #define p_dz    k_part.dz(p_index)
+  #define p_ux    k_part.ux(p_index)
+  #define p_uy    k_part.uy(p_index)
+  #define p_uz    k_part.uz(p_index)
+  #define p_w     k_part.w(p_index)
+  #define pii     k_part.i(p_index)
 
-  #define p_dx    k_particles(p_index, particle_var::dx)
-  #define p_dy    k_particles(p_index, particle_var::dy)
-  #define p_dz    k_particles(p_index, particle_var::dz)
-  #define p_ux    k_particles(p_index, particle_var::ux)
-  #define p_uy    k_particles(p_index, particle_var::uy)
-  #define p_uz    k_particles(p_index, particle_var::uz)
-  #define p_w     k_particles(p_index, particle_var::w)
-  #define pii     k_particles_i(p_index)
+//  #define p_dx    k_particles(p_index, particle_var::dx)
+//  #define p_dy    k_particles(p_index, particle_var::dy)
+//  #define p_dz    k_particles(p_index, particle_var::dz)
+//  #define p_ux    k_particles(p_index, particle_var::ux)
+//  #define p_uy    k_particles(p_index, particle_var::uy)
+//  #define p_uz    k_particles(p_index, particle_var::uz)
+//  #define p_w     k_particles(p_index, particle_var::w)
+//  #define pii     k_particles_i(p_index)
 
   #define f_cbx k_interp(ii, interpolator_var::cbx)
   #define f_cby k_interp(ii, interpolator_var::cby)
@@ -170,6 +170,17 @@ sp_[id]->
   });
 
 
+Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
+  k_particles(i, particle_var::dx) = k_part.dx(i);
+  k_particles(i, particle_var::dy) = k_part.dy(i);
+  k_particles(i, particle_var::dz) = k_part.dz(i);
+  k_particles(i, particle_var::ux) = k_part.ux(i);
+  k_particles(i, particle_var::uy) = k_part.uy(i);
+  k_particles(i, particle_var::uz) = k_part.uz(i);
+  k_particles(i, particle_var::w) = k_part.w(i);
+  k_particles_i(i) = k_part.i(i);
+});
+
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index)
     {
@@ -177,7 +188,7 @@ sp_[id]->
     float v0, v1, v2, v3, v4, v5;
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
 
-    float dx   = p_dx;                             // Load position
+    float dx   = float(p_dx);                             // Load position
     float dy   = p_dy;
     float dz   = p_dz;
     int   ii   = pii;
@@ -303,8 +314,7 @@ sp_[id]->
       local_pm->i     = p_index;
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
-//      if( move_p_kokkos(k_part, k_particles, k_particles_i, local_pm,
-      if( move_p_kokkos(k_particles, k_particles_i, local_pm,
+      if( move_p_kokkos(k_part, k_particles, k_particles_i, local_pm,
                          k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
         if( k_nm(0)<max_nm ) {
           const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
@@ -316,7 +326,7 @@ sp_[id]->
           k_particle_movers_i(nm)   = local_pm->i;
 
           // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-          k_particle_copy(nm, particle_var::dx) = p_dx;
+          k_particle_copy(nm, particle_var::dx) = float(p_dx);
           k_particle_copy(nm, particle_var::dy) = p_dy;
           k_particle_copy(nm, particle_var::dz) = p_dz;
           k_particle_copy(nm, particle_var::ux) = p_ux;
@@ -341,6 +351,16 @@ sp_[id]->
 //}
   });
 
+Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
+  k_part.dx(i) = k_particles(i, particle_var::dx);
+  k_part.dy(i) = k_particles(i, particle_var::dy);
+  k_part.dz(i) = k_particles(i, particle_var::dz);
+  k_part.ux(i) = k_particles(i, particle_var::ux);
+  k_part.uy(i) = k_particles(i, particle_var::uy);
+  k_part.uz(i) = k_particles(i, particle_var::uz);
+  k_part.w(i) = k_particles(i, particle_var::w);
+  k_part.i(i) = k_particles_i(i);
+});
 //Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
 //  k_particles(i, particle_var::dx) = k_part.dx(i);
 //  k_particles(i, particle_var::dy) = k_part.dy(i);
@@ -401,7 +421,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
   advance_p_kokkos(
-//          sp->k_p_soa_d,
+          sp->k_p_soa_d,
           sp->k_p_d,
           sp->k_p_i_d,
           sp->k_pc_d,
@@ -539,7 +559,7 @@ advance_p_profiling( /**/  species_t            * RESTRICT sp,
 
 Kokkos::Profiling::pushRegion(" " + std::to_string(step) + " " + std::string(sp->name) + " advance_p_kokkos");
   advance_p_kokkos(
-//          sp->k_p_soa_d,
+          sp->k_p_soa_d,
           sp->k_p_d,
           sp->k_p_i_d,
           sp->k_pc_d,

@@ -293,11 +293,11 @@ move_p( particle_t       * ALIGNED(128) p0,    // Particle array
         const grid_t     *              g,     // Grid parameters
         const float                     qsp ); // Species particle charge
 
-template<class particle_view_t, class particle_i_view_t, class accumulator_sa_t, class neighbor_view_t>
+template<class particle_soa_view_t, class particle_view_t, class particle_i_view_t, class accumulator_sa_t, class neighbor_view_t>
 int
 KOKKOS_INLINE_FUNCTION
 move_p_kokkos(
-//    const k_particles_soa_t& k_part,
+    const particle_soa_view_t& k_part,
     const particle_view_t& k_particles,
     const particle_i_view_t& k_particles_i,
     particle_mover_t* ALIGNED(16)  pm,
@@ -343,6 +343,7 @@ move_p_kokkos(
   //int pi = int(local_pm_i);
   int pi = pm->i;
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
+
 
   q = qsp*p_w;
 
@@ -447,6 +448,9 @@ move_p_kokkos(
 
     //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset
+//    k_part.dx(pi) += s_dispx+s_dispx;
+//    k_part.dy(pi) += s_dispy+s_dispy;
+//    k_part.dz(pi) += s_dispz+s_dispz;
     p_dx += s_dispx+s_dispx;
     p_dy += s_dispy+s_dispy;
     p_dz += s_dispz+s_dispz;
@@ -513,13 +517,15 @@ move_p_kokkos(
       // particle position, face it hit and update the remaining
       // displacement in the particle mover.
       pii = 8*pii + face;
+//      k_part.i(pi) = 8*k_part.i(pi) + face;
       return 1; // Return "mover still in use"
-      }
+    }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
 
     pii = neighbor - rangel;
+//    k_part.i(pi) = neighbor - rangel;
     /**/                         // Note: neighbor - rangel < 2^31 / 6
 //if(axis == 0) {
 //    k_part.dx(pi) = -v0; // Avoid roundoff fiascos--put the particle
@@ -538,6 +544,17 @@ move_p_kokkos(
   #undef p_uz
   #undef p_w
   #undef pii
+
+//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
+//  k_part.dx(i) = k_particles(i, particle_var::dx);
+//  k_part.dy(i) = k_particles(i, particle_var::dy);
+//  k_part.dz(i) = k_particles(i, particle_var::dz);
+//  k_part.ux(i) = k_particles(i, particle_var::ux);
+//  k_part.uy(i) = k_particles(i, particle_var::uy);
+//  k_part.uz(i) = k_particles(i, particle_var::uz);
+//  k_part.w(i) = k_particles(i, particle_var::w);
+//  k_part.i(i) = k_particles_i(i);
+//});
 
   //#undef local_pm_dispx
   //#undef local_pm_dispy

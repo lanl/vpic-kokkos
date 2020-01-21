@@ -9,6 +9,7 @@
 
 //#include "cnl/all.h"
 //using cnl::fixed_point;
+//using fixed_point_t = fixed_point<int32_t, -23>;
 #include "half.hpp"
 using half_float::half;
 
@@ -44,7 +45,7 @@ class k_particles_struct {
         Kokkos::View<float *> uy;
         Kokkos::View<float *> uz;
         Kokkos::View<float *> w;
-        Kokkos::View<int *> i;
+        Kokkos::View<int   *> i;
 
         k_particles_struct() {}
 
@@ -67,8 +68,8 @@ class k_particles_host_struct {
         Kokkos::View<float *>::HostMirror ux;
         Kokkos::View<float *>::HostMirror uy;
         Kokkos::View<float *>::HostMirror uz;
-        Kokkos::View<float*>::HostMirror w;
-        Kokkos::View<int*>::HostMirror i;
+        Kokkos::View<float *>::HostMirror w;
+        Kokkos::View<int   *>::HostMirror i;
 
         k_particles_host_struct() {}
 

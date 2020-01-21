@@ -52,8 +52,7 @@ int vpic_simulation::advance(void) {
       {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
           //TIC sort_p( sp ); TOC( sort_p, 1 );
-//          sorter.sort( sp->k_p_soa_d, sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
-          sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
+          sorter.sort( sp->k_p_soa_d, sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
       }
   }
 
@@ -114,6 +113,16 @@ int vpic_simulation::advance(void) {
 
   LIST_FOR_EACH( sp, species_list )
   {
+Kokkos::parallel_for(Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(int i) {
+  sp->k_p_d(i, particle_var::dx) = sp->k_p_soa_d.dx(i);
+  sp->k_p_d(i, particle_var::dy) = sp->k_p_soa_d.dy(i);
+  sp->k_p_d(i, particle_var::dz) = sp->k_p_soa_d.dz(i);
+  sp->k_p_d(i, particle_var::ux) = sp->k_p_soa_d.ux(i);
+  sp->k_p_d(i, particle_var::uy) = sp->k_p_soa_d.uy(i);
+  sp->k_p_d(i, particle_var::uz) = sp->k_p_soa_d.uz(i);
+  sp->k_p_d(i, particle_var::w) = sp->k_p_soa_d.w(i);
+  sp->k_p_i_d(i) = sp->k_p_soa_d.i(i);
+});
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " " + std::string(sp->name) + " advance_p");
       advance_p_profiling( sp, accumulator_array, interpolator_array, step() );
@@ -121,6 +130,17 @@ int vpic_simulation::advance(void) {
 #else
       advance_p( sp, accumulator_array, interpolator_array );
 #endif
+
+Kokkos::parallel_for(Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(int i) {
+  sp->k_p_soa_d.dx(i) = sp->k_p_d(i, particle_var::dx);
+  sp->k_p_soa_d.dy(i) = sp->k_p_d(i, particle_var::dy);
+  sp->k_p_soa_d.dz(i) = sp->k_p_d(i, particle_var::dz);
+  sp->k_p_soa_d.ux(i) = sp->k_p_d(i, particle_var::ux);
+  sp->k_p_soa_d.uy(i) = sp->k_p_d(i, particle_var::uy);
+  sp->k_p_soa_d.uz(i) = sp->k_p_d(i, particle_var::uz);
+  sp->k_p_soa_d.w(i) = sp->k_p_d(i, particle_var::w);
+  sp->k_p_soa_d.i(i) = sp->k_p_i_d(i);
+});
   }
   KOKKOS_TOC( advance_p, 1);
 //  KOKKOS_TOCN( advance_p, 1);
@@ -368,7 +388,7 @@ int sp_counter = 0;
 
       // TODO: this can be hoisted to the end of advance_p if desired
       compressor.compress(
-//              sp->k_p_soa_d,
+              sp->k_p_soa_d,
               sp->k_p_d,
               sp->k_p_i_d,
               sp->k_pm_i_d,
