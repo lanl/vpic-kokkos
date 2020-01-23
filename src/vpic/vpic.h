@@ -789,7 +789,7 @@ public:
       auto n_particles = sp->np;
       auto max_pmovers = sp->max_nm;
 
-      auto& kph = sp->k_p_soa_h;
+//      auto& kph = sp->k_p_soa_h;
 
       auto& k_particles_h = sp->k_p_h;
       auto& k_particles_i_h = sp->k_p_i_h;
@@ -889,7 +889,7 @@ public:
 
       auto& k_nm_h = sp->k_nm_h;
 
-      auto& kph = sp->k_p_soa_h;
+//      auto& kph = sp->k_p_soa_h;
 
       sp->nm = k_nm_h(0);
 

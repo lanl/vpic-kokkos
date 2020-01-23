@@ -867,7 +867,7 @@ begin_initialization {
 
   double nx                = 1200; //11232;
   double ny                = 1;    // 2D problem in x-z plane
-  double nz                = 145; //756;  // was 549;
+  double nz                = 290; //756;  // was 549;
 //  double nx                = 55; //11232;
 //  double ny                = 55;    // 2D problem in x-z plane
 //  double nz                = 55; //756;  // was 549;
@@ -1029,7 +1029,7 @@ begin_initialization {
 
   // SETUP HIGH-LEVEL SIMULATION PARMETERS
   sim_log("Setting up high-level simulation parameters. "); 
-  num_step             = 10; //int(t_stop/(dt)); 
+  num_step             = 100; //int(t_stop/(dt)); 
   status_interval      = 2000; 
 //  status_interval      = -1; 
 //  sync_shared_interval = status_interval/1;
