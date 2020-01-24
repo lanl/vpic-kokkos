@@ -83,13 +83,6 @@ class k_particles_host_struct {
             w = Kokkos::create_mirror_view(particles.w);
             i = Kokkos::create_mirror_view(particles.i);
         }
-
-//        k_particles_host_struct(int num_particles) {
-//            pos("Particle positions", num_particles),
-//            mom("Particle momentum", num_particles),
-//            w("Particle weight", num_particles),
-//            i("Particle index", num_particles){}
-//        }
 };
 
 using k_particles_soa_t = k_particles_struct;
@@ -102,18 +95,10 @@ using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
 using k_field_edge_t = Kokkos::View<material_id* [FIELD_EDGE_COUNT]>;
 
 // TODO Consolidate using Cabana?
-//using k_particles_t = Kokkos::View<half *[PARTICLE_VAR_COUNT]>;
-using k_particles_pos_t = Kokkos::View<half *[3]>;
-using k_particles_mom_t = Kokkos::View<float *[3]>;
-using k_particles_w_t = Kokkos::View<float *>;
 using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
 using k_particles_i_t = Kokkos::View<int*>;
 
 // TODO: think about the layout here
-//using k_particle_copy_t = Kokkos::View<half *[PARTICLE_VAR_COUNT], Kokkos::LayoutRight>;
-using k_particles_pos_copy_t = Kokkos::View<half *[3]>;
-using k_particles_mom_copy_t = Kokkos::View<float *[3]>;
-using k_particles_w_copy_t = Kokkos::View<float *>;
 using k_particle_copy_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutRight>;
 using k_particle_i_copy_t = Kokkos::View<int*, Kokkos::LayoutRight>;
 
@@ -193,22 +178,6 @@ namespace interpolator_var {
     dcbydy   = 15,
     cbz      = 16,
     dcbzdz   = 17
-  };
-};
-
-namespace particle_pos_var {
-  enum pos_v {
-    dx = 0,
-    dy,
-    dz,
-  };
-};
-
-namespace particle_mom_var {
-  enum mom_v {
-    ux = 0,
-    uy,
-    uz,
   };
 };
 

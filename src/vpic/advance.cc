@@ -113,16 +113,16 @@ int vpic_simulation::advance(void) {
 
   LIST_FOR_EACH( sp, species_list )
   {
-Kokkos::parallel_for(Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(int i) {
-  sp->k_p_d(i, particle_var::dx) = sp->k_p_soa_d.dx(i);
-  sp->k_p_d(i, particle_var::dy) = sp->k_p_soa_d.dy(i);
-  sp->k_p_d(i, particle_var::dz) = sp->k_p_soa_d.dz(i);
-  sp->k_p_d(i, particle_var::ux) = sp->k_p_soa_d.ux(i);
-  sp->k_p_d(i, particle_var::uy) = sp->k_p_soa_d.uy(i);
-  sp->k_p_d(i, particle_var::uz) = sp->k_p_soa_d.uz(i);
-  sp->k_p_d(i, particle_var::w) = sp->k_p_soa_d.w(i);
-  sp->k_p_i_d(i) = sp->k_p_soa_d.i(i);
-});
+//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(int i) {
+//  sp->k_p_d(i, particle_var::dx) = sp->k_p_soa_d.dx(i);
+//  sp->k_p_d(i, particle_var::dy) = sp->k_p_soa_d.dy(i);
+//  sp->k_p_d(i, particle_var::dz) = sp->k_p_soa_d.dz(i);
+//  sp->k_p_d(i, particle_var::ux) = sp->k_p_soa_d.ux(i);
+//  sp->k_p_d(i, particle_var::uy) = sp->k_p_soa_d.uy(i);
+//  sp->k_p_d(i, particle_var::uz) = sp->k_p_soa_d.uz(i);
+//  sp->k_p_d(i, particle_var::w) = sp->k_p_soa_d.w(i);
+//  sp->k_p_i_d(i) = sp->k_p_soa_d.i(i);
+//});
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " " + std::string(sp->name) + " advance_p");
       advance_p_profiling( sp, accumulator_array, interpolator_array, step() );
@@ -131,16 +131,16 @@ Kokkos::parallel_for(Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(int i) {
       advance_p( sp, accumulator_array, interpolator_array );
 #endif
 
-Kokkos::parallel_for(Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(int i) {
-  sp->k_p_soa_d.dx(i) = sp->k_p_d(i, particle_var::dx);
-  sp->k_p_soa_d.dy(i) = sp->k_p_d(i, particle_var::dy);
-  sp->k_p_soa_d.dz(i) = sp->k_p_d(i, particle_var::dz);
-  sp->k_p_soa_d.ux(i) = sp->k_p_d(i, particle_var::ux);
-  sp->k_p_soa_d.uy(i) = sp->k_p_d(i, particle_var::uy);
-  sp->k_p_soa_d.uz(i) = sp->k_p_d(i, particle_var::uz);
-  sp->k_p_soa_d.w(i) = sp->k_p_d(i, particle_var::w);
-  sp->k_p_soa_d.i(i) = sp->k_p_i_d(i);
-});
+//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(int i) {
+//  sp->k_p_soa_d.dx(i) = sp->k_p_d(i, particle_var::dx);
+//  sp->k_p_soa_d.dy(i) = sp->k_p_d(i, particle_var::dy);
+//  sp->k_p_soa_d.dz(i) = sp->k_p_d(i, particle_var::dz);
+//  sp->k_p_soa_d.ux(i) = sp->k_p_d(i, particle_var::ux);
+//  sp->k_p_soa_d.uy(i) = sp->k_p_d(i, particle_var::uy);
+//  sp->k_p_soa_d.uz(i) = sp->k_p_d(i, particle_var::uz);
+//  sp->k_p_soa_d.w(i) = sp->k_p_d(i, particle_var::w);
+//  sp->k_p_soa_d.i(i) = sp->k_p_i_d(i);
+//});
   }
   KOKKOS_TOC( advance_p, 1);
 //  KOKKOS_TOCN( advance_p, 1);
@@ -327,8 +327,6 @@ Kokkos::parallel_for(Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(int i) {
         auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, sp->num_to_copy));
         Kokkos::deep_copy(pc_h_subview, pr_h_subview);
         Kokkos::deep_copy(pci_h_subview, pri_h_subview);
-//      Kokkos::deep_copy(sp->k_pc_h, sp->k_pr_h);
-//      Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pr_i_h);
   }
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 //  KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
