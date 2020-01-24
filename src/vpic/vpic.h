@@ -799,23 +799,23 @@ public:
       k_nm_h(0) = sp->nm;
 
       Kokkos::parallel_for("copy particles to device", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) {
-//              kph.dx(i) = sp->p[i].dx;
-//              kph.dy(i) = sp->p[i].dy;
-//              kph.dz(i) = sp->p[i].dz;
-//              kph.ux(i) = sp->p[i].ux;
-//              kph.uy(i) = sp->p[i].uy;
-//              kph.uz(i) = sp->p[i].uz;
-//              kph.w(i) = sp->p[i].w;
-//              kph.i(i) = sp->p[i].i;
+              kph.dx(i) = sp->p[i].dx;
+              kph.dy(i) = sp->p[i].dy;
+              kph.dz(i) = sp->p[i].dz;
+              kph.ux(i) = sp->p[i].ux;
+              kph.uy(i) = sp->p[i].uy;
+              kph.uz(i) = sp->p[i].uz;
+              kph.w(i) = sp->p[i].w;
+              kph.i(i) = sp->p[i].i;
 
-              k_particles_h(i, particle_var::dx) = sp->p[i].dx;
-              k_particles_h(i, particle_var::dy) = sp->p[i].dy;
-              k_particles_h(i, particle_var::dz) = sp->p[i].dz;
-              k_particles_h(i, particle_var::ux) = sp->p[i].ux;
-              k_particles_h(i, particle_var::uy) = sp->p[i].uy;
-              k_particles_h(i, particle_var::uz) = sp->p[i].uz;
-              k_particles_h(i, particle_var::w)  = sp->p[i].w;
-              k_particles_i_h(i) = sp->p[i].i;
+//              k_particles_h(i, particle_var::dx) = sp->p[i].dx;
+//              k_particles_h(i, particle_var::dy) = sp->p[i].dy;
+//              k_particles_h(i, particle_var::dz) = sp->p[i].dz;
+//              k_particles_h(i, particle_var::ux) = sp->p[i].ux;
+//              k_particles_h(i, particle_var::uy) = sp->p[i].uy;
+//              k_particles_h(i, particle_var::uz) = sp->p[i].uz;
+//              k_particles_h(i, particle_var::w)  = sp->p[i].w;
+//              k_particles_i_h(i) = sp->p[i].i;
               });
 
       Kokkos::parallel_for("copy movers to device", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {
@@ -823,19 +823,19 @@ public:
               k_particle_movers_h(i, particle_mover_var::dispy) = sp->pm[i].dispy;
               k_particle_movers_h(i, particle_mover_var::dispz) = sp->pm[i].dispz;
               k_particle_movers_i_h(i) = sp->pm[i].i;
-              });
+      });
 
-//      Kokkos::deep_copy(sp->k_p_soa_d.dx, sp->k_p_soa_h.dx);
-//      Kokkos::deep_copy(sp->k_p_soa_d.dy, sp->k_p_soa_h.dy);
-//      Kokkos::deep_copy(sp->k_p_soa_d.dz, sp->k_p_soa_h.dz);
-//      Kokkos::deep_copy(sp->k_p_soa_d.ux, sp->k_p_soa_h.ux);
-//      Kokkos::deep_copy(sp->k_p_soa_d.uy, sp->k_p_soa_h.uy);
-//      Kokkos::deep_copy(sp->k_p_soa_d.uz, sp->k_p_soa_h.uz);
-//      Kokkos::deep_copy(sp->k_p_soa_d.w, sp->k_p_soa_h.w);
-//      Kokkos::deep_copy(sp->k_p_soa_d.i, sp->k_p_soa_h.i);
+      Kokkos::deep_copy(sp->k_p_soa_d.dx, sp->k_p_soa_h.dx);
+      Kokkos::deep_copy(sp->k_p_soa_d.dy, sp->k_p_soa_h.dy);
+      Kokkos::deep_copy(sp->k_p_soa_d.dz, sp->k_p_soa_h.dz);
+      Kokkos::deep_copy(sp->k_p_soa_d.ux, sp->k_p_soa_h.ux);
+      Kokkos::deep_copy(sp->k_p_soa_d.uy, sp->k_p_soa_h.uy);
+      Kokkos::deep_copy(sp->k_p_soa_d.uz, sp->k_p_soa_h.uz);
+      Kokkos::deep_copy(sp->k_p_soa_d.w,  sp->k_p_soa_h.w);
+      Kokkos::deep_copy(sp->k_p_soa_d.i,  sp->k_p_soa_h.i);
 
-      Kokkos::deep_copy(sp->k_p_d, sp->k_p_h);
-      Kokkos::deep_copy(sp->k_p_i_d, sp->k_p_i_h);
+//      Kokkos::deep_copy(sp->k_p_d, sp->k_p_h);
+//      Kokkos::deep_copy(sp->k_p_i_d, sp->k_p_i_h);
       Kokkos::deep_copy(sp->k_pm_d, sp->k_pm_h);
       Kokkos::deep_copy(sp->k_pm_i_d, sp->k_pm_i_h);
       Kokkos::deep_copy(sp->k_nm_d, sp->k_nm_h);
@@ -863,17 +863,17 @@ public:
    */
   void KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(species_t* sp)
   {
-//      Kokkos::deep_copy(sp->k_p_soa_h.dx, sp->k_p_soa_d.dx);
-//      Kokkos::deep_copy(sp->k_p_soa_h.dy, sp->k_p_soa_d.dy);
-//      Kokkos::deep_copy(sp->k_p_soa_h.dz, sp->k_p_soa_d.dz);
-//      Kokkos::deep_copy(sp->k_p_soa_h.ux, sp->k_p_soa_d.ux);
-//      Kokkos::deep_copy(sp->k_p_soa_h.uy, sp->k_p_soa_d.uy);
-//      Kokkos::deep_copy(sp->k_p_soa_h.uz, sp->k_p_soa_d.uz);
-//      Kokkos::deep_copy(sp->k_p_soa_h.w, sp->k_p_soa_d.w);
-//      Kokkos::deep_copy(sp->k_p_soa_h.i, sp->k_p_soa_d.i);
+      Kokkos::deep_copy(sp->k_p_soa_h.dx, sp->k_p_soa_d.dx);
+      Kokkos::deep_copy(sp->k_p_soa_h.dy, sp->k_p_soa_d.dy);
+      Kokkos::deep_copy(sp->k_p_soa_h.dz, sp->k_p_soa_d.dz);
+      Kokkos::deep_copy(sp->k_p_soa_h.ux, sp->k_p_soa_d.ux);
+      Kokkos::deep_copy(sp->k_p_soa_h.uy, sp->k_p_soa_d.uy);
+      Kokkos::deep_copy(sp->k_p_soa_h.uz, sp->k_p_soa_d.uz);
+      Kokkos::deep_copy(sp->k_p_soa_h.w,  sp->k_p_soa_d.w);
+      Kokkos::deep_copy(sp->k_p_soa_h.i,  sp->k_p_soa_d.i);
 
-      Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
-      Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
+//      Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
+//      Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
       Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d);
       Kokkos::deep_copy(sp->k_pm_i_h, sp->k_pm_i_d);
       Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
@@ -894,23 +894,23 @@ public:
       sp->nm = k_nm_h(0);
 
       Kokkos::parallel_for("copy particles to host", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) {
-              sp->p[i].dx = k_particles_h(i, particle_var::dx);
-              sp->p[i].dy = k_particles_h(i, particle_var::dy);
-              sp->p[i].dz = k_particles_h(i, particle_var::dz);
-              sp->p[i].ux = k_particles_h(i, particle_var::ux);
-              sp->p[i].uy = k_particles_h(i, particle_var::uy);
-              sp->p[i].uz = k_particles_h(i, particle_var::uz);
-              sp->p[i].w  = k_particles_h(i, particle_var::w);
-              sp->p[i].i  = k_particles_i_h(i);
+//              sp->p[i].dx = k_particles_h(i, particle_var::dx);
+//              sp->p[i].dy = k_particles_h(i, particle_var::dy);
+//              sp->p[i].dz = k_particles_h(i, particle_var::dz);
+//              sp->p[i].ux = k_particles_h(i, particle_var::ux);
+//              sp->p[i].uy = k_particles_h(i, particle_var::uy);
+//              sp->p[i].uz = k_particles_h(i, particle_var::uz);
+//              sp->p[i].w  = k_particles_h(i, particle_var::w);
+//              sp->p[i].i  = k_particles_i_h(i);
 
-//          sp->p[i].dx = float(kph.dx(i));
-//          sp->p[i].dy = kph.dy(i);
-//          sp->p[i].dz = kph.dz(i);
-//          sp->p[i].ux = kph.ux(i);
-//          sp->p[i].uy = kph.uy(i);
-//          sp->p[i].uz = kph.uz(i);
-//          sp->p[i].w = kph.w(i);
-//          sp->p[i].i = kph.i(i);
+          sp->p[i].dx = kph.dx(i);
+          sp->p[i].dy = kph.dy(i);
+          sp->p[i].dz = kph.dz(i);
+          sp->p[i].ux = kph.ux(i);
+          sp->p[i].uy = kph.uy(i);
+          sp->p[i].uz = kph.uz(i);
+          sp->p[i].w  = kph.w(i);
+          sp->p[i].i  = kph.i(i);
       });
 
       Kokkos::parallel_for("copy movers to host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {

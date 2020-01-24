@@ -113,16 +113,6 @@ int vpic_simulation::advance(void) {
 
   LIST_FOR_EACH( sp, species_list )
   {
-//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(int i) {
-//  sp->k_p_d(i, particle_var::dx) = sp->k_p_soa_d.dx(i);
-//  sp->k_p_d(i, particle_var::dy) = sp->k_p_soa_d.dy(i);
-//  sp->k_p_d(i, particle_var::dz) = sp->k_p_soa_d.dz(i);
-//  sp->k_p_d(i, particle_var::ux) = sp->k_p_soa_d.ux(i);
-//  sp->k_p_d(i, particle_var::uy) = sp->k_p_soa_d.uy(i);
-//  sp->k_p_d(i, particle_var::uz) = sp->k_p_soa_d.uz(i);
-//  sp->k_p_d(i, particle_var::w) = sp->k_p_soa_d.w(i);
-//  sp->k_p_i_d(i) = sp->k_p_soa_d.i(i);
-//});
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " " + std::string(sp->name) + " advance_p");
       advance_p_profiling( sp, accumulator_array, interpolator_array, step() );
@@ -130,17 +120,6 @@ int vpic_simulation::advance(void) {
 #else
       advance_p( sp, accumulator_array, interpolator_array );
 #endif
-
-//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(int i) {
-//  sp->k_p_soa_d.dx(i) = sp->k_p_d(i, particle_var::dx);
-//  sp->k_p_soa_d.dy(i) = sp->k_p_d(i, particle_var::dy);
-//  sp->k_p_soa_d.dz(i) = sp->k_p_d(i, particle_var::dz);
-//  sp->k_p_soa_d.ux(i) = sp->k_p_d(i, particle_var::ux);
-//  sp->k_p_soa_d.uy(i) = sp->k_p_d(i, particle_var::uy);
-//  sp->k_p_soa_d.uz(i) = sp->k_p_d(i, particle_var::uz);
-//  sp->k_p_soa_d.w(i) = sp->k_p_d(i, particle_var::w);
-//  sp->k_p_soa_d.i(i) = sp->k_p_i_d(i);
-//});
   }
   KOKKOS_TOC( advance_p, 1);
 //  KOKKOS_TOCN( advance_p, 1);
@@ -405,6 +384,7 @@ int sp_counter = 0;
 
       auto& particles = sp->k_p_d;
       auto& particles_i = sp->k_p_i_d;
+      auto& k_particles = sp->k_p_soa_d;
 
       int num_to_copy = sp->num_to_copy;
       //printf("Trying to append %d from particle copy where np = %d max nm %d \n", num_to_copy, sp->np, sp->max_nm);
@@ -447,14 +427,23 @@ int sp_counter = 0;
       {
         int npi = np+i; // i goes from 0..n so no need for -1
         //printf("append to %d from %d \n", npi, i);
-        particles(npi, particle_var::dx) = particle_copy(i, particle_var::dx);
-        particles(npi, particle_var::dy) = particle_copy(i, particle_var::dy);
-        particles(npi, particle_var::dz) = particle_copy(i, particle_var::dz);
-        particles(npi, particle_var::ux) = particle_copy(i, particle_var::ux);
-        particles(npi, particle_var::uy) = particle_copy(i, particle_var::uy);
-        particles(npi, particle_var::uz) = particle_copy(i, particle_var::uz);
-        particles(npi, particle_var::w)  = particle_copy(i, particle_var::w);
-        particles_i(npi) = particle_copy_i(i);
+//        particles(npi, particle_var::dx) = particle_copy(i, particle_var::dx);
+//        particles(npi, particle_var::dy) = particle_copy(i, particle_var::dy);
+//        particles(npi, particle_var::dz) = particle_copy(i, particle_var::dz);
+//        particles(npi, particle_var::ux) = particle_copy(i, particle_var::ux);
+//        particles(npi, particle_var::uy) = particle_copy(i, particle_var::uy);
+//        particles(npi, particle_var::uz) = particle_copy(i, particle_var::uz);
+//        particles(npi, particle_var::w)  = particle_copy(i, particle_var::w);
+//        particles_i(npi) = particle_copy_i(i);
+
+        k_particles.dx(npi) = particle_copy(i, particle_var::dx);
+        k_particles.dy(npi) = particle_copy(i, particle_var::dy);
+        k_particles.dz(npi) = particle_copy(i, particle_var::dz);
+        k_particles.ux(npi) = particle_copy(i, particle_var::ux);
+        k_particles.uy(npi) = particle_copy(i, particle_var::uy);
+        k_particles.uz(npi) = particle_copy(i, particle_var::uz);
+        k_particles.w(npi)  = particle_copy(i, particle_var::w);
+        k_particles.i(npi) = particle_copy_i(i);
       });
 
       // Reset this to zero now we've done the write back

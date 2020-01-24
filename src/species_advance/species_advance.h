@@ -310,23 +310,23 @@ move_p_kokkos(
 )
 {
 
-//  #define p_dx    k_part.dx(pi)
-//  #define p_dy    k_part.dy(pi)
-//  #define p_dz    k_part.dz(pi)
-//  #define p_ux    k_part.ux(pi)
-//  #define p_uy    k_part.uy(pi)
-//  #define p_uz    k_part.uz(pi)
-//  #define p_w     k_part.w(pi)
-//  #define pii     k_part.i(pi)
+  #define p_dx    k_part.dx(pi)
+  #define p_dy    k_part.dy(pi)
+  #define p_dz    k_part.dz(pi)
+  #define p_ux    k_part.ux(pi)
+  #define p_uy    k_part.uy(pi)
+  #define p_uz    k_part.uz(pi)
+  #define p_w     k_part.w(pi)
+  #define pii     k_part.i(pi)
 
-  #define p_dx    k_particles(pi, particle_var::dx)
-  #define p_dy    k_particles(pi, particle_var::dy)
-  #define p_dz    k_particles(pi, particle_var::dz)
-  #define p_ux    k_particles(pi, particle_var::ux)
-  #define p_uy    k_particles(pi, particle_var::uy)
-  #define p_uz    k_particles(pi, particle_var::uz)
-  #define p_w     k_particles(pi, particle_var::w)
-  #define pii     k_particles_i(pi)
+//  #define p_dx    k_particles(pi, particle_var::dx)
+//  #define p_dy    k_particles(pi, particle_var::dy)
+//  #define p_dz    k_particles(pi, particle_var::dz)
+//  #define p_ux    k_particles(pi, particle_var::ux)
+//  #define p_uy    k_particles(pi, particle_var::uy)
+//  #define p_uz    k_particles(pi, particle_var::uz)
+//  #define p_w     k_particles(pi, particle_var::w)
+//  #define pii     k_particles_i(pi)
 
   //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
   //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
@@ -448,9 +448,6 @@ move_p_kokkos(
 
     //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset
-//    k_part.dx(pi) += s_dispx+s_dispx;
-//    k_part.dy(pi) += s_dispy+s_dispy;
-//    k_part.dz(pi) += s_dispz+s_dispz;
     p_dx += s_dispx+s_dispx;
     p_dy += s_dispy+s_dispy;
     p_dz += s_dispz+s_dispz;
@@ -468,14 +465,14 @@ move_p_kokkos(
     // +/-1 _exactly_ for the particle.
 
     v0 = s_dir[axis];
-//if(axis == 0) {
-//    k_part.dx(pi) = v0; // Avoid roundoff fiascos--put the particle
-//} else if (axis == 1) {
-//    k_part.dy(pi) = v0; // Avoid roundoff fiascos--put the particle
-//} else {
-//    k_part.dz(pi) = v0; // Avoid roundoff fiascos--put the particle
-//}
-    k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
+if(axis == 0) {
+    k_part.dx(pi) = v0; // Avoid roundoff fiascos--put the particle
+} else if (axis == 1) {
+    k_part.dy(pi) = v0; // Avoid roundoff fiascos--put the particle
+} else {
+    k_part.dz(pi) = v0; // Avoid roundoff fiascos--put the particle
+}
+//    k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
                            // _exactly_ on the boundary.
     face = axis; if( v0>0 ) face += 3;
 
@@ -493,14 +490,14 @@ move_p_kokkos(
       // Hit a reflecting boundary condition.  Reflect the particle
       // momentum and remaining displacement and keep moving the
       // particle.
-//if(axis == 0) {
-//    k_part.ux(pi) = -k_part.ux(pi); // Avoid roundoff fiascos--put the particle
-//} else if (axis == 1) {
-//    k_part.uy(pi) = -k_part.uy(pi); // Avoid roundoff fiascos--put the particle
-//} else {
-//    k_part.uz(pi) = -k_part.uz(pi); // Avoid roundoff fiascos--put the particle
-//}
-      k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
+if(axis == 0) {
+    k_part.ux(pi) = -k_part.ux(pi); // Avoid roundoff fiascos--put the particle
+} else if (axis == 1) {
+    k_part.uy(pi) = -k_part.uy(pi); // Avoid roundoff fiascos--put the particle
+} else {
+    k_part.uz(pi) = -k_part.uz(pi); // Avoid roundoff fiascos--put the particle
+}
+//      k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
 
       // TODO: make this safer
       //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
@@ -527,14 +524,14 @@ move_p_kokkos(
     pii = neighbor - rangel;
 //    k_part.i(pi) = neighbor - rangel;
     /**/                         // Note: neighbor - rangel < 2^31 / 6
-//if(axis == 0) {
-//    k_part.dx(pi) = -v0; // Avoid roundoff fiascos--put the particle
-//} else if (axis == 1) {
-//    k_part.dy(pi) = -v0; // Avoid roundoff fiascos--put the particle
-//} else {
-//    k_part.dz(pi) = -v0; // Avoid roundoff fiascos--put the particle
-//}
-    k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+if(axis == 0) {
+    k_part.dx(pi) = -v0; // Avoid roundoff fiascos--put the particle
+} else if (axis == 1) {
+    k_part.dy(pi) = -v0; // Avoid roundoff fiascos--put the particle
+} else {
+    k_part.dz(pi) = -v0; // Avoid roundoff fiascos--put the particle
+}
+//    k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
   }
   #undef p_dx
   #undef p_dy

@@ -5,26 +5,26 @@
 void uncenter_p_kokkos(k_particles_soa_t k_part, k_particles_t k_particles, k_particles_i_t k_particles_i, k_interpolator_t k_interp, int np, float qdt_2mc_c) {
   const float qdt_2mc        =     -qdt_2mc_c; // For backward half advance
   const float qdt_4mc        = -0.5*qdt_2mc_c; // For backward half rotate
-  const float one            = 1.;
-  const float one_third      = 1./3.;
-  const float two_fifteenths = 2./15.;
+  constexpr float one            = 1.;
+  constexpr float one_third      = 1./3.;
+  constexpr float two_fifteenths = 2./15.;
 
   // Particle defines (p->x)
-  #define p_dx    k_particles(p_index, particle_var::dx) 
-  #define p_dy    k_particles(p_index, particle_var::dy)
-  #define p_dz    k_particles(p_index, particle_var::dz)
-  #define p_ux    k_particles(p_index, particle_var::ux) // Load momentum
-  #define p_uy    k_particles(p_index, particle_var::uy)
-  #define p_uz    k_particles(p_index, particle_var::uz)
-  #define pii     k_particles_i(p_index)
+//  #define p_dx    k_particles(p_index, particle_var::dx) 
+//  #define p_dy    k_particles(p_index, particle_var::dy)
+//  #define p_dz    k_particles(p_index, particle_var::dz)
+//  #define p_ux    k_particles(p_index, particle_var::ux) // Load momentum
+//  #define p_uy    k_particles(p_index, particle_var::uy)
+//  #define p_uz    k_particles(p_index, particle_var::uz)
+//  #define pii     k_particles_i(p_index)
 
-//  #define p_dx    k_part.dx(p_index) 
-//  #define p_dy    k_part.dy(p_index)
-//  #define p_dz    k_part.dz(p_index)
-//  #define p_ux    k_part.ux(p_index) // Load momentum
-//  #define p_uy    k_part.uy(p_index)
-//  #define p_uz    k_part.uz(p_index)
-//  #define pii     k_part.i(p_index)
+  #define p_dx    k_part.dx(p_index) 
+  #define p_dy    k_part.dy(p_index)
+  #define p_dz    k_part.dz(p_index)
+  #define p_ux    k_part.ux(p_index) // Load momentum
+  #define p_uy    k_part.uy(p_index)
+  #define p_uz    k_part.uz(p_index)
+  #define pii     k_part.i(p_index)
 
   // Interpolator Defines (f->x)
   #define f_cbx k_interp(ii, interpolator_var::cbx)
@@ -49,18 +49,6 @@ void uncenter_p_kokkos(k_particles_soa_t k_part, k_particles_t k_particles, k_pa
   #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
   #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
   #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
-
-//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
-//  k_part.dx(i) = k_particles(i, particle_var::dx);
-//  k_part.dy(i) = k_particles(i, particle_var::dy);
-//  k_part.dz(i) = k_particles(i, particle_var::dz);
-//  k_part.ux(i) = k_particles(i, particle_var::ux);
-//  k_part.uy(i) = k_particles(i, particle_var::uy);
-//  k_part.uz(i) = k_particles(i, particle_var::uz);
-//  k_part.w(i) = k_particles(i, particle_var::w);
-//  k_part.i(i) = k_particles_i(i);
-//});
-
 
   // this goes to np using p_index
   Kokkos::parallel_for("uncenter p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
@@ -96,18 +84,6 @@ void uncenter_p_kokkos(k_particles_soa_t k_part, k_particles_t k_particles, k_pa
     p_uy += hay;
     p_uz += haz;
   });
-
-//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
-//  k_particles(i, particle_var::dx) = k_part.dx(i);
-//  k_particles(i, particle_var::dy) = k_part.dy(i);
-//  k_particles(i, particle_var::dz) = k_part.dz(i);
-//  k_particles(i, particle_var::ux) = k_part.ux(i);
-//  k_particles(i, particle_var::uy) = k_part.uy(i);
-//  k_particles(i, particle_var::uz) = k_part.uz(i);
-//  k_particles(i, particle_var::w) = k_part.w(i);
-//  k_particles_i(i) = k_part.i(i);
-//});
-
 }
 
 void
