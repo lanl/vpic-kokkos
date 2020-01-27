@@ -19,9 +19,9 @@ int vpic_simulation::advance(void) {
   species_t *sp;
   double err;
 
-  std::string step_str = std::to_string(step());
 
 #ifdef VPIC_ENABLE_PAPI
+  std::string step_str = std::to_string(step());
 //Kokkos::Profiling::pushRegion(" " + step_str);
 #endif
 
@@ -52,7 +52,6 @@ int vpic_simulation::advance(void) {
       {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
           //TIC sort_p( sp ); TOC( sort_p, 1 );
-//          sorter.sort( sp->k_p_soa_d, sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
           sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
       }
   }

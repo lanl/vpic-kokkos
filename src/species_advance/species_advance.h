@@ -99,12 +99,6 @@ class species_t {
         species_id id;                      // Unique identifier for a species
         species_t* next = NULL;             // Next species in the list
 
-//        k_particles_soa_t k_p_soa_d;
-//        k_particles_host_soa_t k_p_soa_h;
-//        k_particles_soa_t k_pc_soa_d;
-//        k_particles_host_soa_t k_pc_soa_h;
-//        k_particles_host_soa_t k_pr_soa_h;
-
         k_particles_t k_p_d;                 // kokkos particles view on device
         k_particles_i_t k_p_i_d;             // kokkos particles view on device
 
@@ -148,12 +142,6 @@ class species_t {
             k_pr_i_h("k_particle_send_for_movers_i", n_pmovers),
             k_nm_d("k_nm") // size 1
     {
-//        k_p_soa_d = k_particles_soa_t(n_particles);
-//        k_p_soa_h = k_particles_host_soa_t(k_p_soa_d);
-//        k_pc_soa_d = k_particles_soa_t(n_pmovers);
-//        k_pc_soa_h = k_particles_host_soa_t(k_pc_soa_d);
-//        k_pr_soa_h = k_particles_host_soa_t(n_pmovers);
-
         k_p_h = Kokkos::create_mirror_view(k_p_d);
         k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
 

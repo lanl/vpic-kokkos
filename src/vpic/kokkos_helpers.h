@@ -35,65 +35,6 @@
 
 typedef int16_t material_id;
 
-//class k_particles_struct {
-//    public:
-//        Kokkos::View<float *> dx;
-//        Kokkos::View<float *> dy;
-//        Kokkos::View<float *> dz;
-//        Kokkos::View<float *> ux;
-//        Kokkos::View<float *> uy;
-//        Kokkos::View<float *> uz;
-//        Kokkos::View<float *> w;
-//        Kokkos::View<int *> i;
-//
-//        k_particles_struct() {}
-//
-//        k_particles_struct(int num_particles) :
-//            dx("Particle dx position", num_particles),
-//            dy("Particle dy position", num_particles),
-//            dz("Particle dz position", num_particles),
-//            ux("Particle ux momentum", num_particles),
-//            uy("Particle uy momentum", num_particles),
-//            uz("Particle uz momentum", num_particles),
-//            w("Particle weight", num_particles),
-//            i("Particle index", num_particles){}
-//};
-//
-//class k_particles_host_struct {
-//    public:
-//        Kokkos::View<float *>::HostMirror dx;
-//        Kokkos::View<float *>::HostMirror dy;
-//        Kokkos::View<float *>::HostMirror dz;
-//        Kokkos::View<float *>::HostMirror ux;
-//        Kokkos::View<float *>::HostMirror uy;
-//        Kokkos::View<float *>::HostMirror uz;
-//        Kokkos::View<float*>::HostMirror w;
-//        Kokkos::View<int*>::HostMirror i;
-//
-//        k_particles_host_struct() {}
-//
-//        k_particles_host_struct(k_particles_struct& particles) {
-//            dx = Kokkos::create_mirror_view(particles.dx);
-//            dy = Kokkos::create_mirror_view(particles.dy);
-//            dz = Kokkos::create_mirror_view(particles.dz);
-//            ux = Kokkos::create_mirror_view(particles.ux);
-//            uy = Kokkos::create_mirror_view(particles.uy);
-//            uz = Kokkos::create_mirror_view(particles.uz);
-//            w = Kokkos::create_mirror_view(particles.w);
-//            i = Kokkos::create_mirror_view(particles.i);
-//        }
-//
-////        k_particles_host_struct(int num_particles) {
-////            pos("Particle positions", num_particles),
-////            mom("Particle momentum", num_particles),
-////            w("Particle weight", num_particles),
-////            i("Particle index", num_particles){}
-////        }
-//};
-
-//using k_particles_soa_t = k_particles_struct;
-//using k_particles_host_soa_t = k_particles_host_struct;
-
 // TODO: we dont need the [1] here
 using k_iterator_t = Kokkos::View<int[1]>;
 

@@ -843,8 +843,8 @@ begin_initialization {
   double f_H              = 1-f_He;   // Ratio of number density of H  to total ion density 
 
   int load_particles = 1;         // Flag to turn off particle load for testing wave launch. 
-  double nppc        = 512;
-//  double nppc        = 1;
+//  double nppc        = 512;
+  double nppc        = 1;
 
 // Here _He is C+6
   double A_H                = 1;
@@ -865,9 +865,9 @@ begin_initialization {
   double debye = uthe*delta;
   double wpe1ps=1e-12* speed_of_light/delta;
 
-  double nx                = 1200; //11232;
+  double nx                = 4800; //11232;
   double ny                = 1;    // 2D problem in x-z plane
-  double nz                = 290; //756;  // was 549;
+  double nz                = 2400; //756;  // was 549;
 //  double nx                = 55; //11232;
 //  double ny                = 55;    // 2D problem in x-z plane
 //  double nz                = 55; //756;  // was 549;
@@ -1029,7 +1029,7 @@ begin_initialization {
 
   // SETUP HIGH-LEVEL SIMULATION PARMETERS
   sim_log("Setting up high-level simulation parameters. "); 
-  num_step             = 100; //int(t_stop/(dt)); 
+  num_step             = 5; //int(t_stop/(dt)); 
   status_interval      = 2000; 
 //  status_interval      = -1; 
 //  sync_shared_interval = status_interval/1;
@@ -1045,6 +1045,12 @@ begin_initialization {
     current_injection_interval = -1;
     field_copy_interval = -1;
     particle_copy_interval = -1;
+//    kokkos_field_injection = false;
+//    field_injection_interval = 1;
+//    particle_injection_interval = -1;
+//    current_injection_interval = -1;
+//    field_copy_interval = -1;
+//    particle_copy_interval = -1;
 
   // For maxwellian reinjection, we need more than the default number of
   // passes (3) through the boundary handler
@@ -3030,15 +3036,15 @@ begin_field_injection {
     pulse_shape_factor        = ( t<pulse_length ? sin_t_tau : 1 );
     double h                  = -global->xfocus/rl;   // Distance / Rayleigh length
 
-// Original injection
+//// Original injection
 //# define DY    ( grid->y0 + (iy-0.5)*grid->dy - global->ycenter )
 //# define DZ    ( grid->z0 + (iz-1  )*grid->dz - global->zcenter )
 //# define R2    ( DY*DY + DZ*DZ )                                   
 //# define R2Z    ( DZ*DZ )                                   
 //# define PHASE ( -global->omega_0*t + h*R2Z/(global->width*global->width) )
 //# define MASK  ( R2Z<=pow(global->mask*global->width,2) ? 1 : 0 )
-
-    // Loop over all Ey values on left edge of this node
+//
+//  // Loop over all Ey values on left edge of this node
 //    for ( int iz=1; iz<=grid->nz+1; ++iz ) 
 //      for ( int iy=1; iy<=grid->ny; ++iy )  
 //        field(1,iy,iz).ey += prefactor 
