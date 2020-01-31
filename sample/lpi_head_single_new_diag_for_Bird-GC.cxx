@@ -867,7 +867,7 @@ begin_initialization {
 
   double nx                = 1200; //11232;
   double ny                = 1;    // 2D problem in x-z plane
-  double nz                = 16; //756;  // was 549;
+  double nz                = 32; //756;  // was 549;
 //  double nx                = 55; //11232;
 //  double ny                = 55;    // 2D problem in x-z plane
 //  double nz                = 55; //756;  // was 549;

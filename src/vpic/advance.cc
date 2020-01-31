@@ -52,7 +52,8 @@ int vpic_simulation::advance(void) {
       {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
           //TIC sort_p( sp ); TOC( sort_p, 1 );
-          sorter.sort( sp->k_p_soa_d, sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
+//          sorter.sort( sp->k_p_soa_d, sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
+          sorter.sort( sp->k_p_soa_d, sp->np, accumulator_array->na);
       }
   }
 
@@ -79,9 +80,6 @@ int vpic_simulation::advance(void) {
     Kokkos::Profiling::popRegion();
 #endif
   }
-//  KOKKOS_TIC();
-//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
-//  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   // Note: Particles should not have moved since the last performance sort
   // when calling collision operators.
@@ -96,14 +94,6 @@ int vpic_simulation::advance(void) {
   }
 
   //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
-
-//  KOKKOS_TIC(); // Time this data movement
-//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
-//  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
-//  KOKKOS_TIC();
-//  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
-//  KOKKOS_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
-//  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
 
   //int lna = 180;
 
@@ -247,10 +237,6 @@ int vpic_simulation::advance(void) {
   // This should be after the emission and injection to allow for the
   // possibility of thread parallelizing these operations
 
-//  KOKKOS_TIC();
-//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
-//  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
-
 // HOST
 // Touches accumulator memory
 //  if( species_list )
@@ -263,9 +249,6 @@ int vpic_simulation::advance(void) {
   // local accumulation).
 
   // This should mean the kokkos accum data is up to date
-//  KOKKOS_TIC();
-//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
-//  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " Accumulator_Data_Movement: To host before boundary_p");
 #endif
@@ -366,8 +349,8 @@ int sp_counter = 0;
       // TODO: this can be hoisted to the end of advance_p if desired
       compressor.compress(
               sp->k_p_soa_d,
-              sp->k_p_d,
-              sp->k_p_i_d,
+//              sp->k_p_d,
+//              sp->k_p_i_d,
               sp->k_pm_i_d,
               nm,
               sp->np,
@@ -382,8 +365,8 @@ int sp_counter = 0;
       Kokkos::Profiling::popRegion();
 #endif
 
-      auto& particles = sp->k_p_d;
-      auto& particles_i = sp->k_p_i_d;
+//      auto& particles = sp->k_p_d;
+//      auto& particles_i = sp->k_p_i_d;
       auto& k_particles = sp->k_p_soa_d;
 
       int num_to_copy = sp->num_to_copy;
@@ -402,9 +385,6 @@ int sp_counter = 0;
         auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, num_to_copy));
         Kokkos::deep_copy(pc_d_subview, pc_h_subview);
         Kokkos::deep_copy(pci_d_subview, pci_h_subview);
-
-//      Kokkos::deep_copy(sp->k_pc_d, sp->k_pc_h);
-//      Kokkos::deep_copy(sp->k_pc_i_d, sp->k_pc_i_h);
       KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 //      KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 #ifdef VPIC_ENABLE_PAPI

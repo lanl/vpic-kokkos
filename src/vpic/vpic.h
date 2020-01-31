@@ -791,8 +791,8 @@ public:
 
       auto& kph = sp->k_p_soa_h;
 
-      auto& k_particles_h = sp->k_p_h;
-      auto& k_particles_i_h = sp->k_p_i_h;
+//      auto& k_particles_h = sp->k_p_h;
+//      auto& k_particles_i_h = sp->k_p_i_h;
       auto& k_particle_movers_h = sp->k_pm_h;
       auto& k_particle_movers_i_h = sp->k_pm_i_h;
       auto& k_nm_h = sp->k_nm_h;
@@ -881,8 +881,8 @@ public:
       auto n_particles = sp->np;
       auto max_pmovers = sp->max_nm;
 
-      auto& k_particles_h = sp->k_p_h;
-      auto& k_particles_i_h = sp->k_p_i_h;
+//      auto& k_particles_h = sp->k_p_h;
+//      auto& k_particles_i_h = sp->k_p_i_h;
 
       auto& k_particle_movers_h = sp->k_pm_h;
       auto& k_particle_movers_i_h = sp->k_pm_i_h;

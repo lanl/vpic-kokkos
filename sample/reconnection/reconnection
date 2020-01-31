@@ -287,9 +287,12 @@ begin_initialization {
   //                                                           : 158.467s
   // map --profile --np 4 --mpiargs="--map-by numa --bind-to numa" ./reonnection.Linux --tpp 16
 #if 1
+//  double topology_x = 4;  // Number of domains in x, y, and z
+//  double topology_y = 1;
+//  double topology_z = 1;
   double topology_x = 4;  // Number of domains in x, y, and z
-  double topology_y = 1;
-  double topology_z = 1;
+  double topology_y = 2;
+  double topology_z = 2;
 #endif
 
   // mpirun -n 2 --map-by socket --bind-to socket ./reconnection.Linux --tpp 32

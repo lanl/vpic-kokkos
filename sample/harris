@@ -37,7 +37,7 @@ begin_globals {
 
 begin_initialization {
 
-  particle_copy_interval = 2;
+  //particle_copy_interval = 2;
 
   // At this point, there is an empty grid and the random number generator is
   // seeded with the rank. The grid, materials, species need to be defined.
@@ -85,8 +85,8 @@ begin_initialization {
   double Lx        = 16*L;  // How big should the box be in the x direction
   double Ly        = 16*L;  // How big should the box be in the y direction
   double Lz        = 16*L;  // How big should the box be in the z direction
-  double nx        = 32;    // Global resolution in the x direction
-  double ny        = 32;    // Global resolution in the y direction
+  double nx        = 64;    // Global resolution in the x direction
+  double ny        = 64;    // Global resolution in the y direction
   double nz        = 1;     // Global resolution in the z direction
   double nppc      = 64;    // Average number of macro particles per cell (both species combined!)
   double cfl_req   = 0.99;  // How close to Courant should we try to run
@@ -131,15 +131,17 @@ begin_initialization {
   ////////////////////////////////////////
   // Setup high level simulation parmeters
 
-  num_step             = int(0.2*taui/(wci*dt));
-  status_interval      = int(1./(wci*dt));
+  //num_step             = int(0.2*taui/(wci*dt));
+  num_step             = 1000;
+//  status_interval      = int(1./(wci*dt));
+  status_interval      = 100;
   sync_shared_interval = status_interval;
   clean_div_e_interval = status_interval;
   clean_div_b_interval = status_interval;
 
-    particle_injection_on = false;
-    current_injection_on = false;
-    field_injection_on = false;
+//    particle_injection_on = false;
+//    current_injection_on = false;
+//    field_injection_on = false;
 
   global->energies_interval  = status_interval;
   global->fields_interval    = status_interval;
@@ -322,7 +324,7 @@ begin_initialization {
 
 begin_diagnostics {
 
-# define should_dump(x)  0 // (global->x##_interval>0 && remainder(step(),global->x##_interval)==0)
+# define should_dump(x) (global->x##_interval>0 && remainder(step(),global->x##_interval)==0)
 
   if( step()==-10 ) {
     // A grid dump contains all grid parameters, field boundary conditions,
@@ -399,7 +401,7 @@ begin_diagnostics {
   // the checkpt but before the next timestep will be missed on restore.
   // Restart dumps are in a binary format unique to the each simulation.
 
-  //if( should_dump(restart) ) checkpt( "checkpt", step() );
+//  if( should_dump(restart) ) checkpt( "checkpt", step() );
 
   // If you want to write a checkpt after a certain amount of simulation time,
   // use uptime() in conjunction with checkpt.  For example, this will cause
