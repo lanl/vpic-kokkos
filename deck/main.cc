@@ -106,6 +106,11 @@ int main(int argc, char** argv)
         REGISTER_OBJECT( &simulation, checkpt_main, restore_main, NULL );
     }
 
+#ifdef VPIC_ENABLE_PAPI
+  std::fstream profile("profile.log");
+  profile << "START" << std::endl;
+#endif
+
     // Do any post init/restore simulation modifications
 
     // Detec if the "modify" option is passed, which allows users to change
@@ -157,6 +162,11 @@ int main(int argc, char** argv)
 
     // Check everything went well
     if( world_rank==0 ) log_printf( "normal exit\n" );
+
+#ifdef VPIC_ENABLE_PAPI
+  profile << "END" << std::endl;
+  profile.close();
+#endif
 
     halt_services();
     return 0;
