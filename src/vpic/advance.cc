@@ -85,13 +85,12 @@ int vpic_simulation::advance(void) {
 
 // DEVICE function
 // Touches particles, particle movers, accumulators, interpolators
-  KOKKOS_TIC();
 
   LIST_FOR_EACH( sp, species_list )
   {
+      // Now Times internally
       advance_p( sp, accumulator_array, interpolator_array );
   }
-  KOKKOS_TOC( advance_p, 1);
 
   KOKKOS_TIC();
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
