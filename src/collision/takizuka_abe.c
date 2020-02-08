@@ -8,6 +8,7 @@ apply_takizuka_abe( takizuka_abe_t * cm ){
   if( cm->interval<1 || (cm->spi->g->step % cm->interval) ) return;
   if( cm->spi->last_sorted!=cm->spi->g->step ) sort_p( cm->spi );
   if( cm->spj->last_sorted!=cm->spi->g->step ) sort_p( cm->spj );
+  // TODO: takizuka_abe_pipeline can be remove entirely?
   apply_takizuka_abe_pipeline(cm);
 }
 
