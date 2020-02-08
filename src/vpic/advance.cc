@@ -85,13 +85,12 @@ int vpic_simulation::advance(void) {
 
 // DEVICE function
 // Touches particles, particle movers, accumulators, interpolators
-  KOKKOS_TIC();
 
   LIST_FOR_EACH( sp, species_list )
   {
+      // Now Times internally
       advance_p( sp, accumulator_array, interpolator_array );
   }
-  KOKKOS_TOC( advance_p, 1);
 
   KOKKOS_TIC();
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
@@ -289,7 +288,7 @@ int vpic_simulation::advance(void) {
       int num_to_copy = sp->num_to_copy;
       //printf("Trying to append %d from particle copy where np = %d max nm %d \n", num_to_copy, sp->np, sp->max_nm);
 
-      int np = sp->np;
+      //int np = sp->np;
 
       // Copy data for copies back to device
       KOKKOS_TIC();

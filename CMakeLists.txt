@@ -28,6 +28,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(MPI REQUIRED)
 list(APPEND MPI_CXX_COMPILE_FLAGS -DOMPI_SKIP_MPICXX -DMPICH_SKIP_MPICXX )
 include_directories(${MPI_C_INCLUDE_PATH})
+include_directories(${MPI_CXX_INCLUDE_PATH})
 
 #------------------------------------------------------------------------------#
 # Add build options

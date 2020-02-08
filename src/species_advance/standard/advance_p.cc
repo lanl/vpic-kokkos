@@ -366,6 +366,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
+  KOKKOS_TIC();
   advance_p_kokkos(
           sp->k_p_d,
           sp->k_p_i_d,
@@ -390,15 +391,17 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->g->ny,
           sp->g->nz
   );
+  KOKKOS_TOC( advance_p, 1);
 
+  KOKKOS_TIC();
   // I need to know the number of movers that got populated so I can call the
   // compress. Let's copy it back
   Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
   // TODO: which way round should this copy be?
 
-//  int nm = sp->k_nm_h(0);
+  //  int nm = sp->k_nm_h(0);
 
-//  printf("nm = %d \n", nm);
+  //  printf("nm = %d \n", nm);
 
   // Copy particle mirror movers back so we have their data safe. Ready for
   // boundary_p_kokkos
@@ -406,11 +409,12 @@ advance_p( /**/  species_t            * RESTRICT sp,
   auto pci_d_subview = Kokkos::subview(sp->k_pc_i_d, std::make_pair(0, sp->k_nm_h(0)));
   auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
   auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, sp->k_nm_h(0)));
-  KOKKOS_TIC();
-    Kokkos::deep_copy(pc_h_subview, pc_d_subview);
-    Kokkos::deep_copy(pci_h_subview, pci_d_subview);
-//  Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
-//  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
+
+  Kokkos::deep_copy(pc_h_subview, pc_d_subview);
+  Kokkos::deep_copy(pci_h_subview, pci_d_subview);
+  //  Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
+  //  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
+
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   //print_nm(sp->k_pm_d, nm);
