@@ -10,6 +10,7 @@
 
 #include "vpic/vpic.h"
 #include <chrono>
+#include <thread>
 
 // The simulation variable is set up this way so both the checkpt
 // service and main can see it.  This allows main to find where
@@ -106,11 +107,6 @@ int main(int argc, char** argv)
         REGISTER_OBJECT( &simulation, checkpt_main, restore_main, NULL );
     }
 
-#ifdef VPIC_ENABLE_PAPI
-  std::fstream profile("profile.log");
-  profile << "START" << std::endl;
-#endif
-
     // Do any post init/restore simulation modifications
 
     // Detec if the "modify" option is passed, which allows users to change
@@ -127,6 +123,13 @@ int main(int argc, char** argv)
     double elapsed = wallclock();
 //    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 
+//#ifdef VPIC_ENABLE_PAPI
+  std::fstream profile("profile.log", std::ios_base::app);
+  profile << "START" << std::endl;
+  profile.close();
+  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//#endif
+
     // Call the actual advance until it's done
     // TODO: Can we make this into a bounded loop
 //Kokkos::Profiling::pushRegion("VPIC");
@@ -136,6 +139,12 @@ int main(int argc, char** argv)
     elapsed = wallclock() - elapsed;
 //    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
 //    std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double>>(t2-t1);
+
+//#ifdef VPIC_ENABLE_PAPI
+  profile.open("profile.log", std::ios_base::app);
+  profile << "FINISH" << std::endl;
+  profile.close();
+//#endif
 
     // Report run time information on rank 0
     if( world_rank==0 )
@@ -162,11 +171,6 @@ int main(int argc, char** argv)
 
     // Check everything went well
     if( world_rank==0 ) log_printf( "normal exit\n" );
-
-#ifdef VPIC_ENABLE_PAPI
-  profile << "END" << std::endl;
-  profile.close();
-#endif
 
     halt_services();
     return 0;

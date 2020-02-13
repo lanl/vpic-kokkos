@@ -400,6 +400,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
+  KOKKOS_TIC();
   advance_p_kokkos(
 //          sp->k_p_soa_d,
           sp->k_p_d,
@@ -425,6 +426,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->g->ny,
           sp->g->nz
   );
+  KOKKOS_TOC(advance_p, 1);
 
   // I need to know the number of movers that got populated so I can call the
   // compress. Let's copy it back

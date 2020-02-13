@@ -24,6 +24,7 @@ int vpic_simulation::advance(void) {
   std::string step_str = std::to_string(step());
 //Kokkos::Profiling::pushRegion(" " + step_str);
 #endif
+  std::string step_str = std::to_string(step());
 
   //printf("%d: Step %d \n", rank(), step());
 
@@ -43,6 +44,8 @@ int vpic_simulation::advance(void) {
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " Sort_particles");
 #endif
+//  std::fstream profile("profile.log", std::ios_base::app);
+//  profile << "BEGIN " + step_str + " Sort Particles\n";
   KOKKOS_TIC();
 
   // Sort the particles for performance if desired.
@@ -61,6 +64,7 @@ int vpic_simulation::advance(void) {
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
 #endif
+//  profile << "END " + step_str + " Sort Particles\n";
 
   // At this point, fields are at E_0 and B_0 and the particle positions
   // are at r_0 and u_{-1/2}.  Further the mover lists for the particles should
@@ -74,7 +78,9 @@ int vpic_simulation::advance(void) {
 #ifdef VPIC_ENABLE_PAPI
     Kokkos::Profiling::pushRegion(" " + step_str + " clear_accumulator_array");
 #endif
+//  profile << "BEGIN " + step_str + " Clear Accumulator Array\n";
     TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
+//  profile << "END " + step_str + " Clear Accumulator Array\n";
 #ifdef VPIC_ENABLE_PAPI
     Kokkos::Profiling::popRegion();
 #endif
@@ -109,7 +115,7 @@ int vpic_simulation::advance(void) {
 
 // DEVICE function
 // Touches particles, particle movers, accumulators, interpolators
-  KOKKOS_TIC();
+//  KOKKOS_TIC();
 
   LIST_FOR_EACH( sp, species_list )
   {
@@ -118,19 +124,23 @@ int vpic_simulation::advance(void) {
       advance_p_profiling( sp, accumulator_array, interpolator_array, step() );
   Kokkos::Profiling::popRegion();
 #else
+  //profile << "BEGIN " + step_str + " advance_p\n";
       advance_p( sp, accumulator_array, interpolator_array );
+  //profile << "END " + step_str + " advance_p\n";
 #endif
   }
-  KOKKOS_TOC( advance_p, 1);
+//  KOKKOS_TOC( advance_p, 1);
 //  KOKKOS_TOCN( advance_p, 1);
 
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " accumulator_contributions");
 #endif
+  //profile << "BEGIN " + step_str + " accumulator_contributions\n";
   KOKKOS_TIC();
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
   accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
   KOKKOS_TOC( accumulator_contributions, 1);
+  //profile << "END " + step_str + " accumulator_contributions\n";
 //  KOKKOS_TOCN( accumulator_contributions, 1);
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
@@ -150,6 +160,7 @@ int vpic_simulation::advance(void) {
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " Particle_Data_Movement: Copy particle movers");
 #endif
+  //profile << "BEGIN " + step_str + " Particle_Data_Movement Copy particle movers\n";
   KOKKOS_TIC(); // Time this data movement
   // TODO: make this into a function
   LIST_FOR_EACH( sp, species_list )
@@ -191,6 +202,7 @@ int vpic_simulation::advance(void) {
     });
   };
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+  //profile << "END " + step_str + " Particle_Data_Movement Copy particle movers\n";
 //  KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
@@ -215,9 +227,11 @@ int vpic_simulation::advance(void) {
 #ifdef VPIC_ENABLE_PAPI
             Kokkos::Profiling::pushRegion(" " + step_str + " Particle_Data_Movement: To host before particle injection");
 #endif
+  //profile << "BEGIN " + step_str + " Particle_Data_Movement: To host before particle injection\n";
             KOKKOS_TIC();
             KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
             KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
+  //profile << "END " + step_str + " Particle_Data_Movement: To host before particle injection\n";
 //            KOKKOS_TOCN(PARTICLE_DATA_MOVEMENT, 1);
 #ifdef VPIC_ENABLE_PAPI
             Kokkos::Profiling::popRegion();
@@ -226,7 +240,9 @@ int vpic_simulation::advance(void) {
 #ifdef VPIC_ENABLE_PAPI
         Kokkos::Profiling::pushRegion(" " + step_str + " user_particle_injection");
 #endif
+  //profile << "BEGIN " + step_str + " user_particle_injection\n";
         TIC user_particle_injection(); TOC( user_particle_injection, 1 );
+  //profile << "END " + step_str + " user_particle_injection\n";
 #ifdef VPIC_ENABLE_PAPI
         Kokkos::Profiling::popRegion();
 #endif
@@ -234,9 +250,11 @@ int vpic_simulation::advance(void) {
 #ifdef VPIC_ENABLE_PAPI
             Kokkos::Profiling::pushRegion(" " + step_str + " Particle_Data_Movement: To device after particle injection");
 #endif
+  //profile << "BEGIN " + step_str + " Particle_Data_Movement: To host after particle injection\n";
             KOKKOS_TIC();
             KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
             KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
+  //profile << "END " + step_str + " Particle_Data_Movement: To host after particle injection\n";
 //            KOKKOS_TOCN(PARTICLE_DATA_MOVEMENT, 1);
 #ifdef VPIC_ENABLE_PAPI
             Kokkos::Profiling::popRegion();
@@ -269,9 +287,11 @@ int vpic_simulation::advance(void) {
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " Accumulator_Data_Movement: To host before boundary_p");
 #endif
+  //profile << "BEGIN " + step_str + " Accumulator_Data_Movement: To host before boundary_p\n";
   KOKKOS_TIC(); // Time this data movement
   Kokkos::deep_copy(accumulator_array->k_a_h, accumulator_array->k_a_d);
   KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  //profile << "END " + step_str + " Accumulator_Data_Movement: To host before boundary_p\n";
 //  KOKKOS_TOCN( ACCUMULATOR_DATA_MOVEMENT, 1);
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
@@ -282,6 +302,7 @@ int vpic_simulation::advance(void) {
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " boundary_p");
 #endif
+  //profile << "BEGIN " + step_str + " boundary_p\n";
   TIC
     for( int round=0; round<num_comm_round; round++ )
     {
@@ -289,6 +310,7 @@ int vpic_simulation::advance(void) {
       boundary_p_kokkos( particle_bc_list, species_list, field_array, accumulator_array );
     }
   TOC( boundary_p, num_comm_round );
+  //profile << "END " + step_str + " boundary_p\n";
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
 #endif
@@ -297,6 +319,7 @@ int vpic_simulation::advance(void) {
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " Particle_Data_Movement: Copy recv particles to particle copy");
 #endif
+  //profile << "BEGIN " + step_str + " Particle_Data_Movement: Copy recv particles to particle copy\n";
   KOKKOS_TIC();
   LIST_FOR_EACH( sp, species_list )
   {
@@ -306,11 +329,10 @@ int vpic_simulation::advance(void) {
         auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, sp->num_to_copy));
         Kokkos::deep_copy(pc_h_subview, pr_h_subview);
         Kokkos::deep_copy(pci_h_subview, pri_h_subview);
-//      Kokkos::deep_copy(sp->k_pc_h, sp->k_pr_h);
-//      Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pr_i_h);
   }
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 //  KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
+  //profile << "END " + step_str + " Particle_Data_Movement: Copy recv particles to particle copy\n";
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
 #endif
@@ -327,11 +349,13 @@ int vpic_simulation::advance(void) {
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " Accumulator_Data_Movement: To device after boundary_p");
 #endif
+  //profile << "BEGIN " + step_str + " Accumulator_Data_Movement: To device after boundary_p\n";
   KOKKOS_TIC(); // Time this data movement
   Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
 //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
   KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 //  KOKKOS_TOCN( ACCUMULATOR_DATA_MOVEMENT, 1);
+  //profile << "END " + step_str + " Accumulator_Data_Movement: To device after boundary_p\n";
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
 #endif
@@ -362,10 +386,12 @@ int sp_counter = 0;
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::pushRegion(" " + step_str + " Backfill " + std::to_string(sp_counter) + ": Compress");
 #endif
+  //profile << "BEGIN " + step_str + " Backfill " + std::to_string(sp_counter) + ": Compress\n";
       KOKKOS_TIC(); // Time this data movement
       const int nm = sp->k_nm_h(0);
 
       // TODO: this can be hoisted to the end of advance_p if desired
+      KOKKOS_TIC();
       compressor.compress(
 //              sp->k_p_soa_d,
               sp->k_p_d,
@@ -375,11 +401,13 @@ int sp_counter = 0;
               sp->np,
               sp
       );
+      KOKKOS_TOC(compress_p, 1);
 
       // Update np now we removed them...
       sp->np -= nm;
       KOKKOS_TOC( BACKFILL, 0);
 //      KOKKOS_TOCN( BACKFILL, 0);
+  //profile << "END " + step_str + " Backfill " + std::to_string(sp_counter) + ": Compress\n";
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::popRegion();
 #endif
@@ -396,6 +424,7 @@ int sp_counter = 0;
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::pushRegion(" " + step_str + " Particle_Data_Movement " + std::to_string(sp_counter) + ": Update device particle copy");
 #endif
+  //profile << "BEGIN " + step_str + " Particle_Data_Movement " + std::to_string(sp_counter) + ": Update device particle copy\n";
       KOKKOS_TIC();
         auto pc_d_subview = Kokkos::subview(sp->k_pc_d, std::make_pair(0, num_to_copy), Kokkos::ALL);
         auto pci_d_subview = Kokkos::subview(sp->k_pc_i_d, std::make_pair(0, num_to_copy));
@@ -408,6 +437,7 @@ int sp_counter = 0;
 //      Kokkos::deep_copy(sp->k_pc_i_d, sp->k_pc_i_h);
       KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 //      KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
+  //profile << "END " + step_str + " Particle_Data_Movement " + std::to_string(sp_counter) + ": Update device particle copy\n";
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::popRegion();
 #endif
@@ -415,6 +445,7 @@ int sp_counter = 0;
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::pushRegion(" " + step_str + " Backfill " + std::to_string(sp_counter) + ": Append moved particles to device particles");
 #endif
+  //profile << "BEGIN " + step_str + " Backfill " + std::to_string(sp_counter) + ": Append moved particles to device particles\n";
       KOKKOS_TIC(); // Time this data movement
       auto& particle_copy = sp->k_pc_d;
       auto& particle_copy_i = sp->k_pc_i_d;
@@ -443,6 +474,7 @@ int sp_counter = 0;
       sp->num_to_copy = 0;
       KOKKOS_TOC( BACKFILL, 1); // Don't double count
 //      KOKKOS_TOCN( BACKFILL, 1); // Don't double count
+  //profile << "END " + step_str + " Backfill " + std::to_string(sp_counter) + ": Append moved particles to device particles\n";
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::popRegion();
 #endif
@@ -509,7 +541,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " clear_jf");
 #endif 
+  //profile << "BEGIN " + step_str + " clear_jf\n";
   TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
+  //profile << "END " + step_str + " clear_jf\n";
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
 #endif
@@ -526,7 +560,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
     Kokkos::Profiling::pushRegion(" " + step_str + " unload_accumulator_array");
 #endif
+  //profile << "BEGIN " + step_str + " unload_accumulator_array\n";
     TIC unload_accumulator_array_kokkos( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
+  //profile << "END " + step_str + " unload_accumulator_array\n";
 #ifdef VPIC_ENABLE_PAPI
     Kokkos::Profiling::popRegion();
 #endif
@@ -543,7 +579,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " synchronize_jf");
 #endif
+  //profile << "BEGIN " + step_str + " synchronize_jf\n";
   TIC FAK->k_synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
+  //profile << "END " + step_str + " synchronize_jf\n";
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
 #endif
@@ -564,9 +602,11 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
           Kokkos::Profiling::pushRegion(" " + step_str + " Field_Data_Movement: To host before current injection");
 #endif
+  //profile << "BEGIN " + step_str + " Field_Data_Movement: To host before current injection\n";
           KOKKOS_TIC();
           KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
           KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+  //profile << "END " + step_str + " Field_Data_Movement: To host before current injection\n";
 //          KOKKOS_TOCN(FIELD_DATA_MOVEMENT, 1);
 #ifdef VPIC_ENABLE_PAPI
           Kokkos::Profiling::popRegion();
@@ -575,7 +615,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::pushRegion(" " + step_str + " user_current_injection");
 #endif
+  //profile << "BEGIN " + step_str + " user_current_injection\n";
       TIC user_current_injection(); TOC( user_current_injection, 1 );
+  //profile << "END " + step_str + " user_current_injection\n";
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::popRegion();
 #endif
@@ -583,9 +625,11 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
           Kokkos::Profiling::pushRegion(" " + step_str + " Field_Data_Movement: To device after current injection");
 #endif
+  //profile << "BEGIN " + step_str + " Field_Data_Movement: To device after current injection\n";
           KOKKOS_TIC();
           KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
           KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+  //profile << "END " + step_str + " Field_Data_Movement: To device after current injection\n";
 //          KOKKOS_TOCN(FIELD_DATA_MOVEMENT, 1);
 #ifdef VPIC_ENABLE_PAPI
           Kokkos::Profiling::popRegion();
@@ -602,9 +646,11 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " advance_b: First half step");
 #endif
+  //profile << "BEGIN " + step_str + " advance_b: First half step\n";
   KOKKOS_TIC();
   FAK->advance_b( field_array, 0.5 );
   KOKKOS_TOC( advance_b, 1 );
+  //profile << "END " + step_str + " advance_b: First half step\n";
 //  KOKKOS_TOCN( advance_b, 1 );
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
@@ -622,7 +668,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " advance_e");
 #endif
+  //profile << "BEGIN " + step_str + " advance_e\n";
   TIC FAK->advance_e_kokkos( field_array, 1.0 ); TOC( advance_e, 1 );
+  //profile << "END " + step_str + " advance_e\n";
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
 #endif
@@ -640,9 +688,11 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
             Kokkos::Profiling::pushRegion(" " + step_str + " Field_Data_Movement: To host before field injection");
 #endif
+  //profile << "BEGIN " + step_str + " Field_Data_Movement: To host before field injection\n";
             KOKKOS_TIC();
             KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
             KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+  //profile << "END " + step_str + " Field_Data_Movement: To host before field injection\n";
 //            KOKKOS_TOCN(FIELD_DATA_MOVEMENT, 1);
 #ifdef VPIC_ENABLE_PAPI
             Kokkos::Profiling::popRegion();
@@ -651,7 +701,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
         Kokkos::Profiling::pushRegion(" " + step_str + " user_field_injection");
 #endif
+  //profile << "BEGIN " + step_str + " user_field_injection\n";
         TIC user_field_injection(); TOC( user_field_injection, 1 );
+  //profile << "END " + step_str + " user_field_injection\n";
 #ifdef VPIC_ENABLE_PAPI
         Kokkos::Profiling::popRegion();
 #endif
@@ -659,9 +711,11 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
             Kokkos::Profiling::pushRegion(" " + step_str + " Field_Data_Movement: To device after field injection");
 #endif
+  //profile << "BEGIN " + step_str + " Field_Data_Movement: To device after field injection\n";
             KOKKOS_TIC();
             KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
             KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+  //profile << "END " + step_str + " Field_Data_Movement: To device after field injection\n";
 //            KOKKOS_TOCN(FIELD_DATA_MOVEMENT, 1);
 #ifdef VPIC_ENABLE_PAPI
             Kokkos::Profiling::popRegion();
@@ -680,7 +734,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " advance_b: Second half step");
 #endif
+  //profile << "BEGIN " + step_str + " advance_b: Second half step\n";
   TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
+  //profile << "END " + step_str + " advance_b: Second half step\n";
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
 #endif
@@ -700,7 +756,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
     Kokkos::Profiling::pushRegion(" " + step_str + " clear_rhof");
 #endif
+  //profile << "BEGIN " + step_str + " clear_rhof\n";
     TIC FAK->clear_rhof_kokkos( field_array ); TOC( clear_rhof,1 );
+  //profile << "END " + step_str + " clear_rhof\n";
 #ifdef VPIC_ENABLE_PAPI
     Kokkos::Profiling::popRegion();
 #endif
@@ -717,6 +775,7 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
         Kokkos::Profiling::pushRegion(" " + step_str + " accumulate_rho_p");
 #endif
+  //profile << "BEGIN " + step_str + " accumulate_rho_p\n";
         KOKKOS_TIC();
         LIST_FOR_EACH( sp, species_list )
         {
@@ -725,6 +784,7 @@ sp_counter ++;
         }
         KOKKOS_TOC( accumulate_rho_p, species_list->id );
 //        KOKKOS_TOCN( accumulate_rho_p, species_list->id );
+  //profile << "END " + step_str + " accumulate_rho_p\n";
 #ifdef VPIC_ENABLE_PAPI
         Kokkos::Profiling::popRegion();
 #endif
@@ -740,7 +800,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
     Kokkos::Profiling::pushRegion(" " + step_str + " synchronize_rho");
 #endif
+  //profile << "BEGIN " + step_str + " synchronize_rho\n";
     TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+  //profile << "END " + step_str + " synchronize_rho\n";
 #ifdef VPIC_ENABLE_PAPI
     Kokkos::Profiling::popRegion();
 #endif
@@ -759,7 +821,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::pushRegion(" " + step_str + " compute_div_e_err: Round " + std::to_string(round));
 #endif
+  //profile << "BEGIN " + step_str + " compute_div_e_err: Round " + std::to_string(round) + "\n";
       TIC FAK->compute_div_e_err_kokkos( field_array ); TOC( compute_div_e_err, 1 );
+  //profile << "END " + step_str + " compute_div_e_err: Round " + std::to_string(round) + "\n";
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::popRegion();
 #endif
@@ -771,7 +835,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
         Kokkos::Profiling::pushRegion(" " + step_str + " compute_rms_div_e_err: Round" + std::to_string(round));
 #endif
+  //profile << "BEGIN " + step_str + " compute_rms_div_e_err: Round " + std::to_string(round) + "\n";
         TIC err = FAK->compute_rms_div_e_err_kokkos( field_array ); TOC( compute_rms_div_e_err, 1 );
+  //profile << "END " + step_str + " compute_rms_div_e_err: Round " + std::to_string(round) + "\n";
 #ifdef VPIC_ENABLE_PAPI
         Kokkos::Profiling::popRegion();
 #endif
@@ -784,7 +850,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::pushRegion(" " + step_str + " clean_div_e: Round" + std::to_string(round));
 #endif
+  //profile << "BEGIN " + step_str + " clean_div_e: Round" + std::to_string(round) + "\n";
       TIC FAK->clean_div_e_kokkos( field_array ); TOC( clean_div_e, 1 );
+  //profile << "END " + step_str + " clean_div_e: Round" + std::to_string(round) + "\n";
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::popRegion();
 #endif
@@ -817,7 +885,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::pushRegion(" " + step_str + " compute_div_b_err: Round" + std::to_string(round));
 #endif
+  //profile << "BEGIN " + step_str + " compute_div_b_err: Round" + std::to_string(round) + "\n";
       TIC FAK->compute_div_b_err_kokkos( field_array ); TOC( compute_div_b_err, 1 );
+  //profile << "END " + step_str + " compute_div_b_err: Round" + std::to_string(round) + "\n";
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::popRegion();
 #endif
@@ -829,7 +899,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
         Kokkos::Profiling::pushRegion(" " + step_str + " compute_rms_div_b_err: Round" + std::to_string(round));
 #endif
+  //profile << "BEGIN " + step_str + " compute_rms_div_b_err: Round" + std::to_string(round) + "\n";
         TIC err = FAK->compute_rms_div_b_err_kokkos( field_array ); TOC( compute_rms_div_b_err, 1 );
+  //profile << "END " + step_str + " compute_rms_div_b_err: Round" + std::to_string(round) + "\n";
 #ifdef VPIC_ENABLE_PAPI
         Kokkos::Profiling::popRegion();
 #endif
@@ -845,7 +917,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::pushRegion(" " + step_str + " clean_div_b: Round" + std::to_string(round));
 #endif
+  //profile << "BEGIN " + step_str + " clean_div_b: Round" + std::to_string(round) + "\n";
       TIC FAK->clean_div_b_kokkos( field_array ); TOC( clean_div_b, 1 );
+  //profile << "END " + step_str + " clean_div_b: Round" + std::to_string(round) + "\n";
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::popRegion();
 #endif
@@ -867,7 +941,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
     Kokkos::Profiling::pushRegion(" " + step_str + " synchronize_tang_e_norm_b");
 #endif
+  //profile << "BEGIN " + step_str + " synchronize_tang_e_norm_b\n";
     TIC err = FAK->synchronize_tang_e_norm_b_kokkos( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+  //profile << "END " + step_str + " synchronize_tang_e_norm_b\n";
 #ifdef VPIC_ENABLE_PAPI
     Kokkos::Profiling::popRegion();
 #endif
@@ -893,7 +969,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " load_interpolator_array");
 #endif
+  //profile << "BEGIN " + step_str + " load_interpolator_array\n";
   if( species_list ) TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
+  //profile << "END " + step_str + " load_interpolator_array\n";
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
 #endif
@@ -926,10 +1004,12 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::pushRegion(" " + step_str + " Particle_Data_Movement: To host before user_diagnostics");
 #endif
+  //profile << "BEGIN " + step_str + " Particle_Data_Movement: To host before user_diagnostics\n";
       // Copy particles back
       KOKKOS_TIC(); // Time this data movement
       KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
       KOKKOS_TOC( user_diagnostics, 1);
+  //profile << "END " + step_str + " Particle_Data_Movement: To host before user_diagnostics\n";
 //      KOKKOS_TOCN( user_diagnostics, 1);
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::popRegion();
@@ -941,10 +1021,12 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::pushRegion(" " + step_str + " Field_Data_Movement: To host before user diagnostics");
 #endif
+  //profile << "BEGIN " + step_str + " Field_Data_Movement: To host before user diagnostics\n";
       KOKKOS_TIC(); // Time this data movement
       KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
       KOKKOS_TOC( user_diagnostics, 1);
 //      KOKKOS_TOCN( user_diagnostics, 1);
+  //profile << "END " + step_str + " Field_Data_Movement: To host before user diagnostics\n";
 #ifdef VPIC_ENABLE_PAPI
       Kokkos::Profiling::popRegion();
 #endif
@@ -954,7 +1036,9 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " user_diagnostics");
 #endif
+  //profile << "BEGIN " + step_str + " user_diagnostics\n";
   TIC user_diagnostics(); TOC( user_diagnostics, 1 );
+  //profile << "END " + step_str + " user_diagnostics\n";
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
 #endif
@@ -969,15 +1053,14 @@ sp_counter ++;
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " dump_energies");
 #endif
+  //profile << "BEGIN " + step_str + " dump_energies\n";
   TIC dump_energies("energies.txt", 1); TOC( dump_energies, 1);
+  //profile << "END " + step_str + " dump_energies\n";
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::popRegion();
 #endif
 #endif
 
-#ifdef VPIC_ENABLE_PAPI
-//Kokkos::Profiling::popRegion();
-#endif
   return 1;
 }
 

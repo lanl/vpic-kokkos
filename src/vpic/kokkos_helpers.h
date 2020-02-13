@@ -42,6 +42,8 @@ using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
 using k_field_edge_t = Kokkos::View<material_id* [FIELD_EDGE_COUNT]>;
 
 // TODO Consolidate using Cabana?
+//using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::CudaUVMSpace>;
+//using k_particles_i_t = Kokkos::View<int*, Kokkos::CudaUVMSpace>;
 using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
 using k_particles_i_t = Kokkos::View<int*>;
 

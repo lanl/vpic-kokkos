@@ -843,8 +843,8 @@ begin_initialization {
   double f_H              = 1-f_He;   // Ratio of number density of H  to total ion density 
 
   int load_particles = 1;         // Flag to turn off particle load for testing wave launch. 
-//  double nppc        = 512;
-  double nppc        = 1;
+  double nppc        = 512;
+//  double nppc        = 1;
 
 // Here _He is C+6
   double A_H                = 1;
@@ -867,7 +867,7 @@ begin_initialization {
 
   double nx                = 1200; //11232;
   double ny                = 1;    // 2D problem in x-z plane
-  double nz                = 290; //756;  // was 549;
+  double nz                = 580; //756;  // was 549;
 //  double nx                = 55; //11232;
 //  double ny                = 55;    // 2D problem in x-z plane
 //  double nz                = 55; //756;  // was 549;
@@ -1029,7 +1029,7 @@ begin_initialization {
 
   // SETUP HIGH-LEVEL SIMULATION PARMETERS
   sim_log("Setting up high-level simulation parameters. "); 
-  num_step             = 100; //int(t_stop/(dt)); 
+  num_step             = 1000; //int(t_stop/(dt)); 
   status_interval      = 2000; 
 //  status_interval      = -1; 
 //  sync_shared_interval = status_interval/1;
