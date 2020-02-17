@@ -11,6 +11,9 @@
 //using cnl::fixed_point;
 //using fixed_point_t = fixed_point<int32_t, -23>;
 #include "half.hpp"
+#ifdef __CUDA_ARCH__
+#include "cuda_fp16.h"
+#endif
 using half_float::half;
 
 // This module implements kokkos macros
@@ -36,9 +39,19 @@ using half_float::half;
 
 typedef int16_t material_id;
 
-typedef float pos_t;
-typedef float mom_t;
-typedef float mixed_t;
+typedef float float_t;
+//typedef __half pos_t;
+//typedef __half mom_t;
+//typedef __half mixed_t;
+#ifdef __CUDA_ARCH__
+#define pos_t __half
+#define mom_t __half
+#define mixed_t __half
+#else
+#define pos_t half
+#define mom_t half
+#define mixed_t half
+#endif
 
 class k_particles_struct {
     public:

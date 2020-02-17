@@ -199,7 +199,7 @@ void vacuum_compute_div_e_err_interior_kokkos(field_array_t* fa, const grid_t* g
 
     k_field_t& k_field = fa->k_f_d;
     k_field_edge_t& k_field_edge = fa->k_fe_d;
-    k_material_coefficient_t& k_matcoeff = sfa_p->k_mc_d;
+//    k_material_coefficient_t& k_matcoeff = sfa_p->k_mc_d;
 
     Kokkos::parallel_for("compute_div_e interior", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
@@ -231,7 +231,7 @@ void vacuum_compute_div_e_err_exterior_kokkos(field_array_t* fa, const grid_t* g
 
     k_field_t& k_field = fa->k_f_d;
     k_field_edge_t& k_field_edge = fa->k_fe_d;
-    k_material_coefficient_t& k_matcoeff = sfa_p->k_mc_d;
+//    k_material_coefficient_t& k_matcoeff = sfa_p->k_mc_d;
 
     // z faces, x edges, y edges and all corners
     Kokkos::parallel_for("z faces, x edges, y edges and all corners", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),

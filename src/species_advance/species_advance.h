@@ -357,15 +357,15 @@ move_p_kokkos(
 
     //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
 
-    s_dir[0] = (s_dispx>0) ? 1 : -1;
-    s_dir[1] = (s_dispy>0) ? 1 : -1;
-    s_dir[2] = (s_dispz>0) ? 1 : -1;
+    s_dir[0] = (s_dispx>static_cast<pos_t>(0)) ? 1 : -1;
+    s_dir[1] = (s_dispy>static_cast<pos_t>(0)) ? 1 : -1;
+    s_dir[2] = (s_dispz>static_cast<pos_t>(0)) ? 1 : -1;
 
     // Compute the twice the fractional distance to each potential
     // streak/cell face intersection.
-    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
-    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
-    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
+    v0 = (s_dispx==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[0]-s_midx)/s_dispx;
+    v1 = (s_dispy==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[1]-s_midy)/s_dispy;
+    v2 = (s_dispz==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[2]-s_midz)/s_dispz;
 
     // Determine the fractional length and axis of current streak. The
     // streak ends on either the first face intersected by the
@@ -390,19 +390,20 @@ move_p_kokkos(
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
     // current quadrant in a time-step
-    v5 = q*s_dispx*s_dispy*s_dispz*half(one_third);
+//    v5 = q*s_dispx*s_dispy*s_dispz*half(one_third);
+    v5 = static_cast<pos_t>(q)*s_dispx*s_dispy*s_dispz*static_cast<pos_t>(one_third);
 
     //a = (float *)(&d_accumulators[ci]);
 
 #   define accumulate_j(X,Y,Z)                                        \
-    v4  = q*s_disp##X;    /* v2 = q ux                            */  \
+    v4  = static_cast<pos_t>(q)*s_disp##X;    /* v2 = q ux                            */  \
     v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
     v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
     v1 += v4;             /* v1 = q ux (1+dy)                     */  \
-    v4  = 1+s_mid##Z;     /* v4 = 1+dz                            */  \
+    v4  = static_cast<pos_t>(1)+s_mid##Z;     /* v4 = 1+dz                            */  \
     v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
     v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
-    v4  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
+    v4  = static_cast<pos_t>(1)-s_mid##Z;     /* v4 = 1-dz                            */  \
     v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
     v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
     v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
@@ -435,9 +436,9 @@ move_p_kokkos(
 #   undef accumulate_j
 
     // Compute the remaining particle displacment
-    pm->dispx -= s_dispx;
-    pm->dispy -= s_dispy;
-    pm->dispz -= s_dispz;
+    pm->dispx -= static_cast<float>(s_dispx);
+    pm->dispy -= static_cast<float>(s_dispy);
+    pm->dispz -= static_cast<float>(s_dispz);
 
     //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset
@@ -466,7 +467,7 @@ move_p_kokkos(
         k_part.dz(pi) = v0; // Avoid roundoff fiascos--put the particle
     }
                            // _exactly_ on the boundary.
-    face = axis; if( v0>0 ) face += 3;
+    face = axis; if( v0>static_cast<pos_t>(0) ) face += 3;
 
     // TODO: clean this fixed index to an enum
     //neighbor = g->neighbor[ 6*ii + face ];
@@ -580,11 +581,13 @@ move_p_kokkos(
 
   pos_t s_midx, s_midy, s_midz;
   pos_t s_dispx, s_dispy, s_dispz;
+  pos_t v0, v1, v2, v3, v4, v5, q;
+  pos_t s_dir[3];
 
 //  float s_midx, s_midy, s_midz;
 //  float s_dispx, s_dispy, s_dispz;
-  float s_dir[3];
-  float v0, v1, v2, v3, v4, v5, q;
+//  float s_dir[3];
+//  float v0, v1, v2, v3, v4, v5, q;
   int axis, face;
   int64_t neighbor;
   //int pi = int(local_pm_i);
@@ -612,15 +615,15 @@ move_p_kokkos(
 
     //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
 
-    s_dir[0] = (s_dispx>0) ? 1 : -1;
-    s_dir[1] = (s_dispy>0) ? 1 : -1;
-    s_dir[2] = (s_dispz>0) ? 1 : -1;
+    s_dir[0] = (s_dispx>static_cast<pos_t>(0)) ? 1 : -1;
+    s_dir[1] = (s_dispy>static_cast<pos_t>(0)) ? 1 : -1;
+    s_dir[2] = (s_dispz>static_cast<pos_t>(0)) ? 1 : -1;
 
     // Compute the twice the fractional distance to each potential
     // streak/cell face intersection.
-    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
-    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
-    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
+    v0 = (s_dispx==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[0]-s_midx)/s_dispx;
+    v1 = (s_dispy==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[1]-s_midy)/s_dispy;
+    v2 = (s_dispz==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[2]-s_midz)/s_dispz;
 
     // Determine the fractional length and axis of current streak. The
     // streak ends on either the first face intersected by the
@@ -645,19 +648,19 @@ move_p_kokkos(
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
     // current quadrant in a time-step
-    v5 = q*s_dispx*s_dispy*s_dispz*one_third;
+    v5 = static_cast<pos_t>(q)*s_dispx*s_dispy*s_dispz*static_cast<pos_t>(one_third);
 
     //a = (float *)(&d_accumulators[ci]);
 
 #   define accumulate_j(X,Y,Z)                                        \
-    v4  = q*s_disp##X;    /* v2 = q ux                            */  \
+    v4  = static_cast<pos_t>(q)*s_disp##X;    /* v2 = q ux                            */  \
     v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
     v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
     v1 += v4;             /* v1 = q ux (1+dy)                     */  \
-    v4  = 1+s_mid##Z;     /* v4 = 1+dz                            */  \
+    v4  = static_cast<pos_t>(1)+s_mid##Z;     /* v4 = 1+dz                            */  \
     v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
     v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
-    v4  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
+    v4  = static_cast<pos_t>(1)-s_mid##Z;     /* v4 = 1-dz                            */  \
     v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
     v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
     v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
@@ -690,9 +693,9 @@ move_p_kokkos(
 #   undef accumulate_j
 
     // Compute the remaining particle displacment
-    pm->dispx -= s_dispx;
-    pm->dispy -= s_dispy;
-    pm->dispz -= s_dispz;
+    pm->dispx -= static_cast<float_t>(s_dispx);
+    pm->dispy -= static_cast<float_t>(s_dispy);
+    pm->dispz -= static_cast<float_t>(s_dispz);
 
     //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset
@@ -722,7 +725,7 @@ move_p_kokkos(
     }
 //    k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
                            // _exactly_ on the boundary.
-    face = axis; if( v0>0 ) face += 3;
+    face = axis; if( v0>static_cast<pos_t>(0) ) face += 3;
 
     // TODO: clean this fixed index to an enum
     //neighbor = g->neighbor[ 6*ii + face ];

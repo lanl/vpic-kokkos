@@ -55,7 +55,8 @@ compute_rms_div_e_err_kokkos( const field_array_t * RESTRICT fa ) {
 //  const field_t * f, * f0;
   const grid_t * RESTRICT g;
   double err = 0, temp_err = 0, local[2], global[2];
-  int x, y, z, nx, ny, nz, p;
+  int nx, ny, nz;
+//  int x, y, z, nx, ny, nz, p;
 
   if( !fa ) ERROR(( "Bad args" ));
 //  f = fa->f;

@@ -8,6 +8,22 @@
 #include "../../vpic/kokkos_helpers.h"
 #include "../../vpic/vpic.h"
 
+//KOKKOS_INLINE_FUNCTION __half sqrt(__half a) {
+//#ifdef __CUDA_ARCH__
+//  return hsqrt(a);
+//#else
+//  return sqrt(a);
+//#endif
+//}
+//
+//KOKKOS_INLINE_FUNCTION __half float2half(float a) {
+//#ifdef __CUDA_ARCH__
+//  return __float2half(a);
+//#else
+//  return static_cast<__half>(a);
+//#endif
+//}
+
 void
 advance_p_kokkos(
         k_particles_soa_t& k_part,
@@ -173,12 +189,25 @@ sp_[id]->
 //                           dx*( f_deydx + dz*f_d2eydzdx ) );
 //    float haz  = qdt_2mc*(    ( f_ez    + dx*f_dezdx    ) +
 //                           dy*( f_dezdy + dx*f_d2ezdxdy ) );
-    mixed_t hax  = static_cast<mixed_t>(qdt_2mc)*(    ( static_cast<mixed_t>(f_ex)    + dy*static_cast<mixed_t>(f_dexdy)    ) +
-                           dz*( static_cast<mixed_t>(f_dexdz) + dy*static_cast<mixed_t>(f_d2exdydz) ) );
-    mixed_t hay  = static_cast<mixed_t>(qdt_2mc)*(    ( static_cast<mixed_t>(f_ey)    + dz*static_cast<mixed_t>(f_deydz)    ) +
-                           dx*( static_cast<mixed_t>(f_deydx) + dz*static_cast<mixed_t>(f_d2eydzdx) ) );
-    mixed_t haz  = static_cast<mixed_t>(qdt_2mc)*(    ( static_cast<mixed_t>(f_ez)    + dx*static_cast<mixed_t>(f_dezdx)    ) +
-                           dy*( static_cast<mixed_t>(f_dezdy) + dx*static_cast<mixed_t>(f_d2ezdxdy) ) );
+    #ifdef __CUDA_ARCH__
+//    mixed_t hax  = static_cast<mixed_t>(qdt_2mc)*( (static_cast<mixed_t>(f_ex) + dy*static_cast<mixed_t>(f_dexdy)) +
+//                           dz*(static_cast<mixed_t>(f_dexdz) + dy*static_cast<mixed_t>(f_d2exdydz)) );
+    mixed_t temp = __hfma(dy, float2half(f_dexdy), float2half(f_ex));
+    mixed_t temp2 = __hfma(dy, float2half(f_d2exdydz), float2half(f_dexdz));
+    mixed_t temp3 = __hadd(temp, temp2);
+    mixed_t hax = __hmul(qdt_2mc, temp3);
+    mixed_t hay  = static_cast<mixed_t>(qdt_2mc)*( (static_cast<mixed_t>(f_ey) + dz*static_cast<mixed_t>(f_deydz)) +
+                           dx*(static_cast<mixed_t>(f_deydx) + dz*static_cast<mixed_t>(f_d2eydzdx)) );
+    mixed_t haz  = static_cast<mixed_t>(qdt_2mc)*( (static_cast<mixed_t>(f_ez) + dx*static_cast<mixed_t>(f_dezdx)) +
+                           dy*(static_cast<mixed_t>(f_dezdy) + dx*static_cast<mixed_t>(f_d2ezdxdy)) );
+    #else
+    mixed_t hax  = static_cast<mixed_t>(qdt_2mc)*( (static_cast<mixed_t>(f_ex) + dy*static_cast<mixed_t>(f_dexdy)) +
+                           dz*(static_cast<mixed_t>(f_dexdz) + dy*static_cast<mixed_t>(f_d2exdydz)) );
+    mixed_t hay  = static_cast<mixed_t>(qdt_2mc)*( (static_cast<mixed_t>(f_ey) + dz*static_cast<mixed_t>(f_deydz)) +
+                           dx*(static_cast<mixed_t>(f_deydx) + dz*static_cast<mixed_t>(f_d2eydzdx)) );
+    mixed_t haz  = static_cast<mixed_t>(qdt_2mc)*( (static_cast<mixed_t>(f_ez) + dx*static_cast<mixed_t>(f_dezdx)) +
+                           dy*(static_cast<mixed_t>(f_dezdy) + dx*static_cast<mixed_t>(f_d2ezdxdy)) );
+    #endif
     //printf(" inter %d vs %ld \n", ii, k_interp.size());
 //    float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
 //    float cby  = f_cby + dy*f_dcbydy;
@@ -350,6 +379,37 @@ sp_[id]->
   //delete(k_local_particle_movers_p);
   //return h_nm(0);
 
+  #undef p_dx  
+  #undef p_dy  
+  #undef p_dz  
+  #undef p_ux  
+  #undef p_uy  
+  #undef p_uz  
+  #undef p_w   
+  #undef pii   
+
+  #undef f_cbx 
+  #undef f_cby 
+  #undef f_cbz 
+  #undef f_ex  
+  #undef f_ey  
+  #undef f_ez  
+
+  #undef f_dexdy    
+  #undef f_dexdz    
+
+  #undef f_d2exdydz 
+  #undef f_deydx    
+  #undef f_deydz    
+
+  #undef f_d2eydzdx 
+  #undef f_dezdx    
+  #undef f_dezdy    
+
+  #undef f_d2ezdxdy 
+  #undef f_dcbxdx   
+  #undef f_dcbydy   
+  #undef f_dcbzdz   
 }
 
 void
@@ -716,6 +776,46 @@ sp_[id]->
   //delete(k_local_particle_movers_p);
   //return h_nm(0);
 
+  #undef p_dx  
+  #undef p_dy  
+  #undef p_dz  
+  #undef p_ux  
+  #undef p_uy  
+  #undef p_uz  
+  #undef p_w   
+  #undef pii   
+
+//  #undef p_dx
+//  #undef p_dy
+//  #undef p_dz
+//  #undef p_ux
+//  #undef p_uy
+//  #undef p_uz
+//  #undef p_w 
+//  #undef pii 
+
+  #undef f_cbx 
+  #undef f_cby 
+  #undef f_cbz 
+  #undef f_ex  
+  #undef f_ey  
+  #undef f_ez  
+
+  #undef f_dexdy    
+  #undef f_dexdz    
+
+  #undef f_d2exdydz 
+  #undef f_deydx    
+  #undef f_deydz    
+
+  #undef f_d2eydzdx 
+  #undef f_dezdx    
+  #undef f_dezdy    
+
+  #undef f_d2ezdxdy 
+  #undef f_dcbxdx   
+  #undef f_dcbydy   
+  #undef f_dcbzdz   
 }
 
 void
