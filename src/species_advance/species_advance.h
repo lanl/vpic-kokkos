@@ -134,12 +134,12 @@ class species_t {
         species_t(int n_particles, int n_pmovers) :
             k_p_d("k_particles", n_particles),
             k_p_i_d("k_particles_i", n_particles),
-            k_pm_d("k_particle_movers", n_pmovers),
-            k_pm_i_d("k_particle_movers_i", n_pmovers),
             k_pc_d("k_particle_copy_for_movers", n_pmovers),
             k_pc_i_d("k_particle_copy_for_movers_i", n_pmovers),
             k_pr_h("k_particle_send_for_movers", n_pmovers),
             k_pr_i_h("k_particle_send_for_movers_i", n_pmovers),
+            k_pm_d("k_particle_movers", n_pmovers),
+            k_pm_i_d("k_particle_movers_i", n_pmovers),
             k_nm_d("k_nm") // size 1
     {
         k_p_h = Kokkos::create_mirror_view(k_p_d);
