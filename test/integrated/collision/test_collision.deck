@@ -38,19 +38,19 @@ begin_initialization {
   double de   = 1;         // Length normalization (electron inertial length)
   double eps0 = 1;         // Permittivity of space
 
-  double cfl_req   = 0.99;  // How close to Courant should we try to run
-  double wpedt_max = 0.36;  // Max dt allowed if Courant not too restrictive
-  double damp      = 0.0;   // Level of radiation damping
-  int rng_seed     = 1;     // Random number seed increment
+  //double cfl_req   = 0.99;  // How close to Courant should we try to run
+  //double wpedt_max = 0.36;  // Max dt allowed if Courant not too restrictive
+  //double damp      = 0.0;   // Level of radiation damping
+  //int rng_seed     = 1;     // Random number seed increment
 
   // Physics parameters
   double mi_me   = 1836.0;   // Ion mass / electron mass
   double Te      = 0.001;     // Electron temperature in m_ec^2
   double Ti_Te   = 1.0;      // Ion temperature / electron temperature
   double n0      = 1.0;      // Density
-  double Z       = 1.0;      // Ion charge
+  //double Z       = 1.0;      // Ion charge
   double vdre_vthe =  1.0;   // 1 gives Fig. 8a in Takizuka & Abe (1977)
-  double taue    = 1.0*sqrt(2.0);      // simulation tau_e's to run
+  //double taue    = 1.0*sqrt(2.0);      // simulation tau_e's to run
 
   double quota   = 0.1;   // run quota in hours
   double quota_sec = quota*3600;  // Run quota in seconds
@@ -127,12 +127,13 @@ begin_initialization {
     (iz) = _iz;                                                         \
   } END_PRIMITIVE
 
-  int ix, iy, iz, left=0,right=0,top=0,bottom=0;
-  RANK_TO_INDEX( int(rank()), ix, iy, iz );
-  if ( ix ==0 ) left=1;
-  if ( ix ==topology_x-1 ) right=1;
-  if ( iz ==0 ) bottom=1;
-  if ( iz ==topology_z-1 ) top=1;
+  //int ix, iy, iz;
+  //int left=0,right=0,top=0,bottom=0;
+  //RANK_TO_INDEX( int(rank()), ix, iy, iz );
+  //if ( ix ==0 ) left=1;
+  //if ( ix ==topology_x-1 ) right=1;
+  //if ( iz ==0 ) bottom=1;
+  //if ( iz ==topology_z-1 ) top=1;
 
   ///////////////////////////////////////////////
   // Setup high level simulation parameters
@@ -194,8 +195,7 @@ begin_initialization {
   // Define resistive layer surrounding boundary --> set thickness=0
   // to eliminate this feature
   //double thickness = 2;
-  //#define resistive_layer (x < hx*thickness || x > Lx-hx*thickness	\
-  //                     || z <-Lz/2+hz*thickness  || z > Lz/2-hz*thickness )
+  //#define resistive_layer (x < hx*thickness || x > Lx-hx*thickness || z <-Lz/2+hz*thickness  || z > Lz/2-hz*thickness )
 
   //if (thickness > 0)
   // set_region_material(resistive_layer, resistive, resistive);
@@ -570,9 +570,9 @@ begin_diagnostics {
    * THE LOCATION OF THE GLOBAL HEADER!!!
    *------------------------------------------------------------------------*/
 
-  const int nx=grid->nx;
-  const int ny=grid->ny;
-  const int nz=grid->nz;
+  //const int nx=grid->nx;
+  //const int ny=grid->ny;
+  //const int nz=grid->nz;
 
   /*--------------------------------------------------------------------------
    * Normal rundata dump
