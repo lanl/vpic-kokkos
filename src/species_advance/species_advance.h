@@ -387,10 +387,11 @@ move_p_kokkos(
     v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
     v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
     v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
-    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-    //Kokkos::atomic_add(&a[0], v0); \
-    //Kokkos::atomic_add(&a[1], v1); \
-    //Kokkos::atomic_add(&a[2], v2); \
+    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+
+    //Kokkos::atomic_add(&a[0], v0);
+    //Kokkos::atomic_add(&a[1], v1);
+    //Kokkos::atomic_add(&a[2], v2);
     //Kokkos::atomic_add(&a[3], v3);
 
     accumulate_j(x,y,z);
@@ -610,9 +611,10 @@ move_p_kokkos_host_serial(
     v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
     v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
     v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-    //Kokkos::atomic_add(&a[0], v0); \
-    //Kokkos::atomic_add(&a[1], v1); \
-    //Kokkos::atomic_add(&a[2], v2); \
+
+    //Kokkos::atomic_add(&a[0], v0);
+    //Kokkos::atomic_add(&a[1], v1);
+    //Kokkos::atomic_add(&a[2], v2);
     //Kokkos::atomic_add(&a[3], v3);
 
     accumulate_j(x,y,z);
