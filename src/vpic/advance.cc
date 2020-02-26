@@ -65,10 +65,6 @@ int vpic_simulation::advance(void) {
   // yields a first order accurate Trotter factorization (not a second
   // order accurate factorization).
 
-  // TODO: remove this
-  KOKKOS_TIC()
-  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
-  KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
   if( collision_op_list )
   {
       //Kokkos::abort("Collision is not supported");
@@ -76,10 +72,6 @@ int vpic_simulation::advance(void) {
   }
 
   TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
-  // TODO: remove this
-  KOKKOS_TIC()
-  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
-  KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
 
 //  KOKKOS_TIC(); // Time this data movement
 //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);

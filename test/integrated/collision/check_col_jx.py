@@ -71,7 +71,7 @@ for i in range(numsteps):
 print("max errors -- relative {}% absolute {}".format(max_rel, max_ab))
 
 rel_tol = 1.0  # 1%
-ab_tol = 0.008  # 1%
+ab_tol = 0.015  # 1%
 if max_rel > rel_tol or max_ab > ab_tol:
     # Error out
     print("=> Fail")
