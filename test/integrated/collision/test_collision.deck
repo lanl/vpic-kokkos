@@ -714,7 +714,15 @@ begin_particle_collisions{
         if ( status==fail ) ERROR(("Could not open JX data file."));
         fileIO.seek( uint64_t( sizeof(double)* ( step()/global->velocity_interval ) ),
                 SEEK_SET );
-        double jx = 0.5*(field(1,1,1).jfx+field(2,1,1).jfx);
+
+        int nx = grid->nx;
+        int ny = grid->ny;
+        k_field_t& k_field = field_array->k_f_d;
+
+        double jx = 0.5* ( k_field( VOXEL(1,1,1, nx, ny, nz), field_var::jfx)
+                + k_field( VOXEL(2,1,1, nx, ny, nz), field_var::jfx));
+
+        std::cout << "writing jx = " << jx << std::endl;
         //fileIO.print( "%f \n" , jx );
         fileIO.write(&jx,1);
         fileIO.close();

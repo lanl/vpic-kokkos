@@ -37,9 +37,12 @@ if np.all(jx==0):
 
 jx = jx/jx[0]
 
+print(jx)
+
 numsteps = 80  # hard coded to match deck
 t = np.linspace(0, numsteps*dtcoll, numsteps)
 theory = jx[0]*np.exp(-t*nuei)
+print(theory)
 
 show_plot = 1
 if show_plot:
@@ -56,7 +59,7 @@ max_ab = 0.0
 for i in range(numsteps):
     a = jx[i]
     b = theory[i]
-    rel = (1.0 - (b/a)) * 100.0
+    rel = (1.0 - (a/b)) * 100.0
     ab = a-b
 
     if rel > max_rel:
@@ -68,7 +71,8 @@ for i in range(numsteps):
 print("max errors -- relative {}% absolute {}".format(max_rel, max_ab))
 
 rel_tol = 1.0  # 1%
-if max_rel > rel_tol:
+ab_tol = 0.008  # 1%
+if max_rel > rel_tol or max_ab > ab_tol:
     # Error out
     print("=> Fail")
     sys.exit(1)

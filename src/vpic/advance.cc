@@ -44,7 +44,6 @@ int vpic_simulation::advance(void) {
 
   KOKKOS_TOC( sort_particles, 1);
 
-
   // At this point, fields are at E_0 and B_0 and the particle positions
   // are at r_0 and u_{-1/2}.  Further the mover lists for the particles should
   // empty and all particles should be inside the local computational domain.
@@ -65,13 +64,21 @@ int vpic_simulation::advance(void) {
   // yields a first order accurate Trotter factorization (not a second
   // order accurate factorization).
 
+  // TODO: remove this
+  KOKKOS_TIC()
+  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+  KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
   if( collision_op_list )
   {
-      Kokkos::abort("Collision is not supported");
+      //Kokkos::abort("Collision is not supported");
       TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
   }
 
-  //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
+  TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
+  // TODO: remove this
+  KOKKOS_TIC()
+  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
+  KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
 
 //  KOKKOS_TIC(); // Time this data movement
 //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);

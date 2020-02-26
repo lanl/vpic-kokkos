@@ -310,13 +310,13 @@ public:
     return field_array->f[ voxel(ix,iy,iz) ];
   }
 
-    inline k_field_t& get_field() {
-        return field_array->k_f_d;
-    }
+  inline k_field_t& get_field() {
+      return field_array->k_f_d;
+  }
 
-    inline float& k_field(const int ix, const int iy, const int iz, field_var::f_v member) {
-        return field_array->k_f_d(voxel(ix,iy,iz), member);
-    }
+  inline float& k_field(const int ix, const int iy, const int iz, field_var::f_v member) {
+      return field_array->k_f_d(voxel(ix,iy,iz), member);
+  }
 
   inline interpolator_t &
   interpolator( const int v ) {

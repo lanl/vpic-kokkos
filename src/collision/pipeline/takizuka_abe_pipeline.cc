@@ -8,7 +8,7 @@
 
 #include "../../util/pipelines/pipelines.h"
 
-#define CMOV(a,b) if(t0<t1) a=b
+//#define CMOV(a,b) if(t0<t1) a=b
 
 /*
 void scatter_particles(
@@ -77,71 +77,79 @@ void takizuka_abe_collision(
         rng_t* rng // TODO: remove?
 )
 {
-    float urx = pi->ux - pj->ux;
-    float ury = pi->uy - pj->uy;
-    float urz = pi->uz - pj->uz;
-    float wi  = pi->w;
-    float wj  = pj->w;
+    //particle_t * const RESTRICT pi = (PI);
+    //particle_t * const RESTRICT pj = (PJ);
+    float dd, ur, urx, ury, urz, tx, ty, tz, t0, t1, t2, wi, wj, stack[3];
+    int d0, d1, d2;
+
+    urx = pi->ux - pj->ux;
+    ury = pi->uy - pj->uy;
+    urz = pi->uz - pj->uz;
+    wi  = pi->w;
+    wj  = pj->w;
 
     /* There are lots of ways to formulate T vector formation    */
     /* This has no branches (but uses L1 heavily)                */
 
-    float t0 = urx*urx;
-    int d0=0;
-    int d1=1;
-    int d2=2;
-    float t1=t0;
+    t0 = urx*urx;
+    d0=0;
+    d1=1;
+    d2=2;
+    t1=t0;
+    ur  = t0;
 
-    float ur = t0;
     t0 = ury*ury;
-
     //CMOV(d0,1);
     //CMOV(d1,2);
     //CMOV(d2,0);
     //CMOV(t1,t0);
-    // if (t0 < t1)
-    if (ury*ury < urx*urx)
+    if (t0 < t1)
     {
         d0 = 1;
         d1 = 2;
         d2 = 0;
         t1 = t0;
     }
-
     ur += t0;
 
     t0 = urz*urz;
     //CMOV(d0,2);
     //CMOV(d1,0);
     //CMOV(d2,1);
-    // if (t0 < t1)
-    if (urz*urz < urx*urx)
+    if (t0 < t1)
     {
         d0 = 2;
         d1 = 0;
         d2 = 1;
     }
-
     ur += t0;
+
     ur = sqrtf( ur );
 
-    float stack[3] = { urx, ury, urz };
-
+    stack[0] = urx;
+    stack[1] = ury;
+    stack[2] = urz;
     t1  = stack[d1];
-    float t2  = stack[d2];
-    t0  = 1.0 / sqrtf( t1*t1 + t2*t2 + FLT_MIN );
+    t2  = stack[d2];
+    t0  = 1 / sqrtf( t1*t1 + t2*t2 + FLT_MIN );
     stack[d0] =  0;
     stack[d1] =  t0*t2;
-    stack[d2] = -1*t0*t1;
-    float tx = stack[0];
-    float ty = stack[1];
-    float tz = stack[2];
+    stack[d2] = -t0*t1;
+    tx = stack[0];
+    ty = stack[1];
+    tz = stack[2];
 
     t0 = 1;
     t2 = 1/ur;
     t1 = std*sqrtf(t2)*t2;
-    CMOV(t1,t0);
-    float dd = t1*frandn(rng);
+
+    //CMOV(t1,t0);
+    if (t0 < t1)
+    {
+        t1 = t0;
+    }
+
+    dd = t1*frandn(rng);
 
     t0 = 2*dd/(1+dd*dd);
     t1 = 2*M_PI*frand_c0(rng);
@@ -158,8 +166,8 @@ void takizuka_abe_collision(
     t0 = frand_c0(rng);
     t1 = mu_i;
     t2 = mu_j;
-    if(wj < wi && wi*t0 > wj) t1 = 0;
-    if(wi < wj && wj*t0 > wi) t2 = 0;
+    if(wj < wi && wi*t0 > wj) t1 = 0 ;
+    if(wi < wj && wj*t0 > wi) t2 = 0 ;
 
     pi->ux += t1*stack[0];
     pi->uy += t1*stack[1];
@@ -170,67 +178,34 @@ void takizuka_abe_collision(
 }
 
 void
-takizuka_abe_rfb(
-    takizuka_abe_t * RESTRICT cm,
-    int pipeline_rank,
-    int n_pipeline
-)
+takizuka_abe_pipeline_scalar( takizuka_abe_t * RESTRICT cm,
+                              int pipeline_rank,
+                              int n_pipeline )
 {
-    // Self-scattering among species
-    /*
-    for (auto& species :  species_list)
-    {
-        for (auto c : cells)
-        {
-            //int p1 = 0;
-            //int p2 = 0;
 
-            takizuka_abe_collision(
-                spi_p + k0,
-                spj_p + l0,
-                mu_i, mu_j,
-                std,
-                rng
-            );
-        }
-    }
-    */
-}
+  /**/  species_t    * RESTRICT spi           = cm->spi;
+  /**/  species_t    * RESTRICT spj           = cm->spj;
+  /**/  rng_t        * RESTRICT rng           = cm->rp->rng[ pipeline_rank ];
+  const grid_t       * RESTRICT g             = spi->g;
 
+  /**/  particle_t   * RESTRICT ALIGNED(128) spi_p         = spi->p;
+  const int          * RESTRICT ALIGNED(128) spi_partition = spi->partition;
 
-void
-takizuka_abe_pipeline_scalar_kokkos(
-    takizuka_abe_t * RESTRICT cm
-)
-{
-    // TODO: change rng to use kokkos
-    rng_t* RESTRICT rng      = cm->rp->rng[ 0 ];
+  /**/  particle_t   * RESTRICT ALIGNED(128) spj_p         = spj->p;
+  const int          * RESTRICT ALIGNED(128) spj_partition = spj->partition;
 
-    species_t* RESTRICT spi  = cm->spi;
-    species_t* RESTRICT spj  = cm->spj;
-    const grid_t* RESTRICT g = spi->g;
+  const float dtinterval_dV = ( g->dt * (float)cm->interval ) / g->dV;
+  const float mu    = (spi->m*spj->m)/(spi->m+spj->m);
+  const float mu_i  = spj->m/(spi->m+spj->m);
+  const float mu_j  = spi->m/(spi->m+spj->m);
+  const double cvar = cm->cvar0 * (spi->q*spi->q*spj->q*spj->q) / (mu*mu);
 
-    particle_t* RESTRICT ALIGNED(128) spi_p        = spi->p;
-    const int* RESTRICT ALIGNED(128) spi_partition = spi->partition;
+  particle_t ptemp;
+  float std, density_k, density_l;
+  int i, j, ii, rn, k0, k1, nk, l0, nl;
 
-    particle_t* RESTRICT ALIGNED(128) spj_p        = spj->p;
-    const int* RESTRICT ALIGNED(128) spj_partition = spj->partition;
-
-    const float dtinterval_dV = ( g->dt * (float)cm->interval ) / g->dV;
-    const float mu    = (spi->m*spj->m)/(spi->m+spj->m);
-    const float mu_i  = spj->m/(spi->m+spj->m);
-    const float mu_j  = spi->m/(spi->m+spj->m);
-    const double cvar = cm->cvar0 * (spi->q*spi->q*spj->q*spj->q) / (mu*mu);
-
-    particle_t ptemp;
-    float std, density_k, density_l;
-    int i, j, rn;
-    int k0, k1, nk, l0, nl; //, size_k, size_l;
-
-    /* Stripe the (mostly non-ghost) voxels over threads for load balance */
-    int v = VOXEL( 0,0,0, g->nx,g->ny,g->nz );
-
-    //v1 = VOXEL( g->nx,g->ny,g->nz, g->nx,g->ny,g->nz ) + 1;
+  for (int v = 0; v < g->nv; v++)
+  {
 
     /* Find the species i computational particles, k, and the species j
        computational particles, l, in this voxel, determine the number
@@ -241,133 +216,124 @@ takizuka_abe_pipeline_scalar_kokkos(
 
     k0 = spi_partition[v  ];
     nk = spi_partition[v+1] - k0;
-    if( !nk ) return; /* Nothing to do */
+    if( !nk ) continue; /* Nothing to do */
 
     // Compute the species density for this cell while doing a Fisher-Yates
     // shuffle. NOTE: shuffling here instead of computing random indicies allows
     // for better optimization of the collision loop and an overall speedup.
     density_k = 0;
     k1 = k0+nk;
-    for(i=k0 ; i < k1-1 ; ++i)
-    {
-        rn = UINT32_MAX / (uint32_t)(k1-i);
-        do { j = i + (int)(uirand(rng)/rn); } while( j>=k1 );
-        ptemp = spi_p[j], spi_p[j] = spi_p[i], spi_p[i] = ptemp;
-        density_k += spi_p[i].w;
+    for(i=k0 ; i < k1-1 ; ++i){
+      rn = UINT32_MAX / (uint32_t)(k1-i);
+      do { j = i + (int)(uirand(rng)/rn); } while( j>=k1 );
+      ptemp = spi_p[j], spi_p[j] = spi_p[i], spi_p[i] = ptemp;
+      density_k += spi_p[i].w;
     }
-
     density_k += spi_p[i].w;
 
     if( spi==spj ) {
-        if( nk%2 && nk >= 3 )
-        {
-            std = sqrtf(0.5*density_k*cvar*dtinterval_dV);
 
-            takizuka_abe_collision(
-                spi_p + k0,
-                spi_p + k0 + 1,
-                mu_i,
-                mu_j,
-                std,
-                rng
-            );
+      if( nk%2 && nk >= 3 ) {
+        std = sqrtf(0.5*density_k*cvar*dtinterval_dV);
+        takizuka_abe_collision( spi_p + k0,
+                                spi_p + k0 + 1,
+                                mu_i, mu_j, std, rng );
+        takizuka_abe_collision( spi_p + k0,
+                                spi_p + k0 + 2,
+                                mu_i, mu_j, std, rng );
+        takizuka_abe_collision( spi_p + k0 + 1,
+                                spi_p + k0 + 2,
+                                mu_i, mu_j, std, rng );
+        nk -= 3;
+        k0 += 3;
+      }
 
-            takizuka_abe_collision(
-                spi_p + k0,
-                spi_p + k0 + 2,
-                mu_i,
-                mu_j,
-                std,
-                rng
-            );
+      nl = nk = nk/2;
+      l0 = k0 + nk;
+      if( !nk ) continue; /* We had exactly 1 or 3 paticles. */
+      std = sqrtf(cvar*density_k*dtinterval_dV);
 
-            takizuka_abe_collision(
-                spi_p + k0 + 1,
-                spi_p + k0 + 2,
-                mu_i,
-                mu_j,
-                std,
-                rng
-            );
+    } else {
 
-            nk -= 3;
-            k0 += 3;
-        }
+      l0 = spj_partition[v  ];
+      nl = spj_partition[v+1] - l0;
+      if( !nl ) continue; /* Nothing to do */
 
-        nl = nk = nk/2;
-        l0 = k0 + nk;
-        if( !nk ) return; /* We had exactly 1 or 3 paticles. */
-        std = sqrtf(cvar*density_k*dtinterval_dV);
-    }
-    else
-    {
-        l0 = spj_partition[v  ];
-        nl = spj_partition[v+1] - l0;
-        if( !nl ) return; /* Nothing to do */
+      // Since spi_p is already randomized, setting spi_j to any specific
+      // permutataion will still give a perfectly valid and random set of
+      // particle pairs. Which means we can just leave it as is.
 
-        // Since spi_p is already randomized, setting spi_j to any specific
-        // permutataion will still give a perfectly valid and random set of
-        // particle pairs. Which means we can just leave it as is.
+      // Compute the species density for this cell.
+      density_l = 0;
+      for(i=0 ; i < nl ; ++i)
+        density_l += spj_p[l0+i].w;
 
-        // Compute the species density for this cell.
-        density_l = 0;
-        for(i=0 ; i < nl ; ++i)
-        {
-            density_l += spj_p[l0+i].w;
-        }
-
-        // Compute the standard deviation of the collision angle.
-        std = sqrtf( cvar*(density_l > density_k ? density_k : density_l)*dtinterval_dV );
+      // Compute the standard deviation of the collision angle.
+      std = sqrtf( cvar*(density_l > density_k ? density_k : density_l)*dtinterval_dV );
     }
 
     if (nk > nl) {
-        int ii = nk/nl;
-        int rn = nk - ii*nl;
 
-        for( i=0 ; i < rn ; ++i, ++l0 ) {
-            for( j=0 ; j <= ii ; ++j, ++k0 ) {
-                takizuka_abe_collision( spi_p + k0,
-                        spj_p + l0,
-                        mu_i, mu_j, std, rng);
-            }
-        }
+      ii = nk/nl;
+      rn = nk - ii*nl;
 
-        for( ; i < nl ; ++i, ++l0 )  {
-            for( j=0 ; j < ii ; ++j, ++k0 ) {
-                takizuka_abe_collision( spi_p + k0,
-                        spj_p + l0,
-                        mu_i, mu_j, std, rng);
-            }
-        }
+      for( i=0 ; i < rn ; ++i, ++l0 )
+      {
+          for( j=0 ; j <= ii ; ++j, ++k0 )
+          {
+              takizuka_abe_collision( spi_p + k0,
+                      spj_p + l0,
+                      mu_i, mu_j, std, rng);
+          }
+      }
 
-    } else {
-        int ii = nl/nk;
-        int rn = nl - ii*nk;
+      for( ; i < nl ; ++i, ++l0 )
+      {
+          for( j=0 ; j < ii ; ++j, ++k0 )
+          {
+              takizuka_abe_collision( spi_p + k0,
+                      spj_p + l0,
+                      mu_i, mu_j, std, rng);
+          }
+      }
 
-        for( i=0 ; i < rn ; ++i, ++k0 ) {
-            for( j=0 ; j <= ii ; ++j, ++l0 ) {
-                takizuka_abe_collision( spi_p + k0,
-                        spj_p + l0,
-                        mu_i, mu_j, std, rng);
-            }
-        }
-
-        for( ; i < nk ; ++i, ++k0 ) {
-            for( j=0 ; j < ii ; ++j, ++l0 ) {
-                takizuka_abe_collision( spi_p + k0,
-                        spj_p + l0,
-                        mu_i, mu_j, std, rng);
-            }
-        }
     }
-} // end function
+    else
+    {
+      ii = nl/nk;
+      rn = nl - ii*nk;
 
-#undef CMOV
+      for( i=0 ; i < rn ; ++i, ++k0 )
+      {
+          for( j=0 ; j <= ii ; ++j, ++l0 )
+          {
+              takizuka_abe_collision( spi_p + k0,
+                      spj_p + l0,
+                      mu_i, mu_j, std, rng);
+          }
+      }
+
+      for( ; i < nk ; ++i, ++k0 )
+      {
+
+          for( j=0 ; j < ii ; ++j, ++l0 )
+          {
+              takizuka_abe_collision( spi_p + k0,
+                      spj_p + l0,
+                      mu_i, mu_j, std, rng);
+          }
+      }
+
+    }
+  } // end cell loop
+}
+
 #undef takizuka_abe_collision
 
-void apply_takizuka_abe_pipeline( takizuka_abe_t * cm )
+void apply_takizuka_abe_pipeline( takizuka_abe_t* cm )
 {
-    takizuka_abe_pipeline_scalar_kokkos(cm);
+    takizuka_abe_pipeline_scalar(cm, 0, thread.n_pipeline);
+    //takizuka_abe_pipeline_scalar_kokkos(cm);
     //EXEC_PIPELINES( takizuka_abe, cm, 0 );
     //WAIT_PIPELINES();
 }
