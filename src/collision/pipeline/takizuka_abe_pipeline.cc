@@ -68,6 +68,7 @@ void scatter_particles(
 */
 
 // Branchless and direction-agnositc method for computing momentum transfer.
+KOKKOS_INLINE_FUNCTION
 void takizuka_abe_collision(
         const k_particles_t& pi,
         const k_particles_t& pj,
@@ -243,7 +244,7 @@ takizuka_abe_pipeline_scalar_kokkos(
         int k0 = spi_partition(v);
         int nk = spi_partition(v+1) - k0;
 
-        std::cout << " thread " << omp_get_thread_num() << " of " << omp_get_num_threads() << " has " << nk << " particles at v=" << v << std::endl;
+        //std::cout << " thread " << omp_get_thread_num() << " of " << omp_get_num_threads() << " has " << nk << " particles at v=" << v << std::endl;
         //std::cout << " x " << x << " y " << y << " z " << z << std::endl;
 
         // TODO: convert this to be a more explicit check on if we have work
