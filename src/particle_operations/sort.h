@@ -9,14 +9,21 @@
  * @brief Simple bin sort using Kokkos inbuilt sort
  */
 struct DefaultSort {
-    // TODO: should the sort interface just take the sp?
     static void sort(
+            /*
             k_particles_t particles,
             k_particles_i_t particles_i,
             const int32_t np,
-            const int32_t num_bins
+            */
+            species_t* sp,
+            const int32_t num_bins,
+            int step
     )
     {
+
+        auto& particles = sp->k_p_d;
+        auto& particles_i = sp->k_p_i_d;
+
         // Try grab the index's for a permute key
         //int pi = particle_var::pi; // FIXME: can you really not pass an enum in??
         //auto keys = Kokkos::subview(particles, Kokkos::ALL, pi);
@@ -30,10 +37,16 @@ struct DefaultSort {
         Comparator comp(num_bins, 0, num_bins);
 
         int sort_within_bins = 0;
-        Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, np, comp, sort_within_bins );
+        Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, sp->np, comp, sort_within_bins );
         bin_sort.create_permute_vector();
         bin_sort.sort(particles);
         bin_sort.sort(particles_i);
+
+        sp->k_partition_d = bin_sort.get_bin_offsets();
+        Kokkos::deep_copy(sp->k_partition_d, sp->k_partition_h);
+
+        // Track the step on which we sorted the particles
+        sp->last_sorted = step;
     }
 
 };

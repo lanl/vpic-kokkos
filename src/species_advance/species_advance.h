@@ -73,7 +73,12 @@ class species_t {
         // sorted.
         int sort_interval;                  // How often to sort the species
         int sort_out_of_place;              // Sort method
+
         int * ALIGNED(128) partition;       // Static array indexed 0:
+
+        k_particle_partition_t k_partition_d;
+        k_particle_partition_t::HostMirror k_partition_h;
+
         /**/                                // (nx+2)*(ny+2)*(nz+2).  Each value
         /**/                                // corresponds to the associated particle
         /**/                                // array index of the first particle in
@@ -252,11 +257,11 @@ void
 k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
                   const species_t     * RESTRICT sp );
 
-void 
-k_accumulate_rhob(k_field_t& kfield, 
-                  k_particles_t& kpart, 
-                  k_particle_movers_t& kpart_movers, 
-                  const grid_t* RESTRICT g, 
+void
+k_accumulate_rhob(k_field_t& kfield,
+                  k_particles_t& kpart,
+                  k_particle_movers_t& kpart_movers,
+                  const grid_t* RESTRICT g,
                   const float qsp,
                   const int nm);
 

@@ -6,8 +6,16 @@
 void
 apply_takizuka_abe( takizuka_abe_t * cm ){
   if( cm->interval<1 || (cm->spi->g->step % cm->interval) ) return;
-  if( cm->spi->last_sorted!=cm->spi->g->step ) sort_p( cm->spi );
-  if( cm->spj->last_sorted!=cm->spi->g->step ) sort_p( cm->spj );
+  if( cm->spi->last_sorted!=cm->spi->g->step ) {
+      // TODO: these need to call the kokkos sort instead
+      std::cout << "Performing collision sort on species " << cm->spi->name << std::endl;
+      sort_p( cm->spi );
+  }
+  if( cm->spj->last_sorted!=cm->spi->g->step ) {
+      // TODO: these need to call the kokkos sort instead
+      std::cout << "Performing collision sort on species " << cm->spj->name << std::endl;
+      sort_p( cm->spj );
+  }
   // TODO: takizuka_abe_pipeline can be remove entirely?
   apply_takizuka_abe_pipeline(cm);
 }

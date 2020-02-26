@@ -178,21 +178,24 @@ void takizuka_abe_collision(
 }
 
 void
-takizuka_abe_pipeline_scalar( takizuka_abe_t * RESTRICT cm,
-                              int pipeline_rank,
-                              int n_pipeline )
+takizuka_abe_pipeline_scalar_kokkos(
+        takizuka_abe_t * RESTRICT cm
+)
 {
 
-  /**/  species_t    * RESTRICT spi           = cm->spi;
-  /**/  species_t    * RESTRICT spj           = cm->spj;
-  /**/  rng_t        * RESTRICT rng           = cm->rp->rng[ pipeline_rank ];
-  const grid_t       * RESTRICT g             = spi->g;
+  species_t* RESTRICT spi           = cm->spi;
+  species_t* RESTRICT spj           = cm->spj;
 
-  /**/  particle_t   * RESTRICT ALIGNED(128) spi_p         = spi->p;
-  const int          * RESTRICT ALIGNED(128) spi_partition = spi->partition;
+  // TODO: move to kokkos rng
+  rng_t* RESTRICT rng           = cm->rp->rng[ 0 ];
 
-  /**/  particle_t   * RESTRICT ALIGNED(128) spj_p         = spj->p;
-  const int          * RESTRICT ALIGNED(128) spj_partition = spj->partition;
+  const grid_t* RESTRICT g             = spi->g;
+
+  particle_t* RESTRICT ALIGNED(128) spi_p         = spi->p;
+  particle_t* RESTRICT ALIGNED(128) spj_p         = spj->p;
+
+  auto& spj_partition = spj->k_partition_d;
+  auto& spi_partition = spi->k_partition_d;
 
   const float dtinterval_dV = ( g->dt * (float)cm->interval ) / g->dV;
   const float mu    = (spi->m*spj->m)/(spi->m+spj->m);
@@ -204,6 +207,7 @@ takizuka_abe_pipeline_scalar( takizuka_abe_t * RESTRICT cm,
   float std, density_k, density_l;
   int i, j, ii, rn, k0, k1, nk, l0, nl;
 
+  // TODO: make this a parallel loop
   for (int v = 0; v < g->nv; v++)
   {
 
@@ -214,8 +218,10 @@ takizuka_abe_pipeline_scalar( takizuka_abe_t * RESTRICT cm,
        split the range of the fastest integer rng into intervals
        suitable for sampling pairs. */
 
-    k0 = spi_partition[v  ];
-    nk = spi_partition[v+1] - k0;
+    k0 = spi_partition(v);
+    nk = spi_partition(v+1) - k0;
+
+    // TODO: convert this to be a more explicit check on if we have work
     if( !nk ) continue; /* Nothing to do */
 
     // Compute the species density for this cell while doing a Fisher-Yates
@@ -253,10 +259,14 @@ takizuka_abe_pipeline_scalar( takizuka_abe_t * RESTRICT cm,
       if( !nk ) continue; /* We had exactly 1 or 3 paticles. */
       std = sqrtf(cvar*density_k*dtinterval_dV);
 
-    } else {
+    }
+    else {
 
-      l0 = spj_partition[v  ];
-      nl = spj_partition[v+1] - l0;
+      l0 = spj_partition(v);
+      nl = spj_partition(v+1) - l0;
+
+      std::cout << "l0 " << l0 << " nl " << nl << " nk " << nk << std::endl;
+
       if( !nl ) continue; /* Nothing to do */
 
       // Since spi_p is already randomized, setting spi_j to any specific
@@ -332,8 +342,7 @@ takizuka_abe_pipeline_scalar( takizuka_abe_t * RESTRICT cm,
 
 void apply_takizuka_abe_pipeline( takizuka_abe_t* cm )
 {
-    takizuka_abe_pipeline_scalar(cm, 0, thread.n_pipeline);
-    //takizuka_abe_pipeline_scalar_kokkos(cm);
+    takizuka_abe_pipeline_scalar_kokkos(cm);
     //EXEC_PIPELINES( takizuka_abe, cm, 0 );
     //WAIT_PIPELINES();
 }
