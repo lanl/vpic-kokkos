@@ -27,13 +27,21 @@ E = 0.5*1  # 0.5*me*vdre^2/Te
 nuei = mu(E)*np.power(E, -1.5) / np.sqrt(2)
 
 jx = load_slice(datafile)
+
+
+# Check the read in array is not 0, else it can spuriously pass
+if np.all(jx==0):
+    # Fail to avoid div by zero
+    print("=> Fail")
+    sys.exit(1)
+
 jx = jx/jx[0]
 
 numsteps = 80  # hard coded to match deck
 t = np.linspace(0, numsteps*dtcoll, numsteps)
 theory = jx[0]*np.exp(-t*nuei)
 
-show_plot = 0
+show_plot = 1
 if show_plot:
     import matplotlib.pyplot as plt
     fig, (ax1) = plt.subplots(nrows=1)
@@ -48,7 +56,7 @@ max_ab = 0.0
 for i in range(numsteps):
     a = jx[i]
     b = theory[i]
-    rel = (1.0 - (a/b)) * 100.0
+    rel = (1.0 - (b/a)) * 100.0
     ab = a-b
 
     if rel > max_rel:
