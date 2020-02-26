@@ -207,210 +207,230 @@ takizuka_abe_pipeline_scalar_kokkos(
   const float mu_j  = spi->m/(spi->m+spj->m);
   const double cvar = cm->cvar0 * (spi->q*spi->q*spj->q*spj->q) / (mu*mu);
 
-  int nv = g->nv;
+  //int nv = g->nv;
+
+  int nx = g->nx;
+  int ny = g->ny;
+  int nz = g->nz;
 
   //for (int v = 0; v < nv; v++)
-  //{
-  Kokkos::parallel_for("collisions cell v loop", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, nv),
-    KOKKOS_LAMBDA (size_t v)
+
+  int v_min = VOXEL(1,1,1,nx,ny,nz);
+  int v_max = VOXEL(nx,ny,nz,nx,ny,nz) + 1;
+  //Kokkos::RangePolicy< Kokkos::Schedule<Kokkos::Dynamic>, Kokkos::OpenMP> nv_policy_dynamic(v_min, v_max);
+  Kokkos::RangePolicy< Kokkos::DefaultExecutionSpace > nv_policy(v_min, v_max);
+  Kokkos::parallel_for("collisions cell v loop", nv_policy,
+    KOKKOS_LAMBDA (size_t v) // 1d
     {
 
-    int nl, l0;
-    /* Find the species i computational particles, k, and the species j
-       computational particles, l, in this voxel, determine the number
-       of computational particle pairs, np and the number of candidate
-       pairs, nc, to test for collisions within this voxel.  Also,
-       split the range of the fastest integer rng into intervals
-       suitable for sampling pairs. */
-
-    int k0 = spi_partition(v);
-    int nk = spi_partition(v+1) - k0;
-
-    // TODO: convert this to be a more explicit check on if we have work
-    if( !nk ) return; /* Nothing to do */
-
-    // Compute the species density for this cell while doing a Fisher-Yates
-    // shuffle. NOTE: shuffling here instead of computing random indicies allows
-    // for better optimization of the collision loop and an overall speedup.
-    // [True on CPU with AoS, unlikely to be true for GPU with SoA]
-    float density_k = 0;
-    int k1 = k0+nk;
-
-    int i;
-
-    // TODO: do we really want to do the shuffle like this on the GPU?
-    // Fisher-Yates shuffles
-    for( i=k0; i < k1-1; ++i )
+  /*
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1,1,1},{nz+1,ny+1,nx+1});
+  Kokkos::parallel_for("collisions cell v loop", xyz_policy,
+    KOKKOS_LAMBDA (size_t v) // 1d
+    KOKKOS_LAMBDA(const int z, const int y, const int x) // 3d
     {
-        int rn = UINT32_MAX / (uint32_t)(k1-i);
+        int v = VOXEL(x, y, z, nx, ny, nz);
+  */
 
-        int j;
-        do {
-            j = i + (int)(uirand(rng)/rn);
-        } while( j>=k1 );
+        int nl, l0;
+        /* Find the species i computational particles, k, and the species j
+           computational particles, l, in this voxel, determine the number
+           of computational particle pairs, np and the number of candidate
+           pairs, nc, to test for collisions within this voxel.  Also,
+           split the range of the fastest integer rng into intervals
+           suitable for sampling pairs. */
 
-        // Swap spi_p[j] with spi_p[i]
-        /*
-        particle_t* ptemp = spi_p[j];
-        spi_p[j] = spi_p[i];
-        spi_p[i] = ptemp;
-        */
+        int k0 = spi_partition(v);
+        int nk = spi_partition(v+1) - k0;
 
-        // Gather temps for swap
-        float dx = spi_p(i, particle_var::dx);
-        float dy = spi_p(i, particle_var::dy);
-        float dz = spi_p(i, particle_var::dz);
-        float ux = spi_p(i, particle_var::ux);
-        float uy = spi_p(i, particle_var::uy);
-        float uz = spi_p(i, particle_var::uz);
-        float w = spi_p(i, particle_var::w);
-        int ii = spi_p_i(i);
+        std::cout << " thread " << omp_get_thread_num() << " of " << omp_get_num_threads() << " has " << nk << " particles at v=" << v << std::endl;
+        //std::cout << " x " << x << " y " << y << " z " << z << std::endl;
 
-        // Write to i, where we got the temps from
-        spi_p(i, particle_var::dx) = spi_p(j, particle_var::dx);
-        spi_p(i, particle_var::dy) = spi_p(j, particle_var::dy);
-        spi_p(i, particle_var::dz) = spi_p(j, particle_var::dz);
-        spi_p(i, particle_var::ux) = spi_p(j, particle_var::ux);
-        spi_p(i, particle_var::uy) = spi_p(j, particle_var::uy);
-        spi_p(i, particle_var::uz) = spi_p(j, particle_var::uz);
-        spi_p(i, particle_var::w) = spi_p(j, particle_var::w);
-        spi_p_i(i) = spi_p_i(j);
+        // TODO: convert this to be a more explicit check on if we have work
+        if( !nk ) return; /* Nothing to do */
 
-        // Write temps to j
-        spi_p(j, particle_var::dx) = dx;
-        spi_p(j, particle_var::dy) = dy;
-        spi_p(j, particle_var::dz) = dz;
-        spi_p(j, particle_var::ux) = ux;
-        spi_p(j, particle_var::uy) = uy;
-        spi_p(j, particle_var::uz) = uz;
-        spi_p(j, particle_var::w) = w;
-        spi_p_i(j) = ii;
+        // Compute the species density for this cell while doing a Fisher-Yates
+        // shuffle. NOTE: shuffling here instead of computing random indicies allows
+        // for better optimization of the collision loop and an overall speedup.
+        // [True on CPU with AoS, unlikely to be true for GPU with SoA]
+        float density_k = 0;
+        int k1 = k0+nk;
 
+        int i;
+
+        // TODO: do we really want to do the shuffle like this on the GPU?
+        // Fisher-Yates shuffles
+        for( i=k0; i < k1-1; ++i )
+        {
+            int rn = UINT32_MAX / (uint32_t)(k1-i);
+
+            int j;
+            do {
+                j = i + (int)(uirand(rng)/rn);
+            } while( j>=k1 );
+
+            // Swap spi_p[j] with spi_p[i]
+            /*
+               particle_t* ptemp = spi_p[j];
+               spi_p[j] = spi_p[i];
+               spi_p[i] = ptemp;
+               */
+
+            // Gather temps for swap
+            float dx = spi_p(i, particle_var::dx);
+            float dy = spi_p(i, particle_var::dy);
+            float dz = spi_p(i, particle_var::dz);
+            float ux = spi_p(i, particle_var::ux);
+            float uy = spi_p(i, particle_var::uy);
+            float uz = spi_p(i, particle_var::uz);
+            float w = spi_p(i, particle_var::w);
+            int ii = spi_p_i(i);
+
+            // Write to i, where we got the temps from
+            spi_p(i, particle_var::dx) = spi_p(j, particle_var::dx);
+            spi_p(i, particle_var::dy) = spi_p(j, particle_var::dy);
+            spi_p(i, particle_var::dz) = spi_p(j, particle_var::dz);
+            spi_p(i, particle_var::ux) = spi_p(j, particle_var::ux);
+            spi_p(i, particle_var::uy) = spi_p(j, particle_var::uy);
+            spi_p(i, particle_var::uz) = spi_p(j, particle_var::uz);
+            spi_p(i, particle_var::w) = spi_p(j, particle_var::w);
+            spi_p_i(i) = spi_p_i(j);
+
+            // Write temps to j
+            spi_p(j, particle_var::dx) = dx;
+            spi_p(j, particle_var::dy) = dy;
+            spi_p(j, particle_var::dz) = dz;
+            spi_p(j, particle_var::ux) = ux;
+            spi_p(j, particle_var::uy) = uy;
+            spi_p(j, particle_var::uz) = uz;
+            spi_p(j, particle_var::w) = w;
+            spi_p_i(j) = ii;
+
+            density_k += spi_p(i, particle_var::w);
+        }
+
+        //density_k += spi_p[i].w;
         density_k += spi_p(i, particle_var::w);
-    }
 
-    //density_k += spi_p[i].w;
-    density_k += spi_p(i, particle_var::w);
+        float std;
+        if( spi==spj )
+        {
+            if( nk%2 && nk >= 3 ) {
+                std = sqrtf(0.5*density_k*cvar*dtinterval_dV);
+                takizuka_abe_collision( spi_p,
+                        spi_p,
+                        k0,
+                        k0 + 1,
+                        mu_i, mu_j, std, rng );
+                takizuka_abe_collision( spi_p,
+                        spi_p,
+                        k0,
+                        k0 + 1,
+                        mu_i, mu_j, std, rng );
+                takizuka_abe_collision( spi_p,
+                        spi_p,
+                        k0 + 1,
+                        k0 + 2,
+                        mu_i, mu_j, std, rng );
+                nk -= 3;
+                k0 += 3;
+            }
 
-    float std;
-    if( spi==spj )
-    {
-      if( nk%2 && nk >= 3 ) {
-        std = sqrtf(0.5*density_k*cvar*dtinterval_dV);
-        takizuka_abe_collision( spi_p,
-                                spi_p,
-                                k0,
-                                k0 + 1,
-                                mu_i, mu_j, std, rng );
-        takizuka_abe_collision( spi_p,
-                                spi_p,
-                                k0,
-                                k0 + 1,
-                                mu_i, mu_j, std, rng );
-        takizuka_abe_collision( spi_p,
-                                spi_p,
-                                k0 + 1,
-                                k0 + 2,
-                                mu_i, mu_j, std, rng );
-        nk -= 3;
-        k0 += 3;
-      }
+            nl = nk = nk/2;
+            l0 = k0 + nk;
+            if( !nk ) return; /* We had exactly 1 or 3 paticles. */
+            std = sqrtf(cvar*density_k*dtinterval_dV);
 
-      nl = nk = nk/2;
-      l0 = k0 + nk;
-      if( !nk ) return; /* We had exactly 1 or 3 paticles. */
-      std = sqrtf(cvar*density_k*dtinterval_dV);
+        }
+        else {
 
-    }
-    else {
+            l0 = spj_partition(v);
+            nl = spj_partition(v+1) - l0;
 
-      l0 = spj_partition(v);
-      nl = spj_partition(v+1) - l0;
+            if( !nl ) return; /* Nothing to do */
 
-      if( !nl ) return; /* Nothing to do */
+            // Since spi_p is already randomized, setting spi_j to any specific
+            // permutataion will still give a perfectly valid and random set of
+            // particle pairs. Which means we can just leave it as is.
 
-      // Since spi_p is already randomized, setting spi_j to any specific
-      // permutataion will still give a perfectly valid and random set of
-      // particle pairs. Which means we can just leave it as is.
+            // Compute the species density for this cell.
+            float density_l = 0;
+            for(i=0 ; i < nl ; ++i)
+            {
+                //density_l += spj_p[l0+i].w;
+                density_l += spj_p(l0+i, particle_var::w);
+            }
 
-      // Compute the species density for this cell.
-      float density_l = 0;
-      for(i=0 ; i < nl ; ++i)
-      {
-        //density_l += spj_p[l0+i].w;
-        density_l += spj_p(l0+i, particle_var::w);
-      }
+            // Compute the standard deviation of the collision angle.
+            std = sqrtf( cvar*(density_l > density_k ? density_k : density_l)*dtinterval_dV );
+        }
 
-      // Compute the standard deviation of the collision angle.
-      std = sqrtf( cvar*(density_l > density_k ? density_k : density_l)*dtinterval_dV );
-    }
+        if (nk > nl) {
 
-    if (nk > nl) {
+            int ii = nk/nl;
+            int rn = nk - ii*nl;
 
-      int ii = nk/nl;
-      int rn = nk - ii*nl;
+            for( i=0; i < rn; ++i, ++l0 )
+            {
+                for( int j=0; j <= ii; ++j, ++k0 )
+                {
+                    takizuka_abe_collision(
+                            spi_p,
+                            spj_p,
+                            k0,
+                            l0,
+                            mu_i, mu_j, std, rng);
+                }
+            }
 
-      for( i=0; i < rn; ++i, ++l0 )
-      {
-          for( int j=0; j <= ii; ++j, ++k0 )
-          {
-              takizuka_abe_collision(
-                      spi_p,
-                      spj_p,
-                      k0,
-                      l0,
-                      mu_i, mu_j, std, rng);
-          }
-      }
+            for( ; i < nl ; ++i, ++l0 )
+            {
+                for( int j=0; j < ii; ++j, ++k0 )
+                {
+                    takizuka_abe_collision(
+                            spi_p,
+                            spj_p,
+                            k0,
+                            l0,
+                            mu_i, mu_j, std, rng);
+                }
+            }
 
-      for( ; i < nl ; ++i, ++l0 )
-      {
-          for( int j=0; j < ii; ++j, ++k0 )
-          {
-              takizuka_abe_collision(
-                      spi_p,
-                      spj_p,
-                      k0,
-                      l0,
-                      mu_i, mu_j, std, rng);
-          }
-      }
+        }
+        else
+        {
+            int ii = nl/nk;
+            int rn = nl - ii*nk;
 
-    }
-    else
-    {
-      int ii = nl/nk;
-      int rn = nl - ii*nk;
+            for( i=0; i < rn; ++i, ++k0 )
+            {
+                for( int j=0; j <= ii; ++j, ++l0 )
+                {
+                    takizuka_abe_collision(
+                            spi_p,
+                            spj_p,
+                            k0,
+                            l0,
+                            mu_i, mu_j, std, rng);
+                }
+            }
 
-      for( i=0; i < rn; ++i, ++k0 )
-      {
-          for( int j=0; j <= ii; ++j, ++l0 )
-          {
-              takizuka_abe_collision(
-                      spi_p,
-                      spj_p,
-                      k0,
-                      l0,
-                      mu_i, mu_j, std, rng);
-          }
-      }
+            for( ; i < nk ; ++i, ++k0 )
+            {
 
-      for( ; i < nk ; ++i, ++k0 )
-      {
+                for( int j = 0; j < ii; ++j, ++l0 )
+                {
+                    takizuka_abe_collision(
+                            spi_p,
+                            spj_p,
+                            k0,
+                            l0,
+                            mu_i, mu_j, std, rng);
+                }
+            }
 
-          for( int j = 0; j < ii; ++j, ++l0 )
-          {
-              takizuka_abe_collision(
-                      spi_p,
-                      spj_p,
-                      k0,
-                      l0,
-                      mu_i, mu_j, std, rng);
-          }
-      }
-
-    }
-  }); // end cell loop
+        }
+    }); // end cell loop
 }
 
 #undef takizuka_abe_collision

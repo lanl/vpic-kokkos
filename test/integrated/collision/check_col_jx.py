@@ -60,7 +60,7 @@ for i in range(numsteps):
     a = jx[i]
     b = theory[i]
     rel = (1.0 - (a/b)) * 100.0
-    ab = a-b
+    ab = abs(a-b)
 
     if rel > max_rel:
         max_rel = rel
