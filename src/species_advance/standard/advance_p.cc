@@ -28,7 +28,7 @@ advance_p_kokkos(
         const float qsp,
         const int na,
         const int np,
-        const int max_nm,
+        const unsigned int max_nm,
         const int nx,
         const int ny,
         const int nz)

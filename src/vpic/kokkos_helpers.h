@@ -31,6 +31,7 @@
 typedef int16_t material_id;
 
 // TODO: we dont need the [1] here
+// TODO: this should probably be unsigned
 using k_iterator_t = Kokkos::View<int[1]>;
 
 using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;

@@ -6,15 +6,16 @@
 
 #include "../takizuka_abe.h"
 
-#include "../../util/pipelines/pipelines_exec.h"
+#include "../../util/pipelines/pipelines.h"
 
 #define CMOV(a,b) if(t0<t1) a=b
 
+/*
 void scatter_particles(
         int I,
         int J,
-        species_t* P1,
-        species_t* P2,
+        particle_t* P1,
+        particle_t* P2,
         float M1,
         float M2,
         float SQRT_VAR
@@ -40,7 +41,7 @@ void scatter_particles(
     float sin_phi         = sin(phi);
     float cos_phi         = cos(phi);
 
-    /* General case */
+    // General case
     if ( uperp>0 )
     {
         dux = (( ux*uz * sin_theta * cos_phi) - uy * u * sin_theta * sin_phi)
@@ -51,7 +52,7 @@ void scatter_particles(
 
         duz =- uperp *  sin_theta * cos_phi - uz * one_m_cos_theta;
     }
-    else {          /* Handle purely z-directed difference vectors separately */
+    else { // Handle purely z-directed difference vectors separately
         dux =  u * sin_theta * cos_phi;
         duy =  u * sin_theta * sin_phi;
         duz = -u * one_m_cos_theta;
@@ -64,6 +65,7 @@ void scatter_particles(
     (P2)[J].uy -= mratio2*duy;
     (P2)[J].uz -= mratio2*duz;
 }
+*/
 
 // Branchless and direction-agnositc method for computing momentum transfer.
 void takizuka_abe_collision(
@@ -175,12 +177,13 @@ takizuka_abe_rfb(
 )
 {
     // Self-scattering among species
+    /*
     for (auto& species :  species_list)
     {
         for (auto c : cells)
         {
-            int p1 = 0;
-            int p2 = 0;
+            //int p1 = 0;
+            //int p2 = 0;
 
             takizuka_abe_collision(
                 spi_p + k0,
@@ -191,21 +194,20 @@ takizuka_abe_rfb(
             );
         }
     }
+    */
 }
 
 
 void
 takizuka_abe_pipeline_scalar_kokkos(
-    takizuka_abe_t * RESTRICT cm,
-    int pipeline_rank,
-    int n_pipeline
+    takizuka_abe_t * RESTRICT cm
 )
 {
-    if( pipeline_rank==n_pipeline ) return; /* No host straggler cleanup */
+    // TODO: change rng to use kokkos
+    rng_t* RESTRICT rng      = cm->rp->rng[ 0 ];
 
     species_t* RESTRICT spi  = cm->spi;
     species_t* RESTRICT spj  = cm->spj;
-    rng_t* RESTRICT rng      = cm->rp->rng[ pipeline_rank ];
     const grid_t* RESTRICT g = spi->g;
 
     particle_t* RESTRICT ALIGNED(128) spi_p        = spi->p;
@@ -222,11 +224,13 @@ takizuka_abe_pipeline_scalar_kokkos(
 
     particle_t ptemp;
     float std, density_k, density_l;
-    int v, v1, k, k0, k1, nk, l, l0, nl, size_k, size_l;
+    int i, j, rn;
+    int k0, k1, nk, l0, nl; //, size_k, size_l;
 
     /* Stripe the (mostly non-ghost) voxels over threads for load balance */
-    v  = VOXEL( 0,0,0,             g->nx,g->ny,g->nz ) + pipeline_rank;
-    v1 = VOXEL( g->nx,g->ny,g->nz, g->nx,g->ny,g->nz ) + 1;
+    int v = VOXEL( 0,0,0, g->nx,g->ny,g->nz );
+
+    //v1 = VOXEL( g->nx,g->ny,g->nz, g->nx,g->ny,g->nz ) + 1;
 
     /* Find the species i computational particles, k, and the species j
        computational particles, l, in this voxel, determine the number
@@ -237,7 +241,7 @@ takizuka_abe_pipeline_scalar_kokkos(
 
     k0 = spi_partition[v  ];
     nk = spi_partition[v+1] - k0;
-    if( !nk ) continue; /* Nothing to do */
+    if( !nk ) return; /* Nothing to do */
 
     // Compute the species density for this cell while doing a Fisher-Yates
     // shuffle. NOTE: shuffling here instead of computing random indicies allows
@@ -292,14 +296,14 @@ takizuka_abe_pipeline_scalar_kokkos(
 
         nl = nk = nk/2;
         l0 = k0 + nk;
-        if( !nk ) continue; /* We had exactly 1 or 3 paticles. */
+        if( !nk ) return; /* We had exactly 1 or 3 paticles. */
         std = sqrtf(cvar*density_k*dtinterval_dV);
     }
     else
     {
         l0 = spj_partition[v  ];
         nl = spj_partition[v+1] - l0;
-        if( !nl ) continue; /* Nothing to do */
+        if( !nl ) return; /* Nothing to do */
 
         // Since spi_p is already randomized, setting spi_j to any specific
         // permutataion will still give a perfectly valid and random set of
@@ -317,9 +321,8 @@ takizuka_abe_pipeline_scalar_kokkos(
     }
 
     if (nk > nl) {
-
-        ii = nk/nl;
-        rn = nk - ii*nl;
+        int ii = nk/nl;
+        int rn = nk - ii*nl;
 
         for( i=0 ; i < rn ; ++i, ++l0 ) {
             for( j=0 ; j <= ii ; ++j, ++k0 ) {
@@ -338,9 +341,8 @@ takizuka_abe_pipeline_scalar_kokkos(
         }
 
     } else {
-
-        ii = nl/nk;
-        rn = nl - ii*nk;
+        int ii = nl/nk;
+        int rn = nl - ii*nk;
 
         for( i=0 ; i < rn ; ++i, ++k0 ) {
             for( j=0 ; j <= ii ; ++j, ++l0 ) {
@@ -365,7 +367,7 @@ takizuka_abe_pipeline_scalar_kokkos(
 
 void apply_takizuka_abe_pipeline( takizuka_abe_t * cm )
 {
-    takizuka_abe_pipeline_scalar_kokkos(cm, pipeline_rank, n_pipeline);
+    takizuka_abe_pipeline_scalar_kokkos(cm);
     //EXEC_PIPELINES( takizuka_abe, cm, 0 );
     //WAIT_PIPELINES();
 }
