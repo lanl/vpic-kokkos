@@ -69,8 +69,8 @@ void scatter_particles(
 
 // Branchless and direction-agnositc method for computing momentum transfer.
 void takizuka_abe_collision(
-        k_particles_t& pi,
-        k_particles_t& pj,
+        const k_particles_t& pi,
+        const k_particles_t& pj,
         int i,
         int j,
         float  mu_i,
@@ -207,13 +207,15 @@ takizuka_abe_pipeline_scalar_kokkos(
   const float mu_j  = spi->m/(spi->m+spj->m);
   const double cvar = cm->cvar0 * (spi->q*spi->q*spj->q*spj->q) / (mu*mu);
 
-  float std, density_l;
-  int i, j, rn, k0, k1, nk, l0, nl;
+  int nv = g->nv;
 
-  // TODO: make this a parallel loop
-  for (int v = 0; v < g->nv; v++)
-  {
+  //for (int v = 0; v < nv; v++)
+  //{
+  Kokkos::parallel_for("collisions cell v loop", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, nv),
+    KOKKOS_LAMBDA (size_t v)
+    {
 
+    int nl, l0;
     /* Find the species i computational particles, k, and the species j
        computational particles, l, in this voxel, determine the number
        of computational particle pairs, np and the number of candidate
@@ -221,25 +223,28 @@ takizuka_abe_pipeline_scalar_kokkos(
        split the range of the fastest integer rng into intervals
        suitable for sampling pairs. */
 
-    k0 = spi_partition(v);
-    nk = spi_partition(v+1) - k0;
+    int k0 = spi_partition(v);
+    int nk = spi_partition(v+1) - k0;
 
     // TODO: convert this to be a more explicit check on if we have work
-    if( !nk ) continue; /* Nothing to do */
+    if( !nk ) return; /* Nothing to do */
 
     // Compute the species density for this cell while doing a Fisher-Yates
     // shuffle. NOTE: shuffling here instead of computing random indicies allows
     // for better optimization of the collision loop and an overall speedup.
     // [True on CPU with AoS, unlikely to be true for GPU with SoA]
     float density_k = 0;
-    k1 = k0+nk;
+    int k1 = k0+nk;
+
+    int i;
 
     // TODO: do we really want to do the shuffle like this on the GPU?
     // Fisher-Yates shuffles
     for( i=k0; i < k1-1; ++i )
     {
-        rn = UINT32_MAX / (uint32_t)(k1-i);
+        int rn = UINT32_MAX / (uint32_t)(k1-i);
 
+        int j;
         do {
             j = i + (int)(uirand(rng)/rn);
         } while( j>=k1 );
@@ -287,8 +292,9 @@ takizuka_abe_pipeline_scalar_kokkos(
     //density_k += spi_p[i].w;
     density_k += spi_p(i, particle_var::w);
 
-    if( spi==spj ) {
-
+    float std;
+    if( spi==spj )
+    {
       if( nk%2 && nk >= 3 ) {
         std = sqrtf(0.5*density_k*cvar*dtinterval_dV);
         takizuka_abe_collision( spi_p,
@@ -312,7 +318,7 @@ takizuka_abe_pipeline_scalar_kokkos(
 
       nl = nk = nk/2;
       l0 = k0 + nk;
-      if( !nk ) continue; /* We had exactly 1 or 3 paticles. */
+      if( !nk ) return; /* We had exactly 1 or 3 paticles. */
       std = sqrtf(cvar*density_k*dtinterval_dV);
 
     }
@@ -321,16 +327,14 @@ takizuka_abe_pipeline_scalar_kokkos(
       l0 = spj_partition(v);
       nl = spj_partition(v+1) - l0;
 
-      std::cout << "l0 " << l0 << " nl " << nl << " nk " << nk << std::endl;
-
-      if( !nl ) continue; /* Nothing to do */
+      if( !nl ) return; /* Nothing to do */
 
       // Since spi_p is already randomized, setting spi_j to any specific
       // permutataion will still give a perfectly valid and random set of
       // particle pairs. Which means we can just leave it as is.
 
       // Compute the species density for this cell.
-      density_l = 0;
+      float density_l = 0;
       for(i=0 ; i < nl ; ++i)
       {
         //density_l += spj_p[l0+i].w;
@@ -344,11 +348,11 @@ takizuka_abe_pipeline_scalar_kokkos(
     if (nk > nl) {
 
       int ii = nk/nl;
-      rn = nk - ii*nl;
+      int rn = nk - ii*nl;
 
-      for( i=0 ; i < rn ; ++i, ++l0 )
+      for( i=0; i < rn; ++i, ++l0 )
       {
-          for( j=0 ; j <= ii ; ++j, ++k0 )
+          for( int j=0; j <= ii; ++j, ++k0 )
           {
               takizuka_abe_collision(
                       spi_p,
@@ -361,7 +365,7 @@ takizuka_abe_pipeline_scalar_kokkos(
 
       for( ; i < nl ; ++i, ++l0 )
       {
-          for( j=0 ; j < ii ; ++j, ++k0 )
+          for( int j=0; j < ii; ++j, ++k0 )
           {
               takizuka_abe_collision(
                       spi_p,
@@ -376,11 +380,11 @@ takizuka_abe_pipeline_scalar_kokkos(
     else
     {
       int ii = nl/nk;
-      rn = nl - ii*nk;
+      int rn = nl - ii*nk;
 
-      for( i=0 ; i < rn ; ++i, ++k0 )
+      for( i=0; i < rn; ++i, ++k0 )
       {
-          for( j=0 ; j <= ii ; ++j, ++l0 )
+          for( int j=0; j <= ii; ++j, ++l0 )
           {
               takizuka_abe_collision(
                       spi_p,
@@ -394,7 +398,7 @@ takizuka_abe_pipeline_scalar_kokkos(
       for( ; i < nk ; ++i, ++k0 )
       {
 
-          for( j=0 ; j < ii ; ++j, ++l0 )
+          for( int j = 0; j < ii; ++j, ++l0 )
           {
               takizuka_abe_collision(
                       spi_p,
@@ -406,7 +410,7 @@ takizuka_abe_pipeline_scalar_kokkos(
       }
 
     }
-  } // end cell loop
+  }); // end cell loop
 }
 
 #undef takizuka_abe_collision
