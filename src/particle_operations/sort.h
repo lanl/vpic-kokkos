@@ -42,7 +42,7 @@ struct DefaultSort {
         bin_sort.sort(particles);
         bin_sort.sort(particles_i);
 
-        sp->k_partition_d = bin_sort.get_bin_offsets();
+        Kokkos::deep_copy( sp->k_partition_d, bin_sort.get_bin_offsets());
         sp->k_partition_h = Kokkos::create_mirror_view(sp->k_partition_d);
         Kokkos::deep_copy(sp->k_partition_d, sp->k_partition_h);
 
