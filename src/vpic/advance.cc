@@ -68,7 +68,9 @@ int vpic_simulation::advance(void) {
   if( collision_op_list )
   {
       //Kokkos::abort("Collision is not supported");
-      TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
+      KOKKOS_TIC();
+      apply_collision_op_list( collision_op_list );
+      KOKKOS_TOC( collision_model, 1 );
   }
 
   TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );

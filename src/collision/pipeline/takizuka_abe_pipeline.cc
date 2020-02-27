@@ -2,6 +2,9 @@
 
 /* #define HAS_V4_PIPELINE */
 
+#include <chrono>
+using namespace std::chrono;
+
 #include "collision_pipeline.h"
 
 #include "../takizuka_abe.h"
@@ -68,6 +71,7 @@ void scatter_particles(
 */
 
 // Branchless and direction-agnositc method for computing momentum transfer.
+KOKKOS_INLINE_FUNCTION
 void takizuka_abe_collision(
         const k_particles_t& pi,
         const k_particles_t& pj,
@@ -190,7 +194,7 @@ takizuka_abe_pipeline_scalar_kokkos(
   species_t* RESTRICT spj = cm->spj;
 
   // TODO: move to kokkos rng
-  rng_t* RESTRICT rng = cm->rp->rng[ 0 ];
+  auto& _rng = cm->rp->rng;
 
   const grid_t* RESTRICT g = spi->g;
 
@@ -214,6 +218,7 @@ takizuka_abe_pipeline_scalar_kokkos(
   int nz = g->nz;
 
   //for (int v = 0; v < nv; v++)
+  high_resolution_clock::time_point t1 = high_resolution_clock::now();
 
   int v_min = VOXEL(1,1,1,nx,ny,nz);
   int v_max = VOXEL(nx,ny,nz,nx,ny,nz) + 1;
@@ -222,6 +227,14 @@ takizuka_abe_pipeline_scalar_kokkos(
   Kokkos::parallel_for("collisions cell v loop", nv_policy,
     KOKKOS_LAMBDA (size_t v) // 1d
     {
+
+    //Kokkos::Experimental::UniqueToken<
+        //Kokkos::HostSpace, Kokkos::Experimental::UniqueTokenScope::Global>
+        //unique_token{Kokkos::HostSpace()};
+        //int thread_id = unique_token.acquire();
+        //std::cout << "Token is " << thread_id << std::endl;
+        int thread_id = omp_get_thread_num();
+        auto& rng = _rng[thread_id];
 
   /*
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1,1,1},{nz+1,ny+1,nx+1});
@@ -243,7 +256,7 @@ takizuka_abe_pipeline_scalar_kokkos(
         int k0 = spi_partition(v);
         int nk = spi_partition(v+1) - k0;
 
-        std::cout << " thread " << omp_get_thread_num() << " of " << omp_get_num_threads() << " has " << nk << " particles at v=" << v << std::endl;
+        //std::cout << " thread " << omp_get_thread_num() << " of " << omp_get_num_threads() << " has " << nk << " particles at v=" << v << std::endl;
         //std::cout << " x " << x << " y " << y << " z " << z << std::endl;
 
         // TODO: convert this to be a more explicit check on if we have work
@@ -266,6 +279,8 @@ takizuka_abe_pipeline_scalar_kokkos(
 
             int j;
             do {
+                // Generate a random unsigned int between [0, UINTTYPE_MAX]
+                //j = i + (int)(uirand(rng)/rn);
                 j = i + (int)(uirand(rng)/rn);
             } while( j>=k1 );
 
@@ -431,6 +446,10 @@ takizuka_abe_pipeline_scalar_kokkos(
 
         }
     }); // end cell loop
+
+    high_resolution_clock::time_point t2 = high_resolution_clock::now();
+    duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+    std::cout << "TA took " << time_span.count() << std::endl;
 }
 
 #undef takizuka_abe_collision

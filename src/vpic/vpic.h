@@ -24,6 +24,7 @@
 #include "../util/bitfield.h"
 #include "../util/checksum.h"
 #include "../util/system.h"
+#include "../util/rng_policy.h"
 
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
@@ -126,6 +127,20 @@ public:
   void modify( const char *fname );
   int advance( void );
   void finalize( void );
+
+  // Set RNG policy
+  // Use std::rng by default, optionally use Kokkos or "original"
+  // TODO: turn this into a policy
+#ifndef USE_ORIGINAL_RNG
+ #ifdef USE_KOKKOS_RNG
+  _RNG::RandomNumberProvider<_RNG::KokkosRNG> rng_policy;
+ #else
+   // TODO: move to constructor
+  _RNG::RandomNumberProvider<_RNG::CppRNG> rng_policy;
+ #endif
+#else
+  _RNG::RandomNumberProvider<_RNG::OriginalRNG> rng_policy;
+#endif
 
   // Directly initialized by user
 
@@ -338,11 +353,13 @@ public:
     return hydro_array->h[ voxel(ix,iy,iz) ];
   }
 
+  // TODO: do I need to update this ?
   inline rng_t *
   rng( const int n ) {
     return entropy->rng[n];
   }
 
+  // TODO: do I need to update this ?
   inline rng_t *
   sync_rng( const int n ) {
     return sync_entropy->rng[n];
@@ -604,21 +621,27 @@ public:
   // FIXME: MTRAND DESPERATELY NEEDS A LARGER SEED SPACE!
 
   inline void seed_entropy( int base ) {
-    seed_rng_pool( entropy,      base, 0 );
-    seed_rng_pool( sync_entropy, base, 1 );
+    rng_policy.seed( entropy, sync_entropy, base, 0 );
+    //seed_rng_pool( entropy,      base, 0 );
+    //seed_rng_pool( sync_entropy, base, 1 );
   }
 
   // Uniform random number on (low,high) (open interval)
   // FIXME: IS THE INTERVAL STILL OPEN IN FINITE PRECISION
   //        AND IS THE OPEN INTERVAL REALLY WHAT USERS WANT??
   inline double uniform( rng_t * rng, double low, double high ) {
-    double dx = drand( rng );
-    return low*(1-dx) + high*dx;
+    //double dx = drand( rng );
+    //return low*(1-dx) + high*dx;
+    return rng_policy.uniform(rng, low, high);
   }
 
   // Normal random number with mean mu and standard deviation sigma
   inline double normal( rng_t * rng, double mu, double sigma ) {
-    return mu + sigma*drandn( rng );
+    //return mu + sigma*drandn( rng );
+    return rng_policy.normal(rng, mu, sigma);
+  }
+  inline unsigned int random_uint( unsigned int max ) {
+    return rng_policy.uint(max);
   }
 
   /////////////////////////////////
