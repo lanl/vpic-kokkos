@@ -60,12 +60,12 @@ for i in range(numsteps):
     a = jx[i]
     b = theory[i]
     rel = (1.0 - (a/b)) * 100.0
-    ab = abs(a-b)
+    ab = a-b
 
-    if rel > max_rel:
+    if abs(rel) > max_rel:
         max_rel = rel
 
-    if ab > max_ab:
+    if abs(ab) > max_ab:
         max_ab = ab
     # print("{} vs {} diff rel {} abs {}".format(a, b, rel, ab) )
 print("max errors -- relative {}% absolute {}".format(max_rel, max_ab))

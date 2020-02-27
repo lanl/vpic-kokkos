@@ -5,6 +5,7 @@
 #include <chrono>
 using namespace std::chrono;
 
+#include "src/util/rng_policy.h"
 #include "collision_pipeline.h"
 
 #include "../takizuka_abe.h"
@@ -71,6 +72,7 @@ void scatter_particles(
 */
 
 // Branchless and direction-agnositc method for computing momentum transfer.
+template <class _RNG_t>
 KOKKOS_INLINE_FUNCTION
 void takizuka_abe_collision(
         const k_particles_t& pi,
@@ -80,7 +82,8 @@ void takizuka_abe_collision(
         float  mu_i,
         float  mu_j,
         float std,
-        rng_t* rng // TODO: remove?
+        rng_t* rng, // TODO: remove?
+        _RNG_t& rg
 )
 {
     //particle_t * const RESTRICT pi = (PI);
@@ -156,10 +159,20 @@ void takizuka_abe_collision(
         t1 = t0;
     }
 
-    dd = t1*frandn(rng);
+    //auto _r = frandn(rng);
+    auto _r = rg.normal(0, 1);
+    //std::cout << "frandn " << _r << " vs " << _r2 << std::endl;
+    dd = t1*_r;
+    //dd = t1*normal(rng);
 
     t0 = 2*dd/(1+dd*dd);
-    t1 = 2*M_PI*frand_c0(rng);
+
+    //auto _r2 = frand_c0(rng); // uniform in the interval [0,1)
+    auto _r2 = rg.drand(0, 1);
+    //t1 = 2*M_PI*frand_c0(rng);
+    //std::cout << _r2 << " vs " << _r3 << std::endl;
+    t1 = 2*M_PI*_r2;
+
     t2 = t0*sin(t1);
     t1 = t0*ur*cos(t1);
     t0 *= -dd;
@@ -170,7 +183,8 @@ void takizuka_abe_collision(
     stack[2] = (t0*urz + t1*tz) + t2*( urx*ty - ury*tx );
 
     /* Handle unequal particle weights. */
-    t0 = frand_c0(rng);
+    //t0 = frand_c0(rng);  // uniform in the interval [0,1)
+    t0 = rg.drand(0, 1);
     t1 = mu_i;
     t2 = mu_j;
     if(wj < wi && wi*t0 > wj) t1 = 0 ;
@@ -227,6 +241,12 @@ takizuka_abe_pipeline_scalar_kokkos(
   Kokkos::parallel_for("collisions cell v loop", nv_policy,
     KOKKOS_LAMBDA (size_t v) // 1d
     {
+      // TODO: Currently defaults to host space...
+      // TODO: Using the object and getting the state multiple times was giving
+      // me the same numbers...
+      //_RNG::RandomNumberProvider<_RNG::KokkosRNG> rp;
+      _RNG::KokkosRNG rp;
+      auto rg = rp.rand_pool.get_state();
 
     //Kokkos::Experimental::UniqueToken<
         //Kokkos::HostSpace, Kokkos::Experimental::UniqueTokenScope::Global>
@@ -234,7 +254,7 @@ takizuka_abe_pipeline_scalar_kokkos(
         //int thread_id = unique_token.acquire();
         //std::cout << "Token is " << thread_id << std::endl;
         int thread_id = omp_get_thread_num();
-        auto& rng = _rng[thread_id];
+        auto& rng = _rng[thread_id]; // TODO: remove
 
   /*
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1,1,1},{nz+1,ny+1,nx+1});
@@ -280,8 +300,8 @@ takizuka_abe_pipeline_scalar_kokkos(
             int j;
             do {
                 // Generate a random unsigned int between [0, UINTTYPE_MAX]
-                //j = i + (int)(uirand(rng)/rn);
                 j = i + (int)(uirand(rng)/rn);
+                //j = i + (rp.uint(UINT32_MAX)/rn);
             } while( j>=k1 );
 
             // Swap spi_p[j] with spi_p[i]
@@ -336,17 +356,17 @@ takizuka_abe_pipeline_scalar_kokkos(
                         spi_p,
                         k0,
                         k0 + 1,
-                        mu_i, mu_j, std, rng );
+                        mu_i, mu_j, std, rng, rg );
                 takizuka_abe_collision( spi_p,
                         spi_p,
                         k0,
                         k0 + 1,
-                        mu_i, mu_j, std, rng );
+                        mu_i, mu_j, std, rng, rg );
                 takizuka_abe_collision( spi_p,
                         spi_p,
                         k0 + 1,
                         k0 + 2,
-                        mu_i, mu_j, std, rng );
+                        mu_i, mu_j, std, rng, rg );
                 nk -= 3;
                 k0 += 3;
             }
@@ -394,7 +414,7 @@ takizuka_abe_pipeline_scalar_kokkos(
                             spj_p,
                             k0,
                             l0,
-                            mu_i, mu_j, std, rng);
+                            mu_i, mu_j, std, rng, rg);
                 }
             }
 
@@ -407,7 +427,7 @@ takizuka_abe_pipeline_scalar_kokkos(
                             spj_p,
                             k0,
                             l0,
-                            mu_i, mu_j, std, rng);
+                            mu_i, mu_j, std, rng, rg);
                 }
             }
 
@@ -426,7 +446,7 @@ takizuka_abe_pipeline_scalar_kokkos(
                             spj_p,
                             k0,
                             l0,
-                            mu_i, mu_j, std, rng);
+                            mu_i, mu_j, std, rng, rg);
                 }
             }
 
@@ -440,7 +460,7 @@ takizuka_abe_pipeline_scalar_kokkos(
                             spj_p,
                             k0,
                             l0,
-                            mu_i, mu_j, std, rng);
+                            mu_i, mu_j, std, rng, rg);
                 }
             }
 

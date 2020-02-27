@@ -131,6 +131,7 @@ public:
   // Set RNG policy
   // Use std::rng by default, optionally use Kokkos or "original"
   // TODO: turn this into a policy
+#define USE_ORIGINAL_RNG
 #ifndef USE_ORIGINAL_RNG
  #ifdef USE_KOKKOS_RNG
   _RNG::RandomNumberProvider<_RNG::KokkosRNG> rng_policy;
