@@ -10,12 +10,16 @@ namespace _RNG {
 // NOTE: this policy ignore the rng it's passed..
 class OriginalRNG {
     public:
-        inline double uniform( rng_t * rng, double low, double high ) {
+        inline double uniform( rng_t* rng, double low, double high ) {
             double dx = drand( rng );
             return low*(1-dx) + high*dx;
         }
-        inline double normal( rng_t * rng, double mu, double sigma ) {
+        inline double normal( rng_t* rng, double mu, double sigma ) {
             return mu + sigma*drandn( rng );
+        }
+        inline unsigned int uint( rng_t* rng, unsigned int max )
+        {
+            return uirand(rng) % max;
         }
         void seed( rng_pool_t* entropy, rng_pool_t* sync_entropy, int seed, int sync ) {
             // seed here is a base, that gets passed into:
@@ -27,13 +31,18 @@ class OriginalRNG {
 
 class CppRNG {
     public:
-        inline double uniform( rng_t * rng, double low, double high ) {
+        inline double uniform( rng_t* rng, double low, double high ) {
             std::uniform_real_distribution<double> distribution(low, high);
             return distribution(uniform_generator);
         }
-        inline double normal( rng_t * rng, double mu, double sigma ) {
+        inline double normal( rng_t* rng, double mu, double sigma ) {
             std::normal_distribution<double> distribution(mu, sigma);
             return distribution(normal_generator);
+        }
+        inline unsigned int uint( rng_t* rng, unsigned int max )
+        {
+            std::uniform_int_distribution<> distribution(0, max);
+            return distribution(uniform_generator);
         }
         void seed( rng_pool_t* entropy, rng_pool_t* sync_entropy, int base, int sync ) {
             // Try emulate old VPIC seeding such that different ranks use
@@ -65,11 +74,15 @@ class KokkosRNG { // CPU!
         //auto rand_gen = rand_pool.get_state();
         //Kokkos::Random_XorShift1024<Kokkos::DefaultExecutionSpace> rp_device;
 
-        inline double uniform( rng_t * rng, double low, double high ) {
+        inline double uniform( rng_t* rng, double low, double high ) {
             return rp.drand(low, high);
         }
-        inline double normal( rng_t * rng, double mu, double sigma ) {
+        inline double normal( rng_t* rng, double mu, double sigma ) {
             return rp.normal(mu, sigma);
+        }
+        inline unsigned int uint( rng_t* rng, unsigned int max )
+        {
+            return rp.urand(max);
         }
         void seed( rng_pool_t* entropy, rng_pool_t* sync_entropy, int seed, int sync )
         {
@@ -81,6 +94,7 @@ template <typename Policy = CppRNG>
 struct RandomNumberProvider : private Policy {
     using Policy::uniform;
     using Policy::normal;
+    using Policy::uint;
     using Policy::seed;
 };
 }

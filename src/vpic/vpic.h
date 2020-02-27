@@ -640,8 +640,8 @@ public:
     //return mu + sigma*drandn( rng );
     return rng_policy.normal(rng, mu, sigma);
   }
-  inline unsigned int random_uint( unsigned int max ) {
-    return rng_policy.uint(max);
+  inline unsigned int random_uint( rng_t* rng, unsigned int max ) {
+    return rng_policy.uint(rng, max);
   }
 
   /////////////////////////////////
