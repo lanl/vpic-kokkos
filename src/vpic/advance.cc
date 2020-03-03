@@ -12,6 +12,7 @@
 #include "../particle_operations/compress.h"
 #include "../particle_operations/sort.h"
 #include <Kokkos_Sort.hpp>
+#include "../collision/kokkos/takizuka_abe.h"
 
 #define FAK field_array->kernel
 
@@ -65,11 +66,12 @@ int vpic_simulation::advance(void) {
   // yields a first order accurate Trotter factorization (not a second
   // order accurate factorization).
 
-  if( collision_op_list )
+  if( have_ta_collisions() )
   {
       //Kokkos::abort("Collision is not supported");
       KOKKOS_TIC();
-      apply_collision_op_list( collision_op_list );
+      //apply_collision_op_list( collision_op_list );
+      apply_ta_collisions();
       KOKKOS_TOC( collision_model, 1 );
   }
 

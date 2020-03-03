@@ -1,3 +1,5 @@
+#if 0 // block remove
+
 #ifndef _takizuka_abe_h_
 #define _takizuka_abe_h_
 
@@ -16,3 +18,4 @@ void
 apply_takizuka_abe_pipeline( takizuka_abe_t * l );
 
 #endif /* _takizuka_abe_h_ */
+#endif // block remove

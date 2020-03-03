@@ -63,7 +63,7 @@ begin_initialization {
   double vthi = sqrt(Ti/mi);       // Ion thermal velocity
   double wpe  = 1.0;               // electron plasma frequency
 
-  double sort_interval = 1; // Injector moments also updated
+  double sort_interval = 1.0; // Injector moments also updated
 
    // Numerical parameters
   double nppc  = 1000; // number of macro particle per cell per species
@@ -217,7 +217,12 @@ begin_initialization {
   // Collisions
 
   int ncoll = tstep_coll; //number of time steps (grid->dt) between calls
-  define_collision_op(takizuka_abe("e_i_bulk", electron, ion, entropy, cvar0, ncoll));
+
+  //define_collision_op(takizuka_abe("e_i_bulk", electron, ion, entropy, cvar0, ncoll));
+
+  std::cout << "Deck adding collison with interval " << ncoll << std::endl;
+  takizuka_abe_t ta("e_i_bulk", electron, ion, cvar0, ncoll);
+  add_takizuka_abe_collision(ta);
 
   ///////////////////////////////////////////////////
   // Log diagnostic information about this simulation
@@ -467,9 +472,9 @@ begin_initialization {
   //global->hHdParams.output_variables( current_density | charge_density );
   //                                    | stress_tensor );
 
-  global->fdParams.output_variables( all );
-  global->hedParams.output_variables( all );
-  global->hHdParams.output_variables( all );
+  //global->fdParams.output_variables( all );
+  //global->hedParams.output_variables( all );
+  //global->hHdParams.output_variables( all );
 
   /*--------------------------------------------------------------------------
    * Convenience functions for simlog output
@@ -707,6 +712,7 @@ begin_field_injection {
 begin_particle_collisions{
     /* use internal collisions but dump diagnostic info here */
     if ( (should_dump(velocity) || step()==1) && step()>0 ) {
+        KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
         FileIO        fileIO;
         FileIOStatus  status;
         static char   fname[] = "JX_data" ;
@@ -717,7 +723,7 @@ begin_particle_collisions{
 
         int nx = grid->nx;
         int ny = grid->ny;
-        k_field_t& k_field = field_array->k_f_d;
+        auto& k_field = field_array->k_f_h;
 
         double jx = 0.5* ( k_field( VOXEL(1,1,1, nx, ny, nz), field_var::jfx)
                 + k_field( VOXEL(2,1,1, nx, ny, nz), field_var::jfx));

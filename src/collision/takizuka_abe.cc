@@ -1,3 +1,5 @@
+#if 0 // block remove
+
 #define IN_collision
 #include "takizuka_abe.h"
 
@@ -82,3 +84,5 @@ takizuka_abe( const char       * RESTRICT name,
                                     (restore_func_t)restore_takizuka_abe,
                                     NULL );
 }
+
+#endif //block remove

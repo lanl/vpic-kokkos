@@ -1,20 +1,13 @@
-#if 0 // block remove
-
-#define IN_collision
-
-/* #define HAS_V4_PIPELINE */
-
 #include <chrono>
 using namespace std::chrono;
 
 #include "src/util/rng_policy.h"
-#include "collision_pipeline.h"
+#include "takizuka_abe.h"
 
-#include "../takizuka_abe.h"
+#include <vector>
 
-#include "../../util/pipelines/pipelines.h"
+std::vector<takizuka_abe_t> ta_list;
 
-//#define CMOV(a,b) if(t0<t1) a=b
 
 /*
 void scatter_particles(
@@ -211,7 +204,7 @@ takizuka_abe_pipeline_scalar_kokkos(
   species_t* RESTRICT spj = cm->spj;
 
   // TODO: move to kokkos rng
-  auto& _rng = cm->rp->rng;
+  //auto& _rng = cm->rp->rng;
 
   const grid_t* RESTRICT g = spi->g;
 
@@ -482,13 +475,54 @@ takizuka_abe_pipeline_scalar_kokkos(
 
 void apply_takizuka_abe_pipeline( takizuka_abe_t* cm )
 {
+    std::cout << "Calling takizuka_abe_pipeline_scalar_kokkos" << std::endl;
     takizuka_abe_pipeline_scalar_kokkos(cm);
     //EXEC_PIPELINES( takizuka_abe, cm, 0 );
     //WAIT_PIPELINES();
 }
+
+void apply_takizuka_abe( takizuka_abe_t * cm )
+{
+  if( cm->interval<1 || (cm->spi->g->step % cm->interval) ) {
+      std::cout << "Bailing out of collision on step " << cm->spi->g->step << ", interval is " << cm->interval << std::endl;
+      return;
+  }
+  if( cm->spi->last_sorted!=cm->spi->g->step ) {
+      // TODO: these need to call the kokkos sort instead
+      std::cout << "Performing collision sort on species " << cm->spi->name << std::endl;
+      sort_p( cm->spi );
+  }
+  if( cm->spj->last_sorted!=cm->spi->g->step ) {
+      // TODO: these need to call the kokkos sort instead
+      std::cout << "Performing collision sort on species " << cm->spj->name << std::endl;
+      sort_p( cm->spj );
+  }
+  // TODO: takizuka_abe_pipeline can be remove entirely?
+    std::cout << "Calling apply_takizuka_abe_pipeline" << std::endl;
+  apply_takizuka_abe_pipeline(cm);
+}
+
 void add_takizuka_abe_collision(takizuka_abe_t ta) {
     std::cout << "Appended TA collision " << ta.name << std::endl;
     ta_list.push_back(ta);
 }
+int have_ta_collisions() {
+    std::cout << "Ta list size = " << ta_list.size() << std::endl;
+    return ta_list.size();
+}
 
-#endif // block remove
+void apply_ta_collisions()
+{
+    std::cout << "Checking if we need to apply collisions" << std::endl;
+    for (auto ta : ta_list)
+    {
+        /*std::string _name,
+          species_t* _spi,
+          species_t* _spj,
+          int _interval,
+          double _cvar0*/
+        std::cout << "Applying ta " << ta.name << " collision at interval " << ta.interval << std::endl;
+        apply_takizuka_abe(&ta);
+    }
+}
+

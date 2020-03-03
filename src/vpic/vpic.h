@@ -26,6 +26,8 @@
 #include "../util/system.h"
 #include "../util/rng_policy.h"
 
+#include "../collision/kokkos/takizuka_abe.h"
+
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
 #endif
