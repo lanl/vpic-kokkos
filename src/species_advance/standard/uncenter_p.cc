@@ -1,6 +1,118 @@
 #define IN_spa
 #include "spa_private.h"
 
+KOKKOS_INLINE_FUNCTION void add(half& a, half b, half c) {
+#ifdef __CUDA_ARCH__
+  a = __hadd(b,c);
+//#else
+//  a = b+c;
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION void sub(half& a, half b, half c) {
+#ifdef __CUDA_ARCH__
+  a = __hsub(b,c);
+//#else
+//  a = b-c;
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION void mult(half& a, half b, half c) {
+#ifdef __CUDA_ARCH__
+  a = __hmul(b,c);
+//#else
+//  a = b*c;
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION void div(half& a, half b, half c) {
+#ifdef __CUDA_ARCH__
+  a = __hdiv(b,c);
+//#else
+//  a = b/c;
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION half add(half a, half b) {
+#ifdef __CUDA_ARCH__
+  return __hadd(a,b);
+//#else
+//  return a+b;
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION half sub(half a, half b) {
+#ifdef __CUDA_ARCH__
+  return __hsub(a,b);
+//#else
+//  return a-b;
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION half mult(half a, half b) {
+#ifdef __CUDA_ARCH__
+  return __hmul(a,b);
+//#else
+//  return a*b;
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION half div(half a, half b) {
+#ifdef __CUDA_ARCH__
+  return __hdiv(a,b);
+//#else
+//  return a/b;
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION half neg(half h) {
+#ifdef __CUDA_ARCH__
+  return __hneg(h);
+//#else
+//  return -h;
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION bool geq(half a, half b) {
+#ifdef __CUDA_ARCH__
+  return __hge(a,b);
+//#else
+//  return a>=b;
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION bool leq(half a, half b) {
+#ifdef __CUDA_ARCH__
+  return __hle(a,b);
+//#else
+//  return a<=b;
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION half float2half(float f) {
+#ifdef __CUDA_ARCH__
+  return __float2half(f);
+#else
+  return static_cast<half>(f);
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION float half2float(half h) {
+#ifdef __CUDA_ARCH__
+  return __half2float(h);
+#else
+  return static_cast<float>(h);
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION half sqrt(half f) {
+#ifdef __CUDA_ARCH__
+  return hsqrt(f);
+#else
+  return sqrt(f);
+#endif
+}
+
 // TODO: these should be refs?
 void uncenter_p_kokkos(k_particles_soa_t k_part, k_interpolator_t k_interp, int np, float qdt_2mc_c) {
   const float qdt_2mc        =     -qdt_2mc_c; // For backward half advance
@@ -47,34 +159,68 @@ void uncenter_p_kokkos(k_particles_soa_t k_part, k_interpolator_t k_interp, int 
       (0, np), KOKKOS_LAMBDA (int p_index) {
 
     int ii = pii;
-    float hax, hay, haz, l_cbx, l_cby, l_cbz;
-    float v0, v1, v2, v3, v4;
+//    float hax, hay, haz, l_cbx, l_cby, l_cbz;
+//    float v0, v1, v2, v3, v4;
+    mixed_t hax, hay, haz, l_cbx, l_cby, l_cbz;
+    mixed_t v0, v1, v2, v3, v4;
 
-    hax  = qdt_2mc*(      ( f_ex    + p_dy*f_dexdy    ) +
+    hax  = static_cast<mixed_t>(qdt_2mc)*(      ( f_ex    + p_dy*f_dexdy    ) +
                      p_dz*( f_dexdz + p_dy*f_d2exdydz ) );
-    hay  = qdt_2mc*(      ( f_ey    + p_dz*f_deydz    ) +
+    hay  = static_cast<mixed_t>(qdt_2mc)*(      ( f_ey    + p_dz*f_deydz    ) +
                      p_dx*( f_deydx + p_dz*f_d2eydzdx ) );
     haz  = qdt_2mc*(      ( f_ez    + p_dx*f_dezdx    ) +
                      p_dy*( f_dezdy + p_dx*f_d2ezdxdy ) );
+
     l_cbx  = f_cbx + p_dx*f_dcbxdx;            // Interpolate B
     l_cby  = f_cby + p_dy*f_dcbydy;
     l_cbz  = f_cbz + p_dz*f_dcbzdz;
-    v0   = qdt_4mc/(float)sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
+
+    v0   = qdt_4mc/sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
+
     /**/                                     // Boris - scalars
     v1    = l_cbx*l_cbx + (l_cby*l_cby + l_cbz*l_cbz);
     v2    = (v0*v0)*v1;
     v3    = v0*(one+v2*(one_third+v2*two_fifteenths));
     v4    = v3/(one+v1*(v3*v3));
     v4   += v4;
+
     v0    = p_ux + v3*( p_uy*l_cbz - p_uz*l_cby );      // Boris - uprime
     v1    = p_uy + v3*( p_uz*l_cbx - p_ux*l_cbz );
     v2    = p_uz + v3*( p_ux*l_cby - p_uy*l_cbx );
+
     p_ux += v4*( v1*l_cbz - v2*l_cby );           // Boris - rotation
     p_uy += v4*( v2*l_cbx - v0*l_cbz );
     p_uz += v4*( v0*l_cby - v1*l_cbx );
+
     p_ux += hax;                              // Half advance E
     p_uy += hay;
     p_uz += haz;
+
+//    hax  = mult(float2half(qdt_2mc),add(      add( f_ex    , mult(p_dy,f_dexdy)    ) ,
+//                     mult(p_dz,add( f_dexdz , mult(p_dy,f_d2exdydz) )) ));
+//    hay  = mult(float2half(qdt_2mc),add(      add( f_ey    , mult(p_dz,f_deydz)    ) ,
+//                     mult(p_dx,add( f_deydx , mult(p_dz,f_d2eydzdx) )) ));
+//    haz  = mult(float2half(qdt_2mc),add(      add( f_ez    , mult(p_dx,f_dezdx)    ) ,
+//                     mult(p_dy,add( f_dezdy , mult(p_dx,f_d2ezdxdy) )) ));
+//    l_cbx  = add(float2half(f_cbx) , mult(p_dx,f_dcbxdx));            // Interpolate B
+//    l_cby  = add(float2half(f_cby) , mult(p_dy,f_dcbydy));
+//    l_cbz  = add(float2half(f_cbz) , mult(p_dz,f_dcbzdz));
+//    v0   = div(float2half(qdt_4mc),sqrt(add(one , add(mult(p_ux,p_ux) , add(mult(p_uy,p_uy) , mult(p_uz,p_uz))))));
+//    /**/                                     // Boris - scalars
+//    v1    = add(mult(l_cbx,l_cbx) , add(mult(l_cby,l_cby) , mult(l_cbz,l_cbz)));
+//    v2    = mult(mult(v0,v0),v1);
+//    v3    = mult(v0,add(one,mult(v2,add(one_third,mult(v2,two_fifteenths)))));
+//    v4    = div(v3,add(one,mult(v1,mult(v3,v3))));
+//    v4    = add(v4,v4);
+//    v0    = add(p_ux , mult(v3,sub( mult(p_uy,l_cbz) , mult(p_uz,l_cby) )));      // Boris - uprime
+//    v1    = add(p_uy , mult(v3,sub( mult(p_uz,l_cbx) , mult(p_ux,l_cbz) )));
+//    v2    = add(p_uz , mult(v3,sub( mult(p_ux,l_cby) , mult(p_uy,l_cbx) )));
+//    p_ux  = add(p_ux,mult(v4,sub( mult(v1,l_cbz) , mult(v2,l_cby) )));           // Boris - rotation
+//    p_uy  = add(p_uy,mult(v4,sub( mult(v2,l_cbx) , mult(v0,l_cbz) )));
+//    p_uz  = add(p_uz,mult(v4,sub( mult(v0,l_cby) , mult(v1,l_cbx) )));
+//    p_ux  = add(p_ux,hax);                              // Half advance E
+//    p_uy  = add(p_ux,hay);
+//    p_uz  = add(p_ux,haz);
   });
 }
 
@@ -131,8 +277,37 @@ void uncenter_p_kokkos(k_particles_soa_t k_part, k_particles_t k_particles, k_pa
       (0, np), KOKKOS_LAMBDA (int p_index) {
 
     int ii = pii;
-    float hax, hay, haz, l_cbx, l_cby, l_cbz;
-    float v0, v1, v2, v3, v4;
+//    float hax, hay, haz, l_cbx, l_cby, l_cbz;
+//    float v0, v1, v2, v3, v4;
+//
+//    hax  = qdt_2mc*(      ( f_ex    + p_dy*f_dexdy    ) +
+//                     p_dz*( f_dexdz + p_dy*f_d2exdydz ) );
+//    hay  = qdt_2mc*(      ( f_ey    + p_dz*f_deydz    ) +
+//                     p_dx*( f_deydx + p_dz*f_d2eydzdx ) );
+//    haz  = qdt_2mc*(      ( f_ez    + p_dx*f_dezdx    ) +
+//                     p_dy*( f_dezdy + p_dx*f_d2ezdxdy ) );
+//    l_cbx  = f_cbx + p_dx*f_dcbxdx;            // Interpolate B
+//    l_cby  = f_cby + p_dy*f_dcbydy;
+//    l_cbz  = f_cbz + p_dz*f_dcbzdz;
+//    v0   = qdt_4mc/(float)sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
+//    /**/                                     // Boris - scalars
+//    v1    = l_cbx*l_cbx + (l_cby*l_cby + l_cbz*l_cbz);
+//    v2    = (v0*v0)*v1;
+//    v3    = v0*(one+v2*(one_third+v2*two_fifteenths));
+//    v4    = v3/(one+v1*(v3*v3));
+//    v4   += v4;
+//    v0    = p_ux + v3*( p_uy*l_cbz - p_uz*l_cby );      // Boris - uprime
+//    v1    = p_uy + v3*( p_uz*l_cbx - p_ux*l_cbz );
+//    v2    = p_uz + v3*( p_ux*l_cby - p_uy*l_cbx );
+//    p_ux += v4*( v1*l_cbz - v2*l_cby );           // Boris - rotation
+//    p_uy += v4*( v2*l_cbx - v0*l_cbz );
+//    p_uz += v4*( v0*l_cby - v1*l_cbx );
+//    p_ux += hax;                              // Half advance E
+//    p_uy += hay;
+//    p_uz += haz;
+
+    mixed_t hax, hay, haz, l_cbx, l_cby, l_cbz;
+    mixed_t v0, v1, v2, v3, v4;
 
     hax  = qdt_2mc*(      ( f_ex    + p_dy*f_dexdy    ) +
                      p_dz*( f_dexdz + p_dy*f_d2exdydz ) );
@@ -159,6 +334,32 @@ void uncenter_p_kokkos(k_particles_soa_t k_part, k_particles_t k_particles, k_pa
     p_ux += hax;                              // Half advance E
     p_uy += hay;
     p_uz += haz;
+
+//    hax  = mult(float2half(qdt_2mc),add(      add( f_ex    , mult(p_dy,f_dexdy)    ) ,
+//                     mult(p_dz,add( f_dexdz , mult(p_dy,f_d2exdydz) )) ));
+//    hay  = mult(float2half(qdt_2mc),add(      add( f_ey    , mult(p_dz,f_deydz)    ) ,
+//                     mult(p_dx,add( f_deydx , mult(p_dz,f_d2eydzdx) )) ));
+//    haz  = mult(float2half(qdt_2mc),add(      add( f_ez    , mult(p_dx,f_dezdx)    ) ,
+//                     mult(p_dy,add( f_dezdy , mult(p_dx,f_d2ezdxdy) )) ));
+//    l_cbx  = add(float2half(f_cbx) , mult(p_dx,f_dcbxdx));            // Interpolate B
+//    l_cby  = add(float2half(f_cby) , mult(p_dy,f_dcbydy));
+//    l_cbz  = add(float2half(f_cbz) , mult(p_dz,f_dcbzdz));
+//    v0   = div(float2half(qdt_4mc),sqrt(add(one , add(mult(p_ux,p_ux) , add(mult(p_uy,p_uy) , mult(p_uz,p_uz))))));
+//    /**/                                     // Boris - scalars
+//    v1    = add(mult(l_cbx,l_cbx) , add(mult(l_cby,l_cby) , mult(l_cbz,l_cbz)));
+//    v2    = mult(mult(v0,v0),v1);
+//    v3    = mult(v0,add(one,mult(v2,add(one_third,mult(v2,two_fifteenths)))));
+//    v4    = div(v3,add(one,mult(v1,mult(v3,v3))));
+//    v4    = add(v4,v4);
+//    v0    = add(p_ux , mult(v3,sub( mult(p_uy,l_cbz) , mult(p_uz,l_cby) )));      // Boris - uprime
+//    v1    = add(p_uy , mult(v3,sub( mult(p_uz,l_cbx) , mult(p_ux,l_cbz) )));
+//    v2    = add(p_uz , mult(v3,sub( mult(p_ux,l_cby) , mult(p_uy,l_cbx) )));
+//    p_ux  = add(p_ux,mult(v4,sub( mult(v1,l_cbz) , mult(v2,l_cby) )));           // Boris - rotation
+//    p_uy  = add(p_uy,mult(v4,sub( mult(v2,l_cbx) , mult(v0,l_cbz) )));
+//    p_uz  = add(p_uz,mult(v4,sub( mult(v0,l_cby) , mult(v1,l_cbx) )));
+//    p_ux  = add(p_ux,hax);                              // Half advance E
+//    p_uy  = add(p_ux,hay);
+//    p_uz  = add(p_ux,haz);
   });
 }
 

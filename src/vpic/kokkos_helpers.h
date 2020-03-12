@@ -10,11 +10,13 @@
 //#include "cnl/all.h"
 //using cnl::fixed_point;
 //using fixed_point_t = fixed_point<int32_t, -23>;
-#include "half.hpp"
-#ifdef __CUDA_ARCH__
+
+//#ifdef KOKKOS_ENABLE_CUDA
 #include "cuda_fp16.h"
-#endif
+//#else
+#include "half.hpp"
 using half_float::half;
+//#endif
 
 // This module implements kokkos macros
 
@@ -40,17 +42,330 @@ using half_float::half;
 typedef int16_t material_id;
 
 typedef float float_t;
-//typedef __half pos_t;
-//typedef __half mom_t;
-//typedef __half mixed_t;
+
+//#ifdef KOKKOS_ENABLE_CUDA
+//#define half __half
+//#endif
+//
+//#define pos_t half
+//#define mom_t half
+//#define mixed_t half
+
+template <typename T> class Half {
+  public:
+    T _data; // Actual data
+
+    KOKKOS_INLINE_FUNCTION Half(): _data() {}
+
+    KOKKOS_INLINE_FUNCTION Half(T data) {
+      _data = data;
+    }
+
+    KOKKOS_INLINE_FUNCTION Half(const float f) {
 #ifdef __CUDA_ARCH__
-#define pos_t __half
-#define mom_t __half
-#define mixed_t __half
+      _data = __float2half(f);
 #else
-#define pos_t half
-#define mom_t half
-#define mixed_t half
+      _data = static_cast<half>(f);
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION operator float() const {
+#ifdef __CUDA_ARCH__
+      return __half2float(_data);
+#else
+      return static_cast<float>(_data);
+#endif
+    }
+
+		KOKKOS_INLINE_FUNCTION Half& operator=(Half rhs) { 
+#ifdef __CUDA_ARCH__
+      _data = rhs._data;
+      return *this;
+#else
+      _data = rhs._data;
+      return *this;
+#endif
+    }
+
+		KOKKOS_INLINE_FUNCTION Half& operator=(float rhs) { 
+#ifdef __CUDA_ARCH__
+      _data = __float2half(rhs);
+      return *this;
+#else
+      _data = static_cast<half>(rhs);
+      return *this;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T> operator+(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      return Half<T>(__hadd(_data, rhs._data));
+#else
+      return Half<T>(_data+rhs._data);
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T> operator+(const float& rhs) {
+#ifdef __CUDA_ARCH__
+      return Half<T>(__hadd(_data, __float2half(rhs)));
+#else
+      return Half<T>(_data+static_cast<T>(_data));
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T> operator-(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      return Half<T>(__hsub(_data, rhs._data));
+#else
+      return Half<T>(_data-rhs._data);
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T> operator-(const float& rhs) {
+#ifdef __CUDA_ARCH__
+      return Half<T>(__hsub(_data, __float2half(rhs)));
+#else
+      return Half<T>(_data-static_cast<T>(_data));
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T> operator*(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      return Half<T>(__hmul(_data, rhs._data));
+#else
+      return Half<T>(_data*rhs._data);
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T> operator*(const float& rhs) {
+#ifdef __CUDA_ARCH__
+      return Half<T>(__hmul(_data, __float2half(rhs)));
+#else
+      return Half<T>(_data*static_cast<T>(_data));
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T> operator/(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      return Half<T>(__hdiv(_data, rhs._data));
+#else
+      return Half<T>(_data/rhs._data);
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T> operator/(const float& rhs) {
+#ifdef __CUDA_ARCH__
+      return Half<T>(__hdiv(_data, __float2half(rhs)));
+#else
+      return Half<T>(_data/static_cast<T>(_data));
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T>& operator+=(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      _data = __hadd(_data, rhs._data);
+      return *this;
+#else
+      _data += rhs._data;
+      return *this;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T>& operator+=(const float& rhs) {
+#ifdef __CUDA_ARCH__
+      _data = __hadd(_data, __float2half(rhs));
+      return *this;
+#else
+      _data += rhs;
+      return *this;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T>& operator-=(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      _data = __hsub(_data, rhs._data);
+      return *this;
+#else
+      _data -= rhs._data;
+      return *this;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T>& operator*=(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      _data = __hmul(_data, rhs._data);
+      return *this;
+#else
+      _data *= rhs._data;
+      return *this;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T>& operator/=(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      _data = __hdiv(_data, rhs._data);
+      return *this;
+#else
+      _data = rhs._data;
+      return *this;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T>& operator++() {
+#ifdef __CUDA_ARCH__
+      _data = __hadd(_data, Half(1.0));
+      return *this;
+#else
+      _data++;
+      return *this;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T>& operator--() {
+#ifdef __CUDA_ARCH__
+      _data = __hsub(_data, Half(1.0));
+      return *this;
+#else
+      _data--;
+      return *this;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T> operator++(int a) {
+#ifdef __CUDA_ARCH__
+      return Half<T>( __hadd(_data, Half(1.0)));
+#else
+      return Half<T>(++_data);
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T> operator--(int a) {
+#ifdef __CUDA_ARCH__
+      return Half<T>( __hsub(_data, Half(1.0)));
+#else
+      return Half<T>(--_data);
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T> operator+() const {
+#ifdef __CUDA_ARCH__
+      return Half<T>(_data);
+#else
+      return Half<T>(_data);
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION Half<T> operator-() const {
+#ifdef __CUDA_ARCH__
+      return Half<T>(__hneg(_data));
+#else
+      return -Half<T>(_data);
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION bool operator==(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      return __heq(_data, rhs._data);
+#else
+      return _data==rhs._data;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION bool operator!=(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      return __hne(_data, rhs._data);
+#else
+      return _data!=rhs._data;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION bool operator<=(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      return __hle(_data, rhs._data);
+#else
+      return _data<=rhs._data;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION bool operator>=(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      return __hge(_data, rhs._data);
+#else
+      return _data>=rhs._data;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION bool operator<(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      return __hlt(_data, rhs._data);
+#else
+      return _data<rhs._data;
+#endif
+    }
+
+    KOKKOS_INLINE_FUNCTION bool operator>(const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+      return __hgt(_data, rhs._data);
+#else
+      return _data>rhs._data;
+#endif
+    }
+};
+
+//template<typename T>
+//KOKKOS_INLINE_FUNCTION Half<T> Half<T>::operator+(const float lhs, const Half<T>& rhs) {
+//#ifdef __CUDA_ARCH__
+//  return Half<T>(lhs) + rhs;
+//#else
+//  return Half<T>(lhs) + rhs;
+//#endif
+//}
+
+template<typename T>
+KOKKOS_INLINE_FUNCTION Half<T> operator*(const float lhs, const Half<T>& rhs) {
+#ifdef __CUDA_ARCH__
+  return Half<T>(lhs) * rhs;
+#else
+  return Half<T>(lhs) * rhs;
+#endif
+}
+
+template<typename T> 
+KOKKOS_INLINE_FUNCTION Half<T> sqrt(Half<T> h) {
+//  if(std::is_same<Kokkos::Cuda, Kokkos::DefaultExecutionSpace>::value) {
+//  if(std::is_same<T,__half>::value) {
+//    return Half<T>(hsqrt(h._data));
+//  } else {
+//    return Half<T>(half_float::sqrt(h._data));
+//  }
+#ifdef __CUDA_ARCH__
+  return Half<T>(hsqrt(h._data));
+//#else
+//  return Half<T>(half_float::sqrt(h._data));
+#endif
+}
+
+//#ifdef KOKKOS_ENABLE_CUDA
+//#define pos_t __half
+//#define mom_t __half
+//#define mixed_t __half
+//#else
+//#define pos_t half
+//#define mom_t half
+//#define mixed_t half
+////#define pos_t float
+////#define mom_t float
+////#define mixed_t float
+//#endif
+
+#ifdef __CUDA_ARCH__
+typedef Half<__half> pos_t;
+typedef Half<__half> mom_t;
+typedef Half<__half> mixed_t;
+#else
+typedef Half<half> pos_t;
+typedef Half<half> mom_t;
+typedef Half<half> mixed_t;
 #endif
 
 class k_particles_struct {

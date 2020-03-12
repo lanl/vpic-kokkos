@@ -8,22 +8,6 @@
 #include "../../vpic/kokkos_helpers.h"
 #include "../../vpic/vpic.h"
 
-//KOKKOS_INLINE_FUNCTION __half sqrt(__half a) {
-//#ifdef __CUDA_ARCH__
-//  return hsqrt(a);
-//#else
-//  return sqrt(a);
-//#endif
-//}
-//
-//KOKKOS_INLINE_FUNCTION __half float2half(float a) {
-//#ifdef __CUDA_ARCH__
-//  return __float2half(a);
-//#else
-//  return static_cast<__half>(a);
-//#endif
-//}
-
 void
 advance_p_kokkos(
         k_particles_soa_t& k_part,
@@ -56,9 +40,9 @@ advance_p_kokkos(
 //  constexpr float one_third      = 1./3.;
 //  constexpr float two_fifteenths = 2./15.;
 
-  const mixed_t one            = (mixed_t)(1.);
-  const mixed_t one_third      = (mixed_t)(1./3.);
-  const mixed_t two_fifteenths = (mixed_t)(2./15.);
+  const mixed_t one            = static_cast<mixed_t>(1.);
+  const mixed_t one_third      = static_cast<mixed_t>(1./3.);
+  const mixed_t two_fifteenths = static_cast<mixed_t>(2./15.);
 
   /*
   k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
@@ -172,16 +156,17 @@ sp_[id]->
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index)
     {
+//#ifndef KOKKOS_ENABLE_CUDA
 //    float v0, v1, v2, v3, v4, v5;
-    mixed_t v0, v1, v2, v3, v4, v5;
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+    mixed_t v0, v1, v2, v3, v4, v5;
 
 //    float dx   = p_dx;                             // Load position
 //    float dy   = p_dy;
 //    float dz   = p_dz;
-    pos_t dx   = p_dx;                             // Load position
-    pos_t dy   = p_dy;
-    pos_t dz   = p_dz;
+    mixed_t dx = p_dx;
+    mixed_t dy = p_dy;
+    mixed_t dz = p_dz;
     int   ii   = pii;
 //    float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
 //                           dz*( f_dexdz + dy*f_d2exdydz ) );
@@ -189,25 +174,12 @@ sp_[id]->
 //                           dx*( f_deydx + dz*f_d2eydzdx ) );
 //    float haz  = qdt_2mc*(    ( f_ez    + dx*f_dezdx    ) +
 //                           dy*( f_dezdy + dx*f_d2ezdxdy ) );
-    #ifdef __CUDA_ARCH__
-//    mixed_t hax  = static_cast<mixed_t>(qdt_2mc)*( (static_cast<mixed_t>(f_ex) + dy*static_cast<mixed_t>(f_dexdy)) +
-//                           dz*(static_cast<mixed_t>(f_dexdz) + dy*static_cast<mixed_t>(f_d2exdydz)) );
-    mixed_t temp = __hfma(dy, float2half(f_dexdy), float2half(f_ex));
-    mixed_t temp2 = __hfma(dy, float2half(f_d2exdydz), float2half(f_dexdz));
-    mixed_t temp3 = __hadd(temp, temp2);
-    mixed_t hax = __hmul(qdt_2mc, temp3);
-    mixed_t hay  = static_cast<mixed_t>(qdt_2mc)*( (static_cast<mixed_t>(f_ey) + dz*static_cast<mixed_t>(f_deydz)) +
-                           dx*(static_cast<mixed_t>(f_deydx) + dz*static_cast<mixed_t>(f_d2eydzdx)) );
-    mixed_t haz  = static_cast<mixed_t>(qdt_2mc)*( (static_cast<mixed_t>(f_ez) + dx*static_cast<mixed_t>(f_dezdx)) +
-                           dy*(static_cast<mixed_t>(f_dezdy) + dx*static_cast<mixed_t>(f_d2ezdxdy)) );
-    #else
     mixed_t hax  = static_cast<mixed_t>(qdt_2mc)*( (static_cast<mixed_t>(f_ex) + dy*static_cast<mixed_t>(f_dexdy)) +
                            dz*(static_cast<mixed_t>(f_dexdz) + dy*static_cast<mixed_t>(f_d2exdydz)) );
     mixed_t hay  = static_cast<mixed_t>(qdt_2mc)*( (static_cast<mixed_t>(f_ey) + dz*static_cast<mixed_t>(f_deydz)) +
                            dx*(static_cast<mixed_t>(f_deydx) + dz*static_cast<mixed_t>(f_d2eydzdx)) );
     mixed_t haz  = static_cast<mixed_t>(qdt_2mc)*( (static_cast<mixed_t>(f_ez) + dx*static_cast<mixed_t>(f_dezdx)) +
                            dy*(static_cast<mixed_t>(f_dezdy) + dx*static_cast<mixed_t>(f_d2ezdxdy)) );
-    #endif
     //printf(" inter %d vs %ld \n", ii, k_interp.size());
 //    float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
 //    float cby  = f_cby + dy*f_dcbydy;
@@ -215,55 +187,57 @@ sp_[id]->
     mixed_t cbx  = static_cast<mixed_t>(f_cbx) + dx*static_cast<mixed_t>(f_dcbxdx);             // Interpolate B
     mixed_t cby  = static_cast<mixed_t>(f_cby) + dy*static_cast<mixed_t>(f_dcbydy);
     mixed_t cbz  = static_cast<mixed_t>(f_cbz) + dz*static_cast<mixed_t>(f_dcbzdz);
+    mixed_t ux   = p_ux;                             // Load momentum
+    mixed_t uy   = p_uy;
+    mixed_t uz   = p_uz;
+    mixed_t q    = static_cast<mixed_t>(p_w);
 //    float ux   = p_ux;                             // Load momentum
 //    float uy   = p_uy;
 //    float uz   = p_uz;
 //    float q    = p_w;
-    mom_t ux   = p_ux;                             // Load momentum
-    mom_t uy   = p_uy;
-    mom_t uz   = p_uz;
-    mixed_t q    = static_cast<mixed_t>(p_w);
     ux  += hax;                               // Half advance E
     uy  += hay;
     uz  += haz;
-//    v0   = qdt_2mc/sqrtf(one + (ux*ux + (uy*uy + uz*uz)));
-    v0   = static_cast<mixed_t>(qdt_2mc)/sqrt(one + (ux*ux + (uy*uy + uz*uz)));
-    /**/                                      // Boris - scalars
+    v0   = static_cast<mixed_t>(qdt_2mc)/sqrt(static_cast<mixed_t>(one) + (ux*ux + (uy*uy + uz*uz)));
     v1   = cbx*cbx + (cby*cby + cbz*cbz);
-    v2   = (v0*v0)*v1;
-    v3   = v0*(one+v2*(one_third+v2*two_fifteenths));
-    v4   = v3/(one+v1*(v3*v3));
+    v2   = ( v0*v0 ) * v1;
+    v3   = v0*(static_cast<mixed_t>(one)+v2*(static_cast<mixed_t>(one_third)+v2*static_cast<mixed_t>(two_fifteenths)));
+    v4   = v3/(static_cast<mixed_t>(one)+v1*(v3*v3));
     v4  += v4;
+
     v0   = ux + v3*( uy*cbz - uz*cby );       // Boris - uprime
     v1   = uy + v3*( uz*cbx - ux*cbz );
     v2   = uz + v3*( ux*cby - uy*cbx );
+
     ux  += v4*( v1*cbz - v2*cby );            // Boris - rotation
     uy  += v4*( v2*cbx - v0*cbz );
     uz  += v4*( v0*cby - v1*cbx );
+
     ux  += hax;                               // Half advance E
     uy  += hay;
     uz  += haz;
+
     p_ux = ux;                               // Store momentum
     p_uy = uy;
     p_uz = uz;
-
-//    v0   = one/sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
-    v0   = one/sqrt(one + (ux*ux+ (uy*uy + uz*uz)));
-    /**/                                      // Get norm displacement
+    v0   = one/sqrtf(static_cast<mixed_t>(one) + (ux*ux+ (uy*uy + uz*uz)));
     ux  *= cdt_dx;
     uy  *= cdt_dy;
     uz  *= cdt_dz;
+
+    /**/                                      // Get norm displacement
     ux  *= v0;
     uy  *= v0;
     uz  *= v0;
+
     v0   = dx + ux;                           // Streak midpoint (inbnds)
     v1   = dy + uy;
     v2   = dz + uz;
+
     v3   = v0 + ux;                           // New position
     v4   = v1 + uy;
     v5   = v2 + uz;
 
-    // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
     if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
         -v3<=one && -v4<=one && -v5<=one ) {
 
@@ -279,7 +253,6 @@ sp_[id]->
       dy = v1;
       dz = v2;
       v5 = static_cast<mixed_t>(q)*ux*uy*uz*one_third;              // Compute correction
-
 
 #     define ACCUMULATE_J(X,Y,Z)                                 \
       v4  = q*u##X;   /* v2 = q ux                            */        \
@@ -345,7 +318,7 @@ sp_[id]->
           k_particle_movers_i(nm)   = local_pm->i;
 
           // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-          k_particle_copy(nm, particle_var::dx) = float(p_dx);
+          k_particle_copy(nm, particle_var::dx) = p_dx;
           k_particle_copy(nm, particle_var::dy) = p_dy;
           k_particle_copy(nm, particle_var::dz) = p_dz;
           k_particle_copy(nm, particle_var::ux) = p_ux;
@@ -367,6 +340,176 @@ sp_[id]->
         }
       }
     }
+//#else
+//    mixed_t v0, v1, v2, v3, v4, v5;
+//    auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+//    pos_t dx   = p_dx;                             // Load position
+//    pos_t dy   = p_dy;
+//    pos_t dz   = p_dz;
+//    int   ii   = pii;
+//    mixed_t hax  = mult(float2half(qdt_2mc),add(    add( f_ex    , mult(dy,float2half(f_dexdy))    ) ,
+//                           mult(dz,add( float2half(f_dexdz) , mult(dy,float2half(f_d2exdydz)) )) ));
+//    mixed_t hay  = mult(float2half(qdt_2mc),add(    add( f_ey    , mult(dz,float2half(f_deydz))    ) ,
+//                           mult(dx,add( float2half(f_deydx) , mult(dz,float2half(f_d2eydzdx)) )) ));
+//    mixed_t haz  = mult(float2half(qdt_2mc),add(    add( f_ez    , mult(dx,float2half(f_dezdx))    ) ,
+//                           mult(dy,add( float2half(f_dezdy) , mult(dx,float2half(f_d2ezdxdy)) )) ));
+//    //printf(" inter %d vs %ld \n", ii, k_interp.size());
+//    mixed_t cbx = add(float2half(f_cbx), mult(dx, float2half(f_dcbxdx)));
+//    mixed_t cby = add(float2half(f_cby), mult(dy, float2half(f_dcbydy)));
+//    mixed_t cbz = add(float2half(f_cbz), mult(dz, float2half(f_dcbzdz)));
+//    mom_t ux   = p_ux;                             // Load momentum
+//    mom_t uy   = p_uy;
+//    mom_t uz   = p_uz;
+//    mixed_t q    = float2half(p_w);
+//    ux = add(ux, hax);                               // Half advance E
+//    uy = add(uy, hay);
+//    uz = add(uz, haz);
+//    v0   = div(float2half(qdt_2mc), sqrt(add(one , add(mult(ux,ux) , add(mult(uy,uy) , mult(uz,uz))))));
+//    /**/                                      // Boris - scalars
+//    v1   = add(mult(cbx,cbx) , (add(mult(cby,cby) , mult(cbz,cbz))));
+//    v2   = mult(mult(v0,v0),v1);
+//    v3   = mult(v0,(add(one,mult(v2,(add(one_third,mult(v2,two_fifteenths)))))));
+//    v4   = div(v3,add(one,mult(v1,mult(v3,v3))));
+//    v4   = add(v4,v4);
+//
+//    v0   = add(ux , mult(v3,sub( mult(uy,cbz) , mult(uz,cby) )));       // Boris - uprime
+//    v1   = add(uy , mult(v3,sub( mult(uz,cbx) , mult(ux,cbz) )));
+//    v2   = add(uz , mult(v3,sub( mult(ux,cby) , mult(uy,cbx) )));
+//
+//    ux   = add(ux, mult(v4,sub( mult(v1,cbz) , mult(v2,cby) )));            // Boris - rotation
+//    uy   = add(uy, mult(v4,sub( mult(v2,cbx) , mult(v0,cbz) )));            // Boris - rotation
+//    uz   = add(uz, mult(v4,sub( mult(v0,cby) , mult(v1,cbx) )));            // Boris - rotation
+//
+//    ux   = add(ux,ux);
+//    uy   = add(uz,uy);
+//    uz   = add(uz,uz);
+//
+//    p_ux = ux;                               // Store momentum
+//    p_uy = uy;
+//    p_uz = uz;
+//
+//    v0   = div(one,sqrt(add(one , add(mult(ux,ux) , add(mult(uy,uy) , mult(uz,uz))))));
+//    /**/                                      // Get norm displacement
+//    ux   = mult(ux, cdt_dx);
+//    uy   = mult(uy, cdt_dy);
+//    uz   = mult(uz, cdt_dz);
+//
+//    ux   = mult(ux, v0);
+//    uy   = mult(uy, v0);
+//    uz   = mult(uz, v0);
+//
+//    v0   = add(dx , ux);                           // Streak midpoint (inbnds)
+//    v1   = add(dy , uy);
+//    v2   = add(dz , uz);
+//
+//    v3   = add(v0 , ux);                           // New position
+//    v4   = add(v1 , uy);
+//    v5   = add(v2 , uz);
+//
+//    // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
+//    if(  leq(v3,one) &&  leq(v4,one) &&  leq(v5,one) &&   // Check if inbnds
+//        leq(neg(v3),one) && leq(neg(v4),one) && leq(neg(v5),one) ) {
+//
+//      // Common case (inbnds).  Note: accumulator values are 4 times
+//      // the total physical charge that passed through the appropriate
+//      // current quadrant in a time-step
+//
+//      q = mult(q,qsp);
+//      p_dx = v3;                             // Store new position
+//      p_dy = v4;
+//      p_dz = v5;
+//      dx = v0;                                // Streak midpoint
+//      dy = v1;
+//      dz = v2;
+//      v5 = mult(mult(mult(mult(float2half(q),ux),uy),uz),one_third);              // Compute correction
+//
+//#     define ACCUMULATE_J(X,Y,Z)                                 \
+//      v4  = mult(q,u##X);   /* v2 = q ux                            */        \
+//      v1  = mult(v4,d##Y);  /* v1 = q ux dy                         */        \
+//      v0  = sub(v4,v1);    /* v0 = q ux (1-dy)                     */        \
+//      v1  = add(v1,v4);       /* v1 = q ux (1+dy)                     */        \
+//      v4  = add(one,d##Z); /* v4 = 1+dz                            */        \
+//      v2  = mult(v0,v4);    /* v2 = q ux (1-dy)(1+dz)               */        \
+//      v3  = mult(v1,v4);    /* v3 = q ux (1+dy)(1+dz)               */        \
+//      v4  = sub(one,d##Z); /* v4 = 1-dz                            */        \
+//      v0  = mult(v0,v4);       /* v0 = q ux (1-dy)(1-dz)               */        \
+//      v1  = mult(v1,v4);       /* v1 = q ux (1+dy)(1-dz)               */        \
+//      v0  = add(v0,v5);       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+//      v1  = sub(v1,v5);       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+//      v2  = sub(v2,v5);       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+//      v3  = add(v3,v5);       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+//
+//      ACCUMULATE_J( x,y,z );
+//      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+//      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+//      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+//      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+//
+//      ACCUMULATE_J( y,z,x );
+//      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+//      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+//      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+//      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+//
+//      ACCUMULATE_J( z,x,y );
+//      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+//      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+//      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+//      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+//
+//#     undef ACCUMULATE_J
+//
+//    } else
+//    {                                    // Unlikely
+//        /*
+//           local_pm_dispx = ux;
+//           local_pm_dispy = uy;
+//           local_pm_dispz = uz;
+//
+//           local_pm_i     = p_index;
+//        */
+//      DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+//      local_pm->dispx = ux;
+//      local_pm->dispy = uy;
+//      local_pm->dispz = uz;
+//      local_pm->i     = p_index;
+//
+//      //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
+//      if( move_p_kokkos(k_part, local_pm,
+//                         k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
+//        if( k_nm(0)<max_nm ) {
+//          const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+//          if (nm >= max_nm) Kokkos::abort("overran max_nm");
+//
+//          k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+//          k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+//          k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+//          k_particle_movers_i(nm)   = local_pm->i;
+//
+//          // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+//          k_particle_copy(nm, particle_var::dx) = p_dx;
+//          k_particle_copy(nm, particle_var::dy) = p_dy;
+//          k_particle_copy(nm, particle_var::dz) = p_dz;
+//          k_particle_copy(nm, particle_var::ux) = p_ux;
+//          k_particle_copy(nm, particle_var::uy) = p_uy;
+//          k_particle_copy(nm, particle_var::uz) = p_uz;
+//          k_particle_copy(nm, particle_var::w) = p_w;
+//          k_particle_i_copy(nm) = pii;
+//
+//          // Tag this one as having left
+//          //k_particles(p_index, particle_var::pi) = 999999;
+//
+//          // Copy local local_pm back
+//          //local_pm_dispx = local_pm->dispx;
+//          //local_pm_dispy = local_pm->dispy;
+//          //local_pm_dispz = local_pm->dispz;
+//          //local_pm_i = local_pm->i;
+//          //printf("rank copying %d to nm %d \n", local_pm_i, nm);
+//          //copy_local_to_pm(nm);
+//        }
+//      }
+//    }
+//#endif
   });
 
   // TODO: abstract this manual data copy

@@ -121,7 +121,7 @@ begin_initialization {
   
   // Numerical parameters
 
-  double nppc  =  200; // Average number of macro particle per cell per species
+  double nppc  =  512; // Average number of macro particle per cell per species
 
   double Lx  = 30.0/sqrt(mi_me)*di; // size of box in x dimension
   double Ly  = 15.0/sqrt(mi_me)*di; // size of box in y dimension
@@ -291,7 +291,7 @@ begin_initialization {
 //  double topology_y = 1;
 //  double topology_z = 1;
   double topology_x = 4;  // Number of domains in x, y, and z
-  double topology_y = 2;
+  double topology_y = 4;
   double topology_z = 2;
 #endif
 
@@ -314,9 +314,9 @@ begin_initialization {
 #endif
 
 
-  double nx = 128;
-  double ny = 64;
-  double nz = 64;
+  double nx = 32;
+  double ny = 32;
+  double nz = 32;
 
 //  nx /= 4; ny /= 4; nz /= 4; nppc /= 10;
 
@@ -356,10 +356,11 @@ begin_initialization {
                                                  // plasma frequency limited
    
   //int restart_interval = int(10000.0/(wci*dt));
-  //int restart_interval = 8000;
-  int restart_interval = 100;
+  int restart_interval = 8000;
+  //int restart_interval = 100;
   int energies_interval = 100;
-  int interval = int(5.0/(wci*dt)); 
+  //int interval = int(5.0/(wci*dt)); 
+  int interval = 10;
   int fields_interval = interval;
   int ehydro_interval = interval;
   int Hhydro_interval = interval;
@@ -388,8 +389,8 @@ begin_initialization {
 
   ///////////////////////////////////////////////
   // Setup high level simulation parameters
-  num_step             = int(taui/(wci*dt));
-  num_step             = 5000;
+  //num_step             = int(taui/(wci*dt));
+  num_step             = 10000;
   status_interval      = 200;
   sync_shared_interval = status_interval/2;
   clean_div_e_interval = status_interval/2;
