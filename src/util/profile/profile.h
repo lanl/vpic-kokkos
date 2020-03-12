@@ -50,6 +50,7 @@
   _( INTERPOLATOR_DATA_MOVEMENT ) \
   _( BACKFILL ) \
   _( BACKFILL_COMPRESS ) \
+  _( compress_p ) \
   _( user_diagnostics  )
 
 enum profile_internal_use_only_timers {
