@@ -345,7 +345,7 @@ sp_[id]->
           k_particle_movers_i(nm)   = local_pm->i;
 
           // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-          k_particle_copy(nm, particle_var::dx) = float(p_dx);
+          k_particle_copy(nm, particle_var::dx) = p_dx;
           k_particle_copy(nm, particle_var::dy) = p_dy;
           k_particle_copy(nm, particle_var::dz) = p_dz;
           k_particle_copy(nm, particle_var::ux) = p_ux;
