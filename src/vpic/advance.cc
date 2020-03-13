@@ -953,7 +953,7 @@ sp_counter ++;
   // return true here so that the first call to advance after a restore
   // will act properly for this edge case.
 
-#ifdef DUMP_ENERGIES
+#ifdef VPIC_DUMP_ENERGIES
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " dump_energies");
 #endif
