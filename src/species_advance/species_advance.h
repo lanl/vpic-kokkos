@@ -102,16 +102,16 @@ class species_t {
         k_particles_soa_t k_p_soa_d;
         k_particles_host_soa_t k_p_soa_h;
 
-        k_particles_soa_t k_pc_soa_d;
-        k_particles_host_soa_t k_pc_soa_h;
+//        k_particles_soa_t k_pc_soa_d;
+//        k_particles_host_soa_t k_pc_soa_h;
 
 //        k_particles_host_soa_t k_pr_soa_h;
 
-        k_particles_t k_p_d;                 // kokkos particles view on device
-        k_particles_i_t k_p_i_d;             // kokkos particles view on device
+//        k_particles_t k_p_d;                 // kokkos particles view on device
+//        k_particles_i_t k_p_i_d;             // kokkos particles view on device
 
-        k_particles_t::HostMirror k_p_h;     // kokkos particles view on host
-        k_particles_i_t::HostMirror k_p_i_h; // kokkos particles view on host
+//        k_particles_t::HostMirror k_p_h;     // kokkos particles view on host
+//        k_particles_i_t::HostMirror k_p_i_h; // kokkos particles view on host
 
         k_particle_copy_t k_pc_d;            // kokkos particles copy for movers view on device
         k_particle_i_copy_t k_pc_i_d;        // kokkos particles copy for movers view on device
@@ -140,8 +140,8 @@ class species_t {
 
         // Init Kokkos Particle Arrays
         species_t(int n_particles, int n_pmovers) :
-            k_p_d("k_particles", n_particles),
-            k_p_i_d("k_particles_i", n_particles),
+//            k_p_d("k_particles", n_particles),
+//            k_p_i_d("k_particles_i", n_particles),
             k_pm_d("k_particle_movers", n_pmovers),
             k_pm_i_d("k_particle_movers_i", n_pmovers),
             k_pc_d("k_particle_copy_for_movers", n_pmovers),
@@ -158,8 +158,8 @@ class species_t {
 //
 //        k_pr_soa_h = k_particles_host_soa_t(n_pmovers);
 
-        k_p_h = Kokkos::create_mirror_view(k_p_d);
-        k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
+//        k_p_h = Kokkos::create_mirror_view(k_p_d);
+//        k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
 
         k_pc_h = Kokkos::create_mirror_view(k_pc_d);
         k_pc_i_h = Kokkos::create_mirror_view(k_pc_i_d);
