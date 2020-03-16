@@ -15,7 +15,7 @@
 #include <iostream>
 
 #include "../sf_interface/sf_interface.h"
-#include "Kokkos_DualView.hpp"
+//#include "Kokkos_DualView.hpp"
 
 typedef int32_t species_id; // Must be 32-bit wide for particle_injector_t
 
@@ -302,7 +302,7 @@ int
 KOKKOS_INLINE_FUNCTION
 move_p_kokkos(
     const particle_soa_view_t& k_part,
-    particle_mover_t* ALIGNED(16)  pm,
+    k_particle_mover_t* pm,
     accumulator_sa_t k_accumulators_sa,
     const grid_t* g,
     neighbor_view_t& d_neighbor,
@@ -335,7 +335,7 @@ move_p_kokkos(
   //int pi = int(local_pm_i);
   int pi = pm->i;
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
-  constexpr float one_third = 1.0/3.0;
+  const pos_t one_third = 1.0/3.0;
 
 
   q = qsp*p_w;
@@ -391,12 +391,12 @@ move_p_kokkos(
     // the total physical charge that passed through the appropriate
     // current quadrant in a time-step
 //    v5 = q*s_dispx*s_dispy*s_dispz*half(one_third);
-    v5 = static_cast<pos_t>(q)*s_dispx*s_dispy*s_dispz*static_cast<pos_t>(one_third);
+    v5 = q*s_dispx*s_dispy*s_dispz*one_third;
 
     //a = (float *)(&d_accumulators[ci]);
 
 #   define accumulate_j(X,Y,Z)                                        \
-    v4  = static_cast<pos_t>(q)*s_disp##X;    /* v2 = q ux                            */  \
+    v4  = q*s_disp##X;    /* v2 = q ux                            */  \
     v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
     v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
     v1 += v4;             /* v1 = q ux (1+dy)                     */  \
@@ -436,9 +436,9 @@ move_p_kokkos(
 #   undef accumulate_j
 
     // Compute the remaining particle displacment
-    pm->dispx -= static_cast<float>(s_dispx);
-    pm->dispy -= static_cast<float>(s_dispy);
-    pm->dispz -= static_cast<float>(s_dispz);
+    pm->dispx -= s_dispx;
+    pm->dispy -= s_dispy;
+    pm->dispz -= s_dispz;
 
     //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset

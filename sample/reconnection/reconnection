@@ -286,7 +286,7 @@ begin_initialization {
   // mpirun -n 4 --map-by numa --bind-to numa ./reconnection.Linux --tpp 16
   //                                                           : 158.467s
   // map --profile --np 4 --mpiargs="--map-by numa --bind-to numa" ./reonnection.Linux --tpp 16
-#if 1
+#if 0
 //  double topology_x = 4;  // Number of domains in x, y, and z
 //  double topology_y = 1;
 //  double topology_z = 1;
@@ -307,7 +307,7 @@ begin_initialization {
   // NB: htop confirms all 64 CPUs are active. It also confirms there are
   //     serialization points within the calculation which is likely why
   //     this operating mode is slower than MPI everywhere.
-#if 0
+#if 1
   double topology_x = 1;  // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 1;
@@ -390,7 +390,7 @@ begin_initialization {
   ///////////////////////////////////////////////
   // Setup high level simulation parameters
   //num_step             = int(taui/(wci*dt));
-  num_step             = 10000;
+  num_step             = 1000;
   status_interval      = 200;
   sync_shared_interval = status_interval/2;
   clean_div_e_interval = status_interval/2;
@@ -919,200 +919,200 @@ begin_initialization {
   (global->x##_interval>0 && remainder(step(), global->x##_interval) == 0)
 
 begin_diagnostics {
-  
-  
-  /*--------------------------------------------------------------------------
-   * NOTE: YOU CANNOT DIRECTLY USE C FILE DESCRIPTORS OR SYSTEM CALLS ANYMORE
-   *
-   * To create a new directory, use:
-   *
-   *   dump_mkdir("full-path-to-directory/directoryname")
-   *
-   * To open a file, use: FileIO class
-   *
-   * Example for file creation and use:
-   *
-   *   // declare file and open for writing
-   *   // possible modes are: io_write, io_read, io_append,
-   *   // io_read_write, io_write_read, io_append_read
-   *   FileIO fileIO;
-   *   FileIOStatus status;
-   *   status= fileIO.open("full-path-to-file/filename", io_write);
-   *
-   *   // formatted ASCII  output
-   *   fileIO.print("format string", varg1, varg2, ...);
-   *
-   *   // binary output
-   *   // Write n elements from array data to file.
-   *   // T is the type, e.g., if T=double
-   *   // fileIO.write(double * data, size_t n);
-   *   // All basic types are supported.
-   *   fileIO.write(T * data, size_t n);
-   *
-   *   // close file
-   *   fileIO.close();
-   *------------------------------------------------------------------------*/
-  
-  /*--------------------------------------------------------------------------
-   * Data output directories
-   * WARNING: The directory list passed to "global_header" must be
-   * consistent with the actual directories where fields and species are
-   * output using "field_dump" and "hydro_dump".
-   *
-   * DIRECTORY PATHES SHOULD BE RELATIVE TO
-   * THE LOCATION OF THE GLOBAL HEADER!!!
-   *------------------------------------------------------------------------*/
-  
-  
-  /*--------------------------------------------------------------------------
-   * Normal rundata dump
-   *------------------------------------------------------------------------*/
-  if(step()==0) {
-    dump_mkdir("fields");
-    dump_mkdir("hydro");
-    dump_mkdir("rundata");
-    dump_mkdir("restart1");  // 1st backup
-    dump_mkdir("restart2");  // 2nd backup
-    dump_mkdir("particle");
-    
-    dump_grid("rundata/grid");
-    dump_materials("rundata/materials");
-    dump_species("rundata/species");
-    global_header("global", global->outputParams);
-  } // if
-  
-  /*--------------------------------------------------------------------------
-   * Normal rundata energies dump
-   *------------------------------------------------------------------------*/
-  if(should_dump(energies)) {
-    dump_energies("rundata/energies", step() == 0 ? 0 : 1);
-  } // if
-  
-  /*--------------------------------------------------------------------------
-   * Field data output
-   *------------------------------------------------------------------------*/
-  
-  if(step() == 1 || should_dump(fields)) field_dump(global->fdParams);
-  
-  /*--------------------------------------------------------------------------
-   * Electron species output
-   *------------------------------------------------------------------------*/
-  
-  if(should_dump(ehydro)) hydro_dump("electron", global->hedParams);
-  
-  /*--------------------------------------------------------------------------
-   * Ion species output
-   *------------------------------------------------------------------------*/
-  
-  if(should_dump(Hhydro)) hydro_dump("ion", global->hHdParams);
-  
-  /*--------------------------------------------------------------------------
-   * Energy Spectrum Output
-   *------------------------------------------------------------------------*/
-  
-  //#include "energy.cxx"   // Subroutine to compute energy spectrum diagnostic
-  
-  //Vadim: 
-  //#include "dissipation.cxx"
-  //#include "Ohms_exp_all_v2.cxx"
-  
-  /*--------------------------------------------------------------------------
-   * Restart dump
-   *------------------------------------------------------------------------*/
-
-  // jgw: cannot write a restart every step with this logic, which is really
-  //      only useful for debugging.
-  // Vadim:
-  if (step() && !(step()%global->restart_interval))
-    global->write_restart = 1; // set restart flag. the actual restart files
-                               // are written during the next step
-  else
-    if (global->write_restart) {
-      
-      global->write_restart = 0; // reset restart flag
-      
-      double dumpstart = uptime();
-      
-      if(!global->rtoggle) {
-	global->rtoggle = 1;
-	checkpt("restart1/restart", 0);
-      }
-      else {
-	global->rtoggle = 0;
-	checkpt("restart2/restart", 0);
-      } // if
-      
-      mp_barrier(  ); // Just to be safe
-      
-      double dumpelapsed = uptime() - dumpstart;
-      sim_log("Restart duration "<<dumpelapsed);
-      
-      //Vadim
-      if (rank()==0) {
-	
-        FileIO fp_restart_info;
-        if ( ! (fp_restart_info.open("latest_restart", io_write)==ok) )
-	  ERROR(("Cannot open file."));
-        if(!global->rtoggle) {
-          fp_restart_info.print("restart restart2/restart\n");
-        } else
-          fp_restart_info.print("restart restart1/restart\n");
-	
-        fp_restart_info.close();
-      }
-      
-    } // if
-  
-  
-  // Dump particle data
-  char subdir[36];
-  if ( should_dump(eparticle) && step() !=0 &&
-       step() > 0*(global->fields_interval)  ) {
-    sprintf(subdir,"particle/T.%d",step()); 
-    dump_mkdir(subdir);
-    sprintf(subdir,"particle/T.%d/eparticle",step()); 
-    dump_particles("electron",subdir);
-  }
-  
-  // Shut down simulation when wall clock time exceeds global->quota_sec. 
-  // Note that the mp_elapsed() is guaranteed to return the same value for all
-  // processors (i.e., elapsed time on proc #0), and therefore the abort will 
-  // be synchronized across processors. Note that this is only checked every
-  // few timesteps to eliminate the expensive mp_elapsed call from every
-  // timestep. mp_elapsed has an ALL_REDUCE in it!
-  
-  //Vadim:
-  if  (( step()>0 && global->quota_check_interval>0
-	 && (step()&global->quota_check_interval)==0)
-       || (global->write_end_restart) ) {
-    if ( (global->write_end_restart) ) {
-		   
-      global->write_end_restart = 0; // reset restart flag
-      
-      sim_log( "Allowed runtime exceeded for this job.  Terminating....\n");
-      double dumpstart = uptime();
-      
-      checkpt("restart0/restart",0);
-      
-      mp_barrier(  ); // Just to be safe
-      sim_log( "Restart dump restart completed." );
-      double dumpelapsed = uptime() - dumpstart;
-      sim_log("Restart duration "<<dumpelapsed);
-      
-      //Vadim:
-      if (rank()==0) {
-	FileIO fp_restart_info;
-	if ( ! (fp_restart_info.open("latest_restart", io_write)==ok) )
-          ERROR(("Cannot open file."));
-	fp_restart_info.print("restart restart0/restart");
-	fp_restart_info.close();
-      }
-      
-      exit(0); // Exit or abort?
-    }
-    if( uptime( ) > global->quota_sec )   global->write_end_restart = 1;
-  }
-  
+//  
+//  
+//  /*--------------------------------------------------------------------------
+//   * NOTE: YOU CANNOT DIRECTLY USE C FILE DESCRIPTORS OR SYSTEM CALLS ANYMORE
+//   *
+//   * To create a new directory, use:
+//   *
+//   *   dump_mkdir("full-path-to-directory/directoryname")
+//   *
+//   * To open a file, use: FileIO class
+//   *
+//   * Example for file creation and use:
+//   *
+//   *   // declare file and open for writing
+//   *   // possible modes are: io_write, io_read, io_append,
+//   *   // io_read_write, io_write_read, io_append_read
+//   *   FileIO fileIO;
+//   *   FileIOStatus status;
+//   *   status= fileIO.open("full-path-to-file/filename", io_write);
+//   *
+//   *   // formatted ASCII  output
+//   *   fileIO.print("format string", varg1, varg2, ...);
+//   *
+//   *   // binary output
+//   *   // Write n elements from array data to file.
+//   *   // T is the type, e.g., if T=double
+//   *   // fileIO.write(double * data, size_t n);
+//   *   // All basic types are supported.
+//   *   fileIO.write(T * data, size_t n);
+//   *
+//   *   // close file
+//   *   fileIO.close();
+//   *------------------------------------------------------------------------*/
+//  
+//  /*--------------------------------------------------------------------------
+//   * Data output directories
+//   * WARNING: The directory list passed to "global_header" must be
+//   * consistent with the actual directories where fields and species are
+//   * output using "field_dump" and "hydro_dump".
+//   *
+//   * DIRECTORY PATHES SHOULD BE RELATIVE TO
+//   * THE LOCATION OF THE GLOBAL HEADER!!!
+//   *------------------------------------------------------------------------*/
+//  
+//  
+//  /*--------------------------------------------------------------------------
+//   * Normal rundata dump
+//   *------------------------------------------------------------------------*/
+//  if(step()==0) {
+//    dump_mkdir("fields");
+//    dump_mkdir("hydro");
+//    dump_mkdir("rundata");
+//    dump_mkdir("restart1");  // 1st backup
+//    dump_mkdir("restart2");  // 2nd backup
+//    dump_mkdir("particle");
+//    
+//    dump_grid("rundata/grid");
+//    dump_materials("rundata/materials");
+//    dump_species("rundata/species");
+//    global_header("global", global->outputParams);
+//  } // if
+//  
+//  /*--------------------------------------------------------------------------
+//   * Normal rundata energies dump
+//   *------------------------------------------------------------------------*/
+//  if(should_dump(energies)) {
+//    dump_energies("rundata/energies", step() == 0 ? 0 : 1);
+//  } // if
+//  
+//  /*--------------------------------------------------------------------------
+//   * Field data output
+//   *------------------------------------------------------------------------*/
+//  
+//  if(step() == 1 || should_dump(fields)) field_dump(global->fdParams);
+//  
+//  /*--------------------------------------------------------------------------
+//   * Electron species output
+//   *------------------------------------------------------------------------*/
+//  
+//  if(should_dump(ehydro)) hydro_dump("electron", global->hedParams);
+//  
+//  /*--------------------------------------------------------------------------
+//   * Ion species output
+//   *------------------------------------------------------------------------*/
+//  
+//  if(should_dump(Hhydro)) hydro_dump("ion", global->hHdParams);
+//  
+//  /*--------------------------------------------------------------------------
+//   * Energy Spectrum Output
+//   *------------------------------------------------------------------------*/
+//  
+//  //#include "energy.cxx"   // Subroutine to compute energy spectrum diagnostic
+//  
+//  //Vadim: 
+//  //#include "dissipation.cxx"
+//  //#include "Ohms_exp_all_v2.cxx"
+//  
+//  /*--------------------------------------------------------------------------
+//   * Restart dump
+//   *------------------------------------------------------------------------*/
+//
+//  // jgw: cannot write a restart every step with this logic, which is really
+//  //      only useful for debugging.
+//  // Vadim:
+//  if (step() && !(step()%global->restart_interval))
+//    global->write_restart = 1; // set restart flag. the actual restart files
+//                               // are written during the next step
+//  else
+//    if (global->write_restart) {
+//      
+//      global->write_restart = 0; // reset restart flag
+//      
+//      double dumpstart = uptime();
+//      
+//      if(!global->rtoggle) {
+//	global->rtoggle = 1;
+//	checkpt("restart1/restart", 0);
+//      }
+//      else {
+//	global->rtoggle = 0;
+//	checkpt("restart2/restart", 0);
+//      } // if
+//      
+//      mp_barrier(  ); // Just to be safe
+//      
+//      double dumpelapsed = uptime() - dumpstart;
+//      sim_log("Restart duration "<<dumpelapsed);
+//      
+//      //Vadim
+//      if (rank()==0) {
+//	
+//        FileIO fp_restart_info;
+//        if ( ! (fp_restart_info.open("latest_restart", io_write)==ok) )
+//	  ERROR(("Cannot open file."));
+//        if(!global->rtoggle) {
+//          fp_restart_info.print("restart restart2/restart\n");
+//        } else
+//          fp_restart_info.print("restart restart1/restart\n");
+//	
+//        fp_restart_info.close();
+//      }
+//      
+//    } // if
+//  
+//  
+//  // Dump particle data
+//  char subdir[36];
+//  if ( should_dump(eparticle) && step() !=0 &&
+//       step() > 0*(global->fields_interval)  ) {
+//    sprintf(subdir,"particle/T.%d",step()); 
+//    dump_mkdir(subdir);
+//    sprintf(subdir,"particle/T.%d/eparticle",step()); 
+//    dump_particles("electron",subdir);
+//  }
+//  
+//  // Shut down simulation when wall clock time exceeds global->quota_sec. 
+//  // Note that the mp_elapsed() is guaranteed to return the same value for all
+//  // processors (i.e., elapsed time on proc #0), and therefore the abort will 
+//  // be synchronized across processors. Note that this is only checked every
+//  // few timesteps to eliminate the expensive mp_elapsed call from every
+//  // timestep. mp_elapsed has an ALL_REDUCE in it!
+//  
+//  //Vadim:
+//  if  (( step()>0 && global->quota_check_interval>0
+//	 && (step()&global->quota_check_interval)==0)
+//       || (global->write_end_restart) ) {
+//    if ( (global->write_end_restart) ) {
+//		   
+//      global->write_end_restart = 0; // reset restart flag
+//      
+//      sim_log( "Allowed runtime exceeded for this job.  Terminating....\n");
+//      double dumpstart = uptime();
+//      
+//      checkpt("restart0/restart",0);
+//      
+//      mp_barrier(  ); // Just to be safe
+//      sim_log( "Restart dump restart completed." );
+//      double dumpelapsed = uptime() - dumpstart;
+//      sim_log("Restart duration "<<dumpelapsed);
+//      
+//      //Vadim:
+//      if (rank()==0) {
+//	FileIO fp_restart_info;
+//	if ( ! (fp_restart_info.open("latest_restart", io_write)==ok) )
+//          ERROR(("Cannot open file."));
+//	fp_restart_info.print("restart restart0/restart");
+//	fp_restart_info.close();
+//      }
+//      
+//      exit(0); // Exit or abort?
+//    }
+//    if( uptime( ) > global->quota_sec )   global->write_end_restart = 1;
+//  }
+//  
 } // end diagnostics
 
 begin_particle_injection {

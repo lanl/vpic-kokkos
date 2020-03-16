@@ -10,6 +10,7 @@
 
 #include "vpic/vpic.h"
 #include <chrono>
+#include <thread>
 
 // The simulation variable is set up this way so both the checkpt
 // service and main can see it.  This allows main to find where
@@ -122,11 +123,18 @@ int main(int argc, char** argv)
     double elapsed = wallclock();
 //    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 
+std::fstream profile("profile.log", std::ios_base::app);
+profile << "START" << std::endl;
+profile.close();
+std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     // Call the actual advance until it's done
     // TODO: Can we make this into a bounded loop
 //Kokkos::Profiling::pushRegion("VPIC");
     while( simulation->advance() );
 //Kokkos::Profiling::popRegion();
+profile.open("profile.log", std::ios_base::app);
+profile << "FINISH" << std::endl;
+profile.close();
 
     elapsed = wallclock() - elapsed;
 //    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
