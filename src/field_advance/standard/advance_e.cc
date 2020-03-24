@@ -646,7 +646,9 @@ void advance_e_kokkos(field_array_t* RESTRICT fa, float frac) {
 
     k_field_t k_field = fa->k_f_d;
     k_field_edge_t k_field_edge = fa->k_fe_d;
+
     //const material_coefficient_t * ALIGNED(128) m = args->p->mc;
+
     const grid_t                 *              g = args->g;
     const int nx = g->nx, ny = g->ny, nz = g->nz;
 

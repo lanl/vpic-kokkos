@@ -163,10 +163,10 @@ typedef struct grid {
       // currently implied by unmanaged view
 
       //k_neighbor_d = Kokkos::create_mirror_view(k_neighbor_d);
-      
-//        max_ports = 27;
-//      k_mpi_d = k_mpi_t("k_mpi_d");
-//      k_mpi_h = Kokkos::create_mirror_view(k_mpi_d);
+
+      //        max_ports = 27;
+      //      k_mpi_d = k_mpi_t("k_mpi_d");
+      //      k_mpi_h = Kokkos::create_mirror_view(k_mpi_d);
   }
 
 
