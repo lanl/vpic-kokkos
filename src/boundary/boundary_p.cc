@@ -191,7 +191,8 @@ boundary_p_kokkos(
     // For each species, load the movers
     LIST_FOR_EACH( sp, sp_list )
     {
-        auto& particle_send = sp->k_pc_i_h;
+//        auto& particle_send = sp->k_pc_i_h;
+        auto& particle_send = sp->k_pc_soa_h.i;
 
         //const float   sp_q  = sp->q;
         const int32_t sp_id = sp->id;
@@ -253,9 +254,12 @@ boundary_p_kokkos(
                 //pi->dx=p0[i].dx;
                 //pi->dy=p0[i].dy;
                 //pi->dz=p0[i].dz;
-                pi->dx = sp->k_pc_h(copy_index, particle_var::dx);
-                pi->dy = sp->k_pc_h(copy_index, particle_var::dy);
-                pi->dz = sp->k_pc_h(copy_index, particle_var::dz);
+                //pi->dx = sp->k_pc_h(copy_index, particle_var::dx);
+                //pi->dy = sp->k_pc_h(copy_index, particle_var::dy);
+                //pi->dz = sp->k_pc_h(copy_index, particle_var::dz);
+                pi->dx = sp->k_pc_soa_h.dx(copy_index);
+                pi->dy = sp->k_pc_soa_h.dy(copy_index);
+                pi->dz = sp->k_pc_soa_h.dz(copy_index);
 
 
                 pi->i = nn - range[face];
@@ -263,12 +267,16 @@ boundary_p_kokkos(
                 //pi->ux=p0[i].ux;
                 //pi->uy=p0[i].uy;
                 //pi->uz=p0[i].uz;
-                pi->ux = sp->k_pc_h(copy_index, particle_var::ux);
-                pi->uy = sp->k_pc_h(copy_index, particle_var::uy);
-                pi->uz = sp->k_pc_h(copy_index, particle_var::uz);
+                //pi->ux = sp->k_pc_h(copy_index, particle_var::ux);
+                //pi->uy = sp->k_pc_h(copy_index, particle_var::uy);
+                //pi->uz = sp->k_pc_h(copy_index, particle_var::uz);
+                pi->ux = sp->k_pc_soa_h.ux(copy_index);
+                pi->uy = sp->k_pc_soa_h.uy(copy_index);
+                pi->uz = sp->k_pc_soa_h.uz(copy_index);
 
                 //pi->w=p0[i].w;
-                pi->w = sp->k_pc_h(copy_index, particle_var::w);
+                //pi->w = sp->k_pc_h(copy_index, particle_var::w);
+                pi->w = sp->k_pc_soa_h.w(copy_index);
 
                 pi->dispx = pm->dispx; pi->dispy = pm->dispy; pi->dispz = pm->dispz;
                 pi->sp_id = sp_id;
@@ -428,10 +436,12 @@ boundary_p_kokkos(
 
         //auto& particle_copy = sp_[id]->k_pc_h;
         //auto& particle_copy_i = sp_[id]->k_pc_i_h;
-        auto& particle_recv = sp_[id]->k_pr_h;
-        auto& particle_recv_i = sp_[id]->k_pr_i_h;
-        auto& particle_send = sp_[id]->k_pc_h;
-        auto& particle_send_i = sp_[id]->k_pc_i_h;
+        //auto& particle_recv = sp_[id]->k_pr_h;
+        //auto& particle_recv_i = sp_[id]->k_pr_i_h;
+        //auto& particle_send = sp_[id]->k_pc_h;
+        //auto& particle_send_i = sp_[id]->k_pc_i_h;
+        auto& particle_recv = sp_[id]->k_pr_soa_h;
+        auto& particle_send = sp_[id]->k_pc_soa_h;
 
         int write_index = sp_[id]->num_to_copy;
 
@@ -451,16 +461,24 @@ boundary_p_kokkos(
         // Should write from 0..nm
         //printf("writing to n=%d for %p \n", sp_[id]->num_to_copy, sp_[id]);
         //printf("writing to n=%d for = %d \n", sp_[id]->num_to_copy, write_index);
-        particle_recv(write_index, particle_var::dx) = pi->dx;
-        particle_recv(write_index, particle_var::dy) = pi->dy;
-        particle_recv(write_index, particle_var::dz) = pi->dz;
-        particle_recv(write_index, particle_var::ux) = pi->ux;
-        particle_recv(write_index, particle_var::uy) = pi->uy;
-        particle_recv(write_index, particle_var::uz) = pi->uz;
-        particle_recv(write_index, particle_var::w)  = pi->w;
+        //particle_recv(write_index, particle_var::dx) = pi->dx;
+        //particle_recv(write_index, particle_var::dy) = pi->dy;
+        //particle_recv(write_index, particle_var::dz) = pi->dz;
+        //particle_recv(write_index, particle_var::ux) = pi->ux;
+        //particle_recv(write_index, particle_var::uy) = pi->uy;
+        //particle_recv(write_index, particle_var::uz) = pi->uz;
+        //particle_recv(write_index, particle_var::w)  = pi->w;
+        particle_recv.dx(write_index) = pi->dx;
+        particle_recv.dy(write_index) = pi->dy;
+        particle_recv.dz(write_index) = pi->dz;
+        particle_recv.ux(write_index) = pi->ux;
+        particle_recv.uy(write_index) = pi->uy;
+        particle_recv.uz(write_index) = pi->uz;
+        particle_recv.w(write_index) = pi->w;
 
         int pii = pi->i;
-        particle_recv_i(write_index) = pii;
+        //particle_recv_i(write_index) = pii;
+        particle_recv.i(write_index) = pii;
 
         // track how many particles we buffer up here
         sp_[id]->num_to_copy++;
@@ -479,7 +497,7 @@ boundary_p_kokkos(
         //sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
         int ret_code = move_p_kokkos_host_serial(
                 particle_recv,
-                particle_recv_i,
+//                particle_recv_i,
                 &(pm[nm]),
                 aa->k_a_h,
                 //aa->k_a_sah, // TODO: why does changing this to k_a_h break things?
@@ -500,14 +518,22 @@ boundary_p_kokkos(
             sp_[id]->num_to_copy--;
 
             // And more him to the "send" array for next iter
-            particle_send(keep_id, particle_var::dx) = particle_recv(write_index, particle_var::dx);
-            particle_send(keep_id, particle_var::dy) = particle_recv(write_index, particle_var::dy);
-            particle_send(keep_id, particle_var::dz) = particle_recv(write_index, particle_var::dz);
-            particle_send(keep_id, particle_var::ux) = particle_recv(write_index, particle_var::ux);
-            particle_send(keep_id, particle_var::uy) = particle_recv(write_index, particle_var::uy);
-            particle_send(keep_id, particle_var::uz) = particle_recv(write_index, particle_var::uz);
-            particle_send(keep_id, particle_var::w)  = particle_recv(write_index, particle_var::w);
-            particle_send_i(keep_id)  = particle_recv_i(write_index);
+            //particle_send(keep_id, particle_var::dx) = particle_recv(write_index, particle_var::dx);
+            //particle_send(keep_id, particle_var::dy) = particle_recv(write_index, particle_var::dy);
+            //particle_send(keep_id, particle_var::dz) = particle_recv(write_index, particle_var::dz);
+            //particle_send(keep_id, particle_var::ux) = particle_recv(write_index, particle_var::ux);
+            //particle_send(keep_id, particle_var::uy) = particle_recv(write_index, particle_var::uy);
+            //particle_send(keep_id, particle_var::uz) = particle_recv(write_index, particle_var::uz);
+            //particle_send(keep_id, particle_var::w)  = particle_recv(write_index, particle_var::w);
+            //particle_send_i(keep_id)  = particle_recv_i(write_index);
+            particle_send.dx(keep_id) = particle_recv.dx(write_index);
+            particle_send.dy(keep_id) = particle_recv.dy(write_index);
+            particle_send.dz(keep_id) = particle_recv.dz(write_index);
+            particle_send.ux(keep_id) = particle_recv.ux(write_index);
+            particle_send.uy(keep_id) = particle_recv.uy(write_index);
+            particle_send.uz(keep_id) = particle_recv.uz(write_index);
+            particle_send.w(keep_id) = particle_recv.w(write_index);
+            particle_send.i(keep_id) = particle_recv.i(write_index);
         }
 
       }

@@ -102,10 +102,10 @@ class species_t {
         k_particles_soa_t k_p_soa_d;
         k_particles_host_soa_t k_p_soa_h;
 
-//        k_particles_soa_t k_pc_soa_d;
-//        k_particles_host_soa_t k_pc_soa_h;
+        k_particles_soa_t k_pc_soa_d;
+        k_particles_host_soa_t k_pc_soa_h;
 
-//        k_particles_host_soa_t k_pr_soa_h;
+        k_particles_host_soa_t k_pr_soa_h;
 
 //        k_particles_t k_p_d;                 // kokkos particles view on device
 //        k_particles_i_t k_p_i_d;             // kokkos particles view on device
@@ -113,15 +113,15 @@ class species_t {
 //        k_particles_t::HostMirror k_p_h;     // kokkos particles view on host
 //        k_particles_i_t::HostMirror k_p_i_h; // kokkos particles view on host
 
-        k_particle_copy_t k_pc_d;            // kokkos particles copy for movers view on device
-        k_particle_i_copy_t k_pc_i_d;        // kokkos particles copy for movers view on device
-
-        k_particle_copy_t::HostMirror k_pc_h;      // kokkos particles copy for movers view on host
-        k_particle_i_copy_t::HostMirror k_pc_i_h;  // kokkos particles i copy for movers view on host
+//        k_particle_copy_t k_pc_d;            // kokkos particles copy for movers view on device
+//        k_particle_i_copy_t k_pc_i_d;        // kokkos particles copy for movers view on device
+//
+//        k_particle_copy_t::HostMirror k_pc_h;      // kokkos particles copy for movers view on host
+//        k_particle_i_copy_t::HostMirror k_pc_i_h;  // kokkos particles i copy for movers view on host
 
         // Only need host versions
-        k_particle_copy_t::HostMirror k_pr_h;      // kokkos particles copy for received particles
-        k_particle_i_copy_t::HostMirror k_pr_i_h;  // kokkos particles i copy for received particles
+//        k_particle_copy_t::HostMirror k_pr_h;      // kokkos particles copy for received particles
+//        k_particle_i_copy_t::HostMirror k_pr_i_h;  // kokkos particles i copy for received particles
 
         k_particle_movers_t k_pm_d;         // kokkos particle movers on device
         k_particle_i_movers_t k_pm_i_d;         // kokkos particle movers on device
@@ -144,25 +144,25 @@ class species_t {
 //            k_p_i_d("k_particles_i", n_particles),
             k_pm_d("k_particle_movers", n_pmovers),
             k_pm_i_d("k_particle_movers_i", n_pmovers),
-            k_pc_d("k_particle_copy_for_movers", n_pmovers),
-            k_pc_i_d("k_particle_copy_for_movers_i", n_pmovers),
-            k_pr_h("k_particle_send_for_movers", n_pmovers),
-            k_pr_i_h("k_particle_send_for_movers_i", n_pmovers),
+//            k_pc_d("k_particle_copy_for_movers", n_pmovers),
+//            k_pc_i_d("k_particle_copy_for_movers_i", n_pmovers),
+//            k_pr_h("k_particle_send_for_movers", n_pmovers),
+//            k_pr_i_h("k_particle_send_for_movers_i", n_pmovers),
             k_nm_d("k_nm") // size 1
     {
         k_p_soa_d = k_particles_soa_t(n_particles);
         k_p_soa_h = k_particles_host_soa_t(k_p_soa_d);
 
-//        k_pc_soa_d = k_particles_soa_t(n_pmovers);
-//        k_pc_soa_h = k_particles_host_soa_t(k_pc_soa_d);
-//
-//        k_pr_soa_h = k_particles_host_soa_t(n_pmovers);
+        k_pc_soa_d = k_particles_soa_t(n_pmovers);
+        k_pc_soa_h = k_particles_host_soa_t(k_pc_soa_d);
+
+        k_pr_soa_h = k_particles_host_soa_t(n_pmovers);
 
 //        k_p_h = Kokkos::create_mirror_view(k_p_d);
 //        k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
 
-        k_pc_h = Kokkos::create_mirror_view(k_pc_d);
-        k_pc_i_h = Kokkos::create_mirror_view(k_pc_i_d);
+//        k_pc_h = Kokkos::create_mirror_view(k_pc_d);
+//        k_pc_i_h = Kokkos::create_mirror_view(k_pc_i_d);
 
         k_pm_h = Kokkos::create_mirror_view(k_pm_d);
         k_pm_i_h = Kokkos::create_mirror_view(k_pm_i_d);
@@ -799,11 +799,12 @@ move_p_kokkos(
 }
 
 // this has no data race protection for write into the accumulators
-template<class particle_view_t, class particle_i_view_t, class accumulator_t, class neighbor_view_t>
+//template<class particle_view_t, class particle_i_view_t, class accumulator_t, class neighbor_view_t>
+template<class particle_view_t, class accumulator_t, class neighbor_view_t>
 int
 move_p_kokkos_host_serial(
     const particle_view_t& k_particles,
-    const particle_i_view_t& k_particles_i,
+//    const particle_i_view_t& k_particles_i,
     particle_mover_t* ALIGNED(16) pm,
     accumulator_t k_accumulators,
     const grid_t* g,
@@ -814,14 +815,22 @@ move_p_kokkos_host_serial(
 )
 {
 
-  #define p_dx    k_particles(pi, particle_var::dx)
-  #define p_dy    k_particles(pi, particle_var::dy)
-  #define p_dz    k_particles(pi, particle_var::dz)
-  #define p_ux    k_particles(pi, particle_var::ux)
-  #define p_uy    k_particles(pi, particle_var::uy)
-  #define p_uz    k_particles(pi, particle_var::uz)
-  #define p_w     k_particles(pi, particle_var::w)
-  #define pii     k_particles_i(pi)
+//  #define p_dx    k_particles(pi, particle_var::dx)
+//  #define p_dy    k_particles(pi, particle_var::dy)
+//  #define p_dz    k_particles(pi, particle_var::dz)
+//  #define p_ux    k_particles(pi, particle_var::ux)
+//  #define p_uy    k_particles(pi, particle_var::uy)
+//  #define p_uz    k_particles(pi, particle_var::uz)
+//  #define p_w     k_particles(pi, particle_var::w)
+//  #define pii     k_particles_i(pi)
+  #define p_dx    k_particles.dx(pi)
+  #define p_dy    k_particles.dy(pi)
+  #define p_dz    k_particles.dz(pi)
+  #define p_ux    k_particles.ux(pi)
+  #define p_uy    k_particles.uy(pi)
+  #define p_uz    k_particles.uz(pi)
+  #define p_w     k_particles.w(pi)
+  #define pii     k_particles.i(pi)
 
   //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
   //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
@@ -959,7 +968,14 @@ move_p_kokkos_host_serial(
     // +/-1 _exactly_ for the particle.
 
     v0 = s_dir[axis];
-    k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
+//    k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
+    if(axis == 0) {
+        k_particles.dx(pi) = v0; // Avoid roundoff fiascos--put the particle
+    } else if (axis == 1) {
+        k_particles.dy(pi) = v0; // Avoid roundoff fiascos--put the particle
+    } else {
+        k_particles.dz(pi) = v0; // Avoid roundoff fiascos--put the particle
+    }
                            // _exactly_ on the boundary.
     face = axis; if( v0>0 ) face += 3;
 
@@ -977,7 +993,14 @@ move_p_kokkos_host_serial(
       // Hit a reflecting boundary condition.  Reflect the particle
       // momentum and remaining displacement and keep moving the
       // particle.
-      k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
+      //k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
+      if(axis == 0) {
+          k_particles.ux(pi) = -k_particles.ux(pi); // Avoid roundoff fiascos--put the particle
+      } else if (axis == 1) {
+          k_particles.uy(pi) = -k_particles.uy(pi); // Avoid roundoff fiascos--put the particle
+      } else {
+          k_particles.uz(pi) = -k_particles.uz(pi); // Avoid roundoff fiascos--put the particle
+      }
 
       // TODO: make this safer
       //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
@@ -1002,7 +1025,14 @@ move_p_kokkos_host_serial(
 
     pii = neighbor - rangel;
     /**/                         // Note: neighbor - rangel < 2^31 / 6
-    k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+    //k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+    if(axis == 0) {
+        k_particles.dx(pi) = -v0; // Avoid roundoff fiascos--put the particle
+    } else if (axis == 1) {
+        k_particles.dy(pi) = -v0; // Avoid roundoff fiascos--put the particle
+    } else {
+        k_particles.dz(pi) = -v0; // Avoid roundoff fiascos--put the particle
+    }
   }
   #undef p_dx
   #undef p_dy

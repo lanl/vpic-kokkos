@@ -242,6 +242,7 @@ public:
   void dump_energies( const char *fname, int append = 1 );
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
+  void dump_partloc(const char *fname, int append = 1);
 
   // Binary dumps
   void dump_grid( const char *fbase );
@@ -894,6 +895,7 @@ public:
       sp->nm = k_nm_h(0);
 
       Kokkos::parallel_for("copy particles to host", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) {
+//      Kokkos::parallel_for("copy particles to host", host_execution_policy(0, n_particles/2) , KOKKOS_LAMBDA (int i) {
 //              sp->p[i].dx = k_particles_h(i, particle_var::dx);
 //              sp->p[i].dy = k_particles_h(i, particle_var::dy);
 //              sp->p[i].dz = k_particles_h(i, particle_var::dz);
@@ -911,6 +913,23 @@ public:
           sp->p[i].uz = kph.uz(i);
           sp->p[i].w  = kph.w(i);
           sp->p[i].i  = kph.i(i);
+
+//          sp->p[i*2].dx   = kph.dx(i*2).low2float();
+//          sp->p[i*2+1].dx = kph.dx(i*2+1).high2float();
+//          sp->p[i*2].dy   = kph.dy(i*2).low2float();
+//          sp->p[i*2+1].dy = kph.dy(i*2+1).high2float();
+//          sp->p[i*2].dz   = kph.dz(i*2).low2float();
+//          sp->p[i*2+1].dz = kph.dz(i*2+1).high2float();
+//          sp->p[i*2].ux   = kph.ux(i*2).low2float();
+//          sp->p[i*2+1].ux = kph.ux(i*2+1).high2float();
+//          sp->p[i*2].uy   = kph.uy(i*2).low2float();
+//          sp->p[i*2+1].uy = kph.uy(i*2+1).high2float();
+//          sp->p[i*2].uz   = kph.uz(i*2).low2float();
+//          sp->p[i*2+1].uz = kph.uz(i*2+1).high2float();
+//          sp->p[i*2].w    = kph.w(i*2);
+//          sp->p[i*2+1].w  = kph.w(i*2+1);
+//          sp->p[i*2].i    = kph.i(i*2);
+//          sp->p[i*2+1].i  = kph.i(i*2+1);
       });
 
       Kokkos::parallel_for("copy movers to host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {

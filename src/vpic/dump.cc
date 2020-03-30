@@ -77,6 +77,44 @@ vpic_simulation::dump_energies( const char *fname,
   }
 }
 
+void vpic_simulation::dump_partloc(const char *fname, int append) {
+  species_t *sp;
+  FileIO fileIO;
+  FileIOStatus status(fail);
+
+  if( !fname ) ERROR(("Invalid file name"));
+
+  if( rank()==0 ) {
+    status = fileIO.open(fname, append ? io_append : io_write);
+    if( status==fail ) ERROR(( "Could not open \"%s\".", fname ));
+    else {
+      if( append==0 ) {
+        fileIO.print( "%% Layout\n%% step " );
+        LIST_FOR_EACH(sp,species_list)
+          fileIO.print( " \"%s\"(dx dy dz ux uy uz)", sp->name );
+        fileIO.print( "\n" );
+        fileIO.print( "%% timestep = %e\n", grid->dt );
+      }
+      fileIO.print( "%li", (long)step() );
+    }
+  }
+
+  if( rank() == 0 ) {
+    LIST_FOR_EACH(sp, species_list) {
+      int num = sp->np;
+      for(int i=0; i<num; i++) {
+        particle_t particle = sp->p[i];
+        fileIO.print(" (%e %e %e %e %e %e)", particle.dx, particle.dy, particle.dz, particle.ux, particle.uy, particle.uz);
+      }
+    }
+  }
+ 
+  if( rank()==0 && status!=fail ) {
+    fileIO.print( "\n" );
+    if( fileIO.close() ) ERROR(("File close failed on dump energies!!!"));
+  }
+}
+
 // Note: dump_species/materials assume that names do not contain any \n!
 
 void

@@ -506,9 +506,58 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 //  kpart.i(i) = kparticles_i(i);
 //});
 
-    Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np), KOKKOS_LAMBDA(const int n) {
+//    Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np), KOKKOS_LAMBDA(const int n) {
+////        float w0, w1, w2, w3, w4, w5, w6, w7, dz;
+//        mixed_t w0, w1, w2, w3, w4, w5, w6, w7, dz;
+//
+////        w0 = kparticles(n, particle_var::dx);
+////        w1 = kparticles(n, particle_var::dy);
+////        dz = kparticles(n, particle_var::dz);
+////        int v = kparticles_i(n);
+////        w7 = kparticles(n, particle_var::w) * q_8V;
+//
+//        w0 = kpart.dx(n);
+//        w1 = kpart.dy(n);
+//        dz = kpart.dz(n);
+//        int v = kpart.i(n);
+//        w7 = kpart.w(n) * q_8V;
+//
+//#   define FMA( x,y,z) ((z)+(x)*(y))
+//#   define FNMS(x,y,z) ((z)-(x)*(y))
+//        w6=FNMS(w0,w7,w7);                    // q(1-dx)
+//        w7=FMA( w0,w7,w7);                    // q(1+dx)
+//        w4=FNMS(w1,w6,w6); w5=FNMS(w1,w7,w7); // q(1-dx)(1-dy), q(1+dx)(1-dy)
+//        w6=FMA( w1,w6,w6); w7=FMA( w1,w7,w7); // q(1-dx)(1+dy), q(1+dx)(1+dy)
+//        w0=FNMS(dz,w4,w4); w1=FNMS(dz,w5,w5); w2=FNMS(dz,w6,w6); w3=FNMS(dz,w7,w7);
+//        w4=FMA( dz,w4,w4); w5=FMA( dz,w5,w5); w6=FMA( dz,w6,w6); w7=FMA( dz,w7,w7);
+//#   undef FNMS
+//#   undef FMA
+//
+//        auto scatter_view_access = scatter_view.access();
+//
+//        scatter_view_access(v,         field_var::rhof) += w0;
+//        scatter_view_access(v+1,       field_var::rhof) += w1;
+//        scatter_view_access(v+sy,      field_var::rhof) += w2;
+//        scatter_view_access(v+sy+1,    field_var::rhof) += w3;
+//        scatter_view_access(v+sz,      field_var::rhof) += w4;
+//        scatter_view_access(v+sz+1,    field_var::rhof) += w5;
+//        scatter_view_access(v+sz+sy,   field_var::rhof) += w6;
+//        scatter_view_access(v+sz+sy+1, field_var::rhof) += w7;
+//
+////        Kokkos::atomic_add(&kfield(v,         field_var::rhof), w0);
+////        Kokkos::atomic_add(&kfield(v+1,       field_var::rhof), w1);
+////        Kokkos::atomic_add(&kfield(v+sy,      field_var::rhof), w2);
+////        Kokkos::atomic_add(&kfield(v+sy+1,    field_var::rhof), w3);
+////        Kokkos::atomic_add(&kfield(v+sz,      field_var::rhof), w4);
+////        Kokkos::atomic_add(&kfield(v+sz+1,    field_var::rhof), w5);
+////        Kokkos::atomic_add(&kfield(v+sz+sy,   field_var::rhof), w6);
+////        Kokkos::atomic_add(&kfield(v+sz+sy+1, field_var::rhof), w7);
+//
+//    });
+
+    Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np/2), KOKKOS_LAMBDA(const int n) {
 //        float w0, w1, w2, w3, w4, w5, w6, w7, dz;
-        mixed_t w0, w1, w2, w3, w4, w5, w6, w7, dz;
+        packed_t w0, w1, w2, w3, w4, w5, w6, w7, dz;
 
 //        w0 = kparticles(n, particle_var::dx);
 //        w1 = kparticles(n, particle_var::dy);
@@ -516,11 +565,12 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 //        int v = kparticles_i(n);
 //        w7 = kparticles(n, particle_var::w) * q_8V;
 
-        w0 = kpart.dx(n);
-        w1 = kpart.dy(n);
-        dz = kpart.dz(n);
-        int v = kpart.i(n);
-        w7 = kpart.w(n) * q_8V;
+        w0 = packed_t(kpart.dx(n*2), kpart.dx(n*2+1));
+        w1 = packed_t(kpart.dy(n*2), kpart.dy(n*2+1));
+        dz = packed_t(kpart.dz(n*2), kpart.dz(n*2+1));
+        int v0 = kpart.i(n*2);
+        int v1 = kpart.i(n*2+1);
+        w7 = packed_t(kpart.w(n*2), kpart.w(n*2+1)) * packed_t(q_8V);
 
 #   define FMA( x,y,z) ((z)+(x)*(y))
 #   define FNMS(x,y,z) ((z)-(x)*(y))
@@ -535,23 +585,23 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
         auto scatter_view_access = scatter_view.access();
 
-        scatter_view_access(v,         field_var::rhof) += w0;
-        scatter_view_access(v+1,       field_var::rhof) += w1;
-        scatter_view_access(v+sy,      field_var::rhof) += w2;
-        scatter_view_access(v+sy+1,    field_var::rhof) += w3;
-        scatter_view_access(v+sz,      field_var::rhof) += w4;
-        scatter_view_access(v+sz+1,    field_var::rhof) += w5;
-        scatter_view_access(v+sz+sy,   field_var::rhof) += w6;
-        scatter_view_access(v+sz+sy+1, field_var::rhof) += w7;
+        scatter_view_access(v0,         field_var::rhof) += w0.low2float();
+        scatter_view_access(v0+1,       field_var::rhof) += w1.low2float();
+        scatter_view_access(v0+sy,      field_var::rhof) += w2.low2float();
+        scatter_view_access(v0+sy+1,    field_var::rhof) += w3.low2float();
+        scatter_view_access(v0+sz,      field_var::rhof) += w4.low2float();
+        scatter_view_access(v0+sz+1,    field_var::rhof) += w5.low2float();
+        scatter_view_access(v0+sz+sy,   field_var::rhof) += w6.low2float();
+        scatter_view_access(v0+sz+sy+1, field_var::rhof) += w7.low2float();
 
-//        Kokkos::atomic_add(&kfield(v,         field_var::rhof), w0);
-//        Kokkos::atomic_add(&kfield(v+1,       field_var::rhof), w1);
-//        Kokkos::atomic_add(&kfield(v+sy,      field_var::rhof), w2);
-//        Kokkos::atomic_add(&kfield(v+sy+1,    field_var::rhof), w3);
-//        Kokkos::atomic_add(&kfield(v+sz,      field_var::rhof), w4);
-//        Kokkos::atomic_add(&kfield(v+sz+1,    field_var::rhof), w5);
-//        Kokkos::atomic_add(&kfield(v+sz+sy,   field_var::rhof), w6);
-//        Kokkos::atomic_add(&kfield(v+sz+sy+1, field_var::rhof), w7);
+        scatter_view_access(v1,         field_var::rhof) += w0.high2float();
+        scatter_view_access(v1+1,       field_var::rhof) += w1.high2float();
+        scatter_view_access(v1+sy,      field_var::rhof) += w2.high2float();
+        scatter_view_access(v1+sy+1,    field_var::rhof) += w3.high2float();
+        scatter_view_access(v1+sz,      field_var::rhof) += w4.high2float();
+        scatter_view_access(v1+sz+1,    field_var::rhof) += w5.high2float();
+        scatter_view_access(v1+sz+sy,   field_var::rhof) += w6.high2float();
+        scatter_view_access(v1+sz+sy+1, field_var::rhof) += w7.high2float();
 
     });
     Kokkos::Experimental::contribute(kfield, scatter_view);

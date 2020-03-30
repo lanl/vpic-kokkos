@@ -283,12 +283,39 @@ int vpic_simulation::advance(void) {
   KOKKOS_TIC();
   LIST_FOR_EACH( sp, species_list )
   {
-        auto pr_h_subview = Kokkos::subview(sp->k_pr_h, std::make_pair(0, sp->num_to_copy), Kokkos::ALL);
-        auto pri_h_subview = Kokkos::subview(sp->k_pr_i_h, std::make_pair(0, sp->num_to_copy));
-        auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, sp->num_to_copy), Kokkos::ALL);
-        auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, sp->num_to_copy));
-        Kokkos::deep_copy(pc_h_subview, pr_h_subview);
-        Kokkos::deep_copy(pci_h_subview, pri_h_subview);
+//        auto pr_h_subview = Kokkos::subview(sp->k_pr_h, std::make_pair(0, sp->num_to_copy), Kokkos::ALL);
+//        auto pri_h_subview = Kokkos::subview(sp->k_pr_i_h, std::make_pair(0, sp->num_to_copy));
+//        auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, sp->num_to_copy), Kokkos::ALL);
+//        auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, sp->num_to_copy));
+//        Kokkos::deep_copy(pc_h_subview, pr_h_subview);
+//        Kokkos::deep_copy(pci_h_subview, pri_h_subview);
+
+        auto pc_dx_h_subview = Kokkos::subview(sp->k_pc_soa_h.dx, std::make_pair(0, sp->num_to_copy));
+        auto pc_dy_h_subview = Kokkos::subview(sp->k_pc_soa_h.dy, std::make_pair(0, sp->num_to_copy));
+        auto pc_dz_h_subview = Kokkos::subview(sp->k_pc_soa_h.dz, std::make_pair(0, sp->num_to_copy));
+        auto pc_ux_h_subview = Kokkos::subview(sp->k_pc_soa_h.ux, std::make_pair(0, sp->num_to_copy));
+        auto pc_uy_h_subview = Kokkos::subview(sp->k_pc_soa_h.uy, std::make_pair(0, sp->num_to_copy));
+        auto pc_uz_h_subview = Kokkos::subview(sp->k_pc_soa_h.uz, std::make_pair(0, sp->num_to_copy));
+        auto pc_w_h_subview = Kokkos::subview(sp->k_pc_soa_h.w, std::make_pair(0, sp->num_to_copy));
+        auto pc_i_h_subview = Kokkos::subview(sp->k_pc_soa_h.i, std::make_pair(0, sp->num_to_copy));
+
+        auto pr_dx_h_subview = Kokkos::subview(sp->k_pr_soa_h.dx, std::make_pair(0, sp->num_to_copy));
+        auto pr_dy_h_subview = Kokkos::subview(sp->k_pr_soa_h.dy, std::make_pair(0, sp->num_to_copy));
+        auto pr_dz_h_subview = Kokkos::subview(sp->k_pr_soa_h.dz, std::make_pair(0, sp->num_to_copy));
+        auto pr_ux_h_subview = Kokkos::subview(sp->k_pr_soa_h.ux, std::make_pair(0, sp->num_to_copy));
+        auto pr_uy_h_subview = Kokkos::subview(sp->k_pr_soa_h.uy, std::make_pair(0, sp->num_to_copy));
+        auto pr_uz_h_subview = Kokkos::subview(sp->k_pr_soa_h.uz, std::make_pair(0, sp->num_to_copy));
+        auto pr_w_h_subview = Kokkos::subview(sp->k_pr_soa_h.w, std::make_pair(0, sp->num_to_copy));
+        auto pr_i_h_subview = Kokkos::subview(sp->k_pr_soa_h.i, std::make_pair(0, sp->num_to_copy));
+  
+        Kokkos::deep_copy(pc_dx_h_subview, pr_dx_h_subview);
+        Kokkos::deep_copy(pc_dy_h_subview, pr_dy_h_subview);
+        Kokkos::deep_copy(pc_dz_h_subview, pr_dz_h_subview);
+        Kokkos::deep_copy(pc_ux_h_subview, pr_ux_h_subview);
+        Kokkos::deep_copy(pc_uy_h_subview, pr_uy_h_subview);
+        Kokkos::deep_copy(pc_uz_h_subview, pr_uz_h_subview);
+        Kokkos::deep_copy(pc_w_h_subview, pr_w_h_subview);
+        Kokkos::deep_copy(pc_i_h_subview, pr_i_h_subview);
   }
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 //  KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
@@ -379,12 +406,38 @@ int sp_counter = 0;
       Kokkos::Profiling::pushRegion(" " + step_str + " Particle_Data_Movement " + std::to_string(sp_counter) + ": Update device particle copy");
 #endif
       KOKKOS_TIC();
-        auto pc_d_subview = Kokkos::subview(sp->k_pc_d, std::make_pair(0, num_to_copy), Kokkos::ALL);
-        auto pci_d_subview = Kokkos::subview(sp->k_pc_i_d, std::make_pair(0, num_to_copy));
-        auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, num_to_copy), Kokkos::ALL);
-        auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, num_to_copy));
-        Kokkos::deep_copy(pc_d_subview, pc_h_subview);
-        Kokkos::deep_copy(pci_d_subview, pci_h_subview);
+        //auto pc_d_subview = Kokkos::subview(sp->k_pc_d, std::make_pair(0, num_to_copy), Kokkos::ALL);
+        //auto pci_d_subview = Kokkos::subview(sp->k_pc_i_d, std::make_pair(0, num_to_copy));
+        //auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, num_to_copy), Kokkos::ALL);
+        //auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, num_to_copy));
+        //Kokkos::deep_copy(pc_d_subview, pc_h_subview);
+        //Kokkos::deep_copy(pci_d_subview, pci_h_subview);
+
+        auto pc_dx_d_subview = Kokkos::subview(sp->k_pc_soa_d.dx, std::make_pair(0, sp->num_to_copy));
+        auto pc_dy_d_subview = Kokkos::subview(sp->k_pc_soa_d.dy, std::make_pair(0, sp->num_to_copy));
+        auto pc_dz_d_subview = Kokkos::subview(sp->k_pc_soa_d.dz, std::make_pair(0, sp->num_to_copy));
+        auto pc_ux_d_subview = Kokkos::subview(sp->k_pc_soa_d.ux, std::make_pair(0, sp->num_to_copy));
+        auto pc_uy_d_subview = Kokkos::subview(sp->k_pc_soa_d.uy, std::make_pair(0, sp->num_to_copy));
+        auto pc_uz_d_subview = Kokkos::subview(sp->k_pc_soa_d.uz, std::make_pair(0, sp->num_to_copy));
+        auto pc_w_d_subview = Kokkos::subview(sp->k_pc_soa_d.w, std::make_pair(0, sp->num_to_copy));
+        auto pc_i_d_subview = Kokkos::subview(sp->k_pc_soa_d.i, std::make_pair(0, sp->num_to_copy));
+
+        auto pc_dx_h_subview = Kokkos::subview(sp->k_pc_soa_h.dx, std::make_pair(0, sp->num_to_copy));
+        auto pc_dy_h_subview = Kokkos::subview(sp->k_pc_soa_h.dy, std::make_pair(0, sp->num_to_copy));
+        auto pc_dz_h_subview = Kokkos::subview(sp->k_pc_soa_h.dz, std::make_pair(0, sp->num_to_copy));
+        auto pc_ux_h_subview = Kokkos::subview(sp->k_pc_soa_h.ux, std::make_pair(0, sp->num_to_copy));
+        auto pc_uy_h_subview = Kokkos::subview(sp->k_pc_soa_h.uy, std::make_pair(0, sp->num_to_copy));
+        auto pc_uz_h_subview = Kokkos::subview(sp->k_pc_soa_h.uz, std::make_pair(0, sp->num_to_copy));
+        auto pc_w_h_subview = Kokkos::subview(sp->k_pc_soa_h.w, std::make_pair(0, sp->num_to_copy));
+        auto pc_i_h_subview = Kokkos::subview(sp->k_pc_soa_h.i, std::make_pair(0, sp->num_to_copy));
+        Kokkos::deep_copy(pc_dx_d_subview, pc_dx_h_subview);
+        Kokkos::deep_copy(pc_dy_d_subview, pc_dy_h_subview);
+        Kokkos::deep_copy(pc_dz_d_subview, pc_dz_h_subview);
+        Kokkos::deep_copy(pc_ux_d_subview, pc_ux_h_subview);
+        Kokkos::deep_copy(pc_uy_d_subview, pc_uy_h_subview);
+        Kokkos::deep_copy(pc_uz_d_subview, pc_uz_h_subview);
+        Kokkos::deep_copy(pc_w_d_subview, pc_w_h_subview);
+        Kokkos::deep_copy(pc_i_d_subview, pc_i_h_subview);
       KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 //      KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 #ifdef VPIC_ENABLE_PAPI
@@ -395,8 +448,9 @@ int sp_counter = 0;
       Kokkos::Profiling::pushRegion(" " + step_str + " Backfill " + std::to_string(sp_counter) + ": Append moved particles to device particles");
 #endif
       KOKKOS_TIC(); // Time this data movement
-      auto& particle_copy = sp->k_pc_d;
-      auto& particle_copy_i = sp->k_pc_i_d;
+      //auto& particle_copy = sp->k_pc_d;
+      //auto& particle_copy_i = sp->k_pc_i_d;
+      auto& particle_copy = sp->k_pc_soa_d;
       int num_to_copy = sp->num_to_copy;
       int np = sp->np;
 
@@ -416,14 +470,14 @@ int sp_counter = 0;
 //        particles(npi, particle_var::w)  = particle_copy(i, particle_var::w);
 //        particles_i(npi) = particle_copy_i(i);
 
-        k_particles.dx(npi) = particle_copy(i, particle_var::dx);
-        k_particles.dy(npi) = particle_copy(i, particle_var::dy);
-        k_particles.dz(npi) = particle_copy(i, particle_var::dz);
-        k_particles.ux(npi) = particle_copy(i, particle_var::ux);
-        k_particles.uy(npi) = particle_copy(i, particle_var::uy);
-        k_particles.uz(npi) = particle_copy(i, particle_var::uz);
-        k_particles.w(npi)  = particle_copy(i, particle_var::w);
-        k_particles.i(npi) = particle_copy_i(i);
+        k_particles.dx(npi) = particle_copy.dx(i);
+        k_particles.dy(npi) = particle_copy.dy(i);
+        k_particles.dz(npi) = particle_copy.dz(i);
+        k_particles.ux(npi) = particle_copy.ux(i);
+        k_particles.uy(npi) = particle_copy.uy(i);
+        k_particles.uz(npi) = particle_copy.uz(i);
+        k_particles.w(npi)  = particle_copy.w(i);
+        k_particles.i(npi)  = particle_copy.i(i);
       });
 
       // Reset this to zero now we've done the write back
@@ -953,15 +1007,19 @@ sp_counter ++;
   // return true here so that the first call to advance after a restore
   // will act properly for this edge case.
 
-#ifdef VPIC_DUMP_ENERGIES
-#ifdef VPIC_ENABLE_PAPI
-  Kokkos::Profiling::pushRegion(" " + step_str + " dump_energies");
-#endif
+//#ifdef VPIC_DUMP_ENERGIES
+//#ifdef VPIC_ENABLE_PAPI
+//  Kokkos::Profiling::pushRegion(" " + step_str + " dump_energies");
+//#endif
+//  KOKKOS_TIC(); // Time this data movement
+//  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+//  KOKKOS_TOC( user_diagnostics, 1);
   TIC dump_energies("energies.txt", 1); TOC( dump_energies, 1);
-#ifdef VPIC_ENABLE_PAPI
-  Kokkos::Profiling::popRegion();
-#endif
-#endif
+//  dump_partloc("particle_location.txt", 1);
+//#ifdef VPIC_ENABLE_PAPI
+//  Kokkos::Profiling::popRegion();
+//#endif
+//#endif
 
 #ifdef VPIC_ENABLE_PAPI
 //Kokkos::Profiling::popRegion();
