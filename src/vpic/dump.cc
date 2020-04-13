@@ -77,6 +77,19 @@ vpic_simulation::dump_energies( const char *fname,
   }
 }
 
+void rank_to_index(int rank, int& ix, int& iy, int& iz, int gpx, int gpy, int gpz) {
+  int _ix, _iy, _iz;
+  _ix  = rank;
+  _iy  = _ix / gpx;
+  _ix -= _iy * gpx;
+  _iz  = _iy / gpy;
+  _iy -= _iz * gpy;
+  ix   = _ix;
+  iy   = _iy;
+  iz   = _iz;
+}
+
+
 void vpic_simulation::dump_partloc(const char *fname, int append) {
   species_t *sp;
   FileIO fileIO;
@@ -91,7 +104,7 @@ void vpic_simulation::dump_partloc(const char *fname, int append) {
       if( append==0 ) {
         fileIO.print( "%% Layout\n%% step " );
         LIST_FOR_EACH(sp,species_list)
-          fileIO.print( " \"%s\"(dx dy dz ux uy uz)", sp->name );
+          fileIO.print( " \"%s\"dx dy dz ux uy uz", sp->name );
         fileIO.print( "\n" );
         fileIO.print( "%% timestep = %e\n", grid->dt );
       }
@@ -104,7 +117,20 @@ void vpic_simulation::dump_partloc(const char *fname, int append) {
       int num = sp->np;
       for(int i=0; i<num; i++) {
         particle_t particle = sp->p[i];
-        fileIO.print(" (%e %e %e %e %e %e)", particle.dx, particle.dy, particle.dz, particle.ux, particle.uy, particle.uz);
+        size_t ix, iy, iz;
+        int _ix, _iy, _iz;
+        _ix = particle.i;
+        _iy = _ix/int(grid->nx + 2);
+        _ix -= _iy*int(grid->nx + 2);
+        _iz = _iy/int(grid->ny + 2);
+        _iy -= _iz*int(grid->ny + 2);
+        ix = _ix;
+        iy = _iy;
+        iz = _iz;
+        float x = 0.0+(ix-1+(particle.dx + 1.0)*0.5)*grid->dx;
+        float y = 0.0+(iy-1+(particle.dy + 1.0)*0.5)*grid->dy;
+        float z = 0.0+(iz-1+(particle.dz + 1.0)*0.5)*grid->dz;
+        fileIO.print(" %e %e %e %e %e %e", x, y, z, particle.ux, particle.uy, particle.uz);
       }
     }
   }

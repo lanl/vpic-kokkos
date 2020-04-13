@@ -108,7 +108,9 @@ int vpic_simulation::advance(void) {
       advance_p_profiling( sp, accumulator_array, interpolator_array, step() );
   Kokkos::Profiling::popRegion();
 #else
+  Kokkos::Profiling::pushRegion(" " + step_str + " " + std::string(sp->name) + " advance_p");
       advance_p( sp, accumulator_array, interpolator_array );
+  Kokkos::Profiling::popRegion();
 #endif
   }
   KOKKOS_TOC( advance_p, 1);
@@ -1013,9 +1015,9 @@ sp_counter ++;
 //#endif
 //  KOKKOS_TIC(); // Time this data movement
 //  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+//  dump_partloc("particle_location.txt", 1);
 //  KOKKOS_TOC( user_diagnostics, 1);
   TIC dump_energies("energies.txt", 1); TOC( dump_energies, 1);
-//  dump_partloc("particle_location.txt", 1);
 //#ifdef VPIC_ENABLE_PAPI
 //  Kokkos::Profiling::popRegion();
 //#endif

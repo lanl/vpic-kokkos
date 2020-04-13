@@ -341,6 +341,24 @@ KOKKOS_INLINE_FUNCTION Half<T> fma(const Half<T>& a, const Half<T>& b, const Hal
 #endif
 }
 
+template<typename T>
+KOKKOS_INLINE_FUNCTION void atomicAdd(const Half<T>& a, const Half<T>& b) {
+#ifdef __CUDA_ARCH__
+  atomicAdd(&(a._data), b._data);
+#else 
+  Kokkos::atomic_add(&(a._data), b._data);
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION void atomic_add(float* a, float b) {
+#ifdef __CUDA_ARCH__
+  atomicAdd(a,b);
+//#else
+//  Kokkos::atomic_add(a, b);
+#endif
+}
+  
+
 template <typename T>
 class Half2 {
   public:
@@ -561,26 +579,26 @@ KOKKOS_INLINE_FUNCTION Half2<T> fma(const Half2<T>& a, const Half2<T>& b, const 
 //#define mom_t Half2<__half2>
 //#define mixed_t Half2<__half2>
 typedef Half<__half> pos_t;
-typedef Half<__half> mom_t;
-typedef Half<__half> mixed_t;
+//typedef Half<__half> mom_t;
+//typedef Half<__half> mixed_t;
 typedef Half2<__half2> packed_t;
 //typedef float pos_t;
-//typedef float mom_t;
-//typedef float mixed_t;
+typedef float mom_t;
+typedef float mixed_t;
 #else
 //#define pos_t half
 //#define mom_t half
 //#define mixed_t half
 typedef Half<__half> pos_t;
-typedef Half<__half> mom_t;
-typedef Half<__half> mixed_t;
+//typedef Half<__half> mom_t;
+//typedef Half<__half> mixed_t;
 typedef Half2<__half2> packed_t;
 //typedef Half<half> pos_t;
 //typedef Half<half> mom_t;
 //typedef Half<half> mixed_t;
 //typedef float pos_t;
-//typedef float mom_t;
-//typedef float mixed_t;
+typedef float mom_t;
+typedef float mixed_t;
 #endif
 
 class k_particles_struct {
@@ -714,7 +732,8 @@ using k_neighbor_t = Kokkos::View<int64_t*>;
 
 using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 
-using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::MemoryTraits<Kokkos::Atomic> >;
+using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
+//using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::MemoryTraits<Kokkos::Atomic> >;
 
 using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
