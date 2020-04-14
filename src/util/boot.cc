@@ -84,7 +84,7 @@ boot_services( int * pargc,
         std::cout << "MPI Ranks: " << _world_size << std::endl;
         std::cout << "Threads: " << thread.n_pipeline << std::endl;
 
-        std::cout << "######### End and Run Details ############" << std::endl;
+        std::cout << "############# End Details ###############" << std::endl;
         std::cout << std::endl; // blank line
     }
 }
