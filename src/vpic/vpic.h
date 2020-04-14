@@ -124,6 +124,7 @@ public:
   void modify( const char *fname );
   int advance( void );
   void finalize( void );
+  void print_run_details( void );
 
   // Directly initialized by user
 
@@ -370,34 +371,37 @@ public:
   define_periodic_grid( double xl,  double yl,  double zl,
                         double xh,  double yh,  double zh,
                         double gnx, double gny, double gnz,
-                        double gpx, double gpy, double gpz ) {
-	px = size_t(gpx); py = size_t(gpy); pz = size_t(gpz);
-    partition_periodic_box( grid, xl, yl, zl, xh, yh, zh,
-                            (int)gnx, (int)gny, (int)gnz,
-                            (int)gpx, (int)gpy, (int)gpz );
+                        double gpx, double gpy, double gpz )
+  {
+      px = size_t(gpx); py = size_t(gpy); pz = size_t(gpz);
+      partition_periodic_box( grid, xl, yl, zl, xh, yh, zh,
+              (int)gnx, (int)gny, (int)gnz,
+              (int)gpx, (int)gpy, (int)gpz );
   }
 
   inline void
   define_absorbing_grid( double xl,  double yl,  double zl,
                          double xh,  double yh,  double zh,
                          double gnx, double gny, double gnz,
-                         double gpx, double gpy, double gpz, int pbc ) {
-	px = size_t(gpx); py = size_t(gpy); pz = size_t(gpz);
-    partition_absorbing_box( grid, xl, yl, zl, xh, yh, zh,
-                             (int)gnx, (int)gny, (int)gnz,
-                             (int)gpx, (int)gpy, (int)gpz,
-                             pbc );
+                         double gpx, double gpy, double gpz, int pbc )
+  {
+      px = size_t(gpx); py = size_t(gpy); pz = size_t(gpz);
+      partition_absorbing_box( grid, xl, yl, zl, xh, yh, zh,
+              (int)gnx, (int)gny, (int)gnz,
+              (int)gpx, (int)gpy, (int)gpz,
+              pbc );
   }
 
   inline void
   define_reflecting_grid( double xl,  double yl,  double zl,
                           double xh,  double yh,  double zh,
                           double gnx, double gny, double gnz,
-                          double gpx, double gpy, double gpz ) {
-	px = size_t(gpx); py = size_t(gpy); pz = size_t(gpz);
-    partition_metal_box( grid, xl, yl, zl, xh, yh, zh,
-                         (int)gnx, (int)gny, (int)gnz,
-                         (int)gpx, (int)gpy, (int)gpz );
+                          double gpx, double gpy, double gpz )
+  {
+      px = size_t(gpx); py = size_t(gpy); pz = size_t(gpz);
+      partition_metal_box( grid, xl, yl, zl, xh, yh, zh,
+              (int)gnx, (int)gny, (int)gnz,
+              (int)gpx, (int)gpy, (int)gpz );
   }
 
   // The below macros allow custom domains to be created

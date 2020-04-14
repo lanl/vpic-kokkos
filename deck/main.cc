@@ -117,6 +117,9 @@ int main(int argc, char** argv)
         simulation->modify( fbase );
     }
 
+    // Print output log
+    simulation->print_run_details();
+
     // Perform the main simulation
     if( world_rank==0 ) log_printf( "*** Advancing\n" );
     double elapsed = wallclock();

@@ -111,3 +111,33 @@ vpic_simulation::~vpic_simulation() {
   Kokkos::finalize();
 }
 
+void vpic_simulation::print_run_details()
+{
+    if (rank() == 0)
+    {
+        species_t* sp = nullptr;
+        // Read run details and print them out
+        // Focus on performance detemring quantities, and allow the deck to print
+        // physics focused params:
+        // num steps, nx, ny, nz, num particles per species
+        std::cout << "######### Run Details ##########" << std::endl;
+        std::cout << "## Global:" << std::endl;
+        std::cout << "  # Num Step " << num_step << std::endl;
+        std::cout << "  # px " << px << " py " << py << " pz " << pz << std::endl;
+        std::cout << "  # gnx " << px*grid->nx << " gny " << py*grid->ny << " gnz " << pz*grid->nz << std::endl;
+        std::cout << "## Local:" << std::endl;
+        std::cout << "  # nx " << grid->nx << " ny " << grid->ny << " nz " << grid->nz << std::endl;
+        std::cout << "  # dx " << grid->dx << " dy " << grid->dy << " dz " << grid->dz << std::endl;
+        if (species_list )
+        {
+            std::cout << "## Particle Species: " <<  num_species( species_list ) << std::endl;
+            LIST_FOR_EACH( sp, species_list )
+            {
+                std::cout << "  # " << sp->name << " np " << sp->np << std::endl;
+            }
+        }
+        std::cout << "######### End Run Details ######" << std::endl;
+        std::cout << std::endl; // blank line
+    }
+}
+

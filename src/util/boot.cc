@@ -77,14 +77,14 @@ boot_services( int * pargc,
     // TODO: move this into a specific run outputter class
     if (world_rank == 0)
     {
-        std::cout << "######### Build and Run Details ##########" << std::endl;
+        std::cout << "######### Build Details ##########" << std::endl;
 
-        std::cout << "VPIC Git Hash: "  << GIT_REVISION << std::endl;
-        std::cout << "Built on: "  << GIT_REVISION << std::endl;
-        std::cout << "MPI Ranks: " << _world_size << std::endl;
-        std::cout << "Threads: " << thread.n_pipeline << std::endl;
+        std::cout << "# VPIC Git Hash: "  << GIT_REVISION << std::endl;
+        std::cout << "# Built on: "  << BUILD_TIMESTAMP << std::endl;
+        std::cout << "# MPI Ranks: " << _world_size << std::endl;
+        std::cout << "# Threads: " << thread.n_pipeline << std::endl;
 
-        std::cout << "############# End Details ###############" << std::endl;
+        std::cout << "######### End Run Details ########" << std::endl;
         std::cout << std::endl; // blank line
     }
 }
