@@ -652,14 +652,14 @@ int vpic_simulation::advance(void)
       // Copy particles back
       KOKKOS_TIC(); // Time this data movement
       KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
-      KOKKOS_TOC( user_diagnostics, 1);
+      KOKKOS_TOC( user_data_movement, 1);
   }
   if ( (field_copy_interval > 0) && ((step() % field_copy_interval) == 0))
   {
       // Copy fields back
       KOKKOS_TIC(); // Time this data movement
       KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
-      KOKKOS_TOC( user_diagnostics, 1);
+      KOKKOS_TOC( user_data_movement, 1);
   }
 
   // Let the user compute diagnostics
