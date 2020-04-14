@@ -167,7 +167,7 @@ if (BUILD_INTERNAL_KOKKOS)
   #include_directories(${Kokkos_INCLUDE_DIRS_RET})
   set(KOKKOS_INCLUDE_DIRS ${Kokkos_INCLUDE_DIRS_RET})
 else()
-  # CONSIDER ADDING --expt-extended-lambda 
+  # CONSIDER ADDING --expt-extended-lambda
   find_package(KOKKOS REQUIRED)
   # TODO: I doubt this is the cmakey way to add this to includes
   get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INTERFACE_INCLUDE_DIRECTORIES)
@@ -189,10 +189,9 @@ include_directories(${KOKKOS_INCLUDE_DIRS})
 # TODO: bad idea.. at best, this is just going to add it to the last one in the
 # array
 link_directories(${KOKKOS_INCLUDE_DIRS}/../lib)
-link_directories(${KOKKOS_INCLUDE_DIRS}/lib) 
+link_directories(${KOKKOS_INCLUDE_DIRS}/lib)
 
 # Libs
-message(${string_libraries})
 string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
 set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
 
@@ -245,6 +244,31 @@ endif(USE_V4_SSE)
 if(ENABLE_OPENSSL)
   add_definitions(-DENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
+
+#------------------------------------------------------------------------------#
+# Output log variables
+#------------------------------------------------------------------------------#
+FIND_PACKAGE(Git)
+IF(GIT_FOUND AND IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/.git)
+    EXECUTE_PROCESS(
+        COMMAND           ${GIT_EXECUTABLE} log --pretty=format:%H -n 1
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE   VPIC_GIT_COMMIT_HASH
+        )
+ELSE()
+    SET(VPIC_GIT_COMMIT_HASH "Not a git repository")
+ENDIF()
+string(TIMESTAMP _build_time_stamp)
+
+MESSAGE(STATUS "VPIC Revision = '${VPIC_GIT_COMMIT_HASH}'")
+#add_definitions("-DVPIC_GIT_HASH=${VPIC_GIT_COMMIT_HASH}")
+
+configure_file (
+    "${PROJECT_SOURCE_DIR}/cmake/git_version.h.in"
+    "${PROJECT_BINARY_DIR}/include/git_version.h"
+)
+
+include_directories(${PROJECT_BINARY_DIR}/include) # for generated git_version.h
 
 #------------------------------------------------------------------------------#
 # Handle vpic compile script last
