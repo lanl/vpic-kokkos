@@ -78,7 +78,11 @@ boot_services( int * pargc,
     if (world_rank == 0)
     {
         std::cout << "######### Build Details ##########" << std::endl;
-
+        if (*pargc > 0) // We unlikely, be argc can be 0 as allowed by the standard
+        {
+            std::cout << "# Binary: " << (*pargv)[0] << std::endl;
+        }
+        std::cout << "# Args: " << (*pargc) << std::endl;
         std::cout << "# VPIC Git Hash: "  << GIT_REVISION << std::endl;
         std::cout << "# Built on: "  << BUILD_TIMESTAMP << std::endl;
         std::cout << "# MPI Ranks: " << _world_size << std::endl;
