@@ -910,7 +910,9 @@
 //    //local_pm_i = 0;
 //  });
 //
-//  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
+////  Kokkos::LaunchBounds<MaxThreadsPerBlock, MinBlocksPerSM>
+////  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
+//  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy <Kokkos::LaunchBounds<128,4> > (0, np),
 //    KOKKOS_LAMBDA (size_t p_index)
 //    {
 //
@@ -1315,12 +1317,31 @@ sp_[id]->
     //local_pm_i = 0;
   });
 
-  int per_league = (np/84) + 1;
-  Kokkos::parallel_for("advance_p", Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>(84, Kokkos::AUTO()), 
+//  int num_threads = 32;
+//  int num_leagues = np/num_threads;
+//  int per_league = np/num_leagues;
+  int num_leagues = 120;
+  int per_league = np/num_leagues + 1;
+//  if(num_leagues*per_league < np)
+//    per_league++;
+//  int per_thread = (per_league/num_threads) + 1;
+  Kokkos::parallel_for("advance_p", Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>(num_leagues, Kokkos::AUTO()), 
   KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, per_league), [=] (size_t pindex) {
-      auto  k_accumulators_scatter_access = k_accumulators_sa.access();
       int p_index = team_member.league_rank()*per_league + pindex;
+//    int x_index = team_member.league_rank();
+//    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, per_thread), [=] (size_t y_idx) {
+//      int y_index = y_idx;
+//    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_threads), [=] (size_t z_idx) {
+//      int z_index = z_idx;
+//      int p_index = x_index*per_thread*num_threads + y_index*num_threads + z_index;
+
+//#ifdef __CUDA_ARCH__
+////if(x_index == 0 && y_index == 0 && z_index == 0)
+//if(team_member.league_rank() == 0 && pindex == 0)
+//printf("grid (x,y,z): (%d,%d,%d), block (x,y,z): (%d,%d,%d)\n", gridDim.x, gridDim.y, gridDim.z, blockDim.x, blockDim.y, blockDim.z);
+//#endif
+      auto  k_accumulators_scatter_access = k_accumulators_sa.access();
       if(p_index < np) {
         mixed_t v0, v1, v2, v3, v4, v5;
     
@@ -1522,6 +1543,7 @@ sp_[id]->
           }
         }
       }
+//    });
     });
   });
 
