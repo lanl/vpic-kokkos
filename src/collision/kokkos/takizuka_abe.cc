@@ -508,7 +508,6 @@ void add_takizuka_abe_collision(takizuka_abe_t ta) {
     ta_list.push_back(ta);
 }
 int have_ta_collisions() {
-    std::cout << "Ta list size = " << ta_list.size() << std::endl;
     return ta_list.size();
 }
 

@@ -89,7 +89,7 @@ class KokkosRNG
          */
         inline double uniform( const double low, const double high ) {
             auto generator = rand_pool.get_state();
-            auto r = drand(generator, low, high);
+            auto r = uniform(generator, low, high);
             rand_pool.free_state(generator);
             return r;
         }
@@ -121,7 +121,7 @@ class KokkosRNG
          *
          * @return The generated uniform number
          */
-        inline double uniform( const kokkos_rng_state_t& generator, const double low, const double high ) {
+        inline double uniform( kokkos_rng_state_t& generator, const double low, const double high ) {
             return generator.drand(low, high);
         }
 
@@ -172,7 +172,7 @@ class KokkosRNG
          *
          * @return The generated normal number
          */
-        inline double normal( const kokkos_rng_state_t& generator, const double mu, const double sigma ) {
+        inline double normal( kokkos_rng_state_t& generator, const double mu, const double sigma ) {
             return generator.normal(mu, sigma);
         }
 
@@ -219,7 +219,7 @@ class KokkosRNG
          *
          * @return The generated random int
          */
-        inline unsigned int uint( const kokkos_rng_state_t& generator, const unsigned int max )
+        inline unsigned int uint(  kokkos_rng_state_t& generator, const unsigned int max )
         {
             return generator.urand(max);
         }
@@ -255,7 +255,7 @@ class KokkosRNG
          *
          * @param generator The kokkos generator state to free
          */
-        void free_state(kokkos_rng_state_t generator)
+        void free_state(kokkos_rng_state_t& generator)
         {
             rand_pool.free_state(generator);
         }

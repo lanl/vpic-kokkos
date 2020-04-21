@@ -132,7 +132,8 @@ public:
   // Set RNG policy. Use std::rng by default, optionally use Kokkos or
   // "original"
 #ifdef USE_KOKKOS_RNG
-  _RNG::RandomNumberProvider<_RNG::KokkosRNG> rng_policy;
+  // TODO: this only works on CPU right now...
+  _RNG::RandomNumberProvider< _RNG::KokkosRNG<Kokkos::DefaultHostExecutionSpace> > rng_policy;
 #elif USE_STL_RNG
   _RNG::RandomNumberProvider<_RNG::CppRNG> rng_policy;
 #else // USE_ORIGINAL_RNG
