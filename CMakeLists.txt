@@ -56,9 +56,27 @@ option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 
 set(KOKKOS_ARCH "Power9;Volta70" CACHE STRING "Architecture to use with Kokkos")
 
-
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
+
+##### SET RNG POLICY #####
+
+set(VPIC_RNG_POLICY "ORIGINAL" CACHE STRING "Selected RNG Policy")
+set(ALLOWABLE_RNG ORIGINAL KOKKOS STD) # List allowable values
+# hint the tools the allowed values
+set_property(CACHE VPIC_RNG_POLICY PROPERTY STRINGS ${ALLOWABLE_RNG})
+
+if(VPIC_RNG_POLICY MATCHES "KOKKOS")
+  add_definitions(-DUSE_KOKKOS_RNG)
+elseif(VPIC_RNG_POLICY MATCHES "STD")
+  add_definitions(-DUSE_STL_RNG)
+elseif(VPIC_RNG_POLICY MATCHES "ORIGINAL")
+  add_definitions(-DUSE_ORIGINAL_RNG)
+else()
+  message(FATAL_ERROR "Unknown RNG policy. Options are: ${ALLOWABLE_RNG}")
+endif()
+
+###### END RNG POLICY #####
 
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
@@ -167,7 +185,7 @@ if (BUILD_INTERNAL_KOKKOS)
   #include_directories(${Kokkos_INCLUDE_DIRS_RET})
   set(KOKKOS_INCLUDE_DIRS ${Kokkos_INCLUDE_DIRS_RET})
 else()
-  # CONSIDER ADDING --expt-extended-lambda 
+  # CONSIDER ADDING --expt-extended-lambda
   find_package(KOKKOS REQUIRED)
   # TODO: I doubt this is the cmakey way to add this to includes
   get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INTERFACE_INCLUDE_DIRECTORIES)
@@ -189,7 +207,7 @@ include_directories(${KOKKOS_INCLUDE_DIRS})
 # TODO: bad idea.. at best, this is just going to add it to the last one in the
 # array
 link_directories(${KOKKOS_INCLUDE_DIRS}/../lib)
-link_directories(${KOKKOS_INCLUDE_DIRS}/lib) 
+link_directories(${KOKKOS_INCLUDE_DIRS}/lib)
 
 # Libs
 message(${string_libraries})

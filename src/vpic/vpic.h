@@ -129,18 +129,13 @@ public:
   int advance( void );
   void finalize( void );
 
-  // Set RNG policy
-  // Use std::rng by default, optionally use Kokkos or "original"
-  // TODO: turn this into a policy
-#define USE_ORIGINAL_RNG
-#ifndef USE_ORIGINAL_RNG
- #ifdef USE_KOKKOS_RNG
+  // Set RNG policy. Use std::rng by default, optionally use Kokkos or
+  // "original"
+#ifdef USE_KOKKOS_RNG
   _RNG::RandomNumberProvider<_RNG::KokkosRNG> rng_policy;
- #else
-   // TODO: move to constructor
+#elif USE_STL_RNG
   _RNG::RandomNumberProvider<_RNG::CppRNG> rng_policy;
- #endif
-#else
+#else // USE_ORIGINAL_RNG
   _RNG::RandomNumberProvider<_RNG::OriginalRNG> rng_policy;
 #endif
 
