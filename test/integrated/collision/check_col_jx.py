@@ -50,6 +50,7 @@ if show_plot:
     fig, (ax1) = plt.subplots(nrows=1)
     im = ax1.plot(t, jx, 'b')
     im2 = ax1.plot(t, theory, 'r')
+    ax1.set_ylim([0.84, 1.005])
     # plt.axis([0, 0.1, 0, 0.04])
     plt.show()
 
@@ -71,7 +72,7 @@ for i in range(numsteps):
 print("max errors -- relative {}% absolute {}".format(max_rel, max_ab))
 
 rel_tol = 1.0  # 1%
-ab_tol = 0.015  # 1%
+ab_tol = 0.015
 if max_rel > rel_tol or max_ab > ab_tol:
     # Error out
     print("=> Fail")

@@ -64,51 +64,206 @@ class CppRNG {
         }
 };
 
-// Theres a better way to do Kokkos rng on device using pools
-// TODO: the way this keeps polling the state seems to give the same RNG, as you need to pole the same state multiple times. This seems sketchy for init...
-class KokkosRNG { // CPU!
-    //Kokkos::Random_XorShift64_Pool<> rand_pool(12313);
-    // TODO: this is going to give device rng in some cases..
+template<typename ExecutionSpace>
+class KokkosRNG
+{
     public:
-        // TODO: need to pass this a state..
-        // TODO: Explicitly setting a exec space here is bad
+        // TODO: use a better quality RNG? 1024?
+        // eg
+        //using kokkos_rng_pool_t = Kokkos::Random_XorShift1024<Kokkos::DefaultHostExecutionSpace>;
 
-        // TODO: use a better quality RNG, likely needs the addition of a "pool"
-        //using kokkos_rng_gen_t = Kokkos::Random_XorShift1024<Kokkos::DefaultHostExecutionSpace>;
-        //auto rand_gen = rand_pool.get_state();
-        //Kokkos::Random_XorShift64<Kokkos::DefaultExecutionSpace> rp_device;
+        using kokkos_rng_pool_t = Kokkos::Random_XorShift64_Pool<ExecutionSpace>;
+        using kokkos_rng_state_t = Kokkos::Random_XorShift64<ExecutionSpace>;
 
-        using kokkos_rng_pool_t = Kokkos::Random_XorShift64_Pool<Kokkos::DefaultHostExecutionSpace>;
         kokkos_rng_pool_t rand_pool;
 
+        /////////// Uniform
+
+        /**
+         * @brief Generate a uniform number between (low..high]
+         *
+         * @param low The min for the range
+         * @param high The max for the range
+         *
+         * @return The generated uniform number
+         */
         inline double uniform( const double low, const double high ) {
             auto generator = rand_pool.get_state();
-            return generator.drand(low, high);
+            auto r = drand(generator, low, high);
+            rand_pool.free_state(generator);
+            return r;
         }
-        inline double uniform( rng_t* rng, const double low, const double high ) {
+
+        /**
+         * @brief Pass-through helper to strip off the interface-only arg rng_t
+         *
+         * Generate a uniform number between (low..high]
+         *
+         * @param generator The generated state to pass in
+         * @param low The min for the range
+         * @param high The max for the range
+         *
+         * @return The generated uniform number
+         */
+        inline double uniform( const rng_t* rng, const double low, const double high ) {
             return uniform(low, high);
         }
+
+        /**
+         * @brief Advanced unfirom generator where the caller holds the state
+         * variable for the generator.
+         *
+         * Generate a uniform number between (low..high]
+         *
+         * @param generator The generated state to pass in
+         * @param low The min for the range
+         * @param high The max for the range
+         *
+         * @return The generated uniform number
+         */
+        inline double uniform( const kokkos_rng_state_t& generator, const double low, const double high ) {
+            return generator.drand(low, high);
+        }
+
+        /////////// Normal
+
+        /**
+         * @brief Generate a normally distributed real with given mean and standard
+         * deviation
+         *
+         * @param mu The mean of the distribution
+         * @param sigma The standard deviation of the distribution
+         *
+         * @return The generated normal number
+         */
         inline double normal( const double mu, const double sigma ) {
             auto generator = rand_pool.get_state();
-            return generator.normal(mu, sigma);
+            auto r = normal(generator, mu, sigma);
+            rand_pool.free_state(generator);
+            return r;
         }
-        inline double normal( rng_t* rng, const double mu, const double sigma ) {
+
+        /**
+         * @brief Pass-through helper to strip off the interface-only arg rng_t
+         *
+         * Generate a normally distributed real with given mean and standard
+         * deviation
+         *
+         * @param rnt_t IGNORED
+         * @param mu The mean of the distribution
+         * @param sigma The standard deviation of the distribution
+         *
+         * @return The generated normal number
+         */
+        inline double normal( const rng_t* rng, const double mu, const double sigma ) {
             return normal(mu, sigma);
         }
+
+        /**
+         * @brief Advanced normal generator where the caller holds the state
+         * variable for the generator.
+         *
+         * Generate a normally distributed real with given mean and standard
+         * deviation
+         *
+         * @param generator The generator/state to use
+         * @param mu The mean of the distribution
+         * @param sigma The standard deviation of the distribution
+         *
+         * @return The generated normal number
+         */
+        inline double normal( const kokkos_rng_state_t& generator, const double mu, const double sigma ) {
+            return generator.normal(mu, sigma);
+        }
+
+        //////////// uint
+
+        /**
+         * @brief Generate a random int between (0..max]
+         *
+         * @param max The max for the range
+         *
+         * @return The generated random int
+         */
         inline unsigned int uint( const unsigned int max )
         {
             auto generator = rand_pool.get_state();
-            return generator.urand(max);
+            auto r = generator.urand(max);
+            rand_pool.free_state(generator);
+            return r;
         }
-        inline unsigned int uint( rng_t* rng, const unsigned int max )
+
+        /**
+         * @brief Pass-through helper to strip off the interface-only arg rng_t
+         *
+         * Generate a random int between (0..max]
+         *
+         * @param rng_t IGNORED
+         * @param max The max for the range
+         *
+         * @return The generated random int
+         */
+        inline unsigned int uint( const rng_t* rng, const unsigned int max )
         {
             return uint(max);
         }
+
+        /**
+         * @brief Advanced uint generator where the caller holds the state
+         * variable for the generator.
+         *
+         * Generate a random int between (0..max]
+         *
+         * @param generator The generated state to pass in
+         * @param max The max for the range
+         *
+         * @return The generated random int
+         */
+        inline unsigned int uint( const kokkos_rng_state_t& generator, const unsigned int max )
+        {
+            return generator.urand(max);
+        }
+
+        ////////////////
+
+        /**
+         * @brief Seed the kokkos RNG, based on inputs and MPI rank
+         *
+         * @param entropy IGNORED
+         * @param sync_entropy IGNORED
+         * @param base Base offset to MPI rank seed
+         * @param sync Condition to determine if we use base
+         */
         void seed( rng_pool_t* entropy, rng_pool_t* sync_entropy, const int base, const int sync )
         {
            int seed = (sync ? world_size : world_rank) + (world_size+1)*base;
            rand_pool = kokkos_rng_pool_t(seed);
         }
+
+        /**
+         * @brief Helper wrapper to allow the user to manage their own state
+         * variables to avoid the cost of repeatedly creating/freeing it
+         */
+        kokkos_rng_state_t get_state()
+        {
+            return rand_pool.get_state();
+        }
+
+        /**
+         * @brief Helper wrapper to allow the user to free the state they manually created
+         * using the above get_state() wrapper
+         *
+         * @param generator The kokkos generator state to free
+         */
+        void free_state(kokkos_rng_state_t generator)
+        {
+            rand_pool.free_state(generator);
+        }
+
+        /**
+         * @brief Default constructor, which will intialize the kokkos pool
+         * with seed=DEFAULT_SEED, which the user can set at compile time
+         */
         KokkosRNG() {
            rand_pool = kokkos_rng_pool_t(DEFAULT_SEED);
         }

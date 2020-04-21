@@ -79,7 +79,7 @@ void takizuka_abe_collision(
         float std,
         //rng_t* rng, // TODO: remove?
         //_RNG_t& rg
-        Kokkos::Random_XorShift64<Kokkos::Cuda>& rg
+        Kokkos::Random_XorShift64<Kokkos::DefaultExecutionSpace>& rg
 )
 {
     //particle_t * const RESTRICT pi = (PI);
@@ -233,7 +233,8 @@ takizuka_abe_pipeline_scalar_kokkos(
   int v_min = VOXEL(1,1,1,nx,ny,nz);
   int v_max = VOXEL(nx,ny,nz,nx,ny,nz) + 1;
 
-  Kokkos::Random_XorShift64_Pool<> rp(0);
+  auto step = cm->spi->g->step;
+  Kokkos::Random_XorShift64_Pool<> rp(step);
 
   //Kokkos::RangePolicy< Kokkos::Schedule<Kokkos::Dynamic>, Kokkos::OpenMP> nv_policy_dynamic(v_min, v_max);
   Kokkos::RangePolicy<> nv_policy(v_min, v_max);
@@ -247,7 +248,7 @@ takizuka_abe_pipeline_scalar_kokkos(
       //_RNG::KokkosRNG rp;
       //auto rg = rp.rand_pool.get_state();
 
-      Kokkos::Random_XorShift64<Kokkos::Cuda> rg = rp.get_state();
+      Kokkos::Random_XorShift64<Kokkos::DefaultExecutionSpace> rg = rp.get_state();
 
     //Kokkos::Experimental::UniqueToken<
         //Kokkos::HostSpace, Kokkos::Experimental::UniqueTokenScope::Global>

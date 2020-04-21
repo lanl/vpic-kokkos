@@ -281,9 +281,20 @@ sp_[id]->
       local_pm->i     = p_index;
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
-      if( move_p_kokkos( k_particles, k_particles_i, local_pm,
-                         k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
-        if( k_nm(0)<max_nm ) {
+      if( move_p_kokkos(
+                  k_particles,
+                  k_particles_i,
+                  local_pm,
+                  k_accumulators_sa,
+                  g,
+                  k_neighbors,
+                  rangel,
+                  rangeh,
+                  qsp
+          ) ) // Unlikely
+      {
+        if( k_nm(0)<max_nm )
+        {
           const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
           if (nm >= max_nm) Kokkos::abort("overran max_nm");
 
