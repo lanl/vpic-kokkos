@@ -57,7 +57,6 @@ option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 set(KOKKOS_ARCH "Power9;Volta70" CACHE STRING "Architecture to use with Kokkos")
 
 add_definitions(-DUSE_KOKKOS)
-set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
 ##### SET RNG POLICY #####
 
@@ -85,12 +84,6 @@ endif()
 #------------------------------------------------------------------------------#
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
-
-set(VPIC_CPPFLAGS)
-if(MPI_CPPFLAGS)
-  string(REPLACE ";" " " string_cppflags "${MPI_CPPFLAGS}")
-  set(VPIC_CPPFLAGS "${string_cppflags}")
-endif(MPI_CPPFLAGS)
 
 string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
 if(NOT ${string_includes} STREQUAL "")
@@ -283,6 +276,13 @@ endif(ENABLE_COVERAGE_BUILD)
 # local built exe wrapper, and has example deck/platform.
 configure_file(${CMAKE_SOURCE_DIR}/sample/Makefile.run.in
   ${CMAKE_BINARY_DIR}/bin/Makefile.run)
+
+# Append all defines to VPIC_DEFINES, so it can be seen during input deck building
+get_directory_property(ALL_DEFINES DIRECTORY ${CMAKE_SOURCE_DIR} COMPILE_DEFINITIONS)
+foreach(d ${ALL_DEFINES})
+      set(VPIC_DEFINES "${VPIC_DEFINES} -D${d}")
+endforeach()
+message("${VPIC_DEFINES}")
 
 # install script
 configure_file(${CMAKE_SOURCE_DIR}/bin/vpic.in
