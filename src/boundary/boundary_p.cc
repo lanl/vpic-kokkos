@@ -188,10 +188,14 @@ boundary_p_kokkos(
     }
     n_ci = 0;
 
+    // If the boundary absorbs a particle, we will have outdated fields on the
+    // device, and need to update them
+    int absorbed = 0;
+
     // For each species, load the movers
     LIST_FOR_EACH( sp, sp_list )
     {
-        auto& particle_send = sp->k_pc_i_h;
+        const auto& particle_send = sp->k_pc_i_h;
 
         //const float   sp_q  = sp->q;
         const int32_t sp_id = sp->id;
@@ -236,12 +240,43 @@ boundary_p_kokkos(
 
             // TODO: Allow for absorbing boundaries
             // Absorb
-            if( nn==absorb_particles ) {
+            if( nn==absorb_particles )
+            {
+                if (absorbed == 0)
+                {
+                    // TODO: sync device to host if this is the first time
+                    absorbed = 1;
+                }
+
                 // Ideally, we would batch all rhob accumulations together
                 // for efficiency
-                Kokkos::abort("Not implemented yet");
+                // Kokkos::abort("Not implemented yet");
+
+                // TODO: We could detect this on the GPU side and process is there instead
+                  // Not doing that costs us data copies in the fields
+                int i = pm->i;
+                std::cout << "Dropping " << i << std::endl;
+                //field_t * RESTRICT ALIGNED(128) f = fa->f;
+                //particle_t * RESTRICT ALIGNED(128) p0 = sp->p;
+                //const float   sp_q  = sp->q;
+                const auto& kfield_h = fa->k_f_h;
+                const auto& kparticle_move_h = sp->k_pc_h;
+                const auto& kparticle_move_i_h = sp->k_pc_i_h;
+
+                float qsp = sp->q;
+
+                k_accumulate_rhob_single_cpu(
+                        kfield_h,
+                        kparticle_move_h,
+                        kparticle_move_i_h,
+                        copy_index,
+                        g,
+                        qsp
+                );
                 //accumulate_rhob( f, p0+i, g, sp_q );
-                //goto backfill;
+
+                // No need to backfill, as the removed the particle already
+                // goto backfill;
                 continue;
             }
 
@@ -251,12 +286,10 @@ boundary_p_kokkos(
                 pi = &pi_send[face][n_send[face]++];
 
                 //pi->dx=p0[i].dx;
-                //pi->dy=p0[i].dy;
                 //pi->dz=p0[i].dz;
                 pi->dx = sp->k_pc_h(copy_index, particle_var::dx);
                 pi->dy = sp->k_pc_h(copy_index, particle_var::dy);
                 pi->dz = sp->k_pc_h(copy_index, particle_var::dz);
-
 
                 pi->i = nn - range[face];
 
