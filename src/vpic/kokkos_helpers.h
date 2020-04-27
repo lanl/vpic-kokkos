@@ -45,12 +45,12 @@ typedef float float_t;
 //typedef __half mixed_t;
 #ifdef __CUDA_ARCH__
 #define pos_t __half
-#define mom_t __half
-#define mixed_t __half
+#define mom_t float
+#define mixed_t float
 #else
 #define pos_t half
-#define mom_t half
-#define mixed_t half
+#define mom_t float
+#define mixed_t float
 #endif
 
 class k_particles_struct {

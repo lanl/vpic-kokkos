@@ -962,6 +962,7 @@ sp_counter ++;
   Kokkos::Profiling::popRegion();
 #endif
 #endif
+//  dump_partloc("particle_location.txt", 1);
 
 #ifdef VPIC_ENABLE_PAPI
 //Kokkos::Profiling::popRegion();
