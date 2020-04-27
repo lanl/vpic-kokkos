@@ -911,10 +911,15 @@
 //  });
 //
 ////  Kokkos::LaunchBounds<MaxThreadsPerBlock, MinBlocksPerSM>
-////  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
-//  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy <Kokkos::LaunchBounds<128,4> > (0, np),
+//  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
+////  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy <Kokkos::LaunchBounds<128,16> > (0, np),
 //    KOKKOS_LAMBDA (size_t p_index)
 //    {
+////if(p_index == 0) {
+////#ifdef __CUDA_ARCH__
+////printf("grid (x,y,z): (%d,%d,%d), block (x,y,z): (%d,%d,%d)\n", gridDim.x, gridDim.y, gridDim.z, blockDim.x, blockDim.y, blockDim.z);
+////#endif
+////}
 //
 //    auto  k_accumulators_scatter_access = k_accumulators_sa.access();
 //    mixed_t v0, v1, v2, v3, v4, v5;
@@ -1320,15 +1325,35 @@ sp_[id]->
 //  int num_threads = 32;
 //  int num_leagues = np/num_threads;
 //  int per_league = np/num_leagues;
-  int num_leagues = 120;
-  int per_league = np/num_leagues + 1;
-//  if(num_leagues*per_league < np)
-//    per_league++;
-//  int per_thread = (per_league/num_threads) + 1;
-  Kokkos::parallel_for("advance_p", Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>(num_leagues, Kokkos::AUTO()), 
-  KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, per_league), [=] (size_t pindex) {
-      int p_index = team_member.league_rank()*per_league + pindex;
+  int num_leagues = 2048;
+  int num_threads = 1024;
+  int per_league = np/num_leagues;
+  if(np%num_leagues > 0)
+    per_league++;
+//  int per_thread = per_league/num_threads;
+
+  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
+    KOKKOS_LAMBDA (size_t p_index)
+    {
+
+//  Kokkos::parallel_for("advance_p", Kokkos::TeamPolicy<Kokkos::LaunchBounds<1024,2>>(num_leagues, num_threads, 1), 
+
+//  Kokkos::parallel_for("advance_p", Kokkos::TeamPolicy<>(num_leagues, 32, 32), 
+//  KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
+//    int x_idx = team_member.league_rank();
+//    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, per_league/32), [=] (size_t y_idx) {
+//    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, 32), [=] (size_t z_idx) {
+//      int p_index = x_idx*per_league + y_idx*32 + z_idx;
+
+//  Kokkos::parallel_for("advance_p", Kokkos::TeamPolicy<>(num_leagues, num_threads, 1), 
+//  KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
+//    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, per_league), [=] (size_t pindex) {
+//      int p_index = team_member.league_rank()*per_league + pindex;
+
+//  Kokkos::parallel_for("advance_p", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0},{per_league, num_leagues}), 
+//    KOKKOS_LAMBDA(const int y_idx, const int x_idx) {
+//      int p_index = x_idx*per_league + y_idx;
+
 //    int x_index = team_member.league_rank();
 //    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, per_thread), [=] (size_t y_idx) {
 //      int y_index = y_idx;
@@ -1338,7 +1363,7 @@ sp_[id]->
 
 //#ifdef __CUDA_ARCH__
 ////if(x_index == 0 && y_index == 0 && z_index == 0)
-//if(team_member.league_rank() == 0 && pindex == 0)
+//if(p_index == 0)
 //printf("grid (x,y,z): (%d,%d,%d), block (x,y,z): (%d,%d,%d)\n", gridDim.x, gridDim.y, gridDim.z, blockDim.x, blockDim.y, blockDim.z);
 //#endif
       auto  k_accumulators_scatter_access = k_accumulators_sa.access();
@@ -1544,222 +1569,9 @@ sp_[id]->
         }
       }
 //    });
-    });
+//    });
   });
 
-//  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
-//    KOKKOS_LAMBDA (size_t p_index)
-//    {
-//
-//    auto  k_accumulators_scatter_access = k_accumulators_sa.access();
-//    mixed_t v0, v1, v2, v3, v4, v5;
-//
-//    mixed_t dx = p_dx; // Load position
-//    mixed_t dy = p_dy;
-//    mixed_t dz = p_dz;
-//    int   ii   = pii;
-//
-//    mixed_t hax  = qdt_2mc_h*( (mixed_t(f_ex)    + dy*mixed_t(f_dexdy)) +
-//                            dz*(mixed_t(f_dexdz) + dy*mixed_t(f_d2exdydz)) );
-//    mixed_t hay  = qdt_2mc_h*( (mixed_t(f_ey)    + dz*mixed_t(f_deydz)) +
-//                            dx*(mixed_t(f_deydx) + dz*mixed_t(f_d2eydzdx)) );
-//    mixed_t haz  = qdt_2mc_h*( (mixed_t(f_ez)    + dx*mixed_t(f_dezdx)) +
-//                            dy*(mixed_t(f_dezdy) + dx*mixed_t(f_d2ezdxdy)) );
-////    mixed_t hax  = qdt_2mc_h*fma(dz, fma(dy, f_d2exdydz_h, f_dexdz_h), fma(dy, f_dexdy_h, f_ex_h));
-////    mixed_t hay  = qdt_2mc_h*fma(dx, fma(dz, f_d2eydzdx_h, f_deydx_h), fma(dz, f_deydz_h, f_ey_h));
-////    mixed_t haz  = qdt_2mc_h*fma(dy, fma(dx, f_d2ezdxdy_h, f_dezdy_h), fma(dx, f_dezdx_h, f_ez_h));
-//
-//    mixed_t cbx  = mixed_t(f_cbx) + dx*mixed_t(f_dcbxdx);             // Interpolate B
-//    mixed_t cby  = mixed_t(f_cby) + dy*mixed_t(f_dcbydy);
-//    mixed_t cbz  = mixed_t(f_cbz) + dz*mixed_t(f_dcbzdz);
-////    mixed_t cbx  = fma(dx, f_dcbxdx_h, f_cbx_h);             // Interpolate B
-////    mixed_t cby  = fma(dy, f_dcbydy_h, f_cby_h);
-////    mixed_t cbz  = fma(dz, f_dcbzdz_h, f_cbz_h);
-//
-//    mixed_t ux   = p_ux;                             // Load momentum
-//    mixed_t uy   = p_uy;
-//    mixed_t uz   = p_uz;
-//    mixed_t q    = static_cast<mixed_t>(p_w);
-//
-//    ux  += hax;                               // Half advance E
-//    uy  += hay;
-//    uz  += haz;
-//    v0   = qdt_2mc_h/sqrt(one + (ux*ux + (uy*uy + uz*uz)));
-//    v1   = cbx*cbx + (cby*cby + cbz*cbz);
-//    v2   = ( v0*v0 ) * v1;
-//    v3   = v0*(mixed_t(one)+v2*(mixed_t(one_third)+v2*mixed_t(two_fifteenths)));
-////    v3   = v0*(fma(v2, fma(v2, two_fifteenths, one_third), 1));
-//    v4   = v3/(mixed_t(one)+v1*(v3*v3));
-////    v4   = v3/(fma((v3*v3), v1, one));
-//    v4  += v4;
-//
-//    v0   = ux + v3*( uy*cbz - uz*cby );       // Boris - uprime
-//    v1   = uy + v3*( uz*cbx - ux*cbz );
-//    v2   = uz + v3*( ux*cby - uy*cbx );
-//
-//    ux  += v4*( v1*cbz - v2*cby );            // Boris - rotation
-//    uy  += v4*( v2*cbx - v0*cbz );
-//    uz  += v4*( v0*cby - v1*cbx );
-//
-//    ux  += hax;                               // Half advance E
-//    uy  += hay;
-//    uz  += haz;
-//
-//    p_ux = ux;                               // Store momentum
-//    p_uy = uy;
-//    p_uz = uz;
-//    v0   = one/sqrt(one + (ux*ux+ (uy*uy + uz*uz)));
-//    ux  *= cdt_dx_h;
-//    uy  *= cdt_dy_h;
-//    uz  *= cdt_dz_h;
-//
-//    /**/                                      // Get norm displacement
-//    ux  *= v0;
-//    uy  *= v0;
-//    uz  *= v0;
-//
-//    v0   = dx + ux;                           // Streak midpoint (inbnds)
-//    v1   = dy + uy;
-//    v2   = dz + uz;
-//
-//    v3   = v0 + ux;                           // New position
-//    v4   = v1 + uy;
-//    v5   = v2 + uz;
-//
-//    if(  v3<=mixed_t(one) &&  v4<=mixed_t(one) &&  v5<=mixed_t(one) &&   // Check if inbnds
-//        -v3<=mixed_t(one) && -v4<=mixed_t(one) && -v5<=mixed_t(one) ) {
-//
-//      // Common case (inbnds).  Note: accumulator values are 4 times
-//      // the total physical charge that passed through the appropriate
-//      // current quadrant in a time-step
-//
-//      q *= qsp_h;
-//      p_dx = v3;                             // Store new position
-//      p_dy = v4;
-//      p_dz = v5;
-//      dx = v0;                                // Streak midpoint
-//      dy = v1;
-//      dz = v2;
-//      v5 = q*ux*uy*uz*one_third;              // Compute correction
-//
-//#     define ACCUMULATE_J(X,Y,Z)                                 \
-//      v4  = q*u##X;   /* v2 = q ux                            */        \
-//      v1  = v4*d##Y;  /* v1 = q ux dy                         */        \
-//      v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        \
-//      v1 += v4;       /* v1 = q ux (1+dy)                     */        \
-//      v4  = one+d##Z; /* v4 = 1+dz                            */        \
-//      v2  = v0*v4;    /* v2 = q ux (1-dy)(1+dz)               */        \
-//      v3  = v1*v4;    /* v3 = q ux (1+dy)(1+dz)               */        \
-//      v4  = one-d##Z; /* v4 = 1-dz                            */        \
-//      v0 *= v4;       /* v0 = q ux (1-dy)(1-dz)               */        \
-//      v1 *= v4;       /* v1 = q ux (1+dy)(1-dz)               */        \
-//      v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
-//      v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
-//      v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-//      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
-//
-//      ACCUMULATE_J( x,y,z );
-////      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-////      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-////      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-////      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
-////      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jx, 0), static_cast<float>(v0));
-////      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jx, 1), static_cast<float>(v1));
-////      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jx, 2), static_cast<float>(v2));
-////      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jx, 3), static_cast<float>(v3));
-////      atomic_add(&(k_accumulator(ii, accumulator_var::jx, 0)), static_cast<float>(v0));
-////      atomic_add(&(k_accumulator(ii, accumulator_var::jx, 1)), static_cast<float>(v1));
-////      atomic_add(&(k_accumulator(ii, accumulator_var::jx, 2)), static_cast<float>(v2));
-////      atomic_add(&(k_accumulator(ii, accumulator_var::jx, 3)), static_cast<float>(v3));
-//      k_accumulator(ii, accumulator_var::jx, 0) += static_cast<float>(v0);
-//      k_accumulator(ii, accumulator_var::jx, 1) += static_cast<float>(v1);
-//      k_accumulator(ii, accumulator_var::jx, 2) += static_cast<float>(v2);
-//      k_accumulator(ii, accumulator_var::jx, 3) += static_cast<float>(v3);
-//
-//      ACCUMULATE_J( y,z,x );
-////      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-////      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-////      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-////      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
-////      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jy, 0), static_cast<float>(v0));
-////      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jy, 1), static_cast<float>(v1));
-////      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jy, 2), static_cast<float>(v2));
-////      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jy, 3), static_cast<float>(v3));
-////      atomic_add(&(k_accumulator(ii, accumulator_var::jy, 0)), static_cast<float>(v0));
-////      atomic_add(&(k_accumulator(ii, accumulator_var::jy, 1)), static_cast<float>(v1));
-////      atomic_add(&(k_accumulator(ii, accumulator_var::jy, 2)), static_cast<float>(v2));
-////      atomic_add(&(k_accumulator(ii, accumulator_var::jy, 3)), static_cast<float>(v3));
-//      k_accumulator(ii, accumulator_var::jy, 0) += static_cast<float>(v0);
-//      k_accumulator(ii, accumulator_var::jy, 1) += static_cast<float>(v1);
-//      k_accumulator(ii, accumulator_var::jy, 2) += static_cast<float>(v2);
-//      k_accumulator(ii, accumulator_var::jy, 3) += static_cast<float>(v3);
-//
-//      ACCUMULATE_J( z,x,y );
-////      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-////      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-////      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-////      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
-////      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jz, 0), static_cast<float>(v0));
-////      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jz, 1), static_cast<float>(v1));
-////      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jz, 2), static_cast<float>(v2));
-////      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jz, 3), static_cast<float>(v3));
-////      atomic_add(&(k_accumulator(ii, accumulator_var::jz, 0)), static_cast<float>(v0));
-////      atomic_add(&(k_accumulator(ii, accumulator_var::jz, 1)), static_cast<float>(v1));
-////      atomic_add(&(k_accumulator(ii, accumulator_var::jz, 2)), static_cast<float>(v2));
-////      atomic_add(&(k_accumulator(ii, accumulator_var::jz, 3)), static_cast<float>(v3));
-//      k_accumulator(ii, accumulator_var::jz, 0) += static_cast<float>(v0);
-//      k_accumulator(ii, accumulator_var::jz, 1) += static_cast<float>(v1);
-//      k_accumulator(ii, accumulator_var::jz, 2) += static_cast<float>(v2);
-//      k_accumulator(ii, accumulator_var::jz, 3) += static_cast<float>(v3);
-//
-//#     undef ACCUMULATE_J
-//
-//    } 
-//    else
-//    {                                    // Unlikely
-//
-//      k_particle_mover_t local_pm[1];
-//      local_pm->dispx = ux;
-//      local_pm->dispy = uy;
-//      local_pm->dispz = uz;
-//      local_pm->i     = p_index;
-//
-//      //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
-//      if( move_p_kokkos(k_part, local_pm,
-//                         k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
-//        if( k_nm(0)<max_nm ) {
-//          const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
-//          if (nm >= max_nm) Kokkos::abort("overran max_nm");
-//
-//          k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
-//          k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
-//          k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
-//          k_particle_movers_i(nm)   = local_pm->i;
-//
-//          // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-//          k_particle_copy.dx(nm) = k_part.dx(p_index);
-//          k_particle_copy.dy(nm) = k_part.dy(p_index);
-//          k_particle_copy.dz(nm) = k_part.dz(p_index);
-//          k_particle_copy.ux(nm) = k_part.ux(p_index);
-//          k_particle_copy.uy(nm) = k_part.uy(p_index);
-//          k_particle_copy.uz(nm) = k_part.uz(p_index);
-//          k_particle_copy.w(nm) = k_part.w(p_index);
-//          k_particle_copy.i(nm) = k_part.i(p_index);
-//
-//          // Tag this one as having left
-//          //k_particles(p_index, particle_var::pi) = 999999;
-//
-//          // Copy local local_pm back
-//          //local_pm_dispx = local_pm->dispx;
-//          //local_pm_dispy = local_pm->dispy;
-//          //local_pm_dispz = local_pm->dispz;
-//          //local_pm_i = local_pm->i;
-//          //printf("rank copying %d to nm %d \n", local_pm_i, nm);
-//          //copy_local_to_pm(nm);
-//        }
-//      }
-//    }
-//  });
   // TODO: abstract this manual data copy
   //Kokkos::deep_copy(h_nm, k_nm);
 

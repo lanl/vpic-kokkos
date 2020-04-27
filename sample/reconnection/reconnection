@@ -360,13 +360,13 @@ begin_initialization {
   //int restart_interval = 100;
   int energies_interval = 100;
   //int interval = int(5.0/(wci*dt)); 
-  int interval = 10;
+  int interval = 100000;
   int fields_interval = interval;
   int ehydro_interval = interval;
   int Hhydro_interval = interval;
   int eparticle_interval = 200000*interval;
   int Hparticle_interval = 200000*interval;
-  int quota_check_interval     = 100;
+  int quota_check_interval     = 10000000;
 
   // Determine which domains area along the boundaries - Use macro from
   // grid/partition.c
@@ -391,7 +391,7 @@ begin_initialization {
   // Setup high level simulation parameters
   //num_step             = int(taui/(wci*dt));
   num_step             = 1000;
-  status_interval      = 200;
+  status_interval      = 20000000;
   sync_shared_interval = status_interval/2;
   clean_div_e_interval = status_interval/2;
   clean_div_b_interval = status_interval/2;
