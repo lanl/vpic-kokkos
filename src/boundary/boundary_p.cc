@@ -250,7 +250,7 @@ boundary_p_kokkos(
 
                 // Ideally, we would batch all rhob accumulations together
                 // for efficiency
-                // Kokkos::abort("Not implemented yet");
+                //Kokkos::abort("Not implemented yet");
 
                 // TODO: We could detect this on the GPU side and process is there instead
                   // Not doing that costs us data copies in the fields
