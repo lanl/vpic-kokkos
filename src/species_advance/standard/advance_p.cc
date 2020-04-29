@@ -148,9 +148,20 @@ sp_[id]->
   });
 
 
-  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
-    KOKKOS_LAMBDA (size_t p_index)
-    {
+//  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
+//    KOKKOS_LAMBDA (size_t p_index)
+//    {
+  int num_leagues = 2048;
+  int num_threads = 1024;
+  int per_league = np/num_leagues;
+  if(np%num_leagues > 0)
+    per_league++;
+  Kokkos::parallel_for("advance_p", Kokkos::TeamPolicy<>(num_leagues, num_threads, 1), 
+  KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, per_league), [=] (size_t pindex) {
+      int p_index = team_member.league_rank()*per_league + pindex;
+      if(p_index < np) {
+      
 //for(int p_index=0; p_index<np; p_index++) {
     float v0, v1, v2, v3, v4, v5;
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
@@ -315,7 +326,8 @@ sp_[id]->
         }
       }
     }
-//}
+  }
+  });
   });
 
 
