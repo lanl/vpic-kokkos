@@ -24,6 +24,9 @@ the above approach can be quite brittle when changing compile flags
 between builds because Kokkos doesn't treat CMake as a first class
 citizen (set to change in early 2020)
 
+A reminder to GPU users, CUDA 10.2 does not support GCC 8 or newer. We
+recommend you use GCC 6 or 7.
+
 ### Manual Kokkos Install (more powerful, more effort)
 
 It is typical to maintain many different installs of Kokkos (CPU, older
