@@ -179,7 +179,7 @@ class KokkosRNG
         //////////// uint
 
         /**
-         * @brief Generate a random int between (0..max]
+         * @brief Generate a random int between [0..max)
          *
          * @param max The max for the range
          *
@@ -196,7 +196,7 @@ class KokkosRNG
         /**
          * @brief Pass-through helper to strip off the interface-only arg rng_t
          *
-         * Generate a random int between (0..max]
+         * Generate a random int between [0..max)
          *
          * @param rng_t IGNORED
          * @param max The max for the range
@@ -212,7 +212,7 @@ class KokkosRNG
          * @brief Advanced uint generator where the caller holds the state
          * variable for the generator.
          *
-         * Generate a random int between (0..max]
+         * Generate a random int between [0..max)
          *
          * @param generator The generated state to pass in
          * @param max The max for the range

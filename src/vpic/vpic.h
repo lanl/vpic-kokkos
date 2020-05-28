@@ -638,6 +638,8 @@ public:
     //return mu + sigma*drandn( rng );
     return rng_policy.normal(rng, mu, sigma);
   }
+
+  // Generate a random int between [0..max)
   inline unsigned int random_uint( rng_t* rng, unsigned int max ) {
     return rng_policy.uint(rng, max);
   }
