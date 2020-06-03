@@ -108,6 +108,6 @@ vpic_simulation::~vpic_simulation() {
   delete_grid( grid );
   delete_rng_pool( sync_entropy );
   delete_rng_pool( entropy );
+  delete_collision_op_list( collision_op_list );
   Kokkos::finalize();
 }
-

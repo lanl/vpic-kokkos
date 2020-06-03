@@ -12,7 +12,6 @@
 #include "../particle_operations/compress.h"
 #include "../particle_operations/sort.h"
 #include <Kokkos_Sort.hpp>
-#include "../collision/kokkos/takizuka_abe.h"
 
 #define FAK field_array->kernel
 
@@ -40,7 +39,9 @@ int vpic_simulation::advance(void) {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
           //TIC sort_p( sp ); TOC( sort_p, 1 );
           //sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na, step() );
-          sorter.sort( sp, accumulator_array->na, step() );
+          // NOTE: aa->na is at leasy 2x larger than g->nv and leads to poor
+          //       memory usage in kokkos sort.
+          sorter.sort( sp );
       }
   }
 
@@ -66,13 +67,10 @@ int vpic_simulation::advance(void) {
   // yields a first order accurate Trotter factorization (not a second
   // order accurate factorization).
 
-  if( have_ta_collisions() )
-  {
-      //Kokkos::abort("Collision is not supported");
-      KOKKOS_TIC();
-      //apply_collision_op_list( collision_op_list );
-      apply_ta_collisions();
-      KOKKOS_TOC( collision_model, 1 );
+  if( collision_op_list ) {
+    KOKKOS_TIC();
+    apply_collision_op_list( collision_op_list, *kokkos_rng );
+    KOKKOS_TOC( collision_model, 1 );
   }
 
   TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
@@ -419,7 +417,7 @@ int vpic_simulation::advance(void) {
 //  KOKKOS_TIC();
 //  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
 //  KOKKOS_TOC( FIELD_DATA_MOVEMENT, 1);
-  
+
   // At this point, the particle currents are known at jf_{1/2}.
   // Let the user add their own current contributions. It is the users
   // responsibility to insure injected currents are consistent across domains.
@@ -456,7 +454,7 @@ int vpic_simulation::advance(void) {
 //  KOKKOS_TOC( FIELD_DATA_MOVEMENT, 1);
 
   // Advance the electric field from E_0 to E_1
-  
+
 // HOST (Device in nphtan branch)
 // Touches fields
 //  TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
@@ -693,4 +691,3 @@ int vpic_simulation::advance(void) {
 
   return 1;
 }
-
