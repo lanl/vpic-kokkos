@@ -46,7 +46,7 @@ option(USE_V4_SSE "Enable V4 SSE" OFF)
 
 option(ENABLE_OPENSSL "Enable OpenSSL support for checksums" OFF)
 
-option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" OFF)
+option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" ON)
 
 option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 
@@ -171,7 +171,7 @@ set(Kokkos_ENABLE_PROFILING OFF) # NO libDL => no profiling
 
 if (BUILD_INTERNAL_KOKKOS)
   message("Building our own kokkos..")
-  add_subdirectory(kokkos kokkos_build)
+  add_subdirectory(kokkos)
   set(Kokkos_ENABLE_LIBDL OFF)
   set(Kokkos_ENABLE_PROFILING OFF) # NO libDL => no profiling
   #include_directories(${Kokkos_INCLUDE_DIRS_RET})
