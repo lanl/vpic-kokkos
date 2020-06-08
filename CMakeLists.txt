@@ -389,7 +389,7 @@ macro(build_a_vpic name deck)
     message(FATAL_ERROR "Could not find deck '${deck}'")
   endif()
   add_executable(${name} ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc ${VPIC_SRC})
-  target_link_libraries(${name} vpic)
+  target_link_libraries(${name} vpic Kokkos::kokkos)
   target_compile_definitions(${name} PRIVATE INPUT_DECK=${deck})
 endmacro(build_a_vpic)
 
@@ -431,7 +431,7 @@ if(ENABLE_UNIT_TESTS)
 
   # RNG tests
   add_executable(rng src/util/rng/test/rng.cc)
-  target_link_libraries(rng vpic)
+  target_link_libraries(rng vpic Kokkos::kokkos)
   get_target_property(OUT rng LINK_LIBRARIES)
   message(STATUS OUT ${OUT})
 
