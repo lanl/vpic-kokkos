@@ -4,6 +4,7 @@
 #------------------------------------------------------------------------------#
 
 cmake_minimum_required(VERSION 3.9)
+cmake_policy(SET CMP0074 NEW)
 
 #~----------------------------------------------------------------------------~#
 # VPIC project configuration
@@ -53,8 +54,6 @@ option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
-
-#set(KOKKOS_ARCH "Power9;Volta70" CACHE STRING "Architecture to use with Kokkos")
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -124,6 +123,8 @@ endif(VPIC_KOKKOS_DEBUG)
 
 set(Kokkos_ENABLE_EXPLICIT_INSTANTIATION OFF)
 
+set(Kokkos_ENABLE_SERIAL ON CACHE BOOL "Default allow serial execution")
+
 if(ENABLE_KOKKOS_OPENMP)
   if (OPENMP_FOUND)
     set(Kokkos_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
@@ -137,13 +138,8 @@ if(ENABLE_KOKKOS_CUDA)
   if (CUDA_FOUND)
     add_definitions(-DENABLE_KOKKOS_CUDA)
     set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
-    set(Kokkos_ENABLE_CUDA_LAMBDA ON)
-    set(Kokkos_ENABLE_CUDA_UVM OFF)
-
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
-
-    #set(KOKKOS_ARCH "Power9;Volta70")
-    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
+    set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "Enable cuda lambda support")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
 
     # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
     # see https://github.com/UoB-HPC/BabelStream/issues/16
@@ -178,7 +174,8 @@ if (BUILD_INTERNAL_KOKKOS)
   #set(KOKKOS_INCLUDE_DIRS ${Kokkos_INCLUDE_DIRS_RET})
 else()
   # CONSIDER ADDING --expt-extended-lambda
-  find_package(KOKKOS REQUIRED)
+#  find_package(KOKKOS REQUIRED)
+  find_package(Kokkos REQUIRED)
 
   #get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INTERFACE_INCLUDE_DIRECTORIES)
   #get_target_property(KOKKOS_LIB_DIR Kokkos::kokkos INTERFACE_LINK_LIBRARIES)
