@@ -941,8 +941,8 @@ begin_initialization {
 
   int ele_sort_freq       = 20*2; 
   int ion_sort_freq       = 5*ele_sort_freq; 
-//  int ele_sort_freq       = 10000000; 
-//  int ion_sort_freq       = 10000000; 
+//  int ele_sort_freq       = 1; 
+//  int ion_sort_freq       = 1; 
 
   double quota = 11.7;            // Run quota in hours.  
   double quota_sec = quota*3600;  // Run quota in seconds. 

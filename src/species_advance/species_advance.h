@@ -297,6 +297,278 @@ move_p( particle_t       * ALIGNED(128) p0,    // Particle array
         const grid_t     *              g,     // Grid parameters
         const float                     qsp ); // Species particle charge
 
+template<class particle_soa_view_t, class neighbor_view_t>
+int
+KOKKOS_INLINE_FUNCTION
+move_p_kokkos(
+    const particle_soa_view_t& k_part,
+    k_particle_mover_t* pm,
+    k_accumulators_t k_accumulator,
+    const grid_t* g,
+    neighbor_view_t& d_neighbor,
+    int64_t rangel,
+    int64_t rangeh,
+    const float qsp
+)
+{
+
+  #define p_dx    k_part.dx(pi)
+  #define p_dy    k_part.dy(pi)
+  #define p_dz    k_part.dz(pi)
+  #define p_ux    k_part.ux(pi)
+  #define p_uy    k_part.uy(pi)
+  #define p_uz    k_part.uz(pi)
+  #define p_w     k_part.w(pi)
+  #define pii     k_part.i(pi)
+
+  pos_t s_midx, s_midy, s_midz;
+  pos_t s_dispx, s_dispy, s_dispz;
+  pos_t s_dir[3];
+  pos_t v0, v1, v2, v3, v4, v5, q;
+
+//  float s_midx, s_midy, s_midz;
+//  float s_dispx, s_dispy, s_dispz;
+//  float s_dir[3];
+//  float v0, v1, v2, v3, v4, v5, q;
+  int axis, face;
+  int64_t neighbor;
+  //int pi = int(local_pm_i);
+  int pi = pm->i;
+//  auto k_accumulators_scatter_access = k_accumulators_sa.access();
+  const pos_t one_third = 1.0/3.0;
+
+
+  q = qsp*p_w;
+
+    //printf("in move %d \n", pi);
+
+  for(;;) {
+    int ii = pii;
+    s_midx = p_dx;
+    s_midy = p_dy;
+    s_midz = p_dz;
+
+
+    s_dispx = pm->dispx;
+    s_dispy = pm->dispy;
+    s_dispz = pm->dispz;
+
+    //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
+
+    //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
+
+    s_dir[0] = (s_dispx>static_cast<pos_t>(0)) ? 1 : -1;
+    s_dir[1] = (s_dispy>static_cast<pos_t>(0)) ? 1 : -1;
+    s_dir[2] = (s_dispz>static_cast<pos_t>(0)) ? 1 : -1;
+
+    // Compute the twice the fractional distance to each potential
+    // streak/cell face intersection.
+    v0 = (s_dispx==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[0]-s_midx)/s_dispx;
+    v1 = (s_dispy==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[1]-s_midy)/s_dispy;
+    v2 = (s_dispz==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[2]-s_midz)/s_dispz;
+
+    // Determine the fractional length and axis of current streak. The
+    // streak ends on either the first face intersected by the
+    // particle track or at the end of the particle track.
+    //
+    //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
+    //   axis 3        ... streak ends at end of the particle track
+    /**/      v3=2,  axis=3;
+    if(v0<v3) v3=v0, axis=0;
+    if(v1<v3) v3=v1, axis=1;
+    if(v2<v3) v3=v2, axis=2;
+    v3 *= 0.5;
+
+    // Compute the midpoint and the normalized displacement of the streak
+    s_dispx *= v3;
+    s_dispy *= v3;
+    s_dispz *= v3;
+    s_midx += s_dispx;
+    s_midy += s_dispy;
+    s_midz += s_dispz;
+
+    // Accumulate the streak.  Note: accumulator values are 4 times
+    // the total physical charge that passed through the appropriate
+    // current quadrant in a time-step
+//    v5 = q*s_dispx*s_dispy*s_dispz*half(one_third);
+    v5 = q*s_dispx*s_dispy*s_dispz*one_third;
+
+    //a = (float *)(&d_accumulators[ci]);
+
+#   define accumulate_j(X,Y,Z)                                        \
+    v4  = q*s_disp##X;    /* v2 = q ux                            */  \
+    v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
+    v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
+    v1 += v4;             /* v1 = q ux (1+dy)                     */  \
+    v4  = static_cast<pos_t>(1)+s_mid##Z;     /* v4 = 1+dz                            */  \
+    v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
+    v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
+    v4  = static_cast<pos_t>(1)-s_mid##Z;     /* v4 = 1-dz                            */  \
+    v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
+    v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
+    v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
+    v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
+    v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
+    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
+    //Kokkos::atomic_add(&a[0], v0); \
+    //Kokkos::atomic_add(&a[1], v1); \
+    //Kokkos::atomic_add(&a[2], v2); \
+    //Kokkos::atomic_add(&a[3], v3);
+
+    accumulate_j(x,y,z);
+//    k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+//    k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+//    k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+//    k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+    Kokkos::atomic_add(&(k_accumulator(ii, accumulator_var::jx, 0)), static_cast<float>(v0));
+    Kokkos::atomic_add(&(k_accumulator(ii, accumulator_var::jx, 1)), static_cast<float>(v1));
+    Kokkos::atomic_add(&(k_accumulator(ii, accumulator_var::jx, 2)), static_cast<float>(v2));
+    Kokkos::atomic_add(&(k_accumulator(ii, accumulator_var::jx, 3)), static_cast<float>(v3));
+//    k_accumulator(ii, accumulator_var::jx, 0) += static_cast<float>(v0);
+//    k_accumulator(ii, accumulator_var::jx, 1) += static_cast<float>(v1);
+//    k_accumulator(ii, accumulator_var::jx, 2) += static_cast<float>(v2);
+//    k_accumulator(ii, accumulator_var::jx, 3) += static_cast<float>(v3);
+
+    accumulate_j(y,z,x);
+//    k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+//    k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+//    k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+//    k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+    Kokkos::atomic_add(&(k_accumulator(ii, accumulator_var::jy, 0)), static_cast<float>(v0));
+    Kokkos::atomic_add(&(k_accumulator(ii, accumulator_var::jy, 1)), static_cast<float>(v1));
+    Kokkos::atomic_add(&(k_accumulator(ii, accumulator_var::jy, 2)), static_cast<float>(v2));
+    Kokkos::atomic_add(&(k_accumulator(ii, accumulator_var::jy, 3)), static_cast<float>(v3));
+//    k_accumulator(ii, accumulator_var::jy, 0) += static_cast<float>(v0);
+//    k_accumulator(ii, accumulator_var::jy, 1) += static_cast<float>(v1);
+//    k_accumulator(ii, accumulator_var::jy, 2) += static_cast<float>(v2);
+//    k_accumulator(ii, accumulator_var::jy, 3) += static_cast<float>(v3);
+
+    accumulate_j(z,x,y);
+//    k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+//    k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+//    k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+//    k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+    Kokkos::atomic_add(&(k_accumulator(ii, accumulator_var::jz, 0)), static_cast<float>(v0));
+    Kokkos::atomic_add(&(k_accumulator(ii, accumulator_var::jz, 1)), static_cast<float>(v1));
+    Kokkos::atomic_add(&(k_accumulator(ii, accumulator_var::jz, 2)), static_cast<float>(v2));
+    Kokkos::atomic_add(&(k_accumulator(ii, accumulator_var::jz, 3)), static_cast<float>(v3));
+//    k_accumulator(ii, accumulator_var::jz, 0) += static_cast<float>(v0);
+//    k_accumulator(ii, accumulator_var::jz, 1) += static_cast<float>(v1);
+//    k_accumulator(ii, accumulator_var::jz, 2) += static_cast<float>(v2);
+//    k_accumulator(ii, accumulator_var::jz, 3) += static_cast<float>(v3);
+
+//#ifdef __CUDA_ARCH__
+//if(pi < 4096) {
+////  printf("move_p: blockIdx.x: %d,\tthreadIdx.y: %d,\tp_index: %d,\tii: %d\n", blockIdx.x, threadIdx.y,  pi, ii);
+//  printf("p_index: %4d, pii: %6d, blockIdx.x: %6d, threadIdx.y: %4d, move_p\n", pi, pii, blockIdx.x, threadIdx.y);
+//}
+//#endif
+
+#   undef accumulate_j
+
+    // Compute the remaining particle displacment
+    pm->dispx -= s_dispx;
+    pm->dispy -= s_dispy;
+    pm->dispz -= s_dispz;
+
+    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+    // Compute the new particle offset
+    p_dx += s_dispx+s_dispx;
+    p_dy += s_dispy+s_dispy;
+    p_dz += s_dispz+s_dispz;
+
+    // If an end streak, return success (should be ~50% of the time)
+    //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+
+    if( axis==3 ) break;
+
+    // Determine if the particle crossed into a local cell or if it
+    // hit a boundary and convert the coordinate system accordingly.
+    // Note: Crossing into a local cell should happen ~50% of the
+    // time; hitting a boundary is usually a rare event.  Note: the
+    // entry / exit coordinate for the particle is guaranteed to be
+    // +/-1 _exactly_ for the particle.
+
+    v0 = s_dir[axis];
+    if(axis == 0) {
+        k_part.dx(pi) = v0; // Avoid roundoff fiascos--put the particle
+    } else if (axis == 1) {
+        k_part.dy(pi) = v0; // Avoid roundoff fiascos--put the particle
+    } else {
+        k_part.dz(pi) = v0; // Avoid roundoff fiascos--put the particle
+    }
+                           // _exactly_ on the boundary.
+    face = axis; if( v0>static_cast<pos_t>(0) ) face += 3;
+
+    // TODO: clean this fixed index to an enum
+    //neighbor = g->neighbor[ 6*ii + face ];
+    neighbor = d_neighbor( 6*ii + face );
+
+    // TODO: these two if statements used to be marked UNLIKELY,
+    // but that intrinsic doesn't work on GPU.
+    // for performance portability, maybe specialize UNLIKELY
+    // for CUDA mode and put it back
+
+
+    if( neighbor==reflect_particles ) {
+      // Hit a reflecting boundary condition.  Reflect the particle
+      // momentum and remaining displacement and keep moving the
+      // particle.
+      if(axis == 0) {
+          k_part.ux(pi) = -k_part.ux(pi); // Avoid roundoff fiascos--put the particle
+      } else if (axis == 1) {
+          k_part.uy(pi) = -k_part.uy(pi); // Avoid roundoff fiascos--put the particle
+      } else {
+          k_part.uz(pi) = -k_part.uz(pi); // Avoid roundoff fiascos--put the particle
+      }
+
+      // TODO: make this safer
+      //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
+      //k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
+      // TODO: replace this, it's horrible
+      (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
+
+
+      continue;
+    }
+
+    if( neighbor<rangel || neighbor>rangeh ) {
+      // Cannot handle the boundary condition here.  Save the updated
+      // particle position, face it hit and update the remaining
+      // displacement in the particle mover.
+      pii = 8*pii + face;
+      return 1; // Return "mover still in use"
+    }
+
+    // Crossed into a normal voxel.  Update the voxel index, convert the
+    // particle coordinate system and keep moving the particle.
+
+    pii = neighbor - rangel;
+    /**/                         // Note: neighbor - rangel < 2^31 / 6
+    if(axis == 0) {
+        k_part.dx(pi) = -v0; // Avoid roundoff fiascos--put the particle
+    } else if (axis == 1) {
+        k_part.dy(pi) = -v0; // Avoid roundoff fiascos--put the particle
+    } else {
+        k_part.dz(pi) = -v0; // Avoid roundoff fiascos--put the particle
+    }
+  }
+  #undef p_dx
+  #undef p_dy
+  #undef p_dz
+  #undef p_ux
+  #undef p_uy
+  #undef p_uz
+  #undef p_w
+  #undef pii
+
+  //#undef local_pm_dispx
+  //#undef local_pm_dispy
+  //#undef local_pm_dispz
+  //#undef local_pm_i
+  return 0; // Return "mover not in use"
+}
+
 template<class particle_soa_view_t, class accumulator_sa_t, class neighbor_view_t>
 int
 KOKKOS_INLINE_FUNCTION
@@ -432,6 +704,13 @@ move_p_kokkos(
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+
+//#ifdef __CUDA_ARCH__
+//if(pi < 4096) {
+////  printf("move_p: blockIdx.x: %d,\tthreadIdx.y: %d,\tp_index: %d,\tii: %d\n", blockIdx.x, threadIdx.y,  pi, ii);
+//  printf("p_index: %4d, pii: %6d, blockIdx.x: %6d, threadIdx.y: %4d, move_p\n", pi, pii, blockIdx.x, threadIdx.y);
+//}
+//#endif
 
 #   undef accumulate_j
 

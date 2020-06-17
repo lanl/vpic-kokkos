@@ -1023,10 +1023,16 @@ public:
               (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) {
               const unsigned int i = team_member.league_rank();
               /* TODO: Do we really need a 2d loop here*/
+//              Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) {
+//                      k_accumulators_h(i, accumulator_var::jx, j)       = accumulator_array->a[i].jx[j];
+//                      k_accumulators_h(i, accumulator_var::jy, j)       = accumulator_array->a[i].jy[j];
+//                      k_accumulators_h(i, accumulator_var::jz, j)       = accumulator_array->a[i].jz[j];
+//                      });
+//              });
               Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) {
-                      k_accumulators_h(i, accumulator_var::jx, j)       = accumulator_array->a[i].jx[j];
-                      k_accumulators_h(i, accumulator_var::jy, j)       = accumulator_array->a[i].jy[j];
-                      k_accumulators_h(i, accumulator_var::jz, j)       = accumulator_array->a[i].jz[j];
+                      k_accumulators_h(i, j, accumulator_var::jx)       = accumulator_array->a[i].jx[j];
+                      k_accumulators_h(i, j, accumulator_var::jy)       = accumulator_array->a[i].jy[j];
+                      k_accumulators_h(i, j, accumulator_var::jz)       = accumulator_array->a[i].jz[j];
                       });
               });
       Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
@@ -1044,10 +1050,16 @@ public:
               (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) {
               const unsigned int i = team_member.league_rank();
 
+//              Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) {
+//                      accumulator_array->a[i].jx[j] = k_accumulators_h(i, accumulator_var::jx, j);
+//                      accumulator_array->a[i].jy[j] = k_accumulators_h(i, accumulator_var::jy, j);
+//                      accumulator_array->a[i].jz[j] = k_accumulators_h(i, accumulator_var::jz, j);
+//                      });
+//              });
               Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) {
-                      accumulator_array->a[i].jx[j] = k_accumulators_h(i, accumulator_var::jx, j);
-                      accumulator_array->a[i].jy[j] = k_accumulators_h(i, accumulator_var::jy, j);
-                      accumulator_array->a[i].jz[j] = k_accumulators_h(i, accumulator_var::jz, j);
+                      accumulator_array->a[i].jx[j] = k_accumulators_h(i, j, accumulator_var::jx);
+                      accumulator_array->a[i].jy[j] = k_accumulators_h(i, j, accumulator_var::jy);
+                      accumulator_array->a[i].jz[j] = k_accumulators_h(i, j, accumulator_var::jz);
                       });
               });
   }

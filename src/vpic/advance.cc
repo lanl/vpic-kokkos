@@ -51,11 +51,27 @@ int vpic_simulation::advance(void) {
       if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
       {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
+//printf("species: %s\n", sp->name);
           //TIC sort_p( sp ); TOC( sort_p, 1 );
 //          sorter.sort( sp->k_p_soa_d, sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
           sorter.sort( sp->k_p_soa_d, sp->np, accumulator_array->na);
+//          sorter.gpu_sort( sp->k_p_soa_d, sp->np, accumulator_array->na);
+//          gpu_memory_access_sort(sp->k_p_soa_d, sp->np, accumulator_array->na);
+//Kokkos::parallel_for("Print cells", Kokkos::RangePolicy<>(0,1), KOKKOS_LAMBDA(const int index) {
+//  for(int i=0; i<1024; i++) {
+//    printf("particle %d, cell index: %d\n", i, sp->k_p_soa_d.i(i));
+//  }
+//});
       }
   }
+//KOKKOS_TIC();
+//KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+//KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+//auto species = species_list;
+//for(int i=0; i<species->np; i++) {
+//  printf("particle: %d, cell: %d\n", i, species->p[i].i);
+//}
+
 
   KOKKOS_TOC( sort_particles, 1);
 //  KOKKOS_TOCN( sort_particles, 1);
@@ -99,7 +115,7 @@ int vpic_simulation::advance(void) {
 
 // DEVICE function
 // Touches particles, particle movers, accumulators, interpolators
-  KOKKOS_TIC();
+//  KOKKOS_TIC();
 
   LIST_FOR_EACH( sp, species_list )
   {
@@ -113,7 +129,7 @@ int vpic_simulation::advance(void) {
   Kokkos::Profiling::popRegion();
 #endif
   }
-  KOKKOS_TOC( advance_p, 1);
+//  KOKKOS_TOC( advance_p, 1);
 //  KOKKOS_TOCN( advance_p, 1);
 
 #ifdef VPIC_ENABLE_PAPI
@@ -1016,12 +1032,38 @@ sp_counter ++;
 //  KOKKOS_TIC(); // Time this data movement
 //  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
 //  dump_partloc("particle_location.txt", 1);
-//  KOKKOS_TOC( user_diagnostics, 1);
   TIC dump_energies("energies.txt", 1); TOC( dump_energies, 1);
+//  KOKKOS_TOC( user_diagnostics, 1);
 //#ifdef VPIC_ENABLE_PAPI
 //  Kokkos::Profiling::popRegion();
 //#endif
 //#endif
+
+//auto team_policy = Kokkos::TeamPolicy<>(64, 32);
+//Kokkos::parallel_for(team_policy, KOKKOS_LAMBDA(Kokkos::TeamPolicy<>::member_type team_member) {
+////  int y = team_member.league_rank();
+//  Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, 64), [=](const int& x) {
+//    int y = team_member.league_rank();
+//    int idx = y*64+x;
+//    printf("league_rank: %d, team_rank: %d, y: %d, x: %d, index: %d\n", team_member.league_rank(), team_member.team_rank(), y, x, idx);
+//
+//  });
+////  printf("league_rank: %d, team_rank: %d, index: %d\n", team_member.league_rank(), team_member.team_rank(), idx);
+//
+////  for(int i=0; i<4; i++) {
+////#ifdef __CUDA_ARCH__
+////    printf("test block (x,y,z): (%d,%d,%d), thread (x,y,z): (%d,%d,%d), p_index: %d\n", blockIdx.x, blockIdx.y, blockIdx.z, threadIdx.x, threadIdx.y, threadIdx.z, idx+i);
+////#endif
+////  }
+//
+////  Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, 4), [=](size_t i) {
+////    int idx = team_member.league_rank()*4 + i;
+////    #ifdef __CUDA_ARCH__
+////      idx = blockIdx.x*blockDim.y + i;
+////    #endif
+////    printf("league_rank: %d, team_rank: %d, index: %d\n", team_member.league_rank(), team_member.team_rank(), idx);
+////  });
+//});
 
 #ifdef VPIC_ENABLE_PAPI
 //Kokkos::Profiling::popRegion();

@@ -14,6 +14,7 @@
   _( sort_p            ) \
   _( collision_model   ) \
   _( advance_p         ) \
+  _( advance_p_kokkos  ) \
   _( reduce_accumulators ) \
   _( emission_model    ) \
   _( boundary_p        ) \

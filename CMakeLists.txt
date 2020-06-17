@@ -4,6 +4,7 @@
 #------------------------------------------------------------------------------#
 
 cmake_minimum_required(VERSION 3.9)
+cmake_policy(SET CMP0074 NEW)
 
 #~----------------------------------------------------------------------------~#
 # VPIC project configuration
@@ -26,6 +27,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # where it has a hard time detecting MPI. Cmake version. 3.9.0 works great
 # though..
 find_package(MPI REQUIRED)
+#add_definitions(-DOMPI_SKIP_MPICXX)
 list(APPEND MPI_CXX_COMPILE_FLAGS -DOMPI_SKIP_MPICXX -DMPICH_SKIP_MPICXX )
 include_directories(${MPI_C_INCLUDE_PATH})
 
@@ -45,20 +47,38 @@ option(USE_V4_SSE "Enable V4 SSE" OFF)
 
 option(ENABLE_OPENSSL "Enable OpenSSL support for checksums" OFF)
 
+# Build internal Kokkos options that may affect vpic code
+option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
+
+option(ENABLE_KOKKOS_SERIAL "Enable Kokkos Serial" ON)
+
 option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" ON)
+
+option(ENABLE_KOKKOS_PTHREAD "Enable Kokkos Pthread" OFF)
 
 option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 
-option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
+option(ENABLE_KOKKOS_CUDA_UVM "Enable Cuda UVM support" OFF)
 
+# Options so we know which libs to pass to the build script
+option(ENABLE_KOKKOS_HWLOC "Enable HWLOC support" OFF)
+
+option(ENABLE_KOKKOS_LIBNUMA "Enable LIBNUMA support" OFF)
+
+option(ENABLE_KOKKOS_MEMKIND "Enable MEMKIND support" OFF)
+
+option(ENABLE_KOKKOS_LIBDL "Enable LIBDL support" ON)
+
+option(ENABLE_KOKKOS_LIBRT "Enable LIBDRT support" OFF)
+
+# VPIC specific options
 option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 
 option(VPIC_ENABLE_PROFILING "Whether to enable kokkos-tools profiling" OFF)
 
 option(VPIC_ENABLE_PAPI "Whether to enable papi profiling" OFF)
 
-set(KOKKOS_ARCH "Power9;Volta70" CACHE STRING "Architecture to use with Kokkos")
-
+option(VPIC_KOKKOS_DEBUG "Enable Debug In Kokkos" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -94,7 +114,8 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
 endif("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
 
 string(REPLACE ";" " " string_libraries "${MPI_CXX_LIBRARIES} ${MPI_C_LIBRARIES}")
-set(VPIC_CXX_LIBRARIES "${string_libraries}")
+#set(VPIC_CXX_LIBRARIES "${string_libraries}")
+set(VPIC_LIBRARIES "${string_libraries}")
 
 #------------------------------------------------------------------------------#
 # OpenMP
@@ -118,95 +139,90 @@ include_directories(${PROJECT_SOURCE_DIR})
 #------------------------------------------------------------------------------#
 # Kokkos
 #------------------------------------------------------------------------------#
-set(KOKKOS_ENABLE_DEBUG OFF)
-
-option(VPIC_KOKKOS_DEBUG "Enable Debug In Kokkos" OFF)
+# turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
+# see https://github.com/UoB-HPC/BabelStream/issues/16
+set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Disable CXX extensions")
 
 if (VPIC_KOKKOS_DEBUG)
-    set(KOKKOS_ENABLE_DEBUG ON)
+    set(Kokkos_ENABLE_DEBUG ON)
 endif(VPIC_KOKKOS_DEBUG)
 
-set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
-
 if(ENABLE_KOKKOS_OPENMP)
-  if (OPENMP_FOUND)
-    set(KOKKOS_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
+  if(OPENMP_FOUND)
+    set(Kokkos_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
   endif()
+endif()
+
+if(ENABLE_KOKKOS_PTHREAD)
+  set(Kokkos_ENABLE_PTHREAD ON CACHE BOOL "Use Pthreads if found")
+endif()
+
+if(ENABLE_KOKKOS_SERIAL)
+  set(Kokkos_ENABLE_SERIAL ON CACHE BOOL "Use Serial")
 endif()
 
 if(ENABLE_KOKKOS_CUDA)
   find_package(CUDA)
   if (CUDA_FOUND)
     add_definitions(-DENABLE_KOKKOS_CUDA)
-    set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
-    set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
-#    set(KOKKOS_ENABLE_CUDA_UVM ON)
-    set(KOKKOS_ENABLE_CUDA_UVM OFF)
+    set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
+    set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "Enable CUDA extended lambda support")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
 
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
+    if(ENABLE_KOKKOS_CUDA_UVM)
+      set(Kokkos_ENABLE_CUDA_UVM OFF CACHE BOOL "Enable Unified Virtual Memory support")
+    endif()
 
-    #set(KOKKOS_ARCH "Power9;Volta70")
-    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
-
-    # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
-    # see https://github.com/UoB-HPC/BabelStream/issues/16
-    set(CMAKE_CXX_EXTENSIONS OFF)
-
-    # Don't use intel intrinsics if we are using CUDA
-    option(USE_V4_ALTIVEC "Enable V4 Altivec" OFF)
-    option(USE_V4_PORTABLE "Enable V4 Portable" OFF)
-    option(USE_V4_SSE "Enable V4 SSE" OFF)
-
+    set(Kokkos_ARCH_POWER9 ON CACHE BOOL "Using Power9 hardware")
+    set(Kokkos_ARCH_VOLTA70 ON CACHE BOOL "Using Volta70 hardware")
   endif()
 endif()
 
 # Disable platform specific options
 if (APPLE)
-  set(KOKKOS_ENABLE_LIBRT OFF CACHE BOOL "librt is not available on macOS")
+  set(Kokkos_ENABLE_LIBRT OFF CACHE BOOL "librt is not available on macOS")
 endif()
 
 if (BUILD_INTERNAL_KOKKOS)
   message("Building our own kokkos..")
   add_subdirectory(kokkos)
-  #include_directories(${Kokkos_INCLUDE_DIRS_RET})
-  set(KOKKOS_INCLUDE_DIRS ${Kokkos_INCLUDE_DIRS_RET})
+  message("Kokkos_INCLUDE_DIRS_RET=${Kokkos_INCLUDE_DIRS_RET}")
+  include_directories(${Kokkos_INCLUDE_DIRS_RET})
+#  set(KOKKOS_INCLUDE_DIRS ${Kokkos_INCLUDE_DIRS_RET})
+  set(KOKKOS_INCLUDE_DIRS ${CMAKE_INSTALL_PREFIX}/include)
+  message(${KOKKOS_INCLUDE_DIRS})
+  get_target_property(KOKKOS_INCLUDE_DIRS kokkos INTERFACE_INCLUDE_DIRECTORIES)
+  message(${KOKKOS_INCLUDE_DIRS})
+#  get_target_property(TEST Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
+#  message(${TEST})
 else()
-  # CONSIDER ADDING --expt-extended-lambda 
-  find_package(KOKKOS REQUIRED)
-  # TODO: I doubt this is the cmakey way to add this to includes
+  find_package(Kokkos REQUIRED)
   get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INTERFACE_INCLUDE_DIRECTORIES)
-  #get_target_property(KOKKOS_LIB_DIR Kokkos::kokkos INTERFACE_LINK_LIBRARIES)
-  #message(${KOKKOS_INCLUDE_DIRS})
-  link_directories(${KOKKOS_INCLUDE_DIRS}/../lib) # TODO: bad idea..
+  include_directories(${KOKKOS_INCLUDE_DIRS})
 endif(BUILD_INTERNAL_KOKKOS)
 
-include_directories(${KOKKOS_INCLUDE_DIRS})
-#string(REPLACE ";" " " KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS}")
-#message(dirs: ${KOKKOS_INCLUDE_DIRS})
+# Libs for compiling decks
+set(VPIC_LIBRARIES "${VPIC_LIBRARIES} -l:libkokkoscore.a -l:libkokkoscontainers.a")
+if(ENABLE_KOKKOS_HWLOC)
+  set(VPIC_LIBRARIES "${VPIC_LIBRARIES} -lhwloc")
+endif(ENABLE_KOKKOS_HWLOC)
 
-#FOREACH (P ${KOKKOS_INCLUDE_DIRS})
-    #message(${P})
-    #include_directories(${P})
-    #link_directories(${P})
-    #ENDFOREACH(P)
+if(ENABLE_KOKKOS_MEMKIND)
+  set(VPIC_LIBRARIES "${VPIC_LIBRARIES} -lmemkind")
+endif(ENABLE_KOKKOS_MEMKIND)
 
-# TODO: bad idea.. at best, this is just going to add it to the last one in the
-# array
-link_directories(${KOKKOS_INCLUDE_DIRS}/../lib)
-link_directories(${KOKKOS_INCLUDE_DIRS}/lib) 
+if(ENABLE_KOKKOS_LIBDL)
+  set(VPIC_LIBRARIES "${VPIC_LIBRARIES} -ldl")
+endif(ENABLE_KOKKOS_LIBDL)
 
-# Libs
-message(${string_libraries})
-string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
-set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+if(ENABLE_KOKKOS_LIBRT)
+  set(VPIC_LIBRARIES "${VPIC_LIBRARIES} -lrt")
+endif(ENABLE_KOKKOS_LIBRT)
+message(${VPIC_LIBRARIES})
 
-# Includes (TODO: this is definitely abuse of the CXX variable..)
-string(REPLACE ";" " -I" string_libraries "-I${KOKKOS_INCLUDE_DIRS}")
-set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-
-string(REPLACE ";" " -L" string_libraries "-L${KOKKOS_INCLUDE_DIRS}")
-set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-
+# Not ideal, relies on fixed Kokkos dir structure
+set(VPIC_LIB_PATH "-L${KOKKOS_INCLUDE_DIRS}/../lib64")
+set(VPIC_INC_PATH "-I${KOKKOS_INCLUDE_DIRS}")
 
 #------------------------------------------------------------------------------#
 # OpenSSL
@@ -217,7 +233,8 @@ if(ENABLE_OPENSSL)
 
   include_directories(${OPENSSL_INCLUDE_DIR})
   string(REPLACE ";" " " string_libraries "${OPENSSL_LIBRARIES}")
-  set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+#  set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+  set(VPIC_LIBRARIES "${VPIC_LIBRARIES} ${OPENSSL_LIBRARIES}")
 endif(ENABLE_OPENSSL)
 
 find_package(Threads REQUIRED)
@@ -233,15 +250,15 @@ include_directories(${CNL_DIR}/include/)
 #------------------------------------------------------------------------------#
 
 if (VPIC_DUMP_ENERGIES)
-    add_definitions(-DDUMP_ENERGIES)
+  add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
 
 if (VPIC_ENABLE_PROFILING)
-    add_definitions(-DVPIC_ENABLE_PROFILING)
+  add_definitions(-DVPIC_ENABLE_PROFILING)
 endif(VPIC_ENABLE_PROFILING)
 
 if (VPIC_ENABLE_PAPI)
-    add_definitions(-DVPIC_ENABLE_PAPI)
+  add_definitions(-DVPIC_ENABLE_PAPI)
 endif(VPIC_ENABLE_PAPI)
 
 set(USE_V4)
@@ -332,8 +349,14 @@ else()
   set(VPIC_SRC)
   install(TARGETS vpic LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 endif()
+
 target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} kokkos)
+if (BUILD_INTERNAL_KOKKOS)
+  target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} kokkos)
+else()
+  target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
+endif(BUILD_INTERNAL_KOKKOS)
+
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS})
 
 macro(build_a_vpic name deck)
@@ -395,3 +418,4 @@ endif(ENABLE_UNIT_TESTS)
 #~---------------------------------------------------------------------------~-#
 # vim: set tabstop=2 shiftwidth=2 expandtab :
 #~---------------------------------------------------------------------------~-#
+

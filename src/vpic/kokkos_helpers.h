@@ -584,7 +584,8 @@ typedef Half<__half> pos_t;
 typedef Half2<__half2> packed_t;
 //typedef float pos_t;
 typedef float mom_t;
-typedef float mixed_t;
+//typedef float mixed_t;
+#define mixed_t float
 #else
 //#define pos_t half
 //#define mom_t half

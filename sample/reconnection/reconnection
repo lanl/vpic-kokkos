@@ -390,7 +390,7 @@ begin_initialization {
   ///////////////////////////////////////////////
   // Setup high level simulation parameters
   //num_step             = int(taui/(wci*dt));
-  num_step             = 1000;
+  num_step             = 100;
   status_interval      = 20000000;
   sync_shared_interval = status_interval/2;
   clean_div_e_interval = status_interval/2;
