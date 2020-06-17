@@ -944,12 +944,7 @@ sp_[id]->
 
   // TODO: is this the right place to do this?
   Kokkos::parallel_for("clear nm", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
-    //printf("how many times does this run %d", i);
     k_nm(0) = 0;
-    //local_pm_dispx = 0;
-    //local_pm_dispy = 0;
-    //local_pm_dispz = 0;
-    //local_pm_i = 0;
   });
 
 //Kokkos::View<int*> accum_index = Kokkos::View<int*>("Accumulator indices", na);
@@ -957,17 +952,17 @@ sp_[id]->
 //  Kokkos::atomic_add(&(accum_index(i)), 1);
 //});
 
-  int num_threads = 96;
-  int num_leagues = 318945;
-//  if(num_threads*num_leagues < np)
-//    num_leagues++;
-  int per_league = num_threads;
-//
-//  int num_threads = 32;
-//  int num_leagues = np/num_threads;
-//  if(num_threads*num_leagues < np)
-//    num_leagues++;
+//  int num_threads = 96;
+//  int num_leagues = 318945;
+////  if(num_threads*num_leagues < np)
+////    num_leagues++;
 //  int per_league = num_threads;
+
+  int num_threads = 32;
+  int num_leagues = np/num_threads;
+  if(num_threads*num_leagues < np)
+    num_leagues++;
+  int per_league = num_threads;
 
 //  int num_threads = 32;
 //  int num_leagues = 512;
@@ -987,7 +982,7 @@ sp_[id]->
 //cudaFuncCache cache_config;
 //cudaDeviceGetCacheConfig(&cache_config);
 //printf("Cache config: %d\n", cache_config);
-cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
+//cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
 //printf("Cache config post update: %d\n", cache_config);
 
   typedef Kokkos::DefaultExecutionSpace::scratch_memory_space ScratchSpace;
@@ -1049,23 +1044,8 @@ cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
       int p_index = league_rank*per_league + pindex;
       const int team_rank = team_member.team_rank();
 
-//  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
-//    KOKKOS_LAMBDA (const size_t& p_index)
-//    {
-
 //if(p_index < 43510)
 //    printf("league_rank: %d, team_rank: %d, pindex: %d, p_index: %d\n", team_member.league_rank(), team_member.team_rank(), pindex, p_index);
-
-//  Kokkos::parallel_for("advance_p", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0},{per_league, num_leagues}), 
-//    KOKKOS_LAMBDA(const int y_idx, const int x_idx) {
-//      int p_index = x_idx*per_league + y_idx;
-
-//    int x_index = team_member.league_rank();
-//    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, per_thread), [=] (size_t y_idx) {
-//      int y_index = y_idx;
-//    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_threads), [=] (size_t z_idx) {
-//      int z_index = z_idx;
-//      int p_index = x_index*per_thread*num_threads + y_index*num_threads + z_index;
 
 //      auto  k_accumulators_scatter_access = k_accumulators_sa.access();
       if(p_index < np) {
@@ -1217,7 +1197,7 @@ cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
           dz = v2;
           v5 = q*ux*uy*uz*one_third;              // Compute correction
     
-    #     define ACCUMULATE_J(X,Y,Z)                                 \
+         #define ACCUMULATE_J(X,Y,Z)                                        \
           v4  = q*u##X;   /* v2 = q ux                            */        \
           v1  = v4*d##Y;  /* v1 = q ux dy                         */        \
           v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        \
@@ -2785,10 +2765,6 @@ advance_p( /**/  species_t            * RESTRICT sp,
   advance_p_kokkos(
           sp->k_p_soa_d,
           sp->k_pc_soa_d,
-//          sp->k_p_d,
-//          sp->k_p_i_d,
-//          sp->k_pc_d,
-//          sp->k_pc_i_d,
           sp->k_pm_d,
           sp->k_pm_i_d,
           aa->k_a_sa,
@@ -2984,14 +2960,15 @@ Kokkos::Profiling::pushRegion(" " + std::to_string(step) + " " + std::string(sp-
   );
 Kokkos::Profiling::popRegion();
 
+//  KOKKOS_TIC();
   // I need to know the number of movers that got populated so I can call the
   // compress. Let's copy it back
   Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
   // TODO: which way round should this copy be?
 
-//  int nm = sp->k_nm_h(0);
+  //  int nm = sp->k_nm_h(0);
 
-//  printf("nm = %d \n", nm);
+  //  printf("nm = %d \n", nm);
 
   // Copy particle mirror movers back so we have their data safe. Ready for
   // boundary_p_kokkos

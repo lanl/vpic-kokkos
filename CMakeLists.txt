@@ -27,9 +27,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # where it has a hard time detecting MPI. Cmake version. 3.9.0 works great
 # though..
 find_package(MPI REQUIRED)
-#add_definitions(-DOMPI_SKIP_MPICXX)
 list(APPEND MPI_CXX_COMPILE_FLAGS -DOMPI_SKIP_MPICXX -DMPICH_SKIP_MPICXX )
 include_directories(${MPI_C_INCLUDE_PATH})
+include_directories(${MPI_CXX_INCLUDE_PATH})
 
 #------------------------------------------------------------------------------#
 # Add build options
@@ -47,38 +47,13 @@ option(USE_V4_SSE "Enable V4 SSE" OFF)
 
 option(ENABLE_OPENSSL "Enable OpenSSL support for checksums" OFF)
 
-# Build internal Kokkos options that may affect vpic code
-option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
-
-option(ENABLE_KOKKOS_SERIAL "Enable Kokkos Serial" ON)
-
 option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" ON)
-
-option(ENABLE_KOKKOS_PTHREAD "Enable Kokkos Pthread" OFF)
 
 option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 
-option(ENABLE_KOKKOS_CUDA_UVM "Enable Cuda UVM support" OFF)
+option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
 
-# Options so we know which libs to pass to the build script
-option(ENABLE_KOKKOS_HWLOC "Enable HWLOC support" OFF)
-
-option(ENABLE_KOKKOS_LIBNUMA "Enable LIBNUMA support" OFF)
-
-option(ENABLE_KOKKOS_MEMKIND "Enable MEMKIND support" OFF)
-
-option(ENABLE_KOKKOS_LIBDL "Enable LIBDL support" ON)
-
-option(ENABLE_KOKKOS_LIBRT "Enable LIBDRT support" OFF)
-
-# VPIC specific options
 option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
-
-option(VPIC_ENABLE_PROFILING "Whether to enable kokkos-tools profiling" OFF)
-
-option(VPIC_ENABLE_PAPI "Whether to enable papi profiling" OFF)
-
-option(VPIC_KOKKOS_DEBUG "Enable Debug In Kokkos" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -114,8 +89,7 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
 endif("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
 
 string(REPLACE ";" " " string_libraries "${MPI_CXX_LIBRARIES} ${MPI_C_LIBRARIES}")
-#set(VPIC_CXX_LIBRARIES "${string_libraries}")
-set(VPIC_LIBRARIES "${string_libraries}")
+set(VPIC_CXX_LIBRARIES "${string_libraries}")
 
 #------------------------------------------------------------------------------#
 # OpenMP
@@ -139,26 +113,24 @@ include_directories(${PROJECT_SOURCE_DIR})
 #------------------------------------------------------------------------------#
 # Kokkos
 #------------------------------------------------------------------------------#
-# turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
-# see https://github.com/UoB-HPC/BabelStream/issues/16
-set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Disable CXX extensions")
+set(Kokkos_ENABLE_DEBUG OFF)
+
+option(VPIC_KOKKOS_DEBUG "Enable Debug In Kokkos" OFF)
 
 if (VPIC_KOKKOS_DEBUG)
     set(Kokkos_ENABLE_DEBUG ON)
 endif(VPIC_KOKKOS_DEBUG)
 
+set(Kokkos_ENABLE_EXPLICIT_INSTANTIATION OFF)
+
+set(Kokkos_ENABLE_SERIAL ON CACHE BOOL "Default allow serial execution")
+
 if(ENABLE_KOKKOS_OPENMP)
-  if(OPENMP_FOUND)
+  if (OPENMP_FOUND)
     set(Kokkos_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
   endif()
-endif()
-
-if(ENABLE_KOKKOS_PTHREAD)
-  set(Kokkos_ENABLE_PTHREAD ON CACHE BOOL "Use Pthreads if found")
-endif()
-
-if(ENABLE_KOKKOS_SERIAL)
-  set(Kokkos_ENABLE_SERIAL ON CACHE BOOL "Use Serial")
+else()
+    set(Kokkos_ENABLE_OPENMP OFF)
 endif()
 
 if(ENABLE_KOKKOS_CUDA)
@@ -166,15 +138,18 @@ if(ENABLE_KOKKOS_CUDA)
   if (CUDA_FOUND)
     add_definitions(-DENABLE_KOKKOS_CUDA)
     set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
-    set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "Enable CUDA extended lambda support")
+    set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "Enable cuda lambda support")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
 
-    if(ENABLE_KOKKOS_CUDA_UVM)
-      set(Kokkos_ENABLE_CUDA_UVM OFF CACHE BOOL "Enable Unified Virtual Memory support")
-    endif()
+    # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
+    # see https://github.com/UoB-HPC/BabelStream/issues/16
+    set(CMAKE_CXX_EXTENSIONS OFF)
 
-    set(Kokkos_ARCH_POWER9 ON CACHE BOOL "Using Power9 hardware")
-    set(Kokkos_ARCH_VOLTA70 ON CACHE BOOL "Using Volta70 hardware")
+    # Don't use intel intrinsics if we are using CUDA
+    option(USE_V4_ALTIVEC "Enable V4 Altivec" OFF)
+    option(USE_V4_PORTABLE "Enable V4 Portable" OFF)
+    option(USE_V4_SSE "Enable V4 SSE" OFF)
+
   endif()
 endif()
 
@@ -183,46 +158,80 @@ if (APPLE)
   set(Kokkos_ENABLE_LIBRT OFF CACHE BOOL "librt is not available on macOS")
 endif()
 
+
+
+# TODO: This is only need for non-linux platforms
+set(Kokkos_ENABLE_LIBDL OFF)
+set(Kokkos_ENABLE_PROFILING OFF) # NO libDL => no profiling
+
+
 if (BUILD_INTERNAL_KOKKOS)
   message("Building our own kokkos..")
   add_subdirectory(kokkos)
-  message("Kokkos_INCLUDE_DIRS_RET=${Kokkos_INCLUDE_DIRS_RET}")
-  include_directories(${Kokkos_INCLUDE_DIRS_RET})
-#  set(KOKKOS_INCLUDE_DIRS ${Kokkos_INCLUDE_DIRS_RET})
-  set(KOKKOS_INCLUDE_DIRS ${CMAKE_INSTALL_PREFIX}/include)
-  message(${KOKKOS_INCLUDE_DIRS})
-  get_target_property(KOKKOS_INCLUDE_DIRS kokkos INTERFACE_INCLUDE_DIRECTORIES)
-  message(${KOKKOS_INCLUDE_DIRS})
-#  get_target_property(TEST Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
-#  message(${TEST})
+  set(Kokkos_ENABLE_LIBDL OFF)
+  set(Kokkos_ENABLE_PROFILING OFF) # NO libDL => no profiling
+  #include_directories(${Kokkos_INCLUDE_DIRS_RET})
+  #set(KOKKOS_INCLUDE_DIRS ${Kokkos_INCLUDE_DIRS_RET})
 else()
+  # CONSIDER ADDING --expt-extended-lambda
+#  find_package(KOKKOS REQUIRED)
   find_package(Kokkos REQUIRED)
-  get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INTERFACE_INCLUDE_DIRECTORIES)
-  include_directories(${KOKKOS_INCLUDE_DIRS})
+
+  #get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INTERFACE_INCLUDE_DIRECTORIES)
+  #get_target_property(KOKKOS_LIB_DIR Kokkos::kokkos INTERFACE_LINK_LIBRARIES)
+  #message(${KOKKOS_INCLUDE_DIRS})
+  #link_directories(${KOKKOS_INCLUDE_DIRS}/../lib) # TODO: bad idea..
 endif(BUILD_INTERNAL_KOKKOS)
 
-# Libs for compiling decks
-set(VPIC_LIBRARIES "${VPIC_LIBRARIES} -l:libkokkoscore.a -l:libkokkoscontainers.a")
-if(ENABLE_KOKKOS_HWLOC)
-  set(VPIC_LIBRARIES "${VPIC_LIBRARIES} -lhwloc")
-endif(ENABLE_KOKKOS_HWLOC)
 
-if(ENABLE_KOKKOS_MEMKIND)
-  set(VPIC_LIBRARIES "${VPIC_LIBRARIES} -lmemkind")
-endif(ENABLE_KOKKOS_MEMKIND)
+get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE_INCLUDE_DIRECTORIES)
 
-if(ENABLE_KOKKOS_LIBDL)
-  set(VPIC_LIBRARIES "${VPIC_LIBRARIES} -ldl")
-endif(ENABLE_KOKKOS_LIBDL)
+message(${KOKKOS_INCLUDE_DIRS})
+# TODO: this gives the external include path
+#get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
 
-if(ENABLE_KOKKOS_LIBRT)
-  set(VPIC_LIBRARIES "${VPIC_LIBRARIES} -lrt")
-endif(ENABLE_KOKKOS_LIBRT)
-message(${VPIC_LIBRARIES})
+#get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
+#get_target_property(KOKKOS_LIB_CONTAINERS Kokkos::kokkoscontainers INTERFACE_LINK_DEPENDS)
 
-# Not ideal, relies on fixed Kokkos dir structure
-set(VPIC_LIB_PATH "-L${KOKKOS_INCLUDE_DIRS}/../lib64")
-set(VPIC_INC_PATH "-I${KOKKOS_INCLUDE_DIRS}")
+set(KOKKOS_CORE_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_core_includes)
+set(KOKKOS_CONTAINER_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_container_includes)
+#set(KOKKOS_CORE_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_core_lib)
+#set(KOKKOS_CONTAINER_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_container_lib)
+
+# For an "external" build these will be the same, but for an internal we need to gather both
+file(GENERATE OUTPUT ${KOKKOS_CORE_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
+file(GENERATE OUTPUT ${KOKKOS_CONTAINER_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_CONTAINERS}")
+
+#file(GENERATE OUTPUT ${KOKKOS_CORE_LIB_FILE} CONTENT "${KOKKOS_LIB_DIRS}")
+#file(GENERATE OUTPUT ${KOKKOS_CONTAINER_LIB_FILE} CONTENT "${KOKKOS_LIB_CONTAINERS}")
+
+#include_directories(${KOKKOS_INCLUDE_DIRS})
+#string(REPLACE ";" " " KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS}")
+#message(dirs: ${KOKKOS_INCLUDE_DIRS})
+
+#FOREACH (P ${KOKKOS_INCLUDE_DIRS})
+    #message(${P})
+    #include_directories(${P})
+    #link_directories(${P})
+    #ENDFOREACH(P)
+
+# TODO: bad idea.. at best, this is just going to add it to the last one in the
+# array
+#link_directories(${KOKKOS_INCLUDE_DIRS}/../lib)
+#link_directories(${KOKKOS_INCLUDE_DIRS}/lib)
+
+# Libs
+string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
+set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+
+# Includes (TODO: this is definitely abuse of the CXX variable..)
+#string(REPLACE ";" " -I" string_libraries "-I${KOKKOS_INCLUDE_DIRS}")
+#set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+
+#string(REPLACE ";" " -L" string_libraries "-L${KOKKOS_INCLUDE_DIRS}")
+#set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+
 
 #------------------------------------------------------------------------------#
 # OpenSSL
@@ -233,33 +242,18 @@ if(ENABLE_OPENSSL)
 
   include_directories(${OPENSSL_INCLUDE_DIR})
   string(REPLACE ";" " " string_libraries "${OPENSSL_LIBRARIES}")
-#  set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-  set(VPIC_LIBRARIES "${VPIC_LIBRARIES} ${OPENSSL_LIBRARIES}")
+  set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
 endif(ENABLE_OPENSSL)
 
 find_package(Threads REQUIRED)
-
-#------------------------------------------------------------------------------#
-# CNL
-#------------------------------------------------------------------------------#
-include_directories(${CNL_DIR}/include/)
-
 
 #------------------------------------------------------------------------------#
 # Act on build options set in project.cmake
 #------------------------------------------------------------------------------#
 
 if (VPIC_DUMP_ENERGIES)
-  add_definitions(-DDUMP_ENERGIES)
+    add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
-
-if (VPIC_ENABLE_PROFILING)
-  add_definitions(-DVPIC_ENABLE_PROFILING)
-endif(VPIC_ENABLE_PROFILING)
-
-if (VPIC_ENABLE_PAPI)
-  add_definitions(-DVPIC_ENABLE_PAPI)
-endif(VPIC_ENABLE_PAPI)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)
@@ -282,6 +276,31 @@ if(ENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
 
 #------------------------------------------------------------------------------#
+# Output log variables
+#------------------------------------------------------------------------------#
+FIND_PACKAGE(Git)
+IF(GIT_FOUND AND IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/.git)
+    EXECUTE_PROCESS(
+        COMMAND           ${GIT_EXECUTABLE} log --pretty=format:%H -n 1
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE   VPIC_GIT_COMMIT_HASH
+        )
+ELSE()
+    SET(VPIC_GIT_COMMIT_HASH "Not a git repository")
+ENDIF()
+string(TIMESTAMP _build_time_stamp)
+
+MESSAGE(STATUS "VPIC Revision = '${VPIC_GIT_COMMIT_HASH}'")
+#add_definitions("-DVPIC_GIT_HASH=${VPIC_GIT_COMMIT_HASH}")
+
+configure_file (
+    "${PROJECT_SOURCE_DIR}/cmake/git_version.h.in"
+    "${PROJECT_BINARY_DIR}/include/git_version.h"
+)
+
+include_directories(${PROJECT_BINARY_DIR}/include) # for generated git_version.h
+
+#------------------------------------------------------------------------------#
 # Handle vpic compile script last
 #------------------------------------------------------------------------------#
 
@@ -298,12 +317,18 @@ endif(ENABLE_COVERAGE_BUILD)
 
 # process Makefile.run.in to get a simple Makefile.run for a run. Points to
 # local built exe wrapper, and has example deck/platform.
-configure_file(${CMAKE_SOURCE_DIR}/sample/Makefile.run.in
-  ${CMAKE_BINARY_DIR}/bin/Makefile.run)
+configure_file(
+    ${CMAKE_SOURCE_DIR}/sample/Makefile.run.in
+    ${CMAKE_BINARY_DIR}/bin/Makefile.run
+)
 
 # install script
-configure_file(${CMAKE_SOURCE_DIR}/bin/vpic.in
-  ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic-install)
+configure_file(
+    ${CMAKE_SOURCE_DIR}/bin/vpic.in
+    ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic-install
+    @ONLY
+)
+
 install(FILES ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic-install
   DESTINATION bin
   RENAME vpic
@@ -319,8 +344,11 @@ install(FILES ${CMAKE_SOURCE_DIR}/deck/wrapper.cc
   DESTINATION share/vpic)
 
 # local script
-configure_file(${CMAKE_SOURCE_DIR}/bin/vpic-local.in
-  ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic)
+configure_file(
+    ${CMAKE_SOURCE_DIR}/bin/vpic-local.in
+    ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
+    @ONLY
+)
 
 file(COPY ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
   DESTINATION ${CMAKE_BINARY_DIR}/bin
@@ -349,14 +377,8 @@ else()
   set(VPIC_SRC)
   install(TARGETS vpic LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 endif()
-
 target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
-if (BUILD_INTERNAL_KOKKOS)
-  target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} kokkos)
-else()
-  target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
-endif(BUILD_INTERNAL_KOKKOS)
-
+target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS})
 
 macro(build_a_vpic name deck)
@@ -364,7 +386,7 @@ macro(build_a_vpic name deck)
     message(FATAL_ERROR "Could not find deck '${deck}'")
   endif()
   add_executable(${name} ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc ${VPIC_SRC})
-  target_link_libraries(${name} vpic)
+  target_link_libraries(${name} vpic Kokkos::kokkos)
   target_compile_definitions(${name} PRIVATE INPUT_DECK=${deck})
 endmacro(build_a_vpic)
 
@@ -406,7 +428,7 @@ if(ENABLE_UNIT_TESTS)
 
   # RNG tests
   add_executable(rng src/util/rng/test/rng.cc)
-  target_link_libraries(rng vpic)
+  target_link_libraries(rng vpic Kokkos::kokkos)
   get_target_property(OUT rng LINK_LIBRARIES)
   message(STATUS OUT ${OUT})
 
@@ -418,4 +440,3 @@ endif(ENABLE_UNIT_TESTS)
 #~---------------------------------------------------------------------------~-#
 # vim: set tabstop=2 shiftwidth=2 expandtab :
 #~---------------------------------------------------------------------------~-#
-

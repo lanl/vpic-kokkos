@@ -29,7 +29,7 @@ clean_div_b_pipeline( pipeline_args_t * args,
                       int n_pipeline ) {
   field_t      * ALIGNED(128) f = args->f;
   const grid_t *              g = args->g;
-  
+
   field_t * ALIGNED(16) f0;
   field_t * ALIGNED(16) fx, * ALIGNED(16) fy, * ALIGNED(16) fz;
   int x, y, z, n_voxel;
@@ -49,7 +49,7 @@ clean_div_b_pipeline( pipeline_args_t * args,
   pz *= alphadt;
 
   // Process voxels assigned to this pipeline
-  
+
   DISTRIBUTE_VOXELS( 2,nx, 2,ny, 2,nz, 16,
                      pipeline_rank, n_pipeline,
                      x, y, z, n_voxel );
@@ -61,19 +61,19 @@ clean_div_b_pipeline( pipeline_args_t * args,
   fz = &f(x,  y,  z-1)
 
   LOAD_STENCIL();
-  
+
   for( ; n_voxel; n_voxel-- ) {
     MARDER_CBX();
     MARDER_CBY();
     MARDER_CBZ();
     f0++; fx++; fy++; fz++;
-    
+
     x++;
     if( x>nx ) {
       x=2, y++;
       if( y>ny ) y=2, z++;
       LOAD_STENCIL();
-    }      
+    }
   }
 
 # undef LOAD_STENCIL
@@ -94,7 +94,7 @@ clean_div_b_pipeline_v4( pipeline_args_t * args,
   field_t * ALIGNED(16) f0;
   field_t * ALIGNED(16) fx, * ALIGNED(16) fy, * ALIGNED(16) fz;
   int x, y, z, n_voxel;
-  
+
   const int nx = g->nx;
   const int ny = g->ny;
   const int nz = g->nz;
@@ -124,8 +124,8 @@ clean_div_b_pipeline_v4( pipeline_args_t * args,
   field_t * ALIGNED(16) fy0, * ALIGNED(16) fy1, * ALIGNED(16) fy2, * ALIGNED(16) fy3; // Voxel quad +x neighbors
   field_t * ALIGNED(16) fz0, * ALIGNED(16) fz1, * ALIGNED(16) fz2, * ALIGNED(16) fz3; // Voxel quad +x neighbors
 
-  // Process voxels assigned to this pipeline 
-  
+  // Process voxels assigned to this pipeline
+
   DISTRIBUTE_VOXELS( 2,nx, 2,ny, 2,nz, 16,
                      pipeline_rank, n_pipeline,
                      x, y, z, n_voxel );
@@ -178,7 +178,7 @@ clean_div_b_pipeline_v4( pipeline_args_t * args,
 void
 clean_div_b( field_array_t * fa ) {
   pipeline_args_t args[1];
-  
+
   field_t * f, * f0, * fx, * fy, * fz;
   const grid_t * g;
   float alphadt, px, py, pz;
@@ -227,7 +227,7 @@ clean_div_b( field_array_t * fa ) {
   args->f = f;
   args->g = g;
   EXEC_PIPELINES( clean_div_b, args, 0 );
-  
+
   // Do left over interior bx
   for( y=1; y<=ny; y++ ) {
     f0 = &f(2,y,1);
@@ -285,7 +285,7 @@ clean_div_b( field_array_t * fa ) {
   }
 
   // Finish setting derr ghosts
-  
+
   end_remote_ghost_div_b( f, g );
 
   // Do Marder pass in exterior
@@ -347,9 +347,9 @@ clean_div_b( field_array_t * fa ) {
   }
 
   // Wait for pipelines to finish up cleaning div_b in interior
-  
+
   WAIT_PIPELINES();
-  
+
   local_adjust_norm_b(f,g);
 }
 
@@ -409,7 +409,7 @@ clean_div_b_kokkos( field_array_t * fa ) {
         marder_cby(k_field, py, f0, fy);
         marder_cbz(k_field, pz, f0, fz);
     });
-  
+
   // Do left over interior bx
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> bx_yx({1, 2}, {ny+1, nx+1});
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> bx_zx({2, 2}, {nz+1, nx+1});
@@ -506,7 +506,7 @@ clean_div_b_kokkos( field_array_t * fa ) {
   }
 */
   // Finish setting derr ghosts
-  
+
   k_end_remote_ghost_div_b( fa, g, fb );
 
   // Do Marder pass in exterior
@@ -607,8 +607,8 @@ clean_div_b_kokkos( field_array_t * fa ) {
   }
 */
   // Wait for pipelines to finish up cleaning div_b in interior
-  
+
 //  WAIT_PIPELINES();
-  
+
   k_local_adjust_norm_b(fa,g);
 }

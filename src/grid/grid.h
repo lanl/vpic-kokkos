@@ -135,11 +135,11 @@ typedef struct grid {
 
   // Nearest neighbor communications ports
   mp_t * mp;
-    mp_t* mp_k;
-//  mp_kokkos_t* mp_k;
-//    int max_ports;
-//    k_mpi_t k_mpi_d;
-//    k_mpi_t::HostMirror k_mpi_h;
+  mp_t* mp_k;
+  //  mp_kokkos_t* mp_k;
+  //    int max_ports;
+  //    k_mpi_t k_mpi_d;
+  //    k_mpi_t::HostMirror k_mpi_h;
 
   // We want to call this *only* once the neighbor is done
   void init_kokkos_grid(int num_neighbor)
@@ -163,10 +163,10 @@ typedef struct grid {
       // currently implied by unmanaged view
 
       //k_neighbor_d = Kokkos::create_mirror_view(k_neighbor_d);
-      
-//        max_ports = 27;
-//      k_mpi_d = k_mpi_t("k_mpi_d");
-//      k_mpi_h = Kokkos::create_mirror_view(k_mpi_d);
+
+      //        max_ports = 27;
+      //      k_mpi_d = k_mpi_t("k_mpi_d");
+      //      k_mpi_h = Kokkos::create_mirror_view(k_mpi_d);
   }
 
 

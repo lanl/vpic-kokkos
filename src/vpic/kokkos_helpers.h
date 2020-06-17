@@ -829,10 +829,10 @@ namespace particle_mover_var {
 };
 
 namespace accumulator_var {
-  enum a_v { 
-    jx = 0, 
-    jy = 1, 
-    jz = 2, 
+  enum a_v {
+    jx = 0,
+    jy = 1,
+    jz = 2,
   };
 };
 
@@ -865,6 +865,5 @@ template <class P>
 bool compareParticleMovers(P& a, P& b) {
     return a.i < b.i;
 }
-
 
 #endif // _kokkos_helpers_h_

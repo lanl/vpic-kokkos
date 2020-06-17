@@ -15,7 +15,7 @@ compute_rms_div_e_err_pipeline( pipeline_args_t * args,
                                 int n_pipeline ) {
   const field_t * ALIGNED(128) f = args->f;
   const grid_t  *              g = args->g;
-  
+
   const field_t * ALIGNED(16) f0;
   int x, y, z, n_voxel;
 
@@ -56,11 +56,10 @@ compute_rms_div_e_err_kokkos( const field_array_t * RESTRICT fa ) {
   const grid_t * RESTRICT g;
   double err = 0, temp_err = 0, local[2], global[2];
   int nx, ny, nz;
-//  int x, y, z, nx, ny, nz, p;
 
   if( !fa ) ERROR(( "Bad args" ));
 //  f = fa->f;
-  g = fa->g; 
+  g = fa->g;
 
   nx = g->nx;
   ny = g->ny;
@@ -79,14 +78,14 @@ compute_rms_div_e_err_kokkos( const field_array_t * RESTRICT fa ) {
     }
   }
 # endif
-  
+
   // Have the pipelines accumulate the interior of the local domain
   // (the host handled stragglers in the interior).
 
 //  args->f = f;
 //  args->g = g;
 //  EXEC_PIPELINES( compute_rms_div_e_err, args, 0 );
-    
+
     Kokkos::MDRangePolicy<Kokkos::Rank<3>> policy_zyx({2,2,2}, {nz+1,ny+1,nx+1});
     Kokkos::parallel_reduce("compute_rms_div_e_err", policy_zyx, KOKKOS_LAMBDA(const int z, const int y, const int x, double& error) {
         double div_e_err = static_cast<double>(k_field(VOXEL(x,y,z,nx,ny,nz), field_var::div_e_err));
@@ -149,7 +148,7 @@ compute_rms_div_e_err_kokkos( const field_array_t * RESTRICT fa ) {
     err += temp_err;
     temp_err = 0.0;
 
-            
+
 
   // Do exterior edges
 /*
@@ -229,13 +228,13 @@ compute_rms_div_e_err_kokkos( const field_array_t * RESTRICT fa ) {
         double corner6 = static_cast<double>(k_field(VOXEL(   1, ny+1, nz+1,nx,ny,nz), field_var::div_e_err));
         double corner7 = static_cast<double>(k_field(VOXEL(nx+1, ny+1, nz+1,nx,ny,nz), field_var::div_e_err));
         error += 0.125*corner0*corner0 + 0.125*corner1*corner1 + 0.125*corner2*corner2 + 0.125*corner3*corner3 +
-                0.125*corner4*corner4 + 0.125*corner5*corner5 + 0.125*corner6*corner6 + 0.125*corner7*corner7; 
+                0.125*corner4*corner4 + 0.125*corner5*corner5 + 0.125*corner6*corner6 + 0.125*corner7*corner7;
     },temp_err);
 
     err += temp_err;
     temp_err = 0.0;
 
-  
+
   // Reduce the results from the host and pipelines
 
 //  WAIT_PIPELINES();
@@ -265,7 +264,7 @@ compute_rms_div_e_err( const field_array_t * RESTRICT fa ) {
 
   if( !fa ) ERROR(( "Bad args" ));
   f = fa->f;
-  g = fa->g; 
+  g = fa->g;
 
 #if 0 // Original non-pipelined version
   for( z=2; z<=nz; z++ ) {
@@ -277,7 +276,7 @@ compute_rms_div_e_err( const field_array_t * RESTRICT fa ) {
     }
   }
 # endif
-  
+
   // Have the pipelines accumulate the interior of the local domain
   // (the host handled stragglers in the interior).
 
@@ -347,7 +346,7 @@ compute_rms_div_e_err( const field_array_t * RESTRICT fa ) {
   f0 = &f(nx+1,   1,nz+1); err += 0.125*(double)f0->div_e_err*(double)f0->div_e_err;
   f0 = &f(   1,ny+1,nz+1); err += 0.125*(double)f0->div_e_err*(double)f0->div_e_err;
   f0 = &f(nx+1,ny+1,nz+1); err += 0.125*(double)f0->div_e_err*(double)f0->div_e_err;
-  
+
   // Reduce the results from the host and pipelines
 
   WAIT_PIPELINES();

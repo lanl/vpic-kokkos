@@ -51,6 +51,7 @@
   _( INTERPOLATOR_DATA_MOVEMENT ) \
   _( BACKFILL ) \
   _( BACKFILL_COMPRESS ) \
+  _( user_data_movement ) \
   _( user_diagnostics  )
 
 enum profile_internal_use_only_timers {
@@ -98,7 +99,7 @@ enum profile_internal_use_only_timers {
 //      (n_calls);                                                      \
 //  } while(0); \
 //  if (should_barrier) Kokkos::fence();
-#define KOKKOS_TOC_(timer,n_calls, should_barrier)                     \
+#define KOKKOS_TOC_(timer,n_calls, should_barrier)                    \
     if (should_barrier) Kokkos::fence();                              \
     profile_internal_use_only[profile_internal_use_only_##timer].t += \
       wallclock() - _profile_tic;                                     \

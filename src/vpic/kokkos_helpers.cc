@@ -5,7 +5,7 @@
 void print_accumulator(k_accumulators_t& f, int n)
 {
 
-    printf("size of accumulator is %d\n", f.size() );
+    printf("size of accumulator is %ld\n", f.size() );
 
     Kokkos::parallel_for("field printer", Kokkos::RangePolicy <
             Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int i)

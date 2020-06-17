@@ -51,7 +51,7 @@ void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const
         UPDATE_CBY();
         UPDATE_CBZ();
     });
-  
+
   // Do left over bx
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> zy_policy({1,1},{nz+1,ny+1});
     Kokkos::parallel_for("advance_b::bx", zy_policy, KOKKOS_LAMBDA(const int z, const int y) {
