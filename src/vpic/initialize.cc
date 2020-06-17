@@ -161,7 +161,7 @@ vpic_simulation::initialize( int argc,
   // Initialize Kokkos
   // TODO : Move Kokkos to boot.cc and kokkos_rng to constructor?
   Kokkos::initialize( argc, argv );
-  kokkos_rng = new kokkos_rng_pool_t();
+  kokkos_rng = new kokkos_rng_pool_t(0); // seed_entropy will re-seed.
 
   // Call the user initialize the simulation
 
