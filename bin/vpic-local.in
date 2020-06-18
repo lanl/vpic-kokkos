@@ -2,6 +2,42 @@
 
 deck=`echo $1 | sed 's,\.cxx,,g;s,\.cc,,g;s,\.cpp,,g;s,.*\/,,g'`
 
-echo "${CMAKE_CXX_COMPILER} ${VPIC_CPPFLAGS} ${CMAKE_CXX_FLAGS} -I. -I${CMAKE_SOURCE_DIR}/src ${VPIC_CXX_FLAGS} -DINPUT_DECK=$1 ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc -o $deck.${CMAKE_SYSTEM_NAME} -Wl,-rpath,${CMAKE_BINARY_DIR} -L${CMAKE_BINARY_DIR} -lvpic ${VPIC_CXX_LIBRARIES} -lpthread -ldl"
+clean_kokkos_path()
+{
+    # $1 = path
+    # $2 = swap ; for $2
+    if grep -q ";" <<< "$1"; then
+      echo $(echo $1 | sed "s/;/ $2/g")
+    else
+      echo ${2}${1}
+    fi
+}
 
-${CMAKE_CXX_COMPILER} ${VPIC_CPPFLAGS} ${CMAKE_CXX_FLAGS} -I. -I${CMAKE_SOURCE_DIR}/src ${VPIC_CXX_FLAGS} -DINPUT_DECK=$1 ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc -o $deck.${CMAKE_SYSTEM_NAME} -Wl,-rpath,${CMAKE_BINARY_DIR} -L${CMAKE_BINARY_DIR} -lvpic ${VPIC_CXX_LIBRARIES} -lpthread -ldl
+
+KOKKOS_CORE_INCLUDES=$( cat @KOKKOS_CORE_INCLUDES_FILE@ )
+KOKKOS_CONTAINER_INCLUDES=$( cat @KOKKOS_CONTAINER_INCLUDES_FILE@ )
+
+KOKKOS_CORE_LIBS=$KOKKOS_CORE_INCLUDES
+KOKKOS_CONTAINER_LIBS=$KOKKOS_CONTAINER_INCLUDES
+
+echo $KOKKOS_CORE_LIBS
+
+# Add hack to include ../lib and ../lib64, only required for "external" builds
+# If only a single path was passed append the paths
+if ! grep -q ";" <<< "$KOKKOS_CORE_LIBS"; then
+    # We pre append ";" to make the above subsition work when cleaning the path
+    #KOKKOS_CORE_LIBS=";${KOKKOS_CORE_LIBS};${KOKKOS_CORE_LIBS}/../lib/"
+    KOKKOS_CORE_LIBS="${KOKKOS_CORE_LIBS};${KOKKOS_CORE_LIBS}/../lib64/"
+fi
+
+KOKKOS_CORE_INCLUDES=$(clean_kokkos_path $KOKKOS_CORE_INCLUDES -I)
+KOKKOS_CONTAINER_INCLUDES=$(clean_kokkos_path $KOKKOS_CONTAINER_INCLUDES -I)
+
+KOKKOS_CORE_LIBS=$(clean_kokkos_path $KOKKOS_CORE_LIBS -L)
+KOKKOS_CONTAINER_LIBS=$(clean_kokkos_path $KOKKOS_CONTAINER_LIBS -L)
+
+KOKKOS_LIBS="-l:libkokkoscore.a -l:libkokkoscontainers.a"
+
+echo @CMAKE_CXX_COMPILER@ @VPIC_CPPFLAGS@ @CMAKE_CXX_FLAGS@ -I. -I@CMAKE_SOURCE_DIR@/src @VPIC_CXX_FLAGS@ -DINPUT_DECK=$1 @CMAKE_SOURCE_DIR@/deck/main.cc @CMAKE_SOURCE_DIR@/deck/wrapper.cc -o $deck.@CMAKE_SYSTEM_NAME@ -Wl,-rpath,@CMAKE_BINARY_DIR@ -L@CMAKE_BINARY_DIR@ -lvpic @VPIC_CXX_LIBRARIES@ -lpthread -ldl -L$KOKKOS_CORE_LIBS $KOKKOS_CONTAINER_LIBS $KOKKOS_CORE_INCLUDES $KOKKOS_CONTAINER_INCLUDES $KOKKOS_LIBS
+
+@CMAKE_CXX_COMPILER@ @VPIC_CPPFLAGS@ @CMAKE_CXX_FLAGS@ -I. -I@CMAKE_SOURCE_DIR@/src @VPIC_CXX_FLAGS@ -DINPUT_DECK=$1 @CMAKE_SOURCE_DIR@/deck/main.cc @CMAKE_SOURCE_DIR@/deck/wrapper.cc -o $deck.@CMAKE_SYSTEM_NAME@ -Wl,-rpath,@CMAKE_BINARY_DIR@ -L@CMAKE_BINARY_DIR@ -lvpic @VPIC_CXX_LIBRARIES@ -lpthread -ldl -L$KOKKOS_CORE_LIBS $KOKKOS_CONTAINER_LIBS $KOKKOS_CORE_INCLUDES $KOKKOS_CONTAINER_INCLUDES $KOKKOS_LIBS
