@@ -72,6 +72,13 @@ if(MPI_CPPFLAGS)
   set(VPIC_CPPFLAGS "${string_cppflags}")
 endif(MPI_CPPFLAGS)
 
+# Append extra implicit includes
+string(REPLACE ";" " -I" string_cppflags "${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES}")
+set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -I${string_cppflags}")
+message(${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+message(${VPIC_CPPFLAGS})
+
+
 string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
 if(NOT ${string_includes} STREQUAL "")
   set(VPIC_CXX_FLAGS "-I${string_includes} ${MPI_C_LINK_FLAGS}")
