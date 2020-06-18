@@ -222,9 +222,20 @@ sp_[id]->
     v4   = v1 + uy;
     v5   = v2 + uz;
 
-    // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
-    if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
-        -v3<=one && -v4<=one && -v5<=one ) {
+//    // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
+//    if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
+//        -v3<=one && -v4<=one && -v5<=one ) {
+
+    bool inbnds = v3<=one && v4<=one && v5<=one &&
+                  -v3<=one && -v4<=one && -v5<=one;
+    int mask = 0xffffffff;
+    int synced = 0;
+    int same_idx = 0;
+#ifdef __CUDA_ARCH__
+    __match_all_sync(mask, inbnds, &synced);
+    __match_all_sync(mask, ii, &same_idx);
+#endif
+    if(inbnds) {
 
       // Common case (inbnds).  Note: accumulator values are 4 times
       // the total physical charge that passed through the appropriate
@@ -256,23 +267,69 @@ sp_[id]->
       v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
       v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
-      ACCUMULATE_J( x,y,z );
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+// Warp reduction
+      if(synced && same_idx) {
+#ifdef __CUDA_ARCH__
+        const int team_rank = team_member.team_rank();
+        ACCUMULATE_J( x,y,z );
+        for(int i=16; i>0; i=i/2) {
+          v0 += __shfl_down_sync(mask, v0, i);
+          v1 += __shfl_down_sync(mask, v1, i);
+          v2 += __shfl_down_sync(mask, v2, i);
+          v3 += __shfl_down_sync(mask, v3, i);
+        }
+        if(team_rank%32 == 0) {
+          k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+          k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+          k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+          k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+        }
+        ACCUMULATE_J( y,z,x );
+        for(int i=16; i>0; i=i/2) {
+          v0 += __shfl_down_sync(mask, v0, i);
+          v1 += __shfl_down_sync(mask, v1, i);
+          v2 += __shfl_down_sync(mask, v2, i);
+          v3 += __shfl_down_sync(mask, v3, i);
+        }
+        if(team_rank%32 == 0) {
+          k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+          k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+          k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+          k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+        }
+        ACCUMULATE_J( z,x,y );
+        for(int i=16; i>0; i=i/2) {
+          v0 += __shfl_down_sync(mask, v0, i);
+          v1 += __shfl_down_sync(mask, v1, i);
+          v2 += __shfl_down_sync(mask, v2, i);
+          v3 += __shfl_down_sync(mask, v3, i);
+        }
+        if(team_rank%32 == 0) {
+          k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+          k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+          k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+          k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+        }
+#endif
+      } else {
+        ACCUMULATE_J( x,y,z );
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
 
-      ACCUMULATE_J( y,z,x );
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+        ACCUMULATE_J( y,z,x );
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
 
-      ACCUMULATE_J( z,x,y );
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+        ACCUMULATE_J( z,x,y );
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+      }
 
 #     undef ACCUMULATE_J
 
