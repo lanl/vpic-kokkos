@@ -55,10 +55,6 @@ using k_particle_sortindex_t = Kokkos::View<Kokkos::DefaultExecutionSpace::size_
 using k_particle_sortindex_t_ra = Kokkos::View<const Kokkos::DefaultExecutionSpace::size_type*,
                                                Kokkos::MemoryTraits<Kokkos::RandomAccess>>;
 
-using k_particle_cellindex_t = Kokkos::View<Kokkos::DefaultExecutionSpace::size_type*>;
-using k_particle_cellindex_t_ra = Kokkos::View<const Kokkos::DefaultExecutionSpace::size_type*,
-                                               Kokkos::MemoryTraits<Kokkos::RandomAccess>>;
-
 using k_neighbor_t = Kokkos::View<int64_t*>;
 
 using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;

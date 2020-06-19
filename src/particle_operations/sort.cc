@@ -1,8 +1,7 @@
 #include "sort.h"
 
 void BinSort::sort( species_t* sp,
-                    const bool direct,
-                    const bool use_cellindex )
+                    const bool direct )
 {
     const int step = sp->g->step;
     const int num_bins = sp->g->nv;
@@ -25,15 +24,6 @@ void BinSort::sort( species_t* sp,
       sp->k_sortindex_h = Kokkos::create_mirror_view(sp->k_sortindex_d);
     }
 
-    // Create cellindex if needed.
-    if( use_cellindex && sp->k_cellindex_d.extent(0) < sp->np ) {
-      sp->k_cellindex_d = k_particle_sortindex_t(
-        Kokkos::ViewAllocateWithoutInitializing("k_cellindex_d"),
-        sp->np
-      );
-      sp->k_cellindex_h = Kokkos::create_mirror_view(sp->k_cellindex_d);
-    }
-
     // Create temporary storage.
     Kokkos::View<Kokkos::DefaultExecutionSpace::size_type*> bincounts(
       Kokkos::ViewAllocateWithoutInitializing("bincounts"),
@@ -42,7 +32,6 @@ void BinSort::sort( species_t* sp,
 
     k_particle_partition_t& partition = sp->k_partition_d;
     k_particle_sortindex_t& sortindex = sp->k_sortindex_d;
-    k_particle_cellindex_t& cellindex = sp->k_cellindex_d;
 
     k_particles_i_t index_ra = sp->k_p_i_d;
     k_particle_partition_t_ra partition_ra = partition;
@@ -77,11 +66,6 @@ void BinSort::sort( species_t* sp,
         const int bin = index_ra(i);
         const int count = Kokkos::atomic_fetch_add(&bincounts(bin), 1);
         sortindex(partition(bin) + count) = i;
-
-        if( use_cellindex ) {
-          cellindex(i) = count;
-        }
-
       });
 
     if( direct ) {
@@ -113,10 +97,6 @@ void BinSort::sort( species_t* sp,
           new_p(i, particle_var::dz) = old_p(j, particle_var::dz);
           new_p(i, particle_var::w)  = old_p(j, particle_var::w);
           new_i(i)                   = v;
-
-          if( use_cellindex ) {
-            cellindex(i) = i - partition_ra(v);
-          }
 
         });
 

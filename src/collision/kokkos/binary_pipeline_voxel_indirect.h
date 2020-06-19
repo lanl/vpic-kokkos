@@ -110,11 +110,11 @@ struct binary_collision_pipeline {
 
     // Ensure sorted and shuffled.
     if( spi->last_indexed != spi->g->step ) {
-      sorter.sort( spi, false, false );
+      sorter.sort( spi, false );
     }
 
     if( spj->last_indexed != spj->g->step ) {
-      sorter.sort( spj, false, false );
+      sorter.sort( spj, false );
     }
 
     // Always reload in case Views were invalidated.
@@ -138,7 +138,7 @@ struct binary_collision_pipeline {
         ERROR(("Bad spj sort products."));
 
     // We only need to shuffle one species to ensure random pairings.
-    shuffler.shuffle( spi, rp, false, false );
+    shuffler.shuffle( spi, rp, false );
 
     // TODO: Move this out of dispatch so we can dispatch multiple models
     //       without recomputing the density. Kokkos won't let me put it in

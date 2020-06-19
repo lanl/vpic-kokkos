@@ -27,8 +27,7 @@ struct BinSort {
 
     static void sort(
         species_t* sp,
-        const bool direct = true,
-        const bool use_cellindex = false
+        const bool direct = true
     );
 
 };
@@ -85,14 +84,9 @@ struct DefaultSort {
 
     static void sort(
         species_t* sp,
-        const bool direct = true,
-        const bool use_cellindex = false
+        const bool direct = true
     )
     {
-
-        if( use_cellindex ) {
-          ERROR(("DefaultSort does not support cell-level indexing."));
-        }
 
         // Try grab the index's for a permute key
         //int pi = particle_var::pi; // FIXME: can you really not pass an enum in??

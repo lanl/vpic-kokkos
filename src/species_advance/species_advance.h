@@ -83,10 +83,6 @@ class species_t {
         k_particle_sortindex_t k_sortindex_d;
         k_particle_sortindex_t::HostMirror k_sortindex_h;
 
-        // Used for indirect sorts with particle-based collision loops.
-        k_particle_sortindex_t k_cellindex_d;
-        k_particle_sortindex_t::HostMirror k_cellindex_h;
-
         /**/                                // (nx+2)*(ny+2)*(nz+2).  Each value
         /**/                                // corresponds to the associated particle
         /**/                                // array index of the first particle in
