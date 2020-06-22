@@ -12,7 +12,9 @@ center_p_pipeline( center_p_pipeline_args_t * args,
   const interpolator_t * ALIGNED(16)  f;
 
   const float qdt_2mc        =     args->qdt_2mc;
-  const float qdt_4mc        = 0.5*args->qdt_2mc; // For half Boris rotate
+  #ifndef ENABLE_NON_RELATIVISTIC
+    const float qdt_4mc        = 0.5*args->qdt_2mc; // For half Boris rotate
+  #endif
   const float one            = 1.;
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;

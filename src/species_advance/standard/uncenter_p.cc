@@ -4,7 +4,9 @@
 // TODO: these should be refs?
 void uncenter_p_kokkos(k_particles_t k_particles, k_particles_i_t k_particles_i, k_interpolator_t k_interp, int np, float qdt_2mc_c) {
   const float qdt_2mc        =     -qdt_2mc_c; // For backward half advance
-  const float qdt_4mc        = -0.5*qdt_2mc_c; // For backward half rotate
+  #ifndef ENABLE_NON_RELATIVISTIC
+    const float qdt_4mc        = -0.5*qdt_2mc_c; // For backward half rotate
+  #endif
   const float one            = 1.;
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
