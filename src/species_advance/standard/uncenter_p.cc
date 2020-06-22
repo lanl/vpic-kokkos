@@ -60,7 +60,14 @@ void uncenter_p_kokkos(k_particles_t k_particles, k_particles_i_t k_particles_i,
     l_cbx  = f_cbx + p_dx*f_dcbxdx;            // Interpolate B
     l_cby  = f_cby + p_dy*f_dcbydy;
     l_cbz  = f_cbz + p_dz*f_dcbzdz;
-    v0   = qdt_4mc/(float)sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
+    
+    //TODO: This is 4mc not 2mc, does this change the unity value?
+    #ifdef ENABLE_NON_RELATIVISTIC
+        v0 = 1.0f;
+    #else
+        v0   = qdt_4mc/(float)sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
+    #endif
+
     /**/                                     // Boris - scalars
     v1    = l_cbx*l_cbx + (l_cby*l_cby + l_cbz*l_cbz);
     v2    = (v0*v0)*v1;

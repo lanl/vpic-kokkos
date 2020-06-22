@@ -55,6 +55,8 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 
+option(ENABLE_NON_RELATIVISTIC "Enable Non Relativistic Push and Initialization" OFF)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -280,6 +282,10 @@ endif(USE_V4_SSE)
 if(ENABLE_OPENSSL)
   add_definitions(-DENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
+
+if(ENABLE_NON_RELATIVISTIC)
+    add_definitions(-DENABLE_NON_RELATIVISTIC)
+endif(ENABLE_NON_RELATIVISTIC)
 
 #------------------------------------------------------------------------------#
 # Output log variables

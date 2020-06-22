@@ -176,7 +176,16 @@ sp_[id]->
     ux  += hax;                               // Half advance E
     uy  += hay;
     uz  += haz;
-    v0   = qdt_2mc/sqrtf(one + (ux*ux + (uy*uy + uz*uz)));
+    
+    //Conjecture: enabling a non relativistic option for v0 may allow for
+    //faster computation and better performance on the GPU without sacrificing
+    //the accuracy of the physics
+    #ifdef ENABLE_NON_RELATIVISTIC
+        v0 = 1.0f;
+    #else
+        v0   = qdt_2mc/sqrtf(one + (ux*ux + (uy*uy + uz*uz)));
+    #endif
+
     /**/                                      // Boris - scalars
     v1   = cbx*cbx + (cby*cby + cbz*cbz);
     v2   = (v0*v0)*v1;
