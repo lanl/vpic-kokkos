@@ -51,6 +51,8 @@ option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" ON)
 
 option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 
+option(ENABLE_KOKKOS_HIP "Enable Kokkos HIP for AMD GPUs" OFF)
+
 option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
@@ -107,7 +109,7 @@ find_package(OpenMP)
 # FIXME: Sometimes OpenMP is not found fully, when it really should be. Is this
 # a CMAKE issue?
 if (OPENMP_FOUND)
-  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
   set(VPIC_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${VPIC_CXX_FLAGS}")
   #set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
 else()
@@ -144,8 +146,11 @@ if(ENABLE_KOKKOS_CUDA)
   find_package(CUDA)
   if (CUDA_FOUND)
     add_definitions(-DENABLE_KOKKOS_CUDA)
+
     set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
     set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "Enable cuda lambda support")
+    set(Kokkos_ENABLE_CUDA_UVM OFF)
+
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
 
     # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
@@ -158,6 +163,14 @@ if(ENABLE_KOKKOS_CUDA)
     option(USE_V4_SSE "Enable V4 SSE" OFF)
 
   endif()
+endif()
+
+if(ENABLE_KOKKOS_HIP)
+  set(Kokkos_ENABLE_HIP ON CACHE BOOL "Use Cuda with Kokkos")
+  # TODO: This may be a bad idea...
+  set(Kokkos_ARCH_VEGA900 ON CACHE BOOL "Default to using Vega900")
+  #set(Kokkos_ARCH_VEGA906 ON CACHE BOOL "Default to using Vega900")
+  #set(Kokkos_ENABLE_HIP_RELOCATABLE_DEVICE_CODE ON CACHE BOOL "Causes a linking error without this...")
 endif()
 
 # Disable platform specific options

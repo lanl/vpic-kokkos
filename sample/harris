@@ -85,7 +85,7 @@ begin_initialization {
   double Lx        = 16*L;  // How big should the box be in the x direction
   double Ly        = 16*L;  // How big should the box be in the y direction
   double Lz        = 16*L;  // How big should the box be in the z direction
-  double nx        = 32;    // Global resolution in the x direction
+  double nx        = 320;    // Global resolution in the x direction
   double ny        = 32;    // Global resolution in the y direction
   double nz        = 1;     // Global resolution in the z direction
   double nppc      = 64;    // Average number of macro particles per cell (both species combined!)

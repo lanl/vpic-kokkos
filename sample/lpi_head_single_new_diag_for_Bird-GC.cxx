@@ -862,7 +862,7 @@ begin_initialization {
   double debye = uthe*delta;
   double wpe1ps=1e-12* speed_of_light/delta;
 
-  double nx                = 1200; //11232;
+  double nx                = 2000; //1200; //11232;
   double ny                = 1;    // 2D problem in x-z plane
   double nz                = 54; //756;  // was 549;
 
@@ -2782,6 +2782,7 @@ begin_particle_collisions {
 }
 
 begin_field_injection { 
+    /*
   // Inject a light wave from lhs boundary with E aligned along y
   // Use scalar diffraction theory for the Gaussian beam source.  (This is approximate). 
 
@@ -2854,5 +2855,6 @@ begin_field_injection {
     });
 
   }
+  */
 }
 

@@ -2,7 +2,10 @@
 #include "git_version.h"
 
 #include <iostream>
+
+#if defined(_OPENMP)
 #include <omp.h>
+#endif
 
 double _boot_timestamp = 0;
 
@@ -56,7 +59,8 @@ boot_services( int * pargc,
             std::cerr << std::endl;
         }
 
-        int nThreads = 0;
+        int nThreads = 1;
+#if defined(_OPENMP)
 #pragma omp parallel
         {
             nThreads = omp_get_num_threads();
@@ -70,9 +74,13 @@ boot_services( int * pargc,
 
         std::cerr << "-> Setting omp_get_num_threads to be tpp! " << thread.n_pipeline << std::endl;
         std::cerr << std::endl;
+#endif
+
     }
 
+#if defined(_OPENMP)
     omp_set_num_threads(thread.n_pipeline);
+#endif
 
     // TODO: move this into a specific run outputter class
     if (world_rank == 0)

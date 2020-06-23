@@ -470,7 +470,7 @@ vpic_simulation::global_header( const char * base,
   fileIO.print("GRID_TOPOLOGY_Z %d\n\n", pz);
 
   // Global data inforation
-  assert(dumpParams.size() >= 2);
+  //assert(dumpParams.size() >= 2);
 
   print_hashed_comment(fileIO, "Field data information");
   fileIO.print("FIELD_DATA_DIRECTORY %s\n", dumpParams[0]->baseDir);

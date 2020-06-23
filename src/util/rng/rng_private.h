@@ -7,21 +7,21 @@
 
 #include "rng.h"
 
-#if defined(__SSE2__) /* Use SSE-2 accelerated version */
-
-#include <emmintrin.h>
-
-typedef struct sfmt_128 {
-  __m128i u;
-} sfmt_128_t;
-
-#else /* Use portable version */
+//#if defined(__SSE2__) /* Use SSE-2 accelerated version */
+//
+//#include <emmintrin.h>
+//
+//typedef struct sfmt_128 {
+  //__m128i u;
+//} sfmt_128_t;
+//
+//#else /* Use portable version */
 
 typedef struct sfmt_128 {
   uint32_t u0, u1, u2, u3;
 } sfmt_128_t;
 
-#endif
+//#endif
 
 /* Set the default random number generator to 11213.  This has the
    median period (all have practically inexhaustible periods with
@@ -204,21 +204,21 @@ struct rng {
   uint32_t pad[3]; /* 16-byte align */
 };
 
-#if defined(__SSE2__)
+//#if defined(__SSE2__)
+//
+//# define DECL_SFMT                                                 \
+  //__m128i a_u, mask = _mm_setr_epi32( SFMT_MASK0, SFMT_MASK1,      \
+                                      //SFMT_MASK2, SFMT_MASK3 )
+//
+//# define SFMT( a, b, c, d )                                        \
+  //a_u = a.u;                                                       \
+  //a.u = _mm_xor_si128(   a_u, _mm_xor_si128(                       \
+        //_mm_xor_si128(   _mm_slli_si128( a_u, SFMT_L2 ),           \
+          //_mm_and_si128( _mm_srli_epi32( b.u, SFMT_R1 ), mask ) ), \
+        //_mm_xor_si128(   _mm_srli_si128( c.u, SFMT_R2 ),           \
+                         //_mm_slli_epi32( d.u, SFMT_L1 ) ) ) )
 
-# define DECL_SFMT                                                 \
-  __m128i a_u, mask = _mm_setr_epi32( SFMT_MASK0, SFMT_MASK1,      \
-                                      SFMT_MASK2, SFMT_MASK3 )
-
-# define SFMT( a, b, c, d )                                        \
-  a_u = a.u;                                                       \
-  a.u = _mm_xor_si128(   a_u, _mm_xor_si128(                       \
-        _mm_xor_si128(   _mm_slli_si128( a_u, SFMT_L2 ),           \
-          _mm_and_si128( _mm_srli_epi32( b.u, SFMT_R1 ), mask ) ), \
-        _mm_xor_si128(   _mm_srli_si128( c.u, SFMT_R2 ),           \
-                         _mm_slli_epi32( d.u, SFMT_L1 ) ) ) )
-
-#else
+//#else
 
 # define DECL_SFMT                                                      \
   uint32_t x0, x1, x2, x3, y0, y1, y2, y3
@@ -237,7 +237,7 @@ struct rng {
   a.u2 ^= (x2 ^ ((b.u2>>SFMT_R1)&SFMT_MASK2)) ^ (y2 ^ (d.u2<<SFMT_L1)); \
   a.u3 ^= (x3 ^ ((b.u3>>SFMT_R1)&SFMT_MASK3)) ^ (y3 ^ (d.u3<<SFMT_L1))
 
-#endif
+//#endif
 
 STATIC_INLINE void
 sfmt_next( sfmt_128_t * RESTRICT sfmt ) {
