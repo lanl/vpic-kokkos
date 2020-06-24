@@ -176,7 +176,7 @@ accumulate_hydro_p_kokkos(
         const species_t            * RESTRICT sp
 )
 {
-  k_hydro_sv_t k_hydro_sv;
+  k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
   float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
 
