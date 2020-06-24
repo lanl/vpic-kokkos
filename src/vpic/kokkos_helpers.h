@@ -17,6 +17,7 @@
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
+#define HYDRO_VAR_COUNT 14
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -52,9 +53,13 @@ using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 
 using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
+// TODO: why is this _sa_ not _sv_?
 using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
-using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
+using k_hydro_d_t = Kokkos::View<float* [HYDRO_VAR_COUNT]>;
+using k_hydro_sv_t = Kokkos::Experimental::ScatterView<float* [HYDRO_VAR_COUNT]>;
+
+//using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
@@ -167,6 +172,25 @@ namespace material_coeff_var {
         epsx          = 10,
         epsy          = 11,
         epsz          = 12,
+    };
+};
+
+namespace hydro_var {
+    enum h_v {
+        jx  = 0,
+        jy  = 1,
+        jz  = 2,
+        rho = 3,
+        px  = 4,
+        py  = 5,
+        pz  = 6,
+        ke  = 7,
+        txx = 8,
+        tyy = 9,
+        tzz = 10,
+        tyz = 11,
+        tzx = 12,
+        txy = 13,
     };
 };
 

@@ -58,7 +58,7 @@ vpic_simulation::dump_energies( const char *fname,
       fileIO.print( "%li", (long)step() );
     }
   }
- 
+
 //  field_array->kernel->energy_f( en_f, field_array );
   field_array->kernel->energy_f_kokkos( en_f, field_array );
   if( rank()==0 && status!=fail )
@@ -236,7 +236,31 @@ vpic_simulation::dump_hydro( const char *sp_name,
   if( !sp ) ERROR(( "Invalid species \"%s\"", sp_name ));
 
   clear_hydro_array( hydro_array );
-  accumulate_hydro_p( hydro_array, sp, interpolator_array );
+  //accumulate_hydro_p( hydro_array, sp, interpolator_array );
+
+  auto& particles = sp->k_p_d;
+  auto& particles_i = sp->k_p_i_d;
+  auto& interpolators_k = interpolator_array->k_i_d;
+
+  k_hydro_d_t hydro_view("hydro_d", sp->g->nv*2);
+
+  accumulate_hydro_p_kokkos(
+      particles,
+      particles_i,
+      hydro_view,
+      interpolators_k,
+      sp
+  );
+
+  printf("Dumping hydro %d \n", sp->g->nv);
+
+  k_hydro_d_t::HostMirror hydro_view_h("hydro_d_h", sp->g->nv);
+  Kokkos::deep_copy( hydro_view_h , hydro_view);
+  for (int i = 0; i < sp->g->nv; i++)
+  {
+      printf("hydro at i %d = %e \n", i, hydro_view_h(i, 0) );
+  }
+
   synchronize_hydro_array( hydro_array );
 
   if( !fbase ) ERROR(( "Invalid filename" ));
