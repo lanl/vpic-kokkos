@@ -97,9 +97,15 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
   set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 endif("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
 
-string(REPLACE ";" " " string_libraries "${MPI_CXX_LIBRARIES} ${MPI_C_LIBRARIES}")
-set(VPIC_CXX_LIBRARIES "${string_libraries}")
+#string(REPLACE ";" " " string_libraries "${MPI_CXX_LIBRARIES} ${MPI_C_LIBRARIES}")
+#set(VPIC_CXX_LIBRARIES "${string_libraries}")
+set(VPIC_CXX_LIBRARIES "-L$ENV{MPI_LIB} -lmpi")
 
+get_cmake_property(_variableNames VARIABLES)
+list (SORT _variableNames)
+foreach (_variableName ${_variableNames})
+    message(STATUS "${_variableName}=${${_variableName}}")
+endforeach()
 #------------------------------------------------------------------------------#
 # OpenMP
 #------------------------------------------------------------------------------#
