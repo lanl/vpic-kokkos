@@ -59,8 +59,8 @@ set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ fil
 
 # Set a build option to compare zigzag current accumulation to the old method.
 option(ACCUMULATE_J_ZIGZAG "enable zigzag method on accumulate_j in move_p_kokkos" OFF)
-add_definitions(-DACCUMULATE_J_ZIGZAG)
 if(ACCUMULATE_J_ZIGZAG)
+    add_definitions(-DACCUMULATE_J_ZIGZAG)
     set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DACCUMULATE_J_ZIGZAG")
 endif()
 

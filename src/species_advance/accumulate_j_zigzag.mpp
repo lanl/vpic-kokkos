@@ -53,6 +53,8 @@
     Wz1 = 0.5 * ( s_midz + zr ) - k1;
     Wz2 = 0.5 * ( s_midz + s_dispz + zr ) - k2;
 
+    // printf("\n\nI am different than before!\n\n");
+
     // This function is defined for the four edges of Jx. Then
     // cyclically permute X,Y,Z to get Jy and Jz weights.
     // I believe all units are already normalized by cell volume...
