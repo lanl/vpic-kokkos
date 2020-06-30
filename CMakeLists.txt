@@ -34,7 +34,6 @@ include_directories(${MPI_CXX_INCLUDE_PATH})
 #------------------------------------------------------------------------------#
 # Add build options
 #------------------------------------------------------------------------------#
-
 option(ENABLE_INTEGRATED_TESTS "enable integrated tests" OFF)
 
 option(ENABLE_UNIT_TESTS "enable unit tests" OFF)
@@ -57,6 +56,13 @@ option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
+
+# Set a build option to compare zigzag current accumulation to the old method.
+option(ACCUMULATE_J_ZIGZAG "enable zigzag method on accumulate_j in move_p_kokkos" OFF)
+add_definitions(-DACCUMULATE_J_ZIGZAG)
+if(ACCUMULATE_J_ZIGZAG)
+    set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DACCUMULATE_J_ZIGZAG")
+endif()
 
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
