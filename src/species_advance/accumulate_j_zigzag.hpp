@@ -37,11 +37,11 @@
     float Fx1 = q * ( xr - s_midx  );
     float Fy1 = q * ( yr - s_midy  );
     float Fz1 = q * ( zr - s_midz  );
-
+    
     float Fx2 = q * p_ux - Fx1;
     float Fy2 = q * p_uy - Fy1;
-    float Fx2 = q * p_uz - Fz1;
-
+    float Fz2 = q * p_uz - Fz1;
+    
     // Finally, get the weights
     float Wx1 = 0.5 * ( s_midx + xr ) - i1;
     float Wx2 = 0.5 * ( s_midx + s_dispx + xr ) - i2;
