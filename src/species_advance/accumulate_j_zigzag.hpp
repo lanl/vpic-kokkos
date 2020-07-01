@@ -2,7 +2,7 @@
     
     This "header" file is meant to be included directly into the 
     move_p_kokkos(...) function in species_advance.h as 
-    #include "accumulate_j_zigzag_zigzag.mpp"
+    #include "accumulate_j_zigzag.hpp"
     
     This method was published by Umeda et al. in 2003 and can be 
     found at
@@ -12,52 +12,51 @@
     THIS FILE IS THE ZIGZAG ONE!!!!!!!!!!!!!!!!!!!
 
    ****************************************************************/
-    
+
+    // TODO: Change the equations below to reflect that s_mid and 
+    // s_disp variables are normalized by cdt_dx.
+
     // Obtain the cell indices for the particles.
-    float i1, i2, j1, j2, k1, k2;
-    i1 = floor( s_midx ), i2 = floor( s_midx + s_dispx );
-    j1 = floor( s_midy ), j2 = floor( s_midy + s_dispy );
-    k1 = floor( s_midz ), k2 = floor( s_midz + s_dispz );
+    float i1 = floor( s_midx ), i2 = floor( s_midx + s_dispx );
+    float j1 = floor( s_midy ), j2 = floor( s_midy + s_dispy );
+    float k1 = floor( s_midz ), k2 = floor( s_midz + s_dispz );
 
     // Obtain the midpoints for the trajectory over one timestep
-    float xmid, ymid, zmid;
-    xmid = s_midx + 0.5 * s_dispx;
-    ymid = s_midy + 0.5 * s_dispy;
-    zmid = s_midz + 0.5 * s_dispz;
+    float xmid = s_midx + 0.5 * s_dispx;
+    float ymid = s_midy + 0.5 * s_dispy;
+    float zmid = s_midz + 0.5 * s_dispz;
 
     // Obtain the reference points for the particles
-    float xr, yr, zr;
-    xr = fmin( fmin(i1, i2), fmax( fmax(i1, i2), xmid ) );
-    yr = fmin( fmin(j1, j2), fmax( fmax(j1, j2), ymid ) );
-    zr = fmin( fmin(k1, k2), fmax( fmax(k1, k2), zmid ) );
+    float xr = fmin( fmin(i1, i2), fmax( fmax(i1, i2), xmid ) );
+    float yr = fmin( fmin(j1, j2), fmax( fmax(j1, j2), ymid ) );
+    float zr = fmin( fmin(k1, k2), fmax( fmax(k1, k2), zmid ) );
 
-    // Get the fluxes -- I DON'T KNOW WHAT DELTA T IS!
+    // Get the fluxes
+    // TODO: I DON'T KNOW WHAT DELTA T IS!
     // I'm assuming dt = 1 for the time being.
-    float Fx1, Fx2, Fy1, Fy2, Fz1, Fz2;
-    Fx1 = q * ( xr - s_midx  );
-    Fy1 = q * ( yr - s_midy  );
-    Fz1 = q * ( zr - s_midz  );
+    float Fx1 = q * ( xr - s_midx  );
+    float Fy1 = q * ( yr - s_midy  );
+    float Fz1 = q * ( zr - s_midz  );
 
-    Fx2 = q * p_ux - Fx1;
-    Fy2 = q * p_uy - Fy1;
-    Fx2 = q * p_uz - Fz1;
+    float Fx2 = q * p_ux - Fx1;
+    float Fy2 = q * p_uy - Fy1;
+    float Fx2 = q * p_uz - Fz1;
 
     // Finally, get the weights
-    float Wx1, Wx2, Wy1, Wy2, Wz1, Wz2;
-    Wx1 = 0.5 * ( s_midx + xr ) - i1;
-    Wx2 = 0.5 * ( s_midx + s_dispx + xr ) - i2;
+    float Wx1 = 0.5 * ( s_midx + xr ) - i1;
+    float Wx2 = 0.5 * ( s_midx + s_dispx + xr ) - i2;
     
-    Wy1 = 0.5 * ( s_midy + yr ) - j1;
-    Wy2 = 0.5 * ( s_midy + s_dispy + yr ) - j2;
+    float Wy1 = 0.5 * ( s_midy + yr ) - j1;
+    float Wy2 = 0.5 * ( s_midy + s_dispy + yr ) - j2;
     
-    Wz1 = 0.5 * ( s_midz + zr ) - k1;
-    Wz2 = 0.5 * ( s_midz + s_dispz + zr ) - k2;
-
-    // printf("\n\nI am different than before!\n\n");
+    float Wz1 = 0.5 * ( s_midz + zr ) - k1;
+    float Wz2 = 0.5 * ( s_midz + s_dispz + zr ) - k2;
 
     // This function is defined for the four edges of Jx. Then
     // cyclically permute X,Y,Z to get Jy and Jz weights.
     // I believe all units are already normalized by cell volume...
+    // TODO: Verify that l = 1,2 is not actually necessary when
+    // particles move.
 #   define accumulate_j_zigzag(X,Y,Z,l)                                                   \
     v0 = F##X##l * (1 - W##Y##l) * (1 - W##Z##l); /*   v0 = Fx * (1 - Wy) * (1 - Wz)   */ \
     v1 = F##X##l * W##Y##l * (1 - W##Z##l);       /*   v1 = Fx * Wy * (1 - Wz)         */ \

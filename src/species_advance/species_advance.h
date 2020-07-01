@@ -377,9 +377,9 @@ move_p_kokkos(
     // the standard way or the new and flashy
     // zigzag way.
 #if ACCUMULATE_J_ZIGZAG
-    #include "accumulate_j_zigzag.mpp"
+    #include "accumulate_j_zigzag.hpp"
 #else
-    #include "accumulate_j_OLD.mpp"
+    #include "accumulate_j.hpp"
 #endif
 
     // Compute the remaining particle displacment
