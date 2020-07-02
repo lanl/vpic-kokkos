@@ -358,6 +358,7 @@ move_p_kokkos(
     if(v2<v3) v3=v2, axis=2;
     v3 *= 0.5;
 
+
     // Compute the midpoint and the normalized displacement of the streak
     s_dispx *= v3;
     s_dispy *= v3;
@@ -365,6 +366,9 @@ move_p_kokkos(
     s_midx += s_dispx;
     s_midy += s_dispy;
     s_midz += s_dispz;
+
+    float joe_midx = s_midx, joe_midy = s_midy, joe_midz = s_midz;
+    float joe_dispx = s_dispx, joe_dispy = s_dispy, joe_dispz = s_dispz;
 
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate

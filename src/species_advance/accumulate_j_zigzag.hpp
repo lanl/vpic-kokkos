@@ -17,14 +17,14 @@
     // s_disp variables are normalized by cdt_dx.
 
     // Obtain the cell indices for the particles.
-    float i1 = floor( s_midx ), i2 = floor( s_midx + s_dispx );
-    float j1 = floor( s_midy ), j2 = floor( s_midy + s_dispy );
-    float k1 = floor( s_midz ), k2 = floor( s_midz + s_dispz );
+    float i1 = floor( joe_midx ), i2 = floor( joe_midx + joe_dispx );
+    float j1 = floor( joe_midy ), j2 = floor( joe_midy + joe_dispy );
+    float k1 = floor( joe_midz ), k2 = floor( joe_midz + joe_dispz );
 
     // Obtain the midpoints for the trajectory over one timestep
-    float xmid = s_midx + 0.5 * s_dispx;
-    float ymid = s_midy + 0.5 * s_dispy;
-    float zmid = s_midz + 0.5 * s_dispz;
+    float xmid = joe_midx + 0.5 * joe_dispx;
+    float ymid = joe_midy + 0.5 * joe_dispy;
+    float zmid = joe_midz + 0.5 * joe_dispz;
 
     // Obtain the reference points for the particles
     float xr = fmin( fmin(i1, i2), fmax( fmax(i1, i2), xmid ) );
@@ -34,23 +34,23 @@
     // Get the fluxes
     // TODO: I DON'T KNOW WHAT DELTA T IS!
     // I'm assuming dt = 1 for the time being.
-    float Fx1 = q * ( xr - s_midx  );
-    float Fy1 = q * ( yr - s_midy  );
-    float Fz1 = q * ( zr - s_midz  );
+    float Fx1 = q * ( xr - joe_midx  );
+    float Fy1 = q * ( yr - joe_midy  );
+    float Fz1 = q * ( zr - joe_midz  );
     
     float Fx2 = q * p_ux - Fx1;
     float Fy2 = q * p_uy - Fy1;
     float Fz2 = q * p_uz - Fz1;
     
     // Finally, get the weights
-    float Wx1 = 0.5 * ( s_midx + xr ) - i1;
-    float Wx2 = 0.5 * ( s_midx + s_dispx + xr ) - i2;
+    float Wx1 = 0.5 * ( joe_midx + xr ) - i1;
+    float Wx2 = 0.5 * ( joe_midx + joe_dispx + xr ) - i2;
     
-    float Wy1 = 0.5 * ( s_midy + yr ) - j1;
-    float Wy2 = 0.5 * ( s_midy + s_dispy + yr ) - j2;
+    float Wy1 = 0.5 * ( joe_midy + yr ) - j1;
+    float Wy2 = 0.5 * ( joe_midy + joe_dispy + yr ) - j2;
     
-    float Wz1 = 0.5 * ( s_midz + zr ) - k1;
-    float Wz2 = 0.5 * ( s_midz + s_dispz + zr ) - k2;
+    float Wz1 = 0.5 * ( joe_midz + zr ) - k1;
+    float Wz2 = 0.5 * ( joe_midz + joe_dispz + zr ) - k2;
 
     // This function is defined for the four edges of Jx. Then
     // cyclically permute X,Y,Z to get Jy and Jz weights.
