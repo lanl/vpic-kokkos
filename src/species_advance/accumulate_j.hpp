@@ -52,3 +52,15 @@
 
 #   undef accumulate_j
 
+    // Compute the remaining particle displacment
+    pm->dispx -= s_dispx;
+    pm->dispy -= s_dispy;
+    pm->dispz -= s_dispz;
+
+    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+    // Compute the new particle offset
+    p_dx += s_dispx+s_dispx;
+    p_dy += s_dispy+s_dispy;
+    p_dz += s_dispz+s_dispz;
+
+

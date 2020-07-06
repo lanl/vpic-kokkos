@@ -21,19 +21,30 @@
     float j1 = floor( joe_midy ), j2 = floor( joe_midy + joe_dispy );
     float k1 = floor( joe_midz ), k2 = floor( joe_midz + joe_dispz );
 
+    printf("\nParticle %d: i1, j1, k1 = %d, %d, %d",
+            pii, (int)i1, (int)j1, (int)k1);
+    printf("\nParticle %d: i2, j2, k2 = %d, %d, %d",
+            pii, (int)i2, (int)j2, (int)k2);
+
     // Obtain the midpoints for the trajectory over one timestep
     float xmid = joe_midx + 0.5 * joe_dispx;
     float ymid = joe_midy + 0.5 * joe_dispy;
     float zmid = joe_midz + 0.5 * joe_dispz;
 
     // Obtain the reference points for the particles
-    float xr = fmin( fmin(i1, i2), fmax( fmax(i1, i2), xmid ) );
-    float yr = fmin( fmin(j1, j2), fmax( fmax(j1, j2), ymid ) );
-    float zr = fmin( fmin(k1, k2), fmax( fmax(k1, k2), zmid ) );
+    // Here the constant 1.f comes from cell coordinates.
+    float xr = fmin( fmin(i1, i2) + 1.f, fmax( fmax(i1, i2), xmid ) );
+    float yr = fmin( fmin(j1, j2) + 1.f, fmax( fmax(j1, j2), ymid ) );
+    float zr = fmin( fmin(k1, k2) + 1.f, fmax( fmax(k1, k2), zmid ) );
+
+    printf("\nParticle %d: xmid, ymid, zmid = %e, %e, %e\n",
+            pii, xmid, ymid, zmid);
+    printf("\nParticle %d: xr, yr, zr = %e, %e, %e\n",
+            pii, xr, yr, zr);
+    printf("\n\n*************************************************************************************************************\n\n");
 
     // Get the fluxes
-    // TODO: I DON'T KNOW WHAT DELTA T IS!
-    // I'm assuming dt = 1 for the time being.
+    // TODO: Verify that the formula below is correct.
     float Fx1 = q * ( xr - joe_midx  );
     float Fy1 = q * ( yr - joe_midy  );
     float Fz1 = q * ( zr - joe_midz  );
@@ -83,3 +94,16 @@
     k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
 
 #   undef accumulate_j_zigzag
+
+    // Compute the remaining particle displacment
+    pm->dispx = joe_dispx - ( xr - joe_midx );
+    pm->dispy = joe_dispy - ( yr - joe_midy );
+    pm->dispz = joe_dispz - ( zr - joe_midz );
+
+    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+    // Compute the new particle offset
+    p_dx = xr;
+    p_dy = yr;
+    p_dz = zr;
+
+

@@ -332,9 +332,9 @@ move_p_kokkos(
     s_dispy = pm->dispy;
     s_dispz = pm->dispz;
 
-    //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
+    printf("\nParticle %d: pre axis %d x %e y %e z %e", pii, axis, p_dx, p_dy, p_dz);
 
-    //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
+    printf("\nParticle %d: disp x %e y %e z %e", pii, s_dispx, s_dispy, s_dispz);
 
     s_dir[0] = (s_dispx>0) ? 1 : -1;
     s_dir[1] = (s_dispy>0) ? 1 : -1;
@@ -357,7 +357,16 @@ move_p_kokkos(
     if(v1<v3) v3=v1, axis=1;
     if(v2<v3) v3=v2, axis=2;
     v3 *= 0.5;
+    
+    printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
+            pii, axis, v0, v1, v2, 2.*v3);
+    printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
+            pii, s_midx, s_midy, s_midz);
+    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e\n",
+            pii, s_dispx, s_dispy, s_dispz);
 
+    float joe_midx = s_midx, joe_midy = s_midy, joe_midz = s_midz;
+    float joe_dispx = s_dispx, joe_dispy = s_dispy, joe_dispz = s_dispz;
 
     // Compute the midpoint and the normalized displacement of the streak
     s_dispx *= v3;
@@ -366,9 +375,12 @@ move_p_kokkos(
     s_midx += s_dispx;
     s_midy += s_dispy;
     s_midz += s_dispz;
-
-    float joe_midx = s_midx, joe_midy = s_midy, joe_midz = s_midz;
-    float joe_dispx = s_dispx, joe_dispy = s_dispy, joe_dispz = s_dispz;
+    
+    printf("\nAfter rescaling...");
+    printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
+            pii, s_midx, s_midy, s_midz);
+    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e\n",
+            pii, s_dispx, s_dispy, s_dispz);
 
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
@@ -386,21 +398,15 @@ move_p_kokkos(
     #include "accumulate_j.hpp"
 #endif
 
-    // Compute the remaining particle displacment
-    pm->dispx -= s_dispx;
-    pm->dispy -= s_dispy;
-    pm->dispz -= s_dispz;
-
-    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
-    // Compute the new particle offset
-    p_dx += s_dispx+s_dispx;
-    p_dy += s_dispy+s_dispy;
-    p_dz += s_dispz+s_dispz;
-
     // If an end streak, return success (should be ~50% of the time)
     //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
 
-    if( axis==3 ) break;
+    if( axis==3 ) 
+    {
+        printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
+                pii, p_dx, p_dy, p_dz, joe_midx + joe_dispx, joe_midy + joe_dispy, joe_midz + joe_dispz);
+        break;
+    }
 
     // Determine if the particle crossed into a local cell or if it
     // hit a boundary and convert the coordinate system accordingly.
@@ -428,6 +434,7 @@ move_p_kokkos(
       // Hit a reflecting boundary condition.  Reflect the particle
       // momentum and remaining displacement and keep moving the
       // particle.
+      printf("\n*************************\nParticle %d was reflected.\n************************\n", pii);
       k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
 
       // TODO: make this safer
