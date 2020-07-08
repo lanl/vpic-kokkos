@@ -332,9 +332,9 @@ move_p_kokkos(
     s_dispy = pm->dispy;
     s_dispz = pm->dispz;
 
-    printf("\nParticle %d: pre axis %d x %e y %e z %e", pii, axis, p_dx, p_dy, p_dz);
+    //printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
 
-    printf("\nParticle %d: disp x %e y %e z %e", pii, s_dispx, s_dispy, s_dispz);
+    //printf("\nParticle %d: disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
 
     s_dir[0] = (s_dispx>0) ? 1 : -1;
     s_dir[1] = (s_dispy>0) ? 1 : -1;
@@ -359,11 +359,11 @@ move_p_kokkos(
     v3 *= 0.5;
     
     printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
-            pii, axis, v0, v1, v2, 2.*v3);
+            pi, axis, v0, v1, v2, 2.*v3);
     printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
-            pii, s_midx, s_midy, s_midz);
+            pi, s_midx, s_midy, s_midz);
     printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e\n",
-            pii, s_dispx, s_dispy, s_dispz);
+            pi, s_dispx, s_dispy, s_dispz);
 
     float joe_midx = s_midx, joe_midy = s_midy, joe_midz = s_midz;
     float joe_dispx = s_dispx, joe_dispy = s_dispy, joe_dispz = s_dispz;
@@ -378,9 +378,9 @@ move_p_kokkos(
     
     printf("\nAfter rescaling...");
     printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
-            pii, s_midx, s_midy, s_midz);
+            pi, s_midx, s_midy, s_midz);
     printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e\n",
-            pii, s_dispx, s_dispy, s_dispz);
+            pi, s_dispx, s_dispy, s_dispz);
 
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
@@ -404,7 +404,7 @@ move_p_kokkos(
     if( axis==3 ) 
     {
         printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
-                pii, p_dx, p_dy, p_dz, joe_midx + joe_dispx, joe_midy + joe_dispy, joe_midz + joe_dispz);
+                pi, p_dx, p_dy, p_dz, joe_midx + joe_dispx, joe_midy + joe_dispy, joe_midz + joe_dispz);
         break;
     }
 
@@ -434,7 +434,7 @@ move_p_kokkos(
       // Hit a reflecting boundary condition.  Reflect the particle
       // momentum and remaining displacement and keep moving the
       // particle.
-      printf("\n*************************\nParticle %d was reflected.\n************************\n", pii);
+      printf("\n*************************\nParticle %d was reflected.\n************************\n", pi);
       k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
 
       // TODO: make this safer
