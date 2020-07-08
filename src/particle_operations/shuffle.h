@@ -107,6 +107,8 @@ struct FisherYatesShuffle {
             const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
             const auto i0 = partition(v);
             const auto ni = partition(v+1) - i0;
+
+
             auto rg = rp.get_state();
 
             Kokkos::single(Kokkos::PerTeam(team_member),
@@ -114,6 +116,7 @@ struct FisherYatesShuffle {
 
               for(int i=0 ; i < ni-1 ; ++i ) {
 
+                if (ni == 0) { return; }
                 int j = rg.urand(i, ni); // [i, ni)
                 swap(view, i0+i, i0+j);
 
