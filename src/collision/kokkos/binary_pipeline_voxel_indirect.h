@@ -60,7 +60,7 @@ struct binary_collision_pipeline {
   const int   nx, ny, nz;
 
   species_t *spi, *spj;
-  kokkos_rng_pool_t& rp;
+  kokkos_rng_pool_t rp;
   k_density_t     spi_n,  spj_n;
   k_particles_t   spi_p,  spj_p;
   k_particles_i_t spi_i,  spj_i;
@@ -74,11 +74,10 @@ struct binary_collision_pipeline {
     species_t * spi,
     species_t * spj,
     double interval,
-    kokkos_rng_pool_t& rp
+    kokkos_rng_pool_t& _rp
   )
     : spi(spi),
       spj(spj),
-      rp(rp),
       mu_i(spj->m / (spi->m + spj->m)),
       mu_j(spi->m / (spi->m + spj->m)),
       mu(spi->m*spj->m / (spi->m + spj->m)),
@@ -91,6 +90,9 @@ struct binary_collision_pipeline {
 
     if( !spi || !spj || !spi->g || !spj->g || spi->g != spj->g || interval <= 0)
       ERROR(("Bad args."));
+
+    //rp = new kokkos_rng_pool_t(1);
+    rp = kokkos_rng_pool_t(1);
 
   }
 
