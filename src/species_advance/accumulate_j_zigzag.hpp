@@ -13,9 +13,6 @@
 
    ****************************************************************/
 
-    // TODO: Change the equations below to reflect that s_mid and 
-    // s_disp variables are normalized by cdt_dx.
-
     // Obtain the cell indices for the particles.
     /*
     float i1 = floor( 0.5 * ( 1. + joe_midx ) ), i2 = floor( 0.5 * ( 1. + joe_midx + joe_dispx ) );
@@ -60,21 +57,10 @@
 #define umeda2cell_pt(val) -1. + 2. * val           // Convert a point from [0,1] to [-1,1]
 #define umeda2cell_diff(val) 2. * val               // Convert a difference from [0,1] to [-1,1]
    
-    printf("\nBefore cheating with macros...");
-    printf("\nParticle %d: joe_midx, joe_midy, joe_midz = %e, %e, %e",
-            pi, joe_midx, joe_midy, joe_midz);
-    printf("\nParticle %d: joe_dispx, joe_dispy, joe_dispz = %e, %e, %e\n",
-            pi, joe_dispx, joe_dispy, joe_dispz);
-   
     joe_midx = cell2umeda_pt(joe_midx), joe_midy = cell2umeda_pt(joe_midy), joe_midz = cell2umeda_pt(joe_midz);
     joe_dispx = cell2umeda_diff(joe_dispx), joe_dispy = cell2umeda_diff(joe_dispy), joe_dispz = cell2umeda_diff(joe_dispz);
-    
-    printf("\nAfter cheating with macros...");
-    printf("\nParticle %d: joe_midx, joe_midy, joe_midz = %e, %e, %e",
-            pi, joe_midx, joe_midy, joe_midz);
-    printf("\nParticle %d: joe_dispx, joe_dispy, joe_dispz = %e, %e, %e\n",
-            pi, joe_dispx, joe_dispy, joe_dispz);
-    
+     
+    // Obtain the cell indices for the particles.
     float i1 = floor(joe_midx), i2 = floor(joe_midx + joe_dispx);
     float j1 = floor(joe_midy), j2 = floor(joe_midy + joe_dispy);
     float k1 = floor(joe_midz), k2 = floor(joe_midz + joe_dispz);
@@ -95,14 +81,18 @@
     float yr = fmin( fmin(j1, j2) + 1.f, fmax( fmax(j1, j2), ymid ) );
     float zr = fmin( fmin(k1, k2) + 1.f, fmax( fmax(k1, k2), zmid ) );
 
+    int lval = ( axis == 3 ? 2 : 1 );
+    if ( lval == 2 )
+    {
+        xr = joe_midx, yr = joe_midy, zr = joe_midz;
+    }
+
     printf("\nParticle %d: xmid, ymid, zmid = %e, %e, %e\n",
             pi, xmid, ymid, zmid);
     printf("\nParticle %d: xr, yr, zr = %e, %e, %e\n",
             pi, xr, yr, zr);
-    printf("\n\n*************************************************************************************************************\n\n");
 
-    // Get the fluxes
-    // TODO: Verify that the formula below is correct.
+    // Get the fluxes in the Umeda coordinates
     float Fx1 = q * ( xr - joe_midx  );
     float Fy1 = q * ( yr - joe_midy  );
     float Fz1 = q * ( zr - joe_midz  );
@@ -111,7 +101,7 @@
     float Fy2 = q * p_uy - Fy1;
     float Fz2 = q * p_uz - Fz1;
     
-    // Finally, get the weights
+    // Finally, get the weights in the Umeda coordinates
     float Wx1 = 0.5 * ( joe_midx + xr ) - i1;
     float Wx2 = 0.5 * ( joe_midx + joe_dispx + xr ) - i2;
     
@@ -124,12 +114,6 @@
     joe_midx = umeda2cell_pt(joe_midx), joe_midy = umeda2cell_pt(joe_midy), joe_midz = umeda2cell_pt(joe_midz);
     joe_dispx = umeda2cell_diff(joe_dispx), joe_dispy = umeda2cell_diff(joe_dispy), joe_dispz = umeda2cell_diff(joe_dispz);
     
-    printf("\nNow converting back with macros...");
-    printf("\nParticle %d: joe_midx, joe_midy, joe_midz = %e, %e, %e",
-            pi, joe_midx, joe_midy, joe_midz);
-    printf("\nParticle %d: joe_dispx, joe_dispy, joe_dispz = %e, %e, %e\n",
-            pi, joe_dispx, joe_dispy, joe_dispz);
-
 #undef cell2umeda_pt
 #undef cell2umeda_diff
 #undef umeda2cell_pt
@@ -140,29 +124,61 @@
     // I believe all units are already normalized by cell volume...
     // TODO: Verify that l = 1,2 is not actually necessary when
     // particles move.
-#   define accumulate_j_zigzag(X,Y,Z,l)                                                   \
-    v0 = F##X##l * (1 - W##Y##l) * (1 - W##Z##l); /*   v0 = Fx * (1 - Wy) * (1 - Wz)   */ \
-    v1 = F##X##l * W##Y##l * (1 - W##Z##l);       /*   v1 = Fx * Wy * (1 - Wz)         */ \
-    v2 = F##X##l * (1 - W##Y##l) * W##Z##l;       /*   v2 = Fx * (1 - Wy) * Wz         */ \
-    v3 = F##X##l * W##Y##l * W##Z##l;             /*   v2 = Fx * Wy * Wz               */
+#   define accumulate_j_zigzag(X,Y,Z,l)                                                      \
+    v0 = F##X##l * (1 - W##Y##l) * (1 - W##Z##l); /*   v0 = Fux * (1 - Wuy) * (1 - Wuz)   */ \
+    printf("\nUmeda v0 = %e", v0);                                                           \
+    v1 = F##X##l * W##Y##l * (1 - W##Z##l);       /*   v1 = Fux * Wuy * (1 - Wuz)         */ \
+    v2 = F##X##l * (1 - W##Y##l) * W##Z##l;       /*   v2 = Fux * (1 - Wuy) * Wuz         */ \
+    v3 = F##X##l * W##Y##l * W##Z##l;             /*   v2 = Fux * Wuy * Wuz               */ \
+    /*   Now convert from the Umeda coordinates back into VPIC cell cooridinates          */ \
+    /*   These equations guarantee that the total flux summed around the edges            */ \
+    /*   are Fx = 2Fux as they should be (both the fluxes and the weights                 */ \
+    /*   transform as differences between coordinate systems.)                            */ \
+    printf("\nFux, Wuy, Wuz = %e, %e, %e", F##X##l, W##Y##l, W##Z##l);                       \
+    v0 = 8 * v0; /*- 4 * F##X##l * ( 1.5 - W##Y##l - W##Z##l );*/                            \
+    printf("\nVPIC v0 = %e\n", v0);                                                          \
+    v1 = 8 * v1; /*- 4 * F##X##l * W##Y##l;      */                                          \
+    v2 = 8 * v2; /* - 4 * F##X##l * W##Z##l;  */                                             \
+    v3 = 8 * v3;
 
-
-    accumulate_j_zigzag(x,y,z,1);
-    printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v4 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    if ( lval == 1 )
+    {   
+        accumulate_j_zigzag(x,y,z,1);
+    }
+    if ( lval == 2 )
+    {
+        accumulate_j_zigzag(x,y,z,2); 
+    }
+    printf("\nParticle %d depositing (x,y,z,l) v0, v1, v2, v4 = %e, %e, %e, %e, %d", pi, v0, v1, v2, v3, lval);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
 
-    accumulate_j_zigzag(y,z,x,1);
-    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v4 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+
+    if ( lval == 1 )
+    {
+        accumulate_j_zigzag(y,z,x,1);
+    }
+    if ( lval == 2 )
+    {
+        accumulate_j_zigzag(y,z,x,2); 
+    }
+    printf("\nParticle %d depositing (y,z,x,l) v0, v1, v2, v4 = %e, %e, %e, %e, %d", pi, v0, v1, v2, v3, lval);
     k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
 
-    accumulate_j_zigzag(z,x,y,1);
-    printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v4 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
+    if ( lval == 1 )
+    {
+        accumulate_j_zigzag(z,x,y,1);
+    }
+    if ( lval == 2 )
+    {
+        accumulate_j_zigzag(z,x,y,2);  
+    }
+    printf("\nParticle %d depositing (z,x,y,l) v0, v1, v2, v4 = %e, %e, %e, %e, %d\n\n", pi, v0, v1, v2, v3, lval);
     k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
