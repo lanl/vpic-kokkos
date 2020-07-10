@@ -322,76 +322,10 @@ move_p_kokkos(
     //printf("in move %d \n", pi);
 
   for(;;) {
-    int ii = pii;
-    s_midx = p_dx;
-    s_midy = p_dy;
-    s_midz = p_dz;
 
-
-    s_dispx = pm->dispx;
-    s_dispy = pm->dispy;
-    s_dispz = pm->dispz;
-
-    //printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
-
-    //printf("\nParticle %d: disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
-
-    s_dir[0] = (s_dispx>0) ? 1 : -1;
-    s_dir[1] = (s_dispy>0) ? 1 : -1;
-    s_dir[2] = (s_dispz>0) ? 1 : -1;
-
-    // Compute the twice the fractional distance to each potential
-    // streak/cell face intersection.
-    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
-    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
-    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
-
-    // Determine the fractional length and axis of current streak. The
-    // streak ends on either the first face intersected by the
-    // particle track or at the end of the particle track.
-    //
-    //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
-    //   axis 3        ... streak ends at end of the particle track
-    /**/      v3=2,  axis=3;
-    if(v0<v3) v3=v0, axis=0;
-    if(v1<v3) v3=v1, axis=1;
-    if(v2<v3) v3=v2, axis=2;
-    v3 *= 0.5;
-    
-    printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
-            pi, axis, v0, v1, v2, 2.*v3);
-    printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
-            pi, s_midx, s_midy, s_midz);
-    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e\n",
-            pi, s_dispx, s_dispy, s_dispz);
-
-    float joe_midx = s_midx, joe_midy = s_midy, joe_midz = s_midz;
-    float joe_dispx = s_dispx, joe_dispy = s_dispy, joe_dispz = s_dispz;
-
-    // Compute the midpoint and the normalized displacement of the streak
-    s_dispx *= v3;
-    s_dispy *= v3;
-    s_dispz *= v3;
-    s_midx += s_dispx;
-    s_midy += s_dispy;
-    s_midz += s_dispz;
-    
-    printf("\nAfter rescaling...");
-    printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
-            pi, s_midx, s_midy, s_midz);
-    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e\n",
-            pi, s_dispx, s_dispy, s_dispz);
-
-    // Accumulate the streak.  Note: accumulator values are 4 times
-    // the total physical charge that passed through the appropriate
-    // current quadrant in a time-step
-    v5 = q*s_dispx*s_dispy*s_dispz*(1.f/3.f);
-
-    //a = (float *)(&d_accumulators[ci]);
-
-    // Accumulate the currents using either
-    // the standard way or the new and flashy
-    // zigzag way.
+    // Move the particles and accumulate the 
+    // currents using either the standard way
+    // or the new and flashy zigzag way.
 #if ACCUMULATE_J_ZIGZAG
     #include "accumulate_j_zigzag.hpp"
 #else
