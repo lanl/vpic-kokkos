@@ -48,6 +48,11 @@
  *
  * By templating this and using constexpr/consteval, good compilers should be
  * able to skip and disable unused features at compile time.
+ *
+ * ######################IMPORTANT DOCUMENTATION ##############
+ * For information on use of lambdas inside struct and classes:
+ *     https://github.com/kokkos/kokkos/wiki/Lambda-Dispatch 
+ * ############################################################
  */
 template<bool MonteCarlo>
 struct binary_collision_pipeline {
@@ -150,22 +155,33 @@ struct binary_collision_pipeline {
     spj_n = k_density_t("spj_n", spj->g->nv);
 
     const float rdV = 1/spi->g->dV;
+    
+    // NOTE: workaround to avoid implicit capture of this
+    // SEE:  kokkos lambda dispatch link at top
+    auto const &spi_n_ = spi_n;
+    auto const &spi_p_ = spi_p;
+    auto const &spi_i_ = spi_i;
     Kokkos::parallel_for("binary_collision_pipeline::spi_denisty",
       Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, spi->np),
       KOKKOS_LAMBDA (int i) {
         Kokkos::atomic_add(
-          &spi_n(spi_i(i)),
-          spi_p(i, particle_var::w)*rdV
+          &spi_n_(spi_i_(i)),
+          spi_p_(i, particle_var::w)*rdV
         );
-      });
+    });
 
     if( spi != spj ) {
+        // NOTE: workaround to avoid implicit capture of this
+        // SEE:  kokkos lambda dispatch link at top
+        auto const &spj_n_ = spj_n;
+        auto const &spj_p_ = spj_p;
+        auto const &spj_i_ = spj_i;
       Kokkos::parallel_for("binary_collision_pipeline::spj_denisty",
         Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, spj->np),
         KOKKOS_LAMBDA (int i) {
           Kokkos::atomic_add(
-            &spj_n(spj_i(i)),
-            spj_p(i, particle_var::w)*rdV
+            &spj_n_(spj_i_(i)),
+            spj_p_(i, particle_var::w)*rdV
           );
         });
     }
@@ -186,38 +202,60 @@ struct binary_collision_pipeline {
     collision_model& model
   )
   {
-
+    auto const& _model = model;
+    auto const& _mu_i = mu_i;
+    auto const& _mu_j = mu_j;
+    auto const& _mu = mu;
+    auto const& _dtinterval = dtinterval;
+    auto const& _rdV = rdV;
+    auto const& _nx = nx;
+    auto const& _ny = ny;
+    auto const& _nz = nz;
+    auto const& _spi = spi;
+    auto const& _spj = spj;
+    auto const& _rp  = rp;
+    auto const& _spi_n = spi_n;   
+    auto const& _spj_n = spj_n;     
+    auto const& _spi_p = spi_p; 
+    auto const& _spj_p = spj_p; 
+    auto const& _spi_i = spi_i; 
+    auto const& _spj_i = spj_i; 
+    auto const& _spi_sortindex_ra = spi_sortindex_ra; 
+    auto const& _spj_sortindex_ra = spj_sortindex_ra; 
+    auto const& _spi_partition_ra = spi_partition_ra;
+    auto const& _spj_partition_ra = spj_partition_ra; 
+    
     Kokkos::parallel_for("binary_collision_pipeline::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
       KOKKOS_LAMBDA (member_type team_member) {
-
+        
         int ix, iy, iz;
-        RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
-        const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
+        RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, _nx, _ny, _nz);
+        const int v = VOXEL(ix+1, iy+1, iz+1, _nx, _ny, _nz);
 
         // Find number of particles for each species.
-        auto i0 = spi_partition_ra(v);
-        auto ni = spi_partition_ra(v+1) - i0;
+        auto i0 = _spi_partition_ra(v);
+        auto ni = _spi_partition_ra(v+1) - i0;
 
-        auto j0 = spj_partition_ra(v);
-        auto nj = spj_partition_ra(v+1) - j0;
+        auto j0 = _spj_partition_ra(v);
+        auto nj = _spj_partition_ra(v+1) - j0;
 
         // TODO: convert this to be a more explicit check on if we have work
-        if( ni <= 0 || nj <= 0 ) return; /* Nothing to do */
+        if( ni <= 0 || nj <= 0 ) return; //Nothing to do
 
         // Find the real densities.
-        float density_i = spi_n(v);
-        float density_j = spj_n(v);
+        float density_i = _spi_n(v);
+        float density_j = _spj_n(v);
 
         // Compute ndt
         const float density_min = density_j > density_i ? density_i : density_j;
-        const float ndt = density_min*dtinterval;
+        const float ndt = density_min*_dtinterval;
 
         // Get a random generator. Do not leave without freeing it.
-        kokkos_rng_state_t rg = rp.get_state();
+        kokkos_rng_state_t rg = _rp.get_state();
 
         // Handle intraspecies.
-        if( spi == spj ) {
+        if( _spi == _spj ) {
 
             // Odd number of particles.
             if( ni%2 && ni >= 3 ) {
@@ -227,19 +265,19 @@ struct binary_collision_pipeline {
 
                 // These must be done serially to avoid atomics (same particles)
 
-                binary_collision( model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 1)
+                binary_collision(_mu, _mu_i, _mu_j, _spi_p, _spj_p,   _model, rg, 0.5*ndt,
+                    _spi_sortindex_ra(i0),
+                    _spi_sortindex_ra(i0 + 1)
                 );
 
-                binary_collision( model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 2)
+                binary_collision(_mu, _mu_i, _mu_j, _spi_p, _spj_p,   _model, rg, 0.5*ndt,
+                    _spi_sortindex_ra(i0),
+                    _spi_sortindex_ra(i0 + 2)
                 );
 
-                binary_collision( model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0 + 1),
-                    spi_sortindex_ra(i0 + 2)
+                binary_collision(_mu, _mu_i, _mu_j, _spi_p, _spj_p,   _model, rg, 0.5*ndt,
+                    _spi_sortindex_ra(i0 + 1),
+                    _spi_sortindex_ra(i0 + 2)
                 );
 
               });
@@ -277,9 +315,9 @@ struct binary_collision_pipeline {
             int i = l + k*(ncoll+1) ;
             int j = k ;
 
-            binary_collision( model, rg, ndt,
-                spi_sortindex_ra(i0 + (ij ? i : j)),
-                spj_sortindex_ra(j0 + (ij ? j : i))
+            binary_collision(_mu, _mu_i, _mu_j, _spi_p, _spj_p,   _model, rg, ndt,
+                _spi_sortindex_ra(i0 + (ij ? i : j)),
+                _spj_sortindex_ra(j0 + (ij ? j : i))
             );
 
           }
@@ -296,9 +334,9 @@ struct binary_collision_pipeline {
             int i = l + remain*(ncoll+1) ;
             int j = k + remain ;
 
-            binary_collision( model, rg, ndt,
-                spi_sortindex_ra(i0 + (ij ? i : j)),
-                spj_sortindex_ra(j0 + (ij ? j : i))
+            binary_collision(_mu, _mu_i, _mu_j, _spi_p, _spj_p,   _model, rg, ndt,
+                _spi_sortindex_ra(i0 + (ij ? i : j)),
+                _spj_sortindex_ra(j0 + (ij ? j : i))
             );
 
           }
@@ -306,8 +344,8 @@ struct binary_collision_pipeline {
         });
 
         // We *must* free generators.
-        rp.free_state(rg);
-
+        _rp.free_state(rg);
+        
       });
 
     // I don't know why we need this, but without it I get an illegal memory
@@ -319,29 +357,35 @@ struct binary_collision_pipeline {
   /**
    * @brief Perform a collision between two particles.
    */
+  //Must have all struct member types passed in directly to the inline function
   template<class collision_model>
   KOKKOS_INLINE_FUNCTION
   void binary_collision (
-    collision_model& model,
+    const float _mu,
+    const float _mu_i,
+    const float _mu_j,
+    const k_particles_t&   _spi_p,
+    const k_particles_t&   _spj_p,
+    collision_model& _model,
     kokkos_rng_state_t& rg,
     float ndt,
     int i,
     int j
   )
   {
-
+    
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];
     int d0, d1, d2;
 
-    float uix = spi_p(i, particle_var::ux);
-    float uiy = spi_p(i, particle_var::uy);
-    float uiz = spi_p(i, particle_var::uz);
-    float wi  = spi_p(i, particle_var::w);
+    float uix = _spi_p(i, particle_var::ux);
+    float uiy = _spi_p(i, particle_var::uy);
+    float uiz = _spi_p(i, particle_var::uz);
+    float wi  = _spi_p(i, particle_var::w);
 
-    float ujx = spj_p(j, particle_var::ux);
-    float ujy = spj_p(j, particle_var::uy);
-    float ujz = spj_p(j, particle_var::uz);
-    float wj  = spj_p(j, particle_var::w);
+    float ujx = _spj_p(j, particle_var::ux);
+    float ujy = _spj_p(j, particle_var::uy);
+    float ujz = _spj_p(j, particle_var::uz);
+    float wj  = _spj_p(j, particle_var::w);
 
     // Relative velocity
     float urx = uix - ujx;
@@ -380,7 +424,7 @@ struct binary_collision_pipeline {
     ur = sqrtf( t2 );
 
     // Collision parameters
-    t2 *= mu;       // mu v^2  = Collision energy
+    t2 *= _mu;       // _mu v^2  = Collision energy
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
 
     // Monte-Carlo collision test
@@ -388,14 +432,14 @@ struct binary_collision_pipeline {
 
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
       //        Would this be useful?
-      dd = model.cross_section(rg, t2, t1);
+      dd = _model.cross_section(rg, t2, t1);
       if( rg.frand() > dd*t1 ) return;
 
     }
 
     // Compute collision angle and coefficient of restitution
-    const float rr = model.restitution(rg, t2, t1);
-    dd = model.tan_theta_half(rg, t2, t1);
+    const float rr = _model.restitution(rg, t2, t1);
+    dd = _model.tan_theta_half(rg, t2, t1);
     PREVENT_BACKSCATTER(dd);
 
     stack[0] = urx;
@@ -427,23 +471,23 @@ struct binary_collision_pipeline {
 
     // Scaled center of mass velocity.
     t1 = (1-rr);
-    float cmx = t1*(mu_j*uix + mu_i*ujx);
-    float cmy = t1*(mu_j*uiy + mu_i*ujy);
-    float cmz = t1*(mu_j*uiz + mu_i*ujz);
+    float cmx = t1*(_mu_j*uix + _mu_i*ujx);
+    float cmy = t1*(_mu_j*uiy + _mu_i*ujy);
+    float cmz = t1*(_mu_j*uiz + _mu_i*ujz);
 
     // Handle unequal particle weights using detailed balance.
     t0 = rg.frand(0, 1);
 
     if(wi*t0 <= wj) {
-      spi_p(i, particle_var::ux) = (uix + mu_i*stack[0])*rr + cmx;
-      spi_p(i, particle_var::uy) = (uiy + mu_i*stack[1])*rr + cmy;
-      spi_p(i, particle_var::uz) = (uiz + mu_i*stack[2])*rr + cmz;
+      _spi_p(i, particle_var::ux) = (uix + _mu_i*stack[0])*rr + cmx;
+      _spi_p(i, particle_var::uy) = (uiy + _mu_i*stack[1])*rr + cmy;
+      _spi_p(i, particle_var::uz) = (uiz + _mu_i*stack[2])*rr + cmz;
     }
 
     if(wj*t0 <= wi) {
-      spj_p(j, particle_var::ux) = (ujx - mu_j*stack[0])*rr + cmx;
-      spj_p(j, particle_var::uy) = (ujy - mu_j*stack[1])*rr + cmy;
-      spj_p(j, particle_var::uz) = (ujz - mu_j*stack[2])*rr + cmz;
+      _spj_p(j, particle_var::ux) = (ujx - _mu_j*stack[0])*rr + cmx;
+      _spj_p(j, particle_var::uy) = (ujy - _mu_j*stack[1])*rr + cmy;
+      _spj_p(j, particle_var::uz) = (ujz - _mu_j*stack[2])*rr + cmz;
     }
 
   }
