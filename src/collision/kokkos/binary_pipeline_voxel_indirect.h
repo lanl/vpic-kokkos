@@ -61,19 +61,25 @@ struct binary_collision_pipeline {
   using member_type=Kokkos::TeamPolicy<Space>::member_type;
   using k_density_t=Kokkos::View<float *, Space>;
 
-  const float mu_i, mu_j, mu, dtinterval, rdV;
-  const int   nx, ny, nz;
+  const float _mu_i, _mu_j, _mu, _dtinterval, _rdV;
+  const int   _nx, _ny, _nz;
 
-  species_t *spi, *spj;
-  kokkos_rng_pool_t& rp;
-  k_density_t     spi_n,  spj_n;
-  k_particles_t   spi_p,  spj_p;
-  k_particles_i_t spi_i,  spj_i;
+  //Member variables start with the symbol _ and this is used 
+  //to indicate they are not safe to be passed into a kokkos
+  //lambda without first changing the reference type. Any var
+  //starting with _ in a lambda will likely throw and illegal
+  //memory error. As convention we reccomend not using _varName
+  //in an inline fucntion but rather just varName
+  species_t *_spi, *_spj;
+  kokkos_rng_pool_t& _rp;
+  k_density_t     _spi_n,  _spj_n;
+  k_particles_t   _spi_p,  _spj_p;
+  k_particles_i_t _spi_i,  _spj_i;
 
   // Random access, read-only Views
   // TODO : Does RandomAccess trait really matter?
-  k_particle_sortindex_t_ra spi_sortindex_ra, spj_sortindex_ra;
-  k_particle_partition_t_ra spi_partition_ra, spj_partition_ra;
+  k_particle_sortindex_t_ra _spi_sortindex_ra, _spj_sortindex_ra;
+  k_particle_partition_t_ra _spi_partition_ra, _spj_partition_ra;
 
   binary_collision_pipeline(
     species_t * spi,
@@ -81,20 +87,20 @@ struct binary_collision_pipeline {
     double interval,
     kokkos_rng_pool_t& rp
   )
-    : spi(spi),
-      spj(spj),
-      rp(rp),
-      mu_i(spj->m / (spi->m + spj->m)),
-      mu_j(spi->m / (spi->m + spj->m)),
-      mu(spi->m*spj->m / (spi->m + spj->m)),
-      dtinterval(spi->g->dt * interval),
-      nx(spi->g->nx),
-      ny(spi->g->ny),
-      nz(spi->g->nz),
-      rdV(1/spi->g->dV)
+    : _spi(spi),
+      _spj(spj),
+      _rp(rp),
+      _mu_i(spj->m / (spi->m + spj->m)),
+      _mu_j(spi->m / (spi->m + spj->m)),
+      _mu(spi->m*spj->m / (spi->m + spj->m)),
+      _dtinterval(spi->g->dt * interval),
+      _nx(spi->g->nx),
+      _ny(spi->g->ny),
+      _nz(spi->g->nz),
+      _rdV(1/spi->g->dV)
   {
-
-    if( !spi || !spj || !spi->g || !spj->g || spi->g != spj->g || interval <= 0)
+    //TODO: is interval needed here? 
+    if( !_spi || !_spj || !_spi->g || !_spj->g || _spi->g != _spj->g || interval <= 0)
       ERROR(("Bad args."));
 
   }
@@ -106,7 +112,7 @@ struct binary_collision_pipeline {
    */
   template<class collision_model>
   void dispatch(
-    collision_model& model
+    collision_model& _model
   )
   {
 
@@ -114,36 +120,36 @@ struct binary_collision_pipeline {
     ParticleShuffler<> shuffler;
 
     // Ensure sorted and shuffled.
-    if( spi->last_indexed != spi->g->step ) {
-      sorter.sort( spi, false );
+    if( _spi->last_indexed != _spi->g->step ) {
+      sorter.sort( _spi, false );
     }
 
-    if( spj->last_indexed != spj->g->step ) {
-      sorter.sort( spj, false );
+    if( _spj->last_indexed != _spj->g->step ) {
+      sorter.sort( _spj, false );
     }
 
     // Always reload in case Views were invalidated.
-    spi_p            = spi->k_p_d;
-    spi_i            = spi->k_p_i_d;
-    spi_partition_ra = spi->k_partition_d;
-    spi_sortindex_ra = spi->k_sortindex_d;
+    _spi_p            = _spi->k_p_d;
+    _spi_i            = _spi->k_p_i_d;
+    _spi_partition_ra = _spi->k_partition_d;
+    _spi_sortindex_ra = _spi->k_sortindex_d;
 
-    spj_p            = spj->k_p_d;
-    spj_i            = spj->k_p_i_d;
-    spj_partition_ra = spj->k_partition_d;
-    spj_sortindex_ra = spj->k_sortindex_d;
+    _spj_p            = _spj->k_p_d;
+    _spj_i            = _spj->k_p_i_d;
+    _spj_partition_ra = _spj->k_partition_d;
+    _spj_sortindex_ra = _spj->k_sortindex_d;
 
     // Am I being paranoid?
-    if( spi->np      != spi_sortindex_ra.extent(0) ||
-        spi->g->nv+1 != spi_partition_ra.extent(0) )
+    if( _spi->np      != _spi_sortindex_ra.extent(0) ||
+        _spi->g->nv+1 != _spi_partition_ra.extent(0) )
         ERROR(("Bad spi sort products."));
 
-    if( spj->np      != spj_sortindex_ra.extent(0) ||
-        spj->g->nv+1 != spj_partition_ra.extent(0) )
+    if( _spj->np      != _spj_sortindex_ra.extent(0) ||
+        _spj->g->nv+1 != _spj_partition_ra.extent(0) )
         ERROR(("Bad spj sort products."));
 
     // We only need to shuffle one species to ensure random pairings.
-    shuffler.shuffle( spi, rp, false );
+    shuffler.shuffle( _spi, _rp, false );
 
     // TODO: Move this out of dispatch so we can dispatch multiple models
     //       without recomputing the density. Kokkos won't let me put it in
@@ -151,46 +157,47 @@ struct binary_collision_pipeline {
 
     // Compute species densities using a simple histogram. Batching these
     // beforehand is much faster than doing it inline.
-    spi_n = k_density_t("spi_n", spi->g->nv);
-    spj_n = k_density_t("spj_n", spj->g->nv);
+    _spi_n = k_density_t("spi_n", _spi->g->nv);
+    _spj_n = k_density_t("spj_n", _spj->g->nv);
+   
+    //Not sure if this is needed to be redefined here
+    const float rdV = (1/_spi->g->dV);
 
-    const float rdV = 1/spi->g->dV;
-    
     // NOTE: workaround to avoid implicit capture of this
     // SEE:  kokkos lambda dispatch link at top
-    auto const &spi_n_ = spi_n;
-    auto const &spi_p_ = spi_p;
-    auto const &spi_i_ = spi_i;
+    auto const& spi_n = _spi_n;
+    auto const& spi_p = _spi_p;
+    auto const& spi_i = _spi_i;
     Kokkos::parallel_for("binary_collision_pipeline::spi_denisty",
-      Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, spi->np),
+      Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, _spi->np),
       KOKKOS_LAMBDA (int i) {
         Kokkos::atomic_add(
-          &spi_n_(spi_i_(i)),
-          spi_p_(i, particle_var::w)*rdV
+          &spi_n(spi_i(i)),
+          spi_p(i, particle_var::w)*rdV
         );
     });
 
-    if( spi != spj ) {
+    if( _spi != _spj ) {
         // NOTE: workaround to avoid implicit capture of this
         // SEE:  kokkos lambda dispatch link at top
-        auto const &spj_n_ = spj_n;
-        auto const &spj_p_ = spj_p;
-        auto const &spj_i_ = spj_i;
+        auto const& spj_n = _spj_n;
+        auto const& spj_p = _spj_p;
+        auto const& spj_i = _spj_i;
       Kokkos::parallel_for("binary_collision_pipeline::spj_denisty",
-        Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, spj->np),
+        Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, _spj->np),
         KOKKOS_LAMBDA (int i) {
           Kokkos::atomic_add(
-            &spj_n_(spj_i_(i)),
-            spj_p_(i, particle_var::w)*rdV
+            &spj_n(spj_i(i)),
+            spj_p(i, particle_var::w)*rdV
           );
         });
     }
     else {
-      spj_n = spi_n;
+      _spj_n = _spi_n;
     }
 
     // Do collisions.
-    apply_model(model);
+    apply_model(_model);
 
   }
 
@@ -199,63 +206,62 @@ struct binary_collision_pipeline {
    */
   template<class collision_model>
   void apply_model (
-    collision_model& model
+    collision_model& _model
   )
   {
-    auto const& _model = model;
-    auto const& _mu_i = mu_i;
-    auto const& _mu_j = mu_j;
-    auto const& _mu = mu;
-    auto const& _dtinterval = dtinterval;
-    auto const& _rdV = rdV;
-    auto const& _nx = nx;
-    auto const& _ny = ny;
-    auto const& _nz = nz;
-    auto const& _spi = spi;
-    auto const& _spj = spj;
-    auto const& _rp  = rp;
-    auto const& _spi_n = spi_n;   
-    auto const& _spj_n = spj_n;     
-    auto const& _spi_p = spi_p; 
-    auto const& _spj_p = spj_p; 
-    auto const& _spi_i = spi_i; 
-    auto const& _spj_i = spj_i; 
-    auto const& _spi_sortindex_ra = spi_sortindex_ra; 
-    auto const& _spj_sortindex_ra = spj_sortindex_ra; 
-    auto const& _spi_partition_ra = spi_partition_ra;
-    auto const& _spj_partition_ra = spj_partition_ra; 
+    // NOTE: workaround to avoid implicit capture of this
+    // SEE:  kokkos lambda dispatch link at top
+    auto const& model = _model;
+    auto const& mu_i = _mu_i;
+    auto const& mu_j = _mu_j;
+    auto const& mu = _mu;
+    auto const& nx = _nx;
+    auto const& ny = _ny;
+    auto const& nz = _nz;
+    auto const& spi = _spi;
+    auto const& spj = _spj;
+    auto const& rp  = _rp;
+    auto const& spi_n = _spi_n;   
+    auto const& spj_n = _spj_n;     
+    auto const& spi_p = _spi_p; 
+    auto const& spj_p = _spj_p; 
+    auto const& dtinterval = _dtinterval;
+    auto const& spi_sortindex_ra = _spi_sortindex_ra; 
+    auto const& spj_sortindex_ra = _spj_sortindex_ra; 
+    auto const& spi_partition_ra = _spi_partition_ra;
+    auto const& spj_partition_ra = _spj_partition_ra; 
     
     Kokkos::parallel_for("binary_collision_pipeline::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
       KOKKOS_LAMBDA (member_type team_member) {
         
         int ix, iy, iz;
-        RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, _nx, _ny, _nz);
-        const int v = VOXEL(ix+1, iy+1, iz+1, _nx, _ny, _nz);
+        RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
+        const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
 
         // Find number of particles for each species.
-        auto i0 = _spi_partition_ra(v);
-        auto ni = _spi_partition_ra(v+1) - i0;
+        auto i0 = spi_partition_ra(v);
+        auto ni = spi_partition_ra(v+1) - i0;
 
-        auto j0 = _spj_partition_ra(v);
-        auto nj = _spj_partition_ra(v+1) - j0;
+        auto j0 = spj_partition_ra(v);
+        auto nj = spj_partition_ra(v+1) - j0;
 
         // TODO: convert this to be a more explicit check on if we have work
         if( ni <= 0 || nj <= 0 ) return; //Nothing to do
 
         // Find the real densities.
-        float density_i = _spi_n(v);
-        float density_j = _spj_n(v);
+        float density_i = spi_n(v);
+        float density_j = spj_n(v);
 
         // Compute ndt
         const float density_min = density_j > density_i ? density_i : density_j;
-        const float ndt = density_min*_dtinterval;
+        const float ndt = density_min*dtinterval;
 
         // Get a random generator. Do not leave without freeing it.
-        kokkos_rng_state_t rg = _rp.get_state();
+        kokkos_rng_state_t rg = rp.get_state();
 
         // Handle intraspecies.
-        if( _spi == _spj ) {
+        if( spi == spj ) {
 
             // Odd number of particles.
             if( ni%2 && ni >= 3 ) {
@@ -265,19 +271,19 @@ struct binary_collision_pipeline {
 
                 // These must be done serially to avoid atomics (same particles)
 
-                binary_collision(_mu, _mu_i, _mu_j, _spi_p, _spj_p,   _model, rg, 0.5*ndt,
-                    _spi_sortindex_ra(i0),
-                    _spi_sortindex_ra(i0 + 1)
+                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                    spi_sortindex_ra(i0),
+                    spi_sortindex_ra(i0 + 1)
                 );
 
-                binary_collision(_mu, _mu_i, _mu_j, _spi_p, _spj_p,   _model, rg, 0.5*ndt,
-                    _spi_sortindex_ra(i0),
-                    _spi_sortindex_ra(i0 + 2)
+                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                    spi_sortindex_ra(i0),
+                    spi_sortindex_ra(i0 + 2)
                 );
 
-                binary_collision(_mu, _mu_i, _mu_j, _spi_p, _spj_p,   _model, rg, 0.5*ndt,
-                    _spi_sortindex_ra(i0 + 1),
-                    _spi_sortindex_ra(i0 + 2)
+                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                    spi_sortindex_ra(i0 + 1),
+                    spi_sortindex_ra(i0 + 2)
                 );
 
               });
@@ -315,9 +321,9 @@ struct binary_collision_pipeline {
             int i = l + k*(ncoll+1) ;
             int j = k ;
 
-            binary_collision(_mu, _mu_i, _mu_j, _spi_p, _spj_p,   _model, rg, ndt,
-                _spi_sortindex_ra(i0 + (ij ? i : j)),
-                _spj_sortindex_ra(j0 + (ij ? j : i))
+            binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
+                spi_sortindex_ra(i0 + (ij ? i : j)),
+                spj_sortindex_ra(j0 + (ij ? j : i))
             );
 
           }
@@ -334,9 +340,9 @@ struct binary_collision_pipeline {
             int i = l + remain*(ncoll+1) ;
             int j = k + remain ;
 
-            binary_collision(_mu, _mu_i, _mu_j, _spi_p, _spj_p,   _model, rg, ndt,
-                _spi_sortindex_ra(i0 + (ij ? i : j)),
-                _spj_sortindex_ra(j0 + (ij ? j : i))
+            binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
+                spi_sortindex_ra(i0 + (ij ? i : j)),
+                spj_sortindex_ra(j0 + (ij ? j : i))
             );
 
           }
@@ -344,7 +350,7 @@ struct binary_collision_pipeline {
         });
 
         // We *must* free generators.
-        _rp.free_state(rg);
+        rp.free_state(rg);
         
       });
 
@@ -358,15 +364,19 @@ struct binary_collision_pipeline {
    * @brief Perform a collision between two particles.
    */
   //Must have all struct member types passed in directly to the inline function
+  //In terms of notation, all inline functions should not have variables that start
+  //with the _ (underscore), because _ is used to indicate a class member before it
+  //is caputred by a lambda. One lambda captured, we should refer to the variable
+  //as EX: mu not _mu
   template<class collision_model>
   KOKKOS_INLINE_FUNCTION
   void binary_collision (
-    const float _mu,
-    const float _mu_i,
-    const float _mu_j,
-    const k_particles_t&   _spi_p,
-    const k_particles_t&   _spj_p,
-    collision_model& _model,
+    const float mu,
+    const float mu_i,
+    const float mu_j,
+    const k_particles_t&   spi_p,
+    const k_particles_t&   spj_p,
+    collision_model& model,
     kokkos_rng_state_t& rg,
     float ndt,
     int i,
@@ -377,15 +387,15 @@ struct binary_collision_pipeline {
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];
     int d0, d1, d2;
 
-    float uix = _spi_p(i, particle_var::ux);
-    float uiy = _spi_p(i, particle_var::uy);
-    float uiz = _spi_p(i, particle_var::uz);
-    float wi  = _spi_p(i, particle_var::w);
+    float uix = spi_p(i, particle_var::ux);
+    float uiy = spi_p(i, particle_var::uy);
+    float uiz = spi_p(i, particle_var::uz);
+    float wi  = spi_p(i, particle_var::w);
 
-    float ujx = _spj_p(j, particle_var::ux);
-    float ujy = _spj_p(j, particle_var::uy);
-    float ujz = _spj_p(j, particle_var::uz);
-    float wj  = _spj_p(j, particle_var::w);
+    float ujx = spj_p(j, particle_var::ux);
+    float ujy = spj_p(j, particle_var::uy);
+    float ujz = spj_p(j, particle_var::uz);
+    float wj  = spj_p(j, particle_var::w);
 
     // Relative velocity
     float urx = uix - ujx;
@@ -424,7 +434,7 @@ struct binary_collision_pipeline {
     ur = sqrtf( t2 );
 
     // Collision parameters
-    t2 *= _mu;       // _mu v^2  = Collision energy
+    t2 *= mu;       // _mu v^2  = Collision energy
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
 
     // Monte-Carlo collision test
@@ -432,14 +442,14 @@ struct binary_collision_pipeline {
 
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
       //        Would this be useful?
-      dd = _model.cross_section(rg, t2, t1);
+      dd = model.cross_section(rg, t2, t1);
       if( rg.frand() > dd*t1 ) return;
 
     }
 
     // Compute collision angle and coefficient of restitution
-    const float rr = _model.restitution(rg, t2, t1);
-    dd = _model.tan_theta_half(rg, t2, t1);
+    const float rr = model.restitution(rg, t2, t1);
+    dd = model.tan_theta_half(rg, t2, t1);
     PREVENT_BACKSCATTER(dd);
 
     stack[0] = urx;
@@ -471,23 +481,23 @@ struct binary_collision_pipeline {
 
     // Scaled center of mass velocity.
     t1 = (1-rr);
-    float cmx = t1*(_mu_j*uix + _mu_i*ujx);
-    float cmy = t1*(_mu_j*uiy + _mu_i*ujy);
-    float cmz = t1*(_mu_j*uiz + _mu_i*ujz);
+    float cmx = t1*(mu_j*uix + mu_i*ujx);
+    float cmy = t1*(mu_j*uiy + mu_i*ujy);
+    float cmz = t1*(mu_j*uiz + mu_i*ujz);
 
     // Handle unequal particle weights using detailed balance.
     t0 = rg.frand(0, 1);
 
     if(wi*t0 <= wj) {
-      _spi_p(i, particle_var::ux) = (uix + _mu_i*stack[0])*rr + cmx;
-      _spi_p(i, particle_var::uy) = (uiy + _mu_i*stack[1])*rr + cmy;
-      _spi_p(i, particle_var::uz) = (uiz + _mu_i*stack[2])*rr + cmz;
+      spi_p(i, particle_var::ux) = (uix + mu_i*stack[0])*rr + cmx;
+      spi_p(i, particle_var::uy) = (uiy + mu_i*stack[1])*rr + cmy;
+      spi_p(i, particle_var::uz) = (uiz + mu_i*stack[2])*rr + cmz;
     }
 
     if(wj*t0 <= wi) {
-      _spj_p(j, particle_var::ux) = (ujx - _mu_j*stack[0])*rr + cmx;
-      _spj_p(j, particle_var::uy) = (ujy - _mu_j*stack[1])*rr + cmy;
-      _spj_p(j, particle_var::uz) = (ujz - _mu_j*stack[2])*rr + cmz;
+      spj_p(j, particle_var::ux) = (ujx - mu_j*stack[0])*rr + cmx;
+      spj_p(j, particle_var::uy) = (ujy - mu_j*stack[1])*rr + cmy;
+      spj_p(j, particle_var::uz) = (ujz - mu_j*stack[2])*rr + cmz;
     }
 
   }
