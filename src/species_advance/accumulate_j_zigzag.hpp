@@ -17,8 +17,7 @@
     // and move the particles along the zigzag path. The position 
     // of the zig of the zigzag will be performed only if the 
     // particle leaves the cell. If the particle does not leave the
-    // cell, then the zag is performed.
-    
+    // cell, then the zag is performed. 
     int ii = pii;
     s_midx = p_dx;
     s_midy = p_dy;
@@ -41,9 +40,47 @@
     s_dispy = pm->dispy;
     s_dispz = pm->dispz;
 
-    printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
+    // Here is the progression of the displacements moving
+    // forward, with x1 = p_dx = s_midx as the initial position
+    // and x2 the final position, after the move_p_kokkos(...)
+    // function is used:
+    //
+    //      * Start with s_dispx = pm->dispx = 0.5 * (x2 - x1).
+    //
+    //      * Find the next endpoint xf (either the boundary
+    //        or x2). Then adjust to the new 
+    //        midpoint
+    //
+    //          -- Change s_dispx = xf - x1.
+    //
+    //          -- Scale s_dispx = 0.5 * s_dispx if the particle
+    //             does leave the cell.
+    //
+    //          -- Set the new midpoint 
+    //             s_midx = s_midx + s_dispx = 0.5 * ( xf + x1 )
+    //
+    //      * *** Accumulate Currents ***
+    //
+    //      * Change the displacement of the particle as
+    //        pm->dispx = pm->dispx - s_dispx
+    //                  = 0.5 * ( x2 - x1 ) - 0.5 * ( xf - x1 )
+    //                  = 0.5 * ( x2 - xf )
+    //
+    //      * Change the position of the particle as
+    //        p_dx = p_dx + s_dispx + s_dispx
+    //             = x1 + 0.5 * ( xf - x1 ) + 0.5 * ( xf - x1 )
+    //             = xf
+    //
+    //      * Determine if the particle leaves the cell and
+    //        move it if it does  
+    //       
+    // Hopefully fully elaborating these steps and how the 
+    // displacement and midpoint variables change will help in 
+    // future development.
 
-    printf("\nParticle %d: disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
+    //printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
+
+    //printf("\nParticle %d: disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
 
     // Compute the direction that the particle moves.
     // This value is the also the boundary of the cell 
@@ -52,7 +89,7 @@
     s_dir[1] = (s_dispy>0) ? 1 : -1;
     s_dir[2] = (s_dispz>0) ? 1 : -1;
 
-    printf("\ns_dir = %d, %d, %d", (int)s_dir[0], (int)s_dir[1], (int)s_dir[2]);
+    //printf("\ns_dir = %d, %d, %d", (int)s_dir[0], (int)s_dir[1], (int)s_dir[2]);
 
     // Compute the twice the fractional distance to each potential
     // streak/cell face intersection. This number is the amount of
@@ -79,7 +116,8 @@
     // Multiply v3 by 1/2 because the particle first moves to the 
     // midpoint if axis != 3, or it stops if axis == 3.
     v3 *= 0.5;
-    
+
+    /*
     printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
             pi, axis, v0, v1, v2, 2.*v3);
     printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
@@ -93,6 +131,7 @@
         printf("\nParticle %d: s_midx + 2*s_dispx -/+ 2, s_midy + 2*s_dispy -/+ 2, s_midz + 2*s_dispz -/+ 2 = %e, %e, %e",
                 pi, s_midx + 2*s_dispx - 2*s_dir[0], s_midy + 2*s_dispy - 2*s_dir[1], s_midz + 2*s_dispz - 2*s_dir[2]);
     }
+    */
 
     // Store the old values of s_mid and s_disp before I do crazy
     // things.
@@ -190,21 +229,21 @@
     //Kokkos::atomic_add(&a[3], v3);
    
     accumulate_j(x,y,z);
-    printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    //printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
 
     accumulate_j(y,z,x);
-    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    //printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
 
     accumulate_j(z,x,y);
-    printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
+    //printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
@@ -230,8 +269,8 @@
 
     if( axis == 3 ) 
     {
-        printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
-                pi, p_dx, p_dy, p_dz, xr, yr, zr);
+        //printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
+        //        pi, p_dx, p_dy, p_dz, xr, yr, zr);
         break;
     }
 
@@ -262,7 +301,7 @@
       // Hit a reflecting boundary condition.  Reflect the particle
       // momentum and remaining displacement and keep moving the
       // particle.
-      printf("\n*************************\nParticle %d was reflected.\n************************\n", pi);
+      //printf("\n*************************\nParticle %d was reflected.\n************************\n", pi);
       k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
 
       // TODO: make this safer
