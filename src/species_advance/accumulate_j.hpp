@@ -50,8 +50,17 @@
             pi, axis, v0, v1, v2, 2.*v3);
     printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
             pi, s_midx, s_midy, s_midz);
-    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e\n",
+    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
             pi, s_dispx, s_dispy, s_dispz);
+    printf("\nParticle %d: s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz = %e, %e, %e",
+            pi, s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz);
+    printf("\nParticle %d: s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz = %e, %e, %e",
+            pi, s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz);
+    if( axis != 3 )
+    {
+        printf("\nParticle %d: s_midx + 2*s_dispx -/+ 2, s_midy + 2*s_dispy -/+ 2, s_midz + 2*s_dispz -/+ 2 = %e, %e, %e",
+                pi, s_midx + 2*s_dispx - 2*s_dir[0], s_midy + 2*s_dispy - 2*s_dir[1], s_midz + 2*s_dispz - 2*s_dir[2]);
+    }
 
     float joe_midx = s_midx, joe_midy = s_midy, joe_midz = s_midz;
     float joe_dispx = s_dispx, joe_dispy = s_dispy, joe_dispz = s_dispz;
@@ -64,7 +73,7 @@
     s_midy += s_dispy;
     s_midz += s_dispz;
     
-    printf("\nAfter rescaling...");
+    printf("\n\nAfter rescaling...");
     printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
             pi, s_midx, s_midy, s_midz);
     printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e\n",
@@ -98,21 +107,21 @@
     //Kokkos::atomic_add(&a[3], v3);
 
     accumulate_j(x,y,z);
-    printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v4 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
 
     accumulate_j(y,z,x);
-    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v4 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
 
     accumulate_j(z,x,y);
-    printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v4 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;

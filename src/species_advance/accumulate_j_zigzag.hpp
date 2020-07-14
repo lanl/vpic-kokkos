@@ -18,20 +18,32 @@
     // of the zig of the zigzag will be performed only if the 
     // particle leaves the cell. If the particle does not leave the
     // cell, then the zag is performed.
-
+    
     int ii = pii;
     s_midx = p_dx;
     s_midy = p_dy;
     s_midz = p_dz;
 
-
+    // So these displacements are not the actual displacements.
+    // Such a thing would be too obvious. Instead this displacement
+    // is really half of the true particle displacement, and so the 
+    // point 
+    //
+    //                  s_mid + s_disp,
+    //
+    // is the MIDPOINT of the full particle motion, not the full
+    // particle displacement. The final particle position is then 
+    //
+    //                  s_mid + 2 * s_disp.
+    // 
+    // This will be used moving forward.
     s_dispx = pm->dispx;
     s_dispy = pm->dispy;
     s_dispz = pm->dispz;
 
-    //printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
+    printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
 
-    //printf("\nParticle %d: disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
+    printf("\nParticle %d: disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
 
     // Compute the direction that the particle moves.
     // This value is the also the boundary of the cell 
@@ -39,6 +51,8 @@
     s_dir[0] = (s_dispx>0) ? 1 : -1;
     s_dir[1] = (s_dispy>0) ? 1 : -1;
     s_dir[2] = (s_dispz>0) ? 1 : -1;
+
+    printf("\ns_dir = %d, %d, %d", (int)s_dir[0], (int)s_dir[1], (int)s_dir[2]);
 
     // Compute the twice the fractional distance to each potential
     // streak/cell face intersection. This number is the amount of
@@ -70,20 +84,31 @@
             pi, axis, v0, v1, v2, 2.*v3);
     printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
             pi, s_midx, s_midy, s_midz);
-    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e\n",
-            pi, s_dispx, s_dispy, s_dispz);
-    
+    printf("\nParticle %d: s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz = %e, %e, %e",
+            pi, s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz);
+    printf("\nParticle %d: s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz = %e, %e, %e",
+            pi, s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz);
+    if( axis != 3 )
+    {
+        printf("\nParticle %d: s_midx + 2*s_dispx -/+ 2, s_midy + 2*s_dispy -/+ 2, s_midz + 2*s_dispz -/+ 2 = %e, %e, %e",
+                pi, s_midx + 2*s_dispx - 2*s_dir[0], s_midy + 2*s_dispy - 2*s_dir[1], s_midz + 2*s_dispz - 2*s_dir[2]);
+    }
+
     // Store the old values of s_mid and s_disp before I do crazy
     // things.
-    float old_midx = s_midx, old_midy = s_midy, old_midz = s_midz;
-    float old_dispx = s_dispx, old_dispy = s_dispy, old_dispz = s_dispz;
+    float old_midx = s_midx;
+    float old_midy = s_midy;
+    float old_midz = s_midz;
+    float old_dispx = s_dispx;
+    float old_dispy = s_dispy;
+    float old_dispz = s_dispz;
 
     // Umeda algorithm: assume axis == 3 and set xr, yr, and zr
-    // to be the end of the midpoint of the zag (so the final
-    // destination of the particle).
-    // TODO: Is it necessary to half the displacement when
-    // axis == 3?
-    float xr = s_midx + 0.5 * s_dispx, yr = s_midy + 0.5 * s_dispy, zr = s_midz + 0.5 * s_dispz;
+    // to be the end of the the zag (so the final destination 
+    // of the particle).
+    float xr = s_midx + 2. * s_dispx;
+    float yr = s_midy + 2. * s_dispy;
+    float zr = s_midz + 2. * s_dispz;
    
     // If the particle crosses the x-boundary change xr
     // to the boundary it hits.
@@ -115,7 +140,12 @@
 
     // Change the displacement to the midpoint along the zig
     // or zag.
-    s_dispx *= 0.5, s_dispy *= 0.5, s_dispz *= 0.5;
+    if ( axis != 3 )
+    {
+        s_dispx *= 0.5;
+        s_dispy *= 0.5;
+        s_dispz *= 0.5;
+    }
 
     // Compute the midpoint and the normalized displacement of the 
     // streak. By scaling the displacments by v3, if axis == 3, then
@@ -160,21 +190,21 @@
     //Kokkos::atomic_add(&a[3], v3);
    
     accumulate_j(x,y,z);
-    printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v4 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
 
     accumulate_j(y,z,x);
-    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v4 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
 
     accumulate_j(z,x,y);
-    printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v4 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
@@ -198,7 +228,7 @@
     // If an end streak, return success (should be ~50% of the time)
     //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
 
-    if( axis==3 ) 
+    if( axis == 3 ) 
     {
         printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
                 pi, p_dx, p_dy, p_dz, xr, yr, zr);
@@ -248,7 +278,7 @@
     if( neighbor<rangel || neighbor>rangeh ) {
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
-      // displacement in the particle mover.
+      // displacement in the particle mover as a bitshift.
       pii = 8*pii + face;
       return 1; // Return "mover still in use"
       }
