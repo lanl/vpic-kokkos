@@ -28,6 +28,7 @@ checkpt_field_advance_kernels( const field_advance_kernels_t * kernel ) {
   CHECKPT_SYM( kernel->clean_div_b               );
 }
 
+
 void
 restore_field_advance_kernels( field_advance_kernels_t * kernel ) {
   RESTORE_SYM( kernel->delete_fa                 );
@@ -42,10 +43,10 @@ restore_field_advance_kernels( field_advance_kernels_t * kernel ) {
   RESTORE_SYM( kernel->compute_curl_b            );
   RESTORE_SYM( kernel->synchronize_tang_e_norm_b );
   RESTORE_SYM( kernel->compute_div_e_err         );
-  RESTORE_SYM( kernel->compute_rms_div_e_err     );
-  RESTORE_SYM( kernel->clean_div_e               );
-  RESTORE_SYM( kernel->compute_div_b_err         );
-  RESTORE_SYM( kernel->compute_rms_div_b_err     );
+////jawndanaoidnaiodn  RESTORE_SYM( kernel->compute_rms_div_e_err     );
+////jawndanaoidnaiodn  RESTORE_SYM( kernel->clean_div_e               );
+////jawndanaoidnaiodn  RESTORE_SYM( kernel->compute_div_b_err         );
+////jawndanaoidnaiodn  RESTORE_SYM( kernel->compute_rms_div_b_err     );
   RESTORE_SYM( kernel->clean_div_b               );
 }
 

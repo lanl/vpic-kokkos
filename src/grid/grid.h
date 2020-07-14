@@ -114,6 +114,7 @@ typedef struct grid {
                           // voxels owned by processor "rank".  Note:
                           // range[rank+1]-range[rank] <~ 2^31 / 6
 
+  const int NUM_NEIGHBORS = 27;
   int64_t * ALIGNED(128) neighbor;
                           // (0:5,0:local_num_voxel-1) FORTRAN indexed
                           // array neighbor(0:5,lidx) are the global
@@ -142,8 +143,10 @@ typedef struct grid {
   //    k_mpi_t::HostMirror k_mpi_h;
 
   // We want to call this *only* once the neighbor is done
-  void init_kokkos_grid(int num_neighbor)
+  void init_kokkos_grid()
   {
+      int num_neighbor = NUM_NEIGHBORS;
+
       k_neighbor_d = k_neighbor_t("k_neighbor_d", num_neighbor);
       //k_neighbor_h = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_neighbor_d);
       k_neighbor_h = Kokkos::create_mirror_view(k_neighbor_d);

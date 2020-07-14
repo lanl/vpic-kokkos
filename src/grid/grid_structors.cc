@@ -17,7 +17,7 @@ void
 checkpt_grid( const grid_t * g ) {
   CHECKPT( g, 1 );
   if( g->range    ) CHECKPT_ALIGNED( g->range, world_size+1, 16 );
-  if( g->neighbor ) CHECKPT_ALIGNED( g->neighbor, 6*g->nv, 128 );
+  if( g->neighbor ) CHECKPT_ALIGNED( g->neighbor, g->NUM_NEIGHBORS * g->nv, 128 );
   CHECKPT_PTR( g->mp );
 }
 
@@ -39,6 +39,7 @@ new_grid( void ) {
   //MALLOC( g, 1 );
   //CLEAR( g, 1 );
 
+  // TODO: dry this 27
   for( i=0; i<27; i++ ) g->bc[i] = anti_symmetric_fields;
   g->bc[BOUNDARY(0,0,0)] = world_rank;
   g->mp = new_mp( 27 );

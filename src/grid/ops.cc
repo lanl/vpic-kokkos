@@ -54,35 +54,178 @@ size_grid( grid_t * g,
   g->rangeh = g->range[world_rank+1]-1;
 
   FREE_ALIGNED( g->neighbor );
-  MALLOC_ALIGNED( g->neighbor, 6*g->nv, 128 );
+
+  int num_neighbors = g->NUM_NEIGHBORS;
+  MALLOC_ALIGNED( g->neighbor, num_neighbors * g->nv, 128 );
+
+
+  // Originally the neighbor mapping is
+  // 0 => x-1, y,   z
+  // 1 => x,   y-1, z
+  // 2 => x,   y,   z-1
+
+  // 3 => x+1, y,   z
+  // 4 => x,   y+1, z
+  // 5 => x,   y,   z+1
+
+  // We extend that to include:
+  // remainder of x=0 plane
+  // 6 => x, y-1, z-1
+  // 7 => x, y-1, z+1
+  // 8 => x, y+1, z-1
+  // 9 => x, y+1, z+1
+
+  // x-1 plane
+  // 10 => x-1, y-1, z
+  // 11 => x-1, y+1, z
+
+  // 12 => x-1, y, z-1
+  // 13 => x-1, y, z+1
+
+  // diagonals
+  // 14 => x-1, y-1, z-1
+  // 15 => x-1, y-1, z+1
+  // 16 => x-1, y+1, z-1
+  // 17 => x-1, y+1, z+1
+
+  // x+1 plane
+  // 18 => x+1, y-1, z
+  // 19 => x+1, y+1, z
+
+  // 20 => x+1, y, z-1
+  // 21 => x+1, y, z+1
+
+  // diagonals
+  // 22 => x+1, y-1, z-1
+  // 23 => x+1, y-1, z+1
+  // 24 => x+1, y+1, z-1
+  // 25 => x+1, y+1, z+1
+
+  // Self?
+  // 26 => x, y, z
 
   for( z=0; z<=lnz+1; z++ ) {
     for( y=0; y<=lny+1; y++ ) {
       for( x=0; x<=lnx+1; x++ ) {
-        i = 6*LOCAL_CELL_ID(x,y,z);
-        g->neighbor[i+0] = g->rangel + LOCAL_CELL_ID(x-1,y,z);
-        g->neighbor[i+1] = g->rangel + LOCAL_CELL_ID(x,y-1,z);
-        g->neighbor[i+2] = g->rangel + LOCAL_CELL_ID(x,y,z-1);
-        g->neighbor[i+3] = g->rangel + LOCAL_CELL_ID(x+1,y,z);
-        g->neighbor[i+4] = g->rangel + LOCAL_CELL_ID(x,y+1,z);
-        g->neighbor[i+5] = g->rangel + LOCAL_CELL_ID(x,y,z+1);
+        i = num_neighbors * LOCAL_CELL_ID(x,y,z);
+
+        // TODO: we could replace all this indexing with a constexpr function
+        // that knows how to turn each 3d index into a 1d index at compile time
+        // for us. This would allow the user to then use a 3d index where the
+        // want to, and still have no over / the same over head as the user
+        // using 1d
+        g->neighbor[i+0]  = g->rangel + LOCAL_CELL_ID(x-1, y,   z  );
+        g->neighbor[i+1]  = g->rangel + LOCAL_CELL_ID(x,   y-1, z  );
+        g->neighbor[i+2]  = g->rangel + LOCAL_CELL_ID(x,   y,   z-1);
+        g->neighbor[i+3]  = g->rangel + LOCAL_CELL_ID(x+1, y,   z  );
+        g->neighbor[i+4]  = g->rangel + LOCAL_CELL_ID(x,   y+1, z  );
+        g->neighbor[i+5]  = g->rangel + LOCAL_CELL_ID(x,   y,   z+1);
+
+        g->neighbor[i+6]  = g->rangel + LOCAL_CELL_ID(x,   y-1, z-1);
+        g->neighbor[i+7]  = g->rangel + LOCAL_CELL_ID(x,   y-1, z+1);
+        g->neighbor[i+8]  = g->rangel + LOCAL_CELL_ID(x,   y+1, z+1);
+        g->neighbor[i+9]  = g->rangel + LOCAL_CELL_ID(x,   y+1, z+1);
+
+        g->neighbor[i+10] = g->rangel + LOCAL_CELL_ID(x-1, y-1, z  );
+        g->neighbor[i+11] = g->rangel + LOCAL_CELL_ID(x-1, y+1, z  );
+        g->neighbor[i+12] = g->rangel + LOCAL_CELL_ID(x-1, y,   z-1);
+        g->neighbor[i+13] = g->rangel + LOCAL_CELL_ID(x-1, y,   z+1);
+
+        g->neighbor[i+14] = g->rangel + LOCAL_CELL_ID(x-1, y-1, z-1);
+        g->neighbor[i+15] = g->rangel + LOCAL_CELL_ID(x-1, y-1, z+1);
+        g->neighbor[i+16] = g->rangel + LOCAL_CELL_ID(x-1, y+1, z-1);
+        g->neighbor[i+17] = g->rangel + LOCAL_CELL_ID(x-1, y+1, z+1);
+
+        g->neighbor[i+18] = g->rangel + LOCAL_CELL_ID(x+1, y-1, z  );
+        g->neighbor[i+19] = g->rangel + LOCAL_CELL_ID(x+1, y+1, z  );
+        g->neighbor[i+20] = g->rangel + LOCAL_CELL_ID(x+1, y,   z-1);
+        g->neighbor[i+21] = g->rangel + LOCAL_CELL_ID(x+1, y,   z+1);
+
+        g->neighbor[i+22] = g->rangel + LOCAL_CELL_ID(x+1, y-1, z+1);
+        g->neighbor[i+23] = g->rangel + LOCAL_CELL_ID(x+1, y-1, z+1);
+        g->neighbor[i+24] = g->rangel + LOCAL_CELL_ID(x+1, y+1, z-1);
+        g->neighbor[i+25] = g->rangel + LOCAL_CELL_ID(x+1, y+1, z+1);
+
+        // TODO: we likely don't need this?
+        g->neighbor[i+26] = g->rangel + LOCAL_CELL_ID(x  , y  , z  );
+
         // Set boundary faces appropriately
-        if( x==1   ) g->neighbor[i+0] = reflect_particles;
-        if( y==1   ) g->neighbor[i+1] = reflect_particles;
-        if( z==1   ) g->neighbor[i+2] = reflect_particles;
-        if( x==lnx ) g->neighbor[i+3] = reflect_particles;
-        if( y==lny ) g->neighbor[i+4] = reflect_particles;
-        if( z==lnz ) g->neighbor[i+5] = reflect_particles;
+        if( x==1   ) {
+            g->neighbor[i+0] = reflect_particles;
+            g->neighbor[i+10] = reflect_particles;
+            g->neighbor[i+11] = reflect_particles;
+            g->neighbor[i+12] = reflect_particles;
+            g->neighbor[i+13] = reflect_particles;
+            g->neighbor[i+14] = reflect_particles;
+            g->neighbor[i+15] = reflect_particles;
+            g->neighbor[i+16] = reflect_particles;
+            g->neighbor[i+17] = reflect_particles;
+        }
+        if( y==1   ) {
+            g->neighbor[i+1] = reflect_particles;
+            g->neighbor[i+6] = reflect_particles;
+            g->neighbor[i+7] = reflect_particles;
+            g->neighbor[i+10] = reflect_particles;
+            g->neighbor[i+14] = reflect_particles;
+            g->neighbor[i+15] = reflect_particles;
+            g->neighbor[i+18] = reflect_particles;
+            g->neighbor[i+22] = reflect_particles;
+            g->neighbor[i+23] = reflect_particles;
+        }
+        if( z==1   ) {
+            g->neighbor[i+2] = reflect_particles;
+            g->neighbor[i+6] = reflect_particles;
+            g->neighbor[i+8] = reflect_particles;
+            g->neighbor[i+12] = reflect_particles;
+            g->neighbor[i+14] = reflect_particles;
+            g->neighbor[i+16] = reflect_particles;
+            g->neighbor[i+20] = reflect_particles;
+            g->neighbor[i+22] = reflect_particles;
+            g->neighbor[i+24] = reflect_particles;
+        }
+        if( x==lnx ) {
+            g->neighbor[i+3] = reflect_particles;
+            g->neighbor[i+18] = reflect_particles;
+            g->neighbor[i+19] = reflect_particles;
+            g->neighbor[i+20] = reflect_particles;
+            g->neighbor[i+21] = reflect_particles;
+            g->neighbor[i+22] = reflect_particles;
+            g->neighbor[i+23] = reflect_particles;
+            g->neighbor[i+24] = reflect_particles;
+            g->neighbor[i+25] = reflect_particles;
+        }
+        if( y==lny ) {
+            g->neighbor[i+4] = reflect_particles;
+            g->neighbor[i+8] = reflect_particles;
+            g->neighbor[i+9] = reflect_particles;
+            g->neighbor[i+11] = reflect_particles;
+            g->neighbor[i+16] = reflect_particles;
+            g->neighbor[i+17] = reflect_particles;
+            g->neighbor[i+19] = reflect_particles;
+            g->neighbor[i+24] = reflect_particles;
+            g->neighbor[i+25] = reflect_particles;
+        }
+        if( z==lnz ) {
+            g->neighbor[i+5] = reflect_particles;
+            g->neighbor[i+7] = reflect_particles;
+            g->neighbor[i+9] = reflect_particles;
+            g->neighbor[i+5] = reflect_particles;
+            g->neighbor[i+13] = reflect_particles;
+            g->neighbor[i+15] = reflect_particles;
+            g->neighbor[i+17] = reflect_particles;
+            g->neighbor[i+21] = reflect_particles;
+            g->neighbor[i+25] = reflect_particles;
+        }
+
         // Set ghost cells appropriately
         if( x==0 || x==lnx+1 ||
             y==0 || y==lny+1 ||
-            z==0 || z==lnz+1 ) {
-          g->neighbor[i+0] = reflect_particles;
-          g->neighbor[i+1] = reflect_particles;
-          g->neighbor[i+2] = reflect_particles;
-          g->neighbor[i+3] = reflect_particles;
-          g->neighbor[i+4] = reflect_particles;
-          g->neighbor[i+5] = reflect_particles;
+            z==0 || z==lnz+1 )
+        {
+            for (int z = 0; z < num_neighbors; z++)
+            {
+              g->neighbor[i+z] = reflect_particles;
+            }
         }
       }
     }
@@ -136,6 +279,8 @@ join_grid( grid_t * g,
   lny = g->ny;
   lnz = g->nz;
   rnc = g->range[rank+1] - g->range[rank]; // Note: rnc <~ 2^31 / 6
+  // TODO: is the 6 in this comment still true if we change the number of
+  // neighbors to be more?
 
 # define GLUE_FACE(tag,i,j,k,X,Y,Z) BEGIN_PRIMITIVE {           \
     if( boundary==BOUNDARY(i,j,k) ) {                           \
@@ -150,7 +295,7 @@ join_grid( grid_t * g,
           r##X = (i+j+k)<0 ? rn##X : 1;                         \
           r##Y = l##Y;                                          \
           r##Z = l##Z;                                          \
-          g->neighbor[ 6*LOCAL_CELL_ID(lx,ly,lz) + tag ] =      \
+          g->neighbor[ num_neighbors*LOCAL_CELL_ID(lx,ly,lz) + tag ] =      \
             g->range[rank] + REMOTE_CELL_ID(rx,ry,rz);          \
         }                                                       \
       }                                                         \
@@ -158,6 +303,7 @@ join_grid( grid_t * g,
     }                                                           \
   } END_PRIMITIVE
 
+  int num_neighbors = g->NUM_NEIGHBORS;
   GLUE_FACE(0,-1, 0, 0,x,y,z);
   GLUE_FACE(1, 0,-1, 0,y,z,x);
   GLUE_FACE(2, 0, 0,-1,z,x,y);
@@ -199,11 +345,12 @@ set_pbc( grid_t * g,
       l##X = (i+j+k)<0 ? 1 : ln##X;                             \
       for( l##Z=1; l##Z<=ln##Z; l##Z++ )                        \
         for( l##Y=1; l##Y<=ln##Y; l##Y++ )                      \
-          g->neighbor[ 6*LOCAL_CELL_ID(lx,ly,lz) + tag ] = pbc; \
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + tag ] = pbc; \
       return;                                                   \
     }                                                           \
   } END_PRIMITIVE
 
+  int num_neighbor = g->NUM_NEIGHBORS;
   SET_PBC(0,-1, 0, 0,x,y,z);
   SET_PBC(1, 0,-1, 0,y,z,x);
   SET_PBC(2, 0, 0,-1,z,x,y);
