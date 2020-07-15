@@ -130,6 +130,18 @@ class species_t {
         // And is basically the same as nm at certain times?
         int num_to_copy = 0;
 
+        // Step when the species was last copied to to the host.  The copy can
+        // take place at any time during the step, so checking
+        // species_copy_last==step() does not mean that the host and device
+        // data are the same.  Typically, copy is called immediately after the
+        // step is incremented and before or during user_diagnostics.  Checking
+        // species_copy_last==step() in these circumstances does mean the host
+        // is up to date, unless you do unusual stuff in user_diagnostics.
+        //
+        // This number is tracked on the host only, and may be inaccurate on
+        // the device.
+        int64_t species_copy_last = -1;
+
         // Init Kokkos Particle Arrays
         species_t(int n_particles, int n_pmovers) :
             k_p_d("k_particles", n_particles),
