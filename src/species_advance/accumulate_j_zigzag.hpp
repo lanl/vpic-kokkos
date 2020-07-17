@@ -78,9 +78,9 @@
     // displacement and midpoint variables change will help in 
     // future development.
 
-    //printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
+    printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
 
-    //printf("\nParticle %d: disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
+    printf("\nParticle %d: disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
 
     // Compute the direction that the particle moves.
     // This value is the also the boundary of the cell 
@@ -89,7 +89,7 @@
     s_dir[1] = (s_dispy>0) ? 1 : -1;
     s_dir[2] = (s_dispz>0) ? 1 : -1;
 
-    //printf("\ns_dir = %d, %d, %d", (int)s_dir[0], (int)s_dir[1], (int)s_dir[2]);
+    printf("\ns_dir = %d, %d, %d", (int)s_dir[0], (int)s_dir[1], (int)s_dir[2]);
 
     // Compute the twice the fractional distance to each potential
     // streak/cell face intersection. This number is the amount of
@@ -229,21 +229,21 @@
     //Kokkos::atomic_add(&a[3], v3);
    
     accumulate_j(x,y,z);
-    //printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
 
     accumulate_j(y,z,x);
-    //printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
 
     accumulate_j(z,x,y);
-    //printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
@@ -252,25 +252,24 @@
 #   undef accumulate_j
 
 
+    printf("\nAfter accumulation...\npre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the remaining particle displacment
     pm->dispx -= s_dispx;
     pm->dispy -= s_dispy;
     pm->dispz -= s_dispz;
 
-    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset
-    // TODO: In the case that axis == 3, this seems to overcompensate for the change in position...
     p_dx += s_dispx+s_dispx;
     p_dy += s_dispy+s_dispy;
     p_dz += s_dispz+s_dispz;
 
     // If an end streak, return success (should be ~50% of the time)
-    //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+    printf("\nAfter adjusting position...\naxis %d x %e y %e z %e disp x %e y %e z %e", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
 
     if( axis == 3 ) 
     {
-        //printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
-        //        pi, p_dx, p_dy, p_dz, xr, yr, zr);
+        printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
+                pi, p_dx, p_dy, p_dz, xr, yr, zr);
         break;
     }
 
@@ -281,51 +280,126 @@
     // entry / exit coordinate for the particle is guaranteed to be
     // +/-1 _exactly_ for the particle.
 
+    // Change the value of s_dir to be -1, 0, 1. The zero case 
+    // corresponds to when the particle does not leave the cell in a
+    // particular direction and is moved to the midpoint in that
+    // direction.
+    s_dir[0] = ( xr == s_dir[0] ? s_dir[0] : 0 );
+    s_dir[1] = ( yr == s_dir[1] ? s_dir[1] : 0 );
+    s_dir[2] = ( zr == s_dir[2] ? s_dir[2] : 0 );
+    
+    printf("\ns_dir = %d, %d, %d", (int)s_dir[0], (int)s_dir[1], (int)s_dir[2]);
+
+    // Compute the neighbor cell index the particle moves to. 
+    // Note that 0,0,0 => 13 will return the particle to the
+    // same cell. 
+    // TODO: neighbor_index should replace the face variable
+    int32_t neighbor_index = ( s_dir[0] + 1 ) * 9 + ( s_dir[1] + 1 ) * 3 + ( s_dir[2] + 1 );
+    printf("\nneighbor_index = %d", neighbor_index);
+
+    /* Old stuffs ...
     // TODO: Change this to allow for corner crossing.
     v0 = s_dir[axis];
     k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
                            // _exactly_ on the boundary.
     face = axis; if( v0>0 ) face += 3;
+    */
 
     // TODO: clean this fixed index to an enum
     //neighbor = g->neighbor[ 6*ii + face ];
-    neighbor = d_neighbor( 6*ii + face );
+    // Throw neighbor through this function to get the cell
+    // index the particle moves into.
+    neighbor = d_neighbor( 27 * ii + neighbor_index );
+    printf("\nneighbor value, reflect_particles = %d, %d", (int)neighbor, (int)reflect_particles);
 
     // TODO: these two if statements used to be marked UNLIKELY,
     // but that intrinsic doesn't work on GPU.
     // for performance portability, maybe specialize UNLIKELY
     // for CUDA mode and put it back
 
-
+    
     if( neighbor==reflect_particles ) {
-      // Hit a reflecting boundary condition.  Reflect the particle
-      // momentum and remaining displacement and keep moving the
-      // particle.
-      //printf("\n*************************\nParticle %d was reflected.\n************************\n", pi);
-      k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
+        // Hit a reflecting boundary condition.  Reflect the particle
+        // momentum and remaining displacement and keep moving the
+        // particle.
+        printf("\nI, particle %d, was reflected!\nBefore reflection...", pi);
+        printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
+                                            k_particles(pi, particle_var::uy),
+                                            k_particles(pi, particle_var::uz));
+        if ( s_dir[0] != 0 )
+        {
+            k_particles(pi, particle_var::ux ) = -k_particles(pi, particle_var::ux );
+            pm->dispx *= -1.;
+        }
 
-      // TODO: make this safer
-      //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
-      //k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
-      // TODO: replace this, it's horrible
-      (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
+        if ( s_dir[1] != 0 )
+        {
+            k_particles(pi, particle_var::uy ) = -k_particles(pi, particle_var::uy );
+            pm->dispy *= -1.;
+        }
 
+        if ( s_dir[2] != 0 )
+        {
+            k_particles(pi, particle_var::uz ) = -k_particles(pi, particle_var::uz );
+            pm->dispz *= -1.;
+        }
 
-      continue;
+        printf("\nAfter reflection...");
+        printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
+                                            k_particles(pi, particle_var::uy),
+                                            k_particles(pi, particle_var::uz));
+        
+        /* Old stuffs ... 
+        k_particles(pi, particle_var::ux + axis ) = -k_particles(pi, particle_var::ux + axis );
+
+        // TODO: make this safer
+        //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
+        //k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
+        // TODO: replace this, it's horrible
+        (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
+        */
+
+        continue;
     }
 
     if( neighbor<rangel || neighbor>rangeh ) {
-      // Cannot handle the boundary condition here.  Save the updated
-      // particle position, face it hit and update the remaining
-      // displacement in the particle mover as a bitshift.
-      pii = 8*pii + face;
-      return 1; // Return "mover still in use"
-      }
+        // Cannot handle the boundary condition here.  Save the updated
+        // particle position, face it hit and update the remaining
+        // displacement in the particle mover as a bitshift.
+        //
+        // 26 == 11010 in binary and so multiplying by 32 should be
+        // sufficient for now. 
+        //
+        // TODO: Change this to something better to not reduce the 
+        // cell number by too much. 
+        //pii = 8*pii + face;
+        printf("\nWeird if statement...\npii = %d", pii);
+        pii = 32 * pii + neighbor_index;
+        printf("\npii = %d", pii);
+        return 1; // Return "mover still in use"
+    }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
 
+    // TODO: How is rangel affected by 26 neighbors?
+    printf("\npii = %d", pii);
     pii = neighbor - rangel;
+    printf("\npii = %d", pii);
     /**/                         // Note: neighbor - rangel < 2^31 / 6
-    k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+    //k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+   
+    // Convert the coordinate system when the particle changes cells.
+    // The coordinate change is x -> x - 2 * s_dir to move the origin
+    // of coordinates along the s_dir direction by 2. 
+    //
+    // In the case where s_dir == 0, then this approach holds and there
+    // is no coordinate conversion.
+    //
+    // TODO: Make an enumeration for x,y,z not being 0,1,2.
+    k_particles( pi, particle_var::dx ) -= 2. * s_dir[0];
+    k_particles( pi, particle_var::dy ) -= 2. * s_dir[1];
+    k_particles( pi, particle_var::dz ) -= 2. * s_dir[2];
+
+    
 

@@ -55,9 +55,11 @@ size_grid( grid_t * g,
 
   FREE_ALIGNED( g->neighbor );
 
+  int cell_planes_per_axis = g->CELL_PLANES_PER_AXIS;
   int num_neighbors = g->NUM_NEIGHBORS;
   MALLOC_ALIGNED( g->neighbor, num_neighbors * g->nv, 128 );
-
+  
+    
 
   // Originally the neighbor mapping is
   // 0 => x-1, y,   z
@@ -67,7 +69,28 @@ size_grid( grid_t * g,
   // 3 => x+1, y,   z
   // 4 => x,   y+1, z
   // 5 => x,   y,   z+1
+  
+  // We change the local neighborhood scheme
+  // to include not only the faces, as before, 
+  // but the edges and corners of each cell,
+  // as well. The 3d -> 1d mapping we employ 
+  // is as follows, for x_index, y_index, 
+  // z_index each being one of {-1, 0, 1}:
+  //
+  // neighbor =   ( x_index + 1 ) * 3 * 3
+  //            + ( y_index + 1 ) * 3
+  //            + ( z_index + 1 ).
+  //
+  // Note that this is an identity mapping
+  // for neighbor = 13. That is, 
+  //
+  // neighbor(0, 0, 0) = 13,
+  //
+  // such that we include the original cell 
+  // in its own local neighborhood.
 
+  /* TODO: Get rid of the following.
+  
   // We extend that to include:
   // remainder of x=0 plane
   // 6 => x, y-1, z-1
@@ -103,11 +126,33 @@ size_grid( grid_t * g,
 
   // Self?
   // 26 => x, y, z
+  
+  */
 
+  int neighbor_index = 0;
   for( z=0; z<=lnz+1; z++ ) {
     for( y=0; y<=lny+1; y++ ) {
       for( x=0; x<=lnx+1; x++ ) {
         i = num_neighbors * LOCAL_CELL_ID(x,y,z);
+
+        // Fill the neighbor array with the appropriate
+        // points
+        for ( int x_index = -1; x_index < cell_planes_per_axis - 1; ++x_index )
+        {
+          for ( int y_index = -1; y_index < cell_planes_per_axis - 1; ++y_index )
+          {
+            for ( int z_index = -1; z_index < cell_planes_per_axis - 1; ++z_index )
+            {
+              // Determine the local neighbor.
+              neighbor_index = ( x_index + 1 ) * 9 + ( y_index + 1 ) * 3 + ( z_index + 1 );
+
+              // Write the neighbor index properly. 
+              g->neighbor[i + neighbor_index] = g->rangel + LOCAL_CELL_ID( x + x_index, y + y_index, z + z_index ); 
+            }
+          }
+        }
+
+        /* Not doing this method...
 
         // TODO: we could replace all this indexing with a constexpr function
         // that knows how to turn each 3d index into a 1d index at compile time
@@ -149,72 +194,89 @@ size_grid( grid_t * g,
         // TODO: we likely don't need this?
         g->neighbor[i+26] = g->rangel + LOCAL_CELL_ID(x  , y  , z  );
 
+        */
+        
         // Set boundary faces appropriately
-        if( x==1   ) {
-            g->neighbor[i+0] = reflect_particles;
-            g->neighbor[i+10] = reflect_particles;
-            g->neighbor[i+11] = reflect_particles;
-            g->neighbor[i+12] = reflect_particles;
-            g->neighbor[i+13] = reflect_particles;
-            g->neighbor[i+14] = reflect_particles;
-            g->neighbor[i+15] = reflect_particles;
-            g->neighbor[i+16] = reflect_particles;
-            g->neighbor[i+17] = reflect_particles;
+        // Here are the English conventions for 
+        // the position along each axis:
+        //
+        // ^ z         z: height ( low to high )
+        // |   / y     y: depth  ( shallow to deep )
+        // |  /        x: left or right 
+        // | /
+        // |/
+        // ---------> x
+        if( x == 1   ) {
+            // x-1 plane for the left most cell
+            g->neighbor[i +  0] = reflect_particles;
+            g->neighbor[i +  1] = reflect_particles;
+            g->neighbor[i +  2] = reflect_particles;
+            g->neighbor[i +  3] = reflect_particles;
+            g->neighbor[i +  4] = reflect_particles;
+            g->neighbor[i +  5] = reflect_particles;
+            g->neighbor[i +  6] = reflect_particles;
+            g->neighbor[i +  7] = reflect_particles;
+            g->neighbor[i +  8] = reflect_particles;
         }
-        if( y==1   ) {
-            g->neighbor[i+1] = reflect_particles;
-            g->neighbor[i+6] = reflect_particles;
-            g->neighbor[i+7] = reflect_particles;
-            g->neighbor[i+10] = reflect_particles;
-            g->neighbor[i+14] = reflect_particles;
-            g->neighbor[i+15] = reflect_particles;
-            g->neighbor[i+18] = reflect_particles;
-            g->neighbor[i+22] = reflect_particles;
-            g->neighbor[i+23] = reflect_particles;
+        if( y == 1  ) {
+            // y-1 plane for the shallowest cell
+            g->neighbor[i +  0] = reflect_particles;
+            g->neighbor[i +  1] = reflect_particles;
+            g->neighbor[i +  2] = reflect_particles;
+            g->neighbor[i +  9] = reflect_particles;
+            g->neighbor[i + 10] = reflect_particles;
+            g->neighbor[i + 11] = reflect_particles;
+            g->neighbor[i + 18] = reflect_particles;
+            g->neighbor[i + 19] = reflect_particles;
+            g->neighbor[i + 20] = reflect_particles;
         }
         if( z==1   ) {
-            g->neighbor[i+2] = reflect_particles;
-            g->neighbor[i+6] = reflect_particles;
-            g->neighbor[i+8] = reflect_particles;
-            g->neighbor[i+12] = reflect_particles;
-            g->neighbor[i+14] = reflect_particles;
-            g->neighbor[i+16] = reflect_particles;
-            g->neighbor[i+20] = reflect_particles;
-            g->neighbor[i+22] = reflect_particles;
-            g->neighbor[i+24] = reflect_particles;
+            // z-1 plane for the lowest cell
+            g->neighbor[i +  0] = reflect_particles;
+            g->neighbor[i +  3] = reflect_particles;
+            g->neighbor[i +  6] = reflect_particles;
+            g->neighbor[i +  9] = reflect_particles;
+            g->neighbor[i + 12] = reflect_particles;
+            g->neighbor[i + 15] = reflect_particles;
+            g->neighbor[i + 18] = reflect_particles;
+            g->neighbor[i + 21] = reflect_particles;
+            g->neighbor[i + 24] = reflect_particles;
         }
         if( x==lnx ) {
-            g->neighbor[i+3] = reflect_particles;
-            g->neighbor[i+18] = reflect_particles;
-            g->neighbor[i+19] = reflect_particles;
-            g->neighbor[i+20] = reflect_particles;
-            g->neighbor[i+21] = reflect_particles;
-            g->neighbor[i+22] = reflect_particles;
-            g->neighbor[i+23] = reflect_particles;
-            g->neighbor[i+24] = reflect_particles;
-            g->neighbor[i+25] = reflect_particles;
+            // x+1 plane for the right most cell
+            g->neighbor[i + 18] = reflect_particles;
+            g->neighbor[i + 19] = reflect_particles;
+            g->neighbor[i + 20] = reflect_particles;
+            g->neighbor[i + 21] = reflect_particles;
+            g->neighbor[i + 22] = reflect_particles;
+            g->neighbor[i + 23] = reflect_particles;
+            g->neighbor[i + 24] = reflect_particles;
+            g->neighbor[i + 25] = reflect_particles;
+            g->neighbor[i + 26] = reflect_particles;
         }
         if( y==lny ) {
-            g->neighbor[i+4] = reflect_particles;
-            g->neighbor[i+8] = reflect_particles;
-            g->neighbor[i+9] = reflect_particles;
-            g->neighbor[i+11] = reflect_particles;
-            g->neighbor[i+16] = reflect_particles;
-            g->neighbor[i+17] = reflect_particles;
-            g->neighbor[i+19] = reflect_particles;
-            g->neighbor[i+24] = reflect_particles;
-            g->neighbor[i+25] = reflect_particles;
+            // y+1 plane for the deepest cell
+            g->neighbor[i +  6] = reflect_particles;
+            g->neighbor[i +  7] = reflect_particles;
+            g->neighbor[i +  8] = reflect_particles;
+            g->neighbor[i + 15] = reflect_particles;
+            g->neighbor[i + 16] = reflect_particles;
+            g->neighbor[i + 17] = reflect_particles;
+            g->neighbor[i + 24] = reflect_particles;
+            g->neighbor[i + 25] = reflect_particles;
+            g->neighbor[i + 26] = reflect_particles;
         }
         if( z==lnz ) {
-            g->neighbor[i+5] = reflect_particles;
-            g->neighbor[i+7] = reflect_particles;
-            g->neighbor[i+9] = reflect_particles;
-            g->neighbor[i+5] = reflect_particles;
-            g->neighbor[i+13] = reflect_particles;
-            g->neighbor[i+15] = reflect_particles;
-            g->neighbor[i+17] = reflect_particles;
-            g->neighbor[i+21] = reflect_particles;
-            g->neighbor[i+25] = reflect_particles;
+            // y+1 plane for the highest cell
+            g->neighbor[i +  2] = reflect_particles;
+            g->neighbor[i +  5] = reflect_particles;
+            g->neighbor[i +  8] = reflect_particles;
+            g->neighbor[i + 11] = reflect_particles;
+            g->neighbor[i + 14] = reflect_particles;
+            g->neighbor[i + 17] = reflect_particles;
+            g->neighbor[i + 20] = reflect_particles;
+            g->neighbor[i + 23] = reflect_particles;
+            g->neighbor[i + 26] = reflect_particles;
         }
 
         // Set ghost cells appropriately

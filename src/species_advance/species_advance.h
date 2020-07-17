@@ -303,6 +303,7 @@ move_p_kokkos(
     const float qsp
 )
 {
+  printf("\nHere?\n");
 
   #define p_dx    k_particles(pi, particle_var::dx)
   #define p_dy    k_particles(pi, particle_var::dy)
@@ -328,6 +329,10 @@ move_p_kokkos(
   //int pi = int(local_pm_i);
   int pi = pm->i;
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
+  
+  //const int num_neighbors = g->NUM_NEIGHBORS;
+  //printf("\nNum neighbors = %d\nStarting to move...\n", num_neighbors);
+  printf("\nNum neighbors = FAIL\nStarting to move...\n");
 
   q = qsp*p_w;
 

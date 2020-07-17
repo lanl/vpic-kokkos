@@ -113,7 +113,9 @@ typedef struct grid {
                           // (range[rank]:range[rank+1]-1) are global
                           // voxels owned by processor "rank".  Note:
                           // range[rank+1]-range[rank] <~ 2^31 / 6
-
+  
+  const int CELL_PLANES_PER_AXIS = 3; // -1, 0, 1. Shift by -1 to 
+                                      // use in for loops.
   const int NUM_NEIGHBORS = 27;
   int64_t * ALIGNED(128) neighbor;
                           // (0:5,0:local_num_voxel-1) FORTRAN indexed
