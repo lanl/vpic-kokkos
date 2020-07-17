@@ -211,8 +211,6 @@ sp_[id]->
     v4   = v1 + uy;
     v5   = v2 + uz;
 
-    //printf("\nv3, v4, v5 = %e, %e, %e");
-
     // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
     if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
         -v3<=one && -v4<=one && -v5<=one ) {
@@ -247,7 +245,6 @@ sp_[id]->
       v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
       v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
-      //printf("\naccumulate x,y,z: v0, v1, v2, v3 = %e, %e, %e, %e", v0, v1, v2, v3);
       ACCUMULATE_J( x,y,z );
       k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
       k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
@@ -268,8 +265,6 @@ sp_[id]->
 
 #     undef ACCUMULATE_J
 
-      printf("\nSimulation got here.\n");
-
     } else
     {                                    // Unlikely
         /*
@@ -279,14 +274,13 @@ sp_[id]->
 
            local_pm_i     = p_index;
         */
-      printf("\nI think Imma segfault here.\n");
       DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
       local_pm->dispx = ux;
       local_pm->dispy = uy;
       local_pm->dispz = uz;
       local_pm->i     = p_index;
 
-      printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
+      //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, k_particles_i, local_pm,
                          k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
         if( k_nm(0)<max_nm ) {

@@ -383,9 +383,9 @@
     // particle coordinate system and keep moving the particle.
 
     // TODO: How is rangel affected by 26 neighbors?
-    printf("\npii = %d", pii);
+    printf("\npii, rangel = %d, %d", pii, rangel);
     pii = neighbor - rangel;
-    printf("\npii = %d", pii);
+    printf("\npii, rangel = %d, %d", pii, rangel);
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     //k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
    
@@ -397,9 +397,21 @@
     // is no coordinate conversion.
     //
     // TODO: Make an enumeration for x,y,z not being 0,1,2.
+    printf("\nParticle %d before coordinate shift", pi);
+    printf("\ndx, dy, dz = %e, %e, %e", k_particles( pi, particle_var::dx ),
+                                        k_particles( pi, particle_var::dy ),
+                                        k_particles( pi, particle_var::dz ));
     k_particles( pi, particle_var::dx ) -= 2. * s_dir[0];
     k_particles( pi, particle_var::dy ) -= 2. * s_dir[1];
     k_particles( pi, particle_var::dz ) -= 2. * s_dir[2];
+
+
+    printf("\nParticle %d after coordinate shift", pi);
+    printf("\ndx, dy, dz = %e, %e, %e", k_particles( pi, particle_var::dx ),
+                                        k_particles( pi, particle_var::dy ),
+                                        k_particles( pi, particle_var::dz ));
+
+    printf("\n##########################################\n");
 
     
 
