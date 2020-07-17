@@ -309,7 +309,7 @@
     //neighbor = g->neighbor[ 6*ii + face ];
     // Throw neighbor through this function to get the cell
     // index the particle moves into.
-    neighbor = d_neighbor( neighbor_index );
+    neighbor = d_neighbor( num_neighbors * pii + neighbor_index );
     printf("\nneighbor value, reflect_particles = %d, %d", (int)neighbor, (int)reflect_particles);
 
     // TODO: these two if statements used to be marked UNLIKELY,

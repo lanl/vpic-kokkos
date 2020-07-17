@@ -211,7 +211,7 @@ sp_[id]->
     v4   = v1 + uy;
     v5   = v2 + uz;
 
-    printf("\nv3, v4, v5 = %e, %e, %e");
+    //printf("\nv3, v4, v5 = %e, %e, %e");
 
     // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
     if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
@@ -247,7 +247,7 @@ sp_[id]->
       v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
       v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
-      printf("\naccumulate x,y,z: v0, v1, v2, v3 = %e, %e, %e, %e", v0, v1, v2, v3);
+      //printf("\naccumulate x,y,z: v0, v1, v2, v3 = %e, %e, %e, %e", v0, v1, v2, v3);
       ACCUMULATE_J( x,y,z );
       k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
       k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
@@ -267,6 +267,8 @@ sp_[id]->
       k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
 
 #     undef ACCUMULATE_J
+
+      printf("\nSimulation got here.\n");
 
     } else
     {                                    // Unlikely
