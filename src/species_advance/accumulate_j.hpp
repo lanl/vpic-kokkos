@@ -10,6 +10,10 @@
         https://doi.org/10.1016/0010-4655(92)90169-Y
 
    ****************************************************************/
+
+    printf("\nParticle %d Velocity before accumulation:", pii);
+    printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
+
     int ii = pii;
     s_midx = p_dx;
     s_midy = p_dy;
@@ -102,7 +106,7 @@
             pi, s_midx, s_midy, s_midz);
     printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
             pi, s_dispx, s_dispy, s_dispz);
-    printf("\nParticle %d: s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz = %e, %e, %e",
+    /*printf("\nParticle %d: s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz = %e, %e, %e",
             pi, s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz);
     printf("\nParticle %d: s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz = %e, %e, %e",
             pi, s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz);
@@ -111,6 +115,7 @@
         printf("\nParticle %d: s_midx + 2*s_dispx -/+ 2, s_midy + 2*s_dispy -/+ 2, s_midz + 2*s_dispz -/+ 2 = %e, %e, %e",
                 pi, s_midx + 2*s_dispx - 2*s_dir[0], s_midy + 2*s_dispy - 2*s_dir[1], s_midz + 2*s_dispz - 2*s_dir[2]);
     }
+    */
     
 
     float joe_midx = s_midx, joe_midy = s_midy, joe_midz = s_midz;
@@ -128,13 +133,13 @@
     s_midy += s_dispy;
     s_midz += s_dispz;
     
-    
+   /* 
     printf("\n\nAfter rescaling...");
     printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
             pi, s_midx, s_midy, s_midz);
     printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e\n",
             pi, s_dispx, s_dispy, s_dispz);
-    
+   */ 
 
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
@@ -164,21 +169,21 @@
     //Kokkos::atomic_add(&a[3], v3);
 
     accumulate_j(x,y,z);
-    //printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
 
     accumulate_j(y,z,x);
-    //printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
 
     accumulate_j(z,x,y);
-    //printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
@@ -202,10 +207,13 @@
     // If an end streak, return success (should be ~50% of the time)
     printf("\nStreak ended...\naxis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
 
+    printf("\nParticle %d Velocity after accumulation:", pii);
+    printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
+
     if( axis==3 ) 
     {
-        //printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
-        //        pi, p_dx, p_dy, p_dz, joe_midx + joe_dispx, joe_midy + joe_dispy, joe_midz + joe_dispz);
+        printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
+                pi, p_dx, p_dy, p_dz, joe_midx + joe_dispx, joe_midy + joe_dispy, joe_midz + joe_dispz);
         break;
     }
 
@@ -216,14 +224,43 @@
     // entry / exit coordinate for the particle is guaranteed to be
     // +/-1 _exactly_ for the particle.
 
+    /* Old stuff 
+       TODO: Remove
     v0 = s_dir[axis];
     k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
                            // _exactly_ on the boundary.
     face = axis; if( v0>0 ) face += 3;
+    */
+
+    // Change the value of s_dir to be -1, 0, 1. The zero case 
+    // corresponds to when the particle does not leave the cell in a
+    // particular direction and is moved to the midpoint in that
+    // direction.
+    s_dir[0] = ( p_dx == s_dir[0] ? s_dir[0] : 0 );
+    s_dir[1] = ( p_dy == s_dir[1] ? s_dir[1] : 0 );
+    s_dir[2] = ( p_dz == s_dir[2] ? s_dir[2] : 0 );
+    
+    printf("\ns_dir = %d, %d, %d", (int)s_dir[0], (int)s_dir[1], (int)s_dir[2]);
+
+    // Compute the neighbor cell index the particle moves to. 
+    // Note that 0,0,0 => 13 will return the particle to the
+    // same cell. 
+    // TODO: neighbor_index should replace the face variable
+    int32_t neighbor_index = ( s_dir[0] + 1 ) * 9 + ( s_dir[1] + 1 ) * 3 + ( s_dir[2] + 1 );
+    printf("\nneighbor_index = %d", neighbor_index);
+
 
     // TODO: clean this fixed index to an enum
     //neighbor = g->neighbor[ 6*ii + face ];
-    neighbor = d_neighbor( 6*ii + face );
+    neighbor = d_neighbor( num_neighbors * ii + neighbor_index );
+    // Throw neighbor through this function to get the cell
+    // index the particle moves into.
+    neighbor = d_neighbor( num_neighbors * pii + neighbor_index );
+    printf("\nneighbor value, reflect_particles = %d, %d", (int)neighbor, (int)reflect_particles);
+
+    if ( s_dir[0] != 0 ) axis = 0;
+    if ( s_dir[1] != 0 ) axis = 1;
+    if ( s_dir[2] != 0 ) axis = 2;
 
     // TODO: these two if statements used to be marked UNLIKELY,
     // but that intrinsic doesn't work on GPU.
@@ -262,3 +299,6 @@
     pii = neighbor - rangel;
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+
+    
+    printf("\n##################################################\n");

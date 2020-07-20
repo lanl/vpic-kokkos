@@ -13,6 +13,9 @@
 
    ****************************************************************/
     
+    printf("\nParticle %d Velocity before accumulation:", pii);
+    printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
+
     // In this approach, we keep the current accumulation the same,
     // and move the particles along the zigzag path. The position 
     // of the zig of the zigzag will be performed only if the 
@@ -252,11 +255,14 @@
 #   undef accumulate_j
 
 
-    printf("\nAfter accumulation...\npre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+    printf("\nParticle mover before updating...\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
     // Compute the remaining particle displacment
     pm->dispx -= s_dispx;
     pm->dispy -= s_dispy;
     pm->dispz -= s_dispz;
+
+    printf("\nCurrents deposited...\naxis %d x %e y %e z %e disp x %e y %e z %e", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+    printf("\nParticle mover updated...\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
 
     // Compute the new particle offset
     p_dx += s_dispx+s_dispx;
@@ -264,7 +270,10 @@
     p_dz += s_dispz+s_dispz;
 
     // If an end streak, return success (should be ~50% of the time)
-    printf("\nAfter adjusting position...\naxis %d x %e y %e z %e disp x %e y %e z %e", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+    printf("\nStreak ended...\naxis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+   
+    printf("\nParticle %d Velocity after accumulation:", pii);
+    printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
     if( axis == 3 ) 
     {
@@ -374,6 +383,7 @@
         // cell number by too much. 
         //pii = 8*pii + face;
         printf("\nWeird if statement...\npii = %d", pii);
+        // TODO: Fix boundary_p
         pii = 32 * pii + neighbor_index;
         printf("\npii = %d", pii);
         return 1; // Return "mover still in use"

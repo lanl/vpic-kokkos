@@ -187,7 +187,8 @@ boundary_p_kokkos(
       max_ci = nm;
     }
     n_ci = 0;
-
+    
+    int num_neighbors = g->NUM_NEIGHBORS;
     // For each species, load the movers
     LIST_FOR_EACH( sp, sp_list )
     {
@@ -225,14 +226,17 @@ boundary_p_kokkos(
 
             //int voxel = p0[i].i;
             int voxel = particle_send(copy_index);
-
-            int face = voxel & 7;
-            voxel >>= 3;
+            
+            // This finds the neighbor index from move_p (1 << 5 == 31)
+            int neighbor_index = voxel & 31;
+            // This undoes the previous bitshift multiplication by 32
+            voxel >>= 5;
 
             //p0[i].i = voxel;
             particle_send(copy_index) = voxel;
-
-            int64_t nn = neighbor[ 6*voxel + face ];
+            
+            // TODO: This needs to be fixed.
+            int64_t nn = neighbor[ num_neighbors * voxel + neighbor_index ];
 
             // TODO: Allow for absorbing boundaries
             // Absorb

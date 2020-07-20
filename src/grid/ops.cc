@@ -144,7 +144,7 @@ size_grid( grid_t * g,
             for ( int z_index = -1; z_index < cell_planes_per_axis - 1; ++z_index )
             {
               // Determine the local neighbor.
-              neighbor_index = ( x_index + 1 ) * 9 + ( y_index + 1 ) * 3 + ( z_index + 1 );
+              neighbor_index = ( x_index + 1 ) * cell_planes_per_axis * cell_planes_per_axis + ( y_index + 1 ) * cell_planes_per_axis + ( z_index + 1 );
 
               // Write the neighbor index properly. 
               g->neighbor[i + neighbor_index] = g->rangel + LOCAL_CELL_ID( x + x_index, y + y_index, z + z_index ); 
@@ -365,6 +365,7 @@ join_grid( grid_t * g,
     }                                                           \
   } END_PRIMITIVE
 
+  // TODO: Joe make this 27 cases
   int num_neighbors = g->NUM_NEIGHBORS;
   GLUE_FACE(0,-1, 0, 0,x,y,z);
   GLUE_FACE(1, 0,-1, 0,y,z,x);
@@ -389,6 +390,7 @@ set_fbc( grid_t * g,
   g->bc[boundary] = fbc;
 }
 
+// TODO: Fix this for 27 neighbors
 void
 set_pbc( grid_t * g,
          int boundary,
