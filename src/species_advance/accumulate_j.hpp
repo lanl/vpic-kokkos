@@ -11,7 +11,7 @@
 
    ****************************************************************/
 
-    printf("\nParticle %d Velocity before accumulation:", pii);
+    printf("\nParticle %d Velocity before accumulation:", pi);
     printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
     int ii = pii;
@@ -126,7 +126,8 @@
     // nothing is done (v3 == 1.0 at this point), but if axis != 3,
     // then s_disp is set to s_dir - s_mid along the appropriate
     // axis, while the other displacements are scaled to keep the
-    // particle on the same linear trajectory.    s_dispx *= v3;
+    // particle on the same linear trajectory.   
+    s_dispx *= v3;
     s_dispy *= v3;
     s_dispz *= v3;
     s_midx += s_dispx;
@@ -207,7 +208,7 @@
     // If an end streak, return success (should be ~50% of the time)
     printf("\nStreak ended...\naxis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
 
-    printf("\nParticle %d Velocity after accumulation:", pii);
+    printf("\nParticle %d Velocity after accumulation:", pi);
     printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
     if( axis==3 ) 
@@ -223,10 +224,10 @@
     // time; hitting a boundary is usually a rare event.  Note: the
     // entry / exit coordinate for the particle is guaranteed to be
     // +/-1 _exactly_ for the particle.
-
+    
+    v0 = s_dir[axis];
     /* Old stuff 
        TODO: Remove
-    v0 = s_dir[axis];
     k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
                            // _exactly_ on the boundary.
     face = axis; if( v0>0 ) face += 3;
@@ -300,9 +301,20 @@
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
 
+    printf("\npii, rangel = %d, %d", pii, rangel);
     pii = neighbor - rangel;
+    printf("\npii, rangel = %d, %d", pii, rangel);
     /**/                         // Note: neighbor - rangel < 2^31 / 6
+    printf("\nParticle %d before coordinate shift", pi);
+    printf("\ndx, dy, dz = %e, %e, %e", k_particles( pi, particle_var::dx ),
+                                        k_particles( pi, particle_var::dy ),
+                                        k_particles( pi, particle_var::dz ));
+
     k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
 
+    printf("\nParticle %d after coordinate shift", pi);
+    printf("\ndx, dy, dz = %e, %e, %e", k_particles( pi, particle_var::dx ),
+                                        k_particles( pi, particle_var::dy ),
+                                        k_particles( pi, particle_var::dz ));
     
     printf("\n##################################################\n");

@@ -13,7 +13,7 @@
 
    ****************************************************************/
     
-    printf("\nParticle %d Velocity before accumulation:", pii);
+    printf("\nParticle %d Velocity before accumulation:", pi);
     printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
     // In this approach, we keep the current accumulation the same,
@@ -120,12 +120,14 @@
     // midpoint if axis != 3, or it stops if axis == 3.
     v3 *= 0.5;
 
-    /*
+    
     printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
             pi, axis, v0, v1, v2, 2.*v3);
     printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
             pi, s_midx, s_midy, s_midz);
-    printf("\nParticle %d: s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz = %e, %e, %e",
+    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
+            pi, s_dispx, s_dispy, s_dispz);
+    /*printf("\nParticle %d: s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz = %e, %e, %e",
             pi, s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz);
     printf("\nParticle %d: s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz = %e, %e, %e",
             pi, s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz);
@@ -272,7 +274,7 @@
     // If an end streak, return success (should be ~50% of the time)
     printf("\nStreak ended...\naxis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
    
-    printf("\nParticle %d Velocity after accumulation:", pii);
+    printf("\nParticle %d Velocity after accumulation:", pi);
     printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
     if( axis == 3 ) 
