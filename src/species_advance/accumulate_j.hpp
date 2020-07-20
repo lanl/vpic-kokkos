@@ -236,11 +236,11 @@
     // corresponds to when the particle does not leave the cell in a
     // particular direction and is moved to the midpoint in that
     // direction.
-    s_dir[0] = ( p_dx == s_dir[0] ? s_dir[0] : 0 );
-    s_dir[1] = ( p_dy == s_dir[1] ? s_dir[1] : 0 );
-    s_dir[2] = ( p_dz == s_dir[2] ? s_dir[2] : 0 );
+    s_dir[0] = ( axis == 0 ? s_dir[0] : 0 );
+    s_dir[1] = ( axis == 1 ? s_dir[1] : 0 );
+    s_dir[2] = ( axis == 2 ? s_dir[2] : 0 );
     
-    printf("\ns_dir = %d, %d, %d", (int)s_dir[0], (int)s_dir[1], (int)s_dir[2]);
+    printf("\ns_dir = %d, %d, %d after axis calculation", (int)s_dir[0], (int)s_dir[1], (int)s_dir[2]);
 
     // Compute the neighbor cell index the particle moves to. 
     // Note that 0,0,0 => 13 will return the particle to the
@@ -261,6 +261,8 @@
     if ( s_dir[0] != 0 ) axis = 0;
     if ( s_dir[1] != 0 ) axis = 1;
     if ( s_dir[2] != 0 ) axis = 2;
+
+    printf("\naxis = %d after s_dir calculation", axis);
 
     // TODO: these two if statements used to be marked UNLIKELY,
     // but that intrinsic doesn't work on GPU.
@@ -288,8 +290,10 @@
     if( neighbor<rangel || neighbor>rangeh ) {
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
-      // displacement in the particle mover.
-      pii = 8*pii + face;
+      // displacement in the particle mover. This multiplication is
+      // a bitshift of the form 1 << 5. Note that 26 == 11010 in binary
+      // hence the bitshift by 5.
+      pii = 32*pii + neighbor_index;
       return 1; // Return "mover still in use"
       }
 
