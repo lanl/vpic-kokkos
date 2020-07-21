@@ -16,6 +16,15 @@
 
 #define BOUNDARY(i,j,k) (13+(i)+3*(j)+9*(k)) /* FORTRAN -1:1,-1:1,-1:1 */
 
+// Use this to calculate the neighbor index throughout VPIC.
+// Currently, each index is -1, 0, or 1 with 27 total neighbors
+// for each voxel. Neighbor 13 corresponds to 0, 0, 0, i.e. is an 
+// identity mapping from a voxel into itself.
+inline int get_neighbor_index( int x_index, int y_index, int z_index, int planes_per_axis)
+{
+    return ( (x_index + 1) * planes_per_axis + (y_index + 1) ) * planes_per_axis + (z_index + 1);
+}
+
 enum grid_enums {
 
   // Phase 2 boundary conditions
@@ -114,8 +123,8 @@ typedef struct grid {
                           // voxels owned by processor "rank".  Note:
                           // range[rank+1]-range[rank] <~ 2^31 / 6
   
-  const int CELL_PLANES_PER_AXIS = 3; // -1, 0, 1. Shift by -1 to 
-                                      // use in for loops.
+  const int PLANES_PER_AXIS = 3; // -1, 0, 1. Shift by -1 to 
+                                 // use in for loops.
   const int NUM_NEIGHBORS = 27;
   int64_t * ALIGNED(128) neighbor;
                           // (0:26,0:local_num_voxel-1) FORTRAN indexed
@@ -163,7 +172,7 @@ typedef struct grid {
       {
           if ( i / NUM_NEIGHBORS == special_cell )
           {
-              printf("\nCELL %d: Neighbor %d == %d", i / NUM_NEIGHBORS, i % NUM_NEIGHBORS, neighbor[i]);
+              printf("\nCELL %d: Neighbor %d == %lld", i / NUM_NEIGHBORS, i % NUM_NEIGHBORS, neighbor[i]);
           }
           k_neighbor_h(i) = neighbor[i];
       }

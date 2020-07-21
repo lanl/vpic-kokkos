@@ -55,7 +55,7 @@ size_grid( grid_t * g,
 
   FREE_ALIGNED( g->neighbor );
 
-  int cell_planes_per_axis = g->CELL_PLANES_PER_AXIS;
+  int planes_per_axis = g->PLANES_PER_AXIS;
   int num_neighbors = g->NUM_NEIGHBORS;
   MALLOC_ALIGNED( g->neighbor, num_neighbors * g->nv, 128 );
   
@@ -138,20 +138,20 @@ size_grid( grid_t * g,
         int special_cell = 46008;
         // Fill the neighbor array with the appropriate
         // points
-        for ( int x_index = -1; x_index < cell_planes_per_axis - 1; ++x_index )
+        for ( int x_index = -1; x_index < planes_per_axis - 1; ++x_index )
         {
-          for ( int y_index = -1; y_index < cell_planes_per_axis - 1; ++y_index )
+          for ( int y_index = -1; y_index < planes_per_axis - 1; ++y_index )
           {
-            for ( int z_index = -1; z_index < cell_planes_per_axis - 1; ++z_index )
+            for ( int z_index = -1; z_index < planes_per_axis - 1; ++z_index )
             {
               // Determine the local neighbor.
-              neighbor_index = ( x_index + 1 ) * cell_planes_per_axis * cell_planes_per_axis + ( y_index + 1 ) * cell_planes_per_axis + ( z_index + 1 );
+              neighbor_index = get_neighbor_index(x_index, y_index, z_index, planes_per_axis);
 
               // Write the neighbor index properly. 
               g->neighbor[i + neighbor_index] = g->rangel + LOCAL_CELL_ID( x + x_index, y + y_index, z + z_index ); 
                 
               if ( LOCAL_CELL_ID(x,y,z) == special_cell )
-                  printf("\nCELL ID %d. Neighbor %d == %d", (int)LOCAL_CELL_ID(x,y,z), (int)neighbor_index, (int)g->neighbor[i + neighbor_index]);
+                  printf("\nCELL ID %d. Neighbor %d == %lld", (int)LOCAL_CELL_ID(x,y,z), (int)neighbor_index, g->neighbor[i + neighbor_index]);
             }
           }
         }
@@ -350,35 +350,40 @@ join_grid( grid_t * g,
   // TODO: is the 6 in this comment still true if we change the number of
   // neighbors to be more?
 
-# define GLUE_FACE(tag,i,j,k,X,Y,Z) BEGIN_PRIMITIVE {           \
-    if( boundary==BOUNDARY(i,j,k) ) {                           \
-      if( rnc%((ln##Y+2)*(ln##Z+2))!=0 )                        \
-        ERROR(("Remote face is incompatible"));                 \
-      rn##X = (rnc/((ln##Y+2)*(ln##Z+2)))-2;                    \
-      rn##Y = ln##Y;                                            \
-      rn##Z = ln##Z;                                            \
-      for( l##Z=1; l##Z<=ln##Z; l##Z++ ) {                      \
-        for( l##Y=1; l##Y<=ln##Y; l##Y++ ) {                    \
-          l##X = (i+j+k)<0 ? 1     : ln##X;                     \
-          r##X = (i+j+k)<0 ? rn##X : 1;                         \
-          r##Y = l##Y;                                          \
-          r##Z = l##Z;                                          \
-          g->neighbor[ num_neighbors*LOCAL_CELL_ID(lx,ly,lz) + tag ] =      \
-            g->range[rank] + REMOTE_CELL_ID(rx,ry,rz);          \
-        }                                                       \
-      }                                                         \
-      return;                                                   \
-    }                                                           \
+  int planes_per_axis = g->PLANES_PER_AXIS;
+  int num_neighbors = g->NUM_NEIGHBORS;
+  int neighbor_index = 0;
+
+# define GLUE_FACE(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                                       \
+    neighbor_index = get_neighbor_index(i, j, k, planes_per_axis);                      \
+    if( boundary==BOUNDARY(i,j,k) ) {                                                   \
+      if( rnc%((ln##Y+2)*(ln##Z+2))!=0 )                                                \
+        ERROR(("Remote face is incompatible"));                                         \
+      rn##X = (rnc/((ln##Y+2)*(ln##Z+2)))-2;                                            \
+      rn##Y = ln##Y;                                                                    \
+      rn##Z = ln##Z;                                                                    \
+      for( l##Z=1; l##Z<=ln##Z; l##Z++ ) {                                              \
+        for( l##Y=1; l##Y<=ln##Y; l##Y++ ) {                                            \
+          l##X = (i+j+k)<0 ? 1     : ln##X;                                             \
+          r##X = (i+j+k)<0 ? rn##X : 1;                                                 \
+          r##Y = l##Y;                                                                  \
+          r##Z = l##Z;                                                                  \
+          g->neighbor[ num_neighbors*LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ] =       \
+            g->range[rank] + REMOTE_CELL_ID(rx,ry,rz);                                  \
+        }                                                                               \
+      }                                                                                 \
+      return;                                                                           \
+    }                                                                                   \
   } END_PRIMITIVE
 
-  // TODO: Joe make this 27 cases
-  int num_neighbors = g->NUM_NEIGHBORS;
-  GLUE_FACE(0,-1, 0, 0,x,y,z);
-  GLUE_FACE(1, 0,-1, 0,y,z,x);
-  GLUE_FACE(2, 0, 0,-1,z,x,y);
-  GLUE_FACE(3, 1, 0, 0,x,y,z);
-  GLUE_FACE(4, 0, 1, 0,y,z,x);
-  GLUE_FACE(5, 0, 0, 1,z,x,y);
+  // TODO: Joe, are there more faces to be glued
+  // with the increase in the local neighborhood?
+  GLUE_FACE(-1, 0, 0,x,y,z);
+  GLUE_FACE(0,-1, 0,y,z,x);
+  GLUE_FACE(0, 0,-1,z,x,y);
+  GLUE_FACE(1, 0, 0,x,y,z);
+  GLUE_FACE(0, 1, 0,y,z,x);
+  GLUE_FACE(0, 0, 1,z,x,y);
 
 # undef GLUE_FACE
 }
@@ -396,7 +401,6 @@ set_fbc( grid_t * g,
   g->bc[boundary] = fbc;
 }
 
-// TODO: Fix this for 27 neighbors
 void
 set_pbc( grid_t * g,
          int boundary,
@@ -410,23 +414,30 @@ set_pbc( grid_t * g,
   lny = g->ny;
   lnz = g->nz;
 
-# define SET_PBC(tag,i,j,k,X,Y,Z) BEGIN_PRIMITIVE {             \
-    if( boundary==BOUNDARY(i,j,k) ) {                           \
-      l##X = (i+j+k)<0 ? 1 : ln##X;                             \
-      for( l##Z=1; l##Z<=ln##Z; l##Z++ )                        \
-        for( l##Y=1; l##Y<=ln##Y; l##Y++ )                      \
-          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + tag ] = pbc; \
-      return;                                                   \
-    }                                                           \
+  int planes_per_axis = g->PLANES_PER_AXIS;
+  int num_neighbors = g->NUM_NEIGHBORS;
+  int neighbor_index = 0;
+
+# define SET_PBC(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                                         \
+    neighbor_index = get_neighbor_index(i, j, k, planes_per_axis);                          \
+    if( boundary==BOUNDARY(i,j,k) ) {                                                       \
+      l##X = (i+j+k)<0 ? 1 : ln##X;                                                         \
+      for( l##Z=1; l##Z<=ln##Z; l##Z++ )                                                    \
+        for( l##Y=1; l##Y<=ln##Y; l##Y++ )                                                  \
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ] = pbc;    \
+      return;                                                                               \
+    }                                                                                       \
   } END_PRIMITIVE
 
-  int num_neighbors = g->NUM_NEIGHBORS;
-  SET_PBC(0,-1, 0, 0,x,y,z);
-  SET_PBC(1, 0,-1, 0,y,z,x);
-  SET_PBC(2, 0, 0,-1,z,x,y);
-  SET_PBC(3, 1, 0, 0,x,y,z);
-  SET_PBC(4, 0, 1, 0,y,z,x);
-  SET_PBC(5, 0, 0, 1,z,x,y);
+  // TODO: Joe, are there more faces to be glued
+  // with the increase in the local neighborhood?
+  SET_PBC(-1, 0, 0,x,y,z);
+  SET_PBC(0,-1, 0,y,z,x);
+  SET_PBC(0, 0,-1,z,x,y);
+  SET_PBC(1, 0, 0,x,y,z);
+  SET_PBC(0, 1, 0,y,z,x);
+  SET_PBC(0, 0, 1,z,x,y);
+ 
 
 # undef SET_PBC
 }

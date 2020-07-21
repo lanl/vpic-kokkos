@@ -305,7 +305,7 @@
     // Note that 0,0,0 => 13 will return the particle to the
     // same cell. 
     // TODO: neighbor_index should replace the face variable
-    int32_t neighbor_index = ( s_dir[0] + 1 ) * num_cell_planes * num_cell_planes + ( s_dir[1] + 1 ) * num_cell_planes + ( s_dir[2] + 1 );
+    int neighbor_index = get_neighbor_index(s_dir[0], s_dir[1], s_dir[2], planes_per_axis);
     printf("\nneighbor_index = %d", neighbor_index);
 
     /* Old stuffs ...

@@ -14,6 +14,7 @@
 
 #include <iostream>
 
+#include "../grid/grid.h"       // Include for get_neighbor_index
 #include "../sf_interface/sf_interface.h"
 #include "Kokkos_DualView.hpp"
 
@@ -330,7 +331,7 @@ move_p_kokkos(
   int pi = pm->i;
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
  
-  const int num_cell_planes = g->CELL_PLANES_PER_AXIS;
+  const int planes_per_axis = g->PLANES_PER_AXIS;
   const int num_neighbors = g->NUM_NEIGHBORS;
   printf("\nNum neighbors = %d\nStarting to move...\n", num_neighbors);
 
