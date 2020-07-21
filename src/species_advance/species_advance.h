@@ -289,6 +289,11 @@ move_p( particle_t       * ALIGNED(128) p0,    // Particle array
         const grid_t     *              g,     // Grid parameters
         const float                     qsp ); // Species particle charge
 
+// Make an axis enumeration for the s_dir
+enum Axis_Label {
+    x = 0, y = 1, z = 2, num_axes = 3
+};
+
 template<class particle_view_t, class particle_i_view_t, class accumulator_sa_t, class neighbor_view_t>
 int
 KOKKOS_INLINE_FUNCTION

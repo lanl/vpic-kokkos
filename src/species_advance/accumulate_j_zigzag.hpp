@@ -88,11 +88,11 @@
     // Compute the direction that the particle moves.
     // This value is the also the boundary of the cell 
     // the particle will intercept.
-    s_dir[0] = (s_dispx>0) ? 1 : -1;
-    s_dir[1] = (s_dispy>0) ? 1 : -1;
-    s_dir[2] = (s_dispz>0) ? 1 : -1;
+    s_dir[Axis_Label::x] = (s_dispx>0) ? 1 : -1;
+    s_dir[Axis_Label::y] = (s_dispy>0) ? 1 : -1;
+    s_dir[Axis_Label::z] = (s_dispz>0) ? 1 : -1;
 
-    printf("\ns_dir = %d, %d, %d", (int)s_dir[0], (int)s_dir[1], (int)s_dir[2]);
+    printf("\ns_dir = %d, %d, %d", (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
 
     // Compute the twice the fractional distance to each potential
     // streak/cell face intersection. This number is the amount of
@@ -102,9 +102,9 @@
     // if the value is greater than 2 in a particle direction, then
     // it does not leave the cell in that direction in this
     // function call.
-    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
-    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
-    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
+    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[Axis_Label::x]-s_midx)/s_dispx;
+    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[Axis_Label::y]-s_midy)/s_dispy;
+    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[Axis_Label::z]-s_midz)/s_dispz;
 
     // Determine the fractional length and axis of current streak. The
     // streak ends on either the first face intersected by the
@@ -158,21 +158,21 @@
     // to the boundary it hits.
     if ( v0 < 2. )
     {
-        xr = s_dir[0];
+        xr = s_dir[Axis_Label::x];
         s_dispx *= v0;
     }
     // If the particle crosses the y-boundary change yr
     // to the boundary it hits.
     if ( v1 < 2. )
     {
-        yr = s_dir[1];
+        yr = s_dir[Axis_Label::y];
         s_dispy *= v1;
     }
     // If the particle crosses the z-boundary change zr
     // to the boundary it hits.
     if ( v2 < 2. )
     {
-        zr = s_dir[2];
+        zr = s_dir[Axis_Label::z];
         s_dispz *= v2;
     } 
     // With xr, yr, and zr known, we can treat them as the final 
@@ -295,17 +295,17 @@
     // corresponds to when the particle does not leave the cell in a
     // particular direction and is moved to the midpoint in that
     // direction.
-    s_dir[0] = ( xr == s_dir[0] ? s_dir[0] : 0 );
-    s_dir[1] = ( yr == s_dir[1] ? s_dir[1] : 0 );
-    s_dir[2] = ( zr == s_dir[2] ? s_dir[2] : 0 );
+    s_dir[Axis_Label::x] = ( xr == s_dir[Axis_Label::x] ? s_dir[Axis_Label::x] : 0 );
+    s_dir[Axis_Label::y] = ( yr == s_dir[Axis_Label::y] ? s_dir[Axis_Label::y] : 0 );
+    s_dir[Axis_Label::z] = ( zr == s_dir[Axis_Label::z] ? s_dir[Axis_Label::z] : 0 );
     
-    printf("\ns_dir = %d, %d, %d", (int)s_dir[0], (int)s_dir[1], (int)s_dir[2]);
+    printf("\ns_dir = %d, %d, %d", (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
 
     // Compute the neighbor cell index the particle moves to. 
     // Note that 0,0,0 => 13 will return the particle to the
     // same cell. 
     // TODO: neighbor_index should replace the face variable
-    int neighbor_index = get_neighbor_index(s_dir[0], s_dir[1], s_dir[2], planes_per_axis);
+    int neighbor_index = get_neighbor_index(s_dir[Axis_Label::x], s_dir[Axis_Label::y], s_dir[Axis_Label::z], planes_per_axis);
     printf("\nneighbor_index = %d", neighbor_index);
 
     /* Old stuffs ...
@@ -337,19 +337,19 @@
         printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
                                             k_particles(pi, particle_var::uy),
                                             k_particles(pi, particle_var::uz));
-        if ( s_dir[0] != 0 )
+        if ( s_dir[Axis_Label::x] != 0 )
         {
             k_particles(pi, particle_var::ux ) = -k_particles(pi, particle_var::ux );
             pm->dispx *= -1.;
         }
 
-        if ( s_dir[1] != 0 )
+        if ( s_dir[Axis_Label::y] != 0 )
         {
             k_particles(pi, particle_var::uy ) = -k_particles(pi, particle_var::uy );
             pm->dispy *= -1.;
         }
 
-        if ( s_dir[2] != 0 )
+        if ( s_dir[Axis_Label::z] != 0 )
         {
             k_particles(pi, particle_var::uz ) = -k_particles(pi, particle_var::uz );
             pm->dispz *= -1.;
@@ -413,9 +413,9 @@
     printf("\ndx, dy, dz = %e, %e, %e", k_particles( pi, particle_var::dx ),
                                         k_particles( pi, particle_var::dy ),
                                         k_particles( pi, particle_var::dz ));
-    k_particles( pi, particle_var::dx ) -= 2. * s_dir[0];
-    k_particles( pi, particle_var::dy ) -= 2. * s_dir[1];
-    k_particles( pi, particle_var::dz ) -= 2. * s_dir[2];
+    k_particles( pi, particle_var::dx ) -= 2. * s_dir[Axis_Label::x];
+    k_particles( pi, particle_var::dy ) -= 2. * s_dir[Axis_Label::y];
+    k_particles( pi, particle_var::dz ) -= 2. * s_dir[Axis_Label::z];
 
 
     printf("\nParticle %d after coordinate shift", pi);

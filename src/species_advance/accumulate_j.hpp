@@ -69,9 +69,9 @@
     // Compute the direction that the particle moves.
     // This value is the also the boundary of the cell 
     // the particle will intercept.
-    s_dir[0] = (s_dispx>0) ? 1 : -1;
-    s_dir[1] = (s_dispy>0) ? 1 : -1;
-    s_dir[2] = (s_dispz>0) ? 1 : -1;
+    s_dir[Axis_Label::x] = (s_dispx>0) ? 1 : -1;
+    s_dir[Axis_Label::y] = (s_dispy>0) ? 1 : -1;
+    s_dir[Axis_Label::z] = (s_dispz>0) ? 1 : -1;
 
     // Compute the twice the fractional distance to each potential
     // streak/cell face intersection. This number is the amount of
@@ -81,9 +81,9 @@
     // if the value is greater than 2 in a particle direction, then
     // it does not leave the cell in that direction in this
     // function call.
-    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
-    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
-    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
+    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[Axis_Label::x]-s_midx)/s_dispx;
+    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[Axis_Label::y]-s_midy)/s_dispy;
+    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[Axis_Label::z]-s_midz)/s_dispz;
 
     // Determine the fractional length and axis of current streak. The
     // streak ends on either the first face intersected by the
@@ -237,17 +237,17 @@
     // corresponds to when the particle does not leave the cell in a
     // particular direction and is moved to the midpoint in that
     // direction.
-    s_dir[0] = ( axis == 0 ? s_dir[0] : 0 );
-    s_dir[1] = ( axis == 1 ? s_dir[1] : 0 );
-    s_dir[2] = ( axis == 2 ? s_dir[2] : 0 );
+    s_dir[Axis_Label::x] = ( axis == Axis_Label::x ? s_dir[Axis_Label::x] : 0 );
+    s_dir[Axis_Label::y] = ( axis == Axis_Label::y ? s_dir[Axis_Label::y] : 0 );
+    s_dir[Axis_Label::z] = ( axis == Axis_Label::z ? s_dir[Axis_Label::z] : 0 );
     
-    printf("\ns_dir = %d, %d, %d after axis calculation", (int)s_dir[0], (int)s_dir[1], (int)s_dir[2]);
+    printf("\ns_dir = %d, %d, %d after axis calculation", (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
 
     // Compute the neighbor cell index the particle moves to. 
     // Note that 0,0,0 => 13 will return the particle to the
     // same cell. 
     // TODO: neighbor_index should replace the face variable
-    int neighbor_index = get_neighbor_index(s_dir[0], s_dir[1], s_dir[2], planes_per_axis);
+    int neighbor_index = get_neighbor_index(s_dir[Axis_Label::x], s_dir[Axis_Label::y], s_dir[Axis_Label::z], planes_per_axis);
     printf("\nneighbor_index = %d", neighbor_index);
 
 
@@ -259,9 +259,9 @@
     neighbor = d_neighbor( num_neighbors * pii + neighbor_index );
     printf("\nneighbor value, true neighbor, reflect_particles = %d, %d, %d", (int)neighbor, (int)g->neighbor[ num_neighbors * pii + neighbor_index ], (int)reflect_particles);
 
-    if ( s_dir[0] != 0 ) axis = 0;
-    if ( s_dir[1] != 0 ) axis = 1;
-    if ( s_dir[2] != 0 ) axis = 2;
+    if ( s_dir[Axis_Label::x] != 0 ) axis = 0;
+    if ( s_dir[Axis_Label::y] != 0 ) axis = 1;
+    if ( s_dir[Axis_Label::z] != 0 ) axis = 2;
 
     printf("\naxis = %d after s_dir calculation", axis);
 
