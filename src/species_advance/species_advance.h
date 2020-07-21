@@ -329,7 +329,8 @@ move_p_kokkos(
   //int pi = int(local_pm_i);
   int pi = pm->i;
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
-  
+ 
+  const int num_cell_planes = g->CELL_PLANES_PER_AXIS;
   const int num_neighbors = g->NUM_NEIGHBORS;
   printf("\nNum neighbors = %d\nStarting to move...\n", num_neighbors);
 

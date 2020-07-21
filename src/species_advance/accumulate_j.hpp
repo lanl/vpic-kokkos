@@ -11,7 +11,7 @@
 
    ****************************************************************/
 
-    printf("\nParticle %d Velocity before accumulation:", pi);
+    printf("\nParticle %d in Voxel %d Velocity before accumulation:", pi, pii);
     printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
     int ii = pii;
@@ -208,7 +208,7 @@
     // If an end streak, return success (should be ~50% of the time)
     printf("\nStreak ended...\naxis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
 
-    printf("\nParticle %d Velocity after accumulation:", pi);
+    printf("\nParticle %d in Voxel %d Velocity after accumulation:", pi, pii);
     printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
     if( axis==3 ) 
@@ -247,7 +247,7 @@
     // Note that 0,0,0 => 13 will return the particle to the
     // same cell. 
     // TODO: neighbor_index should replace the face variable
-    int32_t neighbor_index = ( s_dir[0] + 1 ) * 9 + ( s_dir[1] + 1 ) * 3 + ( s_dir[2] + 1 );
+    int32_t neighbor_index = ( s_dir[0] + 1 ) * num_cell_planes * num_cell_planes + ( s_dir[1] + 1 ) * num_cell_planes + ( s_dir[2] + 1 );
     printf("\nneighbor_index = %d", neighbor_index);
 
 
@@ -257,7 +257,7 @@
     // Throw neighbor through this function to get the cell
     // index the particle moves into.
     neighbor = d_neighbor( num_neighbors * pii + neighbor_index );
-    printf("\nneighbor value, reflect_particles = %d, %d", (int)neighbor, (int)reflect_particles);
+    printf("\nneighbor value, true neighbor, reflect_particles = %d, %d, %d", (int)neighbor, (int)g->neighbor[ num_neighbors * pii + neighbor_index ], (int)reflect_particles);
 
     if ( s_dir[0] != 0 ) axis = 0;
     if ( s_dir[1] != 0 ) axis = 1;
@@ -301,9 +301,9 @@
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
 
-    printf("\npii, rangel = %d, %d", pii, rangel);
+    printf("\nBefore neighbor change pii, rangel = %d, %d", pii, rangel);
     pii = neighbor - rangel;
-    printf("\npii, rangel = %d, %d", pii, rangel);
+    printf("\nAfter neighbor change pii, rangel = %d, %d", pii, rangel);
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     printf("\nParticle %d before coordinate shift", pi);
     printf("\ndx, dy, dz = %e, %e, %e", k_particles( pi, particle_var::dx ),

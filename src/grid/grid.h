@@ -118,8 +118,8 @@ typedef struct grid {
                                       // use in for loops.
   const int NUM_NEIGHBORS = 27;
   int64_t * ALIGNED(128) neighbor;
-                          // (0:5,0:local_num_voxel-1) FORTRAN indexed
-                          // array neighbor(0:5,lidx) are the global
+                          // (0:26,0:local_num_voxel-1) FORTRAN indexed
+                          // array neighbor(0:26,lidx) are the global
                           // indexes of neighboring voxels of the
                           // voxel with local index "lidx".  Negative
                           // if neighbor is a boundary condition.
@@ -155,12 +155,19 @@ typedef struct grid {
       k_neighbor_d = k_neighbor_t("k_neighbor_d", num_neighbor);
       //k_neighbor_h = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_neighbor_d);
       k_neighbor_h = Kokkos::create_mirror_view(k_neighbor_d);
-
+    
+      int special_cell = 46008;
+      printf("\nInitialization step...");
       // TODO: make this a host parlalel for
       for (int i = 0; i < num_neighbor; i++)
       {
+          if ( i / NUM_NEIGHBORS == special_cell )
+          {
+              printf("\nCELL %d: Neighbor %d == %d", i / NUM_NEIGHBORS, i % NUM_NEIGHBORS, neighbor[i]);
+          }
           k_neighbor_h(i) = neighbor[i];
       }
+      printf("\n\n");
 
       Kokkos::deep_copy(k_neighbor_d, k_neighbor_h);
 

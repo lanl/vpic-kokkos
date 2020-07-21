@@ -135,6 +135,7 @@ size_grid( grid_t * g,
       for( x=0; x<=lnx+1; x++ ) {
         i = num_neighbors * LOCAL_CELL_ID(x,y,z);
 
+        int special_cell = 46008;
         // Fill the neighbor array with the appropriate
         // points
         for ( int x_index = -1; x_index < cell_planes_per_axis - 1; ++x_index )
@@ -148,9 +149,14 @@ size_grid( grid_t * g,
 
               // Write the neighbor index properly. 
               g->neighbor[i + neighbor_index] = g->rangel + LOCAL_CELL_ID( x + x_index, y + y_index, z + z_index ); 
+                
+              if ( LOCAL_CELL_ID(x,y,z) == special_cell )
+                  printf("\nCELL ID %d. Neighbor %d == %d", (int)LOCAL_CELL_ID(x,y,z), (int)neighbor_index, (int)g->neighbor[i + neighbor_index]);
             }
           }
         }
+        if ( LOCAL_CELL_ID(x,y,z) == special_cell ) 
+            printf("\n");
 
         /* Not doing this method...
 
