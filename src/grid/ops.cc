@@ -150,13 +150,13 @@ size_grid( grid_t * g,
               // Write the neighbor index properly. 
               g->neighbor[i + neighbor_index] = g->rangel + LOCAL_CELL_ID( x + x_index, y + y_index, z + z_index ); 
                 
-              if ( LOCAL_CELL_ID(x,y,z) == special_cell )
-                  printf("\nCELL ID %d. Neighbor %d == %lld", (int)LOCAL_CELL_ID(x,y,z), (int)neighbor_index, g->neighbor[i + neighbor_index]);
+              //if ( LOCAL_CELL_ID(x,y,z) == special_cell )
+                  //printf("\nCELL ID %d. Neighbor %d == %lld", (int)LOCAL_CELL_ID(x,y,z), (int)neighbor_index, g->neighbor[i + neighbor_index]);
             }
           }
         }
-        if ( LOCAL_CELL_ID(x,y,z) == special_cell ) 
-            printf("\n");
+        //if ( LOCAL_CELL_ID(x,y,z) == special_cell ) 
+            //printf("\n");
 
         /* Not doing this method...
 

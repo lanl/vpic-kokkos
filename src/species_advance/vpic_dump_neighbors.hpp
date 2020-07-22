@@ -28,7 +28,7 @@ struct DUMP_NEIGHBORS
     file_stream << value << "\n";
   }
 
-  ~DUMP_NEIGHBORS() { file_stream.close(); }
+  ~DUMP_NEIGHBORS(){ file_stream.close(); }
 
   private:
     const std::string index_file;

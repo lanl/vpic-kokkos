@@ -166,14 +166,16 @@ typedef struct grid {
       k_neighbor_h = Kokkos::create_mirror_view(k_neighbor_d);
     
       int special_cell = 46008;
-      printf("\nInitialization step...");
-      // TODO: make this a host parlalel for
+      //printf("\nInitialization step...");
+      // TODO: make this a host parallel for
       for (int i = 0; i < num_neighbor; i++)
       {
+          /*
           if ( i / NUM_NEIGHBORS == special_cell )
           {
               printf("\nCELL %d: Neighbor %d == %lld", i / NUM_NEIGHBORS, i % NUM_NEIGHBORS, neighbor[i]);
           }
+          */
           k_neighbor_h(i) = neighbor[i];
       }
       printf("\n\n");

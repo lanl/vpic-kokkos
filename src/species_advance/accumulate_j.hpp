@@ -250,6 +250,9 @@
     neighbor_index = get_neighbor_index(s_dir[Axis_Label::x], s_dir[Axis_Label::y], s_dir[Axis_Label::z], planes_per_axis);
     printf("\nneighbor_index = %d", neighbor_index);
 
+#if VPIC_DUMP_NEIGHBORS
+    print_neighbor(neighbor_index);
+#endif
 
     // TODO: clean this fixed index to an enum
     //neighbor = g->neighbor[ 6*ii + face ];
