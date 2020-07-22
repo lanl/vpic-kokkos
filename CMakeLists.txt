@@ -57,12 +57,20 @@ option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
-# Set a build option to compare zigzag current accumulation to the old method.
+# Set a build option to compare zigzag current accumulation to the Villasenor method.
 option(ACCUMULATE_J_ZIGZAG "enable zigzag method on accumulate_j in move_p_kokkos" OFF)
 if(ACCUMULATE_J_ZIGZAG)
     add_definitions(-DACCUMULATE_J_ZIGZAG)
     set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DACCUMULATE_J_ZIGZAG")
 endif()
+
+# Set a build option to dump the neighbor indices to a file
+option(VPIC_DUMP_NEIGHBORS "If the code should dump neighbor indices" OFF)
+if(VPIC_DUMP_NEIGHBORS)
+    add_definitions(-DVPIC_DUMP_NEIGHBORS)
+    set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DVPIC_DUMP_NEIGHBORS")
+endif()
+
 
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
