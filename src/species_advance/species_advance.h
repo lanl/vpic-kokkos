@@ -294,6 +294,11 @@ enum Axis_Label {
     x = 0, y = 1, z = 2, num_axes = 3
 };
 
+// Add neighbor index dumping for testing zigzag.
+#if VPIC_DUMP_NEIGHBORS
+  #include "vpic_dump_neighbors.hpp"
+#endif
+
 template<class particle_view_t, class particle_i_view_t, class accumulator_sa_t, class neighbor_view_t>
 int
 KOKKOS_INLINE_FUNCTION
@@ -309,8 +314,6 @@ move_p_kokkos(
     const float qsp
 )
 {
-  printf("\nHere?\n");
-
   #define p_dx    k_particles(pi, particle_var::dx)
   #define p_dy    k_particles(pi, particle_var::dy)
   #define p_dz    k_particles(pi, particle_var::dz)
@@ -325,12 +328,11 @@ move_p_kokkos(
   //#define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
   //#define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
 
-
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
   float v0, v1, v2, v3, v4, v5, q;
-  int axis, face;
+  int axis, neighbor_index;
   int64_t neighbor;
   //int pi = int(local_pm_i);
   int pi = pm->i;
@@ -338,7 +340,10 @@ move_p_kokkos(
  
   const int planes_per_axis = g->PLANES_PER_AXIS;
   const int num_neighbors = g->NUM_NEIGHBORS;
-  printf("\nNum neighbors = %d\nStarting to move...\n", num_neighbors);
+
+#if VPIC_DUMP_NEIGHBORS
+  DUMP_NEIGHBORS<int> print_neighbor("neighbor_indices.txt");
+#endif
 
   q = qsp*p_w;
 
