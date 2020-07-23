@@ -89,45 +89,48 @@ size_grid( grid_t * g,
   // such that we include the original cell 
   // in its own local neighborhood.
 
-  /* TODO: Get rid of the following.
-  
-  // We extend that to include:
-  // remainder of x=0 plane
-  // 6 => x, y-1, z-1
-  // 7 => x, y-1, z+1
-  // 8 => x, y+1, z-1
-  // 9 => x, y+1, z+1
+  /*
 
-  // x-1 plane
-  // 10 => x-1, y-1, z
-  // 11 => x-1, y+1, z
+    A schematic of the neighbors is shown below. Each axis (X, Y, Z)
+    has 3 planes with values {-1, 0, 1}. The intersection of each of 
+    these planes gives rise to 26 neighbors surrounding 1 point at 
+    the origin of each voxel (27 points total). The langle/rangle 
+    numbers (< 1 >) show which plane corresponds to each axis. The
+    other numbers denote the neighbor indices. There are 6 faces, 
+    12 edges, and 8 corners to each voxel, and each of these neighbors
+    represents a possible location for a particle to be sent through
+    in the zigzag algorithm. 
 
-  // 12 => x-1, y, z-1
-  // 13 => x-1, y, z+1
+                              Z
+                              ^
+                              |
+                              |            Y
+                              |           /
+                              |          /
+            < 1 >  8 -- -- -- -- 17 -- -- -- -- 26
+                  /|          |  /|    /        /|
+                 / |          | / |   /        / |
+                /  |          |/  |  /        /  |
+        < 0 >  5 --|-- -- -- 14 --|-- -- -- 23   |
+              /|   |         /|   |/        /|   |
+             / |   7 -- -- -/ -- 16 -- -- -/ |- 25
+            /  |  /|       /  |  /|       /  |  /|
+  < 1/-1 > 2 --|-- -- -- 11 --|-- -- -- 20   | / |
+           |   |/  |      |   |/  |      |   |/  |
+           |   4 --|-- -- |- 13 --|-- -- |- 22 --|-- -- -- -- --> X
+           |  /|   |      |  /|   |      |  /|   |
+           | / |   6 -- --|-- -- 15 -- --|-/ |- 24
+           |/  |  /       |/  |  /       |/  |  /
+    < 0 >  1 --|-- -- -- 10 --|-- -- -- 19   | /
+           |   |/         |   |/         |   |/
+           |   5 -- -- -- |- 12 -- -- -- |- 21 
+           |  /           |  /           |  /
+           | /            | /            | /
+           |/             |/             |/
+   < -1 >  0 -- -- -- --  9 -- -- -- -- 18
+        < -1 >          < 0 >          < 1 >
 
-  // diagonals
-  // 14 => x-1, y-1, z-1
-  // 15 => x-1, y-1, z+1
-  // 16 => x-1, y+1, z-1
-  // 17 => x-1, y+1, z+1
-
-  // x+1 plane
-  // 18 => x+1, y-1, z
-  // 19 => x+1, y+1, z
-
-  // 20 => x+1, y, z-1
-  // 21 => x+1, y, z+1
-
-  // diagonals
-  // 22 => x+1, y-1, z-1
-  // 23 => x+1, y-1, z+1
-  // 24 => x+1, y+1, z-1
-  // 25 => x+1, y+1, z+1
-
-  // Self?
-  // 26 => x, y, z
-  
-  */
+   */  
 
   int neighbor_index = 0;
   for( z=0; z<=lnz+1; z++ ) {
@@ -158,49 +161,6 @@ size_grid( grid_t * g,
         //if ( LOCAL_CELL_ID(x,y,z) == special_cell ) 
             //printf("\n");
 
-        /* Not doing this method...
-
-        // TODO: we could replace all this indexing with a constexpr function
-        // that knows how to turn each 3d index into a 1d index at compile time
-        // for us. This would allow the user to then use a 3d index where the
-        // want to, and still have no over / the same over head as the user
-        // using 1d
-        g->neighbor[i+0]  = g->rangel + LOCAL_CELL_ID(x-1, y,   z  );
-        g->neighbor[i+1]  = g->rangel + LOCAL_CELL_ID(x,   y-1, z  );
-        g->neighbor[i+2]  = g->rangel + LOCAL_CELL_ID(x,   y,   z-1);
-        g->neighbor[i+3]  = g->rangel + LOCAL_CELL_ID(x+1, y,   z  );
-        g->neighbor[i+4]  = g->rangel + LOCAL_CELL_ID(x,   y+1, z  );
-        g->neighbor[i+5]  = g->rangel + LOCAL_CELL_ID(x,   y,   z+1);
-
-        g->neighbor[i+6]  = g->rangel + LOCAL_CELL_ID(x,   y-1, z-1);
-        g->neighbor[i+7]  = g->rangel + LOCAL_CELL_ID(x,   y-1, z+1);
-        g->neighbor[i+8]  = g->rangel + LOCAL_CELL_ID(x,   y+1, z+1);
-        g->neighbor[i+9]  = g->rangel + LOCAL_CELL_ID(x,   y+1, z+1);
-
-        g->neighbor[i+10] = g->rangel + LOCAL_CELL_ID(x-1, y-1, z  );
-        g->neighbor[i+11] = g->rangel + LOCAL_CELL_ID(x-1, y+1, z  );
-        g->neighbor[i+12] = g->rangel + LOCAL_CELL_ID(x-1, y,   z-1);
-        g->neighbor[i+13] = g->rangel + LOCAL_CELL_ID(x-1, y,   z+1);
-
-        g->neighbor[i+14] = g->rangel + LOCAL_CELL_ID(x-1, y-1, z-1);
-        g->neighbor[i+15] = g->rangel + LOCAL_CELL_ID(x-1, y-1, z+1);
-        g->neighbor[i+16] = g->rangel + LOCAL_CELL_ID(x-1, y+1, z-1);
-        g->neighbor[i+17] = g->rangel + LOCAL_CELL_ID(x-1, y+1, z+1);
-
-        g->neighbor[i+18] = g->rangel + LOCAL_CELL_ID(x+1, y-1, z  );
-        g->neighbor[i+19] = g->rangel + LOCAL_CELL_ID(x+1, y+1, z  );
-        g->neighbor[i+20] = g->rangel + LOCAL_CELL_ID(x+1, y,   z-1);
-        g->neighbor[i+21] = g->rangel + LOCAL_CELL_ID(x+1, y,   z+1);
-
-        g->neighbor[i+22] = g->rangel + LOCAL_CELL_ID(x+1, y-1, z+1);
-        g->neighbor[i+23] = g->rangel + LOCAL_CELL_ID(x+1, y-1, z+1);
-        g->neighbor[i+24] = g->rangel + LOCAL_CELL_ID(x+1, y+1, z-1);
-        g->neighbor[i+25] = g->rangel + LOCAL_CELL_ID(x+1, y+1, z+1);
-
-        // TODO: we likely don't need this?
-        g->neighbor[i+26] = g->rangel + LOCAL_CELL_ID(x  , y  , z  );
-
-        */
         
         // Set boundary faces appropriately
         // Here are the English conventions for 
