@@ -2,7 +2,7 @@
 #define _binary_h_
 
 #include "collision_private.h"
-#include "kokkos/binary_pipeline_voxel_indirect.h"
+#include "binary_collision_pipeline.h"
 
 /**
  * @brief Base collision operator for binary collsiions.
