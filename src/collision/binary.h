@@ -30,7 +30,7 @@ void apply_binary_collision_model_pipeline( binary_collision_op_t * cop,
         return;
     }
 
-    binary_collision_pipeline<MonteCarlo> pipeline(
+    binary_collision_pipeline<MonteCarlo, VoxelParallel> pipeline(
       cop->spi,
       cop->spj,
       cop->interval,

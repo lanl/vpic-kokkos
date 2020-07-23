@@ -220,6 +220,7 @@ struct VoxelParallel : BinaryCollision<MonteCarlo> {
     species_t* const& spi, 
     species_t* const& spj, 
     kokkos_rng_pool_t const& rp,  
+    k_particles_i_t spi_i,
     k_density_t const& spi_n, 
     k_density_t const& spj_n, 
     k_particles_t const& spi_p, 
@@ -358,6 +359,168 @@ struct VoxelParallel : BinaryCollision<MonteCarlo> {
       });
   }
 };
+
+
+/**
+   * @brief Loop over particles performing collisions.
+   */
+template<bool MonteCarlo>
+struct ParticleParallel : BinaryCollision<MonteCarlo> {
+  using BinaryCollision<MonteCarlo>::binary_collision;
+  /**
+   * @brief Loop over particles performing collisions.
+   */
+  template<class collision_model>
+  void apply_model (collision_model& model, 
+    float const& mu_i, 
+    float const& mu_j, 
+    float const& mu, 
+    int const& nx, 
+    int const& ny, 
+    int const& nz, 
+    species_t* const& spi, 
+    species_t* const& spj, 
+    kokkos_rng_pool_t const& rp,
+    k_particles_i_t spi_i,
+    k_density_t const& spi_n, 
+    k_density_t const& spj_n, 
+    k_particles_t const& spi_p, 
+    k_particles_t const& spj_p, 
+    float const& dtinterval, 
+    k_particle_sortindex_t_ra const& spi_sortindex_ra, 
+    k_particle_sortindex_t_ra const& spj_sortindex_ra, 
+    k_particle_partition_t_ra const& spi_partition_ra, 
+    k_particle_partition_t_ra const& spj_partition_ra) 
+  {  
+    
+    using Space=Kokkos::DefaultExecutionSpace;
+    using member_type=Kokkos::TeamPolicy<Space>::member_type;
+     
+    // To avoid atomics, we can only have at most sum_v min(ni(v), nj(v))
+    // independent threads. This is strictly less than ni or nj, so launch
+    // one thread per particles and cancel ones we don't need.
+
+    Kokkos::parallel_for("binary_collision_pipeline::apply_model",
+      Kokkos::RangePolicy<Space>(0, spi->np),
+      KOKKOS_LAMBDA (const int ipart) {
+
+        const int   v    = spi_i(ipart);        // Voxel
+        const float iden = spi_n(v);            // Real density
+        const float jden = spj_n(v);            // Real density
+        const float ndt  = (jden > iden ? iden : jden) * dtinterval;
+
+        // Particle counts for each species in this voxel.
+        int i0 = spi_partition_ra(v);           // Voxel start index
+        int ni = spi_partition_ra(v+1) - i0;    // Number of particles
+
+        int j0 = spj_partition_ra(v);           // Voxel start index
+        int nj = spj_partition_ra(v+1) - j0;    // Number of particles
+
+        const int idx = ipart - i0;             // Intracell index
+
+        // Handle intraspecies collisions.
+        if( spi == spj ) {
+
+            // Odd number of patticles.
+            if( ni%2 && ni >= 3) {
+
+              // These must be done serially to avoid atomics
+              if( idx == 0 ) {
+
+                // Get a random generator.
+                kokkos_rng_state_t rg = rp.get_state();
+
+               binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                    spi_sortindex_ra(i0),
+                    spi_sortindex_ra(i0 + 1)
+                );
+
+                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                    spi_sortindex_ra(i0),
+                    spi_sortindex_ra(i0 + 1)
+                );
+
+                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                    spi_sortindex_ra(i0),
+                    spi_sortindex_ra(i0 + 1)
+                );
+
+
+                // Free the generator.
+                rp.free_state(rg);
+
+              }
+
+              ni -= 3;
+              i0 += 3;
+
+            }
+
+            // Even number of particles.
+            nj = ni = ni/2;
+            j0 = i0 + ni;
+
+        }
+
+        const bool ij  = ni > nj;
+        const int nmax = ij ? ni : nj;
+        const int nmin = ij ? nj : ni;
+
+        // Nothing to do.
+        if( idx >= nmin ) return;
+
+        // Calculate collisional pairings.
+        //  w.l.o.g. let ni < nj
+        //  then:
+        //    Let nj = ni*ncoll + remain
+        //    The first remain particles from spi will collide ncoll+1 times
+        //    The following (ni-remain) particles will collide ncoll times.
+
+        int startidx;
+        int ncoll  = nmin <= 0 ? 0 : nmax/nmin;
+        int remain = nmin <= 0 ? 0 : nmax - ncoll*nmin;
+
+        // If we're in the remianing list, increment the number of collisions.
+        if( idx < remain )
+        {
+          ncoll += 1;
+          startidx = idx*ncoll;
+        }
+        else
+        {
+          startidx = remain*(ncoll+1) + (idx-remain)*ncoll;
+        }
+
+        // Branchless looping.
+        // if (ij) then we will collide particle j with ncoll i
+        // else         we will collide particle i with ncoll j
+
+        int i = i0 + (ij ? startidx :      idx);
+        int j = j0 + (ij ?      idx : startidx);
+
+        // Get a random generator.
+        kokkos_rng_state_t rg = rp.get_state();
+
+        for(int k=0 ; k < ncoll ; ++k) {
+
+          binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                    spi_sortindex_ra(i0),
+                    spi_sortindex_ra(i0 + 1)
+          );
+
+          i += ij ? 1 : 0 ;
+          j += ij ? 0 : 1 ;
+
+        }
+
+        // Free the generator.
+        rp.free_state(rg);
+
+      });
+  }
+};
+
+
 
 template<bool MonteCarlo = false, template <bool> class ParallelPolicy = VoxelParallel>
 struct CollisionParallelismModel : ParallelPolicy<MonteCarlo> {
@@ -528,7 +691,7 @@ struct binary_collision_pipeline {
 
     // Do collisions.
     pm.apply_model(model, mu_i, mu_j, mu, nx, ny, nz, spi, spj, rp,
-                spi_n, spj_n, spi_p, spj_p, dtinterval, 
+                spi_i, spi_n, spj_n, spi_p, spj_p, dtinterval, 
                 spi_sortindex_ra, spj_sortindex_ra,
                 spi_partition_ra, spj_partition_ra);
 
