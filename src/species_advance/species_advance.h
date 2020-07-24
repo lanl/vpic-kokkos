@@ -342,7 +342,6 @@ move_p_kokkos(
   const int num_neighbors = g->NUM_NEIGHBORS;
 
 #if VPIC_DUMP_NEIGHBORS
-  printf("\n@@@@@@@ Building the functor @@@@@@@");
   DUMP_NEIGHBORS<int> print_neighbor("neighbor_indices.txt");
 #endif
 

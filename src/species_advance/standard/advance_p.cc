@@ -211,6 +211,9 @@ sp_[id]->
     v4   = v1 + uy;
     v5   = v2 + uz;
 
+    printf("\n\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, dx, dy, dz);
+    printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, dx + 2*ux, dy + 2*uy, dz + 2*uz);
+
     // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
     if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
         -v3<=one && -v4<=one && -v5<=one ) {

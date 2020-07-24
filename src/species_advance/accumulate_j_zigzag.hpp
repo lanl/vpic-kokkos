@@ -13,7 +13,7 @@
 
    ****************************************************************/
     
-    printf("\nParticle %d Velocity before accumulation:", pi);
+    printf("\nParticle %d in Voxel %d Velocity before accumulation:", pi, pii);
     printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
     // In this approach, we keep the current accumulation the same,
