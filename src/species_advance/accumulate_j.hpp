@@ -24,6 +24,10 @@
     s_dispy = pm->dispy;
     s_dispz = pm->dispz;
 
+#if VPIC_DUMP_NEIGHBORS
+    print_neighbor.write_final_cell( s_midx + 2. * s_dispx, s_midy + 2. * s_dispy, s_midz + 2. * s_dispz );
+#endif
+
     // Here is the progression of the displacements moving
     // forward, with x1 = p_dx = s_midx as the initial position
     // and x2 the final position, after the move_p_kokkos(...)
@@ -298,7 +302,7 @@
       // displacement in the particle mover. This multiplication is
       // a bitshift of the form 1 << 5. Note that 26 == 11010 in binary
       // hence the bitshift by 5.
-      pii = 32*pii + neighbor_index;
+      pii = upper_bound_of_neighbors * pii + neighbor_index;
       return 1; // Return "mover still in use"
       }
 

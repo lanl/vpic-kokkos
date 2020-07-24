@@ -18,6 +18,10 @@
 #include "../sf_interface/sf_interface.h"
 #include "Kokkos_DualView.hpp"
 
+// Smallest power of 2 that's an upper bound of 
+// the neighborhood size (27).
+static constexpr unsigned upper_bound_of_neighbors = 32;
+
 typedef int32_t species_id; // Must be 32-bit wide for particle_injector_t
 
 // FIXME: Eventually particle_t (definitely) and ther other formats
@@ -342,7 +346,9 @@ move_p_kokkos(
   const int num_neighbors = g->NUM_NEIGHBORS;
 
 #if VPIC_DUMP_NEIGHBORS
-  DUMP_NEIGHBORS<int> print_neighbor("neighbor_indices.txt", "neighbor_planes.txt");
+  DUMP_NEIGHBORS<int, float> print_neighbor("neighbor_indices.txt", 
+                                            "neighbor_planes.txt",
+                                            "neighbor_connections.txt");
 #endif
 
   q = qsp*p_w;
