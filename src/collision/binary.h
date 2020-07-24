@@ -29,8 +29,9 @@ void apply_binary_collision_model_pipeline( binary_collision_op_t * cop,
     if( cop->interval<1 || (step % cop->interval) ) {
         return;
     }
-
-    // TODO: is this out of date? Seems hard coded for Voxel..
+    
+    // TODO: This is hardcoded, later we will want to have this enabled
+    // at compile time instead.
     binary_collision_pipeline< VoxelParallel<MonteCarlo> > pipeline(
       cop->spi,
       cop->spj,
