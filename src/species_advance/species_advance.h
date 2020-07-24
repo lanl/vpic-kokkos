@@ -342,7 +342,7 @@ move_p_kokkos(
   const int num_neighbors = g->NUM_NEIGHBORS;
 
 #if VPIC_DUMP_NEIGHBORS
-  DUMP_NEIGHBORS<int> print_neighbor("neighbor_indices.txt");
+  DUMP_NEIGHBORS<int> print_neighbor("neighbor_indices.txt", "neighbor_planes.txt");
 #endif
 
   q = qsp*p_w;

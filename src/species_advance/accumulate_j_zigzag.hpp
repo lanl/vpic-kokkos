@@ -310,6 +310,7 @@
 
 #if VPIC_DUMP_NEIGHBORS
     print_neighbor(neighbor_index);
+    print_neighbor.write_planes(s_dir[Axis_Label::x], s_dir[Axis_Label::y], s_dir[Axis_Label::z]);
 #endif
 
     /* Old stuffs ...
