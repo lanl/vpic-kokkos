@@ -144,12 +144,14 @@
 
     // Store the old values of s_mid and s_disp before I do crazy
     // things.
+    /*
     float old_midx = s_midx;
     float old_midy = s_midy;
     float old_midz = s_midz;
     float old_dispx = s_dispx;
     float old_dispy = s_dispy;
     float old_dispz = s_dispz;
+    */
 
     // Umeda algorithm: assume axis == 3 and set xr, yr, and zr
     // to be the end of the the zag (so the final destination 

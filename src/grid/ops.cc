@@ -160,12 +160,13 @@ size_grid( grid_t * g,
         }
         //if ( LOCAL_CELL_ID(x,y,z) == special_cell ) 
             //printf("\n");
-        if ( LOCAL_CELL_ID(x,y,z) == 63757 )
+        /*if ( LOCAL_CELL_ID(x,y,z) == 63757 )
         {
             printf("\n\n*****************************************");
             printf("\nCELL ID %ld corresponds to (%ld, %ld, %ld)", LOCAL_CELL_ID(x,y,z), x,y,z);
             printf("\n\n*****************************************");
         }
+        */
         // Set boundary faces appropriately
         // Here are the English conventions for 
         // the position along each axis:
@@ -214,9 +215,10 @@ size_grid( grid_t * g,
         }
         if( x==lnx ) {
             // x+1 plane for the right most cell
-            printf("\nCELL ID %ld at (%ld, %ld, %ld) has lnx == %ld", LOCAL_CELL_ID(x,y,z), x, y, z, x);
+            /*printf("\nCELL ID %ld at (%ld, %ld, %ld) has lnx == %ld", LOCAL_CELL_ID(x,y,z), x, y, z, x);
             printf("\nBefore:\n\tg->neighbor[i + 22] = %ld", g->neighbor[i + 22]);
             printf("\n\tg->neighbor[i + 25] = %ld", g->neighbor[i + 22]);
+            */
             g->neighbor[i + 18] = reflect_particles;
             g->neighbor[i + 19] = reflect_particles;
             g->neighbor[i + 20] = reflect_particles;
@@ -226,12 +228,14 @@ size_grid( grid_t * g,
             g->neighbor[i + 24] = reflect_particles;
             g->neighbor[i + 25] = reflect_particles;
             g->neighbor[i + 26] = reflect_particles;
+            /*
             printf("\nAfter:\n\tg->neighbor[i + 22] = %ld", g->neighbor[i + 22]);
             printf("\n\tg->neighbor[i + 25] = %ld", g->neighbor[i + 22]);
+            */
         }
         if( y==lny ) {
             // y+1 plane for the deepest cell
-            printf("\nCELL ID %ld at (%ld, %ld, %ld) has lny == %ld", LOCAL_CELL_ID(x,y,z), x, y, z, y);
+            //printf("\nCELL ID %ld at (%ld, %ld, %ld) has lny == %ld", LOCAL_CELL_ID(x,y,z), x, y, z, y);
             g->neighbor[i +  6] = reflect_particles;
             g->neighbor[i +  7] = reflect_particles;
             g->neighbor[i +  8] = reflect_particles;
