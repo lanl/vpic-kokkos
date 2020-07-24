@@ -441,12 +441,12 @@ struct ParticleParallel : BinaryCollision<MonteCarlo> {
 
                 binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
                     spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 1)
+                    spi_sortindex_ra(i0 + 2)
                 );
 
                 binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 1)
+                    spi_sortindex_ra(i0 + 1),
+                    spi_sortindex_ra(i0 + 2)
                 );
 
 
@@ -507,10 +507,7 @@ struct ParticleParallel : BinaryCollision<MonteCarlo> {
 
         for(int k=0 ; k < ncoll ; ++k) {
 
-          binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 1)
-          );
+          binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt, i, j);
 
           i += ij ? 1 : 0 ;
           j += ij ? 0 : 1 ;
