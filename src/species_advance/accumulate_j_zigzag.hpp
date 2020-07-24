@@ -159,7 +159,21 @@
     float xr = s_midx + 2. * s_dispx;
     float yr = s_midy + 2. * s_dispy;
     float zr = s_midz + 2. * s_dispz;
-   
+
+    xr = fmin( fmin( floor(s_midx), floor(xr) ) + 2., fmax( fmax( floor(s_midx), floor(xr) ), s_midx + s_dispx )  );
+    yr = fmin( fmin( floor(s_midy), floor(yr) ) + 2., fmax( fmax( floor(s_midy), floor(yr) ), s_midy + s_dispy )  );
+    zr = fmin( fmin( floor(s_midz), floor(zr) ) + 2., fmax( fmax( floor(s_midz), floor(zr) ), s_midz + s_dispz )  );
+    
+    printf("\n");
+    printf("\nParticle %ld: TEST REFERENCE POINT = %e, %e, %e", pi, xr, yr, zr);
+    printf("\n");
+    
+    /*
+    // TODO: get rid of this if my idea works.
+    xr = s_midx + 2. * s_dispx;
+    yr = s_midy + 2. * s_dispy;
+    zr = s_midz + 2. * s_dispz;
+     
     // If the particle crosses the x-boundary change xr
     // to the boundary it hits.
     if ( v0 < 2. )
@@ -181,6 +195,7 @@
         zr = s_dir[Axis_Label::z];
         s_dispz *= v2;
     } 
+    */
     // With xr, yr, and zr known, we can treat them as the final 
     // location on either the zig or the zag. Now we just need 
     // the new midpoint along this new linear zig or zag.
@@ -188,14 +203,30 @@
     s_midy = 0.5 * ( s_midy + yr );
     s_midz = 0.5 * ( s_midz + zr );
 
+    printf("\n");
+    printf("\nParticle %ld: POST IF STATEMENTS s_midx, s_midy, s_midz = %e, %e, %e", pi, s_midx, s_midy, s_midz);
+    printf("\n");
+
     // Change the displacement to the midpoint along the zig
     // or zag.
+    /*
     if ( axis != 3 )
     {
         s_dispx *= 0.5;
         s_dispy *= 0.5;
         s_dispz *= 0.5;
     }
+    */
+    // Calculate the displacements based on the 
+    // new midpoints along the zigzag. At this 
+    // point s_mid actually means midpoint!!!
+    s_dispx = xr - s_midx;
+    s_dispy = yr - s_midy;
+    s_dispz = zr - s_midz;
+
+    printf("\n");
+    printf("\nParticle %ld: POST IF STATEMENTS s_dispx, s_dispy, s_dispz = %e, %e, %e", pi, s_dispx, s_dispy, s_dispz);
+    printf("\n");
 
     // Compute the midpoint and the normalized displacement of the 
     // streak. By scaling the displacments by v3, if axis == 3, then
@@ -273,9 +304,14 @@
     printf("\nParticle mover updated...\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
 
     // Compute the new particle offset
+    /*
     p_dx += s_dispx+s_dispx;
     p_dy += s_dispy+s_dispy;
     p_dz += s_dispz+s_dispz;
+    */
+    p_dx = xr;
+    p_dy = yr; 
+    p_dz = zr;
 
     // If an end streak, return success (should be ~50% of the time)
     printf("\nStreak ended...\naxis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
