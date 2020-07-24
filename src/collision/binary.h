@@ -30,7 +30,8 @@ void apply_binary_collision_model_pipeline( binary_collision_op_t * cop,
         return;
     }
 
-    binary_collision_pipeline<MonteCarlo, VoxelParallel> pipeline(
+    // TODO: is this out of date? Seems hard coded for Voxel..
+    binary_collision_pipeline< VoxelParallel<MonteCarlo> > pipeline(
       cop->spi,
       cop->spj,
       cop->interval,

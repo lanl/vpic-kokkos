@@ -51,7 +51,7 @@
  *
  * ######################IMPORTANT DOCUMENTATION ##############
  * For information on use of lambdas inside struct and classes:
- *     https://github.com/kokkos/kokkos/wiki/Lambda-Dispatch 
+ *     https://github.com/kokkos/kokkos/wiki/Lambda-Dispatch
  * ############################################################
  */
 
@@ -60,6 +60,9 @@ using k_density_t=Kokkos::View<float *, Kokkos::DefaultExecutionSpace>;
 
 template <bool MonteCarlo>
 struct BinaryCollision {
+
+  static constexpr bool monte_carlo = MonteCarlo;
+
 /**
    * @brief Perform a collision between two particles.
    */
@@ -83,7 +86,7 @@ struct BinaryCollision {
     int j
   )
   {
-    
+
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];
     int d0, d1, d2;
 
@@ -206,39 +209,40 @@ struct BinaryCollision {
 template<bool MonteCarlo>
 struct VoxelParallel : BinaryCollision<MonteCarlo> {
   using BinaryCollision<MonteCarlo>::binary_collision;
+
   /**
    * @brief Loop over particles performing collisions.
    */
   template<class collision_model>
-  void apply_model (collision_model& model, 
-    float const& mu_i, 
-    float const& mu_j, 
-    float const& mu, 
-    int const& nx, 
-    int const& ny, 
-    int const& nz, 
-    species_t* const& spi, 
-    species_t* const& spj, 
-    kokkos_rng_pool_t const& rp,  
+  void apply_model (collision_model& model,
+    float const& mu_i,
+    float const& mu_j,
+    float const& mu,
+    int const& nx,
+    int const& ny,
+    int const& nz,
+    species_t* const& spi,
+    species_t* const& spj,
+    kokkos_rng_pool_t const& rp,
     k_particles_i_t spi_i,
-    k_density_t const& spi_n, 
-    k_density_t const& spj_n, 
-    k_particles_t const& spi_p, 
-    k_particles_t const& spj_p, 
-    float const& dtinterval, 
-    k_particle_sortindex_t_ra const& spi_sortindex_ra, 
-    k_particle_sortindex_t_ra const& spj_sortindex_ra, 
-    k_particle_partition_t_ra const& spi_partition_ra, 
-    k_particle_partition_t_ra const& spj_partition_ra) 
-  {  
-    
+    k_density_t const& spi_n,
+    k_density_t const& spj_n,
+    k_particles_t const& spi_p,
+    k_particles_t const& spj_p,
+    float const& dtinterval,
+    k_particle_sortindex_t_ra const& spi_sortindex_ra,
+    k_particle_sortindex_t_ra const& spj_sortindex_ra,
+    k_particle_partition_t_ra const& spi_partition_ra,
+    k_particle_partition_t_ra const& spj_partition_ra)
+  {
+
     using Space=Kokkos::DefaultExecutionSpace;
     using member_type=Kokkos::TeamPolicy<Space>::member_type;
-  
+
     Kokkos::parallel_for("binary_collision_pipeline::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
       KOKKOS_LAMBDA (member_type team_member) {
-        
+
         int ix, iy, iz;
         RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
         const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
@@ -355,7 +359,7 @@ struct VoxelParallel : BinaryCollision<MonteCarlo> {
 
         // We *must* free generators.
         rp.free_state(rg);
-        
+
       });
   }
 };
@@ -371,31 +375,31 @@ struct ParticleParallel : BinaryCollision<MonteCarlo> {
    * @brief Loop over particles performing collisions.
    */
   template<class collision_model>
-  void apply_model (collision_model& model, 
-    float const& mu_i, 
-    float const& mu_j, 
-    float const& mu, 
-    int const& nx, 
-    int const& ny, 
-    int const& nz, 
-    species_t* const& spi, 
-    species_t* const& spj, 
+  void apply_model (collision_model& model,
+    float const& mu_i,
+    float const& mu_j,
+    float const& mu,
+    int const& nx,
+    int const& ny,
+    int const& nz,
+    species_t* const& spi,
+    species_t* const& spj,
     kokkos_rng_pool_t const& rp,
     k_particles_i_t spi_i,
-    k_density_t const& spi_n, 
-    k_density_t const& spj_n, 
-    k_particles_t const& spi_p, 
-    k_particles_t const& spj_p, 
-    float const& dtinterval, 
-    k_particle_sortindex_t_ra const& spi_sortindex_ra, 
-    k_particle_sortindex_t_ra const& spj_sortindex_ra, 
-    k_particle_partition_t_ra const& spi_partition_ra, 
-    k_particle_partition_t_ra const& spj_partition_ra) 
-  {  
-    
+    k_density_t const& spi_n,
+    k_density_t const& spj_n,
+    k_particles_t const& spi_p,
+    k_particles_t const& spj_p,
+    float const& dtinterval,
+    k_particle_sortindex_t_ra const& spi_sortindex_ra,
+    k_particle_sortindex_t_ra const& spj_sortindex_ra,
+    k_particle_partition_t_ra const& spi_partition_ra,
+    k_particle_partition_t_ra const& spj_partition_ra)
+  {
+
     using Space=Kokkos::DefaultExecutionSpace;
     using member_type=Kokkos::TeamPolicy<Space>::member_type;
-     
+
     // To avoid atomics, we can only have at most sum_v min(ni(v), nj(v))
     // independent threads. This is strictly less than ni or nj, so launch
     // one thread per particles and cancel ones we don't need.
@@ -522,19 +526,18 @@ struct ParticleParallel : BinaryCollision<MonteCarlo> {
 
 
 
-template<bool MonteCarlo = false, template <bool> class ParallelPolicy = VoxelParallel>
-struct CollisionParallelismModel : ParallelPolicy<MonteCarlo> {
-    using ParallelPolicy<MonteCarlo>::apply_model;
+template<typename ParallelPolicy = VoxelParallel<true> >
+struct CollisionParallelismModel : ParallelPolicy {
+    using ParallelPolicy::apply_model;
 };
 
-template<bool MonteCarlo = false, template <bool> class ParallelPolicy = VoxelParallel>
+template<typename ParallelPolicy = VoxelParallel<true> >
 struct binary_collision_pipeline {
-
 
   const float _mu_i, _mu_j, _mu, _dtinterval, _rdV;
   const int   _nx, _ny, _nz;
 
-  //Member variables start with the symbol _ and this is used 
+  //Member variables start with the symbol _ and this is used
   //to indicate they are not safe to be passed into a kokkos
   //lambda without first changing the reference type. Any var
   //starting with _ in a lambda will likely throw and illegal
@@ -551,7 +554,7 @@ struct binary_collision_pipeline {
   k_particle_sortindex_t_ra _spi_sortindex_ra, _spj_sortindex_ra;
   k_particle_partition_t_ra _spi_partition_ra, _spj_partition_ra;
 
-  CollisionParallelismModel<MonteCarlo, ParallelPolicy> pm;
+  CollisionParallelismModel< ParallelPolicy > pm;
 
   binary_collision_pipeline(
     species_t * spi,
@@ -571,7 +574,7 @@ struct binary_collision_pipeline {
       _nz(spi->g->nz),
       _rdV(1/spi->g->dV)
   {
-    //TODO: is interval needed here? 
+    //TODO: is interval needed here?
     if( !_spi || !_spj || !_spi->g || !_spj->g || _spi->g != _spj->g || interval <= 0)
       ERROR(("Bad args."));
 
@@ -631,7 +634,7 @@ struct binary_collision_pipeline {
     // beforehand is much faster than doing it inline.
     _spi_n = k_density_t("spi_n", _spi->g->nv);
     _spj_n = k_density_t("spj_n", _spj->g->nv);
-   
+
     //Not sure if this is needed to be redefined here
     const float rdV = (1/_spi->g->dV);
 
@@ -648,7 +651,7 @@ struct binary_collision_pipeline {
           spi_p(i, particle_var::w)*rdV
         );
     });
-    
+
     // NOTE: workaround to avoid implicit capture of this
     // SEE:  kokkos lambda dispatch link at top
     auto const& spj_n = _spj_n;
@@ -668,7 +671,7 @@ struct binary_collision_pipeline {
     else {
       _spj_n = _spi_n;
     }
-    
+
     // NOTE: workaround to avoid implicit capture of this
     // SEE:  kokkos lambda dispatch link at top
     auto const& model = _model;
@@ -682,16 +685,16 @@ struct binary_collision_pipeline {
     auto const& spj = _spj;
     auto const& rp  = _rp;
     auto const& dtinterval = _dtinterval;
-    auto const& spi_sortindex_ra = _spi_sortindex_ra; 
-    auto const& spj_sortindex_ra = _spj_sortindex_ra; 
+    auto const& spi_sortindex_ra = _spi_sortindex_ra;
+    auto const& spj_sortindex_ra = _spj_sortindex_ra;
     auto const& spi_partition_ra = _spi_partition_ra;
-    auto const& spj_partition_ra = _spj_partition_ra; 
-    
+    auto const& spj_partition_ra = _spj_partition_ra;
+
 
 
     // Do collisions.
     pm.apply_model(model, mu_i, mu_j, mu, nx, ny, nz, spi, spj, rp,
-                spi_i, spi_n, spj_n, spi_p, spj_p, dtinterval, 
+                spi_i, spi_n, spj_n, spi_p, spj_p, dtinterval,
                 spi_sortindex_ra, spj_sortindex_ra,
                 spi_partition_ra, spj_partition_ra);
 
