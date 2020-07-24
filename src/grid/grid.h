@@ -14,7 +14,11 @@
 #include "../util/util.h"
 #include "../vpic/kokkos_helpers.h"
 
-#define BOUNDARY(i,j,k) (13+(i)+3*(j)+9*(k)) /* FORTRAN -1:1,-1:1,-1:1 */
+// This is old. #define BOUNDARY(i,j,k) (13+(i)+3*(j)+9*(k)) /* FORTRAN -1:1,-1:1,-1:1 */
+//
+// TODO: get rid of this macro since get_neighbor_index is made to be
+// the global 3d to 1d mapping for the neighbor indices.
+#define BOUNDARY(i,j,k) ( ( (i + 1) * 3 + (j + 1) ) * 3 + (k + 1)  ) /* FORTRAN -1:1,-1:1,-1:1 */
 
 // Use this to calculate the neighbor index throughout VPIC.
 // Currently, each index is -1, 0, or 1 with 27 total neighbors
