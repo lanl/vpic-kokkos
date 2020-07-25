@@ -133,36 +133,60 @@
             pi, s_dispx, s_dispy, s_dispz);
     /*printf("\nParticle %d: s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz = %e, %e, %e",
             pi, s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz);
+    */
     printf("\nParticle %d: s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz = %e, %e, %e",
             pi, s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz);
-    if( axis != 3 )
-    {
-        printf("\nParticle %d: s_midx + 2*s_dispx -/+ 2, s_midy + 2*s_dispy -/+ 2, s_midz + 2*s_dispz -/+ 2 = %e, %e, %e",
+    /*
+    printf("\nParticle %d: s_midx + 2*s_dispx -/+ 2, s_midy + 2*s_dispy -/+ 2, s_midz + 2*s_dispz -/+ 2 = %e, %e, %e",
                 pi, s_midx + 2*s_dispx - 2*s_dir[0], s_midy + 2*s_dispy - 2*s_dir[1], s_midz + 2*s_dispz - 2*s_dir[2]);
-    }
     */
+   
 
     // Store the old values of s_mid and s_disp before I do crazy
     // things.
-    /*
-    float old_midx = s_midx;
-    float old_midy = s_midy;
-    float old_midz = s_midz;
-    float old_dispx = s_dispx;
-    float old_dispy = s_dispy;
-    float old_dispz = s_dispz;
-    */
+    
+    float finalx = s_midx + s_dispx;
+    float finaly = s_midy + s_dispy;
+    float finalz = s_midz + s_dispz;
+    float final_dispx = s_dispx;
+    float final_dispy = s_dispy;
+    float final_dispz = s_dispz;
 
+    // TODO: The comment below is no longer true.
     // Umeda algorithm: assume axis == 3 and set xr, yr, and zr
     // to be the end of the the zag (so the final destination 
     // of the particle).
-    float xr = s_midx + 2. * s_dispx;
-    float yr = s_midy + 2. * s_dispy;
-    float zr = s_midz + 2. * s_dispz;
+    float xr = s_midx + s_dispx;
+    float yr = s_midy + s_dispy;
+    float zr = s_midz + s_dispz;
 
+    if ( v0 < 2. ) 
+    {
+        xr = s_dir[Axis_Label::x];
+        finalx = xr;
+    }
+    if ( v1 < 2. )
+    {
+        yr = s_dir[Axis_Label::y];
+        finaly = yr;
+    }
+    if ( v2 < 2. )
+    {
+        zr = s_dir[Axis_Label::z];
+        finalz = zr;
+    }
+    if ( axis == 3 )
+    {
+        finalx += s_dispx;
+        finaly += s_dispy;
+        finalz += s_dispz;
+    }
+    
+    /*
     xr = fmin( fmin( floor(s_midx), floor(xr) ) + 2., fmax( fmax( floor(s_midx), floor(xr) ), s_midx + s_dispx )  );
     yr = fmin( fmin( floor(s_midy), floor(yr) ) + 2., fmax( fmax( floor(s_midy), floor(yr) ), s_midy + s_dispy )  );
     zr = fmin( fmin( floor(s_midz), floor(zr) ) + 2., fmax( fmax( floor(s_midz), floor(zr) ), s_midz + s_dispz )  );
+    */
     
     printf("\n");
     printf("\nParticle %ld: TEST REFERENCE POINT = %e, %e, %e", pi, xr, yr, zr);
@@ -296,9 +320,14 @@
 
     printf("\nParticle mover before updating...\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
     // Compute the remaining particle displacment
+    /*
     pm->dispx -= s_dispx;
     pm->dispy -= s_dispy;
     pm->dispz -= s_dispz;
+    */
+    pm->dispx -= 0.5 * (xr - ( s_midx - s_dispx ));
+    pm->dispy -= 0.5 * (yr - ( s_midy - s_dispy ));
+    pm->dispz -= 0.5 * (zr - ( s_midz - s_dispz ));
 
     printf("\nCurrents deposited...\naxis %d x %e y %e z %e disp x %e y %e z %e", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     printf("\nParticle mover updated...\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
@@ -309,9 +338,9 @@
     p_dy += s_dispy+s_dispy;
     p_dz += s_dispz+s_dispz;
     */
-    p_dx = xr;
-    p_dy = yr; 
-    p_dz = zr;
+    p_dx = finalx;
+    p_dy = finaly; 
+    p_dz = finalz;
 
     // If an end streak, return success (should be ~50% of the time)
     printf("\nStreak ended...\naxis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
@@ -322,7 +351,7 @@
     if( axis == 3 ) 
     {
         printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
-                pi, p_dx, p_dy, p_dz, xr, yr, zr);
+                pi, p_dx, p_dy, p_dz, finalx, finaly, finalz);
         break;
     }
 
