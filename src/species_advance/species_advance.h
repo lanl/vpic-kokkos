@@ -345,6 +345,12 @@ move_p_kokkos(
   const int planes_per_axis = g->PLANES_PER_AXIS;
   const int num_neighbors = g->NUM_NEIGHBORS;
 
+
+  // TODO: Get rid of these. They are only for debugging
+  float old_fx = p_dx + 2 * pm->dispx;
+  float old_fy = p_dy + 2 * pm->dispy;
+  float old_fz = p_dz + 2 * pm->dispz;
+
 #if VPIC_DUMP_NEIGHBORS
   DUMP_NEIGHBORS<int, float> print_neighbor("neighbor_indices.txt", 
                                             "neighbor_planes.txt",

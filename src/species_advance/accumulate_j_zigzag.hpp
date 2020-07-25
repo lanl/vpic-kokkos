@@ -152,11 +152,6 @@
     float final_dispy = s_dispy;
     float final_dispz = s_dispz;
 
-    // TODO: Get rid of these. They are only for debugging
-    float old_fx = finalx + s_dispx;
-    float old_fy = finaly + s_dispy;
-    float old_fz = finalz + s_dispz;
-
     // TODO: The comment below is no longer true.
     // Umeda algorithm: assume axis == 3 and set xr, yr, and zr
     // to be the end of the the zag (so the final destination 
@@ -171,20 +166,29 @@
         s_dispx = 0.5 * ( xr - s_midx );
         finalx = xr;
     }
+    else s_dispx *= 0.5;  // Get to the quarter-point
+
     if ( v1 < 2. )
     {
         yr = s_dir[Axis_Label::y];
         s_dispy = 0.5 * ( yr - s_midy );
         finaly = yr;
     }
+    else s_dispy *= 0.5;  // Get to the quarter-point
+
     if ( v2 < 2. )
     {
         zr = s_dir[Axis_Label::z];
         s_dispz = 0.5 * ( zr - s_midz );
         finalz = zr;
     }
+    else s_dispz *= 0.5;  // Get to the quarter-point
+
     if ( axis == 3 )
     {
+        s_dispx *= 2.;    // Get away from quarter-point
+        s_dispy *= 2.;    // Get away from quarter-point
+        s_dispz *= 2.;    // Get away from quarter-point
         finalx += s_dispx;
         finaly += s_dispy;
         finalz += s_dispz;
@@ -363,7 +367,7 @@
     if( axis == 3 ) 
     {
         printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
-                pi, old_fx, old_fy, old_fz, finalx, finaly, finalz);
+                pi, p_dx, p_dy, p_dz, old_fx, old_fy, old_fz);
         break;
     }
 

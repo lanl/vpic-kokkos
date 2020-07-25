@@ -218,7 +218,7 @@
     if( axis==3 ) 
     {
         printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
-                pi, p_dx, p_dy, p_dz, joe_midx + joe_dispx, joe_midy + joe_dispy, joe_midz + joe_dispz);
+                pi, p_dx, p_dy, p_dz, old_fx, old_fy, old_fz);
         break;
     }
 
