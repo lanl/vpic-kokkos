@@ -152,6 +152,11 @@
     float final_dispy = s_dispy;
     float final_dispz = s_dispz;
 
+    // TODO: Get rid of these. They are only for debugging
+    float old_fx = finalx + s_dispx;
+    float old_fy = finaly + s_dispy;
+    float old_fz = finalz + s_dispz;
+
     // TODO: The comment below is no longer true.
     // Umeda algorithm: assume axis == 3 and set xr, yr, and zr
     // to be the end of the the zag (so the final destination 
@@ -163,16 +168,19 @@
     if ( v0 < 2. ) 
     {
         xr = s_dir[Axis_Label::x];
+        s_dispx = 0.5 * ( xr - s_midx );
         finalx = xr;
     }
     if ( v1 < 2. )
     {
         yr = s_dir[Axis_Label::y];
+        s_dispy = 0.5 * ( yr - s_midy );
         finaly = yr;
     }
     if ( v2 < 2. )
     {
         zr = s_dir[Axis_Label::z];
+        s_dispz = 0.5 * ( zr - s_midz );
         finalz = zr;
     }
     if ( axis == 3 )
@@ -223,9 +231,11 @@
     // With xr, yr, and zr known, we can treat them as the final 
     // location on either the zig or the zag. Now we just need 
     // the new midpoint along this new linear zig or zag.
+    
     s_midx = 0.5 * ( s_midx + xr );
     s_midy = 0.5 * ( s_midy + yr );
     s_midz = 0.5 * ( s_midz + zr );
+    
 
     printf("\n");
     printf("\nParticle %ld: POST IF STATEMENTS s_midx, s_midy, s_midz = %e, %e, %e", pi, s_midx, s_midy, s_midz);
@@ -244,9 +254,11 @@
     // Calculate the displacements based on the 
     // new midpoints along the zigzag. At this 
     // point s_mid actually means midpoint!!!
+    /*
     s_dispx = xr - s_midx;
     s_dispy = yr - s_midy;
     s_dispz = zr - s_midz;
+    */
 
     printf("\n");
     printf("\nParticle %ld: POST IF STATEMENTS s_dispx, s_dispy, s_dispz = %e, %e, %e", pi, s_dispx, s_dispy, s_dispz);
@@ -351,7 +363,7 @@
     if( axis == 3 ) 
     {
         printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
-                pi, p_dx, p_dy, p_dz, finalx, finaly, finalz);
+                pi, old_fx, old_fy, old_fz, finalx, finaly, finalz);
         break;
     }
 
