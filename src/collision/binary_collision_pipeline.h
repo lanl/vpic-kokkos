@@ -57,12 +57,6 @@
 
 using k_density_t=Kokkos::View<float *, Kokkos::DefaultExecutionSpace>;
 
-
-template <bool MonteCarlo>
-struct BinaryCollision {
-
-  static constexpr bool monte_carlo = MonteCarlo;
-
 /**
    * @brief Perform a collision between two particles.
    */
@@ -71,7 +65,7 @@ struct BinaryCollision {
   //with the _ (underscore), because _ is used to indicate a class member before it
   //is caputred by a lambda. One lambda captured, we should refer to the variable
   //as EX: mu not _mu
-  template<class collision_model>
+  template<bool MonteCarlo, class collision_model>
   KOKKOS_INLINE_FUNCTION
   void binary_collision (
     float const& mu,
@@ -87,6 +81,8 @@ struct BinaryCollision {
   )
   {
 
+    static constexpr bool monte_carlo = MonteCarlo;
+   
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];
     int d0, d1, d2;
 
@@ -141,7 +137,7 @@ struct BinaryCollision {
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
 
     // Monte-Carlo collision test
-    if( MonteCarlo ) {
+    if(monte_carlo) {
 
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
       //        Would this be useful?
@@ -204,11 +200,9 @@ struct BinaryCollision {
     }
 
   }
-};
 
 template<bool MonteCarlo>
-struct VoxelParallel : BinaryCollision<MonteCarlo> {
-  using BinaryCollision<MonteCarlo>::binary_collision;
+struct VoxelParallel {
 
   /**
    * @brief Loop over particles performing collisions.
@@ -279,17 +273,17 @@ struct VoxelParallel : BinaryCollision<MonteCarlo> {
 
                 // These must be done serially to avoid atomics (same particles)
 
-                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
                     spi_sortindex_ra(i0),
                     spi_sortindex_ra(i0 + 1)
                 );
 
-                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
                     spi_sortindex_ra(i0),
                     spi_sortindex_ra(i0 + 2)
                 );
 
-                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
                     spi_sortindex_ra(i0 + 1),
                     spi_sortindex_ra(i0 + 2)
                 );
@@ -329,7 +323,7 @@ struct VoxelParallel : BinaryCollision<MonteCarlo> {
             int i = l + k*(ncoll+1) ;
             int j = k ;
 
-            binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
+            binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
                 spi_sortindex_ra(i0 + (ij ? i : j)),
                 spj_sortindex_ra(j0 + (ij ? j : i))
             );
@@ -348,7 +342,7 @@ struct VoxelParallel : BinaryCollision<MonteCarlo> {
             int i = l + remain*(ncoll+1) ;
             int j = k + remain ;
 
-            binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
+            binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
                 spi_sortindex_ra(i0 + (ij ? i : j)),
                 spj_sortindex_ra(j0 + (ij ? j : i))
             );
@@ -369,8 +363,7 @@ struct VoxelParallel : BinaryCollision<MonteCarlo> {
    * @brief Loop over particles performing collisions.
    */
 template<bool MonteCarlo>
-struct ParticleParallel : BinaryCollision<MonteCarlo> {
-  using BinaryCollision<MonteCarlo>::binary_collision;
+struct ParticleParallel {
   /**
    * @brief Loop over particles performing collisions.
    */
@@ -434,17 +427,17 @@ struct ParticleParallel : BinaryCollision<MonteCarlo> {
                 // Get a random generator.
                 kokkos_rng_state_t rg = rp.get_state();
 
-               binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+               binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
                     spi_sortindex_ra(i0),
                     spi_sortindex_ra(i0 + 1)
                 );
 
-                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
                     spi_sortindex_ra(i0),
                     spi_sortindex_ra(i0 + 2)
                 );
 
-                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
                     spi_sortindex_ra(i0 + 1),
                     spi_sortindex_ra(i0 + 2)
                 );
@@ -507,7 +500,7 @@ struct ParticleParallel : BinaryCollision<MonteCarlo> {
 
         for(int k=0 ; k < ncoll ; ++k) {
 
-          binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt, i, j);
+          binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt, i, j);
 
           i += ij ? 1 : 0 ;
           j += ij ? 0 : 1 ;

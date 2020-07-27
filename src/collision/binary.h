@@ -32,7 +32,7 @@ void apply_binary_collision_model_pipeline( binary_collision_op_t * cop,
     
     // TODO: This is hardcoded, later we will want to have this enabled
     // at compile time instead.
-    binary_collision_pipeline< VoxelParallel<MonteCarlo> > pipeline(
+    binary_collision_pipeline< ParticleParallel<MonteCarlo> > pipeline(
       cop->spi,
       cop->spj,
       cop->interval,
