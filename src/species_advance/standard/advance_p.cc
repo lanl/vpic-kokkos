@@ -165,10 +165,13 @@ sp_[id]->
                            dx*( f_deydx + dz*f_d2eydzdx ) );
     float haz  = qdt_2mc*(    ( f_ez    + dx*f_dezdx    ) +
                            dy*( f_dezdy + dx*f_d2ezdxdy ) );
+
+    //hax = 0, hay = 0, haz = 0;
     //printf(" inter %d vs %ld \n", ii, k_interp.size());
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby + dy*f_dcbydy;
     float cbz  = f_cbz + dz*f_dcbzdz;
+    //cbx = 0, cby = 0, cbz = 0;
     float ux   = p_ux;                             // Load momentum
     float uy   = p_uy;
     float uz   = p_uz;
@@ -211,8 +214,8 @@ sp_[id]->
     v4   = v1 + uy;
     v5   = v2 + uz;
 
-    printf("\n\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, dx, dy, dz);
-    printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, dx + 2*ux, dy + 2*uy, dz + 2*uz);
+//    printf("\n\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, dx, dy, dz);
+//    printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, dx + 2*ux, dy + 2*uy, dz + 2*uz);
 
     // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
     if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds

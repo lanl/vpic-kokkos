@@ -47,6 +47,7 @@
     print_neighbor.write_final_cell( s_midx + 2. * s_dispx, s_midy + 2. * s_dispy, s_midz + 2. * s_dispz );
 #endif
 
+    // TODO: Change this for zigzag.
     // Here is the progression of the displacements moving
     // forward, with x1 = p_dx = s_midx as the initial position
     // and x2 the final position, after the move_p_kokkos(...)
@@ -136,102 +137,71 @@
     */
     printf("\nParticle %d: s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz = %e, %e, %e",
             pi, s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz);
-    /*
-    printf("\nParticle %d: s_midx + 2*s_dispx -/+ 2, s_midy + 2*s_dispy -/+ 2, s_midz + 2*s_dispz -/+ 2 = %e, %e, %e",
-                pi, s_midx + 2*s_dispx - 2*s_dir[0], s_midy + 2*s_dispy - 2*s_dir[1], s_midz + 2*s_dispz - 2*s_dir[2]);
-    */
-   
-
-    // Store the old values of s_mid and s_disp before I do crazy
-    // things.
     
-    float finalx = s_midx + s_dispx;
-    float finaly = s_midy + s_dispy;
-    float finalz = s_midz + s_dispz;
-    float final_dispx = s_dispx;
-    float final_dispy = s_dispy;
-    float final_dispz = s_dispz;
+    float zig_finalx = s_midx + s_dispx;
+    float zig_finaly = s_midy + s_dispy;
+    float zig_finalz = s_midz + s_dispz;
 
-    // TODO: The comment below is no longer true.
-    // Umeda algorithm: assume axis == 3 and set xr, yr, and zr
-    // to be the end of the the zag (so the final destination 
-    // of the particle).
-    float xr = s_midx + s_dispx;
-    float yr = s_midy + s_dispy;
-    float zr = s_midz + s_dispz;
+    printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
+   
+    // Set the reference points to the midpoint 
+    // of the motion by default.
+    float xr = zig_finalx;
+    float yr = zig_finaly;
+    float zr = zig_finalz;
+    
+    printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
 
     if ( v0 < 2. ) 
     {
         xr = s_dir[Axis_Label::x];
-        s_dispx = 0.5 * ( xr - s_midx );
-        finalx = xr;
+        s_dispx = ( xr - s_midx );
+        zig_finalx = xr;
     }
-    else s_dispx *= 0.5;  // Get to the quarter-point
 
     if ( v1 < 2. )
     {
         yr = s_dir[Axis_Label::y];
-        s_dispy = 0.5 * ( yr - s_midy );
-        finaly = yr;
+        s_dispy = ( yr - s_midy );
+        zig_finaly = yr;
     }
-    else s_dispy *= 0.5;  // Get to the quarter-point
 
     if ( v2 < 2. )
     {
         zr = s_dir[Axis_Label::z];
-        s_dispz = 0.5 * ( zr - s_midz );
-        finalz = zr;
+        s_dispz = ( zr - s_midz );
+        zig_finalz = zr;
     }
-    else s_dispz *= 0.5;  // Get to the quarter-point
-
+    
+    // If the particle stays in-cell, adjust
+    // the final position to be the final point
+    // of the motion. 
     if ( axis == 3 )
     {
-        s_dispx *= 2.;    // Get away from quarter-point
-        s_dispy *= 2.;    // Get away from quarter-point
-        s_dispz *= 2.;    // Get away from quarter-point
-        finalx += s_dispx;
-        finaly += s_dispy;
-        finalz += s_dispz;
+        zig_finalx += s_dispx;
+        zig_finaly += s_dispy;
+        zig_finalz += s_dispz;
+
+        xr = zig_finalx;
+        yr = zig_finaly;
+        zr = zig_finalz;
     }
-    
-    /*
-    xr = fmin( fmin( floor(s_midx), floor(xr) ) + 2., fmax( fmax( floor(s_midx), floor(xr) ), s_midx + s_dispx )  );
-    yr = fmin( fmin( floor(s_midy), floor(yr) ) + 2., fmax( fmax( floor(s_midy), floor(yr) ), s_midy + s_dispy )  );
-    zr = fmin( fmin( floor(s_midz), floor(zr) ) + 2., fmax( fmax( floor(s_midz), floor(zr) ), s_midz + s_dispz )  );
-    */
-    
+    else
+    {
+        // If axis != 3 then scale down the s_disp
+        // values by a factor of two to account 
+        // for the "quarter-point".
+        // Note that this else will scale the IF 
+        // statements above (e.g. if (v0 < 2){ ...  })
+        s_dispx *= 0.5;
+        s_dispy *= 0.5;
+        s_dispz *= 0.5;
+    }
+     
     printf("\n");
     printf("\nParticle %ld: TEST REFERENCE POINT = %e, %e, %e", pi, xr, yr, zr);
     printf("\n");
     
-    /*
-    // TODO: get rid of this if my idea works.
-    xr = s_midx + 2. * s_dispx;
-    yr = s_midy + 2. * s_dispy;
-    zr = s_midz + 2. * s_dispz;
-     
-    // If the particle crosses the x-boundary change xr
-    // to the boundary it hits.
-    if ( v0 < 2. )
-    {
-        xr = s_dir[Axis_Label::x];
-        s_dispx *= v0;
-    }
-    // If the particle crosses the y-boundary change yr
-    // to the boundary it hits.
-    if ( v1 < 2. )
-    {
-        yr = s_dir[Axis_Label::y];
-        s_dispy *= v1;
-    }
-    // If the particle crosses the z-boundary change zr
-    // to the boundary it hits.
-    if ( v2 < 2. )
-    {
-        zr = s_dir[Axis_Label::z];
-        s_dispz *= v2;
-    } 
-    */
     // With xr, yr, and zr known, we can treat them as the final 
     // location on either the zig or the zag. Now we just need 
     // the new midpoint along this new linear zig or zag.
@@ -245,43 +215,9 @@
     printf("\nParticle %ld: POST IF STATEMENTS s_midx, s_midy, s_midz = %e, %e, %e", pi, s_midx, s_midy, s_midz);
     printf("\n");
 
-    // Change the displacement to the midpoint along the zig
-    // or zag.
-    /*
-    if ( axis != 3 )
-    {
-        s_dispx *= 0.5;
-        s_dispy *= 0.5;
-        s_dispz *= 0.5;
-    }
-    */
-    // Calculate the displacements based on the 
-    // new midpoints along the zigzag. At this 
-    // point s_mid actually means midpoint!!!
-    /*
-    s_dispx = xr - s_midx;
-    s_dispy = yr - s_midy;
-    s_dispz = zr - s_midz;
-    */
-
     printf("\n");
     printf("\nParticle %ld: POST IF STATEMENTS s_dispx, s_dispy, s_dispz = %e, %e, %e", pi, s_dispx, s_dispy, s_dispz);
     printf("\n");
-
-    // Compute the midpoint and the normalized displacement of the 
-    // streak. By scaling the displacments by v3, if axis == 3, then
-    // nothing is done (v3 == 1.0 at this point), but if axis != 3,
-    // then s_disp is set to s_dir - s_mid along the appropriate
-    // axis, while the other displacements are scaled to keep the
-    // particle on the same linear trajectory.
-    /*
-    s_dispx *= v3;
-    s_dispy *= v3;
-    s_dispz *= v3;
-    s_midx += s_dispx;
-    s_midy += s_dispy;
-    s_midz += s_dispz;
-    */
     
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
@@ -335,31 +271,30 @@
 
 
     printf("\nParticle mover before updating...\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
-    // Compute the remaining particle displacment
-    /*
-    pm->dispx -= s_dispx;
-    pm->dispy -= s_dispy;
-    pm->dispz -= s_dispz;
-    */
-    pm->dispx -= 0.5 * (xr - ( s_midx - s_dispx ));
-    pm->dispy -= 0.5 * (yr - ( s_midy - s_dispy ));
-    pm->dispz -= 0.5 * (zr - ( s_midz - s_dispz ));
+    
+    // Subtract off what has been travelled from the full displacement.
+    // This approach is equivalent to:
+    //   
+    //   starting_x = 2 * s_midx - xr;
+    //   s_dispx = 2 * pm->dispx - ( zig_finalx - starting_x );
+    //   s_dispx *= 0.5;
+    //   pm->dispx = s_dispx;
+    //
+    // along each direction.
+    pm->dispx -= 0.5 * ( zig_finalx - (2 * s_midx - xr) );
+    pm->dispy -= 0.5 * ( zig_finaly - (2 * s_midy - yr) );
+    pm->dispz -= 0.5 * ( zig_finalz - (2 * s_midz - zr) );
 
-    printf("\nCurrents deposited...\naxis %d x %e y %e z %e disp x %e y %e z %e", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+    printf("\nCurrents deposited...\naxis %d x %e y %e z %e s_disp x %e y %e z %e", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     printf("\nParticle mover updated...\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
 
-    // Compute the new particle offset
-    /*
-    p_dx += s_dispx+s_dispx;
-    p_dy += s_dispy+s_dispy;
-    p_dz += s_dispz+s_dispz;
-    */
-    p_dx = finalx;
-    p_dy = finaly; 
-    p_dz = finalz;
+    // Set the new particle position post-accumulation.
+    p_dx = zig_finalx;
+    p_dy = zig_finaly; 
+    p_dz = zig_finalz;
 
     // If an end streak, return success (should be ~50% of the time)
-    printf("\nStreak ended...\naxis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+    printf("\nStreak ended...\naxis %d x %e y %e z %e s_disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
    
     printf("\nParticle %d Velocity after accumulation:", pi);
     printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
@@ -403,7 +338,6 @@
 #endif
 
     /* Old stuffs ...
-    // TODO: Change this to allow for corner crossing.
     v0 = s_dir[axis];
     k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
                            // _exactly_ on the boundary.
@@ -478,10 +412,8 @@
         // TODO: Change this to something better to not reduce the 
         // cell number by too much. 
         //pii = 8*pii + face;
-        printf("\nWeird if statement...\npii = %d", pii);
         // TODO: Fix boundary_p
         pii = upper_bound_of_neighbors * pii + neighbor_index;
-        printf("\npii = %d", pii);
         return 1; // Return "mover still in use"
     }
 
@@ -516,7 +448,6 @@
     printf("\ndx, dy, dz = %e, %e, %e", k_particles( pi, particle_var::dx ),
                                         k_particles( pi, particle_var::dy ),
                                         k_particles( pi, particle_var::dz ));
-
     printf("\n##########################################\n");
 
     
