@@ -364,6 +364,8 @@
     printf("\nParticle %d Velocity after accumulation:", pi);
     printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
+    // TODO: Change this break based on neighbor_index == 13.
+    // This should help reduce thread divergence.
     if( axis == 3 ) 
     {
         printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
