@@ -241,53 +241,53 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_soa_t& k_par
 //        update += static_cast<double>(v0);
 //    }, en);
 
-//    Kokkos::parallel_reduce("energy_p", np, KOKKOS_LAMBDA(const int n, double& update) {
-//        float dx = k_part.dx(n);
-//        float dy = k_part.dy(n);
-//        float dz = k_part.dz(n);
-//        int   i  = k_part.i(n);
-//        float v0 = static_cast<float>(k_part.ux(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
-//                           dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
-//        float v1 = static_cast<float>(k_part.uy(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ey)    + dz*k_interp(i, interpolator_var::deydz)    ) +
-//                           dx*( k_interp(i, interpolator_var::deydx) + dz*k_interp(i, interpolator_var::d2eydzdx) ) );
-//        float v2 = static_cast<float>(k_part.uz(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
-//                                dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
-//        v0 = v0*v0 + v1*v1 + v2*v2;
-//        v0 = (msp * k_part.w(n)) * (v0 / (1 + sqrtf(1 + v0)));
-//        update += static_cast<double>(v0);
-//    }, en);
-
-    Kokkos::parallel_reduce("energy_p", np/2, KOKKOS_LAMBDA(const int n, double& update) {
-        packed_t dx = packed_t(k_part.dx(n*2), k_part.dx(n*2+1));
-        packed_t dy = packed_t(k_part.dy(n*2), k_part.dy(n*2+1));
-        packed_t dz = packed_t(k_part.dz(n*2), k_part.dz(n*2+1));
-        packed_t ux = packed_t(k_part.ux(n*2), k_part.ux(n*2+1));
-        packed_t uy = packed_t(k_part.uy(n*2), k_part.uy(n*2+1));
-        packed_t uz = packed_t(k_part.uz(n*2), k_part.uz(n*2+1));
-        packed_t  w = packed_t(k_part.w(n*2), k_part.w(n*2+1));
-        int   pi0  = k_part.i(n*2);
-        int   pi1  = k_part.i(n*2+1);
-        packed_t ex = packed_t(k_interp(pi0, interpolator_var::ex), k_interp(pi1, interpolator_var::ex));
-        packed_t ey = packed_t(k_interp(pi0, interpolator_var::ey), k_interp(pi1, interpolator_var::ey));
-        packed_t ez = packed_t(k_interp(pi0, interpolator_var::ez), k_interp(pi1, interpolator_var::ez));
-        packed_t dexdy = packed_t(k_interp(pi0, interpolator_var::dexdy), k_interp(pi1, interpolator_var::dexdy));
-        packed_t dexdz = packed_t(k_interp(pi0, interpolator_var::dexdz), k_interp(pi1, interpolator_var::dexdz));
-        packed_t d2exdydz = packed_t(k_interp(pi0, interpolator_var::d2exdydz), k_interp(pi1, interpolator_var::d2exdydz));
-        packed_t deydx = packed_t(k_interp(pi0, interpolator_var::deydx), k_interp(pi1, interpolator_var::deydx));
-        packed_t deydz = packed_t(k_interp(pi0, interpolator_var::deydz), k_interp(pi1, interpolator_var::deydz));
-        packed_t d2eydzdx = packed_t(k_interp(pi0, interpolator_var::d2exdydz), k_interp(pi1, interpolator_var::d2eydzdx));
-        packed_t dezdx = packed_t(k_interp(pi0, interpolator_var::dezdx), k_interp(pi1, interpolator_var::dezdx));
-        packed_t dezdy = packed_t(k_interp(pi0, interpolator_var::dezdy), k_interp(pi1, interpolator_var::dezdy));
-        packed_t d2ezdxdy = packed_t(k_interp(pi0, interpolator_var::d2exdydz), k_interp(pi1, interpolator_var::d2ezdxdy));
-
-        packed_t v0 = ux + packed_t(qdt_2mc)*( (ex + dy*dexdy) + dz*(dexdz + dy*d2exdydz) );
-        packed_t v1 = uy + packed_t(qdt_2mc)*( (ey + dz*deydz) + dx*(deydx + dz*d2eydzdx) );
-        packed_t v2 = uz + packed_t(qdt_2mc)*( (ez + dx*dezdx) + dy*(dezdy + dx*d2ezdxdy) );
+    Kokkos::parallel_reduce("energy_p", np, KOKKOS_LAMBDA(const int n, double& update) {
+        float dx = k_part.dx(n);
+        float dy = k_part.dy(n);
+        float dz = k_part.dz(n);
+        int   i  = k_part.i(n);
+        float v0 = static_cast<float>(k_part.ux(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
+                           dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
+        float v1 = static_cast<float>(k_part.uy(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ey)    + dz*k_interp(i, interpolator_var::deydz)    ) +
+                           dx*( k_interp(i, interpolator_var::deydx) + dz*k_interp(i, interpolator_var::d2eydzdx) ) );
+        float v2 = static_cast<float>(k_part.uz(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
+                                dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
         v0 = v0*v0 + v1*v1 + v2*v2;
-        v0 = (packed_t(msp) + w) * (v0 / (packed_t(1) + sqrt(packed_t(1) + v0)));
-        update += static_cast<double>(v0.low2float());
-        update += static_cast<double>(v0.high2float());
+        v0 = (msp * k_part.w(n)) * (v0 / (1 + sqrtf(1 + v0)));
+        update += static_cast<double>(v0);
     }, en);
+
+//    Kokkos::parallel_reduce("energy_p", np/2, KOKKOS_LAMBDA(const int n, double& update) {
+//        packed_t dx = packed_t(k_part.dx(n*2), k_part.dx(n*2+1));
+//        packed_t dy = packed_t(k_part.dy(n*2), k_part.dy(n*2+1));
+//        packed_t dz = packed_t(k_part.dz(n*2), k_part.dz(n*2+1));
+//        packed_t ux = packed_t(k_part.ux(n*2), k_part.ux(n*2+1));
+//        packed_t uy = packed_t(k_part.uy(n*2), k_part.uy(n*2+1));
+//        packed_t uz = packed_t(k_part.uz(n*2), k_part.uz(n*2+1));
+//        packed_t  w = packed_t(k_part.w(n*2), k_part.w(n*2+1));
+//        int   pi0  = k_part.i(n*2);
+//        int   pi1  = k_part.i(n*2+1);
+//        packed_t ex = packed_t(k_interp(pi0, interpolator_var::ex), k_interp(pi1, interpolator_var::ex));
+//        packed_t ey = packed_t(k_interp(pi0, interpolator_var::ey), k_interp(pi1, interpolator_var::ey));
+//        packed_t ez = packed_t(k_interp(pi0, interpolator_var::ez), k_interp(pi1, interpolator_var::ez));
+//        packed_t dexdy = packed_t(k_interp(pi0, interpolator_var::dexdy), k_interp(pi1, interpolator_var::dexdy));
+//        packed_t dexdz = packed_t(k_interp(pi0, interpolator_var::dexdz), k_interp(pi1, interpolator_var::dexdz));
+//        packed_t d2exdydz = packed_t(k_interp(pi0, interpolator_var::d2exdydz), k_interp(pi1, interpolator_var::d2exdydz));
+//        packed_t deydx = packed_t(k_interp(pi0, interpolator_var::deydx), k_interp(pi1, interpolator_var::deydx));
+//        packed_t deydz = packed_t(k_interp(pi0, interpolator_var::deydz), k_interp(pi1, interpolator_var::deydz));
+//        packed_t d2eydzdx = packed_t(k_interp(pi0, interpolator_var::d2exdydz), k_interp(pi1, interpolator_var::d2eydzdx));
+//        packed_t dezdx = packed_t(k_interp(pi0, interpolator_var::dezdx), k_interp(pi1, interpolator_var::dezdx));
+//        packed_t dezdy = packed_t(k_interp(pi0, interpolator_var::dezdy), k_interp(pi1, interpolator_var::dezdy));
+//        packed_t d2ezdxdy = packed_t(k_interp(pi0, interpolator_var::d2exdydz), k_interp(pi1, interpolator_var::d2ezdxdy));
+//
+//        packed_t v0 = ux + packed_t(qdt_2mc)*( (ex + dy*dexdy) + dz*(dexdz + dy*d2exdydz) );
+//        packed_t v1 = uy + packed_t(qdt_2mc)*( (ey + dz*deydz) + dx*(deydx + dz*d2eydzdx) );
+//        packed_t v2 = uz + packed_t(qdt_2mc)*( (ez + dx*dezdx) + dy*(dezdy + dx*d2ezdxdy) );
+//        v0 = v0*v0 + v1*v1 + v2*v2;
+//        v0 = (packed_t(msp) + w) * (v0 / (packed_t(1) + sqrt(packed_t(1) + v0)));
+//        update += static_cast<double>(v0.low2float());
+//        update += static_cast<double>(v0.high2float());
+//    }, en);
 
     return en;
 }

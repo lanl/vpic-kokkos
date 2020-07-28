@@ -578,29 +578,31 @@ KOKKOS_INLINE_FUNCTION Half2<T> fma(const Half2<T>& a, const Half2<T>& b, const 
 //#define pos_t Half2<__half2>
 //#define mom_t Half2<__half2>
 //#define mixed_t Half2<__half2>
-typedef Half<__half> pos_t;
+//typedef Half<__half> pos_t;
 //typedef Half<__half> mom_t;
 //typedef Half<__half> mixed_t;
-typedef Half2<__half2> packed_t;
-//typedef float pos_t;
+//typedef Half2<__half2> packed_t;
+typedef float pos_t;
 typedef float mom_t;
-//typedef float mixed_t;
+typedef float mixed_t;
 #define mixed_t float
 #else
 //#define pos_t half
 //#define mom_t half
 //#define mixed_t half
-typedef Half<__half> pos_t;
+//typedef Half<__half> pos_t;
 //typedef Half<__half> mom_t;
 //typedef Half<__half> mixed_t;
-typedef Half2<__half2> packed_t;
+//typedef Half2<__half2> packed_t;
 //typedef Half<half> pos_t;
 //typedef Half<half> mom_t;
 //typedef Half<half> mixed_t;
-//typedef float pos_t;
+typedef float pos_t;
 typedef float mom_t;
 typedef float mixed_t;
 #endif
+
+//#define GPUSpace  Kokkos::DefaultExecutionSpace::memory_space
 
 class k_particles_struct {
     public:

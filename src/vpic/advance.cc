@@ -45,7 +45,9 @@ int vpic_simulation::advance(void)
 //printf("species: %s\n", sp->name);
           //TIC sort_p( sp ); TOC( sort_p, 1 );
           sorter.sort( sp->k_p_soa_d, sp->np, accumulator_array->na);
-//          sorter.gpu_sort( sp->k_p_soa_d, sp->np, accumulator_array->na);
+//          sorter.strided_sort( sp->k_p_soa_d, sp->np, accumulator_array->na);
+//          sorter.tiled_sort( sp->k_p_soa_d, sp->np, accumulator_array->na, 4);
+//          sorter.tiled_strided_sort( sp->k_p_soa_d, sp->np, accumulator_array->na, 2048);
       }
   }
 
@@ -101,9 +103,7 @@ int vpic_simulation::advance(void)
       advance_p_profiling( sp, accumulator_array, interpolator_array, step() );
   Kokkos::Profiling::popRegion();
 #else
-  Kokkos::Profiling::pushRegion(" " + step_str + " " + std::string(sp->name) + " advance_p");
       advance_p( sp, accumulator_array, interpolator_array );
-  Kokkos::Profiling::popRegion();
 #endif
   }
 //  KOKKOS_TOC( advance_p, 1);

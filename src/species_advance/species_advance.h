@@ -222,6 +222,10 @@ void
 advance_p_profiling( /**/  species_t            * RESTRICT sp,
            /**/  accumulator_array_t  * RESTRICT aa,
                  interpolator_array_t * RESTRICT ia, int64_t step);
+void
+advance_p_cuda( /**/  species_t            * RESTRICT sp,
+           /**/  accumulator_array_t  * RESTRICT aa,
+                 interpolator_array_t * RESTRICT ia);
 
 // In center_p.cxx
 
