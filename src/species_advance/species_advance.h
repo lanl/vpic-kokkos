@@ -66,7 +66,10 @@ class species_t {
         int np = 0, max_np = 0;             // Number and max local particles
         particle_t * ALIGNED(128) p;        // Array of particles for the species
 
-        int nm, max_nm;                     // Number and max local movers in use
+        // TODO: these could be unsigned?
+        int nm;                             // Number and max local movers in use
+        int max_nm;
+
         particle_mover_t * ALIGNED(128) pm; // Particle movers
 
         int64_t last_sorted;                // Step when the particles were last
@@ -122,8 +125,8 @@ class species_t {
         k_particle_i_movers_t::HostMirror k_pm_i_h;  // kokkos particle movers on host
 
         // TODO: what is an iterator here??
-        k_iterator_t k_nm_d;               // nm iterator
-        k_iterator_t::HostMirror k_nm_h;
+        k_counter_t k_nm_d;               // nm iterator
+        k_counter_t::HostMirror k_nm_h;
 
         // TODO: this should ultimatley be removeable.
         // This tracks the number of particles we need to move back to the device
@@ -146,12 +149,12 @@ class species_t {
         species_t(int n_particles, int n_pmovers) :
             k_p_d("k_particles", n_particles),
             k_p_i_d("k_particles_i", n_particles),
-            k_pm_d("k_particle_movers", n_pmovers),
-            k_pm_i_d("k_particle_movers_i", n_pmovers),
             k_pc_d("k_particle_copy_for_movers", n_pmovers),
             k_pc_i_d("k_particle_copy_for_movers_i", n_pmovers),
             k_pr_h("k_particle_send_for_movers", n_pmovers),
             k_pr_i_h("k_particle_send_for_movers_i", n_pmovers),
+            k_pm_d("k_particle_movers", n_pmovers),
+            k_pm_i_d("k_particle_movers_i", n_pmovers),
             k_nm_d("k_nm") // size 1
     {
         k_p_h = Kokkos::create_mirror_view(k_p_d);
@@ -264,11 +267,11 @@ void
 k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
                   const species_t     * RESTRICT sp );
 
-void 
-k_accumulate_rhob(k_field_t& kfield, 
-                  k_particles_t& kpart, 
-                  k_particle_movers_t& kpart_movers, 
-                  const grid_t* RESTRICT g, 
+void
+k_accumulate_rhob(k_field_t& kfield,
+                  k_particles_t& kpart,
+                  k_particle_movers_t& kpart_movers,
+                  const grid_t* RESTRICT g,
                   const float qsp,
                   const int nm);
 
@@ -400,9 +403,10 @@ move_p_kokkos(
     v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
     v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
     v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-    //Kokkos::atomic_add(&a[0], v0); \
-    //Kokkos::atomic_add(&a[1], v1); \
-    //Kokkos::atomic_add(&a[2], v2); \
+
+    //Kokkos::atomic_add(&a[0], v0);
+    //Kokkos::atomic_add(&a[1], v1);
+    //Kokkos::atomic_add(&a[2], v2);
     //Kokkos::atomic_add(&a[3], v3);
 
     accumulate_j(x,y,z);
@@ -622,9 +626,10 @@ move_p_kokkos_host_serial(
     v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
     v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
     v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-    //Kokkos::atomic_add(&a[0], v0); \
-    //Kokkos::atomic_add(&a[1], v1); \
-    //Kokkos::atomic_add(&a[2], v2); \
+
+    //Kokkos::atomic_add(&a[0], v0);
+    //Kokkos::atomic_add(&a[1], v1);
+    //Kokkos::atomic_add(&a[2], v2);
     //Kokkos::atomic_add(&a[3], v3);
 
     accumulate_j(x,y,z);
