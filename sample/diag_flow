@@ -1,0 +1,94 @@
+begin_globals {
+};
+
+begin_initialization {
+
+  num_step = 10;                    // Do a bunch of steps. Maybe a single one would be enough
+  status_interval = 1000;            // Basically don't print status until the end
+  sync_shared_interval = status_interval;
+  clean_div_e_interval = status_interval;
+  clean_div_b_interval = status_interval;
+
+  define_units(1, 1);                // speed of light and eps0
+  define_timestep( 0.95/sqrt(3.0) ); // This implies dx=dy=dz = 1
+
+  const int gnx = 24*nproc(); // Global size in cells
+  const int gny = 24;
+  const int gnz = 24;
+
+  const int topox = nproc(); // Global layout of local domains
+  const int topoy = 1;
+  const int topoz = 1;
+
+  // Define simulation box
+  define_periodic_grid(0,0,0,              // Low corner
+                       gnx,gny,gnz,        // High corner
+                       gnx,gny,gnz,        // Resolution
+                       topox,topoy,topoz); // Topology
+
+  // Space is by default filled with first material defined
+  define_material("vacuum",1.0);
+
+  // Create the field array
+  define_field_array(NULL, 0.00);
+
+  // Create species
+  const int nppc = 100;
+  species_t* elec = define_species("electron",  // name
+                                          -1.,  // charge
+                                           1.,  // mass
+                 1.5*nppc*gnx*gny*gnz/nproc(),  // maximum number of local particles
+                                           -1,  // automatic numbner of particle movers
+                                            0,  // sort never
+                                            1); // sort mode out-of-place
+
+  const float Bx = 1.;
+  const float By = 1.;
+  const float Bz = 0.;
+
+  // Set field values
+  set_region_field(everywhere, 0.,0.,0., Bx,By,Bz);
+
+  // Generate particles
+  seed_entropy(rank()); // different random numbers on different ranks
+
+  for(int n=0; n<nppc*gnx*gny*gnz/nproc(); n++) {
+    // Pick a uniform random location in the local domain
+    const float x = uniform( rng(0), grid->x0, grid->x1 );
+    const float y = uniform( rng(0), grid->y0, grid->y1 );
+    const float z = uniform( rng(0), grid->z0, grid->z1 );
+
+    // Drift along magnetic field
+    const float vdriftx = 0.5;
+    const float vdrifty = 0.5;
+    const float vdriftz = 0.;
+    // Andfairly warm
+    const float vthx = 0.99;
+    const float vthy = 0.99;
+    const float vthz = 0.99;
+    // Pick random velocity from normal distribution to get thermal VDF
+    const float ux = normal( rng(0), vdriftx, vthx );
+    const float uy = normal( rng(0), vdrifty, vthy );
+    const float uz = normal( rng(0), vdriftz, vthz );
+    inject_particle(elec, x,y,z, ux,uy,uz, 1., 0, 0);
+  }
+
+  sim_log("Done with setup");
+  fflush(NULL);
+}
+
+begin_diagnostics {
+  // No output, what we really want is performance numbers from the inside
+}
+
+begin_particle_injection {
+}
+
+begin_current_injection {
+}
+
+begin_field_injection {
+}
+
+begin_particle_collisions {
+}
