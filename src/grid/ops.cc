@@ -138,7 +138,7 @@ size_grid( grid_t * g,
       for( x=0; x<=lnx+1; x++ ) {
         i = num_neighbors * LOCAL_CELL_ID(x,y,z);
 
-        int special_cell = 46008;
+        int special_cell = 1205;
         // Fill the neighbor array with the appropriate
         // points
         for ( int x_index = -1; x_index < planes_per_axis - 1; ++x_index )
@@ -158,15 +158,18 @@ size_grid( grid_t * g,
             }
           }
         }
-        //if ( LOCAL_CELL_ID(x,y,z) == special_cell ) 
+        /*
+        if ( LOCAL_CELL_ID(x,y,z) == special_cell ) 
             //printf("\n");
-        /*if ( LOCAL_CELL_ID(x,y,z) == 63757 )
+        if ( LOCAL_CELL_ID(x,y,z) == special_cell )
         {
             printf("\n\n*****************************************");
             printf("\nCELL ID %ld corresponds to (%ld, %ld, %ld)", LOCAL_CELL_ID(x,y,z), x,y,z);
+            printf("\nNeighbor 23 corresponds to %ld", g->neighbor[num_neighbors * LOCAL_CELL_ID(x,y,z) + 23]);
             printf("\n\n*****************************************");
         }
         */
+        
         // Set boundary faces appropriately
         // Here are the English conventions for 
         // the position along each axis:
@@ -215,10 +218,11 @@ size_grid( grid_t * g,
         }
         if( x==lnx ) {
             // x+1 plane for the right most cell
-            /*printf("\nCELL ID %ld at (%ld, %ld, %ld) has lnx == %ld", LOCAL_CELL_ID(x,y,z), x, y, z, x);
-            printf("\nBefore:\n\tg->neighbor[i + 22] = %ld", g->neighbor[i + 22]);
-            printf("\n\tg->neighbor[i + 25] = %ld", g->neighbor[i + 22]);
-            */
+            //printf("\nCELL ID %ld at (%ld, %ld, %ld) has lnx == %ld", LOCAL_CELL_ID(x,y,z), x, y, z, x);
+            //printf("\nBefore:\n\tg->neighbor[i + 22] = %ld", g->neighbor[i + 22]);
+            //printf("\n\tg->neighbor[i + 23] = %ld", g->neighbor[i + 23]);
+            //printf("\n\tg->neighbor[i + 25] = %ld", g->neighbor[i + 22]);
+            
             g->neighbor[i + 18] = reflect_particles;
             g->neighbor[i + 19] = reflect_particles;
             g->neighbor[i + 20] = reflect_particles;
@@ -228,10 +232,11 @@ size_grid( grid_t * g,
             g->neighbor[i + 24] = reflect_particles;
             g->neighbor[i + 25] = reflect_particles;
             g->neighbor[i + 26] = reflect_particles;
-            /*
-            printf("\nAfter:\n\tg->neighbor[i + 22] = %ld", g->neighbor[i + 22]);
-            printf("\n\tg->neighbor[i + 25] = %ld", g->neighbor[i + 22]);
-            */
+           
+            //printf("\nAfter:\n\tg->neighbor[i + 22] = %ld", g->neighbor[i + 22]);
+            //printf("\n\tg->neighbor[i + 23] = %ld", g->neighbor[i + 23]);
+            //printf("\n\tg->neighbor[i + 25] = %ld", g->neighbor[i + 22]);
+            
         }
         if( y==lny ) {
             // y+1 plane for the deepest cell

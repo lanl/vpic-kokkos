@@ -13,8 +13,8 @@
 
    ****************************************************************/
     
-    printf("\nParticle %d in Voxel %d Velocity before accumulation:", pi, pii);
-    printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
+    //printf("\nParticle %d in Voxel %d Velocity before accumulation:", pi, pii);
+    //printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
     // In this approach, we keep the current accumulation the same,
     // and move the particles along the zigzag path. The position 
@@ -86,9 +86,9 @@
     // displacement and midpoint variables change will help in 
     // future development.
 
-    printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
+    //printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
 
-    printf("\nParticle %d: disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
+    //printf("\nParticle %d: disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
 
     // Compute the direction that the particle moves.
     // This value is the also the boundary of the cell 
@@ -97,7 +97,7 @@
     s_dir[Axis_Label::y] = (s_dispy>0) ? 1 : -1;
     s_dir[Axis_Label::z] = (s_dispz>0) ? 1 : -1;
 
-    printf("\ns_dir = %d, %d, %d", (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
+    //printf("\ns_dir = %d, %d, %d", (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
 
     // Compute the twice the fractional distance to each potential
     // streak/cell face intersection. This number is the amount of
@@ -126,23 +126,23 @@
     v3 *= 0.5;
 
     
-    printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
-            pi, axis, v0, v1, v2, 2.*v3);
-    printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
-            pi, s_midx, s_midy, s_midz);
-    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
-            pi, s_dispx, s_dispy, s_dispz);
+    //printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
+    //        pi, axis, v0, v1, v2, 2.*v3);
+    //printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
+    //        pi, s_midx, s_midy, s_midz);
+    //printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
+    //        pi, s_dispx, s_dispy, s_dispz);
     /*printf("\nParticle %d: s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz = %e, %e, %e",
             pi, s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz);
     */
-    printf("\nParticle %d: s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz = %e, %e, %e",
-            pi, s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz);
+    //printf("\nParticle %d: s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz = %e, %e, %e",
+    //        pi, s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz);
     
     float zig_finalx = s_midx + s_dispx;
     float zig_finaly = s_midy + s_dispy;
     float zig_finalz = s_midz + s_dispz;
 
-    printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
+    //printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
    
     // Set the reference points to the midpoint 
     // of the motion by default.
@@ -150,7 +150,7 @@
     float yr = zig_finaly;
     float zr = zig_finalz;
     
-    printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
+    //printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
 
     if ( v0 < 2. ) 
     {
@@ -198,9 +198,9 @@
         s_dispz *= 0.5;
     }
      
-    printf("\n");
-    printf("\nParticle %ld: TEST REFERENCE POINT = %e, %e, %e", pi, xr, yr, zr);
-    printf("\n");
+    //printf("\n");
+    //printf("\nParticle %ld: TEST REFERENCE POINT = %e, %e, %e", pi, xr, yr, zr);
+    //printf("\n");
     
     // With xr, yr, and zr known, we can treat them as the final 
     // location on either the zig or the zag. Now we just need 
@@ -210,7 +210,7 @@
     s_midy = 0.5 * ( s_midy + yr );
     s_midz = 0.5 * ( s_midz + zr );
     
-
+/*
     printf("\n");
     printf("\nParticle %ld: POST IF STATEMENTS s_midx, s_midy, s_midz = %e, %e, %e", pi, s_midx, s_midy, s_midz);
     printf("\n");
@@ -218,6 +218,7 @@
     printf("\n");
     printf("\nParticle %ld: POST IF STATEMENTS s_dispx, s_dispy, s_dispz = %e, %e, %e", pi, s_dispx, s_dispy, s_dispz);
     printf("\n");
+*/
     
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
@@ -247,21 +248,21 @@
     //Kokkos::atomic_add(&a[3], v3);
    
     accumulate_j(x,y,z);
-    printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+ //   printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
 
     accumulate_j(y,z,x);
-    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+//    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
 
     accumulate_j(z,x,y);
-    printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
+   // printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
@@ -270,7 +271,7 @@
 #   undef accumulate_j
 
 
-    printf("\nParticle mover before updating...\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
+    //printf("\nParticle mover before updating...\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
     
     // Subtract off what has been travelled from the full displacement.
     // This approach is equivalent to:
@@ -284,27 +285,27 @@
     pm->dispx -= 0.5 * ( zig_finalx - (2 * s_midx - xr) );
     pm->dispy -= 0.5 * ( zig_finaly - (2 * s_midy - yr) );
     pm->dispz -= 0.5 * ( zig_finalz - (2 * s_midz - zr) );
-
+/*
     printf("\nCurrents deposited...\naxis %d x %e y %e z %e s_disp x %e y %e z %e", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     printf("\nParticle mover updated...\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
-
+*/
     // Set the new particle position post-accumulation.
     p_dx = zig_finalx;
     p_dy = zig_finaly; 
     p_dz = zig_finalz;
 
     // If an end streak, return success (should be ~50% of the time)
-    printf("\nStreak ended...\naxis %d x %e y %e z %e s_disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+ //   printf("\nStreak ended...\naxis %d x %e y %e z %e s_disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
    
-    printf("\nParticle %d Velocity after accumulation:", pi);
-    printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
+  //  printf("\nParticle %d Velocity after accumulation:", pi);
+  //  printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
     // TODO: Change this break based on neighbor_index == 13.
     // This should help reduce thread divergence.
     if( axis == 3 ) 
     {
-        printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
-                pi, p_dx, p_dy, p_dz, old_fx, old_fy, old_fz);
+   //     printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
+    //            pi, p_dx, p_dy, p_dz, old_fx, old_fy, old_fz);
         break;
     }
 
@@ -323,14 +324,15 @@
     s_dir[Axis_Label::y] = ( yr == s_dir[Axis_Label::y] ? s_dir[Axis_Label::y] : 0 );
     s_dir[Axis_Label::z] = ( zr == s_dir[Axis_Label::z] ? s_dir[Axis_Label::z] : 0 );
     
-    printf("\ns_dir = %d, %d, %d", (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
+    //printf("\ns_dir = %d, %d, %d", (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
+    
 
     // Compute the neighbor cell index the particle moves to. 
     // Note that 0,0,0 => 13 will return the particle to the
     // same cell. 
     // TODO: neighbor_index should replace the face variable
     neighbor_index = get_neighbor_index(s_dir[Axis_Label::x], s_dir[Axis_Label::y], s_dir[Axis_Label::z], planes_per_axis);
-    printf("\nneighbor_index = %d", neighbor_index);
+    //printf("\nneighbor_index = %d", neighbor_index);
 
 #if VPIC_DUMP_NEIGHBORS
     print_neighbor(neighbor_index);
@@ -349,7 +351,16 @@
     // Throw neighbor through this function to get the cell
     // index the particle moves into.
     neighbor = d_neighbor( num_neighbors * pii + neighbor_index );
-    printf("\nneighbor value, reflect_particles = %d, %d", (int)neighbor, (int)reflect_particles);
+    //printf("\nneighbor value, reflect_particles = %d, %d", (int)neighbor, (int)reflect_particles);
+    
+    /*
+    if ( abs(s_dir[Axis_Label::x]) + abs(s_dir[Axis_Label::y]) + abs(s_dir[Axis_Label::z]) > 1)
+    { 
+        printf("\nParticle %d: s_dir = %d, %d, %d", pi, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
+        printf("\nneighbor_index = %d", neighbor_index);
+        printf("\nneighbor value, reflect_particles = %d, %d", (int)neighbor, (int)reflect_particles);
+    }
+    */
 
     // TODO: these two if statements used to be marked UNLIKELY,
     // but that intrinsic doesn't work on GPU.
@@ -361,10 +372,14 @@
         // Hit a reflecting boundary condition.  Reflect the particle
         // momentum and remaining displacement and keep moving the
         // particle.
+        /*
         printf("\nI, particle %d, was reflected!\nBefore reflection...", pi);
+        printf("\npii, rangel = %d, %d", pii, rangel);
+        printf("\nneighbor, rangel = %d, %d", neighbor - rangel, rangel);
         printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
                                             k_particles(pi, particle_var::uy),
                                             k_particles(pi, particle_var::uz));
+        */
         if ( s_dir[Axis_Label::x] != 0 )
         {
             k_particles(pi, particle_var::ux ) = -k_particles(pi, particle_var::ux );
@@ -382,12 +397,14 @@
             k_particles(pi, particle_var::uz ) = -k_particles(pi, particle_var::uz );
             pm->dispz *= -1.;
         }
-
+        
+        /*
         printf("\nAfter reflection...");
         printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
                                             k_particles(pi, particle_var::uy),
                                             k_particles(pi, particle_var::uz));
-        
+        */ 
+
         /* Old stuffs ... 
         k_particles(pi, particle_var::ux + axis ) = -k_particles(pi, particle_var::ux + axis );
 
@@ -398,6 +415,7 @@
         (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
         */
 
+        //printf("\n##########################################\n");
         continue;
     }
 
@@ -421,9 +439,14 @@
     // particle coordinate system and keep moving the particle.
 
     // TODO: How is rangel affected by 26 neighbors?
+    /*
+    if ( abs(s_dir[Axis_Label::x]) + abs(s_dir[Axis_Label::y]) + abs(s_dir[Axis_Label::z]) > 1){
     printf("\npii, rangel = %d, %d", pii, rangel);
+    //pii = neighbor - rangel;
+    printf("\npii, rangel = %d, %d", neighbor - rangel, rangel);
+    }
+    */
     pii = neighbor - rangel;
-    printf("\npii, rangel = %d, %d", pii, rangel);
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     //k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
    
@@ -435,20 +458,25 @@
     // is no coordinate conversion.
     //
     // TODO: Make an enumeration for x,y,z not being 0,1,2.
+    /*
+    if ( abs(s_dir[Axis_Label::x]) + abs(s_dir[Axis_Label::y]) + abs(s_dir[Axis_Label::z]) > 1){
     printf("\nParticle %d before coordinate shift", pi);
     printf("\ndx, dy, dz = %e, %e, %e", k_particles( pi, particle_var::dx ),
                                         k_particles( pi, particle_var::dy ),
                                         k_particles( pi, particle_var::dz ));
+    }
+    */
     k_particles( pi, particle_var::dx ) -= 2. * s_dir[Axis_Label::x];
     k_particles( pi, particle_var::dy ) -= 2. * s_dir[Axis_Label::y];
     k_particles( pi, particle_var::dz ) -= 2. * s_dir[Axis_Label::z];
 
-
+    /*
+    if ( abs(s_dir[Axis_Label::x]) + abs(s_dir[Axis_Label::y]) + abs(s_dir[Axis_Label::z]) > 1){
     printf("\nParticle %d after coordinate shift", pi);
     printf("\ndx, dy, dz = %e, %e, %e", k_particles( pi, particle_var::dx ),
                                         k_particles( pi, particle_var::dy ),
                                         k_particles( pi, particle_var::dz ));
     printf("\n##########################################\n");
-
-    
+    }
+    */
 
