@@ -233,7 +233,7 @@ struct VoxelParallel {
     using Space=Kokkos::DefaultExecutionSpace;
     using member_type=Kokkos::TeamPolicy<Space>::member_type;
 
-    Kokkos::parallel_for("binary_collision_pipeline::apply_model",
+    Kokkos::parallel_for("binary_collision_pipeline::VoxelParallel::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
       KOKKOS_LAMBDA (member_type team_member) {
 
@@ -397,7 +397,7 @@ struct ParticleParallel {
     // independent threads. This is strictly less than ni or nj, so launch
     // one thread per particles and cancel ones we don't need.
 
-    Kokkos::parallel_for("binary_collision_pipeline::apply_model",
+    Kokkos::parallel_for("binary_collision_pipeline::ParticleParallel::apply_model",
       Kokkos::RangePolicy<Space>(0, spi->np),
       KOKKOS_LAMBDA (const int ipart) {
 
@@ -418,7 +418,7 @@ struct ParticleParallel {
         // Handle intraspecies collisions.
         if( spi == spj ) {
 
-            // Odd number of patticles.
+            // Odd number of particles.
             if( ni%2 && ni >= 3) {
 
               // These must be done serially to avoid atomics
@@ -459,6 +459,7 @@ struct ParticleParallel {
 
         }
 
+        //should it be ni >= nj?
         const bool ij  = ni > nj;
         const int nmax = ij ? ni : nj;
         const int nmin = ij ? nj : ni;
@@ -580,17 +581,20 @@ struct binary_collision_pipeline {
     collision_model& _model
   )
   {
-
-    ParticleSorter<BinSort> sorter;
+    ParticleSorter<> sorter;
     ParticleShuffler<> shuffler;
-
+    
     // Ensure sorted and shuffled.
     if( _spi->last_indexed != _spi->g->step ) {
-      sorter.sort( _spi, false );
+        KOKKOS_TIC();
+        sorter.sort( _spi, false );
+        KOKKOS_TOC(collision_sort, 1);
     }
 
     if( _spj->last_indexed != _spj->g->step ) {
-      sorter.sort( _spj, false );
+        KOKKOS_TIC();
+        sorter.sort( _spj, false );
+        KOKKOS_TOC(collision_sort, 1);
     }
 
     // Always reload in case Views were invalidated.
@@ -614,7 +618,10 @@ struct binary_collision_pipeline {
         ERROR(("Bad spj sort products."));
 
     // We only need to shuffle one species to ensure random pairings.
+    KOKKOS_TIC();
     shuffler.shuffle( _spi, _rp, false );
+    KOKKOS_TOC(collision_shuffle, 1);
+
 
     // TODO: Move this out of dispatch so we can dispatch multiple models
     //       without recomputing the density. Kokkos won't let me put it in
@@ -683,11 +690,12 @@ struct binary_collision_pipeline {
 
 
     // Do collisions.
+    KOKKOS_TIC();
     pm.apply_model(model, mu_i, mu_j, mu, nx, ny, nz, spi, spj, rp,
                 spi_i, spi_n, spj_n, spi_p, spj_p, dtinterval,
                 spi_sortindex_ra, spj_sortindex_ra,
                 spi_partition_ra, spj_partition_ra);
-
+    KOKKOS_TOC(collision_apply, 1);
   }
 };
 

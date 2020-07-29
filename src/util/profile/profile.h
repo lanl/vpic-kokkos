@@ -13,6 +13,9 @@
   _( clear_accumulators ) \
   _( sort_p            ) \
   _( collision_model   ) \
+  _( collision_apply ) \
+  _( collision_sort  ) \
+  _( collision_shuffle ) \
   _( advance_p         ) \
   _( reduce_accumulators ) \
   _( emission_model    ) \
