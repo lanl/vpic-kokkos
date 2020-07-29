@@ -731,7 +731,7 @@ move_p_kokkos_host_serial(
 // TODO: this bascially duplicates funcitonality in rho_p.cc and should be DRY'd
 template<typename kf_t, typename kp_t, typename kpi_t> // k_field_t, k_particles_t, k_particles_i_t
 void k_accumulate_rhob_single_cpu(
-        kf_t& kfield,
+        kf_t& k_rhob_accum,
         kp_t& kpart,
         kpi_t& kpart_i,
         const int i,
@@ -756,6 +756,7 @@ void k_accumulate_rhob_single_cpu(
     float w7 = (qsp * r8V) * kpart(i, particle_var::w);
     float dz = kpart(i, particle_var::dz);
     int v = kpart_i(i);
+    //printf("\n Vars are %g, %g, %g %g\n", w0, w1, w7, dz);
 
     float w6 = w7 - w0 * w7;
     w7 = w7 + w0 * w7;
@@ -813,15 +814,17 @@ void k_accumulate_rhob_single_cpu(
         w5 += w5;
         w7 += w7;
     }
-    printf("Absorbing %d into %d for %e \n", i, v, w0);
-    kfield(v,         field_var::rhob) += w0;
-    kfield(v+1,       field_var::rhob) += w1;
-    kfield(v+sy,      field_var::rhob) += w2;
-    kfield(v+sy+1,    field_var::rhob) += w3;
-    kfield(v+sz,      field_var::rhob) += w4;
-    kfield(v+sz+1,    field_var::rhob) += w5;
-    kfield(v+sz+sy,   field_var::rhob) += w6;
-    kfield(v+sz+sy+1, field_var::rhob) += w7;
+    //printf("Absorbing %d into %d for %e %e %e %e %e %e %e %e \n", i, v, w0, w1, w2, w3, w4, w5, w6, w7);
+    // Save the bound charge to an accumulator array to be added to rhob on the
+    // device later
+    k_rhob_accum(v) += w0;
+    k_rhob_accum(v+1) += w1;
+    k_rhob_accum(v+sy) += w2;
+    k_rhob_accum(v+sy+1) += w3;
+    k_rhob_accum(v+sz) += w4;
+    k_rhob_accum(v+sz+1) += w5;
+    k_rhob_accum(v+sz+sy) += w6;
+    k_rhob_accum(v+sz+sy+1) += w7;
 }
 
 #endif // _species_advance_h_
