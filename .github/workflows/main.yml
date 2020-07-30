@@ -27,7 +27,7 @@ jobs:
         cmake --install build
     - uses: actions/checkout@v2
     - name: configure
-      run: cmake -B build -DCMAKE_PREFIX_PATH="$HOME/kokkos"
+      run: cmake -B build -DCMAKE_PREFIX_PATH="$HOME/kokkos" -DENABLE_UNIT_TESTS=ON
     - name: make
       run: cmake --build build
     - name: make check
