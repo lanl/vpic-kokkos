@@ -3,7 +3,7 @@ begin_globals {
 
 begin_initialization {
 
-  num_step = 10;                    // Do a bunch of steps. Maybe a single one would be enough
+  num_step = 1;                    // Do a bunch of steps. Maybe a single one would be enough
   status_interval = 1000;            // Basically don't print status until the end
   sync_shared_interval = status_interval;
   clean_div_e_interval = status_interval;

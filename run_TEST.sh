@@ -15,6 +15,11 @@ PLANES_FILE="neighbor_planes.txt"
 CONNECTION_FILE="neighbor_connections.txt"
 
 echo
+git checkout joe/move_p_zigzag_v2
+git branch
+echo
+
+echo
 echo "Building the ${VERSION} code for the ${DECK} deck..."
 
 if [ ! -d "$BDIR" ]
@@ -78,7 +83,7 @@ fi
 # Run VPIC-Kokkos
 # *******************************************************************************************************************
 
-time ./"${APP}" > "output.${DECK}_${VERSION}"
+time ./"${APP}" &> "output.${DECK}_${VERSION}"
 
 # *******************************************************************************************************************
 # Plot neighbor data

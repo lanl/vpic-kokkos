@@ -43,6 +43,20 @@
     s_dispy = pm->dispy;
     s_dispz = pm->dispz;
 
+    zig_finalx = s_midx + s_dispx;
+    zig_finaly = s_midy + s_dispy;
+    zig_finalz = s_midz + s_dispz;
+
+    //printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
+   
+    // Set the reference points to the midpoint 
+    // of the motion by default.
+    xr = zig_finalx;
+    yr = zig_finaly;
+    zr = zig_finalz;
+    
+    //printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
+
 #if VPIC_DUMP_NEIGHBORS
     print_neighbor.write_final_cell( s_midx + 2. * s_dispx, s_midy + 2. * s_dispy, s_midz + 2. * s_dispz );
 #endif
@@ -118,9 +132,33 @@
     //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
     //   axis 3        ... streak ends at end of the particle track
     /**/      v3=2,  axis=3;
-    if(v0<v3) v3=v0, axis=0;
-    if(v1<v3) v3=v1, axis=1;
-    if(v2<v3) v3=v2, axis=2;
+    if(v0<v3) 
+    {
+        v3=v0;
+        axis=0;
+        // Set the zizag point along the x-axis
+        xr = s_dir[Axis_Label::x];
+        s_dispx = ( xr - s_midx );
+        zig_finalx = xr;
+    }
+    if(v1<v3)
+    {
+        v3=v1;
+        axis=1;
+        // Set the zizag point along the y-axis
+        yr = s_dir[Axis_Label::y];
+        s_dispy = ( yr - s_midy );
+        zig_finaly = yr;
+    }
+    if(v2<v3)
+    {
+        v3=v2;
+        axis=2;
+        // Set the zizag point along the z-axis 
+        zr = s_dir[Axis_Label::z];
+        s_dispz = ( zr - s_midz );
+        zig_finalz = zr;
+    }
     // Multiply v3 by 1/2 because the particle first moves to the 
     // midpoint if axis != 3, or it stops if axis == 3.
     v3 *= 0.5;
@@ -137,41 +175,6 @@
     */
     //printf("\nParticle %d: s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz = %e, %e, %e",
     //        pi, s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz);
-    
-    float zig_finalx = s_midx + s_dispx;
-    float zig_finaly = s_midy + s_dispy;
-    float zig_finalz = s_midz + s_dispz;
-
-    //printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
-   
-    // Set the reference points to the midpoint 
-    // of the motion by default.
-    float xr = zig_finalx;
-    float yr = zig_finaly;
-    float zr = zig_finalz;
-    
-    //printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
-
-    if ( v0 < 2. ) 
-    {
-        xr = s_dir[Axis_Label::x];
-        s_dispx = ( xr - s_midx );
-        zig_finalx = xr;
-    }
-
-    if ( v1 < 2. )
-    {
-        yr = s_dir[Axis_Label::y];
-        s_dispy = ( yr - s_midy );
-        zig_finaly = yr;
-    }
-
-    if ( v2 < 2. )
-    {
-        zr = s_dir[Axis_Label::z];
-        s_dispz = ( zr - s_midz );
-        zig_finalz = zr;
-    }
     
     // If the particle stays in-cell, adjust
     // the final position to be the final point

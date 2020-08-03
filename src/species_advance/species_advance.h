@@ -351,6 +351,19 @@ move_p_kokkos(
   float old_fy = p_dy + 2 * pm->dispy;
   float old_fz = p_dz + 2 * pm->dispz;
 
+  // Declare some useful variables for zigzag
+  // These are the final particle position in the
+  // zigzag trajectory
+  float zig_finalx = 0.;
+  float zig_finaly = 0.;
+  float zig_finalz = 0.;
+    
+  // These are these "relay points" calculated
+  // directly in the Zigzag algorithm. (See Umeda et al. 2002)
+  float xr = 0.;
+  float yr = 0.;
+  float zr = 0.;
+
 #if VPIC_DUMP_NEIGHBORS
   DUMP_NEIGHBORS<int, float> print_neighbor("neighbor_indices.txt", 
                                             "neighbor_planes.txt",
@@ -369,10 +382,13 @@ move_p_kokkos(
 #if ACCUMULATE_J_ZIGZAG
     #include "accumulate_j_zigzag.hpp"
 #else
+    // TODO: THIS IS NO LONGER VALID
+    // WITHOUT AN OUTER FOR LOOP
     #include "accumulate_j.hpp"
 #endif
- 
+
   }
+ 
   #undef p_dx
   #undef p_dy
   #undef p_dz
