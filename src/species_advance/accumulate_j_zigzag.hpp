@@ -131,29 +131,29 @@
     //
     //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
     //   axis 3        ... streak ends at end of the particle track
-    /**/      v3=2,  axis=3;
-    if(v0<v3) 
+    /**/      v3=two,  axis=3;
+    if(v0 < two) 
     {
-        v3=v0;
-        axis=0;
+        v3 = v0;
+        axis = Axis_Label::x;
         // Set the zizag point along the x-axis
         xr = s_dir[Axis_Label::x];
         s_dispx = ( xr - s_midx );
         zig_finalx = xr;
     }
-    if(v1<v3)
+    if(v1 < two)
     {
-        v3=v1;
-        axis=1;
+        v3 = v1;
+        axis = Axis_Label::y;
         // Set the zizag point along the y-axis
         yr = s_dir[Axis_Label::y];
         s_dispy = ( yr - s_midy );
         zig_finaly = yr;
     }
-    if(v2<v3)
+    if(v2 < two)
     {
-        v3=v2;
-        axis=2;
+        v3 = v2;
+        axis = Axis_Label::z;
         // Set the zizag point along the z-axis 
         zr = s_dir[Axis_Label::z];
         s_dispz = ( zr - s_midz );
@@ -216,7 +216,7 @@
     s_midy = 0.5 * ( s_midy + yr );
     s_midz = 0.5 * ( s_midz + zr );
     
-/*
+
     printf("\n");
     printf("\nParticle %ld: POST IF STATEMENTS s_midx, s_midy, s_midz = %e, %e, %e", pi, s_midx, s_midy, s_midz);
     printf("\n");
@@ -224,7 +224,7 @@
     printf("\n");
     printf("\nParticle %ld: POST IF STATEMENTS s_dispx, s_dispy, s_dispz = %e, %e, %e", pi, s_dispx, s_dispy, s_dispz);
     printf("\n");
-*/
+
     
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
@@ -254,21 +254,21 @@
     //Kokkos::atomic_add(&a[3], v3);
    
     accumulate_j(x,y,z);
- //   printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
 
     accumulate_j(y,z,x);
-//    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
 
     accumulate_j(z,x,y);
-   // printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
+    printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;

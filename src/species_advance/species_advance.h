@@ -21,6 +21,8 @@
 // Smallest power of 2 that's an upper bound of 
 // the neighborhood size (27).
 static constexpr unsigned upper_bound_of_neighbors = 32;
+// This is needed for move_p_kokkos
+static constexpr float two = 2.f;
 
 typedef int32_t species_id; // Must be 32-bit wide for particle_injector_t
 
