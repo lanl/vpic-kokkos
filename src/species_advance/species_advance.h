@@ -47,6 +47,7 @@ typedef struct particle {
 // WHO USES THAT PARTICLE MOVER WILL HAVE ACCESS TO PARTICLE ARRAY
 
 typedef struct particle_mover {
+  float pdx,   pdy,   pdz;   // Position of particle
   float dispx, dispy, dispz; // Displacement of particle
   int32_t i;                 // Index of the particle to move
 } particle_mover_t;
@@ -386,6 +387,8 @@ move_p_kokkos(
     // WITHOUT AN OUTER FOR LOOP
     #include "accumulate_j.hpp"
 #endif
+    
+    printf("\nMOVE_P_OVER...\naxis %d x %e y %e z %e s_disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
  
   #undef p_dx
   #undef p_dy

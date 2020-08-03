@@ -214,65 +214,21 @@ sp_[id]->
     v4   = v1 + uy;
     v5   = v2 + uz;
 
-//    printf("\n\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, dx, dy, dz);
-//    printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, dx + 2*ux, dy + 2*uy, dz + 2*uz);
+    //printf("\n\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, dx, dy, dz);
+    //printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, dx + 2*ux, dy + 2*uy, dz + 2*uz);
+    float s_dispx = ux;
+    float s_dispy = uy;
+    float s_dispz = uz;
 
     // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
-    if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
-        -v3<=one && -v4<=one && -v5<=one ) {
+    if(  !(v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
+            -v3<=one && -v4<=one && -v5<=one) ) {
 
-      // Common case (inbnds).  Note: accumulator values are 4 times
-      // the total physical charge that passed through the appropriate
-      // current quadrant in a time-step
+        // If a particle leaves the cell, perform the zig of the 
+        // zigzag algorithm. This moves the particle directly to 
+        // the boundary of the cell. From here it will then zag
+        // below, corresponding to motion within the same cell.
 
-      q *= qsp;
-      p_dx = v3;                             // Store new position
-      p_dy = v4;
-      p_dz = v5;
-      dx = v0;                                // Streak midpoint
-      dy = v1;
-      dz = v2;
-      v5 = q*ux*uy*uz*one_third;              // Compute correction
-
-
-#     define ACCUMULATE_J(X,Y,Z)                                 \
-      v4  = q*u##X;   /* v2 = q ux                            */        \
-      v1  = v4*d##Y;  /* v1 = q ux dy                         */        \
-      v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        \
-      v1 += v4;       /* v1 = q ux (1+dy)                     */        \
-      v4  = one+d##Z; /* v4 = 1+dz                            */        \
-      v2  = v0*v4;    /* v2 = q ux (1-dy)(1+dz)               */        \
-      v3  = v1*v4;    /* v3 = q ux (1+dy)(1+dz)               */        \
-      v4  = one-d##Z; /* v4 = 1-dz                            */        \
-      v0 *= v4;       /* v0 = q ux (1-dy)(1-dz)               */        \
-      v1 *= v4;       /* v1 = q ux (1+dy)(1-dz)               */        \
-      v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
-      v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
-      v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
-
-      ACCUMULATE_J( x,y,z );
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
-
-      ACCUMULATE_J( y,z,x );
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
-
-      ACCUMULATE_J( z,x,y );
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
-
-#     undef ACCUMULATE_J
-
-    } else
-    {                                    // Unlikely
         /*
            local_pm_dispx = ux;
            local_pm_dispy = uy;
@@ -281,6 +237,9 @@ sp_[id]->
            local_pm_i     = p_index;
         */
       DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+      local_pm->pdx   = dx;
+      local_pm->pdy   = dy;
+      local_pm->pdz   = dz;
       local_pm->dispx = ux;
       local_pm->dispy = uy;
       local_pm->dispz = uz;
@@ -320,7 +279,98 @@ sp_[id]->
           //copy_local_to_pm(nm);
         }
       }
+      // Change the particle positions after the zig for the 
+      // upcoming zag.
+      p_dx = local_pm->pdx;                   // Store new position
+      p_dy = local_pm->pdy;
+      p_dz = local_pm->pdz;
+      /*
+      v0 = v3 + local_pm->dispx;           // Streak midpoint
+      v1 = v4 + local_pm->dispy;
+      v2 = v5 + local_pm->dispz;
+      */
+
+      s_dispx = local_pm->dispx;
+      s_dispy = local_pm->dispy;
+      s_dispz = local_pm->dispz;
+      printf("\nFINISHED MOVE_P\n");
     }
+    // Common case (inbnds).  Note: accumulator values are 4 times
+    // the total physical charge that passed through the appropriate
+    // current quadrant in a time-step
+    
+    printf("\n\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, v3, v4, v5);
+    printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, v3 + 2 * s_dispx, v4 + 2 * s_dispy, v5 + 2 * s_dispz);
+
+    q *= qsp;
+    /*
+    p_dx = v3;                                              // Store new position
+    p_dy = v4;
+    p_dz = v5;
+    dx = v0;                                                // Streak midpoint
+    dy = v1;
+    dz = v2;
+    */
+    v5 = q*s_dispx*s_dispy*s_dispz*one_third;               // Compute correction
+
+    int axis = 3;
+
+    printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
+            p_index, axis, v0, v1, v2, 2.*v3);
+    printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
+            p_index, p_dx, p_dy, p_dz);
+    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
+            p_index, s_dispx, s_dispy, s_dispz);
+    
+    float s_midx = p_dx + s_dispx;
+    float s_midy = p_dy + s_dispy;
+    float s_midz = p_dz + s_dispz;
+
+// Create a single accumulate_j macro.
+#   define accumulate_j(X,Y,Z)                                        \
+    v4  = q*s_disp##X;    /* v2 = q ux                            */  \
+    v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
+    v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
+    v1 += v4;             /* v1 = q ux (1+dy)                     */  \
+    v4  = 1+s_mid##Z;     /* v4 = 1+dz                            */  \
+    v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
+    v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
+    v4  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
+    v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
+    v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
+    v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
+    v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
+    v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
+    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
+    //Kokkos::atomic_add(&a[0], v0); \
+    //Kokkos::atomic_add(&a[1], v1); \
+    //Kokkos::atomic_add(&a[2], v2); \
+    //Kokkos::atomic_add(&a[3], v3);
+
+
+    accumulate_j( x,y,z );
+    printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
+    k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+    k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+    k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+    k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+
+    accumulate_j( y,z,x );
+    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
+    k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+    k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+    k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+    k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+
+    accumulate_j( z,x,y );
+    printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
+    k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+    k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+    k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+    k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+
+#     undef ACCUMULATE_J
+
 //}
   });
 

@@ -219,7 +219,7 @@
     {
         printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
                 pi, p_dx, p_dy, p_dz, old_fx, old_fy, old_fz);
-        break;
+        //break;
     }
 
     // Determine if the particle crossed into a local cell or if it
@@ -293,7 +293,7 @@
       (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
 
 
-      continue;
+      //continue;
     }
 
     if( neighbor<rangel || neighbor>rangeh ) {
