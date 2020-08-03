@@ -12,7 +12,28 @@
     THIS FILE IS THE ZIGZAG ONE!!!!!!!!!!!!!!!!!!!
 
    ****************************************************************/
-    
+   
+// Create a single accumulate_j macro for use twice.
+#   define accumulate_j(X,Y,Z)                                        \
+    v4  = q*s_disp##X;    /* v2 = q ux                            */  \
+    v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
+    v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
+    v1 += v4;             /* v1 = q ux (1+dy)                     */  \
+    v4  = 1+s_mid##Z;     /* v4 = 1+dz                            */  \
+    v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
+    v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
+    v4  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
+    v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
+    v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
+    v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
+    v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
+    v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
+    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
+    //Kokkos::atomic_add(&a[0], v0); \
+    //Kokkos::atomic_add(&a[1], v1); \
+    //Kokkos::atomic_add(&a[2], v2); \
+    //Kokkos::atomic_add(&a[3], v3);
+
     //printf("\nParticle %d in Voxel %d Velocity before accumulation:", pi, pii);
     //printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
@@ -228,31 +249,11 @@
     
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
-    // current quadrant in a time-step
+    // current quadrant in a time-step. 
+    // v5 is used in accumulate_j! DO NOT DELETE!
     v5 = q*s_dispx*s_dispy*s_dispz*(1.f/3.f);
-
-    //a = (float *)(&d_accumulators[ci]);
-
-#   define accumulate_j(X,Y,Z)                                        \
-    v4  = q*s_disp##X;    /* v2 = q ux                            */  \
-    v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
-    v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
-    v1 += v4;             /* v1 = q ux (1+dy)                     */  \
-    v4  = 1+s_mid##Z;     /* v4 = 1+dz                            */  \
-    v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
-    v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
-    v4  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
-    v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
-    v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
-    v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
-    v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
-    v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
-    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-    //Kokkos::atomic_add(&a[0], v0); \
-    //Kokkos::atomic_add(&a[1], v1); \
-    //Kokkos::atomic_add(&a[2], v2); \
-    //Kokkos::atomic_add(&a[3], v3);
-   
+ 
+    // Now accumulate the currents
     accumulate_j(x,y,z);
     printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
@@ -273,8 +274,6 @@
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
-
-#   undef accumulate_j
 
 
     //printf("\nParticle mover before updating...\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
@@ -308,12 +307,12 @@
 
     // TODO: Change this break based on neighbor_index == 13.
     // This should help reduce thread divergence.
-    if( axis == 3 ) 
-    {
+    //if( axis == 3 ) 
+    //{
    //     printf("\n*****************************\nParticle %d is done moving at p_dx, p_dy, p_dz = %e, %e, %e\nIt is supposed to stop at x2, y2, z2 = %e, %e, %e\n****************************\n",
     //            pi, p_dx, p_dy, p_dz, old_fx, old_fy, old_fz);
         //break;
-    }
+    //}
 
     // Determine if the particle crossed into a local cell or if it
     // hit a boundary and convert the coordinate system accordingly.
@@ -698,26 +697,6 @@
 
     //a = (float *)(&d_accumulators[ci]);
 
-#   define accumulate_j(X,Y,Z)                                        \
-    v4  = q*s_disp##X;    /* v2 = q ux                            */  \
-    v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
-    v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
-    v1 += v4;             /* v1 = q ux (1+dy)                     */  \
-    v4  = 1+s_mid##Z;     /* v4 = 1+dz                            */  \
-    v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
-    v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
-    v4  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
-    v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
-    v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
-    v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
-    v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
-    v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
-    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-    //Kokkos::atomic_add(&a[0], v0); \
-    //Kokkos::atomic_add(&a[1], v1); \
-    //Kokkos::atomic_add(&a[2], v2); \
-    //Kokkos::atomic_add(&a[3], v3);
-   
     accumulate_j(x,y,z);
     printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
@@ -738,9 +717,6 @@
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
-
-#   undef accumulate_j
-
 
     //printf("\nParticle mover before updating...\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
     
@@ -779,3 +755,6 @@
    //  //            pi, p_dx, p_dy, p_dz, old_fx, old_fy, old_fz);
    //      break;
    //  }
+
+#   undef accumulate_j
+
