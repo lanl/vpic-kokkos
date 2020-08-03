@@ -164,17 +164,20 @@
     v3 *= 0.5;
 
     
-    //printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
-    //        pi, axis, v0, v1, v2, 2.*v3);
-    //printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
-    //        pi, s_midx, s_midy, s_midz);
-    //printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
-    //        pi, s_dispx, s_dispy, s_dispz);
+    printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
+            pi, axis, v0, v1, v2, 2.*v3);
+    printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
+            pi, s_midx, s_midy, s_midz);
+    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
+            pi, s_dispx, s_dispy, s_dispz);
     /*printf("\nParticle %d: s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz = %e, %e, %e",
             pi, s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz);
     */
     //printf("\nParticle %d: s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz = %e, %e, %e",
     //        pi, s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz);
+    
+    printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
+    printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
     
     // If the particle stays in-cell, adjust
     // the final position to be the final point
@@ -201,9 +204,9 @@
         s_dispz *= 0.5;
     }
      
-    //printf("\n");
-    //printf("\nParticle %ld: TEST REFERENCE POINT = %e, %e, %e", pi, xr, yr, zr);
-    //printf("\n");
+    printf("\n");
+    printf("\nParticle %ld: TEST REFERENCE POINT = %e, %e, %e", pi, xr, yr, zr);
+    printf("\n");
     
     // With xr, yr, and zr known, we can treat them as the final 
     // location on either the zig or the zag. Now we just need 
