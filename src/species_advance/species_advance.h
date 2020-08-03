@@ -376,8 +376,6 @@ move_p_kokkos(
 
     //printf("in move %d \n", pi);
 
-  for(;;) {
-
     // Move the particles and accumulate the 
     // currents using either the standard way
     // or the new and flashy zigzag way.
@@ -388,8 +386,6 @@ move_p_kokkos(
     // WITHOUT AN OUTER FOR LOOP
     #include "accumulate_j.hpp"
 #endif
-
-  }
  
   #undef p_dx
   #undef p_dy
