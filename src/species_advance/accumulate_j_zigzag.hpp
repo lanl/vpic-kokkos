@@ -200,7 +200,8 @@
     
     printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
     printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
-    
+   
+    /*
     // If the particle stays in-cell, adjust
     // the final position to be the final point
     // of the motion. 
@@ -214,17 +215,19 @@
         yr = zig_finaly;
         zr = zig_finalz;
     }
+    
     else
     {
-        // If axis != 3 then scale down the s_disp
-        // values by a factor of two to account 
-        // for the "quarter-point".
-        // Note that this else will scale the IF 
-        // statements above (e.g. if (v0 < 2){ ...  })
-        s_dispx *= 0.5;
-        s_dispy *= 0.5;
-        s_dispz *= 0.5;
-    }
+    */
+    // If axis != 3 then scale down the s_disp
+    // values by a factor of two to account 
+    // for the "quarter-point".
+    // Note that this else will scale the IF 
+    // statements above (e.g. if (v0 < 2){ ...  })
+    s_dispx *= 0.5;
+    s_dispy *= 0.5;
+    s_dispz *= 0.5;
+    //}
      
     printf("\n");
     printf("\nParticle %ld: TEST REFERENCE POINT = %e, %e, %e", pi, xr, yr, zr);

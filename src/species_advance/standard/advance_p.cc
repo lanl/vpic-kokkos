@@ -171,6 +171,8 @@ sp_[id]->
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby + dy*f_dcbydy;
     float cbz  = f_cbz + dz*f_dcbzdz;
+    printf("\n\nParticle %ld: hax, hay, haz = %e, %e, %e", p_index, hax, hay, haz);
+    printf("\nParticle %ld: cbx, cby, cbz = %e, %e, %e", p_index, cbx, cby, cbz);
     //cbx = 0, cby = 0, cbz = 0;
     float ux   = p_ux;                             // Load momentum
     float uy   = p_uy;
