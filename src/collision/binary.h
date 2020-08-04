@@ -32,12 +32,23 @@ void apply_binary_collision_model_pipeline( binary_collision_op_t * cop,
     
     // TODO: This is hardcoded, later we will want to have this enabled
     // at compile time instead.
-    binary_collision_pipeline< ParticleParallel<MonteCarlo> > pipeline(
-      cop->spi,
-      cop->spj,
-      cop->interval,
-      rng
-    );
+    #ifdef COLLISION_PARTICLE_PARALLEL_POLICY
+        binary_collision_pipeline< ParticleParallel<MonteCarlo> > pipeline(
+          cop->spi,
+          cop->spj,
+          cop->interval,
+          rng
+        );
+    #elif COLLISION_VOXEL_PARALLEL_POLICY
+        binary_collision_pipeline< VoxelParallel<MonteCarlo> > pipeline(
+          cop->spi,
+          cop->spj,
+          cop->interval,
+          rng
+        );
+    #else
+        ERROR(("Collision Parallel Policy not defined"));
+    #endif
 
     pipeline.dispatch(model);
 }

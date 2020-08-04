@@ -54,9 +54,29 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 
+option(USE_COLLISION_DIRECT "Enables a direct vs indirect sort" ON)
+
 set(KOKKOS_ARCH "Power9;Volta70" CACHE STRING "Architecture to use with Kokkos")
 
+
+
 add_definitions(-DUSE_KOKKOS)
+
+##### SET COLLISION PARALLEL POLICY #####
+#Defaults to the best choice
+set(COLLISION_PARALLEL_POLICY "ParticleParallel" CACHE STRING "Selected collision parallel policy")
+set(ALLOWABLE_COLL ParticleParallel VoxelParallel)
+set_property(CACHE COLLISION_PARALLEL_POLICY PROPERTY STRINGS ${ALLOWABLE_COLL})
+
+if(COLLISION_PARALLEL_POLICY MATCHES "ParticleParallel")
+    add_definitions(-DCOLLISION_PARTICLE_PARALLEL_POLICY)
+elseif(COLLISION_PARALLEL_POLICY MATCHES "VoxelParallel")
+    add_definitions(-DCOLLISION_VOXEL_PARALLEL_POLICY)
+else()
+    message(FATAL_ERROR "Unknown parallel collision policy. Options are: ${ALLOWABLE_COLL}")
+endif()
+
+##### END COLLISION PARALLEL POLICY #####
 
 ##### SET RNG POLICY #####
 
@@ -236,6 +256,11 @@ find_package(Threads REQUIRED)
 if (VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
+
+if (USE_COLLISION_DIRECT)
+    add_definitions(-DUSE_COLLISION_DIRECT)
+endif(USE_COLLISION_DIRECT)
+
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)

@@ -230,6 +230,8 @@ struct VoxelParallel {
     k_particle_partition_t_ra const& spj_partition_ra)
   {
 
+    MESSAGE(("Applying VoxelParallel Collision Policy"));
+
     using Space=Kokkos::DefaultExecutionSpace;
     using member_type=Kokkos::TeamPolicy<Space>::member_type;
 
@@ -390,6 +392,7 @@ struct ParticleParallel {
     k_particle_partition_t_ra const& spj_partition_ra)
   {
 
+    MESSAGE(("Applying ParticleParallel Collision Policy"));
     using Space=Kokkos::DefaultExecutionSpace;
     using member_type=Kokkos::TeamPolicy<Space>::member_type;
 
@@ -581,19 +584,37 @@ struct binary_collision_pipeline {
     collision_model& _model
   )
   {
+   
+    #ifndef USE_COLLISION_DIRECT
+    #define USE_COLLISION_DIRECT false
+    #endif
+    
     ParticleSorter<> sorter;
     ParticleShuffler<> shuffler;
     
     // Ensure sorted and shuffled.
     if( _spi->last_indexed != _spi->g->step ) {
+        //TODO: add rank fix
+        //if( rank()==0 ) {
+            if(USE_COLLISION_DIRECT)
+                MESSAGE(( "Performing collision direct sort \"%s\"", _spi->name ));
+            else
+                MESSAGE(( "Performing collision indirect sort \"%s\"", _spi->name ));
+        //}
         KOKKOS_TIC();
-        sorter.sort( _spi, false );
+        sorter.sort( _spi, USE_COLLISION_DIRECT);
         KOKKOS_TOC(collision_sort, 1);
     }
 
     if( _spj->last_indexed != _spj->g->step ) {
+        //if( rank()==0 ) {
+            if(USE_COLLISION_DIRECT)
+                MESSAGE(( "Performing collision direct sort \"%s\"", _spj->name ));
+            else
+                MESSAGE(( "Performing collision indirect sort \"%s\"", _spj->name ));
+        //}
         KOKKOS_TIC();
-        sorter.sort( _spj, false );
+        sorter.sort( _spj, USE_COLLISION_DIRECT );
         KOKKOS_TOC(collision_sort, 1);
     }
 
@@ -618,8 +639,14 @@ struct binary_collision_pipeline {
         ERROR(("Bad spj sort products."));
 
     // We only need to shuffle one species to ensure random pairings.
+    //if( rank()==0 ) {
+        if(USE_COLLISION_DIRECT)
+            MESSAGE(( "Performing collision direct shuffle \"%s\"", _spi->name ));
+        else
+            MESSAGE(( "Performing collision indirect shuffle \"%s\"", _spi->name ));
+    //}
     KOKKOS_TIC();
-    shuffler.shuffle( _spi, _rp, false );
+    shuffler.shuffle( _spi, _rp, USE_COLLISION_DIRECT);
     KOKKOS_TOC(collision_shuffle, 1);
 
 
