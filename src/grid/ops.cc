@@ -309,6 +309,81 @@ size_grid( grid_t * g,
 # endif
 }
 
+void glue_edge( grid_t * g, int boundary, int rank )
+{
+  // This is stolen from join_grid
+  // Join phase 2 data structures
+  g->bc[boundary] = rank;
+
+  // Join phase 3 data structures
+  lnx = g->nx;
+  lny = g->ny;
+  lnz = g->nz;
+  rnc = g->range[rank+1] - g->range[rank]; 
+
+  int planes_per_axis = g->PLANES_PER_AXIS;
+  int num_neighbors = g->NUM_NEIGHBORS;
+  int neighbor_index = 0;
+
+  int lnx = g->nx;
+  int lny = g->ny;
+  int lnz = g->nz;
+
+  int rnc = g->range[rank+1] - g->range[rank];
+ 
+  // Take care of edges along x-1 and x+1 planes
+  for ( int lz = 1; lz <= lnz; ++lz )
+  {
+    for ( int lx = 1; lx <= lnx; ++lx )
+    {
+
+      // Move along y == 1 
+      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) + 3] = g->range[rank] + REMOTE_CELL_ID(lx, lny, lz-1);
+      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) + 5] = g->range[rank] + REMOTE_CELL_ID(lx, lny, lz+1);
+
+      // Move along y == lny
+      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) + 21] = g->range[rank] + REMOTE_CELL_ID(lx, 1, lz-1);
+      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) + 23] = g->range[rank] + REMOTE_CELL_ID(lx, 1, lz+1);
+
+    }
+  }
+
+  // Take care of edges along y-1 and y+1 planes
+  for ( int lz = 1; lz <= lnz; ++lz )
+  {
+    for ( int ly = 1; ly <= lny; ++ly )
+    {
+
+      // Move along x == 1 
+      g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 9] = g->range[rank] + REMOTE_CELL_ID(lnx, ly, lz-1);
+      g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 11] = g->range[rank] + REMOTE_CELL_ID(lnx, ly, lz+1);
+
+      // Move along x == lnx
+      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 15] = g->range[rank] + REMOTE_CELL_ID(1, ly, lz-1);
+      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 17] = g->range[rank] + REMOTE_CELL_ID(1, ly, lz+1);
+
+    }
+  }
+
+  // Take care of edges along z-1 and z+1 planes
+  for ( int lx = 1; lx <= lnx; ++lx )
+  {
+    for ( int ly = 1; ly <= lny; ++ly )
+    {
+
+      // Move along z == 1 
+      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, 1) + ] = g->range[rank] + REMOTE_CELL_ID(lnx, ly, lz-1);
+      g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 11] = g->range[rank] + REMOTE_CELL_ID(lnx, ly, lz+1);
+
+      // Move along x == lnx
+      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 15] = g->range[rank] + REMOTE_CELL_ID(1, ly, lz-1);
+      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 17] = g->range[rank] + REMOTE_CELL_ID(1, ly, lz+1);
+
+    }
+  }
+
+}
+
 void
 join_grid( grid_t * g,
            int boundary,
