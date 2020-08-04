@@ -120,10 +120,11 @@
     // Hopefully fully elaborating these steps and how the 
     // displacement and midpoint variables change will help in 
     // future development.
+    
+    printf("\n\nMOVE P ENTERED...");
+    printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
 
-    //printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
-
-    //printf("\nParticle %d: disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
+    printf("\nParticle %d: s_disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
 
     // Compute the direction that the particle moves.
     // This value is the also the boundary of the cell 
@@ -184,7 +185,7 @@
     // midpoint if axis != 3, or it stops if axis == 3.
     v3 *= 0.5;
 
-    
+    printf("\n\nns_disp may have changed!");
     printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
             pi, axis, v0, v1, v2, 2.*v3);
     printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
@@ -377,40 +378,50 @@
         // Hit a reflecting boundary condition.  Reflect the particle
         // momentum and remaining displacement and keep moving the
         // particle.
-        /*
+        
         printf("\nI, particle %d, was reflected!\nBefore reflection...", pi);
         printf("\npii, rangel = %d, %d", pii, rangel);
         printf("\nneighbor, rangel = %d, %d", neighbor - rangel, rangel);
         printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
                                             k_particles(pi, particle_var::uy),
                                             k_particles(pi, particle_var::uz));
-        */
+        
         if ( s_dir[Axis_Label::x] != 0 )
         {
             k_particles(pi, particle_var::ux ) = -k_particles(pi, particle_var::ux );
             pm->dispx *= -1.;
+            s_dir[Axis_Label::x] = 0;
         }
 
         if ( s_dir[Axis_Label::y] != 0 )
         {
             k_particles(pi, particle_var::uy ) = -k_particles(pi, particle_var::uy );
             pm->dispy *= -1.;
+            s_dir[Axis_Label::y] = 0;
         }
 
         if ( s_dir[Axis_Label::z] != 0 )
         {
             k_particles(pi, particle_var::uz ) = -k_particles(pi, particle_var::uz );
             pm->dispz *= -1.;
+            s_dir[Axis_Label::z] = 0;
         }
         
-        /*
+        
         printf("\nAfter reflection...");
         printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
                                             k_particles(pi, particle_var::uy),
                                             k_particles(pi, particle_var::uz));
-        */ 
+         
+        k_particles( pi, particle_var::dx ) -= 2. * s_dir[Axis_Label::x];
+        k_particles( pi, particle_var::dy ) -= 2. * s_dir[Axis_Label::y];
+        k_particles( pi, particle_var::dz ) -= 2. * s_dir[Axis_Label::z];
 
-        /* Old stuffs ... 
+
+        pm->pdx = p_dx;
+        pm->pdy = p_dy;
+        pm->pdz = p_dz;
+            /* Old stuffs ... 
         k_particles(pi, particle_var::ux + axis ) = -k_particles(pi, particle_var::ux + axis );
 
         // TODO: make this safer
@@ -422,9 +433,10 @@
 
         //printf("\n##########################################\n");
         //continue;
+        return 0;
     }
 
-    if( neighbor<rangel || neighbor>rangeh ) {
+    if ( neighbor<rangel || neighbor>rangeh ) {
         // Cannot handle the boundary condition here.  Save the updated
         // particle position, face it hit and update the remaining
         // displacement in the particle mover as a bitshift.

@@ -281,9 +281,9 @@ sp_[id]->
       }
       // Change the particle positions after the zig for the 
       // upcoming zag.
-      p_dx = local_pm->pdx;                   // Store new position
-      p_dy = local_pm->pdy;
-      p_dz = local_pm->pdz;
+      dx = local_pm->pdx;                   // Store new position
+      dy = local_pm->pdy;
+      dz = local_pm->pdz;
       /*
       v0 = v3 + local_pm->dispx;           // Streak midpoint
       v1 = v4 + local_pm->dispy;
@@ -299,8 +299,8 @@ sp_[id]->
     // the total physical charge that passed through the appropriate
     // current quadrant in a time-step
     
-    printf("\n\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, v3, v4, v5);
-    printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, v3 + 2 * s_dispx, v4 + 2 * s_dispy, v5 + 2 * s_dispz);
+    printf("\n\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, dx, dy, dz);
+    printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, dx + 2 * s_dispx, dy + 2 * s_dispy, dz + 2 * s_dispz);
 
     q *= qsp;
     /*
@@ -314,18 +314,18 @@ sp_[id]->
     v5 = q*s_dispx*s_dispy*s_dispz*one_third;               // Compute correction
 
     int axis = 3;
+    
+    float s_midx = dx + s_dispx;
+    float s_midy = dy + s_dispy;
+    float s_midz = dz + s_dispz;
 
     printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
             p_index, axis, v0, v1, v2, 2.*v3);
     printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
-            p_index, p_dx, p_dy, p_dz);
+            p_index, s_midx, s_midy, s_midz);
     printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
             p_index, s_dispx, s_dispy, s_dispz);
     
-    float s_midx = p_dx + s_dispx;
-    float s_midy = p_dy + s_dispy;
-    float s_midz = p_dz + s_dispz;
-
 // Create a single accumulate_j macro.
 #   define accumulate_j(X,Y,Z)                                        \
     v4  = q*s_disp##X;    /* v2 = q ux                            */  \
