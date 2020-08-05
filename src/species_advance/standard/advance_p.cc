@@ -34,9 +34,10 @@ advance_p_kokkos(
         const int nz)
 {
 
-  constexpr float one            = 1.;
-  constexpr float one_third      = 1./3.;
-  constexpr float two_fifteenths = 2./15.;
+  constexpr float one                   = 1.;
+  static constexpr float minus_one      = -1.;
+  constexpr float one_third             = 1./3.;
+  constexpr float two_fifteenths        = 2./15.;
 
   /*
   k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
@@ -231,8 +232,8 @@ sp_[id]->
     //if(  !(v3<=one &&  v4<=one &&  v5<=one && -v3<=one && -v4<=one && -v5<=one) ) {
     // Check if the particle is going to leave the cell on either boundary. 
     // A single axis is sufficient to engage zigzags.
-    //if ( (v3 > one || v3 < -one) || (v4 > one || v4 < -one) || (v5 > one || v5 < -one) ) {
-    if(  v3 > one || v4 > one || v5 > one || -v3 < one || -v4 < one || -v5 < one ) {
+    if ( (v3 > one || v3 < minus_one) || (v4 > one || v4 < minus_one) || (v5 > one || v5 < minus_one) ) {
+    //if(  v3 > one || v4 > one || v5 > one || -v3 < one || -v4 < one || -v5 < one ) {
 
         // zagger = false;
 
