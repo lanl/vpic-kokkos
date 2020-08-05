@@ -387,7 +387,7 @@ move_p_kokkos(
     #include "accumulate_j.hpp"
 #endif
     
-    printf("\nMOVE_P_OVER...\naxis %d x %e y %e z %e s_disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+    // printf("\nMOVE_P_OVER...\naxis %d x %e y %e z %e s_disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
  
   #undef p_dx
   #undef p_dy

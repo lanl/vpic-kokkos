@@ -68,7 +68,7 @@
     zig_finaly = s_midy + s_dispy;
     zig_finalz = s_midz + s_dispz;
 
-    printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
+    // printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
    
     // Set the reference points to the midpoint 
     // of the motion by default.
@@ -76,7 +76,7 @@
     yr = zig_finaly;
     zr = zig_finalz;
     
-    printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
+    // printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
 
 #if VPIC_DUMP_NEIGHBORS
     print_neighbor.write_final_cell( s_midx + 2. * s_dispx, s_midy + 2. * s_dispy, s_midz + 2. * s_dispz );
@@ -185,13 +185,13 @@
     // midpoint if axis != 3, or it stops if axis == 3.
     v3 *= 0.5;
 
-    printf("\n\nns_disp may have changed!");
-    printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
-            pi, axis, v0, v1, v2, 2.*v3);
-    printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
-            pi, s_midx, s_midy, s_midz);
-    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
-            pi, s_dispx, s_dispy, s_dispz);
+    // printf("\n\nns_disp may have changed!");
+    // printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
+    //         pi, axis, v0, v1, v2, 2.*v3);
+    // printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
+    //         pi, s_midx, s_midy, s_midz);
+    // printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
+    //         pi, s_dispx, s_dispy, s_dispz);
     /*printf("\nParticle %d: s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz = %e, %e, %e",
             pi, s_midx + s_dispx, s_midy + s_dispy, s_midz + s_dispz);
     */
@@ -229,9 +229,9 @@
     s_dispz *= 0.5;
     //}
      
-    printf("\n");
-    printf("\nParticle %ld: TEST REFERENCE POINT = %e, %e, %e", pi, xr, yr, zr);
-    printf("\n");
+    // printf("\n");
+    // printf("\nParticle %ld: TEST REFERENCE POINT = %e, %e, %e", pi, xr, yr, zr);
+    // printf("\n");
     
     // With xr, yr, and zr known, we can treat them as the final 
     // location on either the zig or the zag. Now we just need 
@@ -242,13 +242,13 @@
     s_midz = 0.5 * ( s_midz + zr );
     
 
-    printf("\n");
-    printf("\nParticle %ld: POST IF STATEMENTS s_midx, s_midy, s_midz = %e, %e, %e", pi, s_midx, s_midy, s_midz);
-    printf("\n");
+    // printf("\n");
+    // printf("\nParticle %ld: POST IF STATEMENTS s_midx, s_midy, s_midz = %e, %e, %e", pi, s_midx, s_midy, s_midz);
+    // printf("\n");
 
-    printf("\n");
-    printf("\nParticle %ld: POST IF STATEMENTS s_dispx, s_dispy, s_dispz = %e, %e, %e", pi, s_dispx, s_dispy, s_dispz);
-    printf("\n");
+    // printf("\n");
+    // printf("\nParticle %ld: POST IF STATEMENTS s_dispx, s_dispy, s_dispz = %e, %e, %e", pi, s_dispx, s_dispy, s_dispz);
+    // printf("\n");
 
     
     // Accumulate the streak.  Note: accumulator values are 4 times
@@ -259,21 +259,21 @@
  
     // Now accumulate the currents
     accumulate_j(x,y,z);
-    printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    // printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
 
     accumulate_j(y,z,x);
-    printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+    // printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
 
     accumulate_j(z,x,y);
-    printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
+    // printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
@@ -304,7 +304,7 @@
     p_dz = zig_finalz;
 
     // If an end streak, return success (should be ~50% of the time)
-   printf("\nStreak ended...\naxis %d x %e y %e z %e s_disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+   // printf("\nStreak ended...\naxis %d x %e y %e z %e s_disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
    
   //  printf("\nParticle %d Velocity after accumulation:", pi);
   //  printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
@@ -382,12 +382,12 @@
         // momentum and remaining displacement and keep moving the
         // particle.
         
-        printf("\nI, particle %d, was reflected!\nBefore reflection...", pi);
-        printf("\npii, rangel = %d, %d", pii, rangel);
-        printf("\nneighbor, rangel = %d, %d", neighbor - rangel, rangel);
-        printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
-                                            k_particles(pi, particle_var::uy),
-                                            k_particles(pi, particle_var::uz));
+        // printf("\nI, particle %d, was reflected!\nBefore reflection...", pi);
+        // printf("\npii, rangel = %d, %d", pii, rangel);
+        // printf("\nneighbor, rangel = %d, %d", neighbor - rangel, rangel);
+        // printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
+        //                                     k_particles(pi, particle_var::uy),
+        //                                     k_particles(pi, particle_var::uz));
         
         if ( s_dir[Axis_Label::x] != 0 )
         {
@@ -411,10 +411,10 @@
         }
         
         
-        printf("\nAfter reflection...");
-        printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
-                                            k_particles(pi, particle_var::uy),
-                                            k_particles(pi, particle_var::uz));
+        // printf("\nAfter reflection...");
+        // printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
+        //                                     k_particles(pi, particle_var::uy),
+        //                                     k_particles(pi, particle_var::uz));
          
         k_particles( pi, particle_var::dx ) -= 2. * s_dir[Axis_Label::x];
         k_particles( pi, particle_var::dy ) -= 2. * s_dir[Axis_Label::y];
