@@ -227,8 +227,11 @@ sp_[id]->
     // bool zagger = true;
 
     // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
-    if(  !(v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
-            -v3<=one && -v4<=one && -v5<=one) ) {
+    // Check if inbnds
+    //if(  !(v3<=one &&  v4<=one &&  v5<=one && -v3<=one && -v4<=one && -v5<=one) ) {
+    // Check if the particle is going to leave the cell on either boundary. 
+    // A single axis is sufficient to engage zigzags.
+    if ( abs(v3) > one || abs(v4) > one || abs(v5) > one ) {
 
         // zagger = false;
 
