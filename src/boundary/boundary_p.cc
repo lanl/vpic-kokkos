@@ -698,6 +698,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
       {
         int i = pm->i;
         int voxel = p0[i].i;
+        // TODO: Fix this with 27 neighbors!
         face = voxel & 7;
         voxel >>= 3;
         p0[i].i = voxel;
@@ -714,6 +715,8 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         // Send to a neighboring node
 
         if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) ) {
+          // TODO: This WILL segfault for multiple MPI nodes!
+          // Faces are not ordered 0 to 6 anymore!
           pi = &pi_send[face][n_send[face]++];
 #         ifdef V4_ACCELERATION
           copy_4x1( &pi->dx,    &p0[i].dx  );
