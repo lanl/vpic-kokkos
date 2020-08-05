@@ -249,13 +249,17 @@ boundary_p_kokkos(
 
                 // TODO: We could detect this on the GPU side and process is there instead
                   // Not doing that costs us data copies in the fields
-                int i = pm->i;
+                //int i = pm->i;
                 //const auto& kfield_h = fa->k_f_h;
                 const auto& krhob_accum_h = fa->k_f_rhob_accum_h;
                 const auto& kparticle_move_h = sp->k_pc_h;
                 const auto& kparticle_move_i_h = sp->k_pc_i_h;
 
                 float qsp = sp->q;
+
+                // Send the particle to the particle boundary diagnostic
+                if (sp->pb_diag != NULL)
+                    pbd_write_to_buffer(sp, kparticle_move_h, kparticle_move_i_h, copy_index);
 
                 k_accumulate_rhob_single_cpu(
                         krhob_accum_h,

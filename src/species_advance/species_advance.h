@@ -56,6 +56,35 @@ typedef struct particle_injector {
   species_id sp_id;          // Species of particle
 } particle_injector_t;
 
+// Seems like this belongs in boundary.h
+class species_t;
+typedef struct pb_diagnostic {
+
+    int         enable; // Wether or not to use this diagnostic
+    int         enable_user; // Will the user write additional values?
+    // TODO: Do I need this circular reference?
+    species_t   *sp; // Pointer to the species
+    char        *fname;
+    int         file_counter; // How many files has this rank written?
+    size_t      store_counter; // How many floats need to be written from the buffer
+    size_t      write_counter; // How many floats have been written to the current file
+    size_t      bufflen; // Size of the memory buffer in sizeof(float)
+    float       *buff; // The buffer that stores data to be written
+
+    int         num_user_writes; // Number of floats the user stores per particle
+    int         num_writes; // Total number of floats stored per particle
+
+    int         write_ux;
+    int         write_uy;
+    int         write_uz;
+    int         write_momentum_magnitude;
+    int         write_posx;
+    int         write_posy;
+    int         write_posz;
+    int         write_weight;
+
+} pb_diagnostic_t;
+
 class species_t {
     public:
 
@@ -141,6 +170,9 @@ class species_t {
         // This number is tracked on the host only, and may be inaccurate on
         // the device.
         int64_t species_copy_last = -1;
+
+        // Particle boundary diagnostic.  Assumed dissabled unless non-NULL.
+        pb_diagnostic_t * pb_diag = NULL;
 
         // Init Kokkos Particle Arrays
         species_t(int n_particles, int n_pmovers) :
