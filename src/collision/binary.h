@@ -30,8 +30,6 @@ void apply_binary_collision_model_pipeline( binary_collision_op_t * cop,
         return;
     }
     
-    // TODO: This is hardcoded, later we will want to have this enabled
-    // at compile time instead.
     #ifdef COLLISION_PARTICLE_PARALLEL_POLICY
         binary_collision_pipeline< ParticleParallel<MonteCarlo> > pipeline(
           cop->spi,

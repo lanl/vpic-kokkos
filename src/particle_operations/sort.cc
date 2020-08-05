@@ -69,7 +69,7 @@ void BinSort::sort( species_t* sp,
       });
 
     if( direct ) {
-
+        std::cout << "Here!\n";
       k_particles_t old_p = sp->k_p_d;
       k_particles_t new_p(
         Kokkos::ViewAllocateWithoutInitializing("k_particles"),

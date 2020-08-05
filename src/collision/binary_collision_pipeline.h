@@ -589,11 +589,12 @@ struct binary_collision_pipeline {
     #define USE_COLLISION_DIRECT false
     #endif
     
-    ParticleSorter<> sorter;
+    ParticleSorter<BinSort> sorter;
     ParticleShuffler<> shuffler;
     
     // Ensure sorted and shuffled.
-    if( _spi->last_indexed != _spi->g->step ) {
+    // TODO: should it be last_sorted instead?
+    if( _spi->last_indexed != _spi->g->step || _spi->last_sorted != _spi->g->step) {
         //TODO: add rank fix
         //if( rank()==0 ) {
             if(USE_COLLISION_DIRECT)
@@ -606,7 +607,7 @@ struct binary_collision_pipeline {
         KOKKOS_TOC(collision_sort, 1);
     }
 
-    if( _spj->last_indexed != _spj->g->step ) {
+    if( _spj->last_indexed != _spj->g->step || _spj->last_sorted != _spj->g->step) {
         //if( rank()==0 ) {
             if(USE_COLLISION_DIRECT)
                 MESSAGE(( "Performing collision direct sort \"%s\"", _spj->name ));
@@ -629,6 +630,9 @@ struct binary_collision_pipeline {
     _spj_partition_ra = _spj->k_partition_d;
     _spj_sortindex_ra = _spj->k_sortindex_d;
 
+    std::cout << "I NP and V: " << _spi->np << " " << _spi_sortindex_ra.extent(0) << " " << _spi->g->nv+1 << " " << _spi_partition_ra.extent(0) << std::endl;
+    std::cout << "J NP and V: " << _spj->np << " " << _spj_sortindex_ra.extent(0) << " " << _spj->g->nv+1 << " " <<  _spj_partition_ra.extent(0) << std::endl;
+ 
     // Am I being paranoid?
     if( _spi->np      != _spi_sortindex_ra.extent(0) ||
         _spi->g->nv+1 != _spi_partition_ra.extent(0) )
