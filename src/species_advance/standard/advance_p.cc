@@ -171,8 +171,8 @@ sp_[id]->
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby + dy*f_dcbydy;
     float cbz  = f_cbz + dz*f_dcbzdz;
-    printf("\n\nParticle %ld: hax, hay, haz = %e, %e, %e", p_index, hax, hay, haz);
-    printf("\nParticle %ld: cbx, cby, cbz = %e, %e, %e", p_index, cbx, cby, cbz);
+    // printf("\n\nParticle %ld: hax, hay, haz = %e, %e, %e", p_index, hax, hay, haz);
+    // printf("\nParticle %ld: cbx, cby, cbz = %e, %e, %e", p_index, cbx, cby, cbz);
     //cbx = 0, cby = 0, cbz = 0;
     float ux   = p_ux;                             // Load momentum
     float uy   = p_uy;
@@ -216,8 +216,10 @@ sp_[id]->
     v4   = v1 + uy;
     v5   = v2 + uz;
 
-    //printf("\n\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, dx, dy, dz);
-    //printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, dx + 2*ux, dy + 2*uy, dz + 2*uz);
+    printf("\n\nBEGINNING OF PARTICLE MOTION");
+    printf("\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, dx, dy, dz);
+    printf("\nParticle %ld final-particle-velocity vxf, vyf, vzf = %e, %e %e", p_index, p_ux, p_uy, p_uz);
+    printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, dx + 2*ux, dy + 2*uy, dz + 2*uz);
     float s_dispx = ux;
     float s_dispy = uy;
     float s_dispz = uz;
@@ -243,9 +245,6 @@ sp_[id]->
            local_pm_i     = p_index;
         */
       DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
-      local_pm->pdx   = dx;
-      local_pm->pdy   = dy;
-      local_pm->pdz   = dz;
       local_pm->dispx = ux;
       local_pm->dispy = uy;
       local_pm->dispz = uz;
@@ -287,11 +286,11 @@ sp_[id]->
       }
       // Change the particle positions after the zig for the 
       // upcoming zag.
-      dx = local_pm->pdx;                   // Store new position
-      dy = local_pm->pdy;
-      dz = local_pm->pdz;
+      dx = p_dx;                   // Store new position
+      dy = p_dy;
+      dz = p_dz;
       /*
-      v0 = v3 + local_pm->dispx;           // Streak midpoint
+      v0 = v3 + local_pm->dispx;   // Streak midpoint
       v1 = v4 + local_pm->dispy;
       v2 = v5 + local_pm->dispz;
       */
@@ -385,6 +384,15 @@ sp_[id]->
     k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
 
 #     undef ACCUMULATE_J
+
+    // Finally, set the final particle position
+    p_dx = s_midx + s_dispx;
+    p_dy = s_midy + s_dispy;
+    p_dz = s_midz + s_dispz;
+
+    printf("\nParticle %ld final-particle-position xf, yf, zf = %e, %e %e", p_index, p_dx, p_dy, p_dz);
+    printf("\nParticle %ld final-particle-velocity vxf, vyf, vzf = %e, %e %e", p_index, p_ux, p_uy, p_uz);
+    printf("\nEND OF PARTICLE MOTION\n\n");
 
 //}
   });

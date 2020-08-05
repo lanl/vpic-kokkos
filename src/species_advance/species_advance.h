@@ -47,7 +47,6 @@ typedef struct particle {
 // WHO USES THAT PARTICLE MOVER WILL HAVE ACCESS TO PARTICLE ARRAY
 
 typedef struct particle_mover {
-  float pdx,   pdy,   pdz;   // Position of particle
   float dispx, dispy, dispz; // Displacement of particle
   int32_t i;                 // Index of the particle to move
 } particle_mover_t;

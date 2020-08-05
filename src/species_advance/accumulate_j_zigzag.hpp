@@ -34,8 +34,8 @@
     //Kokkos::atomic_add(&a[2], v2); \
     //Kokkos::atomic_add(&a[3], v3);
 
-    //printf("\nParticle %d in Voxel %d Velocity before accumulation:", pi, pii);
-    //printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
+    // printf("\nParticle %d in Voxel %d Velocity before accumulation:", pi, pii);
+    // printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
 
     // In this approach, we keep the current accumulation the same,
     // and move the particles along the zigzag path. The position 
@@ -68,7 +68,7 @@
     zig_finaly = s_midy + s_dispy;
     zig_finalz = s_midz + s_dispz;
 
-    //printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
+    printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
    
     // Set the reference points to the midpoint 
     // of the motion by default.
@@ -76,7 +76,7 @@
     yr = zig_finaly;
     zr = zig_finalz;
     
-    //printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
+    printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
 
 #if VPIC_DUMP_NEIGHBORS
     print_neighbor.write_final_cell( s_midx + 2. * s_dispx, s_midy + 2. * s_dispy, s_midz + 2. * s_dispz );
@@ -121,10 +121,10 @@
     // displacement and midpoint variables change will help in 
     // future development.
     
-    printf("\n\nMOVE P ENTERED...");
-    printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
+    // printf("\n\nMOVE P ENTERED...");
+    // printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
 
-    printf("\nParticle %d: s_disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
+    // printf("\nParticle %d: s_disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
 
     // Compute the direction that the particle moves.
     // This value is the also the boundary of the cell 
@@ -198,8 +198,8 @@
     //printf("\nParticle %d: s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz = %e, %e, %e",
     //        pi, s_midx + 2*s_dispx, s_midy + 2*s_dispy, s_midz + 2*s_dispz);
     
-    printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
-    printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
+    // printf("\nParticle %d: zig_finalx, zig_finaly, zig_finalz = %e, %e, %e", pi, zig_finalx, zig_finaly, zig_finalz);
+    // printf("\nParticle %d: xr, yr, zr = %e, %e, %e", pi, xr, yr, zr);
    
     /*
     // If the particle stays in-cell, adjust
@@ -304,7 +304,7 @@
     p_dz = zig_finalz;
 
     // If an end streak, return success (should be ~50% of the time)
- //   printf("\nStreak ended...\naxis %d x %e y %e z %e s_disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+   printf("\nStreak ended...\naxis %d x %e y %e z %e s_disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
    
   //  printf("\nParticle %d Velocity after accumulation:", pi);
   //  printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
@@ -420,11 +420,7 @@
         k_particles( pi, particle_var::dy ) -= 2. * s_dir[Axis_Label::y];
         k_particles( pi, particle_var::dz ) -= 2. * s_dir[Axis_Label::z];
 
-
-        pm->pdx = p_dx;
-        pm->pdy = p_dy;
-        pm->pdz = p_dz;
-            /* Old stuffs ... 
+        /* Old stuffs ... 
         k_particles(pi, particle_var::ux + axis ) = -k_particles(pi, particle_var::ux + axis );
 
         // TODO: make this safer
@@ -491,10 +487,6 @@
     k_particles( pi, particle_var::dy ) -= 2. * s_dir[Axis_Label::y];
     k_particles( pi, particle_var::dz ) -= 2. * s_dir[Axis_Label::z];
 
-
-    pm->pdx = p_dx;
-    pm->pdy = p_dy;
-    pm->pdz = p_dz;
     /*
     if ( abs(s_dir[Axis_Label::x]) + abs(s_dir[Axis_Label::y]) + abs(s_dir[Axis_Label::z]) > 1){
     printf("\nParticle %d after coordinate shift", pi);
