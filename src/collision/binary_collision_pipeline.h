@@ -589,7 +589,7 @@ struct binary_collision_pipeline {
     #define USE_COLLISION_DIRECT false
     #endif
     
-    ParticleSorter<BinSort> sorter;
+    ParticleSorter<> sorter;
     ParticleShuffler<> shuffler;
     
     // Ensure sorted and shuffled.
