@@ -118,7 +118,7 @@ struct DefaultSort {
           bin_sort.sort(sp->k_p_i_d);
           sp->last_sorted = step;
 
-        } //else {
+        } else {
 
           sp->k_sortindex_d = bin_sort.get_permute_vector();
           sp->k_sortindex_h = Kokkos::create_mirror_view(sp->k_sortindex_d);
@@ -127,7 +127,7 @@ struct DefaultSort {
           // TODO: do we ever touch this data on the host? Seems expensive.
           // Kokkos::deep_copy(sp->k_sortindex_h, sp->k_sortindex_d);
 
-        //}
+        }
 
     }
 

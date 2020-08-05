@@ -230,6 +230,11 @@ struct VoxelParallel {
     k_particle_partition_t_ra const& spj_partition_ra)
   {
 
+    #ifndef USE_COLLISION_DIRECT
+    #define USE_COLLISION_DIRECT false
+    #endif
+
+      
     MESSAGE(("Applying VoxelParallel Collision Policy"));
 
     using Space=Kokkos::DefaultExecutionSpace;
@@ -249,7 +254,7 @@ struct VoxelParallel {
 
         auto j0 = spj_partition_ra(v);
         auto nj = spj_partition_ra(v+1) - j0;
-
+        
         // TODO: convert this to be a more explicit check on if we have work
         if( ni <= 0 || nj <= 0 ) return; //Nothing to do
 
@@ -272,23 +277,37 @@ struct VoxelParallel {
 
               Kokkos::single( Kokkos::PerTeam(team_member),
               [&]() {
-
                 // These must be done serially to avoid atomics (same particles)
+                int a; int b;
+                if(USE_COLLISION_DIRECT) {
+                    a = i0;
+                    b = i0 + 1;
+                } else {
+                    a = spi_sortindex_ra(i0);
+                    b = spi_sortindex_ra(i0+1);
+                }
 
-                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 1)
-                );
+                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt, a, b);
 
-                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 2)
-                );
+                 if(USE_COLLISION_DIRECT) {
+                    a = i0;
+                    b = i0 + 2;
+                } else {
+                    a = spi_sortindex_ra(i0);
+                    b = spi_sortindex_ra(i0+2);
+                }
 
-                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0 + 1),
-                    spi_sortindex_ra(i0 + 2)
-                );
+                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,a,b);
+
+                 if(USE_COLLISION_DIRECT) {
+                    a = i0 + 1;
+                    b = i0 + 2;
+                } else {
+                    a = spi_sortindex_ra(i0+1);
+                    b = spi_sortindex_ra(i0+2);
+                }
+
+                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,a,b);
 
               });
 
@@ -324,11 +343,16 @@ struct VoxelParallel {
 
             int i = l + k*(ncoll+1) ;
             int j = k ;
+            int a; int b;
+            if(USE_COLLISION_DIRECT) {
+                a = i0 + (ij ? i : j);
+                b = j0 + (ij ? j : i);
+            } else {
+                a = spi_sortindex_ra(i0 + (ij ? i : j));
+                b = spi_sortindex_ra(j0 + (ij ? j : i));
+            }
 
-            binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
-                spi_sortindex_ra(i0 + (ij ? i : j)),
-                spj_sortindex_ra(j0 + (ij ? j : i))
-            );
+            binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt, a, b);
 
           }
 
@@ -344,10 +368,16 @@ struct VoxelParallel {
             int i = l + remain*(ncoll+1) ;
             int j = k + remain ;
 
-            binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
-                spi_sortindex_ra(i0 + (ij ? i : j)),
-                spj_sortindex_ra(j0 + (ij ? j : i))
-            );
+            int a; int b;
+            if(USE_COLLISION_DIRECT) {
+                a = i0 + (ij ? i : j);
+                b = j0 + (ij ? j : i);
+            } else {
+                a = spi_sortindex_ra(i0 + (ij ? i : j));
+                b = spi_sortindex_ra(j0 + (ij ? j : i));
+            }
+
+            binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt, a, b);
 
           }
 
@@ -392,6 +422,11 @@ struct ParticleParallel {
     k_particle_partition_t_ra const& spj_partition_ra)
   {
 
+    
+    #ifndef USE_COLLISION_DIRECT
+    #define USE_COLLISION_DIRECT false
+    #endif
+
     MESSAGE(("Applying ParticleParallel Collision Policy"));
     using Space=Kokkos::DefaultExecutionSpace;
     using member_type=Kokkos::TeamPolicy<Space>::member_type;
@@ -429,21 +464,36 @@ struct ParticleParallel {
 
                 // Get a random generator.
                 kokkos_rng_state_t rg = rp.get_state();
+                int a; int b;
+                if(USE_COLLISION_DIRECT) {
+                    a = i0;
+                    b = i0 + 1;
+                } else {
+                    a = spi_sortindex_ra(i0);
+                    b = spi_sortindex_ra(i0+1);
+                }
+               binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,a,b);
 
-               binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 1)
-                );
+            
+               if(USE_COLLISION_DIRECT) {
+                    a = i0;
+                    b = i0 + 2;
+                } else {
+                    a = spi_sortindex_ra(i0);
+                    b = spi_sortindex_ra(i0+2);
+                }
 
-                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 2)
-                );
+               binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,a,b);
 
-                binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0 + 1),
-                    spi_sortindex_ra(i0 + 2)
-                );
+               if(USE_COLLISION_DIRECT) {
+                    a = i0 + 1;
+                    b = i0 + 2;
+                } else {
+                    a = spi_sortindex_ra(i0+1);
+                    b = spi_sortindex_ra(i0+2);
+                }
+ 
+               binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,a,b);
 
 
                 // Free the generator.
@@ -504,7 +554,16 @@ struct ParticleParallel {
 
         for(int k=0 ; k < ncoll ; ++k) {
 
-          binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt, i, j);
+            int a; int b;
+            if(USE_COLLISION_DIRECT) {
+                a = i;
+                b = j;
+            } else {
+                a = spi_sortindex_ra(i);
+                b = spi_sortindex_ra(j);
+            }
+
+            binary_collision<MonteCarlo>(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt, a, b);
 
           i += ij ? 1 : 0 ;
           j += ij ? 0 : 1 ;
@@ -634,14 +693,14 @@ struct binary_collision_pipeline {
     std::cout << "J NP and V: " << _spj->np << " " << _spj_sortindex_ra.extent(0) << " " << _spj->g->nv+1 << " " <<  _spj_partition_ra.extent(0) << std::endl;
  
     // Am I being paranoid?
-    if( _spi->np      != _spi_sortindex_ra.extent(0) ||
+    /*if( _spi->np      != _spi_sortindex_ra.extent(0) ||
         _spi->g->nv+1 != _spi_partition_ra.extent(0) )
         ERROR(("Bad spi sort products."));
 
     if( _spj->np      != _spj_sortindex_ra.extent(0) ||
         _spj->g->nv+1 != _spj_partition_ra.extent(0) )
         ERROR(("Bad spj sort products."));
-
+*/
     // We only need to shuffle one species to ensure random pairings.
     //if( rank()==0 ) {
         if(USE_COLLISION_DIRECT)
