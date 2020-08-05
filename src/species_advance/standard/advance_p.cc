@@ -231,7 +231,8 @@ sp_[id]->
     //if(  !(v3<=one &&  v4<=one &&  v5<=one && -v3<=one && -v4<=one && -v5<=one) ) {
     // Check if the particle is going to leave the cell on either boundary. 
     // A single axis is sufficient to engage zigzags.
-    if ( (v3 > one || v3 < -one) || (v4 > one || v4 < -one) || (v5 > one || v5 < -one) ) {
+    //if ( (v3 > one || v3 < -one) || (v4 > one || v4 < -one) || (v5 > one || v5 < -one) ) {
+    if(  v3 > one || v4 > one || v5 > one || -v3 < one || -v4 < one || -v5 < one ) {
 
         // zagger = false;
 
