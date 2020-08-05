@@ -309,7 +309,15 @@ size_grid( grid_t * g,
 # endif
 }
 
-void glue_edge( grid_t * g, int boundary, int rank )
+// This is literally just for readability
+static constexpr enum class periodic_axis 
+{
+    x = 0, y = 1, z = 2, num_axes = 3
+};
+
+// TODO: This idea may get a lil wonky at the global corners and global edges,
+// but I think it should be okay.
+void assign_periodic_neighbors( grid_t * g, int boundary, int rank, periodic_axis ax )
 {
   // This is stolen from join_grid
   // Join phase 2 data structures
@@ -330,58 +338,129 @@ void glue_edge( grid_t * g, int boundary, int rank )
   int lnz = g->nz;
 
   int rnc = g->range[rank+1] - g->range[rank];
- 
-  // Take care of edges along x-1 and x+1 planes
-  for ( int lz = 1; lz <= lnz; ++lz )
+
+  switch (ax)
   {
-    for ( int lx = 1; lx <= lnx; ++lx )
+    case periodic_axis::x:
     {
+      // Move along the x == 1 and x == lnx global
+      // planes. Populate all neighbors on these
+      // faces.
+      // TODO: will the lnz+1 segfault below?
+      for ( int lz = 1; lz <= lnz; ++lz )
+      {
+        for ( int ly = 1; ly <= lny; ++ly )
+        {
 
-      // Move along y == 1 
-      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) + 3] = g->range[rank] + REMOTE_CELL_ID(lx, lny, lz-1);
-      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) + 5] = g->range[rank] + REMOTE_CELL_ID(lx, lny, lz+1);
+          // Move along x == 1 
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 0] = g->range[rank] + REMOTE_CELL_ID(lnx, ly-1, lz-1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 1] = g->range[rank] + REMOTE_CELL_ID(lnx, ly-1, lz  );
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 2] = g->range[rank] + REMOTE_CELL_ID(lnx, ly-1, lz+1);
+          
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 3] = g->range[rank] + REMOTE_CELL_ID(lnx, ly  , lz-1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 4] = g->range[rank] + REMOTE_CELL_ID(lnx, ly  , lz  );
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 5] = g->range[rank] + REMOTE_CELL_ID(lnx, ly  , lz+1);
+          
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 6] = g->range[rank] + REMOTE_CELL_ID(lnx, ly+1, lz-1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 7] = g->range[rank] + REMOTE_CELL_ID(lnx, ly+1, lz  );
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 8] = g->range[rank] + REMOTE_CELL_ID(lnx, ly+1, lz+1);
 
-      // Move along y == lny
-      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) + 21] = g->range[rank] + REMOTE_CELL_ID(lx, 1, lz-1);
-      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) + 23] = g->range[rank] + REMOTE_CELL_ID(lx, 1, lz+1);
+          // Move along x == lnx
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 18] = g->range[rank] + REMOTE_CELL_ID(1, ly-1, lz-1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 19] = g->range[rank] + REMOTE_CELL_ID(1, ly-1, lz  );
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 20] = g->range[rank] + REMOTE_CELL_ID(1, ly-1, lz+1);
+          
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 21] = g->range[rank] + REMOTE_CELL_ID(1, ly  , lz-1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 22] = g->range[rank] + REMOTE_CELL_ID(1, ly  , lz  );
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 23] = g->range[rank] + REMOTE_CELL_ID(1, ly  , lz+1);
+          
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 24] = g->range[rank] + REMOTE_CELL_ID(1, ly+1, lz-1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 25] = g->range[rank] + REMOTE_CELL_ID(1, ly+1, lz  );
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 26] = g->range[rank] + REMOTE_CELL_ID(1, ly+1, lz+1);
+        }
+      }
+      break;  
+    }
+    case periodic_axis::y:
+    {
+      // Move along the y == 1 and y == lny global
+      // planes. Populate all neighbors on these
+      // faces.
+      for ( int lz = 1; lz <= lnz; ++lz )
+      {
+        for ( int lx = 1; lx <= lnx; ++lx )
+        {
 
+          // Move along y == 1 
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) +  0] = g->range[rank] + REMOTE_CELL_ID(lx-1, lny, lz-1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) +  1] = g->range[rank] + REMOTE_CELL_ID(lx-1, lny, lz  );
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) +  2] = g->range[rank] + REMOTE_CELL_ID(lx-1, lny, lz+1);
+          
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) +  9] = g->range[rank] + REMOTE_CELL_ID(lx  , lny, lz-1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) + 10] = g->range[rank] + REMOTE_CELL_ID(lx  , lny, lz  );
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) + 11] = g->range[rank] + REMOTE_CELL_ID(lx  , lny, lz+1);
+          
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) + 18] = g->range[rank] + REMOTE_CELL_ID(lx+1, lny, lz-1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) + 19] = g->range[rank] + REMOTE_CELL_ID(lx+1, lny, lz  );
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, 1, lz) + 20] = g->range[rank] + REMOTE_CELL_ID(lx+1, lny, lz+1);
+
+          // Move along y == lny
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) +  6] = g->range[rank] + REMOTE_CELL_ID(lx-1, 1, lz-1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) +  7] = g->range[rank] + REMOTE_CELL_ID(lx-1, 1, lz  );
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) +  8] = g->range[rank] + REMOTE_CELL_ID(lx-1, 1, lz+1);
+          
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) + 15] = g->range[rank] + REMOTE_CELL_ID(lx  , 1, lz-1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) + 16] = g->range[rank] + REMOTE_CELL_ID(lx  , 1, lz  );
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) + 17] = g->range[rank] + REMOTE_CELL_ID(lx  , 1, lz+1);
+          
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) + 24] = g->range[rank] + REMOTE_CELL_ID(lx+1, 1, lz-1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) + 25] = g->range[rank] + REMOTE_CELL_ID(lx+1, 1, lz  );
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, lny, lz) + 26] = g->range[rank] + REMOTE_CELL_ID(lx+1, 1, lz+1);
+
+        }
+      }
+      break;  
+    }
+    case periodic_axis::z:
+    {
+      // Move along the z == 1 and y == lnz global
+      // planes. Populate all neighbors on these
+      // faces.
+      for ( int ly = 1; ly <= lny; ++ly )
+      {
+        for ( int lx = 1; lx <= lnx; ++lx )
+        {
+
+          // Move along z == 1 
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, 1) +  0] = g->range[rank] + REMOTE_CELL_ID(lx-1, ly-1, lnz);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, 1) +  3] = g->range[rank] + REMOTE_CELL_ID(lx-1, ly  , lnz);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, 1) +  6] = g->range[rank] + REMOTE_CELL_ID(lx-1, ly+1, lnz);
+          
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, 1) +  9] = g->range[rank] + REMOTE_CELL_ID(lx  , ly-1, lnz);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, 1) + 12] = g->range[rank] + REMOTE_CELL_ID(lx  , ly  , lnz);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, 1) + 15] = g->range[rank] + REMOTE_CELL_ID(lx  , ly+1, lnz);
+          
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, 1) + 18] = g->range[rank] + REMOTE_CELL_ID(lx+1, ly-1, lnz);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, 1) + 21] = g->range[rank] + REMOTE_CELL_ID(lx+1, ly  , lnz);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, 1) + 24] = g->range[rank] + REMOTE_CELL_ID(lx+1, ly+1, lnz);
+
+          // Move along z == lnz
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lnz) +  2] = g->range[rank] + REMOTE_CELL_ID(lx-1, ly-1, 1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lnz) +  5] = g->range[rank] + REMOTE_CELL_ID(lx-1, ly  , 1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lnz) +  8] = g->range[rank] + REMOTE_CELL_ID(lx-1, ly+1, 1);
+          
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lnz) + 11] = g->range[rank] + REMOTE_CELL_ID(lx  , ly-1, 1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lnz) + 14] = g->range[rank] + REMOTE_CELL_ID(lx  , ly  , 1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lnz) + 17] = g->range[rank] + REMOTE_CELL_ID(lx  , ly+1, 1);
+          
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lnz) + 20] = g->range[rank] + REMOTE_CELL_ID(lx+1, ly-1, 1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lnz) + 23] = g->range[rank] + REMOTE_CELL_ID(lx+1, ly  , 1);
+          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lnz) + 26] = g->range[rank] + REMOTE_CELL_ID(lx+1, ly+1, 1);
+        }
+      }
+      break;  
     }
   }
-
-  // Take care of edges along y-1 and y+1 planes
-  for ( int lz = 1; lz <= lnz; ++lz )
-  {
-    for ( int ly = 1; ly <= lny; ++ly )
-    {
-
-      // Move along x == 1 
-      g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 9] = g->range[rank] + REMOTE_CELL_ID(lnx, ly, lz-1);
-      g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 11] = g->range[rank] + REMOTE_CELL_ID(lnx, ly, lz+1);
-
-      // Move along x == lnx
-      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 15] = g->range[rank] + REMOTE_CELL_ID(1, ly, lz-1);
-      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 17] = g->range[rank] + REMOTE_CELL_ID(1, ly, lz+1);
-
-    }
-  }
-
-  // Take care of edges along z-1 and z+1 planes
-  for ( int lx = 1; lx <= lnx; ++lx )
-  {
-    for ( int ly = 1; ly <= lny; ++ly )
-    {
-
-      // Move along z == 1 
-      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, 1) + ] = g->range[rank] + REMOTE_CELL_ID(lnx, ly, lz-1);
-      g->neighbor[ num_neighbors * LOCAL_CELL_ID(1, ly, lz) + 11] = g->range[rank] + REMOTE_CELL_ID(lnx, ly, lz+1);
-
-      // Move along x == lnx
-      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 15] = g->range[rank] + REMOTE_CELL_ID(1, ly, lz-1);
-      g->neighbor[ num_neighbors * LOCAL_CELL_ID(lnx, ly, lz) + 17] = g->range[rank] + REMOTE_CELL_ID(1, ly, lz+1);
-
-    }
-  }
-
 }
 
 void
@@ -440,6 +519,12 @@ join_grid( grid_t * g,
   GLUE_FACE(0, 0, 1,z,x,y);
 
 # undef GLUE_FACE
+ 
+  // Assign the periodic boundaries appropriately. 
+  assign_periodic_neighbors(g, boundary, rank, periodic_axis::x);
+  assign_periodic_neighbors(g, boundary, rank, periodic_axis::y);
+  assign_periodic_neighbors(g, boundary, rank, periodic_axis::z);
+
 }
 
 void
