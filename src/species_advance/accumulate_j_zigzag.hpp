@@ -333,7 +333,7 @@
     s_dir[Axis_Label::y] = ( yr == s_dir[Axis_Label::y] ? s_dir[Axis_Label::y] : 0 );
     s_dir[Axis_Label::z] = ( zr == s_dir[Axis_Label::z] ? s_dir[Axis_Label::z] : 0 );
     
-    //printf("\ns_dir = %d, %d, %d", (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
+    printf("\nParticle %ld: s_dir = %d, %d, %d", pi, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
     
 
     // Compute the neighbor cell index the particle moves to. 
@@ -341,7 +341,7 @@
     // same cell. 
     // TODO: neighbor_index should replace the face variable
     neighbor_index = get_neighbor_index(s_dir[Axis_Label::x], s_dir[Axis_Label::y], s_dir[Axis_Label::z], planes_per_axis);
-    //printf("\nneighbor_index = %d", neighbor_index);
+    printf("\nParticle %ld: neighbor_index = %d", pi, neighbor_index);
 
 #if VPIC_DUMP_NEIGHBORS
     print_neighbor(neighbor_index);
@@ -360,7 +360,7 @@
     // Throw neighbor through this function to get the cell
     // index the particle moves into.
     neighbor = d_neighbor( num_neighbors * pii + neighbor_index );
-    //printf("\nneighbor value, reflect_particles = %d, %d", (int)neighbor, (int)reflect_particles);
+    printf("\nParticle %ld: neighbor value, reflect_particles = %d, %d", pi, (int)neighbor, (int)reflect_particles);
     
     /*
     if ( abs(s_dir[Axis_Label::x]) + abs(s_dir[Axis_Label::y]) + abs(s_dir[Axis_Label::z]) > 1)
@@ -466,7 +466,9 @@
     printf("\npii, rangel = %d, %d", neighbor - rangel, rangel);
     }
     */
+    printf("\nParticle %ld: pii, rangel = %d, %d", pi, pii, rangel);
     pii = neighbor - rangel;
+    printf("\nParticle %ld: pii, rangel = %d, %d", pi, pii, rangel);
     /**/                         // Note: neighbor - rangel < 2^31 / 6
     //k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
    

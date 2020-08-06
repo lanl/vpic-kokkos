@@ -77,6 +77,7 @@ begin_initialization {
   double Ti_Te   = 1;    // Ion temperature / electron temperature
   double wpe_wce = 3;    // Electron plasma freq / electron cycltron freq
   double theta   = 0;    // Orientation of the simulation wrt current sheet
+  // taui should be 100
   double taui    = 100;  // Simulation wci's to run
 
   // Numerical parameters
