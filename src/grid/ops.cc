@@ -350,7 +350,7 @@ void assign_periodic_neighbors( grid_t * g, int rank, periodic_axis axis )
 
   int special_cell = 1206;
 
-  printf("\nlnx, lny, lnz = %d, %d, %d\n", lnx, lny, lnz);
+  // printf("\nlnx, lny, lnz = %d, %d, %d\n", lnx, lny, lnz);
 
   if ( axis == periodic_axis::x )
   {
@@ -383,11 +383,11 @@ void assign_periodic_neighbors( grid_t * g, int rank, periodic_axis axis )
               while ( renz < 1 )  { renz += lnz; }  // 0 is a ghost cell
               
               neighbor_index = get_neighbor_index(plane_value, yind, zind, planes);
-              if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
-                  printf("\nCell(%d, %d, %d) %d: x neighbor(%d, %d, %d) %d before = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
+              // if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
+              //     printf("\nCell(%d, %d, %d) %d: x neighbor(%d, %d, %d) %d before = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
               g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lz) + neighbor_index ] = g->range[rank] + REMOTE_CELL_ID(renx, reny, renz);
-              if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
-                  printf("\nCell(%d, %d, %d) %d: x neighbor(%d, %d, %d) %d after = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
+              // if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
+              //     printf("\nCell(%d, %d, %d) %d: x neighbor(%d, %d, %d) %d after = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
               
             }
           }
@@ -426,11 +426,11 @@ void assign_periodic_neighbors( grid_t * g, int rank, periodic_axis axis )
               while ( renx < 1 )  { renx += lnx; }  // 0 is a ghost cell
               
               neighbor_index = get_neighbor_index(xind, plane_value, zind, planes);
-              if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
-                  printf("\nCell(%d, %d, %d) %d: y neighbor(%d, %d, %d) %d before = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
+              // if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
+              //     printf("\nCell(%d, %d, %d) %d: y neighbor(%d, %d, %d) %d before = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
               g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lz) + neighbor_index ] = g->range[rank] + REMOTE_CELL_ID(renx, reny, renz);
-              if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
-                  printf("\nCell(%d, %d, %d) %d: y neighbor(%d, %d, %d) %d after = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
+              // if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
+              //     printf("\nCell(%d, %d, %d) %d: y neighbor(%d, %d, %d) %d after = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
               
             }
           }
@@ -440,7 +440,7 @@ void assign_periodic_neighbors( grid_t * g, int rank, periodic_axis axis )
   }
   else if ( axis == periodic_axis::z )
   {
-    printf("\nz axis here.\n");
+    // printf("\nz axis here.\n");
     // Move along the z == 1 and z == lnz global
     // planes. Populate all neighbors on these
     // faces.
@@ -449,7 +449,7 @@ void assign_periodic_neighbors( grid_t * g, int rank, periodic_axis axis )
     for ( int zface = 1; zface <= 2; ++zface )
     {
       int lz = ( zface == 1 ? 1 : lnz );
-      printf("\nlz = %d", lz);
+      // printf("\nlz = %d", lz);
       for ( int lx = 1; lx <= lnx; ++lx )
       {
         for ( int ly = 1; ly <= lny; ++ly )
@@ -471,11 +471,11 @@ void assign_periodic_neighbors( grid_t * g, int rank, periodic_axis axis )
               while ( reny < 1 )  { reny += lny; }  // 0 is a ghost cell
               
               neighbor_index = get_neighbor_index(xind, yind, plane_value, planes);
-              if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
-                  printf("\nCell(%d, %d, %d) %d: z neighbor(%d, %d, %d) %d before = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->range[rank] + g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
+              // if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
+              //     printf("\nCell(%d, %d, %d) %d: z neighbor(%d, %d, %d) %d before = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->range[rank] + g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
               g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lz) + neighbor_index ] = g->range[rank] + REMOTE_CELL_ID(renx, reny, renz);
-              if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
-                  printf("\nCell(%d, %d, %d) %d: z neighbor(%d, %d, %d) %d after = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->range[rank] + g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
+              // if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
+              //     printf("\nCell(%d, %d, %d) %d: z neighbor(%d, %d, %d) %d after = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->range[rank] + g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
               
             }
           }
