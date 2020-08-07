@@ -34,9 +34,10 @@ advance_p_kokkos(
         const int nz)
 {
 
-  constexpr float one            = 1.;
-  constexpr float one_third      = 1./3.;
-  constexpr float two_fifteenths = 2./15.;
+  constexpr float one                   = 1.;
+  static constexpr float minus_one      = -1.;
+  constexpr float one_third             = 1./3.;
+  constexpr float two_fifteenths        = 2./15.;
 
   /*
   k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
@@ -171,8 +172,8 @@ sp_[id]->
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby + dy*f_dcbydy;
     float cbz  = f_cbz + dz*f_dcbzdz;
-    printf("\n\nParticle %ld: hax, hay, haz = %e, %e, %e", p_index, hax, hay, haz);
-    printf("\nParticle %ld: cbx, cby, cbz = %e, %e, %e", p_index, cbx, cby, cbz);
+    // printf("\n\nParticle %ld: hax, hay, haz = %e, %e, %e", p_index, hax, hay, haz);
+    // printf("\nParticle %ld: cbx, cby, cbz = %e, %e, %e", p_index, cbx, cby, cbz);
     //cbx = 0, cby = 0, cbz = 0;
     float ux   = p_ux;                             // Load momentum
     float uy   = p_uy;
@@ -216,19 +217,26 @@ sp_[id]->
     v4   = v1 + uy;
     v5   = v2 + uz;
 
-    //printf("\n\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, dx, dy, dz);
-    //printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, dx + 2*ux, dy + 2*uy, dz + 2*uz);
+    // printf("\n\nBEGINNING OF PARTICLE MOTION");
+    // printf("\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, dx, dy, dz);
+    // printf("\nParticle %ld final-particle-velocity vxf, vyf, vzf = %e, %e %e", p_index, p_ux, p_uy, p_uz);
+    // printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, dx + 2*ux, dy + 2*uy, dz + 2*uz);
     float s_dispx = ux;
     float s_dispy = uy;
     float s_dispz = uz;
 
-    bool zagger = true;
+    // bool zagger = true;
 
     // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
-    if(  !(v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
-            -v3<=one && -v4<=one && -v5<=one) ) {
+    // Check if inbnds
+    // TODO: get rid of this old stuff if(  !(v3<=one &&  v4<=one &&  v5<=one && -v3<=one && -v4<=one && -v5<=one) ) {
+    //
+    // Check if the particle is going to leave the cell on either boundary. 
+    // A single axis is sufficient to engage zigzags.
+    if ( v3 > one || v3 < minus_one || v4 > one || v4 < minus_one || v5 > one || v5 < minus_one ) {
+    //if(  v3 > one || v4 > one || v5 > one || v3 < minus_one || v4 < minus_one || v5 < minus_one ) {
 
-        zagger = false;
+        // zagger = false;
 
         // If a particle leaves the cell, perform the zig of the 
         // zigzag algorithm. This moves the particle directly to 
@@ -243,9 +251,6 @@ sp_[id]->
            local_pm_i     = p_index;
         */
       DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
-      local_pm->pdx   = dx;
-      local_pm->pdy   = dy;
-      local_pm->pdz   = dz;
       local_pm->dispx = ux;
       local_pm->dispy = uy;
       local_pm->dispz = uz;
@@ -287,11 +292,11 @@ sp_[id]->
       }
       // Change the particle positions after the zig for the 
       // upcoming zag.
-      dx = local_pm->pdx;                   // Store new position
-      dy = local_pm->pdy;
-      dz = local_pm->pdz;
+      dx = p_dx;                   // Store new position
+      dy = p_dy;
+      dz = p_dz;
       /*
-      v0 = v3 + local_pm->dispx;           // Streak midpoint
+      v0 = v3 + local_pm->dispx;   // Streak midpoint
       v1 = v4 + local_pm->dispy;
       v2 = v5 + local_pm->dispz;
       */
@@ -299,14 +304,14 @@ sp_[id]->
       s_dispx = local_pm->dispx;
       s_dispy = local_pm->dispy;
       s_dispz = local_pm->dispz;
-      printf("\nFINISHED MOVE_P\n");
+      // printf("\nFINISHED MOVE_P\n");
     }
     // Common case (inbnds).  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
     // current quadrant in a time-step
     
-    printf("\n\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, dx, dy, dz);
-    printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, dx + 2 * s_dispx, dy + 2 * s_dispy, dz + 2 * s_dispz);
+    // printf("\n\nParticle %d: xi, yi, zi = %e, %e, %e", p_index, dx, dy, dz);
+    // printf("\nParticle %d: xf, yf, zf = %e, %e, %e\n", p_index, dx + 2 * s_dispx, dy + 2 * s_dispy, dz + 2 * s_dispz);
 
     q *= qsp;
     /*
@@ -325,12 +330,12 @@ sp_[id]->
     float s_midy = dy + s_dispy;
     float s_midz = dz + s_dispz;
 
-    printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
-            p_index, axis, v0, v1, v2, 2.*v3);
-    printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
-            p_index, s_midx, s_midy, s_midz);
-    printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
-            p_index, s_dispx, s_dispy, s_dispz);
+    // printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
+    //         p_index, axis, v0, v1, v2, 2.*v3);
+    // printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
+    //         p_index, s_midx, s_midy, s_midz);
+    // printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
+    //         p_index, s_dispx, s_dispy, s_dispz);
     
 // Create a single accumulate_j macro.
 #   define accumulate_j(X,Y,Z)                                        \
@@ -355,36 +360,45 @@ sp_[id]->
 
 
     accumulate_j( x,y,z );
-    if (zagger)
-        printf("\nParticle %d zagging current (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
-    else
-        printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
+    // if (zagger)
+    //     printf("\nParticle %d zagging current (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
+    // else
+    //     printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
 
     accumulate_j( y,z,x );
-    if (zagger)
-        printf("\nParticle %d zagging current (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
-    else
-        printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
+    // if (zagger)
+    //     printf("\nParticle %d zagging current (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
+    // else
+    //     printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
 
     accumulate_j( z,x,y );
-    if (zagger)
-        printf("\nParticle %d zagging current (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
-    else
-        printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
+    // if (zagger)
+    //     printf("\nParticle %d zagging current (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
+    // else
+    //     printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
     k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
 
 #     undef ACCUMULATE_J
+
+    // Finally, set the final particle position
+    p_dx = s_midx + s_dispx;
+    p_dy = s_midy + s_dispy;
+    p_dz = s_midz + s_dispz;
+
+    // printf("\nParticle %ld final-particle-position xf, yf, zf = %e, %e %e", p_index, p_dx, p_dy, p_dz);
+    // printf("\nParticle %ld final-particle-velocity vxf, vyf, vzf = %e, %e %e", p_index, p_ux, p_uy, p_uz);
+    // printf("\nEND OF PARTICLE MOTION\n\n");
 
 //}
     if (!zagger)

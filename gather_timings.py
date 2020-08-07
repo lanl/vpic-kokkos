@@ -17,7 +17,7 @@ def setup_args():
                         help = "Deck type.")
 
     args = parser.parse_args()
-    if args.test_file == None or args.devel_file == None or args.output_file or args.deck == None:
+    if args.test_file == None or args.devel_file == None or args.output_file == None or args.deck == None:
         print("\nArgument error. Execute python3 %s --help for more information.\n" % __file__)
         return False
 
@@ -36,10 +36,11 @@ def write_data_file(args, test_data, devel_data):
     output_file = open(args.output_file, "w")
     output_file.write("# 1: TEST  2: devel\n")
     for row in range(0, len(test_data)):
-        if row != len(test_data)-1:
-            output_file.write("%s  %s\n" % (test_data[row], devel_data[row]))
-        else:
-            output_file.write("%s  %s" % (test_data[row], devel_data[row]))
+        if test_data[row] != "0.0e+00" and devel_data[row] != "0.0e+00":
+            if row != len(test_data)-1:
+                output_file.write("%s  %s\n" % (test_data[row], devel_data[row]))
+            else:
+                output_file.write("%s  %s" % (test_data[row], devel_data[row]))
 
     output_file.close()
 
@@ -53,7 +54,7 @@ def main():
     devel_data = read_single_file(parser.parse_args().devel_file)
 
     if len(test_data) != len(devel_data):
-        print("\nERROR: Unfair comparison found. TEST has %d elements and devel has %d.\n", len(test_file), len(devel_data))
+        print("\nERROR: Unfair comparison found. TEST has %d elements and devel has %d.\n" % (len(test_data), len(devel_data)))
         return
 
     write_data_file(parser.parse_args(), test_data, devel_data)

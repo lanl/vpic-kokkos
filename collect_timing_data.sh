@@ -1,19 +1,21 @@
 #!/bin/bash
 
 # ****************************************************
-# Command line arguments. 1: Deck, 2: CPU vs GPU
+# Command line arguments.
+# 1: Deck, 2: Node type, 3: CPU vs GPU
 DECK=$1
-TYPE=$2
+HARDWARE=$2
+TYPE=$3
 # ****************************************************
 
 KEYWORD="advance_p"
 TEST="TEST"
-DEVEL="devel"
+DEVEL="STABLE"
 PARSER="parse_advance_p.py"
 GATHERER="gather_timings.py"
 
-TDIR="/home/meese_wj/VPIC/vpic-kokkos/build_${DECK}_${TEST}"
-DDIR="/home/meese_wj/VPIC/stable_vpic/vpic-kokkos/build_${DECK}_${DEVEL}"
+TDIR="/home/meese_wj/VPIC/vpic-kokkos/${HARDWARE}_${TYPE}/build_${DECK}_${TEST}"
+DDIR="/home/meese_wj/VPIC/stable_vpic/vpic-kokkos/${HARDWARE}_${TYPE}/build_${DECK}_${DEVEL}"
 
 # Build directories for the stderr
 TEST_STDERR="${TDIR}/output.${DECK}_${TEST}"
@@ -24,7 +26,7 @@ TEST_TIMINGS="${TDIR}/advance_p_${DECK}_${TEST}.txt"
 DEVEL_TIMINGS="${DDIR}/advance_p_${DECK}_${DEVEL}.txt"
 
 # Timing Table locations
-TIMING_DIR="/home/meese_wj/VPIC/zigzag_timings_${DECK}"
+TIMING_DIR="/home/meese_wj/VPIC/zigzag_timings/${HARDWARE}_${DECK}"
 if [ ! -d "${TIMING_DIR}" ]
 then
     mkdir ${TIMING_DIR}
