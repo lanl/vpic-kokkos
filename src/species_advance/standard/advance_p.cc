@@ -387,6 +387,8 @@ sp_[id]->
 #     undef ACCUMULATE_J
 
 //}
+    if (!zagger)
+        printf("\nParticle %d: final cell position = %d", p_index, pii);
   });
 
 

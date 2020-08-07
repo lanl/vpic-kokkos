@@ -320,141 +320,167 @@ enum class periodic_axis
 void assign_periodic_neighbors( grid_t * g, int rank, periodic_axis axis )
 {
 
-  int lnx = g->nx;    // Resolution in x direction
-  int lny = g->ny;    // Resolution in y direction
-  int lnz = g->nz;    // Resolution in z direction
-
+  const int lnx = g->nx;    // Resolution in x direction
+  const int lny = g->ny;    // Resolution in y direction
+  const int lnz = g->nz;    // Resolution in z direction
+   
+  // TODO: This will break when the remotes have
+  // different resolutions.
+  const int rnx = lnx;      // Remote resolution in x direction
+  const int rny = lny;      // Remote resolution in y direction
+  const int rnz = lnz;      // Remote resolution in z direction
   int rnc = g->range[rank+1] - g->range[rank];
     
   // Define the remote cell x, y, and z
   // coordinates that the neighbor to 
   // the LOCAL_CELL would be in a periodic 
   // grid. To save Bob some headaches later
-  // on, "rnx" stands for "remote neighbor
-  // along the x axis".
-  int rnx = 0;
-  int rny = 0;
-  int rnz = 0;
+  // on, "renx" stands for "remote neighbor
+  // along the x axis". It can't be rnx 
+  // because of the dumb macro REMOTE_CELL_ID
+  // already using it.
+  int renx = 0;
+  int reny = 0;
+  int renz = 0;
 
   const int num_neighbors = g->NUM_NEIGHBORS; // Number of cells in the local neighborhood
   const int planes = g->PLANES_PER_AXIS;      // Number of planes {-1, 0, 1} for neighbor indexing
   int neighbor_index = 0;                     // The value of the neighbor index to be computed.
   int plane_value = 0;                        // The value of the plane {-1, 0, 1} for each case axis.
 
-  switch (axis)
+  int special_cell = 1206;
+
+  printf("\nlnx, lny, lnz = %d, %d, %d\n", lnx, lny, lnz);
+
+  if ( axis == periodic_axis::x )
   {
-    case periodic_axis::x:
+    // Move along the x == 1 and x == lnx global
+    // planes. Populate all neighbors on these
+    // faces.
+    //
+    // Protect against lny == 1...
+    for ( int xface = 1; xface <= 2; ++xface )
     {
-      // Move along the x == 1 and x == lnx global
-      // planes. Populate all neighbors on these
-      // faces.
-      for ( int lx = 1; lx < lnx; lx = lx + (lnx - 1) )
-      {
-        for ( int ly = 1; ly <= lny; ++ly )
-        {
-          for ( int lz = 1; lz <= lnz; ++lz )
-          {
-            // Move only along the x == 1 and x == lnx global planes.
-            // This fixes rnx to be then either lnx or 1, respectively.
-            rnx = (lx == 1 ? lnx : 1);
-            plane_value = (lx == 1 ? -1 : 1);
-            for ( int yind = -1; yind < planes-1; ++yind  )
-            {
-              for ( int zind = -1; zind < planes-1; ++zind )
-              {
-                rny = ly + yind;
-                while ( rny > lny ){ rny -= lny; }  // lny + 1 is a ghost cell
-                while ( rny < 1 )  { rny += lny; }  // 0 is a ghost cell
-                
-                rnz = lz + zind;
-                while ( rnz > lnz ){ rnz -= lnz; }  // lnz + 1 is a ghost cell
-                while ( rnz < 1 )  { rnz += lnz; }  // 0 is a ghost cell
-                
-                neighbor_index = get_neighbor_index(plane_value, yind, zind, planes);
-                g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lz) + neighbor_index ] = g->range[rank] + REMOTE_CELL_ID(rnx, rny, rnz);
-                
-              }
-            }
-          }
-        }
-      }
-      break;
-    }
-    
-    case periodic_axis::y:
-    {
-      // Move along the y == 1 and y == lny global
-      // planes. Populate all neighbors on these
-      // faces.
-      for ( int ly = 1; ly < lny; ly = ly + (lny - 1) )
+      int lx = ( xface == 1 ? 1 : lnx );
+      for ( int ly = 1; ly <= lny; ++ly )
       {
         for ( int lz = 1; lz <= lnz; ++lz )
         {
-          for ( int lx = 1; lx <= lnx; ++lx )
+          // Move only along the x == 1 and x == lnx global planes.
+          // This fixes renx to be then either lnx or 1, respectively.
+          renx = (xface == 1 ? lnx : 1);
+          plane_value = (xface == 1 ? -1 : 1);
+          for ( int yind = -1; yind < planes-1; ++yind  )
           {
-            // Move only along the y == 1 and y == lny global planes.
-            // This fixes rny to be then either lny or 1, respectively.
-            rny = (ly == 1 ? lny : 1);
-            plane_value = (ly == 1 ? -1 : 1);
             for ( int zind = -1; zind < planes-1; ++zind )
             {
-              for ( int xind = -1; xind < planes-1; ++xind  )
-              {
-                rnz = lz + zind;
-                while ( rnz > lnz ){ rnz -= lnz; }  // lnz + 1 is a ghost cell
-                while ( rnz < 1 )  { rnz += lnz; }  // 0 is a ghost cell
-                
-                rnx = lx + xind;
-                while ( rnx > lnx ){ rnx -= lnx; }  // lnx + 1 is a ghost cell
-                while ( rnx < 1 )  { rnx += lnx; }  // 0 is a ghost cell
-                
-                neighbor_index = get_neighbor_index(xind, plane_value, zind, planes);
-                g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lz) + neighbor_index ] = g->range[rank] + REMOTE_CELL_ID(rnx, rny, rnz);
-                
-              }
+              reny = ly + yind;
+              while ( reny > lny ){ reny -= lny; }  // lny + 1 is a ghost cell
+              while ( reny < 1 )  { reny += lny; }  // 0 is a ghost cell
+              
+              renz = lz + zind;
+              while ( renz > lnz ){ renz -= lnz; }  // lnz + 1 is a ghost cell
+              while ( renz < 1 )  { renz += lnz; }  // 0 is a ghost cell
+              
+              neighbor_index = get_neighbor_index(plane_value, yind, zind, planes);
+              if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
+                  printf("\nCell(%d, %d, %d) %d: x neighbor(%d, %d, %d) %d before = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
+              g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lz) + neighbor_index ] = g->range[rank] + REMOTE_CELL_ID(renx, reny, renz);
+              if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
+                  printf("\nCell(%d, %d, %d) %d: x neighbor(%d, %d, %d) %d after = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
+              
             }
           }
         }
       }
-      break;
     }
-
-    case periodic_axis::z:
+  }
+  else if ( axis == periodic_axis::y )
+  {
+    // Move along the y == 1 and y == lny global
+    // planes. Populate all neighbors on these
+    // faces.
+    //
+    // Protect against lny == 1...
+    for ( int yface = 1; yface <= 2; ++yface )
     {
-      // Move along the z == 1 and z == lnz global
-      // planes. Populate all neighbors on these
-      // faces.
-      for ( int lz = 1; lz < lnz; lz = lz + (lnz - 1) )
+      int ly = ( yface == 1 ? 1 : lny );
+      for ( int lz = 1; lz <= lnz; ++lz )
       {
         for ( int lx = 1; lx <= lnx; ++lx )
         {
-          for ( int ly = 1; ly <= lny; ++ly )
+          // Move only along the y == 1 and y == lny global planes.
+          // This fixes rny to be then either lny or 1, respectively.
+          reny = (yface == 1 ? lny : 1);
+          plane_value = (yface == 1 ? -1 : 1);
+          for ( int zind = -1; zind < planes-1; ++zind )
           {
-            // Move only along the z == 1 and z == lny global planes.
-            // This fixes rnz to be then either lny or 1, respectively.
-            rnz = (lz == 1 ? lnz : 1);
-            plane_value = (lz == 1 ? -1 : 1);
             for ( int xind = -1; xind < planes-1; ++xind  )
             {
-              for ( int yind = -1; yind < planes-1; ++yind )
-              {
-                rnx = lx + xind;
-                while ( rnx > lnx ){ rnx -= lnx; }  // lnx + 1 is a ghost cell
-                while ( rnx < 1 )  { rnx += lnx; }  // 0 is a ghost cell
-                
-                rny = ly + yind;
-                while ( rny > lny ){ rny -= lny; }  // lny + 1 is a ghost cell
-                while ( rny < 1 )  { rny += lny; }  // 0 is a ghost cell
-                
-                neighbor_index = get_neighbor_index(xind, yind, plane_value, planes);
-                g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lz) + neighbor_index ] = g->range[rank] + REMOTE_CELL_ID(rnx, rny, rnz);
-                
-              }
+              renz = lz + zind;
+              while ( renz > lnz ){ renz -= lnz; }  // lnz + 1 is a ghost cell
+              while ( renz < 1 )  { renz += lnz; }  // 0 is a ghost cell
+              
+              renx = lx + xind;
+              while ( renx > lnx ){ renx -= lnx; }  // lnx + 1 is a ghost cell
+              while ( renx < 1 )  { renx += lnx; }  // 0 is a ghost cell
+              
+              neighbor_index = get_neighbor_index(xind, plane_value, zind, planes);
+              if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
+                  printf("\nCell(%d, %d, %d) %d: y neighbor(%d, %d, %d) %d before = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
+              g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lz) + neighbor_index ] = g->range[rank] + REMOTE_CELL_ID(renx, reny, renz);
+              if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
+                  printf("\nCell(%d, %d, %d) %d: y neighbor(%d, %d, %d) %d after = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
+              
             }
           }
         }
       }
-      break;
+    }
+  }
+  else if ( axis == periodic_axis::z )
+  {
+    printf("\nz axis here.\n");
+    // Move along the z == 1 and z == lnz global
+    // planes. Populate all neighbors on these
+    // faces.
+    //
+    // Protect against lnz == 1...
+    for ( int zface = 1; zface <= 2; ++zface )
+    {
+      int lz = ( zface == 1 ? 1 : lnz );
+      printf("\nlz = %d", lz);
+      for ( int lx = 1; lx <= lnx; ++lx )
+      {
+        for ( int ly = 1; ly <= lny; ++ly )
+        {
+          // Move only along the z == 1 and z == lny global planes.
+          // This fixes rnz to be then either lny or 1, respectively.
+          renz = (zface == 1 ? lnz : 1);
+          plane_value = (zface == 1 ? -1 : 1);
+          for ( int xind = -1; xind < planes-1; ++xind  )
+          {
+            for ( int yind = -1; yind < planes-1; ++yind )
+            {
+              renx = lx + xind;
+              while ( renx > lnx ){ renx -= lnx; }  // lnx + 1 is a ghost cell
+              while ( renx < 1 )  { renx += lnx; }  // 0 is a ghost cell
+              
+              reny = ly + yind;
+              while ( reny > lny ){ reny -= lny; }  // lny + 1 is a ghost cell
+              while ( reny < 1 )  { reny += lny; }  // 0 is a ghost cell
+              
+              neighbor_index = get_neighbor_index(xind, yind, plane_value, planes);
+              if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
+                  printf("\nCell(%d, %d, %d) %d: z neighbor(%d, %d, %d) %d before = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->range[rank] + g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
+              g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx, ly, lz) + neighbor_index ] = g->range[rank] + REMOTE_CELL_ID(renx, reny, renz);
+              if (LOCAL_CELL_ID(lx,ly,lz) == special_cell)
+                  printf("\nCell(%d, %d, %d) %d: z neighbor(%d, %d, %d) %d after = %ld", lx, ly, lz, LOCAL_CELL_ID(lx,ly,lz), renx, reny, renz, neighbor_index, g->range[rank] + g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ]);
+              
+            }
+          }
+        }
+      }
     }
   }
 }
@@ -483,6 +509,8 @@ join_grid( grid_t * g,
   int num_neighbors = g->NUM_NEIGHBORS;
   int neighbor_index = 0;
 
+  printf("\nJOIN GRID HERE\n");
+
 # define GLUE_FACE(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                                       \
     neighbor_index = get_neighbor_index(i, j, k, planes_per_axis);                      \
     if( boundary==BOUNDARY(i,j,k) ) {                                                   \
@@ -507,12 +535,14 @@ join_grid( grid_t * g,
 
   // TODO: Joe, are there more faces to be glued
   // with the increase in the local neighborhood?
+  /*
   GLUE_FACE(-1, 0, 0,x,y,z);
   GLUE_FACE(0,-1, 0,y,z,x);
   GLUE_FACE(0, 0,-1,z,x,y);
   GLUE_FACE(1, 0, 0,x,y,z);
   GLUE_FACE(0, 1, 0,y,z,x);
   GLUE_FACE(0, 0, 1,z,x,y);
+  */
 
 # undef GLUE_FACE
  
