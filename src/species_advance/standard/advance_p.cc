@@ -225,7 +225,7 @@ sp_[id]->
     float s_dispy = uy;
     float s_dispz = uz;
 
-    // bool zagger = true;
+    bool zagger = true;
 
     // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
     // Check if inbnds
@@ -236,7 +236,7 @@ sp_[id]->
     if ( v3 > one || v3 < minus_one || v4 > one || v4 < minus_one || v5 > one || v5 < minus_one ) {
     //if(  v3 > one || v4 > one || v5 > one || v3 < minus_one || v4 < minus_one || v5 < minus_one ) {
 
-        // zagger = false;
+        zagger = false;
 
         // If a particle leaves the cell, perform the zig of the 
         // zigzag algorithm. This moves the particle directly to 
