@@ -12,7 +12,7 @@ void BinSort::sort( species_t* sp,
         Kokkos::ViewAllocateWithoutInitializing("k_partition_d"),
         num_bins + 1
       );
-      sp->k_partition_h = Kokkos::create_mirror_view(sp->k_partition_d);
+      //sp->k_partition_h = Kokkos::create_mirror_view(sp->k_partition_d);
     }
 
     // Create sortindex.
@@ -21,7 +21,7 @@ void BinSort::sort( species_t* sp,
         Kokkos::ViewAllocateWithoutInitializing("k_sortindex_d"),
         sp->np
       );
-      sp->k_sortindex_h = Kokkos::create_mirror_view(sp->k_sortindex_d);
+      //sp->k_sortindex_h = Kokkos::create_mirror_view(sp->k_sortindex_d);
     }
 
     // Create temporary storage.
@@ -102,8 +102,8 @@ void BinSort::sort( species_t* sp,
       sp->k_p_d   = new_p;
       sp->k_p_i_d = new_i;
 
-      sp->k_p_h   = Kokkos::create_mirror_view(sp->k_p_d);
-      sp->k_p_i_h = Kokkos::create_mirror_view(sp->k_p_i_d);
+      //sp->k_p_h   = Kokkos::create_mirror_view(sp->k_p_d);
+      //sp->k_p_i_h = Kokkos::create_mirror_view(sp->k_p_i_d);
 
       sp->last_sorted = step;
 

@@ -114,6 +114,7 @@ struct FisherYatesShuffle {
 
               for(int i=0 ; i < ni-1 ; ++i ) {
 
+                if(ni == 0) { return; }
                 int j = rg.urand(i, ni); // [i, ni)
                 swap(view, i0+i, i0+j);
 

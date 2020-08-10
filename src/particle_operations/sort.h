@@ -107,7 +107,7 @@ struct DefaultSort {
         bin_sort.create_permute_vector();
 
         sp->k_partition_d = bin_sort.get_bin_offsets();
-        sp->k_partition_h = Kokkos::create_mirror_view(sp->k_partition_d);
+        //sp->k_partition_h = Kokkos::create_mirror_view(sp->k_partition_d);
 
         // TODO: do we ever touch this data on the host?
         // Kokkos::deep_copy(sp->k_partition_h, sp->k_partition_d);
@@ -121,7 +121,7 @@ struct DefaultSort {
         } else {
 
           sp->k_sortindex_d = bin_sort.get_permute_vector();
-          sp->k_sortindex_h = Kokkos::create_mirror_view(sp->k_sortindex_d);
+          //sp->k_sortindex_h = Kokkos::create_mirror_view(sp->k_sortindex_d);
           sp->last_indexed  = step;
 
           // TODO: do we ever touch this data on the host? Seems expensive.
