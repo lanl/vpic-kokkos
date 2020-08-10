@@ -31,7 +31,13 @@ advance_p_kokkos(
         const int max_nm,
         const int nx,
         const int ny,
-        const int nz)
+#if MOVE_P_STUDY
+        const int nz,
+        Kokkos::View<long unsigned int> & move_p_count
+#else
+        const int nz
+#endif 
+        )
 {
 
   constexpr float one            = 1.;
@@ -274,6 +280,14 @@ sp_[id]->
 
            local_pm_i     = p_index;
         */
+      
+#if MOVE_P_STUDY
+      // Count the first time a particle leaves the cell for congruity with
+      // the zigzag algorithm in which each particle, if it leaves the cell,
+      // will only do it once per time-step.
+      move_p_count(0) = atomic_fetch_add( &move_p_count(0), ++move_p_count(0) );
+#endif
+
       DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
       local_pm->dispx = ux;
       local_pm->dispy = uy;
@@ -366,6 +380,12 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
+#if MOVE_P_STUDY
+  // Create a Kokkos scalar View to track which particles
+  // advance enough to leave the cell (once).
+  Kokkos::View<long unsigned int> move_p_count("move_p_count");
+#endif
+
   KOKKOS_TIC();
   advance_p_kokkos(
           sp->k_p_d,
@@ -389,9 +409,26 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->max_nm,
           sp->g->nx,
           sp->g->ny,
+#if MOVE_P_STUDY
+          sp->g->nz,
+          move_p_count
+#else
           sp->g->nz
+#endif
   );
   KOKKOS_TOC( advance_p, 1);
+
+#if MOVE_P_STUDY
+  // Now mirror the scalar View to the host space to
+  // print to stdout for later grepping.
+  Kokkos::View<long unsigned int>::HostMirror host_move_p_count = create_mirror_view(move_p_count);
+  // Printf this counter and GREP it later with bash by
+  // pushing (at least) stdout to a file, such as
+  //    ./DECK_NAME.Linux > output.DECK_NAME
+  //    grep "MOVE_P_COUNT" output.DECK_NAME
+  printf("\n\nMOVE_P_COUNT = %lu\n\n", host_move_p_count);
+#endif
+  
 
   KOKKOS_TIC();
   // I need to know the number of movers that got populated so I can call the

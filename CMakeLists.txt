@@ -58,6 +58,14 @@ option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
+# Set for the move_p study (W. Joe Meese)
+option(MOVE_P_STUDY "If a particle leaving the cell should be counted and printed." OFF)
+if (MOVE_P_STUDY)
+    add_definitions(-DMOVE_P_STUDY)
+    set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DMOVE_P_STUDY")
+endif()
+
+
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
 #
