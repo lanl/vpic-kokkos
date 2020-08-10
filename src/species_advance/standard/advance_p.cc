@@ -285,8 +285,8 @@ sp_[id]->
       // Count the first time a particle leaves the cell for congruity with
       // the zigzag algorithm in which each particle, if it leaves the cell,
       // will only do it once per time-step.
-      Kokkos::View<int> old_value("old count value", 1);
-      old_value() = Kokkos::atomic_fetch_add( &move_p_count(), 1 );
+     // Kokkos::View<int> old_value("old count value", 1);
+      int old_value = Kokkos::atomic_fetch_add( &move_p_count(), 1 );
 #endif
 
       DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
@@ -384,7 +384,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
 #if MOVE_P_STUDY
   // Create a Kokkos scalar View to track which particles
   // advance enough to leave the cell (once).
-  Kokkos::View<int> move_p_count("move_p_count", 1);
+  Kokkos::View<int> move_p_count("move_p_count");
 #endif
 
   KOKKOS_TIC();
@@ -422,12 +422,14 @@ advance_p( /**/  species_t            * RESTRICT sp,
 #if MOVE_P_STUDY
   // Now mirror the scalar View to the host space to
   // print to stdout for later grepping.
+  // deep_copy
   Kokkos::View<int>::HostMirror host_move_p_count = create_mirror_view(move_p_count);
+  Kokkos::deep_copy(host_move_p_count, move_p_count);
   // Printf this counter and GREP it later with bash by
   // pushing (at least) stdout to a file, such as
   //    ./DECK_NAME.Linux > output.DECK_NAME
   //    grep "MOVE_P_COUNT" output.DECK_NAME
-  printf("\n\nMOVE_P_COUNT = %d\n\n", host_move_p_count());
+  printf("\nMOVE_P_COUNT = %d\n", host_move_p_count());
 #endif
   
 
