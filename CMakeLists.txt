@@ -71,6 +71,12 @@ if(VPIC_DUMP_NEIGHBORS)
     set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DVPIC_DUMP_NEIGHBORS")
 endif()
 
+# Set for the move_p study (W. Joe Meese)
+option(MOVE_P_STUDY "If a particle leaving the cell should be counted and printed." OFF)
+if (MOVE_P_STUDY)
+    add_definitions(-DMOVE_P_STUDY)
+    set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DMOVE_P_STUDY")
+endif()
 
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
