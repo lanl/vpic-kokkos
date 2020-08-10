@@ -509,8 +509,6 @@ join_grid( grid_t * g,
   int num_neighbors = g->NUM_NEIGHBORS;
   int neighbor_index = 0;
 
-  printf("\nJOIN GRID HERE\n");
-
 # define GLUE_FACE(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                                       \
     neighbor_index = get_neighbor_index(i, j, k, planes_per_axis);                      \
     if( boundary==BOUNDARY(i,j,k) ) {                                                   \

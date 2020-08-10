@@ -336,6 +336,7 @@ move_p_kokkos(
 
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
+  // TODO: should this be an SOA?
   float s_dir[3];
   float v0, v1, v2, v3, v4, v5, q;
   int axis, neighbor_index;

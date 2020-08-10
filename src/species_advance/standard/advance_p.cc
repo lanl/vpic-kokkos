@@ -31,7 +31,13 @@ advance_p_kokkos(
         const int max_nm,
         const int nx,
         const int ny,
-        const int nz)
+#if MOVE_P_STUDY 
+        const int nz,
+        Kokkos::View<int> & move_p_count
+#else
+        const int nz
+#endif
+        )
 {
 
   constexpr float one                   = 1.;
@@ -233,6 +239,7 @@ sp_[id]->
     //
     // Check if the particle is going to leave the cell on either boundary. 
     // A single axis is sufficient to engage zigzags.
+    // TODO: Write out timings for Bob and include the timings.
     if ( v3 > one || v3 < minus_one || v4 > one || v4 < minus_one || v5 > one || v5 < minus_one ) {
     //if(  v3 > one || v4 > one || v5 > one || v3 < minus_one || v4 < minus_one || v5 < minus_one ) {
 
@@ -250,6 +257,15 @@ sp_[id]->
 
            local_pm_i     = p_index;
         */
+
+#if MOVE_P_STUDY
+      // Count the first time a particle leaves the cell for congruity with
+      // the zigzag algorithm in which each particle, if it leaves the cell,
+      // will only do it once per time-step.
+     // Kokkos::View<int> old_value("old count value", 1);
+      int old_value = Kokkos::atomic_fetch_add( &move_p_count(), 1 );
+#endif
+
       DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
       local_pm->dispx = ux;
       local_pm->dispy = uy;
@@ -323,9 +339,7 @@ sp_[id]->
     dz = v2;
     */
     v5 = q*s_dispx*s_dispy*s_dispz*one_third;               // Compute correction
-
-    int axis = 3;
-    
+ 
     float s_midx = dx + s_dispx;
     float s_midy = dy + s_dispy;
     float s_midz = dz + s_dispz;
@@ -453,6 +467,12 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
+#if MOVE_P_STUDY
+  // Create a Kokkos scalar View to track which particles
+  // advance enough to leave the cell (once).
+  Kokkos::View<int> move_p_count("move_p_count");
+#endif
+
   KOKKOS_TIC();
   advance_p_kokkos(
           sp->k_p_d,
@@ -476,10 +496,28 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->max_nm,
           sp->g->nx,
           sp->g->ny,
+#if MOVE_P_STUDY
+          sp->g->nz,
+          move_p_count
+#else
           sp->g->nz
-  );
+#endif
+  );  
   KOKKOS_TOC( advance_p, 1);
 
+#if MOVE_P_STUDY
+  // Now mirror the scalar View to the host space to
+  // print to stdout for later grepping.
+  // deep_copy
+  Kokkos::View<int>::HostMirror host_move_p_count = create_mirror_view(move_p_count);
+  Kokkos::deep_copy(host_move_p_count, move_p_count);
+  // Printf this counter and GREP it later with bash by
+  // pushing (at least) stdout to a file, such as
+  //    ./DECK_NAME.Linux > output.DECK_NAME
+  //    grep "MOVE_P_COUNT" output.DECK_NAME
+  printf("\nMOVE_P_COUNT = %d\n", host_move_p_count());
+#endif
+  
   KOKKOS_TIC();
   // I need to know the number of movers that got populated so I can call the
   // compress. Let's copy it back
