@@ -63,9 +63,10 @@ begin_initialization {
     const float vdrifty = 0.5;
     const float vdriftz = 0.;
     // Andfairly warm
-    const float vthx = 0.99;
-    const float vthy = 0.99;
-    const float vthz = 0.99;
+    const float V_TEMP = 0.99;
+    const float vthx = V_TEMP;
+    const float vthy = V_TEMP;
+    const float vthz = V_TEMP;
     // Pick random velocity from normal distribution to get thermal VDF
     const float ux = normal( rng(0), vdriftx, vthx );
     const float uy = normal( rng(0), vdrifty, vthy );
