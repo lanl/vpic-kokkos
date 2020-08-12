@@ -592,8 +592,7 @@ set_pbc( grid_t * g,
     }                                                                                       \
   } END_PRIMITIVE
 
-  // TODO: Joe, are there more faces to be glued
-  // with the increase in the local neighborhood?
+  //TODO: This needs to account for new PBCs.
   SET_PBC(-1, 0, 0,x,y,z);
   SET_PBC(0,-1, 0,y,z,x);
   SET_PBC(0, 0,-1,z,x,y);

@@ -165,6 +165,7 @@ partition_metal_box( grid_t * g,
 
   if( px==0 && gnx>1 ) {
     set_fbc(g,BOUNDARY(-1,0,0),anti_symmetric_fields);
+    //TODO: Set PBC needs fixing for 27 neighbors
     set_pbc(g,BOUNDARY(-1,0,0),reflect_particles);
   }
 

@@ -341,10 +341,11 @@
     s_dir[Axis_Label::x] = ( xr == s_dir[Axis_Label::x] ? s_dir[Axis_Label::x] : 0 );
     s_dir[Axis_Label::y] = ( yr == s_dir[Axis_Label::y] ? s_dir[Axis_Label::y] : 0 );
     s_dir[Axis_Label::z] = ( zr == s_dir[Axis_Label::z] ? s_dir[Axis_Label::z] : 0 );
-    
-    //printf("\nParticle %ld: s_dir = %d, %d, %d", pi, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
-    
 
+#if FINAL_POSITION_TEST 
+    printf("\nParticle %d: s_dir = %d, %d, %d", pi, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
+#endif
+    
     // Compute the neighbor cell index the particle moves to. 
     // Note that 0,0,0 => 13 will return the particle to the
     // same cell. 
