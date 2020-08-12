@@ -85,6 +85,15 @@ if (CURRENT_TEST)
     set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DCURRENT_TEST")
 endif()
 
+# Set for the final particle position to be tested (W. Joe Meese)
+option(FINAL_POSITION_TEST "Test for the final particle position." OFF)
+if (FINAL_POSITION_TEST)
+    add_definitions(-DFINAL_POSITION_TEST)
+    set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DFINAL_POSITION_TEST")
+endif()
+
+
+
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
 #

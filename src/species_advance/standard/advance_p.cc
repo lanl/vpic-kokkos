@@ -419,8 +419,11 @@ sp_[id]->
     p_dy = s_midy + s_dispy;
     p_dz = s_midz + s_dispz;
 
-    // printf("\nParticle %ld final-particle-position xf, yf, zf = %e, %e %e", p_index, p_dx, p_dy, p_dz);
-    // printf("\nParticle %ld final-particle-velocity vxf, vyf, vzf = %e, %e %e", p_index, p_ux, p_uy, p_uz);
+#if FINAL_POSITION_TEST
+    printf("\nParticle %ld final-cell-number %d", p_index, pii);
+    printf("\nParticle %ld final-particle-position xf, yf, zf = %e, %e %e", p_index, p_dx, p_dy, p_dz);
+    printf("\nParticle %ld final-particle-velocity vxf, vyf, vzf = %e, %e %e", p_index, p_ux, p_uy, p_uz);
+#endif
     // printf("\nEND OF PARTICLE MOTION\n\n");
 
 //}
