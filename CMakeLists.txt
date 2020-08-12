@@ -78,6 +78,13 @@ if (MOVE_P_STUDY)
     set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DMOVE_P_STUDY")
 endif()
 
+# Set for the current accumulation test (W. Joe Meese)
+option(CURRENT_TEST "Test to sum the current accumulation in the cell per particle." OFF)
+if (CURRENT_TEST)
+    add_definitions(-DCURRENT_TEST)
+    set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DCURRENT_TEST")
+endif()
+
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
 #

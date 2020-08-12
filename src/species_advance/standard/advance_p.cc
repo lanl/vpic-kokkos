@@ -378,6 +378,9 @@ sp_[id]->
     //     printf("\nParticle %d zagging current (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
     // else
     //     printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
+#if CURRENT_TEST
+    printf("\nParticle %ld currents-xyz %e %e %e %e %e", p_index, v0, v1, v2, v3, v0+v1+v2+v3);
+#endif 
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
@@ -388,6 +391,9 @@ sp_[id]->
     //     printf("\nParticle %d zagging current (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
     // else
     //     printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
+#if CURRENT_TEST
+    printf("\nParticle %ld currents-yzx %e %e %e %e %e", p_index, v0, v1, v2, v3, v0+v1+v2+v3);
+#endif 
     k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
@@ -398,6 +404,9 @@ sp_[id]->
     //     printf("\nParticle %d zagging current (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
     // else
     //     printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e", p_index, v0, v1, v2, v3);
+#if CURRENT_TEST
+    printf("\nParticle %ld currents-zxy %e %e %e %e %e", p_index, v0, v1, v2, v3, v0+v1+v2+v3);
+#endif 
     k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;

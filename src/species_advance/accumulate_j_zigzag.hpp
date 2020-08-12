@@ -260,6 +260,9 @@
     // Now accumulate the currents
     accumulate_j(x,y,z);
     // printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+#if CURRENT_TEST
+    printf("\nParticle %d currents-xyz %e %e %e %e %e", pi, v0, v1, v2, v3, v0+v1+v2+v3);
+#endif
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
@@ -267,6 +270,9 @@
 
     accumulate_j(y,z,x);
     // printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+#if CURRENT_TEST
+    printf("\nParticle %d currents-yzx %e %e %e %e %e", pi, v0, v1, v2, v3, v0+v1+v2+v3);
+#endif
     k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
@@ -274,6 +280,9 @@
 
     accumulate_j(z,x,y);
     // printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
+#if CURRENT_TEST
+    printf("\nParticle %d currents-zxy %e %e %e %e %e", pi, v0, v1, v2, v3, v0+v1+v2+v3);
+#endif
     k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
