@@ -419,7 +419,7 @@
         neighbor = neighbor_face_##AX_1; /* Move to the open neighbor. */                                \
     }                                                                                                    \
     /* TODO: There are no other cases, right? */                                                         \
-    else if ( neighbor_face_##AX_1 != reflect_particles && neighbor_face_##AX_2 != reflect_particles )   \
+    else if ( neighbor_face_##AX_1 == reflect_particles && neighbor_face_##AX_2 == reflect_particles )   \
     {                                                                                                    \
         /* Hit a global edge. Need to reflect both using a 2d reflection matrix. */                      \
         SET_2D_REFLECTION(AX_1, AX_2);                                                                   \
@@ -443,7 +443,8 @@
         int which_case =  s_dir[Axis_Label::x] * s_dir[Axis_Label::x]
                         + s_dir[Axis_Label::y] * s_dir[Axis_Label::y]
                         + s_dir[Axis_Label::z] * s_dir[Axis_Label::z];
-        
+        printf("\nParticle %d in cell %d: which_case = %d", pi, ii, which_case); 
+
         // Do the easy Face case.
         if (which_case == 1)
         {
@@ -466,13 +467,18 @@
         // Now do the harder edge and corner cases
         else
         {
-            int neighbor_face_x = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, 0) );
-            int neighbor_face_y = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], 0) );
-            int neighbor_face_z = d_neighbor( num_neighbors * ii + get_neighbor_index(0, 0, s_dir[Axis_Label::z]) );
+            int neighbor_face_x = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, 0, planes_per_axis) );
+            int neighbor_face_y = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], 0, planes_per_axis) );
+            int neighbor_face_z = d_neighbor( num_neighbors * ii + get_neighbor_index(0, 0, s_dir[Axis_Label::z], planes_per_axis) );
+            printf("\nParticle %d in cell %d (%d) original neighbor(%d, %d, %d) = %d", pi, ii, pii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z], neighbor);
+            printf("\nParticle %d in cell %d (%d) neighbor_face_x(%d, %d, %d) = %d", pi, ii, pii, 0, (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z], neighbor_face_x);
+            printf("\nParticle %d in cell %d (%d) neighbor_face_y(%d, %d, %d) = %d", pi, ii, pii, (int)s_dir[Axis_Label::x], 0, (int)s_dir[Axis_Label::z], neighbor_face_y);
+            printf("\nParticle %d in cell %d (%d) neighbor_face_z(%d, %d, %d) = %d", pi, ii, pii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], 0,  neighbor_face_z);
 
             // Consider all the edge cases
             if ( which_case == 2 )
             {
+                printf("\nParticle %d in cell %d: before s_dir = %d, %d, %d", pi, ii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
                 // Check how many axes the edge is reflective along
                 // (it can be reflective on a maximum of two meaning
                 // the edge is a global edge of the simulation).
@@ -488,9 +494,11 @@
                 }
                 else
                 {
+                    printf("\nHere?plz");
                     // Intercepts an xy edge.
                     CHECK_EDGE_REFLECTION(x, y);
                 }
+                printf("\nParticle %d in cell %d: afterwords s_dir = %d, %d, %d", pi, ii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
             }
             // Consider the corner cases
             else
@@ -501,40 +509,40 @@
                     // Only the x axis is reflective.
                     SET_1D_REFLECTION(x);
                     // Set the neighbor to be that connected by the open edge.
-                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], s_dir[Axis_Label::z]) );
+                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], s_dir[Axis_Label::z], planes_per_axis) );
                 }
                 else if ( neighbor_face_x != reflect_particles && neighbor_face_y == reflect_particles && neighbor_face_z != reflect_particles )
                 {
                     // Only the y axis is reflective.
                     SET_1D_REFLECTION(y);
                     // Set the neighbor to be that connected by the open edge.
-                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, s_dir[Axis_Label::z]) );
+                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, s_dir[Axis_Label::z], planes_per_axis) );
                 }
                 else if ( neighbor_face_x != reflect_particles && neighbor_face_y != reflect_particles && neighbor_face_z == reflect_particles )
                 {
                     // Only the z axis is reflective.
                     SET_1D_REFLECTION(z);
                     // Set the neighbor to be that connected by the open edge.
-                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], s_dir[Axis_Label::y], 0) );
+                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], s_dir[Axis_Label::y], 0, planes_per_axis) );
                 }
                 // Now check the corner if is on a global edge (two reflective faces) 
                 else if ( neighbor_face_x == reflect_particles && neighbor_face_y == reflect_particles && neighbor_face_z != reflect_particles )
                 {
                     // Both the xy axes are reflective
                     SET_2D_REFLECTION(x, y);
-                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(0, 0, s_dir[Axis_Label::z]) );
+                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(0, 0, s_dir[Axis_Label::z], planes_per_axis) );
                 }
                 else if ( neighbor_face_x == reflect_particles && neighbor_face_y != reflect_particles && neighbor_face_z == reflect_particles )
                 {
                     // Both the zx axes are reflective
                     SET_2D_REFLECTION(z, x);
-                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], 0) );
+                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], 0, planes_per_axis) );
                 }
                 else if ( neighbor_face_x != reflect_particles && neighbor_face_y == reflect_particles && neighbor_face_z == reflect_particles )
                 {
                     // Both the yz axes are reflective
                     SET_2D_REFLECTION(y, z);
-                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, 0) );
+                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, 0, planes_per_axis) );
                 }
                 // Finally the corner must be on a global corner (three reflective faces)
                 else
@@ -556,8 +564,13 @@
 
                     neighbor = ii;
                 }
-
             }
+            
+            printf("\n\nAFTER CHECKS");
+            printf("\nParticle %d in cell %d (%d) new neighbor(%d, %d, %d) = %d", pi, ii, pii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z], neighbor);
+            printf("\nParticle %d in cell %d (%d) neighbor_face_x(%d, %d, %d) = %d", pi, ii, pii, 0, (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z], neighbor_face_x);
+            printf("\nParticle %d in cell %d (%d) neighbor_face_y(%d, %d, %d) = %d", pi, ii, pii, (int)s_dir[Axis_Label::x], 0, (int)s_dir[Axis_Label::z], neighbor_face_y);
+            printf("\nParticle %d in cell %d (%d) neighbor_face_z(%d, %d, %d) = %d", pi, ii, pii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], 0,  neighbor_face_z);
         }
 
         // printf("\nAfter reflection...");

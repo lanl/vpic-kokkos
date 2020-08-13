@@ -340,7 +340,7 @@ move_p_kokkos(
   float s_dir[3];
   float v0, v1, v2, v3, v4, v5, q;
   int axis, neighbor_index;
-  int64_t neighbor;
+  int neighbor;
   //int pi = int(local_pm_i);
   int pi = pm->i;
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
