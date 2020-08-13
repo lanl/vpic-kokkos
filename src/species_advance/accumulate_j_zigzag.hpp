@@ -470,10 +470,12 @@
             int neighbor_face_x = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, 0, planes_per_axis) );
             int neighbor_face_y = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], 0, planes_per_axis) );
             int neighbor_face_z = d_neighbor( num_neighbors * ii + get_neighbor_index(0, 0, s_dir[Axis_Label::z], planes_per_axis) );
+            /*
             printf("\nParticle %d in cell %d (%d) original neighbor(%d, %d, %d) = %d", pi, ii, pii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z], neighbor);
             printf("\nParticle %d in cell %d (%d) neighbor_face_x(%d, %d, %d) = %d", pi, ii, pii, 0, (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z], neighbor_face_x);
             printf("\nParticle %d in cell %d (%d) neighbor_face_y(%d, %d, %d) = %d", pi, ii, pii, (int)s_dir[Axis_Label::x], 0, (int)s_dir[Axis_Label::z], neighbor_face_y);
             printf("\nParticle %d in cell %d (%d) neighbor_face_z(%d, %d, %d) = %d", pi, ii, pii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], 0,  neighbor_face_z);
+            */
 
             // Consider all the edge cases
             if ( which_case == 2 )
@@ -494,11 +496,11 @@
                 }
                 else
                 {
-                    printf("\nHere?plz");
+                    //printf("\nHere?plz");
                     // Intercepts an xy edge.
                     CHECK_EDGE_REFLECTION(x, y);
                 }
-                printf("\nParticle %d in cell %d: afterwords s_dir = %d, %d, %d", pi, ii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
+                //printf("\nParticle %d in cell %d: afterwords s_dir = %d, %d, %d", pi, ii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
             }
             // Consider the corner cases
             else
@@ -565,12 +567,13 @@
                     neighbor = ii;
                 }
             }
-            
+            /* 
             printf("\n\nAFTER CHECKS");
             printf("\nParticle %d in cell %d (%d) new neighbor(%d, %d, %d) = %d", pi, ii, pii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z], neighbor);
             printf("\nParticle %d in cell %d (%d) neighbor_face_x(%d, %d, %d) = %d", pi, ii, pii, 0, (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z], neighbor_face_x);
             printf("\nParticle %d in cell %d (%d) neighbor_face_y(%d, %d, %d) = %d", pi, ii, pii, (int)s_dir[Axis_Label::x], 0, (int)s_dir[Axis_Label::z], neighbor_face_y);
             printf("\nParticle %d in cell %d (%d) neighbor_face_z(%d, %d, %d) = %d", pi, ii, pii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], 0,  neighbor_face_z);
+            */
         }
 
         // printf("\nAfter reflection...");
