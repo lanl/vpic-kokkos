@@ -64,6 +64,10 @@
     s_dispy = pm->dispy;
     s_dispz = pm->dispz;
 
+    float displacementx = pm->dispx;
+    float displacementy = pm->dispy;
+    float displacementz = pm->dispz;
+
     zig_finalx = s_midx + s_dispx;
     zig_finaly = s_midy + s_dispy;
     zig_finalz = s_midz + s_dispz;
@@ -124,7 +128,7 @@
     // printf("\n\nMOVE P ENTERED...");
     // printf("\nParticle %d: pre axis %d x %e y %e z %e", pi, axis, p_dx, p_dy, p_dz);
 
-    // printf("\nParticle %d: s_disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
+    printf("\nParticle %d: s_disp x %e y %e z %e", pi, s_dispx, s_dispy, s_dispz);
 
     // Compute the direction that the particle moves.
     // This value is the also the boundary of the cell 
@@ -313,7 +317,7 @@
     p_dz = zig_finalz;
 
     // If an end streak, return success (should be ~50% of the time)
-   // printf("\nStreak ended...\naxis %d x %e y %e z %e s_disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
+    printf("\nStreak ended...\naxis %d x %e y %e z %e s_disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
    
   //  printf("\nParticle %d Velocity after accumulation:", pi);
   //  printf("\nux, uy, uz = %e, %e, %e", p_ux, p_uy, p_uz);
@@ -341,11 +345,7 @@
     s_dir[Axis_Label::x] = ( xr == s_dir[Axis_Label::x] ? s_dir[Axis_Label::x] : 0 );
     s_dir[Axis_Label::y] = ( yr == s_dir[Axis_Label::y] ? s_dir[Axis_Label::y] : 0 );
     s_dir[Axis_Label::z] = ( zr == s_dir[Axis_Label::z] ? s_dir[Axis_Label::z] : 0 );
-
-#if FINAL_POSITION_TEST 
-    printf("\nParticle %d: s_dir = %d, %d, %d", pi, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
-#endif
-    
+ 
     // Compute the neighbor cell index the particle moves to. 
     // Note that 0,0,0 => 13 will return the particle to the
     // same cell. 
@@ -370,6 +370,9 @@
     // Throw neighbor through this function to get the cell
     // index the particle moves into.
     neighbor = d_neighbor( num_neighbors * pii + neighbor_index );
+#if FINAL_POSITION_TEST 
+    printf("\nParticle %d in cell %d: s_dir = %d, %d, %d => neighbor(%d) = %d", pi, pii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z], neighbor_index, neighbor);
+#endif
     //printf("\nParticle %ld: neighbor value, reflect_particles = %d, %d", pi, (int)neighbor, (int)reflect_particles);
     
     /*
@@ -386,64 +389,330 @@
     // for performance portability, maybe specialize UNLIKELY
     // for CUDA mode and put it back
 
-    
-    if( neighbor==reflect_particles ) {
-        // Hit a reflecting boundary condition.  Reflect the particle
-        // momentum and remaining displacement and keep moving the
-        // particle.
+#define axis_colon(ax) Axis_Label:: ax        
+#define SET_REFLECTION(AX)                                                                  \
+    k_particles(pi, particle_var::u##AX ) = -k_particles(pi, particle_var::u##AX );     \
+    pm->disp##AX *= -1.;                                                                \
+    s_dir[axis_colon(AX)] = 0;
+
+#define COMPARE_TWO_REFLECTIONS(AX_1, AX_2)                                                 \
+    printf("\nCOMPARE = %e, %e, %e, %e", displacement##AX_1, displacement##AX_2, abs(displacement##AX_1), abs(displacement##AX_2));\
+    if ( abs(displacement##AX_1) < abs(displacement##AX_2) ){ SET_REFLECTION(AX_1); }                 \
+    else                        { SET_REFLECTION(AX_2); }
         
-        // printf("\nI, particle %d, was reflected!\nBefore reflection...", pi);
-        // printf("\npii, rangel = %d, %d", pii, rangel);
-        // printf("\nneighbor, rangel = %d, %d", neighbor - rangel, rangel);
-        // printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
-        //                                     k_particles(pi, particle_var::uy),
-        //                                     k_particles(pi, particle_var::uz));
-        
-        if ( s_dir[Axis_Label::x] != 0 )
+    if ( neighbor == reflect_particles)
+    {
+        while ( neighbor == reflect_particles )
         {
-            k_particles(pi, particle_var::ux ) = -k_particles(pi, particle_var::ux );
-            pm->dispx *= -1.;
-            s_dir[Axis_Label::x] = 0;
+        	// Hit a reflecting boundary condition.  Reflect the particle
+	        // momentum and remaining displacement and keep moving the
+	        // particle.
+
+        	printf("\nI, particle %d, was reflected!\nBefore reflection...", pi);
+	        printf("\npii, rangel = %d, %d", pii, rangel);
+	        printf("\nneighbor, rangel = %d, %d", neighbor - rangel, rangel);
+	        printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
+                                             	k_particles(pi, particle_var::uy),
+                                             	k_particles(pi, particle_var::uz));
+            printf("\n\nTop of the loop");
+            printf("\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
+            printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
+                    pi, s_midx, s_midy, s_midz);
+            printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
+                    pi, s_dispx, s_dispy, s_dispz);
+            printf("\nParticle %d: displacementx, displacementy, displacementz = %e, %e, %e",
+                    pi, displacementx, displacementy, displacementz);
+            // First check if the motion is simple and along only a single axis
+            if      ( s_dir[Axis_Label::x] != 0 && s_dir[Axis_Label::y] == 0 && s_dir[Axis_Label::z] == 0 )
+            {
+                SET_REFLECTION(x);    
+            }
+            else if ( s_dir[Axis_Label::x] == 0 && s_dir[Axis_Label::y] != 0 && s_dir[Axis_Label::z] == 0 )
+            {
+                SET_REFLECTION(y);    
+            }
+            else if ( s_dir[Axis_Label::x] == 0 && s_dir[Axis_Label::y] == 0 && s_dir[Axis_Label::z] != 0 )
+            {
+                SET_REFLECTION(z);    
+            }
+            // Now we need to account for more complicated motion.
+            else
+            {
+                printf("\nI, particle %d, was reflected HERE", pi);
+                // Now check if the motion is along an edge (so it crosses along two axes)
+                if      ( s_dir[Axis_Label::x] != 0 && s_dir[Axis_Label::y] != 0 && s_dir[Axis_Label::z] == 0 )
+                {
+                    COMPARE_TWO_REFLECTIONS(x, y);
+                }
+                else if ( s_dir[Axis_Label::x] != 0 && s_dir[Axis_Label::y] == 0 && s_dir[Axis_Label::z] != 0 )
+                {
+                    COMPARE_TWO_REFLECTIONS(x, z);
+                }
+                else if ( s_dir[Axis_Label::x] == 0 && s_dir[Axis_Label::y] != 0 && s_dir[Axis_Label::z] != 0 )
+                {
+                    COMPARE_TWO_REFLECTIONS(y, z);
+                }
+                // Finally check if the motion is along a corner (so it crosses along three axes)
+                // Reflect the slowest axis?
+                else
+                {
+                    if      ( abs(pm->dispx) < abs(pm->dispy) && abs(pm->dispx) < abs(pm->dispz) )
+                    {
+                        SET_REFLECTION(x);
+                    }
+                    else if ( abs(pm->dispy) < abs(pm->dispz) && abs(pm->dispy) < abs(pm->dispx) )
+                    {
+                        SET_REFLECTION(y);
+                    }
+                    else if ( abs(pm->dispz) < abs(pm->dispx) && abs(pm->dispz) < abs(pm->dispy) )
+                    {
+                        SET_REFLECTION(z);
+                    }
+                }
+
+            }
+
+			// Make sure there is no extra zig due to some weird particle motion
+        	s_midx = p_dx;
+        	s_midy = p_dy;
+        	s_midz = p_dz;
+
+            printf("\n\nStart the new zig");
+            printf("\npm->dispx, pm->dispy, pm->dispz = %e, %e, %e", pm->dispx, pm->dispy, pm->dispz);
+
+        	s_dispx = pm->dispx;
+			s_dispy = pm->dispy;
+			s_dispz = pm->dispz;
+            
+            displacementx = pm->dispx;
+            displacementy = pm->dispy;
+            displacementz = pm->dispz;
+ 
+    	    xr = zig_finalx;
+    	    yr = zig_finaly;
+    	    zr = zig_finalz;
+    	    
+
+#if VPIC_DUMP_NEIGHBORS
+    	    print_neighbor.write_final_cell( s_midx + 2. * s_dispx, s_midy + 2. * s_dispy, s_midz + 2. * s_dispz );
+#endif
+
+    	    s_dir[Axis_Label::x] = (s_dispx>0) ? 1 : -1;
+    	    s_dir[Axis_Label::y] = (s_dispy>0) ? 1 : -1;
+    	    s_dir[Axis_Label::z] = (s_dispz>0) ? 1 : -1;
+
+    	    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[Axis_Label::x]-s_midx)/s_dispx;
+    	    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[Axis_Label::y]-s_midy)/s_dispy;
+    	    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[Axis_Label::z]-s_midz)/s_dispz;
+
+    	    /**/      v3=two,  axis=3;
+    	    if(v0 < two) 
+    	    {
+    	        v3 = v0;
+    	        axis = Axis_Label::x;
+    	        // Set the zizag point along the x-axis
+    	        xr = s_dir[Axis_Label::x];
+    	        s_dispx = ( xr - s_midx );
+    	        zig_finalx = xr;
+    	    }
+    	    if(v1 < two)
+    	    {
+    	        v3 = v1;
+    	        axis = Axis_Label::y;
+    	        // Set the zizag point along the y-axis
+    	        yr = s_dir[Axis_Label::y];
+    	        s_dispy = ( yr - s_midy );
+    	        zig_finaly = yr;
+    	    }
+    	    if(v2 < two)
+    	    {
+    	        v3 = v2;
+    	        axis = Axis_Label::z;
+    	        // Set the zizag point along the z-axis 
+    	        zr = s_dir[Axis_Label::z];
+    	        s_dispz = ( zr - s_midz );
+    	        zig_finalz = zr;
+    	    }
+             printf("\n\ns_disp may have changed!");
+             printf("\nParticle %d: axis, v0, v1, v2, v3 = %d, %e, %e, %e, %e",
+                     pi, axis, v0, v1, v2, 2.*v3);
+             printf("\nParticle %d: s_midx, s_midy, s_midz = %e, %e, %e",
+                     pi, s_midx, s_midy, s_midz);
+             printf("\nParticle %d: s_dispx, s_dispy, s_dispz = %e, %e, %e",
+                     pi, s_dispx, s_dispy, s_dispz);
+            
+
+    	    // If axis == 3 then enter the zag
+    	    if (axis == 3) break;
+
+    	    s_dispx *= 0.5;
+		    s_dispy *= 0.5;
+		    s_dispz *= 0.5;
+		    
+		    s_midx = 0.5 * ( s_midx + xr );
+		    s_midy = 0.5 * ( s_midy + yr );
+		    s_midz = 0.5 * ( s_midz + zr );
+		    
+		    
+		    // Accumulate the streak.  Note: accumulator values are 4 times
+		    // the total physical charge that passed through the appropriate
+		    // current quadrant in a time-step. 
+		    // v5 is used in accumulate_j! DO NOT DELETE!
+		    v5 = q*s_dispx*s_dispy*s_dispz*(1.f/3.f);
+		 
+		    // Now accumulate the currents
+		    accumulate_j(x,y,z);
+		    // printf("\nParticle %d depositing (x,y,z) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+#if CURRENT_TEST
+		    printf("\nParticle %d currents-xyz %e %e %e %e %e", pi, v0, v1, v2, v3, v0+v1+v2+v3);
+#endif
+		    k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+		    k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+		    k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+		    k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+
+		    accumulate_j(y,z,x);
+		    // printf("\nParticle %d depositing (y,z,x) v0, v1, v2, v3 = %e, %e, %e, %e", pi, v0, v1, v2, v3);
+#if CURRENT_TEST
+		    printf("\nParticle %d currents-yzx %e %e %e %e %e", pi, v0, v1, v2, v3, v0+v1+v2+v3);
+#endif
+		    k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+		    k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+		    k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+		    k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+
+		    accumulate_j(z,x,y);
+		    // printf("\nParticle %d depositing (z,x,y) v0, v1, v2, v3 = %e, %e, %e, %e\n\n", pi, v0, v1, v2, v3);
+#if CURRENT_TEST
+		    printf("\nParticle %d currents-zxy %e %e %e %e %e", pi, v0, v1, v2, v3, v0+v1+v2+v3);
+#endif
+		    k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+		    k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+		    k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+		    k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+		    
+		    // Subtract off what has been travelled from the full displacement.
+		    // This approach is equivalent to:
+		    //   
+		    //   starting_x = 2 * s_midx - xr;
+		    //   s_dispx = 2 * pm->dispx - ( zig_finalx - starting_x );
+		    //   s_dispx *= 0.5;
+		    //   pm->dispx = s_dispx;
+		    //
+		    // along each direction.
+		    pm->dispx -= 0.5 * ( zig_finalx - (2 * s_midx - xr) );
+		    pm->dispy -= 0.5 * ( zig_finaly - (2 * s_midy - yr) );
+		    pm->dispz -= 0.5 * ( zig_finalz - (2 * s_midz - zr) );
+		
+		    // Set the new particle position post-accumulation.
+		    p_dx = zig_finalx;
+		    p_dy = zig_finaly; 
+		    p_dz = zig_finalz;
+
+		    // Change the value of s_dir to be -1, 0, 1. The zero case 
+		    // corresponds to when the particle does not leave the cell in a
+		    // particular direction and is moved to the midpoint in that
+		    // direction.
+		    s_dir[Axis_Label::x] = ( xr == s_dir[Axis_Label::x] ? s_dir[Axis_Label::x] : 0 );
+		    s_dir[Axis_Label::y] = ( yr == s_dir[Axis_Label::y] ? s_dir[Axis_Label::y] : 0 );
+		    s_dir[Axis_Label::z] = ( zr == s_dir[Axis_Label::z] ? s_dir[Axis_Label::z] : 0 );
+		 
+		    // Compute the neighbor cell index the particle moves to. 
+		    // Note that 0,0,0 => 13 will return the particle to the
+		    // same cell. 
+		    // TODO: neighbor_index should replace the face variable
+		    neighbor_index = get_neighbor_index(s_dir[Axis_Label::x], s_dir[Axis_Label::y], s_dir[Axis_Label::z], planes_per_axis);
+		    //printf("\nParticle %ld: neighbor_index = %d", pi, neighbor_index);
+
+#if VPIC_DUMP_NEIGHBORS
+		    print_neighbor(neighbor_index);
+		    print_neighbor.write_planes(s_dir[Axis_Label::x], s_dir[Axis_Label::y], s_dir[Axis_Label::z]);
+#endif
+
+		    // Throw neighbor through this function to get the cell
+		    // index the particle moves into.
+		    neighbor = d_neighbor( num_neighbors * pii + neighbor_index );
+#if FINAL_POSITION_TEST 
+		    printf("\nParticle %d in cell %d: s_dir = %d, %d, %d => neighbor(%d) = %d", pi, pii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z], neighbor_index, neighbor);
+#endif
+
         }
+	
+		neighbor_index = get_neighbor_index(s_dir[Axis_Label::x], s_dir[Axis_Label::y], s_dir[Axis_Label::z], planes_per_axis);
+	    pii = neighbor - rangel;
+	    printf("\nParticle %d in cell %d: s_dir = %d, %d, %d => neighbor(%d) = %d", pi, pii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z], neighbor_index, neighbor);
+	    
+	    
+	        
+	    /*
+	    if ( s_dir[Axis_Label::x] != 0 )
+	    {
+	        k_particles(pi, particle_var::ux ) = -k_particles(pi, particle_var::ux );
+	        pm->dispx *= -1.;
+	        s_dir[Axis_Label::x] = 0;
+	    }
 
-        if ( s_dir[Axis_Label::y] != 0 )
-        {
-            k_particles(pi, particle_var::uy ) = -k_particles(pi, particle_var::uy );
-            pm->dispy *= -1.;
-            s_dir[Axis_Label::y] = 0;
-        }
+	    if ( s_dir[Axis_Label::y] != 0 )
+	    {
+	        k_particles(pi, particle_var::uy ) = -k_particles(pi, particle_var::uy );
+	        pm->dispy *= -1.;
+	        s_dir[Axis_Label::y] = 0;
+	    }
 
-        if ( s_dir[Axis_Label::z] != 0 )
-        {
-            k_particles(pi, particle_var::uz ) = -k_particles(pi, particle_var::uz );
-            pm->dispz *= -1.;
-            s_dir[Axis_Label::z] = 0;
-        }
-        
-        
-        // printf("\nAfter reflection...");
-        // printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
-        //                                     k_particles(pi, particle_var::uy),
-        //                                     k_particles(pi, particle_var::uz));
-         
-        k_particles( pi, particle_var::dx ) -= 2. * s_dir[Axis_Label::x];
-        k_particles( pi, particle_var::dy ) -= 2. * s_dir[Axis_Label::y];
-        k_particles( pi, particle_var::dz ) -= 2. * s_dir[Axis_Label::z];
+	    if ( s_dir[Axis_Label::z] != 0 )
+	    {
+	        k_particles(pi, particle_var::uz ) = -k_particles(pi, particle_var::uz );
+	        pm->dispz *= -1.;
+	        s_dir[Axis_Label::z] = 0;
+	    }
+	    */
+	    
+	    
+	    printf("\nAfter reflection...");
+	    printf("\npii, rangel = %d, %d", pii, rangel);
+	    printf("\nneighbor, rangel = %d, %d", neighbor - rangel, rangel);
+	    printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
+	                                        k_particles(pi, particle_var::uy),
+	                                        k_particles(pi, particle_var::uz));
+	     
+	    k_particles( pi, particle_var::dx ) -= 2. * s_dir[Axis_Label::x];
+	    k_particles( pi, particle_var::dy ) -= 2. * s_dir[Axis_Label::y];
+	    k_particles( pi, particle_var::dz ) -= 2. * s_dir[Axis_Label::z];
 
-        /* Old stuffs ... 
-        k_particles(pi, particle_var::ux + axis ) = -k_particles(pi, particle_var::ux + axis );
+	    /* Old stuffs ... 
+	    k_particles(pi, particle_var::ux + axis ) = -k_particles(pi, particle_var::ux + axis );
 
-        // TODO: make this safer
-        //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
-        //k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
-        // TODO: replace this, it's horrible
-        (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
-        */
+	    // TODO: make this safer
+	    //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
+	    //k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
+	    // TODO: replace this, it's horrible
+	    (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
+	    */
 
-        //printf("\n##########################################\n");
-        //continue;
-        return 0;
-    }
+	    //printf("\n##########################################\n");
+	    //continue;
+#undef SET_REFLECTION
+#undef COMPARE_TWO_REFLECTIONS
+
+    	if ( neighbor<rangel || neighbor>rangeh ) {
+		    // Cannot handle the boundary condition here.  Save the updated
+		    // particle position, face it hit and update the remaining
+		    // displacement in the particle mover as a bitshift.
+		    //
+		    // 26 == 11010 in binary and so multiplying by 32 should be
+		    // sufficient for now. 
+		    //
+		    // TODO: Change this to something better to not reduce the 
+		    // cell number by too much. 
+		    //pii = 8*pii + face;
+		    // TODO: Fix boundary_p
+		    pii = upper_bound_of_neighbors * pii + neighbor_index;
+		    return 1; // Return "mover still in use"
+		}
+    	
+    	return 0;
+
+	}
 
     if ( neighbor<rangel || neighbor>rangeh ) {
         // Cannot handle the boundary condition here.  Save the updated

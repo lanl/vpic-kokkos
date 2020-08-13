@@ -564,6 +564,20 @@ set_fbc( grid_t * g,
   g->bc[boundary] = fbc;
 }
 
+// Return the neighbor from ind_1 and ind_2 at the given face.
+// It assumes that i+j+k ==1 or -1. It will break otherwise.
+static int neighbor_from_face(int i, int j, int k, int planes_per_axis, int ind_1, int ind_2)
+{
+  if ( i != 0 ){ return get_neighbor_index(i, ind_1, ind_2, planes_per_axis); }
+  else if ( j != 0 ){ return get_neighbor_index(ind_2, j, ind_1, planes_per_axis); }
+  else if ( k != 0 ){ return get_neighbor_index(ind_1, ind_2, k, planes_per_axis); }
+  else
+  {
+      printf("\n\nYou broke something. You tried to grab a face that doesn't exist.\n\n");
+      return -INT_MAX;
+  }
+}
+
 void
 set_pbc( grid_t * g,
          int boundary,
@@ -581,15 +595,27 @@ set_pbc( grid_t * g,
   int num_neighbors = g->NUM_NEIGHBORS;
   int neighbor_index = 0;
 
-# define SET_PBC(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                                             \
-    neighbor_index = get_neighbor_index(i, j, k, planes_per_axis);                          \
-    if( boundary==BOUNDARY(i,j,k) ) {                                                       \
-      l##X = (i+j+k)<0 ? 1 : ln##X;                                                         \
-      for( l##Z=1; l##Z<=ln##Z; l##Z++ )                                                    \
-        for( l##Y=1; l##Y<=ln##Y; l##Y++ )                                                  \
-          g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ] = pbc;    \
-      return;                                                                               \
-    }                                                                                       \
+// Modified to cover all neighbors on each face. 
+// TODO: This will definitely lead to duplicates
+// but I don't know how to deal with them right 
+// now.
+# define SET_PBC(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                                                 \
+    neighbor_index = get_neighbor_index(i, j, k, planes_per_axis);                              \
+    if( boundary==BOUNDARY(i,j,k) ) {                                                           \
+      l##X = (i+j+k)<0 ? 1 : ln##X;                                                             \
+      for( l##Z=1; l##Z<=ln##Z; l##Z++ )                                                        \
+        for( l##Y=1; l##Y<=ln##Y; l##Y++ ){                                                     \
+          printf("\n\nCell(%d, %d, %d) = %d", lx, ly, lz, LOCAL_CELL_ID(lx, ly, lz));          \
+          for ( int index_1 = -1; index_1 < planes_per_axis-1; ++index_1 ){                       \
+            for ( int index_2 = -1; index_2 < planes_per_axis-1; ++index_2 ){                     \
+              neighbor_index = neighbor_from_face(i, j, k, planes_per_axis, index_1, index_2);  \
+              printf("\ni j k = %d, %d, %d: (index_1, index_2 = %d, %d) => neighbor %d", i,j,k, index_1, index_2, neighbor_index); \
+              g->neighbor[ num_neighbors * LOCAL_CELL_ID(lx,ly,lz) + neighbor_index ] = pbc;    \
+            }                                                                                   \
+          }                                                                                     \
+        }                                                                                     \
+      return;                                                                                   \
+    }                                                                                           \
   } END_PRIMITIVE
 
   //TODO: This needs to account for new PBCs.
@@ -603,4 +629,6 @@ set_pbc( grid_t * g,
 
 # undef SET_PBC
 }
+
+
 
