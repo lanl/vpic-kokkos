@@ -404,6 +404,27 @@
     s_dir[AXIS_LABELER(AX_1)] = 0;                                                        \
     s_dir[AXIS_LABELER(AX_2)] = 0;                                                        
 
+#define CHECK_EDGE_REFLECTION(AX_1, AX_2)                                                                \
+    /* Intercepts an AX_1 - AX_2 edge. */                                                                \
+    if      ( neighbor_face_##AX_1 == reflect_particles && neighbor_face_##AX_2 != reflect_particles )   \
+    {                                                                                                    \
+        /* Only reflect along AX_1 as the AX_2 axis is open. */                                          \
+        SET_1D_REFLECTION(AX_1);                                                                         \
+        neighbor = neighbor_face_##AX_2; /* Move to the open neighbor. */                                \
+    }                                                                                                    \
+    else if ( neighbor_face_##AX_1 != reflect_particles && neighbor_face_##AX_2 == reflect_particles )   \
+    {                                                                                                    \
+        /* Only reflect along AX_2 as the AX_1 axis is open. */                                          \
+        SET_1D_REFLECTION(AX_2);                                                                         \
+        neighbor = neighbor_face_##AX_1; /* Move to the open neighbor. */                                \
+    }                                                                                                    \
+    /* TODO: There are no other cases, right? */                                                         \
+    else if ( neighbor_face_##AX_1 != reflect_particles && neighbor_face_##AX_2 != reflect_particles )   \
+    {                                                                                                    \
+        /* Hit a global edge. Need to reflect both using a 2d reflection matrix. */                      \
+        SET_2D_REFLECTION(AX_1, AX_2);                                                                   \
+        neighbor = ii;                   /* Stays in the same cell afterwards. */                        \
+    } 
     
     if( neighbor==reflect_particles ) {
         // Hit a reflecting boundary condition.  Reflect the particle
@@ -422,10 +443,11 @@
         int which_case =  s_dir[Axis_Label::x] * s_dir[Axis_Label::x]
                         + s_dir[Axis_Label::y] * s_dir[Axis_Label::y]
                         + s_dir[Axis_Label::z] * s_dir[Axis_Label::z];
-
+        
         // Do the easy Face case.
         if (which_case == 1)
         {
+            // TODO:
             if      ( s_dir[Axis_Label::x] != 0 )
             {
                 SET_1D_REFLECTION(x);
@@ -438,95 +460,104 @@
             {
                 SET_1D_REFLECTION(z);
             }
+            // Stays in the same cell.
+            neighbor = ii;
         }
-        // Now do the harder edge cases
-        else if (which_case == 1)
+        // Now do the harder edge and corner cases
+        else
         {
-            // Check how many axes the edge is reflective along
-            // (it can be reflective on a maximum of two meaning
-            // the edge is a global edge of the simulation).
-            int neighbor_face_1 = 0;
-            int neighbor_face_2 = 0;
+            int neighbor_face_x = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, 0) );
+            int neighbor_face_y = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], 0) );
+            int neighbor_face_z = d_neighbor( num_neighbors * ii + get_neighbor_index(0, 0, s_dir[Axis_Label::z]) );
 
-            if      ( s_dir[Axis_Label::x] == 0 )
+            // Consider all the edge cases
+            if ( which_case == 2 )
             {
-                // Intercepts a yz edge.
-                neighbor_face_1 = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], 0) );
-                neighbor_face_2 = d_neighbor( num_neighbors * ii + get_neighbor_index(0, 0, s_dir[Axis_Label::z]) );
-
-                if      ( neighbor_face_1 == reflect_particles && neighbor_face_2 != reflect_particles )
+                // Check how many axes the edge is reflective along
+                // (it can be reflective on a maximum of two meaning
+                // the edge is a global edge of the simulation).
+                if      ( s_dir[Axis_Label::x] == 0 )
                 {
-                    // Only reflect along y as the z axis is open.
-                    SET_1D_REFLECTION(y);
-                    neighbor = neighbor_face_2;
+                    // Intercepts a yz edge.
+                    CHECK_EDGE_REFLECTION(y, z);
                 }
-                else if ( neighbor_face_1 != reflect_particles && neighbor_face_2 == reflect_particles )
+                else if ( s_dir[Axis_Label::y] == 0 )
                 {
-                    // Only reflect along z as the y axis is open.
-                    SET_1D_REFLECTION(z);
-                    neighbor = neighbor_face_1;
+                    // Intercepts a zx edge
+                    CHECK_EDGE_REFLECTION(z, x);
                 }
-                // TODO: There are no other cases, right?
-                else if ( neighbor_face_1 != reflect_particles && neighbor_face_2 != reflect_particles )
+                else
                 {
-                    // Hit a global edge. Need to reflect both using a 2d reflection matrix. 
-                    SET_2D_REFLECTION(y, z);
-                    neighbor = ii;
-                } 
-            }
-            else if ( s_dir[Axis_Label::y] == 0 )
-            {
-                // Intercepts a zx edge.
-                neighbor_face_1 = d_neighbor( num_neighbors * ii + get_neighbor_index(0, 0, s_dir[Axis_Label::z]) );
-                neighbor_face_2 = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, 0) );
-                
-                if      ( neighbor_face_1 == reflect_particles && neighbor_face_2 != reflect_particles )
-                {
-                    // Only reflect along z as the x axis is open.
-                    SET_1D_REFLECTION(z);
-                    neighbor = neighbor_face_2;
-                }
-                else if ( neighbor_face_1 != reflect_particles && neighbor_face_2 == reflect_particles )
-                {
-                    // Only reflect along x as the z axis is open.
-                    SET_1D_REFLECTION(x);
-                    neighbor = neighbor_face_1;
-                }
-                // TODO: There are no other cases, right?
-                else if ( neighbor_face_1 != reflect_particles && neighbor_face_2 != reflect_particles )
-                {
-                    // Hit a global edge. Need to reflect both using a 2d reflection matrix. 
-                    SET_2D_REFLECTION(z, x);
-                    neighbor = ii;
+                    // Intercepts an xy edge.
+                    CHECK_EDGE_REFLECTION(x, y);
                 }
             }
+            // Consider the corner cases
             else
             {
-                // Intercepts an xy edge.
-                neighbor_face_index_1 = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, 0) );
-                neighbor_face_index_2 = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], 0) );
-
-                if      ( neighbor_face_1 == reflect_particles && neighbor_face_2 != reflect_particles )
+                // First check if the corner is on a global face (one reflective face)
+                if      ( neighbor_face_x == reflect_particles && neighbor_face_y != reflect_particles && neighbor_face_z != reflect_particles )
                 {
-                    // Only reflect along x as the y axis is open.
+                    // Only the x axis is reflective.
                     SET_1D_REFLECTION(x);
-                    neighbor = neighbor_face_2;
+                    // Set the neighbor to be that connected by the open edge.
+                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], s_dir[Axis_Label::z]) );
                 }
-                else if ( neighbor_face_1 != reflect_particles && neighbor_face_2 == reflect_particles )
+                else if ( neighbor_face_x != reflect_particles && neighbor_face_y == reflect_particles && neighbor_face_z != reflect_particles )
                 {
-                    // Only reflect along y as the x axis is open.
+                    // Only the y axis is reflective.
                     SET_1D_REFLECTION(y);
-                    neighbor = neighbor_face_1;
+                    // Set the neighbor to be that connected by the open edge.
+                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, s_dir[Axis_Label::z]) );
                 }
-                // TODO: There are no other cases, right?
-                else if ( neighbor_face_1 != reflect_particles && neighbor_face_2 != reflect_particles )
+                else if ( neighbor_face_x != reflect_particles && neighbor_face_y != reflect_particles && neighbor_face_z == reflect_particles )
                 {
-                    // Hit a global edge. Need to reflect both using a 2d reflection matrix. 
+                    // Only the z axis is reflective.
+                    SET_1D_REFLECTION(z);
+                    // Set the neighbor to be that connected by the open edge.
+                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], s_dir[Axis_Label::y], 0) );
+                }
+                // Now check the corner if is on a global edge (two reflective faces) 
+                else if ( neighbor_face_x == reflect_particles && neighbor_face_y == reflect_particles && neighbor_face_z != reflect_particles )
+                {
+                    // Both the xy axes are reflective
                     SET_2D_REFLECTION(x, y);
+                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(0, 0, s_dir[Axis_Label::z]) );
+                }
+                else if ( neighbor_face_x == reflect_particles && neighbor_face_y != reflect_particles && neighbor_face_z == reflect_particles )
+                {
+                    // Both the zx axes are reflective
+                    SET_2D_REFLECTION(z, x);
+                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], 0) );
+                }
+                else if ( neighbor_face_x != reflect_particles && neighbor_face_y == reflect_particles && neighbor_face_z == reflect_particles )
+                {
+                    // Both the yz axes are reflective
+                    SET_2D_REFLECTION(y, z);
+                    neighbor = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, 0) );
+                }
+                // Finally the corner must be on a global corner (three reflective faces)
+                else
+                {
+                    // xyz axes are all reflective
+                    // TODO: This is definitely broken. We should be using a reflection
+                    // about a plane intercepting the corner of interest. 
+                    k_particles(pi, particle_var::ux ) = -k_particles(pi, particle_var::ux );   
+                    pm->dispx *= -1.;                                                              
+                    s_dir[Axis_Label::x] = 0;
+                    
+                    k_particles(pi, particle_var::uy ) = -k_particles(pi, particle_var::uy );   
+                    pm->dispy *= -1.;                                                              
+                    s_dir[Axis_Label::y] = 0;
+                    
+                    k_particles(pi, particle_var::uz ) = -k_particles(pi, particle_var::uz );   
+                    pm->dispz *= -1.;                                                              
+                    s_dir[Axis_Label::z] = 0;
+
                     neighbor = ii;
                 }
-            }
 
+            }
         }
 
         // printf("\nAfter reflection...");
@@ -540,12 +571,15 @@
         k_particles( pi, particle_var::dy ) -= 2. * s_dir[Axis_Label::y];
         k_particles( pi, particle_var::dz ) -= 2. * s_dir[Axis_Label::z];
 
+        pii = neighbor - rangel;
+
         //printf("\n##########################################\n");
         return 0;
     }
 #undef AXIS_LABELER
 #undef SET_1D_REFLECTION
 #undef SET_2D_REFLECTION
+#undef CHECK_EDGE_REFLECTION
 
     if ( neighbor<rangel || neighbor>rangeh ) {
         // Cannot handle the boundary condition here.  Save the updated
