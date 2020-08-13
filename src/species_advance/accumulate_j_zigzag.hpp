@@ -385,6 +385,24 @@
     // but that intrinsic doesn't work on GPU.
     // for performance portability, maybe specialize UNLIKELY
     // for CUDA mode and put it back
+#define AXIS_LABELER(AX) Axis_Label:: AX
+
+#define SET_1D_REFLECTION(AX)                                                         \
+    k_particles(pi, particle_var::u##AX ) = -k_particles(pi, particle_var::u##AX );   \
+    pm->disp##AX *= -1.;                                                              \
+    s_dir[AXIS_LABELER(AX)] = 0;
+
+#define SET_2D_REFLECTION(AX_1, AX_2)                                                     \
+    float minus_v##AX_1 = -k_particles(pi, particle_var::u##AX_1);                        \
+    float minus_v##AX_2 = -k_particles(pi, particle_var::u##AX_2);                        \
+    k_particles(pi, particle_var::u##AX_1 ) = minus_v##AX_2;                              \
+    k_particles(pi, particle_var::u##AX_2 ) = minus_v##AX_1;                              \
+    minus_v##AX_1 = -pm->disp##AX_1;                                                      \
+    minus_v##AX_2 = -pm->disp##AX_2;                                                      \
+    pm->disp##AX_1 = minus_v##AX_2;                                                       \
+    pm->disp##AX_2 = minus_v##AX_1;                                                       \
+    s_dir[AXIS_LABELER(AX_1)] = 0;                                                        \
+    s_dir[AXIS_LABELER(AX_2)] = 0;                                                        
 
     
     if( neighbor==reflect_particles ) {
@@ -398,52 +416,136 @@
         // printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
         //                                     k_particles(pi, particle_var::uy),
         //                                     k_particles(pi, particle_var::uz));
-        
-        if ( s_dir[Axis_Label::x] != 0 )
+      
+        // Face: which_case == 1, Edge: which_case == 2, Corner: which_case == 3
+        // TODO: Use an enum for readability. This stuff is hard enough.
+        int which_case =  s_dir[Axis_Label::x] * s_dir[Axis_Label::x]
+                        + s_dir[Axis_Label::y] * s_dir[Axis_Label::y]
+                        + s_dir[Axis_Label::z] * s_dir[Axis_Label::z];
+
+        // Do the easy Face case.
+        if (which_case == 1)
         {
-            k_particles(pi, particle_var::ux ) = -k_particles(pi, particle_var::ux );
-            pm->dispx *= -1.;
-            s_dir[Axis_Label::x] = 0;
+            if      ( s_dir[Axis_Label::x] != 0 )
+            {
+                SET_1D_REFLECTION(x);
+            }
+            else if ( s_dir[Axis_Label::y] != 0 )
+            {
+                SET_1D_REFLECTION(y);
+            }
+            else   
+            {
+                SET_1D_REFLECTION(z);
+            }
+        }
+        // Now do the harder edge cases
+        else if (which_case == 1)
+        {
+            // Check how many axes the edge is reflective along
+            // (it can be reflective on a maximum of two meaning
+            // the edge is a global edge of the simulation).
+            int neighbor_face_1 = 0;
+            int neighbor_face_2 = 0;
+
+            if      ( s_dir[Axis_Label::x] == 0 )
+            {
+                // Intercepts a yz edge.
+                neighbor_face_1 = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], 0) );
+                neighbor_face_2 = d_neighbor( num_neighbors * ii + get_neighbor_index(0, 0, s_dir[Axis_Label::z]) );
+
+                if      ( neighbor_face_1 == reflect_particles && neighbor_face_2 != reflect_particles )
+                {
+                    // Only reflect along y as the z axis is open.
+                    SET_1D_REFLECTION(y);
+                    neighbor = neighbor_face_2;
+                }
+                else if ( neighbor_face_1 != reflect_particles && neighbor_face_2 == reflect_particles )
+                {
+                    // Only reflect along z as the y axis is open.
+                    SET_1D_REFLECTION(z);
+                    neighbor = neighbor_face_1;
+                }
+                // TODO: There are no other cases, right?
+                else if ( neighbor_face_1 != reflect_particles && neighbor_face_2 != reflect_particles )
+                {
+                    // Hit a global edge. Need to reflect both using a 2d reflection matrix. 
+                    SET_2D_REFLECTION(y, z);
+                    neighbor = ii;
+                } 
+            }
+            else if ( s_dir[Axis_Label::y] == 0 )
+            {
+                // Intercepts a zx edge.
+                neighbor_face_1 = d_neighbor( num_neighbors * ii + get_neighbor_index(0, 0, s_dir[Axis_Label::z]) );
+                neighbor_face_2 = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, 0) );
+                
+                if      ( neighbor_face_1 == reflect_particles && neighbor_face_2 != reflect_particles )
+                {
+                    // Only reflect along z as the x axis is open.
+                    SET_1D_REFLECTION(z);
+                    neighbor = neighbor_face_2;
+                }
+                else if ( neighbor_face_1 != reflect_particles && neighbor_face_2 == reflect_particles )
+                {
+                    // Only reflect along x as the z axis is open.
+                    SET_1D_REFLECTION(x);
+                    neighbor = neighbor_face_1;
+                }
+                // TODO: There are no other cases, right?
+                else if ( neighbor_face_1 != reflect_particles && neighbor_face_2 != reflect_particles )
+                {
+                    // Hit a global edge. Need to reflect both using a 2d reflection matrix. 
+                    SET_2D_REFLECTION(z, x);
+                    neighbor = ii;
+                }
+            }
+            else
+            {
+                // Intercepts an xy edge.
+                neighbor_face_index_1 = d_neighbor( num_neighbors * ii + get_neighbor_index(s_dir[Axis_Label::x], 0, 0) );
+                neighbor_face_index_2 = d_neighbor( num_neighbors * ii + get_neighbor_index(0, s_dir[Axis_Label::y], 0) );
+
+                if      ( neighbor_face_1 == reflect_particles && neighbor_face_2 != reflect_particles )
+                {
+                    // Only reflect along x as the y axis is open.
+                    SET_1D_REFLECTION(x);
+                    neighbor = neighbor_face_2;
+                }
+                else if ( neighbor_face_1 != reflect_particles && neighbor_face_2 == reflect_particles )
+                {
+                    // Only reflect along y as the x axis is open.
+                    SET_1D_REFLECTION(y);
+                    neighbor = neighbor_face_1;
+                }
+                // TODO: There are no other cases, right?
+                else if ( neighbor_face_1 != reflect_particles && neighbor_face_2 != reflect_particles )
+                {
+                    // Hit a global edge. Need to reflect both using a 2d reflection matrix. 
+                    SET_2D_REFLECTION(x, y);
+                    neighbor = ii;
+                }
+            }
+
         }
 
-        if ( s_dir[Axis_Label::y] != 0 )
-        {
-            k_particles(pi, particle_var::uy ) = -k_particles(pi, particle_var::uy );
-            pm->dispy *= -1.;
-            s_dir[Axis_Label::y] = 0;
-        }
-
-        if ( s_dir[Axis_Label::z] != 0 )
-        {
-            k_particles(pi, particle_var::uz ) = -k_particles(pi, particle_var::uz );
-            pm->dispz *= -1.;
-            s_dir[Axis_Label::z] = 0;
-        }
-        
-        
         // printf("\nAfter reflection...");
         // printf("\nux, uy, uz = %e, %e, %e", k_particles(pi, particle_var::ux),
         //                                     k_particles(pi, particle_var::uy),
         //                                     k_particles(pi, particle_var::uz));
-         
+        
+        // Now shift the particles appropriately. Only axes where s_dir != 0 
+        // must be shifted.
         k_particles( pi, particle_var::dx ) -= 2. * s_dir[Axis_Label::x];
         k_particles( pi, particle_var::dy ) -= 2. * s_dir[Axis_Label::y];
         k_particles( pi, particle_var::dz ) -= 2. * s_dir[Axis_Label::z];
 
-        /* Old stuffs ... 
-        k_particles(pi, particle_var::ux + axis ) = -k_particles(pi, particle_var::ux + axis );
-
-        // TODO: make this safer
-        //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
-        //k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
-        // TODO: replace this, it's horrible
-        (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
-        */
-
         //printf("\n##########################################\n");
-        //continue;
         return 0;
     }
+#undef AXIS_LABELER
+#undef SET_1D_REFLECTION
+#undef SET_2D_REFLECTION
 
     if ( neighbor<rangel || neighbor>rangeh ) {
         // Cannot handle the boundary condition here.  Save the updated
