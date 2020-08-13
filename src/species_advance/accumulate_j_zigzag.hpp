@@ -391,7 +391,7 @@
     k_particles(pi, particle_var::u##AX ) = -k_particles(pi, particle_var::u##AX );   \
     pm->disp##AX *= -1.;                                                              \
     s_dir[AXIS_LABELER(AX)] = 0;
-
+/*
 #define SET_2D_REFLECTION(AX_1, AX_2)                                                     \
     float minus_v##AX_1 = -k_particles(pi, particle_var::u##AX_1);                        \
     float minus_v##AX_2 = -k_particles(pi, particle_var::u##AX_2);                        \
@@ -403,6 +403,15 @@
     pm->disp##AX_2 = minus_v##AX_1;                                                       \
     s_dir[AXIS_LABELER(AX_1)] = 0;                                                        \
     s_dir[AXIS_LABELER(AX_2)] = 0;                                                        
+*/
+#define SET_2D_REFLECTION(AX_1, AX_2)                                                     \
+    k_particles(pi, particle_var::u##AX_1 ) *= -1;                                        \
+    k_particles(pi, particle_var::u##AX_2 ) *= -1;                                        \
+    pm->disp##AX_1 *= -1;                                                                 \
+    pm->disp##AX_2 *= -1;                                                                 \
+    s_dir[AXIS_LABELER(AX_1)] = 0;                                                        \
+    s_dir[AXIS_LABELER(AX_2)] = 0;                                                        
+
 
 #define CHECK_EDGE_REFLECTION(AX_1, AX_2)                                                                \
     /* Intercepts an AX_1 - AX_2 edge. */                                                                \
@@ -443,7 +452,6 @@
         int which_case =  s_dir[Axis_Label::x] * s_dir[Axis_Label::x]
                         + s_dir[Axis_Label::y] * s_dir[Axis_Label::y]
                         + s_dir[Axis_Label::z] * s_dir[Axis_Label::z];
-        printf("\nParticle %d in cell %d: which_case = %d", pi, ii, which_case); 
 
         // Do the easy Face case.
         if (which_case == 1)
@@ -480,7 +488,6 @@
             // Consider all the edge cases
             if ( which_case == 2 )
             {
-                printf("\nParticle %d in cell %d: before s_dir = %d, %d, %d", pi, ii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
                 // Check how many axes the edge is reflective along
                 // (it can be reflective on a maximum of two meaning
                 // the edge is a global edge of the simulation).
@@ -496,11 +503,9 @@
                 }
                 else
                 {
-                    //printf("\nHere?plz");
                     // Intercepts an xy edge.
                     CHECK_EDGE_REFLECTION(x, y);
                 }
-                //printf("\nParticle %d in cell %d: afterwords s_dir = %d, %d, %d", pi, ii, (int)s_dir[Axis_Label::x], (int)s_dir[Axis_Label::y], (int)s_dir[Axis_Label::z]);
             }
             // Consider the corner cases
             else
