@@ -223,6 +223,8 @@ new_standard_field_array( grid_t           * RESTRICT g,
           fa->k_f_rhob_accum_h(i) = 0;
           });
   //MALLOC( fa, 1 );
+  if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for the fields\n",
+          (double (g->nv*sizeof(field_t)))/pow(2,30));
   MALLOC_ALIGNED( fa->f, g->nv, 128 );
   CLEAR( fa->f, g->nv );
   fa->g = g;

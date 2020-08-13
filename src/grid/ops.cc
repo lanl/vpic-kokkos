@@ -53,6 +53,8 @@ size_grid( grid_t * g,
   g->rangel = g->range[world_rank];
   g->rangeh = g->range[world_rank+1]-1;
 
+  if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for the grid neighbor\n",
+          (double (6*g->nv*sizeof(int64_t)))/pow(2,30));
   FREE_ALIGNED( g->neighbor );
   MALLOC_ALIGNED( g->neighbor, 6*g->nv, 128 );
 
