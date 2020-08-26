@@ -586,19 +586,13 @@ vacuum_advance_e_kokkos( field_array_t * RESTRICT fa,
   const float pz_muy = ((nz>1) ? (1+damp)*g->cvac*g->dt*g->rdz : 0)*m->rmuy; 
   const float pz_mux = ((nz>1) ? (1+damp)*g->cvac*g->dt*g->rdz : 0)*m->rmux; 
   const float cj     = g->dt/g->eps0;                                        
-    
-    // Field buffers for GPU - GPU communication
-    const int xyz_sz = 1 + ny*(nz+1) + nz*(ny+1);
-    const int yzx_sz = 1 + nz*(nx+1) + nx*(nz+1);
-    const int zxy_sz = 1 + nx*(ny+1) + ny*(nx+1);
-    field_buffers_t f_buffers = field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
 
   /***************************************************************************
    * Begin tangential B ghost setup
    ***************************************************************************/
   
 //    k_begin_remote_ghost_tang_b( fa, fa->g );
-    kokkos_begin_remote_ghost_tang_b(fa, fa->g, f_buffers);
+    kokkos_begin_remote_ghost_tang_b(fa, fa->g, *fa->fb);
 
     k_local_ghost_tang_b( fa, fa->g );
 
@@ -609,7 +603,7 @@ vacuum_advance_e_kokkos( field_array_t * RESTRICT fa,
    ***************************************************************************/
 
 //    k_end_remote_ghost_tang_b( fa, fa->g );
-    kokkos_end_remote_ghost_tang_b(fa, fa->g, f_buffers);
+    kokkos_end_remote_ghost_tang_b(fa, fa->g, *fa->fb);
 
   /***************************************************************************
    * Update exterior fields

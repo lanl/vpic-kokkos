@@ -242,6 +242,15 @@ new_standard_field_array( grid_t           * RESTRICT g,
     fa->kernel->clean_div_e_kokkos= vacuum_clean_div_e_kokkos;
     fa->kernel->energy_f_kokkos   = vacuum_energy_f_kokkos;
   }
+  int nx = g->nx;
+  int ny = g->ny;
+  int nz = g->nz;
+
+  int xyz_sz = 2*ny*(nz+1) + 2*nz*(ny+1) + ny*nz;
+  int yzx_sz = 2*nz*(nx+1) + 2*nx*(nz+1) + nz*nx;
+  int zxy_sz = 2*nx*(ny+1) + 2*ny*(nx+1) + nx*ny;
+  static field_buffers_t buffs = field_buffers(xyz_sz, yzx_sz, zxy_sz);
+  fa->fb = &buffs;
 
   REGISTER_OBJECT( fa, checkpt_standard_field_array,
                        restore_standard_field_array, NULL );
