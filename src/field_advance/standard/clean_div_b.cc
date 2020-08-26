@@ -390,11 +390,8 @@ clean_div_b_kokkos( field_array_t * fa ) {
   }
 # endif
 
-    const int xyz_size = 1+ny*nz, yzx_size = 1+nx*nz, zxy_size = 1+ny*nx;
-    field_buffers_t fb = field_buffers(xyz_size, yzx_size, zxy_size);
-
     // Begin setting derr ghosts
-    k_begin_remote_ghost_div_b( fa, g, fb);
+    k_begin_remote_ghost_div_b( fa, g, *fa->fb);
     k_local_ghost_div_b( fa, g);
 
   // Have pipelines do interior of the local domain
@@ -507,7 +504,7 @@ clean_div_b_kokkos( field_array_t * fa ) {
 */
   // Finish setting derr ghosts
 
-  k_end_remote_ghost_div_b( fa, g, fb );
+  k_end_remote_ghost_div_b( fa, g, *fa->fb );
 
   // Do Marder pass in exterior
 
