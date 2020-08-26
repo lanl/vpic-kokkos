@@ -1799,42 +1799,33 @@ synchronize_tang_e_norm_b_kokkos( field_array_t * RESTRICT fa ) {
     k_local_adjust_tang_e( fa, g );
     k_local_adjust_norm_b( fa, g );
 
-    const int nx = g->nx;
-    const int ny = g->ny;
-    const int nz = g->nz;
-
-    const int xyz_sz = 2*ny*(nz+1) + 2*nz*(ny+1) + ny*nz;
-    const int yzx_sz = 2*nz*(nx+1) + 2*nx*(nz+1) + nz*nx;
-    const int zxy_sz = 2*nx*(ny+1) + 2*ny*(nx+1) + nx*ny;
-    field_buffers_t fb = field_buffers(xyz_sz, yzx_sz, zxy_sz);
-
     // Exchange x-faces
-    begin_recv_tang_e_norm_b<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
-    begin_recv_tang_e_norm_b<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
-    begin_send_tang_e_norm_b<XYZ>(fa, -1,  0,  0, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
-    begin_send_tang_e_norm_b<XYZ>(fa,  1,  0,  0, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
-    err += end_recv_tang_e_norm_b<XYZ>(fa,  -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
-    err += end_recv_tang_e_norm_b<XYZ>(fa,   1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    begin_recv_tang_e_norm_b<XYZ>(fa, -1,  0,  0, fa->fb->xyz_rbuf_neg, fa->fb->xyz_rbuf_neg_h);
+    begin_recv_tang_e_norm_b<XYZ>(fa,  1,  0,  0, fa->fb->xyz_rbuf_pos, fa->fb->xyz_rbuf_pos_h);
+    begin_send_tang_e_norm_b<XYZ>(fa, -1,  0,  0, fa->fb->xyz_sbuf_neg, fa->fb->xyz_sbuf_neg_h);
+    begin_send_tang_e_norm_b<XYZ>(fa,  1,  0,  0, fa->fb->xyz_sbuf_pos, fa->fb->xyz_sbuf_pos_h);
+    err += end_recv_tang_e_norm_b<XYZ>(fa,  -1,  0,  0, fa->fb->xyz_rbuf_neg, fa->fb->xyz_rbuf_neg_h);
+    err += end_recv_tang_e_norm_b<XYZ>(fa,   1,  0,  0, fa->fb->xyz_rbuf_pos, fa->fb->xyz_rbuf_pos_h);
     end_send_tang_e_norm_b<XYZ>(fa,  -1,  0,  0);
     end_send_tang_e_norm_b<XYZ>(fa,   1,  0,  0);
 
     // Exchange y-faces
-    begin_recv_tang_e_norm_b<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
-    begin_recv_tang_e_norm_b<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
-    begin_send_tang_e_norm_b<YZX>(fa,  0, -1,  0, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
-    begin_send_tang_e_norm_b<YZX>(fa,  0,  1,  0, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
-    err += end_recv_tang_e_norm_b<YZX>(fa,   0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
-    err += end_recv_tang_e_norm_b<YZX>(fa,   0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    begin_recv_tang_e_norm_b<YZX>(fa,  0, -1,  0, fa->fb->yzx_rbuf_neg, fa->fb->yzx_rbuf_neg_h);
+    begin_recv_tang_e_norm_b<YZX>(fa,  0,  1,  0, fa->fb->yzx_rbuf_pos, fa->fb->yzx_rbuf_pos_h);
+    begin_send_tang_e_norm_b<YZX>(fa,  0, -1,  0, fa->fb->yzx_sbuf_neg, fa->fb->yzx_sbuf_neg_h);
+    begin_send_tang_e_norm_b<YZX>(fa,  0,  1,  0, fa->fb->yzx_sbuf_pos, fa->fb->yzx_sbuf_pos_h);
+    err += end_recv_tang_e_norm_b<YZX>(fa,   0, -1,  0, fa->fb->yzx_rbuf_neg, fa->fb->yzx_rbuf_neg_h);
+    err += end_recv_tang_e_norm_b<YZX>(fa,   0,  1,  0, fa->fb->yzx_rbuf_pos, fa->fb->yzx_rbuf_pos_h);
     end_send_tang_e_norm_b<YZX>(fa,   0, -1,  0);
     end_send_tang_e_norm_b<YZX>(fa,   0,  1,  0);
 
     // Exchange z-faces
-    begin_recv_tang_e_norm_b<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
-    begin_recv_tang_e_norm_b<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
-    begin_send_tang_e_norm_b<ZXY>(fa,  0,  0, -1, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
-    begin_send_tang_e_norm_b<ZXY>(fa,  0,  0,  1, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
-    err += end_recv_tang_e_norm_b<ZXY>(fa,   0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
-    err += end_recv_tang_e_norm_b<ZXY>(fa,   0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+    begin_recv_tang_e_norm_b<ZXY>(fa,  0,  0, -1, fa->fb->zxy_rbuf_neg, fa->fb->zxy_rbuf_neg_h);
+    begin_recv_tang_e_norm_b<ZXY>(fa,  0,  0,  1, fa->fb->zxy_rbuf_pos, fa->fb->zxy_rbuf_pos_h);
+    begin_send_tang_e_norm_b<ZXY>(fa,  0,  0, -1, fa->fb->zxy_sbuf_neg, fa->fb->zxy_sbuf_neg_h);
+    begin_send_tang_e_norm_b<ZXY>(fa,  0,  0,  1, fa->fb->zxy_sbuf_pos, fa->fb->zxy_sbuf_pos_h);
+    err += end_recv_tang_e_norm_b<ZXY>(fa,   0,  0, -1, fa->fb->zxy_rbuf_neg, fa->fb->zxy_rbuf_neg_h);
+    err += end_recv_tang_e_norm_b<ZXY>(fa,   0,  0,  1, fa->fb->zxy_rbuf_pos, fa->fb->zxy_rbuf_pos_h);
     end_send_tang_e_norm_b<ZXY>(fa,   0,  0, -1);
     end_send_tang_e_norm_b<ZXY>(fa,   0,  0,  1);
 
@@ -2115,38 +2106,33 @@ void k_synchronize_jf(field_array_t* RESTRICT fa) {
 
     k_local_adjust_jf(fa, g);
 
-    const int xyz_sz = 1 + ny*(nz+1) + nz*(ny+1);
-    const int yzx_sz = 1 + nz*(nx+1) + nx*(nz+1);
-    const int zxy_sz = 1 + nx*(ny+1) + ny*(nx+1);
-    field_buffers_t fb = field_buffers(xyz_sz, yzx_sz, zxy_sz);
-
     // Exchange x-faces
-    begin_recv_jf<XYZ>(g, -1, 0, 0, nx, ny, nz, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
-    begin_recv_jf<XYZ>(g,  1, 0, 0, nx, ny, nz, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
-    begin_send_jf<XYZ>(g, fa, -1, 0, 0, nx, ny, nz, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
-    begin_send_jf<XYZ>(g, fa,  1, 0, 0, nx, ny, nz, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
-    end_recv_jf<XYZ>(g, fa, -1, 0, 0, nx, ny, nz, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
-    end_recv_jf<XYZ>(g, fa,  1, 0, 0, nx, ny, nz, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    begin_recv_jf<XYZ>(g, -1, 0, 0, nx, ny, nz, fa->fb->xyz_rbuf_neg, fa->fb->xyz_rbuf_neg_h);
+    begin_recv_jf<XYZ>(g,  1, 0, 0, nx, ny, nz, fa->fb->xyz_rbuf_pos, fa->fb->xyz_rbuf_pos_h);
+    begin_send_jf<XYZ>(g, fa, -1, 0, 0, nx, ny, nz, fa->fb->xyz_sbuf_neg, fa->fb->xyz_sbuf_neg_h);
+    begin_send_jf<XYZ>(g, fa,  1, 0, 0, nx, ny, nz, fa->fb->xyz_sbuf_pos, fa->fb->xyz_sbuf_pos_h);
+    end_recv_jf<XYZ>(g, fa, -1, 0, 0, nx, ny, nz, fa->fb->xyz_rbuf_neg, fa->fb->xyz_rbuf_neg_h);
+    end_recv_jf<XYZ>(g, fa,  1, 0, 0, nx, ny, nz, fa->fb->xyz_rbuf_pos, fa->fb->xyz_rbuf_pos_h);
     end_send_jf<XYZ>(g, -1, 0, 0);
     end_send_jf<XYZ>(g,  1, 0, 0);
 
     // Exchange y-faces
-    begin_recv_jf<YZX>(g, 0, -1, 0, nx, ny, nz, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
-    begin_recv_jf<YZX>(g, 0,  1, 0, nx, ny, nz, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
-    begin_send_jf<YZX>(g, fa, 0, -1, 0, nx, ny, nz, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
-    begin_send_jf<YZX>(g, fa, 0,  1, 0, nx, ny, nz, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
-    end_recv_jf<YZX>(g, fa, 0, -1, 0, nx, ny, nz, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
-    end_recv_jf<YZX>(g, fa, 0,  1, 0, nx, ny, nz, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    begin_recv_jf<YZX>(g, 0, -1, 0, nx, ny, nz, fa->fb->yzx_rbuf_neg, fa->fb->yzx_rbuf_neg_h);
+    begin_recv_jf<YZX>(g, 0,  1, 0, nx, ny, nz, fa->fb->yzx_rbuf_pos, fa->fb->yzx_rbuf_pos_h);
+    begin_send_jf<YZX>(g, fa, 0, -1, 0, nx, ny, nz, fa->fb->yzx_sbuf_neg, fa->fb->yzx_sbuf_neg_h);
+    begin_send_jf<YZX>(g, fa, 0,  1, 0, nx, ny, nz, fa->fb->yzx_sbuf_pos, fa->fb->yzx_sbuf_pos_h);
+    end_recv_jf<YZX>(g, fa, 0, -1, 0, nx, ny, nz, fa->fb->yzx_rbuf_neg, fa->fb->yzx_rbuf_neg_h);
+    end_recv_jf<YZX>(g, fa, 0,  1, 0, nx, ny, nz, fa->fb->yzx_rbuf_pos, fa->fb->yzx_rbuf_pos_h);
     end_send_jf<YZX>(g, 0, -1, 0);
     end_send_jf<YZX>(g, 0,  1, 0);
 
     // Exchange z-faces
-    begin_recv_jf<ZXY>(g, 0, 0, -1, nx, ny, nz, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
-    begin_recv_jf<ZXY>(g, 0, 0,  1, nx, ny, nz, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
-    begin_send_jf<ZXY>(g, fa, 0, 0, -1, nx, ny, nz, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
-    begin_send_jf<ZXY>(g, fa, 0, 0,  1, nx, ny, nz, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
-    end_recv_jf<ZXY>(g, fa, 0, 0, -1, nx, ny, nz, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
-    end_recv_jf<ZXY>(g, fa, 0, 0,  1, nx, ny, nz, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+    begin_recv_jf<ZXY>(g, 0, 0, -1, nx, ny, nz, fa->fb->zxy_rbuf_neg, fa->fb->zxy_rbuf_neg_h);
+    begin_recv_jf<ZXY>(g, 0, 0,  1, nx, ny, nz, fa->fb->zxy_rbuf_pos, fa->fb->zxy_rbuf_pos_h);
+    begin_send_jf<ZXY>(g, fa, 0, 0, -1, nx, ny, nz, fa->fb->zxy_sbuf_neg, fa->fb->zxy_sbuf_neg_h);
+    begin_send_jf<ZXY>(g, fa, 0, 0,  1, nx, ny, nz, fa->fb->zxy_sbuf_pos, fa->fb->zxy_sbuf_pos_h);
+    end_recv_jf<ZXY>(g, fa, 0, 0, -1, nx, ny, nz, fa->fb->zxy_rbuf_neg, fa->fb->zxy_rbuf_neg_h);
+    end_recv_jf<ZXY>(g, fa, 0, 0,  1, nx, ny, nz, fa->fb->zxy_rbuf_pos, fa->fb->zxy_rbuf_pos_h);
     end_send_jf<ZXY>(g, 0, 0, -1);
     end_send_jf<ZXY>(g, 0, 0,  1);
 
@@ -2423,38 +2409,33 @@ void k_synchronize_rho(field_array_t* RESTRICT fa) {
     k_local_adjust_rhof(fa, g);
     k_local_adjust_rhob(fa, g);
 
-    const int xyz_sz = 1 + 2*(ny+1)*(nz+1);
-    const int yzx_sz = 1 + 2*(nz+1)*(nx+1);
-    const int zxy_sz = 1 + 2*(nx+1)*(ny+1);
-    field_buffers_t fb = field_buffers(xyz_sz, yzx_sz, zxy_sz);
-
     // Exchange x-faces
-    begin_recv_rho<XYZ>(fa, -1, 0, 0, nx, ny, nz, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
-    begin_recv_rho<XYZ>(fa,  1, 0, 0, nx, ny, nz, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
-    begin_send_rho<XYZ>(fa, -1, 0, 0, nx, ny, nz, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
-    begin_send_rho<XYZ>(fa,  1, 0, 0, nx, ny, nz, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
-    end_recv_rho<XYZ>(  fa, -1, 0, 0, nx, ny, nz, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
-    end_recv_rho<XYZ>(  fa,  1, 0, 0, nx, ny, nz, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    begin_recv_rho<XYZ>(fa, -1, 0, 0, nx, ny, nz, fa->fb->xyz_rbuf_neg, fa->fb->xyz_rbuf_neg_h);
+    begin_recv_rho<XYZ>(fa,  1, 0, 0, nx, ny, nz, fa->fb->xyz_rbuf_pos, fa->fb->xyz_rbuf_pos_h);
+    begin_send_rho<XYZ>(fa, -1, 0, 0, nx, ny, nz, fa->fb->xyz_sbuf_neg, fa->fb->xyz_sbuf_neg_h);
+    begin_send_rho<XYZ>(fa,  1, 0, 0, nx, ny, nz, fa->fb->xyz_sbuf_pos, fa->fb->xyz_sbuf_pos_h);
+    end_recv_rho<XYZ>(  fa, -1, 0, 0, nx, ny, nz, fa->fb->xyz_rbuf_neg, fa->fb->xyz_rbuf_neg_h);
+    end_recv_rho<XYZ>(  fa,  1, 0, 0, nx, ny, nz, fa->fb->xyz_rbuf_pos, fa->fb->xyz_rbuf_pos_h);
     end_send_rho<XYZ>(  fa, -1, 0, 0);
     end_send_rho<XYZ>(  fa,  1, 0, 0);
 
     // Exchange y-faces
-    begin_recv_rho<YZX>(fa, 0, -1, 0, nx, ny, nz, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
-    begin_recv_rho<YZX>(fa, 0,  1, 0, nx, ny, nz, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
-    begin_send_rho<YZX>(fa, 0, -1, 0, nx, ny, nz, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
-    begin_send_rho<YZX>(fa, 0,  1, 0, nx, ny, nz, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
-    end_recv_rho<YZX>(  fa, 0, -1, 0, nx, ny, nz, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
-    end_recv_rho<YZX>(  fa, 0,  1, 0, nx, ny, nz, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    begin_recv_rho<YZX>(fa, 0, -1, 0, nx, ny, nz, fa->fb->yzx_rbuf_neg, fa->fb->yzx_rbuf_neg_h);
+    begin_recv_rho<YZX>(fa, 0,  1, 0, nx, ny, nz, fa->fb->yzx_rbuf_pos, fa->fb->yzx_rbuf_pos_h);
+    begin_send_rho<YZX>(fa, 0, -1, 0, nx, ny, nz, fa->fb->yzx_sbuf_neg, fa->fb->yzx_sbuf_neg_h);
+    begin_send_rho<YZX>(fa, 0,  1, 0, nx, ny, nz, fa->fb->yzx_sbuf_pos, fa->fb->yzx_sbuf_pos_h);
+    end_recv_rho<YZX>(  fa, 0, -1, 0, nx, ny, nz, fa->fb->yzx_rbuf_neg, fa->fb->yzx_rbuf_neg_h);
+    end_recv_rho<YZX>(  fa, 0,  1, 0, nx, ny, nz, fa->fb->yzx_rbuf_pos, fa->fb->yzx_rbuf_pos_h);
     end_send_rho<YZX>(  fa, 0, -1, 0);
     end_send_rho<YZX>(  fa, 0,  1, 0);
 
     // Exchange z-faces
-    begin_recv_rho<ZXY>(fa, 0, 0, -1, nx, ny, nz, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
-    begin_recv_rho<ZXY>(fa, 0, 0,  1, nx, ny, nz, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
-    begin_send_rho<ZXY>(fa, 0, 0, -1, nx, ny, nz, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
-    begin_send_rho<ZXY>(fa, 0, 0,  1, nx, ny, nz, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
-    end_recv_rho<ZXY>(  fa, 0, 0, -1, nx, ny, nz, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
-    end_recv_rho<ZXY>(  fa, 0, 0,  1, nx, ny, nz, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+    begin_recv_rho<ZXY>(fa, 0, 0, -1, nx, ny, nz, fa->fb->zxy_rbuf_neg, fa->fb->zxy_rbuf_neg_h);
+    begin_recv_rho<ZXY>(fa, 0, 0,  1, nx, ny, nz, fa->fb->zxy_rbuf_pos, fa->fb->zxy_rbuf_pos_h);
+    begin_send_rho<ZXY>(fa, 0, 0, -1, nx, ny, nz, fa->fb->zxy_sbuf_neg, fa->fb->zxy_sbuf_neg_h);
+    begin_send_rho<ZXY>(fa, 0, 0,  1, nx, ny, nz, fa->fb->zxy_sbuf_pos, fa->fb->zxy_sbuf_pos_h);
+    end_recv_rho<ZXY>(  fa, 0, 0, -1, nx, ny, nz, fa->fb->zxy_rbuf_neg, fa->fb->zxy_rbuf_neg_h);
+    end_recv_rho<ZXY>(  fa, 0, 0,  1, nx, ny, nz, fa->fb->zxy_rbuf_pos, fa->fb->zxy_rbuf_pos_h);
     end_send_rho<ZXY>(  fa, 0, 0, -1);
     end_send_rho<ZXY>(  fa, 0, 0,  1);
 
