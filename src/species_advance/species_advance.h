@@ -142,6 +142,16 @@ class species_t {
         // the device.
         int64_t species_copy_last = -1;
 
+        // Static allocations for the compressor
+        Kokkos::View<int*> unsafe_index;
+        //Kokkos::View<int> panic_counter("panic counter");
+        //Kokkos::View<int> clean_up_to_count("clean up to count");
+        //Kokkos::View<int> clean_up_from_count("clean up from count");
+        //Kokkos::View<int>::HostMirror clean_up_to_count_h;
+        //Kokkos::View<int>::HostMirror clean_up_from_count_h;
+        Kokkos::View<int*> clean_up_from;
+        Kokkos::View<int*> clean_up_to;
+
         // Init Kokkos Particle Arrays
         species_t(int n_particles, int n_pmovers) :
             k_p_d("k_particles", n_particles),
@@ -152,7 +162,11 @@ class species_t {
             k_pc_i_d("k_particle_copy_for_movers_i", n_pmovers),
             k_pr_h("k_particle_send_for_movers", n_pmovers),
             k_pr_i_h("k_particle_send_for_movers_i", n_pmovers),
-            k_nm_d("k_nm") // size 1
+            k_nm_d("k_nm"), // size 1
+            unsafe_index("safe index", 2*n_pmovers),
+            clean_up_from("clean up from", n_pmovers),
+            clean_up_to("clean up to", n_pmovers)
+
     {
         k_p_h = Kokkos::create_mirror_view(k_p_d);
         k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
@@ -164,6 +178,9 @@ class species_t {
         k_pm_i_h = Kokkos::create_mirror_view(k_pm_i_d);
 
         k_nm_h = Kokkos::create_mirror_view(k_nm_d);
+
+        //clean_up_to_count_h = Kokkos::create_mirror_view(clean_up_to_count);
+        //clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
     }
 
 };
