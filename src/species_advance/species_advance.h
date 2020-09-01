@@ -144,11 +144,9 @@ class species_t {
 
         // Static allocations for the compressor
         Kokkos::View<int*> unsafe_index;
-        //Kokkos::View<int> panic_counter("panic counter");
-        //Kokkos::View<int> clean_up_to_count("clean up to count");
-        //Kokkos::View<int> clean_up_from_count("clean up from count");
-        //Kokkos::View<int>::HostMirror clean_up_to_count_h;
-        //Kokkos::View<int>::HostMirror clean_up_from_count_h;
+        Kokkos::View<int> clean_up_to_count;
+        Kokkos::View<int> clean_up_from_count;
+        Kokkos::View<int>::HostMirror clean_up_from_count_h;
         Kokkos::View<int*> clean_up_from;
         Kokkos::View<int*> clean_up_to;
 
@@ -164,6 +162,8 @@ class species_t {
             k_pr_i_h("k_particle_send_for_movers_i", n_pmovers),
             k_nm_d("k_nm"), // size 1
             unsafe_index("safe index", 2*n_pmovers),
+            clean_up_to_count("clean up to count"),
+            clean_up_from_count("clean up from count"),
             clean_up_from("clean up from", n_pmovers),
             clean_up_to("clean up to", n_pmovers)
 
@@ -179,8 +179,7 @@ class species_t {
 
         k_nm_h = Kokkos::create_mirror_view(k_nm_d);
 
-        //clean_up_to_count_h = Kokkos::create_mirror_view(clean_up_to_count);
-        //clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
+        clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
     }
 
 };
