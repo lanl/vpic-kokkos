@@ -241,6 +241,7 @@ void restore_kokkos(vpic_simulation& simulation)
     new(&interp->k_i_h) k_interpolator_t::HostMirror();
 
     interp->init_kokkos_interp(nv);
+    simulation.KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interp);
 
     // Restore Grid/Neighbors
 

@@ -61,6 +61,8 @@ void checkpt(const char* fbase, int tag)
     // TODO: do these functions need to live inside the simulation class?
     simulation->KOKKOS_COPY_FIELD_MEM_TO_HOST(simulation->field_array);
 
+    simulation->KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(simulation->interpolator_array);
+
     std::cout << "Copying data back to host for checkpointing.." << std::endl;
 
     ///// End Kokkos Copy Data /////
