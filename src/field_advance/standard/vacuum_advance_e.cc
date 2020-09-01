@@ -592,7 +592,7 @@ vacuum_advance_e_kokkos( field_array_t * RESTRICT fa,
    ***************************************************************************/
   
 //    k_begin_remote_ghost_tang_b( fa, fa->g );
-    kokkos_begin_remote_ghost_tang_b(fa, fa->g, *fa->fb);
+    kokkos_begin_remote_ghost_tang_b(fa, fa->g, fa->fb);
 
     k_local_ghost_tang_b( fa, fa->g );
 
@@ -603,7 +603,7 @@ vacuum_advance_e_kokkos( field_array_t * RESTRICT fa,
    ***************************************************************************/
 
 //    k_end_remote_ghost_tang_b( fa, fa->g );
-    kokkos_end_remote_ghost_tang_b(fa, fa->g, *fa->fb);
+    kokkos_end_remote_ghost_tang_b(fa, fa->g, fa->fb);
 
   /***************************************************************************
    * Update exterior fields
