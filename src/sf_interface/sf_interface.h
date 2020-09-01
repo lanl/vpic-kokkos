@@ -36,9 +36,14 @@ typedef struct interpolator_array {
   k_interpolator_t k_i_d;
   k_interpolator_t::HostMirror k_i_h;
 
-  interpolator_array(int nv) :
-    k_i_d("k_interpolators", nv)
+  interpolator_array(int nv)
   {
+      init_kokkos_interp(nv);
+  }
+
+  void init_kokkos_interp(int nv)
+  {
+    k_i_d = k_interpolator_t("k_interpolators", nv);
     k_i_h = Kokkos::create_mirror_view(k_i_d);
   }
 
@@ -91,9 +96,16 @@ typedef struct accumulator_array {
   k_accumulators_sa_t k_a_sa;
   //k_accumulators_sah_t k_a_sah;
 
-  accumulator_array(int na) :
-    k_a_d("k_accumulators", na)
-    {
+  accumulator_array(int _na)
+  {
+      init_kokoks_accum(_na);
+  }
+
+  void init_kokoks_accum(int _na)
+  {
+      na = _na;
+
+      k_a_d = k_accumulators_t("k_accumulators", _na);
         //printf("Making accumulator of size %d", na);
         // TODO: kokkos can deduce these
       k_a_sa = Kokkos::Experimental::create_scatter_view(k_a_d);
@@ -104,7 +116,7 @@ typedef struct accumulator_array {
 
       //k_a_sah = Kokkos::Experimental::create_scatter_view(k_a_h);
       //printf("k_a_h size = %d \n", k_a_h.size() );
-    }
+  }
 
 
 } accumulator_array_t;

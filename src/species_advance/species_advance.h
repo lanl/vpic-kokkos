@@ -102,6 +102,12 @@ class species_t {
         species_id id;                      // Unique identifier for a species
         species_t* next = NULL;             // Next species in the list
 
+
+
+
+        //// END CHECKPOINTED DATA, START KOKKOS //////
+
+
         k_particles_t k_p_d;                 // kokkos particles view on device
         k_particles_i_t k_p_i_d;             // kokkos particles view on device
 
@@ -146,28 +152,38 @@ class species_t {
         int64_t species_copy_last = -1;
 
         // Init Kokkos Particle Arrays
-        species_t(int n_particles, int n_pmovers) :
-            k_p_d("k_particles", n_particles),
-            k_p_i_d("k_particles_i", n_particles),
-            k_pc_d("k_particle_copy_for_movers", n_pmovers),
-            k_pc_i_d("k_particle_copy_for_movers_i", n_pmovers),
-            k_pr_h("k_particle_send_for_movers", n_pmovers),
-            k_pr_i_h("k_particle_send_for_movers_i", n_pmovers),
-            k_pm_d("k_particle_movers", n_pmovers),
-            k_pm_i_d("k_particle_movers_i", n_pmovers),
-            k_nm_d("k_nm") // size 1
-    {
-        k_p_h = Kokkos::create_mirror_view(k_p_d);
-        k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
+        species_t(int n_particles, int n_pmovers)
+        {
+           init_kokkos_particles(n_particles, n_pmovers);
+        }
 
-        k_pc_h = Kokkos::create_mirror_view(k_pc_d);
-        k_pc_i_h = Kokkos::create_mirror_view(k_pc_i_d);
+        void init_kokkos_particles()
+        {
+            init_kokkos_particles(max_np, max_nm);
+        }
+        void init_kokkos_particles(int n_particles, int n_pmovers)
+        {
+            k_p_d = k_particles_t("k_particles", n_particles);
+            k_p_i_d = k_particles_i_t("k_particles_i", n_particles);
+            k_pc_d = k_particle_copy_t("k_particle_copy_for_movers", n_pmovers);
+            k_pc_i_d = k_particle_i_copy_t("k_particle_copy_for_movers_i", n_pmovers);
+            k_pr_h = k_particle_copy_t::HostMirror("k_particle_send_for_movers", n_pmovers);
+            k_pr_i_h = k_particle_i_copy_t::HostMirror("k_particle_send_for_movers_i", n_pmovers);
+            k_pm_d = k_particle_movers_t("k_particle_movers", n_pmovers);
+            k_pm_i_d = k_particle_i_movers_t("k_particle_movers_i", n_pmovers);
+            k_nm_d = k_counter_t("k_nm"); // size 1 encoded in type
 
-        k_pm_h = Kokkos::create_mirror_view(k_pm_d);
-        k_pm_i_h = Kokkos::create_mirror_view(k_pm_i_d);
+            k_p_h = Kokkos::create_mirror_view(k_p_d);
+            k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
 
-        k_nm_h = Kokkos::create_mirror_view(k_nm_d);
-    }
+            k_pc_h = Kokkos::create_mirror_view(k_pc_d);
+            k_pc_i_h = Kokkos::create_mirror_view(k_pc_i_d);
+
+            k_pm_h = Kokkos::create_mirror_view(k_pm_d);
+            k_pm_i_h = Kokkos::create_mirror_view(k_pm_i_d);
+
+            k_nm_h = Kokkos::create_mirror_view(k_nm_d);
+        }
 
 };
 
