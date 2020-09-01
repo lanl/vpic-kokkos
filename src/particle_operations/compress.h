@@ -64,21 +64,16 @@ struct DefaultCompress {
         // TODO: prevent these allocations from being repeated.
 
         // Track (atomically) the id's we've tried to pull from when dealing with a
-        // gap in the "danger zone"
-        Kokkos::View<int> panic_counter("panic counter");
-        //Kokkos::View<int> panic_counter = sp->panic_counter;
-
         // We use this to store a list of things we bailed out on moving. Typically because the mapping of pull_from->write_to got skipped.
 
-        Kokkos::View<int> clean_up_to_count("clean up to count"); // todo: find an algorithm that doesn't need this
-        Kokkos::View<int> clean_up_from_count("clean up from count"); // todo: find an algorithm that doesn't need this
-        //Kokkos::View<int> clean_up_to_count = sp->clean_up_to_count;
-        //Kokkos::View<int> clean_up_from_count = sp->clean_up_from_count;
+        //Kokkos::View<int> clean_up_to_count("clean up to count"); // TODO: find an algorithm that doesn't need this
+        //Kokkos::View<int> clean_up_from_count("clean up from count"); // TODO: find an algorithm that doesn't need this
+        Kokkos::View<int> clean_up_to_count = sp->clean_up_to_count;
+        Kokkos::View<int> clean_up_from_count = sp->clean_up_from_count;
 
-        Kokkos::View<int>::HostMirror clean_up_to_count_h = Kokkos::create_mirror_view(clean_up_to_count);
-        Kokkos::View<int>::HostMirror clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
-        //Kokkos::View<int>::HostMirror clean_up_to_count_h = sp->clean_up_to_count_h;
-        //Kokkos::View<int>::HostMirror clean_up_from_count_h = sp->clean_up_from_count_h;
+        //Kokkos::View<int>::HostMirror clean_up_to_count_h = Kokkos::create_mirror_view(clean_up_to_count);
+        //Kokkos::View<int>::HostMirror clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
+        Kokkos::View<int>::HostMirror clean_up_from_count_h = sp->clean_up_from_count_h;
 
         //Kokkos::View<int*> clean_up_from("clean up from", nm);
         //Kokkos::View<int*> clean_up_to("clean up to", nm);
@@ -86,6 +81,10 @@ struct DefaultCompress {
         Kokkos::View<int*> clean_up_to = sp->clean_up_to;
         
         Kokkos::parallel_for("Clean clean up arrays", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int i) {
+                if(!i){//TODO: At least I know I should be embarrassed about this
+                    clean_up_to_count()=0;
+                    clean_up_from_count()=0;
+                }
                 clean_up_from(i) = 0;
                 clean_up_to(i) = 0;
                 });
@@ -93,6 +92,7 @@ struct DefaultCompress {
                 unsafe_index(i) = 0;
                 });
 
+        //fprintf(stderr, "Compress inited\n");
         // Loop over 2*nm, which is enough to guarantee you `nm` non-gaps
         // Build a list of safe lookups
 
@@ -190,7 +190,6 @@ struct DefaultCompress {
         });
 
         Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
-        Kokkos::deep_copy(clean_up_to_count_h, clean_up_to_count);
 
         Kokkos::parallel_for("compress clean up", Kokkos::RangePolicy <
         Kokkos::DefaultExecutionSpace > (0, clean_up_from_count_h() ), KOKKOS_LAMBDA (int n)
