@@ -306,17 +306,19 @@ typedef struct field_array {
   k_field_accum_t k_f_rhob_accum_d;//TODO: Remove when absorbing pbc on device
   k_field_accum_t::HostMirror k_f_rhob_accum_h;
 
-  field_buffers_t* fb;
+  field_buffers_t fb;
 
   // Initialize Kokkos Field Array
-  field_array(int n_fields) :
+  field_array(int n_fields, int xyz_sz, int yzx_sz, int zxy_sz) :
     k_f_d("k_fields", n_fields),
     k_fe_d("k_field_edges", n_fields),
-    k_f_rhob_accum_d("k_rhob_accum", n_fields)//TODO: does this zero the array?
+    k_f_rhob_accum_d("k_rhob_accum", n_fields),//TODO: does this zero the array?
+    fb(xyz_sz, yzx_sz, zxy_sz)
   {
     k_f_h = Kokkos::create_mirror_view(k_f_d);
     k_fe_h = Kokkos::create_mirror_view(k_fe_d);
     k_f_rhob_accum_h = Kokkos::create_mirror_view(k_f_rhob_accum_d);
+
   }
 
 } field_array_t;
