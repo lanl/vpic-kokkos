@@ -1,0 +1,8 @@
+#pragma once
+#ifndef VPIC_GIT_VERSION
+#define VPIC_GIT_VERSION
+
+#define GIT_REVISION "@VPIC_GIT_COMMIT_HASH@"
+#define BUILD_TIMESTAMP "@_build_time_stamp@"
+
+#endif
