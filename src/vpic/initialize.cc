@@ -76,7 +76,7 @@ vpic_simulation::initialize( int argc,
   KOKKOS_TIC(); // Time this data movement
   KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
   KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
-  
+
   // Do some consistency checks on user initialized fields
 
   if( rank()==0 ) MESSAGE(( "Checking interdomain synchronization" ));
@@ -159,7 +159,9 @@ vpic_simulation::initialize( int argc,
   species_t * sp;
 
   // Initialize Kokkos
+  // TODO : Move Kokkos to boot.cc and kokkos_rng to constructor?
   Kokkos::initialize( argc, argv );
+  kokkos_rng = new kokkos_rng_pool_t(0); // seed_entropy will re-seed.
 
   // Call the user initialize the simulation
 
@@ -258,6 +260,6 @@ void
 vpic_simulation::finalize( void ) {
   barrier();
   //Kokkos::finalize();
+  delete kokkos_rng;
   update_profile( rank()==0 );
 }
-

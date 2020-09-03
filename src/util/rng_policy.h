@@ -5,6 +5,10 @@
 #include "../vpic/kokkos_helpers.h"
 #include <random>
 
+// TODO: These don't belong here, do they?
+using kokkos_rng_pool_t = Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace>;
+using kokkos_rng_state_t = Kokkos::Random_XorShift64<Kokkos::DefaultExecutionSpace>;
+
 namespace _RNG {
 
 // NOTE: this policy ignore the rng it's passed..

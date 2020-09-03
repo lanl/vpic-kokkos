@@ -26,8 +26,6 @@
 #include "../util/system.h"
 #include "../util/rng_policy.h"
 
-#include "../collision/kokkos/takizuka_abe.h"
-
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
 #endif
@@ -139,6 +137,10 @@ public:
 #else // USE_ORIGINAL_RNG
   _RNG::RandomNumberProvider<_RNG::OriginalRNG> rng_policy;
 #endif
+
+  // TODO: remove or improve this
+
+  kokkos_rng_pool_t * kokkos_rng;
 
   // Directly initialized by user
 
@@ -620,6 +622,7 @@ public:
 
   inline void seed_entropy( int base ) {
     rng_policy.seed( entropy, sync_entropy, base, 0 );
+    kokkos_rng->init(base, Kokkos::DefaultExecutionSpace::concurrency());
     //seed_rng_pool( entropy,      base, 0 );
     //seed_rng_pool( sync_entropy, base, 1 );
   }

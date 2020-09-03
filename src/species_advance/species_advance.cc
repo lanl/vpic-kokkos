@@ -134,6 +134,7 @@ species( const char * name,
   sp->max_nm = max_local_nm;
 
   sp->last_sorted       = INT64_MIN;
+  sp->last_indexed      = INT64_MIN;
   sp->sort_interval     = sort_interval;
   sp->sort_out_of_place = sort_out_of_place;
   MALLOC_ALIGNED( sp->partition, g->nv+1, 128 );
