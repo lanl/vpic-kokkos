@@ -1,7 +1,9 @@
 #include "util.h"
 
 #include <iostream>
+#if defined(_OPENMP)
 #include <omp.h>
+#endif
 
 double _boot_timestamp = 0;
 
@@ -55,6 +57,7 @@ boot_services( int * pargc,
           std::cerr << std::endl;
       }
 
+#if defined(_OPENMP)
       int nThreads = 0;
 #pragma omp parallel
       {
@@ -69,9 +72,12 @@ boot_services( int * pargc,
 
       std::cerr << "-> Setting omp_get_num_threads to be tpp! " << thread.n_pipeline << std::endl;
       std::cerr << std::endl;
+#endif
   }
 
+#if defined(_OPENMP)
   omp_set_num_threads(thread.n_pipeline);
+#endif
 
 }
 
