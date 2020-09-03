@@ -54,7 +54,7 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 
-set(KOKKOS_ARCH "Power9;Volta70" CACHE STRING "Architecture to use with Kokkos")
+#set(KOKKOS_ARCH "Power9;Volta70" CACHE STRING "Architecture to use with Kokkos")
 
 add_definitions(-DUSE_KOKKOS)
 
@@ -126,29 +126,29 @@ include_directories(${PROJECT_SOURCE_DIR})
 #------------------------------------------------------------------------------#
 # Kokkos
 #------------------------------------------------------------------------------#
-set(KOKKOS_ENABLE_DEBUG OFF)
+set(Kokkos_ENABLE_DEBUG OFF)
 
 option(VPIC_KOKKOS_DEBUG "Enable Debug In Kokkos" OFF)
 
 if (VPIC_KOKKOS_DEBUG)
-    set(KOKKOS_ENABLE_DEBUG ON)
+    set(KOkkos_ENABLE_DEBUG ON)
 endif(VPIC_KOKKOS_DEBUG)
 
 set(KOKKOS_ENABLE_EXPLICIT_INSTANTIATION OFF)
 
 if(ENABLE_KOKKOS_OPENMP)
   if (OPENMP_FOUND)
-    set(KOKKOS_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
+    set(Kokkos_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
   endif()
 endif()
 
 if(ENABLE_KOKKOS_CUDA)
   find_package(CUDA)
   if (CUDA_FOUND)
-    add_definitions(-DENABLE_KOKKOS_CUDA)
-    set(KOKKOS_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
-    set(KOKKOS_ENABLE_CUDA_LAMBDA ON)
-    set(KOKKOS_ENABLE_CUDA_UVM OFF)
+    add_definitions(-DENABLE_Kokkos_CUDA)
+    set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
+    set(Kokkos_ENABLE_CUDA_LAMBDA ON)
+    set(Kokkos_ENABLE_CUDA_UVM OFF)
 
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
 
@@ -169,7 +169,7 @@ endif()
 
 # Disable platform specific options
 if (APPLE)
-  set(KOKKOS_ENABLE_LIBRT OFF CACHE BOOL "librt is not available on macOS")
+  set(Kokkos_ENABLE_LIBRT OFF CACHE BOOL "librt is not available on macOS")
 endif()
 
 if (BUILD_INTERNAL_KOKKOS)
