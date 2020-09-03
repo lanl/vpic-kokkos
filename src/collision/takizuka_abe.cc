@@ -51,8 +51,8 @@ takizuka_abe(
   takizuka_abe_collision_op_t * ta;
   MALLOC( ta, 1);
   MALLOC( ta->name, strlen(name) +1 );
-  strcpy( ta->name, name ); 
-  
+  strncpy( ta->name, name, strlen(name)+1);
+
   ta->spi         = spi;
   ta->spj         = spj;
   ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;

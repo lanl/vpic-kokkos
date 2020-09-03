@@ -51,7 +51,7 @@
  *
  * ######################IMPORTANT DOCUMENTATION ##############
  * For information on use of lambdas inside struct and classes:
- *     https://github.com/kokkos/kokkos/wiki/Lambda-Dispatch 
+ *     https://github.com/kokkos/kokkos/wiki/Lambda-Dispatch
  * ############################################################
  */
 template<bool MonteCarlo>
@@ -64,7 +64,7 @@ struct binary_collision_pipeline {
   const float _mu_i, _mu_j, _mu, _dtinterval, _rdV;
   const int   _nx, _ny, _nz;
 
-  //Member variables start with the symbol _ and this is used 
+  //Member variables start with the symbol _ and this is used
   //to indicate they are not safe to be passed into a kokkos
   //lambda without first changing the reference type. Any var
   //starting with _ in a lambda will likely throw and illegal
@@ -87,19 +87,19 @@ struct binary_collision_pipeline {
     double interval,
     kokkos_rng_pool_t& rp
   )
-    : _spi(spi),
-      _spj(spj),
-      _rp(rp),
-      _mu_i(spj->m / (spi->m + spj->m)),
+    : _mu_i(spj->m / (spi->m + spj->m)),
       _mu_j(spi->m / (spi->m + spj->m)),
       _mu(spi->m*spj->m / (spi->m + spj->m)),
       _dtinterval(spi->g->dt * interval),
+      _rdV(1/spi->g->dV),
       _nx(spi->g->nx),
       _ny(spi->g->ny),
       _nz(spi->g->nz),
-      _rdV(1/spi->g->dV)
+      _spi(spi),
+      _spj(spj),
+      _rp(rp)
   {
-    //TODO: is interval needed here? 
+    //TODO: is interval needed here?
     if( !_spi || !_spj || !_spi->g || !_spj->g || _spi->g != _spj->g || interval <= 0)
       ERROR(("Bad args."));
 
@@ -159,7 +159,7 @@ struct binary_collision_pipeline {
     // beforehand is much faster than doing it inline.
     _spi_n = k_density_t("spi_n", _spi->g->nv);
     _spj_n = k_density_t("spj_n", _spj->g->nv);
-   
+
     //Not sure if this is needed to be redefined here
     const float rdV = (1/_spi->g->dV);
 
@@ -221,20 +221,20 @@ struct binary_collision_pipeline {
     auto const& spi = _spi;
     auto const& spj = _spj;
     auto const& rp  = _rp;
-    auto const& spi_n = _spi_n;   
-    auto const& spj_n = _spj_n;     
-    auto const& spi_p = _spi_p; 
-    auto const& spj_p = _spj_p; 
+    auto const& spi_n = _spi_n;
+    auto const& spj_n = _spj_n;
+    auto const& spi_p = _spi_p;
+    auto const& spj_p = _spj_p;
     auto const& dtinterval = _dtinterval;
-    auto const& spi_sortindex_ra = _spi_sortindex_ra; 
-    auto const& spj_sortindex_ra = _spj_sortindex_ra; 
+    auto const& spi_sortindex_ra = _spi_sortindex_ra;
+    auto const& spj_sortindex_ra = _spj_sortindex_ra;
     auto const& spi_partition_ra = _spi_partition_ra;
-    auto const& spj_partition_ra = _spj_partition_ra; 
-    
+    auto const& spj_partition_ra = _spj_partition_ra;
+
     Kokkos::parallel_for("binary_collision_pipeline::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
       KOKKOS_LAMBDA (member_type team_member) {
-        
+
         int ix, iy, iz;
         RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
         const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
@@ -351,7 +351,7 @@ struct binary_collision_pipeline {
 
         // We *must* free generators.
         rp.free_state(rg);
-        
+
       });
 
     // I don't know why we need this, but without it I get an illegal memory
@@ -383,7 +383,7 @@ struct binary_collision_pipeline {
     int j
   )
   {
-    
+
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];
     int d0, d1, d2;
 
