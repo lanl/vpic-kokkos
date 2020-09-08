@@ -58,25 +58,16 @@ struct DefaultCompress {
         // This is annoying, but it will give a back fill order more consistent
         // with VPIC's serial algorithm
 
-        //Kokkos::View<int*> unsafe_index("safe index", 2*nm);
         Kokkos::View<int*> unsafe_index = sp->unsafe_index;
-
-        // TODO: prevent these allocations from being repeated.
 
         // Track (atomically) the id's we've tried to pull from when dealing with a
         // We use this to store a list of things we bailed out on moving. Typically because the mapping of pull_from->write_to got skipped.
 
-        //Kokkos::View<int> clean_up_to_count("clean up to count"); // TODO: find an algorithm that doesn't need this
-        //Kokkos::View<int> clean_up_from_count("clean up from count"); // TODO: find an algorithm that doesn't need this
         Kokkos::View<int> clean_up_to_count = sp->clean_up_to_count;
         Kokkos::View<int> clean_up_from_count = sp->clean_up_from_count;
 
-        //Kokkos::View<int>::HostMirror clean_up_to_count_h = Kokkos::create_mirror_view(clean_up_to_count);
-        //Kokkos::View<int>::HostMirror clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
         Kokkos::View<int>::HostMirror clean_up_from_count_h = sp->clean_up_from_count_h;
 
-        //Kokkos::View<int*> clean_up_from("clean up from", nm);
-        //Kokkos::View<int*> clean_up_to("clean up to", nm);
         Kokkos::View<int*> clean_up_from = sp->clean_up_from;
         Kokkos::View<int*> clean_up_to = sp->clean_up_to;
         
@@ -97,7 +88,6 @@ struct DefaultCompress {
         // Build a list of safe lookups
 
         // TODO: we can probably do this online while we do the advance_p
-        // TODO: Is this supposed to go to 2*nm like mentioned above?
         Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
         Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int i)
         {
@@ -127,8 +117,8 @@ struct DefaultCompress {
             int write_to = particle_movers_i(nm-n-1); // put it in a gap
             int danger_zone = np - nm;
 
-            // if they're the same, no need to do it. This can happen below in the
-            // danger zone and we want to avoid "cleaning it up"
+            // if they're the same, no need to do it. This can happen below in
+            // the danger zone and we want to avoid "cleaning it up"
             if (pull_from == write_to) return;
 
             // If the "gap" is in the danger zone, no need to back fill it
