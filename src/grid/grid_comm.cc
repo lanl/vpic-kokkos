@@ -67,8 +67,8 @@ begin_recv_port_k( int i, int j, int k,
                  char* recv_buf ) {
   int port = BOUNDARY(-i,-j,-k), src = g->bc[port];
   if( src<0 || src>=world_size ) return;
-  mp_set_recv_buffer(g->mp, port, size, recv_buf);
-  mp_begin_recv( g->mp, port, size, src, BOUNDARY(i,j,k));
+  mp_set_recv_buffer(g->mp_k, port, size, recv_buf);
+  mp_begin_recv( g->mp_k, port, size, src, BOUNDARY(i,j,k));
 }
 
 void*
@@ -76,9 +76,9 @@ end_recv_port_k( int i, int j, int k,
                const grid_t * g ) {
   int port = BOUNDARY(-i,-j,-k), src = g->bc[port];
   if( src<0 || src>=world_size ) return NULL;
-  mp_end_recv( g->mp, port );
-  mp_unset_recv_buffer(g->mp, port);
-  return mp_send_buffer( g->mp, port );
+  mp_end_recv( g->mp_k, port );
+  mp_unset_recv_buffer(g->mp_k, port);
+  return mp_send_buffer( g->mp_k, port );
 }
 
 void
@@ -88,8 +88,8 @@ begin_send_port_k( int i, int j, int k,
                  char* send_buf) {
   int port = BOUNDARY( i, j, k), dst = g->bc[port];
   if( dst<0 || dst>=world_size ) return;
-  mp_set_send_buffer(g->mp, port, size, send_buf);
-  mp_begin_send( g->mp, port, size, dst, port);
+  mp_set_send_buffer(g->mp_k, port, size, send_buf);
+  mp_begin_send( g->mp_k, port, size, dst, port);
 }
 
 void
@@ -97,8 +97,8 @@ end_send_port_k( int i, int j, int k,
                const grid_t * g ) {
   int port = BOUNDARY( i, j, k), dst = g->bc[port];
   if( dst<0 || dst>=world_size ) return;
-  mp_end_send( g->mp, BOUNDARY(i,j,k) );
-  mp_unset_send_buffer(g->mp, port);
+  mp_end_send( g->mp_k, BOUNDARY(i,j,k) );
+  mp_unset_send_buffer(g->mp_k, port);
 }
 
 void begin_recv_port_kokkos(const grid_t* g, int port, int size, int tag, char * ALIGNED(128) recv_buf) {
