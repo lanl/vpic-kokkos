@@ -71,11 +71,10 @@ struct DefaultCompress {
         Kokkos::View<int*> clean_up_from = sp->clean_up_from;
         Kokkos::View<int*> clean_up_to = sp->clean_up_to;
         
+        // Zero out the arrays and counters
+        Kokkos::deep_copy(clean_up_to_count, 0);
+        Kokkos::deep_copy(clean_up_from_count, 0);
         Kokkos::parallel_for("Clean clean up arrays", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int i) {
-                if(!i){//TODO: At least I know I should be embarrassed about this
-                    clean_up_to_count()=0;
-                    clean_up_from_count()=0;
-                }
                 clean_up_from(i) = 0;
                 clean_up_to(i) = 0;
                 });
