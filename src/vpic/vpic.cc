@@ -212,7 +212,23 @@ void restore_kokkos(vpic_simulation& simulation)
     new(&fa->k_f_h) k_field_t::HostMirror();
     new(&fa->k_fe_h) k_field_edge_t::HostMirror();
 
-    fa->init_kokkos_fields( nv );
+    // TODO: restore fb or make it a pointer to avoid it getting filled with
+    // garbage on restore
+
+    new(&fa->k_f_rhob_accum_d) k_field_accum_t();
+    new(&fa->k_f_rhob_accum_h) k_field_accum_t::HostMirror();
+
+    grid_t* grid = simulation.grid;
+
+    // TODO: this xxx_sz calculation is duplicated in sfa.cc and could be DRYed
+    int nx = grid->nx;
+    int ny = grid->ny;
+    int nz = grid->nz;
+    int xyz_sz = 2*ny*(nz+1) + 2*nz*(ny+1) + ny*nz;
+    int yzx_sz = 2*nz*(nx+1) + 2*nx*(nz+1) + nz*nx;
+    int zxy_sz = 2*nx*(ny+1) + 2*ny*(nx+1) + nx*ny;
+    fa->init_kokkos_fields( nv, xyz_sz, yzx_sz, zxy_sz );
+
     simulation.KOKKOS_COPY_FIELD_MEM_TO_DEVICE(simulation.field_array);
 
     // Restore Material Data
@@ -244,9 +260,6 @@ void restore_kokkos(vpic_simulation& simulation)
     simulation.KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interp);
 
     // Restore Grid/Neighbors
-
-    grid_t* grid = simulation.grid;
-
     new(&grid->k_neighbor_d) k_neighbor_t();
     new(&grid->k_neighbor_h) k_neighbor_t::HostMirror();
 

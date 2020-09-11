@@ -143,6 +143,10 @@ boundary_p_kokkos(
 
   // Load the particle send and local injection buffers
 
+  // Track if rhob needs to be updated on the device.
+  // TODO: Do the absorbtion on the device.
+  int absorbed = 0;
+
   do {
 
     particle_injector_t * RESTRICT ALIGNED(16) pi_send[6];
@@ -191,7 +195,7 @@ boundary_p_kokkos(
     // For each species, load the movers
     LIST_FOR_EACH( sp, sp_list )
     {
-        auto& particle_send = sp->k_pc_i_h;
+        const auto& particle_send = sp->k_pc_i_h;
 
         //const float   sp_q  = sp->q;
         const int32_t sp_id = sp->id;
@@ -234,14 +238,37 @@ boundary_p_kokkos(
 
             int64_t nn = neighbor[ 6*voxel + face ];
 
-            // TODO: Allow for absorbing boundaries
             // Absorb
-            if( nn==absorb_particles ) {
+            if( nn==absorb_particles )
+            {
+                // TODO: sync device to host if this is the first time
+                absorbed++;
+
                 // Ideally, we would batch all rhob accumulations together
                 // for efficiency
-                Kokkos::abort("Not implemented yet");
+
+                // TODO: We could detect this on the GPU side and process is there instead
+                  // Not doing that costs us data copies in the fields
+                int i = pm->i;
+                //const auto& kfield_h = fa->k_f_h;
+                const auto& krhob_accum_h = fa->k_f_rhob_accum_h;
+                const auto& kparticle_move_h = sp->k_pc_h;
+                const auto& kparticle_move_i_h = sp->k_pc_i_h;
+
+                float qsp = sp->q;
+
+                k_accumulate_rhob_single_cpu(
+                        krhob_accum_h,
+                        kparticle_move_h,
+                        kparticle_move_i_h,
+                        copy_index,
+                        g,
+                        qsp
+                );
                 //accumulate_rhob( f, p0+i, g, sp_q );
-                //goto backfill;
+
+                // No need to backfill, as the removed the particle already
+                // goto backfill;
                 continue;
             }
 
@@ -251,12 +278,10 @@ boundary_p_kokkos(
                 pi = &pi_send[face][n_send[face]++];
 
                 //pi->dx=p0[i].dx;
-                //pi->dy=p0[i].dy;
                 //pi->dz=p0[i].dz;
                 pi->dx = sp->k_pc_h(copy_index, particle_var::dx);
                 pi->dy = sp->k_pc_h(copy_index, particle_var::dy);
                 pi->dz = sp->k_pc_h(copy_index, particle_var::dz);
-
 
                 pi->i = nn - range[face];
 
@@ -336,6 +361,7 @@ boundary_p_kokkos(
     }
 
   } while(0);
+  
 
   // Finish exchanging particle counts and start exchanging actual
   // particles.
@@ -531,6 +557,25 @@ boundary_p_kokkos(
     if( shared[face] ) mp_end_send(mp,f2b[face]);
   }
 
+  // If there is additional bound charge, update rhob on device
+  // Having the accumulator array saves us from copying rhob to the host every
+  // step where a particle is absorbed.
+  if (absorbed){
+      int n_fields = fa->g->nv;
+      auto& kfd = fa->k_f_d;
+      auto& kfad = fa->k_f_rhob_accum_d;
+      auto& kfah = fa->k_f_rhob_accum_h;
+      Kokkos::deep_copy(kfad, kfah);
+      // TODO: Is this the right range policy?
+      Kokkos::parallel_for("Add rhob accumulation to device rhob", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, n_fields), KOKKOS_LAMBDA (int i) {
+                kfd(i, field_var::rhob) += kfad(i);
+      });
+      // Zero host accum array
+      Kokkos::parallel_for("Clear rhob accumulation array on host", host_execution_policy(0, n_fields - 1), KOKKOS_LAMBDA (int i) {
+              kfah(i) = 0;
+              });
+
+  }
   // contribute SA back
   //Kokkos::Experimental::contribute(aa->k_a_h, scatter_add);
 }
