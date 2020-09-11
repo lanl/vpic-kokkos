@@ -1,6 +1,7 @@
 set(test test_collision)
 build_a_vpic(${test} ${CMAKE_CURRENT_SOURCE_DIR}/${test}.deck)
-add_test(NAME ${test} COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ./${test})
+add_test(${test} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ./${test})
+
 
 include(FindPythonInterp)
 

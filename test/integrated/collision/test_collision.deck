@@ -221,8 +221,10 @@ begin_initialization {
   //define_collision_op(takizuka_abe("e_i_bulk", electron, ion, entropy, cvar0, ncoll));
 
   std::cout << "Deck adding collison with interval " << ncoll << std::endl;
-  takizuka_abe_t ta("e_i_bulk", electron, ion, cvar0, ncoll);
-  add_takizuka_abe_collision(ta);
+  //takizuka_abe_t ta("e_i_bulk", electron, ion, cvar0, ncoll);
+  //add_takizuka_abe_collision(ta);
+
+  define_collision_op(takizuka_abe("e_i_bulk", electron, ion, cvar0, ncoll));
 
   ///////////////////////////////////////////////////
   // Log diagnostic information about this simulation
@@ -694,15 +696,19 @@ begin_current_injection { }
 //*******************  FIELD INJECTION ***************************
 begin_field_injection {
     //set all to 0
-    for( int iz=0; iz<=grid->nz+1; iz++) {
-        for( int iy=0; iy<=grid->ny+1; iy++) {
-            for( int ix=0; ix<=grid->nx+1; ix++) {
-                field(ix,iy,iz).ex=0;
-                field(ix,iy,iz).ey=0;
-                field(ix,iy,iz).ez=0;
-                field(ix,iy,iz).cbx=0;
-                field(ix,iy,iz).cby=0;
-                field(ix,iy,iz).cbz=0;
+    int nx = grid->nx;
+    int ny = grid->ny;
+    int nz = grid->nz;
+
+    for( int iz=0; iz<=nz+1; iz++) {
+        for( int iy=0; iy<=ny+1; iy++) {
+            for( int ix=0; ix<=nx+1; ix++) {
+                k_field( ix, iy, iz, field_var::ex)  = 0.0;
+                k_field( ix, iy, iz, field_var::ey)  = 0.0;
+                k_field( ix, iy, iz, field_var::ez)  = 0.0;
+                k_field( ix, iy, iz, field_var::cbx) = 0.0;
+                k_field( ix, iy, iz, field_var::cby) = 0.0;
+                k_field( ix, iy, iz, field_var::cbz) = 0.0;
             }
         }
     }
