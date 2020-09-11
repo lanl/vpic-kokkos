@@ -339,6 +339,11 @@ typedef struct field_array {
       fb = new field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
   }
 
+  ~field_array()
+  {
+      delete fb;
+  }
+
 } field_array_t;
 
 
