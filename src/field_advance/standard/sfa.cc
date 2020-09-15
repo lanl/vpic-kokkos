@@ -214,9 +214,20 @@ new_standard_field_array( grid_t           * RESTRICT g,
   field_array_t * fa;
   if( !g || !m_list || damp<0 ) ERROR(( "Bad args" ));
 
-  fa = new field_array_t(g->nv);
-  //fa->init_fields(g->nv);
+  int nx = g->nx;
+  int ny = g->ny;
+  int nz = g->nz;
+  int xyz_sz = 2*ny*(nz+1) + 2*nz*(ny+1) + ny*nz;
+  int yzx_sz = 2*nz*(nx+1) + 2*nx*(nz+1) + nz*nx;
+  int zxy_sz = 2*nx*(ny+1) + 2*ny*(nx+1) + nx*ny;
+
   //MALLOC( fa, 1 );
+  fa = new field_array_t(g->nv, xyz_sz, yzx_sz, zxy_sz);
+
+  // Zero host accum array
+  Kokkos::parallel_for("Clear rhob accumulation array on host", host_execution_policy(0, g->nv), KOKKOS_LAMBDA (int i) {
+          fa->k_f_rhob_accum_h(i) = 0;
+          });
 
   MALLOC_ALIGNED( fa->f, g->nv, 128 );
   CLEAR( fa->f, g->nv );
