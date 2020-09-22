@@ -63,7 +63,7 @@ void checkpt(const char* fbase, int tag)
 
     simulation->KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(simulation->interpolator_array);
 
-    std::cout << "Copying data back to host for checkpointing.." << std::endl;
+    //std::cout << "Copying data back to host for checkpointing.." << std::endl;
 
     ///// End Kokkos Copy Data /////
 
