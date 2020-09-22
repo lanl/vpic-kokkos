@@ -198,6 +198,13 @@ void restore_kokkos(vpic_simulation& simulation)
         new(&sp->k_pm_h) k_particle_movers_t::HostMirror();
         new(&sp->k_pm_i_h) k_particle_i_movers_t::HostMirror();
 
+        new(&sp->unsafe_index) Kokkos::View<int*>();
+        new(&sp->clean_up_to_count) Kokkos::View<int>();
+        new(&sp->clean_up_from_count) Kokkos::View<int>();
+        new(&sp->clean_up_from_count_h) Kokkos::View<int>::HostMirror();
+        new(&sp->clean_up_from) Kokkos::View<int*>();
+        new(&sp->clean_up_to) Kokkos::View<int*>();
+
         sp->init_kokkos_particles();
 
         simulation.KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(sp);
