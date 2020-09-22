@@ -16,9 +16,11 @@ void
 checkpt_species( const species_t * sp ) {
   CHECKPT( sp, 1 );
   CHECKPT_STR( sp->name );
+  std::cout << "checkpoint particles " << sp->name << " has " << sp->np << " of max " << sp->max_np << std::endl;
   checkpt_data( sp->p,
                 sp->np    *sizeof(particle_t),
                 sp->max_np*sizeof(particle_t), 1, 1, 128 );
+  std::cout << "checkpoint movers " << sp->name << " has " << sp->nm << " of max " << sp->max_nm << std::endl;
   checkpt_data( sp->pm,
                 sp->nm    *sizeof(particle_mover_t),
                 sp->max_nm*sizeof(particle_mover_t), 1, 1, 128 );

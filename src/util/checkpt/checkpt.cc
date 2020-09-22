@@ -601,7 +601,7 @@ find_saddr( const char * sname,
   /* If we aren't given a symbol name, return not found */
 
   if( !sname ) return NULL;
-  
+
   /* Note that the default library search path (RTLD_DEFAULT) includes
      the application itself.  The application should be linked with
      with the global symbol table exported (e.g. "-rdynamic" under
