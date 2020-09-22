@@ -23,7 +23,7 @@ src_dir="${0%/*}/.."
 # the raw address instead and keeping my fingers crossed.
 
 CXX=$src_dir/kokkos/bin/nvcc_wrapper cmake \
-  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_BUILD_TYPE=Release
   -DENABLE_INTEGRATED_TESTS=OFF \
   -DENABLE_UNIT_TESTS=OFF \
   -DBUILD_INTERNAL_KOKKOS=ON \
