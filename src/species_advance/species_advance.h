@@ -66,7 +66,7 @@ class species_t {
         int np = 0, max_np = 0;             // Number and max local particles
         particle_t * ALIGNED(128) p;        // Array of particles for the species
 
-        int nm, max_nm;                     // Number and max local movers in use
+        int nm = 0, max_nm = 0;             // Number and max local movers in use
         particle_mover_t * ALIGNED(128) pm; // Particle movers
 
         int64_t last_sorted;                // Step when the particles were last
