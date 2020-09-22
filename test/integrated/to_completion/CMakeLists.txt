@@ -17,6 +17,8 @@ list(APPEND DEFAULT_ARG_TESTS
 
 list(APPEND RESTART_DECK dump) # Reuse existing deck and start half way
 list(APPEND RESTART_BINARY restore)
+list(APPEND CHECKPOINT_FILE "${CMAKE_CURRENT_BINARY_DIR}/checkpt_test.1")
+list(APPEND RESTART_ARGS --restore ${CHECKPOINT_FILE})
 
 foreach(test ${DEFAULT_ARG_TESTS})
     build_a_vpic(${test} ${CMAKE_CURRENT_SOURCE_DIR}/${test}.deck)
@@ -36,29 +38,29 @@ endforeach()
 #${MPIEXEC_POSTFLAGS} ${ARGS})
 
 # Try a threaded run
-set (THREADED_TEST threaded)
-list(APPEND THREADED_ARGS --tpp ${NUM_THREADS})
+#set (THREADED_TEST threaded)
+#list(APPEND THREADED_ARGS --tpp ${NUM_THREADS})
 
-build_a_vpic(${THREADED_TEST} ${CMAKE_CURRENT_SOURCE_DIR}/simple.deck)
-add_test(${THREADED_TEST} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_NUMPROC}
-    ${MPIEXEC_PREFLAGS} ${THREADED_TEST} ${MPIEXEC_POSTFLAGS} ${THREADED_ARGS})
+#build_a_vpic(${THREADED_TEST} ${CMAKE_CURRENT_SOURCE_DIR}/simple.deck)
+#add_test(${THREADED_TEST} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_NUMPROC}
+#${MPIEXEC_PREFLAGS} ${THREADED_TEST} ${MPIEXEC_POSTFLAGS} ${THREADED_ARGS})
 
-# Try an MPI run
-# This can hang if you over subscribe the gpu with mpi
-#set (MPI_TEST mpi_test_run_2)
-#build_a_vpic(${MPI_TEST} ${CMAKE_CURRENT_SOURCE_DIR}/simple.deck)
-#add_test(${MPI_TEST} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_NUMPROC_PARALLEL}
-    #${MPIEXEC_PREFLAGS} ${MPI_TEST} ${MPIEXEC_POSTFLAGS})
+set(generate_restore "generate_${RESTART_BINARY}")
+build_a_vpic(${generate_restore} ${CMAKE_CURRENT_SOURCE_DIR}/${RESTART_DECK}.deck)
+add_test(${generate_restore} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG}
+${MPIEXEC_NUMPROC} ${MPIEXEC_PREFLAGS} ./${generate_restore}
+${MPIEXEC_POSTFLAGS})
 
-# TODO: Do we want to try an MPI + Threaded runs
+# Run using the restore file
+# TODO: caps?
+set(perform_restore "perform_${RESTART_BINARY}")
+build_a_vpic(${perform_restore} ${CMAKE_CURRENT_SOURCE_DIR}/${RESTART_DECK}.deck)
+add_test(${perform_restore} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG}
+${MPIEXEC_NUMPROC} ${MPIEXEC_PREFLAGS} ./${perform_restore}
+${MPIEXEC_POSTFLAGS} ${RESTART_ARGS})
 
-# Test Restart (restore) functionality
-
-# TODO: make the vpic on the local machine generate the checkpoint
-#list(APPEND CHECKPOINT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/checkpt.1")
-#list(APPEND RESTART_ARGS --restore ${CHECKPOINT_FILE})
-
-#build_a_vpic(${RESTART_BINARY} ${CMAKE_CURRENT_SOURCE_DIR}/${RESTART_DECK}.deck)
-#add_test(${RESTART_BINARY} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG}
-    #${MPIEXEC_NUMPROC} ${MPIEXEC_PREFLAGS} ${RESTART_BINARY}
-    #${MPIEXEC_POSTFLAGS} ${RESTART_ARGS})
+# Link the two tests
+set(RESTORE_LABEL "restore_group")
+set_tests_properties(${perform_restore} PROPERTIES DEPENDS ${generate_restore})
+#set_property(TEST ${generate_restore} PROPERTY FIXTURES_SETUP ${RESTORE_LABEL})
+#set_property(TEST ${perform_restore} PROPERTY FIXTURES_REQUIRED ${RESTORE_LABEL})
