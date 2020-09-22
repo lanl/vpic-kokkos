@@ -67,8 +67,7 @@ class species_t {
         particle_t * ALIGNED(128) p;        // Array of particles for the species
 
         // TODO: these could be unsigned?
-        int nm;                             // Number and max local movers in use
-        int max_nm;
+        int nm = 0, max_nm = 0;             // Number and max local movers in use
 
         particle_mover_t * ALIGNED(128) pm; // Particle movers
 
