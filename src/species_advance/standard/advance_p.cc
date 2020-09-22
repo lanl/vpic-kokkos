@@ -82,16 +82,9 @@ advance_p_kokkos(
   auto rangel = g->rangel;
   auto rangeh = g->rangeh;
 
-  // TODO: is this the right place to do this?
-  Kokkos::parallel_for("clear nm", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
-    //printf("how many times does this run %d", i);
-    k_nm(0) = 0;
-    //local_pm_dispx = 0;
-    //local_pm_dispy = 0;
-    //local_pm_dispz = 0;
-    //local_pm_i = 0;
-  });
-
+  // zero out nm, we could probably do this earlier if we're worried about it
+  // slowing things down
+  Kokkos::deep_copy(k_nm, 0);
 
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index)
