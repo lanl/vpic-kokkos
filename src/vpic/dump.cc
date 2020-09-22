@@ -22,6 +22,8 @@
 // COMPATIBLE WITH EXISTING EXTERNAL 3RD PARTY VISUALIZATION SOFTWARE.
 // IN THE LONG RUN, THIS EXTERNAL SOFTWARE WILL NEED TO BE UPDATED.
 
+const int max_filename_bytes = 256;
+
 int vpic_simulation::dump_mkdir(const char * dname) {
 	return FileUtils::makeDirectory(dname);
 } // dump_mkdir
@@ -137,14 +139,14 @@ namespace dump_type {
 
 void
 vpic_simulation::dump_grid( const char *fbase ) {
-  char fname[256];
+  char fname[max_filename_bytes];
   FileIO fileIO;
   int dim[4];
 
   if( !fbase ) ERROR(( "Invalid filename" ));
   if( rank()==0 ) MESSAGE(( "Dumping grid to \"%s\"", fbase ));
 
-  sprintf( fname, "%s.%i", fbase, rank() );
+  snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
   FileIOStatus status = fileIO.open(fname, io_write);
   if( status==fail ) ERROR(( "Could not open \"%s\".", fname ));
 
@@ -184,7 +186,7 @@ vpic_simulation::dump_fields( const char *fbase, int ftag ) {
     if (step() > field_copy_last)
         KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
 
-  char fname[256];
+  char fname[max_filename_bytes];
   FileIO fileIO;
   int dim[3];
 
@@ -192,8 +194,8 @@ vpic_simulation::dump_fields( const char *fbase, int ftag ) {
 
   if( rank()==0 ) MESSAGE(( "Dumping fields to \"%s\"", fbase ));
 
-  if( ftag ) sprintf( fname, "%s.%li.%i", fbase, (long)step(), rank() );
-  else       sprintf( fname, "%s.%i", fbase, rank() );
+  if( ftag ) snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
+  else       snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
 
   FileIOStatus status = fileIO.open(fname, io_write);
   if( status==fail ) ERROR(( "Could not open \"%s\".", fname ));
@@ -223,7 +225,7 @@ vpic_simulation::dump_hydro( const char *sp_name,
 
 
   species_t *sp;
-  char fname[256];
+  char fname[max_filename_bytes];
   FileIO fileIO;
   int dim[3];
 
@@ -245,8 +247,13 @@ vpic_simulation::dump_hydro( const char *sp_name,
   if( rank()==0 )
     MESSAGE(("Dumping \"%s\" hydro fields to \"%s\"",sp->name,fbase));
 
-  if( ftag ) sprintf( fname, "%s.%li.%i", fbase, (long)step(), rank() );
-  else       sprintf( fname, "%s.%i", fbase, rank() );
+  if( ftag ) {
+      snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
+  }
+  else {
+      snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
+  }
+
   FileIOStatus status = fileIO.open(fname, io_write);
   if( status==fail) ERROR(( "Could not open \"%s\".", fname ));
 
@@ -275,7 +282,7 @@ vpic_simulation::dump_particles( const char *sp_name,
 {
 
     species_t *sp;
-    char fname[256];
+    char fname[max_filename_bytes];
     FileIO fileIO;
     int dim[1], buf_start;
     static particle_t * ALIGNED(128) p_buf = NULL;
@@ -295,8 +302,13 @@ vpic_simulation::dump_particles( const char *sp_name,
     if( rank()==0 )
         MESSAGE(("Dumping \"%s\" particles to \"%s\"",sp->name,fbase));
 
-    if( ftag ) sprintf( fname, "%s.%li.%i", fbase, (long)step(), rank() );
-    else       sprintf( fname, "%s.%i", fbase, rank() );
+    if( ftag ) {
+        snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
+    }
+    else {
+        snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
+    }
+
     FileIOStatus status = fileIO.open(fname, io_write);
     if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
 
@@ -411,8 +423,8 @@ vpic_simulation::global_header( const char * base,
   if( rank() ) return;
 
   // Open the file for output
-  char filename[256];
-  sprintf(filename, "%s.vpc", base);
+  char filename[max_filename_bytes];
+  snprintf(filename, max_filename_bytes, "%s.vpc", base);
 
   FileIO fileIO;
   FileIOStatus status;
@@ -503,7 +515,7 @@ vpic_simulation::global_header( const char * base,
                                                          total_hydro_groups),
                        total_hydro_groups);
 
-    sprintf(species_comment, "Species(%d) data information", (int)i);
+    snprintf(species_comment, max_filename_bytes, "Species(%d) data information", (int)i);
     print_hashed_comment(fileIO, species_comment);
     fileIO.print("SPECIES_DATA_DIRECTORY %s\n",
                  dumpParams[i]->baseDir);
@@ -541,14 +553,20 @@ vpic_simulation::field_dump( DumpParameters & dumpParams ) {
         KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
 
   // Create directory for this time step
-  char timeDir[256];
-  sprintf(timeDir, "%s/T.%ld", dumpParams.baseDir, (long)step());
+  char timeDir[max_filename_bytes];
+  int ret = snprintf(timeDir, max_filename_bytes, "%s/T.%ld", dumpParams.baseDir, (long)step());
+  if (ret < 0) {
+      ERROR(("snprintf failed"));
+  }
   dump_mkdir(timeDir);
 
   // Open the file for output
-  char filename[256];
-  sprintf(filename, "%s/T.%ld/%s.%ld.%d", dumpParams.baseDir, (long)step(),
+  char filename[max_filename_bytes];
+  ret = snprintf(filename, max_filename_bytes, "%s/T.%ld/%s.%ld.%d", dumpParams.baseDir, (long)step(),
           dumpParams.baseFileName, (long)step(), rank());
+  if (ret < 0) {
+      ERROR(("snprintf failed"));
+  }
 
   FileIO fileIO;
   FileIOStatus status;
@@ -683,14 +701,17 @@ vpic_simulation::hydro_dump( const char * speciesname,
                              DumpParameters & dumpParams ) {
 
   // Create directory for this time step
-  char timeDir[256];
-  sprintf(timeDir, "%s/T.%ld", dumpParams.baseDir, (long)step());
+  char timeDir[max_filename_bytes];
+  snprintf(timeDir, max_filename_bytes, "%s/T.%ld", dumpParams.baseDir, (long)step());
   dump_mkdir(timeDir);
 
   // Open the file for output
-  char filename[256];
-  sprintf( filename, "%s/T.%ld/%s.%ld.%d", dumpParams.baseDir, (long)step(),
+  char filename[max_filename_bytes];
+  int ret = snprintf( filename, max_filename_bytes, "%s/T.%ld/%s.%ld.%d", dumpParams.baseDir, (long)step(),
            dumpParams.baseFileName, (long)step(), rank() );
+  if (ret < 0) {
+      ERROR(("snprintf failed"));
+  }
 
   FileIO fileIO;
   FileIOStatus status;

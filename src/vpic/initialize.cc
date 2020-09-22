@@ -159,7 +159,8 @@ vpic_simulation::initialize( int argc,
   species_t * sp;
 
   // Initialize Kokkos
-  Kokkos::initialize( argc, argv );
+  // Moved to boot servcies
+  //Kokkos::initialize( argc, argv );
 
   // Call the user initialize the simulation
 
