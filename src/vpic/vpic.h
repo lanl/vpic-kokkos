@@ -306,13 +306,13 @@ public:
     return field_array->f[ voxel(ix,iy,iz) ];
   }
 
-    inline k_field_t& get_field() {
-        return field_array->k_f_d;
-    }
+  inline k_field_t& get_field() {
+      return field_array->k_f_d;
+  }
 
-    inline float& k_field(const int ix, const int iy, const int iz, field_var::f_v member) {
-        return field_array->k_f_d(voxel(ix,iy,iz), member);
-    }
+  inline float& k_field(const int ix, const int iy, const int iz, field_var::f_v member) {
+      return field_array->k_f_d(voxel(ix,iy,iz), member);
+  }
 
   inline interpolator_t &
   interpolator( const int v ) {
@@ -786,7 +786,7 @@ public:
    * This does not guarantee that the particles are truly up to date, since it
    * checks only if a copy has already been done at some point during the
    * current step, but it will always work in user_diagnostics unless the loop
-   * is modified or a user modifies particles during user_diagnostics.  
+   * is modified or a user modifies particles during user_diagnostics.
    *
    */
   void user_diagnostics_copy_field_mem_to_host()
@@ -920,7 +920,7 @@ public:
    * This does not guarantee that the particles are truly up to date, since it
    * checks only if a copy has already been done at some point during the
    * current step, but it will always work in user_diagnostics unless the loop
-   * is modified or a user modifies particles during user_diagnostics.  
+   * is modified or a user modifies particles during user_diagnostics.
    *
    * @param speciesname the name of the species to copy
    */
@@ -940,7 +940,7 @@ public:
    * This does not guarantee that the particles are truly up to date, since it
    * checks only if a copy has already been done at some point during the
    * current step, but it will always work in user_diagnostics unless the loop
-   * is modified or a user modifies particles during user_diagnostics.  
+   * is modified or a user modifies particles during user_diagnostics.
    *
    * @param sp the species list to copy
    */
@@ -1052,5 +1052,12 @@ public:
   }
 
 };
+
+
+/**
+ * @brief After a checkpoint restore, we must move the data back over to the
+ * Kokkos objects. This currently must be done for all views
+ */
+void restore_kokkos(vpic_simulation& simulation);
 
 #endif // vpic_h

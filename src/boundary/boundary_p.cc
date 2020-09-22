@@ -336,7 +336,13 @@ boundary_p_kokkos(
 
             // Uh-oh: We fell through
             //if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
-            printf("nn %ld rangel %ld rangeh %ld rangem %ld voxel %d face %d old_nn %ld \n", nn, rangel, rangeh, rangem, voxel, face, old_nn);
+            std::cout << "nn " << nn <<
+                " rangel " << rangel <<
+                " rangeh " << rangeh <<
+                " rangem " << rangem <<
+                " voxel " << face <<
+                " old_nn " << old_nn <<
+                std::endl;
 
             WARNING(( "Unknown boundary interaction ... dropping particle "
                         "(species=%s)", sp->name ));

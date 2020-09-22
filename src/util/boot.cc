@@ -87,6 +87,8 @@ boot_services( int * pargc,
         std::cout << "######### End Run Details ########" << std::endl;
         std::cout << std::endl; // blank line
     }
+
+    Kokkos::initialize( *pargc, *pargv );
 }
 
 // This operates in reverse order from boot_services
