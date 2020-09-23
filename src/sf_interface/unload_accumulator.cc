@@ -186,3 +186,38 @@ unload_accumulator_array_kokkos(field_array_t* RESTRICT fa,
     });
 */
 }
+
+void
+combine_accumulators(accumulator_array_t* RESTRICT aa)
+{
+    // TODO: this is likely faster with a 3d policy
+    //Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nz+2, ny+2, nx+2});
+    k_accumulators_t& k_accum_d = aa->k_a_d;
+    k_accumulators_t& k_accum_copy = aa->k_a_d_copy;
+
+    auto& k_accum_h = aa->k_a_h;
+    Kokkos::deep_copy(k_accum_copy, k_accum_h);
+
+    int nv = aa->g->nv;
+    //std::cout << " nv " << nv << " size " << k_accum_d.size() << " extent " << k_accum_d.extent(0) << std::endl;
+    // TODO: why is extent 2x the nv
+    //int nv = k_accum_d.extent(0);
+
+    Kokkos::parallel_for("combine accumulator array", nv, KOKKOS_LAMBDA (const int i) {
+            //std::cout << "copying over " << k_accum_copy(i, accumulator_var::jx, 0) << std::endl;
+        k_accum_d(i, accumulator_var::jx, 0) += k_accum_copy(i, accumulator_var::jx, 0);
+        k_accum_d(i, accumulator_var::jx, 1) += k_accum_copy(i, accumulator_var::jx, 1);
+        k_accum_d(i, accumulator_var::jx, 2) += k_accum_copy(i, accumulator_var::jx, 2);
+        k_accum_d(i, accumulator_var::jx, 3) += k_accum_copy(i, accumulator_var::jx, 3);
+
+        k_accum_d(i, accumulator_var::jy, 0) += k_accum_copy(i, accumulator_var::jy, 0);
+        k_accum_d(i, accumulator_var::jy, 1) += k_accum_copy(i, accumulator_var::jy, 1);
+        k_accum_d(i, accumulator_var::jy, 2) += k_accum_copy(i, accumulator_var::jy, 2);
+        k_accum_d(i, accumulator_var::jy, 3) += k_accum_copy(i, accumulator_var::jy, 3);
+
+        k_accum_d(i, accumulator_var::jz, 0) += k_accum_copy(i, accumulator_var::jz, 0);
+        k_accum_d(i, accumulator_var::jz, 1) += k_accum_copy(i, accumulator_var::jz, 1);
+        k_accum_d(i, accumulator_var::jz, 2) += k_accum_copy(i, accumulator_var::jz, 2);
+        k_accum_d(i, accumulator_var::jz, 3) += k_accum_copy(i, accumulator_var::jz, 3);
+    });
+}

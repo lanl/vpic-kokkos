@@ -251,6 +251,7 @@ void restore_kokkos(vpic_simulation& simulation)
     //int num_accum = old_accum->na;
 
     new(&accum->k_a_d) k_accumulators_t();
+    new(&accum->k_a_d_copy) k_accumulators_t();
     new(&accum->k_a_h) k_accumulators_t::HostMirror();
     new(&accum->k_a_sa) k_accumulators_sa_t();
 
