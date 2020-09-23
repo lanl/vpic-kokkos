@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by:
  *   Kevin J. Bowers, Ph.D.
  *   Plasma Physics Group (X-1)
@@ -47,13 +47,13 @@ new_accumulator_array( grid_t * g ) {
   //printf("Making %d copies of accumulator \n",aa_n_pipeline()+1 );
   aa = new accumulator_array_t(
           //(size_t)(aa->n_pipeline+1)*(size_t)aa->stride,
-          (size_t)(aa_n_pipeline()+1)*(size_t)(POW2_CEIL(g->nv,2))
-          //g->nv
+          //(size_t)(aa_n_pipeline()+1)*(size_t)(POW2_CEIL(g->nv,2))
+          g->nv
   );
   aa->n_pipeline = aa_n_pipeline();
   aa->stride     = POW2_CEIL(g->nv,2);
   aa->g          = g;
-  aa->na         = (size_t)(aa->n_pipeline+1)*(size_t)aa->stride;
+  //aa->na         = (size_t)(aa->n_pipeline+1)*(size_t)aa->stride;
   MALLOC_ALIGNED( aa->a, aa->na, 128 );
   CLEAR( aa->a, aa->na);
   REGISTER_OBJECT( aa, checkpt_accumulator_array, restore_accumulator_array,
