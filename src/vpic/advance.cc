@@ -206,7 +206,7 @@ int vpic_simulation::advance(void)
   //accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_h);
 
   // If we didn't accumulate in place (as in the GPU case), do so
-  if (! accumulate_in_place )
+  if ( accumulate_in_place == false)
   {
       // Update device so we can pull it all the way back to the host
       KOKKOS_TIC(); // Time this data movement
