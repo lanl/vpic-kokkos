@@ -7,6 +7,7 @@
 
 int vpic_simulation::advance(void)
 {
+
   species_t *sp;
   double err;
 
@@ -141,6 +142,22 @@ int vpic_simulation::advance(void)
         }
     }
 
+
+  bool accumulate_in_place = false; // This has to be outside the scoped timing block
+
+  KOKKOS_TIC(); // Time this data movement
+  // This could technically be done once per simulation, not every timestep
+  if (accumulator_array->k_a_h.data() == accumulator_array->k_a_d.data() )
+  {
+      accumulate_in_place = true;
+  }
+  else {
+      // Zero out the host accumulator
+      Kokkos::deep_copy(accumulator_array->k_a_h, 0.0f);
+  }
+
+  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+
   // This should be after the emission and injection to allow for the
   // possibility of thread parallelizing these operations
 
@@ -154,11 +171,6 @@ int vpic_simulation::advance(void)
   // that had boundary interactions are now on the guard list. Process the
   // guard lists. Particles that absorbed are added to rhob (using a corrected
   // local accumulation).
-
-  // This means the kokkos accum data is up to date
-  KOKKOS_TIC(); // Time this data movement
-  Kokkos::deep_copy(accumulator_array->k_a_h, accumulator_array->k_a_d);
-  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   // HOST - Touches particle copies, particle_movers, particle_injectors,
   // accumulators (move_p), neighbors
@@ -193,11 +205,14 @@ int vpic_simulation::advance(void)
   //Kokkos::Experimental::contribute(accumulator_array->k_a_h, accumulator_array->k_a_sah);
   //accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_h);
 
-  // Update device so we can pull it all the way back to the host
-  KOKKOS_TIC(); // Time this data movement
-  Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
-  //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
-  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  // If we didn't accumulate in place (as in the GPU case), do so
+  if (! accumulate_in_place )
+  {
+      // Update device so we can pull it all the way back to the host
+      KOKKOS_TIC(); // Time this data movement
+      combine_accumulators( accumulator_array );
+      KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  }
 
   /*
   // Move these value back to the real, on host, accum

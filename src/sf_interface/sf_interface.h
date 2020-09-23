@@ -107,7 +107,7 @@ typedef struct accumulator_array {
       na = _na;
 
       k_a_d = k_accumulators_t("k_accumulators", _na);
-      k_a_d = k_accumulators_t("k_accumulators_copy", _na);
+      k_a_d_copy = k_accumulators_t("k_accumulators_copy", _na);
       k_a_sa = Kokkos::Experimental::create_scatter_view(k_a_d);
       k_a_h  = Kokkos::create_mirror_view(k_a_d);
   }

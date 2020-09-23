@@ -15,13 +15,13 @@ unload_accumulator_pipeline( unload_accumulator_pipeline_args_t * args,
                              int n_pipeline ) {
   field_t             * ALIGNED(128) f = args->f;
   const accumulator_t * ALIGNED(128) a = args->a;
-  
+
   const accumulator_t * ALIGNED(16) a0;
   const accumulator_t * ALIGNED(16) ax,  * ALIGNED(16) ay,  * ALIGNED(16) az;
   const accumulator_t * ALIGNED(16) ayz, * ALIGNED(16) azx, * ALIGNED(16) axy;
   field_t * ALIGNED(16) f0;
   int x, y, z, n_voxel;
-  
+
   const int nx = args->nx;
   const int ny = args->ny;
   const int nz = args->nz;
@@ -31,7 +31,7 @@ unload_accumulator_pipeline( unload_accumulator_pipeline_args_t * args,
   const float cz = args->cz;
 
   // Process the voxels assigned to this pipeline
-  
+
   if( pipeline_rank==n_pipeline ) return; // No need for straggler cleanup
   DISTRIBUTE_VOXELS( 1,nx+1, 1,ny+1, 1,nz+1, 1,
                      pipeline_rank, n_pipeline, x, y, z, n_voxel );
@@ -140,20 +140,20 @@ unload_accumulator_array_kokkos(field_array_t* RESTRICT fa,
         int ayz = VOXEL(1, y-1, z-1, nx, ny, nz) + x-1;
         int azx = VOXEL(0, y, z-1, nx, ny, nz) + x-1;
         int axy = VOXEL(0, y-1, z, nx, ny, nz) + x-1;
-        k_field(f0, field_var::jfx) += cx*( k_accum(a0, accumulator_var::jx, 0) + 
-                                            k_accum(ay, accumulator_var::jx, 1) + 
-                                            k_accum(az, accumulator_var::jx, 2) + 
+        k_field(f0, field_var::jfx) += cx*( k_accum(a0, accumulator_var::jx, 0) +
+                                            k_accum(ay, accumulator_var::jx, 1) +
+                                            k_accum(az, accumulator_var::jx, 2) +
                                             k_accum(ayz, accumulator_var::jx, 3) );
-        k_field(f0, field_var::jfy) += cy*( k_accum(a0, accumulator_var::jy, 0) + 
-                                            k_accum(az, accumulator_var::jy, 1) + 
-                                            k_accum(ax, accumulator_var::jy, 2) + 
+        k_field(f0, field_var::jfy) += cy*( k_accum(a0, accumulator_var::jy, 0) +
+                                            k_accum(az, accumulator_var::jy, 1) +
+                                            k_accum(ax, accumulator_var::jy, 2) +
                                             k_accum(azx, accumulator_var::jy, 3) );
-        k_field(f0, field_var::jfz) += cz*( k_accum(a0, accumulator_var::jz, 0) + 
-                                            k_accum(ax, accumulator_var::jz, 1) + 
-                                            k_accum(ay, accumulator_var::jz, 2) + 
+        k_field(f0, field_var::jfz) += cz*( k_accum(a0, accumulator_var::jz, 0) +
+                                            k_accum(ax, accumulator_var::jz, 1) +
+                                            k_accum(ay, accumulator_var::jz, 2) +
                                             k_accum(axy, accumulator_var::jz, 3) );
     });
-/*    
+/*
     Kokkos::parallel_for("unload_accumulator_array", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
         const size_t z = team_member.league_rank() + 1;
@@ -169,17 +169,17 @@ unload_accumulator_array_kokkos(field_array_t* RESTRICT fa,
                 int ayz = VOXEL(1, y-1, z-1, nx, ny, nz) + i;
                 int azx = VOXEL(0, y, z-1, nx, ny, nz) + i;
                 int axy = VOXEL(0, y-1, z, nx, ny, nz) + i;
-                k_field(f0, field_var::jfx) += cx*( k_accum(a0, accumulator_var::jx, 0) + 
-                                                    k_accum(ay, accumulator_var::jx, 1) + 
-                                                    k_accum(az, accumulator_var::jx, 2) + 
+                k_field(f0, field_var::jfx) += cx*( k_accum(a0, accumulator_var::jx, 0) +
+                                                    k_accum(ay, accumulator_var::jx, 1) +
+                                                    k_accum(az, accumulator_var::jx, 2) +
                                                     k_accum(ayz, accumulator_var::jx, 3) );
-                k_field(f0, field_var::jfy) += cy*( k_accum(a0, accumulator_var::jy, 0) + 
-                                                    k_accum(az, accumulator_var::jy, 1) + 
-                                                    k_accum(ax, accumulator_var::jy, 2) + 
+                k_field(f0, field_var::jfy) += cy*( k_accum(a0, accumulator_var::jy, 0) +
+                                                    k_accum(az, accumulator_var::jy, 1) +
+                                                    k_accum(ax, accumulator_var::jy, 2) +
                                                     k_accum(azx, accumulator_var::jy, 3) );
-                k_field(f0, field_var::jfz) += cz*( k_accum(a0, accumulator_var::jz, 0) + 
-                                                    k_accum(ax, accumulator_var::jz, 1) + 
-                                                    k_accum(ay, accumulator_var::jz, 2) + 
+                k_field(f0, field_var::jfz) += cz*( k_accum(a0, accumulator_var::jz, 0) +
+                                                    k_accum(ax, accumulator_var::jz, 1) +
+                                                    k_accum(ay, accumulator_var::jz, 2) +
                                                     k_accum(axy, accumulator_var::jz, 3) );
             });
         });
@@ -190,18 +190,17 @@ unload_accumulator_array_kokkos(field_array_t* RESTRICT fa,
 void
 combine_accumulators(accumulator_array_t* RESTRICT aa)
 {
-    // TODO: this is likely faster with a 3d policy
+    // TODO: this is likely faster with a 3d policy?
     //Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nz+2, ny+2, nx+2});
     k_accumulators_t& k_accum_d = aa->k_a_d;
     k_accumulators_t& k_accum_copy = aa->k_a_d_copy;
 
     auto& k_accum_h = aa->k_a_h;
+
     Kokkos::deep_copy(k_accum_copy, k_accum_h);
 
-    int nv = aa->g->nv;
-    //std::cout << " nv " << nv << " size " << k_accum_d.size() << " extent " << k_accum_d.extent(0) << std::endl;
-    // TODO: why is extent 2x the nv
-    //int nv = k_accum_d.extent(0);
+    //int nv = aa->g->nv;
+    int nv = k_accum_d.extent(0);
 
     Kokkos::parallel_for("combine accumulator array", nv, KOKKOS_LAMBDA (const int i) {
             //std::cout << "copying over " << k_accum_copy(i, accumulator_var::jx, 0) << std::endl;
