@@ -96,6 +96,10 @@ typedef struct accumulator_array {
   k_accumulators_sa_t k_a_sa;
   //k_accumulators_sah_t k_a_sah;
 
+  // Used when we move data back from the host to the device, but need to
+  // vombine the values
+  k_accumulators_t k_a_d_copy;
+
   accumulator_array(int _na)
   {
       init_kokoks_accum(_na);
@@ -112,10 +116,15 @@ typedef struct accumulator_array {
         //<Kokkos::Experimental::ScatterSum,
          //KOKKOS_SCATTER_DUPLICATED,
          //KOKKOS_SCATTER_ATOMIC>(k_a_d);
-      k_a_h  = Kokkos::create_mirror_view(k_a_d);
+
+      //k_a_h  = Kokkos::create_mirror_view(k_a_d);
+      // This is no longer a host mirror, as we do not want them strongly link.
+      // It's only used for copying data around, and we handle the link manually
+      k_a_h = k_accumulators_t::HostMirror("k_a_h", _na);
 
       //k_a_sah = Kokkos::Experimental::create_scatter_view(k_a_h);
       //printf("k_a_h size = %d \n", k_a_h.size() );
+      k_a_d_copy = k_accumulators_t("k_accumulators copy", _na);
   }
 
 
@@ -171,6 +180,8 @@ void
 unload_accumulator_array_kokkos( /**/  field_array_t       * RESTRICT fa,
                           const accumulator_array_t * RESTRICT aa );
 
+void
+combine_accumulators( accumulator_array_t * RESTRICT aa );
 /*****************************************************************************/
 
 // Hydro arrays shall be a (nx+2) x (ny+2) x (nz+2) allocation indexed

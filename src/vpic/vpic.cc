@@ -253,6 +253,7 @@ void restore_kokkos(vpic_simulation& simulation)
     new(&accum->k_a_d) k_accumulators_t();
     new(&accum->k_a_h) k_accumulators_t::HostMirror();
     new(&accum->k_a_sa) k_accumulators_sa_t();
+    new(&accum->k_a_d_copy) k_accumulators_t();
 
     std::cout << "make accum of size " << accum->na << std::endl;
     accum->init_kokoks_accum(accum->na);

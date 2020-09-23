@@ -43,6 +43,8 @@ int vpic_simulation::advance(void)
   if( species_list )
   {
     // TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
+
+    // Only applies to device
     TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
   }
   //  KOKKOS_TIC();
@@ -187,7 +189,13 @@ int vpic_simulation::advance(void)
   //KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
   //KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
   KOKKOS_TIC(); // Time this data movement
-  Kokkos::deep_copy(accumulator_array->k_a_h, accumulator_array->k_a_d);
+  //Kokkos::deep_copy(accumulator_array->k_a_h, accumulator_array->k_a_d);
+
+  // Zero it out
+  // TODO: this could be avoided on host-only runs using a conditional to see
+  // if k_a_h == k_a_d TODO: could be done in clear accumulators?
+  Kokkos::deep_copy(accumulator_array->k_a_h, 0.0); // TODO: could we have done this earlier to try overlap it?
+
   KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   // HOST - Touches particle copies, particle_movers, particle_injectors,
@@ -198,6 +206,7 @@ int vpic_simulation::advance(void)
       //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
       boundary_p_kokkos( particle_bc_list, species_list, field_array, accumulator_array );
     }
+
   TOC( boundary_p, num_comm_round );
 
   // currently the recv particles are in particles_recv, not particle_copy
@@ -224,10 +233,17 @@ int vpic_simulation::advance(void)
   //accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_h);
 
   // Update device so we can pull it all the way back to the host
-  KOKKOS_TIC(); // Time this data movement
-  Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
-  //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
-  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  if( species_list )
+  {
+      KOKKOS_TIC(); // Time this data movement
+      //Kokkos::deep_copy(accumulator_array->k_a_d, 0.0);
+      // TODO: this could be avoided on host-only runs using a conditional to
+      // see if k_a_h == k_a_d, and instead contribute directly into k_a_h
+      combine_accumulators( accumulator_array );
+      //Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
+      //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
+      KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  }
 
   /*
   // Move these value back to the real, on host, accum

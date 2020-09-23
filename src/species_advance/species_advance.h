@@ -305,15 +305,6 @@ void k_accumulate_rhob(
             const float qsp,
             const int nm);
 
-void k_accumulate_rhob_single_cpu(
-            k_field_t& kfield,
-            k_particles_t& kpart,
-            k_particles_i_t& kpart_i,
-            const int i,
-            const grid_t* g,
-            const float qsp
-);
-
 // In hydro_p.c
 
 void
@@ -672,6 +663,7 @@ move_p_kokkos_host_serial(
     //Kokkos::atomic_add(&a[3], v3);
 
     accumulate_j(x,y,z);
+    std::cout << " deposit " << k_accumulators(ii, accumulator_var::jx, 0) << std::endl;
     k_accumulators(ii, accumulator_var::jx, 0) += v0;
     k_accumulators(ii, accumulator_var::jx, 1) += v1;
     k_accumulators(ii, accumulator_var::jx, 2) += v2;

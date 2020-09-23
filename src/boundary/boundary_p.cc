@@ -65,18 +65,6 @@ boundary_p_kokkos(
       )
 {
 
-  // TODO: this doesn't need to be made every time
-  // Make scatter add ON HOST
-  // TODO: hard coding OpenMP here is not good
-  /*
-  Kokkos::Experimental::ScatterView<float
-      *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutLeft,
-      Kokkos::OpenMP, Kokkos::Experimental::ScatterSum,
-      Kokkos::Experimental::ScatterDuplicated ,
-      Kokkos::Experimental::ScatterNonAtomic > scatter_add =
-          Kokkos::Experimental::create_scatter_view(aa->k_a_h);
-          */
-
   // Temporary store for local particle injectors
   // FIXME: Ugly static usage
   static particle_injector_t * RESTRICT ALIGNED(16) ci = NULL;
@@ -450,6 +438,7 @@ boundary_p_kokkos(
 
       // TODO: the benefit of doing this backwards goes away
       pi += n-1;
+
       for( ; n; pi--, n-- ) {
         id = pi->sp_id;
 
@@ -501,7 +490,6 @@ boundary_p_kokkos(
 
         // Don't update np yet, we have not copied it back
         //sp_np[id] = np+1;
-
         pm[nm].dispx=pi->dispx; pm[nm].dispy=pi->dispy; pm[nm].dispz=pi->dispz;
 
         //pm[nm].i=np;
@@ -509,6 +497,7 @@ boundary_p_kokkos(
 
         // TODO: this relies on serial for now -- maybe bad?
         //sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
+        std::cout << "Calling move_p" << std::endl;
         int ret_code = move_p_kokkos_host_serial(
                 particle_recv,
                 particle_recv_i,
@@ -573,9 +562,9 @@ boundary_p_kokkos(
       // Zero host accum array
       Kokkos::parallel_for("Clear rhob accumulation array on host", host_execution_policy(0, n_fields - 1), KOKKOS_LAMBDA (int i) {
               kfah(i) = 0;
-              });
-
+      });
   }
+
   // contribute SA back
   //Kokkos::Experimental::contribute(aa->k_a_h, scatter_add);
 }
