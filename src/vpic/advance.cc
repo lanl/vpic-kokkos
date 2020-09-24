@@ -427,4 +427,3 @@ int vpic_simulation::advance(void)
 
   return 1;
 }
-
