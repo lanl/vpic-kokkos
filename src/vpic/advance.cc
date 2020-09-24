@@ -69,48 +69,16 @@ int vpic_simulation::advance(void)
       advance_p( sp, accumulator_array, interpolator_array );
   }
 
+  // Reduce accumulator contributions into the device array
   KOKKOS_TIC();
   Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
   accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
   KOKKOS_TOC( accumulator_contributions, 1);
 
-  KOKKOS_TIC(); // Time this data movement
-  // TODO: make this into a function
-  LIST_FOR_EACH( sp, species_list )
-  {
-    //Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
-    Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
-    {
-        auto pm_h_dispx = Kokkos::subview(sp->k_pm_h, std::make_pair(0, sp->k_nm_h(0)), 0);
-        auto pm_d_dispx = Kokkos::subview(sp->k_pm_d, std::make_pair(0, sp->k_nm_h(0)), 0);
-        auto pm_h_dispy = Kokkos::subview(sp->k_pm_h, std::make_pair(0, sp->k_nm_h(0)), 1);
-        auto pm_d_dispy = Kokkos::subview(sp->k_pm_d, std::make_pair(0, sp->k_nm_h(0)), 1);
-        auto pm_h_dispz = Kokkos::subview(sp->k_pm_h, std::make_pair(0, sp->k_nm_h(0)), 2);
-        auto pm_d_dispz = Kokkos::subview(sp->k_pm_d, std::make_pair(0, sp->k_nm_h(0)), 2);
-        auto pm_i_h_subview = Kokkos::subview(sp->k_pm_i_h, std::make_pair(0, sp->k_nm_h(0)));
-        auto pm_i_d_subview = Kokkos::subview(sp->k_pm_i_d, std::make_pair(0, sp->k_nm_h(0)));
-        Kokkos::deep_copy(pm_h_dispx, pm_d_dispx);
-        Kokkos::deep_copy(pm_h_dispy, pm_d_dispy);
-        Kokkos::deep_copy(pm_h_dispz, pm_d_dispz);
-        Kokkos::deep_copy(pm_i_h_subview, pm_i_d_subview);
-    }
-
-    auto& k_particle_movers_h = sp->k_pm_h;
-    auto& k_particle_i_movers_h = sp->k_pm_i_h;
-    auto& k_nm_h = sp->k_nm_h;
-    sp->nm = k_nm_h(0);
-
-    Kokkos::parallel_for("copy movers to host", host_execution_policy(0, sp->nm) , KOKKOS_LAMBDA (int i) {
-      sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
-      sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
-      sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
-      sp->pm[i].i     = k_particle_i_movers_h(i);
-    });
-  };
+  // Copy particle movers back to host
+  KOKKOS_TIC();
+  KOKKOS_COPY_MOVER_MEM_TO_HOST(species_list);
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
-
-  // TODO: think about if this is needed? It's done in advance_p
-  //Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
 
   // Because the partial position push when injecting aged particles might
   // place those particles onto the guard list (boundary interaction) and
@@ -121,22 +89,23 @@ int vpic_simulation::advance(void)
   // Probably needs to be on host due to user particle injection
   // May not touch memory?
   if( emitter_list )
+  {
     TIC apply_emitter_list( emitter_list ); TOC( emission_model, 1 );
+  }
 
-    if((particle_injection_interval>0) && ((step() % particle_injection_interval)==0)) {
-        if(!kokkos_particle_injection) {
-            KOKKOS_TIC();
-            KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
-            KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
-        }
-        TIC user_particle_injection(); TOC( user_particle_injection, 1 );
-        if(!kokkos_particle_injection) {
-            KOKKOS_TIC();
-            KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
-            KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
-        }
-    }
-
+  if((particle_injection_interval>0) && ((step() % particle_injection_interval)==0)) {
+      if(!kokkos_particle_injection) {
+          KOKKOS_TIC();
+          KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+          KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
+      }
+      TIC user_particle_injection(); TOC( user_particle_injection, 1 );
+      if(!kokkos_particle_injection) {
+          KOKKOS_TIC();
+          KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
+          KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
+      }
+  }
 
   bool accumulate_in_place = false; // This has to be outside the scoped timing block
 

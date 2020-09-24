@@ -111,6 +111,11 @@ vpic_simulation::~vpic_simulation() {
   Kokkos::finalize();
 }
 
+/**
+ * @brief Helper function to print run details in a formatted way. Useful for
+ * both having a clear view of what the run is, but also structured enough to
+ * be parsable by tools
+ */
 void vpic_simulation::print_run_details()
 {
     if (rank() == 0)
