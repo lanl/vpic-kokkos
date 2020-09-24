@@ -213,9 +213,6 @@ void restore_kokkos(vpic_simulation& simulation)
     new(&fa->k_f_h) k_field_t::HostMirror();
     new(&fa->k_fe_h) k_field_edge_t::HostMirror();
 
-    // TODO: restore fb or make it a pointer to avoid it getting filled with
-    // garbage on restore
-
     new(&fa->k_f_rhob_accum_d) k_field_accum_t();
     new(&fa->k_f_rhob_accum_h) k_field_accum_t::HostMirror();
 

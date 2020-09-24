@@ -149,11 +149,12 @@ typedef struct grid {
       //k_neighbor_h = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_neighbor_d);
       k_neighbor_h = Kokkos::create_mirror_view(k_neighbor_d);
 
-      // TODO: make this a host parlalel for
-      for (int i = 0; i < num_neighbor; i++)
+      Kokkos::parallel_for("Copy neighbors to host+device",
+              Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0,
+                  num_neighbor), KOKKOS_LAMBDA (const int i)
       {
           k_neighbor_h(i) = neighbor[i];
-      }
+      });
 
       Kokkos::deep_copy(k_neighbor_d, k_neighbor_h);
 
