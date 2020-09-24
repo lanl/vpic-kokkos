@@ -46,6 +46,7 @@ int vpic_simulation::advance(void)
     // TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
     TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
   }
+
   // Note: Particles should not have moved since the last performance sort
   // when calling collision operators.
   // FIXME: Technically, this placement of the collision operators only
@@ -58,6 +59,7 @@ int vpic_simulation::advance(void)
       TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
   }
 
+  // TODO: implement
   //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
   // DEVICE function - Touches particles, particle movers, accumulators, interpolators
@@ -92,13 +94,6 @@ int vpic_simulation::advance(void)
         Kokkos::deep_copy(pm_h_dispz, pm_d_dispz);
         Kokkos::deep_copy(pm_i_h_subview, pm_i_d_subview);
     }
-
-    // Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d);
-    // Kokkos::deep_copy(sp->k_pm_i_h, sp->k_pm_i_d);
-
-    //auto n_particles = sp->np;
-    //auto max_pmovers = sp->max_nm;
-    //k_particles_h = sp->k_p_h;
 
     auto& k_particle_movers_h = sp->k_pm_h;
     auto& k_particle_i_movers_h = sp->k_pm_i_h;

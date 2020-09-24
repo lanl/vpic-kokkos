@@ -145,27 +145,16 @@ void vpic_simulation::print_run_details()
 /**
  * @brief After a checkpoint restore, we must move the data back over to the
  * Kokkos objects. This currently must be done for all views
+ *
+ * @param simulation The vpic_simulation that was restored
  */
 void restore_kokkos(vpic_simulation& simulation)
 {
-    // I think the way the restore works by copying bytes it messes with the
-    // reference counting of the built in Kokkos objects, and thus we have to
-    // manual handle a bunch of the data copies
-
-    // TODO: I can probably reach into Kokkos internals and tell it not to
-    // decrement the counter for the nonesne object that was reanimated. If I
-    // don't it's likely going to do bad stuff at program any way end..
-
-    // TODO: the created objects below need to call the helper creators because
-    // they won't get registered otherwise...
-    // TODO: changing the objects like this is scary as I can't dealloc them
-    // but I need to unregister then from the checkpoint syustem
-
-    // TODO: the grid is hidden in a bunch of objects.. it will be hard to find
-    // them all
-
-    // TODO: this should be done on the views insnide
-    //simulation.grid = new (simulation.grid) grid_t();
+    // The way the VPIC checkpoint/restore works is by copying raw bytes and
+    // pointers.  It messes with the reference counting built into Kokkos, and
+    // thus we have to manual handle a bunch of the data copies / fix the
+    // Kokkos data. When a view gets restored, its unsafe to delete. This code
+    // fixes that (but may leak a few kb per restart...)
 
     // This restore methods relies on 'placement new'. Our approach is this:
     // 1) Use placement new to overwrite the garbage from the restart (note: we
@@ -276,113 +265,4 @@ void restore_kokkos(vpic_simulation& simulation)
     // also restores the neighbors
     grid->init_kokkos_grid(nfaces_per_voxel*nv);
 
-
-    /* // All this code tries to recreate the objects and then use then
-     * populate the Kokkos data, this has limitations and changes the actual
-     * underlying pointers
-    // Restore Grid (+Neighbors)
-    //grid_t* old_grid = simulation->grid;
-    //grid_t* new_grid = new_grid();
-
-    //auto nfaces_per_voxel = 6;
-    //simulation.grid->init_kokkos_grid(nfaces_per_voxel * nv);
-
-    // Restore Particles
-    species_t* sp;
-
-    // As part of this, we have to re-write the species list.... that's lame.
-    species_t* prev = nullptr;
-    species_t* head = simulation.species_list;
-
-    LIST_FOR_EACH( sp, simulation.species_list )
-    {
-        // Create a new species object by hand
-        species_t* sp2 = new species_t(sp->np, sp->nm);
-
-        // Update the last guy in the list to point to this guy
-        if (prev != nullptr)
-        {
-            prev->next = sp2;
-        }
-
-        // Fill in the data it needs
-        // TODO: This could basically be a copy constructor
-        sp2->name = sp->name;
-        sp2->q = sp->q;
-        sp2->m = sp->m;
-        sp2->np = sp->np;
-        sp2->max_np = sp->max_np;
-        sp2->p = sp->p;
-        sp2->nm = sp->nm;
-        sp2->max_nm = sp->max_nm;
-        sp2->pm = sp->pm;
-        sp2->last_sorted = sp->last_sorted;
-        sp2->sort_interval = sp->sort_interval;
-        sp2->sort_out_of_place = sp->sort_out_of_place;
-        sp2->partition = sp->partition;
-        sp2->g = sp->g;
-        sp2->id = sp->id;
-        sp2->next = sp->next;
-
-        // init it
-        sp2->init_kokkos_particles();
-
-        if (sp == simulation.species_list)
-        {
-            std::cout << "repointing head" << std::endl;
-            head = sp2;
-        }
-
-        // Swap it in
-        // delete(sp); // This techincally leaks the data of size species, but
-        // the way we checkpoint the species is currently not safe...
-        // This was ~552 bytes per species
-        //std::cout << sizeof(*sp) << std::endl;
-        std::cout << sp->nm << std::endl;
-
-        simulation.KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(sp2);
-
-        prev = sp2;
-
-    }
-    simulation.species_list = head;
-
-    int nv = simulation.grid->nv;
-
-    // Restore fields
-    field_array_t* new_fa = new field_array_t(nv);
-    field_array_t* old_fa = simulation.field_array;
-
-    new_fa->f = old_fa->f;
-    new_fa->g = old_fa->g;
-    new_fa->params = old_fa->params;
-    new_fa->kernel[0] = old_fa->kernel[0];
-
-    simulation.field_array = new_fa;
-    //simulation.field_array->init_kokkos_fields(simulation.grid->nv);
-    simulation.KOKKOS_COPY_FIELD_MEM_TO_DEVICE(simulation.field_array);
-
-    // Restore accumulators
-    accumulator_array_t* old_accum = simulation.accumulator_array;
-    int num_accum = old_accum->na;
-    accumulator_array_t* new_accum = new accumulator_array_t(num_accum);
-
-    new_accum->a = old_accum->a;
-    new_accum->n_pipeline = old_accum->n_pipeline;
-    new_accum->stride = old_accum->stride;
-    new_accum->na = old_accum->na;
-    new_accum->g = old_accum->g;
-
-    simulation.accumulator_array = new_accum;
-
-    // restore interpolators?
-    interpolator_array_t* new_interp = new interpolator_array_t(nv);
-    interpolator_array_t* old_interp = simulation.interpolator_array;
-
-    new_interp->i = old_interp->i;
-    new_interp->g = old_interp->g;
-
-    simulation.interpolator_array = new_interp;
-    */
 }
-
