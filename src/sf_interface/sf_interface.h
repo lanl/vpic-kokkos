@@ -95,6 +95,7 @@ typedef struct accumulator_array {
   k_accumulators_t::HostMirror k_a_h;
   k_accumulators_sa_t k_a_sa;
   //k_accumulators_sah_t k_a_sah;
+  k_accumulators_t k_a_d_copy;
 
   accumulator_array(int _na)
   {
@@ -106,16 +107,9 @@ typedef struct accumulator_array {
       na = _na;
 
       k_a_d = k_accumulators_t("k_accumulators", _na);
-        //printf("Making accumulator of size %d", na);
-        // TODO: kokkos can deduce these
+      k_a_d_copy = k_accumulators_t("k_accumulators_copy", _na);
       k_a_sa = Kokkos::Experimental::create_scatter_view(k_a_d);
-        //<Kokkos::Experimental::ScatterSum,
-         //KOKKOS_SCATTER_DUPLICATED,
-         //KOKKOS_SCATTER_ATOMIC>(k_a_d);
       k_a_h  = Kokkos::create_mirror_view(k_a_d);
-
-      //k_a_sah = Kokkos::Experimental::create_scatter_view(k_a_h);
-      //printf("k_a_h size = %d \n", k_a_h.size() );
   }
 
 
@@ -170,6 +164,9 @@ unload_accumulator_array( /**/  field_array_t       * RESTRICT fa,
 void
 unload_accumulator_array_kokkos( /**/  field_array_t       * RESTRICT fa,
                           const accumulator_array_t * RESTRICT aa );
+
+void
+combine_accumulators( accumulator_array_t * RESTRICT aa );
 
 /*****************************************************************************/
 

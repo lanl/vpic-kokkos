@@ -65,18 +65,6 @@ boundary_p_kokkos(
       )
 {
 
-  // TODO: this doesn't need to be made every time
-  // Make scatter add ON HOST
-  // TODO: hard coding OpenMP here is not good
-  /*
-  Kokkos::Experimental::ScatterView<float
-      *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutLeft,
-      Kokkos::OpenMP, Kokkos::Experimental::ScatterSum,
-      Kokkos::Experimental::ScatterDuplicated ,
-      Kokkos::Experimental::ScatterNonAtomic > scatter_add =
-          Kokkos::Experimental::create_scatter_view(aa->k_a_h);
-          */
-
   // Temporary store for local particle injectors
   // FIXME: Ugly static usage
   static particle_injector_t * RESTRICT ALIGNED(16) ci = NULL;
@@ -249,7 +237,7 @@ boundary_p_kokkos(
 
                 // TODO: We could detect this on the GPU side and process is there instead
                   // Not doing that costs us data copies in the fields
-                int i = pm->i;
+                //int i = pm->i;
                 //const auto& kfield_h = fa->k_f_h;
                 const auto& krhob_accum_h = fa->k_f_rhob_accum_h;
                 const auto& kparticle_move_h = sp->k_pc_h;
