@@ -168,7 +168,7 @@ int vpic_simulation::advance(void)
 
   // Boundary_p calls move_p, so we may need to deal with the current
   // If we didn't accumulate for the host in place (as in the GPU case), do so
-  if (! accumulate_in_place )
+  if ( accumulate_in_place == false)
   {
       // Update device so we can pull it all the way back to the host
       KOKKOS_TIC(); // Time this data movement
