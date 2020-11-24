@@ -196,7 +196,6 @@ public:
   material_t           * material_list;      // define_material
   field_array_t        * field_array;        // define_field_array
   interpolator_array_t * interpolator_array; // define_interpolator_array
-  accumulator_array_t  * accumulator_array;  // define_accumulator_array
   hydro_array_t        * hydro_array;        // define_hydro_array
   species_t            * species_list;       // define_species /
                                              // species helpers
@@ -482,7 +481,6 @@ public:
     field_array        = fa ? fa :
                          new_standard_field_array( grid, material_list, damp );
     interpolator_array = new_interpolator_array( grid );
-    accumulator_array  = new_accumulator_array( grid );
     hydro_array        = new_hydro_array( grid );
 
     // Pre-size communications buffers. This is done to get most memory
@@ -580,13 +578,15 @@ public:
                        float ux, float uy, float uz, float w,
                        float dispx, float dispy, float dispz,
                        int update_rhob ) {
+    Kokkos::abort("Raw inject with move does not work because it uses the old, CPU only move_p");
     particle_t       * RESTRICT p  = sp->p  + (sp->np++);
     particle_mover_t * RESTRICT pm = sp->pm + sp->nm;
     p->dx = dx; p->dy = dy; p->dz = dz; p->i = i;
     p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
     pm->dispx = dispx; pm->dispy = dispy; pm->dispz = dispz; pm->i = sp->np-1;
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
-    sp->nm += move_p( sp->p, pm, accumulator_array->a, grid, sp->q );
+    // TODO: Get this to use a move_p that works
+    //sp->nm += move_p( sp->p, pm, accumulator_array->a, grid, sp->q );
   }
 
   //////////////////////////////////

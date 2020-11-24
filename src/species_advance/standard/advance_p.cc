@@ -15,18 +15,19 @@ advance_p_kokkos(
         k_particle_i_copy_t& k_particle_i_copy,
         k_particle_movers_t& k_particle_movers,
         k_particle_i_movers_t& k_particle_movers_i,
-        k_accumulators_sa_t k_accumulators_sa,
+        //k_accumulators_sa_t k_accumulators_sa,
+        k_field_sa_t k_f_sa,
         k_interpolator_t& k_interp,
         //k_particle_movers_t k_local_particle_movers,
         k_counter_t& k_nm,
         k_neighbor_t& k_neighbors,
+        //field_array_t* RESTRICT fa,
         const grid_t *g,
         const float qdt_2mc,
         const float cdt_dx,
         const float cdt_dy,
         const float cdt_dz,
         const float qsp,
-        const int na,
         const int np,
         const int max_nm,
         const int nx,
@@ -37,6 +38,11 @@ advance_p_kokkos(
   constexpr float one            = 1.;
   constexpr float one_third      = 1./3.;
   constexpr float two_fifteenths = 2./15.;
+
+  //k_field_t& k_field = fa->k_f_d;
+  float cx = 0.25 * g->rdy * g->rdz / g->dt;
+  float cy = 0.25 * g->rdz * g->rdx / g->dt;
+  float cz = 0.25 * g->rdx * g->rdy / g->dt;
 
   // Process particles for this pipeline
 
@@ -90,8 +96,9 @@ advance_p_kokkos(
     KOKKOS_LAMBDA (size_t p_index)
     {
 //for(int p_index=0; p_index<np; p_index++) {
+
     float v0, v1, v2, v3, v4, v5;
-    auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+    auto  k_field_scatter_access = k_f_sa.access();
 
     float dx   = p_dx;                             // Load position
     float dy   = p_dy;
@@ -183,23 +190,40 @@ advance_p_kokkos(
       v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
       v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
+      int iii = ii;
+      int zi = iii/((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii/(nx+2);
+      int xi = iii - yi*(nx+2);
       ACCUMULATE_J( x,y,z );
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+      //Kokkos::atomic_add(&k_field(ii, field_var::jfx), cx*v0);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx), cx*v1);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx), cx*v2);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx), cx*v3);
+      k_field_scatter_access(ii, field_var::jfx) += cx*v0;
+      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
+      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
+      k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
 
       ACCUMULATE_J( y,z,x );
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+      //Kokkos::atomic_add(&k_field(ii, field_var::jfy), cy*v0);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v1);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy), cy*v2);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v3);
+      k_field_scatter_access(ii, field_var::jfy) += cy*v0;
+      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
+      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
+      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
 
       ACCUMULATE_J( z,x,y );
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+      //Kokkos::atomic_add(&k_field(ii, field_var::jfz), cz*v0);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz), cz*v1);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v2);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v3);
+      k_field_scatter_access(ii, field_var::jfz) += cz*v0;
+      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
+      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
+      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
 
 #     undef ACCUMULATE_J
 
@@ -220,7 +244,7 @@ advance_p_kokkos(
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                     k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) )
+                     k_f_sa, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
       {
         if( k_nm(0) < max_nm )
         {
@@ -273,8 +297,8 @@ advance_p_kokkos(
 
 void
 advance_p( /**/  species_t            * RESTRICT sp,
-           /**/  accumulator_array_t  * RESTRICT aa,
-           interpolator_array_t * RESTRICT ia ) {
+           interpolator_array_t * RESTRICT ia,
+           field_array_t* RESTRICT fa ) {
   //DECLARE_ALIGNED_ARRAY( advance_p_pipeline_args_t, 128, args, 1 );
   //DECLARE_ALIGNED_ARRAY( particle_mover_seg_t, 128, seg, MAX_PIPELINE+1 );
   //int rank;
@@ -283,15 +307,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   {
     ERROR(( "Bad args" ));
   }
-  if( !aa )
-  {
-    ERROR(( "Bad args" ));
-  }
   if( !ia  )
-  {
-    ERROR(( "Bad args" ));
-  }
-  if( sp->g!=aa->g )
   {
     ERROR(( "Bad args" ));
   }
@@ -314,17 +330,18 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->k_pc_i_d,
           sp->k_pm_d,
           sp->k_pm_i_d,
-          aa->k_a_sa,
+          //aa->k_a_sa,
+          fa->k_field_sa_d,
           ia->k_i_d,
           sp->k_nm_d,
           sp->g->k_neighbor_d,
+          //fa,
           sp->g,
           qdt_2mc,
           cdt_dx,
           cdt_dy,
           cdt_dz,
           sp->q,
-          aa->na,
           sp->np,
           sp->max_nm,
           sp->g->nx,
