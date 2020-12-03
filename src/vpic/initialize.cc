@@ -218,6 +218,10 @@ vpic_simulation::initialize( int argc,
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
   KOKKOS_TOCN( INTERPOLATOR_DATA_MOVEMENT, 1);
 
+  KOKKOS_TIC();
+  FAK->k_reduce_jf(field_array);
+  KOKKOS_TOC( JF_ACCUM_DATA_MOVEMENT, 1);
+
   if( species_list ) {
     KOKKOS_TIC(); // Time this data movement
     KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);

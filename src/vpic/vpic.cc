@@ -211,6 +211,7 @@ void restore_kokkos(vpic_simulation& simulation)
     // Restore field array
     field_array_t* fa = simulation.field_array;
     new(&fa->k_f_d) k_field_t();
+    new(&fa->k_field_sa_d) k_field_sa_t();
     new(&fa->k_fe_d) k_field_edge_t();
     new(&fa->k_f_h) k_field_t::HostMirror();
     new(&fa->k_fe_h) k_field_edge_t::HostMirror();
@@ -220,6 +221,9 @@ void restore_kokkos(vpic_simulation& simulation)
 
     new(&fa->k_f_rhob_accum_d) k_field_accum_t();
     new(&fa->k_f_rhob_accum_h) k_field_accum_t::HostMirror();
+
+    new(&fa->k_jf_accum_d) k_jf_accum_t();
+    new(&fa->k_jf_accum_h) k_jf_accum_t::HostMirror();
 
     grid_t* grid = simulation.grid;
 

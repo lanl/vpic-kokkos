@@ -578,15 +578,13 @@ public:
                        float ux, float uy, float uz, float w,
                        float dispx, float dispy, float dispz,
                        int update_rhob ) {
-    Kokkos::abort("Raw inject with move does not work because it uses the old, CPU only move_p");
     particle_t       * RESTRICT p  = sp->p  + (sp->np++);
     particle_mover_t * RESTRICT pm = sp->pm + sp->nm;
     p->dx = dx; p->dy = dy; p->dz = dz; p->i = i;
     p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
     pm->dispx = dispx; pm->dispy = dispy; pm->dispz = dispz; pm->i = sp->np-1;
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
-    // TODO: Get this to use a move_p that works
-    //sp->nm += move_p( sp->p, pm, accumulator_array->a, grid, sp->q );
+    sp->nm += move_p( sp->p, pm, grid, field_array->k_jf_accum_h, sp->q );
   }
 
   //////////////////////////////////

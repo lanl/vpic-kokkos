@@ -110,7 +110,6 @@ advance_p_kokkos(
                            dx*( f_deydx + dz*f_d2eydzdx ) );
     float haz  = qdt_2mc*(    ( f_ez    + dx*f_dezdx    ) +
                            dy*( f_dezdy + dx*f_d2ezdxdy ) );
-    //printf(" inter %d vs %ld \n", ii, k_interp.size());
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby + dy*f_dcbydy;
     float cbz  = f_cbz + dz*f_dcbzdz;
@@ -190,6 +189,7 @@ advance_p_kokkos(
       v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
       v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
+      // TODO: That 2 needs to be 2*NGHOST eventually
       int iii = ii;
       int zi = iii/((nx+2)*(ny+2));
       iii -= zi*(nx+2)*(ny+2);

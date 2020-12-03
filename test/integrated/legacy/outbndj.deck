@@ -145,11 +145,11 @@ begin_initialization {
 
     // Move the particles and extract the currents
     load_interpolator_array( interpolator_array, field_array );
-    clear_accumulator_array( accumulator_array );
-    advance_p( sp, accumulator_array, interpolator_array );
+    //clear_accumulator_array( accumulator_array );
     field_array->kernel->clear_jf( field_array );
-    reduce_accumulator_array( accumulator_array );
-    unload_accumulator_array( field_array, accumulator_array );
+    advance_p( sp, accumulator_array, interpolator_array );
+    //reduce_accumulator_array( accumulator_array );
+    //unload_accumulator_array( field_array, accumulator_array );
     field_array->kernel->synchronize_jf( field_array );
 
     // Compute the final rho

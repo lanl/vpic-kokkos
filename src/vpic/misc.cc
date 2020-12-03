@@ -85,7 +85,6 @@ vpic_simulation::inject_particle( species_t * sp,
   if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
 
   if( age!=0 ) {
-    Kokkos::abort("Inject with age does not work because it uses the old, CPU only move_p");
     if( sp->nm>=sp->max_nm )
       WARNING(( "No movers available to age injected  particle" ));
     particle_mover_t * pm = sp->pm + sp->nm;
@@ -94,7 +93,7 @@ vpic_simulation::inject_particle( species_t * sp,
     pm->dispy = uy*age*grid->rdy;
     pm->dispz = uz*age*grid->rdz;
     pm->i     = sp->np-1;
-    //sp->nm += move_p( sp->p, pm, accumulator_array->a, grid, sp->q );
+    sp->nm += move_p( sp->p, pm, grid, field_array->k_jf_accum_h, sp->q );
   }
 
 }

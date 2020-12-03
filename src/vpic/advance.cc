@@ -147,7 +147,7 @@ int vpic_simulation::advance(void)
     }
 
 
-  bool accumulate_in_place = false; // This has to be outside the scoped timing block
+  //bool accumulate_in_place = false; // This has to be outside the scoped timing block
 
   //KOKKOS_TIC(); // Time this data movement
   //// This could technically be done once per simulation, not every timestep
