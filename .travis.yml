@@ -26,8 +26,8 @@ env: #maybe add mpich later
 before_script:
   - ccache -z
   # TODO: This if seems kind of dumb, but for some reason Kokkos is still present sometimes
-  - if [[ ! -d ./kokkos ]]; then
-    git clone --depth=1 --branch 3.1.00 https://github.com/kokkos/kokkos.git &&
+  - if [[ -d ./kokkos ]]; then rm -rf kokkos; fi
+  - git clone --depth=1 --branch 3.1.00 https://github.com/kokkos/kokkos.git &&
     pushd kokkos &&
     mkdir build &&
     pushd build &&
@@ -35,7 +35,7 @@ before_script:
     make -j2 &&
     make install &&
     popd &&
-    popd; fi
+    popd
 
 script:
   - mkdir build && cd build &&
