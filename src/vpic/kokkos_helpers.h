@@ -585,30 +585,39 @@ KOKKOS_INLINE_FUNCTION void atomic_add(float* a, float b) {
 //#endif
 //}
 
-#ifdef __CUDA_ARCH__
-//typedef Half<__half> pos_t;
-//typedef Half<__half> mom_t;
-//typedef Half<__half> mixed_t;
-//typedef Half2<__half2> packed_t;
-//typedef Q1_14 pos_t;
+#ifdef KOKKOS_ENABLE_CUDA
 typedef __half pos_t;
-//typedef float pos_t;
 typedef float mom_t;
 typedef float mixed_t;
 #else
-//typedef Half<__half> pos_t;
-//typedef Half<__half> mom_t;
-//typedef Half<__half> mixed_t;
-//typedef Half2<__half2> packed_t;
-//typedef Half<half> pos_t;
-//typedef Half<half> mom_t;
-//typedef Half<half> mixed_t;
-//typedef Q1_14 pos_t;
-typedef __half pos_t;
-//typedef float pos_t;
+typedef float pos_t;
 typedef float mom_t;
 typedef float mixed_t;
 #endif
+//#ifdef __CUDA_ARCH__
+////typedef Half<__half> pos_t;
+////typedef Half<__half> mom_t;
+////typedef Half<__half> mixed_t;
+////typedef Half2<__half2> packed_t;
+////typedef Q1_14 pos_t;
+//typedef __half pos_t;
+////typedef float pos_t;
+//typedef float mom_t;
+//typedef float mixed_t;
+//#else
+////typedef Half<__half> pos_t;
+////typedef Half<__half> mom_t;
+////typedef Half<__half> mixed_t;
+////typedef Half2<__half2> packed_t;
+////typedef Half<half> pos_t;
+////typedef Half<half> mom_t;
+////typedef Half<half> mixed_t;
+////typedef Q1_14 pos_t;
+//typedef __half pos_t;
+////typedef float pos_t;
+//typedef float mom_t;
+//typedef float mixed_t;
+//#endif
 
 //#define GPUSpace  Kokkos::DefaultExecutionSpace::memory_space
 
@@ -1263,8 +1272,13 @@ class k_particle_movers_host_struct {
         }
 };
 
+#ifdef KOKKOS_ENABLE_CUDA
 using k_particles_soa_t      = k_particles_struct<pos_t, mom_t>;
 using k_particles_host_soa_t = k_particles_host_struct<pos_t, mom_t>;
+#else
+using k_particles_soa_t      = k_particles_struct<fp16_t, mom_t>;
+using k_particles_host_soa_t = k_particles_host_struct<fp16_t, mom_t>;
+#endif
 using k_particle_movers_soa_t = k_particle_movers_struct;
 using k_particle_movers_host_soa_t = k_particle_movers_host_struct;
 
