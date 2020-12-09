@@ -978,7 +978,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         pm[nm].dispx=pi->dispx; pm[nm].dispy=pi->dispy; pm[nm].dispz=pi->dispz;
         pm[nm].i=np;
 #       endif
-        sp_nm[id] = nm + move_p( p, pm+nm, g, fa->k_jf_accum_h, sp_q[id] );
+        sp_nm[id] = nm + move_p( p, pm+nm, fa->k_jf_accum_h, g, sp_q[id] );
       }
     } while(face!=5);
 

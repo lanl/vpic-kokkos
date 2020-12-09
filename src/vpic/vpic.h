@@ -584,7 +584,7 @@ public:
     p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
     pm->dispx = dispx; pm->dispy = dispy; pm->dispz = dispz; pm->i = sp->np-1;
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
-    sp->nm += move_p( sp->p, pm, grid, field_array->k_jf_accum_h, sp->q );
+    sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
   }
 
   //////////////////////////////////
