@@ -54,7 +54,9 @@ struct DefaultSort {
         bin_sort.sort(part.ux);
         bin_sort.sort(part.uy);
         bin_sort.sort(part.uz);
+#ifndef PARTICLE_WEIGHT_CONSTANT
         bin_sort.sort(part.w);
+#endif
         bin_sort.sort(part.i);
     }
 
@@ -86,7 +88,9 @@ struct DefaultSort {
         bin_sort.sort(part.ux);
         bin_sort.sort(part.uy);
         bin_sort.sort(part.uz);
+#ifndef PARTICLE_WEIGHT_CONSTANT
         bin_sort.sort(part.w);
+#endif
         bin_sort.sort(part.i);
     }
 
@@ -130,7 +134,9 @@ struct DefaultSort {
         bin_sort.sort(part.ux);
         bin_sort.sort(part.uy);
         bin_sort.sort(part.uz);
+#ifndef PARTICLE_WEIGHT_CONSTANT
         bin_sort.sort(part.w);
+#endif
         bin_sort.sort(part.i);
     }
 
@@ -175,7 +181,9 @@ struct DefaultSort {
         bin_sort.sort(part.ux);
         bin_sort.sort(part.uy);
         bin_sort.sort(part.uz);
+#ifndef PARTICLE_WEIGHT_CONSTANT
         bin_sort.sort(part.w);
+#endif
         bin_sort.sort(part.i);
     }
 
@@ -235,7 +243,9 @@ struct DefaultSort {
         bin_sort.sort(part.ux);
         bin_sort.sort(part.uy);
         bin_sort.sort(part.uz);
+#ifndef PARTICLE_WEIGHT_CONSTANT
         bin_sort.sort(part.w);
+#endif
         bin_sort.sort(part.i);
     }
 

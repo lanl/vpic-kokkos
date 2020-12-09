@@ -11,12 +11,16 @@
 //using cnl::fixed_point;
 //using fixed_point_t = fixed_point<int32_t, -23>;
 
-//#ifdef KOKKOS_ENABLE_CUDA
+#ifdef KOKKOS_ENABLE_CUDA
 #include "cuda_fp16.h"
-//#else
+#else
 #include "half.hpp"
 using half_float::half;
-//#endif
+#endif
+#include "altivec.h"
+#undef vector
+#undef bool
+//#include "simd_kokkos.hpp"
 
 // This module implements kokkos macros
 
@@ -28,6 +32,12 @@ using half_float::half;
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
+
+#define PARTICLE_WEIGHT_CONSTANT
+//#define PARTICLE_WEIGHT_SHORT
+//#define PARTICLE_WEIGHT_FLOAT
+
+//#define CPU_HALF
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -43,13 +53,14 @@ typedef int16_t material_id;
 
 typedef float float_t;
 
-//#ifdef KOKKOS_ENABLE_CUDA
-//#define half __half
-//#endif
-//
-//#define pos_t half
-//#define mom_t half
-//#define mixed_t half
+typedef unsigned short fp16_t;
+
+typedef short Q1_14;
+
+//constexpr float Q1_14_CONST = 10000.0;
+//constexpr float Q1_14_INV_CONST = (1.0/10000.0);
+constexpr float Q1_14_CONST = static_cast<float>(1 << 14);
+constexpr float Q1_14_INV_CONST = (1.0/static_cast<float>(1 << 14));
 
 template <typename T> class Half {
   public:
@@ -359,237 +370,232 @@ KOKKOS_INLINE_FUNCTION void atomic_add(float* a, float b) {
 }
   
 
-template <typename T>
-class Half2 {
-  public:
-    T _data; // Actual data
-
-    KOKKOS_INLINE_FUNCTION Half2<T>(): _data() {}
-
-    KOKKOS_INLINE_FUNCTION Half2<T>(__half2 data) {
-      _data = data;
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T>(const float f1, const float f2) {
-      _data = __floats2half2_rn(f1,f2);
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T>(const float f) {
-      _data = __float2half2_rn(f);
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T>(const __half h) {
-#ifdef __CUDA_ARCH__
-      _data = __half2half2(h);
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION float high2float() {
-      return __high2float(_data);
-    }
-
-    KOKKOS_INLINE_FUNCTION float low2float() {
-      return __low2float(_data);
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<__half> high2half() {
-      return Half<__half>(__high2half(_data));
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<__half> low2half() {
-      return Half<__half>(__low2half(_data));
-    }
-
-		KOKKOS_INLINE_FUNCTION Half2<T>& operator=(Half2<T> rhs) { 
-#ifdef __CUDA_ARCH__
-      _data = rhs._data;
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T> operator+(const Half2<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half2<T>(__hadd2(_data, rhs._data));
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T> operator+(Half2<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half2<T>(__hadd2(_data, rhs._data));
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T> operator-(const Half2<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half2<T>(__hsub2(_data, rhs._data));
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T> operator*(const Half2<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half2<T>(__hmul2(_data, rhs._data));
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T> operator/(const Half2<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half2<T>(__h2div(_data, rhs._data));
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T>& operator+=(const Half2<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      _data = __hadd2(_data, rhs._data);
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T>& operator-=(const Half2<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      _data = __hsub2(_data, rhs._data);
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T>& operator*=(const Half2<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      _data = __hmul2(_data, rhs._data);
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T>& operator/=(const Half2<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      _data = __h2div(_data, rhs._data);
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T>& operator++() {
-#ifdef __CUDA_ARCH__
-      _data = __hadd2(_data, __floats2half2_rn(1.0,1.0));
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T>& operator--() {
-#ifdef __CUDA_ARCH__
-      _data = __hsub2(_data, __floats2half2_rn(1.0,1.0));
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T> operator++(int a) {
-#ifdef __CUDA_ARCH__
-      return Half2<T>( __hadd2(_data, __floats2half2_rn(1.0,1.0)));
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T> operator--(int a) {
-#ifdef __CUDA_ARCH__
-      return Half2<T>( __hsub2(_data, __floats2half2_rn(1.0,1.0)));
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T> operator+() const {
-#ifdef __CUDA_ARCH__
-      return Half2<T>(_data);
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half2<T> operator-() const {
-#ifdef __CUDA_ARCH__
-      return Half2<T>(__hneg2(_data));
-#endif
-    }
-
-//    KOKKOS_INLINE_FUNCTION bool operator==(const Half2<T>& rhs) {
+//template <typename T>
+//class Half2 {
+//  public:
+//    T _data; // Actual data
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T>(): _data() {}
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T>(__half2 data) {
+//      _data = data;
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T>(const float f1, const float f2) {
+//      _data = __floats2half2_rn(f1,f2);
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T>(const float f) {
+//      _data = __float2half2_rn(f);
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T>(const __half h) {
 //#ifdef __CUDA_ARCH__
-//      return __heq(_data, rhs._data);
+//      _data = __half2half2(h);
 //#endif
 //    }
 //
-//    KOKKOS_INLINE_FUNCTION bool operator!=(const Half2<T>& rhs) {
-//#ifdef __CUDA_ARCH__
-//      return __hne(_data, rhs._data);
-//#endif
+//    KOKKOS_INLINE_FUNCTION float high2float() {
+//      return __high2float(_data);
 //    }
-
-    KOKKOS_INLINE_FUNCTION bool operator<=(const Half2<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return __hble2(_data, rhs._data);
-#endif
-    }
-
-//    KOKKOS_INLINE_FUNCTION bool operator>=(const Half2<T>& rhs) {
+//
+//    KOKKOS_INLINE_FUNCTION float low2float() {
+//      return __low2float(_data);
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half<__half> high2half() {
+//      return Half<__half>(__high2half(_data));
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half<__half> low2half() {
+//      return Half<__half>(__low2half(_data));
+//    }
+//
+//		KOKKOS_INLINE_FUNCTION Half2<T>& operator=(Half2<T> rhs) { 
 //#ifdef __CUDA_ARCH__
-//      return __hge(_data, rhs._data);
+//      _data = rhs._data;
+//      return *this;
 //#endif
 //    }
 //
-//    KOKKOS_INLINE_FUNCTION bool operator<(const Half2<T>& rhs) {
+//    KOKKOS_INLINE_FUNCTION Half2<T> operator+(const Half2<T>& rhs) {
 //#ifdef __CUDA_ARCH__
-//      return __hlt(_data, rhs._data);
+//      return Half2<T>(__hadd2(_data, rhs._data));
 //#endif
 //    }
 //
-//    KOKKOS_INLINE_FUNCTION bool operator>(const Half2<T>& rhs) {
+//    KOKKOS_INLINE_FUNCTION Half2<T> operator+(Half2<T>& rhs) {
 //#ifdef __CUDA_ARCH__
-//      return __hgt(_data, rhs._data);
+//      return Half2<T>(__hadd2(_data, rhs._data));
 //#endif
 //    }
-};
-
-template <typename T>
-KOKKOS_INLINE_FUNCTION Half2<T> sqrt(Half2<T> h) {
-#ifdef __CUDA_ARCH__
-  return Half2<T>(h2sqrt(h._data));
-#endif
-}
-
-//KOKKOS_INLINE_FUNCTION Half2<T> abs(Half2<T> h) {
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T> operator-(const Half2<T>& rhs) {
 //#ifdef __CUDA_ARCH__
-//  return Half2<T>(__habs2(h._data));
+//      return Half2<T>(__hsub2(_data, rhs._data));
+//#endif
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T> operator*(const Half2<T>& rhs) {
+//#ifdef __CUDA_ARCH__
+//      return Half2<T>(__hmul2(_data, rhs._data));
+//#endif
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T> operator/(const Half2<T>& rhs) {
+//#ifdef __CUDA_ARCH__
+//      return Half2<T>(__h2div(_data, rhs._data));
+//#endif
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T>& operator+=(const Half2<T>& rhs) {
+//#ifdef __CUDA_ARCH__
+//      _data = __hadd2(_data, rhs._data);
+//      return *this;
+//#endif
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T>& operator-=(const Half2<T>& rhs) {
+//#ifdef __CUDA_ARCH__
+//      _data = __hsub2(_data, rhs._data);
+//      return *this;
+//#endif
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T>& operator*=(const Half2<T>& rhs) {
+//#ifdef __CUDA_ARCH__
+//      _data = __hmul2(_data, rhs._data);
+//      return *this;
+//#endif
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T>& operator/=(const Half2<T>& rhs) {
+//#ifdef __CUDA_ARCH__
+//      _data = __h2div(_data, rhs._data);
+//      return *this;
+//#endif
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T>& operator++() {
+//#ifdef __CUDA_ARCH__
+//      _data = __hadd2(_data, __floats2half2_rn(1.0,1.0));
+//      return *this;
+//#endif
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T>& operator--() {
+//#ifdef __CUDA_ARCH__
+//      _data = __hsub2(_data, __floats2half2_rn(1.0,1.0));
+//      return *this;
+//#endif
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T> operator++(int a) {
+//#ifdef __CUDA_ARCH__
+//      return Half2<T>( __hadd2(_data, __floats2half2_rn(1.0,1.0)));
+//#endif
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T> operator--(int a) {
+//#ifdef __CUDA_ARCH__
+//      return Half2<T>( __hsub2(_data, __floats2half2_rn(1.0,1.0)));
+//#endif
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T> operator+() const {
+//#ifdef __CUDA_ARCH__
+//      return Half2<T>(_data);
+//#endif
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION Half2<T> operator-() const {
+//#ifdef __CUDA_ARCH__
+//      return Half2<T>(__hneg2(_data));
+//#endif
+//    }
+//
+////    KOKKOS_INLINE_FUNCTION bool operator==(const Half2<T>& rhs) {
+////#ifdef __CUDA_ARCH__
+////      return __heq(_data, rhs._data);
+////#endif
+////    }
+////
+////    KOKKOS_INLINE_FUNCTION bool operator!=(const Half2<T>& rhs) {
+////#ifdef __CUDA_ARCH__
+////      return __hne(_data, rhs._data);
+////#endif
+////    }
+//
+//    KOKKOS_INLINE_FUNCTION bool operator<=(const Half2<T>& rhs) {
+//#ifdef __CUDA_ARCH__
+//      return __hble2(_data, rhs._data);
+//#endif
+//    }
+//
+////    KOKKOS_INLINE_FUNCTION bool operator>=(const Half2<T>& rhs) {
+////#ifdef __CUDA_ARCH__
+////      return __hge(_data, rhs._data);
+////#endif
+////    }
+////
+////    KOKKOS_INLINE_FUNCTION bool operator<(const Half2<T>& rhs) {
+////#ifdef __CUDA_ARCH__
+////      return __hlt(_data, rhs._data);
+////#endif
+////    }
+////
+////    KOKKOS_INLINE_FUNCTION bool operator>(const Half2<T>& rhs) {
+////#ifdef __CUDA_ARCH__
+////      return __hgt(_data, rhs._data);
+////#endif
+////    }
+//};
+//
+//template <typename T>
+//KOKKOS_INLINE_FUNCTION Half2<T> sqrt(Half2<T> h) {
+//#ifdef __CUDA_ARCH__
+//  return Half2<T>(h2sqrt(h._data));
+//#endif
+//}
+//
+////KOKKOS_INLINE_FUNCTION Half2<T> abs(Half2<T> h) {
+////#ifdef __CUDA_ARCH__
+////  return Half2<T>(__habs2(h._data));
+////#endif
+////}
+//
+//template <typename T>
+//KOKKOS_INLINE_FUNCTION Half2<T> eq(const Half2<T>& lhs, const Half2<T> & rhs) {
+//#ifdef __CUDA_ARCH__
+//  return Half2<T>(__heq2(lhs._data, rhs._data));
+//#endif
+//}
+//
+//template <typename T>
+//KOKKOS_INLINE_FUNCTION Half2<T> leq(const Half2<T>& lhs, const Half2<T> & rhs) {
+//#ifdef __CUDA_ARCH__
+//  return Half2<T>(__hle2(lhs._data, rhs._data));
+//#endif
+//}
+//
+//template <typename T>
+//KOKKOS_INLINE_FUNCTION Half2<T> fma(const Half2<T>& a, const Half2<T>& b, const Half2<T>& c) {
+//#ifdef __CUDA_ARCH__
+//  return Half2<T>(__hfma2(a._data, b._data, c._data));
 //#endif
 //}
 
-template <typename T>
-KOKKOS_INLINE_FUNCTION Half2<T> eq(const Half2<T>& lhs, const Half2<T> & rhs) {
 #ifdef __CUDA_ARCH__
-  return Half2<T>(__heq2(lhs._data, rhs._data));
-#endif
-}
-
-template <typename T>
-KOKKOS_INLINE_FUNCTION Half2<T> leq(const Half2<T>& lhs, const Half2<T> & rhs) {
-#ifdef __CUDA_ARCH__
-  return Half2<T>(__hle2(lhs._data, rhs._data));
-#endif
-}
-
-template <typename T>
-KOKKOS_INLINE_FUNCTION Half2<T> fma(const Half2<T>& a, const Half2<T>& b, const Half2<T>& c) {
-#ifdef __CUDA_ARCH__
-  return Half2<T>(__hfma2(a._data, b._data, c._data));
-#endif
-}
-
-#ifdef __CUDA_ARCH__
-//#define pos_t Half2<__half2>
-//#define mom_t Half2<__half2>
-//#define mixed_t Half2<__half2>
 //typedef Half<__half> pos_t;
 //typedef Half<__half> mom_t;
 //typedef Half<__half> mixed_t;
 //typedef Half2<__half2> packed_t;
-typedef float pos_t;
+//typedef Q1_14 pos_t;
+typedef __half pos_t;
+//typedef float pos_t;
 typedef float mom_t;
 typedef float mixed_t;
-#define mixed_t float
 #else
-//#define pos_t half
-//#define mom_t half
-//#define mixed_t half
 //typedef Half<__half> pos_t;
 //typedef Half<__half> mom_t;
 //typedef Half<__half> mixed_t;
@@ -597,23 +603,30 @@ typedef float mixed_t;
 //typedef Half<half> pos_t;
 //typedef Half<half> mom_t;
 //typedef Half<half> mixed_t;
-typedef float pos_t;
+//typedef Q1_14 pos_t;
+typedef __half pos_t;
+//typedef float pos_t;
 typedef float mom_t;
 typedef float mixed_t;
 #endif
 
 //#define GPUSpace  Kokkos::DefaultExecutionSpace::memory_space
 
+template<typename Position, typename Momentum>
 class k_particles_struct {
     public:
-        Kokkos::View<pos_t *> dx;
-        Kokkos::View<pos_t *> dy;
-        Kokkos::View<pos_t *> dz;
-        Kokkos::View<mom_t *> ux;
-        Kokkos::View<mom_t *> uy;
-        Kokkos::View<mom_t *> uz;
-        Kokkos::View<float *> w;
+        Kokkos::View<Position *> dx;
+        Kokkos::View<Position *> dy;
+        Kokkos::View<Position *> dz;
+        Kokkos::View<Momentum *> ux;
+        Kokkos::View<Momentum *> uy;
+        Kokkos::View<Momentum *> uz;
         Kokkos::View<int   *> i;
+#if defined PARTICLE_WEIGHT_SHORT
+        Kokkos::View<short *> w;
+#elif defined PARTICLE_WEIGHT_FLOAT
+        Kokkos::View<float *> w;
+#endif
 
         k_particles_struct() {}
 
@@ -624,20 +637,280 @@ class k_particles_struct {
             ux("Particle ux momentum", num_particles),
             uy("Particle uy momentum", num_particles),
             uz("Particle uz momentum", num_particles),
-            w("Particle weight", num_particles),
+#if !defined PARTICLE_WEIGHT_CONSTANT
+            i("Particle index", num_particles),
+            w("Particle weight", num_particles){}
+#else
             i("Particle index", num_particles){}
+#endif
+
+        KOKKOS_INLINE_FUNCTION Position get_dx(size_t j) const {
+          return dx(j);
+        }
+        KOKKOS_INLINE_FUNCTION Position get_dy(size_t j) const {
+          return dy(j);
+        }
+        KOKKOS_INLINE_FUNCTION Position get_dz(size_t j) const {
+          return dz(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_ux(size_t j) const {
+          return ux(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_uy(size_t j) const {
+          return uy(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_uz(size_t j) const {
+          return uz(j);
+        }
+//        KOKKOS_INLINE_FUNCTION float get_w(size_t j) const {
+//          return w(j);
+//        }
+        KOKKOS_INLINE_FUNCTION int get_i(size_t j) const {
+          return i(j);
+        }
+
+        KOKKOS_INLINE_FUNCTION void set_dx(Position val, size_t j) const {
+          dx(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_dy(Position val, size_t j) const {
+          dy(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_dz(Position val, size_t j) const {
+          dz(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_ux(Momentum val, size_t j) const {
+          ux(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_uy(Momentum val, size_t j) const {
+          uy(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_uz(Momentum val, size_t j) const {
+          uz(j) = val;
+        }
+//        KOKKOS_INLINE_FUNCTION void set_w(float val, size_t j) const {
+//          w(j) = val;
+//        }
+        KOKKOS_INLINE_FUNCTION void set_i(int val, size_t j) const {
+          i(j) = val;
+        }
+
 };
 
+#ifdef CPU_HALF
+template<typename Momentum>
+class k_particles_struct<fp16_t, Momentum> {
+    public:
+        Kokkos::View<fp16_t *> dx;
+        Kokkos::View<fp16_t *> dy;
+        Kokkos::View<fp16_t *> dz;
+        Kokkos::View<Momentum *> ux;
+        Kokkos::View<Momentum *> uy;
+        Kokkos::View<Momentum *> uz;
+        Kokkos::View<int   *> i;
+#if defined PARTICLE_WEIGHT_SHORT
+        Kokkos::View<short *> w;
+#elif defined PARTICLE_WEIGHT_FLOAT
+        Kokkos::View<float *> w;
+#endif
+
+        k_particles_struct() {}
+
+        k_particles_struct(int num_particles) :
+            dx("Particle dx position", num_particles),
+            dy("Particle dy position", num_particles),
+            dz("Particle dz position", num_particles),
+            ux("Particle ux momentum", num_particles),
+            uy("Particle uy momentum", num_particles),
+            uz("Particle uz momentum", num_particles),
+#if !defined PARTICLE_WEIGHT_CONSTANT
+            i("Particle index", num_particles),
+            w("Particle weight", num_particles){}
+#else
+            i("Particle index", num_particles){}
+#endif
+
+        KOKKOS_INLINE_FUNCTION float get_dx(int j) const {
+          int vec_idx = (j/8)*8;
+          int vec_lane = j%8;
+          __vector unsigned short half = {dx(j), 0, 0, 0, 0, 0, 0, 0};
+          __vector float single = vec_extract_fp32_from_shorth(half);
+          return single[0];
+        }
+
+        KOKKOS_INLINE_FUNCTION float get_dy(int j) const {
+          int vec_idx = (j/8)*8;
+          int vec_lane = j%8;
+          __vector unsigned short half = {dy(j), 0, 0, 0, 0, 0, 0, 0};
+          __vector float single = vec_extract_fp32_from_shorth(half);
+          return single[0];
+        }
+
+        KOKKOS_INLINE_FUNCTION float get_dz(int j) const {
+          int vec_idx = (j/8)*8;
+          int vec_lane = j%8;
+          __vector unsigned short half = {dz(j), 0, 0, 0, 0, 0, 0, 0};
+          __vector float single = vec_extract_fp32_from_shorth(half);
+          return single[0];
+        }
+
+        KOKKOS_INLINE_FUNCTION Momentum get_ux(size_t j) const {
+          return ux(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_uy(size_t j) const {
+          return uy(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_uz(size_t j) const {
+          return uz(j);
+        }
+//        KOKKOS_INLINE_FUNCTION float get_w(size_t j) const {
+//          return w(j);
+//        }
+        KOKKOS_INLINE_FUNCTION int get_i(size_t j) const {
+          return i(j);
+        }
+
+        KOKKOS_INLINE_FUNCTION void set_dx(float val, size_t j) const {
+          __vector float single = {0.0, 0.0, 0.0, 0.0};
+          single[0] = val;
+          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
+          dx(j) = half[0];
+        }
+
+        KOKKOS_INLINE_FUNCTION void set_dy(float val, size_t j) const {
+          __vector float single = {0.0, 0.0, 0.0, 0.0};
+          single[0] = val;
+          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
+          dy(j) = half[0];
+        }
+
+        KOKKOS_INLINE_FUNCTION void set_dz(float val, size_t j) const {
+          __vector float single = {0.0, 0.0, 0.0, 0.0};
+          single[0] = val;
+          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
+          dz(j) = half[0];
+        }
+
+
+        KOKKOS_INLINE_FUNCTION void set_ux(Momentum val, size_t j) const {
+          ux(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_uy(Momentum val, size_t j) const {
+          uy(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_uz(Momentum val, size_t j) const {
+          uz(j) = val;
+        }
+//        KOKKOS_INLINE_FUNCTION void set_w(float val, size_t j) const {
+//          w(j) = val;
+//        }
+        KOKKOS_INLINE_FUNCTION void set_i(int val, size_t j) const {
+          i(j) = val;
+        }
+
+};
+#endif
+
+template<typename Momentum>
+class k_particles_struct<Q1_14, Momentum> {
+    public:
+        Kokkos::View<Q1_14 *> dx;
+        Kokkos::View<Q1_14 *> dy;
+        Kokkos::View<Q1_14 *> dz;
+        Kokkos::View<Momentum *> ux;
+        Kokkos::View<Momentum *> uy;
+        Kokkos::View<Momentum *> uz;
+        Kokkos::View<int   *> i;
+#if defined PARTICLE_WEIGHT_SHORT
+        Kokkos::View<short *> w;
+#elif defined PARTICLE_WEIGHT_FLOAT
+        Kokkos::View<float *> w;
+#endif
+
+        k_particles_struct() {}
+
+        k_particles_struct(int num_particles) :
+            dx("Particle dx position", num_particles),
+            dy("Particle dy position", num_particles),
+            dz("Particle dz position", num_particles),
+            ux("Particle ux momentum", num_particles),
+            uy("Particle uy momentum", num_particles),
+            uz("Particle uz momentum", num_particles),
+#if !defined PARTICLE_WEIGHT_CONSTANT
+            i("Particle index", num_particles),
+            w("Particle weight", num_particles){}
+#else
+            i("Particle index", num_particles){}
+#endif
+
+        KOKKOS_INLINE_FUNCTION float get_dx(size_t j) const {
+          return static_cast<float>(dx(j)) * Q1_14_INV_CONST;
+        }
+        KOKKOS_INLINE_FUNCTION float get_dy(size_t j) const {
+          return static_cast<float>(dy(j)) * Q1_14_INV_CONST;
+        }
+        KOKKOS_INLINE_FUNCTION float get_dz(size_t j) const {
+          return static_cast<float>(dz(j)) * Q1_14_INV_CONST;
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_ux(size_t j) const {
+          return ux(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_uy(size_t j) const {
+          return uy(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_uz(size_t j) const {
+          return uz(j);
+        }
+//        KOKKOS_INLINE_FUNCTION float get_w(size_t j) const {
+//          return w(j);
+//        }
+        KOKKOS_INLINE_FUNCTION int get_i(size_t j) const {
+          return i(j);
+        }
+
+        KOKKOS_INLINE_FUNCTION void set_dx(float val, size_t j) const {
+//          dx(j) = static_cast<Q1_14>((val * Q1_14_CONST));
+          dx(j) = static_cast<Q1_14>(roundf(val * Q1_14_CONST));
+        }
+        KOKKOS_INLINE_FUNCTION void set_dy(float val, size_t j) const {
+//          dy(j) = static_cast<Q1_14>((val * Q1_14_CONST));
+          dy(j) = static_cast<Q1_14>(roundf(val * Q1_14_CONST));
+        }
+        KOKKOS_INLINE_FUNCTION void set_dz(float val, size_t j) const {
+//          dz(j) = static_cast<Q1_14>((val * Q1_14_CONST));
+          dz(j) = static_cast<Q1_14>(roundf(val * Q1_14_CONST));
+        }
+        KOKKOS_INLINE_FUNCTION void set_ux(Momentum val, size_t j) const {
+          ux(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_uy(Momentum val, size_t j) const {
+          uy(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_uz(Momentum val, size_t j) const {
+          uz(j) = val;
+        }
+//        KOKKOS_INLINE_FUNCTION void set_w(float val, size_t j) const {
+//          w(j) = val;
+//        }
+        KOKKOS_INLINE_FUNCTION void set_i(int val, size_t j) const {
+          i(j) = val;
+        }
+};
+
+template<typename Position, typename Momentum>
 class k_particles_host_struct {
     public:
-        Kokkos::View<pos_t *>::HostMirror dx;
-        Kokkos::View<pos_t *>::HostMirror dy;
-        Kokkos::View<pos_t *>::HostMirror dz;
-        Kokkos::View<mom_t *>::HostMirror ux;
-        Kokkos::View<mom_t *>::HostMirror uy;
-        Kokkos::View<mom_t *>::HostMirror uz;
-        Kokkos::View<float *>::HostMirror w;
+        typename Kokkos::View<Position *>::HostMirror dx;
+        typename Kokkos::View<Position *>::HostMirror dy;
+        typename Kokkos::View<Position *>::HostMirror dz;
+        typename Kokkos::View<Momentum *>::HostMirror ux;
+        typename Kokkos::View<Momentum *>::HostMirror uy;
+        typename Kokkos::View<Momentum *>::HostMirror uz;
         Kokkos::View<int   *>::HostMirror i;
+#if defined PARTICLE_WEIGHT_SHORT
+        Kokkos::View<short *>::HostMirror w;
+#elif defined PARTICLE_WEIGHT_FLOAT
+        Kokkos::View<float *>::HostMirror w;
+#endif
 
         k_particles_host_struct() {}
 
@@ -648,26 +921,307 @@ class k_particles_host_struct {
             ux("Particle ux momentum", num_particles),
             uy("Particle uy momentum", num_particles),
             uz("Particle uz momentum", num_particles),
-            w("Particle weight", num_particles),
+#if !defined PARTICLE_WEIGHT_CONSTANT
+            i("Particle index", num_particles),
+            w("Particle weight", num_particles){}
+#else
             i("Particle index", num_particles){}
+#endif
 
-        k_particles_host_struct(k_particles_struct& particles) {
+        k_particles_host_struct<Position,Momentum>(k_particles_struct<Position,Momentum>& particles) {
             dx = Kokkos::create_mirror_view(particles.dx);
             dy = Kokkos::create_mirror_view(particles.dy);
             dz = Kokkos::create_mirror_view(particles.dz);
             ux = Kokkos::create_mirror_view(particles.ux);
             uy = Kokkos::create_mirror_view(particles.uy);
             uz = Kokkos::create_mirror_view(particles.uz);
-            w = Kokkos::create_mirror_view(particles.w);
             i = Kokkos::create_mirror_view(particles.i);
+#if !defined PARTICLE_WEIGHT_CONSTANT
+            w = Kokkos::create_mirror_view(particles.w);
+#endif
+        }
+
+        KOKKOS_INLINE_FUNCTION Position get_dx(size_t j) const {
+          return dx(j);
+        }
+        KOKKOS_INLINE_FUNCTION Position get_dy(size_t j) const {
+          return dy(j);
+        }
+        KOKKOS_INLINE_FUNCTION Position get_dz(size_t j) const {
+          return dz(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_ux(size_t j) const {
+          return ux(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_uy(size_t j) const {
+          return uy(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_uz(size_t j) const {
+          return uz(j);
+        }
+//        KOKKOS_INLINE_FUNCTION float get_w(size_t j) const {
+//          return w(j);
+//        }
+        KOKKOS_INLINE_FUNCTION int get_i(size_t j) const {
+          return i(j);
+        }
+
+        KOKKOS_INLINE_FUNCTION void set_dx(Position val, size_t j) const {
+          dx(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_dy(Position val, size_t j) const {
+          dy(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_dz(Position val, size_t j) const {
+          dz(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_ux(Momentum val, size_t j) const {
+          ux(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_uy(Momentum val, size_t j) const {
+          uy(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_uz(Momentum val, size_t j) const {
+          uz(j) = val;
+        }
+//        KOKKOS_INLINE_FUNCTION void set_w(float val, size_t j) const {
+//          w(j) = val;
+//        }
+        KOKKOS_INLINE_FUNCTION void set_i(int val, size_t j) const {
+          i(j) = val;
+        }
+};
+
+#ifdef CPU_HALF
+template<typename Momentum>
+class k_particles_host_struct<fp16_t, Momentum> {
+    public:
+        typename Kokkos::View<fp16_t *>::HostMirror dx;
+        typename Kokkos::View<fp16_t *>::HostMirror dy;
+        typename Kokkos::View<fp16_t *>::HostMirror dz;
+        typename Kokkos::View<Momentum *>::HostMirror ux;
+        typename Kokkos::View<Momentum *>::HostMirror uy;
+        typename Kokkos::View<Momentum *>::HostMirror uz;
+        Kokkos::View<int   *>::HostMirror i;
+#if defined PARTICLE_WEIGHT_SHORT
+        Kokkos::View<short *>::HostMirror w;
+#elif defined PARTICLE_WEIGHT_FLOAT
+        Kokkos::View<float *>::HostMirror w;
+#endif
+
+        k_particles_host_struct() {}
+
+        k_particles_host_struct(int num_particles) :
+            dx("Particle dx position", num_particles),
+            dy("Particle dy position", num_particles),
+            dz("Particle dz position", num_particles),
+            ux("Particle ux momentum", num_particles),
+            uy("Particle uy momentum", num_particles),
+            uz("Particle uz momentum", num_particles),
+#if !defined PARTICLE_WEIGHT_CONSTANT
+            i("Particle index", num_particles),
+            w("Particle weight", num_particles){}
+#else
+            i("Particle index", num_particles){}
+#endif
+
+        k_particles_host_struct<fp16_t,Momentum>(k_particles_struct<fp16_t,Momentum>& particles) {
+            dx = Kokkos::create_mirror_view(particles.dx);
+            dy = Kokkos::create_mirror_view(particles.dy);
+            dz = Kokkos::create_mirror_view(particles.dz);
+            ux = Kokkos::create_mirror_view(particles.ux);
+            uy = Kokkos::create_mirror_view(particles.uy);
+            uz = Kokkos::create_mirror_view(particles.uz);
+            i = Kokkos::create_mirror_view(particles.i);
+#if !defined PARTICLE_WEIGHT_CONSTANT
+            w = Kokkos::create_mirror_view(particles.w);
+#endif
+        }
+
+        KOKKOS_INLINE_FUNCTION float get_dx(int j) const {
+          int vec_idx = (j/8)*8;
+          int vec_lane = j%8;
+          __vector unsigned short half = {dx(j), 0, 0, 0, 0, 0, 0, 0};
+          __vector float single = vec_extract_fp32_from_shorth(half);
+          return single[0];
+        }
+
+        KOKKOS_INLINE_FUNCTION float get_dy(int j) const {
+          int vec_idx = (j/8)*8;
+          int vec_lane = j%8;
+          __vector unsigned short half = {dy(j), 0, 0, 0, 0, 0, 0, 0};
+          __vector float single = vec_extract_fp32_from_shorth(half);
+          return single[0];
+        }
+
+        KOKKOS_INLINE_FUNCTION float get_dz(int j) const {
+          int vec_idx = (j/8)*8;
+          int vec_lane = j%8;
+          __vector unsigned short half = {dz(j), 0, 0, 0, 0, 0, 0, 0};
+          __vector float single = vec_extract_fp32_from_shorth(half);
+          return single[0];
+        }
+
+        KOKKOS_INLINE_FUNCTION Momentum get_ux(int j) const {
+          return ux(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_uy(int j) const {
+          return uy(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_uz(int j) const {
+          return uz(j);
+        }
+//        KOKKOS_INLINE_FUNCTION float get_w(int j) const {
+//          return w(j);
+//        }
+        KOKKOS_INLINE_FUNCTION int get_i(int j) const {
+          return i(j);
+        }
+
+        KOKKOS_INLINE_FUNCTION void set_dx(float val, size_t j) const {
+          __vector float single = {0.0, 0.0, 0.0, 0.0};
+          single[0] = val;
+          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
+          dx(j) = half[0];
+        }
+
+        KOKKOS_INLINE_FUNCTION void set_dy(float val, size_t j) const {
+          __vector float single = {0.0, 0.0, 0.0, 0.0};
+          single[0] = val;
+          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
+          dy(j) = half[0];
+        }
+
+        KOKKOS_INLINE_FUNCTION void set_dz(float val, size_t j) const {
+          __vector float single = {0.0, 0.0, 0.0, 0.0};
+          single[0] = val;
+          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
+          dz(j) = half[0];
+        }
+
+        KOKKOS_INLINE_FUNCTION void set_ux(Momentum val, size_t j) const {
+          ux(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_uy(Momentum val, size_t j) const {
+          uy(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_uz(Momentum val, size_t j) const {
+          uz(j) = val;
+        }
+//        KOKKOS_INLINE_FUNCTION void set_w(float val, size_t j) const {
+//          w(j) = val;
+//        }
+        KOKKOS_INLINE_FUNCTION void set_i(int val, size_t j) const {
+          i(j) = val;
+        }
+
+};
+#endif
+
+template<typename Momentum>
+class k_particles_host_struct<Q1_14, Momentum> {
+    public:
+        typename Kokkos::View<Q1_14 *>::HostMirror dx;
+        typename Kokkos::View<Q1_14 *>::HostMirror dy;
+        typename Kokkos::View<Q1_14 *>::HostMirror dz;
+        typename Kokkos::View<Momentum *>::HostMirror ux;
+        typename Kokkos::View<Momentum *>::HostMirror uy;
+        typename Kokkos::View<Momentum *>::HostMirror uz;
+        Kokkos::View<int   *>::HostMirror i;
+#if defined PARTICLE_WEIGHT_SHORT
+        Kokkos::View<short *>::HostMirror w;
+#elif defined PARTICLE_WEIGHT_FLOAT
+        Kokkos::View<float *>::HostMirror w;
+#endif
+
+        k_particles_host_struct() {}
+
+        k_particles_host_struct(int num_particles) :
+            dx("Particle dx position", num_particles),
+            dy("Particle dy position", num_particles),
+            dz("Particle dz position", num_particles),
+            ux("Particle ux momentum", num_particles),
+            uy("Particle uy momentum", num_particles),
+            uz("Particle uz momentum", num_particles),
+#if !defined PARTICLE_WEIGHT_CONSTANT
+            i("Particle index", num_particles),
+            w("Particle weight", num_particles){}
+#else
+            i("Particle index", num_particles){}
+#endif
+
+        k_particles_host_struct<Q1_14,Momentum>(k_particles_struct<Q1_14,Momentum>& particles) {
+            dx = Kokkos::create_mirror_view(particles.dx);
+            dy = Kokkos::create_mirror_view(particles.dy);
+            dz = Kokkos::create_mirror_view(particles.dz);
+            ux = Kokkos::create_mirror_view(particles.ux);
+            uy = Kokkos::create_mirror_view(particles.uy);
+            uz = Kokkos::create_mirror_view(particles.uz);
+            i = Kokkos::create_mirror_view(particles.i);
+#if !defined PARTICLE_WEIGHT_CONSTANT
+            w = Kokkos::create_mirror_view(particles.w);
+#endif
+        }
+
+        KOKKOS_INLINE_FUNCTION float get_dx(size_t j) const {
+          return static_cast<float>(dx(j)) * Q1_14_INV_CONST;
+        }
+        KOKKOS_INLINE_FUNCTION float get_dy(size_t j) const {
+          return static_cast<float>(dy(j)) * Q1_14_INV_CONST;
+        }
+        KOKKOS_INLINE_FUNCTION float get_dz(size_t j) const {
+          return static_cast<float>(dz(j)) * Q1_14_INV_CONST;
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_ux(size_t j) const {
+          return ux(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_uy(size_t j) const {
+          return uy(j);
+        }
+        KOKKOS_INLINE_FUNCTION Momentum get_uz(size_t j) const {
+          return uz(j);
+        }
+//        KOKKOS_INLINE_FUNCTION float get_w(size_t j) const {
+//          return w(j);
+//        }
+        KOKKOS_INLINE_FUNCTION int get_i(size_t j) const {
+          return i(j);
+        }
+
+        KOKKOS_INLINE_FUNCTION void set_dx(float val, size_t j) const {
+//          dx(j) = static_cast<Q1_14>((val * Q1_14_CONST));
+          dx(j) = static_cast<Q1_14>(roundf(val * Q1_14_CONST));
+        }
+        KOKKOS_INLINE_FUNCTION void set_dy(float val, size_t j) const {
+//          dy(j) = static_cast<Q1_14>((val * Q1_14_CONST));
+          dy(j) = static_cast<Q1_14>(roundf(val * Q1_14_CONST));
+        }
+        KOKKOS_INLINE_FUNCTION void set_dz(float val, size_t j) const {
+//          dz(j) = static_cast<Q1_14>((val * Q1_14_CONST));
+          dz(j) = static_cast<Q1_14>(roundf(val * Q1_14_CONST));
+        }
+        KOKKOS_INLINE_FUNCTION void set_ux(Momentum val, size_t j) const {
+          ux(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_uy(Momentum val, size_t j) const {
+          uy(j) = val;
+        }
+        KOKKOS_INLINE_FUNCTION void set_uz(Momentum val, size_t j) const {
+          uz(j) = val;
+        }
+//        KOKKOS_INLINE_FUNCTION void set_w(float val, size_t j) const {
+//          w(j) = val;
+//        }
+        KOKKOS_INLINE_FUNCTION void set_i(int val, size_t j) const {
+          i(j) = val;
         }
 };
 
 typedef struct k_particle_mover {
+  int i;
   pos_t dispx;
   pos_t dispy;
   pos_t dispz;
-  int i;
 } k_particle_mover_t;
 
 class k_particle_movers_struct {
@@ -701,16 +1255,16 @@ class k_particle_movers_host_struct {
             dispz("Particle dz position", num_particles),
             i("Particle index", num_particles){}
 
-        k_particle_movers_host_struct(k_particles_struct& particles) {
-            dispx = Kokkos::create_mirror_view(particles.dx);
-            dispy = Kokkos::create_mirror_view(particles.dy);
-            dispz = Kokkos::create_mirror_view(particles.dz);
+        k_particle_movers_host_struct(k_particle_movers_struct& particles) {
+            dispx = Kokkos::create_mirror_view(particles.dispx);
+            dispy = Kokkos::create_mirror_view(particles.dispy);
+            dispz = Kokkos::create_mirror_view(particles.dispz);
             i = Kokkos::create_mirror_view(particles.i);
         }
 };
 
-using k_particles_soa_t = k_particles_struct;
-using k_particles_host_soa_t = k_particles_host_struct;
+using k_particles_soa_t      = k_particles_struct<pos_t, mom_t>;
+using k_particles_host_soa_t = k_particles_host_struct<pos_t, mom_t>;
 using k_particle_movers_soa_t = k_particle_movers_struct;
 using k_particle_movers_host_soa_t = k_particle_movers_host_struct;
 

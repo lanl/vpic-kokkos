@@ -843,8 +843,8 @@ begin_initialization {
   double f_H              = 1-f_He;   // Ratio of number density of H  to total ion density 
 
   int load_particles = 1;         // Flag to turn off particle load for testing wave launch. 
+//  double nppc        = 7168;
   double nppc        = 512;
-//  double nppc        = 1;
 
 // Here _He is C+6
   double A_H                = 1;
@@ -867,7 +867,7 @@ begin_initialization {
 
   double nx                = 1200; //11232;
   double ny                = 1;    // 2D problem in x-z plane
-  double nz                = 145; //756;  // was 549;
+  double nz                = 225; //756;  // was 549;
 //  double nx                = 55; //11232;
 //  double ny                = 55;    // 2D problem in x-z plane
 //  double nz                = 55; //756;  // was 549;
@@ -941,8 +941,8 @@ begin_initialization {
 
   int ele_sort_freq       = 20*2; 
   int ion_sort_freq       = 5*ele_sort_freq; 
-//  int ele_sort_freq       = 1; 
-//  int ion_sort_freq       = 1; 
+//  int ele_sort_freq       = -1; 
+//  int ion_sort_freq       = -1; 
 
   double quota = 11.7;            // Run quota in hours.  
   double quota_sec = quota*3600;  // Run quota in seconds. 
@@ -1029,7 +1029,7 @@ begin_initialization {
 
   // SETUP HIGH-LEVEL SIMULATION PARMETERS
   sim_log("Setting up high-level simulation parameters. "); 
-  num_step             = 100; //int(t_stop/(dt)); 
+  num_step             = 10; //int(t_stop/(dt)); 
   status_interval      = 2000; 
 //  status_interval      = -1; 
 //  sync_shared_interval = status_interval/1;
@@ -1152,17 +1152,17 @@ begin_initialization {
   species_t *electron = NULL; 
   species_t *ion_H    = NULL;
   species_t *ion_He   = NULL;
-  electron = define_species("electron", -1, 1, max_local_np, max_local_nm, ele_sort_freq, 1);
+  electron = define_species("electron", -1, 1, fabs(qe), max_local_np, max_local_nm, ele_sort_freq, 0);
 //  electron = define_species("electron", -1, 1, max_local_np, max_local_nm, ele_sort_freq, 0);
   if ( mobile_ions ) {
     if ( H_present ) {
       sim_log("- Creating H species.");
-      ion_H  = define_species("H",  Z_H,  mime_H,  max_local_np, max_local_nm, ion_sort_freq, 1);
+      ion_H  = define_species("H",  Z_H,  mime_H,  qi_H, max_local_np, max_local_nm, ion_sort_freq, 0);
 //      ion_H  = define_species("H",  Z_H,  mime_H,  max_local_np, max_local_nm, ion_sort_freq, 0);
     }
     if ( He_present ) {
       sim_log("- Creating He species.");
-      ion_He = define_species("He", Z_He, mime_He, max_local_np, max_local_nm, ion_sort_freq, 1);
+      ion_He = define_species("He", Z_He, mime_He, qi_He, max_local_np, max_local_nm, ion_sort_freq, 0);
 //      ion_He = define_species("He", Z_He, mime_He, max_local_np, max_local_nm, ion_sort_freq, 0);
     }
   }
@@ -1263,7 +1263,8 @@ begin_initialization {
       inject_particle( electron, x, y, z,
                        normal( rng(0), 0, uthe ), 
                        normal( rng(0), 0, uthe ), 
-                       normal( rng(0), 0, uthe ), 
+//                       normal( rng(0), 0, uthe ), 
+                       0.6, //normal( rng(0), 0, uthe ), 
                        fabs(qe), 0, 0 );
 
       if ( mobile_ions ) {
@@ -1277,7 +1278,8 @@ begin_initialization {
           inject_particle( ion_He, x, y, z,
                            normal( rng(0), 0, uthi_He ), 
                            normal( rng(0), 0, uthi_He ), 
-                           normal( rng(0), 0, uthi_He ), 
+//                           normal( rng(0), 0, uthi_He ), 
+                           0.6, //normal( rng(0), 0, uthi_He ), 
                            fabs(qi_He), 0, 0 );
       }
       // DEBUG 
@@ -2679,7 +2681,8 @@ begin_diagnostics {
       fileIO_##SUFF.close();                                        \
     }
 
-  if ( 1 ) {
+//  if ( 1 ) {
+  if ( 0 ) {
     float        f_e[NVX*NVZ], f_He[NVX*NVZ], f_H[NVX*NVZ]; 
     float        vmax_e  = 10*global->vthe,    dvx_e,  dvz_e;     
     float        vmax_He = 10*global->vthi_He, dvx_He, dvz_He; 

@@ -2,6 +2,8 @@
 #include "../particle_operations/compress.h"
 #include "../particle_operations/sort.h"
 #include <Kokkos_Sort.hpp>
+#include <chrono>
+#include <thread>
 
 #define FAK field_array->kernel
 
@@ -96,6 +98,10 @@ int vpic_simulation::advance(void)
 //  KOKKOS_TIC();
 
   // DEVICE function - Touches particles, particle movers, accumulators, interpolators
+std::fstream profile("profile.log", std::ios_base::app);
+profile << "START" << std::endl;
+profile.close();
+std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   LIST_FOR_EACH( sp, species_list )
   {
 #ifdef VPIC_ENABLE_PAPI
@@ -106,6 +112,10 @@ int vpic_simulation::advance(void)
       advance_p( sp, accumulator_array, interpolator_array );
 #endif
   }
+std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+profile.open("profile.log", std::ios_base::app);
+profile << "FINISH" << std::endl;
+profile.close();
 //  KOKKOS_TOC( advance_p, 1);
 //  KOKKOS_TOCN( advance_p, 1);
 
@@ -288,7 +298,9 @@ int vpic_simulation::advance(void)
         auto pc_ux_h_subview = Kokkos::subview(sp->k_pc_soa_h.ux, std::make_pair(0, sp->num_to_copy));
         auto pc_uy_h_subview = Kokkos::subview(sp->k_pc_soa_h.uy, std::make_pair(0, sp->num_to_copy));
         auto pc_uz_h_subview = Kokkos::subview(sp->k_pc_soa_h.uz, std::make_pair(0, sp->num_to_copy));
+#ifndef PARTICLE_WEIGHT_CONSTANT
         auto pc_w_h_subview = Kokkos::subview(sp->k_pc_soa_h.w, std::make_pair(0, sp->num_to_copy));
+#endif
         auto pc_i_h_subview = Kokkos::subview(sp->k_pc_soa_h.i, std::make_pair(0, sp->num_to_copy));
 
         auto pr_dx_h_subview = Kokkos::subview(sp->k_pr_soa_h.dx, std::make_pair(0, sp->num_to_copy));
@@ -297,7 +309,9 @@ int vpic_simulation::advance(void)
         auto pr_ux_h_subview = Kokkos::subview(sp->k_pr_soa_h.ux, std::make_pair(0, sp->num_to_copy));
         auto pr_uy_h_subview = Kokkos::subview(sp->k_pr_soa_h.uy, std::make_pair(0, sp->num_to_copy));
         auto pr_uz_h_subview = Kokkos::subview(sp->k_pr_soa_h.uz, std::make_pair(0, sp->num_to_copy));
+#ifndef PARTICLE_WEIGHT_CONSTANT
         auto pr_w_h_subview = Kokkos::subview(sp->k_pr_soa_h.w, std::make_pair(0, sp->num_to_copy));
+#endif
         auto pr_i_h_subview = Kokkos::subview(sp->k_pr_soa_h.i, std::make_pair(0, sp->num_to_copy));
   
         Kokkos::deep_copy(pc_dx_h_subview, pr_dx_h_subview);
@@ -306,7 +320,9 @@ int vpic_simulation::advance(void)
         Kokkos::deep_copy(pc_ux_h_subview, pr_ux_h_subview);
         Kokkos::deep_copy(pc_uy_h_subview, pr_uy_h_subview);
         Kokkos::deep_copy(pc_uz_h_subview, pr_uz_h_subview);
+#ifndef PARTICLE_WEIGHT_CONSTANT
         Kokkos::deep_copy(pc_w_h_subview, pr_w_h_subview);
+#endif
         Kokkos::deep_copy(pc_i_h_subview, pr_i_h_subview);
   }
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
@@ -408,7 +424,9 @@ int sp_counter = 0;
         auto pc_ux_d_subview = Kokkos::subview(sp->k_pc_soa_d.ux, std::make_pair(0, sp->num_to_copy));
         auto pc_uy_d_subview = Kokkos::subview(sp->k_pc_soa_d.uy, std::make_pair(0, sp->num_to_copy));
         auto pc_uz_d_subview = Kokkos::subview(sp->k_pc_soa_d.uz, std::make_pair(0, sp->num_to_copy));
+#ifndef PARTICLE_WEIGHT_CONSTANT
         auto pc_w_d_subview = Kokkos::subview(sp->k_pc_soa_d.w, std::make_pair(0, sp->num_to_copy));
+#endif
         auto pc_i_d_subview = Kokkos::subview(sp->k_pc_soa_d.i, std::make_pair(0, sp->num_to_copy));
 
         auto pc_dx_h_subview = Kokkos::subview(sp->k_pc_soa_h.dx, std::make_pair(0, sp->num_to_copy));
@@ -417,7 +435,9 @@ int sp_counter = 0;
         auto pc_ux_h_subview = Kokkos::subview(sp->k_pc_soa_h.ux, std::make_pair(0, sp->num_to_copy));
         auto pc_uy_h_subview = Kokkos::subview(sp->k_pc_soa_h.uy, std::make_pair(0, sp->num_to_copy));
         auto pc_uz_h_subview = Kokkos::subview(sp->k_pc_soa_h.uz, std::make_pair(0, sp->num_to_copy));
+#ifndef PARTICLE_WEIGHT_CONSTANT
         auto pc_w_h_subview = Kokkos::subview(sp->k_pc_soa_h.w, std::make_pair(0, sp->num_to_copy));
+#endif
         auto pc_i_h_subview = Kokkos::subview(sp->k_pc_soa_h.i, std::make_pair(0, sp->num_to_copy));
         Kokkos::deep_copy(pc_dx_d_subview, pc_dx_h_subview);
         Kokkos::deep_copy(pc_dy_d_subview, pc_dy_h_subview);
@@ -425,7 +445,9 @@ int sp_counter = 0;
         Kokkos::deep_copy(pc_ux_d_subview, pc_ux_h_subview);
         Kokkos::deep_copy(pc_uy_d_subview, pc_uy_h_subview);
         Kokkos::deep_copy(pc_uz_d_subview, pc_uz_h_subview);
+#ifndef PARTICLE_WEIGHT_CONSTANT
         Kokkos::deep_copy(pc_w_d_subview, pc_w_h_subview);
+#endif
         Kokkos::deep_copy(pc_i_d_subview, pc_i_h_subview);
       KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 #ifdef VPIC_ENABLE_PAPI
@@ -464,7 +486,9 @@ int sp_counter = 0;
         k_particles.ux(npi) = particle_copy.ux(i);
         k_particles.uy(npi) = particle_copy.uy(i);
         k_particles.uz(npi) = particle_copy.uz(i);
+#ifndef PARTICLE_WEIGHT_CONSTANT
         k_particles.w(npi)  = particle_copy.w(i);
+#endif
         k_particles.i(npi)  = particle_copy.i(i);
       });
 
@@ -990,8 +1014,12 @@ sp_counter ++;
 //#endif
 //  KOKKOS_TIC(); // Time this data movement
 //  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+//  dump_partloc("gpu_Q1_14_pos_nx9000_2particle_1Mtimesteps_particle_locations.txt", 1);
+//  TIC dump_energies("gpu_Q1_14_pos_nx9000_2particle_1Mtimesteps_energies.txt", 1); TOC( dump_energies, 1);
+//  dump_partloc("test3_particle_locations.txt", 1);
+//  TIC dump_energies("test3_energies.txt", 1); TOC( dump_energies, 1);
 //  dump_partloc("particle_location.txt", 1);
-  TIC dump_energies("energies.txt", 1); TOC( dump_energies, 1);
+//  TIC dump_energies("energies.txt", 1); TOC( dump_energies, 1);
 //  KOKKOS_TOC( user_diagnostics, 1);
 //#ifdef VPIC_ENABLE_PAPI
 //  Kokkos::Profiling::popRegion();

@@ -47,25 +47,71 @@ void uncenter_p_kokkos(k_particles_soa_t k_part, k_interpolator_t k_interp, int 
   #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
   #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
 
+//  Kokkos::parallel_for("uncenter p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
+//      (0, np), KOKKOS_LAMBDA (int p_index) {
+//
+//    int ii = pii;
+////    float hax, hay, haz, l_cbx, l_cby, l_cbz;
+////    float v0, v1, v2, v3, v4;
+//    mixed_t hax, hay, haz, l_cbx, l_cby, l_cbz;
+//    mixed_t v0, v1, v2, v3, v4;
+//
+//    hax  = qdt_2mc*(      ( f_ex    + p_dy*f_dexdy    ) +
+//                     p_dz*( f_dexdz + p_dy*f_d2exdydz ) );
+//    hay  = qdt_2mc*(      ( f_ey    + p_dz*f_deydz    ) +
+//                     p_dx*( f_deydx + p_dz*f_d2eydzdx ) );
+//    haz  = qdt_2mc*(      ( f_ez    + p_dx*f_dezdx    ) +
+//                     p_dy*( f_dezdy + p_dx*f_d2ezdxdy ) );
+//
+//    l_cbx  = f_cbx + p_dx*f_dcbxdx;            // Interpolate B
+//    l_cby  = f_cby + p_dy*f_dcbydy;
+//    l_cbz  = f_cbz + p_dz*f_dcbzdz;
+//
+//    v0   = qdt_4mc/sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
+//
+//    /**/                                     // Boris - scalars
+//    v1    = l_cbx*l_cbx + (l_cby*l_cby + l_cbz*l_cbz);
+//    v2    = (v0*v0)*v1;
+//    v3    = v0*(one+v2*(one_third+v2*two_fifteenths));
+//    v4    = v3/(one+v1*(v3*v3));
+//    v4   += v4;
+//
+//    v0    = p_ux + v3*( p_uy*l_cbz - p_uz*l_cby );      // Boris - uprime
+//    v1    = p_uy + v3*( p_uz*l_cbx - p_ux*l_cbz );
+//    v2    = p_uz + v3*( p_ux*l_cby - p_uy*l_cbx );
+//
+//    p_ux += v4*( v1*l_cbz - v2*l_cby );           // Boris - rotation
+//    p_uy += v4*( v2*l_cbx - v0*l_cbz );
+//    p_uz += v4*( v0*l_cby - v1*l_cbx );
+//
+//    p_ux += hax;                              // Half advance E
+//    p_uy += hay;
+//    p_uz += haz;
+//  });
+
   Kokkos::parallel_for("uncenter p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
-      (0, np), KOKKOS_LAMBDA (int p_index) {
+      (0, (np/8)+1), KOKKOS_LAMBDA (int index) {
+for(int idx=0; idx<8; idx++) {
+int p_index = index*8 + idx;
+if(p_index < np) {
 
     int ii = pii;
-//    float hax, hay, haz, l_cbx, l_cby, l_cbz;
-//    float v0, v1, v2, v3, v4;
     mixed_t hax, hay, haz, l_cbx, l_cby, l_cbz;
     mixed_t v0, v1, v2, v3, v4;
+    mixed_t dx = k_part.get_dx(p_index);
+    mixed_t dy = k_part.get_dy(p_index);
+    mixed_t dz = k_part.get_dz(p_index);
 
-    hax  = qdt_2mc*(      ( f_ex    + p_dy*f_dexdy    ) +
-                     p_dz*( f_dexdz + p_dy*f_d2exdydz ) );
-    hay  = qdt_2mc*(      ( f_ey    + p_dz*f_deydz    ) +
-                     p_dx*( f_deydx + p_dz*f_d2eydzdx ) );
-    haz  = qdt_2mc*(      ( f_ez    + p_dx*f_dezdx    ) +
-                     p_dy*( f_dezdy + p_dx*f_d2ezdxdy ) );
+    hax  = qdt_2mc*(      ( f_ex    + dy*f_dexdy    ) +
+                       dz*( f_dexdz + dy*f_d2exdydz ) );
+    hay  = qdt_2mc*(      ( f_ey    + dz*f_deydz    ) +
+                       dx*( f_deydx + dz*f_d2eydzdx ) );
+    haz  = qdt_2mc*(      ( f_ez    + dx*f_dezdx    ) +
+                       dy*( f_dezdy + dx*f_d2ezdxdy ) );
 
-    l_cbx  = f_cbx + p_dx*f_dcbxdx;            // Interpolate B
-    l_cby  = f_cby + p_dy*f_dcbydy;
-    l_cbz  = f_cbz + p_dz*f_dcbzdz;
+    l_cbx  = f_cbx + dx*f_dcbxdx;            // Interpolate B
+    l_cby  = f_cby + dy*f_dcbydy;
+    l_cbz  = f_cbz + dz*f_dcbzdz;
 
     v0   = qdt_4mc/sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
 
@@ -87,6 +133,8 @@ void uncenter_p_kokkos(k_particles_soa_t k_part, k_interpolator_t k_interp, int 
     p_ux += hax;                              // Half advance E
     p_uy += hay;
     p_uz += haz;
+}
+}
   });
 
 //  // this goes to np using p_index
@@ -274,16 +322,19 @@ void uncenter_p_kokkos(k_particles_soa_t k_part, k_particles_t k_particles, k_pa
 
     mixed_t hax, hay, haz, l_cbx, l_cby, l_cbz;
     mixed_t v0, v1, v2, v3, v4;
+    mixed_t dx = k_part.get_dx(p_index);
+    mixed_t dy = k_part.get_dy(p_index);
+    mixed_t dz = k_part.get_dz(p_index);
 
-    hax  = qdt_2mc*(      ( f_ex    + p_dy*f_dexdy    ) +
-                     p_dz*( f_dexdz + p_dy*f_d2exdydz ) );
-    hay  = qdt_2mc*(      ( f_ey    + p_dz*f_deydz    ) +
-                     p_dx*( f_deydx + p_dz*f_d2eydzdx ) );
-    haz  = qdt_2mc*(      ( f_ez    + p_dx*f_dezdx    ) +
-                     p_dy*( f_dezdy + p_dx*f_d2ezdxdy ) );
-    l_cbx  = f_cbx + p_dx*f_dcbxdx;            // Interpolate B
-    l_cby  = f_cby + p_dy*f_dcbydy;
-    l_cbz  = f_cbz + p_dz*f_dcbzdz;
+    hax  = qdt_2mc*(      ( f_ex    + dy*f_dexdy    ) +
+                       dz*( f_dexdz + dy*f_d2exdydz ) );
+    hay  = qdt_2mc*(      ( f_ey    + dz*f_deydz    ) +
+                       dx*( f_deydx + dz*f_d2eydzdx ) );
+    haz  = qdt_2mc*(      ( f_ez    + dx*f_dezdx    ) +
+                       dy*( f_dezdy + dx*f_d2ezdxdy ) );
+    l_cbx  = f_cbx + dx*f_dcbxdx;            // Interpolate B
+    l_cby  = f_cby + dy*f_dcbydy;
+    l_cbz  = f_cbz + dz*f_dcbzdz;
     v0   = qdt_4mc/(float)sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
     /**/                                     // Boris - scalars
     v1    = l_cbx*l_cbx + (l_cby*l_cby + l_cbz*l_cbz);

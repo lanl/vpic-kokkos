@@ -119,7 +119,7 @@ energy_p_pipeline_v4( energy_p_pipeline_args_t * args,
 #endif
 
 double
-energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_soa_t& k_part, const float qdt_2mc, const float msp, const int np) {
+energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_soa_t& k_part, const float qdt_2mc, const float msp, const int np, const float sp_w) {
 //  const interpolator_t * RESTRICT ALIGNED(128) f = args->f;
 //  const particle_t     * RESTRICT ALIGNED(32)  p = args->p;
 //  const float qdt_2mc = args->qdt_2mc;
@@ -168,9 +168,12 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_soa_t& k_par
 //                           dx*( k_interp(i, interpolator_var::deydx) + dz*k_interp(i, interpolator_var::d2eydzdx) ) );
 //        float v2 = k_part.uz(n) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
 //                                dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
-        float dx = static_cast<float>(k_part.dx(n));
-        float dy = static_cast<float>(k_part.dy(n));
-        float dz = static_cast<float>(k_part.dz(n));
+//        float dx = static_cast<float>(k_part.dx(n));
+//        float dy = static_cast<float>(k_part.dy(n));
+//        float dz = static_cast<float>(k_part.dz(n));
+        float dx = static_cast<float>(k_part.get_dx(n));
+        float dy = static_cast<float>(k_part.get_dy(n));
+        float dz = static_cast<float>(k_part.get_dz(n));
         int   i  = k_part.i(n);
         float v0 = static_cast<float>(k_part.ux(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
                            dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
@@ -179,7 +182,14 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_soa_t& k_par
         float v2 = static_cast<float>(k_part.uz(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
                                 dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
         v0 = v0*v0 + v1*v1 + v2*v2;
+
+#if defined PARTICLE_WEIGHT_FLOAT
         v0 = (msp * k_part.w(n)) * (v0 / (1 + sqrtf(1 + v0)));
+#elif defined PARTICLE_WEIGHT_SHORT
+        v0 = (msp * k_part.w(n)*sp_w) * (v0 / (1 + sqrtf(1 + v0)));
+#elif defined PARTICLE_WEIGHT_CONSTANT
+        v0 = (msp * sp_w) * (v0 / (1 + sqrtf(1 + v0)));
+#endif
         update += static_cast<double>(v0);
     }, en);
 
@@ -187,7 +197,7 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_soa_t& k_par
 }
 
 double
-energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_soa_t& k_part, const k_particles_t& k_particles, const k_particles_i_t& k_particles_i, const float qdt_2mc, const float msp, const int np) {
+energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_soa_t& k_part, const k_particles_t& k_particles, const k_particles_i_t& k_particles_i, const float qdt_2mc, const float msp, const int np, const float sp_w) {
 //  const interpolator_t * RESTRICT ALIGNED(128) f = args->f;
 //  const particle_t     * RESTRICT ALIGNED(32)  p = args->p;
 //  const float qdt_2mc = args->qdt_2mc;
@@ -241,10 +251,39 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_soa_t& k_par
 //        update += static_cast<double>(v0);
 //    }, en);
 
-    Kokkos::parallel_reduce("energy_p", np, KOKKOS_LAMBDA(const int n, double& update) {
-        float dx = k_part.dx(n);
-        float dy = k_part.dy(n);
-        float dz = k_part.dz(n);
+//    Kokkos::parallel_reduce("energy_p", np, KOKKOS_LAMBDA(const int n, double& update) {
+//        float dx = k_part.dx(n);
+//        float dy = k_part.dy(n);
+//        float dz = k_part.dz(n);
+//        int   i  = k_part.i(n);
+//        float v0 = static_cast<float>(k_part.ux(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
+//                           dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
+//        float v1 = static_cast<float>(k_part.uy(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ey)    + dz*k_interp(i, interpolator_var::deydz)    ) +
+//                           dx*( k_interp(i, interpolator_var::deydx) + dz*k_interp(i, interpolator_var::d2eydzdx) ) );
+//        float v2 = static_cast<float>(k_part.uz(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
+//                                dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
+//        v0 = v0*v0 + v1*v1 + v2*v2;
+//
+//#if defined PARTICLE_WEIGHT_FLOAT
+//        v0 = (msp * k_part.w(n)) * (v0 / (1 + sqrtf(1 + v0)));
+//#elif defined PARTICLE_WEIGHT_SHORT
+//        v0 = (msp * k_part.w(n)*sp_w) * (v0 / (1 + sqrtf(1 + v0)));
+//#elif defined PARTICLE_WEIGHT_CONSTANT
+//        v0 = (msp * sp_w) * (v0 / (1 + sqrtf(1 + v0)));
+//#endif
+//        update += static_cast<double>(v0);
+//    }, en);
+
+    Kokkos::parallel_reduce("energy_p", (np/8)+1, KOKKOS_LAMBDA(const int index, double& update) {
+for(int idx=0; idx<8; idx++) {
+int n = index*8 + idx;
+if(n < np) {
+//        float dx = k_part.dx(n);
+//        float dy = k_part.dy(n);
+//        float dz = k_part.dz(n);
+        float dx = k_part.get_dx(n);
+        float dy = k_part.get_dy(n);
+        float dz = k_part.get_dz(n);
         int   i  = k_part.i(n);
         float v0 = static_cast<float>(k_part.ux(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
                            dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
@@ -253,8 +292,17 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_soa_t& k_par
         float v2 = static_cast<float>(k_part.uz(n)) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
                                 dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
         v0 = v0*v0 + v1*v1 + v2*v2;
+
+#if defined PARTICLE_WEIGHT_FLOAT
         v0 = (msp * k_part.w(n)) * (v0 / (1 + sqrtf(1 + v0)));
+#elif defined PARTICLE_WEIGHT_SHORT
+        v0 = (msp * k_part.w(n)*sp_w) * (v0 / (1 + sqrtf(1 + v0)));
+#elif defined PARTICLE_WEIGHT_CONSTANT
+        v0 = (msp * sp_w) * (v0 / (1 + sqrtf(1 + v0)));
+#endif
         update += static_cast<double>(v0);
+}
+}
     }, en);
 
 //    Kokkos::parallel_reduce("energy_p", np/2, KOKKOS_LAMBDA(const int n, double& update) {
@@ -331,7 +379,7 @@ energy_p_kokkos(const species_t* RESTRICT sp,
     float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
 
 //    local = energy_p_kernel(ia->k_i_d, sp->k_p_soa_d, sp->k_p_d, sp->k_p_i_d, qdt_2mc, sp->m, sp->np);
-    local = energy_p_kernel(ia->k_i_d, sp->k_p_soa_d, qdt_2mc, sp->m, sp->np);
+    local = energy_p_kernel(ia->k_i_d, sp->k_p_soa_d, qdt_2mc, sp->m, sp->np, sp->w);
     Kokkos::fence();
 
     mp_allsum_d( &local, &global, 1 );

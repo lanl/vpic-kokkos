@@ -257,9 +257,12 @@ boundary_p_kokkos(
                 //pi->dx = sp->k_pc_h(copy_index, particle_var::dx);
                 //pi->dy = sp->k_pc_h(copy_index, particle_var::dy);
                 //pi->dz = sp->k_pc_h(copy_index, particle_var::dz);
-                pi->dx = sp->k_pc_soa_h.dx(copy_index);
-                pi->dy = sp->k_pc_soa_h.dy(copy_index);
-                pi->dz = sp->k_pc_soa_h.dz(copy_index);
+                //pi->dx = sp->k_pc_soa_h.dx(copy_index);
+                //pi->dy = sp->k_pc_soa_h.dy(copy_index);
+                //pi->dz = sp->k_pc_soa_h.dz(copy_index);
+                pi->dx = sp->k_pc_soa_h.get_dx(copy_index);
+                pi->dy = sp->k_pc_soa_h.get_dy(copy_index);
+                pi->dz = sp->k_pc_soa_h.get_dz(copy_index);
 
 
                 pi->i = nn - range[face];
@@ -276,7 +279,14 @@ boundary_p_kokkos(
 
                 //pi->w=p0[i].w;
                 //pi->w = sp->k_pc_h(copy_index, particle_var::w);
+//                pi->w = sp->k_pc_soa_h.w(copy_index);
+#if defined PARTICLE_WEIGHT_FLOAT
                 pi->w = sp->k_pc_soa_h.w(copy_index);
+#elif defined PARTICLE_WEIGHT_SHORT
+                pi->w = sp->k_pc_soa_h.w(copy_index)*sp->w;
+#elif defined PARTICLE_WEIGHT_CONSTANT
+                pi->w = sp->w;
+#endif
 
                 pi->dispx = pm->dispx; pi->dispy = pm->dispy; pi->dispz = pm->dispz;
                 pi->sp_id = sp_id;
@@ -468,13 +478,20 @@ boundary_p_kokkos(
         //particle_recv(write_index, particle_var::uy) = pi->uy;
         //particle_recv(write_index, particle_var::uz) = pi->uz;
         //particle_recv(write_index, particle_var::w)  = pi->w;
-        particle_recv.dx(write_index) = pi->dx;
-        particle_recv.dy(write_index) = pi->dy;
-        particle_recv.dz(write_index) = pi->dz;
+        //particle_recv.dx(write_index) = pi->dx;
+        //particle_recv.dy(write_index) = pi->dy;
+        //particle_recv.dz(write_index) = pi->dz;
+        particle_recv.set_dx(pi->dx, write_index);
+        particle_recv.set_dy(pi->dy, write_index);
+        particle_recv.set_dz(pi->dz, write_index);
         particle_recv.ux(write_index) = pi->ux;
         particle_recv.uy(write_index) = pi->uy;
         particle_recv.uz(write_index) = pi->uz;
+#if defined PARTICLE_WEIGHT_FLOAT
         particle_recv.w(write_index) = pi->w;
+#elif defined PARTICLE_WEIGHT_SHORT
+        particle_recv.w(write_index) = static_cast<short>(pi->w/sp->w);
+#endif
 
         int pii = pi->i;
         //particle_recv_i(write_index) = pii;
@@ -506,7 +523,8 @@ boundary_p_kokkos(
                 sp_[id]->g->k_neighbor_h,
                 rangel,
                 rangeh,
-                sp_[id]->q
+                sp_[id]->q,
+                sp_[id]->w
         );
 
         int keep_id = nm + ret_code - 1;
@@ -526,14 +544,19 @@ boundary_p_kokkos(
             //particle_send(keep_id, particle_var::uz) = particle_recv(write_index, particle_var::uz);
             //particle_send(keep_id, particle_var::w)  = particle_recv(write_index, particle_var::w);
             //particle_send_i(keep_id)  = particle_recv_i(write_index);
-            particle_send.dx(keep_id) = particle_recv.dx(write_index);
-            particle_send.dy(keep_id) = particle_recv.dy(write_index);
-            particle_send.dz(keep_id) = particle_recv.dz(write_index);
+            //particle_send.dx(keep_id) = particle_recv.dx(write_index);
+            //particle_send.dy(keep_id) = particle_recv.dy(write_index);
+            //particle_send.dz(keep_id) = particle_recv.dz(write_index);
+            particle_send.set_dx(particle_recv.get_dx(write_index), keep_id);
+            particle_send.set_dy(particle_recv.get_dy(write_index), keep_id);
+            particle_send.set_dz(particle_recv.get_dz(write_index), keep_id);
             particle_send.ux(keep_id) = particle_recv.ux(write_index);
             particle_send.uy(keep_id) = particle_recv.uy(write_index);
             particle_send.uz(keep_id) = particle_recv.uz(write_index);
-            particle_send.w(keep_id) = particle_recv.w(write_index);
             particle_send.i(keep_id) = particle_recv.i(write_index);
+#if !defined PARTICLE_WEIGHT_CONSTANT
+            particle_send.w(keep_id) = particle_recv.w(write_index);
+#endif
         }
 
       }

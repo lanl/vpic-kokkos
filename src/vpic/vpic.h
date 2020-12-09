@@ -535,6 +535,30 @@ public:
                                     grid ), &species_list );
   }
 
+  // FIXME: SILLY PROMOTIONS
+  inline species_t *
+  define_species( const char *name,
+                  double q,
+                  double m,
+                  double w,
+                  double max_local_np,
+                  double max_local_nm,
+                  double sort_interval,
+                  double sort_out_of_place ) {
+    // Compute a reasonble number of movers if user did not specify
+    // Based on the twice the number of particles expected to hit the boundary
+    // of a wpdt=0.2 / dx=lambda species in a 3x3x3 domain
+    if( max_local_nm<0 ) {
+      max_local_nm = 2*max_local_np/25;
+      if( max_local_nm<16*(MAX_PIPELINE+1) )
+        max_local_nm = 16*(MAX_PIPELINE+1);
+    }
+    return append_species( species( name, (float)q, (float)m, (float)w,
+                                    (int)max_local_np, (int)max_local_nm,
+                                    (int)sort_interval, (int)sort_out_of_place,
+                                    grid ), &species_list );
+  }
+
   inline species_t *
   find_species( const char *name ) {
      return find_species_name( name, species_list );
@@ -794,7 +818,8 @@ public:
       auto n_particles = sp->np;
       auto max_pmovers = sp->max_nm;
 
-      auto& kph = sp->k_p_soa_h;
+//      auto& kph = sp->k_p_soa_h;
+      k_particles_host_soa_t& kph = sp->k_p_soa_h;
 
 //      auto& k_particles_h = sp->k_p_h;
 //      auto& k_particles_i_h = sp->k_p_i_h;
@@ -803,15 +828,28 @@ public:
       auto& k_nm_h = sp->k_nm_h;
       k_nm_h(0) = sp->nm;
 
+//if(rank() == 0) {
+//      Kokkos::parallel_for("Print first 100 particles dx", host_execution_policy(0,10), KOKKOS_LAMBDA(const int i) {
+//        printf("Pre: Particle: %d, dx = %f\n", i, sp->p[i].dx);
+//      });
+//}
+
       Kokkos::parallel_for("copy particles to device", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) {
-              kph.dx(i) = sp->p[i].dx;
-              kph.dy(i) = sp->p[i].dy;
-              kph.dz(i) = sp->p[i].dz;
+//              kph.dx(i) = sp->p[i].dx;
+//              kph.dy(i) = sp->p[i].dy;
+//              kph.dz(i) = sp->p[i].dz;
+              kph.set_dx(sp->p[i].dx, i);
+              kph.set_dy(sp->p[i].dy, i);
+              kph.set_dz(sp->p[i].dz, i);
               kph.ux(i) = sp->p[i].ux;
               kph.uy(i) = sp->p[i].uy;
               kph.uz(i) = sp->p[i].uz;
-              kph.w(i) = sp->p[i].w;
               kph.i(i) = sp->p[i].i;
+#if defined PARTICLE_WEIGHT_FLOAT
+              kph.w(i) = sp->p[i].w;
+#elif defined PARTICLE_WEIGHT_SHORT
+              kph.w(i) = static_cast<short>(sp->p[i].w / sp->w);
+#endif
 
 //              k_particles_h(i, particle_var::dx) = sp->p[i].dx;
 //              k_particles_h(i, particle_var::dy) = sp->p[i].dy;
@@ -836,14 +874,22 @@ public:
       Kokkos::deep_copy(sp->k_p_soa_d.ux, sp->k_p_soa_h.ux);
       Kokkos::deep_copy(sp->k_p_soa_d.uy, sp->k_p_soa_h.uy);
       Kokkos::deep_copy(sp->k_p_soa_d.uz, sp->k_p_soa_h.uz);
-      Kokkos::deep_copy(sp->k_p_soa_d.w,  sp->k_p_soa_h.w);
       Kokkos::deep_copy(sp->k_p_soa_d.i,  sp->k_p_soa_h.i);
+#ifndef PARTICLE_WEIGHT_CONSTANT
+      Kokkos::deep_copy(sp->k_p_soa_d.w,  sp->k_p_soa_h.w);
+#endif
 
 //      Kokkos::deep_copy(sp->k_p_d, sp->k_p_h);
 //      Kokkos::deep_copy(sp->k_p_i_d, sp->k_p_i_h);
       Kokkos::deep_copy(sp->k_pm_d, sp->k_pm_h);
       Kokkos::deep_copy(sp->k_pm_i_d, sp->k_pm_i_h);
       Kokkos::deep_copy(sp->k_nm_d, sp->k_nm_h);
+
+//if(rank()==0) {
+//      Kokkos::parallel_for("Print first 100 particles dx", Kokkos::RangePolicy<>(0,10), KOKKOS_LAMBDA(const int i) {
+//        printf("Post: Particle: %d, dx = %f\n", i, sp->k_p_soa_d.get_dx(i));
+//      });
+//}
   }
 
   /**
@@ -874,8 +920,10 @@ public:
       Kokkos::deep_copy(sp->k_p_soa_h.ux, sp->k_p_soa_d.ux);
       Kokkos::deep_copy(sp->k_p_soa_h.uy, sp->k_p_soa_d.uy);
       Kokkos::deep_copy(sp->k_p_soa_h.uz, sp->k_p_soa_d.uz);
-      Kokkos::deep_copy(sp->k_p_soa_h.w,  sp->k_p_soa_d.w);
       Kokkos::deep_copy(sp->k_p_soa_h.i,  sp->k_p_soa_d.i);
+#ifndef PARTICLE_WEIGHT_CONSTANT
+      Kokkos::deep_copy(sp->k_p_soa_h.w,  sp->k_p_soa_d.w);
+#endif
 
 //      Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
 //      Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
@@ -909,14 +957,21 @@ public:
 //              sp->p[i].w  = k_particles_h(i, particle_var::w);
 //              sp->p[i].i  = k_particles_i_h(i);
 
-          sp->p[i].dx = kph.dx(i);
-          sp->p[i].dy = kph.dy(i);
-          sp->p[i].dz = kph.dz(i);
+//          sp->p[i].dx = kph.dx(i);
+//          sp->p[i].dy = kph.dy(i);
+//          sp->p[i].dz = kph.dz(i);
+          sp->p[i].dx = kph.get_dx(i);
+          sp->p[i].dy = kph.get_dy(i);
+          sp->p[i].dz = kph.get_dz(i);
           sp->p[i].ux = kph.ux(i);
           sp->p[i].uy = kph.uy(i);
           sp->p[i].uz = kph.uz(i);
-          sp->p[i].w  = kph.w(i);
           sp->p[i].i  = kph.i(i);
+#if defined PARTICLE_WEIGHT_FLOAT
+          sp->p[i].w  = kph.w(i);
+#elif defined PARTICLE_WEIGHT_SHORT
+          sp->p[i].w  = kph.w(i) * sp->w;
+#endif
 
 //          sp->p[i*2].dx   = kph.dx(i*2).low2float();
 //          sp->p[i*2+1].dx = kph.dx(i*2+1).high2float();

@@ -166,8 +166,10 @@ struct DefaultCompress {
             part.ux(write_to) = part.ux(pull_from);
             part.uy(write_to) = part.uy(pull_from);
             part.uz(write_to) = part.uz(pull_from);
-            part.w(write_to)  = part.w(pull_from);
             part.i(write_to) = part.i(pull_from);
+#ifndef PARTICLE_WEIGHT_CONSTANT
+            part.w(write_to)  = part.w(pull_from);
+#endif
         });
 
         Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
@@ -185,8 +187,10 @@ struct DefaultCompress {
             part.ux(write_to) = part.ux(pull_from);
             part.uy(write_to) = part.uy(pull_from);
             part.uz(write_to) = part.uz(pull_from);
-            part.w(write_to)  = part.w(pull_from);
             part.i(write_to) = part.i(pull_from);
+#ifndef PARTICLE_WEIGHT_CONSTANT
+            part.w(write_to)  = part.w(pull_from);
+#endif
         });
     }
 

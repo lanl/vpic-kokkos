@@ -250,6 +250,11 @@ find_package(Threads REQUIRED)
 #------------------------------------------------------------------------------#
 # Act on build options set in project.cmake
 #------------------------------------------------------------------------------#
+include_directories(${CNL_DIR}/include/)
+
+#------------------------------------------------------------------------------#
+# Act on build options set in project.cmake
+#------------------------------------------------------------------------------#
 
 if (VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)

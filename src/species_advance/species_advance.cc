@@ -126,6 +126,56 @@ species( const char * name,
 
   sp->q = q;
   sp->m = m;
+  sp->w = 0.0;
+
+  MALLOC_ALIGNED( sp->p, max_local_np, 128 );
+  sp->max_np = max_local_np;
+
+  MALLOC_ALIGNED( sp->pm, max_local_nm, 128 );
+  sp->max_nm = max_local_nm;
+
+  sp->last_sorted       = INT64_MIN;
+  sp->sort_interval     = sort_interval;
+  sp->sort_out_of_place = sort_out_of_place;
+  MALLOC_ALIGNED( sp->partition, g->nv+1, 128 );
+
+  sp->g = g;
+
+  /* id, next are set by append species */
+
+  REGISTER_OBJECT( sp, checkpt_species, restore_species, NULL );
+  return sp;
+}
+
+species_t *
+species( const char * name,
+         float q,
+         float m,
+         float w,
+         int max_local_np,
+         int max_local_nm,
+         int sort_interval,
+         int sort_out_of_place,
+         grid_t * g ) {
+  species_t * sp;
+  int len = name ? strlen(name) : 0;
+
+  if( !len ) ERROR(( "Cannot create a nameless species" ));
+  if( !g ) ERROR(( "NULL grid" ));
+  if( g->nv == 0) ERROR(( "Allocate grid before defining species." ));
+  if( max_local_np<1 ) max_local_np = 1;
+  if( max_local_nm<1 ) max_local_nm = 1;
+
+  sp = new species_t(max_local_np, max_local_nm);
+  //MALLOC( sp, 1 );
+  //CLEAR( sp, 1 );
+
+  MALLOC( sp->name, len+1 );
+  strcpy( sp->name, name );
+
+  sp->q = q;
+  sp->m = m;
+  sp->w = w;
 
   MALLOC_ALIGNED( sp->p, max_local_np, 128 );
   sp->max_np = max_local_np;

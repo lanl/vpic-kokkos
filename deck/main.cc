@@ -125,18 +125,18 @@ int main(int argc, char** argv)
     if( world_rank==0 ) log_printf( "*** Advancing\n" );
     double elapsed = wallclock();
 
-std::fstream profile("profile.log", std::ios_base::app);
-profile << "START" << std::endl;
-profile.close();
-std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//std::fstream profile("profile.log", std::ios_base::app);
+//profile << "START" << std::endl;
+//profile.close();
+//std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     // Call the actual advance until it's done
     // TODO: Can we make this into a bounded loop
 //Kokkos::Profiling::pushRegion("VPIC");
     while( simulation->advance() );
 //Kokkos::Profiling::popRegion();
-profile.open("profile.log", std::ios_base::app);
-profile << "FINISH" << std::endl;
-profile.close();
+//profile.open("profile.log", std::ios_base::app);
+//profile << "FINISH" << std::endl;
+//profile.close();
 
     elapsed = wallclock() - elapsed;
 
