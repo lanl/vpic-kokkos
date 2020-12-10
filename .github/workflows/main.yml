@@ -38,4 +38,3 @@ jobs:
       working-directory: build
     - name: configure with internal
       run: cmake -B build_internal -DBUILD_INTERNAL_KOKKOS=ON D-DENABLE_UNIT_TESTS=ON -DENABLE_INTEGRATED_TESTS=ON -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing"
-      working-directory: build_internal
