@@ -953,6 +953,12 @@ public:
       }
   }
 
+  /**
+   * @brief Copy the interpolator array values from original VPIC memory, into
+   * the Kokkos host array and then ship it down to the device
+   *
+   * @param interpolator_array Interpolator source data to copy
+   */
   void KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array_t* interpolator_array)
   {
       auto nv = interpolator_array->g->nv;
@@ -981,6 +987,12 @@ public:
       Kokkos::deep_copy(interpolator_array->k_i_d, interpolator_array->k_i_h);
   }
 
+  /**
+   * @brief Copy the interpolator array back from the device, and copy into
+   * into the original VPIC memory
+   *
+   * @param interpolator_array location to copy the Interpolator data into
+   */
   void KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array_t* interpolator_array)
   {
 
@@ -1011,6 +1023,12 @@ public:
               });
   }
 
+  /**
+   * @brief Copy the accumulator array values from original VPIC memory, into
+   * the Kokkos host array and then ship it down to the device
+   *
+   * @param accumulator_array accumulator source data to copy
+   */
   void KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array_t* accumulator_array)
   {
       auto na = accumulator_array->na;
@@ -1031,6 +1049,12 @@ public:
       Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
   }
 
+  /**
+   * @brief Copy the accumulator array back from the device, and copy into
+   * into the original VPIC memory
+   *
+   * @param accumulator_array location to copy the accumulator data into
+   */
   void KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array_t* accumulator_array)
   {
       auto& na = accumulator_array->na;
@@ -1051,6 +1075,59 @@ public:
               });
   }
 
+  /**
+   * @brief For a single species, this copyes particle mover data to host,
+   * and populates original vpic mover memory. Uses subviews to copy from 0..nm
+   * instead of 0..nm_max to reduce d->h copy size
+   *
+   * @param species_list The species to apply the copy for
+   */
+  void KOKKOS_COPY_MOVER_MEM_TO_HOST_SP(species_t* sp)
+  {
+    Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
+    {
+        auto pm_h_dispx = Kokkos::subview(sp->k_pm_h, std::make_pair(0, sp->k_nm_h(0)), 0);
+        auto pm_d_dispx = Kokkos::subview(sp->k_pm_d, std::make_pair(0, sp->k_nm_h(0)), 0);
+        auto pm_h_dispy = Kokkos::subview(sp->k_pm_h, std::make_pair(0, sp->k_nm_h(0)), 1);
+        auto pm_d_dispy = Kokkos::subview(sp->k_pm_d, std::make_pair(0, sp->k_nm_h(0)), 1);
+        auto pm_h_dispz = Kokkos::subview(sp->k_pm_h, std::make_pair(0, sp->k_nm_h(0)), 2);
+        auto pm_d_dispz = Kokkos::subview(sp->k_pm_d, std::make_pair(0, sp->k_nm_h(0)), 2);
+        auto pm_i_h_subview = Kokkos::subview(sp->k_pm_i_h, std::make_pair(0, sp->k_nm_h(0)));
+        auto pm_i_d_subview = Kokkos::subview(sp->k_pm_i_d, std::make_pair(0, sp->k_nm_h(0)));
+        Kokkos::deep_copy(pm_h_dispx, pm_d_dispx);
+        Kokkos::deep_copy(pm_h_dispy, pm_d_dispy);
+        Kokkos::deep_copy(pm_h_dispz, pm_d_dispz);
+        Kokkos::deep_copy(pm_i_h_subview, pm_i_d_subview);
+    }
+
+    auto& k_particle_movers_h = sp->k_pm_h;
+    auto& k_particle_i_movers_h = sp->k_pm_i_h;
+    auto& k_nm_h = sp->k_nm_h;
+    sp->nm = k_nm_h(0);
+
+    Kokkos::parallel_for("copy movers to host", host_execution_policy(0, sp->nm) , KOKKOS_LAMBDA (int i) {
+      sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
+      sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
+      sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
+      sp->pm[i].i     = k_particle_i_movers_h(i);
+    });
+  }
+
+  /**
+   * @brief For all species in a list, this copyes particle mover data to host,
+   * and populates original vpic mover memory. Uses subviews to copy from 0..nm
+   * instead of 0..nm_max to reduce d->h copy size
+   *
+   * @param species_list The list of species to apply the copy for
+   */
+  void KOKKOS_COPY_MOVER_MEM_TO_HOST(species_t* species_list)
+  {
+      auto* sp = species_list;
+      LIST_FOR_EACH( sp, species_list ) {
+          KOKKOS_COPY_MOVER_MEM_TO_HOST_SP(sp);
+      }
+  }
+
 };
 
 
@@ -1059,5 +1136,7 @@ public:
  * Kokkos objects. This currently must be done for all views
  */
 void restore_kokkos(vpic_simulation& simulation);
+// TODO: would this make more sense as a member function on vpic_simulation_t
+
 
 #endif // vpic_h

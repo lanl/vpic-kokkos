@@ -80,7 +80,7 @@ enum profile_internal_use_only_timers {
       (n_calls);                                                      \
   } while(0);
 
-// TODO: these unsafe macros should be removed, but I didn't want to fight with all the extra while loop and scoping crap.
+// TODO: these unsafe macros should be removed, but I didn't want to fight with all the extra while loop and scoping.
 //#define KOKKOS_TIC()
 //  do {
 //    std::chrono::high_resolution_clock::time_point _profile_tic = std::chrono::high_resolution_clock::now();
