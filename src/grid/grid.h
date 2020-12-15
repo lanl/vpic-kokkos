@@ -11,8 +11,10 @@
 #ifndef _grid_h_
 #define _grid_h_
 
+
 #include "../util/util.h"
 #include "../vpic/kokkos_helpers.h"
+#include "geometry/geometry.h"
 
 #define BOUNDARY(i,j,k) (13+(i)+3*(j)+9*(k)) /* FORTRAN -1:1,-1:1,-1:1 */
 
@@ -76,6 +78,8 @@ typedef struct grid {
   // System of units
   float dt, cvac, eps0;
 
+  Geometry geometry;      // The geometry of the grid
+
   // Time stepper.  The simulation time is given by
   // t = g->t0 + (double)g->dt*(double)g->step
   int64_t step;             // Current timestep
@@ -121,11 +125,6 @@ typedef struct grid {
                           // voxel with local index "lidx".  Negative
                           // if neighbor is a boundary condition.
 
-  //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
-      //h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
-  //auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
-  //
-
   int64_t rangel, rangeh; // Redundant for move_p performance reasons:
                           //   rangel = range[rank]
                           //   rangeh = range[rank+1]-1.
@@ -133,43 +132,41 @@ typedef struct grid {
 
   // Nearest neighbor communications ports
   mp_t * mp;
-  mp_t* mp_k;
-  //  mp_kokkos_t* mp_k;
-  //    int max_ports;
-  //    k_mpi_t k_mpi_d;
-  //    k_mpi_t::HostMirror k_mpi_h;
+  mp_t * mp_k;
 
-  k_neighbor_t k_neighbor_d;                // kokkos neighbor view on device
+  // Dense mesh of cell-centered coordinates
+  k_mesh_t             k_mesh_d;            // Mesh on device
+  k_mesh_t::HostMirror k_mesh_h;            // Mesh on host
+
+  // Array of neighbors
+  k_neighbor_t             k_neighbor_d;    // kokkos neighbor view on device
   k_neighbor_t::HostMirror k_neighbor_h;    // kokkos neighbor view on host
 
-  // We want to call this *only* once the neighbor is done
-  void init_kokkos_grid(int num_neighbor)
+  /**
+   * @brief Initalize the grid on the device.
+   *  We want to call this *only* once the neighbor array is complete.
+   */
+  void init_kokkos_grid(int num_neighbor);
+
+  /**
+   * @brief Get geometric operations for use on the device.
+   */
+  template<Geometry geo>
+  const typename GeometryClass<geo>::device
+  get_device_geometry() const
   {
-      k_neighbor_d = k_neighbor_t("k_neighbor_d", num_neighbor);
-      //k_neighbor_h = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), k_neighbor_d);
-      k_neighbor_h = Kokkos::create_mirror_view(k_neighbor_d);
-
-      // TODO: make this a host parlalel for
-      for (int i = 0; i < num_neighbor; i++)
-      {
-          k_neighbor_h(i) = neighbor[i];
-      }
-
-      Kokkos::deep_copy(k_neighbor_d, k_neighbor_h);
-
-      //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
-      //k_neighbor_h(neighbor, num_neighbor);
-
-      // Copy data over
-      // currently implied by unmanaged view
-
-      //k_neighbor_d = Kokkos::create_mirror_view(k_neighbor_d);
-
-      //        max_ports = 27;
-      //      k_mpi_d = k_mpi_t("k_mpi_d");
-      //      k_mpi_h = Kokkos::create_mirror_view(k_mpi_d);
+    return typename GeometryClass<geo>::device(dx, dy, dz, k_mesh_d);
   }
 
+  /**
+   * @brief Get geometric operations for use on the host.
+   */
+  template<Geometry geo>
+  const typename GeometryClass<geo>::host
+  get_host_geometry() const
+  {
+    return typename GeometryClass<geo>::host(dx, dy, dz, k_mesh_h);
+  }
 
 } grid_t;
 

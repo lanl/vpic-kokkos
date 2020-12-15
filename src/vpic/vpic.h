@@ -586,7 +586,7 @@ public:
     p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
     pm->dispx = dispx; pm->dispy = dispy; pm->dispz = dispz; pm->i = sp->np-1;
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
-    sp->nm += move_p( sp->p, pm, accumulator_array->a, grid, sp->q );
+    sp->nm += move_p( sp->p, pm, accumulator_array, grid, sp->q );
   }
 
   //////////////////////////////////
@@ -803,38 +803,8 @@ public:
    */
   void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(species_t* sp)
   {
-      auto n_particles = sp->np;
-      auto max_pmovers = sp->max_nm;
-
-      auto& k_particles_h = sp->k_p_h;
-      auto& k_particles_i_h = sp->k_p_i_h;
-      auto& k_particle_movers_h = sp->k_pm_h;
-      auto& k_particle_movers_i_h = sp->k_pm_i_h;
-      auto& k_nm_h = sp->k_nm_h;
-      k_nm_h(0) = sp->nm;
-
-      Kokkos::parallel_for("copy particles to device", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) {
-              k_particles_h(i, particle_var::dx) = sp->p[i].dx;
-              k_particles_h(i, particle_var::dy) = sp->p[i].dy;
-              k_particles_h(i, particle_var::dz) = sp->p[i].dz;
-              k_particles_h(i, particle_var::ux) = sp->p[i].ux;
-              k_particles_h(i, particle_var::uy) = sp->p[i].uy;
-              k_particles_h(i, particle_var::uz) = sp->p[i].uz;
-              k_particles_h(i, particle_var::w)  = sp->p[i].w;
-              k_particles_i_h(i) = sp->p[i].i;
-              });
-
-      Kokkos::parallel_for("copy movers to device", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {
-              k_particle_movers_h(i, particle_mover_var::dispx) = sp->pm[i].dispx;
-              k_particle_movers_h(i, particle_mover_var::dispy) = sp->pm[i].dispy;
-              k_particle_movers_h(i, particle_mover_var::dispz) = sp->pm[i].dispz;
-              k_particle_movers_i_h(i) = sp->pm[i].i;
-              });
-      Kokkos::deep_copy(sp->k_p_d, sp->k_p_h);
-      Kokkos::deep_copy(sp->k_p_i_d, sp->k_p_i_h);
-      Kokkos::deep_copy(sp->k_pm_d, sp->k_pm_h);
-      Kokkos::deep_copy(sp->k_pm_i_d, sp->k_pm_i_h);
-      Kokkos::deep_copy(sp->k_nm_d, sp->k_nm_h);
+    // FIXME: Remove
+    sp->copy_all_to_device();
   }
 
   /**
@@ -859,44 +829,8 @@ public:
    */
   void KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(species_t* sp)
   {
-      Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
-      Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
-      Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d);
-      Kokkos::deep_copy(sp->k_pm_i_h, sp->k_pm_i_d);
-      Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
-
-      auto n_particles = sp->np;
-      auto max_pmovers = sp->max_nm;
-
-      auto& k_particles_h = sp->k_p_h;
-      auto& k_particles_i_h = sp->k_p_i_h;
-
-      auto& k_particle_movers_h = sp->k_pm_h;
-      auto& k_particle_movers_i_h = sp->k_pm_i_h;
-
-      auto& k_nm_h = sp->k_nm_h;
-
-      sp->nm = k_nm_h(0);
-
-      Kokkos::parallel_for("copy particles to host", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) {
-              sp->p[i].dx = k_particles_h(i, particle_var::dx);
-              sp->p[i].dy = k_particles_h(i, particle_var::dy);
-              sp->p[i].dz = k_particles_h(i, particle_var::dz);
-              sp->p[i].ux = k_particles_h(i, particle_var::ux);
-              sp->p[i].uy = k_particles_h(i, particle_var::uy);
-              sp->p[i].uz = k_particles_h(i, particle_var::uz);
-              sp->p[i].w  = k_particles_h(i, particle_var::w);
-              sp->p[i].i  = k_particles_i_h(i);
-              });
-
-      Kokkos::parallel_for("copy movers to host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {
-              sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
-              sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
-              sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
-              sp->pm[i].i     = k_particle_movers_i_h(i);
-              });
-
-      sp->species_copy_last = step();
+    // FIXME: Remove
+    sp->copy_all_to_host();
   }
 
   /**
@@ -928,9 +862,7 @@ public:
   {
       species_t * sp = find_species_name(speciesname, species_list);
       if(!sp) ERROR(( "Invalid Species name: %s", speciesname ));
-
-      if(step() > sp->species_copy_last)
-          KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
+      KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
   }
 
   /**
@@ -948,7 +880,6 @@ public:
   {
       auto* sp = species_list;
       LIST_FOR_EACH( sp, species_list ) {
-          if(step() > sp->species_copy_last)
           KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(sp);
       }
   }

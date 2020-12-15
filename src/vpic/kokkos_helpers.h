@@ -9,6 +9,8 @@
 
 // This module implements kokkos macros
 
+#define MESH_VAR_COUNT 3
+#define HYDRO_VAR_COUNT 14
 #define FIELD_VAR_COUNT 16
 #define FIELD_EDGE_COUNT 8
 #define PARTICLE_VAR_COUNT 7
@@ -65,8 +67,40 @@ using k_material_coefficient_t = Kokkos::View<float* [MATERIAL_COEFFICIENT_VAR_C
 
 using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
 
+using k_mesh_t = Kokkos::View<float *[MESH_VAR_COUNT]>;
+
+using k_hydro_t = Kokkos::View<float *[HYDRO_VAR_COUNT]>;
+using k_hydro_sa_t = Kokkos::Experimental::ScatterView<float *[HYDRO_VAR_COUNT]>;
+
 #define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
 #define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
+
+namespace hydro_var {
+  enum h_v {
+    jx = 0,
+    jy = 1,
+    jz = 2,
+    rho = 3,
+    px = 4,
+    py = 5,
+    pz = 6,
+    ke = 7,
+    txx = 8,
+    tyy = 9,
+    tzz = 10,
+    tyz = 11,
+    tzx = 12,
+    txy = 13
+  };
+};
+
+namespace mesh_var {
+  enum m_v {
+    x = 0,
+    y = 1,
+    z = 2
+  };
+};
 
 namespace field_var {
   enum f_v {

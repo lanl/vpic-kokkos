@@ -76,7 +76,7 @@ vpic_simulation::initialize( int argc,
   KOKKOS_TIC(); // Time this data movement
   KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
   KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
-  
+
   // Do some consistency checks on user initialized fields
 
   if( rank()==0 ) MESSAGE(( "Checking interdomain synchronization" ));
@@ -186,7 +186,7 @@ vpic_simulation::initialize( int argc,
 
   if( rank()==0 ) MESSAGE(( "Initializing bound charge density" ));
   TIC FAK->clear_rhof( field_array ); TOC( clear_rhof, 1 );
-  LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
+  LIST_FOR_EACH( sp, species_list ) TIC sp->accumulate_rhof( field_array ); TOC( accumulate_rho_p, 1 );
   TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
   TIC FAK->compute_rhob( field_array ); TOC( compute_rhob, 1 );
 
@@ -228,21 +228,13 @@ vpic_simulation::initialize( int argc,
     KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
 
     if( rank()==0 ) MESSAGE(( "Uncentering particles" ));
-    TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
+    TIC interpolator_array->load( field_array ); TOC( load_interpolator, 1 );
   }
   LIST_FOR_EACH( sp, species_list ) {
       KOKKOS_TIC();
-      uncenter_p( sp, interpolator_array );
+      sp->uncenter( interpolator_array );
       KOKKOS_TOC( uncenter_p, 1 );
   }
-
-//  KOKKOS_TIC(); // Time this data movement
-//  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array);
-//  KOKKOS_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
-//
-//  KOKKOS_TIC();
-//  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
-//  KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   if( rank()==0 ) MESSAGE(( "Performing initial diagnostics" ));
 

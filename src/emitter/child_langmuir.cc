@@ -1,5 +1,6 @@
 #define IN_emitter
 #include "emitter_private.h"
+#if 0
 
 /* Private interface *********************************************************/
 
@@ -38,7 +39,7 @@ emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
   /**/  species_t        * RESTRICT              sp  = cl->sp;
   const interpolator_t   * RESTRICT ALIGNED(128) fi  = cl->ia->i;
   /**/  field_t          * RESTRICT ALIGNED(128) f   = cl->fa->f;
-  /**/  accumulator_t    * RESTRICT ALIGNED(128) a   = cl->aa->a;
+  /**/  accumulator_t    * RESTRICT ALIGNED(128) aa  = cl->aa;
   /**/  rng_t            * RESTRICT              rng = cl->rng;
 
   /**/  particle_t       * RESTRICT ALIGNED(128) p   = sp->p;
@@ -111,7 +112,7 @@ emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
         local_pm->disp##Y = w*u##Y*rd##Y;                               \
         local_pm->disp##Z = w*u##Z*rd##Z;                               \
         local_pm->i       = np-1;                                       \
-        if (move_p( p, local_pm, a, g, qsp )) {                         \
+        if (move_p( p, local_pm, aa, g, qsp )) {                        \
             pm[nm++] = local_pm[0];                                     \
         }                                                               \
       }                                                                 \
@@ -209,3 +210,4 @@ child_langmuir( /**/  species_t            * RESTRICT sp,
                                NULL );
 }
 
+#endif

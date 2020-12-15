@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by:
  *   Kevin J. Bowers, Ph.D.
  *   Plasma Physics Group (X-1)
@@ -8,7 +8,7 @@
  *
  */
 
-#include "sf_interface.h"
+#include "hydro_array.h"
 
 /* Though the checkpt/restore functions are not part of the public
    API, they must not be declared as static. */
@@ -31,12 +31,11 @@ restore_hydro_array( void ) {
 
 hydro_array_t *
 new_hydro_array( grid_t * g ) {
-  hydro_array_t * ha;
   if( !g ) ERROR(( "NULL grid" ));
-  MALLOC( ha, 1 );
-  MALLOC_ALIGNED( ha->h, g->nv, 128 );
+  hydro_array_t *ha = new hydro_array_t();
   ha->g = g;
-  clear_hydro_array( ha );
+  MALLOC_ALIGNED( ha->h, g->nv, 128 );
+  CLEAR( ha->h, g->nv );
   REGISTER_OBJECT( ha, checkpt_hydro_array, restore_hydro_array, NULL );
   return ha;
 }
@@ -50,35 +49,54 @@ delete_hydro_array( hydro_array_t * ha ) {
 }
 
 void
-clear_hydro_array( hydro_array_t * ha ) {
-  if( !ha ) ERROR(( "NULL hydro array" ));
-  CLEAR( ha->h, ha->g->nv ); // FIXME: SPU THIS?
+hydro_array_t::clear() {
+  CLEAR( h, g->nv );
+  Kokkos::deep_copy(k_h_d, 0.0f);
 }
 
-#define hydro(x,y,z) h0[ VOXEL(x,y,z, nx,ny,nz) ]
-
-// Generic looping
-#define XYZ_LOOP(xl,xh,yl,yh,zl,zh) \
-  for( z=zl; z<=zh; z++ )	    \
-    for( y=yl; y<=yh; y++ )	    \
-      for( x=xl; x<=xh; x++ )
-	      
-// x_NODE_LOOP => Loop over all non-ghost nodes at plane x
-#define x_NODE_LOOP(x) XYZ_LOOP(x,x,1,ny+1,1,nz+1)
-#define y_NODE_LOOP(y) XYZ_LOOP(1,nx+1,y,y,1,nz+1)
-#define z_NODE_LOOP(z) XYZ_LOOP(1,nx+1,1,ny+1,z,z)
-
 void
-synchronize_hydro_array( hydro_array_t * ha ) {
+hydro_array_t::synchronize() {
+
+  // Combine contributions
+  Kokkos::Experimental::contribute(k_h_d, k_h_sa);
+  k_h_sa.reset_except(k_h_d);
+
+  // Copy to host.
+  Kokkos::deep_copy(k_h_h, k_h_d);
+
+  // Avoid capturing this
+  auto& k_hydro_h = k_h_h;
+  auto& host_hydro = h;
+
+  Kokkos::parallel_for("copy hydro to host",
+    host_execution_policy(0, g->nv) ,
+    KOKKOS_LAMBDA (int i) {
+
+      host_hydro[i].jx  = k_hydro_h(i, hydro_var::jx);
+      host_hydro[i].jy  = k_hydro_h(i, hydro_var::jy);
+      host_hydro[i].jz  = k_hydro_h(i, hydro_var::jz);
+      host_hydro[i].rho = k_hydro_h(i, hydro_var::rho);
+
+      host_hydro[i].px  = k_hydro_h(i, hydro_var::px);
+      host_hydro[i].py  = k_hydro_h(i, hydro_var::py);
+      host_hydro[i].pz  = k_hydro_h(i, hydro_var::pz);
+      host_hydro[i].ke  = k_hydro_h(i, hydro_var::ke);
+
+      host_hydro[i].txx = k_hydro_h(i, hydro_var::txx);
+      host_hydro[i].tyy = k_hydro_h(i, hydro_var::tyy);
+      host_hydro[i].tzz = k_hydro_h(i, hydro_var::tzz);
+      host_hydro[i].tyz = k_hydro_h(i, hydro_var::tyz);
+      host_hydro[i].tzx = k_hydro_h(i, hydro_var::tzx);
+      host_hydro[i].txy = k_hydro_h(i, hydro_var::txy);
+
+    });
+
+  // Now synchronize.
   int size, face, bc, x, y, z, nx, ny, nz;
   float *p, lw, rw;
   hydro_t * h0, * h;
-  grid_t * g;
 
-  if( !ha ) ERROR(( "NULL hydro array" ));
-
-  h0 = ha->h;
-  g  = ha->g;
+  h0 = this->h;
   nx = g->nx;
   ny = g->ny;
   nz = g->nz;
@@ -87,6 +105,19 @@ synchronize_hydro_array( hydro_array_t * ha ) {
   // at the local domain boundary. Because hydro fields are purely
   // diagnostic, correct the hydro along local boundaries to account
   // for accumulations over partial cell volumes
+
+#define hydro(x,y,z) h0[ VOXEL(x,y,z, nx,ny,nz) ]
+
+// Generic looping
+#define XYZ_LOOP(xl,xh,yl,yh,zl,zh) \
+  for( z=zl; z<=zh; z++ )	    \
+    for( y=yl; y<=yh; y++ )	    \
+      for( x=xl; x<=xh; x++ )
+
+// x_NODE_LOOP => Loop over all non-ghost nodes at plane x
+#define x_NODE_LOOP(x) XYZ_LOOP(x,x,1,ny+1,1,nz+1)
+#define y_NODE_LOOP(y) XYZ_LOOP(1,nx+1,y,y,1,nz+1)
+#define z_NODE_LOOP(z) XYZ_LOOP(1,nx+1,1,ny+1,z,z)
 
 # define ADJUST_HYDRO(i,j,k,X,Y,Z)              \
   do {                                          \
@@ -112,7 +143,7 @@ synchronize_hydro_array( hydro_array_t * ha ) {
       }                                         \
     }                                           \
   } while(0)
-  
+
   ADJUST_HYDRO(-1, 0, 0,x,y,z);
   ADJUST_HYDRO( 0,-1, 0,y,z,x);
   ADJUST_HYDRO( 0, 0,-1,z,x,y);

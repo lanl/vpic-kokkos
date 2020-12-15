@@ -60,7 +60,7 @@ vpic_simulation::dump_energies( const char *fname,
       fileIO.print( "%li", (long)step() );
     }
   }
- 
+
 //  field_array->kernel->energy_f( en_f, field_array );
   field_array->kernel->energy_f_kokkos( en_f, field_array );
   if( rank()==0 && status!=fail )
@@ -69,7 +69,7 @@ vpic_simulation::dump_energies( const char *fname,
                   en_f[3], en_f[4], en_f[5] );
 
   LIST_FOR_EACH(sp,species_list) {
-    en_p = energy_p_kokkos( sp, interpolator_array );
+    en_p = sp->energy( interpolator_array );
     if( rank()==0 && status!=fail ) fileIO.print( " %e", en_p );
   }
 
@@ -232,15 +232,10 @@ vpic_simulation::dump_hydro( const char *sp_name,
   sp = find_species_name( sp_name, species_list );
   if( !sp ) ERROR(( "Invalid species \"%s\"", sp_name ));
 
-    // Update the particles on the host only if they haven't been recently
-    // TODO: Port the hydro calculations to the device so this copy won't be
-    // needed.
-    if (step() > sp->species_copy_last)
-        KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
 
-  clear_hydro_array( hydro_array );
-  accumulate_hydro_p( hydro_array, sp, interpolator_array );
-  synchronize_hydro_array( hydro_array );
+  hydro_array->clear();
+  sp->accumulate_hydro( hydro_array, interpolator_array );
+  hydro_array->synchronize();
 
   if( !fbase ) ERROR(( "Invalid filename" ));
 
@@ -284,20 +279,12 @@ vpic_simulation::dump_particles( const char *sp_name,
     species_t *sp;
     char fname[max_filename_bytes];
     FileIO fileIO;
-    int dim[1], buf_start;
-    static particle_t * ALIGNED(128) p_buf = NULL;
-# define PBUF_SIZE 32768 // 1MB of particles
+    int dim[1];
 
     sp = find_species_name( sp_name, species_list );
     if( !sp ) ERROR(( "Invalid species name \"%s\".", sp_name ));
 
     if( !fbase ) ERROR(( "Invalid filename" ));
-
-    // Update the particles on the host only if they haven't been recently
-    if (step() > sp->species_copy_last)
-        KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
-
-    if( !p_buf ) MALLOC_ALIGNED( p_buf, PBUF_SIZE, 128 );
 
     if( rank()==0 )
         MESSAGE(("Dumping \"%s\" particles to \"%s\"",sp->name,fbase));
@@ -323,30 +310,30 @@ vpic_simulation::dump_particles( const char *sp_name,
     WRITE_HEADER_V0( dump_type::particle_dump, sp->id, sp->q/sp->m, fileIO );
 
     dim[0] = sp->np;
-    WRITE_ARRAY_HEADER( p_buf, 1, dim, fileIO );
+    WRITE_ARRAY_HEADER( sp->p, 1, dim, fileIO );
 
-    // Copy a PBUF_SIZE hunk of the particle list into the particle
-    // buffer, timecenter it and write it out. This is done this way to
-    // guarantee the particle list unchanged while not requiring too
-    // much memory.
+    // Starts uncentered or nothing on host, uncentered on device.
+    const auto device_owned = sp->on_device;
 
-    // FIXME: WITH A PIPELINED CENTER_P, PBUF NOMINALLY SHOULD BE QUITE
-    // LARGE.
+    // Center and copy dance.
+    // This assumes GPU center+uncenter+copy is faster than a host-side center
+    sp->center( interpolator_array );
+    sp->on_device = true;
+    sp->copy_all_to_host();
+    sp->on_device = true;
+    sp->uncenter( interpolator_array );
 
-    particle_t * sp_p = sp->p;      sp->p      = p_buf;
-    int sp_np         = sp->np;     sp->np     = 0;
-    int sp_max_np     = sp->max_np; sp->max_np = PBUF_SIZE;
-    for( buf_start=0; buf_start<sp_np; buf_start += PBUF_SIZE ) {
-        sp->np = sp_np-buf_start; if( sp->np > PBUF_SIZE ) sp->np = PBUF_SIZE;
-        COPY( sp->p, &sp_p[buf_start], sp->np );
-        center_p( sp, interpolator_array );
-        fileIO.write( sp->p, sp->np );
-    }
-    sp->p      = sp_p;
-    sp->np     = sp_np;
-    sp->max_np = sp_max_np;
+    // Write particles.
+    fileIO.write( sp->p, sp->np );
+
+    // Copy uncentered particles back to the host.
+    if( !device_owned )
+      sp->copy_all_to_host();
+
+    // Ends uncenterd or nothing on host, uncentered on device.
 
     if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
+
 }
 
 /*------------------------------------------------------------------------------
@@ -722,15 +709,9 @@ vpic_simulation::hydro_dump( const char * speciesname,
   species_t * sp = find_species_name(speciesname, species_list);
   if( !sp ) ERROR(( "Invalid species name: %s", speciesname ));
 
-    // Update the particles on the host only if they haven't been recently
-    // TODO: Port the hydro calculations to the device so this copy won't be
-    // needed.
-    if (step() > sp->species_copy_last)
-        KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
-
-  clear_hydro_array( hydro_array );
-  accumulate_hydro_p( hydro_array, sp, interpolator_array );
-  synchronize_hydro_array( hydro_array );
+  hydro_array->clear();
+  sp->accumulate_hydro( hydro_array, interpolator_array );
+  hydro_array->synchronize();
 
   // convenience
   const size_t istride(dumpParams.stride_x);
