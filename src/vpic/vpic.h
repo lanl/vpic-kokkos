@@ -196,7 +196,6 @@ public:
   material_t           * material_list;      // define_material
   field_array_t        * field_array;        // define_field_array
   interpolator_array_t * interpolator_array; // define_interpolator_array
-  accumulator_array_t  * accumulator_array;  // define_accumulator_array
   hydro_array_t        * hydro_array;        // define_hydro_array
   species_t            * species_list;       // define_species /
                                              // species helpers
@@ -306,13 +305,13 @@ public:
     return field_array->f[ voxel(ix,iy,iz) ];
   }
 
-    inline k_field_t& get_field() {
-        return field_array->k_f_d;
-    }
+  inline k_field_t& get_field() {
+      return field_array->k_f_d;
+  }
 
-    inline float& k_field(const int ix, const int iy, const int iz, field_var::f_v member) {
-        return field_array->k_f_d(voxel(ix,iy,iz), member);
-    }
+  inline float& k_field(const int ix, const int iy, const int iz, field_var::f_v member) {
+      return field_array->k_f_d(voxel(ix,iy,iz), member);
+  }
 
   inline interpolator_t &
   interpolator( const int v ) {
@@ -482,7 +481,6 @@ public:
     field_array        = fa ? fa :
                          new_standard_field_array( grid, material_list, damp );
     interpolator_array = new_interpolator_array( grid );
-    accumulator_array  = new_accumulator_array( grid );
     hydro_array        = new_hydro_array( grid );
 
     // Pre-size communications buffers. This is done to get most memory
@@ -586,7 +584,7 @@ public:
     p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
     pm->dispx = dispx; pm->dispy = dispy; pm->dispz = dispz; pm->i = sp->np-1;
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
-    sp->nm += move_p( sp->p, pm, accumulator_array->a, grid, sp->q );
+    sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
   }
 
   //////////////////////////////////
@@ -786,7 +784,7 @@ public:
    * This does not guarantee that the particles are truly up to date, since it
    * checks only if a copy has already been done at some point during the
    * current step, but it will always work in user_diagnostics unless the loop
-   * is modified or a user modifies particles during user_diagnostics.  
+   * is modified or a user modifies particles during user_diagnostics.
    *
    */
   void user_diagnostics_copy_field_mem_to_host()
@@ -920,7 +918,7 @@ public:
    * This does not guarantee that the particles are truly up to date, since it
    * checks only if a copy has already been done at some point during the
    * current step, but it will always work in user_diagnostics unless the loop
-   * is modified or a user modifies particles during user_diagnostics.  
+   * is modified or a user modifies particles during user_diagnostics.
    *
    * @param speciesname the name of the species to copy
    */
@@ -940,7 +938,7 @@ public:
    * This does not guarantee that the particles are truly up to date, since it
    * checks only if a copy has already been done at some point during the
    * current step, but it will always work in user_diagnostics unless the loop
-   * is modified or a user modifies particles during user_diagnostics.  
+   * is modified or a user modifies particles during user_diagnostics.
    *
    * @param sp the species list to copy
    */
@@ -1052,5 +1050,12 @@ public:
   }
 
 };
+
+
+/**
+ * @brief After a checkpoint restore, we must move the data back over to the
+ * Kokkos objects. This currently must be done for all views
+ */
+void restore_kokkos(vpic_simulation& simulation);
 
 #endif // vpic_h

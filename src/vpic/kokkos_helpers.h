@@ -17,6 +17,7 @@
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
+#define NUM_J_DIMS 3
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -31,11 +32,17 @@
 typedef int16_t material_id;
 
 // TODO: we dont need the [1] here
-using k_iterator_t = Kokkos::View<int[1]>;
+// TODO: this can likely be unsigned, but that tends to upset Kokkos
+using k_counter_t = Kokkos::View<int[1]>;
 
 using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
+// TODO: This scatter access is needed only for jfxyz, not all field vars.
+// This is probably terrible on CPU.
+using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
 using k_field_edge_t = Kokkos::View<material_id* [FIELD_EDGE_COUNT]>;
 using k_field_accum_t = Kokkos::View<float *>;
+
+using k_jf_accum_t = Kokkos::View<float *[NUM_J_DIMS]>;
 
 using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
 using k_particles_i_t = Kokkos::View<int*>;
@@ -51,6 +58,7 @@ using k_neighbor_t = Kokkos::View<int64_t*>;
 
 using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 
+// TODO: Delete these
 using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
 using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
@@ -175,7 +183,6 @@ void print_particles_d(
         k_particles_t particles,
         int np
         );
-void print_accumulator(k_accumulators_t fields, int n);
 
 // The templating here is to defer the type until later in the head include chain
 template <class P>

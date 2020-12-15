@@ -1799,6 +1799,8 @@ synchronize_tang_e_norm_b_kokkos( field_array_t * RESTRICT fa ) {
     k_local_adjust_tang_e( fa, g );
     k_local_adjust_norm_b( fa, g );
 
+    auto& fb = *(fa->fb);
+
     // Exchange x-faces
     begin_recv_tang_e_norm_b<XYZ>(fa, -1,  0,  0, fa->fb.xyz_rbuf_neg, fa->fb.xyz_rbuf_neg_h);
     begin_recv_tang_e_norm_b<XYZ>(fa,  1,  0,  0, fa->fb.xyz_rbuf_pos, fa->fb.xyz_rbuf_pos_h);
@@ -2106,6 +2108,8 @@ void k_synchronize_jf(field_array_t* RESTRICT fa) {
 
     k_local_adjust_jf(fa, g);
 
+    auto& fb = *(fa->fb);
+
     // Exchange x-faces
     begin_recv_jf<XYZ>(g, -1, 0, 0, nx, ny, nz, fa->fb.xyz_rbuf_neg, fa->fb.xyz_rbuf_neg_h);
     begin_recv_jf<XYZ>(g,  1, 0, 0, nx, ny, nz, fa->fb.xyz_rbuf_pos, fa->fb.xyz_rbuf_pos_h);
@@ -2408,6 +2412,8 @@ void k_synchronize_rho(field_array_t* RESTRICT fa) {
 
     k_local_adjust_rhof(fa, g);
     k_local_adjust_rhob(fa, g);
+
+    auto& fb = *(fa->fb);
 
     // Exchange x-faces
     begin_recv_rho<XYZ>(fa, -1, 0, 0, nx, ny, nz, fa->fb.xyz_rbuf_neg, fa->fb.xyz_rbuf_neg_h);

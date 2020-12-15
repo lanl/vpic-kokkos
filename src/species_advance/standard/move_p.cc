@@ -21,7 +21,8 @@
 // Note: changes here likely need to be reflected in SPE accelerated
 // version as well.
 
-#if defined(V4_ACCELERATION)
+//#if defined(V4_ACCELERATION)
+#if 0
 
 // High performance variant based on SPE accelerated version
 
@@ -215,16 +216,25 @@ move_p( particle_t       * RESTRICT ALIGNED(128) p,
 int
 move_p( particle_t       * ALIGNED(128) p0,
         particle_mover_t * ALIGNED(16)  pm,
-        accumulator_t    * ALIGNED(128) a0,
+        //accumulator_t    * ALIGNED(128) a0,
+        k_jf_accum_t::HostMirror& k_jf_accum,
         const grid_t     *              g,
         const float                     qsp ) {
+
+  const int nx = g->nx;
+  const int ny = g->ny;
+  const int nz = g->nz;
+  float cx = 0.25 * g->rdy * g->rdz / g->dt;
+  float cy = 0.25 * g->rdz * g->rdx / g->dt;
+  float cz = 0.25 * g->rdx * g->rdy / g->dt;
+
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
   float v0, v1, v2, v3, v4, v5, q;
   int axis, face;
   int64_t neighbor;
-  float *a;
+  //float *a;
   particle_t * ALIGNED(32) p = p0 + pm->i;
 
   q = qsp*p->w;
@@ -272,7 +282,7 @@ move_p( particle_t       * ALIGNED(128) p0,
     // the total physical charge that passed through the appropriate
     // current quadrant in a time-step
     v5 = q*s_dispx*s_dispy*s_dispz*(1./3.);
-    a = (float *)(a0 + p->i);
+    //a = (float *)(a0 + p->i);
 #   define accumulate_j(X,Y,Z)                                        \
     v4  = q*s_disp##X;    /* v2 = q ux                            */  \
     v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
@@ -287,14 +297,32 @@ move_p( particle_t       * ALIGNED(128) p0,
     v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
     v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
     v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
-    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-    a[0] += v0;                                                       \
-    a[1] += v1;                                                       \
-    a[2] += v2;                                                       \
-    a[3] += v3
-    accumulate_j(x,y,z); a += 4;
-    accumulate_j(y,z,x); a += 4;
+    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+
+    int ii = p->i;
+    int iii = ii;
+    int zi = iii/((nx+2)*(ny+2));
+    iii -= zi*(nx+2)*(ny+2);
+    int yi = iii/(nx+2);
+    int xi = iii - yi*(nx+2);
+    accumulate_j(x,y,z);
+    k_jf_accum(ii, accumulator_var::jx) += cx*v0;
+    k_jf_accum(VOXEL(xi,yi+1,zi,nx,ny,nz), accumulator_var::jx) += cx*v1;
+    k_jf_accum(VOXEL(xi,yi,zi+1,nx,ny,nz), accumulator_var::jx) += cx*v2;
+    k_jf_accum(VOXEL(xi,yi+1,zi+1,nx,ny,nz), accumulator_var::jx) += cx*v3;
+
+    accumulate_j(y,z,x);
+    k_jf_accum(ii, accumulator_var::jy) += cy*v0;
+    k_jf_accum(VOXEL(xi,yi,zi+1,nx,ny,nz), accumulator_var::jy) += cy*v1;
+    k_jf_accum(VOXEL(xi+1,yi,zi,nx,ny,nz), accumulator_var::jy) += cy*v2;
+    k_jf_accum(VOXEL(xi+1,yi,zi+1,nx,ny,nz), accumulator_var::jy) += cy*v3;
+
     accumulate_j(z,x,y);
+    k_jf_accum(ii, accumulator_var::jz) += cz*v0;
+    k_jf_accum(VOXEL(xi+1,yi,zi,nx,ny,nz), accumulator_var::jz) += cz*v1;
+    k_jf_accum(VOXEL(xi,yi+1,zi,nx,ny,nz), accumulator_var::jz) += cz*v2;
+    k_jf_accum(VOXEL(xi+1,yi+1,zi,nx,ny,nz), accumulator_var::jz) += cz*v3;
+
 #   undef accumulate_j
 
     // Compute the remaining particle displacment

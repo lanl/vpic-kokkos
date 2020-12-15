@@ -19,6 +19,7 @@ checkpt_grid( const grid_t * g ) {
   if( g->range    ) CHECKPT_ALIGNED( g->range, world_size+1, 16 );
   if( g->neighbor ) CHECKPT_ALIGNED( g->neighbor, 6*g->nv, 128 );
   CHECKPT_PTR( g->mp );
+  CHECKPT_PTR( g->mp_k );
 }
 
 grid_t *
@@ -28,6 +29,7 @@ restore_grid( void ) {
   if( g->range    ) RESTORE_ALIGNED( g->range );
   if( g->neighbor ) RESTORE_ALIGNED( g->neighbor );
   RESTORE_PTR( g->mp );
+  RESTORE_PTR( g->mp_k );
   return g;
 }
 

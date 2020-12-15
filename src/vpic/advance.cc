@@ -7,6 +7,7 @@
 
 int vpic_simulation::advance(void)
 {
+
   species_t *sp;
   double err;
 
@@ -28,7 +29,7 @@ int vpic_simulation::advance(void)
       {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
           //TIC sort_p( sp ); TOC( sort_p, 1 );
-          sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
+          sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, grid->nv);
       }
   }
 
@@ -39,22 +40,21 @@ int vpic_simulation::advance(void)
   // empty and all particles should be inside the local computational domain.
   // Advance the particle lists.
 
+  //printf("Sorted\n");
   // HOST - Touches accumulators
   if( species_list )
   {
     // TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
-    TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
+    //TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
+  TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
   }
-  //  KOKKOS_TIC();
-  //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
-  //  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
-
   // Note: Particles should not have moved since the last performance sort
   // when calling collision operators.
   // FIXME: Technically, this placement of the collision operators only
   // yields a first order accurate Trotter factorization (not a second
   // order accurate factorization).
 
+  //printf("Cleared jf\n");
   if( collision_op_list )
   {
       Kokkos::abort("Collision is not supported");
@@ -63,36 +63,18 @@ int vpic_simulation::advance(void)
 
   //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
-  //  KOKKOS_TIC(); // Time this data movement
-  //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
-  //  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
-  //  KOKKOS_TIC();
-  //  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
-  //  KOKKOS_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
-  //  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE();
-
   // DEVICE function - Touches particles, particle movers, accumulators, interpolators
   LIST_FOR_EACH( sp, species_list )
   {
       // Now Times internally
-      advance_p( sp, accumulator_array, interpolator_array );
+      advance_p( sp, interpolator_array, field_array );
   }
+  //printf("Pushed\n");
 
   KOKKOS_TIC();
-  Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
-  accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
-  KOKKOS_TOC( accumulator_contributions, 1);
-
-  //  KOKKOS_TIC(); // Time this data movement
-  //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
-  //  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
-  //  KOKKOS_TIC()
-  //  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array);
-  //  KOKKOS_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
-
-  //  KOKKOS_TIC()
-  //  KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array);
-  //  KOKKOS_TOC( INTERPOLATOR_DATA_MOVEMENT, 1);
+  Kokkos::Experimental::contribute(field_array->k_f_d, field_array->k_field_sa_d);
+  field_array->k_field_sa_d.reset_except(field_array->k_f_d);
+  KOKKOS_TOC( field_sa_contributions, 1);
 
   KOKKOS_TIC(); // Time this data movement
   // TODO: make this into a function
@@ -164,12 +146,24 @@ int vpic_simulation::advance(void)
         }
     }
 
+
+  //bool accumulate_in_place = false; // This has to be outside the scoped timing block
+
+  //KOKKOS_TIC(); // Time this data movement
+  //// This could technically be done once per simulation, not every timestep
+  //if (accumulator_array->k_a_h.data() == accumulator_array->k_a_d.data() )
+  //{
+  //    accumulate_in_place = true;
+  //}
+  //else {
+  //    // Zero out the host accumulator
+  //    Kokkos::deep_copy(accumulator_array->k_a_h, 0.0f);
+  //}
+
+  //KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+
   // This should be after the emission and injection to allow for the
   // possibility of thread parallelizing these operations
-
-  //  KOKKOS_TIC();
-  //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE();
-  //  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   // HOST
   // Touches accumulator memory
@@ -182,21 +176,13 @@ int vpic_simulation::advance(void)
   // guard lists. Particles that absorbed are added to rhob (using a corrected
   // local accumulation).
 
-  // This should mean the kokkos accum data is up to date
-  //KOKKOS_TIC();
-  //KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
-  //KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
-  KOKKOS_TIC(); // Time this data movement
-  Kokkos::deep_copy(accumulator_array->k_a_h, accumulator_array->k_a_d);
-  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
-
   // HOST - Touches particle copies, particle_movers, particle_injectors,
   // accumulators (move_p), neighbors
   TIC
     for( int round=0; round<num_comm_round; round++ )
     {
       //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
-      boundary_p_kokkos( particle_bc_list, species_list, field_array, accumulator_array );
+      boundary_p_kokkos( particle_bc_list, species_list, field_array );
     }
   TOC( boundary_p, num_comm_round );
 
@@ -223,11 +209,14 @@ int vpic_simulation::advance(void)
   //Kokkos::Experimental::contribute(accumulator_array->k_a_h, accumulator_array->k_a_sah);
   //accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_h);
 
-  // Update device so we can pull it all the way back to the host
-  KOKKOS_TIC(); // Time this data movement
-  Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
-  //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
-  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  // If we didn't accumulate in place (as in the GPU case), do so
+  //if ( accumulate_in_place == false)
+  //{
+  //    // Update device so we can pull it all the way back to the host
+  //    KOKKOS_TIC(); // Time this data movement
+  //    combine_accumulators( accumulator_array );
+  //    KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  //}
 
   /*
   // Move these value back to the real, on host, accum
@@ -375,7 +364,7 @@ int vpic_simulation::advance(void)
   // HOST
   // Touches fields and accumulators
   //  TIC FAK->clear_jf( field_array ); TOC( clear_jf, 1 );
-  TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
+  //TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
 
   //  KOKKOS_TIC(); // Time this data movement
   //  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
@@ -385,10 +374,10 @@ int vpic_simulation::advance(void)
   //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
   //  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
-  if( species_list )
-  {
-    TIC unload_accumulator_array_kokkos( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
-  }
+  //if( species_list )
+  //{
+  //  TIC unload_accumulator_array_kokkos( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
+  //}
   //    TIC unload_accumulator_array( field_array, accumulator_array ); TOC( unload_accumulator, 1 );
   //  KOKKOS_TIC();
   //  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
@@ -397,6 +386,11 @@ int vpic_simulation::advance(void)
   //  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST();
   //  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
+  // Must move all the current from boundary_p that is on the host to the device
+  // TODO: The interior should all be zero, so it can be ignored.
+  KOKKOS_TIC();
+  FAK->k_reduce_jf(field_array);
+  KOKKOS_TOC( JF_ACCUM_DATA_MOVEMENT, 1);
   //  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
   TIC FAK->k_synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
 

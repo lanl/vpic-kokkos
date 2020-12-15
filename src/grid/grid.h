@@ -125,8 +125,6 @@ typedef struct grid {
       //h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
   //auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
   //
-  k_neighbor_t k_neighbor_d;                // kokkos neighbor view on device
-  k_neighbor_t::HostMirror k_neighbor_h;    // kokkos neighbor view on host
 
   int64_t rangel, rangeh; // Redundant for move_p performance reasons:
                           //   rangel = range[rank]
@@ -140,6 +138,9 @@ typedef struct grid {
   //    int max_ports;
   //    k_mpi_t k_mpi_d;
   //    k_mpi_t::HostMirror k_mpi_h;
+
+  k_neighbor_t k_neighbor_d;                // kokkos neighbor view on device
+  k_neighbor_t::HostMirror k_neighbor_h;    // kokkos neighbor view on host
 
   // We want to call this *only* once the neighbor is done
   void init_kokkos_grid(int num_neighbor)
