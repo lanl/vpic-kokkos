@@ -451,7 +451,7 @@ void advance_e(
 }
 
 
-void compute_curl_b_kokkos(
+void compute_curl_b(
   field_array_t* RESTRICT fa
 )
 {
