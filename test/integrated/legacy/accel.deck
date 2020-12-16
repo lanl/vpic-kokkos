@@ -86,7 +86,7 @@ begin_initialization {
 
   // Hack into vpic internals
   int failed = 0;
-  load_interpolator_array( interpolator_array, field_array );
+  interpolator_array->load( field_array );
 
 
   sim_log("this_sp " << this_sp);
@@ -96,7 +96,7 @@ begin_initialization {
 
       sim_log("STEP " << n);
 
-      advance_p( this_sp, accumulator_array, interpolator_array );
+      this_sp->advance( accumulator_array, interpolator_array );
 
       //Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
       //accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);

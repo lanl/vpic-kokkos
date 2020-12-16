@@ -58,11 +58,8 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
     KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(sp);
 
-    advance_p( sp, accumulator_array, interpolator_array );
-
-    // Call both functions
-    k_accumulate_rho_p( field_array, sp );
-    accumulate_rho_p( field_array, sp );
+    sp->advance( accumulator_array, interpolator_array );
+    sp->accumulate_rhof( field_array );
 
     // Copy the data back to host view
     Kokkos::deep_copy(field_array->k_f_h, field_array->k_f_d);

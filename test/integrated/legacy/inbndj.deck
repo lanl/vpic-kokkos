@@ -83,20 +83,17 @@ begin_initialization {
 
   // Advance the particles
 
-  clear_accumulator_array( accumulator_array );
+  accumulator_array->clear();
 
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
 
-  advance_p( this_sp, accumulator_array, interpolator_array );
+  this_sp->advance( accumulator_array, interpolator_array );
 
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
 
-  Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
-  accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
+  accumulator_array->contribute();
 
   KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
-
-  reduce_accumulator_array( accumulator_array );
 
   // Compute the final charge density
 
