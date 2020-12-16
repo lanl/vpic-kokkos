@@ -12,6 +12,14 @@
 
 #include <Kokkos_Core.hpp>
 
+// Dummy wrappers to optimize vacuum advances. They will be optimized
+// away at compile-time.
+
+class VacuumMaterialId {
+public:
+  constexpr material_id operator() (int, int) const { return 0; }
+};
+
 // In standard_field_advance.c
 
 void

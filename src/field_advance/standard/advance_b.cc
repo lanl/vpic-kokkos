@@ -4,8 +4,17 @@
 #include <Kokkos_Core.hpp>
 #include <iostream>
 
-void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const size_t nz, const size_t nv,
-                      const float px, const float py, const float pz) {
+template<class geo_t>
+void advance_b_kokkos(
+  k_field_t k_field,
+  geo_t geometry,
+  const size_t nx,
+  const size_t ny,
+  const size_t nz,
+  const size_t nv,
+  const float dt
+)
+{
 
   #define f0_cbx k_field(f0_index, field_var::cbx)
   #define f0_cby k_field(f0_index, field_var::cby)
@@ -33,9 +42,9 @@ void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const
   // even with explicit parenthesis are in there!  Oh my ...
   // -fno-unsafe-math-optimizations must be used
 
-  #define UPDATE_CBX() f0_cbx -= ( py*( fy_ez-f0_ez ) - pz*( fz_ey-f0_ey ) );
-  #define UPDATE_CBY() f0_cby -= ( pz*( fz_ex-f0_ex ) - px*( fx_ez-f0_ez ) );
-  #define UPDATE_CBZ() f0_cbz -= ( px*( fx_ey-f0_ey ) - py*( fy_ex-f0_ex ) );
+  #define UPDATE_CBX() f0_cbx -= dt*geometry.face_curl_x(f0_index, f0_ez, fy_ez, f0_ey, fz_ey)
+  #define UPDATE_CBY() f0_cby -= dt*geometry.face_curl_y(f0_index, f0_ex, fz_ex, f0_ez, fx_ez)
+  #define UPDATE_CBZ() f0_cbz -= dt*geometry.face_curl_z(f0_index, f0_ey, fx_ey, f0_ex, fy_ex)
 
   // Do the bulk of the magnetic fields in the pipelines.  The host
   // handles stragglers.
@@ -92,12 +101,22 @@ advance_b(field_array_t * RESTRICT fa,
   size_t ny   = g->ny;
   size_t nz   = g->nz;
   size_t nv   = g->nv;
-  float  px   = (nx>1) ? frac*g->cvac*g->dt*g->rdx : 0;
-  float  py   = (ny>1) ? frac*g->cvac*g->dt*g->rdy : 0;
-  float  pz   = (nz>1) ? frac*g->cvac*g->dt*g->rdz : 0;
-//printf("Advance_B kernel\n");
+  float  dt   = frac*g->cvac*g->dt;
 
-  advance_b_kokkos(k_field, nx, ny, nz, nv, px, py, pz);
+  SELECT_GEOMETRY(g->geometry, geo, {
+
+    advance_b_kokkos(
+      k_field,
+      fa->g->get_device_geometry<geo>(),
+      nx,
+      ny,
+      nz,
+      nv,
+      dt
+    );
+
+  });
 
   k_local_adjust_norm_b( fa, g );
+
 }

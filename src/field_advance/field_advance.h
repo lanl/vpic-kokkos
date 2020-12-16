@@ -216,24 +216,6 @@ typedef struct field_advance_kernels {
   double (*compute_rms_div_b_err)( const struct field_array * RESTRICT fa );
   void   (*clean_div_b          )( /**/  struct field_array * RESTRICT fa );
 
-  void (*advance_e_kokkos)( struct field_array * RESTRICT fa, float frac );
-  void (*energy_f_kokkos)( /**/  double        * RESTRICT en, // 6 elem
-                    const struct field_array * RESTRICT fa );
-  void (*clear_jf_kokkos)( struct field_array * RESTRICT fa );
-  void (*clear_rhof_kokkos     )( struct field_array * RESTRICT fa );
-  void (*k_synchronize_jf )( struct field_array * RESTRICT fa );
-  void (*k_synchronize_rho)( struct field_array * RESTRICT fa );
-  double (*synchronize_tang_e_norm_b_kokkos)( struct field_array * RESTRICT fa );
-
-  void   (*compute_div_e_err_kokkos  )( /**/  struct field_array * RESTRICT fa );
-  double (*compute_rms_div_e_err_kokkos)(const struct field_array * RESTRICT fa);
-  void   (*clean_div_e_kokkos   )( /**/  struct field_array * RESTRICT fa );
-
-  void   (*compute_div_b_err_kokkos)( struct field_array* RESTRICT fa );
-  double (*compute_rms_div_b_err_kokkos)( const struct field_array * RESTRICT fa );
-  void   (*clean_div_b_kokkos   )( /**/  struct field_array * RESTRICT fa );
-
-
 } field_advance_kernels_t;
 
 typedef struct field_buffers

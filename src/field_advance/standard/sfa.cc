@@ -43,25 +43,6 @@ static field_advance_kernels_t sfa_kernels = {
   compute_rms_div_b_err,
   clean_div_b,
 
-  // Kokkos Kenrels
-  advance_e_kokkos,
-  energy_f_kokkos,
-  clear_jf_kokkos,
-
-  clear_rhof_kokkos,
-
-  k_synchronize_jf,
-  k_synchronize_rho,
-
-  synchronize_tang_e_norm_b_kokkos,
-
-  compute_div_e_err_kokkos,
-  compute_rms_div_e_err_kokkos,
-  clean_div_e_kokkos,
-
-  compute_div_b_err_kokkos,
-  compute_rms_div_b_err_kokkos,
-  clean_div_b_kokkos
 };
 
 static float
@@ -225,29 +206,17 @@ new_standard_field_array( grid_t           * RESTRICT g,
   fa = new field_array_t(g->nv, xyz_sz, yzx_sz, zxy_sz);
 
   // Zero host accum array
-  Kokkos::parallel_for("Clear rhob accumulation array on host", host_execution_policy(0, g->nv), KOKKOS_LAMBDA (int i) {
-          fa->k_f_rhob_accum_h(i) = 0;
-          });
+  Kokkos::parallel_for("Clear rhob accumulation array on host",
+    host_execution_policy(0, g->nv),
+    KOKKOS_LAMBDA (int i) {
+      fa->k_f_rhob_accum_h(i) = 0;
+    });
 
   MALLOC_ALIGNED( fa->f, g->nv, 128 );
   CLEAR( fa->f, g->nv );
   fa->g = g;
   fa->params = create_sfa_params( g, m_list, damp );
   fa->kernel[0] = sfa_kernels;
-  if( !m_list->next ) {
-    /* If there is only one material, then this material permeates all
-       space and we can use high performance versions of some kernels. */
-    fa->kernel->advance_e         = vacuum_advance_e;
-    fa->kernel->energy_f          = vacuum_energy_f;
-    fa->kernel->compute_rhob      = vacuum_compute_rhob;
-    fa->kernel->compute_curl_b    = vacuum_compute_curl_b;
-    fa->kernel->compute_div_e_err = vacuum_compute_div_e_err;
-    fa->kernel->clean_div_e       = vacuum_clean_div_e;
-    fa->kernel->advance_e_kokkos  = vacuum_advance_e_kokkos;
-    fa->kernel->compute_div_e_err_kokkos = vacuum_compute_div_e_err_kokkos;
-    fa->kernel->clean_div_e_kokkos= vacuum_clean_div_e_kokkos;
-    fa->kernel->energy_f_kokkos   = vacuum_energy_f_kokkos;
-  }
 
   REGISTER_OBJECT( fa, checkpt_standard_field_array,
                        restore_standard_field_array, NULL );
@@ -266,27 +235,16 @@ delete_standard_field_array( field_array_t * fa ) {
 
 /*****************************************************************************/
 
-#define f(x,y,z) f[ VOXEL(x,y,z, nx,ny,nz) ]
-
-void
-clear_jf( field_array_t * RESTRICT fa ) {
-  if( !fa ) ERROR(( "Bad args" ));
-  field_t * RESTRICT ALIGNED(128) f = fa->f;
-  const int nv = fa->g->nv;
-  for( int v=0; v<nv; v++ ) f[v].jfx = 0, f[v].jfy = 0, f[v].jfz = 0;
-}
-
-void
-clear_rhof( field_array_t * RESTRICT fa ) {
-  if( !fa ) ERROR(( "Bad args" ));
-  field_t * RESTRICT ALIGNED(128) f = fa->f;
-  const int nv = fa->g->nv;
-  for( int v=0; v<nv; v++ ) f[v].rhof = 0;
-}
-
 // Kokkos versions
-void clear_jf_kokkos(field_array_t* RESTRICT fa) {
-    if(!fa) ERROR(("Bad args" ));
+void clear_jf(
+  field_array_t* RESTRICT fa
+)
+{
+    if( !fa )
+    {
+      ERROR(("Bad args" ));
+    }
+
     k_field_t kfield = fa->k_f_d;
     const int nv = fa->g->nv;
     Kokkos::parallel_for("clear_jf", Kokkos::RangePolicy<>(0,nv),
@@ -297,8 +255,15 @@ void clear_jf_kokkos(field_array_t* RESTRICT fa) {
     });
 }
 
-void clear_rhof_kokkos(field_array_t* RESTRICT fa) {
-    if(!fa) ERROR(("Bad args" ));
+void clear_rhof(
+  field_array_t* RESTRICT fa
+)
+{
+    if( !fa )
+    {
+      ERROR(("Bad args" ));
+    }
+
     k_field_t kfield = fa->k_f_d;
     const int nv = fa->g->nv;
     Kokkos::parallel_for("clear_rhof", Kokkos::RangePolicy<>(0,nv),

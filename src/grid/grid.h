@@ -155,7 +155,7 @@ typedef struct grid {
   const typename GeometryClass<geo>::device
   get_device_geometry() const
   {
-    return typename GeometryClass<geo>::device(dx, dy, dz, k_mesh_d);
+    return typename GeometryClass<geo>::device(nx, ny, nz, dx, dy, dz, k_mesh_d);
   }
 
   /**
@@ -165,7 +165,7 @@ typedef struct grid {
   const typename GeometryClass<geo>::host
   get_host_geometry() const
   {
-    return typename GeometryClass<geo>::host(dx, dy, dz, k_mesh_h);
+    return typename GeometryClass<geo>::host(nx, ny, nz, dx, dy, dz, k_mesh_h);
   }
 
 } grid_t;

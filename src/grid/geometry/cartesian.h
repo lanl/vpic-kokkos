@@ -3,9 +3,25 @@
 
 template<class mesh_view_t>
 class CartesianGeometry {
+private:
+
+  const float px,  py,  pz;
+  const float dx,  dy,  dz,  dV;
+  const float rdx, rdy, rdz, rdV;
+  const mesh_view_t mesh;
+
 public:
 
+  // TODO: Logical flaw. Setting p{x,y,z} as done here is consistent
+  // with previous versions of VPIC, but it assumes that n > 1 locally
+  // is the same as N > 1 globally. This is not true in the edge case
+  // where the domain decomposition allows a local domain to have
+  // exactly one cell.
+
   CartesianGeometry(
+      const int nx,
+      const int ny,
+      const int nz,
       const float dx,
       const float dy,
       const float dz,
@@ -13,9 +29,201 @@ public:
   )
   : mesh(mesh),
     dx(dx), dy(dy), dz(dz), dV(dx*dy*dz),
-    rdx(1./dx), rdy(1./dy), rdz(1./dz), rdV(1./(dx*dy*dz))
+    rdx(1./dx), rdy(1./dy), rdz(1./dz), rdV(1./(dx*dy*dz)),
+    px(nx > 1 ? 1./dx : 0), // Used for calculating derivatives
+    py(ny > 1 ? 1./dy : 0), // Used for calculating derivatives
+    pz(nz > 1 ? 1./dz : 0)  // Used for calculating derivatives
+
   {
 
+  }
+
+  /**
+   * @brief Curl of a vector A defined on the edges. Output on the faces.
+   * @param voxel Voxel to compute in
+   * @param Az0 Az(ix, iy, iz)
+   * @param Azy Az(ix, iy+1, iz)
+   * @param Ay0 Ay(ix, iy, iz)
+   * @param Ayz Az(ix, iy, iz+1)
+   * @returns curlx(A)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  edge_curl_x(int voxel, float Az0, float Azy, float Ay0, float Ayz) const {
+    return py*(Azy - Az0) - pz*(Ayz - Ay0);
+  }
+
+  /**
+   * @brief Curl of a vector A defined on the edges. Output on the faces.
+   * @param voxel Voxel to compute in
+   * @param Ax0 Ax(ix, iy, iz)
+   * @param Axz Ax(ix, iy, iz+1)
+   * @param Az0 Az(ix, iy, iz)
+   * @param Azx Az(ix+1, iy, iz)
+   * @returns curly(A)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  edge_curl_y(int voxel, float Ax0, float Axz, float Az0, float Azx) const {
+    return pz*(Axz - Ax0) - px*(Azx - Az0);
+  }
+
+  /**
+   * @brief Curl of a vector A defined on the edges. Output on the faces.
+   * @param voxel Voxel to compute in
+   * @param Ay0 Az(ix, iy, iz)
+   * @param Ayx Az(ix+1, iy, iz)
+   * @param Ax0 Ax(ix, iy, iz)
+   * @param Axy Ax(ix, iy+1, iz)
+   * @returns curlz(A)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  edge_curl_z(int voxel, float Ay0, float Ayx, float Ax0, float Axy) const {
+    return px*(Ayx - Ay0) - py*(Axy - Ax0);
+  }
+
+  /**
+   * @brief Curl of a vector A defined on the faces. Output on the edges.
+   * @param voxel Voxel to compute in
+   * @param Az0 Az(ix, iy, iz)
+   * @param Azy Az(ix, iy-1, iz)
+   * @param Ay0 Ay(ix, iy, iz)
+   * @param Ayz Az(ix, iy, iz-1)
+   * @returns curlx(A)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  face_curl_x(int voxel, float Az0, float Azy, float Ay0, float Ayz) const {
+    return py*(Az0 - Azy) - pz*(Ay0 - Ayz);
+  }
+
+  /**
+   * @brief Curl of a vector A defined on the faces. Output on the edges.
+   * @param voxel Voxel to compute in
+   * @param Ax0 Ax(ix, iy, iz)
+   * @param Axz Ax(ix, iy, iz-1)
+   * @param Az0 Az(ix, iy, iz)
+   * @param Azx Az(ix-1, iy, iz)
+   * @returns curly(A)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  face_curl_y(int voxel, float Ax0, float Axz, float Az0, float Azx) const {
+    return pz*(Ax0 - Axz) - px*(Az0 - Azx);
+  }
+
+  /**
+   * @brief Curl of a vector A defined on the faces. Output on the edges.
+   * @param voxel Voxel to compute in
+   * @param Ay0 Ay(ix, iy, iz)
+   * @param Ayx Ay(ix-1, iy, iz)
+   * @param Ax0 Ax(ix, iy, iz)
+   * @param Axy Ax(ix, iy-1, iz)
+   * @returns curlz(A)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  face_curl_z(int voxel, float Ay0, float Ayx, float Ax0, float Axy) const {
+    return px*(Ay0 - Ayx) - py*(Ax0 - Axy);
+  }
+
+  /**
+   * @brief Gradient of a scalar defined on cell-centers. Output on the faces.
+   * @param voxel Voxel to compute in
+   * @param f0 f(ix, iy, iz)
+   * @param fx f(ix-1, iy, iz)
+   * @returns gradx(f)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  cell_gradient_x(int voxel, float f0, float fx) const {
+    return px*(f0 - fx);
+  }
+
+  /**
+   * @brief Gradient of a scalar defined on cell-centers. Output on the faces.
+   * @param voxel Voxel to compute in
+   * @param f0 f(ix, iy, iz)
+   * @param fy f(ix, iy-1, iz)
+   * @returns grady(f)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  cell_gradient_y(int voxel, float f0, float fy) const {
+    return py*(f0 - fy);
+  }
+
+    /**
+   * @brief Gradient of a scalar defined on cell-centers. Output on the faces.
+   * @param voxel Voxel to compute in
+   * @param f0 f(ix, iy, iz)
+   * @param fz f(ix, iy, iz-1)
+   * @returns gradz(f)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  cell_gradient_z(int voxel, float f0, float fz) const {
+    return pz*(f0 - fz);
+  }
+
+  /**
+   * @brief Gradient of a scalar defined on nodes. Output on the edges.
+   * @param voxel Voxel to compute in
+   * @param f0 f(ix, iy, iz)
+   * @param fx f(ix+1, iy, iz)
+   * @returns gradx(f)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  node_gradient_x(int voxel, float f0, float fx) const {
+    return px*(fx - f0);
+  }
+
+  /**
+   * @brief Gradient of a scalar defined on nodes. Output on the edges.
+   * @param voxel Voxel to compute in
+   * @param f0 f(ix, iy, iz)
+   * @param fy f(ix, iy+1, iz)
+   * @returns grady(f)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  node_gradient_y(int voxel, float f0, float fy) const {
+    return py*(fy - f0);
+  }
+
+    /**
+   * @brief Gradient of a scalar defined on nodes. Output on the edges.
+   * @param voxel Voxel to compute in
+   * @param f0 f(ix, iy, iz)
+   * @param fz f(ix, iy, iz+1)
+   * @returns gradz(f)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  node_gradient_z(int voxel, float f0, float fz) const {
+    return pz*(fz - f0);
+  }
+
+   /**
+   * @brief Divergence of a vector A defined on the faces. Output on the cell center.
+   * @param voxel Voxel to compute in
+   * @param Ax0 Ax(ix, iy, iz)
+   * @param Ax1 Ax(ix+1, iy, iz)
+   * @param Ay0 Ay(ix, iy, iz)
+   * @param Ay1 Ay(ix, iy+1, iz)
+   * @param Az0 Az(ix, iy, iz)
+   * @param Az1 Az(ix, iy, iz+1)
+   * @returns div(A)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  face_divergence(int voxel, float Ax0, float Ax1, float Ay0, float Ay1, float Az0, float Az1) const {
+    return px*(Ax1 - Ax0) + py*(Ay1 - Ay0) + pz*(Az1 - Az0);
+  }
+
+   /**
+   * @brief Divergence of a vector A defined on the edges. Output on the nodes.
+   * @param voxel Voxel to compute in
+   * @param Ax0 Ax(ix, iy, iz)
+   * @param Ax1 Ax(ix-1, iy, iz)
+   * @param Ay0 Ay(ix, iy, iz)
+   * @param Ay1 Ay(ix, iy-1, iz)
+   * @param Az0 Az(ix, iy, iz)
+   * @param Az1 Az(ix, iy, iz-1)
+   * @returns div(A)(ix, iy, iz)
+   */
+  const float KOKKOS_INLINE_FUNCTION
+  edge_divergence(int voxel, float Ax0, float Ax1, float Ay0, float Ay1, float Az0, float Az1) const {
+    return px*(Ax0 - Ax1) + py*(Ay0 - Ay1) + pz*(Az0 - Az1);
   }
 
   /**
@@ -70,12 +278,6 @@ public:
     dispz *= 2*rdz;
 
   }
-
-private:
-
-  const float dx,  dy,  dz,  dV;
-  const float rdx, rdy, rdz, rdV;
-  const mesh_view_t mesh;
 
 };
 

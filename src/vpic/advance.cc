@@ -188,14 +188,14 @@ int vpic_simulation::advance(void)
 
   // HOST
   // Touches fields and accumulators
-  TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
+  TIC FAK->clear_jf( field_array ); TOC( clear_jf, 1 );
 
   if( species_list )
   {
     TIC accumulator_array->unload( field_array ); TOC( unload_accumulator, 1 );
   }
 
-  TIC FAK->k_synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
+  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
 
   // At this point, the particle currents are known at jf_{1/2}.
   // Let the user add their own current contributions. It is the users
@@ -227,7 +227,7 @@ int vpic_simulation::advance(void)
   // Advance the electric field from E_0 to E_1
 
   // Device - Touches fields
-  TIC FAK->advance_e_kokkos( field_array, 1.0 ); TOC( advance_e, 1 );
+  TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
 
   // Let the user add their own contributions to the electric field. It is the
   // users responsibility to insure injected electric fields are consistent
@@ -261,7 +261,7 @@ int vpic_simulation::advance(void)
 
       // HOST (Device in rho_p)
       // Touches fields and particles
-      TIC FAK->clear_rhof_kokkos( field_array ); TOC( clear_rhof,1 );
+      TIC FAK->clear_rhof( field_array ); TOC( clear_rhof,1 );
 
       if( species_list )
       {
@@ -275,20 +275,20 @@ int vpic_simulation::advance(void)
 
       }
 
-      TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+      TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
 
       // HOST
       // Touches fields
       for( int round=0; round<num_div_e_round; round++ ) {
 
-          TIC FAK->compute_div_e_err_kokkos( field_array ); TOC( compute_div_e_err, 1 );
+          TIC FAK->compute_div_e_err( field_array ); TOC( compute_div_e_err, 1 );
 
           if( round==0 || round==num_div_e_round-1 ) {
-              TIC err = FAK->compute_rms_div_e_err_kokkos( field_array ); TOC( compute_rms_div_e_err, 1 );
+              TIC err = FAK->compute_rms_div_e_err( field_array ); TOC( compute_rms_div_e_err, 1 );
 
               if( rank()==0 ) MESSAGE(( "%s rms error = %e (charge/volume)", round==0 ? "Initial" : "Cleaned", err ));
           }
-          TIC FAK->clean_div_e_kokkos( field_array ); TOC( clean_div_e, 1 );
+          TIC FAK->clean_div_e( field_array ); TOC( clean_div_e, 1 );
 
       }
 
@@ -305,15 +305,15 @@ int vpic_simulation::advance(void)
       for( int round=0; round<num_div_b_round; round++ )
       {
 
-          TIC FAK->compute_div_b_err_kokkos( field_array ); TOC( compute_div_b_err, 1 );
+          TIC FAK->compute_div_b_err( field_array ); TOC( compute_div_b_err, 1 );
 
           if( round==0 || round==num_div_b_round-1 ) {
-              TIC err = FAK->compute_rms_div_b_err_kokkos( field_array ); TOC( compute_rms_div_b_err, 1 );
+              TIC err = FAK->compute_rms_div_b_err( field_array ); TOC( compute_rms_div_b_err, 1 );
 
               if( rank()==0 ) MESSAGE(( "%s rms error = %e (charge/volume)", round==0 ? "Initial" : "Cleaned", err ));
           }
 
-          TIC FAK->clean_div_b_kokkos( field_array ); TOC( clean_div_b, 1 );
+          TIC FAK->clean_div_b( field_array ); TOC( clean_div_b, 1 );
 
       }
   }
@@ -323,7 +323,7 @@ int vpic_simulation::advance(void)
   // Touches fields
   if( (sync_shared_interval>0) && ((step() % sync_shared_interval)==0) ) {
     if( rank()==0 ) MESSAGE(( "Synchronizing shared tang e, norm b, rho_b" ));
-    TIC err = FAK->synchronize_tang_e_norm_b_kokkos( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+    TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
     if( rank()==0 ) MESSAGE(( "Domain desynchronization error = %e (arb units)", err ));
   }
 
