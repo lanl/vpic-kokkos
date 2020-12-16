@@ -42,9 +42,9 @@ void advance_b_kokkos(
   // even with explicit parenthesis are in there!  Oh my ...
   // -fno-unsafe-math-optimizations must be used
 
-  #define UPDATE_CBX() f0_cbx -= dt*geometry.face_curl_x(f0_index, f0_ez, fy_ez, f0_ey, fz_ey)
-  #define UPDATE_CBY() f0_cby -= dt*geometry.face_curl_y(f0_index, f0_ex, fz_ex, f0_ez, fx_ez)
-  #define UPDATE_CBZ() f0_cbz -= dt*geometry.face_curl_z(f0_index, f0_ey, fx_ey, f0_ex, fy_ex)
+  #define UPDATE_CBX() f0_cbx -= dt*geometry.edge_curl_x(f0_index, f0_ez, fy_ez, f0_ey, fz_ey)
+  #define UPDATE_CBY() f0_cby -= dt*geometry.edge_curl_y(f0_index, f0_ex, fz_ex, f0_ez, fx_ez)
+  #define UPDATE_CBZ() f0_cbz -= dt*geometry.edge_curl_z(f0_index, f0_ey, fx_ey, f0_ex, fy_ex)
 
   // Do the bulk of the magnetic fields in the pipelines.  The host
   // handles stragglers.

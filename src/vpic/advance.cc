@@ -221,7 +221,7 @@ int vpic_simulation::advance(void)
   // DEVICE -- Touches fields
   // Half advance the magnetic field from B_0 to B_{1/2}
   KOKKOS_TIC();
-  FAK->advance_b( field_array, 0.5 );
+    FAK->advance_b( field_array, 0.5 );
   KOKKOS_TOC( advance_b, 1 );
 
   // Advance the electric field from E_0 to E_1
@@ -251,7 +251,9 @@ int vpic_simulation::advance(void)
 
   // DEVICE
   // Touches fields
-  TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
+  KOKKOS_TIC();
+    FAK->advance_b( field_array, 0.5 );
+  KOKKOS_TOC( advance_b, 1 );
 
   // Divergence clean e
 

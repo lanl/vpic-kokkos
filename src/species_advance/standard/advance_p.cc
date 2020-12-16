@@ -78,12 +78,12 @@ advance_p_kokkos(
       k_particles(p_index, particle_var::uz) = uz;
 
       v0   = dx + dispx;                           // Streak midpoint (inbnds)
-      v1   = dy + dispx;
-      v2   = dz + dispx;
+      v1   = dy + dispy;
+      v2   = dz + dispz;
 
       v3   = v0 + dispx;                           // New position
-      v4   = v1 + dispx;
-      v5   = v2 + dispx;
+      v4   = v1 + dispy;
+      v5   = v2 + dispz;
 
       // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
       if(  v3<=1.0f &&  v4<=1.0f &&  v5<=1.0f &&   // Check if inbnds
@@ -97,7 +97,7 @@ advance_p_kokkos(
         k_particles(p_index, particle_var::dz) = v5;
 
         // Accumulate current
-        accumulate(ii, q*qsp, v0, v1, v2, ux, uy, uz);
+        accumulate(ii, q*qsp, v0, v1, v2, dispx, dispy, dispz);
 
       } else
       {
