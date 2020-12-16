@@ -58,7 +58,7 @@ begin_initialization {
   for( int n=0; n<nstep; n++ ) {
     this_sp->advance( accumulator_array, interpolator_array );
 
-    KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+    this_sp->copy_to_host( true ); // Force copy
 
     double ux = cos(2*M_PI*(0.125*nstep-(n+1))/(double)nstep) /
                 cos(2*M_PI*(0.125*nstep)      /(double)nstep);
