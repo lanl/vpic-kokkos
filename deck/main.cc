@@ -49,16 +49,9 @@ vpic_simulation** restore_main(void)
 void checkpt(const char* fbase, int tag)
 {
 
-    ////////// Pull Kokkos data back from the device
-    species_t* sp;
-    LIST_FOR_EACH( sp, simulation->species_list )
-    {
-        if (simulation->step() > sp->species_copy_last)
-        {
-            simulation->KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
-        }
-    }
     // TODO: do these functions need to live inside the simulation class?
+    simulation->KOKKOS_COPY_PARTICLE_MEM_TO_HOST(simulation->species_list);
+
     simulation->KOKKOS_COPY_FIELD_MEM_TO_HOST(simulation->field_array);
 
     simulation->KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(simulation->interpolator_array);
