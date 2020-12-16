@@ -45,6 +45,7 @@ new_grid( void ) {
   g->bc[BOUNDARY(0,0,0)] = world_rank;
   g->mp = new_mp( 27 );
   g->mp_k = new_mp( 27 );
+  g->geometry = Geometry::Cartesian;
   REGISTER_OBJECT( g, checkpt_grid, restore_grid, NULL );
   return g;
 }
