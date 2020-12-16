@@ -107,16 +107,16 @@ public:
   k_hydro_t::HostMirror k_h_h;
   k_hydro_sa_t k_h_sa;
 
-  hydro_array_t()
+  hydro_array_t(int nv)
   {
-      init_kokoks_hydro();
+    init_kokkos_hydro(nv);
   }
 
-  void init_kokoks_hydro()
+  void init_kokkos_hydro(int nv)
   {
-      k_h_d = k_hydro_t("k_hydro");
-      k_h_sa = Kokkos::Experimental::create_scatter_view(k_h_d);
-      k_h_h  = Kokkos::create_mirror_view(k_h_d);
+    k_h_d = k_hydro_t("k_hydro", nv);
+    k_h_sa = Kokkos::Experimental::create_scatter_view(k_h_d);
+    k_h_h  = Kokkos::create_mirror_view(k_h_d);
   }
 
   /**
@@ -142,6 +142,16 @@ public:
    * @brief Clears the hydro array.
    */
   void clear();
+
+  /**
+   * @brief Copies the hydro data to the host.
+   */
+  void copy_to_host();
+
+  /**
+   * @brief Copies the hydro data to the device.
+   */
+  void copy_to_device();
 
 };
 

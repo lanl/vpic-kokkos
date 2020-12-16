@@ -186,6 +186,16 @@ public:
    */
   void clear();
 
+  /**
+   * @brief Copies the accumulator data to the host.
+   */
+  void copy_to_host();
+
+  /**
+   * @brief Copies the accumulator data to the device.
+   */
+  void copy_to_device();
+
 };
 
 // In sf_structors.c

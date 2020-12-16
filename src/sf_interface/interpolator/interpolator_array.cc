@@ -210,3 +210,70 @@ interpolator_array_t::load( const field_array_t * RESTRICT fa ) {
 
 }
 
+void
+interpolator_array_t::copy_to_host() {
+
+  Kokkos::deep_copy(k_i_h, k_i_d);
+
+  // Avoid capturing this
+  auto& host_interp = this->i;
+  auto& k_interpolator_h = k_i_h;
+
+  Kokkos::parallel_for("Copy interpolators to host",
+    host_execution_policy(0, g->nv) ,
+    KOKKOS_LAMBDA (int i) {
+      host_interp[i].ex       = k_interpolator_h(i, interpolator_var::ex);
+      host_interp[i].ey       = k_interpolator_h(i, interpolator_var::ey);
+      host_interp[i].ez       = k_interpolator_h(i, interpolator_var::ez);
+      host_interp[i].dexdy    = k_interpolator_h(i, interpolator_var::dexdy);
+      host_interp[i].dexdz    = k_interpolator_h(i, interpolator_var::dexdz);
+      host_interp[i].d2exdydz = k_interpolator_h(i, interpolator_var::d2exdydz);
+      host_interp[i].deydz    = k_interpolator_h(i, interpolator_var::deydz);
+      host_interp[i].deydx    = k_interpolator_h(i, interpolator_var::deydx);
+      host_interp[i].d2eydzdx = k_interpolator_h(i, interpolator_var::d2eydzdx);
+      host_interp[i].dezdx    = k_interpolator_h(i, interpolator_var::dezdx);
+      host_interp[i].dezdy    = k_interpolator_h(i, interpolator_var::dezdy);
+      host_interp[i].d2ezdxdy = k_interpolator_h(i, interpolator_var::d2ezdxdy);
+      host_interp[i].cbx      = k_interpolator_h(i, interpolator_var::cbx);
+      host_interp[i].cby      = k_interpolator_h(i, interpolator_var::cby);
+      host_interp[i].cbz      = k_interpolator_h(i, interpolator_var::cbz);
+      host_interp[i].dcbxdx   = k_interpolator_h(i, interpolator_var::dcbxdx);
+      host_interp[i].dcbydy   = k_interpolator_h(i, interpolator_var::dcbydy);
+      host_interp[i].dcbzdz   = k_interpolator_h(i, interpolator_var::dcbzdz);
+    });
+
+}
+
+void
+interpolator_array_t::copy_to_device() {
+
+  // Avoid capturing this
+  auto& host_interp = this->i;
+  auto& k_interpolator_h = k_i_h;
+
+  Kokkos::parallel_for("Copy interpolators to device",
+    host_execution_policy(0, g->nv) ,
+    KOKKOS_LAMBDA (int i) {
+      k_interpolator_h(i, interpolator_var::ex)       = host_interp[i].ex;
+      k_interpolator_h(i, interpolator_var::ey)       = host_interp[i].ey;
+      k_interpolator_h(i, interpolator_var::ez)       = host_interp[i].ez;
+      k_interpolator_h(i, interpolator_var::dexdy)    = host_interp[i].dexdy;
+      k_interpolator_h(i, interpolator_var::dexdz)    = host_interp[i].dexdz;
+      k_interpolator_h(i, interpolator_var::d2exdydz) = host_interp[i].d2exdydz;
+      k_interpolator_h(i, interpolator_var::deydz)    = host_interp[i].deydz;
+      k_interpolator_h(i, interpolator_var::deydx)    = host_interp[i].deydx;
+      k_interpolator_h(i, interpolator_var::d2eydzdx) = host_interp[i].d2eydzdx;
+      k_interpolator_h(i, interpolator_var::dezdx)    = host_interp[i].dezdx;
+      k_interpolator_h(i, interpolator_var::dezdy)    = host_interp[i].dezdy;
+      k_interpolator_h(i, interpolator_var::d2ezdxdy) = host_interp[i].d2ezdxdy;
+      k_interpolator_h(i, interpolator_var::cbx)      = host_interp[i].cbx;
+      k_interpolator_h(i, interpolator_var::cby)      = host_interp[i].cby;
+      k_interpolator_h(i, interpolator_var::cbz)      = host_interp[i].cbz;
+      k_interpolator_h(i, interpolator_var::dcbxdx)   = host_interp[i].dcbxdx;
+      k_interpolator_h(i, interpolator_var::dcbydy)   = host_interp[i].dcbydy;
+      k_interpolator_h(i, interpolator_var::dcbzdz)   = host_interp[i].dcbzdz;
+    });
+
+  Kokkos::deep_copy(k_i_d, k_i_h);
+
+}

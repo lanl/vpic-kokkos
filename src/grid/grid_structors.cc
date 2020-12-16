@@ -61,46 +61,47 @@ delete_grid( grid_t * g ) {
 //    delete_mp_kokkos(g->mp_k);
   FREE( g );
 }
-  void
-  grid_t::init_kokkos_grid(int num_neighbor)
-  {
-      k_neighbor_d = k_neighbor_t("k_neighbor_d", num_neighbor);
-      k_neighbor_h = Kokkos::create_mirror_view(k_neighbor_d);
 
-      k_mesh_d = k_mesh_t("k_mesh_d", nv);
-      k_mesh_h = Kokkos::create_mirror_view(k_mesh_d);
+void
+grid_t::init_kokkos_grid(int num_neighbor)
+{
+    k_neighbor_d = k_neighbor_t("k_neighbor_d", num_neighbor);
+    k_neighbor_h = Kokkos::create_mirror_view(k_neighbor_d);
 
-      // TODO: make this a host parlalel for
-      for (int i = 0; i < num_neighbor; i++)
-      {
-          k_neighbor_h(i) = neighbor[i];
-      }
+    k_mesh_d = k_mesh_t("k_mesh_d", nv);
+    k_mesh_h = Kokkos::create_mirror_view(k_mesh_d);
 
-      // Construct the dense mesh
-      int v = 0;
-      for (int k = 0 ; k < nz+2 ; ++k) {
-        double fz = (k-0.5) / ((double) nz);
-        double z = z0*(1-fz) + z1*fz;
+    // TODO: make this a host parlalel for
+    for (int i = 0; i < num_neighbor; i++)
+    {
+        k_neighbor_h(i) = neighbor[i];
+    }
 
-        for (int j = 0 ; j < ny+2 ; ++j) {
-          double fy = (j-0.5) / ((double) ny);
-          double y = y0*(1-fy) + y1*fy;
+    // Construct the dense mesh
+    int v = 0;
+    for (int k = 0 ; k < nz+2 ; ++k) {
+      double fz = (k-0.5) / ((double) nz);
+      double z = z0*(1-fz) + z1*fz;
 
-          for (int i = 0 ; i < nx+2 ; ++i) {
-            double fx = (i-0.5) / ((double) nx);
-            double x = x0*(1-fx) + x1*fx;
+      for (int j = 0 ; j < ny+2 ; ++j) {
+        double fy = (j-0.5) / ((double) ny);
+        double y = y0*(1-fy) + y1*fy;
 
-            k_mesh_h(v, mesh_var::x) = x;
-            k_mesh_h(v, mesh_var::y) = y;
-            k_mesh_h(v, mesh_var::z) = z;
-            v += 1;
+        for (int i = 0 ; i < nx+2 ; ++i) {
+          double fx = (i-0.5) / ((double) nx);
+          double x = x0*(1-fx) + x1*fx;
 
-          }
+          k_mesh_h(v, mesh_var::x) = x;
+          k_mesh_h(v, mesh_var::y) = y;
+          k_mesh_h(v, mesh_var::z) = z;
+          v += 1;
+
         }
       }
+    }
 
-      // Copy to device
-      Kokkos::deep_copy(k_mesh_d, k_mesh_h);
-      Kokkos::deep_copy(k_neighbor_d, k_neighbor_h);
+    // Copy to device
+    Kokkos::deep_copy(k_mesh_d, k_mesh_h);
+    Kokkos::deep_copy(k_neighbor_d, k_neighbor_h);
 
-  }
+}

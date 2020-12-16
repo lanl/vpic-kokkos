@@ -32,7 +32,7 @@ restore_hydro_array( void ) {
 hydro_array_t *
 new_hydro_array( grid_t * g ) {
   if( !g ) ERROR(( "NULL grid" ));
-  hydro_array_t *ha = new hydro_array_t();
+  hydro_array_t *ha = new hydro_array_t(g->nv);
   ha->g = g;
   MALLOC_ALIGNED( ha->h, g->nv, 128 );
   CLEAR( ha->h, g->nv );
@@ -55,7 +55,7 @@ hydro_array_t::clear() {
 }
 
 void
-hydro_array_t::synchronize() {
+hydro_array_t::copy_to_host() {
 
   // Combine contributions
   Kokkos::Experimental::contribute(k_h_d, k_h_sa);
@@ -90,6 +90,48 @@ hydro_array_t::synchronize() {
       host_hydro[i].txy = k_hydro_h(i, hydro_var::txy);
 
     });
+
+}
+
+void
+hydro_array_t::copy_to_device() {
+
+  // Avoid capturing this
+  auto& k_hydro_h = k_h_h;
+  auto& host_hydro = h;
+
+  Kokkos::parallel_for("copy hydro to device",
+    host_execution_policy(0, g->nv) ,
+    KOKKOS_LAMBDA (int i) {
+
+      k_hydro_h(i, hydro_var::jx)  = host_hydro[i].jx;
+      k_hydro_h(i, hydro_var::jy)  = host_hydro[i].jy;
+      k_hydro_h(i, hydro_var::jz)  = host_hydro[i].jz;
+      k_hydro_h(i, hydro_var::rho) = host_hydro[i].rho;
+
+      k_hydro_h(i, hydro_var::px)  = host_hydro[i].px;
+      k_hydro_h(i, hydro_var::py)  = host_hydro[i].py;
+      k_hydro_h(i, hydro_var::pz)  = host_hydro[i].pz;
+      k_hydro_h(i, hydro_var::ke)  = host_hydro[i].ke;
+
+      k_hydro_h(i, hydro_var::txx) = host_hydro[i].txx;
+      k_hydro_h(i, hydro_var::tyy) = host_hydro[i].tyy;
+      k_hydro_h(i, hydro_var::tzz) = host_hydro[i].tzz;
+      k_hydro_h(i, hydro_var::tyz) = host_hydro[i].tyz;
+      k_hydro_h(i, hydro_var::tzx) = host_hydro[i].tzx;
+      k_hydro_h(i, hydro_var::txy) = host_hydro[i].txy;
+
+    });
+
+  // Copy to device.
+  Kokkos::deep_copy(k_h_d, k_h_h);
+
+}
+
+void
+hydro_array_t::synchronize() {
+
+  copy_to_host();
 
   // Now synchronize.
   int size, face, bc, x, y, z, nx, ny, nz;

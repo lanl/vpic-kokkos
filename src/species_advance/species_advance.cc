@@ -15,7 +15,7 @@
 void
 checkpt_species( species_t * sp ) {
 
-  sp->copy_all_to_host();
+  sp->copy_to_host();
 
   CHECKPT( sp, 1 );
   CHECKPT_STR( sp->name );
@@ -152,10 +152,10 @@ species( const char * name,
 /* Class methods **************************************************************/
 
 void
-species_t::copy_all_to_host()
+species_t::copy_to_host(bool force)
 {
 
-  if( !on_device )
+  if( !on_device && !force )
     return;
 
   Kokkos::deep_copy(k_p_h, k_p_d);
@@ -207,10 +207,10 @@ species_t::copy_all_to_host()
 }
 
 void
-species_t::copy_all_to_device()
+species_t::copy_to_device(bool force)
 {
 
-  if( on_device )
+  if( on_device && !force )
     return;
 
   k_nm_h(0) = nm;

@@ -185,3 +185,52 @@ void
 accumulator_array_t::clear() {
     Kokkos::deep_copy(k_a_d, 0.0f);
 }
+
+void
+accumulator_array_t::copy_to_host() {
+
+  Kokkos::deep_copy(k_a_h, k_a_d);
+
+  // Avoid capturing this
+  auto& k_accumulators_h = k_a_h;
+  accumulator_t * host_accum = a;
+
+  Kokkos::parallel_for("copy accumulator to host",
+    KOKKOS_TEAM_POLICY_HOST (na, Kokkos::AUTO),
+    KOKKOS_LAMBDA (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) {
+
+      const unsigned int i = team_member.league_rank();
+      /* TODO: Do we really need a 2d loop here*/
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) {
+        host_accum[i].jx[j] = k_accumulators_h(i, accumulator_var::jx, j);
+        host_accum[i].jy[j] = k_accumulators_h(i, accumulator_var::jy, j);
+        host_accum[i].jz[j] = k_accumulators_h(i, accumulator_var::jz, j);
+      });
+
+    });
+
+}
+
+void
+accumulator_array_t::copy_to_device() {
+
+  // Avoid capturing this
+  auto& k_accumulators_h = k_a_h;
+  accumulator_t * host_accum = a;
+
+  Kokkos::parallel_for("copy accumulator to device",
+    KOKKOS_TEAM_POLICY_HOST (na, Kokkos::AUTO),
+    KOKKOS_LAMBDA (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) {
+
+      const unsigned int i = team_member.league_rank();
+      /* TODO: Do we really need a 2d loop here*/
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) {
+        k_accumulators_h(i, accumulator_var::jx, j) = host_accum[i].jx[j];
+        k_accumulators_h(i, accumulator_var::jy, j) = host_accum[i].jy[j];
+        k_accumulators_h(i, accumulator_var::jz, j) = host_accum[i].jz[j];
+      });
+
+    });
+  Kokkos::deep_copy(k_a_d, k_a_h);
+
+}

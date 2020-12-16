@@ -238,12 +238,12 @@ class species_t {
         /**
          * @brief Copies all the particles and movers from the device to the host.
          */
-        void copy_all_to_host();
+        void copy_to_host(bool force=false);
 
         /**
          * @brief Copies all the particles and movers from the host to the device.
          */
-        void copy_all_to_device();
+        void copy_to_device(bool force=false);
 
         /**
          * @brief Copies all the inbound particles from the host to the device.

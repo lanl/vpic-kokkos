@@ -267,14 +267,24 @@ void restore_kokkos(vpic_simulation& simulation)
     interp->init_kokkos_interp(nv);
     simulation.KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interp);
 
-    // Restore Grid/Neighbors
+    // Restore Grid/Neighbors/Mesh
     new(&grid->k_neighbor_d) k_neighbor_t();
     new(&grid->k_neighbor_h) k_neighbor_t::HostMirror();
+    new(&grid->k_mesh_d) k_mesh_t();
+    new(&grid->k_mesh_h) k_mesh_t::HostMirror();
 
     auto nfaces_per_voxel = 6;
 
     // also restores the neighbors
     grid->init_kokkos_grid(nfaces_per_voxel*nv);
+
+    // Restore hydro array
+    hydro_array_t * hydro_array = simulation.hydro_array;
+    new(&hydro_array->k_h_d) k_hydro_t();
+    new(&hydro_array->k_h_h) k_hydro_t::HostMirror();
+    new(&hydro_array->k_h_sa) k_hydro_sa_t();
+    hydro_array->init_kokkos_hydro(nv);
+    hydro_array->copy_to_device();
 
 
     /* // All this code tries to recreate the objects and then use then

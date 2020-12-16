@@ -317,9 +317,8 @@ vpic_simulation::dump_particles( const char *sp_name,
     // Center and copy dance.
     // This assumes GPU center+uncenter+copy is faster than a host-side center
     sp->center( interpolator_array );
-    sp->on_device = true;
-    sp->copy_all_to_host();
-    sp->on_device = true;
+    sp->copy_to_host( true );
+    sp->on_device = true; // reset ownership to device.
     sp->uncenter( interpolator_array );
 
     // Write particles.
@@ -327,7 +326,7 @@ vpic_simulation::dump_particles( const char *sp_name,
 
     // Copy uncentered particles back to the host.
     if( !device_owned )
-      sp->copy_all_to_host();
+      sp->copy_to_host();
 
     // Ends uncenterd or nothing on host, uncentered on device.
 

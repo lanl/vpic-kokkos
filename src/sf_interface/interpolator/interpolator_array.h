@@ -108,17 +108,27 @@ public:
     );
   }
 
-/**
- * @brief Load the fields into the interpolator.
- * Going into load_interpolator, the field array f contains the
- * current information such that the fields can be interpolated to
- * particles within the local domain.  Load interpolate computes the
- * field array into a set of interpolation coefficients for each voxel
- * inside the local domain suitable for use by the particle update
- * functions.
- */
-void
-load( const field_array_t * RESTRICT fa );
+  /**
+   * @brief Load the fields into the interpolator.
+   * Going into load_interpolator, the field array f contains the
+   * current information such that the fields can be interpolated to
+   * particles within the local domain.  Load interpolate computes the
+   * field array into a set of interpolation coefficients for each voxel
+   * inside the local domain suitable for use by the particle update
+   * functions.
+   */
+  void
+  load( const field_array_t * RESTRICT fa );
+
+  /**
+   * @brief Copies the interpolator data to the host.
+   */
+  void copy_to_host();
+
+  /**
+   * @brief Copies the interpolator data to the device.
+   */
+  void copy_to_device();
 
 };
 

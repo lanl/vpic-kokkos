@@ -326,6 +326,17 @@ typedef struct field_array {
       delete fb;
   }
 
+  /**
+   * @brief Copies the field data to the host.
+   */
+  void copy_to_host();
+
+  /**
+   * @brief Copies the field data to the device.
+   */
+  void copy_to_device();
+
+
 } field_array_t;
 
 
