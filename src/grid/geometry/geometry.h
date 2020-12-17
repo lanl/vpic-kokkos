@@ -17,7 +17,7 @@ typedef struct field_vectors {
 
 
 #include "cartesian.h"
-
+#include "cylindrical.h"
 
 // TODO: Can we lift this out of an ugly macro and template mess and still get
 // compile-time optimization? I think we need to keep geometry and mesh_type
@@ -25,7 +25,7 @@ typedef struct field_vectors {
 // have to specialize host/device which leads to lots of code duplication. This
 // version avoids this issue.
 //
-// Alternatively, C++14 would help things a lot.
+// Alternatively, C++14 would help things a lot since we could decltype(auto).
 
 template<Geometry geo> struct GeometryClass{ };
 
@@ -34,12 +34,22 @@ template<> struct GeometryClass<Geometry::Cartesian> {
   typedef CartesianGeometry<k_mesh_t::HostMirror> host;
 };
 
+template<> struct GeometryClass<Geometry::Cylindrical> {
+  typedef CylindricalGeometry<k_mesh_t> device;
+  typedef CylindricalGeometry<k_mesh_t::HostMirror> host;
+};
+
 
 // Unsafe macro to help conditionally select geometries.
 #define SELECT_GEOMETRY(VAR, GEONAME, BLOCK)            \
 switch(VAR) {                                           \
   case Geometry::Cartesian : {                          \
     constexpr Geometry GEONAME = Geometry::Cartesian;   \
+    BLOCK;                                              \
+    break;                                              \
+  }                                                     \
+  case Geometry::Cylindrical : {                        \
+    constexpr Geometry GEONAME = Geometry::Cylindrical; \
     BLOCK;                                              \
     break;                                              \
   }                                                     \
