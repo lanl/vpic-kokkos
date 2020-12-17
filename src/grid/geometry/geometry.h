@@ -39,8 +39,19 @@ template<> struct GeometryClass<Geometry::Cylindrical> {
   typedef CylindricalGeometry<k_mesh_t::HostMirror> host;
 };
 
-
-// Unsafe macro to help conditionally select geometries.
+/**
+ * @brief Unsafe macro to help conditionally select geometries.
+ * @param VAR Variable that defines the geometry, see Geometry.
+ * @param GEONAME Geometry name that can be used as a template argument.
+ * @param BLOCK Code block to execute that depends on geometry.
+ *
+ * This macro allows geometry to be templated and different code
+ * paths optimized at compile time, while still allowing runtime
+ * selectability.
+ *
+ * Example:
+ * SELECT_GEOMETRY(grid->geometry, geo, ({ some_templated_method<geo>(); }))
+ */
 #define SELECT_GEOMETRY(VAR, GEONAME, BLOCK)            \
 switch(VAR) {                                           \
   case Geometry::Cartesian : {                          \
