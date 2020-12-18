@@ -22,7 +22,7 @@ advance_p_kokkos(
         interp_t interpolate,
         accum_t accumulate,
         const float qdt_2mc,
-        const float cdt_2,
+        const float cdt,
         const float qsp,
         const int np,
         const int max_nm,
@@ -41,7 +41,8 @@ advance_p_kokkos(
     Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index) {
 
-      float v0, v1, v2, v3, v4, v5, dispx, dispy, dispz;
+      // TODO: Do we need the macro, or can we just use a particle_mover_t?
+      DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
 
       // Load position
       float dx = k_particles(p_index, particle_var::dx);
@@ -63,52 +64,75 @@ advance_p_kokkos(
       borris_rotate_b(qdt_2mc, f, ux, uy, uz);
       borris_advance_e(qdt_2mc, f, ux, uy, uz);
 
-      /**/                                      // Get norm displacement
-      v0   = cdt_2/sqrtf(1.0f + (ux*ux+ (uy*uy + uz*uz)));
-
-      dispx = ux*v0;
-      dispy = uy*v0;
-      dispz = uz*v0;
-
-      geometry.convert_to_logical(ii, dx, dy, dz, dispx, dispy, dispz, ux, uy, uz);
-
-      // Store momentum
+      // Store momentum (locally Cartesian)
       k_particles(p_index, particle_var::ux) = ux;
       k_particles(p_index, particle_var::uy) = uy;
       k_particles(p_index, particle_var::uz) = uz;
 
-      v0   = dx + dispx;                           // Streak midpoint (inbnds)
-      v1   = dy + dispy;
-      v2   = dz + dispz;
+      // Gamma*dt/2
+      float cgam = cdt/sqrtf(1.0f + (ux*ux+ (uy*uy + uz*uz)));
 
-      v3   = v0 + dispx;                           // New position
-      v4   = v1 + dispy;
-      v5   = v2 + dispz;
+      // Half displacement (locally Cartesian)
+      float dispx = ux*cgam;
+      float dispy = uy*cgam;
+      float dispz = uz*cgam;
+
+      // Pre-load mover with Cartesian displacement
+      local_pm->dispx = dispx;
+      local_pm->dispy = dispy;
+      local_pm->dispz = dispz;
+      local_pm->i  = p_index;
+
+      // Compute momentum in the displaced frame
+      // Double precision for better momentum conservation.
+      geometry.template realign_cartesian_vector<double>(
+        ii,
+        dx, dy, dz,
+        dispx, dispy, dispz,
+        ux, uy, uz
+      );
+
+      // Convert displacement from Cartesian to logical
+      geometry.displacement_to_half_logical(
+        ii,
+        dx, dy, dz,
+        dispx, dispy, dispz
+      );
+
+      // Compute new position in logical space
+      float dxmid = dx + dispx;                  // Streak midpoint (inbnds)
+      float dymid = dy + dispy;
+      float dzmid = dz + dispz;
+
+      dx = dxmid + dispx;                        // New position
+      dy = dymid + dispy;
+      dz = dzmid + dispz;
 
       // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
-      if(  v3<=1.0f &&  v4<=1.0f &&  v5<=1.0f &&   // Check if inbnds
-          -v3<=1.0f && -v4<=1.0f && -v5<=1.0f ) {
+      if(  dx<=1.0f &&  dy<=1.0f &&  dz<=1.0f &&   // Check if inbnds
+          -dx<=1.0f && -dy<=1.0f && -dz<=1.0f ) {
 
         // Common case (inbnds).
 
-        // Store new position
-        k_particles(p_index, particle_var::dx) = v3;
-        k_particles(p_index, particle_var::dy) = v4;
-        k_particles(p_index, particle_var::dz) = v5;
+        // Store new position (logical)
+        k_particles(p_index, particle_var::dx) = dx;
+        k_particles(p_index, particle_var::dy) = dy;
+        k_particles(p_index, particle_var::dz) = dz;
+
+        // Store momentum (logical)
+        k_particles(p_index, particle_var::ux) = ux;
+        k_particles(p_index, particle_var::uy) = uy;
+        k_particles(p_index, particle_var::uz) = uz;
 
         // Accumulate current
-        accumulate(ii, q*qsp, v0, v1, v2, dispx, dispy, dispz);
+        accumulate(ii, q*qsp, dxmid, dymid, dzmid, dispx, dispy, dispz);
 
       } else
       {
         // Unlikely
-        DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
-        local_pm->dispx = dispx;
-        local_pm->dispy = dispy;
-        local_pm->dispz = dispz;
-        local_pm->i     = p_index;
 
-        if( move_p_kokkos( k_particles, k_particles_i, local_pm,
+
+        if( move_p_kokkos( geometry, k_particles, k_particles_i, local_pm,
                           accumulate, k_neighbors, rangel, rangeh, qsp ) )
         {
           // Unlikely
@@ -166,7 +190,7 @@ species_t::advance( accumulator_array_t  * RESTRICT aa,
   }
 
   float qdt_2mc = (q*g->dt)/(2*m*g->cvac);
-  float cdt_2   = 0.5*g->cvac*g->dt;
+  float cdt     = g->cvac*g->dt;
 
   KOKKOS_TIC();
 
@@ -185,7 +209,7 @@ species_t::advance( accumulator_array_t  * RESTRICT aa,
         ia->get_device_interpolator<geo>(),
         aa->get_device_accumulator(),
         qdt_2mc,
-        cdt_2,
+        cdt,
         q,
         np,
         max_nm,

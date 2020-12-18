@@ -402,6 +402,7 @@ boundary_p_kokkos(
         // TODO: this relies on serial for now -- maybe bad?
         //sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
         int ret_code = move_p_kokkos(
+                geometry,
                 particle_recv,
                 particle_recv_i,
                 &(pm[nm]),

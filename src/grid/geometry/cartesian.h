@@ -238,22 +238,136 @@ public:
   }
 
   /**
-   * @brief Converts a set of field vectors from logical to Cartesian representation.
-   * @param fields A set of field vectors, logical on input, Cartesian on output
+   * @brief Apply a prescaling to the interpolating fields.
+   * @param voxel Voxel index
+   * @param ex Ex(i, j, k)
+   * @param ex_y Ex(i, j+1, k)
+   * @param ex_z Ex(i, j, k+1)
+   * @param ex_yz Ex(i, j+1, k+1)
+   */
+  const void KOKKOS_INLINE_FUNCTION
+  prescale_interpolated_ex (
+    const int voxel,
+    float& ex, float& ex_y, float& ex_z, float& ex_yz
+  ) const {
+
+  }
+
+  /**
+   * @brief Apply a prescaling to the interpolating fields.
+   * @param voxel Voxel index
+   * @param ey Ey(i, j, k)
+   * @param ey_x Ey(i+1, j, k)
+   * @param ey_z Ey(i, j, k+1)
+   * @param ey_xz Ey(i+1, j, k+1)
+   */
+  const void KOKKOS_INLINE_FUNCTION
+  prescale_interpolated_ey (
+    const int voxel,
+    float& ey, float& ey_x, float& ey_z, float& ey_xz
+  ) const {
+
+  }
+
+  /**
+   * @brief Apply a prescaling to the interpolating fields.
+   * @param voxel Voxel index
+   * @param ez Ez(i, j, k)
+   * @param ez_x Ez(i+1, j, k)
+   * @param ez_y Ez(i, j+1, k)
+   * @param ez_xy Ez(i+1, j+1, k)
+   */
+  const void KOKKOS_INLINE_FUNCTION
+  prescale_interpolated_ez (
+    const int voxel,
+    float& ez, float& ez_x, float& ez_y, float& ez_xy
+  ) const {
+
+  }
+
+  /**
+   * @brief Apply a prescaling to the interpolating fields.
+   * @param voxel Voxel index
+   * @param cbx cBx(i, j, k)
+   * @param cbx_x cBx(i+1, j, k)
+   */
+  const void KOKKOS_INLINE_FUNCTION
+  prescale_interpolated_cbx (
+    const int voxel,
+    float& cbx, float& cbx_x
+  ) const {
+
+  }
+
+  /**
+   * @brief Apply a prescaling to the interpolating fields.
+   * @param voxel Voxel index
+   * @param cby cBy(i, j, k)
+   * @param cby_y cBy(i, j+1, k)
+   */
+  const void KOKKOS_INLINE_FUNCTION
+  prescale_interpolated_cby (
+    const int voxel,
+    float& cby, float& cby_y
+  ) const {
+
+  }
+
+  /**
+   * @brief Apply a prescaling to the interpolating fields.
+   * @param voxel Voxel index
+   * @param cbz cBz(i, j, k)
+   * @param cbz_z cBz(i, j, k+1)
+   */
+  const void KOKKOS_INLINE_FUNCTION
+  prescale_interpolated_cbz (
+    const int voxel,
+    float& cbz, float& cbz_z
+  ) const {
+
+  }
+
+  /**
+   * @brief Apply a postscaling to the interpolated fields.
+   * @param fields A set of field vectors
    * @param voxel Voxel index
    * @param dx0 x-coordinate, logical
    * @param dy0 y-coordinate, logical
    * @param dz0 z-coordinate, logical
    */
   const void KOKKOS_INLINE_FUNCTION
-  transform_interpolated_fields (
+  postscale_interpolated_fields (
     field_vectors_t& fields, int voxel, float dx0, float dy0, float dz0
   ) const {
 
   }
 
   /**
-   * @brief Transforms a particle displacement and momentum from Cartesian to logical coordinates.
+   * @brief Transforms a vector between locally Cartesian frames
+   * @param voxel Voxel index
+   * @param dx0 Starting x-coordinate, logical
+   * @param dy0 Starting y-coordinate, logical
+   * @param dz0 Starting z-coordinate, logical
+   * @param dispx x-displacement, locally Cartesian in inital frame
+   * @param dispy y-displacement, locally Cartesian in inital frame
+   * @param dispz z-displacement, locally Cartesian in inital frame
+   * @param Ax x-component, locally Cartesian in initial frame on input and in displaced frame on output
+   * @param Ay y-component, locally Cartesian in initial frame on input and in displaced frame on output
+   * @param Az z-component, locally Cartesian in initial frame on input and in displaced frame on output
+   */
+  template<class T>
+  void KOKKOS_INLINE_FUNCTION
+  realign_cartesian_vector (
+    const int voxel,
+    const float  dx0,   const float  dy0,   const float  dz0,
+    const float  dispx, const float  dispy, const float  dispz,
+    /**/  float& Ax,    /**/  float& Ay,    /**/  float& Az
+  ) const {
+
+  }
+
+  /**
+   * @brief Transforms a particle displacement from a local Cartesian to logical frames.
    * @param voxel Voxel index
    * @param dx0 Starting x-coordinate, logical
    * @param dy0 Starting y-coordinate, logical
@@ -266,16 +380,52 @@ public:
    * @param uz z-momentum, Cartesian on input, logical on output
    */
   void KOKKOS_INLINE_FUNCTION
-  convert_to_logical (
-    int voxel,
-    float  dx0,   float  dy0,   float  dz0,
-    float& dispx, float& dispy, float& dispz,
-    float& ux,    float& uy,    float& uz
+  displacement_to_half_logical (
+    const int voxel,
+    const float  dx0,   const float  dy0,   const float  dz0,
+    /**/  float& dispx, /**/  float& dispy, /**/  float& dispz
   ) const {
 
-    dispx *= 2*rdx;
-    dispy *= 2*rdy;
-    dispz *= 2*rdz;
+    dispx *= rdx;
+    dispy *= rdy;
+    dispz *= rdz;
+
+  }
+
+  /**
+   * @brief Calculates the age and direction required to hit a boundary
+   * @param voxel Voxel index
+   * @param dx0 Starting x-coordinate, logical
+   * @param dy0 Starting y-coordinate, logical
+   * @param dz0 Starting z-coordinate, logical
+   * @param dispx x-displacement, Cartesian on input, logical on output
+   * @param dispy y-displacement, Cartesian on input, logical on output
+   * @param dispz z-displacement, Cartesian on input, logical on output
+   * @param axis direction towards boundary
+   * @param dir direction of the boundary
+   * @param age age until the particle hits the boundary
+   */
+  void KOKKOS_INLINE_FUNCTION
+  age_to_boundary(
+    const int voxel,
+    const float dx0,   const float dy0,   const float dz0,
+    const float dispx, const float dispy, const float dispz,
+    /**/  int&  axis,  /**/  int&  dir,   /**/  float& age
+  ) const {
+
+    const int xdir = (dispx>0) ? 1 : -1;
+    const int ydir = (dispy>0) ? 1 : -1;
+    const int zdir = (dispz>0) ? 1 : -1;
+
+    const float xage = ( dispx == 0 ) ? 3.4e38 : dx*(xdir - dx0)/dispx;
+    const float yage = ( dispy == 0 ) ? 3.4e38 : dy*(ydir - dy0)/dispy;
+    const float zage = ( dispz == 0 ) ? 3.4e38 : dz*(zdir - dz0)/dispz;
+
+    age = 2; axis = 3;
+    if( zage < age ) { age = zage; axis = 2; dir = zdir; }
+    if( yage < age ) { age = yage; axis = 1; dir = ydir; }
+    if( xage < age ) { age = xage; axis = 0; dir = xdir; }
+    age *= 0.5;
 
   }
 

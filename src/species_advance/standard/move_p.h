@@ -2,6 +2,7 @@
 #define _move_p_kokkos_h_
 
 template<
+  class geo_t,
   class particle_view_t,
   class particle_i_view_t,
   class neighbor_view_t,
@@ -10,6 +11,7 @@ template<
 int
 KOKKOS_INLINE_FUNCTION
 move_p_kokkos(
+  const geo_t& geometry,
   const particle_view_t& k_particles,
   const particle_i_view_t& k_particles_i,
   particle_mover_t* ALIGNED(16)  pm,
@@ -21,69 +23,95 @@ move_p_kokkos(
 )
 {
 
-  float s_midx, s_midy, s_midz;
-  float s_dispx, s_dispy, s_dispz;
-  float s_dir[3];
-  float v0, v1, v2, v3, v4, v5, q;
-  int axis, face;
+  float age;
+  int axis, dir, face;
   int64_t neighbor;
   int pi = pm->i;
 
-  q = qsp*k_particles(pi, particle_var::w);
+  const float q = qsp*k_particles(pi, particle_var::w);
 
   for(;;) {
 
     int ii = k_particles_i(pi);
-    s_midx = k_particles(pi, particle_var::dx);
-    s_midy = k_particles(pi, particle_var::dy);
-    s_midz = k_particles(pi, particle_var::dz);
 
-    s_dispx = pm->dispx;
-    s_dispy = pm->dispy;
-    s_dispz = pm->dispz;
+    // Load initial position (logical)
+    float dx = k_particles(pi, particle_var::dx);
+    float dy = k_particles(pi, particle_var::dy);
+    float dz = k_particles(pi, particle_var::dz);
 
-    s_dir[0] = (s_dispx>0) ? 1 : -1;
-    s_dir[1] = (s_dispy>0) ? 1 : -1;
-    s_dir[2] = (s_dispz>0) ? 1 : -1;
+    // Load initial momentum (logical)
+    float ux = k_particles(pi, particle_var::ux);
+    float uy = k_particles(pi, particle_var::uy);
+    float uz = k_particles(pi, particle_var::uz);
 
-    // Compute the twice the fractional distance to each potential
-    // streak/cell face intersection.
-    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
-    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
-    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
+    // Load remaining displacement (Cartesian)
+    float dispx = pm->dispx;
+    float dispy = pm->dispy;
+    float dispz = pm->dispz;
 
-    // Determine the fractional length and axis of current streak. The
-    // streak ends on either the first face intersected by the
-    // particle track or at the end of the particle track.
-    //
-    //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
-    //   axis 3        ... streak ends at end of the particle track
-    /**/      v3=2,  axis=3;
-    if(v0<v3) v3=v0, axis=0;
-    if(v1<v3) v3=v1, axis=1;
-    if(v2<v3) v3=v2, axis=2;
-    v3 *= 0.5;
+    // Move to a boundary.
+    geometry.age_to_boundary(
+      ii,
+      dx, dy, dz,
+      dispx, dispy, dispz,
+      axis, dir, age
+    );
 
-    // Compute the midpoint and the normalized displacement of the streak
-    s_dispx *= v3;
-    s_dispy *= v3;
-    s_dispz *= v3;
-    s_midx += s_dispx;
-    s_midy += s_dispy;
-    s_midz += s_dispz;
+    // Compute fractional displacement (Cartesian)
+    dispx *= age;
+    dispy *= age;
+    dispz *= age;
+
+    // Update remaining displacement (Cartesian)
+    pm->dispx -= dispx;
+    pm->dispy -= dispy;
+    pm->dispz -= dispz;
+
+    // Compute momentum in the displaced frame
+    // Double precision for better momentum conservation.
+    geometry.template realign_cartesian_vector<double>(
+      ii,
+      dx, dy, dz,
+      dispx, dispy, dispz,
+      ux, uy, uz
+    );
+
+    // Transform remaining displacement
+    geometry.template realign_cartesian_vector<float>(
+      ii,
+      dx, dy, dz,
+      dispx, dispy, dispz,
+      pm->dispx, pm->dispy, pm->dispz
+    );
+
+    // Convert displacement from Cartesian to logical
+    geometry.displacement_to_half_logical(
+      ii,
+      dx, dy, dz,
+      dispx, dispy, dispz
+    );
+
+    // Compute new position in logical space
+    float dxmid = dx + dispx;                  // Streak midpoint (inbnds)
+    float dymid = dy + dispy;
+    float dzmid = dz + dispz;
+
+    dx = dxmid + dispx;                        // New position
+    dy = dymid + dispy;
+    dz = dzmid + dispz;
 
     // Accumulate the streak.
-    accumulate(ii, q, s_midx, s_midy, s_midz, s_dispx, s_dispy, s_dispz);
+    accumulate(ii, q, dxmid, dymid, dzmid, dispx, dispy, dispz);
 
-    // Compute the remaining particle displacment
-    pm->dispx -= s_dispx;
-    pm->dispy -= s_dispy;
-    pm->dispz -= s_dispz;
+    // Store new position (logical)
+    k_particles(pi, particle_var::dx) = dx;
+    k_particles(pi, particle_var::dy) = dy;
+    k_particles(pi, particle_var::dz) = dz;
 
-    // Compute the new particle offset
-    k_particles(pi, particle_var::dx) += s_dispx+s_dispx;
-    k_particles(pi, particle_var::dy) += s_dispy+s_dispy;
-    k_particles(pi, particle_var::dz) += s_dispz+s_dispz;
+    // Store momentum (logical)
+    k_particles(pi, particle_var::ux) = ux;
+    k_particles(pi, particle_var::uy) = uy;
+    k_particles(pi, particle_var::uz) = uz;
 
     // If an end streak, return success (should be ~50% of the time)
 
@@ -96,10 +124,9 @@ move_p_kokkos(
     // entry / exit coordinate for the particle is guaranteed to be
     // +/-1 _exactly_ for the particle.
 
-    v0 = s_dir[axis];
-    k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
-                                                   // _exactly_ on the boundary.
-    face = axis; if( v0>0 ) face += 3;
+    k_particles(pi, particle_var::dx + axis) = dir; // Avoid roundoff fiascos--put the particle
+                                                    // _exactly_ on the boundary.
+    face = axis; if( dir>0 ) face += 3;
 
     // TODO: clean this fixed index to an enum
     //neighbor = g->neighbor[ 6*ii + face ];
@@ -139,7 +166,7 @@ move_p_kokkos(
     // particle coordinate system and keep moving the particle.
 
     k_particles_i(pi) = neighbor - rangel;               // Note: neighbor - rangel < 2^31 / 6
-    k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+    k_particles(pi, particle_var::dx + axis) = -dir;     // Convert coordinate system
 
   }
 

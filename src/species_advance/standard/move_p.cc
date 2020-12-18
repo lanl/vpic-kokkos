@@ -16,7 +16,9 @@ move_p( particle_t          * ALIGNED(128) p0,
 
   SELECT_GEOMETRY(g->geometry, geo, {
 
+    auto geometry = g->get_host_geometry<geo>();
     return move_p_kokkos(
+      geometry,
       pview,
       pview,
       pm,

@@ -46,7 +46,7 @@ public:
     result.cby = interp(voxel, cby) + dy*interp(voxel, dcbydy);
     result.cbz = interp(voxel, cbz) + dz*interp(voxel, dcbzdz);
 
-    geometry.transform_interpolated_fields(result, voxel, dx, dy, dz);
+    geometry.postscale_interpolated_fields(result, voxel, dx, dy, dz);
 
     return result;
 
