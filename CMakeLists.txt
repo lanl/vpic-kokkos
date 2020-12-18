@@ -407,6 +407,13 @@ if(USER_DECKS)
   endforeach()
 endif()
 
+build_a_vpic(vpic-benchmark ${CMAKE_SOURCE_DIR}/sample/bench/advance_p)
+set_target_properties(
+  vpic-benchmark
+  PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
 #------------------------------------------------------------------------------#
 # Add VPIC integrated test mechanism
 #------------------------------------------------------------------------------#

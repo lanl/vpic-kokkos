@@ -12,26 +12,43 @@ begin_globals {
 };
 
 begin_initialization {
-  if( num_cmdline_arguments != 3 ) {
-    sim_log( "Usage: " << cmdline_argument[0] << " local_np n_step" );
+  if( num_cmdline_arguments != 9 ) {
+    sim_log( " VPIC advance_p benchmark" );
+    sim_log( "   Usage: " << cmdline_argument[0] << " np nx ny nz dx dy dz N" );
+    sim_log( "     np : Local number of particles per domain" );
+    sim_log( "     nx : Local number of cells in x " );
+    sim_log( "     ny : Local number of cells in y " );
+    sim_log( "     nz : Local number of cells in z " );
+    sim_log( "     dx : Grid spacing in x (vth/dt) " );
+    sim_log( "     dy : Grid spacing in y (vth/dt) " );
+    sim_log( "     dz : Grid spacing in z (vth/dt) " );
+    sim_log( "     N  : Number of advances to make " );
     abort(0);
   }
 
-  double L = 1e10; // Make cell so large particles will not leave 
-  double local_np = atof(cmdline_argument[1]);
-  double n_step   = atof(cmdline_argument[2]);
+  double np = atof(cmdline_argument[1]);
+  int    nx = atoi(cmdline_argument[2]);
+  int    ny = atoi(cmdline_argument[3]);
+  int    nz = atoi(cmdline_argument[4]);
+  double dx = atof(cmdline_argument[5]);
+  double dy = atof(cmdline_argument[6]);
+  double dz = atof(cmdline_argument[7]);
+  int    N  = atoi(cmdline_argument[8]);
+
+  int P = nproc();
 
   define_units( 1, 1 );
   define_timestep( 1 );
-  define_periodic_grid( 0, 0, 0,         // Grid low corner
-                        L, L, L,         // Grid high corner
-                        nproc(), 1, 1,   // Grid resolution
-                        nproc(), 1, 1 ); // Processor topology
+  define_periodic_grid( 0,       0,     0,        // Grid low corner
+                        P*nx*dx, ny*dz, nz*dz,    // Grid high corner
+                        P*nx,    ny,    nz,       // Grid resolution
+                        P,       1,     1      ); // Processor topology
+
   define_material( "vacuum", 1.0, 1.0, 0.0 );
   define_field_array();
 
-  species_t * sp = define_species( "test_species", 1, 1, local_np, 1, 0, 0 );
-  repeat( local_np )
+  species_t * sp = define_species( "test_species", 1, 1, np, 1, 0, 0 );
+  repeat( np )
     inject_particle( sp,
                      uniform( rng(0), grid->x0, grid->x1 ),
                      uniform( rng(0), grid->y0, grid->y1 ),
@@ -42,14 +59,28 @@ begin_initialization {
                      uniform( rng(0), 0, 1 ),
                      0, 0 );
 
+  set_region_field(everywhere, 0, 0, 0, 0, 0, 0);
+
+  // Kokkos
+  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
+  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
+  interpolator_array->load( field_array );
+
   // Warm up the caches
-  repeat( 3 ) advance_p( sp, accumulator_array, interpolator_array );
+  repeat( 3 ) sp->advance( accumulator_array, interpolator_array );
 
   // Do the benchmark
   double elapsed = wallclock();
-  repeat( n_step ) advance_p( sp, accumulator_array, interpolator_array );
+  repeat( N ) sp->advance( accumulator_array, interpolator_array );
   elapsed = wallclock() - elapsed;
-  sim_log( (double)local_np*(double)nproc()*(double)n_step/elapsed/1e6 );
+
+  double result = (double)np*(double)P*(double)N/elapsed;
+
+  sim_log( "----------------------------------------------" );
+  sim_log( std::scientific  << result << " particle advances / domain / sec " );
+
+  barrier();
   exit(0);
 }
 
