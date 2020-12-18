@@ -72,6 +72,13 @@ if(MPI_CPPFLAGS)
   set(VPIC_CPPFLAGS "${string_cppflags}")
 endif(MPI_CPPFLAGS)
 
+# Append extra implicit includes
+string(REPLACE ";" " -I" string_cppflags "${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES}")
+set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -I${string_cppflags}")
+message(${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+message(${VPIC_CPPFLAGS})
+
+
 string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
 if(NOT ${string_includes} STREQUAL "")
   set(VPIC_CXX_FLAGS "-I${string_includes} ${MPI_C_LINK_FLAGS}")
@@ -187,7 +194,6 @@ endif(BUILD_INTERNAL_KOKKOS)
 get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE_INCLUDE_DIRECTORIES)
 
-message(${KOKKOS_INCLUDE_DIRS})
 # TODO: this gives the external include path
 #get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
 
@@ -430,7 +436,6 @@ if(ENABLE_UNIT_TESTS)
   add_executable(rng src/util/rng/test/rng.cc)
   target_link_libraries(rng vpic Kokkos::kokkos)
   get_target_property(OUT rng LINK_LIBRARIES)
-  message(STATUS OUT ${OUT})
 
   add_test(NAME rng COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ./rng)
 
