@@ -129,7 +129,6 @@ move_p_kokkos(
     face = axis; if( dir>0 ) face += 3;
 
     // TODO: clean this fixed index to an enum
-    //neighbor = g->neighbor[ 6*ii + face ];
     neighbor = d_neighbor( 6*ii + face );
 
     // TODO: these two if statements used to be marked UNLIKELY,
