@@ -1,6 +1,7 @@
 #ifndef _checkpt_h_
 #define _checkpt_h_
 
+#include <string>
 #include "../util_base.h"
 
 /* A checkpt_func_t serializes an object to a checkpt.  It takes a
@@ -109,7 +110,7 @@ reanimate_objects( void );
 
 /*****************************************************************************/
 /* Simple checkpt / restore / reanimate primitives */
-                 
+
 /* Checkpt(restore) n bytes from(to) data. */
 
 void
@@ -244,7 +245,7 @@ restore_ptr( void );
    a verbose warnings to the log to help diagnosing (and repairing)
    any issues caused by checkpointing and restoring various
    edge cases above.
-   
+
    It is okay to checkpoint a NULL symbol (it will be restored as a
    NULL). */
 
@@ -329,5 +330,135 @@ restore_sym( void );
 void
 _cxx_illegal_ptr_copy( void * lv_ref,
                        const void * rv );
+
+/**
+ * @brief Checkpoints the minimal metadata required to restore an empty View.
+ */
+template<class view_type>
+void checkpt_kokkos_view(view_type& view)
+{
+   const int rank = view.rank_dynamic;
+   int n[8] = {0};
+
+   CHECKPT_STR(view.label().c_str());
+   CHECKPT_VAL(int, rank);
+   for(int i=0 ; i < rank ; ++i) {
+      n[i] = view.extent_int(i);
+      CHECKPT_VAL(int, view.extent_int(i));
+   }
+
+};
+
+/**
+ * @brief Checkpoints the contents of a View.
+ */
+template<class view_type>
+void checkpt_kokkos_view_data(view_type& view)
+{
+
+   using T = typename view_type::value_type;
+
+   const size_t size = view.size();
+   const size_t rank = view.rank;
+   /**/  size_t i, j, n[rank] = {0};
+
+   T data;
+
+   for(i = 0 ; i < size ; ++i ) {
+
+      // Load element
+      data = view.access(n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7]);
+
+      // Write.
+      checkpt_raw(&data, sizeof(T));
+
+      // Update index
+      n[0] += 1;
+      for(j = 0 ; j < rank ; ++j)
+         if( n[j] == view.extent(j) ){
+            n[j]    = 0;
+            n[j+1] += 1;
+         }
+
+   }
+
+};
+
+/**
+ * @brief Restores an empty View.
+ */
+template<class view_type>
+void restore_kokkos_view(view_type * view_p)
+{
+   int rank;
+   int n[8];
+   char * clabel;
+
+   RESTORE_STR(clabel);
+   RESTORE_VAL(int, rank);
+   for(int i=0 ; i < rank ; ++i)
+      RESTORE_VAL(int, n[i]);
+
+   // TODO: Can we avoid placement new?
+   std::string label(clabel);
+   switch( rank ){
+      case 0: new(view_p) view_type(label); break;
+      case 1: new(view_p) view_type(label, n[0]); break;
+      case 2: new(view_p) view_type(label, n[0], n[1]); break;
+      case 3: new(view_p) view_type(label, n[0], n[1], n[2]); break;
+      case 4: new(view_p) view_type(label, n[0], n[1], n[2], n[3]); break;
+      case 5: new(view_p) view_type(label, n[0], n[1], n[2], n[3], n[4]); break;
+      case 6: new(view_p) view_type(label, n[0], n[1], n[2], n[3], n[4], n[5]); break;
+      case 7: new(view_p) view_type(label, n[0], n[1], n[2], n[3], n[4], n[5], n[6]); break;
+      case 8: new(view_p) view_type(label, n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7]); break;
+      default:
+         ERROR(("View %s has too many runtime dimensions (%d)", label, rank));
+         break;
+   }
+
+   FREE(clabel);
+
+};
+
+
+/**
+ * @brief Restores the data in a View.
+ */
+template<class view_type>
+void restore_kokkos_view_data(view_type& view)
+{
+
+   using T = typename view_type::value_type;
+
+   const size_t size = view.size();
+   const size_t rank = view.rank;
+   /**/  size_t i, j, n[rank] = {0};
+
+   T data;
+
+   for(i = 0 ; i < size ; ++i ) {
+
+      // Load element
+      restore_raw(&data, sizeof(T));
+
+      // Load element
+      view.access(n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7]) = data;
+
+      // Update index
+      n[0] += 1;
+      for(j = 0 ; j < rank ; ++j)
+         if( n[j] == view.extent(j) ){
+            n[j]    = 0;
+            n[j+1] += 1;
+         }
+
+   }
+
+};
+
+#define CHECKPT_VIEW(v)      checkpt_kokkos_view(v)
+#define CHECKPT_VIEW_DATA(v) checkpt_kokkos_view_data(v)
+#define RESTORE_VIEW(v)      restore_kokkos_view(v)
+#define RESTORE_VIEW_DATA(v) restore_kokkos_view_data(v)
 
 #endif /* _checkpt_h_ */
