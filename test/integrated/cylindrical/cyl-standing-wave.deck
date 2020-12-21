@@ -1,0 +1,148 @@
+#include <iostream>
+#include <fstream>
+#include <iomanip>
+
+#include <math.h>
+
+// Based on a known working version.
+#define ERROR_LIMIT 1e-4
+
+#define FAK field_array->kernel
+#define f(x,y,z)  f [  VOXEL(x,y,z,grid->nx,grid->ny,grid->nz) ]
+
+begin_globals {
+};
+
+begin_initialization {
+
+
+  // Initial parameters.
+  define_units( 1, 1 );
+
+  // Initialize grid.
+  double R0  = 0.01;
+  double Rmax  = 0.5;
+  double Tmin  = -M_PI/4.0;
+  double Tmax  =  M_PI/4.0;
+  int nR = 256;
+  int nT = 1;
+
+  sim_log("Newtons method to find Bessel roots");
+  double xval;
+  int numroots = 12;
+  double xk[numroots];
+  double xkp[numroots];
+  int    newtit;
+
+#define F   j0( R0*xval )*y0( Rmax*xval ) - y0( R0*xval )*j0( Rmax*xval )
+#define Fx  R0*( j0( Rmax*xval )*y1( R0*xval ) - j1( R0*xval )*y0( Rmax*xval ) ) + Rmax*( j1( Rmax*xval )*y0( R0*xval ) - y1( Rmax*xval )*j0( R0*xval ) )
+
+  // Compute initial guesses by marching forward in time with step. Choose step smaller than spacing between roots.
+  double step=0.01;
+  double x1,x2;
+  x2 = R0;   // Start from inner boundary.
+  for (int i=0; i<numroots; i++) {
+    double y1,y2;
+    do {
+      x1 = x2;
+      xval  = x1;
+      y1 = F;
+      x2 = x1+step;
+      xval  = x2;
+      y2 = F;
+    } while(y1*y2 > 0);
+    xkp[i]=0.5*(x1+x2);
+    sim_log("Initial guess=" << xkp[i]);
+  }
+
+  // Refine guesses with Newtons method.
+  for (int i=0; i<numroots; i++) {
+    newtit = 0.;
+    do {
+      newtit += 1;
+      xk[i]  = xkp[i];
+      xval=xk[i];
+      xkp[i] = xk[i] - ((F)/(Fx));
+
+      sim_log("Newton it=" << newtit << ", xk=" << xk[i] << ", xkp=" << xkp[i]);
+
+    } while( fabs(xkp[i]-xk[i]) > 1.0e-12 );
+    sim_log("Converged in " << newtit << ", xk=" << xk[i] << ", xkp=" << xkp[i]);
+  }
+
+  double kr = xkp[4]; // Choose a solution.
+  double preconst = -j0(kr*R0)/y0(kr*R0);
+
+  define_periodic_grid( R0, Tmin, 0,  // Grid low corner
+                        Rmax, Tmax, 1,  // Grid high corner
+                        nR, nT, 1,      // Grid resolution
+                        1, 1, 1 );      // Processor config
+
+  grid->geometry = Geometry::Cylindrical;
+
+  set_domain_field_bc( BOUNDARY(-1,0,0), pec_fields );
+  set_domain_field_bc( BOUNDARY( 1,0,0), pec_fields );
+
+  define_material("vacuum",1.0,1.0,0.0);
+
+  // Initialize field.
+  define_field_array();
+  set_region_field( everywhere,
+                    0, 0, 0.1*(j0(kr*x) + preconst*y0(kr*x)),
+		                0, 0, 0.0);
+
+  define_timestep(0.001);
+
+  grid->copy_to_device();
+  field_array->copy_to_device();
+
+  // Main loop.
+  for ( int istep=0; istep <=100; istep++ ) {
+
+    field_array->copy_to_host();
+    double t = ((double) grid->dt) * (double) istep;
+    sim_log("Time = " << t);
+
+    for(int ix=1; ix<=grid->nx+1; ix++ ) {
+
+      double x = grid->x0 + (ix-1)*((double)grid->x1 - (double)grid->x0)/((double)grid->nx);
+
+      double theory = 0.1*(j0(kr*x) + preconst*y0(kr*x))*cos(kr*t);
+      double err = ((double) field(ix, 1, 1).ez) - theory;
+
+      if( err*err > ERROR_LIMIT*ERROR_LIMIT ) {
+        sim_log("Step : " << istep << ", ix = " << ix << ", err = " << err << " ez = " << field(ix, 1, 1).ez << " (expected " << theory << ")");
+        sim_log("FAIL");
+        abort(1);
+      }
+
+    }
+
+    FAK->advance_b( field_array, 0.5 );
+    FAK->advance_e( field_array, 1.0 );
+    FAK->advance_b( field_array, 0.5 );
+
+  }
+
+  sim_log("PASS");
+  halt_mp();
+  exit(0);
+
+}
+
+begin_diagnostics {
+}
+
+begin_particle_injection {
+}
+
+begin_current_injection {
+}
+
+begin_field_injection {
+}
+
+begin_particle_collisions {
+}
+
+

@@ -1,0 +1,167 @@
+#include <iostream>
+#include <iomanip>
+
+// Test Cyclotron motion in a constant magnetic field - cylindrical geometry
+
+begin_globals {
+};
+
+begin_initialization {
+
+  int ntests = 13;
+
+  // Error limits are based on results from a known and working version.
+  double ERROR_LIMITS[ntests][2] = {
+    {1e-1, 5e-1},
+    {2e-2, 2e-1},
+    {2e-3, 8e-3},
+    {5e-4, 2e-3},
+    {2e-4, 4e-4},
+    {3e-5, 1e-4},
+    {1e-5, 3e-5},
+    {3e-6, 1e-5},
+    {2e-6, 1e-5},
+    {2e-6, 1e-5},
+    {2e-6, 1e-5},
+    {2e-6, 1e-5},
+    {2e-6, 5e-5},
+  };
+
+  // Initial parameters.
+  define_units( 1, 1 );
+
+  // Initialize grid.
+  double Rmin  = 0.01;
+  double Rmax  = 0.5;
+  double Tmin  = -M_PI/4.0;
+  double Tmax  =  M_PI/4.0;
+  int nR = 1;
+  int nT = 1;
+
+  define_periodic_grid( Rmin, Tmin, 0,  // Grid low corner
+                        Rmax, Tmax, 1,  // Grid high corner
+                        nR, nT, 1,      // Grid resolution
+                        1, 1, 1 );      // Processor config
+
+  grid->geometry = Geometry::Cylindrical;
+  grid->copy_to_device();
+
+  define_material("vacuum",1.0,1.0,0.0);
+
+  // Initialize field.
+  define_field_array();
+
+  set_region_field(everywhere,  // Region
+		               0, 0, 0,     // E-field
+		               0, 0, 1);    // B-field
+
+  field_array->copy_to_device();
+  interpolator_array->copy_to_device();
+  interpolator_array->load( field_array );
+
+  // Initialize particles
+  species_t * sp = define_species( "test_species", 1, 1, ntests+1, ntests+1, 0, 0 );
+
+  double rp = 0.05;
+  double uy = 0.05;
+  int norbits = 10;
+
+  inject_particle( sp,
+		               rp,  0, 0,    // Initial position.
+		               0,  uy, 0,    // Initial rel. momenta.
+		               1,  0, 0);    // Weight, old?
+
+  sp->copy_to_device( true ); // Force copy.
+
+  particle_t * p = sp->p;
+
+  int nstep = 2*norbits;
+  bool failed = false;
+  for ( int itest=0; itest<ntests; itest++) {
+
+    double err1 = 0.;
+    double err2 = 0.;
+
+    // Set dt for loop.
+    double dt = 2.0*M_PI*(double)norbits/(double)nstep;
+    define_timestep( dt );
+    sim_log( "Testing orbit. " << nstep << " steps with dt = " << dt );
+
+    sp->copy_to_host( true ); // Force copy.
+
+    // Re-inject particle to start location. Unable to delete old particle.
+    inject_particle( sp,
+    		             rp, 0,  0,    // Initial position.
+    		             0,  uy, 0,    // Initial rel. momenta./
+		                 1,  0,  0);   // Weight, old?
+
+    p++;
+
+    sp->copy_to_device( true ); // Force copy.
+    sp->uncenter( interpolator_array );
+
+    for( int n=0; n<nstep; n++ ) {
+
+      sp->advance( accumulator_array, interpolator_array );
+      sp->copy_to_host( true ); // Force copy.
+
+      double timed = (n+1)*dt;
+      double gamma = sqrt(1.0+uy*uy);
+      double omeg = 1.0/gamma;
+      double vy0  = uy/gamma;
+      double Rd = sqrt( pow((rp + vy0/omeg - vy0*cos(omeg*timed)/omeg),2) + pow((vy0*sin(omeg*timed)/omeg),2) );
+      double thetd = atan2( vy0*sin(omeg*timed), rp*omeg + vy0 - vy0*cos(omeg*timed) );
+
+      // Calculate global positions (in DP to avoid further precision loss).
+      int tmpz = floor((p->i)/((double)((grid->nx+2)*(grid->ny+2))));
+      int tmpy = floor(((p->i)-tmpz*(grid->nx+2)*(grid->ny+2))/((double)(grid->nx+2)));
+      int tmpx = p->i-tmpz*(grid->nx+2)*(grid->ny+2) - tmpy*(grid->nx+2);
+
+      double xg = (0.5*p->dx + tmpx -0.5)*grid->dx + grid->x0;
+      double yg = (0.5*p->dy + tmpy -0.5)*grid->dy + grid->y0;
+      double zg = (0.5*p->dz + tmpz -0.5)*grid->dz + grid->z0;
+
+      err1 = err1 + (Rd-xg)*(Rd-xg);
+      err2 = err2 + (thetd-yg)*(thetd-yg);
+
+    }
+
+    err1 = sqrt(err1/((double)nstep));
+    err2 = sqrt(err2/((double)nstep));
+
+    sim_log("  R     error = " << std::scientific << std::setprecision(3) << err1 );
+    sim_log("  Theta error = " << std::scientific << std::setprecision(3) << err2 );
+
+    bool test_fail = (err1 > ERROR_LIMITS[itest][0]) || (err2 > ERROR_LIMITS[itest][1]);
+    if( test_fail ) {
+      sim_log("  --- FAIL --- ");
+      failed = true;
+    }
+
+    nstep *= 2;
+
+  }
+
+
+  if( failed ) { sim_log( "FAIL" ); abort(1); }
+  sim_log( "PASS" );
+  halt_mp();
+  exit(0);
+}
+
+begin_diagnostics {
+}
+
+begin_particle_injection {
+}
+
+begin_current_injection {
+}
+
+begin_field_injection {
+}
+
+begin_particle_collisions {
+}
+
+
