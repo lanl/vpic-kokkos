@@ -1,0 +1,127 @@
+# Valgrind bug reports leak in dlopen
+
+{
+   dlopen bug
+   Memcheck:Leak
+   ...
+   fun:_dl_open
+   ...
+}
+
+{
+   dlopen bug
+   Memcheck:Leak
+   ...
+   fun:_dl_allocate_tls
+   ...
+}
+
+# Suppress invalid read/write and unaddressable bytes in MPI calls
+
+{
+   MPI-Addr2
+   Memcheck:Addr2
+   ...
+   fun:*MPI_*
+   ...
+}
+
+{
+   MPI-Addr4
+   Memcheck:Addr4
+   ...
+   fun:*MPI_*
+   ...
+}
+
+{
+   MPI-Addr8
+   Memcheck:Addr8
+   ...
+   fun:*MPI_*
+   ...
+}
+
+{
+   MPI-Unaddressable
+   Memcheck:User
+   ...
+   fun:*MPI_*
+   ...
+}
+
+{
+   MPI-Virtual leaks
+   Memcheck:Leak
+   fun:*alloc
+   ...
+   obj:*mpi*
+   ...
+}
+
+# Suppress invalid read/write and unaddressable bytes in OpenMP calls
+
+{
+   OpenMP-Addr2
+   Memcheck:Addr2
+   ...
+   obj:*libgomp*
+   ...
+}
+
+{
+   OpenMP-Addr4
+   Memcheck:Addr4
+   ...
+   obj:*libgomp*
+   ...
+}
+
+{
+   OpenMP-Addr8
+   Memcheck:Addr8
+   ...
+   obj:*libgomp*
+   ...
+}
+
+# Suppress invalid read/write in VPIC
+# TODO: Are these real or spurious due to kokkos?
+
+{
+   VPIC-Addr1
+   Memcheck:Addr1
+   ...
+   fun:main
+}
+
+{
+   VPIC-Addr2
+   Memcheck:Addr2
+   ...
+   fun:main
+}
+
+{
+   VPIC-Addr4
+   Memcheck:Addr4
+   ...
+   fun:main
+}
+
+{
+   VPIC-Addr8
+   Memcheck:Addr8
+   ...
+   fun:main
+}
+
+# In VPIC, checkpointing uninitialized data is okay.
+
+{
+   VPIC Checkpoint Uninitalized
+   Memcheck:Param
+   write(buf)
+   ...
+   fun:*checkpt*
+}

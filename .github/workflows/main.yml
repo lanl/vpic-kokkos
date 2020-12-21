@@ -2,11 +2,11 @@ name: CI
 
 on:
   push:
-    branches: 
+    branches:
       - '**'
   pull_request:
     branches:
-      - '**' 
+      - '**'
 
 jobs:
   build:
@@ -14,7 +14,7 @@ jobs:
 
     steps:
     - name: Install deps
-      run: sudo apt-get install gfortran openmpi-bin libopenmpi-dev
+      run: sudo apt-get install gfortran openmpi-bin libopenmpi-dev valgrind
     - name: Checkout kokkos
       uses: actions/checkout@v2.2.0
       with:

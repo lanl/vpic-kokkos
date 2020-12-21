@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# There are some external memory leaks that can't be suppressed, so set a low
+# threshold here.
+
+export definite_limit=100
+export indirect_limit=100
+export possible_limit=100
+
+$( $@ &> valgrind-memcheck.log )
+
+wait
+
+export definite_loss=`awk '/==[0-9]+== *definitely lost:/{gsub(",",""); print $4}' valgrind-memcheck.log`
+export indirect_loss=`awk '/==[0-9]+== *indirectly lost:/{gsub(",",""); print $4}' valgrind-memcheck.log`
+export possible_loss=`awk '/==[0-9]+== *possibly lost:/{gsub(",",""); print $4}' valgrind-memcheck.log`
+
+export retval=3
+
+if [ "${definite_loss}" -gt "${definite_limit}" ]; then
+    echo "FAIL - Definitly lost ${definite_loss} bytes (limit = ${definite_limit})."
+else
+    echo "PASS - Definitly lost ${definite_loss} bytes (limit = ${definite_limit})."
+    retval=$(( $retval - 1 ))
+fi;
+
+if [ "${indirect_loss}" -gt "${indirect_limit}" ]; then
+    echo "FAIL - Definitly lost ${indirect_loss} bytes (limit = ${indirect_limit})."
+else
+    echo "PASS - Definitly lost ${indirect_loss} bytes (limit = ${indirect_limit})."
+    retval=$(( $retval - 1 ))
+fi;
+
+if [ "${possible_loss}" -gt "${possible_limit}" ]; then
+    echo "FAIL - Definitly lost ${possible_loss} bytes (limit = ${possible_limit})."
+else
+    echo "PASS - Definitly lost ${possible_loss} bytes (limit = ${possible_limit})."
+    retval=$(( $retval - 1 ))
+fi;
+
+exit ${retval}
