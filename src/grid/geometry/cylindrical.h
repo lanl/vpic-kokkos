@@ -538,7 +538,7 @@ public:
       delta = -delta;
 
     if( dispy != 0 && dispy - dispx*delta != 0 )
-      yage = 2.0*r0*delta/(dispy - dispx*delta);
+      yage = 2.0f*r0*delta/(dispy - dispx*delta);
 
     if( yage < 0 )
       yage = 3.4e38;
@@ -568,7 +568,7 @@ public:
     {
 
       delta = -0.5f*(1.0f+dx0)*dx;
-      delta = fminf((2.0*r0 + delta)*delta, 0);
+      delta = fminf((2.0f*r0 + delta)*delta, 0);
       deter = rdr*rdr + dr*delta;
 
       if ( deter >= 0 )
