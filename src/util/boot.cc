@@ -100,5 +100,6 @@ halt_services( void ) {
   thread.halt();
   serial.halt();
   halt_checkpt();
+  Kokkos::finalize();
 }
 

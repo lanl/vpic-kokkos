@@ -18,10 +18,19 @@ aa_n_pipeline(void) {
 }
 
 void
-checkpt_accumulator_array( const accumulator_array_t * aa ) {
+checkpt_accumulator_array( accumulator_array_t * aa ) {
+
+  aa->copy_to_host();
+
   CHECKPT( aa, 1 );
   CHECKPT_ALIGNED( aa->a, (size_t)(aa->n_pipeline+1)*(size_t)aa->stride, 128 );
   CHECKPT_PTR( aa->g );
+
+  CHECKPT_VIEW( aa->k_a_d );
+  CHECKPT_VIEW( aa->k_a_h );
+  CHECKPT_VIEW( aa->k_a_d_copy );
+
+
 }
 
 accumulator_array_t *
@@ -30,6 +39,16 @@ restore_accumulator_array( void ) {
   RESTORE( aa );
   RESTORE_ALIGNED( aa->a );
   RESTORE_PTR( aa->g );
+
+  RESTORE_VIEW( &aa->k_a_d );
+  RESTORE_VIEW( &aa->k_a_h );
+  RESTORE_VIEW( &aa->k_a_d_copy );
+
+  // Scatter access cannot be checkpointed, recreate fresh.
+  new(&aa->k_a_sa) k_accumulators_sa_t(aa->k_a_d);
+
+  aa->copy_to_device();
+
   if( aa->n_pipeline!=aa_n_pipeline() )
     ERROR(( "Number of accumulators restored is not the same as the number of "
             "accumulators checkpointed.  Did you change the number of threads "
@@ -45,15 +64,17 @@ new_accumulator_array( grid_t * g ) {
 
   // TODO: this is likely too big
   //printf("Making %d copies of accumulator \n",aa_n_pipeline()+1 );
-  aa = new accumulator_array_t(
-          //(size_t)(aa->n_pipeline+1)*(size_t)aa->stride,
-          //(size_t)(aa_n_pipeline()+1)*(size_t)(POW2_CEIL(g->nv,2))
-          g->nv
-  );
+  aa = new accumulator_array_t();
+
+  aa->na         = g->nv;
   aa->n_pipeline = aa_n_pipeline();
   aa->stride     = POW2_CEIL(g->nv,2);
   aa->g          = g;
-  //aa->na         = (size_t)(aa->n_pipeline+1)*(size_t)aa->stride;
+  aa->k_a_d      = k_accumulators_t("k_accumulators", aa->na);
+  aa->k_a_d_copy = k_accumulators_t("k_accumulators_copy", aa->na);
+  aa->k_a_h      = Kokkos::create_mirror_view(aa->k_a_d);
+  aa->k_a_sa     = Kokkos::Experimental::create_scatter_view(aa->k_a_d);
+
   MALLOC_ALIGNED( aa->a, aa->na, 128 );
   CLEAR( aa->a, aa->na);
   REGISTER_OBJECT( aa, checkpt_accumulator_array, restore_accumulator_array,
@@ -66,34 +87,9 @@ delete_accumulator_array( accumulator_array_t * aa ) {
   if( !aa ) return;
   UNREGISTER_OBJECT( aa );
   FREE_ALIGNED( aa->a );
-  FREE( aa );
+  delete(aa);
 }
 
-// void
-// accumulator_array_t::reduce()
-// {
-
-//   const k_accumulators_t& k_accum = k_a_d;
-//   auto& k_scatter = k_a_sa;
-
-//   #define VOX(x,y,z) VOXEL(x,y,z, g->nx, g->ny, g->nz)
-//   const int start = (VOX(1,1,1)/2)*2;
-//   const int end = (((VOX(g->nx, g->ny, g->nz) - (VOX(1,1,1)/2)*2 + 1)+1)/2)*2;
-//   #undef VOX
-
-
-//   Kokkos::MDRangePolicy<Kokkos::Rank<3>> accum_policy({0, 0, start}, {4, 3, end});
-//   Kokkos::parallel_for("reduce accumulator", accum_policy,
-//     KOKKOS_LAMBDA(const int i, const int j, const int v) {
-//       auto k_accum_sa = k_scatter.access();
-//       const float next = k_accum(v+1, j, i);
-//       k_accum_sa(v,j,i) += next;
-//   });
-
-//   Kokkos::Experimental::contribute(k_a_d, k_a_sa);
-//   k_a_sa.reset_except(k_a_d);
-
-// }
 
 void
 accumulator_array_t::contribute()

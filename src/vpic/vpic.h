@@ -833,11 +833,4 @@ public:
 
 };
 
-
-/**
- * @brief After a checkpoint restore, we must move the data back over to the
- * Kokkos objects. This currently must be done for all views
- */
-void restore_kokkos(vpic_simulation& simulation);
-
 #endif // vpic_h

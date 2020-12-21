@@ -2,51 +2,109 @@
 #include "field_advance_private.h"
 
 void
+checkpt_field_array_internal( field_array_t * fa ) {
+
+  fa->copy_to_host();
+
+  CHECKPT( fa, 1 );
+  CHECKPT_ALIGNED( fa->f, fa->g->nv, 128 );
+  CHECKPT_PTR( fa->g );
+  CHECKPT_PTR( fa->fb );
+
+  CHECKPT_SYM( fa->kernel->delete_fa                 );
+  CHECKPT_SYM( fa->kernel->advance_b                 );
+  CHECKPT_SYM( fa->kernel->advance_e                 );
+  CHECKPT_SYM( fa->kernel->energy_f                  );
+  CHECKPT_SYM( fa->kernel->clear_jf                  );
+  CHECKPT_SYM( fa->kernel->synchronize_jf            );
+  CHECKPT_SYM( fa->kernel->clear_rhof                );
+  CHECKPT_SYM( fa->kernel->synchronize_rho           );
+  CHECKPT_SYM( fa->kernel->compute_rhob              );
+  CHECKPT_SYM( fa->kernel->compute_curl_b            );
+  CHECKPT_SYM( fa->kernel->synchronize_tang_e_norm_b );
+  CHECKPT_SYM( fa->kernel->compute_div_e_err         );
+  CHECKPT_SYM( fa->kernel->compute_rms_div_e_err     );
+  CHECKPT_SYM( fa->kernel->clean_div_e               );
+  CHECKPT_SYM( fa->kernel->compute_div_b_err         );
+  CHECKPT_SYM( fa->kernel->compute_rms_div_b_err     );
+  CHECKPT_SYM( fa->kernel->clean_div_b               );
+
+  CHECKPT_VIEW( fa->k_f_d );
+  CHECKPT_VIEW( fa->k_f_h );
+  CHECKPT_VIEW( fa->k_fe_h );
+  CHECKPT_VIEW( fa->k_fe_d );
+  CHECKPT_VIEW( fa->k_f_rhob_accum_d );
+  CHECKPT_VIEW( fa->k_f_rhob_accum_h );
+
+}
+
+field_array_t *
+restore_field_array_internal( void * params ) {
+
+  field_array_t * fa;
+  RESTORE( fa );
+
+  RESTORE_ALIGNED( fa->f );
+  RESTORE_PTR( fa->g );
+  RESTORE_PTR( fa->fb );
+  fa->params = params;
+
+  RESTORE_SYM( fa->kernel->delete_fa                 );
+  RESTORE_SYM( fa->kernel->advance_b                 );
+  RESTORE_SYM( fa->kernel->advance_e                 );
+  RESTORE_SYM( fa->kernel->energy_f                  );
+  RESTORE_SYM( fa->kernel->clear_jf                  );
+  RESTORE_SYM( fa->kernel->synchronize_jf            );
+  RESTORE_SYM( fa->kernel->clear_rhof                );
+  RESTORE_SYM( fa->kernel->synchronize_rho           );
+  RESTORE_SYM( fa->kernel->compute_rhob              );
+  RESTORE_SYM( fa->kernel->compute_curl_b            );
+  RESTORE_SYM( fa->kernel->synchronize_tang_e_norm_b );
+  RESTORE_SYM( fa->kernel->compute_div_e_err         );
+  RESTORE_SYM( fa->kernel->compute_rms_div_e_err     );
+  RESTORE_SYM( fa->kernel->clean_div_e               );
+  RESTORE_SYM( fa->kernel->compute_div_b_err         );
+  RESTORE_SYM( fa->kernel->compute_rms_div_b_err     );
+  RESTORE_SYM( fa->kernel->clean_div_b               );
+
+  RESTORE_VIEW( &fa->k_f_d );
+  RESTORE_VIEW( &fa->k_f_h );
+  RESTORE_VIEW( &fa->k_fe_d );
+  RESTORE_VIEW( &fa->k_fe_h );
+  RESTORE_VIEW( &fa->k_f_rhob_accum_d );
+  RESTORE_VIEW( &fa->k_f_rhob_accum_h );
+
+  fa->copy_to_device();
+
+  return fa;
+
+}
+
+field_array::field_array(
+  int n_fields,
+  int xyz_sz,
+  int yzx_sz,
+  int zxy_sz
+)
+{
+
+  k_f_d = k_field_t("k_fields", n_fields);
+  k_fe_d = k_field_edge_t("k_field_edges", n_fields);
+  k_f_h = Kokkos::create_mirror_view(k_f_d);
+  k_fe_h = Kokkos::create_mirror_view(k_fe_d);
+
+  k_f_rhob_accum_d = k_field_accum_t("k_rhob_accum", n_fields);
+  k_f_rhob_accum_h = Kokkos::create_mirror_view(k_f_rhob_accum_d);
+
+  fb = new field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
+
+}
+
+void
 delete_field_array( field_array_t * fa ) {
   if( !fa ) return;
+  delete fa->fb;
   fa->kernel->delete_fa( fa );
-}
-
-void
-checkpt_field_advance_kernels( const field_advance_kernels_t * kernel ) {
-  CHECKPT_SYM( kernel->delete_fa                 );
-  CHECKPT_SYM( kernel->advance_b                 );
-  CHECKPT_SYM( kernel->advance_e                 );
-  CHECKPT_SYM( kernel->energy_f                  );
-  CHECKPT_SYM( kernel->clear_jf                  );
-  CHECKPT_SYM( kernel->synchronize_jf            );
-  CHECKPT_SYM( kernel->clear_rhof                );
-  CHECKPT_SYM( kernel->synchronize_rho           );
-  CHECKPT_SYM( kernel->compute_rhob              );
-  CHECKPT_SYM( kernel->compute_curl_b            );
-  CHECKPT_SYM( kernel->synchronize_tang_e_norm_b );
-  CHECKPT_SYM( kernel->compute_div_e_err         );
-  CHECKPT_SYM( kernel->compute_rms_div_e_err     );
-  CHECKPT_SYM( kernel->clean_div_e               );
-  CHECKPT_SYM( kernel->compute_div_b_err         );
-  CHECKPT_SYM( kernel->compute_rms_div_b_err     );
-  CHECKPT_SYM( kernel->clean_div_b               );
-}
-
-void
-restore_field_advance_kernels( field_advance_kernels_t * kernel ) {
-  RESTORE_SYM( kernel->delete_fa                 );
-  RESTORE_SYM( kernel->advance_b                 );
-  RESTORE_SYM( kernel->advance_e                 );
-  RESTORE_SYM( kernel->energy_f                  );
-  RESTORE_SYM( kernel->clear_jf                  );
-  RESTORE_SYM( kernel->synchronize_jf            );
-  RESTORE_SYM( kernel->clear_rhof                );
-  RESTORE_SYM( kernel->synchronize_rho           );
-  RESTORE_SYM( kernel->compute_rhob              );
-  RESTORE_SYM( kernel->compute_curl_b            );
-  RESTORE_SYM( kernel->synchronize_tang_e_norm_b );
-  RESTORE_SYM( kernel->compute_div_e_err         );
-  RESTORE_SYM( kernel->compute_rms_div_e_err     );
-  RESTORE_SYM( kernel->clean_div_e               );
-  RESTORE_SYM( kernel->compute_div_b_err         );
-  RESTORE_SYM( kernel->compute_rms_div_b_err     );
-  RESTORE_SYM( kernel->clean_div_b               );
 }
 
 void
@@ -142,7 +200,7 @@ field_array_t::copy_to_device() {
 
     });
 
-  Kokkos::deep_copy(k_f_h, k_f_d);
-  Kokkos::deep_copy(k_fe_h, k_fe_d);
+  Kokkos::deep_copy(k_f_d, k_f_h);
+  Kokkos::deep_copy(k_fe_d, k_fe_h);
 
 }

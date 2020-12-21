@@ -84,17 +84,6 @@ public:
   k_interpolator_t k_i_d;
   k_interpolator_t::HostMirror k_i_h;
 
-  interpolator_array_t(int nv)
-  {
-      init_kokkos_interp(nv);
-  }
-
-  void init_kokkos_interp(int nv)
-  {
-    k_i_d = k_interpolator_t("k_interpolators", nv);
-    k_i_h = Kokkos::create_mirror_view(k_i_d);
-  }
-
   /**
    * @brief Get an interpolator object to use on the device.
    */

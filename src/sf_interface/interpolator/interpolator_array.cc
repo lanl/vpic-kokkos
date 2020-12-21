@@ -1,10 +1,17 @@
 #include "interpolator_array.h"
 
 void
-checkpt_interpolator_array( const interpolator_array_t * ia ) {
+checkpt_interpolator_array( interpolator_array_t * ia ) {
+
+  ia->copy_to_host();
+
   CHECKPT( ia, 1 );
   CHECKPT_ALIGNED( ia->i, ia->g->nv, 128 );
   CHECKPT_PTR( ia->g );
+
+  CHECKPT_VIEW( ia->k_i_d );
+  CHECKPT_VIEW( ia->k_i_h );
+
 }
 
 interpolator_array_t *
@@ -13,6 +20,12 @@ restore_interpolator_array( void ) {
   RESTORE( ia );
   RESTORE_ALIGNED( ia->i );
   RESTORE_PTR( ia->g );
+
+  RESTORE_VIEW( &ia->k_i_d );
+  RESTORE_VIEW( &ia->k_i_h );
+
+  ia->copy_to_device();
+
   return ia;
 }
 
@@ -20,8 +33,11 @@ interpolator_array_t *
 new_interpolator_array( grid_t * g ) {
   interpolator_array_t * ia;
   if( !g ) ERROR(( "NULL grid" ));
-  ia = new interpolator_array_t(g->nv);
-  //MALLOC( ia, 1 );
+  ia = new interpolator_array_t();
+
+  ia->k_i_d = k_interpolator_t("k_interpolators", g->nv);
+  ia->k_i_h = Kokkos::create_mirror_view(ia->k_i_d);
+
   MALLOC_ALIGNED( ia->i, g->nv, 128 );
   CLEAR( ia->i, g->nv );
   ia->g = g;
@@ -36,7 +52,6 @@ delete_interpolator_array( interpolator_array_t * ia ) {
   UNREGISTER_OBJECT( ia );
   FREE_ALIGNED( ia->i );
   delete(ia);
-  //FREE( ia );
 }
 
 template<class geo_t> void

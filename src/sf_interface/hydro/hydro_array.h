@@ -107,18 +107,6 @@ public:
   k_hydro_t::HostMirror k_h_h;
   k_hydro_sa_t k_h_sa;
 
-  hydro_array_t(int nv)
-  {
-    init_kokkos_hydro(nv);
-  }
-
-  void init_kokkos_hydro(int nv)
-  {
-    k_h_d = k_hydro_t("k_hydro", nv);
-    k_h_sa = Kokkos::Experimental::create_scatter_view(k_h_d);
-    k_h_h  = Kokkos::create_mirror_view(k_h_d);
-  }
-
   /**
    * @brief Get a hydro accumulator object to use on the device.
    */

@@ -19,15 +19,50 @@ checkpt_species( species_t * sp ) {
 
   CHECKPT( sp, 1 );
   CHECKPT_STR( sp->name );
+
   checkpt_data( sp->p,
                 sp->np    *sizeof(particle_t),
                 sp->max_np*sizeof(particle_t), 1, 1, 128 );
+
   checkpt_data( sp->pm,
                 sp->nm    *sizeof(particle_mover_t),
                 sp->max_nm*sizeof(particle_mover_t), 1, 1, 128 );
+
   CHECKPT_ALIGNED( sp->partition, sp->g->nv+1, 128 );
   CHECKPT_PTR( sp->g );
   CHECKPT_PTR( sp->next );
+
+  CHECKPT_VIEW( sp->k_p_d );
+  CHECKPT_VIEW( sp->k_p_i_d );
+
+  CHECKPT_VIEW( sp->k_p_h );
+  CHECKPT_VIEW( sp->k_p_i_h );
+
+  CHECKPT_VIEW( sp->k_pc_d );
+  CHECKPT_VIEW( sp->k_pc_i_d );
+
+  CHECKPT_VIEW( sp->k_pc_h );
+  CHECKPT_VIEW( sp->k_pc_i_h );
+
+  CHECKPT_VIEW( sp->k_pr_h );
+  CHECKPT_VIEW( sp->k_pr_i_h );
+
+  CHECKPT_VIEW( sp->k_pm_d );
+  CHECKPT_VIEW( sp->k_pm_i_d );
+
+  CHECKPT_VIEW( sp->k_pm_h );
+  CHECKPT_VIEW( sp->k_pm_i_h );
+
+  CHECKPT_VIEW( sp->k_nm_d );
+  CHECKPT_VIEW( sp->k_nm_h );
+
+  CHECKPT_VIEW( sp->unsafe_index );
+  CHECKPT_VIEW( sp->clean_up_to_count );
+  CHECKPT_VIEW( sp->clean_up_from_count );
+  CHECKPT_VIEW( sp->clean_up_from_count_h );
+  CHECKPT_VIEW( sp->clean_up_from );
+  CHECKPT_VIEW( sp->clean_up_to );
+
 }
 
 species_t *
@@ -40,6 +75,40 @@ restore_species( void ) {
   RESTORE_ALIGNED( sp->partition );
   RESTORE_PTR( sp->g );
   RESTORE_PTR( sp->next );
+
+  RESTORE_VIEW( &sp->k_p_d );
+  RESTORE_VIEW( &sp->k_p_i_d );
+
+  RESTORE_VIEW( &sp->k_p_h );
+  RESTORE_VIEW( &sp->k_p_i_h );
+
+  RESTORE_VIEW( &sp->k_pc_d );
+  RESTORE_VIEW( &sp->k_pc_i_d );
+
+  RESTORE_VIEW( &sp->k_pc_h );
+  RESTORE_VIEW( &sp->k_pc_i_h );
+
+  RESTORE_VIEW( &sp->k_pr_h );
+  RESTORE_VIEW( &sp->k_pr_i_h );
+
+  RESTORE_VIEW( &sp->k_pm_d );
+  RESTORE_VIEW( &sp->k_pm_i_d );
+
+  RESTORE_VIEW( &sp->k_pm_h );
+  RESTORE_VIEW( &sp->k_pm_i_h );
+
+  RESTORE_VIEW( &sp->k_nm_d );
+  RESTORE_VIEW( &sp->k_nm_h );
+
+  RESTORE_VIEW( &sp->unsafe_index );
+  RESTORE_VIEW( &sp->clean_up_to_count );
+  RESTORE_VIEW( &sp->clean_up_from_count );
+  RESTORE_VIEW( &sp->clean_up_from_count_h );
+  RESTORE_VIEW( &sp->clean_up_from );
+  RESTORE_VIEW( &sp->clean_up_to );
+
+  sp->copy_to_device();
+
   return sp;
 }
 
@@ -50,7 +119,7 @@ delete_species( species_t * sp ) {
   FREE_ALIGNED( sp->pm );
   FREE_ALIGNED( sp->p );
   FREE( sp->name );
-  FREE( sp );
+  delete(sp);
 }
 
 /* Public interface **********************************************************/
@@ -120,9 +189,35 @@ species( const char * name,
   if( max_local_np<1 ) max_local_np = 1;
   if( max_local_nm<1 ) max_local_nm = 1;
 
-  sp = new species_t(max_local_np, max_local_nm);
-  //MALLOC( sp, 1 );
-  //CLEAR( sp, 1 );
+  sp = new species_t();
+
+  sp->k_p_d = k_particles_t("k_particles", max_local_np);
+  sp->k_p_i_d = k_particles_i_t("k_particles_i", max_local_np);
+  sp->k_pc_d = k_particle_copy_t("k_particle_copy_for_movers", max_local_nm);
+  sp->k_pc_i_d = k_particle_i_copy_t("k_particle_copy_for_movers_i", max_local_nm);
+  sp->k_pr_h = k_particle_copy_t::HostMirror("k_particle_send_for_movers", max_local_nm);
+  sp->k_pr_i_h = k_particle_i_copy_t::HostMirror("k_particle_send_for_movers_i", max_local_nm);
+  sp->k_pm_d = k_particle_movers_t("k_particle_movers", max_local_nm);
+  sp->k_pm_i_d = k_particle_i_movers_t("k_particle_movers_i", max_local_nm);
+  sp->k_nm_d = k_counter_t("k_nm"); // size 1 encoded in type
+  sp->unsafe_index = Kokkos::View<int*>("safe index", 2*max_local_nm);
+  sp->clean_up_to_count = Kokkos::View<int>("clean up to count");
+  sp->clean_up_from_count = Kokkos::View<int>("clean up from count");
+  sp->clean_up_from = Kokkos::View<int*>("clean up from", max_local_nm);
+  sp->clean_up_to = Kokkos::View<int*>("clean up to", max_local_nm);
+
+  sp->k_p_h = Kokkos::create_mirror_view(sp->k_p_d);
+  sp->k_p_i_h = Kokkos::create_mirror_view(sp->k_p_i_d);
+
+  sp->k_pc_h = Kokkos::create_mirror_view(sp->k_pc_d);
+  sp->k_pc_i_h = Kokkos::create_mirror_view(sp->k_pc_i_d);
+
+  sp->k_pm_h = Kokkos::create_mirror_view(sp->k_pm_d);
+  sp->k_pm_i_h = Kokkos::create_mirror_view(sp->k_pm_i_d);
+
+  sp->k_nm_h = Kokkos::create_mirror_view(sp->k_nm_d);
+
+  sp->clean_up_from_count_h = Kokkos::create_mirror_view(sp->clean_up_from_count);
 
   MALLOC( sp->name, len+1 );
   strcpy( sp->name, name );

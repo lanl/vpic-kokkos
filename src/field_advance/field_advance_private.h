@@ -7,14 +7,10 @@
 
 #include "field_advance.h"
 
-/* Checkpoint the symbols for the given field advance kernel */
-
 void
-checkpt_field_advance_kernels( const field_advance_kernels_t * kernel );
+checkpt_field_array_internal( field_array_t * fa );
 
-/* Checkpoint the symbols for the given field advance kernel */
-
-void
-restore_field_advance_kernels( field_advance_kernels_t * kernel );
+field_array_t *
+restore_field_array_internal( void * params );
 
 #endif // _field_advance_private_h_

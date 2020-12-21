@@ -20,6 +20,31 @@ public:
   constexpr material_id operator() (int, int) const { return 0; }
 };
 
+typedef struct material_coefficient {
+  float decayx, drivex;         // Decay of ex and drive of (curl H)x and Jx
+  float decayy, drivey;         // Decay of ey and drive of (curl H)y and Jy
+  float decayz, drivez;         // Decay of ez and drive of (curl H)z and Jz
+  float rmux, rmuy, rmuz;       // Reciprocle of relative permeability
+  float nonconductive;          // Divergence cleaning related coefficients
+  float epsx, epsy, epsz;
+  float pad[3];                 // For 64-byte alignment and future expansion
+} material_coefficient_t;
+
+typedef struct sfa_params {
+  // TODO: Remove mc in favor of pure kokkos
+  material_coefficient_t * mc;
+  int n_mc;
+  float damp;
+
+  k_material_coefficient_t k_mc_d;
+  k_material_coefficient_t::HostMirror k_mc_h;
+
+  void copy_to_host();
+  void copy_to_device();
+
+} sfa_params_t;
+
+
 // In standard_field_advance.c
 
 void
@@ -70,17 +95,6 @@ void
 advance_e( field_array_t * RESTRICT fa,
            float                    frac );
 
-void
-advance_e_kokkos( field_array_t * RESTRICT fa,
-           float                    frac );
-
-void
-vacuum_advance_e( field_array_t * RESTRICT fa,
-                  float                    frac );
-
-void
-vacuum_advance_e_kokkos( field_array_t * RESTRICT fa,
-                  float                    frac );
 
 // In energy_f.c
 
@@ -101,17 +115,6 @@ void
 energy_f( /**/  double        * RESTRICT en, // 6 elem array
           const field_array_t * RESTRICT fa );
 
-void
-vacuum_energy_f( /**/  double        * RESTRICT en, // 6 elem array
-                 const field_array_t * RESTRICT fa );
-
-void
-energy_f_kokkos( /**/  double        * RESTRICT en, // 6 elem array
-          const field_array_t * RESTRICT fa );
-
-void
-vacuum_energy_f_kokkos( /**/  double        * RESTRICT en, // 6 elem array
-                 const field_array_t * RESTRICT fa );
 
 // In compute_curl_b.c
 
@@ -125,9 +128,6 @@ vacuum_energy_f_kokkos( /**/  double        * RESTRICT en, // 6 elem array
 
 void
 compute_curl_b( field_array_t * RESTRICT fa );
-
-void
-vacuum_compute_curl_b( field_array_t * RESTRICT fa );
 
 // The theory behind the Marder correction is that the Ampere and
 // Faraday equations can be modified as follows:
@@ -254,9 +254,6 @@ vacuum_compute_curl_b( field_array_t * RESTRICT fa );
 void
 compute_rhob( field_array_t * RESTRICT fa );
 
-void
-vacuum_compute_rhob( field_array_t * RESTRICT fa );
-
 // In compute_div_e_err.c
 
 // compute_div_e_err applies the following difference equation:
@@ -268,14 +265,6 @@ vacuum_compute_rhob( field_array_t * RESTRICT fa );
 
 void
 compute_div_e_err( field_array_t * RESTRICT fa );
-void
-compute_div_e_err_kokkos( field_array_t * RESTRICT fa );
-
-void
-vacuum_compute_div_e_err( field_array_t * RESTRICT fa );
-
-void
-vacuum_compute_div_e_err_kokkos( field_array_t * RESTRICT fa );
 
 // In compute_rms_div_e_err.c
 
@@ -289,9 +278,6 @@ vacuum_compute_div_e_err_kokkos( field_array_t * RESTRICT fa );
 double
 compute_rms_div_e_err( const field_array_t * RESTRICT fa );
 
-double
-compute_rms_div_e_err_kokkos( const field_array_t * RESTRICT fa );
-
 // In clean_div_e.c
 
 // clean_div_e applies the following difference equation:
@@ -304,15 +290,6 @@ compute_rms_div_e_err_kokkos( const field_array_t * RESTRICT fa );
 void
 clean_div_e( field_array_t * RESTRICT fa );
 
-void
-clean_div_e_kokkos( field_array_t * RESTRICT fa );
-
-void
-vacuum_clean_div_e( field_array_t * RESTRICT fa );
-
-void
-vacuum_clean_div_e_kokkos( field_array_t * RESTRICT fa );
-
 // In compute_div_b_err.c
 
 // compute_div_b_err applies the following difference equation:
@@ -320,9 +297,6 @@ vacuum_clean_div_e_kokkos( field_array_t * RESTRICT fa );
 
 void
 compute_div_b_err( field_array_t * RESTRICT fa );
-
-void
-compute_div_b_err_kokkos( field_array_t * RESTRICT fa );
 
 // In compute_rms_div_b_err.c
 
@@ -337,8 +311,6 @@ compute_div_b_err_kokkos( field_array_t * RESTRICT fa );
 double
 compute_rms_div_b_err( const field_array_t * RESTRICT fa );
 
-double
-compute_rms_div_b_err_kokkos( const field_array_t * RESTRICT fa );
 
 // In clean_div_b.c
 
@@ -348,9 +320,6 @@ compute_rms_div_b_err_kokkos( const field_array_t * RESTRICT fa );
 
 void
 clean_div_b( field_array_t * RESTRICT fa );
-
-void
-clean_div_b_kokkos( field_array_t * RESTRICT fa );
 
 // Internode functions
 

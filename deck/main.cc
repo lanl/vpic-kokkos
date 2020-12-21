@@ -108,8 +108,6 @@ int main(int argc, char** argv)
         reanimate_objects();
         mp_barrier();
 
-        restore_kokkos(*simulation);
-
     }
     else // We are initializing from scratch.
     {

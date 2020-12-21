@@ -51,6 +51,62 @@ minf( float a,
   return a<b ? a : b;
 }
 
+void
+sfa_params::copy_to_device() {
+
+  // Avoid capturing this
+  auto kmc = k_mc_h;
+
+  Kokkos::parallel_for("Copy material coefficients to device",
+    Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, n_mc),
+    KOKKOS_LAMBDA (const int i) {
+      kmc(i, material_coeff_var::decayx) = mc[i].decayx;
+      kmc(i, material_coeff_var::drivex) = mc[i].drivex;
+      kmc(i, material_coeff_var::decayy) = mc[i].decayy;
+      kmc(i, material_coeff_var::drivey) = mc[i].drivey;
+      kmc(i, material_coeff_var::decayz) = mc[i].decayz;
+      kmc(i, material_coeff_var::drivez) = mc[i].drivez;
+      kmc(i, material_coeff_var::rmux) = mc[i].rmux;
+      kmc(i, material_coeff_var::rmuy) = mc[i].rmuy;
+      kmc(i, material_coeff_var::rmuz) = mc[i].rmuz;
+      kmc(i, material_coeff_var::nonconductive) = mc[i].nonconductive;
+      kmc(i, material_coeff_var::epsx) = mc[i].epsx;
+      kmc(i, material_coeff_var::epsy) = mc[i].epsy;
+      kmc(i, material_coeff_var::epsz) = mc[i].epsz;
+    });
+
+  Kokkos::deep_copy(k_mc_d, k_mc_h);
+
+}
+
+void
+sfa_params::copy_to_host() {
+
+  Kokkos::deep_copy(k_mc_h, k_mc_d);
+
+  // Avoid capturing this
+  auto kmc = k_mc_h;
+
+  Kokkos::parallel_for("Copy material coefficients to host",
+    Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, n_mc),
+    KOKKOS_LAMBDA (const int i) {
+      mc[i].decayx = kmc(i, material_coeff_var::decayx);
+      mc[i].drivex = kmc(i, material_coeff_var::drivex);
+      mc[i].decayy = kmc(i, material_coeff_var::decayy);
+      mc[i].drivey = kmc(i, material_coeff_var::drivey);
+      mc[i].decayz = kmc(i, material_coeff_var::decayz);
+      mc[i].drivez = kmc(i, material_coeff_var::drivez);
+      mc[i].rmux = kmc(i, material_coeff_var::rmux);
+      mc[i].rmuy = kmc(i, material_coeff_var::rmuy);
+      mc[i].rmuz = kmc(i, material_coeff_var::rmuz);
+      mc[i].nonconductive = kmc(i, material_coeff_var::nonconductive);
+      mc[i].epsx = kmc(i, material_coeff_var::epsx);
+      mc[i].epsy = kmc(i, material_coeff_var::epsy);
+      mc[i].epsz = kmc(i, material_coeff_var::epsz);
+    });
+
+}
+
 static sfa_params_t *
 create_sfa_params( grid_t           * g,
                    const material_t * m_list,
@@ -97,10 +153,11 @@ create_sfa_params( grid_t           * g,
   }
 
   // Allocate the sfa parameters
+  p = new sfa_params_t();
 
-    p = new sfa_params_t(n_mc);
-//  MALLOC( p, 1 );
-  MALLOC_ALIGNED( p->mc, n_mc+2, 128 );
+  MALLOC_ALIGNED( p->mc, n_mc, 128 );
+  p->k_mc_d = k_material_coefficient_t("k_mc_d", n_mc);
+  p->k_mc_h = Kokkos::create_mirror_view(p->k_mc_d);
   p->n_mc = n_mc;
   p->damp = damp;
 
@@ -146,7 +203,7 @@ create_sfa_params( grid_t           * g,
     mc->epsz = m->epsz;
   }
 
-  p->populate_kokkos_data();
+  p->copy_to_device();
 
   return p;
 }
@@ -154,38 +211,34 @@ create_sfa_params( grid_t           * g,
 void
 destroy_sfa_params( sfa_params_t * p ) {
   FREE_ALIGNED( p->mc );
-  FREE( p );
+  delete(p);
 }
 
 /*****************************************************************************/
 
 void
-checkpt_standard_field_array( const field_array_t * fa ) {
+checkpt_standard_field_array( field_array_t * fa ) {
   sfa_params_t * p = (sfa_params_t *)fa->params;
-  CHECKPT( fa, 1 );
-  CHECKPT_ALIGNED( fa->f, fa->g->nv, 128 );
-  CHECKPT_PTR( fa->g );
+  p->copy_to_host();
+
   CHECKPT( p, 1 );
   CHECKPT_ALIGNED( p->mc, p->n_mc, 128 );
-  checkpt_field_advance_kernels( fa->kernel );
-}
+  CHECKPT_VIEW( p->k_mc_d );
+  CHECKPT_VIEW( p->k_mc_h );
 
-// FIXME: Use same new/delete/checkpt/restore structure as found in emitter
-// and boundary(e.g. restore_field_advance_kernels =>
-// return field_array_internal( params )).
+  checkpt_field_array_internal( fa );
+}
 
 field_array_t *
 restore_standard_field_array( void ) {
-  field_array_t * fa;
   sfa_params_t * p;
-  RESTORE( fa );
-  RESTORE_ALIGNED( fa->f );
-  RESTORE_PTR( fa->g );
   RESTORE( p );
   RESTORE_ALIGNED( p->mc );
-  fa->params = p;
-  restore_field_advance_kernels( fa->kernel );
-  return fa;
+  RESTORE_VIEW( &p->k_mc_d );
+  RESTORE_VIEW( &p->k_mc_h );
+
+  p->copy_to_device();
+  return restore_field_array_internal( (void*) p);
 }
 
 field_array_t *
@@ -229,7 +282,6 @@ delete_standard_field_array( field_array_t * fa ) {
   UNREGISTER_OBJECT( fa );
   destroy_sfa_params( (sfa_params_t *)fa->params );
   FREE_ALIGNED( fa->f );
-  //FREE( fa );
   delete(fa);
 }
 

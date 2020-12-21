@@ -14,10 +14,17 @@
    API, they must not be declared as static. */
 
 void
-checkpt_hydro_array( const hydro_array_t * ha ) {
+checkpt_hydro_array( hydro_array_t * ha ) {
+
+  ha->copy_to_host();
+
   CHECKPT( ha, 1 );
   CHECKPT_ALIGNED( ha->h, ha->g->nv, 128 );
   CHECKPT_PTR( ha->g );
+
+  CHECKPT_VIEW( ha->k_h_d );
+  CHECKPT_VIEW( ha->k_h_h );
+
 }
 
 hydro_array_t *
@@ -26,14 +33,28 @@ restore_hydro_array( void ) {
   RESTORE( ha );
   RESTORE_ALIGNED( ha->h );
   RESTORE_PTR( ha->g );
+
+  RESTORE_VIEW( &ha->k_h_d );
+  RESTORE_VIEW( &ha->k_h_h );
+
+  // Scatter access cannot be checkpointed. Recreate new.
+  new(&ha->k_h_sa) k_hydro_sa_t(ha->k_h_d);
+
+  ha->copy_to_device();
+
   return ha;
 }
 
 hydro_array_t *
 new_hydro_array( grid_t * g ) {
   if( !g ) ERROR(( "NULL grid" ));
-  hydro_array_t *ha = new hydro_array_t(g->nv);
-  ha->g = g;
+  hydro_array_t *ha = new hydro_array_t();
+
+  ha->g      = g;
+  ha->k_h_d  = k_hydro_t("k_hydro", g->nv);
+  ha->k_h_sa = Kokkos::Experimental::create_scatter_view(ha->k_h_d);
+  ha->k_h_h  = Kokkos::create_mirror_view(ha->k_h_d);
+
   MALLOC_ALIGNED( ha->h, g->nv, 128 );
   CLEAR( ha->h, g->nv );
   REGISTER_OBJECT( ha, checkpt_hydro_array, restore_hydro_array, NULL );
@@ -45,7 +66,7 @@ delete_hydro_array( hydro_array_t * ha ) {
   if( !ha ) return;
   UNREGISTER_OBJECT( ha );
   FREE_ALIGNED( ha->h );
-  FREE( ha );
+  delete(ha);
 }
 
 void

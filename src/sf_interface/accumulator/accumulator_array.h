@@ -134,22 +134,6 @@ public:
   //k_accumulators_sah_t k_a_sah;
   k_accumulators_t k_a_d_copy;
 
-  accumulator_array_t(int _na)
-  {
-      init_kokoks_accum(_na);
-  }
-
-  void init_kokoks_accum(int _na)
-  {
-      na = _na;
-
-      k_a_d = k_accumulators_t("k_accumulators", _na);
-      k_a_d_copy = k_accumulators_t("k_accumulators_copy", _na);
-      k_a_sa = Kokkos::Experimental::create_scatter_view(k_a_d);
-      k_a_h  = Kokkos::create_mirror_view(k_a_d);
-  }
-
-
   /**
    * @brief Get an Accumulator object to use on the device.
    */
