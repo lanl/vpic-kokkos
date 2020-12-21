@@ -118,13 +118,6 @@ typedef struct grid {
                           // voxels owned by processor "rank".  Note:
                           // range[rank+1]-range[rank] <~ 2^31 / 6
 
-  int64_t * ALIGNED(128) neighbor;
-                          // (0:5,0:local_num_voxel-1) FORTRAN indexed
-                          // array neighbor(0:5,lidx) are the global
-                          // indexes of neighboring voxels of the
-                          // voxel with local index "lidx".  Negative
-                          // if neighbor is a boundary condition.
-
   int64_t rangel, rangeh; // Redundant for move_p performance reasons:
                           //   rangel = range[rank]
                           //   rangeh = range[rank+1]-1.
@@ -143,10 +136,14 @@ typedef struct grid {
   k_neighbor_t::HostMirror k_neighbor_h;    // kokkos neighbor view on host
 
   /**
-   * @brief Initalize the grid on the device.
-   *  We want to call this *only* once the neighbor array is complete.
+   * @brief Copy the grid to the device.
    */
-  void init_kokkos_grid(int num_neighbor);
+  void copy_to_device();
+
+  /**
+   * @brief Copy the grid to the host.
+   */
+  void copy_to_host();
 
   /**
    * @brief Get geometric operations for use on the device.

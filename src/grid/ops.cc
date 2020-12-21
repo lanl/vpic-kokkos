@@ -53,70 +53,42 @@ size_grid( grid_t * g,
   g->rangel = g->range[world_rank];
   g->rangeh = g->range[world_rank+1]-1;
 
-  FREE_ALIGNED( g->neighbor );
-  MALLOC_ALIGNED( g->neighbor, 6*g->nv, 128 );
+  g->k_neighbor_d = k_neighbor_t("k_neighbor_d", 6*g->nv);
+  g->k_neighbor_h = Kokkos::create_mirror_view(g->k_neighbor_d);
+
+  auto& neighbor = g->k_neighbor_h;
 
   for( z=0; z<=lnz+1; z++ ) {
     for( y=0; y<=lny+1; y++ ) {
       for( x=0; x<=lnx+1; x++ ) {
         i = 6*LOCAL_CELL_ID(x,y,z);
-        g->neighbor[i+0] = g->rangel + LOCAL_CELL_ID(x-1,y,z);
-        g->neighbor[i+1] = g->rangel + LOCAL_CELL_ID(x,y-1,z);
-        g->neighbor[i+2] = g->rangel + LOCAL_CELL_ID(x,y,z-1);
-        g->neighbor[i+3] = g->rangel + LOCAL_CELL_ID(x+1,y,z);
-        g->neighbor[i+4] = g->rangel + LOCAL_CELL_ID(x,y+1,z);
-        g->neighbor[i+5] = g->rangel + LOCAL_CELL_ID(x,y,z+1);
+        neighbor(i+0) = g->rangel + LOCAL_CELL_ID(x-1,y,z);
+        neighbor(i+1) = g->rangel + LOCAL_CELL_ID(x,y-1,z);
+        neighbor(i+2) = g->rangel + LOCAL_CELL_ID(x,y,z-1);
+        neighbor(i+3) = g->rangel + LOCAL_CELL_ID(x+1,y,z);
+        neighbor(i+4) = g->rangel + LOCAL_CELL_ID(x,y+1,z);
+        neighbor(i+5) = g->rangel + LOCAL_CELL_ID(x,y,z+1);
         // Set boundary faces appropriately
-        if( x==1   ) g->neighbor[i+0] = reflect_particles;
-        if( y==1   ) g->neighbor[i+1] = reflect_particles;
-        if( z==1   ) g->neighbor[i+2] = reflect_particles;
-        if( x==lnx ) g->neighbor[i+3] = reflect_particles;
-        if( y==lny ) g->neighbor[i+4] = reflect_particles;
-        if( z==lnz ) g->neighbor[i+5] = reflect_particles;
+        if( x==1   ) neighbor(i+0) = reflect_particles;
+        if( y==1   ) neighbor(i+1) = reflect_particles;
+        if( z==1   ) neighbor(i+2) = reflect_particles;
+        if( x==lnx ) neighbor(i+3) = reflect_particles;
+        if( y==lny ) neighbor(i+4) = reflect_particles;
+        if( z==lnz ) neighbor(i+5) = reflect_particles;
         // Set ghost cells appropriately
         if( x==0 || x==lnx+1 ||
             y==0 || y==lny+1 ||
             z==0 || z==lnz+1 ) {
-          g->neighbor[i+0] = reflect_particles;
-          g->neighbor[i+1] = reflect_particles;
-          g->neighbor[i+2] = reflect_particles;
-          g->neighbor[i+3] = reflect_particles;
-          g->neighbor[i+4] = reflect_particles;
-          g->neighbor[i+5] = reflect_particles;
+          neighbor(i+0) = reflect_particles;
+          neighbor(i+1) = reflect_particles;
+          neighbor(i+2) = reflect_particles;
+          neighbor(i+3) = reflect_particles;
+          neighbor(i+4) = reflect_particles;
+          neighbor(i+5) = reflect_particles;
         }
       }
     }
   }
-
-
-# if 0
-  // Setup the space filling curve
-  // FIXME: THIS IS A CRUDE HACK UNTIL A GOOD SFC CAN BE WRITTEN
-  // CURRENT SFC IS GOOD FOR THREADING WITH POWER-OF-TWO NUMBER OF THREADS.
-  // UP TO AND INCLUDING 8 THREADS.
-
-  FREE_ALIGNED( g->sfc );
-  MALLOC_ALIGNED( g->sfc, g->nv, 128 );
-
-  do {
-    int off;
-    int ox, oy, oz;
-    int nx, ny, nz;
-    int nx1 = (lnx+2)/2,   ny1 = (lny+2)/2,   nz1 = (lnz+2)/2;
-    int nx0 = (lnx+2)-nx1, ny0 = (lny+2)-ny1, nz0 = (lnz+2)-nz1;
-
-    for( z=0; z<=lnz+1; z++ )
-      for( y=0; y<=lny+1; y++ )
-        for( x=0; x<=lnx+1; x++ ) {
-          i = LOCAL_CELL_ID(x,y,z);
-          off = 0;
-          ox=x; nx=nx0; if(ox>=nx) ox-=nx, off+=nx,                 nx=nx1;
-          oy=y; ny=ny0; if(oy>=ny) oy-=ny, off+=ny*(lnx+2),         ny=ny1;
-          oz=z; nz=nz0; if(oz>=nz) oz-=nz, off+=nz*(lnx+2)*(lny+2), nz=nz1;
-          g->sfc[i] = off + ox + nx*( oy + ny*oz );
-        }
-  } while(0);
-# endif
 }
 
 void
@@ -150,7 +122,7 @@ join_grid( grid_t * g,
           r##X = (i+j+k)<0 ? rn##X : 1;                         \
           r##Y = l##Y;                                          \
           r##Z = l##Z;                                          \
-          g->neighbor[ 6*LOCAL_CELL_ID(lx,ly,lz) + tag ] =      \
+          g->k_neighbor_h( 6*LOCAL_CELL_ID(lx,ly,lz) + tag ) =  \
             g->range[rank] + REMOTE_CELL_ID(rx,ry,rz);          \
         }                                                       \
       }                                                         \
@@ -194,14 +166,14 @@ set_pbc( grid_t * g,
   lny = g->ny;
   lnz = g->nz;
 
-# define SET_PBC(tag,i,j,k,X,Y,Z) BEGIN_PRIMITIVE {             \
-    if( boundary==BOUNDARY(i,j,k) ) {                           \
-      l##X = (i+j+k)<0 ? 1 : ln##X;                             \
-      for( l##Z=1; l##Z<=ln##Z; l##Z++ )                        \
-        for( l##Y=1; l##Y<=ln##Y; l##Y++ )                      \
-          g->neighbor[ 6*LOCAL_CELL_ID(lx,ly,lz) + tag ] = pbc; \
-      return;                                                   \
-    }                                                           \
+# define SET_PBC(tag,i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                 \
+    if( boundary==BOUNDARY(i,j,k) ) {                               \
+      l##X = (i+j+k)<0 ? 1 : ln##X;                                 \
+      for( l##Z=1; l##Z<=ln##Z; l##Z++ )                            \
+        for( l##Y=1; l##Y<=ln##Y; l##Y++ )                          \
+          g->k_neighbor_h( 6*LOCAL_CELL_ID(lx,ly,lz) + tag ) = pbc; \
+      return;                                                       \
+    }                                                               \
   } END_PRIMITIVE
 
   SET_PBC(0,-1, 0, 0,x,y,z);

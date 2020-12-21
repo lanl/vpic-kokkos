@@ -143,9 +143,9 @@ vpic_simulation::user_particle_collisions( void )
     const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;         \
     const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;         \
     const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;         \
-    int64_t * _n0 = grid->neighbor;                                      \
+    auto& _neighbor = grid->k_neighbor_h;                                \
     for( int _k=1; _k<_nz+1; _k++ ) { const double _zn = _z0 + _dz*(_k-1), _zh = _z0 + _dz*_k; \
-    for( int _j=1; _j<_ny+1; _j++ ) { const double _yn = _y0 + _dy*(_j-1), _yh = _y0 + _dy*_j; int64_t * _n = _n0 + 6*voxel(1,_j,_k); \
+    for( int _j=1; _j<_ny+1; _j++ ) { const double _yn = _y0 + _dy*(_j-1), _yh = _y0 + _dy*_j; size_t _n = 6*voxel(1,_j,_k); \
     for( int _i=1; _i<_nx+1; _i++ ) { const double _xn = _x0 + _dx*(_i-1), _xh = _x0 + _dx*_i; double x, y, z; \
           int _r000, _r100, _r010, _r110, _r001, _r101, _r011, _r111;    \
           x = _xn; y = _yn; z = _zn; _r000 = (rgn);                      \
@@ -157,20 +157,20 @@ vpic_simulation::user_particle_collisions( void )
           x = _xn; y = _yh;          _r011 = (rgn);                      \
           x = _xh;                   _r111 = (rgn);                      \
           if( _epbc ) {                                                  \
-            if( _r000 || _r010 || _r001 || _r011 ) _n[0] = _epbc;        \
-            if( _r000 || _r001 || _r100 || _r101 ) _n[1] = _epbc;        \
-            if( _r000 || _r100 || _r010 || _r110 ) _n[2] = _epbc;        \
-            if( _r100 || _r110 || _r101 || _r111 ) _n[3] = _epbc;        \
-            if( _r010 || _r011 || _r110 || _r111 ) _n[4] = _epbc;        \
-            if( _r001 || _r101 || _r011 || _r111 ) _n[5] = _epbc;        \
+            if( _r000 || _r010 || _r001 || _r011 ) _neighbor(_n + 0) = _epbc;  \
+            if( _r000 || _r001 || _r100 || _r101 ) _neighbor(_n + 1) = _epbc;  \
+            if( _r000 || _r100 || _r010 || _r110 ) _neighbor(_n + 2) = _epbc;  \
+            if( _r100 || _r110 || _r101 || _r111 ) _neighbor(_n + 3) = _epbc;  \
+            if( _r010 || _r011 || _r110 || _r111 ) _neighbor(_n + 4) = _epbc;  \
+            if( _r001 || _r101 || _r011 || _r111 ) _neighbor(_n + 5) = _epbc;  \
           }                                                              \
           if( _ipbc ) {                                                  \
-            if( _r000 && _r010 && _r001 && _r011 ) _n[0] = _ipbc         \
-            if( _r000 && _r001 && _r100 && _r101 ) _n[1] = _ipbc         \
-            if( _r000 && _r100 && _r010 && _r110 ) _n[2] = _ipbc         \
-            if( _r100 && _r110 && _r101 && _r111 ) _n[3] = _ipbc         \
-            if( _r010 && _r011 && _r110 && _r111 ) _n[4] = _ipbc         \
-            if( _r001 && _r101 && _r011 && _r111 ) _n[5] = _ipbc         \
+            if( _r000 && _r010 && _r001 && _r011 ) _neighbor(_n + 0) = _ipbc;  \
+            if( _r000 && _r001 && _r100 && _r101 ) _neighbor(_n + 1) = _ipbc;  \
+            if( _r000 && _r100 && _r010 && _r110 ) _neighbor(_n + 2) = _ipbc;  \
+            if( _r100 && _r110 && _r101 && _r111 ) _neighbor(_n + 3) = _ipbc;  \
+            if( _r010 && _r011 && _r110 && _r111 ) _neighbor(_n + 4) = _ipbc;  \
+            if( _r001 && _r101 && _r011 && _r111 ) _neighbor(_n + 5) = _ipbc;  \
           }                                                              \
           _n += 6;                                                       \
     }}}                                                                  \
@@ -251,9 +251,9 @@ vpic_simulation::user_particle_collisions( void )
     const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;         \
     const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;         \
     const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;         \
-    int64_t * _n0 = grid->neighbor;                                      \
+    auto& _neighbor = grid->k_neighbor_h;                                \
     for( int _k=1; _k<_nz+1; _k++ ) { const double _zl = _z0 + _dz*(_k-1.5), _zc = _z0 + _dz*(_k-0.5), _zh = _z0 + _dz*(_k+0.5); \
-    for( int _j=1; _j<_ny+1; _j++ ) { const double _yl = _y0 + _dy*(_j-1.5), _yc = _y0 + _dy*(_j-0.5), _yh = _y0 + _dy*(_j+0.5); int64_t * _n = _n0 + 6*voxel(1,_j,_k); \
+    for( int _j=1; _j<_ny+1; _j++ ) { const double _yl = _y0 + _dy*(_j-1.5), _yc = _y0 + _dy*(_j-0.5), _yh = _y0 + _dy*(_j+0.5); size_t  _n = 6*voxel(1,_j,_k); \
     for( int _i=1; _i<_nx+1; _i++ ) { const double _xl = _x0 + _dx*(_i-1.5), _xc = _x0 + _dx*(_i-0.5), _xh = _x0 + _dx*(_i+0.5); double x, y, z; \
           int _rc, _r0, _r1, _r2, _r3, _r4, _r5;                         \
           x = _xc; y = _yc; z = _zc; _rc = (rgn);                        \
@@ -264,28 +264,28 @@ vpic_simulation::user_particle_collisions( void )
           x = _xc; y = _yh; z = _zc; _r4 = (rgn);                        \
           x = _xc; y = _yc; z = _zh; _r5 = (rgn);                        \
           if( _vpbc ) {                                                  \
-            if( _rc && _r0  ) _n[0] = _vpbc;                             \
-            if( _rc && _r1  ) _n[1] = _vpbc;                             \
-            if( _rc && _r2  ) _n[2] = _vpbc;                             \
-            if( _rc && _r3  ) _n[3] = _vpbc;                             \
-            if( _rc && _r4  ) _n[4] = _vpbc;                             \
-            if( _rc && _r5  ) _n[5] = _vpbc;                             \
+            if( _rc && _r0  ) _neighbor(_n + 0) = _vpbc;                 \
+            if( _rc && _r1  ) _neighbor(_n + 1) = _vpbc;                 \
+            if( _rc && _r2  ) _neighbor(_n + 2) = _vpbc;                 \
+            if( _rc && _r3  ) _neighbor(_n + 3) = _vpbc;                 \
+            if( _rc && _r4  ) _neighbor(_n + 4) = _vpbc;                 \
+            if( _rc && _r5  ) _neighbor(_n + 5) = _vpbc;                 \
           }                                                              \
           if( _ipbc ) {                                                  \
-            if( _rc && !_r0 ) _n[0] = _ipbc;                             \
-            if( _rc && !_r1 ) _n[1] = _ipbc;                             \
-            if( _rc && !_r2 ) _n[2] = _ipbc;                             \
-            if( _rc && !_r3 ) _n[3] = _ipbc;                             \
-            if( _rc && !_r4 ) _n[4] = _ipbc;                             \
-            if( _rc && !_r5 ) _n[5] = _ipbc;                             \
+            if( _rc && !_r0 ) _neighbor(_n + 0) = _ipbc;                 \
+            if( _rc && !_r1 ) _neighbor(_n + 1) = _ipbc;                 \
+            if( _rc && !_r2 ) _neighbor(_n + 2) = _ipbc;                 \
+            if( _rc && !_r3 ) _neighbor(_n + 3) = _ipbc;                 \
+            if( _rc && !_r4 ) _neighbor(_n + 4) = _ipbc;                 \
+            if( _rc && !_r5 ) _neighbor(_n + 5) = _ipbc;                 \
           }                                                              \
           if( _epbc ) {                                                  \
-            if( !_rc && _r0 ) _n[0] = _epbc;                             \
-            if( !_rc && _r1 ) _n[1] = _epbc;                             \
-            if( !_rc && _r2 ) _n[2] = _epbc;                             \
-            if( !_rc && _r3 ) _n[3] = _epbc;                             \
-            if( !_rc && _r4 ) _n[4] = _epbc;                             \
-            if( !_rc && _r5 ) _n[5] = _epbc;                             \
+            if( !_rc && _r0 ) _neighbor(_n + 0) = _epbc;                 \
+            if( !_rc && _r1 ) _neighbor(_n + 1) = _epbc;                 \
+            if( !_rc && _r2 ) _neighbor(_n + 2) = _epbc;                 \
+            if( !_rc && _r3 ) _neighbor(_n + 3) = _epbc;                 \
+            if( !_rc && _r4 ) _neighbor(_n + 4) = _epbc;                 \
+            if( !_rc && _r5 ) _neighbor(_n + 5) = _epbc;                 \
           }                                                              \
           _n += 6;                                                       \
     }}}                                                                  \

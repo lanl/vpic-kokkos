@@ -169,12 +169,19 @@ vpic_simulation::dump_grid( const char *fbase ) {
   WRITE_ARRAY_HEADER( grid->range, 1, dim, fileIO );
   fileIO.write( grid->range, dim[0] );
 
-  dim[0] = 6;
+  auto& neighbor = grid->k_neighbor_h;
+  typename k_neighbor_t::value_type tmp;
+
+  dim[0] = neighbor.size() / grid->nv;
   dim[1] = grid->nx+2;
   dim[2] = grid->ny+2;
   dim[3] = grid->nz+2;
-  WRITE_ARRAY_HEADER( grid->neighbor, 4, dim, fileIO );
-  fileIO.write( grid->neighbor, dim[0]*dim[1]*dim[2]*dim[3] );
+
+  WRITE_ARRAY_HEADER( (&tmp), 4, dim, fileIO );
+  for(size_t i=0 ; i < neighbor.size() ; ++i) {
+    tmp = neighbor(i);
+    fileIO.write( &tmp, 1 );
+  }
 
   if( fileIO.close() ) ERROR(( "File close failed on dump grid!!!" ));
 }

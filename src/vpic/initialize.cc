@@ -14,13 +14,7 @@ vpic_simulation::initialize( int argc,
   TIC user_initialization( argc, argv ); TOC( user_initialization, 1 );
 
   // Now move everything to the device
-
-  // We want to call this once the neighbor is done
-  // TODO: general grid handle
-
-  auto g = species_list->g;
-  auto nfaces_per_voxel = 6;
-  g->init_kokkos_grid(nfaces_per_voxel*g->nv);
+  grid->copy_to_device();
 
   KOKKOS_TIC();
   KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);

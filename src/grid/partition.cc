@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by:
  *   Kevin J. Bowers, Ph.D.
  *   Plasma Physics Group (X-1)
@@ -32,6 +32,47 @@
     (rank) = _ix + gpx*( _iy + gpy*_iz );            \
   } while(0)
 
+
+void
+construct_mesh(grid_t * g) {
+
+  g->k_mesh_d = k_mesh_t("k_mesh_d", g->nv);
+  g->k_mesh_h = Kokkos::create_mirror_view(g->k_mesh_d);
+
+  double x0 = g->x0;
+  double x1 = g->x1;
+  double y0 = g->y0;
+  double y1 = g->y1;
+  double z0 = g->z0;
+  double z1 = g->z1;
+
+  auto& mesh = g->k_mesh_h;
+
+  // Construct the dense mesh
+  int v = 0;
+  for (int k = 0 ; k < g->nz+2 ; ++k) {
+    double fz = (k-0.5) / ((double) g->nz);
+    double z = z0*(1-fz) + z1*fz;
+
+    for (int j = 0 ; j < g->ny+2 ; ++j) {
+      double fy = (j-0.5) / ((double) g->ny);
+      double y = y0*(1-fy) + y1*fy;
+
+      for (int i = 0 ; i < g->nx+2 ; ++i) {
+        double fx = (i-0.5) / ((double) g->nx);
+        double x = x0*(1-fx) + x1*fx;
+
+        mesh(v, mesh_var::x) = x;
+        mesh(v, mesh_var::y) = y;
+        mesh(v, mesh_var::z) = z;
+        v += 1;
+
+      }
+    }
+  }
+
+}
+
 void
 partition_periodic_box( grid_t * g,
                         double gx0, double gy0, double gz0,
@@ -39,7 +80,7 @@ partition_periodic_box( grid_t * g,
                         int gnx, int gny, int gnz,
                         int gpx, int gpy, int gpz ) {
   double f;
-  int rank, px, py, pz; 
+  int rank, px, py, pz;
 
   // Make sure the grid can be setup
 
@@ -88,6 +129,9 @@ partition_periodic_box( grid_t * g,
   INDEX_TO_RANK(px,  py+1,pz,  rank); join_grid(g,BOUNDARY( 0, 1, 0),rank);
   INDEX_TO_RANK(px,  py,  pz+1,rank); join_grid(g,BOUNDARY( 0, 0, 1),rank);
 
+  // Construct the mesh.
+  construct_mesh(g);
+
 }
 
 void
@@ -97,7 +141,7 @@ partition_absorbing_box( grid_t * g,
                          int gnx, int gny, int gnz,
                          int gpx, int gpy, int gpz,
                          int pbc ) {
-  int px, py, pz; 
+  int px, py, pz;
 
   partition_periodic_box( g,
                           gx0, gy0, gz0,
@@ -109,30 +153,30 @@ partition_absorbing_box( grid_t * g,
 
   RANK_TO_INDEX( world_rank, px,py,pz );
 
-  if( px==0 && gnx>1 ) { 
+  if( px==0 && gnx>1 ) {
     set_fbc(g,BOUNDARY(-1,0,0),absorb_fields);
     set_pbc(g,BOUNDARY(-1,0,0),pbc);
-  } 
+  }
 
   if( px==gpx-1 && gnx>1 ) {
     set_fbc(g,BOUNDARY( 1,0,0),absorb_fields);
     set_pbc(g,BOUNDARY( 1,0,0),pbc);
   }
 
-  if( py==0 && gny>1 ) { 
+  if( py==0 && gny>1 ) {
     set_fbc(g,BOUNDARY(0,-1,0),absorb_fields);
     set_pbc(g,BOUNDARY(0,-1,0),pbc);
-  } 
+  }
 
   if( py==gpy-1 && gny>1 ) {
     set_fbc(g,BOUNDARY(0, 1,0),absorb_fields);
     set_pbc(g,BOUNDARY(0, 1,0),pbc);
   }
 
-  if( pz==0 && gnz>1 ) { 
+  if( pz==0 && gnz>1 ) {
     set_fbc(g,BOUNDARY(0,0,-1),absorb_fields);
     set_pbc(g,BOUNDARY(0,0,-1),pbc);
-  } 
+  }
 
   if( pz==gpz-1 && gnz>1 ) {
     set_fbc(g,BOUNDARY(0,0, 1),absorb_fields);
@@ -149,7 +193,7 @@ partition_metal_box( grid_t * g,
                      double gx1, double gy1, double gz1,
                      int gnx, int gny, int gnz,
                      int gpx, int gpy, int gpz ) {
-  int px, py, pz; 
+  int px, py, pz;
 
   partition_periodic_box( g,
                           gx0, gy0, gz0,

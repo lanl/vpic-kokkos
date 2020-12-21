@@ -70,12 +70,14 @@ boundary_p_kokkos(
   int face;
 
   // Unpack the grid
-  const grid_t  * RESTRICT           g = fa->g;
-  const int64_t * RESTRICT ALIGNED(128) neighbor = g->neighbor;
-  mp_t* RESTRICT              mp       = g->mp;
+  const grid_t  * RESTRICT g = fa->g;
+  mp_t* RESTRICT    mp = g->mp;
   const int64_t rangel = g->rangel;
   const int64_t rangeh = g->rangeh;
   const int64_t rangem = g->range[world_size];
+
+  // Boundary works on host.
+  auto& neighbor = g->k_neighbor_h;
 
   int bc[6], shared[6];
   int64_t range[6];
@@ -184,7 +186,7 @@ boundary_p_kokkos(
 
             particle_send(copy_index) = voxel;
 
-            int64_t nn = neighbor[ 6*voxel + face ];
+            int64_t nn = neighbor( 6*voxel + face );
 
             // Absorb
             if( nn==absorb_particles )
