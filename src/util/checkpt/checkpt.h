@@ -338,14 +338,11 @@ template<class view_type>
 void checkpt_kokkos_view(view_type& view)
 {
    const int rank = view.rank_dynamic;
-   int n[8] = {0};
 
    CHECKPT_STR(view.label().c_str());
    CHECKPT_VAL(int, rank);
-   for(int i=0 ; i < rank ; ++i) {
-      n[i] = view.extent_int(i);
+   for(int i=0 ; i < rank ; ++i)
       CHECKPT_VAL(int, view.extent_int(i));
-   }
 
 };
 

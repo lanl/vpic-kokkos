@@ -6,6 +6,7 @@
 class TrilinearWeighting {
 public:
 
+    KOKKOS_INLINE_FUNCTION
     TrilinearWeighting(
         const int nx, const int ny, const int nz,
         const int sx, const int sy, const int sz
@@ -15,7 +16,7 @@ public:
 
     }
 
-    void KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION void
     set_position(float dx, float dy, float dz) {
 
         constexpr float one_eigth = 1./8.;
@@ -46,7 +47,7 @@ public:
 
     }
 
-    void KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION void
     synchronize_weights(const int voxel) {
 
         int x, y, z;
@@ -96,7 +97,7 @@ public:
     }
 
     template<class view_type_t>
-    void KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION void
     deposit(
         view_type_t& view,
         int          voxel,
@@ -116,7 +117,7 @@ public:
 
 
     template<class view_type_t>
-    void KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION void
     deposit(
         view_type_t& view,
         int          voxel,

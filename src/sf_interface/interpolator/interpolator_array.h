@@ -24,8 +24,7 @@ public:
   /**
    * @brief Interpolate the field at a point.
    */
-  const field_vectors_t
-  KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION field_vectors_t
   operator() (
     int voxel,
     float dx, float dy, float dz

@@ -17,7 +17,8 @@
 
 class VacuumMaterialId {
 public:
-  constexpr material_id operator() (int, int) const { return 0; }
+  constexpr KOKKOS_INLINE_FUNCTION
+  material_id operator() (int, int) const { return 0; }
 };
 
 typedef struct material_coefficient {

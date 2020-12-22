@@ -402,7 +402,6 @@ void advance_e(
   k_field_edge_t k_field_edge = fa->k_fe_d;
 
   const grid_t *g = fa->g;
-  const int nx = g->nx, ny = g->ny, nz = g->nz;
 
   const float damp = sfa->damp;
   const float dt   = (1+damp)*g->cvac*g->dt;

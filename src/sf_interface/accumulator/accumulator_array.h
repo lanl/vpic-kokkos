@@ -18,7 +18,7 @@ public:
    * Accumulator values are four times the total physical charge that passed
    * through the appropriate current quadrant in a time-step.
    */
-  void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   operator() (
     const int voxel, const float q,
     const float dx,  const float dy, const float dz,
@@ -34,7 +34,7 @@ private:
    * @brief Accumulate the current from a particle.
    */
   template<typename current_type>
-  void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   accumulate(
     current_type& current_access,
     const int voxel, const float q,
@@ -91,7 +91,7 @@ private:
 
 // Specialization for device scatter access
 template<>
-void KOKKOS_INLINE_FUNCTION
+KOKKOS_INLINE_FUNCTION void
 Accumulator<k_accumulators_sa_t>::operator() (
   const int voxel, const float q,
   const float dx,  const float dy, const float dz,

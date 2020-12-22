@@ -34,7 +34,6 @@ public:
     px(nx > 1 ? 1./dx : 0), // Used for calculating derivatives
     py(ny > 1 ? 1./dy : 0), // Used for calculating derivatives
     pz(nz > 1 ? 1./dz : 0)  // Used for calculating derivatives
-
   {
 
   }
@@ -48,7 +47,7 @@ public:
    * @param Ayz Az(ix, iy, iz+1)
    * @returns curlx(A)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   edge_curl_x(int voxel, float Az0, float Azy, float Ay0, float Ayz) const {
     return py*(Azy - Az0) - pz*(Ayz - Ay0);
   }
@@ -62,7 +61,7 @@ public:
    * @param Azx Az(ix+1, iy, iz)
    * @returns curly(A)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   edge_curl_y(int voxel, float Ax0, float Axz, float Az0, float Azx) const {
     return pz*(Axz - Ax0) - px*(Azx - Az0);
   }
@@ -76,7 +75,7 @@ public:
    * @param Axy Ax(ix, iy+1, iz)
    * @returns curlz(A)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   edge_curl_z(int voxel, float Ay0, float Ayx, float Ax0, float Axy) const {
     return px*(Ayx - Ay0) - py*(Axy - Ax0);
   }
@@ -90,7 +89,7 @@ public:
    * @param Ayz Az(ix, iy, iz-1)
    * @returns curlx(A)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   face_curl_x(int voxel, float Az0, float Azy, float Ay0, float Ayz) const {
     return py*(Az0 - Azy) - pz*(Ay0 - Ayz);
   }
@@ -104,7 +103,7 @@ public:
    * @param Azx Az(ix-1, iy, iz)
    * @returns curly(A)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   face_curl_y(int voxel, float Ax0, float Axz, float Az0, float Azx) const {
     return pz*(Ax0 - Axz) - px*(Az0 - Azx);
   }
@@ -118,7 +117,7 @@ public:
    * @param Axy Ax(ix, iy-1, iz)
    * @returns curlz(A)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   face_curl_z(int voxel, float Ay0, float Ayx, float Ax0, float Axy) const {
     return px*(Ay0 - Ayx) - py*(Ax0 - Axy);
   }
@@ -130,7 +129,7 @@ public:
    * @param fx f(ix-1, iy, iz)
    * @returns gradx(f)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   cell_gradient_x(int voxel, float f0, float fx) const {
     return px*(f0 - fx);
   }
@@ -142,7 +141,7 @@ public:
    * @param fy f(ix, iy-1, iz)
    * @returns grady(f)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   cell_gradient_y(int voxel, float f0, float fy) const {
     return py*(f0 - fy);
   }
@@ -154,7 +153,7 @@ public:
    * @param fz f(ix, iy, iz-1)
    * @returns gradz(f)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   cell_gradient_z(int voxel, float f0, float fz) const {
     return pz*(f0 - fz);
   }
@@ -166,7 +165,7 @@ public:
    * @param fx f(ix+1, iy, iz)
    * @returns gradx(f)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   node_gradient_x(int voxel, float f0, float fx) const {
     return px*(fx - f0);
   }
@@ -178,7 +177,7 @@ public:
    * @param fy f(ix, iy+1, iz)
    * @returns grady(f)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   node_gradient_y(int voxel, float f0, float fy) const {
     return py*(fy - f0);
   }
@@ -190,7 +189,7 @@ public:
    * @param fz f(ix, iy, iz+1)
    * @returns gradz(f)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   node_gradient_z(int voxel, float f0, float fz) const {
     return pz*(fz - f0);
   }
@@ -206,7 +205,7 @@ public:
    * @param Az1 Az(ix, iy, iz+1)
    * @returns div(A)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   face_divergence(int voxel, float Ax0, float Ax1, float Ay0, float Ay1, float Az0, float Az1) const {
     return px*(Ax1 - Ax0) + py*(Ay1 - Ay0) + pz*(Az1 - Az0);
   }
@@ -222,7 +221,7 @@ public:
    * @param Az1 Az(ix, iy, iz-1)
    * @returns div(A)(ix, iy, iz)
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   edge_divergence(int voxel, float Ax0, float Ax1, float Ay0, float Ay1, float Az0, float Az1) const {
     return px*(Ax0 - Ax1) + py*(Ay0 - Ay1) + pz*(Az0 - Az1);
   }
@@ -231,7 +230,7 @@ public:
    * @brief Computes the inverse volume of a voxel
    * @param voxel Voxel index
    */
-  const float KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION float
   inverse_voxel_volume (int voxel) const {
 
     return rdV;
@@ -246,7 +245,7 @@ public:
    * @param ex_z Ex(i, j, k+1)
    * @param ex_yz Ex(i, j+1, k+1)
    */
-  const void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   prescale_interpolated_ex (
     const int voxel,
     float& ex, float& ex_y, float& ex_z, float& ex_yz
@@ -262,7 +261,7 @@ public:
    * @param ey_z Ey(i, j, k+1)
    * @param ey_xz Ey(i+1, j, k+1)
    */
-  const void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   prescale_interpolated_ey (
     const int voxel,
     float& ey, float& ey_x, float& ey_z, float& ey_xz
@@ -278,7 +277,7 @@ public:
    * @param ez_y Ez(i, j+1, k)
    * @param ez_xy Ez(i+1, j+1, k)
    */
-  const void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   prescale_interpolated_ez (
     const int voxel,
     float& ez, float& ez_x, float& ez_y, float& ez_xy
@@ -292,7 +291,7 @@ public:
    * @param cbx cBx(i, j, k)
    * @param cbx_x cBx(i+1, j, k)
    */
-  const void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   prescale_interpolated_cbx (
     const int voxel,
     float& cbx, float& cbx_x
@@ -306,7 +305,7 @@ public:
    * @param cby cBy(i, j, k)
    * @param cby_y cBy(i, j+1, k)
    */
-  const void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   prescale_interpolated_cby (
     const int voxel,
     float& cby, float& cby_y
@@ -320,7 +319,7 @@ public:
    * @param cbz cBz(i, j, k)
    * @param cbz_z cBz(i, j, k+1)
    */
-  const void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   prescale_interpolated_cbz (
     const int voxel,
     float& cbz, float& cbz_z
@@ -336,7 +335,7 @@ public:
    * @param dy0 y-coordinate, logical
    * @param dz0 z-coordinate, logical
    */
-  const void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   postscale_interpolated_fields (
     field_vectors_t& fields, int voxel, float dx0, float dy0, float dz0
   ) const {
@@ -357,7 +356,7 @@ public:
    * @param Az z-component, locally Cartesian in initial frame on input and in displaced frame on output
    */
   template<class T>
-  void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   realign_cartesian_vector (
     const int voxel,
     const float  dx0,   const float  dy0,   const float  dz0,
@@ -380,7 +379,7 @@ public:
    * @param uy y-momentum, Cartesian on input, logical on output
    * @param uz z-momentum, Cartesian on input, logical on output
    */
-  void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   displacement_to_half_logical (
     const int voxel,
     const float  dx0,   const float  dy0,   const float  dz0,
@@ -406,7 +405,7 @@ public:
    * @param dir direction of the boundary
    * @param age age until the particle hits the boundary
    */
-  void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   age_to_boundary(
     const int voxel,
     const float dx0,   const float dy0,   const float dz0,

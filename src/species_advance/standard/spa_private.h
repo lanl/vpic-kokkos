@@ -17,6 +17,9 @@ public:
 
     ParticleViewWrapper(particle_t * p) : p(p) {}
 
+    // Needs to be marked __device__ to suppress a warning, even though
+    // never used on device.
+    KOKKOS_INLINE_FUNCTION
     float& operator() (int index, int var) const {
         particle_t * pp = p + index;
         switch(var) {
@@ -28,11 +31,17 @@ public:
             case particle_var::uz : return pp->uz ; break ;
             case particle_var::w  : return pp->w  ; break ;
             default :
-                ERROR(("Unknown particle var"));
+                // I want to error, but this is difficult on device.
+                // Doing this for now, and will re-work later.
+                return pp->w;
+                // ERROR(("Unknown particle var"));
                 break;
         }
     }
 
+    // Needs to be marked __device__ to suppress a warning, even though
+    // never used on device.
+    KOKKOS_INLINE_FUNCTION
     int32_t& operator() (int index) const {
         return (p + index)->i;
     }

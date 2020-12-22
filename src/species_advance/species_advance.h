@@ -220,7 +220,7 @@ class species_t {
         {
           log_printf("Performance sorting \"%s\"", name );
           sorter.sort( k_p_d, k_p_i_d, np, num_bins);
-        };
+        }
 
         /**
          * @brief Compress the device particles.
@@ -240,7 +240,7 @@ class species_t {
           );
           np -= nm_host;
 
-        };
+        }
 
 };
 

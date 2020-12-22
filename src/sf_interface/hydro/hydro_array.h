@@ -26,7 +26,7 @@ public:
   /**
    * @brief Accumulate the hydro moments from a particle.
    */
-  void KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION void
   operator() (
     const int voxel,
     const float w,   const float q,  const float m,
@@ -52,7 +52,7 @@ public:
     float py   = rhom*uy;
     float pz   = rhom*uz;
 
-    TrilinearWeighting weighter(nx, ny, nz, sx, sy, sz);
+    TrilinearWeighting weighter(dx, dy, dz, sx, sy, sz);
     weighter.set_position(dx, dy, dz);
 
     weighter.deposit(hydro_access, voxel, hydro_var::jx,  rhoq*vx);
