@@ -12,6 +12,8 @@ private:
 
 public:
 
+  const float domain_volume;
+
   // TODO: Logical flaw. Setting p{x,y,z} as done here is consistent
   // with previous versions of VPIC, but it assumes that n > 1 locally
   // is the same as N > 1 globally. This is not true in the edge case
@@ -19,15 +21,14 @@ public:
   // exactly one cell.
 
   CylindricalGeometry(
-      const int nx,
-      const int ny,
-      const int nz,
-      const float dx,
-      const float dy,
-      const float dz,
+      const float x0, const float y0, const float z0,
+      const float x1, const float y1, const float z1,
+      const float dx, const float dy, const float dz,
+      const int   nx, const int   ny, const int   nz,
       const mesh_view_t mesh
   )
   : mesh(mesh),
+    domain_volume( 0.5*(y1-y0)*(x1*x1 - x0*x0)*(z1-z0) ),
     dx(dx), dy(dy), dz(dz), dV(dx*dy*dz),
     rdx(1./dx), rdy(1./dy), rdz(1./dz), rdV(1./(dx*dy*dz)),
     px(nx > 1 ? 1./dx : 0), // Used for calculating derivatives
