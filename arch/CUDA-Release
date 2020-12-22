@@ -24,13 +24,12 @@ src_dir="${0%/*}/.."
 
 CXX=$src_dir/kokkos/bin/nvcc_wrapper cmake \
   -DCMAKE_BUILD_TYPE=Release \
-  -DENABLE_INTEGRATED_TESTS=OFF \
-  -DENABLE_UNIT_TESTS=OFF \
+  -DENABLE_INTEGRATED_TESTS=ON \
+  -DENABLE_UNIT_TESTS=ON \
   -DBUILD_INTERNAL_KOKKOS=ON \
   -DENABLE_KOKKOS_CUDA=ON \
   -DKokkos_ARCH_BDW=ON \
   -DKokkos_ARCH_TURING75=ON \
-  -DVPIC_DUMP_ENERGIES=ON \
   -DCMAKE_C_FLAGS="-rdynamic" \
   -DCMAKE_CXX_FLAGS="-rdynamic" \
   $src_dir
