@@ -71,11 +71,20 @@ class species_t {
 
         particle_mover_t * ALIGNED(128) pm; // Particle movers
 
-        int64_t last_sorted;                // Step when the particles were last
-        // sorted.
+        int64_t last_sorted;                // Step when the particles were last sorted.
+        int64_t last_indexed;               // Step when the particles were last indexed.
         int sort_interval;                  // How often to sort the species
         int sort_out_of_place;              // Sort method
+
         int * ALIGNED(128) partition;       // Static array indexed 0:
+
+        k_particle_partition_t k_partition_d;
+        k_particle_partition_t::HostMirror k_partition_h;
+
+        // Used for indirect sorts.
+        k_particle_sortindex_t k_sortindex_d;
+        k_particle_sortindex_t::HostMirror k_sortindex_h;
+
         /**/                                // (nx+2)*(ny+2)*(nz+2).  Each value
         /**/                                // corresponds to the associated particle
         /**/                                // array index of the first particle in

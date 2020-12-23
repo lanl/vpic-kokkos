@@ -108,6 +108,7 @@ vpic_simulation::~vpic_simulation() {
   delete_grid( grid );
   delete_rng_pool( sync_entropy );
   delete_rng_pool( entropy );
+  delete_collision_op_list( collision_op_list );
 }
 
 void vpic_simulation::print_run_details()
@@ -139,4 +140,3 @@ void vpic_simulation::print_run_details()
         std::cout << std::endl; // blank line
     }
 }
-

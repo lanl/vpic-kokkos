@@ -24,6 +24,7 @@
 #include "../util/bitfield.h"
 #include "../util/checksum.h"
 #include "../util/system.h"
+#include "../util/rng_policy.h"
 
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
@@ -36,18 +37,19 @@
 
 typedef FileIO FILETYPE;
 
-const uint32_t electric		(1<<0 | 1<<1 | 1<<2);
-const uint32_t div_e_err	(1<<3);
-const uint32_t magnetic		(1<<4 | 1<<5 | 1<<6);
-const uint32_t div_b_err	(1<<7);
-const uint32_t tca			(1<<8 | 1<<9 | 1<<10);
-const uint32_t rhob			(1<<11);
-const uint32_t current		(1<<12 | 1<<13 | 1<<14);
-const uint32_t rhof			(1<<15);
-const uint32_t emat			(1<<16 | 1<<17 | 1<<18);
-const uint32_t nmat			(1<<19);
-const uint32_t fmat			(1<<20 | 1<<21 | 1<<22);
-const uint32_t cmat			(1<<23);
+//const uint32_t all       (0xffffffff);
+const uint32_t electric  (1<<0 | 1<<1 | 1<<2);
+const uint32_t div_e_err (1<<3);
+const uint32_t magnetic  (1<<4 | 1<<5 | 1<<6);
+const uint32_t div_b_err (1<<7);
+const uint32_t tca       (1<<8 | 1<<9 | 1<<10);
+const uint32_t rhob      (1<<11);
+const uint32_t current   (1<<12 | 1<<13 | 1<<14);
+const uint32_t rhof      (1<<15);
+const uint32_t emat      (1<<16 | 1<<17 | 1<<18);
+const uint32_t nmat      (1<<19);
+const uint32_t fmat      (1<<20 | 1<<21 | 1<<22);
+const uint32_t cmat      (1<<23);
 
 const size_t total_field_variables(24);
 const size_t total_field_groups(12); // this counts vectors, tensors etc...
@@ -55,21 +57,21 @@ const size_t total_field_groups(12); // this counts vectors, tensors etc...
 const size_t field_indeces[12] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23 };
 
 struct FieldInfo {
-	char name[128];
-	char degree[128];
-	char elements[128];
-	char type[128];
-	size_t size;
+  char name[128];
+  char degree[128];
+  char elements[128];
+  char type[128];
+  size_t size;
 }; // struct FieldInfo
 
-const uint32_t current_density	(1<<0 | 1<<1 | 1<<2);
-const uint32_t charge_density	(1<<3);
-const uint32_t momentum_density	(1<<4 | 1<<5 | 1<<6);
-const uint32_t ke_density		(1<<7);
-const uint32_t stress_tensor	(1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13);
+const uint32_t current_density  (1<<0 | 1<<1 | 1<<2);
+const uint32_t charge_density (1<<3);
+const uint32_t momentum_density (1<<4 | 1<<5 | 1<<6);
+const uint32_t ke_density   (1<<7);
+const uint32_t stress_tensor  (1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13);
 /* May want to use these instead
-const uint32_t stress_diagonal 		(1<<8 | 1<<9 | 1<<10);
-const uint32_t stress_offdiagonal	(1<<11 | 1<<12 | 1<<13);
+const uint32_t stress_diagonal    (1<<8 | 1<<9 | 1<<10);
+const uint32_t stress_offdiagonal (1<<11 | 1<<12 | 1<<13);
 */
 
 const size_t total_hydro_variables(14);
@@ -78,11 +80,11 @@ const size_t total_hydro_groups(5); // this counts vectors, tensors etc...
 const size_t hydro_indeces[5] = { 0, 3, 4, 7, 8 };
 
 struct HydroInfo {
-	char name[128];
-	char degree[128];
-	char elements[128];
-	char type[128];
-	size_t size;
+  char name[128];
+  char degree[128];
+  char elements[128];
+  char type[128];
+  size_t size;
 }; // struct FieldInfo
 
 /*----------------------------------------------------------------------------
@@ -125,6 +127,21 @@ public:
   int advance( void );
   void finalize( void );
   void print_run_details( void );
+
+  // Set RNG policy. Use std::rng by default, optionally use Kokkos or
+  // "original"
+#ifdef USE_KOKKOS_RNG
+  // TODO: this only works on CPU right now...
+  _RNG::RandomNumberProvider< _RNG::KokkosRNG<Kokkos::DefaultHostExecutionSpace> > rng_policy;
+#elif USE_STL_RNG
+  _RNG::RandomNumberProvider<_RNG::CppRNG> rng_policy;
+#else // USE_ORIGINAL_RNG
+  _RNG::RandomNumberProvider<_RNG::OriginalRNG> rng_policy;
+#endif
+
+  // TODO: remove or improve this
+
+  kokkos_rng_pool_t * kokkos_rng;
 
   // Directly initialized by user
 
@@ -255,7 +272,7 @@ public:
 
   void print_hashed_comment(FileIO & fileIO, const char * comment);
   void global_header(const char * base,
-  	std::vector<DumpParameters *> dumpParams);
+    std::vector<DumpParameters *> dumpParams);
 
   void field_header(const char * fbase, DumpParameters & dumpParams);
   void hydro_header(const char * speciesname, const char * hbase,
@@ -334,11 +351,13 @@ public:
     return hydro_array->h[ voxel(ix,iy,iz) ];
   }
 
+  // TODO: do I need to update this ?
   inline rng_t *
   rng( const int n ) {
     return entropy->rng[n];
   }
 
+  // TODO: do I need to update this ?
   inline rng_t *
   sync_rng( const int n ) {
     return sync_entropy->rng[n];
@@ -445,7 +464,7 @@ public:
                    double epsx,        double epsy,       double epsz,
                    double mux,         double muy,        double muz,
                    double sigmax,      double sigmay,     double sigmaz,
-		   double zetax = 0 ,  double zetay = 0,  double zetaz = 0 ) {
+       double zetax = 0 ,  double zetay = 0,  double zetaz = 0 ) {
     return append_material( material( name,
                                       epsx,   epsy,   epsz,
                                       mux,    muy,    muz,
@@ -603,21 +622,30 @@ public:
   // FIXME: MTRAND DESPERATELY NEEDS A LARGER SEED SPACE!
 
   inline void seed_entropy( int base ) {
-    seed_rng_pool( entropy,      base, 0 );
-    seed_rng_pool( sync_entropy, base, 1 );
+    rng_policy.seed( entropy, sync_entropy, base, 0 );
+    kokkos_rng->init(base, Kokkos::DefaultExecutionSpace::concurrency());
+    //seed_rng_pool( entropy,      base, 0 );
+    //seed_rng_pool( sync_entropy, base, 1 );
   }
 
   // Uniform random number on (low,high) (open interval)
   // FIXME: IS THE INTERVAL STILL OPEN IN FINITE PRECISION
   //        AND IS THE OPEN INTERVAL REALLY WHAT USERS WANT??
   inline double uniform( rng_t * rng, double low, double high ) {
-    double dx = drand( rng );
-    return low*(1-dx) + high*dx;
+    //double dx = drand( rng );
+    //return low*(1-dx) + high*dx;
+    return rng_policy.uniform(rng, low, high);
   }
 
   // Normal random number with mean mu and standard deviation sigma
   inline double normal( rng_t * rng, double mu, double sigma ) {
-    return mu + sigma*drandn( rng );
+    //return mu + sigma*drandn( rng );
+    return rng_policy.normal(rng, mu, sigma);
+  }
+
+  // Generate a random int between [0..max)
+  inline unsigned int random_uint( rng_t* rng, unsigned int max ) {
+    return rng_policy.uint(rng, max);
   }
 
   /////////////////////////////////
@@ -670,7 +698,7 @@ public:
 
   // Compute the Courant length on a regular mesh
   inline double courant_length( double lx, double ly, double lz,
-				double nx, double ny, double nz ) {
+        double nx, double ny, double nz ) {
     double w0, w1 = 0;
     if( nx>1 ) w0 = nx/lx, w1 += w0*w0;
     if( ny>1 ) w0 = ny/ly, w1 += w0*w0;

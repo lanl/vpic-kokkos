@@ -94,6 +94,7 @@ void
 advance_b(field_array_t * RESTRICT fa,
           float       frac) {
 
+    // TODO: ref?
   k_field_t k_field = fa->k_f_d;
 
   grid_t *g   = fa->g;

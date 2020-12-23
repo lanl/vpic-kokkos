@@ -84,6 +84,7 @@ enum profile_internal_use_only_timers {
 //#define KOKKOS_TIC()
 //  do {
 //    std::chrono::high_resolution_clock::time_point _profile_tic = std::chrono::high_resolution_clock::now();
+
 #define KOKKOS_TIC()                                                  \
   do {                                                                \
     double _profile_tic = wallclock();

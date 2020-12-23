@@ -95,6 +95,6 @@ vpic_simulation::initialize( int argc,
 void
 vpic_simulation::finalize( void ) {
   barrier();
+  delete kokkos_rng;
   update_profile( rank()==0 );
 }
-

@@ -2,7 +2,9 @@
 #include "git_version.h"
 
 #include <iostream>
+#if defined(_OPENMP)
 #include <omp.h>
+#endif
 
 double _boot_timestamp = 0;
 
