@@ -529,7 +529,8 @@ public:
       {
         deter = sqrtf(deter);
         deter = rdr - deter;
-        xage2 = 2.0f*delta/deter;
+        delta = 2.0f*delta/deter;
+        if( delta >= 0 ) xage2 = delta;
       }
 
     }
