@@ -15,7 +15,8 @@ list(APPEND DEFAULT_ARG_TESTS
     reconnection_test # This is a simple reconnection run
     )
 
-list(APPEND RESTART_DECK dump) # Reuse existing deck and start half way
+list(APPEND SIMPLE_DECK dump) # Reuse existing deck and start half way
+list(APPEND RESTART_DECK simple) # Reuse existing deck and start half way
 list(APPEND RESTART_BINARY restore)
 list(APPEND CHECKPOINT_FILE "${CMAKE_CURRENT_BINARY_DIR}/checkpt_test.1")
 list(APPEND RESTART_ARGS --restore ${CHECKPOINT_FILE})
@@ -64,3 +65,17 @@ set(RESTORE_LABEL "restore_group")
 set_tests_properties(${perform_restore} PROPERTIES DEPENDS ${generate_restore})
 #set_property(TEST ${generate_restore} PROPERTY FIXTURES_SETUP ${RESTORE_LABEL})
 #set_property(TEST ${perform_restore} PROPERTY FIXTURES_REQUIRED ${RESTORE_LABEL})
+
+# See if we can build a deck with the 2 stage compile
+# TODO: add a test that runs the generated deck
+add_test(
+    NAME perform_2stage_compile
+    COMMAND ${CMAKE_BINARY_DIR}/bin/vpic ${CMAKE_CURRENT_SOURCE_DIR}/${SIMPLE_DECK}.deck
+)
+
+set(TWOSTAGE_OUT ${SIMPLE_DECK}.deck.${CMAKE_SYSTEM_NAME})
+add_test(
+    NAME run_2stage_compile
+    COMMAND ./${TWOSTAGE_OUT}
+)
+set_tests_properties(run_2stage_compile PROPERTIES DEPENDS perform_2stage_compile)
