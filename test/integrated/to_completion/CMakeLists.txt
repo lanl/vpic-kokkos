@@ -78,4 +78,6 @@ add_test(
     NAME run_2stage_compile
     COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${TWOSTAGE_OUT}
 )
-set_tests_properties(run_2stage_compile PROPERTIES DEPENDS perform_2stage_compile)
+
+set_tests_properties(perform_2stage_compile PROPERTIES FIXTURES_SETUP 2stage_fixture)
+set_tests_properties(run_2stage_compile PROPERTIES FIXTURES_REQUIRED 2stage_fixture)
