@@ -15,8 +15,8 @@ list(APPEND DEFAULT_ARG_TESTS
     reconnection_test # This is a simple reconnection run
     )
 
-list(APPEND SIMPLE_DECK dump) # Reuse existing deck and start half way
-list(APPEND RESTART_DECK simple) # Reuse existing deck and start half way
+list(APPEND SIMPLE_DECK simple) # Reuse existing deck and start half way
+list(APPEND RESTART_DECK dump) # Reuse existing deck and start half way
 list(APPEND RESTART_BINARY restore)
 list(APPEND CHECKPOINT_FILE "${CMAKE_CURRENT_BINARY_DIR}/checkpt_test.1")
 list(APPEND RESTART_ARGS --restore ${CHECKPOINT_FILE})
@@ -76,6 +76,6 @@ add_test(
 set(TWOSTAGE_OUT ${SIMPLE_DECK}.deck.${CMAKE_SYSTEM_NAME})
 add_test(
     NAME run_2stage_compile
-    COMMAND ./${TWOSTAGE_OUT}
+    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${TWOSTAGE_OUT}
 )
 set_tests_properties(run_2stage_compile PROPERTIES DEPENDS perform_2stage_compile)
