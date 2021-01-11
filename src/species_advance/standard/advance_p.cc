@@ -152,7 +152,7 @@ sp_[id]->
 //    KOKKOS_LAMBDA (size_t p_index)
 //    {
   int num_leagues = 2048;
-  int num_threads = 1024;
+  int num_threads = 512;
   int per_league = np/num_leagues;
   if(np%num_leagues > 0)
     per_league++;
