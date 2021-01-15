@@ -77,7 +77,9 @@ int vpic_simulation::advance(void)
 
   // Copy particle movers back to host
   KOKKOS_TIC();
-  KOKKOS_COPY_MOVER_MEM_TO_HOST(species_list);
+  LIST_FOR_EACH( sp, species_list ) {
+    sp->copy_outbound_to_host();
+  }
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   // Because the partial position push when injecting aged particles might
@@ -96,13 +98,17 @@ int vpic_simulation::advance(void)
   if((particle_injection_interval>0) && ((step() % particle_injection_interval)==0)) {
       if(!kokkos_particle_injection) {
           KOKKOS_TIC();
-          KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+          LIST_FOR_EACH( sp, species_list ) {
+            sp->copy_to_host();
+          }
           KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
       }
       TIC user_particle_injection(); TOC( user_particle_injection, 1 );
       if(!kokkos_particle_injection) {
           KOKKOS_TIC();
-          KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
+          LIST_FOR_EACH( sp, species_list ) {
+            sp->copy_to_device();
+          }
           KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
       }
   }
@@ -239,13 +245,13 @@ int vpic_simulation::advance(void)
   if((current_injection_interval>0) && ((step() % current_injection_interval)==0)) {
       if(!kokkos_current_injection) {
           KOKKOS_TIC();
-          KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+          field_array->copy_to_host();
           KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
       }
       TIC user_current_injection(); TOC( user_current_injection, 1 );
       if(!kokkos_current_injection) {
           KOKKOS_TIC();
-          KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+          field_array->copy_to_device();
           KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
       }
   }
@@ -269,13 +275,13 @@ int vpic_simulation::advance(void)
   if ((field_injection_interval>0) && ((step() % field_injection_interval)==0)) {
       if (!kokkos_field_injection) {
           KOKKOS_TIC();
-          KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+          field_array->copy_to_host();
           KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
       }
       TIC user_field_injection(); TOC( user_field_injection, 1 );
       if (!kokkos_field_injection) {
           KOKKOS_TIC();
-          KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+          field_array->copy_to_device();
           KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
       }
   }

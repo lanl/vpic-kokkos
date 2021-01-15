@@ -55,8 +55,10 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     }
 
     // Make sure kokkos views have correct data
-    KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
-    KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(sp);
+    field_array->copy_to_device();
+    LIST_FOR_EACH( sp, species_list ) {
+      sp->copy_to_device();
+    }
 
     advance_p( sp, accumulator_array, interpolator_array );
 

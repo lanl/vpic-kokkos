@@ -692,16 +692,6 @@ public:
   void user_diagnostics(void);
   void user_particle_collisions(void);
 
-  void KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array_t* field_array)
-  {
-    field_array->copy_to_device();
-  }
-
-  void KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array_t* field_array)
-  {
-    field_array->copy_to_host();
-  }
-
   /**
    * @brief Copy all field data to the host, if it has not already been copied
    * this step
@@ -715,58 +705,7 @@ public:
   void user_diagnostics_copy_field_mem_to_host()
   {
       if (step() > field_array->last_copied)
-          KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
-  }
-
-  /**
-   * @brief Copy all available particle memory from host to device, for a given
-   * species list
-   *
-   * @param sp the species_t to copy
-   */
-  void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(species_t* sp)
-  {
-    // FIXME: Remove
-    sp->copy_to_device();
-  }
-
-  /**
-   * @brief Copy all available particle memory from host to device, for a given
-   * list of species
-   *
-   * @param sp the species list to copy
-   */
-  void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_t* species_list)
-  {
-      auto* sp = species_list;
-      LIST_FOR_EACH( sp, species_list ) {
-          KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(sp);
-      }
-  }
-
-
-  /**
-   * @brief Copy all available particle memory from device to host, for a given species
-   *
-   * @param sp the species_t to copy
-   */
-  void KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(species_t* sp)
-  {
-    // FIXME: Remove
-    sp->copy_to_host();
-  }
-
-  /**
-   * @brief Copy all available particle memory from device to host, for a given species
-   *
-   * @param species_list The list of species to copy
-   */
-  void KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_t* species_list)
-  {
-      auto* sp = species_list;
-      LIST_FOR_EACH( sp, species_list ) {
-          KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
-      }
+        field_array->copy_to_host();
   }
 
   /**
@@ -786,7 +725,7 @@ public:
       if(!sp) ERROR(( "Invalid Species name: %s", speciesname ));
 
       if(step() > sp->last_copied)
-          KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
+        sp->copy_to_host();
   }
 
   /**
@@ -805,78 +744,7 @@ public:
       auto* sp = species_list;
       LIST_FOR_EACH( sp, species_list ) {
           if(step() > sp->last_copied)
-          KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(sp);
-      }
-  }
-
-  /**
-   * @brief Copy the interpolator array values from original VPIC memory, into
-   * the Kokkos host array and then ship it down to the device
-   *
-   * @param interpolator_array Interpolator source data to copy
-   */
-  void KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array_t* interpolator_array)
-  {
-    interpolator_array->copy_to_device();
-  }
-
-  /**
-   * @brief Copy the interpolator array back from the device, and copy into
-   * into the original VPIC memory
-   *
-   * @param interpolator_array location to copy the Interpolator data into
-   */
-  void KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array_t* interpolator_array)
-  {
-    interpolator_array->copy_to_host();
-  }
-
-  /**
-   * @brief Copy the accumulator array values from original VPIC memory, into
-   * the Kokkos host array and then ship it down to the device
-   *
-   * @param accumulator_array accumulator source data to copy
-   */
-  void KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array_t* accumulator_array)
-  {
-    accumulator_array->copy_to_device();
-  }
-
-  /**
-   * @brief Copy the accumulator array back from the device, and copy into
-   * into the original VPIC memory
-   *
-   * @param accumulator_array location to copy the accumulator data into
-   */
-  void KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array_t* accumulator_array)
-  {
-    accumulator_array->copy_to_host();
-  }
-
-  /**
-   * @brief For a single species, this copyes particle mover data to host,
-   * and populates original vpic mover memory. Uses subviews to copy from 0..nm
-   * instead of 0..nm_max to reduce d->h copy size
-   *
-   * @param species_list The species to apply the copy for
-   */
-  void KOKKOS_COPY_MOVER_MEM_TO_HOST_SP(species_t* sp)
-  {
-    sp->copy_outbound_to_host();
-  }
-
-  /**
-   * @brief For all species in a list, this copyes particle mover data to host,
-   * and populates original vpic mover memory. Uses subviews to copy from 0..nm
-   * instead of 0..nm_max to reduce d->h copy size
-   *
-   * @param species_list The list of species to apply the copy for
-   */
-  void KOKKOS_COPY_MOVER_MEM_TO_HOST(species_t* species_list)
-  {
-      auto* sp = species_list;
-      LIST_FOR_EACH( sp, species_list ) {
-          KOKKOS_COPY_MOVER_MEM_TO_HOST_SP(sp);
+            sp->copy_to_host();
       }
   }
 
