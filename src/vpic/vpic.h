@@ -697,86 +697,13 @@ public:
 
   void KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array_t* field_array)
   {
-      int n_fields = field_array->g->nv;
-      auto& k_field = field_array->k_f_h;
-      auto& k_field_edge = field_array->k_fe_h;
-      Kokkos::parallel_for("copy field to device", host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) {
-              k_field(i, field_var::ex) = field_array->f[i].ex;
-              k_field(i, field_var::ey) = field_array->f[i].ey;
-              k_field(i, field_var::ez) = field_array->f[i].ez;
-              k_field(i, field_var::div_e_err) = field_array->f[i].div_e_err;
-
-              k_field(i, field_var::cbx) = field_array->f[i].cbx;
-              k_field(i, field_var::cby) = field_array->f[i].cby;
-              k_field(i, field_var::cbz) = field_array->f[i].cbz;
-              k_field(i, field_var::div_b_err) = field_array->f[i].div_b_err;
-
-              k_field(i, field_var::tcax) = field_array->f[i].tcax;
-              k_field(i, field_var::tcay) = field_array->f[i].tcay;
-              k_field(i, field_var::tcaz) = field_array->f[i].tcaz;
-              k_field(i, field_var::rhob) = field_array->f[i].rhob;
-
-              k_field(i, field_var::jfx) = field_array->f[i].jfx;
-              k_field(i, field_var::jfy) = field_array->f[i].jfy;
-              k_field(i, field_var::jfz) = field_array->f[i].jfz;
-              k_field(i, field_var::rhof) = field_array->f[i].rhof;
-
-              k_field_edge(i, field_edge_var::ematx) = field_array->f[i].ematx;
-              k_field_edge(i, field_edge_var::ematy) = field_array->f[i].ematy;
-              k_field_edge(i, field_edge_var::ematz) = field_array->f[i].ematz;
-              k_field_edge(i, field_edge_var::nmat) = field_array->f[i].nmat;
-
-              k_field_edge(i, field_edge_var::fmatx) = field_array->f[i].fmatx;
-              k_field_edge(i, field_edge_var::fmaty) = field_array->f[i].fmaty;
-              k_field_edge(i, field_edge_var::fmatz) = field_array->f[i].fmatz;
-              k_field_edge(i, field_edge_var::cmat) = field_array->f[i].cmat;
-      });
-      Kokkos::deep_copy(field_array->k_f_d, field_array->k_f_h);
-      Kokkos::deep_copy(field_array->k_fe_d, field_array->k_fe_h);
+    field_array->copy_to_device();
   }
 
   void KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array_t* field_array)
   {
-      field_copy_last = step(); // track when we last moved this
-      Kokkos::deep_copy(field_array->k_f_h, field_array->k_f_d);
-      Kokkos::deep_copy(field_array->k_fe_h, field_array->k_fe_d);
-
-      auto& k_field = field_array->k_f_h;
-      auto& k_field_edge = field_array->k_fe_h;
-
-      int n_fields = field_array->g->nv;
-
-      Kokkos::parallel_for("copy field to host", host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) {
-              field_array->f[i].ex = k_field(i, field_var::ex);
-              field_array->f[i].ey = k_field(i, field_var::ey);
-              field_array->f[i].ez = k_field(i, field_var::ez);
-              field_array->f[i].div_e_err = k_field(i, field_var::div_e_err);
-
-              field_array->f[i].cbx = k_field(i, field_var::cbx);
-              field_array->f[i].cby = k_field(i, field_var::cby);
-              field_array->f[i].cbz = k_field(i, field_var::cbz);
-              field_array->f[i].div_b_err = k_field(i, field_var::div_b_err);
-
-              field_array->f[i].tcax = k_field(i, field_var::tcax);
-              field_array->f[i].tcay = k_field(i, field_var::tcay);
-              field_array->f[i].tcaz = k_field(i, field_var::tcaz);
-              field_array->f[i].rhob = k_field(i, field_var::rhob);
-
-              field_array->f[i].jfx = k_field(i, field_var::jfx);
-              field_array->f[i].jfy = k_field(i, field_var::jfy);
-              field_array->f[i].jfz = k_field(i, field_var::jfz);
-              field_array->f[i].rhof = k_field(i, field_var::rhof);
-
-              field_array->f[i].ematx = k_field_edge(i, field_edge_var::ematx);
-              field_array->f[i].ematy = k_field_edge(i, field_edge_var::ematy);
-              field_array->f[i].ematz = k_field_edge(i, field_edge_var::ematz);
-              field_array->f[i].nmat = k_field_edge(i, field_edge_var::nmat);
-
-              field_array->f[i].fmatx = k_field_edge(i, field_edge_var::fmatx);
-              field_array->f[i].fmaty = k_field_edge(i, field_edge_var::fmaty);
-              field_array->f[i].fmatz = k_field_edge(i, field_edge_var::fmatz);
-              field_array->f[i].cmat = k_field_edge(i, field_edge_var::cmat);
-      });
+    field_array->copy_to_host();
+    field_copy_last = step();
   }
 
   /**
