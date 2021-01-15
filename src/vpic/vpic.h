@@ -895,30 +895,7 @@ public:
    */
   void KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array_t* interpolator_array)
   {
-      auto nv = interpolator_array->g->nv;
-
-      auto& k_interpolator_h = interpolator_array->k_i_h;
-      Kokkos::parallel_for("Copy interpolators to device", host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) {
-              k_interpolator_h(i, interpolator_var::ex)       = interpolator_array->i[i].ex;
-              k_interpolator_h(i, interpolator_var::ey)       = interpolator_array->i[i].ey;
-              k_interpolator_h(i, interpolator_var::ez)       = interpolator_array->i[i].ez;
-              k_interpolator_h(i, interpolator_var::dexdy)    = interpolator_array->i[i].dexdy;
-              k_interpolator_h(i, interpolator_var::dexdz)    = interpolator_array->i[i].dexdz;
-              k_interpolator_h(i, interpolator_var::d2exdydz) = interpolator_array->i[i].d2exdydz;
-              k_interpolator_h(i, interpolator_var::deydz)    = interpolator_array->i[i].deydz;
-              k_interpolator_h(i, interpolator_var::deydx)    = interpolator_array->i[i].deydx;
-              k_interpolator_h(i, interpolator_var::d2eydzdx) = interpolator_array->i[i].d2eydzdx;
-              k_interpolator_h(i, interpolator_var::dezdx)    = interpolator_array->i[i].dezdx;
-              k_interpolator_h(i, interpolator_var::dezdy)    = interpolator_array->i[i].dezdy;
-              k_interpolator_h(i, interpolator_var::d2ezdxdy) = interpolator_array->i[i].d2ezdxdy;
-              k_interpolator_h(i, interpolator_var::cbx)      = interpolator_array->i[i].cbx;
-              k_interpolator_h(i, interpolator_var::cby)      = interpolator_array->i[i].cby;
-              k_interpolator_h(i, interpolator_var::cbz)      = interpolator_array->i[i].cbz;
-              k_interpolator_h(i, interpolator_var::dcbxdx)   = interpolator_array->i[i].dcbxdx;
-              k_interpolator_h(i, interpolator_var::dcbydy)   = interpolator_array->i[i].dcbydy;
-              k_interpolator_h(i, interpolator_var::dcbzdz)   = interpolator_array->i[i].dcbzdz;
-              });
-      Kokkos::deep_copy(interpolator_array->k_i_d, interpolator_array->k_i_h);
+    interpolator_array->copy_to_device();
   }
 
   /**
@@ -929,32 +906,7 @@ public:
    */
   void KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array_t* interpolator_array)
   {
-
-      Kokkos::deep_copy(interpolator_array->k_i_h, interpolator_array->k_i_d);
-
-      auto nv = interpolator_array->g->nv;;
-      auto& k_interpolator_h = interpolator_array->k_i_h;
-
-      Kokkos::parallel_for("Copy interpolators to device", host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) {
-              interpolator_array->i[i].ex       = k_interpolator_h(i, interpolator_var::ex);
-              interpolator_array->i[i].ey       = k_interpolator_h(i, interpolator_var::ey);
-              interpolator_array->i[i].ez       = k_interpolator_h(i, interpolator_var::ez);
-              interpolator_array->i[i].dexdy    = k_interpolator_h(i, interpolator_var::dexdy);
-              interpolator_array->i[i].dexdz    = k_interpolator_h(i, interpolator_var::dexdz);
-              interpolator_array->i[i].d2exdydz = k_interpolator_h(i, interpolator_var::d2exdydz);
-              interpolator_array->i[i].deydz    = k_interpolator_h(i, interpolator_var::deydz);
-              interpolator_array->i[i].deydx    = k_interpolator_h(i, interpolator_var::deydx);
-              interpolator_array->i[i].d2eydzdx = k_interpolator_h(i, interpolator_var::d2eydzdx);
-              interpolator_array->i[i].dezdx    = k_interpolator_h(i, interpolator_var::dezdx);
-              interpolator_array->i[i].dezdy    = k_interpolator_h(i, interpolator_var::dezdy);
-              interpolator_array->i[i].d2ezdxdy = k_interpolator_h(i, interpolator_var::d2ezdxdy);
-              interpolator_array->i[i].cbx      = k_interpolator_h(i, interpolator_var::cbx);
-              interpolator_array->i[i].cby      = k_interpolator_h(i, interpolator_var::cby);
-              interpolator_array->i[i].cbz      = k_interpolator_h(i, interpolator_var::cbz);
-              interpolator_array->i[i].dcbxdx   = k_interpolator_h(i, interpolator_var::dcbxdx);
-              interpolator_array->i[i].dcbydy   = k_interpolator_h(i, interpolator_var::dcbydy);
-              interpolator_array->i[i].dcbzdz   = k_interpolator_h(i, interpolator_var::dcbzdz);
-              });
+    interpolator_array->copy_to_host();
   }
 
   /**

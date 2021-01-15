@@ -47,6 +47,16 @@ typedef struct interpolator_array {
     k_i_h = Kokkos::create_mirror_view(k_i_d);
   }
 
+  /**
+   * @brief Copies the interpolator data to the host.
+   */
+  void copy_to_host();
+
+  /**
+   * @brief Copies the interpolator data to the device.
+   */
+  void copy_to_device();
+
 } interpolator_array_t;
 
 // In interpolator_array.cxx
