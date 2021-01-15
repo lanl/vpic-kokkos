@@ -122,6 +122,15 @@ typedef struct accumulator_array {
       k_a_h  = Kokkos::create_mirror_view(k_a_d);
   }
 
+  /**
+   * @brief Copies the accumulator data to the host.
+   */
+  void copy_to_host();
+
+  /**
+   * @brief Copies the accumulator data to the device.
+   */
+  void copy_to_device();
 
 } accumulator_array_t;
 

@@ -917,22 +917,7 @@ public:
    */
   void KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array_t* accumulator_array)
   {
-      auto na = accumulator_array->na;
-
-      auto& k_accumulators_h = accumulator_array->k_a_h;
-      Kokkos::parallel_for("copy accumulator to device", KOKKOS_TEAM_POLICY_HOST
-              (na, Kokkos::AUTO),
-              KOKKOS_LAMBDA
-              (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) {
-              const unsigned int i = team_member.league_rank();
-              /* TODO: Do we really need a 2d loop here*/
-              Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) {
-                      k_accumulators_h(i, accumulator_var::jx, j)       = accumulator_array->a[i].jx[j];
-                      k_accumulators_h(i, accumulator_var::jy, j)       = accumulator_array->a[i].jy[j];
-                      k_accumulators_h(i, accumulator_var::jz, j)       = accumulator_array->a[i].jz[j];
-                      });
-              });
-      Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
+    accumulator_array->copy_to_device();
   }
 
   /**
@@ -943,22 +928,7 @@ public:
    */
   void KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array_t* accumulator_array)
   {
-      auto& na = accumulator_array->na;
-      auto& k_accumulators_h = accumulator_array->k_a_h;
-
-      Kokkos::deep_copy(accumulator_array->k_a_h, accumulator_array->k_a_d);
-      Kokkos::parallel_for("copy accumulator to host", KOKKOS_TEAM_POLICY_HOST
-              (na, Kokkos::AUTO),
-              KOKKOS_LAMBDA
-              (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) {
-              const unsigned int i = team_member.league_rank();
-
-              Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) {
-                      accumulator_array->a[i].jx[j] = k_accumulators_h(i, accumulator_var::jx, j);
-                      accumulator_array->a[i].jy[j] = k_accumulators_h(i, accumulator_var::jy, j);
-                      accumulator_array->a[i].jz[j] = k_accumulators_h(i, accumulator_var::jz, j);
-                      });
-              });
+    accumulator_array->copy_to_host();
   }
 
   /**
