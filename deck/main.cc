@@ -53,7 +53,7 @@ void checkpt(const char* fbase, int tag)
     species_t* sp;
     LIST_FOR_EACH( sp, simulation->species_list )
     {
-        if (simulation->step() > sp->species_copy_last)
+        if (simulation->step() > sp->last_copied)
         {
             simulation->KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
         }

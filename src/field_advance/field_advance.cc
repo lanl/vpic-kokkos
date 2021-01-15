@@ -135,6 +135,8 @@ field_array_t::copy_to_host() {
 
     });
 
+  last_copied = g->step;
+
 }
 
 void

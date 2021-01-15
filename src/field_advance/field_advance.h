@@ -319,6 +319,18 @@ typedef struct field_array {
   k_field_accum_t k_f_rhob_accum_d;//TODO: Remove when absorbing pbc on device
   k_field_accum_t::HostMirror k_f_rhob_accum_h;
 
+  // Step when the field was last copied to to the host.  The copy can
+  // take place at any time during the step, so checking
+  // last_copied==step() does not mean that the host and device
+  // data are the same.  Typically, copy is called immediately after the
+  // step is incremented and before or during user_diagnostics.  Checking
+  // last_copied==step() in these circumstances does mean the host
+  // is up to date, unless you do unusual stuff in user_diagnostics.
+  //
+  // This number is tracked on the host only, and may be inaccurate on
+  // the device.
+  int64_t last_copied = -1;
+
   // Constructors don't get called on restart..
   // Initialize Kokkos Field Array
   field_array(int n_fields, int xyz_sz, int yzx_sz, int zxy_sz)

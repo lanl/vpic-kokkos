@@ -146,9 +146,6 @@ public:
   bool kokkos_field_injection = false;
   bool kokkos_current_injection = false;
   bool kokkos_particle_injection = false;
-  // Copy the last time-step on which we knowingly copied data back
-  int64_t field_copy_last = -1;
-  int64_t particle_copy_last = -1;
 
   // FIXME: THESE INTERVALS SHOULDN'T BE PART OF vpic_simulation
   // THE BIG LIST FOLLOWING IT SHOULD BE CLEANED UP TOO
@@ -703,7 +700,6 @@ public:
   void KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array_t* field_array)
   {
     field_array->copy_to_host();
-    field_copy_last = step();
   }
 
   /**
@@ -718,7 +714,7 @@ public:
    */
   void user_diagnostics_copy_field_mem_to_host()
   {
-      if (step() > field_copy_last)
+      if (step() > field_array->last_copied)
           KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
   }
 
@@ -767,7 +763,6 @@ public:
    */
   void KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_t* species_list)
   {
-      particle_copy_last = step();
       auto* sp = species_list;
       LIST_FOR_EACH( sp, species_list ) {
           KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
@@ -790,7 +785,7 @@ public:
       species_t * sp = find_species_name(speciesname, species_list);
       if(!sp) ERROR(( "Invalid Species name: %s", speciesname ));
 
-      if(step() > sp->species_copy_last)
+      if(step() > sp->last_copied)
           KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
   }
 
@@ -809,7 +804,7 @@ public:
   {
       auto* sp = species_list;
       LIST_FOR_EACH( sp, species_list ) {
-          if(step() > sp->species_copy_last)
+          if(step() > sp->last_copied)
           KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(sp);
       }
   }

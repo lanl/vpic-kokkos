@@ -197,7 +197,7 @@ species_t::copy_to_host()
 
     });
 
-  species_copy_last = g->step;
+  last_copied = g->step;
 
 }
 
