@@ -195,9 +195,29 @@ class species_t {
             k_pm_i_h = Kokkos::create_mirror_view(k_pm_i_d);
 
             k_nm_h = Kokkos::create_mirror_view(k_nm_d);
-            
+
             clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
         }
+
+        /**
+         * @brief Copies all the outbound particles and movers to the host.
+         */
+        void copy_outbound_to_host();
+
+        /**
+         * @brief Copies all the particles and movers from the device to the host.
+         */
+        void copy_to_host();
+
+        /**
+         * @brief Copies all the particles and movers from the host to the device.
+         */
+        void copy_to_device();
+
+        /**
+         * @brief Copies all the inbound particles from the host to the device.
+         */
+        void copy_inbound_to_device();
 
 };
 

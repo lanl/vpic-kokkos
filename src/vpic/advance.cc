@@ -197,50 +197,13 @@ int vpic_simulation::advance(void)
 
       // Update np now we removed them...
       sp->np -= nm;
-      KOKKOS_TOC( BACKFILL, 0);
-
-      auto& particles = sp->k_p_d;
-      auto& particles_i = sp->k_p_i_d;
-
-      int num_to_copy = sp->num_to_copy;
+      KOKKOS_TOC( BACKFILL, 1);
 
       // Copy data for copies back to device
       KOKKOS_TIC();
-        auto pc_d_subview = Kokkos::subview(sp->k_pc_d, std::make_pair(0, num_to_copy), Kokkos::ALL);
-        auto pci_d_subview = Kokkos::subview(sp->k_pc_i_d, std::make_pair(0, num_to_copy));
-        auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, num_to_copy), Kokkos::ALL);
-        auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, num_to_copy));
-        Kokkos::deep_copy(pc_d_subview, pc_h_subview);
-        Kokkos::deep_copy(pci_d_subview, pci_h_subview);
-      KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
+        sp->copy_inbound_to_device();
+      KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
-      KOKKOS_TIC(); // Time this data movement
-      auto& particle_copy = sp->k_pc_d;
-      auto& particle_copy_i = sp->k_pc_i_d;
-      int num_to_copy = sp->num_to_copy;
-      int np = sp->np;
-
-      // Append it to the particles
-      Kokkos::parallel_for("append moved particles", Kokkos::RangePolicy <
-              Kokkos::DefaultExecutionSpace > (0, sp->num_to_copy), KOKKOS_LAMBDA
-              (int i)
-      {
-        int npi = np+i; // i goes from 0..n so no need for -1
-        //printf("append to %d from %d \n", npi, i);
-        particles(npi, particle_var::dx) = particle_copy(i, particle_var::dx);
-        particles(npi, particle_var::dy) = particle_copy(i, particle_var::dy);
-        particles(npi, particle_var::dz) = particle_copy(i, particle_var::dz);
-        particles(npi, particle_var::ux) = particle_copy(i, particle_var::ux);
-        particles(npi, particle_var::uy) = particle_copy(i, particle_var::uy);
-        particles(npi, particle_var::uz) = particle_copy(i, particle_var::uz);
-        particles(npi, particle_var::w)  = particle_copy(i, particle_var::w);
-        particles_i(npi) = particle_copy_i(i);
-      });
-
-      // Reset this to zero now we've done the write back
-      sp->np += num_to_copy;
-      sp->num_to_copy = 0;
-      KOKKOS_TOC( BACKFILL, 1); // Don't double count
   }
 
   // This copies over a val for nm, which is a lie
