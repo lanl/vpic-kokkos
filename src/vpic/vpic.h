@@ -124,6 +124,7 @@ public:
   void modify( const char *fname );
   int advance( void );
   void finalize( void );
+  void print_run_details( void );
 
   // Directly initialized by user
 
@@ -145,12 +146,9 @@ public:
   bool kokkos_field_injection = false;
   bool kokkos_current_injection = false;
   bool kokkos_particle_injection = false;
-  // Track how often the user wants us to copy data back from device
-  int field_copy_interval = -1;
-  int particle_copy_interval = -1;
   // Copy the last time-step on which we knowingly copied data back
-  int field_copy_last;
-  int particle_copy_last;
+  int64_t field_copy_last = -1;
+  int64_t particle_copy_last = -1;
 
   // FIXME: THESE INTERVALS SHOULDN'T BE PART OF vpic_simulation
   // THE BIG LIST FOLLOWING IT SHOULD BE CLEANED UP TOO
@@ -370,34 +368,37 @@ public:
   define_periodic_grid( double xl,  double yl,  double zl,
                         double xh,  double yh,  double zh,
                         double gnx, double gny, double gnz,
-                        double gpx, double gpy, double gpz ) {
-	px = size_t(gpx); py = size_t(gpy); pz = size_t(gpz);
-    partition_periodic_box( grid, xl, yl, zl, xh, yh, zh,
-                            (int)gnx, (int)gny, (int)gnz,
-                            (int)gpx, (int)gpy, (int)gpz );
+                        double gpx, double gpy, double gpz )
+  {
+      px = size_t(gpx); py = size_t(gpy); pz = size_t(gpz);
+      partition_periodic_box( grid, xl, yl, zl, xh, yh, zh,
+              (int)gnx, (int)gny, (int)gnz,
+              (int)gpx, (int)gpy, (int)gpz );
   }
 
   inline void
   define_absorbing_grid( double xl,  double yl,  double zl,
                          double xh,  double yh,  double zh,
                          double gnx, double gny, double gnz,
-                         double gpx, double gpy, double gpz, int pbc ) {
-	px = size_t(gpx); py = size_t(gpy); pz = size_t(gpz);
-    partition_absorbing_box( grid, xl, yl, zl, xh, yh, zh,
-                             (int)gnx, (int)gny, (int)gnz,
-                             (int)gpx, (int)gpy, (int)gpz,
-                             pbc );
+                         double gpx, double gpy, double gpz, int pbc )
+  {
+      px = size_t(gpx); py = size_t(gpy); pz = size_t(gpz);
+      partition_absorbing_box( grid, xl, yl, zl, xh, yh, zh,
+              (int)gnx, (int)gny, (int)gnz,
+              (int)gpx, (int)gpy, (int)gpz,
+              pbc );
   }
 
   inline void
   define_reflecting_grid( double xl,  double yl,  double zl,
                           double xh,  double yh,  double zh,
                           double gnx, double gny, double gnz,
-                          double gpx, double gpy, double gpz ) {
-	px = size_t(gpx); py = size_t(gpy); pz = size_t(gpz);
-    partition_metal_box( grid, xl, yl, zl, xh, yh, zh,
-                         (int)gnx, (int)gny, (int)gnz,
-                         (int)gpx, (int)gpy, (int)gpz );
+                          double gpx, double gpy, double gpz )
+  {
+      px = size_t(gpx); py = size_t(gpy); pz = size_t(gpz);
+      partition_metal_box( grid, xl, yl, zl, xh, yh, zh,
+              (int)gnx, (int)gny, (int)gnz,
+              (int)gpx, (int)gpy, (int)gpz );
   }
 
   // The below macros allow custom domains to be created
@@ -779,6 +780,22 @@ public:
   }
 
   /**
+   * @brief Copy all field data to the host, if it has not already been copied
+   * this step
+   *
+   * This does not guarantee that the particles are truly up to date, since it
+   * checks only if a copy has already been done at some point during the
+   * current step, but it will always work in user_diagnostics unless the loop
+   * is modified or a user modifies particles during user_diagnostics.  
+   *
+   */
+  void user_diagnostics_copy_field_mem_to_host()
+  {
+      if (step() > field_copy_last)
+          KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+  }
+
+  /**
    * @brief Copy all available particle memory from host to device, for a given
    * species list
    *
@@ -919,6 +936,8 @@ public:
               sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
               sp->pm[i].i     = k_particle_movers_i_h(i);
               });
+
+      sp->species_copy_last = step();
   }
 
   /**
@@ -932,6 +951,46 @@ public:
       auto* sp = species_list;
       LIST_FOR_EACH( sp, species_list ) {
           KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
+      }
+  }
+
+  /**
+   * @brief Copy all available particle memory from device to host, for a given
+   * species, if it has not been copied this step
+   *
+   * This does not guarantee that the particles are truly up to date, since it
+   * checks only if a copy has already been done at some point during the
+   * current step, but it will always work in user_diagnostics unless the loop
+   * is modified or a user modifies particles during user_diagnostics.  
+   *
+   * @param speciesname the name of the species to copy
+   */
+  void user_diagnostics_copy_particles_mem_to_host(const char * speciesname)
+  {
+      species_t * sp = find_species_name(speciesname, species_list);
+      if(!sp) ERROR(( "Invalid Species name: %s", speciesname ));
+
+      if(step() > sp->species_copy_last)
+          KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
+  }
+
+  /**
+   * @brief Copy all available particle memory from host to device, for a given
+   * list of species, if it has not been copied this step
+   *
+   * This does not guarantee that the particles are truly up to date, since it
+   * checks only if a copy has already been done at some point during the
+   * current step, but it will always work in user_diagnostics unless the loop
+   * is modified or a user modifies particles during user_diagnostics.  
+   *
+   * @param sp the species list to copy
+   */
+  void user_diagnostics_copy_all_particles_mem_to_host(species_t* species_list)
+  {
+      auto* sp = species_list;
+      LIST_FOR_EACH( sp, species_list ) {
+          if(step() > sp->species_copy_last)
+          KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(sp);
       }
   }
 

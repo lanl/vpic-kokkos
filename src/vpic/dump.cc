@@ -180,16 +180,9 @@ vpic_simulation::dump_grid( const char *fbase ) {
 
 void
 vpic_simulation::dump_fields( const char *fbase, int ftag ) {
-    // Check the current dump step is up to date with GPU data
-    if( rank()==0 )
-    {
-        if (step() > field_copy_last) {
-            // Warn the user:
-            std::cerr << "Field data being dumped is out of date. Dumping at step "
-                << step() << " with data from step " <<
-                field_copy_last << std::endl;
-        }
-    }
+    // Update the fields if necessary
+    if (step() > field_copy_last)
+        KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
 
   char fname[256];
   FileIO fileIO;
@@ -227,6 +220,8 @@ void
 vpic_simulation::dump_hydro( const char *sp_name,
                              const char *fbase,
                              int ftag ) {
+
+
   species_t *sp;
   char fname[256];
   FileIO fileIO;
@@ -234,6 +229,12 @@ vpic_simulation::dump_hydro( const char *sp_name,
 
   sp = find_species_name( sp_name, species_list );
   if( !sp ) ERROR(( "Invalid species \"%s\"", sp_name ));
+
+    // Update the particles on the host only if they haven't been recently
+    // TODO: Port the hydro calculations to the device so this copy won't be
+    // needed.
+    if (step() > sp->species_copy_last)
+        KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
 
   clear_hydro_array( hydro_array );
   accumulate_hydro_p( hydro_array, sp, interpolator_array );
@@ -272,16 +273,6 @@ vpic_simulation::dump_particles( const char *sp_name,
                                  const char *fbase,
                                  int ftag )
 {
-    // Check the current dump step is up to date with GPU data
-    if( rank()==0 )
-    {
-        if (step() > particle_copy_last) {
-            // Warn the user:
-            std::cerr << "Particle data being dumped is out of date. Dumping at step "
-                << step() << " with data from step " <<
-                particle_copy_last << std::endl;
-        }
-    }
 
     species_t *sp;
     char fname[256];
@@ -294,6 +285,10 @@ vpic_simulation::dump_particles( const char *sp_name,
     if( !sp ) ERROR(( "Invalid species name \"%s\".", sp_name ));
 
     if( !fbase ) ERROR(( "Invalid filename" ));
+
+    // Update the particles on the host only if they haven't been recently
+    if (step() > sp->species_copy_last)
+        KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
 
     if( !p_buf ) MALLOC_ALIGNED( p_buf, PBUF_SIZE, 128 );
 
@@ -541,6 +536,10 @@ vpic_simulation::global_header( const char * base,
 void
 vpic_simulation::field_dump( DumpParameters & dumpParams ) {
 
+    // Update the fields if necessary
+    if (step() > field_copy_last)
+        KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+
   // Create directory for this time step
   char timeDir[256];
   sprintf(timeDir, "%s/T.%ld", dumpParams.baseDir, (long)step());
@@ -701,6 +700,12 @@ vpic_simulation::hydro_dump( const char * speciesname,
 
   species_t * sp = find_species_name(speciesname, species_list);
   if( !sp ) ERROR(( "Invalid species name: %s", speciesname ));
+
+    // Update the particles on the host only if they haven't been recently
+    // TODO: Port the hydro calculations to the device so this copy won't be
+    // needed.
+    if (step() > sp->species_copy_last)
+        KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
 
   clear_hydro_array( hydro_array );
   accumulate_hydro_p( hydro_array, sp, interpolator_array );

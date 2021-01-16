@@ -37,8 +37,6 @@ begin_globals {
 
 begin_initialization {
 
-  particle_copy_interval = 2;
-
   // At this point, there is an empty grid and the random number generator is
   // seeded with the rank. The grid, materials, species need to be defined.
   // Then the initial non-zero fields need to be loaded at time level 0 and the

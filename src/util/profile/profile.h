@@ -98,13 +98,22 @@ enum profile_internal_use_only_timers {
 //      (n_calls);                                                      \
 //  } while(0); \
 //  if (should_barrier) Kokkos::fence();
+<<<<<<< HEAD
 #define KOKKOS_TOC_(timer,n_calls, should_barrier)                    \
     if (should_barrier) Kokkos::fence();                              \
+=======
+#define KOKKOS_TOC_(timer,n_calls, should_barrier)                     \
+    if (should_barrier) Kokkos::fence(); \
+>>>>>>> devel
     profile_internal_use_only[profile_internal_use_only_##timer].t += \
       wallclock() - _profile_tic;                                     \
     profile_internal_use_only[profile_internal_use_only_##timer].n += \
       (n_calls);                                                      \
+<<<<<<< HEAD
   } while(0); 
+=======
+  } while(0);
+>>>>>>> devel
 
 #define KOKKOS_TOC(timer,n_calls) KOKKOS_TOC_(timer, n_calls, 1)
 // N for no barrier

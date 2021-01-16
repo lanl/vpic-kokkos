@@ -130,6 +130,18 @@ class species_t {
         // And is basically the same as nm at certain times?
         int num_to_copy = 0;
 
+        // Step when the species was last copied to to the host.  The copy can
+        // take place at any time during the step, so checking
+        // species_copy_last==step() does not mean that the host and device
+        // data are the same.  Typically, copy is called immediately after the
+        // step is incremented and before or during user_diagnostics.  Checking
+        // species_copy_last==step() in these circumstances does mean the host
+        // is up to date, unless you do unusual stuff in user_diagnostics.
+        //
+        // This number is tracked on the host only, and may be inaccurate on
+        // the device.
+        int64_t species_copy_last = -1;
+
         // Init Kokkos Particle Arrays
         species_t(int n_particles, int n_pmovers) :
             k_p_d("k_particles", n_particles),
@@ -257,13 +269,21 @@ void
 k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
                   const species_t     * RESTRICT sp );
 
-void 
-k_accumulate_rhob(k_field_t& kfield, 
-                  k_particles_t& kpart, 
-                  k_particle_movers_t& kpart_movers, 
-                  const grid_t* RESTRICT g, 
+void k_accumulate_rhob(k_field_t& kfield,
+                  k_particles_t& kpart,
+                  k_particle_movers_t& kpart_movers,
+                  const grid_t* RESTRICT g,
                   const float qsp,
                   const int nm);
+
+void k_accumulate_rhob_single_cpu(
+            k_field_t& kfield,
+            k_particles_t& kpart,
+            k_particles_i_t& kpart_i,
+            const int i,
+            const grid_t* g,
+            const float qsp
+);
 
 // In hydro_p.c
 
@@ -755,4 +775,104 @@ move_p_kokkos_host_serial(
   //#undef local_pm_i
   return 0; // Return "mover not in use"
 }
+
+// TODO: this bascially duplicates funcitonality in rho_p.cc and should be DRY'd
+template<typename kf_t, typename kp_t, typename kpi_t> // k_field_t, k_particles_t, k_particles_i_t
+void k_accumulate_rhob_single_cpu(
+        kf_t& k_rhob_accum,
+        kp_t& kpart,
+        kpi_t& kpart_i,
+        const int i,
+        const grid_t* g,
+        const float qsp
+)
+{
+    // Extract grid vars
+    const float r8V = g->r8V;
+    const int nx = g->nx;
+    const int ny = g->ny;
+    const int nz = g->nz;
+    const int sy = g->sy;
+    const int sz = g->sz;
+
+    // Kernel
+    //float w0 = p->dx, w1 = p->dy, w2, w3, w4, w5, w6, w7, dz = p->dz;
+    //int v = p->i, x, y, z, sy = g->sy, sz = g->sz;
+    //w7 = (qsp*g->r8V)*p->w;
+    float w0 = kpart(i, particle_var::dx);
+    float w1 = kpart(i, particle_var::dy);
+    float w7 = (qsp * r8V) * kpart(i, particle_var::w);
+    float dz = kpart(i, particle_var::dz);
+    int v = kpart_i(i);
+    //printf("\n Vars are %g, %g, %g %g\n", w0, w1, w7, dz);
+
+    float w6 = w7 - w0 * w7;
+    w7 = w7 + w0 * w7;
+    float w4 = w6 - w1 * w6;
+    float w5 = w7 - w1 * w7;
+    w6 = w6 + w1 * w6;
+    w7 = w7 + w1 * w7;
+    w0 = w4 - dz * w4;
+    w1 = w5 - dz * w5;
+    float w2 = w6 - dz * w6;
+    float w3 = w7 - dz * w7;
+    w4 = w4 + dz * w4;
+    w5 = w5 + dz * w5;
+    w6 = w6 + dz * w6;
+    w7 = w7 + dz * w7;
+
+    int x = v;
+    int z = x/sz;
+    if(z == 1) {
+        w0 += w0;
+        w1 += w1;
+        w2 += w2;
+        w3 += w3;
+    }
+    if(z == nz) {
+        w4 += w4;
+        w5 += w5;
+        w6 += w6;
+        w7 += w7;
+    }
+    x -= sz * z;
+    int y = x/sy;
+    if(y == 1) {
+        w0 += w0;
+        w1 += w1;
+        w4 += w4;
+        w5 += w5;
+    }
+    if(y == ny) {
+        w2 += w2;
+        w3 += w3;
+        w6 += w6;
+        w7 += w7;
+    }
+    x -= sy * y;
+    if(x == 1) {
+        w0 += w0;
+        w2 += w2;
+        w4 += w4;
+        w6 += w6;
+    }
+    if(x == nx) {
+        w1 += w1;
+        w3 += w3;
+        w5 += w5;
+        w7 += w7;
+    }
+    //printf("Absorbing %d into %d for %e %e %e %e %e %e %e %e \n", i, v, w0, w1, w2, w3, w4, w5, w6, w7);
+    // Save the bound charge to an accumulator array to be added to rhob on the
+    // device later
+    k_rhob_accum(v) += w0;
+    k_rhob_accum(v+1) += w1;
+    k_rhob_accum(v+sy) += w2;
+    k_rhob_accum(v+sy+1) += w3;
+    k_rhob_accum(v+sz) += w4;
+    k_rhob_accum(v+sz+1) += w5;
+    k_rhob_accum(v+sz+sy) += w6;
+    k_rhob_accum(v+sz+sy+1) += w7;
+}
+
 #endif // _species_advance_h_

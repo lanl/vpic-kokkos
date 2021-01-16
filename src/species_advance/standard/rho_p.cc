@@ -25,7 +25,8 @@
 
 void
 accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
-        const species_t     * RESTRICT sp ) {
+        const species_t     * RESTRICT sp )
+{
     if( !fa || !sp || fa->g!=sp->g ) ERROR(( "Bad args" ));
 
     /**/  field_t    * RESTRICT ALIGNED(128) f = fa->f;
@@ -132,6 +133,7 @@ accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
         const float                              qsp ) {
 # if 1
 
+    std::cout << "accumulate rhob" << std::endl;
     // See note in rhof for why this variant is used.
     float w0 = p->dx, w1 = p->dy, w2, w3, w4, w5, w6, w7, dz = p->dz;
     int v = p->i, x, y, z, sy = g->sy, sz = g->sz;
@@ -239,7 +241,7 @@ struct accum_rho_p_reduce {
 
     KOKKOS_INLINE_FUNCTION
     void init(value_type sums) const {
-        for(int j=0; j<value_count; ++j) { 
+        for(int j=0; j<value_count; ++j) {
             sums[j] = 0.0;
         }
     }
@@ -574,4 +576,3 @@ void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, k_particles_i_t&
     Kokkos::parallel_for("accumulate_rhob", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0,nm),
         accum_rhob(kfield, kpart, kpart_i, k_part_movers_i, qsp, r8V, nx, ny, nz, sy, sz));
 }
-

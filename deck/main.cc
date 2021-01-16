@@ -118,10 +118,12 @@ int main(int argc, char** argv)
         simulation->modify( fbase );
     }
 
+    // Print output log
+    simulation->print_run_details();
+
     // Perform the main simulation
     if( world_rank==0 ) log_printf( "*** Advancing\n" );
     double elapsed = wallclock();
-//    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 
 //#ifdef VPIC_ENABLE_PAPI
   std::fstream profile("profile.log", std::ios_base::app);
@@ -137,8 +139,6 @@ int main(int argc, char** argv)
 //Kokkos::Profiling::popRegion();
 
     elapsed = wallclock() - elapsed;
-//    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-//    std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double>>(t2-t1);
 
 //#ifdef VPIC_ENABLE_PAPI
   profile.open("profile.log", std::ios_base::app);
@@ -156,8 +156,7 @@ int main(int argc, char** argv)
         h -= d*24;
         d -= w*7;
 
-//        log_printf( "*** Done (%fs elapsed)\n",
-//                time_span.count());
+        // Does not include intialization time, only records main advance loop time
         log_printf( "*** Done (%gs / %iw:%id:%ih:%im:%is elapsed)\n",
                 elapsed, w, d, h, m, s );
     }

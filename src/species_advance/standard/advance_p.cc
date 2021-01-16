@@ -567,14 +567,15 @@ Kokkos::Profiling::pushRegion(" " + std::to_string(step) + " " + std::string(sp-
   );
 Kokkos::Profiling::popRegion();
 
+  KOKKOS_TIC();
   // I need to know the number of movers that got populated so I can call the
   // compress. Let's copy it back
   Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
   // TODO: which way round should this copy be?
 
-//  int nm = sp->k_nm_h(0);
+  //  int nm = sp->k_nm_h(0);
 
-//  printf("nm = %d \n", nm);
+  //  printf("nm = %d \n", nm);
 
   // Copy particle mirror movers back so we have their data safe. Ready for
   // boundary_p_kokkos

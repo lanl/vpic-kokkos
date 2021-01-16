@@ -1279,7 +1279,7 @@ template <> void adjust_div_e_err<ZXY>(field_array_t* fa, const grid_t* g, const
         Kokkos::MDRangePolicy<Kokkos::Rank<2>> yx_policy({1,1}, {ny+2, nx+2});
         switch(bc) {
             case anti_symmetric_fields:
-                break;
+                //break;
             case absorb_fields:
                 Kokkos::parallel_for("adjust_div_e_err<ZXY>", yx_policy, KOKKOS_LAMBDA(const int y, const int x) {
                     const int z = face;
