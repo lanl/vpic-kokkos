@@ -40,7 +40,8 @@ void
 boundary_p_kokkos( particle_bc_t       * RESTRICT pbc_list,
             species_t           * RESTRICT sp_list,
             field_array_t       * RESTRICT fa,
-            accumulator_array_t * RESTRICT aa );
+            accumulator_array_t * RESTRICT aa
+        );
 
 /* In maxwellian_reflux.c */
 

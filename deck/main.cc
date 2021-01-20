@@ -8,9 +8,10 @@
  *
  */
 
-#include "vpic/vpic.h"
 #include <chrono>
 #include <thread>
+
+#include "vpic/vpic.h"
 
 // The simulation variable is set up this way so both the checkpt
 // service and main can see it.  This allows main to find where
@@ -48,6 +49,25 @@ vpic_simulation** restore_main(void)
  */
 void checkpt(const char* fbase, int tag)
 {
+
+    ////////// Pull Kokkos data back from the device
+    species_t* sp;
+    LIST_FOR_EACH( sp, simulation->species_list )
+    {
+        if (simulation->step() > sp->species_copy_last)
+        {
+            simulation->KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
+        }
+    }
+    // TODO: do these functions need to live inside the simulation class?
+    simulation->KOKKOS_COPY_FIELD_MEM_TO_HOST(simulation->field_array);
+
+    simulation->KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(simulation->interpolator_array);
+
+    //std::cout << "Copying data back to host for checkpointing.." << std::endl;
+
+    ///// End Kokkos Copy Data /////
+
     char fname[256];
     if( !fbase ) ERROR(( "NULL filename base" ));
     sprintf( fname, "%s.%i.%i", fbase, tag, world_rank );
@@ -66,8 +86,10 @@ void checkpt(const char* fbase, int tag)
 int main(int argc, char** argv)
 {
 
-    // TODO: not everthing goes through the deck, so this may be better done
-    // in simulation init
+    // Doing the scope guard is a reasonable option, however not everything
+    // relies on this main, and thus they need to duplicate the scope guard.
+    // If we instead have the VPIC internals do the init (such as in
+    // simulation->init), that duplication can be avoided
     //Kokkos::ScopeGuard scope_guard(argc, argv);
 
     // Initialize underlying threads and services
@@ -93,6 +115,8 @@ int main(int argc, char** argv)
         mp_barrier();
         reanimate_objects();
         mp_barrier();
+
+        restore_kokkos(*simulation);
 
     }
     else // We are initializing from scratch.
@@ -126,24 +150,22 @@ int main(int argc, char** argv)
     double elapsed = wallclock();
 
 //#ifdef VPIC_ENABLE_PAPI
-  std::fstream profile("profile.log", std::ios_base::app);
-  profile << "START" << std::endl;
-  profile.close();
-  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//  std::fstream profile("profile.log", std::ios_base::app);
+//  profile << "START" << std::endl;
+//  profile.close();
+//  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 //#endif
 
     // Call the actual advance until it's done
     // TODO: Can we make this into a bounded loop
-//Kokkos::Profiling::pushRegion("VPIC");
     while( simulation->advance() );
-//Kokkos::Profiling::popRegion();
 
     elapsed = wallclock() - elapsed;
 
 //#ifdef VPIC_ENABLE_PAPI
-  profile.open("profile.log", std::ios_base::app);
-  profile << "FINISH" << std::endl;
-  profile.close();
+//  profile.open("profile.log", std::ios_base::app);
+//  profile << "FINISH" << std::endl;
+//  profile.close();
 //#endif
 
     // Report run time information on rank 0

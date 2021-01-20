@@ -1263,7 +1263,8 @@ begin_initialization {
       inject_particle( electron, x, y, z,
                        normal( rng(0), 0, uthe ), 
                        normal( rng(0), 0, uthe ), 
-                       normal( rng(0), 0, uthe ), 
+                       0.5,
+//                       normal( rng(0), 0, uthe ), 
                        fabs(qe), 0, 0 );
 
       if ( mobile_ions ) {
@@ -1271,13 +1272,15 @@ begin_initialization {
           inject_particle( ion_H, x, y, z,
                            normal( rng(0), 0, uthi_H ), 
                            normal( rng(0), 0, uthi_H ), 
-                           normal( rng(0), 0, uthi_H ), 
+                           0.25,
+//                           normal( rng(0), 0, uthi_H ), 
                            fabs(qi_H), 0, 0 );
         if ( He_present ) // Inject an He macroion on top of macroelectron
           inject_particle( ion_He, x, y, z,
                            normal( rng(0), 0, uthi_He ), 
                            normal( rng(0), 0, uthi_He ), 
-                           normal( rng(0), 0, uthi_He ), 
+                           0.75, 
+//                           normal( rng(0), 0, uthi_He ), 
                            fabs(qi_He), 0, 0 );
       }
       // DEBUG 

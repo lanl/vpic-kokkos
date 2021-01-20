@@ -80,9 +80,9 @@ enum profile_internal_use_only_timers {
       (n_calls);                                                      \
   } while(0);
 
-// TODO: these unsafe macros should be removed, but I didn't want to fight with all the extra while loop and scoping crap.
-//#define KOKKOS_TIC()                                                  \
-//  do {                                                                \
+// TODO: these unsafe macros should be removed, but I didn't want to fight with all the extra while loop and scoping.
+//#define KOKKOS_TIC()
+//  do {
 //    std::chrono::high_resolution_clock::time_point _profile_tic = std::chrono::high_resolution_clock::now();
 #define KOKKOS_TIC()                                                  \
   do {                                                                \
@@ -91,29 +91,20 @@ enum profile_internal_use_only_timers {
 // This macro:
 // 1) is more flexible but stronger scoped than the normal TIC
 // 2) calls kokkos::fence, and thus has performance over head
-//#define KOKKOS_TOC_(timer,n_calls, should_barrier)                     \
-//    profile_internal_use_only[profile_internal_use_only_##timer].t += \
-//      (std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::high_resolution_clock::now() - _profile_tic)).count(); \
-//    profile_internal_use_only[profile_internal_use_only_##timer].n += \
-//      (n_calls);                                                      \
-//  } while(0); \
+//#define KOKKOS_TOC_(timer,n_calls, should_barrier)
+//    profile_internal_use_only[profile_internal_use_only_##timer].t +=
+//      (std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::high_resolution_clock::now() - _profile_tic)).count();
+//    profile_internal_use_only[profile_internal_use_only_##timer].n +=
+//      (n_calls);
+//  } while(0);
 //  if (should_barrier) Kokkos::fence();
-<<<<<<< HEAD
 #define KOKKOS_TOC_(timer,n_calls, should_barrier)                    \
     if (should_barrier) Kokkos::fence();                              \
-=======
-#define KOKKOS_TOC_(timer,n_calls, should_barrier)                     \
-    if (should_barrier) Kokkos::fence(); \
->>>>>>> devel
     profile_internal_use_only[profile_internal_use_only_##timer].t += \
       wallclock() - _profile_tic;                                     \
     profile_internal_use_only[profile_internal_use_only_##timer].n += \
       (n_calls);                                                      \
-<<<<<<< HEAD
   } while(0); 
-=======
-  } while(0);
->>>>>>> devel
 
 #define KOKKOS_TOC(timer,n_calls) KOKKOS_TOC_(timer, n_calls, 1)
 // N for no barrier

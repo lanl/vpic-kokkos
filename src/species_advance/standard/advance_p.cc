@@ -10,7 +10,6 @@
 
 void
 advance_p_kokkos(
-//        k_particles_soa_t& k_part,
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
         k_particle_copy_t& k_particle_copy,
@@ -20,7 +19,7 @@ advance_p_kokkos(
         k_accumulators_sa_t k_accumulators_sa,
         k_interpolator_t& k_interp,
         //k_particle_movers_t k_local_particle_movers,
-        k_iterator_t& k_nm,
+        k_counter_t& k_nm,
         k_neighbor_t& k_neighbors,
         const grid_t *g,
         const float qdt_2mc,
@@ -40,72 +39,6 @@ advance_p_kokkos(
   constexpr float one_third      = 1./3.;
   constexpr float two_fifteenths = 2./15.;
 
-//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
-//  k_part.dx(i) = k_particles(i, particle_var::dx);
-//  k_part.dy(i) = k_particles(i, particle_var::dy);
-//  k_part.dz(i) = k_particles(i, particle_var::dz);
-//  k_part.ux(i) = k_particles(i, particle_var::ux);
-//  k_part.uy(i) = k_particles(i, particle_var::uy);
-//  k_part.uz(i) = k_particles(i, particle_var::uz);
-//  k_part.w(i) = k_particles(i, particle_var::w);
-//  k_part.i(i) = k_particles_i(i);
-//});
-
-  /*
-  k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
-  k_particle_movers_t  k_local_particle_movers("k_local_pm", 1);
-
-  k_iterator_t k_nm("k_nm");
-  k_iterator_t::HostMirror h_nm = Kokkos::create_mirror_view(k_nm);
-  h_nm(0) = 0;
-  Kokkos::deep_copy(k_nm, h_nm);
-  */
-  // Determine which quads of particles quads this pipeline processes
-
-  //DISTRIBUTE( args->np, 16, pipeline_rank, n_pipeline, itmp, n );
-  //p = args->p0 + itmp;
-
-  /*
-  printf("original value %f\n\n", k_accumulators(0, 0, 0));
-sp_[id]->
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int i) {
-
-      auto scatter_access = k_accumulators_sa.access();
-      //auto scatter_access_atomic = scatter_view.template access<Kokkos::Experimental::ScatterAtomic>();
-          printf("Writing to %d\n", i);
-          scatter_access(i, 0, 0) += 4;
-          //scatter_access_atomic(i, 1) += 2.0;
-          //scatter_access(k, 2) += 1.0;
-          //
-  });
-
-  // copy back
-  Kokkos::Experimental::contribute(k_accumulators, k_accumulators_sa);
-  printf("changed value %f\n", k_accumulators(0, 0, 0));
-  */
-
-  // Determine which movers are reserved for this pipeline
-  // Movers (16 bytes) should be reserved for pipelines in at least
-  // multiples of 8 such that the set of particle movers reserved for
-  // a pipeline is 128-byte aligned and a multiple of 128-byte in
-  // size.  The host is guaranteed to get enough movers to process its
-  // particles with this allocation.
-/*
-  max_nm = args->max_nm - (args->np&15);
-  if( max_nm<0 ) max_nm = 0;
-  DISTRIBUTE( max_nm, 8, pipeline_rank, n_pipeline, itmp, max_nm );
-  if( pipeline_rank==n_pipeline ) max_nm = args->max_nm - itmp;
-  pm   = args->pm + itmp;
-  nm   = 0;
-  itmp = 0;
-
-  // Determine which accumulator array to use
-  // The host gets the first accumulator array
-
-  if( pipeline_rank!=n_pipeline )
-    a0 += (1+pipeline_rank)*
-          POW2_CEIL((args->nx+2)*(args->ny+2)*(args->nz+2),2);
-*/
   // Process particles for this pipeline
 
 //  #define p_dx    k_part.dx(p_index)
@@ -159,21 +92,13 @@ sp_[id]->
   auto rangel = g->rangel;
   auto rangeh = g->rangeh;
 
-  // TODO: is this the right place to do this?
-  Kokkos::parallel_for("clear nm", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
-    //printf("how many times does this run %d", i);
-    k_nm(0) = 0;
-    //local_pm_dispx = 0;
-    //local_pm_dispy = 0;
-    //local_pm_dispz = 0;
-    //local_pm_i = 0;
-  });
-
+  // zero out nm, we could probably do this earlier if we're worried about it
+  // slowing things down
+  Kokkos::deep_copy(k_nm, 0);
 
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index)
     {
-//for(int p_index=0; p_index<np; p_index++) {
     float v0, v1, v2, v3, v4, v5;
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
 
@@ -302,8 +227,6 @@ sp_[id]->
       local_pm->dispz = uz;
       local_pm->i     = p_index;
 
-      //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
-//      if( move_p_kokkos(k_part, k_particles, k_particles_i, local_pm,
       if( move_p_kokkos(k_particles, k_particles_i, local_pm,
                          k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
         if( k_nm(0)<max_nm ) {
@@ -338,20 +261,7 @@ sp_[id]->
         }
       }
     }
-//}
   });
-
-//Kokkos::parallel_for(Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(int i) {
-//  k_particles(i, particle_var::dx) = k_part.dx(i);
-//  k_particles(i, particle_var::dy) = k_part.dy(i);
-//  k_particles(i, particle_var::dz) = k_part.dz(i);
-//  k_particles(i, particle_var::ux) = k_part.ux(i);
-//  k_particles(i, particle_var::uy) = k_part.uy(i);
-//  k_particles(i, particle_var::uz) = k_part.uz(i);
-//  k_particles(i, particle_var::w) = k_part.w(i);
-//  k_particles_i(i) = k_part.i(i);
-//});
-
 
   // TODO: abstract this manual data copy
   //Kokkos::deep_copy(h_nm, k_nm);
@@ -362,7 +272,6 @@ sp_[id]->
   //args->seg[pipeline_rank].n_ignored = 0; // TODO: update this
   //delete(k_local_particle_movers_p);
   //return h_nm(0);
-
 }
 
 void
@@ -567,7 +476,6 @@ Kokkos::Profiling::pushRegion(" " + std::to_string(step) + " " + std::string(sp-
   );
 Kokkos::Profiling::popRegion();
 
-  KOKKOS_TIC();
   // I need to know the number of movers that got populated so I can call the
   // compress. Let's copy it back
   Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);

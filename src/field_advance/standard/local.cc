@@ -1109,7 +1109,18 @@ void
 k_local_adjust_norm_b( field_array_t * RESTRICT fa,
                      const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
-  int bc, face, x, y, z, xl, xh, yl, yh, zl, zh;
+
+  int bc = 0;
+  int face = 0;
+  int xl = 0;
+  int xh = 0;
+  int yl = 0;
+  int yh = 0;
+  int zl = 0;
+  int zh = 0;
+  int x = 0;
+  int y = 0;
+  int z = 0;
 
 // TODO: Test the macro unrolling and parallel_for here. This does not
 // get touched during a normal harris run

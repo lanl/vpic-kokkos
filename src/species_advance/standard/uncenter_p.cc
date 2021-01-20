@@ -1,8 +1,14 @@
 #define IN_spa
 #include "spa_private.h"
 
-// TODO: these should be refs?
-void uncenter_p_kokkos(k_particles_t k_particles, k_particles_i_t k_particles_i, k_interpolator_t k_interp, int np, float qdt_2mc_c) {
+void uncenter_p_kokkos(
+        k_particles_t& k_particles,
+        k_particles_i_t& k_particles_i,
+        k_interpolator_t& k_interp,
+        int np,
+        float qdt_2mc_c
+)
+{
   const float qdt_2mc        =     -qdt_2mc_c; // For backward half advance
   const float qdt_4mc        = -0.5*qdt_2mc_c; // For backward half rotate
   const float one            = 1.;
@@ -10,7 +16,7 @@ void uncenter_p_kokkos(k_particles_t k_particles, k_particles_i_t k_particles_i,
   const float two_fifteenths = 2./15.;
 
   // Particle defines (p->x)
-  #define p_dx    k_particles(p_index, particle_var::dx) 
+  #define p_dx    k_particles(p_index, particle_var::dx)
   #define p_dy    k_particles(p_index, particle_var::dy)
   #define p_dz    k_particles(p_index, particle_var::dz)
   #define p_ux    k_particles(p_index, particle_var::ux) // Load momentum

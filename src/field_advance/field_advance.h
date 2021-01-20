@@ -181,14 +181,11 @@ typedef struct field_advance_kernels {
 
   void (*advance_b)( struct field_array * RESTRICT fa, float frac );
   void (*advance_e)( struct field_array * RESTRICT fa, float frac );
-  void (*advance_e_kokkos)( struct field_array * RESTRICT fa, float frac );
 
   // Diagnostic interface
   // FIXME: MAY NEED MORE CAREFUL THOUGHT FOR CURVILINEAR SYSTEMS
 
   void (*energy_f)( /**/  double        * RESTRICT en, // 6 elem
-                    const struct field_array * RESTRICT fa );
-  void (*energy_f_kokkos)( /**/  double        * RESTRICT en, // 6 elem
                     const struct field_array * RESTRICT fa );
 
   // Accumulator interface
@@ -197,10 +194,6 @@ typedef struct field_advance_kernels {
   void (*synchronize_jf )( struct field_array * RESTRICT fa );
   void (*clear_rhof     )( struct field_array * RESTRICT fa );
   void (*synchronize_rho)( struct field_array * RESTRICT fa );
-  void (*clear_jf_kokkos)( struct field_array * RESTRICT fa );
-  void (*k_synchronize_jf )( struct field_array * RESTRICT fa );
-  void (*clear_rhof_kokkos     )( struct field_array * RESTRICT fa );
-  void (*k_synchronize_rho)( struct field_array * RESTRICT fa );
 
   // Initialization interface
 
@@ -210,58 +203,41 @@ typedef struct field_advance_kernels {
   // Local/remote shared face cleaning
 
   double (*synchronize_tang_e_norm_b)( struct field_array * RESTRICT fa );
-  double (*synchronize_tang_e_norm_b_kokkos)( struct field_array * RESTRICT fa );
 
   // Electric field divergence cleaning interface
 
   void   (*compute_div_e_err    )( /**/  struct field_array * RESTRICT fa );
   double (*compute_rms_div_e_err)( const struct field_array * RESTRICT fa );
   void   (*clean_div_e          )( /**/  struct field_array * RESTRICT fa );
-  void   (*compute_div_e_err_kokkos  )( /**/  struct field_array * RESTRICT fa );
-  double (*compute_rms_div_e_err_kokkos)(const struct field_array * RESTRICT fa);
-  void   (*clean_div_e_kokkos   )( /**/  struct field_array * RESTRICT fa );
 
   // Magnetic field divergence cleaning interface
 
   void   (*compute_div_b_err    )( /**/  struct field_array * RESTRICT fa );
   double (*compute_rms_div_b_err)( const struct field_array * RESTRICT fa );
   void   (*clean_div_b          )( /**/  struct field_array * RESTRICT fa );
+
+  void (*advance_e_kokkos)( struct field_array * RESTRICT fa, float frac );
+  void (*energy_f_kokkos)( /**/  double        * RESTRICT en, // 6 elem
+                    const struct field_array * RESTRICT fa );
+  void (*clear_jf_kokkos)( struct field_array * RESTRICT fa );
+  void (*clear_rhof_kokkos     )( struct field_array * RESTRICT fa );
+  void (*k_synchronize_jf )( struct field_array * RESTRICT fa );
+  void (*k_synchronize_rho)( struct field_array * RESTRICT fa );
+  double (*synchronize_tang_e_norm_b_kokkos)( struct field_array * RESTRICT fa );
+
+  void   (*compute_div_e_err_kokkos  )( /**/  struct field_array * RESTRICT fa );
+  double (*compute_rms_div_e_err_kokkos)(const struct field_array * RESTRICT fa);
+  void   (*clean_div_e_kokkos   )( /**/  struct field_array * RESTRICT fa );
+
   void   (*compute_div_b_err_kokkos)( struct field_array* RESTRICT fa );
   double (*compute_rms_div_b_err_kokkos)( const struct field_array * RESTRICT fa );
   void   (*clean_div_b_kokkos   )( /**/  struct field_array * RESTRICT fa );
 
+
 } field_advance_kernels_t;
 
-// A field_array holds all the field quanties and pointers to
-// kernels used to advance them.
-
-typedef struct field_array {
-  field_t * ALIGNED(128) f;           // Local field data
-  grid_t  * g;                        // Underlying grid
-  void    * params;                   // Field advance specific parameters
-  field_advance_kernels_t kernel[1];  // Field advance kernels
-
-  k_field_t k_f_d;                   // Kokkos field data on device
-  k_field_t::HostMirror k_f_h;       // Kokkos field data on host
-  k_field_edge_t k_fe_d;             // Kokkos field_edge data (part of field_t) on device
-  k_field_edge_t::HostMirror k_fe_h; // Kokkos field_edge data on host
-  k_field_accum_t k_f_rhob_accum_d;//TODO: Remove when absorbing pbc on device
-  k_field_accum_t::HostMirror k_f_rhob_accum_h;
-
-  // Initialize Kokkos Field Array
-  field_array(int n_fields) :
-    k_f_d("k_fields", n_fields),
-    k_fe_d("k_field_edges", n_fields),
-    k_f_rhob_accum_d("k_rhob_accum", n_fields)//TODO: does this zero the array?
-  {
-    k_f_h = Kokkos::create_mirror_view(k_f_d);
-    k_fe_h = Kokkos::create_mirror_view(k_fe_d);
-    k_f_rhob_accum_h = Kokkos::create_mirror_view(k_f_rhob_accum_d);
-  }
-
-} field_array_t;
-
-typedef struct field_buffers {
+typedef struct field_buffers
+{
     Kokkos::View<float*>   xyz_sbuf_pos;
     Kokkos::View<float*>   yzx_sbuf_pos;
     Kokkos::View<float*>   zxy_sbuf_pos;
@@ -287,6 +263,10 @@ typedef struct field_buffers {
     Kokkos::View<float*>::HostMirror   xyz_rbuf_neg_h;
     Kokkos::View<float*>::HostMirror   yzx_rbuf_neg_h;
     Kokkos::View<float*>::HostMirror   zxy_rbuf_neg_h;
+
+    field_buffers() {
+        // User should try avoid calling this
+    }
 
     field_buffers(int xyz_size, int yzx_size, int zxy_size) {
         xyz_sbuf_pos = Kokkos::View<float*>("Send buffer for XYZ positive face", xyz_size);
@@ -318,6 +298,54 @@ typedef struct field_buffers {
         zxy_rbuf_neg_h = Kokkos::create_mirror_view(zxy_rbuf_neg);
     }
 } field_buffers_t;
+// A field_array holds all the field quanties and pointers to
+// kernels used to advance them.
+
+typedef struct field_array {
+  field_t * ALIGNED(128) f;           // Local field data
+  grid_t  * g;                        // Underlying grid
+  void    * params;                   // Field advance specific parameters
+  field_advance_kernels_t kernel[1];  // Field advance kernels
+
+  // I don't want this to be a pointer, but given it only holds Kokkos data
+  // this avoids a fiasco when checkpointing...
+  field_buffers_t* fb;
+
+  k_field_t k_f_d;                   // Kokkos field data on device
+  k_field_t::HostMirror k_f_h;       // Kokkos field data on host
+  k_field_edge_t k_fe_d;             // Kokkos field_edge data (part of field_t) on device
+  k_field_edge_t::HostMirror k_fe_h; // Kokkos field_edge data on host
+
+  k_field_accum_t k_f_rhob_accum_d;//TODO: Remove when absorbing pbc on device
+  k_field_accum_t::HostMirror k_f_rhob_accum_h;
+
+  // Constructors don't get called on restart..
+  // Initialize Kokkos Field Array
+  field_array(int n_fields, int xyz_sz, int yzx_sz, int zxy_sz)
+  {
+      init_kokkos_fields(n_fields, xyz_sz, yzx_sz, zxy_sz);
+  }
+
+  void init_kokkos_fields(int n_fields, int xyz_sz, int yzx_sz, int zxy_sz)
+  {
+      k_f_d = k_field_t("k_fields", n_fields);
+      k_fe_d = k_field_edge_t("k_field_edges", n_fields);
+      k_f_h = Kokkos::create_mirror_view(k_f_d);
+      k_fe_h = Kokkos::create_mirror_view(k_fe_d);
+
+      k_f_rhob_accum_d = k_field_accum_t("k_rhob_accum", n_fields);
+      k_f_rhob_accum_h = Kokkos::create_mirror_view(k_f_rhob_accum_d);
+
+      fb = new field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
+  }
+
+  ~field_array()
+  {
+      delete fb;
+  }
+
+} field_array_t;
+
 
 
 field_array_t *
@@ -327,5 +355,60 @@ new_standard_field_array( grid_t           * RESTRICT g,
 
 void
 delete_field_array( field_array_t * fa );
+
+
+// Move in from SFA private
+typedef struct material_coefficient {
+  float decayx, drivex;         // Decay of ex and drive of (curl H)x and Jx
+  float decayy, drivey;         // Decay of ey and drive of (curl H)y and Jy
+  float decayz, drivez;         // Decay of ez and drive of (curl H)z and Jz
+  float rmux, rmuy, rmuz;       // Reciprocle of relative permeability
+  float nonconductive;          // Divergence cleaning related coefficients
+  float epsx, epsy, epsz;
+  float pad[3];                 // For 64-byte alignment and future expansion
+} material_coefficient_t;
+
+typedef struct sfa_params {
+    material_coefficient_t * mc;
+    int n_mc;
+    float damp;
+
+    k_material_coefficient_t k_mc_d;
+    k_material_coefficient_t::HostMirror k_mc_h;
+
+    int n_materials;
+
+    sfa_params(int _n_materials) {
+        n_materials = _n_materials;
+        init_kokkos_sfa_params(_n_materials);
+    }
+    void init_kokkos_sfa_params(int n_materials)
+    {
+        k_mc_d = k_material_coefficient_t("k_material_coefficents", n_materials);
+        k_mc_h = Kokkos::create_mirror_view(k_mc_d);
+    }
+
+    void populate_kokkos_data()
+    {
+        Kokkos::parallel_for("Copy materials to device", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, n_mc), KOKKOS_LAMBDA (const int i)
+        {
+                k_mc_h(i, material_coeff_var::decayx) = mc[i].decayx;
+                k_mc_h(i, material_coeff_var::drivex) = mc[i].drivex;
+                k_mc_h(i, material_coeff_var::decayy) = mc[i].decayy;
+                k_mc_h(i, material_coeff_var::drivey) = mc[i].drivey;
+                k_mc_h(i, material_coeff_var::decayz) = mc[i].decayz;
+                k_mc_h(i, material_coeff_var::drivez) = mc[i].drivez;
+                k_mc_h(i, material_coeff_var::rmux) = mc[i].rmux;
+                k_mc_h(i, material_coeff_var::rmuy) = mc[i].rmuy;
+                k_mc_h(i, material_coeff_var::rmuz) = mc[i].rmuz;
+                k_mc_h(i, material_coeff_var::nonconductive) = mc[i].nonconductive;
+                k_mc_h(i, material_coeff_var::epsx) = mc[i].epsx;
+                k_mc_h(i, material_coeff_var::epsy) = mc[i].epsy;
+                k_mc_h(i, material_coeff_var::epsz) = mc[i].epsz;
+        });
+        Kokkos::deep_copy(k_mc_d, k_mc_h);
+    }
+
+} sfa_params_t;
 
 #endif // _field_advance_h_
