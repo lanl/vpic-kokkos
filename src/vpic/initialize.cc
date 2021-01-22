@@ -21,9 +21,9 @@ vpic_simulation::initialize( int argc,
   auto nfaces_per_voxel = 6;
   g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
-#ifdef VPIC_ENABLE_PAPI
-  Kokkos::Profiling::pushRegion("Initialization");
-#endif
+//#ifdef VPIC_ENABLE_PAPI
+//  Kokkos::Profiling::pushRegion("Initialization");
+//#endif
 
   // Do some consistency checks on user initialized fields
 
@@ -69,9 +69,9 @@ vpic_simulation::initialize( int argc,
   KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
   KOKKOS_TOCN( INTERPOLATOR_DATA_MOVEMENT, 1);
 
-  KOKKOS_TIC(); // Time this data movement
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
-  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+//  KOKKOS_TIC(); // Time this data movement
+//  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
+//  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   KOKKOS_TIC(); // Time this data movement
   KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
@@ -150,9 +150,9 @@ vpic_simulation::initialize( int argc,
   if( rank()==0 ) MESSAGE(( "Initialization complete" ));
   update_profile( rank()==0 ); // Let the user know how initialization went
 
-#ifdef VPIC_ENABLE_PAPI
-  Kokkos::Profiling::popRegion();
-#endif
+//#ifdef VPIC_ENABLE_PAPI
+//  Kokkos::Profiling::popRegion();
+//#endif
 }
 
 

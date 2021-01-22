@@ -448,7 +448,6 @@ advance_p_profiling( /**/  species_t            * RESTRICT sp,
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
-Kokkos::Profiling::pushRegion(" " + std::to_string(step) + " " + std::string(sp->name) + " advance_p_kokkos");
   advance_p_kokkos(
 //          sp->k_p_soa_d,
           sp->k_p_d,

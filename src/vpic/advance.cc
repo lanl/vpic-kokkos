@@ -12,9 +12,9 @@ int vpic_simulation::advance(void)
   double err;
 
   std::string step_str = std::to_string(step());
-#ifdef VPIC_ENABLE_PAPI
-  Kokkos::Profiling::pushRegion(" " + step_str);
-#endif
+//#ifdef VPIC_ENABLE_PAPI
+//  Kokkos::Profiling::pushRegion(" " + step_str);
+//#endif
 
   //printf("%d: Step %d \n", rank(), step());
 
@@ -25,9 +25,9 @@ int vpic_simulation::advance(void)
   // Determine if we are done ... see note below why this is done here
 
   if( num_step>0 && step()>=num_step ) {
-#ifdef VPIC_ENABLE_PAPI
-    Kokkos::Profiling::popRegion();
-#endif
+//#ifdef VPIC_ENABLE_PAPI
+//    Kokkos::Profiling::popRegion();
+//#endif
     return 0;
   }
   if( num_step>0 && step()>=num_step ) return 0;
@@ -90,10 +90,15 @@ int vpic_simulation::advance(void)
   KOKKOS_TIC();
   LIST_FOR_EACH( sp, species_list )
   {
+//#ifdef VPIC_ENABLE_PAPI
+//      advance_p_profiling( sp, accumulator_array, interpolator_array, step() );
+//#else
 #ifdef VPIC_ENABLE_PAPI
-      advance_p_profiling( sp, accumulator_array, interpolator_array, step() );
-#else
+Kokkos::Profiling::pushRegion(" " + step_str + " " + std::string(sp->name) + " advance_p_kokkos");
+#endif
       advance_p( sp, accumulator_array, interpolator_array );
+#ifdef VPIC_ENABLE_PAPI
+    Kokkos::Profiling::popRegion();
 #endif
   }
   KOKKOS_TOC( advance_p, 1);
