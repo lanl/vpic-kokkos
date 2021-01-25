@@ -33,9 +33,9 @@ using half_float::half;
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
 
-#define PARTICLE_WEIGHT_CONSTANT
+//#define PARTICLE_WEIGHT_CONSTANT
 //#define PARTICLE_WEIGHT_SHORT
-//#define PARTICLE_WEIGHT_FLOAT
+#define PARTICLE_WEIGHT_FLOAT
 
 //#define CPU_HALF
 
@@ -62,562 +62,29 @@ typedef short Q1_14;
 constexpr float Q1_14_CONST = static_cast<float>(1 << 14);
 constexpr float Q1_14_INV_CONST = (1.0/static_cast<float>(1 << 14));
 
-template <typename T> class Half {
-  public:
-    T _data; // Actual data
-
-    KOKKOS_INLINE_FUNCTION Half(): _data() {}
-
-    KOKKOS_INLINE_FUNCTION Half(T data) {
-      _data = data;
-    }
-
-    KOKKOS_INLINE_FUNCTION Half(const float f) {
-#ifdef __CUDA_ARCH__
-      _data = __float2half(f);
-#else
-      _data = static_cast<half>(f);
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION float half2float() {
-      return __half2float(_data);
-    }
-
-    KOKKOS_INLINE_FUNCTION operator float() const {
-#ifdef __CUDA_ARCH__
-      return __half2float(_data);
-#else
-      return static_cast<float>(_data);
-#endif
-    }
-
-		KOKKOS_INLINE_FUNCTION Half& operator=(Half rhs) { 
-#ifdef __CUDA_ARCH__
-      _data = rhs._data;
-      return *this;
-#else
-      _data = rhs._data;
-      return *this;
-#endif
-    }
-
-		KOKKOS_INLINE_FUNCTION Half& operator=(float rhs) { 
-#ifdef __CUDA_ARCH__
-      _data = __float2half(rhs);
-      return *this;
-#else
-      _data = static_cast<half>(rhs);
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T> operator+(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half<T>(__hadd(_data, rhs._data));
-#else
-      return Half<T>(_data+rhs._data);
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T> operator+(const float& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half<T>(__hadd(_data, __float2half(rhs)));
-#else
-      return Half<T>(_data+static_cast<T>(_data));
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T> operator-(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half<T>(__hsub(_data, rhs._data));
-#else
-      return Half<T>(_data-rhs._data);
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T> operator-(const float& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half<T>(__hsub(_data, __float2half(rhs)));
-#else
-      return Half<T>(_data-static_cast<T>(_data));
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T> operator*(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half<T>(__hmul(_data, rhs._data));
-#else
-      return Half<T>(_data*rhs._data);
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T> operator*(const float& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half<T>(__hmul(_data, __float2half(rhs)));
-#else
-      return Half<T>(_data*static_cast<T>(_data));
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T> operator/(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half<T>(__hdiv(_data, rhs._data));
-#else
-      return Half<T>(_data/rhs._data);
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T> operator/(const float& rhs) {
-#ifdef __CUDA_ARCH__
-      return Half<T>(__hdiv(_data, __float2half(rhs)));
-#else
-      return Half<T>(_data/static_cast<T>(_data));
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T>& operator+=(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      _data = __hadd(_data, rhs._data);
-      return *this;
-#else
-      _data += rhs._data;
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T>& operator+=(const float& rhs) {
-#ifdef __CUDA_ARCH__
-      _data = __hadd(_data, __float2half(rhs));
-      return *this;
-#else
-      _data += rhs;
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T>& operator-=(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      _data = __hsub(_data, rhs._data);
-      return *this;
-#else
-      _data -= rhs._data;
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T>& operator*=(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      _data = __hmul(_data, rhs._data);
-      return *this;
-#else
-      _data *= rhs._data;
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T>& operator/=(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      _data = __hdiv(_data, rhs._data);
-      return *this;
-#else
-      _data = rhs._data;
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T>& operator++() {
-#ifdef __CUDA_ARCH__
-      _data = __hadd(_data, Half(1.0));
-      return *this;
-#else
-      _data++;
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T>& operator--() {
-#ifdef __CUDA_ARCH__
-      _data = __hsub(_data, Half(1.0));
-      return *this;
-#else
-      _data--;
-      return *this;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T> operator++(int a) {
-#ifdef __CUDA_ARCH__
-      return Half<T>( __hadd(_data, Half(1.0)));
-#else
-      return Half<T>(++_data);
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T> operator--(int a) {
-#ifdef __CUDA_ARCH__
-      return Half<T>( __hsub(_data, Half(1.0)));
-#else
-      return Half<T>(--_data);
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T> operator+() const {
-#ifdef __CUDA_ARCH__
-      return Half<T>(_data);
-#else
-      return Half<T>(_data);
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION Half<T> operator-() const {
-#ifdef __CUDA_ARCH__
-      return Half<T>(__hneg(_data));
-#else
-      return -Half<T>(_data);
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION bool operator==(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return __heq(_data, rhs._data);
-#else
-      return _data==rhs._data;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION bool operator!=(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return __hne(_data, rhs._data);
-#else
-      return _data!=rhs._data;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION bool operator<=(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return __hle(_data, rhs._data);
-#else
-      return _data<=rhs._data;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION bool operator>=(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return __hge(_data, rhs._data);
-#else
-      return _data>=rhs._data;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION bool operator<(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return __hlt(_data, rhs._data);
-#else
-      return _data<rhs._data;
-#endif
-    }
-
-    KOKKOS_INLINE_FUNCTION bool operator>(const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-      return __hgt(_data, rhs._data);
-#else
-      return _data>rhs._data;
-#endif
-    }
-};
-
-template<typename T>
-KOKKOS_INLINE_FUNCTION Half<T> operator*(const float lhs, const Half<T>& rhs) {
-#ifdef __CUDA_ARCH__
-  return Half<T>(lhs) * rhs;
-#else
-  return Half<T>(lhs) * rhs;
-#endif
-}
-
-template<typename T> 
-KOKKOS_INLINE_FUNCTION Half<T> sqrt(Half<T> h) {
-#ifdef __CUDA_ARCH__
-  return Half<T>(hsqrt(h._data));
-#endif
-}
-
-template<typename T>
-KOKKOS_INLINE_FUNCTION Half<T> fma(const Half<T>& a, const Half<T>& b, const Half<T>& c) {
-#ifdef __CUDA_ARCH__
-  return Half<T>(__hfma(a._data, b._data, c._data));
-#else
-  return Half<T>(a._data*b._data + c._data);
-#endif
-}
-
-template<typename T>
-KOKKOS_INLINE_FUNCTION void atomicAdd(const Half<T>& a, const Half<T>& b) {
-#ifdef __CUDA_ARCH__
-  atomicAdd(&(a._data), b._data);
-#else 
-  Kokkos::atomic_add(&(a._data), b._data);
-#endif
-}
-
-KOKKOS_INLINE_FUNCTION void atomic_add(float* a, float b) {
-#ifdef __CUDA_ARCH__
-  atomicAdd(a,b);
-//#else
-//  Kokkos::atomic_add(a, b);
-#endif
-}
-  
-
-//template <typename T>
-//class Half2 {
-//  public:
-//    T _data; // Actual data
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T>(): _data() {}
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T>(__half2 data) {
-//      _data = data;
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T>(const float f1, const float f2) {
-//      _data = __floats2half2_rn(f1,f2);
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T>(const float f) {
-//      _data = __float2half2_rn(f);
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T>(const __half h) {
-//#ifdef __CUDA_ARCH__
-//      _data = __half2half2(h);
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION float high2float() {
-//      return __high2float(_data);
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION float low2float() {
-//      return __low2float(_data);
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half<__half> high2half() {
-//      return Half<__half>(__high2half(_data));
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half<__half> low2half() {
-//      return Half<__half>(__low2half(_data));
-//    }
-//
-//		KOKKOS_INLINE_FUNCTION Half2<T>& operator=(Half2<T> rhs) { 
-//#ifdef __CUDA_ARCH__
-//      _data = rhs._data;
-//      return *this;
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T> operator+(const Half2<T>& rhs) {
-//#ifdef __CUDA_ARCH__
-//      return Half2<T>(__hadd2(_data, rhs._data));
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T> operator+(Half2<T>& rhs) {
-//#ifdef __CUDA_ARCH__
-//      return Half2<T>(__hadd2(_data, rhs._data));
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T> operator-(const Half2<T>& rhs) {
-//#ifdef __CUDA_ARCH__
-//      return Half2<T>(__hsub2(_data, rhs._data));
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T> operator*(const Half2<T>& rhs) {
-//#ifdef __CUDA_ARCH__
-//      return Half2<T>(__hmul2(_data, rhs._data));
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T> operator/(const Half2<T>& rhs) {
-//#ifdef __CUDA_ARCH__
-//      return Half2<T>(__h2div(_data, rhs._data));
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T>& operator+=(const Half2<T>& rhs) {
-//#ifdef __CUDA_ARCH__
-//      _data = __hadd2(_data, rhs._data);
-//      return *this;
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T>& operator-=(const Half2<T>& rhs) {
-//#ifdef __CUDA_ARCH__
-//      _data = __hsub2(_data, rhs._data);
-//      return *this;
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T>& operator*=(const Half2<T>& rhs) {
-//#ifdef __CUDA_ARCH__
-//      _data = __hmul2(_data, rhs._data);
-//      return *this;
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T>& operator/=(const Half2<T>& rhs) {
-//#ifdef __CUDA_ARCH__
-//      _data = __h2div(_data, rhs._data);
-//      return *this;
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T>& operator++() {
-//#ifdef __CUDA_ARCH__
-//      _data = __hadd2(_data, __floats2half2_rn(1.0,1.0));
-//      return *this;
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T>& operator--() {
-//#ifdef __CUDA_ARCH__
-//      _data = __hsub2(_data, __floats2half2_rn(1.0,1.0));
-//      return *this;
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T> operator++(int a) {
-//#ifdef __CUDA_ARCH__
-//      return Half2<T>( __hadd2(_data, __floats2half2_rn(1.0,1.0)));
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T> operator--(int a) {
-//#ifdef __CUDA_ARCH__
-//      return Half2<T>( __hsub2(_data, __floats2half2_rn(1.0,1.0)));
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T> operator+() const {
-//#ifdef __CUDA_ARCH__
-//      return Half2<T>(_data);
-//#endif
-//    }
-//
-//    KOKKOS_INLINE_FUNCTION Half2<T> operator-() const {
-//#ifdef __CUDA_ARCH__
-//      return Half2<T>(__hneg2(_data));
-//#endif
-//    }
-//
-////    KOKKOS_INLINE_FUNCTION bool operator==(const Half2<T>& rhs) {
-////#ifdef __CUDA_ARCH__
-////      return __heq(_data, rhs._data);
-////#endif
-////    }
-////
-////    KOKKOS_INLINE_FUNCTION bool operator!=(const Half2<T>& rhs) {
-////#ifdef __CUDA_ARCH__
-////      return __hne(_data, rhs._data);
-////#endif
-////    }
-//
-//    KOKKOS_INLINE_FUNCTION bool operator<=(const Half2<T>& rhs) {
-//#ifdef __CUDA_ARCH__
-//      return __hble2(_data, rhs._data);
-//#endif
-//    }
-//
-////    KOKKOS_INLINE_FUNCTION bool operator>=(const Half2<T>& rhs) {
-////#ifdef __CUDA_ARCH__
-////      return __hge(_data, rhs._data);
-////#endif
-////    }
-////
-////    KOKKOS_INLINE_FUNCTION bool operator<(const Half2<T>& rhs) {
-////#ifdef __CUDA_ARCH__
-////      return __hlt(_data, rhs._data);
-////#endif
-////    }
-////
-////    KOKKOS_INLINE_FUNCTION bool operator>(const Half2<T>& rhs) {
-////#ifdef __CUDA_ARCH__
-////      return __hgt(_data, rhs._data);
-////#endif
-////    }
-//};
-//
-//template <typename T>
-//KOKKOS_INLINE_FUNCTION Half2<T> sqrt(Half2<T> h) {
-//#ifdef __CUDA_ARCH__
-//  return Half2<T>(h2sqrt(h._data));
-//#endif
-//}
-//
-////KOKKOS_INLINE_FUNCTION Half2<T> abs(Half2<T> h) {
-////#ifdef __CUDA_ARCH__
-////  return Half2<T>(__habs2(h._data));
-////#endif
-////}
-//
-//template <typename T>
-//KOKKOS_INLINE_FUNCTION Half2<T> eq(const Half2<T>& lhs, const Half2<T> & rhs) {
-//#ifdef __CUDA_ARCH__
-//  return Half2<T>(__heq2(lhs._data, rhs._data));
-//#endif
-//}
-//
-//template <typename T>
-//KOKKOS_INLINE_FUNCTION Half2<T> leq(const Half2<T>& lhs, const Half2<T> & rhs) {
-//#ifdef __CUDA_ARCH__
-//  return Half2<T>(__hle2(lhs._data, rhs._data));
-//#endif
-//}
-//
-//template <typename T>
-//KOKKOS_INLINE_FUNCTION Half2<T> fma(const Half2<T>& a, const Half2<T>& b, const Half2<T>& c) {
-//#ifdef __CUDA_ARCH__
-//  return Half2<T>(__hfma2(a._data, b._data, c._data));
-//#endif
-//}
-
-#ifdef KOKKOS_ENABLE_CUDA
-typedef __half pos_t;
-typedef float mom_t;
-typedef float mixed_t;
-#else
-typedef float pos_t;
-typedef float mom_t;
-typedef float mixed_t;
-#endif
-//#ifdef __CUDA_ARCH__
-////typedef Half<__half> pos_t;
-////typedef Half<__half> mom_t;
-////typedef Half<__half> mixed_t;
-////typedef Half2<__half2> packed_t;
-////typedef Q1_14 pos_t;
+//#ifdef KOKKOS_ENABLE_CUDA
 //typedef __half pos_t;
-////typedef float pos_t;
 //typedef float mom_t;
 //typedef float mixed_t;
 //#else
-////typedef Half<__half> pos_t;
-////typedef Half<__half> mom_t;
-////typedef Half<__half> mixed_t;
-////typedef Half2<__half2> packed_t;
-////typedef Half<half> pos_t;
-////typedef Half<half> mom_t;
-////typedef Half<half> mixed_t;
-////typedef Q1_14 pos_t;
-//typedef __half pos_t;
-////typedef float pos_t;
+//typedef float pos_t;
 //typedef float mom_t;
 //typedef float mixed_t;
 //#endif
+
+#ifdef __CUDA_ARCH__
+typedef Q1_14 pos_t;
+//typedef __half pos_t;
+//typedef float pos_t;
+typedef float mom_t;
+typedef float mixed_t;
+#else
+typedef Q1_14 pos_t;
+//typedef __half pos_t;
+//typedef float pos_t;
+typedef float mom_t;
+typedef float mixed_t;
+#endif
 
 //#define GPUSpace  Kokkos::DefaultExecutionSpace::memory_space
 
@@ -1228,16 +695,16 @@ class k_particles_host_struct<Q1_14, Momentum> {
 
 typedef struct k_particle_mover {
   int i;
-  pos_t dispx;
-  pos_t dispy;
-  pos_t dispz;
+  float dispx;
+  float dispy;
+  float dispz;
 } k_particle_mover_t;
 
 class k_particle_movers_struct {
     public:
-        Kokkos::View<pos_t *> dispx;
-        Kokkos::View<pos_t *> dispy;
-        Kokkos::View<pos_t *> dispz;
+        Kokkos::View<float *> dispx;
+        Kokkos::View<float *> dispy;
+        Kokkos::View<float *> dispz;
         Kokkos::View<int   *> i;
 
         k_particle_movers_struct() {}
@@ -1251,9 +718,9 @@ class k_particle_movers_struct {
 
 class k_particle_movers_host_struct {
     public:
-        Kokkos::View<pos_t *>::HostMirror dispx;
-        Kokkos::View<pos_t *>::HostMirror dispy;
-        Kokkos::View<pos_t *>::HostMirror dispz;
+        Kokkos::View<float *>::HostMirror dispx;
+        Kokkos::View<float *>::HostMirror dispy;
+        Kokkos::View<float *>::HostMirror dispz;
         Kokkos::View<int   *>::HostMirror i;
 
         k_particle_movers_host_struct() {}
@@ -1272,12 +739,14 @@ class k_particle_movers_host_struct {
         }
 };
 
+//using k_particles_soa_t      = k_particles_struct<Q1_14, mom_t>;
+//using k_particles_host_soa_t = k_particles_host_struct<Q1_14, mom_t>;
 #ifdef KOKKOS_ENABLE_CUDA
 using k_particles_soa_t      = k_particles_struct<pos_t, mom_t>;
 using k_particles_host_soa_t = k_particles_host_struct<pos_t, mom_t>;
 #else
-using k_particles_soa_t      = k_particles_struct<fp16_t, mom_t>;
-using k_particles_host_soa_t = k_particles_host_struct<fp16_t, mom_t>;
+using k_particles_soa_t      = k_particles_struct<pos_t, mom_t>;
+using k_particles_host_soa_t = k_particles_host_struct<pos_t, mom_t>;
 #endif
 using k_particle_movers_soa_t = k_particle_movers_struct;
 using k_particle_movers_host_soa_t = k_particle_movers_host_struct;

@@ -344,10 +344,10 @@ move_p_kokkos(
 #endif
   #define pii     k_part.i(pi)
 
-  pos_t s_midx, s_midy, s_midz;
-  pos_t s_dispx, s_dispy, s_dispz;
-  pos_t s_dir[3];
-  pos_t v0, v1, v2, v3, v4, v5, q;
+  mixed_t s_midx, s_midy, s_midz;
+  mixed_t s_dispx, s_dispy, s_dispz;
+  mixed_t s_dir[3];
+  mixed_t v0, v1, v2, v3, v4, v5, q;
 
 //  float s_midx, s_midy, s_midz;
 //  float s_dispx, s_dispy, s_dispz;
@@ -358,7 +358,7 @@ move_p_kokkos(
   //int pi = int(local_pm_i);
   int pi = pm->i;
 //  auto k_accumulators_scatter_access = k_accumulators_sa.access();
-  const pos_t one_third = 1.0/3.0;
+  const mixed_t one_third = 1.0/3.0;
 
 
   q = qsp*p_w;
@@ -383,15 +383,15 @@ move_p_kokkos(
 
     //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
 
-    s_dir[0] = (s_dispx>static_cast<pos_t>(0)) ? 1 : -1;
-    s_dir[1] = (s_dispy>static_cast<pos_t>(0)) ? 1 : -1;
-    s_dir[2] = (s_dispz>static_cast<pos_t>(0)) ? 1 : -1;
+    s_dir[0] = (s_dispx>static_cast<mixed_t>(0)) ? 1 : -1;
+    s_dir[1] = (s_dispy>static_cast<mixed_t>(0)) ? 1 : -1;
+    s_dir[2] = (s_dispz>static_cast<mixed_t>(0)) ? 1 : -1;
 
     // Compute the twice the fractional distance to each potential
     // streak/cell face intersection.
-    v0 = (s_dispx==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[0]-s_midx)/s_dispx;
-    v1 = (s_dispy==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[1]-s_midy)/s_dispy;
-    v2 = (s_dispz==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[2]-s_midz)/s_dispz;
+    v0 = (s_dispx==static_cast<mixed_t>(0)) ? static_cast<mixed_t>(3.4e38f) : (s_dir[0]-s_midx)/s_dispx;
+    v1 = (s_dispy==static_cast<mixed_t>(0)) ? static_cast<mixed_t>(3.4e38f) : (s_dir[1]-s_midy)/s_dispy;
+    v2 = (s_dispz==static_cast<mixed_t>(0)) ? static_cast<mixed_t>(3.4e38f) : (s_dir[2]-s_midz)/s_dispz;
 
     // Determine the fractional length and axis of current streak. The
     // streak ends on either the first face intersected by the
@@ -426,10 +426,10 @@ move_p_kokkos(
     v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
     v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
     v1 += v4;             /* v1 = q ux (1+dy)                     */  \
-    v4  = static_cast<pos_t>(1)+s_mid##Z;     /* v4 = 1+dz                            */  \
+    v4  = static_cast<mixed_t>(1)+s_mid##Z;     /* v4 = 1+dz                            */  \
     v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
     v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
-    v4  = static_cast<pos_t>(1)-s_mid##Z;     /* v4 = 1-dz                            */  \
+    v4  = static_cast<mixed_t>(1)-s_mid##Z;     /* v4 = 1-dz                            */  \
     v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
     v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
     v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
@@ -530,7 +530,7 @@ move_p_kokkos(
         k_part.set_dz(v0, pi);
     }
                            // _exactly_ on the boundary.
-    face = axis; if( v0>static_cast<pos_t>(0) ) face += 3;
+    face = axis; if( v0>static_cast<mixed_t>(0) ) face += 3;
 
     // TODO: clean this fixed index to an enum
     //neighbor = g->neighbor[ 6*ii + face ];
@@ -635,10 +635,10 @@ move_p_kokkos(
 #endif
   #define pii     k_part.i(pi)
 
-  pos_t s_midx, s_midy, s_midz;
-  pos_t s_dispx, s_dispy, s_dispz;
-  pos_t s_dir[3];
-  pos_t v0, v1, v2, v3, v4, v5, q;
+  mixed_t s_midx, s_midy, s_midz;
+  mixed_t s_dispx, s_dispy, s_dispz;
+  mixed_t s_dir[3];
+  mixed_t v0, v1, v2, v3, v4, v5, q;
 
 //  float s_midx, s_midy, s_midz;
 //  float s_dispx, s_dispy, s_dispz;
@@ -649,7 +649,7 @@ move_p_kokkos(
   //int pi = int(local_pm_i);
   int pi = pm->i;
   auto k_accumulators_scatter_access = k_accumulators_sa.access();
-  const pos_t one_third = 1.0/3.0;
+  const mixed_t one_third = 1.0/3.0;
 
 
   q = qsp*p_w;
@@ -673,15 +673,15 @@ move_p_kokkos(
 
     //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
 
-    s_dir[0] = (s_dispx>static_cast<pos_t>(0)) ? 1 : -1;
-    s_dir[1] = (s_dispy>static_cast<pos_t>(0)) ? 1 : -1;
-    s_dir[2] = (s_dispz>static_cast<pos_t>(0)) ? 1 : -1;
+    s_dir[0] = (s_dispx>static_cast<mixed_t>(0)) ? 1 : -1;
+    s_dir[1] = (s_dispy>static_cast<mixed_t>(0)) ? 1 : -1;
+    s_dir[2] = (s_dispz>static_cast<mixed_t>(0)) ? 1 : -1;
 
     // Compute the twice the fractional distance to each potential
     // streak/cell face intersection.
-    v0 = (s_dispx==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[0]-s_midx)/s_dispx;
-    v1 = (s_dispy==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[1]-s_midy)/s_dispy;
-    v2 = (s_dispz==static_cast<pos_t>(0)) ? static_cast<pos_t>(3.4e38f) : (s_dir[2]-s_midz)/s_dispz;
+    v0 = (s_dispx==static_cast<mixed_t>(0)) ? static_cast<mixed_t>(3.4e38f) : (s_dir[0]-s_midx)/s_dispx;
+    v1 = (s_dispy==static_cast<mixed_t>(0)) ? static_cast<mixed_t>(3.4e38f) : (s_dir[1]-s_midy)/s_dispy;
+    v2 = (s_dispz==static_cast<mixed_t>(0)) ? static_cast<mixed_t>(3.4e38f) : (s_dir[2]-s_midz)/s_dispz;
 
     // Determine the fractional length and axis of current streak. The
     // streak ends on either the first face intersected by the
@@ -706,7 +706,6 @@ move_p_kokkos(
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
     // current quadrant in a time-step
-//    v5 = q*s_dispx*s_dispy*s_dispz*half(one_third);
     v5 = q*s_dispx*s_dispy*s_dispz*one_third;
 
     //a = (float *)(&d_accumulators[ci]);
@@ -716,20 +715,16 @@ move_p_kokkos(
     v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
     v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
     v1 += v4;             /* v1 = q ux (1+dy)                     */  \
-    v4  = static_cast<pos_t>(1)+s_mid##Z;     /* v4 = 1+dz                            */  \
+    v4  = static_cast<mixed_t>(1)+s_mid##Z;     /* v4 = 1+dz                            */  \
     v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
     v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
-    v4  = static_cast<pos_t>(1)-s_mid##Z;     /* v4 = 1-dz                            */  \
+    v4  = static_cast<mixed_t>(1)-s_mid##Z;     /* v4 = 1-dz                            */  \
     v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
     v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
     v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
     v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
     v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
     v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-    //Kokkos::atomic_add(&a[0], v0); \
-    //Kokkos::atomic_add(&a[1], v1); \
-    //Kokkos::atomic_add(&a[2], v2); \
-    //Kokkos::atomic_add(&a[3], v3);
 
     accumulate_j(x,y,z);
     k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
@@ -749,13 +744,6 @@ move_p_kokkos(
     k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
     k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
 
-//#ifdef __CUDA_ARCH__
-//if(pi < 4096) {
-////  printf("move_p: blockIdx.x: %d,\tthreadIdx.y: %d,\tp_index: %d,\tii: %d\n", blockIdx.x, threadIdx.y,  pi, ii);
-//  printf("p_index: %4d, pii: %6d, blockIdx.x: %6d, threadIdx.y: %4d, move_p\n", pi, pii, blockIdx.x, threadIdx.y);
-//}
-//#endif
-
 #   undef accumulate_j
 
     // Compute the remaining particle displacment
@@ -768,9 +756,9 @@ move_p_kokkos(
 //    p_dx += s_dispx+s_dispx;
 //    p_dy += s_dispy+s_dispy;
 //    p_dz += s_dispz+s_dispz;
-    k_part.set_dx(k_part.get_dx(pi)+s_dispx+s_dispx, pi);
-    k_part.set_dy(k_part.get_dy(pi)+s_dispy+s_dispy, pi);
-    k_part.set_dz(k_part.get_dz(pi)+s_dispz+s_dispz, pi);
+    k_part.set_dx(static_cast<mixed_t>(k_part.get_dx(pi))+s_dispx+s_dispx, pi);
+    k_part.set_dy(static_cast<mixed_t>(k_part.get_dy(pi))+s_dispy+s_dispy, pi);
+    k_part.set_dz(static_cast<mixed_t>(k_part.get_dz(pi))+s_dispz+s_dispz, pi);
 
     // If an end streak, return success (should be ~50% of the time)
     //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
@@ -796,7 +784,7 @@ move_p_kokkos(
         k_part.set_dz(v0, pi);
     }
                            // _exactly_ on the boundary.
-    face = axis; if( v0>static_cast<pos_t>(0) ) face += 3;
+    face = axis; if( v0>static_cast<mixed_t>(0) ) face += 3;
 
     // TODO: clean this fixed index to an enum
     //neighbor = g->neighbor[ 6*ii + face ];

@@ -1988,9 +1988,9 @@ template<> void end_recv_jf<ZXY>(const grid_t* g, field_array_t* fa, int i, int 
     if(p) {
         const int face = (i+j+k)<0 ? nz+1 : 1;
         float rw  = rbuf_h(0);
-        float lw  = rw + g->dy;
+        float lw  = rw + g->dz;
         rw /= lw;
-        lw  = g->dy/lw;
+        lw  = g->dz/lw;
         lw += lw;
         rw += rw;
         Kokkos::deep_copy(rbuf_d, rbuf_h);

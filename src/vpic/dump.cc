@@ -90,7 +90,7 @@ void rank_to_index(int rank, int& ix, int& iy, int& iz, int gpx, int gpy, int gp
 }
 
 
-void vpic_simulation::dump_partloc(const char *fname, int append) {
+void vpic_simulation::dump_partloc(const char *fname, int append, int num_part) {
   species_t *sp;
   FileIO fileIO;
   FileIOStatus status(fail);
@@ -114,7 +114,12 @@ void vpic_simulation::dump_partloc(const char *fname, int append) {
 
   if( rank() == 0 ) {
     LIST_FOR_EACH(sp, species_list) {
-      int num = sp->np;
+      int num = 0;
+      if(num_part == -1) {
+        num = sp->np;
+      } else {
+        num = num_part;
+      }
       for(int i=0; i<num; i++) {
         particle_t particle = sp->p[i];
         size_t ix, iy, iz;

@@ -935,12 +935,6 @@ sp_[id]->
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy<>(0, np),
     KOKKOS_LAMBDA (size_t p_index)
     {
-//if(p_index == 0) {
-//#ifdef __CUDA_ARCH__
-//printf("gridDims (%d,%d,%d), blockDims (%d,%d,%d)\n", gridDim.x, gridDim.y, gridDim.z, blockDim.x, blockDim.y, blockDim.z);
-//#endif
-//}
-
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
     mixed_t v0, v1, v2, v3, v4, v5;
 
@@ -952,33 +946,21 @@ sp_[id]->
     mixed_t dz = k_part.get_dz(p_index);
     int   ii   = pii;
 
-//#ifdef __CUDA_ARCH__
-//if(p_index < 4096) {
-//  printf("blockIdx (x,y,z): (%d,%d,%d), threadIdx (x,y,z): (%d,%d,%d), p_index: %llu, cell_index: %d\n", blockIdx.x, blockIdx.y, blockIdx.z, threadIdx.x, threadIdx.y, threadIdx.z, p_index, ii);
-//}
-//#endif
-
     mixed_t hax  = qdt_2mc_h*( (mixed_t(f_ex)    + dy*mixed_t(f_dexdy)) +
                             dz*(mixed_t(f_dexdz) + dy*mixed_t(f_d2exdydz)) );
     mixed_t hay  = qdt_2mc_h*( (mixed_t(f_ey)    + dz*mixed_t(f_deydz)) +
                             dx*(mixed_t(f_deydx) + dz*mixed_t(f_d2eydzdx)) );
     mixed_t haz  = qdt_2mc_h*( (mixed_t(f_ez)    + dx*mixed_t(f_dezdx)) +
                             dy*(mixed_t(f_dezdy) + dx*mixed_t(f_d2ezdxdy)) );
-//    mixed_t hax  = qdt_2mc_h*fma(dz, fma(dy, f_d2exdydz_h, f_dexdz_h), fma(dy, f_dexdy_h, f_ex_h));
-//    mixed_t hay  = qdt_2mc_h*fma(dx, fma(dz, f_d2eydzdx_h, f_deydx_h), fma(dz, f_deydz_h, f_ey_h));
-//    mixed_t haz  = qdt_2mc_h*fma(dy, fma(dx, f_d2ezdxdy_h, f_dezdy_h), fma(dx, f_dezdx_h, f_ez_h));
 
     mixed_t cbx  = mixed_t(f_cbx) + dx*mixed_t(f_dcbxdx);             // Interpolate B
     mixed_t cby  = mixed_t(f_cby) + dy*mixed_t(f_dcbydy);
     mixed_t cbz  = mixed_t(f_cbz) + dz*mixed_t(f_dcbzdz);
-//    mixed_t cbx  = fma(dx, f_dcbxdx_h, f_cbx_h);             // Interpolate B
-//    mixed_t cby  = fma(dy, f_dcbydy_h, f_cby_h);
-//    mixed_t cbz  = fma(dz, f_dcbzdz_h, f_cbz_h);
 
     mixed_t ux   = p_ux;                             // Load momentum
     mixed_t uy   = p_uy;
     mixed_t uz   = p_uz;
-    mixed_t q    = static_cast<mixed_t>(p_w);
+    mixed_t q    = p_w;
 
     ux  += hax;                               // Half advance E
     uy  += hay;
@@ -987,9 +969,7 @@ sp_[id]->
     v1   = cbx*cbx + (cby*cby + cbz*cbz);
     v2   = ( v0*v0 ) * v1;
     v3   = v0*(mixed_t(one)+v2*(mixed_t(one_third)+v2*mixed_t(two_fifteenths)));
-//    v3   = v0*(fma(v2, fma(v2, two_fifteenths, one_third), 1));
     v4   = v3/(mixed_t(one)+v1*(v3*v3));
-//    v4   = v3/(fma((v3*v3), v1, one));
     v4  += v4;
 
     v0   = ux + v3*( uy*cbz - uz*cby );       // Boris - uprime
@@ -1004,9 +984,13 @@ sp_[id]->
     uy  += hay;
     uz  += haz;
 
-    p_ux = ux;                               // Store momentum
-    p_uy = uy;
-    p_uz = uz;
+//    p_ux = ux;                               // Store momentum
+//    p_uy = uy;
+//    p_uz = uz;
+    k_part.set_ux(ux, p_index);
+    k_part.set_uy(uy, p_index);
+    k_part.set_uz(uz, p_index);
+
     v0   = one/sqrt(one + (ux*ux+ (uy*uy + uz*uz)));
     ux  *= cdt_dx_h;
     uy  *= cdt_dy_h;
@@ -1061,46 +1045,34 @@ sp_[id]->
       v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
       ACCUMULATE_J( x,y,z );
-//      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-//      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-//      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-//      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
-      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jx, 0), static_cast<float>(v0));
-      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jx, 1), static_cast<float>(v1));
-      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jx, 2), static_cast<float>(v2));
-      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jx, 3), static_cast<float>(v3));
-//      k_accumulator(ii, accumulator_var::jx, 0) += static_cast<float>(v0);
-//      k_accumulator(ii, accumulator_var::jx, 1) += static_cast<float>(v1);
-//      k_accumulator(ii, accumulator_var::jx, 2) += static_cast<float>(v2);
-//      k_accumulator(ii, accumulator_var::jx, 3) += static_cast<float>(v3);
+      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+//      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jx, 0), static_cast<float>(v0));
+//      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jx, 1), static_cast<float>(v1));
+//      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jx, 2), static_cast<float>(v2));
+//      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jx, 3), static_cast<float>(v3));
 
       ACCUMULATE_J( y,z,x );
-//      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-//      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-//      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-//      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
-      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jy, 0), static_cast<float>(v0));
-      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jy, 1), static_cast<float>(v1));
-      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jy, 2), static_cast<float>(v2));
-      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jy, 3), static_cast<float>(v3));
-//      k_accumulator(ii, accumulator_var::jy, 0) += static_cast<float>(v0);
-//      k_accumulator(ii, accumulator_var::jy, 1) += static_cast<float>(v1);
-//      k_accumulator(ii, accumulator_var::jy, 2) += static_cast<float>(v2);
-//      k_accumulator(ii, accumulator_var::jy, 3) += static_cast<float>(v3);
+      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+//      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jy, 0), static_cast<float>(v0));
+//      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jy, 1), static_cast<float>(v1));
+//      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jy, 2), static_cast<float>(v2));
+//      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jy, 3), static_cast<float>(v3));
 
       ACCUMULATE_J( z,x,y );
-//      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-//      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-//      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-//      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
-      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jz, 0), static_cast<float>(v0));
-      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jz, 1), static_cast<float>(v1));
-      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jz, 2), static_cast<float>(v2));
-      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jz, 3), static_cast<float>(v3));
-//      k_accumulator(ii, accumulator_var::jz, 0) += static_cast<float>(v0);
-//      k_accumulator(ii, accumulator_var::jz, 1) += static_cast<float>(v1);
-//      k_accumulator(ii, accumulator_var::jz, 2) += static_cast<float>(v2);
-//      k_accumulator(ii, accumulator_var::jz, 3) += static_cast<float>(v3);
+      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+//      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jz, 0), static_cast<float>(v0));
+//      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jz, 1), static_cast<float>(v1));
+//      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jz, 2), static_cast<float>(v2));
+//      Kokkos::atomic_add(&k_accumulator(ii, accumulator_var::jz, 3), static_cast<float>(v3));
 
 #     undef ACCUMULATE_J
 
