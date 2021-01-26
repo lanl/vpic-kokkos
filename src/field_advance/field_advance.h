@@ -356,39 +356,6 @@ typedef struct field_array {
 } field_array_t;
 
 
-// A field_array holds all the field quanties and pointers to
-// kernels used to advance them.
-
-typedef struct field_array {
-  field_t * ALIGNED(128) f;           // Local field data
-  grid_t  * g;                        // Underlying grid
-  void    * params;                   // Field advance specific parameters
-  field_advance_kernels_t kernel[1];  // Field advance kernels
-
-  k_field_t k_f_d;                   // Kokkos field data on device
-  k_field_t::HostMirror k_f_h;       // Kokkos field data on host
-  k_field_edge_t k_fe_d;             // Kokkos field_edge data (part of field_t) on device
-  k_field_edge_t::HostMirror k_fe_h; // Kokkos field_edge data on host
-  k_field_accum_t k_f_rhob_accum_d;//TODO: Remove when absorbing pbc on device
-  k_field_accum_t::HostMirror k_f_rhob_accum_h;
-
-  field_buffers_t fb;
-
-  // Initialize Kokkos Field Array
-  field_array(int n_fields, int xyz_sz, int yzx_sz, int zxy_sz) :
-    k_f_d("k_fields", n_fields),
-    k_fe_d("k_field_edges", n_fields),
-    k_f_rhob_accum_d("k_rhob_accum", n_fields),//TODO: does this zero the array?
-    fb(xyz_sz, yzx_sz, zxy_sz)
-  {
-    k_f_h = Kokkos::create_mirror_view(k_f_d);
-    k_fe_h = Kokkos::create_mirror_view(k_fe_d);
-    k_f_rhob_accum_h = Kokkos::create_mirror_view(k_f_rhob_accum_d);
-
-  }
-
-} field_array_t;
-
 
 field_array_t *
 new_standard_field_array( grid_t           * RESTRICT g,
