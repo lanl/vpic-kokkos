@@ -45,14 +45,17 @@ typedef struct pipeline_args {
                                              pz*( f0->ez - fz->ez ) -   \
                                              cj*( f0->rhof + f0->rhob ) )
 
-KOKKOS_INLINE_FUNCTION void update_derr_e(const k_field_t& k_field, const k_field_edge_t& k_field_edge, const float nc, int f0, int fx, int fy, int fz, float px, float py, float pz, float cj) {
-    k_field(f0, field_var::div_e_err) = nc*( px*( k_field(f0, field_var::ex) - k_field(fx, field_var::ex) ) +
-                                             py*( k_field(f0, field_var::ey) - k_field(fy, field_var::ey) ) +
-                                             pz*( k_field(f0, field_var::ez) - k_field(fz, field_var::ez) ) -
-                                             cj*( k_field(f0, field_var::rhof) + k_field(f0, field_var::rhob) ) );
+KOKKOS_INLINE_FUNCTION void update_derr_e(const k_field_t& k_field, const
+        k_field_edge_t& k_field_edge, const float nc, int f0, int fx, int fy,
+        int fz, float px, float py, float pz, float cj)
+{
+    k_field(f0, field_var::div_e_err) = nc*(
+            px*( k_field(f0, field_var::ex) - k_field(fx, field_var::ex) ) +
+            py*( k_field(f0, field_var::ey) - k_field(fy, field_var::ey) ) +
+            pz*( k_field(f0, field_var::ez) - k_field(fz, field_var::ez) ) -
+            cj*( k_field(f0, field_var::rhof) + k_field(f0, field_var::rhob) )
+    );
 }
-void vacuum_compute_div_e_err_interior_kokkos(field_array_t* fa, const grid_t* g); 
-void vacuum_compute_div_e_err_exterior_kokkos(field_array_t* fa, const grid_t* g);
 
 void
 vacuum_compute_div_e_err_pipeline( pipeline_args_t * args,
@@ -90,10 +93,10 @@ vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
   begin_remote_ghost_norm_e( fa->f, fa->g );
 
   local_ghost_norm_e( fa->f, fa->g );
-  
+
   // Have pipelines compute interior of local domain
 
-  pipeline_args_t args[1];  
+  pipeline_args_t args[1];
   args->f = fa->f;
   args->p = (sfa_params_t *)fa->params;
   args->g = fa->g;
@@ -199,7 +202,6 @@ void vacuum_compute_div_e_err_interior_kokkos(field_array_t* fa, const grid_t* g
 
     k_field_t& k_field = fa->k_f_d;
     k_field_edge_t& k_field_edge = fa->k_fe_d;
-    //k_material_coefficient_t& k_matcoeff = sfa_p->k_mc_d;
 
     Kokkos::parallel_for("compute_div_e interior", KOKKOS_TEAM_POLICY_DEVICE(nz-1, Kokkos::AUTO),
     KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type& team_member) {
@@ -231,8 +233,6 @@ void vacuum_compute_div_e_err_exterior_kokkos(field_array_t* fa, const grid_t* g
 
     k_field_t& k_field = fa->k_f_d;
     k_field_edge_t& k_field_edge = fa->k_fe_d;
-    // TODO: do we need material coeff?
-    //k_material_coefficient_t& k_matcoeff = sfa_p->k_mc_d;
 
     // z faces, x edges, y edges and all corners
     Kokkos::parallel_for("z faces, x edges, y edges and all corners", KOKKOS_TEAM_POLICY_DEVICE(ny+1, Kokkos::AUTO),
@@ -307,32 +307,32 @@ void vacuum_compute_div_e_err_exterior_kokkos(field_array_t* fa, const grid_t* g
 
 void
 vacuum_compute_div_e_err_kokkos( field_array_t * RESTRICT fa ) {
-  if( !fa ) ERROR(( "Bad args" ));
+    if( !fa ) ERROR(( "Bad args" ));
 
-  // Have pipelines compute the interior of local domain (the host
-  // handles stragglers in the interior)
+    // Have pipelines compute the interior of local domain (the host
+    // handles stragglers in the interior)
 
-  // Begin setting normal e ghosts
+    // Begin setting normal e ghosts
 
-//  k_begin_remote_ghost_norm_e( fa, fa->g );
-  kokkos_begin_remote_ghost_norm_e( fa, fa->g, *(fa->fb) );
+    //  k_begin_remote_ghost_norm_e( fa, fa->g );
+    kokkos_begin_remote_ghost_norm_e( fa, fa->g, *(fa->fb) );
 
-  k_local_ghost_norm_e( fa, fa->g );
+    k_local_ghost_norm_e( fa, fa->g );
 
-  // Have pipelines compute interior of local domain
+    // Have pipelines compute interior of local domain
 
     vacuum_compute_div_e_err_interior_kokkos(fa, fa->g);
 
-  // While pipelines are busy, have host compute the exterior
-  // of the local domain
+    // While pipelines are busy, have host compute the exterior
+    // of the local domain
 
-  // Finish setting normal e ghosts
-//  k_end_remote_ghost_norm_e( fa, fa->g );
-  kokkos_end_remote_ghost_norm_e( fa, fa->g, *(fa->fb) );
+    // Finish setting normal e ghosts
+    //  k_end_remote_ghost_norm_e( fa, fa->g );
+    kokkos_end_remote_ghost_norm_e( fa, fa->g, *(fa->fb) );
 
     vacuum_compute_div_e_err_exterior_kokkos(fa, fa->g);
 
-  // Finish up setting interior
+    // Finish up setting interior
 
-  k_local_adjust_div_e( fa, fa->g );
+    k_local_adjust_div_e( fa, fa->g );
 }

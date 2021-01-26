@@ -27,6 +27,7 @@ before_script:
   - ccache -z
   # TODO: This if seems kind of dumb, but for some reason Kokkos is still present sometimes
   - if [[ -d ./kokkos ]]; then rm -rf kokkos; fi
+  # TODO: this branch checkout should ideally match the tagged version in the repo
   - git clone --depth=1 --branch 3.1.00 https://github.com/kokkos/kokkos.git &&
     pushd kokkos &&
     mkdir build &&
