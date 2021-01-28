@@ -220,6 +220,12 @@ int vpic_simulation::advance(void)
       int num_to_copy = sp->num_to_copy;
       int np = sp->np;
 
+      // TODO: is it better to catch this during boundary p?
+      if (np + sp->num_to_copy > sp->max_np)
+      {
+          Kokkos::abort("Species overflowed particle storage during boundary exchange");
+      }
+
       // Append it to the particles
       Kokkos::parallel_for("append moved particles", Kokkos::RangePolicy <
               Kokkos::DefaultExecutionSpace > (0, sp->num_to_copy), KOKKOS_LAMBDA
