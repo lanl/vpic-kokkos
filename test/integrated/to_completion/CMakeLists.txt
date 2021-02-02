@@ -27,7 +27,7 @@ endforeach()
 
 foreach(test ${DEFAULT_ARG_TESTS})
     add_test(${test} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_NUMPROC}
-        ${MPIEXEC_PREFLAGS} ${test} ${MPIEXEC_POSTFLAGS} ${ARGS})
+        ${MPIEXEC_PREFLAGS} ./${test} ${MPIEXEC_POSTFLAGS} ${ARGS})
 endforeach()
 
 # TODO: re-enable parallel run
@@ -74,9 +74,8 @@ add_test(
 )
 
 set(TWOSTAGE_OUT ${SIMPLE_DECK}.deck.${CMAKE_SYSTEM_NAME})
-add_test(
-    NAME run_2stage_compile
-    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${TWOSTAGE_OUT}
+add_test(run_2stage_compile ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG}
+    ${MPIEXEC_NUMPROC} ${MPIEXEC_PREFLAGS} ./${TWOSTAGE_OUT}
 )
 
 set_tests_properties(perform_2stage_compile PROPERTIES FIXTURES_SETUP 2stage_fixture)
