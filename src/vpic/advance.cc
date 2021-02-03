@@ -223,7 +223,26 @@ int vpic_simulation::advance(void)
       // TODO: is it better to catch this during boundary p?
       if (np + sp->num_to_copy > sp->max_np)
       {
-          Kokkos::abort("Species overflowed particle storage during boundary exchange");
+          int new_size = sp->max_np + 2*sp->num_to_copy;
+          sp->max_np = new_size;
+
+          // Try add double the extra room we need
+          Kokkos::resize( particles, new_size);
+          Kokkos::resize( particles_i, new_size);
+
+          // Resize host arrays as we deep copy into them
+          Kokkos::resize( sp->k_p_h, new_size);
+          Kokkos::resize( sp->k_p_i_h, new_size);
+
+          // Resize copy arrays as we deep copy into them
+          Kokkos::resize( sp->k_pc_h, new_size);
+          Kokkos::resize( sp->k_pc_i_h, new_size);
+
+          // Check if the new size fits the data we need
+          if (particles.size() < np + sp->num_to_copy)
+          {
+              Kokkos::abort("Species overflowed particle storage during boundary exchange");
+          }
       }
 
       // Append it to the particles

@@ -195,7 +195,7 @@ class species_t {
             k_pm_i_h = Kokkos::create_mirror_view(k_pm_i_d);
 
             k_nm_h = Kokkos::create_mirror_view(k_nm_d);
-            
+
             clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
         }
 
