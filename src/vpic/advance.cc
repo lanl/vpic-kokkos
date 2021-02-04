@@ -152,26 +152,6 @@ int vpic_simulation::advance(void)
     }
   TOC( boundary_p, num_comm_round );
 
-  // currently the recv particles are in particles_recv, not particle_copy
-  KOKKOS_TIC();
-  LIST_FOR_EACH( sp, species_list )
-  {
-        auto pr_h_subview = Kokkos::subview(sp->k_pr_h,
-                std::make_pair(0, sp->num_to_copy), Kokkos::ALL);
-        auto pri_h_subview = Kokkos::subview(sp->k_pr_i_h,
-                std::make_pair(0, sp->num_to_copy));
-
-        auto pc_h_subview = Kokkos::subview(sp->k_pc_h,
-                std::make_pair(0, sp->num_to_copy), Kokkos::ALL);
-        auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h,
-                std::make_pair(0, sp->num_to_copy));
-
-        Kokkos::deep_copy(pc_h_subview, pr_h_subview);
-        Kokkos::deep_copy(pci_h_subview, pri_h_subview);
-  }
-
-  KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
-
   // Boundary_p calls move_p, so we may need to deal with the current
   // If we didn't accumulate for the host in place (as in the GPU case), do so
   if ( accumulate_in_place == false)
