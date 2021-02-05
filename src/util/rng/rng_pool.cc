@@ -79,6 +79,7 @@ seed_rng_pool( rng_pool_t * RESTRICT rp,
   int n;
   if( !rp ) ERROR(( "Bad args" ));
   seed = (sync ? world_size : world_rank) + (world_size+1)*rp->n_rng*seed;
+  rp->k_rng_pool = kokkos_rng_pool_t(seed);
   for( n=0; n<rp->n_rng; n++ ) seed_rng( rp->rng[n], seed + (world_size+1)*n );
   return rp;
 }
