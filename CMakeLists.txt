@@ -13,10 +13,10 @@ cmake_policy(SET CMP0074 NEW)
 project(vpic CXX)
 
 #------------------------------------------------------------------------------#
-# If a C++11 compiler is available, then set the appropriate flags
+# If a C++14 compiler is available, then set the appropriate flags
 #------------------------------------------------------------------------------#
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #------------------------------------------------------------------------------#
@@ -56,7 +56,6 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 
 add_definitions(-DUSE_KOKKOS)
-set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
@@ -76,7 +75,7 @@ string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
 if(NOT ${string_includes} STREQUAL "")
   set(VPIC_CXX_FLAGS "-I${string_includes} ${MPI_C_LINK_FLAGS}")
 endif(NOT ${string_includes} STREQUAL "")
-set(VPIC_CXX_FLAGS "${CMAKE_CXX11_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
+set(VPIC_CXX_FLAGS "${CMAKE_CXX14_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
 
 # Add Debug flags to VPIC_CXX_FLAGS
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
@@ -119,6 +118,7 @@ option(VPIC_KOKKOS_DEBUG "Enable Debug In Kokkos" OFF)
 
 if (VPIC_KOKKOS_DEBUG)
     set(Kokkos_ENABLE_DEBUG ON)
+    set(VPIC_DEFINES "${VPIC_DEFINES} -DKOKKOS_ENABLE_DEBUG")
 endif(VPIC_KOKKOS_DEBUG)
 
 set(Kokkos_ENABLE_EXPLICIT_INSTANTIATION OFF)
@@ -128,6 +128,7 @@ set(Kokkos_ENABLE_SERIAL ON CACHE BOOL "Default allow serial execution")
 if(ENABLE_KOKKOS_OPENMP)
   if (OPENMP_FOUND)
     set(Kokkos_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP if found")
+    set(VPIC_DEFINES "${VPIC_DEFINES} -DKOKKOS_ENABLE_OPENMP")
   endif()
 else()
     set(Kokkos_ENABLE_OPENMP OFF)
@@ -136,7 +137,7 @@ endif()
 if(ENABLE_KOKKOS_CUDA)
   find_package(CUDA)
   if (CUDA_FOUND)
-    add_definitions(-DENABLE_KOKKOS_CUDA)
+    set(VPIC_DEFINES "${VPIC_DEFINES} -DKOKKOS_ENABLE_CUDA")
     set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
     set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "Enable cuda lambda support")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
@@ -321,41 +322,11 @@ configure_file(
     ${CMAKE_BINARY_DIR}/bin/Makefile.run
 )
 
-# install script
-configure_file(
-    ${CMAKE_SOURCE_DIR}/bin/vpic.in
-    ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic-install
-    @ONLY
-)
-
-install(FILES ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic-install
-  DESTINATION bin
-  RENAME vpic
-  PERMISSIONS
-    OWNER_READ OWNER_WRITE OWNER_EXECUTE
-    GROUP_READ GROUP_EXECUTE
-    WORLD_READ WORLD_EXECUTE
-    )
-
 install(FILES ${CMAKE_SOURCE_DIR}/deck/main.cc
   DESTINATION share/vpic)
 install(FILES ${CMAKE_SOURCE_DIR}/deck/wrapper.cc
   DESTINATION share/vpic)
 
-# local script
-configure_file(
-    ${CMAKE_SOURCE_DIR}/bin/vpic-local.in
-    ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
-    @ONLY
-)
-
-file(COPY ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
-  DESTINATION ${CMAKE_BINARY_DIR}/bin
-  FILE_PERMISSIONS
-    OWNER_READ OWNER_WRITE OWNER_EXECUTE
-    GROUP_READ GROUP_EXECUTE
-    WORLD_READ WORLD_EXECUTE
-)
 
 #------------------------------------------------------------------------------#
 # Add library target
@@ -401,7 +372,7 @@ if(USER_DECKS)
 endif()
 
 #------------------------------------------------------------------------------#
-# Add VPIC integrated test mechanism
+# Add VPIC test mechanism
 #------------------------------------------------------------------------------#
 
 if(ENABLE_INTEGRATED_TESTS)
@@ -435,6 +406,45 @@ if(ENABLE_UNIT_TESTS)
   add_subdirectory(test/unit)
 
 endif(ENABLE_UNIT_TESTS)
-#~---------------------------------------------------------------------------~-#
-# vim: set tabstop=2 shiftwidth=2 expandtab :
-#~---------------------------------------------------------------------------~-#
+
+#------------------------------------------------------------------------------#
+# Propagate defines to ./bin/vpic file
+#------------------------------------------------------------------------------#
+
+# Append all defines to VPIC_DEFINES, so it can be seen during input deck building
+get_directory_property(ALL_DEFINES DIRECTORY ${CMAKE_SOURCE_DIR} COMPILE_DEFINITIONS)
+foreach(d ${ALL_DEFINES})
+    set(VPIC_DEFINES "${VPIC_DEFINES} -D${d}")
+endforeach()
+
+# install script
+configure_file(
+    ${CMAKE_SOURCE_DIR}/bin/vpic.in
+    ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic-install
+    @ONLY
+)
+
+
+install(FILES ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic-install
+    DESTINATION bin
+    RENAME vpic
+  PERMISSIONS
+    OWNER_READ OWNER_WRITE OWNER_EXECUTE
+    GROUP_READ GROUP_EXECUTE
+    WORLD_READ WORLD_EXECUTE
+    )
+
+# local script
+configure_file(
+    ${CMAKE_SOURCE_DIR}/bin/vpic-local.in
+    ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
+    @ONLY
+)
+
+file(COPY ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
+  DESTINATION ${CMAKE_BINARY_DIR}/bin
+  FILE_PERMISSIONS
+    OWNER_READ OWNER_WRITE OWNER_EXECUTE
+    GROUP_READ GROUP_EXECUTE
+    WORLD_READ WORLD_EXECUTE
+)
