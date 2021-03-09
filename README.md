@@ -8,7 +8,14 @@ kokkos, documented below.
 ### Quickstart
 
 1) Do a *recursive* clone of this repo, this will pull down a copy of Kokkos
-for you
+for you.
+```
+git clone --recursive git@github.com:lanl/vpic-kokkos.git
+```
+If you switch branches, you might need to update the Kokkos submodule.
+```
+git submodule update --init
+```
 2) Load modules for a) Cuda, and b) MPI
 3) Build the project by passing the CMake option `-DBUILD_INTERNAL_KOKKOS=ON`.
 This will request VPIC to build and handle Kokkos for you.
