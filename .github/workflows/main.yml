@@ -14,8 +14,7 @@ jobs:
 
     steps:
     - name: Install deps
-      run: sudo apt-get update
-      run: sudo apt-get install gfortran openmpi-bin libopenmpi-dev
+      run: sudo apt-get update; sudo apt-get install gfortran openmpi-bin libopenmpi-dev
     - name: Checkout vpic and kokkos
       uses: actions/checkout@v2
       with:
