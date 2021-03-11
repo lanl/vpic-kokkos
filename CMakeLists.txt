@@ -13,10 +13,13 @@ cmake_policy(SET CMP0074 NEW)
 project(vpic CXX)
 
 #------------------------------------------------------------------------------#
-# If a C++11 compiler is available, then set the appropriate flags
+# If a C++14 compiler is available, then set the appropriate flags
+# Note: As of February 2021, VPIC requires only C++11, but requiring C++14
+# makes building Kokkos easier.  If you are adventurous and using your own
+# Kokkos build, feel free to try a lower standard.
 #------------------------------------------------------------------------------#
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #------------------------------------------------------------------------------#
@@ -83,7 +86,7 @@ string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
 if(NOT ${string_includes} STREQUAL "")
   set(VPIC_CXX_FLAGS "-I${string_includes} ${MPI_C_LINK_FLAGS}")
 endif(NOT ${string_includes} STREQUAL "")
-set(VPIC_CXX_FLAGS "${CMAKE_CXX11_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
+set(VPIC_CXX_FLAGS "${CMAKE_CXX14_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
 
 # Add Debug flags to VPIC_CXX_FLAGS
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")

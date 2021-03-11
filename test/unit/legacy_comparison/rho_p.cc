@@ -67,15 +67,22 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     // Copy the data back to host view
     Kokkos::deep_copy(field_array->k_f_h, field_array->k_f_d);
 
-    float eps = 10*std::numeric_limits<float>::epsilon();
+    // We want to compare relative, not absolute, error.
+    //float eps = 10*std::numeric_limits<float>::epsilon();
+    // The Kokkos version uses a scatter access that should produce a more
+    // accurate sum, so we have a large tolerance here
+    float tol = 1e3*std::numeric_limits<float>::epsilon();
+
+    std::cout << "Tolerance is " << tol << std::endl;
 
     // This is how many pipelines there are inside the array
     for (int i = 0; i < grid->nv; i++)
     {
-        float diff = field_array->k_f_h(i, field_var::rhof) - field_array->f[i].rhof;
-        if (diff > eps)
+        //float diff = field_array->k_f_h(i, field_var::rhof) - field_array->f[i].rhof;
+        float rel_err = (field_array->k_f_h(i, field_var::rhof) - field_array->f[i].rhof)/field_array->f[i].rhof;
+        if (abs(rel_err) > tol)
         {
-            std::cout << " Failed at " << i << " with " << diff << std::endl;
+            std::cout << " Failed at " << i << " with relative error " << rel_err << " from k_field and field " << field_array->k_f_h(i, field_var::rhof) << " " << field_array->f[i].rhof << std::endl;
             failed++;
         }
     }
