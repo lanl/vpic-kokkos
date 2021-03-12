@@ -51,6 +51,7 @@ static field_advance_kernels_t sfa_kernels = {
   clear_rhof_kokkos,
 
   k_synchronize_jf,
+  k_reduce_jf,
   k_synchronize_rho,
 
   synchronize_tang_e_norm_b_kokkos,

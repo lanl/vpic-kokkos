@@ -42,11 +42,11 @@
   _( user_current_injection ) \
   _( user_field_injection ) \
   _( sort_particles ) \
-  _( accumulator_contributions ) \
+  _( field_sa_contributions ) \
   _( dump_energies ) \
   _( FIELD_DATA_MOVEMENT ) \
   _( PARTICLE_DATA_MOVEMENT ) \
-  _( ACCUMULATOR_DATA_MOVEMENT ) \
+  _( JF_ACCUM_DATA_MOVEMENT ) \
   _( INTERPOLATOR_DATA_MOVEMENT ) \
   _( BACKFILL ) \
   _( BACKFILL_COMPRESS ) \

@@ -16,18 +16,19 @@ advance_p_kokkos(
         k_particle_i_copy_t& k_particle_i_copy,
         k_particle_movers_t& k_particle_movers,
         k_particle_i_movers_t& k_particle_movers_i,
-        k_accumulators_sa_t k_accumulators_sa,
+        //k_accumulators_sa_t k_accumulators_sa,
+        k_field_sa_t k_f_sa,
         k_interpolator_t& k_interp,
         //k_particle_movers_t k_local_particle_movers,
         k_counter_t& k_nm,
         k_neighbor_t& k_neighbors,
+        //field_array_t* RESTRICT fa,
         const grid_t *g,
         const float qdt_2mc,
         const float cdt_dx,
         const float cdt_dy,
         const float cdt_dz,
         const float qsp,
-        const int na,
         const int np,
         const int max_nm,
         const int nx,
@@ -38,6 +39,11 @@ advance_p_kokkos(
   constexpr float one            = 1.;
   constexpr float one_third      = 1./3.;
   constexpr float two_fifteenths = 2./15.;
+
+  //k_field_t& k_field = fa->k_f_d;
+  float cx = 0.25 * g->rdy * g->rdz / g->dt;
+  float cy = 0.25 * g->rdz * g->rdx / g->dt;
+  float cz = 0.25 * g->rdx * g->rdy / g->dt;
 
   // Process particles for this pipeline
 
@@ -100,7 +106,7 @@ advance_p_kokkos(
     KOKKOS_LAMBDA (size_t p_index)
     {
     float v0, v1, v2, v3, v4, v5;
-    auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+    auto  k_field_scatter_access = k_f_sa.access();
 
     float dx   = p_dx;                             // Load position
     float dy   = p_dy;
@@ -112,7 +118,6 @@ advance_p_kokkos(
                            dx*( f_deydx + dz*f_d2eydzdx ) );
     float haz  = qdt_2mc*(    ( f_ez    + dx*f_dezdx    ) +
                            dy*( f_dezdy + dx*f_d2ezdxdy ) );
-    //printf(" inter %d vs %ld \n", ii, k_interp.size());
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby + dy*f_dcbydy;
     float cbz  = f_cbz + dz*f_dcbzdz;
@@ -192,23 +197,41 @@ advance_p_kokkos(
       v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
       v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
+      // TODO: That 2 needs to be 2*NGHOST eventually
+      int iii = ii;
+      int zi = iii/((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii/(nx+2);
+      int xi = iii - yi*(nx+2);
       ACCUMULATE_J( x,y,z );
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+      //Kokkos::atomic_add(&k_field(ii, field_var::jfx), cx*v0);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx), cx*v1);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx), cx*v2);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx), cx*v3);
+      k_field_scatter_access(ii, field_var::jfx) += cx*v0;
+      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
+      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
+      k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
 
       ACCUMULATE_J( y,z,x );
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+      //Kokkos::atomic_add(&k_field(ii, field_var::jfy), cy*v0);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v1);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy), cy*v2);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v3);
+      k_field_scatter_access(ii, field_var::jfy) += cy*v0;
+      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
+      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
+      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
 
       ACCUMULATE_J( z,x,y );
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+      //Kokkos::atomic_add(&k_field(ii, field_var::jfz), cz*v0);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz), cz*v1);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v2);
+      //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v3);
+      k_field_scatter_access(ii, field_var::jfz) += cz*v0;
+      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
+      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
+      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
 
 #     undef ACCUMULATE_J
 
@@ -227,37 +250,40 @@ advance_p_kokkos(
       local_pm->dispz = uz;
       local_pm->i     = p_index;
 
-      if( move_p_kokkos(k_particles, k_particles_i, local_pm,
-                         k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
-        if( k_nm(0)<max_nm ) {
-          const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
-          if (nm >= max_nm) Kokkos::abort("overran max_nm");
+      //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
+      if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
+                     k_f_sa, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
+      {
+        if( k_nm(0) < max_nm )
+        {
+            const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+            if (nm >= max_nm) Kokkos::abort("overran max_nm");
 
-          k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
-          k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
-          k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
-          k_particle_movers_i(nm)   = local_pm->i;
+            k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+            k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+            k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+            k_particle_movers_i(nm)   = local_pm->i;
 
-          // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-          k_particle_copy(nm, particle_var::dx) = p_dx;
-          k_particle_copy(nm, particle_var::dy) = p_dy;
-          k_particle_copy(nm, particle_var::dz) = p_dz;
-          k_particle_copy(nm, particle_var::ux) = p_ux;
-          k_particle_copy(nm, particle_var::uy) = p_uy;
-          k_particle_copy(nm, particle_var::uz) = p_uz;
-          k_particle_copy(nm, particle_var::w) = p_w;
-          k_particle_i_copy(nm) = pii;
+            // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+            k_particle_copy(nm, particle_var::dx) = p_dx;
+            k_particle_copy(nm, particle_var::dy) = p_dy;
+            k_particle_copy(nm, particle_var::dz) = p_dz;
+            k_particle_copy(nm, particle_var::ux) = p_ux;
+            k_particle_copy(nm, particle_var::uy) = p_uy;
+            k_particle_copy(nm, particle_var::uz) = p_uz;
+            k_particle_copy(nm, particle_var::w) = p_w;
+            k_particle_i_copy(nm) = pii;
 
-          // Tag this one as having left
-          //k_particles(p_index, particle_var::pi) = 999999;
+            // Tag this one as having left
+            //k_particles(p_index, particle_var::pi) = 999999;
 
-          // Copy local local_pm back
-          //local_pm_dispx = local_pm->dispx;
-          //local_pm_dispy = local_pm->dispy;
-          //local_pm_dispz = local_pm->dispz;
-          //local_pm_i = local_pm->i;
-          //printf("rank copying %d to nm %d \n", local_pm_i, nm);
-          //copy_local_to_pm(nm);
+            // Copy local local_pm back
+            //local_pm_dispx = local_pm->dispx;
+            //local_pm_dispy = local_pm->dispy;
+            //local_pm_dispz = local_pm->dispz;
+            //local_pm_i = local_pm->i;
+            //printf("rank copying %d to nm %d \n", local_pm_i, nm);
+            //copy_local_to_pm(nm);
         }
       }
     }
@@ -276,8 +302,8 @@ advance_p_kokkos(
 
 void
 advance_p( /**/  species_t            * RESTRICT sp,
-           /**/  accumulator_array_t  * RESTRICT aa,
-           interpolator_array_t * RESTRICT ia ) {
+           interpolator_array_t * RESTRICT ia,
+           field_array_t* RESTRICT fa ) {
   //DECLARE_ALIGNED_ARRAY( advance_p_pipeline_args_t, 128, args, 1 );
   //DECLARE_ALIGNED_ARRAY( particle_mover_seg_t, 128, seg, MAX_PIPELINE+1 );
   //int rank;
@@ -286,15 +312,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   {
     ERROR(( "Bad args" ));
   }
-  if( !aa )
-  {
-    ERROR(( "Bad args" ));
-  }
   if( !ia  )
-  {
-    ERROR(( "Bad args" ));
-  }
-  if( sp->g!=aa->g )
   {
     ERROR(( "Bad args" ));
   }
@@ -318,17 +336,18 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->k_pc_i_d,
           sp->k_pm_d,
           sp->k_pm_i_d,
-          aa->k_a_sa,
+          //aa->k_a_sa,
+          fa->k_field_sa_d,
           ia->k_i_d,
           sp->k_nm_d,
           sp->g->k_neighbor_d,
+          //fa,
           sp->g,
           qdt_2mc,
           cdt_dx,
           cdt_dy,
           cdt_dz,
           sp->q,
-          aa->na,
           sp->np,
           sp->max_nm,
           sp->g->nx,
@@ -413,91 +432,91 @@ advance_p( /**/  species_t            * RESTRICT sp,
   //sp->nm = nm;
 }
 
-void
-advance_p_profiling( /**/  species_t            * RESTRICT sp,
-           /**/  accumulator_array_t  * RESTRICT aa,
-           interpolator_array_t * RESTRICT ia, int64_t step ) {
-  //DECLARE_ALIGNED_ARRAY( advance_p_pipeline_args_t, 128, args, 1 );
-  //DECLARE_ALIGNED_ARRAY( particle_mover_seg_t, 128, seg, MAX_PIPELINE+1 );
-  //int rank;
-
-  if( !sp )
-  {
-    ERROR(( "Bad args" ));
-  }
-  if( !aa )
-  {
-    ERROR(( "Bad args" ));
-  }
-  if( !ia  )
-  {
-    ERROR(( "Bad args" ));
-  }
-  if( sp->g!=aa->g )
-  {
-    ERROR(( "Bad args" ));
-  }
-  if( sp->g!=ia->g )
-  {
-    ERROR(( "Bad args" ));
-  }
-
-
-  float qdt_2mc  = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-  float cdt_dx   = sp->g->cvac*sp->g->dt*sp->g->rdx;
-  float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
-  float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
-
-  advance_p_kokkos(
-//          sp->k_p_soa_d,
-          sp->k_p_d,
-          sp->k_p_i_d,
-          sp->k_pc_d,
-          sp->k_pc_i_d,
-          sp->k_pm_d,
-          sp->k_pm_i_d,
-          aa->k_a_sa,
-          ia->k_i_d,
-          sp->k_nm_d,
-          sp->g->k_neighbor_d,
-          sp->g,
-          qdt_2mc,
-          cdt_dx,
-          cdt_dy,
-          cdt_dz,
-          sp->q,
-          aa->na,
-          sp->np,
-          sp->max_nm,
-          sp->g->nx,
-          sp->g->ny,
-          sp->g->nz
-  );
-Kokkos::Profiling::popRegion();
-
-  // I need to know the number of movers that got populated so I can call the
-  // compress. Let's copy it back
-  Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
-  // TODO: which way round should this copy be?
-
-  //  int nm = sp->k_nm_h(0);
-
-  //  printf("nm = %d \n", nm);
-
-  // Copy particle mirror movers back so we have their data safe. Ready for
-  // boundary_p_kokkos
-  auto pc_d_subview = Kokkos::subview(sp->k_pc_d, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
-  auto pci_d_subview = Kokkos::subview(sp->k_pc_i_d, std::make_pair(0, sp->k_nm_h(0)));
-  auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
-  auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, sp->k_nm_h(0)));
-Kokkos::Profiling::pushRegion(" " + std::to_string(step) + " " + std::string(sp->name) + " advance_p Copy particle copies to host");
-  KOKKOS_TIC();
-    Kokkos::deep_copy(pc_h_subview, pc_d_subview);
-    Kokkos::deep_copy(pci_h_subview, pci_d_subview);
-//  Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
-//  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
-  KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
-Kokkos::Profiling::popRegion();
+//void
+//advance_p_profiling( /**/  species_t            * RESTRICT sp,
+//           /**/  accumulator_array_t  * RESTRICT aa,
+//           interpolator_array_t * RESTRICT ia, int64_t step ) {
+//  //DECLARE_ALIGNED_ARRAY( advance_p_pipeline_args_t, 128, args, 1 );
+//  //DECLARE_ALIGNED_ARRAY( particle_mover_seg_t, 128, seg, MAX_PIPELINE+1 );
+//  //int rank;
+//
+//  if( !sp )
+//  {
+//    ERROR(( "Bad args" ));
+//  }
+//  if( !aa )
+//  {
+//    ERROR(( "Bad args" ));
+//  }
+//  if( !ia  )
+//  {
+//    ERROR(( "Bad args" ));
+//  }
+//  if( sp->g!=aa->g )
+//  {
+//    ERROR(( "Bad args" ));
+//  }
+//  if( sp->g!=ia->g )
+//  {
+//    ERROR(( "Bad args" ));
+//  }
+//
+//
+//  float qdt_2mc  = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+//  float cdt_dx   = sp->g->cvac*sp->g->dt*sp->g->rdx;
+//  float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
+//  float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
+//
+//  advance_p_kokkos(
+////          sp->k_p_soa_d,
+//          sp->k_p_d,
+//          sp->k_p_i_d,
+//          sp->k_pc_d,
+//          sp->k_pc_i_d,
+//          sp->k_pm_d,
+//          sp->k_pm_i_d,
+////          aa->k_a_sa,
+//          fa->k_field_sa_d,
+//          ia->k_i_d,
+//          sp->k_nm_d,
+//          sp->g->k_neighbor_d,
+//          sp->g,
+//          qdt_2mc,
+//          cdt_dx,
+//          cdt_dy,
+//          cdt_dz,
+//          sp->q,
+//          sp->np,
+//          sp->max_nm,
+//          sp->g->nx,
+//          sp->g->ny,
+//          sp->g->nz
+//  );
+//Kokkos::Profiling::popRegion();
+//
+//  // I need to know the number of movers that got populated so I can call the
+//  // compress. Let's copy it back
+//  Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
+//  // TODO: which way round should this copy be?
+//
+//  //  int nm = sp->k_nm_h(0);
+//
+//  //  printf("nm = %d \n", nm);
+//
+//  // Copy particle mirror movers back so we have their data safe. Ready for
+//  // boundary_p_kokkos
+//  auto pc_d_subview = Kokkos::subview(sp->k_pc_d, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
+//  auto pci_d_subview = Kokkos::subview(sp->k_pc_i_d, std::make_pair(0, sp->k_nm_h(0)));
+//  auto pc_h_subview = Kokkos::subview(sp->k_pc_h, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
+//  auto pci_h_subview = Kokkos::subview(sp->k_pc_i_h, std::make_pair(0, sp->k_nm_h(0)));
+//Kokkos::Profiling::pushRegion(" " + std::to_string(step) + " " + std::string(sp->name) + " advance_p Copy particle copies to host");
+//  KOKKOS_TIC();
+//    Kokkos::deep_copy(pc_h_subview, pc_d_subview);
+//    Kokkos::deep_copy(pci_h_subview, pci_d_subview);
+////  Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
+////  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
+//  KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+//Kokkos::Profiling::popRegion();
 
   //print_nm(sp->k_pm_d, nm);
 
@@ -551,4 +570,4 @@ Kokkos::Profiling::popRegion();
   }
   */
   //sp->nm = nm;
-}
+//}

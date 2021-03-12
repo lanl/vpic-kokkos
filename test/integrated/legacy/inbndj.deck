@@ -83,20 +83,30 @@ begin_initialization {
 
   // Advance the particles
 
-  clear_accumulator_array( accumulator_array );
+  //clear_accumulator_array( accumulator_array );
 
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
+  //KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
 
-  advance_p( this_sp, accumulator_array, interpolator_array );
+  // All the moves should be done on the device, so no need to wory about the
+  // host jf accumulator
+  // The jf should all be initialized to zero as well, but we do this in the
+  // main loop, so let's do it here too
+
+  field_array->kernel->clear_jf_kokkos(field_array);
+
+  advance_p( this_sp, interpolator_array, field_array );
 
   KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
 
-  Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
-  accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
+  //Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
+  //accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
 
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
+  //KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array);
 
-  reduce_accumulator_array( accumulator_array );
+  //reduce_accumulator_array( accumulator_array );
+
+  // All we need to do is get jf from device to host (no jf_accum from host)
+  KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
 
   // Compute the final charge density
 
@@ -122,18 +132,31 @@ begin_initialization {
 
   // Compute the div J
 
-  accumulator_t *a = &accumulator_array->a[ voxel(1,1,1) ];
+  //accumulator_t *a = &accumulator_array->a[ voxel(1,1,1) ];
 
   double divj[8];
 
-  divj[0] = 0.25*(  (double)a->jx[0] + (double)a->jy[0] + (double)a->jz[0] ); // -1,-1,-1
-  divj[1] = 0.25*( -(double)a->jx[0] + (double)a->jy[2] + (double)a->jz[1] ); //  1,-1,-1
-  divj[2] = 0.25*(  (double)a->jx[1] - (double)a->jy[0] + (double)a->jz[2] ); // -1, 1,-1
-  divj[3] = 0.25*( -(double)a->jx[1] - (double)a->jy[2] + (double)a->jz[3] ); //  1, 1,-1
-  divj[4] = 0.25*(  (double)a->jx[2] + (double)a->jy[1] - (double)a->jz[0] ); // -1,-1, 1
-  divj[5] = 0.25*( -(double)a->jx[2] + (double)a->jy[3] - (double)a->jz[1] ); //  1,-1, 1
-  divj[6] = 0.25*(  (double)a->jx[3] - (double)a->jy[1] - (double)a->jz[2] ); // -1, 1, 1
-  divj[7] = 0.25*( -(double)a->jx[3] - (double)a->jy[3] - (double)a->jz[3] ); //  1, 1, 1
+  // It looks to me like the velocity of the particles was chosen such that
+  // boundaries are never crossed, so the reduced accumulator should just be a
+  // quarter of the current, so I can directly substitute the current for these
+  // accumulators, but maybe I need a constant that would be applied in the
+  // unload?
+  //divj[0] = 0.25*(  (double)a->jx[0] + (double)a->jy[0] + (double)a->jz[0] ); // -1,-1,-1
+  //divj[1] = 0.25*( -(double)a->jx[0] + (double)a->jy[2] + (double)a->jz[1] ); //  1,-1,-1
+  //divj[2] = 0.25*(  (double)a->jx[1] - (double)a->jy[0] + (double)a->jz[2] ); // -1, 1,-1
+  //divj[3] = 0.25*( -(double)a->jx[1] - (double)a->jy[2] + (double)a->jz[3] ); //  1, 1,-1
+  //divj[4] = 0.25*(  (double)a->jx[2] + (double)a->jy[1] - (double)a->jz[0] ); // -1,-1, 1
+  //divj[5] = 0.25*( -(double)a->jx[2] + (double)a->jy[3] - (double)a->jz[1] ); //  1,-1, 1
+  //divj[6] = 0.25*(  (double)a->jx[3] - (double)a->jy[1] - (double)a->jz[2] ); // -1, 1, 1
+  //divj[7] = 0.25*( -(double)a->jx[3] - (double)a->jy[3] - (double)a->jz[3] ); //  1, 1, 1
+  divj[0] = .25*( (double)field(1,1,1).jfx + (double)field(1,1,1).jfy + (double)field(1,1,1).jfz);
+  divj[1] = .25*(-(double)field(1,1,1).jfx + (double)field(2,1,1).jfy + (double)field(2,1,1).jfz);
+  divj[2] = .25*( (double)field(1,2,1).jfx - (double)field(1,1,1).jfy + (double)field(1,2,1).jfz);
+  divj[3] = .25*(-(double)field(1,2,1).jfx - (double)field(2,1,1).jfy + (double)field(2,2,1).jfz);
+  divj[4] = .25*( (double)field(1,1,2).jfx + (double)field(1,1,2).jfy - (double)field(1,1,1).jfz);
+  divj[5] = .25*(-(double)field(1,1,2).jfx + (double)field(2,1,2).jfy - (double)field(2,1,1).jfz);
+  divj[6] = .25*( (double)field(1,2,2).jfx - (double)field(1,1,2).jfy - (double)field(1,2,1).jfz);
+  divj[7] = .25*(-(double)field(1,2,2).jfx - (double)field(2,1,2).jfy - (double)field(2,2,1).jfz);
 
   // Test the results
 

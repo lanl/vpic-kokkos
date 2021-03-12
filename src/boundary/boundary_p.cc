@@ -60,8 +60,7 @@ void
 boundary_p_kokkos(
         particle_bc_t       * RESTRICT pbc_list,
         species_t           * RESTRICT sp_list,
-        field_array_t       * RESTRICT fa,
-        accumulator_array_t * RESTRICT aa
+        field_array_t       * RESTRICT fa
       )
 {
 
@@ -78,7 +77,7 @@ boundary_p_kokkos(
   // Check input args
 
   if( !sp_list ) return; // Nothing to do if no species
-  if( !fa || !aa || sp_list->g!=aa->g || fa->g!=aa->g )
+  if( !fa )
     ERROR(( "Bad args" ));
 
   // Unpack the particle boundary conditions
@@ -99,9 +98,6 @@ boundary_p_kokkos(
   //field_t * RESTRICT ALIGNED(128) f = fa->f;
   grid_t  * RESTRICT              g = fa->g;
 
-  // Unpack accumulator
-
-  //accumulator_t * RESTRICT ALIGNED(128) a0 = aa->a;
 
   // Unpack the grid
 
@@ -477,7 +473,7 @@ boundary_p_kokkos(
                 particle_recv,
                 particle_recv_i,
                 &(pm[nm]),
-                aa->k_a_h,
+                fa->k_jf_accum_h,
                 g,
                 sp_[id]->g->k_neighbor_h,
                 rangel,
@@ -533,10 +529,7 @@ boundary_p_kokkos(
       });
 
       // Zero host accum array
-      Kokkos::parallel_for("Clear rhob accumulation array on host", host_execution_policy(0, n_fields - 1), KOKKOS_LAMBDA (int i) {
-              kfah(i) = 0;
-      });
-
+      Kokkos::deep_copy(kfah, 0.0f);
   }
 }
 
@@ -959,7 +952,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         pm[nm].dispx=pi->dispx; pm[nm].dispy=pi->dispy; pm[nm].dispz=pi->dispz;
         pm[nm].i=np;
 #       endif
-        sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
+        sp_nm[id] = nm + move_p( p, pm+nm, fa->k_jf_accum_h, g, sp_q[id] );
       }
     } while(face!=5);
 
