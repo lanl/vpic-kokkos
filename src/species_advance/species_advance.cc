@@ -9,6 +9,7 @@
  */
 
 #include "species_advance.h"
+#include "../boundary/boundary.h"
 
 /* Private interface *********************************************************/
 
@@ -26,6 +27,7 @@ checkpt_species( const species_t * sp ) {
   CHECKPT_ALIGNED( sp->partition, sp->g->nv+1, 128 );
   CHECKPT_PTR( sp->g );
   CHECKPT_PTR( sp->next );
+  CHECKPT_PTR( sp->pb_diag );
 }
 
 species_t *
@@ -38,11 +40,13 @@ restore_species( void ) {
   RESTORE_ALIGNED( sp->partition );
   RESTORE_PTR( sp->g );
   RESTORE_PTR( sp->next );
+  RESTORE_PTR( sp->pb_diag );
   return sp;
 }
 
 void
 delete_species( species_t * sp ) {
+  delete_pbd(sp->pb_diag);
   UNREGISTER_OBJECT( sp );
   FREE_ALIGNED( sp->partition );
   FREE_ALIGNED( sp->pm );
@@ -144,6 +148,9 @@ species( const char * name,
   MALLOC_ALIGNED( sp->partition, g->nv+1, 128 );
 
   sp->g = g;
+
+  sp->pb_diag = init_pb_diagnostic();
+  REGISTER_OBJECT( sp->pb_diag, checkpt_pbd, restore_pbd, NULL);
 
   /* id, next are set by append species */
 

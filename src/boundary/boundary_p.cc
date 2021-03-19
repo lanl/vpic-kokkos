@@ -232,7 +232,7 @@ boundary_p_kokkos(
                 float qsp = sp->q;
 
                 // Send the particle to the particle boundary diagnostic
-                if (sp->pb_diag != NULL)
+                if (sp->pb_diag->enable)
                     pbd_write_to_buffer(sp, kparticle_move_h, kparticle_move_i_h, copy_index);
 
                 k_accumulate_rhob_single_cpu(

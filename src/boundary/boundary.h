@@ -22,6 +22,15 @@ num_particle_bc( const particle_bc_t * RESTRICT pbc_list );
 void
 delete_particle_bc_list( particle_bc_t * RESTRICT pbc_list );
 
+void
+checkpt_pbd(pb_diagnostic_t *diag);
+
+pb_diagnostic_t *
+restore_pbd(void);
+
+void
+delete_pbd(pb_diagnostic_t *diag);
+
 particle_bc_t *
 append_particle_bc( particle_bc_t * pbc,
                     particle_bc_t ** pbc_list );
@@ -96,10 +105,10 @@ void pbd_write_to_buffer(species_t * RESTRICT sp,
 }
 
 pb_diagnostic_t *
-init_pb_diagnostic(species_t * sp);
+init_pb_diagnostic();
 
 void
-finalize_pb_diagnostic(pb_diagnostic_t * diag);
+finalize_pb_diagnostic(species_t * sp);
 
 /* In boundary_p.cxx */
 

@@ -130,7 +130,8 @@ class species_t {
         species_id id;                      // Unique identifier for a species
         species_t* next = NULL;             // Next species in the list
 
-
+        // Particle boundary diagnostic.
+        pb_diagnostic_t * pb_diag = NULL;
 
 
         //// END CHECKPOINTED DATA, START KOKKOS //////
@@ -178,9 +179,6 @@ class species_t {
         // This number is tracked on the host only, and may be inaccurate on
         // the device.
         int64_t species_copy_last = -1;
-
-        // Particle boundary diagnostic.  Assumed dissabled unless non-NULL.
-        pb_diagnostic_t * pb_diag = NULL;
 
         // Static allocations for the compressor
         Kokkos::View<int*> unsafe_index;

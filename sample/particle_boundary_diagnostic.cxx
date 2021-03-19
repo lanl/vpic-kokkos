@@ -595,7 +595,6 @@ begin_initialization {
   int nspec = 2;
   species_t * electron = define_species("electron", -1.*e_c, m_e_c,
           max_local_np_e, max_local_nm_e, 20, 1);
-  electron->pb_diag = init_pb_diagnostic(electron);
   electron->pb_diag->write_ux = 1;
   electron->pb_diag->write_uy = 1;
   electron->pb_diag->write_uz = 1;
@@ -603,7 +602,7 @@ begin_initialization {
   electron->pb_diag->write_posx = 1;
   electron->pb_diag->write_posy = 1;
   electron->pb_diag->write_posz = 1;
-  finalize_pb_diagnostic(electron->pb_diag);
+  finalize_pb_diagnostic(electron);
   species_t *ion_I1, *ion_I2;
   if ( mobile_ions ) {
   sim_log("Setting up ions. ");
@@ -612,7 +611,6 @@ begin_initialization {
     if ( I2_present  ) {
         ion_I2 = define_species("I2", Z_I2*e_c, m_I2_c,
             max_local_np_i2, max_local_nm_i2, 80, 1);
-        ion_I2->pb_diag = init_pb_diagnostic(ion_I2);
         ion_I2->pb_diag->write_ux = 1;
         ion_I2->pb_diag->write_uy = 1;
         ion_I2->pb_diag->write_uz = 1;
@@ -620,7 +618,7 @@ begin_initialization {
         ion_I2->pb_diag->write_posx = 1;
         ion_I2->pb_diag->write_posy = 1;
         ion_I2->pb_diag->write_posz = 1;
-        finalize_pb_diagnostic(ion_I2->pb_diag);
+        finalize_pb_diagnostic(ion_I2);
     }
   }
 
