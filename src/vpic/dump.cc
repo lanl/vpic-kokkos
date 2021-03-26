@@ -60,7 +60,7 @@ vpic_simulation::dump_energies( const char *fname,
       fileIO.print( "%li", (long)step() );
     }
   }
- 
+
 //  field_array->kernel->energy_f( en_f, field_array );
   field_array->kernel->energy_f_kokkos( en_f, field_array );
   if( rank()==0 && status!=fail )
@@ -722,11 +722,13 @@ vpic_simulation::hydro_dump( const char * speciesname,
   species_t * sp = find_species_name(speciesname, species_list);
   if( !sp ) ERROR(( "Invalid species name: %s", speciesname ));
 
-    // Update the particles on the host only if they haven't been recently
-    // TODO: Port the hydro calculations to the device so this copy won't be
-    // needed.
-    if (step() > sp->species_copy_last)
-        KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
+  // Update the particles on the host only if they haven't been recently
+  // TODO: Port the hydro calculations to the device so this copy won't be
+  // needed.
+  if (step() > sp->species_copy_last)
+  {
+      KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
+  }
 
   clear_hydro_array( hydro_array );
   accumulate_hydro_p( hydro_array, sp, interpolator_array );
