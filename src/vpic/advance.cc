@@ -30,6 +30,9 @@ int vpic_simulation::advance(void)
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
           //TIC sort_p( sp ); TOC( sort_p, 1 );
           sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
+//          sorter.strided_sort( sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
+//          sorter.tiled_sort( sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na, 4);
+//          sorter.tiled_strided_sort( sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na, 1024);
       }
   }
 
