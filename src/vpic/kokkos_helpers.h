@@ -37,7 +37,7 @@ using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
 using k_field_edge_t = Kokkos::View<material_id* [FIELD_EDGE_COUNT]>;
 using k_field_accum_t = Kokkos::View<float *>;
 
-using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
+using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutRight>;
 using k_particles_i_t = Kokkos::View<int*>;
 
 // TODO: think about the layout here

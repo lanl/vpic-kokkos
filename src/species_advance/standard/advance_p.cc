@@ -8,6 +8,1657 @@
 #include "../../vpic/kokkos_helpers.h"
 
 void
+advance_p_kokkos_vector(
+        k_particles_t& k_particles,
+        k_particles_i_t& k_particles_i,
+        k_particle_copy_t& k_particle_copy,
+        k_particle_i_copy_t& k_particle_i_copy,
+        k_particle_movers_t& k_particle_movers,
+        k_particle_i_movers_t& k_particle_movers_i,
+        k_accumulators_sa_t k_accumulators_sa,
+        k_interpolator_t& k_interp,
+        //k_particle_movers_t k_local_particle_movers,
+        k_iterator_t& k_nm,
+        k_neighbor_t& k_neighbors,
+        const grid_t *g,
+        const float qdt_2mc,
+        const float cdt_dx,
+        const float cdt_dy,
+        const float cdt_dz,
+        const float qsp,
+        const int na,
+        const int np,
+        const int max_nm,
+        const int nx,
+        const int ny,
+        const int nz)
+{
+
+  constexpr float one            = 1.;
+  constexpr float one_third      = 1./3.;
+  constexpr float two_fifteenths = 2./15.;
+
+  #define p_dx    k_particles(p_index, particle_var::dx)
+  #define p_dy    k_particles(p_index, particle_var::dy)
+  #define p_dz    k_particles(p_index, particle_var::dz)
+  #define p_ux    k_particles(p_index, particle_var::ux)
+  #define p_uy    k_particles(p_index, particle_var::uy)
+  #define p_uz    k_particles(p_index, particle_var::uz)
+  #define p_w     k_particles(p_index, particle_var::w)
+  #define pii     k_particles_i(p_index)
+
+  #define f_cbx k_interp(ii[lane], interpolator_var::cbx)
+  #define f_cby k_interp(ii[lane], interpolator_var::cby)
+  #define f_cbz k_interp(ii[lane], interpolator_var::cbz)
+  #define f_ex  k_interp(ii[lane], interpolator_var::ex)
+  #define f_ey  k_interp(ii[lane], interpolator_var::ey)
+  #define f_ez  k_interp(ii[lane], interpolator_var::ez)
+
+  #define f_dexdy    k_interp(ii[lane], interpolator_var::dexdy)
+  #define f_dexdz    k_interp(ii[lane], interpolator_var::dexdz)
+
+  #define f_d2exdydz k_interp(ii[lane], interpolator_var::d2exdydz)
+  #define f_deydx    k_interp(ii[lane], interpolator_var::deydx)
+  #define f_deydz    k_interp(ii[lane], interpolator_var::deydz)
+
+  #define f_d2eydzdx k_interp(ii[lane], interpolator_var::d2eydzdx)
+  #define f_dezdx    k_interp(ii[lane], interpolator_var::dezdx)
+  #define f_dezdy    k_interp(ii[lane], interpolator_var::dezdy)
+
+  #define f_d2ezdxdy k_interp(ii[lane], interpolator_var::d2ezdxdy)
+  #define f_dcbxdx   k_interp(ii[lane], interpolator_var::dcbxdx)
+  #define f_dcbydy   k_interp(ii[lane], interpolator_var::dcbydy)
+  #define f_dcbzdz   k_interp(ii[lane], interpolator_var::dcbzdz)
+
+  // copy local memmbers from grid
+  //auto nfaces_per_voxel = 6;
+  //auto nvoxels = g->nv;
+  //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
+      //h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
+  //auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
+
+  auto rangel = g->rangel;
+  auto rangeh = g->rangeh;
+
+  // TODO: is this the right place to do this?
+  Kokkos::deep_copy(k_nm, 0);
+
+  Kokkos::View<float[16]> v0("v0"), v1("v1"), v2("v2"), v3("v3"), v4("v4"), v5("v5");
+  Kokkos::View<float[16]> dx("dx"), dy("dy"), dz("dz"), ux("ux"), uy("uy"), uz("uz");
+  Kokkos::View<float[16]> hax("hax"), hay("hay"), haz("haz"), cbx("cbx"), cby("cby"), cbz("cbz");
+  Kokkos::View<float[16]> q("q");
+  Kokkos::View<int[16]> ii("ii");
+  Kokkos::View<bool[16]> inbnds("inbnds");
+
+  constexpr int num_leagues = 1;
+  constexpr int num_threads = 1;
+  constexpr int num_lanes = 16;
+  int num_chunks = np/num_lanes;
+//  if(np%num_lanes > 0)
+//    num_chunks++;
+//  Kokkos::TeamPolicy<> policy = Kokkos::TeamPolicy<>(num_leagues, num_threads, num_lanes).set_scratch_size(0, Kokkos::PerThread(21*num_lanes*4));
+//  typedef Kokkos::DefaultExecutionSpace::scratch_memory_space ScratchSpace;
+//  typedef Kokkos::View<float[num_lanes], ScratchSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> simd_float;
+//  typedef Kokkos::View<int[num_lanes],   ScratchSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> simd_int;
+//  typedef Kokkos::View<bool[num_lanes],  ScratchSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> simd_bool;
+//  Kokkos::parallel_for("advance_p", policy, 
+//  KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
+//    simd_float v0(team_member.team_scratch(0));
+//    simd_float v1(team_member.team_scratch(0));
+//    simd_float v2(team_member.team_scratch(0));
+//    simd_float v3(team_member.team_scratch(0));
+//    simd_float v4(team_member.team_scratch(0));
+//    simd_float v5(team_member.team_scratch(0));
+//    simd_float dx(team_member.team_scratch(0));
+//    simd_float dy(team_member.team_scratch(0));
+//    simd_float dz(team_member.team_scratch(0));
+//    simd_float ux(team_member.team_scratch(0));
+//    simd_float uy(team_member.team_scratch(0));
+//    simd_float uz(team_member.team_scratch(0));
+//    simd_float hax(team_member.team_scratch(0));
+//    simd_float hay(team_member.team_scratch(0));
+//    simd_float haz(team_member.team_scratch(0));
+//    simd_float cbx(team_member.team_scratch(0));
+//    simd_float cby(team_member.team_scratch(0));
+//    simd_float cbz(team_member.team_scratch(0));
+//    simd_int   ii(team_member.team_scratch(0));
+//    simd_float q(team_member.team_scratch(0));
+//    simd_bool  inbnds(team_member.team_scratch(0));
+//    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_chunks), [=] (size_t chunk) {
+Kokkos::parallel_for("advance_p", Kokkos::RangePolicy<>(0,num_chunks), KOKKOS_LAMBDA(const size_t chunk) {
+      auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+#pragma omp simd
+      for(int lane=0; lane<num_lanes; lane++) {
+        size_t p_index = chunk*num_lanes + lane;
+  
+        // Load position
+        dx[lane] = p_dx;
+        dy[lane] = p_dy;
+        dz[lane] = p_dz;
+        ii[lane] = pii;
+  
+        hax[lane] = qdt_2mc*( (f_ex + dy[lane]*f_dexdy ) + dz[lane]*(f_dexdz + dy[lane]*f_d2exdydz) );
+        hay[lane] = qdt_2mc*( (f_ey + dz[lane]*f_deydz ) + dx[lane]*(f_deydx + dz[lane]*f_d2eydzdx) );
+        haz[lane] = qdt_2mc*( (f_ez + dx[lane]*f_dezdx ) + dy[lane]*(f_dezdy + dx[lane]*f_d2ezdxdy) );
+  
+        // Interpolate B
+        cbx[lane] = f_cbx + dx[lane]*f_dcbxdx;
+        cby[lane] = f_cby + dy[lane]*f_dcbydy;
+        cbz[lane] = f_cbz + dz[lane]*f_dcbzdz;
+  
+        // Load momentum
+        ux[lane] = p_ux;
+        uy[lane] = p_uy;
+        uz[lane] = p_uz;
+        q[lane] = p_w;
+  
+        // Half advance e
+        ux[lane] += hax[lane];
+        uy[lane] += hay[lane];
+        uz[lane] += haz[lane];
+      }
+  
+      for(int lane=0; lane<num_lanes; lane++) {
+        v0[lane] = qdt_2mc/std::sqrt(one + (ux[lane]*ux[lane] + (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
+      }
+
+#pragma omp simd
+      for(int lane=0; lane<num_lanes; lane++) {
+        size_t p_index = chunk*num_lanes + lane;
+        // Boris - scalars
+        v1[lane] = cbx[lane]*cbx[lane] + (cby[lane]*cby[lane] + cbz[lane]*cbz[lane]);
+        v2[lane] = (v0[lane]*v0[lane])*v1[lane];
+        v3[lane] = v0[lane]*(one+v2[lane]*(one_third+v2[lane]*two_fifteenths));
+        v4[lane] = v3[lane]/(one+v1[lane]*(v3[lane]*v3[lane]));
+        v4[lane] += v4[lane];
+        // Boris - uprime
+        v0[lane] = ux[lane] + v3[lane]*(uy[lane]*cbz[lane] - uz[lane]*cby[lane]);
+        v1[lane] = uy[lane] + v3[lane]*(uz[lane]*cbx[lane] - ux[lane]*cbz[lane]);
+        v2[lane] = uz[lane] + v3[lane]*(ux[lane]*cby[lane] - uy[lane]*cbx[lane]);
+        // Boris - rotation
+        ux[lane] += v4[lane]*(v1[lane]*cbz[lane] - v2[lane]*cby[lane]);
+        uy[lane] += v4[lane]*(v2[lane]*cbx[lane] - v0[lane]*cbz[lane]);
+        uz[lane] += v4[lane]*(v0[lane]*cby[lane] - v1[lane]*cbx[lane]);
+        // Half advance e
+        ux[lane] += hax[lane];
+        uy[lane] += hay[lane];
+        uz[lane] += haz[lane];
+        // Store momentum
+        p_ux = ux[lane];
+        p_uy = uy[lane];
+        p_uz = uz[lane];
+      }
+  
+      for(int lane=0; lane<num_lanes; lane++) {
+        v0[lane]   = one/sqrtf(one + (ux[lane]*ux[lane]+ (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
+      }
+
+#pragma omp simd
+      for(int lane=0; lane<num_lanes; lane++) {
+        /**/                                      // Get norm displacement
+        ux[lane]  *= cdt_dx;
+        uy[lane]  *= cdt_dy;
+        uz[lane]  *= cdt_dz;
+        ux[lane]  *= v0[lane];
+        uy[lane]  *= v0[lane];
+        uz[lane]  *= v0[lane];
+        v0[lane]   = dx[lane] + ux[lane];                           // Streak midpoint (inbnds)
+        v1[lane]   = dy[lane] + uy[lane];
+        v2[lane]   = dz[lane] + uz[lane];
+        v3[lane]   = v0[lane] + ux[lane];                           // New position
+        v4[lane]   = v1[lane] + uy[lane];
+        v5[lane]   = v2[lane] + uz[lane];
+  
+        inbnds[lane] = v3[lane]<=one &&  v4[lane]<=one &&  v5[lane]<=one &&
+                      -v3[lane]<=one && -v4[lane]<=one && -v5[lane]<=one;
+      }
+
+#pragma omp simd
+      for(int lane=0; lane<num_lanes; lane++) {
+        size_t p_index = chunk*num_lanes + lane;
+
+        v3[lane] = inbnds[lane] ? v3[lane] : p_dx;
+        v4[lane] = inbnds[lane] ? v4[lane] : p_dy;
+        v5[lane] = inbnds[lane] ? v5[lane] : p_dz;
+
+        q[lane] = inbnds[lane] ? q[lane]*qsp : 0.0;
+        p_dx = v3[lane];
+        p_dy = v4[lane];
+        p_dz = v5[lane];
+        dx[lane] = v0[lane];
+        dy[lane] = v1[lane];
+        dz[lane] = v2[lane];
+        v5[lane] = q[lane]*ux[lane]*uy[lane]*uz[lane]*one_third;
+
+#       define ACCUMULATE_J(X,Y,Z)                                 \
+        v4[lane]  = q[lane]*u##X[lane];   /* v2 = q ux                            */        \
+        v1[lane]  = v4[lane]*d##Y[lane];  /* v1 = q ux dy                         */        \
+        v0[lane]  = v4[lane]-v1[lane];    /* v0 = q ux (1-dy)                     */        \
+        v1[lane] += v4[lane];             /* v1 = q ux (1+dy)                     */        \
+        v4[lane]  = one+d##Z[lane];       /* v4 = 1+dz                            */        \
+        v2[lane]  = v0[lane]*v4[lane];    /* v2 = q ux (1-dy)(1+dz)               */        \
+        v3[lane]  = v1[lane]*v4[lane];    /* v3 = q ux (1+dy)(1+dz)               */        \
+        v4[lane]  = one-d##Z[lane];       /* v4 = 1-dz                            */        \
+        v0[lane] *= v4[lane];             /* v0 = q ux (1-dy)(1-dz)               */        \
+        v1[lane] *= v4[lane];             /* v1 = q ux (1+dy)(1-dz)               */        \
+        v0[lane] += v5[lane];             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+        v1[lane] -= v5[lane];             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+        v2[lane] -= v5[lane];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+        v3[lane] += v5[lane];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+
+        ACCUMULATE_J( x,y,z );
+//        v6[lane] = v0[lane];
+//        v7[lane] = v1[lane];
+//        v8[lane] = v2[lane];
+//        v9[lane] = v3[lane];
+        k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 0) += v0[lane];
+        k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 1) += v1[lane];
+        k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 2) += v2[lane];
+        k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 3) += v3[lane];
+
+        ACCUMULATE_J( y,z,x );
+//        v10[lane] = v0[lane];
+//        v11[lane] = v1[lane];
+//        v12[lane] = v2[lane];
+//        v13[lane] = v3[lane];
+        k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 0) += v0[lane];
+        k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 1) += v1[lane];
+        k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 2) += v2[lane];
+        k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 3) += v3[lane];
+
+        ACCUMULATE_J( z,x,y );
+//        v14[lane] = v0[lane];
+//        v15[lane] = v1[lane];
+//        v16[lane] = v2[lane];
+//        v17[lane] = v3[lane];
+        k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 0) += v0[lane];
+        k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 1) += v1[lane];
+        k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 2) += v2[lane];
+        k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 3) += v3[lane];
+#       undef ACCUMULATE_J
+      }
+//      for(int lane=0; lane<num_lanes; lane++) {
+//        k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 0) += v6[lane];
+//        k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 1) += v7[lane];
+//        k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 2) += v8[lane];
+//        k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 3) += v9[lane];
+//
+//        k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 0) += v10[lane];
+//        k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 1) += v11[lane];
+//        k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 2) += v12[lane];
+//        k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 3) += v13[lane];
+//
+//        k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 0) += v14[lane];
+//        k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 1) += v15[lane];
+//        k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 2) += v16[lane];
+//        k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 3) += v17[lane];
+//      }
+      for(int lane=0; lane<num_lanes; lane++) {
+        if(!inbnds[lane]) {
+          size_t p_index = chunk*num_lanes + lane;
+          DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+          local_pm->dispx = ux[lane];
+          local_pm->dispy = uy[lane];
+          local_pm->dispz = uz[lane];
+          local_pm->i     = p_index;
+
+          if( move_p_kokkos( k_particles, k_particles_i, local_pm,
+                             k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
+            if( k_nm(0)<max_nm ) {
+              const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+              if (nm >= max_nm) Kokkos::abort("overran max_nm");
+
+              k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+              k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+              k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+              k_particle_movers_i(nm)   = local_pm->i;
+
+              // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+              k_particle_copy(nm, particle_var::dx) = p_dx;
+              k_particle_copy(nm, particle_var::dy) = p_dy;
+              k_particle_copy(nm, particle_var::dz) = p_dz;
+              k_particle_copy(nm, particle_var::ux) = p_ux;
+              k_particle_copy(nm, particle_var::uy) = p_uy;
+              k_particle_copy(nm, particle_var::uz) = p_uz;
+              k_particle_copy(nm, particle_var::w) = p_w;
+              k_particle_i_copy(nm) = pii;
+            }
+          }
+        }
+      }
+//    });
+//  });
+});
+#undef p_dx
+#undef p_dy
+#undef p_dz
+#undef p_ux
+#undef p_uy
+#undef p_uz
+#undef p_w 
+#undef pii 
+
+#undef f_cbx
+#undef f_cby
+#undef f_cbz
+#undef f_ex 
+#undef f_ey 
+#undef f_ez 
+
+#undef f_dexdy
+#undef f_dexdz
+
+#undef f_d2exdydz
+#undef f_deydx   
+#undef f_deydz   
+
+#undef f_d2eydzdx
+#undef f_dezdx   
+#undef f_dezdy   
+
+#undef f_d2ezdxdy
+#undef f_dcbxdx  
+#undef f_dcbydy  
+#undef f_dcbzdz  
+
+#define p_dx    k_particles(p_index, particle_var::dx)
+#define p_dy    k_particles(p_index, particle_var::dy)
+#define p_dz    k_particles(p_index, particle_var::dz)
+#define p_ux    k_particles(p_index, particle_var::ux)
+#define p_uy    k_particles(p_index, particle_var::uy)
+#define p_uz    k_particles(p_index, particle_var::uz)
+#define p_w     k_particles(p_index, particle_var::w)
+#define pii     k_particles_i(p_index)
+
+#define f_cbx k_interp(ii, interpolator_var::cbx)
+#define f_cby k_interp(ii, interpolator_var::cby)
+#define f_cbz k_interp(ii, interpolator_var::cbz)
+#define f_ex  k_interp(ii, interpolator_var::ex)
+#define f_ey  k_interp(ii, interpolator_var::ey)
+#define f_ez  k_interp(ii, interpolator_var::ez)
+
+#define f_dexdy    k_interp(ii, interpolator_var::dexdy)
+#define f_dexdz    k_interp(ii, interpolator_var::dexdz)
+
+#define f_d2exdydz k_interp(ii, interpolator_var::d2exdydz)
+#define f_deydx    k_interp(ii, interpolator_var::deydx)
+#define f_deydz    k_interp(ii, interpolator_var::deydz)
+
+#define f_d2eydzdx k_interp(ii, interpolator_var::d2eydzdx)
+#define f_dezdx    k_interp(ii, interpolator_var::dezdx)
+#define f_dezdy    k_interp(ii, interpolator_var::dezdy)
+
+#define f_d2ezdxdy k_interp(ii, interpolator_var::d2ezdxdy)
+#define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
+#define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
+#define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
+  if(num_chunks*num_lanes < np) {
+    for(int p_index=num_chunks*num_lanes; p_index<np; p_index++) {
+      float v0, v1, v2, v3, v4, v5;
+      auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+
+      // Load position
+      float dx = p_dx;
+      float dy = p_dy;
+      float dz = p_dz;
+      int ii = pii;
+
+      float hax = qdt_2mc*( (f_ex + dy*f_dexdy ) + dz*(f_dexdz + dy*f_d2exdydz) );
+      float hay = qdt_2mc*( (f_ey + dz*f_deydz ) + dx*(f_deydx + dz*f_d2eydzdx) );
+      float haz = qdt_2mc*( (f_ez + dx*f_dezdx ) + dy*(f_dezdy + dx*f_d2ezdxdy) );
+
+      // Interpolate B
+      float cbx = f_cbx + dx*f_dcbxdx;
+      float cby = f_cby + dy*f_dcbydy;
+      float cbz = f_cbz + dz*f_dcbzdz;
+
+      // Load momentum
+      float ux = p_ux;
+      float uy = p_uy;
+      float uz = p_uz;
+      float q = p_w;
+
+      // Half advance e
+      ux += hax;
+      uy += hay;
+      uz += haz;
+
+      v0 = qdt_2mc/std::sqrt(one + (ux*ux + (uy*uy + uz*uz)));
+
+      // Boris - scalars
+      v1 = cbx*cbx + (cby*cby + cbz*cbz);
+      v2 = (v0*v0)*v1;
+      v3 = v0*(one+v2*(one_third+v2*two_fifteenths));
+      v4 = v3/(one+v1*(v3*v3));
+      v4 += v4;
+      // Boris - uprime
+      v0 = ux + v3*(uy*cbz - uz*cby);
+      v1 = uy + v3*(uz*cbx - ux*cbz);
+      v2 = uz + v3*(ux*cby - uy*cbx);
+      // Boris - rotation
+      ux += v4*(v1*cbz - v2*cby);
+      uy += v4*(v2*cbx - v0*cbz);
+      uz += v4*(v0*cby - v1*cbx);
+      // Half advance e
+      ux += hax;
+      uy += hay;
+      uz += haz;
+      // Store momentum
+      p_ux = ux;
+      p_uy = uy;
+      p_uz = uz;
+
+      v0   = one/sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
+
+      /**/                                      // Get norm displacement
+      ux  *= cdt_dx;
+      uy  *= cdt_dy;
+      uz  *= cdt_dz;
+      ux  *= v0;
+      uy  *= v0;
+      uz  *= v0;
+      v0   = dx + ux;                           // Streak midpoint (inbnds)
+      v1   = dy + uy;
+      v2   = dz + uz;
+      v3   = v0 + ux;                           // New position
+      v4   = v1 + uy;
+      v5   = v2 + uz;
+
+      bool inbnds = v3<=one &&  v4<=one &&  v5<=one &&
+                    -v3<=one && -v4<=one && -v5<=one;
+      if(inbnds) {
+        // Common case (inbnds).  Note: accumulator values are 4 times
+        // the total physical charge that passed through the appropriate
+        // current quadrant in a time-step
+
+        q *= qsp;
+        p_dx = v3;                             // Store new position
+        p_dy = v4;
+        p_dz = v5;
+        dx = v0;                                // Streak midpoint
+        dy = v1;
+        dz = v2;
+        v5 = q*ux*uy*uz*one_third;              // Compute correction
+
+#       define ACCUMULATE_J(X,Y,Z)                                 \
+        v4  = q*u##X;   /* v2 = q ux                            */        \
+        v1  = v4*d##Y;  /* v1 = q ux dy                         */        \
+        v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        \
+        v1 += v4;       /* v1 = q ux (1+dy)                     */        \
+        v4  = one+d##Z; /* v4 = 1+dz                            */        \
+        v2  = v0*v4;    /* v2 = q ux (1-dy)(1+dz)               */        \
+        v3  = v1*v4;    /* v3 = q ux (1+dy)(1+dz)               */        \
+        v4  = one-d##Z; /* v4 = 1-dz                            */        \
+        v0 *= v4;       /* v0 = q ux (1-dy)(1-dz)               */        \
+        v1 *= v4;       /* v1 = q ux (1+dy)(1-dz)               */        \
+        v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+        v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+        v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+        v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+
+        ACCUMULATE_J( x,y,z );
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+
+        ACCUMULATE_J( y,z,x );
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+
+        ACCUMULATE_J( z,x,y );
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+#       undef ACCUMULATE_J
+      } else {
+        DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+        local_pm->dispx = ux;
+        local_pm->dispy = uy;
+        local_pm->dispz = uz;
+        local_pm->i     = p_index;
+
+        if( move_p_kokkos( k_particles, k_particles_i, local_pm,
+                           k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
+          if( k_nm(0)<max_nm ) {
+            const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+            if (nm >= max_nm) Kokkos::abort("overran max_nm");
+
+            k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+            k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+            k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+            k_particle_movers_i(nm)   = local_pm->i;
+
+            // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+            k_particle_copy(nm, particle_var::dx) = p_dx;
+            k_particle_copy(nm, particle_var::dy) = p_dy;
+            k_particle_copy(nm, particle_var::dz) = p_dz;
+            k_particle_copy(nm, particle_var::ux) = p_ux;
+            k_particle_copy(nm, particle_var::uy) = p_uy;
+            k_particle_copy(nm, particle_var::uz) = p_uz;
+            k_particle_copy(nm, particle_var::w) = p_w;
+            k_particle_i_copy(nm) = pii;
+          }
+        }
+      }
+    }
+  }
+#undef p_dx
+#undef p_dy
+#undef p_dz
+#undef p_ux
+#undef p_uy
+#undef p_uz
+#undef p_w 
+#undef pii 
+
+#undef f_cbx
+#undef f_cby
+#undef f_cbz
+#undef f_ex 
+#undef f_ey 
+#undef f_ez 
+
+#undef f_dexdy
+#undef f_dexdz
+
+#undef f_d2exdydz
+#undef f_deydx   
+#undef f_deydz   
+
+#undef f_d2eydzdx
+#undef f_dezdx   
+#undef f_dezdy   
+
+#undef f_d2ezdxdy
+#undef f_dcbxdx  
+#undef f_dcbydy  
+#undef f_dcbzdz  
+}
+
+void
+advance_p_kokkos_devel_serial_chunk(
+        k_particles_t& k_particles,
+        k_particles_i_t& k_particles_i,
+        k_particle_copy_t& k_particle_copy,
+        k_particle_i_copy_t& k_particle_i_copy,
+        k_particle_movers_t& k_particle_movers,
+        k_particle_i_movers_t& k_particle_movers_i,
+        k_accumulators_sa_t k_accumulators_sa,
+        k_interpolator_t& k_interp,
+        //k_particle_movers_t k_local_particle_movers,
+        k_iterator_t& k_nm,
+        k_neighbor_t& k_neighbors,
+        const grid_t *g,
+        const float qdt_2mc,
+        const float cdt_dx,
+        const float cdt_dy,
+        const float cdt_dz,
+        const float qsp,
+        const int na,
+        const int np,
+        const int max_nm,
+        const int nx,
+        const int ny,
+        const int nz)
+{
+
+  constexpr float one            = 1.;
+  constexpr float one_third      = 1./3.;
+  constexpr float two_fifteenths = 2./15.;
+
+  #define p_dx    k_particles(p_index, particle_var::dx)
+  #define p_dy    k_particles(p_index, particle_var::dy)
+  #define p_dz    k_particles(p_index, particle_var::dz)
+  #define p_ux    k_particles(p_index, particle_var::ux)
+  #define p_uy    k_particles(p_index, particle_var::uy)
+  #define p_uz    k_particles(p_index, particle_var::uz)
+  #define p_w     k_particles(p_index, particle_var::w)
+  #define pii     k_particles_i(p_index)
+
+  #define f_cbx k_interp(ii[lane], interpolator_var::cbx)
+  #define f_cby k_interp(ii[lane], interpolator_var::cby)
+  #define f_cbz k_interp(ii[lane], interpolator_var::cbz)
+  #define f_ex  k_interp(ii[lane], interpolator_var::ex)
+  #define f_ey  k_interp(ii[lane], interpolator_var::ey)
+  #define f_ez  k_interp(ii[lane], interpolator_var::ez)
+
+  #define f_dexdy    k_interp(ii[lane], interpolator_var::dexdy)
+  #define f_dexdz    k_interp(ii[lane], interpolator_var::dexdz)
+
+  #define f_d2exdydz k_interp(ii[lane], interpolator_var::d2exdydz)
+  #define f_deydx    k_interp(ii[lane], interpolator_var::deydx)
+  #define f_deydz    k_interp(ii[lane], interpolator_var::deydz)
+
+  #define f_d2eydzdx k_interp(ii[lane], interpolator_var::d2eydzdx)
+  #define f_dezdx    k_interp(ii[lane], interpolator_var::dezdx)
+  #define f_dezdy    k_interp(ii[lane], interpolator_var::dezdy)
+
+  #define f_d2ezdxdy k_interp(ii[lane], interpolator_var::d2ezdxdy)
+  #define f_dcbxdx   k_interp(ii[lane], interpolator_var::dcbxdx)
+  #define f_dcbydy   k_interp(ii[lane], interpolator_var::dcbydy)
+  #define f_dcbzdz   k_interp(ii[lane], interpolator_var::dcbzdz)
+
+  // copy local memmbers from grid
+  //auto nfaces_per_voxel = 6;
+  //auto nvoxels = g->nv;
+  //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
+      //h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
+  //auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
+
+  auto rangel = g->rangel;
+  auto rangeh = g->rangeh;
+
+  // TODO: is this the right place to do this?
+  Kokkos::deep_copy(k_nm, 0);
+
+  constexpr int num_lanes = 16;
+  int num_chunks = np/num_lanes;
+  auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+  for(size_t chunk=0; chunk<num_chunks; chunk++) {
+    float v0[num_lanes], v1[num_lanes], v2[num_lanes], v3[num_lanes], v4[num_lanes], v5[num_lanes];
+    float v6[num_lanes], v7[num_lanes], v8[num_lanes], v9[num_lanes];
+    float v10[num_lanes], v11[num_lanes], v12[num_lanes], v13[num_lanes];
+    float v14[num_lanes], v15[num_lanes], v16[num_lanes], v17[num_lanes];
+    float dx[num_lanes], dy[num_lanes], dz[num_lanes];
+    float ux[num_lanes], uy[num_lanes], uz[num_lanes];
+    float hax[num_lanes], hay[num_lanes], haz[num_lanes];
+    float cbx[num_lanes], cby[num_lanes], cbz[num_lanes];
+    float q[num_lanes];
+    int ii[num_lanes];
+    bool inbnds[num_lanes];
+    for(int lane=0; lane<num_lanes; lane++) {
+      size_t p_index = chunk*num_lanes + lane;
+      // Load position
+      dx[lane] = p_dx;
+      dy[lane] = p_dy;
+      dz[lane] = p_dz;
+
+      // Load momentum
+      ux[lane] = p_ux;
+      uy[lane] = p_uy;
+      uz[lane] = p_uz;
+      q[lane] = p_w;
+      ii[lane] = pii;
+    }
+#pragma omp simd
+    for(int lane=0; lane<num_lanes; lane++) {
+      size_t p_index = chunk*num_lanes + lane;
+
+      hax[lane] = qdt_2mc*( (f_ex + dy[lane]*f_dexdy ) + dz[lane]*(f_dexdz + dy[lane]*f_d2exdydz) );
+      hay[lane] = qdt_2mc*( (f_ey + dz[lane]*f_deydz ) + dx[lane]*(f_deydx + dz[lane]*f_d2eydzdx) );
+      haz[lane] = qdt_2mc*( (f_ez + dx[lane]*f_dezdx ) + dy[lane]*(f_dezdy + dx[lane]*f_d2ezdxdy) );
+
+      // Interpolate B
+      cbx[lane] = f_cbx + dx[lane]*f_dcbxdx;
+      cby[lane] = f_cby + dy[lane]*f_dcbydy;
+      cbz[lane] = f_cbz + dz[lane]*f_dcbzdz;
+
+      // Half advance e
+      ux[lane] += hax[lane];
+      uy[lane] += hay[lane];
+      uz[lane] += haz[lane];
+    }
+
+#pragma omp simd
+    for(int lane=0; lane<num_lanes; lane++) {
+      size_t p_index = chunk*num_lanes + lane;
+      v0[lane] = qdt_2mc/std::sqrt(one + (ux[lane]*ux[lane] + (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
+    }
+
+#pragma omp simd
+    for(int lane=0; lane<num_lanes; lane++) {
+      size_t p_index = chunk*num_lanes + lane;
+      // Boris - scalars
+      v1[lane] = cbx[lane]*cbx[lane] + (cby[lane]*cby[lane] + cbz[lane]*cbz[lane]);
+      v2[lane] = (v0[lane]*v0[lane])*v1[lane];
+      v3[lane] = v0[lane]*(one+v2[lane]*(one_third+v2[lane]*two_fifteenths));
+      v4[lane] = v3[lane]/(one+v1[lane]*(v3[lane]*v3[lane]));
+      v4[lane] += v4[lane];
+      // Boris - uprime
+      v0[lane] = ux[lane] + v3[lane]*(uy[lane]*cbz[lane] - uz[lane]*cby[lane]);
+      v1[lane] = uy[lane] + v3[lane]*(uz[lane]*cbx[lane] - ux[lane]*cbz[lane]);
+      v2[lane] = uz[lane] + v3[lane]*(ux[lane]*cby[lane] - uy[lane]*cbx[lane]);
+      // Boris - rotation
+      ux[lane] += v4[lane]*(v1[lane]*cbz[lane] - v2[lane]*cby[lane]);
+      uy[lane] += v4[lane]*(v2[lane]*cbx[lane] - v0[lane]*cbz[lane]);
+      uz[lane] += v4[lane]*(v0[lane]*cby[lane] - v1[lane]*cbx[lane]);
+      // Half advance e
+      ux[lane] += hax[lane];
+      uy[lane] += hay[lane];
+      uz[lane] += haz[lane];
+      // Store momentum
+      p_ux = ux[lane];
+      p_uy = uy[lane];
+      p_uz = uz[lane];
+    }
+
+#pragma omp simd
+    for(int lane=0; lane<num_lanes; lane++) {
+      size_t p_index = chunk*num_lanes + lane;
+      v0[lane]   = one/sqrtf(one + (ux[lane]*ux[lane]+ (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
+    }
+
+#pragma omp simd
+    for(int lane=0; lane<num_lanes; lane++) {
+      size_t p_index = chunk*num_lanes + lane;
+
+      /**/                                      // Get norm displacement
+      ux[lane]  *= cdt_dx;
+      uy[lane]  *= cdt_dy;
+      uz[lane]  *= cdt_dz;
+      ux[lane]  *= v0[lane];
+      uy[lane]  *= v0[lane];
+      uz[lane]  *= v0[lane];
+      v0[lane]   = dx[lane] + ux[lane];                           // Streak midpoint (inbnds)
+      v1[lane]   = dy[lane] + uy[lane];
+      v2[lane]   = dz[lane] + uz[lane];
+      v3[lane]   = v0[lane] + ux[lane];                           // New position
+      v4[lane]   = v1[lane] + uy[lane];
+      v5[lane]   = v2[lane] + uz[lane];
+
+      inbnds[lane] = v3[lane]<=one &&  v4[lane]<=one &&  v5[lane]<=one &&
+                    -v3[lane]<=one && -v4[lane]<=one && -v5[lane]<=one;
+    }
+
+#pragma omp simd
+    for(int lane=0; lane<num_lanes; lane++) {
+      size_t p_index = chunk*num_lanes + lane;
+//      v3[lane] = ( v3[lane] & inbnds[lane] ) | ( dx[lane] & ~inbnds[lane] );
+//      v4[lane] = ( v4[lane] & inbnds[lane] ) | ( dy[lane] & ~inbnds[lane] );
+//      v5[lane] = ( v5[lane] & inbnds[lane] ) | ( dz[lane] & ~inbnds[lane] );
+
+      v3[lane] = inbnds[lane] ? v3[lane] : p_dx;
+      v4[lane] = inbnds[lane] ? v4[lane] : p_dy;
+      v5[lane] = inbnds[lane] ? v5[lane] : p_dz;
+
+      q[lane] = inbnds[lane] ? q[lane]*qsp : 0.0;
+//      q[lane] = q[lane]*qsp*static_cast<float>(inbnds[lane]);
+//      q[lane] *= qsp;
+      p_dx = v3[lane];
+      p_dy = v4[lane];
+      p_dz = v5[lane];
+      dx[lane] = v0[lane];
+      dy[lane] = v1[lane];
+      dz[lane] = v2[lane];
+      v5[lane] = q[lane]*ux[lane]*uy[lane]*uz[lane]*one_third;
+
+#     define ACCUMULATE_J(X,Y,Z)                                 \
+      v4[lane]  = q[lane]*u##X[lane];   /* v2 = q ux                            */        \
+      v1[lane]  = v4[lane]*d##Y[lane];  /* v1 = q ux dy                         */        \
+      v0[lane]  = v4[lane]-v1[lane];    /* v0 = q ux (1-dy)                     */        \
+      v1[lane] += v4[lane];             /* v1 = q ux (1+dy)                     */        \
+      v4[lane]  = one+d##Z[lane];       /* v4 = 1+dz                            */        \
+      v2[lane]  = v0[lane]*v4[lane];    /* v2 = q ux (1-dy)(1+dz)               */        \
+      v3[lane]  = v1[lane]*v4[lane];    /* v3 = q ux (1+dy)(1+dz)               */        \
+      v4[lane]  = one-d##Z[lane];       /* v4 = 1-dz                            */        \
+      v0[lane] *= v4[lane];             /* v0 = q ux (1-dy)(1-dz)               */        \
+      v1[lane] *= v4[lane];             /* v1 = q ux (1+dy)(1-dz)               */        \
+      v0[lane] += v5[lane];             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+      v1[lane] -= v5[lane];             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+      v2[lane] -= v5[lane];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+      v3[lane] += v5[lane];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+
+      ACCUMULATE_J( x,y,z );
+      v6[lane] = v0[lane];
+      v7[lane] = v1[lane];
+      v8[lane] = v2[lane];
+      v9[lane] = v3[lane];
+//      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 0) += v0[lane];
+//      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 1) += v1[lane];
+//      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 2) += v2[lane];
+//      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 3) += v3[lane];
+
+      ACCUMULATE_J( y,z,x );
+      v10[lane] = v0[lane];
+      v11[lane] = v1[lane];
+      v12[lane] = v2[lane];
+      v13[lane] = v3[lane];
+//      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 0) += v0[lane];
+//      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 1) += v1[lane];
+//      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 2) += v2[lane];
+//      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 3) += v3[lane];
+
+      ACCUMULATE_J( z,x,y );
+      v14[lane] = v0[lane];
+      v15[lane] = v1[lane];
+      v16[lane] = v2[lane];
+      v17[lane] = v3[lane];
+//      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 0) += v0[lane];
+//      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 1) += v1[lane];
+//      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 2) += v2[lane];
+//      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 3) += v3[lane];
+#     undef ACCUMULATE_J
+    }
+    for(int lane=0; lane<num_lanes; lane++) {
+      size_t p_index = chunk*num_lanes + lane;
+      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 0) += v6[lane];
+      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 1) += v7[lane];
+      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 2) += v8[lane];
+      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 3) += v9[lane];
+
+      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 0) += v10[lane];
+      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 1) += v11[lane];
+      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 2) += v12[lane];
+      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 3) += v13[lane];
+
+      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 0) += v14[lane];
+      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 1) += v15[lane];
+      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 2) += v16[lane];
+      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 3) += v17[lane];
+    }
+    for(int lane=0; lane<num_lanes; lane++) {
+      if(!inbnds[lane]) {
+        size_t p_index = chunk*num_lanes + lane;
+        DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+        local_pm->dispx = ux[lane];
+        local_pm->dispy = uy[lane];
+        local_pm->dispz = uz[lane];
+        local_pm->i     = p_index;
+
+        if( move_p_kokkos( k_particles, k_particles_i, local_pm,
+                           k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
+          if( k_nm(0)<max_nm ) {
+            const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+            if (nm >= max_nm) Kokkos::abort("overran max_nm");
+
+            k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+            k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+            k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+            k_particle_movers_i(nm)   = local_pm->i;
+
+            // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+            k_particle_copy(nm, particle_var::dx) = p_dx;
+            k_particle_copy(nm, particle_var::dy) = p_dy;
+            k_particle_copy(nm, particle_var::dz) = p_dz;
+            k_particle_copy(nm, particle_var::ux) = p_ux;
+            k_particle_copy(nm, particle_var::uy) = p_uy;
+            k_particle_copy(nm, particle_var::uz) = p_uz;
+            k_particle_copy(nm, particle_var::w) = p_w;
+            k_particle_i_copy(nm) = pii;
+          }
+        }
+      }
+    }
+  }
+#undef p_dx
+#undef p_dy
+#undef p_dz
+#undef p_ux
+#undef p_uy
+#undef p_uz
+#undef p_w 
+#undef pii 
+
+#undef f_cbx
+#undef f_cby
+#undef f_cbz
+#undef f_ex 
+#undef f_ey 
+#undef f_ez 
+
+#undef f_dexdy
+#undef f_dexdz
+
+#undef f_d2exdydz
+#undef f_deydx   
+#undef f_deydz   
+
+#undef f_d2eydzdx
+#undef f_dezdx   
+#undef f_dezdy   
+
+#undef f_d2ezdxdy
+#undef f_dcbxdx  
+#undef f_dcbydy  
+#undef f_dcbzdz  
+
+#define p_dx    k_particles(p_index, particle_var::dx)
+#define p_dy    k_particles(p_index, particle_var::dy)
+#define p_dz    k_particles(p_index, particle_var::dz)
+#define p_ux    k_particles(p_index, particle_var::ux)
+#define p_uy    k_particles(p_index, particle_var::uy)
+#define p_uz    k_particles(p_index, particle_var::uz)
+#define p_w     k_particles(p_index, particle_var::w)
+#define pii     k_particles_i(p_index)
+
+#define f_cbx k_interp(ii, interpolator_var::cbx)
+#define f_cby k_interp(ii, interpolator_var::cby)
+#define f_cbz k_interp(ii, interpolator_var::cbz)
+#define f_ex  k_interp(ii, interpolator_var::ex)
+#define f_ey  k_interp(ii, interpolator_var::ey)
+#define f_ez  k_interp(ii, interpolator_var::ez)
+
+#define f_dexdy    k_interp(ii, interpolator_var::dexdy)
+#define f_dexdz    k_interp(ii, interpolator_var::dexdz)
+
+#define f_d2exdydz k_interp(ii, interpolator_var::d2exdydz)
+#define f_deydx    k_interp(ii, interpolator_var::deydx)
+#define f_deydz    k_interp(ii, interpolator_var::deydz)
+
+#define f_d2eydzdx k_interp(ii, interpolator_var::d2eydzdx)
+#define f_dezdx    k_interp(ii, interpolator_var::dezdx)
+#define f_dezdy    k_interp(ii, interpolator_var::dezdy)
+
+#define f_d2ezdxdy k_interp(ii, interpolator_var::d2ezdxdy)
+#define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
+#define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
+#define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
+  if(num_chunks*num_lanes < np) {
+    for(int p_index=num_chunks*num_lanes; p_index<np; p_index++) {
+      float v0, v1, v2, v3, v4, v5;
+      auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+
+      // Load position
+      float dx = p_dx;
+      float dy = p_dy;
+      float dz = p_dz;
+      int ii = pii;
+
+      float hax = qdt_2mc*( (f_ex + dy*f_dexdy ) + dz*(f_dexdz + dy*f_d2exdydz) );
+      float hay = qdt_2mc*( (f_ey + dz*f_deydz ) + dx*(f_deydx + dz*f_d2eydzdx) );
+      float haz = qdt_2mc*( (f_ez + dx*f_dezdx ) + dy*(f_dezdy + dx*f_d2ezdxdy) );
+
+      // Interpolate B
+      float cbx = f_cbx + dx*f_dcbxdx;
+      float cby = f_cby + dy*f_dcbydy;
+      float cbz = f_cbz + dz*f_dcbzdz;
+
+      // Load momentum
+      float ux = p_ux;
+      float uy = p_uy;
+      float uz = p_uz;
+      float q = p_w;
+
+      // Half advance e
+      ux += hax;
+      uy += hay;
+      uz += haz;
+
+      v0 = qdt_2mc/std::sqrt(one + (ux*ux + (uy*uy + uz*uz)));
+
+      // Boris - scalars
+      v1 = cbx*cbx + (cby*cby + cbz*cbz);
+      v2 = (v0*v0)*v1;
+      v3 = v0*(one+v2*(one_third+v2*two_fifteenths));
+      v4 = v3/(one+v1*(v3*v3));
+      v4 += v4;
+      // Boris - uprime
+      v0 = ux + v3*(uy*cbz - uz*cby);
+      v1 = uy + v3*(uz*cbx - ux*cbz);
+      v2 = uz + v3*(ux*cby - uy*cbx);
+      // Boris - rotation
+      ux += v4*(v1*cbz - v2*cby);
+      uy += v4*(v2*cbx - v0*cbz);
+      uz += v4*(v0*cby - v1*cbx);
+      // Half advance e
+      ux += hax;
+      uy += hay;
+      uz += haz;
+      // Store momentum
+      p_ux = ux;
+      p_uy = uy;
+      p_uz = uz;
+
+      v0   = one/sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
+
+      /**/                                      // Get norm displacement
+      ux  *= cdt_dx;
+      uy  *= cdt_dy;
+      uz  *= cdt_dz;
+      ux  *= v0;
+      uy  *= v0;
+      uz  *= v0;
+      v0   = dx + ux;                           // Streak midpoint (inbnds)
+      v1   = dy + uy;
+      v2   = dz + uz;
+      v3   = v0 + ux;                           // New position
+      v4   = v1 + uy;
+      v5   = v2 + uz;
+
+      bool inbnds = v3<=one &&  v4<=one &&  v5<=one &&
+                    -v3<=one && -v4<=one && -v5<=one;
+      if(inbnds) {
+        // Common case (inbnds).  Note: accumulator values are 4 times
+        // the total physical charge that passed through the appropriate
+        // current quadrant in a time-step
+
+        q *= qsp;
+        p_dx = v3;                             // Store new position
+        p_dy = v4;
+        p_dz = v5;
+        dx = v0;                                // Streak midpoint
+        dy = v1;
+        dz = v2;
+        v5 = q*ux*uy*uz*one_third;              // Compute correction
+
+#       define ACCUMULATE_J(X,Y,Z)                                 \
+        v4  = q*u##X;   /* v2 = q ux                            */        \
+        v1  = v4*d##Y;  /* v1 = q ux dy                         */        \
+        v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        \
+        v1 += v4;       /* v1 = q ux (1+dy)                     */        \
+        v4  = one+d##Z; /* v4 = 1+dz                            */        \
+        v2  = v0*v4;    /* v2 = q ux (1-dy)(1+dz)               */        \
+        v3  = v1*v4;    /* v3 = q ux (1+dy)(1+dz)               */        \
+        v4  = one-d##Z; /* v4 = 1-dz                            */        \
+        v0 *= v4;       /* v0 = q ux (1-dy)(1-dz)               */        \
+        v1 *= v4;       /* v1 = q ux (1+dy)(1-dz)               */        \
+        v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+        v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+        v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+        v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+
+        ACCUMULATE_J( x,y,z );
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+
+        ACCUMULATE_J( y,z,x );
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+
+        ACCUMULATE_J( z,x,y );
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+#       undef ACCUMULATE_J
+      } else {
+        DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+        local_pm->dispx = ux;
+        local_pm->dispy = uy;
+        local_pm->dispz = uz;
+        local_pm->i     = p_index;
+
+        if( move_p_kokkos( k_particles, k_particles_i, local_pm,
+                           k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
+          if( k_nm(0)<max_nm ) {
+            const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+            if (nm >= max_nm) Kokkos::abort("overran max_nm");
+
+            k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+            k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+            k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+            k_particle_movers_i(nm)   = local_pm->i;
+
+            // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+            k_particle_copy(nm, particle_var::dx) = p_dx;
+            k_particle_copy(nm, particle_var::dy) = p_dy;
+            k_particle_copy(nm, particle_var::dz) = p_dz;
+            k_particle_copy(nm, particle_var::ux) = p_ux;
+            k_particle_copy(nm, particle_var::uy) = p_uy;
+            k_particle_copy(nm, particle_var::uz) = p_uz;
+            k_particle_copy(nm, particle_var::w) = p_w;
+            k_particle_i_copy(nm) = pii;
+          }
+        }
+      }
+    }
+  }
+#undef p_dx
+#undef p_dy
+#undef p_dz
+#undef p_ux
+#undef p_uy
+#undef p_uz
+#undef p_w 
+#undef pii 
+
+#undef f_cbx
+#undef f_cby
+#undef f_cbz
+#undef f_ex 
+#undef f_ey 
+#undef f_ez 
+
+#undef f_dexdy
+#undef f_dexdz
+
+#undef f_d2exdydz
+#undef f_deydx   
+#undef f_deydz   
+
+#undef f_d2eydzdx
+#undef f_dezdx   
+#undef f_dezdy   
+
+#undef f_d2ezdxdy
+#undef f_dcbxdx  
+#undef f_dcbydy  
+#undef f_dcbzdz  
+}
+
+//void
+//advance_p_kokkos_devel_serial(
+//        k_particles_t& k_particles,
+//        k_particles_i_t& k_particles_i,
+//        k_particle_copy_t& k_particle_copy,
+//        k_particle_i_copy_t& k_particle_i_copy,
+//        k_particle_movers_t& k_particle_movers,
+//        k_particle_i_movers_t& k_particle_movers_i,
+//        k_accumulators_sa_t k_accumulators_sa,
+//        k_interpolator_t& k_interp,
+//        //k_particle_movers_t k_local_particle_movers,
+//        k_iterator_t& k_nm,
+//        k_neighbor_t& k_neighbors,
+//        const grid_t *g,
+//        const float qdt_2mc,
+//        const float cdt_dx,
+//        const float cdt_dy,
+//        const float cdt_dz,
+//        const float qsp,
+//        const int na,
+//        const int np,
+//        const int max_nm,
+//        const int nx,
+//        const int ny,
+//        const int nz)
+//{
+//
+//  constexpr float one            = 1.;
+//  constexpr float one_third      = 1./3.;
+//  constexpr float two_fifteenths = 2./15.;
+//
+//  #define p_dx    k_particles(p_index, particle_var::dx)
+//  #define p_dy    k_particles(p_index, particle_var::dy)
+//  #define p_dz    k_particles(p_index, particle_var::dz)
+//  #define p_ux    k_particles(p_index, particle_var::ux)
+//  #define p_uy    k_particles(p_index, particle_var::uy)
+//  #define p_uz    k_particles(p_index, particle_var::uz)
+//  #define p_w     k_particles(p_index, particle_var::w)
+//  #define pii     k_particles_i(p_index)
+//
+//  #define f_cbx k_interp(ii, interpolator_var::cbx)
+//  #define f_cby k_interp(ii, interpolator_var::cby)
+//  #define f_cbz k_interp(ii, interpolator_var::cbz)
+//  #define f_ex  k_interp(ii, interpolator_var::ex)
+//  #define f_ey  k_interp(ii, interpolator_var::ey)
+//  #define f_ez  k_interp(ii, interpolator_var::ez)
+//
+//  #define f_dexdy    k_interp(ii, interpolator_var::dexdy)
+//  #define f_dexdz    k_interp(ii, interpolator_var::dexdz)
+//
+//  #define f_d2exdydz k_interp(ii, interpolator_var::d2exdydz)
+//  #define f_deydx    k_interp(ii, interpolator_var::deydx)
+//  #define f_deydz    k_interp(ii, interpolator_var::deydz)
+//
+//  #define f_d2eydzdx k_interp(ii, interpolator_var::d2eydzdx)
+//  #define f_dezdx    k_interp(ii, interpolator_var::dezdx)
+//  #define f_dezdy    k_interp(ii, interpolator_var::dezdy)
+//
+//  #define f_d2ezdxdy k_interp(ii, interpolator_var::d2ezdxdy)
+//  #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
+//  #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
+//  #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
+//
+//  // copy local memmbers from grid
+//  //auto nfaces_per_voxel = 6;
+//  //auto nvoxels = g->nv;
+//  //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
+//      //h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
+//  //auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
+//
+//  auto rangel = g->rangel;
+//  auto rangeh = g->rangeh;
+//
+//  // TODO: is this the right place to do this?
+//  Kokkos::deep_copy(k_nm, 0);
+//
+////  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(const size_t p_index) {
+//  for(size_t p_index=0; p_index<np; p_index++) {
+//    float v0, v1, v2, v3, v4, v5;
+//    auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+//
+//    // Load position
+//    float dx = p_dx;
+//    float dy = p_dy;
+//    float dz = p_dz;
+//    int ii = pii;
+//
+//    float hax = qdt_2mc*( (f_ex + dy*f_dexdy ) + dz*(f_dexdz + dy*f_d2exdydz) );
+//    float hay = qdt_2mc*( (f_ey + dz*f_deydz ) + dx*(f_deydx + dz*f_d2eydzdx) );
+//    float haz = qdt_2mc*( (f_ez + dx*f_dezdx ) + dy*(f_dezdy + dx*f_d2ezdxdy) );
+//
+//    // Interpolate B
+//    float cbx = f_cbx + dx*f_dcbxdx;
+//    float cby = f_cby + dy*f_dcbydy;
+//    float cbz = f_cbz + dz*f_dcbzdz;
+//
+//    // Load momentum
+//    float ux = p_ux;
+//    float uy = p_uy;
+//    float uz = p_uz;
+//    float q = p_w;
+//
+//    // Half advance e
+//    ux += hax;
+//    uy += hay;
+//    uz += haz;
+//
+//    v0 = qdt_2mc/std::sqrt(one + (ux*ux + (uy*uy + uz*uz)));
+//
+//    // Boris - scalars
+//    v1 = cbx*cbx + (cby*cby + cbz*cbz);
+//    v2 = (v0*v0)*v1;
+//    v3 = v0*(one+v2*(one_third+v2*two_fifteenths));
+//    v4 = v3/(one+v1*(v3*v3));
+//    v4 += v4;
+//    // Boris - uprime
+//    v0 = ux + v3*(uy*cbz - uz*cby);
+//    v1 = uy + v3*(uz*cbx - ux*cbz);
+//    v2 = uz + v3*(ux*cby - uy*cbx);
+//    // Boris - rotation
+//    ux += v4*(v1*cbz - v2*cby);
+//    uy += v4*(v2*cbx - v0*cbz);
+//    uz += v4*(v0*cby - v1*cbx);
+//    // Half advance e
+//    ux += hax;
+//    uy += hay;
+//    uz += haz;
+//    // Store momentum
+//    p_ux = ux;
+//    p_uy = uy;
+//    p_uz = uz;
+//
+//    v0   = one/sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
+//
+//    /**/                                      // Get norm displacement
+//    ux  *= cdt_dx;
+//    uy  *= cdt_dy;
+//    uz  *= cdt_dz;
+//    ux  *= v0;
+//    uy  *= v0;
+//    uz  *= v0;
+//    v0   = dx + ux;                           // Streak midpoint (inbnds)
+//    v1   = dy + uy;
+//    v2   = dz + uz;
+//    v3   = v0 + ux;                           // New position
+//    v4   = v1 + uy;
+//    v5   = v2 + uz;
+//
+//    bool inbnds = v3<=one &&  v4<=one &&  v5<=one &&
+//                  -v3<=one && -v4<=one && -v5<=one;
+//    if(inbnds) {
+//      // Common case (inbnds).  Note: accumulator values are 4 times
+//      // the total physical charge that passed through the appropriate
+//      // current quadrant in a time-step
+//
+//      q *= qsp;
+//      p_dx = v3;                             // Store new position
+//      p_dy = v4;
+//      p_dz = v5;
+//      dx = v0;                                // Streak midpoint
+//      dy = v1;
+//      dz = v2;
+//      v5 = q*ux*uy*uz*one_third;              // Compute correction
+//
+//#     define ACCUMULATE_J(X,Y,Z)                                 \
+//      v4  = q*u##X;   /* v2 = q ux                            */        \
+//      v1  = v4*d##Y;  /* v1 = q ux dy                         */        \
+//      v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        \
+//      v1 += v4;       /* v1 = q ux (1+dy)                     */        \
+//      v4  = one+d##Z; /* v4 = 1+dz                            */        \
+//      v2  = v0*v4;    /* v2 = q ux (1-dy)(1+dz)               */        \
+//      v3  = v1*v4;    /* v3 = q ux (1+dy)(1+dz)               */        \
+//      v4  = one-d##Z; /* v4 = 1-dz                            */        \
+//      v0 *= v4;       /* v0 = q ux (1-dy)(1-dz)               */        \
+//      v1 *= v4;       /* v1 = q ux (1+dy)(1-dz)               */        \
+//      v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+//      v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+//      v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+//      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+//
+//      ACCUMULATE_J( x,y,z );
+//      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+//      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+//      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+//      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+//
+//      ACCUMULATE_J( y,z,x );
+//      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+//      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+//      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+//      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+//
+//      ACCUMULATE_J( z,x,y );
+//      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+//      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+//      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+//      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+//#     undef ACCUMULATE_J
+//    } else {
+//      DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+//      local_pm->dispx = ux;
+//      local_pm->dispy = uy;
+//      local_pm->dispz = uz;
+//      local_pm->i     = p_index;
+//
+//      if( move_p_kokkos( k_particles, k_particles_i, local_pm,
+//                         k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
+//        if( k_nm(0)<max_nm ) {
+//          const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+//          if (nm >= max_nm) Kokkos::abort("overran max_nm");
+//
+//          k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+//          k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+//          k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+//          k_particle_movers_i(nm)   = local_pm->i;
+//
+//          // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+//          k_particle_copy(nm, particle_var::dx) = p_dx;
+//          k_particle_copy(nm, particle_var::dy) = p_dy;
+//          k_particle_copy(nm, particle_var::dz) = p_dz;
+//          k_particle_copy(nm, particle_var::ux) = p_ux;
+//          k_particle_copy(nm, particle_var::uy) = p_uy;
+//          k_particle_copy(nm, particle_var::uz) = p_uz;
+//          k_particle_copy(nm, particle_var::w) = p_w;
+//          k_particle_i_copy(nm) = pii;
+//        }
+//      }
+//    }
+//  }
+////  });
+//#undef p_dx
+//#undef p_dy
+//#undef p_dz
+//#undef p_ux
+//#undef p_uy
+//#undef p_uz
+//#undef p_w 
+//#undef pii 
+//
+//#undef f_cbx
+//#undef f_cby
+//#undef f_cbz
+//#undef f_ex 
+//#undef f_ey 
+//#undef f_ez 
+//
+//#undef f_dexdy
+//#undef f_dexdz
+//
+//#undef f_d2exdydz
+//#undef f_deydx   
+//#undef f_deydz   
+//
+//#undef f_d2eydzdx
+//#undef f_dezdx   
+//#undef f_dezdy   
+//
+//#undef f_d2ezdxdy
+//#undef f_dcbxdx  
+//#undef f_dcbydy  
+//#undef f_dcbzdz  
+//}
+
+//void
+//advance_p_kokkos_devel(
+//        k_particles_t& k_particles,
+//        k_particles_i_t& k_particles_i,
+//        k_particle_copy_t& k_particle_copy,
+//        k_particle_i_copy_t& k_particle_i_copy,
+//        k_particle_movers_t& k_particle_movers,
+//        k_particle_i_movers_t& k_particle_movers_i,
+//        k_accumulators_sa_t k_accumulators_sa,
+//        k_interpolator_t& k_interp,
+//        //k_particle_movers_t k_local_particle_movers,
+//        k_iterator_t& k_nm,
+//        k_neighbor_t& k_neighbors,
+//        const grid_t *g,
+//        const float qdt_2mc,
+//        const float cdt_dx,
+//        const float cdt_dy,
+//        const float cdt_dz,
+//        const float qsp,
+//        const int na,
+//        const int np,
+//        const int max_nm,
+//        const int nx,
+//        const int ny,
+//        const int nz)
+//{
+//
+//  constexpr float one            = 1.;
+//  constexpr float one_third      = 1./3.;
+//  constexpr float two_fifteenths = 2./15.;
+//
+//  #define p_dx    k_particles(p_index, particle_var::dx)
+//  #define p_dy    k_particles(p_index, particle_var::dy)
+//  #define p_dz    k_particles(p_index, particle_var::dz)
+//  #define p_ux    k_particles(p_index, particle_var::ux)
+//  #define p_uy    k_particles(p_index, particle_var::uy)
+//  #define p_uz    k_particles(p_index, particle_var::uz)
+//  #define p_w     k_particles(p_index, particle_var::w)
+//  #define pii     k_particles_i(p_index)
+//
+//  #define f_cbx k_interp(ii, interpolator_var::cbx)
+//  #define f_cby k_interp(ii, interpolator_var::cby)
+//  #define f_cbz k_interp(ii, interpolator_var::cbz)
+//  #define f_ex  k_interp(ii, interpolator_var::ex)
+//  #define f_ey  k_interp(ii, interpolator_var::ey)
+//  #define f_ez  k_interp(ii, interpolator_var::ez)
+//
+//  #define f_dexdy    k_interp(ii, interpolator_var::dexdy)
+//  #define f_dexdz    k_interp(ii, interpolator_var::dexdz)
+//
+//  #define f_d2exdydz k_interp(ii, interpolator_var::d2exdydz)
+//  #define f_deydx    k_interp(ii, interpolator_var::deydx)
+//  #define f_deydz    k_interp(ii, interpolator_var::deydz)
+//
+//  #define f_d2eydzdx k_interp(ii, interpolator_var::d2eydzdx)
+//  #define f_dezdx    k_interp(ii, interpolator_var::dezdx)
+//  #define f_dezdy    k_interp(ii, interpolator_var::dezdy)
+//
+//  #define f_d2ezdxdy k_interp(ii, interpolator_var::d2ezdxdy)
+//  #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
+//  #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
+//  #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
+//
+//  // copy local memmbers from grid
+//  //auto nfaces_per_voxel = 6;
+//  //auto nvoxels = g->nv;
+//  //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
+//      //h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
+//  //auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
+//
+//  auto rangel = g->rangel;
+//  auto rangeh = g->rangeh;
+//
+//  // TODO: is this the right place to do this?
+//  Kokkos::deep_copy(k_nm, 0);
+//
+//  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy<>(0,np), KOKKOS_LAMBDA(const size_t p_index) {
+//    float v0, v1, v2, v3, v4, v5;
+//    auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+//
+//    // Load position
+//    float dx = p_dx;
+//    float dy = p_dy;
+//    float dz = p_dz;
+//    int ii = pii;
+//
+//    float hax = qdt_2mc*( (f_ex + dy*f_dexdy ) + dz*(f_dexdz + dy*f_d2exdydz) );
+//    float hay = qdt_2mc*( (f_ey + dz*f_deydz ) + dx*(f_deydx + dz*f_d2eydzdx) );
+//    float haz = qdt_2mc*( (f_ez + dx*f_dezdx ) + dy*(f_dezdy + dx*f_d2ezdxdy) );
+//
+//    // Interpolate B
+//    float cbx = f_cbx + dx*f_dcbxdx;
+//    float cby = f_cby + dy*f_dcbydy;
+//    float cbz = f_cbz + dz*f_dcbzdz;
+//
+//    // Load momentum
+//    float ux = p_ux;
+//    float uy = p_uy;
+//    float uz = p_uz;
+//    float q = p_w;
+//
+//    // Half advance e
+//    ux += hax;
+//    uy += hay;
+//    uz += haz;
+//
+//    v0 = qdt_2mc/std::sqrt(one + (ux*ux + (uy*uy + uz*uz)));
+//
+//    // Boris - scalars
+//    v1 = cbx*cbx + (cby*cby + cbz*cbz);
+//    v2 = (v0*v0)*v1;
+//    v3 = v0*(one+v2*(one_third+v2*two_fifteenths));
+//    v4 = v3/(one+v1*(v3*v3));
+//    v4 += v4;
+//    // Boris - uprime
+//    v0 = ux + v3*(uy*cbz - uz*cby);
+//    v1 = uy + v3*(uz*cbx - ux*cbz);
+//    v2 = uz + v3*(ux*cby - uy*cbx);
+//    // Boris - rotation
+//    ux += v4*(v1*cbz - v2*cby);
+//    uy += v4*(v2*cbx - v0*cbz);
+//    uz += v4*(v0*cby - v1*cbx);
+//    // Half advance e
+//    ux += hax;
+//    uy += hay;
+//    uz += haz;
+//    // Store momentum
+//    p_ux = ux;
+//    p_uy = uy;
+//    p_uz = uz;
+//
+//    v0   = one/sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
+//
+//    /**/                                      // Get norm displacement
+//    ux  *= cdt_dx;
+//    uy  *= cdt_dy;
+//    uz  *= cdt_dz;
+//    ux  *= v0;
+//    uy  *= v0;
+//    uz  *= v0;
+//    v0   = dx + ux;                           // Streak midpoint (inbnds)
+//    v1   = dy + uy;
+//    v2   = dz + uz;
+//    v3   = v0 + ux;                           // New position
+//    v4   = v1 + uy;
+//    v5   = v2 + uz;
+//
+//    bool inbnds = v3<=one &&  v4<=one &&  v5<=one &&
+//                  -v3<=one && -v4<=one && -v5<=one;
+//    if(inbnds) {
+//      // Common case (inbnds).  Note: accumulator values are 4 times
+//      // the total physical charge that passed through the appropriate
+//      // current quadrant in a time-step
+//
+//      q *= qsp;
+//      p_dx = v3;                             // Store new position
+//      p_dy = v4;
+//      p_dz = v5;
+//      dx = v0;                                // Streak midpoint
+//      dy = v1;
+//      dz = v2;
+//      v5 = q*ux*uy*uz*one_third;              // Compute correction
+//
+//#     define ACCUMULATE_J(X,Y,Z)                                 \
+//      v4  = q*u##X;   /* v2 = q ux                            */        \
+//      v1  = v4*d##Y;  /* v1 = q ux dy                         */        \
+//      v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        \
+//      v1 += v4;       /* v1 = q ux (1+dy)                     */        \
+//      v4  = one+d##Z; /* v4 = 1+dz                            */        \
+//      v2  = v0*v4;    /* v2 = q ux (1-dy)(1+dz)               */        \
+//      v3  = v1*v4;    /* v3 = q ux (1+dy)(1+dz)               */        \
+//      v4  = one-d##Z; /* v4 = 1-dz                            */        \
+//      v0 *= v4;       /* v0 = q ux (1-dy)(1-dz)               */        \
+//      v1 *= v4;       /* v1 = q ux (1+dy)(1-dz)               */        \
+//      v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+//      v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+//      v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+//      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+//
+//      ACCUMULATE_J( x,y,z );
+//      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+//      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+//      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+//      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+//
+//      ACCUMULATE_J( y,z,x );
+//      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+//      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+//      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+//      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+//
+//      ACCUMULATE_J( z,x,y );
+//      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+//      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+//      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+//      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+//#     undef ACCUMULATE_J
+//    } else {
+//      DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+//      local_pm->dispx = ux;
+//      local_pm->dispy = uy;
+//      local_pm->dispz = uz;
+//      local_pm->i     = p_index;
+//
+//      if( move_p_kokkos( k_particles, k_particles_i, local_pm,
+//                         k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
+//        if( k_nm(0)<max_nm ) {
+//          const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+//          if (nm >= max_nm) Kokkos::abort("overran max_nm");
+//
+//          k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+//          k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+//          k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+//          k_particle_movers_i(nm)   = local_pm->i;
+//
+//          // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+//          k_particle_copy(nm, particle_var::dx) = p_dx;
+//          k_particle_copy(nm, particle_var::dy) = p_dy;
+//          k_particle_copy(nm, particle_var::dz) = p_dz;
+//          k_particle_copy(nm, particle_var::ux) = p_ux;
+//          k_particle_copy(nm, particle_var::uy) = p_uy;
+//          k_particle_copy(nm, particle_var::uz) = p_uz;
+//          k_particle_copy(nm, particle_var::w) = p_w;
+//          k_particle_i_copy(nm) = pii;
+//        }
+//      }
+//    }
+//  });
+//#undef p_dx
+//#undef p_dy
+//#undef p_dz
+//#undef p_ux
+//#undef p_uy
+//#undef p_uz
+//#undef p_w 
+//#undef pii 
+//
+//#undef f_cbx
+//#undef f_cby
+//#undef f_cbz
+//#undef f_ex 
+//#undef f_ey 
+//#undef f_ez 
+//
+//#undef f_dexdy
+//#undef f_dexdz
+//
+//#undef f_d2exdydz
+//#undef f_deydx   
+//#undef f_deydz   
+//
+//#undef f_d2eydzdx
+//#undef f_dezdx   
+//#undef f_dezdy   
+//
+//#undef f_d2ezdxdy
+//#undef f_dcbxdx  
+//#undef f_dcbydy  
+//#undef f_dcbzdz  
+//}
+
+void
 advance_p_kokkos(
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
@@ -38,63 +1689,6 @@ advance_p_kokkos(
   constexpr float one_third      = 1./3.;
   constexpr float two_fifteenths = 2./15.;
 
-  /*
-  k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
-  k_particle_movers_t  k_local_particle_movers("k_local_pm", 1);
-
-  k_iterator_t k_nm("k_nm");
-  k_iterator_t::HostMirror h_nm = Kokkos::create_mirror_view(k_nm);
-  h_nm(0) = 0;
-  Kokkos::deep_copy(k_nm, h_nm);
-  */
-  // Determine which quads of particles quads this pipeline processes
-
-  //DISTRIBUTE( args->np, 16, pipeline_rank, n_pipeline, itmp, n );
-  //p = args->p0 + itmp;
-
-  /*
-  printf("original value %f\n\n", k_accumulators(0, 0, 0));
-sp_[id]->
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int i) {
-
-      auto scatter_access = k_accumulators_sa.access();
-      //auto scatter_access_atomic = scatter_view.template access<Kokkos::Experimental::ScatterAtomic>();
-          printf("Writing to %d\n", i);
-          scatter_access(i, 0, 0) += 4;
-          //scatter_access_atomic(i, 1) += 2.0;
-          //scatter_access(k, 2) += 1.0;
-          //
-  });
-
-  // copy back
-  Kokkos::Experimental::contribute(k_accumulators, k_accumulators_sa);
-  printf("changed value %f\n", k_accumulators(0, 0, 0));
-  */
-
-  // Determine which movers are reserved for this pipeline
-  // Movers (16 bytes) should be reserved for pipelines in at least
-  // multiples of 8 such that the set of particle movers reserved for
-  // a pipeline is 128-byte aligned and a multiple of 128-byte in
-  // size.  The host is guaranteed to get enough movers to process its
-  // particles with this allocation.
-/*
-  max_nm = args->max_nm - (args->np&15);
-  if( max_nm<0 ) max_nm = 0;
-  DISTRIBUTE( max_nm, 8, pipeline_rank, n_pipeline, itmp, max_nm );
-  if( pipeline_rank==n_pipeline ) max_nm = args->max_nm - itmp;
-  pm   = args->pm + itmp;
-  nm   = 0;
-  itmp = 0;
-
-  // Determine which accumulator array to use
-  // The host gets the first accumulator array
-
-  if( pipeline_rank!=n_pipeline )
-    a0 += (1+pipeline_rank)*
-          POW2_CEIL((args->nx+2)*(args->ny+2)*(args->nz+2),2);
-*/
-  // Process particles for this pipeline
-
   #define p_dx    k_particles(p_index, particle_var::dx)
   #define p_dy    k_particles(p_index, particle_var::dy)
   #define p_dz    k_particles(p_index, particle_var::dz)
@@ -104,28 +1698,28 @@ sp_[id]->
   #define p_w     k_particles(p_index, particle_var::w)
   #define pii     k_particles_i(p_index)
 
-  #define f_cbx k_interp(ii, interpolator_var::cbx)
-  #define f_cby k_interp(ii, interpolator_var::cby)
-  #define f_cbz k_interp(ii, interpolator_var::cbz)
-  #define f_ex  k_interp(ii, interpolator_var::ex)
-  #define f_ey  k_interp(ii, interpolator_var::ey)
-  #define f_ez  k_interp(ii, interpolator_var::ez)
+  #define f_cbx k_interp(ii(lane), interpolator_var::cbx)
+  #define f_cby k_interp(ii(lane), interpolator_var::cby)
+  #define f_cbz k_interp(ii(lane), interpolator_var::cbz)
+  #define f_ex  k_interp(ii(lane), interpolator_var::ex)
+  #define f_ey  k_interp(ii(lane), interpolator_var::ey)
+  #define f_ez  k_interp(ii(lane), interpolator_var::ez)
 
-  #define f_dexdy    k_interp(ii, interpolator_var::dexdy)
-  #define f_dexdz    k_interp(ii, interpolator_var::dexdz)
+  #define f_dexdy    k_interp(ii(lane), interpolator_var::dexdy)
+  #define f_dexdz    k_interp(ii(lane), interpolator_var::dexdz)
 
-  #define f_d2exdydz k_interp(ii, interpolator_var::d2exdydz)
-  #define f_deydx    k_interp(ii, interpolator_var::deydx)
-  #define f_deydz    k_interp(ii, interpolator_var::deydz)
+  #define f_d2exdydz k_interp(ii(lane), interpolator_var::d2exdydz)
+  #define f_deydx    k_interp(ii(lane), interpolator_var::deydx)
+  #define f_deydz    k_interp(ii(lane), interpolator_var::deydz)
 
-  #define f_d2eydzdx k_interp(ii, interpolator_var::d2eydzdx)
-  #define f_dezdx    k_interp(ii, interpolator_var::dezdx)
-  #define f_dezdy    k_interp(ii, interpolator_var::dezdy)
+  #define f_d2eydzdx k_interp(ii(lane), interpolator_var::d2eydzdx)
+  #define f_dezdx    k_interp(ii(lane), interpolator_var::dezdx)
+  #define f_dezdy    k_interp(ii(lane), interpolator_var::dezdy)
 
-  #define f_d2ezdxdy k_interp(ii, interpolator_var::d2ezdxdy)
-  #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
-  #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
-  #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
+  #define f_d2ezdxdy k_interp(ii(lane), interpolator_var::d2ezdxdy)
+  #define f_dcbxdx   k_interp(ii(lane), interpolator_var::dcbxdx)
+  #define f_dcbydy   k_interp(ii(lane), interpolator_var::dcbydy)
+  #define f_dcbzdz   k_interp(ii(lane), interpolator_var::dcbzdz)
 
   // copy local memmbers from grid
   //auto nfaces_per_voxel = 6;
@@ -138,266 +1732,262 @@ sp_[id]->
   auto rangeh = g->rangeh;
 
   // TODO: is this the right place to do this?
-  Kokkos::parallel_for("clear nm", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
-    //printf("how many times does this run %d", i);
-    k_nm(0) = 0;
-    //local_pm_dispx = 0;
-    //local_pm_dispy = 0;
-    //local_pm_dispz = 0;
-    //local_pm_i = 0;
-  });
+  Kokkos::deep_copy(k_nm, 0);
 
+  Kokkos::View<float[16]> v0("v0"), v1("v1"), v2("v2"), v3("v3"), v4("v4"), v5("v5");
+  Kokkos::View<float[16]> dx("dx"), dy("dy"), dz("dz"), ux("ux"), uy("uy"), uz("uz");
+  Kokkos::View<float[16]> hax("hax"), hay("hay"), haz("haz"), cbx("cbx"), cby("cby"), cbz("cbz");
+  Kokkos::View<float[16]> q("q");
+  Kokkos::View<int[16]> ii("ii");
+  Kokkos::View<bool[16]> inbnds("inbnds");
 
-//  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
-//    KOKKOS_LAMBDA (size_t p_index)
-//    {
-  int num_leagues = 2048;
-  int num_threads = 512;
-  int per_league = np/num_leagues;
-  if(np%num_leagues > 0)
-    per_league++;
-  Kokkos::parallel_for("advance_p", Kokkos::TeamPolicy<>(num_leagues, num_threads, 1), 
+  constexpr int num_leagues = 1;
+  constexpr int num_threads = 1;
+  constexpr int num_lanes = 16;
+  int num_chunks = np/num_lanes;
+//  if(np%num_lanes > 0)
+//    num_chunks++;
+  Kokkos::TeamPolicy<> policy = Kokkos::TeamPolicy<>(num_leagues, num_threads, num_lanes).set_scratch_size(0, Kokkos::PerThread(21*num_lanes*4));
+  typedef Kokkos::DefaultExecutionSpace::scratch_memory_space ScratchSpace;
+  typedef Kokkos::View<float[num_lanes], ScratchSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> simd_float;
+  typedef Kokkos::View<int[num_lanes], ScratchSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> simd_int;
+  typedef Kokkos::View<bool[num_lanes], ScratchSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> simd_bool;
+//Kokkos::parallel_for("advance_p", Kokkos::RangePolicy<>(0,num_chunks), KOKKOS_LAMBDA(const size_t chunk) {
+  Kokkos::parallel_for("advance_p", policy, 
   KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, per_league), [=] (size_t pindex) {
-      int p_index = team_member.league_rank()*per_league + pindex;
-      if(p_index < np) {
-      
-//for(int p_index=0; p_index<np; p_index++) {
-    float v0, v1, v2, v3, v4, v5;
-    auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+//    simd_float v0(team_member.team_scratch(0));
+//    simd_float v1(team_member.team_scratch(0));
+//    simd_float v2(team_member.team_scratch(0));
+//    simd_float v3(team_member.team_scratch(0));
+//    simd_float v4(team_member.team_scratch(0));
+//    simd_float v5(team_member.team_scratch(0));
+//    simd_float dx(team_member.team_scratch(0));
+//    simd_float dy(team_member.team_scratch(0));
+//    simd_float dz(team_member.team_scratch(0));
+//    simd_float ux(team_member.team_scratch(0));
+//    simd_float uy(team_member.team_scratch(0));
+//    simd_float uz(team_member.team_scratch(0));
+//    simd_float hax(team_member.team_scratch(0));
+//    simd_float hay(team_member.team_scratch(0));
+//    simd_float haz(team_member.team_scratch(0));
+//    simd_float cbx(team_member.team_scratch(0));
+//    simd_float cby(team_member.team_scratch(0));
+//    simd_float cbz(team_member.team_scratch(0));
+//    simd_int   ii(team_member.team_scratch(0));
+//    simd_float q(team_member.team_scratch(0));
+//    simd_bool  inbnds(team_member.team_scratch(0));
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_chunks), [=] (size_t chunk) {
+      auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+//      for(int lane=0; lane<num_lanes; lane++) {
+//        int p_index = chunk*num_lanes + lane;
+//        dx(lane) = p_dx;
+//        dy(lane) = p_dy;
+//        dz(lane) = p_dz;
+//        ux(lane) = p_ux;
+//        uy(lane) = p_uy;
+//        uz(lane) = p_uz;
+//        q(lane) = p_w;
+//        ii(lane) = pii;
+//      }
 
-    float dx   = p_dx;                             // Load position
-    float dy   = p_dy;
-    float dz   = p_dz;
-    int   ii   = pii;
-    float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
-                           dz*( f_dexdz + dy*f_d2exdydz ) );
-    float hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
-                           dx*( f_deydx + dz*f_d2eydzdx ) );
-    float haz  = qdt_2mc*(    ( f_ez    + dx*f_dezdx    ) +
-                           dy*( f_dezdy + dx*f_d2ezdxdy ) );
-    //printf(" inter %d vs %ld \n", ii, k_interp.size());
-    float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
-    float cby  = f_cby + dy*f_dcbydy;
-    float cbz  = f_cbz + dz*f_dcbzdz;
-    float ux   = p_ux;                             // Load momentum
-    float uy   = p_uy;
-    float uz   = p_uz;
-    float q    = p_w;
-    ux  += hax;                               // Half advance E
-    uy  += hay;
-    uz  += haz;
-    v0   = qdt_2mc/sqrtf(one + (ux*ux + (uy*uy + uz*uz)));
-    /**/                                      // Boris - scalars
-    v1   = cbx*cbx + (cby*cby + cbz*cbz);
-    v2   = (v0*v0)*v1;
-    v3   = v0*(one+v2*(one_third+v2*two_fifteenths));
-    v4   = v3/(one+v1*(v3*v3));
-    v4  += v4;
-    v0   = ux + v3*( uy*cbz - uz*cby );       // Boris - uprime
-    v1   = uy + v3*( uz*cbx - ux*cbz );
-    v2   = uz + v3*( ux*cby - uy*cbx );
-    ux  += v4*( v1*cbz - v2*cby );            // Boris - rotation
-    uy  += v4*( v2*cbx - v0*cbz );
-    uz  += v4*( v0*cby - v1*cbx );
-    ux  += hax;                               // Half advance E
-    uy  += hay;
-    uz  += haz;
-    p_ux = ux;                               // Store momentum
-    p_uy = uy;
-    p_uz = uz;
+#pragma omp simd
+      for(int lane=0; lane<num_lanes; lane++) {
+        int p_index = chunk*num_lanes + lane;
+        // Load position
+        dx(lane) = p_dx;
+        dy(lane) = p_dy;
+        dz(lane) = p_dz;
+        // Load momentum
+        ux(lane) = p_ux;
+        uy(lane) = p_uy;
+        uz(lane) = p_uz;
+        q(lane) = p_w;
+        ii(lane) = pii;
 
-    v0   = one/sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
-    /**/                                      // Get norm displacement
-    ux  *= cdt_dx;
-    uy  *= cdt_dy;
-    uz  *= cdt_dz;
-    ux  *= v0;
-    uy  *= v0;
-    uz  *= v0;
-    v0   = dx + ux;                           // Streak midpoint (inbnds)
-    v1   = dy + uy;
-    v2   = dz + uz;
-    v3   = v0 + ux;                           // New position
-    v4   = v1 + uy;
-    v5   = v2 + uz;
+        hax(lane) = qdt_2mc*( (f_ex + dy(lane)*f_dexdy ) + dz(lane)*(f_dexdz + dy(lane)*f_d2exdydz) );
+        hay(lane) = qdt_2mc*( (f_ey + dz(lane)*f_deydz ) + dx(lane)*(f_deydx + dz(lane)*f_d2eydzdx) );
+        haz(lane) = qdt_2mc*( (f_ez + dx(lane)*f_dezdx ) + dy(lane)*(f_dezdy + dx(lane)*f_d2ezdxdy) );
 
-//    // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
-//    if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
-//        -v3<=one && -v4<=one && -v5<=one ) {
+        // Interpolate B
+        cbx(lane) = f_cbx + dx(lane)*f_dcbxdx;
+        cby(lane) = f_cby + dy(lane)*f_dcbydy;
+        cbz(lane) = f_cbz + dz(lane)*f_dcbzdz;
 
-    bool inbnds = v3<=one && v4<=one && v5<=one &&
-                  -v3<=one && -v4<=one && -v5<=one;
-    int mask = 0xffffffff;
-    int synced = 0;
-    int same_idx = 0;
-#ifdef __CUDA_ARCH__
-    __match_all_sync(mask, inbnds, &synced);
-    __match_all_sync(mask, ii, &same_idx);
-#endif
-    if(inbnds) {
-
-      // Common case (inbnds).  Note: accumulator values are 4 times
-      // the total physical charge that passed through the appropriate
-      // current quadrant in a time-step
-
-      q *= qsp;
-      p_dx = v3;                             // Store new position
-      p_dy = v4;
-      p_dz = v5;
-      dx = v0;                                // Streak midpoint
-      dy = v1;
-      dz = v2;
-      v5 = q*ux*uy*uz*one_third;              // Compute correction
-
-
-#     define ACCUMULATE_J(X,Y,Z)                                 \
-      v4  = q*u##X;   /* v2 = q ux                            */        \
-      v1  = v4*d##Y;  /* v1 = q ux dy                         */        \
-      v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        \
-      v1 += v4;       /* v1 = q ux (1+dy)                     */        \
-      v4  = one+d##Z; /* v4 = 1+dz                            */        \
-      v2  = v0*v4;    /* v2 = q ux (1-dy)(1+dz)               */        \
-      v3  = v1*v4;    /* v3 = q ux (1+dy)(1+dz)               */        \
-      v4  = one-d##Z; /* v4 = 1-dz                            */        \
-      v0 *= v4;       /* v0 = q ux (1-dy)(1-dz)               */        \
-      v1 *= v4;       /* v1 = q ux (1+dy)(1-dz)               */        \
-      v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
-      v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
-      v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
-
-// Warp reduction
-      if(synced && same_idx) {
-#ifdef __CUDA_ARCH__
-        const int team_rank = team_member.team_rank();
-        ACCUMULATE_J( x,y,z );
-        for(int i=16; i>0; i=i/2) {
-          v0 += __shfl_down_sync(mask, v0, i);
-          v1 += __shfl_down_sync(mask, v1, i);
-          v2 += __shfl_down_sync(mask, v2, i);
-          v3 += __shfl_down_sync(mask, v3, i);
-        }
-        if(team_rank%32 == 0) {
-          k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-          k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-          k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-          k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
-        }
-        ACCUMULATE_J( y,z,x );
-        for(int i=16; i>0; i=i/2) {
-          v0 += __shfl_down_sync(mask, v0, i);
-          v1 += __shfl_down_sync(mask, v1, i);
-          v2 += __shfl_down_sync(mask, v2, i);
-          v3 += __shfl_down_sync(mask, v3, i);
-        }
-        if(team_rank%32 == 0) {
-          k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-          k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-          k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-          k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
-        }
-        ACCUMULATE_J( z,x,y );
-        for(int i=16; i>0; i=i/2) {
-          v0 += __shfl_down_sync(mask, v0, i);
-          v1 += __shfl_down_sync(mask, v1, i);
-          v2 += __shfl_down_sync(mask, v2, i);
-          v3 += __shfl_down_sync(mask, v3, i);
-        }
-        if(team_rank%32 == 0) {
-          k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-          k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-          k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-          k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
-        }
-#endif
-      } else {
-        ACCUMULATE_J( x,y,z );
-        k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-        k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-        k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-        k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
-
-        ACCUMULATE_J( y,z,x );
-        k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-        k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-        k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-        k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
-
-        ACCUMULATE_J( z,x,y );
-        k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-        k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-        k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-        k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+        // Half advance e
+        ux(lane) += hax(lane);
+        uy(lane) += hay(lane);
+        uz(lane) += haz(lane);
       }
 
-#     undef ACCUMULATE_J
+      for(int lane=0; lane<num_lanes; lane++) {
+        v0(lane) = qdt_2mc/sqrtf(one + (ux(lane)*ux(lane) + (uy(lane)*uy(lane) + uz(lane)*uz(lane))));
+      }
 
-    } else
-    {                                    // Unlikely
-        /*
-           local_pm_dispx = ux;
-           local_pm_dispy = uy;
-           local_pm_dispz = uz;
+#pragma omp simd
+      for(int lane=0; lane<num_lanes; lane++) {
+        int p_index = chunk*num_lanes + lane;
+        // Boris - scalars
+        v1(lane) = cbx(lane)*cbx(lane) + (cby(lane)*cby(lane) + cbz(lane)*cbz(lane));
+        v2(lane) = (v0(lane)*v0(lane))*v1(lane);
+        v3(lane) = v0(lane)*(one+v2(lane)*(one_third+v2(lane)*two_fifteenths));
+        v4(lane) = v3(lane)/(one+v1(lane)*(v3(lane)*v3(lane)));
+        v4(lane) += v4(lane);
+        // Boris - uprime
+        v0(lane) = ux(lane) + v3(lane)*(uy(lane)*cbz(lane) - uz(lane)*cby(lane));
+        v1(lane) = uy(lane) + v3(lane)*(uz(lane)*cbx(lane) - ux(lane)*cbz(lane));
+        v2(lane) = uz(lane) + v3(lane)*(ux(lane)*cby(lane) - uy(lane)*cbx(lane));
+        // Boris - rotation
+        ux(lane) += v4(lane)*(v1(lane)*cbz(lane) - v2(lane)*cby(lane));
+        uy(lane) += v4(lane)*(v2(lane)*cbx(lane) - v0(lane)*cbz(lane));
+        uz(lane) += v4(lane)*(v0(lane)*cby(lane) - v1(lane)*cbx(lane));
+        // Half advance e
+        ux(lane) += hax(lane);
+        uy(lane) += hay(lane);
+        uz(lane) += haz(lane);
+        // Store momentum
+        p_ux = ux(lane);
+        p_uy = uy(lane);
+        p_uz = uz(lane);
+      }
 
-           local_pm_i     = p_index;
-        */
-      DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
-      local_pm->dispx = ux;
-      local_pm->dispy = uy;
-      local_pm->dispz = uz;
-      local_pm->i     = p_index;
+      for(int lane=0; lane<num_lanes; lane++) {
+        v0(lane)   = one/sqrtf(one + (ux(lane)*ux(lane)+ (uy(lane)*uy(lane) + uz(lane)*uz(lane))));
+      }
 
-      //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
-      if( move_p_kokkos( k_particles, k_particles_i, local_pm,
-                         k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
-        if( k_nm(0)<max_nm ) {
-          const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
-          if (nm >= max_nm) Kokkos::abort("overran max_nm");
+#pragma omp simd
+      for(int lane=0; lane<num_lanes; lane++) {
+        /**/                                      // Get norm displacement
+        ux(lane)  *= cdt_dx;
+        uy(lane)  *= cdt_dy;
+        uz(lane)  *= cdt_dz;
+        ux(lane)  *= v0(lane);
+        uy(lane)  *= v0(lane);
+        uz(lane)  *= v0(lane);
+        v0(lane)   = dx(lane) + ux(lane);                           // Streak midpoint (inbnds)
+        v1(lane)   = dy(lane) + uy(lane);
+        v2(lane)   = dz(lane) + uz(lane);
+        v3(lane)   = v0(lane) + ux(lane);                           // New position
+        v4(lane)   = v1(lane) + uy(lane);
+        v5(lane)   = v2(lane) + uz(lane);
 
-          k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
-          k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
-          k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
-          k_particle_movers_i(nm)   = local_pm->i;
+        inbnds(lane) = v3(lane)<=one &&  v4(lane)<=one &&  v5(lane)<=one &&
+                      -v3(lane)<=one && -v4(lane)<=one && -v5(lane)<=one;
+      }
+      for(int lane=0; lane<num_lanes; lane++) {
+        int p_index = chunk*num_lanes + lane;
+        if(inbnds(lane)) {
+          // Common case (inbnds).  Note: accumulator values are 4 times
+          // the total physical charge that passed through the appropriate
+          // current quadrant in a time-step
 
-          // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-          k_particle_copy(nm, particle_var::dx) = p_dx;
-          k_particle_copy(nm, particle_var::dy) = p_dy;
-          k_particle_copy(nm, particle_var::dz) = p_dz;
-          k_particle_copy(nm, particle_var::ux) = p_ux;
-          k_particle_copy(nm, particle_var::uy) = p_uy;
-          k_particle_copy(nm, particle_var::uz) = p_uz;
-          k_particle_copy(nm, particle_var::w) = p_w;
-          k_particle_i_copy(nm) = pii;
+          q(lane) *= qsp;
+          p_dx = v3(lane);                             // Store new position
+          p_dy = v4(lane);
+          p_dz = v5(lane);
+          dx(lane) = v0(lane);                                // Streak midpoint
+          dy(lane) = v1(lane);
+          dz(lane) = v2(lane);
+          v5(lane) = q(lane)*ux(lane)*uy(lane)*uz(lane)*one_third;              // Compute correction
 
-          // Tag this one as having left
-          //k_particles(p_index, particle_var::pi) = 999999;
+#         define ACCUMULATE_J(X,Y,Z)                                 \
+          v4(lane)  = q(lane)*u##X(lane);   /* v2 = q ux                            */        \
+          v1(lane)  = v4(lane)*d##Y(lane);  /* v1 = q ux dy                         */        \
+          v0(lane)  = v4(lane)-v1(lane);    /* v0 = q ux (1-dy)                     */        \
+          v1(lane) += v4(lane);       /* v1 = q ux (1+dy)                     */        \
+          v4(lane)  = one+d##Z(lane); /* v4 = 1+dz                            */        \
+          v2(lane)  = v0(lane)*v4(lane);    /* v2 = q ux (1-dy)(1+dz)               */        \
+          v3(lane)  = v1(lane)*v4(lane);    /* v3 = q ux (1+dy)(1+dz)               */        \
+          v4(lane)  = one-d##Z(lane); /* v4 = 1-dz                            */        \
+          v0(lane) *= v4(lane);       /* v0 = q ux (1-dy)(1-dz)               */        \
+          v1(lane) *= v4(lane);       /* v1 = q ux (1+dy)(1-dz)               */        \
+          v0(lane) += v5(lane);       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+          v1(lane) -= v5(lane);       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+          v2(lane) -= v5(lane);       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+          v3(lane) += v5(lane);       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
-          // Copy local local_pm back
-          //local_pm_dispx = local_pm->dispx;
-          //local_pm_dispy = local_pm->dispy;
-          //local_pm_dispz = local_pm->dispz;
-          //local_pm_i = local_pm->i;
-          //printf("rank copying %d to nm %d \n", local_pm_i, nm);
-          //copy_local_to_pm(nm);
+          ACCUMULATE_J( x,y,z );
+          k_accumulators_scatter_access(ii(lane), accumulator_var::jx, 0) += v0(lane);
+          k_accumulators_scatter_access(ii(lane), accumulator_var::jx, 1) += v1(lane);
+          k_accumulators_scatter_access(ii(lane), accumulator_var::jx, 2) += v2(lane);
+          k_accumulators_scatter_access(ii(lane), accumulator_var::jx, 3) += v3(lane);
+
+          ACCUMULATE_J( y,z,x );
+          k_accumulators_scatter_access(ii(lane), accumulator_var::jy, 0) += v0(lane);
+          k_accumulators_scatter_access(ii(lane), accumulator_var::jy, 1) += v1(lane);
+          k_accumulators_scatter_access(ii(lane), accumulator_var::jy, 2) += v2(lane);
+          k_accumulators_scatter_access(ii(lane), accumulator_var::jy, 3) += v3(lane);
+
+          ACCUMULATE_J( z,x,y );
+          k_accumulators_scatter_access(ii(lane), accumulator_var::jz, 0) += v0(lane);
+          k_accumulators_scatter_access(ii(lane), accumulator_var::jz, 1) += v1(lane);
+          k_accumulators_scatter_access(ii(lane), accumulator_var::jz, 2) += v2(lane);
+          k_accumulators_scatter_access(ii(lane), accumulator_var::jz, 3) += v3(lane);
+#         undef ACCUMULATE_J
+        } else {
+          DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+          local_pm->dispx = ux(lane);
+          local_pm->dispy = uy(lane);
+          local_pm->dispz = uz(lane);
+          local_pm->i     = p_index;
+
+          if( move_p_kokkos( k_particles, k_particles_i, local_pm,
+                             k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
+            if( k_nm(0)<max_nm ) {
+              const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+              if (nm >= max_nm) Kokkos::abort("overran max_nm");
+
+              k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+              k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+              k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+              k_particle_movers_i(nm)   = local_pm->i;
+
+              // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+              k_particle_copy(nm, particle_var::dx) = p_dx;
+              k_particle_copy(nm, particle_var::dy) = p_dy;
+              k_particle_copy(nm, particle_var::dz) = p_dz;
+              k_particle_copy(nm, particle_var::ux) = p_ux;
+              k_particle_copy(nm, particle_var::uy) = p_uy;
+              k_particle_copy(nm, particle_var::uz) = p_uz;
+              k_particle_copy(nm, particle_var::w) = p_w;
+              k_particle_i_copy(nm) = pii;
+            }
+          }
         }
       }
-    }
-  }
+    });
   });
-  });
+//});
+#undef p_dx
+#undef p_dy
+#undef p_dz
+#undef p_ux
+#undef p_uy
+#undef p_uz
+#undef p_w 
+#undef pii 
 
+#undef f_cbx
+#undef f_cby
+#undef f_cbz
+#undef f_ex 
+#undef f_ey 
+#undef f_ez 
 
-  // TODO: abstract this manual data copy
-  //Kokkos::deep_copy(h_nm, k_nm);
+#undef f_dexdy
+#undef f_dexdz
 
-  //args->seg[pipeline_rank].pm        = pm;
-  //args->seg[pipeline_rank].max_nm    = max_nm;
-  //args->seg[pipeline_rank].nm        = h_nm(0);
-  //args->seg[pipeline_rank].n_ignored = 0; // TODO: update this
-  //delete(k_local_particle_movers_p);
-  //return h_nm(0);
+#undef f_d2exdydz
+#undef f_deydx   
+#undef f_deydz   
 
+#undef f_d2eydzdx
+#undef f_dezdx   
+#undef f_dezdy   
+
+#undef f_d2ezdxdy
+#undef f_dcbxdx  
+#undef f_dcbydy  
+#undef f_dcbzdz  
 }
 
 void
@@ -436,7 +2026,8 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
   KOKKOS_TIC();
-  advance_p_kokkos(
+//  advance_p_kokkos_devel_serial_chunk(
+  advance_p_kokkos_vector(
           sp->k_p_d,
           sp->k_p_i_d,
           sp->k_pc_d,
