@@ -16,7 +16,7 @@ project(vpic CXX)
 # If a C++11 compiler is available, then set the appropriate flags
 #------------------------------------------------------------------------------#
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #------------------------------------------------------------------------------#
@@ -55,6 +55,8 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
 
+option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -83,7 +85,7 @@ string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
 if(NOT ${string_includes} STREQUAL "")
   set(VPIC_CXX_FLAGS "-I${string_includes} ${MPI_C_LINK_FLAGS}")
 endif(NOT ${string_includes} STREQUAL "")
-set(VPIC_CXX_FLAGS "${CMAKE_CXX11_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
+set(VPIC_CXX_FLAGS "${CMAKE_CXX14_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
 
 # Add Debug flags to VPIC_CXX_FLAGS
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
@@ -147,6 +149,7 @@ if(ENABLE_KOKKOS_CUDA)
     set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
     set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "Enable cuda lambda support")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -arch=sm_70")
 
     # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
     # see https://github.com/UoB-HPC/BabelStream/issues/16
@@ -260,6 +263,10 @@ find_package(Threads REQUIRED)
 if (VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
+
+if (VPIC_ENABLE_HIERARCHICAL)
+  add_definitions(-DVPIC_ENABLE_HIERARCHICAL)
+endif(VPIC_ENABLE_HIERARCHICAL)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)

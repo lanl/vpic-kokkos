@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include "spa_private.h"
 #include "../../vpic/kokkos_helpers.h"
+#include "../../vpic/kokkos_tuning.hpp"
 
 void
 advance_p_kokkos(
@@ -147,22 +148,20 @@ sp_[id]->
     //local_pm_i = 0;
   });
 
-
-//  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
-//    KOKKOS_LAMBDA (size_t p_index)
-//    {
-  int num_leagues = 2048;
-  int num_threads = 512;
-  int per_league = np/num_leagues;
-  if(np%num_leagues > 0)
+#ifdef VPIC_ENABLE_HIERARCHICAL
+  auto team_policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE);
+  int per_league = np/LEAGUE_SIZE;
+  if(np%LEAGUE_SIZE > 0)
     per_league++;
-  Kokkos::parallel_for("advance_p", Kokkos::TeamPolicy<>(num_leagues, num_threads, 1), 
-  KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
+  Kokkos::parallel_for("advance_p", team_policy, KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, per_league), [=] (size_t pindex) {
       int p_index = team_member.league_rank()*per_league + pindex;
       if(p_index < np) {
+#else
+  auto range_policy = Kokkos::RangePolicy<>(0,np);
+  Kokkos::parallel_for("advance_p", range_policy, KOKKOS_LAMBDA (size_t p_index) {
+#endif
       
-//for(int p_index=0; p_index<np; p_index++) {
     float v0, v1, v2, v3, v4, v5;
     auto  k_accumulators_scatter_access = k_accumulators_sa.access();
 
@@ -222,19 +221,22 @@ sp_[id]->
     v4   = v1 + uy;
     v5   = v2 + uz;
 
-//    // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
+////    // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
 //    if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
 //        -v3<=one && -v4<=one && -v5<=one ) {
 
     bool inbnds = v3<=one && v4<=one && v5<=one &&
                   -v3<=one && -v4<=one && -v5<=one;
-    int mask = 0xffffffff;
-    int synced = 0;
-    int same_idx = 0;
-#ifdef __CUDA_ARCH__
-    __match_all_sync(mask, inbnds, &synced);
-    __match_all_sync(mask, ii, &same_idx);
-#endif
+//    int mask = 0xffffffff;
+//    int synced = 0;
+//    int same_idx = 0;
+//#ifdef __CUDA_ARCH__
+//    __match_all_sync(mask, inbnds, &synced);
+//    __match_all_sync(mask, ii, &same_idx);
+//#endif
+//    Kokkos::LAnd<bool> sync_res(inbnds);
+//    team_member.team_reduce(sync_res);
+//    if(sync_res.reference()) {
     if(inbnds) {
 
       // Common case (inbnds).  Note: accumulator values are 4 times
@@ -267,51 +269,60 @@ sp_[id]->
       v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
       v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
-// Warp reduction
-      if(synced && same_idx) {
-#ifdef __CUDA_ARCH__
-        const int team_rank = team_member.team_rank();
-        ACCUMULATE_J( x,y,z );
-        for(int i=16; i>0; i=i/2) {
-          v0 += __shfl_down_sync(mask, v0, i);
-          v1 += __shfl_down_sync(mask, v1, i);
-          v2 += __shfl_down_sync(mask, v2, i);
-          v3 += __shfl_down_sync(mask, v3, i);
-        }
-        if(team_rank%32 == 0) {
-          k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-          k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-          k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-          k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
-        }
-        ACCUMULATE_J( y,z,x );
-        for(int i=16; i>0; i=i/2) {
-          v0 += __shfl_down_sync(mask, v0, i);
-          v1 += __shfl_down_sync(mask, v1, i);
-          v2 += __shfl_down_sync(mask, v2, i);
-          v3 += __shfl_down_sync(mask, v3, i);
-        }
-        if(team_rank%32 == 0) {
-          k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-          k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-          k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-          k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
-        }
-        ACCUMULATE_J( z,x,y );
-        for(int i=16; i>0; i=i/2) {
-          v0 += __shfl_down_sync(mask, v0, i);
-          v1 += __shfl_down_sync(mask, v1, i);
-          v2 += __shfl_down_sync(mask, v2, i);
-          v3 += __shfl_down_sync(mask, v3, i);
-        }
-        if(team_rank%32 == 0) {
-          k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-          k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-          k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-          k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
-        }
-#endif
-      } else {
+//// Warp reduction
+//      if(synced && same_idx) {
+//#ifdef __CUDA_ARCH__
+//        const int team_rank = team_member.team_rank();
+//        ACCUMULATE_J( x,y,z );
+//        for(int i=16; i>0; i=i/2) {
+//          v0 += __shfl_down_sync(mask, v0, i);
+//          v1 += __shfl_down_sync(mask, v1, i);
+//          v2 += __shfl_down_sync(mask, v2, i);
+//          v3 += __shfl_down_sync(mask, v3, i);
+//        }
+////        team_member.team_barrier();
+////        team_member.team_reduce(Kokkos::Sum<float>(v0));
+////        team_member.team_reduce(Kokkos::Sum<float>(v1));
+////        team_member.team_reduce(Kokkos::Sum<float>(v2));
+////        team_member.team_reduce(Kokkos::Sum<float>(v3));
+////        team_member.team_broadcast(v0, 0);
+////        team_member.team_broadcast(v1, 0);
+////        team_member.team_broadcast(v2, 0);
+////        team_member.team_broadcast(v3, 0);
+//        if(team_rank%32 == 0) {
+//          k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+//          k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+//          k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+//          k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+//        }
+//        ACCUMULATE_J( y,z,x );
+//        for(int i=16; i>0; i=i/2) {
+//          v0 += __shfl_down_sync(mask, v0, i);
+//          v1 += __shfl_down_sync(mask, v1, i);
+//          v2 += __shfl_down_sync(mask, v2, i);
+//          v3 += __shfl_down_sync(mask, v3, i);
+//        }
+//        if(team_rank%32 == 0) {
+//          k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+//          k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+//          k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+//          k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+//        }
+//        ACCUMULATE_J( z,x,y );
+//        for(int i=16; i>0; i=i/2) {
+//          v0 += __shfl_down_sync(mask, v0, i);
+//          v1 += __shfl_down_sync(mask, v1, i);
+//          v2 += __shfl_down_sync(mask, v2, i);
+//          v3 += __shfl_down_sync(mask, v3, i);
+//        }
+//        if(team_rank%32 == 0) {
+//          k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+//          k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+//          k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+//          k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+//        }
+//#endif
+//      } else {
         ACCUMULATE_J( x,y,z );
         k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
         k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
@@ -329,7 +340,7 @@ sp_[id]->
         k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
         k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
         k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
-      }
+//      }
 
 #     undef ACCUMULATE_J
 
@@ -383,8 +394,10 @@ sp_[id]->
         }
       }
     }
+#ifdef VPIC_ENABLE_HIERARCHICAL
   }
   });
+#endif
   });
 
 
