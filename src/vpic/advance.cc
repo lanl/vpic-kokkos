@@ -4,6 +4,7 @@
 #include <Kokkos_Sort.hpp>
 
 #define FAK field_array->kernel
+#define DUMP_ENERGIES
 
 int vpic_simulation::advance(void)
 {
@@ -656,7 +657,7 @@ int vpic_simulation::advance(void)
   // will act properly for this edge case.
 
 #ifdef DUMP_ENERGIES
-//  TIC dump_energies("energies.txt", 1); TOC( dump_energies, 1);
+  TIC dump_energies("energies.txt", 1); TOC( dump_energies, 1);
 #endif
 
   return 1;
