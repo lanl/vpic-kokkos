@@ -66,7 +66,9 @@ class species_t {
         int np = 0, max_np = 0;             // Number and max local particles
         particle_t * ALIGNED(128) p;        // Array of particles for the species
 
-        int nm, max_nm;                     // Number and max local movers in use
+        // TODO: these could be unsigned?
+        int nm = 0, max_nm = 0;             // Number and max local movers in use
+
         particle_mover_t * ALIGNED(128) pm; // Particle movers
 
         int64_t last_sorted;                // Step when the particles were last
@@ -99,6 +101,12 @@ class species_t {
         species_id id;                      // Unique identifier for a species
         species_t* next = NULL;             // Next species in the list
 
+
+
+
+        //// END CHECKPOINTED DATA, START KOKKOS //////
+
+
         k_particles_t k_p_d;                 // kokkos particles view on device
         k_particles_i_t k_p_i_d;             // kokkos particles view on device
 
@@ -122,8 +130,8 @@ class species_t {
         k_particle_i_movers_t::HostMirror k_pm_i_h;  // kokkos particle movers on host
 
         // TODO: what is an iterator here??
-        k_iterator_t k_nm_d;               // nm iterator
-        k_iterator_t::HostMirror k_nm_h;
+        k_counter_t k_nm_d;               // nm iterator
+        k_counter_t::HostMirror k_nm_h;
 
         // TODO: this should ultimatley be removeable.
         // This tracks the number of particles we need to move back to the device
@@ -142,29 +150,54 @@ class species_t {
         // the device.
         int64_t species_copy_last = -1;
 
+        // Static allocations for the compressor
+        Kokkos::View<int*> unsafe_index;
+        Kokkos::View<int> clean_up_to_count;
+        Kokkos::View<int> clean_up_from_count;
+        Kokkos::View<int>::HostMirror clean_up_from_count_h;
+        Kokkos::View<int*> clean_up_from;
+        Kokkos::View<int*> clean_up_to;
+
         // Init Kokkos Particle Arrays
-        species_t(int n_particles, int n_pmovers) :
-            k_p_d("k_particles", n_particles),
-            k_p_i_d("k_particles_i", n_particles),
-            k_pm_d("k_particle_movers", n_pmovers),
-            k_pm_i_d("k_particle_movers_i", n_pmovers),
-            k_pc_d("k_particle_copy_for_movers", n_pmovers),
-            k_pc_i_d("k_particle_copy_for_movers_i", n_pmovers),
-            k_pr_h("k_particle_send_for_movers", n_pmovers),
-            k_pr_i_h("k_particle_send_for_movers_i", n_pmovers),
-            k_nm_d("k_nm") // size 1
-    {
-        k_p_h = Kokkos::create_mirror_view(k_p_d);
-        k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
+        species_t(int n_particles, int n_pmovers)
+        {
+           init_kokkos_particles(n_particles, n_pmovers);
+        }
 
-        k_pc_h = Kokkos::create_mirror_view(k_pc_d);
-        k_pc_i_h = Kokkos::create_mirror_view(k_pc_i_d);
+        void init_kokkos_particles()
+        {
+            init_kokkos_particles(max_np, max_nm);
+        }
+        void init_kokkos_particles(int n_particles, int n_pmovers)
+        {
+            k_p_d = k_particles_t("k_particles", n_particles);
+            k_p_i_d = k_particles_i_t("k_particles_i", n_particles);
+            k_pc_d = k_particle_copy_t("k_particle_copy_for_movers", n_pmovers);
+            k_pc_i_d = k_particle_i_copy_t("k_particle_copy_for_movers_i", n_pmovers);
+            k_pr_h = k_particle_copy_t::HostMirror("k_particle_send_for_movers", n_pmovers);
+            k_pr_i_h = k_particle_i_copy_t::HostMirror("k_particle_send_for_movers_i", n_pmovers);
+            k_pm_d = k_particle_movers_t("k_particle_movers", n_pmovers);
+            k_pm_i_d = k_particle_i_movers_t("k_particle_movers_i", n_pmovers);
+            k_nm_d = k_counter_t("k_nm"); // size 1 encoded in type
+            unsafe_index = Kokkos::View<int*>("safe index", 2*n_pmovers);
+            clean_up_to_count = Kokkos::View<int>("clean up to count");
+            clean_up_from_count = Kokkos::View<int>("clean up from count");
+            clean_up_from = Kokkos::View<int*>("clean up from", n_pmovers);
+            clean_up_to = Kokkos::View<int*>("clean up to", n_pmovers);
 
-        k_pm_h = Kokkos::create_mirror_view(k_pm_d);
-        k_pm_i_h = Kokkos::create_mirror_view(k_pm_i_d);
+            k_p_h = Kokkos::create_mirror_view(k_p_d);
+            k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
 
-        k_nm_h = Kokkos::create_mirror_view(k_nm_d);
-    }
+            k_pc_h = Kokkos::create_mirror_view(k_pc_d);
+            k_pc_i_h = Kokkos::create_mirror_view(k_pc_i_d);
+
+            k_pm_h = Kokkos::create_mirror_view(k_pm_d);
+            k_pm_i_h = Kokkos::create_mirror_view(k_pm_i_d);
+
+            k_nm_h = Kokkos::create_mirror_view(k_nm_d);
+            
+            clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
+        }
 
 };
 
@@ -264,12 +297,13 @@ void
 k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
                   const species_t     * RESTRICT sp );
 
-void k_accumulate_rhob(k_field_t& kfield,
-                  k_particles_t& kpart,
-                  k_particle_movers_t& kpart_movers,
-                  const grid_t* RESTRICT g,
-                  const float qsp,
-                  const int nm);
+void k_accumulate_rhob(
+            k_field_t& kfield,
+            k_particles_t& kpart,
+            k_particle_movers_t& kpart_movers,
+            const grid_t* RESTRICT g,
+            const float qsp,
+            const int nm);
 
 void k_accumulate_rhob_single_cpu(
             k_field_t& kfield,
@@ -408,9 +442,10 @@ move_p_kokkos(
     v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
     v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
     v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-    //Kokkos::atomic_add(&a[0], v0); \
-    //Kokkos::atomic_add(&a[1], v1); \
-    //Kokkos::atomic_add(&a[2], v2); \
+
+    //Kokkos::atomic_add(&a[0], v0);
+    //Kokkos::atomic_add(&a[1], v1);
+    //Kokkos::atomic_add(&a[2], v2);
     //Kokkos::atomic_add(&a[3], v3);
 
     accumulate_j(x,y,z);
@@ -630,9 +665,10 @@ move_p_kokkos_host_serial(
     v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
     v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
     v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-    //Kokkos::atomic_add(&a[0], v0); \
-    //Kokkos::atomic_add(&a[1], v1); \
-    //Kokkos::atomic_add(&a[2], v2); \
+
+    //Kokkos::atomic_add(&a[0], v0);
+    //Kokkos::atomic_add(&a[1], v1);
+    //Kokkos::atomic_add(&a[2], v2);
     //Kokkos::atomic_add(&a[3], v3);
 
     accumulate_j(x,y,z);

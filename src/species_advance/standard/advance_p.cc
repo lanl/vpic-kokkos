@@ -19,7 +19,7 @@ advance_p_kokkos(
         k_accumulators_sa_t k_accumulators_sa,
         k_interpolator_t& k_interp,
         //k_particle_movers_t k_local_particle_movers,
-        k_iterator_t& k_nm,
+        k_counter_t& k_nm,
         k_neighbor_t& k_neighbors,
         const grid_t *g,
         const float qdt_2mc,
@@ -39,61 +39,6 @@ advance_p_kokkos(
   constexpr float one_third      = 1./3.;
   constexpr float two_fifteenths = 2./15.;
 
-  /*
-  k_particle_movers_t *k_local_particle_movers_p = new k_particle_movers_t("k_local_pm", 1);
-  k_particle_movers_t  k_local_particle_movers("k_local_pm", 1);
-
-  k_iterator_t k_nm("k_nm");
-  k_iterator_t::HostMirror h_nm = Kokkos::create_mirror_view(k_nm);
-  h_nm(0) = 0;
-  Kokkos::deep_copy(k_nm, h_nm);
-  */
-  // Determine which quads of particles quads this pipeline processes
-
-  //DISTRIBUTE( args->np, 16, pipeline_rank, n_pipeline, itmp, n );
-  //p = args->p0 + itmp;
-
-  /*
-  printf("original value %f\n\n", k_accumulators(0, 0, 0));
-sp_[id]->
-  Kokkos::parallel_for(Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int i) {
-
-      auto scatter_access = k_accumulators_sa.access();
-      //auto scatter_access_atomic = scatter_view.template access<Kokkos::Experimental::ScatterAtomic>();
-          printf("Writing to %d\n", i);
-          scatter_access(i, 0, 0) += 4;
-          //scatter_access_atomic(i, 1) += 2.0;
-          //scatter_access(k, 2) += 1.0;
-          //
-  });
-
-  // copy back
-  Kokkos::Experimental::contribute(k_accumulators, k_accumulators_sa);
-  printf("changed value %f\n", k_accumulators(0, 0, 0));
-  */
-
-  // Determine which movers are reserved for this pipeline
-  // Movers (16 bytes) should be reserved for pipelines in at least
-  // multiples of 8 such that the set of particle movers reserved for
-  // a pipeline is 128-byte aligned and a multiple of 128-byte in
-  // size.  The host is guaranteed to get enough movers to process its
-  // particles with this allocation.
-/*
-  max_nm = args->max_nm - (args->np&15);
-  if( max_nm<0 ) max_nm = 0;
-  DISTRIBUTE( max_nm, 8, pipeline_rank, n_pipeline, itmp, max_nm );
-  if( pipeline_rank==n_pipeline ) max_nm = args->max_nm - itmp;
-  pm   = args->pm + itmp;
-  nm   = 0;
-  itmp = 0;
-
-  // Determine which accumulator array to use
-  // The host gets the first accumulator array
-
-  if( pipeline_rank!=n_pipeline )
-    a0 += (1+pipeline_rank)*
-          POW2_CEIL((args->nx+2)*(args->ny+2)*(args->nz+2),2);
-*/
   // Process particles for this pipeline
 
   #define p_dx    k_particles(p_index, particle_var::dx)
@@ -138,15 +83,9 @@ sp_[id]->
   auto rangel = g->rangel;
   auto rangeh = g->rangeh;
 
-  // TODO: is this the right place to do this?
-  Kokkos::parallel_for("clear nm", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (size_t i) {
-    //printf("how many times does this run %d", i);
-    k_nm(0) = 0;
-    //local_pm_dispx = 0;
-    //local_pm_dispy = 0;
-    //local_pm_dispz = 0;
-    //local_pm_i = 0;
-  });
+  // zero out nm, we could probably do this earlier if we're worried about it
+  // slowing things down
+  Kokkos::deep_copy(k_nm, 0);
 
 #ifdef VPIC_ENABLE_HIERARCHICAL
   auto team_policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE);
@@ -360,37 +299,39 @@ sp_[id]->
       local_pm->i     = p_index;
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
-      if( move_p_kokkos( k_particles, k_particles_i, local_pm,
-                         k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) ) { // Unlikely
-        if( k_nm(0)<max_nm ) {
-          const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
-          if (nm >= max_nm) Kokkos::abort("overran max_nm");
+      if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
+                     k_accumulators_sa, g, k_neighbors, rangel, rangeh, qsp ) )
+      {
+        if( k_nm(0) < max_nm )
+        {
+            const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+            if (nm >= max_nm) Kokkos::abort("overran max_nm");
 
-          k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
-          k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
-          k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
-          k_particle_movers_i(nm)   = local_pm->i;
+            k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+            k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+            k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+            k_particle_movers_i(nm)   = local_pm->i;
 
-          // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-          k_particle_copy(nm, particle_var::dx) = p_dx;
-          k_particle_copy(nm, particle_var::dy) = p_dy;
-          k_particle_copy(nm, particle_var::dz) = p_dz;
-          k_particle_copy(nm, particle_var::ux) = p_ux;
-          k_particle_copy(nm, particle_var::uy) = p_uy;
-          k_particle_copy(nm, particle_var::uz) = p_uz;
-          k_particle_copy(nm, particle_var::w) = p_w;
-          k_particle_i_copy(nm) = pii;
+            // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+            k_particle_copy(nm, particle_var::dx) = p_dx;
+            k_particle_copy(nm, particle_var::dy) = p_dy;
+            k_particle_copy(nm, particle_var::dz) = p_dz;
+            k_particle_copy(nm, particle_var::ux) = p_ux;
+            k_particle_copy(nm, particle_var::uy) = p_uy;
+            k_particle_copy(nm, particle_var::uz) = p_uz;
+            k_particle_copy(nm, particle_var::w) = p_w;
+            k_particle_i_copy(nm) = pii;
 
-          // Tag this one as having left
-          //k_particles(p_index, particle_var::pi) = 999999;
+            // Tag this one as having left
+            //k_particles(p_index, particle_var::pi) = 999999;
 
-          // Copy local local_pm back
-          //local_pm_dispx = local_pm->dispx;
-          //local_pm_dispy = local_pm->dispy;
-          //local_pm_dispz = local_pm->dispz;
-          //local_pm_i = local_pm->i;
-          //printf("rank copying %d to nm %d \n", local_pm_i, nm);
-          //copy_local_to_pm(nm);
+            // Copy local local_pm back
+            //local_pm_dispx = local_pm->dispx;
+            //local_pm_dispy = local_pm->dispy;
+            //local_pm_dispz = local_pm->dispz;
+            //local_pm_i = local_pm->i;
+            //printf("rank copying %d to nm %d \n", local_pm_i, nm);
+            //copy_local_to_pm(nm);
         }
       }
     }

@@ -24,6 +24,7 @@ struct DefaultCompress {
             species_t* sp
             )
     {
+        //fprintf(stderr, "In compress\n");
         // From particle_movers(nm, particle_mover_var::pmi), we know where the
         // gaps in particle are
 
@@ -57,25 +58,31 @@ struct DefaultCompress {
         // This is annoying, but it will give a back fill order more consistent
         // with VPIC's serial algorithm
 
-        Kokkos::View<int*> unsafe_index("safe index", 2*nm);
-
-        // TODO: prevent these allocations from being repeated.
+        Kokkos::View<int*> unsafe_index = sp->unsafe_index;
 
         // Track (atomically) the id's we've tried to pull from when dealing with a
-        // gap in the "danger zone"
-        Kokkos::View<int> panic_counter("panic counter");
-
         // We use this to store a list of things we bailed out on moving. Typically because the mapping of pull_from->write_to got skipped.
 
-        Kokkos::View<int> clean_up_to_count("clean up to count"); // todo: find an algorithm that doesn't need this
-        Kokkos::View<int> clean_up_from_count("clean up from count"); // todo: find an algorithm that doesn't need this
+        Kokkos::View<int> clean_up_to_count = sp->clean_up_to_count;
+        Kokkos::View<int> clean_up_from_count = sp->clean_up_from_count;
 
-        Kokkos::View<int>::HostMirror clean_up_to_count_h = Kokkos::create_mirror_view(clean_up_to_count);
-        Kokkos::View<int>::HostMirror clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
+        Kokkos::View<int>::HostMirror clean_up_from_count_h = sp->clean_up_from_count_h;
 
-        Kokkos::View<int*> clean_up_from("clean up from", nm);
-        Kokkos::View<int*> clean_up_to("clean up to", nm);
+        Kokkos::View<int*> clean_up_from = sp->clean_up_from;
+        Kokkos::View<int*> clean_up_to = sp->clean_up_to;
+        
+        // Zero out the arrays and counters
+        Kokkos::deep_copy(clean_up_to_count, 0);
+        Kokkos::deep_copy(clean_up_from_count, 0);
+        Kokkos::parallel_for("Clean clean up arrays", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int i) {
+                clean_up_from(i) = 0;
+                clean_up_to(i) = 0;
+                });
+        Kokkos::parallel_for("Clean clean up arrays", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 2*nm), KOKKOS_LAMBDA (int i) {
+                unsafe_index(i) = 0;
+                });
 
+        //fprintf(stderr, "Compress inited\n");
         // Loop over 2*nm, which is enough to guarantee you `nm` non-gaps
         // Build a list of safe lookups
 
@@ -109,8 +116,8 @@ struct DefaultCompress {
             int write_to = particle_movers_i(nm-n-1); // put it in a gap
             int danger_zone = np - nm;
 
-            // if they're the same, no need to do it. This can happen below in the
-            // danger zone and we want to avoid "cleaning it up"
+            // if they're the same, no need to do it. This can happen below in
+            // the danger zone and we want to avoid "cleaning it up"
             if (pull_from == write_to) return;
 
             // If the "gap" is in the danger zone, no need to back fill it
@@ -172,7 +179,6 @@ struct DefaultCompress {
         });
 
         Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
-        Kokkos::deep_copy(clean_up_to_count_h, clean_up_to_count);
 
         Kokkos::parallel_for("compress clean up", Kokkos::RangePolicy <
         Kokkos::DefaultExecutionSpace > (0, clean_up_from_count_h() ), KOKKOS_LAMBDA (int n)

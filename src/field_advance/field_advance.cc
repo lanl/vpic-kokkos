@@ -26,6 +26,25 @@ checkpt_field_advance_kernels( const field_advance_kernels_t * kernel ) {
   CHECKPT_SYM( kernel->compute_div_b_err         );
   CHECKPT_SYM( kernel->compute_rms_div_b_err     );
   CHECKPT_SYM( kernel->clean_div_b               );
+
+  // Checkpoint Kokkos Specific kernels
+  CHECKPT_SYM( kernel->advance_e_kokkos                 );
+  CHECKPT_SYM( kernel->energy_f_kokkos                  );
+  CHECKPT_SYM( kernel->clear_jf_kokkos                  );
+  CHECKPT_SYM( kernel->clear_rhof_kokkos                );
+
+  CHECKPT_SYM( kernel->k_synchronize_jf                 );
+  CHECKPT_SYM( kernel->k_synchronize_rho                );
+
+  CHECKPT_SYM( kernel->synchronize_tang_e_norm_b_kokkos );
+
+  CHECKPT_SYM( kernel->compute_div_e_err_kokkos         );
+  CHECKPT_SYM( kernel->compute_rms_div_e_err_kokkos     );
+  CHECKPT_SYM( kernel->clean_div_e_kokkos               );
+
+  CHECKPT_SYM( kernel->compute_div_b_err_kokkos         );
+  CHECKPT_SYM( kernel->compute_rms_div_b_err_kokkos     );
+  CHECKPT_SYM( kernel->clean_div_b_kokkos               );
 }
 
 void
@@ -47,5 +66,25 @@ restore_field_advance_kernels( field_advance_kernels_t * kernel ) {
   RESTORE_SYM( kernel->compute_div_b_err         );
   RESTORE_SYM( kernel->compute_rms_div_b_err     );
   RESTORE_SYM( kernel->clean_div_b               );
+
+
+  // Restore Kokkos Kernels
+  RESTORE_SYM( kernel->advance_e_kokkos                 );
+  RESTORE_SYM( kernel->energy_f_kokkos                  );
+  RESTORE_SYM( kernel->clear_jf_kokkos                  );
+  RESTORE_SYM( kernel->clear_rhof_kokkos                );
+
+  RESTORE_SYM( kernel->k_synchronize_jf                 );
+  RESTORE_SYM( kernel->k_synchronize_rho                );
+
+  RESTORE_SYM( kernel->synchronize_tang_e_norm_b_kokkos );
+
+  RESTORE_SYM( kernel->compute_div_e_err_kokkos         );
+  RESTORE_SYM( kernel->compute_rms_div_e_err_kokkos     );
+  RESTORE_SYM( kernel->clean_div_e_kokkos               );
+
+  RESTORE_SYM( kernel->compute_div_b_err_kokkos         );
+  RESTORE_SYM( kernel->compute_rms_div_b_err_kokkos     );
+  RESTORE_SYM( kernel->clean_div_b_kokkos               );
 }
 

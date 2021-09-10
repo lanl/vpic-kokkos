@@ -14,6 +14,7 @@
 
 void
 checkpt_species( const species_t * sp ) {
+    //std::cout << "checkpintg " << sp->name << " with nm = " << sp->nm << std::endl;
   CHECKPT( sp, 1 );
   CHECKPT_STR( sp->name );
   checkpt_data( sp->p,

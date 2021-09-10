@@ -13,7 +13,10 @@ cmake_policy(SET CMP0074 NEW)
 project(vpic CXX)
 
 #------------------------------------------------------------------------------#
-# If a C++11 compiler is available, then set the appropriate flags
+# If a C++14 compiler is available, then set the appropriate flags
+# Note: As of February 2021, VPIC requires only C++11, but requiring C++14
+# makes building Kokkos easier.  If you are adventurous and using your own
+# Kokkos build, feel free to try a lower standard.
 #------------------------------------------------------------------------------#
 
 set(CMAKE_CXX_STANDARD 14)
@@ -53,7 +56,7 @@ option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 
 option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
 
-option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
+option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
 
 option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
 

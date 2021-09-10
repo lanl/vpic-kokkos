@@ -59,8 +59,6 @@ int string_starts_with(const char *str, const char *pre)
 
 int string_contains(const char *str, const char *substr)
 {
-    const char *output = strstr(str,substr);
-
     const char* pos = strstr(str, substr);
 
     if (pos) {
