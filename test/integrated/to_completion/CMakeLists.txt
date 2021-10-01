@@ -15,6 +15,7 @@ list(APPEND DEFAULT_ARG_TESTS
     reconnection_test # This is a simple reconnection run
     )
 
+list(APPEND SIMPLE_DECK simple) # Reuse existing deck and start half way
 list(APPEND RESTART_DECK dump) # Reuse existing deck and start half way
 list(APPEND RESTART_BINARY restore)
 list(APPEND CHECKPOINT_FILE "${CMAKE_CURRENT_BINARY_DIR}/checkpt_test.1")
@@ -26,7 +27,7 @@ endforeach()
 
 foreach(test ${DEFAULT_ARG_TESTS})
     add_test(${test} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_NUMPROC}
-        ${MPIEXEC_PREFLAGS} ${test} ${MPIEXEC_POSTFLAGS} ${ARGS})
+        ${MPIEXEC_PREFLAGS} ./${test} ${MPIEXEC_POSTFLAGS} ${ARGS})
 endforeach()
 
 # TODO: re-enable parallel run
@@ -64,3 +65,18 @@ set(RESTORE_LABEL "restore_group")
 set_tests_properties(${perform_restore} PROPERTIES DEPENDS ${generate_restore})
 #set_property(TEST ${generate_restore} PROPERTY FIXTURES_SETUP ${RESTORE_LABEL})
 #set_property(TEST ${perform_restore} PROPERTY FIXTURES_REQUIRED ${RESTORE_LABEL})
+
+# See if we can build a deck with the 2 stage compile
+# TODO: add a test that runs the generated deck
+add_test(
+    NAME perform_2stage_compile
+    COMMAND ${CMAKE_BINARY_DIR}/bin/vpic ${CMAKE_CURRENT_SOURCE_DIR}/${SIMPLE_DECK}.deck
+)
+
+set(TWOSTAGE_OUT ${SIMPLE_DECK}.deck.${CMAKE_SYSTEM_NAME})
+add_test(run_2stage_compile ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG}
+    ${MPIEXEC_NUMPROC} ${MPIEXEC_PREFLAGS} ./${TWOSTAGE_OUT}
+)
+
+set_tests_properties(perform_2stage_compile PROPERTIES FIXTURES_SETUP 2stage_fixture)
+set_tests_properties(run_2stage_compile PROPERTIES FIXTURES_REQUIRED 2stage_fixture)

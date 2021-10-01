@@ -133,7 +133,6 @@ accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
         const float                              qsp ) {
 # if 1
 
-    std::cout << "accumulate rhob" << std::endl;
     // See note in rhof for why this variant is used.
     float w0 = p->dx, w1 = p->dy, w2, w3, w4, w5, w6, w7, dz = p->dz;
     int v = p->i, x, y, z, sy = g->sy, sz = g->sz;
