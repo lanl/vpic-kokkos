@@ -11,16 +11,19 @@
 //using cnl::fixed_point;
 //using fixed_point_t = fixed_point<int32_t, -23>;
 
-#ifdef KOKKOS_ENABLE_CUDA
-#include "cuda_fp16.h"
-#else
-#include "half.hpp"
-using half_float::half;
-#endif
+//#include "simd_kokkos.hpp"
+
+#if defined(__ppc64le__)
 #include "altivec.h"
 #undef vector
 #undef bool
-//#include "simd_kokkos.hpp"
+typedef unsigned short fp16_t;
+#endif
+
+#if defined(__x86_64__)
+#include <emmintrin.h>
+typedef short fp16_t;
+#endif
 
 // This module implements kokkos macros
 
@@ -38,6 +41,7 @@ using half_float::half;
 #define PARTICLE_WEIGHT_FLOAT
 
 //#define CPU_HALF
+//#define CPU_FIXED
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -51,16 +55,15 @@ using half_float::half;
 
 typedef int16_t material_id;
 
-typedef float float_t;
+//typedef float float_t;
 
-typedef unsigned short fp16_t;
 
+#ifdef CPU_FIXED
 typedef short Q1_14;
-
-//constexpr float Q1_14_CONST = 10000.0;
-//constexpr float Q1_14_INV_CONST = (1.0/10000.0);
 constexpr float Q1_14_CONST = static_cast<float>(1 << 14);
 constexpr float Q1_14_INV_CONST = (1.0/static_cast<float>(1 << 14));
+#endif
+
 
 //#ifdef KOKKOS_ENABLE_CUDA
 //typedef __half pos_t;
@@ -73,15 +76,17 @@ constexpr float Q1_14_INV_CONST = (1.0/static_cast<float>(1 << 14));
 //#endif
 
 #ifdef __CUDA_ARCH__
-typedef Q1_14 pos_t;
+//typedef Q1_14 pos_t;
 //typedef __half pos_t;
-//typedef float pos_t;
+typedef float pos_t;
 typedef float mom_t;
 typedef float mixed_t;
 #else
-typedef Q1_14 pos_t;
+//typedef Q1_14 pos_t;
 //typedef __half pos_t;
-//typedef float pos_t;
+//typedef __fp16 pos_t;
+//typedef fp16_t pos_t;
+typedef float pos_t;
 typedef float mom_t;
 typedef float mixed_t;
 #endif
@@ -206,27 +211,36 @@ class k_particles_struct<fp16_t, Momentum> {
 #endif
 
         KOKKOS_INLINE_FUNCTION float get_dx(int j) const {
-          int vec_idx = (j/8)*8;
-          int vec_lane = j%8;
-          __vector unsigned short half = {dx(j), 0, 0, 0, 0, 0, 0, 0};
-          __vector float single = vec_extract_fp32_from_shorth(half);
-          return single[0];
+//          int vec_idx = (j/8)*8;
+//          int vec_lane = j%8;
+//          __vector unsigned short half = {dx(j), 0, 0, 0, 0, 0, 0, 0};
+//          __vector float single = vec_extract_fp32_from_shorth(half);
+//          return single[0];
+          __m128i half = _mm_set1_epi16(dx(j));
+          __m128 single = _mm_cvtph_ps(half);
+          return _mm_cvtss_f32(single);	
         }
 
         KOKKOS_INLINE_FUNCTION float get_dy(int j) const {
-          int vec_idx = (j/8)*8;
-          int vec_lane = j%8;
-          __vector unsigned short half = {dy(j), 0, 0, 0, 0, 0, 0, 0};
-          __vector float single = vec_extract_fp32_from_shorth(half);
-          return single[0];
+//          int vec_idx = (j/8)*8;
+//          int vec_lane = j%8;
+//          __vector unsigned short half = {dy(j), 0, 0, 0, 0, 0, 0, 0};
+//          __vector float single = vec_extract_fp32_from_shorth(half);
+//          return single[0];
+          __m128i half = _mm_set1_epi16(dy(j));
+          __m128 single = _mm_cvtph_ps(half);
+          return _mm_cvtss_f32(single);	
         }
 
         KOKKOS_INLINE_FUNCTION float get_dz(int j) const {
-          int vec_idx = (j/8)*8;
-          int vec_lane = j%8;
-          __vector unsigned short half = {dz(j), 0, 0, 0, 0, 0, 0, 0};
-          __vector float single = vec_extract_fp32_from_shorth(half);
-          return single[0];
+//          int vec_idx = (j/8)*8;
+//          int vec_lane = j%8;
+//          __vector unsigned short half = {dz(j), 0, 0, 0, 0, 0, 0, 0};
+//          __vector float single = vec_extract_fp32_from_shorth(half);
+//          return single[0];
+          __m128i half = _mm_set1_epi16(dz(j));
+          __m128 single = _mm_cvtph_ps(half);
+          return _mm_cvtss_f32(single);	
         }
 
         KOKKOS_INLINE_FUNCTION Momentum get_ux(size_t j) const {
@@ -246,24 +260,33 @@ class k_particles_struct<fp16_t, Momentum> {
         }
 
         KOKKOS_INLINE_FUNCTION void set_dx(float val, size_t j) const {
-          __vector float single = {0.0, 0.0, 0.0, 0.0};
-          single[0] = val;
-          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
-          dx(j) = half[0];
+//          __vector float single = {0.0, 0.0, 0.0, 0.0};
+//          single[0] = val;
+//          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
+//          dx(j) = half[0];
+          __m128 single = _mm_set1_ps(val);
+          __m128i half = _mm_cvtps_ph(single, 3);
+          dx(j) = _mm_extract_epi16(half, 0);
         }
 
         KOKKOS_INLINE_FUNCTION void set_dy(float val, size_t j) const {
-          __vector float single = {0.0, 0.0, 0.0, 0.0};
-          single[0] = val;
-          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
-          dy(j) = half[0];
+//          __vector float single = {0.0, 0.0, 0.0, 0.0};
+//          single[0] = val;
+//          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
+//          dy(j) = half[0];
+          __m128 single = _mm_set1_ps(val);
+          __m128i half = _mm_cvtps_ph(single, 3);
+          dy(j) = _mm_extract_epi16(half, 0);
         }
 
         KOKKOS_INLINE_FUNCTION void set_dz(float val, size_t j) const {
-          __vector float single = {0.0, 0.0, 0.0, 0.0};
-          single[0] = val;
-          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
-          dz(j) = half[0];
+//          __vector float single = {0.0, 0.0, 0.0, 0.0};
+//          single[0] = val;
+//          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
+//          dz(j) = half[0];
+          __m128 single = _mm_set1_ps(val);
+          __m128i half = _mm_cvtps_ph(single, 3);
+          dz(j) = _mm_extract_epi16(half, 0);
         }
 
 
@@ -286,6 +309,7 @@ class k_particles_struct<fp16_t, Momentum> {
 };
 #endif
 
+#ifdef CPU_FIXED
 template<typename Momentum>
 class k_particles_struct<Q1_14, Momentum> {
     public:
@@ -371,6 +395,7 @@ class k_particles_struct<Q1_14, Momentum> {
           i(j) = val;
         }
 };
+#endif
 
 template<typename Position, typename Momentum>
 class k_particles_host_struct {
@@ -515,27 +540,36 @@ class k_particles_host_struct<fp16_t, Momentum> {
         }
 
         KOKKOS_INLINE_FUNCTION float get_dx(int j) const {
-          int vec_idx = (j/8)*8;
-          int vec_lane = j%8;
-          __vector unsigned short half = {dx(j), 0, 0, 0, 0, 0, 0, 0};
-          __vector float single = vec_extract_fp32_from_shorth(half);
-          return single[0];
+//          int vec_idx = (j/8)*8;
+//          int vec_lane = j%8;
+//          __vector unsigned short half = {dx(j), 0, 0, 0, 0, 0, 0, 0};
+//          __vector float single = vec_extract_fp32_from_shorth(half);
+//          return single[0];
+          __m128i half = _mm_set1_epi16(dx(j));
+          __m128 single = _mm_cvtph_ps(half);
+          return (_mm_cvtss_f32(single));	
         }
 
         KOKKOS_INLINE_FUNCTION float get_dy(int j) const {
-          int vec_idx = (j/8)*8;
-          int vec_lane = j%8;
-          __vector unsigned short half = {dy(j), 0, 0, 0, 0, 0, 0, 0};
-          __vector float single = vec_extract_fp32_from_shorth(half);
-          return single[0];
+//          int vec_idx = (j/8)*8;
+//          int vec_lane = j%8;
+//          __vector unsigned short half = {dy(j), 0, 0, 0, 0, 0, 0, 0};
+//          __vector float single = vec_extract_fp32_from_shorth(half);
+//          return single[0];
+          __m128i half = _mm_set1_epi16(dy(j));
+          __m128 single = _mm_cvtph_ps(half);
+          return (_mm_cvtss_f32(single));	
         }
 
         KOKKOS_INLINE_FUNCTION float get_dz(int j) const {
-          int vec_idx = (j/8)*8;
-          int vec_lane = j%8;
-          __vector unsigned short half = {dz(j), 0, 0, 0, 0, 0, 0, 0};
-          __vector float single = vec_extract_fp32_from_shorth(half);
-          return single[0];
+//          int vec_idx = (j/8)*8;
+//          int vec_lane = j%8;
+//          __vector unsigned short half = {dz(j), 0, 0, 0, 0, 0, 0, 0};
+//          __vector float single = vec_extract_fp32_from_shorth(half);
+//          return single[0];
+          __m128i half = _mm_set1_epi16(dz(j));
+          __m128 single = _mm_cvtph_ps(half);
+          return (_mm_cvtss_f32(single));	
         }
 
         KOKKOS_INLINE_FUNCTION Momentum get_ux(int j) const {
@@ -555,24 +589,33 @@ class k_particles_host_struct<fp16_t, Momentum> {
         }
 
         KOKKOS_INLINE_FUNCTION void set_dx(float val, size_t j) const {
-          __vector float single = {0.0, 0.0, 0.0, 0.0};
-          single[0] = val;
-          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
-          dx(j) = half[0];
+//          __vector float single = {0.0, 0.0, 0.0, 0.0};
+//          single[0] = val;
+//          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
+//          dx(j) = half[0];
+          __m128 single = _mm_set1_ps(val);
+          __m128i half = _mm_cvtps_ph(single, 3);
+          dx(j) = _mm_extract_epi16(half, 0);
         }
 
         KOKKOS_INLINE_FUNCTION void set_dy(float val, size_t j) const {
-          __vector float single = {0.0, 0.0, 0.0, 0.0};
-          single[0] = val;
-          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
-          dy(j) = half[0];
+//          __vector float single = {0.0, 0.0, 0.0, 0.0};
+//          single[0] = val;
+//          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
+//          dy(j) = half[0];
+          __m128 single = _mm_set1_ps(val);
+          __m128i half = _mm_cvtps_ph(single, 3);
+          dy(j) = _mm_extract_epi16(half, 0);
         }
 
         KOKKOS_INLINE_FUNCTION void set_dz(float val, size_t j) const {
-          __vector float single = {0.0, 0.0, 0.0, 0.0};
-          single[0] = val;
-          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
-          dz(j) = half[0];
+//          __vector float single = {0.0, 0.0, 0.0, 0.0};
+//          single[0] = val;
+//          __vector unsigned short half = vec_pack_to_short_fp32(single, single);
+//          dz(j) = half[0];
+          __m128 single = _mm_set1_ps(val);
+          __m128i half = _mm_cvtps_ph(single, 3);
+          dz(j) = _mm_extract_epi16(half, 0);
         }
 
         KOKKOS_INLINE_FUNCTION void set_ux(Momentum val, size_t j) const {
@@ -594,6 +637,7 @@ class k_particles_host_struct<fp16_t, Momentum> {
 };
 #endif
 
+#ifdef CPU_FIXED
 template<typename Momentum>
 class k_particles_host_struct<Q1_14, Momentum> {
     public:
@@ -692,6 +736,7 @@ class k_particles_host_struct<Q1_14, Momentum> {
           i(j) = val;
         }
 };
+#endif
 
 typedef struct k_particle_mover {
   int i;
@@ -739,15 +784,12 @@ class k_particle_movers_host_struct {
         }
 };
 
-//using k_particles_soa_t      = k_particles_struct<Q1_14, mom_t>;
-//using k_particles_host_soa_t = k_particles_host_struct<Q1_14, mom_t>;
-#ifdef KOKKOS_ENABLE_CUDA
+//using k_particles_soa_t      = k_particles_struct<fp16_t, mom_t>;
+//using k_particles_host_soa_t = k_particles_host_struct<fp16_t, mom_t>;
+
 using k_particles_soa_t      = k_particles_struct<pos_t, mom_t>;
 using k_particles_host_soa_t = k_particles_host_struct<pos_t, mom_t>;
-#else
-using k_particles_soa_t      = k_particles_struct<pos_t, mom_t>;
-using k_particles_host_soa_t = k_particles_host_struct<pos_t, mom_t>;
-#endif
+
 using k_particle_movers_soa_t = k_particle_movers_struct;
 using k_particle_movers_host_soa_t = k_particle_movers_host_struct;
 

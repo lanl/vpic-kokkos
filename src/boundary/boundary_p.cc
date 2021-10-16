@@ -490,7 +490,7 @@ boundary_p_kokkos(
 #if defined PARTICLE_WEIGHT_FLOAT
         particle_recv.w(write_index) = pi->w;
 #elif defined PARTICLE_WEIGHT_SHORT
-        particle_recv.w(write_index) = static_cast<short>(pi->w/sp->w);
+        particle_recv.w(write_index) = static_cast<short>(pi->w/sp_[id]->w);
 #endif
 
         int pii = pi->i;
