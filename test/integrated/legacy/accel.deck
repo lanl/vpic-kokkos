@@ -60,7 +60,7 @@ begin_initialization {
   field(1,2,1).ez  = 3;
   field(2,2,1).ez  = 3;
 
-  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+  field_array->copy_to_device();
 
   species_t* sp; // We use this to iterate over species
 
@@ -78,11 +78,13 @@ begin_initialization {
                      0., 0., 0., 1., 0., 0 );
   }
 
-  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
+  LIST_FOR_EACH( sp, species_list ) {
+    sp->copy_to_device();
+  }
 
 
   // We load this first, as the load_interpolator_array call uses device data
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
+  interpolator_array->copy_to_device();
 
   // Hack into vpic internals
   int failed = 0;
@@ -102,7 +104,9 @@ begin_initialization {
       //accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);
 
       // Copy data back for inspection on host
-      KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+      LIST_FOR_EACH( sp, species_list ) {
+        sp->copy_to_host();
+      }
 
       for( int m=0; m<npart; m++ )
       {

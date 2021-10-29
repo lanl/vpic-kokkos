@@ -36,7 +36,7 @@ begin_initialization {
   field(1,1,1).cbz  = 2*M_PI / (double)nstep;
   field(1,1,2).cbz  = 2*M_PI / (double)nstep;
 
-  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+  field_array->copy_to_device();
 
   species_t* sp; // We use this to iterate over species
 
@@ -49,8 +49,10 @@ begin_initialization {
                                  uniform( rng(0), 0, 1 ),
                                  0, 0 );
 
-  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
+  LIST_FOR_EACH( sp, species_list ) {
+    sp->copy_to_device();
+  }
+  interpolator_array->copy_to_device();
   // Hack into vpic internals
 
   int failed = 0;
@@ -58,7 +60,9 @@ begin_initialization {
   for( int n=0; n<nstep; n++ ) {
     advance_p( this_sp, accumulator_array, interpolator_array );
 
-    KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list);
+    LIST_FOR_EACH( sp, species_list ) {
+      sp->copy_to_host();
+    }
 
     double ux = cos(2*M_PI*(0.125*nstep-(n+1))/(double)nstep) /
                 cos(2*M_PI*(0.125*nstep)      /(double)nstep);

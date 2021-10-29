@@ -53,15 +53,14 @@ void checkpt(const char* fbase, int tag)
     species_t* sp;
     LIST_FOR_EACH( sp, simulation->species_list )
     {
-        if (simulation->step() > sp->species_copy_last)
+        if (simulation->step() > sp->last_copied)
         {
-            simulation->KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
+            sp->copy_to_host();
         }
     }
-    // TODO: do these functions need to live inside the simulation class?
-    simulation->KOKKOS_COPY_FIELD_MEM_TO_HOST(simulation->field_array);
 
-    simulation->KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(simulation->interpolator_array);
+    simulation->field_array->copy_to_host();
+    simulation->interpolator_array->copy_to_host();
 
     //std::cout << "Copying data back to host for checkpointing.." << std::endl;
 
