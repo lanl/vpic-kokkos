@@ -31,8 +31,7 @@ echo $KOKKOS_CORE_LIBS
 # If only a single path was passed append the paths
 if ! grep -q ";" <<< "$KOKKOS_CORE_LIBS"; then
     # We pre append ";" to make the above subsition work when cleaning the path
-    KOKKOS_CORE_LIBS=";${KOKKOS_CORE_LIBS};${KOKKOS_CORE_LIBS}/../lib/"
-    KOKKOS_CORE_LIBS=";${KOKKOS_CORE_LIBS};${KOKKOS_CORE_LIBS}/../lib64/"
+    KOKKOS_CORE_LIBS=";${KOKKOS_CORE_LIBS};${KOKKOS_CORE_LIBS}/../lib/;${KOKKOS_CORE_LIBS};${KOKKOS_CORE_LIBS}/../lib64/"
 fi
 
 KOKKOS_CORE_INCLUDES=$(clean_kokkos_path $KOKKOS_CORE_INCLUDES -I)
