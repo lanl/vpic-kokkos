@@ -140,15 +140,15 @@ class species_t {
 
         // Step when the species was last copied to to the host.  The copy can
         // take place at any time during the step, so checking
-        // species_copy_last==step() does not mean that the host and device
+        // last_copied==step() does not mean that the host and device
         // data are the same.  Typically, copy is called immediately after the
         // step is incremented and before or during user_diagnostics.  Checking
-        // species_copy_last==step() in these circumstances does mean the host
+        // last_copied==step() in these circumstances does mean the host
         // is up to date, unless you do unusual stuff in user_diagnostics.
         //
         // This number is tracked on the host only, and may be inaccurate on
         // the device.
-        int64_t species_copy_last = -1;
+        int64_t last_copied = -1;
 
         // Static allocations for the compressor
         Kokkos::View<int*> unsafe_index;
@@ -195,9 +195,29 @@ class species_t {
             k_pm_i_h = Kokkos::create_mirror_view(k_pm_i_d);
 
             k_nm_h = Kokkos::create_mirror_view(k_nm_d);
-            
+
             clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
         }
+
+        /**
+         * @brief Copies all the outbound particles and movers to the host.
+         */
+        void copy_outbound_to_host();
+
+        /**
+         * @brief Copies all the particles and movers from the device to the host.
+         */
+        void copy_to_host();
+
+        /**
+         * @brief Copies all the particles and movers from the host to the device.
+         */
+        void copy_to_device();
+
+        /**
+         * @brief Copies all the inbound particles from the host to the device.
+         */
+        void copy_inbound_to_device();
 
 };
 

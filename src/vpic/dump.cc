@@ -60,7 +60,7 @@ vpic_simulation::dump_energies( const char *fname,
       fileIO.print( "%li", (long)step() );
     }
   }
- 
+
 //  field_array->kernel->energy_f( en_f, field_array );
   field_array->kernel->energy_f_kokkos( en_f, field_array );
   if( rank()==0 && status!=fail )
@@ -183,8 +183,8 @@ vpic_simulation::dump_grid( const char *fbase ) {
 void
 vpic_simulation::dump_fields( const char *fbase, int ftag ) {
     // Update the fields if necessary
-    if (step() > field_copy_last)
-        KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+    if (step() > field_array->last_copied)
+        field_array->copy_to_host();
 
   char fname[max_filename_bytes];
   FileIO fileIO;
@@ -235,8 +235,8 @@ vpic_simulation::dump_hydro( const char *sp_name,
     // Update the particles on the host only if they haven't been recently
     // TODO: Port the hydro calculations to the device so this copy won't be
     // needed.
-    if (step() > sp->species_copy_last)
-        KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
+    if (step() > sp->last_copied)
+      sp->copy_to_host();
 
   clear_hydro_array( hydro_array );
   accumulate_hydro_p( hydro_array, sp, interpolator_array );
@@ -294,8 +294,8 @@ vpic_simulation::dump_particles( const char *sp_name,
     if( !fbase ) ERROR(( "Invalid filename" ));
 
     // Update the particles on the host only if they haven't been recently
-    if (step() > sp->species_copy_last)
-        KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
+    if (step() > sp->last_copied)
+      sp->copy_to_host();
 
     if( !p_buf ) MALLOC_ALIGNED( p_buf, PBUF_SIZE, 128 );
 
@@ -549,8 +549,8 @@ void
 vpic_simulation::field_dump( DumpParameters & dumpParams ) {
 
     // Update the fields if necessary
-    if (step() > field_copy_last)
-        KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
+    if (step() > field_array->last_copied)
+      field_array->copy_to_host();
 
   // Create directory for this time step
   char timeDir[max_filename_bytes];
@@ -725,8 +725,8 @@ vpic_simulation::hydro_dump( const char * speciesname,
     // Update the particles on the host only if they haven't been recently
     // TODO: Port the hydro calculations to the device so this copy won't be
     // needed.
-    if (step() > sp->species_copy_last)
-        KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
+    if (step() > sp->last_copied)
+      sp->copy_to_host();
 
   clear_hydro_array( hydro_array );
   accumulate_hydro_p( hydro_array, sp, interpolator_array );

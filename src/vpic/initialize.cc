@@ -60,20 +60,22 @@ vpic_simulation::initialize( int argc,
   g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
   KOKKOS_TIC();
-  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list);
+  LIST_FOR_EACH( sp, species_list ) {
+    sp->copy_to_device();
+  }
   KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 
   KOKKOS_TIC(); // Time this data movement
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
+  interpolator_array->copy_to_device();
   KOKKOS_TOCN( INTERPOLATOR_DATA_MOVEMENT, 1);
 
   KOKKOS_TIC(); // Time this data movement
-  KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array);
+  accumulator_array->copy_to_device();
   KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   if( species_list ) {
     KOKKOS_TIC(); // Time this data movement
-    KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+    field_array->copy_to_device();
     KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
 
     if( rank()==0 ) MESSAGE(( "Uncentering particles" ));

@@ -201,7 +201,7 @@ void restore_kokkos(vpic_simulation& simulation)
 
         sp->init_kokkos_particles();
 
-        simulation.KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(sp);
+        sp->copy_to_device();
     }
 
     int nv = simulation.grid->nv;
@@ -227,7 +227,7 @@ void restore_kokkos(vpic_simulation& simulation)
     int zxy_sz = 2*nx*(ny+1) + 2*ny*(nx+1) + nx*ny;
     fa->init_kokkos_fields( nv, xyz_sz, yzx_sz, zxy_sz );
 
-    simulation.KOKKOS_COPY_FIELD_MEM_TO_DEVICE(simulation.field_array);
+    simulation.field_array->copy_to_device();
 
     // Restore Material Data
     sfa_params_t* params = reinterpret_cast<sfa_params_t*>(fa->params);
@@ -256,7 +256,7 @@ void restore_kokkos(vpic_simulation& simulation)
     new(&interp->k_i_h) k_interpolator_t::HostMirror();
 
     interp->init_kokkos_interp(nv);
-    simulation.KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interp);
+    interp->copy_to_device();
 
     // Restore Grid/Neighbors
     new(&grid->k_neighbor_d) k_neighbor_t();
