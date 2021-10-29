@@ -4,6 +4,7 @@
 #include <Kokkos_Sort.hpp>
 #include <Kokkos_DualView.hpp>
 #include "../vpic/kokkos_helpers.h"
+#include "../vpic/kokkos_tuning.hpp"
 
 struct min_max_functor {
   typedef Kokkos::MinMaxScalar<Kokkos::View<int*>::non_const_value_type> minmax_scalar;
@@ -21,7 +22,7 @@ struct min_max_functor {
  */
 struct DefaultSort {
     // TODO: should the sort interface just take the sp?
-    static void sort(
+    static void standard_sort(
             k_particles_t particles,
             k_particles_i_t particles_i,
             const int32_t np,
@@ -63,9 +64,7 @@ struct DefaultSort {
         Kokkos::View<int*> key_view("sorting keys", particles_i.extent(0));
         Kokkos::View<int*> bin_counter("Counter for updating keys", num_bins);
         Kokkos::deep_copy(key_view, particles_i);
-        Kokkos::parallel_for("init bin counters", Kokkos::RangePolicy<>(0,num_bins), KOKKOS_LAMBDA(const int i) {
-          bin_counter(i) = 0;
-        });
+        Kokkos::deep_copy(bin_counter, 0);
         Kokkos::parallel_for("Update keys", Kokkos::RangePolicy<>(0, np), KOKKOS_LAMBDA(const int i) {
           int count = Kokkos::atomic_fetch_add(&(bin_counter(key_view(i))), 1);
           key_view(i) += count*result.max_val;
@@ -145,17 +144,13 @@ struct DefaultSort {
         Kokkos::parallel_reduce("Get min/max bin", Kokkos::RangePolicy<>(0,particles_i.extent(0)), 
           min_max_functor(particles_i), reducer);
         Kokkos::deep_copy(key_view, particles_i);
-        Kokkos::parallel_for("init bin counters", Kokkos::RangePolicy<>(0,num_bins), KOKKOS_LAMBDA(const int i) {
-          bin_counter(i) = 0;
-        });
+        Kokkos::deep_copy(bin_counter, 0);
         Kokkos::parallel_for("get max nppc", Kokkos::RangePolicy<>(0, np), KOKKOS_LAMBDA(const int i) {
           Kokkos::atomic_increment(&(bin_counter(key_view(i))));
         });
         Kokkos::parallel_reduce("Get max/min nppc", Kokkos::RangePolicy<>(0,num_bins), 
           min_max_functor(bin_counter), nppc_reducer); 
-        Kokkos::parallel_for("reinit bin counters", Kokkos::RangePolicy<>(0,num_bins), KOKKOS_LAMBDA(const int i) {
-          bin_counter(i) = 0;
-        });
+        Kokkos::deep_copy(bin_counter, 0);
         Kokkos::parallel_for("Update keys", Kokkos::RangePolicy<>(0, np), KOKKOS_LAMBDA(const int i) {
           int count = Kokkos::atomic_fetch_add(&(bin_counter(key_view(i))), 1);
           int chunk_size = tile_size*nppc_result.max_val;
@@ -183,10 +178,17 @@ struct DefaultSort {
 
 template <typename Policy = DefaultSort>
 struct ParticleSorter : private Policy {
-    using Policy::sort;
-    using Policy::strided_sort;
-    using Policy::tiled_sort;
-    using Policy::tiled_strided_sort;
+  using Policy::standard_sort;
+  using Policy::strided_sort;
+  using Policy::tiled_sort;
+  using Policy::tiled_strided_sort;
+  void sort(k_particles_t particles, k_particles_i_t particles_i, const int32_t np, const int num_bins) {
+#ifdef SORT_TILE_SIZE // strided_tiled_sort or tiled_strided_sort
+    SORT(particles, particles_i, np, num_bins, SORT_TILE_SIZE);
+#else // standard_sort or strided_sort
+    SORT(particles, particles_i, np, num_bins);
+#endif
+  }
 };
 
 #endif //guard
