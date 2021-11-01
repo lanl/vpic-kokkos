@@ -38,7 +38,7 @@ begin_initialization {
   field(1,2,1).ez  = 10;
   field(2,2,1).ez  = 11;
 
-  KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
+  field_array->copy_to_device();
 
   species_t* sp; // We use this to iterate over species
 
@@ -48,7 +48,7 @@ begin_initialization {
 
   int failed = 0;
 
-  KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array);
+  interpolator_array->copy_to_device();
   load_interpolator_array( interpolator_array, field_array );
 
   this_sp->np = npart;
@@ -64,9 +64,13 @@ begin_initialization {
     this_sp->p[n].uz = 0;                                    \
     this_sp->p[n].w  = fabs( normal( rng(0), 0, 1 ) );       \
   }                                                     \
-  KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_list); \
-  advance_p( this_sp, interpolator_array, field_array ); \
-  KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_list); \
+  LIST_FOR_EACH( sp, species_list ) {                   \
+    sp->copy_to_device();                               \
+  }                                                     \
+  advance_p( this_sp, interpolator_array, field_array );  \
+  LIST_FOR_EACH( sp, species_list ) {                           \
+    sp->copy_to_host();                                         \
+  }                                                             \
   for( int n=0; n<npart; n++ ) {                        \
     if( this_sp->p[n].u##X != VAL ) {                        \
       failed++;                                         \

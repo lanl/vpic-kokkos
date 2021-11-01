@@ -40,6 +40,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     field(1,2,1).ez  = 3;
     field(2,2,1).ez  = 3;
 
+    species_t * sp_temp;
     species_t * sp = define_species( "test_species", 1., 1., npart, npart, 0, 0 );
 
     int failed = 0;
@@ -55,8 +56,10 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     }
 
     // Make sure kokkos views have correct data
-    KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
-    KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(sp);
+    field_array->copy_to_device();
+    LIST_FOR_EACH( sp_temp, species_list ) {
+      sp_temp->copy_to_device();
+    }
 
     advance_p( sp, interpolator_array, field_array );
 
