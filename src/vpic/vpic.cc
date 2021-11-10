@@ -111,6 +111,11 @@ vpic_simulation::~vpic_simulation() {
   Kokkos::finalize();
 }
 
+/**
+ * @brief Helper function to print run details in a formatted way. Useful for
+ * both having a clear view of what the run is, but also structured enough to
+ * be parsable by tools
+ */
 void vpic_simulation::print_run_details()
 {
     if (rank() == 0)
@@ -141,3 +146,125 @@ void vpic_simulation::print_run_details()
     }
 }
 
+
+/**
+ * @brief After a checkpoint restore, we must move the data back over to the
+ * Kokkos objects. This currently must be done for all views
+ *
+ * @param simulation The vpic_simulation that was restored
+ */
+void restore_kokkos(vpic_simulation& simulation)
+{
+    // The way the VPIC checkpoint/restore works is by copying raw bytes and
+    // pointers.  It messes with the reference counting built into Kokkos, and
+    // thus we have to manual handle a bunch of the data copies / fix the
+    // Kokkos data. When a view gets restored, its unsafe to delete. This code
+    // fixes that (but may leak a few kb per restart...)
+
+    // This restore methods relies on 'placement new'. Our approach is this:
+    // 1) Use placement new to overwrite the garbage from the restart (note: we
+    // can throw away the resulting pointer, as it overwrite in place)
+    // 2) Overwrite that be doing normal init
+    // We may be able to do that one in one step, but this way is clearer
+
+    // Restore Particles
+    species_t* sp;
+    LIST_FOR_EACH( sp, simulation.species_list )
+    {
+        // TODO: we can bury this in the class
+        new(&sp->k_p_d) k_particles_t();
+        new(&sp->k_p_i_d) k_particles_i_t();
+        new(&sp->k_pc_d) k_particle_copy_t::HostMirror();
+        new(&sp->k_pc_i_d) k_particle_i_copy_t::HostMirror();
+        new(&sp->k_pr_h) k_particle_copy_t::HostMirror();
+        new(&sp->k_pr_i_h) k_particle_i_copy_t::HostMirror();
+        new(&sp->k_pm_d) k_particle_movers_t();
+        new(&sp->k_pm_i_d) k_particle_i_movers_t();
+        new(&sp->k_nm_d) k_counter_t();
+        new(&sp->k_nm_h) k_counter_t::HostMirror();
+
+        new(&sp->k_p_h) k_particles_t::HostMirror();
+        new(&sp->k_p_i_h) k_particles_i_t::HostMirror();
+
+        new(&sp->k_pc_h) k_particle_copy_t::HostMirror();
+        new(&sp->k_pc_i_h) k_particle_i_copy_t::HostMirror();
+
+        new(&sp->k_pm_h) k_particle_movers_t::HostMirror();
+        new(&sp->k_pm_i_h) k_particle_i_movers_t::HostMirror();
+
+        new(&sp->unsafe_index) Kokkos::View<int*>();
+        new(&sp->clean_up_to_count) Kokkos::View<int>();
+        new(&sp->clean_up_from_count) Kokkos::View<int>();
+        new(&sp->clean_up_from_count_h) Kokkos::View<int>::HostMirror();
+        new(&sp->clean_up_from) Kokkos::View<int*>();
+        new(&sp->clean_up_to) Kokkos::View<int*>();
+
+        sp->init_kokkos_particles();
+
+        sp->copy_to_device();
+    }
+
+    int nv = simulation.grid->nv;
+
+    // Restore field array
+    field_array_t* fa = simulation.field_array;
+    new(&fa->k_f_d) k_field_t();
+    new(&fa->k_fe_d) k_field_edge_t();
+    new(&fa->k_f_h) k_field_t::HostMirror();
+    new(&fa->k_fe_h) k_field_edge_t::HostMirror();
+
+    new(&fa->k_f_rhob_accum_d) k_field_accum_t();
+    new(&fa->k_f_rhob_accum_h) k_field_accum_t::HostMirror();
+
+    grid_t* grid = simulation.grid;
+
+    // TODO: this xxx_sz calculation is duplicated in sfa.cc and could be DRYed
+    int nx = grid->nx;
+    int ny = grid->ny;
+    int nz = grid->nz;
+    int xyz_sz = 2*ny*(nz+1) + 2*nz*(ny+1) + ny*nz;
+    int yzx_sz = 2*nz*(nx+1) + 2*nx*(nz+1) + nz*nx;
+    int zxy_sz = 2*nx*(ny+1) + 2*ny*(nx+1) + nx*ny;
+    fa->init_kokkos_fields( nv, xyz_sz, yzx_sz, zxy_sz );
+
+    simulation.field_array->copy_to_device();
+
+    // Restore Material Data
+    sfa_params_t* params = reinterpret_cast<sfa_params_t*>(fa->params);
+    new(&params->k_mc_d) k_material_coefficient_t();
+    new(&params->k_mc_h) k_material_coefficient_t::HostMirror();
+
+    params->init_kokkos_sfa_params(params->n_materials);
+    params->populate_kokkos_data();
+
+    // Restore accumulators
+    accumulator_array_t* accum = simulation.accumulator_array;
+    //int num_accum = old_accum->na;
+
+    new(&accum->k_a_d) k_accumulators_t();
+    new(&accum->k_a_d_copy) k_accumulators_t();
+    new(&accum->k_a_h) k_accumulators_t::HostMirror();
+    new(&accum->k_a_sa) k_accumulators_sa_t();
+
+    std::cout << "make accum of size " << accum->na << std::endl;
+    accum->init_kokoks_accum(accum->na);
+
+    // Restore interpolators
+    interpolator_array_t* interp = simulation.interpolator_array;
+
+    new(&interp->k_i_d) k_interpolator_t();
+    new(&interp->k_i_h) k_interpolator_t::HostMirror();
+
+    interp->init_kokkos_interp(nv);
+    interp->copy_to_device();
+
+    // Restore Grid/Neighbors
+    new(&grid->k_neighbor_d) k_neighbor_t();
+    new(&grid->k_neighbor_h) k_neighbor_t::HostMirror();
+
+    auto nfaces_per_voxel = 6;
+
+    // also restores the neighbors
+    grid->init_kokkos_grid(nfaces_per_voxel*nv);
+
+}

@@ -10,19 +10,17 @@ static field_advance_kernels_t sfa_kernels = {
 
   advance_b,
   advance_e,
-  advance_e_kokkos,
 
   // Diagnostic interfaces
 
   energy_f,
-  energy_f_kokkos,
 
   // Accumulator interfaces
 
-  clear_jf,   synchronize_jf,
-  clear_rhof, synchronize_rho,
-  clear_jf_kokkos, k_synchronize_jf,
-  clear_rhof_kokkos,k_synchronize_rho,
+  clear_jf,
+  synchronize_jf,
+  clear_rhof,
+  synchronize_rho,
 
   // Initialize interface
 
@@ -32,30 +30,42 @@ static field_advance_kernels_t sfa_kernels = {
   // Shared face cleaning interface
 
   synchronize_tang_e_norm_b,
-  synchronize_tang_e_norm_b_kokkos,
-  
+
   // Electric field divergence cleaning interface
 
   compute_div_e_err,
   compute_rms_div_e_err,
   clean_div_e,
-  compute_div_e_err_kokkos,
-  compute_rms_div_e_err_kokkos,
-  clean_div_e_kokkos,
 
   // Magnetic field divergence cleaning interface
 
   compute_div_b_err,
   compute_rms_div_b_err,
   clean_div_b,
+
+  // Kokkos Kenrels
+  advance_e_kokkos,
+  energy_f_kokkos,
+  clear_jf_kokkos,
+
+  clear_rhof_kokkos,
+
+  k_synchronize_jf,
+  k_synchronize_rho,
+
+  synchronize_tang_e_norm_b_kokkos,
+
+  compute_div_e_err_kokkos,
+  compute_rms_div_e_err_kokkos,
+  clean_div_e_kokkos,
+
   compute_div_b_err_kokkos,
   compute_rms_div_b_err_kokkos,
   clean_div_b_kokkos
-
 };
 
 static float
-minf( float a, 
+minf( float a,
       float b ) {
   return a<b ? a : b;
 }
@@ -155,22 +165,8 @@ create_sfa_params( grid_t           * g,
     mc->epsz = m->epsz;
   }
 
-    Kokkos::parallel_for("Copy materials to device", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, n_mc), KOKKOS_LAMBDA (const int i) {
-        p->k_mc_h(i, material_coeff_var::decayx) = p->mc[i].decayx;
-        p->k_mc_h(i, material_coeff_var::drivex) = p->mc[i].drivex;
-        p->k_mc_h(i, material_coeff_var::decayy) = p->mc[i].decayy;
-        p->k_mc_h(i, material_coeff_var::drivey) = p->mc[i].drivey;
-        p->k_mc_h(i, material_coeff_var::decayz) = p->mc[i].decayz;
-        p->k_mc_h(i, material_coeff_var::drivez) = p->mc[i].drivez;
-        p->k_mc_h(i, material_coeff_var::rmux) = p->mc[i].rmux;
-        p->k_mc_h(i, material_coeff_var::rmuy) = p->mc[i].rmuy;
-        p->k_mc_h(i, material_coeff_var::rmuz) = p->mc[i].rmuz;
-        p->k_mc_h(i, material_coeff_var::nonconductive) = p->mc[i].nonconductive;
-        p->k_mc_h(i, material_coeff_var::epsx) = p->mc[i].epsx;
-        p->k_mc_h(i, material_coeff_var::epsy) = p->mc[i].epsy;
-        p->k_mc_h(i, material_coeff_var::epsz) = p->mc[i].epsz;
-    });
-    Kokkos::deep_copy(p->k_mc_d, p->k_mc_h);
+  p->populate_kokkos_data();
+
   return p;
 }
 
@@ -184,7 +180,7 @@ destroy_sfa_params( sfa_params_t * p ) {
 
 void
 checkpt_standard_field_array( const field_array_t * fa ) {
-  sfa_params_t * p = (sfa_params_t *)fa->params; 
+  sfa_params_t * p = (sfa_params_t *)fa->params;
   CHECKPT( fa, 1 );
   CHECKPT_ALIGNED( fa->f, fa->g->nv, 128 );
   CHECKPT_PTR( fa->g );
@@ -199,7 +195,7 @@ checkpt_standard_field_array( const field_array_t * fa ) {
 
 field_array_t *
 restore_standard_field_array( void ) {
-  field_array_t * fa; 
+  field_array_t * fa;
   sfa_params_t * p;
   RESTORE( fa );
   RESTORE_ALIGNED( fa->f );
@@ -217,8 +213,22 @@ new_standard_field_array( grid_t           * RESTRICT g,
                           float                       damp ) {
   field_array_t * fa;
   if( !g || !m_list || damp<0 ) ERROR(( "Bad args" ));
-  fa = new field_array_t(g->nv);
+
+  int nx = g->nx;
+  int ny = g->ny;
+  int nz = g->nz;
+  int xyz_sz = 2*ny*(nz+1) + 2*nz*(ny+1) + ny*nz;
+  int yzx_sz = 2*nz*(nx+1) + 2*nx*(nz+1) + nz*nx;
+  int zxy_sz = 2*nx*(ny+1) + 2*ny*(nx+1) + nx*ny;
+
   //MALLOC( fa, 1 );
+  fa = new field_array_t(g->nv, xyz_sz, yzx_sz, zxy_sz);
+
+  // Zero host accum array
+  Kokkos::parallel_for("Clear rhob accumulation array on host", host_execution_policy(0, g->nv), KOKKOS_LAMBDA (int i) {
+          fa->k_f_rhob_accum_h(i) = 0;
+          });
+
   MALLOC_ALIGNED( fa->f, g->nv, 128 );
   CLEAR( fa->f, g->nv );
   fa->g = g;
@@ -268,7 +278,7 @@ clear_jf( field_array_t * RESTRICT fa ) {
 
 void
 clear_rhof( field_array_t * RESTRICT fa ) {
-  if( !fa ) ERROR(( "Bad args" )); 
+  if( !fa ) ERROR(( "Bad args" ));
   field_t * RESTRICT ALIGNED(128) f = fa->f;
   const int nv = fa->g->nv;
   for( int v=0; v<nv; v++ ) f[v].rhof = 0;

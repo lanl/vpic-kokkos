@@ -8,30 +8,57 @@ kokkos, documented below.
 ### Quickstart
 
 1) Do a *recursive* clone of this repo, this will pull down a copy of Kokkos
-for you
+for you.
+```
+git clone --recursive git@github.com:lanl/vpic-kokkos.git
+```
+If you switch branches, you might need to update the Kokkos submodule.
+```
+git submodule update --init
+```
 2) Load modules for a) Cuda, and b) MPI
 3) Build the project by passing the CMake option `-DBUILD_INTERNAL_KOKKOS=ON`.
 This will request VPIC to build and handle Kokkos for you.
-4) If you want GPU functionally, also pass `-DENABLE_KOKKOS_CUDA=ON`. One
-should manually revied the `set(KOKKOS_ARCH "...")` line in `CMakeLists.txt` to
-ensure it meets their needs (the default is for Volta)
+4) If you want NVIDIA GPU functionally, also pass `-DENABLE_KOKKOS_CUDA=ON`. One
+should manually set the Kokkos target architecture, some example CMake
+variables to do this include:
+    
+```
+Kokkos_ARCH_VOLTA70=ON
+Kokkos_ARCH_POWER9=ON
+```
 
 This should give you a simple working of the code, but be aware it does come
-with caveats. Most notably, one is expected to main a version of Kokkos per
-target device (one per GPU device, one per CPU platform, etc), where as the
-above builds for the specific platform that you're currently on. Additionally,
-the above approach can be quite brittle when changing compile flags
-between builds because Kokkos doesn't treat CMake as a first class
-citizen (set to change in early 2020)
+with caveats. Most notably, one is expected to build and maintain a version of
+Kokkos (and optionally VPIC) per target device (one per GPU device, one per CPU
+platform, etc), where as the above builds for the specific platform that you're
+currently on. Additionally, the above approach can be quite brittle when
+changing compile flags between builds because Kokkos doesn't treat CMake as a
+first class citizen (set to change in early 2020)
 
-A reminder to GPU users, CUDA 10.2 does not support GCC 8 or newer. We
+A reminder to NVIDIA GPU users, CUDA 10.2 does not support GCC 8 or newer. We
 recommend you use GCC 6 or 7.
+
+AMD GPUs are now technically supported, however no guidance is given at this
+point
 
 ### Manual Kokkos Install (more powerful, more effort)
 
 It is typical to maintain many different installs of Kokkos (CPU, older
 GPU, new GPU, Debug, etc), so it's worth while learning how to install Kokkos
-manually. Breifly:
+manually. To do this we will use cmake. On can achieve this by:
+
+CPU:
+```
+cmake -DKokkos_ENABLE_OPENMP=ON -DKokkos_ARCH_KNL=ON ..
+```
+
+GPU:
+```
+cmake -DKokkos_ENABLE_CUDA=ON -DKokkos_ARCH_VOLTA70=ON ..
+```
+
+#### Legacy non-cmake build for old Kokkos versions
 
 1) Clone Kokkos (or use ./kokkos in the recursive clone) from
 https://github.com/kokkos/kokkos
@@ -73,7 +100,7 @@ system
 
 ## Running on multiple GPUs
 
-To run on multiple GPU's, you can pass the flag: `--kokkos-ndevices=N`, where
+To run on multiple GPU's, you can pass the flag: `--kokkos-num-devices=N` (which replaced `--kokkos-ndevices`), where
 `N` specifies the number of GPUs (per node). This works by VPIC passing through
 options it doesn't understand to Kokkos, and thus VPIC will generate a warning
 as it thinks you may have tried to tell it something it doesn't understand...
@@ -132,7 +159,7 @@ seen:
 2. During a GPU compile, nvcc warns about multiply defined c-standard flags.
    This warning can be safely ignored
 3. If you see `../src/util/pipelines/pipelines_thread.cc:239: undefined
-   reference to `omp_get_num_threads'` when building a deck, it's because
+   reference to omp_get_num_threads'` when building a deck, it's because
    `-fopenmp` (or equivelent) didn't get added to `./bin/vpic`. This happens
    because of a cmake bug where it fails to detect OpenMP. To fix it, you can
    manually add `-fopenmp` to the build flags in the file.

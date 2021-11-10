@@ -32,10 +32,12 @@
 typedef int16_t material_id;
 
 // TODO: we dont need the [1] here
-using k_iterator_t = Kokkos::View<int[1]>;
+// TODO: this can likely be unsigned, but that tends to upset Kokkos
+using k_counter_t = Kokkos::View<int[1]>;
 
 using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
 using k_field_edge_t = Kokkos::View<material_id* [FIELD_EDGE_COUNT]>;
+using k_field_accum_t = Kokkos::View<float *>;
 
 using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
 using k_particles_i_t = Kokkos::View<int*>;

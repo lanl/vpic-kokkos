@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by:
  *   Kevin J. Bowers, Ph.D.
  *   Plasma Physics Group (X-1)
@@ -47,12 +47,13 @@ new_accumulator_array( grid_t * g ) {
   //printf("Making %d copies of accumulator \n",aa_n_pipeline()+1 );
   aa = new accumulator_array_t(
           //(size_t)(aa->n_pipeline+1)*(size_t)aa->stride,
-          (size_t)(aa_n_pipeline()+1)*(size_t)(POW2_CEIL(g->nv,2))
+          //(size_t)(aa_n_pipeline()+1)*(size_t)(POW2_CEIL(g->nv,2))
+          g->nv
   );
   aa->n_pipeline = aa_n_pipeline();
   aa->stride     = POW2_CEIL(g->nv,2);
   aa->g          = g;
-  aa->na         = (size_t)(aa->n_pipeline+1)*(size_t)aa->stride;
+  //aa->na         = (size_t)(aa->n_pipeline+1)*(size_t)aa->stride;
   MALLOC_ALIGNED( aa->a, aa->na, 128 );
   CLEAR( aa->a, aa->na);
   REGISTER_OBJECT( aa, checkpt_accumulator_array, restore_accumulator_array,
@@ -68,3 +69,51 @@ delete_accumulator_array( accumulator_array_t * aa ) {
   FREE( aa );
 }
 
+void
+accumulator_array_t::copy_to_host() {
+
+  Kokkos::deep_copy(k_a_h, k_a_d);
+
+  // Avoid capturing this
+  auto& k_accumulators_h = k_a_h;
+  accumulator_t * host_accum = a;
+
+  Kokkos::parallel_for("copy accumulator to host",
+    KOKKOS_TEAM_POLICY_HOST (na, Kokkos::AUTO),
+    KOKKOS_LAMBDA (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) {
+
+      const unsigned int i = team_member.league_rank();
+      /* TODO: Do we really need a 2d loop here*/
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) {
+        host_accum[i].jx[j] = k_accumulators_h(i, accumulator_var::jx, j);
+        host_accum[i].jy[j] = k_accumulators_h(i, accumulator_var::jy, j);
+        host_accum[i].jz[j] = k_accumulators_h(i, accumulator_var::jz, j);
+      });
+
+    });
+
+}
+
+void
+accumulator_array_t::copy_to_device() {
+
+  // Avoid capturing this
+  auto& k_accumulators_h = k_a_h;
+  accumulator_t * host_accum = a;
+
+  Kokkos::parallel_for("copy accumulator to device",
+    KOKKOS_TEAM_POLICY_HOST (na, Kokkos::AUTO),
+    KOKKOS_LAMBDA (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) {
+
+      const unsigned int i = team_member.league_rank();
+      /* TODO: Do we really need a 2d loop here*/
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) {
+        k_accumulators_h(i, accumulator_var::jx, j) = host_accum[i].jx[j];
+        k_accumulators_h(i, accumulator_var::jy, j) = host_accum[i].jy[j];
+        k_accumulators_h(i, accumulator_var::jz, j) = host_accum[i].jz[j];
+      });
+
+    });
+  Kokkos::deep_copy(k_a_d, k_a_h);
+
+}

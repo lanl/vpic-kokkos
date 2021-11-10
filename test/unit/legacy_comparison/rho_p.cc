@@ -40,6 +40,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     field(1,2,1).ez  = 3;
     field(2,2,1).ez  = 3;
 
+    species_t * sp_temp;
     species_t * sp = define_species( "test_species", 1., 1., npart, npart, 0, 0 );
 
     int failed = 0;
@@ -55,8 +56,10 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     }
 
     // Make sure kokkos views have correct data
-    KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array);
-    KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(sp);
+    field_array->copy_to_device();
+    LIST_FOR_EACH( sp_temp, species_list ) {
+      sp_temp->copy_to_device();
+    }
 
     advance_p( sp, accumulator_array, interpolator_array );
 
@@ -67,15 +70,22 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     // Copy the data back to host view
     Kokkos::deep_copy(field_array->k_f_h, field_array->k_f_d);
 
-    float eps = 10*std::numeric_limits<float>::epsilon();
+    // We want to compare relative, not absolute, error.
+    //float eps = 10*std::numeric_limits<float>::epsilon();
+    // The Kokkos version uses a scatter access that should produce a more
+    // accurate sum, so we have a large tolerance here
+    float tol = 1e3*std::numeric_limits<float>::epsilon();
+
+    std::cout << "Tolerance is " << tol << std::endl;
 
     // This is how many pipelines there are inside the array
     for (int i = 0; i < grid->nv; i++)
     {
-        float diff = field_array->k_f_h(i, field_var::rhof) - field_array->f[i].rhof;
-        if (diff > eps)
+        //float diff = field_array->k_f_h(i, field_var::rhof) - field_array->f[i].rhof;
+        float rel_err = (field_array->k_f_h(i, field_var::rhof) - field_array->f[i].rhof)/field_array->f[i].rhof;
+        if (abs(rel_err) > tol)
         {
-            std::cout << " Failed at " << i << " with " << diff << std::endl;
+            std::cout << " Failed at " << i << " with relative error " << rel_err << " from k_field and field " << field_array->k_f_h(i, field_var::rhof) << " " << field_array->f[i].rhof << std::endl;
             failed++;
         }
     }
