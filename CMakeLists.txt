@@ -10,7 +10,9 @@ cmake_policy(SET CMP0074 NEW)
 # VPIC project configuration
 #~----------------------------------------------------------------------------~#
 
-project(vpic CXX)
+# note we need C here because cmake needs to find HDF5
+# see https://gitlab.kitware.com/cmake/cmake/-/merge_requests/4534
+project(vpic C CXX)
 
 #------------------------------------------------------------------------------#
 # If a C++14 compiler is available, then set the appropriate flags
@@ -21,6 +23,13 @@ project(vpic CXX)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+#------------------------------------------------------------------------------#
+# Set C flags
+#------------------------------------------------------------------------------#
+
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 #------------------------------------------------------------------------------#
 # MPI detection
@@ -57,6 +66,8 @@ option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
+
+option(USE_HDF5 "Enable HDF5 for use during IO. VPIC does not help you install HDF5" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -286,6 +297,32 @@ if(ENABLE_OPENSSL)
   add_definitions(-DENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
 
+# HDF5
+if(USE_HDF5)
+    # Enable HDF5, and the relevant defines
+    find_package(HDF5 REQUIRED COMPONENTS C)
+    if (NOT HDF5_IS_PARALLEL)
+        message(FATAL_ERROR "HDF5 Parallel support is required: ${HDF5_IS_PARALLEL}")
+    endif()
+    add_definitions(-DVPIC_ENABLE_HDF5)
+
+    # the hdf5 var we need changes based on version...
+    string(REPLACE ";" " " string_libraries "${HDF5_C_LIBRARY}")
+    set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+
+    if ("${HDF5_C_LIBRARY}" STREQUAL "")
+        string(REPLACE ";" " " string_libraries "${HDF5_C_LIBRARIES}")
+        set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+    endif()
+
+    include_directories(${HDF5_INCLUDE_DIRS})
+
+    # Add includes to ./bin/vpic for users who need the headers in their decks
+    string(REPLACE ";" " -I" string_includes "${HDF5_INCLUDE_DIRS}")
+    set(VPIC_CXX_FLAGS "-I${string_includes} ${VPIC_CXX_FLAGS}")
+
+endif(USE_HDF5)
+
 #------------------------------------------------------------------------------#
 # Output log variables
 #------------------------------------------------------------------------------#
@@ -389,7 +426,7 @@ else()
   install(TARGETS vpic LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 endif()
 target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
+target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} ${HDF5_C_LIBRARIES} Kokkos::kokkos)
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS})
 
 macro(build_a_vpic name deck)
