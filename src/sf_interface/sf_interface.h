@@ -204,7 +204,15 @@ typedef struct hydro {
 
 typedef struct hydro_array {
   hydro_t * ALIGNED(128) h;
+  k_hydro_d_t k_h_d;
+  k_hydro_d_t::HostMirror k_h_h;
   grid_t * g;
+  
+  hydro_array(int nv)
+  {
+    k_h_d = k_hydro_d_t("k_hydro", nv);
+    k_h_h = Kokkos::create_mirror_view(k_h_d);
+  }
 } hydro_array_t;
 
 // In hydro_array.c
@@ -231,5 +239,8 @@ clear_hydro_array( hydro_array_t * ha );
 
 void
 synchronize_hydro_array( hydro_array_t * ha );
+
+void
+synchronize_hydro_array_kokkos( hydro_array_t * ha );
 
 #endif // _sf_interface_h_
