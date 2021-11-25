@@ -40,12 +40,7 @@ void
 clear_accumulator_array_kokkos(accumulator_array_t* RESTRICT aa) {
     if(!aa) ERROR(("Bad args"));
     const grid_t* g = aa->g;
-    const int nx = g->nx, ny = g->ny, nz = g->nz;
     const k_accumulators_t& k_accum = aa->k_a_d;
 
     Kokkos::deep_copy(k_accum, 0.0f);
-    //Kokkos::MDRangePolicy<Kokkos::Rank<5>> policy({1, 1, 1, 0, 0}, {nz+2, ny+2, nx+2, 3, 4});
-    //Kokkos::parallel_for("clear accumulators", policy, KOKKOS_LAMBDA(const int z, const int y, const int x, const int j, const int w) {
-        //k_accum(VOXEL(x,y,z,nx,ny,nz), j, w) = 0.0f;
-    //});
 }

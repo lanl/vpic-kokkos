@@ -8,6 +8,39 @@
 #include "../../vpic/kokkos_helpers.h"
 #include "../../vpic/kokkos_tuning.hpp"
 
+template<class TeamMember, class accumulator_sa_t, class accumulator_var>
+void
+KOKKOS_INLINE_FUNCTION
+contribute_current(TeamMember& team_member, accumulator_sa_t& access, int ii, accumulator_var j, float v0, float v1,  float v2, float v3) {
+#ifdef __CUDA_ARCH__
+  int mask = 0xffffffff;
+  int team_rank = team_member.team_rank();
+  for(int i=16; i>0; i=i/2) {
+    v0 += __shfl_down_sync(mask, v0, i);
+    v1 += __shfl_down_sync(mask, v1, i);
+    v2 += __shfl_down_sync(mask, v2, i);
+    v3 += __shfl_down_sync(mask, v3, i);
+  }
+  if(team_rank%32 == 0) {
+    access(ii, j, 0) += v0;
+    access(ii, j, 1) += v1;
+    access(ii, j, 2) += v2;
+    access(ii, j, 3) += v3;
+  }
+#else
+  team_member.team_reduce(Kokkos::Sum<float>(v0));
+  team_member.team_reduce(Kokkos::Sum<float>(v1));
+  team_member.team_reduce(Kokkos::Sum<float>(v2));
+  team_member.team_reduce(Kokkos::Sum<float>(v3));
+  if(team_member.team_rank() == 0) {
+    access(ii, j, 0) += v0;
+    access(ii, j, 1) += v1;
+    access(ii, j, 2) += v2;
+    access(ii, j, 3) += v3;
+  }
+#endif
+}
+
 void
 advance_p_kokkos(
         k_particles_t& k_particles,
@@ -89,6 +122,7 @@ advance_p_kokkos(
 
 #ifdef VPIC_ENABLE_HIERARCHICAL
   auto team_policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE);
+//printf("Team size: %d\n", team_policy.team_size());
   int per_league = np/LEAGUE_SIZE;
   if(np%LEAGUE_SIZE > 0)
     per_league++;
@@ -160,6 +194,18 @@ advance_p_kokkos(
     v4   = v1 + uy;
     v5   = v2 + uz;
 
+#ifdef VPIC_ENABLE_TEAM_REDUCTION
+    int inbnds = v3<=one && v4<=one && v5<=one && -v3<=one && -v4<=one && -v5<=one;
+    int min_inbnds = inbnds;
+    int max_inbnds = inbnds;
+    team_member.team_reduce(Kokkos::Max<int>(min_inbnds));
+    team_member.team_reduce(Kokkos::Min<int>(max_inbnds));
+    int min_index = ii;
+    int max_index = ii;
+    team_member.team_reduce(Kokkos::Max<int>(max_index));
+    team_member.team_reduce(Kokkos::Min<int>(min_index));
+#endif
+
     // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
     if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
         -v3<=one && -v4<=one && -v5<=one ) {
@@ -194,23 +240,36 @@ advance_p_kokkos(
       v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
       v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
-      ACCUMULATE_J( x,y,z );
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
-
-      ACCUMULATE_J( y,z,x );
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
-
-      ACCUMULATE_J( z,x,y );
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-      k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+#ifdef VPIC_ENABLE_TEAM_REDUCTION
+      if(min_inbnds == max_inbnds && min_index == max_index) {
+        ACCUMULATE_J( x,y,z );
+        contribute_current(team_member, k_accumulators_scatter_access, ii, accumulator_var::jx, v0, v1, v2, v3);
+        ACCUMULATE_J( y,z,x );
+        contribute_current(team_member, k_accumulators_scatter_access, ii, accumulator_var::jy, v0, v1, v2, v3);
+        ACCUMULATE_J( z,x,y );
+        contribute_current(team_member, k_accumulators_scatter_access, ii, accumulator_var::jz, v0, v1, v2, v3);
+      } else {
+#endif
+        ACCUMULATE_J( x,y,z );
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
+        k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+      
+        ACCUMULATE_J( y,z,x );
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
+        k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+      
+        ACCUMULATE_J( z,x,y );
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
+        k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+#ifdef VPIC_ENABLE_TEAM_REDUCTION
+      }
+#endif
 
 #     undef ACCUMULATE_J
 

@@ -60,6 +60,8 @@ option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for de
 
 option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
 
+option(VPIC_ENABLE_TEAM_REDUCTION "Enable team reduction for current accumulation" OFF)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -162,6 +164,8 @@ if(ENABLE_KOKKOS_CUDA)
     option(USE_V4_PORTABLE "Enable V4 Portable" OFF)
     option(USE_V4_SSE "Enable V4 SSE" OFF)
 
+  else()
+    message("CUDA not found and options not changed")
   endif()
 endif()
 
@@ -269,6 +273,10 @@ endif(VPIC_DUMP_ENERGIES)
 if (VPIC_ENABLE_HIERARCHICAL)
   add_definitions(-DVPIC_ENABLE_HIERARCHICAL)
 endif(VPIC_ENABLE_HIERARCHICAL)
+
+if(VPIC_ENABLE_TEAM_REDUCTION)
+  add_definitions(-DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_TEAM_REDUCTION)
+endif(VPIC_ENABLE_TEAM_REDUCTION)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)
@@ -402,7 +410,7 @@ macro(build_a_vpic name deck)
   endif()
   add_executable(${name} ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc ${VPIC_SRC})
   target_link_libraries(${name} vpic Kokkos::kokkos)
-  target_compile_definitions(${name} PRIVATE INPUT_DECK=${deck})
+  target_compile_definitions(${name} PRIVATE INPUT_DECK="${deck}")
 endmacro(build_a_vpic)
 
 if(USER_DECKS)
