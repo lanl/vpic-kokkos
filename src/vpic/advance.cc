@@ -28,8 +28,7 @@ int vpic_simulation::advance(void)
       if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
       {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-          //TIC sort_p( sp ); TOC( sort_p, 1 );
-          sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
+          sorter.sort(sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
       }
   }
 
