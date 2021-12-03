@@ -54,10 +54,10 @@ void print_log( const char *fmt, ... );
 #define ux 0
 #define uy 1
 #define uz 2
-#define w 3
-#define x 4
-#define y 5
-#define z 6
+#define w 6
+#define x 3
+#define y 4
+#define z 5
 #define numvars 7
 
 int main( int argc, char *argv[] ) { 
@@ -80,7 +80,7 @@ int main( int argc, char *argv[] ) {
   //int interval, nstep_total, i;
   FILE *params;
   params = fopen("../params.txt", "r");
-  if (!params) ERROR(("Cannot open params.txt."));
+  if (!params) ERROR(("Cannot open params.txt.  (The location is probably wrong.)"));
 
   double timeToSI, lengthToSI, massToSI, chargeToSI;
   fgets(buffer, 1024, params);
@@ -117,14 +117,9 @@ int main( int argc, char *argv[] ) {
   double elecekMeVconst = m_e_SI*c_SI*c_SI*1e-6/e_SI;
   double carbekMeVconst = 12.*mp_me*elecekMeVconst;
   double protonekMeVconst = mp_me*elecekMeVconst;
-  double WekMeVconst = 184.*mp_me*elecekMeVconst;
   if (strcmp(particle, "I2")==0) ekMeVconst = carbekMeVconst;
   else if (strcmp(particle, "proton")==0){
       ekMeVconst = protonekMeVconst;
-      particle = "I2";
-  }
-  else if (strcmp(particle, "W")==0){
-      ekMeVconst = WekMeVconst;
       particle = "I2";
   }
   else ekMeVconst = elecekMeVconst;

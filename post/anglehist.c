@@ -79,7 +79,7 @@ int main( int argc, char *argv[] ) {
   //int interval, nstep_total, i;
   FILE *params;
   params = fopen("../params.txt", "r");
-  if (!params) ERROR(("Cannot open params.txt."));
+  if (!params) ERROR(("Cannot open params.txt.  (The location is probably wrong.)"));
 
   double timeToSI, lengthToSI, massToSI, chargeToSI;
   fgets(buffer, 1024, params);
