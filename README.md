@@ -1,3 +1,6 @@
+The primary documentation for VPIC has moved to Sphinx and is located in `docs/`.
+The documentation is very much a work in progress, and the below is left intact for now, but may not be up to date and will be removed in the future.
+
 # GPU Specific Instructions
 
 ## Obtaining and Using Kokkos
