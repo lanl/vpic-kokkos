@@ -58,6 +58,10 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
 
+option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
+
+option(VPIC_ENABLE_TEAM_REDUCTION "Enable team reduction for current accumulation" OFF)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -270,6 +274,14 @@ find_package(Threads REQUIRED)
 if (VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
+
+if (VPIC_ENABLE_HIERARCHICAL)
+  add_definitions(-DVPIC_ENABLE_HIERARCHICAL)
+endif(VPIC_ENABLE_HIERARCHICAL)
+
+if(VPIC_ENABLE_TEAM_REDUCTION)
+  add_definitions(-DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_TEAM_REDUCTION)
+endif(VPIC_ENABLE_TEAM_REDUCTION)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)
