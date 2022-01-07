@@ -138,7 +138,7 @@ species( const char * name,
   sp->max_np = max_local_np;
 
   if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for species %s movers.\n",
-          (double (max_local_np*sizeof(particle_t)))/pow(2,30), sp->name);
+          (double (max_local_nm*sizeof(particle_t)))/pow(2,30), sp->name);
   MALLOC_ALIGNED( sp->pm, max_local_nm, 128 );
   sp->max_nm = max_local_nm;
 
