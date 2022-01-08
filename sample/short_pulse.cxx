@@ -213,6 +213,7 @@ begin_initialization {
 
   // Simulation parameters
   // These are floating point to avoid a lot of casting
+  // Increase resolution to ~3000 for physical results
   double nx = 500;
   double ny = 1;
   double nz = 500;
