@@ -74,8 +74,13 @@ int vpic_simulation::advance(void)
 
   // Reduce accumulator contributions into the device array
   KOKKOS_TIC();
-  Kokkos::Experimental::contribute(field_array->k_f_d, field_array->k_field_sa_d);
-  field_array->k_field_sa_d.reset_except(field_array->k_f_d);
+  // These aren't behaving as I expect on CPUs, so I'm now doing this at the
+  // end of advance_p.  This is rather wasteful of view allocs and contributes.
+  // TODO: Only contribute once per timestep and do one view creation per
+  // simulation.
+  //Kokkos::Experimental::contribute(field_array->k_f_d, field_array->k_field_sa_d);
+  //field_array->k_field_sa_d.reset_except(field_array->k_f_d);
+  //field_array->k_field_sa_d.reset();
   KOKKOS_TOC( field_sa_contributions, 1);
 
   // Copy particle movers back to host

@@ -55,7 +55,7 @@ advance_p_kokkos(
         //k_particle_movers_t k_local_particle_movers,
         k_counter_t& k_nm,
         k_neighbor_t& k_neighbors,
-        //field_array_t* RESTRICT fa,
+        field_array_t* RESTRICT fa,
         const grid_t *g,
         const float qdt_2mc,
         const float cdt_dx,
@@ -73,7 +73,8 @@ advance_p_kokkos(
   constexpr float one_third      = 1./3.;
   constexpr float two_fifteenths = 2./15.;
 
-  //k_field_t& k_field = fa->k_f_d;
+  k_field_t k_field = fa->k_f_d;
+  k_field_sa_t k_f_sv = Kokkos::Experimental::create_scatter_view<>(k_field);
   float cx = 0.25 * g->rdy * g->rdz / g->dt;
   float cy = 0.25 * g->rdz * g->rdx / g->dt;
   float cz = 0.25 * g->rdx * g->rdy / g->dt;
@@ -142,7 +143,7 @@ advance_p_kokkos(
 #endif
       
     float v0, v1, v2, v3, v4, v5;
-    auto  k_field_scatter_access = k_f_sa.access();
+    auto  k_field_scatter_access = k_f_sv.access();
 
     float dx   = p_dx;                             // Load position
     float dy   = p_dy;
@@ -334,7 +335,7 @@ advance_p_kokkos(
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                     k_f_sa, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
+                     k_f_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
       {
         if( k_nm(0) < max_nm )
         {
@@ -374,6 +375,7 @@ advance_p_kokkos(
   });
 #endif
   });
+  Kokkos::Experimental::contribute(k_field, k_f_sv);
 
 
   // TODO: abstract this manual data copy
@@ -428,7 +430,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
           ia->k_i_d,
           sp->k_nm_d,
           sp->g->k_neighbor_d,
-          //fa,
+          fa,
           sp->g,
           qdt_2mc,
           cdt_dx,
