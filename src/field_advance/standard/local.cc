@@ -1519,6 +1519,24 @@ void k_local_adjust_jf(field_array_t* fa, const grid_t* g) {
     adjust_jf<ZXY>(fa, g, 0, 0, 1);
 }
 
+void k_reduce_jf(field_array_t* RESTRICT fa ) {
+    int n_fields = fa->g->nv;
+    auto& kad = fa->k_jf_accum_d;
+    auto& kah = fa->k_jf_accum_h;
+    auto& kfd = fa->k_f_d;
+    // Move the current to the accumulator on device
+    Kokkos::deep_copy(kad,kah);
+    // Sum the accumulator into the field
+    // TODO: Is this the right range policy?
+    Kokkos::parallel_for("Add jf accumulation to device jf", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, n_fields), KOKKOS_LAMBDA (int i) {
+              kfd(i, field_var::jfx) += kad(i, accumulator_var::jx);
+              kfd(i, field_var::jfy) += kad(i, accumulator_var::jy);
+              kfd(i, field_var::jfz) += kad(i, accumulator_var::jz);
+    });
+    // Clear the accumulators on the host
+    Kokkos::deep_copy(kah,0.0f);
+}
+
 // anti_symmetric => Opposite sign image charges (zero rhof/rhob)
 // symmetric      => Same sign image charges (double rhof)
 //                => (double rhof, rhob is already correct)

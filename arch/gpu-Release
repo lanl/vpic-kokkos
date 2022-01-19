@@ -26,9 +26,7 @@ CXX=$src_dir/kokkos/bin/nvcc_wrapper cmake \
   -DCMAKE_BUILD_TYPE=Release \
   -DENABLE_INTEGRATED_TESTS=ON \
   -DENABLE_UNIT_TESTS=ON \
-  -DCMAKE_CXX_FLAGS="--expt-extended-lambda" \
-  -DCMAKE_C_FLAGS="-rdynamic" \
-  -DCMAKE_CXX_FLAGS="-rdynamic" \
+  -DCMAKE_CXX_FLAGS="-rdynamic --expt-extended-lambda" \
   $src_dir
 
 #------------------------------------------------------------------------------#

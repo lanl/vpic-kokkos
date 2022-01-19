@@ -83,3 +83,136 @@ get_particle_bc_id( particle_bc_t * pbc ) {
   return pbc->id;
 }
 
+#define BUFLEN (256)
+// A file size in sizeof(float) that is easy on your filesystem.
+// Will be exceeded by up to bufflen*sizeof(float)
+#define FRIENDLY_FILE_SIZE 268435456 // 1 GiB
+
+void
+checkpt_pbd(pb_diagnostic_t *diag){
+    // Flush the buffer to disk so we don't have to save it (and then reload it
+    // after a restore so we can write it to disk).
+    pbd_buff_to_disk(diag);
+    CHECKPT(diag, 1);
+    CHECKPT_STR(diag->fname);
+}
+
+pb_diagnostic_t *
+restore_pbd(void){
+    pb_diagnostic_t * diag;
+    RESTORE(diag);
+    RESTORE_STR(diag->fname);
+    MALLOC(diag->buff, diag->bufflen);
+    return diag;
+}
+
+void
+delete_pbd(pb_diagnostic_t *diag){
+    UNREGISTER_OBJECT(diag);
+    FREE(diag->fname);
+    FREE(diag->buff);
+    FREE(diag);
+}
+
+pb_diagnostic_t *
+init_pb_diagnostic() {
+    pb_diagnostic_t * diag;
+    MALLOC( diag, 1);
+
+    diag->enable = 0;
+    diag->enable_user = 0;
+    diag->sp = NULL;
+    diag->fname = NULL;
+
+    diag->bufflen = pow(2,20); // Somewhat arbitrary
+    diag->buff = NULL;
+
+    diag->num_user_writes = 0;
+    diag->num_writes = 0;
+
+    diag->write_ux = 0;
+    diag->write_uy = 0;
+    diag->write_uz = 0;
+    diag->write_momentum_magnitude = 0;
+    diag->write_posx = 0;
+    diag->write_posy = 0;
+    diag->write_posz = 0;
+    diag->write_weight = 0;
+
+    return diag;
+}
+
+void
+finalize_pb_diagnostic(species_t * sp){
+    pb_diagnostic_t *diag = sp->pb_diag;
+    if(diag->write_ux) diag->num_writes += 1;
+    if(diag->write_uy) diag->num_writes += 1;
+    if(diag->write_uz) diag->num_writes += 1;
+    if(diag->write_momentum_magnitude) diag->num_writes += 1;
+    if(diag->write_posx) diag->num_writes += 1;
+    if(diag->write_posy) diag->num_writes += 1;
+    if(diag->write_posz) diag->num_writes += 1;
+    if(diag->write_weight) diag->num_writes += 1;
+
+    diag->num_writes += diag->num_user_writes;
+
+    if(diag->num_writes > 0) diag->enable = 1;
+    else return;
+
+    diag->sp = sp;
+    
+    MALLOC(diag->fname, BUFLEN);
+    CLEAR(diag->fname, BUFLEN);
+    sprintf(diag->fname, "pb_diagnostic/%s.%i.", sp->name, world_rank);
+
+    // Should be a multiple of num_writes
+    diag->bufflen = diag->bufflen/diag->num_writes*diag->num_writes;
+
+    MALLOC(diag->buff, diag->bufflen);
+
+    diag->file_counter = -1;
+    diag->store_counter = 0;
+    diag->write_counter = 0;
+
+    //fprintf(stderr, "For species %s, there are %d writes per particle.\n", diag->sp->name, diag->num_writes);
+}
+
+void
+pbd_buff_to_disk( pb_diagnostic_t * diag ){
+    if(diag==NULL) return;
+    if(diag->store_counter == 0) return;
+
+    size_t store = diag->store_counter;
+    size_t write = diag->write_counter;
+
+    FileIO fileIO;
+    FileIOStatus status;
+    char fname[BUFLEN];
+
+    // Append the buffer to an existing file if small enough
+    if(write < FRIENDLY_FILE_SIZE && write != 0){
+        sprintf(fname, "%s%d", diag->fname, diag->file_counter);
+        status = fileIO.open(fname, io_read_write);
+        if ( status==fail ) ERROR(("Could not open file %s.", fname));
+        //fileIO.seek(0, SEEK_END);
+        // If we restarted, appending might write a particle twice, so we need
+        // to calculate the location we should write, and overwrite anything
+        // that happened after the restart dump.
+        fileIO.seek(write*4, SEEK_SET);
+    } else{ // Need to start a new file
+        sprintf(fname, "%s%d", diag->fname, ++(diag->file_counter));
+        status = fileIO.open(fname, io_write);
+        if ( status==fail ) ERROR(("Could not open file %s.", fname));
+        write = 0;
+    }
+
+    fileIO.write(diag->buff, store);
+    fileIO.close();
+
+    write += store;
+    store = 0;
+
+    diag->store_counter = store;
+    diag->write_counter = write;
+}
+

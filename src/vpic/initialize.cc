@@ -69,9 +69,9 @@ vpic_simulation::initialize( int argc,
   interpolator_array->copy_to_device();
   KOKKOS_TOCN( INTERPOLATOR_DATA_MOVEMENT, 1);
 
-  KOKKOS_TIC(); // Time this data movement
-  accumulator_array->copy_to_device();
-  KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  KOKKOS_TIC();
+  FAK->k_reduce_jf(field_array);
+  KOKKOS_TOC( JF_ACCUM_DATA_MOVEMENT, 1);
 
   if( species_list ) {
     KOKKOS_TIC(); // Time this data movement
