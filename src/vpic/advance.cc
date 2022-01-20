@@ -28,7 +28,7 @@ int vpic_simulation::advance(void)
       if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
       {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-          sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, grid->nv);
+          sorter.sort(opt_settings, sp->k_p_d, sp->k_p_i_d, sp->np, sp->g->nv);
       }
   }
 
@@ -68,7 +68,7 @@ int vpic_simulation::advance(void)
   LIST_FOR_EACH( sp, species_list )
   {
       // Now Times internally
-      advance_p( sp, interpolator_array, field_array );
+      advance_p( sp, interpolator_array, field_array, opt_settings );
   }
   //printf("Pushed\n");
 

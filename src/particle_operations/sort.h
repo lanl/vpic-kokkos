@@ -247,12 +247,21 @@ struct ParticleSorter : private Policy {
   using Policy::strided_sort;
   using Policy::tiled_sort;
   using Policy::tiled_strided_sort;
-  void sort(k_particles_t particles, k_particles_i_t particles_i, const int32_t np, const int num_bins) {
-#ifdef SORT_TILE_SIZE // strided_tiled_sort or tiled_strided_sort
-    SORT(particles, particles_i, np, num_bins, SORT_TILE_SIZE);
-#else // standard_sort or strided_sort
-    SORT(particles, particles_i, np, num_bins);
-#endif
+  void sort(OptimizationSettings* opt_settings, k_particles_t particles, k_particles_i_t particles_i, const int32_t np, const int num_bins) {
+    if(opt_settings->sort_type == StandardSort) {
+      standard_sort(particles, particles_i, np, num_bins);
+    } else if(opt_settings->sort_type == StridedSort) {
+      strided_sort(particles, particles_i, np, num_bins);
+    } else if(opt_settings->sort_type == TiledSort) {
+      tiled_sort(particles, particles_i, np, num_bins, opt_settings->sort_tile_size);
+    } else if(opt_settings->sort_type == TiledStridedSort) {
+      tiled_strided_sort(particles, particles_i, np, num_bins, opt_settings->sort_tile_size);
+    }
+//#ifdef SORT_TILE_SIZE // strided_tiled_sort or tiled_strided_sort
+//    SORT(particles, particles_i, np, num_bins, SORT_TILE_SIZE);
+//#else // standard_sort or strided_sort
+//    SORT(particles, particles_i, np, num_bins);
+//#endif
   }
 };
 

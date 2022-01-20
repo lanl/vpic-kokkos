@@ -39,8 +39,6 @@ clear_accumulator_array( accumulator_array_t * RESTRICT aa ) {
 void
 clear_accumulator_array_kokkos(accumulator_array_t* RESTRICT aa) {
     if(!aa) ERROR(("Bad args"));
-    const grid_t* g = aa->g;
     const k_accumulators_t& k_accum = aa->k_a_d;
-
     Kokkos::deep_copy(k_accum, 0.0f);
 }

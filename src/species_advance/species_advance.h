@@ -14,6 +14,7 @@
 
 #include <iostream>
 
+#include "../vpic/kokkos_tuning.hpp"
 #include "../sf_interface/sf_interface.h"
 #include "Kokkos_DualView.hpp"
 
@@ -295,7 +296,8 @@ sort_p( species_t * RESTRICT sp );
 void
 advance_p( /**/  species_t            * RESTRICT sp,
                  interpolator_array_t * RESTRICT ia,
-                 field_array_t* RESTRICT fa );
+                 field_array_t* RESTRICT fa,
+                 OptimizationSettings* opt_settings = NULL);
 
 // In center_p.cxx
 
@@ -389,7 +391,7 @@ move_p_kokkos(
     particle_mover_t* ALIGNED(16)  pm,
     //accumulator_sa_t k_accumulators_sa,
     field_sa_t k_f_sa,
-    const grid_t* g,
+//    const grid_t* g,
     neighbor_view_t& d_neighbor,
     int64_t rangel,
     int64_t rangeh,
@@ -640,8 +642,8 @@ move_p_kokkos_host_serial(
     accum_view_t& k_jf_accum,
     const grid_t* g,
     neighbor_view_t& d_neighbor,
-    int64_t rangel,
-    int64_t rangeh,
+    const int64_t rangel,
+    const int64_t rangeh,
     const float qsp
 )
 {
