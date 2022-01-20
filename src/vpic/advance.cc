@@ -29,6 +29,7 @@ int vpic_simulation::advance(void)
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
           //TIC sort_p( sp ); TOC( sort_p, 1 );
           sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
+//          sorter.strided_sort( sp->k_p_d, sp->k_p_i_d, sp->np, accumulator_array->na);
       }
   }
 
@@ -655,9 +656,9 @@ int vpic_simulation::advance(void)
   // return true here so that the first call to advance after a restore
   // will act properly for this edge case.
 
-#ifdef DUMP_ENERGIES
+//#ifdef DUMP_ENERGIES
   TIC dump_energies("energies.txt", 1); TOC( dump_energies, 1);
-#endif
+//#endif
 
   return 1;
 }
