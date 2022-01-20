@@ -4,6 +4,7 @@
 #include <Kokkos_Sort.hpp>
 
 #define FAK field_array->kernel
+#define DUMP_ENERGIES
 
 int vpic_simulation::advance(void)
 {
