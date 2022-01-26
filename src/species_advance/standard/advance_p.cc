@@ -64,7 +64,6 @@ advance_p_kokkos(
         const float cx,
         const float cy,
         const float cz,
-//        const int na,
         const int np,
         const int max_nm,
         const int nx,
@@ -235,19 +234,19 @@ advance_p_kokkos(
       int i2 = VOXEL(xi,yi,zi+1,nx,ny,nz);
       int i3 = VOXEL(xi,yi+1,zi+1,nx,ny,nz);
       ACCUMULATE_J( x,y,z );
-      contribute_current(team_member, k_field_scatter_access, i0, i1, i2, i3, field_var::jfx, v0, v1, v2, v3);
+      contribute_current(team_member, k_field_scatter_access, i0, i1, i2, i3, field_var::jfx, cx*v0, cx*v1, cx*v2, cx*v3);
 
       i1 = VOXEL(xi,yi,zi+1,nx,ny,nz);
       i2 = VOXEL(xi+1,yi,zi,nx,ny,nz);
       i3 = VOXEL(xi+1,yi,zi+1,nx,ny,nz);
       ACCUMULATE_J( y,z,x );
-      contribute_current(team_member, k_field_scatter_access, i0, i1, i2, i3, field_var::jfy, v0, v1, v2, v3);
+      contribute_current(team_member, k_field_scatter_access, i0, i1, i2, i3, field_var::jfy, cy*v0, cy*v1, cy*v2, cy*v3);
 
       i1 = VOXEL(xi+1,yi,zi,nx,ny,nz);
       i2 = VOXEL(xi,yi+1,zi,nx,ny,nz);
       i3 = VOXEL(xi+1,yi+1,zi,nx,ny,nz);
       ACCUMULATE_J( z,x,y );
-      contribute_current(team_member, k_field_scatter_access, i0, i1, i2, i3, field_var::jfz, v0, v1, v2, v3);
+      contribute_current(team_member, k_field_scatter_access, i0, i1, i2, i3, field_var::jfz, cz*v0, cz*v1, cz*v2, cz*v3);
     } else {
       // TODO: That 2 needs to be 2*NGHOST eventually
       int iii = ii;
@@ -292,40 +291,39 @@ advance_p_kokkos(
     //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
     if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
                      k_f_sv, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
-//                     k_f_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
+    {
+      if( k_nm(0) < max_nm )
       {
-        if( k_nm(0) < max_nm )
-        {
-            const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
-            if (nm >= max_nm) Kokkos::abort("overran max_nm");
+          const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+          if (nm >= max_nm) Kokkos::abort("overran max_nm");
 
-            k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
-            k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
-            k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
-            k_particle_movers_i(nm)   = local_pm->i;
+          k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+          k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+          k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+          k_particle_movers_i(nm)   = local_pm->i;
 
-            // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-            k_particle_copy(nm, particle_var::dx) = p_dx;
-            k_particle_copy(nm, particle_var::dy) = p_dy;
-            k_particle_copy(nm, particle_var::dz) = p_dz;
-            k_particle_copy(nm, particle_var::ux) = p_ux;
-            k_particle_copy(nm, particle_var::uy) = p_uy;
-            k_particle_copy(nm, particle_var::uz) = p_uz;
-            k_particle_copy(nm, particle_var::w) = p_w;
-            k_particle_i_copy(nm) = pii;
+          // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+          k_particle_copy(nm, particle_var::dx) = p_dx;
+          k_particle_copy(nm, particle_var::dy) = p_dy;
+          k_particle_copy(nm, particle_var::dz) = p_dz;
+          k_particle_copy(nm, particle_var::ux) = p_ux;
+          k_particle_copy(nm, particle_var::uy) = p_uy;
+          k_particle_copy(nm, particle_var::uz) = p_uz;
+          k_particle_copy(nm, particle_var::w) = p_w;
+          k_particle_i_copy(nm) = pii;
 
-            // Tag this one as having left
-            //k_particles(p_index, particle_var::pi) = 999999;
+          // Tag this one as having left
+          //k_particles(p_index, particle_var::pi) = 999999;
 
-            // Copy local local_pm back
-            //local_pm_dispx = local_pm->dispx;
-            //local_pm_dispy = local_pm->dispy;
-            //local_pm_dispz = local_pm->dispz;
-            //local_pm_i = local_pm->i;
-            //printf("rank copying %d to nm %d \n", local_pm_i, nm);
-            //copy_local_to_pm(nm);
-        }
+          // Copy local local_pm back
+          //local_pm_dispx = local_pm->dispx;
+          //local_pm_dispy = local_pm->dispy;
+          //local_pm_dispz = local_pm->dispz;
+          //local_pm_i = local_pm->i;
+          //printf("rank copying %d to nm %d \n", local_pm_i, nm);
+          //copy_local_to_pm(nm);
       }
+    }
   }
 }
 
@@ -713,10 +711,6 @@ advance_p( /**/  species_t            * RESTRICT sp,
            interpolator_array_t * RESTRICT ia,
            field_array_t* RESTRICT fa,
            OptimizationSettings* opt_settings ) {
-  //DECLARE_ALIGNED_ARRAY( advance_p_pipeline_args_t, 128, args, 1 );
-  //DECLARE_ALIGNED_ARRAY( particle_mover_seg_t, 128, seg, MAX_PIPELINE+1 );
-  //int rank;
-
   if( !sp )
   {
     ERROR(( "Bad args" ));
@@ -872,57 +866,4 @@ advance_p( /**/  species_t            * RESTRICT sp,
   //  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
 
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
-
-  //print_nm(sp->k_pm_d, nm);
-
-/*
-  args->p0       = sp->p;
-  args->pm       = sp->pm;
-  args->a0       = aa->a;
-  args->f0       = ia->i;
-  args->seg      = seg;
-  args->g        = sp->g;
-
-  args->qdt_2mc  = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-  args->cdt_dx   = sp->g->cvac*sp->g->dt*sp->g->rdx;
-  args->cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
-  args->cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
-  args->qsp      = sp->q;
-
-  args->np       = sp->np;
-  args->max_nm   = sp->max_nm;
-  args->nx       = sp->g->nx;
-  args->ny       = sp->g->ny;
-  args->nz       = sp->g->nz;
-
-  // Have the host processor do the last incomplete bundle if necessary.
-  // Note: This is overlapped with the pipelined processing.  As such,
-  // it uses an entire accumulator.  Reserving an entire accumulator
-  // for the host processor to handle at most 15 particles is wasteful
-  // of memory.  It is anticipated that it may be useful at some point
-  // in the future have pipelines accumulating currents while the host
-  // processor is doing other more substantive work (e.g. accumulating
-  // currents from particles received from neighboring nodes).
-  // However, it is worth reconsidering this at some point in the
-  // future.
-
-  EXEC_PIPELINES( advance_p, args, 0 );
-  WAIT_PIPELINES();
-
-  // FIXME: HIDEOUS HACK UNTIL BETTER PARTICLE MOVER SEMANTICS
-  // INSTALLED FOR DEALING WITH PIPELINES.  COMPACT THE PARTICLE
-  // MOVERS TO ELIMINATE HOLES FROM THE PIPELINING.
-
-
-  sp->nm = 0;
-  for( rank=0; rank<=N_PIPELINE; rank++ ) {
-    if( args->seg[rank].n_ignored )
-      WARNING(( "Pipeline %i ran out of storage for %i movers",
-                rank, args->seg[rank].n_ignored ));
-    if( sp->pm+sp->nm != args->seg[rank].pm )
-      MOVE( sp->pm+sp->nm, args->seg[rank].pm, args->seg[rank].nm );
-    sp->nm += args->seg[rank].nm;
-  }
-  */
-  //sp->nm = nm;
 }

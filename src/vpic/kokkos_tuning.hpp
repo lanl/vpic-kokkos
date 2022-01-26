@@ -68,7 +68,6 @@ typedef struct OptimizationSettings {
     sort_tile_size = 0;
     advance_p_league_size = 0;
     advance_p_team_size = 0;
-
   }
 
   OptimizationSettings(int na) {
@@ -84,11 +83,13 @@ typedef struct OptimizationSettings {
 #endif
     sort_type = SORT_TYPE;
     sort_tile_size = 0;
-printf("Reached league/team size\n");
+    advance_p_league_size = 0;
+    advance_p_team_size = 0;
+#ifdef VPIC_ENABLE_HIERARCHICAL
     Kokkos::TeamPolicy<> team_policy(LEAGUE_SIZE, TEAM_SIZE);
-printf("Created policy\n");
     advance_p_league_size = team_policy.league_size();
     advance_p_team_size = team_policy.team_size();
+#endif
 
   }
 
@@ -105,11 +106,13 @@ printf("Created policy\n");
 #endif
     sort_type = SORT_TYPE;
     sort_tile_size = 0;
-printf("Reached league/team size\n");
+    advance_p_league_size = 0;
+    advance_p_team_size = 0;
+#ifdef VPIC_ENABLE_HIERARCHICAL
     Kokkos::TeamPolicy<> team_policy(LEAGUE_SIZE, TEAM_SIZE);
-printf("Created policy\n");
     advance_p_league_size = team_policy.league_size();
     advance_p_team_size = team_policy.team_size();
+#endif
   }
 
   void init_from_cmdline(int argc, char** argv) {
