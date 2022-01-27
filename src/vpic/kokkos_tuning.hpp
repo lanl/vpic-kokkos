@@ -175,8 +175,6 @@ typedef struct OptimizationSettings {
     }
     log_printf("****************************************\n");
   }
-
-
 } OptimizationSettings;
 
 

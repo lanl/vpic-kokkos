@@ -129,6 +129,12 @@ int main(int argc, char** argv)
         REGISTER_OBJECT( &simulation, checkpt_main, restore_main, NULL );
     }
 
+    simulation->opt_settings = new OptimizationSettings(simulation->grid->nv);
+    simulation->opt_settings->init_from_cmdline(argc, argv);
+    if(world_rank == 0) {
+      simulation->opt_settings->print();
+    }
+
     // Do any post init/restore simulation modifications
 
     // Detec if the "modify" option is passed, which allows users to change

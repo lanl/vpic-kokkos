@@ -58,11 +58,11 @@ vpic_simulation::initialize( int argc,
   auto nfaces_per_voxel = 6;
   g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
-  opt_settings = new OptimizationSettings(grid->nv);
-  opt_settings->init_from_cmdline(argc, argv);
-  if(rank() == 0) {
-    opt_settings->print();
-  }
+//  opt_settings = new OptimizationSettings(grid->nv);
+//  opt_settings->init_from_cmdline(argc, argv);
+//  if(rank() == 0) {
+//    opt_settings->print();
+//  }
 
   KOKKOS_TIC();
   LIST_FOR_EACH( sp, species_list ) {

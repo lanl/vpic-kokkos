@@ -62,6 +62,8 @@ option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
 
 option(VPIC_ENABLE_TEAM_REDUCTION "Enable team reduction for current accumulation" OFF)
 
+option(VPIC_TUNING_MODE "Allow passing optiization parameters as arguments for easier performance tuning" OFF)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -281,6 +283,11 @@ if(VPIC_ENABLE_TEAM_REDUCTION)
   add_definitions(-DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_TEAM_REDUCTION)
   set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} -DVPIC_ENABLE_TEAM_REDUCTION")
 endif(VPIC_ENABLE_TEAM_REDUCTION)
+
+if(VPIC_TUNING_MODE)
+  add_definitions(-DVPIC_TUNING_MODE)
+  set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} -DVPIC_TUNING_MODE")
+endif(VPIC_TUNING_MODE)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)

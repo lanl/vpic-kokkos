@@ -177,7 +177,10 @@ advance_p_kokkos(
 
   int inbnds=0, reduce=0;
   inbnds = v3<=one && v4<=one && v5<=one && -v3<=one && -v4<=one && -v5<=one;
+#ifdef VPIC_TUNING_MODE
   if(enable_team_reduction) {
+#endif
+#if defined (VPIC_TUNING_MODE) || defined(VPIC_ENABLE_TEAM_REDUCTION)
     int min_inbnds = inbnds;
     int max_inbnds = inbnds;
     team_member.team_reduce(Kokkos::Max<int>(min_inbnds));
@@ -187,7 +190,10 @@ advance_p_kokkos(
     team_member.team_reduce(Kokkos::Max<int>(max_index));
     team_member.team_reduce(Kokkos::Min<int>(min_index));
     reduce = min_inbnds == max_inbnds && min_index == max_index;
+#endif
+#ifdef VPIC_TUNING_MODE
   }
+#endif
 
   // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
   if( inbnds ) {
@@ -222,7 +228,11 @@ advance_p_kokkos(
     v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
     v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
-    if(enable_team_reduction && reduce) {
+#ifdef VPIC_TUNING_MODE
+    reduce = enable_team_reduction && reduce;
+#endif
+#if defined(VPIC_ENABLE_TEAM_REDUCTION) || defined(VPIC_TUNING_MODE)
+    if(reduce) {
       int iii = ii;
       int zi = iii/((nx+2)*(ny+2));
       iii -= zi*(nx+2)*(ny+2);
@@ -248,6 +258,7 @@ advance_p_kokkos(
       ACCUMULATE_J( z,x,y );
       contribute_current(team_member, k_field_scatter_access, i0, i1, i2, i3, field_var::jfz, cz*v0, cz*v1, cz*v2, cz*v3);
     } else {
+#endif
       // TODO: That 2 needs to be 2*NGHOST eventually
       int iii = ii;
       int zi = iii/((nx+2)*(ny+2));
@@ -271,7 +282,9 @@ advance_p_kokkos(
       k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
       k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
       k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
+#if defined(VPIC_TUNING_MODE) || defined(VPIC_ENABLE_TEAM_REDUCTION)
     }
+#endif
 #   undef ACCUMULATE_J
   } else
   {                                    // Unlikely
@@ -758,11 +771,21 @@ advance_p( /**/  species_t            * RESTRICT sp,
   int ny = sp->g->ny;
   int nz = sp->g->nz;
 
+  uint32_t n_leagues = LEAGUE_SIZE;
+  uint32_t n_threads = TEAM_SIZE;
+  bool enable_team_reduce = false;
+#ifdef VPIC_TUNING_MODE
+  if(opt_settings != NULL) {
+    n_leagues = opt_settings->advance_p_league_size;
+    n_threads = opt_settings->advance_p_team_size;
+  }
   if(opt_settings != NULL && opt_settings->enable_hierarchical) {
-    bool enable_team_reduce = opt_settings->enable_team_reduction;
-    auto team_policy = Kokkos::TeamPolicy<>(opt_settings->advance_p_league_size, opt_settings->advance_p_team_size);
-    int per_league = np/opt_settings->advance_p_league_size;
-    if(np%opt_settings->advance_p_league_size > 0)
+    enable_team_reduce = opt_settings->enable_team_reduction;
+#endif
+#if defined(VPIC_TUNING_MODE) || defined(VPIC_ENABLE_HIERARCHICAL)
+    auto team_policy = Kokkos::TeamPolicy<>(n_leagues, n_threads);
+    int per_league = np/n_leagues;
+    if(np%n_leagues > 0)
       per_league++;
     Kokkos::parallel_for("advance_p", team_policy, KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
       Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, per_league), [=] (size_t pindex) {
@@ -801,8 +824,11 @@ advance_p( /**/  species_t            * RESTRICT sp,
         }
      });
     });
+#endif
+#ifdef VPIC_TUNING_MODE
   } else {
-    bool enable_team_reduce = false;
+#endif
+#if defined(VPIC_TUNING_MODE) || !defined(VPIC_ENABLE_HIERARCHICAL)
     auto range_policy = Kokkos::RangePolicy<>(0,np);
     Kokkos::parallel_for("advance_p", range_policy, KOKKOS_LAMBDA (size_t p_index) {
         advance_p_kokkos(
@@ -835,7 +861,10 @@ advance_p( /**/  species_t            * RESTRICT sp,
           enable_team_reduce
         );
     });
+#endif
+#ifdef VPIC_TUNING_MODE
   }
+#endif
 
 //>>>>>>> Stashed changes
   Kokkos::Experimental::contribute(k_field, field_sa);
