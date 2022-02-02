@@ -12,29 +12,6 @@
 
 #include <Kokkos_Core.hpp>
 
-typedef struct material_coefficient {
-  float decayx, drivex;         // Decay of ex and drive of (curl H)x and Jx
-  float decayy, drivey;         // Decay of ey and drive of (curl H)y and Jy
-  float decayz, drivez;         // Decay of ez and drive of (curl H)z and Jz
-  float rmux, rmuy, rmuz;       // Reciprocle of relative permeability
-  float nonconductive;          // Divergence cleaning related coefficients
-  float epsx, epsy, epsz;
-  float pad[3];                 // For 64-byte alignment and future expansion
-} material_coefficient_t;
-
-typedef struct sfa_params {
-  material_coefficient_t * mc;
-  int n_mc;
-  float damp;
-
-    k_material_coefficient_t k_mc_d;
-    k_material_coefficient_t::HostMirror k_mc_h;
-
-    sfa_params(int n_materials) : k_mc_d("k_material_coefficents", n_materials) {
-        k_mc_h = Kokkos::create_mirror_view(k_mc_d);
-    }
-} sfa_params_t;
-
 // In standard_field_advance.c
 
 void
@@ -440,6 +417,9 @@ local_adjust_norm_b( field_t      * ALIGNED(128) f,
 void
 local_adjust_jf( field_t      * ALIGNED(128) f,
                  const grid_t *              g );
+
+void
+k_reduce_jf( field_array_t * RESTRICT fa );
 
 void
 local_adjust_rhof( field_t      * ALIGNED(128) f,

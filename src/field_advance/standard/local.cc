@@ -1109,7 +1109,18 @@ void
 k_local_adjust_norm_b( field_array_t * RESTRICT fa,
                      const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
-  int bc, face, x, y, z, xl, xh, yl, yh, zl, zh;
+
+  int bc = 0;
+  int face = 0;
+  int xl = 0;
+  int xh = 0;
+  int yl = 0;
+  int yh = 0;
+  int zl = 0;
+  int zh = 0;
+  int x = 0;
+  int y = 0;
+  int z = 0;
 
 // TODO: Test the macro unrolling and parallel_for here. This does not
 // get touched during a normal harris run
@@ -1506,6 +1517,24 @@ void k_local_adjust_jf(field_array_t* fa, const grid_t* g) {
     adjust_jf<XYZ>(fa, g, 1, 0, 0);
     adjust_jf<YZX>(fa, g, 0, 1, 0);
     adjust_jf<ZXY>(fa, g, 0, 0, 1);
+}
+
+void k_reduce_jf(field_array_t* RESTRICT fa ) {
+    int n_fields = fa->g->nv;
+    auto& kad = fa->k_jf_accum_d;
+    auto& kah = fa->k_jf_accum_h;
+    auto& kfd = fa->k_f_d;
+    // Move the current to the accumulator on device
+    Kokkos::deep_copy(kad,kah);
+    // Sum the accumulator into the field
+    // TODO: Is this the right range policy?
+    Kokkos::parallel_for("Add jf accumulation to device jf", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, n_fields), KOKKOS_LAMBDA (int i) {
+              kfd(i, field_var::jfx) += kad(i, accumulator_var::jx);
+              kfd(i, field_var::jfy) += kad(i, accumulator_var::jy);
+              kfd(i, field_var::jfz) += kad(i, accumulator_var::jz);
+    });
+    // Clear the accumulators on the host
+    Kokkos::deep_copy(kah,0.0f);
 }
 
 // anti_symmetric => Opposite sign image charges (zero rhof/rhob)

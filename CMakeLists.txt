@@ -14,6 +14,9 @@ project(vpic CXX)
 
 #------------------------------------------------------------------------------#
 # If a C++14 compiler is available, then set the appropriate flags
+# Note: As of February 2021, VPIC requires only C++11, but requiring C++14
+# makes building Kokkos easier.  If you are adventurous and using your own
+# Kokkos build, feel free to try a lower standard.
 #------------------------------------------------------------------------------#
 
 set(CMAKE_CXX_STANDARD 14)
@@ -53,7 +56,11 @@ option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 
 option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
 
-option(VPIC_DUMP_ENERGIES "If the code should dump energies diagnostic" OFF)
+option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
+
+option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
+
+option(VPIC_ENABLE_TEAM_REDUCTION "Enable team reduction for current accumulation" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -83,7 +90,6 @@ string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
 if(NOT ${string_includes} STREQUAL "")
   set(VPIC_CXX_FLAGS "-I${string_includes} ${MPI_C_LINK_FLAGS}")
 endif(NOT ${string_includes} STREQUAL "")
-#set(VPIC_CXX_FLAGS "-h std=c++14 ${VPIC_CXX_FLAGS}")
 set(VPIC_CXX_FLAGS "${CMAKE_CXX14_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
 
 # Add Debug flags to VPIC_CXX_FLAGS
@@ -158,6 +164,8 @@ if(ENABLE_KOKKOS_CUDA)
     option(USE_V4_PORTABLE "Enable V4 Portable" OFF)
     option(USE_V4_SSE "Enable V4 SSE" OFF)
 
+  else()
+    message("CUDA not found and options not changed")
   endif()
 endif()
 
@@ -192,9 +200,11 @@ else()
 endif(BUILD_INTERNAL_KOKKOS)
 
 
+get_target_property(KOKKOS_COMPILE_OPTIONS Kokkos::kokkoscore INTERFACE_COMPILE_OPTIONS)
 get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE_INCLUDE_DIRECTORIES)
 
+message(${KOKKOS_COMPILE_OPTIONS})
 # TODO: this gives the external include path
 #get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
 
@@ -203,12 +213,15 @@ get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE
 
 set(KOKKOS_CORE_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_core_includes)
 set(KOKKOS_CONTAINER_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_container_includes)
+set(KOKKOS_COMPILE_OPTIONS_FILE ${PROJECT_BINARY_DIR}/kokkos_compile_options)
 #set(KOKKOS_CORE_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_core_lib)
 #set(KOKKOS_CONTAINER_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_container_lib)
 
 # For an "external" build these will be the same, but for an internal we need to gather both
 file(GENERATE OUTPUT ${KOKKOS_CORE_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 file(GENERATE OUTPUT ${KOKKOS_CONTAINER_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_CONTAINERS}")
+string(REPLACE ";" " " kokkos_compile_options "${KOKKOS_COMPILE_OPTIONS}")
+file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${kokkos_compile_options}")
 
 #file(GENERATE OUTPUT ${KOKKOS_CORE_LIB_FILE} CONTENT "${KOKKOS_LIB_DIRS}")
 #file(GENERATE OUTPUT ${KOKKOS_CONTAINER_LIB_FILE} CONTENT "${KOKKOS_LIB_CONTAINERS}")
@@ -261,6 +274,14 @@ find_package(Threads REQUIRED)
 if (VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
+
+if (VPIC_ENABLE_HIERARCHICAL)
+  add_definitions(-DVPIC_ENABLE_HIERARCHICAL)
+endif(VPIC_ENABLE_HIERARCHICAL)
+
+if(VPIC_ENABLE_TEAM_REDUCTION)
+  add_definitions(-DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_TEAM_REDUCTION)
+endif(VPIC_ENABLE_TEAM_REDUCTION)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)
@@ -386,7 +407,7 @@ else()
 endif()
 target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
-target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS})
+target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
 
 macro(build_a_vpic name deck)
   if(NOT EXISTS ${deck})
@@ -394,7 +415,7 @@ macro(build_a_vpic name deck)
   endif()
   add_executable(${name} ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc ${VPIC_SRC})
   target_link_libraries(${name} vpic Kokkos::kokkos)
-  target_compile_definitions(${name} PRIVATE INPUT_DECK=${deck})
+  target_compile_definitions(${name} PRIVATE INPUT_DECK="${deck}")
 endmacro(build_a_vpic)
 
 if(USER_DECKS)

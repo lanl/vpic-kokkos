@@ -60,22 +60,9 @@ void
 boundary_p_kokkos(
         particle_bc_t       * RESTRICT pbc_list,
         species_t           * RESTRICT sp_list,
-        field_array_t       * RESTRICT fa,
-        accumulator_array_t * RESTRICT aa
+        field_array_t       * RESTRICT fa
       )
 {
-
-  // TODO: this doesn't need to be made every time
-  // Make scatter add ON HOST
-  // TODO: hard coding OpenMP here is not good
-  /*
-  Kokkos::Experimental::ScatterView<float
-      *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutLeft,
-      Kokkos::OpenMP, Kokkos::Experimental::ScatterSum,
-      Kokkos::Experimental::ScatterDuplicated ,
-      Kokkos::Experimental::ScatterNonAtomic > scatter_add =
-          Kokkos::Experimental::create_scatter_view(aa->k_a_h);
-          */
 
   // Temporary store for local particle injectors
   // FIXME: Ugly static usage
@@ -90,7 +77,7 @@ boundary_p_kokkos(
   // Check input args
 
   if( !sp_list ) return; // Nothing to do if no species
-  if( !fa || !aa || sp_list->g!=aa->g || fa->g!=aa->g )
+  if( !fa )
     ERROR(( "Bad args" ));
 
   // Unpack the particle boundary conditions
@@ -111,9 +98,6 @@ boundary_p_kokkos(
   //field_t * RESTRICT ALIGNED(128) f = fa->f;
   grid_t  * RESTRICT              g = fa->g;
 
-  // Unpack accumulator
-
-  //accumulator_t * RESTRICT ALIGNED(128) a0 = aa->a;
 
   // Unpack the grid
 
@@ -208,10 +192,6 @@ boundary_p_kokkos(
 
         particle_injector_t * RESTRICT ALIGNED(16) pi;
 
-        // TODO: the monotonic requirement should go away, thus we can (try)
-        // remove this
-        //std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers);
-
         // Note that particle movers for each species are processed in
         // reverse order.  This allows us to backfill holes in the
         // particle list created by boundary conditions and/or
@@ -241,21 +221,19 @@ boundary_p_kokkos(
             // Absorb
             if( nn==absorb_particles )
             {
-                // TODO: sync device to host if this is the first time
                 absorbed++;
 
                 // Ideally, we would batch all rhob accumulations together
                 // for efficiency
-
-                // TODO: We could detect this on the GPU side and process is there instead
-                  // Not doing that costs us data copies in the fields
-                int i = pm->i;
-                //const auto& kfield_h = fa->k_f_h;
                 const auto& krhob_accum_h = fa->k_f_rhob_accum_h;
                 const auto& kparticle_move_h = sp->k_pc_h;
                 const auto& kparticle_move_i_h = sp->k_pc_i_h;
 
                 float qsp = sp->q;
+
+                // Send the particle to the particle boundary diagnostic
+                if (sp->pb_diag->enable)
+                    pbd_write_to_buffer(sp, kparticle_move_h, kparticle_move_i_h, copy_index);
 
                 k_accumulate_rhob_single_cpu(
                         krhob_accum_h,
@@ -336,7 +314,13 @@ boundary_p_kokkos(
 
             // Uh-oh: We fell through
             //if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
-            printf("nn %ld rangel %ld rangeh %ld rangem %ld voxel %d face %d old_nn %ld \n", nn, rangel, rangeh, rangem, voxel, face, old_nn);
+            std::cout << "nn " << nn <<
+                " rangel " << rangel <<
+                " rangeh " << rangeh <<
+                " rangem " << rangem <<
+                " voxel " << face <<
+                " old_nn " << old_nn <<
+                std::endl;
 
             WARNING(( "Unknown boundary interaction ... dropping particle "
                         "(species=%s)", sp->name ));
@@ -395,9 +379,6 @@ boundary_p_kokkos(
                      bc[face], f2b[face] );
     }
 
-  // TODO: add a check to see if we'll overflow the available size
-  // For now we assume we will just fit
-
   do {
     // Unpack the species list for random acesss
 
@@ -408,15 +389,15 @@ boundary_p_kokkos(
     //int sp_np[MAX_SP];
     int sp_nm[MAX_SP];
 
-    // TODO: I'm not sure this inpack buys us anything -- remove?
     if( num_species( sp_list ) > MAX_SP )
+    {
       ERROR(( "Update this to support more species" ));
+    }
+
+    // FIXME: I'm not sure this manual packing and storing buys us anything -- remove?
     LIST_FOR_EACH( sp, sp_list ) {
       sp_[  sp->id ] = sp;
-      //sp_p[  sp->id ] = sp->p;
       sp_pm[ sp->id ] = sp->pm;
-      //sp_q[  sp->id ] = sp->q;
-      //sp_np[ sp->id ] = sp->np;
       sp_nm[ sp->id ] = sp->nm;
     }
 
@@ -442,18 +423,14 @@ boundary_p_kokkos(
       // WARNING: THIS TRUSTS THAT THE INJECTORS (INCLUDING THOSE
       // RECEIVED FROM OTHER NODES) HAVE VALID PARTICLE IDS.
 
-      // TODO: the benefit of doing this backwards goes away
+      // FIXME: the benefit of doing this backwards goes away. Go forward?
       pi += n-1;
       for( ; n; pi--, n-- ) {
         id = pi->sp_id;
 
-        //p  = sp_p[id]; // We can remove this because we don't want to touch the real particle array
-        //np = sp_np[id];
         pm = sp_pm[id];
         nm = sp_nm[id];
 
-        //auto& particle_copy = sp_[id]->k_pc_h;
-        //auto& particle_copy_i = sp_[id]->k_pc_i_h;
         auto& particle_recv = sp_[id]->k_pr_h;
         auto& particle_recv_i = sp_[id]->k_pr_i_h;
         auto& particle_send = sp_[id]->k_pc_h;
@@ -471,12 +448,7 @@ boundary_p_kokkos(
         //p[np].i=pi->i;
         //p[np].w=pi->w;
 
-        // FIXME: if this doesn't work, it's likely because we weren't done with the
-        // data we overwrite here..but I think it's fine
-
         // Should write from 0..nm
-        //printf("writing to n=%d for %p \n", sp_[id]->num_to_copy, sp_[id]);
-        //printf("writing to n=%d for = %d \n", sp_[id]->num_to_copy, write_index);
         particle_recv(write_index, particle_var::dx) = pi->dx;
         particle_recv(write_index, particle_var::dy) = pi->dy;
         particle_recv(write_index, particle_var::dz) = pi->dz;
@@ -491,8 +463,6 @@ boundary_p_kokkos(
         // track how many particles we buffer up here
         sp_[id]->num_to_copy++;
 
-        //printf("sp_[id] np %d vs numcopy %d \n", sp_[id]->np,  sp_[id]->num_to_copy);
-
         // Don't update np yet, we have not copied it back
         //sp_np[id] = np+1;
 
@@ -501,15 +471,13 @@ boundary_p_kokkos(
         //pm[nm].i=np;
         pm[nm].i = write_index; // Try tell it the index we wrote to
 
-        // TODO: this relies on serial for now -- maybe bad?
+        // FIXME: this relies on serial for now -- maybe bad?
         //sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
         int ret_code = move_p_kokkos_host_serial(
                 particle_recv,
                 particle_recv_i,
                 &(pm[nm]),
-                aa->k_a_h,
-                //aa->k_a_sah, // TODO: why does changing this to k_a_h break things?
-                //scatter_add,
+                fa->k_jf_accum_h,
                 g,
                 sp_[id]->g->k_neighbor_h,
                 rangel,
@@ -540,7 +508,6 @@ boundary_p_kokkos(
     } while(face!=5);
 
     LIST_FOR_EACH( sp, sp_list ) {
-      //sp->np=sp_np[sp->id];
       sp->nm=sp_nm[sp->id];
     }
 
@@ -560,18 +527,14 @@ boundary_p_kokkos(
       auto& kfad = fa->k_f_rhob_accum_d;
       auto& kfah = fa->k_f_rhob_accum_h;
       Kokkos::deep_copy(kfad, kfah);
-      // TODO: Is this the right range policy?
+
       Kokkos::parallel_for("Add rhob accumulation to device rhob", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, n_fields), KOKKOS_LAMBDA (int i) {
                 kfd(i, field_var::rhob) += kfad(i);
       });
-      // Zero host accum array
-      Kokkos::parallel_for("Clear rhob accumulation array on host", host_execution_policy(0, n_fields - 1), KOKKOS_LAMBDA (int i) {
-              kfah(i) = 0;
-              });
 
+      // Zero host accum array
+      Kokkos::deep_copy(kfah, 0.0f);
   }
-  // contribute SA back
-  //Kokkos::Experimental::contribute(aa->k_a_h, scatter_add);
 }
 
 void
@@ -885,7 +848,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         /**/                     // fragmentation)
         WARNING(( "Resizing local %s particle storage from %i to %i",
                   sp->name, sp->max_np, n ));
-        // TODO: KOKKOS REALLOC AS WELL ALSO FAIL HERE UNTIL THIS IS DONE
+        // FIXME: KOKKOS REALLOC AS WELL ALSO FAIL HERE UNTIL THIS IS DONE
         assert(0)
 
         MALLOC_ALIGNED( new_p, n, 128 );
@@ -993,7 +956,7 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         pm[nm].dispx=pi->dispx; pm[nm].dispy=pi->dispy; pm[nm].dispz=pi->dispz;
         pm[nm].i=np;
 #       endif
-        sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
+        sp_nm[id] = nm + move_p( p, pm+nm, fa->k_jf_accum_h, g, sp_q[id] );
       }
     } while(face!=5);
 

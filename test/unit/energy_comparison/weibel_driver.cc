@@ -23,7 +23,7 @@ begin_globals {
 
 std::string energy_file_name = "./energies";
 
-std::string energy_gold_file_name = EXPAND_AND_STRINGIFY( GOLD_ENERGY_FILE );
+std::string energy_gold_file_name = GOLD_ENERGY_FILE;
 
 void vpic_simulation::user_diagnostics() {
     dump_energies(energy_file_name.c_str(), 1);

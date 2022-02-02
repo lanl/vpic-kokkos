@@ -1,3 +1,6 @@
+The primary documentation for VPIC has moved to Sphinx and is located in `docs/`.
+The documentation is very much a work in progress, and the below is left intact for now, but may not be up to date and will be removed in the future.
+
 # GPU Specific Instructions
 
 ## Obtaining and Using Kokkos
@@ -8,7 +11,14 @@ kokkos, documented below.
 ### Quickstart
 
 1) Do a *recursive* clone of this repo, this will pull down a copy of Kokkos
-for you
+for you.
+```
+git clone --recursive git@github.com:lanl/vpic-kokkos.git
+```
+If you switch branches, you might need to update the Kokkos submodule.
+```
+git submodule update --init
+```
 2) Load modules for a) Cuda, and b) MPI
 3) Build the project by passing the CMake option `-DBUILD_INTERNAL_KOKKOS=ON`.
 This will request VPIC to build and handle Kokkos for you.
@@ -152,7 +162,7 @@ seen:
 2. During a GPU compile, nvcc warns about multiply defined c-standard flags.
    This warning can be safely ignored
 3. If you see `../src/util/pipelines/pipelines_thread.cc:239: undefined
-   reference to `omp_get_num_threads'` when building a deck, it's because
+   reference to omp_get_num_threads'` when building a deck, it's because
    `-fopenmp` (or equivelent) didn't get added to `./bin/vpic`. This happens
    because of a cmake bug where it fails to detect OpenMP. To fix it, you can
    manually add `-fopenmp` to the build flags in the file.

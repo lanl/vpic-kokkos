@@ -2,9 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [ devel ]
+    branches:
+      - '**'
   pull_request:
-    branches: [ devel ]
+    branches:
+      - '**'
 
 jobs:
   build:
@@ -12,24 +14,29 @@ jobs:
 
     steps:
     - name: Install deps
-      run: sudo apt-get install gfortran openmpi-bin libopenmpi-dev
-    - name: Checkout kokkos
-      uses: actions/checkout@v2.2.0
+      run: sudo apt-get update; sudo apt-get install gfortran openmpi-bin libopenmpi-dev
+    - name: Checkout vpic and kokkos
+      uses: actions/checkout@v2
       with:
-        repository: kokkos/kokkos
-        ref: 3.1.00
-        path: kokkos
+        submodules: recursive
+        #repository: kokkos/kokkos
+        #ref: 3.1.00
+        #path: kokkos
     - name: Build kokkos
       working-directory: kokkos
       run: |
-        cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/kokkos -DKokkos_CXX_STANDARD=14
+        cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/kokkos # -DKokkos_CXX_STANDARD=14
         cmake --build build --parallel 2
         cmake --install build
-    - uses: actions/checkout@v2
-    - name: configure
-      run: cmake -B build -DCMAKE_PREFIX_PATH="$HOME/kokkos" -DENABLE_UNIT_TESTS=ON -DENABLE_INTEGRATED_TESTS=ON
-    - name: make
+    #- uses: actions/checkout@v2
+    - name: configure with external
+      run: cmake -B build -DCMAKE_PREFIX_PATH="$HOME/kokkos" -DENABLE_UNIT_TESTS=ON -DENABLE_INTEGRATED_TESTS=ON -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing"
+    - name: make external
       run: cmake --build build
     - name: make check
       run: ctest --output-on-failure
       working-directory: build
+    - name: configure with internal
+      run: cmake -B build_internal -DBUILD_INTERNAL_KOKKOS=ON -DENABLE_UNIT_TESTS=ON -DENABLE_INTEGRATED_TESTS=ON -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing"
+    - name: make internal
+      run: cmake --build build_internal

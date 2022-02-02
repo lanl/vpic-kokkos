@@ -146,9 +146,6 @@ public:
   bool kokkos_field_injection = false;
   bool kokkos_current_injection = false;
   bool kokkos_particle_injection = false;
-  // Copy the last time-step on which we knowingly copied data back
-  int64_t field_copy_last = -1;
-  int64_t particle_copy_last = -1;
 
   // FIXME: THESE INTERVALS SHOULDN'T BE PART OF vpic_simulation
   // THE BIG LIST FOLLOWING IT SHOULD BE CLEANED UP TOO
@@ -196,7 +193,6 @@ public:
   material_t           * material_list;      // define_material
   field_array_t        * field_array;        // define_field_array
   interpolator_array_t * interpolator_array; // define_interpolator_array
-  accumulator_array_t  * accumulator_array;  // define_accumulator_array
   hydro_array_t        * hydro_array;        // define_hydro_array
   species_t            * species_list;       // define_species /
                                              // species helpers
@@ -306,13 +302,13 @@ public:
     return field_array->f[ voxel(ix,iy,iz) ];
   }
 
-    inline k_field_t& get_field() {
-        return field_array->k_f_d;
-    }
+  inline k_field_t& get_field() {
+      return field_array->k_f_d;
+  }
 
-    inline float& k_field(const int ix, const int iy, const int iz, field_var::f_v member) {
-        return field_array->k_f_d(voxel(ix,iy,iz), member);
-    }
+  inline float& k_field(const int ix, const int iy, const int iz, field_var::f_v member) {
+      return field_array->k_f_d(voxel(ix,iy,iz), member);
+  }
 
   inline interpolator_t &
   interpolator( const int v ) {
@@ -482,7 +478,6 @@ public:
     field_array        = fa ? fa :
                          new_standard_field_array( grid, material_list, damp );
     interpolator_array = new_interpolator_array( grid );
-    accumulator_array  = new_accumulator_array( grid );
     hydro_array        = new_hydro_array( grid );
 
     // Pre-size communications buffers. This is done to get most memory
@@ -586,7 +581,7 @@ public:
     p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
     pm->dispx = dispx; pm->dispy = dispy; pm->dispz = dispz; pm->i = sp->np-1;
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
-    sp->nm += move_p( sp->p, pm, accumulator_array->a, grid, sp->q );
+    sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
   }
 
   //////////////////////////////////
@@ -695,90 +690,6 @@ public:
   void user_diagnostics(void);
   void user_particle_collisions(void);
 
-  void KOKKOS_COPY_FIELD_MEM_TO_DEVICE(field_array_t* field_array)
-  {
-      int n_fields = field_array->g->nv;
-      auto& k_field = field_array->k_f_h;
-      auto& k_field_edge = field_array->k_fe_h;
-      Kokkos::parallel_for("copy field to device", host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) {
-              k_field(i, field_var::ex) = field_array->f[i].ex;
-              k_field(i, field_var::ey) = field_array->f[i].ey;
-              k_field(i, field_var::ez) = field_array->f[i].ez;
-              k_field(i, field_var::div_e_err) = field_array->f[i].div_e_err;
-
-              k_field(i, field_var::cbx) = field_array->f[i].cbx;
-              k_field(i, field_var::cby) = field_array->f[i].cby;
-              k_field(i, field_var::cbz) = field_array->f[i].cbz;
-              k_field(i, field_var::div_b_err) = field_array->f[i].div_b_err;
-
-              k_field(i, field_var::tcax) = field_array->f[i].tcax;
-              k_field(i, field_var::tcay) = field_array->f[i].tcay;
-              k_field(i, field_var::tcaz) = field_array->f[i].tcaz;
-              k_field(i, field_var::rhob) = field_array->f[i].rhob;
-
-              k_field(i, field_var::jfx) = field_array->f[i].jfx;
-              k_field(i, field_var::jfy) = field_array->f[i].jfy;
-              k_field(i, field_var::jfz) = field_array->f[i].jfz;
-              k_field(i, field_var::rhof) = field_array->f[i].rhof;
-
-              k_field_edge(i, field_edge_var::ematx) = field_array->f[i].ematx;
-              k_field_edge(i, field_edge_var::ematy) = field_array->f[i].ematy;
-              k_field_edge(i, field_edge_var::ematz) = field_array->f[i].ematz;
-              k_field_edge(i, field_edge_var::nmat) = field_array->f[i].nmat;
-
-              k_field_edge(i, field_edge_var::fmatx) = field_array->f[i].fmatx;
-              k_field_edge(i, field_edge_var::fmaty) = field_array->f[i].fmaty;
-              k_field_edge(i, field_edge_var::fmatz) = field_array->f[i].fmatz;
-              k_field_edge(i, field_edge_var::cmat) = field_array->f[i].cmat;
-      });
-      Kokkos::deep_copy(field_array->k_f_d, field_array->k_f_h);
-      Kokkos::deep_copy(field_array->k_fe_d, field_array->k_fe_h);
-  }
-
-  void KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array_t* field_array)
-  {
-      field_copy_last = step(); // track when we last moved this
-      Kokkos::deep_copy(field_array->k_f_h, field_array->k_f_d);
-      Kokkos::deep_copy(field_array->k_fe_h, field_array->k_fe_d);
-
-      auto& k_field = field_array->k_f_h;
-      auto& k_field_edge = field_array->k_fe_h;
-
-      int n_fields = field_array->g->nv;
-
-      Kokkos::parallel_for("copy field to host", host_execution_policy(0, n_fields - 1) , KOKKOS_LAMBDA (int i) {
-              field_array->f[i].ex = k_field(i, field_var::ex);
-              field_array->f[i].ey = k_field(i, field_var::ey);
-              field_array->f[i].ez = k_field(i, field_var::ez);
-              field_array->f[i].div_e_err = k_field(i, field_var::div_e_err);
-
-              field_array->f[i].cbx = k_field(i, field_var::cbx);
-              field_array->f[i].cby = k_field(i, field_var::cby);
-              field_array->f[i].cbz = k_field(i, field_var::cbz);
-              field_array->f[i].div_b_err = k_field(i, field_var::div_b_err);
-
-              field_array->f[i].tcax = k_field(i, field_var::tcax);
-              field_array->f[i].tcay = k_field(i, field_var::tcay);
-              field_array->f[i].tcaz = k_field(i, field_var::tcaz);
-              field_array->f[i].rhob = k_field(i, field_var::rhob);
-
-              field_array->f[i].jfx = k_field(i, field_var::jfx);
-              field_array->f[i].jfy = k_field(i, field_var::jfy);
-              field_array->f[i].jfz = k_field(i, field_var::jfz);
-              field_array->f[i].rhof = k_field(i, field_var::rhof);
-
-              field_array->f[i].ematx = k_field_edge(i, field_edge_var::ematx);
-              field_array->f[i].ematy = k_field_edge(i, field_edge_var::ematy);
-              field_array->f[i].ematz = k_field_edge(i, field_edge_var::ematz);
-              field_array->f[i].nmat = k_field_edge(i, field_edge_var::nmat);
-
-              field_array->f[i].fmatx = k_field_edge(i, field_edge_var::fmatx);
-              field_array->f[i].fmaty = k_field_edge(i, field_edge_var::fmaty);
-              field_array->f[i].fmatz = k_field_edge(i, field_edge_var::fmatz);
-              field_array->f[i].cmat = k_field_edge(i, field_edge_var::cmat);
-      });
-  }
-
   /**
    * @brief Copy all field data to the host, if it has not already been copied
    * this step
@@ -786,131 +697,13 @@ public:
    * This does not guarantee that the particles are truly up to date, since it
    * checks only if a copy has already been done at some point during the
    * current step, but it will always work in user_diagnostics unless the loop
-   * is modified or a user modifies particles during user_diagnostics.  
+   * is modified or a user modifies particles during user_diagnostics.
    *
    */
   void user_diagnostics_copy_field_mem_to_host()
   {
-      if (step() > field_copy_last)
-          KOKKOS_COPY_FIELD_MEM_TO_HOST(field_array);
-  }
-
-  /**
-   * @brief Copy all available particle memory from host to device, for a given
-   * species list
-   *
-   * @param sp the species_t to copy
-   */
-  void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(species_t* sp)
-  {
-      auto n_particles = sp->np;
-      auto max_pmovers = sp->max_nm;
-
-      auto& k_particles_h = sp->k_p_h;
-      auto& k_particles_i_h = sp->k_p_i_h;
-      auto& k_particle_movers_h = sp->k_pm_h;
-      auto& k_particle_movers_i_h = sp->k_pm_i_h;
-      auto& k_nm_h = sp->k_nm_h;
-      k_nm_h(0) = sp->nm;
-
-      Kokkos::parallel_for("copy particles to device", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) {
-              k_particles_h(i, particle_var::dx) = sp->p[i].dx;
-              k_particles_h(i, particle_var::dy) = sp->p[i].dy;
-              k_particles_h(i, particle_var::dz) = sp->p[i].dz;
-              k_particles_h(i, particle_var::ux) = sp->p[i].ux;
-              k_particles_h(i, particle_var::uy) = sp->p[i].uy;
-              k_particles_h(i, particle_var::uz) = sp->p[i].uz;
-              k_particles_h(i, particle_var::w)  = sp->p[i].w;
-              k_particles_i_h(i) = sp->p[i].i;
-              });
-
-      Kokkos::parallel_for("copy movers to device", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {
-              k_particle_movers_h(i, particle_mover_var::dispx) = sp->pm[i].dispx;
-              k_particle_movers_h(i, particle_mover_var::dispy) = sp->pm[i].dispy;
-              k_particle_movers_h(i, particle_mover_var::dispz) = sp->pm[i].dispz;
-              k_particle_movers_i_h(i) = sp->pm[i].i;
-              });
-      Kokkos::deep_copy(sp->k_p_d, sp->k_p_h);
-      Kokkos::deep_copy(sp->k_p_i_d, sp->k_p_i_h);
-      Kokkos::deep_copy(sp->k_pm_d, sp->k_pm_h);
-      Kokkos::deep_copy(sp->k_pm_i_d, sp->k_pm_i_h);
-      Kokkos::deep_copy(sp->k_nm_d, sp->k_nm_h);
-  }
-
-  /**
-   * @brief Copy all available particle memory from host to device, for a given
-   * list of species
-   *
-   * @param sp the species list to copy
-   */
-  void KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE(species_t* species_list)
-  {
-      auto* sp = species_list;
-      LIST_FOR_EACH( sp, species_list ) {
-          KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(sp);
-      }
-  }
-
-
-  /**
-   * @brief Copy all available particle memory from device to host, for a given species
-   *
-   * @param sp the species_t to copy
-   */
-  void KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(species_t* sp)
-  {
-      Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
-      Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
-      Kokkos::deep_copy(sp->k_pm_h, sp->k_pm_d);
-      Kokkos::deep_copy(sp->k_pm_i_h, sp->k_pm_i_d);
-      Kokkos::deep_copy(sp->k_nm_h, sp->k_nm_d);
-
-      auto n_particles = sp->np;
-      auto max_pmovers = sp->max_nm;
-
-      auto& k_particles_h = sp->k_p_h;
-      auto& k_particles_i_h = sp->k_p_i_h;
-
-      auto& k_particle_movers_h = sp->k_pm_h;
-      auto& k_particle_movers_i_h = sp->k_pm_i_h;
-
-      auto& k_nm_h = sp->k_nm_h;
-
-      sp->nm = k_nm_h(0);
-
-      Kokkos::parallel_for("copy particles to host", host_execution_policy(0, n_particles) , KOKKOS_LAMBDA (int i) {
-              sp->p[i].dx = k_particles_h(i, particle_var::dx);
-              sp->p[i].dy = k_particles_h(i, particle_var::dy);
-              sp->p[i].dz = k_particles_h(i, particle_var::dz);
-              sp->p[i].ux = k_particles_h(i, particle_var::ux);
-              sp->p[i].uy = k_particles_h(i, particle_var::uy);
-              sp->p[i].uz = k_particles_h(i, particle_var::uz);
-              sp->p[i].w  = k_particles_h(i, particle_var::w);
-              sp->p[i].i  = k_particles_i_h(i);
-              });
-
-      Kokkos::parallel_for("copy movers to host", host_execution_policy(0, max_pmovers) , KOKKOS_LAMBDA (int i) {
-              sp->pm[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
-              sp->pm[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
-              sp->pm[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
-              sp->pm[i].i     = k_particle_movers_i_h(i);
-              });
-
-      sp->species_copy_last = step();
-  }
-
-  /**
-   * @brief Copy all available particle memory from device to host, for a given species
-   *
-   * @param species_list The list of species to copy
-   */
-  void KOKKOS_COPY_PARTICLE_MEM_TO_HOST(species_t* species_list)
-  {
-      particle_copy_last = step();
-      auto* sp = species_list;
-      LIST_FOR_EACH( sp, species_list ) {
-          KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
-      }
+      if (step() > field_array->last_copied)
+        field_array->copy_to_host();
   }
 
   /**
@@ -920,7 +713,7 @@ public:
    * This does not guarantee that the particles are truly up to date, since it
    * checks only if a copy has already been done at some point during the
    * current step, but it will always work in user_diagnostics unless the loop
-   * is modified or a user modifies particles during user_diagnostics.  
+   * is modified or a user modifies particles during user_diagnostics.
    *
    * @param speciesname the name of the species to copy
    */
@@ -929,8 +722,8 @@ public:
       species_t * sp = find_species_name(speciesname, species_list);
       if(!sp) ERROR(( "Invalid Species name: %s", speciesname ));
 
-      if(step() > sp->species_copy_last)
-          KOKKOS_COPY_PARTICLE_MEM_TO_HOST_SP(sp);
+      if(step() > sp->last_copied)
+        sp->copy_to_host();
   }
 
   /**
@@ -940,7 +733,7 @@ public:
    * This does not guarantee that the particles are truly up to date, since it
    * checks only if a copy has already been done at some point during the
    * current step, but it will always work in user_diagnostics unless the loop
-   * is modified or a user modifies particles during user_diagnostics.  
+   * is modified or a user modifies particles during user_diagnostics.
    *
    * @param sp the species list to copy
    */
@@ -948,109 +741,20 @@ public:
   {
       auto* sp = species_list;
       LIST_FOR_EACH( sp, species_list ) {
-          if(step() > sp->species_copy_last)
-          KOKKOS_COPY_PARTICLE_MEM_TO_DEVICE_SP(sp);
+          if(step() > sp->last_copied)
+            sp->copy_to_host();
       }
   }
 
-  void KOKKOS_COPY_INTERPOLATOR_MEM_TO_DEVICE(interpolator_array_t* interpolator_array)
-  {
-      auto nv = interpolator_array->g->nv;
-
-      auto& k_interpolator_h = interpolator_array->k_i_h;
-      Kokkos::parallel_for("Copy interpolators to device", host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) {
-              k_interpolator_h(i, interpolator_var::ex)       = interpolator_array->i[i].ex;
-              k_interpolator_h(i, interpolator_var::ey)       = interpolator_array->i[i].ey;
-              k_interpolator_h(i, interpolator_var::ez)       = interpolator_array->i[i].ez;
-              k_interpolator_h(i, interpolator_var::dexdy)    = interpolator_array->i[i].dexdy;
-              k_interpolator_h(i, interpolator_var::dexdz)    = interpolator_array->i[i].dexdz;
-              k_interpolator_h(i, interpolator_var::d2exdydz) = interpolator_array->i[i].d2exdydz;
-              k_interpolator_h(i, interpolator_var::deydz)    = interpolator_array->i[i].deydz;
-              k_interpolator_h(i, interpolator_var::deydx)    = interpolator_array->i[i].deydx;
-              k_interpolator_h(i, interpolator_var::d2eydzdx) = interpolator_array->i[i].d2eydzdx;
-              k_interpolator_h(i, interpolator_var::dezdx)    = interpolator_array->i[i].dezdx;
-              k_interpolator_h(i, interpolator_var::dezdy)    = interpolator_array->i[i].dezdy;
-              k_interpolator_h(i, interpolator_var::d2ezdxdy) = interpolator_array->i[i].d2ezdxdy;
-              k_interpolator_h(i, interpolator_var::cbx)      = interpolator_array->i[i].cbx;
-              k_interpolator_h(i, interpolator_var::cby)      = interpolator_array->i[i].cby;
-              k_interpolator_h(i, interpolator_var::cbz)      = interpolator_array->i[i].cbz;
-              k_interpolator_h(i, interpolator_var::dcbxdx)   = interpolator_array->i[i].dcbxdx;
-              k_interpolator_h(i, interpolator_var::dcbydy)   = interpolator_array->i[i].dcbydy;
-              k_interpolator_h(i, interpolator_var::dcbzdz)   = interpolator_array->i[i].dcbzdz;
-              });
-      Kokkos::deep_copy(interpolator_array->k_i_d, interpolator_array->k_i_h);
-  }
-
-  void KOKKOS_COPY_INTERPOLATOR_MEM_TO_HOST(interpolator_array_t* interpolator_array)
-  {
-
-      Kokkos::deep_copy(interpolator_array->k_i_h, interpolator_array->k_i_d);
-
-      auto nv = interpolator_array->g->nv;;
-      auto& k_interpolator_h = interpolator_array->k_i_h;
-
-      Kokkos::parallel_for("Copy interpolators to device", host_execution_policy(0, nv) , KOKKOS_LAMBDA (int i) {
-              interpolator_array->i[i].ex       = k_interpolator_h(i, interpolator_var::ex);
-              interpolator_array->i[i].ey       = k_interpolator_h(i, interpolator_var::ey);
-              interpolator_array->i[i].ez       = k_interpolator_h(i, interpolator_var::ez);
-              interpolator_array->i[i].dexdy    = k_interpolator_h(i, interpolator_var::dexdy);
-              interpolator_array->i[i].dexdz    = k_interpolator_h(i, interpolator_var::dexdz);
-              interpolator_array->i[i].d2exdydz = k_interpolator_h(i, interpolator_var::d2exdydz);
-              interpolator_array->i[i].deydz    = k_interpolator_h(i, interpolator_var::deydz);
-              interpolator_array->i[i].deydx    = k_interpolator_h(i, interpolator_var::deydx);
-              interpolator_array->i[i].d2eydzdx = k_interpolator_h(i, interpolator_var::d2eydzdx);
-              interpolator_array->i[i].dezdx    = k_interpolator_h(i, interpolator_var::dezdx);
-              interpolator_array->i[i].dezdy    = k_interpolator_h(i, interpolator_var::dezdy);
-              interpolator_array->i[i].d2ezdxdy = k_interpolator_h(i, interpolator_var::d2ezdxdy);
-              interpolator_array->i[i].cbx      = k_interpolator_h(i, interpolator_var::cbx);
-              interpolator_array->i[i].cby      = k_interpolator_h(i, interpolator_var::cby);
-              interpolator_array->i[i].cbz      = k_interpolator_h(i, interpolator_var::cbz);
-              interpolator_array->i[i].dcbxdx   = k_interpolator_h(i, interpolator_var::dcbxdx);
-              interpolator_array->i[i].dcbydy   = k_interpolator_h(i, interpolator_var::dcbydy);
-              interpolator_array->i[i].dcbzdz   = k_interpolator_h(i, interpolator_var::dcbzdz);
-              });
-  }
-
-  void KOKKOS_COPY_ACCUMULATOR_MEM_TO_DEVICE(accumulator_array_t* accumulator_array)
-  {
-      auto na = accumulator_array->na;
-
-      auto& k_accumulators_h = accumulator_array->k_a_h;
-      Kokkos::parallel_for("copy accumulator to device", KOKKOS_TEAM_POLICY_HOST
-              (na, Kokkos::AUTO),
-              KOKKOS_LAMBDA
-              (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) {
-              const unsigned int i = team_member.league_rank();
-              /* TODO: Do we really need a 2d loop here*/
-              Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) {
-                      k_accumulators_h(i, accumulator_var::jx, j)       = accumulator_array->a[i].jx[j];
-                      k_accumulators_h(i, accumulator_var::jy, j)       = accumulator_array->a[i].jy[j];
-                      k_accumulators_h(i, accumulator_var::jz, j)       = accumulator_array->a[i].jz[j];
-                      });
-              });
-      Kokkos::deep_copy(accumulator_array->k_a_d, accumulator_array->k_a_h);
-  }
-
-  void KOKKOS_COPY_ACCUMULATOR_MEM_TO_HOST(accumulator_array_t* accumulator_array)
-  {
-      auto& na = accumulator_array->na;
-      auto& k_accumulators_h = accumulator_array->k_a_h;
-
-      Kokkos::deep_copy(accumulator_array->k_a_h, accumulator_array->k_a_d);
-      Kokkos::parallel_for("copy accumulator to host", KOKKOS_TEAM_POLICY_HOST
-              (na, Kokkos::AUTO),
-              KOKKOS_LAMBDA
-              (const KOKKOS_TEAM_POLICY_HOST::member_type &team_member) {
-              const unsigned int i = team_member.league_rank();
-
-              Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ACCUMULATOR_ARRAY_LENGTH), [=] (int j) {
-                      accumulator_array->a[i].jx[j] = k_accumulators_h(i, accumulator_var::jx, j);
-                      accumulator_array->a[i].jy[j] = k_accumulators_h(i, accumulator_var::jy, j);
-                      accumulator_array->a[i].jz[j] = k_accumulators_h(i, accumulator_var::jz, j);
-                      });
-              });
-  }
-
 };
+
+
+/**
+ * @brief After a checkpoint restore, we must move the data back over to the
+ * Kokkos objects. This currently must be done for all views
+ */
+void restore_kokkos(vpic_simulation& simulation);
+// TODO: would this make more sense as a member function on vpic_simulation_t
+
 
 #endif // vpic_h
