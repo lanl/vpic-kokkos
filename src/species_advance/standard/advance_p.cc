@@ -894,6 +894,7 @@ advance_p_kokkos_omp_simd(
       q[lane] = p_w;
       ii[lane] = pii;
     }
+
 #pragma omp simd
     for(int lane=0; lane<num_lanes; lane++) {
       // Load interpolators
@@ -944,7 +945,7 @@ advance_p_kokkos_omp_simd(
 #pragma omp simd 
     for(int lane=0; lane<num_lanes; lane++) {
       size_t p_index = chunk*num_lanes + lane;
-      v0[lane] = qdt_2mc/std::sqrt(one + (ux[lane]*ux[lane] + (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
+      v0[lane] = qdt_2mc/sqrtf(one + (ux[lane]*ux[lane] + (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
     }
 
 #pragma omp simd
@@ -1046,35 +1047,58 @@ advance_p_kokkos_omp_simd(
       v2[lane] -= v5[lane];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
       v3[lane] += v5[lane];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
+//        int iii = ii[lane];
+//        int zi = iii/((nx+2)*(ny+2));
+//        iii -= zi*(nx+2)*(ny+2);
+//        int yi = iii/(nx+2);
+//        int xi = iii - yi*(nx+2);
+//        ACCUMULATE_J( x,y,z );
+//        //Kokkos::atomic_add(&k_field(ii, field_var::jfx), cx*v0);
+//        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx), cx*v1);
+//        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx), cx*v2);
+//        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx), cx*v3);
+//        k_field_scatter_access(ii[lane], field_var::jfx) += cx*v0[lane];
+//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1[lane];
+//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2[lane];
+//        k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3[lane];
+//
+//        ACCUMULATE_J( y,z,x );
+//        //Kokkos::atomic_add(&k_field(ii, field_var::jfy), cy*v0);
+//        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v1);
+//        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy), cy*v2);
+//        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v3);
+//        k_field_scatter_access(ii[lane], field_var::jfy) += cy*v0[lane];
+//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1[lane];
+//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2[lane];
+//        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3[lane];
+//
+//        ACCUMULATE_J( z,x,y );
+//        //Kokkos::atomic_add(&k_field(ii, field_var::jfz), cz*v0);
+//        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz), cz*v1);
+//        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v2);
+//        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v3);
+//        k_field_scatter_access(ii[lane], field_var::jfz) += cz*v0[lane];
+//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1[lane];
+//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
+//        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
+
       ACCUMULATE_J( x,y,z );
       v6[lane] = v0[lane];
       v7[lane] = v1[lane];
       v8[lane] = v2[lane];
       v9[lane] = v3[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 0) += v0[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 1) += v1[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 2) += v2[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 3) += v3[lane];
 
       ACCUMULATE_J( y,z,x );
       v10[lane] = v0[lane];
       v11[lane] = v1[lane];
       v12[lane] = v2[lane];
       v13[lane] = v3[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 0) += v0[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 1) += v1[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 2) += v2[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 3) += v3[lane];
 
       ACCUMULATE_J( z,x,y );
 //      v14[lane] = v0[lane];
 //      v15[lane] = v1[lane];
 //      v16[lane] = v2[lane];
 //      v17[lane] = v3[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 0) += v0[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 1) += v1[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 2) += v2[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 3) += v3[lane];
 #     undef ACCUMULATE_J
     }
 
@@ -1100,7 +1124,6 @@ advance_p_kokkos_omp_simd(
 //      a7_ptr[lane] += v13[lane];
 //    }
 
-#pragma omp simd
     for(int lane=0; lane<num_lanes; lane++) {
       size_t p_index = chunk*num_lanes + lane;
       int iii = ii[lane];
@@ -1114,46 +1137,17 @@ advance_p_kokkos_omp_simd(
       k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v8[lane];
       k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[lane];
 
-      k_field_scatter_access(ii[lane], field_var::jfy) += cx*v10[lane];
-      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cx*v11[lane];
-      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cx*v12[lane];
-      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cx*v13[lane];
+      k_field_scatter_access(ii[lane], field_var::jfy) += cy*v10[lane];
+      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v11[lane];
+      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v12[lane];
+      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[lane];
 
-      k_field_scatter_access(ii[lane], field_var::jfz) += cx*v0[lane];
-      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cx*v1[lane];
-      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cx*v2[lane];
-      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cx*v3[lane];
-
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 0) += v6[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 1) += v7[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 2) += v8[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jx, 3) += v9[lane];
-//
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 0) += v10[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 1) += v11[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 2) += v12[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jy, 3) += v13[lane];
-//
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 0) += v0[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 1) += v1[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 2) += v2[lane];
-//      k_accumulators_scatter_access(ii[lane], accumulator_var::jz, 3) += v3[lane];
-
-//      k_accumulators(ii[lane], accumulator_var::jx, 0) += v6[lane];
-//      k_accumulators(ii[lane], accumulator_var::jx, 1) += v7[lane];
-//      k_accumulators(ii[lane], accumulator_var::jx, 2) += v8[lane];
-//      k_accumulators(ii[lane], accumulator_var::jx, 3) += v9[lane];
-//
-//      k_accumulators(ii[lane], accumulator_var::jy, 0) += v10[lane];
-//      k_accumulators(ii[lane], accumulator_var::jy, 1) += v11[lane];
-//      k_accumulators(ii[lane], accumulator_var::jy, 2) += v12[lane];
-//      k_accumulators(ii[lane], accumulator_var::jy, 3) += v13[lane];
-//
-//      k_accumulators(ii[lane], accumulator_var::jz, 0) += v14[lane];
-//      k_accumulators(ii[lane], accumulator_var::jz, 1) += v15[lane];
-//      k_accumulators(ii[lane], accumulator_var::jz, 2) += v16[lane];
-//      k_accumulators(ii[lane], accumulator_var::jz, 3) += v17[lane];
+      k_field_scatter_access(ii[lane], field_var::jfz) += cz*v0[lane];
+      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1[lane];
+      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
+      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
     }
+
     for(int lane=0; lane<num_lanes; lane++) {
       if(!inbnds[lane]) {
         size_t p_index = chunk*num_lanes + lane;
@@ -1254,56 +1248,46 @@ advance_p_kokkos_omp_simd(
   if(num_chunks*num_lanes < np) {
     for(int p_index=num_chunks*num_lanes; p_index<np; p_index++) {
       float v0, v1, v2, v3, v4, v5;
-//      auto  k_accumulators_scatter_access = k_accumulators_sa.access();
+      auto  k_field_scatter_access = k_f_sv.access();
 
-      // Load position
-      float dx = p_dx;
-      float dy = p_dy;
-      float dz = p_dz;
-      int ii = pii;
+      float dx   = p_dx;                             // Load position
+      float dy   = p_dy;
+      float dz   = p_dz;
+      int   ii   = pii;
+      float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
+                             dz*( f_dexdz + dy*f_d2exdydz ) );
+      float hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
+                             dx*( f_deydx + dz*f_d2eydzdx ) );
+      float haz  = qdt_2mc*(    ( f_ez    + dx*f_dezdx    ) +
+                             dy*( f_dezdy + dx*f_d2ezdxdy ) );
 
-      float hax = qdt_2mc*( (f_ex + dy*f_dexdy ) + dz*(f_dexdz + dy*f_d2exdydz) );
-      float hay = qdt_2mc*( (f_ey + dz*f_deydz ) + dx*(f_deydx + dz*f_d2eydzdx) );
-      float haz = qdt_2mc*( (f_ez + dx*f_dezdx ) + dy*(f_dezdy + dx*f_d2ezdxdy) );
-
-      // Interpolate B
-      float cbx = f_cbx + dx*f_dcbxdx;
-      float cby = f_cby + dy*f_dcbydy;
-      float cbz = f_cbz + dz*f_dcbzdz;
-
-      // Load momentum
-      float ux = p_ux;
-      float uy = p_uy;
-      float uz = p_uz;
-      float q = p_w;
-
-      // Half advance e
-      ux += hax;
-      uy += hay;
-      uz += haz;
-
-      v0 = qdt_2mc/std::sqrt(one + (ux*ux + (uy*uy + uz*uz)));
-
-      // Boris - scalars
-      v1 = cbx*cbx + (cby*cby + cbz*cbz);
-      v2 = (v0*v0)*v1;
-      v3 = v0*(one+v2*(one_third+v2*two_fifteenths));
-      v4 = v3/(one+v1*(v3*v3));
-      v4 += v4;
-      // Boris - uprime
-      v0 = ux + v3*(uy*cbz - uz*cby);
-      v1 = uy + v3*(uz*cbx - ux*cbz);
-      v2 = uz + v3*(ux*cby - uy*cbx);
-      // Boris - rotation
-      ux += v4*(v1*cbz - v2*cby);
-      uy += v4*(v2*cbx - v0*cbz);
-      uz += v4*(v0*cby - v1*cbx);
-      // Half advance e
-      ux += hax;
-      uy += hay;
-      uz += haz;
-      // Store momentum
-      p_ux = ux;
+      float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
+      float cby  = f_cby + dy*f_dcbydy;
+      float cbz  = f_cbz + dz*f_dcbzdz;
+      float ux   = p_ux;                             // Load momentum
+      float uy   = p_uy;
+      float uz   = p_uz;
+      float q    = p_w;
+      ux  += hax;                               // Half advance E
+      uy  += hay;
+      uz  += haz;
+      v0   = qdt_2mc/sqrtf(one + (ux*ux + (uy*uy + uz*uz)));
+      /**/                                      // Boris - scalars
+      v1   = cbx*cbx + (cby*cby + cbz*cbz);
+      v2   = (v0*v0)*v1;
+      v3   = v0*(one+v2*(one_third+v2*two_fifteenths));
+      v4   = v3/(one+v1*(v3*v3));
+      v4  += v4;
+      v0   = ux + v3*( uy*cbz - uz*cby );       // Boris - uprime
+      v1   = uy + v3*( uz*cbx - ux*cbz );
+      v2   = uz + v3*( ux*cby - uy*cbx );
+      ux  += v4*( v1*cbz - v2*cby );            // Boris - rotation
+      uy  += v4*( v2*cbx - v0*cbz );
+      uz  += v4*( v0*cby - v1*cbx );
+      ux  += hax;                               // Half advance E
+      uy  += hay;
+      uz  += haz;
+      p_ux = ux;                               // Store momentum
       p_uy = uy;
       p_uz = uz;
 
@@ -1323,9 +1307,10 @@ advance_p_kokkos_omp_simd(
       v4   = v1 + uy;
       v5   = v2 + uz;
 
-      bool inbnds = v3<=one &&  v4<=one &&  v5<=one &&
-                    -v3<=one && -v4<=one && -v5<=one;
-      if(inbnds) {
+      // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
+      if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
+          -v3<=one && -v4<=one && -v5<=one ) {
+
         // Common case (inbnds).  Note: accumulator values are 4 times
         // the total physical charge that passed through the appropriate
         // current quadrant in a time-step
@@ -1355,29 +1340,43 @@ advance_p_kokkos_omp_simd(
         v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
         v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
+// Bypass accumulators TODO: enable warp reduction
+
+        // TODO: That 2 needs to be 2*NGHOST eventually
         int iii = ii;
         int zi = iii/((nx+2)*(ny+2));
         iii -= zi*(nx+2)*(ny+2);
         int yi = iii/(nx+2);
         int xi = iii - yi*(nx+2);
-
         ACCUMULATE_J( x,y,z );
+        //Kokkos::atomic_add(&k_field(ii, field_var::jfx), cx*v0);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx), cx*v1);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx), cx*v2);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx), cx*v3);
         k_field_scatter_access(ii, field_var::jfx) += cx*v0;
         k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
         k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
         k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
 
         ACCUMULATE_J( y,z,x );
-        k_field_scatter_access(ii, field_var::jfy) += cx*v0;
-        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cx*v1;
-        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cx*v2;
-        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cx*v3;
+        //Kokkos::atomic_add(&k_field(ii, field_var::jfy), cy*v0);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v1);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy), cy*v2);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v3);
+        k_field_scatter_access(ii, field_var::jfy) += cy*v0;
+        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
+        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
+        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
 
         ACCUMULATE_J( z,x,y );
-        k_field_scatter_access(ii, field_var::jfz) += cx*v0;
-        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cx*v1;
-        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cx*v2;
-        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cx*v3;
+        //Kokkos::atomic_add(&k_field(ii, field_var::jfz), cz*v0);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz), cz*v1);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v2);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v3);
+        k_field_scatter_access(ii, field_var::jfz) += cz*v0;
+        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
+        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
+        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
 #       undef ACCUMULATE_J
       } else {
         DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
@@ -1386,26 +1385,40 @@ advance_p_kokkos_omp_simd(
         local_pm->dispz = uz;
         local_pm->i     = p_index;
 
-        if( move_p_kokkos( k_particles, k_particles_i, local_pm,
-                           k_f_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) ) { // Unlikely
-          if( k_nm(0)<max_nm ) {
-            const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
-            if (nm >= max_nm) Kokkos::abort("overran max_nm");
+        //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
+        if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
+                       k_f_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
+        {
+          if( k_nm(0) < max_nm )
+          {
+              const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+              if (nm >= max_nm) Kokkos::abort("overran max_nm");
 
-            k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
-            k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
-            k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
-            k_particle_movers_i(nm)   = local_pm->i;
+              k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+              k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+              k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+              k_particle_movers_i(nm)   = local_pm->i;
 
-            // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-            k_particle_copy(nm, particle_var::dx) = p_dx;
-            k_particle_copy(nm, particle_var::dy) = p_dy;
-            k_particle_copy(nm, particle_var::dz) = p_dz;
-            k_particle_copy(nm, particle_var::ux) = p_ux;
-            k_particle_copy(nm, particle_var::uy) = p_uy;
-            k_particle_copy(nm, particle_var::uz) = p_uz;
-            k_particle_copy(nm, particle_var::w) = p_w;
-            k_particle_i_copy(nm) = pii;
+              // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+              k_particle_copy(nm, particle_var::dx) = p_dx;
+              k_particle_copy(nm, particle_var::dy) = p_dy;
+              k_particle_copy(nm, particle_var::dz) = p_dz;
+              k_particle_copy(nm, particle_var::ux) = p_ux;
+              k_particle_copy(nm, particle_var::uy) = p_uy;
+              k_particle_copy(nm, particle_var::uz) = p_uz;
+              k_particle_copy(nm, particle_var::w) = p_w;
+              k_particle_i_copy(nm) = pii;
+
+              // Tag this one as having left
+              //k_particles(p_index, particle_var::pi) = 999999;
+
+              // Copy local local_pm back
+              //local_pm_dispx = local_pm->dispx;
+              //local_pm_dispy = local_pm->dispy;
+              //local_pm_dispz = local_pm->dispz;
+              //local_pm_i = local_pm->i;
+              //printf("rank copying %d to nm %d \n", local_pm_i, nm);
+              //copy_local_to_pm(nm);
           }
         }
       }
@@ -1688,6 +1701,7 @@ advance_p_kokkos_devel(
       k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
       k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
       k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
+
 // TODO: Make this optimization work with the accumulator bypass
 //#ifdef VPIC_ENABLE_TEAM_REDUCTION
 //      if(min_inbnds == max_inbnds && min_index == max_index) {
