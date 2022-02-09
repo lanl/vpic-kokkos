@@ -118,63 +118,112 @@ advance_p_kokkos_vector(
   // TODO: is this the right place to do this?
   Kokkos::deep_copy(k_nm, 0);
 
-  int num_leagues = g->nv/4;
-  constexpr int num_lanes = 32;
+//  int num_leagues = g->nv/4;
+  int num_leagues = 1;
+  constexpr int num_lanes = 16;
 
   int num_chunks = np/num_lanes;
   int chunks_per_league = num_chunks/num_leagues;
 
-  typedef Kokkos::DefaultExecutionSpace::scratch_memory_space ScratchSpace;
-  typedef Kokkos::View<float[num_lanes], ScratchSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> simd_float;
-  typedef Kokkos::View<int[num_lanes],   ScratchSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> simd_int;
-  Kokkos::TeamPolicy<> policy = Kokkos::TeamPolicy<>(num_leagues, Kokkos::AUTO(), num_lanes).set_scratch_size(1, Kokkos::PerThread(64*(num_lanes*4+sizeof(simd_float))));
-  Kokkos::parallel_for("advance_p", policy, 
-  KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
-    simd_float v0(team_member.thread_scratch(1));
-    simd_float v1(team_member.thread_scratch(1));
-    simd_float v2(team_member.thread_scratch(1));
-    simd_float v3(team_member.thread_scratch(1));
-    simd_float v4(team_member.thread_scratch(1));
-    simd_float v5(team_member.thread_scratch(1));
-    simd_float dx(team_member.thread_scratch(1));
-    simd_float dy(team_member.thread_scratch(1));
-    simd_float dz(team_member.thread_scratch(1));
-    simd_float ux(team_member.thread_scratch(1));
-    simd_float uy(team_member.thread_scratch(1));
-    simd_float uz(team_member.thread_scratch(1));
-    simd_float hax(team_member.thread_scratch(1));
-    simd_float hay(team_member.thread_scratch(1));
-    simd_float haz(team_member.thread_scratch(1));
-    simd_float cbx(team_member.thread_scratch(1));
-    simd_float cby(team_member.thread_scratch(1));
-    simd_float cbz(team_member.thread_scratch(1));
-    simd_float q(team_member.thread_scratch(1));
-    simd_int   ii(team_member.thread_scratch(1));
-    simd_int   inbnds(team_member.thread_scratch(1));
+//  typedef Kokkos::DefaultExecutionSpace::scratch_memory_space ScratchSpace;
+//  typedef Kokkos::View<float[num_lanes], ScratchSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> simd_float;
+//  typedef Kokkos::View<int[num_lanes],   ScratchSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> simd_int;
+////  Kokkos::TeamPolicy<> policy = Kokkos::TeamPolicy<>(num_leagues, Kokkos::AUTO(), num_lanes).set_scratch_size(1, Kokkos::PerThread(64*(num_lanes*4+sizeof(simd_float))));
+//  Kokkos::TeamPolicy<> policy = Kokkos::TeamPolicy<>(num_leagues, Kokkos::AUTO(), num_lanes);
+//  Kokkos::parallel_for("advance_p", policy, 
+//  KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
+//
+//    simd_float v0(team_member.thread_scratch(1));
+//    simd_float v1(team_member.thread_scratch(1));
+//    simd_float v2(team_member.thread_scratch(1));
+//    simd_float v3(team_member.thread_scratch(1));
+//    simd_float v4(team_member.thread_scratch(1));
+//    simd_float v5(team_member.thread_scratch(1));
+//    simd_float dx(team_member.thread_scratch(1));
+//    simd_float dy(team_member.thread_scratch(1));
+//    simd_float dz(team_member.thread_scratch(1));
+//    simd_float ux(team_member.thread_scratch(1));
+//    simd_float uy(team_member.thread_scratch(1));
+//    simd_float uz(team_member.thread_scratch(1));
+//    simd_float hax(team_member.thread_scratch(1));
+//    simd_float hay(team_member.thread_scratch(1));
+//    simd_float haz(team_member.thread_scratch(1));
+//    simd_float cbx(team_member.thread_scratch(1));
+//    simd_float cby(team_member.thread_scratch(1));
+//    simd_float cbz(team_member.thread_scratch(1));
+//    simd_float q(team_member.thread_scratch(1));
+//    simd_int   ii(team_member.thread_scratch(1));
+//    simd_int   inbnds(team_member.thread_scratch(1));
+//
+//    simd_float fcbx(team_member.thread_scratch(1));
+//    simd_float fcby(team_member.thread_scratch(1));
+//    simd_float fcbz(team_member.thread_scratch(1));
+//    simd_float fex(team_member.thread_scratch(1));
+//    simd_float fey(team_member.thread_scratch(1));
+//    simd_float fez(team_member.thread_scratch(1));
+//    simd_float fdexdy(team_member.thread_scratch(1));
+//    simd_float fdexdz(team_member.thread_scratch(1));
+//    simd_float fd2exdydz(team_member.thread_scratch(1));
+//    simd_float fdeydx(team_member.thread_scratch(1));
+//    simd_float fdeydz(team_member.thread_scratch(1));
+//    simd_float fd2eydzdx(team_member.thread_scratch(1));
+//    simd_float fdezdx(team_member.thread_scratch(1));
+//    simd_float fdezdy(team_member.thread_scratch(1));
+//    simd_float fd2ezdxdy(team_member.thread_scratch(1));
+//    simd_float fdcbxdx(team_member.thread_scratch(1));
+//    simd_float fdcbydy(team_member.thread_scratch(1));
+//    simd_float fdcbzdz(team_member.thread_scratch(1));
 
-    simd_float fcbx(team_member.thread_scratch(1));
-    simd_float fcby(team_member.thread_scratch(1));
-    simd_float fcbz(team_member.thread_scratch(1));
-    simd_float fex(team_member.thread_scratch(1));
-    simd_float fey(team_member.thread_scratch(1));
-    simd_float fez(team_member.thread_scratch(1));
-    simd_float fdexdy(team_member.thread_scratch(1));
-    simd_float fdexdz(team_member.thread_scratch(1));
-    simd_float fd2exdydz(team_member.thread_scratch(1));
-    simd_float fdeydx(team_member.thread_scratch(1));
-    simd_float fdeydz(team_member.thread_scratch(1));
-    simd_float fd2eydzdx(team_member.thread_scratch(1));
-    simd_float fdezdx(team_member.thread_scratch(1));
-    simd_float fdezdy(team_member.thread_scratch(1));
-    simd_float fd2ezdxdy(team_member.thread_scratch(1));
-    simd_float fdcbxdx(team_member.thread_scratch(1));
-    simd_float fdcbydy(team_member.thread_scratch(1));
-    simd_float fdcbzdz(team_member.thread_scratch(1));
+//printf("Num leagues: %d, team size: %d, chunks per league: %d\n", team_member.league_size(), team_member.team_size(), chunks_per_league);
 
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, chunks_per_league), [=] (size_t chunk_offset) {
+//    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, chunks_per_league), [=] (size_t chunk_offset) {
+Kokkos::parallel_for("push particles", Kokkos::RangePolicy<>(0, chunks_per_league), KOKKOS_LAMBDA(const size_t chunk_offset) {
+
+      float v0[num_lanes];
+      float v1[num_lanes];
+      float v2[num_lanes];
+      float v3[num_lanes];
+      float v4[num_lanes];
+      float v5[num_lanes];
+      float dx[num_lanes];
+      float dy[num_lanes];
+      float dz[num_lanes];
+      float ux[num_lanes];
+      float uy[num_lanes];
+      float uz[num_lanes];
+      float hax[num_lanes];
+      float hay[num_lanes];
+      float haz[num_lanes];
+      float cbx[num_lanes];
+      float cby[num_lanes];
+      float cbz[num_lanes];
+      float q[num_lanes];
+      int ii[num_lanes];
+      int inbnds[num_lanes];
+
+      float fcbx[num_lanes];
+      float fcby[num_lanes];
+      float fcbz[num_lanes];
+      float fex[num_lanes];
+      float fey[num_lanes];
+      float fez[num_lanes];
+      float fdexdy[num_lanes];
+      float fdexdz[num_lanes];
+      float fd2exdydz[num_lanes];
+      float fdeydx[num_lanes];
+      float fdeydz[num_lanes];
+      float fd2eydzdx[num_lanes];
+      float fdezdx[num_lanes];
+      float fdezdy[num_lanes];
+      float fd2ezdxdy[num_lanes];
+      float fdcbxdx[num_lanes];
+      float fdcbydy[num_lanes];
+      float fdcbzdz[num_lanes];
 
       auto k_field_scatter_access = k_f_sv.access();
-      size_t chunk = team_member.league_rank()*chunks_per_league + chunk_offset;
+//      size_t chunk = team_member.league_rank()*chunks_per_league + chunk_offset;
+      size_t chunk = chunk_offset;
+
 #pragma omp simd
       for(int lane=0; lane<num_lanes; lane++) {
         size_t p_index = chunk*num_lanes + lane;
@@ -292,18 +341,18 @@ advance_p_kokkos_vector(
                       -v3[lane]<=one && -v4[lane]<=one && -v5[lane]<=one;
       }
 
-const simd_float& v6 = fex;
-const simd_float& v7 = fdexdy;
-const simd_float& v8 = fdexdz;
-const simd_float& v9 = fd2exdydz;
-const simd_float& v10 = fey;
-const simd_float& v11 = fdeydz;
-const simd_float& v12 = fdeydx;
-const simd_float& v13 = fd2eydzdx;
-const simd_float& v14 = fez;
-const simd_float& v15 = fdezdx;
-const simd_float& v16 = fdezdy;
-const simd_float& v17 = fd2ezdxdy;
+float* v6 = fex;
+float* v7 = fdexdy;
+float* v8 = fdexdz;
+float* v9 = fd2exdydz;
+float* v10 = fey;
+float* v11 = fdeydz;
+float* v12 = fdeydx;
+float* v13 = fd2eydzdx;
+float* v14 = fez;
+float* v15 = fdezdx;
+float* v16 = fdezdy;
+float* v17 = fd2ezdxdy;
 
 #pragma omp simd
       for(int lane=0; lane<num_lanes; lane++) {
@@ -344,165 +393,160 @@ const simd_float& v17 = fd2ezdxdy;
         v3[lane] += v5[lane];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
         ACCUMULATE_J( x,y,z );
-        v6(lane) = v0(lane);
-        v7(lane) = v1(lane);
-        v8(lane) = v2(lane);
-        v9(lane) = v3(lane);
+        v6[lane] = v0[lane];
+        v7[lane] = v1[lane];
+        v8[lane] = v2[lane];
+        v9[lane] = v3[lane];
 
         ACCUMULATE_J( y,z,x );
-        v10(lane) = v0(lane);
-        v11(lane) = v1(lane);
-        v12(lane) = v2(lane);
-        v13(lane) = v3(lane);
+        v10[lane] = v0[lane];
+        v11[lane] = v1[lane];
+        v12[lane] = v2[lane];
+        v13[lane] = v3[lane];
 
         ACCUMULATE_J( z,x,y );
-        v14(lane) = v0(lane);
-        v15(lane) = v1(lane);
-        v16(lane) = v2(lane);
-        v17(lane) = v3(lane);
+        v14[lane] = v0[lane];
+        v15[lane] = v1[lane];
+        v16[lane] = v2[lane];
+        v17[lane] = v3[lane];
       }
 
-#ifdef VPIC_ENABLE_TEAM_REDUCTION
-      int first = ii(0);
-      int index = first;
-      int in_bounds = 1;
-      #pragma omp simd reduction(&:index,in_bounds)
+//#ifdef VPIC_ENABLE_TEAM_REDUCTION
+    int first = ii[0];
+    int index = first;
+    int in_bounds = 1;
+    #pragma omp simd reduction(&:index,in_bounds)
+    for(int lane=0; lane<num_lanes; lane++) {
+      index &= ii[lane];
+      in_bounds &= inbnds[lane];
+    }
+
+    if(first == index && in_bounds == 1) {
+      int iii = first;
+      int zi = iii/((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii/(nx+2);
+      int xi = iii - yi*(nx+2);
+
+      float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
+      float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
+      float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
+      #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val8,val9,val10,val11)
       for(int lane=0; lane<num_lanes; lane++) {
-        index &= ii(lane);
-        in_bounds &= inbnds(lane);
+        val0 += v6[lane];
+        val1 += v7[lane];
+        val2 += v8[lane];
+        val3 += v9[lane];
+        val4 += v10[lane];
+        val5 += v11[lane];
+        val6 += v12[lane];
+        val7 += v13[lane];
+        val8 += v0[lane];
+        val9 += v1[lane];
+        val10 += v2[lane];
+        val11 += v3[lane];
       }
+      k_field_scatter_access(first, field_var::jfx) += cx*val0;
+      k_field_scatter_access(first, field_var::jfy) += cy*val4;
+      k_field_scatter_access(first, field_var::jfz) += cz*val8;
+      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*val6;
+      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*val9;
+      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*val1;
+      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val10;
+      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*val2;
+      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val5;
+      k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*val3;
+      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val7;
+      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val11;
 
-      if(first == index && in_bounds == 1) {
-        int iii = first;
+//      #pragma omp simd reduction(+:val0,val1,val2,val3)
+//      for(int lane=0; lane<num_lanes; lane++) {
+//        val0 += v6[lane];
+//        val1 += v7[lane];
+//        val2 += v8[lane];
+//        val3 += v9[lane];
+//      }
+//      k_field_scatter_access(first, field_var::jfx) += cx*val0;
+//      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*val1;
+//      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*val2;
+//      k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*val3;
+//
+//      val0 = 0.0;
+//      val1 = 0.0;
+//      val2 = 0.0;
+//      val3 = 0.0;
+//      #pragma omp simd reduction(+:val0,val1,val2,val3)
+//      for(int lane=0; lane<num_lanes; lane++) {
+//        val0 += v10[lane];
+//        val1 += v11[lane];
+//        val2 += v12[lane];
+//        val3 += v13[lane];
+//      }
+//      k_field_scatter_access(first, field_var::jfy) += cy*val0;
+//      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val1;
+//      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*val2;
+//      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val3;
+//
+//      val0 = 0.0;
+//      val1 = 0.0;
+//      val2 = 0.0;
+//      val3 = 0.0;
+//      #pragma omp simd reduction(+:val0,val1,val2,val3)
+//      for(int lane=0; lane<num_lanes; lane++) {
+//        val0 += v0[lane];
+//        val1 += v1[lane];
+//        val2 += v2[lane];
+//        val3 += v3[lane];
+//      }
+//      k_field_scatter_access(first, field_var::jfz) += cz*val0;
+//      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*val1;
+//      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val2;
+//      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val3;
+    } else {
+//#endif
+      for(int lane=0; lane<num_lanes; lane++) {
+        size_t p_index = chunk*num_lanes + lane;
+        int iii = ii[lane];
         int zi = iii/((nx+2)*(ny+2));
         iii -= zi*(nx+2)*(ny+2);
         int yi = iii/(nx+2);
         int xi = iii - yi*(nx+2);
 
-        float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
-        float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
-        float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
-        #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val7,val8,val9,val10,val11)
-        for(int lane=0; lane<num_lanes; lane++) {
-          val0 += v6(lane);
-          val1 += v7(lane);
-          val2 += v8(lane);
-          val3 += v9(lane);
-          val4 += v10(lane);
-          val5 += v11(lane);
-          val6 += v12(lane);
-          val7 += v13(lane);
-          val8 += v0(lane);
-          val9 += v1(lane);
-          val10 += v2(lane);
-          val11 += v3(lane);
-        }
-//        k_field_scatter_access(first, field_var::jfx) += cx*val0;
-//        k_field_scatter_access(first, field_var::jfy) += cy*val4;
-//        k_field_scatter_access(first, field_var::jfz) += cz*val8;
-//        k_field_scatter_access(VOXEL(xi+1,yi,  zi,  nx,ny,nz), field_var::jfy) += cy*val6;
-//        k_field_scatter_access(VOXEL(xi+1,yi,  zi,  nx,ny,nz), field_var::jfz) += cz*val9;
-//        k_field_scatter_access(VOXEL(xi,  yi+1,zi,  nx,ny,nz), field_var::jfx) += cx*val1;
-//        k_field_scatter_access(VOXEL(xi,  yi+1,zi,  nx,ny,nz), field_var::jfz) += cz*val10;
-//        k_field_scatter_access(VOXEL(xi,  yi,  zi+1,nx,ny,nz), field_var::jfx) += cx*val2;
-//        k_field_scatter_access(VOXEL(xi,  yi,  zi+1,nx,ny,nz), field_var::jfy) += cy*val5;
-//        k_field_scatter_access(VOXEL(xi,  yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*val3;
-//        k_field_scatter_access(VOXEL(xi+1,yi,  zi+1,nx,ny,nz), field_var::jfy) += cy*val7;
-//        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,  nx,ny,nz), field_var::jfz) += cz*val11;
+        k_field_scatter_access(ii[lane], field_var::jfx) += cx*v6[lane];
+        k_field_scatter_access(ii[lane], field_var::jfy) += cy*v10[lane];
+        k_field_scatter_access(ii[lane], field_var::jfz) += cz*v0[lane];
 
-        k_field_scatter_access(first, field_var::jfx) += cx*val0;
-        k_field_scatter_access(VOXEL(xi,  yi+1,zi,  nx,ny,nz), field_var::jfx) += cx*val1;
-        k_field_scatter_access(VOXEL(xi,  yi,  zi+1,nx,ny,nz), field_var::jfx) += cx*val2;
-        k_field_scatter_access(VOXEL(xi,  yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*val3;
-        k_field_scatter_access(first, field_var::jfy) += cy*val4;
-        k_field_scatter_access(VOXEL(xi,  yi,  zi+1,nx,ny,nz), field_var::jfy) += cy*val5;
-        k_field_scatter_access(VOXEL(xi+1,yi,  zi,  nx,ny,nz), field_var::jfy) += cy*val6;
-        k_field_scatter_access(VOXEL(xi+1,yi,  zi+1,nx,ny,nz), field_var::jfy) += cy*val7;
-        k_field_scatter_access(first, field_var::jfz) += cz*val8;
-        k_field_scatter_access(VOXEL(xi+1,yi,  zi,  nx,ny,nz), field_var::jfz) += cz*val9;
-        k_field_scatter_access(VOXEL(xi,  yi+1,zi,  nx,ny,nz), field_var::jfz) += cz*val10;
-        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,  nx,ny,nz), field_var::jfz) += cz*val11;
+        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v12[lane];
+        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1[lane];
 
-//        val0 = 0.0;
-//        val1 = 0.0;
-//        val2 = 0.0;
-//        val3 = 0.0;
-//        #pragma omp simd reduction(+:val0,val1,val2,val3)
-//        for(int lane=0; lane<num_lanes; lane++) {
-//          val0 += inbnds(lane)*v10(lane);
-//          val1 += inbnds(lane)*v11(lane);
-//          val2 += inbnds(lane)*v12(lane);
-//          val3 += inbnds(lane)*v13(lane);
-//        }
-//        k_field_scatter_access(first, field_var::jfy) += cy*val0;
-//        k_field_scatter_access(VOXEL(xi,  yi,  zi+1,nx,ny,nz), field_var::jfy) += cy*val1;
-//        k_field_scatter_access(VOXEL(xi+1,yi,  zi,  nx,ny,nz), field_var::jfy) += cy*val2;
-//        k_field_scatter_access(VOXEL(xi+1,yi,  zi+1,nx,ny,nz), field_var::jfy) += cy*val3;
+        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v7[lane];
+        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
+
+        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v8[lane];
+        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v11[lane];
+
+        k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[lane];
+        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[lane];
+        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
+
+//        k_field_scatter_access(ii[lane], field_var::jfx) += cx*v6[lane];
+//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v7[lane];
+//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v8[lane];
+//        k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[lane];
 //
-//        val0 = 0.0;
-//        val1 = 0.0;
-//        val2 = 0.0;
-//        val3 = 0.0;
-//        #pragma omp simd reduction(+:val0,val1,val2,val3)
-//        for(int lane=0; lane<num_lanes; lane++) {
-//          val0 += inbnds(lane)*v0(lane);
-//          val1 += inbnds(lane)*v1(lane);
-//          val2 += inbnds(lane)*v2(lane);
-//          val3 += inbnds(lane)*v3(lane);
-//        }
-//        k_field_scatter_access(first, field_var::jfz) += cz*val0;
-//        k_field_scatter_access(VOXEL(xi+1,yi,  zi,  nx,ny,nz), field_var::jfz) += cz*val1;
-//        k_field_scatter_access(VOXEL(xi,  yi+1,zi,  nx,ny,nz), field_var::jfz) += cz*val2;
-//        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,  nx,ny,nz), field_var::jfz) += cz*val3;
-      } else {
-#endif
-
-//#pragma omp simd
-      for(int lane=0; lane<num_lanes; lane++) {
-        // TODO: That 2 needs to be 2*NGHOST eventually
-        int iii = ii(lane);
-        int zi = iii/((nx+2)*(ny+2));
-        iii -= zi*(nx+2)*(ny+2);
-        int yi = iii/(nx+2);
-        int xi = iii - yi*(nx+2);
-////        ACCUMULATE_J( x,y,z );
-//        k_field_scatter_access(ii(lane), field_var::jfx) += cx*v6(lane);
-//        k_field_scatter_access(VOXEL(xi,  yi+1,zi,  nx,ny,nz), field_var::jfx) += cx*v7(lane);
-//        k_field_scatter_access(VOXEL(xi,  yi,  zi+1,nx,ny,nz), field_var::jfx) += cx*v8(lane);
-//        k_field_scatter_access(VOXEL(xi,  yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9(lane);
+//        k_field_scatter_access(ii[lane], field_var::jfy) += cy*v10[lane];
+//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v11[lane];
+//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v12[lane];
+//        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[lane];
 //
-////        ACCUMULATE_J( y,z,x );
-//        k_field_scatter_access(ii(lane), field_var::jfy) += cy*v10(lane);
-//        k_field_scatter_access(VOXEL(xi,  yi,  zi+1,nx,ny,nz), field_var::jfy) += cy*v11(lane);
-//        k_field_scatter_access(VOXEL(xi+1,yi,  zi,  nx,ny,nz), field_var::jfy) += cy*v12(lane);
-//        k_field_scatter_access(VOXEL(xi+1,yi,  zi+1,nx,ny,nz), field_var::jfy) += cy*v13(lane);
-//
-////        ACCUMULATE_J( z,x,y );
-//        k_field_scatter_access(ii(lane), field_var::jfz) += cz*v14(lane);
-//        k_field_scatter_access(VOXEL(xi+1,yi,  zi,  nx,ny,nz), field_var::jfz) += cz*v15(lane);
-//        k_field_scatter_access(VOXEL(xi,  yi+1,zi,  nx,ny,nz), field_var::jfz) += cz*v16(lane);
-//        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,  nx,ny,nz), field_var::jfz) += cz*v17(lane);
-
-        k_field_scatter_access(ii(lane), field_var::jfx) += cx*v6(lane);
-        k_field_scatter_access(ii(lane), field_var::jfy) += cy*v10(lane);
-        k_field_scatter_access(ii(lane), field_var::jfz) += cz*v14(lane);
-
-        k_field_scatter_access(VOXEL(xi+1,yi,  zi,  nx,ny,nz), field_var::jfy) += cy*v12(lane);
-        k_field_scatter_access(VOXEL(xi+1,yi,  zi,  nx,ny,nz), field_var::jfz) += cz*v15(lane);
-
-        k_field_scatter_access(VOXEL(xi,  yi+1,zi,  nx,ny,nz), field_var::jfx) += cx*v7(lane);
-        k_field_scatter_access(VOXEL(xi,  yi+1,zi,  nx,ny,nz), field_var::jfz) += cz*v16(lane);
-
-        k_field_scatter_access(VOXEL(xi,  yi,  zi+1,nx,ny,nz), field_var::jfx) += cx*v8(lane);
-        k_field_scatter_access(VOXEL(xi,  yi,  zi+1,nx,ny,nz), field_var::jfy) += cy*v11(lane);
-
-        k_field_scatter_access(VOXEL(xi,  yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9(lane);
-        k_field_scatter_access(VOXEL(xi+1,yi,  zi+1,nx,ny,nz), field_var::jfy) += cy*v13(lane);
-        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,  nx,ny,nz), field_var::jfz) += cz*v17(lane);
+//        k_field_scatter_access(ii[lane], field_var::jfz) += cz*v0[lane];
+//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1[lane];
+//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
+//        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
       }
-#ifdef VPIC_ENABLE_TEAM_REDUCTION
-      }
-#endif
+//#ifdef VPIC_ENABLE_TEAM_REDUCTION
+    }
+//#endif
 #       undef ACCUMULATE_J
 
       for(int lane=0; lane<num_lanes; lane++) {
@@ -539,9 +583,9 @@ const simd_float& v17 = fd2ezdxdy;
           }
         }
       }
-    });
-  });
-//});
+//    });
+//  });
+});
 #undef p_dx
 #undef p_dy
 #undef p_dz
@@ -1166,139 +1210,141 @@ advance_p_kokkos_omp_simd(
 //    }
 
 //#ifdef VPIC_ENABLE_TEAM_REDUCTION
-      int first = ii[0];
-      int index = first;
-      int in_bounds = 1;
-      #pragma omp simd reduction(&:index,in_bounds)
-      for(int lane=0; lane<num_lanes; lane++) {
-        index &= ii[lane];
-        in_bounds &= inbnds[lane];
-      }
-
-      if(first == index && in_bounds == 1) {
-        int iii = first;
-        int zi = iii/((nx+2)*(ny+2));
-        iii -= zi*(nx+2)*(ny+2);
-        int yi = iii/(nx+2);
-        int xi = iii - yi*(nx+2);
-
-        float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
-        float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
-        float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
-        #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val8,val9,val10,val11)
-        for(int lane=0; lane<num_lanes; lane++) {
-          val0 += v6[lane];
-          val1 += v7[lane];
-          val2 += v8[lane];
-          val3 += v9[lane];
-          val4 += v10[lane];
-          val5 += v11[lane];
-          val6 += v12[lane];
-          val7 += v13[lane];
-          val8 += v0[lane];
-          val9 += v1[lane];
-          val10 += v2[lane];
-          val11 += v3[lane];
-        }
-        k_field_scatter_access(first, field_var::jfx) += cx*val0;
-        k_field_scatter_access(first, field_var::jfy) += cy*val4;
-        k_field_scatter_access(first, field_var::jfz) += cz*val8;
-        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*val6;
-        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*val9;
-        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*val1;
-        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val10;
-        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*val2;
-        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val5;
-        k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*val3;
-        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val7;
-        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val11;
-
-//        #pragma omp simd reduction(+:val0,val1,val2,val3)
-//        for(int lane=0; lane<num_lanes; lane++) {
-//          val0 += v6[lane];
-//          val1 += v7[lane];
-//          val2 += v8[lane];
-//          val3 += v9[lane];
-//        }
-//        k_field_scatter_access(first, field_var::jfx) += cx*val0;
-//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*val1;
-//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*val2;
-//        k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*val3;
-//
-//        val0 = 0.0;
-//        val1 = 0.0;
-//        val2 = 0.0;
-//        val3 = 0.0;
-//        #pragma omp simd reduction(+:val0,val1,val2,val3)
-//        for(int lane=0; lane<num_lanes; lane++) {
-//          val0 += v10[lane];
-//          val1 += v11[lane];
-//          val2 += v12[lane];
-//          val3 += v13[lane];
-//        }
-//        k_field_scatter_access(first, field_var::jfy) += cy*val0;
-//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val1;
-//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*val2;
-//        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val3;
-//
-//        val0 = 0.0;
-//        val1 = 0.0;
-//        val2 = 0.0;
-//        val3 = 0.0;
-//        #pragma omp simd reduction(+:val0,val1,val2,val3)
-//        for(int lane=0; lane<num_lanes; lane++) {
-//          val0 += v0[lane];
-//          val1 += v1[lane];
-//          val2 += v2[lane];
-//          val3 += v3[lane];
-//        }
-//        k_field_scatter_access(first, field_var::jfz) += cz*val0;
-//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*val1;
-//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val2;
-//        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val3;
-      } else {
-//#endif
+    int first = ii[0];
+    int index = first;
+    int in_bounds = 1;
+    #pragma omp simd reduction(&:index,in_bounds)
     for(int lane=0; lane<num_lanes; lane++) {
-      size_t p_index = chunk*num_lanes + lane;
-      int iii = ii[lane];
+      index &= ii[lane];
+      in_bounds &= inbnds[lane];
+    }
+
+    if(first == index && in_bounds == 1) {
+      int iii = first;
       int zi = iii/((nx+2)*(ny+2));
       iii -= zi*(nx+2)*(ny+2);
       int yi = iii/(nx+2);
       int xi = iii - yi*(nx+2);
 
-      k_field_scatter_access(ii[lane], field_var::jfx) += cx*v6[lane];
-      k_field_scatter_access(ii[lane], field_var::jfy) += cy*v10[lane];
-      k_field_scatter_access(ii[lane], field_var::jfz) += cz*v0[lane];
+      float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
+      float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
+      float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
+      #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val8,val9,val10,val11)
+      for(int lane=0; lane<num_lanes; lane++) {
+        val0 += v6[lane];
+        val1 += v7[lane];
+        val2 += v8[lane];
+        val3 += v9[lane];
+        val4 += v10[lane];
+        val5 += v11[lane];
+        val6 += v12[lane];
+        val7 += v13[lane];
+        val8 += v0[lane];
+        val9 += v1[lane];
+        val10 += v2[lane];
+        val11 += v3[lane];
+      }
+      k_field_scatter_access(first, field_var::jfx) += cx*val0;
+      k_field_scatter_access(first, field_var::jfy) += cy*val4;
+      k_field_scatter_access(first, field_var::jfz) += cz*val8;
+      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*val6;
+      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*val9;
+      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*val1;
+      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val10;
+      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*val2;
+      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val5;
+      k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*val3;
+      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val7;
+      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val11;
 
-      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v12[lane];
-      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1[lane];
-
-      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v7[lane];
-      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
-
-      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v8[lane];
-      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v11[lane];
-
-      k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[lane];
-      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[lane];
-      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
-
-//      k_field_scatter_access(ii[lane], field_var::jfx) += cx*v6[lane];
-//      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v7[lane];
-//      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v8[lane];
-//      k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[lane];
+//      #pragma omp simd reduction(+:val0,val1,val2,val3)
+//      for(int lane=0; lane<num_lanes; lane++) {
+//        val0 += v6[lane];
+//        val1 += v7[lane];
+//        val2 += v8[lane];
+//        val3 += v9[lane];
+//      }
+//      k_field_scatter_access(first, field_var::jfx) += cx*val0;
+//      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*val1;
+//      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*val2;
+//      k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*val3;
 //
-//      k_field_scatter_access(ii[lane], field_var::jfy) += cy*v10[lane];
-//      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v11[lane];
-//      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v12[lane];
-//      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[lane];
+//      val0 = 0.0;
+//      val1 = 0.0;
+//      val2 = 0.0;
+//      val3 = 0.0;
+//      #pragma omp simd reduction(+:val0,val1,val2,val3)
+//      for(int lane=0; lane<num_lanes; lane++) {
+//        val0 += v10[lane];
+//        val1 += v11[lane];
+//        val2 += v12[lane];
+//        val3 += v13[lane];
+//      }
+//      k_field_scatter_access(first, field_var::jfy) += cy*val0;
+//      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val1;
+//      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*val2;
+//      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val3;
 //
-//      k_field_scatter_access(ii[lane], field_var::jfz) += cz*v0[lane];
-//      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1[lane];
-//      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
-//      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
+//      val0 = 0.0;
+//      val1 = 0.0;
+//      val2 = 0.0;
+//      val3 = 0.0;
+//      #pragma omp simd reduction(+:val0,val1,val2,val3)
+//      for(int lane=0; lane<num_lanes; lane++) {
+//        val0 += v0[lane];
+//        val1 += v1[lane];
+//        val2 += v2[lane];
+//        val3 += v3[lane];
+//      }
+//      k_field_scatter_access(first, field_var::jfz) += cz*val0;
+//      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*val1;
+//      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val2;
+//      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val3;
+    } else {
+//#endif
+      for(int lane=0; lane<num_lanes; lane++) {
+        size_t p_index = chunk*num_lanes + lane;
+        int iii = ii[lane];
+        int zi = iii/((nx+2)*(ny+2));
+        iii -= zi*(nx+2)*(ny+2);
+        int yi = iii/(nx+2);
+        int xi = iii - yi*(nx+2);
+
+        k_field_scatter_access(ii[lane], field_var::jfx) += cx*v6[lane];
+        k_field_scatter_access(ii[lane], field_var::jfy) += cy*v10[lane];
+        k_field_scatter_access(ii[lane], field_var::jfz) += cz*v0[lane];
+
+        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v12[lane];
+        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1[lane];
+
+        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v7[lane];
+        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
+
+        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v8[lane];
+        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v11[lane];
+
+        k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[lane];
+        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[lane];
+        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
+
+//        k_field_scatter_access(ii[lane], field_var::jfx) += cx*v6[lane];
+//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v7[lane];
+//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v8[lane];
+//        k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[lane];
+//
+//        k_field_scatter_access(ii[lane], field_var::jfy) += cy*v10[lane];
+//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v11[lane];
+//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v12[lane];
+//        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[lane];
+//
+//        k_field_scatter_access(ii[lane], field_var::jfz) += cz*v0[lane];
+//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1[lane];
+//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
+//        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
+      }
+//#ifdef VPIC_ENABLE_TEAM_REDUCTION
     }
-}
+//#endif
 
     for(int lane=0; lane<num_lanes; lane++) {
       if(!inbnds[lane]) {
