@@ -157,7 +157,6 @@ finalize_pb_diagnostic(species_t * sp){
     diag->num_writes += diag->num_user_writes;
 
     if(diag->num_writes > 0) diag->enable = 1;
-    else return;
 
     diag->sp = sp;
     
@@ -179,7 +178,7 @@ finalize_pb_diagnostic(species_t * sp){
 
 void
 pbd_buff_to_disk( pb_diagnostic_t * diag ){
-    if(diag==NULL) return;
+    if(!diag->enable) return;
     if(diag->store_counter == 0) return;
 
     size_t store = diag->store_counter;
