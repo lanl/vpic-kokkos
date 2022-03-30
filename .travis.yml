@@ -32,7 +32,7 @@ before_script:
     pushd kokkos &&
     mkdir build &&
     pushd build &&
-    cmake -DCMAKE_INSTALL_PREFIX=$HOME/kokkos .. &&
+    cmake -DCMAKE_INSTALL_PREFIX=$HOME/kokkos -DKokkos_CXX_STANDARD=17 .. &&
     make -j2 &&
     make install &&
     popd &&
