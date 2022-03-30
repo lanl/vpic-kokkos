@@ -25,7 +25,7 @@ jobs:
     - name: Build kokkos
       working-directory: kokkos
       run: |
-        cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/kokkos # -DKokkos_CXX_STANDARD=14
+        cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/kokkos # -DKokkos_CXX_STANDARD=17
         cmake --build build --parallel 2
         cmake --install build
     #- uses: actions/checkout@v2
