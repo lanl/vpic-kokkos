@@ -52,6 +52,3 @@ after_success:
 cache:
   directories:
     - $HOME/.ccache
-
-compiler:
-  - gcc
