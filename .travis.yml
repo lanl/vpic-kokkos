@@ -11,6 +11,9 @@ addons:
       - cmake
       - libopenmpi-dev
       - openmpi-bin
+      - g++-9
+env:
+  - MATRIX_EVAL="CC=gcc-9 CXX=g++-9"
 
 before_install:
  - mkdir -p "$HOME/bin"
