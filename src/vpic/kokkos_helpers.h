@@ -44,7 +44,7 @@ using k_field_accum_t = Kokkos::View<float *>;
 
 using k_jf_accum_t = Kokkos::View<float *[NUM_J_DIMS]>;
 
-using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
+using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft>;
 using k_particles_i_t = Kokkos::View<int*>;
 
 // TODO: think about the layout here
@@ -70,7 +70,6 @@ using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSp
 
 using k_material_coefficient_t = Kokkos::View<float* [MATERIAL_COEFFICIENT_VAR_COUNT]>;
 
-using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
 
 #define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
 #define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
