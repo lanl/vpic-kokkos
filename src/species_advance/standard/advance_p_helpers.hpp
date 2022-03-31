@@ -3,32 +3,7 @@
 #include "../../vpic/kokkos_helpers.h"
 #include "../../vpic/kokkos_tuning.hpp"
 
-void KOKKOS_INLINE_FUNCTION sw(float& x, float& y) {
-  float temp = x;
-  x = y;
-  y = temp;
-}
-void transpose_port( float* v0, float* v1, float* v2, float* v3,
-                float* v4, float* v5, float* v6, float* v7,
-                float* v8, float* v9, float* v10, float* v11,
-                float* v12, float* v13, float* v14, float* v15) {
-  sw(v0[1], v1[0]); sw(v0[2], v2[0]); sw(v0[3], v3[0]); sw(v0[4], v4[0]); sw(v0[5], v5[0]); sw(v0[6], v6[0]); sw(v0[7], v7[0]); sw(v0[8], v8[0]); sw(v0[9], v9[0]); sw(v0[10], v10[0]); sw(v0[11], v11[0]); sw(v0[12], v12[0]); sw(v0[13], v13[0]); sw(v0[14], v14[0]); sw(v0[15], v15[0]);
-                    sw(v1[2], v2[1]); sw(v1[3], v3[1]); sw(v1[4], v4[1]); sw(v1[5], v5[1]); sw(v1[6], v6[1]); sw(v1[7], v7[1]); sw(v1[8], v8[1]); sw(v1[9], v9[1]); sw(v1[10], v10[1]); sw(v1[11], v11[1]); sw(v1[12], v12[1]); sw(v1[13], v13[1]); sw(v1[14], v14[1]); sw(v1[15], v15[1]);
-                                      sw(v2[3], v3[2]); sw(v2[4], v4[2]); sw(v2[5], v5[2]); sw(v2[6], v6[2]); sw(v2[7], v7[2]); sw(v2[8], v8[2]); sw(v2[9], v9[2]); sw(v2[10], v10[2]); sw(v2[11], v11[2]); sw(v2[12], v12[2]); sw(v2[13], v13[2]); sw(v2[14], v14[2]); sw(v2[15], v15[2]);
-                                                        sw(v3[4], v4[3]); sw(v3[5], v5[3]); sw(v3[6], v6[3]); sw(v3[7], v7[3]); sw(v3[8], v8[3]); sw(v3[9], v9[3]); sw(v3[10], v10[3]); sw(v3[11], v11[3]); sw(v3[12], v12[3]); sw(v3[13], v13[3]); sw(v3[14], v14[3]); sw(v3[15], v15[3]);
-                                                                          sw(v4[5], v5[4]); sw(v4[6], v6[4]); sw(v4[7], v7[4]); sw(v4[8], v8[4]); sw(v4[9], v9[4]); sw(v4[10], v10[4]); sw(v4[11], v11[4]); sw(v4[12], v12[4]); sw(v4[13], v13[4]); sw(v4[14], v14[4]); sw(v4[15], v15[4]);
-                                                                                            sw(v5[6], v6[5]); sw(v5[7], v7[5]); sw(v5[8], v8[5]); sw(v5[9], v9[5]); sw(v5[10], v10[5]); sw(v5[11], v11[5]); sw(v5[12], v12[5]); sw(v5[13], v13[5]); sw(v5[14], v14[5]); sw(v5[15], v15[5]);
-                                                                                                              sw(v6[7], v7[6]); sw(v6[8], v8[6]); sw(v6[9], v9[6]); sw(v6[10], v10[6]); sw(v6[11], v11[6]); sw(v6[12], v12[6]); sw(v6[13], v13[6]); sw(v6[14], v14[6]); sw(v6[15], v15[6]);
-                                                                                                                                sw(v7[8], v8[7]); sw(v7[9], v9[7]); sw(v7[10], v10[7]); sw(v7[11], v11[7]); sw(v7[12], v12[7]); sw(v7[13], v13[7]); sw(v7[14], v14[7]); sw(v7[15], v15[7]);
-                                                                                                                                                  sw(v8[9], v9[8]); sw(v8[10], v10[8]); sw(v8[11], v11[8]); sw(v8[12], v12[8]); sw(v8[13], v13[8]); sw(v8[14], v14[8]); sw(v8[15], v15[8]);
-                                                                                                                                                                   sw(v9[10], v10[9]); sw(v9[11], v11[9]); sw(v9[12], v12[9]); sw(v9[13], v13[9]); sw(v9[14], v14[9]); sw(v9[15], v15[9]);
-                                                                                                                                                                                       sw(v10[11], v11[10]); sw(v10[12], v12[10]); sw(v10[13], v13[10]); sw(v10[14], v14[10]); sw(v10[15], v15[10]);
-                                                                                                                                                                                                           sw(v11[12], v12[11]); sw(v11[13], v13[11]); sw(v11[14], v14[11]); sw(v11[15], v15[11]);
-                                                                                                                                                                                                                               sw(v12[13], v13[12]); sw(v12[14], v14[12]); sw(v12[15], v15[12]);
-                                                                                                                                                                                                                                                    sw(v13[14], v14[13]); sw(v13[15], v15[13]);
-                                                                                                                                                                                                                                                                        sw(v14[15], v15[14]);
-}
-
+#ifdef __AVX512F__
 KOKKOS_INLINE_FUNCTION
 void transpose(float* ALIGNED(16) v00, float* ALIGNED(16) v01, float* ALIGNED(16) v02, float* ALIGNED(16) v03,
                float* ALIGNED(16) v04, float* ALIGNED(16) v05, float* ALIGNED(16) v06, float* ALIGNED(16) v07,
@@ -156,5 +131,33 @@ void transpose(float* ALIGNED(16) v00, float* ALIGNED(16) v01, float* ALIGNED(16
   _mm512_store_ps(v14, a14);
   _mm512_store_ps(v15, a15);
 }
+#else
+
+void KOKKOS_INLINE_FUNCTION sw(float& x, float& y) {
+  float temp = x;
+  x = y;
+  y = temp;
+}
+void transpose_port( float* v0, float* v1, float* v2, float* v3,
+                float* v4, float* v5, float* v6, float* v7,
+                float* v8, float* v9, float* v10, float* v11,
+                float* v12, float* v13, float* v14, float* v15) {
+  sw(v0[1], v1[0]); sw(v0[2], v2[0]); sw(v0[3], v3[0]); sw(v0[4], v4[0]); sw(v0[5], v5[0]); sw(v0[6], v6[0]); sw(v0[7], v7[0]); sw(v0[8], v8[0]); sw(v0[9], v9[0]); sw(v0[10], v10[0]); sw(v0[11], v11[0]); sw(v0[12], v12[0]); sw(v0[13], v13[0]); sw(v0[14], v14[0]); sw(v0[15], v15[0]);
+                    sw(v1[2], v2[1]); sw(v1[3], v3[1]); sw(v1[4], v4[1]); sw(v1[5], v5[1]); sw(v1[6], v6[1]); sw(v1[7], v7[1]); sw(v1[8], v8[1]); sw(v1[9], v9[1]); sw(v1[10], v10[1]); sw(v1[11], v11[1]); sw(v1[12], v12[1]); sw(v1[13], v13[1]); sw(v1[14], v14[1]); sw(v1[15], v15[1]);
+                                      sw(v2[3], v3[2]); sw(v2[4], v4[2]); sw(v2[5], v5[2]); sw(v2[6], v6[2]); sw(v2[7], v7[2]); sw(v2[8], v8[2]); sw(v2[9], v9[2]); sw(v2[10], v10[2]); sw(v2[11], v11[2]); sw(v2[12], v12[2]); sw(v2[13], v13[2]); sw(v2[14], v14[2]); sw(v2[15], v15[2]);
+                                                        sw(v3[4], v4[3]); sw(v3[5], v5[3]); sw(v3[6], v6[3]); sw(v3[7], v7[3]); sw(v3[8], v8[3]); sw(v3[9], v9[3]); sw(v3[10], v10[3]); sw(v3[11], v11[3]); sw(v3[12], v12[3]); sw(v3[13], v13[3]); sw(v3[14], v14[3]); sw(v3[15], v15[3]);
+                                                                          sw(v4[5], v5[4]); sw(v4[6], v6[4]); sw(v4[7], v7[4]); sw(v4[8], v8[4]); sw(v4[9], v9[4]); sw(v4[10], v10[4]); sw(v4[11], v11[4]); sw(v4[12], v12[4]); sw(v4[13], v13[4]); sw(v4[14], v14[4]); sw(v4[15], v15[4]);
+                                                                                            sw(v5[6], v6[5]); sw(v5[7], v7[5]); sw(v5[8], v8[5]); sw(v5[9], v9[5]); sw(v5[10], v10[5]); sw(v5[11], v11[5]); sw(v5[12], v12[5]); sw(v5[13], v13[5]); sw(v5[14], v14[5]); sw(v5[15], v15[5]);
+                                                                                                              sw(v6[7], v7[6]); sw(v6[8], v8[6]); sw(v6[9], v9[6]); sw(v6[10], v10[6]); sw(v6[11], v11[6]); sw(v6[12], v12[6]); sw(v6[13], v13[6]); sw(v6[14], v14[6]); sw(v6[15], v15[6]);
+                                                                                                                                sw(v7[8], v8[7]); sw(v7[9], v9[7]); sw(v7[10], v10[7]); sw(v7[11], v11[7]); sw(v7[12], v12[7]); sw(v7[13], v13[7]); sw(v7[14], v14[7]); sw(v7[15], v15[7]);
+                                                                                                                                                  sw(v8[9], v9[8]); sw(v8[10], v10[8]); sw(v8[11], v11[8]); sw(v8[12], v12[8]); sw(v8[13], v13[8]); sw(v8[14], v14[8]); sw(v8[15], v15[8]);
+                                                                                                                                                                   sw(v9[10], v10[9]); sw(v9[11], v11[9]); sw(v9[12], v12[9]); sw(v9[13], v13[9]); sw(v9[14], v14[9]); sw(v9[15], v15[9]);
+                                                                                                                                                                                       sw(v10[11], v11[10]); sw(v10[12], v12[10]); sw(v10[13], v13[10]); sw(v10[14], v14[10]); sw(v10[15], v15[10]);
+                                                                                                                                                                                                           sw(v11[12], v12[11]); sw(v11[13], v13[11]); sw(v11[14], v14[11]); sw(v11[15], v15[11]);
+                                                                                                                                                                                                                               sw(v12[13], v13[12]); sw(v12[14], v14[12]); sw(v12[15], v15[12]);
+                                                                                                                                                                                                                                                    sw(v13[14], v14[13]); sw(v13[15], v15[13]);
+                                                                                                                                                                                                                                                                        sw(v14[15], v15[14]);
+}
+#endif
 
 #endif

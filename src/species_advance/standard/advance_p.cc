@@ -84,6 +84,7 @@ void simd_load_interpolator_var(float* v0, const int ii, const k_interpolator_t&
 
 
 // Template for unrolling a loop in reverse order
+// Necessary to avoid the looping/pointer overhead when loading interpolator data
 template<int N>
 KOKKOS_INLINE_FUNCTION
 void unrolled_simd_load(float* vals, const int* ii, const k_interpolator_t& k_interp, int len) {
@@ -164,101 +165,134 @@ void load_interpolators(
 //    fdcbzdz[lane]   = f_dcbzdz; 
 //  }
 
-  float vals[18*NumLanes];
-  unrolled_simd_load<NumLanes>(vals, ii, k_interp, 18);
+  int first = ii[0];
+  int index = first;
+  #pragma omp simd reduction(&:index)
+  for(int lane=0; lane<num_lanes; lane++) {
+    index &= ii[lane];
+  }
+  if(ii[0] == index) {
+    float vals[18];
+    simd_load_interpolator_var(vals, ii[0], k_interp, 18);
+    #pragma omp simd
+    for(int i=0; i<num_lanes; i++) {
+      fex[i]       = vals[0];
+      fdexdy[i]    = vals[1];
+      fdexdz[i]    = vals[2];
+      fd2exdydz[i] = vals[3];
+      fey[i]       = vals[4];
+      fdeydz[i]    = vals[5];
+      fdeydx[i]    = vals[6];
+      fd2eydzdx[i] = vals[7];
+      fez[i]       = vals[8];
+      fdezdx[i]    = vals[9];
+      fdezdy[i]    = vals[10];
+      fd2ezdxdy[i] = vals[11];
+      fcbx[i]      = vals[12];
+      fdcbxdx[i]   = vals[13];
+      fcby[i]      = vals[14];
+      fdcbydy[i]   = vals[15];
+      fcbz[i]      = vals[16];
+      fdcbzdz[i]   = vals[17];
+    }
+  } else {
 
-//  float *v0  = vals;
-//  float *v1  = vals+18;
-//  float *v2  = vals+36;
-//  float *v3  = vals+54;
-//  float *v4  = vals+72;
-//  float *v5  = vals+90;
-//  float *v6  = vals+108;
-//  float *v7  = vals+126;
-//  float *v8  = vals+144;
-//  float *v9  = vals+162;
-//  float *v10 = vals+180;
-//  float *v11 = vals+198;
-//  float *v12 = vals+216;
-//  float *v13 = vals+234;
-//  float *v14 = vals+252;
-//  float *v15 = vals+270;
+    float vals[18*NumLanes];
+    unrolled_simd_load<NumLanes>(vals, ii, k_interp, 18);
 
-//  float *v0  = fex;
-//  float *v1  = fdexdy;
-//  float *v2  = fdexdz;
-//  float *v3  = fd2exdydz;
-//  float *v4  = fey;
-//  float *v5  = fdeydz;
-//  float *v6  = fdeydx;
-//  float *v7  = fd2eydzdx;
-//  float *v8  = fez;
-//  float *v9  = fdezdx;
-//  float *v10 = fdezdy;
-//  float *v11 = fd2ezdxdy;
-//  float *v12 = fcbx;
-//  float *v13 = fdcbxdx;
-//  float *v14 = fcby;
-//  float *v15 = fdcbydy;
-//
-//simd_load_interpolator_var(v0, ii[0], k_interp, 16);
-//simd_load_interpolator_var(v1, ii[1], k_interp, 16);
-//simd_load_interpolator_var(v2, ii[2], k_interp, 16);
-//simd_load_interpolator_var(v3, ii[3], k_interp, 16);
-//simd_load_interpolator_var(v4, ii[4], k_interp, 16);
-//simd_load_interpolator_var(v5, ii[5], k_interp, 16);
-//simd_load_interpolator_var(v6, ii[6], k_interp, 16);
-//simd_load_interpolator_var(v7, ii[7], k_interp, 16);
-//simd_load_interpolator_var(v8, ii[8], k_interp, 16);
-//simd_load_interpolator_var(v9, ii[9], k_interp, 16);
-//simd_load_interpolator_var(v10, ii[10], k_interp, 16);
-//simd_load_interpolator_var(v11, ii[11], k_interp, 16);
-//simd_load_interpolator_var(v12, ii[12], k_interp, 16);
-//simd_load_interpolator_var(v13, ii[13], k_interp, 16);
-//simd_load_interpolator_var(v14, ii[14], k_interp, 16);
-//simd_load_interpolator_var(v15, ii[15], k_interp, 16);
-  
-//  transpose(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15);
-//  #pragma omp simd
-//  for(int i=0; i<16; i++) {
-//    fex[i]       = v0[i];
-//    fdexdy[i]    = v1[i];
-//    fdexdz[i]    = v2[i];
-//    fd2exdydz[i] = v3[i];
-//    fey[i]       = v4[i];
-//    fdeydz[i]    = v5[i];
-//    fdeydx[i]    = v6[i];
-//    fd2eydzdx[i] = v7[i];
-//    fez[i]       = v8[i];
-//    fdezdx[i]    = v9[i];
-//    fdezdy[i]    = v10[i];
-//    fd2ezdxdy[i] = v11[i];
-//    fcbx[i]      = v12[i];
-//    fdcbxdx[i]   = v13[i];
-//    fcby[i]      = v14[i];
-//    fdcbydy[i]   = v15[i];
-//  }
+//    float *v0  = vals;
+//    float *v1  = vals+18;
+//    float *v2  = vals+36;
+//    float *v3  = vals+54;
+//    float *v4  = vals+72;
+//    float *v5  = vals+90;
+//    float *v6  = vals+108;
+//    float *v7  = vals+126;
+//    float *v8  = vals+144;
+//    float *v9  = vals+162;
+//    float *v10 = vals+180;
+//    float *v11 = vals+198;
+//    float *v12 = vals+216;
+//    float *v13 = vals+234;
+//    float *v14 = vals+252;
+//    float *v15 = vals+270;
 
-  #pragma omp simd
-  for(int i=0; i<num_lanes; i++) {
-    fex[i]       = vals[18*i];
-    fdexdy[i]    = vals[1+18*i];
-    fdexdz[i]    = vals[2+18*i];
-    fd2exdydz[i] = vals[3+18*i];
-    fey[i]       = vals[4+18*i];
-    fdeydz[i]    = vals[5+18*i];
-    fdeydx[i]    = vals[6+18*i];
-    fd2eydzdx[i] = vals[7+18*i];
-    fez[i]       = vals[8+18*i];
-    fdezdx[i]    = vals[9+18*i];
-    fdezdy[i]    = vals[10+18*i];
-    fd2ezdxdy[i] = vals[11+18*i];
-    fcbx[i]      = vals[12+18*i];
-    fdcbxdx[i]   = vals[13+18*i];
-    fcby[i]      = vals[14+18*i];
-    fdcbydy[i]   = vals[15+18*i];
-    fcbz[i]      = vals[16+18*i];
-    fdcbzdz[i]   = vals[17+18*i];
+//    float *v0  = fex;
+//    float *v1  = fdexdy;
+//    float *v2  = fdexdz;
+//    float *v3  = fd2exdydz;
+//    float *v4  = fey;
+//    float *v5  = fdeydz;
+//    float *v6  = fdeydx;
+//    float *v7  = fd2eydzdx;
+//    float *v8  = fez;
+//    float *v9  = fdezdx;
+//    float *v10 = fdezdy;
+//    float *v11 = fd2ezdxdy;
+//    float *v12 = fcbx;
+//    float *v13 = fdcbxdx;
+//    float *v14 = fcby;
+//    float *v15 = fdcbydy;
+//  
+//  simd_load_interpolator_var(v0, ii[0], k_interp, 16);
+//  simd_load_interpolator_var(v1, ii[1], k_interp, 16);
+//  simd_load_interpolator_var(v2, ii[2], k_interp, 16);
+//  simd_load_interpolator_var(v3, ii[3], k_interp, 16);
+//  simd_load_interpolator_var(v4, ii[4], k_interp, 16);
+//  simd_load_interpolator_var(v5, ii[5], k_interp, 16);
+//  simd_load_interpolator_var(v6, ii[6], k_interp, 16);
+//  simd_load_interpolator_var(v7, ii[7], k_interp, 16);
+//  simd_load_interpolator_var(v8, ii[8], k_interp, 16);
+//  simd_load_interpolator_var(v9, ii[9], k_interp, 16);
+//  simd_load_interpolator_var(v10, ii[10], k_interp, 16);
+//  simd_load_interpolator_var(v11, ii[11], k_interp, 16);
+//  simd_load_interpolator_var(v12, ii[12], k_interp, 16);
+//  simd_load_interpolator_var(v13, ii[13], k_interp, 16);
+//  simd_load_interpolator_var(v14, ii[14], k_interp, 16);
+//  simd_load_interpolator_var(v15, ii[15], k_interp, 16);
+//    
+//    transpose(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15);
+//    #pragma omp simd
+//    for(int i=0; i<16; i++) {
+//      fex[i]       = v0[i];
+//      fdexdy[i]    = v1[i];
+//      fdexdz[i]    = v2[i];
+//      fd2exdydz[i] = v3[i];
+//      fey[i]       = v4[i];
+//      fdeydz[i]    = v5[i];
+//      fdeydx[i]    = v6[i];
+//      fd2eydzdx[i] = v7[i];
+//      fez[i]       = v8[i];
+//      fdezdx[i]    = v9[i];
+//      fdezdy[i]    = v10[i];
+//      fd2ezdxdy[i] = v11[i];
+//      fcbx[i]      = v12[i];
+//      fdcbxdx[i]   = v13[i];
+//      fcby[i]      = v14[i];
+//      fdcbydy[i]   = v15[i];
+//    }
+
+    #pragma omp simd
+    for(int i=0; i<num_lanes; i++) {
+      fex[i]       = vals[18*i];
+      fdexdy[i]    = vals[1+18*i];
+      fdexdz[i]    = vals[2+18*i];
+      fd2exdydz[i] = vals[3+18*i];
+      fey[i]       = vals[4+18*i];
+      fdeydz[i]    = vals[5+18*i];
+      fdeydx[i]    = vals[6+18*i];
+      fd2eydzdx[i] = vals[7+18*i];
+      fez[i]       = vals[8+18*i];
+      fdezdx[i]    = vals[9+18*i];
+      fdezdy[i]    = vals[10+18*i];
+      fd2ezdxdy[i] = vals[11+18*i];
+      fcbx[i]      = vals[12+18*i];
+      fdcbxdx[i]   = vals[13+18*i];
+      fcby[i]      = vals[14+18*i];
+      fdcbydy[i]   = vals[15+18*i];
+      fcbz[i]      = vals[16+18*i];
+      fdcbzdz[i]   = vals[17+18*i];
+    }
   }
 }
 
@@ -792,11 +826,11 @@ advance_p_kokkos_vector(
         v2[lane] -= v5[lane];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
         v3[lane] += v5[lane];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
-        ACCUMULATE_J( x,y,z,v6,v7,v8,v9 );
+        ACCUMULATE_J( x,y,z, v6,v7,v8,v9 );
 
-        ACCUMULATE_J( y,z,x,v10,v11,v12,v13 );
+        ACCUMULATE_J( y,z,x, v10,v11,v12,v13 );
 
-        ACCUMULATE_J( z,x,y,v0,v1,v2,v3 );
+        ACCUMULATE_J( z,x,y, v0,v1,v2,v3 );
       }
 
 //accumulate_current(dx, dy, dz, ux, uy, uz, ii, 
@@ -871,13 +905,13 @@ advance_p_kokkos_vector(
       accum_sa(first, 11) += cz*val11;
     } else {
 #endif
-//      for(int lane=0; lane<num_lanes; lane++) {
-//        size_t p_index = chunk*num_lanes + lane;
-//        int iii = ii[lane];
-//        int zi = iii/((nx+2)*(ny+2));
-//        iii -= zi*(nx+2)*(ny+2);
-//        int yi = iii/(nx+2);
-//        int xi = iii - yi*(nx+2);
+      for(int lane=0; lane<num_lanes; lane++) {
+        size_t p_index = chunk*num_lanes + lane;
+        int iii = ii[lane];
+        int zi = iii/((nx+2)*(ny+2));
+        iii -= zi*(nx+2)*(ny+2);
+        int yi = iii/(nx+2);
+        int xi = iii - yi*(nx+2);
 
 //        k_field_scatter_access(ii[lane], field_var::jfx) += cx*v6[lane];
 //        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v7[lane];
@@ -894,61 +928,61 @@ advance_p_kokkos_vector(
 //        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
 //        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
 
-//        accum_sa(ii[lane], 0)  += cx*v6[lane];
-//        accum_sa(ii[lane], 1)  += cx*v7[lane];
-//        accum_sa(ii[lane], 2)  += cx*v8[lane];
-//        accum_sa(ii[lane], 3)  += cx*v9[lane];
-//
-//        accum_sa(ii[lane], 4)  += cy*v10[lane];
-//        accum_sa(ii[lane], 5)  += cy*v11[lane];
-//        accum_sa(ii[lane], 6)  += cy*v12[lane];
-//        accum_sa(ii[lane], 7)  += cy*v13[lane];
-//
-//        accum_sa(ii[lane], 8)  += cz*v0[lane];
-//        accum_sa(ii[lane], 9)  += cz*v1[lane];
-//        accum_sa(ii[lane], 10) += cz*v2[lane];
-//        accum_sa(ii[lane], 11) += cz*v3[lane];
-//      }
+        accum_sa(ii[lane], 0)  += cx*v6[lane];
+        accum_sa(ii[lane], 1)  += cx*v7[lane];
+        accum_sa(ii[lane], 2)  += cx*v8[lane];
+        accum_sa(ii[lane], 3)  += cx*v9[lane];
 
-        #pragma omp simd
-        for(int lane=0; lane<num_lanes; lane++) {
-          v4[lane] = 0.0f;
-          v5[lane] = 0.0f;
-          v14[lane] = 0.0f;
-          v15[lane] = 0.0f;
-        }
-        #pragma omp simd
-        for(int lane=0; lane<num_lanes; lane++) {
-          v6[lane]  *= cx;
-          v7[lane]  *= cx;
-          v8[lane]  *= cx;
-          v9[lane]  *= cx;
-          v10[lane] *= cy;
-          v11[lane] *= cy;
-          v12[lane] *= cy;
-          v13[lane] *= cy;
-          v0[lane]  *= cz;
-          v1[lane]  *= cz;
-          v2[lane]  *= cz;
-          v3[lane]  *= cz;
-        }
-        transpose(v6, v7, v8, v9, v10, v11, v12, v13, v0, v1, v2, v3, v4, v5, v14, v15);
-        simd_update_accumulators( accum_sa, num_lanes, ii[0],  v6);
-        simd_update_accumulators( accum_sa, num_lanes, ii[1],  v7);
-        simd_update_accumulators( accum_sa, num_lanes, ii[2],  v8);
-        simd_update_accumulators( accum_sa, num_lanes, ii[3],  v9);
-        simd_update_accumulators( accum_sa, num_lanes, ii[4],  v10);
-        simd_update_accumulators( accum_sa, num_lanes, ii[5],  v11);
-        simd_update_accumulators( accum_sa, num_lanes, ii[6],  v12);
-        simd_update_accumulators( accum_sa, num_lanes, ii[7],  v13);
-        simd_update_accumulators( accum_sa, num_lanes, ii[8],  v0);
-        simd_update_accumulators( accum_sa, num_lanes, ii[9],  v1);
-        simd_update_accumulators( accum_sa, num_lanes, ii[10], v2);
-        simd_update_accumulators( accum_sa, num_lanes, ii[11], v3);
-        simd_update_accumulators( accum_sa, num_lanes, ii[12], v4);
-        simd_update_accumulators( accum_sa, num_lanes, ii[13], v5);
-        simd_update_accumulators( accum_sa, num_lanes, ii[14], v14);
-        simd_update_accumulators( accum_sa, num_lanes, ii[15], v15);
+        accum_sa(ii[lane], 4)  += cy*v10[lane];
+        accum_sa(ii[lane], 5)  += cy*v11[lane];
+        accum_sa(ii[lane], 6)  += cy*v12[lane];
+        accum_sa(ii[lane], 7)  += cy*v13[lane];
+
+        accum_sa(ii[lane], 8)  += cz*v0[lane];
+        accum_sa(ii[lane], 9)  += cz*v1[lane];
+        accum_sa(ii[lane], 10) += cz*v2[lane];
+        accum_sa(ii[lane], 11) += cz*v3[lane];
+      }
+
+//        #pragma omp simd
+//        for(int lane=0; lane<num_lanes; lane++) {
+//          v4[lane] = 0.0f;
+//          v5[lane] = 0.0f;
+//          v14[lane] = 0.0f;
+//          v15[lane] = 0.0f;
+//        }
+//        #pragma omp simd
+//        for(int lane=0; lane<num_lanes; lane++) {
+//          v6[lane]  *= cx;
+//          v7[lane]  *= cx;
+//          v8[lane]  *= cx;
+//          v9[lane]  *= cx;
+//          v10[lane] *= cy;
+//          v11[lane] *= cy;
+//          v12[lane] *= cy;
+//          v13[lane] *= cy;
+//          v0[lane]  *= cz;
+//          v1[lane]  *= cz;
+//          v2[lane]  *= cz;
+//          v3[lane]  *= cz;
+//        }
+//        transpose(v6, v7, v8, v9, v10, v11, v12, v13, v0, v1, v2, v3, v4, v5, v14, v15);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[0],  v6);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[1],  v7);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[2],  v8);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[3],  v9);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[4],  v10);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[5],  v11);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[6],  v12);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[7],  v13);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[8],  v0);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[9],  v1);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[10], v2);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[11], v3);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[12], v4);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[13], v5);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[14], v14);
+//        simd_update_accumulators( accum_sa, num_lanes, ii[15], v15);
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
     }
 #endif
@@ -1264,1076 +1298,6 @@ advance_p_kokkos_vector(
                                        accumulator(axy, 11) );
   });
 //  Kokkos::Experimental::contribute(k_field, k_f_sv);
-#undef p_dx
-#undef p_dy
-#undef p_dz
-#undef p_ux
-#undef p_uy
-#undef p_uz
-#undef p_w 
-#undef pii 
-
-#undef f_cbx
-#undef f_cby
-#undef f_cbz
-#undef f_ex 
-#undef f_ey 
-#undef f_ez 
-
-#undef f_dexdy
-#undef f_dexdz
-
-#undef f_d2exdydz
-#undef f_deydx   
-#undef f_deydz   
-
-#undef f_d2eydzdx
-#undef f_dezdx   
-#undef f_dezdy   
-
-#undef f_d2ezdxdy
-#undef f_dcbxdx  
-#undef f_dcbydy  
-#undef f_dcbzdz  
-}
-
-void KOKKOS_INLINE_FUNCTION recip_square_root(float v0[32], float ux[32], float uy[32], float uz[32], float qdt_2mc, int num_lanes) {
-  #pragma omp simd 
-  for(int lane=0; lane<num_lanes; lane++) {
-    v0[lane] = qdt_2mc/sqrtf(1.0f + (ux[lane]*ux[lane] + (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
-  }
-}
-
-void KOKKOS_INLINE_FUNCTION 
-interpolate_e(float hax[NUM_LANES], float* hay, float haz[NUM_LANES], 
-              float dx[NUM_LANES], float* dy, float dz[NUM_LANES], 
-              float fex[NUM_LANES], float fey[NUM_LANES], float fez[NUM_LANES], 
-              float fdexdy[NUM_LANES], float fdexdz[NUM_LANES], float fd2exdydz[NUM_LANES], 
-              float fdeydx[NUM_LANES], float fdeydz[NUM_LANES], float fd2eydzdx[NUM_LANES], 
-              float fdezdx[NUM_LANES], float fdezdy[NUM_LANES], float fd2ezdxdy[NUM_LANES],
-              float qdt_2mc, int num_lanes) {
-  #pragma omp simd 
-  for(int lane=0; lane<NUM_LANES; lane++) {
-    hax[lane] = qdt_2mc*( (fex[lane] + dy[lane]*fdexdy[lane] ) + dz[lane]*(fdexdz[lane] + dy[lane]*fd2exdydz[lane]) );
-    hay[lane] = qdt_2mc*( (fey[lane] + dz[lane]*fdeydz[lane] ) + dx[lane]*(fdeydx[lane] + dz[lane]*fd2eydzdx[lane]) );
-    haz[lane] = qdt_2mc*( (fez[lane] + dx[lane]*fdezdx[lane] ) + dy[lane]*(fdezdy[lane] + dx[lane]*fd2ezdxdy[lane]) );
-  }
-}
-
-void KOKKOS_INLINE_FUNCTION
-interpolate_b(float cbx[NUM_LANES], float cby[NUM_LANES], float cbz[NUM_LANES],
-              float dx[NUM_LANES], float dy[NUM_LANES], float dz[NUM_LANES], 
-              float fcbx[NUM_LANES], float fcby[NUM_LANES], float fcbz[NUM_LANES],
-              float fdcbxdx[NUM_LANES], float fdcbydy[NUM_LANES], float fdcbzdz[NUM_LANES], 
-              int num_lanes) {
-  #pragma omp simd 
-  for(int lane=0; lane<num_lanes; lane++) {
-    cbx[lane] = fcbx[lane] + dx[lane]*fdcbxdx[lane];
-    cby[lane] = fcby[lane] + dy[lane]*fdcbydy[lane];
-    cbz[lane] = fcbz[lane] + dz[lane]*fdcbzdz[lane];
-  }
-}
-
-void KOKKOS_INLINE_FUNCTION
-half_advance_e( float ux[NUM_LANES], float uy[NUM_LANES], float uz[NUM_LANES], 
-                float hax[NUM_LANES], float hay[NUM_LANES], float haz[NUM_LANES], 
-                int num_lanes) {
-  #pragma omp simd 
-  for(int lane=0; lane<num_lanes; lane++) {
-    ux[lane] += hax[lane];
-    uy[lane] += hay[lane];
-    uz[lane] += haz[lane];
-  }
-}
-
-KOKKOS_INLINE_FUNCTION
-void advance_pos(float* dx, float* dy, float* dz, float* ux, float* uy, float* uz, int* ii, 
-                 float* v0, float* v1, float* v2, float* v3, float* v4, float* v5, int* inbnds,
-                 float* hax, float* hay, float* haz, 
-                 float* cbx, float* cby, float* cbz, 
-                 float* fex, float* fey, float* fez, 
-                 float* fcbx, float* fcby, float* fcbz, 
-                 float* fdcbxdx, float* fdcbydy, float* fdcbzdz, 
-                 float* fdexdy, float* fdexdz, float* fd2exdydz, 
-                 float* fdeydx, float* fdeydz, float* fd2eydzdx, 
-                 float* fdezdx, float* fdezdy, float* fd2ezdxdy,
-                 k_particles_t& k_particles,
-                 float cdt_dx, float cdt_dy, float cdt_dz, 
-                 float qdt_2mc, int num_lanes, int chunk) {
-  #define p_ux    k_particles(p_index, particle_var::ux)
-  #define p_uy    k_particles(p_index, particle_var::uy)
-  #define p_uz    k_particles(p_index, particle_var::uz)
-  constexpr float one = 1.0;
-  constexpr float one_third = 1.0/3.0;
-  constexpr float two_fifteenths = 2.0/15.0;
-  #pragma omp simd 
-  for(int lane=0; lane<num_lanes; lane++) {
-    size_t p_index = chunk*num_lanes + lane;
-  
-    hax[lane] = qdt_2mc*( (fex[lane] + dy[lane]*fdexdy[lane] ) + dz[lane]*(fdexdz[lane] + dy[lane]*fd2exdydz[lane]) );
-    hay[lane] = qdt_2mc*( (fey[lane] + dz[lane]*fdeydz[lane] ) + dx[lane]*(fdeydx[lane] + dz[lane]*fd2eydzdx[lane]) );
-    haz[lane] = qdt_2mc*( (fez[lane] + dx[lane]*fdezdx[lane] ) + dy[lane]*(fdezdy[lane] + dx[lane]*fd2ezdxdy[lane]) );
-  
-    // Interpolate B
-    cbx[lane] = fcbx[lane] + dx[lane]*fdcbxdx[lane];
-    cby[lane] = fcby[lane] + dy[lane]*fdcbydy[lane];
-    cbz[lane] = fcbz[lane] + dz[lane]*fdcbzdz[lane];
-  
-    // Half advance e
-    ux[lane] += hax[lane];
-    uy[lane] += hay[lane];
-    uz[lane] += haz[lane];
-
-    v0[lane] = qdt_2mc/sqrtf(one + (ux[lane]*ux[lane] + (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
-
-    // Boris - scalars
-    v1[lane] = cbx[lane]*cbx[lane] + (cby[lane]*cby[lane] + cbz[lane]*cbz[lane]);
-    v2[lane] = (v0[lane]*v0[lane])*v1[lane];
-    v3[lane] = v0[lane]*(one+v2[lane]*(one_third+v2[lane]*two_fifteenths));
-    v4[lane] = v3[lane]/(one+v1[lane]*(v3[lane]*v3[lane]));
-    v4[lane] += v4[lane];
-    // Boris - uprime
-    v0[lane] = ux[lane] + v3[lane]*(uy[lane]*cbz[lane] - uz[lane]*cby[lane]);
-    v1[lane] = uy[lane] + v3[lane]*(uz[lane]*cbx[lane] - ux[lane]*cbz[lane]);
-    v2[lane] = uz[lane] + v3[lane]*(ux[lane]*cby[lane] - uy[lane]*cbx[lane]);
-    // Boris - rotation
-    ux[lane] += v4[lane]*(v1[lane]*cbz[lane] - v2[lane]*cby[lane]);
-    uy[lane] += v4[lane]*(v2[lane]*cbx[lane] - v0[lane]*cbz[lane]);
-    uz[lane] += v4[lane]*(v0[lane]*cby[lane] - v1[lane]*cbx[lane]);
-    // Half advance e
-    ux[lane] += hax[lane];
-    uy[lane] += hay[lane];
-    uz[lane] += haz[lane];
-  }
-}
-
-KOKKOS_INLINE_FUNCTION
-void update_momentum(float* dx, float* dy, float* dz, float* ux, float* uy, float* uz, int* ii, 
-                 float* v0, float* v1, float* v2, float* v3, float* v4, float* v5, int* inbnds,
-                 float* hax, float* hay, float* haz, 
-                 float* cbx, float* cby, float* cbz, 
-                 float* fex, float* fey, float* fez, 
-                 float* fcbx, float* fcby, float* fcbz, 
-                 float* fdcbxdx, float* fdcbydy, float* fdcbzdz, 
-                 float* fdexdy, float* fdexdz, float* fd2exdydz, 
-                 float* fdeydx, float* fdeydz, float* fd2eydzdx, 
-                 float* fdezdx, float* fdezdy, float* fd2ezdxdy,
-                 k_particles_t& k_particles,
-                 float cdt_dx, float cdt_dy, float cdt_dz, 
-                 float qdt_2mc, int num_lanes, int chunk) {
-  #define p_ux    k_particles(p_index, particle_var::ux)
-  #define p_uy    k_particles(p_index, particle_var::uy)
-  #define p_uz    k_particles(p_index, particle_var::uz)
-  #pragma omp simd 
-  for(int lane=0; lane<num_lanes; lane++) {
-    size_t p_index = chunk*num_lanes + lane;
-    // Store momentum
-    p_ux = ux[lane];
-    p_uy = uy[lane];
-    p_uz = uz[lane];
-  }
-}
-
-KOKKOS_INLINE_FUNCTION
-void update_pos(float* dx, float* dy, float* dz, float* ux, float* uy, float* uz, int* ii, 
-                 float* v0, float* v1, float* v2, float* v3, float* v4, float* v5, int* inbnds,
-                 float* hax, float* hay, float* haz, 
-                 float* cbx, float* cby, float* cbz, 
-                 float* fex, float* fey, float* fez, 
-                 float* fcbx, float* fcby, float* fcbz, 
-                 float* fdcbxdx, float* fdcbydy, float* fdcbzdz, 
-                 float* fdexdy, float* fdexdz, float* fd2exdydz, 
-                 float* fdeydx, float* fdeydz, float* fd2eydzdx, 
-                 float* fdezdx, float* fdezdy, float* fd2ezdxdy,
-                 k_particles_t& k_particles,
-                 float cdt_dx, float cdt_dy, float cdt_dz, 
-                 float qdt_2mc, int num_lanes, int chunk) {
-
-  constexpr float one = 1.0;
-  constexpr float one_third = 1.0/3.0;
-  constexpr float two_fifteenths = 2.0/15.0;
-  #pragma omp simd 
-  for(int lane=0; lane<num_lanes; lane++) {
-    v0[lane]   = one/sqrtf(one + (ux[lane]*ux[lane]+ (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
-
-    /**/                                      // Get norm displacement
-    ux[lane]  *= cdt_dx;
-    uy[lane]  *= cdt_dy;
-    uz[lane]  *= cdt_dz;
-    ux[lane]  *= v0[lane];
-    uy[lane]  *= v0[lane];
-    uz[lane]  *= v0[lane];
-    v0[lane]   = dx[lane] + ux[lane];                           // Streak midpoint (inbnds)
-    v1[lane]   = dy[lane] + uy[lane];
-    v2[lane]   = dz[lane] + uz[lane];
-    v3[lane]   = v0[lane] + ux[lane];                           // New position
-    v4[lane]   = v1[lane] + uy[lane];
-    v5[lane]   = v2[lane] + uz[lane];
-  
-    inbnds[lane] = v3[lane]<=one &&  v4[lane]<=one &&  v5[lane]<=one &&
-                  -v3[lane]<=one && -v4[lane]<=one && -v5[lane]<=one;
-  }
-}
-
-void
-advance_p_kokkos_omp_simd(
-        k_particles_t& k_particles,
-        k_particles_i_t& k_particles_i,
-        k_particle_copy_t& k_particle_copy,
-        k_particle_i_copy_t& k_particle_i_copy,
-        k_particle_movers_t& k_particle_movers,
-        k_particle_i_movers_t& k_particle_movers_i,
-//        k_accumulators_sa_t k_accumulators_sa,
-        k_field_sa_t k_f_sa,
-        k_interpolator_t& k_interp,
-        //k_particle_movers_t k_local_particle_movers,
-        k_counter_t& k_nm,
-        k_neighbor_t& k_neighbors,
-        field_array_t* RESTRICT fa,
-        const grid_t *g,
-        const float qdt_2mc,
-        const float cdt_dx,
-        const float cdt_dy,
-        const float cdt_dz,
-        const float qsp,
-//        const int na,
-        const int np,
-        const int max_nm,
-        const int nx,
-        const int ny,
-        const int nz)
-{
-
-  constexpr float one            = 1.;
-  constexpr float one_third      = 1./3.;
-  constexpr float two_fifteenths = 2./15.;
-
-  k_field_t k_field = fa->k_f_d;
-  k_field_sa_t k_f_sv = Kokkos::Experimental::create_scatter_view<>(k_field);
-  float cx = 0.25 * g->rdy * g->rdz / g->dt;
-  float cy = 0.25 * g->rdz * g->rdx / g->dt;
-  float cz = 0.25 * g->rdx * g->rdy / g->dt;
-
-  #define p_dx    k_particles(p_index, particle_var::dx)
-  #define p_dy    k_particles(p_index, particle_var::dy)
-  #define p_dz    k_particles(p_index, particle_var::dz)
-  #define p_ux    k_particles(p_index, particle_var::ux)
-  #define p_uy    k_particles(p_index, particle_var::uy)
-  #define p_uz    k_particles(p_index, particle_var::uz)
-  #define p_w     k_particles(p_index, particle_var::w)
-  #define pii     k_particles_i(p_index)
-
-  #define f_cbx k_interp(ii[lane], interpolator_var::cbx)
-  #define f_cby k_interp(ii[lane], interpolator_var::cby)
-  #define f_cbz k_interp(ii[lane], interpolator_var::cbz)
-  #define f_ex  k_interp(ii[lane], interpolator_var::ex)
-  #define f_ey  k_interp(ii[lane], interpolator_var::ey)
-  #define f_ez  k_interp(ii[lane], interpolator_var::ez)
-
-  #define f_dexdy    k_interp(ii[lane], interpolator_var::dexdy)
-  #define f_dexdz    k_interp(ii[lane], interpolator_var::dexdz)
-
-  #define f_d2exdydz k_interp(ii[lane], interpolator_var::d2exdydz)
-  #define f_deydx    k_interp(ii[lane], interpolator_var::deydx)
-  #define f_deydz    k_interp(ii[lane], interpolator_var::deydz)
-
-  #define f_d2eydzdx k_interp(ii[lane], interpolator_var::d2eydzdx)
-  #define f_dezdx    k_interp(ii[lane], interpolator_var::dezdx)
-  #define f_dezdy    k_interp(ii[lane], interpolator_var::dezdy)
-
-  #define f_d2ezdxdy k_interp(ii[lane], interpolator_var::d2ezdxdy)
-  #define f_dcbxdx   k_interp(ii[lane], interpolator_var::dcbxdx)
-  #define f_dcbydy   k_interp(ii[lane], interpolator_var::dcbydy)
-  #define f_dcbzdz   k_interp(ii[lane], interpolator_var::dcbzdz)
-
-  // copy local memmbers from grid
-  //auto nfaces_per_voxel = 6;
-  //auto nvoxels = g->nv;
-  //Kokkos::View<int64_t*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>
-      //h_neighbors(g->neighbor, nfaces_per_voxel * nvoxels);
-  //auto d_neighbors = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), h_neighbors);
-
-  auto rangel = g->rangel;
-  auto rangeh = g->rangeh;
-
-  // TODO: is this the right place to do this?
-  Kokkos::deep_copy(k_nm, 0);
-
-  constexpr int num_lanes = NUM_LANES;
-  int num_chunks = np/num_lanes;
-//  auto k_field_scatter_access = k_f_sv.access();
-  for(size_t chunk=0; chunk<num_chunks; chunk++) {
-    float v0[num_lanes], v1[num_lanes], v2[num_lanes], v3[num_lanes], v4[num_lanes], v5[num_lanes];
-    float v6[num_lanes], v7[num_lanes], v8[num_lanes], v9[num_lanes];
-    float v10[num_lanes], v11[num_lanes], v12[num_lanes], v13[num_lanes];
-    float dx[num_lanes], dy[num_lanes], dz[num_lanes];
-    float ux[num_lanes], uy[num_lanes], uz[num_lanes];
-    float hax[num_lanes], hay[num_lanes], haz[num_lanes];
-    float cbx[num_lanes], cby[num_lanes], cbz[num_lanes];
-    float q[num_lanes];
-    int ii[num_lanes];
-    int inbnds[num_lanes];
-
-    float fex[num_lanes];      
-    float fdexdy[num_lanes];   
-    float fdexdz[num_lanes];   
-    float fd2exdydz[num_lanes];
-    float fey[num_lanes];      
-    float fdeydz[num_lanes];   
-    float fdeydx[num_lanes];   
-    float fd2eydzdx[num_lanes];
-    float fez[num_lanes];      
-    float fdezdx[num_lanes];   
-    float fdezdy[num_lanes];   
-    float fd2ezdxdy[num_lanes];
-    float fcbx[num_lanes];     
-    float fdcbxdx[num_lanes];  
-    float fcby[num_lanes];     
-    float fdcbydy[num_lanes];  
-    float fcbz[num_lanes];     
-    float fdcbzdz[num_lanes];  
-
-#pragma omp simd
-    for(int lane=0; lane<num_lanes; lane++) {
-      size_t p_index = chunk*num_lanes + lane;
-      // Load position
-      dx[lane] = p_dx;
-      dy[lane] = p_dy;
-      dz[lane] = p_dz;
-
-      // Load momentum
-      ux[lane] = p_ux;
-      uy[lane] = p_uy;
-      uz[lane] = p_uz;
-      q[lane] = p_w;
-      ii[lane] = pii;
-    }
-
-#pragma omp simd
-    for(int lane=0; lane<num_lanes; lane++) {
-      // Load interpolators
-      fex[lane]       = f_ex;     
-      fdexdy[lane]    = f_dexdy;  
-      fdexdz[lane]    = f_dexdz;  
-      fd2exdydz[lane] = f_d2exdydz;
-      fey[lane]       = f_ey;     
-      fdeydz[lane]    = f_deydz;  
-      fdeydx[lane]    = f_deydx;  
-      fd2eydzdx[lane] = f_d2eydzdx;
-      fez[lane]       = f_ez;     
-      fdezdx[lane]    = f_dezdx;  
-      fdezdy[lane]    = f_dezdy;  
-      fd2ezdxdy[lane] = f_d2ezdxdy;
-      fcbx[lane]      = f_cbx;    
-      fdcbxdx[lane]   = f_dcbxdx; 
-      fcby[lane]      = f_cby;    
-      fdcbydy[lane]   = f_dcbydy; 
-      fcbz[lane]      = f_cbz;    
-      fdcbzdz[lane]   = f_dcbzdz; 
-    }
-
-advance_pos(dx, dy, dz, ux, uy, uz, ii, 
-            v0, v1, v2, v3, v4, v5, inbnds,
-            hax, hay, haz, 
-            cbx, cby, cbz, 
-            fex, fey, fez, 
-            fcbx, fcby, fcbz, 
-            fdcbxdx, fdcbydy, fdcbzdz, 
-            fdexdy, fdexdz, fd2exdydz, 
-            fdeydx, fdeydz, fd2eydzdx, 
-            fdezdx, fdezdy, fd2ezdxdy,
-            k_particles, 
-            cdt_dx, cdt_dy, cdt_dz, 
-            qdt_2mc, num_lanes, chunk);
-
-update_momentum(dx, dy, dz, ux, uy, uz, ii, 
-            v0, v1, v2, v3, v4, v5, inbnds,
-            hax, hay, haz, 
-            cbx, cby, cbz, 
-            fex, fey, fez, 
-            fcbx, fcby, fcbz, 
-            fdcbxdx, fdcbydy, fdcbzdz, 
-            fdexdy, fdexdz, fd2exdydz, 
-            fdeydx, fdeydz, fd2eydzdx, 
-            fdezdx, fdezdy, fd2ezdxdy,
-            k_particles, 
-            cdt_dx, cdt_dy, cdt_dz, 
-            qdt_2mc, num_lanes, chunk);
-
-update_pos(dx, dy, dz, ux, uy, uz, ii, 
-            v0, v1, v2, v3, v4, v5, inbnds,
-            hax, hay, haz, 
-            cbx, cby, cbz, 
-            fex, fey, fez, 
-            fcbx, fcby, fcbz, 
-            fdcbxdx, fdcbydy, fdcbzdz, 
-            fdexdy, fdexdz, fd2exdydz, 
-            fdeydx, fdeydz, fd2eydzdx, 
-            fdezdx, fdezdy, fd2ezdxdy,
-            k_particles, 
-            cdt_dx, cdt_dy, cdt_dz, 
-            qdt_2mc, num_lanes, chunk);
-
-//#pragma omp simd
-//    for(int lane=0; lane<num_lanes; lane++) {
-//      size_t p_index = chunk*num_lanes + lane;
-//      hax[lane] = qdt_2mc*( (fex[lane] + dy[lane]*fdexdy[lane] ) + dz[lane]*(fdexdz[lane] + dy[lane]*fd2exdydz[lane]) );
-//      hay[lane] = qdt_2mc*( (fey[lane] + dz[lane]*fdeydz[lane] ) + dx[lane]*(fdeydx[lane] + dz[lane]*fd2eydzdx[lane]) );
-//      haz[lane] = qdt_2mc*( (fez[lane] + dx[lane]*fdezdx[lane] ) + dy[lane]*(fdezdy[lane] + dx[lane]*fd2ezdxdy[lane]) );
-//
-//      // Interpolate B
-//      cbx[lane] = fcbx[lane] + dx[lane]*fdcbxdx[lane];
-//      cby[lane] = fcby[lane] + dy[lane]*fdcbydy[lane];
-//      cbz[lane] = fcbz[lane] + dz[lane]*fdcbzdz[lane];
-//
-//      // Half advance e
-//      ux[lane] += hax[lane];
-//      uy[lane] += hay[lane];
-//      uz[lane] += haz[lane];
-//    }
-////
-////    interpolate_e(hax, hay, haz, 
-////                  dx, dy, dz, 
-////                  fex, fey, fez, 
-////                  fdexdy, fdexdz, fd2exdydz, 
-////                  fdeydx, fdeydz, fd2eydzdx, 
-////                  fdezdx, fdezdy, fd2ezdxdy,
-////                  qdt_2mc, num_lanes);
-////
-////    interpolate_b(cbx, cby, cbz,
-////                  dx, dy, dz, 
-////                  fcbx, fcby, fcbz,
-////                  fdcbxdx, fdcbydy, fdcbzdz, 
-////                  num_lanes);
-////
-////    half_advance_e(ux, uy, uz, 
-////                   hax, hay, haz, 
-////                   num_lanes);
-////
-//#pragma omp simd 
-//    for(int lane=0; lane<num_lanes; lane++) {
-//      size_t p_index = chunk*num_lanes + lane;
-//      v0[lane] = qdt_2mc/sqrtf(one + (ux[lane]*ux[lane] + (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
-//    }
-////    recip_square_root(v0, ux, uy, uz, qdt_2mc, num_lanes);
-//
-//#pragma omp simd
-//    for(int lane=0; lane<num_lanes; lane++) {
-//      size_t p_index = chunk*num_lanes + lane;
-//      // Boris - scalars
-//      v1[lane] = cbx[lane]*cbx[lane] + (cby[lane]*cby[lane] + cbz[lane]*cbz[lane]);
-//      v2[lane] = (v0[lane]*v0[lane])*v1[lane];
-//      v3[lane] = v0[lane]*(one+v2[lane]*(one_third+v2[lane]*two_fifteenths));
-//      v4[lane] = v3[lane]/(one+v1[lane]*(v3[lane]*v3[lane]));
-//      v4[lane] += v4[lane];
-//      // Boris - uprime
-//      v0[lane] = ux[lane] + v3[lane]*(uy[lane]*cbz[lane] - uz[lane]*cby[lane]);
-//      v1[lane] = uy[lane] + v3[lane]*(uz[lane]*cbx[lane] - ux[lane]*cbz[lane]);
-//      v2[lane] = uz[lane] + v3[lane]*(ux[lane]*cby[lane] - uy[lane]*cbx[lane]);
-//      // Boris - rotation
-//      ux[lane] += v4[lane]*(v1[lane]*cbz[lane] - v2[lane]*cby[lane]);
-//      uy[lane] += v4[lane]*(v2[lane]*cbx[lane] - v0[lane]*cbz[lane]);
-//      uz[lane] += v4[lane]*(v0[lane]*cby[lane] - v1[lane]*cbx[lane]);
-//      // Half advance e
-//      ux[lane] += hax[lane];
-//      uy[lane] += hay[lane];
-//      uz[lane] += haz[lane];
-//    }
-//
-//#pragma omp simd
-//    for(int lane=0; lane<num_lanes; lane++) {
-//      size_t p_index = chunk*num_lanes + lane;
-//      // Store momentum
-//      p_ux = ux[lane];
-//      p_uy = uy[lane];
-//      p_uz = uz[lane];
-//    }
-//
-//#pragma omp simd
-//    for(int lane=0; lane<num_lanes; lane++) {
-//      size_t p_index = chunk*num_lanes + lane;
-//      v0[lane]   = one/sqrtf(one + (ux[lane]*ux[lane]+ (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
-//    }
-//
-//#pragma omp simd
-//    for(int lane=0; lane<num_lanes; lane++) {
-//      size_t p_index = chunk*num_lanes + lane;
-//
-//      /**/                                      // Get norm displacement
-//      ux[lane]  *= cdt_dx;
-//      uy[lane]  *= cdt_dy;
-//      uz[lane]  *= cdt_dz;
-//      ux[lane]  *= v0[lane];
-//      uy[lane]  *= v0[lane];
-//      uz[lane]  *= v0[lane];
-//      v0[lane]   = dx[lane] + ux[lane];                           // Streak midpoint (inbnds)
-//      v1[lane]   = dy[lane] + uy[lane];
-//      v2[lane]   = dz[lane] + uz[lane];
-//      v3[lane]   = v0[lane] + ux[lane];                           // New position
-//      v4[lane]   = v1[lane] + uy[lane];
-//      v5[lane]   = v2[lane] + uz[lane];
-//
-//      inbnds[lane] = v3[lane]<=one &&  v4[lane]<=one &&  v5[lane]<=one &&
-//                    -v3[lane]<=one && -v4[lane]<=one && -v5[lane]<=one;
-//    }
-
-#pragma omp simd
-    for(int lane=0; lane<num_lanes; lane++) {
-      size_t p_index = chunk*num_lanes + lane;
-
-      v3[lane] = static_cast<float>(inbnds[lane])*v3[lane] + (1.0-static_cast<float>(inbnds[lane]))*dx[lane];
-      v4[lane] = static_cast<float>(inbnds[lane])*v4[lane] + (1.0-static_cast<float>(inbnds[lane]))*dy[lane];
-      v5[lane] = static_cast<float>(inbnds[lane])*v5[lane] + (1.0-static_cast<float>(inbnds[lane]))*dz[lane];
-      q[lane]  = static_cast<float>(inbnds[lane])*q[lane]*qsp;
-
-      p_dx = v3[lane];
-      p_dy = v4[lane];
-      p_dz = v5[lane];
-      dx[lane] = v0[lane];
-      dy[lane] = v1[lane];
-      dz[lane] = v2[lane];
-      v5[lane] = q[lane]*ux[lane]*uy[lane]*uz[lane]*one_third;
-    }
-
-#pragma omp simd
-    for(int lane=0; lane<num_lanes; lane++) {
-#     define ACCUMULATE_J(X,Y,Z)                                 \
-      v4[lane]  = q[lane]*u##X[lane];   /* v2 = q ux                            */        \
-      v1[lane]  = v4[lane]*d##Y[lane];  /* v1 = q ux dy                         */        \
-      v0[lane]  = v4[lane]-v1[lane];    /* v0 = q ux (1-dy)                     */        \
-      v1[lane] += v4[lane];             /* v1 = q ux (1+dy)                     */        \
-      v4[lane]  = one+d##Z[lane];       /* v4 = 1+dz                            */        \
-      v2[lane]  = v0[lane]*v4[lane];    /* v2 = q ux (1-dy)(1+dz)               */        \
-      v3[lane]  = v1[lane]*v4[lane];    /* v3 = q ux (1+dy)(1+dz)               */        \
-      v4[lane]  = one-d##Z[lane];       /* v4 = 1-dz                            */        \
-      v0[lane] *= v4[lane];             /* v0 = q ux (1-dy)(1-dz)               */        \
-      v1[lane] *= v4[lane];             /* v1 = q ux (1+dy)(1-dz)               */        \
-      v0[lane] += v5[lane];             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
-      v1[lane] -= v5[lane];             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
-      v2[lane] -= v5[lane];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-      v3[lane] += v5[lane];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
-
-//        int iii = ii[lane];
-//        int zi = iii/((nx+2)*(ny+2));
-//        iii -= zi*(nx+2)*(ny+2);
-//        int yi = iii/(nx+2);
-//        int xi = iii - yi*(nx+2);
-//        ACCUMULATE_J( x,y,z );
-//        //Kokkos::atomic_add(&k_field(ii, field_var::jfx), cx*v0);
-//        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx), cx*v1);
-//        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx), cx*v2);
-//        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx), cx*v3);
-//        k_field_scatter_access(ii[lane], field_var::jfx) += cx*v0[lane];
-//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1[lane];
-//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2[lane];
-//        k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3[lane];
-//
-//        ACCUMULATE_J( y,z,x );
-//        //Kokkos::atomic_add(&k_field(ii, field_var::jfy), cy*v0);
-//        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v1);
-//        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy), cy*v2);
-//        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v3);
-//        k_field_scatter_access(ii[lane], field_var::jfy) += cy*v0[lane];
-//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1[lane];
-//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2[lane];
-//        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3[lane];
-//
-//        ACCUMULATE_J( z,x,y );
-//        //Kokkos::atomic_add(&k_field(ii, field_var::jfz), cz*v0);
-//        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz), cz*v1);
-//        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v2);
-//        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v3);
-//        k_field_scatter_access(ii[lane], field_var::jfz) += cz*v0[lane];
-//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1[lane];
-//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
-//        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
-
-      ACCUMULATE_J( x,y,z );
-      v6[lane] = v0[lane];
-      v7[lane] = v1[lane];
-      v8[lane] = v2[lane];
-      v9[lane] = v3[lane];
-
-      ACCUMULATE_J( y,z,x );
-      v10[lane] = v0[lane];
-      v11[lane] = v1[lane];
-      v12[lane] = v2[lane];
-      v13[lane] = v3[lane];
-
-      ACCUMULATE_J( z,x,y );
-//      v14[lane] = v0[lane];
-//      v15[lane] = v1[lane];
-//      v16[lane] = v2[lane];
-//      v17[lane] = v3[lane];
-#     undef ACCUMULATE_J
-    }
-
-//    transpose(v6, v7, v8, v9, v10, v11, v12, v13);
-//    float* a0_ptr = &(k_accumulators(ii[0], accumulator_var::jx, 0));
-//    float* a1_ptr = &(k_accumulators(ii[1], accumulator_var::jx, 0));
-//    float* a2_ptr = &(k_accumulators(ii[2], accumulator_var::jx, 0));
-//    float* a3_ptr = &(k_accumulators(ii[3], accumulator_var::jx, 0));
-//    float* a4_ptr = &(k_accumulators(ii[4], accumulator_var::jx, 0));
-//    float* a5_ptr = &(k_accumulators(ii[5], accumulator_var::jx, 0));
-//    float* a6_ptr = &(k_accumulators(ii[6], accumulator_var::jx, 0));
-//    float* a7_ptr = &(k_accumulators(ii[7], accumulator_var::jx, 0));
-
-//#pragma omp simd
-//    for(int lane=0; lane<num_lanes; lane++) {
-//      a0_ptr[lane] += v6[lane];
-//      a1_ptr[lane] += v7[lane];
-//      a2_ptr[lane] += v8[lane];
-//      a3_ptr[lane] += v9[lane];
-//      a4_ptr[lane] += v10[lane];
-//      a5_ptr[lane] += v11[lane];
-//      a6_ptr[lane] += v12[lane];
-//      a7_ptr[lane] += v13[lane];
-//    }
-
-//#ifdef VPIC_ENABLE_TEAM_REDUCTION
-    int first = ii[0];
-    int index = first;
-    int in_bounds = 1;
-    #pragma omp simd reduction(&:index,in_bounds)
-    for(int lane=0; lane<num_lanes; lane++) {
-      index &= ii[lane];
-      in_bounds &= inbnds[lane];
-    }
-
-  auto k_field_scatter_access = k_f_sv.access();
-    if(first == index && in_bounds == 1) {
-      int iii = first;
-      int zi = iii/((nx+2)*(ny+2));
-      iii -= zi*(nx+2)*(ny+2);
-      int yi = iii/(nx+2);
-      int xi = iii - yi*(nx+2);
-
-      float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
-      float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
-      float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
-      #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val8,val9,val10,val11)
-      for(int lane=0; lane<num_lanes; lane++) {
-        val0 += v6[lane];
-        val1 += v7[lane];
-        val2 += v8[lane];
-        val3 += v9[lane];
-        val4 += v10[lane];
-        val5 += v11[lane];
-        val6 += v12[lane];
-        val7 += v13[lane];
-        val8 += v0[lane];
-        val9 += v1[lane];
-        val10 += v2[lane];
-        val11 += v3[lane];
-      }
-//      k_field_scatter_access(first, field_var::jfx) += cx*val0;
-//      k_field_scatter_access(first, field_var::jfy) += cy*val4;
-//      k_field_scatter_access(first, field_var::jfz) += cz*val8;
-//      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*val6;
-//      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*val9;
-//      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*val1;
-//      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val10;
-//      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*val2;
-//      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val5;
-//      k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*val3;
-//      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val7;
-//      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val11;
-      k_field(first, field_var::jfx) += cx*val0;
-      k_field(first, field_var::jfy) += cy*val4;
-      k_field(first, field_var::jfz) += cz*val8;
-      k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*val6;
-      k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*val9;
-      k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*val1;
-      k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val10;
-      k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*val2;
-      k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val5;
-      k_field(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*val3;
-      k_field(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val7;
-      k_field(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val11;
-
-//      #pragma omp simd reduction(+:val0,val1,val2,val3)
-//      for(int lane=0; lane<num_lanes; lane++) {
-//        val0 += v6[lane];
-//        val1 += v7[lane];
-//        val2 += v8[lane];
-//        val3 += v9[lane];
-//      }
-//      k_field_scatter_access(first, field_var::jfx) += cx*val0;
-//      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*val1;
-//      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*val2;
-//      k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*val3;
-//
-//      val0 = 0.0;
-//      val1 = 0.0;
-//      val2 = 0.0;
-//      val3 = 0.0;
-//      #pragma omp simd reduction(+:val0,val1,val2,val3)
-//      for(int lane=0; lane<num_lanes; lane++) {
-//        val0 += v10[lane];
-//        val1 += v11[lane];
-//        val2 += v12[lane];
-//        val3 += v13[lane];
-//      }
-//      k_field_scatter_access(first, field_var::jfy) += cy*val0;
-//      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val1;
-//      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*val2;
-//      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*val3;
-//
-//      val0 = 0.0;
-//      val1 = 0.0;
-//      val2 = 0.0;
-//      val3 = 0.0;
-//      #pragma omp simd reduction(+:val0,val1,val2,val3)
-//      for(int lane=0; lane<num_lanes; lane++) {
-//        val0 += v0[lane];
-//        val1 += v1[lane];
-//        val2 += v2[lane];
-//        val3 += v3[lane];
-//      }
-//      k_field_scatter_access(first, field_var::jfz) += cz*val0;
-//      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*val1;
-//      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val2;
-//      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val3;
-    } else {
-//#endif
-      for(int lane=0; lane<num_lanes; lane++) {
-        size_t p_index = chunk*num_lanes + lane;
-        int iii = ii[lane];
-        int zi = iii/((nx+2)*(ny+2));
-        iii -= zi*(nx+2)*(ny+2);
-        int yi = iii/(nx+2);
-        int xi = iii - yi*(nx+2);
-
-        k_field(ii[lane], field_var::jfx) += cx*v6[lane];
-        k_field(ii[lane], field_var::jfy) += cy*v10[lane];
-        k_field(ii[lane], field_var::jfz) += cz*v0[lane];
-
-        k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v12[lane];
-        k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1[lane];
-
-        k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v7[lane];
-        k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
-
-        k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v8[lane];
-        k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v11[lane];
-
-        k_field(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[lane];
-        k_field(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[lane];
-        k_field(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
-
-//        k_field_scatter_access(ii[lane], field_var::jfx) += cx*v6[lane];
-//        k_field_scatter_access(ii[lane], field_var::jfy) += cy*v10[lane];
-//        k_field_scatter_access(ii[lane], field_var::jfz) += cz*v0[lane];
-//
-//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v12[lane];
-//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1[lane];
-//
-//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v7[lane];
-//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
-//
-//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v8[lane];
-//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v11[lane];
-//
-//        k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[lane];
-//        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[lane];
-//        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
-
-//        k_field_scatter_access(ii[lane], field_var::jfx) += cx*v6[lane];
-//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v7[lane];
-//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v8[lane];
-//        k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[lane];
-//
-//        k_field_scatter_access(ii[lane], field_var::jfy) += cy*v10[lane];
-//        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v11[lane];
-//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v12[lane];
-//        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[lane];
-//
-//        k_field_scatter_access(ii[lane], field_var::jfz) += cz*v0[lane];
-//        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1[lane];
-//        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2[lane];
-//        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[lane];
-      }
-//#ifdef VPIC_ENABLE_TEAM_REDUCTION
-    }
-//#endif
-
-    for(int lane=0; lane<num_lanes; lane++) {
-      if(!inbnds[lane]) {
-        size_t p_index = chunk*num_lanes + lane;
-        DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
-        local_pm->dispx = ux[lane];
-        local_pm->dispy = uy[lane];
-        local_pm->dispz = uz[lane];
-        local_pm->i     = p_index;
-
-        if( move_p_kokkos( k_particles, k_particles_i, local_pm,
-                           k_f_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) ) { // Unlikely
-          if( k_nm(0)<max_nm ) {
-            const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
-            if (nm >= max_nm) Kokkos::abort("overran max_nm");
-
-            k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
-            k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
-            k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
-            k_particle_movers_i(nm)   = local_pm->i;
-
-            // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-            k_particle_copy(nm, particle_var::dx) = p_dx;
-            k_particle_copy(nm, particle_var::dy) = p_dy;
-            k_particle_copy(nm, particle_var::dz) = p_dz;
-            k_particle_copy(nm, particle_var::ux) = p_ux;
-            k_particle_copy(nm, particle_var::uy) = p_uy;
-            k_particle_copy(nm, particle_var::uz) = p_uz;
-            k_particle_copy(nm, particle_var::w) = p_w;
-            k_particle_i_copy(nm) = pii;
-          }
-        }
-      }
-    }
-  }
-#undef p_dx
-#undef p_dy
-#undef p_dz
-#undef p_ux
-#undef p_uy
-#undef p_uz
-#undef p_w 
-#undef pii 
-
-#undef f_cbx
-#undef f_cby
-#undef f_cbz
-#undef f_ex 
-#undef f_ey 
-#undef f_ez 
-
-#undef f_dexdy
-#undef f_dexdz
-
-#undef f_d2exdydz
-#undef f_deydx   
-#undef f_deydz   
-
-#undef f_d2eydzdx
-#undef f_dezdx   
-#undef f_dezdy   
-
-#undef f_d2ezdxdy
-#undef f_dcbxdx  
-#undef f_dcbydy  
-#undef f_dcbzdz  
-
-#define p_dx    k_particles(p_index, particle_var::dx)
-#define p_dy    k_particles(p_index, particle_var::dy)
-#define p_dz    k_particles(p_index, particle_var::dz)
-#define p_ux    k_particles(p_index, particle_var::ux)
-#define p_uy    k_particles(p_index, particle_var::uy)
-#define p_uz    k_particles(p_index, particle_var::uz)
-#define p_w     k_particles(p_index, particle_var::w)
-#define pii     k_particles_i(p_index)
-
-#define f_cbx k_interp(ii, interpolator_var::cbx)
-#define f_cby k_interp(ii, interpolator_var::cby)
-#define f_cbz k_interp(ii, interpolator_var::cbz)
-#define f_ex  k_interp(ii, interpolator_var::ex)
-#define f_ey  k_interp(ii, interpolator_var::ey)
-#define f_ez  k_interp(ii, interpolator_var::ez)
-
-#define f_dexdy    k_interp(ii, interpolator_var::dexdy)
-#define f_dexdz    k_interp(ii, interpolator_var::dexdz)
-
-#define f_d2exdydz k_interp(ii, interpolator_var::d2exdydz)
-#define f_deydx    k_interp(ii, interpolator_var::deydx)
-#define f_deydz    k_interp(ii, interpolator_var::deydz)
-
-#define f_d2eydzdx k_interp(ii, interpolator_var::d2eydzdx)
-#define f_dezdx    k_interp(ii, interpolator_var::dezdx)
-#define f_dezdy    k_interp(ii, interpolator_var::dezdy)
-
-#define f_d2ezdxdy k_interp(ii, interpolator_var::d2ezdxdy)
-#define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
-#define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
-#define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
-  if(num_chunks*num_lanes < np) {
-    for(int p_index=num_chunks*num_lanes; p_index<np; p_index++) {
-      float v0, v1, v2, v3, v4, v5;
-      auto  k_field_scatter_access = k_f_sv.access();
-
-      float dx   = p_dx;                             // Load position
-      float dy   = p_dy;
-      float dz   = p_dz;
-      int   ii   = pii;
-      float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
-                             dz*( f_dexdz + dy*f_d2exdydz ) );
-      float hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
-                             dx*( f_deydx + dz*f_d2eydzdx ) );
-      float haz  = qdt_2mc*(    ( f_ez    + dx*f_dezdx    ) +
-                             dy*( f_dezdy + dx*f_d2ezdxdy ) );
-
-      float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
-      float cby  = f_cby + dy*f_dcbydy;
-      float cbz  = f_cbz + dz*f_dcbzdz;
-      float ux   = p_ux;                             // Load momentum
-      float uy   = p_uy;
-      float uz   = p_uz;
-      float q    = p_w;
-      ux  += hax;                               // Half advance E
-      uy  += hay;
-      uz  += haz;
-      v0   = qdt_2mc/sqrtf(one + (ux*ux + (uy*uy + uz*uz)));
-      /**/                                      // Boris - scalars
-      v1   = cbx*cbx + (cby*cby + cbz*cbz);
-      v2   = (v0*v0)*v1;
-      v3   = v0*(one+v2*(one_third+v2*two_fifteenths));
-      v4   = v3/(one+v1*(v3*v3));
-      v4  += v4;
-      v0   = ux + v3*( uy*cbz - uz*cby );       // Boris - uprime
-      v1   = uy + v3*( uz*cbx - ux*cbz );
-      v2   = uz + v3*( ux*cby - uy*cbx );
-      ux  += v4*( v1*cbz - v2*cby );            // Boris - rotation
-      uy  += v4*( v2*cbx - v0*cbz );
-      uz  += v4*( v0*cby - v1*cbx );
-      ux  += hax;                               // Half advance E
-      uy  += hay;
-      uz  += haz;
-      p_ux = ux;                               // Store momentum
-      p_uy = uy;
-      p_uz = uz;
-
-      v0   = one/sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
-
-      /**/                                      // Get norm displacement
-      ux  *= cdt_dx;
-      uy  *= cdt_dy;
-      uz  *= cdt_dz;
-      ux  *= v0;
-      uy  *= v0;
-      uz  *= v0;
-      v0   = dx + ux;                           // Streak midpoint (inbnds)
-      v1   = dy + uy;
-      v2   = dz + uz;
-      v3   = v0 + ux;                           // New position
-      v4   = v1 + uy;
-      v5   = v2 + uz;
-
-      // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
-      if(  v3<=one &&  v4<=one &&  v5<=one &&   // Check if inbnds
-          -v3<=one && -v4<=one && -v5<=one ) {
-
-        // Common case (inbnds).  Note: accumulator values are 4 times
-        // the total physical charge that passed through the appropriate
-        // current quadrant in a time-step
-
-        q *= qsp;
-        p_dx = v3;                             // Store new position
-        p_dy = v4;
-        p_dz = v5;
-        dx = v0;                                // Streak midpoint
-        dy = v1;
-        dz = v2;
-        v5 = q*ux*uy*uz*one_third;              // Compute correction
-
-#       define ACCUMULATE_J(X,Y,Z)                                 \
-        v4  = q*u##X;   /* v2 = q ux                            */        \
-        v1  = v4*d##Y;  /* v1 = q ux dy                         */        \
-        v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        \
-        v1 += v4;       /* v1 = q ux (1+dy)                     */        \
-        v4  = one+d##Z; /* v4 = 1+dz                            */        \
-        v2  = v0*v4;    /* v2 = q ux (1-dy)(1+dz)               */        \
-        v3  = v1*v4;    /* v3 = q ux (1+dy)(1+dz)               */        \
-        v4  = one-d##Z; /* v4 = 1-dz                            */        \
-        v0 *= v4;       /* v0 = q ux (1-dy)(1-dz)               */        \
-        v1 *= v4;       /* v1 = q ux (1+dy)(1-dz)               */        \
-        v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
-        v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
-        v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-        v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
-
-// Bypass accumulators TODO: enable warp reduction
-
-        // TODO: That 2 needs to be 2*NGHOST eventually
-        int iii = ii;
-        int zi = iii/((nx+2)*(ny+2));
-        iii -= zi*(nx+2)*(ny+2);
-        int yi = iii/(nx+2);
-        int xi = iii - yi*(nx+2);
-        ACCUMULATE_J( x,y,z );
-        //Kokkos::atomic_add(&k_field(ii, field_var::jfx), cx*v0);
-        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx), cx*v1);
-        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx), cx*v2);
-        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx), cx*v3);
-        k_field_scatter_access(ii, field_var::jfx) += cx*v0;
-        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
-        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
-        k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
-
-        ACCUMULATE_J( y,z,x );
-        //Kokkos::atomic_add(&k_field(ii, field_var::jfy), cy*v0);
-        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v1);
-        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy), cy*v2);
-        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v3);
-        k_field_scatter_access(ii, field_var::jfy) += cy*v0;
-        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
-        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
-        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
-
-        ACCUMULATE_J( z,x,y );
-        //Kokkos::atomic_add(&k_field(ii, field_var::jfz), cz*v0);
-        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz), cz*v1);
-        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v2);
-        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v3);
-        k_field_scatter_access(ii, field_var::jfz) += cz*v0;
-        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
-        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
-        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
-#       undef ACCUMULATE_J
-      } else {
-        DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
-        local_pm->dispx = ux;
-        local_pm->dispy = uy;
-        local_pm->dispz = uz;
-        local_pm->i     = p_index;
-
-        //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
-        if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                       k_f_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
-        {
-          if( k_nm(0) < max_nm )
-          {
-              const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
-              if (nm >= max_nm) Kokkos::abort("overran max_nm");
-
-              k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
-              k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
-              k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
-              k_particle_movers_i(nm)   = local_pm->i;
-
-              // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-              k_particle_copy(nm, particle_var::dx) = p_dx;
-              k_particle_copy(nm, particle_var::dy) = p_dy;
-              k_particle_copy(nm, particle_var::dz) = p_dz;
-              k_particle_copy(nm, particle_var::ux) = p_ux;
-              k_particle_copy(nm, particle_var::uy) = p_uy;
-              k_particle_copy(nm, particle_var::uz) = p_uz;
-              k_particle_copy(nm, particle_var::w) = p_w;
-              k_particle_i_copy(nm) = pii;
-
-              // Tag this one as having left
-              //k_particles(p_index, particle_var::pi) = 999999;
-
-              // Copy local local_pm back
-              //local_pm_dispx = local_pm->dispx;
-              //local_pm_dispy = local_pm->dispy;
-              //local_pm_dispz = local_pm->dispz;
-              //local_pm_i = local_pm->i;
-              //printf("rank copying %d to nm %d \n", local_pm_i, nm);
-              //copy_local_to_pm(nm);
-          }
-        }
-      }
-    }
-  }
-  Kokkos::Experimental::contribute(k_field, k_f_sv);
 #undef p_dx
 #undef p_dy
 #undef p_dz
@@ -2737,7 +1701,6 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
 
   KOKKOS_TIC();
-//  advance_p_kokkos_omp_simd(
   advance_p_kokkos_vector(
 //  advance_p_kokkos_devel(
           sp->k_p_d,
