@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Compiling VPIC &mdash; VPIC-Kokkos 2.0 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Running VPIC" href="run.html" />
+    <link rel="prev" title="Introduction" href="intro.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> VPIC-Kokkos
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">Introduction</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Compiling VPIC</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#quickstart">Quickstart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#manual-kokkos-install-more-powerful-more-effort">Manual Kokkos Install (more powerful, more effort)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#legacy-non-cmake-build-for-old-kokkos-versions">Legacy non-cmake build for old Kokkos versions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#further-reading">Further Reading</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#building-vpic-kokkos">Building VPIC + Kokkos</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="run.html">Running VPIC</a></li>
+<li class="toctree-l1"><a class="reference internal" href="porting.html">How to port user kernels to Kokkos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vis.html">Postprocessing and Visualization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pbd.html">Particle Boundary Diagnostic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="issues.html">Known Issues</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">VPIC-Kokkos</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>Compiling VPIC</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/comp.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <div class="section" id="compiling-vpic">
+<h1>Compiling VPIC<a class="headerlink" href="#compiling-vpic" title="Permalink to this headline"></a></h1>
+<p>Compiling VPIC consists of two steps: compiling or finding a Kokkos install, and building VPIC against that Kokkos install.</p>
+<div class="section" id="quickstart">
+<h2>Quickstart<a class="headerlink" href="#quickstart" title="Permalink to this headline"></a></h2>
+<p>1) Do a <em>recursive</em> clone of this repo, this will pull down a copy of Kokkos
+for you.
+<code class="docutils literal notranslate"><span class="pre">`</span>
+<span class="pre">git</span> <span class="pre">clone</span> <span class="pre">--recursive</span> <span class="pre">git&#64;github.com:lanl/vpic-kokkos.git</span>
+<span class="pre">`</span></code>
+If you switch branches, you might need to update the Kokkos submodule.
+<code class="docutils literal notranslate"><span class="pre">`</span>
+<span class="pre">git</span> <span class="pre">submodule</span> <span class="pre">update</span> <span class="pre">--init</span>
+<span class="pre">`</span></code>
+2) Load modules for CMake, your compiler, MPI, and any platform specific packages like CUDA.
+3) Find a file in <cite>arch/</cite> that is close to your intended system and modify as necessary.
+Pay particular attention to lines like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">-</span><span class="n">DENABLE_KOKKOS_CUDA</span><span class="o">=</span><span class="n">ON</span>
+<span class="o">-</span><span class="n">DKokkos_ARCH_VOLTA70</span><span class="o">=</span><span class="n">ON</span>
+<span class="o">-</span><span class="n">DKokkos_ARCH_POWER9</span><span class="o">=</span><span class="n">ON</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="4">
+<li><p>Make a build directory and run the arch file.</p></li>
+<li><p>Type <cite>make</cite>.</p></li>
+</ol>
+<p>This should give you a simple working of the code, but be aware it does come
+with caveats. Most notably, one is expected to build and maintain a version of
+Kokkos (and optionally VPIC) per target device (one per GPU device, one per CPU
+platform, etc), where as the above builds for the specific platform that you’re
+currently on.</p>
+<p>A reminder to NVIDIA GPU users, CUDA 10.2 does not support GCC 8 or newer. We
+recommend you use GCC 6 or 7.</p>
+</div>
+<div class="section" id="manual-kokkos-install-more-powerful-more-effort">
+<h2>Manual Kokkos Install (more powerful, more effort)<a class="headerlink" href="#manual-kokkos-install-more-powerful-more-effort" title="Permalink to this headline"></a></h2>
+<p>It is typical to maintain many different installs of Kokkos (CPU, older
+GPU, new GPU, Debug, etc), so it’s worth while learning how to install Kokkos
+manually. To do this we will use cmake. On can achieve this by:</p>
+<p>CPU:
+<code class="docutils literal notranslate"><span class="pre">`</span>
+<span class="pre">cmake</span> <span class="pre">-DKokkos_ENABLE_OPENMP=ON</span> <span class="pre">-DKokkos_ARCH_KNL=ON</span> <span class="pre">..</span>
+<span class="pre">`</span></code></p>
+<p>GPU:
+<code class="docutils literal notranslate"><span class="pre">`</span>
+<span class="pre">cmake</span> <span class="pre">-DKokkos_ENABLE_CUDA=ON</span> <span class="pre">-DKokkos_ARCH_VOLTA70=ON</span> <span class="pre">..</span>
+<span class="pre">`</span></code></p>
+</div>
+<div class="section" id="legacy-non-cmake-build-for-old-kokkos-versions">
+<h2>Legacy non-cmake build for old Kokkos versions<a class="headerlink" href="#legacy-non-cmake-build-for-old-kokkos-versions" title="Permalink to this headline"></a></h2>
+<p>1) Clone Kokkos (or use ./kokkos in the recursive clone) from
+<a class="reference external" href="https://github.com/kokkos/kokkos">https://github.com/kokkos/kokkos</a>
+2) Make a build folder, and execute <cite>../generate_makefile.bash</cite>, passing the
+appropriate options for platform and device architecture. These look something
+like:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>CPU: <cite>../generate_makefile.bash –with-serial –with-openmp –prefix=$KOKKOS_INSTALL_DIR</cite></p></li>
+<li><p>GPU: <cite>../generate_makefile.bash –with-serial –with-openmp –with-cuda –arch=Kepler30 –with-cuda-options=enable_lambda –compiler=$KOKKOS_SRC_DIR/bin/nvcc_wrapper –prefix=$KOKKOS_INSTALL_DIR</cite></p></li>
+</ul>
+</div></blockquote>
+</div>
+<div class="section" id="further-reading">
+<h2>Further Reading<a class="headerlink" href="#further-reading" title="Permalink to this headline"></a></h2>
+<p>One can cherry pick the Kokkos specific details from
+[here](<a class="reference external" href="https://github.com/ECP-copa/Cabana/wiki/Build-Instructions">https://github.com/ECP-copa/Cabana/wiki/Build-Instructions</a>) to get
+detailed build instructions for Kokkos (ignore the things about Cabana)</p>
+<p>The advanced user should review <cite>CMakeLists.txt</cite> for the Kokkos specific
+options that are available. These include:</p>
+<ol class="arabic simple">
+<li><p><cite>ENABLE_KOKKOS_OPENMP</cite></p></li>
+<li><p><cite>ENABLE_KOKKOS_CUDA</cite></p></li>
+<li><p><cite>BUILD_INTERNAL_KOKKOS</cite></p></li>
+<li><p><cite>VPIC_KOKKOS_DEBUG</cite></p></li>
+<li><p><cite>KOKKOS_ARCH</cite></p></li>
+</ol>
+</div>
+<div class="section" id="building-vpic-kokkos">
+<h2>Building VPIC + Kokkos<a class="headerlink" href="#building-vpic-kokkos" title="Permalink to this headline"></a></h2>
+<p>Then when we build VPIC we need to make sure we using the GPU, you need to
+specify the Kokkos <cite>nvcc_wrapper</cite> to be the compiler. This typically looks
+something like:</p>
+<p><cite>CXX=$HOME/tools/kokkos_gpu/bin/nvcc_wrapper cmake -DENABLE_KOKKOS_CUDA=ON -DCMAKE_BUILD_TYPE=Release ..</cite></p>
+<p>Note: As with any CMake application, it’s critical that you set the
+CMAKE_BUILD_TYPE (and other optimization flags) appropriately for your target
+system</p>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="intro.html" class="btn btn-neutral float-left" title="Introduction" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="run.html" class="btn btn-neutral float-right" title="Running VPIC" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Los Alamos National Laboratory.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
