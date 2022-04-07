@@ -422,7 +422,7 @@ typedef struct sfa_params {
 
     void populate_kokkos_data()
     {
-        Kokkos::parallel_for("Copy materials to device", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, n_mc), KOKKOS_LAMBDA (const int i)
+        Kokkos::parallel_for("Copy materials to device", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, n_mc), KOKKOS_CLASS_LAMBDA (const int i)
         {
                 k_mc_h(i, material_coeff_var::decayx) = mc[i].decayx;
                 k_mc_h(i, material_coeff_var::drivex) = mc[i].drivex;

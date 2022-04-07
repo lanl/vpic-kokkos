@@ -11,39 +11,38 @@
 
 #define NUM_LANES 8
 
-//template<class TeamMember, class accumulator_sa_t, class accumulator_var>
-//void
-//KOKKOS_INLINE_FUNCTION
-//contribute_current(TeamMember& team_member, accumulator_sa_t& access, int ii, accumulator_var j, float v0, float v1,  float v2, float v3) {
-//#ifdef __CUDA_ARCH__
-//  int mask = 0xffffffff;
-//  int team_rank = team_member.team_rank();
-//  for(int i=16; i>0; i=i/2) {
-//    v0 += __shfl_down_sync(mask, v0, i);
-//    v1 += __shfl_down_sync(mask, v1, i);
-//    v2 += __shfl_down_sync(mask, v2, i);
-//    v3 += __shfl_down_sync(mask, v3, i);
-//  }
-//  if(team_rank%32 == 0) {
-//    access(ii, j, 0) += v0;
-//    access(ii, j, 1) += v1;
-//    access(ii, j, 2) += v2;
-//    access(ii, j, 3) += v3;
-//  }
-//#else
-//  team_member.team_reduce(Kokkos::Sum<float>(v0));
-//  team_member.team_reduce(Kokkos::Sum<float>(v1));
-//  team_member.team_reduce(Kokkos::Sum<float>(v2));
-//  team_member.team_reduce(Kokkos::Sum<float>(v3));
-//  if(team_member.team_rank() == 0) {
-//    access(ii, j, 0) += v0;
-//    access(ii, j, 1) += v1;
-//    access(ii, j, 2) += v2;
-//    access(ii, j, 3) += v3;
-//  }
-//#endif
-//}
-//
+template<class TeamMember, class field_sa_t, class field_var>
+void
+KOKKOS_INLINE_FUNCTION
+contribute_current(TeamMember& team_member, field_sa_t& access, int i0, int i1, int i2, int i3, field_var j, float v0, float v1,  float v2, float v3) {
+#ifdef __CUDA_ARCH__
+  int mask = 0xffffffff;
+  int team_rank = team_member.team_rank();
+  for(int i=16; i>0; i=i/2) {
+    v0 += __shfl_down_sync(mask, v0, i);
+    v1 += __shfl_down_sync(mask, v1, i);
+    v2 += __shfl_down_sync(mask, v2, i);
+    v3 += __shfl_down_sync(mask, v3, i);
+  }
+  if(team_rank%32 == 0) {
+    access(i0, j) += v0;
+    access(i1, j) += v1;
+    access(i2, j) += v2;
+    access(i3, j) += v3;
+  }
+#else
+  team_member.team_reduce(Kokkos::Sum<float>(v0));
+  team_member.team_reduce(Kokkos::Sum<float>(v1));
+  team_member.team_reduce(Kokkos::Sum<float>(v2));
+  team_member.team_reduce(Kokkos::Sum<float>(v3));
+  if(team_member.team_rank() == 0) {
+    access(i0, j) += v0;
+    access(i1, j) += v1;
+    access(i2, j) += v2;
+    access(i3, j) += v3;
+  }
+#endif
+}
 
 struct CurrentType {
   float v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11;
@@ -1758,6 +1757,7 @@ advance_p_kokkos_devel(
     v5   = v2 + uz;
 
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
+    int reduce = 0;
     int inbnds = v3<=one && v4<=one && v5<=one && -v3<=one && -v4<=one && -v5<=one;
     int min_inbnds = inbnds;
     int max_inbnds = inbnds;
@@ -1767,6 +1767,7 @@ advance_p_kokkos_devel(
     int max_index = ii;
     team_member.team_reduce(Kokkos::Max<int>(max_index));
     team_member.team_reduce(Kokkos::Min<int>(min_index));
+    reduce = min_inbnds == max_inbnds && min_index == max_index;
 #endif
 
     // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
@@ -1802,75 +1803,75 @@ advance_p_kokkos_devel(
       v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
       v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
-// Bypass accumulators TODO: enable warp reduction
+#ifdef VPIC_ENABLE_TEAM_REDUCTION
+      if(reduce) {
+        int iii = ii;
+        int zi = iii/((nx+2)*(ny+2));
+        iii -= zi*(nx+2)*(ny+2);
+        int yi = iii/(nx+2);
+        int xi = iii - yi*(nx+2);
 
-      // TODO: That 2 needs to be 2*NGHOST eventually
-      int iii = ii;
-      int zi = iii/((nx+2)*(ny+2));
-      iii -= zi*(nx+2)*(ny+2);
-      int yi = iii/(nx+2);
-      int xi = iii - yi*(nx+2);
-      ACCUMULATE_J( x,y,z );
-      //Kokkos::atomic_add(&k_field(ii, field_var::jfx), cx*v0);
-      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx), cx*v1);
-      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx), cx*v2);
-      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx), cx*v3);
-      k_field_scatter_access(ii, field_var::jfx) += cx*v0;
-      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
-      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
-      k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
+        int i0 = ii;
+        int i1 = VOXEL(xi,yi+1,zi,nx,ny,nz);
+        int i2 = VOXEL(xi,yi,zi+1,nx,ny,nz);
+        int i3 = VOXEL(xi,yi+1,zi+1,nx,ny,nz);
+        ACCUMULATE_J( x,y,z );
+        contribute_current(team_member, k_field_scatter_access, i0, i1, i2, i3, 
+                            field_var::jfx, cx*v0, cx*v1, cx*v2, cx*v3);
 
-      ACCUMULATE_J( y,z,x );
-      //Kokkos::atomic_add(&k_field(ii, field_var::jfy), cy*v0);
-      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v1);
-      //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy), cy*v2);
-      //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v3);
-      k_field_scatter_access(ii, field_var::jfy) += cy*v0;
-      k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
-      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
-      k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
+        i1 = VOXEL(xi,yi,zi+1,nx,ny,nz);
+        i2 = VOXEL(xi+1,yi,zi,nx,ny,nz);
+        i3 = VOXEL(xi+1,yi,zi+1,nx,ny,nz);
+        ACCUMULATE_J( y,z,x );
+        contribute_current(team_member, k_field_scatter_access, i0, i1, i2, i3, 
+                            field_var::jfy, cy*v0, cy*v1, cy*v2, cy*v3);
 
-      ACCUMULATE_J( z,x,y );
-      //Kokkos::atomic_add(&k_field(ii, field_var::jfz), cz*v0);
-      //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz), cz*v1);
-      //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v2);
-      //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v3);
-      k_field_scatter_access(ii, field_var::jfz) += cz*v0;
-      k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
-      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
-      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
+        i1 = VOXEL(xi+1,yi,zi,nx,ny,nz);
+        i2 = VOXEL(xi,yi+1,zi,nx,ny,nz);
+        i3 = VOXEL(xi+1,yi+1,zi,nx,ny,nz);
+        ACCUMULATE_J( z,x,y );
+        contribute_current(team_member, k_field_scatter_access, i0, i1, i2, i3, 
+                            field_var::jfz, cz*v0, cz*v1, cz*v2, cz*v3);
+      } else {
+#endif
+        // TODO: That 2 needs to be 2*NGHOST eventually
+        int iii = ii;
+        int zi = iii/((nx+2)*(ny+2));
+        iii -= zi*(nx+2)*(ny+2);
+        int yi = iii/(nx+2);
+        int xi = iii - yi*(nx+2);
+        ACCUMULATE_J( x,y,z );
+        //Kokkos::atomic_add(&k_field(ii, field_var::jfx), cx*v0);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx), cx*v1);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx), cx*v2);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx), cx*v3);
+        k_field_scatter_access(ii, field_var::jfx) += cx*v0;
+        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
+        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
+        k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
 
-// TODO: Make this optimization work with the accumulator bypass
-//#ifdef VPIC_ENABLE_TEAM_REDUCTION
-//      if(min_inbnds == max_inbnds && min_index == max_index) {
-//        ACCUMULATE_J( x,y,z );
-//        contribute_current(team_member, k_accumulators_scatter_access, ii, accumulator_var::jx, v0, v1, v2, v3);
-//        ACCUMULATE_J( y,z,x );
-//        contribute_current(team_member, k_accumulators_scatter_access, ii, accumulator_var::jy, v0, v1, v2, v3);
-//        ACCUMULATE_J( z,x,y );
-//        contribute_current(team_member, k_accumulators_scatter_access, ii, accumulator_var::jz, v0, v1, v2, v3);
-//      } else {
-//#endif
-//        ACCUMULATE_J( x,y,z );
-//        k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-//        k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-//        k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-//        k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
-//      
-//        ACCUMULATE_J( y,z,x );
-//        k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-//        k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-//        k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-//        k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
-//      
-//        ACCUMULATE_J( z,x,y );
-//        k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-//        k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-//        k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-//        k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
-//#ifdef VPIC_ENABLE_TEAM_REDUCTION
-//      }
-//#endif
+        ACCUMULATE_J( y,z,x );
+        //Kokkos::atomic_add(&k_field(ii, field_var::jfy), cy*v0);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v1);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy), cy*v2);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v3);
+        k_field_scatter_access(ii, field_var::jfy) += cy*v0;
+        k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
+        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
+        k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
+
+        ACCUMULATE_J( z,x,y );
+        //Kokkos::atomic_add(&k_field(ii, field_var::jfz), cz*v0);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz), cz*v1);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v2);
+        //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v3);
+        k_field_scatter_access(ii, field_var::jfz) += cz*v0;
+        k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
+        k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
+        k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
+#ifdef VPIC_ENABLE_TEAM_REDUCTION
+      }
+#endif
 
 #     undef ACCUMULATE_J
     } else {
