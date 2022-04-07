@@ -249,41 +249,21 @@ void load_interpolators(
 
   int first = ii[0];
   int index = first;
-//  #pragma omp simd reduction(&:index)
-//  for(int lane=0; lane<num_lanes; lane++) {
-//    index &= ii[lane];
-//  }
-  Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(team_member, num_lanes), [&](const int lane, int& update) {
-    index  = index & ii[lane];
-  }, Kokkos::BAnd<int>(index));
+  #pragma omp simd reduction(&:index)
+  for(int lane=0; lane<num_lanes; lane++) {
+    index &= ii[lane];
+  }
+//  Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(team_member, num_lanes), [&](const int lane, int& update) {
+//    index  = index & ii[lane];
+//  }, Kokkos::BAnd<int>(index));
 
   if(ii[0] == index) {
     float vals[18];
-    simd_load_interpolator_var(team_member, vals, ii[0], k_interp, 18);
+//    simd_load_interpolator_var(team_member, vals, ii[0], k_interp, 18);
 
-//    simd_load_interpolator_var(vals, ii[0], k_interp, 18);
-//    #pragma omp simd
-//    for(int i=0; i<num_lanes; i++) {
-//      fex[i]       = vals[0];
-//      fdexdy[i]    = vals[1];
-//      fdexdz[i]    = vals[2];
-//      fd2exdydz[i] = vals[3];
-//      fey[i]       = vals[4];
-//      fdeydz[i]    = vals[5];
-//      fdeydx[i]    = vals[6];
-//      fd2eydzdx[i] = vals[7];
-//      fez[i]       = vals[8];
-//      fdezdx[i]    = vals[9];
-//      fdezdy[i]    = vals[10];
-//      fd2ezdxdy[i] = vals[11];
-//      fcbx[i]      = vals[12];
-//      fdcbxdx[i]   = vals[13];
-//      fcby[i]      = vals[14];
-//      fdcbydy[i]   = vals[15];
-//      fcbz[i]      = vals[16];
-//      fdcbzdz[i]   = vals[17];
-//    }
-    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (const int i) {
+    simd_load_interpolator_var(vals, ii[0], k_interp, 18);
+    #pragma omp simd
+    for(int i=0; i<num_lanes; i++) {
       fex[i]       = vals[0];
       fdexdy[i]    = vals[1];
       fdexdz[i]    = vals[2];
@@ -302,12 +282,32 @@ void load_interpolators(
       fdcbydy[i]   = vals[15];
       fcbz[i]      = vals[16];
       fdcbzdz[i]   = vals[17];
-    });
+    }
+//    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (const int i) {
+//      fex[i]       = vals[0];
+//      fdexdy[i]    = vals[1];
+//      fdexdz[i]    = vals[2];
+//      fd2exdydz[i] = vals[3];
+//      fey[i]       = vals[4];
+//      fdeydz[i]    = vals[5];
+//      fdeydx[i]    = vals[6];
+//      fd2eydzdx[i] = vals[7];
+//      fez[i]       = vals[8];
+//      fdezdx[i]    = vals[9];
+//      fdezdy[i]    = vals[10];
+//      fd2ezdxdy[i] = vals[11];
+//      fcbx[i]      = vals[12];
+//      fdcbxdx[i]   = vals[13];
+//      fcby[i]      = vals[14];
+//      fdcbydy[i]   = vals[15];
+//      fcbz[i]      = vals[16];
+//      fdcbzdz[i]   = vals[17];
+//    });
   } else {
 
     float vals[18*NumLanes];
-    unrolled_simd_load(team_member, vals, ii, k_interp, 18, NumLanes);
-//    unrolled_simd_load<NumLanes>(vals, ii, k_interp, 18);
+//    unrolled_simd_load(team_member, vals, ii, k_interp, 18, NumLanes);
+   unrolled_simd_load<NumLanes>(vals, ii, k_interp, 18);
 
 //    float *v0  = vals;
 //    float *v1  = vals+18;
@@ -381,28 +381,8 @@ void load_interpolators(
 //      fdcbydy[i]   = v15[i];
 //    }
 
-//    #pragma omp simd
-//    for(int i=0; i<num_lanes; i++) {
-//      fex[i]       = vals[18*i];
-//      fdexdy[i]    = vals[1+18*i];
-//      fdexdz[i]    = vals[2+18*i];
-//      fd2exdydz[i] = vals[3+18*i];
-//      fey[i]       = vals[4+18*i];
-//      fdeydz[i]    = vals[5+18*i];
-//      fdeydx[i]    = vals[6+18*i];
-//      fd2eydzdx[i] = vals[7+18*i];
-//      fez[i]       = vals[8+18*i];
-//      fdezdx[i]    = vals[9+18*i];
-//      fdezdy[i]    = vals[10+18*i];
-//      fd2ezdxdy[i] = vals[11+18*i];
-//      fcbx[i]      = vals[12+18*i];
-//      fdcbxdx[i]   = vals[13+18*i];
-//      fcby[i]      = vals[14+18*i];
-//      fdcbydy[i]   = vals[15+18*i];
-//      fcbz[i]      = vals[16+18*i];
-//      fdcbzdz[i]   = vals[17+18*i];
-//    }
-    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (const int i) {
+    #pragma omp simd
+    for(int i=0; i<num_lanes; i++) {
       fex[i]       = vals[18*i];
       fdexdy[i]    = vals[1+18*i];
       fdexdz[i]    = vals[2+18*i];
@@ -421,7 +401,27 @@ void load_interpolators(
       fdcbydy[i]   = vals[15+18*i];
       fcbz[i]      = vals[16+18*i];
       fdcbzdz[i]   = vals[17+18*i];
-    });
+    }
+//    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (const int i) {
+//      fex[i]       = vals[18*i];
+//      fdexdy[i]    = vals[1+18*i];
+//      fdexdz[i]    = vals[2+18*i];
+//      fd2exdydz[i] = vals[3+18*i];
+//      fey[i]       = vals[4+18*i];
+//      fdeydz[i]    = vals[5+18*i];
+//      fdeydx[i]    = vals[6+18*i];
+//      fd2eydzdx[i] = vals[7+18*i];
+//      fez[i]       = vals[8+18*i];
+//      fdezdx[i]    = vals[9+18*i];
+//      fdezdy[i]    = vals[10+18*i];
+//      fd2ezdxdy[i] = vals[11+18*i];
+//      fcbx[i]      = vals[12+18*i];
+//      fdcbxdx[i]   = vals[13+18*i];
+//      fcby[i]      = vals[14+18*i];
+//      fdcbydy[i]   = vals[15+18*i];
+//      fcbz[i]      = vals[16+18*i];
+//      fdcbzdz[i]   = vals[17+18*i];
+//    });
   }
 }
 
@@ -728,41 +728,41 @@ advance_p_kokkos_vector(
       auto k_field_scatter_access = k_f_sv.access();
       size_t chunk = chunk_offset;
 
-//#pragma omp simd 
-//      for(int lane=0; lane<num_lanes; lane++) {
-//        size_t p_index = chunk*num_lanes + lane;
-//        // Load position
-//        dx[lane] = p_dx;
-//        dy[lane] = p_dy;
-//        dz[lane] = p_dz;
-//  
-//        // Load momentum
-//        ux[lane] = p_ux;
-//        uy[lane] = p_uy;
-//        uz[lane] = p_uz;
-//        q[lane] = p_w;
-//
-//        // Load index
-//        ii[lane] = pii;
-//      }
-//      load_particles(dx, dy, dz, ux, uy, uz, q, ii,
-//                     k_particles, k_particles_i, 
-//                     num_lanes, chunk);
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int lane) {
+#pragma omp simd 
+      for(int lane=0; lane<num_lanes; lane++) {
         size_t p_index = chunk*num_lanes + lane;
         // Load position
         dx[lane] = p_dx;
         dy[lane] = p_dy;
         dz[lane] = p_dz;
+  
         // Load momentum
         ux[lane] = p_ux;
         uy[lane] = p_uy;
         uz[lane] = p_uz;
-        // Load weight
-        q[lane]  = p_w;
+        q[lane] = p_w;
+
         // Load index
         ii[lane] = pii;
-      });
+      }
+//      load_particles(dx, dy, dz, ux, uy, uz, q, ii,
+//                     k_particles, k_particles_i, 
+//                     num_lanes, chunk);
+//      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int lane) {
+//        size_t p_index = chunk*num_lanes + lane;
+//        // Load position
+//        dx[lane] = p_dx;
+//        dy[lane] = p_dy;
+//        dz[lane] = p_dz;
+//        // Load momentum
+//        ux[lane] = p_ux;
+//        uy[lane] = p_uy;
+//        uz[lane] = p_uz;
+//        // Load weight
+//        q[lane]  = p_w;
+//        // Load index
+//        ii[lane] = pii;
+//      });
 
 //#pragma omp simd 
 //      for(int lane=0; lane<num_lanes; lane++) {
@@ -826,75 +826,9 @@ advance_p_kokkos_vector(
 //                  cdt_dx, cdt_dy, cdt_dz, 
 //                  qdt_2mc, num_lanes, chunk);
 
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int lane) {
-        size_t p_index = chunk*num_lanes + lane;
-
-        // Interpolate E
-        hax[lane] = qdt_2mc*( (fex[lane] + dy[lane]*fdexdy[lane] ) + dz[lane]*(fdexdz[lane] + dy[lane]*fd2exdydz[lane]) );
-        hay[lane] = qdt_2mc*( (fey[lane] + dz[lane]*fdeydz[lane] ) + dx[lane]*(fdeydx[lane] + dz[lane]*fd2eydzdx[lane]) );
-        haz[lane] = qdt_2mc*( (fez[lane] + dx[lane]*fdezdx[lane] ) + dy[lane]*(fdezdy[lane] + dx[lane]*fd2ezdxdy[lane]) );
-  
-        // Interpolate B
-        cbx[lane] = fcbx[lane] + dx[lane]*fdcbxdx[lane];
-        cby[lane] = fcby[lane] + dy[lane]*fdcbydy[lane];
-        cbz[lane] = fcbz[lane] + dz[lane]*fdcbzdz[lane];
-  
-        // Half advance e
-        ux[lane] += hax[lane];
-        uy[lane] += hay[lane];
-        uz[lane] += haz[lane];
-        v0[lane] = qdt_2mc/sqrtf(one + (ux[lane]*ux[lane] + (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
-
-        // Boris - scalars
-        v1[lane] = cbx[lane]*cbx[lane] + (cby[lane]*cby[lane] + cbz[lane]*cbz[lane]);
-        v2[lane] = (v0[lane]*v0[lane])*v1[lane];
-        v3[lane] = v0[lane]*(one+v2[lane]*(one_third+v2[lane]*two_fifteenths));
-        v4[lane] = v3[lane]/(one+v1[lane]*(v3[lane]*v3[lane]));
-        v4[lane] += v4[lane];
-        // Boris - uprime
-        v0[lane] = ux[lane] + v3[lane]*(uy[lane]*cbz[lane] - uz[lane]*cby[lane]);
-        v1[lane] = uy[lane] + v3[lane]*(uz[lane]*cbx[lane] - ux[lane]*cbz[lane]);
-        v2[lane] = uz[lane] + v3[lane]*(ux[lane]*cby[lane] - uy[lane]*cbx[lane]);
-        // Boris - rotation
-        ux[lane] += v4[lane]*(v1[lane]*cbz[lane] - v2[lane]*cby[lane]);
-        uy[lane] += v4[lane]*(v2[lane]*cbx[lane] - v0[lane]*cbz[lane]);
-        uz[lane] += v4[lane]*(v0[lane]*cby[lane] - v1[lane]*cbx[lane]);
-        // Half advance e
-        ux[lane] += hax[lane];
-        uy[lane] += hay[lane];
-        uz[lane] += haz[lane];
-        // Store momentum
-        p_ux = ux[lane];
-        p_uy = uy[lane];
-        p_uz = uz[lane];
-      });
-
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int lane) {
-        size_t p_index = chunk*num_lanes + lane;
-        v0[lane]   = one/sqrtf(one + (ux[lane]*ux[lane]+ (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
-
-        /**/                                      // Get norm displacement
-        ux[lane]  *= cdt_dx;
-        uy[lane]  *= cdt_dy;
-        uz[lane]  *= cdt_dz;
-        ux[lane]  *= v0[lane];
-        uy[lane]  *= v0[lane];
-        uz[lane]  *= v0[lane];
-        v0[lane]   = dx[lane] + ux[lane];                           // Streak midpoint (inbnds)
-        v1[lane]   = dy[lane] + uy[lane];
-        v2[lane]   = dz[lane] + uz[lane];
-        v3[lane]   = v0[lane] + ux[lane];                           // New position
-        v4[lane]   = v1[lane] + uy[lane];
-        v5[lane]   = v2[lane] + uz[lane];
-  
-        inbnds[lane] = v3[lane]<=one &&  v4[lane]<=one &&  v5[lane]<=one &&
-                      -v3[lane]<=one && -v4[lane]<=one && -v5[lane]<=one;
-      });
-
-//#pragma omp simd 
-//      for(int lane=0; lane<num_lanes; lane++) {
+//      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int lane) {
 //        size_t p_index = chunk*num_lanes + lane;
-//  
+//
 //        // Interpolate E
 //        hax[lane] = qdt_2mc*( (fex[lane] + dy[lane]*fdexdy[lane] ) + dz[lane]*(fdexdz[lane] + dy[lane]*fd2exdydz[lane]) );
 //        hay[lane] = qdt_2mc*( (fey[lane] + dz[lane]*fdeydz[lane] ) + dx[lane]*(fdeydx[lane] + dz[lane]*fd2eydzdx[lane]) );
@@ -909,16 +843,8 @@ advance_p_kokkos_vector(
 //        ux[lane] += hax[lane];
 //        uy[lane] += hay[lane];
 //        uz[lane] += haz[lane];
-//      }
-  
-//#pragma omp simd 
-//      for(int lane=0; lane<num_lanes; lane++) {
 //        v0[lane] = qdt_2mc/sqrtf(one + (ux[lane]*ux[lane] + (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
-//      }
-
-//#pragma omp simd 
-//      for(int lane=0; lane<num_lanes; lane++) {
-//        size_t p_index = chunk*num_lanes + lane;
+//
 //        // Boris - scalars
 //        v1[lane] = cbx[lane]*cbx[lane] + (cby[lane]*cby[lane] + cbz[lane]*cbz[lane]);
 //        v2[lane] = (v0[lane]*v0[lane])*v1[lane];
@@ -941,15 +867,12 @@ advance_p_kokkos_vector(
 //        p_ux = ux[lane];
 //        p_uy = uy[lane];
 //        p_uz = uz[lane];
-//      }
-//  
-//#pragma omp simd 
-//      for(int lane=0; lane<num_lanes; lane++) {
-//        v0[lane]   = one/sqrtf(one + (ux[lane]*ux[lane]+ (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
-//      }
+//      });
 //
-//#pragma omp simd 
-//      for(int lane=0; lane<num_lanes; lane++) {
+//      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int lane) {
+//        size_t p_index = chunk*num_lanes + lane;
+//        v0[lane]   = one/sqrtf(one + (ux[lane]*ux[lane]+ (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
+//
 //        /**/                                      // Get norm displacement
 //        ux[lane]  *= cdt_dx;
 //        uy[lane]  *= cdt_dy;
@@ -966,7 +889,84 @@ advance_p_kokkos_vector(
 //  
 //        inbnds[lane] = v3[lane]<=one &&  v4[lane]<=one &&  v5[lane]<=one &&
 //                      -v3[lane]<=one && -v4[lane]<=one && -v5[lane]<=one;
-//      }
+//      });
+
+#pragma omp simd 
+      for(int lane=0; lane<num_lanes; lane++) {
+        size_t p_index = chunk*num_lanes + lane;
+  
+        // Interpolate E
+        hax[lane] = qdt_2mc*( (fex[lane] + dy[lane]*fdexdy[lane] ) + dz[lane]*(fdexdz[lane] + dy[lane]*fd2exdydz[lane]) );
+        hay[lane] = qdt_2mc*( (fey[lane] + dz[lane]*fdeydz[lane] ) + dx[lane]*(fdeydx[lane] + dz[lane]*fd2eydzdx[lane]) );
+        haz[lane] = qdt_2mc*( (fez[lane] + dx[lane]*fdezdx[lane] ) + dy[lane]*(fdezdy[lane] + dx[lane]*fd2ezdxdy[lane]) );
+  
+        // Interpolate B
+        cbx[lane] = fcbx[lane] + dx[lane]*fdcbxdx[lane];
+        cby[lane] = fcby[lane] + dy[lane]*fdcbydy[lane];
+        cbz[lane] = fcbz[lane] + dz[lane]*fdcbzdz[lane];
+  
+        // Half advance e
+        ux[lane] += hax[lane];
+        uy[lane] += hay[lane];
+        uz[lane] += haz[lane];
+      }
+
+#pragma omp simd 
+      for(int lane=0; lane<num_lanes; lane++) {
+        v0[lane] = qdt_2mc/sqrtf(one + (ux[lane]*ux[lane] + (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
+      }
+
+#pragma omp simd 
+      for(int lane=0; lane<num_lanes; lane++) {
+        size_t p_index = chunk*num_lanes + lane;
+        // Boris - scalars
+        v1[lane] = cbx[lane]*cbx[lane] + (cby[lane]*cby[lane] + cbz[lane]*cbz[lane]);
+        v2[lane] = (v0[lane]*v0[lane])*v1[lane];
+        v3[lane] = v0[lane]*(one+v2[lane]*(one_third+v2[lane]*two_fifteenths));
+        v4[lane] = v3[lane]/(one+v1[lane]*(v3[lane]*v3[lane]));
+        v4[lane] += v4[lane];
+        // Boris - uprime
+        v0[lane] = ux[lane] + v3[lane]*(uy[lane]*cbz[lane] - uz[lane]*cby[lane]);
+        v1[lane] = uy[lane] + v3[lane]*(uz[lane]*cbx[lane] - ux[lane]*cbz[lane]);
+        v2[lane] = uz[lane] + v3[lane]*(ux[lane]*cby[lane] - uy[lane]*cbx[lane]);
+        // Boris - rotation
+        ux[lane] += v4[lane]*(v1[lane]*cbz[lane] - v2[lane]*cby[lane]);
+        uy[lane] += v4[lane]*(v2[lane]*cbx[lane] - v0[lane]*cbz[lane]);
+        uz[lane] += v4[lane]*(v0[lane]*cby[lane] - v1[lane]*cbx[lane]);
+        // Half advance e
+        ux[lane] += hax[lane];
+        uy[lane] += hay[lane];
+        uz[lane] += haz[lane];
+        // Store momentum
+        p_ux = ux[lane];
+        p_uy = uy[lane];
+        p_uz = uz[lane];
+      }
+  
+#pragma omp simd 
+      for(int lane=0; lane<num_lanes; lane++) {
+        v0[lane]   = one/sqrtf(one + (ux[lane]*ux[lane]+ (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
+      }
+
+#pragma omp simd 
+      for(int lane=0; lane<num_lanes; lane++) {
+        /**/                                      // Get norm displacement
+        ux[lane]  *= cdt_dx;
+        uy[lane]  *= cdt_dy;
+        uz[lane]  *= cdt_dz;
+        ux[lane]  *= v0[lane];
+        uy[lane]  *= v0[lane];
+        uz[lane]  *= v0[lane];
+        v0[lane]   = dx[lane] + ux[lane];                           // Streak midpoint (inbnds)
+        v1[lane]   = dy[lane] + uy[lane];
+        v2[lane]   = dz[lane] + uz[lane];
+        v3[lane]   = v0[lane] + ux[lane];                           // New position
+        v4[lane]   = v1[lane] + uy[lane];
+        v5[lane]   = v2[lane] + uz[lane];
+  
+        inbnds[lane] = v3[lane]<=one &&  v4[lane]<=one &&  v5[lane]<=one &&
+                      -v3[lane]<=one && -v4[lane]<=one && -v5[lane]<=one;
+      }
 
       float* v6 = fex;
       float* v7 = fdexdy;
@@ -981,47 +981,7 @@ advance_p_kokkos_vector(
       float* v16 = fdezdy;
       float* v17 = fd2ezdxdy;
 
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int lane) {
-        size_t p_index = chunk*num_lanes + lane;
-
-        v3[lane] = static_cast<float>(inbnds[lane])*v3[lane] + (1.0-static_cast<float>(inbnds[lane]))*p_dx;
-        v4[lane] = static_cast<float>(inbnds[lane])*v4[lane] + (1.0-static_cast<float>(inbnds[lane]))*p_dy;
-        v5[lane] = static_cast<float>(inbnds[lane])*v5[lane] + (1.0-static_cast<float>(inbnds[lane]))*p_dz;
-        q[lane]  = static_cast<float>(inbnds[lane])*q[lane]*qsp;
-
-        p_dx = v3[lane];
-        p_dy = v4[lane];
-        p_dz = v5[lane];
-        dx[lane] = v0[lane];
-        dy[lane] = v1[lane];
-        dz[lane] = v2[lane];
-        v5[lane] = q[lane]*ux[lane]*uy[lane]*uz[lane]*one_third;
-
-#       define ACCUMULATE_J(X,Y,Z,v0,v1,v2,v3)                                              \
-        v4[lane]  = q[lane]*u##X[lane];   /* v2 = q ux                            */        \
-        v1[lane]  = v4[lane]*d##Y[lane];  /* v1 = q ux dy                         */        \
-        v0[lane]  = v4[lane]-v1[lane];    /* v0 = q ux (1-dy)                     */        \
-        v1[lane] += v4[lane];             /* v1 = q ux (1+dy)                     */        \
-        v4[lane]  = one+d##Z[lane];       /* v4 = 1+dz                            */        \
-        v2[lane]  = v0[lane]*v4[lane];    /* v2 = q ux (1-dy)(1+dz)               */        \
-        v3[lane]  = v1[lane]*v4[lane];    /* v3 = q ux (1+dy)(1+dz)               */        \
-        v4[lane]  = one-d##Z[lane];       /* v4 = 1-dz                            */        \
-        v0[lane] *= v4[lane];             /* v0 = q ux (1-dy)(1-dz)               */        \
-        v1[lane] *= v4[lane];             /* v1 = q ux (1+dy)(1-dz)               */        \
-        v0[lane] += v5[lane];             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
-        v1[lane] -= v5[lane];             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
-        v2[lane] -= v5[lane];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-        v3[lane] += v5[lane];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
-
-        ACCUMULATE_J( x,y,z, v6,v7,v8,v9 );
-
-        ACCUMULATE_J( y,z,x, v10,v11,v12,v13 );
-
-        ACCUMULATE_J( z,x,y, v0,v1,v2,v3 );
-      });
-
-//#pragma omp simd 
-//      for(int lane=0; lane<num_lanes; lane++) {
+//      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int lane) {
 //        size_t p_index = chunk*num_lanes + lane;
 //
 //        v3[lane] = static_cast<float>(inbnds[lane])*v3[lane] + (1.0-static_cast<float>(inbnds[lane]))*p_dx;
@@ -1058,7 +1018,47 @@ advance_p_kokkos_vector(
 //        ACCUMULATE_J( y,z,x, v10,v11,v12,v13 );
 //
 //        ACCUMULATE_J( z,x,y, v0,v1,v2,v3 );
-//      }
+//      });
+
+#pragma omp simd 
+      for(int lane=0; lane<num_lanes; lane++) {
+        size_t p_index = chunk*num_lanes + lane;
+
+        v3[lane] = static_cast<float>(inbnds[lane])*v3[lane] + (1.0-static_cast<float>(inbnds[lane]))*p_dx;
+        v4[lane] = static_cast<float>(inbnds[lane])*v4[lane] + (1.0-static_cast<float>(inbnds[lane]))*p_dy;
+        v5[lane] = static_cast<float>(inbnds[lane])*v5[lane] + (1.0-static_cast<float>(inbnds[lane]))*p_dz;
+        q[lane]  = static_cast<float>(inbnds[lane])*q[lane]*qsp;
+
+        p_dx = v3[lane];
+        p_dy = v4[lane];
+        p_dz = v5[lane];
+        dx[lane] = v0[lane];
+        dy[lane] = v1[lane];
+        dz[lane] = v2[lane];
+        v5[lane] = q[lane]*ux[lane]*uy[lane]*uz[lane]*one_third;
+
+#       define ACCUMULATE_J(X,Y,Z,v0,v1,v2,v3)                                              \
+        v4[lane]  = q[lane]*u##X[lane];   /* v2 = q ux                            */        \
+        v1[lane]  = v4[lane]*d##Y[lane];  /* v1 = q ux dy                         */        \
+        v0[lane]  = v4[lane]-v1[lane];    /* v0 = q ux (1-dy)                     */        \
+        v1[lane] += v4[lane];             /* v1 = q ux (1+dy)                     */        \
+        v4[lane]  = one+d##Z[lane];       /* v4 = 1+dz                            */        \
+        v2[lane]  = v0[lane]*v4[lane];    /* v2 = q ux (1-dy)(1+dz)               */        \
+        v3[lane]  = v1[lane]*v4[lane];    /* v3 = q ux (1+dy)(1+dz)               */        \
+        v4[lane]  = one-d##Z[lane];       /* v4 = 1-dz                            */        \
+        v0[lane] *= v4[lane];             /* v0 = q ux (1-dy)(1-dz)               */        \
+        v1[lane] *= v4[lane];             /* v1 = q ux (1+dy)(1-dz)               */        \
+        v0[lane] += v5[lane];             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+        v1[lane] -= v5[lane];             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+        v2[lane] -= v5[lane];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+        v3[lane] += v5[lane];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+
+        ACCUMULATE_J( x,y,z, v6,v7,v8,v9 );
+
+        ACCUMULATE_J( y,z,x, v10,v11,v12,v13 );
+
+        ACCUMULATE_J( z,x,y, v0,v1,v2,v3 );
+      }
 
 //accumulate_current(dx, dy, dz, ux, uy, uz, ii, 
 //             v0, v1, v2, v3, v4, v5, v6,
@@ -1071,17 +1071,17 @@ advance_p_kokkos_vector(
     int first = ii[0];
     int index = first;
     int in_bounds = 1;
-//    #pragma omp simd reduction(&:index,in_bounds)
-//    for(int lane=0; lane<num_lanes; lane++) {
-//      index &= ii[lane];
-//      in_bounds &= inbnds[lane];
-//    }
-    Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int& lane, int& index) {
-      index = index & ii[lane];
-    }, Kokkos::BAnd<int>(index));
-    Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int& lane, int& inbounds) {
-      inbounds = inbounds & inbnds[lane];
-    }, Kokkos::BAnd<int>(in_bounds));
+    #pragma omp simd reduction(&:index,in_bounds)
+    for(int lane=0; lane<num_lanes; lane++) {
+      index &= ii[lane];
+      in_bounds &= inbnds[lane];
+    }
+//    Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int& lane, int& index) {
+//      index = index & ii[lane];
+//    }, Kokkos::BAnd<int>(index));
+//    Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int& lane, int& inbounds) {
+//      inbounds = inbounds & inbnds[lane];
+//    }, Kokkos::BAnd<int>(in_bounds));
 
     if(first == index && in_bounds == 1) {
       int iii = first;
@@ -1090,53 +1090,53 @@ advance_p_kokkos_vector(
       int yi = iii/(nx+2);
       int xi = iii - yi*(nx+2);
 
-//      float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
-//      float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
-//      float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
-//      #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val8,val9,val10,val11)
-//      for(int lane=0; lane<num_lanes; lane++) {
-//        val0  += v6[lane];
-//        val1  += v7[lane];
-//        val2  += v8[lane];
-//        val3  += v9[lane];
-//        val4  += v10[lane];
-//        val5  += v11[lane];
-//        val6  += v12[lane];
-//        val7  += v13[lane];
-//        val8  += v0[lane];
-//        val9  += v1[lane];
-//        val10 += v2[lane];
-//        val11 += v3[lane];
-//      }
+      float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
+      float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
+      float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
+      #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val8,val9,val10,val11)
+      for(int lane=0; lane<num_lanes; lane++) {
+        val0  += v6[lane];
+        val1  += v7[lane];
+        val2  += v8[lane];
+        val3  += v9[lane];
+        val4  += v10[lane];
+        val5  += v11[lane];
+        val6  += v12[lane];
+        val7  += v13[lane];
+        val8  += v0[lane];
+        val9  += v1[lane];
+        val10 += v2[lane];
+        val11 += v3[lane];
+      }
 
-      CurrentType tr;
-      Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int lane, CurrentType& update) {
-        update.v0  += v6[lane];
-        update.v1  += v7[lane];
-        update.v2  += v8[lane];
-        update.v3  += v9[lane];
-        update.v4  += v10[lane];
-        update.v5  += v11[lane];
-        update.v6  += v12[lane];
-        update.v7  += v13[lane];
-        update.v8  += v0[lane];
-        update.v9  += v1[lane];
-        update.v10 += v2[lane];
-        update.v11 += v3[lane];
-      }, CurrentAccumulation<Kokkos::DefaultExecutionSpace::memory_space>(tr));
-
-      accum_sa(first, 0)  += cx*tr.v0;
-      accum_sa(first, 1)  += cx*tr.v1;
-      accum_sa(first, 2)  += cx*tr.v2;
-      accum_sa(first, 3)  += cx*tr.v3;
-      accum_sa(first, 4)  += cy*tr.v4;
-      accum_sa(first, 5)  += cy*tr.v5;
-      accum_sa(first, 6)  += cy*tr.v6;
-      accum_sa(first, 7)  += cy*tr.v7;
-      accum_sa(first, 8)  += cz*tr.v8;
-      accum_sa(first, 9)  += cz*tr.v9;
-      accum_sa(first, 10) += cz*tr.v10;
-      accum_sa(first, 11) += cz*tr.v11;
+//      CurrentType tr;
+//      Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(team_member, num_lanes), [&] (int lane, CurrentType& update) {
+//        update.v0  += v6[lane];
+//        update.v1  += v7[lane];
+//        update.v2  += v8[lane];
+//        update.v3  += v9[lane];
+//        update.v4  += v10[lane];
+//        update.v5  += v11[lane];
+//        update.v6  += v12[lane];
+//        update.v7  += v13[lane];
+//        update.v8  += v0[lane];
+//        update.v9  += v1[lane];
+//        update.v10 += v2[lane];
+//        update.v11 += v3[lane];
+//      }, CurrentAccumulation<Kokkos::DefaultExecutionSpace::memory_space>(tr));
+//
+//      accum_sa(first, 0)  += cx*tr.v0;
+//      accum_sa(first, 1)  += cx*tr.v1;
+//      accum_sa(first, 2)  += cx*tr.v2;
+//      accum_sa(first, 3)  += cx*tr.v3;
+//      accum_sa(first, 4)  += cy*tr.v4;
+//      accum_sa(first, 5)  += cy*tr.v5;
+//      accum_sa(first, 6)  += cy*tr.v6;
+//      accum_sa(first, 7)  += cy*tr.v7;
+//      accum_sa(first, 8)  += cz*tr.v8;
+//      accum_sa(first, 9)  += cz*tr.v9;
+//      accum_sa(first, 10) += cz*tr.v10;
+//      accum_sa(first, 11) += cz*tr.v11;
 
 //      k_field_scatter_access(first, field_var::jfx) += cx*val0;
 //      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*val1;
@@ -1151,20 +1151,20 @@ advance_p_kokkos_vector(
 //      k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val10;
 //      k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*val11;
 
-//      accum_sa(first, 0)  += cx*val0;
-//      accum_sa(first, 1)  += cx*val1;
-//      accum_sa(first, 2)  += cx*val2;
-//      accum_sa(first, 3)  += cx*val3;
-//
-//      accum_sa(first, 4)  += cy*val4;
-//      accum_sa(first, 5)  += cy*val5;
-//      accum_sa(first, 6)  += cy*val6;
-//      accum_sa(first, 7)  += cy*val7;
-//
-//      accum_sa(first, 8)  += cz*val8;
-//      accum_sa(first, 9)  += cz*val9;
-//      accum_sa(first, 10) += cz*val10;
-//      accum_sa(first, 11) += cz*val11;
+      accum_sa(first, 0)  += cx*val0;
+      accum_sa(first, 1)  += cx*val1;
+      accum_sa(first, 2)  += cx*val2;
+      accum_sa(first, 3)  += cx*val3;
+
+      accum_sa(first, 4)  += cy*val4;
+      accum_sa(first, 5)  += cy*val5;
+      accum_sa(first, 6)  += cy*val6;
+      accum_sa(first, 7)  += cy*val7;
+
+      accum_sa(first, 8)  += cz*val8;
+      accum_sa(first, 9)  += cz*val9;
+      accum_sa(first, 10) += cz*val10;
+      accum_sa(first, 11) += cz*val11;
     } else {
 #endif
       for(int lane=0; lane<num_lanes; lane++) {
