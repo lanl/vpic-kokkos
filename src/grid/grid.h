@@ -151,7 +151,7 @@ typedef struct grid {
 
       Kokkos::parallel_for("Copy neighbors to host+device",
               Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0,
-                  num_neighbor), KOKKOS_LAMBDA (const int i)
+                  num_neighbor), KOKKOS_CLASS_LAMBDA (const int i)
       {
           k_neighbor_h(i) = neighbor[i];
       });
