@@ -74,6 +74,25 @@ using k_material_coefficient_t = Kokkos::View<float* [MATERIAL_COEFFICIENT_VAR_C
 #define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
 #define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
 
+namespace Kokkos {
+  /** \brief  Intra-thread vector parallel_for. Executes lambda(iType i) for each
+   * i=0..N-1.
+   *
+   * The range i=0..N-1 is mapped to all vector lanes of the the calling thread.
+   */
+  template <template <typename iType, class ThreadsExecTeamMember> class ThreadVectorRangeBoundariesStruct, 
+            typename iType, class ThreadsExecTeamMember, class Lambda>
+  KOKKOS_INLINE_FUNCTION void parallel_for_simd(
+      const ThreadVectorRangeBoundariesStruct<
+          iType, ThreadsExecTeamMember>& loop_boundaries,
+      const Lambda& lambda) {
+    #pragma omp simd
+    for (iType i = loop_boundaries.start; i < loop_boundaries.end;
+         i += loop_boundaries.increment)
+      lambda(i);
+  }
+}
+
 namespace field_var {
   enum f_v {
     ex        = 0,
