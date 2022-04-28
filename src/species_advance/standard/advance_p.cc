@@ -1944,20 +1944,6 @@ advance_p_kokkos_unified(
 
 #ifdef KOKKOS_ENABLE_CUDA
   k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
-
-//  auto policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, 1, TEAM_SIZE);
-//  int chunk_size = np/LEAGUE_SIZE;
-//  if(chunk_size*LEAGUE_SIZE < np)
-//    chunk_size += 1;
-//  constexpr int num_lanes = TEAM_SIZE;
-//  int num_chunks = LEAGUE_SIZE;
-//#define INNER_RANGE_POLICY Kokkos::ThreadVectorRange
-//#define idx lane
-//#define BEGIN_THREAD_BLOCK Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_iters), [&] (int lane) {
-//#define END_THREAD_BLOCK });
-//#define BEGIN_VECTOR_BLOCK Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, num_iters), [&] (int lane) {
-//#define END_VECTOR_BLOCK });
-
   auto policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE, 1);
   int chunk_size = np/LEAGUE_SIZE;
   if(chunk_size*LEAGUE_SIZE < np)
@@ -2201,73 +2187,73 @@ advance_p_kokkos_unified(
         ACCUMULATE_J( z,x,y, v0,v1,v2,v3 );
       END_VECTOR_BLOCK
 
-//#ifdef VPIC_ENABLE_TEAM_REDUCTION
-//    int first = ii[0];
-//
-//    if(particles_in_same_cell(team_member, ii, inbnds, num_iters)) {
-//
-//#ifdef KOKKOS_ENABLE_CUDA
-//      int iii = first;
-//      int zi = iii/((nx+2)*(ny+2));
-//      iii -= zi*(nx+2)*(ny+2);
-//      int yi = iii/(nx+2);
-//      int xi = iii - yi*(nx+2);
-//
-//      int i0 = ii[0];
-//      int i1 = VOXEL(xi,yi+1,zi,nx,ny,nz);
-//      int i2 = VOXEL(xi,yi,zi+1,nx,ny,nz);
-//      int i3 = VOXEL(xi,yi+1,zi+1,nx,ny,nz);
-//      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
-//                          field_var::jfx, cx*v6[idx], cx*v7[idx], cx*v8[idx], cx*v9[idx]);
-//
-//      i1 = VOXEL(xi,yi,zi+1,nx,ny,nz);
-//      i2 = VOXEL(xi+1,yi,zi,nx,ny,nz);
-//      i3 = VOXEL(xi+1,yi,zi+1,nx,ny,nz);
-//      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
-//                          field_var::jfy, cy*v10[idx], cy*v11[idx], cy*v12[idx], cy*v13[idx]);
-//
-//      i1 = VOXEL(xi+1,yi,zi,nx,ny,nz);
-//      i2 = VOXEL(xi,yi+1,zi,nx,ny,nz);
-//      i3 = VOXEL(xi+1,yi+1,zi,nx,ny,nz);
-//      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
-//                          field_var::jfz, cz*v0[idx], cz*v1[idx], cz*v2[idx], cz*v3[idx]);
-//#else
-//      float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
-//      float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
-//      float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
-//      #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val8,val9,val10,val11)
-//      for(int lane=0; lane<num_iters; lane++) {
-//        val0  += v6[lane];
-//        val1  += v7[lane];
-//        val2  += v8[lane];
-//        val3  += v9[lane];
-//        val4  += v10[lane];
-//        val5  += v11[lane];
-//        val6  += v12[lane];
-//        val7  += v13[lane];
-//        val8  += v0[lane];
-//        val9  += v1[lane];
-//        val10 += v2[lane];
-//        val11 += v3[lane];
-//      }
-//
-//      current_sa(first, 0)  += cx*val0;
-//      current_sa(first, 1)  += cx*val1;
-//      current_sa(first, 2)  += cx*val2;
-//      current_sa(first, 3)  += cx*val3;
-//
-//      current_sa(first, 4)  += cy*val4;
-//      current_sa(first, 5)  += cy*val5;
-//      current_sa(first, 6)  += cy*val6;
-//      current_sa(first, 7)  += cy*val7;
-//
-//      current_sa(first, 8)  += cz*val8;
-//      current_sa(first, 9)  += cz*val9;
-//      current_sa(first, 10) += cz*val10;
-//      current_sa(first, 11) += cz*val11;
-//#endif
-//    } else {
-//#endif
+#ifdef VPIC_ENABLE_TEAM_REDUCTION
+    int first = ii[0];
+
+    if(particles_in_same_cell(team_member, ii, inbnds, num_iters)) {
+
+#ifdef KOKKOS_ENABLE_CUDA
+      int iii = first;
+      int zi = iii/((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii/(nx+2);
+      int xi = iii - yi*(nx+2);
+
+      int i0 = ii[0];
+      int i1 = VOXEL(xi,yi+1,zi,nx,ny,nz);
+      int i2 = VOXEL(xi,yi,zi+1,nx,ny,nz);
+      int i3 = VOXEL(xi,yi+1,zi+1,nx,ny,nz);
+      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
+                          field_var::jfx, cx*v6[idx], cx*v7[idx], cx*v8[idx], cx*v9[idx]);
+
+      i1 = VOXEL(xi,yi,zi+1,nx,ny,nz);
+      i2 = VOXEL(xi+1,yi,zi,nx,ny,nz);
+      i3 = VOXEL(xi+1,yi,zi+1,nx,ny,nz);
+      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
+                          field_var::jfy, cy*v10[idx], cy*v11[idx], cy*v12[idx], cy*v13[idx]);
+
+      i1 = VOXEL(xi+1,yi,zi,nx,ny,nz);
+      i2 = VOXEL(xi,yi+1,zi,nx,ny,nz);
+      i3 = VOXEL(xi+1,yi+1,zi,nx,ny,nz);
+      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
+                          field_var::jfz, cz*v0[idx], cz*v1[idx], cz*v2[idx], cz*v3[idx]);
+#else
+      float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
+      float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
+      float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
+      #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val8,val9,val10,val11)
+      for(int lane=0; lane<num_iters; lane++) {
+        val0  += v6[lane];
+        val1  += v7[lane];
+        val2  += v8[lane];
+        val3  += v9[lane];
+        val4  += v10[lane];
+        val5  += v11[lane];
+        val6  += v12[lane];
+        val7  += v13[lane];
+        val8  += v0[lane];
+        val9  += v1[lane];
+        val10 += v2[lane];
+        val11 += v3[lane];
+      }
+
+      current_sa(first, 0)  += cx*val0;
+      current_sa(first, 1)  += cx*val1;
+      current_sa(first, 2)  += cx*val2;
+      current_sa(first, 3)  += cx*val3;
+
+      current_sa(first, 4)  += cy*val4;
+      current_sa(first, 5)  += cy*val5;
+      current_sa(first, 6)  += cy*val6;
+      current_sa(first, 7)  += cy*val7;
+
+      current_sa(first, 8)  += cz*val8;
+      current_sa(first, 9)  += cz*val9;
+      current_sa(first, 10) += cz*val10;
+      current_sa(first, 11) += cz*val11;
+#endif
+    } else {
+#endif
 
       BEGIN_VECTOR_BLOCK
 #ifdef KOKKOS_ENABLE_CUDA
@@ -2308,9 +2294,9 @@ advance_p_kokkos_unified(
         current_sa(ii[idx], 11) += cz*v3[idx];
 #endif
       END_VECTOR_BLOCK
-//#ifdef VPIC_ENABLE_TEAM_REDUCTION
-//    }
-//#endif
+#ifdef VPIC_ENABLE_TEAM_REDUCTION
+    }
+#endif
 #       undef ACCUMULATE_J
       BEGIN_THREAD_BLOCK
         if(!inbnds[idx]) {
