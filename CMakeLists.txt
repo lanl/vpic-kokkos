@@ -21,7 +21,7 @@ project(vpic CXX)
 # feel free to experiment with lower standards.
 #------------------------------------------------------------------------------#
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #------------------------------------------------------------------------------#
@@ -64,6 +64,8 @@ option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
 
 option(VPIC_ENABLE_TEAM_REDUCTION "Enable team reduction for current accumulation" OFF)
 
+option(VPIC_ENABLE_VECTORIZATION "Enable improved vectorization for CPUs" OFF)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -84,8 +86,8 @@ endif(MPI_CPPFLAGS)
 # Append extra implicit includes
 string(REPLACE ";" " -I" string_cppflags "${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES}")
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -I${string_cppflags}")
-message(${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
-message(${VPIC_CPPFLAGS})
+#message(${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+#message(${VPIC_CPPFLAGS})
 
 
 string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
@@ -206,7 +208,7 @@ get_target_property(KOKKOS_COMPILE_OPTIONS Kokkos::kokkoscore INTERFACE_COMPILE_
 get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE_INCLUDE_DIRECTORIES)
 
-message(${KOKKOS_COMPILE_OPTIONS})
+#message(${KOKKOS_COMPILE_OPTIONS})
 # TODO: this gives the external include path
 #get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
 
@@ -273,17 +275,27 @@ find_package(Threads REQUIRED)
 # Act on build options set in project.cmake
 #------------------------------------------------------------------------------#
 
+message("-- VPIC Optimization Settings")
 if (VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
 
 if (VPIC_ENABLE_HIERARCHICAL)
   add_definitions(-DVPIC_ENABLE_HIERARCHICAL)
+  message("--     VPIC: Enabled hierarchical parallelism")
 endif(VPIC_ENABLE_HIERARCHICAL)
 
 if(VPIC_ENABLE_TEAM_REDUCTION)
   add_definitions(-DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_TEAM_REDUCTION)
+  message("--     VPIC: Enabled hierarchical parallelism")
+  message("--     VPIC: Enabled reduction optimization")
 endif(VPIC_ENABLE_TEAM_REDUCTION)
+
+if (VPIC_ENABLE_VECTORIZATION)
+  add_definitions(-DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_VECTORIZATION)
+  message("--     VPIC: Enabled hierarchical parallelism")
+  message("--     VPIC: Enabled improved CPU vectorization")
+endif(VPIC_ENABLE_VECTORIZATION)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)

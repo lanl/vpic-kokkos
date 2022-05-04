@@ -115,7 +115,7 @@ reduce_and_contribute_current(TeamMember& team_member, current_sa_t& current_sca
 
 template<class TeamMember, class IndexView, class BoundsView>
 bool KOKKOS_INLINE_FUNCTION particles_in_same_cell(TeamMember& team_member, IndexView& ii, BoundsView& inbnds, const int num_lanes) {
-#ifdef __CUDA_ARCH__
+#ifdef USE_GPU
   int min_inbnds = inbnds[0];
   int max_inbnds = inbnds[0];
   team_member.team_reduce(Kokkos::Max<int>(min_inbnds));
@@ -1899,7 +1899,6 @@ advance_p_kokkos_unified(
   constexpr float two_fifteenths = 2./15.;
 
   k_field_t k_field = fa->k_f_d;
-//  k_field_sa_t k_f_sv = Kokkos::Experimental::create_scatter_view<>(k_field);
   float cx = 0.25 * g->rdy * g->rdz / g->dt;
   float cy = 0.25 * g->rdz * g->rdx / g->dt;
   float cz = 0.25 * g->rdx * g->rdy / g->dt;
@@ -1913,28 +1912,28 @@ advance_p_kokkos_unified(
   #define p_w     k_particles(p_index, particle_var::w)
   #define pii     k_particles_i(p_index)
 
-  #define f_cbx k_interp(ii[idx], interpolator_var::cbx)
-  #define f_cby k_interp(ii[idx], interpolator_var::cby)
-  #define f_cbz k_interp(ii[idx], interpolator_var::cbz)
-  #define f_ex  k_interp(ii[idx], interpolator_var::ex)
-  #define f_ey  k_interp(ii[idx], interpolator_var::ey)
-  #define f_ez  k_interp(ii[idx], interpolator_var::ez)
+  #define f_cbx k_interp(ii[LANE_IDX], interpolator_var::cbx)
+  #define f_cby k_interp(ii[LANE_IDX], interpolator_var::cby)
+  #define f_cbz k_interp(ii[LANE_IDX], interpolator_var::cbz)
+  #define f_ex  k_interp(ii[LANE_IDX], interpolator_var::ex)
+  #define f_ey  k_interp(ii[LANE_IDX], interpolator_var::ey)
+  #define f_ez  k_interp(ii[LANE_IDX], interpolator_var::ez)
 
-  #define f_dexdy    k_interp(ii[idx], interpolator_var::dexdy)
-  #define f_dexdz    k_interp(ii[idx], interpolator_var::dexdz)
+  #define f_dexdy    k_interp(ii[LANE_IDX], interpolator_var::dexdy)
+  #define f_dexdz    k_interp(ii[LANE_IDX], interpolator_var::dexdz)
 
-  #define f_d2exdydz k_interp(ii[idx], interpolator_var::d2exdydz)
-  #define f_deydx    k_interp(ii[idx], interpolator_var::deydx)
-  #define f_deydz    k_interp(ii[idx], interpolator_var::deydz)
+  #define f_d2exdydz k_interp(ii[LANE_IDX], interpolator_var::d2exdydz)
+  #define f_deydx    k_interp(ii[LANE_IDX], interpolator_var::deydx)
+  #define f_deydz    k_interp(ii[LANE_IDX], interpolator_var::deydz)
 
-  #define f_d2eydzdx k_interp(ii[idx], interpolator_var::d2eydzdx)
-  #define f_dezdx    k_interp(ii[idx], interpolator_var::dezdx)
-  #define f_dezdy    k_interp(ii[idx], interpolator_var::dezdy)
+  #define f_d2eydzdx k_interp(ii[LANE_IDX], interpolator_var::d2eydzdx)
+  #define f_dezdx    k_interp(ii[LANE_IDX], interpolator_var::dezdx)
+  #define f_dezdy    k_interp(ii[LANE_IDX], interpolator_var::dezdy)
 
-  #define f_d2ezdxdy k_interp(ii[idx], interpolator_var::d2ezdxdy)
-  #define f_dcbxdx   k_interp(ii[idx], interpolator_var::dcbxdx)
-  #define f_dcbydy   k_interp(ii[idx], interpolator_var::dcbydy)
-  #define f_dcbzdz   k_interp(ii[idx], interpolator_var::dcbzdz)
+  #define f_d2ezdxdy k_interp(ii[LANE_IDX], interpolator_var::d2ezdxdy)
+  #define f_dcbxdx   k_interp(ii[LANE_IDX], interpolator_var::dcbxdx)
+  #define f_dcbydy   k_interp(ii[LANE_IDX], interpolator_var::dcbydy)
+  #define f_dcbzdz   k_interp(ii[LANE_IDX], interpolator_var::dcbzdz)
 
   auto rangel = g->rangel;
   auto rangeh = g->rangeh;
@@ -1942,21 +1941,7 @@ advance_p_kokkos_unified(
   // TODO: is this the right place to do this?
   Kokkos::deep_copy(k_nm, 0);
 
-#ifdef KOKKOS_ENABLE_CUDA
-  k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
-  auto policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE, 1);
-  int chunk_size = np/LEAGUE_SIZE;
-  if(chunk_size*LEAGUE_SIZE < np)
-    chunk_size += 1;
-  constexpr int num_lanes = 1;
-  int num_chunks = LEAGUE_SIZE+1;
-#define INNER_RANGE_POLICY Kokkos::TeamThreadRange
-#define idx 0
-#define BEGIN_THREAD_BLOCK
-#define END_THREAD_BLOCK
-#define BEGIN_VECTOR_BLOCK
-#define END_VECTOR_BLOCK
-#else
+#if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
   Kokkos::View<float*[12], Kokkos::LayoutRight> accumulator("Accumulator", k_field.extent(0));
   Kokkos::deep_copy(accumulator, 0);
   auto current_sv = Kokkos::Experimental::create_scatter_view(accumulator);
@@ -1966,16 +1951,38 @@ advance_p_kokkos_unified(
   if(num_chunks*num_lanes < np)
     num_chunks += 1;
   auto policy = Kokkos::TeamPolicy<>(num_chunks, 1, num_lanes);
-#define INNER_RANGE_POLICY Kokkos::ThreadVectorRange
-#define idx lane
-#define BEGIN_THREAD_BLOCK Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (int lane) {
-#define END_THREAD_BLOCK });
-#define BEGIN_VECTOR_BLOCK Kokkos::parallel_for_simd(Kokkos::ThreadVectorRange(team_member, num_iters), [&] (int lane) {
-#define END_VECTOR_BLOCK });
+#elif defined( VPIC_ENABLE_HIERARCHICAL )
+  k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
+  auto policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE);
+  int chunk_size = np/LEAGUE_SIZE;
+  if(chunk_size*LEAGUE_SIZE < np)
+    chunk_size += 1;
+  constexpr int num_lanes = 1;
+  int num_chunks = LEAGUE_SIZE;
+#else
+  constexpr int num_lanes = 1;
 #endif
 
+#if defined(VPIC_ENABLE_HIERARCHICAL) || defined(VPIC_ENABLE_VECTORIZATION)
   Kokkos::parallel_for("advance_p", policy, 
   KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
+      auto current_sa = current_sv.access();
+      int chunk = team_member.league_rank();
+      int num_iters = chunk_size;
+      if((chunk+1)*chunk_size > np)
+        num_iters = np - chunk*chunk_size;
+      int pi_offset = chunk*chunk_size;
+#else
+  auto policy = Kokkos::RangePolicy<>(0,np);
+  k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
+  Kokkos::parallel_for("advance_p", policy, KOKKOS_LAMBDA (const size_t pi_offset) {
+      auto current_sa = current_sv.access();
+#endif
+
+#if defined ( VPIC_ENABLE_HIERARCHICAL ) && !defined( VPIC_ENABLE_VECTORIZATION )
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (const size_t index) {
+      int pi_offset = chunk*chunk_size + index;
+#endif
       float v0[num_lanes];
       float v1[num_lanes];
       float v2[num_lanes];
@@ -2017,127 +2024,117 @@ advance_p_kokkos_unified(
       float fdcbydy[num_lanes];
       float fdcbzdz[num_lanes];
       float *v6, *v7, *v8, *v9, *v10, *v11, *v12, *v13;
+      size_t p_index;
 
-      int p_index;
-      auto current_sa = current_sv.access();
-      int chunk = team_member.league_rank();
-      int num_iters = chunk_size;
-      if((chunk+1)*chunk_size > np)
-        num_iters = np - chunk*chunk_size;
-
-#ifdef KOKKOS_ENABLE_CUDA
-      Kokkos::parallel_for(INNER_RANGE_POLICY(team_member, num_iters), [&] (int lane) {
-#endif
-
-      BEGIN_VECTOR_BLOCK
-        p_index = chunk*chunk_size + lane;
+      BEGIN_VECTOR_BLOCK {
+        p_index = pi_offset + LANE_IDX;
         // Load position
-        dx[idx] = p_dx;
-        dy[idx] = p_dy;
-        dz[idx] = p_dz;
+        dx[LANE_IDX] = p_dx;
+        dy[LANE_IDX] = p_dy;
+        dz[LANE_IDX] = p_dz;
         // Load momentum
-        ux[idx] = p_ux;
-        uy[idx] = p_uy;
-        uz[idx] = p_uz;
+        ux[LANE_IDX] = p_ux;
+        uy[LANE_IDX] = p_uy;
+        uz[LANE_IDX] = p_uz;
         // Load weight
-        q[idx]  = p_w;
+        q[LANE_IDX]  = p_w;
         // Load index
-        ii[idx] = pii;
-      END_VECTOR_BLOCK
+        ii[LANE_IDX] = pii;
+      } END_VECTOR_BLOCK;
 
-      BEGIN_VECTOR_BLOCK
+      BEGIN_VECTOR_BLOCK {
         // Load interpolators
-        fex[idx]       = f_ex;     
-        fdexdy[idx]    = f_dexdy;  
-        fdexdz[idx]    = f_dexdz;  
-        fd2exdydz[idx] = f_d2exdydz;
-        fey[idx]       = f_ey;     
-        fdeydz[idx]    = f_deydz;  
-        fdeydx[idx]    = f_deydx;  
-        fd2eydzdx[idx] = f_d2eydzdx;
-        fez[idx]       = f_ez;     
-        fdezdx[idx]    = f_dezdx;  
-        fdezdy[idx]    = f_dezdy;  
-        fd2ezdxdy[idx] = f_d2ezdxdy;
-        fcbx[idx]      = f_cbx;    
-        fdcbxdx[idx]   = f_dcbxdx; 
-        fcby[idx]      = f_cby;    
-        fdcbydy[idx]   = f_dcbydy; 
-        fcbz[idx]      = f_cbz;    
-        fdcbzdz[idx]   = f_dcbzdz; 
-      END_VECTOR_BLOCK
+        fex[LANE_IDX]       = f_ex;     
+        fdexdy[LANE_IDX]    = f_dexdy;  
+        fdexdz[LANE_IDX]    = f_dexdz;  
+        fd2exdydz[LANE_IDX] = f_d2exdydz;
+        fey[LANE_IDX]       = f_ey;     
+        fdeydz[LANE_IDX]    = f_deydz;  
+        fdeydx[LANE_IDX]    = f_deydx;  
+        fd2eydzdx[LANE_IDX] = f_d2eydzdx;
+        fez[LANE_IDX]       = f_ez;     
+        fdezdx[LANE_IDX]    = f_dezdx;  
+        fdezdy[LANE_IDX]    = f_dezdy;  
+        fd2ezdxdy[LANE_IDX] = f_d2ezdxdy;
+        fcbx[LANE_IDX]      = f_cbx;    
+        fdcbxdx[LANE_IDX]   = f_dcbxdx; 
+        fcby[LANE_IDX]      = f_cby;    
+        fdcbydy[LANE_IDX]   = f_dcbydy; 
+        fcbz[LANE_IDX]      = f_cbz;    
+        fdcbzdz[LANE_IDX]   = f_dcbzdz; 
+      } END_VECTOR_BLOCK;
 
-      BEGIN_VECTOR_BLOCK
+      BEGIN_VECTOR_BLOCK {
         // Interpolate E
-        hax[idx] = qdt_2mc*( (fex[idx] + dy[idx]*fdexdy[idx] ) + dz[idx]*(fdexdz[idx] + dy[idx]*fd2exdydz[idx]) );
-        hay[idx] = qdt_2mc*( (fey[idx] + dz[idx]*fdeydz[idx] ) + dx[idx]*(fdeydx[idx] + dz[idx]*fd2eydzdx[idx]) );
-        haz[idx] = qdt_2mc*( (fez[idx] + dx[idx]*fdezdx[idx] ) + dy[idx]*(fdezdy[idx] + dx[idx]*fd2ezdxdy[idx]) );
+        hax[LANE_IDX] = qdt_2mc*( (fex[LANE_IDX] + dy[LANE_IDX]*fdexdy[LANE_IDX] ) + dz[LANE_IDX]*(fdexdz[LANE_IDX] + dy[LANE_IDX]*fd2exdydz[LANE_IDX]) );
+        hay[LANE_IDX] = qdt_2mc*( (fey[LANE_IDX] + dz[LANE_IDX]*fdeydz[LANE_IDX] ) + dx[LANE_IDX]*(fdeydx[LANE_IDX] + dz[LANE_IDX]*fd2eydzdx[LANE_IDX]) );
+        haz[LANE_IDX] = qdt_2mc*( (fez[LANE_IDX] + dx[LANE_IDX]*fdezdx[LANE_IDX] ) + dy[LANE_IDX]*(fdezdy[LANE_IDX] + dx[LANE_IDX]*fd2ezdxdy[LANE_IDX]) );
   
         // Interpolate B
-        cbx[idx] = fcbx[idx] + dx[idx]*fdcbxdx[idx];
-        cby[idx] = fcby[idx] + dy[idx]*fdcbydy[idx];
-        cbz[idx] = fcbz[idx] + dz[idx]*fdcbzdz[idx];
+        cbx[LANE_IDX] = fcbx[LANE_IDX] + dx[LANE_IDX]*fdcbxdx[LANE_IDX];
+        cby[LANE_IDX] = fcby[LANE_IDX] + dy[LANE_IDX]*fdcbydy[LANE_IDX];
+        cbz[LANE_IDX] = fcbz[LANE_IDX] + dz[LANE_IDX]*fdcbzdz[LANE_IDX];
   
         // Half advance e
-        ux[idx] += hax[idx];
-        uy[idx] += hay[idx];
-        uz[idx] += haz[idx];
-      END_VECTOR_BLOCK
+        ux[LANE_IDX] += hax[LANE_IDX];
+        uy[LANE_IDX] += hay[LANE_IDX];
+        uz[LANE_IDX] += haz[LANE_IDX];
+      } END_VECTOR_BLOCK;
 
-      BEGIN_VECTOR_BLOCK
-        v0[idx] = qdt_2mc/sqrtf(one + (ux[idx]*ux[idx] + (uy[idx]*uy[idx] + uz[idx]*uz[idx])));
-      END_VECTOR_BLOCK
+      BEGIN_VECTOR_BLOCK {
+        v0[LANE_IDX] = qdt_2mc/sqrtf(one + (ux[LANE_IDX]*ux[LANE_IDX] + (uy[LANE_IDX]*uy[LANE_IDX] + uz[LANE_IDX]*uz[LANE_IDX])));
+      } END_VECTOR_BLOCK;
 
-      BEGIN_VECTOR_BLOCK
-        p_index = chunk*chunk_size + lane;
+      BEGIN_VECTOR_BLOCK {
+        p_index = pi_offset + LANE_IDX;
 
         // Boris - scalars
-        v1[idx] = cbx[idx]*cbx[idx] + (cby[idx]*cby[idx] + cbz[idx]*cbz[idx]);
-        v2[idx] = (v0[idx]*v0[idx])*v1[idx];
-        v3[idx] = v0[idx]*(one+v2[idx]*(one_third+v2[idx]*two_fifteenths));
-        v4[idx] = v3[idx]/(one+v1[idx]*(v3[idx]*v3[idx]));
-        v4[idx] += v4[idx];
+        v1[LANE_IDX] = cbx[LANE_IDX]*cbx[LANE_IDX] + (cby[LANE_IDX]*cby[LANE_IDX] + cbz[LANE_IDX]*cbz[LANE_IDX]);
+        v2[LANE_IDX] = (v0[LANE_IDX]*v0[LANE_IDX])*v1[LANE_IDX];
+        v3[LANE_IDX] = v0[LANE_IDX]*(one+v2[LANE_IDX]*(one_third+v2[LANE_IDX]*two_fifteenths));
+        v4[LANE_IDX] = v3[LANE_IDX]/(one+v1[LANE_IDX]*(v3[LANE_IDX]*v3[LANE_IDX]));
+        v4[LANE_IDX] += v4[LANE_IDX];
         // Boris - uprime
-        v0[idx] = ux[idx] + v3[idx]*(uy[idx]*cbz[idx] - uz[idx]*cby[idx]);
-        v1[idx] = uy[idx] + v3[idx]*(uz[idx]*cbx[idx] - ux[idx]*cbz[idx]);
-        v2[idx] = uz[idx] + v3[idx]*(ux[idx]*cby[idx] - uy[idx]*cbx[idx]);
+        v0[LANE_IDX] = ux[LANE_IDX] + v3[LANE_IDX]*(uy[LANE_IDX]*cbz[LANE_IDX] - uz[LANE_IDX]*cby[LANE_IDX]);
+        v1[LANE_IDX] = uy[LANE_IDX] + v3[LANE_IDX]*(uz[LANE_IDX]*cbx[LANE_IDX] - ux[LANE_IDX]*cbz[LANE_IDX]);
+        v2[LANE_IDX] = uz[LANE_IDX] + v3[LANE_IDX]*(ux[LANE_IDX]*cby[LANE_IDX] - uy[LANE_IDX]*cbx[LANE_IDX]);
         // Boris - rotation
-        ux[idx] += v4[idx]*(v1[idx]*cbz[idx] - v2[idx]*cby[idx]);
-        uy[idx] += v4[idx]*(v2[idx]*cbx[idx] - v0[idx]*cbz[idx]);
-        uz[idx] += v4[idx]*(v0[idx]*cby[idx] - v1[idx]*cbx[idx]);
+        ux[LANE_IDX] += v4[LANE_IDX]*(v1[LANE_IDX]*cbz[LANE_IDX] - v2[LANE_IDX]*cby[LANE_IDX]);
+        uy[LANE_IDX] += v4[LANE_IDX]*(v2[LANE_IDX]*cbx[LANE_IDX] - v0[LANE_IDX]*cbz[LANE_IDX]);
+        uz[LANE_IDX] += v4[LANE_IDX]*(v0[LANE_IDX]*cby[LANE_IDX] - v1[LANE_IDX]*cbx[LANE_IDX]);
         // Half advance e
-        ux[idx] += hax[idx];
-        uy[idx] += hay[idx];
-        uz[idx] += haz[idx];
+        ux[LANE_IDX] += hax[LANE_IDX];
+        uy[LANE_IDX] += hay[LANE_IDX];
+        uz[LANE_IDX] += haz[LANE_IDX];
         // Store momentum
-        p_ux = ux[idx];
-        p_uy = uy[idx];
-        p_uz = uz[idx];
-      END_VECTOR_BLOCK
+        p_ux = ux[LANE_IDX];
+        p_uy = uy[LANE_IDX];
+        p_uz = uz[LANE_IDX];
+      } END_VECTOR_BLOCK;
 
-      BEGIN_VECTOR_BLOCK
-        v0[idx]   = one/sqrtf(one + (ux[idx]*ux[idx]+ (uy[idx]*uy[idx] + uz[idx]*uz[idx])));
-      END_VECTOR_BLOCK
+      BEGIN_VECTOR_BLOCK {
+        v0[LANE_IDX]   = one/sqrtf(one + (ux[LANE_IDX]*ux[LANE_IDX]+ (uy[LANE_IDX]*uy[LANE_IDX] + uz[LANE_IDX]*uz[LANE_IDX])));
+      } END_VECTOR_BLOCK;
 
-      BEGIN_VECTOR_BLOCK
+      BEGIN_VECTOR_BLOCK {
 
         /**/                                      // Get norm displacement
-        ux[idx]  *= cdt_dx;
-        uy[idx]  *= cdt_dy;
-        uz[idx]  *= cdt_dz;
-        ux[idx]  *= v0[idx];
-        uy[idx]  *= v0[idx];
-        uz[idx]  *= v0[idx];
-        v0[idx]   = dx[idx] + ux[idx];                           // Streak midpoint (inbnds)
-        v1[idx]   = dy[idx] + uy[idx];
-        v2[idx]   = dz[idx] + uz[idx];
-        v3[idx]   = v0[idx] + ux[idx];                           // New position
-        v4[idx]   = v1[idx] + uy[idx];
-        v5[idx]   = v2[idx] + uz[idx];
+        ux[LANE_IDX]  *= cdt_dx;
+        uy[LANE_IDX]  *= cdt_dy;
+        uz[LANE_IDX]  *= cdt_dz;
+        ux[LANE_IDX]  *= v0[LANE_IDX];
+        uy[LANE_IDX]  *= v0[LANE_IDX];
+        uz[LANE_IDX]  *= v0[LANE_IDX];
+        v0[LANE_IDX]   = dx[LANE_IDX] + ux[LANE_IDX];                           // Streak midpoint (inbnds)
+        v1[LANE_IDX]   = dy[LANE_IDX] + uy[LANE_IDX];
+        v2[LANE_IDX]   = dz[LANE_IDX] + uz[LANE_IDX];
+        v3[LANE_IDX]   = v0[LANE_IDX] + ux[LANE_IDX];                           // New position
+        v4[LANE_IDX]   = v1[LANE_IDX] + uy[LANE_IDX];
+        v5[LANE_IDX]   = v2[LANE_IDX] + uz[LANE_IDX];
   
-        inbnds[idx] = v3[idx]<=one &&  v4[idx]<=one &&  v5[idx]<=one &&
-                      -v3[idx]<=one && -v4[idx]<=one && -v5[idx]<=one;
-      END_VECTOR_BLOCK
+        inbnds[LANE_IDX] = v3[LANE_IDX]<=one &&  v4[LANE_IDX]<=one &&  v5[LANE_IDX]<=one &&
+                      -v3[LANE_IDX]<=one && -v4[LANE_IDX]<=one && -v5[LANE_IDX]<=one;
+      } END_VECTOR_BLOCK;
 
       v6 = fex;
       v7 = fdexdy;
@@ -2148,76 +2145,51 @@ advance_p_kokkos_unified(
       v12 = fdeydx;
       v13 = fd2eydzdx;
 
-      BEGIN_VECTOR_BLOCK
-        p_index = chunk*chunk_size + lane;
+      BEGIN_VECTOR_BLOCK {
+        p_index = pi_offset + LANE_IDX;
 
-        v3[idx] = static_cast<float>(inbnds[idx])*v3[idx] + (1.0-static_cast<float>(inbnds[idx]))*p_dx;
-        v4[idx] = static_cast<float>(inbnds[idx])*v4[idx] + (1.0-static_cast<float>(inbnds[idx]))*p_dy;
-        v5[idx] = static_cast<float>(inbnds[idx])*v5[idx] + (1.0-static_cast<float>(inbnds[idx]))*p_dz;
-        q[idx]  = static_cast<float>(inbnds[idx])*q[idx]*qsp;
+        v3[LANE_IDX] = static_cast<float>(inbnds[LANE_IDX])*v3[LANE_IDX] + (1.0-static_cast<float>(inbnds[LANE_IDX]))*p_dx;
+        v4[LANE_IDX] = static_cast<float>(inbnds[LANE_IDX])*v4[LANE_IDX] + (1.0-static_cast<float>(inbnds[LANE_IDX]))*p_dy;
+        v5[LANE_IDX] = static_cast<float>(inbnds[LANE_IDX])*v5[LANE_IDX] + (1.0-static_cast<float>(inbnds[LANE_IDX]))*p_dz;
+        q[LANE_IDX]  = static_cast<float>(inbnds[LANE_IDX])*q[LANE_IDX]*qsp;
 
-        p_dx = v3[idx];
-        p_dy = v4[idx];
-        p_dz = v5[idx];
-        dx[idx] = v0[idx];
-        dy[idx] = v1[idx];
-        dz[idx] = v2[idx];
-        v5[idx] = q[idx]*ux[idx]*uy[idx]*uz[idx]*one_third;
+        p_dx = v3[LANE_IDX];
+        p_dy = v4[LANE_IDX];
+        p_dz = v5[LANE_IDX];
+        dx[LANE_IDX] = v0[LANE_IDX];
+        dy[LANE_IDX] = v1[LANE_IDX];
+        dz[LANE_IDX] = v2[LANE_IDX];
+        v5[LANE_IDX] = q[LANE_IDX]*ux[LANE_IDX]*uy[LANE_IDX]*uz[LANE_IDX]*one_third;
 
 #       define ACCUMULATE_J(X,Y,Z,v0,v1,v2,v3)                                              \
-        v4[idx]  = q[idx]*u##X[idx];   /* v2 = q ux                            */        \
-        v1[idx]  = v4[idx]*d##Y[idx];  /* v1 = q ux dy                         */        \
-        v0[idx]  = v4[idx]-v1[idx];    /* v0 = q ux (1-dy)                     */        \
-        v1[idx] += v4[idx];             /* v1 = q ux (1+dy)                     */        \
-        v4[idx]  = one+d##Z[idx];       /* v4 = 1+dz                            */        \
-        v2[idx]  = v0[idx]*v4[idx];    /* v2 = q ux (1-dy)(1+dz)               */        \
-        v3[idx]  = v1[idx]*v4[idx];    /* v3 = q ux (1+dy)(1+dz)               */        \
-        v4[idx]  = one-d##Z[idx];       /* v4 = 1-dz                            */        \
-        v0[idx] *= v4[idx];             /* v0 = q ux (1-dy)(1-dz)               */        \
-        v1[idx] *= v4[idx];             /* v1 = q ux (1+dy)(1-dz)               */        \
-        v0[idx] += v5[idx];             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
-        v1[idx] -= v5[idx];             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
-        v2[idx] -= v5[idx];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-        v3[idx] += v5[idx];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+        v4[LANE_IDX]  = q[LANE_IDX]*u##X[LANE_IDX];   /* v2 = q ux                            */        \
+        v1[LANE_IDX]  = v4[LANE_IDX]*d##Y[LANE_IDX];  /* v1 = q ux dy                         */        \
+        v0[LANE_IDX]  = v4[LANE_IDX]-v1[LANE_IDX];    /* v0 = q ux (1-dy)                     */        \
+        v1[LANE_IDX] += v4[LANE_IDX];             /* v1 = q ux (1+dy)                     */        \
+        v4[LANE_IDX]  = one+d##Z[LANE_IDX];       /* v4 = 1+dz                            */        \
+        v2[LANE_IDX]  = v0[LANE_IDX]*v4[LANE_IDX];    /* v2 = q ux (1-dy)(1+dz)               */        \
+        v3[LANE_IDX]  = v1[LANE_IDX]*v4[LANE_IDX];    /* v3 = q ux (1+dy)(1+dz)               */        \
+        v4[LANE_IDX]  = one-d##Z[LANE_IDX];       /* v4 = 1-dz                            */        \
+        v0[LANE_IDX] *= v4[LANE_IDX];             /* v0 = q ux (1-dy)(1-dz)               */        \
+        v1[LANE_IDX] *= v4[LANE_IDX];             /* v1 = q ux (1+dy)(1-dz)               */        \
+        v0[LANE_IDX] += v5[LANE_IDX];             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+        v1[LANE_IDX] -= v5[LANE_IDX];             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+        v2[LANE_IDX] -= v5[LANE_IDX];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+        v3[LANE_IDX] += v5[LANE_IDX];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
         ACCUMULATE_J( x,y,z, v6,v7,v8,v9 );
 
         ACCUMULATE_J( y,z,x, v10,v11,v12,v13 );
 
         ACCUMULATE_J( z,x,y, v0,v1,v2,v3 );
-      END_VECTOR_BLOCK
+      } END_VECTOR_BLOCK;
 
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
     int first = ii[0];
 
     if(particles_in_same_cell(team_member, ii, inbnds, num_iters)) {
 
-#ifdef KOKKOS_ENABLE_CUDA
-      int iii = first;
-      int zi = iii/((nx+2)*(ny+2));
-      iii -= zi*(nx+2)*(ny+2);
-      int yi = iii/(nx+2);
-      int xi = iii - yi*(nx+2);
-
-      int i0 = ii[0];
-      int i1 = VOXEL(xi,yi+1,zi,nx,ny,nz);
-      int i2 = VOXEL(xi,yi,zi+1,nx,ny,nz);
-      int i3 = VOXEL(xi,yi+1,zi+1,nx,ny,nz);
-      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
-                          field_var::jfx, cx*v6[idx], cx*v7[idx], cx*v8[idx], cx*v9[idx]);
-
-      i1 = VOXEL(xi,yi,zi+1,nx,ny,nz);
-      i2 = VOXEL(xi+1,yi,zi,nx,ny,nz);
-      i3 = VOXEL(xi+1,yi,zi+1,nx,ny,nz);
-      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
-                          field_var::jfy, cy*v10[idx], cy*v11[idx], cy*v12[idx], cy*v13[idx]);
-
-      i1 = VOXEL(xi+1,yi,zi,nx,ny,nz);
-      i2 = VOXEL(xi,yi+1,zi,nx,ny,nz);
-      i3 = VOXEL(xi+1,yi+1,zi,nx,ny,nz);
-      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
-                          field_var::jfz, cz*v0[idx], cz*v1[idx], cz*v2[idx], cz*v3[idx]);
-#else
+#ifdef VPIC_ENABLE_VECTORIZATION
       float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
       float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
       float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
@@ -2236,6 +2208,54 @@ advance_p_kokkos_unified(
         val10 += v2[lane];
         val11 += v3[lane];
       }
+//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
+//      [&] (const int lane, float& result) {
+//        result += v6[lane];
+//      }, val0);
+//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
+//      [&] (const int lane, float& result) {
+//        result += v7[lane];
+//      }, val1);
+//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
+//      [&] (const int lane, float& result) {
+//        result += v8[lane];
+//      }, val2);
+//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
+//      [&] (const int lane, float& result) {
+//        result += v9[lane];
+//      }, val3);
+//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
+//      [&] (const int lane, float& result) {
+//        result += v10[lane];
+//      }, val4);
+//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
+//      [&] (const int lane, float& result) {
+//        result += v11[lane];
+//      }, val5);
+//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
+//      [&] (const int lane, float& result) {
+//        result += v12[lane];
+//      }, val6);
+//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
+//      [&] (const int lane, float& result) {
+//        result += v13[lane];
+//      }, val7);
+//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
+//      [&] (const int lane, float& result) {
+//        result += v0[lane];
+//      }, val8);
+//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
+//      [&] (const int lane, float& result) {
+//        result += v1[lane];
+//      }, val9);
+//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
+//      [&] (const int lane, float& result) {
+//        result += v2[lane];
+//      }, val10);
+//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
+//      [&] (const int lane, float& result) {
+//        result += v3[lane];
+//      }, val11);
 
       current_sa(first, 0)  += cx*val0;
       current_sa(first, 1)  += cx*val1;
@@ -2251,61 +2271,86 @@ advance_p_kokkos_unified(
       current_sa(first, 9)  += cz*val9;
       current_sa(first, 10) += cz*val10;
       current_sa(first, 11) += cz*val11;
+#else
+      int iii = first;
+      int zi = iii/((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii/(nx+2);
+      int xi = iii - yi*(nx+2);
+
+      int i0 = ii[0];
+      int i1 = VOXEL(xi,yi+1,zi,nx,ny,nz);
+      int i2 = VOXEL(xi,yi,zi+1,nx,ny,nz);
+      int i3 = VOXEL(xi,yi+1,zi+1,nx,ny,nz);
+      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
+                          field_var::jfx, cx*v6[LANE_IDX], cx*v7[LANE_IDX], cx*v8[LANE_IDX], cx*v9[LANE_IDX]);
+
+      i1 = VOXEL(xi,yi,zi+1,nx,ny,nz);
+      i2 = VOXEL(xi+1,yi,zi,nx,ny,nz);
+      i3 = VOXEL(xi+1,yi,zi+1,nx,ny,nz);
+      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
+                          field_var::jfy, cy*v10[LANE_IDX], cy*v11[LANE_IDX], cy*v12[LANE_IDX], cy*v13[LANE_IDX]);
+
+      i1 = VOXEL(xi+1,yi,zi,nx,ny,nz);
+      i2 = VOXEL(xi,yi+1,zi,nx,ny,nz);
+      i3 = VOXEL(xi+1,yi+1,zi,nx,ny,nz);
+      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
+                          field_var::jfz, cz*v0[LANE_IDX], cz*v1[LANE_IDX], cz*v2[LANE_IDX], cz*v3[LANE_IDX]);
 #endif
     } else {
 #endif
 
-      BEGIN_VECTOR_BLOCK
-#ifdef KOKKOS_ENABLE_CUDA
-        int iii = ii[idx];
+      BEGIN_VECTOR_BLOCK {
+#ifdef VPIC_ENABLE_VECTORIZATION 
+        current_sa(ii[LANE_IDX], 0)  += cx*v6[LANE_IDX];
+        current_sa(ii[LANE_IDX], 1)  += cx*v7[LANE_IDX];
+        current_sa(ii[LANE_IDX], 2)  += cx*v8[LANE_IDX];
+        current_sa(ii[LANE_IDX], 3)  += cx*v9[LANE_IDX];
+
+        current_sa(ii[LANE_IDX], 4)  += cy*v10[LANE_IDX];
+        current_sa(ii[LANE_IDX], 5)  += cy*v11[LANE_IDX];
+        current_sa(ii[LANE_IDX], 6)  += cy*v12[LANE_IDX];
+        current_sa(ii[LANE_IDX], 7)  += cy*v13[LANE_IDX];
+
+        current_sa(ii[LANE_IDX], 8)  += cz*v0[LANE_IDX];
+        current_sa(ii[LANE_IDX], 9)  += cz*v1[LANE_IDX];
+        current_sa(ii[LANE_IDX], 10) += cz*v2[LANE_IDX];
+        current_sa(ii[LANE_IDX], 11) += cz*v3[LANE_IDX];
+#else
+        int iii = ii[LANE_IDX];
         int zi = iii/((nx+2)*(ny+2));
         iii -= zi*(nx+2)*(ny+2);
         int yi = iii/(nx+2);
         int xi = iii - yi*(nx+2);
 
-        current_sa(ii[idx], field_var::jfx)                      += cx*v6[idx];
-        current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx)   += cx*v7[idx];
-        current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx)   += cx*v8[idx];
-        current_sa(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[idx];
+        current_sa(ii[LANE_IDX], field_var::jfx)                      += cx*v6[LANE_IDX];
+        current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx)   += cx*v7[LANE_IDX];
+        current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx)   += cx*v8[LANE_IDX];
+        current_sa(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[LANE_IDX];
 
-        current_sa(ii[idx], field_var::jfy)                      += cy*v10[idx];
-        current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy)   += cy*v11[idx];
-        current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy)   += cy*v12[idx];
-        current_sa(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[idx];
+        current_sa(ii[LANE_IDX], field_var::jfy)                      += cy*v10[LANE_IDX];
+        current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy)   += cy*v11[LANE_IDX];
+        current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy)   += cy*v12[LANE_IDX];
+        current_sa(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[LANE_IDX];
 
-        current_sa(ii[idx], field_var::jfz)                      += cz*v0[idx];
-        current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz)   += cz*v1[idx];
-        current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz)   += cz*v2[idx];
-        current_sa(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[idx];
-#else
-        current_sa(ii[idx], 0)  += cx*v6[idx];
-        current_sa(ii[idx], 1)  += cx*v7[idx];
-        current_sa(ii[idx], 2)  += cx*v8[idx];
-        current_sa(ii[idx], 3)  += cx*v9[idx];
-
-        current_sa(ii[idx], 4)  += cy*v10[idx];
-        current_sa(ii[idx], 5)  += cy*v11[idx];
-        current_sa(ii[idx], 6)  += cy*v12[idx];
-        current_sa(ii[idx], 7)  += cy*v13[idx];
-
-        current_sa(ii[idx], 8)  += cz*v0[idx];
-        current_sa(ii[idx], 9)  += cz*v1[idx];
-        current_sa(ii[idx], 10) += cz*v2[idx];
-        current_sa(ii[idx], 11) += cz*v3[idx];
+        current_sa(ii[LANE_IDX], field_var::jfz)                      += cz*v0[LANE_IDX];
+        current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz)   += cz*v1[LANE_IDX];
+        current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz)   += cz*v2[LANE_IDX];
+        current_sa(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[LANE_IDX];
 #endif
-      END_VECTOR_BLOCK
+      } END_VECTOR_BLOCK;
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
     }
 #endif
 #       undef ACCUMULATE_J
-      BEGIN_THREAD_BLOCK
-        if(!inbnds[idx]) {
-          p_index = chunk*chunk_size + lane;
+      BEGIN_THREAD_BLOCK {
+        if(!inbnds[LANE_IDX]) {
+          p_index = pi_offset + LANE_IDX;
 
           DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
-          local_pm->dispx = ux[idx];
-          local_pm->dispy = uy[idx];
-          local_pm->dispz = uz[idx];
+          local_pm->dispx = ux[LANE_IDX];
+          local_pm->dispy = uy[LANE_IDX];
+          local_pm->dispz = uz[LANE_IDX];
           local_pm->i     = p_index;
 
           if( move_p_kokkos_test( k_particles, k_particles_i, local_pm, // Unlikely
@@ -2332,15 +2377,13 @@ advance_p_kokkos_unified(
             }
           }
         }
-      END_THREAD_BLOCK
-#ifdef KOKKOS_ENABLE_CUDA
+      } END_THREAD_BLOCK;
+#if defined( VPIC_ENABLE_HIERARCHICAL ) && !defined( VPIC_ENABLE_VECTORIZATION )
       });
 #endif
   });
 
-#ifdef KOKKOS_ENABLE_CUDA
-  Kokkos::Experimental::contribute(k_field, current_sv);
-#else
+#if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
   Kokkos::Experimental::contribute(accumulator, current_sv);
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nz+2, ny+2, nx+2});
   Kokkos::parallel_for("unload accumulator array", unload_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
@@ -2365,6 +2408,8 @@ advance_p_kokkos_unified(
                                        accumulator(ay, 10) +
                                        accumulator(axy, 11) );
   });
+#else
+  Kokkos::Experimental::contribute(k_field, current_sv);
 #endif
 
 #undef idx
@@ -2489,12 +2534,6 @@ advance_p_kokkos_gpu(
   Kokkos::deep_copy(k_nm, 0);
 
 #ifdef VPIC_ENABLE_HIERARCHICAL
-//  auto team_policy = Kokkos::TeamPolicy<>(np/32, 32);
-//printf("Team size: %d\n", team_policy.team_size());
-//  int per_league = np/32;
-//  if(np%32 > 0)
-//    per_league++;
-//  int per_league = 32;
   auto team_policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE);
   int per_league = np/LEAGUE_SIZE;
   if(np%LEAGUE_SIZE > 0)

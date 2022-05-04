@@ -91,6 +91,53 @@ namespace Kokkos {
          i += loop_boundaries.increment)
       lambda(i);
   }
+
+  /** \brief  Intra-thread vector parallel_reduce. Executes lambda(iType i,
+   * ValueType & val) for each i=0..N-1.
+   *
+   * The range i=0..N-1 is mapped to all vector lanes of the the calling thread
+   * and a summation of val is performed and put into result.
+   */
+  template <template <typename iType, class ThreadsExecTeamMember> class ThreadVectorRangeBoundariesStruct, 
+            typename iType, class ThreadsExecTeamMember, class Lambda, typename ValueType>
+  KOKKOS_INLINE_FUNCTION
+      typename std::enable_if<!Kokkos::is_reducer<ValueType>::value>::type
+      parallel_reduce_simd_sum(const ThreadVectorRangeBoundariesStruct<
+                          iType, ThreadsExecTeamMember>& loop_boundaries,
+                      const Lambda& lambda, ValueType& result) {
+    result = ValueType();
+    #pragma omp simd reduction(+:result)
+    for (iType i = loop_boundaries.start; i < loop_boundaries.end;
+         i += loop_boundaries.increment) {
+      lambda(i, result);
+    }
+  }
+
+//namespace VPIC {
+//  template< class Policy, template<typename iType, class TeamMember> class RangeBoundariesStruct, 
+//            typename iType, class TeamMember, class Lambda>
+//  KOKKOS_INLINE_FUNCTION void parallel_for_simd(const Policy& policy, const RangeBoundariesStruct<iType, TeamMember>& loop_boundaries, const Lambda& lambda) {
+//    if (std::is_same<typename Policy::execution_space, Kokkos::OpenMP>::value) {
+////                  std::is_same<typename Policy::execution_space, Kokkos::Threads>::value) {
+//      Kokkos::parallel_for_simd(loop_boundaries, lambda);
+//    } else {
+//      lambda(0);
+//    }
+//  }
+//}
+  
+//  template <typename iType, class Lambda, typename ReducerType>
+//  KOKKOS_INLINE_FUNCTION
+//      typename std::enable_if<Kokkos::is_reducer<ReducerType>::value>::type
+//      parallel_reduce_simd(const Impl::ThreadVectorRangeBoundariesStruct<
+//                          iType, Impl::ThreadsExecTeamMember>& loop_boundaries,
+//                      const Lambda& lambda, const ReducerType& reducer) {
+//    reducer.init(reducer.reference());
+//    for (iType i = loop_boundaries.start; i < loop_boundaries.end;
+//         i += loop_boundaries.increment) {
+//      lambda(i, reducer.reference());
+//    }
+//  }
 }
 
 namespace field_var {

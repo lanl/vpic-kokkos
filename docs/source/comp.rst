@@ -95,3 +95,11 @@ Note: As with any CMake application, it's critical that you set the
 CMAKE_BUILD_TYPE (and other optimization flags) appropriately for your target
 system
 
+Optimization Options
+********************
+
+VPIC has compilation flags for enabling/disabling various optimizations. The optimization options are as follows:
+
+1. `VPIC_ENABLE_HIERARCHICAL`: 
+2. `VPIC_ENABLE_TEAM_REDUCTION`: 
+3. `VPIC_ENABLE_VECTORIZATION`: 
