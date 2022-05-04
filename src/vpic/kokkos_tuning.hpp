@@ -53,9 +53,6 @@
   #endif
 #else
   #define SORT standard_sort
-//  #define SORT strided_sort
-//  #define SORT tiled_sort
-//  #define SORT_TILE_SIZE 16
 #endif
 
 #endif // _kokkos_tuning_h_
