@@ -126,15 +126,11 @@ bool KOKKOS_INLINE_FUNCTION particles_in_same_cell(TeamMember& team_member, Inde
   team_member.team_reduce(Kokkos::Min<int>(min_index));
   return min_inbnds == max_inbnds && min_index == max_index;
 #else
-  int first = ii[0];
-  int index = first;
-  int in_bounds = 1;
-  #pragma omp simd reduction(&:index,in_bounds)
   for(int lane=0; lane<num_lanes; lane++) {
-    index &= ii[lane];
-    in_bounds &= inbnds[lane];
+    if(ii[0] != ii[lane] || inbnds[0] != inbnds[lane])
+      return false;
   }
-  return first == index && in_bounds == 1;
+  return true;
 #endif
 }
 
