@@ -1024,7 +1024,7 @@ move_p_kokkos_test(
     //Kokkos::atomic_add(&a[2], v2);
     //Kokkos::atomic_add(&a[3], v3);
 
-    if(std::is_same<scatter_view_t,k_field_sa_t>::value) {
+    if constexpr (std::is_same<scatter_view_t,k_field_sa_t>::value) {
       int iii = ii;
       int zi = iii/((nx+2)*(ny+2));
       iii -= zi*(nx+2)*(ny+2);
@@ -1066,53 +1066,6 @@ move_p_kokkos_test(
       scatter_access(ii, 10) += cz*v2;
       scatter_access(ii, 11) += cz*v3;
     }
-
-//    int iii = ii;
-//    int zi = iii/((nx+2)*(ny+2));
-//    iii -= zi*(nx+2)*(ny+2);
-//    int yi = iii/(nx+2);
-//    int xi = iii-yi*(nx+2);
-//    accumulate_j(x,y,z);
-//    //Kokkos::atomic_add(&k_field(ii, field_var::jfx), cx*v0);
-//    //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx), cx*v1);
-//    //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx), cx*v2);
-//    //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx), cx*v3);
-////    k_field_scatter_access(ii, field_var::jfx) += cx*v0;
-////    k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
-////    k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
-////    k_field_scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
-//    accum_sa(ii, 0) += cx*v0;
-//    accum_sa(ii, 1) += cx*v1;
-//    accum_sa(ii, 2) += cx*v2;
-//    accum_sa(ii, 3) += cx*v3;
-//
-//    accumulate_j(y,z,x);
-//    //Kokkos::atomic_add(&k_field(ii, field_var::jfy), cy*v0);
-//    //Kokkos::atomic_add(&k_field(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v1);
-//    //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy), cy*v2);
-//    //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy), cy*v3);
-////    k_field_scatter_access(ii, field_var::jfy) += cy*v0;
-////    k_field_scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
-////    k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
-////    k_field_scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
-//    accum_sa(ii, 4) += cy*v0;
-//    accum_sa(ii, 5) += cy*v1;
-//    accum_sa(ii, 6) += cy*v2;
-//    accum_sa(ii, 7) += cy*v3;
-//
-//    accumulate_j(z,x,y);
-//    //Kokkos::atomic_add(&k_field(ii, field_var::jfz), cz*v0);
-//    //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz), cz*v1);
-//    //Kokkos::atomic_add(&k_field(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v2);
-//    //Kokkos::atomic_add(&k_field(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz), cz*v3);
-////    k_field_scatter_access(ii, field_var::jfz) += cz*v0;
-////    k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
-////    k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
-////    k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
-//    accum_sa(ii, 8) += cz*v0;
-//    accum_sa(ii, 9) += cz*v1;
-//    accum_sa(ii, 10) += cz*v2;
-//    accum_sa(ii, 11) += cz*v3;
 
 #   undef accumulate_j
 

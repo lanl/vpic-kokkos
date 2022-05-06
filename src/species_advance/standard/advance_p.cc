@@ -1937,10 +1937,15 @@ advance_p_kokkos_unified(
   // TODO: is this the right place to do this?
   Kokkos::deep_copy(k_nm, 0);
 
-#if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
-  Kokkos::View<float*[12], Kokkos::LayoutRight> accumulator("Accumulator", k_field.extent(0));
+#if defined( VPIC_ENABLE_ACCUMULATORS )
+  Kokkos::View<float*[12]> accumulator("Accumulator", k_field.extent(0));
   Kokkos::deep_copy(accumulator, 0);
   auto current_sv = Kokkos::Experimental::create_scatter_view(accumulator);
+#else
+  k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
+#endif
+
+#if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
   constexpr int num_lanes = 32;
   int chunk_size = num_lanes;
   int num_chunks = np/num_lanes;
@@ -1948,7 +1953,6 @@ advance_p_kokkos_unified(
     num_chunks += 1;
   auto policy = Kokkos::TeamPolicy<>(num_chunks, 1, num_lanes);
 #elif defined( VPIC_ENABLE_HIERARCHICAL )
-  k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
   auto policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE);
   int chunk_size = np/LEAGUE_SIZE;
   if(chunk_size*LEAGUE_SIZE < np)
@@ -1970,7 +1974,6 @@ advance_p_kokkos_unified(
       int pi_offset = chunk*chunk_size;
 #else
   auto policy = Kokkos::RangePolicy<>(0,np);
-  k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
   Kokkos::parallel_for("advance_p", policy, KOKKOS_LAMBDA (const size_t pi_offset) {
       auto current_sa = current_sv.access();
 #endif
@@ -2204,54 +2207,6 @@ advance_p_kokkos_unified(
         val10 += v2[lane];
         val11 += v3[lane];
       }
-//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
-//      [&] (const int lane, float& result) {
-//        result += v6[lane];
-//      }, val0);
-//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
-//      [&] (const int lane, float& result) {
-//        result += v7[lane];
-//      }, val1);
-//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
-//      [&] (const int lane, float& result) {
-//        result += v8[lane];
-//      }, val2);
-//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
-//      [&] (const int lane, float& result) {
-//        result += v9[lane];
-//      }, val3);
-//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
-//      [&] (const int lane, float& result) {
-//        result += v10[lane];
-//      }, val4);
-//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
-//      [&] (const int lane, float& result) {
-//        result += v11[lane];
-//      }, val5);
-//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
-//      [&] (const int lane, float& result) {
-//        result += v12[lane];
-//      }, val6);
-//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
-//      [&] (const int lane, float& result) {
-//        result += v13[lane];
-//      }, val7);
-//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
-//      [&] (const int lane, float& result) {
-//        result += v0[lane];
-//      }, val8);
-//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
-//      [&] (const int lane, float& result) {
-//        result += v1[lane];
-//      }, val9);
-//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
-//      [&] (const int lane, float& result) {
-//        result += v2[lane];
-//      }, val10);
-//      Kokkos::parallel_reduce_simd_sum(Kokkos::ThreadVectorRange(team_member, num_iters), 
-//      [&] (const int lane, float& result) {
-//        result += v3[lane];
-//      }, val11);
 
       current_sa(first, 0)  += cx*val0;
       current_sa(first, 1)  += cx*val1;
@@ -2297,7 +2252,7 @@ advance_p_kokkos_unified(
 #endif
 
       BEGIN_VECTOR_BLOCK {
-#ifdef VPIC_ENABLE_VECTORIZATION 
+#ifdef VPIC_ENABLE_ACCUMULATORS
         current_sa(ii[LANE_IDX], 0)  += cx*v6[LANE_IDX];
         current_sa(ii[LANE_IDX], 1)  += cx*v7[LANE_IDX];
         current_sa(ii[LANE_IDX], 2)  += cx*v8[LANE_IDX];
@@ -2379,7 +2334,8 @@ advance_p_kokkos_unified(
 #endif
   });
 
-#if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
+//#if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
+#if defined( VPIC_ENABLE_ACCUMULATORS )
   Kokkos::Experimental::contribute(accumulator, current_sv);
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nz+2, ny+2, nx+2});
   Kokkos::parallel_for("unload accumulator array", unload_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
