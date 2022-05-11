@@ -7,7 +7,131 @@
 #include "spa_private.h"
 #include "../../vpic/kokkos_helpers.h"
 #include "../../vpic/kokkos_tuning.hpp"
-#include "advance_p_helpers.hpp"
+
+template<class CurrentScatterAccess>
+void KOKKOS_INLINE_FUNCTION
+accumulate_current(CurrentScatterAccess& current_sa, int ii,
+                   const int nx, const int ny, const int nz, 
+                   const float cx, const float cy, const float cz, 
+                   const float v0, const float v1, const float v2, const float v3,
+                   const float v4, const float v5, const float v6, const float v7,
+                   const float v8, const float v9, const float v10, const float v11) {
+#ifdef VPIC_ENABLE_ACCUMULATORS
+  current_sa(ii, 0)  += cx*v0;
+  current_sa(ii, 1)  += cx*v1;
+  current_sa(ii, 2)  += cx*v2;
+  current_sa(ii, 3)  += cx*v3;
+  
+  current_sa(ii, 4)  += cy*v4;
+  current_sa(ii, 5)  += cy*v5;
+  current_sa(ii, 6)  += cy*v6;
+  current_sa(ii, 7)  += cy*v7;
+  
+  current_sa(ii, 8)  += cz*v8;
+  current_sa(ii, 9)  += cz*v9;
+  current_sa(ii, 10) += cz*v10;
+  current_sa(ii, 11) += cz*v11;
+#else
+  int iii = ii;
+  int zi = iii/((nx+2)*(ny+2));
+  iii -= zi*(nx+2)*(ny+2);
+  int yi = iii/(nx+2);
+  int xi = iii - yi*(nx+2);
+  
+  current_sa(ii, field_var::jfx)                           += cx*v0;
+  current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx)   += cx*v1;
+  current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx)   += cx*v2;
+  current_sa(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
+  
+  current_sa(ii, field_var::jfy)                           += cy*v4;
+  current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy)   += cy*v5;
+  current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy)   += cy*v6;
+  current_sa(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v7;
+  
+  current_sa(ii, field_var::jfz)                           += cz*v8;
+  current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz)   += cz*v9;
+  current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz)   += cz*v10;
+  current_sa(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v11;
+#endif
+}
+
+template<class TeamMember, class CurrentScatterAccess>
+void
+KOKKOS_INLINE_FUNCTION
+reduce_and_accumulate_current(TeamMember& team_member, CurrentScatterAccess& access, 
+                              const int num_iters, const int ii, 
+                              const int nx, const int ny, const int nz, 
+                              const float cx, const float cy, const float cz, 
+                              float *v0, float *v1,  float *v2,  float *v3,
+                              float *v4, float *v5,  float *v6,  float *v7,
+                              float *v8, float *v9,  float *v10, float *v11) {
+
+#ifdef VPIC_ENABLE_VECTORIZATION
+  float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
+  float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
+  float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
+  #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val8,val9,val10,val11)
+  for(int lane=0; lane<num_iters; lane++) {
+    val0  += v0[lane];
+    val1  += v1[lane];
+    val2  += v2[lane];
+    val3  += v3[lane];
+    val4  += v4[lane];
+    val5  += v5[lane];
+    val6  += v6[lane];
+    val7  += v7[lane];
+    val8  += v8[lane];
+    val9  += v9[lane];
+    val10 += v10[lane];
+    val11 += v11[lane];
+  }
+  accumulate_current(access, ii, nx, ny, nz, cx, cy, cz, 
+                     val0, val1, val2, val3, 
+                     val4, val5, val6, val7, 
+                     val8, val9, val10, val11);
+#elif defined( __CUDA_ARCH__ )
+  int mask = 0xffffffff;
+  for(int i=16; i>0; i=i/2) {
+    v0[0]  += __shfl_down_sync(mask, v0[0],  i);
+    v1[0]  += __shfl_down_sync(mask, v1[0],  i);
+    v2[0]  += __shfl_down_sync(mask, v2[0],  i);
+    v3[0]  += __shfl_down_sync(mask, v3[0],  i);
+    v4[0]  += __shfl_down_sync(mask, v4[0],  i);
+    v5[0]  += __shfl_down_sync(mask, v5[0],  i);
+    v6[0]  += __shfl_down_sync(mask, v6[0],  i);
+    v7[0]  += __shfl_down_sync(mask, v7[0],  i);
+    v8[0]  += __shfl_down_sync(mask, v8[0],  i);
+    v9[0]  += __shfl_down_sync(mask, v9[0],  i);
+    v10[0] += __shfl_down_sync(mask, v10[0], i);
+    v11[0] += __shfl_down_sync(mask, v11[0], i);
+  }
+  if(team_member.team_rank()%32 == 0) {
+    accumulate_current(access, ii, nx, ny, nz, cx, cy, cz, 
+                       v0[0], v1[0], v2[0], v3[0], 
+                       v4[0], v5[0], v6[0], v7[0], 
+                       v8[0], v9[0], v10[0], v11[0]);
+  }
+#else
+  team_member.team_reduce(Kokkos::Sum<float>(v0[0]));
+  team_member.team_reduce(Kokkos::Sum<float>(v1[0]));
+  team_member.team_reduce(Kokkos::Sum<float>(v2[0]));
+  team_member.team_reduce(Kokkos::Sum<float>(v3[0]));
+  team_member.team_reduce(Kokkos::Sum<float>(v4[0]));
+  team_member.team_reduce(Kokkos::Sum<float>(v5[0]));
+  team_member.team_reduce(Kokkos::Sum<float>(v6[0]));
+  team_member.team_reduce(Kokkos::Sum<float>(v7[0]));
+  team_member.team_reduce(Kokkos::Sum<float>(v8[0]));
+  team_member.team_reduce(Kokkos::Sum<float>(v9[0]));
+  team_member.team_reduce(Kokkos::Sum<float>(v10[0]));
+  team_member.team_reduce(Kokkos::Sum<float>(v11[0]));
+  if(team_member.team_rank() == 0) {
+    accumulate_current(access, ii, nx, ny, nz, cx, cy, cz, 
+                       v0[0], v1[0], v2[0], v3[0], 
+                       v4[0], v5[0], v6[0], v7[0], 
+                       v8[0], v9[0], v10[0], v11[0]);
+  }
+#endif
+}
 
 template<class TeamMember, class field_sa_t, class field_var>
 void
@@ -42,79 +166,8 @@ contribute_current(TeamMember& team_member, field_sa_t& access, int i0, int i1, 
 #endif
 }
 
-template<class TeamMember, class current_sa_t>
-void KOKKOS_INLINE_FUNCTION
-reduce_and_contribute_current(TeamMember& team_member, current_sa_t& current_scatter_access, const int first, const int num_lanes, 
-                              const int nx, const int ny, const int nz,
-                              const int cx, const int cy, const int cz,
-                              const float *v0, const float* v1, const float* v2, const float* v3,
-                              const float *v4, const float* v5, const float* v6, const float* v7,
-                              const float *v8, const float* v9, const float* v10, const float* v11
-                              ) {
-#ifdef KOKKOS_ENABLE_CUDA
-  int iii = first;
-  int zi = iii/((nx+2)*(ny+2));
-  iii -= zi*(nx+2)*(ny+2);
-  int yi = iii/(nx+2);
-  int xi = iii - yi*(nx+2);
-
-  int i0 = first;
-  int i1 = VOXEL(xi,yi+1,zi,nx,ny,nz);
-  int i2 = VOXEL(xi,yi,zi+1,nx,ny,nz);
-  int i3 = VOXEL(xi,yi+1,zi+1,nx,ny,nz);
-  contribute_current(team_member, current_scatter_access, i0, i1, i2, i3, 
-                      field_var::jfx, cx*v0[0], cx*v1[0], cx*v2[0], cx*v3[0]);
-
-  i1 = VOXEL(xi,yi,zi+1,nx,ny,nz);
-  i2 = VOXEL(xi+1,yi,zi,nx,ny,nz);
-  i3 = VOXEL(xi+1,yi,zi+1,nx,ny,nz);
-  contribute_current(team_member, current_scatter_access, i0, i1, i2, i3, 
-                      field_var::jfy, cy*v4[0], cy*v5[0], cy*v6[0], cy*v7[0]);
-
-  i1 = VOXEL(xi+1,yi,zi,nx,ny,nz);
-  i2 = VOXEL(xi,yi+1,zi,nx,ny,nz);
-  i3 = VOXEL(xi+1,yi+1,zi,nx,ny,nz);
-  contribute_current(team_member, current_scatter_access, i0, i1, i2, i3, 
-                      field_var::jfz, cz*v8[0], cz*v9[0], cz*v10[0], cz*v11[0]);
-#else
-  float val0 = 0.0, val1 = 0.0, val2  = 0.0, val3  = 0.0;
-  float val4 = 0.0, val5 = 0.0, val6  = 0.0, val7  = 0.0;
-  float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
-  #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val8,val9,val10,val11)
-  for(int lane=0; lane<num_lanes; lane++) {
-    val0  += v0[lane];
-    val1  += v1[lane];
-    val2  += v2[lane];
-    val3  += v3[lane];
-    val4  += v4[lane];
-    val5  += v5[lane];
-    val6  += v6[lane];
-    val7  += v7[lane];
-    val8  += v8[lane];
-    val9  += v9[lane];
-    val10 += v10[lane];
-    val11 += v11[lane];
-  }
-
-  current_scatter_access(first, 0)  += cx*val0;
-  current_scatter_access(first, 1)  += cx*val1;
-  current_scatter_access(first, 2)  += cx*val2;
-  current_scatter_access(first, 3)  += cx*val3;
-
-  current_scatter_access(first, 4)  += cy*val4;
-  current_scatter_access(first, 5)  += cy*val5;
-  current_scatter_access(first, 6)  += cy*val6;
-  current_scatter_access(first, 7)  += cy*val7;
-
-  current_scatter_access(first, 8)  += cz*val8;
-  current_scatter_access(first, 9)  += cz*val9;
-  current_scatter_access(first, 10) += cz*val10;
-  current_scatter_access(first, 11) += cz*val11;
-#endif
-}
-
 template<class TeamMember, class IndexView, class BoundsView>
-bool KOKKOS_INLINE_FUNCTION particles_in_same_cell(TeamMember& team_member, IndexView& ii, BoundsView& inbnds, const int num_lanes) {
+int KOKKOS_INLINE_FUNCTION particles_in_same_cell(TeamMember& team_member, IndexView& ii, BoundsView& inbnds, const int num_lanes) {
 #ifdef USE_GPU
   int min_inbnds = inbnds[0];
   int max_inbnds = inbnds[0];
@@ -128,82 +181,11 @@ bool KOKKOS_INLINE_FUNCTION particles_in_same_cell(TeamMember& team_member, Inde
 #else
   for(int lane=0; lane<num_lanes; lane++) {
     if(ii[0] != ii[lane] || inbnds[0] != inbnds[lane])
-      return false;
+      return 0;
   }
-  return true;
+  return 1;
 #endif
 }
-
-struct CurrentType {
-  float v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11;
-
-  KOKKOS_INLINE_FUNCTION
-  CurrentType() { init(); }
-
-  KOKKOS_INLINE_FUNCTION
-  void init() {
-    v0 = 0.0f; v1 = 0.0f; v2  = 0.0f; v3  = 0.0f;
-    v4 = 0.0f; v5 = 0.0f; v6  = 0.0f; v7  = 0.0f;
-    v8 = 0.0f; v9 = 0.0f; v10 = 0.0f; v11 = 0.0f;
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  CurrentType(float val0, float val1, float val2, float val3,
-              float val4, float val5, float val6, float val7,
-              float val8, float val9, float val10, float val11) {
-    v0 = val0; v1 = val1; v2  = val2;  v3  = val3;
-    v4 = val4; v5 = val5; v6  = val6;  v7  = val7;
-    v8 = val8; v9 = val9; v10 = val10; v11 = val11;
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  CurrentType& operator+=(const CurrentType& src) {
-    v0 += src.v0; v1 += src.v1; v2  += src.v2;  v3  += src.v3;
-    v4 += src.v4; v5 += src.v5; v6  += src.v6;  v7  += src.v7;
-    v8 += src.v8; v9 += src.v9; v10 += src.v10; v11 += src.v11;
-    return *this;
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void operator+=(const volatile CurrentType& src) volatile {
-    v0 += src.v0; v1 += src.v1; v2  += src.v2;  v3  += src.v3;
-    v4 += src.v4; v5 += src.v5; v6  += src.v6;  v7  += src.v7;
-    v8 += src.v8; v9 += src.v9; v10 += src.v10; v11 += src.v11;
-  }
-};
-
-template<class Space>
-struct CurrentAccumulation {
-  public:
-    typedef CurrentAccumulation reducer;
-    typedef CurrentType value_type;
-    typedef Kokkos::View<value_type*, Space, Kokkos::MemoryUnmanaged> result_view_type;
-
-  private:
-    value_type& value;
-
-  public:
-    KOKKOS_INLINE_FUNCTION
-    CurrentAccumulation(value_type& value_) : value(value_) {}
-
-    KOKKOS_INLINE_FUNCTION
-    void join(value_type& dest, const value_type& src) const { dest += src; }
-    
-    KOKKOS_INLINE_FUNCTION
-    void join(volatile value_type& dest, const volatile value_type& src) const { dest += src; }
-
-    KOKKOS_INLINE_FUNCTION
-    void init(value_type& val) const { val.init(); }
-
-    KOKKOS_INLINE_FUNCTION
-    value_type& reference() const { return value; }
-
-    KOKKOS_INLINE_FUNCTION
-    result_view_type view() const { return result_view_type(&value, 1); }
-
-    KOKKOS_INLINE_FUNCTION
-    bool referneces_scalar() const { return true; }
-};
 
 KOKKOS_INLINE_FUNCTION
 void load_particles(float* dx, float* dy, float* dz, float* ux, float* uy, float* uz, float* q, int* ii,
@@ -264,7 +246,7 @@ void unrolled_simd_load(TeamMember& team_member, float* vals, const int* ii, con
   }
 }
 
-template<int NumLanes, typename TeamMember>
+template<int NumLanes>
 KOKKOS_INLINE_FUNCTION
 void load_interpolators(
                         float* fex,
@@ -286,73 +268,67 @@ void load_interpolators(
                         float* fcbz,
                         float* fdcbzdz,
                         const int* ii,
-                        const k_interpolator_t& k_interp,
-                        const int num_lanes,
-                        TeamMember& team_member
+                        const k_interpolator_t& k_interp
                         ) {
-  #define f_cbx k_interp(ii[lane], interpolator_var::cbx)
-  #define f_cby k_interp(ii[lane], interpolator_var::cby)
-  #define f_cbz k_interp(ii[lane], interpolator_var::cbz)
-  #define f_ex  k_interp(ii[lane], interpolator_var::ex)
-  #define f_ey  k_interp(ii[lane], interpolator_var::ey)
-  #define f_ez  k_interp(ii[lane], interpolator_var::ez)
+  #define f_cbx k_interp(ii[LANE], interpolator_var::cbx)
+  #define f_cby k_interp(ii[LANE], interpolator_var::cby)
+  #define f_cbz k_interp(ii[LANE], interpolator_var::cbz)
+  #define f_ex  k_interp(ii[LANE], interpolator_var::ex)
+  #define f_ey  k_interp(ii[LANE], interpolator_var::ey)
+  #define f_ez  k_interp(ii[LANE], interpolator_var::ez)
 
-  #define f_dexdy    k_interp(ii[lane], interpolator_var::dexdy)
-  #define f_dexdz    k_interp(ii[lane], interpolator_var::dexdz)
+  #define f_dexdy    k_interp(ii[LANE], interpolator_var::dexdy)
+  #define f_dexdz    k_interp(ii[LANE], interpolator_var::dexdz)
 
-  #define f_d2exdydz k_interp(ii[lane], interpolator_var::d2exdydz)
-  #define f_deydx    k_interp(ii[lane], interpolator_var::deydx)
-  #define f_deydz    k_interp(ii[lane], interpolator_var::deydz)
+  #define f_d2exdydz k_interp(ii[LANE], interpolator_var::d2exdydz)
+  #define f_deydx    k_interp(ii[LANE], interpolator_var::deydx)
+  #define f_deydz    k_interp(ii[LANE], interpolator_var::deydz)
 
-  #define f_d2eydzdx k_interp(ii[lane], interpolator_var::d2eydzdx)
-  #define f_dezdx    k_interp(ii[lane], interpolator_var::dezdx)
-  #define f_dezdy    k_interp(ii[lane], interpolator_var::dezdy)
+  #define f_d2eydzdx k_interp(ii[LANE], interpolator_var::d2eydzdx)
+  #define f_dezdx    k_interp(ii[LANE], interpolator_var::dezdx)
+  #define f_dezdy    k_interp(ii[LANE], interpolator_var::dezdy)
 
-  #define f_d2ezdxdy k_interp(ii[lane], interpolator_var::d2ezdxdy)
-  #define f_dcbxdx   k_interp(ii[lane], interpolator_var::dcbxdx)
-  #define f_dcbydy   k_interp(ii[lane], interpolator_var::dcbydy)
-  #define f_dcbzdz   k_interp(ii[lane], interpolator_var::dcbzdz)
+  #define f_d2ezdxdy k_interp(ii[LANE], interpolator_var::d2ezdxdy)
+  #define f_dcbxdx   k_interp(ii[LANE], interpolator_var::dcbxdx)
+  #define f_dcbydy   k_interp(ii[LANE], interpolator_var::dcbydy)
+  #define f_dcbzdz   k_interp(ii[LANE], interpolator_var::dcbzdz)
 
-//  #pragma omp simd
-//  for(int lane=0; lane<num_lanes; lane++) {
-//    // Load interpolators
-//    fex[lane]       = f_ex;     
-//    fdexdy[lane]    = f_dexdy;  
-//    fdexdz[lane]    = f_dexdz;  
-//    fd2exdydz[lane] = f_d2exdydz;
-//    fey[lane]       = f_ey;     
-//    fdeydz[lane]    = f_deydz;  
-//    fdeydx[lane]    = f_deydx;  
-//    fd2eydzdx[lane] = f_d2eydzdx;
-//    fez[lane]       = f_ez;     
-//    fdezdx[lane]    = f_dezdx;  
-//    fdezdy[lane]    = f_dezdy;  
-//    fd2ezdxdy[lane] = f_d2ezdxdy;
-//    fcbx[lane]      = f_cbx;    
-//    fdcbxdx[lane]   = f_dcbxdx; 
-//    fcby[lane]      = f_cby;    
-//    fdcbydy[lane]   = f_dcbydy; 
-//    fcbz[lane]      = f_cbz;    
-//    fdcbzdz[lane]   = f_dcbzdz; 
-//  }
-
+#if !defined( VPIC_ENABLE_VECTORIZATION ) || defined( USE_GPU )
+  for(int lane=0; lane<NumLanes; lane++) {
+    // Load interpolators
+    fex[LANE]       = f_ex;     
+    fdexdy[LANE]    = f_dexdy;  
+    fdexdz[LANE]    = f_dexdz;  
+    fd2exdydz[LANE] = f_d2exdydz;
+    fey[LANE]       = f_ey;     
+    fdeydz[LANE]    = f_deydz;  
+    fdeydx[LANE]    = f_deydx;  
+    fd2eydzdx[LANE] = f_d2eydzdx;
+    fez[LANE]       = f_ez;     
+    fdezdx[LANE]    = f_dezdx;  
+    fdezdy[LANE]    = f_dezdy;  
+    fd2ezdxdy[LANE] = f_d2ezdxdy;
+    fcbx[LANE]      = f_cbx;    
+    fdcbxdx[LANE]   = f_dcbxdx; 
+    fcby[LANE]      = f_cby;    
+    fdcbydy[LANE]   = f_dcbydy; 
+    fcbz[LANE]      = f_cbz;    
+    fdcbzdz[LANE]   = f_dcbzdz; 
+  }
+#else
   int first = ii[0];
   int index = first;
   #pragma omp simd reduction(&:index)
-  for(int lane=0; lane<num_lanes; lane++) {
+  for(int lane=0; lane<NumLanes; lane++) {
     index &= ii[lane];
   }
-//  Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team_member, num_lanes), [&](const int lane, int& update) {
-//    index  = index & ii[lane];
-//  }, Kokkos::BAnd<int>(index));
 
   if(ii[0] == index) {
     float vals[18];
-//    simd_load_interpolator_var(team_member, vals, ii[0], k_interp, 18);
 
     simd_load_interpolator_var(vals, ii[0], k_interp, 18);
     #pragma omp simd
-    for(int i=0; i<num_lanes; i++) {
+    for(int i=0; i<NumLanes; i++) {
       fex[i]       = vals[0];
       fdexdy[i]    = vals[1];
       fdexdz[i]    = vals[2];
@@ -372,317 +348,57 @@ void load_interpolators(
       fcbz[i]      = vals[16];
       fdcbzdz[i]   = vals[17];
     }
-//    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_lanes), [&] (const int i) {
-//      fex[i]       = vals[0];
-//      fdexdy[i]    = vals[1];
-//      fdexdz[i]    = vals[2];
-//      fd2exdydz[i] = vals[3];
-//      fey[i]       = vals[4];
-//      fdeydz[i]    = vals[5];
-//      fdeydx[i]    = vals[6];
-//      fd2eydzdx[i] = vals[7];
-//      fez[i]       = vals[8];
-//      fdezdx[i]    = vals[9];
-//      fdezdy[i]    = vals[10];
-//      fd2ezdxdy[i] = vals[11];
-//      fcbx[i]      = vals[12];
-//      fdcbxdx[i]   = vals[13];
-//      fcby[i]      = vals[14];
-//      fdcbydy[i]   = vals[15];
-//      fcbz[i]      = vals[16];
-//      fdcbzdz[i]   = vals[17];
-//    });
   } else {
 
-  #pragma omp simd
-  for(int lane=0; lane<num_lanes; lane++) {
-    // Load interpolators
-    fex[lane]       = f_ex;     
-    fdexdy[lane]    = f_dexdy;  
-    fdexdz[lane]    = f_dexdz;  
-    fd2exdydz[lane] = f_d2exdydz;
-    fey[lane]       = f_ey;     
-    fdeydz[lane]    = f_deydz;  
-    fdeydx[lane]    = f_deydx;  
-    fd2eydzdx[lane] = f_d2eydzdx;
-    fez[lane]       = f_ez;     
-    fdezdx[lane]    = f_dezdx;  
-    fdezdy[lane]    = f_dezdy;  
-    fd2ezdxdy[lane] = f_d2ezdxdy;
-    fcbx[lane]      = f_cbx;    
-    fdcbxdx[lane]   = f_dcbxdx; 
-    fcby[lane]      = f_cby;    
-    fdcbydy[lane]   = f_dcbydy; 
-    fcbz[lane]      = f_cbz;    
-    fdcbzdz[lane]   = f_dcbzdz; 
+    float vals[18*NumLanes];
+    unrolled_simd_load<NumLanes>(vals, ii, k_interp, 18);
+
+    #pragma omp simd
+    for(int i=0; i<NumLanes; i++) {
+      fex[i]       = vals[18*i];
+      fdexdy[i]    = vals[1+18*i];
+      fdexdz[i]    = vals[2+18*i];
+      fd2exdydz[i] = vals[3+18*i];
+      fey[i]       = vals[4+18*i];
+      fdeydz[i]    = vals[5+18*i];
+      fdeydx[i]    = vals[6+18*i];
+      fd2eydzdx[i] = vals[7+18*i];
+      fez[i]       = vals[8+18*i];
+      fdezdx[i]    = vals[9+18*i];
+      fdezdy[i]    = vals[10+18*i];
+      fd2ezdxdy[i] = vals[11+18*i];
+      fcbx[i]      = vals[12+18*i];
+      fdcbxdx[i]   = vals[13+18*i];
+      fcby[i]      = vals[14+18*i];
+      fdcbydy[i]   = vals[15+18*i];
+      fcbz[i]      = vals[16+18*i];
+      fdcbzdz[i]   = vals[17+18*i];
+    }
   }
+#endif
 
-//    float vals[18*NumLanes];
-//    unrolled_simd_load(team_member, vals, ii, k_interp, 18, NumLanes);
-//   unrolled_simd_load<NumLanes>(vals, ii, k_interp, 18);
+  #undef f_cbx 
+  #undef f_cby 
+  #undef f_cbz 
+  #undef f_ex  
+  #undef f_ey  
+  #undef f_ez  
 
-//    float *v0  = vals;
-//    float *v1  = vals+18;
-//    float *v2  = vals+36;
-//    float *v3  = vals+54;
-//    float *v4  = vals+72;
-//    float *v5  = vals+90;
-//    float *v6  = vals+108;
-//    float *v7  = vals+126;
-//    float *v8  = vals+144;
-//    float *v9  = vals+162;
-//    float *v10 = vals+180;
-//    float *v11 = vals+198;
-//    float *v12 = vals+216;
-//    float *v13 = vals+234;
-//    float *v14 = vals+252;
-//    float *v15 = vals+270;
+  #undef f_dexdy    
+  #undef f_dexdz    
 
-//    float *v0  = fex;
-//    float *v1  = fdexdy;
-//    float *v2  = fdexdz;
-//    float *v3  = fd2exdydz;
-//    float *v4  = fey;
-//    float *v5  = fdeydz;
-//    float *v6  = fdeydx;
-//    float *v7  = fd2eydzdx;
-//    float *v8  = fez;
-//    float *v9  = fdezdx;
-//    float *v10 = fdezdy;
-//    float *v11 = fd2ezdxdy;
-//    float *v12 = fcbx;
-//    float *v13 = fdcbxdx;
-//    float *v14 = fcby;
-//    float *v15 = fdcbydy;
-//  
-//  simd_load_interpolator_var(v0, ii[0], k_interp, 16);
-//  simd_load_interpolator_var(v1, ii[1], k_interp, 16);
-//  simd_load_interpolator_var(v2, ii[2], k_interp, 16);
-//  simd_load_interpolator_var(v3, ii[3], k_interp, 16);
-//  simd_load_interpolator_var(v4, ii[4], k_interp, 16);
-//  simd_load_interpolator_var(v5, ii[5], k_interp, 16);
-//  simd_load_interpolator_var(v6, ii[6], k_interp, 16);
-//  simd_load_interpolator_var(v7, ii[7], k_interp, 16);
-//  simd_load_interpolator_var(v8, ii[8], k_interp, 16);
-//  simd_load_interpolator_var(v9, ii[9], k_interp, 16);
-//  simd_load_interpolator_var(v10, ii[10], k_interp, 16);
-//  simd_load_interpolator_var(v11, ii[11], k_interp, 16);
-//  simd_load_interpolator_var(v12, ii[12], k_interp, 16);
-//  simd_load_interpolator_var(v13, ii[13], k_interp, 16);
-//  simd_load_interpolator_var(v14, ii[14], k_interp, 16);
-//  simd_load_interpolator_var(v15, ii[15], k_interp, 16);
-//    
-//    transpose(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15);
-//    #pragma omp simd
-//    for(int i=0; i<16; i++) {
-//      fex[i]       = v0[i];
-//      fdexdy[i]    = v1[i];
-//      fdexdz[i]    = v2[i];
-//      fd2exdydz[i] = v3[i];
-//      fey[i]       = v4[i];
-//      fdeydz[i]    = v5[i];
-//      fdeydx[i]    = v6[i];
-//      fd2eydzdx[i] = v7[i];
-//      fez[i]       = v8[i];
-//      fdezdx[i]    = v9[i];
-//      fdezdy[i]    = v10[i];
-//      fd2ezdxdy[i] = v11[i];
-//      fcbx[i]      = v12[i];
-//      fdcbxdx[i]   = v13[i];
-//      fcby[i]      = v14[i];
-//      fdcbydy[i]   = v15[i];
-//    }
+  #undef f_d2exdydz 
+  #undef f_deydx    
+  #undef f_deydz    
 
-//    #pragma omp simd
-//    for(int i=0; i<num_lanes; i++) {
-//      fex[i]       = vals[18*i];
-//      fdexdy[i]    = vals[1+18*i];
-//      fdexdz[i]    = vals[2+18*i];
-//      fd2exdydz[i] = vals[3+18*i];
-//      fey[i]       = vals[4+18*i];
-//      fdeydz[i]    = vals[5+18*i];
-//      fdeydx[i]    = vals[6+18*i];
-//      fd2eydzdx[i] = vals[7+18*i];
-//      fez[i]       = vals[8+18*i];
-//      fdezdx[i]    = vals[9+18*i];
-//      fdezdy[i]    = vals[10+18*i];
-//      fd2ezdxdy[i] = vals[11+18*i];
-//      fcbx[i]      = vals[12+18*i];
-//      fdcbxdx[i]   = vals[13+18*i];
-//      fcby[i]      = vals[14+18*i];
-//      fdcbydy[i]   = vals[15+18*i];
-//      fcbz[i]      = vals[16+18*i];
-//      fdcbzdz[i]   = vals[17+18*i];
-//    }
-//    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_lanes), [&] (const int i) {
-//      fex[i]       = vals[18*i];
-//      fdexdy[i]    = vals[1+18*i];
-//      fdexdz[i]    = vals[2+18*i];
-//      fd2exdydz[i] = vals[3+18*i];
-//      fey[i]       = vals[4+18*i];
-//      fdeydz[i]    = vals[5+18*i];
-//      fdeydx[i]    = vals[6+18*i];
-//      fd2eydzdx[i] = vals[7+18*i];
-//      fez[i]       = vals[8+18*i];
-//      fdezdx[i]    = vals[9+18*i];
-//      fdezdy[i]    = vals[10+18*i];
-//      fd2ezdxdy[i] = vals[11+18*i];
-//      fcbx[i]      = vals[12+18*i];
-//      fdcbxdx[i]   = vals[13+18*i];
-//      fcby[i]      = vals[14+18*i];
-//      fdcbydy[i]   = vals[15+18*i];
-//      fcbz[i]      = vals[16+18*i];
-//      fdcbzdz[i]   = vals[17+18*i];
-//    });
+  #undef f_d2eydzdx 
+  #undef f_dezdx    
+  #undef f_dezdy    
 
-  }
-}
-
-KOKKOS_INLINE_FUNCTION
-void advance_pos(float* dx, float* dy, float* dz, float* ux, float* uy, float* uz, int* ii, 
-                 float* v0, float* v1, float* v2, float* v3, float* v4, float* v5, int* inbnds,
-                 float* hax, float* hay, float* haz, 
-                 float* cbx, float* cby, float* cbz, 
-                 float* fex, float* fey, float* fez, 
-                 float* fcbx, float* fcby, float* fcbz, 
-                 float* fdcbxdx, float* fdcbydy, float* fdcbzdz, 
-                 float* fdexdy, float* fdexdz, float* fd2exdydz, 
-                 float* fdeydx, float* fdeydz, float* fd2eydzdx, 
-                 float* fdezdx, float* fdezdy, float* fd2ezdxdy,
-                 const k_particles_t& k_particles,
-                 float cdt_dx, float cdt_dy, float cdt_dz, 
-                 float qdt_2mc, int num_lanes, int chunk) {
-  #define p_ux    k_particles(p_index, particle_var::ux)
-  #define p_uy    k_particles(p_index, particle_var::uy)
-  #define p_uz    k_particles(p_index, particle_var::uz)
-  constexpr float one = 1.0;
-  constexpr float one_third = 1.0/3.0;
-  constexpr float two_fifteenths = 2.0/15.0;
-  #pragma omp simd
-  for(int lane=0; lane<num_lanes; lane++) {
-    size_t p_index = chunk*num_lanes + lane;
-  
-    // Interpolate E
-    hax[lane] = qdt_2mc*( (fex[lane] + dy[lane]*fdexdy[lane] ) + dz[lane]*(fdexdz[lane] + dy[lane]*fd2exdydz[lane]) );
-    hay[lane] = qdt_2mc*( (fey[lane] + dz[lane]*fdeydz[lane] ) + dx[lane]*(fdeydx[lane] + dz[lane]*fd2eydzdx[lane]) );
-    haz[lane] = qdt_2mc*( (fez[lane] + dx[lane]*fdezdx[lane] ) + dy[lane]*(fdezdy[lane] + dx[lane]*fd2ezdxdy[lane]) );
-  
-    // Interpolate B
-    cbx[lane] = fcbx[lane] + dx[lane]*fdcbxdx[lane];
-    cby[lane] = fcby[lane] + dy[lane]*fdcbydy[lane];
-    cbz[lane] = fcbz[lane] + dz[lane]*fdcbzdz[lane];
-  
-    // Half advance e
-    ux[lane] += hax[lane];
-    uy[lane] += hay[lane];
-    uz[lane] += haz[lane];
-
-    v0[lane] = qdt_2mc/sqrtf(one + (ux[lane]*ux[lane] + (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
-
-    // Boris - scalars
-    v1[lane] = cbx[lane]*cbx[lane] + (cby[lane]*cby[lane] + cbz[lane]*cbz[lane]);
-    v2[lane] = (v0[lane]*v0[lane])*v1[lane];
-    v3[lane] = v0[lane]*(one+v2[lane]*(one_third+v2[lane]*two_fifteenths));
-    v4[lane] = v3[lane]/(one+v1[lane]*(v3[lane]*v3[lane]));
-    v4[lane] += v4[lane];
-    // Boris - uprime
-    v0[lane] = ux[lane] + v3[lane]*(uy[lane]*cbz[lane] - uz[lane]*cby[lane]);
-    v1[lane] = uy[lane] + v3[lane]*(uz[lane]*cbx[lane] - ux[lane]*cbz[lane]);
-    v2[lane] = uz[lane] + v3[lane]*(ux[lane]*cby[lane] - uy[lane]*cbx[lane]);
-    // Boris - rotation
-    ux[lane] += v4[lane]*(v1[lane]*cbz[lane] - v2[lane]*cby[lane]);
-    uy[lane] += v4[lane]*(v2[lane]*cbx[lane] - v0[lane]*cbz[lane]);
-    uz[lane] += v4[lane]*(v0[lane]*cby[lane] - v1[lane]*cbx[lane]);
-    // Half advance e
-    ux[lane] += hax[lane];
-    uy[lane] += hay[lane];
-    uz[lane] += haz[lane];
-    // Store momentum
-    p_ux = ux[lane];
-    p_uy = uy[lane];
-    p_uz = uz[lane];
-
-    v0[lane]   = one/sqrtf(one + (ux[lane]*ux[lane]+ (uy[lane]*uy[lane] + uz[lane]*uz[lane])));
-
-    /**/                                      // Get norm displacement
-    ux[lane]  *= cdt_dx;
-    uy[lane]  *= cdt_dy;
-    uz[lane]  *= cdt_dz;
-    ux[lane]  *= v0[lane];
-    uy[lane]  *= v0[lane];
-    uz[lane]  *= v0[lane];
-    v0[lane]   = dx[lane] + ux[lane];                           // Streak midpoint (inbnds)
-    v1[lane]   = dy[lane] + uy[lane];
-    v2[lane]   = dz[lane] + uz[lane];
-    v3[lane]   = v0[lane] + ux[lane];                           // New position
-    v4[lane]   = v1[lane] + uy[lane];
-    v5[lane]   = v2[lane] + uz[lane];
-  
-    inbnds[lane] = v3[lane]<=one &&  v4[lane]<=one &&  v5[lane]<=one &&
-                  -v3[lane]<=one && -v4[lane]<=one && -v5[lane]<=one;
-  }
-  #undef p_ux
-  #undef p_uy
-  #undef p_uz
-}
-
-KOKKOS_INLINE_FUNCTION
-void accumulate_current(float* dx, float* dy, float* dz, float* ux, float* uy, float* uz, int* ii, 
-                 float* v0, float* v1, float* v2, float* v3, float* v4, float* v5, float* v6,
-                 float* v7, float* v8, float* v9, float* v10, float* v11, float* v12, float* v13,
-                 int* inbnds, float* q,
-                 const k_particles_t& k_particles,
-                 float qsp, int num_lanes, int chunk) {
-  #define p_dx    k_particles(p_index, particle_var::dx)
-  #define p_dy    k_particles(p_index, particle_var::dy)
-  #define p_dz    k_particles(p_index, particle_var::dz)
-  constexpr float one = 1.0;
-  constexpr float one_third = 1.0/3.0;
-  constexpr float two_fifteenths = 2.0/15.0;
-
-  #pragma omp simd
-  for(int lane=0; lane<num_lanes; lane++) {
-    size_t p_index = chunk*num_lanes + lane;
-
-    v3[lane] = static_cast<float>(inbnds[lane])*v3[lane] + (1.0-static_cast<float>(inbnds[lane]))*p_dx;
-    v4[lane] = static_cast<float>(inbnds[lane])*v4[lane] + (1.0-static_cast<float>(inbnds[lane]))*p_dy;
-    v5[lane] = static_cast<float>(inbnds[lane])*v5[lane] + (1.0-static_cast<float>(inbnds[lane]))*p_dz;
-    q[lane]  = static_cast<float>(inbnds[lane])*q[lane]*qsp;
-
-    p_dx = v3[lane];
-    p_dy = v4[lane];
-    p_dz = v5[lane];
-    dx[lane] = v0[lane];
-    dy[lane] = v1[lane];
-    dz[lane] = v2[lane];
-    v5[lane] = q[lane]*ux[lane]*uy[lane]*uz[lane]*one_third;
-  }
-
-# define ACCUMULATE_J(X,Y,Z,v0,v1,v2,v3)                                                          \
-  v4[lane]  = q[lane]*u##X[lane];   /* v2 = q ux                            */        \
-  v1[lane]  = v4[lane]*d##Y[lane];  /* v1 = q ux dy                         */        \
-  v0[lane]  = v4[lane]-v1[lane];    /* v0 = q ux (1-dy)                     */        \
-  v1[lane] += v4[lane];             /* v1 = q ux (1+dy)                     */        \
-  v4[lane]  = one+d##Z[lane];       /* v4 = 1+dz                            */        \
-  v2[lane]  = v0[lane]*v4[lane];    /* v2 = q ux (1-dy)(1+dz)               */        \
-  v3[lane]  = v1[lane]*v4[lane];    /* v3 = q ux (1+dy)(1+dz)               */        \
-  v4[lane]  = one-d##Z[lane];       /* v4 = 1-dz                            */        \
-  v0[lane] *= v4[lane];             /* v0 = q ux (1-dy)(1-dz)               */        \
-  v1[lane] *= v4[lane];             /* v1 = q ux (1+dy)(1-dz)               */        \
-  v0[lane] += v5[lane];             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
-  v1[lane] -= v5[lane];             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
-  v2[lane] -= v5[lane];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-  v3[lane] += v5[lane];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
-
-  #pragma omp simd
-  for(int lane=0; lane<num_lanes; lane++) {
-    ACCUMULATE_J( x,y,z,v6,v7,v8,v9 );
-
-    ACCUMULATE_J( y,z,x,v10,v11,v12,v13 );
-
-    ACCUMULATE_J( z,x,y,v0,v1,v2,v3 );
-  }
-#   undef ACCUMULATE_J
+  #undef f_d2ezdxdy 
+  #undef f_dcbxdx   
+  #undef f_dcbydy   
+  #undef f_dcbzdz   
 }
 
 template<typename ScatterAccess>
@@ -1908,28 +1624,60 @@ advance_p_kokkos_unified(
   #define p_w     k_particles(p_index, particle_var::w)
   #define pii     k_particles_i(p_index)
 
-  #define f_cbx k_interp(ii[LANE_IDX], interpolator_var::cbx)
-  #define f_cby k_interp(ii[LANE_IDX], interpolator_var::cby)
-  #define f_cbz k_interp(ii[LANE_IDX], interpolator_var::cbz)
-  #define f_ex  k_interp(ii[LANE_IDX], interpolator_var::ex)
-  #define f_ey  k_interp(ii[LANE_IDX], interpolator_var::ey)
-  #define f_ez  k_interp(ii[LANE_IDX], interpolator_var::ez)
+  #define f_cbx k_interp(ii[LANE], interpolator_var::cbx)
+  #define f_cby k_interp(ii[LANE], interpolator_var::cby)
+  #define f_cbz k_interp(ii[LANE], interpolator_var::cbz)
+  #define f_ex  k_interp(ii[LANE], interpolator_var::ex)
+  #define f_ey  k_interp(ii[LANE], interpolator_var::ey)
+  #define f_ez  k_interp(ii[LANE], interpolator_var::ez)
 
-  #define f_dexdy    k_interp(ii[LANE_IDX], interpolator_var::dexdy)
-  #define f_dexdz    k_interp(ii[LANE_IDX], interpolator_var::dexdz)
+  #define f_dexdy    k_interp(ii[LANE], interpolator_var::dexdy)
+  #define f_dexdz    k_interp(ii[LANE], interpolator_var::dexdz)
 
-  #define f_d2exdydz k_interp(ii[LANE_IDX], interpolator_var::d2exdydz)
-  #define f_deydx    k_interp(ii[LANE_IDX], interpolator_var::deydx)
-  #define f_deydz    k_interp(ii[LANE_IDX], interpolator_var::deydz)
+  #define f_d2exdydz k_interp(ii[LANE], interpolator_var::d2exdydz)
+  #define f_deydx    k_interp(ii[LANE], interpolator_var::deydx)
+  #define f_deydz    k_interp(ii[LANE], interpolator_var::deydz)
 
-  #define f_d2eydzdx k_interp(ii[LANE_IDX], interpolator_var::d2eydzdx)
-  #define f_dezdx    k_interp(ii[LANE_IDX], interpolator_var::dezdx)
-  #define f_dezdy    k_interp(ii[LANE_IDX], interpolator_var::dezdy)
+  #define f_d2eydzdx k_interp(ii[LANE], interpolator_var::d2eydzdx)
+  #define f_dezdx    k_interp(ii[LANE], interpolator_var::dezdx)
+  #define f_dezdy    k_interp(ii[LANE], interpolator_var::dezdy)
 
-  #define f_d2ezdxdy k_interp(ii[LANE_IDX], interpolator_var::d2ezdxdy)
-  #define f_dcbxdx   k_interp(ii[LANE_IDX], interpolator_var::dcbxdx)
-  #define f_dcbydy   k_interp(ii[LANE_IDX], interpolator_var::dcbydy)
-  #define f_dcbzdz   k_interp(ii[LANE_IDX], interpolator_var::dcbzdz)
+  #define f_d2ezdxdy k_interp(ii[LANE], interpolator_var::d2ezdxdy)
+  #define f_dcbxdx   k_interp(ii[LANE], interpolator_var::dcbxdx)
+  #define f_dcbydy   k_interp(ii[LANE], interpolator_var::dcbydy)
+  #define f_dcbzdz   k_interp(ii[LANE], interpolator_var::dcbzdz)
+
+//  #define p_dx    k_particles(p_index, particle_var::dx)
+//  #define p_dy    k_particles(p_index, particle_var::dy)
+//  #define p_dz    k_particles(p_index, particle_var::dz)
+//  #define p_ux    k_particles(p_index, particle_var::ux)
+//  #define p_uy    k_particles(p_index, particle_var::uy)
+//  #define p_uz    k_particles(p_index, particle_var::uz)
+//  #define p_w     k_particles(p_index, particle_var::w)
+//  #define pii     k_particles_i(p_index)
+//
+//  #define f_cbx k_interp(ii, interpolator_var::cbx)
+//  #define f_cby k_interp(ii, interpolator_var::cby)
+//  #define f_cbz k_interp(ii, interpolator_var::cbz)
+//  #define f_ex  k_interp(ii, interpolator_var::ex)
+//  #define f_ey  k_interp(ii, interpolator_var::ey)
+//  #define f_ez  k_interp(ii, interpolator_var::ez)
+//
+//  #define f_dexdy    k_interp(ii, interpolator_var::dexdy)
+//  #define f_dexdz    k_interp(ii, interpolator_var::dexdz)
+//
+//  #define f_d2exdydz k_interp(ii, interpolator_var::d2exdydz)
+//  #define f_deydx    k_interp(ii, interpolator_var::deydx)
+//  #define f_deydz    k_interp(ii, interpolator_var::deydz)
+//
+//  #define f_d2eydzdx k_interp(ii, interpolator_var::d2eydzdx)
+//  #define f_dezdx    k_interp(ii, interpolator_var::dezdx)
+//  #define f_dezdy    k_interp(ii, interpolator_var::dezdy)
+//
+//  #define f_d2ezdxdy k_interp(ii, interpolator_var::d2ezdxdy)
+//  #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
+//  #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
+//  #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
 
   auto rangel = g->rangel;
   auto rangeh = g->rangeh;
@@ -1971,7 +1719,7 @@ advance_p_kokkos_unified(
       int num_iters = chunk_size;
       if((chunk+1)*chunk_size > np)
         num_iters = np - chunk*chunk_size;
-      int pi_offset = chunk*chunk_size;
+      size_t pi_offset = chunk*chunk_size;
 #else
   auto policy = Kokkos::RangePolicy<>(0,np);
   Kokkos::parallel_for("advance_p", policy, KOKKOS_LAMBDA (const size_t pi_offset) {
@@ -1980,7 +1728,7 @@ advance_p_kokkos_unified(
 
 #if defined ( VPIC_ENABLE_HIERARCHICAL ) && !defined( VPIC_ENABLE_VECTORIZATION )
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (const size_t index) {
-      int pi_offset = chunk*chunk_size + index;
+      size_t pi_offset = chunk*chunk_size + index;
 #endif
       float v0[num_lanes];
       float v1[num_lanes];
@@ -2022,159 +1770,148 @@ advance_p_kokkos_unified(
       float fdcbxdx[num_lanes];
       float fdcbydy[num_lanes];
       float fdcbzdz[num_lanes];
-      float *v6, *v7, *v8, *v9, *v10, *v11, *v12, *v13;
-      size_t p_index;
+      float *v6 = fex;
+      float *v7 = fdexdy;
+      float *v8 = fdexdz;
+      float *v9 = fd2exdydz;
+      float *v10 = fey;
+      float *v11 = fdeydz;
+      float *v12 = fdeydx;
+      float *v13 = fd2eydzdx;
+
+      size_t p_index = pi_offset;
 
       BEGIN_VECTOR_BLOCK {
-        p_index = pi_offset + LANE_IDX;
+        p_index = pi_offset + LANE;
         // Load position
-        dx[LANE_IDX] = p_dx;
-        dy[LANE_IDX] = p_dy;
-        dz[LANE_IDX] = p_dz;
+        dx[LANE] = p_dx;
+        dy[LANE] = p_dy;
+        dz[LANE] = p_dz;
         // Load momentum
-        ux[LANE_IDX] = p_ux;
-        uy[LANE_IDX] = p_uy;
-        uz[LANE_IDX] = p_uz;
+        ux[LANE] = p_ux;
+        uy[LANE] = p_uy;
+        uz[LANE] = p_uz;
         // Load weight
-        q[LANE_IDX]  = p_w;
+        q[LANE]  = p_w;
         // Load index
-        ii[LANE_IDX] = pii;
+        ii[LANE] = pii;
       } END_VECTOR_BLOCK;
 
-      BEGIN_VECTOR_BLOCK {
-        // Load interpolators
-        fex[LANE_IDX]       = f_ex;     
-        fdexdy[LANE_IDX]    = f_dexdy;  
-        fdexdz[LANE_IDX]    = f_dexdz;  
-        fd2exdydz[LANE_IDX] = f_d2exdydz;
-        fey[LANE_IDX]       = f_ey;     
-        fdeydz[LANE_IDX]    = f_deydz;  
-        fdeydx[LANE_IDX]    = f_deydx;  
-        fd2eydzdx[LANE_IDX] = f_d2eydzdx;
-        fez[LANE_IDX]       = f_ez;     
-        fdezdx[LANE_IDX]    = f_dezdx;  
-        fdezdy[LANE_IDX]    = f_dezdy;  
-        fd2ezdxdy[LANE_IDX] = f_d2ezdxdy;
-        fcbx[LANE_IDX]      = f_cbx;    
-        fdcbxdx[LANE_IDX]   = f_dcbxdx; 
-        fcby[LANE_IDX]      = f_cby;    
-        fdcbydy[LANE_IDX]   = f_dcbydy; 
-        fcbz[LANE_IDX]      = f_cbz;    
-        fdcbzdz[LANE_IDX]   = f_dcbzdz; 
-      } END_VECTOR_BLOCK;
+      load_interpolators<num_lanes>( fex, fdexdy, fdexdz, fd2exdydz,
+                                     fey, fdeydz, fdeydx, fd2eydzdx,
+                                     fez, fdezdx, fdezdy, fd2ezdxdy,
+                                     fcbx, fdcbxdx,
+                                     fcby, fdcbydy,
+                                     fcbz, fdcbzdz,
+                                     ii, k_interp);
 
       BEGIN_VECTOR_BLOCK {
         // Interpolate E
-        hax[LANE_IDX] = qdt_2mc*( (fex[LANE_IDX] + dy[LANE_IDX]*fdexdy[LANE_IDX] ) + dz[LANE_IDX]*(fdexdz[LANE_IDX] + dy[LANE_IDX]*fd2exdydz[LANE_IDX]) );
-        hay[LANE_IDX] = qdt_2mc*( (fey[LANE_IDX] + dz[LANE_IDX]*fdeydz[LANE_IDX] ) + dx[LANE_IDX]*(fdeydx[LANE_IDX] + dz[LANE_IDX]*fd2eydzdx[LANE_IDX]) );
-        haz[LANE_IDX] = qdt_2mc*( (fez[LANE_IDX] + dx[LANE_IDX]*fdezdx[LANE_IDX] ) + dy[LANE_IDX]*(fdezdy[LANE_IDX] + dx[LANE_IDX]*fd2ezdxdy[LANE_IDX]) );
+        hax[LANE] = qdt_2mc*( (fex[LANE] + dy[LANE]*fdexdy[LANE] ) + dz[LANE]*(fdexdz[LANE] + dy[LANE]*fd2exdydz[LANE]) );
+        hay[LANE] = qdt_2mc*( (fey[LANE] + dz[LANE]*fdeydz[LANE] ) + dx[LANE]*(fdeydx[LANE] + dz[LANE]*fd2eydzdx[LANE]) );
+        haz[LANE] = qdt_2mc*( (fez[LANE] + dx[LANE]*fdezdx[LANE] ) + dy[LANE]*(fdezdy[LANE] + dx[LANE]*fd2ezdxdy[LANE]) );
   
         // Interpolate B
-        cbx[LANE_IDX] = fcbx[LANE_IDX] + dx[LANE_IDX]*fdcbxdx[LANE_IDX];
-        cby[LANE_IDX] = fcby[LANE_IDX] + dy[LANE_IDX]*fdcbydy[LANE_IDX];
-        cbz[LANE_IDX] = fcbz[LANE_IDX] + dz[LANE_IDX]*fdcbzdz[LANE_IDX];
+        cbx[LANE] = fcbx[LANE] + dx[LANE]*fdcbxdx[LANE];
+        cby[LANE] = fcby[LANE] + dy[LANE]*fdcbydy[LANE];
+        cbz[LANE] = fcbz[LANE] + dz[LANE]*fdcbzdz[LANE];
   
         // Half advance e
-        ux[LANE_IDX] += hax[LANE_IDX];
-        uy[LANE_IDX] += hay[LANE_IDX];
-        uz[LANE_IDX] += haz[LANE_IDX];
+        ux[LANE] += hax[LANE];
+        uy[LANE] += hay[LANE];
+        uz[LANE] += haz[LANE];
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
-        v0[LANE_IDX] = qdt_2mc/sqrtf(one + (ux[LANE_IDX]*ux[LANE_IDX] + (uy[LANE_IDX]*uy[LANE_IDX] + uz[LANE_IDX]*uz[LANE_IDX])));
+        v0[LANE] = qdt_2mc/sqrtf(one + (ux[LANE]*ux[LANE] + (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE])));
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
-        p_index = pi_offset + LANE_IDX;
+        p_index = pi_offset + LANE;
 
         // Boris - scalars
-        v1[LANE_IDX] = cbx[LANE_IDX]*cbx[LANE_IDX] + (cby[LANE_IDX]*cby[LANE_IDX] + cbz[LANE_IDX]*cbz[LANE_IDX]);
-        v2[LANE_IDX] = (v0[LANE_IDX]*v0[LANE_IDX])*v1[LANE_IDX];
-        v3[LANE_IDX] = v0[LANE_IDX]*(one+v2[LANE_IDX]*(one_third+v2[LANE_IDX]*two_fifteenths));
-        v4[LANE_IDX] = v3[LANE_IDX]/(one+v1[LANE_IDX]*(v3[LANE_IDX]*v3[LANE_IDX]));
-        v4[LANE_IDX] += v4[LANE_IDX];
+        v1[LANE] = cbx[LANE]*cbx[LANE] + (cby[LANE]*cby[LANE] + cbz[LANE]*cbz[LANE]);
+        v2[LANE] = (v0[LANE]*v0[LANE])*v1[LANE];
+        v3[LANE] = v0[LANE]*(one+v2[LANE]*(one_third+v2[LANE]*two_fifteenths));
+        v4[LANE] = v3[LANE]/(one+v1[LANE]*(v3[LANE]*v3[LANE]));
+        v4[LANE] += v4[LANE];
         // Boris - uprime
-        v0[LANE_IDX] = ux[LANE_IDX] + v3[LANE_IDX]*(uy[LANE_IDX]*cbz[LANE_IDX] - uz[LANE_IDX]*cby[LANE_IDX]);
-        v1[LANE_IDX] = uy[LANE_IDX] + v3[LANE_IDX]*(uz[LANE_IDX]*cbx[LANE_IDX] - ux[LANE_IDX]*cbz[LANE_IDX]);
-        v2[LANE_IDX] = uz[LANE_IDX] + v3[LANE_IDX]*(ux[LANE_IDX]*cby[LANE_IDX] - uy[LANE_IDX]*cbx[LANE_IDX]);
+        v0[LANE] = ux[LANE] + v3[LANE]*(uy[LANE]*cbz[LANE] - uz[LANE]*cby[LANE]);
+        v1[LANE] = uy[LANE] + v3[LANE]*(uz[LANE]*cbx[LANE] - ux[LANE]*cbz[LANE]);
+        v2[LANE] = uz[LANE] + v3[LANE]*(ux[LANE]*cby[LANE] - uy[LANE]*cbx[LANE]);
         // Boris - rotation
-        ux[LANE_IDX] += v4[LANE_IDX]*(v1[LANE_IDX]*cbz[LANE_IDX] - v2[LANE_IDX]*cby[LANE_IDX]);
-        uy[LANE_IDX] += v4[LANE_IDX]*(v2[LANE_IDX]*cbx[LANE_IDX] - v0[LANE_IDX]*cbz[LANE_IDX]);
-        uz[LANE_IDX] += v4[LANE_IDX]*(v0[LANE_IDX]*cby[LANE_IDX] - v1[LANE_IDX]*cbx[LANE_IDX]);
+        ux[LANE] += v4[LANE]*(v1[LANE]*cbz[LANE] - v2[LANE]*cby[LANE]);
+        uy[LANE] += v4[LANE]*(v2[LANE]*cbx[LANE] - v0[LANE]*cbz[LANE]);
+        uz[LANE] += v4[LANE]*(v0[LANE]*cby[LANE] - v1[LANE]*cbx[LANE]);
         // Half advance e
-        ux[LANE_IDX] += hax[LANE_IDX];
-        uy[LANE_IDX] += hay[LANE_IDX];
-        uz[LANE_IDX] += haz[LANE_IDX];
+        ux[LANE] += hax[LANE];
+        uy[LANE] += hay[LANE];
+        uz[LANE] += haz[LANE];
         // Store momentum
-        p_ux = ux[LANE_IDX];
-        p_uy = uy[LANE_IDX];
-        p_uz = uz[LANE_IDX];
+        p_ux = ux[LANE];
+        p_uy = uy[LANE];
+        p_uz = uz[LANE];
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
-        v0[LANE_IDX]   = one/sqrtf(one + (ux[LANE_IDX]*ux[LANE_IDX]+ (uy[LANE_IDX]*uy[LANE_IDX] + uz[LANE_IDX]*uz[LANE_IDX])));
+        v0[LANE]   = one/sqrtf(one + (ux[LANE]*ux[LANE]+ (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE])));
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
 
         /**/                                      // Get norm displacement
-        ux[LANE_IDX]  *= cdt_dx;
-        uy[LANE_IDX]  *= cdt_dy;
-        uz[LANE_IDX]  *= cdt_dz;
-        ux[LANE_IDX]  *= v0[LANE_IDX];
-        uy[LANE_IDX]  *= v0[LANE_IDX];
-        uz[LANE_IDX]  *= v0[LANE_IDX];
-        v0[LANE_IDX]   = dx[LANE_IDX] + ux[LANE_IDX];                           // Streak midpoint (inbnds)
-        v1[LANE_IDX]   = dy[LANE_IDX] + uy[LANE_IDX];
-        v2[LANE_IDX]   = dz[LANE_IDX] + uz[LANE_IDX];
-        v3[LANE_IDX]   = v0[LANE_IDX] + ux[LANE_IDX];                           // New position
-        v4[LANE_IDX]   = v1[LANE_IDX] + uy[LANE_IDX];
-        v5[LANE_IDX]   = v2[LANE_IDX] + uz[LANE_IDX];
+        ux[LANE]  *= cdt_dx;
+        uy[LANE]  *= cdt_dy;
+        uz[LANE]  *= cdt_dz;
+        ux[LANE]  *= v0[LANE];
+        uy[LANE]  *= v0[LANE];
+        uz[LANE]  *= v0[LANE];
+        v0[LANE]   = dx[LANE] + ux[LANE];                           // Streak midpoint (inbnds)
+        v1[LANE]   = dy[LANE] + uy[LANE];
+        v2[LANE]   = dz[LANE] + uz[LANE];
+        v3[LANE]   = v0[LANE] + ux[LANE];                           // New position
+        v4[LANE]   = v1[LANE] + uy[LANE];
+        v5[LANE]   = v2[LANE] + uz[LANE];
   
-        inbnds[LANE_IDX] = v3[LANE_IDX]<=one &&  v4[LANE_IDX]<=one &&  v5[LANE_IDX]<=one &&
-                      -v3[LANE_IDX]<=one && -v4[LANE_IDX]<=one && -v5[LANE_IDX]<=one;
+        inbnds[LANE] = v3[LANE]<=one &&  v4[LANE]<=one &&  v5[LANE]<=one &&
+                      -v3[LANE]<=one && -v4[LANE]<=one && -v5[LANE]<=one;
       } END_VECTOR_BLOCK;
-
-      v6 = fex;
-      v7 = fdexdy;
-      v8 = fdexdz;
-      v9 = fd2exdydz;
-      v10 = fey;
-      v11 = fdeydz;
-      v12 = fdeydx;
-      v13 = fd2eydzdx;
+    
+#ifdef VPIC_ENABLE_TEAM_REDUCTION
+      int in_cell = particles_in_same_cell(team_member, ii, inbnds, num_iters);
+#endif
 
       BEGIN_VECTOR_BLOCK {
-        p_index = pi_offset + LANE_IDX;
+        p_index = pi_offset + LANE;
 
-        v3[LANE_IDX] = static_cast<float>(inbnds[LANE_IDX])*v3[LANE_IDX] + (1.0-static_cast<float>(inbnds[LANE_IDX]))*p_dx;
-        v4[LANE_IDX] = static_cast<float>(inbnds[LANE_IDX])*v4[LANE_IDX] + (1.0-static_cast<float>(inbnds[LANE_IDX]))*p_dy;
-        v5[LANE_IDX] = static_cast<float>(inbnds[LANE_IDX])*v5[LANE_IDX] + (1.0-static_cast<float>(inbnds[LANE_IDX]))*p_dz;
-        q[LANE_IDX]  = static_cast<float>(inbnds[LANE_IDX])*q[LANE_IDX]*qsp;
+        v3[LANE] = static_cast<float>(inbnds[LANE])*v3[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dx;
+        v4[LANE] = static_cast<float>(inbnds[LANE])*v4[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dy;
+        v5[LANE] = static_cast<float>(inbnds[LANE])*v5[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dz;
+        q[LANE]  = static_cast<float>(inbnds[LANE])*q[LANE]*qsp;
 
-        p_dx = v3[LANE_IDX];
-        p_dy = v4[LANE_IDX];
-        p_dz = v5[LANE_IDX];
-        dx[LANE_IDX] = v0[LANE_IDX];
-        dy[LANE_IDX] = v1[LANE_IDX];
-        dz[LANE_IDX] = v2[LANE_IDX];
-        v5[LANE_IDX] = q[LANE_IDX]*ux[LANE_IDX]*uy[LANE_IDX]*uz[LANE_IDX]*one_third;
+        p_dx = v3[LANE];
+        p_dy = v4[LANE];
+        p_dz = v5[LANE];
+        dx[LANE] = v0[LANE];
+        dy[LANE] = v1[LANE];
+        dz[LANE] = v2[LANE];
+        v5[LANE] = q[LANE]*ux[LANE]*uy[LANE]*uz[LANE]*one_third;
 
 #       define ACCUMULATE_J(X,Y,Z,v0,v1,v2,v3)                                              \
-        v4[LANE_IDX]  = q[LANE_IDX]*u##X[LANE_IDX];   /* v2 = q ux                            */        \
-        v1[LANE_IDX]  = v4[LANE_IDX]*d##Y[LANE_IDX];  /* v1 = q ux dy                         */        \
-        v0[LANE_IDX]  = v4[LANE_IDX]-v1[LANE_IDX];    /* v0 = q ux (1-dy)                     */        \
-        v1[LANE_IDX] += v4[LANE_IDX];             /* v1 = q ux (1+dy)                     */        \
-        v4[LANE_IDX]  = one+d##Z[LANE_IDX];       /* v4 = 1+dz                            */        \
-        v2[LANE_IDX]  = v0[LANE_IDX]*v4[LANE_IDX];    /* v2 = q ux (1-dy)(1+dz)               */        \
-        v3[LANE_IDX]  = v1[LANE_IDX]*v4[LANE_IDX];    /* v3 = q ux (1+dy)(1+dz)               */        \
-        v4[LANE_IDX]  = one-d##Z[LANE_IDX];       /* v4 = 1-dz                            */        \
-        v0[LANE_IDX] *= v4[LANE_IDX];             /* v0 = q ux (1-dy)(1-dz)               */        \
-        v1[LANE_IDX] *= v4[LANE_IDX];             /* v1 = q ux (1+dy)(1-dz)               */        \
-        v0[LANE_IDX] += v5[LANE_IDX];             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
-        v1[LANE_IDX] -= v5[LANE_IDX];             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
-        v2[LANE_IDX] -= v5[LANE_IDX];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-        v3[LANE_IDX] += v5[LANE_IDX];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+        v4[LANE]  = q[LANE]*u##X[LANE];   /* v2 = q ux                            */        \
+        v1[LANE]  = v4[LANE]*d##Y[LANE];  /* v1 = q ux dy                         */        \
+        v0[LANE]  = v4[LANE]-v1[LANE];    /* v0 = q ux (1-dy)                     */        \
+        v1[LANE] += v4[LANE];             /* v1 = q ux (1+dy)                     */        \
+        v4[LANE]  = one+d##Z[LANE];       /* v4 = 1+dz                            */        \
+        v2[LANE]  = v0[LANE]*v4[LANE];    /* v2 = q ux (1-dy)(1+dz)               */        \
+        v3[LANE]  = v1[LANE]*v4[LANE];    /* v3 = q ux (1+dy)(1+dz)               */        \
+        v4[LANE]  = one-d##Z[LANE];       /* v4 = 1-dz                            */        \
+        v0[LANE] *= v4[LANE];             /* v0 = q ux (1-dy)(1-dz)               */        \
+        v1[LANE] *= v4[LANE];             /* v1 = q ux (1+dy)(1-dz)               */        \
+        v0[LANE] += v5[LANE];             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+        v1[LANE] -= v5[LANE];             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+        v2[LANE] -= v5[LANE];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+        v3[LANE] += v5[LANE];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
         ACCUMULATE_J( x,y,z, v6,v7,v8,v9 );
 
@@ -2184,124 +1921,34 @@ advance_p_kokkos_unified(
       } END_VECTOR_BLOCK;
 
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
-    int first = ii[0];
-
-    if(particles_in_same_cell(team_member, ii, inbnds, num_iters)) {
-
-#ifdef VPIC_ENABLE_VECTORIZATION
-      float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
-      float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
-      float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
-      #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val8,val9,val10,val11)
-      for(int lane=0; lane<num_iters; lane++) {
-        val0  += v6[lane];
-        val1  += v7[lane];
-        val2  += v8[lane];
-        val3  += v9[lane];
-        val4  += v10[lane];
-        val5  += v11[lane];
-        val6  += v12[lane];
-        val7  += v13[lane];
-        val8  += v0[lane];
-        val9  += v1[lane];
-        val10 += v2[lane];
-        val11 += v3[lane];
-      }
-
-      current_sa(first, 0)  += cx*val0;
-      current_sa(first, 1)  += cx*val1;
-      current_sa(first, 2)  += cx*val2;
-      current_sa(first, 3)  += cx*val3;
-
-      current_sa(first, 4)  += cy*val4;
-      current_sa(first, 5)  += cy*val5;
-      current_sa(first, 6)  += cy*val6;
-      current_sa(first, 7)  += cy*val7;
-
-      current_sa(first, 8)  += cz*val8;
-      current_sa(first, 9)  += cz*val9;
-      current_sa(first, 10) += cz*val10;
-      current_sa(first, 11) += cz*val11;
-#else
-      int iii = first;
-      int zi = iii/((nx+2)*(ny+2));
-      iii -= zi*(nx+2)*(ny+2);
-      int yi = iii/(nx+2);
-      int xi = iii - yi*(nx+2);
-
-      int i0 = ii[0];
-      int i1 = VOXEL(xi,yi+1,zi,nx,ny,nz);
-      int i2 = VOXEL(xi,yi,zi+1,nx,ny,nz);
-      int i3 = VOXEL(xi,yi+1,zi+1,nx,ny,nz);
-      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
-                          field_var::jfx, cx*v6[LANE_IDX], cx*v7[LANE_IDX], cx*v8[LANE_IDX], cx*v9[LANE_IDX]);
-
-      i1 = VOXEL(xi,yi,zi+1,nx,ny,nz);
-      i2 = VOXEL(xi+1,yi,zi,nx,ny,nz);
-      i3 = VOXEL(xi+1,yi,zi+1,nx,ny,nz);
-      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
-                          field_var::jfy, cy*v10[LANE_IDX], cy*v11[LANE_IDX], cy*v12[LANE_IDX], cy*v13[LANE_IDX]);
-
-      i1 = VOXEL(xi+1,yi,zi,nx,ny,nz);
-      i2 = VOXEL(xi,yi+1,zi,nx,ny,nz);
-      i3 = VOXEL(xi+1,yi+1,zi,nx,ny,nz);
-      contribute_current(team_member, current_sa, i0, i1, i2, i3, 
-                          field_var::jfz, cz*v0[LANE_IDX], cz*v1[LANE_IDX], cz*v2[LANE_IDX], cz*v3[LANE_IDX]);
-#endif
+    if(in_cell) {
+      int first = ii[0];
+      reduce_and_accumulate_current(team_member, current_sa, num_iters, first, 
+                                    nx, ny, nz, cx, cy, cz,
+                                    v6, v7, v8, v9,
+                                    v10, v11, v12, v13,
+                                    v0, v1, v2, v3);
     } else {
 #endif
-
       BEGIN_VECTOR_BLOCK {
-#ifdef VPIC_ENABLE_ACCUMULATORS
-        current_sa(ii[LANE_IDX], 0)  += cx*v6[LANE_IDX];
-        current_sa(ii[LANE_IDX], 1)  += cx*v7[LANE_IDX];
-        current_sa(ii[LANE_IDX], 2)  += cx*v8[LANE_IDX];
-        current_sa(ii[LANE_IDX], 3)  += cx*v9[LANE_IDX];
-
-        current_sa(ii[LANE_IDX], 4)  += cy*v10[LANE_IDX];
-        current_sa(ii[LANE_IDX], 5)  += cy*v11[LANE_IDX];
-        current_sa(ii[LANE_IDX], 6)  += cy*v12[LANE_IDX];
-        current_sa(ii[LANE_IDX], 7)  += cy*v13[LANE_IDX];
-
-        current_sa(ii[LANE_IDX], 8)  += cz*v0[LANE_IDX];
-        current_sa(ii[LANE_IDX], 9)  += cz*v1[LANE_IDX];
-        current_sa(ii[LANE_IDX], 10) += cz*v2[LANE_IDX];
-        current_sa(ii[LANE_IDX], 11) += cz*v3[LANE_IDX];
-#else
-        int iii = ii[LANE_IDX];
-        int zi = iii/((nx+2)*(ny+2));
-        iii -= zi*(nx+2)*(ny+2);
-        int yi = iii/(nx+2);
-        int xi = iii - yi*(nx+2);
-
-        current_sa(ii[LANE_IDX], field_var::jfx)                      += cx*v6[LANE_IDX];
-        current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx)   += cx*v7[LANE_IDX];
-        current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx)   += cx*v8[LANE_IDX];
-        current_sa(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v9[LANE_IDX];
-
-        current_sa(ii[LANE_IDX], field_var::jfy)                      += cy*v10[LANE_IDX];
-        current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy)   += cy*v11[LANE_IDX];
-        current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy)   += cy*v12[LANE_IDX];
-        current_sa(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v13[LANE_IDX];
-
-        current_sa(ii[LANE_IDX], field_var::jfz)                      += cz*v0[LANE_IDX];
-        current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz)   += cz*v1[LANE_IDX];
-        current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz)   += cz*v2[LANE_IDX];
-        current_sa(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3[LANE_IDX];
-#endif
+        accumulate_current(current_sa, ii[LANE],
+                     nx, ny, nz, cx, cy, cz, 
+                     v6[LANE], v7[LANE], v8[LANE], v9[LANE],
+                     v10[LANE], v11[LANE], v12[LANE], v13[LANE],
+                     v0[LANE], v1[LANE], v2[LANE], v3[LANE]);
       } END_VECTOR_BLOCK;
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
     }
 #endif
 #       undef ACCUMULATE_J
       BEGIN_THREAD_BLOCK {
-        if(!inbnds[LANE_IDX]) {
-          p_index = pi_offset + LANE_IDX;
+        if(!inbnds[LANE]) {
+          p_index = pi_offset + LANE;
 
           DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
-          local_pm->dispx = ux[LANE_IDX];
-          local_pm->dispy = uy[LANE_IDX];
-          local_pm->dispz = uz[LANE_IDX];
+          local_pm->dispx = ux[LANE];
+          local_pm->dispy = uy[LANE];
+          local_pm->dispz = uz[LANE];
           local_pm->i     = p_index;
 
           if( move_p_kokkos_test( k_particles, k_particles_i, local_pm, // Unlikely
@@ -2334,16 +1981,16 @@ advance_p_kokkos_unified(
 #endif
   });
 
-//#if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
 #if defined( VPIC_ENABLE_ACCUMULATORS )
   Kokkos::Experimental::contribute(accumulator, current_sv);
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nz+2, ny+2, nx+2});
-  Kokkos::parallel_for("unload accumulator array", unload_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
-      int f0 = VOXEL(1, y, z, nx, ny, nz) + x-1;
-      int a0 = VOXEL(1, y, z, nx, ny, nz) + x-1;
-      int ax = VOXEL(0, y, z, nx, ny, nz) + x-1;
-      int ay = VOXEL(1, y-1, z, nx, ny, nz) + x-1;
-      int az = VOXEL(1, y, z-1, nx, ny, nz) + x-1;
+  Kokkos::parallel_for("unload accumulator array", unload_policy, 
+  KOKKOS_LAMBDA(const int z, const int y, const int x) {
+      int f0  = VOXEL(1, y, z, nx, ny, nz) + x-1;
+      int a0  = VOXEL(1, y, z, nx, ny, nz) + x-1;
+      int ax  = VOXEL(0, y, z, nx, ny, nz) + x-1;
+      int ay  = VOXEL(1, y-1, z, nx, ny, nz) + x-1;
+      int az  = VOXEL(1, y, z-1, nx, ny, nz) + x-1;
       int ayz = VOXEL(1, y-1, z-1, nx, ny, nz) + x-1;
       int azx = VOXEL(0, y, z-1, nx, ny, nz) + x-1;
       int axy = VOXEL(0, y-1, z, nx, ny, nz) + x-1;
@@ -2363,8 +2010,6 @@ advance_p_kokkos_unified(
 #else
   Kokkos::Experimental::contribute(k_field, current_sv);
 #endif
-
-#undef idx
 
 #undef p_dx
 #undef p_dy

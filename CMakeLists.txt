@@ -21,7 +21,7 @@ project(vpic CXX)
 # feel free to experiment with lower standards.
 #------------------------------------------------------------------------------#
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #------------------------------------------------------------------------------#
@@ -289,7 +289,7 @@ endif(VPIC_ENABLE_TEAM_REDUCTION)
 if (VPIC_ENABLE_VECTORIZATION)
   add_definitions(-DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_VECTORIZATION)
   set(VPIC_ENABLE_HIERARCHICAL ON CACHE INTERNAL "Enable Hierarchical parallelism")
-  set(VPIC_ENABLE_ACCUMULATORS ON CACHE INTERNAL "Enable Accumulators")
+  #set(VPIC_ENABLE_ACCUMULATORS ON "Enable Accumulators")
   message("--     VPIC: Enabled improved CPU vectorization")
 endif(VPIC_ENABLE_VECTORIZATION)
 
