@@ -316,14 +316,15 @@ void load_interpolators(
     fdcbzdz[LANE]   = f_dcbzdz; 
   }
 #else
-  int first = ii[0];
-  int index = first;
-  #pragma omp simd reduction(&:index)
+  int same_cell = 1;
   for(int lane=0; lane<NumLanes; lane++) {
-    index &= ii[lane];
+    if(ii[0] != ii[lane]) {
+      same_cell = 0;
+      break;
+    }
   }
 
-  if(ii[0] == index) {
+  if(same_cell) {
     float vals[18];
 
     simd_load_interpolator_var(vals, ii[0], k_interp, 18);
