@@ -60,11 +60,15 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
 
+option(VPIC_ENABLE_AUTO_TUNING "Enable automatic tuning based on architecture" ON)
+
 option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
 
 option(VPIC_ENABLE_TEAM_REDUCTION "Enable team reduction for current accumulation" OFF)
 
 option(VPIC_ENABLE_VECTORIZATION "Enable improved vectorization for CPUs" OFF)
+
+option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performnace on CPUs" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -280,26 +284,29 @@ if (VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
 
+if(VPIC_ENABLE_AUTO_TUNING)
+  add_definitions(-DVPIC_ENABLE_AUTO_TUNING)
+endif(VPIC_ENABLE_AUTO_TUNING)
+
 if(VPIC_ENABLE_TEAM_REDUCTION)
-  add_definitions(-DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_TEAM_REDUCTION)
+  add_definitions(-DVPIC_DISABLE_AUTOSETTINGS -DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_TEAM_REDUCTION)
   set(VPIC_ENABLE_HIERARCHICAL ON CACHE INTERNAL "Enable Hierarchical parallelism")
   message("--     VPIC: Enabled reduction optimization")
 endif(VPIC_ENABLE_TEAM_REDUCTION)
 
 if (VPIC_ENABLE_VECTORIZATION)
-  add_definitions(-DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_VECTORIZATION)
+  add_definitions(-DVPIC_DISABLE_AUTOSETTINGS -DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_VECTORIZATION)
   set(VPIC_ENABLE_HIERARCHICAL ON CACHE INTERNAL "Enable Hierarchical parallelism")
-  #set(VPIC_ENABLE_ACCUMULATORS ON "Enable Accumulators")
   message("--     VPIC: Enabled improved CPU vectorization")
 endif(VPIC_ENABLE_VECTORIZATION)
 
 if (VPIC_ENABLE_HIERARCHICAL)
-  add_definitions(-DVPIC_ENABLE_HIERARCHICAL)
+  add_definitions(-DVPIC_DISABLE_AUTOSETTINGS -DVPIC_ENABLE_HIERARCHICAL)
   message("--     VPIC: Enabled hierarchical parallelism")
 endif(VPIC_ENABLE_HIERARCHICAL)
 
 if (VPIC_ENABLE_ACCUMULATORS)
-  add_definitions(-DVPIC_ENABLE_ACCUMULATORS)
+  add_definitions(-DVPIC_DISABLE_AUTOSETTINGS -DVPIC_ENABLE_ACCUMULATORS)
   message("--     VPIC: Enabled accumulators")
 endif(VPIC_ENABLE_ACCUMULATORS)
 
