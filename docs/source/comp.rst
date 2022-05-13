@@ -98,7 +98,7 @@ system
 Optimization Options
 ********************
 
-VPIC has compilation flags for enabling/disabling various optimizations. VPIC will automatically selct optimization settings depending on the architecture settings from Kokkos. Users can supply their own settings for potentially better performance. The optimization options are as follows:
+VPIC has compilation flags for enabling/disabling various optimizations. VPIC will automatically selct optimizations settings. Users can supply their own settings for potentially better performance. The optimization options are as follows:
 
 1. `VPIC_ENABLE_AUTO_TUNING=ON`
   - Control whether to use the automatically determined optimization settings or user supplied compile time flags.

@@ -68,28 +68,28 @@ reduce_and_accumulate_current(TeamMember& team_member, CurrentScatterAccess& acc
                               float *v8, float *v9,  float *v10, float *v11) {
 
 #ifdef VPIC_ENABLE_VECTORIZATION
-  float val0 = 0.0, val1 = 0.0, val2 = 0.0, val3 = 0.0;
-  float val4 = 0.0, val5 = 0.0, val6 = 0.0, val7 = 0.0;
-  float val8 = 0.0, val9 = 0.0, val10 = 0.0, val11 = 0.0;
-  #pragma omp simd reduction(+:val0,val1,val2,val3,val4,val5,val6,val8,val9,val10,val11)
+  alignas(16) float valx[4] = {0.0, 0.0, 0.0, 0.0};
+  alignas(16) float valy[4] = {0.0, 0.0, 0.0, 0.0};
+  alignas(16) float valz[4] = {0.0, 0.0, 0.0, 0.0};
+  #pragma omp simd reduction(+:valx[0:4],valy[0:4],valz[0:4])
   for(int lane=0; lane<num_iters; lane++) {
-    val0  += v0[lane];
-    val1  += v1[lane];
-    val2  += v2[lane];
-    val3  += v3[lane];
-    val4  += v4[lane];
-    val5  += v5[lane];
-    val6  += v6[lane];
-    val7  += v7[lane];
-    val8  += v8[lane];
-    val9  += v9[lane];
-    val10 += v10[lane];
-    val11 += v11[lane];
+    valx[0] += v0[lane];
+    valx[1] += v1[lane];
+    valx[2] += v2[lane];
+    valx[3] += v3[lane];
+    valy[0] += v4[lane];
+    valy[1] += v5[lane];
+    valy[2] += v6[lane];
+    valy[3] += v7[lane];
+    valz[0] += v8[lane];
+    valz[1] += v9[lane];
+    valz[2] += v10[lane];
+    valz[3] += v11[lane];
   }
   accumulate_current(access, ii, nx, ny, nz, cx, cy, cz, 
-                     val0, val1, val2, val3, 
-                     val4, val5, val6, val7, 
-                     val8, val9, val10, val11);
+                     valx[0], valx[1], valx[2], valx[3], 
+                     valy[0], valy[1], valy[2], valy[3], 
+                     valz[0], valz[1], valz[2], valz[3]);
 #elif defined( __CUDA_ARCH__ )
   int mask = 0xffffffff;
   for(int i=16; i>0; i=i/2) {
@@ -637,24 +637,24 @@ advance_p_kokkos_unified(
       } END_VECTOR_BLOCK;
 
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
-    if(in_cell) {
-      int first = ii[0];
-      reduce_and_accumulate_current(team_member, current_sa, num_iters, first, 
-                                    nx, ny, nz, cx, cy, cz,
-                                    v6, v7, v8, v9,
-                                    v10, v11, v12, v13,
-                                    v0, v1, v2, v3);
-    } else {
+      if(in_cell) {
+        int first = ii[0];
+        reduce_and_accumulate_current(team_member, current_sa, num_iters, first, 
+                                      nx, ny, nz, cx, cy, cz,
+                                      v6, v7, v8, v9,
+                                      v10, v11, v12, v13,
+                                      v0, v1, v2, v3);
+      } else {
 #endif
-      BEGIN_VECTOR_BLOCK {
-        accumulate_current(current_sa, ii[LANE],
-                     nx, ny, nz, cx, cy, cz, 
-                     v6[LANE], v7[LANE], v8[LANE], v9[LANE],
-                     v10[LANE], v11[LANE], v12[LANE], v13[LANE],
-                     v0[LANE], v1[LANE], v2[LANE], v3[LANE]);
-      } END_VECTOR_BLOCK;
+        BEGIN_VECTOR_BLOCK {
+          accumulate_current(current_sa, ii[LANE],
+                       nx, ny, nz, cx, cy, cz, 
+                       v6[LANE], v7[LANE], v8[LANE], v9[LANE],
+                       v10[LANE], v11[LANE], v12[LANE], v13[LANE],
+                       v0[LANE], v1[LANE], v2[LANE], v3[LANE]);
+        } END_VECTOR_BLOCK;
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
-    }
+      }
 #endif
 #       undef ACCUMULATE_J
       BEGIN_THREAD_BLOCK {
@@ -667,7 +667,7 @@ advance_p_kokkos_unified(
           local_pm->dispz = uz[LANE];
           local_pm->i     = p_index;
 
-          if( move_p_kokkos_test( k_particles, k_particles_i, local_pm, // Unlikely
+          if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
                              current_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
           {
             if( k_nm(0)<max_nm ) {
@@ -1043,10 +1043,8 @@ advance_p_kokkos_gpu(
       local_pm->i     = p_index;
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
-//      if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-//                     k_f_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
-          if( move_p_kokkos_test( k_particles, k_particles_i, local_pm, // Unlikely
-                             k_f_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
+      if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
+                         k_f_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
       {
         if( k_nm(0) < max_nm )
         {
