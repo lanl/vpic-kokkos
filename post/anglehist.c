@@ -91,6 +91,7 @@ int main( int argc, char *argv[] ) {
 
   double emin = 0;
   double emax; // MeV
+  double Ecut = 0;
 
   char *particle = argv[1];
   if (argc>2) emax = atof(argv[2]);
@@ -154,7 +155,7 @@ int main( int argc, char *argv[] ) {
   glob_t globbuf;
   glob(filepath, GLOB_NOSORT, NULL, &globbuf); 
   size_t count = globbuf.gl_pathc;
-  fprintf(stderr, "count is %zu\n", count);
+  fprintf(stderr, "Found %zu\n files", count);
 
   // Consider only particles within a certain box
   // Check if the line that does this is commented below!
@@ -213,6 +214,7 @@ int main( int argc, char *argv[] ) {
           // binning in normalized units, but the performance is dominated by
           // disk access, so let's keep things a bit more understandable
           ek = ekMeVconst * u2/ (1. + sqrt(1.+ u2));
+          if (ek < Ecut) continue;
           Etot += ek*part[w]; // Increment Etot before putting it in the hist
           if (ek > emax) ek = emax-0.5*de;
           ebin = (int)(ek/de);
@@ -276,6 +278,7 @@ int main( int argc, char *argv[] ) {
   fprintf(out, "%.14e   ekMeVconst\n", ekMeVconst);
   fprintf(out, "%lld   Number of particles used\n", ntot);
   fprintf(out, "%.14e   Total Energy in histogram (MeV)\n", Etot);
+  fprintf(out, "%lld   Number of physical particles in histogram\n", wsum);
   fclose(out);
 
   // Store the histogram for Python plotting
