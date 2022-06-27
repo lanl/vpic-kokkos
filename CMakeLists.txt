@@ -159,9 +159,10 @@ if(ENABLE_KOKKOS_CUDA)
   find_package(CUDA)
   if (CUDA_FOUND)
     add_definitions(-DENABLE_KOKKOS_CUDA)
+    set(ENV{NVCC_WRAPPER_DEFAULT_COMPILER} ${CMAKE_CXX_COMPILER})
     set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
     set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "Enable cuda lambda support")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
+    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
 
     # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
     # see https://github.com/UoB-HPC/BabelStream/issues/16
@@ -398,12 +399,21 @@ install(FILES ${CMAKE_SOURCE_DIR}/deck/main.cc
 install(FILES ${CMAKE_SOURCE_DIR}/deck/wrapper.cc
   DESTINATION share/vpic)
 
+if(ENABLE_KOKKOS_CUDA AND DEFINED ENV{CRAYPE_VERSION})
+# local script
+configure_file(
+  ${CMAKE_SOURCE_DIR}/bin/vpic-localCrayA100.in
+    ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
+    @ONLY
+)
+else()
 # local script
 configure_file(
     ${CMAKE_SOURCE_DIR}/bin/vpic-local.in
     ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
     @ONLY
 )
+endif()
 
 file(COPY ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
   DESTINATION ${CMAKE_BINARY_DIR}/bin
