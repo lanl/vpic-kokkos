@@ -30,7 +30,6 @@ CXX=$src_dir/kokkos/bin/nvcc_wrapper cmake \
   -DENABLE_KOKKOS_CUDA=ON \
   -DKokkos_ARCH_BDW=ON \
   -DKokkos_ARCH_TURING75=ON \
-  -DCMAKE_C_FLAGS="-rdynamic" \
   -DCMAKE_CXX_FLAGS="-rdynamic" \
   $src_dir
 

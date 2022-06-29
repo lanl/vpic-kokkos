@@ -48,14 +48,14 @@ struct DefaultSort {
         bin_sort.create_permute_vector();
         // Sort particle data. 
         // If using LayoutLeft we can save memory by sorting each particle variable separately.
-		if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
-			for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
-				auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
-				bin_sort.sort(sub_view);
-			}
-		} else {
-          bin_sort.sort(particles);
+	if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+		for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
+			auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+			bin_sort.sort(sub_view);
 		}
+	} else {
+          bin_sort.sort(particles);
+	}
         // Sort particle indices
         bin_sort.sort(particles_i);
     }
@@ -101,14 +101,14 @@ struct DefaultSort {
 
         // Sort particle data. 
         // If using LayoutLeft we can save memory by sorting each particle variable separately.
-		if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
-			for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
-				auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
-				bin_sort.sort(sub_view);
-			}
-		} else {
-          bin_sort.sort(particles);
+	if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+		for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
+			auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+			bin_sort.sort(sub_view);
 		}
+	} else {
+          bin_sort.sort(particles);
+	}
         // Sort particle indices
         bin_sort.sort(particles_i);
 

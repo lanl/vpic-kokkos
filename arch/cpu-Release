@@ -13,11 +13,6 @@ src_dir="${0%/*}/.."
 # Check required environment variables
 #------------------------------------------------------------------------------#
 
-#module purge
-#module load PrgEnv-cray
-#module load cmake
-module list 2>&1 | tee modules.txt
-
 #------------------------------------------------------------------------------#
 # Call CMake command
 #------------------------------------------------------------------------------#
@@ -35,8 +30,7 @@ cmake \
   -DKokkos_ARCH_ZEN2=ON \
   -DKokkos_ENABLE_PTHREAD=OFF \
   -DKokkos_ENABLE_OPENMP=ON \
-  -DCMAKE_CXX_COMPILER="CC" \
-  -DCMAKE_CXX_FLAGS="-g -O2 -rdynamic -dynamic"\
+  -DCMAKE_CXX_FLAGS="-g -O2 -rdynamic" \
   $src_dir
 
 #------------------------------------------------------------------------------#

@@ -44,12 +44,12 @@ using k_field_accum_t = Kokkos::View<float *>;
 
 using k_jf_accum_t = Kokkos::View<float *[NUM_J_DIMS]>;
 
-using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT]>;
+using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft>;
 using k_particles_i_t = Kokkos::View<int*>;
 
 // TODO: think about the layout here
 using k_particle_copy_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutRight>;
-using k_particle_i_copy_t = Kokkos::View<int*, Kokkos::LayoutRight>;
+using k_particle_i_copy_t = Kokkos::View<int*>;
 
 using k_particle_movers_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT]>;
 using k_particle_i_movers_t = Kokkos::View<int*>;
@@ -70,10 +70,49 @@ using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSp
 
 using k_material_coefficient_t = Kokkos::View<float* [MATERIAL_COEFFICIENT_VAR_COUNT]>;
 
-using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
 
 #define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
 #define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
+
+namespace Kokkos {
+  /** \brief  Intra-thread vector parallel_for. Executes lambda(iType i) for each
+   * i=0..N-1.
+   *
+   * The range i=0..N-1 is mapped to all vector lanes of the the calling thread.
+   */
+  template <template <typename iType, class ThreadsExecTeamMember> class ThreadVectorRangeBoundariesStruct, 
+            typename iType, class ThreadsExecTeamMember, class Lambda>
+  KOKKOS_INLINE_FUNCTION void parallel_for_simd(
+      const ThreadVectorRangeBoundariesStruct<
+          iType, ThreadsExecTeamMember>& loop_boundaries,
+      const Lambda& lambda) {
+    #pragma omp simd
+    for (iType i = loop_boundaries.start; i < loop_boundaries.end;
+         i += loop_boundaries.increment)
+      lambda(i);
+  }
+
+  /** \brief  Intra-thread vector parallel_reduce. Executes lambda(iType i,
+   * ValueType & val) for each i=0..N-1.
+   *
+   * The range i=0..N-1 is mapped to all vector lanes of the the calling thread
+   * and a summation of val is performed and put into result.
+   */
+  template <template <typename iType, class ThreadsExecTeamMember> class ThreadVectorRangeBoundariesStruct, 
+            typename iType, class ThreadsExecTeamMember, class Lambda, typename ValueType>
+  KOKKOS_INLINE_FUNCTION
+      typename std::enable_if<!Kokkos::is_reducer<ValueType>::value>::type
+      parallel_reduce_simd_sum(const ThreadVectorRangeBoundariesStruct<
+                          iType, ThreadsExecTeamMember>& loop_boundaries,
+                      const Lambda& lambda, ValueType& result) {
+    result = ValueType();
+    #pragma omp simd reduction(+:result)
+    for (iType i = loop_boundaries.start; i < loop_boundaries.end;
+         i += loop_boundaries.increment) {
+      lambda(i, result);
+    }
+  }
+}
 
 namespace field_var {
   enum f_v {
