@@ -22,11 +22,15 @@ src_dir="${0%/*}/.."
 # (the closest match was "(null)" from "./lpi_2d_F6_test.Linux").  Writing out
 # the raw address instead and keeping my fingers crossed.
 
-CXX=$src_dir/kokkos/bin/nvcc_wrapper cmake \
+cmake \
   -DCMAKE_BUILD_TYPE=Release \
   -DENABLE_INTEGRATED_TESTS=ON \
   -DENABLE_UNIT_TESTS=ON \
-  -DCMAKE_CXX_FLAGS="-rdynamic --expt-extended-lambda" \
+  -DBUILD_INTERNAL_KOKKOS=ON \
+  -DKokkos_ARCH_ZEN2=ON \
+  -DKokkos_ENABLE_PTHREAD=OFF \
+  -DKokkos_ENABLE_OPENMP=ON \
+  -DCMAKE_CXX_FLAGS="-g -O2 -rdynamic" \
   $src_dir
 
 #------------------------------------------------------------------------------#
