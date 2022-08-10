@@ -2,9 +2,10 @@
 
 #SBATCH -p gpu
 #SBATCH -N 1
-#SBATCH -t 1:00:00 
+#SBATCH -t 4:00:00 
 #SBATCH --output=vpic-kokkos-build-log.txt
 
+# Chicoma-specific build instructions
 module swap PrgEnv-cray PrgEnv-gnu
 module load cmake cuda
 module list
@@ -12,12 +13,18 @@ export CRAYPE_LINK_TYPE=dynamic
 export NVCC_WRAPPER_DEFAULT_COMPILER=CC
 echo "NVCC_WRAPPER_DEFAULT_COMPILER:" $NVCC_WRAPPER_DEFAULT_COMPILER
 echo "CRAYPE_LINK_TYPE:" $CRAYPE_LINK_TYPE
+
 lscpu
 nvidia-smi
 #env
 
-src_dir=/users/matsekh/VPIC/vpic-kokkos
-builds=/lustre/scratch5/.mdt0/matsekh/VPIC/vpic-kokkos-build
+# Set up code building flag
+# build_code_flag=1 -- build code & deck
+# build_code_flag=0 -- build deck only
+build_code_flag=1  
+
+src_dir=/users/matsekh/VPIC/vpic-kokkos # source directory 
+builds=/lustre/scratch5/matsekh/VPIC/vpic-kokkos-build #build directory
 mkdir -p $builds
 openmp=$builds/openmp
 pthreads=$builds/pthreads
@@ -56,114 +63,170 @@ function build_deck(){
 }
 
 # PrgEnv-gnu, OpenMP=ON, PThreads=OFF, TEAM_REDUCTION=OFF, HIERARCHICAL=OFF
-build_dir=$openmp/no-team_no-hierarch
-mkdir -p $build_dir 
-cd $build_dir
-cmake_openmp="ON" 
-cmake_pthreads="OFF"
-cmake_team_reduction="OFF"
-cmake_hierarchical="OFF"
-cmake_cxx_flags="-fopenmp -rdynamic -dynamic"
-vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
-make
-make test
-build_deck $build_dir $src_dir
+if [ $build_code_flag -eq 1 ]
+then
+    build_dir=$openmp/no-team_no-hierarch
+    mkdir -p $build_dir 
+    cd $build_dir
+    cmake_openmp="ON" 
+    cmake_pthreads="OFF"
+    cmake_team_reduction="OFF"
+    cmake_hierarchical="OFF"
+    cmake_cxx_flags="-fopenmp -rdynamic -dynamic"
+    vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
+    make
+    make test
+    build_deck $build_dir $src_dir
+else
+    build_dir=$openmp/no-team_no-hierarch
+    cd $build_dir
+    build_deck $build_dir $src_dir
+fi
+
 
 # PrgEnv-gnu, OpenMP=ON, PThreads=OFF, TEAM_REDUCTION=ON, HIERARCHICAL=OFF                                                       
-build_dir=$openmp/team_no-hierarch
-mkdir -p $build_dir
-cd $build_dir
-cmake_openmp="ON" 
-cmake_pthreads="OFF"
-cmake_team_reduction="ON"
-cmake_hierarchical="OFF"
-cmake_cxx_flags="-fopenmp -rdynamic -dynamic"
-vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
-make
-make test
-build_deck $build_dir $src_dir
-
+if [ $build_code_flag -eq 1 ]
+then
+    build_dir=$openmp/team_no-hierarch
+    mkdir -p $build_dir
+    cd $build_dir
+    cmake_openmp="ON" 
+    cmake_pthreads="OFF"
+    cmake_team_reduction="ON"
+    cmake_hierarchical="OFF"
+    cmake_cxx_flags="-fopenmp -rdynamic -dynamic"
+    vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
+    make
+    make test
+    build_deck $build_dir $src_dir
+else
+    build_dir=$openmp/team_no-hierarch
+    cd $build_dir
+    build_deck $build_dir $src_dir
+fi
+    
 # PrgEnv-gnu, OpenMP=ON, PThreads=OFF, TEAM_REDUCTION=OFF, HIERARCHICAL=ON                                                       
-build_dir=$openmp/no-team_hierarch
-mkdir -p $build_dir
-cd $build_dir
-cmake_openmp="ON"
-cmake_pthreads="OFF"
-cmake_team_reduction="OFF"
-cmake_hierarchical="ON"
-cmake_cxx_flags="-fopenmp -rdynamic -dynamic"
-vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
-make
-make test
-build_deck $build_dir $src_dir
+if [ $build_code_flag -eq 1 ]
+then
+    build_dir=$openmp/no-team_hierarch
+    mkdir -p $build_dir
+    cd $build_dir
+    cmake_openmp="ON"
+    cmake_pthreads="OFF"
+    cmake_team_reduction="OFF"
+    cmake_hierarchical="ON"
+    cmake_cxx_flags="-fopenmp -rdynamic -dynamic"
+    vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
+    make
+    make test
+    build_deck $build_dir $src_dir
+else
+    build_dir=$openmp/no-team_hierarch
+    cd $build_dir
+    build_deck $build_dir $src_dir
+fi
 
 # PrgEnv-gnu, OpenMP=ON, PThreads=OFF, TEAM_REDUCTION=ON, HIERARCHICAL=ON                                                       
-build_dir=$openmp/team_hierarch
-mkdir -p $build_dir
-cd $build_dir
-cmake_openmp="ON"
-cmake_pthreads="OFF"
-cmake_team_reduction="ON"
-cmake_hierarchical="ON"
-cmake_cxx_flags="-fopenmp -rdynamic -dynamic"
-vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
-make
-make test
-build_deck $build_dir $src_dir
-
+if [ $build_code_flag -eq 1 ]
+then
+    build_dir=$openmp/team_hierarch
+    mkdir -p $build_dir
+    cd $build_dir
+    cmake_openmp="ON"
+    cmake_pthreads="OFF"
+    cmake_team_reduction="ON"
+    cmake_hierarchical="ON"
+    cmake_cxx_flags="-fopenmp -rdynamic -dynamic"
+    vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
+    make
+    make test
+    build_deck $build_dir $src_dir
+else
+    build_dir=$openmp/team_hierarch
+    cd $build_dir
+    build_deck $build_dir $src_dir
+fi
 
 # PrgEnv-gnu, OpenMP=OFF, PThreads=ON, TEAM_REDUCTION=OFF, HIERARCHICAL=OFF
-build_dir=$pthreads/no-team_no-hierarch
-mkdir -p $build_dir 
-cd $build_dir
-cmake_openmp="OFF" 
-cmake_pthreads="ON"
-cmake_team_reduction="OFF"
-cmake_hierarchical="OFF"
-cmake_cxx_flags="-rdynamic -dynamic"
-vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
-make
-make test
-build_deck $build_dir $src_dir
+if [ $build_code_flag -eq 1 ]
+then
+    build_dir=$pthreads/no-team_no-hierarch
+    mkdir -p $build_dir 
+    cd $build_dir
+    cmake_openmp="OFF" 
+    cmake_pthreads="ON"
+    cmake_team_reduction="OFF"
+    cmake_hierarchical="OFF"
+    cmake_cxx_flags="-rdynamic -dynamic"
+    vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
+    make
+    make test
+    build_deck $build_dir $src_dir
+else
+    build_dir=$pthreads/no-team_no-hierarch
+    cd $build_dir
+    build_deck $build_dir $src_dir
+fi
 
 # PrgEnv-gnu, OpenMP=OFF, PThreads=ON, TEAM_REDUCTION=ON, HIERARCHICAL=OFF                                                       
-build_dir=$pthreads/team_no-hierarch
-mkdir -p $build_dir
-cd $build_dir
-cmake_openmp="OFF" 
-cmake_pthreads="ON"
-cmake_team_reduction="ON"
-cmake_hierarchical="OFF"
-cmake_cxx_flags="-rdynamic -dynamic"
-vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
-make
-make test
-build_deck $build_dir $src_dir
+if [ $build_code_flag -eq 1 ]
+then
+    build_dir=$pthreads/team_no-hierarch
+    mkdir -p $build_dir
+    cd $build_dir
+    cmake_openmp="OFF" 
+    cmake_pthreads="ON"
+    cmake_team_reduction="ON"
+    cmake_hierarchical="OFF"
+    cmake_cxx_flags="-rdynamic -dynamic"
+    vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
+    make
+    make test
+    build_deck $build_dir $src_dir
+else
+    build_dir=$pthreads/team_no-hierarch
+    cd $build_dir
+    build_deck $build_dir $src_dir
+fi
 
 # PrgEnv-gnu, OpenMP=OFF, PThreads=ON, TEAM_REDUCTION=OFF, HIERARCHICAL=ON                                                       
-build_dir=$pthreads/no-team_hierarch
-mkdir -p $build_dir
-cd $build_dir
-cmake_openmp="OFF"
-cmake_pthreads="ON"
-cmake_team_reduction="OFF"
-cmake_hierarchical="ON"
-cmake_cxx_flags="-rdynamic -dynamic"
-vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
-make
-make test
-build_deck $build_dir $src_dir
+if [ $build_code_flag -eq 1 ]
+then
+    build_dir=$pthreads/no-team_hierarch
+    mkdir -p $build_dir
+    cd $build_dir
+    cmake_openmp="OFF"
+    cmake_pthreads="ON"
+    cmake_team_reduction="OFF"
+    cmake_hierarchical="ON"
+    cmake_cxx_flags="-rdynamic -dynamic"
+    vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
+    make
+    make test
+    build_deck $build_dir $src_dir
+else
+    build_dir=$pthreads/no-team_hierarch
+    cd $build_dir
+    build_deck $build_dir $src_dir
+fi
 
 # PrgEnv-gnu, OpenMP=OFF, PThreads=ON, TEAM_REDUCTION=ON, HIERARCHICAL=ON                                                       
-build_dir=$pthreads/team_hierarch
-mkdir -p $build_dir
-cd $build_dir
-cmake_openmp="OFF"
-cmake_pthreads="ON"
-cmake_team_reduction="ON"
-cmake_hierarchical="ON"
-cmake_cxx_flags="-rdynamic -dynamic"
-vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
-make
-make test
-build_deck $build_dir $src_dir
+if [ $build_code_flag -eq 1 ]
+then
+    build_dir=$pthreads/team_hierarch
+    mkdir -p $build_dir
+    cd $build_dir
+    cmake_openmp="OFF"
+    cmake_pthreads="ON"
+    cmake_team_reduction="ON"
+    cmake_hierarchical="ON"
+    cmake_cxx_flags="-rdynamic -dynamic"
+    vpic_cmake $src_dir $cmake_pthreads $cmake_openmp $cmake_cxx_flags $cmake_hierarchical $cmake_team_reduction
+    make
+    make test
+    build_deck $build_dir $src_dir
+else
+    build_dir=$pthreads/team_hierarch
+    cd $build_dir
+    build_deck $build_dir $src_dir
+fi
