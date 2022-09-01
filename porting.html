@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8" />
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>How to port user kernels to Kokkos &mdash; VPIC-Kokkos 2.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -13,6 +14,7 @@
         <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
         <script src="_static/doctools.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
@@ -44,6 +46,7 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">How to port user kernels to Kokkos</a></li>
 <li class="toctree-l1"><a class="reference internal" href="vis.html">Postprocessing and Visualization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="pbd.html">Particle Boundary Diagnostic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mcnplink.html">Linking VPIC to MCNP</a></li>
 <li class="toctree-l1"><a class="reference internal" href="issues.html">Known Issues</a></li>
 </ul>
 
@@ -71,8 +74,8 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <div class="section" id="how-to-port-user-kernels-to-kokkos">
-<h1>How to port user kernels to Kokkos<a class="headerlink" href="#how-to-port-user-kernels-to-kokkos" title="Permalink to this headline"></a></h1>
+  <section id="how-to-port-user-kernels-to-kokkos">
+<h1>How to port user kernels to Kokkos<a class="headerlink" href="#how-to-port-user-kernels-to-kokkos" title="Permalink to this heading"></a></h1>
 <p>Most user code/loops can be easily converted to run on the GPU, as long as we follow
 some simple rules:</p>
 <ol class="arabic simple">
@@ -113,7 +116,7 @@ Kokkos::parallel_for(&quot;Field injection&quot;, left_edge, KOKKOS_LAMBDA(const
 });
 </pre></div>
 </div>
-</div>
+</section>
 
 
            </div>

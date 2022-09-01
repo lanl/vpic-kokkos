@@ -95,3 +95,19 @@ Note: As with any CMake application, it's critical that you set the
 CMAKE_BUILD_TYPE (and other optimization flags) appropriately for your target
 system
 
+Optimization Options
+********************
+
+VPIC has compilation flags for enabling/disabling various optimizations. VPIC will automatically selct optimizations settings. Users can supply their own settings for potentially better performance. The optimization options are as follows:
+
+1. `VPIC_ENABLE_AUTO_TUNING=ON`
+  - Control whether to use the automatically determined optimization settings or user supplied compile time flags.
+2. `VPIC_ENABLE_HIERARCHICAL=OFF` 
+  - Allow finer control over how work is distributed amoung threads. Automatically enabled by certain optimizations (Team reduction, Vectorization) that require explicit control over threads and vector lanes. Performance is highly dependent on how work is distributed. See kokkos_tuning.hpp for setting the number of leagues (thread teams) and team size (threads per team).
+3. `VPIC_ENABLE_TEAM_REDUCTION=OFF` 
+  - Reduce number of atomic writes in the particle push. Checks if all the particles being processed by active threads / vector lanes belong to the same cell. If so, use fast register based methods to reduce current so that only 1 thread/lane needs to update the fields.
+4. `VPIC_ENABLE_VECTORIZATION=OFF` 
+  - Enables vectorization with OpenMP SIMD for greater performance on the CPU
+5. `VPIC_ENABLE_ACCUMULATORS=OFF`
+  - Use an explicit accumulator for collecting current in advance_p. The accumulator results in better memory access patterns when writing current. This is useful on CPUs but not necessary on GPUs which have better random access characteristics.
+

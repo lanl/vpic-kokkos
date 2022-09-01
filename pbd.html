@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8" />
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Particle Boundary Diagnostic &mdash; VPIC-Kokkos 2.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -13,11 +14,12 @@
         <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
         <script src="_static/doctools.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Known Issues" href="issues.html" />
+    <link rel="next" title="Linking VPIC to MCNP" href="mcnplink.html" />
     <link rel="prev" title="Postprocessing and Visualization" href="vis.html" /> 
 </head>
 
@@ -49,6 +51,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#plotting-the-results">Plotting the results</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="mcnplink.html">Linking VPIC to MCNP</a></li>
 <li class="toctree-l1"><a class="reference internal" href="issues.html">Known Issues</a></li>
 </ul>
 
@@ -76,11 +79,11 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <div class="section" id="particle-boundary-diagnostic">
-<h1>Particle Boundary Diagnostic<a class="headerlink" href="#particle-boundary-diagnostic" title="Permalink to this headline"></a></h1>
+  <section id="particle-boundary-diagnostic">
+<h1>Particle Boundary Diagnostic<a class="headerlink" href="#particle-boundary-diagnostic" title="Permalink to this heading"></a></h1>
 <p>The particle boundary diagnostic is a tool to record particle data when it interacts with a boundary.  Currently, it works only with absorbing boundaries, uses an ad hoc binary output, and interfaces with c postprocessors and python plotters that rely on the precise layout of the data.  This page should get you started making some plots.</p>
-<div class="section" id="enabling-the-diagnostic-in-your-deck">
-<h2>Enabling the diagnostic in your deck<a class="headerlink" href="#enabling-the-diagnostic-in-your-deck" title="Permalink to this headline"></a></h2>
+<section id="enabling-the-diagnostic-in-your-deck">
+<h2>Enabling the diagnostic in your deck<a class="headerlink" href="#enabling-the-diagnostic-in-your-deck" title="Permalink to this heading"></a></h2>
 <p>The <cite>species_t</cite> class now has a <cite>pb_diagnostic</cite> struct as a member which controls the particle boundary diagnostic for that species.  You must, in your deck, tell the diagnostic what values to write and finalize the diagnostic to enable it.</p>
 <div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="n">species_t</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">electron</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">define_species</span><span class="p">(</span><span class="s">&quot;electron&quot;</span><span class="p">,</span><span class="w"> </span><span class="mf">-1.</span><span class="o">*</span><span class="n">e_c</span><span class="p">,</span><span class="w"> </span><span class="n">m_e_c</span><span class="p">,</span><span class="w"> </span><span class="n">max_local_np_e</span><span class="p">,</span><span class="w"> </span><span class="n">max_local_nm_e</span><span class="p">,</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w"></span>
 <span class="n">electron</span><span class="o">-&gt;</span><span class="n">pb_diag</span><span class="o">-&gt;</span><span class="n">write_ux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"></span>
@@ -114,23 +117,23 @@
 <span class="p">}</span><span class="w"></span>
 </pre></div>
 </div>
-</div>
-<div class="section" id="processing-the-output">
-<h2>Processing the output<a class="headerlink" href="#processing-the-output" title="Permalink to this headline"></a></h2>
+</section>
+<section id="processing-the-output">
+<h2>Processing the output<a class="headerlink" href="#processing-the-output" title="Permalink to this heading"></a></h2>
 <p>There are two <cite>*.c</cite> example files in <cite>vpic-kokkos/post</cite>.  At present, these are extreemely ad hoc, and make assumptions about what values the particle boundary diagnostic wrote and what species are present in your simulation.  They work well with the short_pulse.cxx sample deck.  See the files for compilation and usage instructions.</p>
-</div>
-<div class="section" id="plotting-the-results">
-<h2>Plotting the results<a class="headerlink" href="#plotting-the-results" title="Permalink to this headline"></a></h2>
+</section>
+<section id="plotting-the-results">
+<h2>Plotting the results<a class="headerlink" href="#plotting-the-results" title="Permalink to this heading"></a></h2>
 <p>There are two python plotters in <cite>vpic-kokkos/post</cite> that will make plots from the data from the c postprocessors.  If you ran the postprocessors correctly, these should be very easy to use.</p>
-</div>
-</div>
+</section>
+</section>
 
 
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="vis.html" class="btn btn-neutral float-left" title="Postprocessing and Visualization" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="issues.html" class="btn btn-neutral float-right" title="Known Issues" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="mcnplink.html" class="btn btn-neutral float-right" title="Linking VPIC to MCNP" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

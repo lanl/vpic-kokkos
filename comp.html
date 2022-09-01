@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8" />
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Compiling VPIC &mdash; VPIC-Kokkos 2.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -13,6 +14,7 @@
         <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
         <script src="_static/doctools.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
@@ -45,12 +47,14 @@
 <li class="toctree-l2"><a class="reference internal" href="#legacy-non-cmake-build-for-old-kokkos-versions">Legacy non-cmake build for old Kokkos versions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#further-reading">Further Reading</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#building-vpic-kokkos">Building VPIC + Kokkos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#optimization-options">Optimization Options</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="run.html">Running VPIC</a></li>
 <li class="toctree-l1"><a class="reference internal" href="porting.html">How to port user kernels to Kokkos</a></li>
 <li class="toctree-l1"><a class="reference internal" href="vis.html">Postprocessing and Visualization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="pbd.html">Particle Boundary Diagnostic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mcnplink.html">Linking VPIC to MCNP</a></li>
 <li class="toctree-l1"><a class="reference internal" href="issues.html">Known Issues</a></li>
 </ul>
 
@@ -78,11 +82,11 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <div class="section" id="compiling-vpic">
-<h1>Compiling VPIC<a class="headerlink" href="#compiling-vpic" title="Permalink to this headline"></a></h1>
+  <section id="compiling-vpic">
+<h1>Compiling VPIC<a class="headerlink" href="#compiling-vpic" title="Permalink to this heading"></a></h1>
 <p>Compiling VPIC consists of two steps: compiling or finding a Kokkos install, and building VPIC against that Kokkos install.</p>
-<div class="section" id="quickstart">
-<h2>Quickstart<a class="headerlink" href="#quickstart" title="Permalink to this headline"></a></h2>
+<section id="quickstart">
+<h2>Quickstart<a class="headerlink" href="#quickstart" title="Permalink to this heading"></a></h2>
 <p>1) Do a <em>recursive</em> clone of this repo, this will pull down a copy of Kokkos
 for you.
 <code class="docutils literal notranslate"><span class="pre">`</span>
@@ -111,9 +115,9 @@ platform, etc), where as the above builds for the specific platform that you’r
 currently on.</p>
 <p>A reminder to NVIDIA GPU users, CUDA 10.2 does not support GCC 8 or newer. We
 recommend you use GCC 6 or 7.</p>
-</div>
-<div class="section" id="manual-kokkos-install-more-powerful-more-effort">
-<h2>Manual Kokkos Install (more powerful, more effort)<a class="headerlink" href="#manual-kokkos-install-more-powerful-more-effort" title="Permalink to this headline"></a></h2>
+</section>
+<section id="manual-kokkos-install-more-powerful-more-effort">
+<h2>Manual Kokkos Install (more powerful, more effort)<a class="headerlink" href="#manual-kokkos-install-more-powerful-more-effort" title="Permalink to this heading"></a></h2>
 <p>It is typical to maintain many different installs of Kokkos (CPU, older
 GPU, new GPU, Debug, etc), so it’s worth while learning how to install Kokkos
 manually. To do this we will use cmake. On can achieve this by:</p>
@@ -125,9 +129,9 @@ manually. To do this we will use cmake. On can achieve this by:</p>
 <code class="docutils literal notranslate"><span class="pre">`</span>
 <span class="pre">cmake</span> <span class="pre">-DKokkos_ENABLE_CUDA=ON</span> <span class="pre">-DKokkos_ARCH_VOLTA70=ON</span> <span class="pre">..</span>
 <span class="pre">`</span></code></p>
-</div>
-<div class="section" id="legacy-non-cmake-build-for-old-kokkos-versions">
-<h2>Legacy non-cmake build for old Kokkos versions<a class="headerlink" href="#legacy-non-cmake-build-for-old-kokkos-versions" title="Permalink to this headline"></a></h2>
+</section>
+<section id="legacy-non-cmake-build-for-old-kokkos-versions">
+<h2>Legacy non-cmake build for old Kokkos versions<a class="headerlink" href="#legacy-non-cmake-build-for-old-kokkos-versions" title="Permalink to this heading"></a></h2>
 <p>1) Clone Kokkos (or use ./kokkos in the recursive clone) from
 <a class="reference external" href="https://github.com/kokkos/kokkos">https://github.com/kokkos/kokkos</a>
 2) Make a build folder, and execute <cite>../generate_makefile.bash</cite>, passing the
@@ -139,9 +143,9 @@ like:</p>
 <li><p>GPU: <cite>../generate_makefile.bash –with-serial –with-openmp –with-cuda –arch=Kepler30 –with-cuda-options=enable_lambda –compiler=$KOKKOS_SRC_DIR/bin/nvcc_wrapper –prefix=$KOKKOS_INSTALL_DIR</cite></p></li>
 </ul>
 </div></blockquote>
-</div>
-<div class="section" id="further-reading">
-<h2>Further Reading<a class="headerlink" href="#further-reading" title="Permalink to this headline"></a></h2>
+</section>
+<section id="further-reading">
+<h2>Further Reading<a class="headerlink" href="#further-reading" title="Permalink to this heading"></a></h2>
 <p>One can cherry pick the Kokkos specific details from
 [here](<a class="reference external" href="https://github.com/ECP-copa/Cabana/wiki/Build-Instructions">https://github.com/ECP-copa/Cabana/wiki/Build-Instructions</a>) to get
 detailed build instructions for Kokkos (ignore the things about Cabana)</p>
@@ -154,9 +158,9 @@ options that are available. These include:</p>
 <li><p><cite>VPIC_KOKKOS_DEBUG</cite></p></li>
 <li><p><cite>KOKKOS_ARCH</cite></p></li>
 </ol>
-</div>
-<div class="section" id="building-vpic-kokkos">
-<h2>Building VPIC + Kokkos<a class="headerlink" href="#building-vpic-kokkos" title="Permalink to this headline"></a></h2>
+</section>
+<section id="building-vpic-kokkos">
+<h2>Building VPIC + Kokkos<a class="headerlink" href="#building-vpic-kokkos" title="Permalink to this heading"></a></h2>
 <p>Then when we build VPIC we need to make sure we using the GPU, you need to
 specify the Kokkos <cite>nvcc_wrapper</cite> to be the compiler. This typically looks
 something like:</p>
@@ -164,8 +168,52 @@ something like:</p>
 <p>Note: As with any CMake application, it’s critical that you set the
 CMAKE_BUILD_TYPE (and other optimization flags) appropriately for your target
 system</p>
-</div>
-</div>
+</section>
+<section id="optimization-options">
+<h2>Optimization Options<a class="headerlink" href="#optimization-options" title="Permalink to this heading"></a></h2>
+<p>VPIC has compilation flags for enabling/disabling various optimizations. VPIC will automatically selct optimizations settings. Users can supply their own settings for potentially better performance. The optimization options are as follows:</p>
+<ol class="arabic simple">
+<li><p><cite>VPIC_ENABLE_AUTO_TUNING=ON</cite></p></li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li><p>Control whether to use the automatically determined optimization settings or user supplied compile time flags.</p></li>
+</ul>
+</div></blockquote>
+<ol class="arabic simple" start="2">
+<li><p><cite>VPIC_ENABLE_HIERARCHICAL=OFF</cite></p></li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li><p>Allow finer control over how work is distributed amoung threads. Automatically enabled by certain optimizations (Team reduction, Vectorization) that require explicit control over threads and vector lanes. Performance is highly dependent on how work is distributed. See kokkos_tuning.hpp for setting the number of leagues (thread teams) and team size (threads per team).</p></li>
+</ul>
+</div></blockquote>
+<ol class="arabic simple" start="3">
+<li><p><cite>VPIC_ENABLE_TEAM_REDUCTION=OFF</cite></p></li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li><p>Reduce number of atomic writes in the particle push. Checks if all the particles being processed by active threads / vector lanes belong to the same cell. If so, use fast register based methods to reduce current so that only 1 thread/lane needs to update the fields.</p></li>
+</ul>
+</div></blockquote>
+<ol class="arabic simple" start="4">
+<li><p><cite>VPIC_ENABLE_VECTORIZATION=OFF</cite></p></li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li><p>Enables vectorization with OpenMP SIMD for greater performance on the CPU</p></li>
+</ul>
+</div></blockquote>
+<ol class="arabic simple" start="5">
+<li><p><cite>VPIC_ENABLE_ACCUMULATORS=OFF</cite></p></li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li><p>Use an explicit accumulator for collecting current in advance_p. The accumulator results in better memory access patterns when writing current. This is useful on CPUs but not necessary on GPUs which have better random access characteristics.</p></li>
+</ul>
+</div></blockquote>
+</section>
+</section>
 
 
            </div>
