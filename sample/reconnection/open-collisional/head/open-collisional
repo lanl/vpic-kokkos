@@ -1,0 +1,1541 @@
+//////////////////////////////////////////////////////
+//
+//   Harris Sheet Reconnection - Open Boundary Model
+//
+//////////////////////////////////////////////////////
+
+#include "injection"   //  Subroutine to compute re-injection velocity
+
+//////////////////////////////////////////////////////
+
+// structure to hold the data for energy diagnostics
+struct edata {
+  species_id sp_id;       /* species id */
+  double       vth;       /* thermal energy */
+  char  fname[256];       /* file to save data */
+};
+
+begin_globals {
+
+  int restart_interval;
+  int energies_interval;
+  int fields_interval;
+  int ehydro_interval;
+  int Hhydro_interval;
+  int eparticle_interval;
+  int Hparticle_interval;
+  int quota_check_interval;  // How frequently to check if quota exceeded
+
+  int rtoggle;               // enables save of last 2 restart dumps for safety
+  double quota_sec;          // Run quota in seconds
+  double b0;                 // B0
+  double bg;                 // Guide field
+  double v_A;
+  double topology_x;       // domain topology
+  double topology_y;
+  double topology_z;
+
+  // parameters for the collision model
+  int    ee_collisions; // Flag to signal we want to do e-e collisions.
+  int    ei_collisions; // Flag to signal we want to do e-i collisions.
+  int    ii_collisions; // Flag to signal we want to do i-i collisions.
+
+  double cvar; // Base variance (dimensionless) used in particle collision
+  double nppc_max; // Max number of particles/cell (used to def key array size).
+  int tstep_coll;  // Collision interval (=multiple of sort interval).
+  double Z;
+  double mi_me;
+  double wpewce;
+
+  // Variables for Open BC Model
+  double nb;      // Background density
+  int nsp;        // Number of Species
+  double vth[2];  // Thermal velocity of Harris components
+  double vthb[2]; // Thermal velocity of background components
+  double q[2];    // Species charge
+  double L_de;    // Initial Harris sheet thickness
+  double uf[2];   // Initial Fluid Drift in Harris
+  double nfac; // Normalization factor to convert particles per cell to density
+  double rin[3];  // Relaxation parameter for inflow boundary moments
+  double rout[3]; // Relaxation parameter for outlfow boundary moments
+  double sort[2]; // Intervals where we know particles are sorted
+  double edrive;  // Drive field for inflow boundary
+  double tdrive;
+  int left,right,top,bottom;  // Keep track of boundary domains
+  // Moments for bottom injectors
+  double *nbot, *ubot, *pbot, *bbot, *fbot;
+  // Moments for top injectors
+  double *ntop, *utop, *ptop, *btop, *ftop;
+  // Moments for left injectors
+  double *nleft, *uleft, *pleft, *bleft, *fleft;
+  // Moments for right injectors
+  double *nright, *uright, *pright, *bright, *fright;
+
+  // Output variables
+  DumpParameters fdParams;
+  DumpParameters hedParams;
+  DumpParameters hHdParams;
+  std::vector<DumpParameters *> outputParams;
+
+  // Variables for the energy diagnostics
+  edata ede;             // parameters for electron species
+  edata edi;             // parameters for ion species
+  double emax;           // maximum energy (in units of me*c**2)
+  int nex;               // number of energy bins
+
+  //Vadim: modified restart machinary
+  int write_restart;     // global flag for all to write restart files
+  int write_end_restart; // global flag for all to write restart files
+};
+
+begin_initialization {
+  // use natural PIC units
+  double ec   = 1;         // Charge normalization
+  double me   = 1;         // Mass normalization
+  double c    = 1;         // Speed of light
+  double de   = 1;         // Length normalization (electron inertial length)
+  double eps0 = 1;         // Permittivity of space
+
+  double cfl_req   = 0.99;  // How close to Courant should we try to run
+  double wpedt_max = 0.36;  // Max dt allowed if Courant not too restrictive
+  double damp      = 0.0;   // Level of radiation damping
+  int rng_seed     = 1;     // Random number seed increment
+
+  // Physics parameters
+  double mi_me   = 400.0;  // Ion mass / electron mass
+  double L_di    = 0.5;    // Sheet thickness / ion inertial length
+  double Ti_Te   = 5.0;    // Ion temperature / electron temperature
+  double Z   = 1.0;      // Ion charge
+  double nb_n0   = 0.228;   // background plasma density
+  double Tbe_Te  = 0.7598;  // Ratio of background T_e to Harris T_e
+  double Tbi_Ti  = 0.3039;  // Ratio of background T_i to Harris T_i
+  double wpe_wce = 2.0;    // electron plasma freq / electron cyclotron freq
+  double bg = 0.0;
+  double theta   = 0;      // B0 = Bx
+  double taui    = 300;    // simulation wci's to run
+
+  double quota   = 11.0;   // run quota in hours
+  double quota_sec = quota*3600;  // Run quota in seconds
+
+  double cs   = cos(theta);
+  double sn   = sin(theta);
+
+  //derived qunatities
+  double mi = me*mi_me;       // Ion mass
+  double Te = me*c*c/(2*eps0*wpe_wce*wpe_wce*(1+Ti_Te)); // Electron temperature
+  double Ti = Te*Ti_Te;       // Ion temperature
+  double vthe = sqrt(Te/me);                        // Electron thermal velocity
+  double vthi = sqrt(Ti/mi);  // Ion thermal velocity
+  double vtheb = sqrt(Tbe_Te*Te/me);  // normalized background e thermal vel.
+  double vthib = sqrt(Tbi_Ti*Ti/mi);  // normalized background ion thermal vel.
+  double wci  = 1.0/(mi_me*wpe_wce);  // Ion cyclotron frequency
+  double wce  = wci*mi_me;            // Electron cyclotron freqeuncy
+  double wpe  = wce*wpe_wce;          // electron plasma frequency
+  double wpi  = wpe/sqrt(mi_me);      // ion plasma frequency
+  double di   = c/wpi;                // ion inertial length
+  double L    = L_di*di;              // Harris sheet thickness
+  double rhoi_L = sqrt(Ti_Te/(1.0+Ti_Te))/L_di;
+  double v_A= (wci/wpi)/sqrt(nb_n0); // based on nb
+
+  double ion_sort_interval = 25; // Injector moments also updated
+  double electron_sort_interval = 25; // Injector moments also updated
+
+  // Parameters for Open BC model
+  // Relaxation - density, velocity + particle flux, pressure tensor
+  double rin[3] =  {0.000, 0.06, 0.000};
+  double rout[3] = {0.002, 0.002, 0.002};
+  double edrive = 0.08*v_A/(wpe_wce);    // edrive = 0 gives undriven limit
+  //double edrive = 0.0099;    // Setting edrive = 0 will give undriven limit
+
+  double tdrive = 32000.0;
+  double sort_interval = 10;  // Injector moments also updated at this interval
+
+  // Numerical parameters
+  double nppc  = 400; // Average number of macro particle per cell per species
+
+  double Lx    = 20*di;      // size of box in x dimension
+  double Ly    = 0.00781*di; // size of box in y dimension
+  double Lz    = 20*di;      // size of box in z dimension
+
+  int topology_factor = 64; // 4 ranks
+
+  double topology_x = 256/topology_factor;  // Number of domains in x, y, and z
+  double topology_y = 1;
+  double topology_z = 1;  // For load balance, keep "1" or "2" for Harris sheet
+
+  double nx = 2560/sqrt(topology_factor);
+  double ny = 1;
+  double nz = 2560/sqrt(topology_factor);
+
+  double hx = Lx/nx;
+  double hy = Ly/ny;
+  double hz = Lz/nz;
+
+  double b0 = me*c*wce/ec; // Asymptotic magnetic field strength
+  double n0 = me*eps0*wpe*wpe/(ec*ec);  // Peak electron (ion) density
+  double vdri = 2*c*Ti/(ec*b0*L);   // Ion drift velocity
+  double vdre = -vdri/(Ti_Te);      // electron drift velocity
+
+  double Npe_sheet = 2*n0*Lx*Ly*L*tanh(0.5*Lz/L); // N physical e's in sheet
+  double Npe_back  = nb_n0*n0*Ly*Lz*Lx;           // N physical e's in backgrnd
+  double Npe       = Npe_sheet + Npe_back;
+  double Ne        = nppc*nx*ny*nz;  // total macro electrons in box
+  double Ne_sheet  = Ne*Npe_sheet/Npe;
+  double Ne_back   = Ne*Npe_back/Npe;
+  Ne_sheet = trunc_granular(Ne_sheet,nproc()); // Make it divisible by nproc
+  Ne_back  = trunc_granular(Ne_back,nproc());  // Make it divisible by nproc
+  Ne = Ne_sheet + Ne_back;
+  double qe_s = -ec*Npe_sheet/Ne_sheet;  // Charge per macro electron
+  double qi_s =  ec*Npe_sheet/Ne_sheet;  // Charge per macro electron
+  double weight_s = ec*Npe_sheet/Ne_sheet;  // Charge per macro electron
+  double qe_b = -ec*Npe_back/Ne_back;  // Charge per macro electron
+  double qi_b =  ec*Npe_back/Ne_back;  // Charge per macro electron
+  double weight_b =  ec*Npe_back/Ne_back;  // Charge per macro electron
+  double nfac = qi_s/(hx*hy*hz);       // Convert density to particles per cell
+
+  double gdri = 1/sqrt(1-vdri*vdri/(c*c));  // gamma of ion drift frame
+  double gdre = 1/sqrt(1-vdre*vdre/(c*c)); // gamma of electron drift frame
+  double udri = vdri*gdri;                 // 4-velocity of ion drift frame
+  double udre = vdre*gdre;                 // 4-velocity of electron drift frame
+  double tanhf = tanh(0.5*Lz/L);
+  double Lpert = 1.5*Lx; // wavelength of perturbation
+  double dbz =  0.03*b0; // Perturbation i       %e\n", taui );
+    fp_info.print("              num_step =             %i\n", num_step );
+    fp_info.print("              Lx/de =                %e\n", Lx/de );
+    fp_info.print("              Ly/de =                %e\n", Ly/de );
+    fp_info.print("              Lz/de =                %e\n", Lz/de );
+    fp_info.print("              Lx/di =                %e\n", Lx/di );
+    fp_info.print("              Ly/di =                %e\n", Ly/di );
+    fp_info.print("              Lz/di =                %e\n", Lz/di );
+    fp_info.print("              nx =                   %e\n", nx );
+    fp_info.print("              ny =                   %e\n", ny );
+    fp_info.print("              nz =                   %e\n", nz );
+    fp_info.print("              damp =                 %e\n", damp );
+    fp_info.print("              courant =              %e\n", c*dt/dg );
+    fp_info.print("              nproc =                %i\n", nproc() );
+    fp_info.print("              nppc =                 %e\n", nppc );
+    fp_info.print("              b0 =                   %e\n", b0 );
+    fp_info.print("              v_A (based on nb) =    %e\n", v_A );
+    fp_info.print("              di =                   %e\n", di );
+    fp_info.print("              Ne =                   %e\n", Ne );
+    fp_info.print("              Ne_sheet =             %e\n", Ne_sheet );
+    fp_info.print("              Ne_back =              %e\n", Ne_back );
+    fp_info.print("              total # of particles = %e\n", 2*Ne );
+    fp_info.print("              dt*wpe =               %e\n", wpe*dt );
+    fp_info.print("              dt*wce =               %e\n", wce*dt );
+    fp_info.print("              dt*wci =               %e\n", wci*dt );
+    fp_info.print("              energies_interval:     %i\n",
+      energies_interval);
+    fp_info.print("              dx/de =                %e\n", Lx/(de*nx) );
+    fp_info.print("              dy/de =                %e\n", Ly/(de*ny) );
+    fp_info.print("              dz/de =                %e\n", Lz/(de*nz) );
+    fp_info.print("              L/debye =              %e\n", L/(vthe/wpe) );
+    fp_info.print("              dx/rhoi =              %e\n",
+      (Lx/nx)/(vthi/wci) );
+    fp_info.print("              dx/rhoe =              %e\n",
+      (Lx/nx)/(vthe/wce) );
+    fp_info.print("              dx/debye =             %e\n",
+      (Lx/nx)/(vthe/wpe) );
+    fp_info.print("              n0 =                   %e\n", n0 );
+    fp_info.print("              vthi/c =               %e\n", vthi/c );
+    fp_info.print("              vthe/c =               %e\n", vthe/c );
+    fp_info.print("              vdri/c =               %e\n", vdri/c );
+    fp_info.print("              vdre/c =               %e\n", vdre/c );
+    fp_info.print(" tstep_coll:                    %i\n", tstep_coll);
+    fp_info.print(" nu/wce:                        %g\n", nuei_wce);
+    fp_info.print(" nu*dt_coll:                    %g\n",
+      nuei_wce/wpe_wce*dt_coll);
+    fp_info.print("              ***************************\n");
+    fp_info.close();
+  }
+
+  ////////////////////////////
+  // Load fields
+
+  sim_log( "Loading fields" );
+  set_region_field( everywhere, 0, 0, 0,                    // Electric field
+    cs*b0*tanh(z/L)+dbx*cos(2.0*M_PI*(x-0.5*Lx)/Lpert)*sin(M_PI*z/Lz), //Bx
+    -sn*b0*tanh(z/L) + b0*bg, //By
+    dbz*cos(M_PI*z/Lz)*sin(2.0*M_PI*(x-0.5*Lx)/Lpert) ); // Bz
+
+  // Localized Perturbation to lauch a light wave
+
+//    # define R2 ((x-0.5*Lx)*(x-0.5*Lx) + z*z)/(L*L)
+//    # define PERT  0.2*tanh(R2)/cosh(R2)
+//      set_region_field( everywhere, 0, 0, 0,                    // Electric field
+//        cs*b0*tanh(z/L) - z*PERT, //Bx
+//        b0*bg, //By
+//        (x-0.5*Lx)*PERT ); // Bz
+
+  // Note: everywhere is a region that encompasses the entire simulation
+  // In general, regions are specied as logical equations (i.e. x>0 && x+y<2)
+
+  // LOAD PARTICLES
+
+  sim_log( "Loading particles" );
+
+  // Do a fast load of the particles
+
+  seed_entropy( rank() );  //Generators desynchronized
+  double xmin = grid->x0 , xmax = grid->x0+(grid->dx)*(grid->nx);
+  double ymin = grid->y0 , ymax = grid->y0+(grid->dy)*(grid->ny);
+  double zmin = grid->z0 , zmax = grid->z0+(grid->dz)*(grid->nz);
+
+  // Load Harris population
+
+  sim_log( "-> Main Harris Sheet" );
+
+  repeat ( Ne_sheet/nproc() ) {
+    double x, y, z, ux, uy, uz, d0 ;
+
+    do {
+      z = L*atanh(uniform( rng(0), -1, 1)*tanhf);
+    } while( z<= zmin || z>=zmax );
+    x = uniform( rng(0), xmin, xmax );
+    y = uniform( rng(0), ymin, ymax );
+
+    // inject_particles() will return an error for particles no on this
+    // node and will not inject particle locally
+
+    ux = normal( rng(0), 0, vthe);
+    uy = normal( rng(0), 0, vthe);
+    uz = normal( rng(0), 0, vthe);
+    d0 = gdre*uy + sqrt(ux*ux + uy*uy + uz*uz + 1)*udre;
+    uy = d0*cs - ux*sn;
+    ux = d0*sn + ux*cs;
+
+    inject_particle(electron, x, y, z, ux, uy, uz, weight_s, 0, 0 );
+
+    ux = normal( rng(0), 0, vthi);
+    uy = normal( rng(0), 0, vthi);
+    uz = normal( rng(0), 0, vthi);
+    d0 = gdri*uy + sqrt(ux*ux + uy*uy + uz*uz + 1)*udri;
+    uy = d0*cs - ux*sn;
+    ux = d0*sn + ux*cs;
+
+    inject_particle(ion, x, y, z, ux, uy, uz, weight_s, 0, 0 );
+
+  }
+
+  sim_log( "-> Background Population" );
+
+  repeat ( Ne_back/nproc() ) {
+
+    double x = uniform( rng(0), xmin, xmax );
+    double y = uniform( rng(0), ymin, ymax );
+    double z = uniform( rng(0), zmin, zmax );
+
+    inject_particle( electron, x, y, z,
+                     normal( rng(0), 0, vtheb),
+                     normal( rng(0), 0, vtheb),
+                     normal( rng(0), 0, vtheb),
+                     weight_b, 0, 0);
+
+    inject_particle( ion, x, y, z,
+                     normal( rng(0), 0, vthib),
+                     normal( rng(0), 0, vthib),
+                     normal( rng(0), 0, vthib),
+                     weight_b, 0 ,0 );
+  }
+
+  sim_log( "Finished loading particles" );
+
+  /*--------------------------------------------------------------------------
+   * New dump definition
+   *------------------------------------------------------------------------*/
+
+  /*--------------------------------------------------------------------------
+   * Set data output format
+   *
+   * This option allows the user to specify the data format for an output
+   * dump.  Legal settings are 'band' and 'band_interleave'.  Band-interleave
+   * format is the native storage format for data in VPIC.  For field data,
+   * this looks something like:
+   *
+   *   ex0 ey0 ez0 div_e_err0 cbx0 ... ex1 ey1 ez1 div_e_err1 cbx1 ...
+   *
+   * Banded data format stores all data of a particular state variable as a
+   * contiguous array, and is easier for ParaView to process efficiently.
+   * Banded data looks like:
+   *
+   *   ex0 ex1 ex2 ... exN ey0 ey1 ey2 ...
+   *
+   *------------------------------------------------------------------------*/
+
+  global->fdParams.format = band;
+  sim_log ( "Fields output format = band" );
+
+  global->hedParams.format = band;
+  sim_log ( "Electron species output format = band" );
+
+  global->hHdParams.format = band;
+  sim_log ( "Ion species output format = band" );
+
+  /*--------------------------------------------------------------------------
+   * Set stride
+   *
+   * This option allows data down-sampling at output.  Data are down-sampled
+   * in each dimension by the stride specified for that dimension.  For
+   * example, to down-sample the x-dimension of the field data by a factor
+   * of 2, i.e., half as many data will be output, select:
+   *
+   *   global->fdParams.stride_x = 2;
+   *
+   * The following 2-D example shows down-sampling of a 7x7 grid (nx = 7,
+   * ny = 7.  With ghost-cell padding the actual extents of the grid are 9x9.
+   * Setting the strides in x and y to equal 2 results in an output grid of
+   * nx = 4, ny = 4, with actual extents 6x6.
+   *
+   * G G G G G G G G G
+   * G X X X X X X X G
+   * G X X X X X X X G         G G G G G G
+   * G X X X X X X X G         G X X X X G
+   * G X X X X X X X G   ==>   G X X X X G
+   * G X X X X X X X G         G X X X X G
+   * G X X X X X X X G         G X X X X G
+   * G X X X X X X X G         G G G G G G
+   * G G G G G G G G G
+   *
+   * Note that grid extents in each dimension must be evenly divisible by
+   * the stride for that dimension:
+   *
+   *   nx = 150;
+   *   global->fdParams.stride_x = 10; // legal -> 150/10 = 15
+   *
+   *   global->fdParams.stride_x = 8; // illegal!!! -> 150/8 = 18.75
+   *------------------------------------------------------------------------*/
+
+  // relative path to fields data from global header
+  sprintf(global->fdParams.baseDir, "fields");
+
+  // base file name for fields output
+  sprintf(global->fdParams.baseFileName, "fields");
+
+  global->fdParams.stride_x = 1;
+  global->fdParams.stride_y = 1;
+  global->fdParams.stride_z = 1;
+
+  // add field parameters to list
+  global->outputParams.push_back(&global->fdParams);
+
+  sim_log ( "Fields x-stride " << global->fdParams.stride_x );
+  sim_log ( "Fields y-stride " << global->fdParams.stride_y );
+  sim_log ( "Fields z-stride " << global->fdParams.stride_z );
+
+  // relative path to electron species data from global header
+  sprintf(global->hedParams.baseDir, "hydro");
+
+  // base file name for fields output
+  sprintf(global->hedParams.baseFileName, "ehydro");
+
+  global->hedParams.stride_x = 1;
+  global->hedParams.stride_y = 1;
+  global->hedParams.stride_z = 1;
+
+  // add electron species parameters to list
+  global->outputParams.push_back(&global->hedParams);
+
+  sim_log ( "Electron species x-stride " << global->hedParams.stride_x );
+  sim_log ( "Electron species y-stride " << global->hedParams.stride_y );
+  sim_log ( "Electron species z-stride " << global->hedParams.stride_z );
+
+  // relative path to electron species data from global header
+  sprintf(global->hHdParams.baseDir, "hydro");
+
+  // base file name for fields output
+  sprintf(global->hHdParams.baseFileName, "Hhydro");
+
+  global->hHdParams.stride_x = 1;
+  global->hHdParams.stride_y = 1;
+  global->hHdParams.stride_z = 1;
+
+  sim_log ( "Ion species x-stride " << global->hHdParams.stride_x );
+  sim_log ( "Ion species y-stride " << global->hHdParams.stride_y );
+  sim_log ( "Ion species z-stride " << global->hHdParams.stride_z );
+
+  // add electron species parameters to list
+  global->outputParams.push_back(&global->hHdParams);
+
+  /*--------------------------------------------------------------------------
+   * Set output fields
+   *
+   * It is now possible to select which state-variables are output on a
+   * per-dump basis.  Variables are selected by passing an or-list of
+   * state-variables by name.  For example, to only output the x-component
+   * of the electric field and the y-component of the magnetic field, the
+   * user would call output_variables like:
+   *
+   *   global->fdParams.output_variables( ex | cby );
+   *
+   * NOTE: OUTPUT VARIABLES ARE ONLY USED FOR THE BANDED FORMAT.  IF THE
+   * FORMAT IS BAND-INTERLEAVE, ALL VARIABLES ARE OUTPUT AND CALLS TO
+   * 'output_variables' WILL HAVE NO EFFECT.
+   *
+   * ALSO: DEFAULT OUTPUT IS NONE!  THIS IS DUE TO THE WAY THAT VPIC
+   * HANDLES GLOBAL VARIABLES IN THE INPUT DECK AND IS UNAVOIDABLE.
+   *
+   * For convenience, the output variable 'all' is defined:
+   *
+   *   global->fdParams.output_variables( all );
+   *------------------------------------------------------------------------*/
+  /* CUT AND PASTE AS A STARTING POINT
+   * REMEMBER TO ADD APPROPRIATE GLOBAL DUMPPARAMETERS VARIABLE
+
+   output_variables( all );
+
+   output_variables( electric | div_e_err | magnetic | div_b_err |
+                     tca      | rhob      | current  | rhof |
+                     emat     | nmat      | fmat     | cmat );
+
+   output_variables( current_density  | charge_density |
+                     momentum_density | ke_density     | stress_tensor );
+   */
+
+  //global->fdParams.output_variables( electric | magnetic );
+  //global->hedParams.output_variables( current_density | charge_density
+  //                                    | stress_tensor );
+  //global->hHdParams.output_variables( current_density | charge_density );
+  //                                    | stress_tensor );
+
+  global->fdParams.output_variables( all );
+  global->hedParams.output_variables( all );
+  global->hHdParams.output_variables( all );
+
+  /*--------------------------------------------------------------------------
+   * Convenience functions for simlog output
+   *------------------------------------------------------------------------*/
+
+  char varlist[512];
+  create_field_list(varlist, global->fdParams);
+
+  sim_log ( "Fields variable list: " << varlist );
+
+  create_hydro_list(varlist, global->hedParams);
+
+  sim_log ( "Electron species variable list: " << varlist );
+
+  create_hydro_list(varlist, global->hHdParams);
+
+  sim_log ( "Ion species variable list: " << varlist );
+
+  /* ---------------------------------------------
+     Add parameters for the energy diagnostics
+     --------------------------------------------- */
+
+  global->ede.sp_id = electron->id;
+  global->ede.vth = sqrt(2.0)*vthe;
+  sprintf(global->ede.fname,global->hedParams.baseFileName);
+
+  global->edi.sp_id = ion->id;
+  global->edi.vth = sqrt(2.0)*vthi;
+  sprintf(global->edi.fname, global->hHdParams.baseFileName);
+
+  global->nex  = 6;
+  global->emax = 120;
+
+  sim_log("*** Finished with user-specified initialization ***");
+
+  // Upon completion of the initialization, the following occurs:
+  // - The synchronization error (tang E, norm B) is computed between domains
+  //   and tang E / norm B are synchronized by averaging where discrepancies
+  //   are encountered.
+  // - The initial divergence error of the magnetic field is computed and
+  //   one pass of cleaning is done (for good measure)
+  // - The bound charge density necessary to give the simulation an initially
+  //   clean divergence e is computed.
+  // - The particle momentum is uncentered from u_0 to u_{-1/2}
+  // - The user diagnostics are called on the initial state
+  // - The physics loop is started
+  //
+  // The physics loop consists of:
+  // - Advance particles from x_0,u_{-1/2} to x_1,u_{1/2}
+  // - User particle injection at x_{1-age}, u_{1/2} (use inject_particles)
+  // - User current injection (adjust field(x,y,z).jfx, jfy, jfz)
+  // - Advance B from B_0 to B_{1/2}
+  // - Advance E from E_0 to E_1
+  // - User field injection to E_1 (adjust field(x,y,z).ex,ey,ez,cbx,cby,cbz)
+  // - Advance B from B_{1/2} to B_1
+  // - (periodically) Divergence clean electric field
+  // - (periodically) Divergence clean magnetic field
+  // - (periodically) Synchronize shared tang e and norm b
+  // - Increment the time step
+  // - Call user diagnostics
+  // - (periodically) Print a status message
+
+} //begin_initialization
+
+#define should_dump(x)                                                  \
+  (global->x##_interval>0 && remainder(step(), global->x##_interval) == 0)
+
+begin_diagnostics {
+
+  /*--------------------------------------------------------------------------
+   * NOTE: YOU CANNOT DIRECTLY USE C FILE DESCRIPTORS OR SYSTEM CALLS ANYMORE
+   *
+   * To create a new directory, use:
+   *
+   *   dump_mkdir("full-path-to-directory/directoryname")
+   *
+   * To open a file, use: FileIO class
+   *
+   * Example for file creation and use:
+   *
+   *   // declare file and open for writing
+   *   // possible modes are: io_write, io_read, io_append,
+   *   // io_read_write, io_write_read, io_append_read
+   *   FileIO fileIO;
+   *   FileIOStatus status;
+   *   status= fileIO.open("full-path-to-file/filename", io_write);
+   *
+   *   // formatted ASCII  output
+   *   fileIO.print("format string", varg1, varg2, ...);
+   *
+   *   // binary output
+   *   // Write n elements from array data to file.
+   *   // T is the type, e.g., if T=double
+   *   // fileIO.write(double * data, size_t n);
+   *   // All basic types are supported.
+   *   fileIO.write(T * data, size_t n);
+   *
+   *   // close file
+   *   fileIO.close();
+   *------------------------------------------------------------------------*/
+
+  /*--------------------------------------------------------------------------
+   * Data output directories
+   * WARNING: The directory list passed to "global_header" must be
+   * consistent with the actual directories where fields and species are
+   * output using "field_dump" and "hydro_dump".
+   *
+   * DIRECTORY PATHES SHOULD BE RELATIVE TO
+   * THE LOCATION OF THE GLOBAL HEADER!!!
+   *------------------------------------------------------------------------*/
+
+  const int nsp=global->nsp;
+  const int nx=grid->nx;
+  const int ny=grid->ny;
+  const int nz=grid->nz;
+
+  /*--------------------------------------------------------------------------
+   * Normal rundata dump
+   *------------------------------------------------------------------------*/
+  if(step()==0) {
+    dump_mkdir("fields");
+    dump_mkdir("hydro");
+    dump_mkdir("rundata");
+    dump_mkdir("injectors");
+    dump_mkdir("restart1");  // 1st backup
+    dump_mkdir("restart2");  // 2nd backup
+    dump_mkdir("particle");
+
+    dump_grid("rundata/grid");
+    dump_materials("rundata/materials");
+    dump_species("rundata/species");
+    global_header("global", global->outputParams);
+  } // if
+
+  /*--------------------------------------------------------------------------
+   * Normal rundata energies dump
+   *------------------------------------------------------------------------*/
+  if(should_dump(energies)) {
+    dump_energies("rundata/energies", step() == 0 ? 0 : 1);
+  } // if
+
+  /*--------------------------------------------------------------------------
+   * Field data output
+   *------------------------------------------------------------------------*/
+
+  if(step() == 1 || should_dump(fields)) field_dump(global->fdParams);
+
+  /*--------------------------------------------------------------------------
+   * Electron species output
+   *------------------------------------------------------------------------*/
+
+  if(should_dump(ehydro)) hydro_dump("electron", global->hedParams);
+
+  /*--------------------------------------------------------------------------
+   * Ion species output
+   *------------------------------------------------------------------------*/
+
+  if(should_dump(Hhydro)) hydro_dump("ion", global->hHdParams);
+
+  /*--------------------------------------------------------------------------
+   * Restart dump
+   *------------------------------------------------------------------------*/
+
+  if(step() && !(step()%global->restart_interval)) {
+    if(!global->rtoggle) {
+      global->rtoggle = 1;
+      checkpt("restart1/restart", 0);
+      DUMP_INJECTORS(1);
+    }
+    else {
+      global->rtoggle = 0;
+      checkpt("restart2/restart", 0);
+      DUMP_INJECTORS(2);
+    } // if
+  } // if
+
+  // Dump particle data
+
+  char subdir[36];
+  if ( should_dump(eparticle) && step() !=0
+       && step() > 56*(global->fields_interval)  ) {
+    // if ( should_dump(eparticle) && step() !=0 ) {
+    sprintf(subdir,"particle/T.%d",step());
+    dump_mkdir(subdir);
+    sprintf(subdir,"particle/T.%d/eparticle",step());
+    dump_particles("electron", subdir);
+  }
+
+  if ( should_dump(Hparticle) && step() !=0
+       && step() > 56*(global->fields_interval)  ) {
+    sprintf(subdir,"particle/T.%d/Hparticle",step());
+    dump_particles("ion", subdir);
+  }
+
+  // Shut down simulation when wall clock time exceeds global->quota_sec.
+  // Note that the mp_elapsed() is guaranteed to return the same value for all
+  // processors (i.e., elapsed time on proc #0), and therefore the abort will
+  // be synchronized across processors. Note that this is only checked every
+  // few timesteps to eliminate the expensive mp_elapsed call from every
+  // timestep. mp_elapsed has an ALL_REDUCE in it!
+
+  if (( step()>0 && global->quota_check_interval>0
+        && (step()&global->quota_check_interval)==0)
+      || (global->write_end_restart) ) {
+    if ( (global->write_end_restart) ) {
+
+      global->write_end_restart = 0; // reset restart flag
+
+      sim_log( "Allowed runtime exceeded for this job.  Terminating....\n");
+      double dumpstart = uptime();
+
+      checkpt("restart0/restart",0);
+      DUMP_INJECTORS(0);
+
+      mp_barrier(  ); // Just to be safe
+      sim_log( "Restart dump restart completed." );
+      double dumpelapsed = uptime() - dumpstart;
+      sim_log("Restart duration "<< dumpelapsed);
+      exit(0); // Exit or abort?
+    }
+    if( uptime() > global->quota_sec ) global->write_end_restart = 1;
+  }
+
+} // end diagnostics
+
+// *******************  PARTICLE INJECTION  - OPEN BOUNDARY ********************
+begin_particle_injection {
+  int inject;
+  double x, y, z, age, flux, vtherm, vd;
+  double uv[3];
+  double zcell;
+  const int nsp=global->nsp;
+  const int nx=grid->nx;
+  const int ny=grid->ny;
+  const int nz=grid->nz;
+  const double rin[3]={global->rin[0],global->rin[1],global->rin[2]};
+  const double rout[3]={global->rout[0],global->rout[1],global->rout[2]};
+  const double sqpi =1.772453850905516;
+  const double dt=grid->dt;
+  const double hx=grid->dx;
+  const double hy=grid->dy;
+  const double hz=grid->dz;
+  const double nb=global->nb;
+  const double nfac=global->nfac;
+
+  // Initialize the injectors on the first call
+  static int initted=0;
+  if ( !initted ) {
+
+    initted=1;
+
+    if (rank() == 0)
+      MESSAGE(("------------Initializing the Particle Injectors-------------"));
+
+    // Intialize injectors for Harris Sheet with a uniform background
+
+    if (global->right) {
+
+      DEFINE_INJECTOR(right,ny,nz);
+
+      if (step()==0) {
+        for ( int n=1; n<=nsp; n++ ) {
+          double cn = (uf(2)/vth(2))/(vth(n)/vth(2));
+          for ( int k=1;k<=nz; k++ ) {
+            for ( int j=1;j<=ny; j++ ) {
+              bright(n,k,j) = 0;
+              zcell = (grid->z0 + k*hz-hz/2)/(global->L_de);
+              nright(n,k,j) = (nb + 1/(cosh(zcell)*cosh(zcell)))/nfac;
+              fright(n,k,j) = (nb*vthb(n) + vth(n)/(cosh(zcell)*cosh(zcell)))
+                /(2*hx*sqpi*nfac);
+              uright(1,n,k,j) = 0;
+              uright(2,n,k,j) = uf(n)/(1+nb*cosh(zcell)*cosh(zcell));
+              uright(3,n,k,j) = 0;
+              pright(1,2,n,k,j)=pright(2,1,n,k,j)=pright(1,3,n,k,j)
+                =pright(3,1,n,k,j)=pright(2,3,n,k,j)=pright(3,2,n,k,j)=0;
+              pright(1,1,n,k,j) = (nb*vthb(n)*vthb(n) + vth(n)*vth(n)
+                                   /(cosh(zcell)*cosh(zcell)))/(2*nfac);
+              pright(2,2,n,k,j) = (nb*vthb(n)*vthb(n) + vth(n)*vth(n)
+                                   *(1/(cosh(zcell)*cosh(zcell))+2*nb*cn*cn/
+                                     (1+nb*cosh(zcell)*cosh(zcell))))/(2*nfac);
+              pright(3,3,n,k,j) = pright(1,1,n,k,j);
+            }
+          }
+        }  // end for
+      } // endif
+
+      else
+        READ_INJECTOR(right,ny,nz,0);
+
+    } //end right boundary
+
+    if (global->left) {
+
+      DEFINE_INJECTOR(left,ny,nz);
+
+      if (step()==0) {
+        for ( int n=1; n<=nsp; n++ ) {
+          double cn = (uf(2)/vth(2))/(vth(n)/vth(2));
+          for ( int k=1;k<nz+1; k++ ) {
+            for ( int j=1;j<=ny; j++ ) {
+              bleft(n,k,j) = 0;
+              zcell = (grid->z0 + k*hz-hz/2)/(global->L_de);
+              nleft(n,k,j) = (nb + 1/(cosh(zcell)*cosh(zcell)))/nfac;
+              fleft(n,k,j) = (nb*vthb(n) + vth(n)/(cosh(zcell)*cosh(zcell)))
+                /(2*hx*sqpi*nfac);
+              uleft(1,n,k,j) = 0;
+              uleft(2,n,k,j) = uf(n)/(1+nb*cosh(zcell)*cosh(zcell));
+              uleft(3,n,k,j) = 0;
+              pleft(1,2,n,k,j)=pleft(2,1,n,k,j)=pleft(1,3,n,k,j)
+                =pleft(3,1,n,k,j)=pleft(2,3,n,k,j)=pleft(3,2,n,k,j)=0;
+              pleft(1,1,n,k,j) = (nb*vthb(n)*vthb(n) + vth(n)*vth(n)
+                                  /(cosh(zcell)*cosh(zcell)))/(2*nfac);
+              pleft(2,2,n,k,j) = (nb*vthb(n)*vthb(n) + vth(n)*vth(n)
+                                  *(1/(cosh(zcell)*cosh(zcell))+2*nb*cn*cn
+                                    /(1+nb*cosh(zcell)*cosh(zcell))))/(2*nfac);
+              pleft(3,3,n,k,j) = pleft(1,1,n,k,j);
+            }
+          }
+        } // end for
+      } //endif
+
+      else
+        READ_INJECTOR(left,ny,nz,0);
+
+    } // end left boundary
+
+    if (global->top) {
+
+      DEFINE_INJECTOR(top,ny,nx);
+
+      if (step()==0) {
+        for ( int n=1; n<=nsp; n++ ) {
+          for ( int i=1;i<=nx; i++ ) {
+            for ( int j=1;j<=ny; j++ ) {
+              btop(n,i,j) = 0;
+              ntop(n,i,j) = nb/nfac;
+              ftop(n,i,j) = ntop(n,i,j)*vthb(n)/(2*hz*sqpi);
+              utop(1,n,i,j) = 0;
+              utop(2,n,i,j) = 0;
+              utop(3,n,i,j) = 0;
+              ptop(1,2,n,i,j)=ptop(2,1,n,i,j)=ptop(1,3,n,i,j)=ptop(3,1,n,i,j)
+                =ptop(2,3,n,i,j)=ptop(3,2,n,i,j)=0;
+              ptop(1,1,n,i,j) = ntop(n,i,j)*vthb(n)*vthb(n)/2;;
+              ptop(2,2,n,i,j) = ntop(n,i,j)*vthb(n)*vthb(n)/2;;
+              ptop(3,3,n,i,j) = ntop(n,i,j)*vthb(n)*vthb(n)/2;;
+            }
+          }
+        } // end for
+      } //endif
+
+      else
+        READ_INJECTOR(top,ny,nx,0);
+
+    } // end top boundary
+
+    if (global->bottom) {
+
+      DEFINE_INJECTOR(bot,ny,nx);
+
+      if (step()==0) {
+        for ( int n=1; n<=nsp; n++ ) {
+          for ( int i=1;i<=nx; i++ ) {
+            for ( int j=1;j<=ny; j++ ) {
+              bbot(n,i,j) = 0;
+              nbot(n,i,j) = nb/nfac;
+              fbot(n,i,j) = nbot(n,i,j)*vthb(n)/(2*hz*sqpi);
+              ubot(1,n,i,j) = 0.0;
+              ubot(2,n,i,j) = 0.0;
+              ubot(3,n,i,j) = 0.0;
+              pbot(1,2,n,i,j)=pbot(2,1,n,i,j)=pbot(1,3,n,i,j)
+                =pbot(3,1,n,i,j)=pbot(2,3,n,i,j)=pbot(3,2,n,i,j)=0;
+              pbot(1,1,n,i,j) = nbot(n,i,j)*vthb(n)*vthb(n)/2;
+              pbot(2,2,n,i,j) = nbot(n,i,j)*vthb(n)*vthb(n)/2;
+              pbot(3,3,n,i,j) = nbot(n,i,j)*vthb(n)*vthb(n)/2;
+            }
+          }
+        } // end for
+      } //endif
+
+      else
+        READ_INJECTOR(bot,ny,nx,0);
+
+    }  // end bottom boundary
+
+    if (rank() == 0)
+      MESSAGE(("------------------------------------------------------------"));
+
+  } // End of Intialization
+
+  // Inject particles on Left Boundary
+  if (global->left) {
+    for ( int n=1; n<=nsp; n++ ) {
+      species_t * species = find_species_id(n-1,species_list );
+      for ( int k=1;k<=nz; k++ ) {
+        for ( int j=1;j<=ny; j++ ) {
+          bleft(n,k,j) = bleft(n,k,j) + dt*fleft(n,k,j);
+          inject = (int) bleft(n,k,j);
+          bleft(n,k,j) = bleft(n,k,j) - (double) inject;
+          double uflow[3] = {uleft(1,n,k,j),uleft(2,n,k,j),uleft(3,n,k,j)};
+          double press[9] = {pleft(1,1,n,k,j),pleft(1,2,n,k,j),
+                             pleft(1,3,n,k,j),pleft(2,1,n,k,j),
+                             pleft(2,2,n,k,j),pleft(2,3,n,k,j),
+                             pleft(3,1,n,k,j),pleft(3,2,n,k,j),
+                             pleft(3,3,n,k,j)};
+          repeat(inject) {
+            compute_injection(uv,nleft(n,k,j),uflow,press,1,2,3,rng(0));
+            x = grid->x0;
+            y = grid->y0 + hy*(j-1) + hy*uniform( rng(0), 0, 1 );
+            z = grid->z0 + hz*(k-1) + hz*uniform( rng(0), 0, 1 );
+            age = 0;
+            inject_particle(species, x, y, z, uv[0], uv[1], uv[2], q(n), age,
+                            1 );
+          }
+        }
+      }
+    }
+  } // end left injector
+
+  // Inject particles on Right Boundary
+
+  if (global->right) {
+    for ( int n=1; n<=nsp; n++ ) {
+      species_t * species = find_species_id(n-1,species_list );
+      for ( int k=1;k<=nz; k++ ) {
+        for ( int j=1;j<=ny; j++ ) {
+          bright(n,k,j) = bright(n,k,j) + dt*fright(n,k,j);
+          inject = (int) bright(n,k,j);
+          bright(n,k,j) = bright(n,k,j) - (double) inject;
+          double uflow[3] = {uright(1,n,k,j),uright(2,n,k,j),uright(3,n,k,j)};
+          double press[9] = {pright(1,1,n,k,j),pright(1,2,n,k,j),
+                             pright(1,3,n,k,j),pright(2,1,n,k,j),
+                             pright(2,2,n,k,j),pright(2,3,n,k,j),
+                             pright(3,1,n,k,j),pright(3,2,n,k,j),
+                             pright(3,3,n,k,j)};
+          repeat(inject) {
+            compute_injection(uv,nright(n,k,j),uflow,press,-1,2,3,rng(0));
+            x = grid->x1;
+            y = grid->y0 + hy*(j-1) + hy*uniform( rng(0), 0, 1 );
+            z = grid->z0 + hz*(k-1) + hz*uniform( rng(0), 0, 1 );
+            age = 0;
+            inject_particle(species, x, y, z, uv[0], uv[1], uv[2], q(n), age,
+                            1 );
+          }
+        }
+      }
+    }
+  } // end right injector
+
+  // Inject particles on Top Boundary
+
+  if (global->top) {
+    for ( int n=1; n<=nsp; n++ ) {
+      species_t * species = find_species_id(n-1,species_list );
+      for ( int i=1;i<=nx; i++ ) {
+        for ( int j=1;j<=ny; j++ ) {
+
+          vtherm = sqrt(2.0*ptop(3,3,n,i,j)/ntop(n,i,j));
+          double t=grid->dt*step();
+          double tau = global->tdrive;
+          double vexb = (global->edrive)*(1-exp(-t/tau))/field(i,j,nz).cbx;
+          vd = vexb/vtherm;
+          btop(n,i,j) = btop(n,i,j)
+            + dt*ntop(n,i,j)*vtherm*(exp(-vd*vd)/sqpi+vd*(erf(vd)+1))/(2*hz);
+
+          //btop(n,i,j) = btop(n,i,j) + dt*ftop(n,i,j);
+          inject = (int) btop(n,i,j);
+          btop(n,i,j) = btop(n,i,j)- (double) inject;
+          double uflow[3] = {0 ,0 , -vexb};
+
+          //double uflow[3] = {utop(1,n,i,j),utop(2,n,i,j),utop(3,n,i,j)};
+          double press[9] = {ptop(1,1,n,i,j),ptop(1,2,n,i,j),ptop(1,3,n,i,j),
+                             ptop(2,1,n,i,j),ptop(2,2,n,i,j),ptop(2,3,n,i,j),
+                             ptop(3,1,n,i,j),ptop(3,2,n,i,j),ptop(3,3,n,i,j)};
+          repeat(inject) {
+            compute_injection(uv,ntop(n,i,j),uflow,press,-3,2,1,rng(0));
+            x = grid->x0 + hx*(i-1) + hx*uniform( rng(0), 0, 1 );
+            y = grid->y0 + hy*(j-1) + hy*uniform( rng(0), 0, 1 );
+            z = grid->z1;
+            age=0;
+            inject_particle(species, x, y, z, uv[0], uv[1], uv[2], q(n), age,
+                            1 );
+          }
+        }
+      }
+    }
+  }  // end top injector
+
+  // Inject particles on Bottom Boundary
+  if (global->bottom) {
+    for ( int n=1; n<=nsp; n++ ) {
+      species_t * species = find_species_id(n-1,species_list );
+      for ( int i=1;i<=nx; i++ ) {
+        for ( int j=1;j<=ny; j++ ) {
+
+          vtherm = sqrt(2.0*pbot(3,3,n,i,j)/nbot(n,i,j));
+          double t=grid->dt*step();
+          double tau = global->tdrive;
+          double vexb = (global->edrive)*(1-exp(-t/tau))/field(i,j,1).cbx;
+          vd =   -vexb/vtherm;
+          bbot(n,i,j) = bbot(n,i,j)
+            + dt*nbot(n,i,j)*vtherm*(exp(-vd*vd)/sqpi+vd*(erf(vd)+1))/(2*hz);
+
+          //bbot(n,i,j) = bbot(n,i,j) + dt*fbot(n,i,j);
+          inject = (int) bbot(n,i,j);
+          bbot(n,i,j) = bbot(n,i,j)- (double) inject;
+          //double uflow[3] = {ubot(1,n,i,j),ubot(2,n,i,j),ubot(3,n,i,j)};
+          double uflow[3] = {0 ,0 , vexb };
+          double press[9] = {pbot(1,1,n,i,j),pbot(1,2,n,i,j),pbot(1,3,n,i,j),
+                             pbot(2,1,n,i,j),pbot(2,2,n,i,j),pbot(2,3,n,i,j),
+                             pbot(3,1,n,i,j),pbot(3,2,n,i,j),pbot(3,3,n,i,j)};
+          repeat(inject) {
+            compute_injection(uv,nbot(n,i,j),uflow,press,3,2,1,rng(0));
+            x = grid->x0 + hx*(i-1) + hx*uniform( rng(0), 0, 1 );
+            y = grid->y0 + hy*(j-1) + hy*uniform( rng(0), 0, 1 );
+            z = grid->z0;
+            age = 0;
+            inject_particle(species, x, y, z, uv[0], uv[1], uv[2], q(n), age,
+                            1 );
+          }
+        }
+      }
+    }
+  } // end bottom injector
+
+
+  // *******  Update the injector moments at every sort interval *********
+  double v[3];
+  double u[3];
+  double p[9];
+
+#define icell(i,j,k) INDEX_FORTRAN_3(i,j,k,0,nx+1,0,ny+1,0,nz+1)
+#define v(i) v[INDEX_FORTRAN_1(i,1,3)]
+#define u(i) u[INDEX_FORTRAN_1(i,1,3)]
+#define p(i,j) p[INDEX_FORTRAN_2(i,j,1,3,1,3)]
+
+  // Parameters for measuring moments  - BE CAREFUL -
+  // don't make too big or we will go off the node
+
+  int noff = 1;   // Offset from edge - to measure moments
+                  // noff = 0  --> start with cell directly on boundary
+
+  int nav = 2;  // How many cells to include in the "inward" direction in avg
+  int navin = 2;// How many cells to include in the "inward" direction in avg
+
+  // Right boundary Moments
+  if (global->right) {
+    for ( int n=1; n<=nsp; n++ ) {
+      species_t * species = find_species_id(n-1,species_list );
+      particle_t * part;
+      if (remainder(step(), global->sort[n-1]) == 0) {
+        double npart;
+        for ( int k=1;k<=nz; k++ ) {
+          for ( int j=1;j<=ny; j++ ) {
+            npart = 0;
+            flux = 0;
+            u[0] = u[1] = u[2] = 0;
+            p[0] = p[1] = p[2] = p[3]= p[4] = p[5] = p[6]= p[7] = p[8] = 0;
+            for ( int i=nx-noff; i>nx-nav-noff; i-- ){
+              int nstart = species->partition[icell(i,j,k)];
+              int nstop  = species->partition[icell(i,j,k)+1];
+              int ncell  = nstop - nstart;
+              npart = npart + ncell;
+              for (int np=nstart; np<nstop ; np++) {
+                part=&species->p[np];
+                double gamma = sqrt(1.0+part->ux*part->ux + part->uy*part->uy
+                                    + part->uz*part->uz);
+                v(1) = part->ux;
+                v(2) = part->uy;
+                v(3) = part->uz;
+                if (v(1) < 0) flux = flux - v(1)/gamma;
+                for ( int a=1;a<=3; a++ ) {
+                  u(a) = u(a) + v(a);
+                  for ( int b=1;b<=3; b++ ) {
+                    p(a,b) = p(a,b) + v(a)*v(b);
+                  }
+                }
+              } // end particle loop for single cell
+            } // end cells included for these moments
+
+            if ( npart > 0 ) {
+              fright(n,k,j) = (1.0-rout[1])*fright(n,k,j)
+                + rout[1]*flux/(nav*hx);
+              nright(n,k,j) = (1.0-rout[0])*nright(n,k,j) + rout[0]*npart/nav;
+              for ( int a=1; a<=3; a++ ) {
+                uright(a,n,k,j) = (1-rout[1])*uright(a,n,k,j)
+                  + rout[1]*u(a)/npart;
+                for ( int b=1;b<=3; b++ ) {
+                  p(a,b) = (p(a,b) - u(a)*u(b)/npart)/nav;
+                  pright(a,b,n,k,j) = (1-rout[2])*pright(a,b,n,k,j)
+                    + rout[2]*p(a,b);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }  // end right moment update
+
+  // Left boundary Moments
+  if (global->left) {
+    for ( int n=1; n<=nsp; n++ ) {
+      species_t * species = find_species_id(n-1,species_list );
+      particle_t * part;
+      if (remainder(step(), global->sort[n-1]) == 0) {
+        double npart;
+        for ( int k=1;k<=nz; k++ ) {
+          for ( int j=1;j<=ny; j++ ) {
+            npart = 0;
+            flux = 0;
+            u[0] = u[1] = u[2] = 0;
+            p[0] = p[1] = p[2] = p[3]= p[4] = p[5] = p[6]= p[7] = p[8] = 0;
+            for ( int i=1+noff;i<=nav+noff; i++ ) {
+              int nstart = species->partition[icell(i,j,k)];
+              int nstop  = species->partition[icell(i,j,k)+1];
+              int ncell  = nstop - nstart;
+              npart = npart + ncell;
+              for (int np=nstart; np < nstop ; np++) {
+                part=&species->p[np];
+                double gamma = sqrt(1.0+part->ux*part->ux + part->uy*part->uy
+                                    + part->uz*part->uz);
+                v(1) = part->ux;
+                v(2) = part->uy;
+                v(3) = part->uz;
+                if (v(1) > 0) flux = flux + v(1)/gamma;
+                for ( int a=1; a<=3; a++ ) {
+                  u(a) = u(a) + v(a);
+                  for ( int b=1;b<=3; b++ ) {
+                    p(a,b) = p(a,b) + v(a)*v(b);
+                  }
+                }
+              } // end particle loop for single cell
+            } // end cells included for these moments
+
+            if ( npart > 0 ) {
+              fleft(n,k,j) = (1.0-rout[1])*fleft(n,k,j) + rout[1]*flux/(nav*hx);
+              nleft(n,k,j) = (1.0-rout[0])*nleft(n,k,j) + rout[0]*npart/nav;
+              for ( int a=1; a<=3; a++ ) {
+                uleft(a,n,k,j) = (1-rout[1])*uleft(a,n,k,j)
+                  + rout[1]*u(a)/npart;
+                for ( int b=1;b<=3; b++ ) {
+                  p(a,b) = (p(a,b) - u(a)*u(b)/npart)/nav;
+                  pleft(a,b,n,k,j) = (1-rout[2])*pleft(a,b,n,k,j)
+                    + rout[2]*p(a,b);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }  // end left moment update
+
+  // Top boundary Moments
+  if (global->top) {
+    for ( int n=1; n<=nsp; n++ ) {
+      species_t * species = find_species_id(n-1,species_list );
+      particle_t * part;
+      if (remainder(step(), global->sort[n-1]) == 0) {
+        double npart;
+        for ( int i=1;i<=nx; i++ )
+          for ( int j=1;j<=ny; j++ ) {
+            npart = 0;
+            flux = 0;
+            u[0] = u[1] = u[2] = 0;
+            p[0] = p[1] = p[2] = p[3]= p[4] = p[5] = p[6]= p[7] = p[8] = 0;
+            for ( int k=nz-noff; k>nz-navin-noff; k-- ) {
+              int nstart = species->partition[icell(i,j,k)];
+              int nstop  = species->partition[icell(i,j,k)+1];
+              int ncell  = nstop - nstart;
+              npart = npart + ncell;
+              for (int np=nstart; np < nstop ; np++) {
+                part=&species->p[np];
+                double gamma = sqrt(1.0+part->ux*part->ux + part->uy*part->uy
+                                    + part->uz*part->uz);
+                v(1) = part->ux;
+                v(2) = part->uy;
+                v(3) = part->uz;
+                if (v(3) < 0) flux = flux - v(3)/gamma;
+                for ( int a=1; a<=3; a++ ) {
+                  u(a) = u(a) + v(a);
+                  for ( int b=1;b<=3; b++ ) {
+                    p(a,b) = p(a,b) + v(a)*v(b);
+                  }
+                }
+              } // end particle loop for single cell
+            } // end cells included for these moments
+
+            if ( npart > 0 ) {
+              ftop(n,i,j) = (1.0-rin[1])*ftop(n,i,j) + rin[1]*flux/(navin*hz);
+
+              if ( npart/navin < ntop(n,i,j) )
+                ftop(n,i,j) = (ntop(n,i,j)- npart/navin)/dt;
+              else ftop(n,i,j)=0;
+
+              ntop(n,i,j) = (1-rin[0])*ntop(n,i,j) + rin[0]*npart/navin;
+              for ( int a=1;a<=3; a++ ) {
+                utop(a,n,i,j) = (1-rin[1])*utop(a,n,i,j) + rin[1]*u(a)/npart;
+                for ( int b=1;b<=3; b++ ) {
+                  p(a,b) = (p(a,b) - v(a)*v(b)/npart)/navin;
+                  ptop(a,b,n,i,j) = (1-rin[2])*ptop(a,b,n,i,j) + rin[2]*p(a,b);
+                }
+              }
+            }
+          }
+      }
+    }
+  }  // end top moment update
+
+  if (global->bottom) {
+    for ( int n=1; n<=nsp; n++ ) {
+      species_t * species = find_species_id(n-1,species_list );
+      particle_t * part;
+      if (remainder(step(), global->sort[n-1]) == 0) {
+        double npart;
+        for ( int i=1;i<=nx; i++ )
+          for ( int j=1;j<=ny; j++ ) {
+            npart = 0;
+            flux = 0;
+            u[0] = u[1] = u[2] = 0;
+            p[0] = p[1] = p[2] = p[3]= p[4] = p[5] = p[6]= p[7] = p[8] = 0;
+            for ( int k=1+noff;k<=navin+noff; k++ ) {
+              int nstart = species->partition[icell(i,j,k)];
+              int nstop  = species->partition[icell(i,j,k)+1];
+              int ncell  = nstop - nstart;
+              npart = npart + ncell;
+              for (int np=nstart; np < nstop ; np++) {
+                part=&species->p[np];
+                double gamma = sqrt(1.0+part->ux*part->ux + part->uy*part->uy
+                                    + part->uz*part->uz);
+                v(1) = part->ux;
+                v(2) = part->uy;
+                v(3) = part->uz;
+                if (v(3) > 0) flux = flux + v(3)/gamma;
+                for ( int a=1; a<=3; a++ ) {
+                  u(a) = u(a) + v(a);
+                  for ( int b=1;b<=3; b++ ) {
+                    p(a,b) = p(a,b) + v(a)*v(b);
+                  }
+                }
+              } // end particle loop for single cell
+            } // end cells included for these moments
+
+            if ( npart > 0) {
+              fbot(n,i,j) = (1.0-rin[1])*fbot(n,i,j) + rin[1]*flux/(navin*hz);
+              // if ( npart/navin < nbot(n,i,j) ) fbot(n,i,j)
+              // = (nbot(n,i,j)- npart/navin)/dt; else fbot(n,i,j)=0;
+              nbot(n,i,j) = (1-rin[0])*nbot(n,i,j) + rin[0]*npart/navin;
+              for ( int a=1;a<=3; a++ ) {
+                ubot(a,n,i,j) = (1-rin[1])*ubot(a,n,i,j) + rin[1]*u(a)/npart;
+                for ( int b=1;b<=3; b++ ) {
+                  p(a,b) = (p(a,b) - v(a)*v(b)/npart)/navin;
+                  pbot(a,b,n,i,j) = (1-rin[2])*pbot(a,b,n,i,j) + rin[2]*p(a,b);
+                }
+              }
+            }
+          }
+      }
+    }
+  }  // end bottom moment update
+
+
+  // Periodically save injector moments on outflow boundaries
+  // Only do this on the outflow boundaries, and only if we have
+  // a single domain on each boundary - otherwise would have to combine
+  // data files.
+
+  if ( global->topology_y == 1 && global->topology_z ==1 ) {
+
+    // How often to write moments to file -
+
+    int nskip = 10;
+
+    if (global->left) {
+      int j = 1;
+      for ( int n=1; n<=nsp; n++ ) {
+        if (remainder(step(), nskip*global->sort[n-1]) == 0) {
+          char buffer[20];
+          sprintf(buffer, "injectors/left%i.dat", n);
+          FileIO fileIO;
+          if ( ! (fileIO.open(buffer, io_append)==ok) ) 
+            ERROR(("Cannot open file."));
+          for ( int k=1;k<=nz; k++ ) {
+            zcell = (grid->z0 + k*hz-hz/2)/(global->L_de);
+            fileIO.print("%6.4g %6.4g %6.4g %6.4g %6.4g %6.4g %6.4g %6.4g %6.4g %6.4g %6.4g \n",
+                         zcell,nleft(n,k,j),uleft(1,n,k,j),uleft(2,n,k,j),
+                         uleft(3,n,k,j),pleft(1,1,n,k,j),pleft(2,2,n,k,j),
+                         pleft(3,3,n,k,j),pleft(1,2,n,k,j),pleft(1,3,n,k,j),
+                         pleft(2,3,n,k,j));
+          } //end for
+          fileIO.print("  \n \n");
+          fileIO.close();
+        }
+      }
+    }  //end left output
+
+    if (global->right) {
+      int j = 1;
+      for ( int n=1; n<=nsp; n++ ) {
+        if (remainder(step(), nskip*global->sort[n-1]) == 0) {
+          char buffer[20];
+          sprintf(buffer, "injectors/right%i.dat", n);
+          FileIO fileIO;
+          if ( ! (fileIO.open(buffer, io_append)==ok) ) 
+            ERROR(("Cannot open file."));
+          for ( int k=1;k<=nz; k++ ) {
+            zcell = (grid->z0 + k*hz-hz/2)/(global->L_de);
+            fileIO.print("%6.4g %6.4g %6.4g %6.4g %6.4g %6.4g %6.4g %6.4g %6.4g %6.4g %6.4g \n",
+                         zcell,nright(n,k,j),uright(1,n,k,j),uright(2,n,k,j),
+                         uright(3,n,k,j),pright(1,1,n,k,j),pright(2,2,n,k,j),
+                         pright(3,3,n,k,j),pright(1,2,n,k,j),pright(1,3,n,k,j),
+                         pright(2,3,n,k,j));
+          } //end for
+          fileIO.print("  \n \n");
+          fileIO.close();
+        }
+      }
+    }  //end right output
+
+  } //end output for injector moments
+
+} // end particle injection
+
+//*******************  CURRENT INJECTION ***************************
+begin_current_injection {
+}
+
+//*******************  FIELD INJECTION ***************************
+begin_field_injection {
+
+  const int nx=grid->nx;
+  const int ny=grid->ny;
+  const int nz=grid->nz;
+  double t=grid->dt*step();
+  double tau = global->tdrive;
+  int x,y,z;
+
+  // There macros are from local.c to apply boundary conditions
+#define XYZ_LOOP(xl,xh,yl,yh,zl,zh)             \
+  for( z=zl; z<=zh; z++ )                       \
+    for( y=yl; y<=yh; y++ )                     \
+      for( x=xl; x<=xh; x++ )
+
+#define xy_EDGE_LOOP(z) XYZ_LOOP(1,nx,1,ny+1,z,z)
+#define yx_EDGE_LOOP(z) XYZ_LOOP(1,nx+1,1,ny,z,z)
+
+  // Top Boundary
+  if (global->top) {
+    yx_EDGE_LOOP(nz+1) field(x,y,z).ey = (global->edrive)*(1-exp(-t/tau));
+    xy_EDGE_LOOP(nz+1) field(x,y,z).ex = -(global->edrive)*(1-exp(-t/tau))
+      *global->bg;
+  }
+
+  // Bottom Boundary
+  if (global->bottom) {
+    yx_EDGE_LOOP(1) field(x,y,z).ey = (global->edrive)*(1-exp(-t/tau));
+    xy_EDGE_LOOP(1) field(x,y,z).ex = (global->edrive)*(1-exp(-t/tau))
+      *global->bg;
+  }
+
+}  // end field injection
+
+//  Collisional algorithm
+#include "collisions"
+                                                                                                                                  vpic-inter/src/util/rng/test/rng.cc                                                                 100755       0       0        31747 13401525461  15750  0                                                                                                    ustar   arile                                                                0       0                                                                                                                                                                         /*~--------------------------------------------------------------------------~*
+ *~--------------------------------------------------------------------------~*/
+
+#define CATCH_CONFIG_MAIN  // This tells Catch to provide a main()
+#include "catch.hpp"
+
+#include "../../util.h"
+#include "src/vpic/vpic_unit_deck.h"
+
+/* Sequence is from the 11213 generator with a seed of 1234 */
+
+static const int N = 1000;
+static const unsigned int seq[] = {
+   553293926,  698755237, 2442073441, 4209880924, 1764362329, 
+  2195309918,  256824928, 2214706803, 2136320427, 2843087932, 
+  3486529899, 1306350756, 4270642900, 3297631664, 1850831330, 
+  4213109783,  427081536, 1131131307, 2775965886,  877546999, 
+  2836645597, 2850507086, 2755759911, 1306876265, 2575673187, 
+  1824065691, 3511080041, 1928485268,  649052443, 2971742730, 
+   403698108,  169875003,  380295356, 3528011866, 2952256661, 
+  3733745051, 4164222377, 1628603045, 2638256790, 3519195868, 
+  4195872803, 1476523139, 3699602437, 1672363774, 3684807997, 
+  3968862050,  245048207,   33360175,  169770165,  775405269, 
+  3191865739, 3052672634, 2175042373,  363825885, 2991060127, 
+  3107352189, 2040975233, 2280766171, 1049451347, 2464675372, 
+  2786253384,  517425947, 2576418495, 3915167352, 1319262871, 
+  3860956986, 3254547342, 1881673000, 1502819804, 2581419104, 
+  3993517707, 4179793000, 4134726181,  193902288, 2129660509, 
+  1201683060, 2169424339, 1171199755, 3270482785, 2589967476, 
+  1245732811, 2180825597, 4108548794, 3943541881, 1664725995, 
+  3482571249, 3960328275, 2496083819, 2285170479,  707491711, 
+  1973753445, 2559837769, 3759732527, 3621894707, 2667897962, 
+  2786661035, 2316413096, 4122623937, 1564737819, 3606925948, 
+  3141917404, 3237355011, 4148255857, 3198176564,  899012754, 
+  1921496599, 2722540422, 2314650322, 3316686314,  486198287, 
+  3446984721,  359923326, 4170566747, 1715634878, 3002640485, 
+  2198169011, 1709206686, 1602063393, 1768555127,  296016403, 
+   707947167, 4149178993, 2286171885, 3606834898,  860116794, 
+   837512047, 2780968890, 2934517872, 3265475992, 3995475331, 
+   823251686, 1388379685, 1689938384,  924010855,  801623899, 
+  2370143426,  978918237, 3737022385, 1478921360, 3119535156, 
+  3224513071, 3275923638, 2867594136,  731709579, 3968236195, 
+    64525079,  272371898, 4238912616, 1886765573, 3761754562, 
+  1000710391, 2048957979,  312497819,  439741686,  924925889, 
+  3994889236,   52289190,  759549430, 2584954556,  756493366, 
+   168627065,  857399839, 3425284973,  959170692, 1975409876, 
+   925869263, 1735262701, 3394788651,  550383511,  490309361, 
+   881075537, 2070029863, 1223376354, 2762562712, 2355745036, 
+  4058079425,  688888168, 2084555594, 2213905937, 1164042303, 
+  3938114127, 3862067658, 1899582417, 2637725755, 1855007909, 
+  1289092282, 3474658897, 2719086468, 2644140387, 3572064696, 
+  2835757420, 3854845607,  995529688, 2400664527, 2684303099, 
+  1002902183, 2708291817, 1162219077, 1458303374, 2328212094, 
+  2278558260, 2811513813,  187682146, 3731777450, 1369014755, 
+  4107243587, 4249288801, 3167574229, 2433688524, 1263841578, 
+  4178639597,  103168337,  726791243, 3865077042,  468986147, 
+  1352009278, 2120693945, 2257059684, 2511574244,  282332575, 
+   943738722,  765376122, 3886666299, 2550905672, 3021593314, 
+  1563487207, 2902762078, 2131594494, 1640852828, 2051546052, 
+   533501181, 3599888918, 2717252360, 2048541279,  449906823, 
+  4214508583,  407826952, 1220354008, 3680787680,  874143422, 
+  2771749303, 3918211583, 1933979094, 2397328810, 2048627355, 
+  1066449138,  620406396, 1265779869,   82128565, 3162944753, 
+  1216223916, 1462377073, 2410881086, 3283960481, 2698235827, 
+  1293536964, 1062717153,  737566608, 1581406402,   97798499, 
+  4147949360, 3084486205, 3702594522, 1519104056,  796070846, 
+  1353803554, 3887612590, 3110269517,  733537104,  705633439, 
+  2781674078,  991272693,  916020596, 3545700981,  220687238, 
+   324363525, 2561026636, 3521913746, 3070945031, 2373998044, 
+  3146062523, 1137989108, 3961642762, 3895747052, 1580424738, 
+  3667204475, 1010913545, 2234226736, 4019446758,  727087410, 
+  4059848248, 2936062142, 3183958929, 3882269258, 3455933746, 
+  1356303281, 4279894400, 2251669780,  133524669, 1908619621, 
+  2907753894,  364805371, 3022035474, 2844816175, 3612488522, 
+  3506546721, 1443147198, 1217370657, 3834938319, 1100686954, 
+   489874032, 2821199686, 3650884881, 3171161774, 3305651455, 
+  1771732079, 1462745239, 2313021630,  733759255, 2146937574, 
+  2232389715,  326010464, 2874477323, 4182050638, 2190268358, 
+  3013967555, 2540452868, 1319520735, 3037507174, 1074278118, 
+  3719401211, 2013303214, 2756190478, 2387141578,  180439427, 
+  3993230439, 2862452196, 2557110861, 3728952268, 1253230935, 
+   781742369, 2744212073, 1353835579, 3955007660,  914260429, 
+  1339735569,  747434431,  643113688, 2071932020, 2899349882, 
+  3223077155, 1630920461, 1463073770,  630145878, 3050743218, 
+  3516525223, 3480270450,  294098109, 4063336363, 2361143405, 
+  2013101517, 2785286939, 1503734644, 3839462541, 4074196387, 
+  1117196373, 2048922479, 2388244186, 2413315060, 2367315280, 
+  3349315306, 2936256882, 4068808092, 1372059822, 1149208750, 
+  3401323389, 2755773423, 2860092467, 1505179007, 3793739167, 
+  2348158578, 2812841843, 3568987390, 3339508196, 1360318330, 
+   487859816, 3192619943, 1942716817, 3417059105, 2006941363, 
+  3876292868, 3966499501, 3343575128, 1320062019, 4052874294, 
+  1661660417, 3278328199,  667015521, 2547492577, 2504792501, 
+  3304712274,  481758187, 3614301650, 3369442324, 2121036589, 
+  3692381588,  389150458, 2736546189, 1376548125, 1622203973, 
+  3300072739, 2789882526, 3881344628,   34239194, 4256374384, 
+   515810405, 1337208030, 4076098244, 3273673306, 4049989741, 
+  2223726553, 1600951795, 3374458346, 3959457033, 4038761321, 
+  3738299300, 3475534027,  315621578, 2566360079,  400233151, 
+  3198002493, 4000178367, 3003537992, 2418185466, 4133921279, 
+  3950353604, 3290950939,  105405052, 2073632531, 2567135797, 
+  2114529127,  617722918,  574897074,  145060013, 3481202032, 
+   278011874, 4169773197, 1353827771, 1239826005, 4142475495, 
+  2389529339, 3666924805, 2066381368,    6789416, 1668443782, 
+  3196261404, 3514547288, 4026411825,  802392020, 2677514010, 
+  2787660169, 3939691420, 3204448871, 2381714337, 1233034256, 
+  2984307665, 1103407055, 3031977605, 2409144418, 1140946250, 
+  3222997334,  280241001, 2085596678,  520966818,  510353206, 
+   208665480, 3795213078,  288783070, 2098371164,  562326118, 
+  3233670196, 2553636526,  522053470, 1828316355, 4214319056, 
+   452855188, 2302876034,  924621805,  191866231, 4089907614, 
+  4143273946, 2854199969, 4188327916, 4109927523, 2056850061, 
+  1218639351, 3152774385, 3248416571, 4139264331,  673684274, 
+  1841624903,   37564639, 1701880855, 2249177851,  729274386, 
+   428106918, 4181452858,  347163906, 1863870163, 3001348367, 
+  3537322846, 1225876535, 4022036962,  714821668, 3243025973, 
+  3845974554, 2663355489, 4212970629, 2993122213, 3666588071, 
+  3380238642, 2513936028, 2212417121, 2955814918,  569232806, 
+  3154916977, 3107294339, 3134048835, 3849011673, 3836294919, 
+  3734889980,  164091041, 2030878622, 1419071374,  346851020, 
+  1377631226, 1289968696,  962784564, 2020590972,  421488551, 
+  3180838841, 2053804618,  690498077, 2594130153, 1858540204, 
+  2316849314, 1897091063, 1326185749, 3880467220, 1013841045, 
+  2510006459,  200757585, 1706901250,  507983600, 2286361318, 
+  2687095773, 2439114934, 3785940507, 2910927696,  495212298, 
+  1737826401,  275378906, 1933723674, 1120172738, 2170670353, 
+   703797292,  793855448, 1884515135, 3720836500, 1734151247, 
+  3858004935, 1423598860, 1976443512, 1142497044, 2446033335, 
+  1228821251, 2197570102,  146344084, 3365694978,  355468092, 
+   881096899,  931732364, 3350199871, 3243058622,  245057594, 
+  4278566245, 1408621021, 2506645410, 1267060469, 1365764095, 
+    33272254, 2646325483, 1709890154,  442316585,  538779104, 
+  3412560582,  828087032, 2053596312, 2772521746,  894578119, 
+   201257826, 2291277544, 3599460260, 2893282544, 1783425940, 
+  2778987415, 2575736397, 2012251818, 2003236969, 3481419440, 
+  1234904448, 1194524734, 3660540193, 2209734072, 1072263624, 
+  2734463137, 3382453617, 2661765428,  642404874, 3533639813, 
+  3326229745, 2297215451, 2477704233,  195299388, 1781116828, 
+  3276896535, 2771181349,  348737860, 1379297272, 3012409305, 
+   571556070,   91329936, 3368648619, 4135205696, 2115649999, 
+  1627132802, 2941027473, 1066966330, 3576075844, 2982957512, 
+  1380172142,  613840578, 2425556655,   84325493, 1157833380, 
+   380526350, 4039021014, 1290253449,  545146169, 2529775161, 
+   427361307, 4182711492,  883562403,   59017230,   25492125, 
+  1099369309, 3505470186, 2881491845, 2566852819, 2871303793, 
+  3788442890, 2869657037,  801373099, 3358326700, 3419416145, 
+   843059834, 3762692802, 4171146309, 3260102383, 4031587170, 
+  2675507635,  838206744, 3681419048, 2099605932, 2127485526, 
+   926849448, 1980170805, 1438224173, 3523576643,  926000523, 
+   921155423,  180162584, 2033580132, 3202819054, 4274281899, 
+    69381977, 3353380750, 1092443156, 3825831970, 1248974759, 
+  3565713812, 1256704162, 1217134093, 1591142327, 1752494917, 
+  3028371512, 1958303331, 1850071672, 1217813873, 2916267074, 
+  2374819653, 3587666539, 4104385618, 3253865448, 3488338117, 
+   949576801,  689565959, 4110396943, 2660759860, 1472458161, 
+  3610122826,  180814354, 3695546105, 1577211192, 1424463045, 
+  2848290167, 4040830260, 2890841189,  920378244,  136171106, 
+  4066704554, 2505125024,  532297214, 2924909261,  530183725, 
+  1877714361, 2069794883,  332588948, 1738987415, 3417039337, 
+  3566072804, 3310481469, 2816418630, 1926132498, 2214615551, 
+  1599351183, 1233470572, 1696978507, 1606997108, 3913303019, 
+  1946659740, 2966027013, 2182553097, 1357275782, 1374421849, 
+  3138941674, 1105100192, 4222346580, 2362357402, 1279700422, 
+   249844665, 3656189515,  580604409, 2189793371, 3131564844, 
+  2650695683, 3243504545, 3397723045, 4188316599, 3026572267, 
+   907127125, 3405628562,  830752183, 1292469083, 2111044366, 
+   224549056, 4169187060,  454544759, 2474323400,  609923725, 
+  3194353098, 1869536251, 4096821340, 2152204142, 1225922401, 
+  1381918119, 3791021138,  517181631, 4016322084, 1076718013, 
+  1207923521, 1607526999, 3517963918,  171965789, 4124668424, 
+   876823670, 3547237734, 3510460793, 1383243182,   81851397, 
+  4122318508, 4096995620, 4238234251, 1369415583, 3357744380, 
+  1755168431, 3402210424, 2708770915, 2178593232, 2230490979, 
+  3850592336,  395202753, 1145970800, 2073751834, 4019268122, 
+  1715664056, 2670712766,  511797051, 1

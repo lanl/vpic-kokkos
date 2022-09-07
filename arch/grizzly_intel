@@ -1,0 +1,46 @@
+#! /usr/bin/env bash
+#~----------------------------------------------------------------------------~#
+# placeholder
+#~----------------------------------------------------------------------------~#
+
+#------------------------------------------------------------------------------#
+# Get the path to the project from which this script was called
+#------------------------------------------------------------------------------#
+
+#cinch_dir="$(dirname "$(dirname "$(readlink -f $0)")")"
+
+src_dir="${0%/*}/.."
+
+#------------------------------------------------------------------------------#
+# Check required environment variables
+#------------------------------------------------------------------------------#
+
+#------------------------------------------------------------------------------#
+# Call CMake command
+#------------------------------------------------------------------------------#
+
+# The flag -rdynamic removes warnings of the form:
+# Unable to find a safely writable symbol that corresponds to address 432af0
+# (the closest match was "(null)" from "./lpi_2d_F6_test.Linux").  Writing out
+# the raw address instead and keeping my fingers crossed.
+
+cmake \
+  -DCMAKE_BUILD_TYPE=None \
+  -DENABLE_INTEGRATED_TESTS=OFF \
+  -DENABLE_UNIT_TESTS=OFF \
+  -DCMAKE_C_COMPILER=mpicc \
+  -DCMAKE_CXX_COMPILER=mpiCC \
+  -DCMAKE_C_FLAGS="-g -O3 -inline-forceinline -qoverride-limits -no-ansi-alias -Winline -qopt-report=5 -qopt-report-phase=all -diag-disable 10397 -Wl,--export-dynamic" \
+  -DCMAKE_CXX_FLAGS="-g -O3 -inline-forceinline -qoverride-limits -no-ansi-alias -Winline -qopt-report=5 -qopt-report-phase=all -diag-disable 10397 -Wl,--export-dynamic" \
+  -DMPIEXEC=`which mpirun` \
+  $src_dir
+make VERBOSE=1
+
+
+#------------------------------------------------------------------------------#
+# vim: syntax=sh
+#------------------------------------------------------------------------------#
+
+#~---------------------------------------------------------------------------~-#
+# placeholder
+#~---------------------------------------------------------------------------~-#

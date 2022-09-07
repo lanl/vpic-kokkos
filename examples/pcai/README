@@ -1,0 +1,7 @@
+emacs –nw pcai_new.cxx
+make
+srun –n 1 –N 1 ./pcai.Linux 2>&1 | tee hvpic.out    (or mpirun –np 1 ./pcai..)
+ftn –o translate_pcai translate_pcai.cxx
+mkdir data
+srun –n 1 ./translate_pcai
+python ./plotsPCAI.py

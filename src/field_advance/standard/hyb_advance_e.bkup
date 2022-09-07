@@ -1,0 +1,307 @@
+#define IN_sfa
+//#define HAS_V4_PIPELINE
+#include "sfa_private.h"
+
+#include <iostream>
+//#include <fstream>
+
+typedef struct pipeline_args {
+  /**/  field_t      * ALIGNED(128) f;
+  const sfa_params_t *              p;
+  const grid_t       *              g;
+   float                       hstep;
+} pipeline_args_t;
+
+#define DECLARE_STENCIL()                                             \
+  /**/  field_t                * ALIGNED(128) f = args->f;            \
+  const material_coefficient_t * ALIGNED(128) m = args->p->mc;        \
+  const grid_t                 *              g = args->g;            \
+  const int nx = g->nx, ny = g->ny, nz = g->nz;                       \
+  const float te = g->te;					      \
+  const float eta = g->eta;					      \
+  const int nmx = nx-1;						      \
+  const int nmy=  ny-1;	                        		      \
+  const int nmz = nz-1;						      \
+                                                                      \
+  float px ;							      \
+  float py ;							      \
+  float pz ;							      \
+                                                                      \
+  field_t * ALIGNED(16) f0;                                           \
+  field_t * ALIGNED(16) fx, * ALIGNED(16) fy, * ALIGNED(16) fz;       \
+  field_t * ALIGNED(16) fmx, * ALIGNED(16) fmy, * ALIGNED(16) fmz;    \
+  int x, y, z;							      \
+  float ux,uy,uz,rho,hstep
+
+#define f(x,y,z) f[ VOXEL(x,y,z, nx,ny,nz) ]
+
+#define INIT_STENCIL()    \
+  f0  = &f(x,  y,  z  );  \
+  fmx = &f(x-1,y,  z  );  \
+  fmy = &f(x,  y-1,z  );  \
+  fmz = &f(x,  y,  z-1);  \
+  fx  = &f(x+1,y,  z  );  \
+  fy  = &f(x,  y+1,z  );  \
+  fz  = &f(x,  y,  z+1);  
+
+//ARI
+#define INIT_EDGE_STENCIL(i,j,k)  \
+  f0  = &f(i,  j,  k  );          \
+  fmx = &f(i-1,j,  k  );          \
+  fmy = &f(i,  j-1,k  );          \
+  fmz = &f(i,  j,  k-1);          \
+  fx  = &f(i+1,j,  k  );          \
+  fy  = &f(i,  j+1,k  );	  \
+  fz  = &f(i,  j,  k+1); 
+
+
+#define NEXT_STENCIL()                \
+  x++; f0++; fx++; fy++; fz++;        \
+  fmx++; fmy++; fmz++;                \
+  if( x>nmx ) {                       \
+    /**/       y++;            x = 2; \
+    if( y>nmy) z++; if( y>nmy) y = 2; \
+    INIT_STENCIL();                   \
+  }
+
+//rho has floor of 0.05; hstep=0 gives rho_n, hstep=1 give rho_n+1
+
+#define RHOHS()								\
+  /* rho =(1.0 - hstep)*f0->rhofold + ( hstep )*(  f0->rhof );*/	\
+  rho = 0.5*( 1.0-hstep )*(f0->rhofold + f0->rhof)+( hstep) * (1.5*f0->rhof - 0.5*f0->rhofold); \
+  rho = (rho>0.05) ? rho : 0.05;					\
+  ux = ( 0.5*( 1.0-hstep )*(f0->jfxold + f0->jfx) + ( hstep ) * (1.5*f0->jfx - 0.5*f0->jfxold) )/rho; \
+  uy = ( 0.5*( 1.0-hstep )*(f0->jfyold + f0->jfy) + ( hstep ) * (1.5*f0->jfy - 0.5*f0->jfyold) )/rho; \
+  uz = ( 0.5*( 1.0-hstep )*(f0->jfzold + f0->jfz) + ( hstep ) * (1.5*f0->jfz - 0.5*f0->jfzold) )/rho
+
+#define DXrN()			     \
+  px = (nx>1) ? 0.5*g->rdx/rho : 0;  \
+  py = (ny>1) ? 0.5*g->rdy/rho : 0;  \
+  pz = (nz>1) ? 0.5*g->rdz/rho : 0;
+
+
+#define UPDATE_EX() \
+    f0->ex = f0->cbz*( pz*( (fz->cbx - fmz->cbx) )  -  px*( fx->cbz - fmx->cbz ) ) \
+		   + f0->cby*( py*( (fy->cbx - fmy->cbx) )  -  px*( fx->cby - fmx->cby ) )  \
+    - uy*f0->cbz + uz*f0->cby - px*( fx->pexx - fmx->pexx )  \
+    + eta*rho*(py*( fy->cbz - fmy->cbz ) - pz*( fz->cby - fmz->cby) );\
+  f0->ex = m[f0->cmat].epsx*f0->ex;
+
+
+//- px*( fx->pexx - fmx->pexx )         \ 
+//   - uy*f0->cbz + uz*f0->cby 
+
+#define UPDATE_EY()							\
+    f0->ey = f0->cbx*( px*( (fx->cby - fmx->cby) )   - py*( fy->cbx - fmy->cbx ) ) \
+		   + f0->cbz*( pz*( (fz->cby - fmz->cby) )   - py*( fy->cbz - fmy->cbz ) )  \
+           - uz*f0->cbx + ux*f0->cbz- py*( fy->pexx - fmy->pexx )		\
+      + eta*rho*(pz*( fz->cbx - fmz->cbx ) - px*( fz->cbz - fmz->cbz) ); \
+  f0->ey = m[f0->cmat].epsx*f0->ey;
+
+
+      
+    //  - py*( fy->pexx - fmy->pexx )         \ 
+    //- uz*f0->cbx + ux*f0->cbz
+    
+#define UPDATE_EZ() \
+  f0->ez = f0->cby*( py*( (fy->cbz - fmy->cbz) )   - pz*( fz->cby - fmz->cby ) ) \
+	 + f0->cbx*( px*( (fx->cbz - fmx->cbz) )   - pz*( fz->cbx - fmz->cbx ) )  \
+         - ux*f0->cby + uy*f0->cbx - pz*( fz->pexx - fmz->pexx )		\
+         + eta*rho*(px*( fx->cby - fmx->cby ) - py*( fy->cbx - fmy->cbx) );	\
+  f0->ez = m[f0->cmat].epsx*f0->ez;
+
+
+    //- pz*( fz->pexx - fmz->pexx )         \ 
+    //- ux*f0->cby + uy*f0->cbx
+          
+/*    
+#define UPDATE_EX()				\
+  f0->ex = - uy*f0->cbz + uz*f0->cby 
+
+//- px*( fx->pexx - fmx->pexx )         \ 
+//   - uy*f0->cbz + uz*f0->cby 
+
+#define UPDATE_EY() \
+  f0->ey = - uz*f0->cbx + ux*f0->cbz
+
+    //  - py*( fy->pexx - fmy->pexx )         \ 
+    //- uz*f0->cbx + ux*f0->cbz
+    
+#define UPDATE_EZ() \
+  f0->ez = - ux*f0->cby + uy*f0->cbx
+
+    //- pz*( fz->pexx - fmz->pexx )         \ 
+    //- ux*f0->cby + uy*f0->cbx
+    */       
+void
+hyb_advance_e_pipeline( pipeline_args_t * args,
+                           int pipeline_rank,
+                           int n_pipeline ) {
+  DECLARE_STENCIL();
+
+  int n_voxel;
+  DISTRIBUTE_VOXELS( 2,nmx, 2,nmy, 2,nmz, 16,
+                     pipeline_rank, n_pipeline,
+                     x, y, z, n_voxel );
+
+  INIT_STENCIL();
+  for( ; n_voxel; n_voxel-- ) {
+    RHOHS();
+    DXrN();
+    UPDATE_EX(); UPDATE_EY(); UPDATE_EZ(); 
+    NEXT_STENCIL();
+  }
+}
+
+#if defined(V4_ACCELERATION) && defined(HAS_V4_PIPELINE)
+
+using namespace v4;
+
+void
+hybr_advance_e_pipeline_v4( pipeline_args_t * args,
+                              int pipeline_rank,
+                              int n_pipeline ) {
+  DECLARE_STENCIL();
+
+  int n_voxel;
+  DISTRIBUTE_VOXELS( 2,nx, 2,ny, 2,nz, 16,
+                     pipeline_rank, n_pipeline,
+                     x, y, z, n_voxel );
+
+  const v4float vdecayx( decayx ), vdrivex( drivex );
+  const v4float vdecayy( decayy ), vdrivey( drivey );
+  const v4float vdecayz( decayz ), vdrivez( drivez );
+  const v4float vdamp( damp );
+  const v4float vpx_muz( px_muz ), vpx_muy( px_muy );
+  const v4float vpy_mux( py_mux ), vpy_muz( py_muz );
+  const v4float vpz_muy( pz_muy ), vpz_mux( pz_mux );
+  const v4float vcj( cj );
+
+  v4float save0, save1, dummy;
+
+  v4float f0_ex,   f0_ey,   f0_ez;
+  v4float f0_cbx,  f0_cby,  f0_cbz;
+  v4float f0_tcax, f0_tcay, f0_tcaz;
+  v4float f0_jfx,  f0_jfy,  f0_jfz;
+  v4float          fx_cby,  fx_cbz;
+  v4float fy_cbx,           fy_cbz;
+  v4float fz_cbx,  fz_cby;
+
+  field_t * ALIGNED(16) f00, * ALIGNED(16) f01, * ALIGNED(16) f02, * ALIGNED(16) f03; // Voxel quad
+  field_t * ALIGNED(16) fx0, * ALIGNED(16) fx1, * ALIGNED(16) fx2, * ALIGNED(16) fx3; // Voxel quad +x neighbors
+  field_t * ALIGNED(16) fy0, * ALIGNED(16) fy1, * ALIGNED(16) fy2, * ALIGNED(16) fy3; // Voxel quad +y neighbors
+  field_t * ALIGNED(16) fz0, * ALIGNED(16) fz1, * ALIGNED(16) fz2, * ALIGNED(16) fz3; // Voxel quad +z neighbors
+
+  // Process the bulk of the voxels 4 at a time
+
+  INIT_STENCIL();
+  for( ; n_voxel>3; n_voxel-=4 ) {
+    f00 = f0; fx0 = fx; fy0 = fy; fz0 = fz; NEXT_STENCIL();
+    f01 = f0; fx1 = fx; fy1 = fy; fz1 = fz; NEXT_STENCIL();
+    f02 = f0; fx2 = fx; fy2 = fy; fz2 = fz; NEXT_STENCIL();
+    f03 = f0; fx3 = fx; fy3 = fy; fz3 = fz; NEXT_STENCIL();
+
+    load_4x4_tr( &f00->ex,   &f01->ex,   &f02->ex,   &f03->ex,   f0_ex,   f0_ey,   f0_ez,   save0 );
+    load_4x3_tr( &f00->cbx,  &f01->cbx,  &f02->cbx,  &f03->cbx,  f0_cbx,  f0_cby,  f0_cbz         );
+    load_4x4_tr( &f00->tcax, &f01->tcax, &f02->tcax, &f03->tcax, f0_tcax, f0_tcay, f0_tcaz, save1 );
+    load_4x3_tr( &f00->jfx,  &f01->jfx,  &f02->jfx,  &f03->jfx,  f0_jfx,  f0_jfy,  f0_jfz         );
+
+    load_4x3_tr( &fx0->cbx,  &fx1->cbx,  &fx2->cbx,  &fx3->cbx,  dummy,   fx_cby,  fx_cbz         );
+    load_4x3_tr( &fy0->cbx,  &fy1->cbx,  &fy2->cbx,  &fy3->cbx,  fy_cbx,  dummy,   fy_cbz         );
+    load_4x2_tr( &fz0->cbx,  &fz1->cbx,  &fz2->cbx,  &fz3->cbx,  fz_cbx,  fz_cby   /**/           );
+
+    f0_tcax = fnms( vdamp,f0_tcax, fms( vpy_muz,(f0_cbz-fy_cbz), vpz_muy*(f0_cby-fz_cby) ) );
+    f0_tcay = fnms( vdamp,f0_tcay, fms( vpz_mux,(f0_cbx-fz_cbx), vpx_muz*(f0_cbz-fx_cbz) ) );
+    f0_tcaz = fnms( vdamp,f0_tcaz, fms( vpx_muy,(f0_cby-fx_cby), vpy_mux*(f0_cbx-fy_cbx) ) );
+
+    f0_ex   = fma( vdecayx,f0_ex, vdrivex*fnms( vcj,f0_jfx, f0_tcax ) );
+    f0_ey   = fma( vdecayy,f0_ey, vdrivey*fnms( vcj,f0_jfy, f0_tcay ) );
+    f0_ez   = fma( vdecayz,f0_ez, vdrivez*fnms( vcj,f0_jfz, f0_tcaz ) );
+
+    // Note: Unlike load_4x3 versus load_4x4, store_4x4 is much more efficient than store_4x3!
+    store_4x4_tr( f0_ex,   f0_ey,   f0_ez,   save0, &f00->ex,    &f01->ex,    &f02->ex,    &f03->ex   );
+    store_4x4_tr( f0_tcax, f0_tcay, f0_tcaz, save1, &f00->tcax,  &f01->tcax,  &f02->tcax,  &f03->tcax );
+  }
+}
+
+#endif
+
+void
+hyb_advance_e( field_array_t * RESTRICT fa,
+                  float frac ) {
+  if( !fa     ) ERROR(( "Bad args" ));
+  //if( frac!=1 ) ERROR(( "standard advance_e does not support frac!=1 yet" ));
+
+  /***************************************************************************
+   * Begin tangential B ghost setup
+   ***************************************************************************/
+  
+  begin_remote_ghost_b( fa->f, fa->g );//ARI add cell-centered BCs
+  hyb_epress(fa,frac);
+  
+  /***************************************************************************
+   * Update interior fields CELL CENTERED
+   * Note: ex all (0:nx+1,0:ny+1,0,nz+1) interior (2:nx-1,2:ny-1,2:nz-1)
+   * Note: ey all (0:nx+1,0:ny+1 0:nz+1) interior (2:nx-1,2:ny-1,2:nz-1)
+   * Note: ez all (0:nx+1,0:ny+1,0:nz+1) interior (2:nx-1,2:ny-1,2:nz-1)
+   ***************************************************************************/
+
+  // Do majority interior in a single pass.  The host handles
+  // stragglers.
+
+  pipeline_args_t args[1];
+  args->f = fa->f;
+  args->p = (sfa_params_t *)fa->params;
+  args->g = fa->g;
+  args->hstep=frac;
+
+  DECLARE_STENCIL();
+  hstep=frac;
+  //have to fix
+  //if (nmx*nmy*nmz) {
+  //EXEC_PIPELINES( hyb_advance_e, args, 0 );
+  //WAIT_PIPELINES();
+  //} 
+  /***************************************************************************
+   * Finish B ghost setup
+   ***************************************************************************/
+
+  end_remote_ghost_b( fa->f, fa->g );
+
+  hyb_local_ghost_b( fa->f, fa->g );
+
+  /***************************************************************************
+   * Update edge fields
+   * For nx=1,ny=1, or nz=1, all cells are edge cells...
+   ***************************************************************************/
+  
+  // Do all here
+  for(z=1; z<=nz; z++) {
+    for( y=1; y<=ny; y++ ) {
+      INIT_EDGE_STENCIL(1,y,z)
+	for( x=1; x<=nx; x++ ) {
+	  RHOHS();
+	  DXrN();
+	  UPDATE_EX(); UPDATE_EY(); UPDATE_EZ();
+	  
+	  //if(y==1 && x==nx) std::cout << "jzgho  " << fx->jfz << "     jz " << f0->jfz << std::endl  ;
+	  //if(y==1 && x ==1) std::cout << "uz  " << uz << "      cbx " << f0->cbx << std::endl  ;
+	  
+	  f0++; fmx++; fmy++; fmz++;
+	  fx++; fy++;  fz++;
+
+	}
+    }
+  }
+
+
+  if(fa->g->hypereta>0)  hyb_hypereta(fa);
+
+
+  /*//to initialize E
+  if (frac==-1){
+  begin_remote_ghost_e( fa->f, fa->g );//ARI add cell-centered BCs
+  end_remote_ghost_e( fa->f, fa->g );
+  hyb_local_init_ghost_b( fa->f, fa->g );
+  }*/
+}
