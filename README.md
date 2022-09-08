@@ -18,8 +18,8 @@ densities to be collected from the particles onto the spatial grid points.
 
 # Attribution
 
-Researchers who use the VPIC code for scientific research are asked to cite
-the papers by Kevin Bowers listed below.
+Researchers who use the hybridVPIC code for scientific research are asked to cite
+the papers listed below.
 
 1. Le, A., Winske, D., Stanier, A., Daughton, W., Cowee, M., Wetherton, B.,
 & Guo, F. (2021). Astrophysical explosions revisited: collisionless coupling
