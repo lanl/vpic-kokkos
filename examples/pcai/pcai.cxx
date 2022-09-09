@@ -169,7 +169,7 @@ begin_initialization {
   grid->gamma = gamma;
 
   grid->nsub = 1;
-  grid->nsmooth= 0;
+  grid->nsm= 0;
 
 
   // ***** Set Field Boundary Conditions *****

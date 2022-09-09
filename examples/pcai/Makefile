@@ -2,7 +2,7 @@
 SHELL = csh
 
 # Directory of precompiled VPIC libraries:
-PROJECTDIR = /usr/projects/flaretrex/HYBRID-VPIC/vpic-quad-hdf5/build-chicoma/bin
+PROJECTDIR = /project/projectdirs/ntrain7/hybridVPIC/build-haswell/bin
 
 all:
 	${PROJECTDIR}/vpic pcai.cxx	
