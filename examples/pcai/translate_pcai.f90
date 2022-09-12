@@ -135,7 +135,7 @@ program translate
 
 ! read the info file
 
-  open(unit=10,file='info.bin',status='old',form='binary')
+  open(unit=10,file='info.bin',form='unformatted', access='stream') !status='old',form='unformatted')
   read(10)tx
   read(10)ty
   read(10)tz
@@ -152,6 +152,7 @@ program translate
   
   close(10)
 
+  mi_me=1
 
  
   topology_x = floor(tx+0.5)
@@ -557,10 +558,10 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
 
 
 !              write(fname,"(A9,I0,A,I0,A,I0)")"fields/T.",tindex,"/fields.",tindex,".",n-1
-              write(fname,"(A9,I0,A,I0,A,I0)")"hydro/T.",tindex,"/Hhydro.",tindex,".",n-1
+              write(fname,"(A8,I0,A8,I0,A1,I0)")"hydro/T.",tindex,"/Hhydro.",tindex,".",n-1
               inquire(file=trim(fname),exist=check)
               if (check) then
-                 open(unit=10,file=trim(fname),status='unknown',form='binary')
+                 open(unit=10,file=trim(fname),form='unformatted',access='stream')!status='unknown',form='unformatted')
               else
                  print *,"Can't find file:",fname
                  print *
@@ -615,12 +616,12 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
         
      endif
 
-     print*,'pxx=',pxx
-     print*,'pyy=',pyy
-     print*,'pzz=',pzz
+!     print*,'pxx=',pxx
+!     print*,'pyy=',pyy
+!     print*,'pzz=',pzz
 
      aniso=(pyy+pzz)/(2.0*pxx)
-     print*,'aniso=',aniso
+!     print*,'aniso=',aniso
      
      call MPI_FILE_WRITE_AT_ALL(fh(1), offset, ex, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(2), offset, ey, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
