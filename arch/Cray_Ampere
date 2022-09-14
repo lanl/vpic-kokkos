@@ -13,6 +13,11 @@ src_dir="${0%/*}/.."
 # Check required environment variables
 #------------------------------------------------------------------------------#
 
+module purge
+module load PrgEnv-gnu
+module load cmake cuda cpe-cuda
+module list 2>&1 | tee modules.txt
+
 #------------------------------------------------------------------------------#
 # Call CMake command
 #------------------------------------------------------------------------------#
@@ -22,12 +27,24 @@ src_dir="${0%/*}/.."
 # (the closest match was "(null)" from "./lpi_2d_F6_test.Linux").  Writing out
 # the raw address instead and keeping my fingers crossed.
 
-cmake \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+# In the Cray environment, there is a bit of confusion about compilers and
+# wrappers and such.  I've worked around it with some ad hoc CMake magic, but
+# this line might be helpful when troubleshooting (run it when compiling user
+# decks too).
+#export NVCC_WRAPPER_DEFAULT_COMPILER=$(which CC)
+
+CRAYPE_LINK_TYPE=dynamic cmake \
+  -DCMAKE_BUILD_TYPE=Release \
   -DENABLE_INTEGRATED_TESTS=ON \
-  -DUSE_V4_SSE=ON \
-  -DCMAKE_C_FLAGS="-rdynamic" \
-  -DCMAKE_CXX_FLAGS="-rdynamic" \
+  -DENABLE_UNIT_TESTS=ON \
+  -DBUILD_INTERNAL_KOKKOS=ON \
+  -DENABLE_KOKKOS_CUDA=ON \
+  -DKokkos_ARCH_AMPERE80=ON \
+  -DKokkos_ARCH_ZEN2=ON \
+  -DKokkos_ENABLE_PTHREAD=OFF \
+  -DKokkos_ENABLE_OPENMP=ON \
+  -DCMAKE_CXX_COMPILER="CC" \
+  -DCMAKE_CXX_FLAGS="-g -rdynamic"\
   $src_dir
 
 #------------------------------------------------------------------------------#

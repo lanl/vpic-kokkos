@@ -25,9 +25,12 @@ src_dir="${0%/*}/.."
 cmake \
   -DCMAKE_BUILD_TYPE=Release \
   -DENABLE_INTEGRATED_TESTS=ON \
-  -DUSE_V4_SSE=ON \
-  -DCMAKE_C_FLAGS="-rdynamic -fno-strict-aliasing" \
-  -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing" \
+  -DENABLE_UNIT_TESTS=ON \
+  -DBUILD_INTERNAL_KOKKOS=ON \
+  -DKokkos_ARCH_ZEN2=ON \
+  -DKokkos_ENABLE_PTHREAD=OFF \
+  -DKokkos_ENABLE_OPENMP=ON \
+  -DCMAKE_CXX_FLAGS="-g -O2 -rdynamic" \
   $src_dir
 
 #------------------------------------------------------------------------------#

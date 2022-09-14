@@ -56,6 +56,35 @@ typedef struct particle_injector {
   species_id sp_id;          // Species of particle
 } particle_injector_t;
 
+// Seems like this belongs in boundary.h
+class species_t;
+typedef struct pb_diagnostic {
+
+    int         enable; // Wether or not to use this diagnostic
+    int         enable_user; // Will the user write additional values?
+    // TODO: Do I need this circular reference?
+    species_t   *sp; // Pointer to the species
+    char        *fname;
+    int         file_counter; // How many files has this rank written?
+    size_t      store_counter; // How many floats need to be written from the buffer
+    size_t      write_counter; // How many floats have been written to the current file
+    size_t      bufflen; // Size of the memory buffer in sizeof(float)
+    float       *buff; // The buffer that stores data to be written
+
+    int         num_user_writes; // Number of floats the user stores per particle
+    int         num_writes; // Total number of floats stored per particle
+
+    int         write_ux;
+    int         write_uy;
+    int         write_uz;
+    int         write_momentum_magnitude;
+    int         write_posx;
+    int         write_posy;
+    int         write_posz;
+    int         write_weight;
+
+} pb_diagnostic_t;
+
 class species_t {
     public:
 
@@ -101,7 +130,8 @@ class species_t {
         species_id id;                      // Unique identifier for a species
         species_t* next = NULL;             // Next species in the list
 
-
+        // Particle boundary diagnostic.
+        pb_diagnostic_t * pb_diag = NULL;
 
 
         //// END CHECKPOINTED DATA, START KOKKOS //////
@@ -264,8 +294,8 @@ sort_p( species_t * RESTRICT sp );
 
 void
 advance_p( /**/  species_t            * RESTRICT sp,
-           /**/  accumulator_array_t  * RESTRICT aa,
-                 interpolator_array_t * RESTRICT ia );
+                 interpolator_array_t * RESTRICT ia,
+                 field_array_t* RESTRICT fa );
 
 // In center_p.cxx
 
@@ -350,27 +380,36 @@ void accumulate_hydro_p_kokkos(
 );
 
 // In move_p.cxx
-
 int
-move_p( particle_t       * ALIGNED(128) p0,    // Particle array
-        particle_mover_t * ALIGNED(16)  m,     // Particle mover to apply
-        accumulator_t    * ALIGNED(128) a0,    // Accumulator to use
-        const grid_t     *              g,     // Grid parameters
-        const float                     qsp ); // Species particle charge
+move_p( particle_t       * ALIGNED(128) p0,
+        particle_mover_t * ALIGNED(16)  pm,
+        //accumulator_t    * ALIGNED(128) a0,
+        k_jf_accum_t::HostMirror& k_jf_accum,
+        const grid_t     *              g,
+        const float                     qsp );
 
-template<class particle_view_t, class particle_i_view_t, class accumulator_sa_t, class neighbor_view_t>
+template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class scatter_view_t>
 int
 KOKKOS_INLINE_FUNCTION
 move_p_kokkos(
     const particle_view_t& k_particles,
     const particle_i_view_t& k_particles_i,
     particle_mover_t* ALIGNED(16)  pm,
-    accumulator_sa_t k_accumulators_sa,
+    //accumulator_sa_t k_accumulators_sa,
+    scatter_view_t scatter_view,
     const grid_t* g,
     neighbor_view_t& d_neighbor,
     int64_t rangel,
     int64_t rangeh,
-    const float qsp
+    const float qsp,
+    //field_array_t* RESTRICT fa,
+    //field_view_t& k_field,
+    float cx,
+    float cy,
+    float cz,
+    const int nx,
+    const int ny,
+    const int nz
 )
 {
 
@@ -389,6 +428,7 @@ move_p_kokkos(
   //#define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
 
 
+  //k_field_t& k_field = fa->k_f_d;
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
@@ -397,7 +437,9 @@ move_p_kokkos(
   int64_t neighbor;
   //int pi = int(local_pm_i);
   int pi = pm->i;
-  auto k_accumulators_scatter_access = k_accumulators_sa.access();
+//  auto  k_field_scatter_access = k_f_sa.access();
+//  auto accum_sa = accum_sv.access();
+  auto scatter_access = scatter_view.access();
 
   q = qsp*p_w;
 
@@ -476,23 +518,48 @@ move_p_kokkos(
     //Kokkos::atomic_add(&a[2], v2);
     //Kokkos::atomic_add(&a[3], v3);
 
-    accumulate_j(x,y,z);
-    k_accumulators_scatter_access(ii, accumulator_var::jx, 0) += v0;
-    k_accumulators_scatter_access(ii, accumulator_var::jx, 1) += v1;
-    k_accumulators_scatter_access(ii, accumulator_var::jx, 2) += v2;
-    k_accumulators_scatter_access(ii, accumulator_var::jx, 3) += v3;
+    if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
+      int iii = ii;
+      int zi = iii/((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii/(nx+2);
+      int xi = iii-yi*(nx+2);
+      accumulate_j(x,y,z);
+      scatter_access(ii, field_var::jfx) += cx*v0;
+      scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
+      scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
+      scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
 
-    accumulate_j(y,z,x);
-    k_accumulators_scatter_access(ii, accumulator_var::jy, 0) += v0;
-    k_accumulators_scatter_access(ii, accumulator_var::jy, 1) += v1;
-    k_accumulators_scatter_access(ii, accumulator_var::jy, 2) += v2;
-    k_accumulators_scatter_access(ii, accumulator_var::jy, 3) += v3;
+      accumulate_j(y,z,x);
+      scatter_access(ii, field_var::jfy) += cy*v0;
+      scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
+      scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
+      scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
 
-    accumulate_j(z,x,y);
-    k_accumulators_scatter_access(ii, accumulator_var::jz, 0) += v0;
-    k_accumulators_scatter_access(ii, accumulator_var::jz, 1) += v1;
-    k_accumulators_scatter_access(ii, accumulator_var::jz, 2) += v2;
-    k_accumulators_scatter_access(ii, accumulator_var::jz, 3) += v3;
+      accumulate_j(z,x,y);
+      scatter_access(ii, field_var::jfz) += cz*v0;
+      scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
+      scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
+      scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
+    } else {
+      accumulate_j(x,y,z);
+      scatter_access(ii, 0) += cx*v0;
+      scatter_access(ii, 1) += cx*v1;
+      scatter_access(ii, 2) += cx*v2;
+      scatter_access(ii, 3) += cx*v3;
+
+      accumulate_j(y,z,x);
+      scatter_access(ii, 4) += cy*v0;
+      scatter_access(ii, 5) += cy*v1;
+      scatter_access(ii, 6) += cy*v2;
+      scatter_access(ii, 7) += cy*v3;
+
+      accumulate_j(z,x,y);
+      scatter_access(ii, 8) += cz*v0;
+      scatter_access(ii, 9) += cz*v1;
+      scatter_access(ii, 10) += cz*v2;
+      scatter_access(ii, 11) += cz*v3;
+    }
 
 #   undef accumulate_j
 
@@ -582,13 +649,13 @@ move_p_kokkos(
 }
 
 // this has no data race protection for write into the accumulators
-template<class particle_view_t, class particle_i_view_t, class accumulator_t, class neighbor_view_t>
+template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class accum_view_t>
 int
 move_p_kokkos_host_serial(
     const particle_view_t& k_particles,
     const particle_i_view_t& k_particles_i,
     particle_mover_t* ALIGNED(16) pm,
-    accumulator_t k_accumulators,
+    accum_view_t& k_jf_accum,
     const grid_t* g,
     neighbor_view_t& d_neighbor,
     int64_t rangel,
@@ -596,6 +663,12 @@ move_p_kokkos_host_serial(
     const float qsp
 )
 {
+  const int nx = g->nx;
+  const int ny = g->ny;
+  const int nz = g->nz;
+  float cx = 0.25 * g->rdy * g->rdz / g->dt;
+  float cy = 0.25 * g->rdz * g->rdx / g->dt;
+  float cz = 0.25 * g->rdx * g->rdy / g->dt;
 
   #define p_dx    k_particles(pi, particle_var::dx)
   #define p_dy    k_particles(pi, particle_var::dy)
@@ -620,7 +693,6 @@ move_p_kokkos_host_serial(
   int64_t neighbor;
   //int pi = int(local_pm_i);
   int pi = pm->i;
-  //auto k_accumulators_scatter_access = k_accumulators_sa.access();
 
   q = qsp*p_w;
 
@@ -692,30 +764,30 @@ move_p_kokkos_host_serial(
     v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
     v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
     v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
-    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
+    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */ 
 
-    //Kokkos::atomic_add(&a[0], v0);
-    //Kokkos::atomic_add(&a[1], v1);
-    //Kokkos::atomic_add(&a[2], v2);
-    //Kokkos::atomic_add(&a[3], v3);
-
+    int iii = ii;
+    int zi = iii/((nx+2)*(ny+2));
+    iii -= zi*(nx+2)*(ny+2);
+    int yi = iii/(nx+2);
+    int xi = iii - yi*(nx+2);
     accumulate_j(x,y,z);
-    k_accumulators(ii, accumulator_var::jx, 0) += v0;
-    k_accumulators(ii, accumulator_var::jx, 1) += v1;
-    k_accumulators(ii, accumulator_var::jx, 2) += v2;
-    k_accumulators(ii, accumulator_var::jx, 3) += v3;
+    k_jf_accum(ii, accumulator_var::jx) += cx*v0;
+    k_jf_accum(VOXEL(xi,yi+1,zi,nx,ny,nz), accumulator_var::jx) += cx*v1;
+    k_jf_accum(VOXEL(xi,yi,zi+1,nx,ny,nz), accumulator_var::jx) += cx*v2;
+    k_jf_accum(VOXEL(xi,yi+1,zi+1,nx,ny,nz), accumulator_var::jx) += cx*v3;
 
     accumulate_j(y,z,x);
-    k_accumulators(ii, accumulator_var::jy, 0) += v0;
-    k_accumulators(ii, accumulator_var::jy, 1) += v1;
-    k_accumulators(ii, accumulator_var::jy, 2) += v2;
-    k_accumulators(ii, accumulator_var::jy, 3) += v3;
+    k_jf_accum(ii, accumulator_var::jy) += cy*v0;
+    k_jf_accum(VOXEL(xi,yi,zi+1,nx,ny,nz), accumulator_var::jy) += cy*v1;
+    k_jf_accum(VOXEL(xi+1,yi,zi,nx,ny,nz), accumulator_var::jy) += cy*v2;
+    k_jf_accum(VOXEL(xi+1,yi,zi+1,nx,ny,nz), accumulator_var::jy) += cy*v3;
 
     accumulate_j(z,x,y);
-    k_accumulators(ii, accumulator_var::jz, 0) += v0;
-    k_accumulators(ii, accumulator_var::jz, 1) += v1;
-    k_accumulators(ii, accumulator_var::jz, 2) += v2;
-    k_accumulators(ii, accumulator_var::jz, 3) += v3;
+    k_jf_accum(ii, accumulator_var::jz) += cz*v0;
+    k_jf_accum(VOXEL(xi+1,yi,zi,nx,ny,nz), accumulator_var::jz) += cz*v1;
+    k_jf_accum(VOXEL(xi,yi+1,zi,nx,ny,nz), accumulator_var::jz) += cz*v2;
+    k_jf_accum(VOXEL(xi+1,yi+1,zi,nx,ny,nz), accumulator_var::jz) += cz*v3;
 
 #   undef accumulate_j
 

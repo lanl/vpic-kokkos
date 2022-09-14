@@ -34,6 +34,7 @@ checkpt_field_advance_kernels( const field_advance_kernels_t * kernel ) {
   CHECKPT_SYM( kernel->clear_rhof_kokkos                );
 
   CHECKPT_SYM( kernel->k_synchronize_jf                 );
+  CHECKPT_SYM( kernel->k_reduce_jf                      );
   CHECKPT_SYM( kernel->k_synchronize_rho                );
 
   CHECKPT_SYM( kernel->synchronize_tang_e_norm_b_kokkos );
@@ -75,6 +76,7 @@ restore_field_advance_kernels( field_advance_kernels_t * kernel ) {
   RESTORE_SYM( kernel->clear_rhof_kokkos                );
 
   RESTORE_SYM( kernel->k_synchronize_jf                 );
+  RESTORE_SYM( kernel->k_reduce_jf                      );
   RESTORE_SYM( kernel->k_synchronize_rho                );
 
   RESTORE_SYM( kernel->synchronize_tang_e_norm_b_kokkos );

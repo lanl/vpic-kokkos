@@ -61,7 +61,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
       sp_temp->copy_to_device();
     }
 
-    advance_p( sp, accumulator_array, interpolator_array );
+    advance_p( sp, interpolator_array, field_array );
 
     // Call both functions
     k_accumulate_rho_p( field_array, sp );

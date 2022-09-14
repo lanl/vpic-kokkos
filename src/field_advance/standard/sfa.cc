@@ -51,6 +51,7 @@ static field_advance_kernels_t sfa_kernels = {
   clear_rhof_kokkos,
 
   k_synchronize_jf,
+  k_reduce_jf,
   k_synchronize_rho,
 
   synchronize_tang_e_norm_b_kokkos,
@@ -228,6 +229,8 @@ new_standard_field_array( grid_t           * RESTRICT g,
   Kokkos::parallel_for("Clear rhob accumulation array on host", host_execution_policy(0, g->nv), KOKKOS_LAMBDA (int i) {
           fa->k_f_rhob_accum_h(i) = 0;
           });
+  if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for the fields\n",
+          (double (g->nv*sizeof(field_t)))/pow(2,30));
 
   MALLOC_ALIGNED( fa->f, g->nv, 128 );
   CLEAR( fa->f, g->nv );

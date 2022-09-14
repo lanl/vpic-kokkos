@@ -30,7 +30,6 @@ checkpt_vpic_simulation( const vpic_simulation * vpic ) {
   CHECKPT_FPTR( vpic->material_list );
   CHECKPT_FPTR( vpic->field_array );
   CHECKPT_FPTR( vpic->interpolator_array );
-  CHECKPT_FPTR( vpic->accumulator_array );
   CHECKPT_FPTR( vpic->hydro_array );
   CHECKPT_FPTR( vpic->species_list );
   CHECKPT_FPTR( vpic->particle_bc_list );
@@ -48,7 +47,6 @@ restore_vpic_simulation( void ) {
   RESTORE_FPTR( vpic->material_list );
   RESTORE_FPTR( vpic->field_array );
   RESTORE_FPTR( vpic->interpolator_array );
-  RESTORE_FPTR( vpic->accumulator_array );
   RESTORE_FPTR( vpic->hydro_array );
   RESTORE_FPTR( vpic->species_list );
   RESTORE_FPTR( vpic->particle_bc_list );
@@ -62,7 +60,6 @@ reanimate_vpic_simulation( vpic_simulation * vpic ) {
   REANIMATE_FPTR( vpic->material_list );
   REANIMATE_FPTR( vpic->field_array );
   REANIMATE_FPTR( vpic->interpolator_array );
-  REANIMATE_FPTR( vpic->accumulator_array );
   REANIMATE_FPTR( vpic->hydro_array );
   REANIMATE_FPTR( vpic->species_list );
   REANIMATE_FPTR( vpic->particle_bc_list );
@@ -101,7 +98,6 @@ vpic_simulation::~vpic_simulation() {
   delete_particle_bc_list( particle_bc_list );
   delete_species_list( species_list );
   delete_hydro_array( hydro_array );
-  delete_accumulator_array( accumulator_array );
   delete_interpolator_array( interpolator_array );
   delete_field_array( field_array );
   delete_material_list( material_list );
@@ -209,12 +205,16 @@ void restore_kokkos(vpic_simulation& simulation)
     // Restore field array
     field_array_t* fa = simulation.field_array;
     new(&fa->k_f_d) k_field_t();
+    new(&fa->k_field_sa_d) k_field_sa_t();
     new(&fa->k_fe_d) k_field_edge_t();
     new(&fa->k_f_h) k_field_t::HostMirror();
     new(&fa->k_fe_h) k_field_edge_t::HostMirror();
 
     new(&fa->k_f_rhob_accum_d) k_field_accum_t();
     new(&fa->k_f_rhob_accum_h) k_field_accum_t::HostMirror();
+
+    new(&fa->k_jf_accum_d) k_jf_accum_t();
+    new(&fa->k_jf_accum_h) k_jf_accum_t::HostMirror();
 
     grid_t* grid = simulation.grid;
 
@@ -236,18 +236,6 @@ void restore_kokkos(vpic_simulation& simulation)
 
     params->init_kokkos_sfa_params(params->n_materials);
     params->populate_kokkos_data();
-
-    // Restore accumulators
-    accumulator_array_t* accum = simulation.accumulator_array;
-    //int num_accum = old_accum->na;
-
-    new(&accum->k_a_d) k_accumulators_t();
-    new(&accum->k_a_d_copy) k_accumulators_t();
-    new(&accum->k_a_h) k_accumulators_t::HostMirror();
-    new(&accum->k_a_sa) k_accumulators_sa_t();
-
-    std::cout << "make accum of size " << accum->na << std::endl;
-    accum->init_kokoks_accum(accum->na);
 
     // Restore interpolators
     interpolator_array_t* interp = simulation.interpolator_array;

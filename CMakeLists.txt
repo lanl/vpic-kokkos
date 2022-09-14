@@ -17,9 +17,11 @@ project(vpic CXX)
 # Note: As of February 2021, VPIC requires only C++11, but requiring C++14
 # makes building Kokkos easier.  If you are adventurous and using your own
 # Kokkos build, feel free to try a lower standard.
+# Fixing the this capture requires C++17, but if you don't mind the warnings,
+# feel free to experiment with lower standards.
 #------------------------------------------------------------------------------#
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #------------------------------------------------------------------------------#
@@ -58,6 +60,16 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
 
+option(VPIC_ENABLE_AUTO_TUNING "Enable automatic tuning based on architecture" ON)
+
+option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
+
+option(VPIC_ENABLE_TEAM_REDUCTION "Enable team reduction for current accumulation" OFF)
+
+option(VPIC_ENABLE_VECTORIZATION "Enable improved vectorization for CPUs" OFF)
+
+option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performnace on CPUs" OFF)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -78,15 +90,15 @@ endif(MPI_CPPFLAGS)
 # Append extra implicit includes
 string(REPLACE ";" " -I" string_cppflags "${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES}")
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -I${string_cppflags}")
-message(${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
-message(${VPIC_CPPFLAGS})
+#message(${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+#message(${VPIC_CPPFLAGS})
 
 
 string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
 if(NOT ${string_includes} STREQUAL "")
   set(VPIC_CXX_FLAGS "-I${string_includes} ${MPI_C_LINK_FLAGS}")
 endif(NOT ${string_includes} STREQUAL "")
-set(VPIC_CXX_FLAGS "${CMAKE_CXX14_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
+set(VPIC_CXX_FLAGS "${CMAKE_CXX17_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
 
 # Add Debug flags to VPIC_CXX_FLAGS
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
@@ -147,9 +159,13 @@ if(ENABLE_KOKKOS_CUDA)
   find_package(CUDA)
   if (CUDA_FOUND)
     add_definitions(-DENABLE_KOKKOS_CUDA)
+    # If not on a Cray system, this can cause CMake to stall
+    if(DEFINED ENV{CRAYPE_VERSION})
+      set(ENV{NVCC_WRAPPER_DEFAULT_COMPILER} ${CMAKE_CXX_COMPILER})
+    endif()
     set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
     set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "Enable cuda lambda support")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
+    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
 
     # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
     # see https://github.com/UoB-HPC/BabelStream/issues/16
@@ -160,6 +176,8 @@ if(ENABLE_KOKKOS_CUDA)
     option(USE_V4_PORTABLE "Enable V4 Portable" OFF)
     option(USE_V4_SSE "Enable V4 SSE" OFF)
 
+  else()
+    message("CUDA not found and options not changed")
   endif()
 endif()
 
@@ -194,9 +212,11 @@ else()
 endif(BUILD_INTERNAL_KOKKOS)
 
 
+get_target_property(KOKKOS_COMPILE_OPTIONS Kokkos::kokkoscore INTERFACE_COMPILE_OPTIONS)
 get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE_INCLUDE_DIRECTORIES)
 
+#message(${KOKKOS_COMPILE_OPTIONS})
 # TODO: this gives the external include path
 #get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
 
@@ -205,12 +225,15 @@ get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE
 
 set(KOKKOS_CORE_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_core_includes)
 set(KOKKOS_CONTAINER_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_container_includes)
+set(KOKKOS_COMPILE_OPTIONS_FILE ${PROJECT_BINARY_DIR}/kokkos_compile_options)
 #set(KOKKOS_CORE_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_core_lib)
 #set(KOKKOS_CONTAINER_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_container_lib)
 
 # For an "external" build these will be the same, but for an internal we need to gather both
 file(GENERATE OUTPUT ${KOKKOS_CORE_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 file(GENERATE OUTPUT ${KOKKOS_CONTAINER_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_CONTAINERS}")
+string(REPLACE ";" " " kokkos_compile_options "${KOKKOS_COMPILE_OPTIONS}")
+file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${kokkos_compile_options}")
 
 #file(GENERATE OUTPUT ${KOKKOS_CORE_LIB_FILE} CONTENT "${KOKKOS_LIB_DIRS}")
 #file(GENERATE OUTPUT ${KOKKOS_CONTAINER_LIB_FILE} CONTENT "${KOKKOS_LIB_CONTAINERS}")
@@ -260,9 +283,37 @@ find_package(Threads REQUIRED)
 # Act on build options set in project.cmake
 #------------------------------------------------------------------------------#
 
+message("-- VPIC Optimization Settings")
 if (VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
+
+if(VPIC_ENABLE_AUTO_TUNING)
+  add_definitions(-DVPIC_ENABLE_AUTO_TUNING)
+  message("--     VPIC: Enabled automatic tuning.  Optimizations will be selected during compilation.")
+endif(VPIC_ENABLE_AUTO_TUNING)
+
+if(VPIC_ENABLE_TEAM_REDUCTION)
+  add_definitions(-DVPIC_DISABLE_AUTOSETTINGS -DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_TEAM_REDUCTION)
+  set(VPIC_ENABLE_HIERARCHICAL ON CACHE INTERNAL "Enable Hierarchical parallelism")
+  message("--     VPIC: Enabled reduction optimization")
+endif(VPIC_ENABLE_TEAM_REDUCTION)
+
+if (VPIC_ENABLE_VECTORIZATION)
+  add_definitions(-DVPIC_DISABLE_AUTOSETTINGS -DVPIC_ENABLE_HIERARCHICAL -DVPIC_ENABLE_VECTORIZATION)
+  set(VPIC_ENABLE_HIERARCHICAL ON CACHE INTERNAL "Enable Hierarchical parallelism")
+  message("--     VPIC: Enabled improved CPU vectorization")
+endif(VPIC_ENABLE_VECTORIZATION)
+
+if (VPIC_ENABLE_HIERARCHICAL)
+  add_definitions(-DVPIC_DISABLE_AUTOSETTINGS -DVPIC_ENABLE_HIERARCHICAL)
+  message("--     VPIC: Enabled hierarchical parallelism")
+endif(VPIC_ENABLE_HIERARCHICAL)
+
+if (VPIC_ENABLE_ACCUMULATORS)
+  add_definitions(-DVPIC_DISABLE_AUTOSETTINGS -DVPIC_ENABLE_ACCUMULATORS)
+  message("--     VPIC: Enabled accumulators")
+endif(VPIC_ENABLE_ACCUMULATORS)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)
@@ -352,12 +403,21 @@ install(FILES ${CMAKE_SOURCE_DIR}/deck/main.cc
 install(FILES ${CMAKE_SOURCE_DIR}/deck/wrapper.cc
   DESTINATION share/vpic)
 
+if(ENABLE_KOKKOS_CUDA AND DEFINED ENV{CRAYPE_VERSION})
+# local script
+configure_file(
+  ${CMAKE_SOURCE_DIR}/bin/vpic-localCrayA100.in
+    ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
+    @ONLY
+)
+else()
 # local script
 configure_file(
     ${CMAKE_SOURCE_DIR}/bin/vpic-local.in
     ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
     @ONLY
 )
+endif()
 
 file(COPY ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
   DESTINATION ${CMAKE_BINARY_DIR}/bin
@@ -388,7 +448,7 @@ else()
 endif()
 target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
-target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS})
+target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
 
 macro(build_a_vpic name deck)
   if(NOT EXISTS ${deck})
@@ -396,7 +456,7 @@ macro(build_a_vpic name deck)
   endif()
   add_executable(${name} ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc ${VPIC_SRC})
   target_link_libraries(${name} vpic Kokkos::kokkos)
-  target_compile_definitions(${name} PRIVATE INPUT_DECK=${deck})
+  target_compile_definitions(${name} PRIVATE INPUT_DECK="${deck}")
 endmacro(build_a_vpic)
 
 if(USER_DECKS)

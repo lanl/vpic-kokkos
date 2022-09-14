@@ -419,6 +419,9 @@ local_adjust_jf( field_t      * ALIGNED(128) f,
                  const grid_t *              g );
 
 void
+k_reduce_jf( field_array_t * RESTRICT fa );
+
+void
 local_adjust_rhof( field_t      * ALIGNED(128) f,
                    const grid_t *              g );
 

@@ -222,6 +222,7 @@ typedef struct field_advance_kernels {
   void (*clear_jf_kokkos)( struct field_array * RESTRICT fa );
   void (*clear_rhof_kokkos     )( struct field_array * RESTRICT fa );
   void (*k_synchronize_jf )( struct field_array * RESTRICT fa );
+  void (*k_reduce_jf )( struct field_array * RESTRICT fa );
   void (*k_synchronize_rho)( struct field_array * RESTRICT fa );
   double (*synchronize_tang_e_norm_b_kokkos)( struct field_array * RESTRICT fa );
 
@@ -313,11 +314,15 @@ typedef struct field_array {
 
   k_field_t k_f_d;                   // Kokkos field data on device
   k_field_t::HostMirror k_f_h;       // Kokkos field data on host
+  k_field_sa_t k_field_sa_d;
   k_field_edge_t k_fe_d;             // Kokkos field_edge data (part of field_t) on device
   k_field_edge_t::HostMirror k_fe_h; // Kokkos field_edge data on host
 
   k_field_accum_t k_f_rhob_accum_d;//TODO: Remove when absorbing pbc on device
   k_field_accum_t::HostMirror k_f_rhob_accum_h;
+
+  k_jf_accum_t k_jf_accum_d;
+  k_jf_accum_t::HostMirror k_jf_accum_h;
 
   // Step when the field was last copied to to the host.  The copy can
   // take place at any time during the step, so checking
@@ -341,12 +346,16 @@ typedef struct field_array {
   void init_kokkos_fields(int n_fields, int xyz_sz, int yzx_sz, int zxy_sz)
   {
       k_f_d = k_field_t("k_fields", n_fields);
+      k_field_sa_d = Kokkos::Experimental::create_scatter_view(k_f_d);
       k_fe_d = k_field_edge_t("k_field_edges", n_fields);
       k_f_h = Kokkos::create_mirror_view(k_f_d);
       k_fe_h = Kokkos::create_mirror_view(k_fe_d);
 
       k_f_rhob_accum_d = k_field_accum_t("k_rhob_accum", n_fields);
       k_f_rhob_accum_h = Kokkos::create_mirror_view(k_f_rhob_accum_d);
+
+      k_jf_accum_d = k_jf_accum_t("k_jf_accum", n_fields);
+      k_jf_accum_h = Kokkos::create_mirror_view(k_jf_accum_d);
 
       fb = new field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
   }
@@ -413,7 +422,7 @@ typedef struct sfa_params {
 
     void populate_kokkos_data()
     {
-        Kokkos::parallel_for("Copy materials to device", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, n_mc), KOKKOS_LAMBDA (const int i)
+        Kokkos::parallel_for("Copy materials to device", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, n_mc), KOKKOS_CLASS_LAMBDA (const int i)
         {
                 k_mc_h(i, material_coeff_var::decayx) = mc[i].decayx;
                 k_mc_h(i, material_coeff_var::drivex) = mc[i].drivex;
