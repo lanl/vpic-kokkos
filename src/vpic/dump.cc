@@ -897,8 +897,6 @@ vpic_simulation::hydro_dump( const char * speciesname,
       sp
   );
 
-  printf("Dumping hydro %d \n", sp->g->nv);
-
   k_hydro_d_t::HostMirror hydro_view_h("hydro_d_h", sp->g->nv);
   Kokkos::deep_copy( hydro_view_h , hydro_view);
 
