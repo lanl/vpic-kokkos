@@ -17,6 +17,17 @@ struct min_max_functor {
   }
 };
 
+struct min_max_functor_u64 {
+  typedef Kokkos::MinMaxScalar<Kokkos::View<uint64_t*>::non_const_value_type> minmax_scalar;
+  Kokkos::View<uint64_t*> view;
+  min_max_functor_u64(const Kokkos::View<uint64_t*>& view_) : view(view_) {}
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const size_t& i, minmax_scalar& minmax) const {
+    if(view(i) < minmax.min_val && view(i) != 0) minmax.min_val = view(i);
+    if(view(i) > minmax.max_val && view(i) != 0) minmax.max_val = view(i);
+  }
+};
+
 /**
  * @brief Simple bin sort using Kokkos inbuilt sort
  */
@@ -69,6 +80,7 @@ struct DefaultSort {
     {
         // Create permute view by taking index view and adding offsets such that we get
         // 1,2,3,1,2,3,1,2,3 instead of 1,1,1,2,2,2,3,3,3 
+	Kokkos::View<uint64_t*> keys("Temp keys", particles_i.extent(0));
         Kokkos::MinMaxScalar<Kokkos::View<int*>::non_const_value_type> result;
         Kokkos::MinMax<Kokkos::View<int*>::non_const_value_type> reducer(result);
         // Find max and min particle index
@@ -80,19 +92,19 @@ struct DefaultSort {
         // (current number of particles in cell multiplied by the largest index)
         Kokkos::parallel_for("Update keys", Kokkos::RangePolicy<>(0, np), KOKKOS_LAMBDA(const int i) {
           int count = Kokkos::atomic_fetch_add(&(bin_counter(particles_i(i))), 1);
-          particles_i(i) += count*(result.max_val+1);
+          keys(i) = static_cast<uint64_t>(particles_i(i)) + count*(result.max_val+1);
         });
         // Save the max particle index to undo the offset after sorting
-		int max_val = result.max_val+1;
         // Get the new max index
+        Kokkos::MinMaxScalar<Kokkos::View<uint64_t*>::non_const_value_type> result_u64;
+        Kokkos::MinMax<Kokkos::View<uint64_t*>::non_const_value_type> reducer_u64(result_u64);
         Kokkos::parallel_reduce("Get min/max bin", Kokkos::RangePolicy<>(0,particles_i.extent(0)), 
-          min_max_functor(particles_i), reducer);
-        auto keys = particles_i;
+          min_max_functor_u64(keys), reducer_u64);
 
         // Create Comparator(number of bins, lowest val, highest val)
         using key_type = decltype(keys);
         using Comparator = Kokkos::BinOp1D<key_type>;
-        Comparator comp(np, result.min_val, result.max_val);
+        Comparator comp(np, result_u64.min_val, result_u64.max_val);
 
         // Create permutation View
         int sort_within_bins = 0;
@@ -111,12 +123,6 @@ struct DefaultSort {
 	}
         // Sort particle indices
         bin_sort.sort(particles_i);
-
-        // Remove offset from indices
-        Kokkos::parallel_for("Update keys", Kokkos::RangePolicy<>(0, np), KOKKOS_LAMBDA(const int i) {
-			while(particles_i(i) > max_val)
-				particles_i(i) -= max_val;
-		});
     }
 
     static void tiled_sort(

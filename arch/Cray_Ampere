@@ -13,9 +13,9 @@ src_dir="${0%/*}/.."
 # Check required environment variables
 #------------------------------------------------------------------------------#
 
-module purge
-module load PrgEnv-gnu
-module load cmake cuda cpe-cuda
+#module purge
+#module load PrgEnv-gnu
+#module load cmake cuda cpe-cuda
 module list 2>&1 | tee modules.txt
 
 #------------------------------------------------------------------------------#
