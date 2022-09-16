@@ -135,7 +135,7 @@ program translate
 
 ! read the info file
 
-  open(unit=10,file='info.bin',status='old',form='binary')
+  open(unit=10,file='info.bin',status='old',form='unformatted',access='stream')
   read(10)tx
   read(10)ty
   read(10)tz
@@ -561,7 +561,7 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
 
    
 
-     print*,ne
+!     print*,ne
              
      if (output_format == continuous) then
      
