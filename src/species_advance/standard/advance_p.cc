@@ -232,6 +232,7 @@ void load_interpolators(
                         float* fcbz,
                         float* fdcbzdz,
                         const int* ii,
+			const int num_part,
                         const k_interpolator_t& k_interp
                         ) {
 #if defined(VPIC_ENABLE_VECTORIZATION) && !defined(USE_GPU)
@@ -269,7 +270,7 @@ void load_interpolators(
       fcbz[i]      = vals[16];
       fdcbzdz[i]   = vals[17];
     }
-  } else {
+  } else if(NumLanes == num_part) {
 
     // Efficient vectorized load
     float vals[18*NumLanes];
@@ -296,6 +297,28 @@ void load_interpolators(
       fdcbydy[i]   = vals[15+18*i];
       fcbz[i]      = vals[16+18*i];
       fdcbzdz[i]   = vals[17+18*i];
+    }
+  } else {
+    for(int lane=0; lane<num_part; lane++) {
+      // Load interpolators
+      fex[LANE]       = k_interp(ii[LANE], interpolator_var::ex);     
+      fdexdy[LANE]    = k_interp(ii[LANE], interpolator_var::dexdy);  
+      fdexdz[LANE]    = k_interp(ii[LANE], interpolator_var::dexdz);  
+      fd2exdydz[LANE] = k_interp(ii[LANE], interpolator_var::d2exdydz);
+      fey[LANE]       = k_interp(ii[LANE], interpolator_var::ey);     
+      fdeydz[LANE]    = k_interp(ii[LANE], interpolator_var::deydz);  
+      fdeydx[LANE]    = k_interp(ii[LANE], interpolator_var::deydx);  
+      fd2eydzdx[LANE] = k_interp(ii[LANE], interpolator_var::d2eydzdx);
+      fez[LANE]       = k_interp(ii[LANE], interpolator_var::ez);     
+      fdezdx[LANE]    = k_interp(ii[LANE], interpolator_var::dezdx);  
+      fdezdy[LANE]    = k_interp(ii[LANE], interpolator_var::dezdy);  
+      fd2ezdxdy[LANE] = k_interp(ii[LANE], interpolator_var::d2ezdxdy);
+      fcbx[LANE]      = k_interp(ii[LANE], interpolator_var::cbx);    
+      fdcbxdx[LANE]   = k_interp(ii[LANE], interpolator_var::dcbxdx); 
+      fcby[LANE]      = k_interp(ii[LANE], interpolator_var::cby);    
+      fdcbydy[LANE]   = k_interp(ii[LANE], interpolator_var::dcbydy); 
+      fcbz[LANE]      = k_interp(ii[LANE], interpolator_var::cbz);    
+      fdcbzdz[LANE]   = k_interp(ii[LANE], interpolator_var::dcbzdz); 
     }
   }
 #else
@@ -446,6 +469,9 @@ advance_p_kokkos_unified(
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (const size_t index) {
       size_t pi_offset = chunk*chunk_size + index;
 #endif
+      int num_particles = num_lanes;
+      if(pi_offset+num_particles > np)
+        num_particles = np - pi_offset;
       float v0[num_lanes];
       float v1[num_lanes];
       float v2[num_lanes];
@@ -519,7 +545,7 @@ advance_p_kokkos_unified(
                                      fcbx, fdcbxdx,
                                      fcby, fdcbydy,
                                      fcbz, fdcbzdz,
-                                     ii, k_interp);
+                                     ii, num_particles, k_interp);
 
       BEGIN_VECTOR_BLOCK {
         // Interpolate E
