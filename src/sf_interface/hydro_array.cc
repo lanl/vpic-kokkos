@@ -223,14 +223,12 @@ synchronize_hydro_array( hydro_array_t * ha ) {
 
 void
 synchronize_hydro_array_kokkos( hydro_array_t * ha ) {
-  int size, face, bc, x, y, z, nx, ny, nz;
+  int size, face, bc, nx, ny, nz;
   float *p, lw, rw;
-  hydro_t * h0, * h;
   grid_t * g;
 
   if( !ha ) ERROR(( "NULL hydro array" ));
 
-  h0 = ha->h;
   g  = ha->g;
   nx = g->nx;
   ny = g->ny;
@@ -511,3 +509,32 @@ BEGIN_PRIMITIVE {                                                               
 # undef END_SEND_KOKKOS
 }
 
+void
+hydro_array_t::copy_to_host() {
+  Kokkos::deep_copy( k_h_h , k_h_d);
+
+  // Avoid capturing this
+  auto& k_h = k_h_h;
+  hydro_t * h_l = h;
+
+  //for(int i=0; i<hydro_array->k_h_h.extent(0); i++) {
+  Kokkos::parallel_for("copy field to host",
+    host_execution_policy(0, k_h_h.extent(0) - 1) ,
+    KOKKOS_LAMBDA (int i) {
+    h_l[i].jx = k_h(i, hydro_var::jx);
+    h_l[i].jy = k_h(i, hydro_var::jy);
+    h_l[i].jz = k_h(i, hydro_var::jz);
+    h_l[i].rho = k_h(i, hydro_var::rho);
+    h_l[i].px = k_h(i, hydro_var::px);
+    h_l[i].py = k_h(i, hydro_var::py);
+    h_l[i].pz = k_h(i, hydro_var::pz);
+    h_l[i].ke = k_h(i, hydro_var::ke);
+    h_l[i].txx = k_h(i, hydro_var::txx);
+    h_l[i].tyy = k_h(i, hydro_var::tyy);
+    h_l[i].tzz = k_h(i, hydro_var::tzz);
+    h_l[i].tyz = k_h(i, hydro_var::tyz);
+    h_l[i].tzx = k_h(i, hydro_var::tzx);
+    h_l[i].txy = k_h(i, hydro_var::txy);
+  });
+
+}

@@ -82,7 +82,8 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     auto& particles_i = sp->k_p_i_d;
     auto& interpolators_k = interpolator_array->k_i_d;
 
-    k_hydro_d_t hydro_view("hydro_d", sp->g->nv);
+    auto hydro_view = hydro_array_kokkos->k_h_d;
+    auto hydro_view_h = hydro_array_kokkos->k_h_h;
 
     accumulate_hydro_p_kokkos(
         particles,
@@ -92,32 +93,12 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
         sp
     );
 
-    k_hydro_d_t::HostMirror hydro_view_h("hydro_d_h", sp->g->nv);
-    Kokkos::deep_copy( hydro_view_h , hydro_view);
+    //synchronize_hydro_array_kokkos( hydro_array_kokkos );
 
-    for(int i=0; i<hydro_view_h.extent(0); i++) {
-      hydro_array_kokkos->h[i].jx = hydro_view_h(i, hydro_var::jx);
-      hydro_array_kokkos->h[i].jy = hydro_view_h(i, hydro_var::jy);
-      hydro_array_kokkos->h[i].jz = hydro_view_h(i, hydro_var::jz);
-      hydro_array_kokkos->h[i].rho = hydro_view_h(i, hydro_var::rho);
-      hydro_array_kokkos->h[i].px = hydro_view_h(i, hydro_var::px);
-      hydro_array_kokkos->h[i].py = hydro_view_h(i, hydro_var::py);
-      hydro_array_kokkos->h[i].pz = hydro_view_h(i, hydro_var::pz);
-      hydro_array_kokkos->h[i].ke = hydro_view_h(i, hydro_var::ke);
-      hydro_array_kokkos->h[i].txx = hydro_view_h(i, hydro_var::txx);
-      hydro_array_kokkos->h[i].tyy = hydro_view_h(i, hydro_var::tyy);
-      hydro_array_kokkos->h[i].tzz = hydro_view_h(i, hydro_var::tzz);
-      hydro_array_kokkos->h[i].tyz = hydro_view_h(i, hydro_var::tyz);
-      hydro_array_kokkos->h[i].tzx = hydro_view_h(i, hydro_var::tzx);
-      hydro_array_kokkos->h[i].txy = hydro_view_h(i, hydro_var::txy);
-    }
-
+    hydro_array_kokkos->copy_to_host();
 
     synchronize_hydro_array( hydro_array_legacy );
     synchronize_hydro_array( hydro_array_kokkos );
-
-    // Copy the data back to host view
-    Kokkos::deep_copy(field_array->k_f_h, field_array->k_f_d);
 
     // If two numbers are very close to zero, the relative error can get big
     // just from numerical rounding

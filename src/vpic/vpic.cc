@@ -229,6 +229,15 @@ void restore_kokkos(vpic_simulation& simulation)
 
     simulation.field_array->copy_to_device();
 
+    // Restore hydro array
+    hydro_array_t* ha = simulation.hydro_array;
+    new(&ha->k_h_d) k_hydro_d_t();
+    new(&ha->k_h_h) k_hydro_d_t::HostMirror();
+    ha->k_h_d = k_hydro_d_t("k_hydro", nv);
+    ha->k_h_h = Kokkos::create_mirror_view(ha->k_h_d);
+    // No need to populate hydro
+
+
     // Restore Material Data
     sfa_params_t* params = reinterpret_cast<sfa_params_t*>(fa->params);
     new(&params->k_mc_d) k_material_coefficient_t();

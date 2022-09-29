@@ -213,6 +213,13 @@ typedef struct hydro_array {
     k_h_d = k_hydro_d_t("k_hydro", nv);
     k_h_h = Kokkos::create_mirror_view(k_h_d);
   }
+
+  /**
+    * @brief Copies the hydro data to host legacy array
+    */
+  void copy_to_host();
+  // I don't think we need a copy_to_device, but I could write one easily.
+
 } hydro_array_t;
 
 // In hydro_array.c
