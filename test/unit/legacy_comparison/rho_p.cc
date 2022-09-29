@@ -70,22 +70,25 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     // Copy the data back to host view
     Kokkos::deep_copy(field_array->k_f_h, field_array->k_f_d);
 
-    // We want to compare relative, not absolute, error.
-    //float eps = 10*std::numeric_limits<float>::epsilon();
+    // Update to reflect the hydro_p test
     // The Kokkos version uses a scatter access that should produce a more
     // accurate sum, so we have a large tolerance here
-    float tol = 1e3*std::numeric_limits<float>::epsilon();
+    std::cout << std::scientific << std::setprecision(12) << std::endl;
+    float abstol = 1e3*std::numeric_limits<float>::min();
+    float reltol = 1e-4;
 
-    std::cout << "Tolerance is " << tol << std::endl;
+    std::cout << "Absolute tolerance is " << abstol << std::endl;
+    std::cout << "Relative tolerance is " << reltol << std::endl;
 
     // This is how many pipelines there are inside the array
     for (int i = 0; i < grid->nv; i++)
     {
-        //float diff = field_array->k_f_h(i, field_var::rhof) - field_array->f[i].rhof;
-        float rel_err = (field_array->k_f_h(i, field_var::rhof) - field_array->f[i].rhof)/field_array->f[i].rhof;
-        if (abs(rel_err) > tol)
+        double a = field_array->k_f_h(i, field_var::rhof);
+        double b = field_array->f[i].rhof;
+        double rel_err = (a-b)/a;
+        if (abs(rel_err) > reltol && abs(a)>abstol && abs(b)>abstol)
         {
-            std::cout << " Failed at " << i << " with relative error " << rel_err << " from k_field and field " << field_array->k_f_h(i, field_var::rhof) << " " << field_array->f[i].rhof << std::endl;
+            std::cout << " Failed at " << i << " with relative error " << rel_err << " from k_field and field " << a << " " << b << std::endl;
             failed++;
         }
     }
