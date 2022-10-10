@@ -202,12 +202,20 @@ void simd_load_interpolator_var(float* v0, const int ii, const k_interpolator_t&
 template<int N>
 KOKKOS_INLINE_FUNCTION
 void unrolled_simd_load(float* vals, const int* ii, const k_interpolator_t& k_interp, int len) {
-  simd_load_interpolator_var(vals+(N-1)*18, ii[N-1], k_interp, len);
   unrolled_simd_load<N-1>(vals, ii, k_interp, len);
+  simd_load_interpolator_var(vals+(N-1)*18, ii[N-1], k_interp, len);
 }
 template<>
 KOKKOS_INLINE_FUNCTION
 void unrolled_simd_load<0>(float* vals, const int* ii, const k_interpolator_t& k_interp, int len) {}
+
+// Non forced unrolled version. Potentially less performance than the template version
+// This will work with arbitrary number of particles rather than having to use a multiple of the number of simd lanes
+void unrolled_simd_load(float* vals, const int* ii, const k_interpolator_t& k_interp, int num_var, int num_part) {
+  for(int i=0; i<num_part; i++) {
+    simd_load_interpolator_var(vals+i*num_var, ii[i], k_interp, num_var);
+  }
+}
 
 // Load interpolators
 template<int NumLanes>
@@ -232,6 +240,7 @@ void load_interpolators(
                         float* fcbz,
                         float* fdcbzdz,
                         const int* ii,
+			const int num_part,
                         const k_interpolator_t& k_interp
                         ) {
 #if defined(VPIC_ENABLE_VECTORIZATION) && !defined(USE_GPU)
@@ -273,11 +282,12 @@ void load_interpolators(
 
     // Efficient vectorized load
     float vals[18*NumLanes];
-    unrolled_simd_load<NumLanes>(vals, ii, k_interp, 18);
+    unrolled_simd_load(vals, ii, k_interp, 18, num_part);
+//    unrolled_simd_load<NumLanes>(vals, ii, k_interp, 18);
 
     // Essentially a transpose
     #pragma omp simd
-    for(int i=0; i<NumLanes; i++) {
+    for(int i=0; i<num_part; i++) {
       fex[i]       = vals[18*i];
       fdexdy[i]    = vals[1+18*i];
       fdexdz[i]    = vals[2+18*i];
@@ -446,6 +456,9 @@ advance_p_kokkos_unified(
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (const size_t index) {
       size_t pi_offset = chunk*chunk_size + index;
 #endif
+      int num_particles = num_lanes;
+      if(pi_offset+num_particles > np)
+        num_particles = np - pi_offset;
       float v0[num_lanes];
       float v1[num_lanes];
       float v2[num_lanes];
@@ -519,7 +532,7 @@ advance_p_kokkos_unified(
                                      fcbx, fdcbxdx,
                                      fcby, fdcbydy,
                                      fcbz, fdcbzdz,
-                                     ii, k_interp);
+                                     ii, num_particles, k_interp);
 
       BEGIN_VECTOR_BLOCK {
         // Interpolate E
