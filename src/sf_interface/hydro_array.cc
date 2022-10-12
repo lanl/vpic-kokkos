@@ -221,6 +221,9 @@ synchronize_hydro_array( hydro_array_t * ha ) {
 # undef END_SEND
 }
 
+// In my tests it is faster to copy into the legacy hydro arrays and use the
+// old synchronize than use this function, so this is unused unless a deck
+// specifically call for it, and liable to not be kept up to date.
 void
 synchronize_hydro_array_kokkos( hydro_array_t * ha ) {
   int size, face, bc, nx, ny, nz;
@@ -518,7 +521,7 @@ hydro_array_t::copy_to_host() {
   hydro_t * h_l = h;
 
   //for(int i=0; i<hydro_array->k_h_h.extent(0); i++) {
-  Kokkos::parallel_for("copy field to host",
+  Kokkos::parallel_for("copy hydro to legacy array",
     host_execution_policy(0, k_h_h.extent(0) - 1) ,
     KOKKOS_LAMBDA (int i) {
     h_l[i].jx = k_h(i, hydro_var::jx);

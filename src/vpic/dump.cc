@@ -114,131 +114,6 @@ vpic_simulation::dump_materials( const char *fname ) {
   if( fileIO.close() ) ERROR(( "File close failed on dump materials!!!" ));
 }
 
-void
-vpic_simulation::dump_hydro_ascii( const char *fname, int append) {
-  species_t *sp;
-  FileIO fileIO;
-  if(rank()) return;
-  if(!fname) ERROR(("Invalid file name"));
-  MESSAGE(("Dumping hydro to \"%s\"", fname));
-  FileIOStatus status = fileIO.open(fname, io_write);
-  if(status == fail) ERROR(("Could not open \"%s\"", fname));
-  if( rank()==0 ) {
-    status = fileIO.open(fname, append ? io_append : io_write);
-    if( status==fail ) ERROR(( "Could not open \"%s\".", fname ));
-    else {
-      if( append==0 ) {
-        fileIO.print( "%% Layout\n%% step species jx jy jz rho px py pz ke txx tyy tzz tyz tzx txy" );
-        fileIO.print( "\n" );
-        fileIO.print( "%% timestep = %e\n", grid->dt );
-      }
-      fileIO.print( "%li", (long)step() );
-    }
-  }
-  LIST_FOR_EACH(sp, species_list)
-  {
-//    if(step() > sp->last_copied)
-//      sp->copy_to_host();
-//    clear_hydro_array(hydro_array);
-////    auto& particles = sp->k_p_d;
-////    auto& particles_i = sp->k_p_i_d;
-////    auto& interpolators_k = interpolator_array->k_i_d;
-//
-////    k_hydro_d_t hydro_view("hydro_d", sp->g->nv);
-//
-//    accumulate_hydro_p( hydro_array, sp, interpolator_array );
-//    synchronize_hydro_array( hydro_array );
-//
-////    accumulate_hydro_p(
-////        particles,
-////        particles_i,
-////        hydro_view,
-////        interpolators_k,
-////        sp
-////    );
-////    synchronize_hydro_array( hydro_array );
-//
-////    k_hydro_d_t::HostMirror hydro_view_h("hydro_d_h", sp->g->nv);
-////    Kokkos::deep_copy( hydro_view_h , hydro_view);
-
-  clear_hydro_array( hydro_array );
-
-  auto& particles = sp->k_p_d;
-  auto& particles_i = sp->k_p_i_d;
-  auto& interpolators_k = interpolator_array->k_i_d;
-
-  k_hydro_d_t hydro_view("hydro_d", sp->g->nv);
-
-  accumulate_hydro_p_kokkos(
-      particles,
-      particles_i,
-      hydro_view,
-      interpolators_k,
-      sp
-  );
-
-  k_hydro_d_t::HostMirror hydro_view_h("hydro_d_h", sp->g->nv);
-  Kokkos::deep_copy( hydro_view_h , hydro_view);
-  for(int i=0; i<hydro_view_h.extent(0); i++) {
-    hydro_array->h[i].jx = hydro_view_h(i, hydro_var::jx);
-    hydro_array->h[i].jy = hydro_view_h(i, hydro_var::jy);
-    hydro_array->h[i].jz = hydro_view_h(i, hydro_var::jz);
-    hydro_array->h[i].rho = hydro_view_h(i, hydro_var::rho);
-    hydro_array->h[i].px = hydro_view_h(i, hydro_var::px);
-    hydro_array->h[i].py = hydro_view_h(i, hydro_var::py);
-    hydro_array->h[i].pz = hydro_view_h(i, hydro_var::pz);
-    hydro_array->h[i].ke = hydro_view_h(i, hydro_var::ke);
-    hydro_array->h[i].txx = hydro_view_h(i, hydro_var::txx);
-    hydro_array->h[i].tyy = hydro_view_h(i, hydro_var::tyy);
-    hydro_array->h[i].tzz = hydro_view_h(i, hydro_var::tzz);
-    hydro_array->h[i].tyz = hydro_view_h(i, hydro_var::tyz);
-    hydro_array->h[i].tzx = hydro_view_h(i, hydro_var::tzx);
-    hydro_array->h[i].txy = hydro_view_h(i, hydro_var::txy);
-  }
-
-//  synchronize_hydro_array( hydro_array );
-
-    for (int i = 0; i < sp->g->nv; i+=1000)
-    {
-        fileIO.print("hydro at i = %d: %e %e %e %e %e %e %e %e %e %e %e %e %e %e \n", i, 
-                      hydro_array->h[i].jx, 
-                      hydro_array->h[i].jy, 
-                      hydro_array->h[i].jz, 
-                      hydro_array->h[i].rho,
-                      hydro_array->h[i].px, 
-                      hydro_array->h[i].py, 
-                      hydro_array->h[i].pz, 
-                      hydro_array->h[i].ke, 
-                      hydro_array->h[i].txx,
-                      hydro_array->h[i].tyy,
-                      hydro_array->h[i].tzz,
-                      hydro_array->h[i].tyz,
-                      hydro_array->h[i].tzx,
-                      hydro_array->h[i].txy
-//                      hydro_view_h(i,0), 
-//                      hydro_view_h(i,1), 
-//                      hydro_view_h(i,2), 
-//                      hydro_view_h(i,3), 
-//                      hydro_view_h(i,4), 
-//                      hydro_view_h(i,5), 
-//                      hydro_view_h(i,6), 
-//                      hydro_view_h(i,7), 
-//                      hydro_view_h(i,8), 
-//                      hydro_view_h(i,9), 
-//                      hydro_view_h(i,10), 
-//                      hydro_view_h(i,11), 
-//                      hydro_view_h(i,12), 
-//                      hydro_view_h(i,13) 
-                    );
-    }
-  }
-
-
-  if( rank()==0 && status!=fail ) {
-    fileIO.print( "\n" );
-    if( fileIO.close() ) ERROR(("File close failed on dump hydro!!!"));
-  }
-}
 
 /*****************************************************************************
  * Binary dump IO
@@ -358,21 +233,10 @@ vpic_simulation::dump_hydro( const char *sp_name,
   sp = find_species_name( sp_name, species_list );
   if( !sp ) ERROR(( "Invalid species \"%s\"", sp_name ));
 
-    // Update the particles on the host only if they haven't been recently
-    // TODO: Port the hydro calculations to the device so this copy won't be
-    // needed.
-    //if (step() > sp->last_copied)
-    //  sp->copy_to_host();
-
-  //clear_hydro_array( hydro_array );
-  //accumulate_hydro_p( hydro_array, sp, interpolator_array );
-
   auto& particles = sp->k_p_d;
   auto& particles_i = sp->k_p_i_d;
   auto& interpolators_k = interpolator_array->k_i_d;
 
-//  k_hydro_d_t hydro_view("hydro_d", sp->g->nv*2);
-  //k_hydro_d_t hydro_view("hydro_d", sp->g->nv);
   Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
   accumulate_hydro_p_kokkos(
       particles,
@@ -382,8 +246,8 @@ vpic_simulation::dump_hydro( const char *sp_name,
       sp
   );
 
+  // This is slower in my tests
   //synchronize_hydro_array_kokkos(hydro_array);
-  //k_hydro_d_t::HostMirror hydro_view_h("hydro_d_h", sp->g->nv);
 
   hydro_array->copy_to_host();
 
@@ -869,21 +733,9 @@ vpic_simulation::hydro_dump( const char * speciesname,
   species_t * sp = find_species_name(speciesname, species_list);
   if( !sp ) ERROR(( "Invalid species name: %s", speciesname ));
 
-    // Update the particles on the host only if they haven't been recently
-    // TODO: Port the hydro calculations to the device so this copy won't be
-    // needed.
-    //if (step() > sp->last_copied)
-    //  sp->copy_to_host();
-
-  //clear_hydro_array( hydro_array );
-  //accumulate_hydro_p( hydro_array, sp, interpolator_array );
-
   auto& particles = sp->k_p_d;
   auto& particles_i = sp->k_p_i_d;
   auto& interpolators_k = interpolator_array->k_i_d;
-
-//  k_hydro_d_t hydro_view("hydro_d", sp->g->nv*2);
-  //k_hydro_d_t hydro_view("hydro_d", sp->g->nv);
 
   Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
   accumulate_hydro_p_kokkos(
@@ -896,7 +748,6 @@ vpic_simulation::hydro_dump( const char * speciesname,
 
   // The legacy synchronize is actually a bit faster
   //synchronize_hydro_array_kokkos(hydro_array);
-  //k_hydro_d_t::HostMirror hydro_view_h("hydro_d_h", sp->g->nv);
 
   hydro_array->copy_to_host();
 

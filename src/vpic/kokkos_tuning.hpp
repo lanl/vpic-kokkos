@@ -22,7 +22,7 @@
   #else
     #define VPIC_ENABLE_HIERARCHICAL
     #define VPIC_ENABLE_TEAM_REDUCTION
-    //#define VPIC_ENABLE_VECTORIZATION // Avoid bug
+    #define VPIC_ENABLE_VECTORIZATION
     #define VPIC_ENABLE_ACCUMULATORS
   #endif
 #endif

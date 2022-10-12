@@ -193,6 +193,8 @@ combine_accumulators( accumulator_array_t * RESTRICT aa );
 // FORTRAN style from (0:nx+1,0:ny+1,0:nz+1).  Hydros for voxels on
 // the surface of the local domain (for example h(0,:,:) or
 // h(nx+1,:,:)) are not used.
+// The kokkos hydro array is easily accessed as hydro_array->k_h_d(index,
+// hydro_var::var), with var being any member of a hydro_t.
 
 typedef struct hydro {
   float jx, jy, jz, rho; // Current and charge density => <q v_i f>, <q f>

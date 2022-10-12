@@ -236,7 +236,6 @@ public:
   void dump_energies( const char *fname, int append = 1 );
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
-  void dump_hydro_ascii( const char *fname, int append = 1 );
 
   // Binary dumps
   void dump_grid( const char *fbase );
