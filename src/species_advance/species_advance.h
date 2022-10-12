@@ -371,7 +371,15 @@ accumulate_hydro_p( /**/  hydro_array_t        * RESTRICT ha,
                     const species_t            * RESTRICT sp,
                     const interpolator_array_t * RESTRICT ia );
 
+void accumulate_hydro_p_kokkos(
+        k_particles_t& k_particles,
+        k_particles_i_t& k_particles_i,
+        k_hydro_d_t k_hydro,
+        k_interpolator_t& k_interp,
+        const species_t            * RESTRICT sp
+);
 
+// In move_p.cxx
 int
 move_p( particle_t       * ALIGNED(128) p0,
         particle_mover_t * ALIGNED(16)  pm,

@@ -193,6 +193,8 @@ combine_accumulators( accumulator_array_t * RESTRICT aa );
 // FORTRAN style from (0:nx+1,0:ny+1,0:nz+1).  Hydros for voxels on
 // the surface of the local domain (for example h(0,:,:) or
 // h(nx+1,:,:)) are not used.
+// The kokkos hydro array is easily accessed as hydro_array->k_h_d(index,
+// hydro_var::var), with var being any member of a hydro_t.
 
 typedef struct hydro {
   float jx, jy, jz, rho; // Current and charge density => <q v_i f>, <q f>
@@ -204,7 +206,22 @@ typedef struct hydro {
 
 typedef struct hydro_array {
   hydro_t * ALIGNED(128) h;
+  k_hydro_d_t k_h_d;
+  k_hydro_d_t::HostMirror k_h_h;
   grid_t * g;
+  
+  hydro_array(int nv)
+  {
+    k_h_d = k_hydro_d_t("k_hydro", nv);
+    k_h_h = Kokkos::create_mirror_view(k_h_d);
+  }
+
+  /**
+    * @brief Copies the hydro data to host legacy array
+    */
+  void copy_to_host();
+  // I don't think we need a copy_to_device, but I could write one easily.
+
 } hydro_array_t;
 
 // In hydro_array.c
@@ -231,5 +248,8 @@ clear_hydro_array( hydro_array_t * ha );
 
 void
 synchronize_hydro_array( hydro_array_t * ha );
+
+void
+synchronize_hydro_array_kokkos( hydro_array_t * ha );
 
 #endif // _sf_interface_h_

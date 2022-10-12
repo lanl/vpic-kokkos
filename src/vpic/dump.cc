@@ -114,6 +114,7 @@ vpic_simulation::dump_materials( const char *fname ) {
   if( fileIO.close() ) ERROR(( "File close failed on dump materials!!!" ));
 }
 
+
 /*****************************************************************************
  * Binary dump IO
  *****************************************************************************/
@@ -232,14 +233,24 @@ vpic_simulation::dump_hydro( const char *sp_name,
   sp = find_species_name( sp_name, species_list );
   if( !sp ) ERROR(( "Invalid species \"%s\"", sp_name ));
 
-    // Update the particles on the host only if they haven't been recently
-    // TODO: Port the hydro calculations to the device so this copy won't be
-    // needed.
-    if (step() > sp->last_copied)
-      sp->copy_to_host();
+  auto& particles = sp->k_p_d;
+  auto& particles_i = sp->k_p_i_d;
+  auto& interpolators_k = interpolator_array->k_i_d;
 
-  clear_hydro_array( hydro_array );
-  accumulate_hydro_p( hydro_array, sp, interpolator_array );
+  Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
+  accumulate_hydro_p_kokkos(
+      particles,
+      particles_i,
+      hydro_array->k_h_d,
+      interpolators_k,
+      sp
+  );
+
+  // This is slower in my tests
+  //synchronize_hydro_array_kokkos(hydro_array);
+
+  hydro_array->copy_to_host();
+
   synchronize_hydro_array( hydro_array );
 
   if( !fbase ) ERROR(( "Invalid filename" ));
@@ -722,14 +733,24 @@ vpic_simulation::hydro_dump( const char * speciesname,
   species_t * sp = find_species_name(speciesname, species_list);
   if( !sp ) ERROR(( "Invalid species name: %s", speciesname ));
 
-    // Update the particles on the host only if they haven't been recently
-    // TODO: Port the hydro calculations to the device so this copy won't be
-    // needed.
-    if (step() > sp->last_copied)
-      sp->copy_to_host();
+  auto& particles = sp->k_p_d;
+  auto& particles_i = sp->k_p_i_d;
+  auto& interpolators_k = interpolator_array->k_i_d;
 
-  clear_hydro_array( hydro_array );
-  accumulate_hydro_p( hydro_array, sp, interpolator_array );
+  Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
+  accumulate_hydro_p_kokkos(
+      particles,
+      particles_i,
+      hydro_array->k_h_d,
+      interpolators_k,
+      sp
+  );
+
+  // The legacy synchronize is actually a bit faster
+  //synchronize_hydro_array_kokkos(hydro_array);
+
+  hydro_array->copy_to_host();
+
   synchronize_hydro_array( hydro_array );
 
   // convenience

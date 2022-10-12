@@ -1,3 +1,6 @@
 add_executable(rho_p ./rho_p.cc)
 target_link_libraries(rho_p vpic Kokkos::kokkos)
 add_test(NAME rho_p COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ./rho_p)
+add_executable(hydro_p ./hydro_p.cc)
+target_link_libraries(hydro_p vpic Kokkos::kokkos)
+add_test(NAME hydro_p COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ./hydro_p)
