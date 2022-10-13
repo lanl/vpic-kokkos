@@ -16,6 +16,7 @@
 
 #include "../../vpic/kokkos_helpers.h"
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 // accumulate_rho_p adds the charge density associated with the
 // supplied particle array to the rhof of the fields.  Trilinear
 // interpolation is used.  rhof is known at the nodes at the same time
@@ -114,6 +115,7 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
     }
 }
+#endif
 
 #if 0
 using namespace v4;

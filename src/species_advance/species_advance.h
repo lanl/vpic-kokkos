@@ -345,9 +345,11 @@ energy_p_kokkos( const species_t            * RESTRICT sp,
 
 // In rho_p.cxx
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 void
 accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
                   const species_t     * RESTRICT sp );
+#endif
 
 void
 accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
