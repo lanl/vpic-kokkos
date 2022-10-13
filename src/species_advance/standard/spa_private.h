@@ -62,7 +62,10 @@ typedef struct center_p_pipeline_args {
 
 } center_p_pipeline_args_t;
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 PROTOTYPE_PIPELINE( center_p,   center_p_pipeline_args_t );
+#endif
+PROTOTYPE_PIPELINE( center_p_dump,   center_p_pipeline_args_t );
 PROTOTYPE_PIPELINE( uncenter_p, center_p_pipeline_args_t );
 
 ///////////////////////////////////////////////////////////////////////////////

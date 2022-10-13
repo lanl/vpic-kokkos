@@ -146,6 +146,7 @@ center_p_pipeline_v4( center_p_pipeline_args_t * args,
 
 #endif
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 void
 center_p( /**/  species_t            * RESTRICT sp,
           const interpolator_array_t * RESTRICT ia ) {
@@ -157,6 +158,28 @@ center_p( /**/  species_t            * RESTRICT sp,
   // host do the final incomplete quad.
 
   args->p0      = sp->p;
+  args->f0      = ia->i;
+  args->qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+  args->np      = sp->np;
+
+  EXEC_PIPELINES( center_p, args, 0 );
+  WAIT_PIPELINES();
+}
+#endif
+
+// dump_particles uses this version that doesn't get the legacy particle array from the species.
+void
+center_p_dump( /**/  species_t            * RESTRICT sp,
+                particle_t                 * RESTRICT p,
+                const interpolator_array_t * RESTRICT ia ) {
+  DECLARE_ALIGNED_ARRAY( center_p_pipeline_args_t, 128, args, 1 );
+
+  if( !sp || !p || !ia || sp->g!=ia->g ) ERROR(( "Bad args" ));
+
+  // Have the pipelines do the bulk of particles in quads and have the
+  // host do the final incomplete quad.
+
+  args->p0      = p;
   args->f0      = ia->i;
   args->qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
   args->np      = sp->np;

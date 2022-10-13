@@ -297,6 +297,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
                  interpolator_array_t * RESTRICT ia,
                  field_array_t* RESTRICT fa );
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 // In center_p.cxx
 
 // This does a half advance field advance and a half Boris rotate on
@@ -307,6 +308,16 @@ advance_p( /**/  species_t            * RESTRICT sp,
 void
 center_p( /**/  species_t            * RESTRICT sp,
           const interpolator_array_t * RESTRICT ia );
+#endif
+
+// In center_p.cxx
+
+// This version does not assume that a species_t has a legacy particle array.
+
+void
+center_p_dump( /**/  species_t            * RESTRICT sp,
+                particle_t                 * RESTRICT p,
+                const interpolator_array_t * RESTRICT ia );
 
 // In uncenter_p.cxx
 
