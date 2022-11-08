@@ -304,11 +304,7 @@ vpic_simulation::dump_particles( const char *sp_name,
 
     if( !fbase ) ERROR(( "Invalid filename" ));
 
-    // Update the particles on the host only if they haven't been recently
-    if (step() > sp->last_copied){
-      Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
-      Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
-    }
+    sp->copy_to_host();
 
     if( !p_buf ) MALLOC_ALIGNED( p_buf, PBUF_SIZE, 128 );
 

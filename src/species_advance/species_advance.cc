@@ -172,6 +172,7 @@ species_t::copy_to_host()
 
   nm = k_nm_h(0);
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
   // Avoid capturing this
   auto& k_particle_h = k_p_h;
   auto& k_particle_i_h = k_p_i_h;
@@ -191,6 +192,7 @@ species_t::copy_to_host()
       particles[i].i  = k_particle_i_h(i);
 
     });
+#endif
 
   // Avoid capturing this
   auto& k_particle_movers_h = k_pm_h;
@@ -218,6 +220,7 @@ species_t::copy_to_device()
 
   k_nm_h(0) = nm;
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
   // Avoid capturing this
   auto& k_particle_h = k_p_h;
   auto& k_particle_i_h = k_p_i_h;
@@ -237,6 +240,7 @@ species_t::copy_to_device()
       k_particle_i_h(i) = particles[i].i;
 
     });
+#endif
 
   // Avoid capturing this
   auto& k_particle_movers_h = k_pm_h;
