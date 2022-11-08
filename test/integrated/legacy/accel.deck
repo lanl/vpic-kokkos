@@ -105,26 +105,28 @@ begin_initialization {
 
       // Copy data back for inspection on host
       LIST_FOR_EACH( sp, species_list ) {
-        sp->copy_to_host();
+        //sp->copy_to_host();
+          Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
+          Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
       }
 
       for( int m=0; m<npart; m++ )
       {
-          if( this_sp->p[m].ux != 1*(n+1) ||
-                  this_sp->p[m].uy != 2*(n+1) ||
-                  this_sp->p[m].uz != 3*(n+1) )
+          if( this_sp->k_p_h(m, particle_var::ux) != 1*(n+1) ||
+                  this_sp->k_p_h(m, particle_var::uy) != 2*(n+1) ||
+                  this_sp->k_p_h(m, particle_var::uz) != 3*(n+1) )
           {
               failed++;
               sim_log( n << " " <<
                       m << " " <<
-                      this_sp->p[m].i  << " " <<
-                      this_sp->p[m].dx << " " <<
-                      this_sp->p[m].dy << " " <<
-                      this_sp->p[m].dz << " " <<
-                      this_sp->p[m].ux << " " <<
-                      this_sp->p[m].uy << " " <<
-                      this_sp->p[m].uz << " " <<
-                      this_sp->p[m].w << " ux should be exact multiples of " << (n+1) );
+                      this_sp->k_p_i_h(m) << " " <<
+                      this_sp->k_p_h(m, particle_var::dx) << " " <<
+                      this_sp->k_p_h(m, particle_var::dy) << " " <<
+                      this_sp->k_p_h(m, particle_var::dz) << " " <<
+                      this_sp->k_p_h(m, particle_var::ux) << " " <<
+                      this_sp->k_p_h(m, particle_var::uy) << " " <<
+                      this_sp->k_p_h(m, particle_var::uz) << " " <<
+                      this_sp->k_p_h(m, particle_var::w ) << " ux should be exact multiples of " << (n+1) );
           }
       }
   }

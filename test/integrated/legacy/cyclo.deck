@@ -69,19 +69,19 @@ begin_initialization {
     double uy = sin(2*M_PI*(0.125*nstep-(n+1))/(double)nstep) /
                 sin(2*M_PI*(0.125*nstep)      /(double)nstep);
     for( int m=0; m<npart; m++ ) {
-      if( fabs(this_sp->p[m].ux-ux)>0.6e-6 ||
-          fabs(this_sp->p[m].uy-uy)>0.6e-6 ||
-          this_sp->p[m].uz != 1 ) {
+      if( fabs(this_sp->k_p_h(m, particle_var::ux)-ux)>0.6e-6 ||
+          fabs(this_sp->k_p_h(m, particle_var::uy)-uy)>0.6e-6 ||
+          this_sp->k_p_h(m, particle_var::uz) != 1 ) {
         failed++;
         sim_log( n << " " << m << " " <<
-                 this_sp->p[m].i  << " " <<
-                 this_sp->p[m].dx << " " <<
-                 this_sp->p[m].dy << " " <<
-                 this_sp->p[m].dz << " " <<
-                 this_sp->p[m].ux << " " <<
-                 this_sp->p[m].uy << " " <<
-                 this_sp->p[m].uz << " " <<
-                 this_sp->p[m].w  << " " <<
+                 this_sp->k_p_i_h(m) << " " <<
+                 this_sp->k_p_h(m, particle_var::dx) << " " <<
+                 this_sp->k_p_h(m, particle_var::dy) << " " <<
+                 this_sp->k_p_h(m, particle_var::dz) << " " <<
+                 this_sp->k_p_h(m, particle_var::ux) << " " <<
+                 this_sp->k_p_h(m, particle_var::uy) << " " <<
+                 this_sp->k_p_h(m, particle_var::uz) << " " <<
+                 this_sp->k_p_h(m, particle_var::w ) << " " <<
                  ux << " " <<
                  uy << " " <<
                  this_sp->p[m].ux-ux << " " <<

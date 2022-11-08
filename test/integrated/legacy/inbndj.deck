@@ -52,18 +52,21 @@ begin_initialization {
     double vy_c = cy*( (double)dy1[n] - (double)dy0 );
     double vz_c = cz*( (double)dz1[n] - (double)dz0 );
     double rgamma = sqrt( 1. - ( vx_c*vx_c + vy_c*vy_c + vz_c*vz_c ) );
-    this_sp->p[n].i  = voxel(1,1,1);
-    this_sp->p[n].dx = dx0;
-    this_sp->p[n].dy = dy0;
-    this_sp->p[n].dz = dz0;
-    this_sp->p[n].ux = vx_c/rgamma;
-    this_sp->p[n].uy = vy_c/rgamma;
-    this_sp->p[n].uz = vz_c/rgamma;
-    this_sp->p[n].w  = uniform( rng(0), 0, 1 );
+    this_sp->k_p_i_h(n) = voxel(1,1,1);
+    this_sp->k_p_h(n, particle_var::dx) = dx0;
+    this_sp->k_p_h(n, particle_var::dy) = dy0;
+    this_sp->k_p_h(n, particle_var::dz) = dz0;
+    this_sp->k_p_h(n, particle_var::ux) = vx_c/rgamma;
+    this_sp->k_p_h(n, particle_var::uy) = vy_c/rgamma;
+    this_sp->k_p_h(n, particle_var::uz) = vz_c/rgamma;
+    this_sp->k_p_h(n, particle_var::w ) = uniform( rng(0), 0, 1 );
   }
 
   LIST_FOR_EACH( sp, species_list ) {
-    sp->copy_to_device();
+    // This will overite the host array we just filled with legacy, if it exists.
+    //sp->copy_to_device();
+    Kokkos::deep_copy(sp->k_p_d, sp->k_p_h);            \
+    Kokkos::deep_copy(sp->k_p_i_d, sp->k_p_i_h);        \
   }
 
   // Compute the initial charge density
@@ -71,7 +74,7 @@ begin_initialization {
   double rho0[8];
   CLEAR( rho0, 8 );
   for( int n=0; n<NPART; n++ ) {
-    double dx = this_sp->p[n].dx, dy = this_sp->p[n].dy, dz = this_sp->p[n].dz;
+    double dx = this_sp->k_p_h(n, particle_var::dx), dy = this_sp->k_p_h(n, particle_var::dy), dz = this_sp->k_p_h(n, particle_var::dz);
     double q  = 0.125*(double)this_sp->q*(double)this_sp->p[n].w;
     rho0[0] += q * ( 1 - dx ) * ( 1 - dy ) * ( 1 - dz );
     rho0[1] += q * ( 1 + dx ) * ( 1 - dy ) * ( 1 - dz );
@@ -118,7 +121,7 @@ begin_initialization {
   double rho1[8];
   CLEAR( rho1, 8 );
   for( int n=0; n<NPART; n++ ) {
-    double dx = this_sp->p[n].dx, dy = this_sp->p[n].dy, dz = this_sp->p[n].dz;
+    double dx = this_sp->k_p_h(n, particle_var::dx), dy = this_sp->k_p_h(n, particle_var::dy), dz = this_sp->k_p_h(n, particle_var::dz);
     double q  = 0.125*(double)this_sp->q*(double)this_sp->p[n].w;
     rho1[0] += q * ( 1 - dx ) * ( 1 - dy ) * ( 1 - dz );
     rho1[1] += q * ( 1 + dx ) * ( 1 - dy ) * ( 1 - dz );
@@ -169,9 +172,9 @@ begin_initialization {
   double tol = 4;
   double eps = FLT_EPSILON*0.81650; // disp_mean = 0, disp_rms = sqrt(2/3)
   for( int n=0; n<NPART; n++ ) {
-    double errx = (double)dx1[n] - (double)this_sp->p[n].dx;
-    double erry = (double)dy1[n] - (double)this_sp->p[n].dy;
-    double errz = (double)dz1[n] - (double)this_sp->p[n].dz;
+    double errx = (double)dx1[n] - (double)this_sp->k_p_h(n, particle_var::dx);
+    double erry = (double)dy1[n] - (double)this_sp->k_p_h(n, particle_var::dy);
+    double errz = (double)dz1[n] - (double)this_sp->k_p_h(n, particle_var::dz);
     if( fabs(errx) > tol*eps || fabs(erry) > tol*eps || fabs(errz) > tol*eps ) {
       failed++;
       sim_log( n << " " << errx/eps << " " << erry/eps << " " << errz/eps );
