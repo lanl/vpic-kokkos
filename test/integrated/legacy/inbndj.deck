@@ -75,7 +75,7 @@ begin_initialization {
   CLEAR( rho0, 8 );
   for( int n=0; n<NPART; n++ ) {
     double dx = this_sp->k_p_h(n, particle_var::dx), dy = this_sp->k_p_h(n, particle_var::dy), dz = this_sp->k_p_h(n, particle_var::dz);
-    double q  = 0.125*(double)this_sp->q*(double)this_sp->p[n].w;
+    double q  = 0.125*(double)this_sp->q*(double)this_sp->k_p_h(n, particle_var::w);
     rho0[0] += q * ( 1 - dx ) * ( 1 - dy ) * ( 1 - dz );
     rho0[1] += q * ( 1 + dx ) * ( 1 - dy ) * ( 1 - dz );
     rho0[2] += q * ( 1 - dx ) * ( 1 + dy ) * ( 1 - dz );
@@ -122,7 +122,7 @@ begin_initialization {
   CLEAR( rho1, 8 );
   for( int n=0; n<NPART; n++ ) {
     double dx = this_sp->k_p_h(n, particle_var::dx), dy = this_sp->k_p_h(n, particle_var::dy), dz = this_sp->k_p_h(n, particle_var::dz);
-    double q  = 0.125*(double)this_sp->q*(double)this_sp->p[n].w;
+    double q  = 0.125*(double)this_sp->q*(double)this_sp->k_p_h(n, particle_var::w);
     rho1[0] += q * ( 1 - dx ) * ( 1 - dy ) * ( 1 - dz );
     rho1[1] += q * ( 1 + dx ) * ( 1 - dy ) * ( 1 - dz );
     rho1[2] += q * ( 1 - dx ) * ( 1 + dy ) * ( 1 - dz );
@@ -178,7 +178,7 @@ begin_initialization {
     if( fabs(errx) > tol*eps || fabs(erry) > tol*eps || fabs(errz) > tol*eps ) {
       failed++;
       sim_log( n << " " << errx/eps << " " << erry/eps << " " << errz/eps );
-      sim_log( dx1[n] << " vs " << this_sp->p[n].dx );
+      sim_log( dx1[n] << " vs " << this_sp->k_p_h(n, particle_var::dx) );
     }
   }
 
