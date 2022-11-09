@@ -34,7 +34,7 @@ checkpt_vpic_simulation( const vpic_simulation * vpic ) {
   CHECKPT_FPTR( vpic->species_list );
   CHECKPT_FPTR( vpic->particle_bc_list );
   CHECKPT_FPTR( vpic->emitter_list );
-  CHECKPT_FPTR( vpic->collision_op_list );
+  //CHECKPT_FPTR( vpic->collision_op_list );
 }
 
 vpic_simulation *
@@ -51,7 +51,7 @@ restore_vpic_simulation( void ) {
   RESTORE_FPTR( vpic->species_list );
   RESTORE_FPTR( vpic->particle_bc_list );
   RESTORE_FPTR( vpic->emitter_list );
-  RESTORE_FPTR( vpic->collision_op_list );
+  //RESTORE_FPTR( vpic->collision_op_list );
   return vpic;
 }
 
@@ -64,7 +64,7 @@ reanimate_vpic_simulation( vpic_simulation * vpic ) {
   REANIMATE_FPTR( vpic->species_list );
   REANIMATE_FPTR( vpic->particle_bc_list );
   REANIMATE_FPTR( vpic->emitter_list );
-  REANIMATE_FPTR( vpic->collision_op_list );
+  //REANIMATE_FPTR( vpic->collision_op_list );
 }
 
 

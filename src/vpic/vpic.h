@@ -17,7 +17,8 @@
 #include <cmath>
 
 #include "../boundary/boundary.h"
-#include "../collision/collision.h"
+// TODO: Implement collisions with Kokkos
+//#include "../collision/collision.h"
 #include "../emitter/emitter.h"
 // FIXME: INCLUDES ONCE ALL IS CLEANED UP
 #include "../util/io/FileIO.h"
@@ -200,7 +201,10 @@ public:
                                              // boundary helpers
   emitter_t            * emitter_list;       // define_emitter /
                                              // emitter helpers
+  // TODO: Make collisions work with Kokkos
+#if 0
   collision_op_t       * collision_op_list;  // collision helpers
+#endif
 
   // User defined checkpt preserved variables
   // Note: user_global is aliased with user_global_t (see deck_wrapper.cxx)
@@ -558,6 +562,8 @@ public:
   //   injection with displacement during initialization).
   // This injection is _ultra_ _fast_.
 
+  // TODO: Make Kokkos versions of these
+#ifdef USE_LEGACY_PARTICLE_ARRAY
   inline void
   inject_particle_raw( species_t * RESTRICT sp,
                        float dx, float dy, float dz, int32_t i,
@@ -583,6 +589,7 @@ public:
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
     sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
   }
+#endif
 
   //////////////////////////////////
   // Random number generator helpers
@@ -644,10 +651,13 @@ public:
     return append_particle_bc( pbc, &particle_bc_list );
   }
 
+  // TODO: Make collisions work with Kokkos
+#if 0
   inline collision_op_t *
   define_collision_op( collision_op_t * cop ) {
     return append_collision_op( cop, &collision_op_list );
   }
+#endif
 
   ////////////////////////
   // Miscellaneous helpers

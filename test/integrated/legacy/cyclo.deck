@@ -84,8 +84,8 @@ begin_initialization {
                  this_sp->k_p_h(m, particle_var::w ) << " " <<
                  ux << " " <<
                  uy << " " <<
-                 this_sp->p[m].ux-ux << " " <<
-                 this_sp->p[m].uy-uy );
+                 this_sp->k_p_h(m, particle_var::ux)-ux << " " <<
+                 this_sp->k_p_h(m, particle_var::uy)-uy );
       }
     }
   }

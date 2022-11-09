@@ -93,7 +93,9 @@ class species_t {
         float m;                            // Species particle rest mass
 
         int np = 0, max_np = 0;             // Number and max local particles
+#ifdef USE_LEGACY_PARTICLE_ARRAY
         particle_t * ALIGNED(128) p;        // Array of particles for the species
+#endif
 
         // TODO: these could be unsigned?
         int nm = 0, max_nm = 0;             // Number and max local movers in use
@@ -335,9 +337,11 @@ uncenter_p( /**/  species_t            * RESTRICT sp,
 // calculation is done numerically robustly.  All nodes get the same
 // result.
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 double
 energy_p( const species_t            * RESTRICT sp,
           const interpolator_array_t * RESTRICT ia );
+#endif
 
 double
 energy_p_kokkos( const species_t            * RESTRICT sp,
@@ -379,10 +383,12 @@ void k_accumulate_rhob_single_cpu(
 
 // In hydro_p.c
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 void
 accumulate_hydro_p( /**/  hydro_array_t        * RESTRICT ha,
                     const species_t            * RESTRICT sp,
                     const interpolator_array_t * RESTRICT ia );
+#endif
 
 void accumulate_hydro_p_kokkos(
         k_particles_t& k_particles,
