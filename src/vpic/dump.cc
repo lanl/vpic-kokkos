@@ -371,6 +371,10 @@ vpic_simulation::dump_particles( const char *sp_name,
     sp->np     = sp_np;
     sp->max_np = sp_max_np;
 
+    pbuf = NULL;
+    FREE_ALIGNED(p_buf);
+#undef PBUF_SIZE
+
     if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
 }
 

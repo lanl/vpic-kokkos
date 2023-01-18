@@ -763,8 +763,17 @@ public:
  * @brief After a checkpoint restore, we must move the data back over to the
  * Kokkos objects. This currently must be done for all views
  */
-void restore_kokkos(vpic_simulation& simulation);
+void restore_kokkos(vpic_simulation& simulation, const char * fbase);
 // TODO: would this make more sense as a member function on vpic_simulation_t
 
+/**
+ * @brief The checkpoint macros will not work on the Kokkos views, so we bypass
+ * the checkpointing infrustructure and manually write this data to disk for
+ * all views without a legacy array.
+ *
+ * @param simulation The vpic_simulation that we are checkpointing
+ * @param fbase The base name for the checkpoint files
+ */
+void checkpt_kokkos(vpic_simulation& simulation, const char* fbase);
 
 #endif // vpic_h
