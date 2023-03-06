@@ -547,7 +547,8 @@ public:
   inject_particle( species_t * sp,
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
-                   double w,  double age = 0, int update_rhob = 1 );
+                   double w, double charge,
+		   double age = 0, int update_rhob = 1 );
 
   // Inject particle raw is for power users!
   // No nannyism _at_ _all_:
@@ -556,8 +557,8 @@ public:
   // - The rhob field is _not_ updated.
   // - Injection with displacment may use up movers (i.e. don't use
   //   injection with displacement during initialization).
-  // This injection is _ultra_ _fast_.
-
+  // This injection is _ultra_ _fast_.  
+  
   inline void
   inject_particle_raw( species_t * RESTRICT sp,
                        float dx, float dy, float dz, int32_t i,
@@ -583,6 +584,8 @@ public:
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
     sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
   }
+
+
 
   //////////////////////////////////
   // Random number generator helpers

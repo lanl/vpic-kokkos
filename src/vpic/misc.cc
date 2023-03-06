@@ -16,11 +16,15 @@ void
 vpic_simulation::inject_particle( species_t * sp,
                                   double x,  double y,  double z,
                                   double ux, double uy, double uz,
-                                  double w,  double age,
+                                  double w,  double charge, double age,
                                   int update_rhob ) {
   int ix, iy, iz;
 
   // Check input parameters
+  //#include <iostream>
+  //using namespace std;
+  //cout << "charge (1st misc) = " << charge << endl;
+  
   if( !sp                ) ERROR(( "Invalid species" ));
   if( w < 0              ) ERROR(( "inject_particle: w < 0" ));
 
@@ -81,6 +85,9 @@ vpic_simulation::inject_particle( species_t * sp,
   p->uy = (float)uy;
   p->uz = (float)uz;
   p->w  = w;
+  p->charge = charge;
+
+  //cout << "charge (2nd misc) = " << charge << endl;
 
   if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
 

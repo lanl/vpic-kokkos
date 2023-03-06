@@ -8,6 +8,224 @@
 #include "../../vpic/kokkos_helpers.h"
 #include "../../vpic/kokkos_tuning.hpp"
 
+#include <iostream>
+using namespace std;
+#include <fstream>
+
+// ****************************** field ionization function
+void fieldIonization(float E_SI, float N_ionization, float N_ionization_levels, float epsilon_eV_list[], float dt, float arr[]){
+
+  // Simulation parameters: FIXME: ** Need to get these from vpic **
+  // Right now it is set up for neutral hydrogen                                                                                                                                                                       
+  float lambda_SI    = 1.05800000000000008e-06;   // meters
+  float Z            = 1;          // ion charge number after ionization
+  float Z_star       = 0; // initial charge state                                                                                                                                                                       
+  // Ionization specific parameters
+  float K = 2; //FIXME: currenly only have 2-photon ionization
+  float n = 1; //FIXME: currently only principle quantum number of 1
+  float m = 0; // This is typically 0 in simulations
+  float l = 1;	
+  
+  // initialize variables
+  int ionization_flag = 1;
+  float t_ionize      = 0;
+  float U;
+  float Gamma = 0;
+
+  // Constants
+  float q_e       = 1.60217663e-19;  // coulombs
+  float q_e_au    = 1.0;             // au
+  float m_e       = 9.1093837e-31;   // kilograms
+  float m_e_au    = 1.0;             // au 
+  float c         = 299792458;       // m/s
+  float c_au      = 137.02;          // atomic units
+  float epsilon_0 = 8.85418782e-12;  // F/m
+  float epsilon_0_au = 1/(4*M_PI);   // au
+  float alpha     = 0.00729735;      // fine structure constant
+  float h_bar     = 1.054571817e-34; // J *s
+  float bohr_r_cm =  5.29177249e-9;  // cm
+  float E_field_conversion = 5.1422e+11;      // (alpha^3*m_e^2*c^3)/(q_e*h_bar), multiply AU to get SI
+  float I_conversion       = 6.4364099007e15; // multiply au to get W/cm^2
+  float Gamma_conversion   = 1.0/(h_bar/(pow(alpha,2)*m_e*pow(c,2))); // multiply au to get sec^-1 
+
+  // Calculate stuff
+  float E_au       = E_SI/E_field_conversion; // field strength, atomic units
+  float nu         = c/lambda_SI; // Hz
+  float omega_SI   = 2*M_PI*nu;   // Hz
+  float omega_eV   = 1.2398/(lambda_SI/1e-6); // eV
+  float omega_au   = omega_eV * 0.036749; // energy, Hartree units
+  float I_au       = 0.5*c_au*epsilon_0_au*pow(E_au,2.0); // intensity from the field, atomic units
+  float I_W_cm2    = I_au*I_conversion;       // intensity from the field, SI units
+  
+  // loop for multiple ionization events in a single timestep
+  while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {
+
+  // Get the appropriate ionization energy
+  float epsilon_eV = epsilon_eV_list[int(N_ionization)]; // [eV], ionization energy
+  float epsilon_au = epsilon_eV/27.2;         // atomic units, ionization energy
+  float epsilon_SI = epsilon_au*4.3597463e-18;// [J],  ionization energy
+ 
+  // Calculate stuff
+  float n_star         = (Z_star + 1.0)/sqrt(2*epsilon_au); // effective principle quantum number
+  float l_star         = n_star - 1.0; // angular momentum
+  float T_0            = M_PI*Z/(abs(epsilon_au) * sqrt(2*abs(epsilon_au))); // period of classical radial trajectories
+  float gamma_keldysh  = omega_au*sqrt(2*m_e_au*epsilon_au)/(q_e_au*E_au);
+
+// Ionization events are tested for every particle with a bound electron at every timestep
+  
+// Choose the ionization process based on the E-field at the particle
+  // Specifically, Gamma =
+  // min( Gamma_MPI, Gamma_ADK ) for        E <= E_M
+  // Gamma_ADK                   for E_M <= E <= E_T
+  // min( Gamma_ADK, Gamma_BSI ) for E_T <= E <= E_B
+  // Gamma_BSI                   for        E >  E_B
+  // ** NOTE: E_B is defined such that dGamma_ADK(E_B)/dE = 0 so that we have a monotonically increasing rate. 
+  
+  // Choose the ionization process based on |E| at each particle
+  // Note E_T = epsilon^2/(4*Z) is the correct version but EPOCH uses epsilon^2/Z for some reason (maybe a typo in their paper?)
+  float E_M_SI = 2*omega_SI*sqrt(2*m_e*epsilon_SI)/q_e;
+  float E_M_au = omega_au*sqrt(8*epsilon_au); // atomic units
+  float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
+  float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units 
+
+
+  if (E_au<=E_M_au){
+    // MPI Ionization
+    // ionization rate per atom: Gamma^(K)
+    // sigma^(K) = (h_bar*omega)^K*Gamma^(K)/I^K : K-photon cross section, units [cm^2K * s^(K-1)]
+    // I: intensity of the laser field, units [W/cm^2]
+    //cout << "MPI Ionization" << endl;
+    float K = 2; //FIXME: currenly only have 2-photon ionization
+    int n = 1; //FIXME: currently only principle quantum number of 1
+    // FIXME: need to add the case of circularly polarized field
+    float T_K = 4.80*pow(1.30,2*K)*pow(2*K+1,-1)*pow(K,-1.0/2.0); // in the case of linearly polarized field
+    // FIXME: still need to figure out the units of simga_K; the plot in the book suggests it isnt [cm^2K * s^(K-1)]
+    float sigma_K_au = pow(c_au*pow(tgamma(K+1),2)*pow(n,5)* pow(omega_au,(10*K-1)/3), -1)*T_K*pow(E_au,2*K-2);
+    // FIXME: This definition of Gamma is only correct when sigma is in units of [cm^2K * s^(K-1)]
+    Gamma = sigma_K_au * pow(I_au/omega_au, K);
+
+  }
+
+  else if (E_au>E_M_au && E_au<=E_T_au) {
+    // Tunneling Regime
+    //cout << "Tunneling Ionization" << endl;
+    float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
+    float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
+    float Gamma_ADK_au = C_nstar_lstar_squared*f_n_l * sqrt(3*E_au*pow(n_star,3.0)/(M_PI*pow(Z,3.0))) * pow(Z,2.0)/(2*pow(n_star,2.0)) * pow(2*pow(Z,3.0)/(E_au*pow(n_star,3.0)),2*n_star-abs(m)-1)*exp(-2*pow(Z,3.0)/(3*pow(n_star,3.0)*E_au));
+    float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
+    Gamma = Gamma_ADK_SI;
+
+  }
+
+  else if (E_au>E_T_au && E_au<=E_B_au){
+    // Either classical ADK or with BSI correction
+    // Whichever has the minimum ionization rate
+    cout << "Tunneling or BSI Regime" << endl;
+    // ADK (no correction)
+    float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
+    float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
+    float Gamma_ADK_au = C_nstar_lstar_squared*f_n_l * sqrt(3*E_au*pow(n_star,3.0)/(M_PI*pow(Z,3.0))) * pow(Z,2.0)/(2*pow(n_star,2.0)) * pow(2*pow(Z,3.0)/(E_au*pow(n_star,3.0)),2*n_star-abs(m)-1)*exp(-2*pow(Z,3.0)/(3*pow(n_star,3.0)*E_au));
+    float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
+
+    // With BSI correction: Gamma = Gamma_classical + Gamma_ADK(I_classical)
+    // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity, i.e, the intensity that corresponds to the threshold E-field magnitude
+    float Gamma_ADK_au_threshold = C_nstar_lstar_squared*f_n_l * sqrt(3*E_T_au*pow(n_star,3.0)/(M_PI*pow(Z,3.0))) * pow(Z,2.0)/(2*pow(n_star,2.0)) * pow(2*pow(Z,3.0)/(E_T_au*pow(n_star,3.0)),2*n_star-abs(m)-1)*exp(-2*pow(Z,3.0)/(3*pow(n_star,3.0)*E_T_au));
+    float Gamma_ADK_SI_threshold = Gamma_ADK_au_threshold*Gamma_conversion;
+    // uniform field, FIXME: enable this
+    // gamma_cl_uniform_atomic = (1 - E_n_atomic^2./(4*Z*E_atomic))/(2*T_0);
+    // gamma_cl_uniform_SI = gamma_cl_uniform_atomic / (h_bar/(alpha^2*m_e*c^2));
+    // oscillating field
+    float Gamma_cl_au  = 1.0/(M_PI*T_0) * (  M_PI/2.0 - asin( pow(epsilon_au,2.0)/(4*Z*E_au)) + pow(epsilon_au,2.0)/(4*Z*E_au) * log( ( 4*Z*E_au - sqrt( 16*pow(Z,2.0)*pow(E_au,2.0) - pow(epsilon_au,4.0) ) )/pow(epsilon_au,2.0) ) );
+    float Gamma_cl_SI  = Gamma_cl_au* Gamma_conversion;
+    float Gamma_BSI_SI = Gamma_cl_SI + Gamma_ADK_SI_threshold;
+
+    // Decide if the BSI correction is applicable
+    Gamma = min(Gamma_ADK_SI, Gamma_BSI_SI);
+
+    /*
+    if (Gamma_ADK_SI < Gamma_BSI_SI) {
+      cout << "Tunneling Ionization" << endl;
+    }
+    else {
+      cout << "BSI Correction" << endl;
+    }
+    */
+
+
+  }
+
+  else if (E_au>E_B_au) {
+    // BSI Ionization
+    //cout << "BSI Ionization" << endl;
+    // BSI Ionization: Gamma = Gamma_classical + Gamma_ADK(I_classical)
+    // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity
+    float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
+    float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
+    float Gamma_ADK_au_threshold = C_nstar_lstar_squared*f_n_l * sqrt(3*E_T_au*pow(n_star,3.0)/(M_PI*pow(Z,3.0))) * pow(Z,2.0)/(2*pow(n_star,2.0)) * pow(2*pow(Z,3.0)/(E_T_au*pow(n_star,3.0)),2*n_star-abs(m)-1)*exp(-2*pow(Z,3.0)/(3*pow(n_star,3.0)*E_T_au));
+    float Gamma_ADK_SI_threshold = Gamma_ADK_au_threshold*Gamma_conversion;
+    // uniform field, FIXME: enable this
+    // gamma_cl_uniform_atomic = (1 - E_n_atomic^2./(4*Z*E_atomic))/(2*T_0);
+    // oscillating field
+    float Gamma_cl_au  = 1.0/(M_PI*T_0) * (  M_PI/2.0 - asin( pow(epsilon_au,2.0)/(4*Z*E_au)) + pow(epsilon_au,2.0)/(4*Z*E_au) * log( ( 4*Z*E_au - sqrt( 16*pow(Z,2.0)*pow(E_au,2.0) - pow(epsilon_au,4.0) ) )/pow(epsilon_au,2.0) ) );
+    float Gamma_cl_SI  = Gamma_cl_au* Gamma_conversion;
+    float Gamma_BSI_SI = Gamma_cl_SI + Gamma_ADK_SI_threshold;
+    Gamma = Gamma_BSI_SI;
+  }
+  
+  
+  
+  // Ionization occurs if U_1 < 1 - exp(-Gamma * delta_t), for a uniform number U_1~[0,1]
+  // FIXME: once no further ionization occurs, the particle should be removed and replaced
+  //        with the appropriate ion and an electron with the appropriate weight.
+  //        These should be added in the same location and with the same velocity
+  // FIXME: Need to deal with the energy conservation
+
+    U = (float) rand()/RAND_MAX;
+    if ( U < 1 - exp(-Gamma * (dt-t_ionize) ) ) {
+      // ionization occurs
+      N_ionization++;
+      ionization_flag = 1;
+      //cout << ionization << " Ionization(s) occurs" << endl;
+
+      // deal with multiple ionizations
+      t_ionize = -1.0/Gamma * log(1-U); // use previous U to calc
+
+    } 
+    else {
+      // ionization doesnt occur
+      ionization_flag = 0;
+      //cout << "Ionization doesnt occur" << endl;
+    } 
+
+  } // end while loop
+
+
+      
+  arr[0] = Gamma;
+  arr[1] = float(N_ionization);
+
+  
+} // end field ionization rate function
+
+
+
+
+
+
+
+// ****************************************************
+
+
+
+
+
+
+
+
+
+
+
+
 // Write current values to either an accumulator or directly to the fields
 template<class CurrentScatterAccess>
 void KOKKOS_INLINE_FUNCTION
@@ -333,6 +551,9 @@ void load_interpolators(
 #endif
 }
 
+
+
+
 void
 advance_p_kokkos_unified(
         k_particles_t& k_particles,
@@ -357,7 +578,9 @@ advance_p_kokkos_unified(
         const int max_nm,
         const int nx,
         const int ny,
-        const int nz)
+        const int nz,
+	string sp_name
+			 )
 {
 
   constexpr float one            = 1.;
@@ -369,6 +592,14 @@ advance_p_kokkos_unified(
   float cy = 0.25 * g->rdz * g->rdx / g->dt;
   float cz = 0.25 * g->rdx * g->rdy / g->dt;
 
+  float timestep = g->step;
+  //printf("*************************\n");
+  //cout << "species = " << sp_name << endl;
+  //printf("np: %d \n", np);
+  //printf("charge of species: %g \n", qsp);
+  //printf("timestep = %d \n", timestep);
+
+  
   #define p_dx    k_particles(p_index, particle_var::dx)
   #define p_dy    k_particles(p_index, particle_var::dy)
   #define p_dz    k_particles(p_index, particle_var::dz)
@@ -376,6 +607,7 @@ advance_p_kokkos_unified(
   #define p_uy    k_particles(p_index, particle_var::uy)
   #define p_uz    k_particles(p_index, particle_var::uz)
   #define p_w     k_particles(p_index, particle_var::w)
+  #define p_q     k_particles(p_index, particle_var::charge)
   #define pii     k_particles_i(p_index)
 
   #define f_cbx k_interp(ii[LANE], interpolator_var::cbx)
@@ -404,20 +636,30 @@ advance_p_kokkos_unified(
   auto rangel = g->rangel;
   auto rangeh = g->rangeh;
 
+  //cout << "1st: " << endl;
+  //cout << "k_particles(2235, particle_var::dx) = " << k_particles(2235, particle_var::dx) << endl;
+  // cout << "k_particles(1, particle_var::w) = " << k_particles(1, particle_var::w) << endl;
+  //cout << "k_particles(1, particle_var::charge) = " << k_particles(1, particle_var::charge) << endl;
+
   // TODO: is this the right place to do this?
   Kokkos::deep_copy(k_nm, 0);
 
 // Determine whether to use accumulators
 #if defined( VPIC_ENABLE_ACCUMULATORS )
+  // Goes here
+  //printf("VPIC_ENABLE_ACCUMULATORS \n");
   Kokkos::View<float*[12]> accumulator("Accumulator", k_field.extent(0));
   Kokkos::deep_copy(accumulator, 0);
   auto current_sv = Kokkos::Experimental::create_scatter_view(accumulator);
 #else
+  //printf("VPIC_ENABLE_ACCUMULATORS ELSE\n");
   k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
 #endif
 
 // Setting up work distribution settings
 #if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
+  // Goes here
+  //printf("( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU ) \n");
   constexpr int num_lanes = 32;
   int chunk_size = num_lanes;
   int num_chunks = np/num_lanes;
@@ -425,6 +667,7 @@ advance_p_kokkos_unified(
     num_chunks += 1;
   auto policy = Kokkos::TeamPolicy<>(num_chunks, 1, num_lanes);
 #elif defined( VPIC_ENABLE_HIERARCHICAL )
+  //printf("VPIC_ENABLE_HIERARCHICAL \n");
   auto policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE);
   int chunk_size = np/LEAGUE_SIZE;
   if(chunk_size*LEAGUE_SIZE < np)
@@ -432,11 +675,14 @@ advance_p_kokkos_unified(
   constexpr int num_lanes = 1;
   int num_chunks = LEAGUE_SIZE;
 #else
+  //printf("( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU ) ELSE\n");
   constexpr int num_lanes = 1;
 #endif
 
 // Outermost parallel loop
 #if defined(VPIC_ENABLE_HIERARCHICAL) || defined(VPIC_ENABLE_VECTORIZATION)
+  // Goes here 
+  //printf("(VPIC_ENABLE_HIERARCHICAL) || defined(VPIC_ENABLE_VECTORIZATION) \n");
   Kokkos::parallel_for("advance_p", policy, 
   KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
       auto current_sa = current_sv.access();
@@ -446,13 +692,24 @@ advance_p_kokkos_unified(
         num_iters = np - chunk*chunk_size;
       size_t pi_offset = chunk*chunk_size;
 #else
+      //printf("(VPIC_ENABLE_HIERARCHICAL) || defined(VPIC_ENABLE_VECTORIZATION) ELSE \n");    
   auto policy = Kokkos::RangePolicy<>(0,np);
   Kokkos::parallel_for("advance_p", policy, KOKKOS_LAMBDA (const size_t pi_offset) {
       auto current_sa = current_sv.access();
 #endif
 
+
+    
+      //printf("num_iters = %d \n", num_iters);
+      //printf("chunk_size = %d \n", chunk_size);
+      //printf("num_chunks = %d \n", num_chunks);
+      //printf("num_lanes = %d \n", num_lanes);
+      //printf("np = %d \n", np);
+	
+     
 // Inner parallelization loop
 #if defined ( VPIC_ENABLE_HIERARCHICAL ) && !defined( VPIC_ENABLE_VECTORIZATION )
+      //printf("( VPIC_ENABLE_HIERARCHICAL ) && !defined( VPIC_ENABLE_VECTORIZATION ) \n");
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (const size_t index) {
       size_t pi_offset = chunk*chunk_size + index;
 #endif
@@ -478,6 +735,7 @@ advance_p_kokkos_unified(
       float cby[num_lanes];
       float cbz[num_lanes];
       float q[num_lanes];
+      float charge[num_lanes];
       int   ii[num_lanes];
       int   inbnds[num_lanes];
 
@@ -510,8 +768,14 @@ advance_p_kokkos_unified(
 
       size_t p_index = pi_offset;
 
+      //cout << "p_dx = " << p_dx << endl;
+      //cout << "p_q = "  << p_q << endl;
+      //cout << "p_w = "  << p_w << endl; 
+
+      
       BEGIN_VECTOR_BLOCK {
         p_index = pi_offset + LANE;
+	//cout << "p_index = " << p_index << endl;
         // Load position
         dx[LANE] = p_dx;
         dy[LANE] = p_dy;
@@ -522,10 +786,32 @@ advance_p_kokkos_unified(
         uz[LANE] = p_uz;
         // Load weight
         q[LANE]  = p_w;
+	// Load charge
+	charge[LANE] = p_q;
         // Load index
         ii[LANE] = pii;
       } END_VECTOR_BLOCK;
 
+      //cout << "********" << endl;
+      //printf("num_iters = %d \n", num_iters);
+      //printf("chunk_size = %d \n", chunk_size);
+      //printf("num_chunks = %d \n", num_chunks);
+      //printf("num_lanes = %d \n", num_lanes);
+      //printf("np = %d \n", np);
+      //printf("p_index = %ld \n",p_index);
+      //printf("pi_offset = %ld \n",pi_offset);
+      //         printf("LANE = %d \n", LANE);
+      //cout << "pii = " << pii << endl;
+      //         cout << "ii[LANE] = " << ii[LANE] << endl;
+      //cout << "ii = " << ii << endl;
+      //cout << "p_w = " << p_w << endl;
+      //cout << "p_q = " << p_q << endl;
+      //cout << "p_dx = " << p_dx << endl;
+      //cout << "type(q) = " << typeid(q).name() << endl;
+      //cout << "type(charge) = " << typeid(charge).name() << endl;
+      //cout << "type(dx) = " << typeid(dx).name() << endl;
+
+      
       load_interpolators<num_lanes>( fex, fdexdy, fdexdz, fd2exdydz,
                                      fey, fdeydz, fdeydx, fd2eydzdx,
                                      fez, fdezdx, fdezdy, fd2ezdxdy,
@@ -539,7 +825,131 @@ advance_p_kokkos_unified(
         hax[LANE] = qdt_2mc*( (fex[LANE] + dy[LANE]*fdexdy[LANE] ) + dz[LANE]*(fdexdz[LANE] + dy[LANE]*fd2exdydz[LANE]) );
         hay[LANE] = qdt_2mc*( (fey[LANE] + dz[LANE]*fdeydz[LANE] ) + dx[LANE]*(fdeydx[LANE] + dz[LANE]*fd2eydzdx[LANE]) );
         haz[LANE] = qdt_2mc*( (fez[LANE] + dx[LANE]*fdezdx[LANE] ) + dy[LANE]*(fdezdy[LANE] + dx[LANE]*fd2ezdxdy[LANE]) );
-  
+
+
+	// ***** Field Ioization *****
+	// constants
+        float q_e = 1.60217663e-19;  // coulombs 
+        // FIXME: **** Input deck variables ****
+	int   field_ionization  = 1; // FIXME: this needs to go into the input deck
+        float epsilon_eV_list[] = {13.6}; // eV, ionization energy, this should be a list with the different levels
+        float dt = 6.93444375004407055e-16;      // [s], timestep
+
+	// Check if the particle is fully ionized already
+        float N_ionization        = float(int(charge[LANE]/q_e)); // Current ionization state of the particle
+        float N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
+	int   N_ionization_levels = sizeof(epsilon_eV_list)/sizeof(float);
+        // FIXME: need to check which species the user wants ionization enabled on
+	if (field_ionization == 1 && sp_name != "electron"){ // && N_ionization < N_ionization_levels) {
+        // code units
+	float hax_c = hax[LANE]/qdt_2mc;
+	float hay_c = hay[LANE]/qdt_2mc;
+	float haz_c = haz[LANE]/qdt_2mc;
+	float ha_mag_c = sqrtf(pow(hax_c,2.0)+pow(hay_c,2.0)+pow(haz_c,2.0));
+        // SI units
+	float E_to_SI = 1.44303994037981860e+19;
+	float hax_SI  = E_to_SI * hax_c;
+	float hay_SI  = E_to_SI * hay_c;
+	float haz_SI  = E_to_SI * haz_c;
+	float E_mag_SI = E_to_SI * ha_mag_c;
+	// particle index
+	int particle_index = LANE+pi_offset;
+	
+	// print files to command line
+	//printf("hax[LANE] SI = %g \n", hax_SI);
+	//printf("hax[LANE] SI = %g \n", hay_SI);
+	//printf("hax[LANE] SI = %g \n", haz_SI);
+	/*
+	printf("LANE = %d\n", LANE);
+	cout << "particle index = " << LANE+pi_offset << endl;
+	cout << "Previous Ionization State :" << endl;
+	cout << "   dx[LANE] = " << dx[LANE] << endl;
+	cout << "   E_mag_SI = " << E_mag_SI << endl;
+	cout << "   Ionization State[LANE] = " << N_ionization << endl;
+        */
+	
+	// Calculate the ionization rate and number of ionizations
+        float arr[2];
+        fieldIonization(E_mag_SI, N_ionization, N_ionization_levels, epsilon_eV_list, dt, arr);
+	
+	float Gamma = arr[0];  // ionization rate
+	N_ionization = arr[1]; // ionization state after field ionization function
+
+	// Change the charge of the particle
+	k_particles(particle_index, particle_var::charge) = N_ionization * q_e;
+	// Inject the macro electron
+        /*
+	double px_e_norm = 0;
+	double px_e_norm = 0;
+	double px_e_norm = 0;
+	double w_e = 1;
+        inject_particle( electron, x, y, z,
+                         normal( rng(0), 0, px_e_norm ),
+                         normal( rng(0), 0, py_e_norm ),
+                         normal( rng(0), 0, pz_e_norm ), w_e, 0, 0 );
+	*/
+
+
+	
+
+	/*
+        cout << "After Ionization: " << endl;
+        cout << "   k_particles(particle_index, particle_var::dx) = " << k_particles(particle_index, particle_var::dx) << endl;
+        cout << "   Ionization State = " << N_ionization << endl;
+        */
+
+
+	
+
+	// Make some files
+       	//if (int(timestep) % 50 == 0){
+	if (int(timestep)>=10 && int(timestep)<=100 && int(timestep) % 10 == 0){
+	//printf("timestep = %d \n", int(timestep));
+	
+	// Field and Rate: Open file, write value, close file
+	char fn [100];
+        snprintf(fn, sizeof fn, "E_mag_t_%g_qsp_%g.txt",timestep,qsp); 
+	std::ofstream outfile;
+        //printf("fn = %s \n",fn);
+	if ((int)pi_offset == 0 && LANE == 0) {
+	  //cout << "Made it here \n";
+	  outfile.open(fn); // overwrite old files
+	  outfile << "# E [V/m],Gamma [s^-1]" << endl; // Header
+	}
+	else {
+	  outfile.open(fn, std::ios_base::app); // append to file
+	}
+	outfile << E_mag_SI << "," << Gamma << endl;
+	outfile.close();
+        
+	
+
+	// N Ionizations: Open file, write value, close file
+	char gn [100];
+	snprintf(gn, sizeof gn, "N_ionizations_t_%g_qsp_%g.txt",timestep,qsp);
+	std::ofstream outfile1;
+	if ((int)pi_offset == 0 && LANE == 0) {
+	  //cout << "Made it here \n";
+          outfile1.open(gn); // overwrite old files
+	  outfile1 << "# N ionizations Before" << "," << "# N ionizations After" << "," << "Charge After" << endl; // Header
+	}
+	else {
+	  outfile1.open(gn, std::ios_base::app); // append to file
+	}
+	outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << endl;
+        outfile1.close();
+
+	} // if specific timestep
+
+	} // if field ionization
+
+
+
+
+
+
+	
+	
         // Interpolate B
         cbx[LANE] = fcbx[LANE] + dx[LANE]*fdcbxdx[LANE];
         cby[LANE] = fcby[LANE] + dy[LANE]*fdcbydy[LANE];
@@ -700,6 +1110,7 @@ advance_p_kokkos_unified(
               k_particle_copy(nm, particle_var::uy) = p_uy;
               k_particle_copy(nm, particle_var::uz) = p_uz;
               k_particle_copy(nm, particle_var::w) = p_w;
+	      k_particle_copy(nm, particle_var::charge) = p_q;
               k_particle_i_copy(nm) = pii;
             }
           }
@@ -773,6 +1184,8 @@ advance_p_kokkos_unified(
 #undef f_dcbzdz  
 }
 
+		       
+
 void
 advance_p_kokkos_gpu(
         k_particles_t& k_particles,
@@ -817,6 +1230,7 @@ advance_p_kokkos_gpu(
   #define p_uy    k_particles(p_index, particle_var::uy)
   #define p_uz    k_particles(p_index, particle_var::uz)
   #define p_w     k_particles(p_index, particle_var::w)
+  #define p_q     k_particles(p_index, particle_var::charge)
   #define pii     k_particles_i(p_index)
 
   #define f_cbx k_interp(ii, interpolator_var::cbx)
@@ -884,6 +1298,8 @@ advance_p_kokkos_gpu(
     float haz  = qdt_2mc*(    ( f_ez    + dx*f_dezdx    ) +
                            dy*( f_dezdy + dx*f_d2ezdxdy ) );
 
+    //printf("Made it here (gpu) \n");
+    
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby + dy*f_dcbydy;
     float cbz  = f_cbz + dz*f_dcbzdz;
@@ -1077,6 +1493,7 @@ advance_p_kokkos_gpu(
             k_particle_copy(nm, particle_var::uy) = p_uy;
             k_particle_copy(nm, particle_var::uz) = p_uz;
             k_particle_copy(nm, particle_var::w) = p_w;
+	    k_particle_copy(nm, particle_var::charge) = p_q;
             k_particle_i_copy(nm) = pii;
 
             // Tag this one as having left
@@ -1135,6 +1552,12 @@ advance_p( /**/  species_t            * RESTRICT sp,
   }
 
 
+  //printf("sp: \n");
+  //#include <iostream>
+  //using namespace std;
+  //cout << "sp->name: " << sp->name << endl;
+
+  
   float qdt_2mc  = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
   float cdt_dx   = sp->g->cvac*sp->g->dt*sp->g->rdx;
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
@@ -1170,7 +1593,8 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->max_nm,
           sp->g->nx,
           sp->g->ny,
-          sp->g->nz
+          sp->g->nz,
+	  sp->name
   );
   KOKKOS_TOC( advance_p, 1);
 

@@ -220,6 +220,7 @@ accumulate_hydro_p_kokkos(
     float uy = k_particles(p_index, particle_var::uy);
     float uz = k_particles(p_index, particle_var::uz);
     float w  = k_particles(p_index, particle_var::w);
+    float p_q  = k_particles(p_index, particle_var::charge);
     int ii = k_particles_i(p_index);
 
     const float cbx = k_interp(ii, interpolator_var::cbx);

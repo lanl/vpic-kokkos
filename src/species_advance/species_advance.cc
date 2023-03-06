@@ -188,6 +188,7 @@ species_t::copy_to_host()
       particles[i].uy = k_particle_h(i, particle_var::uy);
       particles[i].uz = k_particle_h(i, particle_var::uz);
       particles[i].w  = k_particle_h(i, particle_var::w);
+      particles[i].charge  = k_particle_h(i, particle_var::charge);
       particles[i].i  = k_particle_i_h(i);
 
     });
@@ -234,6 +235,7 @@ species_t::copy_to_device()
       k_particle_h(i, particle_var::uy) = particles[i].uy;
       k_particle_h(i, particle_var::uz) = particles[i].uz;
       k_particle_h(i, particle_var::w)  = particles[i].w;
+      k_particle_h(i, particle_var::charge)  = particles[i].charge;
       k_particle_i_h(i) = particles[i].i;
 
     });
@@ -341,6 +343,7 @@ species_t::copy_inbound_to_device()
       particles(npi, particle_var::uy) = particle_copy(i, particle_var::uy);
       particles(npi, particle_var::uz) = particle_copy(i, particle_var::uz);
       particles(npi, particle_var::w)  = particle_copy(i, particle_var::w);
+      particles(npi, particle_var::charge)  = particle_copy(i, particle_var::charge);
       particles_i(npi) = particle_copy_i(i);
 
     });
