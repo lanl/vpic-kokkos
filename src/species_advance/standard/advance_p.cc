@@ -24,7 +24,7 @@ void fieldIonization(float E_SI, float N_ionization, float N_ionization_levels, 
   float K = 2; //FIXME: currenly only have 2-photon ionization
   float n = 1; //FIXME: currently only principle quantum number of 1
   float m = 0; // This is typically 0 in simulations
-  float l = 1;	
+  float l = 0;	
   
   // initialize variables
   int ionization_flag = 1;
@@ -88,8 +88,9 @@ void fieldIonization(float E_SI, float N_ionization, float N_ionization_levels, 
   float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
   float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units 
 
-
-  if (E_au<=E_M_au){
+  int TEMP = 1; // FIXME: this needs to be removed, it bypasses MPI
+  
+  if (E_au<=E_M_au && TEMP==0 ){
     // MPI Ionization
     // ionization rate per atom: Gamma^(K)
     // sigma^(K) = (h_bar*omega)^K*Gamma^(K)/I^K : K-photon cross section, units [cm^2K * s^(K-1)]
@@ -106,7 +107,7 @@ void fieldIonization(float E_SI, float N_ionization, float N_ionization_levels, 
 
   }
 
-  else if (E_au>E_M_au && E_au<=E_T_au) {
+  else if (E_au>E_M_au && E_au<=E_T_au || TEMP == 1) {
     // Tunneling Regime
     //cout << "Tunneling Ionization" << endl;
     float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
@@ -877,17 +878,23 @@ advance_p_kokkos_unified(
 
 	// Change the charge of the particle
 	k_particles(particle_index, particle_var::charge) = N_ionization * q_e;
+
 	// Inject the macro electron
-        /*
+      	double x = 0;
+	double y = 0;
+	double z = 0;
 	double px_e_norm = 0;
-	double px_e_norm = 0;
-	double px_e_norm = 0;
+	double py_e_norm = 0;
+	double pz_e_norm = 0;
 	double w_e = 1;
-        inject_particle( electron, x, y, z,
-                         normal( rng(0), 0, px_e_norm ),
-                         normal( rng(0), 0, py_e_norm ),
-                         normal( rng(0), 0, pz_e_norm ), w_e, 0, 0 );
+	//species_t * electron = define_species("electron", -1., 1, 1, 1, 20, 0);
+        /*
+	inject_particle( electron, x, y, z,
+                         normal( 0, 0, px_e_norm ),
+                         normal( 0, 0, py_e_norm ),
+                         normal( 0, 0, pz_e_norm ), w_e, 0, 0 );
 	*/
+	
 
 
 	
@@ -903,7 +910,7 @@ advance_p_kokkos_unified(
 
 	// Make some files
        	//if (int(timestep) % 50 == 0){
-	if (int(timestep)>=10 && int(timestep)<=100 && int(timestep) % 10 == 0){
+	if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 100 == 0){
 	//printf("timestep = %d \n", int(timestep));
 	
 	// Field and Rate: Open file, write value, close file
