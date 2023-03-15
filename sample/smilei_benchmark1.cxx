@@ -98,6 +98,7 @@ begin_globals {
   int    pulse_shape;            // 0 for steady, indefinite pulse, 1 for
                                  // square pulse, 2 for sin^2
   double pulse_FWHM;
+  double nu_c;
   double pulse_start;
 
   double quota_sec;              // Run quota in seconds
@@ -218,7 +219,7 @@ begin_initialization {
   double laser_E_c = laser_E_SI / E_to_SI;
   
   double lambda_SI  = 0.8e-6; // 1.058e-6;
-  double w0_SI = 1.25e-6; // Beam waist
+  double w0_SI = 100e-6; //1.25e-6; // Beam waist
 
   double Lx_SI         = 15e-6; // Simulation box size
   double Ly_SI         = w0_SI*sqrt(M_PI/2.);  // 3DCHANGE
@@ -229,16 +230,16 @@ begin_initialization {
   double T_i = 5. * e_SI;
   float dfrac               = 0.0; // fraction of charge density for n_Al12/ne
 
-  double dist_to_focus = 15e-6;// For this run, put the origin at the focus
+  double dist_to_focus = 1;// For this run, put the focus at the back boundary
 
   // Simulation parameters
   // These are floating point to avoid a lot of casting
   // Increase resolution to ~3000 for physical results
   double nx = 800;
   double ny = 1;
-  double nz = 100;
+  double nz = 10;
 
-  double nppc = 10;  // Average number of macro particles/cell of each species
+  double nppc = 1000;  // Average number of macro particles/cell of each species
 
   int topology_x = 8;
   int topology_y = 1;
@@ -292,8 +293,8 @@ begin_initialization {
   double px_I1_SI = sqrt(1./3.)*sqrt(E_i*E_i+2.*E_i*m_I1_SI*c2)/c_SI;
   double px_I2_SI = sqrt(1./3.)*sqrt(E_i*E_i+2.*E_i*m_I2_SI*c2)/c_SI;
   // VPIC uses normalized momentum, not momentum in code units.
-  double px_e_norm = px_e_SI/(m_e_SI*c_SI);
-  double px_I1_norm = px_I1_SI/(m_I1_SI*c_SI);
+  double px_e_norm = 0; //px_e_SI/(m_e_SI*c_SI);
+  double px_I1_norm = 0; //px_I1_SI/(m_I1_SI*c_SI);
   double px_I2_norm = px_I2_SI/(m_I2_SI*c_SI);
 
   // Code units
@@ -328,7 +329,9 @@ begin_initialization {
 
   int cycles = 10;
   double nu = c_SI/lambda_SI;
-  double pulse_FWHM = (cycles/nu) / time_to_SI; // time in code units
+  double nu_c = nu*time_to_SI;
+  double pulse_FWHM = ((cycles/nu) / time_to_SI); // pulse duration
+  double pulse_period = 1 / nu; 
   // How far in front of the boundary should the peak start?
   double pulse_start = 350e-15 / time_to_SI; // time in code units
   double lambda    = lambda_SI / length_to_SI;  // Wavelength
@@ -342,12 +345,13 @@ begin_initialization {
   double Rayleigh = M_PI*waist*waist/lambda;
   double width = waist*sqrt(1.+pow(xfocus/Rayleigh,2));
   double omega_0 = omega_L_SI * time_to_SI;
-  double emax = sqrt(2.*laser_intensity_SI/(c_SI*eps0_SI)) / E_to_SI;
+  double emax = sqrt(2.*laser_intensity_SI/(c_SI*eps0_SI)) / E_to_SI; // code units
 // if plane wave:
   //emax = emax*sqrt(waist/width); // at entrance if 2D Gaussian
   //emax = emax*(waist/width); // at entrance if 3D Gaussian 3DCHANGE
 
-  double t_stop = 5*pulse_FWHM; // Simulation runtime
+  
+  double t_stop = 2 * pulse_FWHM; // Simulation runtime
 
   // Diagnostics intervals.  
   int energies_interval = 50;
@@ -368,9 +372,12 @@ begin_initialization {
 
 
   // Parameters for the ions (note it is the same box as for electrons)
-  double w_I2 = 1;
-  int I1_present=0;
-  int I2_present=1;
+  double w_I2    = 1;
+  double n_I2_SI = 1e14; // Density of I2
+  double N_I2    = nppc*nx*ny*nz; //Number of macro I2 in box 
+  double NpI2    = n_I2_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I2 in box
+  int I1_present = 0;
+  int I2_present = 1;
 
 
   
@@ -417,6 +424,8 @@ begin_initialization {
     fprintf(out, "%d   Grid data output stride in x\n", stride_x);
     fprintf(out, "%d   Grid data output stride in y\n", stride_y);
     fprintf(out, "%d   Grid data output stride in z\n", stride_z);
+    fprintf(out, "%.17e   N_I2\n", N_I2);
+    fprintf(out, "%.17e   NpI2\n", NpI2);
     fprintf(out, "%d   Field interval\n", field_interval);
     fprintf(out, "%d   Energies interval\n", energies_interval);
     fprintf(out, "%d   Tracer interval\n", 0);
@@ -459,13 +468,14 @@ begin_initialization {
   sim_log("* Physical I2/macro I2 =         "<<w_I2);
   //sim_log("* Physical I1/macro I1 =         "<<qi_I1);
   sim_log("* particles_alloc =              "<<particles_alloc);
-  sim_log("* Average particles/processor:   "<<Ne/nproc());
+  sim_log("* Average I2 particles/processor:   "<<N_I2/nproc());
   sim_log("* Average particles/cell:        "<<nppc);
   sim_log("* Do we have mobile ions?        "<<(mobile_ions ? "Yes" : "No"));
   sim_log("* Are we launching a laser?      "<<(launch_wave ? "Yes" : "No"));
   sim_log("* Omega_0, Omega_pe:             "<<(omega_0/time_to_SI)<<" "
           <<wpe_SI);
   sim_log("* Plasma density(m^-3), ne/nc:   "<<Npe<<" "<<n_e_over_n_crit);
+  sim_log("* I2 density(m^-3):   "<<NpI2);
   sim_log("* Vac wavelength, I_laser:       "<<lambda_SI<<" "
           <<laser_intensity_SI);
   sim_log("* T_e, T_i (eV):                 "<<T_e<<" "<<T_i<<" "<<m_e_c<<" "
@@ -533,6 +543,7 @@ begin_initialization {
 
   global->pulse_shape              = pulse_shape; 
   global->pulse_FWHM               = pulse_FWHM;
+  global->nu_c                     = nu_c;
   global->pulse_start              = pulse_start;
 
   
@@ -621,10 +632,10 @@ begin_initialization {
   /* all boundaries are i.v. */
 
 
-  //set_region_bc( iv_region, reflect_particles, reflect_particles,
-  //reflect_particles);
-  set_region_bc( iv_region, absorb_particles, absorb_particles,
-  absorb_particles);
+  set_region_bc( iv_region, reflect_particles, reflect_particles,
+  reflect_particles);
+  //set_region_bc( iv_region, absorb_particles, absorb_particles,
+  //absorb_particles);
 
   // LOAD PARTICLES
 
@@ -644,7 +655,7 @@ begin_initialization {
     double zmax = (grid->z0+grid->nz*grid->dz);
 
     
-    repeat( (Ne)/(topology_x*topology_y*topology_z) ) {
+    repeat( (N_I2)/(topology_x*topology_y*topology_z) ) {
       double x = uniform( rng(0), xmin, xmax );
       double y = uniform( rng(0), ymin, ymax );   
       double z = uniform( rng(0), zmin, zmax );
@@ -653,7 +664,7 @@ begin_initialization {
 
       // Rejection method, based on user-defined density function
       if ( uniform( rng(0), 0, 1 ) < slab(x*length_to_SI, y*length_to_SI,
-                  z*length_to_SI, global->xmin*length_to_SI+5e-6, 10e-6,
+                  z*length_to_SI, global->xmin*length_to_SI, grid->dx*length_to_SI*3,
                   global->zmin*length_to_SI, global->zmax*length_to_SI,
                   global->ymin*length_to_SI, global->ymax*length_to_SI) ) {
       // third to last arg is "weight," a positive number
@@ -666,12 +677,12 @@ begin_initialization {
 	
 	*/
         if ( mobile_ions ) {
-            inject_particle( ion_I2, x, y, z,
-                             normal( rng(0), 0, px_I2_norm ),
-                             normal( rng(0), 0, px_I2_norm ),
-                             normal( rng(0), 0, px_I2_norm ),
-			     w_I2, q_I2,
-                             0, 0 );
+	  inject_particle( ion_I2, x, y, z, 1e-20, 0, 0, w_I2, q_I2,0,0);
+	  //                              rng(0), 0, 0 ,
+	  //                 normal( rng(0), 0, px_I2_norm ),
+	  //                 normal( rng(0), 0, px_I2_norm ),
+	  //		     w_I2, q_I2,
+	  //                 0, 0 );
         }
 	
  
@@ -1199,10 +1210,16 @@ begin_field_injection {
         z *= fac;
         pulse_shape_factor = 2./(exp(z)+exp(-z));
     }
+
+    // square wave
+    int    square_wave        = 1;
+    double square_wave_factor = 1;
+    if ( square_wave>=1 ) square_wave_factor=( sin( (t*global->nu_c/4)  * 2.0 * M_PI)>=0.0 ? 1 : -1 );
+
 #endif 
 
-    double prefactor = emax_coeff*sqrt(2.0/M_PI); // Wave norm at edge of box
-//  double prefactor = emax_coeff;  // Wave norm at edge of box
+    //double prefactor = emax_coeff*sqrt(2.0/M_PI); // Wave norm at edge of box
+    double prefactor = global->emax;  // Wave norm at edge of box
     // Rayleigh length
     double rl     = M_PI*global->waist*global->waist/global->lambda;
     double h = global->xfocus/rl;                 // distance/Rayleigh length
@@ -1235,7 +1252,10 @@ begin_field_injection {
         auto R2   =( DY*DY + DZ*DZ );
         auto PHASE=( omega_0*t + h*R2/(width*width) );
         auto MASK =( R2<=pow(mask*width,2) ? 1 : 0 );
-        kfield(1+sy*iy+sz*iz, field_var::ey) += (prefactor * cos(PHASE) * exp(-R2/(width*width)) * MASK * pulse_shape_factor);
+        //kfield(1+sy*iy+sz*iz, field_var::ey) += (prefactor * cos(PHASE) * exp(-R2/(width*width)) * MASK * pulse_shape_factor);
+	kfield(1+sy*iy+sz*iz, field_var::ey) = (prefactor * sin(PHASE));
+
+	//	std::cout << "square_wave_factor = " << square_wave_factor << std::endl;
     });
 
   }
@@ -1245,3 +1265,4 @@ begin_field_injection {
 begin_particle_collisions {
   // No particle collisions for this simulation
 }
+

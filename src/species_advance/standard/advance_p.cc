@@ -12,23 +12,23 @@
 using namespace std;
 #include <fstream>
 
-// ***************************** Particle Inject function
+// ***************************** Particle Inject function (Kokkos)
 /*
-void inject_particle_new( species_t * sp,
+void
+vpic_simulation::inject_particle( species_t * sp,
                                   double x,  double y,  double z,
                                   double ux, double uy, double uz,
-                                  double w,  double charge, double age,
+                                  double w,  double age,
                                   int update_rhob ) {
   int ix, iy, iz;
 
+  // * Add the charge/ionization
+  // if grid isnt global grab it from the species
+
   // Check input parameters
-  //#include <iostream>
-  //using namespace std;
-  //cout << "charge (1st misc) = " << charge << endl;
-  
   if( !sp                ) ERROR(( "Invalid species" ));
   if( w < 0              ) ERROR(( "inject_particle: w < 0" ));
-  
+
   const double x0 = (double)grid->x0, y0 = (double)grid->y0, z0 = (double)grid->z0;
   const double x1 = (double)grid->x1, y1 = (double)grid->y1, z1 = (double)grid->z1;
   const int    nx = grid->nx,         ny = grid->ny,         nz = grid->nz;
@@ -77,42 +77,59 @@ void inject_particle_new( species_t * sp,
   if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
   iz++;                               // Adjust for mesh indexing
 
-  particle_t * p = sp->p + (sp->np++);
-  p->dx = (float)x; // Note: Might be rounded to be on [-1,1]
-  p->dy = (float)y; // Note: Might be rounded to be on [-1,1]
-  p->dz = (float)z; // Note: Might be rounded to be on [-1,1]
-  p->i  = VOXEL(ix,iy,iz, nx,ny,nz);
-  p->ux = (float)ux;
-  p->uy = (float)uy;
-  p->uz = (float)uz;
-  p->w  = w;
-  p->charge = charge;
+  int p_index = sp->np++;
+  //k_particles_t& k_particles = sp->k_p_h;
+  //k_particles_i_t& k_particles_i = sp->k_p_i_h;
 
-  //cout << "charge (2nd misc) = " << charge << endl;
+  #define p_dx    sp->k_p_h(p_index, particle_var::dx)
+  #define p_dy    sp->k_p_h(p_index, particle_var::dy)
+  #define p_dz    sp->k_p_h(p_index, particle_var::dz)
+  #define p_ux    sp->k_p_h(p_index, particle_var::ux)
+  #define p_uy    sp->k_p_h(p_index, particle_var::uy)
+  #define p_uz    sp->k_p_h(p_index, particle_var::uz)
+  #define p_w     sp->k_p_h(p_index, particle_var::w)
+  #define pii     sp->k_p_i_h(p_index)
 
-  if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
 
-  if( age!=0 ) {
-    if( sp->nm>=sp->max_nm )
-      WARNING(( "No movers available to age injected  particle" ));
-    particle_mover_t * pm = sp->pm + sp->nm;
-    age *= grid->cvac*grid->dt/sqrt( ux*ux + uy*uy + uz*uz + 1 );
-    pm->dispx = ux*age*grid->rdx;
-    pm->dispy = uy*age*grid->rdy;
-    pm->dispz = uz*age*grid->rdz;
-    pm->i     = sp->np-1;
-    sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
-  }
- 
+  // get the positions and momentum from ionized species
+
+  p_dx = (float)x; // Note: Might be rounded to be on [-1,1]
+  p_dy = (float)y; // Note: Might be rounded to be on [-1,1]
+  p_dz = (float)z; // Note: Might be rounded to be on [-1,1]
+  pii  = VOXEL(ix,iy,iz, nx,ny,nz);
+  p_ux = (float)ux;
+  p_uy = (float)uy;
+  p_uz = (float)uz;
+  p_w  = w;
+
+  if( update_rhob ) Kokkos::abort("update_rhob for particle injection not implemented when not using legacy particle arrays");
+
+  if( age!=0 )  Kokkos::abort( "Ageing not yet implemented for particle injection" );
+
+
+#undef p_dx
+#undef p_dy
+#undef p_dz
+#undef p_ux
+#undef p_uy
+#undef p_uz
+#undef p_w 
+#undef pii 
+
 }
+
 */
+
+  
+
+
 
 // ****************************** field ionization function
 void fieldIonization(float E_SI, float N_ionization, float N_ionization_levels, float epsilon_eV_list[], float dt, float arr[]){
 
   // Simulation parameters: FIXME: ** Need to get these from vpic **
   // Right now it is set up for neutral hydrogen                                                                                                                                                                       
-  float lambda_SI    = 1.05800000000000008e-06;   // meters
+  float lambda_SI    = 0.8e-06;  // meters
   float Z            = 1;          // ion charge number after ionization
   float Z_star       = 0; // initial charge state                                                                                                                                                                       
   // Ionization specific parameters
@@ -252,7 +269,7 @@ void fieldIonization(float E_SI, float N_ionization, float N_ionization_levels, 
 
   else if (E_au>E_B_au) {
     // BSI Ionization
-    //cout << "BSI Ionization" << endl;
+    cout << "BSI Ionization" << endl;
     // BSI Ionization: Gamma = Gamma_classical + Gamma_ADK(I_classical)
     // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity
     float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
@@ -929,7 +946,8 @@ advance_p_kokkos_unified(
         // FIXME: **** Input deck variables ****
 	int   field_ionization  = 1; // FIXME: this needs to go into the input deck
         float epsilon_eV_list[] = {13.6}; // eV, ionization energy, this should be a list with the different levels
-        float dt = 6.93444375004407055e-16;      // [s], timestep
+        float time_to_SI = 1.18119324097025572e-22;
+        float dt = g->dt*time_to_SI;      // [s], timestep
 
 	// Check if the particle is fully ionized already
         float N_ionization        = float(int(charge[LANE]/q_e)); // Current ionization state of the particle
@@ -974,6 +992,9 @@ advance_p_kokkos_unified(
 	// Change the charge of the particle
 	k_particles(particle_index, particle_var::charge) = N_ionization * q_e;
 
+
+
+	// *************************
 	// Inject the macro electron
       	double x = 0;
 	double y = 0;
@@ -983,12 +1004,14 @@ advance_p_kokkos_unified(
 	double pz_e_norm = 0;
 	double w_e = 1;
 	//species_t * electron = define_species("electron", -1., 1, 1, 1, 20, 0);
+        // go through the species list to find electron definition
+	// Have check to be sure the user has defined electrons
         /*
-	inject_particle_new( electron, x, y, z,
+	inject_particle( electron, x, y, z,
                              0, 0, px_e_norm,
                              0, 0, py_e_norm,
                              0, 0, pz_e_norm,
-			     w_e, 0, 0 );
+			 w_e, 0, 0 ); // add the charge
 	*/
 
 
@@ -1005,7 +1028,7 @@ advance_p_kokkos_unified(
 
 	// Make some files
        	//if (int(timestep) % 50 == 0){
-	if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 50 == 0){
+	if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 10 == 0){
 	//printf("timestep = %d \n", int(timestep));
 	
 	// Field and Rate: Open file, write value, close file
