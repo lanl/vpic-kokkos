@@ -1028,7 +1028,7 @@ advance_p_kokkos_unified(
 
 	// Make some files
        	//if (int(timestep) % 50 == 0){
-	if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 10 == 0){
+	if (int(timestep)>=0 && int(timestep)<=500 && int(timestep) % 2 == 0){
 	//printf("timestep = %d \n", int(timestep));
 	
 	// Field and Rate: Open file, write value, close file

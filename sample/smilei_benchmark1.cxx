@@ -26,6 +26,7 @@
 
 
 #include <ctime>
+using namespace std;
 
 // This is probably unnecessary on modern parallel file systems, e.g., lustre
 #define NUM_TURNSTILES 3000  
@@ -126,6 +127,7 @@ begin_globals {
 // units.  Returns a value between 0 and 1 which corresponds to the percetnage
 // of n_0 the density should be for position (x,y,z)
 
+/*
 double density_func(double x, double y, double z, double xmin, double xmax,
         double ymin, double ymax, double zmin, double zmax){
     double dens = 1.;
@@ -149,6 +151,7 @@ double density_func(double x, double y, double z, double xmin, double xmax,
 
     return dens;
 }
+*/
 
 // A simple slab of thickness length starting at the origin
 static inline double slab(double x, double y, double z, double xstart,
@@ -219,11 +222,11 @@ begin_initialization {
   double laser_E_c = laser_E_SI / E_to_SI;
   
   double lambda_SI  = 0.8e-6; // 1.058e-6;
-  double w0_SI = 100e-6; //1.25e-6; // Beam waist
+  double w0_SI = 1.25e-6; // Beam waist
 
-  double Lx_SI         = 15e-6; // Simulation box size
-  double Ly_SI         = w0_SI*sqrt(M_PI/2.);  // 3DCHANGE
-  double Lz_SI         = 15e-6;
+  double Lx_SI         = 16e-6; // Simulation box size
+  double Ly_SI         =  w0_SI*sqrt(M_PI/2.);  // 3DCHANGE
+  double Lz_SI         = 16e-6;
   //double t_stop = 1.2e-12 / time_to_SI; // Simulation run time
 
   double T_e = 5. * e_SI; // Technically, this is k_B*T.  e_SI is eV to J.
@@ -235,11 +238,11 @@ begin_initialization {
   // Simulation parameters
   // These are floating point to avoid a lot of casting
   // Increase resolution to ~3000 for physical results
-  double nx = 800;
+  double nx = 1600;
   double ny = 1;
-  double nz = 10;
+  double nz = 40;
 
-  double nppc = 1000;  // Average number of macro particles/cell of each species
+  double nppc = 300;  // Average number of macro particles/cell of each species
 
   int topology_x = 8;
   int topology_y = 1;
@@ -252,7 +255,7 @@ begin_initialization {
   int stride_x = 1, stride_y = 1, stride_z = 1;
 
   int rng_seed = 9818272;  // random number generator seed.
-  double iv_thick = 2;  // Thickness of impermeable vacuum (in cells)
+  double iv_thick = 1;  // Thickness of impermeable vacuum (in cells)
   double cfl_req = 0.98; // How close to Courant should we try to run
   double damp    = 0.0; // Level of radiation damping
 
@@ -351,7 +354,7 @@ begin_initialization {
   //emax = emax*(waist/width); // at entrance if 3D Gaussian 3DCHANGE
 
   
-  double t_stop = 2 * pulse_FWHM; // Simulation runtime
+  double t_stop = 0.5 * pulse_FWHM; // Simulation runtime
 
   // Diagnostics intervals.  
   int energies_interval = 50;
@@ -372,9 +375,10 @@ begin_initialization {
 
 
   // Parameters for the ions (note it is the same box as for electrons)
-  double w_I2    = 1;
-  double n_I2_SI = 1e14; // Density of I2
+  double w_I2    = fabs(qe);
+  double n_I2_SI = 1e20; // Density of I2
   double N_I2    = nppc*nx*ny*nz; //Number of macro I2 in box 
+  N_I2 = trunc_granular(N_I2, nproc()); // make divisible by # processors
   double NpI2    = n_I2_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I2 in box
   int I1_present = 0;
   int I2_present = 1;
@@ -654,13 +658,21 @@ begin_initialization {
     double zmin = grid->z0;
     double zmax = (grid->z0+grid->nz*grid->dz);
 
+    /*
+    cout << "xmin = " << xmin << endl;
+    cout << "xmax = " << xmax << endl;
+    cout << "ymin = " << ymin << endl;
+    cout << "ymax = " << ymax << endl;
+    cout << "zmin = " << zmin << endl;
+    cout << "zmax = " << zmax << endl;
+    */
     
     repeat( (N_I2)/(topology_x*topology_y*topology_z) ) {
       double x = uniform( rng(0), xmin, xmax );
       double y = uniform( rng(0), ymin, ymax );   
       double z = uniform( rng(0), zmin, zmax );
 
-      if ( iv_region ) continue;   // Particle fell in iv_region.  Don't load.
+      // if ( iv_region ) continue;   // Particle fell in iv_region.  Don't load.
 
       // Rejection method, based on user-defined density function
       if ( uniform( rng(0), 0, 1 ) < slab(x*length_to_SI, y*length_to_SI,
@@ -669,15 +681,15 @@ begin_initialization {
                   global->ymin*length_to_SI, global->ymax*length_to_SI) ) {
       // third to last arg is "weight," a positive number
           //std::cout<< " injecting electron " << std::endl;
-	/*
-          inject_particle( electron, x, y, z,
-                    qe     normal( rng(0), 0, px_e_norm ),
-                         normal( rng(0), 0, px_e_norm ),
-                         normal( rng(0), 0, px_e_norm ), fabs(qe), 0, 0 );
 	
-	*/
+	//inject_particle( electron, x, y, z, 1,0,0,fabs(qe),qe,0,0);
+        //            qe     normal( rng(0), 0, px_e_norm ),
+        //                 normal( rng(0), 0, px_e_norm ),
+        //                 normal( rng(0), 0, px_e_norm ), fabs(qe), 0, 0 );
+	
+	
         if ( mobile_ions ) {
-	  inject_particle( ion_I2, x, y, z, 1e-20, 0, 0, w_I2, q_I2,0,0);
+	  inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);
 	  //                              rng(0), 0, 0 ,
 	  //                 normal( rng(0), 0, px_I2_norm ),
 	  //                 normal( rng(0), 0, px_I2_norm ),
@@ -1214,7 +1226,7 @@ begin_field_injection {
     // square wave
     int    square_wave        = 1;
     double square_wave_factor = 1;
-    if ( square_wave>=1 ) square_wave_factor=( sin( (t*global->nu_c/4)  * 2.0 * M_PI)>=0.0 ? 1 : -1 );
+    if ( square_wave>=1 ) square_wave_factor=( sin( (t*global->nu_c)  * 2.0 * M_PI)>=0.0 ? 1 : -1 );
 
 #endif 
 
