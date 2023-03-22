@@ -1,4 +1,4 @@
-// FIXME: PARTICLE MOVERS NEED TO BE OVERALLOCATED IN STRUCTORS TO
+// FIXMEA: PARTICLE MOVERS NEED TO BE OVERALLOCATED IN STRUCTORS TO
 // ACCOUNT FOR SPLITTING THE MOVER ARRAY BETWEEN HOST AND PIPELINES
 
 #define IN_spa
@@ -13,9 +13,9 @@ using namespace std;
 #include <fstream>
 
 // ***************************** Particle Inject function (Kokkos)
-/*
+
 void
-vpic_simulation::inject_particle( species_t * sp,
+vpic_simulation::inject_particle_new( species_t * sp,
                                   double x,  double y,  double z,
                                   double ux, double uy, double uz,
                                   double w,  double age,
@@ -118,7 +118,7 @@ vpic_simulation::inject_particle( species_t * sp,
 
 }
 
-*/
+
 
   
 
@@ -200,9 +200,9 @@ void fieldIonization(float E_SI, float N_ionization, float N_ionization_levels, 
   float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
   float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units 
 
-  int TEMP = 1; // FIXME: this needs to be removed, it bypasses MPI
+  int TEMP = 1; // FIXME: this needs to be removed, it bypasses Multiphoton ionization
   
-  if (E_au<=E_M_au && TEMP==0 ){
+  if (E_au<=E_M_au){
     // MPI Ionization
     // ionization rate per atom: Gamma^(K)
     // sigma^(K) = (h_bar*omega)^K*Gamma^(K)/I^K : K-photon cross section, units [cm^2K * s^(K-1)]
@@ -215,16 +215,25 @@ void fieldIonization(float E_SI, float N_ionization, float N_ionization_levels, 
     // FIXME: still need to figure out the units of simga_K; the plot in the book suggests it isnt [cm^2K * s^(K-1)]
     float sigma_K_au = pow(c_au*pow(tgamma(K+1),2)*pow(n,5)* pow(omega_au,(10*K-1)/3), -1)*T_K*pow(E_au,2*K-2);
     // FIXME: This definition of Gamma is only correct when sigma is in units of [cm^2K * s^(K-1)]
-    Gamma = sigma_K_au * pow(I_au/omega_au, K);
+    float Gamma_MPI = sigma_K_au * pow(I_au/omega_au, K);
 
-  }
-
-  else if (E_au>E_M_au && E_au<=E_T_au || TEMP == 1) {
     // Tunneling Regime
     //cout << "Tunneling Ionization" << endl;
     float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
     float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
-    float Gamma_ADK_au = C_nstar_lstar_squared*f_n_l * sqrt(3*E_au*pow(n_star,3.0)/(M_PI*pow(Z,3.0))) * pow(Z,2.0)/(2*pow(n_star,2.0)) * pow(2*pow(Z,3.0)/(E_au*pow(n_star,3.0)),2*n_star-abs(m)-1)*exp(-2*pow(Z,3.0)/(3*pow(n_star,3.0)*E_au));
+    float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
+    float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
+
+    Gamma = max(Gamma_MPI,Gamma_ADK_SI); //FIXME: EPOCH uses min here
+
+  }
+
+  else if (E_au>E_M_au && E_au<=E_T_au) {
+    // Tunneling Regime
+    //cout << "Tunneling Ionization" << endl;
+    float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
+    float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
+    float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
     float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
     Gamma = Gamma_ADK_SI;
 
@@ -237,12 +246,12 @@ void fieldIonization(float E_SI, float N_ionization, float N_ionization_levels, 
     // ADK (no correction)
     float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
     float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
-    float Gamma_ADK_au = C_nstar_lstar_squared*f_n_l * sqrt(3*E_au*pow(n_star,3.0)/(M_PI*pow(Z,3.0))) * pow(Z,2.0)/(2*pow(n_star,2.0)) * pow(2*pow(Z,3.0)/(E_au*pow(n_star,3.0)),2*n_star-abs(m)-1)*exp(-2*pow(Z,3.0)/(3*pow(n_star,3.0)*E_au));
+    float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
     float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
 
     // With BSI correction: Gamma = Gamma_classical + Gamma_ADK(I_classical)
     // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity, i.e, the intensity that corresponds to the threshold E-field magnitude
-    float Gamma_ADK_au_threshold = C_nstar_lstar_squared*f_n_l * sqrt(3*E_T_au*pow(n_star,3.0)/(M_PI*pow(Z,3.0))) * pow(Z,2.0)/(2*pow(n_star,2.0)) * pow(2*pow(Z,3.0)/(E_T_au*pow(n_star,3.0)),2*n_star-abs(m)-1)*exp(-2*pow(Z,3.0)/(3*pow(n_star,3.0)*E_T_au));
+    float Gamma_ADK_au_threshold = C_nstar_lstar_squared* f_n_l* epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_T_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_T_au));
     float Gamma_ADK_SI_threshold = Gamma_ADK_au_threshold*Gamma_conversion;
     // uniform field, FIXME: enable this
     // gamma_cl_uniform_atomic = (1 - E_n_atomic^2./(4*Z*E_atomic))/(2*T_0);
@@ -1006,7 +1015,9 @@ advance_p_kokkos_unified(
 	//species_t * electron = define_species("electron", -1., 1, 1, 1, 20, 0);
         // go through the species list to find electron definition
 	// Have check to be sure the user has defined electrons
-        /*
+	
+
+	/*
 	inject_particle( electron, x, y, z,
                              0, 0, px_e_norm,
                              0, 0, py_e_norm,
@@ -1028,7 +1039,7 @@ advance_p_kokkos_unified(
 
 	// Make some files
        	//if (int(timestep) % 50 == 0){
-	if (int(timestep)>=0 && int(timestep)<=500 && int(timestep) % 2 == 0){
+	if (int(timestep)>=0 && int(timestep)<=900 && int(timestep) % 2 == 0){
 	//printf("timestep = %d \n", int(timestep));
 	
 	// Field and Rate: Open file, write value, close file

@@ -354,7 +354,7 @@ begin_initialization {
   //emax = emax*(waist/width); // at entrance if 3D Gaussian 3DCHANGE
 
   
-  double t_stop = 0.5 * pulse_FWHM; // Simulation runtime
+  double t_stop = pulse_FWHM; // Simulation runtime
 
   // Diagnostics intervals.  
   int energies_interval = 50;
