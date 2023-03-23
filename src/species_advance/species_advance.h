@@ -299,7 +299,8 @@ sort_p( species_t * RESTRICT sp );
 void
 advance_p( /**/  species_t            * RESTRICT sp,
                  interpolator_array_t * RESTRICT ia,
-                 field_array_t* RESTRICT fa );
+	         field_array_t* RESTRICT fa,
+	         species_t * species_list);
 
 // In center_p.cxx
 

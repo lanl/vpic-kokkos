@@ -12,117 +12,6 @@
 using namespace std;
 #include <fstream>
 
-// ***************************** Particle Inject function (Kokkos)
-
-void
-vpic_simulation::inject_particle_new( species_t * sp,
-                                  double x,  double y,  double z,
-                                  double ux, double uy, double uz,
-                                  double w,  double age,
-                                  int update_rhob ) {
-  int ix, iy, iz;
-
-  // * Add the charge/ionization
-  // if grid isnt global grab it from the species
-
-  // Check input parameters
-  if( !sp                ) ERROR(( "Invalid species" ));
-  if( w < 0              ) ERROR(( "inject_particle: w < 0" ));
-
-  const double x0 = (double)grid->x0, y0 = (double)grid->y0, z0 = (double)grid->z0;
-  const double x1 = (double)grid->x1, y1 = (double)grid->y1, z1 = (double)grid->z1;
-  const int    nx = grid->nx,         ny = grid->ny,         nz = grid->nz;
-  
-  // Do not inject if the particle is strictly outside the local domain
-  // or if a far wall of local domain shared with a neighbor
-  // FIXME: DO THIS THE PHASE-3 WAY WITH GRID->NEIGHBOR
-  // NOT THE PHASE-2 WAY WITH GRID->BC
-
-  if( (x<x0) | (x>x1) | ( (x==x1) & (grid->bc[BOUNDARY(1,0,0)]>=0 ) ) ) return;
-  if( (y<y0) | (y>y1) | ( (y==y1) & (grid->bc[BOUNDARY(0,1,0)]>=0 ) ) ) return;
-  if( (z<z0) | (z>z1) | ( (z==z1) & (grid->bc[BOUNDARY(0,0,1)]>=0 ) ) ) return;
-
-  // This node should inject the particle
-    
-  if( sp->np>=sp->max_np ) ERROR(( "No room to inject particle" ));
-
-  // Compute the injection cell and coordinate in cell coordinate system
-  // BJA:  Note the use of double precision here for accurate particle 
-  //       placement on large meshes. 
- 
-  // The ifs allow for injection on the far walls of the local computational
-  // domain when necessary
- 
-  x  = ((double)nx)*((x-x0)/(x1-x0)); // x is rigorously on [0,nx]
-  ix = (int)x;                        // ix is rigorously on [0,nx]
-  x -= (double)ix;                    // x is rigorously on [0,1)
-  x  = (x+x)-1;                       // x is rigorously on [-1,1)
-  if( ix==nx ) x = 1;                 // On far wall ... conditional move
-  if( ix==nx ) ix = nx-1;             // On far wall ... conditional move
-  ix++;                               // Adjust for mesh indexing
-
-  y  = ((double)ny)*((y-y0)/(y1-y0)); // y is rigorously on [0,ny]
-  iy = (int)y;                        // iy is rigorously on [0,ny]
-  y -= (double)iy;                    // y is rigorously on [0,1)
-  y  = (y+y)-1;                       // y is rigorously on [-1,1)
-  if( iy==ny ) y = 1;                 // On far wall ... conditional move
-  if( iy==ny ) iy = ny-1;             // On far wall ... conditional move
-  iy++;                               // Adjust for mesh indexing
-
-  z  = ((double)nz)*((z-z0)/(z1-z0)); // z is rigorously on [0,nz]
-  iz = (int)z;                        // iz is rigorously on [0,nz]
-  z -= (double)iz;                    // z is rigorously on [0,1)
-  z  = (z+z)-1;                       // z is rigorously on [-1,1)
-  if( iz==nz ) z = 1;                 // On far wall ... conditional move
-  if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
-  iz++;                               // Adjust for mesh indexing
-
-  int p_index = sp->np++;
-  //k_particles_t& k_particles = sp->k_p_h;
-  //k_particles_i_t& k_particles_i = sp->k_p_i_h;
-
-  #define p_dx    sp->k_p_h(p_index, particle_var::dx)
-  #define p_dy    sp->k_p_h(p_index, particle_var::dy)
-  #define p_dz    sp->k_p_h(p_index, particle_var::dz)
-  #define p_ux    sp->k_p_h(p_index, particle_var::ux)
-  #define p_uy    sp->k_p_h(p_index, particle_var::uy)
-  #define p_uz    sp->k_p_h(p_index, particle_var::uz)
-  #define p_w     sp->k_p_h(p_index, particle_var::w)
-  #define pii     sp->k_p_i_h(p_index)
-
-
-  // get the positions and momentum from ionized species
-
-  p_dx = (float)x; // Note: Might be rounded to be on [-1,1]
-  p_dy = (float)y; // Note: Might be rounded to be on [-1,1]
-  p_dz = (float)z; // Note: Might be rounded to be on [-1,1]
-  pii  = VOXEL(ix,iy,iz, nx,ny,nz);
-  p_ux = (float)ux;
-  p_uy = (float)uy;
-  p_uz = (float)uz;
-  p_w  = w;
-
-  if( update_rhob ) Kokkos::abort("update_rhob for particle injection not implemented when not using legacy particle arrays");
-
-  if( age!=0 )  Kokkos::abort( "Ageing not yet implemented for particle injection" );
-
-
-#undef p_dx
-#undef p_dy
-#undef p_dz
-#undef p_ux
-#undef p_uy
-#undef p_uz
-#undef p_w 
-#undef pii 
-
-}
-
-
-
-  
-
-
 
 // ****************************** field ionization function
 void fieldIonization(float E_SI, float N_ionization, float N_ionization_levels, float epsilon_eV_list[], float dt, float arr[]){
@@ -242,7 +131,7 @@ void fieldIonization(float E_SI, float N_ionization, float N_ionization_levels, 
   else if (E_au>E_T_au && E_au<=E_B_au){
     // Either classical ADK or with BSI correction
     // Whichever has the minimum ionization rate
-    cout << "Tunneling or BSI Regime" << endl;
+    //cout << "Tunneling or BSI Regime" << endl;
     // ADK (no correction)
     float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
     float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
@@ -278,7 +167,7 @@ void fieldIonization(float E_SI, float N_ionization, float N_ionization_levels, 
 
   else if (E_au>E_B_au) {
     // BSI Ionization
-    cout << "BSI Ionization" << endl;
+    //cout << "BSI Ionization" << endl;
     // BSI Ionization: Gamma = Gamma_classical + Gamma_ADK(I_classical)
     // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity
     float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
@@ -701,8 +590,9 @@ advance_p_kokkos_unified(
         const int nx,
         const int ny,
         const int nz,
-	string sp_name
-			 )
+	string sp_name,
+	species_t * RESTRICT sp,
+	species_t * sp_e)
 {
 
   constexpr float one            = 1.;
@@ -721,7 +611,6 @@ advance_p_kokkos_unified(
   //printf("charge of species: %g \n", qsp);
   //printf("timestep = %d \n", timestep);
 
-  
   #define p_dx    k_particles(p_index, particle_var::dx)
   #define p_dy    k_particles(p_index, particle_var::dy)
   #define p_dz    k_particles(p_index, particle_var::dz)
@@ -914,25 +803,25 @@ advance_p_kokkos_unified(
         ii[LANE] = pii;
       } END_VECTOR_BLOCK;
 
-      //cout << "********" << endl;
-      //printf("num_iters = %d \n", num_iters);
-      //printf("chunk_size = %d \n", chunk_size);
-      //printf("num_chunks = %d \n", num_chunks);
-      //printf("num_lanes = %d \n", num_lanes);
-      //printf("np = %d \n", np);
-      //printf("p_index = %ld \n",p_index);
-      //printf("pi_offset = %ld \n",pi_offset);
-      //         printf("LANE = %d \n", LANE);
-      //cout << "pii = " << pii << endl;
+      /*
+      cout << "********" << endl;
+      printf("num_iters = %d \n", num_iters);
+      printf("chunk_size = %d \n", chunk_size);
+      printf("num_chunks = %d \n", num_chunks);
+      printf("num_lanes = %d \n", num_lanes);
+      printf("np = %d \n", np);
+      printf("p_index = %ld \n",p_index);
+      printf("pi_offset = %ld \n",pi_offset);
+      cout << "pii = " << pii << endl;
       //         cout << "ii[LANE] = " << ii[LANE] << endl;
-      //cout << "ii = " << ii << endl;
-      //cout << "p_w = " << p_w << endl;
-      //cout << "p_q = " << p_q << endl;
-      //cout << "p_dx = " << p_dx << endl;
+      cout << "ii = " << ii << endl;
+      cout << "p_w = " << p_w << endl;
+      cout << "p_q = " << p_q << endl;
+      cout << "p_dx = " << p_dx << endl;
       //cout << "type(q) = " << typeid(q).name() << endl;
       //cout << "type(charge) = " << typeid(charge).name() << endl;
       //cout << "type(dx) = " << typeid(dx).name() << endl;
-
+      */
       
       load_interpolators<num_lanes>( fex, fdexdy, fdexdz, fd2exdydz,
                                      fey, fdeydz, fdeydx, fd2eydzdx,
@@ -956,6 +845,7 @@ advance_p_kokkos_unified(
 	int   field_ionization  = 1; // FIXME: this needs to go into the input deck
         float epsilon_eV_list[] = {13.6}; // eV, ionization energy, this should be a list with the different levels
         float time_to_SI = 1.18119324097025572e-22;
+	float E_to_SI = 1.44303994037981860e+19;
         float dt = g->dt*time_to_SI;      // [s], timestep
 
 	// Check if the particle is fully ionized already
@@ -970,7 +860,6 @@ advance_p_kokkos_unified(
 	float haz_c = haz[LANE]/qdt_2mc;
 	float ha_mag_c = sqrtf(pow(hax_c,2.0)+pow(hay_c,2.0)+pow(haz_c,2.0));
         // SI units
-	float E_to_SI = 1.44303994037981860e+19;
 	float hax_SI  = E_to_SI * hax_c;
 	float hay_SI  = E_to_SI * hay_c;
 	float haz_SI  = E_to_SI * haz_c;
@@ -982,11 +871,21 @@ advance_p_kokkos_unified(
 	//printf("hax[LANE] SI = %g \n", hax_SI);
 	//printf("hax[LANE] SI = %g \n", hay_SI);
 	//printf("hax[LANE] SI = %g \n", haz_SI);
+
 	/*
+	cout << "*****************" << endl;
+	cout << "sp_name = " << sp_name << endl;
 	printf("LANE = %d\n", LANE);
 	cout << "particle index = " << LANE+pi_offset << endl;
 	cout << "Previous Ionization State :" << endl;
 	cout << "   dx[LANE] = " << dx[LANE] << endl;
+	cout << "   dx = " << k_particles(particle_index, particle_var::dx) << endl;
+	cout << "   x = " << k_particle_movers(particle_index, particle_mover_var::dispx) << endl;
+	cout << "   dy[LANE] = " << dy[LANE] << endl;
+	cout << "   dz[LANE] = " << dz[LANE] << endl;
+	cout << "   ux[LANE] = " << ux[LANE] << endl;
+        cout << "   uy[LANE] = " << uy[LANE] << endl;
+        cout << "   uz[LANE] = " << uz[LANE] << endl;
 	cout << "   E_mag_SI = " << E_mag_SI << endl;
 	cout << "   Ionization State[LANE] = " << N_ionization << endl;
         */
@@ -994,38 +893,52 @@ advance_p_kokkos_unified(
 	// Calculate the ionization rate and number of ionizations
         float arr[2];
         fieldIonization(E_mag_SI, N_ionization, N_ionization_levels, epsilon_eV_list, dt, arr);
-	
 	float Gamma = arr[0];  // ionization rate
 	N_ionization = arr[1]; // ionization state after field ionization function
 
-	// Change the charge of the particle
-	k_particles(particle_index, particle_var::charge) = N_ionization * q_e;
+	// Check if ionization event occured
+	if(N_ionization_before != N_ionization){
+	  // Change the charge of the particle
+	  k_particles(particle_index, particle_var::charge) = N_ionization * q_e;
 
+	  // Inject the macro electron with the same
+	  // momentum and position as the ionized particle
+	  // Multiple ionization events are enabled so the injected
+	  // electron weight needs to account for that
+	  int electron_index = sp_e->np++;
+          #define p_dx_e    sp_e->k_p_h(electron_index, particle_var::dx)
+          #define p_dy_e    sp_e->k_p_h(electron_index, particle_var::dy)
+          #define p_dz_e    sp_e->k_p_h(electron_index, particle_var::dz)
+          #define p_ux_e    sp_e->k_p_h(electron_index, particle_var::ux)
+          #define p_uy_e    sp_e->k_p_h(electron_index, particle_var::uy)
+          #define p_uz_e    sp_e->k_p_h(electron_index, particle_var::uz)
+          #define p_w_e     sp_e->k_p_h(electron_index, particle_var::w)
+          #define pii_e     sp_e->k_p_i_h(electron_index)
 
+	  cout << sp_e->k_p_h(electron_index, particle_var::w) << endl;
 
-	// *************************
-	// Inject the macro electron
-      	double x = 0;
-	double y = 0;
-	double z = 0;
-	double px_e_norm = 0;
-	double py_e_norm = 0;
-	double pz_e_norm = 0;
-	double w_e = 1;
-	//species_t * electron = define_species("electron", -1., 1, 1, 1, 20, 0);
-        // go through the species list to find electron definition
-	// Have check to be sure the user has defined electrons
-	
+	  
+	  // get the positions and momentum from ionized species
+	  p_dy_e = dy[LANE];
+	  p_dz_e = dz[LANE];
+	  pii_e  = ii[LANE];
+	  p_ux_e = ux[LANE];
+	  p_uy_e = uy[LANE];
+	  p_uz_e = uz[LANE];
+	  p_w_e  = (N_ionization - N_ionization_before) * 1; // FIXME: from N ionizations
+          #undef p_dx_e
+          #undef p_dy_e
+          #undef p_dz_e
+          #undef p_ux_e
+          #undef p_uy_e
+          #undef p_uz_e
+          #undef p_w_e
+          #undef pii_e
 
-	/*
-	inject_particle( electron, x, y, z,
-                             0, 0, px_e_norm,
-                             0, 0, py_e_norm,
-                             0, 0, pz_e_norm,
-			 w_e, 0, 0 ); // add the charge
-	*/
-
-
+	  //cout << "timestep = " << timestep << "," << "electron_index = " << electron_index << endl;
+	  //cout << "N_ionization - N_ionization_before = " << N_ionization - N_ionization_before << endl;
+          cout << "p_w_e = " << (N_ionization - N_ionization_before) * sp_e->w << endl;
+	}
 	
 
 	/*
@@ -1039,7 +952,7 @@ advance_p_kokkos_unified(
 
 	// Make some files
        	//if (int(timestep) % 50 == 0){
-	if (int(timestep)>=0 && int(timestep)<=900 && int(timestep) % 2 == 0){
+	if (int(timestep)>=0 && int(timestep)<=40 && int(timestep) % 2 == 0){
 	//printf("timestep = %d \n", int(timestep));
 	
 	// Field and Rate: Open file, write value, close file
@@ -1075,8 +988,49 @@ advance_p_kokkos_unified(
 	outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << endl;
         outfile1.close();
 
+
+
+	
+	// position
+        char hn [100];
+        snprintf(hn, sizeof hn, "Position_ionizations_t_%g_qsp_%g.txt",timestep,qsp);
+        std::ofstream outfile2;
+        if ((int)pi_offset == 0 && LANE == 0) {
+          outfile2.open(hn); // overwrite old files
+	  outfile2 << "# x,y,z" << endl;
+        }
+        else {
+          outfile2.open(hn, std::ios_base::app); // append to file                                                                                           
+        }
+        outfile2 << dx[LANE] << "," << dy[LANE] << "," << dz[LANE] << endl;
+        outfile2.close();
+
+
+	// velocity
+        char in [100];
+        snprintf(in, sizeof in, "Velocity_ionizations_t_%g_qsp_%g.txt",timestep,qsp);
+        std::ofstream outfile3;
+        if ((int)pi_offset == 0 && LANE == 0) {
+          outfile3.open(in);
+          outfile3 << "# ux,uy,uz" << endl;
+        }
+        else {
+          outfile3.open(in, std::ios_base::app);                                                                                                                                            
+        }
+        outfile3 << ux[LANE] << "," << uy[LANE] << "," << uz[LANE] << endl;
+        outfile3.close();
+
+
+
+
+
+
+
+	
 	} // if specific timestep
 
+
+	
 	} // if field ionization
 
 
@@ -1669,10 +1623,15 @@ void
 advance_p( /**/  species_t            * RESTRICT sp,
 //           accumulator_array_t * RESTRICT aa,
            interpolator_array_t * RESTRICT ia,
-           field_array_t* RESTRICT fa ) {
+           field_array_t* RESTRICT fa,
+	   species_t * species_list) {
   //DECLARE_ALIGNED_ARRAY( advance_p_pipeline_args_t, 128, args, 1 );
   //DECLARE_ALIGNED_ARRAY( particle_mover_seg_t, 128, seg, MAX_PIPELINE+1 );
   //int rank;
+
+  //cout << "species_list = " << species_list << endl;
+  species_t * sp_e = find_species_name("electron", species_list);
+  //cout << "sp_e = " << sp_e << endl;
 
   if( !sp )
   {
@@ -1691,10 +1650,11 @@ advance_p( /**/  species_t            * RESTRICT sp,
   //printf("sp: \n");
   //#include <iostream>
   //using namespace std;
+  //cout << "sp = " << sp << endl;
   //cout << "sp->name: " << sp->name << endl;
 
   
-  float qdt_2mc  = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+  float qdt_2mc  = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac); // take charge from particle not species when ionization is on
   float cdt_dx   = sp->g->cvac*sp->g->dt*sp->g->rdx;
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
@@ -1730,8 +1690,9 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->g->nx,
           sp->g->ny,
           sp->g->nz,
-	  sp->name
-  );
+	  sp->name,
+	  sp,
+	  sp_e);
   KOKKOS_TOC( advance_p, 1);
 
   KOKKOS_TIC();

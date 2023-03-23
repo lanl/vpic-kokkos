@@ -119,7 +119,7 @@ begin_globals {
 
 };
 
-#define VAC 5e-6
+#define VAC 5e-6*0
 // Updated by Scott V. Luedtke, XCP-6
 // Density function helpers for defining how dense the plasma is as a function
 // of position.  Uses SI units to avoid confusion at the expense of some extra
@@ -238,11 +238,11 @@ begin_initialization {
   // Simulation parameters
   // These are floating point to avoid a lot of casting
   // Increase resolution to ~3000 for physical results
-  double nx = 1600;
+  double nx = 1200;
   double ny = 1;
-  double nz = 40;
+  double nz = 200;
 
-  double nppc = 300;  // Average number of macro particles/cell of each species
+  double nppc = 50;  // Average number of macro particles/cell of each species
 
   int topology_x = 8;
   int topology_y = 1;
@@ -375,11 +375,11 @@ begin_initialization {
 
 
   // Parameters for the ions (note it is the same box as for electrons)
-  double w_I2    = fabs(qe);
   double n_I2_SI = 1e20; // Density of I2
   double N_I2    = nppc*nx*ny*nz; //Number of macro I2 in box 
   N_I2 = trunc_granular(N_I2, nproc()); // make divisible by # processors
   double NpI2    = n_I2_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I2 in box
+  double w_I2    = NpI2/N_I2;
   int I1_present = 0;
   int I2_present = 1;
 
@@ -430,6 +430,7 @@ begin_initialization {
     fprintf(out, "%d   Grid data output stride in z\n", stride_z);
     fprintf(out, "%.17e   N_I2\n", N_I2);
     fprintf(out, "%.17e   NpI2\n", NpI2);
+    fprintf(out, "%.17e   w_I2\n", w_I2);
     fprintf(out, "%d   Field interval\n", field_interval);
     fprintf(out, "%d   Energies interval\n", energies_interval);
     fprintf(out, "%d   Tracer interval\n", 0);
@@ -666,6 +667,8 @@ begin_initialization {
     cout << "zmin = " << zmin << endl;
     cout << "zmax = " << zmax << endl;
     */
+
+    //cout << "(N_I2)/(topology_x*topology_y*topology_z) = " << (N_I2)/(topology_x*topology_y*topology_z) << endl;
     
     repeat( (N_I2)/(topology_x*topology_y*topology_z) ) {
       double x = uniform( rng(0), xmin, xmax );
@@ -689,6 +692,7 @@ begin_initialization {
 	
 	
         if ( mobile_ions ) {
+	  //cout << "x,y,z = " << x << "," << y << "," << z << "," << endl;
 	  inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);
 	  //                              rng(0), 0, 0 ,
 	  //                 normal( rng(0), 0, px_I2_norm ),

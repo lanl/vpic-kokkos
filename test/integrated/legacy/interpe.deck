@@ -67,7 +67,7 @@ begin_initialization {
   LIST_FOR_EACH( sp, species_list ) {                   \
     sp->copy_to_device();                               \
   }                                                     \
-  advance_p( this_sp, interpolator_array, field_array );  \
+  advance_p( this_sp, interpolator_array, field_array, species_list );  \
   LIST_FOR_EACH( sp, species_list ) {                           \
     sp->copy_to_host();                                         \
   }                                                             \
