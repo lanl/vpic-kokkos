@@ -915,9 +915,6 @@ advance_p_kokkos_unified(
           #define p_w_e     sp_e->k_p_h(electron_index, particle_var::w)
           #define pii_e     sp_e->k_p_i_h(electron_index)
 
-	  cout << sp_e->k_p_h(electron_index, particle_var::w) << endl;
-
-	  
 	  // get the positions and momentum from ionized species
 	  p_dy_e = dy[LANE];
 	  p_dz_e = dz[LANE];
@@ -925,8 +922,26 @@ advance_p_kokkos_unified(
 	  p_ux_e = ux[LANE];
 	  p_uy_e = uy[LANE];
 	  p_uz_e = uz[LANE];
-	  p_w_e  = (N_ionization - N_ionization_before) * 1; // FIXME: from N ionizations
-          #undef p_dx_e
+	  p_w_e  = (N_ionization - N_ionization_before) * 1; // FIXME: should the 1 be replaced with the user defined weight of a macroelectron?
+
+	  // Electron file: Open file, write value, close file
+	  char kn [100];
+	  snprintf(kn, sizeof kn, "Photoelectrons.txt");
+	  std::ofstream outfile6;
+	  if ((int)electron_index == 0) {
+	    outfile6.open(kn); // overwrite old files
+	    outfile6 << "# Timestep" << "," << "Electron Index" << "," << "pii_e" << "," << "Electron Weight" << endl;
+	  }
+	  else {
+	    outfile6.open(kn, std::ios_base::app); // append to file
+	  }
+	  outfile6 << timestep << "," << electron_index << "," << pii_e << "," << p_w_e << endl;
+	  outfile6.close();
+
+ 
+
+	  
+	  #undef p_dx_e
           #undef p_dy_e
           #undef p_dz_e
           #undef p_ux_e
@@ -935,10 +950,7 @@ advance_p_kokkos_unified(
           #undef p_w_e
           #undef pii_e
 
-	  //cout << "timestep = " << timestep << "," << "electron_index = " << electron_index << endl;
-	  //cout << "N_ionization - N_ionization_before = " << N_ionization - N_ionization_before << endl;
-          cout << "p_w_e = " << (N_ionization - N_ionization_before) * sp_e->w << endl;
-	}
+	} // if ionization event occured
 	
 
 	/*
@@ -1631,7 +1643,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
 
   //cout << "species_list = " << species_list << endl;
   species_t * sp_e = find_species_name("electron", species_list);
-  //cout << "sp_e = " << sp_e << endl;
+
 
   if( !sp )
   {
