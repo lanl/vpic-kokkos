@@ -611,11 +611,6 @@ advance_p_kokkos_unified(
   float cz = 0.25 * g->rdx * g->rdy / g->dt;
 
   float timestep = g->step;
-  //printf("*************************\n");
-  //cout << "species = " << sp_name << endl;
-  //printf("np: %d \n", np);
-  //printf("charge of species: %g \n", qsp);
-  //printf("timestep = %d \n", timestep);
 
   #define p_dx    k_particles(p_index, particle_var::dx)
   #define p_dy    k_particles(p_index, particle_var::dy)
@@ -827,7 +822,6 @@ advance_p_kokkos_unified(
 #ifdef FIELD_IONIZATION
 	// ***** Field Ioization *****
 	// constants
-        float q_e = 1.60217663e-19;  // coulombs
 	int q_e_c = -1; // code units
         // FIXME: **** Input deck variables ****
 	int   field_ionization  = 1; // FIXME: this needs to go into the input deck
@@ -1123,8 +1117,6 @@ advance_p_kokkos_unified(
         v5[LANE] = static_cast<float>(inbnds[LANE])*v5[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dz;
 #ifdef FIELD_IONIZATION
 	q[LANE]  = static_cast<float>(inbnds[LANE])*q[LANE]*charge[LANE]; 
-	//cout << "sp->name = " << sp->name << ",sp->q = " << sp->q << ",q[LANE] = " << q[LANE] << endl;
-        //cout << "* sp->name = " << sp->name << ",charge[LANE] = " << charge[LANE] << ",q[LANE] = " << q[LANE] << endl;
 #else	
         q[LANE]  = static_cast<float>(inbnds[LANE])*q[LANE]*qsp;
 #endif
@@ -1643,8 +1635,11 @@ advance_p( /**/  species_t            * RESTRICT sp,
   //DECLARE_ALIGNED_ARRAY( particle_mover_seg_t, 128, seg, MAX_PIPELINE+1 );
   //int rank;
 
-  //cout << "species_list = " << species_list << endl;
+  //cout << "species_list->name = " << species_list->name << "species_list->id = " << species_list->id<< endl;
+  //species_t * temp = species_list->next;
+  //cout << "temp->name = " << temp->name << "temp->id = " << temp->id<< endl;
   species_t * sp_e = find_species_name("electron", species_list);
+  //cout << "sp_e->id = " << sp_e->id << endl;
 
 
   if( !sp )
@@ -1669,8 +1664,6 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dx   = sp->g->cvac*sp->g->dt*sp->g->rdx;
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
-  
-  //cout << "sp->name = " << sp->name << "sp->q = " << sp->q << "(sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac) = " << (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac) << endl;
   
   #ifdef USE_GPU
     // Use the gpu kernel for slightly better performance

@@ -68,7 +68,7 @@ int vpic_simulation::advance(void)
   // DEVICE function - Touches particles, particle movers, accumulators, interpolators
   LIST_FOR_EACH( sp, species_list )
   {
-      // Now Times internally
+    // Now Times internally
     advance_p( sp, interpolator_array, field_array, species_list );
   }
   //printf("Pushed\n");

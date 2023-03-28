@@ -380,7 +380,7 @@ begin_initialization {
   N_I2 = trunc_granular(N_I2, nproc()); // make divisible by # processors
   double NpI2    = n_I2_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I2 in box
   double w_I2    = NpI2/N_I2;
-  int I1_present = 0;
+  int I1_present = 1;
   int I2_present = 1;
 
 
@@ -692,13 +692,10 @@ begin_initialization {
 	
 	
         if ( mobile_ions ) {
-	  //cout << "x,y,z = " << x << "," << y << "," << z << "," << endl;
 	  inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);
-	  //                              rng(0), 0, 0 ,
-	  //                 normal( rng(0), 0, px_I2_norm ),
-	  //                 normal( rng(0), 0, px_I2_norm ),
-	  //		     w_I2, q_I2,
-	  //                 0, 0 );
+	  inject_particle( ion_I1, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);
+	  
+
         }
 	
  

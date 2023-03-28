@@ -467,7 +467,9 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     k_particles_t kparticles = sp->k_p_d;
     k_particles_i_t kparticles_i = sp->k_p_i_d;
 
+#ifndef FIELD_IONIZATION   
     const float q_8V = (sp->q)*(sp->g->r8V);
+#endif
     const int np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
@@ -496,6 +498,9 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
     Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np), KOKKOS_LAMBDA(const int n) {
         float w0, w1, w2, w3, w4, w5, w6, w7, dz;
+#ifdef FIELD_IONIZATION   
+        const float q_8V = kparticles(n, particle_var::charge)*(sp->g->r8V);
+#endif	
 
         w0 = kparticles(n, particle_var::dx);
         w1 = kparticles(n, particle_var::dy);

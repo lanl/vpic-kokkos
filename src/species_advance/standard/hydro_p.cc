@@ -178,8 +178,12 @@ accumulate_hydro_p_kokkos(
 {
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
+#ifndef FIELD_IONIZATION  
   float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
-
+#else
+  float c, mspc, dt_2mc, dt_4mc2, r8V;
+#endif
+  
   //int np, stride_10, stride_21, stride_43;
 
   //float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
@@ -193,12 +197,17 @@ accumulate_hydro_p_kokkos(
   }
 
   c        = sp->g->cvac;
-  qsp      = sp->q;
   mspc     = sp->m*c;
+#ifndef FIELD_IONIZATION  
+  qsp      = sp->q;
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
+#else
+  dt_2mc  = (sp->g->dt)/(2*mspc);
+  dt_4mc2 = dt_2mc / (2*c);
+#endif  
   r8V      = sp->g->r8V;
-
+  
   const int np        = sp->np;
   const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
                         VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
@@ -211,7 +220,7 @@ accumulate_hydro_p_kokkos(
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index)
     {
-
+    
     // Load the particle
     float dx = k_particles(p_index, particle_var::dx);
     float dy = k_particles(p_index, particle_var::dy);
@@ -220,7 +229,11 @@ accumulate_hydro_p_kokkos(
     float uy = k_particles(p_index, particle_var::uy);
     float uz = k_particles(p_index, particle_var::uz);
     float w  = k_particles(p_index, particle_var::w);
+#ifdef FIELD_IONIZATION    
     float p_q  = k_particles(p_index, particle_var::charge);
+    float qdt_2mc  = p_q * dt_2mc;  
+    float qdt_4mc2 = p_q * dt_4mc2;
+#endif    
     int ii = k_particles_i(p_index);
 
     const float cbx = k_interp(ii, interpolator_var::cbx);
@@ -245,8 +258,8 @@ accumulate_hydro_p_kokkos(
 
     const float dcbxdx = k_interp(ii, interpolator_var::dcbxdx);
     const float dcbydy = k_interp(ii, interpolator_var::dcbydy);
-    const float dcbzdz = k_interp(ii, interpolator_var::dcbzdz);
-
+    const float dcbzdz = k_interp(ii, interpolator_var::dcbzdz);     
+    
     // Half advance E
     ux += qdt_2mc*((ex+dy*dexdy) + dz*(dexdz+dy*d2exdydz));
     uy += qdt_2mc*((ey+dz*deydz) + dx*(deydx+dz*d2eydzdx));
@@ -312,9 +325,11 @@ accumulate_hydro_p_kokkos(
     float t = 0.0; // used in macro
     auto k_hydro_access = k_hydro_sv.access();
 
+          
     // Accumulate the hydro fields
+#ifdef FIELD_IONIZATION
     #define ACCUM_HYDRO( wn, i )                        \
-    t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
+    t  = p_q*wn;        /* t  = (p_q w/V) trilin_n */   \
     k_hydro_access(i, hydro_var::jx)  += t*vx;                       \
     k_hydro_access(i, hydro_var::jy)  += t*vy;                       \
     k_hydro_access(i, hydro_var::jz)  += t*vz;                       \
@@ -333,7 +348,29 @@ accumulate_hydro_p_kokkos(
     k_hydro_access(i, hydro_var::tyz) += dy*vz;                      \
     k_hydro_access(i, hydro_var::tzx) += dz*vx;                      \
     k_hydro_access(i, hydro_var::txy) += dx*vy;
-
+#else    
+    #define ACCUM_HYDRO( wn, i )                        \
+    t  = spq*wn;        /* t  = (qsp w/V) trilin_n */   \
+    k_hydro_access(i, hydro_var::jx)  += t*vx;                       \
+    k_hydro_access(i, hydro_var::jy)  += t*vy;                       \
+    k_hydro_access(i, hydro_var::jz)  += t*vz;                       \
+    k_hydro_access(i, hydro_var::rho) += t;                          \
+    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
+    dx = t*ux;          /* dx = (px w/V) trilin_n */    \
+    dy = t*uy;                                          \
+    dz = t*uz;                                          \
+    k_hydro_access(i, hydro_var::px)  += dx;                         \
+    k_hydro_access(i, hydro_var::py)  += dy;                         \
+    k_hydro_access(i, hydro_var::pz)  += dz;                         \
+    k_hydro_access(i, hydro_var::ke)  += t*ke_mc;                    \
+    k_hydro_access(i, hydro_var::txx) += dx*vx;                      \
+    k_hydro_access(i, hydro_var::tyy) += dy*vy;                      \
+    k_hydro_access(i, hydro_var::tzz) += dz*vz;                      \
+    k_hydro_access(i, hydro_var::tyz) += dy*vz;                      \
+    k_hydro_access(i, hydro_var::tzx) += dz*vx;                      \
+    k_hydro_access(i, hydro_var::txy) += dx*vy;
+#endif
+    
     // TODO: this serial adding to try and save adds is a bit sad
     // TODO: This is somehow going out of bounds right now
     const int i0 = ii;

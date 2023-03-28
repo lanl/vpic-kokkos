@@ -36,7 +36,9 @@ typedef struct particle {
   /**/              // has a stricter limit on this (2^26).
   float ux, uy, uz; // Particle normalized momentum
   float w;          // Particle weight (number of physical particles)
-  float charge;     // Particle charge 
+ #ifdef FIELD_IONIZATION  
+  float charge;     // Particle charge
+ #endif  
 } particle_t;
 
 // WARNING: FUNCTIONS THAT USE A PARTICLE_MOVER ASSUME THAT EVERYBODY
@@ -55,7 +57,9 @@ typedef struct particle_injector {
   int32_t i;                 // Index of cell containing the particle
   float ux, uy, uz;          // Particle normalized momentum
   float w;                   // Particle weight (number of physical particles)
+ #ifdef FIELD_IONIZATION  
   float charge;              // Particle charge
+ #endif  
   float dispx, dispy, dispz; // Displacement of particle
   species_id sp_id;          // Species of particle
 } particle_injector_t;
@@ -93,7 +97,9 @@ class species_t {
     public:
 
         char * name;                        // Species name
+//#ifndef FIELD_IONIZATION	
         float q;                            // Species particle charge
+//#endif	
         float m;                            // Species particle rest mass
 
         int np = 0, max_np = 0;             // Number and max local particles
@@ -425,7 +431,9 @@ move_p_kokkos(
   #define p_uy    k_particles(pi, particle_var::uy)
   #define p_uz    k_particles(pi, particle_var::uz)
   #define p_w     k_particles(pi, particle_var::w)
+ #ifdef FIELD_IONIZATION  
   #define p_q     k_particles(pi, particle_var::charge)
+ #endif  
   #define pii     k_particles_i(pi)
 
   //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
@@ -447,8 +455,12 @@ move_p_kokkos(
 //  auto accum_sa = accum_sv.access();
   auto scatter_access = scatter_view.access();
 
+ #ifdef FIELD_IONIZATION  
+  q = p_q*p_w;
+ #else
   q = qsp*p_w;
-
+ #endif  
+  
     //printf("in move %d \n", pi);
 
   for(;;) {
@@ -684,7 +696,9 @@ move_p_kokkos_host_serial(
   #define p_uy    k_particles(pi, particle_var::uy)
   #define p_uz    k_particles(pi, particle_var::uz)
   #define p_w     k_particles(pi, particle_var::w)
+ #ifdef FIELD_IONIZATION  
   #define p_q     k_particles(pi, particle_var::charge)
+ #endif  
   #define pii     k_particles_i(pi)
 
   //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
@@ -702,8 +716,11 @@ move_p_kokkos_host_serial(
   //int pi = int(local_pm_i);
   int pi = pm->i;
 
+ #ifdef FIELD_IONIZATION
+  q = p_q*p_w; 
+ #else  
   q = qsp*p_w;
-
+ #endif
     //printf("in move %d \n", pi);
 
   for(;;) {
@@ -910,7 +927,11 @@ void k_accumulate_rhob_single_cpu(
     //w7 = (qsp*g->r8V)*p->w;
     float w0 = kpart(i, particle_var::dx);
     float w1 = kpart(i, particle_var::dy);
+  #ifdef FIELD_IONIZATION
+    float w7 = (kpart(i, particle_var::charge) * r8V) * kpart(i, particle_var::w);
+  #else    
     float w7 = (qsp * r8V) * kpart(i, particle_var::w);
+  #endif
     float dz = kpart(i, particle_var::dz);
     int v = kpart_i(i);
     //printf("\n Vars are %g, %g, %g %g\n", w0, w1, w7, dz);

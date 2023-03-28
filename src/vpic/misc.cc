@@ -16,15 +16,15 @@ void
 vpic_simulation::inject_particle( species_t * sp,
                                   double x,  double y,  double z,
                                   double ux, double uy, double uz,
-                                  double w,  double charge, double age,
+                                  double w,
+			   #ifdef FIELD_IONIZATION  
+				  double charge,
+			   #endif  
+				  double age,
                                   int update_rhob ) {
   int ix, iy, iz;
 
   // Check input parameters
-  //#include <iostream>
-  //using namespace std;
-  //cout << "charge (1st misc) = " << charge << endl;
-  
   if( !sp                ) ERROR(( "Invalid species" ));
   if( w < 0              ) ERROR(( "inject_particle: w < 0" ));
 
@@ -85,12 +85,16 @@ vpic_simulation::inject_particle( species_t * sp,
   p->uy = (float)uy;
   p->uz = (float)uz;
   p->w  = w;
+#ifdef FIELD_IONIZATION  
   p->charge = charge;
+#endif  
 
-  //cout << "charge (2nd misc) = " << charge << endl;
-
+#ifdef FIELD_IONIZATION
+  if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -p->charge );
+#else  
   if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
-
+#endif
+  
   if( age!=0 ) {
     if( sp->nm>=sp->max_nm )
       WARNING(( "No movers available to age injected  particle" ));
@@ -100,7 +104,11 @@ vpic_simulation::inject_particle( species_t * sp,
     pm->dispy = uy*age*grid->rdy;
     pm->dispz = uz*age*grid->rdz;
     pm->i     = sp->np-1;
+#ifdef FIELD_IONIZATION
+    sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, p->charge );
+#else    
     sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
+#endif    
   }
 
 }
