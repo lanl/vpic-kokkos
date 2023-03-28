@@ -39,6 +39,7 @@ include_directories(${MPI_CXX_INCLUDE_PATH})
 #------------------------------------------------------------------------------#
 # Add build options
 #------------------------------------------------------------------------------#
+option(FIELD_IONIZATION "Enable field ionization" ON)
 
 option(ENABLE_INTEGRATED_TESTS "enable integrated tests" OFF)
 
@@ -334,6 +335,11 @@ endif(USE_V4_SSE)
 if(ENABLE_OPENSSL)
   add_definitions(-DENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
+
+if(FIELD_IONIZATION)
+  add_definitions(-DFIELD_IONIZATION)
+  set(FIELD_IONIZATION True)
+endif(FIELD_IONIZATION)
 
 #------------------------------------------------------------------------------#
 # Output log variables

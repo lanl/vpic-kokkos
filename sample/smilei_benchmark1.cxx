@@ -242,7 +242,7 @@ begin_initialization {
   double ny = 1;
   double nz = 200;
 
-  double nppc = 50;  // Average number of macro particles/cell of each species
+  double nppc = 75;  // Average number of macro particles/cell of each species
 
   int topology_x = 8;
   int topology_y = 1;
@@ -679,7 +679,7 @@ begin_initialization {
 
       // Rejection method, based on user-defined density function
       if ( uniform( rng(0), 0, 1 ) < slab(x*length_to_SI, y*length_to_SI,
-                  z*length_to_SI, global->xmin*length_to_SI, grid->dx*length_to_SI*3,
+                  z*length_to_SI, global->xmin*length_to_SI, grid->dx*length_to_SI*1,
                   global->zmin*length_to_SI, global->zmax*length_to_SI,
                   global->ymin*length_to_SI, global->ymax*length_to_SI) ) {
       // third to last arg is "weight," a positive number
