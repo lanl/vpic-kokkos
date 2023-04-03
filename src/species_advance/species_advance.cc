@@ -106,7 +106,9 @@ append_species( species_t * sp,
 
 species_t *
 species( const char * name,
+	 //#ifdef FIELD_IONIZATION
          float q,
+	 //#endif
          float m,
          int max_local_np,
          int max_local_nm,
@@ -128,8 +130,9 @@ species( const char * name,
 
   MALLOC( sp->name, len+1 );
   strcpy( sp->name, name );
-
+//#ifdef FIELD_IONIZATION
   sp->q = q;
+//#endif
   sp->m = m;
 
   if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for species %s.\n",

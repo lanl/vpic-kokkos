@@ -542,7 +542,15 @@ public:
   // Note: Don't use injection with aging during initialization
 
   // Defaults in the declaration below enable backwards compatibility.
-  //#if defined(FIELD_IONIZATION)
+#if defined(FIELD_IONIZATION) // FIXME: for some reason this isnt working  
+  void
+  inject_particle( species_t * sp,
+                   double x,  double y,  double z,
+                   double ux, double uy, double uz,
+                   double w,  double charge,
+      		   double age = 0, int update_rhob = 1 );
+  
+#else
   void
   inject_particle( species_t * sp,
                    double x,  double y,  double z,
@@ -550,15 +558,14 @@ public:
                    double w,  double charge,
       		   double age = 0, int update_rhob = 1 );
   /*
-#else
- 
   void
   inject_particle( species_t * sp,
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
                    double w,  double age = 0, int update_rhob = 1 );
-#endif  
   */
+#endif  
+  
 
   // Inject particle raw is for power users!
   // No nannyism _at_ _all_:

@@ -40,11 +40,9 @@ void fieldIonization(float E_SI, int N_ionization, int N_ionization_levels, floa
   float m_e_au    = 1.0;             // au 
   float c         = 299792458;       // m/s
   float c_au      = 137.02;          // atomic units
-  float epsilon_0 = 8.85418782e-12;  // F/m
   float epsilon_0_au = 1/(4*M_PI);   // au
   float alpha     = 0.00729735;      // fine structure constant
   float h_bar     = 1.054571817e-34; // J *s
-  float bohr_r_cm =  5.29177249e-9;  // cm
   float E_field_conversion = 5.1422e+11;      // (alpha^3*m_e^2*c^3)/(q_e*h_bar), multiply AU to get SI
   float I_conversion       = 6.4364099007e15; // multiply au to get W/cm^2
   float Gamma_conversion   = 1.0/(h_bar/(pow(alpha,2)*m_e*pow(c,2))); // multiply au to get sec^-1 
@@ -89,16 +87,12 @@ void fieldIonization(float E_SI, int N_ionization, int N_ionization_levels, floa
   float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
   float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units 
 
-  int TEMP = 1; // FIXME: this needs to be removed, it bypasses Multiphoton ionization
-  
   if (E_au<=E_M_au){
     // MPI Ionization
     // ionization rate per atom: Gamma^(K)
     // sigma^(K) = (h_bar*omega)^K*Gamma^(K)/I^K : K-photon cross section, units [cm^2K * s^(K-1)]
     // I: intensity of the laser field, units [W/cm^2]
     //cout << "MPI Ionization" << endl;
-    float K = 2; //FIXME: currenly only have 2-photon ionization
-    int n = 1; //FIXME: currently only principle quantum number of 1
     // FIXME: need to add the case of circularly polarized field
     float T_K = 4.80*pow(1.30,2*K)*pow(2*K+1,-1)*pow(K,-1.0/2.0); // in the case of linearly polarized field
     // FIXME: still need to figure out the units of simga_K; the plot in the book suggests it isnt [cm^2K * s^(K-1)]
@@ -596,7 +590,6 @@ advance_p_kokkos_unified(
         const int nx,
         const int ny,
         const int nz,
-	string sp_name,
 	species_t * RESTRICT sp,
 	species_t * sp_e)
 {
@@ -650,30 +643,20 @@ advance_p_kokkos_unified(
   auto rangel = g->rangel;
   auto rangeh = g->rangeh;
 
-  //cout << "1st: " << endl;
-  //cout << "k_particles(2235, particle_var::dx) = " << k_particles(2235, particle_var::dx) << endl;
-  // cout << "k_particles(1, particle_var::w) = " << k_particles(1, particle_var::w) << endl;
-  //cout << "k_particles(1, particle_var::charge) = " << k_particles(1, particle_var::charge) << endl;
-
   // TODO: is this the right place to do this?
   Kokkos::deep_copy(k_nm, 0);
 
 // Determine whether to use accumulators
 #if defined( VPIC_ENABLE_ACCUMULATORS )
-  // Goes here
-  //printf("VPIC_ENABLE_ACCUMULATORS \n");
   Kokkos::View<float*[12]> accumulator("Accumulator", k_field.extent(0));
   Kokkos::deep_copy(accumulator, 0);
   auto current_sv = Kokkos::Experimental::create_scatter_view(accumulator);
 #else
-  //printf("VPIC_ENABLE_ACCUMULATORS ELSE\n");
   k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
 #endif
 
 // Setting up work distribution settings
 #if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
-  // Goes here
-  //printf("( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU ) \n");
   constexpr int num_lanes = 32;
   int chunk_size = num_lanes;
   int num_chunks = np/num_lanes;
@@ -681,7 +664,6 @@ advance_p_kokkos_unified(
     num_chunks += 1;
   auto policy = Kokkos::TeamPolicy<>(num_chunks, 1, num_lanes);
 #elif defined( VPIC_ENABLE_HIERARCHICAL )
-  //printf("VPIC_ENABLE_HIERARCHICAL \n");
   auto policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE);
   int chunk_size = np/LEAGUE_SIZE;
   if(chunk_size*LEAGUE_SIZE < np)
@@ -689,14 +671,11 @@ advance_p_kokkos_unified(
   constexpr int num_lanes = 1;
   int num_chunks = LEAGUE_SIZE;
 #else
-  //printf("( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU ) ELSE\n");
   constexpr int num_lanes = 1;
 #endif
 
 // Outermost parallel loop
 #if defined(VPIC_ENABLE_HIERARCHICAL) || defined(VPIC_ENABLE_VECTORIZATION)
-  // Goes here 
-  //printf("(VPIC_ENABLE_HIERARCHICAL) || defined(VPIC_ENABLE_VECTORIZATION) \n");
   Kokkos::parallel_for("advance_p", policy, 
   KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
       auto current_sa = current_sv.access();
@@ -705,8 +684,7 @@ advance_p_kokkos_unified(
       if((chunk+1)*chunk_size > np)
         num_iters = np - chunk*chunk_size;
       size_t pi_offset = chunk*chunk_size;
-#else
-      //printf("(VPIC_ENABLE_HIERARCHICAL) || defined(VPIC_ENABLE_VECTORIZATION) ELSE \n");    
+#else  
   auto policy = Kokkos::RangePolicy<>(0,np);
   Kokkos::parallel_for("advance_p", policy, KOKKOS_LAMBDA (const size_t pi_offset) {
       auto current_sa = current_sv.access();
@@ -716,7 +694,6 @@ advance_p_kokkos_unified(
      
 // Inner parallelization loop
 #if defined ( VPIC_ENABLE_HIERARCHICAL ) && !defined( VPIC_ENABLE_VECTORIZATION )
-      //printf("( VPIC_ENABLE_HIERARCHICAL ) && !defined( VPIC_ENABLE_VECTORIZATION ) \n");
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (const size_t index) {
       size_t pi_offset = chunk*chunk_size + index;
 #endif
@@ -774,11 +751,6 @@ advance_p_kokkos_unified(
       float *v13 = fd2eydzdx;
 
       size_t p_index = pi_offset;
-
-      //cout << "p_dx = " << p_dx << endl;
-      //cout << "p_q = "  << p_q << endl;
-      //cout << "p_w = "  << p_w << endl; 
-
       
       BEGIN_VECTOR_BLOCK {
         p_index = pi_offset + LANE;
@@ -818,59 +790,31 @@ advance_p_kokkos_unified(
         hay[LANE] = qdt_2mc*( (fey[LANE] + dz[LANE]*fdeydz[LANE] ) + dx[LANE]*(fdeydx[LANE] + dz[LANE]*fd2eydzdx[LANE]) );
         haz[LANE] = qdt_2mc*( (fez[LANE] + dx[LANE]*fdezdx[LANE] ) + dy[LANE]*(fdezdy[LANE] + dx[LANE]*fd2ezdxdy[LANE]) );
 
-
 #ifdef FIELD_IONIZATION
 	// ***** Field Ioization *****
 	// constants
-	int q_e_c = -1; // code units
-        // FIXME: **** Input deck variables ****
-	int   field_ionization  = 1; // FIXME: this needs to go into the input deck
-        float epsilon_eV_list[] = {13.6}; // eV, ionization energy, this should be a list with the different levels
-        float time_to_SI = 1.18119324097025572e-22;
+	int q_e_c     = -1; // code units
 	float E_to_SI = 1.44303994037981860e+19;
+        float time_to_SI = 1.18119324097025572e-22;
+        // FIXME: **** Input deck variables ****
+        float epsilon_eV_list[] = {13.6}; // eV, ionization energy, this should be a list with the different levels
         float dt = g->dt*time_to_SI;      // [s], timestep
 
 	// Check if the particle is fully ionized already
         int N_ionization        = int(abs(charge[LANE])); // Current ionization state of the particle
         int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
-	int   N_ionization_levels = sizeof(epsilon_eV_list)/sizeof(float);
+	int N_ionization_levels = sizeof(epsilon_eV_list)/sizeof(float);
         // FIXME: need to check which species the user wants ionization enabled on
-	if (field_ionization == 1 && sp_name != "electron"){ // && N_ionization < N_ionization_levels) {
+	if (sp->name != "electron"){ 
         // code units
 	float hax_c = hax[LANE]/qdt_2mc;
 	float hay_c = hay[LANE]/qdt_2mc;
 	float haz_c = haz[LANE]/qdt_2mc;
 	float ha_mag_c = sqrtf(pow(hax_c,2.0)+pow(hay_c,2.0)+pow(haz_c,2.0));
         // SI units
-	float hax_SI  = E_to_SI * hax_c;
-	float hay_SI  = E_to_SI * hay_c;
-	float haz_SI  = E_to_SI * haz_c;
 	float E_mag_SI = E_to_SI * ha_mag_c;
 	// particle index
 	int particle_index = LANE+pi_offset;
-	
-	// print files to command line
-	//printf("hax[LANE] SI = %g \n", hax_SI);
-	//printf("hax[LANE] SI = %g \n", hay_SI);
-	//printf("hax[LANE] SI = %g \n", haz_SI);
-
-	/*
-	cout << "*****************" << endl;
-	cout << "sp_name = " << sp_name << endl;
-	printf("LANE = %d\n", LANE);
-	cout << "particle index = " << LANE+pi_offset << endl;
-	cout << "Previous Ionization State :" << endl;
-	cout << "   dx[LANE] = " << dx[LANE] << endl;
-	cout << "   dx = " << k_particles(particle_index, particle_var::dx) << endl;
-	cout << "   x = " << k_particle_movers(particle_index, particle_mover_var::dispx) << endl;
-	cout << "   dy[LANE] = " << dy[LANE] << endl;
-	cout << "   dz[LANE] = " << dz[LANE] << endl;
-	cout << "   ux[LANE] = " << ux[LANE] << endl;
-        cout << "   uy[LANE] = " << uy[LANE] << endl;
-        cout << "   uz[LANE] = " << uz[LANE] << endl;
-	cout << "   E_mag_SI = " << E_mag_SI << endl;
-	cout << "   Ionization State[LANE] = " << N_ionization << endl;
-        */
 	
 	// Calculate the ionization rate and number of ionizations
         float arr[2];
@@ -921,9 +865,6 @@ advance_p_kokkos_unified(
 	  }
 	  outfile6 << timestep << "," << electron_index << "," << pii_e << "," << p_w_e << endl;
 	  outfile6.close();
-
- 
-
 	  
 	  #undef p_dx_e
           #undef p_dy_e
@@ -933,102 +874,77 @@ advance_p_kokkos_unified(
           #undef p_uz_e
           #undef p_w_e
           #undef pii_e
-
 	} // if ionization event occured
 	
 
-	/*
-        cout << "After Ionization: " << endl;
-        cout << "   k_particles(particle_index, particle_var::dx) = " << k_particles(particle_index, particle_var::dx) << endl;
-        cout << "   Ionization State = " << N_ionization << endl;
-        */
-
-
-	
 
 	// Make some files
        	//if (int(timestep) % 50 == 0){
 	if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 4 == 0){
-	//printf("timestep = %d \n", int(timestep));
 	
-	// Field and Rate: Open file, write value, close file
-	char fn [100];
-        snprintf(fn, sizeof fn, "E_mag_t_%g.txt",timestep); 
-	std::ofstream outfile;
-        //printf("fn = %s \n",fn);
-	if ((int)pi_offset == 0 && LANE == 0) {
-	  //cout << "Made it here \n";
-	  outfile.open(fn); // overwrite old files
-	  outfile << "# E [V/m],Gamma [s^-1]" << endl; // Header
-	}
-	else {
-	  outfile.open(fn, std::ios_base::app); // append to file
-	}
-	outfile << E_mag_SI << "," << Gamma << endl;
-	outfile.close();
-        
-	
-
-	// N Ionizations: Open file, write value, close file
-	char gn [100];
-	snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt",timestep);
-	std::ofstream outfile1;
-	if ((int)pi_offset == 0 && LANE == 0) {
-	  //cout << "Made it here \n";
-          outfile1.open(gn); // overwrite old files
-	  outfile1 << "# N ionizations Before" << "," << "# N ionizations After" << "," << "Charge After" << endl; // Header
-	}
-	else {
-	  outfile1.open(gn, std::ios_base::app); // append to file
-	}
-	outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << endl;
-        outfile1.close();
-
-
-
-	
-	// position
-        char hn [100];
-        snprintf(hn, sizeof hn, "Position_ionizations_t_%g.txt",timestep);
-        std::ofstream outfile2;
-        if ((int)pi_offset == 0 && LANE == 0) {
-          outfile2.open(hn); // overwrite old files
-	  outfile2 << "# x,y,z" << endl;
-        }
-        else {
-          outfile2.open(hn, std::ios_base::app); // append to file                                                                                           
-        }
-        outfile2 << dx[LANE] << "," << dy[LANE] << "," << dz[LANE] << endl;
-        outfile2.close();
-
-
-	// velocity
-        char in [100];
-        snprintf(in, sizeof in, "Velocity_ionizations_t_%g.txt",timestep);
-        std::ofstream outfile3;
-        if ((int)pi_offset == 0 && LANE == 0) {
-          outfile3.open(in);
-          outfile3 << "# ux,uy,uz" << endl;
-        }
-        else {
-          outfile3.open(in, std::ios_base::app);                                                                                                                                            
-        }
-        outfile3 << ux[LANE] << "," << uy[LANE] << "," << uz[LANE] << endl;
-        outfile3.close();
-
-
-
-
-
-
+	   // Field and Rate: Open file, write value, close file
+	   char fn [100];
+           snprintf(fn, sizeof fn, "E_mag_t_%g.txt",timestep); 
+	   std::ofstream outfile;
+	   if ((int)pi_offset == 0 && LANE == 0) {
+	     outfile.open(fn); // overwrite old files
+	     outfile << "# E [V/m],Gamma [s^-1]" << endl; // Header
+	   }
+	   else {
+	     outfile.open(fn, std::ios_base::app); // append to file
+	   }
+	   outfile << E_mag_SI << "," << Gamma << endl;
+	   outfile.close();
+	   
+	   // N Ionizations: Open file, write value, close file
+	   char gn [100];
+	   snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt",timestep);
+	   std::ofstream outfile1;
+	   if ((int)pi_offset == 0 && LANE == 0) {
+             outfile1.open(gn); // overwrite old files
+	     outfile1 << "# N ionizations Before" << "," << "# N ionizations After" << "," << "Charge After" << endl; // Header
+	   }
+	   else {
+	     outfile1.open(gn, std::ios_base::app); // append to file
+	   }
+	   outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << endl;
+           outfile1.close();
+	   
+	   
+	   // position
+           char hn [100];
+           snprintf(hn, sizeof hn, "Position_ionizations_t_%g.txt",timestep);
+           std::ofstream outfile2;
+           if ((int)pi_offset == 0 && LANE == 0) {
+             outfile2.open(hn); // overwrite old files
+	     outfile2 << "# x,y,z" << endl;
+           }
+           else {
+             outfile2.open(hn, std::ios_base::app); // append to file                                                                                           
+           }
+           outfile2 << dx[LANE] << "," << dy[LANE] << "," << dz[LANE] << endl;
+           outfile2.close();
+	   
+	   
+	   // velocity
+           char in [100];
+           snprintf(in, sizeof in, "Velocity_ionizations_t_%g.txt",timestep);
+           std::ofstream outfile3;
+           if ((int)pi_offset == 0 && LANE == 0) {
+             outfile3.open(in);
+             outfile3 << "# ux,uy,uz" << endl;
+           }
+           else {
+             outfile3.open(in, std::ios_base::app);                                                                                                                                            
+           }
+           outfile3 << ux[LANE] << "," << uy[LANE] << "," << uz[LANE] << endl;
+           outfile3.close();
+	   
+	   } // if specific timestep for making files
 
 	
-	} // if specific timestep
-
-
-	
-	} // if field ionization
-#endif
+	} // if not electrons
+#endif // FIELD_IONIZATION
 
 
 
@@ -1296,16 +1212,24 @@ advance_p_kokkos_gpu(
         k_neighbor_t& k_neighbors,
         field_array_t* RESTRICT fa,
         const grid_t *g,
+#ifdef FIELD_IONIZATION	
+        const float dt_2mc,
+#else
         const float qdt_2mc,
+#endif	
         const float cdt_dx,
         const float cdt_dy,
         const float cdt_dz,
+#ifndef	FIELD_IONIZATION
         const float qsp,
+#endif
         const int np,
         const int max_nm,
         const int nx,
         const int ny,
-        const int nz)
+        const int nz,
+	species_t * RESTRICT sp,
+	species_t * sp_e)
 {
 
   constexpr float one            = 1.;
@@ -1326,7 +1250,9 @@ advance_p_kokkos_gpu(
   #define p_uy    k_particles(p_index, particle_var::uy)
   #define p_uz    k_particles(p_index, particle_var::uz)
   #define p_w     k_particles(p_index, particle_var::w)
+#ifdef FIELD_IONIZATION
   #define p_q     k_particles(p_index, particle_var::charge)
+#endif    
   #define pii     k_particles_i(p_index)
 
   #define f_cbx k_interp(ii, interpolator_var::cbx)
@@ -1387,15 +1313,182 @@ advance_p_kokkos_gpu(
     float dy   = p_dy;
     float dz   = p_dz;
     int   ii   = pii;
-    float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) +
+    float charge = p_q;
+#ifdef FIELD_IONIZATION
+    const float qdt_2mc = charge * dt_2mc;
+    //cout << "," << "charge = " << charge << endl;
+#endif    
+    float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) + // Interpolate E
                            dz*( f_dexdz + dy*f_d2exdydz ) );
     float hay  = qdt_2mc*(    ( f_ey    + dz*f_deydz    ) +
                            dx*( f_deydx + dz*f_d2eydzdx ) );
     float haz  = qdt_2mc*(    ( f_ez    + dx*f_dezdx    ) +
                            dy*( f_dezdy + dx*f_d2ezdxdy ) );
 
-    //printf("Made it here (gpu) \n");
-    
+    //cout << "hax = " << hax << endl;
+
+    /*
+#ifdef FIELD_IONIZATION
+	// ***** Field Ioization *****
+	// constants
+	int q_e_c     = -1; // code units
+	float E_to_SI = 1.44303994037981860e+19;
+        float time_to_SI = 1.18119324097025572e-22;
+        // FIXME: **** Input deck variables ****
+        float epsilon_eV_list[] = {13.6}; // eV, ionization energy, this should be a list with the different levels
+        float dt = g->dt*time_to_SI;      // [s], timestep
+
+	// Check if the particle is fully ionized already
+        int N_ionization        = int(abs(charge[LANE])); // Current ionization state of the particle
+        int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
+	int N_ionization_levels = sizeof(epsilon_eV_list)/sizeof(float);
+        // FIXME: need to check which species the user wants ionization enabled on
+	if (sp->name != "electron"){ 
+        // code units
+	float hax_c = hax[LANE]/qdt_2mc;
+	float hay_c = hay[LANE]/qdt_2mc;
+	float haz_c = haz[LANE]/qdt_2mc;
+	float ha_mag_c = sqrtf(pow(hax_c,2.0)+pow(hay_c,2.0)+pow(haz_c,2.0));
+        // SI units
+	float hax_SI  = E_to_SI * hax_c;
+	float hay_SI  = E_to_SI * hay_c;
+	float haz_SI  = E_to_SI * haz_c;
+	float E_mag_SI = E_to_SI * ha_mag_c;
+	// particle index
+	int particle_index = LANE+pi_offset;
+	
+	// Calculate the ionization rate and number of ionizations
+        float arr[2];
+        fieldIonization(E_mag_SI, N_ionization, N_ionization_levels, epsilon_eV_list, dt, arr);
+	float Gamma = arr[0];  // ionization rate
+	N_ionization = int(arr[1]); // ionization state after field ionization function
+
+	// Check if ionization event occured
+	if(N_ionization_before != N_ionization){
+	  // Change the charge of the particle
+	  k_particles(particle_index, particle_var::charge) = N_ionization * q_e_c; // code units
+
+	  // Inject the macro electron with the same
+	  // momentum and position as the ionized particle
+	  // Multiple ionization events are enabled so the injected
+	  // electron weight needs to account for that
+	  int electron_index = sp_e->np++;
+          #define p_dx_e    sp_e->k_p_h(electron_index, particle_var::dx)
+          #define p_dy_e    sp_e->k_p_h(electron_index, particle_var::dy)
+          #define p_dz_e    sp_e->k_p_h(electron_index, particle_var::dz)
+          #define p_ux_e    sp_e->k_p_h(electron_index, particle_var::ux)
+          #define p_uy_e    sp_e->k_p_h(electron_index, particle_var::uy)
+          #define p_uz_e    sp_e->k_p_h(electron_index, particle_var::uz)
+	  #define p_q_e     sp_e->k_p_h(electron_index, particle_var::charge)
+          #define p_w_e     sp_e->k_p_h(electron_index, particle_var::w)
+          #define pii_e     sp_e->k_p_i_h(electron_index)
+
+	  // get the positions and momentum from ionized species
+	  p_dy_e = dy[LANE];
+	  p_dz_e = dz[LANE];
+	  pii_e  = ii[LANE];
+	  p_ux_e = ux[LANE];
+	  p_uy_e = uy[LANE];
+	  p_uz_e = uz[LANE];
+	  p_q_e  = -1; // electrons charge in code units
+	  p_w_e  = (N_ionization - N_ionization_before) * k_particles(particle_index, particle_var::w); // weight is dependent on the number of ionization events and weight of ionized particle
+
+	  // Electron file: Open file, write value, close file
+	  char kn [100];
+	  snprintf(kn, sizeof kn, "Photoelectrons.txt");
+	  std::ofstream outfile6;
+	  if ((int)electron_index == 0) {
+	    outfile6.open(kn); // overwrite old files
+	    outfile6 << "# Timestep" << "," << "Electron Index" << "," << "pii_e" << "," << "Electron Weight" << endl;
+	  }
+	  else {
+	    outfile6.open(kn, std::ios_base::app); // append to file
+	  }
+	  outfile6 << timestep << "," << electron_index << "," << pii_e << "," << p_w_e << endl;
+	  outfile6.close();
+	  
+	  #undef p_dx_e
+          #undef p_dy_e
+          #undef p_dz_e
+          #undef p_ux_e
+          #undef p_uy_e
+          #undef p_uz_e
+          #undef p_w_e
+          #undef pii_e
+	} // if ionization event occured
+	
+
+
+	// Make some files
+       	//if (int(timestep) % 50 == 0){
+	if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 4 == 0){
+	
+	   // Field and Rate: Open file, write value, close file
+	   char fn [100];
+           snprintf(fn, sizeof fn, "E_mag_t_%g.txt",timestep); 
+	   std::ofstream outfile;
+	   if ((int)pi_offset == 0 && LANE == 0) {
+	     outfile.open(fn); // overwrite old files
+	     outfile << "# E [V/m],Gamma [s^-1]" << endl; // Header
+	   }
+	   else {
+	     outfile.open(fn, std::ios_base::app); // append to file
+	   }
+	   outfile << E_mag_SI << "," << Gamma << endl;
+	   outfile.close();
+	   
+	   // N Ionizations: Open file, write value, close file
+	   char gn [100];
+	   snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt",timestep);
+	   std::ofstream outfile1;
+	   if ((int)pi_offset == 0 && LANE == 0) {
+             outfile1.open(gn); // overwrite old files
+	     outfile1 << "# N ionizations Before" << "," << "# N ionizations After" << "," << "Charge After" << endl; // Header
+	   }
+	   else {
+	     outfile1.open(gn, std::ios_base::app); // append to file
+	   }
+	   outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << endl;
+           outfile1.close();
+	   
+	   
+	   // position
+           char hn [100];
+           snprintf(hn, sizeof hn, "Position_ionizations_t_%g.txt",timestep);
+           std::ofstream outfile2;
+           if ((int)pi_offset == 0 && LANE == 0) {
+             outfile2.open(hn); // overwrite old files
+	     outfile2 << "# x,y,z" << endl;
+           }
+           else {
+             outfile2.open(hn, std::ios_base::app); // append to file                                                                                           
+           }
+           outfile2 << dx[LANE] << "," << dy[LANE] << "," << dz[LANE] << endl;
+           outfile2.close();
+	   
+	   
+	   // velocity
+           char in [100];
+           snprintf(in, sizeof in, "Velocity_ionizations_t_%g.txt",timestep);
+           std::ofstream outfile3;
+           if ((int)pi_offset == 0 && LANE == 0) {
+             outfile3.open(in);
+             outfile3 << "# ux,uy,uz" << endl;
+           }
+           else {
+             outfile3.open(in, std::ios_base::app);                                                                                                                                            
+           }
+           outfile3 << ux[LANE] << "," << uy[LANE] << "," << uz[LANE] << endl;
+           outfile3.close();
+	   
+	   } // if specific timestep for making files
+
+	
+	} // if not electrons
+#endif // FIELD_IONIZATION
+    */
+
+ 
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby + dy*f_dcbydy;
     float cbz  = f_cbz + dz*f_dcbzdz;
@@ -1463,8 +1556,11 @@ advance_p_kokkos_gpu(
       // Common case (inbnds).  Note: accumulator values are 4 times
       // the total physical charge that passed through the appropriate
       // current quadrant in a time-step
-
+#ifdef FIELD_IONIZATION
+      q *= p_q;  //FIXME: check that this is doing the correct thing
+#else      
       q *= qsp;
+#endif      
       p_dx = v3;                             // Store new position
       p_dy = v4;
       p_dz = v5;
@@ -1568,8 +1664,13 @@ advance_p_kokkos_gpu(
       local_pm->i     = p_index;
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
+#ifdef FIELD_IONIZATION
+      if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
+                         k_f_sv, g, k_neighbors, rangel, rangeh, p_q, cx, cy, cz, nx, ny, nz ) )
+#else
       if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
                          k_f_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
+#endif	
       {
         if( k_nm(0) < max_nm )
         {
@@ -1702,7 +1803,6 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->g->nx,
           sp->g->ny,
           sp->g->nz,
-	  sp->name,
 	  sp,
 	  sp_e);
   KOKKOS_TOC( advance_p, 1);
