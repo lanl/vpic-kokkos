@@ -589,9 +589,13 @@ advance_p_kokkos_unified(
         const int max_nm,
         const int nx,
         const int ny,
+#ifdef FIELD_IONIZATION	
         const int nz,
 	species_t * RESTRICT sp,
 	species_t * sp_e)
+#else
+        const int nz) 
+#endif
 {
 
   constexpr float one            = 1.;
@@ -1227,9 +1231,13 @@ advance_p_kokkos_gpu(
         const int max_nm,
         const int nx,
         const int ny,
+#ifndef	FIELD_IONIZATION	
         const int nz,
 	species_t * RESTRICT sp,
 	species_t * sp_e)
+#else
+        const int nz)
+#endif
 {
 
   constexpr float one            = 1.;
@@ -1731,16 +1739,21 @@ advance_p( /**/  species_t            * RESTRICT sp,
 //           accumulator_array_t * RESTRICT aa,
            interpolator_array_t * RESTRICT ia,
            field_array_t* RESTRICT fa,
-	   species_t * species_list) {
+	   species_t * RESTRICT species_list) {
   //DECLARE_ALIGNED_ARRAY( advance_p_pipeline_args_t, 128, args, 1 );
   //DECLARE_ALIGNED_ARRAY( particle_mover_seg_t, 128, seg, MAX_PIPELINE+1 );
   //int rank;
 
-  //cout << "species_list->name = " << species_list->name << "species_list->id = " << species_list->id<< endl;
-  //species_t * temp = species_list->next;
-  //cout << "temp->name = " << temp->name << "temp->id = " << temp->id<< endl;
-  species_t * sp_e = find_species_name("electron", species_list);
-  //cout << "sp_e->id = " << sp_e->id << endl;
+  //species_t * sp_e = find_species_name("electron", species_list);
+  // species_list is the last defined species in the deck
+  // thus electrons need to be defined last in the input deck for this to work
+#ifdef FIELD_IONIZATION
+  species_t * sp_e = species_list;
+  if(strcmp(species_list->name, "electron") != 0)
+  {
+   ERROR(( "Electrons need to be defined last in input deck when field ionization is enabled" ));
+  }
+#endif  
 
 
   if( !sp )
@@ -1802,9 +1815,13 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->max_nm,
           sp->g->nx,
           sp->g->ny,
+#ifdef FIELD_IONIZATION	  
           sp->g->nz,
 	  sp,
 	  sp_e);
+#else
+          sp->g->nz);
+#endif	  
   KOKKOS_TOC( advance_p, 1);
 
   KOKKOS_TIC();

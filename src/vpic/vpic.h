@@ -221,7 +221,7 @@ public:
   void output_checksum_species(const char * species);
   void checksum_species(const char * species, CheckSum & cs);
 #endif // ENABLE_OPENSSL
-
+  
   void print_available_ram() {
     SystemRAM::print_available();
   } // print_available_ram
@@ -506,7 +506,9 @@ public:
   // FIXME: SILLY PROMOTIONS
   inline species_t *
   define_species( const char *name,
+		  //#if !defined(FIELD_IONIZATIONS)	  
                   double q,
+		  //#endif	  
                   double m,
                   double max_local_np,
                   double max_local_nm,
@@ -520,7 +522,11 @@ public:
       if( max_local_nm<16*(MAX_PIPELINE+1) )
         max_local_nm = 16*(MAX_PIPELINE+1);
     }
-    return append_species( species( name, (float)q, (float)m,
+    return append_species( species( name,
+				    //#if !defined(FIELD_IONIZATIONS)
+				    (float)q,
+				    //#endif    
+				    (float)m,
                                     (int)max_local_np, (int)max_local_nm,
                                     (int)sort_interval, (int)sort_out_of_place,
                                     grid ), &species_list );
@@ -542,28 +548,18 @@ public:
   // Note: Don't use injection with aging during initialization
 
   // Defaults in the declaration below enable backwards compatibility.
-#if defined(FIELD_IONIZATION) // FIXME: for some reason this isnt working  
   void
   inject_particle( species_t * sp,
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
-                   double w,  double charge,
+                   double w,
+		   //#if defined(FIELD_IONIZATION)		   
+		   double charge,
+		   //#endif		   
       		   double age = 0, int update_rhob = 1 );
-  
-#else
-  void
-  inject_particle( species_t * sp,
-                   double x,  double y,  double z,
-                   double ux, double uy, double uz,
-                   double w,  double charge,
-      		   double age = 0, int update_rhob = 1 );
-  /*
-  void
-  inject_particle( species_t * sp,
-                   double x,  double y,  double z,
-                   double ux, double uy, double uz,
-                   double w,  double age = 0, int update_rhob = 1 );
-  */
+
+#if defined(FIELD_IONIZATION)		   
+  std::ostream& foo = std::cout << "Made it here" << std::endl;
 #endif  
   
 

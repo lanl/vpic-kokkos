@@ -283,7 +283,9 @@ append_species( species_t * sp,
 
 species_t *
 species( const char * name,
+//#ifdef FIELD_IONIZATION
          float q,
+//#endif
          float m,
          int max_local_np,
          int max_local_nm,

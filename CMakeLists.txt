@@ -338,7 +338,6 @@ endif(ENABLE_OPENSSL)
 
 if(FIELD_IONIZATION)
   add_definitions(-DFIELD_IONIZATION)
-  set(FIELD_IONIZATION True)
 endif(FIELD_IONIZATION)
 
 #------------------------------------------------------------------------------#
