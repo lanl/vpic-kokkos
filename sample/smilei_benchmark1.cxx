@@ -265,7 +265,7 @@ begin_initialization {
   int load_particles = 1;         // Flag to turn off particle load for testing
                                   // wave launch. William Daughton.
   int mobile_ions         = 1;           // whether or not to push ions
-  int FIELD_IONIZATION    = 0;
+  int FIELD_IONIZATION    = 1;
   // For the first run particle_tracing=1, and particle_tracing=2 for the
   // second run
 

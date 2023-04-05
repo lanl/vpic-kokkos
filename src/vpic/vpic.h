@@ -548,19 +548,26 @@ public:
   // Note: Don't use injection with aging during initialization
 
   // Defaults in the declaration below enable backwards compatibility.
+#if defined(FIELD_IONIZATION)		   
+  std::ostream& foo = std::cout << "FIELD_IONIZATION: works in vpic.h" << std::endl;
+#endif 
+#if defined(FIELD_IONIZATION)  
   void
   inject_particle( species_t * sp,
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
                    double w,
-		   //#if defined(FIELD_IONIZATION)		   
-		   double charge,
-		   //#endif		   
-      		   double age = 0, int update_rhob = 1 );
-
-#if defined(FIELD_IONIZATION)		   
-  std::ostream& foo = std::cout << "Made it here" << std::endl;
-#endif  
+	           double charge,
+      	           double age = 0, int update_rhob = 1 );
+#else
+  void
+  inject_particle( species_t * sp,
+                   double x,  double y,  double z,
+                   double ux, double uy, double uz,
+                   double w,		   
+      		   double age = 0, int update_rhob = 1 );  
+#endif
+ 
   
 
   // Inject particle raw is for power users!
