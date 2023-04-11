@@ -11,9 +11,6 @@
 #include "vpic.h"
 
 // FIXME: MOVE THIS INTO VPIC.HXX TO BE TRULY INLINE
-#if defined(FIELD_IONIZATION)		   
-  std::ostream& foo = std::cout << "FIELD_IONIZATION: works in misc.cc" << std::endl;
-#endif 
 #ifdef FIELD_IONIZATION 
 void
 vpic_simulation::inject_particle( species_t * sp,
@@ -88,6 +85,8 @@ vpic_simulation::inject_particle( species_t * sp,
   p->w  = w;  
   p->charge = charge;  
 
+  std::cout << "charge (misc.cc FI on) = " << charge << std::endl;
+  
   if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -p->charge );
   
   if( age!=0 ) {
@@ -175,6 +174,8 @@ vpic_simulation::inject_particle( species_t * sp,
   p->uz = (float)uz;
   p->w  = w;
 
+  std::cout << "charge (misc.cc FI off) = " << charge << std::endl;
+  
   if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
 
   if( age!=0 ) {

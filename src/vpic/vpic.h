@@ -550,21 +550,23 @@ public:
   // Defaults in the declaration below enable backwards compatibility.
 #if defined(FIELD_IONIZATION)		   
   std::ostream& foo = std::cout << "FIELD_IONIZATION: works in vpic.h" << std::endl;
-#endif 
-#if defined(FIELD_IONIZATION)  
+#endif
+    
+#if defined(FIELD_IONIZATION)
   void
   inject_particle( species_t * sp,
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
                    double w,
-	           double charge,
+		   double charge,
       	           double age = 0, int update_rhob = 1 );
+
 #else
   void
   inject_particle( species_t * sp,
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
-                   double w,		   
+                   double w,
       		   double age = 0, int update_rhob = 1 );  
 #endif
  

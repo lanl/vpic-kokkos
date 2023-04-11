@@ -178,10 +178,10 @@ accumulate_hydro_p_kokkos(
 {
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
-#ifndef FIELD_IONIZATION  
-  float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
-#else
+#ifdef FIELD_IONIZATION
   float c, mspc, dt_2mc, dt_4mc2, r8V;
+#else  
+  float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
 #endif
   
   //int np, stride_10, stride_21, stride_43;
@@ -198,13 +198,13 @@ accumulate_hydro_p_kokkos(
 
   c        = sp->g->cvac;
   mspc     = sp->m*c;
-#ifndef FIELD_IONIZATION  
+#ifdef FIELD_IONIZATION
+  dt_2mc  = (sp->g->dt)/(2*mspc);
+  dt_4mc2 = dt_2mc / (2*c);
+#else  
   qsp      = sp->q;
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
-#else
-  dt_2mc  = (sp->g->dt)/(2*mspc);
-  dt_4mc2 = dt_2mc / (2*c);
 #endif  
   r8V      = sp->g->r8V;
   
@@ -350,7 +350,7 @@ accumulate_hydro_p_kokkos(
     k_hydro_access(i, hydro_var::txy) += dx*vy;
 #else    
     #define ACCUM_HYDRO( wn, i )                        \
-    t  = spq*wn;        /* t  = (qsp w/V) trilin_n */   \
+    t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
     k_hydro_access(i, hydro_var::jx)  += t*vx;                       \
     k_hydro_access(i, hydro_var::jy)  += t*vy;                       \
     k_hydro_access(i, hydro_var::jz)  += t*vz;                       \

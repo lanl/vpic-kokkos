@@ -769,8 +769,10 @@ advance_p_kokkos_unified(
         uz[LANE] = p_uz;
         // Load weight
         q[LANE]  = p_w;
+    #ifdef FIELD_IONIZATION	
 	// Load charge
 	charge[LANE] = p_q;
+    #endif	
         // Load index
         ii[LANE] = pii;
       } END_VECTOR_BLOCK;
@@ -1126,7 +1128,9 @@ advance_p_kokkos_unified(
               k_particle_copy(nm, particle_var::uy) = p_uy;
               k_particle_copy(nm, particle_var::uz) = p_uz;
               k_particle_copy(nm, particle_var::w) = p_w;
+       #ifdef FIELD_IONIZATION    
 	      k_particle_copy(nm, particle_var::charge) = p_q;
+       #endif      
               k_particle_i_copy(nm) = pii;
             }
           }
@@ -1321,8 +1325,8 @@ advance_p_kokkos_gpu(
     float dy   = p_dy;
     float dz   = p_dz;
     int   ii   = pii;
+#ifdef FIELD_IONIZATION    
     float charge = p_q;
-#ifdef FIELD_IONIZATION
     const float qdt_2mc = charge * dt_2mc;
     //cout << "," << "charge = " << charge << endl;
 #endif    
@@ -1698,7 +1702,9 @@ advance_p_kokkos_gpu(
             k_particle_copy(nm, particle_var::uy) = p_uy;
             k_particle_copy(nm, particle_var::uz) = p_uz;
             k_particle_copy(nm, particle_var::w) = p_w;
+     #ifdef FIELD_IONIZATION     
 	    k_particle_copy(nm, particle_var::charge) = p_q;
+     #endif	    
             k_particle_i_copy(nm) = pii;
 
             // Tag this one as having left
