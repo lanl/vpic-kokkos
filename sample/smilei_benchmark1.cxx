@@ -66,7 +66,6 @@ using namespace std;
   if ( !((A)=(TYPE *)malloc((size_t)(LEN)*sizeof(TYPE))) )                    \
     ERROR(("Cannot allocate."));
 #endif // ALLOCATE
-
 begin_globals {
   double emax;                   // E0 of the laser
   double omega_0;                // w0/wpe
@@ -81,7 +80,7 @@ begin_globals {
   int    launch_wave;            // whether or not to propagate a laser from
                                  // y-z boundary
 
-  int FIELD_IONIZATION;
+  int field_ionization_flag;
   int    particle_interval;
   int    load_particles;         // Flag to turn off particle load for testing
                                  //wave launch. 
@@ -264,8 +263,8 @@ begin_initialization {
   int launch_wave  = 1; // whether or not to launch wave from y-z plane
   int load_particles = 1;         // Flag to turn off particle load for testing
                                   // wave launch. William Daughton.
-  int mobile_ions         = 1;           // whether or not to push ions
-  int FIELD_IONIZATION    = 1;
+  int mobile_ions           = 1;           // whether or not to push ions
+  int field_ionization_flag = 1;
   // For the first run particle_tracing=1, and particle_tracing=2 for the
   // second run
 
@@ -526,7 +525,7 @@ begin_initialization {
   global->quota_check_interval = quota_check_interval;
   global->emax                     = emax; 
   global->omega_0                  = omega_0;
-  global->FIELD_IONIZATION         = FIELD_IONIZATION;
+  global->field_ionization_flag         = field_ionization_flag;
   global->mobile_ions              = mobile_ions; 
   global->I1_present                = I1_present;
   global->I2_present               = I2_present;
@@ -595,9 +594,9 @@ begin_initialization {
   species_t *ion_I1, *ion_I2;
   if ( mobile_ions ) {
   sim_log("Setting up ions. ");
-    if ( I1_present && FIELD_IONIZATION==0 ) {ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);}
-    else if(I1_present && FIELD_IONIZATION) {ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);}
-    if ( I2_present && FIELD_IONIZATION==0 ) {
+    if ( I1_present && field_ionization_flag==0 ) {ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);}
+    else if(I1_present && field_ionization_flag) {ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);}
+    if ( I2_present && field_ionization_flag==0 ) {
         ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
         ion_I2->pb_diag->write_ux = 1;
         ion_I2->pb_diag->write_uy = 1;
@@ -608,7 +607,7 @@ begin_initialization {
         ion_I2->pb_diag->write_posz = 1;
         finalize_pb_diagnostic(ion_I2);
     }
-    else if ( I2_present && FIELD_IONIZATION ) {
+    else if ( I2_present && field_ionization_flag ) {
         ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
         ion_I2->pb_diag->write_ux = 1;
         ion_I2->pb_diag->write_uy = 1;
@@ -621,8 +620,8 @@ begin_initialization {
     }
   }
 
-  if (FIELD_IONIZATION) {cout << "FIELD_IONIZATION is ON" << FIELD_IONIZATION << endl;}
-  else { cout << "FIELD_IONIZATION is OFF" << endl; }
+  if (field_ionization_flag) {cout << "field_ionization_flag is ON: " << field_ionization_flag << endl;}
+  else { cout << "field_ionization_flag is OFF" << endl; }
 
 
   // Electrons need to be defined last in input deck when field ionization is enabled
@@ -711,17 +710,19 @@ begin_initialization {
 	
 	
         if ( mobile_ions ) {
-	  inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);
-	  inject_particle( ion_I1, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);
-	  
-
-        }
+	  if (field_ionization_flag==1){inject_particle_TEMP( ion_I2, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);}
+	  else { inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2,0,0);}
+        } // if mobile ions
 	
- 
+      } // if uniform < slab
+    } // repeat
 
-      }
-    }
- 
+#if defined(FIELD_IONIZATION)
+    cout << "FIELD_IONIZATION defined in deck" << endl;
+#else 
+    cout << "FIELD_IONIZATION not defined in deck" << endl;
+#endif
+      
     
  } // if load_particles
 
