@@ -388,6 +388,10 @@ configure_file(
     ${CMAKE_BINARY_DIR}/bin/Makefile.run
 )
 
+#The compile definitions are associated with a directory, and won't automatically be available for the deck compile scripts.
+get_directory_property( DirDefs COMPILE_DEFINITIONS )
+string(REPLACE ";" " -D" DirDefs "-D${DirDefs}")
+
 # install script
 configure_file(
     ${CMAKE_SOURCE_DIR}/bin/vpic.in
