@@ -554,7 +554,7 @@ public:
   std::ostream& foo = std::cout << "FIELD_IONIZATION: undefined in vpic.h" << std::endl;
 #endif
     
-  //#if defined(FIELD_IONIZATION)
+ #if defined(FIELD_IONIZATION)
   void
   inject_particle_TEMP( species_t * sp,
                    double x,  double y,  double z,
@@ -563,7 +563,7 @@ public:
 		   double charge,
       	           double age = 0, int update_rhob = 1 );
 
-  //#else
+ #endif //#else
   void
   inject_particle( species_t * sp,
                    double x,  double y,  double z,

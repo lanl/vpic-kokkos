@@ -723,7 +723,9 @@ advance_p_kokkos_unified(
       float cby[num_lanes];
       float cbz[num_lanes];
       float q[num_lanes];
+   #ifdef FIELD_IONIZATION
       float charge[num_lanes];
+   #endif
       int   ii[num_lanes];
       int   inbnds[num_lanes];
 
@@ -1235,7 +1237,7 @@ advance_p_kokkos_gpu(
         const int max_nm,
         const int nx,
         const int ny,
-#ifndef	FIELD_IONIZATION	
+#ifdef	FIELD_IONIZATION	
         const int nz,
 	species_t * RESTRICT sp,
 	species_t * sp_e)

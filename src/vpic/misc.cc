@@ -11,7 +11,7 @@
 #include "vpic.h"
 
 // FIXME: MOVE THIS INTO VPIC.HXX TO BE TRULY INLINE
-//#ifdef FIELD_IONIZATION 
+#ifdef FIELD_IONIZATION 
 void
 vpic_simulation::inject_particle_TEMP( species_t * sp,
                                   double x,  double y,  double z,
@@ -85,7 +85,7 @@ vpic_simulation::inject_particle_TEMP( species_t * sp,
   p->w  = w;  
   p->charge = charge;  
 
-  std::cout << "charge (misc.cc FI on) = " << charge << std::endl;
+  //std::cout << "charge (misc.cc FI on) = " << charge << std::endl;
   
   if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -p->charge );
   
@@ -103,7 +103,7 @@ vpic_simulation::inject_particle_TEMP( species_t * sp,
 
 } //inject_particle
 
-//#else //if field_ionization not enabled
+#endif//#else //if field_ionization not enabled
 void
 vpic_simulation::inject_particle( species_t * sp,
                                   double x,  double y,  double z,
@@ -174,7 +174,7 @@ vpic_simulation::inject_particle( species_t * sp,
   p->uz = (float)uz;
   p->w  = w;
 
-  std::cout << "sp->q (misc.cc FI off) = " << sp->q << std::endl;
+  //std::cout << "sp->q (misc.cc FI off) = " << sp->q << std::endl;
   
   if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
 
