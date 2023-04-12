@@ -408,7 +408,7 @@ hyb_advance_b( field_array_t * RESTRICT fa,
   //Copy for smoothing
   for( z=0; z<=nz+1; z++ ) {
     for( y=0; y<=ny+1; y++ ) {
-      f0   = &f(1,y,z);     
+      f0   = &f(0,y,z);
       for( x=0; x<=nx+1; x++ ) {
 	COPYSMOOTH();
 	f0++;
