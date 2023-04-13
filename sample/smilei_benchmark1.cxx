@@ -79,8 +79,6 @@ begin_globals {
   int    I2_present;             // flag nonzero when He ions are present.  
   int    launch_wave;            // whether or not to propagate a laser from
                                  // y-z boundary
-
-  int field_ionization_flag;
   int    particle_interval;
   int    load_particles;         // Flag to turn off particle load for testing
                                  //wave launch. 
@@ -264,7 +262,6 @@ begin_initialization {
   int load_particles = 1;         // Flag to turn off particle load for testing
                                   // wave launch. William Daughton.
   int mobile_ions           = 1;           // whether or not to push ions
-  int field_ionization_flag = 1;
   // For the first run particle_tracing=1, and particle_tracing=2 for the
   // second run
 
@@ -525,7 +522,6 @@ begin_initialization {
   global->quota_check_interval = quota_check_interval;
   global->emax                     = emax; 
   global->omega_0                  = omega_0;
-  global->field_ionization_flag         = field_ionization_flag;
   global->mobile_ions              = mobile_ions; 
   global->I1_present                = I1_present;
   global->I2_present               = I2_present;
@@ -594,11 +590,20 @@ begin_initialization {
   species_t *ion_I1, *ion_I2;
   if ( mobile_ions ) {
   sim_log("Setting up ions. ");
-    if ( I1_present && field_ionization_flag==0 ) {ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);}
-    else if(I1_present && field_ionization_flag) {ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);}
-    if ( I2_present && field_ionization_flag==0 ) {
+    if ( I1_present ) {
+      #if defined(FIELD_IONIZATION)
+        ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
+      #else
+        ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
+      #endif
+    }
+    if ( I2_present ) {
+      #if defined(FIELD_IONIZATION)
         ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
-        ion_I2->pb_diag->write_ux = 1;
+      #else
+        ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
+      #endif
+	ion_I2->pb_diag->write_ux = 1;
         ion_I2->pb_diag->write_uy = 1;
         ion_I2->pb_diag->write_uz = 1;
         ion_I2->pb_diag->write_weight = 1;
@@ -607,22 +612,7 @@ begin_initialization {
         ion_I2->pb_diag->write_posz = 1;
         finalize_pb_diagnostic(ion_I2);
     }
-    else if ( I2_present && field_ionization_flag ) {
-        ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
-        ion_I2->pb_diag->write_ux = 1;
-        ion_I2->pb_diag->write_uy = 1;
-        ion_I2->pb_diag->write_uz = 1;
-        ion_I2->pb_diag->write_weight = 1;
-        ion_I2->pb_diag->write_posx = 1;
-        ion_I2->pb_diag->write_posy = 1;
-        ion_I2->pb_diag->write_posz = 1;
-        finalize_pb_diagnostic(ion_I2);
-    }
-  }
-
-  if (field_ionization_flag) {cout << "field_ionization_flag is ON: " << field_ionization_flag << endl;}
-  else { cout << "field_ionization_flag is OFF" << endl; }
-
+  } // if mobile_ions
 
   // Electrons need to be defined last in input deck when field ionization is enabled
   species_t * electron = define_species("electron", -1.*e_c, m_e_c,
@@ -677,17 +667,6 @@ begin_initialization {
     double zmin = grid->z0;
     double zmax = (grid->z0+grid->nz*grid->dz);
 
-    /*
-    cout << "xmin = " << xmin << endl;
-    cout << "xmax = " << xmax << endl;
-    cout << "ymin = " << ymin << endl;
-    cout << "ymax = " << ymax << endl;
-    cout << "zmin = " << zmin << endl;
-    cout << "zmax = " << zmax << endl;
-    */
-
-    //cout << "(N_I2)/(topology_x*topology_y*topology_z) = " << (N_I2)/(topology_x*topology_y*topology_z) << endl;
-    
     repeat( (N_I2)/(topology_x*topology_y*topology_z) ) {
       double x = uniform( rng(0), xmin, xmax );
       double y = uniform( rng(0), ymin, ymax );   
@@ -710,20 +689,15 @@ begin_initialization {
 	
 	
         if ( mobile_ions ) {
-	  if (field_ionization_flag==1){inject_particle_TEMP( ion_I2, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);}
-	  else { inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2,0,0);}
+	  #if defined(FIELD_IONIZATION)
+	      inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);
+	  #else
+	      inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2,0,0);
+	  #endif   
         } // if mobile ions
 	
       } // if uniform < slab
-    } // repeat
-
-#if defined(FIELD_IONIZATION)
-    cout << "FIELD_IONIZATION defined in deck" << endl;
-#else 
-    cout << "FIELD_IONIZATION not defined in deck" << endl;
-#endif
-      
-    
+    } // repeat    
  } // if load_particles
 
  /*--------------------------------------------------------------------------
@@ -1287,8 +1261,6 @@ begin_field_injection {
         auto MASK =( R2<=pow(mask*width,2) ? 1 : 0 );
         //kfield(1+sy*iy+sz*iz, field_var::ey) += (prefactor * cos(PHASE) * exp(-R2/(width*width)) * MASK * pulse_shape_factor);
 	kfield(1+sy*iy+sz*iz, field_var::ey) = (prefactor * sin(PHASE));
-
-	//	std::cout << "square_wave_factor = " << square_wave_factor << std::endl;
     });
 
   }
