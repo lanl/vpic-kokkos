@@ -48,6 +48,12 @@ using k_jf_accum_t = Kokkos::View<float *[NUM_J_DIMS]>;
 using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft>;
 using k_particles_i_t = Kokkos::View<int*>;
 
+// Optional additional particle variables
+using int_annotations_t = Kokkos::View<int**>;
+using int64_annotations_t = Kokkos::View<int64_t**>;
+using float_annotations_t = Kokkos::View<float**>;
+using double_annotations_t = Kokkos::View<double**>;
+
 // TODO: think about the layout here
 using k_particle_copy_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutRight>;
 using k_particle_i_copy_t = Kokkos::View<int*>;

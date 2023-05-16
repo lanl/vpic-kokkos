@@ -70,6 +70,10 @@ option(VPIC_ENABLE_VECTORIZATION "Enable improved vectorization for CPUs" OFF)
 
 option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performnace on CPUs" OFF)
 
+option(VPIC_ENABLE_PARTICLE_ANNOTATIONS "Enable particle annotations for additional per particle values" OFF)
+
+option(VPIC_ENABLE_TRACER_PARTICLES "Enable tracer particles" OFF)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -314,6 +318,14 @@ if (VPIC_ENABLE_ACCUMULATORS)
   add_definitions(-DVPIC_DISABLE_AUTOSETTINGS -DVPIC_ENABLE_ACCUMULATORS)
   message("--     VPIC: Enabled accumulators")
 endif(VPIC_ENABLE_ACCUMULATORS)
+
+if (VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+  add_definitions(-DVPIC_ENABLE_PARTICLE_ANNOTATIONS)
+endif(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+
+if (VPIC_ENABLE_TRACER_PARTICLES)
+  add_definitions(-DVPIC_ENABLE_TRACER_PARTICLES -DVPIC_ENABLE_PARTICLE_ANNOTATIONS)
+endif(VPIC_ENABLE_TRACER_PARTICLES)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)

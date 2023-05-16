@@ -35,9 +35,9 @@ int vpic_simulation::dump_cwd(char * dname, size_t size) {
 /*****************************************************************************
  * ASCII dump IO
  *****************************************************************************/
-
 void
 vpic_simulation::dump_energies( const char *fname,
+                                bool tracers,
                                 int append ) {
   double en_f[6], en_p;
   species_t *sp;
@@ -79,6 +79,12 @@ vpic_simulation::dump_energies( const char *fname,
   }
 }
 
+void
+vpic_simulation::dump_energies( const char *fname,
+                                int append ) {
+  dump_energies(fname, false, append);
+}
+
 // Note: dump_species/materials assume that names do not contain any \n!
 
 void
@@ -94,6 +100,11 @@ vpic_simulation::dump_species( const char *fname ) {
   LIST_FOR_EACH( sp, species_list )
     fileIO.print( "%s %i %e %e", sp->name, sp->id, sp->q, sp->m );
   if( fileIO.close() ) ERROR(( "File close failed on dump species!!!" ));
+}
+
+void
+vpic_simulation::dump_species( const char *fname, bool tracers ) {
+  dump_species(fname, false);
 }
 
 void
@@ -114,6 +125,81 @@ vpic_simulation::dump_materials( const char *fname ) {
   if( fileIO.close() ) ERROR(( "File close failed on dump materials!!!" ));
 }
 
+void
+vpic_simulation::dump_tracer_particles_csv( const char *sp_name,
+                                        const char *fbase,
+                                        const int append,
+                                        int ftag )
+{
+
+    species_t *sp;
+    char fname[max_filename_bytes];
+    FileIO fileIO;
+    int dim[1], buf_start;
+    static particle_t * ALIGNED(128) p_buf = NULL;
+
+    sp = find_species_name( sp_name, tracers_list );
+    if( !sp ) ERROR(( "Invalid tracer species name \"%s\".", sp_name ));
+
+    if( !fbase ) ERROR(( "Invalid filename" ));
+
+    // Update the particles on the host only if they haven't been recently
+    if (step() > sp->last_copied)
+      sp->copy_to_host();
+
+    if( rank()==0 )
+        MESSAGE(("Dumping \"%s\" particles to \"%s\"",sp->name,fbase));
+
+    if( ftag ) {
+        snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
+    }
+    else {
+        snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
+    }
+
+    FileIOStatus status = fileIO.open(fname, append ? io_append : io_write);
+    if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
+
+    if( rank() == 0 && append==0 ) {
+      fileIO.print( "step,tracer_id,particle_id,dx,dy,dz,ux,uy,uz,w,posx,posy,posz" );
+    }
+
+    if( rank() == 0 ) {
+#define _nxg (grid->nx + 2)
+#define _nyg (grid->ny + 2)
+#define _nzg (grid->nz + 2)
+#define i0 (ii%_nxg)
+#define j0 ((ii/_nxg)%_nyg)
+#define k0 (ii/(_nxg*_nyg))
+#define tracer_x ((i0 + (dx0-1)*0.5) * grid->dx + grid->x0)
+#define tracer_y ((j0 + (dy0-1)*0.5) * grid->dy + grid->y0)
+#define tracer_z ((k0 + (dz0-1)*0.5) * grid->dz + grid->z0)
+      for(uint32_t i=0; i<sp->np; i++) {
+        float dx0 = sp->k_p_h(i, particle_var::dx);
+        float dy0 = sp->k_p_h(i, particle_var::dy);
+        float dz0 = sp->k_p_h(i, particle_var::dz);
+        float ux0 = sp->k_p_h(i, particle_var::ux);
+        float uy0 = sp->k_p_h(i, particle_var::uy);
+        float uz0 = sp->k_p_h(i, particle_var::uz);
+        float w0  = sp->k_p_h(i, particle_var::w);
+        int ii = sp->k_p_i_h(i);
+        fileIO.print( "%ld,%ld,%d,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e\n", 
+          step(), sp->annotations_h.get<int64_t>(i,0), ii,
+          dx0, dy0, dz0, ux0, uy0, uz0, w0, tracer_x, tracer_y, tracer_z);
+      }
+#undef nxg 
+#undef nyg 
+#undef nzg 
+#undef i0 
+#undef j0 
+#undef k0 
+#undef tracer_x 
+#undef tracer_y 
+#undef tracer_z 
+    }
+
+    if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
+}
 
 /*****************************************************************************
  * Binary dump IO
@@ -222,6 +308,7 @@ vpic_simulation::dump_fields( const char *fbase, int ftag ) {
 void
 vpic_simulation::dump_hydro( const char *sp_name,
                              const char *fbase,
+                             bool tracers,
                              int ftag ) {
 
 
@@ -284,6 +371,13 @@ vpic_simulation::dump_hydro( const char *sp_name,
   WRITE_ARRAY_HEADER( hydro_array->h, 3, dim, fileIO );
   fileIO.write( hydro_array->h, dim[0]*dim[1]*dim[2] );
   if( fileIO.close() ) ERROR(( "File close failed on dump hydro!!!" ));
+}
+
+void
+vpic_simulation::dump_hydro( const char *sp_name,
+                             const char *fbase,
+                             int ftag ) {
+  dump_hydro(sp_name, fbase, false, ftag);
 }
 
 void

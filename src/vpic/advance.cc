@@ -32,6 +32,16 @@ int vpic_simulation::advance(void)
           sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, grid->nv);
       }
   }
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  LIST_FOR_EACH( sp, tracers_list )
+  {
+      if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
+      {
+          if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
+          sorter.sort( sp, grid->nv);
+      }
+  }
+#endif
 
   KOKKOS_TOC( sort_particles, 1);
 
@@ -71,6 +81,13 @@ int vpic_simulation::advance(void)
       // Now Times internally
       advance_p( sp, interpolator_array, field_array );
   }
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  LIST_FOR_EACH( sp, tracers_list )
+  {
+      // Now Times internally
+      advance_p( sp, interpolator_array, field_array );
+  }
+#endif
   //printf("Pushed\n");
 
   // Reduce accumulator contributions into the device array
@@ -89,6 +106,11 @@ int vpic_simulation::advance(void)
   LIST_FOR_EACH( sp, species_list ) {
     sp->copy_outbound_to_host();
   }
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  LIST_FOR_EACH( sp, tracers_list ) {
+    sp->copy_outbound_to_host();
+  }
+#endif
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   // Because the partial position push when injecting aged particles might
@@ -110,6 +132,11 @@ int vpic_simulation::advance(void)
           LIST_FOR_EACH( sp, species_list ) {
             sp->copy_to_host();
           }
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+          LIST_FOR_EACH( sp, tracers_list ) {
+            sp->copy_to_host();
+          }
+#endif
           KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
       }
       TIC user_particle_injection(); TOC( user_particle_injection, 1 );
@@ -118,6 +145,11 @@ int vpic_simulation::advance(void)
           LIST_FOR_EACH( sp, species_list ) {
             sp->copy_to_device();
           }
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+          LIST_FOR_EACH( sp, tracers_list ) {
+            sp->copy_to_device();
+          }
+#endif
           KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
       }
   }
@@ -158,6 +190,7 @@ int vpic_simulation::advance(void)
     {
       //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
       boundary_p_kokkos( particle_bc_list, species_list, field_array );
+      boundary_p_kokkos( particle_bc_list, tracers_list, field_array );
     }
   TOC( boundary_p, num_comm_round );
 
@@ -190,11 +223,43 @@ int vpic_simulation::advance(void)
       KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   }
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  LIST_FOR_EACH( sp, tracers_list )
+  {
+      KOKKOS_TIC(); // Time this data movement
+      const int nm = sp->k_nm_h(0);
+
+      // TODO: this can be hoisted to the end of advance_p if desired
+      compressor.compress(
+              sp->k_p_d,
+              sp->k_p_i_d,
+              sp->k_pm_i_d,
+              nm,
+              sp->np,
+              sp
+      );
+
+      // Update np now we removed them...
+      sp->np -= nm;
+      KOKKOS_TOC( BACKFILL, 1);
+
+      // Copy data for copies back to device
+      KOKKOS_TIC();
+        sp->copy_inbound_to_device();
+      KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+
+  }
+#endif
 
   // This copies over a val for nm, which is a lie
   LIST_FOR_EACH( sp, species_list ) {
       sp->nm = 0;
   }
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  LIST_FOR_EACH( sp, tracers_list ) {
+      sp->nm = 0;
+  }
+#endif
 
   // At this point, all particle positions are at r_1 and u_{1/2}, the
   // guard lists are empty and the accumulators on each processor are current.
@@ -297,6 +362,18 @@ int vpic_simulation::advance(void)
           }
           KOKKOS_TOC( accumulate_rho_p, species_list->id );
       }
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+      if( tracers_list )
+      {
+          KOKKOS_TIC();
+          LIST_FOR_EACH( sp, tracers_list )
+          {
+              //accumulate_rho_p( field_array, sp ); //TOC( accumulate_rho_p, tracers_list->id );
+              k_accumulate_rho_p( field_array, sp );
+          }
+          KOKKOS_TOC( accumulate_rho_p, tracers_list->id );
+      }
+#endif
 
       // TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
       TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );

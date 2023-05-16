@@ -85,6 +85,77 @@ typedef struct pb_diagnostic {
 
 } pb_diagnostic_t;
 
+typedef struct annotation_var_counts {
+  int nint_vars;
+  int nint64_vars;
+  int nfloat_vars;
+ 
+  annotation_var_counts() {
+    nint_vars = 0;
+    nint64_vars = 0;
+    nfloat_vars = 0;
+  }
+
+  annotation_var_counts(const annotation_var_counts& a) {
+    nint_vars = a.nint_vars;
+    nint64_vars = a.nint64_vars;
+    nfloat_vars = a.nfloat_vars;
+  }
+} annotation_var_counts_t;
+
+template<typename ExecSpace>
+class annotations_t {
+public:
+  using memory_space = typename ExecSpace::memory_space;
+  using array_layout = Kokkos::LayoutLeft;
+  Kokkos::View<int**, array_layout, memory_space> i32;
+  Kokkos::View<int64_t**, array_layout, memory_space> i64;
+  Kokkos::View<float**, array_layout, memory_space> f32;
+
+  annotations_t() {}
+
+  annotations_t(int np, annotation_var_counts_t sizes) {
+    i32 = Kokkos::View<int**, array_layout, memory_space>("Int annotations", np, sizes.nint_vars);
+    i64 = Kokkos::View<int64_t**, array_layout, memory_space>("Int64 annotations", np, sizes.nint64_vars);
+    f32 = Kokkos::View<float**, array_layout, memory_space>("Float annotations", np, sizes.nfloat_vars);
+  }
+
+  template<typename AnnotationType>
+  void set(const int particle_index, const int var, AnnotationType val) {
+    if constexpr(std::is_same<AnnotationType, int>::value) {
+      i32(particle_index, var) = val;
+    } else if (std::is_same<AnnotationType, int64_t>::value) {
+      i64(particle_index, var) = val;
+    } else if (std::is_same<AnnotationType, float>::value) {
+      f32(particle_index, var) = val;
+    }
+  }
+
+  template<typename AnnotationType>
+  AnnotationType get(const int particle_index, const int var) {
+    if constexpr(std::is_same<AnnotationType, int>::value) {
+      return i32(particle_index, var);
+    } else if (std::is_same<AnnotationType, int64_t>::value) {
+      return i64(particle_index, var);
+    } else if (std::is_same<AnnotationType, float>::value) {
+      return f32(particle_index, var);
+    }
+  }
+
+  template<typename AnnotationType>
+  AnnotationType access(const int particle_index, const int var) {
+    if constexpr(std::is_same<AnnotationType, int>::value) {
+      return i32(particle_index, var);
+    } else if (std::is_same<AnnotationType, int64_t>::value) {
+      return i64(particle_index, var);
+    } else if (std::is_same<AnnotationType, float>::value) {
+      return f32(particle_index, var);
+    }
+  }
+};
+
+enum class TracerType { Copy, Move };
+
 class species_t {
     public:
 
@@ -133,6 +204,9 @@ class species_t {
         // Particle boundary diagnostic.
         pb_diagnostic_t * pb_diag = NULL;
 
+        // Tracer type
+        TracerType tracer_type;
+
 
         //// END CHECKPOINTED DATA, START KOKKOS //////
 
@@ -162,6 +236,17 @@ class species_t {
         // TODO: what is an iterator here??
         k_counter_t k_nm_d;               // nm iterator
         k_counter_t::HostMirror k_nm_h;
+
+//#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+        bool using_annotations = false;
+        annotation_var_counts_t num_annotations;
+        annotations_t<Kokkos::DefaultExecutionSpace>     annotations_d;
+        annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_h;
+        annotations_t<Kokkos::DefaultExecutionSpace>     annotations_copy_d;
+        annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_copy_h;
+        annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_recv_h;
+//#endif
+
 
         // TODO: this should ultimatley be removeable.
         // This tracks the number of particles we need to move back to the device
@@ -194,10 +279,19 @@ class species_t {
            init_kokkos_particles(n_particles, n_pmovers);
         }
 
+//#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+//        species_t(int n_particles, int n_pmovers, annotation_var_counts_t n_annotations)
+//        {
+//           init_kokkos_particles(n_particles, n_pmovers);
+//           add_annotations(n_particles, n_pmovers, n_annotations);
+//        }
+//#endif
+
         void init_kokkos_particles()
         {
             init_kokkos_particles(max_np, max_nm);
         }
+
         void init_kokkos_particles(int n_particles, int n_pmovers)
         {
             k_p_d = k_particles_t("k_particles", n_particles);
@@ -249,6 +343,234 @@ class species_t {
          */
         void copy_inbound_to_device();
 
+//#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+        /**
+         * @brief Add additional per particle annotations. 
+         */
+        void init_annotations( int num_particles, int num_movers, annotation_var_counts_t& );
+
+        /**
+         * Create tracer particles from parent species using a predicate
+         *
+         * @param parent_species Species of particles to create tracers from
+         * @param tracer_type    Whether to Copy or Move particles to tracers
+         * @param filter         Generic function to decide whether particle is a tracer
+         */
+        void create_tracers_by_predicate( species_t* parent_species,
+                                          const TracerType tracer_type,
+                                          std::function <bool (particle_t)> filter, int rank ) {
+          // Make sure parent species particles are in Kokkos Views
+          auto& k_particle_h = parent_species->k_p_h;
+          auto& k_particle_i_h = parent_species->k_p_i_h;
+          auto& particles = parent_species->p;
+
+          Kokkos::parallel_for("copy particles to device",
+            host_execution_policy(0, parent_species->np) ,
+            KOKKOS_LAMBDA (int i) {
+
+              k_particle_h(i, particle_var::dx) = particles[i].dx;
+              k_particle_h(i, particle_var::dy) = particles[i].dy;
+              k_particle_h(i, particle_var::dz) = particles[i].dz;
+              k_particle_h(i, particle_var::ux) = particles[i].ux;
+              k_particle_h(i, particle_var::uy) = particles[i].uy;
+              k_particle_h(i, particle_var::uz) = particles[i].uz;
+              k_particle_h(i, particle_var::w)  = particles[i].w;
+              k_particle_i_h(i) = particles[i].i;
+
+            });
+          Kokkos::fence();
+
+          for(int i=0; i<parent_species->np; i++) {
+            if(filter(parent_species->p[i])) { // Check if particle passes filter
+              k_p_h(np, particle_var::dx) = parent_species->k_p_h(i, particle_var::dx); // Copy particle to tracer
+              k_p_h(np, particle_var::dy) = parent_species->k_p_h(i, particle_var::dy); 
+              k_p_h(np, particle_var::dz) = parent_species->k_p_h(i, particle_var::dz); 
+              k_p_h(np, particle_var::ux) = parent_species->k_p_h(i, particle_var::ux); 
+              k_p_h(np, particle_var::uy) = parent_species->k_p_h(i, particle_var::uy); 
+              k_p_h(np, particle_var::uz) = parent_species->k_p_h(i, particle_var::uz); 
+              k_p_h(np, particle_var::w)  = parent_species->k_p_h(i, particle_var::w); 
+              k_p_i_h(np) = parent_species->k_p_i_h(i); 
+              p[np] = parent_species->p[i]; // Copy legacy particle FIXME Should be unnecessary
+
+              // Create unique tracer id (32-bit rank concatenated with particle index)
+//              annotations_h.access<int64_t>(np, 0) = ((int64_t)(rank) << 32) | (int64_t)(np); 
+              annotations_h.set<int64_t>(np, 0, ((int64_t)(rank) << 32) | (int64_t)(np)); 
+              //TODO Copy rest of annotations
+              if(tracer_type == TracerType::Copy) {
+                k_p_h(np, particle_var::w) = 0.0f; // Set tracer weight to 0 so the particle is non interactive
+              } else if(tracer_type == TracerType::Move) {
+                // Move last particle over to fill in gap
+                parent_species->k_p_h(i, particle_var::dx) = parent_species->k_p_h(parent_species->np-1, particle_var::dx); 
+                parent_species->k_p_h(i, particle_var::dy) = parent_species->k_p_h(parent_species->np-1, particle_var::dy); 
+                parent_species->k_p_h(i, particle_var::dz) = parent_species->k_p_h(parent_species->np-1, particle_var::dz); 
+                parent_species->k_p_h(i, particle_var::ux) = parent_species->k_p_h(parent_species->np-1, particle_var::ux); 
+                parent_species->k_p_h(i, particle_var::uy) = parent_species->k_p_h(parent_species->np-1, particle_var::uy); 
+                parent_species->k_p_h(i, particle_var::uz) = parent_species->k_p_h(parent_species->np-1, particle_var::uz); 
+                parent_species->k_p_h(i, particle_var::w)  = parent_species->k_p_h(parent_species->np-1, particle_var::w); 
+                parent_species->k_p_i_h(i) = parent_species->k_p_i_h(parent_species->np - 1); 
+                parent_species->p[i] = parent_species->p[parent_species->np-1]; // FIXME remove legacy particles
+                parent_species->np -= 1; // Decrease number of particles in parent species
+                i -= 1;
+              } else {
+                ERROR(( "Invalid TracerType: %d", tracer_type ));
+              } 
+              np++; // Increase number of tracers
+            }
+          }
+        }
+
+        /**
+         * Create tracer particles from parent species. Select a percentage of particles.
+         *
+         * @param parent_species Species of particles to create tracers from
+         * @param tracer_type    Whether to Copy or Move particles to tracers
+         * @param percentage     Percentage of particles to make tracers
+         */
+        void create_tracers_by_percentage( species_t* parent_species,
+                                          const TracerType tracer_type,
+                                          float percentage, int rank) {
+          if( (percentage < 0) || (percentage > 100) ) {
+            ERROR(( "Tracer percentage (%f) is not in [0,100]", percentage ));
+            return;
+          }
+
+          // Make sure parent species particles are in Kokkos Views
+          auto& k_particle_h = parent_species->k_p_h;
+          auto& k_particle_i_h = parent_species->k_p_i_h;
+          auto& particles = parent_species->p;
+
+          Kokkos::parallel_for("copy particles to device",
+            host_execution_policy(0, parent_species->np) ,
+            KOKKOS_LAMBDA (int i) {
+
+              k_particle_h(i, particle_var::dx) = particles[i].dx;
+              k_particle_h(i, particle_var::dy) = particles[i].dy;
+              k_particle_h(i, particle_var::dz) = particles[i].dz;
+              k_particle_h(i, particle_var::ux) = particles[i].ux;
+              k_particle_h(i, particle_var::uy) = particles[i].uy;
+              k_particle_h(i, particle_var::uz) = particles[i].uz;
+              k_particle_h(i, particle_var::w)  = particles[i].w;
+              k_particle_i_h(i) = particles[i].i;
+
+            });
+          Kokkos::fence();
+
+          int skip = static_cast<int>(100.0 / percentage);
+          np = 0;
+          int counter = 0;
+          for(int i=0; i<parent_species->np; i++) {
+            if(counter % skip == 0) { // Check if particle passes filter
+              k_p_h(np, particle_var::dx) = parent_species->k_p_h(i, particle_var::dx); // Copy particle to tracer
+              k_p_h(np, particle_var::dy) = parent_species->k_p_h(i, particle_var::dy); 
+              k_p_h(np, particle_var::dz) = parent_species->k_p_h(i, particle_var::dz); 
+              k_p_h(np, particle_var::ux) = parent_species->k_p_h(i, particle_var::ux); 
+              k_p_h(np, particle_var::uy) = parent_species->k_p_h(i, particle_var::uy); 
+              k_p_h(np, particle_var::uz) = parent_species->k_p_h(i, particle_var::uz); 
+              k_p_h(np, particle_var::w)  = parent_species->k_p_h(i, particle_var::w); 
+              k_p_i_h(np) = parent_species->k_p_i_h(i); 
+              p[np] = parent_species->p[i]; // Copy legacy particle FIXME Should be unnecessary
+              // Create unique tracer id (32-bit rank concatenated with particle index)
+//              annotations_h.access<int64_t>(np, 0) = ((int64_t)(rank) << 32) | (int64_t)(np); 
+              annotations_h.set<int64_t>(np, 0, ((int64_t)(rank) << 32) | (int64_t)(np)); 
+              //TODO Copy rest of annotations
+              if(tracer_type == TracerType::Copy) {
+                k_p_h(np, particle_var::w) = 0.0f; // Set tracer weight to 0 so the particle is non interactive
+              } else if(tracer_type == TracerType::Move) {
+                // Move last particle over to fill in gap
+                parent_species->k_p_h(i, particle_var::dx) = parent_species->k_p_h(parent_species->np-1, particle_var::dx); 
+                parent_species->k_p_h(i, particle_var::dy) = parent_species->k_p_h(parent_species->np-1, particle_var::dy); 
+                parent_species->k_p_h(i, particle_var::dz) = parent_species->k_p_h(parent_species->np-1, particle_var::dz); 
+                parent_species->k_p_h(i, particle_var::ux) = parent_species->k_p_h(parent_species->np-1, particle_var::ux); 
+                parent_species->k_p_h(i, particle_var::uy) = parent_species->k_p_h(parent_species->np-1, particle_var::uy); 
+                parent_species->k_p_h(i, particle_var::uz) = parent_species->k_p_h(parent_species->np-1, particle_var::uz); 
+                parent_species->k_p_h(i, particle_var::w)  = parent_species->k_p_h(parent_species->np-1, particle_var::w); 
+                parent_species->k_p_i_h(i) = parent_species->k_p_i_h(parent_species->np - 1); 
+                parent_species->p[i] = parent_species->p[parent_species->np-1]; // FIXME remove legacy particles
+                parent_species->np -= 1; // Decrease number of particles in parent species
+                i -= 1;
+              } else {
+                ERROR(( "Invalid TracerType: %d", tracer_type ));
+              } 
+              np++; // Increase number of tracers
+            }
+            counter+=1;
+          }
+          printf("Tracer has %d particles\n", np);
+        }
+
+        /**
+         * Create tracer particles from parent species. Select every Nth particle
+         *
+         * @param parent_species Species of particles to create tracers from
+         * @param tracer_type    Whether to Copy or Move particles to tracers
+         * @param skip           Amount of particles to skip between selections
+         */
+        void create_tracers_by_nth( species_t* parent_species,
+                                    const TracerType tracer_type,
+                                    float skip, int rank) {
+
+          // Make sure parent species particles are in Kokkos Views
+          auto& k_particle_h = parent_species->k_p_h;
+          auto& k_particle_i_h = parent_species->k_p_i_h;
+          auto& particles = parent_species->p;
+
+          Kokkos::parallel_for("copy particles to device",
+            host_execution_policy(0, parent_species->np) ,
+            KOKKOS_LAMBDA (int i) {
+
+              k_particle_h(i, particle_var::dx) = particles[i].dx;
+              k_particle_h(i, particle_var::dy) = particles[i].dy;
+              k_particle_h(i, particle_var::dz) = particles[i].dz;
+              k_particle_h(i, particle_var::ux) = particles[i].ux;
+              k_particle_h(i, particle_var::uy) = particles[i].uy;
+              k_particle_h(i, particle_var::uz) = particles[i].uz;
+              k_particle_h(i, particle_var::w)  = particles[i].w;
+              k_particle_i_h(i) = particles[i].i;
+
+            });
+          Kokkos::fence();
+
+          int step = 0;
+          for(int i=parent_species->np-1; i>=0; i--) {
+            if(parent_species->np-i >= (step+1) * skip) { // Check if particle passes filter
+              k_p_h(np, particle_var::dx) = parent_species->k_p_h(i, particle_var::dx); // Copy particle to tracer
+              k_p_h(np, particle_var::dy) = parent_species->k_p_h(i, particle_var::dy); 
+              k_p_h(np, particle_var::dz) = parent_species->k_p_h(i, particle_var::dz); 
+              k_p_h(np, particle_var::ux) = parent_species->k_p_h(i, particle_var::ux); 
+              k_p_h(np, particle_var::uy) = parent_species->k_p_h(i, particle_var::uy); 
+              k_p_h(np, particle_var::uz) = parent_species->k_p_h(i, particle_var::uz); 
+              k_p_h(np, particle_var::w)  = parent_species->k_p_h(i, particle_var::w); 
+              k_p_i_h(np) = parent_species->k_p_i_h(i); 
+              p[np] = parent_species->p[i]; // Copy legacy particle FIXME Should be unnecessary
+              // Create unique tracer id (32-bit rank concatenated with particle index)
+//              annotations_h.access<int64_t>(np, 0) = ((int64_t)(rank) << 32) | (int64_t)(np); 
+              annotations_h.set<int64_t>(np, 0, ((int64_t)(rank) << 32) | (int64_t)(np)); 
+              //TODO Copy rest of annotations
+              if(tracer_type == TracerType::Copy) {
+                k_p_h(np, particle_var::w) = 0.0f; // Set tracer weight to 0 so the particle is non interactive
+p[np].w = 0.0f;
+              } else if(tracer_type == TracerType::Move) {
+                // Move last particle over to fill in gap
+                parent_species->k_p_h(i, particle_var::dx) = parent_species->k_p_h(parent_species->np-1, particle_var::dx); 
+                parent_species->k_p_h(i, particle_var::dy) = parent_species->k_p_h(parent_species->np-1, particle_var::dy); 
+                parent_species->k_p_h(i, particle_var::dz) = parent_species->k_p_h(parent_species->np-1, particle_var::dz); 
+                parent_species->k_p_h(i, particle_var::ux) = parent_species->k_p_h(parent_species->np-1, particle_var::ux); 
+                parent_species->k_p_h(i, particle_var::uy) = parent_species->k_p_h(parent_species->np-1, particle_var::uy); 
+                parent_species->k_p_h(i, particle_var::uz) = parent_species->k_p_h(parent_species->np-1, particle_var::uz); 
+                parent_species->k_p_h(i, particle_var::w)  = parent_species->k_p_h(parent_species->np-1, particle_var::w); 
+                parent_species->k_p_i_h(i) = parent_species->k_p_i_h(parent_species->np - 1); 
+                parent_species->p[i] = parent_species->p[parent_species->np-1]; // FIXME remove legacy particles
+                parent_species->np -= 1; // Decrease number of particles in parent species
+                i -= 1;
+              } else {
+                ERROR(( "Invalid TracerType: %d", tracer_type ));
+              } 
+              np++; // Increase number of tracers
+              step++;
+            }
+          }
+        }
+//#endif
 };
 
 // In species_advance.c

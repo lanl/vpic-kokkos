@@ -59,16 +59,70 @@ struct DefaultSort {
         bin_sort.create_permute_vector();
         // Sort particle data. 
         // If using LayoutLeft we can save memory by sorting each particle variable separately.
-	if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
-		for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
-			auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
-			bin_sort.sort(sub_view);
-		}
-	} else {
-          bin_sort.sort(particles);
-	}
+        if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+        	for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
+        		auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+        		bin_sort.sort(sub_view);
+        	}
+        } else {
+                bin_sort.sort(particles);
+        }
         // Sort particle indices
         bin_sort.sort(particles_i);
+    }
+
+    static void species_sort(
+            species_t* sp,
+            const int32_t num_bins
+    )
+    {
+        k_particles_t& particles = sp->k_p_d;
+        k_particles_i_t& particles_i = sp->k_p_i_d;
+        int np = sp->np;
+
+        // Try grab the index's for a permute key
+        //int pi = particle_var::pi; // FIXME: can you really not pass an enum in??
+        //auto keys = Kokkos::subview(particles, Kokkos::ALL, pi);
+        auto keys = particles_i;
+
+        // TODO: we can tighten the bounds on this to avoid ghosts
+
+        // Create comparator
+        using key_type = decltype(keys);
+        //using Comparator = Casted_BinOp1D<key_type>;
+        using Comparator = Kokkos::BinOp1D<key_type>;
+        Comparator comp(num_bins, 0, num_bins);
+
+        // Sort and make permutation View
+        int sort_within_bins = 0;
+        Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, np, comp, sort_within_bins );
+        bin_sort.create_permute_vector();
+        // Sort particle data. 
+        // If using LayoutLeft we can save memory by sorting each particle variable separately.
+        if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+        	for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
+        		auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+        		bin_sort.sort(sub_view);
+        	}
+        } else {
+                bin_sort.sort(particles);
+        }
+        // Sort particle indices
+        bin_sort.sort(particles_i);
+
+        // Sort annotations
+        for(int i=0; i<sp->num_annotations.nint_vars; i++) {
+          auto sub_view = Kokkos::subview(sp->annotations_d.i32, Kokkos::ALL, i);
+          bin_sort.sort(sub_view);
+        }
+        for(int i=0; i<sp->num_annotations.nint64_vars; i++) {
+          auto sub_view = Kokkos::subview(sp->annotations_d.i64, Kokkos::ALL, i);
+          bin_sort.sort(sub_view);
+        }
+        for(int i=0; i<sp->num_annotations.nfloat_vars; i++) {
+          auto sub_view = Kokkos::subview(sp->annotations_d.f32, Kokkos::ALL, i);
+          bin_sort.sort(sub_view);
+        }
     }
 
     static void strided_sort(
@@ -80,7 +134,7 @@ struct DefaultSort {
     {
         // Create permute view by taking index view and adding offsets such that we get
         // 1,2,3,1,2,3,1,2,3 instead of 1,1,1,2,2,2,3,3,3 
-	Kokkos::View<uint64_t*> keys("Temp keys", particles_i.extent(0));
+        Kokkos::View<uint64_t*> keys("Temp keys", particles_i.extent(0));
         Kokkos::MinMaxScalar<Kokkos::View<int*>::non_const_value_type> result;
         Kokkos::MinMax<Kokkos::View<int*>::non_const_value_type> reducer(result);
         // Find max and min particle index
@@ -113,14 +167,14 @@ struct DefaultSort {
 
         // Sort particle data. 
         // If using LayoutLeft we can save memory by sorting each particle variable separately.
-	if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
-		for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
-			auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
-			bin_sort.sort(sub_view);
-		}
-	} else {
-          bin_sort.sort(particles);
-	}
+        if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+        	for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
+        		auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+        		bin_sort.sort(sub_view);
+        	}
+        } else {
+                bin_sort.sort(particles);
+        }
         // Sort particle indices
         bin_sort.sort(particles_i);
     }
@@ -166,17 +220,17 @@ struct DefaultSort {
 
         // Sort particle data. 
         // If using LayoutLeft we can save memory by sorting each particle variable separately.
-		if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
-			for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
-				auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
-				bin_sort.sort(sub_view);
-			}
-		} else {
-          bin_sort.sort(particles);
-		}
-        // Sort particle indices
-        bin_sort.sort(particles_i);
-    }
+        if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+        	for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
+        		auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+        		bin_sort.sort(sub_view);
+        	}
+        } else {
+              bin_sort.sort(particles);
+        }
+            // Sort particle indices
+            bin_sort.sort(particles_i);
+        }
 
     static void tiled_strided_sort(
             k_particles_t particles,
@@ -234,14 +288,14 @@ struct DefaultSort {
 
         // Sort particle data. 
         // If using LayoutLeft we can save memory by sorting each particle variable separately.
-		if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
-			for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
-				auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
-				bin_sort.sort(sub_view);
-			}
-		} else {
-          bin_sort.sort(particles);
-		}
+        if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+        	for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
+        		auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+        		bin_sort.sort(sub_view);
+        	}
+        } else {
+              bin_sort.sort(particles);
+        }
         // Sort particle indices
         bin_sort.sort(particles_i);
     }
@@ -253,12 +307,18 @@ struct ParticleSorter : private Policy {
   using Policy::strided_sort;
   using Policy::tiled_sort;
   using Policy::tiled_strided_sort;
+  using Policy::species_sort;
+
   void sort(k_particles_t particles, k_particles_i_t particles_i, const int32_t np, const int num_bins) {
 #ifdef SORT_TILE_SIZE // strided_tiled_sort or tiled_strided_sort
     SORT(particles, particles_i, np, num_bins, SORT_TILE_SIZE);
 #else // standard_sort or strided_sort
     SORT(particles, particles_i, np, num_bins);
 #endif
+  }
+
+  void sort(species_t* species, const int num_bins) {
+    species_sort(species, num_bins);
   }
 };
 

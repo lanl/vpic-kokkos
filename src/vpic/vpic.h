@@ -196,6 +196,8 @@ public:
   hydro_array_t        * hydro_array;        // define_hydro_array
   species_t            * species_list;       // define_species /
                                              // species helpers
+  species_t            * tracers_list;       // define_tracers /
+                                             // species helpers
   particle_bc_t        * particle_bc_list;   // define_particle_bc /
                                              // boundary helpers
   emitter_t            * emitter_list;       // define_emitter /
@@ -234,12 +236,18 @@ public:
 
   // Text dumps
   void dump_energies( const char *fname, int append = 1 );
+  void dump_energies( const char *fname, bool tracers, int append = 1 );
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
+  void dump_species( const char *fname , bool tracers);
+  void dump_tracer_particles_csv( const char *sp_name, const char *fbase, int append = 1,
+                                  int fname_tag = 1 );
 
   // Binary dumps
   void dump_grid( const char *fbase );
   void dump_fields( const char *fbase, int fname_tag = 1 );
+  void dump_hydro( const char *sp_name, const char *fbase, bool tracers,
+                   int fname_tag = 1 );
   void dump_hydro( const char *sp_name, const char *fbase,
                    int fname_tag = 1 );
   void dump_particles( const char *sp_name, const char *fbase,
@@ -526,6 +534,147 @@ public:
                                     grid ), &species_list );
   }
 
+//#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+  inline species_t * 
+  define_tracer_species(const char* name,
+                        const species_t* original_species, 
+                        const int max_local_np,
+                        const int max_local_nm,
+                        annotation_var_counts_t annotations = annotation_var_counts_t()) {
+    // Create tracer species based on the original species
+    species_t* tracers = species( name, 
+                                  original_species->q, original_species->m, 
+                                  max_local_np, max_local_nm, 
+                                  original_species->sort_interval, original_species->sort_out_of_place, 
+                                  grid);
+
+    // Add annotations for globas tracer ID
+    annotations.nint64_vars += 1;
+    tracers->using_annotations = true;
+    tracers->num_annotations = annotations;
+    tracers->init_annotations(max_local_np, max_local_nm, annotations);
+
+    return append_species(tracers, &tracers_list); 
+  }
+
+  inline species_t * 
+  define_tracer_species_by_percentage(const char* name,
+                                      species_t* original_species, 
+                                      const TracerType tracer_type, 
+                                      const float percentage, 
+                                      const float over_alloc_factor = 1.0,
+                                      annotation_var_counts_t annotations = annotation_var_counts_t()) {
+    // Check if input percentage is valid
+    if((percentage <= 0.0) || (percentage >= 100.0))
+      ERROR(( "Percentage (%f) is not in [0,100]", percentage));
+
+    // Adjust amount of local particles/movers for tracers
+    int max_local_np = static_cast<int>(static_cast<float>(original_species->max_np) * over_alloc_factor * (percentage/100.0)) + 1;
+    int max_local_nm = static_cast<int>(static_cast<float>(original_species->max_nm) * over_alloc_factor * (percentage/100.0)) + 1;
+    
+    // Create tracer species based on the original species
+    species_t* tracers = species( name, 
+                                  original_species->q, original_species->m, 
+                                  max_local_np, max_local_nm, 
+                                  original_species->sort_interval, original_species->sort_out_of_place, 
+                                  grid);
+
+    // Add annotations for globas tracer ID
+    annotations.nint64_vars += 1;
+    tracers->using_annotations = true;
+    tracers->num_annotations = annotations;
+    tracers->init_annotations(max_local_np, max_local_nm, annotations);
+
+    // Copy of move particles to tracers
+    tracers->create_tracers_by_percentage(original_species, tracer_type, percentage, rank());
+
+    return append_species(tracers, &tracers_list); 
+  }
+
+  inline species_t * 
+  define_tracer_species_by_nth( const char* name, 
+                                species_t* original_species, 
+                                const TracerType tracer_type, 
+                                const float skip,
+                                const float over_alloc_factor = 1.0,
+                                annotation_var_counts_t annotations = annotation_var_counts_t()) {
+
+    // Adjust amount of local particles/movers for tracers
+    int max_local_np = (static_cast<int>(static_cast<float>(original_species->max_np) * over_alloc_factor) / skip) + 1;
+    int max_local_nm = (static_cast<int>(static_cast<float>(original_species->max_nm) * over_alloc_factor) / skip) + 1;
+    
+    // Create tracer species based on the original species
+    species_t* tracers = species( name, 
+                                  original_species->q, original_species->m, 
+                                  max_local_np, max_local_nm, 
+                                  original_species->sort_interval, original_species->sort_out_of_place, 
+                                  grid);
+
+    // Add annotations for globas tracer ID
+    annotations.nint64_vars += 1;
+    tracers->using_annotations = true;
+    tracers->num_annotations = annotations;
+    tracers->init_annotations(max_local_np, max_local_nm, annotations);
+
+    // Copy of move particles to tracers
+    int ntracers = static_cast<int>(static_cast<float>(original_species->np) / skip);
+    tracers->create_tracers_by_nth(original_species, tracer_type, skip, rank());
+
+    return append_species(tracers, &tracers_list); 
+  }
+
+  inline species_t * 
+  define_tracer_species_with_n( const char* name, 
+                                species_t* original_species, 
+                                const TracerType tracer_type, 
+                                const float ntracers,
+                                const float over_alloc_factor = 1.0,
+                                annotation_var_counts_t annotations = annotation_var_counts_t()) {
+if(original_species == NULL)
+  printf("Something really wrong\n");
+printf("# of electrons: %d\n", original_species->np);
+printf("name address: %p\n", name);
+printf("species address: %p\n", original_species);
+printf("ntracers: %f\n", ntracers);
+    if(ntracers < 1.0 || static_cast<int>(ntracers) > original_species->np)
+      ERROR(( "%f is a bad number of tracers. Should be in [%d,%d]", ntracers, 1, original_species->np));
+    return define_tracer_species_by_nth(name, original_species, tracer_type, original_species->np / ntracers, over_alloc_factor, annotations);
+  }
+
+  inline species_t * 
+  define_tracer_species_by_predicate( const char* name, 
+                                      species_t* original_species, 
+                                      const TracerType tracer_type, 
+                                      std::function <bool (particle_t)> filter,
+                                      const float over_alloc_factor = 1.0,
+                                      annotation_var_counts_t annotations = annotation_var_counts_t()) {
+
+    // Adjust amount of local particles/movers for tracers
+    const size_t count_true = std::count_if(original_species->p, original_species->p + original_species->np, filter);
+    const size_t max_local_np = ceil(original_species->max_np * over_alloc_factor * count_true/float(original_species->np)) + 1;
+    const size_t max_local_nm = ceil(original_species->max_nm * over_alloc_factor * count_true/float(original_species->nm)) + 1;
+    
+    // Create tracer species based on the original species
+    species_t* tracers = species( name, 
+                                  original_species->q, original_species->m, 
+                                  max_local_np, max_local_nm, 
+                                  original_species->sort_interval, original_species->sort_out_of_place, 
+                                  grid);
+
+    // Add annotations for globas tracer ID
+    annotations.nint64_vars += 1;
+    tracers->using_annotations = true;
+    tracers->num_annotations = annotations;
+    tracers->init_annotations(max_local_np, max_local_nm, annotations);
+
+    // Copy of move particles to tracers
+    tracers->create_tracers_by_predicate(original_species, tracer_type, filter, rank());
+
+    return append_species(tracers, &tracers_list); 
+  }
+
+//#endif
+
   inline species_t *
   find_species( const char *name ) {
      return find_species_name( name, species_list );
@@ -734,8 +883,6 @@ public:
    * checks only if a copy has already been done at some point during the
    * current step, but it will always work in user_diagnostics unless the loop
    * is modified or a user modifies particles during user_diagnostics.
-   *
-   * @param sp the species list to copy
    */
   void user_diagnostics_copy_all_particles_mem_to_host(species_t* species_list)
   {
