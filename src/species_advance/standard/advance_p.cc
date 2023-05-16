@@ -14,7 +14,14 @@
 using namespace std;
 #include <fstream>
 #include <Kokkos_Random.hpp>
+
+
+
+
 #endif
+
+
+
 
 // Write current values to either an accumulator or directly to the fields
 template<class CurrentScatterAccess>
@@ -435,13 +442,18 @@ advance_p_kokkos_unified(
   // TODO: is this the right place to do this?
   Kokkos::deep_copy(k_nm, 0);
 
+#ifdef FIELD_IONIZATION
+  auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  Kokkos::Random_XorShift64_Pool<> random_pool(seed);
+#endif  
+
 // Determine whether to use accumulators
 #if defined( VPIC_ENABLE_ACCUMULATORS )
   Kokkos::View<float*[12]> accumulator("Accumulator", k_field.extent(0));
   Kokkos::deep_copy(accumulator, 0);
   auto current_sv = Kokkos::Experimental::create_scatter_view(accumulator);
 #else
-  k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
+  k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);
 #endif
 
 // Setting up work distribution settings
@@ -545,7 +557,6 @@ advance_p_kokkos_unified(
       
       BEGIN_VECTOR_BLOCK {
         p_index = pi_offset + LANE;
-	//cout << "p_index = " << p_index << endl;
         // Load position
         dx[LANE] = p_dx;
         dy[LANE] = p_dy;
@@ -584,9 +595,7 @@ advance_p_kokkos_unified(
         haz[LANE] = qdt_2mc*( (fez[LANE] + dx[LANE]*fdezdx[LANE] ) + dy[LANE]*(fdezdy[LANE] + dx[LANE]*fd2ezdxdy[LANE]) );
 
 		
-#ifdef FIELD_IONIZATION
-	
-	
+#ifdef FIELD_IONIZATION	
 	// ***** Field Ioization *****
 	// constants
 	int q_e_c     = -1; // code units
@@ -602,367 +611,315 @@ advance_p_kokkos_unified(
 	int N_ionization_levels = sizeof(epsilon_eV_list)/sizeof(float);
         // FIXME: need to check which species the user wants ionization enabled on
 	if (sp->name != "electron"){ 
-        // code units
-	float hax_c = hax[LANE]/qdt_2mc;
-	float hay_c = hay[LANE]/qdt_2mc;
-	float haz_c = haz[LANE]/qdt_2mc;
-	float ha_mag_c = sqrtf(pow(hax_c,2.0)+pow(hay_c,2.0)+pow(haz_c,2.0));
-        // SI units
-	float E_mag_SI = E_to_SI * ha_mag_c;
-	// particle index
-	int particle_index = LANE+pi_offset;
-	
-
-
-
-
-
-
-
-
-
-
-
-	
-
-        // Simulation parameters: FIXME: ** Need to get these from vpic **
-        // Right now it is set up for neutral hydrogen
-        float lambda_SI    = 0.8e-06;  // meters
-        float Z            = 1;          // ion charge number after ionization
-        float Z_star       = 0; // initial charge state
-
-        // Ionization specific parameters
-        float K = 2; //FIXME: currenly only have 2-photon ionization
-        float n = 1; //FIXME: currently only principle quantum number of 1
-        float m = 0; // This is typically 0 in simulations
-        float l = 0;	
+          // code units
+  	  float hax_c = hax[LANE]/qdt_2mc;
+  	  float hay_c = hay[LANE]/qdt_2mc;
+  	  float haz_c = haz[LANE]/qdt_2mc;
+  	  float ha_mag_c = sqrtf(pow(hax_c,2.0)+pow(hay_c,2.0)+pow(haz_c,2.0));
+          // SI units
+  	  float E_mag_SI = E_to_SI * ha_mag_c;
+  	  // particle index
+  	  int particle_index = LANE+pi_offset;
+  	
+          // Simulation parameters: FIXME: ** Need to get these from vpic **
+          // Right now it is set up for neutral hydrogen
+          float lambda_SI    = 0.8e-06;  // meters
+          float Z            = 1;          // ion charge number after ionization
+          float Z_star       = 0; // initial charge state
+  
+          // Ionization specific parameters
+          float K = 2; //FIXME: currenly only have 2-photon ionization
+          float n = 1; //FIXME: currently only principle quantum number of 1
+          float m = 0; // This is typically 0 in simulations
+          float l = 0;	
+          
+          // initialize variables
+          int ionization_flag = 1;
+          float t_ionize      = 0;
+          float Gamma = 0;
         
-        // initialize variables
-        int ionization_flag = 1;
-        float t_ionize      = 0;
-        float U;
-        float Gamma = 0;
-      
-        // Constants
-        float q_e       = 1.60217663e-19;  // coulombs
-        float q_e_au    = 1.0;             // au
-        float m_e       = 9.1093837e-31;   // kilograms
-        float m_e_au    = 1.0;             // au 
-        float c         = 299792458;       // m/s
-        float c_au      = 137.02;          // atomic units
-        float epsilon_0_au = 1/(4*M_PI);   // au
-        float alpha     = 0.00729735;      // fine structure constant
-        float h_bar     = 1.054571817e-34; // J *s
-        float E_field_conversion = 5.1422e+11;      // (alpha^3*m_e^2*c^3)/(q_e*h_bar), multiply AU to get SI
-        float I_conversion       = 6.4364099007e15; // multiply au to get W/cm^2
-        float Gamma_conversion   = 1.0/(h_bar/(pow(alpha,2)*m_e*pow(c,2))); // multiply au to get sec^-1 
-      
-        // Calculate stuff
-        float E_au       = E_mag_SI/E_field_conversion; // field strength, atomic units
-        float nu         = c/lambda_SI; // Hz
-        float omega_SI   = 2*M_PI*nu;   // Hz
-        float omega_eV   = 1.2398/(lambda_SI/1e-6); // eV
-        float omega_au   = omega_eV * 0.036749; // energy, Hartree units
-        float I_au       = 0.5*c_au*epsilon_0_au*pow(E_au,2.0); // intensity from the field, atomic units
-        float I_W_cm2    = I_au*I_conversion;       // intensity from the field, SI units
+          // Constants
+          float q_e       = 1.60217663e-19;  // coulombs
+          float q_e_au    = 1.0;             // au
+          float m_e       = 9.1093837e-31;   // kilograms
+          float m_e_au    = 1.0;             // au 
+          float c         = 299792458;       // m/s
+          float c_au      = 137.02;          // atomic units
+          float epsilon_0_au = 1/(4*M_PI);   // au
+          float alpha     = 0.00729735;      // fine structure constant
+          float h_bar     = 1.054571817e-34; // J *s
+          float E_field_conversion = 5.1422e+11;      // (alpha^3*m_e^2*c^3)/(q_e*h_bar), multiply AU to get SI
+          float Gamma_conversion   = 1.0/(h_bar/(pow(alpha,2)*m_e*pow(c,2))); // multiply au to get sec^-1 
         
-        // loop for multiple ionization events in a single timestep
-        while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {
-      
-        // Get the appropriate ionization energy
-        float epsilon_eV = epsilon_eV_list[int(N_ionization)]; // [eV], ionization energy
-        float epsilon_au = epsilon_eV/27.2;         // atomic units, ionization energy
-        float epsilon_SI = epsilon_au*4.3597463e-18;// [J],  ionization energy
-       
-        // Calculate stuff
-        float n_star         = (Z_star + 1.0)/sqrt(2*epsilon_au); // effective principle quantum number
-        float l_star         = n_star - 1.0; // angular momentum
-        float T_0            = M_PI*Z/(abs(epsilon_au) * sqrt(2*abs(epsilon_au))); // period of classical radial trajectories
-        float gamma_keldysh  = omega_au*sqrt(2*m_e_au*epsilon_au)/(q_e_au*E_au);
-      
-      // Ionization events are tested for every particle with a bound electron at every timestep
+          // Calculate stuff
+          float E_au       = E_mag_SI/E_field_conversion; // field strength, atomic units
+          float nu         = c/lambda_SI; // Hz
+          float omega_SI   = 2*M_PI*nu;   // Hz
+          float omega_eV   = 1.2398/(lambda_SI/1e-6); // eV
+          float omega_au   = omega_eV * 0.036749; // energy, Hartree units
+          float I_au       = 0.5*c_au*epsilon_0_au*pow(E_au,2.0); // intensity from the field, atomic units
+          
+          // loop for multiple ionization events in a single timestep
+          while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {	  
         
-      // Choose the ionization process based on the E-field at the particle
-        // Specifically, Gamma =
-        // min( Gamma_MPI, Gamma_ADK ) for        E <= E_M
-        // Gamma_ADK                   for E_M <= E <= E_T
-        // min( Gamma_ADK, Gamma_BSI ) for E_T <= E <= E_B
-        // Gamma_BSI                   for        E >  E_B
-        // ** NOTE: E_B is defined such that dGamma_ADK(E_B)/dE = 0 so that we have a monotonically increasing rate. 
-        
-        // Choose the ionization process based on |E| at each particle
-        // Note E_T = epsilon^2/(4*Z) is the correct version but EPOCH uses epsilon^2/Z for some reason (maybe a typo in their paper?)
-        float E_M_SI = 2*omega_SI*sqrt(2*m_e*epsilon_SI)/q_e;
-        float E_M_au = omega_au*sqrt(8*epsilon_au); // atomic units
-        float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
-        float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units 
-      
-        if (E_au<=E_M_au){
-          // MPI Ionization
-          // ionization rate per atom: Gamma^(K)
-          // sigma^(K) = (h_bar*omega)^K*Gamma^(K)/I^K : K-photon cross section, units [cm^2K * s^(K-1)]
-          // I: intensity of the laser field, units [W/cm^2]
-          //cout << "MPI Ionization" << endl;
-          // FIXME: need to add the case of circularly polarized field
-          float T_K = 4.80*pow(1.30,2*K)*pow(2*K+1,-1)*pow(K,-1.0/2.0); // in the case of linearly polarized field
-          // FIXME: still need to figure out the units of simga_K; the plot in the book suggests it isnt [cm^2K * s^(K-1)]
-          float sigma_K_au = pow(c_au*pow(tgamma(K+1),2)*pow(n,5)* pow(omega_au,(10*K-1)/3), -1)*T_K*pow(E_au,2*K-2);
-          // FIXME: This definition of Gamma is only correct when sigma is in units of [cm^2K * s^(K-1)]
-          float Gamma_MPI = sigma_K_au * pow(I_au/omega_au, K);
-      
-          // Tunneling Regime
-          //cout << "Tunneling Ionization" << endl;
-          float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
-          float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
-          float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
-          float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
-      
-          Gamma = max(Gamma_MPI,Gamma_ADK_SI); //FIXME: EPOCH uses min here
-      
-        }
-      
-        else if (E_au>E_M_au && E_au<=E_T_au) {
-          // Tunneling Regime
-          //cout << "Tunneling Ionization" << endl;
-          float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
-          float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
-          float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
-          float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
-          Gamma = Gamma_ADK_SI;
-      
-        }
-      
-        else if (E_au>E_T_au && E_au<=E_B_au){
-          // Either classical ADK or with BSI correction
-          // Whichever has the minimum ionization rate
-          //cout << "Tunneling or BSI Regime" << endl;
-          // ADK (no correction)
-          float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
-          float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
-          float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
-          float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
-      
-          // With BSI correction: Gamma = Gamma_classical + Gamma_ADK(I_classical)
-          // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity, i.e, the intensity that corresponds to the threshold E-field magnitude
-          float Gamma_ADK_au_threshold = C_nstar_lstar_squared* f_n_l* epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_T_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_T_au));
-          float Gamma_ADK_SI_threshold = Gamma_ADK_au_threshold*Gamma_conversion;
-          // uniform field, FIXME: enable this
-          // gamma_cl_uniform_atomic = (1 - E_n_atomic^2./(4*Z*E_atomic))/(2*T_0);
-          // gamma_cl_uniform_SI = gamma_cl_uniform_atomic / (h_bar/(alpha^2*m_e*c^2));
-          // oscillating field
-          float Gamma_cl_au  = 1.0/(M_PI*T_0) * (  M_PI/2.0 - asin( pow(epsilon_au,2.0)/(4*Z*E_au)) + pow(epsilon_au,2.0)/(4*Z*E_au) * log( ( 4*Z*E_au - sqrt( 16*pow(Z,2.0)*pow(E_au,2.0) - pow(epsilon_au,4.0) ) )/pow(epsilon_au,2.0) ) );
-          float Gamma_cl_SI  = Gamma_cl_au* Gamma_conversion;
-          float Gamma_BSI_SI = Gamma_cl_SI + Gamma_ADK_SI_threshold;
-      
-          // Decide if the BSI correction is applicable
-          Gamma = min(Gamma_ADK_SI, Gamma_BSI_SI);
-        }
-      
-        else if (E_au>E_B_au) {
-          // BSI Ionization
-          //cout << "BSI Ionization" << endl;
-          // BSI Ionization: Gamma = Gamma_classical + Gamma_ADK(I_classical)
-          // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity
-          float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
-          float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
-          float Gamma_ADK_au_threshold = C_nstar_lstar_squared*f_n_l * sqrt(3*E_T_au*pow(n_star,3.0)/(M_PI*pow(Z,3.0))) * pow(Z,2.0)/(2*pow(n_star,2.0)) * pow(2*pow(Z,3.0)/(E_T_au*pow(n_star,3.0)),2*n_star-abs(m)-1)*exp(-2*pow(Z,3.0)/(3*pow(n_star,3.0)*E_T_au));
-          float Gamma_ADK_SI_threshold = Gamma_ADK_au_threshold*Gamma_conversion;
-          // uniform field, FIXME: enable this
-          // gamma_cl_uniform_atomic = (1 - E_n_atomic^2./(4*Z*E_atomic))/(2*T_0);
-          // oscillating field
-          float Gamma_cl_au  = 1.0/(M_PI*T_0) * (  M_PI/2.0 - asin( pow(epsilon_au,2.0)/(4*Z*E_au)) + pow(epsilon_au,2.0)/(4*Z*E_au) * log( ( 4*Z*E_au - sqrt( 16*pow(Z,2.0)*pow(E_au,2.0) - pow(epsilon_au,4.0) ) )/pow(epsilon_au,2.0) ) );
-          float Gamma_cl_SI  = Gamma_cl_au* Gamma_conversion;
-          float Gamma_BSI_SI = Gamma_cl_SI + Gamma_ADK_SI_threshold;
-          Gamma = Gamma_BSI_SI;
-        }
-        
-        
-        
-        // Ionization occurs if U_1 < 1 - exp(-Gamma * delta_t), for a uniform number U_1~[0,1]
-        // FIXME: once no further ionization occurs, the particle should be removed and replaced
-        //        with the appropriate ion and an electron with the appropriate weight.
-        //        These should be added in the same location and with the same velocity
-        // FIXME: Need to deal with the energy conservation
-      
-          U = (float) rand()/RAND_MAX;
-          if ( U < 1 - exp(-Gamma * (dt-t_ionize) ) ) {
-            // ionization occurs
-            N_ionization++;
-            ionization_flag = 1;
-            //cout << ionization << " Ionization(s) occurs" << endl;
-      
-            // deal with multiple ionizations
-            t_ionize = -1.0/Gamma * log(1-U); // use previous U to calc
-      
-          } 
-          else {
-            // ionization doesnt occur
-            ionization_flag = 0;
-            //cout << "Ionization doesnt occur" << endl;
-          } 
-      
-        } // end while loop
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	
-	// Check if ionization event occured
-	if(N_ionization_before != N_ionization){
-	  // Change the charge of the particle
-	  k_particles(particle_index, particle_var::charge) = N_ionization * q_e_c; // code units
-
-	  // Inject the macro electron with the same
-	  // momentum and position as the ionized particle
-	  // Multiple ionization events are enabled so the injected
-	  // electron weight needs to account for that
-	  int electron_index = sp_e->np++;
-          #define p_dx_e    sp_e->k_p_h(electron_index, particle_var::dx)
-          #define p_dy_e    sp_e->k_p_h(electron_index, particle_var::dy)
-          #define p_dz_e    sp_e->k_p_h(electron_index, particle_var::dz)
-          #define p_ux_e    sp_e->k_p_h(electron_index, particle_var::ux)
-          #define p_uy_e    sp_e->k_p_h(electron_index, particle_var::uy)
-          #define p_uz_e    sp_e->k_p_h(electron_index, particle_var::uz)
-	  #define p_q_e     sp_e->k_p_h(electron_index, particle_var::charge)
-          #define p_w_e     sp_e->k_p_h(electron_index, particle_var::w)
-          #define pii_e     sp_e->k_p_i_h(electron_index)
-
-	  // get the positions and momentum from ionized species
-	  p_dy_e = dy[LANE];
-	  p_dz_e = dz[LANE];
-	  pii_e  = ii[LANE];
-	  p_ux_e = ux[LANE];
-	  p_uy_e = uy[LANE];
-	  p_uz_e = uz[LANE];
-	  p_q_e  = -1; // electrons charge in code units
-	  p_w_e  = (N_ionization - N_ionization_before) * k_particles(particle_index, particle_var::w); // weight is dependent on the number of ionization events and weight of ionized particle
-
-	  /*
-	  // Electron file: Open file, write value, close file
-	  char kn [100];
-	  snprintf(kn, sizeof kn, "Photoelectrons.txt");
-	  std::ofstream outfile6;
-	  if ((int)electron_index == 0) {
-	    outfile6.open(kn); // overwrite old files
-	    outfile6 << "# Timestep" << "," << "Electron Index" << "," << "pii_e" << "," << "Electron Weight" << endl;
-	  }
-	  else {
-	    outfile6.open(kn, std::ios_base::app); // append to file
-	  }
-	  outfile6 << timestep << "," << electron_index << "," << pii_e << "," << p_w_e << endl;
-	  outfile6.close();
-	  */
-	  
-	  
-	  #undef p_dx_e
-          #undef p_dy_e
-          #undef p_dz_e
-          #undef p_ux_e
-          #undef p_uy_e
-          #undef p_uz_e
-          #undef p_w_e
-          #undef pii_e
-        } // if ionization event occured
-	
-
-	/*
-	// Make some files
-       	//if (int(timestep) % 50 == 0){
-	if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 4 == 0){
-	
-	   // Field and Rate: Open file, write value, close file
-	   char fn [100];
-           snprintf(fn, sizeof fn, "E_mag_t_%g.txt",timestep); 
-	   std::ofstream outfile;
-	   if ((int)pi_offset == 0 && LANE == 0) {
-	     outfile.open(fn); // overwrite old files
-	     outfile << "# E [V/m],Gamma [s^-1]" << endl; // Header
-	   }
-	   else {
-	     outfile.open(fn, std::ios_base::app); // append to file
-	   }
-	   outfile << E_mag_SI << "," << Gamma << endl;
-	   outfile.close();
-	   
-	   // N Ionizations: Open file, write value, close file
-	   char gn [100];
-	   snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt",timestep);
-	   std::ofstream outfile1;
-	   if ((int)pi_offset == 0 && LANE == 0) {
-             outfile1.open(gn); // overwrite old files
-	     outfile1 << "# N ionizations Before" << "," << "# N ionizations After" << "," << "Charge After" << endl; // Header
-	   }
-	   else {
-	     outfile1.open(gn, std::ios_base::app); // append to file
-	   }
-	   outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << endl;
-           outfile1.close();
-	   
-	   
-	   // position
-           char hn [100];
-           snprintf(hn, sizeof hn, "Position_ionizations_t_%g.txt",timestep);
-           std::ofstream outfile2;
-           if ((int)pi_offset == 0 && LANE == 0) {
-             outfile2.open(hn); // overwrite old files
-	     outfile2 << "# x,y,z" << endl;
-           }
-           else {
-             outfile2.open(hn, std::ios_base::app); // append to file                                                                                           
-           }
-           outfile2 << dx[LANE] << "," << dy[LANE] << "," << dz[LANE] << endl;
-           outfile2.close();
-	   
-	   
-	   // velocity
-           char in [100];
-           snprintf(in, sizeof in, "Velocity_ionizations_t_%g.txt",timestep);
-           std::ofstream outfile3;
-           if ((int)pi_offset == 0 && LANE == 0) {
-             outfile3.open(in);
-             outfile3 << "# ux,uy,uz" << endl;
-           }
-           else {
-             outfile3.open(in, std::ios_base::app);                                                                                                                                            
-           }
-           outfile3 << ux[LANE] << "," << uy[LANE] << "," << uz[LANE] << endl;
-           outfile3.close();
-	
-	   
-	   } // if specific timestep for making files
-	*/
-	
+            // Get the appropriate ionization energy
+            float epsilon_eV = epsilon_eV_list[int(N_ionization)]; // [eV], ionization energy
+            float epsilon_au = epsilon_eV/27.2;         // atomic units, ionization energy
+            float epsilon_SI = epsilon_au*4.3597463e-18;// [J],  ionization energy
+           
+            // Calculate stuff
+            float n_star         = (Z_star + 1.0)/sqrt(2*epsilon_au); // effective principle quantum number
+            float l_star         = n_star - 1.0; // angular momentum
+            float T_0            = M_PI*Z/(abs(epsilon_au) * sqrt(2*abs(epsilon_au))); // period of classical radial trajectories
+            float gamma_keldysh  = omega_au*sqrt(2*m_e_au*epsilon_au)/(q_e_au*E_au);
+          
+            // Ionization events are tested for every particle with a bound electron at every timestep
+            
+            // Choose the ionization process based on the E-field at the particle
+            // Specifically, Gamma =
+            // min( Gamma_MPI, Gamma_ADK ) for        E <= E_M
+            // Gamma_ADK                   for E_M <= E <= E_T
+            // min( Gamma_ADK, Gamma_BSI ) for E_T <= E <= E_B
+            // Gamma_BSI                   for        E >  E_B
+            // ** NOTE: E_B is defined such that dGamma_ADK(E_B)/dE = 0 so that we have a monotonically increasing rate. 
+            
+            // Choose the ionization process based on |E| at each particle
+            // Note E_T = epsilon^2/(4*Z) is the correct version but EPOCH uses epsilon^2/Z for some reason (maybe a typo in their paper?)
+            float E_M_SI = 2*omega_SI*sqrt(2*m_e*epsilon_SI)/q_e;
+            float E_M_au = omega_au*sqrt(8*epsilon_au); // atomic units
+            float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
+            float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units 
+          
+            if (E_au<=E_M_au){
+              // MPI Ionization
+              // ionization rate per atom: Gamma^(K)
+              // sigma^(K) = (h_bar*omega)^K*Gamma^(K)/I^K : K-photon cross section, units [cm^2K * s^(K-1)]
+              // I: intensity of the laser field, units [W/cm^2]
+              //cout << "MPI Ionization" << endl;
+              // FIXME: need to add the case of circularly polarized field
+              float T_K = 4.80*pow(1.30,2*K)*pow(2*K+1,-1)*pow(K,-1.0/2.0); // in the case of linearly polarized field
+              // FIXME: still need to figure out the units of simga_K; the plot in the book suggests it isnt [cm^2K * s^(K-1)]
+              float sigma_K_au = pow(c_au*pow(tgamma(K+1),2)*pow(n,5)* pow(omega_au,(10*K-1)/3), -1)*T_K*pow(E_au,2*K-2);
+              // FIXME: This definition of Gamma is only correct when sigma is in units of [cm^2K * s^(K-1)]
+              float Gamma_MPI = sigma_K_au * pow(I_au/omega_au, K);
+          
+              // Tunneling Regime
+              //cout << "Tunneling Ionization" << endl;
+              float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
+              float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
+              float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
+              float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
+          
+              Gamma = max(Gamma_MPI,Gamma_ADK_SI); //FIXME: EPOCH uses min here
+            }
+          
+            else if (E_au>E_M_au && E_au<=E_T_au) {
+              // Tunneling Regime
+              //cout << "Tunneling Ionization" << endl;
+              float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
+              float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
+              float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
+              float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
+              Gamma = Gamma_ADK_SI;
+          
+            }
+          
+            else if (E_au>E_T_au && E_au<=E_B_au){
+              // Either classical ADK or with BSI correction
+              // Whichever has the minimum ionization rate
+              //cout << "Tunneling or BSI Regime" << endl;
+              // ADK (no correction)
+              float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
+              float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
+              float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
+              float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
+          
+              // With BSI correction: Gamma = Gamma_classical + Gamma_ADK(I_classical)
+              // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity, i.e, the intensity that corresponds to the threshold E-field magnitude
+              float Gamma_ADK_au_threshold = C_nstar_lstar_squared* f_n_l* epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_T_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_T_au));
+              float Gamma_ADK_SI_threshold = Gamma_ADK_au_threshold*Gamma_conversion;
+              // uniform field, FIXME: enable this
+              // gamma_cl_uniform_atomic = (1 - E_n_atomic^2./(4*Z*E_atomic))/(2*T_0);
+              // gamma_cl_uniform_SI = gamma_cl_uniform_atomic / (h_bar/(alpha^2*m_e*c^2));
+              // oscillating field
+              float Gamma_cl_au  = 1.0/(M_PI*T_0) * (  M_PI/2.0 - asin( pow(epsilon_au,2.0)/(4*Z*E_au)) + pow(epsilon_au,2.0)/(4*Z*E_au) * log( ( 4*Z*E_au - sqrt( 16*pow(Z,2.0)*pow(E_au,2.0) - pow(epsilon_au,4.0) ) )/pow(epsilon_au,2.0) ) );
+              float Gamma_cl_SI  = Gamma_cl_au* Gamma_conversion;
+              float Gamma_BSI_SI = Gamma_cl_SI + Gamma_ADK_SI_threshold;
+          
+              // Decide if the BSI correction is applicable
+              Gamma = min(Gamma_ADK_SI, Gamma_BSI_SI);
+            }
+          
+            else if (E_au>E_B_au) {
+              // BSI Ionization
+              //cout << "BSI Ionization" << endl;
+              // BSI Ionization: Gamma = Gamma_classical + Gamma_ADK(I_classical)
+              // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity
+              float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
+              float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
+              float Gamma_ADK_au_threshold = C_nstar_lstar_squared*f_n_l * sqrt(3*E_T_au*pow(n_star,3.0)/(M_PI*pow(Z,3.0))) * pow(Z,2.0)/(2*pow(n_star,2.0)) * pow(2*pow(Z,3.0)/(E_T_au*pow(n_star,3.0)),2*n_star-abs(m)-1)*exp(-2*pow(Z,3.0)/(3*pow(n_star,3.0)*E_T_au));
+              float Gamma_ADK_SI_threshold = Gamma_ADK_au_threshold*Gamma_conversion;
+              // uniform field, FIXME: enable this
+              // gamma_cl_uniform_atomic = (1 - E_n_atomic^2./(4*Z*E_atomic))/(2*T_0);
+              // oscillating field
+              float Gamma_cl_au  = 1.0/(M_PI*T_0) * (  M_PI/2.0 - asin( pow(epsilon_au,2.0)/(4*Z*E_au)) + pow(epsilon_au,2.0)/(4*Z*E_au) * log( ( 4*Z*E_au - sqrt( 16*pow(Z,2.0)*pow(E_au,2.0) - pow(epsilon_au,4.0) ) )/pow(epsilon_au,2.0) ) );
+              float Gamma_cl_SI  = Gamma_cl_au* Gamma_conversion;
+              float Gamma_BSI_SI = Gamma_cl_SI + Gamma_ADK_SI_threshold;
+              Gamma = Gamma_BSI_SI;
+            }     
+            
+            // Ionization occurs if U_1 < 1 - exp(-Gamma * delta_t), for a uniform number U_1~[0,1]
+            // FIXME: once no further ionization occurs, the particle should be removed and replaced
+            //        with the appropriate ion and an electron with the appropriate weight.
+            //        These should be added in the same location and with the same velocity
+            // FIXME: Need to deal with the energy conservation
+     	    auto generator = random_pool.get_state();
+            double U = generator.drand(0,1);
+            random_pool.free_state(generator);
+            if ( U < 1 - exp(-Gamma * (dt-t_ionize) ) ) {
+              // ionization occurs
+              N_ionization++;
+              ionization_flag = 1;
+              //cout << ionization << " Ionization(s) occurs" << endl;
+          
+              // deal with multiple ionizations
+              t_ionize = -1.0/Gamma * log(1-U); // use previous U to calc
+            } 
+            else {
+              // ionization doesnt occur
+              ionization_flag = 0;
+              //cout << "Ionization doesnt occur" << endl;
+            } 
+          
+          } // end while loop
+  
+  	
+  	  // Check if ionization event occured
+  	  if(N_ionization_before != N_ionization){
+  	    // Change the charge of the particle
+  	    k_particles(particle_index, particle_var::charge) = N_ionization * abs(q_e_c); // code units
+  
+  	    // Inject the macro electron with the same
+  	    // momentum and position as the ionized particle
+  	    // Multiple ionization events are enabled so the injected
+  	    // electron weight needs to account for that
+  	    int electron_index = sp_e->np++;
+            #define p_dx_e    sp_e->k_p_h(electron_index, particle_var::dx)
+            #define p_dy_e    sp_e->k_p_h(electron_index, particle_var::dy)
+            #define p_dz_e    sp_e->k_p_h(electron_index, particle_var::dz)
+            #define p_ux_e    sp_e->k_p_h(electron_index, particle_var::ux)
+            #define p_uy_e    sp_e->k_p_h(electron_index, particle_var::uy)
+            #define p_uz_e    sp_e->k_p_h(electron_index, particle_var::uz)
+  	    #define p_q_e     sp_e->k_p_h(electron_index, particle_var::charge)
+            #define p_w_e     sp_e->k_p_h(electron_index, particle_var::w)
+            #define pii_e     sp_e->k_p_i_h(electron_index)
+  
+  	    // get the positions and momentum from ionized species
+            p_dx_e = dx[LANE];
+  	    p_dy_e = dy[LANE];
+  	    p_dz_e = dz[LANE];
+  	    pii_e  = ii[LANE];
+  	    p_ux_e = ux[LANE];
+  	    p_uy_e = uy[LANE];
+  	    p_uz_e = uz[LANE];
+  	    p_q_e  = q_e_c; // electrons charge in code units
+  	    p_w_e  = (N_ionization - N_ionization_before) * k_particles(particle_index, particle_var::w); // weight is dependent on the number of ionization events and weight of ionized particle
+  
+  	    /*
+  	    // Electron file: Open file, write value, close file
+  	    char kn [100];
+  	    snprintf(kn, sizeof kn, "Photoelectrons.txt");
+  	    std::ofstream outfile6;
+  	    if ((int)electron_index == 0) {
+  	      outfile6.open(kn); // overwrite old files
+  	      outfile6 << "# Timestep" << "," << "Electron Index" << "," << "pii_e" << "," << "Electron Weight" << endl;
+  	    }
+  	    else {
+  	      outfile6.open(kn, std::ios_base::app); // append to file
+  	    }
+  	    outfile6 << timestep << "," << electron_index << "," << pii_e << "," << p_w_e << endl;
+  	    outfile6.close();
+  	    */
+  	  
+  	  
+  	    #undef p_dx_e
+            #undef p_dy_e
+            #undef p_dz_e
+            #undef p_ux_e
+            #undef p_uy_e
+            #undef p_uz_e
+            #undef p_w_e
+            #undef pii_e
+          } // if ionization event occured
+  	
+  
+  	     /*
+  	     // Make some files
+             //if (int(timestep) % 50 == 0){
+  	     if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 4 == 0){
+  	      
+  	     // Field and Rate: Open file, write value, close file
+  	     char fn [100];
+               snprintf(fn, sizeof fn, "E_mag_t_%g.txt",timestep); 
+  	     std::ofstream outfile;
+  	     if ((int)pi_offset == 0 && LANE == 0) {
+  	       outfile.open(fn); // overwrite old files
+  	       outfile << "# E [V/m],Gamma [s^-1]" << endl; // Header
+  	     }
+  	     else {
+  	       outfile.open(fn, std::ios_base::app); // append to file
+  	     }
+  	     outfile << E_mag_SI << "," << Gamma << endl;
+  	     outfile.close();
+  	     
+  	     // N Ionizations: Open file, write value, close file
+  	     char gn [100];
+  	     snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt",timestep);
+  	     std::ofstream outfile1;
+  	     if ((int)pi_offset == 0 && LANE == 0) {
+                 outfile1.open(gn); // overwrite old files
+  	       outfile1 << "# N ionizations Before" << "," << "# N ionizations After" << "," << "Charge After" << endl; // Header
+  	     }
+  	     else {
+  	       outfile1.open(gn, std::ios_base::app); // append to file
+  	     }
+  	     outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << endl;
+             outfile1.close();
+  	   
+  	   
+  	     // position
+             char hn [100];
+             snprintf(hn, sizeof hn, "Position_ionizations_t_%g.txt",timestep);
+             std::ofstream outfile2;
+             if ((int)pi_offset == 0 && LANE == 0) {
+               outfile2.open(hn); // overwrite old files
+  	     outfile2 << "# x,y,z" << endl;
+             }
+             else {
+               outfile2.open(hn, std::ios_base::app); // append to file                                                                                           
+             }
+             outfile2 << dx[LANE] << "," << dy[LANE] << "," << dz[LANE] << endl;
+             outfile2.close();
+  	   
+  	   
+  	     // velocity
+             char in [100];
+             snprintf(in, sizeof in, "Velocity_ionizations_t_%g.txt",timestep);
+             std::ofstream outfile3;
+             if ((int)pi_offset == 0 && LANE == 0) {
+               outfile3.open(in);
+               outfile3 << "# ux,uy,uz" << endl;
+             }
+             else {
+               outfile3.open(in, std::ios_base::app);                                                                                                                                            
+             }
+             outfile3 << ux[LANE] << "," << uy[LANE] << "," << uz[LANE] << endl;
+             outfile3.close();
+  	
+  	   
+  	     } // if specific timestep for making files
+  	     */
+  	
 	} // if not electrons
 	  
 #endif // FIELD_IONIZATION
@@ -1193,7 +1150,11 @@ advance_p_kokkos_unified(
 #undef p_uy
 #undef p_uz
 #undef p_w 
-#undef pii 
+#undef pii
+
+#ifdef FIELD_IONIZATION
+#undef p_q_e
+#endif
 
 #undef f_cbx
 #undef f_cby
@@ -1319,18 +1280,15 @@ advance_p_kokkos_gpu(
   Kokkos::deep_copy(k_nm, 0);
 
 #ifdef FIELD_IONIZATION
-  Kokkos::Random_XorShift64_Pool<> random_pool(/*seed=*/12345);
+  auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  Kokkos::Random_XorShift64_Pool<> random_pool(seed);
   float time_to_SI = 1.18119324097025572e-22; //FIXME: doesnt belong here
   float dt = g->dt * time_to_SI;
   auto sp_name = sp->name;
-  k_particles_t& k_electrons = sp_e->k_p_d;
-  k_particles_i_t& k_electrons_i = sp_e->k_p_i_d;
-  sp_e->np = 0;
+  k_particles_t& k_electrons = sp_e->k_p_d; 
+  k_particles_i_t& k_electrons_i = sp_e->k_p_i_d;  
   Kokkos::View<int> count("count");
-  Kokkos::deep_copy(count, 0);//sp_e->np); // FIXME: sp_e->np needs to be updated with electron injection
-  Kokkos::View<int> temp_count("temp_count");
-  Kokkos::deep_copy(temp_count, sp_e->np);
-  //printf("timestep: %d, sp_e->np: %d\n",g->step,sp_e->np); // FIXME: get rif of this for final version
+  Kokkos::deep_copy(count, sp_e->np);
 #endif
   
 #ifdef VPIC_ENABLE_HIERARCHICAL
@@ -1346,6 +1304,7 @@ advance_p_kokkos_gpu(
   auto range_policy = Kokkos::RangePolicy<>(0,np);
   Kokkos::parallel_for("advance_p", range_policy, KOKKOS_LAMBDA (size_t p_index) {
 #endif
+
       
     float v0, v1, v2, v3, v4, v5;
     auto  k_field_scatter_access = k_f_sv.access();
@@ -1385,31 +1344,10 @@ advance_p_kokkos_gpu(
     float haz_c = haz/qdt_2mc;
     float ha_mag_c = sqrtf(pow(hax_c,2.0)+pow(hay_c,2.0)+pow(haz_c,2.0));
     // SI units
-    float hax_SI  = E_to_SI * hax_c;
-    float hay_SI  = E_to_SI * hay_c;
-    float haz_SI  = E_to_SI * haz_c;
     float E_mag_SI = E_to_SI * ha_mag_c;
 
     // Calculate the ionization rate and number of ionizations
 
-
-
-
-
-    
-
-
-
-
-    
-
-
-
-
-
-
-
-    
     // Simulation parameters: FIXME: ** Need to get these from vpic **
     // Right now it is set up for neutral hydrogen
     float lambda_SI    = 0.8e-06;  // meters
@@ -1424,7 +1362,6 @@ advance_p_kokkos_gpu(
     // initialize variables
     int ionization_flag = 1;
     float t_ionize      = 0;
-    float U;
     float Gamma = 0;
   
     // Constants
@@ -1438,7 +1375,6 @@ advance_p_kokkos_gpu(
     float alpha     = 0.00729735;      // fine structure constant
     float h_bar     = 1.054571817e-34; // J *s
     float E_field_conversion = 5.1422e+11;      // (alpha^3*m_e^2*c^3)/(q_e*h_bar), multiply AU to get SI
-    float I_conversion       = 6.4364099007e15; // multiply au to get W/cm^2
     float Gamma_conversion   = 1.0/(h_bar/(pow(alpha,2)*m_e*pow(c,2))); // multiply au to get sec^-1 
   
     // Calculate stuff
@@ -1448,9 +1384,6 @@ advance_p_kokkos_gpu(
     float omega_eV   = 1.2398/(lambda_SI/1e-6); // eV
     float omega_au   = omega_eV * 0.036749; // energy, Hartree units
     float I_au       = 0.5*c_au*epsilon_0_au*pow(E_au,2.0); // intensity from the field, atomic units
-    float I_W_cm2    = I_au*I_conversion;       // intensity from the field, SI units
-
-    
 
     // loop for multiple ionization events in a single timestep
     while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {
@@ -1483,7 +1416,6 @@ advance_p_kokkos_gpu(
       float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
       float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units 
       
-      //printf("E_au: %e\n",E_au);    
       if (E_au<=E_M_au){
         // MPI Ionization
         // ionization rate per atom: Gamma^(K)
@@ -1503,9 +1435,7 @@ advance_p_kokkos_gpu(
         float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
         float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
         float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
-      
         Gamma = max(Gamma_MPI,Gamma_ADK_SI); //FIXME: EPOCH uses min here
-      
       }
       
       else if (E_au>E_M_au && E_au<=E_T_au) {
@@ -1516,7 +1446,6 @@ advance_p_kokkos_gpu(
         float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
         float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
         Gamma = Gamma_ADK_SI;
-      
       }
       
       else if (E_au>E_T_au && E_au<=E_B_au){
@@ -1581,48 +1510,28 @@ advance_p_kokkos_gpu(
       // FIXME: Need to deal with the energy conservation
       // Create a random number generator with uniform distribution
       auto generator = random_pool.get_state();
-      double U = generator.drand(0., 1.);
-      //      printf("U: %f, Gamma: %e, dt: %e, t_ionize: %e, other: %e\n",U,Gamma,dt,t_ionize,1 - exp(-Gamma * (dt-t_ionize) ));
+      double U = generator.drand(0,1);
+      random_pool.free_state(generator);
+
       if ( U < 1 - exp(-Gamma * (dt-t_ionize) ) ) {
         // ionization occurs
-        N_ionization++;
+        N_ionization++; 
         ionization_flag = 1;
-	// printf("Ionization(s) occurs - U: %f, Gamma: %e, dt: %e, t_ionize: %e, other: %e\n",U,Gamma,dt,t_ionize,1 - exp(-Gamma * (dt-t_ionize) ));
         // deal with multiple ionizations
-        t_ionize = -1.0/Gamma * log(1-U); // use previous U to calc
-        
+	t_ionize = -1.0/Gamma * log(1-U); // use previous U to calc
       } 
       else {
         // ionization doesnt occur
         ionization_flag = 0;
-        //printf("No Ionization(s) occurs - U: %f, Gamma: %e, dt: %e, t_ionize: %e, other: %e\n",U,Gamma,dt,t_ionize,1 - exp(-Gamma * (dt-t_ionize) ));
       }
-      random_pool.free_state(generator);
       
     } // end while loop
-    
 
-
-
-
-
-//    Kokkos::atomic_fetch_add(&electron_index, 1);
-//    printf("electron_index: %d\n", electron_index);
-
-
-
-
-
-
-
-      //printf("Gamma: %e\n",Gamma);
-      //printf("Gamma: %e, N_ionization_before: %d, N_ionization: %d\n",Gamma,N_ionization_before,N_ionization);
-      // Check if ionization event occured
-    
-      if (N_ionization_before < N_ionization){
+    // Check if ionization event occured
+    if (N_ionization_before < N_ionization){
         // Change the charge of the particle
-        k_particles(p_index, particle_var::charge) = N_ionization * q_e_c; // code units
-	
+        k_particles(p_index, particle_var::charge) = N_ionization * abs(q_e_c); // code units
+
         // Inject the macro electron with the same
         // momentum and position as the ionized particle
         // Multiple ionization events are enabled so the injected
@@ -1636,14 +1545,9 @@ advance_p_kokkos_gpu(
         #define p_q_e     k_electrons(electron_index, particle_var::charge)
         #define p_w_e     k_electrons(electron_index, particle_var::w)
         #define pii_e     k_electrons_i(electron_index)
-
-	int electron_index = Kokkos::atomic_fetch_add(&count(),1);
-	Kokkos::atomic_increment(&temp_count());
-	//printf("electron_index: %d, count(): %d, temp_count(): %d\n",electron_index,count(),temp_count());
 	
+	int electron_index = Kokkos::atomic_fetch_add(&count(),1);
         // get the positions and momentum from ionized species
-	//        printf("dy: %f, dz: %f, ii: %d, p_ux: %f, p_uy: %f, p_uz: %f, other: %f\n",dy,dz,ii,p_ux,p_uy,p_uz,(N_ionization - N_ionization_before) * k_particles(p_index, particle_var::w));
-
 	p_dx_e = dx;
         p_dy_e = dy;
         p_dz_e = dz;
@@ -1651,9 +1555,8 @@ advance_p_kokkos_gpu(
         p_ux_e = p_ux;
         p_uy_e = p_uy;
         p_uz_e = p_uz;
-        p_q_e  = -100; // electrons charge in code units
-        p_w_e  = (N_ionization - N_ionization_before) * k_particles(p_index, particle_var::w); // weight is dependent on the number of ionization events and weight of ionized particle
-	  
+        p_q_e  = q_e_c; // electrons charge in code units
+        p_w_e  = (N_ionization - N_ionization_before) * k_particles(p_index, particle_var::w); // weight is dependent on the number of ionization events and weight of ionized particle		  
         #undef p_dx_e
         #undef p_dy_e
         #undef p_dz_e
@@ -1662,14 +1565,16 @@ advance_p_kokkos_gpu(
         #undef p_uz_e
         #undef p_w_e
         #undef pii_e
-
+      #ifdef FIELD_IONIZATION
+	#undef p_q_e
+      #endif
+	
       } // if ionization event occured	
     
       } // if not electrons
 #endif // FIELD_IONIZATION
-    
 
- 
+    
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby + dy*f_dcbydy;
     float cbz  = f_cbz + dz*f_dcbzdz;
@@ -1889,6 +1794,7 @@ advance_p_kokkos_gpu(
         }
       }
     }
+
 #ifdef VPIC_ENABLE_HIERARCHICAL
   }
   });
@@ -1906,7 +1812,9 @@ advance_p_kokkos_gpu(
   //args->seg[pipeline_rank].n_ignored = 0; // TODO: update this
   //delete(k_local_particle_movers_p);
   //return h_nm(0);
-
+#ifdef FIELD_IONIZATION
+  Kokkos:deep_copy(sp_e->np,count);
+#endif  
 }
 
 void

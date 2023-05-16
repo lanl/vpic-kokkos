@@ -240,9 +240,9 @@ begin_initialization {
   double ny = 1;
   double nz = 200;
 
-  double nppc = 75;  // Average number of macro particles/cell of each species
+  double nppc = 100;  // Average number of macro particles/cell of each species
 
-  int topology_x = 8;
+  int topology_x = 1;
   int topology_y = 1;
   int topology_z = 1;
   double quota = 1;             // Run quota in hours.  
@@ -378,7 +378,7 @@ begin_initialization {
   N_I2 = trunc_granular(N_I2, nproc()); // make divisible by # processors
   double NpI2    = n_I2_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I2 in box
   double w_I2    = NpI2/N_I2;
-  int I1_present = 1;
+  int I1_present = 0;
   int I2_present = 1;
 
 
