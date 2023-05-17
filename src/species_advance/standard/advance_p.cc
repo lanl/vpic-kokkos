@@ -610,7 +610,7 @@ advance_p_kokkos_unified(
         int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
 	int N_ionization_levels = sizeof(epsilon_eV_list)/sizeof(float);
         // FIXME: need to check which species the user wants ionization enabled on
-	if (sp->name != "electron"){ 
+	if (sp->name != "electron"){
           // code units
   	  float hax_c = hax[LANE]/qdt_2mc;
   	  float hay_c = hay[LANE]/qdt_2mc;
@@ -824,24 +824,7 @@ advance_p_kokkos_unified(
   	    p_uz_e = uz[LANE];
   	    p_q_e  = q_e_c; // electrons charge in code units
   	    p_w_e  = (N_ionization - N_ionization_before) * k_particles(particle_index, particle_var::w); // weight is dependent on the number of ionization events and weight of ionized particle
-  
-  	    /*
-  	    // Electron file: Open file, write value, close file
-  	    char kn [100];
-  	    snprintf(kn, sizeof kn, "Photoelectrons.txt");
-  	    std::ofstream outfile6;
-  	    if ((int)electron_index == 0) {
-  	      outfile6.open(kn); // overwrite old files
-  	      outfile6 << "# Timestep" << "," << "Electron Index" << "," << "pii_e" << "," << "Electron Weight" << endl;
-  	    }
-  	    else {
-  	      outfile6.open(kn, std::ios_base::app); // append to file
-  	    }
-  	    outfile6 << timestep << "," << electron_index << "," << pii_e << "," << p_w_e << endl;
-  	    outfile6.close();
-  	    */
-  	  
-  	  
+	    
   	    #undef p_dx_e
             #undef p_dy_e
             #undef p_dz_e
@@ -851,75 +834,7 @@ advance_p_kokkos_unified(
             #undef p_w_e
             #undef pii_e
           } // if ionization event occured
-  	
-  
-  	     /*
-  	     // Make some files
-             //if (int(timestep) % 50 == 0){
-  	     if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 4 == 0){
-  	      
-  	     // Field and Rate: Open file, write value, close file
-  	     char fn [100];
-               snprintf(fn, sizeof fn, "E_mag_t_%g.txt",timestep); 
-  	     std::ofstream outfile;
-  	     if ((int)pi_offset == 0 && LANE == 0) {
-  	       outfile.open(fn); // overwrite old files
-  	       outfile << "# E [V/m],Gamma [s^-1]" << endl; // Header
-  	     }
-  	     else {
-  	       outfile.open(fn, std::ios_base::app); // append to file
-  	     }
-  	     outfile << E_mag_SI << "," << Gamma << endl;
-  	     outfile.close();
-  	     
-  	     // N Ionizations: Open file, write value, close file
-  	     char gn [100];
-  	     snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt",timestep);
-  	     std::ofstream outfile1;
-  	     if ((int)pi_offset == 0 && LANE == 0) {
-                 outfile1.open(gn); // overwrite old files
-  	       outfile1 << "# N ionizations Before" << "," << "# N ionizations After" << "," << "Charge After" << endl; // Header
-  	     }
-  	     else {
-  	       outfile1.open(gn, std::ios_base::app); // append to file
-  	     }
-  	     outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << endl;
-             outfile1.close();
-  	   
-  	   
-  	     // position
-             char hn [100];
-             snprintf(hn, sizeof hn, "Position_ionizations_t_%g.txt",timestep);
-             std::ofstream outfile2;
-             if ((int)pi_offset == 0 && LANE == 0) {
-               outfile2.open(hn); // overwrite old files
-  	     outfile2 << "# x,y,z" << endl;
-             }
-             else {
-               outfile2.open(hn, std::ios_base::app); // append to file                                                                                           
-             }
-             outfile2 << dx[LANE] << "," << dy[LANE] << "," << dz[LANE] << endl;
-             outfile2.close();
-  	   
-  	   
-  	     // velocity
-             char in [100];
-             snprintf(in, sizeof in, "Velocity_ionizations_t_%g.txt",timestep);
-             std::ofstream outfile3;
-             if ((int)pi_offset == 0 && LANE == 0) {
-               outfile3.open(in);
-               outfile3 << "# ux,uy,uz" << endl;
-             }
-             else {
-               outfile3.open(in, std::ios_base::app);                                                                                                                                            
-             }
-             outfile3 << ux[LANE] << "," << uy[LANE] << "," << uz[LANE] << endl;
-             outfile3.close();
-  	
-  	   
-  	     } // if specific timestep for making files
-  	     */
-  	
+  	  
 	} // if not electrons
 	  
 #endif // FIELD_IONIZATION
@@ -1154,6 +1069,16 @@ advance_p_kokkos_unified(
 
 #ifdef FIELD_IONIZATION
 #undef p_q_e
+
+// FIXME: this is temporary  
+if(strcmp(sp->name, "electron") != 0){
+  char kn [100];
+  snprintf(kn, sizeof kn, "Photoelectrons_gpu.txt");
+  std::ofstream outfile;
+  outfile.open(kn, std::ios_base::app); // append to file
+  outfile << g->step << "," << sp->np << "," << sp_e->np << "," << sp->name << endl;
+  outfile.close();
+ }  
 #endif
 
 #undef f_cbx
@@ -1289,6 +1214,7 @@ advance_p_kokkos_gpu(
   k_particles_i_t& k_electrons_i = sp_e->k_p_i_d;  
   Kokkos::View<int> count("count");
   Kokkos::deep_copy(count, sp_e->np);
+  int timestep = g->step;
 #endif
   
 #ifdef VPIC_ENABLE_HIERARCHICAL
@@ -1556,7 +1482,8 @@ advance_p_kokkos_gpu(
         p_uy_e = p_uy;
         p_uz_e = p_uz;
         p_q_e  = q_e_c; // electrons charge in code units
-        p_w_e  = (N_ionization - N_ionization_before) * k_particles(p_index, particle_var::w); // weight is dependent on the number of ionization events and weight of ionized particle		  
+        p_w_e  = (N_ionization - N_ionization_before) * k_particles(p_index, particle_var::w); // weight is dependent on the number of ionization events and weight of ionized particle
+
         #undef p_dx_e
         #undef p_dy_e
         #undef p_dz_e
@@ -1814,6 +1741,16 @@ advance_p_kokkos_gpu(
   //return h_nm(0);
 #ifdef FIELD_IONIZATION
   Kokkos:deep_copy(sp_e->np,count);
+
+  // FIXME: this is temporary  
+if(strcmp(sp->name, "electron") != 0){
+  char kn [100];
+  snprintf(kn, sizeof kn, "Photoelectrons_gpu.txt");
+  std::ofstream outfile;
+  outfile.open(kn, std::ios_base::app); // append to file
+  outfile << g->step << "," << sp->np << "," << sp_e->np << "," << sp->name << endl;
+  outfile.close();
+ }
 #endif  
 }
 
