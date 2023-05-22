@@ -170,13 +170,13 @@ species_t::copy_to_host()
   Kokkos::deep_copy(k_pm_i_h, k_pm_i_d);
   Kokkos::deep_copy(k_nm_h, k_nm_d);
 
-//#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
   if(using_annotations) {
     Kokkos::deep_copy(annotations_h.i32, annotations_d.i32);
     Kokkos::deep_copy(annotations_h.i64, annotations_d.i64);
     Kokkos::deep_copy(annotations_h.f32, annotations_d.f32);
   }
-//#endif
+#endif
 
   nm = k_nm_h(0);
 
@@ -312,8 +312,6 @@ species_t::copy_outbound_to_host()
       movers[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
       movers[i].i     = k_particle_i_movers_h(i);
     });
-
-
 }
 
 void
@@ -359,6 +357,16 @@ species_t::copy_inbound_to_device()
   auto& particles_i = k_p_i_d;
   const int npart = np;
 
+  auto& i32_annotations = annotations_d.i32;
+  auto& i64_annotations = annotations_d.i64;
+  auto& f32_annotations = annotations_d.f32;
+  auto& i32_annotations_copy = annotations_copy_d.i32;
+  auto& i64_annotations_copy = annotations_copy_d.i64;
+  auto& f32_annotations_copy = annotations_copy_d.f32;
+  int num_i32 = num_annotations.nint_vars;
+  int num_i64 = num_annotations.nint64_vars;
+  int num_f32 = num_annotations.nfloat_vars;
+
   Kokkos::parallel_for("append moved particles",
     Kokkos::RangePolicy <Kokkos::DefaultExecutionSpace> (0, num_to_copy),
     KOKKOS_LAMBDA (int i) {
@@ -375,16 +383,16 @@ species_t::copy_inbound_to_device()
 
 #ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
       // Copy int annotations
-      for(int j=0; j<num_annotations.nint_vars; j++) {
-        annotations_h.set<int>(npi, j, annotations_copy_h.get<int>(i, j));
+      for(int j=0; j<num_i32; j++) {
+        i32_annotations(npi,j) = i32_annotations_copy(i,j);
       }
       // Copy int64_t annotations
-      for(int j=0; j<num_annotations.nint64_vars; j++) {
-        annotations_h.set<int64_t>(npi, j, annotations_copy_h.get<int64_t>(i, j));
+      for(int j=0; j<num_i64; j++) {
+        i64_annotations(npi,j) = i64_annotations_copy(i,j);
       }
       // Copy float annnotations
-      for(int j=0; j<num_annotations.nfloat_vars; j++) {
-        annotations_h.set<float>(npi, j, annotations_copy_h.get<float>(i, j));
+      for(int j=0; j<num_f32; j++) {
+        f32_annotations(npi,j) = f32_annotations_copy(i,j);
       }
 #endif
 
@@ -403,9 +411,11 @@ species_t::init_annotations(int num_particles, int num_movers, annotation_var_co
   using_annotations = true;
   num_annotations = annotation_sizes;
   annotations_d = annotations_t<Kokkos::DefaultExecutionSpace>(num_particles, annotation_sizes);
-  annotations_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(num_particles, annotation_sizes);
+//  annotations_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(num_particles, annotation_sizes);
+  annotations_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(annotations_d);
   annotations_copy_d = annotations_t<Kokkos::DefaultExecutionSpace>(num_movers, annotation_sizes);
-  annotations_copy_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(num_movers, annotation_sizes);
+//  annotations_copy_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(num_movers, annotation_sizes);
+  annotations_copy_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(annotations_copy_d);
   annotations_recv_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(num_movers, annotation_sizes);
 }
 #endif

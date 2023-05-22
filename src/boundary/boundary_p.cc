@@ -110,13 +110,6 @@ boundary_p_kokkos(
   int bc[6], shared[6];
   int64_t range[6];
 
-  for( face=0; face<6; face++ ) {
-    bc[face] = g->bc[f2b[face]];
-    shared[face] = (bc[face]>=0) && (bc[face]<world_size) &&
-                   (bc[face]!=world_rank);
-    if( shared[face] ) range[face] = g->range[bc[face]];
-  }
-
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
   int max_annotation_size = 0; // Size in bytes of annotations (for each particle)
   LIST_FOR_EACH(sp, sp_list) {
@@ -129,7 +122,15 @@ boundary_p_kokkos(
     if(annotation_size > max_annotation_size) 
       max_annotation_size = annotation_size;
   }
+  //printf("Rank %d: Max annotation size: %d\n", world_rank, max_annotation_size);
 #endif
+
+  for( face=0; face<6; face++ ) {
+    bc[face] = g->bc[f2b[face]];
+    shared[face] = (bc[face]>=0) && (bc[face]<world_size) &&
+                   (bc[face]!=world_rank);
+    if( shared[face] ) range[face] = g->range[bc[face]];
+  }
 
   // Begin receiving the particle counts
 
@@ -178,6 +179,7 @@ boundary_p_kokkos(
       if( shared[face] ) {
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
         mp_size_send_buffer( mp, f2b[face], 16+nm*(sizeof(particle_injector_t)+max_annotation_size) );
+//printf("Rank %d: Sending %lu bytes, %lu from annotations, to %d\n", world_rank, static_cast<size_t>(16+nm*(sizeof(particle_injector_t)+max_annotation_size)), static_cast<size_t>(nm*(max_annotation_size)), bc[face]);
 #else
         mp_size_send_buffer( mp, f2b[face], 16+nm*sizeof(particle_injector_t) );
 #endif
@@ -278,6 +280,7 @@ boundary_p_kokkos(
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
                 size_t injector_offset = n_send[face] * (sizeof(particle_injector_t) + max_annotation_size);
                 pi = (particle_injector_t*)((uint8_t*)(pi_send[face]) + injector_offset);
+                n_send[face]++;
 #else
                 pi = &pi_send[face][n_send[face]++];
 #endif
@@ -306,21 +309,23 @@ boundary_p_kokkos(
                 (&pi->dx)[axis[face]] = dir[face];
                 pi->i                 = nn - range[face];
                 pi->sp_id             = sp_id;
+//printf("Rank %d: Sending particle ID %ld\n", world_rank, pi->i);
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
                 // Load int annotations
                 int* int_offset = (int*)((uint8_t*)(pi) + sizeof(particle_injector_t));
                 for(int j=0; j<var_counts.nint_vars; j++) {
-                  int_offset[j] = sp->annotations_copy_h.access<int>(copy_index, j);
+                  int_offset[j] = sp->annotations_copy_h.get<int>(copy_index, j);
                 }
                 // Load int64_t annotations
                 int64_t* int64_offset = (int64_t*)((uint8_t*)(int_offset) + var_counts.nint_vars*sizeof(int));
-                for(int j=0; j<var_counts.nint_vars; j++) {
-                  int64_offset[j] = sp->annotations_copy_h.access<int64_t>(copy_index, j);
+                for(int j=0; j<var_counts.nint64_vars; j++) {
+                  int64_offset[j] = sp->annotations_copy_h.get<int64_t>(copy_index, j);
+printf("Rank %d: Sending tracer ID %ld\n", world_rank, int64_offset[j]);
                 }
                 // Load float annnotations
-                float_t* float_offset = (float_t*)((uint8_t*)(int64_offset) + var_counts.nint64_vars*sizeof(int64_t));
-                for(int j=0; j<var_counts.nint_vars; j++) {
-                  float_offset[j] = sp->annotations_copy_h.access<float>(copy_index, j);
+                float* float_offset = (float*)((uint8_t*)(int64_offset) + var_counts.nint64_vars*sizeof(int64_t));
+                for(int j=0; j<var_counts.nfloat_vars; j++) {
+                  float_offset[j] = sp->annotations_copy_h.get<float>(copy_index, j);
                 }
 #endif
                 //goto backfill;
@@ -401,17 +406,20 @@ boundary_p_kokkos(
     if( shared[face] ) {
       *((int *)mp_send_buffer( mp, f2b[face] )) = n_send[face];
       mp_begin_send( mp, f2b[face], sizeof(int), bc[face], f2b[face] );
+//printf("Rank %d: sending %d particles to %d\n", world_rank, n_send[face], bc[face]);
     }
 
   for( face=0; face<6; face++ )
     if( shared[face] )  {
       mp_end_recv( mp, f2b[face] );
       n_recv[face] = *((int *)mp_recv_buffer( mp, f2b[face] ));
+//printf("Rank %d: Receiving %d particles for face %d\n", world_rank, n_recv[face], face);
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
       mp_size_recv_buffer( mp, f2b[face],
                            16+n_recv[face]*(sizeof(particle_injector_t)+max_annotation_size) );
       mp_begin_recv( mp, f2b[face], 16+n_recv[face]*(sizeof(particle_injector_t)+max_annotation_size),
                      bc[face], f2rb[face] );
+//printf("Rank %d: Receive buffer is %lu bytes, %lu from annotations, for port %d\n", world_rank, static_cast<size_t>(16+n_recv[face]*(sizeof(particle_injector_t)+max_annotation_size)), static_cast<size_t>(n_recv[face]*(max_annotation_size)), bc[face]);
 #else
       mp_size_recv_buffer( mp, f2b[face],
                            16+n_recv[face]*sizeof(particle_injector_t) );
@@ -474,19 +482,24 @@ boundary_p_kokkos(
         mp_end_recv( mp, f2b[face] );
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
         recv_buffer = (uint8_t*)(mp_recv_buffer(mp, f2b[face])) + 16;
-        n  = n_recv[face];
+        pi = (particle_injector_t *)
+          (((char *)recv_buffer));
 #else
         pi = (particle_injector_t *)
           (((char *)mp_recv_buffer(mp,f2b[face]))+16);
-        n  = n_recv[face];
 #endif
+        n  = n_recv[face];
       } else continue;
 
       // WARNING: THIS TRUSTS THAT THE INJECTORS (INCLUDING THOSE
       // RECEIVED FROM OTHER NODES) HAVE VALID PARTICLE IDS.
 
       // FIXME: the benefit of doing this backwards goes away. Go forward?
-//      pi += n-1;
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+      pi = (particle_injector_t*)(recv_buffer + (n-1)*(sizeof(particle_injector)+max_annotation_size));
+#else
+      pi += n-1;
+#endif
       for( ; n; pi--, n-- ) {
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
         pi = (particle_injector_t*)(recv_buffer + (n-1)*(sizeof(particle_injector)+max_annotation_size));
@@ -525,6 +538,7 @@ boundary_p_kokkos(
         int pii = pi->i;
         particle_recv_i(write_index) = pii;
 
+//printf("Rank %d: Receiving particle ID %ld\n", world_rank, pii);
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
         // Store int annotations
         int* int_offset = (int*)((uint8_t*)(pi) + sizeof(particle_injector_t));
@@ -535,9 +549,10 @@ boundary_p_kokkos(
         int64_t* int64_offset = (int64_t*)((uint8_t*)(int_offset) + sp_[id]->num_annotations.nint_vars*sizeof(int));
         for(int j=0; j<sp_[id]->num_annotations.nint64_vars; j++) {
           sp_[id]->annotations_recv_h.set<int64_t>(write_index, j, int64_offset[j]);
+printf("Rank %d: Receiving tracer ID %ld\n", world_rank, sp_[id]->annotations_recv_h.get<int64_t>(write_index, j));
         }
         // Store float annnotations
-        float_t* float_offset = (float_t*)((uint8_t*)(int64_offset) + sp_[id]->num_annotations.nint64_vars*sizeof(int64_t));
+        float* float_offset = (float*)((uint8_t*)(int64_offset) + sp_[id]->num_annotations.nint64_vars*sizeof(int64_t));
         for(int j=0; j<sp_[id]->num_annotations.nfloat_vars; j++) {
           sp_[id]->annotations_recv_h.set<float>(write_index, j, float_offset[j]);
         }
@@ -588,17 +603,15 @@ boundary_p_kokkos(
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
             // Copy int annotations
             for(int j=0; j<sp_[id]->num_annotations.nint_vars; j++) {
-//              sp_[id]->annotations_copy_h.access<int>(keep_id, j) = sp_[id]->annotations_recv_h.access<int>(write_index, j);
               sp_[id]->annotations_copy_h.set<int>(keep_id, j, sp_[id]->annotations_recv_h.get<int>(write_index, j));
             }
             // Copy int64_t annotations
             for(int j=0; j<sp_[id]->num_annotations.nint64_vars; j++) {
-//              sp_[id]->annotations_copy_h.access<int64_t>(keep_id, j) = sp_[id]->annotations_recv_h.access<int64_t>(write_index, j);
               sp_[id]->annotations_copy_h.set<int64_t>(keep_id, j, sp_[id]->annotations_recv_h.get<int64_t>(write_index, j));
+printf("Rank %d: Sending tracer ID %ld again\n", world_rank, sp_[id]->annotations_copy_h.get<int64_t>(keep_id, j));
             }
             // Copy float annnotations
             for(int j=0; j<sp_[id]->num_annotations.nfloat_vars; j++) {
-//              sp_[id]->annotations_copy_h.access<float>(keep_id, j) = sp_[id]->annotations_recv_h.access<float>(write_index, j);
               sp_[id]->annotations_copy_h.set<float>(keep_id, j, sp_[id]->annotations_recv_h.get<float>(write_index, j));
             }
 #endif
@@ -622,6 +635,7 @@ boundary_p_kokkos(
   // Having the accumulator array saves us from copying rhob to the host every
   // step where a particle is absorbed.
   if (absorbed){
+//printf("Rank %d: %d particles absorbed\n", world_rank, absorbed);
       int n_fields = fa->g->nv;
       auto& kfd = fa->k_f_d;
       auto& kfad = fa->k_f_rhob_accum_d;

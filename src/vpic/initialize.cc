@@ -38,6 +38,9 @@ vpic_simulation::initialize( int argc,
   if( rank()==0 ) MESSAGE(( "Initializing bound charge density" ));
   TIC FAK->clear_rhof( field_array ); TOC( clear_rhof, 1 );
   LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  LIST_FOR_EACH( sp, tracers_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
+#endif
   TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
   TIC FAK->compute_rhob( field_array ); TOC( compute_rhob, 1 );
 
@@ -63,6 +66,11 @@ vpic_simulation::initialize( int argc,
   LIST_FOR_EACH( sp, species_list ) {
     sp->copy_to_device();
   }
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  LIST_FOR_EACH( sp, tracers_list ) {
+    sp->copy_to_device();
+  }
+#endif
   KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 
   KOKKOS_TIC(); // Time this data movement
@@ -86,6 +94,13 @@ vpic_simulation::initialize( int argc,
       uncenter_p( sp, interpolator_array );
       KOKKOS_TOC( uncenter_p, 1 );
   }
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  LIST_FOR_EACH( sp, tracers_list ) {
+      KOKKOS_TIC();
+      uncenter_p( sp, interpolator_array );
+      KOKKOS_TOC( uncenter_p, 1 );
+  }
+#endif
 
   if( rank()==0 ) MESSAGE(( "Performing initial diagnostics" ));
 

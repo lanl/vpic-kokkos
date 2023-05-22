@@ -74,6 +74,8 @@ option(VPIC_ENABLE_PARTICLE_ANNOTATIONS "Enable particle annotations for additio
 
 option(VPIC_ENABLE_TRACER_PARTICLES "Enable tracer particles" OFF)
 
+option(VPIC_ENABLE_HDF5 "Enable HDF5 support for dumping" OFF)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -348,6 +350,68 @@ if(ENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
 
 #------------------------------------------------------------------------------#
+# HDF5
+#------------------------------------------------------------------------------#
+if(VPIC_ENABLE_HDF5)
+  # Enable HDF5, and the relevant defines
+  find_package(HDF5 REQUIRED)
+  if(NOT HDF5_IS_PARALLEL)
+    message(FATAL_ERROR "HDF5 Parallel support is required: ${HDF5_IS_PARALLEL}")
+  endif()
+  add_definitions(-DVPIC_ENABLE_HDF5)
+#  string(REPLACE ";" " " string_libraries "${HDF5_C_LIBRARIES}")
+  include_directories(${HDF5_INCLUDE_DIR})
+
+  get_target_property(HDF5_INCLUDE_DIRS HDF5::HDF5 INTERFACE_INCLUDE_DIRECTORIES)
+
+#  message(${HDF5_FOUND})
+#  message(${HDF5_VERSION})
+#  message(${HDF5_INCLUDE_DIRS})
+#  message(${HDF5_DEFINITIONS})
+#  message(${HDF5_LIBRARIES})
+#  message(${HDF5_HL_LIBRARIES})
+  
+  set(EXTERNAL_INCLUDES_FILE ${PROJECT_BINARY_DIR}/external_includes)
+  set(EXTERNAL_LIBRARIES_FILE ${PROJECT_BINARY_DIR}/external_libraries)
+
+  set(HDF5_LIBS "hdf5")
+  string(REPLACE " " ";" TEST_LIST ${HDF5_LIBRARIES})
+  foreach(lib ${TEST_LIST})
+    list(APPEND TEST_LIST_TEMP "-l${lib}")
+  endforeach()
+  set(TEST_LIST ${TEST_LIST_TEMP})
+  string(REPLACE ";" " " HDF5_LIB_STR "${TEST_LIST}")
+
+  set(TEST_LIST "")
+  set(TEST_LIST_TEMP "")
+  string(REPLACE " " ";" TEST_LIST ${HDF5_INCLUDE_DIRS})
+  foreach(lib ${TEST_LIST})
+    list(APPEND TEST_LIST_TEMP "-I${lib}")
+  endforeach()
+  set(TEST_LIST ${TEST_LIST_TEMP})
+  string(REPLACE ";" " " HDF5_INC_STR "${TEST_LIST}")
+
+  string(REPLACE "include" "lib" HDF5_LIB_DIRECTORY "${HDF5_INCLUDE_DIRS}")
+#  message(${HDF5_LIB_DIR})
+
+  set(TEST_LIST "")
+  set(TEST_LIST_TEMP "")
+  string(REPLACE " " ";" TEST_LIST ${HDF5_LIB_DIRECTORY})
+  foreach(lib ${TEST_LIST})
+    list(APPEND TEST_LIST_TEMP "-L${lib}")
+  endforeach()
+  set(TEST_LIST ${TEST_LIST_TEMP})
+  string(REPLACE ";" " " HDF5_LIB_DIR "${TEST_LIST}")
+
+  set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${HDF_LIB_STR}")
+  
+  # For an "external" build these will be the same, but for an internal we need to gather both
+  file(GENERATE OUTPUT ${EXTERNAL_INCLUDES_FILE} CONTENT "${HDF5_INC_STR}")
+  file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "")
+#  file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "${HDF5_LIB_DIR} ${HDF5_LIB_STR}")
+endif(VPIC_ENABLE_HDF5)
+
+#------------------------------------------------------------------------------#
 # Output log variables
 #------------------------------------------------------------------------------#
 FIND_PACKAGE(Git)
@@ -459,7 +523,7 @@ else()
   install(TARGETS vpic LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 endif()
 target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
+target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} HDF5::HDF5 Kokkos::kokkos)
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
 
 macro(build_a_vpic name deck)
@@ -467,7 +531,7 @@ macro(build_a_vpic name deck)
     message(FATAL_ERROR "Could not find deck '${deck}'")
   endif()
   add_executable(${name} ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc ${VPIC_SRC})
-  target_link_libraries(${name} vpic Kokkos::kokkos)
+  target_link_libraries(${name} vpic Kokkos::kokkos HDF5::HDF5)
   target_compile_definitions(${name} PRIVATE INPUT_DECK="${deck}")
 endmacro(build_a_vpic)
 

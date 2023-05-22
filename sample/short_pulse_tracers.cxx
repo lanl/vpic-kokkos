@@ -223,7 +223,7 @@ begin_initialization {
 //  int topology_x = 2;
 //  int topology_y = 1;
 //  int topology_z = 2;
-  int topology_x = 1;
+  int topology_x = 2;
   int topology_y = 1;
   int topology_z = 1;
   double quota = 1;             // Run quota in hours.  
@@ -330,7 +330,7 @@ begin_initialization {
 //  int field_interval    = 400;//int(5./omega_L_SI / time_to_SI / dt);
   int field_interval    = 50;//int(5./omega_L_SI / time_to_SI / dt);
 //  int particle_interval = 10*field_interval;
-  int particle_interval = 100*field_interval;
+  int particle_interval = field_interval;
 
 //  int restart_interval = 400;
   int restart_interval = 40000;
@@ -616,10 +616,6 @@ begin_initialization {
     double ymax = (grid->y0+grid->ny*grid->dy);
     double zmin = grid->z0;
     double zmax = (grid->z0+grid->nz*grid->dz);
-printf("Grid (x0, x1): (%f, %f)\n", grid->x0, grid->x1);
-printf("Grid (y0, y1): (%f, %f)\n", grid->y0, grid->y1);
-printf("Grid (z0, z1): (%f, %f)\n", grid->z0, grid->z1);
- 
     
     repeat( (Ne)/(topology_x*topology_y*topology_z) ) {
       double x = uniform( rng(0), xmin, xmax );
@@ -660,16 +656,18 @@ printf("Grid (z0, z1): (%f, %f)\n", grid->z0, grid->z1);
     
  } // if load_particles
 
-printf("# of electrons: %d\n", electron->np);
-printf("species address: %p\n", electron);
-  species_t * electron_tracers = define_tracer_species_with_n("electron_tracers", electron, TracerType::Copy, 1.0);
+  /*--------------------------------------------------------------------------
+   * Create tracer species
+   *------------------------------------------------------------------------*/
+  annotation_var_counts_t electron_annotations;
+  species_t * electron_tracers = define_tracer_species_with_n("electron_tracers", electron, TracerType::Copy, 10.0, 1.1, electron_annotations);
   electron_tracers->copy_to_device();
-  species_t * ion_I2_tracers   = define_tracer_species_with_n("ion_I2_tracers", ion_I2, TracerType::Copy, 1.0);
-  ion_I2_tracers->copy_to_device();
+  printf("Electron weight: %f\n", fabs(qe));
 
-  electron_tracers->sort_interval = -1;
-//  ion_I1_tracers->sort_interval = -1;
-  ion_I2_tracers->sort_interval = -1;
+  annotation_var_counts_t ion_I2_annotations;
+  species_t * ion_I2_tracers   = define_tracer_species_with_n("ion_I2_tracers", ion_I2, TracerType::Copy, 10.0, 1.1, ion_I2_annotations);
+  ion_I2_tracers->copy_to_device();
+  printf("Ion2 weight: %f\n", fabs(qi_I2)/Z_I2);
 
 
  /*--------------------------------------------------------------------------
@@ -1035,14 +1033,22 @@ begin_diagnostics {
 //    }
 //  }
 
-  species_t* sp;
-  LIST_FOR_EACH(sp, tracers_list) {
-    sp->copy_to_host();
-  }
-  dump_tracer_particles_csv( "electron_tracers",
-                             "electron_tracers/tracers", 1, 0);
-  dump_tracer_particles_csv( "ion_I2_tracers",
-                             "ion_I2_tracers/ion_I2_tracers", 1, 0);
+//  if ( should_dump(particle) && global->load_particles ) {
+    species_t* sp;
+
+    /*--------------------------------------------------------------------------
+     * Dump tracer species
+     *------------------------------------------------------------------------*/
+    LIST_FOR_EACH(sp, tracers_list) {
+      sp->copy_to_host();
+    }
+    interpolator_array->copy_to_host();
+    
+    dump_tracers_csv( "electron_tracers",
+                      "electron_tracers/electron_tracers", step() != 0, 0);
+    dump_tracers_csv( "ion_I2_tracers",
+                      "ion_I2_tracers/ion_I2_tracers", step() != 0, 0);
+
 #endif
 
 

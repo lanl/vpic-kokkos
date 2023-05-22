@@ -18,6 +18,10 @@
 /* -1 means no ranks talk */
 #define VERBOSE_rank -1
 
+#ifdef VPIC_ENABLE_HDF5
+#include "hdf5.h"
+#endif
+
 // FIXME: NEW FIELDS IN THE GRID READ/WRITE WAS HACKED UP TO BE BACKWARD
 // COMPATIBLE WITH EXISTING EXTERNAL 3RD PARTY VISUALIZATION SOFTWARE.
 // IN THE LONG RUN, THIS EXTERNAL SOFTWARE WILL NEED TO BE UPDATED.
@@ -126,10 +130,10 @@ vpic_simulation::dump_materials( const char *fname ) {
 }
 
 void
-vpic_simulation::dump_tracer_particles_csv( const char *sp_name,
-                                        const char *fbase,
-                                        const int append,
-                                        int ftag )
+vpic_simulation::dump_tracers_csv( const char *sp_name,
+                                   const char *fbase,
+                                   const int append,
+                                   int ftag )
 {
 
     species_t *sp;
@@ -160,11 +164,40 @@ vpic_simulation::dump_tracer_particles_csv( const char *sp_name,
     FileIOStatus status = fileIO.open(fname, append ? io_append : io_write);
     if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
 
-    if( rank() == 0 && append==0 ) {
-      fileIO.print( "step,tracer_id,particle_id,dx,dy,dz,ux,uy,uz,w,posx,posy,posz" );
+    //if( rank() == 0 && append==0 ) {
+    if( append==0 ) {
+      fileIO.print( "step,rank,tracer_id,cell_id,dx,dy,dz,ux,uy,uz,w,posx,posy,posz,ex,ey,ez,bx,by,bz,rho,jx,px,txx,jy,py,tyy,jz,pz,tzz\n" );
     }
 
-    if( rank() == 0 ) {
+    auto& particles = sp->k_p_d;
+    auto& particles_i = sp->k_p_i_d;
+    auto& interpolators_k = interpolator_array->k_i_d;
+
+    Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
+    accumulate_hydro_p_kokkos(
+        particles,
+        particles_i,
+        hydro_array->k_h_d,
+        interpolators_k,
+        sp
+    );
+
+    // This is slower in my tests
+    //synchronize_hydro_array_kokkos(hydro_array);
+
+    hydro_array->copy_to_host();
+
+    synchronize_hydro_array( hydro_array );
+
+    if(sp->tracer_type == TracerType::Copy) {
+      int w_idx = sp->num_annotations.get_annotation_index<float>("Weight");
+      auto w_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      auto w_annote = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL(), w_idx);
+      Kokkos::deep_copy(w_subview, w_annote);
+    }
+    int tracer_idx = sp->num_annotations.get_annotation_index<int64_t>("TracerID");
+    auto& interp = interpolator_array->k_i_h;
+
 #define _nxg (grid->nx + 2)
 #define _nyg (grid->ny + 2)
 #define _nzg (grid->nz + 2)
@@ -174,19 +207,36 @@ vpic_simulation::dump_tracer_particles_csv( const char *sp_name,
 #define tracer_x ((i0 + (dx0-1)*0.5) * grid->dx + grid->x0)
 #define tracer_y ((j0 + (dy0-1)*0.5) * grid->dy + grid->y0)
 #define tracer_z ((k0 + (dz0-1)*0.5) * grid->dz + grid->z0)
-      for(uint32_t i=0; i<sp->np; i++) {
-        float dx0 = sp->k_p_h(i, particle_var::dx);
-        float dy0 = sp->k_p_h(i, particle_var::dy);
-        float dz0 = sp->k_p_h(i, particle_var::dz);
-        float ux0 = sp->k_p_h(i, particle_var::ux);
-        float uy0 = sp->k_p_h(i, particle_var::uy);
-        float uz0 = sp->k_p_h(i, particle_var::uz);
-        float w0  = sp->k_p_h(i, particle_var::w);
-        int ii = sp->k_p_i_h(i);
-        fileIO.print( "%ld,%ld,%d,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e\n", 
-          step(), sp->annotations_h.get<int64_t>(i,0), ii,
-          dx0, dy0, dz0, ux0, uy0, uz0, w0, tracer_x, tracer_y, tracer_z);
-      }
+    for(uint32_t i=0; i<sp->np; i++) {
+      float dx0 = sp->k_p_h(i, particle_var::dx);
+      float dy0 = sp->k_p_h(i, particle_var::dy);
+      float dz0 = sp->k_p_h(i, particle_var::dz);
+      float ux0 = sp->k_p_h(i, particle_var::ux);
+      float uy0 = sp->k_p_h(i, particle_var::uy);
+      float uz0 = sp->k_p_h(i, particle_var::uz);
+      float w0  = sp->k_p_h(i, particle_var::w);
+      int   ii  = sp->k_p_i_h(i);
+      float ex  = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
+      float ey  = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
+      float ez  = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
+      float bx  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
+      float by  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
+      float bz  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
+      float rho = hydro_array->k_h_h(ii, hydro_var::rho);
+      float jx  = hydro_array->k_h_h(ii, hydro_var::jx);
+      float px  = hydro_array->k_h_h(ii, hydro_var::px);
+      float txx = hydro_array->k_h_h(ii, hydro_var::txx);
+      float jy  = hydro_array->k_h_h(ii, hydro_var::jy);
+      float py  = hydro_array->k_h_h(ii, hydro_var::py);
+      float tyy = hydro_array->k_h_h(ii, hydro_var::tyy);
+      float jz  = hydro_array->k_h_h(ii, hydro_var::jz);
+      float pz  = hydro_array->k_h_h(ii, hydro_var::pz);
+      float tzz = hydro_array->k_h_h(ii, hydro_var::tzz);
+      fileIO.print( "%ld,%d,%ld,%d,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e,%e\n", 
+        step(), rank(), sp->annotations_h.get<int64_t>(i,tracer_idx), ii,
+        dx0, dy0, dz0, ux0, uy0, uz0, w0, tracer_x, tracer_y, tracer_z,
+        ex, ey, ez, bx, by, bz, rho, jx, px, txx, jy, py, tyy, jz, pz, tzz);
+    }
 #undef nxg 
 #undef nyg 
 #undef nzg 
@@ -196,7 +246,6 @@ vpic_simulation::dump_tracer_particles_csv( const char *sp_name,
 #undef tracer_x 
 #undef tracer_y 
 #undef tracer_z 
-    }
 
     if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
 }
@@ -452,6 +501,76 @@ vpic_simulation::dump_particles( const char *sp_name,
     sp->max_np = sp_max_np;
 
     if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
+}
+
+/*------------------------------------------------------------------------------
+ * HDF5 Dumps
+ *---------------------------------------------------------------------------*/
+void vpic_simulation::dump_tracers_hdf5(const char* sp_name, 
+                                        const char*fbase, 
+                                        int append, 
+                                        int fname_tag) {
+//  char fname[256];
+//  char group_name[256];
+//  char particle_scratch[128];
+//  char subparticle_scratch[128];
+//    
+//  species_t* sp = find_species_name( sp_name, tracers_list );
+//  if( !sp ) ERROR(( "Invalid tracer species name \"%s\".", sp_name));
+//
+//  // Update the particles on the host only if they haven't been recently
+//  if (step() > sp->last_copied)
+//    sp->copy_to_host();
+//
+//  // Control amount of data dumped with stride TODO: Make user adjustable
+//  const int stride_particle_dump = 1;
+//  const long long np_local = (sp->np + stride_particle_dump - 1) / stride_particle_dump;
+//  
+////  // Timing measurement flag
+////  bool print_timing = false;
+////  double ec1 = uptime();
+//
+//  int sp_np = sp->np;
+//  int sp_max_np = sp->max_np;
+//
+//  // Copy particles?
+//  
+//  // Center particles?
+//
+////  ec1 = uptime() - ec1;
+////  if(print_timing) MESSAGE(("Time in copying particle data: %fs, np_local = %lld", ec1, np_local));
+//
+//  // Create target directory and subdirectory for the timestep
+//  sprintf(particle_scratch, "./%s", "particle_hdf5");
+//  sprintf(subparticle_scratch, "%s/T.%ld/", particle_scratch, step());
+//  dump_mkdir(particle_scratch);
+//  dump_mkdir(subparticle_scratch);
+//
+//  // Open HDF5 file for species
+//  sprintf(fname, "%s/%s_%ld.h5", subparticle_scratch, sp->name, step());
+//  sprintf(group_name, "/Timestep_%ld", step());
+//  double el1 = uptime();
+//  
+//  hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS); // Create property list with file access property
+//  h5Pset_fapl_mpio(plist_d, MPI_COMM_WORLD, MPI_INFO_NULL); // Store MPI IO communication info to file access property list (MPI_INFO_NULL == No hints)
+//  hid_t file_id = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id); // Create HDF5 file, truncate if it already exists. Use default file creation property list
+//  hid_t group_id = H5Gcreate(file_id, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); // Create group with default link, group creation, and group access property lists
+//
+//  H5Pclose(plist_id); // Close property list
+//
+//  //Calculate the total number of particles and the offsets for each rank
+//  long long total_particles, offset;
+//  long long numparticles = np_local;
+//  MPI_Allreduce(&numparticles, &total_particles, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD); 
+//  MPI_Scan(&numparticles, &offset, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+//  offset -= numparticles; 
+//
+//  // Create new simple dataspace and open
+//  hid_t filespace = H5Screate_simple(1, (hsize_t *)&total_particles, NULL);
+//
+//  hsize_t memspace_count_temp = numparticles * 8;
+//  hid_t memspace = H5Screate_simple(1, &memspace_count_temp, NULL);
+//
 }
 
 /*------------------------------------------------------------------------------

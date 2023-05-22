@@ -44,6 +44,7 @@ int vpic_simulation::advance(void)
 #endif
 
   KOKKOS_TOC( sort_particles, 1);
+//printf("Sorted normal and tracer species\n");
 
   // At this point, fields are at E_0 and B_0 and the particle positions
   // are at r_0 and u_{-1/2}.  Further the mover lists for the particles should
@@ -75,12 +76,15 @@ int vpic_simulation::advance(void)
   // TODO: implement
   //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
+//printf("Starting normal push\n");
   // DEVICE function - Touches particles, particle movers, accumulators, interpolators
   LIST_FOR_EACH( sp, species_list )
   {
       // Now Times internally
       advance_p( sp, interpolator_array, field_array );
   }
+//Kokkos::fence();
+//printf("Pushed normal species\n");
 #ifdef VPIC_ENABLE_TRACER_PARTICLES
   LIST_FOR_EACH( sp, tracers_list )
   {
@@ -88,7 +92,7 @@ int vpic_simulation::advance(void)
       advance_p( sp, interpolator_array, field_array );
   }
 #endif
-  //printf("Pushed\n");
+//  printf("Pushed tracer species\n");
 
   // Reduce accumulator contributions into the device array
   KOKKOS_TIC();
@@ -112,6 +116,7 @@ int vpic_simulation::advance(void)
   }
 #endif
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+//printf("Copied outbound to host for species and tracers\n");
 
   // Because the partial position push when injecting aged particles might
   // place those particles onto the guard list (boundary interaction) and
@@ -185,14 +190,23 @@ int vpic_simulation::advance(void)
 
   // HOST - Touches particle copies, particle_movers, particle_injectors,
   // accumulators (move_p), neighbors
+//printf("Starting boundar_p\n");
   TIC
     for( int round=0; round<num_comm_round; round++ )
     {
       //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
+//mp_barrier();
+//printf("Regular species\n");
       boundary_p_kokkos( particle_bc_list, species_list, field_array );
+//mp_barrier();
+//printf("Tracer species\n");
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
       boundary_p_kokkos( particle_bc_list, tracers_list, field_array );
+#endif
+//mp_barrier();
     }
   TOC( boundary_p, num_comm_round );
+//printf("Done with boundar_p\n");
 
   // Clean_up once boundary p is done
   // Copy back the right data to GPU
@@ -228,6 +242,7 @@ int vpic_simulation::advance(void)
   {
       KOKKOS_TIC(); // Time this data movement
       const int nm = sp->k_nm_h(0);
+printf("Rank %d: Removing %d tracers from %s\n", rank(), nm, sp->name);
 
       // TODO: this can be hoisted to the end of advance_p if desired
       compressor.compress(

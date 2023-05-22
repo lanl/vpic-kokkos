@@ -104,6 +104,13 @@ struct DefaultCompress {
             }
         });
 
+        auto& i32_annotations = sp->annotations_d.i32;
+        auto& i64_annotations = sp->annotations_d.i64;
+        auto& f32_annotations = sp->annotations_d.f32;
+        int num_i32 = sp->num_annotations.nint_vars;
+        int num_i64 = sp->num_annotations.nint64_vars;
+        int num_f32 = sp->num_annotations.nfloat_vars;
+
         // We will use the first 0-nm of safe_index to pull from
         // We will use the nm -> 2nm range for "panic picks", if the first wasn't safe (involves atomics..)
         Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
@@ -176,6 +183,20 @@ struct DefaultCompress {
             particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
             particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
             particles_i(write_to) = particles_i(pull_from);
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+            // Move int annotations
+            for(int j=0; j<num_i32; j++) {
+              i32_annotations(write_to,j) = i32_annotations(pull_from,j);
+            }
+            // Move int64_t annotations
+            for(int j=0; j<num_i64; j++) {
+              i64_annotations(write_to,j) = i64_annotations(pull_from,j);
+            }
+            // Move float annnotations
+            for(int j=0; j<num_f32; j++) {
+              f32_annotations(write_to,j) = f32_annotations(pull_from,j);
+            }
+#endif
         });
 
         Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
@@ -194,6 +215,20 @@ struct DefaultCompress {
             particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
             particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
             particles_i(write_to) = particles_i(pull_from);
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+            // Move int annotations
+            for(int j=0; j<num_i32; j++) {
+              i32_annotations(write_to,j) = i32_annotations(pull_from,j);
+            }
+            // Move int64_t annotations
+            for(int j=0; j<num_i64; j++) {
+              i64_annotations(write_to,j) = i64_annotations(pull_from,j);
+            }
+            // Move float annnotations
+            for(int j=0; j<num_f32; j++) {
+              f32_annotations(write_to,j) = f32_annotations(pull_from,j);
+            }
+#endif
         });
     }
 

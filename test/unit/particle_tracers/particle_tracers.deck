@@ -138,7 +138,7 @@ begin_initialization {
       }
       IDs.insert(id);
     }
-    if(IDs.size() != elec_tracer->np) {
+    if(IDs.size() != static_cast<uint32_t>(elec_tracer->np)) {
       sim_log("FAIL: "<< IDs.size() << " IDs but"<< elec_tracer->np <<" particles in "<<elec_tracer->name); abort(7);
     } else {
       sim_log("info: IDs of "<< elec_tracer->name << " look reasonable");
@@ -229,7 +229,7 @@ begin_initialization {
       }
       IDs.insert(id);
     }
-    if(IDs.size() != elec_tracer2->np) {
+    if(IDs.size() != static_cast<uint32_t>(elec_tracer2->np)) {
       sim_log("FAIL: "<< IDs.size() << " IDs but"<< elec_tracer2->np <<" particles in "<<elec_tracer2->name); abort(7);
     } else {
       sim_log("info: IDs of "<< elec_tracer2->name << " look reasonable");
@@ -317,7 +317,7 @@ begin_initialization {
       }
       IDs.insert(id);
     }
-    if(IDs.size() != elec_tracer3->np) {
+    if(IDs.size() != static_cast<uint32_t>(elec_tracer3->np)) {
       sim_log("FAIL: "<< IDs.size() << " IDs but"<< elec_tracer3->np <<" particles in "<<elec_tracer3->name); abort(21);
     } else {
       sim_log("info: IDs of "<< elec_tracer3->name << " look reasonable");
@@ -425,7 +425,7 @@ begin_initialization {
       }
       IDs.insert(id);
     }
-    if(IDs.size() != elec_tracer4->np) {
+    if(IDs.size() != static_cast<uint32_t>(elec_tracer4->np)) {
       sim_log("FAIL: "<< IDs.size() << " IDs but"<< elec_tracer4->np <<" particles in "<<elec_tracer4->name); abort(28);
     } else {
       sim_log("info: IDs of "<< elec_tracer4->name << " look reasonable");
@@ -524,7 +524,7 @@ begin_initialization {
       }
       IDs.insert(id);
     }
-    if(IDs.size() != elec_tracer5->np) {
+    if(IDs.size() != static_cast<uint32_t>(elec_tracer5->np)) {
       sim_log("FAIL: "<< IDs.size() << " IDs but"<< elec_tracer5->np <<" particles in "<<elec_tracer5->name); abort(36);
     } else {
       sim_log("info: IDs of "<< elec_tracer5->name << " look reasonable");

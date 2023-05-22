@@ -240,7 +240,7 @@ public:
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
   void dump_species( const char *fname , bool tracers);
-  void dump_tracer_particles_csv( const char *sp_name, const char *fbase, int append = 1,
+  void dump_tracers_csv( const char *sp_name, const char *fbase, int append = 1,
                                   int fname_tag = 1 );
 
   // Binary dumps
@@ -252,6 +252,9 @@ public:
                    int fname_tag = 1 );
   void dump_particles( const char *sp_name, const char *fbase,
                        int fname_tag = 1 );
+
+  // HDF5 dumps
+  void dump_tracers_hdf5(const char* sp_name, const char*fbase, int append=1, int fname_tag=1);
 
   // convenience functions for simlog output
   void create_field_list(char * strlist, DumpParameters & dumpParams);
@@ -537,7 +540,7 @@ public:
 //#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
   inline species_t * 
   define_tracer_species(const char* name,
-                        const species_t* original_species, 
+                        species_t* original_species, 
                         const int max_local_np,
                         const int max_local_nm,
                         annotation_var_counts_t annotations = annotation_var_counts_t()) {
@@ -549,10 +552,13 @@ public:
                                   grid);
 
     // Add annotations for globas tracer ID
-    annotations.nint64_vars += 1;
+    annotations.add_annotation<int64_t>(std::string("TracerID"));
     tracers->using_annotations = true;
     tracers->num_annotations = annotations;
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
+
+    // Set parent species pointer
+    tracers->parent_species = original_species;
 
     return append_species(tracers, &tracers_list); 
   }
@@ -580,10 +586,18 @@ public:
                                   grid);
 
     // Add annotations for globas tracer ID
-    annotations.nint64_vars += 1;
+    annotations.add_annotation<int64_t>(std::string("TracerID"));
+    if(tracer_type == TracerType::Copy)
+      annotations.add_annotation<float>(std::string("Weight"));
     tracers->using_annotations = true;
     tracers->num_annotations = annotations;
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
+
+    // Set parent species pointer
+    tracers->parent_species = original_species;
+
+    // Set tracer type
+    tracers->tracer_type = tracer_type;
 
     // Copy of move particles to tracers
     tracers->create_tracers_by_percentage(original_species, tracer_type, percentage, rank());
@@ -611,10 +625,18 @@ public:
                                   grid);
 
     // Add annotations for globas tracer ID
-    annotations.nint64_vars += 1;
+    annotations.add_annotation<int64_t>(std::string("TracerID"));
+    if(tracer_type == TracerType::Copy)
+      annotations.add_annotation<float>(std::string("Weight"));
     tracers->using_annotations = true;
     tracers->num_annotations = annotations;
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
+
+    // Set parent species pointer
+    tracers->parent_species = original_species;
+
+    // Set tracer type
+    tracers->tracer_type = tracer_type;
 
     // Copy of move particles to tracers
     int ntracers = static_cast<int>(static_cast<float>(original_species->np) / skip);
@@ -630,12 +652,6 @@ public:
                                 const float ntracers,
                                 const float over_alloc_factor = 1.0,
                                 annotation_var_counts_t annotations = annotation_var_counts_t()) {
-if(original_species == NULL)
-  printf("Something really wrong\n");
-printf("# of electrons: %d\n", original_species->np);
-printf("name address: %p\n", name);
-printf("species address: %p\n", original_species);
-printf("ntracers: %f\n", ntracers);
     if(ntracers < 1.0 || static_cast<int>(ntracers) > original_species->np)
       ERROR(( "%f is a bad number of tracers. Should be in [%d,%d]", ntracers, 1, original_species->np));
     return define_tracer_species_by_nth(name, original_species, tracer_type, original_species->np / ntracers, over_alloc_factor, annotations);
@@ -662,10 +678,18 @@ printf("ntracers: %f\n", ntracers);
                                   grid);
 
     // Add annotations for globas tracer ID
-    annotations.nint64_vars += 1;
+    annotations.add_annotation<int64_t>(std::string("TracerID"));
+    if(tracer_type == TracerType::Copy)
+      annotations.add_annotation<float>(std::string("Weight"));
     tracers->using_annotations = true;
     tracers->num_annotations = annotations;
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
+
+    // Set parent species pointer
+    tracers->parent_species = original_species;
+
+    // Set tracer type
+    tracers->tracer_type = tracer_type;
 
     // Copy of move particles to tracers
     tracers->create_tracers_by_predicate(original_species, tracer_type, filter, rank());
