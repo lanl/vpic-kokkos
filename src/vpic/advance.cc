@@ -29,7 +29,7 @@ int vpic_simulation::advance(void)
       if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
       {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-          sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, grid->nv);
+          sorter.sort( sp, grid->nv);
       }
   }
 #ifdef VPIC_ENABLE_TRACER_PARTICLES
