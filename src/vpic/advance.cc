@@ -242,7 +242,7 @@ int vpic_simulation::advance(void)
   {
       KOKKOS_TIC(); // Time this data movement
       const int nm = sp->k_nm_h(0);
-printf("Rank %d: Removing %d tracers from %s\n", rank(), nm, sp->name);
+//printf("Rank %d: Removing %d tracers from %s\n", rank(), nm, sp->name);
 
       // TODO: this can be hoisted to the end of advance_p if desired
       compressor.compress(

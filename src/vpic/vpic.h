@@ -549,13 +549,13 @@ public:
                                     grid ), &species_list );
   }
 
-//#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+//#if defined( VPIC_ENABLE_PARTICLE_ANNOTATIONS ) || defined( VPIC_ENABLE_TRACER_PARTICLES )
   inline species_t * 
   define_tracer_species(const char* name,
                         species_t* original_species, 
                         const int max_local_np,
                         const int max_local_nm,
-                        annotation_var_counts_t annotations = annotation_var_counts_t()) {
+                        annotation_vars_t annotations = annotation_vars_t()) {
     // Create tracer species based on the original species
     species_t* tracers = species( name, 
                                   original_species->q, original_species->m, 
@@ -566,53 +566,11 @@ public:
     // Add annotations for globas tracer ID
     annotations.add_annotation<int64_t>(std::string("TracerID"));
     tracers->using_annotations = true;
-    tracers->num_annotations = annotations;
+    tracers->annotation_vars = annotations;
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
 
     // Set parent species pointer
     tracers->parent_species = original_species;
-
-    return append_species(tracers, &tracers_list); 
-  }
-
-  inline species_t * 
-  define_tracer_species_by_percentage(const char* name,
-                                      species_t* original_species, 
-                                      const TracerType tracer_type, 
-                                      const float percentage, 
-                                      const float over_alloc_factor = 1.0,
-                                      annotation_var_counts_t annotations = annotation_var_counts_t()) {
-    // Check if input percentage is valid
-    if((percentage <= 0.0) || (percentage >= 100.0))
-      ERROR(( "Percentage (%f) is not in [0,100]", percentage));
-
-    // Adjust amount of local particles/movers for tracers
-    int max_local_np = static_cast<int>(static_cast<float>(original_species->max_np) * over_alloc_factor * (percentage/100.0)) + 1;
-    int max_local_nm = static_cast<int>(static_cast<float>(original_species->max_nm) * over_alloc_factor * (percentage/100.0)) + 1;
-    
-    // Create tracer species based on the original species
-    species_t* tracers = species( name, 
-                                  original_species->q, original_species->m, 
-                                  max_local_np, max_local_nm, 
-                                  original_species->sort_interval, original_species->sort_out_of_place, 
-                                  grid);
-
-    // Add annotations for globas tracer ID
-    annotations.add_annotation<int64_t>(std::string("TracerID"));
-    if(tracer_type == TracerType::Copy)
-      annotations.add_annotation<float>(std::string("Weight"));
-    tracers->using_annotations = true;
-    tracers->num_annotations = annotations;
-    tracers->init_annotations(max_local_np, max_local_nm, annotations);
-
-    // Set parent species pointer
-    tracers->parent_species = original_species;
-
-    // Set tracer type
-    tracers->tracer_type = tracer_type;
-
-    // Copy of move particles to tracers
-    tracers->create_tracers_by_percentage(original_species, tracer_type, percentage, rank());
 
     return append_species(tracers, &tracers_list); 
   }
@@ -623,7 +581,7 @@ public:
                                 const TracerType tracer_type, 
                                 const float skip,
                                 const float over_alloc_factor = 1.0,
-                                annotation_var_counts_t annotations = annotation_var_counts_t()) {
+                                annotation_vars_t annotations = annotation_vars_t()) {
 
     // Adjust amount of local particles/movers for tracers
     int max_local_np = (static_cast<int>(static_cast<float>(original_species->max_np) * over_alloc_factor) / skip) + 1;
@@ -640,8 +598,12 @@ public:
     annotations.add_annotation<int64_t>(std::string("TracerID"));
     if(tracer_type == TracerType::Copy)
       annotations.add_annotation<float>(std::string("Weight"));
+    // Copy any annotations from the parent species
+    if(original_species->using_annotations) {
+      annotations.combine(original_species->annotation_vars);
+    }
     tracers->using_annotations = true;
-    tracers->num_annotations = annotations;
+    tracers->annotation_vars = annotations;
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
 
     // Set parent species pointer
@@ -663,9 +625,24 @@ public:
                                 const TracerType tracer_type, 
                                 const float ntracers,
                                 const float over_alloc_factor = 1.0,
-                                annotation_var_counts_t annotations = annotation_var_counts_t()) {
+                                annotation_vars_t annotations = annotation_vars_t()) {
     if(ntracers < 1.0 || static_cast<int>(ntracers) > original_species->np)
       ERROR(( "%f is a bad number of tracers. Should be in [%d,%d]", ntracers, 1, original_species->np));
+    return define_tracer_species_by_nth(name, original_species, tracer_type, original_species->np / ntracers, over_alloc_factor, annotations);
+  }
+
+  inline species_t * 
+  define_tracer_species_by_percentage(const char* name,
+                                      species_t* original_species, 
+                                      const TracerType tracer_type, 
+                                      const float percentage, 
+                                      const float over_alloc_factor = 1.0,
+                                      annotation_vars_t annotations = annotation_vars_t()) {
+    // Check if input percentage is valid
+    if((percentage <= 0.0) || (percentage >= 100.0))
+      ERROR(( "Percentage (%f) is not in [0,100]", percentage));
+    
+    int ntracers = static_cast<float>(original_species->np) * (percentage/100.0);
     return define_tracer_species_by_nth(name, original_species, tracer_type, original_species->np / ntracers, over_alloc_factor, annotations);
   }
 
@@ -675,7 +652,7 @@ public:
                                       const TracerType tracer_type, 
                                       std::function <bool (particle_t)> filter,
                                       const float over_alloc_factor = 1.0,
-                                      annotation_var_counts_t annotations = annotation_var_counts_t()) {
+                                      annotation_vars_t annotations = annotation_vars_t()) {
 
     // Adjust amount of local particles/movers for tracers
     const size_t count_true = std::count_if(original_species->p, original_species->p + original_species->np, filter);
@@ -693,8 +670,12 @@ public:
     annotations.add_annotation<int64_t>(std::string("TracerID"));
     if(tracer_type == TracerType::Copy)
       annotations.add_annotation<float>(std::string("Weight"));
+    // Copy any annotations from the parent species
+    if(original_species->using_annotations) {
+      annotations.combine(original_species->annotation_vars);
+    }
     tracers->using_annotations = true;
-    tracers->num_annotations = annotations;
+    tracers->annotation_vars = annotations;
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
 
     // Set parent species pointer

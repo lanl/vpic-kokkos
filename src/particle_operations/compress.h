@@ -104,12 +104,16 @@ struct DefaultCompress {
             }
         });
 
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
         auto& i32_annotations = sp->annotations_d.i32;
         auto& i64_annotations = sp->annotations_d.i64;
         auto& f32_annotations = sp->annotations_d.f32;
-        int num_i32 = sp->num_annotations.nint_vars;
-        int num_i64 = sp->num_annotations.nint64_vars;
-        int num_f32 = sp->num_annotations.nfloat_vars;
+        auto& f64_annotations = sp->annotations_d.f64;
+        int num_i32 = sp->annotation_vars.i32_vars.size();
+        int num_i64 = sp->annotation_vars.i64_vars.size();
+        int num_f32 = sp->annotation_vars.f32_vars.size();
+        int num_f64 = sp->annotation_vars.f64_vars.size();
+#endif
 
         // We will use the first 0-nm of safe_index to pull from
         // We will use the nm -> 2nm range for "panic picks", if the first wasn't safe (involves atomics..)
@@ -196,6 +200,10 @@ struct DefaultCompress {
             for(int j=0; j<num_f32; j++) {
               f32_annotations(write_to,j) = f32_annotations(pull_from,j);
             }
+            // Move double annnotations
+            for(int j=0; j<num_f64; j++) {
+              f64_annotations(write_to,j) = f64_annotations(pull_from,j);
+            }
 #endif
         });
 
@@ -227,6 +235,10 @@ struct DefaultCompress {
             // Move float annnotations
             for(int j=0; j<num_f32; j++) {
               f32_annotations(write_to,j) = f32_annotations(pull_from,j);
+            }
+            // Move double annnotations
+            for(int j=0; j<num_f64; j++) {
+              f64_annotations(write_to,j) = f64_annotations(pull_from,j);
             }
 #endif
         });

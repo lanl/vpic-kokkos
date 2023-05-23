@@ -85,43 +85,36 @@ typedef struct pb_diagnostic {
 
 } pb_diagnostic_t;
 
-typedef struct annotation_var_counts {
-  int nint_vars;
-  int nint64_vars;
-  int nfloat_vars;
+typedef struct annotation_vars {
   std::vector<std::string> i32_vars;
   std::vector<std::string> i64_vars;
   std::vector<std::string> f32_vars;
+  std::vector<std::string> f64_vars;
  
-  annotation_var_counts() {
-    nint_vars = 0;
-    nint64_vars = 0;
-    nfloat_vars = 0;
+  annotation_vars() {
   }
 
-  annotation_var_counts(const annotation_var_counts& a) {
-    nint_vars = a.nint_vars;
-    nint64_vars = a.nint64_vars;
-    nfloat_vars = a.nfloat_vars;
+  annotation_vars(const annotation_vars& a) {
     i32_vars = a.i32_vars;
     i64_vars = a.i64_vars;
     f32_vars = a.f32_vars;
+    f64_vars = a.f64_vars;
   }
 
   template<typename AnnotationType>
   int add_annotation(std::string name) {
     if constexpr(std::is_same<AnnotationType, int>::value) {
-      nint_vars += 1;
       i32_vars.push_back(name);
-      return nint_vars-1;
+      return i32_vars.size()-1;
     } else if (std::is_same<AnnotationType, int64_t>::value) {
-      nint64_vars += 1;
       i64_vars.push_back(name);
-      return nint64_vars-1;
+      return i64_vars.size()-1;
     } else if (std::is_same<AnnotationType, float>::value) {
-      nfloat_vars += 1;
       f32_vars.push_back(name);
-      return nfloat_vars-1;
+      return f32_vars.size()-1;
+    } else if (std::is_same<AnnotationType, double>::value) {
+      f64_vars.push_back(name);
+      return f64_vars.size()-1;
     } 
     return -1;
   }
@@ -146,39 +139,100 @@ typedef struct annotation_var_counts {
           return i;
         }
       }
+    } else if (std::is_same<AnnotationType, double>::value) {
+      for(uint32_t i=0; i<f64_vars.size(); i++) {
+        if(name.compare(f64_vars[i]) == 0) {
+          return i;
+        }
+      }
     } 
     return -1;
   }
 
-} annotation_var_counts_t;
+  void combine(annotation_vars& a) {
+    for(uint32_t i=0; i<a.i32_vars.size(); i++) {
+      bool found = false;
+      for(uint32_t j=0; j<i32_vars.size(); j++) {
+        if(a.i32_vars[i].compare(i32_vars[j])) {
+          found = true;
+          break;
+        }
+      }
+      if(!found) {
+        add_annotation<int>(a.i32_vars[i]);
+      }
+    }
+    for(uint32_t i=0; i<a.i64_vars.size(); i++) {
+      bool found = false;
+      for(uint32_t j=0; j<i64_vars.size(); j++) {
+        if(a.i64_vars[i].compare(i64_vars[j])) {
+          found = true;
+          break;
+        }
+      }
+      if(!found) {
+        add_annotation<int64_t>(a.i64_vars[i]);
+      }
+    }
+    for(uint32_t i=0; i<a.f32_vars.size(); i++) {
+      bool found = false;
+      for(uint32_t j=0; j<f32_vars.size(); j++) {
+        if(a.f32_vars[i].compare(f32_vars[j])) {
+          found = true;
+          break;
+        }
+      }
+      if(!found) {
+        add_annotation<float>(a.f32_vars[i]);
+      }
+    }
+    for(uint32_t i=0; i<a.f64_vars.size(); i++) {
+      bool found = false;
+      for(uint32_t j=0; j<f64_vars.size(); j++) {
+        if(a.f64_vars[i].compare(f64_vars[j])) {
+          found = true;
+          break;
+        }
+      }
+      if(!found) {
+        add_annotation<double>(a.f64_vars[i]);
+      }
+    }
+  }
+
+} annotation_vars_t;
 
 template<typename ExecSpace>
 class annotations_t {
 public:
   using memory_space = typename ExecSpace::memory_space;
-//  using array_layout = Kokkos::LayoutLeft;
   Kokkos::View<int**, Kokkos::LayoutLeft, memory_space> i32;
   Kokkos::View<int64_t**, Kokkos::LayoutLeft, memory_space> i64;
   Kokkos::View<float**, Kokkos::LayoutLeft, memory_space> f32;
+  Kokkos::View<double**, Kokkos::LayoutLeft, memory_space> f64;
 
   annotations_t() {}
 
-  annotations_t(int np, annotation_var_counts_t sizes) {
-    i32 = Kokkos::View<int**, Kokkos::LayoutLeft, memory_space>("Int annotations", np, sizes.nint_vars);
-    i64 = Kokkos::View<int64_t**, Kokkos::LayoutLeft, memory_space>("Int64 annotations", np, sizes.nint64_vars);
-    f32 = Kokkos::View<float**, Kokkos::LayoutLeft, memory_space>("Float annotations", np, sizes.nfloat_vars);
+  annotations_t(int np, annotation_vars_t sizes) {
+    i32 = Kokkos::View<int**, Kokkos::LayoutLeft, memory_space>("Int annotations", np, sizes.i32_vars.size());
+    i64 = Kokkos::View<int64_t**, Kokkos::LayoutLeft, memory_space>("Int64 annotations", np, sizes.i64_vars.size());
+    f32 = Kokkos::View<float**, Kokkos::LayoutLeft, memory_space>("Float annotations", np, sizes.f32_vars.size());
+    f64 = Kokkos::View<double**, Kokkos::LayoutLeft, memory_space>("Double annotations", np, sizes.f64_vars.size());
     Kokkos::deep_copy(i32, 0);
     Kokkos::deep_copy(i64, 0);
     Kokkos::deep_copy(f32, 0.0);
+    Kokkos::deep_copy(f64, 0.0);
   }
 
   annotations_t(annotations_t<Kokkos::DefaultExecutionSpace>& device_annotations) {
     i32 = Kokkos::create_mirror_view(device_annotations.i32);
     i64 = Kokkos::create_mirror_view(device_annotations.i64);
     f32 = Kokkos::create_mirror_view(device_annotations.f32);
+    f64 = Kokkos::create_mirror_view(device_annotations.f64);
     Kokkos::deep_copy(i32, 0);
     Kokkos::deep_copy(i64, 0);
     Kokkos::deep_copy(f32, 0.0);
+    Kokkos::deep_copy(f64, 0.0);
   }
 
   template<typename AnnotationType>
@@ -190,6 +244,8 @@ public:
       i64(particle_index, var) = val;
     } else if (std::is_same<AnnotationType, float>::value) {
       f32(particle_index, var) = val;
+    } else if (std::is_same<AnnotationType, double>::value) {
+      f64(particle_index, var) = val;
     } else {
       printf( "Tried setting value for non existent annotation!\n" );
     }
@@ -204,6 +260,8 @@ public:
       return i64(particle_index, var);
     } else if (std::is_same<AnnotationType, float>::value) {
       return f32(particle_index, var);
+    } else if (std::is_same<AnnotationType, double>::value) {
+      return f64(particle_index, var);
     }
     printf( "Tried getting value for non existent annotation!\n" );
     return 0;
@@ -294,9 +352,9 @@ class species_t {
         k_counter_t k_nm_d;               // nm iterator
         k_counter_t::HostMirror k_nm_h;
 
-//#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+//#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
         bool using_annotations = false;
-        annotation_var_counts_t num_annotations;
+        annotation_vars_t annotation_vars;
         annotations_t<Kokkos::DefaultExecutionSpace>     annotations_d;
         annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_h;
         annotations_t<Kokkos::DefaultExecutionSpace>     annotations_copy_d;
@@ -392,11 +450,11 @@ class species_t {
          */
         void copy_inbound_to_device();
 
-//#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+//#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
         /**
          * @brief Add additional per particle annotations. 
          */
-        void init_annotations( int num_particles, int num_movers, annotation_var_counts_t& );
+        void init_annotations( int num_particles, int num_movers, annotation_vars_t& );
 
         /**
          * Create tracer particles from parent species using a predicate
@@ -441,13 +499,29 @@ class species_t {
               k_p_i_h(np)                 = parent_species->k_p_i_h(i); 
               p[np] = parent_species->p[i]; // Copy legacy particle FIXME Should be unnecessary
 
+              //TODO Test copying the rest of the annotations
+              for(uint32_t j=0; j<parent_species->annotation_vars.i32_vars.size(); j++) {
+                int k = annotation_vars.get_annotation_index<int>(parent_species->annotation_vars.i32_vars[j]);
+                annotations_h.set<int>(np, k, parent_species->annotations_h.get<int>(i, j));
+              }
+              for(uint32_t j=0; j<parent_species->annotation_vars.i64_vars.size(); j++) {
+                int k = annotation_vars.get_annotation_index<int64_t>(parent_species->annotation_vars.i64_vars[j]);
+                annotations_h.set<int64_t>(np, k, parent_species->annotations_h.get<int64_t>(i, j));
+              }
+              for(uint32_t j=0; j<parent_species->annotation_vars.f32_vars.size(); j++) {
+                int k = annotation_vars.get_annotation_index<float>(parent_species->annotation_vars.f32_vars[j]);
+                annotations_h.set<float>(np, k, parent_species->annotations_h.get<float>(i, j));
+              }
+              for(uint32_t j=0; j<parent_species->annotation_vars.f64_vars.size(); j++) {
+                int k = annotation_vars.get_annotation_index<double>(parent_species->annotation_vars.f64_vars[j]);
+                annotations_h.set<double>(np, k, parent_species->annotations_h.get<double>(i, j));
+              }
+
               // Create unique tracer id (32-bit rank concatenated with particle index)
-//              annotations_h.access<int64_t>(np, 0) = ((int64_t)(rank) << 32) | (int64_t)(np); 
-              int tracer_idx = num_annotations.get_annotation_index<int64_t>(std::string("TracerID"));
+              int tracer_idx = annotation_vars.get_annotation_index<int64_t>(std::string("TracerID"));
               annotations_h.set<int64_t>(np, tracer_idx, ((int64_t)(rank) << 32) | (int64_t)(np)); 
-              //TODO Copy rest of annotations
               if(tracer_type == TracerType::Copy) {
-                int w_idx = num_annotations.get_annotation_index<float>(std::string("Weight")); // Get weight annotation index
+                int w_idx = annotation_vars.get_annotation_index<float>(std::string("Weight")); // Get weight annotation index
                 annotations_h.set<float>(np, w_idx, k_p_h(np, particle_var::w)); // Save weight
                 k_p_h(np, particle_var::w) = 0.0f; // Set tracer weight to 0 so the particle is non interactive
               } else if(tracer_type == TracerType::Move) {
@@ -469,87 +543,6 @@ class species_t {
               np++; // Increase number of tracers
             }
           }
-        }
-
-        /**
-         * Create tracer particles from parent species. Select a percentage of particles.
-         *
-         * @param parent_species Species of particles to create tracers from
-         * @param tracer_type    Whether to Copy or Move particles to tracers
-         * @param percentage     Percentage of particles to make tracers
-         */
-        void create_tracers_by_percentage( species_t* parent_species,
-                                          const TracerType tracer_type,
-                                          float percentage, int rank) {
-          if( (percentage < 0) || (percentage > 100) ) {
-            ERROR(( "Tracer percentage (%f) is not in [0,100]", percentage ));
-            return;
-          }
-
-          // Make sure parent species particles are in Kokkos Views
-          auto& k_particle_h = parent_species->k_p_h;
-          auto& k_particle_i_h = parent_species->k_p_i_h;
-          auto& particles = parent_species->p;
-
-          Kokkos::parallel_for("copy particles to device",
-            host_execution_policy(0, parent_species->np) ,
-            KOKKOS_LAMBDA (int i) {
-
-              k_particle_h(i, particle_var::dx) = particles[i].dx;
-              k_particle_h(i, particle_var::dy) = particles[i].dy;
-              k_particle_h(i, particle_var::dz) = particles[i].dz;
-              k_particle_h(i, particle_var::ux) = particles[i].ux;
-              k_particle_h(i, particle_var::uy) = particles[i].uy;
-              k_particle_h(i, particle_var::uz) = particles[i].uz;
-              k_particle_h(i, particle_var::w)  = particles[i].w;
-              k_particle_i_h(i) = particles[i].i;
-
-            });
-          Kokkos::fence();
-
-          int skip = static_cast<int>(100.0 / percentage);
-          np = 0;
-          int counter = 0;
-          for(int i=0; i<parent_species->np; i++) {
-            if(counter % skip == 0) { // Check if particle passes filter
-              k_p_h(np, particle_var::dx) = parent_species->k_p_h(i, particle_var::dx); // Copy particle to tracer
-              k_p_h(np, particle_var::dy) = parent_species->k_p_h(i, particle_var::dy); 
-              k_p_h(np, particle_var::dz) = parent_species->k_p_h(i, particle_var::dz); 
-              k_p_h(np, particle_var::ux) = parent_species->k_p_h(i, particle_var::ux); 
-              k_p_h(np, particle_var::uy) = parent_species->k_p_h(i, particle_var::uy); 
-              k_p_h(np, particle_var::uz) = parent_species->k_p_h(i, particle_var::uz); 
-              k_p_h(np, particle_var::w)  = parent_species->k_p_h(i, particle_var::w); 
-              k_p_i_h(np) = parent_species->k_p_i_h(i); 
-              p[np] = parent_species->p[i]; // Copy legacy particle FIXME Should be unnecessary
-              // Create unique tracer id (32-bit rank concatenated with particle index)
-              int tracer_idx = num_annotations.get_annotation_index<int64_t>(std::string("TracerID"));
-              annotations_h.set<int64_t>(np, tracer_idx, ((int64_t)(rank) << 32) | (int64_t)(np)); 
-              //TODO Copy rest of annotations
-              if(tracer_type == TracerType::Copy) {
-                int w_idx = num_annotations.get_annotation_index<float>(std::string("Weight")); // Get weight annotation index
-                annotations_h.set<float>(np, w_idx, k_p_h(np, particle_var::w)); // Save weight
-                k_p_h(np, particle_var::w) = 0.0f; // Set tracer weight to 0 so the particle is non interactive
-              } else if(tracer_type == TracerType::Move) {
-                // Move last particle over to fill in gap
-                parent_species->k_p_h(i, particle_var::dx) = parent_species->k_p_h(parent_species->np-1, particle_var::dx); 
-                parent_species->k_p_h(i, particle_var::dy) = parent_species->k_p_h(parent_species->np-1, particle_var::dy); 
-                parent_species->k_p_h(i, particle_var::dz) = parent_species->k_p_h(parent_species->np-1, particle_var::dz); 
-                parent_species->k_p_h(i, particle_var::ux) = parent_species->k_p_h(parent_species->np-1, particle_var::ux); 
-                parent_species->k_p_h(i, particle_var::uy) = parent_species->k_p_h(parent_species->np-1, particle_var::uy); 
-                parent_species->k_p_h(i, particle_var::uz) = parent_species->k_p_h(parent_species->np-1, particle_var::uz); 
-                parent_species->k_p_h(i, particle_var::w)  = parent_species->k_p_h(parent_species->np-1, particle_var::w); 
-                parent_species->k_p_i_h(i) = parent_species->k_p_i_h(parent_species->np - 1); 
-                parent_species->p[i] = parent_species->p[parent_species->np-1]; // FIXME remove legacy particles
-                parent_species->np -= 1; // Decrease number of particles in parent species
-                i -= 1;
-              } else {
-                ERROR(( "Invalid TracerType: %d", tracer_type ));
-              } 
-              np++; // Increase number of tracers
-            }
-            counter+=1;
-          }
-          printf("Tracer has %d particles\n", np);
         }
 
         /**
@@ -599,11 +592,28 @@ class species_t {
               k_p_i_h(np) = parent_species->k_p_i_h(step); 
               p[np] = parent_species->p[step]; // Copy legacy particle FIXME Should be unnecessary
               // Create unique tracer id (32-bit rank concatenated with particle index)
-              int tracer_idx = num_annotations.get_annotation_index<int64_t>(std::string("TracerID"));
+              int tracer_idx = annotation_vars.get_annotation_index<int64_t>(std::string("TracerID"));
               annotations_h.set<int64_t>(np, tracer_idx, ((int64_t)(rank) << 32) | (int64_t)(np)); 
-              //TODO Copy rest of annotations
+              //TODO Test copying the rest of the annotations
+              for(uint32_t j=0; j<parent_species->annotation_vars.i32_vars.size(); j++) {
+                int k = annotation_vars.get_annotation_index<int>(parent_species->annotation_vars.i32_vars[j]);
+                annotations_h.set<int>(np, k, parent_species->annotations_h.get<int>(i, j));
+              }
+              for(uint32_t j=0; j<parent_species->annotation_vars.i64_vars.size(); j++) {
+                int k = annotation_vars.get_annotation_index<int64_t>(parent_species->annotation_vars.i64_vars[j]);
+                annotations_h.set<int64_t>(np, k, parent_species->annotations_h.get<int64_t>(i, j));
+              }
+              for(uint32_t j=0; j<parent_species->annotation_vars.f32_vars.size(); j++) {
+                int k = annotation_vars.get_annotation_index<float>(parent_species->annotation_vars.f32_vars[j]);
+                annotations_h.set<float>(np, k, parent_species->annotations_h.get<float>(i, j));
+              }
+              for(uint32_t j=0; j<parent_species->annotation_vars.f64_vars.size(); j++) {
+                int k = annotation_vars.get_annotation_index<double>(parent_species->annotation_vars.f64_vars[j]);
+                annotations_h.set<double>(np, k, parent_species->annotations_h.get<double>(i, j));
+              }
+
               if(tracer_type == TracerType::Copy) {
-                int w_idx = num_annotations.get_annotation_index<float>(std::string("Weight")); // Get weight annotation index
+                int w_idx = annotation_vars.get_annotation_index<float>(std::string("Weight")); // Get weight annotation index
                 annotations_h.set<float>(np, w_idx, k_p_h(np, particle_var::w)); // Save weight
                 k_p_h(np, particle_var::w) = 0.0f; // Set tracer weight to 0 so the particle is non interactive
                 p[np].w = 0.0f;

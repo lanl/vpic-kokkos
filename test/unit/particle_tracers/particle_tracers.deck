@@ -124,7 +124,7 @@ begin_initialization {
   // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
   #ifdef VPIC_ENABLE_TRACER_PARTICLES
     sim_log("info: testing with VPIC_ENABLE_TRACER_PARTICLES");
-    if(!elec_tracer->using_annotations || elec_tracer->num_annotations.nint64_vars < 1) {
+    if(!elec_tracer->using_annotations || elec_tracer->annotation_vars.i64_vars.size() < 1) {
       sim_log("FAIL: "<< elec_tracer->name <<" has no annotations for IDs"); abort(5);
     } else {
       sim_log("info: "<< elec_tracer->name <<" should have unique IDs");
@@ -215,7 +215,7 @@ begin_initialization {
   // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
   #ifdef VPIC_ENABLE_TRACER_PARTICLES
     sim_log("info: testing with VPIC_ENABLE_TRACER_PARTICLES");
-    if(!elec_tracer2->using_annotations || elec_tracer2->num_annotations.nint64_vars < 1) {
+    if(!elec_tracer2->using_annotations || elec_tracer2->annotation_vars.i64_vars.size() < 1) {
       sim_log("FAIL: "<< elec_tracer2->name <<" has no annotations for IDs"); abort(5);
     } else {
       sim_log("info: "<< elec_tracer2->name <<" should have unique IDs");
@@ -303,7 +303,7 @@ begin_initialization {
   // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
   #ifdef VPIC_ENABLE_TRACER_PARTICLES
     sim_log("info: testing with VPIC_GLOBAL_PARTICLE_ID");
-    if(!elec_tracer3->using_annotations || elec_tracer3->num_annotations.nint64_vars < 1) {
+    if(!elec_tracer3->using_annotations || elec_tracer3->annotation_vars.i64_vars.size() < 1) {
       sim_log("FAIL: "<< elec_tracer3->name <<" has no IDs"); abort(19);
     } else {
       sim_log("info: "<< elec_tracer3->name <<" should have unique IDs");
@@ -411,7 +411,7 @@ begin_initialization {
   // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
   #ifdef VPIC_ENABLE_TRACER_PARTICLES
     sim_log("info: testing with VPIC_GLOBAL_PARTICLE_ID");
-    if(!elec_tracer4->using_annotations || elec_tracer4->num_annotations.nint64_vars < 1) {
+    if(!elec_tracer4->using_annotations || elec_tracer4->annotation_vars.i64_vars.size() < 1) {
       sim_log("FAIL: "<< elec_tracer4->name <<" has no IDs"); abort(26);
     } else {
       sim_log("info: "<< elec_tracer4->name <<" should have unique IDs");
@@ -510,7 +510,7 @@ begin_initialization {
   // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
   #ifdef VPIC_ENABLE_TRACER_PARTICLES
     sim_log("info: testing with VPIC_GLOBAL_PARTICLE_ID");
-    if(!elec_tracer5->using_annotations || elec_tracer5->num_annotations.nint64_vars < 1) {
+    if(!elec_tracer5->using_annotations || elec_tracer5->annotation_vars.i64_vars.size() < 1) {
       sim_log("FAIL: "<< elec_tracer5->name <<" has no IDs"); abort(34);
     } else {
       sim_log("info: "<< elec_tracer5->name <<" should have unique IDs");

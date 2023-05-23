@@ -408,6 +408,21 @@ advance_p_kokkos_unified(
   // TODO: is this the right place to do this?
   Kokkos::deep_copy(k_nm, 0);
 
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+  auto& i32_annotations = sp->annotations_d.i32;
+  auto& i64_annotations = sp->annotations_d.i64;
+  auto& f32_annotations = sp->annotations_d.f32;
+  auto& f64_annotations = sp->annotations_d.f64;
+  auto& i32_annotations_copy = sp->annotations_copy_d.i32;
+  auto& i64_annotations_copy = sp->annotations_copy_d.i64;
+  auto& f32_annotations_copy = sp->annotations_copy_d.f32;
+  auto& f64_annotations_copy = sp->annotations_copy_d.f64;
+  int num_i32 = sp->annotation_vars.i32_vars.size();
+  int num_i64 = sp->annotation_vars.i64_vars.size();
+  int num_f32 = sp->annotation_vars.f32_vars.size();
+  int num_f64 = sp->annotation_vars.f64_vars.size();
+#endif
+
 // Determine whether to use accumulators
 #if defined( VPIC_ENABLE_ACCUMULATORS )
   Kokkos::View<float*[12]> accumulator("Accumulator", k_field.extent(0));
@@ -705,16 +720,20 @@ advance_p_kokkos_unified(
 
 #if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
               // Copy int annotations
-              for(int j=0; j<sp->num_annotations.nint_vars; j++) {
-                sp->annotations_copy_d.set<int>(nm, j, sp->annotations_d.get<int>(p_index, j));
+              for(int j=0; j<num_i32; j++) {
+                i32_annotations_copy(nm,j) = i32_annotations(p_index,j);
               }
               // Copy int64_t annotations
-              for(int j=0; j<sp->num_annotations.nint64_vars; j++) {
-                sp->annotations_copy_d.set<int64_t>(nm, j, sp->annotations_d.get<int64_t>(p_index, j));
+              for(int j=0; j<num_i64; j++) {
+                i64_annotations_copy(nm,j) = i64_annotations(p_index,j);
               }
               // Copy float annnotations
-              for(int j=0; j<sp->num_annotations.nfloat_vars; j++) {
-                sp->annotations_copy_d.set<float>(nm, j, sp->annotations_d.get<float>(p_index, j));
+              for(int j=0; j<num_f32; j++) {
+                f32_annotations_copy(nm,j) = f32_annotations(p_index,j);
+              }
+              // Copy double annnotations
+              for(int j=0; j<num_f32; j++) {
+                f64_annotations_copy(nm,j) = f64_annotations(p_index,j);
               }
 #endif
             }
@@ -877,12 +896,15 @@ advance_p_kokkos_gpu(
   auto& i32_annotations = sp->annotations_d.i32;
   auto& i64_annotations = sp->annotations_d.i64;
   auto& f32_annotations = sp->annotations_d.f32;
+  auto& f64_annotations = sp->annotations_d.f64;
   auto& i32_annotations_copy = sp->annotations_copy_d.i32;
   auto& i64_annotations_copy = sp->annotations_copy_d.i64;
   auto& f32_annotations_copy = sp->annotations_copy_d.f32;
-  int num_i32 = sp->num_annotations.nint_vars;
-  int num_i64 = sp->num_annotations.nint64_vars;
-  int num_f32 = sp->num_annotations.nfloat_vars;
+  auto& f64_annotations_copy = sp->annotations_copy_d.f64;
+  int num_i32 = sp->annotation_vars.i32_vars.size();
+  int num_i64 = sp->annotation_vars.i64_vars.size();
+  int num_f32 = sp->annotation_vars.f32_vars.size();
+  int num_f64 = sp->annotation_vars.f64_vars.size();
 #endif
 
 #ifdef VPIC_ENABLE_HIERARCHICAL
@@ -1121,6 +1143,10 @@ advance_p_kokkos_gpu(
             for(int j=0; j<num_f32; j++) {
               f32_annotations_copy(nm,j) = f32_annotations(p_index,j);
             }
+            // Copy double annnotations
+            for(int j=0; j<num_f32; j++) {
+              f64_annotations_copy(nm,j) = f64_annotations(p_index,j);
+            }
 #endif
 
             // Tag this one as having left
@@ -1246,15 +1272,15 @@ advance_p( /**/  species_t            * RESTRICT sp,
 //printf("(%s): Copied particle copies to host\n", sp->name);
 Kokkos::fence();
 #if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
-if(sp->num_annotations.nint_vars > 0) {
-//  auto annotations_i32_d_subview = Kokkos::subview(sp->annotations_copy_d.i32, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
-//  auto annotations_i32_h_subview = Kokkos::subview(sp->annotations_copy_h.i32, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
-//  Kokkos::deep_copy(annotations_i32_h_subview, annotations_i32_d_subview);
-  Kokkos::deep_copy(sp->annotations_copy_h.i32, sp->annotations_copy_d.i32);
+if(sp->annotation_vars.i32_vars.size() > 0) {
+  auto annotations_i32_d_subview = Kokkos::subview(sp->annotations_copy_d.i32, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
+  auto annotations_i32_h_subview = Kokkos::subview(sp->annotations_copy_h.i32, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
+  Kokkos::deep_copy(annotations_i32_h_subview, annotations_i32_d_subview);
+//  Kokkos::deep_copy(sp->annotations_copy_h.i32, sp->annotations_copy_d.i32);
 //Kokkos::fence();
 //printf("(%s): Copied int annotations to host\n", sp->name);
 }
-if(sp->num_annotations.nint64_vars > 0) {
+if(sp->annotation_vars.i64_vars.size() > 0) {
 //  auto annotations_i64_d_subview = Kokkos::subview(sp->annotations_copy_d.i64, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
 //  auto annotations_i64_h_subview = Kokkos::subview(sp->annotations_copy_h.i64, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
 //  Kokkos::deep_copy(annotations_i64_h_subview, annotations_i64_d_subview);
@@ -1262,13 +1288,21 @@ if(sp->num_annotations.nint64_vars > 0) {
 //Kokkos::fence();
 //printf("(%s): Copied int64_t annotations to host\n", sp->name);
 }
-if(sp->num_annotations.nfloat_vars > 0) {
+if(sp->annotation_vars.f32_vars.size() > 0) {
 //  auto annotations_f32_d_subview = Kokkos::subview(sp->annotations_copy_d.f32, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
 //  auto annotations_f32_h_subview = Kokkos::subview(sp->annotations_copy_h.f32, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
 //  Kokkos::deep_copy(annotations_f32_h_subview, annotations_f32_d_subview);
   Kokkos::deep_copy(sp->annotations_copy_h.f32, sp->annotations_copy_d.f32);
 //Kokkos::fence();
 //printf("(%s): Copied float annotations to host\n", sp->name);
+}
+if(sp->annotation_vars.f64_vars.size() > 0) {
+//  auto annotations_f32_d_subview = Kokkos::subview(sp->annotations_copy_d.f32, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
+//  auto annotations_f32_h_subview = Kokkos::subview(sp->annotations_copy_h.f32, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
+//  Kokkos::deep_copy(annotations_f32_h_subview, annotations_f32_d_subview);
+  Kokkos::deep_copy(sp->annotations_copy_h.f64, sp->annotations_copy_d.f64);
+//Kokkos::fence();
+//printf("(%s): Copied double annotations to host\n", sp->name);
 }
 #endif
 

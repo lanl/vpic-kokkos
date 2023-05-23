@@ -190,6 +190,22 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
     if(dump_vars & DumpVar::StressTensor) {
       header_str += ",txx,tyy,tzz,tyz,tzx,txy";
     }
+    for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
+      header_str += ",";
+      header_str += sp->annotation_vars.i32_vars[j].c_str();
+    }
+    for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
+      header_str += ",";
+      header_str += sp->annotation_vars.i64_vars[j].c_str();
+    }
+    for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
+      header_str += ",";
+      header_str += sp->annotation_vars.f32_vars[j].c_str();
+    }
+    for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
+      header_str += ",";
+      header_str += sp->annotation_vars.f64_vars[j].c_str();
+    }
 
     if( append==0 ) {
       fileIO.print( "%s\n", header_str.c_str() );
@@ -200,7 +216,7 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
     auto& interpolators_k = interpolator_array->k_i_d;
 
     if(sp->tracer_type == TracerType::Copy) {
-      int w_idx = sp->num_annotations.get_annotation_index<float>("Weight");
+      int w_idx = sp->annotation_vars.get_annotation_index<float>("Weight");
       auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
       auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
       auto w_annote = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL(), w_idx);
@@ -226,7 +242,7 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
       synchronize_hydro_array( hydro_array );
     }
 
-    int tracer_idx = sp->num_annotations.get_annotation_index<int64_t>("TracerID");
+    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>("TracerID");
     auto& interp = interpolator_array->k_i_h;
 
 #define _nxg (grid->nx + 2)
@@ -293,6 +309,18 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
         float tzx = hydro_array->k_h_h(ii, hydro_var::tzx);
         float txy = hydro_array->k_h_h(ii, hydro_var::txy);
         fileIO.print(",%e,%e,%e,%e,%e,%e", txx, tyy, tzz, tyz, tzx, txy);
+      }
+      for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
+        fileIO.print(",%d", sp->annotations_h.get<int>(i, j));
+      }
+      for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
+        fileIO.print(",%ld", sp->annotations_h.get<int64_t>(i, j));
+      }
+      for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
+        fileIO.print(",%e", sp->annotations_h.get<float>(i, j));
+      }
+      for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
+        fileIO.print(",%e", sp->annotations_h.get<double>(i, j));
       }
       fileIO.print( "\n" );
     }

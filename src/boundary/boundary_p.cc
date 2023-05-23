@@ -115,9 +115,10 @@ boundary_p_kokkos(
   LIST_FOR_EACH(sp, sp_list) {
     int annotation_size = 0;
     if(sp->using_annotations) {
-      annotation_size += sp->num_annotations.nint_vars * sizeof(int);
-      annotation_size += sp->num_annotations.nint64_vars * sizeof(int64_t);
-      annotation_size += sp->num_annotations.nfloat_vars * sizeof(float);
+      annotation_size += sp->annotation_vars.i32_vars.size() * sizeof(int);
+      annotation_size += sp->annotation_vars.i64_vars.size() * sizeof(int64_t);
+      annotation_size += sp->annotation_vars.f32_vars.size() * sizeof(float);
+      annotation_size += sp->annotation_vars.f64_vars.size() * sizeof(double);
     }
     if(annotation_size > max_annotation_size) 
       max_annotation_size = annotation_size;
@@ -213,7 +214,7 @@ boundary_p_kokkos(
         particle_injector_t * RESTRICT ALIGNED(16) pi;
 
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
-        annotation_var_counts_t var_counts = sp->num_annotations;
+        annotation_vars_t var_counts = sp->annotation_vars;
 #endif
 
         // Note that particle movers for each species are processed in
@@ -313,19 +314,24 @@ boundary_p_kokkos(
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
                 // Load int annotations
                 int* int_offset = (int*)((uint8_t*)(pi) + sizeof(particle_injector_t));
-                for(int j=0; j<var_counts.nint_vars; j++) {
+                for(int j=0; j<var_counts.i32_vars.size(); j++) {
                   int_offset[j] = sp->annotations_copy_h.get<int>(copy_index, j);
                 }
                 // Load int64_t annotations
-                int64_t* int64_offset = (int64_t*)((uint8_t*)(int_offset) + var_counts.nint_vars*sizeof(int));
-                for(int j=0; j<var_counts.nint64_vars; j++) {
+                int64_t* int64_offset = (int64_t*)((uint8_t*)(int_offset) + var_counts.i32_vars.size()*sizeof(int));
+                for(int j=0; j<var_counts.i64_vars.size(); j++) {
                   int64_offset[j] = sp->annotations_copy_h.get<int64_t>(copy_index, j);
-printf("Rank %d: Sending tracer ID %ld\n", world_rank, int64_offset[j]);
+//printf("Rank %d: Sending tracer ID %ld\n", world_rank, int64_offset[j]);
                 }
                 // Load float annnotations
-                float* float_offset = (float*)((uint8_t*)(int64_offset) + var_counts.nint64_vars*sizeof(int64_t));
-                for(int j=0; j<var_counts.nfloat_vars; j++) {
+                float* float_offset = (float*)((uint8_t*)(int64_offset) + var_counts.i64_vars.size()*sizeof(int64_t));
+                for(int j=0; j<var_counts.f32_vars.size(); j++) {
                   float_offset[j] = sp->annotations_copy_h.get<float>(copy_index, j);
+                }
+                // Load double annnotations
+                double* double_offset = (double*)((uint8_t*)(float_offset) + var_counts.f32_vars.size()*sizeof(float));
+                for(int j=0; j<var_counts.f64_vars.size(); j++) {
+                  double_offset[j] = sp->annotations_copy_h.get<double>(copy_index, j);
                 }
 #endif
                 //goto backfill;
@@ -542,19 +548,24 @@ printf("Rank %d: Sending tracer ID %ld\n", world_rank, int64_offset[j]);
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
         // Store int annotations
         int* int_offset = (int*)((uint8_t*)(pi) + sizeof(particle_injector_t));
-        for(int j=0; j<sp_[id]->num_annotations.nint_vars; j++) {
+        for(int j=0; j<sp_[id]->annotation_vars.i32_vars.size(); j++) {
           sp_[id]->annotations_recv_h.set<int>(write_index, j, int_offset[j]);
         }
         // Store int64_t annotations
-        int64_t* int64_offset = (int64_t*)((uint8_t*)(int_offset) + sp_[id]->num_annotations.nint_vars*sizeof(int));
-        for(int j=0; j<sp_[id]->num_annotations.nint64_vars; j++) {
+        int64_t* int64_offset = (int64_t*)((uint8_t*)(int_offset) + sp_[id]->annotation_vars.i32_vars.size()*sizeof(int));
+        for(int j=0; j<sp_[id]->annotation_vars.i64_vars.size(); j++) {
           sp_[id]->annotations_recv_h.set<int64_t>(write_index, j, int64_offset[j]);
-printf("Rank %d: Receiving tracer ID %ld\n", world_rank, sp_[id]->annotations_recv_h.get<int64_t>(write_index, j));
+//printf("Rank %d: Receiving tracer ID %ld\n", world_rank, sp_[id]->annotations_recv_h.get<int64_t>(write_index, j));
         }
         // Store float annnotations
-        float* float_offset = (float*)((uint8_t*)(int64_offset) + sp_[id]->num_annotations.nint64_vars*sizeof(int64_t));
-        for(int j=0; j<sp_[id]->num_annotations.nfloat_vars; j++) {
+        float* float_offset = (float*)((uint8_t*)(int64_offset) + sp_[id]->annotation_vars.i64_vars.size()*sizeof(int64_t));
+        for(int j=0; j<sp_[id]->annotation_vars.f32_vars.size(); j++) {
           sp_[id]->annotations_recv_h.set<float>(write_index, j, float_offset[j]);
+        }
+        // Store double annnotations
+        double* double_offset = (double*)((uint8_t*)(float_offset) + sp_[id]->annotation_vars.f32_vars.size()*sizeof(float));
+        for(int j=0; j<sp_[id]->annotation_vars.f64_vars.size(); j++) {
+          sp_[id]->annotations_recv_h.set<double>(write_index, j, double_offset[j]);
         }
 #endif
 
@@ -602,17 +613,21 @@ printf("Rank %d: Receiving tracer ID %ld\n", world_rank, sp_[id]->annotations_re
             particle_send_i(keep_id)  = particle_recv_i(write_index);
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
             // Copy int annotations
-            for(int j=0; j<sp_[id]->num_annotations.nint_vars; j++) {
+            for(int j=0; j<sp_[id]->annotation_vars.i32_vars.size(); j++) {
               sp_[id]->annotations_copy_h.set<int>(keep_id, j, sp_[id]->annotations_recv_h.get<int>(write_index, j));
             }
             // Copy int64_t annotations
-            for(int j=0; j<sp_[id]->num_annotations.nint64_vars; j++) {
+            for(int j=0; j<sp_[id]->annotation_vars.i64_vars.size(); j++) {
               sp_[id]->annotations_copy_h.set<int64_t>(keep_id, j, sp_[id]->annotations_recv_h.get<int64_t>(write_index, j));
-printf("Rank %d: Sending tracer ID %ld again\n", world_rank, sp_[id]->annotations_copy_h.get<int64_t>(keep_id, j));
+//printf("Rank %d: Sending tracer ID %ld again\n", world_rank, sp_[id]->annotations_copy_h.get<int64_t>(keep_id, j));
             }
             // Copy float annnotations
-            for(int j=0; j<sp_[id]->num_annotations.nfloat_vars; j++) {
+            for(int j=0; j<sp_[id]->annotation_vars.f32_vars.size(); j++) {
               sp_[id]->annotations_copy_h.set<float>(keep_id, j, sp_[id]->annotations_recv_h.get<float>(write_index, j));
+            }
+            // Copy double annnotations
+            for(int j=0; j<sp_[id]->annotation_vars.f64_vars.size(); j++) {
+              sp_[id]->annotations_copy_h.set<double>(keep_id, j, sp_[id]->annotations_recv_h.get<double>(write_index, j));
             }
 #endif
         }

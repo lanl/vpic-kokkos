@@ -659,12 +659,12 @@ begin_initialization {
   /*--------------------------------------------------------------------------
    * Create tracer species
    *------------------------------------------------------------------------*/
-  annotation_var_counts_t electron_annotations;
+  annotation_vars_t electron_annotations;
   species_t * electron_tracers = define_tracer_species_with_n("electron_tracers", electron, TracerType::Copy, 10.0, 1.1, electron_annotations);
   electron_tracers->copy_to_device();
   printf("Electron weight: %f\n", fabs(qe));
 
-  annotation_var_counts_t ion_I2_annotations;
+  annotation_vars_t ion_I2_annotations;
   species_t * ion_I2_tracers   = define_tracer_species_with_n("ion_I2_tracers", ion_I2, TracerType::Copy, 10.0, 1.1, ion_I2_annotations);
   ion_I2_tracers->copy_to_device();
   printf("Ion2 weight: %f\n", fabs(qi_I2)/Z_I2);
