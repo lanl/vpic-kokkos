@@ -769,11 +769,7 @@ advance_p_kokkos_unified(
             }     
             
             // Ionization occurs if U_1 < 1 - exp(-Gamma * delta_t), for a uniform number U_1~[0,1]
-            // FIXME: once no further ionization occurs, the particle should be removed and replaced
-            //        with the appropriate ion and an electron with the appropriate weight.
-            //        These should be added in the same location and with the same velocity
-            // FIXME: Need to deal with the energy conservation
-     	    auto generator = random_pool.get_state();
+            auto generator = random_pool.get_state();
             double U = generator.drand(0,1);
             random_pool.free_state(generator);
             if ( U < 1 - exp(-Gamma * (dt-t_ionize) ) ) {
@@ -1214,6 +1210,10 @@ advance_p_kokkos_gpu(
   k_particles_i_t& k_electrons_i = sp_e->k_p_i_d;  
   Kokkos::View<int> count("count");
   Kokkos::deep_copy(count, sp_e->np);
+  float cell_area_xy = g->dx * g->dy; //FIXME: is this the correct area, this will change depending on the problem
+  float cell_area_yz = g->dy * g->dz;
+  float cell_area_xz = g->dx * g->dz;
+  //cout << "cell_area:" << cell_area << "g->dx:" << g->dx << "g->dy:" << g->dy << "g->dz:" << g->dz << endl;
   int timestep = g->step;
 #endif
   
@@ -1251,10 +1251,17 @@ advance_p_kokkos_gpu(
                            dy*( f_dezdy + dx*f_d2ezdxdy ) );
 
 #ifdef FIELD_IONIZATION
+    float tempx = 0;
+    float tempy = 0;
+    float tempz = 0;
     // ***** Field Ioization *****
-    // constants
+    // constants, FIXME: need to get from deck
     int q_e_c     = -1; // code units
-    float E_to_SI = 1.44303994037981860e+19;
+    float E_to_SI = 1.44303994037981860e+19; // code to SI
+    float t_to_SI = 1.18119324097025572e-22; // code to SI
+    float l_to_SI = 3.54112825083459245e-14; // code to SI
+    float q_to_SI = 1.60217663399999989e-19; // code to SI
+    float m_to_SI = 9.10938370150000079e-31; // code to SI
     // FIXME: **** Input deck variables ****
     float epsilon_eV_list[] = {13.6}; // eV, ionization energy, this should be a list with the different levels
     
@@ -1430,11 +1437,6 @@ advance_p_kokkos_gpu(
       
       
       // Ionization occurs if U_1 < 1 - exp(-Gamma * delta_t), for a uniform number U_1~[0,1]
-      // FIXME: once no further ionization occurs, the particle should be removed and replaced
-      //        with the appropriate ion and an electron with the appropriate weight.
-      //        These should be added in the same location and with the same velocity
-      // FIXME: Need to deal with the energy conservation
-      // Create a random number generator with uniform distribution
       auto generator = random_pool.get_state();
       double U = generator.drand(0,1);
       random_pool.free_state(generator);
@@ -1495,13 +1497,40 @@ advance_p_kokkos_gpu(
       #ifdef FIELD_IONIZATION
 	#undef p_q_e
       #endif
-	
-      } // if ionization event occured	
+
+
+	// FIXME: this is a work in progress
+        // Energy conservation is accounted for by a current density correction through Poynting’s theorem (J_ionize = (N*epsilon_t)/(dt*E) E_hat atomic units)
+        // in tunnelling ionisation and BSI the energy loss from the field is the ionisation energy of the electron
+        // in multiphoton ionisation it is the total energy for the number of photons absorbed.
+        // The total energy loss from multiple ionisations is summed and a current density correction is weighted back to the grid points
+        int N_same_state = 1; // this is 1 since the correction is done for every ionization event instead of at the end of the timestep
+        float epsilon_t_au = 0; // initialize the total energy loss from multiple ionizations
+        for(int i=0; i<int(N_ionization-N_ionization_before); i++) {
+          epsilon_t_au += epsilon_eV_list[i]/27.2; // atomic units, ionization energy
+        }
+
+	float dt_au = dt / 2.41884e-17; // convsersion factor is h_bar/Eh where Eh is hartree energy
+	float j_ionize_mag_au = (N_same_state * epsilon_t_au)/(dt_au * E_au); // au
+	float j_ionize_mag_SI = j_ionize_mag_au * 2.3653e18; // conversion is e*Eh/(h_bar*a0^2), a0 is Bohr radius
+        float j_ionize_mag_c  = j_ionize_mag_SI * (t_to_SI * pow(l_to_SI,2.0)/q_to_SI);
+
+        // FIXME: am I using the correct area? 	
+//	k_field_scatter_access(pii, field_var::jfx) += j_ionize_mag_c * cell_area * hax_c/ha_mag_c;
+//	k_field_scatter_access(pii, field_var::jfy) += j_ionize_mag_c * cell_area * hay_c/ha_mag_c;
+//	k_field_scatter_access(pii, field_var::jfz) += j_ionize_mag_c * cell_area * haz_c/ha_mag_c;
+//	tempx = j_ionize_mag_c * cell_area_yz * hax_c/ha_mag_c;
+//	tempy = j_ionize_mag_c * cell_area_xz * hay_c/ha_mag_c;
+//	tempz = j_ionize_mag_c * cell_area_xy * haz_c/ha_mag_c;
+
+	//printf("tempx, %e, tempy, %e, tempz, %e\n",tempx,tempy,tempz);
+
+       
+      } // if ionization event occured
     
       } // if not electrons
 #endif // FIELD_IONIZATION
 
-    
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby + dy*f_dcbydy;
     float cbz  = f_cbz + dz*f_dcbzdz;
@@ -1509,7 +1538,7 @@ advance_p_kokkos_gpu(
     float uy   = p_uy;
     float uz   = p_uz;
     float q    = p_w;
-    ux  += hax;                               // Half advance E
+    ux  += hax;                               // Half advance Er
     uy  += hay;
     uz  += haz;
     v0   = qdt_2mc/sqrtf(one + (ux*ux + (uy*uy + uz*uz)));
@@ -1664,6 +1693,13 @@ advance_p_kokkos_gpu(
         k_field_scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
         k_field_scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
         k_field_scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
+
+//	if (tempy >0) {
+//	  printf("tempx, %e, tempy, %e, tempz, %e, cx*v0, %e, cy*v0, %e, cz*v0, %e, v0, %e, cx, %e, cy, %e, cz, %e\n",tempx,tempy,tempz,cx*v0,cy*v0,cz*v0,v0,cx,cy,cz);
+//	}
+//        k_field_scatter_access(pii, field_var::jfx) += tempx;
+//        k_field_scatter_access(pii, field_var::jfy) += tempy;
+//        k_field_scatter_access(pii, field_var::jfz) += tempz;
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
       }
 #endif
