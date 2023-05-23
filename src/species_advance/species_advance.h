@@ -336,14 +336,6 @@ class species_t {
            init_kokkos_particles(n_particles, n_pmovers);
         }
 
-//#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-//        species_t(int n_particles, int n_pmovers, annotation_var_counts_t n_annotations)
-//        {
-//           init_kokkos_particles(n_particles, n_pmovers);
-//           add_annotations(n_particles, n_pmovers, n_annotations);
-//        }
-//#endif
-
         void init_kokkos_particles()
         {
             init_kokkos_particles(max_np, max_nm);
@@ -592,20 +584,21 @@ class species_t {
             });
           Kokkos::fence();
 
+          int parent_np = parent_species->np;
           int step = 0;
-          for(int i=parent_species->np-1; i>=0; i--) {
-            if(parent_species->np-i >= (step+1) * skip) { // Check if particle passes filter
-              k_p_h(np, particle_var::dx) = parent_species->k_p_h(i, particle_var::dx); // Copy particle to tracer
-              k_p_h(np, particle_var::dy) = parent_species->k_p_h(i, particle_var::dy); 
-              k_p_h(np, particle_var::dz) = parent_species->k_p_h(i, particle_var::dz); 
-              k_p_h(np, particle_var::ux) = parent_species->k_p_h(i, particle_var::ux); 
-              k_p_h(np, particle_var::uy) = parent_species->k_p_h(i, particle_var::uy); 
-              k_p_h(np, particle_var::uz) = parent_species->k_p_h(i, particle_var::uz); 
-              k_p_h(np, particle_var::w)  = parent_species->k_p_h(i, particle_var::w); 
-              k_p_i_h(np) = parent_species->k_p_i_h(i); 
-              p[np] = parent_species->p[i]; // Copy legacy particle FIXME Should be unnecessary
+          np = 0;
+          for(int i=0; i<parent_np; i++) {
+            if(i >= skip*np) { // Check if particle passes filter
+              k_p_h(np, particle_var::dx) = parent_species->k_p_h(step, particle_var::dx); // Copy particle to tracer
+              k_p_h(np, particle_var::dy) = parent_species->k_p_h(step, particle_var::dy); 
+              k_p_h(np, particle_var::dz) = parent_species->k_p_h(step, particle_var::dz); 
+              k_p_h(np, particle_var::ux) = parent_species->k_p_h(step, particle_var::ux); 
+              k_p_h(np, particle_var::uy) = parent_species->k_p_h(step, particle_var::uy); 
+              k_p_h(np, particle_var::uz) = parent_species->k_p_h(step, particle_var::uz); 
+              k_p_h(np, particle_var::w)  = parent_species->k_p_h(step, particle_var::w); 
+              k_p_i_h(np) = parent_species->k_p_i_h(step); 
+              p[np] = parent_species->p[step]; // Copy legacy particle FIXME Should be unnecessary
               // Create unique tracer id (32-bit rank concatenated with particle index)
-//              annotations_h.access<int64_t>(np, 0) = ((int64_t)(rank) << 32) | (int64_t)(np); 
               int tracer_idx = num_annotations.get_annotation_index<int64_t>(std::string("TracerID"));
               annotations_h.set<int64_t>(np, tracer_idx, ((int64_t)(rank) << 32) | (int64_t)(np)); 
               //TODO Copy rest of annotations
@@ -616,23 +609,23 @@ class species_t {
                 p[np].w = 0.0f;
               } else if(tracer_type == TracerType::Move) {
                 // Move last particle over to fill in gap
-                parent_species->k_p_h(i, particle_var::dx) = parent_species->k_p_h(parent_species->np-1, particle_var::dx); 
-                parent_species->k_p_h(i, particle_var::dy) = parent_species->k_p_h(parent_species->np-1, particle_var::dy); 
-                parent_species->k_p_h(i, particle_var::dz) = parent_species->k_p_h(parent_species->np-1, particle_var::dz); 
-                parent_species->k_p_h(i, particle_var::ux) = parent_species->k_p_h(parent_species->np-1, particle_var::ux); 
-                parent_species->k_p_h(i, particle_var::uy) = parent_species->k_p_h(parent_species->np-1, particle_var::uy); 
-                parent_species->k_p_h(i, particle_var::uz) = parent_species->k_p_h(parent_species->np-1, particle_var::uz); 
-                parent_species->k_p_h(i, particle_var::w)  = parent_species->k_p_h(parent_species->np-1, particle_var::w); 
-                parent_species->k_p_i_h(i)                 = parent_species->k_p_i_h(parent_species->np - 1); 
-                parent_species->p[i] = parent_species->p[parent_species->np-1]; // FIXME remove legacy particles
+                parent_species->k_p_h(step, particle_var::dx) = parent_species->k_p_h(parent_species->np-1, particle_var::dx); 
+                parent_species->k_p_h(step, particle_var::dy) = parent_species->k_p_h(parent_species->np-1, particle_var::dy); 
+                parent_species->k_p_h(step, particle_var::dz) = parent_species->k_p_h(parent_species->np-1, particle_var::dz); 
+                parent_species->k_p_h(step, particle_var::ux) = parent_species->k_p_h(parent_species->np-1, particle_var::ux); 
+                parent_species->k_p_h(step, particle_var::uy) = parent_species->k_p_h(parent_species->np-1, particle_var::uy); 
+                parent_species->k_p_h(step, particle_var::uz) = parent_species->k_p_h(parent_species->np-1, particle_var::uz); 
+                parent_species->k_p_h(step, particle_var::w)  = parent_species->k_p_h(parent_species->np-1, particle_var::w); 
+                parent_species->k_p_i_h(step)                 = parent_species->k_p_i_h(parent_species->np - 1); 
+                parent_species->p[step] = parent_species->p[parent_species->np-1]; // FIXME remove legacy particles
                 parent_species->np -= 1; // Decrease number of particles in parent species
-                i -= 1;
+                step -= 1;
               } else {
                 ERROR(( "Invalid TracerType: %d", tracer_type ));
               } 
               np++; // Increase number of tracers
-              step++;
             }
+            step++;
           }
         }
 //#endif

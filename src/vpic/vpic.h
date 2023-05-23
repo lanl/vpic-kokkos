@@ -72,6 +72,18 @@ const uint32_t stress_diagonal 		(1<<8 | 1<<9 | 1<<10);
 const uint32_t stress_offdiagonal	(1<<11 | 1<<12 | 1<<13);
 */
 
+enum DumpVar {
+  GlobalPos = (1<<0 | 1<<1 | 1<<2),
+  Efield = (1<<3 | 1<<4 | 1<<5),
+  Bfield = (1<<6 | 1<<7 | 1<<8),
+  CurrentDensity = (1<<9 | 1<<10 | 1<<11),
+  ChargeDensity = (1<<12),
+  MomentumDensity = (1<<13 | 1<<14 | 1<<15),
+  KEDensity = (1<<16),
+  StressTensor = (1<<17 | 1<<18 | 1<<19 | 1<<20 | 1<<21 | 1<<22),
+  All = 0xFFFFFFFF
+};
+
 const size_t total_hydro_variables(14);
 const size_t total_hydro_groups(5); // this counts vectors, tensors etc...
 // These bits will be tested to determine which variables to output
@@ -240,7 +252,7 @@ public:
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
   void dump_species( const char *fname , bool tracers);
-  void dump_tracers_csv( const char *sp_name, const char *fbase, int append = 1,
+  void dump_tracers_csv( const char *sp_name, uint32_t dump_vars, const char *fbase, int append = 1,
                                   int fname_tag = 1 );
 
   // Binary dumps

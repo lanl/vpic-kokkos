@@ -462,8 +462,8 @@ begin_initialization {
   // FIXME : proper normalization in these units for: xfocus, ycenter, zcenter,
   // waist
   sim_log("Setting up high-level simulation parameters. "); 
-  num_step             = int(t_stop/(dt)); 
-//  num_step             = 1000; 
+//  num_step             = int(t_stop/(dt)); 
+  num_step             = 1000; 
   status_interval      = 100; 
 //?????????????????????????????????????????????????????????????????????????????
   sync_shared_interval = status_interval/5;
@@ -1044,9 +1044,9 @@ begin_diagnostics {
     }
     interpolator_array->copy_to_host();
     
-    dump_tracers_csv( "electron_tracers",
+    dump_tracers_csv( "electron_tracers", DumpVar::GlobalPos | DumpVar::CurrentDensity | DumpVar::ChargeDensity,
                       "electron_tracers/electron_tracers", step() != 0, 0);
-    dump_tracers_csv( "ion_I2_tracers",
+    dump_tracers_csv( "ion_I2_tracers", DumpVar::GlobalPos | DumpVar::CurrentDensity | DumpVar::ChargeDensity,
                       "ion_I2_tracers/ion_I2_tracers", step() != 0, 0);
 
 #endif
