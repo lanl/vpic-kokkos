@@ -1066,15 +1066,20 @@ advance_p_kokkos_unified(
 #ifdef FIELD_IONIZATION
 #undef p_q_e
 
-// FIXME: this is temporary  
+// FIXME: this is temporary
 if(strcmp(sp->name, "electron") != 0){
   char kn [100];
-  snprintf(kn, sizeof kn, "Photoelectrons_gpu.txt");
+  snprintf(kn, sizeof kn, "Photoelectrons.txt");
   std::ofstream outfile;
-  outfile.open(kn, std::ios_base::app); // append to file
-  outfile << g->step << "," << sp->np << "," << sp_e->np << "," << sp->name << endl;
+  if (g->step == 0) {
+    outfile.open(kn); // overwrite old files
+    outfile << g->step << "," << sp->np << "," << sp_e->np << "," << sp->name << endl;
+  } else {
+    outfile.open(kn, std::ios_base::app); // append to file
+    outfile << g->step << "," << sp->np << "," << sp_e->np << "," << sp->name << endl;
+  }
   outfile.close();
- }  
+}
 #endif
 
 #undef f_cbx
@@ -1778,15 +1783,20 @@ advance_p_kokkos_gpu(
 #ifdef FIELD_IONIZATION
   Kokkos:deep_copy(sp_e->np,count);
 
-  // FIXME: this is temporary  
-if(strcmp(sp->name, "electron") != 0){
-  char kn [100];
-  snprintf(kn, sizeof kn, "Photoelectrons_gpu.txt");
-  std::ofstream outfile;
-  outfile.open(kn, std::ios_base::app); // append to file
-  outfile << g->step << "," << sp->np << "," << sp_e->np << "," << sp->name << endl;
-  outfile.close();
- }
+  // FIXME: this is temporary
+  if(strcmp(sp->name, "electron") != 0){
+    char kn [100];
+    snprintf(kn, sizeof kn, "Photoelectrons.txt");
+    std::ofstream outfile;
+    if (g->step == 0) {
+      outfile.open(kn); // overwrite old files
+      outfile << g->step << "," << sp->np << "," << sp_e->np << "," << sp->name << endl;
+    } else {
+      outfile.open(kn, std::ios_base::app); // append to file
+      outfile << g->step << "," << sp->np << "," << sp_e->np << "," << sp->name << endl;
+    }
+    outfile.close();
+  }
 #endif  
 }
 
