@@ -5,43 +5,187 @@
 begin_globals {
 };
 
-//void test_tracer_copy(species_t* parent, species_t* tracer) {
-//  bool success = true;
-//  for(int i=0; i<tracer->np; i++) {
-//    int j=0;
-//    success = false;
-//    for(j=0; j<parent->np; j++) {
-//      if(parent->p[j].dx == tracer->p[i].dx &&
-//         parent->p[j].dy == tracer->p[i].dy &&
-//         parent->p[j].dz == tracer->p[i].dz &&
-//         parent->p[j].ux == tracer->p[i].ux &&
-//         parent->p[j].uy == tracer->p[i].uy &&
-//         parent->p[j].uz == tracer->p[i].uz &&
-//         parent->p[j].i == tracer->p[i].i) {
-//        success = true;
-//        break;
-//      }
-//    }
-//    if(!success) {
-//      sim_log("FAIL: Tracer " << j << " not properly copied from parent species\n"); 
-//      sim_log("FAIL: dx: " << tracer->p[i].dx << "\n");
-//      sim_log("FAIL: dy: " << tracer->p[i].dy << "\n");
-//      sim_log("FAIL: dz: " << tracer->p[i].dz << "\n");
-//      sim_log("FAIL: ux: " << tracer->p[i].ux << "\n");
-//      sim_log("FAIL: uy: " << tracer->p[i].uy << "\n");
-//      sim_log("FAIL: uz: " << tracer->p[i].uz << "\n");
-//      sim_log("FAIL: w: "  << tracer->p[i].w << "\n");
-//      sim_log("FAIL: i: "  << tracer->p[i].i << "\n");
-//      abort(37);
-//      break;
-//    }
-//  }
-//  if(success) {
-//    sim_log("info: All tracers properly copied from parent species\n");
-//  } else {
-//    sim_log("FAIL: Tracers (" << tracer->name << ") not properly copied from parent (" << parent->name << ") species\n"); abort(37);
-//  }
-//}
+inline int rank() {
+  return _world_rank;
+}
+
+//=============================================================================
+// Test whether the number of tracers is correct
+//=============================================================================
+int test_tracer_copy_count(species_t* tracer, int mincount, int maxcount, int _world_rank) {
+  if((tracer->np < mincount) || (tracer->np > maxcount)) {
+    sim_log("FAIL: Did not select the expected number of particles. Expected " << tracer->np << " in [" << mincount << "," << maxcount << "]");
+    return 3;
+  } else {
+    sim_log("info: " << tracer->name << " has " << tracer->np << " particles");
+    return 0;
+  }
+}
+
+//=============================================================================
+// Test whether the weight is 0.0 for copied tracers 
+//=============================================================================
+int test_tracer_copy_weight(species_t* tracer, int _world_rank) {
+  for(int i = 0; i<tracer->np; i++) {
+    if(tracer->k_p_h(i, particle_var::w) != 0.) {
+      sim_log("FAIL: "<< tracer->name <<" did not have zero weight");
+      return 4;
+    }
+  }
+  sim_log("info: "<< tracer->name <<" has zero weight");
+  return 0;
+}
+
+//=============================================================================
+// Verify that all tracer IDs are unique 
+//=============================================================================
+int test_tracer_ids(species_t* tracer, int _world_rank) {
+  std::unordered_set<size_t> IDs;
+  sim_log("info: testing with VPIC_ENABLE_TRACER_PARTICLES");
+  if(!tracer->using_annotations || tracer->annotation_vars.i64_vars.size() < 1) {
+    sim_log("FAIL: "<< tracer->name <<" has no annotations for IDs");
+    return 5;
+  } else {
+    sim_log("info: "<< tracer->name <<" should have unique IDs");
+  }
+  // Check for duplicates. Touch all IDs also verifies memory allocation
+  IDs.clear();
+  for(int i = 0; i<tracer->np; i++) {
+    size_t id = tracer->annotations_h.get<int64_t>(i, 0);
+    if(IDs.count(id) != 0) {
+      sim_log("FAIL: particle "<< i <<" in "<< tracer->name <<" has duplicate ID "<< id);
+      return 6;
+    }
+    IDs.insert(id);
+  }
+  if(IDs.size() != static_cast<uint32_t>(tracer->np)) {
+    sim_log("FAIL: "<< IDs.size() << " IDs but"<< tracer->np <<" particles in "<<tracer->name);
+    return 7;
+  } else {
+    sim_log("info: IDs of "<< tracer->name << " look reasonable");
+  }
+  return 0;
+}
+
+//=============================================================================
+// Test wether tracer particles were copied correctly 
+//=============================================================================
+int test_tracer_copy(species_t* parent, species_t* tracer, int _world_rank) {
+  bool success = true;
+  for(int i=0; i<tracer->np; i++) {
+    int j=0;
+    success = false;
+    for(j=0; j<parent->np; j++) {
+      if(parent->p[j].dx == tracer->p[i].dx &&
+         parent->p[j].dy == tracer->p[i].dy &&
+         parent->p[j].dz == tracer->p[i].dz &&
+         parent->p[j].ux == tracer->p[i].ux &&
+         parent->p[j].uy == tracer->p[i].uy &&
+         parent->p[j].uz == tracer->p[i].uz &&
+         parent->p[j].i == tracer->p[i].i) {
+        success = true;
+        break;
+      }
+    }
+    if(!success) {
+      sim_log("FAIL: Tracer " << j << " not properly copied from parent species\n"); 
+      sim_log("FAIL: dx: " << tracer->p[i].dx << "\n");
+      sim_log("FAIL: dy: " << tracer->p[i].dy << "\n");
+      sim_log("FAIL: dz: " << tracer->p[i].dz << "\n");
+      sim_log("FAIL: ux: " << tracer->p[i].ux << "\n");
+      sim_log("FAIL: uy: " << tracer->p[i].uy << "\n");
+      sim_log("FAIL: uz: " << tracer->p[i].uz << "\n");
+      sim_log("FAIL: w: "  << tracer->p[i].w << "\n");
+      sim_log("FAIL: i: "  << tracer->p[i].i << "\n");
+      return 8;
+      break;
+    }
+  }
+  if(success) {
+    sim_log("info: All tracers properly copied from parent species\n");
+  } else {
+    sim_log("FAIL: Tracers (" << tracer->name << ") not properly copied from parent (" << parent->name << ") species\n");
+    return 8;
+  }
+  return 0;
+}
+
+//=============================================================================
+// Test whether the number of moved tracers is correct
+//=============================================================================
+int test_tracer_move_count(species_t* parent, species_t* tracer, int mincount, int maxcount, int oldcount, int _world_rank) {
+  if((tracer->np < mincount) || (tracer->np > maxcount)) {
+    sim_log("FAIL: Did not move the correct number of particles. " << tracer->np << " should be in [" << mincount << "," << maxcount << "]");
+    return 9;
+  } else {
+    sim_log("info: " << tracer->name << " has " << tracer->np << " particles");
+  }
+
+  if(parent->np + tracer->np != oldcount) {
+    sim_log("FAIL: Particle number not conserved in move from "<< parent->name <<" to "<< tracer->name <<". Before we had "<< oldcount <<" particles, now we have "<< parent->np <<"+"<< tracer->np);
+    return 10;
+  } else {
+    sim_log(parent->name <<" now has "<< parent->np <<" particles");
+  }
+  return 0;
+}
+
+//=============================================================================
+// Test whether the weight is correct for moved tracers
+//=============================================================================
+int test_tracer_move_weight(species_t* tracer, float weight, int _world_rank) {
+  for(int i = 0; i<tracer->np; i++) {
+    if(tracer->k_p_h(i, particle_var::w) != weight) {
+      sim_log("FAIL: particle "<< i << " in species " << tracer->name <<" has weight "<< tracer->k_p_h(i, particle_var::w) <<" instead of "<< weight); 
+      return 11;
+    }
+  }
+  sim_log("info: "<< tracer->name <<" has correct weight");
+  return 0;
+}
+
+//=============================================================================
+// Test wether tracer particles were moved correctly 
+//=============================================================================
+int test_tracer_move(species_t* parent, species_t* tracer, int _world_rank) {
+  bool found = false;
+  for(int i=0; i<tracer->np; i++) {
+    int j=0;
+    found = false;
+    for(j=0; j<parent->np; j++) {
+      if(parent->p[j].dx == tracer->p[i].dx &&
+         parent->p[j].dy == tracer->p[i].dy &&
+         parent->p[j].dz == tracer->p[i].dz &&
+         parent->p[j].ux == tracer->p[i].ux &&
+         parent->p[j].uy == tracer->p[i].uy &&
+         parent->p[j].uz == tracer->p[i].uz &&
+         parent->p[j].i == tracer->p[i].i) {
+        found = true;
+        break;
+      }
+    }
+    if(found) {
+      sim_log("FAIL: Tracer " << j << " not properly moved from parent species\n"); 
+      sim_log("FAIL: dx: " << tracer->p[i].dx << "\n");
+      sim_log("FAIL: dy: " << tracer->p[i].dy << "\n");
+      sim_log("FAIL: dz: " << tracer->p[i].dz << "\n");
+      sim_log("FAIL: ux: " << tracer->p[i].ux << "\n");
+      sim_log("FAIL: uy: " << tracer->p[i].uy << "\n");
+      sim_log("FAIL: uz: " << tracer->p[i].uz << "\n");
+      sim_log("FAIL: w: "  << tracer->p[i].w << "\n");
+      sim_log("FAIL: i: "  << tracer->p[i].i << "\n");
+      return 12;
+      break;
+    }
+  }
+  if(!found) {
+    sim_log("info: All tracers properly moved from parent species\n");
+  } else {
+    sim_log("FAIL: Tracers (" << tracer->name << ") not properly movied from parent (" << parent->name << ") species\n");
+    return 8;
+  }
+  return 0;
+}
 
 begin_initialization {
 
@@ -88,15 +232,14 @@ begin_initialization {
 
   electron->copy_to_device();
 
+  int err_code = 0;
   int mincount,maxcount;
   std::unordered_set<size_t> IDs;
 
   //===========================================================================
   // Copy out 1 percent of all particles.
   //===========================================================================
-//  species_t * elec_tracer  = make_tracers_by_percentage(electron, 1.0, Tracertype::Copy, "sillyname");
   species_t * elec_tracer = define_tracer_species_by_percentage("electron_tracers_percentage", electron, TracerType::Copy, 1.0);
-//  elec_tracer->create_tracers_by_percentage(electron, TracerType::Copy, 1.0, rank());
 
   if(!elec_tracer) {
     sim_log("Creation of tracer species containing 1%% of particles failed"); abort(2);
@@ -106,79 +249,24 @@ begin_initialization {
   //Rounding up or down is both reasonable.
   mincount = floor(Ne*0.01);
   maxcount = ceil(Ne*0.01);
-  if((elec_tracer->np < mincount) || (elec_tracer->np > maxcount)) {
-    sim_log("FAIL: Did not select one percent of particles. Expected " << elec_tracer->np << " in [" << mincount << "," << maxcount << "]"); abort(3);
-  } else {
-    sim_log("info: " << elec_tracer->name << " has " << elec_tracer->np << " particles");
-  }
+  err_code = test_tracer_copy_count(elec_tracer, mincount, maxcount, rank());
+  if(err_code)
+    abort(err_code);
 
   // Statistical weight of copies should be zero. Accessing particles also
   // verifies that memory allocation happend ok.
-  for(int i = 0; i<elec_tracer->np; i++) {
-    if(elec_tracer->k_p_h(i, particle_var::w) != 0.) {
-      sim_log("FAIL: "<< elec_tracer->name <<" did not have zero weight"); abort(4);
-    }
-  }
-  sim_log("info: "<< elec_tracer->name <<" has zero weight");
+  err_code = test_tracer_copy_weight(elec_tracer, rank());
+  if(err_code)
+    abort(err_code);
 
   // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
   #ifdef VPIC_ENABLE_TRACER_PARTICLES
-    sim_log("info: testing with VPIC_ENABLE_TRACER_PARTICLES");
-    if(!elec_tracer->using_annotations || elec_tracer->annotation_vars.i64_vars.size() < 1) {
-      sim_log("FAIL: "<< elec_tracer->name <<" has no annotations for IDs"); abort(5);
-    } else {
-      sim_log("info: "<< elec_tracer->name <<" should have unique IDs");
-    }
-    // Check for duplicates. Touch all IDs also verifies memory allocation
-    IDs.clear();
-    for(int i = 0; i<elec_tracer->np; i++) {
-      size_t id = elec_tracer->annotations_h.get<int64_t>(i, 0);
-      if(IDs.count(id) != 0) {
-        sim_log("FAIL: particle "<< i <<" in "<< elec_tracer->name <<" has duplicate ID "<< id); abort(6);
-      }
-      IDs.insert(id);
-    }
-    if(IDs.size() != static_cast<uint32_t>(elec_tracer->np)) {
-      sim_log("FAIL: "<< IDs.size() << " IDs but"<< elec_tracer->np <<" particles in "<<elec_tracer->name); abort(7);
-    } else {
-      sim_log("info: IDs of "<< elec_tracer->name << " look reasonable");
-    }
-//    test_tracer_copy(electron, elec_tracer);
-    bool success = true;
-    for(int i=0; i<elec_tracer->np; i++) {
-      int j=0;
-      success = false;
-      for(j=0; j<electron->np; j++) {
-        if(electron->k_p_h(j, particle_var::dx) == elec_tracer->k_p_h(i, particle_var::dx) &&
-           electron->k_p_h(j, particle_var::dy) == elec_tracer->k_p_h(i, particle_var::dy) &&
-           electron->k_p_h(j, particle_var::dz) == elec_tracer->k_p_h(i, particle_var::dz) &&
-           electron->k_p_h(j, particle_var::ux) == elec_tracer->k_p_h(i, particle_var::ux) &&
-           electron->k_p_h(j, particle_var::uy) == elec_tracer->k_p_h(i, particle_var::uy) &&
-           electron->k_p_h(j, particle_var::uz) == elec_tracer->k_p_h(i, particle_var::uz) &&
-           electron->k_p_i_h(j)  == elec_tracer->k_p_i_h(i)) {
-          success = true;
-          break;
-        }
-      }
-      if(!success) {
-        sim_log("FAIL: Tracer " << i << " not properly copied from parent species\n"); 
-        sim_log("FAIL: dx: " << elec_tracer->k_p_h(i, particle_var::dx) << "\n");
-        sim_log("FAIL: dy: " << elec_tracer->k_p_h(i, particle_var::dy) << "\n");
-        sim_log("FAIL: dz: " << elec_tracer->k_p_h(i, particle_var::dz) << "\n");
-        sim_log("FAIL: ux: " << elec_tracer->k_p_h(i, particle_var::ux) << "\n");
-        sim_log("FAIL: uy: " << elec_tracer->k_p_h(i, particle_var::uy) << "\n");
-        sim_log("FAIL: uz: " << elec_tracer->k_p_h(i, particle_var::uz) << "\n");
-        sim_log("FAIL: w: "  << elec_tracer->k_p_h(i, particle_var::w) << "\n");
-        sim_log("FAIL: i: "  << elec_tracer->k_p_i_h(i) << "\n");
-        abort(37);
-        break;
-      }
-    }
-    if(success) {
-      sim_log("info: All tracers properly copied from parent species\n");
-    } else {
-      sim_log("FAIL: Tracers not properly copied from parent species\n"); abort(37);
-    }
+    err_code = test_tracer_ids(elec_tracer, rank());
+    if(err_code)
+      abort(err_code);
+    err_code = test_tracer_copy(electron, elec_tracer, rank());
+    if(err_code)
+      abort(err_code);
   #else
     sim_log("info: testing without VPIC_ENABLE_TRACER_PARTICLES");
   #endif
@@ -187,7 +275,6 @@ begin_initialization {
   //===========================================================================
   // Copy out 1 in 99.5 particle
   //===========================================================================
-//  species_t * elec_tracer2 = make_tracers_by_nth(electron, 99.5, Tracertype::Copy);
   species_t * elec_tracer2 = define_tracer_species_by_nth("electron_tracers_nth", electron, TracerType::Copy, 99.5);
   if(!elec_tracer2) {
     sim_log("Creation of tracer2 species containing 1%% of particles failed"); abort(9);
@@ -197,86 +284,31 @@ begin_initialization {
   //Rounding up or down is both reasonable.
   mincount = floor(Ne/99.5);
   maxcount = ceil(Ne/99.5);
-  if((elec_tracer2->np < mincount) || (elec_tracer2->np > maxcount)) {
-    sim_log("FAIL: Did not select one in 99.5 particles" << "Tracers have " << elec_tracer2->np << " particles but should be in [" << mincount << "," << maxcount << "]"); abort(10);
-  } else {
-    sim_log("info: " << elec_tracer2->name << " has " << elec_tracer2->np << " particles");
-  }
+  err_code = test_tracer_copy_count(elec_tracer2, mincount, maxcount, rank());
+  if(err_code)
+    abort(err_code);
 
   // Statistical weight of copies should be zero. Accessing particles also
   // verifies that memory allocation happend ok.
-  for(int i = 0; i<elec_tracer2->np; i++) {
-    if(elec_tracer2->k_p_h(i, particle_var::w) != 0.) {
-      sim_log("FAIL: "<< elec_tracer2->name <<" did not have zero weight"); abort(11);
-    }
-  }
-  sim_log("info: "<< elec_tracer2->name <<" has zero weight");
+  err_code = test_tracer_copy_weight(elec_tracer2, rank());
+  if(err_code)
+    abort(err_code);
 
   // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
   #ifdef VPIC_ENABLE_TRACER_PARTICLES
-    sim_log("info: testing with VPIC_ENABLE_TRACER_PARTICLES");
-    if(!elec_tracer2->using_annotations || elec_tracer2->annotation_vars.i64_vars.size() < 1) {
-      sim_log("FAIL: "<< elec_tracer2->name <<" has no annotations for IDs"); abort(5);
-    } else {
-      sim_log("info: "<< elec_tracer2->name <<" should have unique IDs");
-    }
-    // Check for duplicates. Touch all IDs also verifies memory allocation
-    IDs.clear();
-    for(int i = 0; i<elec_tracer2->np; i++) {
-      size_t id = elec_tracer2->annotations_h.get<int64_t>(i, 0);
-      if(IDs.count(id) != 0) {
-        sim_log("FAIL: particle "<< i <<" in "<< elec_tracer2->name <<" has duplicate ID "<< id); abort(6);
-      }
-      IDs.insert(id);
-    }
-    if(IDs.size() != static_cast<uint32_t>(elec_tracer2->np)) {
-      sim_log("FAIL: "<< IDs.size() << " IDs but"<< elec_tracer2->np <<" particles in "<<elec_tracer2->name); abort(7);
-    } else {
-      sim_log("info: IDs of "<< elec_tracer2->name << " look reasonable");
-    }
-//    test_tracer_copy(electron, elec_tracer2);
-    success = true;
-    for(int i=0; i<elec_tracer2->np; i++) {
-      int j=0;
-      success = false;
-      for(j=0; j<electron->np; j++) {
-        if(electron->k_p_h(j, particle_var::dx) == elec_tracer2->k_p_h(i, particle_var::dx) &&
-           electron->k_p_h(j, particle_var::dy) == elec_tracer2->k_p_h(i, particle_var::dy) &&
-           electron->k_p_h(j, particle_var::dz) == elec_tracer2->k_p_h(i, particle_var::dz) &&
-           electron->k_p_h(j, particle_var::ux) == elec_tracer2->k_p_h(i, particle_var::ux) &&
-           electron->k_p_h(j, particle_var::uy) == elec_tracer2->k_p_h(i, particle_var::uy) &&
-           electron->k_p_h(j, particle_var::uz) == elec_tracer2->k_p_h(i, particle_var::uz) &&
-           electron->k_p_i_h(j)  == elec_tracer2->k_p_i_h(i)) {
-          success = true;
-          break;
-        }
-      }
-      if(!success) {
-        sim_log("FAIL: Tracer " << i << " not properly copied from parent species\n"); 
-        sim_log("FAIL: dx: " << elec_tracer2->k_p_h(i, particle_var::dx) << "\n");
-        sim_log("FAIL: dy: " << elec_tracer2->k_p_h(i, particle_var::dy) << "\n");
-        sim_log("FAIL: dz: " << elec_tracer2->k_p_h(i, particle_var::dz) << "\n");
-        sim_log("FAIL: ux: " << elec_tracer2->k_p_h(i, particle_var::ux) << "\n");
-        sim_log("FAIL: uy: " << elec_tracer2->k_p_h(i, particle_var::uy) << "\n");
-        sim_log("FAIL: uz: " << elec_tracer2->k_p_h(i, particle_var::uz) << "\n");
-        sim_log("FAIL: w: "  << elec_tracer2->k_p_h(i, particle_var::w) << "\n");
-        sim_log("FAIL: i: "  << elec_tracer2->k_p_i_h(i) << "\n");
-        abort(37);
-        break;
-      }
-    }
-    if(success) {
-      sim_log("info: All tracers properly copied from parent species\n");
-    } else {
-      sim_log("FAIL: Tracers not properly copied from parent species\n"); abort(37);
-    }
+    err_code = test_tracer_ids(elec_tracer2, rank());
+    if(err_code)
+      abort(err_code);
+    err_code = test_tracer_copy(electron, elec_tracer2, rank());
+    if(err_code)
+      abort(err_code);
   #else
     sim_log("info: testing without VPIC_ENABLE_TRACER_PARTICLES");
   #endif
   sim_log("info: "<< elec_tracer2->name <<" done");
 
   //===========================================================================
-  // Copy out 1237 percent of all particles.
+  // Copy out 1237 of all particles.
   // This is a prime slightly larger than 1234.56 aka 1 percent
   //===========================================================================
   species_t * elec_tracer3 = define_tracer_species_with_n("electron_tracer_n", electron, TracerType::Copy, 1237);
@@ -285,81 +317,24 @@ begin_initialization {
   }
 
   // This time we have limited on the acceptable number of tracers
-  if(elec_tracer3->np != 1237) {
-    sim_log("FAIL: Did not select 1237 particles"); abort(17);
-  } else {
-    sim_log("info: " << elec_tracer3->name << " has " << elec_tracer3->np << " particles");
-  }
+  err_code = test_tracer_copy_count(elec_tracer3, 1237, 1237, rank());
+  if(err_code)
+    abort(err_code);
 
   // Statistical weight of copies should be zero. Accessing particles also
   // verifies that memory allocation happend ok.
-  for(int i = 0; i<elec_tracer3->np; i++) {
-    if(elec_tracer3->k_p_h(i, particle_var::w) != 0.) {
-      sim_log("FAIL: "<< elec_tracer3->name <<" did not have zero weight"); abort(18);
-    }
-  }
-  sim_log("info: "<< elec_tracer3->name <<" has zero weight");
+  err_code = test_tracer_copy_weight(elec_tracer3, rank());
+  if(err_code)
+    abort(err_code);
 
   // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
   #ifdef VPIC_ENABLE_TRACER_PARTICLES
-    sim_log("info: testing with VPIC_GLOBAL_PARTICLE_ID");
-    if(!elec_tracer3->using_annotations || elec_tracer3->annotation_vars.i64_vars.size() < 1) {
-      sim_log("FAIL: "<< elec_tracer3->name <<" has no IDs"); abort(19);
-    } else {
-      sim_log("info: "<< elec_tracer3->name <<" should have unique IDs");
-    }
-    // Check for duplicates. Touch all IDs also verifies memory allocation
-    IDs.clear();
-    for(int i = 0; i<elec_tracer3->np; i++) {
-      size_t id = elec_tracer3->annotations_h.get<int64_t>(i, 0);
-      if(IDs.count(id) != 0) {
-        sim_log("FAIL: particle "<< i <<" in "<< elec_tracer3->name <<" has duplicate ID "<< id); abort(20);
-      }
-      IDs.insert(id);
-    }
-    if(IDs.size() != static_cast<uint32_t>(elec_tracer3->np)) {
-      sim_log("FAIL: "<< IDs.size() << " IDs but"<< elec_tracer3->np <<" particles in "<<elec_tracer3->name); abort(21);
-    } else {
-      sim_log("info: IDs of "<< elec_tracer3->name << " look reasonable");
-    }
-
-    // Check if particles were copied correctly.
-//    test_tracer_copy(electron, elec_tracer3);
-    success = true;
-    for(int i=0; i<elec_tracer3->np; i++) {
-      int j=0;
-      success = false;
-      for(j=0; j<electron->np; j++) {
-        if(electron->k_p_h(j, particle_var::dx) == elec_tracer3->k_p_h(i, particle_var::dx) &&
-           electron->k_p_h(j, particle_var::dy) == elec_tracer3->k_p_h(i, particle_var::dy) &&
-           electron->k_p_h(j, particle_var::dz) == elec_tracer3->k_p_h(i, particle_var::dz) &&
-           electron->k_p_h(j, particle_var::ux) == elec_tracer3->k_p_h(i, particle_var::ux) &&
-           electron->k_p_h(j, particle_var::uy) == elec_tracer3->k_p_h(i, particle_var::uy) &&
-           electron->k_p_h(j, particle_var::uz) == elec_tracer3->k_p_h(i, particle_var::uz) &&
-           electron->k_p_i_h(j)  == elec_tracer3->k_p_i_h(i)) {
-          success = true;
-          break;
-        }
-      }
-      if(!success) {
-        sim_log("FAIL: Tracer " << i << " not properly copied from parent species\n"); 
-        sim_log("FAIL: dx: " << elec_tracer3->k_p_h(i, particle_var::dx) << "\n");
-        sim_log("FAIL: dy: " << elec_tracer3->k_p_h(i, particle_var::dy) << "\n");
-        sim_log("FAIL: dz: " << elec_tracer3->k_p_h(i, particle_var::dz) << "\n");
-        sim_log("FAIL: ux: " << elec_tracer3->k_p_h(i, particle_var::ux) << "\n");
-        sim_log("FAIL: uy: " << elec_tracer3->k_p_h(i, particle_var::uy) << "\n");
-        sim_log("FAIL: uz: " << elec_tracer3->k_p_h(i, particle_var::uz) << "\n");
-        sim_log("FAIL: w: "  << elec_tracer3->k_p_h(i, particle_var::w) << "\n");
-        sim_log("FAIL: i: "  << elec_tracer3->k_p_i_h(i) << "\n");
-        abort(37);
-        break;
-      }
-    }
-    if(success) {
-      sim_log("info: All tracers properly copied from parent species\n");
-    } else {
-      sim_log("FAIL: Tracers not properly copied from parent species\n"); abort(37);
-    }
+    err_code = test_tracer_ids(elec_tracer3, rank());
+    if(err_code)
+      abort(err_code);
+    err_code = test_tracer_copy(electron, elec_tracer3, rank());
+    if(err_code)
+      abort(err_code);
   #else
     sim_log("info: testing without VPIC_GLOBAL_PARTICLE_ID");
   #endif
@@ -376,7 +351,6 @@ begin_initialization {
     if (p.uz < 0.) { return false; }
     return true;
   };
-//  species_t * elec_tracer4 = make_tracers_by_predicate(electron, my_predicate, Tracertype::Copy);
   species_t* elec_tracer4 = define_tracer_species_by_predicate( "electron_tracer_predicate",
                                                                 electron,
                                                                 TracerType::Copy,
@@ -393,91 +367,33 @@ begin_initialization {
   // distribution.
   mincount = floor(Ne/8. - 3.*sqrt(Ne/8.));
   maxcount = ceil(Ne/8. + 3.*sqrt(Ne/8.));
-  if((elec_tracer4->np < mincount) || (elec_tracer4->np > maxcount)) {
-    sim_log("FAIL: Did not even roughly select "<< Ne/8. << "particles ("<< elec_tracer4->np <<")."); abort(24);
-  } else {
-    sim_log("info: " << elec_tracer4->name << " has " << elec_tracer4->np << " particles");
-  }
+  err_code = test_tracer_copy_count(elec_tracer4, mincount, maxcount, rank());
+  if(err_code)
+    abort(err_code);
 
   // Statistical weight of copies should be zero. Accessing particles also
   // verifies that memory allocation happend ok.
-  for(int i = 0; i<elec_tracer4->np; i++) {
-    if(elec_tracer4->k_p_h(i, particle_var::w) != 0.) {
-      sim_log("FAIL: "<< elec_tracer4->name <<" did not have zero weight"); abort(25);
-    }
-  }
-  sim_log("info: "<< elec_tracer4->name <<" has zero weight");
+  err_code = test_tracer_copy_weight(elec_tracer4, rank());
+  if(err_code)
+    abort(err_code);
 
   // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
   #ifdef VPIC_ENABLE_TRACER_PARTICLES
-    sim_log("info: testing with VPIC_GLOBAL_PARTICLE_ID");
-    if(!elec_tracer4->using_annotations || elec_tracer4->annotation_vars.i64_vars.size() < 1) {
-      sim_log("FAIL: "<< elec_tracer4->name <<" has no IDs"); abort(26);
-    } else {
-      sim_log("info: "<< elec_tracer4->name <<" should have unique IDs");
-    }
-    // Check for duplicates. Touch all IDs also verifies memory allocation
-    IDs.clear();
-    for(int i = 0; i<elec_tracer4->np; i++) {
-      size_t id = elec_tracer4->annotations_h.get<int64_t>(i, 0);
-      if(IDs.count(id) != 0) {
-        sim_log("FAIL: particle "<< i <<" in "<< elec_tracer4->name <<" has duplicate ID "<< id); abort(27);
-      }
-      IDs.insert(id);
-    }
-    if(IDs.size() != static_cast<uint32_t>(elec_tracer4->np)) {
-      sim_log("FAIL: "<< IDs.size() << " IDs but"<< elec_tracer4->np <<" particles in "<<elec_tracer4->name); abort(28);
-    } else {
-      sim_log("info: IDs of "<< elec_tracer4->name << " look reasonable");
-    }
-
-    // Check if particles were copied correctly.
-//    test_tracer_copy(electron, elec_tracer4);
-    success = true;
-    for(int i=0; i<elec_tracer4->np; i++) {
-      int j=0;
-      success = false;
-      for(j=0; j<electron->np; j++) {
-        if(electron->k_p_h(j, particle_var::dx) == elec_tracer4->k_p_h(i, particle_var::dx) &&
-           electron->k_p_h(j, particle_var::dy) == elec_tracer4->k_p_h(i, particle_var::dy) &&
-           electron->k_p_h(j, particle_var::dz) == elec_tracer4->k_p_h(i, particle_var::dz) &&
-           electron->k_p_h(j, particle_var::ux) == elec_tracer4->k_p_h(i, particle_var::ux) &&
-           electron->k_p_h(j, particle_var::uy) == elec_tracer4->k_p_h(i, particle_var::uy) &&
-           electron->k_p_h(j, particle_var::uz) == elec_tracer4->k_p_h(i, particle_var::uz) &&
-           electron->k_p_i_h(j)  == elec_tracer4->k_p_i_h(i)) {
-          success = true;
-          break;
-        }
-      }
-      if(!success) {
-        sim_log("FAIL: Tracer " << i << " not properly copied from parent species\n"); 
-        sim_log("FAIL: dx: " << elec_tracer4->k_p_h(i, particle_var::dx) << "\n");
-        sim_log("FAIL: dy: " << elec_tracer4->k_p_h(i, particle_var::dy) << "\n");
-        sim_log("FAIL: dz: " << elec_tracer4->k_p_h(i, particle_var::dz) << "\n");
-        sim_log("FAIL: ux: " << elec_tracer4->k_p_h(i, particle_var::ux) << "\n");
-        sim_log("FAIL: uy: " << elec_tracer4->k_p_h(i, particle_var::uy) << "\n");
-        sim_log("FAIL: uz: " << elec_tracer4->k_p_h(i, particle_var::uz) << "\n");
-        sim_log("FAIL: w: "  << elec_tracer4->k_p_h(i, particle_var::w) << "\n");
-        sim_log("FAIL: i: "  << elec_tracer4->k_p_i_h(i) << "\n");
-        abort(37);
-        break;
-      }
-    }
-    if(success) {
-      sim_log("info: All tracers properly copied from parent species\n");
-    } else {
-      sim_log("FAIL: Tracers not properly copied from parent species\n"); abort(37);
-    }
+    err_code = test_tracer_ids(elec_tracer4, rank());
+    if(err_code)
+      abort(err_code);
+    err_code = test_tracer_copy(electron, elec_tracer4, rank());
+    if(err_code)
+      abort(err_code);
   #else
     sim_log("info: testing without VPIC_GLOBAL_PARTICLE_ID");
   #endif
   sim_log("info: "<< elec_tracer4->name <<" done");
 
   //===========================================================================
-  // Now we are going to move one percent of particles
+  // Move out 1 percent of all particles.
   //===========================================================================
-  const int oldcount = electron->np;
-//  species_t * elec_tracer5  = make_tracers_by_percentage(electron, 1.0, Tracertype::Move);
+  int oldcount = electron->np;
   species_t * elec_tracer5 = define_tracer_species_by_percentage("electron_tracers_percentage_move", electron, TracerType::Move, 1.0);
   if(!elec_tracer5) {
     sim_log("Creation of tracer5 species containing 1%% of particles failed"); abort(30);
@@ -487,55 +403,173 @@ begin_initialization {
   //Rounding up or down is both reasonable.
   mincount = floor(Ne*0.01);
   maxcount = ceil(Ne*0.01);
-  if((elec_tracer5->np < mincount) || (elec_tracer5->np > maxcount)) {
-    sim_log("FAIL: Did not select one percent of particles. " << elec_tracer5->np << " should be in [" << mincount << "," << maxcount << "]"); abort(31);
-  } else {
-    sim_log("info: " << elec_tracer5->name << " has " << elec_tracer5->np << " particles");
-  }
-  if(electron->np + elec_tracer5->np != oldcount) {
-    sim_log("FAIL: Particle number not conserved in move from "<< electron->name <<" to "<< elec_tracer5->name <<". Before we had "<< oldcount <<" particles, now we have "<< electron->np <<"+"<< elec_tracer5->np); abort(32);
-   } else {
-     sim_log(electron->name <<" now has "<< electron->np <<" particles");
-   }
+  err_code = test_tracer_move_count(electron, elec_tracer5, mincount, maxcount, oldcount, rank());
+  if(err_code)
+    abort(err_code);
 
   // Moving should leave the statistical weight unchanged. Also touching all
   // particles verifies that memory allocation happend ok.
-  for(int i = 0; i<elec_tracer5->np; i++) {
-    if(elec_tracer5->k_p_h(i, particle_var::w) != weight) {
-      sim_log("FAIL: particle "<< i << " in species " << elec_tracer5->name <<" has weight "<< elec_tracer5->k_p_h(i, particle_var::w) <<" instead of "<< weight); abort(33);
-    }
-  }
-  sim_log("info: "<< elec_tracer5->name <<" has correct weight");
+  err_code = test_tracer_move_weight(elec_tracer5, weight, rank());
+  if(err_code)
+    abort(err_code);
 
   // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
   #ifdef VPIC_ENABLE_TRACER_PARTICLES
-    sim_log("info: testing with VPIC_GLOBAL_PARTICLE_ID");
-    if(!elec_tracer5->using_annotations || elec_tracer5->annotation_vars.i64_vars.size() < 1) {
-      sim_log("FAIL: "<< elec_tracer5->name <<" has no IDs"); abort(34);
-    } else {
-      sim_log("info: "<< elec_tracer5->name <<" should have unique IDs");
-    }
-    // Check for duplicates. Touch all IDs also verifies memory allocation
-    IDs.clear();
-    for(int i = 0; i<elec_tracer5->np; i++) {
-      size_t id = elec_tracer5->annotations_h.get<int64_t>(i, 0);
-      if(IDs.count(id) != 0) {
-        sim_log("FAIL: particle "<< i <<" in "<< elec_tracer5->name <<" has duplicate ID "<< id); abort(35);
-      }
-      IDs.insert(id);
-    }
-    if(IDs.size() != static_cast<uint32_t>(elec_tracer5->np)) {
-      sim_log("FAIL: "<< IDs.size() << " IDs but"<< elec_tracer5->np <<" particles in "<<elec_tracer5->name); abort(36);
-    } else {
-      sim_log("info: IDs of "<< elec_tracer5->name << " look reasonable");
-    }
+    err_code = test_tracer_ids(elec_tracer5, rank());
+    if(err_code) 
+      abort(err_code);
   #else
     sim_log("info: testing without VPIC_GLOBAL_PARTICLE_ID");
   #endif
   sim_log("info: "<< elec_tracer5->name <<" done");
 
+  repeat(oldcount-electron->np) inject_particle( electron,
+                              uniform( rng(0), 0, L ),   // Random location
+                              uniform( rng(0), 0, L ),
+                              uniform( rng(0), 0, L ),
+                              normal( rng(0), 0, uthe ), // Random thermal velocity
+                              normal( rng(0), 0, uthe ),
+                              normal( rng(0), 0, uthe ),
+                              weight,                    // Statistical weight
+                              0, 0 );
 
+  //===========================================================================
+  // Move out 1 in 99.5 particle
+  //===========================================================================
+  oldcount = electron->np;
+  species_t * elec_tracer6 = define_tracer_species_by_nth("electron_tracers_nth_move", electron, TracerType::Move, 99.5);
+  if(!elec_tracer6) {
+    sim_log("Creation of tracer6 species containing 1 in 99.5 of particles failed"); abort(9);
+  }
 
+  //That should be 1240.76 tracer particles, but of course it will produce an int.
+  //Rounding up or down is both reasonable.
+  mincount = floor(Ne/99.5);
+  maxcount = ceil(Ne/99.5);
+  err_code = test_tracer_move_count(electron, elec_tracer6, mincount, maxcount, oldcount, rank());
+  if(err_code)
+    abort(err_code);
+
+  // Moving should leave the statistical weight unchanged. Also touching all
+  // particles verifies that memory allocation happend ok.
+  err_code = test_tracer_move_weight(elec_tracer6, weight, rank());
+  if(err_code)
+    abort(err_code);
+
+  // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
+  #ifdef VPIC_ENABLE_TRACER_PARTICLES
+    // Test if Tracer IDs are unique
+    err_code = test_tracer_ids(elec_tracer6, rank());
+    if(err_code) 
+      abort(err_code);
+    // Test if tracers were moved correctly (no matches)
+    err_code = test_tracer_move(electron, elec_tracer6, rank());
+    if(err_code)
+      abort(err_code);
+  #else
+    sim_log("info: testing without VPIC_ENABLE_TRACER_PARTICLES");
+  #endif
+  sim_log("info: "<< elec_tracer6->name <<" done");
+
+  repeat(oldcount-electron->np) inject_particle( electron,
+                              uniform( rng(0), 0, L ),   // Random location
+                              uniform( rng(0), 0, L ),
+                              uniform( rng(0), 0, L ),
+                              normal( rng(0), 0, uthe ), // Random thermal velocity
+                              normal( rng(0), 0, uthe ),
+                              normal( rng(0), 0, uthe ),
+                              weight,                    // Statistical weight
+                              0, 0 );
+
+  //===========================================================================
+  // Move out 1237 of all particles.
+  // This is a prime slightly larger than 1234.56 aka 1 percent
+  //===========================================================================
+  oldcount = electron->np;
+  species_t * elec_tracer7 = define_tracer_species_with_n("electron_tracer_n_move", electron, TracerType::Move, 1237);
+  if(!elec_tracer7) {
+    sim_log("Creation of tracer7 species containing 1237 of particles failed"); abort(16);
+  }
+
+  // This time we have limited on the acceptable number of tracers
+  err_code = test_tracer_move_count(electron, elec_tracer7, 1237, 1237, oldcount, rank());
+  if(err_code)
+    abort(err_code);
+
+  // Moving should leave the statistical weight unchanged. Also touching all
+  // particles verifies that memory allocation happend ok.
+  err_code = test_tracer_move_weight(elec_tracer7, weight, rank());
+  if(err_code)
+    abort(err_code);
+
+  // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
+  #ifdef VPIC_ENABLE_TRACER_PARTICLES
+    // Test if Tracer IDs are unique
+    err_code = test_tracer_ids(elec_tracer7, rank());
+    if(err_code) 
+      abort(err_code);
+    // Test if tracers were moved correctly (no matches)
+    err_code = test_tracer_move(electron, elec_tracer7, rank());
+    if(err_code)
+      abort(err_code);
+  #else
+    sim_log("info: testing without VPIC_GLOBAL_PARTICLE_ID");
+  #endif
+  sim_log("info: "<< elec_tracer7->name <<" done");
+  repeat(oldcount-electron->np) inject_particle( electron,
+                              uniform( rng(0), 0, L ),   // Random location
+                              uniform( rng(0), 0, L ),
+                              uniform( rng(0), 0, L ),
+                              normal( rng(0), 0, uthe ), // Random thermal velocity
+                              normal( rng(0), 0, uthe ),
+                              normal( rng(0), 0, uthe ),
+                              weight,                    // Statistical weight
+                              0, 0 );
+
+  //===========================================================================
+  // Move out particles based on a predicate
+  //===========================================================================
+  oldcount = electron->np;
+  species_t* elec_tracer8 = define_tracer_species_by_predicate( "electron_tracer_predicate_move",
+                                                                electron,
+                                                                TracerType::Move,
+                                                                my_predicate);
+  if(!elec_tracer8) {
+    sim_log("Creation of tracer4 species containing 1237 of particles failed"); abort(23);
+  }
+
+  // This time it is harder to figure out how many particles we should have.
+  // About 1/8 of particles should have three positive velocity components, but
+  // the actual values are randomly distributed. Instead of fixing the random
+  // seed and trusting that the random numnbers don't change, I will accept
+  // anything within 3 sigmas of the expected numnber, assuming a poisson
+  // distribution.
+  mincount = floor(Ne/8. - 3.*sqrt(Ne/8.));
+  maxcount = ceil(Ne/8. + 3.*sqrt(Ne/8.));
+  err_code = test_tracer_move_count(electron, elec_tracer8, mincount, maxcount, oldcount, rank());
+  if(err_code)
+    abort(err_code);
+
+  // Moving should leave the statistical weight unchanged. Also touching all
+  // particles verifies that memory allocation happend ok.
+  err_code = test_tracer_move_weight(elec_tracer8, weight, rank());
+  if(err_code)
+    abort(err_code);
+
+  // All particles should have unique IDs, at least if the code was compiled with GLOBAL_PARTICLE_ID
+  #ifdef VPIC_ENABLE_TRACER_PARTICLES
+    // Test if Tracer IDs are unique
+    err_code = test_tracer_ids(elec_tracer8, rank());
+    if(err_code) 
+      abort(err_code);
+    // Test if tracers were moved correctly (no matches)
+    err_code = test_tracer_move(electron, elec_tracer8, rank());
+    if(err_code)
+      abort(err_code);
+  #else
+    sim_log("info: testing without VPIC_GLOBAL_PARTICLE_ID");
+  #endif
+  sim_log("info: "<< elec_tracer8->name <<" done");
 
 
   sim_log( "pass" );
