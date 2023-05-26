@@ -266,7 +266,7 @@ public:
                        int fname_tag = 1 );
 
   // HDF5 dumps
-  void dump_tracers_hdf5(const char* sp_name, const char*fbase, int append=1, int fname_tag=1);
+  void dump_tracers_hdf5(const char* sp_name, const uint32_t dump_vars, const char*fbase, int append=1);
 
   // convenience functions for simlog output
   void create_field_list(char * strlist, DumpParameters & dumpParams);
@@ -626,6 +626,7 @@ public:
                                 const float ntracers,
                                 const float over_alloc_factor = 1.0,
                                 annotation_vars_t annotations = annotation_vars_t()) {
+    // Verify # of tracer is acceptable
     if(ntracers < 1.0 || static_cast<int>(ntracers) > original_species->np)
       ERROR(( "%f is a bad number of tracers. Should be in [%d,%d]", ntracers, 1, original_species->np));
     return define_tracer_species_by_nth(name, original_species, tracer_type, original_species->np / ntracers, over_alloc_factor, annotations);

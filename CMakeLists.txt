@@ -407,8 +407,8 @@ if(VPIC_ENABLE_HDF5)
   
   # For an "external" build these will be the same, but for an internal we need to gather both
   file(GENERATE OUTPUT ${EXTERNAL_INCLUDES_FILE} CONTENT "${HDF5_INC_STR}")
-  file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "")
-#  file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "${HDF5_LIB_DIR} ${HDF5_LIB_STR}")
+#  file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "${HDF5_LIB_STR}")
+  file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "${HDF5_LIB_DIR} ${HDF5_LIB_STR}")
 endif(VPIC_ENABLE_HDF5)
 
 #------------------------------------------------------------------------------#
