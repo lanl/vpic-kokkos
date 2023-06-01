@@ -97,6 +97,8 @@ begin_globals {
   int    pulse_shape;            // 0 for steady, indefinite pulse, 1 for
                                  // square pulse, 2 for sin^2
   double pulse_FWHM;
+  double pulse_sigma;
+  double pulse_mean;
   double nu_c;
   double pulse_start;
 
@@ -213,8 +215,15 @@ begin_initialization {
 
 
   // Physical parameters
+  int pulse_shape=1;                   // 0 - square pulse, 1 - gaussian
+
   double n_e_over_n_crit       = 90;       // n_e/n_crit in solid slab
-  double laser_intensity_W_cm2 = 1e14;      // units of W/cm^2
+  double laser_intensity_W_cm2;
+  if (pulse_shape == 0){
+    laser_intensity_W_cm2 = 1e14;      // units of W/cm^2
+  } else if (pulse_shape == 1){
+    laser_intensity_W_cm2 = 5.e16;      // units of W/cm^2
+  }
   double laser_intensity_SI    = laser_intensity_W_cm2/1e-4; // units of W/m^2
   double laser_E_SI = sqrt( (2*laser_intensity_SI)/(c_SI * eps0_SI) ); // Laser E
   double laser_E_c = laser_E_SI / E_to_SI;
@@ -275,10 +284,11 @@ begin_initialization {
 
 
 #define mp_me 1836.15267343
-  double A_I1    = 1;              // proton
-  double A_I2    = 2;             // neutral hydrogen
-  double Z_I1    = 1;
+  double A_I1    = 12;   // neutral carbon, mass number
+  double A_I2    = 1;    // neutral hydrogen, mass number
+  double Z_I1    = 6;    
   double Z_I2    = 1;
+  double q_I1    = 1e-30;
   double q_I2    = 1e-30;   // physical charge in code units, vpic doesnt like when charge is zero
   double m_I1_SI = A_I1*mp_me*m_e_SI;
   double m_I2_SI = A_I2*mp_me*m_e_SI;
@@ -326,12 +336,11 @@ begin_initialization {
 
   
   // Laser parameters
-  int pulse_shape=1;                   // square pulse
-
   int cycles = 10;
   double nu = c_SI/lambda_SI;
   double nu_c = nu*time_to_SI;
-  double pulse_FWHM = ((cycles/nu) / time_to_SI); // pulse duration
+  double pulse_FWHM = 5/nu_c;   //((cycles/nu) / time_to_SI); // pulse duration
+  double pulse_sigma = pulse_FWHM/( 2*sqrt(2*log(2) )); // sigma for gaussian function
   double pulse_period = 1 / nu; 
   // How far in front of the boundary should the peak start?
   double pulse_start = 350e-15 / time_to_SI; // time in code units
@@ -352,7 +361,8 @@ begin_initialization {
   //emax = emax*(waist/width); // at entrance if 3D Gaussian 3DCHANGE
 
   
-  double t_stop = pulse_FWHM; // Simulation runtime
+  double t_stop = 0.8*cycles/nu_c; // Simulation runtime
+  double pulse_mean  = cycles/nu_c; // need to shift the gaussian (want the max at the end of the sim)
 
   // Diagnostics intervals.  
   int energies_interval = 50;
@@ -373,13 +383,18 @@ begin_initialization {
 
 
   // Parameters for the ions (note it is the same box as for electrons)
+  double n_I1_SI = 1e20; // Density of I1
   double n_I2_SI = 1e20; // Density of I2
-  double N_I2    = nppc*nx*ny*nz; //Number of macro I2 in box 
+  double N_I1    = nppc*nx*ny*nz; //Number of macro I1 in box
+  double N_I2    = nppc*nx*ny*nz; //Number of macro I2 in box
+  N_I1 = trunc_granular(N_I1, nproc()); // make divisible by # processors
   N_I2 = trunc_granular(N_I2, nproc()); // make divisible by # processors
+  double NpI1    = n_I1_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I1 in box
   double NpI2    = n_I2_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I2 in box
+  double w_I1    = NpI1/N_I1;
   double w_I2    = NpI2/N_I2;
-  int I1_present = 0;
-  int I2_present = 1;
+  int I1_present = 1;
+  int I2_present = 0;
 
 
   
@@ -444,6 +459,11 @@ begin_initialization {
     fprintf(out, "%.17e   Spec max for I2, code units (gamma-1)\n", 0);
     fprintf(out, "%d   Spectra Interval\n", spectra_interval);
     fprintf(out, "%d   This is my rank\n", rank());
+    fprintf(out, "%.17e   Pulse FWHM, code units\n",pulse_FWHM);
+    fprintf(out, "%.17e   Pulse Sigma, code units\n",pulse_sigma);
+    fprintf(out, "%.17e   Pulse mean, code units\n",pulse_mean);
+    fprintf(out, "%.17e   Laser max E, SI\n",laser_E_SI);
+    fprintf(out, "%.17e   Laser emax, code units\n",emax);
     fclose(out);
   }
   
@@ -546,6 +566,8 @@ begin_initialization {
 
   global->pulse_shape              = pulse_shape; 
   global->pulse_FWHM               = pulse_FWHM;
+  global->pulse_sigma               = pulse_sigma;
+  global->pulse_mean               = pulse_mean;
   global->nu_c                     = nu_c;
   global->pulse_start              = pulse_start;
 
@@ -592,16 +614,16 @@ begin_initialization {
   sim_log("Setting up ions. ");
     if ( I1_present ) {
       #if defined(FIELD_IONIZATION)
-        ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
+        ion_I1 = define_species("I1", q_I1, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
       #else
-        ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
+	ion_I1 = define_species("I1", q_I1, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0); // FIXME: q needs to be removed from define_species when field ionization is on.
       #endif
     }
     if ( I2_present ) {
       #if defined(FIELD_IONIZATION)
         ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
       #else
-        ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
+	ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0); // FIXME: q needs to be removed from define_species when field ionization is on.
       #endif
 	ion_I2->pb_diag->write_ux = 1;
         ion_I2->pb_diag->write_uy = 1;
@@ -689,11 +711,23 @@ begin_initialization {
 	
 	
         if ( mobile_ions ) {
-	  #if defined(FIELD_IONIZATION)
-	      inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);
-	  #else
-	      inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2,0,0);
-	  #endif   
+
+	  if ( I2_present ) {
+           #if defined(FIELD_IONIZATION)
+               inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);
+           #else
+               inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2,0,0);
+           #endif
+         } // if I2 present
+         
+         if ( I1_present ) {
+            #if defined(FIELD_IONIZATION)
+                inject_particle( ion_I1, x, y, z, 0, 0, 0, w_I1, q_I1,0,0);
+            #else
+                inject_particle( ion_I1, x, y, z, 0, 0, 0, w_I1,0,0);
+            #endif
+          } // if I1 present
+	  
         } // if mobile ions
 	
       } // if uniform < slab
@@ -896,7 +930,7 @@ begin_initialization {
   */
 
   //global->fdParams.output_variables( all );
-  global->fdParams.output_variables( electric | magnetic );
+  global->fdParams.output_variables( electric | magnetic | current );
 
   //global->hedParams.output_variables( all );
   global->hedParams.output_variables(  current_density  | charge_density |
@@ -1194,6 +1228,7 @@ begin_field_injection {
 //# define MASK  ( R2<=pow(global->mask*global->width,2) ? 1 : 0 )
 
 
+
   if ( global->launch_wave == 0 ) return;
 
   if ( grid->x0==float(global->xmin) ) { // Node is on left boundary
@@ -1260,7 +1295,12 @@ begin_field_injection {
         auto PHASE=( omega_0*t + h*R2/(width*width) );
         auto MASK =( R2<=pow(mask*width,2) ? 1 : 0 );
         //kfield(1+sy*iy+sz*iz, field_var::ey) += (prefactor * cos(PHASE) * exp(-R2/(width*width)) * MASK * pulse_shape_factor);
-	kfield(1+sy*iy+sz*iz, field_var::ey) = (prefactor * sin(PHASE));
+	if ( global->pulse_shape==0 ){
+	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * sin(PHASE));
+	} else if (global->pulse_shape==1 ){
+	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t)) * exp(-(t-global->pulse_mean)*(t-global->pulse_mean)/(2.*global->pulse_sigma*global->pulse_sigma));
+	}
+	
     });
 
   }

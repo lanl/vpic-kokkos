@@ -602,7 +602,7 @@ advance_p_kokkos_unified(
 	float E_to_SI = 1.44303994037981860e+19;
         float time_to_SI = 1.18119324097025572e-22;
         // FIXME: **** Input deck variables ****
-        float epsilon_eV_list[] = {13.6}; // eV, ionization energy, this should be a list with the different levels
+        float epsilon_eV_list[] = {11.26030, 24.38332, 47.8878, 64.4939};//, 392.087, 489.99334};//{13.6}; // eV, ionization energy, this should be a list with the different levels
         float dt = g->dt*time_to_SI;      // [s], timestep
 	
 	// Check if the particle is fully ionized already
@@ -830,7 +830,32 @@ advance_p_kokkos_unified(
             #undef p_w_e
             #undef pii_e
           } // if ionization event occured
-  	  
+
+
+
+
+           if (int(timestep)>=0 && int(timestep)<=700 && int(timestep) % 4 == 0){
+	     // N Ionizations: Open file, write value, close file
+	     char gn [100];
+	     snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt",timestep);
+	     std::ofstream outfile1;
+	     if ((int)pi_offset == 0 && LANE == 0) {
+               outfile1.open(gn); // overwrite old files
+	       outfile1 << "# N ionizations Before" << "," << "# N ionizations After" << "," << "Charge After" << "," << "species name" << endl; // Header
+	     }
+	     else {
+	       outfile1.open(gn, std::ios_base::app); // append to file
+	     }
+	     outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << "," << sp->name << endl;
+             outfile1.close();
+	   }
+
+
+
+
+
+
+	  
 	} // if not electrons
 	  
 #endif // FIELD_IONIZATION
