@@ -416,6 +416,24 @@ species_t::copy_inbound_to_device()
 
 #ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
 void 
+species_t::init_io_buffers(const int N_steps, const float over_alloc_factor) {
+  const int nparticles = static_cast<int>(static_cast<float>(N_steps) * over_alloc_factor);
+  particle_io_buffer      = k_particles_t::HostMirror("Particle io buffer", nparticles);
+  particle_cell_io_buffer = k_particles_i_t::HostMirror("Particle cell io buffer", nparticles);
+//  np_ts_io_buffer         = std::vector<std::pair<int64_t, int64_t>(nparticles, std::make_pair(0, 0));
+  ts_io_buffer            = Kokkos::View<int64_t*>::HostMirror("Timestep io buffer", nparticles);
+  efields_io_buffer       = Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror("Efield io buffer", nparticles);
+  bfields_io_buffer       = Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror("Bfield io buffer", nparticles);
+  current_dens_io_buffer  = Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror("Current density io buffer", nparticles);
+  charge_dens_io_buffer   = Kokkos::View<float*>::HostMirror("Charge density io buffer", nparticles);;
+  momentum_dens_io_buffer = Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror("Momentum density io buffer", nparticles);
+  ke_dens_io_buffer       = Kokkos::View<float*>::HostMirror("KE density io buffer", nparticles);;
+  stress_tensor_io_buffer = Kokkos::View<float*[6], Kokkos::LayoutLeft>::HostMirror("Stress tensor io buffer", nparticles);
+  annotations_io_buffer   = annotations_t<Kokkos::DefaultHostExecutionSpace>(nparticles, annotation_vars);
+  nparticles_buffered = 0;
+}
+
+void 
 species_t::init_annotations(int num_particles, int num_movers, annotation_vars_t& annotation_sizes) 
 {
   using_annotations = true;

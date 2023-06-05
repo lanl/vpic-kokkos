@@ -375,7 +375,7 @@ if(VPIC_ENABLE_HDF5)
   set(EXTERNAL_LIBRARIES_FILE ${PROJECT_BINARY_DIR}/external_libraries)
 
   set(HDF5_LIBS "hdf5")
-  string(REPLACE " " ";" TEST_LIST ${HDF5_LIBRARIES})
+  string(REPLACE " " ";" TEST_LIST ${HDF5_LIBS})
   foreach(lib ${TEST_LIST})
     list(APPEND TEST_LIST_TEMP "-l${lib}")
   endforeach()
@@ -410,6 +410,21 @@ if(VPIC_ENABLE_HDF5)
 #  file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "${HDF5_LIB_STR}")
   file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "${HDF5_LIB_DIR} ${HDF5_LIB_STR}")
 endif(VPIC_ENABLE_HDF5)
+
+#------------------------------------------------------------------------------#
+# Add compile definitions
+#------------------------------------------------------------------------------#
+set(EXTERNAL_DEFINITIONS_FILE ${PROJECT_BINARY_DIR}/external_definitions)
+get_directory_property( DirDefs DIRECTORY ${CMAKE_SOURCE_DIR} COMPILE_DEFINITIONS )
+foreach( d ${DirDefs} )
+  message( STATUS "Found Define: " ${d} )
+endforeach()
+message( STATUS "DirDefs: " ${DirDefs} )
+foreach(def ${DirDefs})
+  list(APPEND DEF_LIST_TEMP "-D${def}")
+endforeach()
+string(REPLACE ";" " " DEF_STR "${DEF_LIST_TEMP}")
+file(GENERATE OUTPUT ${EXTERNAL_DEFINITIONS_FILE} CONTENT ${DEF_STR})
 
 #------------------------------------------------------------------------------#
 # Output log variables

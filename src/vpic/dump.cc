@@ -130,13 +130,475 @@ vpic_simulation::dump_materials( const char *fname ) {
 }
 
 void
+vpic_simulation::dump_tracers_buffered_csv( const char *sp_name,
+                                            uint32_t dump_vars,
+                                            const char *fbase,
+                                            const int append,
+                                            int ftag )
+{
+
+  species_t *sp;
+  char fname[max_filename_bytes];
+  FileIO fileIO;
+  int dim[1], buf_start;
+  static particle_t * ALIGNED(128) p_buf = NULL;
+
+  // Get species
+  sp = find_species_name( sp_name, tracers_list );
+  if( !sp ) ERROR(( "Invalid tracer species name \"%s\".", sp_name ));
+
+  if( !fbase ) ERROR(( "Invalid filename" ));
+
+  // Create and write header string
+  if( append==0 ) {
+    // Create output filename
+    if( ftag ) {
+        snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
+    } else {
+        snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
+    }
+
+    FileIOStatus status = fileIO.open(fname, append ? io_append : io_write);
+    if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
+
+    std::string header_str = std::string("Timestep,rank,tracer_id,cell_id,dx,dy,dz,ux,uy,uz,w");
+    if(dump_vars & DumpVar::GlobalPos) {
+      header_str += ",posx,posy,posz";
+    }
+    if(dump_vars & DumpVar::Efield) {
+      header_str += ",ex,ey,ez";
+    }
+    if(dump_vars & DumpVar::Bfield) {
+      header_str += ",bx,by,bz";
+    }
+    if(dump_vars & DumpVar::CurrentDensity) {
+      header_str += ",jx,jy,jz";
+    }
+    if(dump_vars & DumpVar::ChargeDensity) {
+      header_str += ",rho";
+    }
+    if(dump_vars & DumpVar::MomentumDensity) {
+      header_str += ",px,py,pz";
+    }
+    if(dump_vars & DumpVar::KEDensity) {
+      header_str += ",ke";
+    }
+    if(dump_vars & DumpVar::StressTensor) {
+      header_str += ",txx,tyy,tzz,tyz,tzx,txy";
+    }
+    for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
+      header_str += ",";
+      header_str += sp->annotation_vars.i32_vars[j].c_str();
+    }
+    for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
+      header_str += ",";
+      header_str += sp->annotation_vars.i64_vars[j].c_str();
+    }
+    for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
+      header_str += ",";
+      header_str += sp->annotation_vars.f32_vars[j].c_str();
+    }
+    for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
+      header_str += ",";
+      header_str += sp->annotation_vars.f64_vars[j].c_str();
+    }
+    fileIO.print( "%s\n", header_str.c_str() );
+    if( fileIO.close() ) ERROR(("File close failed on writing header for dump particles!!!"));
+  }
+
+  // Buffer tracers
+  if(sp->nparticles_buffered+sp->np < sp->particle_io_buffer.extent(0) && step() != num_step) {
+    printf("Buffering %d particles (%d already buffered, %d max)\n", sp->np, sp->nparticles_buffered, sp->particle_io_buffer.extent(0));
+    // Update the particles on the host only if they haven't been recently
+    if (step() > sp->last_copied)
+      sp->copy_to_host();
+
+    if( rank()==0 )
+        MESSAGE(("Buffering \"%s\" particles",sp->name));
+
+    auto& particles = sp->k_p_d;
+    auto& particles_i = sp->k_p_i_d;
+    auto& interpolators_k = interpolator_array->k_i_d;
+
+    // If needed, copy weight back to particles for hydro quantities
+    if(sp->tracer_type == TracerType::Copy) {
+      int w_idx = sp->annotation_vars.get_annotation_index<float>("Weight");
+      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      auto w_annote = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL(), w_idx);
+      Kokkos::deep_copy(w_subview_h, w_annote);
+      Kokkos::deep_copy(w_subview_d, w_subview_h);
+    }
+
+    // Compute hydro quantities
+    if(static_cast<uint32_t>(dump_vars) > DumpVar::Bfield) {
+      Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
+      accumulate_hydro_p_kokkos(
+          particles,
+          particles_i,
+          hydro_array->k_h_d,
+          interpolators_k,
+          sp
+      );
+
+      // This is slower in my tests
+      //synchronize_hydro_array_kokkos(hydro_array);
+
+      hydro_array->copy_to_host();
+
+      synchronize_hydro_array( hydro_array );
+    }
+
+    // Get index of tracer ID
+    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>("TracerID");
+    auto& interp = interpolator_array->k_i_h;
+
+    auto particle_slice = Kokkos::make_pair(0, sp->np);
+    auto buffer_slice = Kokkos::make_pair(sp->nparticles_buffered,sp->nparticles_buffered+sp->np);
+
+    // Copy particles into buffer
+    auto particle_subview = Kokkos::subview(sp->k_p_h, particle_slice, Kokkos::ALL());
+    auto particle_buffer_subview = Kokkos::subview(sp->particle_io_buffer, buffer_slice, Kokkos::ALL());
+    auto particle_cell_subview = Kokkos::subview(sp->k_p_i_h, particle_slice);
+    auto particle_cell_buffer_subview = Kokkos::subview(sp->particle_cell_io_buffer, buffer_slice);
+    Kokkos::deep_copy(particle_buffer_subview, particle_subview); 
+    Kokkos::deep_copy(particle_cell_buffer_subview, particle_cell_subview); 
+
+    // Copy annotations into buffers
+    for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
+      auto annote_subview = Kokkos::subview(sp->annotations_h.i32, particle_slice, j);
+      auto buffer_subview = Kokkos::subview(sp->annotations_io_buffer.i32, buffer_slice, j);
+      Kokkos::deep_copy(buffer_subview, annote_subview);
+    }
+    for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
+      auto annote_subview = Kokkos::subview(sp->annotations_h.i64, particle_slice, j);
+      auto buffer_subview = Kokkos::subview(sp->annotations_io_buffer.i64, buffer_slice, j);
+      Kokkos::deep_copy(buffer_subview, annote_subview);
+    }
+    for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
+      auto annote_subview = Kokkos::subview(sp->annotations_h.f32, particle_slice, j);
+      auto buffer_subview = Kokkos::subview(sp->annotations_io_buffer.f32, buffer_slice, j);
+      Kokkos::deep_copy(buffer_subview, annote_subview);
+    }
+    for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
+      auto annote_subview = Kokkos::subview(sp->annotations_h.f64, particle_slice, j);
+      auto buffer_subview = Kokkos::subview(sp->annotations_io_buffer.f64, buffer_slice, j);
+      Kokkos::deep_copy(buffer_subview, annote_subview);
+    }
+
+    // Buffer tracer data
+    sp->np_per_ts_io_buffer.push_back(std::make_pair(sp->np, step()));
+    for(uint32_t i=0; i<sp->np; i++) {
+      float dx0 = sp->k_p_h(i, particle_var::dx);
+      float dy0 = sp->k_p_h(i, particle_var::dy);
+      float dz0 = sp->k_p_h(i, particle_var::dz);
+      float ux0 = sp->k_p_h(i, particle_var::ux);
+      float uy0 = sp->k_p_h(i, particle_var::uy);
+      float uz0 = sp->k_p_h(i, particle_var::uz);
+      float w0  = sp->k_p_h(i, particle_var::w);
+      int   ii  = sp->k_p_i_h(i);
+//      sp->ts_io_buffer(sp->nparticles_buffered+i) = step();
+//      if(dump_vars & DumpVar::GlobalPos) {
+//        fileIO.print(",%e,%e,%e", tracer_x, tracer_y, tracer_z);
+//      }
+      if(dump_vars & DumpVar::Efield) {
+        float ex  = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
+        float ey  = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
+        float ez  = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
+        sp->efields_io_buffer(sp->nparticles_buffered+i, 0) = ex;
+        sp->efields_io_buffer(sp->nparticles_buffered+i, 1) = ey;
+        sp->efields_io_buffer(sp->nparticles_buffered+i, 2) = ez;
+      }
+      if(dump_vars & DumpVar::Bfield) {
+        float bx  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
+        float by  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
+        float bz  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
+        sp->bfields_io_buffer(sp->nparticles_buffered+i, 0) = bx;
+        sp->bfields_io_buffer(sp->nparticles_buffered+i, 1) = by;
+        sp->bfields_io_buffer(sp->nparticles_buffered+i, 2) = bz;
+      }
+      if(dump_vars & DumpVar::CurrentDensity) {
+        float jx  = hydro_array->k_h_h(ii, hydro_var::jx);
+        float jy  = hydro_array->k_h_h(ii, hydro_var::jy);
+        float jz  = hydro_array->k_h_h(ii, hydro_var::jz);
+        sp->current_dens_io_buffer(sp->nparticles_buffered+i, 0) = jx;
+        sp->current_dens_io_buffer(sp->nparticles_buffered+i, 1) = jy;
+        sp->current_dens_io_buffer(sp->nparticles_buffered+i, 2) = jz;
+      }
+      if(dump_vars & DumpVar::ChargeDensity) {
+        float rho = hydro_array->k_h_h(ii, hydro_var::rho);
+        sp->charge_dens_io_buffer(sp->nparticles_buffered+i) = rho;
+      }
+      if(dump_vars & DumpVar::MomentumDensity) {
+        float px  = hydro_array->k_h_h(ii, hydro_var::px);
+        float py  = hydro_array->k_h_h(ii, hydro_var::py);
+        float pz  = hydro_array->k_h_h(ii, hydro_var::pz);
+        sp->momentum_dens_io_buffer(sp->nparticles_buffered+i, 0) = px;
+        sp->momentum_dens_io_buffer(sp->nparticles_buffered+i, 1) = py;
+        sp->momentum_dens_io_buffer(sp->nparticles_buffered+i, 2) = pz;
+      }
+      if(dump_vars & DumpVar::KEDensity) {
+        float ke = hydro_array->k_h_h(ii, hydro_var::ke);
+        sp->ke_dens_io_buffer(sp->nparticles_buffered+i) = ke;
+      }
+      if(dump_vars & DumpVar::StressTensor) {
+        float txx = hydro_array->k_h_h(ii, hydro_var::txx);
+        float tyy = hydro_array->k_h_h(ii, hydro_var::tyy);
+        float tzz = hydro_array->k_h_h(ii, hydro_var::tzz);
+        float tyz = hydro_array->k_h_h(ii, hydro_var::tyz);
+        float tzx = hydro_array->k_h_h(ii, hydro_var::tzx);
+        float txy = hydro_array->k_h_h(ii, hydro_var::txy);
+        sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 0) = txx;
+        sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 1) = tyy;
+        sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 2) = tzz;
+        sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 3) = tyz;
+        sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 4) = tzx;
+        sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 5) = txy;
+      }
+    }
+    sp->nparticles_buffered += sp->np;     
+  } else { // Dump buffered tracers
+    printf("Writing %d particles and %d buffered particles\n", sp->np, sp->nparticles_buffered);
+    // Update the particles on the host only if they haven't been recently
+    if (step() > sp->last_copied)
+      sp->copy_to_host();
+
+    if( rank()==0 )
+        MESSAGE(("Dumping \"%s\" particles to \"%s\"",sp->name,fbase));
+
+    // Create output filename
+    if( ftag ) {
+        snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
+    }
+    else {
+        snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
+    }
+
+    FileIOStatus status = fileIO.open(fname, append ? io_append : io_write);
+    if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
+
+    // Get references to necessary data structures
+    auto& particles = sp->k_p_d;
+    auto& particles_i = sp->k_p_i_d;
+    auto& interpolators_k = interpolator_array->k_i_d;
+
+    // If needed, copy weight back to particles for hydro quantities
+    if(sp->tracer_type == TracerType::Copy) {
+      int w_idx = sp->annotation_vars.get_annotation_index<float>("Weight");
+      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      auto w_annote = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL(), w_idx);
+      Kokkos::deep_copy(w_subview_h, w_annote);
+      Kokkos::deep_copy(w_subview_d, w_subview_h);
+    }
+
+    // Compute hydro quantities
+    if(static_cast<uint32_t>(dump_vars) > DumpVar::Bfield) {
+      Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
+      accumulate_hydro_p_kokkos(
+          particles,
+          particles_i,
+          hydro_array->k_h_d,
+          interpolators_k,
+          sp
+      );
+
+      // This is slower in my tests
+      //synchronize_hydro_array_kokkos(hydro_array);
+
+      hydro_array->copy_to_host();
+
+      synchronize_hydro_array( hydro_array );
+    }
+
+    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>("TracerID");
+    auto& interp = interpolator_array->k_i_h;
+
+#define _nxg (grid->nx + 2)
+#define _nyg (grid->ny + 2)
+#define _nzg (grid->nz + 2)
+#define i0 (ii%_nxg)
+#define j0 ((ii/_nxg)%_nyg)
+#define k0 (ii/(_nxg*_nyg))
+#define tracer_x ((i0 + (dx0-1)*0.5) * grid->dx + grid->x0)
+#define tracer_y ((j0 + (dy0-1)*0.5) * grid->dy + grid->y0)
+#define tracer_z ((k0 + (dz0-1)*0.5) * grid->dz + grid->z0)
+    // Write buffered tracer data
+    uint32_t particle_idx = 0;
+    // Iterate through each timestep
+    for(uint32_t ts_idx=0; ts_idx < sp->np_per_ts_io_buffer.size(); ts_idx++) {
+      int64_t time_step = sp->np_per_ts_io_buffer[ts_idx].second;
+      // Iterate through each particle in the timestep
+      for(uint32_t p_idx=0; p_idx<sp->np_per_ts_io_buffer[ts_idx].first; p_idx++) {
+        uint32_t i = particle_idx + p_idx;
+        float dx0 = sp->particle_io_buffer(i, particle_var::dx);
+        float dy0 = sp->particle_io_buffer(i, particle_var::dy);
+        float dz0 = sp->particle_io_buffer(i, particle_var::dz);
+        float ux0 = sp->particle_io_buffer(i, particle_var::ux);
+        float uy0 = sp->particle_io_buffer(i, particle_var::uy);
+        float uz0 = sp->particle_io_buffer(i, particle_var::uz);
+        float w0  = sp->particle_io_buffer(i, particle_var::w);
+        int   ii  = sp->particle_cell_io_buffer(i);
+        fileIO.print("%ld,%d,%ld,%d,%e,%e,%e,%e,%e,%e,%e", 
+          time_step, rank(), sp->annotations_io_buffer.get<int64_t>(i,tracer_idx), ii,
+          dx0, dy0, dz0, ux0, uy0, uz0, w0);
+        if(dump_vars & DumpVar::GlobalPos) {
+          fileIO.print(",%e,%e,%e", tracer_x, tracer_y, tracer_z);
+        }
+        if(dump_vars & DumpVar::Efield) {
+          float ex  = sp->efields_io_buffer(i, 0);
+          float ey  = sp->efields_io_buffer(i, 1);
+          float ez  = sp->efields_io_buffer(i, 2);
+          fileIO.print(",%e,%e,%e", ex, ey, ez);
+        }
+        if(dump_vars & DumpVar::Bfield) {
+          float bx  = sp->bfields_io_buffer(i,0); 
+          float by  = sp->bfields_io_buffer(i,1); 
+          float bz  = sp->bfields_io_buffer(i,2); 
+          fileIO.print(",%e,%e,%e", bx, by, bz);
+        }
+        if(dump_vars & DumpVar::CurrentDensity) {
+          float jx  = sp->current_dens_io_buffer(i,0);
+          float jy  = sp->current_dens_io_buffer(i,1);
+          float jz  = sp->current_dens_io_buffer(i,2);
+          fileIO.print(",%e,%e,%e", jx, jy, jz);
+        }
+        if(dump_vars & DumpVar::ChargeDensity) {
+          float rho = sp->charge_dens_io_buffer(i);
+          fileIO.print(",%e", rho);
+        }
+        if(dump_vars & DumpVar::MomentumDensity) {
+          float px  = sp->momentum_dens_io_buffer(i,0);
+          float py  = sp->momentum_dens_io_buffer(i,1);
+          float pz  = sp->momentum_dens_io_buffer(i,2);
+          fileIO.print(",%e,%e,%e", px, py, pz);
+        }
+        if(dump_vars & DumpVar::KEDensity) {
+          float ke = sp->ke_dens_io_buffer(i);
+          fileIO.print(",%e", ke);
+        }
+        if(dump_vars & DumpVar::StressTensor) {
+          float txx = sp->stress_tensor_io_buffer(i,0);
+          float tyy = sp->stress_tensor_io_buffer(i,1);
+          float tzz = sp->stress_tensor_io_buffer(i,2);
+          float tyz = sp->stress_tensor_io_buffer(i,3);
+          float tzx = sp->stress_tensor_io_buffer(i,4);
+          float txy = sp->stress_tensor_io_buffer(i,5);
+          fileIO.print(",%e,%e,%e,%e,%e,%e", txx, tyy, tzz, tyz, tzx, txy);
+        }
+        // Print annotations
+        for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
+          fileIO.print(",%d", sp->annotations_io_buffer.get<int>(i, j));
+        }
+        for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
+          fileIO.print(",%ld", sp->annotations_io_buffer.get<int64_t>(i, j));
+        }
+        for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
+          fileIO.print(",%e", sp->annotations_io_buffer.get<float>(i, j));
+        }
+        for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
+          fileIO.print(",%e", sp->annotations_io_buffer.get<double>(i, j));
+        }
+        fileIO.print( "\n" );
+      }
+      particle_idx += sp->np_per_ts_io_buffer[ts_idx].first;
+    }
+
+    // Write tracer data
+    for(uint32_t i=0; i<sp->np; i++) {
+      float dx0 = sp->k_p_h(i, particle_var::dx);
+      float dy0 = sp->k_p_h(i, particle_var::dy);
+      float dz0 = sp->k_p_h(i, particle_var::dz);
+      float ux0 = sp->k_p_h(i, particle_var::ux);
+      float uy0 = sp->k_p_h(i, particle_var::uy);
+      float uz0 = sp->k_p_h(i, particle_var::uz);
+      float w0  = sp->k_p_h(i, particle_var::w);
+      int   ii  = sp->k_p_i_h(i);
+      fileIO.print("%ld,%d,%ld,%d,%e,%e,%e,%e,%e,%e,%e", 
+        step(), rank(), sp->annotations_h.get<int64_t>(i,tracer_idx), ii,
+        dx0, dy0, dz0, ux0, uy0, uz0, w0);
+      if(dump_vars & DumpVar::GlobalPos) {
+        fileIO.print(",%e,%e,%e", tracer_x, tracer_y, tracer_z);
+      }
+      if(dump_vars & DumpVar::Efield) {
+        float ex  = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
+        float ey  = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
+        float ez  = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
+        fileIO.print(",%e,%e,%e", ex, ey, ez);
+      }
+      if(dump_vars & DumpVar::Bfield) {
+        float bx  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
+        float by  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
+        float bz  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
+        fileIO.print(",%e,%e,%e", bx, by, bz);
+      }
+      if(dump_vars & DumpVar::CurrentDensity) {
+        float jx  = hydro_array->k_h_h(ii, hydro_var::jx);
+        float jy  = hydro_array->k_h_h(ii, hydro_var::jy);
+        float jz  = hydro_array->k_h_h(ii, hydro_var::jz);
+        fileIO.print(",%e,%e,%e", jx, jy, jz);
+      }
+      if(dump_vars & DumpVar::ChargeDensity) {
+        float rho = hydro_array->k_h_h(ii, hydro_var::rho);
+        fileIO.print(",%e", rho);
+      }
+      if(dump_vars & DumpVar::MomentumDensity) {
+        float px  = hydro_array->k_h_h(ii, hydro_var::px);
+        float py  = hydro_array->k_h_h(ii, hydro_var::py);
+        float pz  = hydro_array->k_h_h(ii, hydro_var::pz);
+        fileIO.print(",%e,%e,%e", px, py, pz);
+      }
+      if(dump_vars & DumpVar::KEDensity) {
+        float ke = hydro_array->k_h_h(ii, hydro_var::ke);
+        fileIO.print(",%e", ke);
+      }
+      if(dump_vars & DumpVar::StressTensor) {
+        float txx = hydro_array->k_h_h(ii, hydro_var::txx);
+        float tyy = hydro_array->k_h_h(ii, hydro_var::tyy);
+        float tzz = hydro_array->k_h_h(ii, hydro_var::tzz);
+        float tyz = hydro_array->k_h_h(ii, hydro_var::tyz);
+        float tzx = hydro_array->k_h_h(ii, hydro_var::tzx);
+        float txy = hydro_array->k_h_h(ii, hydro_var::txy);
+        fileIO.print(",%e,%e,%e,%e,%e,%e", txx, tyy, tzz, tyz, tzx, txy);
+      }
+      // Print annotations
+      for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
+        fileIO.print(",%d", sp->annotations_h.get<int>(i, j));
+      }
+      for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
+        fileIO.print(",%ld", sp->annotations_h.get<int64_t>(i, j));
+      }
+      for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
+        fileIO.print(",%e", sp->annotations_h.get<float>(i, j));
+      }
+      for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
+        fileIO.print(",%e", sp->annotations_h.get<double>(i, j));
+      }
+      fileIO.print( "\n" );
+    }
+#undef nxg 
+#undef nyg 
+#undef nzg 
+#undef i0 
+#undef j0 
+#undef k0 
+#undef tracer_x 
+#undef tracer_y 
+#undef tracer_z 
+
+    if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
+    sp->nparticles_buffered = 0;
+    sp->np_per_ts_io_buffer.clear();
+  }
+}
+
+void
 vpic_simulation::dump_tracers_csv( const char *sp_name,
                                    uint32_t dump_vars,
                                    const char *fbase,
                                    const int append,
                                    int ftag )
 {
-
     species_t *sp;
     char fname[max_filename_bytes];
     FileIO fileIO;
@@ -601,6 +1063,236 @@ vpic_simulation::dump_particles( const char *sp_name,
 /*------------------------------------------------------------------------------
  * HDF5 Dumps
  *---------------------------------------------------------------------------*/
+//void
+//vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
+//                                             uint32_t dump_vars,
+//                                             const char *fbase,
+//                                             const int append,
+//                                             int ftag )
+//{
+//
+//  species_t *sp;
+//  char fname[max_filename_bytes];
+//  FileIO fileIO;
+//  int dim[1], buf_start;
+//  static particle_t * ALIGNED(128) p_buf = NULL;
+//
+//  // Get species
+//  sp = find_species_name( sp_name, tracers_list );
+//  if( !sp ) ERROR(( "Invalid tracer species name \"%s\".", sp_name ));
+//
+//  if( !fbase ) ERROR(( "Invalid filename" ));
+//
+//  // Buffer tracers
+//  if(sp->nparticles_buffered+sp->np < sp->particle_io_buffer.extent(0) && step() != num_step) {
+//    printf("Buffering %d particles (%d already buffered, %d max)\n", sp->np, sp->nparticles_buffered, sp->particle_io_buffer.extent(0));
+//    // Update the particles on the host only if they haven't been recently
+//    if (step() > sp->last_copied)
+//      sp->copy_to_host();
+//
+//    if( rank()==0 )
+//        MESSAGE(("Buffering \"%s\" particles",sp->name));
+//
+//    auto& particles = sp->k_p_d;
+//    auto& particles_i = sp->k_p_i_d;
+//    auto& interpolators_k = interpolator_array->k_i_d;
+//
+//    // If needed, copy weight back to particles for hydro quantities
+//    if(sp->tracer_type == TracerType::Copy) {
+//      int w_idx = sp->annotation_vars.get_annotation_index<float>("Weight");
+//      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
+//      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
+//      auto w_annote = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL(), w_idx);
+//      Kokkos::deep_copy(w_subview_h, w_annote);
+//      Kokkos::deep_copy(w_subview_d, w_subview_h);
+//    }
+//
+//    // Compute hydro quantities
+//    if(static_cast<uint32_t>(dump_vars) > DumpVar::Bfield) {
+//      Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
+//      accumulate_hydro_p_kokkos(
+//          particles,
+//          particles_i,
+//          hydro_array->k_h_d,
+//          interpolators_k,
+//          sp
+//      );
+//
+//      // This is slower in my tests
+//      //synchronize_hydro_array_kokkos(hydro_array);
+//
+//      hydro_array->copy_to_host();
+//
+//      synchronize_hydro_array( hydro_array );
+//    }
+//
+//    // Get index of tracer ID
+//    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>("TracerID");
+//    auto& interp = interpolator_array->k_i_h;
+//
+//    auto particle_slice = Kokkos::make_pair(0, sp->np);
+//    auto buffer_slice = Kokkos::make_pair(sp->nparticles_buffered,sp->nparticles_buffered+sp->np);
+//
+//    // Copy particles into buffer
+//    auto particle_subview = Kokkos::subview(sp->k_p_h, particle_slice, Kokkos::ALL());
+//    auto particle_buffer_subview = Kokkos::subview(sp->particle_io_buffer, buffer_slice, Kokkos::ALL());
+//    auto particle_cell_subview = Kokkos::subview(sp->k_p_i_h, particle_slice);
+//    auto particle_cell_buffer_subview = Kokkos::subview(sp->particle_cell_io_buffer, buffer_slice);
+//    Kokkos::deep_copy(particle_buffer_subview, particle_subview); 
+//    Kokkos::deep_copy(particle_cell_buffer_subview, particle_cell_subview); 
+//
+//    // Copy annotations into buffers
+//    for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
+//      auto annote_subview = Kokkos::subview(sp->annotations_h.i32, particle_slice, j);
+//      auto buffer_subview = Kokkos::subview(sp->annotations_io_buffer.i32, buffer_slice, j);
+//      Kokkos::deep_copy(buffer_subview, annote_subview);
+//    }
+//    for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
+//      auto annote_subview = Kokkos::subview(sp->annotations_h.i64, particle_slice, j);
+//      auto buffer_subview = Kokkos::subview(sp->annotations_io_buffer.i64, buffer_slice, j);
+//      Kokkos::deep_copy(buffer_subview, annote_subview);
+//    }
+//    for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
+//      auto annote_subview = Kokkos::subview(sp->annotations_h.f32, particle_slice, j);
+//      auto buffer_subview = Kokkos::subview(sp->annotations_io_buffer.f32, buffer_slice, j);
+//      Kokkos::deep_copy(buffer_subview, annote_subview);
+//    }
+//    for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
+//      auto annote_subview = Kokkos::subview(sp->annotations_h.f64, particle_slice, j);
+//      auto buffer_subview = Kokkos::subview(sp->annotations_io_buffer.f64, buffer_slice, j);
+//      Kokkos::deep_copy(buffer_subview, annote_subview);
+//    }
+//
+//    // Buffer tracer data
+//    for(uint32_t i=0; i<sp->np; i++) {
+//      float dx0 = sp->k_p_h(i, particle_var::dx);
+//      float dy0 = sp->k_p_h(i, particle_var::dy);
+//      float dz0 = sp->k_p_h(i, particle_var::dz);
+//      float ux0 = sp->k_p_h(i, particle_var::ux);
+//      float uy0 = sp->k_p_h(i, particle_var::uy);
+//      float uz0 = sp->k_p_h(i, particle_var::uz);
+//      float w0  = sp->k_p_h(i, particle_var::w);
+//      int   ii  = sp->k_p_i_h(i);
+//      sp->ts_io_buffer(sp->nparticles_buffered+i) = step();
+////      if(dump_vars & DumpVar::GlobalPos) {
+////        fileIO.print(",%e,%e,%e", tracer_x, tracer_y, tracer_z);
+////      }
+//      if(dump_vars & DumpVar::Efield) {
+//        float ex  = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
+//        float ey  = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
+//        float ez  = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
+//        sp->efields_io_buffer(sp->nparticles_buffered+i, 0) = ex;
+//        sp->efields_io_buffer(sp->nparticles_buffered+i, 1) = ey;
+//        sp->efields_io_buffer(sp->nparticles_buffered+i, 2) = ez;
+//      }
+//      if(dump_vars & DumpVar::Bfield) {
+//        float bx  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
+//        float by  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
+//        float bz  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
+//        sp->bfields_io_buffer(sp->nparticles_buffered+i, 0) = bx;
+//        sp->bfields_io_buffer(sp->nparticles_buffered+i, 1) = by;
+//        sp->bfields_io_buffer(sp->nparticles_buffered+i, 2) = bz;
+//      }
+//      if(dump_vars & DumpVar::CurrentDensity) {
+//        float jx  = hydro_array->k_h_h(ii, hydro_var::jx);
+//        float jy  = hydro_array->k_h_h(ii, hydro_var::jy);
+//        float jz  = hydro_array->k_h_h(ii, hydro_var::jz);
+//        sp->current_dens_io_buffer(sp->nparticles_buffered+i, 0) = jx;
+//        sp->current_dens_io_buffer(sp->nparticles_buffered+i, 1) = jy;
+//        sp->current_dens_io_buffer(sp->nparticles_buffered+i, 2) = jz;
+//      }
+//      if(dump_vars & DumpVar::ChargeDensity) {
+//        float rho = hydro_array->k_h_h(ii, hydro_var::rho);
+//        sp->charge_dens_io_buffer(sp->nparticles_buffered+i) = rho;
+//      }
+//      if(dump_vars & DumpVar::MomentumDensity) {
+//        float px  = hydro_array->k_h_h(ii, hydro_var::px);
+//        float py  = hydro_array->k_h_h(ii, hydro_var::py);
+//        float pz  = hydro_array->k_h_h(ii, hydro_var::pz);
+//        sp->momentum_dens_io_buffer(sp->nparticles_buffered+i, 0) = px;
+//        sp->momentum_dens_io_buffer(sp->nparticles_buffered+i, 1) = py;
+//        sp->momentum_dens_io_buffer(sp->nparticles_buffered+i, 2) = pz;
+//      }
+//      if(dump_vars & DumpVar::KEDensity) {
+//        float ke = hydro_array->k_h_h(ii, hydro_var::ke);
+//        sp->ke_dens_io_buffer(sp->nparticles_buffered+i) = ke;
+//      }
+//      if(dump_vars & DumpVar::StressTensor) {
+//        float txx = hydro_array->k_h_h(ii, hydro_var::txx);
+//        float tyy = hydro_array->k_h_h(ii, hydro_var::tyy);
+//        float tzz = hydro_array->k_h_h(ii, hydro_var::tzz);
+//        float tyz = hydro_array->k_h_h(ii, hydro_var::tyz);
+//        float tzx = hydro_array->k_h_h(ii, hydro_var::tzx);
+//        float txy = hydro_array->k_h_h(ii, hydro_var::txy);
+//        sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 0) = txx;
+//        sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 1) = tyy;
+//        sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 2) = tzz;
+//        sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 3) = tyz;
+//        sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 4) = tzx;
+//        sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 5) = txy;
+//      }
+//    }
+//    sp->nparticles_buffered += sp->np;     
+//  } else { // Dump buffered tracers
+//    printf("Writing %d particles and %d buffered particles\n", sp->np, sp->nparticles_buffered);
+//    // Update the particles on the host only if they haven't been recently
+//    if (step() > sp->last_copied)
+//      sp->copy_to_host();
+//
+//    if( rank()==0 )
+//        MESSAGE(("Dumping \"%s\" particles to \"%s\"",sp->name,fbase));
+//
+//    // Create output filename
+//    if( ftag ) {
+//        snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
+//    }
+//    else {
+//        snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
+//    }
+//
+//    FileIOStatus status = fileIO.open(fname, append ? io_append : io_write);
+//    if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
+//
+//    // Get references to necessary data structures
+//    auto& particles = sp->k_p_d;
+//    auto& particles_i = sp->k_p_i_d;
+//    auto& interpolators_k = interpolator_array->k_i_d;
+//
+//    // If needed, copy weight back to particles for hydro quantities
+//    if(sp->tracer_type == TracerType::Copy) {
+//      int w_idx = sp->annotation_vars.get_annotation_index<float>("Weight");
+//      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
+//      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
+//      auto w_annote = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL(), w_idx);
+//      Kokkos::deep_copy(w_subview_h, w_annote);
+//      Kokkos::deep_copy(w_subview_d, w_subview_h);
+//    }
+//
+//    // Compute hydro quantities
+//    if(static_cast<uint32_t>(dump_vars) > DumpVar::Bfield) {
+//      Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
+//      accumulate_hydro_p_kokkos(
+//          particles,
+//          particles_i,
+//          hydro_array->k_h_d,
+//          interpolators_k,
+//          sp
+//      );
+//
+//      // This is slower in my tests
+//      //synchronize_hydro_array_kokkos(hydro_array);
+//
+//      hydro_array->copy_to_host();
+//
+//      synchronize_hydro_array( hydro_array );
+//    }
+//
+//    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>("TracerID");
+//    auto& interp = interpolator_array->k_i_h;
+//
+//  }
+//}
+
 void vpic_simulation::dump_tracers_hdf5(const char* sp_name, 
                                         const uint32_t dump_vars,
                                         const char*fbase, 

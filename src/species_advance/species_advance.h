@@ -352,7 +352,7 @@ class species_t {
         k_counter_t k_nm_d;               // nm iterator
         k_counter_t::HostMirror k_nm_h;
 
-//#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
         bool using_annotations = false;
         annotation_vars_t annotation_vars;
         annotations_t<Kokkos::DefaultExecutionSpace>     annotations_d;
@@ -360,7 +360,21 @@ class species_t {
         annotations_t<Kokkos::DefaultExecutionSpace>     annotations_copy_d;
         annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_copy_h;
         annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_recv_h;
-//#endif
+
+        int nparticles_buffered;
+        k_particles_t::HostMirror                               particle_io_buffer;
+        k_particles_i_t::HostMirror                             particle_cell_io_buffer;
+        std::vector<std::pair<int64_t,int64_t>>                 np_per_ts_io_buffer;
+        Kokkos::View<int64_t*>::HostMirror                      ts_io_buffer;
+        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror efields_io_buffer;
+        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror bfields_io_buffer;
+        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror current_dens_io_buffer;
+        Kokkos::View<float*>::HostMirror                        charge_dens_io_buffer;
+        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror momentum_dens_io_buffer;
+        Kokkos::View<float*>::HostMirror                        ke_dens_io_buffer;
+        Kokkos::View<float*[6], Kokkos::LayoutLeft>::HostMirror stress_tensor_io_buffer;
+        annotations_t<Kokkos::DefaultHostExecutionSpace>        annotations_io_buffer;
+#endif
 
 
         // TODO: this should ultimatley be removeable.
@@ -450,7 +464,15 @@ class species_t {
          */
         void copy_inbound_to_device();
 
-//#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+        /**
+         *  @brief Allocate memory for IO buffering tracers
+         *
+         *  @param N_steps Number of timesteps to buffer
+         *  @param over_alloc_factor Multiplier for over allocating space
+         */
+        void init_io_buffers(const int N_steps, const float over_alloc_factor);
+
         /**
          * @brief Add additional per particle annotations. 
          */
@@ -638,7 +660,7 @@ class species_t {
             step++;
           }
         }
-//#endif
+#endif
 };
 
 // In species_advance.c
@@ -1055,7 +1077,7 @@ move_p_kokkos_host_serial(
 {
   const int nx = g->nx;
   const int ny = g->ny;
-  const int nz = g->nz;
+  //const int nz = g->nz;
   float cx = 0.25 * g->rdy * g->rdz / g->dt;
   float cy = 0.25 * g->rdz * g->rdx / g->dt;
   float cz = 0.25 * g->rdx * g->rdy / g->dt;

@@ -252,6 +252,9 @@ public:
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
   void dump_species( const char *fname , bool tracers);
+  void dump_tracers_buffered_csv( const char *sp_name, uint32_t dump_vars, 
+                                  const char *fbase, int append = 1,
+                                  int fname_tag = 1 );
   void dump_tracers_csv( const char *sp_name, uint32_t dump_vars, const char *fbase, int append = 1,
                                   int fname_tag = 1 );
 
@@ -549,7 +552,7 @@ public:
                                     grid ), &species_list );
   }
 
-//#if defined( VPIC_ENABLE_PARTICLE_ANNOTATIONS ) || defined( VPIC_ENABLE_TRACER_PARTICLES )
+#if defined( VPIC_ENABLE_PARTICLE_ANNOTATIONS ) || defined( VPIC_ENABLE_TRACER_PARTICLES )
   inline species_t * 
   define_tracer_species(const char* name,
                         species_t* original_species, 
@@ -568,6 +571,7 @@ public:
     tracers->using_annotations = true;
     tracers->annotation_vars = annotations;
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
+    tracers->init_io_buffers(max_local_np * 10.0, 1.1);
 
     // Set parent species pointer
     tracers->parent_species = original_species;
@@ -580,7 +584,7 @@ public:
                                 species_t* original_species, 
                                 const TracerType tracer_type, 
                                 const float skip,
-                                const float over_alloc_factor = 1.0,
+                                const float over_alloc_factor = 1.1,
                                 annotation_vars_t annotations = annotation_vars_t()) {
 
     // Adjust amount of local particles/movers for tracers
@@ -605,6 +609,7 @@ public:
     tracers->using_annotations = true;
     tracers->annotation_vars = annotations;
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
+    tracers->init_io_buffers(max_local_np * 10.0, over_alloc_factor);
 
     // Set parent species pointer
     tracers->parent_species = original_species;
@@ -624,7 +629,7 @@ public:
                                 species_t* original_species, 
                                 const TracerType tracer_type, 
                                 const float ntracers,
-                                const float over_alloc_factor = 1.0,
+                                const float over_alloc_factor = 1.1,
                                 annotation_vars_t annotations = annotation_vars_t()) {
     // Verify # of tracer is acceptable
     if(ntracers < 1.0 || static_cast<int>(ntracers) > original_species->np)
@@ -637,7 +642,7 @@ public:
                                       species_t* original_species, 
                                       const TracerType tracer_type, 
                                       const float percentage, 
-                                      const float over_alloc_factor = 1.0,
+                                      const float over_alloc_factor = 1.1,
                                       annotation_vars_t annotations = annotation_vars_t()) {
     // Check if input percentage is valid
     if((percentage <= 0.0) || (percentage >= 100.0))
@@ -652,7 +657,7 @@ public:
                                       species_t* original_species, 
                                       const TracerType tracer_type, 
                                       std::function <bool (particle_t)> filter,
-                                      const float over_alloc_factor = 1.0,
+                                      const float over_alloc_factor = 1.1,
                                       annotation_vars_t annotations = annotation_vars_t()) {
 
     // Adjust amount of local particles/movers for tracers
@@ -678,6 +683,7 @@ public:
     tracers->using_annotations = true;
     tracers->annotation_vars = annotations;
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
+    tracers->init_io_buffers(max_local_np * 10.0, over_alloc_factor);
 
     // Set parent species pointer
     tracers->parent_species = original_species;
@@ -691,7 +697,7 @@ public:
     return append_species(tracers, &tracers_list); 
   }
 
-//#endif
+#endif
 
   inline species_t *
   find_species( const char *name ) {
