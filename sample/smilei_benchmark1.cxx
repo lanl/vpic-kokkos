@@ -1298,7 +1298,7 @@ begin_field_injection {
 	if ( global->pulse_shape==0 ){
 	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * sin(PHASE));
 	} else if (global->pulse_shape==1 ){
-	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t)) * exp(-(t-global->pulse_mean)*(t-global->pulse_mean)/(2.*global->pulse_sigma*global->pulse_sigma));
+	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t + M_PI/4)) * exp(-(t-global->pulse_mean)*(t-global->pulse_mean)/(2.*global->pulse_sigma*global->pulse_sigma));
 	}
 	
     });

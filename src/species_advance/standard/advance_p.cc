@@ -598,7 +598,7 @@ advance_p_kokkos_unified(
 	float E_to_SI = 1.44303994037981860e+19;
         float time_to_SI = 1.18119324097025572e-22;
         // FIXME: **** Input deck variables ****
-        float epsilon_eV_list[] = {11.26030, 24.38332, 47.8878, 64.4939};//, 392.087, 489.99334};//{13.6}; // eV, ionization energy, this should be a list with the different levels
+        float epsilon_eV_list[] = {11.26030, 24.38332, 47.8878, 64.4939, 392.087, 489.99334};//{13.6}; // eV, ionization energy, this should be a list with the different levels
         float dt = g->dt*time_to_SI;      // [s], timestep
 	
 	// Check if the particle is fully ionized already
@@ -606,7 +606,7 @@ advance_p_kokkos_unified(
         int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
 	int N_ionization_levels = sizeof(epsilon_eV_list)/sizeof(float);
         // FIXME: need to check which species the user wants ionization enabled on
-	if (sp->name != "electron"){
+	if (sp != sp_e){
           // code units
   	  float hax_c = hax[LANE]/qdt_2mc;
   	  float hay_c = hay[LANE]/qdt_2mc;
@@ -787,7 +787,7 @@ advance_p_kokkos_unified(
   
   	
   	  // Check if ionization event occured
-  	  if(N_ionization_before != N_ionization){
+  	  if(N_ionization_before < N_ionization){
   	    // Change the charge of the particle
   	    k_particles(particle_index, particle_var::charge) = N_ionization * abs(q_e_c); // code units
   
@@ -796,6 +796,10 @@ advance_p_kokkos_unified(
   	    // Multiple ionization events are enabled so the injected
   	    // electron weight needs to account for that
   	    int electron_index = sp_e->np++;
+
+
+	    //cout << "electron_index: " << electron_index << " sp->name: " << sp->name << " typeid(sp->name).name(): " << typeid(sp->name).name() << endl; 
+	    
             #define p_dx_e    sp_e->k_p_h(electron_index, particle_var::dx)
             #define p_dy_e    sp_e->k_p_h(electron_index, particle_var::dy)
             #define p_dz_e    sp_e->k_p_h(electron_index, particle_var::dz)
@@ -1296,7 +1300,7 @@ advance_p_kokkos_gpu(
     int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
     int N_ionization_levels = sizeof(epsilon_eV_list)/sizeof(float);
     // FIXME: need to check which species the user wants ionization enabled on
-    if (sp_name != "electron"){
+    if (sp != sp_e){
     // code units
     float hax_c = hax/qdt_2mc;
     float hay_c = hay/qdt_2mc;
