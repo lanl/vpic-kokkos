@@ -340,6 +340,7 @@ begin_initialization {
   double nu = c_SI/lambda_SI;
   double nu_c = nu*time_to_SI;
   double pulse_FWHM = 5/nu_c;   //((cycles/nu) / time_to_SI); // pulse duration
+  double pulse_mean  = cycles/nu_c; // need to shift the gaussian (want the max at the end of the sim)
   double pulse_sigma = pulse_FWHM/( 2*sqrt(2*log(2) )); // sigma for gaussian function
   double pulse_period = 1 / nu; 
   // How far in front of the boundary should the peak start?
@@ -361,8 +362,7 @@ begin_initialization {
   //emax = emax*(waist/width); // at entrance if 3D Gaussian 3DCHANGE
 
   
-  double t_stop = 0.8*cycles/nu_c; // Simulation runtime
-  double pulse_mean  = cycles/nu_c; // need to shift the gaussian (want the max at the end of the sim)
+  double t_stop = 1*cycles/nu_c; // Simulation runtime
 
   // Diagnostics intervals.  
   int energies_interval = 50;

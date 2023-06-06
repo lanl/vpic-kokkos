@@ -14,10 +14,6 @@
 using namespace std;
 #include <fstream>
 #include <Kokkos_Random.hpp>
-
-
-
-
 #endif
 
 
@@ -624,8 +620,8 @@ advance_p_kokkos_unified(
           // Simulation parameters: FIXME: ** Need to get these from vpic **
           // Right now it is set up for neutral hydrogen
           float lambda_SI    = 0.8e-06;  // meters
-          float Z            = 1;          // ion charge number after ionization
-          float Z_star       = 0; // initial charge state
+          float Z            = N_ionization + 1;          // ion charge number after ionization
+          float Z_star       = N_ionization; // initial charge state
   
           // Ionization specific parameters
           float K = 2; //FIXME: currenly only have 2-photon ionization
@@ -1314,8 +1310,8 @@ advance_p_kokkos_gpu(
     // Simulation parameters: FIXME: ** Need to get these from vpic **
     // Right now it is set up for neutral hydrogen
     float lambda_SI    = 0.8e-06;  // meters
-    float Z            = 1;          // ion charge number after ionization
-    float Z_star       = 0; // initial charge state
+    float Z            = N_ionization + 1;          // ion charge number after ionization
+    float Z_star       = N_ionization; // initial charge state
     // Ionization specific parameters
     float K = 2; //FIXME: currenly only have 2-photon ionization
     float n = 1; //FIXME: currently only principle quantum number of 1
