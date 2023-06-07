@@ -598,7 +598,7 @@ advance_p_kokkos_unified(
 	float E_to_SI = 1.44303994037981860e+19;
         float time_to_SI = 1.18119324097025572e-22;
         // FIXME: **** Input deck variables ****
-        float epsilon_eV_list[] = {11.26030, 24.38332, 47.8878, 64.4939, 392.087, 489.99334};//{13.6}; // eV, ionization energy, this should be a list with the different levels
+        float epsilon_eV_list[] = {13.6}; //{11.26030, 24.38332, 47.8878, 64.4939, 392.087, 489.99334};//{13.6}; // eV, ionization energy, this should be a list with the different levels
         float dt = g->dt*time_to_SI;      // [s], timestep
 	
 	// Check if the particle is fully ionized already
@@ -620,8 +620,6 @@ advance_p_kokkos_unified(
           // Simulation parameters: FIXME: ** Need to get these from vpic **
           // Right now it is set up for neutral hydrogen
           float lambda_SI    = 0.8e-06;  // meters
-          float Z            = N_ionization + 1;          // ion charge number after ionization
-          float Z_star       = N_ionization; // initial charge state
   
           // Ionization specific parameters
           float K = 2; //FIXME: currenly only have 2-photon ionization
@@ -664,6 +662,8 @@ advance_p_kokkos_unified(
             float epsilon_SI = epsilon_au*4.3597463e-18;// [J],  ionization energy
            
             // Calculate stuff
+            float Z            = N_ionization + 1;          // ion charge number after ionization
+            float Z_star       = N_ionization; // initial charge state
             float n_star         = (Z_star + 1.0)/sqrt(2*epsilon_au); // effective principle quantum number
             float l_star         = n_star - 1.0; // angular momentum
             float T_0            = M_PI*Z/(abs(epsilon_au) * sqrt(2*abs(epsilon_au))); // period of classical radial trajectories
@@ -685,7 +685,7 @@ advance_p_kokkos_unified(
             float E_M_au = omega_au*sqrt(8*epsilon_au); // atomic units
             float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
             float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units 
-          
+
             if (E_au<=E_M_au){
               // MPI Ionization
               // ionization rate per atom: Gamma^(K)
@@ -834,7 +834,7 @@ advance_p_kokkos_unified(
 
 
 
-           if (int(timestep)>=0 && int(timestep)<=700 && int(timestep) % 4 == 0){
+           if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 4 == 0){
 	     // N Ionizations: Open file, write value, close file
 	     char gn [100];
 	     snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt",timestep);
@@ -1314,8 +1314,7 @@ advance_p_kokkos_gpu(
     // Simulation parameters: FIXME: ** Need to get these from vpic **
     // Right now it is set up for neutral hydrogen
     float lambda_SI    = 0.8e-06;  // meters
-    float Z            = N_ionization + 1;          // ion charge number after ionization
-    float Z_star       = N_ionization; // initial charge state
+
     // Ionization specific parameters
     float K = 2; //FIXME: currenly only have 2-photon ionization
     float n = 1; //FIXME: currently only principle quantum number of 1
@@ -1357,6 +1356,8 @@ advance_p_kokkos_gpu(
       float epsilon_SI = epsilon_au*4.3597463e-18;// [J],  ionization energy
       
       // Calculate stuff
+      float Z            = N_ionization + 1;          // ion charge number after ionization
+      float Z_star       = N_ionization; // initial charge state
       float n_star         = (Z_star + 1.0)/sqrt(2*epsilon_au); // effective principle quantum number
       float l_star         = n_star - 1.0; // angular momentum
       float T_0            = M_PI*Z/(abs(epsilon_au) * sqrt(2*abs(epsilon_au))); // period of classical radial trajectories

@@ -215,7 +215,7 @@ begin_initialization {
 
 
   // Physical parameters
-  int pulse_shape=1;                   // 0 - square pulse, 1 - gaussian
+  int pulse_shape=0;                   // 0 - square pulse, 1 - gaussian
 
   double n_e_over_n_crit       = 90;       // n_e/n_crit in solid slab
   double laser_intensity_W_cm2;
@@ -249,7 +249,7 @@ begin_initialization {
   double ny = 1;
   double nz = 200;
 
-  double nppc = 100;  // Average number of macro particles/cell of each species
+  double nppc = 10;  // Average number of macro particles/cell of each species
 
   int topology_x = 1;
   int topology_y = 1;
@@ -334,6 +334,7 @@ begin_initialization {
 
   double dt = cfl_req*courant_length(Lx, Ly, Lz, nx, ny, nz);
 
+  dt = dt/2.;
   
   // Laser parameters
   int cycles = 10;
@@ -393,8 +394,8 @@ begin_initialization {
   double NpI2    = n_I2_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I2 in box
   double w_I1    = NpI1/N_I1;
   double w_I2    = NpI2/N_I2;
-  int I1_present = 1;
-  int I2_present = 0;
+  int I1_present = 0;
+  int I2_present = 1;
 
 
   
@@ -464,6 +465,7 @@ begin_initialization {
     fprintf(out, "%.17e   Pulse mean, code units\n",pulse_mean);
     fprintf(out, "%.17e   Laser max E, SI\n",laser_E_SI);
     fprintf(out, "%.17e   Laser emax, code units\n",emax);
+    fprintf(out, "%d   nppc\n",int(nppc));
     fclose(out);
   }
   
