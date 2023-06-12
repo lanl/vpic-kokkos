@@ -81,6 +81,12 @@ vpic_simulation::inject_particle( species_t * sp,
   p->uy = (float)uy;
   p->uz = (float)uz;
   p->w  = w;
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  if(sp->is_tracer) {
+    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>(std::string("TracerID"));
+    sp->annotations_h.set<int64_t>(sp->np-1, tracer_idx, ((int64_t)(rank()) << 32) | (int64_t)(sp->np-1)); 
+  }
+#endif
 
   if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
 

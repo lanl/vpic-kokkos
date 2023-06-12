@@ -327,6 +327,7 @@ endif(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
 
 if (VPIC_ENABLE_TRACER_PARTICLES)
   add_definitions(-DVPIC_ENABLE_TRACER_PARTICLES -DVPIC_ENABLE_PARTICLE_ANNOTATIONS)
+  set(ENABLE_TRACERS ON CACHE INTERNAL "")
 endif(VPIC_ENABLE_TRACER_PARTICLES)
 
 set(USE_V4)
@@ -349,6 +350,11 @@ if(ENABLE_OPENSSL)
   add_definitions(-DENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
 
+set(EXTERNAL_INCLUDES_FILE ${PROJECT_BINARY_DIR}/external_includes)
+set(EXTERNAL_LIBRARIES_FILE ${PROJECT_BINARY_DIR}/external_libraries)
+set(EXTERNAL_INC_STR "" )
+set(EXTERNAL_LIB_STR "" )
+
 #------------------------------------------------------------------------------#
 # HDF5
 #------------------------------------------------------------------------------#
@@ -363,17 +369,7 @@ if(VPIC_ENABLE_HDF5)
   include_directories(${HDF5_INCLUDE_DIR})
 
   get_target_property(HDF5_INCLUDE_DIRS HDF5::HDF5 INTERFACE_INCLUDE_DIRECTORIES)
-
-#  message(${HDF5_FOUND})
-#  message(${HDF5_VERSION})
-#  message(${HDF5_INCLUDE_DIRS})
-#  message(${HDF5_DEFINITIONS})
-#  message(${HDF5_LIBRARIES})
-#  message(${HDF5_HL_LIBRARIES})
   
-  set(EXTERNAL_INCLUDES_FILE ${PROJECT_BINARY_DIR}/external_includes)
-  set(EXTERNAL_LIBRARIES_FILE ${PROJECT_BINARY_DIR}/external_libraries)
-
   set(HDF5_LIBS "hdf5")
   string(REPLACE " " ";" TEST_LIST ${HDF5_LIBS})
   foreach(lib ${TEST_LIST})
@@ -406,20 +402,24 @@ if(VPIC_ENABLE_HDF5)
   set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${HDF_LIB_STR}")
   
   # For an "external" build these will be the same, but for an internal we need to gather both
-  file(GENERATE OUTPUT ${EXTERNAL_INCLUDES_FILE} CONTENT "${HDF5_INC_STR}")
-#  file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "${HDF5_LIB_STR}")
-  file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "${HDF5_LIB_DIR} ${HDF5_LIB_STR}")
+#  file(GENERATE OUTPUT ${EXTERNAL_INCLUDES_FILE} CONTENT "${HDF5_INC_STR}")
+#  file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "${HDF5_LIB_DIR} ${HDF5_LIB_STR}")
+  set(EXTERNAL_INC_STR "${EXTERNAL_INC_STR} ${HDF5_INC_STR}")
+  set(EXTERNAL_LIB_STR "${EXTERNAL_LIB_STR} ${HDF5_LIB_DIR} ${HDF5_LIB_STR}")
 endif(VPIC_ENABLE_HDF5)
+
+file(GENERATE OUTPUT ${EXTERNAL_INCLUDES_FILE} CONTENT "${EXTERNAL_INC_STR}")
+file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "${EXTERNAL_LIB_STR}")
 
 #------------------------------------------------------------------------------#
 # Add compile definitions
 #------------------------------------------------------------------------------#
 set(EXTERNAL_DEFINITIONS_FILE ${PROJECT_BINARY_DIR}/external_definitions)
 get_directory_property( DirDefs DIRECTORY ${CMAKE_SOURCE_DIR} COMPILE_DEFINITIONS )
-foreach( d ${DirDefs} )
-  message( STATUS "Found Define: " ${d} )
-endforeach()
-message( STATUS "DirDefs: " ${DirDefs} )
+#foreach( d ${DirDefs} )
+#  message( STATUS "Found Define: " ${d} )
+#endforeach()
+#message( STATUS "DirDefs: " ${DirDefs} )
 foreach(def ${DirDefs})
   list(APPEND DEF_LIST_TEMP "-D${def}")
 endforeach()
@@ -538,7 +538,11 @@ else()
   install(TARGETS vpic LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 endif()
 target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} HDF5::HDF5 Kokkos::kokkos)
+if(VPIC_ENABLE_HDF5)
+  target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} HDF5::HDF5 Kokkos::kokkos)
+else()
+  target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
+endif()
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
 
 macro(build_a_vpic name deck)
@@ -546,7 +550,10 @@ macro(build_a_vpic name deck)
     message(FATAL_ERROR "Could not find deck '${deck}'")
   endif()
   add_executable(${name} ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc ${VPIC_SRC})
-  target_link_libraries(${name} vpic Kokkos::kokkos HDF5::HDF5)
+  target_link_libraries(${name} vpic Kokkos::kokkos)
+  if(VPIC_ENABLE_HDF5)
+    target_link_libraries(${name} vpic HDF5::HDF5)
+  endif()
   target_compile_definitions(${name} PRIVATE INPUT_DECK="${deck}")
 endmacro(build_a_vpic)
 

@@ -248,21 +248,22 @@ public:
 
   // Text dumps
   void dump_energies( const char *fname, int append = 1 );
-  void dump_energies( const char *fname, bool tracers, int append = 1 );
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
-  void dump_species( const char *fname , bool tracers);
   void dump_tracers_buffered_csv( const char *sp_name, uint32_t dump_vars, 
                                   const char *fbase, int append = 1,
                                   int fname_tag = 1 );
   void dump_tracers_csv( const char *sp_name, uint32_t dump_vars, const char *fbase, int append = 1,
                                   int fname_tag = 1 );
+  void dump_particles_csv( const char *sp_name,
+                           uint32_t dump_vars,
+                           const char *fbase,
+                           const int append=1,
+                           int ftag=1 );
 
   // Binary dumps
   void dump_grid( const char *fbase );
   void dump_fields( const char *fbase, int fname_tag = 1 );
-  void dump_hydro( const char *sp_name, const char *fbase, bool tracers,
-                   int fname_tag = 1 );
   void dump_hydro( const char *sp_name, const char *fbase,
                    int fname_tag = 1 );
   void dump_particles( const char *sp_name, const char *fbase,
@@ -270,6 +271,7 @@ public:
 
   // HDF5 dumps
   void dump_tracers_hdf5(const char* sp_name, const uint32_t dump_vars, const char*fbase, int append=1);
+  void dump_tracers_buffered_hdf5( const char *sp_name, uint32_t dump_vars, const char *fbase, const int append=1 );
 
   // convenience functions for simlog output
   void create_field_list(char * strlist, DumpParameters & dumpParams);
@@ -553,37 +555,157 @@ public:
   }
 
 #if defined( VPIC_ENABLE_PARTICLE_ANNOTATIONS ) || defined( VPIC_ENABLE_TRACER_PARTICLES )
+  /**
+   * @brief Create empty tracer species 
+   *
+   * It is up to the user to provide any additional annotations and create the 
+   * tracer particles. Automatically adds TracerID 64-bit integer annotation 
+   * for tracers.  
+   * Tracer data can be buffered before I/O operations. The size of the buffer
+   * is user controllable and defaults to storing 10x the maximum number of local
+   * particles.
+   * User can allocate additional memory for safety by supplting a multiplicative 
+   * factor for the maximum number of local particles. If not factor is supplied 
+   * then the code will default to allocating an additional 10% of the particles.
+   * Species is automatically added to the tracer list.
+   *
+   * @param name The name of the tracer species
+   * @param q Species particle charge
+   * @param m Species particle rest mass
+   * @param max_local_np Maximum number of particles for a single process
+   * @param max_local_nm Maximum number of movers for a single process
+   * @param sort_interval Number of time steps between particle sorting
+   * @param sort_out_of_place Whether or not to sort out of place 
+   * @param num_particles_buffer Number of particles to buffer before writing (Optional)
+   * @param over_alloc_fact Multiplicative factor for allocating additional memory (Optional)
+   * @param annotations Additional annotation variables (Optional)
+   *
+   * @return Pointer to tracer species
+   */
+  inline species_t * 
+  define_tracer_species(const char* name,
+                        const float q,
+                        const float m,
+                        const int max_local_np,
+                        const int max_local_nm,
+                        const int sort_interval,
+                        const int sort_out_of_place,
+                        const int num_particles_buffer = -1,
+                        const float over_alloc_factor = 1.1,
+                        annotation_vars_t annotations = annotation_vars_t()) {
+    // Create tracer species based on the original species
+    species_t* tracers = species( name, 
+                                  q, m, 
+                                  static_cast<int>(max_local_np*over_alloc_factor), 
+                                  static_cast<int>(max_local_nm*over_alloc_factor), 
+                                  sort_interval, sort_out_of_place, 
+                                  grid);
+    // Mark species as tracer
+    tracers->is_tracer = true;
+
+    // Add annotations for global tracer ID
+    annotations.add_annotation<int64_t>(std::string("TracerID"));
+    tracers->init_annotations(max_local_np, max_local_nm, annotations);
+
+    // Initialize IO buffers
+    int buffer_size = num_particles_buffer;
+    if(num_particles_buffer == -1)
+      buffer_size = max_local_np * 10;
+    tracers->init_io_buffers(buffer_size, over_alloc_factor);
+
+    return append_species(tracers, &tracers_list); 
+//    return append_species(tracers, &species_list); 
+  }
+
+  /**
+   * @brief Create empty tracer species based on existing species
+   *
+   * It is up to the user to provide any additional annotations and create the 
+   * tracer particles. Automatically adds TracerID 64-bit integer annotation 
+   * for tracers.  
+   * Tracer data can be buffered before I/O operations. The size of the buffer
+   * is user controllable and defaults to storing 10x the maximum number of local
+   * particles.
+   * User can allocate additional memory for safety by supplting a multiplicative 
+   * factor for the maximum number of local particles. If not factor is supplied 
+   * then the code will default to allocating an additional 10% of the particles.
+   * Species is automatically added to the tracer list.
+   *
+   * @param name The name of the tracer species
+   * @param original_species Parent species that the tracer is based on
+   * @param max_local_np Maximum number of particles for a single process
+   * @param max_local_nm Maximum number of movers for a single process
+   * @param num_particles_buffer Number of particles to buffer before writing (Optional)
+   * @param over_alloc_fact Multiplicative factor for allocating additional memory (Optional)
+   * @param annotations Additional annotation variables (Optional)
+   *
+   * @return Pointer to tracer species
+   */
   inline species_t * 
   define_tracer_species(const char* name,
                         species_t* original_species, 
                         const int max_local_np,
                         const int max_local_nm,
+                        const int num_particles_buffer = -1,
+                        const float over_alloc_factor = 1.1,
                         annotation_vars_t annotations = annotation_vars_t()) {
     // Create tracer species based on the original species
     species_t* tracers = species( name, 
                                   original_species->q, original_species->m, 
-                                  max_local_np, max_local_nm, 
+                                  static_cast<int>(max_local_np*over_alloc_factor), 
+                                  static_cast<int>(max_local_nm*over_alloc_factor), 
                                   original_species->sort_interval, original_species->sort_out_of_place, 
                                   grid);
+    // Mark species as tracer
+    tracers->is_tracer = true;
 
-    // Add annotations for globas tracer ID
+    // Add annotations for global tracer ID
     annotations.add_annotation<int64_t>(std::string("TracerID"));
-    tracers->using_annotations = true;
-    tracers->annotation_vars = annotations;
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
-    tracers->init_io_buffers(max_local_np * 10.0, 1.1);
+
+    // Initialize IO buffers
+    int buffer_size = num_particles_buffer;
+    if(num_particles_buffer == -1)
+      buffer_size = max_local_np * 10;
+    tracers->init_io_buffers(buffer_size, over_alloc_factor);
 
     // Set parent species pointer
     tracers->parent_species = original_species;
 
     return append_species(tracers, &tracers_list); 
+//    return append_species(tracers, &species_list); 
   }
 
+  /**
+   * @brief Create tracer species and copy/move every Nth particle from the parent
+   *
+   * Copies/Moves every Nth particle from the parent to the tracer species.
+   * Automatically adds TracerID 64-bit integer annotation for tracers.  
+   * It is up to the user to provide any additional annotations. 
+   * Tracer data can be buffered before I/O operations. The size of the buffer
+   * is user controllable and defaults to storing 10x the maximum number of local
+   * particles.
+   * User can allocate additional memory for safety by supplting a multiplicative 
+   * factor for the maximum number of local particles. If not factor is supplied 
+   * then the code will default to allocating an additional 10% of the particles.
+   * Species is automatically added to the tracer list.
+   *
+   * @param name The name of the tracer species
+   * @param original_species Parent species that the tracer is based on
+   * @param tracer_type Decide whether to move or copy particles from parent
+   * @param skip Number of particles to skip between copying/moving tracers
+   * @param num_particles_buffer Number of particles to buffer before writing (Optional)
+   * @param over_alloc_fact Multiplicative factor for allocating additional memory (Optional)
+   * @param annotations Additional annotation variables (Optional)
+   *
+   * @return Pointer to tracer species
+   */
   inline species_t * 
   define_tracer_species_by_nth( const char* name, 
                                 species_t* original_species, 
                                 const TracerType tracer_type, 
                                 const float skip,
+                                const int num_particles_buffer = -1,
                                 const float over_alloc_factor = 1.1,
                                 annotation_vars_t annotations = annotation_vars_t()) {
 
@@ -597,19 +719,26 @@ public:
                                   max_local_np, max_local_nm, 
                                   original_species->sort_interval, original_species->sort_out_of_place, 
                                   grid);
+    
+    // Mark species as tracer
+    tracers->is_tracer = true;
 
     // Add annotations for globas tracer ID
     annotations.add_annotation<int64_t>(std::string("TracerID"));
     if(tracer_type == TracerType::Copy)
       annotations.add_annotation<float>(std::string("Weight"));
+
     // Copy any annotations from the parent species
     if(original_species->using_annotations) {
       annotations.combine(original_species->annotation_vars);
     }
-    tracers->using_annotations = true;
-    tracers->annotation_vars = annotations;
+
+    int buffer_size = num_particles_buffer;
+    if(num_particles_buffer == -1)
+      buffer_size = max_local_np * 10;
+
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
-    tracers->init_io_buffers(max_local_np * 10.0, over_alloc_factor);
+    tracers->init_io_buffers(buffer_size, over_alloc_factor);
 
     // Set parent species pointer
     tracers->parent_species = original_species;
@@ -618,30 +747,81 @@ public:
     tracers->tracer_type = tracer_type;
 
     // Copy of move particles to tracers
-    int ntracers = static_cast<int>(static_cast<float>(original_species->np) / skip);
     tracers->create_tracers_by_nth(original_species, tracer_type, skip, rank());
 
     return append_species(tracers, &tracers_list); 
+//    return append_species(tracers, &species_list); 
   }
 
+  /**
+   * @brief Create tracer species and copy/move N particles from the parent
+   *
+   * Creates N tracers by selecting N evenly spaced particles from the parent.
+   * Automatically adds TracerID 64-bit integer annotation for tracers.  
+   * It is up to the user to provide any additional annotations. 
+   * Tracer data can be buffered before I/O operations. The size of the buffer
+   * is user controllable and defaults to storing 10x the maximum number of local
+   * particles.
+   * User can allocate additional memory for safety by supplting a multiplicative 
+   * factor for the maximum number of local particles. If not factor is supplied 
+   * then the code will default to allocating an additional 10% of the particles.
+   * Species is automatically added to the tracer list.
+   *
+   * @param name The name of the tracer species
+   * @param original_species Parent species that the tracer is based on
+   * @param tracer_type Decide whether to move or copy particles from parent
+   * @param ntracers Number of particles to copy/move tracers
+   * @param num_particles_buffer Number of particles to buffer before writing (Optional)
+   * @param over_alloc_fact Multiplicative factor for allocating additional memory (Optional)
+   * @param annotations Additional annotation variables (Optional)
+   *
+   * @return Pointer to tracer species
+   */
   inline species_t * 
   define_tracer_species_with_n( const char* name, 
                                 species_t* original_species, 
                                 const TracerType tracer_type, 
                                 const float ntracers,
+                                const int num_particles_buffer = -1,
                                 const float over_alloc_factor = 1.1,
                                 annotation_vars_t annotations = annotation_vars_t()) {
     // Verify # of tracer is acceptable
     if(ntracers < 1.0 || static_cast<int>(ntracers) > original_species->np)
       ERROR(( "%f is a bad number of tracers. Should be in [%d,%d]", ntracers, 1, original_species->np));
-    return define_tracer_species_by_nth(name, original_species, tracer_type, original_species->np / ntracers, over_alloc_factor, annotations);
+    return define_tracer_species_by_nth(name, original_species, tracer_type, original_species->np / ntracers, num_particles_buffer, over_alloc_factor, annotations);
   }
 
+  /**
+   * @brief Create tracer species and N percent of the particles from the parent
+   *
+   * Creates tracers by selecting N percent of the particles from the parent 
+   * and copying/moving them to the tracers.
+   * Automatically adds TracerID 64-bit integer annotation for tracers.  
+   * It is up to the user to provide any additional annotations. 
+   * Tracer data can be buffered before I/O operations. The size of the buffer
+   * is user controllable and defaults to storing 10x the maximum number of local
+   * particles.
+   * User can allocate additional memory for safety by supplting a multiplicative 
+   * factor for the maximum number of local particles. If not factor is supplied 
+   * then the code will default to allocating an additional 10% of the particles.
+   * Species is automatically added to the tracer list.
+   *
+   * @param name The name of the tracer species
+   * @param original_species Parent species that the tracer is based on
+   * @param tracer_type Decide whether to move or copy particles from parent
+   * @param skip Number of particles to skip between copying/moving tracers
+   * @param num_particles_buffer Number of particles to buffer before writing (Optional)
+   * @param over_alloc_fact Multiplicative factor for allocating additional memory (Optional)
+   * @param annotations Additional annotation variables (Optional)
+   *
+   * @return Pointer to tracer species
+   */
   inline species_t * 
   define_tracer_species_by_percentage(const char* name,
                                       species_t* original_species, 
                                       const TracerType tracer_type, 
                                       const float percentage, 
+                                      const int num_particles_buffer = -1,
                                       const float over_alloc_factor = 1.1,
                                       annotation_vars_t annotations = annotation_vars_t()) {
     // Check if input percentage is valid
@@ -649,14 +829,39 @@ public:
       ERROR(( "Percentage (%f) is not in [0,100]", percentage));
     
     int ntracers = static_cast<float>(original_species->np) * (percentage/100.0);
-    return define_tracer_species_by_nth(name, original_species, tracer_type, original_species->np / ntracers, over_alloc_factor, annotations);
+    return define_tracer_species_by_nth(name, original_species, tracer_type, original_species->np / ntracers, num_particles_buffer, over_alloc_factor, annotations);
   }
 
+  /**
+   * @brief Create tracer species from the parent by selecting based on the provided predicate 
+   *
+   * Copy/Move tracers from the parent based on the supplied filter function.
+   * Automatically adds TracerID 64-bit integer annotation for tracers.  
+   * It is up to the user to provide any additional annotations. 
+   * Tracer data can be buffered before I/O operations. The size of the buffer
+   * is user controllable and defaults to storing 10x the maximum number of local
+   * particles.
+   * User can allocate additional memory for safety by supplting a multiplicative 
+   * factor for the maximum number of local particles. If not factor is supplied 
+   * then the code will default to allocating an additional 10% of the particles.
+   * Species is automatically added to the tracer list.
+   *
+   * @param name The name of the tracer species
+   * @param original_species Parent species that the tracer is based on
+   * @param tracer_type Decide whether to move or copy particles from parent
+   * @param filter Filter function for selecting which particles to take from the parent 
+   * @param num_particles_buffer Number of particles to buffer before writing (Optional)
+   * @param over_alloc_fact Multiplicative factor for allocating additional memory (Optional)
+   * @param annotations Additional annotation variables (Optional)
+   *
+   * @return Pointer to tracer species
+   */
   inline species_t * 
   define_tracer_species_by_predicate( const char* name, 
                                       species_t* original_species, 
                                       const TracerType tracer_type, 
                                       std::function <bool (particle_t)> filter,
+                                      const int num_particles_buffer = -1,
                                       const float over_alloc_factor = 1.1,
                                       annotation_vars_t annotations = annotation_vars_t()) {
 
@@ -671,6 +876,9 @@ public:
                                   max_local_np, max_local_nm, 
                                   original_species->sort_interval, original_species->sort_out_of_place, 
                                   grid);
+    
+    // Mark species as tracer
+    tracers->is_tracer = true;
 
     // Add annotations for globas tracer ID
     annotations.add_annotation<int64_t>(std::string("TracerID"));
@@ -680,10 +888,13 @@ public:
     if(original_species->using_annotations) {
       annotations.combine(original_species->annotation_vars);
     }
-    tracers->using_annotations = true;
-    tracers->annotation_vars = annotations;
+
+    int buffer_size = num_particles_buffer;
+    if(num_particles_buffer == -1)
+      buffer_size = max_local_np * 10;
+
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
-    tracers->init_io_buffers(max_local_np * 10.0, over_alloc_factor);
+    tracers->init_io_buffers(buffer_size, over_alloc_factor);
 
     // Set parent species pointer
     tracers->parent_species = original_species;
@@ -695,6 +906,7 @@ public:
     tracers->create_tracers_by_predicate(original_species, tracer_type, filter, rank());
 
     return append_species(tracers, &tracers_list); 
+//    return append_species(tracers, &species_list); 
   }
 
 #endif

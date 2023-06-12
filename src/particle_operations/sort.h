@@ -61,19 +61,19 @@ struct DefaultSort {
 
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
         // Sort annotations
-        for(int i=0; i<sp->annotation_vars.i32_vars.size(); i++) {
+        for(unsigned int i=0; i<sp->annotation_vars.i32_vars.size(); i++) {
           auto sub_view = Kokkos::subview(sp->annotations_d.i32, Kokkos::ALL, i);
           bin_sort.sort(sub_view);
         }
-        for(int i=0; i<sp->annotation_vars.i64_vars.size(); i++) {
+        for(unsigned int i=0; i<sp->annotation_vars.i64_vars.size(); i++) {
           auto sub_view = Kokkos::subview(sp->annotations_d.i64, Kokkos::ALL, i);
           bin_sort.sort(sub_view);
         }
-        for(int i=0; i<sp->annotation_vars.f32_vars.size(); i++) {
+        for(unsigned int i=0; i<sp->annotation_vars.f32_vars.size(); i++) {
           auto sub_view = Kokkos::subview(sp->annotations_d.f32, Kokkos::ALL, i);
           bin_sort.sort(sub_view);
         }
-        for(int i=0; i<sp->annotation_vars.f64_vars.size(); i++) {
+        for(unsigned int i=0; i<sp->annotation_vars.f64_vars.size(); i++) {
           auto sub_view = Kokkos::subview(sp->annotations_d.f64, Kokkos::ALL, i);
           bin_sort.sort(sub_view);
         }
@@ -212,19 +212,19 @@ struct DefaultSort {
 
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
         // Sort annotations
-        for(int i=0; i<sp->annotation_vars.i32_vars.size(); i++) {
+        for(unsigned int i=0; i<sp->annotation_vars.i32_vars.size(); i++) {
           auto sub_view = Kokkos::subview(sp->annotations_d.i32, Kokkos::ALL, i);
           bin_sort.sort(sub_view);
         }
-        for(int i=0; i<sp->annotation_vars.i64_vars.size(); i++) {
+        for(unsigned int i=0; i<sp->annotation_vars.i64_vars.size(); i++) {
           auto sub_view = Kokkos::subview(sp->annotations_d.i64, Kokkos::ALL, i);
           bin_sort.sort(sub_view);
         }
-        for(int i=0; i<sp->annotation_vars.f32_vars.size(); i++) {
+        for(unsigned int i=0; i<sp->annotation_vars.f32_vars.size(); i++) {
           auto sub_view = Kokkos::subview(sp->annotations_d.f32, Kokkos::ALL, i);
           bin_sort.sort(sub_view);
         }
-        for(int i=0; i<sp->annotation_vars.f64_vars.size(); i++) {
+        for(unsigned int i=0; i<sp->annotation_vars.f64_vars.size(); i++) {
           auto sub_view = Kokkos::subview(sp->annotations_d.f64, Kokkos::ALL, i);
           bin_sort.sort(sub_view);
         }
@@ -302,19 +302,19 @@ struct DefaultSort {
 
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
         // Sort annotations
-        for(int i=0; i<sp->annotation_vars.i32_vars.size(); i++) {
+        for(unsigned int i=0; i<sp->annotation_vars.i32_vars.size(); i++) {
           auto sub_view = Kokkos::subview(sp->annotations_d.i32, Kokkos::ALL, i);
           bin_sort.sort(sub_view);
         }
-        for(int i=0; i<sp->annotation_vars.i64_vars.size(); i++) {
+        for(unsigned int i=0; i<sp->annotation_vars.i64_vars.size(); i++) {
           auto sub_view = Kokkos::subview(sp->annotations_d.i64, Kokkos::ALL, i);
           bin_sort.sort(sub_view);
         }
-        for(int i=0; i<sp->annotation_vars.f32_vars.size(); i++) {
+        for(unsigned int i=0; i<sp->annotation_vars.f32_vars.size(); i++) {
           auto sub_view = Kokkos::subview(sp->annotations_d.f32, Kokkos::ALL, i);
           bin_sort.sort(sub_view);
         }
-        for(int i=0; i<sp->annotation_vars.f64_vars.size(); i++) {
+        for(unsigned int i=0; i<sp->annotation_vars.f64_vars.size(); i++) {
           auto sub_view = Kokkos::subview(sp->annotations_d.f64, Kokkos::ALL, i);
           bin_sort.sort(sub_view);
         }

@@ -32,6 +32,7 @@ checkpt_vpic_simulation( const vpic_simulation * vpic ) {
   CHECKPT_FPTR( vpic->interpolator_array );
   CHECKPT_FPTR( vpic->hydro_array );
   CHECKPT_FPTR( vpic->species_list );
+  CHECKPT_FPTR( vpic->tracers_list );
   CHECKPT_FPTR( vpic->particle_bc_list );
   CHECKPT_FPTR( vpic->emitter_list );
   CHECKPT_FPTR( vpic->collision_op_list );
@@ -49,6 +50,7 @@ restore_vpic_simulation( void ) {
   RESTORE_FPTR( vpic->interpolator_array );
   RESTORE_FPTR( vpic->hydro_array );
   RESTORE_FPTR( vpic->species_list );
+  RESTORE_FPTR( vpic->tracers_list );
   RESTORE_FPTR( vpic->particle_bc_list );
   RESTORE_FPTR( vpic->emitter_list );
   RESTORE_FPTR( vpic->collision_op_list );
@@ -62,6 +64,7 @@ reanimate_vpic_simulation( vpic_simulation * vpic ) {
   REANIMATE_FPTR( vpic->interpolator_array );
   REANIMATE_FPTR( vpic->hydro_array );
   REANIMATE_FPTR( vpic->species_list );
+  REANIMATE_FPTR( vpic->tracers_list );
   REANIMATE_FPTR( vpic->particle_bc_list );
   REANIMATE_FPTR( vpic->emitter_list );
   REANIMATE_FPTR( vpic->collision_op_list );
@@ -97,6 +100,7 @@ vpic_simulation::~vpic_simulation() {
   delete_emitter_list( emitter_list );
   delete_particle_bc_list( particle_bc_list );
   delete_species_list( species_list );
+  delete_species_list( tracers_list );
   delete_hydro_array( hydro_array );
   delete_interpolator_array( interpolator_array );
   delete_field_array( field_array );

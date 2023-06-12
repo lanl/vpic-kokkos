@@ -1,5 +1,7 @@
 add_subdirectory(particle_push)
 add_subdirectory(energy_comparison)
 add_subdirectory(legacy_comparison)
-add_subdirectory(particle_tracers)
+if(ENABLE_TRACERS)
+  add_subdirectory(particle_tracers)
+endif()
 #add_subdirectory(particle_annotations)

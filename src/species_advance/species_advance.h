@@ -353,6 +353,7 @@ class species_t {
         k_counter_t::HostMirror k_nm_h;
 
 #if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+        bool is_tracer = false;
         bool using_annotations = false;
         annotation_vars_t annotation_vars;
         annotations_t<Kokkos::DefaultExecutionSpace>     annotations_d;
@@ -365,7 +366,6 @@ class species_t {
         k_particles_t::HostMirror                               particle_io_buffer;
         k_particles_i_t::HostMirror                             particle_cell_io_buffer;
         std::vector<std::pair<int64_t,int64_t>>                 np_per_ts_io_buffer;
-        Kokkos::View<int64_t*>::HostMirror                      ts_io_buffer;
         Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror efields_io_buffer;
         Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror bfields_io_buffer;
         Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror current_dens_io_buffer;
@@ -468,15 +468,19 @@ class species_t {
         /**
          *  @brief Allocate memory for IO buffering tracers
          *
-         *  @param N_steps Number of timesteps to buffer
+         *  @param N_particles       Number of particles to buffer before dumping
          *  @param over_alloc_factor Multiplier for over allocating space
          */
-        void init_io_buffers(const int N_steps, const float over_alloc_factor);
+        void init_io_buffers(const int N_particles, const float over_alloc_factor);
 
         /**
          * @brief Add additional per particle annotations. 
+         *
+         * @param num_particles Number of particles using annotations
+         * @param num_movers    Number of movers that need annotations
+         * @param vars          Annotation variables
          */
-        void init_annotations( int num_particles, int num_movers, annotation_vars_t& );
+        void init_annotations( int num_particles, int num_movers, annotation_vars_t& vars );
 
         /**
          * Create tracer particles from parent species using a predicate

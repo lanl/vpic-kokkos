@@ -1,4 +1,7 @@
 LIST(APPEND TESTS weibel_driver)
+if(ENABLE_TRACERS)
+  LIST(APPEND TESTS weibel_tracers_driver)
+endif()
 
 list(APPEND gold_file "${CMAKE_CURRENT_SOURCE_DIR}/energies_gold")
 add_definitions(-DGOLD_ENERGY_FILE="${gold_file}")

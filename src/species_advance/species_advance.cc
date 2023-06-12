@@ -361,6 +361,7 @@ species_t::copy_inbound_to_device()
   auto& particles_i = k_p_i_d;
   const int npart = np;
 
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
   auto& i32_annotations = annotations_d.i32;
   auto& i64_annotations = annotations_d.i64;
   auto& f32_annotations = annotations_d.f32;
@@ -373,6 +374,7 @@ species_t::copy_inbound_to_device()
   int num_i64 = annotation_vars.i64_vars.size();
   int num_f32 = annotation_vars.f32_vars.size();
   int num_f64 = annotation_vars.f64_vars.size();
+#endif
 
   Kokkos::parallel_for("append moved particles",
     Kokkos::RangePolicy <Kokkos::DefaultExecutionSpace> (0, num_to_copy),
@@ -420,8 +422,6 @@ species_t::init_io_buffers(const int N_steps, const float over_alloc_factor) {
   const int nparticles = static_cast<int>(static_cast<float>(N_steps) * over_alloc_factor);
   particle_io_buffer      = k_particles_t::HostMirror("Particle io buffer", nparticles);
   particle_cell_io_buffer = k_particles_i_t::HostMirror("Particle cell io buffer", nparticles);
-//  np_ts_io_buffer         = std::vector<std::pair<int64_t, int64_t>(nparticles, std::make_pair(0, 0));
-  ts_io_buffer            = Kokkos::View<int64_t*>::HostMirror("Timestep io buffer", nparticles);
   efields_io_buffer       = Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror("Efield io buffer", nparticles);
   bfields_io_buffer       = Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror("Bfield io buffer", nparticles);
   current_dens_io_buffer  = Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror("Current density io buffer", nparticles);
@@ -434,14 +434,14 @@ species_t::init_io_buffers(const int N_steps, const float over_alloc_factor) {
 }
 
 void 
-species_t::init_annotations(int num_particles, int num_movers, annotation_vars_t& annotation_sizes) 
+species_t::init_annotations(int num_particles, int num_movers, annotation_vars_t& vars) 
 {
   using_annotations = true;
-  annotation_vars = annotation_sizes;
-  annotations_d = annotations_t<Kokkos::DefaultExecutionSpace>(num_particles, annotation_sizes);
+  annotation_vars = vars;
+  annotations_d = annotations_t<Kokkos::DefaultExecutionSpace>(num_particles, vars);
   annotations_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(annotations_d);
-  annotations_copy_d = annotations_t<Kokkos::DefaultExecutionSpace>(num_movers, annotation_sizes);
+  annotations_copy_d = annotations_t<Kokkos::DefaultExecutionSpace>(num_movers, vars);
   annotations_copy_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(annotations_copy_d);
-  annotations_recv_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(num_movers, annotation_sizes);
+  annotations_recv_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(num_movers, vars);
 }
 #endif
