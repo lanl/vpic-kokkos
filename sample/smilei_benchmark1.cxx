@@ -249,7 +249,7 @@ begin_initialization {
   double ny = 1;
   double nz = 200;
 
-  double nppc = 10;  // Average number of macro particles/cell of each species
+  double nppc = 150;  // Average number of macro particles/cell of each species
 
   int topology_x = 1;
   int topology_y = 1;
@@ -334,7 +334,6 @@ begin_initialization {
 
   double dt = cfl_req*courant_length(Lx, Ly, Lz, nx, ny, nz);
 
-  dt = dt/2.;
   
   // Laser parameters
   int cycles = 10;
