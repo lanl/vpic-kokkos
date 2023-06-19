@@ -611,8 +611,11 @@ move_p_kokkos(
       //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
       //k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
       // TODO: replace this, it's horrible
-      (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
+      //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
 
+      // Clearer and works with AMD GPUs
+      float* disp = static_cast<float*>(&(pm->dispx));
+      disp[axis] = -disp[axis];
 
       continue;
     }
