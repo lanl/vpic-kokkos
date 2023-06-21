@@ -24,7 +24,7 @@ int vpic_simulation::advance(void)
   KOKKOS_TIC();
 
   // Sort the particles for performance if desired.
-  LIST_FOR_EACH( sp, species_list )
+  LIST_FOR_EACH_SPECIES(sp, species_list, tracers_list) 
   {
       if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
       {
@@ -32,16 +32,6 @@ int vpic_simulation::advance(void)
           sorter.sort( sp, grid->nv);
       }
   }
-#ifdef VPIC_ENABLE_TRACER_PARTICLES
-  LIST_FOR_EACH( sp, tracers_list )
-  {
-      if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
-      {
-          if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-          sorter.sort( sp, grid->nv);
-      }
-  }
-#endif
 
   KOKKOS_TOC( sort_particles, 1);
 //printf("Sorted normal and tracer species\n");
@@ -57,7 +47,7 @@ int vpic_simulation::advance(void)
   {
     // TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
     //TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
-  TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
+    TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
   }
 
   // Note: Particles should not have moved since the last performance sort
@@ -78,21 +68,11 @@ int vpic_simulation::advance(void)
 
 //printf("Starting normal push\n");
   // DEVICE function - Touches particles, particle movers, accumulators, interpolators
-  LIST_FOR_EACH( sp, species_list )
+  LIST_FOR_EACH_SPECIES(sp, species_list, tracers_list)
   {
-      // Now Times internally
-      advance_p( sp, interpolator_array, field_array );
+    // Now times internally
+    advance_p(sp, interpolator_array, field_array);
   }
-//Kokkos::fence();
-//printf("Pushed normal species\n");
-#ifdef VPIC_ENABLE_TRACER_PARTICLES
-  LIST_FOR_EACH( sp, tracers_list )
-  {
-      // Now Times internally
-      advance_p( sp, interpolator_array, field_array );
-  }
-#endif
-//  printf("Pushed tracer species\n");
 
   // Reduce accumulator contributions into the device array
   KOKKOS_TIC();
@@ -107,14 +87,9 @@ int vpic_simulation::advance(void)
 
   // Copy particle movers back to host
   KOKKOS_TIC();
-  LIST_FOR_EACH( sp, species_list ) {
+  LIST_FOR_EACH_SPECIES(sp, species_list, tracers_list) {
     sp->copy_outbound_to_host();
   }
-#ifdef VPIC_ENABLE_TRACER_PARTICLES
-  LIST_FOR_EACH( sp, tracers_list ) {
-    sp->copy_outbound_to_host();
-  }
-#endif
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 //printf("Copied outbound to host for species and tracers\n");
 
@@ -134,27 +109,17 @@ int vpic_simulation::advance(void)
   if((particle_injection_interval>0) && ((step() % particle_injection_interval)==0)) {
       if(!kokkos_particle_injection) {
           KOKKOS_TIC();
-          LIST_FOR_EACH( sp, species_list ) {
+          LIST_FOR_EACH_SPECIES( sp, species_list, tracers_list ) {
             sp->copy_to_host();
           }
-#ifdef VPIC_ENABLE_TRACER_PARTICLES
-          LIST_FOR_EACH( sp, tracers_list ) {
-            sp->copy_to_host();
-          }
-#endif
           KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
       }
       TIC user_particle_injection(); TOC( user_particle_injection, 1 );
       if(!kokkos_particle_injection) {
           KOKKOS_TIC();
-          LIST_FOR_EACH( sp, species_list ) {
+          LIST_FOR_EACH_SPECIES( sp, species_list, tracers_list ) {
             sp->copy_to_device();
           }
-#ifdef VPIC_ENABLE_TRACER_PARTICLES
-          LIST_FOR_EACH( sp, tracers_list ) {
-            sp->copy_to_device();
-          }
-#endif
           KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
       }
   }
@@ -212,8 +177,7 @@ int vpic_simulation::advance(void)
   // Copy back the right data to GPU
   // Device
   // Touches particles, particle_movers
-  LIST_FOR_EACH( sp, species_list )
-  {
+  LIST_FOR_EACH_SPECIES( sp, species_list, tracers_list ) {
       KOKKOS_TIC(); // Time this data movement
       const int nm = sp->k_nm_h(0);
 
@@ -237,44 +201,11 @@ int vpic_simulation::advance(void)
       KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   }
-#ifdef VPIC_ENABLE_TRACER_PARTICLES
-  LIST_FOR_EACH( sp, tracers_list )
-  {
-      KOKKOS_TIC(); // Time this data movement
-      const int nm = sp->k_nm_h(0);
-//printf("Rank %d: Removing %d tracers from %s\n", rank(), nm, sp->name);
-
-      // TODO: this can be hoisted to the end of advance_p if desired
-      compressor.compress(
-              sp->k_p_d,
-              sp->k_p_i_d,
-              sp->k_pm_i_d,
-              nm,
-              sp->np,
-              sp
-      );
-
-      // Update np now we removed them...
-      sp->np -= nm;
-      KOKKOS_TOC( BACKFILL, 1);
-
-      // Copy data for copies back to device
-      KOKKOS_TIC();
-        sp->copy_inbound_to_device();
-      KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
-
-  }
-#endif
 
   // This copies over a val for nm, which is a lie
-  LIST_FOR_EACH( sp, species_list ) {
+  LIST_FOR_EACH_SPECIES( sp, species_list, tracers_list ) {
       sp->nm = 0;
   }
-#ifdef VPIC_ENABLE_TRACER_PARTICLES
-  LIST_FOR_EACH( sp, tracers_list ) {
-      sp->nm = 0;
-  }
-#endif
 
   // At this point, all particle positions are at r_1 and u_{1/2}, the
   // guard lists are empty and the accumulators on each processor are current.
@@ -377,7 +308,6 @@ int vpic_simulation::advance(void)
           }
           KOKKOS_TOC( accumulate_rho_p, species_list->id );
       }
-#ifdef VPIC_ENABLE_TRACER_PARTICLES
       if( tracers_list )
       {
           KOKKOS_TIC();
@@ -388,7 +318,6 @@ int vpic_simulation::advance(void)
           }
           KOKKOS_TOC( accumulate_rho_p, tracers_list->id );
       }
-#endif
 
       // TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
       TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );

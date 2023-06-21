@@ -211,6 +211,9 @@ typedef struct collective collective_t;
 #define LIST_FOR_EACH(node,list)        \
   for((node)=(list); (node); (node)=(node)->next)
 
+#define LIST_FOR_EACH_SPECIES(node, list_a, list_b) \
+  for(species_t* list_flag=(list_a),*(node)=(list_a); (node); ((((node)->next == NULL) && list_flag==(list_a)) ? (node)=list_flag=(list_b) : (node)=(node)->next))
+
 #define LIST_FIND_FIRST(node,list,cond) do {        \
     for((node)=(list); (node); (node)=(node)->next) \
       if(cond) break;                               \
