@@ -327,13 +327,13 @@ begin_initialization {
 
   // Diagnostics intervals.  
   int energies_interval = 50;
-//  int field_interval    = 400;//int(5./omega_L_SI / time_to_SI / dt);
-  int field_interval    = 50;//int(5./omega_L_SI / time_to_SI / dt);
-//  int particle_interval = 10*field_interval;
-  int particle_interval = field_interval;
+  int field_interval    = 400;//int(5./omega_L_SI / time_to_SI / dt);
+//  int field_interval    = 50;//int(5./omega_L_SI / time_to_SI / dt);
+  int particle_interval = 10*field_interval;
+//  int particle_interval = field_interval;
 
-//  int restart_interval = 400;
-  int restart_interval = 40000;
+  int restart_interval = 400;
+//  int restart_interval = 40000;
   int quota_check_interval = 200;
 
   int spectra_interval = int(pulse_FWHM/dt);
@@ -663,15 +663,64 @@ printf("z box: [%f,%f]\n", zmin, zmax);
    * Create tracer species
    *------------------------------------------------------------------------*/
   annotation_vars_t electron_annotations;
-  species_t * electron_tracers = define_tracer_species_with_n("electron_tracers", electron, TracerType::Copy, 10.0, 1.1, electron_annotations);
-  electron_tracers->copy_to_device();
-  printf("Electron weight: %f\n", fabs(qe));
+//  species_t * electron_tracers = define_tracer_species_by_percentage("electron_tracers", electron, TracerType::Copy, 0.1, -1, 1.1, electron_annotations);
+//  species_t * electron_tracers = define_tracer_species_with_n("electron_tracers", electron, TracerType::Copy, 5.0, -1, 1.1, electron_annotations);
+//  species_t * electron_tracers = define_tracer_species("electron_tracers", electron, 1000, 1000, 100000, 1.1, electron_annotations);
+  species_t * electron_tracers = define_tracer_species("electron_tracers", -1.*e_c, m_e_c, 1000, 1000, 20, 0);
+//  electron_tracers->parent_species = electron;
 
   annotation_vars_t ion_I2_annotations;
-  species_t * ion_I2_tracers   = define_tracer_species_with_n("ion_I2_tracers", ion_I2, TracerType::Copy, 10.0, 1.1, ion_I2_annotations);
-  ion_I2_tracers->copy_to_device();
-  printf("Ion2 weight: %f\n", fabs(qi_I2)/Z_I2);
+//  species_t * ion_I2_tracers = define_tracer_species_by_percentage("ion_I2_tracers", ion_I2, TracerType::Copy, 0.1, -1, 1.1, ion_I2_annotations);
+//  species_t * ion_I2_tracers = define_tracer_species_with_n("ion_I2_tracers", ion_I2, TracerType::Copy, 5.0, -1, 1.1, ion_I2_annotations);
+//  species_t * ion_I2_tracers = define_tracer_species("ion_I2_tracers", ion_I2, 1000, 1000, 100000, 1.1, ion_I2_annotations);
+  species_t * ion_I2_tracers = define_tracer_species("ion_I2_tracers", Z_I2*e_c, m_I2_c, 1000, 1000, 80, 0);
+//  ion_I2_tracers->parent_species = ion_I2;
 
+  double xmin = grid->x0;
+  double xmax = (grid->x0+grid->nx*grid->dx);
+  double ymin = grid->y0;
+  double ymax = (grid->y0+grid->ny*grid->dy);
+  double zmin = grid->z0;
+  double zmax = (grid->z0+grid->nz*grid->dz);
+  repeat( 1000 ) {
+    double x = uniform( rng(0), xmin, xmax );
+    double y = uniform( rng(0), ymin, ymax );   
+    double z = uniform( rng(0), zmin, zmax );
+    if ( iv_region ) continue;   // Particle fell in iv_region.  Don't load.
+
+    // Rejection method, based on user-defined density function
+    if ( uniform( rng(0), 0, 1 ) < slab(x*length_to_SI, y*length_to_SI,
+                z*length_to_SI, global->xmin*length_to_SI+10e-6, 10e-6,
+                global->zmin*length_to_SI, global->zmax*length_to_SI,
+                global->ymin*length_to_SI, global->ymax*length_to_SI) ) {
+    // third to last arg is "weight," a positive number
+        //std::cout<< " injecting electron " << std::endl;
+        inject_particle( electron_tracers, x, y, z,
+                       normal( rng(0), 0, px_e_norm ),
+                       normal( rng(0), 0, px_e_norm ),
+                       normal( rng(0), 0, px_e_norm ), fabs(qe), 0, 0 );
+  
+//      if ( mobile_ions )
+//        inject_particle( ion_I2, x, y, z,
+//                         normal( rng(0), 0, uthi_I2 ),
+//                         normal( rng(0), 0, uthi_I2 ),
+//                         normal( rng(0), 0, uthi_I2 ), qi_I2 );
+
+      if ( mobile_ions ) {
+          inject_particle( ion_I2_tracers, x, y, z,
+                           normal( rng(0), 0, px_I2_norm ),
+                           normal( rng(0), 0, px_I2_norm ),
+                           normal( rng(0), 0, px_I2_norm ), fabs(qi_I2)/Z_I2,
+                           0, 0 );
+      }
+ 
+
+    }
+  }
+  printf("N electron: %d\n", electron->np);
+  printf("N ion I2: %d\n", ion_I2->np);
+  printf("N electron tracers: %d\n", electron_tracers->np);
+  printf("N ion I2 tracers: %d\n", ion_I2_tracers->np);
 
  /*--------------------------------------------------------------------------
   * New dump definition
@@ -1028,13 +1077,13 @@ begin_diagnostics {
 
   // Particle dump data
 #if 1
-//  if ( should_dump(particle) && global->load_particles ) {
-//    dump_particles( "electron", "particle/eparticle" );
-//    if ( global->mobile_ions ) {
-//      if (global->I1_present) dump_particles( "I1", "particle/I1particle" );
-//      if (global->I2_present) dump_particles( "I2", "particle/I2particle" );
-//    }
-//  }
+  if ( should_dump(particle) && global->load_particles ) {
+    dump_particles( "electron", "particle/eparticle" );
+    if ( global->mobile_ions ) {
+      if (global->I1_present) dump_particles( "I1", "particle/I1particle" );
+      if (global->I2_present) dump_particles( "I2", "particle/I2particle" );
+    }
+  }
 
 //  if ( should_dump(particle) && global->load_particles ) {
     species_t* sp;
@@ -1048,17 +1097,22 @@ begin_diagnostics {
     interpolator_array->copy_to_host();
     
 //    dump_tracers_hdf5( "electron_tracers", DumpVar::All, 
-//                       "electron_tracers/electron_tracers", step() != 0);
+//                       "electron_tracers/electron_tracers_buffered", step() != 0);
 //    dump_tracers_hdf5( "ion_I2_tracers", DumpVar::All,
-//                       "ion_I2_tracers/ion_I2_tracers", step() != 0);
-    dump_tracers_buffered_csv( "electron_tracers", DumpVar::All,
-                               "electron_tracers/electron_tracers_buffered", step() != 0, 0);
-    dump_tracers_buffered_csv( "ion_I2_tracers", DumpVar::All,
-                               "ion_I2_tracers/ion_I2_tracers_buffered", step() != 0, 0);
-    dump_tracers_csv( "electron_tracers", DumpVar::All,
-                      "electron_tracers/electron_tracers", step() != 0, 0);
-    dump_tracers_csv( "ion_I2_tracers", DumpVar::All,
-                      "ion_I2_tracers/ion_I2_tracers", step() != 0, 0);
+//                       "ion_I2_tracers/ion_I2_tracers_buffered", step() != 0);
+    dump_tracers_buffered_hdf5( "electron_tracers", DumpVar::All, 
+                                "electron_tracers/electron_tracers_buffered", step() != 0);
+//    dump_tracers_buffered_hdf5( "ion_I2_tracers", DumpVar::All,
+//                                "ion_I2_tracers/ion_I2_tracers_buffered", step() != 0);
+
+//    dump_tracers_buffered_csv( "electron_tracers", DumpVar::All,
+//                               "electron_tracers/electron_tracers_buffered", step() != 0, 0);
+//    dump_tracers_buffered_csv( "ion_I2_tracers", DumpVar::All,
+//                               "ion_I2_tracers/ion_I2_tracers_buffered", step() != 0, 0);
+//    dump_tracers_csv( "electron_tracers", DumpVar::Efield | DumpVar::KEDensity | DumpVar::ParticleKE,
+//                      "electron_tracers/electron_tracers", step() != 0, 0);
+//    dump_tracers_csv( "ion_I2_tracers", DumpVar::All,
+//                      "ion_I2_tracers/ion_I2_tracers", step() != 0, 0);
 
 #endif
 
@@ -1091,7 +1145,7 @@ begin_diagnostics {
   // processors (elapsed time on proc #0), and therefore the abort should
   // be synchronized across processors.
 
-#if 0
+#if 1
   if ( global->quota_check_interval &&
           (step()%global->quota_check_interval)==0 ) {
     if ( uptime() > global->quota_sec ) {
@@ -1120,7 +1174,7 @@ begin_diagnostics {
   }
 #endif
 
-#if 0
+#if 1
   if ( global->restart_interval>0 &&
           ((step()%global->restart_interval)==0) ) {
     //double dumpstart = uptime();

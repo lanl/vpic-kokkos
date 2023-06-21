@@ -429,6 +429,7 @@ species_t::init_io_buffers(const int N_steps, const float over_alloc_factor) {
   momentum_dens_io_buffer = Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror("Momentum density io buffer", nparticles);
   ke_dens_io_buffer       = Kokkos::View<float*>::HostMirror("KE density io buffer", nparticles);;
   stress_tensor_io_buffer = Kokkos::View<float*[6], Kokkos::LayoutLeft>::HostMirror("Stress tensor io buffer", nparticles);
+  particle_ke_io_buffer   = Kokkos::View<float*, Kokkos::LayoutLeft>::HostMirror("Particle KE io buffer", nparticles);
   annotations_io_buffer   = annotations_t<Kokkos::DefaultHostExecutionSpace>(nparticles, annotation_vars);
   nparticles_buffered = 0;
 }

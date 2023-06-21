@@ -100,6 +100,10 @@ vpic_simulation::dump_energies( const char *fname,
   }
   LIST_FOR_EACH(sp,tracers_list) {
     en_p = energy_p_kokkos( sp, interpolator_array );
+    if(rank() == 0 && status!=fail && (sp->parent_species == NULL)) {
+      std::string sp_name = std::string(sp->name);
+      energy_map[sp_name] = en_p;
+    }
     if(rank() == 0 && status!=fail && sp->is_tracer) {
       std::string sp_name = std::string(sp->parent_species->name);
       energy_map[sp_name] += en_p;
@@ -107,6 +111,9 @@ vpic_simulation::dump_energies( const char *fname,
   }
   LIST_FOR_EACH(sp,species_list) {
     if( rank()==0 && !sp->is_tracer ) fileIO.print( " %e", energy_map[sp->name] );
+  }
+  LIST_FOR_EACH(sp,tracers_list) {
+    if( rank()==0 && (sp->parent_species == NULL) ) fileIO.print( " %e", energy_map[sp->name] );
   }
 #else
   LIST_FOR_EACH(sp,species_list) {
@@ -167,11 +174,11 @@ vpic_simulation::dump_particles_csv( const char *sp_name,
     species_t *sp;
     char fname[max_filename_bytes];
     FileIO fileIO;
-//    int dim[1], buf_start;
-//    static particle_t * ALIGNED(128) p_buf = NULL;
 
     // Get species
     sp = find_species_name( sp_name, species_list );
+    if(sp == NULL)
+      sp = find_species_name(sp_name, tracers_list);
     if( !sp ) ERROR(( "Invalid species name \"%s\".", sp_name ));
 
     if( !fbase ) ERROR(( "Invalid filename" ));
@@ -215,10 +222,13 @@ vpic_simulation::dump_particles_csv( const char *sp_name,
       header_str += ",px,py,pz";
     }
     if(dump_vars & DumpVar::KEDensity) {
-      header_str += ",ke";
+      header_str += ",ke_dens";
     }
     if(dump_vars & DumpVar::StressTensor) {
       header_str += ",txx,tyy,tzz,tyz,tzx,txy";
+    }
+    if(dump_vars & DumpVar::ParticleKE) {
+      header_str += ",ke";
     }
 #ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
     if(sp->using_annotations) {
@@ -294,8 +304,9 @@ vpic_simulation::dump_particles_csv( const char *sp_name,
 #define tracer_y ((j0 + (dy0-1)*0.5) * grid->dy + grid->y0)
 #define tracer_z ((k0 + (dz0-1)*0.5) * grid->dz + grid->z0)
     // Write tracer data
-//    for(int32_t i=0; i<sp->np; i++) {
-    for(int32_t i=0; i<100; i++) {
+    for(int32_t i=0; i<sp->np; i++) {
+//      if(i > sp->np-100) {
+//    for(int32_t i=0; i<100; i++) {
       float dx0 = sp->k_p_h(i, particle_var::dx);
       float dy0 = sp->k_p_h(i, particle_var::dy);
       float dz0 = sp->k_p_h(i, particle_var::dz);
@@ -351,6 +362,19 @@ vpic_simulation::dump_particles_csv( const char *sp_name,
         float txy = hydro_array->k_h_h(ii, hydro_var::txy);
         fileIO.print(",%e,%e,%e,%e,%e,%e", txx, tyy, tzz, tyz, tzx, txy);
       }
+      if(dump_vars & DumpVar::ParticleKE) {
+        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+        float msp = sp->m;
+        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+        v0 = v0*v0 + v1*v1 + v2*v2;
+        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+        fileIO.print(",%e", v0);
+      }
 #ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
       // Print annotations
       if(sp->using_annotations) {
@@ -369,6 +393,7 @@ vpic_simulation::dump_particles_csv( const char *sp_name,
       }
 #endif
       fileIO.print( "\n" );
+//    }
     }
 #undef nxg 
 #undef nyg 
@@ -433,10 +458,13 @@ vpic_simulation::dump_tracers_buffered_csv( const char *sp_name,
       header_str += ",px,py,pz";
     }
     if(dump_vars & DumpVar::KEDensity) {
-      header_str += ",ke";
+      header_str += ",ke_dens";
     }
     if(dump_vars & DumpVar::StressTensor) {
       header_str += ",txx,tyy,tzz,tyz,tzx,txy";
+    }
+    if(dump_vars & DumpVar::ParticleKE) {
+      header_str += ",ke";
     }
 #ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
     for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
@@ -550,10 +578,10 @@ vpic_simulation::dump_tracers_buffered_csv( const char *sp_name,
       float dx0 = sp->k_p_h(i, particle_var::dx);
       float dy0 = sp->k_p_h(i, particle_var::dy);
       float dz0 = sp->k_p_h(i, particle_var::dz);
-//      float ux0 = sp->k_p_h(i, particle_var::ux);
-//      float uy0 = sp->k_p_h(i, particle_var::uy);
-//      float uz0 = sp->k_p_h(i, particle_var::uz);
-//      float w0  = sp->k_p_h(i, particle_var::w);
+      float ux0 = sp->k_p_h(i, particle_var::ux);
+      float uy0 = sp->k_p_h(i, particle_var::uy);
+      float uz0 = sp->k_p_h(i, particle_var::uz);
+      float w0  = sp->k_p_h(i, particle_var::w);
       int   ii  = sp->k_p_i_h(i);
       if(dump_vars & DumpVar::Efield) {
         float ex  = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
@@ -608,6 +636,19 @@ vpic_simulation::dump_tracers_buffered_csv( const char *sp_name,
         sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 3) = tyz;
         sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 4) = tzx;
         sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 5) = txy;
+      }
+      if(dump_vars & DumpVar::ParticleKE) {
+        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+        float msp = sp->m;
+        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+        v0 = v0*v0 + v1*v1 + v2*v2;
+        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+        sp->particle_ke_io_buffer(sp->nparticles_buffered+i) = v0;
       }
     }
     sp->nparticles_buffered += sp->np;     
@@ -742,6 +783,19 @@ vpic_simulation::dump_tracers_buffered_csv( const char *sp_name,
           float txy = sp->stress_tensor_io_buffer(i,5);
           fileIO.print(",%e,%e,%e,%e,%e,%e", txx, tyy, tzz, tyz, tzx, txy);
         }
+        if(dump_vars & DumpVar::ParticleKE) {
+          float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+          float msp = sp->m;
+          float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+                                 dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+          float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+                                 dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+          float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+                                 dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+          v0 = v0*v0 + v1*v1 + v2*v2;
+          v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+          fileIO.print(",%e", v0);
+        }
         // Print annotations
         for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
           fileIO.print(",%d", sp->annotations_io_buffer.get<int>(i, j));
@@ -816,6 +870,19 @@ vpic_simulation::dump_tracers_buffered_csv( const char *sp_name,
         float tzx = hydro_array->k_h_h(ii, hydro_var::tzx);
         float txy = hydro_array->k_h_h(ii, hydro_var::txy);
         fileIO.print(",%e,%e,%e,%e,%e,%e", txx, tyy, tzz, tyz, tzx, txy);
+      }
+      if(dump_vars & DumpVar::ParticleKE) {
+        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+        float msp = sp->m;
+        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+        v0 = v0*v0 + v1*v1 + v2*v2;
+        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+        fileIO.print(",%e", v0);
       }
       // Print annotations
       for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
@@ -906,10 +973,13 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
       header_str += ",px,py,pz";
     }
     if(dump_vars & DumpVar::KEDensity) {
-      header_str += ",ke";
+      header_str += ",ke_dens";
     }
     if(dump_vars & DumpVar::StressTensor) {
       header_str += ",txx,tyy,tzz,tyz,tzx,txy";
+    }
+    if(dump_vars & DumpVar::ParticleKE) {
+      header_str += ",ke";
     }
     for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
       header_str += ",";
@@ -1034,6 +1104,19 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
         float tzx = hydro_array->k_h_h(ii, hydro_var::tzx);
         float txy = hydro_array->k_h_h(ii, hydro_var::txy);
         fileIO.print(",%e,%e,%e,%e,%e,%e", txx, tyy, tzz, tyz, tzx, txy);
+      }
+      if(dump_vars & DumpVar::ParticleKE) {
+        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+        float msp = sp->m;
+        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+        v0 = v0*v0 + v1*v1 + v2*v2;
+        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+        fileIO.print(",%e", v0);
       }
       // Print annotations
       for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
@@ -1322,19 +1405,15 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
   species_t *sp;
   char fname[max_filename_bytes];
   FileIO fileIO;
-//  int dim[1], buf_start;
-//  static particle_t * ALIGNED(128) p_buf = NULL;
   char group_name[256];
 
   // Get species
   sp = find_species_name( sp_name, tracers_list );
-//  sp = find_species_name( sp_name, species_list );
   if( !sp ) ERROR(( "Invalid tracer species name \"%s\".", sp_name ));
 
   if( !fbase ) ERROR(( "Invalid filename" ));
 
   sprintf(fname, "%s.h5", fbase);
-//printf("Using file %s\n", fname);
 
   // Create file access template with parallel IO access
   herr_t status;
@@ -1351,7 +1430,6 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
   // Check if any buffers are filled. If any process needs to dump then all must do it together
   int dump_flag = sp->nparticles_buffered+sp->np < sp->particle_io_buffer.extent(0);
   MPI_Allreduce(MPI_IN_PLACE, &dump_flag, 1, MPI_INT, MPI_PROD, MPI_COMM_WORLD);
-//printf("Rank %d dump flag %d\n", rank(), dump_flag);
 
   // Buffer tracers
   if(dump_flag && step() != num_step) {
@@ -1396,7 +1474,6 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
     }
 
     // Get index of tracer ID
-//    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>("TracerID");
     auto& interp = interpolator_array->k_i_h;
 
     auto particle_slice = Kokkos::make_pair(0, sp->np);
@@ -1438,11 +1515,11 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
       float dx0 = sp->k_p_h(i, particle_var::dx);
       float dy0 = sp->k_p_h(i, particle_var::dy);
       float dz0 = sp->k_p_h(i, particle_var::dz);
-//      float ux0 = sp->k_p_h(i, particle_var::ux);
-//      float uy0 = sp->k_p_h(i, particle_var::uy);
-//      float uz0 = sp->k_p_h(i, particle_var::uz);
-//      float w0  = sp->k_p_h(i, particle_var::w);
       int   ii  = sp->k_p_i_h(i);
+      float ux0 = sp->k_p_h(i, particle_var::ux);
+      float uy0 = sp->k_p_h(i, particle_var::uy);
+      float uz0 = sp->k_p_h(i, particle_var::uz);
+      float w0  = sp->k_p_h(i, particle_var::w);
       if(dump_vars & DumpVar::Efield) {
         float ex  = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
         float ey  = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
@@ -1497,11 +1574,22 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
         sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 4) = tzx;
         sp->stress_tensor_io_buffer(sp->nparticles_buffered+i, 5) = txy;
       }
+      if(dump_vars & DumpVar::ParticleKE) {
+        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+        float msp = sp->m;
+        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+        v0 = v0*v0 + v1*v1 + v2*v2;
+        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+        sp->particle_ke_io_buffer(sp->nparticles_buffered+i) = v0;
+      }
     });
-//printf("Buffered %d %s particles. Buffer size is %d particles\n", sp->nparticles_buffered+sp->np, sp->name, sp->particle_io_buffer.extent(0));
     sp->nparticles_buffered += sp->np;     
   } else { // Dump buffered tracers
-//printf("Rank %d dumping buffered tracers\n", rank());
     // Update the particles on the host only if they haven't been recently
     if (step() > sp->last_copied)
       sp->copy_to_host();
@@ -1547,7 +1635,6 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
       synchronize_hydro_array( hydro_array );
     }
 
-//    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>("TracerID");
     auto& interp = interpolator_array->k_i_h;
 
     // Open file
@@ -1629,17 +1716,12 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
             float dx0 = dx_subview(i);
             float dy0 = dy_subview(i);
             float dz0 = dz_subview(i);
-//            float ux0 = ux_subview(i);
-//            float uy0 = uy_subview(i);
-//            float uz0 = uz_subview(i);
-//            float w0  = w_subview(i);
             int   ii  = i_subview(i);
             
             // Compute global position of particle
             if(dump_vars & DumpVar::GlobalPos) {
               int nxg_ = grid->nx + 2;
               int nyg_ = grid->ny + 2;
-//              int nzg_ = grid->nz + 2;
               int i0 = ii % nxg_;
               int j0 = (ii/nxg_) % nyg_;
               int k0 = ii/(nxg_*nyg_);
@@ -1740,7 +1822,7 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
         // Dump kinetic energy density if specified
         if(dump_vars & DumpVar::KEDensity) {
           auto ke_view = Kokkos::subview(sp->ke_dens_io_buffer, slice);
-          hid_t dataset_ke_id = H5Dcreate(group_id, "ke", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+          hid_t dataset_ke_id = H5Dcreate(group_id, "ke_dens", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
           status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, ke_view.data());
           H5Dclose(dataset_ke_id);
         }
@@ -1772,6 +1854,14 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
           H5Dclose(dataset_tzx_id);
           H5Dclose(dataset_txy_id);
         }
+
+        // Dump kinetic energy of particle if specified
+        if(dump_vars & DumpVar::ParticleKE) {
+          auto ke_view = Kokkos::subview(sp->particle_ke_io_buffer, slice);
+          hid_t dataset_ke_id = H5Dcreate(group_id, "ke", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+          status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, ke_view.data());
+          H5Dclose(dataset_ke_id);
+        }
   
         // Dump int annotations
         for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
@@ -1801,7 +1891,6 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
           status = H5Dwrite(dataset_f64_annote_id, H5T_IEEE_F64LE, memspace_id, dataspace_id, dxpl_id, f64_subview.data());
           H5Dclose(dataset_f64_annote_id);
         }
-//printf("Wrote %ld particles for time step %ld\n", sp->np_per_ts_io_buffer[ts_idx].first, sp->np_per_ts_io_buffer[ts_idx].second);
 
         // Move to next time step
         particle_idx += sp->np_per_ts_io_buffer[ts_idx].first;
@@ -1892,17 +1981,12 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
           float dx0 = sp->k_p_h(i, particle_var::dx);
           float dy0 = sp->k_p_h(i, particle_var::dy);
           float dz0 = sp->k_p_h(i, particle_var::dz);
-//          float ux0 = sp->k_p_h(i, particle_var::ux);
-//          float uy0 = sp->k_p_h(i, particle_var::uy);
-//          float uz0 = sp->k_p_h(i, particle_var::uz);
-//          float w0  = sp->k_p_h(i, particle_var::w);
           int   ii  = sp->k_p_i_h(i);
           
           // Compute global position of particle
           if(dump_vars & DumpVar::GlobalPos) {
             int nxg_ = grid->nx + 2;
             int nyg_ = grid->ny + 2;
-//            int nzg_ = grid->nz + 2;
             int i0 = ii % nxg_;
             int j0 = (ii/nxg_) % nyg_;
             int k0 = ii/(nxg_*nyg_);
@@ -2041,12 +2125,11 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
       // Dump kinetic energy density if specified
       if(dump_vars & DumpVar::KEDensity) {
         auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-        auto momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", sp->np);
         Kokkos::parallel_for("Collect KE density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
           int   ii  = sp->k_p_i_h(i);
           ke_view(i) = hydro_array->k_h_h(ii, hydro_var::ke);
         });
-        hid_t dataset_ke_id = H5Dcreate(group_id, "ke", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        hid_t dataset_ke_id = H5Dcreate(group_id, "ke_dens", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
         status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
         H5Dclose(dataset_ke_id);
       }
@@ -2087,6 +2170,35 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
         H5Dclose(dataset_tyz_id);
         H5Dclose(dataset_tzx_id);
         H5Dclose(dataset_txy_id);
+      }
+
+      // Dump kinetic energy of particle if specified
+      if(dump_vars & DumpVar::ParticleKE) {
+        auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
+        Kokkos::parallel_for("Calculate KE", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+          float dx0 = sp->k_p_h(i, particle_var::dx);
+          float dy0 = sp->k_p_h(i, particle_var::dy);
+          float dz0 = sp->k_p_h(i, particle_var::dz);
+          int   ii  = sp->k_p_i_h(i);
+          float ux0 = sp->k_p_h(i, particle_var::ux);
+          float uy0 = sp->k_p_h(i, particle_var::uy);
+          float uz0 = sp->k_p_h(i, particle_var::uz);
+          float w0  = sp->k_p_h(i, particle_var::w);
+          float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+          float msp = sp->m;
+          float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+                                 dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+          float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+                                 dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+          float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+                                 dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+          v0 = v0*v0 + v1*v1 + v2*v2;
+          v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+          ke_view(i) = v0;
+        });
+        hid_t dataset_ke_id = H5Dcreate(group_id, "ke", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
+        H5Dclose(dataset_ke_id);
       }
 
       // Dump int annotations
@@ -2132,7 +2244,6 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
     }
     status = H5Gclose(group_id);
     status = H5Fclose(file_id);
-//printf("Wrote %d %s particles\n", sp->nparticles_buffered+sp->np, sp->name);
 
     // Clear buffers
     sp->nparticles_buffered = 0;
@@ -2443,7 +2554,7 @@ void vpic_simulation::dump_tracers_hdf5(const char* sp_name,
       int   ii  = sp->k_p_i_h(i);
       ke_view(i) = hydro_array->k_h_h(ii, hydro_var::ke);
     });
-    hid_t dataset_ke_id = H5Dcreate(group_id, "ke", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    hid_t dataset_ke_id = H5Dcreate(group_id, "ke_dens", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
     H5Dclose(dataset_ke_id);
   }
@@ -2484,6 +2595,35 @@ void vpic_simulation::dump_tracers_hdf5(const char* sp_name,
     H5Dclose(dataset_tyz_id);
     H5Dclose(dataset_tzx_id);
     H5Dclose(dataset_txy_id);
+  }
+
+  // Dump kinetic energy of particle if specified
+  if(dump_vars & DumpVar::ParticleKE) {
+    auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
+    Kokkos::parallel_for("Calculate KE", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+      float dx0 = sp->k_p_h(i, particle_var::dx);
+      float dy0 = sp->k_p_h(i, particle_var::dy);
+      float dz0 = sp->k_p_h(i, particle_var::dz);
+      int   ii  = sp->k_p_i_h(i);
+      float ux0 = sp->k_p_h(i, particle_var::ux);
+      float uy0 = sp->k_p_h(i, particle_var::uy);
+      float uz0 = sp->k_p_h(i, particle_var::uz);
+      float w0  = sp->k_p_h(i, particle_var::w);
+      float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+      float msp = sp->m;
+      float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+                             dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+      float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+                             dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+      float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+                             dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+      v0 = v0*v0 + v1*v1 + v2*v2;
+      v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+      ke_view(i) = v0;
+    });
+    hid_t dataset_ke_id = H5Dcreate(group_id, "ke", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
+    H5Dclose(dataset_ke_id);
   }
 
   // Dump int annotations

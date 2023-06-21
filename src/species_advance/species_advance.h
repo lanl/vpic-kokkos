@@ -206,18 +206,21 @@ template<typename ExecSpace>
 class annotations_t {
 public:
   using memory_space = typename ExecSpace::memory_space;
-  Kokkos::View<int**, Kokkos::LayoutLeft, memory_space> i32;
-  Kokkos::View<int64_t**, Kokkos::LayoutLeft, memory_space> i64;
-  Kokkos::View<float**, Kokkos::LayoutLeft, memory_space> f32;
-  Kokkos::View<double**, Kokkos::LayoutLeft, memory_space> f64;
+  template <class T>
+  using AnnotationView = Kokkos::View<T**, Kokkos::LayoutLeft, memory_space>;
+
+  AnnotationView<int>     i32;
+  AnnotationView<int64_t> i64;
+  AnnotationView<float>   f32;
+  AnnotationView<double>  f64;
 
   annotations_t() {}
 
-  annotations_t(int np, annotation_vars_t sizes) {
-    i32 = Kokkos::View<int**, Kokkos::LayoutLeft, memory_space>("Int annotations", np, sizes.i32_vars.size());
-    i64 = Kokkos::View<int64_t**, Kokkos::LayoutLeft, memory_space>("Int64 annotations", np, sizes.i64_vars.size());
-    f32 = Kokkos::View<float**, Kokkos::LayoutLeft, memory_space>("Float annotations", np, sizes.f32_vars.size());
-    f64 = Kokkos::View<double**, Kokkos::LayoutLeft, memory_space>("Double annotations", np, sizes.f64_vars.size());
+  annotations_t(int np, annotation_vars_t vars) {
+    i32 = AnnotationView<int>("Int annotations",       np, vars.i32_vars.size());
+    i64 = AnnotationView<int64_t>("Int64 annotations", np, vars.i64_vars.size());
+    f32 = AnnotationView<float>("Float annotations",   np, vars.f32_vars.size());
+    f64 = AnnotationView<double>("Double annotations", np, vars.f64_vars.size());
     Kokkos::deep_copy(i32, 0);
     Kokkos::deep_copy(i64, 0);
     Kokkos::deep_copy(f32, 0.0);
@@ -233,6 +236,38 @@ public:
     Kokkos::deep_copy(i64, 0);
     Kokkos::deep_copy(f32, 0.0);
     Kokkos::deep_copy(f64, 0.0);
+  }
+
+  template<typename FromExecSpace>
+  void copy_from(annotations_t<FromExecSpace>& from) {
+    Kokkos::deep_copy(i32, from.i32);
+    Kokkos::deep_copy(i64, from.i64);
+    Kokkos::deep_copy(f32, from.f32);
+    Kokkos::deep_copy(f64, from.f64);
+  }
+
+  template<typename FromExecSpace>
+  void copy_from(annotations_t<FromExecSpace>& from, int nparticles) {
+    if(i32.extent(1) > 0) {
+      auto from_subview = Kokkos::subview(from.i32, std::make_pair(0, nparticles), Kokkos::ALL);
+      auto to_subview   = Kokkos::subview(i32, std::make_pair(0, nparticles), Kokkos::ALL);
+      Kokkos::deep_copy(to_subview, from_subview);
+    }
+    if(i64.extent(1) > 0) {
+      auto from_subview = Kokkos::subview(from.i64, std::make_pair(0, nparticles), Kokkos::ALL);
+      auto to_subview   = Kokkos::subview(i64, std::make_pair(0, nparticles), Kokkos::ALL);
+      Kokkos::deep_copy(to_subview, from_subview);
+    }
+    if(f32.extent(1) > 0) {
+      auto from_subview = Kokkos::subview(from.f32, std::make_pair(0, nparticles), Kokkos::ALL);
+      auto to_subview   = Kokkos::subview(f32, std::make_pair(0, nparticles), Kokkos::ALL);
+      Kokkos::deep_copy(to_subview, from_subview);
+    }
+    if(f64.extent(1) > 0) {
+      auto from_subview = Kokkos::subview(from.f64, std::make_pair(0, nparticles), Kokkos::ALL);
+      auto to_subview   = Kokkos::subview(f64, std::make_pair(0, nparticles), Kokkos::ALL);
+      Kokkos::deep_copy(to_subview, from_subview);
+    }
   }
 
   template<typename AnnotationType>
@@ -262,8 +297,9 @@ public:
       return f32(particle_index, var);
     } else if (std::is_same<AnnotationType, double>::value) {
       return f64(particle_index, var);
+    } else {
+      printf( "Tried getting value for non existent annotation!\n" );
     }
-    printf( "Tried getting value for non existent annotation!\n" );
     return 0;
   }
 };
@@ -373,6 +409,7 @@ class species_t {
         Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror momentum_dens_io_buffer;
         Kokkos::View<float*>::HostMirror                        ke_dens_io_buffer;
         Kokkos::View<float*[6], Kokkos::LayoutLeft>::HostMirror stress_tensor_io_buffer;
+        Kokkos::View<float*>::HostMirror                        particle_ke_io_buffer;
         annotations_t<Kokkos::DefaultHostExecutionSpace>        annotations_io_buffer;
 #endif
 
@@ -859,7 +896,6 @@ move_p_kokkos(
 
   q = qsp*p_w;
 
-    //printf("in move %d \n", pi);
 
   for(;;) {
     int ii = pii;
@@ -871,10 +907,6 @@ move_p_kokkos(
     s_dispx = pm->dispx;
     s_dispy = pm->dispy;
     s_dispz = pm->dispz;
-
-    //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
-
-    //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
 
     s_dir[0] = (s_dispx>0) ? 1 : -1;
     s_dir[1] = (s_dispy>0) ? 1 : -1;
@@ -984,14 +1016,12 @@ move_p_kokkos(
     pm->dispy -= s_dispy;
     pm->dispz -= s_dispz;
 
-    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset
     p_dx += s_dispx+s_dispx;
     p_dy += s_dispy+s_dispy;
     p_dz += s_dispz+s_dispz;
 
     // If an end streak, return success (should be ~50% of the time)
-    //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
 
     if( axis==3 ) break;
 
@@ -1027,9 +1057,9 @@ move_p_kokkos(
       //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
       //k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
       // TODO: replace this, it's horrible
-      (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
 
-
+      float* disp = static_cast<float*>(&(pm->dispx));
+      disp[axis] = -disp[axis];
       continue;
     }
 
@@ -1039,7 +1069,7 @@ move_p_kokkos(
       // displacement in the particle mover.
       pii = 8*pii + face;
       return 1; // Return "mover still in use"
-      }
+    }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.

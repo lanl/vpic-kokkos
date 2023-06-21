@@ -15,7 +15,7 @@
   #undef VPIC_ENABLE_VECTORIZATION
   #undef VPIC_ENABLE_ACCUMULATORS
   #ifdef USE_GPU
-    #if (!defined(KOKKOS_ENABLE_CUDA) && !defined(KOKKOS_ENABLE_HIP))
+    #if (!defined(KOKKOS_ENABLE_CUDA) || !defined(KOKKOS_ENABLE_HIP))
       #define VPIC_ENABLE_HIERARCHICAL
       #define VPIC_ENABLE_TEAM_REDUCTION
     #endif
@@ -55,6 +55,9 @@
       #define LEAGUE_SIZE 4096
       #define TEAM_SIZE 512
     #endif
+  #elif defined( KOKKOS_ARCH_VEGA90A )
+    #define LEAGUE_SIZE 131072
+    #define TEAM_SIZE 256
   #else
     #define LEAGUE_SIZE ((g->nv)/4)
     #define TEAM_SIZE Kokkos::AUTO

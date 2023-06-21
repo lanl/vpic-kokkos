@@ -73,15 +73,16 @@ const uint32_t stress_offdiagonal	(1<<11 | 1<<12 | 1<<13);
 */
 
 enum DumpVar {
-  GlobalPos = (1<<0 | 1<<1 | 1<<2),
-  Efield = (1<<3 | 1<<4 | 1<<5),
-  Bfield = (1<<6 | 1<<7 | 1<<8),
-  CurrentDensity = (1<<9 | 1<<10 | 1<<11),
-  ChargeDensity = (1<<12),
+  GlobalPos       = (1<<0 | 1<<1 | 1<<2),
+  Efield          = (1<<3 | 1<<4 | 1<<5),
+  Bfield          = (1<<6 | 1<<7 | 1<<8),
+  CurrentDensity  = (1<<9 | 1<<10 | 1<<11),
+  ChargeDensity   = (1<<12),
   MomentumDensity = (1<<13 | 1<<14 | 1<<15),
-  KEDensity = (1<<16),
-  StressTensor = (1<<17 | 1<<18 | 1<<19 | 1<<20 | 1<<21 | 1<<22),
-  All = 0xFFFFFFFF
+  KEDensity       = (1<<16),
+  StressTensor    = (1<<17 | 1<<18 | 1<<19 | 1<<20 | 1<<21 | 1<<22),
+  ParticleKE      = (1<<23),
+  All             = 0xFFFFFFFF
 };
 
 const size_t total_hydro_variables(14);
@@ -593,6 +594,9 @@ public:
                         const int num_particles_buffer = -1,
                         const float over_alloc_factor = 1.1,
                         annotation_vars_t annotations = annotation_vars_t()) {
+    const int max_local_np_alloc = static_cast<int>(max_local_np * over_alloc_factor);
+    const int max_local_nm_alloc = static_cast<int>(max_local_nm * over_alloc_factor);
+
     // Create tracer species based on the original species
     species_t* tracers = species( name, 
                                   q, m, 
@@ -605,7 +609,10 @@ public:
 
     // Add annotations for global tracer ID
     annotations.add_annotation<int64_t>(std::string("TracerID"));
-    tracers->init_annotations(max_local_np, max_local_nm, annotations);
+    tracers->init_annotations(max_local_np_alloc, max_local_nm_alloc, annotations);
+
+    // Set tracer type to move by default
+    tracers->tracer_type = TracerType::Move;
 
     // Initialize IO buffers
     int buffer_size = num_particles_buffer;
@@ -662,6 +669,9 @@ public:
     // Add annotations for global tracer ID
     annotations.add_annotation<int64_t>(std::string("TracerID"));
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
+
+    // Set tracer type to move by default
+    tracers->tracer_type = TracerType::Move;
 
     // Initialize IO buffers
     int buffer_size = num_particles_buffer;
