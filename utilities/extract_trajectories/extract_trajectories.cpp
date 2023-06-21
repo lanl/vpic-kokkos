@@ -30,13 +30,43 @@ bool timestep_sort(std::string i, std::string j) {
   return (i_int < j_int);
 }
 
+template <typename Out>
+void split(const std::string &s, char delim, Out result) {
+  std::istringstream iss(s);
+  std::string item;
+  while(std::getline(iss, item, delim)) {
+    if(!item.empty())
+      *result++ = item;
+  }
+}
+
+std::vector<std::string> split(const std::string &s, char delip) {
+  std::vector<std::string> elems;
+  split(s, delip, std::back_inserter(elems));
+  return elems;
+}
+
 int main(int argc, char**argv) {
   MPI_Init(&argc, &argv);
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
-  const char* fname = argv[1];
+  int arg_offset = 0;
+  bool select = false;
+  std::set<int64_t> selected_tracers;
+  auto select_arg = std::find(argv, argv+argc, std::string("--select-tracers"));
+  if(select_arg != argv+argc) {
+    select = true;
+    arg_offset += 2;
+    std::string tracers(*(select_arg+1));
+    std::vector<std::string> selected_ids = split(tracers, ',');
+    for(size_t i=0; i<selected_ids.size(); i++) {
+      selected_tracers.insert(std::strtoll(selected_ids[i].c_str(), NULL, 10));
+    }
+  }
+
+  const char* fname = argv[1+arg_offset];
 
   hid_t file_id, access_id;
 
@@ -257,13 +287,17 @@ int main(int argc, char**argv) {
     }
   }
 
+  auto tracer_set = all_tracers_set;
+  if(select)
+    tracer_set = selected_tracers;
+
   // Iterate through all tracers
-  for(auto it=all_tracers_set.begin(); it!=all_tracers_set.end(); it++) {
+  for(auto it=tracer_set.begin(); it!=tracer_set.end(); it++) {
     int64_t id = *it;
     // Create trajectory file name
     std::string particle_fname = std::string(fname);
     particle_fname.erase(particle_fname.end()-3, particle_fname.end());
-    particle_fname = particle_fname + "." + std::to_string(id) + ".h5";
+    particle_fname = particle_fname + "." + std::to_string(id) + ".traj.h5";
     // Split communicator
     MPI_Comm stepcomm;
     MPI_Comm_split(MPI_COMM_WORLD, ntimesteps[id]>0, comm_rank, &stepcomm);
