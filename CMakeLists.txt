@@ -116,6 +116,11 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
   set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 endif("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
 
+# Add Release flags to VPIC_CXX_FLAGS
+if("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+  set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
+endif("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+
 string(REPLACE ";" " " string_libraries "${MPI_CXX_LIBRARIES} ${MPI_C_LIBRARIES}")
 set(VPIC_CXX_LIBRARIES "${string_libraries}")
 
@@ -286,6 +291,25 @@ endif(ENABLE_OPENSSL)
 find_package(Threads REQUIRED)
 
 #------------------------------------------------------------------------------#
+# HDF5
+#------------------------------------------------------------------------------#
+if(VPIC_ENABLE_HDF5)
+  # Enable HDF5, and the relevant defines
+  find_package(HDF5 REQUIRED)
+  if(NOT HDF5_IS_PARALLEL)
+    message(FATAL_ERROR "HDF5 Parallel support is required: ${HDF5_IS_PARALLEL}")
+  endif()
+  add_definitions(-DVPIC_ENABLE_HDF5)
+  include_directories(${HDF5_INCLUDE_DIR})
+
+  get_target_property(HDF5_INCLUDE_DIRS HDF5::HDF5 INTERFACE_INCLUDE_DIRECTORIES)
+  string(REPLACE "include" "lib" HDF5_LIB_DIRECTORY "${HDF5_INCLUDE_DIRS}")
+  
+  set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} -L${HDF5_LIB_DIRECTORY} -lhdf5")
+  set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} -I${HDF5_INCLUDE_DIRS}")
+endif(VPIC_ENABLE_HDF5)
+
+#------------------------------------------------------------------------------#
 # Act on build options set in project.cmake
 #------------------------------------------------------------------------------#
 
@@ -350,81 +374,12 @@ if(ENABLE_OPENSSL)
   add_definitions(-DENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
 
-set(EXTERNAL_INCLUDES_FILE ${PROJECT_BINARY_DIR}/external_includes)
-set(EXTERNAL_LIBRARIES_FILE ${PROJECT_BINARY_DIR}/external_libraries)
-set(EXTERNAL_INC_STR "" )
-set(EXTERNAL_LIB_STR "" )
-
-#------------------------------------------------------------------------------#
-# HDF5
-#------------------------------------------------------------------------------#
-if(VPIC_ENABLE_HDF5)
-  # Enable HDF5, and the relevant defines
-  find_package(HDF5 REQUIRED)
-  if(NOT HDF5_IS_PARALLEL)
-    message(FATAL_ERROR "HDF5 Parallel support is required: ${HDF5_IS_PARALLEL}")
-  endif()
-  add_definitions(-DVPIC_ENABLE_HDF5)
-#  string(REPLACE ";" " " string_libraries "${HDF5_C_LIBRARIES}")
-  include_directories(${HDF5_INCLUDE_DIR})
-
-  get_target_property(HDF5_INCLUDE_DIRS HDF5::HDF5 INTERFACE_INCLUDE_DIRECTORIES)
-  
-  set(HDF5_LIBS "hdf5")
-  string(REPLACE " " ";" TEST_LIST ${HDF5_LIBS})
-  foreach(lib ${TEST_LIST})
-    list(APPEND TEST_LIST_TEMP "-l${lib}")
-  endforeach()
-  set(TEST_LIST ${TEST_LIST_TEMP})
-  string(REPLACE ";" " " HDF5_LIB_STR "${TEST_LIST}")
-
-  set(TEST_LIST "")
-  set(TEST_LIST_TEMP "")
-  string(REPLACE " " ";" TEST_LIST ${HDF5_INCLUDE_DIRS})
-  foreach(lib ${TEST_LIST})
-    list(APPEND TEST_LIST_TEMP "-I${lib}")
-  endforeach()
-  set(TEST_LIST ${TEST_LIST_TEMP})
-  string(REPLACE ";" " " HDF5_INC_STR "${TEST_LIST}")
-
-  string(REPLACE "include" "lib" HDF5_LIB_DIRECTORY "${HDF5_INCLUDE_DIRS}")
-#  message(${HDF5_LIB_DIR})
-
-  set(TEST_LIST "")
-  set(TEST_LIST_TEMP "")
-  string(REPLACE " " ";" TEST_LIST ${HDF5_LIB_DIRECTORY})
-  foreach(lib ${TEST_LIST})
-    list(APPEND TEST_LIST_TEMP "-L${lib}")
-  endforeach()
-  set(TEST_LIST ${TEST_LIST_TEMP})
-  string(REPLACE ";" " " HDF5_LIB_DIR "${TEST_LIST}")
-
-  set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${HDF_LIB_STR}")
-  
-  # For an "external" build these will be the same, but for an internal we need to gather both
-#  file(GENERATE OUTPUT ${EXTERNAL_INCLUDES_FILE} CONTENT "${HDF5_INC_STR}")
-#  file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "${HDF5_LIB_DIR} ${HDF5_LIB_STR}")
-  set(EXTERNAL_INC_STR "${EXTERNAL_INC_STR} ${HDF5_INC_STR}")
-  set(EXTERNAL_LIB_STR "${EXTERNAL_LIB_STR} ${HDF5_LIB_DIR} ${HDF5_LIB_STR}")
-endif(VPIC_ENABLE_HDF5)
-
-file(GENERATE OUTPUT ${EXTERNAL_INCLUDES_FILE} CONTENT "${EXTERNAL_INC_STR}")
-file(GENERATE OUTPUT ${EXTERNAL_LIBRARIES_FILE} CONTENT "${EXTERNAL_LIB_STR}")
-
 #------------------------------------------------------------------------------#
 # Add compile definitions
 #------------------------------------------------------------------------------#
-set(EXTERNAL_DEFINITIONS_FILE ${PROJECT_BINARY_DIR}/external_definitions)
+#set(EXTERNAL_DEFINITIONS_FILE ${PROJECT_BINARY_DIR}/external_definitions)
 get_directory_property( DirDefs DIRECTORY ${CMAKE_SOURCE_DIR} COMPILE_DEFINITIONS )
-#foreach( d ${DirDefs} )
-#  message( STATUS "Found Define: " ${d} )
-#endforeach()
-#message( STATUS "DirDefs: " ${DirDefs} )
-foreach(def ${DirDefs})
-  list(APPEND DEF_LIST_TEMP "-D${def}")
-endforeach()
-string(REPLACE ";" " " DEF_STR "${DEF_LIST_TEMP}")
-file(GENERATE OUTPUT ${EXTERNAL_DEFINITIONS_FILE} CONTENT ${DEF_STR})
+string(REPLACE ";" " -D" DirDefs "-D${DirDefs}")
 
 #------------------------------------------------------------------------------#
 # Output log variables
@@ -567,6 +522,12 @@ if(USER_DECKS)
     build_a_vpic(${NAME} ${DECK})
   endforeach()
 endif()
+
+#string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)
+#message("Build mode flags ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
+#message("Debug build flags ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
+#message("Release build flags ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
+#message("RelWithDebInfo build flags ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 
 #------------------------------------------------------------------------------#
 # Add VPIC integrated test mechanism
