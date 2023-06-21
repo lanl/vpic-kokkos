@@ -606,13 +606,9 @@ move_p_kokkos(
       // momentum and remaining displacement and keep moving the
       // particle.
       k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
-
-      // TODO: make this safer
-      //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
-      //k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
-      // TODO: replace this, it's horrible
-      (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
-
+      // Clearer and works with AMD GPUs
+      float* disp = static_cast<float*>(&(pm->dispx));
+      disp[axis] = -disp[axis];
 
       continue;
     }
@@ -834,13 +830,9 @@ move_p_kokkos_host_serial(
       // momentum and remaining displacement and keep moving the
       // particle.
       k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
-
-      // TODO: make this safer
-      //(&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
-      //k_local_particle_movers(0, particle_mover_var::dispx + axis) = -k_local_particle_movers(0, particle_mover_var::dispx + axis);
-      // TODO: replace this, it's horrible
-      (&(pm->dispx))[axis] = -(&(pm->dispx))[axis];
-
+      // Clearer and works with AMD GPUs
+      float* disp = static_cast<float*>(&(pm->dispx));
+      disp[axis] = -disp[axis];
 
       continue;
     }

@@ -110,6 +110,11 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
   set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 endif("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
 
+# Add Release flags to VPIC_CXX_FLAGS
+if("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+  set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
+endif("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+
 string(REPLACE ";" " " string_libraries "${MPI_CXX_LIBRARIES} ${MPI_C_LIBRARIES}")
 set(VPIC_CXX_LIBRARIES "${string_libraries}")
 
