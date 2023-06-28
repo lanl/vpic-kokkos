@@ -1297,7 +1297,7 @@ begin_field_injection {
         auto MASK =( R2<=pow(mask*width,2) ? 1 : 0 );
         //kfield(1+sy*iy+sz*iz, field_var::ey) += (prefactor * cos(PHASE) * exp(-R2/(width*width)) * MASK * pulse_shape_factor);
 	if ( global->pulse_shape==0 ){
-	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * sin(PHASE));
+	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t));
 	} else if (global->pulse_shape==1 ){
 	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t + M_PI/4)) * exp(-(t-global->pulse_mean)*(t-global->pulse_mean)/(2.*global->pulse_sigma*global->pulse_sigma));
 	}

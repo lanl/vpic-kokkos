@@ -63,7 +63,6 @@ begin_globals {
 };
 
 
-
 void vpic_simulation::user_diagnostics() {}
 
 #define VAC 5e-6*0
@@ -753,8 +752,7 @@ begin_field_injection {
         auto R2   =( DY*DY + DZ*DZ );
         auto PHASE=( omega_0*t + h*R2/(width*width) );
         auto MASK =( R2<=pow(mask*width,2) ? 1 : 0 );
-        //kfield(1+sy*iy+sz*iz, field_var::ey) += (prefactor * cos(PHASE) * exp(-R2/(width*width)) * MASK * pulse_shape_factor);
-	kfield(1+sy*iy+sz*iz, field_var::ey) = (prefactor * sin(PHASE));
+	kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(omega_0*t));
     });
 
   }
@@ -762,22 +760,15 @@ begin_field_injection {
 } // begin_field_injection
 
 begin_particle_injection {
-
   // No particle injection for this simulation
-
 }
 
 begin_current_injection {
-
   // No current injection for this simulation
-
 }
 
-
 begin_particle_collisions{
-
   // No collisions for this simulation
-
 }
 
 TEST_CASE( "Check if field ionization agrees with analytic solution", "[average charge state]" )
@@ -805,13 +796,7 @@ TEST_CASE( "Check if field ionization agrees with analytic solution", "[average 
         }
     }
     
-
-    // Define the analytic result
-    double gamma_analytic = 2.55e12; // [s^-1] from cycle-averaged ADK model
-    gamma_analytic = gamma_analytic*dt_to_SI; // in terms of timestep not seconds (analytic slope)
-
-    
-    // Read data from the file
+    // Read vpic data from the file
     bool flag = 0;
     std::string filename = "Photoelectrons.txt";
     std::vector<DataPoint> data;
@@ -822,7 +807,6 @@ TEST_CASE( "Check if field ionization agrees with analytic solution", "[average 
             std::istringstream iss(line);
             std::string token;
             DataPoint point;
-
             // Split the line by commas and extract the x and y values
 	    std::getline(iss, token, ',');
             point.x = std::stod(token); // this is the timestep
@@ -831,27 +815,62 @@ TEST_CASE( "Check if field ionization agrees with analytic solution", "[average 
 	    std::getline(iss, token, ','); 
             float N_ions = std::stod(token); // number of photoelectrons/ions
 	    point.y = N_ions/N_0; // average charge state
-            data.push_back(point);
+	    // account for the shift the vpic data (due to the particle
+	    // location offset from the boundary edge) by ingnoring the zero ionization data
+	    if (point.y > 0){
+              data.push_back(point);
+	    }
         }
         inputFile.close();
-
-        // Fit a line to the data
-        double slope, intercept, stdErrorSlope, stdErrorIntercept,fitUncertainty;
-        fitLineToData(data, slope, intercept, stdErrorSlope, stdErrorIntercept,fitUncertainty);
-
-	// Check if the simulation agrees with the analytic result
-	flag = fitAgreement(data, gamma_analytic, 0, slope, intercept, fitUncertainty);
-
-        // Print the results
-	//std::cout << "Analytic equation: y = " << gamma_analytic << "x + " << 0 << std::endl; 
-        //std::cout << "Line equation: y = " << slope << "x + " << intercept << std::endl;
-	//std:: cout << "fitUncertainty: " << fitUncertainty << std::endl;
-	//std::cout << "flag: " << flag << std::endl;
-
-
     } else {
         std::cerr << "Failed to open the file: " << filename << std::endl;
     }
+    
+    // Read the analytic solution from the gold file
+    std::string gold_file_name = GOLD_FILE;
+    //std::string filename_analytic = "SMILIE_hydrogen_analytic.txt";
+    std::vector<DataPoint> data_analytic;
+    std::ifstream inputFile_analytic(gold_file_name);
+    if (inputFile_analytic.is_open()) {
+        std::string line;
+        while (std::getline(inputFile_analytic, line)) {
+            std::istringstream iss(line);
+            std::string token;
+            DataPoint point;
+
+            // Split the line by spaces and extract the variables
+	    std::getline(iss, token, ',');
+            point.x = std::stod(token); // this is the timestep
+            std::getline(iss, token, ',');
+            point.y = std::stod(token); // this is the initial number of atoms
+	    if (point.y > 0){
+              data_analytic.push_back(point);
+	    }
+        }
+        inputFile.close();
+    } else {
+        std::cerr << "Failed to open the file: " << gold_file_name << std::endl;
+    }
+
+    // Find residuals and calculate L2 error
+    // Loop over VPIC data as it was truncated, hence the analytic data is likely longer
+    double l2Error = 0.0;
+    int shorterSize = std::min(data.size(), data_analytic.size());
+    for (int i = 0; i < shorterSize; i++) {
+        double residual = data[i].y - data_analytic[i].y;
+        l2Error += residual * residual;
+    }
+    l2Error = std::sqrt(l2Error);
+
+    // Check if the test passes
+    // The value we are comparing to is based on past runs.
+    if (l2Error < 0.01) {
+      flag = 1;
+    }
+    std::cout << "L2 Error: " << l2Error << std::endl;
+
+
+
 
     REQUIRE(flag);
     
