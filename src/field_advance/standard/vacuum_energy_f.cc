@@ -153,7 +153,7 @@ struct field_reduce {
     }
 
     KOKKOS_INLINE_FUNCTION void
-    join(volatile value_type dst, const volatile value_type src) const {
+    join(value_type dst, const value_type src) const {
         for(size_type i = 0; i < 6; i++) {
             dst[i] += src[i];
         }
