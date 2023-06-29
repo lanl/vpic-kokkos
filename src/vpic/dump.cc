@@ -305,8 +305,6 @@ vpic_simulation::dump_particles_csv( const char *sp_name,
 #define tracer_z ((k0 + (dz0-1)*0.5) * grid->dz + grid->z0)
     // Write tracer data
     for(int32_t i=0; i<sp->np; i++) {
-//      if(i > sp->np-100) {
-//    for(int32_t i=0; i<100; i++) {
       float dx0 = sp->k_p_h(i, particle_var::dx);
       float dy0 = sp->k_p_h(i, particle_var::dy);
       float dz0 = sp->k_p_h(i, particle_var::dz);
@@ -393,8 +391,16 @@ vpic_simulation::dump_particles_csv( const char *sp_name,
       }
 #endif
       fileIO.print( "\n" );
-//    }
     }
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+    // If needed, copy weight back to particles for hydro quantities
+    if(sp->using_annotations && sp->tracer_type == TracerType::Copy) {
+      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      Kokkos::deep_copy(w_subview_h, 0.0);
+      Kokkos::deep_copy(w_subview_d, 0.0);
+    }
+#endif
 #undef nxg 
 #undef nyg 
 #undef nzg 
@@ -652,6 +658,15 @@ vpic_simulation::dump_tracers_buffered_csv( const char *sp_name,
       }
     }
     sp->nparticles_buffered += sp->np;     
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+    // If needed, copy weight back to particles for hydro quantities
+    if(sp->tracer_type == TracerType::Copy) {
+      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      Kokkos::deep_copy(w_subview_h, 0.0);
+      Kokkos::deep_copy(w_subview_d, 0.0);
+    }
+#endif
   } else { // Dump buffered tracers
     printf("Writing %d particles and %d buffered particles\n", sp->np, sp->nparticles_buffered);
     // Update the particles on the host only if they haven't been recently
@@ -910,6 +925,15 @@ vpic_simulation::dump_tracers_buffered_csv( const char *sp_name,
 #undef tracer_z 
 
     if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+    // If needed, reset weight to 0 for copied particles
+    if(sp->tracer_type == TracerType::Copy) {
+      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      Kokkos::deep_copy(w_subview_h, 0.0);
+      Kokkos::deep_copy(w_subview_d, 0.0);
+    }
+#endif
     sp->nparticles_buffered = 0;
     sp->np_per_ts_io_buffer.clear();
   }
@@ -1142,6 +1166,15 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
 #undef tracer_x 
 #undef tracer_y 
 #undef tracer_z 
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+    // If needed, reset weight to 0 for copied particles
+    if(sp->tracer_type == TracerType::Copy) {
+      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      Kokkos::deep_copy(w_subview_h, 0.0);
+      Kokkos::deep_copy(w_subview_d, 0.0);
+    }
+#endif
 
     if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
 }
@@ -1589,6 +1622,13 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
       }
     });
     sp->nparticles_buffered += sp->np;     
+    // If needed, reset weight to 0 for copied particles
+    if(sp->tracer_type == TracerType::Copy) {
+      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      Kokkos::deep_copy(w_subview_h, 0.0);
+      Kokkos::deep_copy(w_subview_d, 0.0);
+    }
   } else { // Dump buffered tracers
     // Update the particles on the host only if they haven't been recently
     if (step() > sp->last_copied)
@@ -2245,6 +2285,14 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
     status = H5Gclose(group_id);
     status = H5Fclose(file_id);
 
+    // If needed, reset weight to 0 for copied particles
+    if(sp->tracer_type == TracerType::Copy) {
+      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
+      Kokkos::deep_copy(w_subview_h, 0.0);
+      Kokkos::deep_copy(w_subview_d, 0.0);
+    }
+
     // Clear buffers
     sp->nparticles_buffered = 0;
     sp->np_per_ts_io_buffer.clear();
@@ -2653,6 +2701,14 @@ void vpic_simulation::dump_tracers_hdf5(const char* sp_name,
     hid_t dataset_f64_annote_id = H5Dcreate(group_id, sp->annotation_vars.f64_vars[j].c_str(), H5T_IEEE_F64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     status = H5Dwrite(dataset_f64_annote_id, H5T_IEEE_F64LE, memspace_id, dataspace_id, H5P_DEFAULT, f64_subview.data());
     H5Dclose(dataset_f64_annote_id);
+  }
+
+  // If needed, reset weight to 0 for copied particles
+  if(sp->tracer_type == TracerType::Copy) {
+    auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
+    auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
+    Kokkos::deep_copy(w_subview_h, 0.0);
+    Kokkos::deep_copy(w_subview_d, 0.0);
   }
 
   // Close 

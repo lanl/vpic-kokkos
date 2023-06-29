@@ -280,7 +280,8 @@ boundary_p_kokkos(
             {
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
                 size_t injector_offset = n_send[face] * (sizeof(particle_injector_t) + max_annotation_size);
-                pi = (particle_injector_t*)((uint8_t*)(pi_send[face]) + injector_offset);
+                uint8_t* pi_send_face = reinterpret_cast<uint8_t*>(pi_send[face]);
+                pi = reinterpret_cast<particle_injector_t*>(pi_send_face + injector_offset);
                 n_send[face]++;
 #else
                 pi = &pi_send[face][n_send[face]++];
@@ -313,23 +314,23 @@ boundary_p_kokkos(
 //printf("Rank %d: Sending particle ID %ld\n", world_rank, pi->i);
 #if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
                 // Load int annotations
-                int* int_offset = (int*)((uint8_t*)(pi) + sizeof(particle_injector_t));
+                int* int_offset = reinterpret_cast<int*>(reinterpret_cast<uint8_t*>(pi) + sizeof(particle_injector_t));
                 for(unsigned int j=0; j<var_counts.i32_vars.size(); j++) {
                   int_offset[j] = sp->annotations_copy_h.get<int>(copy_index, j);
                 }
                 // Load int64_t annotations
-                int64_t* int64_offset = (int64_t*)((uint8_t*)(int_offset) + var_counts.i32_vars.size()*sizeof(int));
+                int64_t* int64_offset = reinterpret_cast<int64_t*>(reinterpret_cast<uint8_t*>(int_offset) + var_counts.i32_vars.size()*sizeof(int));
                 for(unsigned int j=0; j<var_counts.i64_vars.size(); j++) {
                   int64_offset[j] = sp->annotations_copy_h.get<int64_t>(copy_index, j);
 //printf("Rank %d: Sending tracer ID %ld\n", world_rank, int64_offset[j]);
                 }
                 // Load float annnotations
-                float* float_offset = (float*)((uint8_t*)(int64_offset) + var_counts.i64_vars.size()*sizeof(int64_t));
+                float* float_offset = reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(int64_offset) + var_counts.i64_vars.size()*sizeof(int64_t));
                 for(unsigned int j=0; j<var_counts.f32_vars.size(); j++) {
                   float_offset[j] = sp->annotations_copy_h.get<float>(copy_index, j);
                 }
                 // Load double annnotations
-                double* double_offset = (double*)((uint8_t*)(float_offset) + var_counts.f32_vars.size()*sizeof(float));
+                double* double_offset = reinterpret_cast<double*>(reinterpret_cast<uint8_t*>(float_offset) + var_counts.f32_vars.size()*sizeof(float));
                 for(unsigned int j=0; j<var_counts.f64_vars.size(); j++) {
                   double_offset[j] = sp->annotations_copy_h.get<double>(copy_index, j);
                 }

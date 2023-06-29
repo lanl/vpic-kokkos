@@ -682,17 +682,21 @@ class species_t {
                 p[np].w = 0.0f;
               } else if(tracer_type == TracerType::Move) {
                 // Move last particle over to fill in gap
-                parent_species->k_p_h(step, particle_var::dx) = parent_species->k_p_h(parent_species->np-1, particle_var::dx); 
-                parent_species->k_p_h(step, particle_var::dy) = parent_species->k_p_h(parent_species->np-1, particle_var::dy); 
-                parent_species->k_p_h(step, particle_var::dz) = parent_species->k_p_h(parent_species->np-1, particle_var::dz); 
-                parent_species->k_p_h(step, particle_var::ux) = parent_species->k_p_h(parent_species->np-1, particle_var::ux); 
-                parent_species->k_p_h(step, particle_var::uy) = parent_species->k_p_h(parent_species->np-1, particle_var::uy); 
-                parent_species->k_p_h(step, particle_var::uz) = parent_species->k_p_h(parent_species->np-1, particle_var::uz); 
-                parent_species->k_p_h(step, particle_var::w)  = parent_species->k_p_h(parent_species->np-1, particle_var::w); 
-                parent_species->k_p_i_h(step)                 = parent_species->k_p_i_h(parent_species->np - 1); 
-                parent_species->p[step] = parent_species->p[parent_species->np-1]; // FIXME remove legacy particles
+                // TODO This if statement ensures that order is preserved when copying an entire species. 
+                // Only needed for accuracy verification, otherwise it is fine to copy them in any order.
+                if(skip != 1.0) { 
+                  parent_species->k_p_h(step, particle_var::dx) = parent_species->k_p_h(parent_species->np-1, particle_var::dx); 
+                  parent_species->k_p_h(step, particle_var::dy) = parent_species->k_p_h(parent_species->np-1, particle_var::dy); 
+                  parent_species->k_p_h(step, particle_var::dz) = parent_species->k_p_h(parent_species->np-1, particle_var::dz); 
+                  parent_species->k_p_h(step, particle_var::ux) = parent_species->k_p_h(parent_species->np-1, particle_var::ux); 
+                  parent_species->k_p_h(step, particle_var::uy) = parent_species->k_p_h(parent_species->np-1, particle_var::uy); 
+                  parent_species->k_p_h(step, particle_var::uz) = parent_species->k_p_h(parent_species->np-1, particle_var::uz); 
+                  parent_species->k_p_h(step, particle_var::w)  = parent_species->k_p_h(parent_species->np-1, particle_var::w); 
+                  parent_species->k_p_i_h(step)                 = parent_species->k_p_i_h(parent_species->np - 1); 
+                  parent_species->p[step] = parent_species->p[parent_species->np-1]; // FIXME remove legacy particles
+                  step -= 1;
+                }
                 parent_species->np -= 1; // Decrease number of particles in parent species
-                step -= 1;
               } else {
                 ERROR(( "Invalid TracerType: %d", tracer_type ));
               } 

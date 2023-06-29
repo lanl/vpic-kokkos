@@ -835,7 +835,7 @@ public:
                                       const float over_alloc_factor = 1.1,
                                       annotation_vars_t annotations = annotation_vars_t()) {
     // Check if input percentage is valid
-    if((percentage <= 0.0) || (percentage >= 100.0))
+    if((percentage < 0.0) || (percentage > 100.0))
       ERROR(( "Percentage (%f) is not in [0,100]", percentage));
     
     int ntracers = static_cast<float>(original_species->np) * (percentage/100.0);
