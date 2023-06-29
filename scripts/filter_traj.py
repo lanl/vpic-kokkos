@@ -37,6 +37,7 @@ def natural_sort_key(s):
 # Read in args
 parser = argparse.ArgumentParser(description='Filter trajectories')
 parser.add_argument('filename', metavar='filename', type=str, nargs=1, help='Input file')
+parser.add_argument('N', type=int, nargs=1, help='Number of particles to select')
 args = parser.parse_args()
 
 filename = args.filename[0]
@@ -48,8 +49,9 @@ tracer_data = h5py.File(filename, 'r')
 data_dict = extract_quantity(tracer_data)
 
 # Filter tracers
-selected_entries = select_trajectories(data_dict, 10)
+selected_entries = select_trajectories(data_dict, args.N[0])
 
 # Print out selected tracers
-for entry in selected_entries[-10:]:
+print("TracerID", "Energy")
+for entry in selected_entries[-args.N[0]:]:
   print(entry, data_dict[entry])
