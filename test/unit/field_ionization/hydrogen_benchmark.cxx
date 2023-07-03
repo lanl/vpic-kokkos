@@ -9,8 +9,6 @@
 #include "src/species_advance/species_advance.h"
 #include "src/vpic/vpic.h"
 
-#include "linear_regression.cpp"
-
 begin_globals {
   double emax;                   // E0 of the laser
   double omega_0;                // w0/wpe
@@ -773,6 +771,11 @@ begin_particle_collisions{
 
 TEST_CASE( "Check if field ionization agrees with analytic solution", "[average charge state]" )
 {
+    // Structure to hold the data points
+    struct DataPoint {
+      double x;
+      double y;
+    };
 
     // Init and run sim
     vpic_simulation simulation = vpic_simulation();
@@ -825,6 +828,8 @@ TEST_CASE( "Check if field ionization agrees with analytic solution", "[average 
     } else {
         std::cerr << "Failed to open the file: " << filename << std::endl;
     }
+
+
     
     // Read the analytic solution from the gold file
     std::string gold_file_name = GOLD_FILE;
@@ -868,8 +873,6 @@ TEST_CASE( "Check if field ionization agrees with analytic solution", "[average 
       flag = 1;
     }
     std::cout << "L2 Error: " << l2Error << std::endl;
-
-
 
 
     REQUIRE(flag);

@@ -832,9 +832,9 @@ advance_p_kokkos_unified(
           } // if ionization event occured
 
 
-
-
-           if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 4 == 0){
+	  // FIXME: This needs to be replaced with a calulation on the hydro data
+        #ifdef CARBON_benchmark_flag
+           if int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 4 == 0){
 	     // N Ionizations: Open file, write value, close file
 	     char gn [100];
 	     snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt",timestep);
@@ -849,7 +849,7 @@ advance_p_kokkos_unified(
 	     outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << "," << sp->name << endl;
              outfile1.close();
 	   }
-
+        #endif // CARBON_benchmark_flag
 
 
 

@@ -1,6 +1,6 @@
-LIST(APPEND TESTS field_ionization_benchmark)
+LIST(APPEND TESTS hydrogen_benchmark)
 
-list(APPEND gold_file "${CMAKE_CURRENT_SOURCE_DIR}/SMILIE_hydrogen_analytic.txt")
+list(APPEND gold_file "${CMAKE_CURRENT_SOURCE_DIR}/hydrogen_benchmark_gold.csv")
 add_definitions(-DGOLD_FILE="${gold_file}")
 
 foreach (test ${TESTS})
