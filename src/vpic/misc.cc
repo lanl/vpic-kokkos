@@ -83,8 +83,8 @@ vpic_simulation::inject_particle( species_t * sp,
   p->w  = w;
 #ifdef VPIC_ENABLE_TRACER_PARTICLES
   if(sp->is_tracer) {
-    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>(std::string("TracerID"));
-    sp->annotations_h.set<int64_t>(sp->np-1, tracer_idx, ((int64_t)(rank()) << 32) | (int64_t)(sp->np-1)); 
+    int tracer_idx = sp->annotation_vars.get_annotation_index<int>(std::string("TracerID"));
+    sp->annotations_h.set<int>(sp->np-1, tracer_idx, rank()*sp->max_np + sp->np - 1); 
   }
 #endif
 

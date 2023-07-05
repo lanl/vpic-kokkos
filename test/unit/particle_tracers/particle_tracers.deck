@@ -42,7 +42,7 @@ int test_tracer_copy_weight(species_t* tracer, int _world_rank) {
 int test_tracer_ids(species_t* tracer, int _world_rank) {
   std::unordered_set<size_t> IDs;
   sim_log("info: testing with VPIC_ENABLE_TRACER_PARTICLES");
-  if(!tracer->using_annotations || tracer->annotation_vars.i64_vars.size() < 1) {
+  if(!tracer->using_annotations || tracer->annotation_vars.i32_vars.size() < 1) {
     sim_log("FAIL: "<< tracer->name <<" has no annotations for IDs");
     return 5;
   } else {
@@ -51,7 +51,7 @@ int test_tracer_ids(species_t* tracer, int _world_rank) {
   // Check for duplicates. Touch all IDs also verifies memory allocation
   IDs.clear();
   for(int i = 0; i<tracer->np; i++) {
-    size_t id = tracer->annotations_h.get<int64_t>(i, 0);
+    size_t id = tracer->annotations_h.get<int>(i, 0);
     if(IDs.count(id) != 0) {
       sim_log("FAIL: particle "<< i <<" in "<< tracer->name <<" has duplicate ID "<< id);
       return 6;

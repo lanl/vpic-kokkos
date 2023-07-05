@@ -598,8 +598,7 @@ public:
     const int max_local_nm_alloc = static_cast<int>(max_local_nm * over_alloc_factor);
 
     // Create tracer species based on the original species
-    species_t* tracers = species( name, 
-                                  q, m, 
+    species_t* tracers = species( name, q, m, 
                                   static_cast<int>(max_local_np*over_alloc_factor), 
                                   static_cast<int>(max_local_nm*over_alloc_factor), 
                                   sort_interval, sort_out_of_place, 
@@ -608,7 +607,7 @@ public:
     tracers->is_tracer = true;
 
     // Add annotations for global tracer ID
-    annotations.add_annotation<int64_t>(std::string("TracerID"));
+    annotations.add_annotation<int>(std::string("TracerID"));
     tracers->init_annotations(max_local_np_alloc, max_local_nm_alloc, annotations);
 
     // Set tracer type to move by default
@@ -667,7 +666,7 @@ public:
     tracers->is_tracer = true;
 
     // Add annotations for global tracer ID
-    annotations.add_annotation<int64_t>(std::string("TracerID"));
+    annotations.add_annotation<int>(std::string("TracerID"));
     tracers->init_annotations(max_local_np, max_local_nm, annotations);
 
     // Set tracer type to move by default
@@ -734,7 +733,7 @@ public:
     tracers->is_tracer = true;
 
     // Add annotations for globas tracer ID
-    annotations.add_annotation<int64_t>(std::string("TracerID"));
+    annotations.add_annotation<int>(std::string("TracerID"));
     if(tracer_type == TracerType::Copy)
       annotations.add_annotation<float>(std::string("Weight"));
 
@@ -891,7 +890,7 @@ public:
     tracers->is_tracer = true;
 
     // Add annotations for globas tracer ID
-    annotations.add_annotation<int64_t>(std::string("TracerID"));
+    annotations.add_annotation<int>(std::string("TracerID"));
     if(tracer_type == TracerType::Copy)
       annotations.add_annotation<float>(std::string("Weight"));
     // Copy any annotations from the parent species

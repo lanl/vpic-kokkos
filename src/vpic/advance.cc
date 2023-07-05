@@ -156,21 +156,15 @@ int vpic_simulation::advance(void)
   // HOST - Touches particle copies, particle_movers, particle_injectors,
   // accumulators (move_p), neighbors
 //printf("Starting boundar_p\n");
-  TIC
+  KOKKOS_TIC();
     for( int round=0; round<num_comm_round; round++ )
     {
-      //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
-//mp_barrier();
-//printf("Regular species\n");
       boundary_p_kokkos( particle_bc_list, species_list, field_array );
-//mp_barrier();
-//printf("Tracer species\n");
 #ifdef VPIC_ENABLE_TRACER_PARTICLES
       boundary_p_kokkos( particle_bc_list, tracers_list, field_array );
 #endif
-//mp_barrier();
     }
-  TOC( boundary_p, num_comm_round );
+  KOKKOS_TOC( boundary_p, num_comm_round );
 //printf("Done with boundar_p\n");
 
   // Clean_up once boundary p is done

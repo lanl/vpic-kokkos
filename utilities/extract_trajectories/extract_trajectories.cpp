@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <sstream>
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -8,6 +9,8 @@
 #include <string>
 #include "hdf5.h"
 #include "mpi.h"
+
+//#define DEBUG
 
 #ifdef DEBUG
  #define DEBUG_PRINT(...) do { fprintf(stderr, __VA_ARGS__); } while(0)
@@ -54,7 +57,7 @@ int main(int argc, char**argv) {
 
   int arg_offset = 0;
   bool select = false;
-  std::set<int64_t> selected_tracers;
+  std::set<int> selected_tracers;
   auto select_arg = std::find(argv, argv+argc, std::string("--select-tracers"));
   if(select_arg != argv+argc) {
     select = true;
@@ -62,8 +65,16 @@ int main(int argc, char**argv) {
     std::string tracers(*(select_arg+1));
     std::vector<std::string> selected_ids = split(tracers, ',');
     for(size_t i=0; i<selected_ids.size(); i++) {
-      selected_tracers.insert(std::strtoll(selected_ids[i].c_str(), NULL, 10));
+      selected_tracers.insert(std::stoi(selected_ids[i].c_str(), NULL, 10));
     }
+  }
+
+  if(comm_rank == 0 && selected_tracers.size() > 0) {
+    std::cout << "Selected tracers: ";
+    for(auto it=selected_tracers.begin(); it!=selected_tracers.end(); it++) {
+      std::cout << *it << ", ";
+    }
+    std::cout << std::endl;
   }
 
   const char* fname = argv[1+arg_offset];
@@ -88,10 +99,10 @@ int main(int argc, char**argv) {
   std::vector<std::string> tracer_vars;
   std::vector<hid_t> tracer_var_types;
   // Maps for each main data type <TracerID, <VarName, Data> >
-  std::map<int64_t, std::map<std::string, std::vector<int> > >     traj_int;
-  std::map<int64_t, std::map<std::string, std::vector<int64_t> > > traj_int64_t;
-  std::map<int64_t, std::map<std::string, std::vector<float> > >   traj_float;
-  std::map<int64_t, std::map<std::string, std::vector<double> > >  traj_double;
+  std::map<int, std::map<std::string, std::vector<int> > >     traj_int;
+  std::map<int, std::map<std::string, std::vector<int64_t> > > traj_int64_t;
+  std::map<int, std::map<std::string, std::vector<float> > >   traj_float;
+  std::map<int, std::map<std::string, std::vector<double> > >  traj_double;
 
   //***************************************************************************
   // Extract tracer info
@@ -127,10 +138,10 @@ int main(int argc, char**argv) {
     // Get number of tracers
     hsize_t ntracers;
     H5Sget_simple_extent_dims(dataspace_id, &ntracers, NULL);
-    std::vector<int64_t> tracer_ids(ntracers, -1);
+    std::vector<int> tracer_ids(ntracers, -1);
 
     // Load tracer IDs
-    ret = H5Dread(dataset_id, H5T_STD_I64LE, dataspace_id, H5S_ALL, H5P_DEFAULT, tracer_ids.data());
+    ret = H5Dread(dataset_id, H5T_STD_I32LE, dataspace_id, H5S_ALL, H5P_DEFAULT, tracer_ids.data());
     H5Sclose(dataspace_id);
     H5Dclose(dataset_id);
 
@@ -202,7 +213,7 @@ int main(int argc, char**argv) {
   //***************************************************************************
 
   // Identify all TracerIDs for each data type
-  std::set<int64_t> tracer_id_set;
+  std::set<int> tracer_id_set;
   for(auto it=traj_int.begin(); it!=traj_int.end(); it++) {
     tracer_id_set.insert(it->first);
   }
@@ -217,14 +228,14 @@ int main(int argc, char**argv) {
   }
   MPI_Barrier(MPI_COMM_WORLD);
 
-  std::vector<int64_t> tracer_id_vec;
+  std::vector<int> tracer_id_vec;
   for(auto it=tracer_id_set.begin(); it!=tracer_id_set.end(); it++) {
     tracer_id_vec.push_back(*it);
   }
   if(comm_rank == 0)
     printf("Done loading tracers into a vector for communication\n");
 
-  std::map<int64_t,int> ntimesteps;
+  std::map<int,int> ntimesteps;
   for(auto it=tracer_id_set.begin(); it!=tracer_id_set.end(); it++) {
     if(traj_int.find(*it) != traj_int.end()) {
       ntimesteps[*it] = (((traj_int[*it]).begin())->second).size();
@@ -241,7 +252,7 @@ int main(int argc, char**argv) {
   }
 
   for(auto it=ntimesteps.begin(); it!=ntimesteps.end(); it++) {
-    DEBUG_PRINT("Rank: %d: Tracer %ld has %d timesteps\n", comm_rank, it->first, it->second);
+    DEBUG_PRINT("Rank: %d: Tracer %d has %d timesteps\n", comm_rank, it->first, it->second);
   }
 
   std::vector<int> tracers_per_proc(comm_size, 0);
@@ -257,7 +268,7 @@ int main(int argc, char**argv) {
   for(uint32_t i=0; i<tracers_per_proc.size(); i++) {
     max_possible_tracers += tracers_per_proc[i];
   }
-  std::vector<int64_t> all_possible_tracer_ids(max_possible_tracers, -1);
+  std::vector<int> all_possible_tracer_ids(max_possible_tracers, -1);
   std::vector<int> displ(comm_size, 0);
   for(int i=1; i<comm_size; i++) {
     displ[i] += tracers_per_proc[i-1] + displ[i-1];
@@ -270,14 +281,14 @@ int main(int argc, char**argv) {
   for(uint32_t i=0; i<tracer_id_vec.size(); i++) {
     all_possible_tracer_ids[displ[comm_rank]+i] = tracer_id_vec[i];
   }
-  MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, all_possible_tracer_ids.data(), tracers_per_proc.data(), displ.data(), MPI_INT64_T, MPI_COMM_WORLD);
+  MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, all_possible_tracer_ids.data(), tracers_per_proc.data(), displ.data(), MPI_INT32_T, MPI_COMM_WORLD);
   if(comm_rank == 0) {
     for(uint32_t i=0; i<all_possible_tracer_ids.size(); i++) {
-      DEBUG_PRINT("TracerID: %ld\n", all_possible_tracer_ids[i]);
+      DEBUG_PRINT("TracerID: %d\n", all_possible_tracer_ids[i]);
     }
   }
 
-  std::set<int64_t> all_tracers_set;
+  std::set<int> all_tracers_set;
   for(uint32_t i=0; i<all_possible_tracer_ids.size(); i++) {
     all_tracers_set.insert(all_possible_tracer_ids[i]);
   }
@@ -291,9 +302,12 @@ int main(int argc, char**argv) {
   if(select)
     tracer_set = selected_tracers;
 
+  if(comm_rank == 0) 
+    std::cout << "Done setting up tracer data\n";
+
   // Iterate through all tracers
   for(auto it=tracer_set.begin(); it!=tracer_set.end(); it++) {
-    int64_t id = *it;
+    int id = *it;
     // Create trajectory file name
     std::string particle_fname = std::string(fname);
     particle_fname.erase(particle_fname.end()-3, particle_fname.end());
@@ -318,8 +332,8 @@ int main(int argc, char**argv) {
       // Create attribute for tracer ID
       hid_t acpl_id = H5Pcreate(H5P_ATTRIBUTE_CREATE);
       hid_t attr_fspace_id = H5Screate(H5S_SCALAR);
-      hid_t attr_id = H5Acreate(tracer_fid, "TracerID", H5T_STD_I64LE, attr_fspace_id, acpl_id, H5P_DEFAULT);
-      H5Awrite(attr_id, H5T_STD_I64LE, &id);
+      hid_t attr_id = H5Acreate(tracer_fid, "TracerID", H5T_STD_I32LE, attr_fspace_id, acpl_id, H5P_DEFAULT);
+      H5Awrite(attr_id, H5T_STD_I32LE, &id);
       H5Aclose(attr_id);
       H5Sclose(attr_fspace_id);
       H5Pclose(acpl_id);
@@ -334,35 +348,35 @@ int main(int argc, char**argv) {
       // Create dataspace for all timesteps
       num_timesteps = memspace_len;
       hsize_t total_timesteps;
-      DEBUG_PRINT("Rank %d has %llu timesteps for tracer %ld\n", comm_rank, num_timesteps, id);
+      DEBUG_PRINT("Rank %d has %llu timesteps for tracer %d\n", comm_rank, num_timesteps, id);
       MPI_Allreduce(&num_timesteps, &total_timesteps, 1, MPI_LONG_LONG, MPI_SUM, stepcomm);
       MPI_Scan(&num_timesteps, &offset, 1, MPI_LONG_LONG, MPI_SUM, stepcomm);
       offset -= num_timesteps;
-      DEBUG_PRINT("Rank %d Tracer: %ld, offset: %llu, count: %llu\n", step_proc_rank, id, offset, count);
+      DEBUG_PRINT("Rank %d Tracer: %d, offset: %llu, count: %llu\n", step_proc_rank, id, offset, count);
       if(comm_rank == 0) 
-        DEBUG_PRINT("%llu timesteps for tracer %ld\n", num_timesteps, id);
+        DEBUG_PRINT("%llu timesteps for tracer %d\n", num_timesteps, id);
       hid_t dataspace_id = H5Screate_simple(1, (hsize_t*)(&total_timesteps), NULL);
 
       // Write slab of int data for all int variables
       for(auto var_it=traj_int[id].begin(); var_it!=traj_int[id].end(); var_it++) {
-        hid_t var_id = H5Dcreate(tracer_fid, var_it->first.c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t filespace_id = H5Dget_space(var_id);
-        H5Sselect_hyperslab(filespace_id, H5S_SELECT_SET, &offset, NULL, &count, NULL);
-        ret = H5Dwrite(var_id, H5T_STD_I32LE, memspace_id, filespace_id, H5P_DEFAULT, var_it->second.data());
-        H5Sclose(filespace_id);
-        H5Dclose(var_id);
+        if(strcmp("TracerID", var_it->first.c_str()) != 0) {
+          hid_t var_id = H5Dcreate(tracer_fid, var_it->first.c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+          hid_t filespace_id = H5Dget_space(var_id);
+          H5Sselect_hyperslab(filespace_id, H5S_SELECT_SET, &offset, NULL, &count, NULL);
+          ret = H5Dwrite(var_id, H5T_STD_I32LE, memspace_id, filespace_id, H5P_DEFAULT, var_it->second.data());
+          H5Sclose(filespace_id);
+          H5Dclose(var_id);
+        }
       }
 
       // Write slab of int64_t data for all int64_t variables
       for(auto var_it=traj_int64_t[id].begin(); var_it!=traj_int64_t[id].end(); var_it++) {
-        if(strcmp("TracerID", var_it->first.c_str()) != 0) {
-          hid_t var_id = H5Dcreate(tracer_fid, var_it->first.c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t filespace_id = H5Dget_space(var_id);
-          H5Sselect_hyperslab(filespace_id, H5S_SELECT_SET, &offset, NULL, &count, NULL);
-          ret = H5Dwrite(var_id, H5T_STD_I64LE, memspace_id, filespace_id, H5P_DEFAULT, var_it->second.data());
-          H5Sclose(filespace_id);
-          H5Dclose(var_id);
-        }
+        hid_t var_id = H5Dcreate(tracer_fid, var_it->first.c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        hid_t filespace_id = H5Dget_space(var_id);
+        H5Sselect_hyperslab(filespace_id, H5S_SELECT_SET, &offset, NULL, &count, NULL);
+        ret = H5Dwrite(var_id, H5T_STD_I64LE, memspace_id, filespace_id, H5P_DEFAULT, var_it->second.data());
+        H5Sclose(filespace_id);
+        H5Dclose(var_id);
       }
 
       // Write slab of float data for all float variables

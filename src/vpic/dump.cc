@@ -103,8 +103,7 @@ vpic_simulation::dump_energies( const char *fname,
     if(rank() == 0 && status!=fail && (sp->parent_species == NULL)) {
       std::string sp_name = std::string(sp->name);
       energy_map[sp_name] = en_p;
-    }
-    if(rank() == 0 && status!=fail && sp->is_tracer) {
+    } else if(rank() == 0 && status!=fail && sp->is_tracer) {
       std::string sp_name = std::string(sp->parent_species->name);
       energy_map[sp_name] += en_p;
     }
@@ -723,7 +722,7 @@ vpic_simulation::dump_tracers_buffered_csv( const char *sp_name,
       synchronize_hydro_array( hydro_array );
     }
 
-    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>("TracerID");
+    int tracer_idx = sp->annotation_vars.get_annotation_index<int>("TracerID");
     auto& interp = interpolator_array->k_i_h;
 
 #define _nxg (grid->nx + 2)
@@ -751,8 +750,8 @@ vpic_simulation::dump_tracers_buffered_csv( const char *sp_name,
         float uz0 = sp->particle_io_buffer(i, particle_var::uz);
         float w0  = sp->particle_io_buffer(i, particle_var::w);
         int   ii  = sp->particle_cell_io_buffer(i);
-        fileIO.print("%ld,%d,%ld,%d,%e,%e,%e,%e,%e,%e,%e", 
-          time_step, rank(), sp->annotations_io_buffer.get<int64_t>(i,tracer_idx), ii,
+        fileIO.print("%ld,%d,%d,%d,%e,%e,%e,%e,%e,%e,%e", 
+          time_step, rank(), sp->annotations_io_buffer.get<int>(i,tracer_idx), ii,
           dx0, dy0, dz0, ux0, uy0, uz0, w0);
         if(dump_vars & DumpVar::GlobalPos) {
           fileIO.print(",%e,%e,%e", tracer_x, tracer_y, tracer_z);
@@ -840,7 +839,7 @@ vpic_simulation::dump_tracers_buffered_csv( const char *sp_name,
       float w0  = sp->k_p_h(i, particle_var::w);
       int   ii  = sp->k_p_i_h(i);
       fileIO.print("%ld,%d,%ld,%d,%e,%e,%e,%e,%e,%e,%e", 
-        step(), rank(), sp->annotations_h.get<int64_t>(i,tracer_idx), ii,
+        step(), rank(), sp->annotations_h.get<int>(i,tracer_idx), ii,
         dx0, dy0, dz0, ux0, uy0, uz0, w0);
       if(dump_vars & DumpVar::GlobalPos) {
         fileIO.print(",%e,%e,%e", tracer_x, tracer_y, tracer_z);
@@ -1060,7 +1059,7 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
       synchronize_hydro_array( hydro_array );
     }
 
-    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>("TracerID");
+    int tracer_idx = sp->annotation_vars.get_annotation_index<int>("TracerID");
     auto& interp = interpolator_array->k_i_h;
 
 #define _nxg (grid->nx + 2)
@@ -1083,7 +1082,7 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
       float w0  = sp->k_p_h(i, particle_var::w);
       int   ii  = sp->k_p_i_h(i);
       fileIO.print("%ld,%d,%ld,%d,%e,%e,%e,%e,%e,%e,%e", 
-        step(), rank(), sp->annotations_h.get<int64_t>(i,tracer_idx), ii,
+        step(), rank(), sp->annotations_h.get<int>(i,tracer_idx), ii,
         dx0, dy0, dz0, ux0, uy0, uz0, w0);
       if(dump_vars & DumpVar::GlobalPos) {
         fileIO.print(",%e,%e,%e", tracer_x, tracer_y, tracer_z);

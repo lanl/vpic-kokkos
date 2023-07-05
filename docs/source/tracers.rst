@@ -1,7 +1,7 @@
 Tracer Particles
 ================
 
-VPIC include tracer particle capabilities to improve simulation analysis. Tracers are a subset of the simulations particles that can be used to analyze simulation behavior without paying the cost of writing all particles to disk. In VPIC, tracers are separate species of particles where each particle is marked with a unique tracer ID. 
+VPIC includes tracer particle capabilities to improve simulation analysis. Tracers are a subset of the simulations particles that can be used to analyze simulation behavior without paying the cost of writing all particles to disk. In VPIC, tracers are separate species of particles where each particle is marked with a unique tracer ID. 
 
 We can track the following quantities for each tracer particle.
 
@@ -161,13 +161,13 @@ How to use tracers
       .. code-block:: c++
 
         inline species_t * 
-        define_tracer_species_by_predicate( const char* name, 
-                                            species_t* original_species, 
-                                            const TracerType tracer_type, 
-                                            std::function <bool (particle_t)> filter,
-                                            const int num_particles_buffer = -1,
-                                            const float over_alloc_factor = 1.1,
-                                            annotation_vars_t annotations = annotation_vars_t()) {
+        define_tracer_species_by_predicate(const char* name, 
+                                           species_t* original_species, 
+                                           const TracerType tracer_type, 
+                                           std::function <bool (particle_t)> filter,
+                                           const int num_particles_buffer = -1,
+                                           const float over_alloc_factor = 1.1,
+                                           annotation_vars_t annotations = annotation_vars_t())
 
   * Example
 
@@ -189,22 +189,22 @@ How to use tracers
 
     .. code-block:: c++
   
-      dump_tracers_buffered_hdf5( "electron_tracers", DumpVar::GlobalPos | DumpVar::ParticleKE, 
-                                  "electron_tracers/electron_tracers_buffered", step() != 0);
+      dump_tracers_buffered_hdf5("electron_tracers", DumpVar::GlobalPos | DumpVar::ParticleKE, 
+                                 "chicoma_hdf5/electron_tracers_buffered", step() != 0);
 
-      dump_tracers_buffered_hdf5( "ion_I2_tracers", DumpVar::GlobalPos | DumpVar::ParticleKE,
-                                  "ion_I2_tracers/ion_I2_tracers_buffered", step() != 0);
+      dump_tracers_buffered_hdf5("ion_I2_tracers", DumpVar::GlobalPos | DumpVar::ParticleKE,
+                                 "chicoma_hdf5/ion_I2_tracers_buffered", step() != 0);
 
 3) Run simulation and collect tracer data
 4) Filter and identify particles of interest 
 
   * Example script (``filter_traj.py``) shows how to access the HDF5 files from python with h5py and filter out the N tracers with the highest energy at the last time step.
-  * See https://docs.h5py.org/en/stable/ for assistance in reading HDF5 files
+  * See https://docs.h5py.org/en/stable/ for assistance in reading and manipulating HDF5 files
   * Example
 
     .. code-block:: bash
 
-      # Select the 5 particles with the highest energy at the end of the simulation
+      # Select the 10 particles with the highest energy at the end of the simulation
       python ../scripts/filter_traj.py chicoma_hdf5/electron_tracers_buffered.h5 10
 
       TracerID Energy
@@ -223,16 +223,22 @@ How to use tracers
 
   * Parallelized with MPI across the number of time steps
   * Extracts selected tracers into their own individual trajectory files
-  * If no selected tracers are provided then all tracers are extracted
+
+    * If no selected tracers are provided then all tracers are extracted
+
   * Example
 
     .. code-block:: bash
   
       # Extract the trajectories for the selected particles
-      [nphtan@cn765 build]$ mpirun -n 16 ../utilities/extract_trajectories/extract_trajectories --select-tracers 4294967298,3,4294967299,4294967297,0,2,4,4294967296,4294967300 chicoma_hdf5/electron_tracers_buffered.h5
+      mpirun -n 16 ../utilities/extract_trajectories/extract_trajectories                 \
+        --select-tracers 4294967298,3,4294967299,4294967297,0,2,4,4294967296,1,4294967300 \
+        chicoma_hdf5/electron_tracers_buffered.h5
+
       Done reading tracer data into vectors
       Done loading tracers into a vector for communication
       Wrote trajectory file chicoma_hdf5/electron_tracers_buffered.0.traj.h5
+      Wrote trajectory file chicoma_hdf5/electron_tracers_buffered.1.traj.h5
       Wrote trajectory file chicoma_hdf5/electron_tracers_buffered.2.traj.h5
       Wrote trajectory file chicoma_hdf5/electron_tracers_buffered.3.traj.h5
       Wrote trajectory file chicoma_hdf5/electron_tracers_buffered.4.traj.h5
@@ -245,15 +251,19 @@ How to use tracers
 6) Analyze and visualize the tracer trajectories 
 
   * ``draw_trajectories.py`` is a simple example script that takes 1 or more trajectory files and plots their position as time evolves
+
     * Optionally color the path based on the value of a selected variable
+
   * Example
 
     .. code-block:: bash
 
       # Plot trajectory for tracer 0 and color the line based on the energy
-      python3 draw_trajectories.py --fig-name figures/electron_trajectory_0.png --overlay-var ke chicoma_hdf5/electron_tracers_buffered.0.traj.h5 
+      python3 draw_trajectories.py --fig-name figures/electron_trajectory_0.png \
+                                   --overlay-var ke                             \
+                                   chicoma_hdf5/electron_tracers_buffered.0.traj.h5 
 
 .. image:: electron_trajectory_0.png
    :width: 800
-   :alt: Particle trajectory for tracer 0
+   :alt: Particle trajectory for electron tracer 0
    :align: center

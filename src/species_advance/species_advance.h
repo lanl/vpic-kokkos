@@ -581,8 +581,8 @@ class species_t {
               }
 
               // Create unique tracer id (32-bit rank concatenated with particle index)
-              int tracer_idx = annotation_vars.get_annotation_index<int64_t>(std::string("TracerID"));
-              annotations_h.set<int64_t>(np, tracer_idx, ((int64_t)(rank) << 32) | (int64_t)(np)); 
+              int tracer_idx = annotation_vars.get_annotation_index<int>(std::string("TracerID"));
+              annotations_h.set<int>(np, tracer_idx, rank*max_np + np);
               if(tracer_type == TracerType::Copy) {
                 int w_idx = annotation_vars.get_annotation_index<float>(std::string("Weight")); // Get weight annotation index
                 annotations_h.set<float>(np, w_idx, k_p_h(np, particle_var::w)); // Save weight
@@ -655,8 +655,8 @@ class species_t {
               k_p_i_h(np) = parent_species->k_p_i_h(step); 
               p[np] = parent_species->p[step]; // Copy legacy particle FIXME Should be unnecessary
               // Create unique tracer id (32-bit rank concatenated with particle index)
-              int tracer_idx = annotation_vars.get_annotation_index<int64_t>(std::string("TracerID"));
-              annotations_h.set<int64_t>(np, tracer_idx, ((int64_t)(rank) << 32) | (int64_t)(np)); 
+              int tracer_idx = annotation_vars.get_annotation_index<int>(std::string("TracerID"));
+              annotations_h.set<int>(np, tracer_idx, rank*max_np + np);
               //TODO Test copying the rest of the annotations
               for(uint32_t j=0; j<parent_species->annotation_vars.i32_vars.size(); j++) {
                 int k = annotation_vars.get_annotation_index<int>(parent_species->annotation_vars.i32_vars[j]);
