@@ -187,9 +187,9 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   // Increase resolution to ~3000 for physical results
   double nx = 1200;
   double ny = 1;
-  double nz = 200;
+  double nz = 100;
 
-  double nppc = 150;  // Average number of macro particles/cell of each species
+  double nppc = 155;  // Average number of macro particles/cell of each species
 
   int topology_x = nproc();
   int topology_y = 1;
@@ -279,7 +279,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   // Laser parameters
   int pulse_shape=1;                   // square pulse
 
-  int cycles = 3;
+  int cycles = 1;
   double nu = c_SI/lambda_SI;
   double nu_c = nu*time_to_SI;
   double pulse_FWHM = ((cycles/nu) / time_to_SI); // pulse duration
@@ -869,7 +869,7 @@ TEST_CASE( "Check if field ionization agrees with analytic solution", "[average 
 
     // Check if the test passes
     // The value we are comparing to is based on past runs.
-    if (l2Error < 0.01) {
+    if (l2Error < 0.008) {
       flag = 1;
     }
     std::cout << "L2 Error: " << l2Error << std::endl;

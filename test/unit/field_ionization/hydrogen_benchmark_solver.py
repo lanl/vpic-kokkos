@@ -54,7 +54,7 @@ def coupledODEs(N, t):
 # Set initial conditions and time span
 N_initial = [1000, 0]  # Initial values for x and y
 
-timesteps = np.arange(0,620);           # FIXME: get from simulation
+timesteps = np.arange(0,60);           # FIXME: get from simulation
 timestep_to_SI = 4.29926779703711293e-17;
 t = timesteps * timestep_to_SI; # Time span for integration
 
