@@ -39,7 +39,7 @@ include_directories(${MPI_CXX_INCLUDE_PATH})
 #------------------------------------------------------------------------------#
 # Add build options
 #------------------------------------------------------------------------------#
-option(FIELD_IONIZATION "Enable field ionization" OFF)
+option(FIELD_IONIZATION "Enable field ionization" ON)
 
 option(ENABLE_INTEGRATED_TESTS "enable integrated tests" OFF)
 

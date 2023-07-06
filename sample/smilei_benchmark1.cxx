@@ -215,7 +215,7 @@ begin_initialization {
 
 
   // Physical parameters
-  int pulse_shape=0;                   // 0 - square pulse, 1 - gaussian
+  int pulse_shape=1;                   // 0 - square pulse, 1 - gaussian
 
   double n_e_over_n_crit       = 90;       // n_e/n_crit in solid slab
   double laser_intensity_W_cm2;
@@ -334,6 +334,8 @@ begin_initialization {
 
   double dt = cfl_req*courant_length(Lx, Ly, Lz, nx, ny, nz);
 
+  //  global->dt = dt;
+  //global->time_to_SI = time_to_SI;
   
   // Laser parameters
   int cycles = 10;
@@ -393,8 +395,8 @@ begin_initialization {
   double NpI2    = n_I2_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I2 in box
   double w_I1    = NpI1/N_I1;
   double w_I2    = NpI2/N_I2;
-  int I1_present = 0;
-  int I2_present = 1;
+  int I1_present = 1;
+  int I2_present = 0;
 
 
   
@@ -1299,7 +1301,7 @@ begin_field_injection {
 	if ( global->pulse_shape==0 ){
 	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t));
 	} else if (global->pulse_shape==1 ){
-	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t + M_PI/4)) * exp(-(t-global->pulse_mean)*(t-global->pulse_mean)/(2.*global->pulse_sigma*global->pulse_sigma));
+	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t)) * exp(-(t-global->pulse_mean)*(t-global->pulse_mean)/(2.*global->pulse_sigma*global->pulse_sigma));
 	}
 	
     });

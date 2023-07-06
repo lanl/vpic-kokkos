@@ -28,8 +28,6 @@ begin_globals {
 
   double xmin,xmax,ymin,ymax,zmin,zmax; // Global geometry
 
-  double dt,time_to_SI;
-
   // Parameters for 2d and 3d Gaussian wave launch
   double lambda;
   double waist;                  // how wide the focused beam is
@@ -42,6 +40,8 @@ begin_globals {
   int    pulse_shape;            // 0 for steady, indefinite pulse, 1 for
                                  // square pulse, 2 for sin^2
   double pulse_FWHM;
+  double pulse_sigma;
+  double pulse_mean;
   double nu_c;
   double pulse_start;
 
@@ -58,6 +58,8 @@ begin_globals {
   DumpParameters hI1dParams;
   DumpParameters hI2dParams;
   std::vector<DumpParameters *> outputParams;
+
+
 };
 
 
@@ -162,8 +164,17 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
 
   // Physical parameters
+  int I1_present = 1; // carbon
+  int I2_present = 0; // hydrogen
+  int pulse_shape=1;                   // 0 - square pulse, 1 - gaussian
+
   double n_e_over_n_crit       = 90;       // n_e/n_crit in solid slab
-  double laser_intensity_W_cm2 = 1e14;      // units of W/cm^2
+  double laser_intensity_W_cm2;
+  if (I2_present){
+    laser_intensity_W_cm2 = 1e14;      // units of W/cm^2
+  } else if (I1_present){
+    laser_intensity_W_cm2 = 1.e20;      // units of W/cm^2
+  }
   double laser_intensity_SI    = laser_intensity_W_cm2/1e-4; // units of W/m^2
   double laser_E_SI = sqrt( (2*laser_intensity_SI)/(c_SI * eps0_SI) ); // Laser E
   double laser_E_c = laser_E_SI / E_to_SI;
@@ -189,7 +200,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   double ny = 1;
   double nz = 100;
 
-  double nppc = 155;  // Average number of macro particles/cell of each species
+  double nppc = 150;  // Average number of macro particles/cell of each species
 
   int topology_x = nproc();
   int topology_y = 1;
@@ -222,12 +233,12 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   double n_e_SI = n_e_over_n_crit*ncr_SI;
   double debye_SI = sqrt(eps0_SI*T_e/(n_e_SI*e_SI*e_SI));
 
-
 #define mp_me 1836.15267343
-  double A_I1    = 1;              // proton
-  double A_I2    = 2;             // neutral hydrogen
-  double Z_I1    = 1;
+  double A_I1    = 12;   // neutral carbon, mass number
+  double A_I2    = 1;    // neutral hydrogen, mass number
+  double Z_I1    = 6;    
   double Z_I2    = 1;
+  double q_I1    = 1e-30;
   double q_I2    = 1e-30;   // physical charge in code units, vpic doesnt like when charge is zero
   double m_I1_SI = A_I1*mp_me*m_e_SI;
   double m_I2_SI = A_I2*mp_me*m_e_SI;
@@ -273,16 +284,26 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
   double dt = cfl_req*courant_length(Lx, Ly, Lz, nx, ny, nz);
 
-  global->dt = dt;
-  global->time_to_SI = time_to_SI;
+  //  global->dt = dt;
+  //  global->time_to_SI = time_to_SI;
   
   // Laser parameters
-  int pulse_shape=1;                   // square pulse
-
-  int cycles = 1;
   double nu = c_SI/lambda_SI;
   double nu_c = nu*time_to_SI;
-  double pulse_FWHM = ((cycles/nu) / time_to_SI); // pulse duration
+
+  double pulse_FWHM;
+  int cycles;
+  if ( I2_present ) {
+    cycles = 1;
+    pulse_FWHM = ((cycles/nu) / time_to_SI); // pulse duration
+  }
+  if ( I1_present ) {
+    cycles = 10;
+    pulse_FWHM = 5/nu_c;   //((cycles/nu) / time_to_SI); // pulse duration
+  }
+  double pulse_mean  = cycles/nu_c; // need to shift the gaussian (want the max at the end of the sim)
+  double pulse_sigma = pulse_FWHM/( 2*sqrt(2*log(2) )); // sigma for gaussian function
+  
   double pulse_period = 1 / nu; 
   // How far in front of the boundary should the peak start?
   double pulse_start = 350e-15 / time_to_SI; // time in code units
@@ -303,7 +324,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   //emax = emax*(waist/width); // at entrance if 3D Gaussian 3DCHANGE
 
   
-  double t_stop = pulse_FWHM; // Simulation runtime
+  double t_stop = ((cycles/nu) / time_to_SI); // Simulation runtime
 
   // Diagnostics intervals.  
   int energies_interval = 50;
@@ -324,13 +345,16 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
 
   // Parameters for the ions (note it is the same box as for electrons)
+  double n_I1_SI = 1e20; // Density of I1
   double n_I2_SI = 1e20; // Density of I2
-  double N_I2    = nppc*nx*ny*nz; //Number of macro I2 in box 
+  double N_I1    = nppc*nx*ny*nz; //Number of macro I1 in box
+  double N_I2    = nppc*nx*ny*nz; //Number of macro I2 in box
+  N_I1 = trunc_granular(N_I1, nproc()); // make divisible by # processors
   N_I2 = trunc_granular(N_I2, nproc()); // make divisible by # processors
+  double NpI1    = n_I1_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I1 in box
   double NpI2    = n_I2_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I2 in box
+  double w_I1    = NpI1/N_I1;
   double w_I2    = NpI2/N_I2;
-  int I1_present = 0;
-  int I2_present = 1;
 
   if(rank() == 0){
     FILE * out;
@@ -389,6 +413,12 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     fprintf(out, "%.17e   Spec max for I2, code units (gamma-1)\n", 0);
     fprintf(out, "%d   Spectra Interval\n", spectra_interval);
     fprintf(out, "%d   This is my rank\n", rank());
+    fprintf(out, "%.17e   Pulse FWHM, code units\n",pulse_FWHM);
+    fprintf(out, "%.17e   Pulse Sigma, code units\n",pulse_sigma);
+    fprintf(out, "%.17e   Pulse mean, code units\n",pulse_mean);
+    fprintf(out, "%.17e   Laser max E, SI\n",laser_E_SI);
+    fprintf(out, "%.17e   Laser emax, code units\n",emax);
+    fprintf(out, "%d   nppc\n",int(nppc));
     fclose(out);
   }
   
@@ -505,6 +535,8 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
   global->pulse_shape              = pulse_shape; 
   global->pulse_FWHM               = pulse_FWHM;
+  global->pulse_sigma               = pulse_sigma;
+  global->pulse_mean               = pulse_mean;
   global->nu_c                     = nu_c;
   global->pulse_start              = pulse_start;
 
@@ -648,11 +680,23 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 	
 	
         if ( mobile_ions ) {
-	  #if defined(FIELD_IONIZATION)
-	      inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);
-	  #else
-	      inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2,0,0);
-	  #endif   
+
+	  if ( I2_present ) {
+           #if defined(FIELD_IONIZATION)
+               inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2, q_I2,0,0);
+           #else
+               inject_particle( ion_I2, x, y, z, 0, 0, 0, w_I2,0,0);
+           #endif
+         } // if I2 present
+         
+         if ( I1_present ) {
+            #if defined(FIELD_IONIZATION)
+                inject_particle( ion_I1, x, y, z, 0, 0, 0, w_I1, q_I1,0,0);
+            #else
+                inject_particle( ion_I1, x, y, z, 0, 0, 0, w_I1,0,0);
+            #endif
+          } // if I1 present
+	  
         } // if mobile ions
 	
       } // if uniform < slab
@@ -692,29 +736,29 @@ begin_field_injection {
     double emax_coeff = ((4/(1+alpha))*global->omega_0*grid->dt*global->emax);
     double t=grid->dt*step();
 
-#if 1
-    double pulse_shape_factor=1;
-    if ( global->pulse_shape>=1 ) pulse_shape_factor=( t<global->pulse_FWHM ? 1
-            : 0 );
-    if ( global->pulse_shape==2 ) {
-    float sin_t_tau = sin(t*M_PI/global->pulse_FWHM);
-      pulse_shape_factor =( t<global->pulse_FWHM ? sin_t_tau : 0 );
-  }
-    // Hyperbolic secant profile
-    if (global->pulse_shape==3){
-        double fac = 2.*log(1.+sqrt(2.))/global->pulse_FWHM;
-        // This is actually a time, not a distance, since the pulse_FWHM is time
-        double z = (t - global->pulse_start);
-        z *= fac;
-        pulse_shape_factor = 2./(exp(z)+exp(-z));
-    }
-
-    // square wave
-    int    square_wave        = 1;
-    double square_wave_factor = 1;
-    if ( square_wave>=1 ) square_wave_factor=( sin( (t*global->nu_c)  * 2.0 * M_PI)>=0.0 ? 1 : -1 );
-
-#endif 
+//#if 1
+//    double pulse_shape_factor=1;
+//    if ( global->pulse_shape>=1 ) pulse_shape_factor=( t<global->pulse_FWHM ? 1
+//            : 0 );
+//    if ( global->pulse_shape==2 ) {
+//    float sin_t_tau = sin(t*M_PI/global->pulse_FWHM);
+//      pulse_shape_factor =( t<global->pulse_FWHM ? sin_t_tau : 0 );
+//  }
+//    // Hyperbolic secant profile
+//    if (global->pulse_shape==3){
+//        double fac = 2.*log(1.+sqrt(2.))/global->pulse_FWHM;
+//        // This is actually a time, not a distance, since the pulse_FWHM is time
+//        double z = (t - global->pulse_start);
+//        z *= fac;
+//        pulse_shape_factor = 2./(exp(z)+exp(-z));
+//    }
+//
+//    // square wave
+//    int    square_wave        = 1;
+//    double square_wave_factor = 1;
+//    if ( square_wave>=1 ) square_wave_factor=( sin( (t*global->nu_c)  * 2.0 * M_PI)>=0.0 ? 1 : -1 );
+//
+//#endif 
 
     //double prefactor = emax_coeff*sqrt(2.0/M_PI); // Wave norm at edge of box
     double prefactor = global->emax;  // Wave norm at edge of box
@@ -751,6 +795,12 @@ begin_field_injection {
         auto PHASE=( omega_0*t + h*R2/(width*width) );
         auto MASK =( R2<=pow(mask*width,2) ? 1 : 0 );
 	kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(omega_0*t));
+
+        if ( global->pulse_shape==0 ){
+	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t));
+	} else if (global->pulse_shape==1 ){
+	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t)) * exp(-(t-global->pulse_mean)*(t-global->pulse_mean)/(2.*global->pulse_sigma*global->pulse_sigma));
+	}
     });
 
   }
@@ -769,7 +819,7 @@ begin_particle_collisions{
   // No collisions for this simulation
 }
 
-TEST_CASE( "Check if field ionization agrees with analytic solution", "[average charge state]" )
+TEST_CASE( "Check if field ionization agrees with numerical solution", "[average charge state]" )
 {
     // Structure to hold the data points
     struct DataPoint {
@@ -800,7 +850,7 @@ TEST_CASE( "Check if field ionization agrees with analytic solution", "[average 
     }
     
     // Read vpic data from the file
-    bool flag = 0;
+    bool flag = 0; 
     std::string filename = "Photoelectrons.txt";
     std::vector<DataPoint> data;
     std::ifstream inputFile(filename);
@@ -814,9 +864,9 @@ TEST_CASE( "Check if field ionization agrees with analytic solution", "[average 
 	    std::getline(iss, token, ',');
             point.x = std::stod(token); // this is the timestep
             std::getline(iss, token, ',');
-            float N_0 = std::stod(token); // this is the initial number of atoms
+            float N_0 = std::stod(token); // this is the initial number of particles
 	    std::getline(iss, token, ','); 
-            float N_ions = std::stod(token); // number of photoelectrons/ions
+            float N_ions = std::stod(token); // number of ions
 	    point.y = N_ions/N_0; // average charge state
 	    // account for the shift the vpic data (due to the particle
 	    // location offset from the boundary edge) by ingnoring the zero ionization data
@@ -831,9 +881,8 @@ TEST_CASE( "Check if field ionization agrees with analytic solution", "[average 
 
 
     
-    // Read the analytic solution from the gold file
+    // Read the numerical solution from the gold file
     std::string gold_file_name = GOLD_FILE;
-    //std::string filename_analytic = "SMILIE_hydrogen_analytic.txt";
     std::vector<DataPoint> data_analytic;
     std::ifstream inputFile_analytic(gold_file_name);
     if (inputFile_analytic.is_open()) {
@@ -843,7 +892,7 @@ TEST_CASE( "Check if field ionization agrees with analytic solution", "[average 
             std::string token;
             DataPoint point;
 
-            // Split the line by spaces and extract the variables
+            // Split the line by commas and extract the variables
 	    std::getline(iss, token, ',');
             point.x = std::stod(token); // this is the timestep
             std::getline(iss, token, ',');
