@@ -399,6 +399,7 @@ class species_t {
         annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_recv_h;
 
         int nparticles_buffered;
+        int nparticles_buffered_max;
         k_particles_t::HostMirror                               particle_io_buffer;
         k_particles_i_t::HostMirror                             particle_cell_io_buffer;
         std::vector<std::pair<int64_t,int64_t>>                 np_per_ts_io_buffer;
@@ -509,6 +510,7 @@ class species_t {
          *  @param over_alloc_factor Multiplier for over allocating space
          */
         void init_io_buffers(const int N_particles, const float over_alloc_factor);
+        void init_io_buffers(const int N_particles);
 
         /**
          * @brief Add additional per particle annotations. 

@@ -71,6 +71,7 @@ void checkpt(const char* fbase, int tag)
     sprintf( fname, "%s.%i.%i", fbase, tag, world_rank );
     if( world_rank==0 ) log_printf( "*** Checkpointing to \"%s\"\n", fbase );
     checkpt_objects( fname );
+    checkpt_kokkos(*simulation, fname);
 }
 
 /**
@@ -114,7 +115,7 @@ int main(int argc, char** argv)
         reanimate_objects();
         mp_barrier();
 
-        restore_kokkos(*simulation);
+        restore_kokkos(*simulation, fname);
 
     }
     else // We are initializing from scratch.

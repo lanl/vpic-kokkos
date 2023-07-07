@@ -599,8 +599,8 @@ public:
 
     // Create tracer species based on the original species
     species_t* tracers = species( name, q, m, 
-                                  static_cast<int>(max_local_np*over_alloc_factor), 
-                                  static_cast<int>(max_local_nm*over_alloc_factor), 
+                                  max_local_np_alloc,
+                                  max_local_nm_alloc,
                                   sort_interval, sort_out_of_place, 
                                   grid);
     // Mark species as tracer
@@ -655,11 +655,13 @@ public:
                         const int num_particles_buffer = -1,
                         const float over_alloc_factor = 1.1,
                         annotation_vars_t annotations = annotation_vars_t()) {
+    const int max_local_np_alloc = static_cast<int>(max_local_np * over_alloc_factor);
+    const int max_local_nm_alloc = static_cast<int>(max_local_nm * over_alloc_factor);
     // Create tracer species based on the original species
     species_t* tracers = species( name, 
                                   original_species->q, original_species->m, 
-                                  static_cast<int>(max_local_np*over_alloc_factor), 
-                                  static_cast<int>(max_local_nm*over_alloc_factor), 
+                                  max_local_np_alloc,
+                                  max_local_nm_alloc,
                                   original_species->sort_interval, original_species->sort_out_of_place, 
                                   grid);
     // Mark species as tracer
@@ -667,7 +669,7 @@ public:
 
     // Add annotations for global tracer ID
     annotations.add_annotation<int>(std::string("TracerID"));
-    tracers->init_annotations(max_local_np, max_local_nm, annotations);
+    tracers->init_annotations(max_local_np_alloc, max_local_nm_alloc, annotations);
 
     // Set tracer type to move by default
     tracers->tracer_type = TracerType::Move;
@@ -1145,8 +1147,18 @@ public:
  * @brief After a checkpoint restore, we must move the data back over to the
  * Kokkos objects. This currently must be done for all views
  */
-void restore_kokkos(vpic_simulation& simulation);
+void restore_kokkos(vpic_simulation& simulation, const char* fbase);
 // TODO: would this make more sense as a member function on vpic_simulation_t
+
+/**
+ * @brief The checkpoint macros will not work on the Kokkos views, so we bypass
+ * the checkpointing infrustructure and manually write this data to disk for
+ * all views without a legacy array.
+ *
+ * @param simulation The vpic_simulation that we are checkpointing
+ * @param fbase The base name for the checkpoint files
+ */
+void checkpt_kokkos(vpic_simulation& simulation, const char* fbase);
 
 
 #endif // vpic_h

@@ -1273,34 +1273,13 @@ advance_p( /**/  species_t            * RESTRICT sp,
   //  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
 
   
-  Kokkos::fence();
 #if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
   if(sp->using_annotations && sp->k_nm_h(0) > 0) {
     sp->annotations_copy_h.copy_from(sp->annotations_copy_d);
 //    sp->annotations_copy_h.copy_from(sp->annotations_copy_d, sp->k_nm_h(0));
-
-//    if(sp->annotation_vars.i32_vars.size() > 0) {
-//      auto annotations_i32_d_subview = Kokkos::subview(sp->annotations_copy_d.i32, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
-//      auto annotations_i32_h_subview = Kokkos::subview(sp->annotations_copy_h.i32, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
-//      Kokkos::deep_copy(annotations_i32_h_subview, annotations_i32_d_subview);
-//    }
-//    if(sp->annotation_vars.i64_vars.size() > 0) {
-//      auto annotations_i64_d_subview = Kokkos::subview(sp->annotations_copy_d.i64, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
-//      auto annotations_i64_h_subview = Kokkos::subview(sp->annotations_copy_h.i64, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
-//      Kokkos::deep_copy(annotations_i64_h_subview, annotations_i64_d_subview);
-//    }
-//    if(sp->annotation_vars.f32_vars.size() > 0) {
-//      auto annotations_f32_d_subview = Kokkos::subview(sp->annotations_copy_d.f32, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
-//      auto annotations_f32_h_subview = Kokkos::subview(sp->annotations_copy_h.f32, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
-//      Kokkos::deep_copy(annotations_f32_h_subview, annotations_f32_d_subview);
-//    }
-//    if(sp->annotation_vars.f64_vars.size() > 0) {
-//      auto annotations_f64_d_subview = Kokkos::subview(sp->annotations_copy_d.f64, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
-//      auto annotations_f64_h_subview = Kokkos::subview(sp->annotations_copy_h.f64, std::make_pair(0, sp->k_nm_h(0)), Kokkos::ALL);
-//      Kokkos::deep_copy(annotations_f64_h_subview, annotations_f64_d_subview);
-//    }
   }
 #endif
 
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+  Kokkos::fence();
 }
