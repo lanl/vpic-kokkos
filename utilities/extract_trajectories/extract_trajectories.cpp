@@ -77,6 +77,13 @@ int main(int argc, char**argv) {
     std::cout << std::endl;
   }
 
+  bool output_single_file = false;
+  auto output_single_file_arg = std::find(argv, argv+argc, std::string("--output-single-file"));
+  if(output_single_file_arg != argv+argc) {
+    output_single_file = true;
+    arg_offset += 1;
+  }
+
   const char* fname = argv[1+arg_offset];
 
   hid_t file_id, access_id;
@@ -305,109 +312,174 @@ int main(int argc, char**argv) {
   if(comm_rank == 0) 
     std::cout << "Done setting up tracer data\n";
 
+  hid_t plist_id, tracer_fid, plist_id2, tracer_gid, write_id;
+  std::string particle_fname;
+  if(output_single_file) {
+    particle_fname = std::string(fname);
+    particle_fname.erase(particle_fname.end()-3, particle_fname.end());
+    particle_fname = particle_fname + ".traj.h5";
+
+    // Create file access property list with parallel I/O access
+    plist_id = H5Pcreate(H5P_FILE_ACCESS);
+    H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
+    // Create trajectory file collectively
+    tracer_fid = H5Fcreate(particle_fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+    H5Pclose(plist_id);
+    // Create property list for collective operations
+    plist_id2 = H5Pcreate(H5P_DATASET_XFER);
+    H5Pset_dxpl_mpio(plist_id2, H5FD_MPIO_COLLECTIVE);
+
+    if(tracer_fid == H5I_INVALID_HID)
+      std::cout << "Failed to create trajectory file\n";
+    if(comm_rank == 0)
+      std::cout << "Writing all tracers to " << particle_fname << std::endl;
+  }
+
   // Iterate through all tracers
   for(auto it=tracer_set.begin(); it!=tracer_set.end(); it++) {
     int id = *it;
-    // Create trajectory file name
-    std::string particle_fname = std::string(fname);
-    particle_fname.erase(particle_fname.end()-3, particle_fname.end());
-    particle_fname = particle_fname + "." + std::to_string(id) + ".traj.h5";
-    // Split communicator
-    MPI_Comm stepcomm;
-    MPI_Comm_split(MPI_COMM_WORLD, ntimesteps[id]>0, comm_rank, &stepcomm);
-    int step_proc_rank, step_proc_size;
-    MPI_Comm_rank(stepcomm, &step_proc_rank);
-    MPI_Comm_size(stepcomm, &step_proc_size);
-    // Only ranks with time steps that matter to the tracer write data
-    if(ntimesteps[id]>0) {
-      // Start offset and number of elements for this process
-      hsize_t offset = beg_step;
-      hsize_t count = ntimesteps[id];
+    // Start offset and number of elements for this process
+    hsize_t offset = beg_step;
+    hsize_t count = ntimesteps[id];
+    if(!output_single_file) {
+      // Create trajectory file name
+      particle_fname = std::string(fname);
+      particle_fname.erase(particle_fname.end()-3, particle_fname.end());
+      particle_fname = particle_fname + "." + std::to_string(id) + ".traj.h5";
       // Create file access property list with parallel I/O access
-      hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
-      H5Pset_fapl_mpio(plist_id, stepcomm, MPI_INFO_NULL);
+      plist_id = H5Pcreate(H5P_FILE_ACCESS);
+      H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
       // Create trajectory file collectively
-      hid_t tracer_fid = H5Fcreate(particle_fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+      tracer_fid = H5Fcreate(particle_fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
       H5Pclose(plist_id);
-      // Create attribute for tracer ID
-      hid_t acpl_id = H5Pcreate(H5P_ATTRIBUTE_CREATE);
-      hid_t attr_fspace_id = H5Screate(H5S_SCALAR);
-      hid_t attr_id = H5Acreate(tracer_fid, "TracerID", H5T_STD_I32LE, attr_fspace_id, acpl_id, H5P_DEFAULT);
-      H5Awrite(attr_id, H5T_STD_I32LE, &id);
-      H5Aclose(attr_id);
-      H5Sclose(attr_fspace_id);
-      H5Pclose(acpl_id);
+      // Create property list for collective operations
+      plist_id2 = H5Pcreate(H5P_DATASET_XFER);
+      H5Pset_dxpl_mpio(plist_id2, H5FD_MPIO_COLLECTIVE);
+      write_id = tracer_fid;
+    } else {
+      if(tracer_fid == H5I_INVALID_HID)
+        printf("ERROR: Trying to create group but file id is invalid\n");
+      std::string group_name = std::to_string(id);
+      tracer_gid = H5Gcreate(tracer_fid, group_name.c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+      write_id = tracer_gid;
+    }
+
+    // Create attribute for tracer ID
+    hid_t acpl_id = H5Pcreate(H5P_ATTRIBUTE_CREATE);
+    hid_t attr_fspace_id = H5Screate(H5S_SCALAR);
+    hid_t attr_id = H5Acreate(write_id, "TracerID", H5T_STD_I32LE, attr_fspace_id, acpl_id, H5P_DEFAULT);
+    H5Awrite(attr_id, H5T_STD_I32LE, &id);
+    H5Aclose(attr_id);
+    H5Sclose(attr_fspace_id);
+    H5Pclose(acpl_id);
+
+    // Create dataspace for all timesteps
+    num_timesteps = ntimesteps[id];
+    hsize_t total_timesteps;
+    DEBUG_PRINT("Rank %d has %llu timesteps for tracer %d\n", comm_rank, num_timesteps, id);
+    MPI_Allreduce(&num_timesteps, &total_timesteps, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Scan(&num_timesteps, &offset, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+    offset -= num_timesteps;
+    DEBUG_PRINT("Rank %d Tracer: %d, offset: %llu, count: %llu\n", step_proc_rank, id, offset, count);
+    if(comm_rank == 0) 
+      DEBUG_PRINT("%llu timesteps for tracer %d\n", num_timesteps, id);
+    hid_t dataspace_id = H5Screate_simple(1, (hsize_t*)(&total_timesteps), NULL);
+
+    std::vector<hid_t> i32_dataset_ids, i64_dataset_ids, f32_dataset_ids, f64_dataset_ids;;
+    // Create slab of int data for all int variables
+    for(auto var_it=traj_int[id].begin(); var_it!=traj_int[id].end(); var_it++) {
+      if(strcmp("TracerID", var_it->first.c_str()) != 0) {
+        hid_t var_id = H5Dcreate(write_id, var_it->first.c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        i32_dataset_ids.push_back(var_id);
+      }
+    }
+
+    // Create slab of int64_t data for all int64_t variables
+    for(auto var_it=traj_int64_t[id].begin(); var_it!=traj_int64_t[id].end(); var_it++) {
+      hid_t var_id = H5Dcreate(write_id, var_it->first.c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+      i64_dataset_ids.push_back(var_id);
+    }
+
+    // Create slab of float data for all float variables
+    for(auto var_it=traj_float[id].begin(); var_it!=traj_float[id].end(); var_it++) {
+      hid_t var_id = H5Dcreate(write_id, var_it->first.c_str(), H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+      f32_dataset_ids.push_back(var_id);
+    }
+
+    // Create slab of double data for all double variables
+    for(auto var_it=traj_double[id].begin(); var_it!=traj_double[id].end(); var_it++) {
+      hid_t var_id = H5Dcreate(write_id, var_it->first.c_str(), H5T_IEEE_F64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+      f64_dataset_ids.push_back(var_id);
+    }
+
+    if(ntimesteps[id]>0) {
       // Create memspace for this processes chunk of data
       hsize_t memspace_len = 0;
       if(tracer_id_set.find(id) != tracer_id_set.end()) 
         memspace_len = static_cast<hsize_t>(ntimesteps[id]);
       hid_t memspace_id = H5Screate_simple(1, &memspace_len, NULL);
-      // Create property list for collective operations
-      hid_t plist_id2 = H5Pcreate(H5P_DATASET_XFER);
-      H5Pset_dxpl_mpio(plist_id2, H5FD_MPIO_COLLECTIVE);
-      // Create dataspace for all timesteps
-      num_timesteps = memspace_len;
-      hsize_t total_timesteps;
-      DEBUG_PRINT("Rank %d has %llu timesteps for tracer %d\n", comm_rank, num_timesteps, id);
-      MPI_Allreduce(&num_timesteps, &total_timesteps, 1, MPI_LONG_LONG, MPI_SUM, stepcomm);
-      MPI_Scan(&num_timesteps, &offset, 1, MPI_LONG_LONG, MPI_SUM, stepcomm);
-      offset -= num_timesteps;
-      DEBUG_PRINT("Rank %d Tracer: %d, offset: %llu, count: %llu\n", step_proc_rank, id, offset, count);
-      if(comm_rank == 0) 
-        DEBUG_PRINT("%llu timesteps for tracer %d\n", num_timesteps, id);
-      hid_t dataspace_id = H5Screate_simple(1, (hsize_t*)(&total_timesteps), NULL);
-
       // Write slab of int data for all int variables
+      int i=0;
       for(auto var_it=traj_int[id].begin(); var_it!=traj_int[id].end(); var_it++) {
         if(strcmp("TracerID", var_it->first.c_str()) != 0) {
-          hid_t var_id = H5Dcreate(tracer_fid, var_it->first.c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+          hid_t var_id = i32_dataset_ids[i++];
           hid_t filespace_id = H5Dget_space(var_id);
           H5Sselect_hyperslab(filespace_id, H5S_SELECT_SET, &offset, NULL, &count, NULL);
-          ret = H5Dwrite(var_id, H5T_STD_I32LE, memspace_id, filespace_id, H5P_DEFAULT, var_it->second.data());
+          ret = H5Dwrite(var_id, H5T_STD_I32LE, memspace_id, filespace_id, plist_id2, var_it->second.data());
           H5Sclose(filespace_id);
           H5Dclose(var_id);
         }
       }
 
       // Write slab of int64_t data for all int64_t variables
+      i=0;
       for(auto var_it=traj_int64_t[id].begin(); var_it!=traj_int64_t[id].end(); var_it++) {
-        hid_t var_id = H5Dcreate(tracer_fid, var_it->first.c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        hid_t var_id = i64_dataset_ids[i++];
         hid_t filespace_id = H5Dget_space(var_id);
         H5Sselect_hyperslab(filespace_id, H5S_SELECT_SET, &offset, NULL, &count, NULL);
-        ret = H5Dwrite(var_id, H5T_STD_I64LE, memspace_id, filespace_id, H5P_DEFAULT, var_it->second.data());
+        ret = H5Dwrite(var_id, H5T_STD_I64LE, memspace_id, filespace_id, plist_id2, var_it->second.data());
         H5Sclose(filespace_id);
         H5Dclose(var_id);
       }
 
       // Write slab of float data for all float variables
+      i=0;
       for(auto var_it=traj_float[id].begin(); var_it!=traj_float[id].end(); var_it++) {
-        hid_t var_id = H5Dcreate(tracer_fid, var_it->first.c_str(), H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        hid_t var_id = f32_dataset_ids[i++];
         hid_t filespace_id = H5Dget_space(var_id);
         H5Sselect_hyperslab(filespace_id, H5S_SELECT_SET, &offset, NULL, &count, NULL);
-        ret = H5Dwrite(var_id, H5T_IEEE_F32LE, memspace_id, filespace_id, H5P_DEFAULT, var_it->second.data());
+        ret = H5Dwrite(var_id, H5T_IEEE_F32LE, memspace_id, filespace_id, plist_id2, var_it->second.data());
         H5Sclose(filespace_id);
         H5Dclose(var_id);
       }
 
+      // Write slab of double data for all double variables
+      i=0;
       for(auto var_it=traj_double[id].begin(); var_it!=traj_double[id].end(); var_it++) {
-        hid_t var_id = H5Dcreate(tracer_fid, var_it->first.c_str(), H5T_IEEE_F64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        hid_t var_id = f64_dataset_ids[i++];
         hid_t filespace_id = H5Dget_space(var_id);
         H5Sselect_hyperslab(filespace_id, H5S_SELECT_SET, &offset, NULL, &count, NULL);
-        ret = H5Dwrite(var_id, H5T_IEEE_F64LE, memspace_id, filespace_id, H5P_DEFAULT, var_it->second.data());
+        ret = H5Dwrite(var_id, H5T_IEEE_F64LE, memspace_id, filespace_id, plist_id2, var_it->second.data());
         H5Sclose(filespace_id);
         H5Dclose(var_id);
       }
 
       // Close HDF5 objects
-      H5Sclose(dataspace_id);
-      H5Pclose(plist_id2);
       H5Sclose(memspace_id);
-      H5Fclose(tracer_fid);
       if(comm_rank == 0)
         printf("Wrote trajectory file %s\n", particle_fname.c_str());
     }
-    MPI_Comm_free(&stepcomm);
+    H5Sclose(dataspace_id);
+    if(output_single_file) {
+      H5Gclose(tracer_gid);
+    } else {
+      H5Fclose(tracer_fid);
+      H5Pclose(plist_id2);
+    }
     MPI_Barrier(MPI_COMM_WORLD);
+  }
+  if(output_single_file) {
+    H5Pclose(plist_id2);
   }
 
   MPI_Finalize();
