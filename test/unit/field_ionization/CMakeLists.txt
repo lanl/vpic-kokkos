@@ -1,4 +1,4 @@
-LIST(APPEND TESTS hydrogen_benchmark)
+LIST(APPEND TESTS field_ionization_benchmark)
 
 list(APPEND gold_file "${CMAKE_CURRENT_SOURCE_DIR}/hydrogen_benchmark_gold.csv")
 add_definitions(-DGOLD_FILE="${gold_file}")

@@ -37,8 +37,6 @@ begin_globals {
   double xfocus;                 // how far from boundary to focus
   double mask;			 // # gaussian widths from beam center where I nonzero
 
-  int    pulse_shape;            // 0 for steady, indefinite pulse, 1 for
-                                 // square pulse, 2 for sin^2
   double pulse_FWHM;
   double pulse_sigma;
   double pulse_mean;
@@ -66,38 +64,6 @@ begin_globals {
 void vpic_simulation::user_diagnostics() {}
 
 #define VAC 5e-6*0
-// Updated by Scott V. Luedtke, XCP-6
-// Density function helpers for defining how dense the plasma is as a function
-// of position.  Uses SI units to avoid confusion at the expense of some extra
-// conversions.  The initialization function is responsible for feeding SI
-// units.  Returns a value between 0 and 1 which corresponds to the percetnage
-// of n_0 the density should be for position (x,y,z)
-
-/*
-double density_func(double x, double y, double z, double xmin, double xmax,
-        double ymin, double ymax, double zmin, double zmax){
-    double dens = 1.;
-    //Start with a nice vacuum inside the boundaries
-    // 3DCHANGE --- this needs to change when in 3D
-    //if( y<ymin+VAC || y > ymax-VAC) return 0.;
-    if( z<zmin+VAC || z > zmax-VAC) return 0.;
-    double ramp_length = 10e-6;
-    double ramp1_min = xmin+VAC;
-    double ramp1_max = ramp1_min+ramp_length;
-    double ramp2_max = xmax-VAC-10e-6;// More space for the pulse to pass
-                                      // electrons, maybe
-    double ramp2_min = ramp2_max-ramp_length;
-    if( x<ramp1_min || x>ramp2_max) return 0.;
-
-    if( x>=ramp1_min && x<ramp1_max )
-        dens *= (1. + cos( (x-ramp1_min)*M_PI/ramp_length - M_PI))/2.;
-
-    if( x>=ramp2_min && x<ramp2_max )
-        dens *= (1. + cos((x-ramp2_min)*M_PI/ramp_length))/2.;
-
-    return dens;
-}
-*/
 
 // A simple slab of thickness length starting at the origin
 static inline double slab(double x, double y, double z, double xstart,
@@ -164,9 +130,8 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
 
   // Physical parameters
-  int I1_present = 1; // carbon
-  int I2_present = 0; // hydrogen
-  int pulse_shape=1;                   // 0 - square pulse, 1 - gaussian
+  int I1_present = 0; // carbon
+  int I2_present = 1; // hydrogen
 
   double n_e_over_n_crit       = 90;       // n_e/n_crit in solid slab
   double laser_intensity_W_cm2;
@@ -256,7 +221,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   // VPIC uses normalized momentum, not momentum in code units.
   double px_e_norm = 0; //px_e_SI/(m_e_SI*c_SI);
   double px_I1_norm = 0; //px_I1_SI/(m_I1_SI*c_SI);
-  double px_I2_norm = px_I2_SI/(m_I2_SI*c_SI);
+  double px_I2_norm = 0;
 
   // Code units
   double dx = Lx_SI/nx / length_to_SI;
@@ -284,8 +249,6 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
   double dt = cfl_req*courant_length(Lx, Ly, Lz, nx, ny, nz);
 
-  //  global->dt = dt;
-  //  global->time_to_SI = time_to_SI;
   
   // Laser parameters
   double nu = c_SI/lambda_SI;
@@ -305,24 +268,10 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   double pulse_sigma = pulse_FWHM/( 2*sqrt(2*log(2) )); // sigma for gaussian function
   
   double pulse_period = 1 / nu; 
-  // How far in front of the boundary should the peak start?
   double pulse_start = 350e-15 / time_to_SI; // time in code units
   double lambda    = lambda_SI / length_to_SI;  // Wavelength
-  double xfocus    = dist_to_focus / length_to_SI; // Distance from boundary to
-                                                   // focus
-  double f_number  = 1.5; // Not used!    // f number of beam
-  double waist     = w0_SI / length_to_SI;  // width of beam at focus
-  double ycenter   = 0;         // spot centered in y on lhs boundary
-  double zcenter   = 0;         // spot centered in z on lhs boundary
-  double mask      = 2.8;       // Set drive I>0 if r>mask*width at boundary.
-  double Rayleigh = M_PI*waist*waist/lambda;
-  double width = waist*sqrt(1.+pow(xfocus/Rayleigh,2));
   double omega_0 = omega_L_SI * time_to_SI;
   double emax = sqrt(2.*laser_intensity_SI/(c_SI*eps0_SI)) / E_to_SI; // code units
-// if plane wave:
-  //emax = emax*sqrt(waist/width); // at entrance if 2D Gaussian
-  //emax = emax*(waist/width); // at entrance if 3D Gaussian 3DCHANGE
-
   
   double t_stop = ((cycles/nu) / time_to_SI); // Simulation runtime
 
@@ -516,12 +465,6 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   global->I2_present               = I2_present;
   global->launch_wave              = launch_wave; 
   global->lambda                   = lambda;
-  global->waist                    = waist;
-  global->width                    = width;
-  global->mask                     = mask;
-  global->xfocus                   = xfocus; 
-  global->ycenter                  = ycenter; 
-  global->zcenter                  = zcenter; 
 
   global->quota_sec                = quota_sec;
   global->rtoggle                  = 0;
@@ -533,7 +476,6 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   global->particle_interval          = particle_interval; 
   global->load_particles           = load_particles; 
 
-  global->pulse_shape              = pulse_shape; 
   global->pulse_FWHM               = pulse_FWHM;
   global->pulse_sigma               = pulse_sigma;
   global->pulse_mean               = pulse_mean;
@@ -670,14 +612,6 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
                   z*length_to_SI, global->xmin*length_to_SI, grid->dx*length_to_SI*1,
                   global->zmin*length_to_SI, global->zmax*length_to_SI,
                   global->ymin*length_to_SI, global->ymax*length_to_SI) ) {
-      // third to last arg is "weight," a positive number
-          //std::cout<< " injecting electron " << std::endl;
-	
-	//inject_particle( electron, x, y, z, 1,0,0,fabs(qe),qe,0,0);
-        //            qe     normal( rng(0), 0, px_e_norm ),
-        //                 normal( rng(0), 0, px_e_norm ),
-        //                 normal( rng(0), 0, px_e_norm ), fabs(qe), 0, 0 );
-	
 	
         if ( mobile_ions ) {
 
@@ -708,97 +642,22 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
 
 begin_field_injection { 
-  // Inject a light wave from lhs boundary with E aligned along y
-  // For 2d, 3d, use scalar diffraction theory for the Gaussian beam source. 
-  // See, e.g., Lin's notes on this or Brian's notes of 12 March 2005. 
-  // (Note the sqrt(2) discrepancy in the two regarding definition of waist. 
-  // The driver below assumes Brian's definition). 
-
-  // Note, for quiet startup (i.e., so that we don't propagate a delta-function
-  // noise pulse at time t=0) we multiply by a constant phase term exp(i phi)
-  // where: 
-  //   phi = k*global->xfocus+atan(h)/2    (2D)
-  //   phi = k*global->xfocus+atan(h)      (3D)
-
-//# define loop_over_left_boundary \
-//    for ( int iz=1; iz<=grid->nz+1; ++iz ) for ( int iy=1; iy<=grid->ny; ++iy )
-//# define DY    ( grid->y0 + (iy-0.5)*grid->dy - global->ycenter )
-//# define DZ    ( grid->z0 +  (iz-1) *grid->dz - global->zcenter )
-//# define R2    ( DY*DY+DZ*DZ )
-//# define PHASE ( global->omega_0*t + h*R2/(global->width*global->width) )
-//# define MASK  ( R2<=pow(global->mask*global->width,2) ? 1 : 0 )
-
 
   if ( global->launch_wave == 0 ) return;
-
+  
   if ( grid->x0==float(global->xmin) ) { // Node is on left boundary
-    double alpha = grid->cvac*grid->dt/grid->dx;
-    double emax_coeff = ((4/(1+alpha))*global->omega_0*grid->dt*global->emax);
     double t=grid->dt*step();
-
-//#if 1
-//    double pulse_shape_factor=1;
-//    if ( global->pulse_shape>=1 ) pulse_shape_factor=( t<global->pulse_FWHM ? 1
-//            : 0 );
-//    if ( global->pulse_shape==2 ) {
-//    float sin_t_tau = sin(t*M_PI/global->pulse_FWHM);
-//      pulse_shape_factor =( t<global->pulse_FWHM ? sin_t_tau : 0 );
-//  }
-//    // Hyperbolic secant profile
-//    if (global->pulse_shape==3){
-//        double fac = 2.*log(1.+sqrt(2.))/global->pulse_FWHM;
-//        // This is actually a time, not a distance, since the pulse_FWHM is time
-//        double z = (t - global->pulse_start);
-//        z *= fac;
-//        pulse_shape_factor = 2./(exp(z)+exp(-z));
-//    }
-//
-//    // square wave
-//    int    square_wave        = 1;
-//    double square_wave_factor = 1;
-//    if ( square_wave>=1 ) square_wave_factor=( sin( (t*global->nu_c)  * 2.0 * M_PI)>=0.0 ? 1 : -1 );
-//
-//#endif 
-
-    //double prefactor = emax_coeff*sqrt(2.0/M_PI); // Wave norm at edge of box
-    double prefactor = global->emax;  // Wave norm at edge of box
-    // Rayleigh length
-    double rl     = M_PI*global->waist*global->waist/global->lambda;
-    double h = global->xfocus/rl;                 // distance/Rayleigh length
-
-// Kokkos Port
     int ny = grid->ny;
-    int nz = grid->nz;
-    float dy = grid->dy;
-    float dz = grid->dz;
-    float y0 = grid->y0;
-    float z0 = grid->z0;
-    float ycenter = global->ycenter;
-    float zcenter = global->zcenter;
-    float width = global->width;
-    float mask = global->mask;
-    float omega_0 = global->omega_0;
-    float dy_offset = y0 - ycenter;
-    float dz_offset = z0 - zcenter;
+    int nz = grid->nz;;
     int sy = grid->sy;
     int sz = grid->sz;
-    //printf("Injecting\n");
-
     k_field_t& kfield = field_array->k_f_d;
 
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> left_edge({1, 1}, {nz+2, ny+1});
     Kokkos::parallel_for("Field injection", left_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
-        auto DY =( (iy-0.5)*dy + dy_offset );
-        if(ny==1) DY = 0.;
-        auto DZ =( (iz-1  )*dz + dz_offset );
-        auto R2   =( DY*DY + DZ*DZ );
-        auto PHASE=( omega_0*t + h*R2/(width*width) );
-        auto MASK =( R2<=pow(mask*width,2) ? 1 : 0 );
-	kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(omega_0*t));
-
-        if ( global->pulse_shape==0 ){
+        if ( global->I2_present==1 ){
 	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t));
-	} else if (global->pulse_shape==1 ){
+	} else if (global->I2_present==1 ){
 	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t)) * exp(-(t-global->pulse_mean)*(t-global->pulse_mean)/(2.*global->pulse_sigma*global->pulse_sigma));
 	}
     });
@@ -807,17 +666,9 @@ begin_field_injection {
 
 } // begin_field_injection
 
-begin_particle_injection {
-  // No particle injection for this simulation
-}
-
-begin_current_injection {
-  // No current injection for this simulation
-}
-
-begin_particle_collisions{
-  // No collisions for this simulation
-}
+begin_particle_injection {}
+begin_current_injection {}
+begin_particle_collisions{}
 
 TEST_CASE( "Check if field ionization agrees with numerical solution", "[average charge state]" )
 {

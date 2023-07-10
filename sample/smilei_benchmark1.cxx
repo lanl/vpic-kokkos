@@ -215,7 +215,7 @@ begin_initialization {
 
 
   // Physical parameters
-  int pulse_shape=1;                   // 0 - square pulse, 1 - gaussian
+  int pulse_shape=0;                   // 0 - square pulse, 1 - gaussian
 
   double n_e_over_n_crit       = 90;       // n_e/n_crit in solid slab
   double laser_intensity_W_cm2;
@@ -231,9 +231,9 @@ begin_initialization {
   double lambda_SI  = 0.8e-6; // 1.058e-6;
   double w0_SI = 1.25e-6; // Beam waist
 
-  double Lx_SI         = 16e-6; // Simulation box size
+  double Lx_SI         = 10*lambda_SI; // Simulation box size
   double Ly_SI         =  w0_SI*sqrt(M_PI/2.);  // 3DCHANGE
-  double Lz_SI         = 16e-6;
+  double Lz_SI         = 10*lambda_SI;
   //double t_stop = 1.2e-12 / time_to_SI; // Simulation run time
 
   double T_e = 5. * e_SI; // Technically, this is k_B*T.  e_SI is eV to J.
@@ -245,11 +245,11 @@ begin_initialization {
   // Simulation parameters
   // These are floating point to avoid a lot of casting
   // Increase resolution to ~3000 for physical results
-  double nx = 1200;
+  double nx = 1500;//(60/lambda_SI)*Lx_SI; // 60 cells per wavelength
   double ny = 1;
-  double nz = 200;
+  double nz = 20;//nx;
 
-  double nppc = 150;  // Average number of macro particles/cell of each species
+  double nppc = 1;  // Average number of macro particles/cell of each species
 
   int topology_x = 1;
   int topology_y = 1;
@@ -306,7 +306,7 @@ begin_initialization {
   // VPIC uses normalized momentum, not momentum in code units.
   double px_e_norm = 0; //px_e_SI/(m_e_SI*c_SI);
   double px_I1_norm = 0; //px_I1_SI/(m_I1_SI*c_SI);
-  double px_I2_norm = px_I2_SI/(m_I2_SI*c_SI);
+  double px_I2_norm = 0;
 
   // Code units
   double dx = Lx_SI/nx / length_to_SI;
@@ -322,7 +322,7 @@ begin_initialization {
   double Ly = ny*dy;
   double Lz = nz*dz;
 
-  global->xmin = -dist_to_focus / length_to_SI;
+  global->xmin = 0;
   global->xmax = global->xmin + Lx;
   global->ymin = -.5*Ly;
   global->ymax = global->ymin + Ly;
@@ -333,6 +333,8 @@ begin_initialization {
   double particles_alloc = nppc*ny*nz*nx;
 
   double dt = cfl_req*courant_length(Lx, Ly, Lz, nx, ny, nz);
+
+  std::cout << "courant_length(Lx, Ly, Lz, nx, ny, nz): " << courant_length(Lx, Ly, Lz, nx, ny, nz) << std::endl;
 
   //  global->dt = dt;
   //global->time_to_SI = time_to_SI;
@@ -388,7 +390,7 @@ begin_initialization {
   double n_I1_SI = 1e20; // Density of I1
   double n_I2_SI = 1e20; // Density of I2
   double N_I1    = nppc*nx*ny*nz; //Number of macro I1 in box
-  double N_I2    = nppc*nx*ny*nz; //Number of macro I2 in box
+  double N_I2    = 90e3;//nppc*nx*ny*nz; //Number of macro I2 in box
   N_I1 = trunc_granular(N_I1, nproc()); // make divisible by # processors
   N_I2 = trunc_granular(N_I2, nproc()); // make divisible by # processors
   double NpI1    = n_I1_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I1 in box
@@ -692,26 +694,16 @@ begin_initialization {
     double zmin = grid->z0;
     double zmax = (grid->z0+grid->nz*grid->dz);
 
-    repeat( (N_I2)/(topology_x*topology_y*topology_z) ) {
-      double x = uniform( rng(0), xmin, xmax );
-      double y = uniform( rng(0), ymin, ymax );   
+    double x = global->xmin + grid->dx;
+    double y = (ymin+ymax)/2.; 
+    repeat( (N_I2)/(topology_x*topology_y*topology_z) ) {  
       double z = uniform( rng(0), zmin, zmax );
 
-      // if ( iv_region ) continue;   // Particle fell in iv_region.  Don't load.
-
-      // Rejection method, based on user-defined density function
-      if ( uniform( rng(0), 0, 1 ) < slab(x*length_to_SI, y*length_to_SI,
-                  z*length_to_SI, global->xmin*length_to_SI, grid->dx*length_to_SI*1,
-                  global->zmin*length_to_SI, global->zmax*length_to_SI,
-                  global->ymin*length_to_SI, global->ymax*length_to_SI) ) {
-      // third to last arg is "weight," a positive number
-          //std::cout<< " injecting electron " << std::endl;
-	
-	//inject_particle( electron, x, y, z, 1,0,0,fabs(qe),qe,0,0);
-        //            qe     normal( rng(0), 0, px_e_norm ),
-        //                 normal( rng(0), 0, px_e_norm ),
-        //                 normal( rng(0), 0, px_e_norm ), fabs(qe), 0, 0 );
-	
+//      // Rejection method, based on user-defined density function
+//      if ( uniform( rng(0), 0, 1 ) < slab(x*length_to_SI, y*length_to_SI,
+//                  z*length_to_SI, global->xmin*length_to_SI, grid->dx*length_to_SI*1,
+//                  global->zmin*length_to_SI, global->zmax*length_to_SI,
+//                  global->ymin*length_to_SI, global->ymax*length_to_SI) ) {
 	
         if ( mobile_ions ) {
 
@@ -733,7 +725,7 @@ begin_initialization {
 	  
         } // if mobile ions
 	
-      } // if uniform < slab
+	//      } // if uniform < slab
     } // repeat    
  } // if load_particles
 
