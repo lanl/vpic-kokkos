@@ -87,15 +87,6 @@ begin_globals {
 
   // Parameters for 2d and 3d Gaussian wave launch
   double lambda;
-  double waist;                  // how wide the focused beam is
-  double width;
-  double zcenter;		 // center of beam at boundary in z
-  double ycenter;		 // center of beam at boundary in y
-  double xfocus;                 // how far from boundary to focus
-  double mask;			 // # gaussian widths from beam center where I nonzero
-
-  int    pulse_shape;            // 0 for steady, indefinite pulse, 1 for
-                                 // square pulse, 2 for sin^2
   double pulse_FWHM;
   double pulse_sigma;
   double pulse_mean;
@@ -215,43 +206,56 @@ begin_initialization {
 
 
   // Physical parameters
-  int pulse_shape=0;                   // 0 - square pulse, 1 - gaussian
+  int I1_present = 1; // carbon
+  int I2_present = 0; // hydrogen
 
   double n_e_over_n_crit       = 90;       // n_e/n_crit in solid slab
   double laser_intensity_W_cm2;
-  if (pulse_shape == 0){
+  if (I2_present){
     laser_intensity_W_cm2 = 1e14;      // units of W/cm^2
-  } else if (pulse_shape == 1){
-    laser_intensity_W_cm2 = 5.e16;      // units of W/cm^2
+  } else if (I1_present){
+    laser_intensity_W_cm2 = 1.e20;      // units of W/cm^2
   }
   double laser_intensity_SI    = laser_intensity_W_cm2/1e-4; // units of W/m^2
   double laser_E_SI = sqrt( (2*laser_intensity_SI)/(c_SI * eps0_SI) ); // Laser E
   double laser_E_c = laser_E_SI / E_to_SI;
   
-  double lambda_SI  = 0.8e-6; // 1.058e-6;
+  double lambda_SI  = 0.8e-6;
   double w0_SI = 1.25e-6; // Beam waist
+  double nu = c_SI/lambda_SI;
+  double nu_c = nu*time_to_SI;
+  int cycles;
+  double pulse_FWHM;
+  double pulse_mean;
+  double pulse_sigma;
+  if ( I2_present ) {
+    cycles = 10;
+  } else if ( I1_present ) {
+    cycles = 10;
+    pulse_FWHM = 5/nu_c;
+    pulse_mean  = cycles/nu_c; // need to shift the gaussian (want the max at the end of the sim)
+    pulse_sigma = pulse_FWHM/( 2*sqrt(2*log(2) )); // sigma for gaussian function
+  }
 
-  double Lx_SI         = 10*lambda_SI; // Simulation box size
-  double Ly_SI         =  w0_SI*sqrt(M_PI/2.);  // 3DCHANGE
-  double Lz_SI         = 10*lambda_SI;
+  double Lx_SI         = cycles*lambda_SI; // Simulation box size
+  double Ly_SI         = w0_SI*sqrt(M_PI/2.);  // 3DCHANGE
+  double Lz_SI         = cycles*lambda_SI;
   //double t_stop = 1.2e-12 / time_to_SI; // Simulation run time
 
   double T_e = 5. * e_SI; // Technically, this is k_B*T.  e_SI is eV to J.
   double T_i = 5. * e_SI;
   float dfrac               = 0.0; // fraction of charge density for n_Al12/ne
 
-  double dist_to_focus = 1;// For this run, put the focus at the back boundary
-
   // Simulation parameters
   // These are floating point to avoid a lot of casting
   // Increase resolution to ~3000 for physical results
-  double nx = 1500;//(60/lambda_SI)*Lx_SI; // 60 cells per wavelength
+  double nx = (60/lambda_SI)*Lx_SI; // 50 cells per wavelength (500 cells)
   double ny = 1;
-  double nz = 20;//nx;
+  double nz = (6/lambda_SI)*Lx_SI; // 6 cells per wavelength (60 cells)
 
-  double nppc = 1;  // Average number of macro particles/cell of each species
+  double nppc = 2000;  // Average number of macro particles/cell of each species
 
-  int topology_x = 1;
+  int topology_x = nproc();
   int topology_y = 1;
   int topology_z = 1;
   double quota = 1;             // Run quota in hours.  
@@ -281,7 +285,6 @@ begin_initialization {
   double skin_depth_SI = c_SI/wpe_SI; // meters
   double n_e_SI = n_e_over_n_crit*ncr_SI;
   double debye_SI = sqrt(eps0_SI*T_e/(n_e_SI*e_SI*e_SI));
-
 
 #define mp_me 1836.15267343
   double A_I1    = 12;   // neutral carbon, mass number
@@ -333,40 +336,15 @@ begin_initialization {
   double particles_alloc = nppc*ny*nz*nx;
 
   double dt = cfl_req*courant_length(Lx, Ly, Lz, nx, ny, nz);
-
-  std::cout << "courant_length(Lx, Ly, Lz, nx, ny, nz): " << courant_length(Lx, Ly, Lz, nx, ny, nz) << std::endl;
-
-  //  global->dt = dt;
-  //global->time_to_SI = time_to_SI;
   
   // Laser parameters
-  int cycles = 10;
-  double nu = c_SI/lambda_SI;
-  double nu_c = nu*time_to_SI;
-  double pulse_FWHM = 5/nu_c;   //((cycles/nu) / time_to_SI); // pulse duration
-  double pulse_mean  = cycles/nu_c; // need to shift the gaussian (want the max at the end of the sim)
-  double pulse_sigma = pulse_FWHM/( 2*sqrt(2*log(2) )); // sigma for gaussian function
   double pulse_period = 1 / nu; 
-  // How far in front of the boundary should the peak start?
   double pulse_start = 350e-15 / time_to_SI; // time in code units
   double lambda    = lambda_SI / length_to_SI;  // Wavelength
-  double xfocus    = dist_to_focus / length_to_SI; // Distance from boundary to
-                                                   // focus
-  double f_number  = 1.5; // Not used!    // f number of beam
-  double waist     = w0_SI / length_to_SI;  // width of beam at focus
-  double ycenter   = 0;         // spot centered in y on lhs boundary
-  double zcenter   = 0;         // spot centered in z on lhs boundary
-  double mask      = 2.8;       // Set drive I>0 if r>mask*width at boundary.
-  double Rayleigh = M_PI*waist*waist/lambda;
-  double width = waist*sqrt(1.+pow(xfocus/Rayleigh,2));
   double omega_0 = omega_L_SI * time_to_SI;
   double emax = sqrt(2.*laser_intensity_SI/(c_SI*eps0_SI)) / E_to_SI; // code units
-// if plane wave:
-  //emax = emax*sqrt(waist/width); // at entrance if 2D Gaussian
-  //emax = emax*(waist/width); // at entrance if 3D Gaussian 3DCHANGE
-
   
-  double t_stop = 1*cycles/nu_c; // Simulation runtime
+  double t_stop = cycles/nu_c; // Simulation runtime
 
   // Diagnostics intervals.  
   int energies_interval = 50;
@@ -374,7 +352,7 @@ begin_initialization {
   int particle_interval = 10*field_interval;
   int restart_interval = 400;
   int quota_check_interval = 200;
-  int spectra_interval = int(pulse_FWHM/dt);
+  //  int spectra_interval = int(pulse_FWHM/dt);
 
 
 
@@ -389,17 +367,14 @@ begin_initialization {
   // Parameters for the ions (note it is the same box as for electrons)
   double n_I1_SI = 1e20; // Density of I1
   double n_I2_SI = 1e20; // Density of I2
-  double N_I1    = nppc*nx*ny*nz; //Number of macro I1 in box
-  double N_I2    = 90e3;//nppc*nx*ny*nz; //Number of macro I2 in box
+  double N_I1    = nppc*nz; //Number of macro I1 in box
+  double N_I2    = nppc*nz; //Number of macro I2 in box
   N_I1 = trunc_granular(N_I1, nproc()); // make divisible by # processors
   N_I2 = trunc_granular(N_I2, nproc()); // make divisible by # processors
   double NpI1    = n_I1_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I1 in box
   double NpI2    = n_I2_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I2 in box
   double w_I1    = NpI1/N_I1;
   double w_I2    = NpI2/N_I2;
-  int I1_present = 1;
-  int I2_present = 0;
-
 
   
 
@@ -461,7 +436,6 @@ begin_initialization {
     fprintf(out, "%.17e   Spec max for electron, code units (gamma-1)\n",
             0);
     fprintf(out, "%.17e   Spec max for I2, code units (gamma-1)\n", 0);
-    fprintf(out, "%d   Spectra Interval\n", spectra_interval);
     fprintf(out, "%d   This is my rank\n", rank());
     fprintf(out, "%.17e   Pulse FWHM, code units\n",pulse_FWHM);
     fprintf(out, "%.17e   Pulse Sigma, code units\n",pulse_sigma);
@@ -511,22 +485,15 @@ begin_initialization {
   sim_log("* m_e, m_I1, m_I2 (code units):  "<<m_e_c<<" "<<m_I1_c<<" "<<m_I2_c);
   sim_log("* Radiation damping:             "<<damp);
   sim_log("* Fraction of courant limit:     "<<cfl_req);
-  sim_log("* emax at entrance, waist:       "<<emax<<" "<<emax/sqrt(waist
-              /width));
   sim_log("* energies_interval:             "<<energies_interval);
   sim_log("* field_interval:                "<<field_interval);
   sim_log("* restart interval:              "<<restart_interval);
   sim_log("* random number base seed:       "<<rng_seed);
-  sim_log("* waist, width, xfocus:          "<<waist<<" "<<width<<" "<<xfocus);
-  sim_log("* ycenter, zcenter, mask:        "<<ycenter<<" "<<zcenter<<" "
-          <<mask);
   sim_log("* tracer_interval:               "<<0);
   sim_log("* tracer2_interval:              "<<0); 
   sim_log("*********************************");
 
   // SETUP HIGH-LEVEL SIMULATION PARMETERS
-  // FIXME : proper normalization in these units for: xfocus, ycenter, zcenter,
-  // waist
   sim_log("Setting up high-level simulation parameters. "); 
   num_step             = int(t_stop/(dt)); 
   status_interval      = 100; 
@@ -551,13 +518,7 @@ begin_initialization {
   global->I1_present                = I1_present;
   global->I2_present               = I2_present;
   global->launch_wave              = launch_wave; 
-  global->lambda                   = lambda;
-  global->waist                    = waist;
-  global->width                    = width;
-  global->mask                     = mask;
-  global->xfocus                   = xfocus; 
-  global->ycenter                  = ycenter; 
-  global->zcenter                  = zcenter; 
+  global->lambda                   = lambda; 
 
   global->quota_sec                = quota_sec;
   global->rtoggle                  = 0;
@@ -569,7 +530,6 @@ begin_initialization {
   global->particle_interval          = particle_interval; 
   global->load_particles           = load_particles; 
 
-  global->pulse_shape              = pulse_shape; 
   global->pulse_FWHM               = pulse_FWHM;
   global->pulse_sigma               = pulse_sigma;
   global->pulse_mean               = pulse_mean;
@@ -679,9 +639,6 @@ begin_initialization {
 
   // LOAD PARTICLES
 
-  // Load particles using rejection method (p. 290 Num. Recipes in C 2ed, Press
-  // et al.)  
-
   if ( load_particles!=0 ) {
     sim_log( "Loading particles" );
   
@@ -698,12 +655,6 @@ begin_initialization {
     double y = (ymin+ymax)/2.; 
     repeat( (N_I2)/(topology_x*topology_y*topology_z) ) {  
       double z = uniform( rng(0), zmin, zmax );
-
-//      // Rejection method, based on user-defined density function
-//      if ( uniform( rng(0), 0, 1 ) < slab(x*length_to_SI, y*length_to_SI,
-//                  z*length_to_SI, global->xmin*length_to_SI, grid->dx*length_to_SI*1,
-//                  global->zmin*length_to_SI, global->zmax*length_to_SI,
-//                  global->ymin*length_to_SI, global->ymax*length_to_SI) ) {
 	
         if ( mobile_ions ) {
 
@@ -1095,99 +1046,6 @@ begin_diagnostics {
 
 
 
-  // Restart dump filenames are by default tagged with the current timestep.
-  // If you do not want to do this add "0" to the dump_restart arguments. One
-  // reason to not tag the dumps is if you want only one restart dump (the most
-  // recent one) to be stored at a time to conserve on file space. Note: A
-  // restart dump should be the _very_ _last_ dump made in a diagnostics
-  // routine. If not, the diagnostics performed after the restart dump but
-  // before the next timestep will be missed on a restart. Restart dumps are
-  // in a binary format. Each rank makes a restart dump.
-
-  // Restarting from restart files is accomplished by running the executable
-  // with "restart restart" as additional command line arguments.  The
-  // executable must be identical to that used to generate the restart dumps or
-  // else the behavior may be unpredictable. 
-
-  // Note:  restart is not currently working with custom boundary conditions
-  // (such as the reflux condition) and has not been tested with emission 
-  // turned on.  
-  
-  // if ( step()!=0 && !(step()%global->restart_interval) )
-  // dump_restart("restart",0); 
-
-
-  // Shut down simulation if wall clock time exceeds global->quota_sec.
-  // Note that the mp_elapsed() is guaranteed to return the same value for all
-  // processors (elapsed time on proc #0), and therefore the abort should
-  // be synchronized across processors.
-
-#if 1
-  if ( global->quota_check_interval &&
-          (step()%global->quota_check_interval)==0 ) {
-    if ( uptime() > global->quota_sec ) {
-
-    BEGIN_TURNSTILE(NUM_TURNSTILES) {
-//    checkpt( "restart/restart", step() );
-      checkpt( "restart/restart", global->rtoggle );
-    } END_TURNSTILE;
-
-      // SVL - This barrier needs to be before the sim_log, else the sim_log is
-      // probably a lie.
-      mp_barrier();
-      if (world_rank==0) {
-        // We are done checkpointing.  Leave a note saying what the newest
-        // checkpoint is.
-        FILE * newckp = fopen("newest_checkpoint.txt", "w");
-        fprintf(newckp, "restart/restart.%i", global->rtoggle);
-        fclose(newckp);
-      }
-      sim_log( "Restart dump invoked by quota completed." );
-      sim_log( "Allowed runtime exceeded for this job.  Terminating." );
-      mp_barrier(); // Just to be safe
-      halt_mp();
-      exit(0);
-    }
-  }
-#endif
-
-#if 1
-  if ( global->restart_interval>0 &&
-          ((step()%global->restart_interval)==0) ) {
-    //double dumpstart = uptime();
-
-    // NOTE: If you want an accurate start time, you need an MPI barrier.
-    // This can feasibly slow down the simulation, so you might not want it
-    // unless you are benchmarking the dump.
-    //mp_barrier();
-    std::time_t dumpstart = std::time(NULL);
-
-//???????????????????????????????????????????????????????????????????????
-    BEGIN_TURNSTILE(NUM_TURNSTILES) {
-//    checkpt( restart_fbase[global->rtoggle], step() );
-      checkpt("restart/restart", global->rtoggle);
- } END_TURNSTILE;
-
-    // SVL - This is a kind of messy way to calculate this.
-    //double dumpelapsed = uptime() - dumpstart;
-
-    // Do put a barrier here so we don't say we're done before we are
-    mp_barrier();
-
-    if (world_rank==0) {
-      double dumpelapsed = std::difftime(std::time(NULL), dumpstart);
-      sim_log("Restart duration "<<dumpelapsed<<" seconds");
-
-      // We are done checkpointing.  Leave a note saying what the newest
-      // checkpoint is.
-      FILE * newckp = fopen("newest_checkpoint.txt", "w");
-      fprintf(newckp, "restart/restart.%i", global->rtoggle);
-      fclose(newckp);
-    }
-
-    global->rtoggle^=1;
-  }
-#endif
 
 }
 
@@ -1202,79 +1060,19 @@ begin_current_injection {
 }
 
 begin_field_injection { 
-  // Inject a light wave from lhs boundary with E aligned along y
-  // For 2d, 3d, use scalar diffraction theory for the Gaussian beam source. 
-  // See, e.g., Lin's notes on this or Brian's notes of 12 March 2005. 
-  // (Note the sqrt(2) discrepancy in the two regarding definition of waist. 
-  // The driver below assumes Brian's definition). 
-
-  // Note, for quiet startup (i.e., so that we don't propagate a delta-function
-  // noise pulse at time t=0) we multiply by a constant phase term exp(i phi)
-  // where: 
-  //   phi = k*global->xfocus+atan(h)/2    (2D)
-  //   phi = k*global->xfocus+atan(h)      (3D)
-
-//# define loop_over_left_boundary \
-//    for ( int iz=1; iz<=grid->nz+1; ++iz ) for ( int iy=1; iy<=grid->ny; ++iy )
-//# define DY    ( grid->y0 + (iy-0.5)*grid->dy - global->ycenter )
-//# define DZ    ( grid->z0 +  (iz-1) *grid->dz - global->zcenter )
-//# define R2    ( DY*DY+DZ*DZ )
-//# define PHASE ( global->omega_0*t + h*R2/(global->width*global->width) )
-//# define MASK  ( R2<=pow(global->mask*global->width,2) ? 1 : 0 )
-
-
 
   if ( global->launch_wave == 0 ) return;
 
   if ( grid->x0==float(global->xmin) ) { // Node is on left boundary
-    double alpha = grid->cvac*grid->dt/grid->dx;
-    double emax_coeff = ((4/(1+alpha))*global->omega_0*grid->dt*global->emax);
     double t=grid->dt*step();
 
-#if 1
-    double pulse_shape_factor=1;
-    if ( global->pulse_shape>=1 ) pulse_shape_factor=( t<global->pulse_FWHM ? 1
-            : 0 );
-    if ( global->pulse_shape==2 ) {
-    float sin_t_tau = sin(t*M_PI/global->pulse_FWHM);
-      pulse_shape_factor =( t<global->pulse_FWHM ? sin_t_tau : 0 );
-  }
-    // Hyperbolic secant profile
-    if (global->pulse_shape==3){
-        double fac = 2.*log(1.+sqrt(2.))/global->pulse_FWHM;
-        // This is actually a time, not a distance, since the pulse_FWHM is time
-        double z = (t - global->pulse_start);
-        z *= fac;
-        pulse_shape_factor = 2./(exp(z)+exp(-z));
-    }
-
-    // square wave
-    int    square_wave        = 1;
-    double square_wave_factor = 1;
-    if ( square_wave>=1 ) square_wave_factor=( sin( (t*global->nu_c)  * 2.0 * M_PI)>=0.0 ? 1 : -1 );
-
-#endif 
-
-    //double prefactor = emax_coeff*sqrt(2.0/M_PI); // Wave norm at edge of box
-    double prefactor = global->emax;  // Wave norm at edge of box
-    // Rayleigh length
-    double rl     = M_PI*global->waist*global->waist/global->lambda;
-    double h = global->xfocus/rl;                 // distance/Rayleigh length
-
-// Kokkos Port
     int ny = grid->ny;
     int nz = grid->nz;
     float dy = grid->dy;
     float dz = grid->dz;
     float y0 = grid->y0;
     float z0 = grid->z0;
-    float ycenter = global->ycenter;
-    float zcenter = global->zcenter;
-    float width = global->width;
-    float mask = global->mask;
     float omega_0 = global->omega_0;
-    float dy_offset = y0 - ycenter;
-    float dz_offset = z0 - zcenter;
     int sy = grid->sy;
     int sz = grid->sz;
     //printf("Injecting\n");
@@ -1283,16 +1081,9 @@ begin_field_injection {
 
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> left_edge({1, 1}, {nz+2, ny+1});
     Kokkos::parallel_for("Field injection", left_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
-        auto DY =( (iy-0.5)*dy + dy_offset );
-        if(ny==1) DY = 0.;
-        auto DZ =( (iz-1  )*dz + dz_offset );
-        auto R2   =( DY*DY + DZ*DZ );
-        auto PHASE=( omega_0*t + h*R2/(width*width) );
-        auto MASK =( R2<=pow(mask*width,2) ? 1 : 0 );
-        //kfield(1+sy*iy+sz*iz, field_var::ey) += (prefactor * cos(PHASE) * exp(-R2/(width*width)) * MASK * pulse_shape_factor);
-	if ( global->pulse_shape==0 ){
+	if ( global->I2_present==1 ){
 	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t));
-	} else if (global->pulse_shape==1 ){
+	} else if (global->I1_present==1 ){
 	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t)) * exp(-(t-global->pulse_mean)*(t-global->pulse_mean)/(2.*global->pulse_sigma*global->pulse_sigma));
 	}
 	

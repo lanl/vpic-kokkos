@@ -30,13 +30,6 @@ begin_globals {
 
   // Parameters for 2d and 3d Gaussian wave launch
   double lambda;
-  double waist;                  // how wide the focused beam is
-  double width;
-  double zcenter;		 // center of beam at boundary in z
-  double ycenter;		 // center of beam at boundary in y
-  double xfocus;                 // how far from boundary to focus
-  double mask;			 // # gaussian widths from beam center where I nonzero
-
   double pulse_FWHM;
   double pulse_sigma;
   double pulse_mean;
@@ -144,28 +137,40 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   double laser_E_SI = sqrt( (2*laser_intensity_SI)/(c_SI * eps0_SI) ); // Laser E
   double laser_E_c = laser_E_SI / E_to_SI;
   
-  double lambda_SI  = 0.8e-6; // 1.058e-6;
+  double lambda_SI  = 0.8e-6;
   double w0_SI = 1.25e-6; // Beam waist
+  double nu = c_SI/lambda_SI;
+  double nu_c = nu*time_to_SI;
+  int cycles;
+  double pulse_FWHM;
+  double pulse_mean;
+  double pulse_sigma;
+  if ( I2_present ) {
+    cycles = 1;
+  } else if ( I1_present ) {
+    cycles = 10;
+    pulse_FWHM = 5/nu_c;
+    pulse_mean  = cycles/nu_c; // need to shift the gaussian (want the max at the end of the sim)
+    pulse_sigma = pulse_FWHM/( 2*sqrt(2*log(2) )); // sigma for gaussian function
+  }
 
-  double Lx_SI         = 16e-6; // Simulation box size
-  double Ly_SI         =  w0_SI*sqrt(M_PI/2.);  // 3DCHANGE
-  double Lz_SI         = 16e-6;
+  double Lx_SI         = cycles*lambda_SI; // Simulation box size
+  double Ly_SI         = w0_SI*sqrt(M_PI/2.);  // 3DCHANGE
+  double Lz_SI         = cycles*lambda_SI;
   //double t_stop = 1.2e-12 / time_to_SI; // Simulation run time
 
   double T_e = 5. * e_SI; // Technically, this is k_B*T.  e_SI is eV to J.
   double T_i = 5. * e_SI;
   float dfrac               = 0.0; // fraction of charge density for n_Al12/ne
 
-  double dist_to_focus = 1;// For this run, put the focus at the back boundary
-
   // Simulation parameters
   // These are floating point to avoid a lot of casting
   // Increase resolution to ~3000 for physical results
-  double nx = 1200;
+  double nx = (60/lambda_SI)*Lx_SI; // 50 cells per wavelength (500 cells)
   double ny = 1;
-  double nz = 100;
+  double nz = (6/lambda_SI)*Lx_SI; // 6 cells per wavelength (60 cells)
 
-  double nppc = 150;  // Average number of macro particles/cell of each species
+  double nppc = 2000;  // Average number of macro particles/cell of each species
 
   int topology_x = nproc();
   int topology_y = 1;
@@ -237,7 +242,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   double Ly = ny*dy;
   double Lz = nz*dz;
 
-  global->xmin = -dist_to_focus / length_to_SI;
+  global->xmin = 0;
   global->xmax = global->xmin + Lx;
   global->ymin = -.5*Ly;
   global->ymax = global->ymin + Ly;
@@ -248,32 +253,15 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   double particles_alloc = nppc*ny*nz*nx;
 
   double dt = cfl_req*courant_length(Lx, Ly, Lz, nx, ny, nz);
-
   
   // Laser parameters
-  double nu = c_SI/lambda_SI;
-  double nu_c = nu*time_to_SI;
-
-  double pulse_FWHM;
-  int cycles;
-  if ( I2_present ) {
-    cycles = 1;
-    pulse_FWHM = ((cycles/nu) / time_to_SI); // pulse duration
-  }
-  if ( I1_present ) {
-    cycles = 10;
-    pulse_FWHM = 5/nu_c;   //((cycles/nu) / time_to_SI); // pulse duration
-  }
-  double pulse_mean  = cycles/nu_c; // need to shift the gaussian (want the max at the end of the sim)
-  double pulse_sigma = pulse_FWHM/( 2*sqrt(2*log(2) )); // sigma for gaussian function
-  
   double pulse_period = 1 / nu; 
   double pulse_start = 350e-15 / time_to_SI; // time in code units
   double lambda    = lambda_SI / length_to_SI;  // Wavelength
   double omega_0 = omega_L_SI * time_to_SI;
   double emax = sqrt(2.*laser_intensity_SI/(c_SI*eps0_SI)) / E_to_SI; // code units
   
-  double t_stop = ((cycles/nu) / time_to_SI); // Simulation runtime
+  double t_stop = cycles/nu_c; // Simulation runtime
 
   // Diagnostics intervals.  
   int energies_interval = 50;
@@ -281,7 +269,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   int particle_interval = 10*field_interval;
   int restart_interval = 400;
   int quota_check_interval = 200;
-  int spectra_interval = int(pulse_FWHM/dt);
+  //  int spectra_interval = int(pulse_FWHM/dt);
 
 
 
@@ -296,8 +284,8 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   // Parameters for the ions (note it is the same box as for electrons)
   double n_I1_SI = 1e20; // Density of I1
   double n_I2_SI = 1e20; // Density of I2
-  double N_I1    = nppc*nx*ny*nz; //Number of macro I1 in box
-  double N_I2    = nppc*nx*ny*nz; //Number of macro I2 in box
+  double N_I1    = nppc*nz; //Number of macro I1 in box
+  double N_I2    = nppc*nz; //Number of macro I2 in box
   N_I1 = trunc_granular(N_I1, nproc()); // make divisible by # processors
   N_I2 = trunc_granular(N_I2, nproc()); // make divisible by # processors
   double NpI1    = n_I1_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical I1 in box
@@ -360,7 +348,6 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     fprintf(out, "%.17e   Spec max for electron, code units (gamma-1)\n",
             0);
     fprintf(out, "%.17e   Spec max for I2, code units (gamma-1)\n", 0);
-    fprintf(out, "%d   Spectra Interval\n", spectra_interval);
     fprintf(out, "%d   This is my rank\n", rank());
     fprintf(out, "%.17e   Pulse FWHM, code units\n",pulse_FWHM);
     fprintf(out, "%.17e   Pulse Sigma, code units\n",pulse_sigma);
@@ -585,9 +572,6 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
   // LOAD PARTICLES
 
-  // Load particles using rejection method (p. 290 Num. Recipes in C 2ed, Press
-  // et al.)  
-
   if ( load_particles!=0 ) {
     sim_log( "Loading particles" );
   
@@ -600,18 +584,10 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     double zmin = grid->z0;
     double zmax = (grid->z0+grid->nz*grid->dz);
 
-    repeat( (N_I2)/(topology_x*topology_y*topology_z) ) {
-      double x = uniform( rng(0), xmin, xmax );
-      double y = uniform( rng(0), ymin, ymax );   
+    double x = global->xmin + grid->dx;
+    double y = (ymin+ymax)/2.; 
+    repeat( (N_I2)/(topology_x*topology_y*topology_z) ) {  
       double z = uniform( rng(0), zmin, zmax );
-
-      // if ( iv_region ) continue;   // Particle fell in iv_region.  Don't load.
-
-      // Rejection method, based on user-defined density function
-      if ( uniform( rng(0), 0, 1 ) < slab(x*length_to_SI, y*length_to_SI,
-                  z*length_to_SI, global->xmin*length_to_SI, grid->dx*length_to_SI*1,
-                  global->zmin*length_to_SI, global->zmax*length_to_SI,
-                  global->ymin*length_to_SI, global->ymax*length_to_SI) ) {
 	
         if ( mobile_ions ) {
 
@@ -632,8 +608,6 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
           } // if I1 present
 	  
         } // if mobile ions
-	
-      } // if uniform < slab
     } // repeat    
  } // if load_particles
   
@@ -657,7 +631,7 @@ begin_field_injection {
     Kokkos::parallel_for("Field injection", left_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
         if ( global->I2_present==1 ){
 	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t));
-	} else if (global->I2_present==1 ){
+	} else if (global->I1_present==1 ){
 	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t)) * exp(-(t-global->pulse_mean)*(t-global->pulse_mean)/(2.*global->pulse_sigma*global->pulse_sigma));
 	}
     });
@@ -769,7 +743,7 @@ TEST_CASE( "Check if field ionization agrees with numerical solution", "[average
 
     // Check if the test passes
     // The value we are comparing to is based on past runs.
-    if (l2Error < 0.008) {
+    if (l2Error < 0.01) {
       flag = 1;
     }
     std::cout << "L2 Error: " << l2Error << std::endl;

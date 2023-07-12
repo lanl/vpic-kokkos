@@ -16,7 +16,7 @@ epsilon_0 = 8.85418782e-12;  # F/m
 alpha     = 0.00729735;      # fine structure constant
 h_bar     = 1.054571817e-34; # J *s
 lambda_0  = 0.8e-6;          # m
-I_L       = 5e16 / 1e-2**2;   # W/m^2
+I_L       = 1e20 / 1e-2**2;   # W/m^2
 
 t_to_SI   = 2.4188843265857e-17; 
 E_to_SI   =  (alpha**3*m_e**2*c**3)/(q_e*h_bar);
@@ -64,14 +64,6 @@ def coupledODEs(N, t):
     
 
     # System of ODEs
-#    dN0dt =              - gamma_0*N0
-#    dN1dt =   gamma_0*N0 - gamma_1*N1
-#    dN2dt =   gamma_1*N1 - gamma_2*N2
-#    dN3dt =   gamma_2*N2 - gamma_3*N3
-#    dN4dt =   gamma_3*N3 - gamma_4*N4
-#    dN5dt =   gamma_4*N4 - gamma_5*N5
-#    dN6dt =   gamma_5*N5
-
     dN0dt =               - gamma[0]*N0
     dN1dt =   gamma[0]*N0 - gamma[1]*N1
     dN2dt =   gamma[1]*N1 - gamma[2]*N2
@@ -129,7 +121,7 @@ plt.plot(c*t/lambda_0, N5/N_initial[0], 'm', linewidth=2, label='Z* = 5')
 plt.plot(c*t/lambda_0, N6/N_initial[0], 'y', linewidth=2, label='Z* = 6')
 plt.xlabel('c*t/$\lambda$')
 plt.ylabel('N_{Z*}(t)/N_0(t=0)')
-plt.xlim([4, 10])
+plt.xlim([0, 10])
 plt.legend()
 plt.show()
 
