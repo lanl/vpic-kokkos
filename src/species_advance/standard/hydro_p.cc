@@ -208,7 +208,7 @@ accumulate_hydro_p_kokkos(
                         VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
 
   //for( n=0; n<np; n++ ) {
-  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
+  Kokkos::parallel_for("hydro_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index)
     {
 

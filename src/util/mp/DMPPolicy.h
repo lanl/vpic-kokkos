@@ -104,7 +104,12 @@ struct DMPPolicy {
   inline void
   boot_mp( int * pargc,
            char *** pargv ) {
+#ifdef VPIC_ENABLE_HDF5_ASYNC
+    int provided;
+    TRAP( MPI_Init_thread( pargc, pargv, MPI_THREAD_MULTIPLE, &provided ) );
+#else
     TRAP( MPI_Init( pargc, pargv ) );
+#endif
     TRAP( MPI_Comm_dup( MPI_COMM_WORLD, &__world.comm ) );
     __world.parent = NULL, __world.color = 0, __world.key = 0;
     TRAP( MPI_Comm_rank( __world.comm, &_world_rank ) );

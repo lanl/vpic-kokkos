@@ -17,6 +17,13 @@
 #include "../sf_interface/sf_interface.h"
 #include "Kokkos_DualView.hpp"
 
+#ifdef VPIC_ENABLE_HDF5
+#include "hdf5.h"
+#endif
+#ifdef VPIC_ENABLE_HDF5_ASYNC
+#include "h5_async_vol.h"
+#endif
+
 typedef int32_t species_id; // Must be 32-bit wide for particle_injector_t
 
 // FIXME: Eventually particle_t (definitely) and ther other formats
@@ -389,6 +396,9 @@ class species_t {
         k_counter_t::HostMirror k_nm_h;
 
 #if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+#ifdef VPIC_ENABLE_HDF5_ASYNC
+        hid_t es_id;
+#endif
         bool is_tracer = false;
         bool using_annotations = false;
         annotation_vars_t annotation_vars;

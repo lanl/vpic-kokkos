@@ -33,7 +33,7 @@ int vpic_simulation::advance(void)
       }
   }
 
-  KOKKOS_TOC( sort_particles, 1);
+  KOKKOS_TOCN( sort_particles, 1);
 //printf("Sorted normal and tracer species\n");
 
   // At this point, fields are at E_0 and B_0 and the particle positions
@@ -83,14 +83,14 @@ int vpic_simulation::advance(void)
   //Kokkos::Experimental::contribute(field_array->k_f_d, field_array->k_field_sa_d);
   //field_array->k_field_sa_d.reset_except(field_array->k_f_d);
   //field_array->k_field_sa_d.reset();
-  KOKKOS_TOC( field_sa_contributions, 1);
+  KOKKOS_TOCN( field_sa_contributions, 1);
 
   // Copy particle movers back to host
   KOKKOS_TIC();
   LIST_FOR_EACH_SPECIES(sp, species_list, tracers_list) {
     sp->copy_outbound_to_host();
   }
-  KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+  KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 //printf("Copied outbound to host for species and tracers\n");
 
   // Because the partial position push when injecting aged particles might
@@ -112,7 +112,7 @@ int vpic_simulation::advance(void)
           LIST_FOR_EACH_SPECIES( sp, species_list, tracers_list ) {
             sp->copy_to_host();
           }
-          KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
+          KOKKOS_TOCN(PARTICLE_DATA_MOVEMENT, 1);
       }
       TIC user_particle_injection(); TOC( user_particle_injection, 1 );
       if(!kokkos_particle_injection) {
@@ -120,7 +120,7 @@ int vpic_simulation::advance(void)
           LIST_FOR_EACH_SPECIES( sp, species_list, tracers_list ) {
             sp->copy_to_device();
           }
-          KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
+          KOKKOS_TOCN(PARTICLE_DATA_MOVEMENT, 1);
       }
   }
 
@@ -137,7 +137,7 @@ int vpic_simulation::advance(void)
   //    Kokkos::deep_copy(accumulator_array->k_a_h, 0.0f);
   //}
 
-  //KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  //KOKKOS_TOCN( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   // This should be after the emission and injection to allow for the
   // possibility of thread parallelizing these operations
@@ -164,7 +164,7 @@ int vpic_simulation::advance(void)
       boundary_p_kokkos( particle_bc_list, tracers_list, field_array );
 #endif
     }
-  KOKKOS_TOC( boundary_p, num_comm_round );
+  KOKKOS_TOCN( boundary_p, num_comm_round );
 //printf("Done with boundar_p\n");
 
   // Clean_up once boundary p is done
@@ -187,12 +187,12 @@ int vpic_simulation::advance(void)
 
       // Update np now we removed them...
       sp->np -= nm;
-      KOKKOS_TOC( BACKFILL, 1);
+      KOKKOS_TOCN( BACKFILL, 1);
 
       // Copy data for copies back to device
       KOKKOS_TIC();
         sp->copy_inbound_to_device();
-      KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+      KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 
   }
 
@@ -220,7 +220,7 @@ int vpic_simulation::advance(void)
   // TODO: The interior should all be zero, so it can be ignored.
   KOKKOS_TIC();
   FAK->k_reduce_jf(field_array);
-  KOKKOS_TOC( JF_ACCUM_DATA_MOVEMENT, 1);
+  KOKKOS_TOCN( JF_ACCUM_DATA_MOVEMENT, 1);
   //  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
   TIC FAK->k_synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
 
@@ -235,13 +235,13 @@ int vpic_simulation::advance(void)
       if(!kokkos_current_injection) {
           KOKKOS_TIC();
           field_array->copy_to_host();
-          KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+          KOKKOS_TOCN(FIELD_DATA_MOVEMENT, 1);
       }
       TIC user_current_injection(); TOC( user_current_injection, 1 );
       if(!kokkos_current_injection) {
           KOKKOS_TIC();
           field_array->copy_to_device();
-          KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+          KOKKOS_TOCN(FIELD_DATA_MOVEMENT, 1);
       }
   }
 
@@ -249,7 +249,7 @@ int vpic_simulation::advance(void)
   // Half advance the magnetic field from B_0 to B_{1/2}
   KOKKOS_TIC();
   FAK->advance_b( field_array, 0.5 );
-  KOKKOS_TOC( advance_b, 1 );
+  KOKKOS_TOCN( advance_b, 1 );
 
   // Advance the electric field from E_0 to E_1
 
@@ -265,13 +265,13 @@ int vpic_simulation::advance(void)
       if (!kokkos_field_injection) {
           KOKKOS_TIC();
           field_array->copy_to_host();
-          KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+          KOKKOS_TOCN(FIELD_DATA_MOVEMENT, 1);
       }
       TIC user_field_injection(); TOC( user_field_injection, 1 );
       if (!kokkos_field_injection) {
           KOKKOS_TIC();
           field_array->copy_to_device();
-          KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+          KOKKOS_TOCN(FIELD_DATA_MOVEMENT, 1);
       }
   }
 
@@ -300,7 +300,7 @@ int vpic_simulation::advance(void)
               //accumulate_rho_p( field_array, sp ); //TOC( accumulate_rho_p, species_list->id );
               k_accumulate_rho_p( field_array, sp );
           }
-          KOKKOS_TOC( accumulate_rho_p, species_list->id );
+          KOKKOS_TOCN( accumulate_rho_p, species_list->id );
       }
       if( tracers_list )
       {
@@ -310,7 +310,7 @@ int vpic_simulation::advance(void)
               //accumulate_rho_p( field_array, sp ); //TOC( accumulate_rho_p, tracers_list->id );
               k_accumulate_rho_p( field_array, sp );
           }
-          KOKKOS_TOC( accumulate_rho_p, tracers_list->id );
+          KOKKOS_TOCN( accumulate_rho_p, tracers_list->id );
       }
 
       // TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
