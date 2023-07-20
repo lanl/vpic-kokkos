@@ -3,18 +3,18 @@ Tracer Particles
 
 VPIC includes tracer particle capabilities to improve simulation analysis. Tracers are a subset of the simulations particles that can be used to analyze simulation behavior without paying the cost of writing all particles to disk. In VPIC, tracers are separate species of particles where each particle is marked with a unique tracer ID. 
 
-We can track the following quantities for each tracer particle.
+We can track the following quantities for each tracer particle. A bitset is used to decide which quantities to dump. For example to dump the global position and kinetic energy of each tracer we would use ``DumpVar::GlobalPos | DumpVar::ParticleKE```.
 
 * Raw particle data
 * GlobalPos (Global position)
 * Efield 
 * Bfield
+* ParticleKE      
 * CurrentDensity  
 * ChargeDensity   
 * MomentumDensity 
 * KEDensity       
 * StressTensor    
-* ParticleKE      
 
 Custom quantities can be tracked and dumped using the annotation interface.
 
@@ -78,6 +78,63 @@ The annotations implementation is spilt into two parts, the annotation storage s
     // Get "Charge" for particle 378 by directly accessing the Views (needed on GPU)
     double charge_378 = f64_annotations(378, charg3_idx);
 
+Dump Functions
+**************
+We include several helper functions for dumping the tracer output. Tracer data is written to disk using the Tracer HDF5 format. In addition to basic HDF5 output, there are additional optimizations that can be applied for better IO performance. VPIC currently supports particle buffering and asynchronous IO. Particle buffering helps reduce diagnostic overhead by collecting tracer data in memory buffers rather than writing tracer data each time tracers are dumped. This leads to fewer pauses for IO and larger writes. Buffer sizes are set at tracer species definition.
+
+Asynchronous IO is experimental. Using the HDF5 async API and Virtual Object Layer (VOL) connector, write operations are performed on a separate thread while VPIC continues to execute. Async IO can remove most of the write overhead from the simulation. Building Async IO support requires additional dependencies and build steps.
+
+Software dependencies
+
+* HDF5 (>= 1.13) 
+
+  * Enable thread safety (``-DHDF5_ENABLE_THREADSAFE=ON`` or ``--enable-threadsafe``) 
+
+* HDF5 Asynchronous I/O VOL Connector (https://github.com/hpc-io/vol-async)
+
+  * Enable double buffering (``-DENABLE_WRITE_MEMCPY=1``)
+
+CMake Options
+
+* Enable HDF5 tracer dumps (``VPIC_ENABLE_HDF5``) 
+* Enable experimental Async IO (``VPIC_ENABLE_HDF5_ASYNC``)
+
+Dump functions
+
+.. code-block:: c++
+
+   /**
+    *  Dump selected tracer data and annotations to file
+    *  @param sp_name   Name of tracer species to dump data
+    *  @param dump_vars Bitset controlling which quantities to dump
+    *  @param fbase     Name of output HDF5 file
+    *  @param append    Flag determining whether this function is called the first time or not (step() != 0) 
+    **/
+
+* Simple csv output for debugging. Each rank writes to their own file. Does not require HDF5
+
+  .. code-block:: c++
+
+     void dump_tracers_csv(const char* sp_name, const uint32_t dump_vars, const char* fbase, int append=1);
+
+* Basic HDF5 output
+
+  .. code-block:: c++
+
+     void dump_tracers_hdf5(const char* sp_name, const uint32_t dump_vars, const char* fbase, int append=1);
+
+* Buffered HDF5 output
+
+  .. code-block:: c++
+
+     void dump_tracers_buffered_hdf5(const char* sp_name, const uint32_t dump_vars, const char* fbase, int append=1);
+
+* Async HDF5 output
+
+  .. code-block:: c++
+
+     void dump_tracers_hdf5_async(const char* sp_name, const uint32_t dump_vars, const char* fbase, int append=1);
+
 How to use tracers
 ******************
 
@@ -87,7 +144,7 @@ How to use tracers
   * Tracer species can be defined as a distinct species or based on an existing species
 
     * Tracers also contain 3 additional parameters that control IO buffering, over allocation for memory, and user defined annotations
-    * **Note** Always define tracer species after the parent species has finished injecting particles if you are using one of the helper function that automatically copies/moves particles from the parent
+    * **Note** If you are using one of the helper function that automatically copies/moves particles from the parent species, always define tracer species after the parent species has finished injecting particles. 
     * Define distinct species (similar to defining normal species)
 
       .. code-block:: c++
