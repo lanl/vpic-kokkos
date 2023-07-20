@@ -10,7 +10,7 @@ cmake_policy(SET CMP0074 NEW)
 # VPIC project configuration
 #~----------------------------------------------------------------------------~#
 
-project(vpic CXX)
+project(vpic C CXX)
 
 #------------------------------------------------------------------------------#
 # If a C++14 compiler is available, then set the appropriate flags
@@ -75,6 +75,8 @@ option(VPIC_ENABLE_PARTICLE_ANNOTATIONS "Enable particle annotations for additio
 option(VPIC_ENABLE_TRACER_PARTICLES "Enable tracer particles" OFF)
 
 option(VPIC_ENABLE_HDF5 "Enable HDF5 support for dumping" OFF)
+
+option(VPIC_ENABLE_HDF5_ASYNC "Enable asynchronous support for HDF5" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -176,7 +178,7 @@ if(ENABLE_KOKKOS_CUDA)
     endif()
     set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
     set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "Enable cuda lambda support")
-    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
 
     # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
     # see https://github.com/UoB-HPC/BabelStream/issues/16
@@ -243,21 +245,14 @@ set(KOKKOS_COMPILE_OPTIONS_FILE ${PROJECT_BINARY_DIR}/kokkos_compile_options)
 # For an "external" build these will be the same, but for an internal we need to gather both
 file(GENERATE OUTPUT ${KOKKOS_CORE_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 file(GENERATE OUTPUT ${KOKKOS_CONTAINER_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_CONTAINERS}")
-string(REPLACE ";" " " kokkos_compile_options "${KOKKOS_COMPILE_OPTIONS}")
+message("Compile options ${KOKKOS_COMPILE_OPTIONS}")
+string(REPLACE "$<$<COMPILE_LANGUAGE:CXX>:" "" kokkos_compile_options0 "${KOKKOS_COMPILE_OPTIONS}")
+message("Compile options post generator remove: ${kokkos_compile_options0}")
+string(REPLACE ">" "" kokkos_compile_options1 "${kokkos_compile_options0}")
+message("Compile options post generator end remove: ${kokkos_compile_options1}")
+string(REPLACE ";" " " kokkos_compile_options "${kokkos_compile_options1}")
+#set(kokkos_compile_options "-expt-extended-lambda -Wext-lambda-captures-this -arch=sm_80 -march=native -mtune=native")
 file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${kokkos_compile_options}")
-
-#file(GENERATE OUTPUT ${KOKKOS_CORE_LIB_FILE} CONTENT "${KOKKOS_LIB_DIRS}")
-#file(GENERATE OUTPUT ${KOKKOS_CONTAINER_LIB_FILE} CONTENT "${KOKKOS_LIB_CONTAINERS}")
-
-#include_directories(${KOKKOS_INCLUDE_DIRS})
-#string(REPLACE ";" " " KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS}")
-#message(dirs: ${KOKKOS_INCLUDE_DIRS})
-
-#FOREACH (P ${KOKKOS_INCLUDE_DIRS})
-    #message(${P})
-    #include_directories(${P})
-    #link_directories(${P})
-    #ENDFOREACH(P)
 
 # TODO: bad idea.. at best, this is just going to add it to the last one in the
 # array
@@ -307,6 +302,16 @@ if(VPIC_ENABLE_HDF5)
   
   set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} -L${HDF5_LIB_DIRECTORY} -lhdf5")
   set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} -I${HDF5_INCLUDE_DIRS}")
+
+  if(VPIC_ENABLE_HDF5_ASYNC)
+    add_definitions(-DVPIC_ENABLE_HDF5_ASYNC)
+    include_directories("${HDF5_VOL_ASYNC_DIR}/include")
+    include_directories("${HDF5_VOL_ABT_DIR}/include")
+    set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} -L${HDF5_VOL_ASYNC_DIR}/lib -L${HDF5_VOL_ABT_DIR}/lib -labt -lh5async -lasynchdf5")
+    set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} -I${HDF5_VOL_ASYNC_DIR}/include -I${HDF5_VOL_ABT_DIR}/include")
+    message("${VPIC_CXX_LIBRARIES}")
+    message("${VPIC_CXX_FLAGS}")
+  endif()
 endif(VPIC_ENABLE_HDF5)
 
 #------------------------------------------------------------------------------#
@@ -494,7 +499,12 @@ else()
 endif()
 target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
 if(VPIC_ENABLE_HDF5)
-  target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} HDF5::HDF5 Kokkos::kokkos)
+  if(VPIC_ENABLE_HDF5_ASYNC)
+    target_link_directories(vpic INTERFACE "/vast/home/nphtan/vol-async/install/lib/" "/vast/home/nphtan/vol-async/argobots/install/lib")
+    target_link_libraries(vpic PRIVATE ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} HDF5::HDF5 Kokkos::kokkos h5async asynchdf5 abt)
+  else()
+    target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} HDF5::HDF5 Kokkos::kokkos)
+  endif()
 else()
   target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
 endif()
@@ -505,9 +515,15 @@ macro(build_a_vpic name deck)
     message(FATAL_ERROR "Could not find deck '${deck}'")
   endif()
   add_executable(${name} ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc ${VPIC_SRC})
-  target_link_libraries(${name} vpic Kokkos::kokkos)
+  target_link_directories(${name} PUBLIC "/vast/home/nphtan/vol-async/install/lib/")
+  target_compile_options(${name} PRIVATE ${KOKKOS_COMPILE_OPTIONS})
   if(VPIC_ENABLE_HDF5)
-    target_link_libraries(${name} vpic HDF5::HDF5)
+    target_link_libraries(${name} vpic Kokkos::kokkos HDF5::HDF5)
+#    if(VPIC_ENABLE_HDF5_ASYNC)
+#      target_link_libraries(${name} vpic Kokkos::kokkos HDF5::HDF5)
+#    endif()
+  else()
+    target_link_libraries(${name} vpic Kokkos::kokkos)
   endif()
   target_compile_definitions(${name} PRIVATE INPUT_DECK="${deck}")
 endmacro(build_a_vpic)
