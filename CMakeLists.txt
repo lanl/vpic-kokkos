@@ -3,14 +3,14 @@
 # All rights reserved.
 #------------------------------------------------------------------------------#
 
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.14)
 cmake_policy(SET CMP0074 NEW)
 
 #~----------------------------------------------------------------------------~#
 # VPIC project configuration
 #~----------------------------------------------------------------------------~#
 
-project(vpic C CXX)
+project(vpic CXX)
 
 #------------------------------------------------------------------------------#
 # If a C++14 compiler is available, then set the appropriate flags
@@ -76,7 +76,7 @@ option(VPIC_ENABLE_TRACER_PARTICLES "Enable tracer particles" OFF)
 
 option(VPIC_ENABLE_HDF5 "Enable HDF5 support for dumping" OFF)
 
-option(VPIC_ENABLE_HDF5_ASYNC "Enable asynchronous support for HDF5" OFF)
+option(VPIC_ENABLE_HDF5_ASYNC "Enable asynchronous support for HDF5 (EXPERIMENTAL!!!)" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -245,13 +245,11 @@ set(KOKKOS_COMPILE_OPTIONS_FILE ${PROJECT_BINARY_DIR}/kokkos_compile_options)
 # For an "external" build these will be the same, but for an internal we need to gather both
 file(GENERATE OUTPUT ${KOKKOS_CORE_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 file(GENERATE OUTPUT ${KOKKOS_CONTAINER_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_CONTAINERS}")
-message("Compile options ${KOKKOS_COMPILE_OPTIONS}")
+# TODO: This removes the language generator expression from the Kokkos flags. 
+# This ideally should be evaluated rather than stripped from the options.
 string(REPLACE "$<$<COMPILE_LANGUAGE:CXX>:" "" kokkos_compile_options0 "${KOKKOS_COMPILE_OPTIONS}")
-message("Compile options post generator remove: ${kokkos_compile_options0}")
 string(REPLACE ">" "" kokkos_compile_options1 "${kokkos_compile_options0}")
-message("Compile options post generator end remove: ${kokkos_compile_options1}")
 string(REPLACE ";" " " kokkos_compile_options "${kokkos_compile_options1}")
-#set(kokkos_compile_options "-expt-extended-lambda -Wext-lambda-captures-this -arch=sm_80 -march=native -mtune=native")
 file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${kokkos_compile_options}")
 
 # TODO: bad idea.. at best, this is just going to add it to the last one in the
@@ -289,6 +287,8 @@ find_package(Threads REQUIRED)
 # HDF5
 #------------------------------------------------------------------------------#
 if(VPIC_ENABLE_HDF5)
+  # Enable C language in order to link with HDF5 and MPI properly
+  enable_language(C)
   # Enable HDF5, and the relevant defines
   find_package(HDF5 REQUIRED)
   if(NOT HDF5_IS_PARALLEL)
@@ -304,6 +304,7 @@ if(VPIC_ENABLE_HDF5)
   set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} -I${HDF5_INCLUDE_DIRS}")
 
   if(VPIC_ENABLE_HDF5_ASYNC)
+    message("Warning! Async tracer dumps are experimental!")
     add_definitions(-DVPIC_ENABLE_HDF5_ASYNC)
     include_directories("${HDF5_VOL_ASYNC_DIR}/include")
     include_directories("${HDF5_VOL_ABT_DIR}/include")
@@ -519,9 +520,6 @@ macro(build_a_vpic name deck)
   target_compile_options(${name} PRIVATE ${KOKKOS_COMPILE_OPTIONS})
   if(VPIC_ENABLE_HDF5)
     target_link_libraries(${name} vpic Kokkos::kokkos HDF5::HDF5)
-#    if(VPIC_ENABLE_HDF5_ASYNC)
-#      target_link_libraries(${name} vpic Kokkos::kokkos HDF5::HDF5)
-#    endif()
   else()
     target_link_libraries(${name} vpic Kokkos::kokkos)
   endif()
