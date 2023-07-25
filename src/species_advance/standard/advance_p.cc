@@ -1810,8 +1810,12 @@ void
 advance_p( /**/  species_t            * RESTRICT sp,
 //           accumulator_array_t * RESTRICT aa,
            interpolator_array_t * RESTRICT ia,
+      #ifndef FIELD_IONIZATION
+           field_array_t* RESTRICT fa) {
+      #else
            field_array_t* RESTRICT fa,
 	   species_t * RESTRICT species_list) {
+      #endif
   //DECLARE_ALIGNED_ARRAY( advance_p_pipeline_args_t, 128, args, 1 );
   //DECLARE_ALIGNED_ARRAY( particle_mover_seg_t, 128, seg, MAX_PIPELINE+1 );
   //int rank;

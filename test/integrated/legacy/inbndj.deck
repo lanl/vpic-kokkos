@@ -96,7 +96,11 @@ begin_initialization {
 
   field_array->kernel->clear_jf_kokkos(field_array);
 
+  #if defined(FIELD_IONIZATION)
   advance_p( this_sp, interpolator_array, field_array, species_list );
+  #else
+  advance_p( this_sp, interpolator_array, field_array );
+  #endif
 
   LIST_FOR_EACH( sp, species_list ) {
     sp->copy_to_host();

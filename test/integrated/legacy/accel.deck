@@ -98,7 +98,11 @@ begin_initialization {
 
       sim_log("STEP " << n);
 
+      #if defined(FIELD_IONIZATION)
       advance_p( this_sp, interpolator_array, field_array, species_list );
+      #else
+      advance_p( this_sp, interpolator_array, field_array );
+      #endif
 
       //Kokkos::Experimental::contribute(accumulator_array->k_a_d, accumulator_array->k_a_sa);
       //accumulator_array->k_a_sa.reset_except(accumulator_array->k_a_d);

@@ -106,11 +106,12 @@ append_species( species_t * sp,
 
 species_t *
 species( const char * name,
-	 //#ifdef FIELD_IONIZATION
+	#ifndef FIELD_IONIZATION
          float q,
-	 //#else
+	#else
+	 float q, // FIXME: need to remove
 	 Kokkos::View<double*> ionization_energy,
-	 //#endif
+	#endif
          float m,
          int max_local_np,
          int max_local_nm,
@@ -132,11 +133,12 @@ species( const char * name,
 
   MALLOC( sp->name, len+1 );
   strcpy( sp->name, name );
-//#ifdef FIELD_IONIZATION
+#ifndef FIELD_IONIZATION
   sp->q = q;
-//#else
+#else
+  sp->q = q; // FIXME: need to remove
   sp->ionization_energy = ionization_energy;
-//#endif
+#endif
   sp->m = m;
 
   if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for species %s.\n",

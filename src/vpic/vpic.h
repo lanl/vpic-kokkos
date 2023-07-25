@@ -506,11 +506,12 @@ public:
   // FIXME: SILLY PROMOTIONS
   inline species_t *
   define_species( const char *name,
-		  //#if !defined(FIELD_IONIZATIONS)	  
+		 #if !defined(FIELD_IONIZATION)	  
                   double q,
-		  //#else
+		 #else
+		  double q, // FIXME: need to remove
                   Kokkos::View<double*> ionization_energy,
-		  //#endif	  
+		 #endif
                   double m,
                   double max_local_np,
                   double max_local_nm,
@@ -525,11 +526,12 @@ public:
         max_local_nm = 16*(MAX_PIPELINE+1);
     }
     return append_species( species( name,
-				    //#if !defined(FIELD_IONIZATIONS)
+				   #if !defined(FIELD_IONIZATION)
 				    (float)q,
-				    //#else
+				   #else
+				    (float)q, //FIXME: need to remove
 				    (Kokkos::View<double*>)ionization_energy,
-				    //#endif    
+				   #endif    
 				    (float)m,
                                     (int)max_local_np, (int)max_local_nm,
                                     (int)sort_interval, (int)sort_out_of_place,

@@ -97,11 +97,12 @@ class species_t {
     public:
 
         char * name;                        // Species name
-//#ifndef FIELD_IONIZATION	
+#ifndef FIELD_IONIZATION	
         float q;                            // Species particle charge
-//#else
+#else
+	float q;  // FIXME: need to remove
 	Kokkos::View<double*> ionization_energy; // Species ionization energies
-//#endif	
+#endif	
         float m;                            // Species particle rest mass
 
         int np = 0, max_np = 0;             // Number and max local particles
@@ -285,11 +286,12 @@ append_species( species_t * sp,
 
 species_t *
 species( const char * name,
-//#ifdef FIELD_IONIZATION
+#ifndef FIELD_IONIZATION
          float q,
-//#else
+#else
+	 float q, // FIXME: need to remove
 	 Kokkos::View<double*> ionization_energy,
-//#endif
+#endif
          float m,
          int max_local_np,
          int max_local_nm,
@@ -311,8 +313,12 @@ sort_p( species_t * RESTRICT sp );
 void
 advance_p( /**/  species_t            * RESTRICT sp,
                  interpolator_array_t * RESTRICT ia,
+	   #ifndef FIELD_IONIZATION
+	         field_array_t* RESTRICT fa);
+	   #else
 	         field_array_t* RESTRICT fa,
 	         species_t * species_list);
+           #endif
 
 // In center_p.cxx
 

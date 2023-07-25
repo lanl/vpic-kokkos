@@ -58,7 +58,11 @@ begin_initialization {
   int failed = 0;
   load_interpolator_array( interpolator_array, field_array );
   for( int n=0; n<nstep; n++ ) {
+   #if defined(FIELD_IONIZATION)
     advance_p( this_sp, interpolator_array, field_array, species_list );
+   #else
+    advance_p( this_sp, interpolator_array, field_array );
+   #endif
 
     LIST_FOR_EACH( sp, species_list ) {
       sp->copy_to_host();

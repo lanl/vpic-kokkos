@@ -69,7 +69,11 @@ int vpic_simulation::advance(void)
   LIST_FOR_EACH( sp, species_list )
   {
     // Now Times internally
+   #ifdef FIELD_IONIZATION
     advance_p( sp, interpolator_array, field_array, species_list );
+   #else
+    advance_p( sp, interpolator_array, field_array );
+   #endif
   }
   //printf("Pushed\n");
 
