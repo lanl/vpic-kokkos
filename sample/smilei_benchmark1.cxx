@@ -206,8 +206,8 @@ begin_initialization {
 
 
   // Physical parameters
-  int I1_present = 1; // carbon
-  int I2_present = 0; // hydrogen
+  int I1_present = 0; // carbon
+  int I2_present = 1; // hydrogen
 
   double n_e_over_n_crit       = 90;       // n_e/n_crit in solid slab
   double laser_intensity_W_cm2;
@@ -298,6 +298,32 @@ begin_initialization {
   double m_I1_c = m_I1_SI/mass_to_SI;
   double m_I2_c = m_I2_SI/mass_to_SI;
 
+
+  // I1 - carbon
+  const int num_elements_I1 = 6;
+  Kokkos::View<double*> ionization_energy_I1("my_kokkos_view", num_elements_I1);
+  double ionization_energy_I1_values[] = {11.26030, 24.38332, 47.8878, 64.4939, 392.087, 489.99334}; // in eV
+  for (int i = 0; i < num_elements_I1; ++i) {
+      ionization_energy_I1(i) = ionization_energy_I1_values[i];
+  }
+
+  // I2 - hydrogen
+  const int num_elements_I2 = 1;
+  Kokkos::View<double*> ionization_energy_I2("my_kokkos_view", num_elements_I2);
+  double ionization_energy_I2_values[] = {13.6}; // in eV
+  for (int i = 0; i < num_elements_I2; ++i) {
+      ionization_energy_I2(i) = ionization_energy_I2_values[i];
+  }
+
+  // electron
+  const int num_elements_electron = 1;
+  Kokkos::View<double*> ionization_energy_electron("my_kokkos_view", num_elements_electron);
+  double ionization_energy_electron_values[] = {0}; // in eV
+  for (int i = 0; i < num_elements_electron; ++i) {
+      ionization_energy_electron(i) = ionization_energy_electron_values[i];
+  }
+
+  
   double c2 = c_SI*c_SI;
   // In 3 dimensions, the average energy is 3 halves the temperature
   double E_e = T_e*1.5;
@@ -579,14 +605,14 @@ begin_initialization {
   sim_log("Setting up ions. ");
     if ( I1_present ) {
       #if defined(FIELD_IONIZATION)
-        ion_I1 = define_species("I1", q_I1, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
+        ion_I1 = define_species("I1", q_I1, ionization_energy_I1, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
       #else
 	ion_I1 = define_species("I1", q_I1, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0); // FIXME: q needs to be removed from define_species when field ionization is on.
       #endif
     }
     if ( I2_present ) {
       #if defined(FIELD_IONIZATION)
-        ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
+        ion_I2 = define_species("I2", q_I2, ionization_energy_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
       #else
 	ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0); // FIXME: q needs to be removed from define_species when field ionization is on.
       #endif
@@ -602,8 +628,12 @@ begin_initialization {
   } // if mobile_ions
 
   // Electrons need to be defined last in input deck when field ionization is enabled
-  species_t * electron = define_species("electron", -1.*e_c, m_e_c,
-          max_local_np_e, max_local_nm_e, 20, 0);
+  species_t *electron;
+  #if defined(FIELD_IONIZATION)
+    electron = define_species("electron", -1.*e_c, ionization_energy_electron, m_e_c,max_local_np_e, max_local_nm_e, 20, 0);
+  #else  
+    electron = define_species("electron", -1.*e_c, m_e_c, max_local_np_e, max_local_nm_e, 20, 0);
+  #endif
   electron->pb_diag->write_ux = 1;
   electron->pb_diag->write_uy = 1;
   electron->pb_diag->write_uz = 1;

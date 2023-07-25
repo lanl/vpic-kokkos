@@ -508,6 +508,8 @@ public:
   define_species( const char *name,
 		  //#if !defined(FIELD_IONIZATIONS)	  
                   double q,
+		  //#else
+                  Kokkos::View<double*> ionization_energy,
 		  //#endif	  
                   double m,
                   double max_local_np,
@@ -525,6 +527,8 @@ public:
     return append_species( species( name,
 				    //#if !defined(FIELD_IONIZATIONS)
 				    (float)q,
+				    //#else
+				    (Kokkos::View<double*>)ionization_energy,
 				    //#endif    
 				    (float)m,
                                     (int)max_local_np, (int)max_local_nm,

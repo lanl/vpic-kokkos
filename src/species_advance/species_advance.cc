@@ -108,6 +108,8 @@ species_t *
 species( const char * name,
 	 //#ifdef FIELD_IONIZATION
          float q,
+	 //#else
+	 Kokkos::View<double*> ionization_energy,
 	 //#endif
          float m,
          int max_local_np,
@@ -132,6 +134,8 @@ species( const char * name,
   strcpy( sp->name, name );
 //#ifdef FIELD_IONIZATION
   sp->q = q;
+//#else
+  sp->ionization_energy = ionization_energy;
 //#endif
   sp->m = m;
 

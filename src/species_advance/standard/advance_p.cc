@@ -439,8 +439,26 @@ advance_p_kokkos_unified(
   Kokkos::deep_copy(k_nm, 0);
 
 #ifdef FIELD_IONIZATION
+  // constants
+  int q_e_c     = -1; // code units
+  float E_to_SI = 1.44303994037981860e+19; // code to SI
+  float time_to_SI = 1.18119324097025572e-22; // code to SI
+  float dt = g->dt*time_to_SI; // [s], timestep
+  float q_e       = 1.60217663e-19;  // coulombs
+  float q_e_au    = 1.0;             // au
+  float m_e       = 9.1093837e-31;   // kilograms
+  float m_e_au    = 1.0;             // au 
+  float c         = 299792458;       // m/s
+  float c_au      = 137.02;          // atomic units
+  float epsilon_0_au = 1/(4*M_PI);   // au
+  float alpha     = 0.00729735;      // fine structure constant
+  float h_bar     = 1.054571817e-34; // J *s
+  float E_field_conversion = 5.1422e+11;      // (alpha^3*m_e^2*c^3)/(q_e*h_bar), multiply AU to get SI
+  float Gamma_conversion   = 1.0/(h_bar/(pow(alpha,2)*m_e*pow(c,2))); // multiply au to get sec^-1 
+  
   auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<> random_pool(seed);
+  Kokkos::View<double*> epsilon_eV_list = sp->ionization_energy;
 #endif  
 
 // Determine whether to use accumulators
@@ -593,20 +611,23 @@ advance_p_kokkos_unified(
 		
 #ifdef FIELD_IONIZATION	
 	// ***** Field Ioization *****
-	// constants
-	int q_e_c     = -1; // code units
-	float E_to_SI = 1.44303994037981860e+19;
-        float time_to_SI = 1.18119324097025572e-22;
-        // FIXME: **** Input deck variables ****
-        float epsilon_eV_list[] = {13.6}; //{11.26030, 24.38332, 47.8878, 64.4939, 392.087, 489.99334};//{13.6}; // eV, ionization energy, this should be a list with the different levels
-        float dt = g->dt*time_to_SI;      // [s], timestep
-	
-	// Check if the particle is fully ionized already
-        int N_ionization        = int(abs(charge[LANE])); // Current ionization state of the particle
-        int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
-	int N_ionization_levels = sizeof(epsilon_eV_list)/sizeof(float);
-        // FIXME: need to check which species the user wants ionization enabled on
-	if (sp != sp_e){
+	if (sp != sp_e){ // FIXME: need to check which species the user wants ionization enabled on
+	  // Simulation parameters: FIXME: ** Need to get these from the input deck **
+          // Right now it is set up for neutral hydrogen
+          float lambda_SI    = 0.8e-06;  // meters
+          // Ionization specific parameters
+          float K = 2; //FIXME: currenly only have 2-photon ionization
+          float n = 1; //FIXME: currently only principle quantum number of 1
+          float m = 0; // This is typically 0 in simulations
+          float l = 0;
+
+
+	  
+	  // Check if the particle is fully ionized already
+          int N_ionization        = int(abs(charge[LANE])); // Current ionization state of the particle
+          int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
+	  int N_ionization_levels = epsilon_eV_list.extent(0);
+
           // code units
   	  float hax_c = hax[LANE]/qdt_2mc;
   	  float hay_c = hay[LANE]/qdt_2mc;
@@ -616,34 +637,6 @@ advance_p_kokkos_unified(
   	  float E_mag_SI = E_to_SI * ha_mag_c;
   	  // particle index
   	  int particle_index = LANE+pi_offset;
-  	
-          // Simulation parameters: FIXME: ** Need to get these from vpic **
-          // Right now it is set up for neutral hydrogen
-          float lambda_SI    = 0.8e-06;  // meters
-  
-          // Ionization specific parameters
-          float K = 2; //FIXME: currenly only have 2-photon ionization
-          float n = 1; //FIXME: currently only principle quantum number of 1
-          float m = 0; // This is typically 0 in simulations
-          float l = 0;	
-          
-          // initialize variables
-          int ionization_flag = 1;
-          float t_ionize      = 0;
-          float Gamma = 0;
-        
-          // Constants
-          float q_e       = 1.60217663e-19;  // coulombs
-          float q_e_au    = 1.0;             // au
-          float m_e       = 9.1093837e-31;   // kilograms
-          float m_e_au    = 1.0;             // au 
-          float c         = 299792458;       // m/s
-          float c_au      = 137.02;          // atomic units
-          float epsilon_0_au = 1/(4*M_PI);   // au
-          float alpha     = 0.00729735;      // fine structure constant
-          float h_bar     = 1.054571817e-34; // J *s
-          float E_field_conversion = 5.1422e+11;      // (alpha^3*m_e^2*c^3)/(q_e*h_bar), multiply AU to get SI
-          float Gamma_conversion   = 1.0/(h_bar/(pow(alpha,2)*m_e*pow(c,2))); // multiply au to get sec^-1 
         
           // Calculate stuff
           float E_au       = E_mag_SI/E_field_conversion; // field strength, atomic units
@@ -652,12 +645,16 @@ advance_p_kokkos_unified(
           float omega_eV   = 1.2398/(lambda_SI/1e-6); // eV
           float omega_au   = omega_eV * 0.036749; // energy, Hartree units
           float I_au       = 0.5*c_au*epsilon_0_au*pow(E_au,2.0); // intensity from the field, atomic units
-          
+
+	   // initialize variables for the while loop
+          int ionization_flag = 1;
+          float t_ionize      = 0;
+          float Gamma = 0;
           // loop for multiple ionization events in a single timestep
           while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {	  
         
             // Get the appropriate ionization energy
-            float epsilon_eV = epsilon_eV_list[int(N_ionization)]; // [eV], ionization energy
+            float epsilon_eV = epsilon_eV_list(int(N_ionization)); // [eV], ionization energy
             float epsilon_au = epsilon_eV/27.2;         // atomic units, ionization energy
             float epsilon_SI = epsilon_au*4.3597463e-18;// [J],  ionization energy
            
@@ -796,9 +793,6 @@ advance_p_kokkos_unified(
   	    // Multiple ionization events are enabled so the injected
   	    // electron weight needs to account for that
   	    int electron_index = sp_e->np++;
-
-
-	    //cout << "electron_index: " << electron_index << " sp->name: " << sp->name << " typeid(sp->name).name(): " << typeid(sp->name).name() << endl; 
 	    
             #define p_dx_e    sp_e->k_p_h(electron_index, particle_var::dx)
             #define p_dy_e    sp_e->k_p_h(electron_index, particle_var::dy)
@@ -833,8 +827,8 @@ advance_p_kokkos_unified(
 
 
 	  // FIXME: This needs to be replaced with a calulation on the hydro data
-        #ifdef CARBON_benchmark_flag
-           if int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 4 == 0){
+	  if (N_ionization_levels == 6) {
+	    if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 4 == 0){
 	     // N Ionizations: Open file, write value, close file
 	     char gn [100];
 	     snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt",timestep);
@@ -849,22 +843,14 @@ advance_p_kokkos_unified(
 	     outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << "," << sp->name << endl;
              outfile1.close();
 	   }
-        #endif // CARBON_benchmark_flag
-
-
-
-
-
+	  }
+	   
 	  
 	} // if not electrons
 	  
 #endif // FIELD_IONIZATION
 
 
-
-
-
-	
 	
         // Interpolate B
         cbx[LANE] = fcbx[LANE] + dx[LANE]*fdcbxdx[LANE];
@@ -1231,6 +1217,25 @@ advance_p_kokkos_gpu(
   Kokkos::deep_copy(k_nm, 0);
 
 #ifdef FIELD_IONIZATION
+  // constants, FIXME: need to get from deck
+  int q_e_c     = -1; // code units
+  float E_to_SI = 1.44303994037981860e+19; // code to SI
+  float t_to_SI = 1.18119324097025572e-22; // code to SI
+  float l_to_SI = 3.54112825083459245e-14; // code to SI
+  float q_to_SI = 1.60217663399999989e-19; // code to SI
+  float m_to_SI = 9.10938370150000079e-31; // code to SI
+  float q_e       = 1.60217663e-19;  // coulombs
+  float q_e_au    = 1.0;             // au
+  float m_e       = 9.1093837e-31;   // kilograms
+  float m_e_au    = 1.0;             // au 
+  float c         = 299792458;       // m/s
+  float c_au      = 137.02;          // atomic units
+  float epsilon_0_au = 1/(4*M_PI);   // au
+  float alpha     = 0.00729735;      // fine structure constant
+  float h_bar     = 1.054571817e-34; // J *s
+  float E_field_conversion = 5.1422e+11;      // (alpha^3*m_e^2*c^3)/(q_e*h_bar), multiply AU to get SI
+  float Gamma_conversion   = 1.0/(h_bar/(pow(alpha,2)*m_e*pow(c,2))); // multiply au to get sec^-1 
+    
   auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<> random_pool(seed);
   float time_to_SI = 1.18119324097025572e-22; //FIXME: doesnt belong here
@@ -1245,6 +1250,7 @@ advance_p_kokkos_gpu(
   float cell_area_xz = g->dx * g->dz;
   //cout << "cell_area:" << cell_area << "g->dx:" << g->dx << "g->dy:" << g->dy << "g->dz:" << g->dz << endl;
   int timestep = g->step;
+  Kokkos::View<double*> epsilon_eV_list = sp->ionization_energy;
 #endif
   
 #ifdef VPIC_ENABLE_HIERARCHICAL
@@ -1281,26 +1287,14 @@ advance_p_kokkos_gpu(
                            dy*( f_dezdy + dx*f_d2ezdxdy ) );
 
 #ifdef FIELD_IONIZATION
-    float tempx = 0;
-    float tempy = 0;
-    float tempz = 0;
     // ***** Field Ioization *****
-    // constants, FIXME: need to get from deck
-    int q_e_c     = -1; // code units
-    float E_to_SI = 1.44303994037981860e+19; // code to SI
-    float t_to_SI = 1.18119324097025572e-22; // code to SI
-    float l_to_SI = 3.54112825083459245e-14; // code to SI
-    float q_to_SI = 1.60217663399999989e-19; // code to SI
-    float m_to_SI = 9.10938370150000079e-31; // code to SI
-    // FIXME: **** Input deck variables ****
-    float epsilon_eV_list[] = {13.6}; // eV, ionization energy, this should be a list with the different levels
-    
+    // FIXME: need to check which species the user wants ionization enabled on
+    if (sp != sp_e){
     // Check if the particle is fully ionized already
     int N_ionization        = int(abs(charge)); // Current ionization state of the particle
     int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
-    int N_ionization_levels = sizeof(epsilon_eV_list)/sizeof(float);
-    // FIXME: need to check which species the user wants ionization enabled on
-    if (sp != sp_e){
+    int N_ionization_levels = epsilon_eV_list.extent(0);
+    
     // code units
     float hax_c = hax/qdt_2mc;
     float hay_c = hay/qdt_2mc;
@@ -1320,24 +1314,6 @@ advance_p_kokkos_gpu(
     float n = 1; //FIXME: currently only principle quantum number of 1
     float m = 0; // This is typically 0 in simulations
     float l = 0;	
-    
-    // initialize variables
-    int ionization_flag = 1;
-    float t_ionize      = 0;
-    float Gamma = 0;
-  
-    // Constants
-    float q_e       = 1.60217663e-19;  // coulombs
-    float q_e_au    = 1.0;             // au
-    float m_e       = 9.1093837e-31;   // kilograms
-    float m_e_au    = 1.0;             // au 
-    float c         = 299792458;       // m/s
-    float c_au      = 137.02;          // atomic units
-    float epsilon_0_au = 1/(4*M_PI);   // au
-    float alpha     = 0.00729735;      // fine structure constant
-    float h_bar     = 1.054571817e-34; // J *s
-    float E_field_conversion = 5.1422e+11;      // (alpha^3*m_e^2*c^3)/(q_e*h_bar), multiply AU to get SI
-    float Gamma_conversion   = 1.0/(h_bar/(pow(alpha,2)*m_e*pow(c,2))); // multiply au to get sec^-1 
   
     // Calculate stuff
     float E_au       = E_mag_SI/E_field_conversion; // field strength, atomic units
@@ -1347,11 +1323,15 @@ advance_p_kokkos_gpu(
     float omega_au   = omega_eV * 0.036749; // energy, Hartree units
     float I_au       = 0.5*c_au*epsilon_0_au*pow(E_au,2.0); // intensity from the field, atomic units
 
+    // initialize variables for while loop
+    int ionization_flag = 1;
+    float t_ionize      = 0;
+    float Gamma = 0;
     // loop for multiple ionization events in a single timestep
     while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {
         
       // Get the appropriate ionization energy
-      float epsilon_eV = epsilon_eV_list[int(N_ionization)]; // [eV], ionization energy
+      float epsilon_eV = epsilon_eV_list(int(N_ionization)); // [eV], ionization energy
       float epsilon_au = epsilon_eV/27.2;         // atomic units, ionization energy
       float epsilon_SI = epsilon_au*4.3597463e-18;// [J],  ionization energy
       

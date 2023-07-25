@@ -99,6 +99,8 @@ class species_t {
         char * name;                        // Species name
 //#ifndef FIELD_IONIZATION	
         float q;                            // Species particle charge
+//#else
+	Kokkos::View<double*> ionization_energy; // Species ionization energies
 //#endif	
         float m;                            // Species particle rest mass
 
@@ -285,6 +287,8 @@ species_t *
 species( const char * name,
 //#ifdef FIELD_IONIZATION
          float q,
+//#else
+	 Kokkos::View<double*> ionization_energy,
 //#endif
          float m,
          int max_local_np,
