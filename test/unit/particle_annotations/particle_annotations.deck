@@ -1,0 +1,364 @@
+begin_globals {
+  int annotation_count;
+};
+
+begin_initialization {
+  // Numerical settings
+  num_step = 7;
+  status_interval = 1000;                 // Basically don't print status
+  sync_shared_interval = status_interval;
+  clean_div_e_interval = status_interval;
+  clean_div_b_interval = status_interval;
+
+  int gnx = nproc();
+  int gny = 2; // Would love to make this 1 as well, but then I get weird NaNs...
+  int gnz = 1;
+
+  int topox = nproc();
+  int topoy = 1;
+  int topoz = 1;
+
+  int nppc = 100;
+
+  // use natural PIC units
+  float ec   = 1;        // Charge normalization
+  float me   = 1;        // Mass normalization
+  float c    = 1;        // Speed of light
+  float de   = 1;        // Length normalization (electron inertial length)
+  float eps0 = 1;        // Permittivity of space
+
+  // physics settings
+  float dx     = 0.1; // d_e
+  float dt     = dx * 0.95/sqrt(3.0)/c;
+  float Lx     = dx * gnx;
+  float Ly     = dx * gny;
+  float Lz     = dx * gnz;
+
+  // Setup stuff in vpic
+  define_units(c, eps0);
+  define_timestep(dt);
+
+  define_periodic_grid(0,0,0,              // Low corner
+                       Lx,Ly,Lz,           // High corner
+                       gnx,gny,gnz,        // Resolution
+                       topox,topoy,topoz); // Topology
+
+  // Space is by default filled with first material defined
+  define_material("vacuum",1.0);
+
+  // Create the field array
+  define_field_array(NULL, 0.00);
+
+  // Create electron species
+  species_t* elec = define_species("electron",  // name
+                                          -ec,  // charge
+                                           me,  // mass
+                 1.5*nppc*gnx*gny*gnz/nproc(),  // maximum number of local particles
+                                          150,  // number of particle movers
+                                            0,  // don't sort
+                                            0); // sort mode in-of-place
+
+  // Set field values
+  set_region_field(everywhere, 0.,0.,0., 1.,0.,0.);
+
+  // Generate particles
+  seed_entropy(rank()); // different random numbers on different ranks
+
+  for(int n=0; n<nppc*gnx*gny*gnz/(float)nproc(); n++) {
+    // Pick a uniform random location in the local domain
+    const float x = uniform( rng(0), grid->x0, grid->x1 );
+    const float y = uniform( rng(0), grid->y0, grid->y1 );
+    const float z = uniform( rng(0), grid->z0, grid->z1 );
+
+    // Pick random velocity
+    float ux = normal( rng(0), 0., 0.1 );
+    float uy = normal( rng(0), 0., 0.1 );
+    float uz = normal( rng(0), 0., 0.1 );
+    inject_particle(elec, x,y,z, ux,uy,uz, 0., 0, 0); // zero weight, we don't actually care about fields
+  }
+
+  // This is the species with frequent output with per-particle user-defined annotations
+//  species_t* sp = make_n_tracers(elec, 2.0, Tracertype::Copy, "electron_tracer");
+  annotation_vars_t annotations;
+  int ex_idx      = annotations.add_annotation<float>("Ex");
+  int ey_idx      = annotations.add_annotation<float>("Ey");
+  int ez_idx      = annotations.add_annotation<float>("Ez");
+  int e_idx       = annotations.add_annotation<float>("|E|");
+  int bx_idx      = annotations.add_annotation<float>("Bx");
+  int by_idx      = annotations.add_annotation<float>("By");
+  int bz_idx      = annotations.add_annotation<float>("Bz");
+  int b_idx       = annotations.add_annotation<float>("|B|");
+  int counter_idx = annotations.add_annotation<int>("counter");
+  species_t* sp = define_tracer_species_with_n("electron_tracer", elec, TracerType::Copy, 2.0, -1, 1.1, annotations);
+
+  if(sp->np != 2) { sim_log("FAIL: wrong number of tracer particles"); exit(1); }
+
+  // create annotation buffer
+//  global->annotation_count = 8; // 6 components of the electromagnetic field, counter and ID
+//  sp->allocate_annotation_buffer(global->annotation_count);
+
+//  if(sp->has_annotation != global->annotation_count) { sim_log("FAIL: wrong number of annotations per particle"); exit(1); }
+
+  // Set all tracer IDs to 0
+  Kokkos::deep_copy(sp->annotations_h.i32, 0);
+
+  for(int n = 0; n<sp->np; n++) {
+    for(uint32_t a=0; a<sp->annotation_vars.i32_vars.size(); a++) {
+      if(sp->annotations_h.get<int>(n, a) != 0) {
+        sim_log("FAIL: Initial value of i32 annotation "<<a<<" is non-zero (" << sp->annotations_h.get<int>(n,a) << ")");
+        exit(1);
+      }
+    }
+    for(uint32_t a=0; a<sp->annotation_vars.i64_vars.size(); a++) {
+      if(sp->annotations_h.get<int64_t>(n, a) != 0) {
+        sim_log("FAIL: Initial value of i64 annotation "<<a<<" is non-zero (" << sp->annotations_h.get<int64_t>(n,a) << ")");
+        exit(1);
+      }
+    }
+    for(uint32_t a=0; a<sp->annotation_vars.f32_vars.size(); a++) {
+      if(sp->annotations_h.get<float>(n, a) != 0.0) {
+        sim_log("FAIL: Initial value of f32 annotation "<<a<<" is non-zero (" << sp->annotations_h.get<float>(n,a) << ")");
+        exit(1);
+      }
+    }
+    for(uint32_t a=0; a<sp->annotation_vars.f64_vars.size(); a++) {
+      if(sp->annotations_h.get<double>(n, a) != 0.0) {
+        sim_log("FAIL: Initial value of f64 annotation "<<a<<" is non-zero (" << sp->annotations_h.get<double>(n,a) << ")");
+        exit(1);
+      }
+    }
+  }
+
+  for(int n = 0; n<sp->np; n++) {
+//    for(int a=0; a<global->annotation_count; a++) {
+//      sp->increment_annotation(n,a,1.);
+//      if(sp->get_annotation(n,a) != 1.) {
+//        sim_log("FAIL: Increment of annotation "<<a<<" failed");
+//        exit(1);
+//      }
+//    }
+    for(uint32_t a=0; a<sp->annotations_h.i32.extent(1); a++) {
+      sp->annotations_h.set<int>(n,a,sp->annotations_h.get<int>(n,a)+1);
+      if(sp->annotations_h.get<int>(n, a) != 1) {
+        sim_log("FAIL: Increment of i32 annotation "<<a<<" failed");
+        exit(1);
+      }
+    }
+    for(uint32_t a=0; a<sp->annotations_h.i64.extent(1); a++) {
+      sp->annotations_h.set<int64_t>(n,a,sp->annotations_h.get<int64_t>(n,a)+1);
+      if(sp->annotations_h.get<int64_t>(n, a) != 1) {
+        sim_log("FAIL: Increment of i64 annotation "<<a<<" failed");
+        exit(1);
+      }
+    }
+    for(uint32_t a=0; a<sp->annotations_h.f32.extent(1); a++) {
+      sp->annotations_h.set<float>(n,a,sp->annotations_h.get<float>(n,a)+1);
+      if(sp->annotations_h.get<float>(n, a) != 1.0) {
+        sim_log("FAIL: Increment of f32 annotation "<<a<<" failed");
+        exit(1);
+      }
+    }
+    for(uint32_t a=0; a<sp->annotations_h.f64.extent(1); a++) {
+      sp->annotations_h.set<double>(n,a,sp->annotations_h.get<double>(n,a)+1);
+      if(sp->annotations_h.get<double>(n, a) != 1.0) {
+        sim_log("FAIL: Increment of f64 annotation "<<a<<" failed");
+        exit(1);
+      }
+    }
+  }
+
+  for(int n = 0; n<sp->np; n++) {
+//    for(int a=0; a<global->annotation_count; a++) {
+//      sp->set_annotation(n,a,0.);
+//      if(sp->get_annotation(n,a) != 0.) {
+//        sim_log("FAIL: Set of annotation "<<a<<" failed");
+//        exit(1);
+//      }
+//    }
+    for(uint32_t a=0; a<sp->annotations_h.i32.extent(1); a++) {
+      sp->annotations_h.set<int>(n,a,0);
+      if(sp->annotations_h.get<int>(n, a) != 0) {
+        sim_log("FAIL: Set of i32 annotation "<<a<<" failed");
+        exit(1);
+      }
+    }
+    for(uint32_t a=0; a<sp->annotations_h.i64.extent(1); a++) {
+      sp->annotations_h.set<int64_t>(n,a,0);
+      if(sp->annotations_h.get<int64_t>(n, a) != 0) {
+        sim_log("FAIL: Set of i64 annotation "<<a<<" failed");
+        exit(1);
+      }
+    }
+    for(uint32_t a=0; a<sp->annotations_h.f32.extent(1); a++) {
+      sp->annotations_h.set<float>(n,a,0.0);
+      if(sp->annotations_h.get<float>(n, a) != 0.0) {
+        sim_log("FAIL: Set of f32 annotation "<<a<<" failed");
+        exit(1);
+      }
+    }
+    for(uint32_t a=0; a<sp->annotations_h.f64.extent(1); a++) {
+      sp->annotations_h.set<double>(n,a,0.0);
+      if(sp->annotations_h.get<double>(n, a) != 0.0) {
+        sim_log("FAIL: Set of f64 annotation "<<a<<" failed");
+        exit(1);
+      }
+    }
+  }
+
+  // Fudge location and speed of annotated particles
+  for(int n = 0; n<sp->np; n++) {
+    sp->p[n].dx = 0.0;
+    sp->p[n].dy = (n+1.)/(sp->np+1.);
+    sp->p[n].dz = (rank()+1.)/(nproc()+1.);
+    sp->p[n].ux = 0.5;
+    sp->p[n].uy = 0.0;
+    sp->p[n].uz = 0.0;
+  }
+
+  // Store ID in last annotation slot
+  int tracer_idx = sp->annotation_vars.get_annotation_index<int>("TracerID");
+  for(int n = 0; n<sp->np; n++) {
+    int id = 100*rank() + n;
+    sp->annotations_h.set<int>(n, tracer_idx, id);
+  }
+
+  sp->copy_to_device();
+}
+
+
+begin_diagnostics {
+
+  species_t* sp = find_species_name("electron_tracer", tracers_list);
+  if(!sp) { sim_log("FAIL: can't find tracer species"); exit(1); }
+
+  // Interpolate fields and store in annotations
+  auto interp = interpolator_array->k_i_d;
+  const int ex_idx = sp->annotation_vars.get_annotation_index<float>("Ex");
+  const int ey_idx = sp->annotation_vars.get_annotation_index<float>("Ey");
+  const int ez_idx = sp->annotation_vars.get_annotation_index<float>("Ez");
+  const int e_idx  = sp->annotation_vars.get_annotation_index<float>("|E|");
+  const int bx_idx = sp->annotation_vars.get_annotation_index<float>("Bx");
+  const int by_idx = sp->annotation_vars.get_annotation_index<float>("By");
+  const int bz_idx = sp->annotation_vars.get_annotation_index<float>("Bz");
+  const int b_idx  = sp->annotation_vars.get_annotation_index<float>("|B|");
+  auto f32_annotations = sp->annotations_d.f32;
+  Kokkos::parallel_for("Interpolate fields annotation", Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(const uint32_t idx) {
+    const int i = sp->k_p_i_d(idx);
+    // Load displacement in the cell
+    const float dx0 = sp->k_p_d(idx, particle_var::dx);
+    const float dy0 = sp->k_p_d(idx, particle_var::dy);
+    const float dz0 = sp->k_p_d(idx, particle_var::dz);
+    // Interpolate field values
+    const float ex = interp(i, interpolator_var::ex) + dy0*interp(i,interpolator_var::dexdy) + dz0*(interp(i,interpolator_var::dexdz)+dy0*interp(i,interpolator_var::d2exdydz));
+    const float ey = interp(i, interpolator_var::ey) + dz0*interp(i,interpolator_var::deydz) + dx0*(interp(i,interpolator_var::deydx)+dz0*interp(i,interpolator_var::d2eydzdx));
+    const float ez = interp(i, interpolator_var::ez) + dx0*interp(i,interpolator_var::dezdx) + dy0*(interp(i,interpolator_var::dezdy)+dx0*interp(i,interpolator_var::d2ezdxdy));
+    const float bx = interp(i, interpolator_var::cbx) + dx0*interp(i,interpolator_var::dcbxdx);
+    const float by = interp(i, interpolator_var::cby) + dy0*interp(i,interpolator_var::dcbydy);
+    const float bz = interp(i, interpolator_var::cbz) + dz0*interp(i,interpolator_var::dcbzdz);
+    // Store
+    f32_annotations(idx, ex_idx) = ex;
+    f32_annotations(idx, ey_idx) = ey;
+    f32_annotations(idx, ez_idx) = ez;
+    f32_annotations(idx, e_idx)  = sqrt(ex*ex + ey*ey + ez*ez);
+    f32_annotations(idx, bx_idx) = bx;
+    f32_annotations(idx, by_idx) = by;
+    f32_annotations(idx, bz_idx) = bz;
+    f32_annotations(idx, b_idx)  = sqrt(bx*bx + by*by + bz*bz);
+  });
+
+  sp->copy_to_host();
+
+  int tracer_idx = sp->annotation_vars.get_annotation_index<int>("TracerID");
+
+  // Check that particles involve sane and that annotations stay with the right particle
+  if(rank() == 0) {
+    for(int n=0; n<sp->np; n++) {
+      sim_log("Step " << step() << ", Particle " << n << ", dx " << sp->p[n].dx << ", dy " << sp->p[n].dy << ", dz " << sp->p[n].dz << ", TracerID " << sp->annotations_h.get<int>(n,tracer_idx));
+
+      if(step() < 3) { // Before first cell crossing and communication
+        if(sp->p[n].dz > 0.5) { sim_log("FAIL: z coordinate indicates particle came from wrong rank"); exit(1); }
+
+        if(sp->annotations_h.get<int>(n,tracer_idx) == 0) {
+         if(sp->p[n].dy > 0.5) { sim_log("FAIL: y coordinate indicates that the wrong particle has ID 0: p["<<n<<"].dy = "<<sp->p[n].dy<<">0.5"); exit(1); }
+        } else if(sp->annotations_h.get<int>(n,tracer_idx) == 1) {
+         if(sp->p[n].dy < 0.5) { sim_log("FAIL: y coordinate indicates that the wrong particle has ID 1: p["<<n<<"].dy = "<<sp->p[n].dy<<"<0.5"); exit(1); }
+        } else {
+         sim_log("FAIL: unexpected ID: sp->annotations_h.get<int>("<<n<<","<<tracer_idx<<") ==" << sp->annotations_h.get<int>(n,tracer_idx)); exit(1);
+        }
+
+      } else if (step() < 7) { // Before second cell crossing and communication
+        if(sp->p[n].dz < 0.5) { sim_log("FAIL: z coordinate indicates particle came from wrong rank"); exit(1); }
+
+        if(sp->annotations_h.get<int>(n,tracer_idx) == 100) {
+         if(sp->p[n].dy > 0.5) { sim_log("FAIL: y coordinate indicates that the wrong particle has ID 100: p["<<n<<"].dy = "<<sp->p[n].dy<<">0.5"); exit(1); }
+        } else if(sp->annotations_h.get<int>(n,tracer_idx) == 101) {
+         if(sp->p[n].dy < 0.5) { sim_log("FAIL: y coordinate indicates that the wrong particle has ID 101: p["<<n<<"].dy = "<<sp->p[n].dy<<"<0.5"); exit(1); }
+        } else {
+         sim_log("FAIL: unexpected ID: sp->annotations_h.get<int>("<<n<<","<<tracer_idx<<") ==" << sp->annotations_h.get<int>(n,tracer_idx)); exit(1);
+        }
+
+      } else { // After
+        if(sp->p[n].dz > 0.5) { sim_log("FAIL: z coordinate indicates particle came from wrong rank"); exit(1); }
+
+        if(sp->annotations_h.get<int>(n,tracer_idx) == 0) {
+         if(sp->p[n].dy > 0.5) { sim_log("FAIL: y coordinate indicates that the wrong particle has ID 0: p["<<n<<"].dy = "<<sp->p[n].dy<<">0.5"); exit(1); }
+        } else if(sp->annotations_h.get<int>(n,tracer_idx) == 1) {
+         if(sp->p[n].dy < 0.5) { sim_log("FAIL: y coordinate indicates that the wrong particle has ID 1: p["<<n<<"].dy = "<<sp->p[n].dy<<"<0.5"); exit(1); }
+        } else {
+         sim_log("FAIL: unexpected ID: sp->annotations_h.get<int>("<<n<<","<<tracer_idx<<") ==" << sp->annotations_h.get<int>(n,tracer_idx)); exit(1);
+        }
+
+      }
+    }
+  }
+
+
+  // Check field interpolation
+  for(int n=0; n<sp->np; n++) {
+    if(sp->annotations_h.get<float>(n,ex_idx) != 0.) { sim_log("FAIL: unexpected E_x on particle "<<n<<" of rank "<<rank()<<" ("<<sp->annotations_h.get<float>(n,ex_idx)<<")"); exit(1); }
+    if(sp->annotations_h.get<float>(n,ey_idx) != 0.) { sim_log("FAIL: unexpected E_y on particle "<<n<<" of rank "<<rank()<<" ("<<sp->annotations_h.get<float>(n,ey_idx)<<")"); exit(1); }
+    if(sp->annotations_h.get<float>(n,ez_idx) != 0.) { sim_log("FAIL: unexpected E_z on particle "<<n<<" of rank "<<rank()<<" ("<<sp->annotations_h.get<float>(n,ez_idx)<<")"); exit(1); }
+    if(sp->annotations_h.get<float>(n,e_idx)  != 0.) { sim_log("FAIL: unexpected |E| on particle "<<n<<" of rank "<<rank()<<" ("<<sp->annotations_h.get<float>(n,e_idx)<<")"); exit(1); }
+    if(sp->annotations_h.get<float>(n,bx_idx) != 1.) { sim_log("FAIL: unexpected B_x on particle "<<n<<" of rank "<<rank()<<" ("<<sp->annotations_h.get<float>(n,bx_idx)<<")"); exit(1); }
+    if(sp->annotations_h.get<float>(n,by_idx) != 0.) { sim_log("FAIL: unexpected B_y on particle "<<n<<" of rank "<<rank()<<" ("<<sp->annotations_h.get<float>(n,by_idx)<<")"); exit(1); }
+    if(sp->annotations_h.get<float>(n,bz_idx) != 0.) { sim_log("FAIL: unexpected B_z on particle "<<n<<" of rank "<<rank()<<" ("<<sp->annotations_h.get<float>(n,bz_idx)<<")"); exit(1); }
+    if(sp->annotations_h.get<float>(n,b_idx)  != 1.) { sim_log("FAIL: unexpected |B| on particle "<<n<<" of rank "<<rank()<<" ("<<sp->annotations_h.get<float>(n,b_idx)<<")"); exit(1); }
+  }
+
+
+  // Check that accumulation works
+  for(int n=0; n<sp->np; n++) {
+    if(sp->annotations_h.get<int>(n,0) != step() ) { sim_log("FAIL: counter does not match time step on particle "<<n<<" of rank "<<rank()); exit(1); }
+    sp->annotations_h.set<int>(n,0, sp->annotations_h.get<int>(n,0) + 1.);
+  }
+
+  // Force a restart after step 5 to make sure that dump/restart works too
+  if(step() == 5) {
+      dump_mkdir("restart0");
+      char fname[256];
+//      sprintf(fname, "%s/restore.0.%i", "restart0", world_rank );
+      checkpt("restart0/restore", step());
+//      checkpt_objects(fname);
+      sim_log("Restart dump restart completed.");
+      mp_barrier();
+  }
+
+  // If we reach this in the last step without any fails we probably did well enough
+  if(step() == num_step) {
+    sim_log("passed");
+  }
+}
+
+begin_particle_injection {
+}
+
+begin_current_injection {
+}
+
+begin_field_injection {
+}
+
+begin_particle_collisions {
+}
+
+
