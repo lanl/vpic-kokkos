@@ -111,6 +111,9 @@ species( const char * name,
 	#else
 	 float q, // FIXME: need to remove
 	 Kokkos::View<double*> ionization_energy,
+	 float qn,
+	 float qm,
+	 float ql,
 	#endif
          float m,
          int max_local_np,
@@ -138,6 +141,9 @@ species( const char * name,
 #else
   sp->q = q; // FIXME: need to remove
   sp->ionization_energy = ionization_energy;
+  sp->qn = qn;
+  sp->qm = qm;
+  sp->ql = ql;
 #endif
   sp->m = m;
 

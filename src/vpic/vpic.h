@@ -511,6 +511,9 @@ public:
 		 #else
 		  double q, // FIXME: need to remove
                   Kokkos::View<double*> ionization_energy,
+		  double qn, // quantum numbers n,m,l
+		  double qm,
+		  double ql,
 		 #endif
                   double m,
                   double max_local_np,
@@ -531,6 +534,9 @@ public:
 				   #else
 				    (float)q, //FIXME: need to remove
 				    (Kokkos::View<double*>)ionization_energy,
+				    (float)qn,
+		                    (float)qm,
+		                    (float)ql,
 				   #endif    
 				    (float)m,
                                     (int)max_local_np, (int)max_local_nm,

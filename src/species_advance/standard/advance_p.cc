@@ -442,7 +442,12 @@ advance_p_kokkos_unified(
   // constants
   int q_e_c     = -1; // code units
   float E_to_SI = 1.44303994037981860e+19; // code to SI
+  float t_to_SI = 1.18119324097025572e-22; // code to SI
+  float l_to_SI = 3.54112825083459245e-14; // code to SI
+  float q_to_SI = 1.60217663399999989e-19; // code to SI
+  float m_to_SI = 9.10938370150000079e-31; // code to SI
   float time_to_SI = 1.18119324097025572e-22; // code to SI
+  float energy_to_SI = m_to_SI * (l_to_SI/time_to_SI) * (l_to_SI/time_to_SI); // code to SI
   float dt = g->dt*time_to_SI; // [s], timestep
   float q_e       = 1.60217663e-19;  // coulombs
   float q_e_au    = 1.0;             // au
@@ -459,6 +464,10 @@ advance_p_kokkos_unified(
   auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<> random_pool(seed);
   Kokkos::View<double*> epsilon_eV_list = sp->ionization_energy;
+  float n = sp->qn; // principal quantum number
+  float m = sp->qm; // magnetic quantum number
+  float l = sp->ql; // angular momentum quantum number
+  float lambda = g->lambda;
 #endif  
 
 // Determine whether to use accumulators
@@ -607,22 +616,16 @@ advance_p_kokkos_unified(
         hax[LANE] = qdt_2mc*( (fex[LANE] + dy[LANE]*fdexdy[LANE] ) + dz[LANE]*(fdexdz[LANE] + dy[LANE]*fd2exdydz[LANE]) );
         hay[LANE] = qdt_2mc*( (fey[LANE] + dz[LANE]*fdeydz[LANE] ) + dx[LANE]*(fdeydx[LANE] + dz[LANE]*fd2eydzdx[LANE]) );
         haz[LANE] = qdt_2mc*( (fez[LANE] + dx[LANE]*fdezdx[LANE] ) + dy[LANE]*(fdezdy[LANE] + dx[LANE]*fd2ezdxdy[LANE]) );
-
 		
 #ifdef FIELD_IONIZATION	
 	// ***** Field Ioization *****
+	// Declate varviables
+	bool multiphoton_ionised = false;
+	float K;
+	
 	if (sp != sp_e){ // FIXME: need to check which species the user wants ionization enabled on
-	  // Simulation parameters: FIXME: ** Need to get these from the input deck **
-          // Right now it is set up for neutral hydrogen
-          float lambda_SI    = 0.8e-06;  // meters
-          // Ionization specific parameters
-          float K = 2; //FIXME: currenly only have 2-photon ionization
-          float n = 1; //FIXME: currently only principle quantum number of 1
-          float m = 0; // This is typically 0 in simulations
-          float l = 0;
+          float lambda_SI    = lambda*l_to_SI;  // meters
 
-
-	  
 	  // Check if the particle is fully ionized already
           int N_ionization        = int(abs(charge[LANE])); // Current ionization state of the particle
           int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
@@ -651,7 +654,7 @@ advance_p_kokkos_unified(
           float t_ionize      = 0;
           float Gamma = 0;
           // loop for multiple ionization events in a single timestep
-          while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {	  
+          while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {
         
             // Get the appropriate ionization energy
             float epsilon_eV = epsilon_eV_list(int(N_ionization)); // [eV], ionization energy
@@ -659,8 +662,9 @@ advance_p_kokkos_unified(
             float epsilon_SI = epsilon_au*4.3597463e-18;// [J],  ionization energy
            
             // Calculate stuff
-            float Z            = N_ionization + 1;          // ion charge number after ionization
-            float Z_star       = N_ionization; // initial charge state
+	    K                    = floor(epsilon_au/omega_au)+1; // number of photons required for multiphoton ionization          
+            float Z              = N_ionization + 1;          // ion charge number after ionization
+            float Z_star         = N_ionization; // initial charge state
             float n_star         = (Z_star + 1.0)/sqrt(2*epsilon_au); // effective principle quantum number
             float l_star         = n_star - 1.0; // angular momentum
             float T_0            = M_PI*Z/(abs(epsilon_au) * sqrt(2*abs(epsilon_au))); // period of classical radial trajectories
@@ -681,7 +685,7 @@ advance_p_kokkos_unified(
             float E_M_SI = 2*omega_SI*sqrt(2*m_e*epsilon_SI)/q_e;
             float E_M_au = omega_au*sqrt(8*epsilon_au); // atomic units
             float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
-            float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units 
+            float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units
 
             if (E_au<=E_M_au){
               // MPI Ionization
@@ -691,10 +695,9 @@ advance_p_kokkos_unified(
               //cout << "MPI Ionization" << endl;
               // FIXME: need to add the case of circularly polarized field
               float T_K = 4.80*pow(1.30,2*K)*pow(2*K+1,-1)*pow(K,-1.0/2.0); // in the case of linearly polarized field
-              // FIXME: still need to figure out the units of simga_K; the plot in the book suggests it isnt [cm^2K * s^(K-1)]
-              float sigma_K_au = pow(c_au*pow(tgamma(K+1),2)*pow(n,5)* pow(omega_au,(10*K-1)/3), -1)*T_K*pow(E_au,2*K-2);
-              // FIXME: This definition of Gamma is only correct when sigma is in units of [cm^2K * s^(K-1)]
-              float Gamma_MPI = sigma_K_au * pow(I_au/omega_au, K);
+              float sigma_K_au = pow(c_au*pow(tgamma(K+1),2)*pow(n,5)* pow(omega_au,(10*K-1)/3), -1)*T_K*pow(E_au,2*K-2); // atomic units, [cm^2K * s^(K-1)]
+	      float flux = c_au*pow(E_au, 2.0)/(8*M_PI*omega_au);
+              float Gamma_MPI = sigma_K_au * pow(flux, K);
           
               // Tunneling Regime
               //cout << "Tunneling Ionization" << endl;
@@ -703,7 +706,8 @@ advance_p_kokkos_unified(
               float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
               float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
           
-              Gamma = max(Gamma_MPI,Gamma_ADK_SI); //FIXME: EPOCH uses min here
+              Gamma = min(Gamma_MPI,Gamma_ADK_SI);
+	      if(Gamma_MPI < Gamma_ADK_SI){ multiphoton_ionised = true; }
             }
           
             else if (E_au>E_M_au && E_au<=E_T_au) {
@@ -785,6 +789,9 @@ advance_p_kokkos_unified(
   	
   	  // Check if ionization event occured
   	  if(N_ionization_before < N_ionization){
+
+	    if(multiphoton_ionised){cout << "Multiphoton Ionization used" << endl;}
+	    
   	    // Change the charge of the particle
   	    k_particles(particle_index, particle_var::charge) = N_ionization * abs(q_e_c); // code units
   
@@ -814,6 +821,25 @@ advance_p_kokkos_unified(
   	    p_uz_e = uz[LANE];
   	    p_q_e  = q_e_c; // electrons charge in code units
   	    p_w_e  = (N_ionization - N_ionization_before) * k_particles(particle_index, particle_var::w); // weight is dependent on the number of ionization events and weight of ionized particle
+
+	    // With multiphoton ionization, the additional energy from photons
+            // accelerates the electron in the direction of the electric field.
+            // This is an approximation as the ejection angle ranges widely
+            // with a maxima at theta = 0 with respect to the field
+	    float epsilon_t_au = 0; // initialize the total energy from multiple ionizations
+    	    float epsilon_t_c  = 0; 
+    	    float epsilon_t_SI = 0;
+	    if(multiphoton_ionised){
+	      for(int i=0; i<int(N_ionization-N_ionization_before); i++) {
+    	        epsilon_t_SI += epsilon_eV_list[i] * q_e; // joules
+              }
+	      double p_correction = sqrt( 2*m_e*(K*h_bar*omega_SI - epsilon_t_SI) )/energy_to_SI; // code units
+	      p_ux_e += p_correction * hax_c/(ha_mag_c*ha_mag_c);
+	      p_uy_e += p_correction * hay_c/(ha_mag_c*ha_mag_c);
+	      p_uz_e += p_correction * haz_c/(ha_mag_c*ha_mag_c);	
+	    }
+
+	    //cout << "pii_e: " << pii_e << endl; // FIXME: remove
 	    
   	    #undef p_dx_e
             #undef p_dy_e
@@ -823,7 +849,205 @@ advance_p_kokkos_unified(
             #undef p_uz_e
             #undef p_w_e
             #undef pii_e
-          } // if ionization event occured
+ 
+
+
+
+            // Energy conservation is accounted for by a current density correction through Poynting’s theorem (J_ionize = (N*epsilon_t)/(dt*E) E_hat atomic units)
+            // in tunnelling ionisation and BSI the energy loss from the field is the ionisation energy of the electron
+            // in multiphoton ionisation it is the total energy for the number of photons absorbed.
+            // The total energy loss from multiple ionisations is summed and a current density correction is weighted back to the grid points
+    	    float N_ions = k_particles(particle_index, particle_var::w); // this is the number of physical ions created  
+	    if(multiphoton_ionised) {
+	      epsilon_t_c = (K*h_bar*omega_SI)/energy_to_SI; // code units
+	    } 
+	    else {
+              for(int i=0; i<int(N_ionization-N_ionization_before); i++) {
+                epsilon_t_au += epsilon_eV_list[i]/27.2; // atomic units, ionization energy
+    	        epsilon_t_SI += epsilon_eV_list[i] * q_e; // joules
+    	        epsilon_t_c  += (epsilon_eV_list[i] * q_e) / energy_to_SI; // code units
+              }
+	    } 
+    
+            float cell_volume_c  = g->dV;
+            float cell_volume_SI = cell_volume_c * l_to_SI*l_to_SI*l_to_SI;
+            float cell_volume_au = cell_volume_SI/pow(5.29177210903e-11,3.0);
+    	
+    	    float dt_au = dt / 2.41884e-17; // convsersion factor is h_bar/Eh where Eh is hartree energy
+
+	    float j_ionize_SI_x = epsilon_t_SI * N_ions * (hax_c * E_to_SI) / (dt * cell_volume_SI * E_mag_SI*E_mag_SI);
+	    float j_ionize_SI_y = epsilon_t_SI * N_ions * (hay_c * E_to_SI) / (dt * cell_volume_SI * E_mag_SI*E_mag_SI);
+	    float j_ionize_SI_z = epsilon_t_SI * N_ions * (haz_c * E_to_SI) / (dt * cell_volume_SI * E_mag_SI*E_mag_SI);
+	    float j_ionize_SI_mag = sqrt( j_ionize_SI_x*j_ionize_SI_x + j_ionize_SI_y*j_ionize_SI_y + j_ionize_SI_z*j_ionize_SI_z );
+
+    	    float j_ionize_mag_c  = (N_ions * epsilon_t_c )/(g->dt    * ha_mag_c * cell_volume_c ); // code
+	    float jx_ionize = (epsilon_t_c * N_ions * hax_c) / (g->dt * cell_volume_c * ha_mag_c*ha_mag_c);
+	    float jy_ionize = (epsilon_t_c * N_ions * hay_c) / (g->dt * cell_volume_c * ha_mag_c*ha_mag_c);
+	    float jz_ionize = (epsilon_t_c * N_ions * haz_c) / (g->dt * cell_volume_c * ha_mag_c*ha_mag_c);
+
+	    //float j_to_SI = 1.08169825311233e30; //q_to_SI/(t_to_SI * l_to_SI*l_to_SI); // code units to SI
+
+	    // FIXME: remove
+	    //cout << "*************" << endl;
+	    //cout << "electron_index: " << electron_index << ", timestep: " << timestep << endl;  
+	    //cout << "epsilon_t_SI: " << epsilon_t_SI << "," << "weight: " << N_ions << "," << "dt: " << dt << "," << "V_cell" << cell_volume_SI << "," << endl;
+	    //cout << "E_mag_SI: " << E_mag_SI << "hax_c * E_to_SI: " << hax_c * E_to_SI << "," << "hay_c * E_to_SI: " << hay_c * E_to_SI << "," << "haz_c * E_to_SI: " << haz_c * E_to_SI << endl;
+	    //cout << "j_ionize_SI_mag: " << j_ionize_SI_mag << "," <<  "j_ionize_SI_x: " << j_ionize_SI_x << "," <<  "j_ionize_SI_y: " << j_ionize_SI_y << "," <<  "j_ionize_SI_z: " << j_ionize_SI_z << endl;
+	    //cout << "j_ionize_mag_c: " << j_ionize_mag_c << "," << "jx_ionize: " << jx_ionize << "," << "jy_ionize: " << jy_ionize << "," << "jz_ionize: " << jz_ionize << endl;
+	    //cout << "ii[LANE]: " << ii[LANE] << "," << "dx[LANE]: " << dx[LANE] << "," << "dy[LANE]: " << dy[LANE] << "," << "dz[LANE]: " << dz[LANE] << endl;
+
+            //Declaration of local variables
+            int ip, id, jp, jd, kp, kd;
+            double xpn, xpmxip, xpmxid;
+            double ypn, ypmyjp, ypmyjd;
+            double zpn, zpmzkp, zpmzkd;
+            double Sxp[2], Sxd[2], Syp[2], Syd[2], Szp[2], Szd[2];
+	    int N_voxel_x,N_voxel_y,N_voxel_z,N_voxel_xy;
+	    int voxel_indx,voxel_indy,voxel_indz;
+            int xgrid,ygrid,zgrid;
+            int y_start,z_start,y_end,z_end;
+	    double xfrac,yfrac,zfrac;
+	    double xpos,ypos,zpos;
+	    double xcorner,ycorner,zcorner;
+
+	    // Calculate grid coordinates from voxel index
+            // (this logic has been checked to be true with the grid coordinate to VOXEL macro)
+	    int nghost = 2; // tophat shape
+            N_voxel_x   = (g->nx + nghost); // number of voxels in the x direction
+            N_voxel_y   = (g->ny + nghost);
+            N_voxel_z   = (g->nz + nghost);
+            N_voxel_xy = N_voxel_x*N_voxel_y; // calculate the number of voxels in the xy plane
+            zgrid = ceil( float(ii[LANE] + 1)/float( N_voxel_xy  ) - 1.0 ); // calculate the z-coordinate
+            z_start = zgrid*N_voxel_xy;           // beginning voxel index for the z-coordinate
+            z_end   = (zgrid+1) * N_voxel_xy - 1; // final voxel index for the z-coordinate
+            ygrid = floor( float(ii[LANE]-z_start)/(float)N_voxel_x ); // calculate y-coordinate
+            y_start = ((nx)+2)*((ygrid) + ((ny)+2)*(zgrid));// beginning voxel index for the y,z-coordinates
+            y_end   = y_start + (N_voxel_x - 1); // final voxel index for the y,z-coordinates
+            xgrid = ii[LANE]-y_start; // calculate x-coordinate
+
+	    // calculate the normalized particle position (global)
+	    xfrac = (dx[LANE] + 1)/2.0; // fraction from left edge of cell (middle of cell is 0.5)
+	    yfrac = (dy[LANE] + 1)/2.0;
+	    zfrac = (dz[LANE] + 1)/2.0;
+	    xpos  = xgrid + xfrac;      // global position of particle (normalized)
+	    ypos  = ygrid + yfrac;
+	    zpos  = zgrid + zfrac;
+
+            //top corner position of particle
+            xcorner = xpos + 0.5;
+            ycorner = ypos + 0.5;
+	    zcorner = zpos + 0.5;
+            
+            // primal grid
+            ip = round(xcorner); // closest node to top particle corner 
+            jp = round(ycorner);
+	    kp = round(zcorner);
+            xpmxip  = xcorner - ( double )ip; // normalized distance from particle corner to node 
+            ypmyjp  = ycorner - ( double )jp;
+	    zpmzkp  = zcorner - ( double )kp;
+            
+            Sxp[1] = 0.5 + xpmxip; // weight
+            Sxp[0] = 0.5 - xpmxip;
+            Syp[1] = 0.5 + ypmyjp;
+            Syp[0] = 0.5 - ypmyjp;
+	    Szp[1] = 0.5 + zpmzkp;
+            Szp[0] = 0.5 - zpmzkp;
+            
+            // staggered grid (staggered by 1/2 cell)
+	    // Jx staggered in x, Jy staggered in y, Jz staggered in z
+            id = round(xcorner + 0.5);
+            jd = round(ycorner + 0.5);
+	    kd = round(zcorner + 0.5);
+            xpmxid  = (xcorner + 0.5) - ( double )id;
+            ypmyjd  = (ycorner + 0.5) - ( double )jd;
+	    zpmzkd  = (zcorner + 0.5) - ( double )kd;
+            
+            Sxd[1] = 0.5 + xpmxid;
+            Sxd[0] = 0.5 - xpmxid;
+            Syd[1] = 0.5 + ypmyjd;
+            Syd[0] = 0.5 - ypmyjd;
+	    Szd[1] = 0.5 + zpmzkd;
+            Szd[0] = 0.5 - zpmzkd;
+
+	    // FIXME: remove
+	    //cout << "xgrid,ygrid,zgrid: " << xgrid << "," << ygrid << "," << zgrid << endl;
+	    //cout << "xfrac,yfrac,zfrac: " << xfrac << "," << yfrac << "," << zfrac << endl;
+	    //cout << "xpos,ypos,zpos: " << xpos<<"," << ypos<<"," << zpos << endl;
+	    //cout << "xcorner,ycorner,zcorner: " << xcorner<<"," << ycorner<<"," << zcorner << endl;
+            //cout << endl;
+            //cout << "non-staggered" << endl;
+            //cout << "ip,jp,kp: " << ip<<"," << jp<<"," << kp << endl;
+            //cout << "xpmxip,ypmyjp,zpmzkp: " << xpmxip<<","<< ypmyjp<<","<< zpmzkp << endl;
+            //cout << "Sxp[0], Sxp[1]: " << Sxp[0]<<"," <<Sxp[1] << endl;
+            //cout << "Syp[0], Syp[1]: " << Syp[0]<<"," <<Syp[1] << endl;
+            //cout << "Szp[0], Szp[1]: " << Szp[0]<<"," <<Szp[1] << endl;
+            //cout << endl;   
+            //cout << "staggered" << endl;
+            //cout << "id,jd,kd: " << id<<"," << jd<<"," << kd << endl;
+            //cout << "xpmxid,ypmyjd,zpmzkd: " << xpmxid<<"," <<ypmyjd<<"," <<zpmzkd << endl;
+            //cout << "Sxd[0], Sxd[1]: " << Sxd[0]<<"," <<Sxd[1] << endl;
+            //cout << "Syd[0], Syd[1]: " << Syd[0]<<"," <<Syd[1] << endl;
+            //cout << "Szd[0], Szd[1]: " << Szd[0]<<"," <<Szd[1] << endl;
+            //cout << endl;   
+            
+            //double TEMP = 0; // FIXME: remove
+	    //int iter = 1; // FIXME: remove
+            for (unsigned int i=0 ; i<2 ; i++) {
+                int iploc=ip+i-1;
+                int idloc=id+i-1;
+                for (unsigned int j=0 ; j<2 ; j++) {
+                    int jploc=jp+j-1;
+                    int jdloc=jd+j-1;
+		    for (unsigned int k=0 ; k<2 ; k++) {
+                      int kploc=kp+k-1;
+                      int kdloc=kd+k-1;
+            	      
+                      //cout << "iter: " << iter++<< endl; // FIXME: remove
+		      
+		      voxel_indx = VOXEL(idloc, jploc, kploc, g->nx,g->ny,g->nz); // Jx is staggered in x 
+          	      voxel_indy = VOXEL(iploc, jdloc, kploc, g->nx,g->ny,g->nz); // Jy is staggered in y
+          	      voxel_indz = VOXEL(iploc, jploc, kdloc, g->nx,g->ny,g->nz); // Jz is staggered in z
+		      
+		      Kokkos::atomic_fetch_add(&k_field(voxel_indx, field_var::jfx), jx_ionize * Sxd[i] * Syp[j] * Szp[k]); 
+          	      Kokkos::atomic_fetch_add(&k_field(voxel_indy, field_var::jfy), jy_ionize * Sxp[i] * Syd[j] * Szp[k]); 
+          	      Kokkos::atomic_fetch_add(&k_field(voxel_indz, field_var::jfz), jz_ionize * Sxp[i] * Syp[j] * Szd[k]);
+                          
+                      // x // FIXME: remove
+                      //cout << "idloc, jploc, kploc: " << idloc<<","<< jploc<<","<< kploc << endl;
+                      //cout << "Sxd[i]*Syp[j]*Szp[k]: " << Sxd[i]*Syp[j]*Szp[k] << endl;
+                      //cout << "i,j,k: " << i <<","<<j<<","<<k<<endl;
+                      //TEMP += Sxd[i]*Syp[j]*Szp[k];
+		      
+		      // y // FIXME: remove
+                      //cout << "iploc, jdloc, kploc: " << iploc<<","<< jdloc<<","<< kploc << endl;
+                      //cout << "Sxp[i]*Syd[j]*Szp[k]: " << Sxp[i]*Syd[j]*Szp[k] << endl;
+                      //cout << "i,j,k: " << i <<","<<j<<","<<k<<endl;
+                      //TEMP += Sxp[i]*Syd[j]*Szp[k];
+		      
+		      // z // FIXME: remove
+                      //cout << "iter: " << iter << endl;
+                      //cout << "iploc, jploc, kdloc: " << iploc<<","<< jploc<<","<< kdloc << endl;
+                      //cout << "Sxp[i]*Syp[j]*Szd[k]: " << Sxp[i]*Syp[j]*Szd[k] << endl;
+                      //cout << "i,j,k: " << i <<","<<j<<","<<k<<endl;
+                      //TEMP += Sxp[i]*Syp[j]*Szd[k];
+		      
+		    }//k  
+                }//j
+            }//i
+
+                
+            //cout << "TEMP: " << TEMP << endl; // FIXME: remove
+
+         } // if ionization event occured
+
+
+	
+
+
+
+
+	
+	  
 
 
 	  // FIXME: This needs to be replaced with a calulation on the hydro data
@@ -1224,6 +1448,9 @@ advance_p_kokkos_gpu(
   float l_to_SI = 3.54112825083459245e-14; // code to SI
   float q_to_SI = 1.60217663399999989e-19; // code to SI
   float m_to_SI = 9.10938370150000079e-31; // code to SI
+  float time_to_SI = 1.18119324097025572e-22; // code to SI
+  float energy_to_SI = m_to_SI * (l_to_SI/time_to_SI) * (l_to_SI/time_to_SI); // code to SI
+  float dt = g->dt*time_to_SI; // [s], timestep
   float q_e       = 1.60217663e-19;  // coulombs
   float q_e_au    = 1.0;             // au
   float m_e       = 9.1093837e-31;   // kilograms
@@ -1238,19 +1465,17 @@ advance_p_kokkos_gpu(
     
   auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<> random_pool(seed);
-  float time_to_SI = 1.18119324097025572e-22; //FIXME: doesnt belong here
-  float dt = g->dt * time_to_SI;
   auto sp_name = sp->name;
   k_particles_t& k_electrons = sp_e->k_p_d; 
   k_particles_i_t& k_electrons_i = sp_e->k_p_i_d;  
   Kokkos::View<int> count("count");
   Kokkos::deep_copy(count, sp_e->np);
-  float cell_area_xy = g->dx * g->dy; //FIXME: is this the correct area, this will change depending on the problem
-  float cell_area_yz = g->dy * g->dz;
-  float cell_area_xz = g->dx * g->dz;
-  //cout << "cell_area:" << cell_area << "g->dx:" << g->dx << "g->dy:" << g->dy << "g->dz:" << g->dz << endl;
   int timestep = g->step;
   Kokkos::View<double*> epsilon_eV_list = sp->ionization_energy;
+  float n = sp->qn; // principal quantum number
+  float m = sp->qm; // magnetic quantum number
+  float l = sp->ql; // angular momentum quantum number
+  float lambda = g->lambda;
 #endif
   
 #ifdef VPIC_ENABLE_HIERARCHICAL
@@ -1288,6 +1513,10 @@ advance_p_kokkos_gpu(
 
 #ifdef FIELD_IONIZATION
     // ***** Field Ioization *****
+    // Declate varviables
+    bool multiphoton_ionised = false;
+    float K;
+	
     // FIXME: need to check which species the user wants ionization enabled on
     if (sp != sp_e){
     // Check if the particle is fully ionized already
@@ -1304,16 +1533,7 @@ advance_p_kokkos_gpu(
     float E_mag_SI = E_to_SI * ha_mag_c;
 
     // Calculate the ionization rate and number of ionizations
-
-    // Simulation parameters: FIXME: ** Need to get these from vpic **
-    // Right now it is set up for neutral hydrogen
-    float lambda_SI    = 0.8e-06;  // meters
-
-    // Ionization specific parameters
-    float K = 2; //FIXME: currenly only have 2-photon ionization
-    float n = 1; //FIXME: currently only principle quantum number of 1
-    float m = 0; // This is typically 0 in simulations
-    float l = 0;	
+    float lambda_SI    = lambda*l_to_SI;  // meters	
   
     // Calculate stuff
     float E_au       = E_mag_SI/E_field_conversion; // field strength, atomic units
@@ -1336,8 +1556,9 @@ advance_p_kokkos_gpu(
       float epsilon_SI = epsilon_au*4.3597463e-18;// [J],  ionization energy
       
       // Calculate stuff
-      float Z            = N_ionization + 1;          // ion charge number after ionization
-      float Z_star       = N_ionization; // initial charge state
+      K                    = floor(epsilon_au/omega_au)+1; // number of photons required for multiphoton ionization       
+      float Z              = N_ionization + 1;          // ion charge number after ionization
+      float Z_star         = N_ionization; // initial charge state
       float n_star         = (Z_star + 1.0)/sqrt(2*epsilon_au); // effective principle quantum number
       float l_star         = n_star - 1.0; // angular momentum
       float T_0            = M_PI*Z/(abs(epsilon_au) * sqrt(2*abs(epsilon_au))); // period of classical radial trajectories
@@ -1361,25 +1582,27 @@ advance_p_kokkos_gpu(
       float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units 
       
       if (E_au<=E_M_au){
-        // MPI Ionization
+	// MPI Ionization
         // ionization rate per atom: Gamma^(K)
         // sigma^(K) = (h_bar*omega)^K*Gamma^(K)/I^K : K-photon cross section, units [cm^2K * s^(K-1)]
         // I: intensity of the laser field, units [W/cm^2]
         //cout << "MPI Ionization" << endl;
+	multiphoton_ionised = true;
         // FIXME: need to add the case of circularly polarized field
         float T_K = 4.80*pow(1.30,2*K)*pow(2*K+1,-1)*pow(K,-1.0/2.0); // in the case of linearly polarized field
-        // FIXME: still need to figure out the units of simga_K; the plot in the book suggests it isnt [cm^2K * s^(K-1)]
-        float sigma_K_au = pow(c_au*pow(tgamma(K+1),2)*pow(n,5)* pow(omega_au,(10*K-1)/3), -1)*T_K*pow(E_au,2*K-2);
-        // FIXME: This definition of Gamma is only correct when sigma is in units of [cm^2K * s^(K-1)]
-        float Gamma_MPI = sigma_K_au * pow(I_au/omega_au, K);
-      
+        float sigma_K_au = pow(c_au*pow(tgamma(K+1),2)*pow(n,5)* pow(omega_au,(10*K-1)/3), -1)*T_K*pow(E_au,2*K-2); // atomic units, [cm^2K * s^(K-1)]
+	float flux = c_au*pow(E_au, 2.0)/(8*M_PI*omega_au);
+        float Gamma_MPI = sigma_K_au * pow(flux, K);
+        
         // Tunneling Regime
         //cout << "Tunneling Ionization" << endl;
         float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
         float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
         float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
         float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
-        Gamma = max(Gamma_MPI,Gamma_ADK_SI); //FIXME: EPOCH uses min here
+        
+        Gamma = min(Gamma_MPI,Gamma_ADK_SI); 
+	if(Gamma_MPI < Gamma_ADK_SI){ multiphoton_ionised = true; }
       }
       
       else if (E_au>E_M_au && E_au<=E_T_au) {
@@ -1497,6 +1720,23 @@ advance_p_kokkos_gpu(
         p_q_e  = q_e_c; // electrons charge in code units
         p_w_e  = (N_ionization - N_ionization_before) * k_particles(p_index, particle_var::w); // weight is dependent on the number of ionization events and weight of ionized particle
 
+	// With multiphoton ionization, the additional energy from photons
+        // accelerates the electron in the direction of the electric field.
+        // This is an approximation as the ejection angle ranges widely
+        // with a maxima at theta = 0 with respect to the field
+	float epsilon_t_au = 0; // initialize the total energy from multiple ionizations
+    	float epsilon_t_c  = 0; 
+    	float epsilon_t_SI = 0;
+	if(multiphoton_ionised){
+	  for(int i=0; i<int(N_ionization-N_ionization_before); i++) {
+    	    epsilon_t_SI += epsilon_eV_list[i] * q_e; // joules
+          }
+	  double p_correction = sqrt( 2*m_e*(K*h_bar*omega_SI - epsilon_t_SI) )/energy_to_SI; // code units
+	  p_ux_e += p_correction * hax_c/(ha_mag_c*ha_mag_c);
+	  p_uy_e += p_correction * hay_c/(ha_mag_c*ha_mag_c);
+	  p_uz_e += p_correction * haz_c/(ha_mag_c*ha_mag_c);	
+	}
+
         #undef p_dx_e
         #undef p_dy_e
         #undef p_dz_e
@@ -1510,31 +1750,188 @@ advance_p_kokkos_gpu(
       #endif
 
 
-	// FIXME: this is a work in progress
-        // Energy conservation is accounted for by a current density correction through Poynting’s theorem (J_ionize = (N*epsilon_t)/(dt*E) E_hat atomic units)
+	// Energy conservation is accounted for by a current density correction through Poynting’s theorem (J_ionize = (N*epsilon_t)/(dt*E) E_hat atomic units)
         // in tunnelling ionisation and BSI the energy loss from the field is the ionisation energy of the electron
         // in multiphoton ionisation it is the total energy for the number of photons absorbed.
         // The total energy loss from multiple ionisations is summed and a current density correction is weighted back to the grid points
-        int N_same_state = 1; // this is 1 since the correction is done for every ionization event instead of at the end of the timestep
-        float epsilon_t_au = 0; // initialize the total energy loss from multiple ionizations
-        for(int i=0; i<int(N_ionization-N_ionization_before); i++) {
-          epsilon_t_au += epsilon_eV_list[i]/27.2; // atomic units, ionization energy
-        }
+    	float N_ions = k_particles(p_index, particle_var::w); // this is the number of physical ions created  
+	if(multiphoton_ionised) {
+	  epsilon_t_c = (K*h_bar*omega_SI)/energy_to_SI; // code units
+	} 
+	else {
+          for(int i=0; i<int(N_ionization-N_ionization_before); i++) {
+            epsilon_t_au += epsilon_eV_list[i]/27.2; // atomic units, ionization energy
+    	    epsilon_t_SI += epsilon_eV_list[i] * q_e; // joules
+    	    epsilon_t_c  += (epsilon_eV_list[i] * q_e) / energy_to_SI; // code units
+          }
+	} 
+    
+        float cell_volume_c  = g->dV;
+        float cell_volume_SI = cell_volume_c * l_to_SI*l_to_SI*l_to_SI;
+        float cell_volume_au = cell_volume_SI/pow(5.29177210903e-11,3.0);
+    	
+    	float dt_au = dt / 2.41884e-17; // convsersion factor is h_bar/Eh where Eh is hartree energy
 
-	float dt_au = dt / 2.41884e-17; // convsersion factor is h_bar/Eh where Eh is hartree energy
-	float j_ionize_mag_au = (N_same_state * epsilon_t_au)/(dt_au * E_au); // au
-	float j_ionize_mag_SI = j_ionize_mag_au * 2.3653e18; // conversion is e*Eh/(h_bar*a0^2), a0 is Bohr radius
-        float j_ionize_mag_c  = j_ionize_mag_SI * (t_to_SI * pow(l_to_SI,2.0)/q_to_SI);
+	float j_ionize_SI_x = epsilon_t_SI * N_ions * (hax_c * E_to_SI) / (dt * cell_volume_SI * E_mag_SI*E_mag_SI);
+	float j_ionize_SI_y = epsilon_t_SI * N_ions * (hay_c * E_to_SI) / (dt * cell_volume_SI * E_mag_SI*E_mag_SI);
+	float j_ionize_SI_z = epsilon_t_SI * N_ions * (haz_c * E_to_SI) / (dt * cell_volume_SI * E_mag_SI*E_mag_SI);
+	float j_ionize_SI_mag = sqrt( j_ionize_SI_x*j_ionize_SI_x + j_ionize_SI_y*j_ionize_SI_y + j_ionize_SI_z*j_ionize_SI_z );
 
-        // FIXME: am I using the correct area? 	
-//	k_field_scatter_access(pii, field_var::jfx) += j_ionize_mag_c * cell_area * hax_c/ha_mag_c;
-//	k_field_scatter_access(pii, field_var::jfy) += j_ionize_mag_c * cell_area * hay_c/ha_mag_c;
-//	k_field_scatter_access(pii, field_var::jfz) += j_ionize_mag_c * cell_area * haz_c/ha_mag_c;
-//	tempx = j_ionize_mag_c * cell_area_yz * hax_c/ha_mag_c;
-//	tempy = j_ionize_mag_c * cell_area_xz * hay_c/ha_mag_c;
-//	tempz = j_ionize_mag_c * cell_area_xy * haz_c/ha_mag_c;
+    	float j_ionize_mag_c  = (N_ions * epsilon_t_c )/(g->dt    * ha_mag_c * cell_volume_c ); // code
+	float jx_ionize = (epsilon_t_c * N_ions * hax_c) / (g->dt * cell_volume_c * ha_mag_c*ha_mag_c);
+	float jy_ionize = (epsilon_t_c * N_ions * hay_c) / (g->dt * cell_volume_c * ha_mag_c*ha_mag_c);
+	float jz_ionize = (epsilon_t_c * N_ions * haz_c) / (g->dt * cell_volume_c * ha_mag_c*ha_mag_c);
 
-	//printf("tempx, %e, tempy, %e, tempz, %e\n",tempx,tempy,tempz);
+	//float j_to_SI = 1.08169825311233e30; //q_to_SI/(t_to_SI * l_to_SI*l_to_SI); // code units to SI
+
+	// FIXME: remove
+	//cout << "*************" << endl;
+	//cout << "electron_index: " << electron_index << ", timestep: " << timestep << endl;  
+	//cout << "epsilon_t_SI: " << epsilon_t_SI << "," << "weight: " << N_ions << "," << "dt: " << dt << "," << "V_cell" << cell_volume_SI << "," << endl;
+	//cout << "E_mag_SI: " << E_mag_SI << "hax_c * E_to_SI: " << hax_c * E_to_SI << "," << "hay_c * E_to_SI: " << hay_c * E_to_SI << "," << "haz_c * E_to_SI: " << haz_c * E_to_SI << endl;
+	//cout << "j_ionize_SI_mag: " << j_ionize_SI_mag << "," <<  "j_ionize_SI_x: " << j_ionize_SI_x << "," <<  "j_ionize_SI_y: " << j_ionize_SI_y << "," <<  "j_ionize_SI_z: " << j_ionize_SI_z << endl;
+	//cout << "j_ionize_mag_c: " << j_ionize_mag_c << "," << "jx_ionize: " << jx_ionize << "," << "jy_ionize: " << jy_ionize << "," << "jz_ionize: " << jz_ionize << endl;
+	//cout << "ii: " << ii << "," << "dx: " << dx << "," << "dy: " << dy << "," << "dz: " << dz << endl;
+
+        //Declaration of local variables
+        int ip, id, jp, jd, kp, kd;
+        double xpn, xpmxip, xpmxid;
+        double ypn, ypmyjp, ypmyjd;
+        double zpn, zpmzkp, zpmzkd;
+        double Sxp[2], Sxd[2], Syp[2], Syd[2], Szp[2], Szd[2];
+	int N_voxel_x,N_voxel_y,N_voxel_z,N_voxel_xy;
+	int voxel_indx,voxel_indy,voxel_indz;
+        int xgrid,ygrid,zgrid;
+        int y_start,z_start,y_end,z_end;
+	double xfrac,yfrac,zfrac;
+	double xpos,ypos,zpos;
+	double xcorner,ycorner,zcorner;
+
+	// Calculate grid coordinates from voxel index
+        // (this logic has been checked to be true with the grid coordinate to VOXEL macro)
+	int nghost = 2; // tophat shape
+        N_voxel_x   = (g->nx + nghost); // number of voxels in the x direction
+        N_voxel_y   = (g->ny + nghost);
+        N_voxel_z   = (g->nz + nghost);
+        N_voxel_xy = N_voxel_x*N_voxel_y; // calculate the number of voxels in the xy plane
+        zgrid = ceil( float(ii + 1)/float( N_voxel_xy  ) - 1.0 ); // calculate the z-coordinate
+        z_start = zgrid*N_voxel_xy;           // beginning voxel index for the z-coordinate
+        z_end   = (zgrid+1) * N_voxel_xy - 1; // final voxel index for the z-coordinate
+        ygrid = floor( float(ii-z_start)/(float)N_voxel_x ); // calculate y-coordinate
+        y_start = ((nx)+2)*((ygrid) + ((ny)+2)*(zgrid));// beginning voxel index for the y,z-coordinates
+        y_end   = y_start + (N_voxel_x - 1); // final voxel index for the y,z-coordinates
+        xgrid = ii-y_start; // calculate x-coordinate
+
+	// calculate the normalized particle position (global)
+	xfrac = (dx + 1)/2.0; // fraction from left edge of cell (middle of cell is 0.5)
+	yfrac = (dy + 1)/2.0;
+	zfrac = (dz + 1)/2.0;
+	xpos  = xgrid + xfrac;      // global position of particle (normalized)
+	ypos  = ygrid + yfrac;
+	zpos  = zgrid + zfrac;
+
+        //top corner position of particle
+        xcorner = xpos + 0.5;
+        ycorner = ypos + 0.5;
+	zcorner = zpos + 0.5;
+        
+        // primal grid
+        ip = round(xcorner); // closest node to top particle corner 
+        jp = round(ycorner);
+	kp = round(zcorner);
+        xpmxip  = xcorner - ( double )ip; // normalized distance from particle corner to node 
+        ypmyjp  = ycorner - ( double )jp;
+	zpmzkp  = zcorner - ( double )kp;
+        
+        Sxp[1] = 0.5 + xpmxip; // weight
+        Sxp[0] = 0.5 - xpmxip;
+        Syp[1] = 0.5 + ypmyjp;
+        Syp[0] = 0.5 - ypmyjp;
+	Szp[1] = 0.5 + zpmzkp;
+        Szp[0] = 0.5 - zpmzkp;
+        
+        // staggered grid (staggered by 1/2 cell)
+	// Jx staggered in x, Jy staggered in y, Jz staggered in z
+        id = round(xcorner + 0.5);
+        jd = round(ycorner + 0.5);
+	kd = round(zcorner + 0.5);
+        xpmxid  = (xcorner + 0.5) - ( double )id;
+        ypmyjd  = (ycorner + 0.5) - ( double )jd;
+	zpmzkd  = (zcorner + 0.5) - ( double )kd;
+        
+        Sxd[1] = 0.5 + xpmxid;
+        Sxd[0] = 0.5 - xpmxid;
+        Syd[1] = 0.5 + ypmyjd;
+        Syd[0] = 0.5 - ypmyjd;
+	Szd[1] = 0.5 + zpmzkd;
+        Szd[0] = 0.5 - zpmzkd;
+
+	// FIXME: remove
+	//cout << "xgrid,ygrid,zgrid: " << xgrid << "," << ygrid << "," << zgrid << endl;
+	//cout << "xfrac,yfrac,zfrac: " << xfrac << "," << yfrac << "," << zfrac << endl;
+	//cout << "xpos,ypos,zpos: " << xpos<<"," << ypos<<"," << zpos << endl;
+	//cout << "xcorner,ycorner,zcorner: " << xcorner<<"," << ycorner<<"," << zcorner << endl;
+        //cout << endl;
+        //cout << "non-staggered" << endl;
+        //cout << "ip,jp,kp: " << ip<<"," << jp<<"," << kp << endl;
+        //cout << "xpmxip,ypmyjp,zpmzkp: " << xpmxip<<","<< ypmyjp<<","<< zpmzkp << endl;
+        //cout << "Sxp[0], Sxp[1]: " << Sxp[0]<<"," <<Sxp[1] << endl;
+        //cout << "Syp[0], Syp[1]: " << Syp[0]<<"," <<Syp[1] << endl;
+        //cout << "Szp[0], Szp[1]: " << Szp[0]<<"," <<Szp[1] << endl;
+        //cout << endl;   
+        //cout << "staggered" << endl;
+        //cout << "id,jd,kd: " << id<<"," << jd<<"," << kd << endl;
+        //cout << "xpmxid,ypmyjd,zpmzkd: " << xpmxid<<"," <<ypmyjd<<"," <<zpmzkd << endl;
+        //cout << "Sxd[0], Sxd[1]: " << Sxd[0]<<"," <<Sxd[1] << endl;
+        //cout << "Syd[0], Syd[1]: " << Syd[0]<<"," <<Syd[1] << endl;
+        //cout << "Szd[0], Szd[1]: " << Szd[0]<<"," <<Szd[1] << endl;
+        //cout << endl;   
+        
+        //double TEMP = 0; // FIXME: remove
+	//int iter = 1; // FIXME: remove
+        for (unsigned int i=0 ; i<2 ; i++) {
+            int iploc=ip+i-1;
+            int idloc=id+i-1;
+            for (unsigned int j=0 ; j<2 ; j++) {
+                int jploc=jp+j-1;
+                int jdloc=jd+j-1;
+		    for (unsigned int k=0 ; k<2 ; k++) {
+                      int kploc=kp+k-1;
+                      int kdloc=kd+k-1;
+        	      
+                      //cout << "iter: " << iter++<< endl; // FIXME: remove
+		      
+		      voxel_indx = VOXEL(idloc, jploc, kploc, g->nx,g->ny,g->nz); // Jx is staggered in x 
+        	      voxel_indy = VOXEL(iploc, jdloc, kploc, g->nx,g->ny,g->nz); // Jy is staggered in y
+        	      voxel_indz = VOXEL(iploc, jploc, kdloc, g->nx,g->ny,g->nz); // Jz is staggered in z
+		      
+		      Kokkos::atomic_fetch_add(&k_field(voxel_indx, field_var::jfx), jx_ionize * Sxd[i] * Syp[j] * Szp[k]); 
+        	      Kokkos::atomic_fetch_add(&k_field(voxel_indy, field_var::jfy), jy_ionize * Sxp[i] * Syd[j] * Szp[k]); 
+        	      Kokkos::atomic_fetch_add(&k_field(voxel_indz, field_var::jfz), jz_ionize * Sxp[i] * Syp[j] * Szd[k]);
+                      
+                      // x // FIXME: remove
+                      //cout << "idloc, jploc, kploc: " << idloc<<","<< jploc<<","<< kploc << endl;
+                      //cout << "Sxd[i]*Syp[j]*Szp[k]: " << Sxd[i]*Syp[j]*Szp[k] << endl;
+                      //cout << "i,j,k: " << i <<","<<j<<","<<k<<endl;
+                      //TEMP += Sxd[i]*Syp[j]*Szp[k];
+		          
+		      // y // FIXME: remove
+                      //cout << "iploc, jdloc, kploc: " << iploc<<","<< jdloc<<","<< kploc << endl;
+                      //cout << "Sxp[i]*Syd[j]*Szp[k]: " << Sxp[i]*Syd[j]*Szp[k] << endl;
+                      //cout << "i,j,k: " << i <<","<<j<<","<<k<<endl;
+                      //TEMP += Sxp[i]*Syd[j]*Szp[k];
+		          
+		          // z // FIXME: remove
+                      //cout << "iter: " << iter << endl;
+                      //cout << "iploc, jploc, kdloc: " << iploc<<","<< jploc<<","<< kdloc << endl;
+                      //cout << "Sxp[i]*Syp[j]*Szd[k]: " << Sxp[i]*Syp[j]*Szd[k] << endl;
+                      //cout << "i,j,k: " << i <<","<<j<<","<<k<<endl;
+                      //TEMP += Sxp[i]*Syp[j]*Szd[k];
+		    }//k       
+            }//j
+        }//i
+            
+        //cout << "TEMP: " << TEMP << endl; // FIXME: remove
 
        
       } // if ionization event occured

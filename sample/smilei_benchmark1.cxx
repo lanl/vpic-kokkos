@@ -297,6 +297,9 @@ begin_initialization {
   double m_I2_SI = A_I2*mp_me*m_e_SI;
   double m_I1_c = m_I1_SI/mass_to_SI;
   double m_I2_c = m_I2_SI/mass_to_SI;
+  double qn     = 1; // quantum numbers of the species
+  double qm     = 0;
+  double ql     = 0;
 
 
   // I1 - carbon
@@ -575,6 +578,8 @@ begin_initialization {
   grid->cvac = c_c;
   grid->eps0 = eps0_c;
 
+  grid->lambda = lambda;
+
   // Partition a periodic box among the processors sliced uniformly in z: 
   define_absorbing_grid( global->xmin,global->ymin,global->zmin,  // Low corner
                         global->xmax,global->ymax,global->zmax,  // High corner
@@ -605,14 +610,14 @@ begin_initialization {
   sim_log("Setting up ions. ");
     if ( I1_present ) {
       #if defined(FIELD_IONIZATION)
-        ion_I1 = define_species("I1", q_I1, ionization_energy_I1, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
+       ion_I1 = define_species("I1", q_I1, ionization_energy_I1, qn,qm,ql, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
       #else
 	ion_I1 = define_species("I1", q_I1, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0); // FIXME: q needs to be removed from define_species when field ionization is on.
       #endif
     }
     if ( I2_present ) {
       #if defined(FIELD_IONIZATION)
-        ion_I2 = define_species("I2", q_I2, ionization_energy_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
+       ion_I2 = define_species("I2", q_I2, ionization_energy_I2, qn,qm,ql, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
       #else
 	ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0); // FIXME: q needs to be removed from define_species when field ionization is on.
       #endif
@@ -630,7 +635,7 @@ begin_initialization {
   // Electrons need to be defined last in input deck when field ionization is enabled
   species_t *electron;
   #if defined(FIELD_IONIZATION)
-    electron = define_species("electron", -1.*e_c, ionization_energy_electron, m_e_c,max_local_np_e, max_local_nm_e, 20, 0);
+   electron = define_species("electron", -1.*e_c, ionization_energy_electron,0,0,0, m_e_c,max_local_np_e, max_local_nm_e, 20, 0);
   #else  
     electron = define_species("electron", -1.*e_c, m_e_c, max_local_np_e, max_local_nm_e, 20, 0);
   #endif

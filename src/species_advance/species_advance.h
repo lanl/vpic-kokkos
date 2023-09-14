@@ -102,6 +102,9 @@ class species_t {
 #else
 	float q;  // FIXME: need to remove
 	Kokkos::View<double*> ionization_energy; // Species ionization energies
+	float qn; // principal quantum number
+	float qm; // magnetic quantum number
+	float ql; // angular momentum quantum number
 #endif	
         float m;                            // Species particle rest mass
 
@@ -291,6 +294,9 @@ species( const char * name,
 #else
 	 float q, // FIXME: need to remove
 	 Kokkos::View<double*> ionization_energy,
+	 float qn,
+	 float qm,
+	 float ql,
 #endif
          float m,
          int max_local_np,
