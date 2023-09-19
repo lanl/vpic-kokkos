@@ -1051,24 +1051,27 @@ advance_p_kokkos_unified(
 
 
 	  // FIXME: This needs to be replaced with a calulation on the hydro data
-	  if (N_ionization_levels == 6) {
-	    if (int(timestep)>=0 && int(timestep)<=2000 && int(timestep) % 4 == 0){
-	     // N Ionizations: Open file, write value, close file
-	     char gn [100];
-	     snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt",timestep);
-	     std::ofstream outfile1;
-	     if ((int)pi_offset == 0 && LANE == 0) {
-               outfile1.open(gn); // overwrite old files
-	       outfile1 << "# N ionizations Before" << "," << "# N ionizations After" << "," << "Charge After" << "," << "species name" << endl; // Header
-	     }
-	     else {
-	       outfile1.open(gn, std::ios_base::app); // append to file
-	     }
-	     outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << "," << sp->name << endl;
-             outfile1.close();
-	   }
-	  }
-	   
+	  // Define a mutex for protecting access to the file
+          std::mutex fileMutex;
+          if (N_ionization_levels == 6) {
+              if (int(timestep) >= 0 && int(timestep) <= 2000 && int(timestep) % 4 == 0) {
+                  char gn[100];
+                  snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt", timestep);
+                  std::ofstream outfile1;
+                  if ((int)pi_offset == 0 && LANE == 0) {
+                      outfile1.open(gn); // overwrite old files
+                      outfile1 << "# N ionizations Before" << "," << "# N ionizations After" << "," << "Charge After" << "," << "species name" << std::endl; // Header
+                  }
+                  else {
+                      outfile1.open(gn, std::ios_base::app); // append to file
+                  }
+                  // Lock the mutex before writing to the file
+                  std::lock_guard<std::mutex> lock(fileMutex);
+                  outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << "," << sp->name << std::endl;
+                  outfile1.close();
+              }
+          }
+
 	  
 	} // if not electrons
 	  
@@ -1302,18 +1305,27 @@ advance_p_kokkos_unified(
 #undef p_q_e
 
 // FIXME: this is temporary
-if(strcmp(sp->name, "electron") != 0){
-  char kn [100];
-  snprintf(kn, sizeof kn, "Photoelectrons.txt");
-  std::ofstream outfile;
-  if (g->step == 0) {
-    outfile.open(kn); // overwrite old files
-    outfile << g->step << "," << sp->np << "," << sp_e->np << "," << sp->name << endl;
-  } else {
-    outfile.open(kn, std::ios_base::app); // append to file
-    outfile << g->step << "," << sp->np << "," << sp_e->np << "," << sp->name << endl;
-  }
-  outfile.close();
+// Define a mutex for protecting access to the file
+std::mutex fileMutex;
+if (strcmp(sp->name, "electron") != 0) {
+    char kn[100];
+    snprintf(kn, sizeof kn, "Photoelectrons.txt");
+
+    std::ofstream outfile;
+    if (g->step == 0) {
+        outfile.open(kn); // overwrite old files
+    }
+    else {
+        outfile.open(kn, std::ios_base::app); // append to file
+    }
+
+    // Lock the mutex before writing to the file
+    std::lock_guard<std::mutex> lock(fileMutex);
+
+    if (outfile.is_open()) {
+        outfile << g->step << "," << sp->np << "," << sp_e->np << "," << sp->name << std::endl;
+        outfile.close();
+    }
 }
 #endif
 
