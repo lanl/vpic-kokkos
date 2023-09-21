@@ -52,6 +52,6 @@ restore_field_advance_kernels( field_advance_kernels_t * kernel ) {
   RESTORE_SYM( kernel->clean_div_b               );
   RESTORE_SYM( kernel->smooth_eb                 );
   RESTORE_SYM( kernel->smooth_moments            );
-  CHECKPT_SYM( kernel->smooth_b                  );
+  RESTORE_SYM( kernel->smooth_b                  );
 }
 
