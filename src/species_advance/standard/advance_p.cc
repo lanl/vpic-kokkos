@@ -440,15 +440,15 @@ advance_p_kokkos_unified(
 
 #ifdef FIELD_IONIZATION
   // constants
-  int q_e_c     = -1; // code units
-  float E_to_SI = 1.44303994037981860e+19; // code to SI
-  float t_to_SI = 1.18119324097025572e-22; // code to SI
-  float l_to_SI = 3.54112825083459245e-14; // code to SI
-  float q_to_SI = 1.60217663399999989e-19; // code to SI
-  float m_to_SI = 9.10938370150000079e-31; // code to SI
-  float time_to_SI = 1.18119324097025572e-22; // code to SI
-  float energy_to_SI = m_to_SI * (l_to_SI/time_to_SI) * (l_to_SI/time_to_SI); // code to SI
-  float dt = g->dt*time_to_SI; // [s], timestep
+  float q_e_c   = sp_e->q;     // code units, FIXME: this might need to come from grid struct
+  float t_to_SI = g->t_to_SI;  // code to SI
+  float l_to_SI = g->l_to_SI;  // code to SI
+  float q_to_SI = g->q_to_SI;  // code to SI
+  float m_to_SI = g->m_to_SI;  // code to SI
+  float E_to_SI = m_to_SI*l_to_SI/(pow(t_to_SI,2)*q_to_SI); // code to SI
+  float energy_to_SI = m_to_SI * (l_to_SI/t_to_SI) * (l_to_SI/t_to_SI); // code to SI
+  
+  float dt = g->dt*t_to_SI; // [s], timestep
   float q_e       = 1.60217663e-19;  // coulombs
   float q_e_au    = 1.0;             // au
   float m_e       = 9.1093837e-31;   // kilograms
@@ -467,7 +467,18 @@ advance_p_kokkos_unified(
   float n = sp->qn; // principal quantum number
   float m = sp->qm; // magnetic quantum number
   float l = sp->ql; // angular momentum quantum number
-  float lambda = g->lambda;
+  float lambda_SI = g->lambda; // in SI units
+
+
+  if( t_to_SI == 0 || l_to_SI == 0 || q_to_SI == 0 || m_to_SI == 0 || lambda_SI == 0)
+  {
+   ERROR(( "Conversion factors and laser wavelength needs to be passed as grid variables when field ionization is enabled." ));
+  }
+
+  if( sp!=sp_e && (n == 0 || epsilon_eV_list(0) == 0) )
+  {
+   ERROR(( "Ionization energies and quantum numbers need to be passed to species struct when field ionization is enabled." ));
+  }
 #endif  
 
 // Determine whether to use accumulators
@@ -624,7 +635,7 @@ advance_p_kokkos_unified(
 	float K;
 	
 	if (sp != sp_e){ // FIXME: need to check which species the user wants ionization enabled on
-          float lambda_SI    = lambda*l_to_SI;  // meters
+          //float lambda_SI    = lambda*l_to_SI;  // meters
 
 	  // Check if the particle is fully ionized already
           int N_ionization        = int(abs(charge[LANE])); // Current ionization state of the particle
@@ -1057,6 +1068,7 @@ advance_p_kokkos_unified(
               if (int(timestep) >= 0 && int(timestep) <= 2000 && int(timestep) % 4 == 0) {
                   char gn[100];
                   snprintf(gn, sizeof gn, "N_ionizations_t_%g.txt", timestep);
+          
                   std::ofstream outfile1;
                   if ((int)pi_offset == 0 && LANE == 0) {
                       outfile1.open(gn); // overwrite old files
@@ -1065,13 +1077,15 @@ advance_p_kokkos_unified(
                   else {
                       outfile1.open(gn, std::ios_base::app); // append to file
                   }
+          
                   // Lock the mutex before writing to the file
                   std::lock_guard<std::mutex> lock(fileMutex);
+          
                   outfile1 << N_ionization_before << "," << N_ionization << "," << k_particles(particle_index, particle_var::charge) << "," << sp->name << std::endl;
                   outfile1.close();
               }
           }
-
+	   
 	  
 	} // if not electrons
 	  
@@ -1453,16 +1467,16 @@ advance_p_kokkos_gpu(
   Kokkos::deep_copy(k_nm, 0);
 
 #ifdef FIELD_IONIZATION
-  // constants, FIXME: need to get from deck
-  int q_e_c     = -1; // code units
-  float E_to_SI = 1.44303994037981860e+19; // code to SI
-  float t_to_SI = 1.18119324097025572e-22; // code to SI
-  float l_to_SI = 3.54112825083459245e-14; // code to SI
-  float q_to_SI = 1.60217663399999989e-19; // code to SI
-  float m_to_SI = 9.10938370150000079e-31; // code to SI
-  float time_to_SI = 1.18119324097025572e-22; // code to SI
-  float energy_to_SI = m_to_SI * (l_to_SI/time_to_SI) * (l_to_SI/time_to_SI); // code to SI
-  float dt = g->dt*time_to_SI; // [s], timestep
+  // constants
+  float q_e_c   = sp_e->q;     // code units, FIXME: this might need to come from grid struct
+  float t_to_SI = g->t_to_SI;  // code to SI
+  float l_to_SI = g->l_to_SI;  // code to SI
+  float q_to_SI = g->q_to_SI;  // code to SI
+  float m_to_SI = g->m_to_SI;  // code to SI
+  float E_to_SI = m_to_SI*l_to_SI/(pow(t_to_SI,2)*q_to_SI); // code to SI
+  float energy_to_SI = m_to_SI * (l_to_SI/t_to_SI) * (l_to_SI/t_to_SI); // code to SI
+  
+  float dt = g->dt*t_to_SI; // [s], timestep
   float q_e       = 1.60217663e-19;  // coulombs
   float q_e_au    = 1.0;             // au
   float m_e       = 9.1093837e-31;   // kilograms
@@ -1487,7 +1501,17 @@ advance_p_kokkos_gpu(
   float n = sp->qn; // principal quantum number
   float m = sp->qm; // magnetic quantum number
   float l = sp->ql; // angular momentum quantum number
-  float lambda = g->lambda;
+  float lambda_SI = g->lambda;
+
+  if( t_to_SI == 0 || l_to_SI == 0 || q_to_SI == 0 || m_to_SI == 0 || lambda_SI == 0)
+  {
+   ERROR(( "Conversion factors and laser wavelength needs to be passed as grid variables when field ionization is enabled." ));
+  }
+
+  if( sp!=sp_e && (n == 0 || epsilon_eV_list(0) == 0) )
+  {
+   ERROR(( "Ionization energies and quantum numbers need to be passed to species struct when field ionization is enabled." ));
+  }
 #endif
   
 #ifdef VPIC_ENABLE_HIERARCHICAL
@@ -1544,9 +1568,7 @@ advance_p_kokkos_gpu(
     // SI units
     float E_mag_SI = E_to_SI * ha_mag_c;
 
-    // Calculate the ionization rate and number of ionizations
-    float lambda_SI    = lambda*l_to_SI;  // meters	
-  
+    // Calculate the ionization rate and number of ionizations	
     // Calculate stuff
     float E_au       = E_mag_SI/E_field_conversion; // field strength, atomic units
     float nu         = c/lambda_SI; // Hz

@@ -506,7 +506,11 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   grid->dt = dt;
   grid->cvac = c_c;
   grid->eps0 = eps0_c;
-  grid->lambda = lambda;
+  grid->lambda = lambda_SI;
+  grid->t_to_SI = time_to_SI;
+  grid->l_to_SI = length_to_SI;
+  grid->q_to_SI = charge_to_SI;
+  grid->m_to_SI = mass_to_SI;
 
   // Partition a periodic box among the processors sliced uniformly in z: 
   define_absorbing_grid( global->xmin,global->ymin,global->zmin,  // Low corner

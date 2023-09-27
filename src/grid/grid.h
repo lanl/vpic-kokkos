@@ -83,7 +83,11 @@ typedef struct grid {
 
 #ifdef FIELD_IONIZATION
   // laser wavethength, needed for ionization
-  double lambda; // code units
+  double lambda; // SI units
+  double t_to_SI; // code to SI
+  double l_to_SI; // code to SI
+  double q_to_SI; // code to SI
+  double m_to_SI; // code to SI
 #endif
 
   // Phase 2 grid data structures
