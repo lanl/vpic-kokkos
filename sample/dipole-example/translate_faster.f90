@@ -56,7 +56,8 @@ program translate
   use MPI
   implicit none
   integer(kind=4)it,itype,ndim,ndomains,decomp,n,nc(3),record_length,ix,iy,iz,yidx, ib, f
-  integer(kind=4)nx,ny,nz,nxstart,nxstop,output_record,tindex,nskip,nout,i,j,error,yslice,nzstop,nzstart,k, tindex_new, tindex_start,tindex_stop
+  integer(kind=4)nx,ny,nz,nxstart,nxstop,output_record,tindex,nskip,nout,i,j,error,yslice,nzstop,nzstart,k
+  integer(kind=4)tindex_new, tindex_start,tindex_stop
 
   integer dom_x, dom_y, dom_z
   integer(kind=4) httx,htty,httz
@@ -106,6 +107,9 @@ program translate
   type(fieldstruct), allocatable, dimension(:,:,:) :: field
   type(hydrostruct), allocatable, dimension(:,:,:) :: hydro
 
+  namelist /datum/ httx,htty,httz,tindex_start,tindex_stop,output_format,append_to_files 
+
+
 ! init MPI 
 
   call MPI_INIT(ierr)                                                                                      
@@ -113,7 +117,6 @@ program translate
   call MPI_COMM_SIZE(MPI_COMM_WORLD, numprocs, ierr)                                                       
 
 
-  namelist /datum/ httx,htty,httz,tindex_start,tindex_stop,output_format,append_to_files 
 
 ! read the configuration file
 
@@ -152,22 +155,22 @@ program translate
 
 ! read info.bin
 
-  open(unit=10,file="info.bin",status='unknown',form='binary')
+  open(unit=10,file="info.bin",status='unknown',form='unformatted', access='stream')
 
-  read(10),tx
-  read(10),ty
-  read(10),tz
+  read(10)tx
+  read(10)ty
+  read(10)tz
   
-  read(10),xmax
-  read(10),ymax
-  read(10),zmax
+  read(10)xmax
+  read(10)ymax
+  read(10)zmax
 
-  read(10),nx_d
-  read(10),ny_d
-  read(10),nz_d
+  read(10)nx_d
+  read(10)ny_d
+  read(10)nz_d
 
-  read(10),dt
-  read(10),mi_me
+  read(10)dt
+  read(10)mi_me
 
 !   tx = 6.0
 !   ty = 1.0
@@ -446,7 +449,7 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
               
               
               if (check) then 
-                 open(unit=10,file=trim(fname),status='unknown',form='binary')
+                 open(unit=10,file=trim(fname),status='unknown',form='unformatted', access='stream')
               else
                  print *,"Can't find file:",fname
                  print *
@@ -509,7 +512,7 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
 
               write(fname,"(A,I0,A,I0,A,I0)")"hydro/T.",tindex,"/ihydro.",tindex,".",n-1        
               if (check) then 
-                 open(unit=10,file=trim(fname),status='unknown',form='binary')
+                 open(unit=10,file=trim(fname),status='unknown',form='unformatted', access='stream')
               else
                  print *,"Can't find file:",fname
                  print *
