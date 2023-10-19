@@ -635,8 +635,7 @@ advance_p_kokkos_unified(
 	float K;
 	
 	if (sp != sp_e){ // FIXME: need to check which species the user wants ionization enabled on
-          //float lambda_SI    = lambda*l_to_SI;  // meters
-
+	  
 	  // Check if the particle is fully ionized already
           int N_ionization        = int(abs(charge[LANE])); // Current ionization state of the particle
           int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
@@ -800,9 +799,7 @@ advance_p_kokkos_unified(
   	
   	  // Check if ionization event occured
   	  if(N_ionization_before < N_ionization){
-
-	    if(multiphoton_ionised){cout << "Multiphoton Ionization used" << endl;}
-	    
+       
   	    // Change the charge of the particle
   	    k_particles(particle_index, particle_var::charge) = N_ionization * abs(q_e_c); // code units
   
@@ -849,8 +846,6 @@ advance_p_kokkos_unified(
 	      p_uy_e += p_correction * hay_c/(ha_mag_c*ha_mag_c);
 	      p_uz_e += p_correction * haz_c/(ha_mag_c*ha_mag_c);	
 	    }
-
-	    //cout << "pii_e: " << pii_e << endl; // FIXME: remove
 	    
   	    #undef p_dx_e
             #undef p_dy_e
@@ -860,9 +855,6 @@ advance_p_kokkos_unified(
             #undef p_uz_e
             #undef p_w_e
             #undef pii_e
- 
-
-
 
             // Energy conservation is accounted for by a current density correction through Poynting’s theorem (J_ionize = (N*epsilon_t)/(dt*E) E_hat atomic units)
             // in tunnelling ionisation and BSI the energy loss from the field is the ionisation energy of the electron
@@ -880,32 +872,10 @@ advance_p_kokkos_unified(
               }
 	    } 
     
-            float cell_volume_c  = g->dV;
-            float cell_volume_SI = cell_volume_c * l_to_SI*l_to_SI*l_to_SI;
-            float cell_volume_au = cell_volume_SI/pow(5.29177210903e-11,3.0);
-    	
-    	    float dt_au = dt / 2.41884e-17; // convsersion factor is h_bar/Eh where Eh is hartree energy
-
-	    float j_ionize_SI_x = epsilon_t_SI * N_ions * (hax_c * E_to_SI) / (dt * cell_volume_SI * E_mag_SI*E_mag_SI);
-	    float j_ionize_SI_y = epsilon_t_SI * N_ions * (hay_c * E_to_SI) / (dt * cell_volume_SI * E_mag_SI*E_mag_SI);
-	    float j_ionize_SI_z = epsilon_t_SI * N_ions * (haz_c * E_to_SI) / (dt * cell_volume_SI * E_mag_SI*E_mag_SI);
-	    float j_ionize_SI_mag = sqrt( j_ionize_SI_x*j_ionize_SI_x + j_ionize_SI_y*j_ionize_SI_y + j_ionize_SI_z*j_ionize_SI_z );
-
-    	    float j_ionize_mag_c  = (N_ions * epsilon_t_c )/(g->dt    * ha_mag_c * cell_volume_c ); // code
-	    float jx_ionize = (epsilon_t_c * N_ions * hax_c) / (g->dt * cell_volume_c * ha_mag_c*ha_mag_c);
-	    float jy_ionize = (epsilon_t_c * N_ions * hay_c) / (g->dt * cell_volume_c * ha_mag_c*ha_mag_c);
-	    float jz_ionize = (epsilon_t_c * N_ions * haz_c) / (g->dt * cell_volume_c * ha_mag_c*ha_mag_c);
-
-	    //float j_to_SI = 1.08169825311233e30; //q_to_SI/(t_to_SI * l_to_SI*l_to_SI); // code units to SI
-
-	    // FIXME: remove
-	    //cout << "*************" << endl;
-	    //cout << "electron_index: " << electron_index << ", timestep: " << timestep << endl;  
-	    //cout << "epsilon_t_SI: " << epsilon_t_SI << "," << "weight: " << N_ions << "," << "dt: " << dt << "," << "V_cell" << cell_volume_SI << "," << endl;
-	    //cout << "E_mag_SI: " << E_mag_SI << "hax_c * E_to_SI: " << hax_c * E_to_SI << "," << "hay_c * E_to_SI: " << hay_c * E_to_SI << "," << "haz_c * E_to_SI: " << haz_c * E_to_SI << endl;
-	    //cout << "j_ionize_SI_mag: " << j_ionize_SI_mag << "," <<  "j_ionize_SI_x: " << j_ionize_SI_x << "," <<  "j_ionize_SI_y: " << j_ionize_SI_y << "," <<  "j_ionize_SI_z: " << j_ionize_SI_z << endl;
-	    //cout << "j_ionize_mag_c: " << j_ionize_mag_c << "," << "jx_ionize: " << jx_ionize << "," << "jy_ionize: " << jy_ionize << "," << "jz_ionize: " << jz_ionize << endl;
-	    //cout << "ii[LANE]: " << ii[LANE] << "," << "dx[LANE]: " << dx[LANE] << "," << "dy[LANE]: " << dy[LANE] << "," << "dz[LANE]: " << dz[LANE] << endl;
+    	    float j_ionize_mag_c  = (N_ions * epsilon_t_c )/(g->dt * g->dV * ha_mag_c ); // code
+	    float jx_ionize = (epsilon_t_c * N_ions * hax_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
+	    float jy_ionize = (epsilon_t_c * N_ions * hay_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
+	    float jz_ionize = (epsilon_t_c * N_ions * haz_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
 
             //Declaration of local variables
             int ip, id, jp, jd, kp, kd;
@@ -980,85 +950,31 @@ advance_p_kokkos_unified(
 	    Szd[1] = 0.5 + zpmzkd;
             Szd[0] = 0.5 - zpmzkd;
 
-	    // FIXME: remove
-	    //cout << "xgrid,ygrid,zgrid: " << xgrid << "," << ygrid << "," << zgrid << endl;
-	    //cout << "xfrac,yfrac,zfrac: " << xfrac << "," << yfrac << "," << zfrac << endl;
-	    //cout << "xpos,ypos,zpos: " << xpos<<"," << ypos<<"," << zpos << endl;
-	    //cout << "xcorner,ycorner,zcorner: " << xcorner<<"," << ycorner<<"," << zcorner << endl;
-            //cout << endl;
-            //cout << "non-staggered" << endl;
-            //cout << "ip,jp,kp: " << ip<<"," << jp<<"," << kp << endl;
-            //cout << "xpmxip,ypmyjp,zpmzkp: " << xpmxip<<","<< ypmyjp<<","<< zpmzkp << endl;
-            //cout << "Sxp[0], Sxp[1]: " << Sxp[0]<<"," <<Sxp[1] << endl;
-            //cout << "Syp[0], Syp[1]: " << Syp[0]<<"," <<Syp[1] << endl;
-            //cout << "Szp[0], Szp[1]: " << Szp[0]<<"," <<Szp[1] << endl;
-            //cout << endl;   
-            //cout << "staggered" << endl;
-            //cout << "id,jd,kd: " << id<<"," << jd<<"," << kd << endl;
-            //cout << "xpmxid,ypmyjd,zpmzkd: " << xpmxid<<"," <<ypmyjd<<"," <<zpmzkd << endl;
-            //cout << "Sxd[0], Sxd[1]: " << Sxd[0]<<"," <<Sxd[1] << endl;
-            //cout << "Syd[0], Syd[1]: " << Syd[0]<<"," <<Syd[1] << endl;
-            //cout << "Szd[0], Szd[1]: " << Szd[0]<<"," <<Szd[1] << endl;
-            //cout << endl;   
-            
-            //double TEMP = 0; // FIXME: remove
-	    //int iter = 1; // FIXME: remove
             for (unsigned int i=0 ; i<2 ; i++) {
                 int iploc=ip+i-1;
-                int idloc=id+i-1;
+                int idloc=id+i-2;
                 for (unsigned int j=0 ; j<2 ; j++) {
                     int jploc=jp+j-1;
-                    int jdloc=jd+j-1;
+                    int jdloc=jd+j-2;
 		    for (unsigned int k=0 ; k<2 ; k++) {
                       int kploc=kp+k-1;
-                      int kdloc=kd+k-1;
-            	      
-                      //cout << "iter: " << iter++<< endl; // FIXME: remove
-		      
-		      voxel_indx = VOXEL(idloc, jploc, kploc, g->nx,g->ny,g->nz); // Jx is staggered in x 
-          	      voxel_indy = VOXEL(iploc, jdloc, kploc, g->nx,g->ny,g->nz); // Jy is staggered in y
-          	      voxel_indz = VOXEL(iploc, jploc, kdloc, g->nx,g->ny,g->nz); // Jz is staggered in z
+                      int kdloc=kd+k-2;
+
+                      // Jx is nearest neighbor in x, Jy is nearest neighbor in y, ...
+		      voxel_indx = VOXEL(xgrid, jploc, kploc, g->nx,g->ny,g->nz); // Jx is staggered in x 
+          	      voxel_indy = VOXEL(iploc, ygrid, kploc, g->nx,g->ny,g->nz); // Jy is staggered in y
+          	      voxel_indz = VOXEL(iploc, jploc, zgrid, g->nx,g->ny,g->nz); // Jz is staggered in z
 		      
 		      Kokkos::atomic_fetch_add(&k_field(voxel_indx, field_var::jfx), jx_ionize * Sxd[i] * Syp[j] * Szp[k]); 
           	      Kokkos::atomic_fetch_add(&k_field(voxel_indy, field_var::jfy), jy_ionize * Sxp[i] * Syd[j] * Szp[k]); 
           	      Kokkos::atomic_fetch_add(&k_field(voxel_indz, field_var::jfz), jz_ionize * Sxp[i] * Syp[j] * Szd[k]);
-                          
-                      // x // FIXME: remove
-                      //cout << "idloc, jploc, kploc: " << idloc<<","<< jploc<<","<< kploc << endl;
-                      //cout << "Sxd[i]*Syp[j]*Szp[k]: " << Sxd[i]*Syp[j]*Szp[k] << endl;
-                      //cout << "i,j,k: " << i <<","<<j<<","<<k<<endl;
-                      //TEMP += Sxd[i]*Syp[j]*Szp[k];
-		      
-		      // y // FIXME: remove
-                      //cout << "iploc, jdloc, kploc: " << iploc<<","<< jdloc<<","<< kploc << endl;
-                      //cout << "Sxp[i]*Syd[j]*Szp[k]: " << Sxp[i]*Syd[j]*Szp[k] << endl;
-                      //cout << "i,j,k: " << i <<","<<j<<","<<k<<endl;
-                      //TEMP += Sxp[i]*Syd[j]*Szp[k];
-		      
-		      // z // FIXME: remove
-                      //cout << "iter: " << iter << endl;
-                      //cout << "iploc, jploc, kdloc: " << iploc<<","<< jploc<<","<< kdloc << endl;
-                      //cout << "Sxp[i]*Syp[j]*Szd[k]: " << Sxp[i]*Syp[j]*Szd[k] << endl;
-                      //cout << "i,j,k: " << i <<","<<j<<","<<k<<endl;
-                      //TEMP += Sxp[i]*Syp[j]*Szd[k];
-		      
+		      		      
 		    }//k  
                 }//j
             }//i
-
-                
-            //cout << "TEMP: " << TEMP << endl; // FIXME: remove
-
+	    
          } // if ionization event occured
 
-
-	
-
-
-
-
-	
-	  
 
 
 	  // FIXME: This needs to be replaced with a calulation on the hydro data
@@ -1086,7 +1002,6 @@ advance_p_kokkos_unified(
               }
           }
 	   
-	  
 	} // if not electrons
 	  
 #endif // FIELD_IONIZATION
@@ -1468,7 +1383,7 @@ advance_p_kokkos_gpu(
 
 #ifdef FIELD_IONIZATION
   // constants
-  float q_e_c   = sp_e->q;     // code units, FIXME: this might need to come from grid struct
+  float q_e_c   = sp_e->q;     // code units
   float t_to_SI = g->t_to_SI;  // code to SI
   float l_to_SI = g->l_to_SI;  // code to SI
   float q_to_SI = g->q_to_SI;  // code to SI
@@ -1783,8 +1698,7 @@ advance_p_kokkos_gpu(
 	#undef p_q_e
       #endif
 
-
-	// Energy conservation is accounted for by a current density correction through Poynting’s theorem (J_ionize = (N*epsilon_t)/(dt*E) E_hat atomic units)
+        // Energy conservation is accounted for by a current density correction through Poynting’s theorem (J_ionize = (N*epsilon_t)/(dt*E) E_hat atomic units)
         // in tunnelling ionisation and BSI the energy loss from the field is the ionisation energy of the electron
         // in multiphoton ionisation it is the total energy for the number of photons absorbed.
         // The total energy loss from multiple ionisations is summed and a current density correction is weighted back to the grid points
@@ -1800,32 +1714,10 @@ advance_p_kokkos_gpu(
           }
 	} 
     
-        float cell_volume_c  = g->dV;
-        float cell_volume_SI = cell_volume_c * l_to_SI*l_to_SI*l_to_SI;
-        float cell_volume_au = cell_volume_SI/pow(5.29177210903e-11,3.0);
-    	
-    	float dt_au = dt / 2.41884e-17; // convsersion factor is h_bar/Eh where Eh is hartree energy
-
-	float j_ionize_SI_x = epsilon_t_SI * N_ions * (hax_c * E_to_SI) / (dt * cell_volume_SI * E_mag_SI*E_mag_SI);
-	float j_ionize_SI_y = epsilon_t_SI * N_ions * (hay_c * E_to_SI) / (dt * cell_volume_SI * E_mag_SI*E_mag_SI);
-	float j_ionize_SI_z = epsilon_t_SI * N_ions * (haz_c * E_to_SI) / (dt * cell_volume_SI * E_mag_SI*E_mag_SI);
-	float j_ionize_SI_mag = sqrt( j_ionize_SI_x*j_ionize_SI_x + j_ionize_SI_y*j_ionize_SI_y + j_ionize_SI_z*j_ionize_SI_z );
-
-    	float j_ionize_mag_c  = (N_ions * epsilon_t_c )/(g->dt    * ha_mag_c * cell_volume_c ); // code
-	float jx_ionize = (epsilon_t_c * N_ions * hax_c) / (g->dt * cell_volume_c * ha_mag_c*ha_mag_c);
-	float jy_ionize = (epsilon_t_c * N_ions * hay_c) / (g->dt * cell_volume_c * ha_mag_c*ha_mag_c);
-	float jz_ionize = (epsilon_t_c * N_ions * haz_c) / (g->dt * cell_volume_c * ha_mag_c*ha_mag_c);
-
-	//float j_to_SI = 1.08169825311233e30; //q_to_SI/(t_to_SI * l_to_SI*l_to_SI); // code units to SI
-
-	// FIXME: remove
-	//cout << "*************" << endl;
-	//cout << "electron_index: " << electron_index << ", timestep: " << timestep << endl;  
-	//cout << "epsilon_t_SI: " << epsilon_t_SI << "," << "weight: " << N_ions << "," << "dt: " << dt << "," << "V_cell" << cell_volume_SI << "," << endl;
-	//cout << "E_mag_SI: " << E_mag_SI << "hax_c * E_to_SI: " << hax_c * E_to_SI << "," << "hay_c * E_to_SI: " << hay_c * E_to_SI << "," << "haz_c * E_to_SI: " << haz_c * E_to_SI << endl;
-	//cout << "j_ionize_SI_mag: " << j_ionize_SI_mag << "," <<  "j_ionize_SI_x: " << j_ionize_SI_x << "," <<  "j_ionize_SI_y: " << j_ionize_SI_y << "," <<  "j_ionize_SI_z: " << j_ionize_SI_z << endl;
-	//cout << "j_ionize_mag_c: " << j_ionize_mag_c << "," << "jx_ionize: " << jx_ionize << "," << "jy_ionize: " << jy_ionize << "," << "jz_ionize: " << jz_ionize << endl;
-	//cout << "ii: " << ii << "," << "dx: " << dx << "," << "dy: " << dy << "," << "dz: " << dz << endl;
+    	float j_ionize_mag_c  = (N_ions * epsilon_t_c )/(g->dt * g->dV * ha_mag_c ); // code
+	float jx_ionize = (epsilon_t_c * N_ions * hax_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
+	float jy_ionize = (epsilon_t_c * N_ions * hay_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
+	float jz_ionize = (epsilon_t_c * N_ions * haz_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
 
         //Declaration of local variables
         int ip, id, jp, jd, kp, kd;
@@ -1900,77 +1792,32 @@ advance_p_kokkos_gpu(
 	Szd[1] = 0.5 + zpmzkd;
         Szd[0] = 0.5 - zpmzkd;
 
-	// FIXME: remove
-	//cout << "xgrid,ygrid,zgrid: " << xgrid << "," << ygrid << "," << zgrid << endl;
-	//cout << "xfrac,yfrac,zfrac: " << xfrac << "," << yfrac << "," << zfrac << endl;
-	//cout << "xpos,ypos,zpos: " << xpos<<"," << ypos<<"," << zpos << endl;
-	//cout << "xcorner,ycorner,zcorner: " << xcorner<<"," << ycorner<<"," << zcorner << endl;
-        //cout << endl;
-        //cout << "non-staggered" << endl;
-        //cout << "ip,jp,kp: " << ip<<"," << jp<<"," << kp << endl;
-        //cout << "xpmxip,ypmyjp,zpmzkp: " << xpmxip<<","<< ypmyjp<<","<< zpmzkp << endl;
-        //cout << "Sxp[0], Sxp[1]: " << Sxp[0]<<"," <<Sxp[1] << endl;
-        //cout << "Syp[0], Syp[1]: " << Syp[0]<<"," <<Syp[1] << endl;
-        //cout << "Szp[0], Szp[1]: " << Szp[0]<<"," <<Szp[1] << endl;
-        //cout << endl;   
-        //cout << "staggered" << endl;
-        //cout << "id,jd,kd: " << id<<"," << jd<<"," << kd << endl;
-        //cout << "xpmxid,ypmyjd,zpmzkd: " << xpmxid<<"," <<ypmyjd<<"," <<zpmzkd << endl;
-        //cout << "Sxd[0], Sxd[1]: " << Sxd[0]<<"," <<Sxd[1] << endl;
-        //cout << "Syd[0], Syd[1]: " << Syd[0]<<"," <<Syd[1] << endl;
-        //cout << "Szd[0], Szd[1]: " << Szd[0]<<"," <<Szd[1] << endl;
-        //cout << endl;   
-        
-        //double TEMP = 0; // FIXME: remove
-	//int iter = 1; // FIXME: remove
         for (unsigned int i=0 ; i<2 ; i++) {
             int iploc=ip+i-1;
-            int idloc=id+i-1;
+            int idloc=id+i-2;
             for (unsigned int j=0 ; j<2 ; j++) {
                 int jploc=jp+j-1;
-                int jdloc=jd+j-1;
-		    for (unsigned int k=0 ; k<2 ; k++) {
-                      int kploc=kp+k-1;
-                      int kdloc=kd+k-1;
-        	      
-                      //cout << "iter: " << iter++<< endl; // FIXME: remove
-		      
-		      voxel_indx = VOXEL(idloc, jploc, kploc, g->nx,g->ny,g->nz); // Jx is staggered in x 
-        	      voxel_indy = VOXEL(iploc, jdloc, kploc, g->nx,g->ny,g->nz); // Jy is staggered in y
-        	      voxel_indz = VOXEL(iploc, jploc, kdloc, g->nx,g->ny,g->nz); // Jz is staggered in z
+                int jdloc=jd+j-2;
+		for (unsigned int k=0 ; k<2 ; k++) {
+                  int kploc=kp+k-1;
+                  int kdloc=kd+k-2;
+
+                  // Jx is nearest neighbor in x, Jy is nearest neighbor in y, ...
+		      voxel_indx = VOXEL(xgrid, jploc, kploc, g->nx,g->ny,g->nz); // Jx is staggered in x 
+        	      voxel_indy = VOXEL(iploc, ygrid, kploc, g->nx,g->ny,g->nz); // Jy is staggered in y
+        	      voxel_indz = VOXEL(iploc, jploc, zgrid, g->nx,g->ny,g->nz); // Jz is staggered in z
 		      
 		      Kokkos::atomic_fetch_add(&k_field(voxel_indx, field_var::jfx), jx_ionize * Sxd[i] * Syp[j] * Szp[k]); 
         	      Kokkos::atomic_fetch_add(&k_field(voxel_indy, field_var::jfy), jy_ionize * Sxp[i] * Syd[j] * Szp[k]); 
         	      Kokkos::atomic_fetch_add(&k_field(voxel_indz, field_var::jfz), jz_ionize * Sxp[i] * Syp[j] * Szd[k]);
-                      
-                      // x // FIXME: remove
-                      //cout << "idloc, jploc, kploc: " << idloc<<","<< jploc<<","<< kploc << endl;
-                      //cout << "Sxd[i]*Syp[j]*Szp[k]: " << Sxd[i]*Syp[j]*Szp[k] << endl;
-                      //cout << "i,j,k: " << i <<","<<j<<","<<k<<endl;
-                      //TEMP += Sxd[i]*Syp[j]*Szp[k];
-		          
-		      // y // FIXME: remove
-                      //cout << "iploc, jdloc, kploc: " << iploc<<","<< jdloc<<","<< kploc << endl;
-                      //cout << "Sxp[i]*Syd[j]*Szp[k]: " << Sxp[i]*Syd[j]*Szp[k] << endl;
-                      //cout << "i,j,k: " << i <<","<<j<<","<<k<<endl;
-                      //TEMP += Sxp[i]*Syd[j]*Szp[k];
-		          
-		          // z // FIXME: remove
-                      //cout << "iter: " << iter << endl;
-                      //cout << "iploc, jploc, kdloc: " << iploc<<","<< jploc<<","<< kdloc << endl;
-                      //cout << "Sxp[i]*Syp[j]*Szd[k]: " << Sxp[i]*Syp[j]*Szd[k] << endl;
-                      //cout << "i,j,k: " << i <<","<<j<<","<<k<<endl;
-                      //TEMP += Sxp[i]*Syp[j]*Szd[k];
-		    }//k       
+		      		      
+	        }//k  
             }//j
         }//i
             
-        //cout << "TEMP: " << TEMP << endl; // FIXME: remove
-
-       
       } // if ionization event occured
-    
       } // if not electrons
+    
 #endif // FIELD_IONIZATION
 
     float cbx  = f_cbx + dx*f_dcbxdx;             // Interpolate B
