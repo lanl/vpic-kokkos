@@ -272,6 +272,9 @@ boundary_p_kokkos(
 
                 //pi->w=p0[i].w;
                 pi->w = sp->k_pc_h(copy_index, particle_var::w);
+	      #ifdef FIELD_IONIZATION
+		pi->charge = sp->k_pc_h(copy_index, particle_var::charge);
+              #endif
 
                 pi->dispx = pm->dispx; pi->dispy = pm->dispy; pi->dispz = pm->dispz;
                 pi->sp_id = sp_id;
@@ -456,6 +459,9 @@ boundary_p_kokkos(
         particle_recv(write_index, particle_var::uy) = pi->uy;
         particle_recv(write_index, particle_var::uz) = pi->uz;
         particle_recv(write_index, particle_var::w)  = pi->w;
+      #ifdef FIELD_IONIZATION
+	particle_recv(write_index, particle_var::charge)  = pi->charge;
+      #endif
 
         int pii = pi->i;
         particle_recv_i(write_index) = pii;
@@ -501,6 +507,9 @@ boundary_p_kokkos(
             particle_send(keep_id, particle_var::uy) = particle_recv(write_index, particle_var::uy);
             particle_send(keep_id, particle_var::uz) = particle_recv(write_index, particle_var::uz);
             particle_send(keep_id, particle_var::w)  = particle_recv(write_index, particle_var::w);
+	  #ifdef FIELD_IONIZATION
+	    particle_send(keep_id, particle_var::charge)  = particle_recv(write_index, particle_var::charge);
+          #endif
             particle_send_i(keep_id)  = particle_recv_i(write_index);
         }
 
