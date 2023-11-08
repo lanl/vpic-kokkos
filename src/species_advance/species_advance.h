@@ -514,6 +514,70 @@ class species_t {
 
 #if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
         /**
+         *  @brief Create tracer particle from existing species
+         *
+         *  @param src_species    Species to create particle from
+         *  @param index          Index of particle to use
+         */
+        void create_tracer_from(species_t* src_species, uint32_t index, int rank) {
+          if(np+1 > max_np) {
+            ERROR(( "Species is full" ));
+            return;
+          }
+          k_p_h(np, particle_var::dx) = src_species->p[index].dx; // Copy particle to tracer
+          k_p_h(np, particle_var::dy) = src_species->p[index].dy; 
+          k_p_h(np, particle_var::dz) = src_species->p[index].dz; 
+          k_p_h(np, particle_var::ux) = src_species->p[index].ux; 
+          k_p_h(np, particle_var::uy) = src_species->p[index].uy; 
+          k_p_h(np, particle_var::uz) = src_species->p[index].uz; 
+          k_p_h(np, particle_var::w)  = src_species->p[index].w; 
+          k_p_i_h(np)                 = src_species->p[index].i; 
+          p[np] = src_species->p[index]; // Copy legacy particle FIXME Should be unnecessary
+
+          //TODO Test copying the rest of the annotations
+          for(uint32_t j=0; j<src_species->annotation_vars.i32_vars.size(); j++) {
+            int k = annotation_vars.get_annotation_index<int>(src_species->annotation_vars.i32_vars[j]);
+            annotations_h.set<int>(np, k, src_species->annotations_h.get<int>(index, j));
+          }
+          for(uint32_t j=0; j<src_species->annotation_vars.i64_vars.size(); j++) {
+            int k = annotation_vars.get_annotation_index<int64_t>(src_species->annotation_vars.i64_vars[j]);
+            annotations_h.set<int64_t>(np, k, src_species->annotations_h.get<int64_t>(index, j));
+          }
+          for(uint32_t j=0; j<src_species->annotation_vars.f32_vars.size(); j++) {
+            int k = annotation_vars.get_annotation_index<float>(src_species->annotation_vars.f32_vars[j]);
+            annotations_h.set<float>(np, k, src_species->annotations_h.get<float>(index, j));
+          }
+          for(uint32_t j=0; j<src_species->annotation_vars.f64_vars.size(); j++) {
+            int k = annotation_vars.get_annotation_index<double>(src_species->annotation_vars.f64_vars[j]);
+            annotations_h.set<double>(np, k, src_species->annotations_h.get<double>(index, j));
+          }
+
+          // Create unique tracer id (32-bit rank concatenated with particle index)
+          int tracer_idx = annotation_vars.get_annotation_index<int>(std::string("TracerID"));
+          annotations_h.set<int>(np, tracer_idx, rank*max_np + np);
+          if(tracer_type == TracerType::Copy) {
+            int w_idx = annotation_vars.get_annotation_index<float>(std::string("Weight")); // Get weight annotation index
+            annotations_h.set<float>(np, w_idx, k_p_h(np, particle_var::w)); // Save weight
+            k_p_h(np, particle_var::w) = 0.0f; // Set tracer weight to 0 so the particle is non interactive
+          } else if(tracer_type == TracerType::Move) {
+            // Move last particle over to fill in gap
+            src_species->k_p_h(index, particle_var::dx) = src_species->k_p_h(src_species->np-1, particle_var::dx); 
+            src_species->k_p_h(index, particle_var::dy) = src_species->k_p_h(src_species->np-1, particle_var::dy); 
+            src_species->k_p_h(index, particle_var::dz) = src_species->k_p_h(src_species->np-1, particle_var::dz); 
+            src_species->k_p_h(index, particle_var::ux) = src_species->k_p_h(src_species->np-1, particle_var::ux); 
+            src_species->k_p_h(index, particle_var::uy) = src_species->k_p_h(src_species->np-1, particle_var::uy); 
+            src_species->k_p_h(index, particle_var::uz) = src_species->k_p_h(src_species->np-1, particle_var::uz); 
+            src_species->k_p_h(index, particle_var::w)  = src_species->k_p_h(src_species->np-1, particle_var::w); 
+            src_species->k_p_i_h(index)                 = src_species->k_p_i_h(src_species->np - 1); 
+            src_species->p[index] = src_species->p[src_species->np-1]; // FIXME remove legacy particles
+            src_species->np -= 1; // Decrease number of particles in parent species
+          } else {
+            ERROR(( "Invalid TracerType: %d", tracer_type ));
+          } 
+          np++; // Increase number of tracers
+        }
+
+        /**
          *  @brief Allocate memory for IO buffering tracers
          *
          *  @param N_particles       Number of particles to buffer before dumping

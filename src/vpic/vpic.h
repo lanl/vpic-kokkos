@@ -608,7 +608,13 @@ public:
                         const float over_alloc_factor = 1.1,
                         annotation_vars_t annotations = annotation_vars_t()) {
     const int max_local_np_alloc = static_cast<int>(max_local_np * over_alloc_factor);
-    const int max_local_nm_alloc = static_cast<int>(max_local_nm * over_alloc_factor);
+    int local_nm;
+    if( max_local_nm<0 ) {
+      local_nm = 2*max_local_np/25;
+      if( local_nm<16*(MAX_PIPELINE+1) )
+        local_nm = 16*(MAX_PIPELINE+1);
+    }
+    const int max_local_nm_alloc = static_cast<int>(local_nm * over_alloc_factor);
 
     // Create tracer species based on the original species
     species_t* tracers = species( name, q, m, 
@@ -669,7 +675,13 @@ public:
                         const float over_alloc_factor = 1.1,
                         annotation_vars_t annotations = annotation_vars_t()) {
     const int max_local_np_alloc = static_cast<int>(max_local_np * over_alloc_factor);
-    const int max_local_nm_alloc = static_cast<int>(max_local_nm * over_alloc_factor);
+    int local_nm = max_local_nm;
+    if( max_local_nm<0 ) {
+      local_nm = 2*max_local_np/25;
+      if( local_nm<16*(MAX_PIPELINE+1) )
+        local_nm = 16*(MAX_PIPELINE+1);
+    }
+    const int max_local_nm_alloc = static_cast<int>(local_nm * over_alloc_factor);
     // Create tracer species based on the original species
     species_t* tracers = species( name, 
                                   original_species->q, original_species->m, 

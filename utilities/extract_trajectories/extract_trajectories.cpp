@@ -67,6 +67,9 @@ int main(int argc, char**argv) {
     for(size_t i=0; i<selected_ids.size(); i++) {
       selected_tracers.insert(std::stoi(selected_ids[i].c_str(), NULL, 10));
     }
+  } else {
+    if(comm_rank == 0) 
+      printf("No tracers selected. Extracting all tracers.");
   }
 
   if(comm_rank == 0 && selected_tracers.size() > 0) {
@@ -85,6 +88,8 @@ int main(int argc, char**argv) {
   }
 
   const char* fname = argv[1+arg_offset];
+  if(comm_rank == 0)
+    printf("Extracting tracers from %s\n", fname);
 
   hid_t file_id, access_id;
 
@@ -368,7 +373,11 @@ int main(int argc, char**argv) {
     hid_t acpl_id = H5Pcreate(H5P_ATTRIBUTE_CREATE);
     hid_t attr_fspace_id = H5Screate(H5S_SCALAR);
     hid_t attr_id = H5Acreate(write_id, "TracerID", H5T_STD_I32LE, attr_fspace_id, acpl_id, H5P_DEFAULT);
-    H5Awrite(attr_id, H5T_STD_I32LE, &id);
+if(attr_id == H5I_INVALID_HID)
+printf("Failed to create attribute\n");
+    int a = H5Awrite(attr_id, H5T_STD_I32LE, &id);
+if(a < 0)
+printf("Failed to write attribute\n");
     H5Aclose(attr_id);
     H5Sclose(attr_fspace_id);
     H5Pclose(acpl_id);
