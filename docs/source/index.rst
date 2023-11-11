@@ -18,6 +18,7 @@ This documentation is very much a work in progress.  Most documentation is still
    vis
    pbd
    mcnplink
+   profiling
    issues
 
 
