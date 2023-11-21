@@ -1390,8 +1390,10 @@ advance_p_kokkos_gpu(
   float m_to_SI = g->m_to_SI;  // code to SI
   float E_to_SI = m_to_SI*l_to_SI/(pow(t_to_SI,2)*q_to_SI); // code to SI
   float energy_to_SI = m_to_SI * (l_to_SI/t_to_SI) * (l_to_SI/t_to_SI); // code to SI
-  
-  float dt = g->dt*t_to_SI; // [s], timestep
+
+  float dV        = g->dV; // Volume of cell
+  float dt_c      = g->dt;
+  float dt        = g->dt*t_to_SI; // [s], timestep
   float q_e       = 1.60217663e-19;  // coulombs
   float q_e_au    = 1.0;             // au
   float m_e       = 9.1093837e-31;   // kilograms
@@ -1412,7 +1414,11 @@ advance_p_kokkos_gpu(
   Kokkos::View<int> count("count");
   Kokkos::deep_copy(count, sp_e->np);
   int timestep = g->step;
-  Kokkos::View<double*> epsilon_eV_list = sp->ionization_energy;
+
+  auto epsilon_eV_list_h = Kokkos::create_mirror(sp->ionization_energy);
+  Kokkos::deep_copy(epsilon_eV_list_h, sp->ionization_energy);
+  Kokkos::View<double*> epsilon_eV_list_d("epsilon_eV_list device", epsilon_eV_list_h.extent(0));
+  Kokkos::deep_copy(epsilon_eV_list_d, epsilon_eV_list_h);
   float n = sp->qn; // principal quantum number
   float m = sp->qm; // magnetic quantum number
   float l = sp->ql; // angular momentum quantum number
@@ -1423,7 +1429,7 @@ advance_p_kokkos_gpu(
    ERROR(( "Conversion factors and laser wavelength needs to be passed as grid variables when field ionization is enabled." ));
   }
 
-  if( sp!=sp_e && (n == 0 || epsilon_eV_list(0) == 0) )
+  if( sp!=sp_e && (n == 0 || epsilon_eV_list_h(0) == 0) )
   {
    ERROR(( "Ionization energies and quantum numbers need to be passed to species struct when field ionization is enabled." ));
   }
@@ -1464,7 +1470,7 @@ advance_p_kokkos_gpu(
 
 #ifdef FIELD_IONIZATION
     // ***** Field Ioization *****
-    // Declate varviables
+    // Declare varviables
     bool multiphoton_ionised = false;
     float K;
 	
@@ -1473,8 +1479,8 @@ advance_p_kokkos_gpu(
     // Check if the particle is fully ionized already
     int N_ionization        = int(abs(charge)); // Current ionization state of the particle
     int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
-    int N_ionization_levels = epsilon_eV_list.extent(0);
-    
+    int N_ionization_levels = epsilon_eV_list_h.extent(0);
+
     // code units
     float hax_c = hax/qdt_2mc;
     float hay_c = hay/qdt_2mc;
@@ -1496,14 +1502,15 @@ advance_p_kokkos_gpu(
     int ionization_flag = 1;
     float t_ionize      = 0;
     float Gamma = 0;
+
     // loop for multiple ionization events in a single timestep
     while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {
         
       // Get the appropriate ionization energy
-      float epsilon_eV = epsilon_eV_list(int(N_ionization)); // [eV], ionization energy
+      float epsilon_eV = epsilon_eV_list_d(int(N_ionization)); // [eV], ionization energy
       float epsilon_au = epsilon_eV/27.2;         // atomic units, ionization energy
       float epsilon_SI = epsilon_au*4.3597463e-18;// [J],  ionization energy
-      
+
       // Calculate stuff
       K                    = floor(epsilon_au/omega_au)+1; // number of photons required for multiphoton ionization       
       float Z              = N_ionization + 1;          // ion charge number after ionization
@@ -1512,9 +1519,8 @@ advance_p_kokkos_gpu(
       float l_star         = n_star - 1.0; // angular momentum
       float T_0            = M_PI*Z/(abs(epsilon_au) * sqrt(2*abs(epsilon_au))); // period of classical radial trajectories
       float gamma_keldysh  = omega_au*sqrt(2*m_e_au*epsilon_au)/(q_e_au*E_au);
-      
+
       // Ionization events are tested for every particle with a bound electron at every timestep
-      
       // Choose the ionization process based on the E-field at the particle
       // Specifically, Gamma =
       // min( Gamma_MPI, Gamma_ADK ) for        E <= E_M
@@ -1529,7 +1535,7 @@ advance_p_kokkos_gpu(
       float E_M_au = omega_au*sqrt(8*epsilon_au); // atomic units
       float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
       float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units 
-      
+
       if (E_au<=E_M_au){
 	// MPI Ionization
         // ionization rate per atom: Gamma^(K)
@@ -1618,7 +1624,6 @@ advance_p_kokkos_gpu(
         Gamma = Gamma_BSI_SI;
       }
       
-      
       // Ionization occurs if U_1 < 1 - exp(-Gamma * delta_t), for a uniform number U_1~[0,1]
       auto generator = random_pool.get_state();
       double U = generator.drand(0,1);
@@ -1678,7 +1683,7 @@ advance_p_kokkos_gpu(
     	float epsilon_t_SI = 0;
 	if(multiphoton_ionised){
 	  for(int i=0; i<int(N_ionization-N_ionization_before); i++) {
-    	    epsilon_t_SI += epsilon_eV_list[i] * q_e; // joules
+    	    epsilon_t_SI += epsilon_eV_list_d(i) * q_e; // joules
           }
 	  double p_correction = sqrt( 2*m_e*(K*h_bar*omega_SI - epsilon_t_SI) )/energy_to_SI; // code units
 	  p_ux_e += p_correction * hax_c/(ha_mag_c*ha_mag_c);
@@ -1708,16 +1713,16 @@ advance_p_kokkos_gpu(
 	} 
 	else {
           for(int i=0; i<int(N_ionization-N_ionization_before); i++) {
-            epsilon_t_au += epsilon_eV_list[i]/27.2; // atomic units, ionization energy
-    	    epsilon_t_SI += epsilon_eV_list[i] * q_e; // joules
-    	    epsilon_t_c  += (epsilon_eV_list[i] * q_e) / energy_to_SI; // code units
+            epsilon_t_au += epsilon_eV_list_d(i)/27.2; // atomic units, ionization energy
+    	    epsilon_t_SI += epsilon_eV_list_d(i) * q_e; // joules
+    	    epsilon_t_c  += (epsilon_eV_list_d(i) * q_e) / energy_to_SI; // code units
           }
 	} 
     
-    	float j_ionize_mag_c  = (N_ions * epsilon_t_c )/(g->dt * g->dV * ha_mag_c ); // code
-	float jx_ionize = (epsilon_t_c * N_ions * hax_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
-	float jy_ionize = (epsilon_t_c * N_ions * hay_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
-	float jz_ionize = (epsilon_t_c * N_ions * haz_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
+    	float j_ionize_mag_c  = (N_ions * epsilon_t_c )/(dt_c * dV * ha_mag_c ); // code
+	float jx_ionize = (epsilon_t_c * N_ions * hax_c) / (dt_c * dV * ha_mag_c*ha_mag_c);
+	float jy_ionize = (epsilon_t_c * N_ions * hay_c) / (dt_c * dV * ha_mag_c*ha_mag_c);
+	float jz_ionize = (epsilon_t_c * N_ions * haz_c) / (dt_c * dV * ha_mag_c*ha_mag_c);
 
         //Declaration of local variables
         int ip, id, jp, jd, kp, kd;
@@ -1736,9 +1741,9 @@ advance_p_kokkos_gpu(
 	// Calculate grid coordinates from voxel index
         // (this logic has been checked to be true with the grid coordinate to VOXEL macro)
 	int nghost = 2; // tophat shape
-        N_voxel_x   = (g->nx + nghost); // number of voxels in the x direction
-        N_voxel_y   = (g->ny + nghost);
-        N_voxel_z   = (g->nz + nghost);
+        N_voxel_x   = (nx + nghost); // number of voxels in the x direction
+        N_voxel_y   = (ny + nghost);
+        N_voxel_z   = (nz + nghost);
         N_voxel_xy = N_voxel_x*N_voxel_y; // calculate the number of voxels in the xy plane
         zgrid = ceil( float(ii + 1)/float( N_voxel_xy  ) - 1.0 ); // calculate the z-coordinate
         z_start = zgrid*N_voxel_xy;           // beginning voxel index for the z-coordinate
@@ -1803,20 +1808,18 @@ advance_p_kokkos_gpu(
                   int kdloc=kd+k-2;
 
                   // Jx is nearest neighbor in x, Jy is nearest neighbor in y, ...
-		      voxel_indx = VOXEL(xgrid, jploc, kploc, g->nx,g->ny,g->nz); // Jx is staggered in x 
-        	      voxel_indy = VOXEL(iploc, ygrid, kploc, g->nx,g->ny,g->nz); // Jy is staggered in y
-        	      voxel_indz = VOXEL(iploc, jploc, zgrid, g->nx,g->ny,g->nz); // Jz is staggered in z
-		      
-		      Kokkos::atomic_fetch_add(&k_field(voxel_indx, field_var::jfx), jx_ionize * Sxd[i] * Syp[j] * Szp[k]); 
-        	      Kokkos::atomic_fetch_add(&k_field(voxel_indy, field_var::jfy), jy_ionize * Sxp[i] * Syd[j] * Szp[k]); 
-        	      Kokkos::atomic_fetch_add(&k_field(voxel_indz, field_var::jfz), jz_ionize * Sxp[i] * Syp[j] * Szd[k]);
-		      		      
+		  voxel_indx = VOXEL(xgrid, jploc, kploc, nx,ny,nz); // Jx is staggered in x 
+        	  voxel_indy = VOXEL(iploc, ygrid, kploc, nx,ny,nz); // Jy is staggered in y
+        	  voxel_indz = VOXEL(iploc, jploc, zgrid, nx,ny,nz); // Jz is staggered in z
+		  Kokkos::atomic_fetch_add(&k_field(voxel_indx, field_var::jfx), jx_ionize * Sxd[i] * Syp[j] * Szp[k]); 
+        	  Kokkos::atomic_fetch_add(&k_field(voxel_indy, field_var::jfy), jy_ionize * Sxp[i] * Syd[j] * Szp[k]); 
+        	  Kokkos::atomic_fetch_add(&k_field(voxel_indz, field_var::jfz), jz_ionize * Sxp[i] * Syp[j] * Szd[k]);
+
 	        }//k  
             }//j
         }//i
-            
-      } // if ionization event occured
-      } // if not electrons
+    } // if ionization event occured
+    } // if not electrons
     
 #endif // FIELD_IONIZATION
 
