@@ -692,10 +692,9 @@ advance_p_kokkos_unified(
             
             // Choose the ionization process based on |E| at each particle
             // Note E_T = epsilon^2/(4*Z) is the correct version but EPOCH uses epsilon^2/Z for some reason (maybe a typo in their paper?)
-            float E_M_SI = 2*omega_SI*sqrt(2*m_e*epsilon_SI)/q_e;
-            float E_M_au = omega_au*sqrt(8*epsilon_au); // atomic units
+            float E_M_au = omega_au*sqrt(2*epsilon_au); // atomic units
             float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
-            float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units
+            float E_B_au = (6*m*pow(n_star,3.0) + 4*pow(Z,3.0))/(12*pow(n_star,4.0) - 9*pow(n_star,3.0)); // atomic units
 
             if (E_au<=E_M_au){
               // MPI Ionization
@@ -707,7 +706,7 @@ advance_p_kokkos_unified(
               float T_K = 4.80*pow(1.30,2*K)*pow(2*K+1,-1)*pow(K,-1.0/2.0); // in the case of linearly polarized field
               float sigma_K_au = pow(c_au*pow(tgamma(K+1),2)*pow(n,5)* pow(omega_au,(10*K-1)/3), -1)*T_K*pow(E_au,2*K-2); // atomic units, [cm^2K * s^(K-1)]
 	      float flux = c_au*pow(E_au, 2.0)/(8*M_PI*omega_au);
-              float Gamma_MPI = sigma_K_au * pow(flux, K);
+              float Gamma_MPI = sigma_K_au * pow(flux, K) *Gamma_conversion; // SI units
           
               // Tunneling Regime
               //cout << "Tunneling Ionization" << endl;
@@ -1531,10 +1530,9 @@ advance_p_kokkos_gpu(
       
       // Choose the ionization process based on |E| at each particle
       // Note E_T = epsilon^2/(4*Z) is the correct version but EPOCH uses epsilon^2/Z for some reason (maybe a typo in their paper?)
-      float E_M_SI = 2*omega_SI*sqrt(2*m_e*epsilon_SI)/q_e;
-      float E_M_au = omega_au*sqrt(8*epsilon_au); // atomic units
+      float E_M_au = omega_au*sqrt(2*epsilon_au); // atomic units
       float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
-      float E_B_au = (6*m*pow(n,3.0) + 4*pow(Z,3.0))/(12*pow(n,4.0) - 9*pow(n,3.0)); // atomic units 
+      float E_B_au = (6*m*pow(n_star,3.0) + 4*pow(Z,3.0))/(12*pow(n_star,4.0) - 9*pow(n_star,3.0)); // atomic units 
 
       if (E_au<=E_M_au){
 	// MPI Ionization
@@ -1547,7 +1545,7 @@ advance_p_kokkos_gpu(
         float T_K = 4.80*pow(1.30,2*K)*pow(2*K+1,-1)*pow(K,-1.0/2.0); // in the case of linearly polarized field
         float sigma_K_au = pow(c_au*pow(tgamma(K+1),2)*pow(n,5)* pow(omega_au,(10*K-1)/3), -1)*T_K*pow(E_au,2*K-2); // atomic units, [cm^2K * s^(K-1)]
 	float flux = c_au*pow(E_au, 2.0)/(8*M_PI*omega_au);
-        float Gamma_MPI = sigma_K_au * pow(flux, K);
+        float Gamma_MPI = sigma_K_au * pow(flux, K) *Gamma_conversion; // SI units
         
         // Tunneling Regime
         //cout << "Tunneling Ionization" << endl;
