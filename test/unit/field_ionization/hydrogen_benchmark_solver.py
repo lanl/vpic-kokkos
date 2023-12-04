@@ -58,11 +58,15 @@ def coupledODEs(N, t):
 
     # Ionization rate
     if E_au <= E_M_au:
-        # MPI
-        T_K = 4.80 * pow(1.30, 2 * K) * pow(2 * K + 1, -1) * pow(K, -1.0 / 2.0)
-        sigma_K_au = pow(c_au * math.gamma(K + 1) ** 2 * pow(n, 5) * pow(omega_au, (10 * K - 1) / 3), -1) * T_K * pow(E_au, 2 * K - 2)
-        flux = c_au * pow(E_au, 2.0) / (8 * np.pi * omega_au)
-        gamma_MPI = sigma_K_au * pow(flux, K) * Gamma_conversion 
+        #  If K! is too large then the multiphoton ionisation rate is zero
+        if K < 30: # K! ~ 2.6525e+32 so this limit should be sufficient to ignore MPI ionization 
+            # MPI
+            T_K = 4.80 * pow(1.30, 2 * K) * pow(2 * K + 1, -1) * pow(K, -1.0 / 2.0)
+            sigma_K_au = pow(c_au * math.gamma(K + 1) ** 2 * pow(n, 5) * pow(omega_au, (10 * K - 1) / 3), -1) * T_K * pow(E_au, 2 * K - 2)
+            flux = c_au * pow(E_au, 2.0) / (8 * np.pi * omega_au)
+            gamma_MPI = sigma_K_au * pow(flux, K) * Gamma_conversion
+        else:
+            gamma_MPI = 0; 
         # ADK
         gamma_ADK =  Gamma_conversion*A_n_l * B_l_m*I_Z_star_atomic*(2*(2*I_Z_star_atomic)**(3/2)/E_au)**((2*n_star-m-1))*math.exp(-(2*(2*I_Z_star_atomic)**(3/2))/(3*E_au))
         # decide if ADK or MPI
