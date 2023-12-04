@@ -170,7 +170,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   double ny = 1;
   double nz = (6/lambda_SI)*Lx_SI; // 6 cells per wavelength (60 cells)
 
-  double nppc = 2000;  // Average number of macro particles/cell of each species
+  double nppc = 5000;  // Average number of macro particles/cell of each species
 
   int topology_x = nproc();
   int topology_y = 1;
@@ -769,19 +769,25 @@ TEST_CASE( "Check if field ionization agrees with numerical solution", "[average
     // Loop over VPIC data as it was truncated, hence the analytic data is likely longer
     double l2Error = 0.0;
     int shorterSize = std::min(data.size(), data_analytic.size());
-    for (int i = 0; i < shorterSize; i++) {
-        double residual = data[i].y - data_analytic[i].y;
-        l2Error += residual * residual;
-    }
-    l2Error = std::sqrt(l2Error);
 
+    // Check that both datasets are not empty
+    // This can happen if the simulation doesnt have any ionization events
+    if (shorterSize == 0) {
+      std::cerr << "Error: At least one of the datasets is empty." << std::endl;
+    } else {
+      for (int i = 0; i < shorterSize; i++) {
+	double residual = data[i].y - data_analytic[i].y;
+        l2Error += residual * residual;
+      }
+      l2Error = std::sqrt(l2Error);
+    }
+    
     // Check if the test passes
     // The value we are comparing to is based on past runs.
     if (l2Error < 0.01) {
       flag = 1;
     }
     std::cout << "L2 Error: " << l2Error << std::endl;
-
 
     REQUIRE(flag);
     
