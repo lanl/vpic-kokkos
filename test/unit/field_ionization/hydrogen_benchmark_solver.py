@@ -43,8 +43,11 @@ Gamma_conversion = 1.0/(h_bar/(alpha**2*m_e*c**2)); # multiply au to get sec^-1
 
 E_M_au = omega_au * math.sqrt(2 * I_Z_star_atomic); # atomic units
 E_T_au = (I_Z_star_atomic**2.0) / (4 * Z); # atomic units
-E_B_au = (6 * m * n_star**3.0 + 4 * Z**3.0) / (12 * n_star**4.0 - 9 * n_star**3.0); # atomic units
-    
+E_B_au = (2*(2)**(3.0/2.0))/(3)*I_Z_star_atomic**(3/2)/(2.*n_star - abs(m) - 1.); # atomic units
+
+# variable to save values
+gamma_0_values = []
+E_au_values    = []
 
 # Define the ODE system
 def coupledODEs(N, t):
@@ -94,6 +97,9 @@ def coupledODEs(N, t):
         Gamma_cl_au = 1.0 / (np.pi * T_0) * (np.pi / 2.0 - math.asin((I_Z_star_atomic**2.0) / (4 * Z * E_au)) + (I_Z_star_atomic**2.0) / (4 * Z * E_au) * math.log((4 * Z * E_au - np.sqrt(16 * (Z**2.0) * (E_au**2.0) - (I_Z_star_atomic**4.0))) / (I_Z_star_atomic**2.0))); #oscillating field
         Gamma_cl_SI = Gamma_cl_au * Gamma_conversion;
         gamma_0 = Gamma_cl_SI + Gamma_ADK_SI_threshold
+
+    gamma_0_values.append(gamma_0)
+    E_au_values.append(E_au)
   
     # System of ODEs
     dN0dt = - gamma_0*N0
@@ -125,7 +131,7 @@ data = np.column_stack((t, avg_charge_state))
 np.savetxt('hydrogen_benchmark_gold.csv', data, delimiter=',', header='', comments='')
 
 
-# Plot the average charge state
+## Plot the average charge state
 #plt.plot(c*t/lambda_0, avg_charge_state, 'k', linewidth=2)
 #plt.xlabel('c*t/$\lambda$')
 #plt.ylabel('<Z>')
@@ -138,6 +144,17 @@ np.savetxt('hydrogen_benchmark_gold.csv', data, delimiter=',', header='', commen
 #plt.legend()
 #plt.title('Solutions of the Coupled ODEs')
 #plt.show()
+## Plot gamma_0 vs E_au
+#plt.figure()
+#plt.scatter(E_au_values, gamma_0_values, marker='.')
+#plt.axvline(E_M_au, color='red', linestyle='--', label='E_M_au')
+#plt.axvline(E_B_au, color='green', linestyle='--', label='E_B_au')
+#plt.axvline(E_T_au, color='blue', linestyle='--', label='E_T_au')
+#plt.xlabel('E_au')
+#plt.ylabel('gamma_0')
+#plt.title('gamma_0 vs E_au')
+#plt.show()
+
 
 
 

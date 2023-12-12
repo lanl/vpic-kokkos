@@ -694,7 +694,7 @@ advance_p_kokkos_unified(
             // Note E_T = epsilon^2/(4*Z) is the correct version but EPOCH uses epsilon^2/Z for some reason (maybe a typo in their paper?)
             float E_M_au = omega_au*sqrt(2*epsilon_au); // atomic units
             float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
-            float E_B_au = (6*m*pow(n_star,3.0) + 4*pow(Z,3.0))/(12*pow(n_star,4.0) - 9*pow(n_star,3.0)); // atomic units
+            float E_B_au = (2 * pow(2, 3.0 / 2.0)) / (3) * pow(epsilon_au, 3.0 / 2.0) / (2.0 * n_star - abs(m) - 1.0); // atomic units
 
             if (E_au<=E_M_au){
               // MPI Ionization
@@ -1532,7 +1532,7 @@ advance_p_kokkos_gpu(
       // Note E_T = epsilon^2/(4*Z) is the correct version but EPOCH uses epsilon^2/Z for some reason (maybe a typo in their paper?)
       float E_M_au = omega_au*sqrt(2*epsilon_au); // atomic units
       float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
-      float E_B_au = (6*m*pow(n_star,3.0) + 4*pow(Z,3.0))/(12*pow(n_star,4.0) - 9*pow(n_star,3.0)); // atomic units 
+      float E_B_au = (2 * pow(2, 3.0 / 2.0)) / (3) * pow(epsilon_au, 3.0 / 2.0) / (2.0 * n_star - abs(m) - 1.0); // atomic units
 
       if (E_au<=E_M_au){
 	// MPI Ionization

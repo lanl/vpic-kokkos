@@ -62,7 +62,7 @@ def coupledODEs(N, t):
         # Thresholds for ionization processes
         E_M_au = omega_au * math.sqrt(2 * I_Z_star_atomic); # atomic units
         E_T_au = (I_Z_star_atomic**2.0) / (4 * Z); # atomic units
-        E_B_au = (6 * m * n_star**3.0 + 4 * Z**3.0) / (12 * n_star**4.0 - 9 * n_star**3.0); # atomic units
+        E_B_au = (2*(2)**(3.0/2.0))/(3)*I_Z_star_atomic**(3/2)/(2.*n_star - abs(m) - 1.); # atomic units
         # field at time t
         E_au = math.sqrt((E_max/E_to_SI*math.cos(omega_0*t)*math.exp(-(t-pulse_mean)*(t-pulse_mean)/(2.*pulse_sigma*pulse_sigma)))**2);
         
