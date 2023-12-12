@@ -577,13 +577,13 @@ begin_initialization {
   grid->dt = dt;
   grid->cvac = c_c;
   grid->eps0 = eps0_c;
-
+#if defined(FIELD_IONIZATION)
   grid->lambda = lambda_SI;
   grid->t_to_SI = time_to_SI;
   grid->l_to_SI = length_to_SI;
   grid->q_to_SI = charge_to_SI;
   grid->m_to_SI = mass_to_SI;
-
+#endif
   // Partition a periodic box among the processors sliced uniformly in z: 
   define_absorbing_grid( global->xmin,global->ymin,global->zmin,  // Low corner
                         global->xmax,global->ymax,global->zmax,  // High corner
