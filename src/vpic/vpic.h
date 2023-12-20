@@ -639,7 +639,6 @@ public:
     tracers->init_io_buffers(buffer_size, over_alloc_factor);
 
     return append_species(tracers, &tracers_list); 
-//    return append_species(tracers, &species_list); 
   }
 
   /**
@@ -709,7 +708,6 @@ public:
     tracers->parent_species = original_species;
 
     return append_species(tracers, &tracers_list); 
-//    return append_species(tracers, &species_list); 
   }
 
   /**
@@ -786,7 +784,6 @@ public:
     tracers->create_tracers_by_nth(original_species, tracer_type, skip, rank());
 
     return append_species(tracers, &tracers_list); 
-//    return append_species(tracers, &species_list); 
   }
 
   /**
@@ -906,7 +903,6 @@ public:
     tracers->create_tracers_by_nth(original_species, tracer_type, skip, rank());
 
     return append_species(tracers, &tracers_list); 
-//    return append_species(tracers, &species_list); 
   }
 
   /**
@@ -983,7 +979,6 @@ public:
     tracers->create_tracers_by_predicate(original_species, tracer_type, filter, rank());
 
     return append_species(tracers, &tracers_list); 
-//    return append_species(tracers, &species_list); 
   }
 
 #endif

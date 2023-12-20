@@ -2064,7 +2064,6 @@ vpic_simulation::dump_tracers_buffered_hdf5_async( const char *sp_name,
                                                    const char *fbase,
                                                    const int append )
 {
-Kokkos::fence();
   species_t *sp;
   char fname[max_filename_bytes];
   FileIO fileIO;
@@ -3436,27 +3435,10 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
   hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
   H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
 
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(plist_id != H5I_INVALID_HID) {
-//    printf("Set file access property list\n");
-//  } else {
-//    printf("Failed to set file access property list\n");
-//  }
-//}
-  
   // Try to create species HDF5 file with default file creation/access property lists
   hid_t file_id;
   if(append == 0) {
     file_id = H5Fcreate(fname, H5F_ACC_EXCL, H5P_DEFAULT, plist_id);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(file_id != H5I_INVALID_HID) {
-//    printf("Created file\n");
-//  } else {
-//    printf("Failed to create file\n");
-//  }
-//}
     status = H5Fclose(file_id);
   }
 
@@ -3464,13 +3446,9 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
   // Check if any buffers are filled. If any process needs to dump then all must do it together
   int dump_flag = sp->nparticles_buffered+sp->np < sp->particle_io_buffer.extent(0);
   MPI_Allreduce(MPI_IN_PLACE, &dump_flag, 1, MPI_INT, MPI_PROD, MPI_COMM_WORLD);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Set dump flag\n");
-//}
 
   // Buffer tracers
-  if(dump_flag && step() != num_step) {
+  if(dump_flag && step() != num_step-1) {
     // Update the particles on the host only if they haven't been recently
     if (step() > sp->last_copied) {
       Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
@@ -3479,7 +3457,7 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
     }
 
     if( rank()==0 )
-        MESSAGE(("Buffering %d \"%s\" particles",sp->np, sp->name));
+        MESSAGE(("Buffering \"%s\" particles", sp->name));
 
     auto& particles = sp->k_p_d;
     auto& particles_i = sp->k_p_i_d;
@@ -3645,14 +3623,11 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
       Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
 //      sp->copy_to_host();
     }
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Copied particles to host\n");
-//}
 
     // Calculate total number of tracers and per rank offsets
     uint64_t total_particles, offset;
     uint64_t num_particles;
+    uint64_t total_particles_written = 0;
 
     if( rank()==0 )
         MESSAGE(("Dumping %ld \"%s\" particles to \"%s\"", sp->particle_cell_io_buffer.extent(0), sp->name,fbase));
@@ -3662,10 +3637,6 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
     auto& particles_i = sp->k_p_i_d;
     auto& interpolators_k = interpolator_array->k_i_d;
     Kokkos::deep_copy(interpolator_array->k_i_h, interpolator_array->k_i_d);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Copied interpolators to host\n");
-//}
 
     // If needed, copy weight back to particles for hydro quantities
     if(sp->tracer_type == TracerType::Copy) {
@@ -3675,10 +3646,6 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
       auto w_annote = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL(), w_idx);
       Kokkos::deep_copy(w_subview_h, w_annote);
       Kokkos::deep_copy(w_subview_d, w_subview_h);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Copied weights to host\n");
-//}
     }
 
     // Compute hydro quantities
@@ -3699,28 +3666,11 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
 
       synchronize_hydro_array( hydro_array );
     }
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Calculated hydro quantities\n");
-//}
 
     auto& interp = interpolator_array->k_i_h;
 
     // Open file
     file_id = H5Fopen(fname, H5F_ACC_RDWR, plist_id);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(file_id != H5I_INVALID_HID) {
-//    printf("Opened file\n");
-//  } else {
-//    printf("Failed to open file\n");
-//  }
-//}
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Number of time steps %ld\n", sp->np_per_ts_io_buffer.size());
-//  printf("Last time step %ld\n", sp->np_per_ts_io_buffer[sp->np_per_ts_io_buffer.size()-1].second);
-//}
 
     // Write buffered tracer data
     uint32_t particle_idx = 0;
@@ -3732,49 +3682,23 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
       num_particles = sp->np_per_ts_io_buffer[ts_idx].first;
       // Calculate the total number of particles for this timestep
       MPI_Allreduce(&num_particles, &total_particles, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+if(rank() == 0)
+  total_particles_written += total_particles;
       // Calcualte the offset for each rank
       MPI_Scan(&num_particles, &offset, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
       offset -= num_particles;
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Starting dump for time step %ld\n", time_step);
-//}
 
 //      if(total_particles > 0) {
         // Create group for time step
         sprintf(group_name, "/Timestep_%ld", time_step);
         hid_t group_id = H5Gcreate(file_id, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(group_id != H5I_INVALID_HID) {
-//    printf("Created group\n");
-//  } else {
-//    printf("Failed to create group\n");
-//  }
-//}
 
         // Create dataspace describing dims for particle datasets
         hid_t dataspace_id = H5Screate_simple(1, (hsize_t*)(&total_particles), NULL);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(dataspace_id != H5I_INVALID_HID) {
-//    printf("Created dataspace\n");
-//  } else {
-//    printf("Failed to create dataspace\n");
-//  }
-//}
 
         // Set MPIO to collective mode
         hid_t dxpl_id = H5Pcreate(H5P_DATASET_XFER);
         H5Pset_dxpl_mpio(dxpl_id, H5FD_MPIO_COLLECTIVE);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(dxpl_id != H5I_INVALID_HID) {
-//    printf("Set collective mode\n");
-//  } else {
-//    printf("Failed to set collective mode\n");
-//  }
-//}
 
         // Select slab of dataset for each rank
         hsize_t stride = 1;
@@ -3783,14 +3707,6 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
     
         // Create memspace
         hid_t memspace_id = H5Screate_simple(1, (hsize_t*)(&num_particles), NULL);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(memspace_id != H5I_INVALID_HID) {
-//    printf("Created memory space\n");
-//  } else {
-//    printf("Failed to create memory space\n");
-//  }
-//}
 
         // Slice of buffered particles
         auto slice = Kokkos::make_pair(static_cast<uint64_t>(particle_idx), static_cast<uint64_t>(particle_idx) + num_particles);
@@ -3814,14 +3730,6 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
         hid_t dataset_uz_id = H5Dcreate(group_id, "uz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
         hid_t dataset_w_id  = H5Dcreate(group_id, "w",  H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
         hid_t dataset_i_id  = H5Dcreate(group_id, "i",  H5T_STD_I32LE,    dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(dataset_i_id != H5I_INVALID_HID) {
-//    printf("Created particle datasets \n");
-//  } else {
-//    printf("Failed to create particle datasets\n");
-//  }
-//}
 
         // Write data to slab
         status = H5Dwrite(dataset_dx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, dx_subview.data());
@@ -3832,14 +3740,6 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
         status = H5Dwrite(dataset_uz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, uz_subview.data());
         status = H5Dwrite(dataset_w_id,  H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, w_subview.data());
         status = H5Dwrite(dataset_i_id,  H5T_STD_I32LE,  memspace_id, dataspace_id, dxpl_id, i_subview.data());
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(status >= 0) {
-//    printf("Wrote datasets\n");
-//  } else {
-//    printf("Failed to write datasets\n");
-//  }
-//}
     
         // Close datasets
         status = H5Dclose(dataset_dx_id);
@@ -3850,14 +3750,6 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
         status = H5Dclose(dataset_uz_id);
         status = H5Dclose(dataset_w_id);
         status = H5Dclose(dataset_i_id);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(status >= 0) {
-//    printf("Closed datasets\n");
-//  } else {
-//    printf("Failed to close datasets\n");
-//  }
-//}
 
         using host_memory_space = Kokkos::DefaultHostExecutionSpace::memory_space;
   
@@ -3885,99 +3777,23 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
             posy_view(i) = tracer_y;
             posz_view(i) = tracer_z;
           });
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Created position view\n");
-//}
 //          auto posx_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 0);
 //          auto posy_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 1);
 //          auto posz_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 2);
           hid_t dataset_posx_id = H5Dcreate(group_id, "posx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(dataset_posx_id != H5I_INVALID_HID) {
-//    printf("Created dataset for global position x\n");
-//  } else {
-//    printf("Failed to create datasets for global position x\n");
-//  }
-//}
 //          status = H5Dwrite(dataset_posx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, posx_subview.data());
           status = H5Dwrite(dataset_posx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, posx_view.data());
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(status >= 0) {
-//    printf("Wrote dataset for global position x\n");
-//  } else {
-//    printf("Failed to write datasets for global position x\n");
-//  }
-//}
           status = H5Dclose(dataset_posx_id);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(status >= 0) {
-//    printf("Closed dataset for global position x\n");
-//  } else {
-//    printf("Failed to close datasets for global position x\n");
-//  }
-//}
 
           hid_t dataset_posy_id = H5Dcreate(group_id, "posy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(dataset_posy_id != H5I_INVALID_HID) {
-//    printf("Created dataset for global position y\n");
-//  } else {
-//    printf("Failed to create datasets for global position y\n");
-//  }
-//}
 //          status = H5Dwrite(dataset_posy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, posy_subview.data());
           status = H5Dwrite(dataset_posy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, posy_view.data());
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(status >= 0) {
-//    printf("Wrote dataset for global position y\n");
-//  } else {
-//    printf("Failed to write datasets for global position y\n");
-//  }
-//}
           status = H5Dclose(dataset_posy_id);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(status >= 0) {
-//    printf("Closed dataset for global position y\n");
-//  } else {
-//    printf("Failed to close datasets for global position y\n");
-//  }
-//}
 
           hid_t dataset_posz_id = H5Dcreate(group_id, "posz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(dataset_posz_id != H5I_INVALID_HID) {
-//    printf("Created dataset for global position z\n");
-//  } else {
-//    printf("Failed to create datasets for global position z\n");
-//  }
-//}
 //          status = H5Dwrite(dataset_posz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, posz_subview.data());
           status = H5Dwrite(dataset_posz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, posz_view.data());
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(status >= 0) {
-//    printf("Wrote dataset for global position y\n");
-//  } else {
-//    printf("Failed to write datasets for global position y\n");
-//  }
-//}
           status = H5Dclose(dataset_posz_id);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(status >= 0) {
-//    printf("Closed dataset for global position z\n");
-//  } else {
-//    printf("Failed to close datasets for global position z\n");
-//  }
-//}
         }
   
         // Dump E field if specified
@@ -4133,29 +3949,13 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
         status = H5Gclose(group_id);
         status = H5Pclose(dxpl_id);
 //      }
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Wrote data for time step %ld\n", time_step);
-//}
     }
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Wrote buffered time steps\n");
-//}
 
     // Write current tracer data
     sprintf(group_name, "/Timestep_%ld", step());
 
     // Create group step
     hid_t group_id = H5Gcreate(file_id, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(group_id != H5I_INVALID_HID) {
-//    printf("Created group\n");
-//  } else {
-//    printf("Failed to create group\n");
-//  }
-//}
 
     // Close plist_id
     H5Pclose(plist_id);
@@ -4163,37 +3963,19 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
     // Calculate offsets and # of particles to write for each rank
     num_particles = sp->np;
     MPI_Allreduce(&num_particles, &total_particles, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+if(rank() == 0)
+  total_particles_written += total_particles;
     MPI_Scan(&num_particles, &offset, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
     offset -= num_particles;
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Calculated offsets for writing particles\n");
-//}
 
     if(total_particles > 0) {
 
       // Create dataspace describing dims for particle datasets
       hid_t dataspace_id = H5Screate_simple(1, (hsize_t*)(&total_particles), NULL);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(dataspace_id != H5I_INVALID_HID) {
-//    printf("Created dataspace\n");
-//  } else {
-//    printf("Failed to create dataspace\n");
-//  }
-//}
 
       // Set MPIO to collective mode
       plist_id = H5Pcreate(H5P_DATASET_XFER);
       H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(group_id != H5I_INVALID_HID) {
-//    printf("Set MPIO collective mode\n");
-//  } else {
-//    printf("Failed to set MPIO collective mode\n");
-//  }
-//}
 
       // Select slab of dataset for each rank
       herr_t status;
@@ -4203,358 +3985,318 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
 
       // Create memspace
       hid_t memspace_id = H5Screate_simple(1, (hsize_t*)(&num_particles), NULL);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  if(memspace_id != H5I_INVALID_HID) {
-//    printf("Created memory space\n");
-//  } else {
-//    printf("Failed to create memory space\n");
-//  }
-//}
 
-//      write_tracers_to_hdf5(sp, 
-//                            grid, 
-//                            hydro_array,
-//                            interp, 
-//                            dump_vars,
-//                            group_id, 
-//                            dataspace_id, 
-//                            memspace_id,
-//                            plist_id);
+      write_tracers_to_hdf5(sp, 
+                            grid, 
+                            hydro_array,
+                            interp, 
+                            dump_vars,
+                            group_id, 
+                            dataspace_id, 
+                            memspace_id,
+                            plist_id);
 
-      // Create subviews for data
-      auto dx_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dx));
-      auto dy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dy));
-      auto dz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dz));
-      auto ux_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::ux));
-      auto uy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uy));
-      auto uz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uz));
-      auto w_subview  = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::w));
-
-      // Create datasets, one for each variable, using dataspace and default property lists
-      hid_t dataset_dx_id = H5Dcreate(group_id, "dx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-      hid_t dataset_dy_id = H5Dcreate(group_id, "dy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-      hid_t dataset_dz_id = H5Dcreate(group_id, "dz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-      hid_t dataset_ux_id = H5Dcreate(group_id, "ux", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-      hid_t dataset_uy_id = H5Dcreate(group_id, "uy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-      hid_t dataset_uz_id = H5Dcreate(group_id, "uz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-      hid_t dataset_w_id  = H5Dcreate(group_id, "w",  H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-      hid_t dataset_i_id  = H5Dcreate(group_id, "i",  H5T_STD_I32LE,    dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Created datasets for particle variables\n");
-//}
-
-      // Write data to slab
-      status = H5Dwrite(dataset_dx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dx_subview.data());
-      status = H5Dwrite(dataset_dy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dy_subview.data());
-      status = H5Dwrite(dataset_dz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dz_subview.data());
-      status = H5Dwrite(dataset_ux_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ux_subview.data());
-      status = H5Dwrite(dataset_uy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uy_subview.data());
-      status = H5Dwrite(dataset_uz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uz_subview.data());
-      status = H5Dwrite(dataset_w_id,  H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, w_subview.data());
-      status = H5Dwrite(dataset_i_id,  H5T_STD_I32LE,  memspace_id, dataspace_id, H5P_DEFAULT, sp->k_p_i_h.data());
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Wrote data to datasets\n");
-//}
-
-      using host_memory_space = Kokkos::DefaultHostExecutionSpace::memory_space;
-
-      // Dump Global position if specified
-      if(dump_vars & DumpVar::GlobalPos) {
-        auto pos_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Pos Host View", sp->np);
-        Kokkos::parallel_for("Calculate global position", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          float dx0 = sp->k_p_h(i, particle_var::dx);
-          float dy0 = sp->k_p_h(i, particle_var::dy);
-          float dz0 = sp->k_p_h(i, particle_var::dz);
-          int   ii  = sp->k_p_i_h(i);
-          
-          // Compute global position of particle
-          if(dump_vars & DumpVar::GlobalPos) {
-            int nxg_ = grid->nx + 2;
-            int nyg_ = grid->ny + 2;
-            int i0 = ii % nxg_;
-            int j0 = (ii/nxg_) % nyg_;
-            int k0 = ii/(nxg_*nyg_);
-            float tracer_x = (i0 + (dx0-1)*0.5) * grid->dx + grid->x0;
-            float tracer_y = (j0 + (dy0-1)*0.5) * grid->dy + grid->y0;
-            float tracer_z = (k0 + (dz0-1)*0.5) * grid->dz + grid->z0;
-            pos_view(i, 0) = tracer_x;
-            pos_view(i, 1) = tracer_y;
-            pos_view(i, 2) = tracer_z;
-          }
-        });
-        auto posx_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 0);
-        auto posy_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 1);
-        auto posz_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 2);
-        hid_t dataset_posx_id = H5Dcreate(group_id, "posx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_posy_id = H5Dcreate(group_id, "posy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_posz_id = H5Dcreate(group_id, "posz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_posx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posx_subview.data());
-        status = H5Dwrite(dataset_posy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posy_subview.data());
-        status = H5Dwrite(dataset_posz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posz_subview.data());
-        H5Dclose(dataset_posx_id);
-        H5Dclose(dataset_posy_id);
-        H5Dclose(dataset_posz_id);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Wrote global position\n");
-//}
-      }
-
-      // Dump E field if specified
-      if(dump_vars & DumpVar::Efield) {
-        auto efield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("E field Host View", sp->np);
-        Kokkos::parallel_for("Calculate E field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          float dx0 = sp->k_p_h(i, particle_var::dx);
-          float dy0 = sp->k_p_h(i, particle_var::dy);
-          float dz0 = sp->k_p_h(i, particle_var::dz);
-          int   ii  = sp->k_p_i_h(i);
-          efield_view(i,0) = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
-          efield_view(i,1) = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
-          efield_view(i,2) = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
-        });
-        auto efieldx_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 0);
-        auto efieldy_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 1);
-        auto efieldz_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 2);
-        hid_t dataset_efieldx_id = H5Dcreate(group_id, "ex", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_efieldy_id = H5Dcreate(group_id, "ey", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_efieldz_id = H5Dcreate(group_id, "ez", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_efieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldx_subview.data());
-        status = H5Dwrite(dataset_efieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldy_subview.data());
-        status = H5Dwrite(dataset_efieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldz_subview.data());
-        H5Dclose(dataset_efieldx_id);
-        H5Dclose(dataset_efieldy_id);
-        H5Dclose(dataset_efieldz_id);
-      }
-
-      // Dump B field if specified
-      if(dump_vars & DumpVar::Bfield) {
-        auto bfield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("B field Host View", sp->np);
-        Kokkos::parallel_for("Calculate B field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          float dx0 = sp->k_p_h(i, particle_var::dx);
-          float dy0 = sp->k_p_h(i, particle_var::dy);
-          float dz0 = sp->k_p_h(i, particle_var::dz);
-          int   ii  = sp->k_p_i_h(i);
-          bfield_view(i,0)  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
-          bfield_view(i,1)  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
-          bfield_view(i,2)  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
-        });
-        auto bfieldx_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 0);
-        auto bfieldy_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 1);
-        auto bfieldz_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 2);
-        hid_t dataset_bfieldx_id = H5Dcreate(group_id, "bx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_bfieldy_id = H5Dcreate(group_id, "by", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_bfieldz_id = H5Dcreate(group_id, "bz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_bfieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldx_subview.data());
-        status = H5Dwrite(dataset_bfieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldy_subview.data());
-        status = H5Dwrite(dataset_bfieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldz_subview.data());
-        H5Dclose(dataset_bfieldx_id);
-        H5Dclose(dataset_bfieldy_id);
-        H5Dclose(dataset_bfieldz_id);
-      }
-
-      // Dump current density if specified
-      if(dump_vars & DumpVar::CurrentDensity) {
-        auto current_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Current density Host View", sp->np);
-        Kokkos::parallel_for("Collect current density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          int   ii  = sp->k_p_i_h(i);
-          current_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::jx);
-          current_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::jy);
-          current_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::jz);
-        });
-        auto jx_subview = Kokkos::subview(current_view, Kokkos::ALL(), 0);
-        auto jy_subview = Kokkos::subview(current_view, Kokkos::ALL(), 1);
-        auto jz_subview = Kokkos::subview(current_view, Kokkos::ALL(), 2);
-        hid_t dataset_jx_id = H5Dcreate(group_id, "jx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_jy_id = H5Dcreate(group_id, "jy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_jz_id = H5Dcreate(group_id, "jz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_jx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jx_subview.data());
-        status = H5Dwrite(dataset_jy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jy_subview.data());
-        status = H5Dwrite(dataset_jz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jz_subview.data());
-        H5Dclose(dataset_jx_id);
-        H5Dclose(dataset_jy_id);
-        H5Dclose(dataset_jz_id);
-      }
-
-      // Dump charge density if specified
-      if(dump_vars & DumpVar::ChargeDensity) {
-        auto charge_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("Charge density Host View", sp->np);
-        Kokkos::parallel_for("Calculate charge density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          int   ii  = sp->k_p_i_h(i);
-          charge_view(i) = hydro_array->k_h_h(ii, hydro_var::rho);
-        });
-        hid_t dataset_rho_id = H5Dcreate(group_id, "rho", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_rho_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, charge_view.data());
-        H5Dclose(dataset_rho_id);
-      }
-
-      // Dump momentum density if specified
-      if(dump_vars & DumpVar::MomentumDensity) {
-        auto momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", sp->np);
-        Kokkos::parallel_for("Collect momentum density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          int   ii  = sp->k_p_i_h(i);
-          momentum_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::px);
-          momentum_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::py);
-          momentum_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::pz);
-        });
-        auto px_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 0);
-        auto py_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 1);
-        auto pz_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 2);
-        hid_t dataset_px_id = H5Dcreate(group_id, "px", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_py_id = H5Dcreate(group_id, "py", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_pz_id = H5Dcreate(group_id, "pz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_px_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, px_subview.data());
-        status = H5Dwrite(dataset_py_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, py_subview.data());
-        status = H5Dwrite(dataset_pz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, pz_subview.data());
-        H5Dclose(dataset_px_id);
-        H5Dclose(dataset_py_id);
-        H5Dclose(dataset_pz_id);
-      }
-
-      // Dump kinetic energy density if specified
-      if(dump_vars & DumpVar::KEDensity) {
-        auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-        Kokkos::parallel_for("Collect KE density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          int   ii  = sp->k_p_i_h(i);
-          ke_view(i) = hydro_array->k_h_h(ii, hydro_var::ke);
-        });
-        hid_t dataset_ke_id = H5Dcreate(group_id, "ke_dens", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
-        H5Dclose(dataset_ke_id);
-      }
-
-      // Dump stress tensor if specified
-      if(dump_vars & DumpVar::StressTensor) {
-        auto stress_view = Kokkos::View<float*[6], Kokkos::LayoutLeft, host_memory_space>("Stress tensor Host View", sp->np);
-        Kokkos::parallel_for("Collect stress tensor", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          int   ii  = sp->k_p_i_h(i);
-          stress_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::txx);
-          stress_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::tyy);
-          stress_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::tzz);
-          stress_view(i, 3) = hydro_array->k_h_h(ii, hydro_var::tyz);
-          stress_view(i, 4) = hydro_array->k_h_h(ii, hydro_var::tzx);
-          stress_view(i, 5) = hydro_array->k_h_h(ii, hydro_var::txy);
-        });
-        auto txx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 0);
-        auto tyy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 1);
-        auto tzz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 2);
-        auto tyz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 3);
-        auto tzx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 4);
-        auto txy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 5);
-        hid_t dataset_txx_id = H5Dcreate(group_id, "txx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_tyy_id = H5Dcreate(group_id, "tyy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_tzz_id = H5Dcreate(group_id, "tzz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_tyz_id = H5Dcreate(group_id, "tyz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_tzx_id = H5Dcreate(group_id, "tzx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_txy_id = H5Dcreate(group_id, "txy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_txx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txx_subview.data());
-        status = H5Dwrite(dataset_tyy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyy_subview.data());
-        status = H5Dwrite(dataset_tzz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzz_subview.data());
-        status = H5Dwrite(dataset_tyz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyz_subview.data());
-        status = H5Dwrite(dataset_tzx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzx_subview.data());
-        status = H5Dwrite(dataset_txy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txy_subview.data());
-        H5Dclose(dataset_txx_id);
-        H5Dclose(dataset_tyy_id);
-        H5Dclose(dataset_tzz_id);
-        H5Dclose(dataset_tyz_id);
-        H5Dclose(dataset_tzx_id);
-        H5Dclose(dataset_txy_id);
-      }
-
-      // Dump kinetic energy of particle if specified
-      if(dump_vars & DumpVar::ParticleKE) {
-        auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-        Kokkos::parallel_for("Calculate KE", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          float dx0 = sp->k_p_h(i, particle_var::dx);
-          float dy0 = sp->k_p_h(i, particle_var::dy);
-          float dz0 = sp->k_p_h(i, particle_var::dz);
-          int   ii  = sp->k_p_i_h(i);
-          float ux0 = sp->k_p_h(i, particle_var::ux);
-          float uy0 = sp->k_p_h(i, particle_var::uy);
-          float uz0 = sp->k_p_h(i, particle_var::uz);
-          float w0  = sp->k_p_h(i, particle_var::w);
-          float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-          float msp = sp->m;
-          float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                                 dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-          float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                                 dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-          float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                                 dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
-          v0 = v0*v0 + v1*v1 + v2*v2;
-          v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
-          ke_view(i) = v0;
-        });
-        hid_t dataset_ke_id = H5Dcreate(group_id, "ke", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
-        H5Dclose(dataset_ke_id);
-      }
-
-      // Dump int annotations
-      for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-        auto i32_subview = Kokkos::subview(sp->annotations_h.i32, Kokkos::ALL, j);
-        hid_t dataset_i32_annote_id = H5Dcreate(group_id, sp->annotation_vars.i32_vars[j].c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_i32_annote_id, H5T_STD_I32LE, memspace_id, dataspace_id, H5P_DEFAULT, i32_subview.data());
-        H5Dclose(dataset_i32_annote_id);
-      }
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Wrote i32 annotations\n");
-//}
-      // Dump 64-bit integer annotations
-      for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-        auto i64_subview = Kokkos::subview(sp->annotations_h.i64, Kokkos::ALL, j);
-        hid_t dataset_i64_annote_id = H5Dcreate(group_id, sp->annotation_vars.i64_vars[j].c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_i64_annote_id, H5T_STD_I64LE, memspace_id, dataspace_id, H5P_DEFAULT, i64_subview.data());
-        H5Dclose(dataset_i64_annote_id);
-      }
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Wrote i64 annotations\n");
-//}
-      // Dump 32-bit floating-point annotations
-      for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-        auto f32_subview = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL, j);
-        hid_t dataset_f32_annote_id = H5Dcreate(group_id, sp->annotation_vars.f32_vars[j].c_str(), H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_f32_annote_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, f32_subview.data());
-        H5Dclose(dataset_f32_annote_id);
-      }
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Wrote f32 annotations\n");
-//}
-      // Dump 64-bit floating-point annotations
-      for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-        auto f64_subview = Kokkos::subview(sp->annotations_h.f64, Kokkos::ALL, j);
-        hid_t dataset_f64_annote_id = H5Dcreate(group_id, sp->annotation_vars.f64_vars[j].c_str(), H5T_IEEE_F64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        status = H5Dwrite(dataset_f64_annote_id, H5T_IEEE_F64LE, memspace_id, dataspace_id, H5P_DEFAULT, f64_subview.data());
-        H5Dclose(dataset_f64_annote_id);
-      }
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Wrote f64 annotations\n");
-//}
-
-      // Close HDF5 objects 
-      status = H5Dclose(dataset_dx_id);
-      status = H5Dclose(dataset_dy_id);
-      status = H5Dclose(dataset_dz_id);
-      status = H5Dclose(dataset_ux_id);
-      status = H5Dclose(dataset_uy_id);
-      status = H5Dclose(dataset_uz_id);
-      status = H5Dclose(dataset_w_id);
-      status = H5Dclose(dataset_i_id);
+//      // Create subviews for data
+//      auto dx_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dx));
+//      auto dy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dy));
+//      auto dz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dz));
+//      auto ux_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::ux));
+//      auto uy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uy));
+//      auto uz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uz));
+//      auto w_subview  = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::w));
+//
+//      // Create datasets, one for each variable, using dataspace and default property lists
+//      hid_t dataset_dx_id = H5Dcreate(group_id, "dx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//      hid_t dataset_dy_id = H5Dcreate(group_id, "dy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//      hid_t dataset_dz_id = H5Dcreate(group_id, "dz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//      hid_t dataset_ux_id = H5Dcreate(group_id, "ux", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//      hid_t dataset_uy_id = H5Dcreate(group_id, "uy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//      hid_t dataset_uz_id = H5Dcreate(group_id, "uz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//      hid_t dataset_w_id  = H5Dcreate(group_id, "w",  H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//      hid_t dataset_i_id  = H5Dcreate(group_id, "i",  H5T_STD_I32LE,    dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//
+//      // Write data to slab
+//      status = H5Dwrite(dataset_dx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dx_subview.data());
+//      status = H5Dwrite(dataset_dy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dy_subview.data());
+//      status = H5Dwrite(dataset_dz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dz_subview.data());
+//      status = H5Dwrite(dataset_ux_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ux_subview.data());
+//      status = H5Dwrite(dataset_uy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uy_subview.data());
+//      status = H5Dwrite(dataset_uz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uz_subview.data());
+//      status = H5Dwrite(dataset_w_id,  H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, w_subview.data());
+//      status = H5Dwrite(dataset_i_id,  H5T_STD_I32LE,  memspace_id, dataspace_id, H5P_DEFAULT, sp->k_p_i_h.data());
+//
+//      using host_memory_space = Kokkos::DefaultHostExecutionSpace::memory_space;
+//
+//      // Dump Global position if specified
+//      if(dump_vars & DumpVar::GlobalPos) {
+//        auto pos_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Pos Host View", sp->np);
+//        Kokkos::parallel_for("Calculate global position", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//          float dx0 = sp->k_p_h(i, particle_var::dx);
+//          float dy0 = sp->k_p_h(i, particle_var::dy);
+//          float dz0 = sp->k_p_h(i, particle_var::dz);
+//          int   ii  = sp->k_p_i_h(i);
+//          
+//          // Compute global position of particle
+//          if(dump_vars & DumpVar::GlobalPos) {
+//            int nxg_ = grid->nx + 2;
+//            int nyg_ = grid->ny + 2;
+//            int i0 = ii % nxg_;
+//            int j0 = (ii/nxg_) % nyg_;
+//            int k0 = ii/(nxg_*nyg_);
+//            float tracer_x = (i0 + (dx0-1)*0.5) * grid->dx + grid->x0;
+//            float tracer_y = (j0 + (dy0-1)*0.5) * grid->dy + grid->y0;
+//            float tracer_z = (k0 + (dz0-1)*0.5) * grid->dz + grid->z0;
+//            pos_view(i, 0) = tracer_x;
+//            pos_view(i, 1) = tracer_y;
+//            pos_view(i, 2) = tracer_z;
+//          }
+//        });
+//        auto posx_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 0);
+//        auto posy_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 1);
+//        auto posz_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 2);
+//        hid_t dataset_posx_id = H5Dcreate(group_id, "posx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_posy_id = H5Dcreate(group_id, "posy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_posz_id = H5Dcreate(group_id, "posz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_posx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posx_subview.data());
+//        status = H5Dwrite(dataset_posy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posy_subview.data());
+//        status = H5Dwrite(dataset_posz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posz_subview.data());
+//        H5Dclose(dataset_posx_id);
+//        H5Dclose(dataset_posy_id);
+//        H5Dclose(dataset_posz_id);
+//      }
+//
+//      // Dump E field if specified
+//      if(dump_vars & DumpVar::Efield) {
+//        auto efield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("E field Host View", sp->np);
+//        Kokkos::parallel_for("Calculate E field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//          float dx0 = sp->k_p_h(i, particle_var::dx);
+//          float dy0 = sp->k_p_h(i, particle_var::dy);
+//          float dz0 = sp->k_p_h(i, particle_var::dz);
+//          int   ii  = sp->k_p_i_h(i);
+//          efield_view(i,0) = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
+//          efield_view(i,1) = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
+//          efield_view(i,2) = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
+//        });
+//        auto efieldx_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 0);
+//        auto efieldy_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 1);
+//        auto efieldz_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 2);
+//        hid_t dataset_efieldx_id = H5Dcreate(group_id, "ex", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_efieldy_id = H5Dcreate(group_id, "ey", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_efieldz_id = H5Dcreate(group_id, "ez", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_efieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldx_subview.data());
+//        status = H5Dwrite(dataset_efieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldy_subview.data());
+//        status = H5Dwrite(dataset_efieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldz_subview.data());
+//        H5Dclose(dataset_efieldx_id);
+//        H5Dclose(dataset_efieldy_id);
+//        H5Dclose(dataset_efieldz_id);
+//      }
+//
+//      // Dump B field if specified
+//      if(dump_vars & DumpVar::Bfield) {
+//        auto bfield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("B field Host View", sp->np);
+//        Kokkos::parallel_for("Calculate B field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//          float dx0 = sp->k_p_h(i, particle_var::dx);
+//          float dy0 = sp->k_p_h(i, particle_var::dy);
+//          float dz0 = sp->k_p_h(i, particle_var::dz);
+//          int   ii  = sp->k_p_i_h(i);
+//          bfield_view(i,0)  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
+//          bfield_view(i,1)  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
+//          bfield_view(i,2)  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
+//        });
+//        auto bfieldx_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 0);
+//        auto bfieldy_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 1);
+//        auto bfieldz_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 2);
+//        hid_t dataset_bfieldx_id = H5Dcreate(group_id, "bx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_bfieldy_id = H5Dcreate(group_id, "by", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_bfieldz_id = H5Dcreate(group_id, "bz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_bfieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldx_subview.data());
+//        status = H5Dwrite(dataset_bfieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldy_subview.data());
+//        status = H5Dwrite(dataset_bfieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldz_subview.data());
+//        H5Dclose(dataset_bfieldx_id);
+//        H5Dclose(dataset_bfieldy_id);
+//        H5Dclose(dataset_bfieldz_id);
+//      }
+//
+//      // Dump current density if specified
+//      if(dump_vars & DumpVar::CurrentDensity) {
+//        auto current_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Current density Host View", sp->np);
+//        Kokkos::parallel_for("Collect current density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//          int   ii  = sp->k_p_i_h(i);
+//          current_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::jx);
+//          current_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::jy);
+//          current_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::jz);
+//        });
+//        auto jx_subview = Kokkos::subview(current_view, Kokkos::ALL(), 0);
+//        auto jy_subview = Kokkos::subview(current_view, Kokkos::ALL(), 1);
+//        auto jz_subview = Kokkos::subview(current_view, Kokkos::ALL(), 2);
+//        hid_t dataset_jx_id = H5Dcreate(group_id, "jx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_jy_id = H5Dcreate(group_id, "jy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_jz_id = H5Dcreate(group_id, "jz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_jx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jx_subview.data());
+//        status = H5Dwrite(dataset_jy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jy_subview.data());
+//        status = H5Dwrite(dataset_jz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jz_subview.data());
+//        H5Dclose(dataset_jx_id);
+//        H5Dclose(dataset_jy_id);
+//        H5Dclose(dataset_jz_id);
+//      }
+//
+//      // Dump charge density if specified
+//      if(dump_vars & DumpVar::ChargeDensity) {
+//        auto charge_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("Charge density Host View", sp->np);
+//        Kokkos::parallel_for("Calculate charge density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//          int   ii  = sp->k_p_i_h(i);
+//          charge_view(i) = hydro_array->k_h_h(ii, hydro_var::rho);
+//        });
+//        hid_t dataset_rho_id = H5Dcreate(group_id, "rho", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_rho_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, charge_view.data());
+//        H5Dclose(dataset_rho_id);
+//      }
+//
+//      // Dump momentum density if specified
+//      if(dump_vars & DumpVar::MomentumDensity) {
+//        auto momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", sp->np);
+//        Kokkos::parallel_for("Collect momentum density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//          int   ii  = sp->k_p_i_h(i);
+//          momentum_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::px);
+//          momentum_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::py);
+//          momentum_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::pz);
+//        });
+//        auto px_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 0);
+//        auto py_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 1);
+//        auto pz_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 2);
+//        hid_t dataset_px_id = H5Dcreate(group_id, "px", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_py_id = H5Dcreate(group_id, "py", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_pz_id = H5Dcreate(group_id, "pz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_px_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, px_subview.data());
+//        status = H5Dwrite(dataset_py_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, py_subview.data());
+//        status = H5Dwrite(dataset_pz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, pz_subview.data());
+//        H5Dclose(dataset_px_id);
+//        H5Dclose(dataset_py_id);
+//        H5Dclose(dataset_pz_id);
+//      }
+//
+//      // Dump kinetic energy density if specified
+//      if(dump_vars & DumpVar::KEDensity) {
+//        auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
+//        Kokkos::parallel_for("Collect KE density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//          int   ii  = sp->k_p_i_h(i);
+//          ke_view(i) = hydro_array->k_h_h(ii, hydro_var::ke);
+//        });
+//        hid_t dataset_ke_id = H5Dcreate(group_id, "ke_dens", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
+//        H5Dclose(dataset_ke_id);
+//      }
+//
+//      // Dump stress tensor if specified
+//      if(dump_vars & DumpVar::StressTensor) {
+//        auto stress_view = Kokkos::View<float*[6], Kokkos::LayoutLeft, host_memory_space>("Stress tensor Host View", sp->np);
+//        Kokkos::parallel_for("Collect stress tensor", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//          int   ii  = sp->k_p_i_h(i);
+//          stress_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::txx);
+//          stress_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::tyy);
+//          stress_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::tzz);
+//          stress_view(i, 3) = hydro_array->k_h_h(ii, hydro_var::tyz);
+//          stress_view(i, 4) = hydro_array->k_h_h(ii, hydro_var::tzx);
+//          stress_view(i, 5) = hydro_array->k_h_h(ii, hydro_var::txy);
+//        });
+//        auto txx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 0);
+//        auto tyy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 1);
+//        auto tzz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 2);
+//        auto tyz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 3);
+//        auto tzx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 4);
+//        auto txy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 5);
+//        hid_t dataset_txx_id = H5Dcreate(group_id, "txx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_tyy_id = H5Dcreate(group_id, "tyy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_tzz_id = H5Dcreate(group_id, "tzz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_tyz_id = H5Dcreate(group_id, "tyz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_tzx_id = H5Dcreate(group_id, "tzx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        hid_t dataset_txy_id = H5Dcreate(group_id, "txy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_txx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txx_subview.data());
+//        status = H5Dwrite(dataset_tyy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyy_subview.data());
+//        status = H5Dwrite(dataset_tzz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzz_subview.data());
+//        status = H5Dwrite(dataset_tyz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyz_subview.data());
+//        status = H5Dwrite(dataset_tzx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzx_subview.data());
+//        status = H5Dwrite(dataset_txy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txy_subview.data());
+//        H5Dclose(dataset_txx_id);
+//        H5Dclose(dataset_tyy_id);
+//        H5Dclose(dataset_tzz_id);
+//        H5Dclose(dataset_tyz_id);
+//        H5Dclose(dataset_tzx_id);
+//        H5Dclose(dataset_txy_id);
+//      }
+//
+//      // Dump kinetic energy of particle if specified
+//      if(dump_vars & DumpVar::ParticleKE) {
+//        auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
+//        Kokkos::parallel_for("Calculate KE", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//          float dx0 = sp->k_p_h(i, particle_var::dx);
+//          float dy0 = sp->k_p_h(i, particle_var::dy);
+//          float dz0 = sp->k_p_h(i, particle_var::dz);
+//          int   ii  = sp->k_p_i_h(i);
+//          float ux0 = sp->k_p_h(i, particle_var::ux);
+//          float uy0 = sp->k_p_h(i, particle_var::uy);
+//          float uz0 = sp->k_p_h(i, particle_var::uz);
+//          float w0  = sp->k_p_h(i, particle_var::w);
+//          float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+//          float msp = sp->m;
+//          float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+//                                 dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+//          float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+//                                 dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+//          float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+//                                 dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+//          v0 = v0*v0 + v1*v1 + v2*v2;
+//          v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+//          ke_view(i) = v0;
+//        });
+//        hid_t dataset_ke_id = H5Dcreate(group_id, "ke", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
+//        H5Dclose(dataset_ke_id);
+//      }
+//
+//      // Dump int annotations
+//      for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
+//        auto i32_subview = Kokkos::subview(sp->annotations_h.i32, Kokkos::ALL, j);
+//        hid_t dataset_i32_annote_id = H5Dcreate(group_id, sp->annotation_vars.i32_vars[j].c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_i32_annote_id, H5T_STD_I32LE, memspace_id, dataspace_id, H5P_DEFAULT, i32_subview.data());
+//        H5Dclose(dataset_i32_annote_id);
+//      }
+//      // Dump 64-bit integer annotations
+//      for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
+//        auto i64_subview = Kokkos::subview(sp->annotations_h.i64, Kokkos::ALL, j);
+//        hid_t dataset_i64_annote_id = H5Dcreate(group_id, sp->annotation_vars.i64_vars[j].c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_i64_annote_id, H5T_STD_I64LE, memspace_id, dataspace_id, H5P_DEFAULT, i64_subview.data());
+//        H5Dclose(dataset_i64_annote_id);
+//      }
+//      // Dump 32-bit floating-point annotations
+//      for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
+//        auto f32_subview = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL, j);
+//        hid_t dataset_f32_annote_id = H5Dcreate(group_id, sp->annotation_vars.f32_vars[j].c_str(), H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_f32_annote_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, f32_subview.data());
+//        H5Dclose(dataset_f32_annote_id);
+//      }
+//      // Dump 64-bit floating-point annotations
+//      for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
+//        auto f64_subview = Kokkos::subview(sp->annotations_h.f64, Kokkos::ALL, j);
+//        hid_t dataset_f64_annote_id = H5Dcreate(group_id, sp->annotation_vars.f64_vars[j].c_str(), H5T_IEEE_F64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//        status = H5Dwrite(dataset_f64_annote_id, H5T_IEEE_F64LE, memspace_id, dataspace_id, H5P_DEFAULT, f64_subview.data());
+//        H5Dclose(dataset_f64_annote_id);
+//      }
+//
+//      // Close HDF5 objects 
+//      status = H5Dclose(dataset_dx_id);
+//      status = H5Dclose(dataset_dy_id);
+//      status = H5Dclose(dataset_dz_id);
+//      status = H5Dclose(dataset_ux_id);
+//      status = H5Dclose(dataset_uy_id);
+//      status = H5Dclose(dataset_uz_id);
+//      status = H5Dclose(dataset_w_id);
+//      status = H5Dclose(dataset_i_id);
       status = H5Sclose(memspace_id);
       status = H5Sclose(dataspace_id);
     }
     status = H5Gclose(group_id);
     status = H5Fclose(file_id);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Wrote current time step data to hdf5\n");
-//}
 
     // If needed, reset weight to 0 for copied particles
     if(sp->tracer_type == TracerType::Copy) {
@@ -4562,25 +4304,15 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
       auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
       Kokkos::deep_copy(w_subview_h, 0.0);
       Kokkos::deep_copy(w_subview_d, 0.0);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Zeroed out weights for tracers\n");
-//}
     }
 
     // Clear buffers
     sp->nparticles_buffered = 0;
     sp->np_per_ts_io_buffer.clear();
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Wrote data to hdf5\n");
-//}
+    if( rank()==0 )
+        MESSAGE(("Wrote %lu \"%s\" particles", total_particles_written, sp->name));
   }
   H5Pclose(plist_id);
-//MPI_Barrier(MPI_COMM_WORLD);
-//if(rank() == 0) {
-//  printf("Closed plist_id\n");
-//}
 }
 
 void vpic_simulation::dump_tracers_hdf5(const char* sp_name, 
@@ -4691,302 +4423,312 @@ void vpic_simulation::dump_tracers_hdf5(const char* sp_name,
   // Create memspace
   hid_t memspace_id = H5Screate_simple(1, (hsize_t*)(&num_particles), NULL);
 
-  // Create subviews for data
-  auto dx_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dx));
-  auto dy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dy));
-  auto dz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dz));
-  auto ux_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::ux));
-  auto uy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uy));
-  auto uz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uz));
-  auto w_subview  = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::w));
+  write_tracers_to_hdf5(sp, 
+                        grid, 
+                        hydro_array,
+                        interp, 
+                        dump_vars,
+                        group_id, 
+                        dataspace_id, 
+                        memspace_id,
+                        plist_id);
 
-  // Create datasets, one for each variable, using dataspace and default property lists
-  hid_t dataset_dx_id = H5Dcreate(group_id, "dx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_dy_id = H5Dcreate(group_id, "dy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_dz_id = H5Dcreate(group_id, "dz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_ux_id = H5Dcreate(group_id, "ux", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_uy_id = H5Dcreate(group_id, "uy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_uz_id = H5Dcreate(group_id, "uz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_w_id  = H5Dcreate(group_id, "w",  H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_i_id  = H5Dcreate(group_id, "i",  H5T_STD_I32LE,    dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-  // Write data to slab
-  status = H5Dwrite(dataset_dx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dx_subview.data());
-  status = H5Dwrite(dataset_dy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dy_subview.data());
-  status = H5Dwrite(dataset_dz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dz_subview.data());
-  status = H5Dwrite(dataset_ux_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ux_subview.data());
-  status = H5Dwrite(dataset_uy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uy_subview.data());
-  status = H5Dwrite(dataset_uz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uz_subview.data());
-  status = H5Dwrite(dataset_w_id,  H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, w_subview.data());
-  status = H5Dwrite(dataset_i_id,  H5T_STD_I32LE,  memspace_id, dataspace_id, H5P_DEFAULT, sp->k_p_i_h.data());
-
-  // Close datasets
-  status = H5Dclose(dataset_dx_id);
-  status = H5Dclose(dataset_dy_id);
-  status = H5Dclose(dataset_dz_id);
-  status = H5Dclose(dataset_ux_id);
-  status = H5Dclose(dataset_uy_id);
-  status = H5Dclose(dataset_uz_id);
-  status = H5Dclose(dataset_w_id);
-  status = H5Dclose(dataset_i_id);
-
-  using host_memory_space = Kokkos::DefaultHostExecutionSpace::memory_space;
-
-  // Dump Global position if specified
-  if(dump_vars & DumpVar::GlobalPos) {
-    auto pos_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Pos Host View", sp->np);
-    Kokkos::parallel_for("Calculate global position", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      float dx0 = sp->k_p_h(i, particle_var::dx);
-      float dy0 = sp->k_p_h(i, particle_var::dy);
-      float dz0 = sp->k_p_h(i, particle_var::dz);
-      int   ii  = sp->k_p_i_h(i);
-      
-      // Compute global position of particle
-      int nxg_ = grid->nx + 2;
-      int nyg_ = grid->ny + 2;
-      int nzg_ = grid->nz + 2;
-      int i0 = ii % nxg_;
-      int j0 = (ii/nxg_) % nyg_;
-      int k0 = ii/(nxg_*nyg_);
-      float tracer_x = (i0 + (dx0-1)*0.5) * grid->dx + grid->x0;
-      float tracer_y = (j0 + (dy0-1)*0.5) * grid->dy + grid->y0;
-      float tracer_z = (k0 + (dz0-1)*0.5) * grid->dz + grid->z0;
-      pos_view(i, 0) = tracer_x;
-      pos_view(i, 1) = tracer_y;
-      pos_view(i, 2) = tracer_z;
-    });
-    auto posx_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 0);
-    auto posy_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 1);
-    auto posz_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 2);
-    hid_t dataset_posx_id = H5Dcreate(group_id, "posx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_posy_id = H5Dcreate(group_id, "posy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_posz_id = H5Dcreate(group_id, "posz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_posx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posx_subview.data());
-    status = H5Dwrite(dataset_posy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posy_subview.data());
-    status = H5Dwrite(dataset_posz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posz_subview.data());
-    H5Dclose(dataset_posx_id);
-    H5Dclose(dataset_posy_id);
-    H5Dclose(dataset_posz_id);
-  }
-
-  // Dump E field if specified
-  if(dump_vars & DumpVar::Efield) {
-    auto efield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("E field Host View", sp->np);
-    Kokkos::parallel_for("Calculate E field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      float dx0 = sp->k_p_h(i, particle_var::dx);
-      float dy0 = sp->k_p_h(i, particle_var::dy);
-      float dz0 = sp->k_p_h(i, particle_var::dz);
-      int   ii  = sp->k_p_i_h(i);
-      efield_view(i,0) = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
-      efield_view(i,1) = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
-      efield_view(i,2) = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
-    });
-    auto efieldx_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 0);
-    auto efieldy_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 1);
-    auto efieldz_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 2);
-    hid_t dataset_efieldx_id = H5Dcreate(group_id, "ex", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_efieldy_id = H5Dcreate(group_id, "ey", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_efieldz_id = H5Dcreate(group_id, "ez", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_efieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldx_subview.data());
-    status = H5Dwrite(dataset_efieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldy_subview.data());
-    status = H5Dwrite(dataset_efieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldz_subview.data());
-    H5Dclose(dataset_efieldx_id);
-    H5Dclose(dataset_efieldy_id);
-    H5Dclose(dataset_efieldz_id);
-  }
-
-  // Dump B field if specified
-  if(dump_vars & DumpVar::Bfield) {
-    auto bfield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("B field Host View", sp->np);
-    Kokkos::parallel_for("Calculate B field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      float dx0 = sp->k_p_h(i, particle_var::dx);
-      float dy0 = sp->k_p_h(i, particle_var::dy);
-      float dz0 = sp->k_p_h(i, particle_var::dz);
-      int   ii  = sp->k_p_i_h(i);
-      bfield_view(i,0)  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
-      bfield_view(i,1)  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
-      bfield_view(i,2)  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
-    });
-    auto bfieldx_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 0);
-    auto bfieldy_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 1);
-    auto bfieldz_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 2);
-    hid_t dataset_bfieldx_id = H5Dcreate(group_id, "bx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_bfieldy_id = H5Dcreate(group_id, "by", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_bfieldz_id = H5Dcreate(group_id, "bz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_bfieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldx_subview.data());
-    status = H5Dwrite(dataset_bfieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldy_subview.data());
-    status = H5Dwrite(dataset_bfieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldz_subview.data());
-    H5Dclose(dataset_bfieldx_id);
-    H5Dclose(dataset_bfieldy_id);
-    H5Dclose(dataset_bfieldz_id);
-  }
-
-  // Dump current density if specified
-  if(dump_vars & DumpVar::CurrentDensity) {
-    auto current_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Current density Host View", sp->np);
-    Kokkos::parallel_for("Collect current density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = sp->k_p_i_h(i);
-      current_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::jx);
-      current_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::jy);
-      current_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::jz);
-    });
-    auto jx_subview = Kokkos::subview(current_view, Kokkos::ALL(), 0);
-    auto jy_subview = Kokkos::subview(current_view, Kokkos::ALL(), 1);
-    auto jz_subview = Kokkos::subview(current_view, Kokkos::ALL(), 2);
-    hid_t dataset_jx_id = H5Dcreate(group_id, "jx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_jy_id = H5Dcreate(group_id, "jy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_jz_id = H5Dcreate(group_id, "jz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_jx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jx_subview.data());
-    status = H5Dwrite(dataset_jy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jy_subview.data());
-    status = H5Dwrite(dataset_jz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jz_subview.data());
-    H5Dclose(dataset_jx_id);
-    H5Dclose(dataset_jy_id);
-    H5Dclose(dataset_jz_id);
-  }
-
-  // Dump charge density if specified
-  if(dump_vars & DumpVar::ChargeDensity) {
-    auto charge_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("Charge density Host View", sp->np);
-    Kokkos::parallel_for("Calculate charge density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = sp->k_p_i_h(i);
-      charge_view(i) = hydro_array->k_h_h(ii, hydro_var::rho);
-    });
-    hid_t dataset_rho_id = H5Dcreate(group_id, "rho", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_rho_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, charge_view.data());
-    H5Dclose(dataset_rho_id);
-  }
-
-  // Dump momentum density if specified
-  if(dump_vars & DumpVar::MomentumDensity) {
-    auto momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", sp->np);
-    Kokkos::parallel_for("Collect momentum density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = sp->k_p_i_h(i);
-      momentum_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::px);
-      momentum_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::py);
-      momentum_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::pz);
-    });
-    auto px_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 0);
-    auto py_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 1);
-    auto pz_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 2);
-    hid_t dataset_px_id = H5Dcreate(group_id, "px", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_py_id = H5Dcreate(group_id, "py", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_pz_id = H5Dcreate(group_id, "pz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_px_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, px_subview.data());
-    status = H5Dwrite(dataset_py_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, py_subview.data());
-    status = H5Dwrite(dataset_pz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, pz_subview.data());
-    H5Dclose(dataset_px_id);
-    H5Dclose(dataset_py_id);
-    H5Dclose(dataset_pz_id);
-  }
-
-  // Dump kinetic energy density if specified
-  if(dump_vars & DumpVar::KEDensity) {
-    auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-    auto momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", sp->np);
-    Kokkos::parallel_for("Collect KE density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = sp->k_p_i_h(i);
-      ke_view(i) = hydro_array->k_h_h(ii, hydro_var::ke);
-    });
-    hid_t dataset_ke_id = H5Dcreate(group_id, "ke_dens", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
-    H5Dclose(dataset_ke_id);
-  }
-
-  // Dump stress tensor if specified
-  if(dump_vars & DumpVar::StressTensor) {
-    auto stress_view = Kokkos::View<float*[6], Kokkos::LayoutLeft, host_memory_space>("Stress tensor Host View", sp->np);
-    Kokkos::parallel_for("Collect stress tensor", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = sp->k_p_i_h(i);
-      stress_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::txx);
-      stress_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::tyy);
-      stress_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::tzz);
-      stress_view(i, 3) = hydro_array->k_h_h(ii, hydro_var::tyz);
-      stress_view(i, 4) = hydro_array->k_h_h(ii, hydro_var::tzx);
-      stress_view(i, 5) = hydro_array->k_h_h(ii, hydro_var::txy);
-    });
-    auto txx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 0);
-    auto tyy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 1);
-    auto tzz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 2);
-    auto tyz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 3);
-    auto tzx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 4);
-    auto txy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 5);
-    hid_t dataset_txx_id = H5Dcreate(group_id, "txx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_tyy_id = H5Dcreate(group_id, "tyy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_tzz_id = H5Dcreate(group_id, "tzz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_tyz_id = H5Dcreate(group_id, "tyz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_tzx_id = H5Dcreate(group_id, "tzx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_txy_id = H5Dcreate(group_id, "txy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_txx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txx_subview.data());
-    status = H5Dwrite(dataset_tyy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyy_subview.data());
-    status = H5Dwrite(dataset_tzz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzz_subview.data());
-    status = H5Dwrite(dataset_tyz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyz_subview.data());
-    status = H5Dwrite(dataset_tzx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzx_subview.data());
-    status = H5Dwrite(dataset_txy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txy_subview.data());
-    H5Dclose(dataset_txx_id);
-    H5Dclose(dataset_tyy_id);
-    H5Dclose(dataset_tzz_id);
-    H5Dclose(dataset_tyz_id);
-    H5Dclose(dataset_tzx_id);
-    H5Dclose(dataset_txy_id);
-  }
-
-  // Dump kinetic energy of particle if specified
-  if(dump_vars & DumpVar::ParticleKE) {
-    auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-    Kokkos::parallel_for("Calculate KE", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      float dx0 = sp->k_p_h(i, particle_var::dx);
-      float dy0 = sp->k_p_h(i, particle_var::dy);
-      float dz0 = sp->k_p_h(i, particle_var::dz);
-      int   ii  = sp->k_p_i_h(i);
-      float ux0 = sp->k_p_h(i, particle_var::ux);
-      float uy0 = sp->k_p_h(i, particle_var::uy);
-      float uz0 = sp->k_p_h(i, particle_var::uz);
-      float w0  = sp->k_p_h(i, particle_var::w);
-      float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-      float msp = sp->m;
-      float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                             dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-      float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                             dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-      float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                             dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
-      v0 = v0*v0 + v1*v1 + v2*v2;
-      v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
-      ke_view(i) = v0;
-    });
-    hid_t dataset_ke_id = H5Dcreate(group_id, "ke", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
-    H5Dclose(dataset_ke_id);
-  }
-
-  // Dump int annotations
-  for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-    auto i32_subview = Kokkos::subview(sp->annotations_h.i32, Kokkos::ALL, j);
-    hid_t dataset_i32_annote_id = H5Dcreate(group_id, sp->annotation_vars.i32_vars[j].c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_i32_annote_id, H5T_STD_I32LE, memspace_id, dataspace_id, H5P_DEFAULT, i32_subview.data());
-    H5Dclose(dataset_i32_annote_id);
-  }
-  // Dump 64-bit integer annotations
-  for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-    auto i64_subview = Kokkos::subview(sp->annotations_h.i64, Kokkos::ALL, j);
-    hid_t dataset_i64_annote_id = H5Dcreate(group_id, sp->annotation_vars.i64_vars[j].c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_i64_annote_id, H5T_STD_I64LE, memspace_id, dataspace_id, H5P_DEFAULT, i64_subview.data());
-    H5Dclose(dataset_i64_annote_id);
-  }
-  // Dump 32-bit floating-point annotations
-  for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-    auto f32_subview = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL, j);
-    hid_t dataset_f32_annote_id = H5Dcreate(group_id, sp->annotation_vars.f32_vars[j].c_str(), H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_f32_annote_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, f32_subview.data());
-    H5Dclose(dataset_f32_annote_id);
-  }
-  // Dump 64-bit floating-point annotations
-  for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-    auto f64_subview = Kokkos::subview(sp->annotations_h.f64, Kokkos::ALL, j);
-    hid_t dataset_f64_annote_id = H5Dcreate(group_id, sp->annotation_vars.f64_vars[j].c_str(), H5T_IEEE_F64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_f64_annote_id, H5T_IEEE_F64LE, memspace_id, dataspace_id, H5P_DEFAULT, f64_subview.data());
-    H5Dclose(dataset_f64_annote_id);
-  }
+//  // Create subviews for data
+//  auto dx_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dx));
+//  auto dy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dy));
+//  auto dz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dz));
+//  auto ux_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::ux));
+//  auto uy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uy));
+//  auto uz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uz));
+//  auto w_subview  = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::w));
+//
+//  // Create datasets, one for each variable, using dataspace and default property lists
+//  hid_t dataset_dx_id = H5Dcreate(group_id, "dx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//  hid_t dataset_dy_id = H5Dcreate(group_id, "dy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//  hid_t dataset_dz_id = H5Dcreate(group_id, "dz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//  hid_t dataset_ux_id = H5Dcreate(group_id, "ux", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//  hid_t dataset_uy_id = H5Dcreate(group_id, "uy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//  hid_t dataset_uz_id = H5Dcreate(group_id, "uz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//  hid_t dataset_w_id  = H5Dcreate(group_id, "w",  H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//  hid_t dataset_i_id  = H5Dcreate(group_id, "i",  H5T_STD_I32LE,    dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//
+//  // Write data to slab
+//  status = H5Dwrite(dataset_dx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dx_subview.data());
+//  status = H5Dwrite(dataset_dy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dy_subview.data());
+//  status = H5Dwrite(dataset_dz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dz_subview.data());
+//  status = H5Dwrite(dataset_ux_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ux_subview.data());
+//  status = H5Dwrite(dataset_uy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uy_subview.data());
+//  status = H5Dwrite(dataset_uz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uz_subview.data());
+//  status = H5Dwrite(dataset_w_id,  H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, w_subview.data());
+//  status = H5Dwrite(dataset_i_id,  H5T_STD_I32LE,  memspace_id, dataspace_id, H5P_DEFAULT, sp->k_p_i_h.data());
+//
+//  // Close datasets
+//  status = H5Dclose(dataset_dx_id);
+//  status = H5Dclose(dataset_dy_id);
+//  status = H5Dclose(dataset_dz_id);
+//  status = H5Dclose(dataset_ux_id);
+//  status = H5Dclose(dataset_uy_id);
+//  status = H5Dclose(dataset_uz_id);
+//  status = H5Dclose(dataset_w_id);
+//  status = H5Dclose(dataset_i_id);
+//
+//  using host_memory_space = Kokkos::DefaultHostExecutionSpace::memory_space;
+//
+//  // Dump Global position if specified
+//  if(dump_vars & DumpVar::GlobalPos) {
+//    auto pos_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Pos Host View", sp->np);
+//    Kokkos::parallel_for("Calculate global position", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//      float dx0 = sp->k_p_h(i, particle_var::dx);
+//      float dy0 = sp->k_p_h(i, particle_var::dy);
+//      float dz0 = sp->k_p_h(i, particle_var::dz);
+//      int   ii  = sp->k_p_i_h(i);
+//      
+//      // Compute global position of particle
+//      int nxg_ = grid->nx + 2;
+//      int nyg_ = grid->ny + 2;
+//      int nzg_ = grid->nz + 2;
+//      int i0 = ii % nxg_;
+//      int j0 = (ii/nxg_) % nyg_;
+//      int k0 = ii/(nxg_*nyg_);
+//      float tracer_x = (i0 + (dx0-1)*0.5) * grid->dx + grid->x0;
+//      float tracer_y = (j0 + (dy0-1)*0.5) * grid->dy + grid->y0;
+//      float tracer_z = (k0 + (dz0-1)*0.5) * grid->dz + grid->z0;
+//      pos_view(i, 0) = tracer_x;
+//      pos_view(i, 1) = tracer_y;
+//      pos_view(i, 2) = tracer_z;
+//    });
+//    auto posx_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 0);
+//    auto posy_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 1);
+//    auto posz_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 2);
+//    hid_t dataset_posx_id = H5Dcreate(group_id, "posx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_posy_id = H5Dcreate(group_id, "posy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_posz_id = H5Dcreate(group_id, "posz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_posx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posx_subview.data());
+//    status = H5Dwrite(dataset_posy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posy_subview.data());
+//    status = H5Dwrite(dataset_posz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posz_subview.data());
+//    H5Dclose(dataset_posx_id);
+//    H5Dclose(dataset_posy_id);
+//    H5Dclose(dataset_posz_id);
+//  }
+//
+//  // Dump E field if specified
+//  if(dump_vars & DumpVar::Efield) {
+//    auto efield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("E field Host View", sp->np);
+//    Kokkos::parallel_for("Calculate E field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//      float dx0 = sp->k_p_h(i, particle_var::dx);
+//      float dy0 = sp->k_p_h(i, particle_var::dy);
+//      float dz0 = sp->k_p_h(i, particle_var::dz);
+//      int   ii  = sp->k_p_i_h(i);
+//      efield_view(i,0) = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
+//      efield_view(i,1) = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
+//      efield_view(i,2) = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
+//    });
+//    auto efieldx_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 0);
+//    auto efieldy_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 1);
+//    auto efieldz_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 2);
+//    hid_t dataset_efieldx_id = H5Dcreate(group_id, "ex", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_efieldy_id = H5Dcreate(group_id, "ey", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_efieldz_id = H5Dcreate(group_id, "ez", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_efieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldx_subview.data());
+//    status = H5Dwrite(dataset_efieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldy_subview.data());
+//    status = H5Dwrite(dataset_efieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldz_subview.data());
+//    H5Dclose(dataset_efieldx_id);
+//    H5Dclose(dataset_efieldy_id);
+//    H5Dclose(dataset_efieldz_id);
+//  }
+//
+//  // Dump B field if specified
+//  if(dump_vars & DumpVar::Bfield) {
+//    auto bfield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("B field Host View", sp->np);
+//    Kokkos::parallel_for("Calculate B field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//      float dx0 = sp->k_p_h(i, particle_var::dx);
+//      float dy0 = sp->k_p_h(i, particle_var::dy);
+//      float dz0 = sp->k_p_h(i, particle_var::dz);
+//      int   ii  = sp->k_p_i_h(i);
+//      bfield_view(i,0)  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
+//      bfield_view(i,1)  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
+//      bfield_view(i,2)  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
+//    });
+//    auto bfieldx_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 0);
+//    auto bfieldy_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 1);
+//    auto bfieldz_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 2);
+//    hid_t dataset_bfieldx_id = H5Dcreate(group_id, "bx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_bfieldy_id = H5Dcreate(group_id, "by", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_bfieldz_id = H5Dcreate(group_id, "bz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_bfieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldx_subview.data());
+//    status = H5Dwrite(dataset_bfieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldy_subview.data());
+//    status = H5Dwrite(dataset_bfieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldz_subview.data());
+//    H5Dclose(dataset_bfieldx_id);
+//    H5Dclose(dataset_bfieldy_id);
+//    H5Dclose(dataset_bfieldz_id);
+//  }
+//
+//  // Dump current density if specified
+//  if(dump_vars & DumpVar::CurrentDensity) {
+//    auto current_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Current density Host View", sp->np);
+//    Kokkos::parallel_for("Collect current density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//      int   ii  = sp->k_p_i_h(i);
+//      current_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::jx);
+//      current_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::jy);
+//      current_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::jz);
+//    });
+//    auto jx_subview = Kokkos::subview(current_view, Kokkos::ALL(), 0);
+//    auto jy_subview = Kokkos::subview(current_view, Kokkos::ALL(), 1);
+//    auto jz_subview = Kokkos::subview(current_view, Kokkos::ALL(), 2);
+//    hid_t dataset_jx_id = H5Dcreate(group_id, "jx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_jy_id = H5Dcreate(group_id, "jy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_jz_id = H5Dcreate(group_id, "jz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_jx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jx_subview.data());
+//    status = H5Dwrite(dataset_jy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jy_subview.data());
+//    status = H5Dwrite(dataset_jz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jz_subview.data());
+//    H5Dclose(dataset_jx_id);
+//    H5Dclose(dataset_jy_id);
+//    H5Dclose(dataset_jz_id);
+//  }
+//
+//  // Dump charge density if specified
+//  if(dump_vars & DumpVar::ChargeDensity) {
+//    auto charge_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("Charge density Host View", sp->np);
+//    Kokkos::parallel_for("Calculate charge density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//      int   ii  = sp->k_p_i_h(i);
+//      charge_view(i) = hydro_array->k_h_h(ii, hydro_var::rho);
+//    });
+//    hid_t dataset_rho_id = H5Dcreate(group_id, "rho", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_rho_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, charge_view.data());
+//    H5Dclose(dataset_rho_id);
+//  }
+//
+//  // Dump momentum density if specified
+//  if(dump_vars & DumpVar::MomentumDensity) {
+//    auto momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", sp->np);
+//    Kokkos::parallel_for("Collect momentum density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//      int   ii  = sp->k_p_i_h(i);
+//      momentum_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::px);
+//      momentum_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::py);
+//      momentum_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::pz);
+//    });
+//    auto px_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 0);
+//    auto py_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 1);
+//    auto pz_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 2);
+//    hid_t dataset_px_id = H5Dcreate(group_id, "px", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_py_id = H5Dcreate(group_id, "py", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_pz_id = H5Dcreate(group_id, "pz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_px_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, px_subview.data());
+//    status = H5Dwrite(dataset_py_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, py_subview.data());
+//    status = H5Dwrite(dataset_pz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, pz_subview.data());
+//    H5Dclose(dataset_px_id);
+//    H5Dclose(dataset_py_id);
+//    H5Dclose(dataset_pz_id);
+//  }
+//
+//  // Dump kinetic energy density if specified
+//  if(dump_vars & DumpVar::KEDensity) {
+//    auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
+//    auto momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", sp->np);
+//    Kokkos::parallel_for("Collect KE density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//      int   ii  = sp->k_p_i_h(i);
+//      ke_view(i) = hydro_array->k_h_h(ii, hydro_var::ke);
+//    });
+//    hid_t dataset_ke_id = H5Dcreate(group_id, "ke_dens", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
+//    H5Dclose(dataset_ke_id);
+//  }
+//
+//  // Dump stress tensor if specified
+//  if(dump_vars & DumpVar::StressTensor) {
+//    auto stress_view = Kokkos::View<float*[6], Kokkos::LayoutLeft, host_memory_space>("Stress tensor Host View", sp->np);
+//    Kokkos::parallel_for("Collect stress tensor", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//      int   ii  = sp->k_p_i_h(i);
+//      stress_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::txx);
+//      stress_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::tyy);
+//      stress_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::tzz);
+//      stress_view(i, 3) = hydro_array->k_h_h(ii, hydro_var::tyz);
+//      stress_view(i, 4) = hydro_array->k_h_h(ii, hydro_var::tzx);
+//      stress_view(i, 5) = hydro_array->k_h_h(ii, hydro_var::txy);
+//    });
+//    auto txx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 0);
+//    auto tyy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 1);
+//    auto tzz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 2);
+//    auto tyz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 3);
+//    auto tzx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 4);
+//    auto txy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 5);
+//    hid_t dataset_txx_id = H5Dcreate(group_id, "txx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_tyy_id = H5Dcreate(group_id, "tyy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_tzz_id = H5Dcreate(group_id, "tzz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_tyz_id = H5Dcreate(group_id, "tyz", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_tzx_id = H5Dcreate(group_id, "tzx", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    hid_t dataset_txy_id = H5Dcreate(group_id, "txy", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_txx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txx_subview.data());
+//    status = H5Dwrite(dataset_tyy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyy_subview.data());
+//    status = H5Dwrite(dataset_tzz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzz_subview.data());
+//    status = H5Dwrite(dataset_tyz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyz_subview.data());
+//    status = H5Dwrite(dataset_tzx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzx_subview.data());
+//    status = H5Dwrite(dataset_txy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txy_subview.data());
+//    H5Dclose(dataset_txx_id);
+//    H5Dclose(dataset_tyy_id);
+//    H5Dclose(dataset_tzz_id);
+//    H5Dclose(dataset_tyz_id);
+//    H5Dclose(dataset_tzx_id);
+//    H5Dclose(dataset_txy_id);
+//  }
+//
+//  // Dump kinetic energy of particle if specified
+//  if(dump_vars & DumpVar::ParticleKE) {
+//    auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
+//    Kokkos::parallel_for("Calculate KE", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+//      float dx0 = sp->k_p_h(i, particle_var::dx);
+//      float dy0 = sp->k_p_h(i, particle_var::dy);
+//      float dz0 = sp->k_p_h(i, particle_var::dz);
+//      int   ii  = sp->k_p_i_h(i);
+//      float ux0 = sp->k_p_h(i, particle_var::ux);
+//      float uy0 = sp->k_p_h(i, particle_var::uy);
+//      float uz0 = sp->k_p_h(i, particle_var::uz);
+//      float w0  = sp->k_p_h(i, particle_var::w);
+//      float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+//      float msp = sp->m;
+//      float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+//                             dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+//      float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+//                             dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+//      float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+//                             dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+//      v0 = v0*v0 + v1*v1 + v2*v2;
+//      v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+//      ke_view(i) = v0;
+//    });
+//    hid_t dataset_ke_id = H5Dcreate(group_id, "ke", H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
+//    H5Dclose(dataset_ke_id);
+//  }
+//
+//  // Dump int annotations
+//  for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
+//    auto i32_subview = Kokkos::subview(sp->annotations_h.i32, Kokkos::ALL, j);
+//    hid_t dataset_i32_annote_id = H5Dcreate(group_id, sp->annotation_vars.i32_vars[j].c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_i32_annote_id, H5T_STD_I32LE, memspace_id, dataspace_id, H5P_DEFAULT, i32_subview.data());
+//    H5Dclose(dataset_i32_annote_id);
+//  }
+//  // Dump 64-bit integer annotations
+//  for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
+//    auto i64_subview = Kokkos::subview(sp->annotations_h.i64, Kokkos::ALL, j);
+//    hid_t dataset_i64_annote_id = H5Dcreate(group_id, sp->annotation_vars.i64_vars[j].c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_i64_annote_id, H5T_STD_I64LE, memspace_id, dataspace_id, H5P_DEFAULT, i64_subview.data());
+//    H5Dclose(dataset_i64_annote_id);
+//  }
+//  // Dump 32-bit floating-point annotations
+//  for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
+//    auto f32_subview = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL, j);
+//    hid_t dataset_f32_annote_id = H5Dcreate(group_id, sp->annotation_vars.f32_vars[j].c_str(), H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_f32_annote_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, f32_subview.data());
+//    H5Dclose(dataset_f32_annote_id);
+//  }
+//  // Dump 64-bit floating-point annotations
+//  for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
+//    auto f64_subview = Kokkos::subview(sp->annotations_h.f64, Kokkos::ALL, j);
+//    hid_t dataset_f64_annote_id = H5Dcreate(group_id, sp->annotation_vars.f64_vars[j].c_str(), H5T_IEEE_F64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+//    status = H5Dwrite(dataset_f64_annote_id, H5T_IEEE_F64LE, memspace_id, dataspace_id, H5P_DEFAULT, f64_subview.data());
+//    H5Dclose(dataset_f64_annote_id);
+//  }
 
   // If needed, reset weight to 0 for copied particles
   if(sp->tracer_type == TracerType::Copy) {
