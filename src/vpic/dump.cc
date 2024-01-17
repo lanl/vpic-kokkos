@@ -383,6 +383,21 @@ static FieldInfo fieldInfo[12] = {
 	{ "Cell Material", "SCALAR", "1", "INTEGER", sizeof(material_id) }
 }; // fieldInfo
 
+#ifdef FIELD_IONIZATION
+static HydroInfo hydroInfo[6] = {
+	{ "Current Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
+	{ "Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
+	{ "Momentum Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
+	{ "Kinetic Energy Density", "SCALAR", "1", "FLOATING_POINT",
+		sizeof(float) },
+	{ "Stress Tensor", "TENSOR", "6", "FLOATING_POINT", sizeof(float) },
+	{ "Maximum Macro Charge", "SCALAR", "1", "FLOATING_POINT", sizeof(float) }
+	/*
+	{ "STRESS_DIAGONAL", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }
+	{ "STRESS_OFFDIAGONAL", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }
+	*/
+}; // hydroInfo
+#else //FIELD_IONIZATION
 static HydroInfo hydroInfo[5] = {
 	{ "Current Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
 	{ "Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
@@ -395,6 +410,7 @@ static HydroInfo hydroInfo[5] = {
 	{ "STRESS_OFFDIAGONAL", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }
 	*/
 }; // hydroInfo
+#endif //FIELD_IONIZATION
 
 void
 vpic_simulation::create_field_list( char * strlist,

@@ -328,6 +328,12 @@ accumulate_hydro_p_kokkos(
           
     // Accumulate the hydro fields
 #ifdef FIELD_IONIZATION
+    if (p_q < 0) {
+      Kokkos::atomic_fetch_min(&k_hydro(ii, hydro_var::max_q), p_q); //electrons
+    } else {
+      Kokkos::atomic_fetch_max(&k_hydro(ii, hydro_var::max_q), p_q);
+    }
+	
     #define ACCUM_HYDRO( wn, i )                        \
     t  = p_q*wn;        /* t  = (p_q w/V) trilin_n */   \
     k_hydro_access(i, hydro_var::jx)  += t*vx;                       \

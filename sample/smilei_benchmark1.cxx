@@ -206,8 +206,8 @@ begin_initialization {
 
 
   // Physical parameters
-  int I1_present = 0; // carbon
-  int I2_present = 1; // hydrogen
+  int I1_present = 1; // carbon
+  int I2_present = 0; // hydrogen
 
   double n_e_over_n_crit       = 90;       // n_e/n_crit in solid slab
   double laser_intensity_W_cm2;
@@ -253,11 +253,11 @@ begin_initialization {
   double ny = 1;
   double nz = (6/lambda_SI)*Lx_SI; // 6 cells per wavelength (60 cells)
 
-  double nppc = 2000;  // Average number of macro particles/cell of each species
+  double nppc = 200;  // Average number of macro particles/cell of each species
 
-  int topology_x = nproc();
+  int topology_x = 1;
   int topology_y = 1;
-  int topology_z = 1;
+  int topology_z = 6;
   double quota = 1;             // Run quota in hours.  
   double quota_sec = quota*3600;  // Run quota in seconds. 
 
@@ -920,13 +920,25 @@ begin_initialization {
   //global->hedParams.output_variables( all );
   global->hedParams.output_variables(  current_density  | charge_density |
                                        momentum_density | ke_density |
-                                       stress_tensor );
+                                       stress_tensor 
+                                       #ifdef FIELD_IONIZATION
+				       | maximum_charge
+				       #endif
+				       );
   global->hI1dParams.output_variables(  current_density  | charge_density |
                                        momentum_density | ke_density |
-                                       stress_tensor );
+                                       stress_tensor
+				       #ifdef FIELD_IONIZATION
+				       | maximum_charge
+				       #endif
+				       );
   global->hI2dParams.output_variables( current_density  | charge_density |
                                        momentum_density | ke_density |
-                                       stress_tensor );
+                                       stress_tensor
+				       #ifdef FIELD_IONIZATION
+				       | maximum_charge
+				       #endif
+				       );
 
  /*--------------------------------------------------------------------------
   * Convenience functions for simlog output

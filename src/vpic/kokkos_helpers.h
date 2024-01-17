@@ -21,7 +21,11 @@
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
+#ifdef FIELD_IONIZATION
+#define HYDRO_VAR_COUNT 15
+#else
 #define HYDRO_VAR_COUNT 14
+#endif
 #define NUM_J_DIMS 3
 
 #ifdef KOKKOS_ENABLE_CUDA
@@ -246,6 +250,9 @@ namespace hydro_var {
         tyz = 11,
         tzx = 12,
         txy = 13,
+      #ifdef FIELD_IONIZATION
+        max_q = 14,
+      #endif
     };
 };
 
