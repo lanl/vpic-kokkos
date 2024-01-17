@@ -216,6 +216,27 @@ accumulate_hydro_p_kokkos(
   const int stride_43 = VOXEL(0,0,1, sp->g->nx,sp->g->ny,sp->g->nz) -
                         VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
 
+  // Calculate the average macro charge
+  //FIXME: check performace on cpu
+  Kokkos::View<int*, Kokkos::DefaultExecutionSpace> particle_count("particle_count", nv);
+  Kokkos::parallel_for("average_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np),
+    KOKKOS_LAMBDA(size_t p_index)
+    {
+      float p_q  = k_particles(p_index, particle_var::charge);  
+      int ii = k_particles_i(p_index);
+      Kokkos::atomic_add(&particle_count(ii), 1); // number of particles in each cell
+      Kokkos::atomic_add(&k_hydro(ii, hydro_var::avg_q), p_q); // total macro charge in each cell
+    });
+  Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, nv),
+    KOKKOS_LAMBDA(size_t ii)
+    {
+      // Calculate mean charge only if there are particles in the cell
+      if (particle_count(ii) > 0) {
+          k_hydro(ii, hydro_var::avg_q) /= static_cast<float>(particle_count(ii));
+      }
+    });
+  
+  
   //for( n=0; n<np; n++ ) {
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index)
@@ -328,6 +349,8 @@ accumulate_hydro_p_kokkos(
           
     // Accumulate the hydro fields
 #ifdef FIELD_IONIZATION
+    //FIXME: check performace on cpu
+    // there is no comperator so I need to do this with the view and not the SA
     if (p_q < 0) {
       Kokkos::atomic_fetch_min(&k_hydro(ii, hydro_var::max_q), p_q); //electrons
     } else {

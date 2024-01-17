@@ -202,7 +202,8 @@ typedef struct hydro {
   float txx, tyy, tzz;   // Stress diagonal            => <p_i v_j f>, i==j
   float tyz, tzx, txy;   // Stress off-diagonal        => <p_i v_j f>, i!=j
  #ifdef FIELD_IONIZATION 
-  float max_q;           // Maximum charge
+  float max_q;           // Maximum macro charge
+  float avg_q;           // Average macro charge
  #endif
   float _pad[2];         // 16-byte align
 } hydro_t;

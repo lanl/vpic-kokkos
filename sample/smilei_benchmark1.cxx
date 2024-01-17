@@ -206,8 +206,8 @@ begin_initialization {
 
 
   // Physical parameters
-  int I1_present = 1; // carbon
-  int I2_present = 0; // hydrogen
+  int I1_present = 0; // carbon
+  int I2_present = 1; // hydrogen
 
   double n_e_over_n_crit       = 90;       // n_e/n_crit in solid slab
   double laser_intensity_W_cm2;
@@ -255,9 +255,9 @@ begin_initialization {
 
   double nppc = 200;  // Average number of macro particles/cell of each species
 
-  int topology_x = 1;
+  int topology_x = nproc();
   int topology_y = 1;
-  int topology_z = 6;
+  int topology_z = 1;
   double quota = 1;             // Run quota in hours.  
   double quota_sec = quota*3600;  // Run quota in seconds. 
 
@@ -923,6 +923,7 @@ begin_initialization {
                                        stress_tensor 
                                        #ifdef FIELD_IONIZATION
 				       | maximum_charge
+				       | average_charge
 				       #endif
 				       );
   global->hI1dParams.output_variables(  current_density  | charge_density |
@@ -930,6 +931,7 @@ begin_initialization {
                                        stress_tensor
 				       #ifdef FIELD_IONIZATION
 				       | maximum_charge
+				       | average_charge
 				       #endif
 				       );
   global->hI2dParams.output_variables( current_density  | charge_density |
@@ -937,6 +939,7 @@ begin_initialization {
                                        stress_tensor
 				       #ifdef FIELD_IONIZATION
 				       | maximum_charge
+				       | average_charge
 				       #endif
 				       );
 

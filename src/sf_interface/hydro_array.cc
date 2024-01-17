@@ -540,6 +540,7 @@ hydro_array_t::copy_to_host() {
     h_l[i].txy = k_h(i, hydro_var::txy);
   #ifdef FIELD_IONIZATION
     h_l[i].max_q = k_h(i, hydro_var::max_q);
+    h_l[i].avg_q = k_h(i, hydro_var::avg_q);
   #endif
   });
 
