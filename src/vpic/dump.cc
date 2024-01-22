@@ -79,6 +79,69 @@ vpic_simulation::dump_energies( const char *fname,
   }
 }
 
+#ifdef FIELD_IONIZATION
+void
+vpic_simulation::dump_ionization_states( const char *fname,
+                                int append ) {
+
+  Kokkos::View<double*, Kokkos::LayoutLeft> N_ions;
+  species_t *sp;
+  FileIO fileIO;
+  FileIOStatus status(fail);
+
+  if( !fname ) ERROR(("Invalid file name"));
+
+  // Iterate over each species
+  LIST_FOR_EACH(sp, species_list) {
+    // Ignore electrons
+    if (std::string(sp->name) == "electron") {
+      // Skip file creation for the "electron" species
+      continue;
+    }
+
+    // Create a filename based on the original fname and species name
+    std::string speciesFileNameStr = std::string(fname) + "_" + sp->name;
+    const char* speciesFileName = speciesFileNameStr.c_str();
+
+    if (rank() == 0) {
+      // Open the file for the current species
+      status = fileIO.open(speciesFileName, append ? io_append : io_write);
+
+      if (status == fail)
+        ERROR(("Could not open \"%s\".", speciesFileName));
+      else {
+        if (append == 0) {
+          // Dynamically generate the layout string
+          std::string layoutString = "%% Layout\n%% Number of particles in each ionization state\n%% step";
+          for (size_t i = 0; i <= (sp->ionization_energy).extent(0); ++i) {
+            layoutString += " " + std::to_string(i) + "+";
+          }
+          fileIO.print(layoutString.c_str());
+          fileIO.print("\n");
+          fileIO.print("%% timestep = %e\n", grid->dt);
+        }
+        fileIO.print("%li", (long)step());
+      }
+    } // if rank
+
+    N_ions = ionization_states_kokkos( sp ); // Number of particles in each ionization state
+
+    if (rank() == 0 && status != fail) {
+      for (size_t i = 0; i < N_ions.extent(0); ++i) {
+        fileIO.print(" %e", N_ions(i));
+      }
+    }
+
+    if( rank()==0 && status!=fail ) {
+      fileIO.print( "\n" );
+      if( fileIO.close() ) ERROR(("File close failed on dump ionization states!!!"));
+    }
+
+  } // species loop
+
+}
+#endif
+
 // Note: dump_species/materials assume that names do not contain any \n!
 
 void

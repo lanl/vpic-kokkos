@@ -246,6 +246,9 @@ public:
   void dump_energies( const char *fname, int append = 1 );
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
+#if defined(FIELD_IONIZATION)
+  void dump_ionization_states( const char *fname, int append = 1 );
+#endif
 
   // Binary dumps
   void dump_grid( const char *fbase );

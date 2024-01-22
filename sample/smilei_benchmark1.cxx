@@ -70,6 +70,7 @@ begin_globals {
   double emax;                   // E0 of the laser
   double omega_0;                // w0/wpe
   int energies_interval;        // how frequently to dump energies
+  int ionization_states_interval; // how frequently to dump ionization states
   int    field_interval;         // how frequently to dump field built-in
                                  // diagnostic
   int    restart_interval; 	 // how frequently to write restart file. 
@@ -255,9 +256,9 @@ begin_initialization {
 
   double nppc = 200;  // Average number of macro particles/cell of each species
 
-  int topology_x = nproc();
+  int topology_x = 1;
   int topology_y = 1;
-  int topology_z = 1;
+  int topology_z = 2;
   double quota = 1;             // Run quota in hours.  
   double quota_sec = quota*3600;  // Run quota in seconds. 
 
@@ -377,6 +378,7 @@ begin_initialization {
 
   // Diagnostics intervals.  
   int energies_interval = 50;
+  int ionization_states_interval = 10;
   int field_interval    = 10;//int(5./omega_L_SI / time_to_SI / dt);
   int particle_interval = 10*field_interval;
   int restart_interval = 400;
@@ -454,6 +456,7 @@ begin_initialization {
     fprintf(out, "%.17e   w_I2\n", w_I2);
     fprintf(out, "%d   Field interval\n", field_interval);
     fprintf(out, "%d   Energies interval\n", energies_interval);
+    fprintf(out, "%d   ionization_states_interval\n",ionization_states_interval);
     fprintf(out, "%d   Tracer interval\n", 0);
     fprintf(out, "%d   Restart interval\n", restart_interval);
     fprintf(out, "%d   Number of tracers per species\n", 0);
@@ -515,6 +518,7 @@ begin_initialization {
   sim_log("* Radiation damping:             "<<damp);
   sim_log("* Fraction of courant limit:     "<<cfl_req);
   sim_log("* energies_interval:             "<<energies_interval);
+  sim_log("* ionization_states_interval:    "<<ionization_states_interval);
   sim_log("* field_interval:                "<<field_interval);
   sim_log("* restart interval:              "<<restart_interval);
   sim_log("* random number base seed:       "<<rng_seed);
@@ -538,6 +542,7 @@ begin_initialization {
   current_injection_interval = -1;
 
   global->energies_interval        = energies_interval;
+  global->ionization_states_interval = ionization_states_interval;
   global->field_interval           = field_interval; 
   global->restart_interval         = restart_interval;
   global->quota_check_interval = quota_check_interval;
@@ -1043,6 +1048,11 @@ begin_diagnostics {
   // energy in various fields/particles 
   if( should_dump(energies) ) {
             dump_energies( "rundata/energies", step() ==0 ? 0 : 1 );
+  } //if
+
+  // ioization states
+  if( should_dump(ionization_states) ) {
+            dump_ionization_states( "rundata/ionization_states", step() ==0 ? 0 : 1 );
   } //if
 
   if ( should_dump(field) ) {

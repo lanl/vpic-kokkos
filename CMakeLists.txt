@@ -61,6 +61,8 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
 
+option(VPIC_DUMP_IONIZATION_STATES "If the code should dump ionizationstates everytimestep for debugging" OFF)
+
 option(VPIC_ENABLE_AUTO_TUNING "Enable automatic tuning based on architecture" ON)
 
 option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
@@ -345,6 +347,10 @@ if(FIELD_IONIZATION)
   add_definitions(-DFIELD_IONIZATION)
 #  add_compile_definitions(-DFIELD_IONIZATION)
   set(FIELD_IONIZATION True)
+
+  if (VPIC_DUMP_IONIZATION_STATES)
+      add_definitions(-DDUMP_IONIZATION_STATES)
+  endif(VPIC_DUMP_IONIZATION_STATES)
 endif(FIELD_IONIZATION)
 
 #------------------------------------------------------------------------------#

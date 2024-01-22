@@ -9,6 +9,52 @@
 // keep dumps prettily formatted, only the first 16 characters of the
 // timer name is printed on profile dumps.
 
+#ifdef FIELD_IONIZATION
+#define PROFILE_TIMERS(_) \
+  _( clear_accumulators ) \
+  _( sort_p            ) \
+  _( collision_model   ) \
+  _( advance_p         ) \
+  _( reduce_accumulators ) \
+  _( emission_model    ) \
+  _( boundary_p        ) \
+  _( clear_jf          ) \
+  _( unload_accumulator ) \
+  _( synchronize_jf    ) \
+  _( advance_b         ) \
+  _( advance_e         ) \
+  _( clear_rhof        ) \
+  _( accumulate_rho_p  ) \
+  _( synchronize_rho   ) \
+  _( compute_div_e_err ) \
+  _( compute_rms_div_e_err ) \
+  _( clean_div_e       ) \
+  _( compute_div_b_err ) \
+  _( compute_rms_div_b_err ) \
+  _( clean_div_b       ) \
+  _( synchronize_tang_e_norm_b ) \
+  _( load_interpolator ) \
+  _( compute_curl_b    ) \
+  _( compute_rhob      ) \
+  _( uncenter_p        ) \
+  _( user_initialization ) \
+  _( user_particle_collisions ) \
+  _( user_particle_injection ) \
+  _( user_current_injection ) \
+  _( user_field_injection ) \
+  _( sort_particles ) \
+  _( field_sa_contributions ) \
+  _( dump_energies ) \
+  _( dump_ionization_states ) \
+  _( FIELD_DATA_MOVEMENT ) \
+  _( PARTICLE_DATA_MOVEMENT ) \
+  _( JF_ACCUM_DATA_MOVEMENT ) \
+  _( INTERPOLATOR_DATA_MOVEMENT ) \
+  _( BACKFILL ) \
+  _( BACKFILL_COMPRESS ) \
+  _( user_data_movement ) \
+  _( user_diagnostics  )
+#else
 #define PROFILE_TIMERS(_) \
   _( clear_accumulators ) \
   _( sort_p            ) \
@@ -52,6 +98,7 @@
   _( BACKFILL_COMPRESS ) \
   _( user_data_movement ) \
   _( user_diagnostics  )
+#endif
 
 enum profile_internal_use_only_timers {
   profile_internal_use_only_invalid_timer = -1,
