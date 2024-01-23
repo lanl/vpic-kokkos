@@ -1057,9 +1057,11 @@ begin_diagnostics {
   } //if
 
   // ioization states
+ #ifdef FIELD_IONIZATION
   if( should_dump(ionization_states) ) {
             dump_ionization_states( "rundata/ionization_states", step() ==0 ? 0 : 1 );
   } //if
+ #endif
 
   if ( should_dump(field) ) {
     field_array->copy_to_host();
