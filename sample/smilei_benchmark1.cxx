@@ -207,8 +207,8 @@ begin_initialization {
 
 
   // Physical parameters
-  int I1_present = 0; // carbon
-  int I2_present = 1; // hydrogen
+  int I1_present = 1; // carbon
+  int I2_present = 0; // hydrogen
 
   double n_e_over_n_crit       = 90;       // n_e/n_crit in solid slab
   double laser_intensity_W_cm2;
@@ -254,9 +254,9 @@ begin_initialization {
   double ny = 1;
   double nz = (6/lambda_SI)*Lx_SI; // 6 cells per wavelength (60 cells)
 
-  double nppc = 200;  // Average number of macro particles/cell of each species
+  double nppc = 1000;  // Average number of macro particles/cell of each species
 
-  int topology_x = 1;
+  int topology_x = 2;
   int topology_y = 1;
   int topology_z = 2;
   double quota = 1;             // Run quota in hours.  
@@ -378,7 +378,7 @@ begin_initialization {
 
   // Diagnostics intervals.  
   int energies_interval = 50;
-  int ionization_states_interval = 10;
+  int ionization_states_interval = 1;
   int field_interval    = 10;//int(5./omega_L_SI / time_to_SI / dt);
   int particle_interval = 10*field_interval;
   int restart_interval = 400;

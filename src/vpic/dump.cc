@@ -118,7 +118,7 @@ vpic_simulation::dump_ionization_states( const char *fname,
           }
           fileIO.print(layoutString.c_str());
           fileIO.print("\n");
-          fileIO.print("%% timestep = %e\n", grid->dt);
+          fileIO.print("%% timestep_to_SI = %e\n", grid->dt*grid->t_to_SI);
         }
         fileIO.print("%li", (long)step());
       }
