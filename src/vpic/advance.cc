@@ -382,7 +382,7 @@ int vpic_simulation::advance(void)
   TIC dump_energies("energies.txt", 1); TOC( dump_energies, 1);
 #endif
 
-#if defined(DUMP_IONIZATION_STATE) && defined(FIELD_IONIZATION)
+#if defined(DUMP_IONIZATION_STATES) && defined(FIELD_IONIZATION)
   TIC dump_ionization_states("ionization_states.txt", 1); TOC( dump_ionization_states, 1);
 #endif
 

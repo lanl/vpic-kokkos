@@ -305,27 +305,33 @@ begin_initialization {
 
   // I1 - carbon
   const int num_elements_I1 = 6;
-  Kokkos::View<double*> ionization_energy_I1("my_kokkos_view", num_elements_I1);
+  Kokkos::View<double*,Kokkos::HostSpace> ionization_energy_I1("my_kokkos_view", num_elements_I1);
   double ionization_energy_I1_values[] = {11.26030, 24.38332, 47.8878, 64.4939, 392.087, 489.99334}; // in eV
   for (int i = 0; i < num_elements_I1; ++i) {
       ionization_energy_I1(i) = ionization_energy_I1_values[i];
   }
+  Kokkos::View<double*> ionization_energy_I1_d("deviceView_I1",num_elements_I1);
+  Kokkos::deep_copy(ionization_energy_I1_d, ionization_energy_I1); // copy to device
 
   // I2 - hydrogen
   const int num_elements_I2 = 1;
-  Kokkos::View<double*> ionization_energy_I2("my_kokkos_view", num_elements_I2);
+  Kokkos::View<double*,Kokkos::HostSpace> ionization_energy_I2("my_kokkos_view", num_elements_I2);
   double ionization_energy_I2_values[] = {13.6}; // in eV
   for (int i = 0; i < num_elements_I2; ++i) {
       ionization_energy_I2(i) = ionization_energy_I2_values[i];
   }
+  Kokkos::View<double*> ionization_energy_I2_d("ionization_energy_I2_d",num_elements_I2);
+  Kokkos::deep_copy(ionization_energy_I2_d, ionization_energy_I2); // copy to device
 
   // electron
   const int num_elements_electron = 1;
-  Kokkos::View<double*> ionization_energy_electron("my_kokkos_view", num_elements_electron);
+  Kokkos::View<double*,Kokkos::HostSpace> ionization_energy_electron("my_kokkos_view", num_elements_electron);
   double ionization_energy_electron_values[] = {0}; // in eV
   for (int i = 0; i < num_elements_electron; ++i) {
       ionization_energy_electron(i) = ionization_energy_electron_values[i];
   }
+  Kokkos::View<double*> ionization_energy_electron_d("ionization_energy_electron_d",num_elements_electron);
+  Kokkos::deep_copy(ionization_energy_electron_d, ionization_energy_electron); // copy to device
 
   
   double c2 = c_SI*c_SI;
@@ -378,7 +384,7 @@ begin_initialization {
 
   // Diagnostics intervals.  
   int energies_interval = 50;
-  int ionization_states_interval = 1;
+  int ionization_states_interval = 20;
   int field_interval    = 10;//int(5./omega_L_SI / time_to_SI / dt);
   int particle_interval = 10*field_interval;
   int restart_interval = 400;
@@ -619,14 +625,14 @@ begin_initialization {
   sim_log("Setting up ions. ");
     if ( I1_present ) {
       #if defined(FIELD_IONIZATION)
-       ion_I1 = define_species("I1", q_I1, ionization_energy_I1, qn,qm,ql, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
+       ion_I1 = define_species("I1", q_I1, ionization_energy_I1_d, qn,qm,ql, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
       #else
 	ion_I1 = define_species("I1", q_I1, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0); // FIXME: q needs to be removed from define_species when field ionization is on.
       #endif
     }
     if ( I2_present ) {
       #if defined(FIELD_IONIZATION)
-       ion_I2 = define_species("I2", q_I2, ionization_energy_I2, qn,qm,ql, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
+       ion_I2 = define_species("I2", q_I2, ionization_energy_I2_d, qn,qm,ql, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
       #else
 	ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0); // FIXME: q needs to be removed from define_species when field ionization is on.
       #endif
@@ -644,7 +650,7 @@ begin_initialization {
   // Electrons need to be defined last in input deck when field ionization is enabled
   species_t *electron;
   #if defined(FIELD_IONIZATION)
-   electron = define_species("electron", -1.*e_c, ionization_energy_electron,0,0,0, m_e_c,max_local_np_e, max_local_nm_e, 20, 0);
+   electron = define_species("electron", -1.*e_c, ionization_energy_electron_d,0,0,0, m_e_c,max_local_np_e, max_local_nm_e, 20, 0);
   #else  
     electron = define_species("electron", -1.*e_c, m_e_c, max_local_np_e, max_local_nm_e, 20, 0);
   #endif
