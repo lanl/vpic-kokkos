@@ -439,6 +439,7 @@ advance_p_kokkos_unified(
   Kokkos::deep_copy(k_nm, 0);
 
 #ifdef FIELD_IONIZATION
+  if (sp != sp_e && epsilon_eV_list(0) != 0){
   // constants
   float q_e_c   = sp_e->q;     // code units, FIXME: this might need to come from grid struct
   float t_to_SI = g->t_to_SI;  // code to SI
@@ -469,16 +470,17 @@ advance_p_kokkos_unified(
   float l = sp->ql; // angular momentum quantum number
   float lambda_SI = g->lambda; // in SI units
 
-
   if( t_to_SI == 0 || l_to_SI == 0 || q_to_SI == 0 || m_to_SI == 0 || lambda_SI == 0)
   {
    ERROR(( "Conversion factors and laser wavelength needs to be passed as grid variables when field ionization is enabled." ));
   }
 
-  if( sp!=sp_e && (n == 0 || epsilon_eV_list(0) == 0) )
+  if( sp!=sp_e && n == 0 )
   {
-   ERROR(( "Ionization energies and quantum numbers need to be passed to species struct when field ionization is enabled." ));
+    ERROR(( "Quantum numbers need to be passed to species struct when field ionization is enabled." )); 
   }
+  
+  } // if electron or if ionization isnt desired for species
 #endif  
 
 // Determine whether to use accumulators
@@ -628,13 +630,12 @@ advance_p_kokkos_unified(
         hay[LANE] = qdt_2mc*( (fey[LANE] + dz[LANE]*fdeydz[LANE] ) + dx[LANE]*(fdeydx[LANE] + dz[LANE]*fd2eydzdx[LANE]) );
         haz[LANE] = qdt_2mc*( (fez[LANE] + dx[LANE]*fdezdx[LANE] ) + dy[LANE]*(fdezdy[LANE] + dx[LANE]*fd2ezdxdy[LANE]) );
 		
-#ifdef FIELD_IONIZATION	
+#ifdef FIELD_IONIZATION
 	// ***** Field Ioization *****
-	// Declate varviables
-	bool multiphoton_ionised = false;
-	float K;
-	
-	if (sp != sp_e){ // FIXME: need to check which species the user wants ionization enabled on
+	if (sp != sp_e && epsilon_eV_list(0) != 0){
+       	  // Declate varviables
+       	  bool multiphoton_ionised = false;
+       	  float K;
 	  
 	  // Check if the particle is fully ionized already
           int N_ionization        = int(abs(charge[LANE])); // Current ionization state of the particle
@@ -669,7 +670,6 @@ advance_p_kokkos_unified(
             // Get the appropriate ionization energy
             float epsilon_eV = epsilon_eV_list(int(N_ionization)); // [eV], ionization energy
             float epsilon_au = epsilon_eV/27.2;         // atomic units, ionization energy
-            float epsilon_SI = epsilon_au*4.3597463e-18;// [J],  ionization energy
            
             // Calculate stuff
 	    K                    = floor(epsilon_au/omega_au)+1; // number of photons required for multiphoton ionization          
@@ -678,7 +678,6 @@ advance_p_kokkos_unified(
             float n_star         = (Z_star + 1.0)/sqrt(2*epsilon_au); // effective principle quantum number
             float l_star         = n_star - 1.0; // angular momentum
             float T_0            = M_PI*Z/(abs(epsilon_au) * sqrt(2*abs(epsilon_au))); // period of classical radial trajectories
-            float gamma_keldysh  = omega_au*sqrt(2*m_e_au*epsilon_au)/(q_e_au*E_au);
           
             // Ionization events are tested for every particle with a bound electron at every timestep
             
@@ -1330,6 +1329,7 @@ advance_p_kokkos_gpu(
   Kokkos::deep_copy(k_nm, 0);
 
 #ifdef FIELD_IONIZATION
+  if (sp != sp_e && epsilon_eV_list(0) != 0){
   // constants
   float q_e_c   = sp_e->q;     // code units
   float t_to_SI = g->t_to_SI;  // code to SI
@@ -1379,8 +1379,10 @@ advance_p_kokkos_gpu(
 
   if( sp!=sp_e && (n == 0 || epsilon_eV_list_h(0) == 0) )
   {
-   ERROR(( "Ionization energies and quantum numbers need to be passed to species struct when field ionization is enabled." ));
+    ERROR(( "Quantum numbers need to be passed to species struct when field ionization is enabled." ));
   }
+
+  } // if electrons or if ionization isnt desired for specied 
 #endif
   
 #ifdef VPIC_ENABLE_HIERARCHICAL
@@ -1418,12 +1420,11 @@ advance_p_kokkos_gpu(
 
 #ifdef FIELD_IONIZATION
     // ***** Field Ioization *****
+    if (sp != sp_e && epsilon_eV_list(0) != 0){
     // Declare varviables
     bool multiphoton_ionised = false;
     float K;
 	
-    // FIXME: need to check which species the user wants ionization enabled on
-    if (sp != sp_e){
     // Check if the particle is fully ionized already
     int N_ionization        = int(abs(charge)); // Current ionization state of the particle
     int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
@@ -1457,7 +1458,6 @@ advance_p_kokkos_gpu(
       // Get the appropriate ionization energy
       float epsilon_eV = epsilon_eV_list_d(int(N_ionization)); // [eV], ionization energy
       float epsilon_au = epsilon_eV/27.2;         // atomic units, ionization energy
-      float epsilon_SI = epsilon_au*4.3597463e-18;// [J],  ionization energy
 
       // Calculate stuff
       K                    = floor(epsilon_au/omega_au)+1; // number of photons required for multiphoton ionization       
@@ -1466,7 +1466,6 @@ advance_p_kokkos_gpu(
       float n_star         = (Z_star + 1.0)/sqrt(2*epsilon_au); // effective principle quantum number
       float l_star         = n_star - 1.0; // angular momentum
       float T_0            = M_PI*Z/(abs(epsilon_au) * sqrt(2*abs(epsilon_au))); // period of classical radial trajectories
-      float gamma_keldysh  = omega_au*sqrt(2*m_e_au*epsilon_au)/(q_e_au*E_au);
 
       // Ionization events are tested for every particle with a bound electron at every timestep
       // Choose the ionization process based on the E-field at the particle

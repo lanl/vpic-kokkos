@@ -384,7 +384,7 @@ begin_initialization {
 
   // Diagnostics intervals.  
   int energies_interval = 50;
-  int ionization_states_interval = 20;
+  int ionization_states_interval = 1;
   int field_interval    = 10;//int(5./omega_L_SI / time_to_SI / dt);
   int particle_interval = 10*field_interval;
   int restart_interval = 400;

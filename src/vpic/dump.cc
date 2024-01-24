@@ -94,8 +94,9 @@ vpic_simulation::dump_ionization_states( const char *fname,
   // Iterate over each species
   LIST_FOR_EACH(sp, species_list) {
     // Ignore electrons
-    if (std::string(sp->name) == "electron") {
-      // Skip file creation for the "electron" species
+    //auto ionization_energy = sp->ionization_energy;
+    if (std::string(sp->name) == "electron" || sp->ionization_energy(0) == 0) {
+      // Skip file creation for the "electron" species or when ionization isnt desired for a species
       continue;
     }
 
