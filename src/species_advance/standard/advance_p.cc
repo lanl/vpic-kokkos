@@ -439,7 +439,6 @@ advance_p_kokkos_unified(
   Kokkos::deep_copy(k_nm, 0);
 
 #ifdef FIELD_IONIZATION
-  if (sp != sp_e && epsilon_eV_list(0) != 0){
   // constants
   float q_e_c   = sp_e->q;     // code units, FIXME: this might need to come from grid struct
   float t_to_SI = g->t_to_SI;  // code to SI
@@ -479,8 +478,6 @@ advance_p_kokkos_unified(
   {
     ERROR(( "Quantum numbers need to be passed to species struct when field ionization is enabled." )); 
   }
-  
-  } // if electron or if ionization isnt desired for species
 #endif  
 
 // Determine whether to use accumulators
@@ -632,7 +629,7 @@ advance_p_kokkos_unified(
 		
 #ifdef FIELD_IONIZATION
 	// ***** Field Ioization *****
-	if (sp != sp_e && epsilon_eV_list(0) != 0){
+	if (sp != sp_e && sp->ionization_energy(0) != 0){
        	  // Declate varviables
        	  bool multiphoton_ionised = false;
        	  float K;
@@ -1329,7 +1326,6 @@ advance_p_kokkos_gpu(
   Kokkos::deep_copy(k_nm, 0);
 
 #ifdef FIELD_IONIZATION
-  if (sp != sp_e && epsilon_eV_list(0) != 0){
   // constants
   float q_e_c   = sp_e->q;     // code units
   float t_to_SI = g->t_to_SI;  // code to SI
@@ -1381,8 +1377,6 @@ advance_p_kokkos_gpu(
   {
     ERROR(( "Quantum numbers need to be passed to species struct when field ionization is enabled." ));
   }
-
-  } // if electrons or if ionization isnt desired for specied 
 #endif
   
 #ifdef VPIC_ENABLE_HIERARCHICAL
@@ -1420,7 +1414,7 @@ advance_p_kokkos_gpu(
 
 #ifdef FIELD_IONIZATION
     // ***** Field Ioization *****
-    if (sp != sp_e && epsilon_eV_list(0) != 0){
+    if (sp != sp_e && sp->ionization_energy(0) != 0){
     // Declare varviables
     bool multiphoton_ionised = false;
     float K;
