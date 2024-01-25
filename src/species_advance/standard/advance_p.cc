@@ -554,7 +554,7 @@ advance_p_kokkos_unified(
       float cbz[num_lanes];
       float q[num_lanes];
    #ifdef FIELD_IONIZATION
-      float charge[num_lanes];
+      short int charge[num_lanes];
    #endif
       int   ii[num_lanes];
       int   inbnds[num_lanes];
@@ -635,14 +635,14 @@ advance_p_kokkos_unified(
        	  float K;
 	  
 	  // Check if the particle is fully ionized already
-          int N_ionization        = int(abs(charge[LANE])); // Current ionization state of the particle
-          int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
-	  int N_ionization_levels = epsilon_eV_list.extent(0);
+          short int N_ionization        = abs(charge[LANE]); // Current ionization state of the particle
+          short int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
+	  short int N_ionization_levels = epsilon_eV_list.extent(0);
 
           // code units
-  	  float hax_c = hax[LANE]/qdt_2mc;
-  	  float hay_c = hay[LANE]/qdt_2mc;
-  	  float haz_c = haz[LANE]/qdt_2mc;
+  	  float hax_c = (fex[LANE] + dy[LANE]*fdexdy[LANE] ) + dz[LANE]*(fdexdz[LANE] + dy[LANE]*fd2exdydz[LANE]);
+  	  float hay_c = (fey[LANE] + dz[LANE]*fdeydz[LANE] ) + dx[LANE]*(fdeydx[LANE] + dz[LANE]*fd2eydzdx[LANE]);
+  	  float haz_c = (fez[LANE] + dx[LANE]*fdezdx[LANE] ) + dy[LANE]*(fdezdy[LANE] + dx[LANE]*fd2ezdxdy[LANE]);
   	  float ha_mag_c = sqrtf(pow(hax_c,2.0)+pow(hay_c,2.0)+pow(haz_c,2.0));
           // SI units
   	  float E_mag_SI = E_to_SI * ha_mag_c;
@@ -723,7 +723,6 @@ advance_p_kokkos_unified(
               float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
               float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
               Gamma = Gamma_ADK_SI;
-          
             }
           
             else if (E_au>E_T_au && E_au<=E_B_au){
@@ -769,7 +768,7 @@ advance_p_kokkos_unified(
               float Gamma_BSI_SI = Gamma_cl_SI + Gamma_ADK_SI_threshold;
               Gamma = Gamma_BSI_SI;
             }     
-            
+
             // Ionization occurs if U_1 < 1 - exp(-Gamma * delta_t), for a uniform number U_1~[0,1]
             auto generator = random_pool.get_state();
             double U = generator.drand(0,1);
@@ -778,7 +777,7 @@ advance_p_kokkos_unified(
               // ionization occurs
               N_ionization++;
               ionization_flag = 1;
-              //cout << ionization << " Ionization(s) occurs" << endl;
+	      //cout << " Ionization(s) occurs" << endl;
           
               // deal with multiple ionizations
               t_ionize = -1.0/Gamma * log(1-U); // use previous U to calc
@@ -1402,7 +1401,7 @@ advance_p_kokkos_gpu(
     float dz   = p_dz;
     int   ii   = pii;
 #ifdef FIELD_IONIZATION    
-    float charge = p_q;
+    short int charge = p_q;
     const float qdt_2mc = charge * dt_2mc;
 #endif    
     float hax  = qdt_2mc*(    ( f_ex    + dy*f_dexdy    ) + // Interpolate E
@@ -1420,14 +1419,14 @@ advance_p_kokkos_gpu(
     float K;
 	
     // Check if the particle is fully ionized already
-    int N_ionization        = int(abs(charge)); // Current ionization state of the particle
-    int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
-    int N_ionization_levels = epsilon_eV_list_h.extent(0);
+    short int N_ionization        = abs(charge); // Current ionization state of the particle
+    short int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
+    short int N_ionization_levels = epsilon_eV_list_h.extent(0);
 
     // code units
-    float hax_c = hax/qdt_2mc;
-    float hay_c = hay/qdt_2mc;
-    float haz_c = haz/qdt_2mc;
+    float hax_c = ( f_ex + dy*f_dexdy ) + dz*( f_dexdz + dy*f_d2exdydz );
+    float hay_c = ( f_ey + dz*f_deydz ) + dx*( f_deydx + dz*f_d2eydzdx );
+    float haz_c = ( f_ez + dx*f_dezdx ) + dy*( f_dezdy + dx*f_d2ezdxdy );
     float ha_mag_c = sqrtf(pow(hax_c,2.0)+pow(hay_c,2.0)+pow(haz_c,2.0));
     // SI units
     float E_mag_SI = E_to_SI * ha_mag_c;

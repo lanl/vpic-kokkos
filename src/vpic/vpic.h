@@ -580,7 +580,7 @@ public:
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
                    double w,
-		   double charge,
+		   short int charge,
       	           double age = 0, int update_rhob = 1 );
 
  #else

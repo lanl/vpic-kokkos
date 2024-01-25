@@ -17,7 +17,7 @@ vpic_simulation::inject_particle( species_t * sp,
                                   double x,  double y,  double z,
                                   double ux, double uy, double uz,
                                   double w,
-				  double charge,
+				  short int charge,
 				  double age,
                                   int update_rhob ){
   int ix, iy, iz;

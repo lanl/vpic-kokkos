@@ -37,7 +37,7 @@ typedef struct particle {
   float ux, uy, uz; // Particle normalized momentum
   float w;          // Particle weight (number of physical particles)
  #ifdef FIELD_IONIZATION  
-  float charge;     // Particle charge
+  short int charge;     // Particle charge
  #endif  
 } particle_t;
 
@@ -58,7 +58,7 @@ typedef struct particle_injector {
   float ux, uy, uz;          // Particle normalized momentum
   float w;                   // Particle weight (number of physical particles)
  #ifdef FIELD_IONIZATION  
-  float charge;              // Particle charge
+  short int charge;              // Particle charge
  #endif  
   float dispx, dispy, dispz; // Displacement of particle
   species_id sp_id;          // Species of particle
@@ -98,7 +98,7 @@ class species_t {
 
         char * name;                        // Species name
 #ifndef FIELD_IONIZATION	
-        float q;                            // Species particle charge
+        short int q;                        // Species particle charge
 #else
 	float q;  // FIXME: need to remove
 	Kokkos::View<double*> ionization_energy; // Species ionization energies

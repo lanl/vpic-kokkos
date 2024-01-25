@@ -20,7 +20,7 @@ ionization_states_kokkos(const species_t* RESTRICT sp) {
 
     // Calculate (local) number of particles in each charge state
     Kokkos::parallel_for("ionization_states_kokkos", np, KOKKOS_LAMBDA(const int n) {
-	int charge = k_particles(n, particle_var::charge);
+	short int charge = k_particles(n, particle_var::charge);
 	Kokkos::atomic_add(&charge_counts(charge), 1.0); //FIXME: GPU doesnt seem to like this.
 
     });

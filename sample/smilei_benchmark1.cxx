@@ -292,8 +292,8 @@ begin_initialization {
   double A_I2    = 1;    // neutral hydrogen, mass number
   double Z_I1    = 6;    
   double Z_I2    = 1;
-  double q_I1    = 1e-30;
-  double q_I2    = 1e-30;   // physical charge in code units, vpic doesnt like when charge is zero
+  short int q_I1    = 0;
+  short int q_I2    = 0;   // physical charge in code units, vpic doesnt like when charge is zero
   double m_I1_SI = A_I1*mp_me*m_e_SI;
   double m_I2_SI = A_I2*mp_me*m_e_SI;
   double m_I1_c = m_I1_SI/mass_to_SI;

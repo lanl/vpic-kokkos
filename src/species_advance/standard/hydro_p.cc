@@ -231,7 +231,7 @@ accumulate_hydro_p_kokkos(
     float uz = k_particles(p_index, particle_var::uz);
     float w  = k_particles(p_index, particle_var::w);
 #ifdef FIELD_IONIZATION    
-    float p_q  = k_particles(p_index, particle_var::charge);
+    short int p_q  = k_particles(p_index, particle_var::charge);
     float qdt_2mc  = p_q * dt_2mc;  
     float qdt_4mc2 = p_q * dt_4mc2;
 #endif    
