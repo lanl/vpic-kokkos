@@ -68,18 +68,19 @@ const uint32_t momentum_density	(1<<4 | 1<<5 | 1<<6);
 const uint32_t ke_density		(1<<7);
 const uint32_t stress_tensor	(1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13);
 #ifdef FIELD_IONIZATION
-const uint32_t maximum_charge	(1<<14);
-const uint32_t average_charge	(1<<15);
+const uint32_t number_density	(1<<14);
+const uint32_t maximum_charge	(1<<15);
+const uint32_t average_charge	(1<<16);
 #endif
 /* May want to use these instead
 const uint32_t stress_diagonal 		(1<<8 | 1<<9 | 1<<10);
 const uint32_t stress_offdiagonal	(1<<11 | 1<<12 | 1<<13);
 */
 #ifdef FIELD_IONIZATION
-const size_t total_hydro_variables(16);
-const size_t total_hydro_groups(7); // this counts vectors, tensors etc...
+const size_t total_hydro_variables(17);
+const size_t total_hydro_groups(8); // this counts vectors, tensors etc...
 // These bits will be tested to determine which variables to output
-const size_t hydro_indeces[7] = { 0, 3, 4, 7, 8, 14, 15 };
+const size_t hydro_indeces[8] = { 0, 3, 4, 7, 8, 14, 15, 16 };
 #else
 const size_t total_hydro_variables(14);
 const size_t total_hydro_groups(5); // this counts vectors, tensors etc...

@@ -448,13 +448,14 @@ static FieldInfo fieldInfo[12] = {
 }; // fieldInfo
 
 #ifdef FIELD_IONIZATION
-static HydroInfo hydroInfo[7] = {
+static HydroInfo hydroInfo[8] = {
 	{ "Current Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
 	{ "Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
 	{ "Momentum Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
 	{ "Kinetic Energy Density", "SCALAR", "1", "FLOATING_POINT",
 		sizeof(float) },
 	{ "Stress Tensor", "TENSOR", "6", "FLOATING_POINT", sizeof(float) },
+	{ "Number Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
 	{ "Maximum Macro Charge", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
 	{ "Average Macro Charge", "SCALAR", "1", "FLOATING_POINT", sizeof(float) }
 	/*

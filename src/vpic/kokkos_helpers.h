@@ -22,7 +22,7 @@
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
 #ifdef FIELD_IONIZATION
-#define HYDRO_VAR_COUNT 16
+#define HYDRO_VAR_COUNT 17
 #else
 #define HYDRO_VAR_COUNT 14
 #endif
@@ -251,8 +251,9 @@ namespace hydro_var {
         tzx = 12,
         txy = 13,
       #ifdef FIELD_IONIZATION
-        max_q = 14,
-	avg_q = 15,
+	n_p   = 14,
+        max_q = 15,
+	avg_q = 16,
       #endif
     };
 };

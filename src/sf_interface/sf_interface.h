@@ -201,7 +201,8 @@ typedef struct hydro {
   float px, py, pz, ke;  // Momentum and K.E. density  => <p_i f>, <m c^2 (gamma-1) f>
   float txx, tyy, tzz;   // Stress diagonal            => <p_i v_j f>, i==j
   float tyz, tzx, txy;   // Stress off-diagonal        => <p_i v_j f>, i!=j
- #ifdef FIELD_IONIZATION 
+ #ifdef FIELD_IONIZATION
+  float n_p;             // Number density
   float max_q;           // Maximum macro charge
   float avg_q;           // Average macro charge
  #endif

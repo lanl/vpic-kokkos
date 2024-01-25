@@ -346,6 +346,7 @@ accumulate_hydro_p_kokkos(
     k_hydro_access(i, hydro_var::jy)  += t*vy;                       \
     k_hydro_access(i, hydro_var::jz)  += t*vz;                       \
     k_hydro_access(i, hydro_var::rho) += t;                          \
+    k_hydro_access(i, hydro_var::n_p) += wn;                         \
     t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
     dx = t*ux;          /* dx = (px w/V) trilin_n */    \
     dy = t*uy;                                          \

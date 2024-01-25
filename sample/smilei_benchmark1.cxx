@@ -933,14 +933,14 @@ begin_initialization {
                                        momentum_density | ke_density |
                                        stress_tensor 
                                        #ifdef FIELD_IONIZATION
-				       | maximum_charge
-				       | average_charge
+				       | number_density
 				       #endif
 				       );
   global->hI1dParams.output_variables(  current_density  | charge_density |
                                        momentum_density | ke_density |
                                        stress_tensor
 				       #ifdef FIELD_IONIZATION
+				       | number_density
 				       | maximum_charge
 				       | average_charge
 				       #endif
@@ -949,6 +949,7 @@ begin_initialization {
                                        momentum_density | ke_density |
                                        stress_tensor
 				       #ifdef FIELD_IONIZATION
+				       | number_density
 				       | maximum_charge
 				       | average_charge
 				       #endif
