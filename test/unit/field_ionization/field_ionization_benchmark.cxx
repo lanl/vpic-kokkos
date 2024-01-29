@@ -13,6 +13,7 @@ begin_globals {
   double emax;                   // E0 of the laser
   double omega_0;                // w0/wpe
   int energies_interval;        // how frequently to dump energies
+  int ionization_states_interval; // how frequently to dump ionization states
   int    field_interval;         // how frequently to dump field built-in
                                  // diagnostic
   int    restart_interval; 	 // how frequently to write restart file. 
@@ -54,7 +55,37 @@ begin_globals {
 };
 
 
-void vpic_simulation::user_diagnostics() {}
+void vpic_simulation::user_diagnostics() {
+# define should_dump(x) \
+  (global->x##_interval>0 && remainder(step(),global->x##_interval)==0)
+
+  if ( step()==0 ) {
+    // A grid dump contains all grid parameters, field boundary conditions,
+    // particle boundary conditions and domain connectivity information. This
+    // is stored in a binary format. Each rank makes a grid dump
+    //dump_grid("grid");
+
+    // A materials dump contains all the materials parameters. This is in a
+    // text format. Only rank 0 makes the materials dump
+    //dump_materials("materials");
+
+    // A species dump contains the physics parameters of a species. This is in
+    // a text format. Only rank 0 makes the species dump
+    //dump_species("species");
+
+    if ( rank()==0 ) {
+    dump_mkdir("rundata");
+    } // if 
+
+  }
+
+  // ioization states
+ #ifdef FIELD_IONIZATION
+  if( should_dump(ionization_states) ) {
+            dump_ionization_states( "rundata/ionization_states", step() ==0 ? 0 : 1 );
+  } //if
+ #endif
+}
 
 #define VAC 5e-6*0
 
@@ -290,6 +321,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
   // Diagnostics intervals.  
   int energies_interval = 50;
+  int ionization_states_interval = 1;
   int field_interval    = 10;//int(5./omega_L_SI / time_to_SI / dt);
   int particle_interval = 10*field_interval;
   int restart_interval = 400;
@@ -318,70 +350,70 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   double w_I1    = NpI1/N_I1;
   double w_I2    = NpI2/N_I2;
 
-  if(rank() == 0){
-    FILE * out;
-    out = fopen("oldparams.txt", "w");
-    fprintf(out, "# Parameter file used for plotters.\n");
-    fprintf(out, "%.17e   Code pulse start\n", pulse_start);
-    fprintf(out, "%d   pulse start in # of timesteps\n", int(pulse_start/dt));
-    fprintf(out, "%.17e   Code pulse FWHM\n", pulse_FWHM);
-    fprintf(out, "%d   pulse FWHM in # of timesteps\n", int(pulse_FWHM/dt));
-    fprintf(out, "%.17e   Code E to SI conversion factor\n", E_to_SI);
-    fprintf(out, "%.17e   Code time to SI conversion factor\n", time_to_SI);
-    fprintf(out, "%.17e   Code length to SI conversion factor\n", length_to_SI);
-    fprintf(out, "%.17e   Code mass to SI conversion factor\n", mass_to_SI);
-    fprintf(out, "%.17e   Code charge to SI conversion factor\n", charge_to_SI);
-    fprintf(out, "%.17e   Time step (dt), SI\n", dt*time_to_SI);
-    fprintf(out, "%.17e   Time the simulation stops in SI units\n",t_stop*time_to_SI);
-    fprintf(out, "%.17e   Time the simulation stops in code units\n",t_stop);
-    fprintf(out, "%d   Number of steps in the entire simulation\n",
-            int(t_stop/(dt)));
-    fprintf(out, "%.17e   Laser wavelength, SI\n", lambda_SI);
-    fprintf(out, "%.17e   Ratio of electron to critical density\n",
-            n_e_over_n_crit);
-    fprintf(out, "%.17e   Box size x, meters\n", Lx_SI);
-    fprintf(out, "%.17e   Box size y, meters\n", Ly_SI);
-    fprintf(out, "%.17e   Box size z, meters\n", Lz_SI);
-    fprintf(out, "%.17e   Low box corner x, meters\n",
-            global->xmin*length_to_SI);
-    fprintf(out, "%.17e   Low box corner y, meters\n",
-            global->ymin*length_to_SI);
-    fprintf(out, "%.17e   Low box corner z, meters\n",
-            global->zmin*length_to_SI);
-    fprintf(out, "%d   Number of cells in x\n", int(nx));
-    fprintf(out, "%d   Number of cells in y\n", int(ny));
-    fprintf(out, "%d   Number of cells in z\n", int(nz));
-    fprintf(out, "%d   Number of domains in x\n", topology_x);
-    fprintf(out, "%d   Number of domains in y\n", topology_y);
-    fprintf(out, "%d   Number of domains in z\n", topology_z);
-    fprintf(out, "%d   Grid data output stride in x\n", stride_x);
-    fprintf(out, "%d   Grid data output stride in y\n", stride_y);
-    fprintf(out, "%d   Grid data output stride in z\n", stride_z);
-    fprintf(out, "%.17e   N_I2\n", N_I2);
-    fprintf(out, "%.17e   NpI2\n", NpI2);
-    fprintf(out, "%.17e   w_I2\n", w_I2);
-    fprintf(out, "%d   Field interval\n", field_interval);
-    fprintf(out, "%d   Energies interval\n", energies_interval);
-    fprintf(out, "%d   Tracer interval\n", 0);
-    fprintf(out, "%d   Restart interval\n", restart_interval);
-    fprintf(out, "%d   Number of tracers per species\n", 0);
-    fprintf(out, "%d   Number of tracer species\n", 0);
-    fprintf(out, "%d   Number of variables per tracer (possibly wrong)\n",
-            0);
-    fprintf(out, "%d   Number of ranks\n", nproc());
-    fprintf(out, "%d   Number of bins in the spectra\n", 0);
-    fprintf(out, "%.17e   Spec max for electron, code units (gamma-1)\n",
-            0);
-    fprintf(out, "%.17e   Spec max for I2, code units (gamma-1)\n", 0);
-    fprintf(out, "%d   This is my rank\n", rank());
-    fprintf(out, "%.17e   Pulse FWHM, code units\n",pulse_FWHM);
-    fprintf(out, "%.17e   Pulse Sigma, code units\n",pulse_sigma);
-    fprintf(out, "%.17e   Pulse mean, code units\n",pulse_mean);
-    fprintf(out, "%.17e   Laser max E, SI\n",laser_E_SI);
-    fprintf(out, "%.17e   Laser emax, code units\n",emax);
-    fprintf(out, "%d   nppc\n",int(nppc));
-    fclose(out);
-  }
+//  if(rank() == 0){
+//    FILE * out;
+//    out = fopen("oldparams.txt", "w");
+//    fprintf(out, "# Parameter file used for plotters.\n");
+//    fprintf(out, "%.17e   Code pulse start\n", pulse_start);
+//    fprintf(out, "%d   pulse start in # of timesteps\n", int(pulse_start/dt));
+//    fprintf(out, "%.17e   Code pulse FWHM\n", pulse_FWHM);
+//    fprintf(out, "%d   pulse FWHM in # of timesteps\n", int(pulse_FWHM/dt));
+//    fprintf(out, "%.17e   Code E to SI conversion factor\n", E_to_SI);
+//    fprintf(out, "%.17e   Code time to SI conversion factor\n", time_to_SI);
+//    fprintf(out, "%.17e   Code length to SI conversion factor\n", length_to_SI);
+//    fprintf(out, "%.17e   Code mass to SI conversion factor\n", mass_to_SI);
+//    fprintf(out, "%.17e   Code charge to SI conversion factor\n", charge_to_SI);
+//    fprintf(out, "%.17e   Time step (dt), SI\n", dt*time_to_SI);
+//    fprintf(out, "%.17e   Time the simulation stops in SI units\n",t_stop*time_to_SI);
+//    fprintf(out, "%.17e   Time the simulation stops in code units\n",t_stop);
+//    fprintf(out, "%d   Number of steps in the entire simulation\n",
+//            int(t_stop/(dt)));
+//    fprintf(out, "%.17e   Laser wavelength, SI\n", lambda_SI);
+//    fprintf(out, "%.17e   Ratio of electron to critical density\n",
+//            n_e_over_n_crit);
+//    fprintf(out, "%.17e   Box size x, meters\n", Lx_SI);
+//    fprintf(out, "%.17e   Box size y, meters\n", Ly_SI);
+//    fprintf(out, "%.17e   Box size z, meters\n", Lz_SI);
+//    fprintf(out, "%.17e   Low box corner x, meters\n",
+//            global->xmin*length_to_SI);
+//    fprintf(out, "%.17e   Low box corner y, meters\n",
+//            global->ymin*length_to_SI);
+//    fprintf(out, "%.17e   Low box corner z, meters\n",
+//            global->zmin*length_to_SI);
+//    fprintf(out, "%d   Number of cells in x\n", int(nx));
+//    fprintf(out, "%d   Number of cells in y\n", int(ny));
+//    fprintf(out, "%d   Number of cells in z\n", int(nz));
+//    fprintf(out, "%d   Number of domains in x\n", topology_x);
+//    fprintf(out, "%d   Number of domains in y\n", topology_y);
+//    fprintf(out, "%d   Number of domains in z\n", topology_z);
+//    fprintf(out, "%d   Grid data output stride in x\n", stride_x);
+//    fprintf(out, "%d   Grid data output stride in y\n", stride_y);
+//    fprintf(out, "%d   Grid data output stride in z\n", stride_z);
+//    fprintf(out, "%.17e   N_I2\n", N_I2);
+//    fprintf(out, "%.17e   NpI2\n", NpI2);
+//    fprintf(out, "%.17e   w_I2\n", w_I2);
+//    fprintf(out, "%d   Field interval\n", field_interval);
+//    fprintf(out, "%d   Energies interval\n", energies_interval);
+//    fprintf(out, "%d   Tracer interval\n", 0);
+//    fprintf(out, "%d   Restart interval\n", restart_interval);
+//    fprintf(out, "%d   Number of tracers per species\n", 0);
+//    fprintf(out, "%d   Number of tracer species\n", 0);
+//    fprintf(out, "%d   Number of variables per tracer (possibly wrong)\n",
+//            0);
+//    fprintf(out, "%d   Number of ranks\n", nproc());
+//    fprintf(out, "%d   Number of bins in the spectra\n", 0);
+//    fprintf(out, "%.17e   Spec max for electron, code units (gamma-1)\n",
+//            0);
+//    fprintf(out, "%.17e   Spec max for I2, code units (gamma-1)\n", 0);
+//    fprintf(out, "%d   This is my rank\n", rank());
+//    fprintf(out, "%.17e   Pulse FWHM, code units\n",pulse_FWHM);
+//    fprintf(out, "%.17e   Pulse Sigma, code units\n",pulse_sigma);
+//    fprintf(out, "%.17e   Pulse mean, code units\n",pulse_mean);
+//    fprintf(out, "%.17e   Laser max E, SI\n",laser_E_SI);
+//    fprintf(out, "%.17e   Laser emax, code units\n",emax);
+//    fprintf(out, "%d   nppc\n",int(nppc));
+//    fclose(out);
+//  }
   
   
   
@@ -467,6 +499,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   current_injection_interval = -1;
 
   global->energies_interval        = energies_interval;
+  global->ionization_states_interval = ionization_states_interval;
   global->field_interval           = field_interval; 
   global->restart_interval         = restart_interval;
   global->quota_check_interval = quota_check_interval;
@@ -674,6 +707,8 @@ begin_field_injection {
 
 } // begin_field_injection
 
+
+
 begin_particle_injection {}
 begin_current_injection {}
 begin_particle_collisions{}
@@ -682,10 +717,14 @@ TEST_CASE( "Check if field ionization agrees with numerical solution", "[average
 {
     // Structure to hold the data points
     struct DataPoint {
-      double x;
-      double y;
+      double timestep;
+      std::vector<double> ionizationStates;
     };
 
+    // Parameters    
+    bool flag = 0; // Flag that decides if test passes
+    double L2_THRESHOLD = 0.01; 
+    
     // Init and run sim
     vpic_simulation simulation = vpic_simulation();
     simulation.initialize( 0, NULL );
@@ -693,101 +732,153 @@ TEST_CASE( "Check if field ionization agrees with numerical solution", "[average
     simulation.finalize();
     if( world_rank==0 ) log_printf( "normal exit\n" );
 
-    // Get parameters from file
+    // Open parameters file
     double dt_to_SI;
     std::ifstream file("params.txt");
-    if (!file.is_open()) {
-        std::cerr << "Failed to open the params.txt file." << std::endl;
-    }
-    std::string line;
-    if (std::getline(file, line)) {
+    bool paramsRead = file.is_open();
+    
+    // Open VPIC file
+    std::string filename = "rundata/ionization_states_I2";
+    std::vector<DataPoint> data;
+    std::ifstream ionizationFile(filename);
+    bool ionizationRead = ionizationFile.is_open(); // is params.txt opened
+    
+    // Open gold file
+    std::string gold_file_name = GOLD_FILE;
+    std::vector<DataPoint> data_analytic;
+    std::ifstream goldFile(gold_file_name);
+    bool goldRead = goldFile.is_open();
+
+    
+    // Only continue with calculation if both files are open
+    if (paramsRead && ionizationRead && goldRead){
+      // get dt_to_SI
+      std::string line;
+      if (std::getline(file, line)) {
         std::istringstream iss(line);
         std::string value;
         if (std::getline(iss, value, ',')) {
 	  dt_to_SI = std::stod(value);
         }
-    }
-    
-    // Read vpic data from the file
-    bool flag = 0; 
-    std::string filename = "Photoelectrons.txt";
-    std::vector<DataPoint> data;
-    std::ifstream inputFile(filename);
-    if (inputFile.is_open()) {
-        std::string line;
-        while (std::getline(inputFile, line)) {
-            std::istringstream iss(line);
-            std::string token;
-            DataPoint point;
-            // Split the line by commas and extract the x and y values
-	    std::getline(iss, token, ',');
-            point.x = std::stod(token); // this is the timestep
-            std::getline(iss, token, ',');
-            float N_0 = std::stod(token); // this is the initial number of particles
-	    std::getline(iss, token, ','); 
-            float N_ions = std::stod(token); // number of ions
-	    point.y = N_ions/N_0; // average charge state
-	    // account for the shift the vpic data (due to the particle
-	    // location offset from the boundary edge) by ingnoring the zero ionization data
-	    if (point.y > 0){
-              data.push_back(point);
-	    }
-        }
-        inputFile.close();
-    } else {
-        std::cerr << "Failed to open the file: " << filename << std::endl;
-    }
-
-
-    
-    // Read the numerical solution from the gold file
-    std::string gold_file_name = GOLD_FILE;
-    std::vector<DataPoint> data_analytic;
-    std::ifstream inputFile_analytic(gold_file_name);
-    if (inputFile_analytic.is_open()) {
-        std::string line;
-        while (std::getline(inputFile_analytic, line)) {
-            std::istringstream iss(line);
-            std::string token;
-            DataPoint point;
-
-            // Split the line by commas and extract the variables
-	    std::getline(iss, token, ',');
-            point.x = std::stod(token); // this is the timestep
-            std::getline(iss, token, ',');
-            point.y = std::stod(token); // this is the initial number of atoms
-	    if (point.y > 0){
-              data_analytic.push_back(point);
-	    }
-        }
-        inputFile.close();
-    } else {
-        std::cerr << "Failed to open the file: " << gold_file_name << std::endl;
-    }
-
-    // Find residuals and calculate L2 error
-    // Loop over VPIC data as it was truncated, hence the analytic data is likely longer
-    double l2Error = 0.0;
-    int shorterSize = std::min(data.size(), data_analytic.size());
-
-    // Check that both datasets are not empty
-    // This can happen if the simulation doesnt have any ionization events
-    if (shorterSize == 0) {
-      std::cerr << "Error: At least one of the datasets is empty." << std::endl;
-    } else {
-      for (int i = 0; i < shorterSize; i++) {
-	double residual = data[i].y - data_analytic[i].y;
-        l2Error += residual * residual;
       }
-      l2Error = std::sqrt(l2Error);
-    }
+
+      // Read the VPIC data
+      double initial0Plus = 0.0; // initial number of particles in the 0+ state
+      bool initial0PlusSet = false;
+      bool initial0PlusAdded = false; // Track if a data point with initial 0+ has been added
+      std::string line1;
+      while (std::getline(ionizationFile, line1)) {
+	// skip comment lines
+	if (line1[0] == '%') { continue; }
     
-    // Check if the test passes
-    // The value we are comparing to is based on past runs.
-    if (l2Error < 0.01) {
-      flag = 1;
+        std::istringstream iss(line1);
+        DataPoint dp;
+        if (!(iss >> dp.timestep)) { break; } // Error
+
+        double ionState;
+	int stateIndex = 0;
+	bool isInitial0Plus = true; // Assume it's the initial 0+ state until proven otherwise
+        while (iss >> ionState) { 
+	  // Set initial0Plus for the first timestep (0+ state)
+          if (!initial0PlusSet && stateIndex == 0) {
+              initial0Plus = ionState;
+              initial0PlusSet = true;
+          }
+
+	  // Check if current state is different from initial 0+ state
+	  // particles are 1 grid cell away from boundary so there is a
+	  // lag between ionization start in vpic and the numerical solution
+          if (stateIndex == 0 && ionState != initial0Plus) {
+              isInitial0Plus = false;
+          }
+	  
+	  // Calculate relative ionization state population
+          dp.ionizationStates.push_back(ionState / initial0Plus);
+	  
+	  stateIndex++;
+        }
+
+	// Only add this data point if it's not an initial 0+ state or if it's the first occurrence
+	// in other words, remove the lad from the vpic data
+        if (!isInitial0Plus || (isInitial0Plus && !initial0PlusAdded)) {
+            data.push_back(dp);
+            if (isInitial0Plus) {
+                initial0PlusAdded = true; // Mark that the initial 0+ state has been added
+            }
+        }
+
+      } // while
+      ionizationFile.close();
+
+
+      // Read the numerical solution from the gold file
+      std::string line2;
+      while (std::getline(goldFile, line2)) {
+        std::istringstream iss(line2);
+        std::string token;
+        DataPoint dp_a;
+
+	// First, read the timestep
+        if (!std::getline(iss, token, ',')) {
+            std::cerr << "Error reading timestep from gold file" << std::endl;
+            break; // or handle the error as appropriate
+        }
+        dp_a.timestep = std::stod(token);
+
+	// Read relative ionization states
+        while (std::getline(iss, token, ',')) {
+	  dp_a.ionizationStates.push_back(std::stod(token));
+        }
+	data_analytic.push_back(dp_a);
+      }
+      goldFile.close();
+
+
+      // Find residuals and calculate L2 error
+      int shorterSize = std::min(data.size(), data_analytic.size());
+      int N_states = data[0].ionizationStates.size();
+      int N_states_analytic = data_analytic[0].ionizationStates.size();
+      
+      // Check that datasets are not empty and that the number of ionization states is equal
+      if (shorterSize == 0 || N_states != N_states_analytic) {
+	flag = 0;
+        std::cerr << "Error: issue with one of the datasets." << std::endl;
+      } else {
+	std::vector<double> l2Error(N_states, 0.0);
+        for (int i = 0; i < shorterSize; i++) {
+	  for (size_t j = 0; j < N_states; ++j) {
+      	    double residual = data[i].ionizationStates[j] - data_analytic[i].ionizationStates[j];
+            l2Error[j] += residual * residual;
+	  }
+        }
+	
+        // Check if L2 values for each state are below threshold
+	bool allBelowThreshold = true; // Variable to check if all errors are below the threshold
+	for (size_t k = 0; k < N_states; ++k) {
+          l2Error[k] = sqrt(l2Error[k]);
+          std::cout << "L2 Error for ionization state " << k << ": " << l2Error[k] << std::endl;
+          // Check against a threshold for each state
+          if (l2Error[k] > L2_THRESHOLD) {
+	    allBelowThreshold = false; // If any state fails, set to false
+	    break;
+	  }
+        } // k loop
+
+	std::cout << "allBelowThreshold: " << allBelowThreshold << std::endl;
+
+	// Check if the test passes
+	if (allBelowThreshold) {
+            flag = 1; // Set flag to 1 if all errors are below the threshold
+        } else {
+            flag = 0; // Set flag to 0 if any error is above the threshold
+        }
+
+      } // else datasets arent empty and match
+
+    } else { // if files couldnt be opened
+      flag = 0; 
+      std::cerr << "Failed to open required files." << std::endl;
     }
-    std::cout << "L2 Error: " << l2Error << std::endl;
 
     REQUIRE(flag);
     

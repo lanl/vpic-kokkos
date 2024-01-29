@@ -127,7 +127,8 @@ N1 = sol[:, 1]
 avg_charge_state = N1/N_initial[0];
 
 # Write solutions to a CSV file
-data = np.column_stack((t, avg_charge_state))
+#header_str = f"% timestep = {timestep_to_SI}"
+data = np.column_stack((t, N0/N_initial[0], N1/N_initial[0]))
 np.savetxt('hydrogen_benchmark_gold.csv', data, delimiter=',', header='', comments='')
 
 
