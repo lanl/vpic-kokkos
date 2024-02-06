@@ -42,7 +42,22 @@ begin_initialization {
 
   species_t* sp; // We use this to iterate over species
 
-  species_t * this_sp = define_species( "test_species", 0.5, 0.5, npart, npart, 0, 0 );
+  species_t * this_sp;
+ #if defined(FIELD_IONIZATION)
+  grid->lambda  = 1; // these need to de defined as nonzero when 
+  grid->t_to_SI = 1; // field ionization is enabled 
+  grid->l_to_SI = 1; 
+  grid->q_to_SI = 1;
+  grid->m_to_SI = 1;
+  Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
+  double ionization_energy_values[] = {0}; // in eV
+  ionization_energy(0) = ionization_energy_values[0];
+  this_sp = define_species( "test_species", 2, ionization_energy, 1,0,0, 2, npart, npart, 0, 0 );
+  // electron needs to be defined when  FI is enabled
+  species_t * electron = define_species("electron",-1.,ionization_energy, 0,0,0, 1., npart, npart, 0, 0); 
+ #else
+  this_sp = define_species( "test_species", 2, 2, npart, npart, 0, 0 );
+ #endif
 
   // Hack into vpic internals
 
@@ -63,6 +78,7 @@ begin_initialization {
     this_sp->p[n].uy = 0;                                    \
     this_sp->p[n].uz = 0;                                    \
     this_sp->p[n].w  = fabs( normal( rng(0), 0, 1 ) );       \
+    this_sp->p[n].charge = 2;                              \
   }                                                     \
   LIST_FOR_EACH( sp, species_list ) {                   \
     sp->copy_to_device();                               \
@@ -87,6 +103,7 @@ begin_initialization {
                 << this_sp->p[n].ux << " "                   \
                 << this_sp->p[n].uy << " "                   \
                 << this_sp->p[n].uz << " "                   \
+		<< this_sp->p[n].charge << " "               \
                 << this_sp->p[n].w );                        \
     }                                                   \
   }

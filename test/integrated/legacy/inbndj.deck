@@ -32,7 +32,22 @@ begin_initialization {
   field_array->copy_to_device();
   interpolator_array->copy_to_device();
 
-  species_t * this_sp = define_species( "test_species", 2., 1., NPART, NPART, 0, 0 );
+  species_t * this_sp;
+ #if defined(FIELD_IONIZATION)
+  grid->lambda  = 1; // these need to de defined as nonzero when 
+  grid->t_to_SI = 1; // field ionization is enabled 
+  grid->l_to_SI = 1; 
+  grid->q_to_SI = 1;
+  grid->m_to_SI = 1;
+  Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
+  double ionization_energy_values[] = {0}; // in eV
+  ionization_energy(0) = ionization_energy_values[0];
+  this_sp = define_species( "test_species", 2., ionization_energy, 1,0,0, 1., NPART, NPART, 0, 0 );
+  // electron needs to be defined when  FI is enabled
+  species_t * electron = define_species("electron",-1.,ionization_energy, 0,0,0, 1., NPART, NPART, 0, 0);
+ #else
+  this_sp = define_species( "test_species", 2., 1., NPART, NPART, 0, 0 );
+ #endif
 
   // Hack into vpic internals
 
@@ -60,6 +75,9 @@ begin_initialization {
     this_sp->p[n].uy = vy_c/rgamma;
     this_sp->p[n].uz = vz_c/rgamma;
     this_sp->p[n].w  = uniform( rng(0), 0, 1 );
+   #if defined(FIELD_IONIZATION)
+    this_sp->p[n].charge = 2.;
+   #endif
   }
 
   LIST_FOR_EACH( sp, species_list ) {
@@ -72,7 +90,11 @@ begin_initialization {
   CLEAR( rho0, 8 );
   for( int n=0; n<NPART; n++ ) {
     double dx = this_sp->p[n].dx, dy = this_sp->p[n].dy, dz = this_sp->p[n].dz;
+   #if defined(FIELD_IONIZATION)
+    double q  = 0.125*(double)this_sp->p[n].charge*(double)this_sp->p[n].w;
+   #else
     double q  = 0.125*(double)this_sp->q*(double)this_sp->p[n].w;
+   #endif
     rho0[0] += q * ( 1 - dx ) * ( 1 - dy ) * ( 1 - dz );
     rho0[1] += q * ( 1 + dx ) * ( 1 - dy ) * ( 1 - dz );
     rho0[2] += q * ( 1 - dx ) * ( 1 + dy ) * ( 1 - dz );

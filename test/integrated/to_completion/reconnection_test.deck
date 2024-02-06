@@ -213,10 +213,32 @@ begin_initialization {
     double nmax = 4.0*Ne/nproc();
     double nmovers = 0.1*nmax;
     double sort_method = 1;   //  0=in place and 1=out of place
-    species_t *electron1 = define_species("electron1",-ec, me, nmax, nmovers, electron_sort_interval, sort_method);
-    species_t *electron2 = define_species("electron2",-ec, me, nmax, nmovers, electron_sort_interval, sort_method);
-    species_t *ion1      = define_species("ion1",      ec, mi, nmax, nmovers, ion_sort_interval,      sort_method);
-    species_t *ion2      = define_species("ion2",      ec, mi, nmax, nmovers, ion_sort_interval,      sort_method);
+
+    species_t *electron1;
+    species_t *electron2;
+    species_t *ion1;
+    species_t *ion2;
+   #if defined(FIELD_IONIZATION)
+    grid->lambda  = 1; // these need to de defined as nonzero when 
+    grid->t_to_SI = 1; // field ionization is enabled 
+    grid->l_to_SI = 1; 
+    grid->q_to_SI = 1;
+    grid->m_to_SI = 1;
+    Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
+    double ionization_energy_values[] = {0}; // in eV
+    ionization_energy(0) = ionization_energy_values[0];
+    electron1 = define_species("electron1",-ec, ionization_energy, 1,0,0, me, nmax, nmovers, electron_sort_interval, sort_method);
+    electron2 = define_species("electron2",-ec, ionization_energy, 1,0,0, me, nmax, nmovers, electron_sort_interval, sort_method);
+    ion1      = define_species("ion1",      ec, ionization_energy, 1,0,0, mi, nmax, nmovers, ion_sort_interval,      sort_method);
+    ion2      = define_species("ion2",      ec, ionization_energy, 1,0,0, mi, nmax, nmovers, ion_sort_interval,      sort_method);
+    // electron needs to be defined when  FI is enabled
+    species_t *electron = define_species("electron",-ec, ionization_energy, 0,0,0, me, nmax, nmovers, electron_sort_interval, sort_method);
+   #else
+    electron1 = define_species("electron1",-ec, me, nmax, nmovers, electron_sort_interval, sort_method);
+    electron2 = define_species("electron2",-ec, me, nmax, nmovers, electron_sort_interval, sort_method);
+    ion1      = define_species("ion1",      ec, mi, nmax, nmovers, ion_sort_interval,      sort_method);
+    ion2      = define_species("ion2",      ec, mi, nmax, nmovers, ion_sort_interval,      sort_method);
+   #endif
 
     ///////////////////////////////////////////////////
     // Log diagnostic information about this simulation

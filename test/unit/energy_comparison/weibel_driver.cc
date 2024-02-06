@@ -180,8 +180,22 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   //species_t *electron = define_species("electron",-ec,me,2.4*Ne/nproc(),-1,25,0);
   //species_t *ion      = define_species("ion",      ec,mi,2.4*Ne/nproc(),-1,25,0);
 
-  species_t *electron = define_species("electron",-ec,me,2.4*Ne/nproc(),-1,0,0); //turn off sorting (GY)
-  species_t *ion      = define_species("ion",      ec,mi,2.4*Ne/nproc(),-1,0,0); //(GY)
+  species_t *electron, *ion;
+  #if defined(FIELD_IONIZATION)
+  grid->lambda  = 1; // these need to de defined as nonzero when 
+  grid->t_to_SI = 1; // field ionization is enabled 
+  grid->l_to_SI = 1; 
+  grid->q_to_SI = 1;
+  grid->m_to_SI = 1;
+  Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
+  double ionization_energy_values[] = {0}; // in eV
+  ionization_energy(0) = ionization_energy_values[0];
+  ion      = define_species("ion",      ec, ionization_energy, 1,0,0, mi,2.4*Ne/nproc(),-1,0,0); //(GY)
+  electron = define_species("electron",-ec, ionization_energy, 0,0,0, me,2.4*Ne/nproc(),-1,0,0); //turn off sorting (GY)
+  #else
+  ion      = define_species("ion",      ec,mi,2.4*Ne/nproc(),-1,0,0); //(GY)
+  electron = define_species("electron",-ec,me,2.4*Ne/nproc(),-1,0,0); //turn off sorting (GY)
+  #endif
 
   ///////////////////////////////////////////////////
   // Log diagnostic information about this simulation
@@ -247,20 +261,34 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
       n1 = normal(rng(0),0,vthex);
       n2 = normal(rng(0),0,vthe );
       n3 = normal(rng(0),0,vthe );
-
+      
+     #if defined(FIELD_IONIZATION)
+      inject_particle( electron, x, y, z,
+              n1,
+              n2,
+	      n3,we,-ec, 0, 0);
+     #else
       inject_particle( electron, x, y, z,
               n1,
               n2,
               n3,we, 0, 0);
+     #endif
 
       n1 = normal(rng(0),0,vthix);
       n2 = normal(rng(0),0,vthi );
       n3 = normal(rng(0),0,vthi );
 
+     #if defined(FIELD_IONIZATION)
+      inject_particle( ion, x, y, z,
+              n1,
+              n2,
+	      n3,wi, ec, 0 ,0 );
+     #else
       inject_particle( ion, x, y, z,
               n1,
               n2,
               n3,wi, 0 ,0 );
+     #endif
 
   }
 
@@ -335,6 +363,7 @@ TEST_CASE( "Check if Weibel gives correct energy (within tol)", "[energy]" )
                 0.001, b_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.b.tight.out", 50, 200)
            );
 
+    std::cout << "**** Here *******" <<std::endl;
     // Test particle energies individually
     REQUIRE(
             test_utils::compare_energies(energy_file_name, energy_gold_file_name,

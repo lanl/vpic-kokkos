@@ -799,7 +799,7 @@ TEST_CASE( "Check if field ionization agrees with numerical solution", "[average
         }
 
 	// Only add this data point if it's not an initial 0+ state or if it's the first occurrence
-	// in other words, remove the lad from the vpic data
+	// in other words, remove the lag from the vpic data
         if (!isInitial0Plus || (isInitial0Plus && !initial0PlusAdded)) {
             data.push_back(dp);
             if (isInitial0Plus) {
@@ -838,9 +838,13 @@ TEST_CASE( "Check if field ionization agrees with numerical solution", "[average
       int shorterSize = std::min(data.size(), data_analytic.size());
       int N_states = data[0].ionizationStates.size();
       int N_states_analytic = data_analytic[0].ionizationStates.size();
+
+      std::cout << "data.size(), data_analytic.size(): " << data.size() << ", " << data_analytic.size() << std::endl;
       
       // Check that datasets are not empty and that the number of ionization states is equal
-      if (shorterSize == 0 || N_states != N_states_analytic) {
+      // shorterSize = 0 means there is something wrong with the dataset
+      // shorterSize = 1 means ionization didnt occur (attempting to delete the lag removed all but one timestep)
+      if (shorterSize < 2 || N_states != N_states_analytic) {
 	flag = 0;
         std::cerr << "Error: issue with one of the datasets." << std::endl;
       } else {
@@ -849,6 +853,7 @@ TEST_CASE( "Check if field ionization agrees with numerical solution", "[average
 	  for (size_t j = 0; j < N_states; ++j) {
       	    double residual = data[i].ionizationStates[j] - data_analytic[i].ionizationStates[j];
             l2Error[j] += residual * residual;
+	    std::cout << "data[i].ionizationStates[j], data_analytic[i].ionizationStates[j]" << data[i].ionizationStates[j] << ", " << data_analytic[i].ionizationStates[j] << std::endl;
 	  }
         }
 	

@@ -133,8 +133,23 @@ begin_initialization {
   // Allow 50% more local_particles in case of non-uniformity
   // VPIC will pick the number of movers to use for each species
   // Both species use out-of-place sorting
-  species_t * ion      = define_species( "ion",       ec, mi, 1.5*Ni/nproc(), -1, 40, 1 );
-  species_t * electron = define_species( "electron", -ec, me, 1.5*Ne/nproc(), -1, 20, 1 );
+  species_t * ion;
+  species_t * electron;
+ #if defined(FIELD_IONIZATION)
+  grid->lambda  = 1; // these need to de defined as nonzero when 
+  grid->t_to_SI = 1; // field ionization is enabled 
+  grid->l_to_SI = 1; 
+  grid->q_to_SI = 1;
+  grid->m_to_SI = 1;
+  Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
+  double ionization_energy_values[] = {0}; // in eV
+  ionization_energy(0) = ionization_energy_values[0];
+  ion      = define_species( "ion",       ec, ionization_energy, 1,0,0, mi, 1.5*Ni/nproc(), -1, 40, 1 );
+  electron = define_species( "electron", -ec, ionization_energy, 1,0,0, me, 1.5*Ne/nproc(), -1, 20, 1 );
+ #else
+  ion      = define_species( "ion",       ec, mi, 1.5*Ni/nproc(), -1, 40, 1 );
+  electron = define_species( "electron", -ec, me, 1.5*Ne/nproc(), -1, 20, 1 );
+ #endif
 
   ///////////////////////////////////////////////////
   // Log diagnostic information about this simulation

@@ -40,7 +40,33 @@ begin_initialization {
 
   species_t* sp; // We use this to iterate over species
 
-  species_t * this_sp = define_species( "test_species", 2, 1, npart, npart, 0, 0 );
+  species_t * this_sp;
+ #if defined(FIELD_IONIZATION)
+  grid->lambda  = 1; // these need to de defined as nonzero when 
+  grid->t_to_SI = 1; // field ionization is enabled 
+  grid->l_to_SI = 1; 
+  grid->q_to_SI = 1;
+  grid->m_to_SI = 1;
+  Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
+  double ionization_energy_values[] = {0}; // in eV
+  ionization_energy(0) = ionization_energy_values[0];
+  this_sp = define_species( "test_species", 2, ionization_energy, 1,0,0, 1, npart, npart, 0, 0 );
+  // electron needs to be defined when  FI is enabled
+  species_t * electron = define_species("electron",-1.,ionization_energy, 0,0,0, 1., npart, npart, 0, 0);
+ #else
+  this_sp = define_species( "test_species", 2, 1, npart, npart, 0, 0 );
+ #endif
+
+ #if defined(FIELD_IONIZATION)
+  repeat(npart) inject_particle( this_sp,
+                                 uniform( rng(0), 0, L ),
+                                 uniform( rng(0), 0, L ),
+                                 uniform( rng(0), 0, L ),
+                                 1, 1, 1, // ux,uy,uz
+                                 uniform( rng(0), 0, 1 ), //weight
+				 2, //charge
+                                 0, 0 );
+ #else
   repeat(npart) inject_particle( this_sp,
                                  uniform( rng(0), 0, L ),
                                  uniform( rng(0), 0, L ),
@@ -48,6 +74,7 @@ begin_initialization {
                                  1, 1, 1, // Gamma = 2
                                  uniform( rng(0), 0, 1 ),
                                  0, 0 );
+ #endif
 
   LIST_FOR_EACH( sp, species_list ) {
     sp->copy_to_device();

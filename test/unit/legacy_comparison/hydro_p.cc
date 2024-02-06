@@ -49,7 +49,15 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
     std::cout << "Initializing particles" << std::endl;
     species_t * sp_temp;
-    species_t * sp = define_species( "test_species", 1., 1., npart, npart, 0, 0 );
+    species_t * sp;
+   #if defined(FIELD_IONIZATION)
+    Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
+    double ionization_energy_values[] = {0}; // in eV
+    ionization_energy(0) = ionization_energy_values[0];
+    sp = define_species( "test_species", 1.,ionization_energy, 0,0,0, 1., npart, npart, 0, 0);
+   #else
+    sp = define_species( "test_species", 1., 1., npart, npart, 0, 0 );
+   #endif
 
     int failed = 0;
 

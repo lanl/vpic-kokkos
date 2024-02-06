@@ -41,7 +41,22 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     field(2,2,1).ez  = 3;
 
     species_t * sp_temp;
-    species_t * sp = define_species( "test_species", 1., 1., npart, npart, 0, 0 );
+    species_t * sp;
+   #if defined(FIELD_IONIZATION)
+    grid->lambda  = 1; // these need to de defined as nonzero when 
+    grid->t_to_SI = 1; // field ionization is enabled 
+    grid->l_to_SI = 1; 
+    grid->q_to_SI = 1;
+    grid->m_to_SI = 1;
+    Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
+    double ionization_energy_values[] = {0}; // in eV
+    ionization_energy(0) = ionization_energy_values[0];
+    sp = define_species( "test_species", 1.,ionization_energy, 1,0,0, 1., npart, npart, 0, 0);
+    // electron needs to be defined when  FI is enabled
+    species_t * electron = define_species("electron",-1.,ionization_energy, 0,0,0, 1., npart, npart, 0, 0); 
+   #else
+    sp = define_species( "test_species", 1., 1., npart, npart, 0, 0 );
+   #endif
 
     int failed = 0;
 
