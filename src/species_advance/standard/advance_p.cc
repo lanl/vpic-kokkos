@@ -463,7 +463,9 @@ advance_p_kokkos_unified(
   
   auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<> random_pool(seed);
-  Kokkos::View<double*> epsilon_eV_list = sp->ionization_energy;
+  
+  //  Kokkos::View<double*> epsilon_eV_list = sp->ionization_energy;
+
   float n = sp->qn; // principal quantum number
   float m = sp->qm; // magnetic quantum number
   float l = sp->ql; // angular momentum quantum number
@@ -637,7 +639,7 @@ advance_p_kokkos_unified(
 	  // Check if the particle is fully ionized already
           short int N_ionization        = abs(charge[LANE]); // Current ionization state of the particle
           short int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
-	  short int N_ionization_levels = epsilon_eV_list.extent(0);
+	  short int N_ionization_levels = sp->ionization_energy.extent(0);
 
           // code units
   	  float hax_c = (fex[LANE] + dy[LANE]*fdexdy[LANE] ) + dz[LANE]*(fdexdz[LANE] + dy[LANE]*fd2exdydz[LANE]);
@@ -665,7 +667,7 @@ advance_p_kokkos_unified(
           while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {
         
             // Get the appropriate ionization energy
-            float epsilon_eV = epsilon_eV_list(int(N_ionization)); // [eV], ionization energy
+            float epsilon_eV = sp->ionization_energy(int(N_ionization)); // [eV], ionization energy
             float epsilon_au = epsilon_eV/27.2;         // atomic units, ionization energy
            
             // Calculate stuff
@@ -833,7 +835,7 @@ advance_p_kokkos_unified(
     	    float epsilon_t_SI = 0;
 	    if(multiphoton_ionised){
 	      for(int i=0; i<int(N_ionization-N_ionization_before); i++) {
-    	        epsilon_t_SI += epsilon_eV_list[i] * q_e; // joules
+    	        epsilon_t_SI += sp->ionization_energy[i] * q_e; // joules
               }
 	      double p_correction = sqrt( 2*m_e*(K*h_bar*omega_SI - epsilon_t_SI) )/energy_to_SI; // code units
 	      p_ux_e += p_correction * hax_c/(ha_mag_c*ha_mag_c);
@@ -860,9 +862,9 @@ advance_p_kokkos_unified(
 	    } 
 	    else {
               for(int i=0; i<int(N_ionization-N_ionization_before); i++) {
-                epsilon_t_au += epsilon_eV_list[i]/27.2; // atomic units, ionization energy
-    	        epsilon_t_SI += epsilon_eV_list[i] * q_e; // joules
-    	        epsilon_t_c  += (epsilon_eV_list[i] * q_e) / energy_to_SI; // code units
+                epsilon_t_au += sp->ionization_energy[i]/27.2; // atomic units, ionization energy
+    	        epsilon_t_SI += sp->ionization_energy[i] * q_e; // joules
+    	        epsilon_t_c  += (sp->ionization_energy[i] * q_e) / energy_to_SI; // code units
               }
 	    } 
     
