@@ -838,8 +838,6 @@ TEST_CASE( "Check if field ionization agrees with numerical solution", "[average
       int shorterSize = std::min(data.size(), data_analytic.size());
       int N_states = data[0].ionizationStates.size();
       int N_states_analytic = data_analytic[0].ionizationStates.size();
-
-      std::cout << "data.size(), data_analytic.size(): " << data.size() << ", " << data_analytic.size() << std::endl;
       
       // Check that datasets are not empty and that the number of ionization states is equal
       // shorterSize = 0 means there is something wrong with the dataset
@@ -853,7 +851,6 @@ TEST_CASE( "Check if field ionization agrees with numerical solution", "[average
 	  for (size_t j = 0; j < N_states; ++j) {
       	    double residual = data[i].ionizationStates[j] - data_analytic[i].ionizationStates[j];
             l2Error[j] += residual * residual;
-	    std::cout << "data[i].ionizationStates[j], data_analytic[i].ionizationStates[j]" << data[i].ionizationStates[j] << ", " << data_analytic[i].ionizationStates[j] << std::endl;
 	  }
         }
 	
