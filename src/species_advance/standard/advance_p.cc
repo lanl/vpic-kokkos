@@ -463,8 +463,6 @@ advance_p_kokkos_unified(
   
   auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<> random_pool(seed);
-  
-  //  Kokkos::View<double*> epsilon_eV_list = sp->ionization_energy;
 
   float n = sp->qn; // principal quantum number
   float m = sp->qm; // magnetic quantum number
