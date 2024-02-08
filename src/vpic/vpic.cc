@@ -237,20 +237,20 @@ void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
       fileIO.write(sp->annotations_recv_h.f64.data(), sp->annotations_recv_h.f64.span());
     }
     // Write buffer data
-    fileIO.write(sp->particle_io_buffer.data(), sp->particle_io_buffer.span());
-    fileIO.write(sp->particle_cell_io_buffer.data(), sp->particle_cell_io_buffer.span());
-    fileIO.write(sp->efields_io_buffer.data(), sp->efields_io_buffer.span());
-    fileIO.write(sp->bfields_io_buffer.data(), sp->bfields_io_buffer.span());
-    fileIO.write(sp->current_dens_io_buffer.data(), sp->current_dens_io_buffer.span());
-    fileIO.write(sp->charge_dens_io_buffer.data(), sp->charge_dens_io_buffer.span());
-    fileIO.write(sp->momentum_dens_io_buffer.data(), sp->momentum_dens_io_buffer.span());
-    fileIO.write(sp->ke_dens_io_buffer.data(), sp->ke_dens_io_buffer.span());
-    fileIO.write(sp->stress_tensor_io_buffer.data(), sp->stress_tensor_io_buffer.span());
-    fileIO.write(sp->particle_ke_io_buffer.data(), sp->particle_ke_io_buffer.span());
-    fileIO.write(sp->annotations_io_buffer.i32.data(), sp->annotations_io_buffer.i32.span());
-    fileIO.write(sp->annotations_io_buffer.i64.data(), sp->annotations_io_buffer.i64.span());
-    fileIO.write(sp->annotations_io_buffer.f32.data(), sp->annotations_io_buffer.f32.span());
-    fileIO.write(sp->annotations_io_buffer.f64.data(), sp->annotations_io_buffer.f64.span());
+    fileIO.write(sp->particle_io_buffer_h.data(), sp->particle_io_buffer_h.span());
+    fileIO.write(sp->particle_cell_io_buffer_h.data(), sp->particle_cell_io_buffer_h.span());
+    fileIO.write(sp->efields_io_buffer_h.data(), sp->efields_io_buffer_h.span());
+    fileIO.write(sp->bfields_io_buffer_h.data(), sp->bfields_io_buffer_h.span());
+    fileIO.write(sp->current_dens_io_buffer_h.data(), sp->current_dens_io_buffer_h.span());
+    fileIO.write(sp->charge_dens_io_buffer_h.data(), sp->charge_dens_io_buffer_h.span());
+    fileIO.write(sp->momentum_dens_io_buffer_h.data(), sp->momentum_dens_io_buffer_h.span());
+    fileIO.write(sp->ke_dens_io_buffer_h.data(), sp->ke_dens_io_buffer_h.span());
+    fileIO.write(sp->stress_tensor_io_buffer_h.data(), sp->stress_tensor_io_buffer_h.span());
+    fileIO.write(sp->particle_ke_io_buffer_h.data(), sp->particle_ke_io_buffer_h.span());
+    fileIO.write(sp->annotations_io_buffer_h.i32.data(), sp->annotations_io_buffer_h.i32.span());
+    fileIO.write(sp->annotations_io_buffer_h.i64.data(), sp->annotations_io_buffer_h.i64.span());
+    fileIO.write(sp->annotations_io_buffer_h.f32.data(), sp->annotations_io_buffer_h.f32.span());
+    fileIO.write(sp->annotations_io_buffer_h.f64.data(), sp->annotations_io_buffer_h.f64.span());
     if( fileIO.close() ) ERROR(( "File close failed on checkpoint tracers!!!" ));
   }
 #endif
@@ -311,6 +311,7 @@ void restore_kokkos(vpic_simulation& simulation, const char *fbase)
 
         sp->init_kokkos_particles();
 
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
         if(sp->using_annotations) {
           new(&sp->annotation_vars) annotation_vars_t();
           new(&sp->annotations_d) annotations_t<Kokkos::DefaultExecutionSpace>();
@@ -318,21 +319,40 @@ void restore_kokkos(vpic_simulation& simulation, const char *fbase)
           new(&sp->annotations_copy_d) annotations_t<Kokkos::DefaultExecutionSpace>();
           new(&sp->annotations_copy_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
           new(&sp->annotations_recv_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
-          new(&sp->particle_io_buffer) k_particles_t::HostMirror();
-          new(&sp->particle_cell_io_buffer) k_particles_t::HostMirror();
+
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
           new(&sp->np_per_ts_io_buffer) std::vector<std::pair<int64_t,int64_t>>();
-          new(&sp->efields_io_buffer) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
-          new(&sp->bfields_io_buffer) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
-          new(&sp->current_dens_io_buffer) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
-          new(&sp->charge_dens_io_buffer) Kokkos::View<float*>::HostMirror();
-          new(&sp->momentum_dens_io_buffer) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
-          new(&sp->ke_dens_io_buffer) Kokkos::View<float*>::HostMirror();
-          new(&sp->stress_tensor_io_buffer) Kokkos::View<float*[6], Kokkos::LayoutLeft>::HostMirror();
-          new(&sp->particle_ke_io_buffer) Kokkos::View<float*>::HostMirror();
-          new(&sp->annotations_io_buffer) annotations_t<Kokkos::DefaultHostExecutionSpace>();
+
+          new(&sp->particle_io_buffer_d) k_particles_t();
+          new(&sp->particle_cell_io_buffer_d) k_particles_t();
+          new(&sp->efields_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
+          new(&sp->bfields_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
+          new(&sp->current_dens_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
+          new(&sp->charge_dens_io_buffer_d) Kokkos::View<float*>();
+          new(&sp->momentum_dens_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
+          new(&sp->ke_dens_io_buffer_d) Kokkos::View<float*>();
+          new(&sp->stress_tensor_io_buffer_d) Kokkos::View<float*[6], Kokkos::LayoutLeft>();
+          new(&sp->particle_ke_io_buffer_d) Kokkos::View<float*>();
+          new(&sp->annotations_io_buffer_d) annotations_t<Kokkos::DefaultExecutionSpace>();
+
+          new(&sp->particle_io_buffer_h) k_particles_t::HostMirror();
+          new(&sp->particle_cell_io_buffer_h) k_particles_t::HostMirror();
+          new(&sp->efields_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
+          new(&sp->bfields_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
+          new(&sp->current_dens_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
+          new(&sp->charge_dens_io_buffer_h) Kokkos::View<float*>::HostMirror();
+          new(&sp->momentum_dens_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
+          new(&sp->ke_dens_io_buffer_h) Kokkos::View<float*>::HostMirror();
+          new(&sp->stress_tensor_io_buffer_h) Kokkos::View<float*[6], Kokkos::LayoutLeft>::HostMirror();
+          new(&sp->particle_ke_io_buffer_h) Kokkos::View<float*>::HostMirror();
+          new(&sp->annotations_io_buffer_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
+#endif
         }
 
-        if(!sp->using_annotations)
+        if(!sp->using_annotations) {
+          sp->copy_to_device();
+        }
+#endif
           sp->copy_to_device();
     }
 #ifdef VPIC_ENABLE_TRACER_PARTICLES
@@ -460,20 +480,20 @@ void restore_kokkos(vpic_simulation& simulation, const char *fbase)
         fileIO.read(sp->annotations_recv_h.f64.data(), sp->annotations_recv_h.f64.span());
       }
       // Read io buffers
-      fileIO.read(sp->particle_io_buffer.data(),        sp->particle_io_buffer.span());
-      fileIO.read(sp->particle_cell_io_buffer.data(),   sp->particle_cell_io_buffer.span());
-      fileIO.read(sp->efields_io_buffer.data(),         sp->efields_io_buffer.span());
-      fileIO.read(sp->bfields_io_buffer.data(),         sp->bfields_io_buffer.span());
-      fileIO.read(sp->current_dens_io_buffer.data(),    sp->current_dens_io_buffer.span());
-      fileIO.read(sp->charge_dens_io_buffer.data(),     sp->charge_dens_io_buffer.span());
-      fileIO.read(sp->momentum_dens_io_buffer.data(),   sp->momentum_dens_io_buffer.span());
-      fileIO.read(sp->ke_dens_io_buffer.data(),         sp->ke_dens_io_buffer.span());
-      fileIO.read(sp->stress_tensor_io_buffer.data(),   sp->stress_tensor_io_buffer.span());
-      fileIO.read(sp->particle_ke_io_buffer.data(),     sp->particle_ke_io_buffer.span());
-      fileIO.read(sp->annotations_io_buffer.i32.data(), sp->annotations_io_buffer.i32.span());
-      fileIO.read(sp->annotations_io_buffer.i64.data(), sp->annotations_io_buffer.i64.span());
-      fileIO.read(sp->annotations_io_buffer.f32.data(), sp->annotations_io_buffer.f32.span());
-      fileIO.read(sp->annotations_io_buffer.f64.data(), sp->annotations_io_buffer.f64.span());
+      fileIO.read(sp->particle_io_buffer_h.data(),        sp->particle_io_buffer_h.span());
+      fileIO.read(sp->particle_cell_io_buffer_h.data(),   sp->particle_cell_io_buffer_h.span());
+      fileIO.read(sp->efields_io_buffer_h.data(),         sp->efields_io_buffer_h.span());
+      fileIO.read(sp->bfields_io_buffer_h.data(),         sp->bfields_io_buffer_h.span());
+      fileIO.read(sp->current_dens_io_buffer_h.data(),    sp->current_dens_io_buffer_h.span());
+      fileIO.read(sp->charge_dens_io_buffer_h.data(),     sp->charge_dens_io_buffer_h.span());
+      fileIO.read(sp->momentum_dens_io_buffer_h.data(),   sp->momentum_dens_io_buffer_h.span());
+      fileIO.read(sp->ke_dens_io_buffer_h.data(),         sp->ke_dens_io_buffer_h.span());
+      fileIO.read(sp->stress_tensor_io_buffer_h.data(),   sp->stress_tensor_io_buffer_h.span());
+      fileIO.read(sp->particle_ke_io_buffer_h.data(),     sp->particle_ke_io_buffer_h.span());
+      fileIO.read(sp->annotations_io_buffer_h.i32.data(), sp->annotations_io_buffer_h.i32.span());
+      fileIO.read(sp->annotations_io_buffer_h.i64.data(), sp->annotations_io_buffer_h.i64.span());
+      fileIO.read(sp->annotations_io_buffer_h.f32.data(), sp->annotations_io_buffer_h.f32.span());
+      fileIO.read(sp->annotations_io_buffer_h.f64.data(), sp->annotations_io_buffer_h.f64.span());
       if( fileIO.close() ) ERROR(( "File close failed on restore tracers!!!" ));
       sp->copy_to_device();
     }

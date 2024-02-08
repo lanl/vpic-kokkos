@@ -408,20 +408,33 @@ class species_t {
         annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_copy_h;
         annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_recv_h;
 
-        int nparticles_buffered;
-        int nparticles_buffered_max;
-        k_particles_t::HostMirror                               particle_io_buffer;
-        k_particles_i_t::HostMirror                             particle_cell_io_buffer;
+        int nparticles_buffered=0;
+        int nparticles_buffered_max=0;
         std::vector<std::pair<int64_t,int64_t>>                 np_per_ts_io_buffer;
-        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror efields_io_buffer;
-        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror bfields_io_buffer;
-        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror current_dens_io_buffer;
-        Kokkos::View<float*>::HostMirror                        charge_dens_io_buffer;
-        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror momentum_dens_io_buffer;
-        Kokkos::View<float*>::HostMirror                        ke_dens_io_buffer;
-        Kokkos::View<float*[6], Kokkos::LayoutLeft>::HostMirror stress_tensor_io_buffer;
-        Kokkos::View<float*>::HostMirror                        particle_ke_io_buffer;
-        annotations_t<Kokkos::DefaultHostExecutionSpace>        annotations_io_buffer;
+
+        k_particles_t                                particle_io_buffer_d;
+        k_particles_i_t                              particle_cell_io_buffer_d;
+        Kokkos::View<float*[3], Kokkos::LayoutLeft>  efields_io_buffer_d;
+        Kokkos::View<float*[3], Kokkos::LayoutLeft>  bfields_io_buffer_d;
+        Kokkos::View<float*[3], Kokkos::LayoutLeft>  current_dens_io_buffer_d;
+        Kokkos::View<float*>                         charge_dens_io_buffer_d;
+        Kokkos::View<float*[3], Kokkos::LayoutLeft>  momentum_dens_io_buffer_d;
+        Kokkos::View<float*>                         ke_dens_io_buffer_d;
+        Kokkos::View<float*[6], Kokkos::LayoutLeft>  stress_tensor_io_buffer_d;
+        Kokkos::View<float*>                         particle_ke_io_buffer_d;
+        annotations_t<Kokkos::DefaultExecutionSpace> annotations_io_buffer_d;
+
+        k_particles_t::HostMirror                               particle_io_buffer_h;
+        k_particles_i_t::HostMirror                             particle_cell_io_buffer_h;
+        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror efields_io_buffer_h;
+        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror bfields_io_buffer_h;
+        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror current_dens_io_buffer_h;
+        Kokkos::View<float*>::HostMirror                        charge_dens_io_buffer_h;
+        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror momentum_dens_io_buffer_h;
+        Kokkos::View<float*>::HostMirror                        ke_dens_io_buffer_h;
+        Kokkos::View<float*[6], Kokkos::LayoutLeft>::HostMirror stress_tensor_io_buffer_h;
+        Kokkos::View<float*>::HostMirror                        particle_ke_io_buffer_h;
+        annotations_t<Kokkos::DefaultHostExecutionSpace>        annotations_io_buffer_h;
 #endif
 
 
@@ -519,7 +532,7 @@ class species_t {
          *  @param src_species    Species to create particle from
          *  @param index          Index of particle to use
          */
-        void create_tracer_from(species_t* src_species, uint32_t index, int rank) {
+        void create_tracer_from(species_t* src_species, uint32_t index) {
           if(np+1 > max_np) {
             ERROR(( "Species is full" ));
             return;
@@ -554,7 +567,7 @@ class species_t {
 
           // Create unique tracer id (32-bit rank concatenated with particle index)
           int tracer_idx = annotation_vars.get_annotation_index<int>(std::string("TracerID"));
-          annotations_h.set<int>(np, tracer_idx, rank*max_np + np);
+          annotations_h.set<int>(np, tracer_idx, world_rank*max_np + np);
           if(tracer_type == TracerType::Copy) {
             int w_idx = annotation_vars.get_annotation_index<float>(std::string("Weight")); // Get weight annotation index
             annotations_h.set<float>(np, w_idx, k_p_h(np, particle_var::w)); // Save weight

@@ -541,3 +541,33 @@ hydro_array_t::copy_to_host() {
   });
 
 }
+
+void
+hydro_array_t::copy_to_device() {
+
+  // Avoid capturing this
+  auto& k_h = k_h_h;
+  hydro_t * h_l = h;
+
+  //for(int i=0; i<hydro_array->k_h_h.extent(0); i++) {
+  Kokkos::parallel_for("copy hydro to legacy array",
+    host_execution_policy(0, k_h_h.extent(0) - 1) ,
+    KOKKOS_LAMBDA (int i) {
+    k_h(i, hydro_var::jx)  = h_l[i].jx;
+    k_h(i, hydro_var::jy)  = h_l[i].jy;
+    k_h(i, hydro_var::jz)  = h_l[i].jz;
+    k_h(i, hydro_var::rho) = h_l[i].rho;
+    k_h(i, hydro_var::px)  = h_l[i].jx;
+    k_h(i, hydro_var::py)  = h_l[i].jy;
+    k_h(i, hydro_var::pz)  = h_l[i].jz;
+    k_h(i, hydro_var::ke)  = h_l[i].ke;
+    k_h(i, hydro_var::txx) = h_l[i].txx;
+    k_h(i, hydro_var::tyy) = h_l[i].tyy;
+    k_h(i, hydro_var::tzz) = h_l[i].tzz;
+    k_h(i, hydro_var::tyz) = h_l[i].tyz;
+    k_h(i, hydro_var::tzx) = h_l[i].tzx;
+    k_h(i, hydro_var::txy) = h_l[i].txy;
+  });
+
+  Kokkos::deep_copy( k_h_d , k_h_h);
+}

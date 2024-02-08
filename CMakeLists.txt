@@ -286,7 +286,7 @@ find_package(Threads REQUIRED)
 #------------------------------------------------------------------------------#
 # HDF5
 #------------------------------------------------------------------------------#
-if(VPIC_ENABLE_HDF5)
+if(VPIC_ENABLE_HDF5 OR VPIC_ENABLE_TRACER_PARTICLES)
   # Enable C language in order to link with HDF5 and MPI properly
   enable_language(C)
   # Enable HDF5, and the relevant defines
@@ -355,9 +355,10 @@ if (VPIC_ENABLE_PARTICLE_ANNOTATIONS)
 endif(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
 
 if (VPIC_ENABLE_TRACER_PARTICLES)
-  add_definitions(-DVPIC_ENABLE_TRACER_PARTICLES -DVPIC_ENABLE_PARTICLE_ANNOTATIONS)
+  add_definitions(-DVPIC_ENABLE_TRACER_PARTICLES -DVPIC_ENABLE_PARTICLE_ANNOTATIONS -DVPIC_ENABLE_HDF5)
   set(ENABLE_ANNOTATIONS ON CACHE INTERNAL "")
   set(ENABLE_TRACERS ON CACHE INTERNAL "")
+  set(ENABLE_HDF5 ON CACHE INTERNAL "")
 endif(VPIC_ENABLE_TRACER_PARTICLES)
 
 set(USE_V4)

@@ -106,6 +106,8 @@ int vpic_simulation::advance(void)
     TIC apply_emitter_list( emitter_list ); TOC( emission_model, 1 );
   }
 
+// Change default behavior?
+// Scott's removal of legacy branch should make this uneeded
   if((particle_injection_interval>0) && ((step() % particle_injection_interval)==0)) {
       if(!kokkos_particle_injection) {
           KOKKOS_TIC();

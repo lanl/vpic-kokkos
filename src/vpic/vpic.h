@@ -259,10 +259,9 @@ public:
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
   void dump_tracers_buffered_csv( const char *sp_name, uint32_t dump_vars, 
-                                  const char *fbase, int append = 1,
-                                  int fname_tag = 1 );
-  void dump_tracers_csv( const char *sp_name, uint32_t dump_vars, const char *fbase, int append = 1,
-                                  int fname_tag = 1 );
+                                  const char *fbase, int fname_tag = 1 );
+  void dump_tracers_csv( const char *sp_name, uint32_t dump_vars, 
+                         const char *fbase, int fname_tag = 1 );
   void dump_particles_csv( const char *sp_name,
                            uint32_t dump_vars,
                            const char *fbase,
@@ -280,11 +279,12 @@ public:
   // HDF5 dumps
 #ifdef VPIC_ENABLE_HDF5
 #ifdef VPIC_ENABLE_HDF5_ASYNC
-  void dump_tracers_hdf5_async(const char* sp_name, const uint32_t dump_vars, const char*fbase, int append=1);
-  void dump_tracers_buffered_hdf5_async( const char *sp_name, uint32_t dump_vars, const char *fbase, const int append=1 );
+  void dump_tracers_hdf5_async(const char* sp_name, const uint32_t dump_vars, const char*fbase);
+  void dump_tracers_buffered_hdf5_async( const char *sp_name, uint32_t dump_vars, const char *fbase );
 #endif
-  void dump_tracers_hdf5(const char* sp_name, const uint32_t dump_vars, const char*fbase, int append=1);
-  void dump_tracers_buffered_hdf5( const char *sp_name, uint32_t dump_vars, const char *fbase, const int append=1 );
+  void dump_tracers_hdf5(const char* sp_name, const uint32_t dump_vars, const char*fbase);
+  void dump_tracers_buffered_hdf5( const char *sp_name, uint32_t dump_vars, const char *fbase );
+  void tracer_dump(const char* species_name, DumpParameters& dumpParams);
 #endif
 
   // convenience functions for simlog output

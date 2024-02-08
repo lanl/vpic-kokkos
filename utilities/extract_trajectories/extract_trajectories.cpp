@@ -340,9 +340,12 @@ int main(int argc, char**argv) {
       std::cout << "Writing all tracers to " << particle_fname << std::endl;
   }
 
+  int counter = 0;
   // Iterate through all tracers
   for(auto it=tracer_set.begin(); it!=tracer_set.end(); it++) {
     int id = *it;
+if(comm_rank == 0)
+  std::cout << "Writing tracer " << counter << " (" << id << ")\n";
     // Start offset and number of elements for this process
     hsize_t offset = beg_step;
     hsize_t count = ntimesteps[id];
@@ -486,6 +489,7 @@ printf("Failed to write attribute\n");
       H5Pclose(plist_id2);
     }
     MPI_Barrier(MPI_COMM_WORLD);
+    counter += 1;
   }
   if(output_single_file) {
     H5Pclose(plist_id2);
