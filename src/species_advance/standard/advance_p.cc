@@ -629,7 +629,7 @@ advance_p_kokkos_unified(
 		
 #ifdef FIELD_IONIZATION
 	// ***** Field Ioization *****
-	if (sp != sp_e && sp->ionization_energy(0) != 0){
+	if (sp != sp_e && sp->ionization_energy(0) != 0 && charge[LANE] != sp->ionization_energy.extent(0)){
        	  // Declate varviables
        	  bool multiphoton_ionised = false;
        	  float K;
