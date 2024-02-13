@@ -200,7 +200,7 @@ class species_t {
         }
         void init_kokkos_particles(int n_particles, int n_pmovers)
         {
-            k_p_d = k_particles_t("k_particles", n_particles);
+            k_p_d = k_particles_t("k_particles", n_particles, PARTICLE_VAR_COUNT);
             k_p_i_d = k_particles_i_t("k_particles_i", n_particles);
             k_pc_d = k_particle_copy_t("k_particle_copy_for_movers", n_pmovers);
             k_pc_i_d = k_particle_i_copy_t("k_particle_copy_for_movers_i", n_pmovers);

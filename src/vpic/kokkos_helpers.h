@@ -45,6 +45,7 @@ using k_field_accum_t = Kokkos::View<float *>;
 
 using k_jf_accum_t = Kokkos::View<float *[NUM_J_DIMS]>;
 
+//using k_particles_tiled_t = Kokkos::View<float **, Kokkos::Experimental::LayoutTiled<Kokkos::Iterate::Left, Kokkos::Iterate::Left, 8, 1> >;
 using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft>;
 using k_particles_i_t = Kokkos::View<int*>;
 
@@ -57,7 +58,7 @@ using k_particle_i_movers_t = Kokkos::View<int*>;
 
 using k_neighbor_t = Kokkos::View<int64_t*>;
 
-using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
+using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT], Kokkos::LayoutLeft>;
 
 // TODO: Delete these
 using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;

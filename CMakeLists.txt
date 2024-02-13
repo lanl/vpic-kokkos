@@ -68,7 +68,7 @@ option(VPIC_ENABLE_TEAM_REDUCTION "Enable team reduction for current accumulatio
 
 option(VPIC_ENABLE_VECTORIZATION "Enable improved vectorization for CPUs" OFF)
 
-option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performnace on CPUs" OFF)
+option(VPIC_ENABLE_ACCUMULATORS "Enable explicit accumulators for better performnace on CPUs" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files

@@ -7,6 +7,7 @@
 #include "spa_private.h"
 #include "../../vpic/kokkos_helpers.h"
 #include "../../vpic/kokkos_tuning.hpp"
+#include <Kokkos_SIMD.hpp>
 
 // Write current values to either an accumulator or directly to the fields
 template<class CurrentScatterAccess>
@@ -1110,7 +1111,499 @@ advance_p_kokkos_gpu(
   //delete(k_local_particle_movers_p);
   //return h_nm(0);
 
+  #undef p_dx 
+  #undef p_dy 
+  #undef p_dz 
+  #undef p_ux 
+  #undef p_uy 
+  #undef p_uz 
+  #undef p_w  
+  #undef pii  
+
+  #undef f_cbx 
+  #undef f_cby 
+  #undef f_cbz 
+  #undef f_ex  
+  #undef f_ey  
+  #undef f_ez  
+
+  #undef f_dexdy    
+  #undef f_dexdz    
+
+  #undef f_d2exdydz 
+  #undef f_deydx    
+  #undef f_deydz    
+
+  #undef f_d2eydzdx 
+  #undef f_dezdx    
+  #undef f_dezdy    
+
+  #undef f_d2ezdxdy 
+  #undef f_dcbxdx   
+  #undef f_dcbydy   
+  #undef f_dcbzdz   
 }
+
+void
+advance_p_kokkos_simd(
+        k_particles_t& k_particles,
+        k_particles_i_t& k_particles_i,
+        k_particle_copy_t& k_particle_copy,
+        k_particle_i_copy_t& k_particle_i_copy,
+        k_particle_movers_t& k_particle_movers,
+        k_particle_i_movers_t& k_particle_movers_i,
+        k_field_sa_t k_f_sa,
+        k_interpolator_t& k_interp,
+        //k_particle_movers_t k_local_particle_movers,
+        k_counter_t& k_nm,
+        k_neighbor_t& k_neighbors,
+        field_array_t* RESTRICT fa,
+        const grid_t *g,
+        const float qdt_2mc,
+        const float cdt_dx,
+        const float cdt_dy,
+        const float cdt_dz,
+        const float qsp,
+        const int np,
+        const int max_nm,
+        const int nx,
+        const int ny,
+        const int nz)
+{
+  namespace KokkosSIMD = Kokkos::Experimental;
+#define WHERE(m, x) KokkosSIMD::where(m, x)
+//#define WHERE(m, x) x
+  using simd_float_t          = KokkosSIMD::native_simd<float>;
+  using simd_float_mask_t     = KokkosSIMD::native_simd_mask<float>;
+  using simd_int32_t          = KokkosSIMD::native_simd<int>;
+  using simd_int32_mask_t     = KokkosSIMD::native_simd_mask<int>;
+
+//  using simd_float_t          = KokkosSIMD::simd<float,KokkosSIMD::simd_abi::scalar>;
+//  using simd_float_mask_t     = KokkosSIMD::simd_mask<float,KokkosSIMD::simd_abi::scalar>;
+//  using simd_int32_t          = KokkosSIMD::simd<int,KokkosSIMD::simd_abi::scalar>;
+//  using simd_int32_mask_t     = KokkosSIMD::simd_mask<int,KokkosSIMD::simd_abi::scalar>;
+
+  using element_aligned_tag_t = KokkosSIMD::element_aligned_tag;
+  constexpr auto num_lanes = simd_float_t::size();
+
+  const simd_float_t one = 1.;
+  const simd_float_t one_third = 1./3.;
+  const simd_float_t two_fifteenths = 2./15.;
+
+  k_field_t k_field = fa->k_f_d;
+
+  float cx_scalar = 0.25 * g->rdy * g->rdz / g->dt;
+  float cy_scalar = 0.25 * g->rdz * g->rdx / g->dt;
+  float cz_scalar = 0.25 * g->rdx * g->rdy / g->dt;
+  simd_float_t cx = 0.25 * g->rdy * g->rdz / g->dt;
+  simd_float_t cy = 0.25 * g->rdz * g->rdx / g->dt;
+  simd_float_t cz = 0.25 * g->rdx * g->rdy / g->dt;
+
+  auto rangel = g->rangel;
+  auto rangeh = g->rangeh;
+
+  // TODO: is this the right place to do this?
+  Kokkos::deep_copy(k_nm, 0);
+
+// Determine whether to use accumulators
+#if defined( VPIC_ENABLE_ACCUMULATORS )
+  Kokkos::View<float*[12], Kokkos::LayoutLeft> accumulator("Accumulator", k_field.extent(0));
+  Kokkos::deep_copy(accumulator, 0);
+  auto current_sv = Kokkos::Experimental::create_scatter_view(accumulator);
+#else
+  k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
+#endif
+
+  auto num_chunks = np/simd_float_t::size();
+  if(num_chunks*simd_float_t::size() < np)
+    num_chunks += 1;
+  auto policy = Kokkos::RangePolicy<size_t>(0,num_chunks);
+  Kokkos::parallel_for("advance_p", policy, KOKKOS_LAMBDA (const size_t p_index) {
+    auto current_sa = current_sv.access();
+
+    simd_float_t v0, v1, v2, v3, v4, v5;
+    simd_float_t v6, v7, v8, v9, v10, v11;
+    simd_float_t v12, v13, v14, v15;
+
+    simd_float_t dx,dy,dz,ux,uy,uz,q;
+    simd_int32_t ii;
+    simd_float_mask_t inbnds;
+
+    simd_float_t fex, fdexdy, fdexdz, fd2exdydz;
+    simd_float_t fey, fdeydz, fdeydx, fd2eydzdx;
+    simd_float_t fez, fdezdx, fdezdy, fd2ezdxdy;
+    simd_float_t fcbx , fcby, fcbz;     
+    simd_float_t fdcbxdx, fdcbydy, fdcbzdz;
+
+    simd_float_mask_t mask([p_index,np] (std::size_t lane) { return p_index*num_lanes + int(lane) < np; });
+    size_t leftover = num_lanes;
+    if(p_index*num_lanes+leftover >= np)
+      leftover = np - p_index*num_lanes;
+
+    float* mem_dx = &(k_particles(p_index*num_lanes, particle_var::dx));
+    float* mem_dy = &(k_particles(p_index*num_lanes, particle_var::dy));
+    float* mem_dz = &(k_particles(p_index*num_lanes, particle_var::dz));
+    float* mem_ux = &(k_particles(p_index*num_lanes, particle_var::ux));
+    float* mem_uy = &(k_particles(p_index*num_lanes, particle_var::uy));
+    float* mem_uz = &(k_particles(p_index*num_lanes, particle_var::uz));
+    float* mem_w  = &(k_particles(p_index*num_lanes, particle_var::w));
+    int*   mem_ii = &(k_particles_i(p_index*num_lanes));
+
+    // Load position
+    WHERE(mask, dx).copy_from(mem_dx, element_aligned_tag_t());
+    WHERE(mask, dy).copy_from(mem_dy, element_aligned_tag_t());
+    WHERE(mask, dz).copy_from(mem_dz, element_aligned_tag_t());
+    WHERE(mask, ii).copy_from(mem_ii, element_aligned_tag_t());
+
+    // Load interpolators
+    const float* mem_fex       = &(k_interp(0, interpolator_var::ex));     
+    const float* mem_fdexdy    = &(k_interp(0, interpolator_var::dexdy));  
+    const float* mem_fdexdz    = &(k_interp(0, interpolator_var::dexdz));  
+    const float* mem_fd2exdydz = &(k_interp(0, interpolator_var::d2exdydz));
+    const float* mem_fey       = &(k_interp(0, interpolator_var::ey));     
+    const float* mem_fdeydz    = &(k_interp(0, interpolator_var::deydz));  
+    const float* mem_fdeydx    = &(k_interp(0, interpolator_var::deydx));  
+    const float* mem_fd2eydzdx = &(k_interp(0, interpolator_var::d2eydzdx));
+    const float* mem_fez       = &(k_interp(0, interpolator_var::ez));     
+    const float* mem_fdezdx    = &(k_interp(0, interpolator_var::dezdx));  
+    const float* mem_fdezdy    = &(k_interp(0, interpolator_var::dezdy));  
+    const float* mem_fd2ezdxdy = &(k_interp(0, interpolator_var::d2ezdxdy));
+    const float* mem_fcbx      = &(k_interp(0, interpolator_var::cbx));    
+    const float* mem_fdcbxdx   = &(k_interp(0, interpolator_var::dcbxdx)); 
+    const float* mem_fcby      = &(k_interp(0, interpolator_var::cby));    
+    const float* mem_fdcbydy   = &(k_interp(0, interpolator_var::dcbydy)); 
+    const float* mem_fcbz      = &(k_interp(0, interpolator_var::cbz));    
+    const float* mem_fdcbzdz   = &(k_interp(0, interpolator_var::dcbzdz)); 
+
+//    simd_int32_t temp = *mem_ii;
+//    simd_int32_mask_t same = temp == ii;
+//    if((num_lanes == leftover) && KokkosSIMD::all_of(same)) {
+//      WHERE(mask, fex)       = k_interp(*mem_ii, interpolator_var::ex);
+//      WHERE(mask, fdexdy)    = k_interp(*mem_ii, interpolator_var::dexdy);
+//      WHERE(mask, fdexdz)    = k_interp(*mem_ii, interpolator_var::dexdz);
+//      WHERE(mask, fd2exdydz) = k_interp(*mem_ii, interpolator_var::d2exdydz);
+//      WHERE(mask, fey)       = k_interp(*mem_ii, interpolator_var::ey);
+//      WHERE(mask, fdeydz)    = k_interp(*mem_ii, interpolator_var::deydz);
+//      WHERE(mask, fdeydx)    = k_interp(*mem_ii, interpolator_var::deydx);
+//      WHERE(mask, fd2eydzdx) = k_interp(*mem_ii, interpolator_var::d2eydzdx);
+//      WHERE(mask, fez)       = k_interp(*mem_ii, interpolator_var::ez);
+//      WHERE(mask, fdezdx)    = k_interp(*mem_ii, interpolator_var::dezdx);
+//      WHERE(mask, fdezdy)    = k_interp(*mem_ii, interpolator_var::dezdy);
+//      WHERE(mask, fd2ezdxdy) = k_interp(*mem_ii, interpolator_var::d2ezdxdy);
+//      WHERE(mask, fcbx)      = k_interp(*mem_ii, interpolator_var::cbx);
+//      WHERE(mask, fdcbxdx)   = k_interp(*mem_ii, interpolator_var::dcbxdx);
+//      WHERE(mask, fcby)      = k_interp(*mem_ii, interpolator_var::cby);
+//      WHERE(mask, fdcbydy)   = k_interp(*mem_ii, interpolator_var::dcbydy);
+//      WHERE(mask, fcbz)      = k_interp(*mem_ii, interpolator_var::cbz);
+//      WHERE(mask, fdcbzdz)   = k_interp(*mem_ii, interpolator_var::dcbzdz);
+//    } else {
+      KokkosSIMD::where(mask, fex).gather_from(mem_fex, ii);
+      KokkosSIMD::where(mask, fdexdy).gather_from(mem_fdexdy, ii);
+      KokkosSIMD::where(mask, fdexdz).gather_from(mem_fdexdz, ii);
+      KokkosSIMD::where(mask, fd2exdydz).gather_from(mem_fd2exdydz, ii);
+      KokkosSIMD::where(mask, fey).gather_from(mem_fey, ii);
+      KokkosSIMD::where(mask, fdeydz).gather_from(mem_fdeydz, ii);
+      KokkosSIMD::where(mask, fdeydx).gather_from(mem_fdeydx, ii);
+      KokkosSIMD::where(mask, fd2eydzdx).gather_from(mem_fd2eydzdx, ii);
+      KokkosSIMD::where(mask, fez).gather_from(mem_fez, ii);
+      KokkosSIMD::where(mask, fdezdx).gather_from(mem_fdezdx, ii);
+      KokkosSIMD::where(mask, fdezdy).gather_from(mem_fdezdy, ii);
+      KokkosSIMD::where(mask, fd2ezdxdy).gather_from(mem_fd2ezdxdy, ii);
+      KokkosSIMD::where(mask, fcbx).gather_from(mem_fcbx, ii);
+      KokkosSIMD::where(mask, fdcbxdx).gather_from(mem_fdcbxdx, ii);
+      KokkosSIMD::where(mask, fcby).gather_from(mem_fcby, ii);
+      KokkosSIMD::where(mask, fdcbydy).gather_from(mem_fdcbydy, ii);
+      KokkosSIMD::where(mask, fcbz).gather_from(mem_fcbz, ii);
+      KokkosSIMD::where(mask, fdcbzdz).gather_from(mem_fdcbzdz, ii);
+//    }
+//    for(size_t i=0; i<leftover; i++) {
+//      fex[i]       = k_interp(ii[i], interpolator_var::ex);     
+//      fdexdy[i]    = k_interp(ii[i], interpolator_var::dexdy);  
+//      fdexdz[i]    = k_interp(ii[i], interpolator_var::dexdz);  
+//      fd2exdydz[i] = k_interp(ii[i], interpolator_var::d2exdydz);
+//      fey[i]       = k_interp(ii[i], interpolator_var::ey);     
+//      fdeydz[i]    = k_interp(ii[i], interpolator_var::deydz);  
+//      fdeydx[i]    = k_interp(ii[i], interpolator_var::deydx);  
+//      fd2eydzdx[i] = k_interp(ii[i], interpolator_var::d2eydzdx);
+//      fez[i]       = k_interp(ii[i], interpolator_var::ez);     
+//      fdezdx[i]    = k_interp(ii[i], interpolator_var::dezdx);  
+//      fdezdy[i]    = k_interp(ii[i], interpolator_var::dezdy);  
+//      fd2ezdxdy[i] = k_interp(ii[i], interpolator_var::d2ezdxdy);
+//      fcbx[i]      = k_interp(ii[i], interpolator_var::cbx);    
+//      fdcbxdx[i]   = k_interp(ii[i], interpolator_var::dcbxdx); 
+//      fcby[i]      = k_interp(ii[i], interpolator_var::cby);    
+//      fdcbydy[i]   = k_interp(ii[i], interpolator_var::dcbydy); 
+//      fcbz[i]      = k_interp(ii[i], interpolator_var::cbz);    
+//      fdcbzdz[i]   = k_interp(ii[i], interpolator_var::dcbzdz); 
+//    }
+
+    // Interpolate E
+    simd_float_t hax  = qdt_2mc*( Kokkos::fma( Kokkos::fma(dy, fd2exdydz, fdexdz), dz, Kokkos::fma(dy, fdexdy, fex)));
+    simd_float_t hay  = qdt_2mc*( Kokkos::fma( Kokkos::fma(dy, fd2eydzdx, fdeydx), dx, Kokkos::fma(dz, fdeydz, fey)));
+    simd_float_t haz  = qdt_2mc*( Kokkos::fma( Kokkos::fma(dy, fd2ezdxdy, fdezdy), dy, Kokkos::fma(dx, fdezdx, fez)));
+
+    // Interpolate B
+    simd_float_t cbx  = Kokkos::fma(dx, fdcbxdx, fcbx);
+    simd_float_t cby  = Kokkos::fma(dy, fdcbydy, fcby);
+    simd_float_t cbz  = Kokkos::fma(dz, fdcbzdz, fcbz);
+    // Load momentum
+    WHERE(mask, ux).copy_from(mem_ux, element_aligned_tag_t());
+    WHERE(mask, uy).copy_from(mem_uy, element_aligned_tag_t());
+    WHERE(mask, uz).copy_from(mem_uz, element_aligned_tag_t());
+    WHERE(mask, q).copy_from( mem_w, element_aligned_tag_t());
+    // Half advance E
+    ux  += hax;
+    uy  += hay;
+    uz  += haz;
+    v0   = qdt_2mc/Kokkos::sqrt(one + Kokkos::fma(ux, ux , Kokkos::fma(uy, uy, uz*uz)));
+    // Boris - scalars
+    v1   = Kokkos::fma(cbx, cbx, Kokkos::fma(cby, cby, cbz*cbz));
+    v2   = (v0*v0)*v1;
+    v3   = v0*Kokkos::fma(v2, Kokkos::fma(v2, two_fifteenths, one_third), one);
+    v4   = v3/Kokkos::fma(v1, (v3*v3), one);
+    v4  += v4;
+    // Boris - uprime
+    v0   = Kokkos::fma( Kokkos::fma( uy, cbz, -uz*cby ), v3, ux);
+    v1   = Kokkos::fma( Kokkos::fma( uz, cbx, -ux*cbz ), v3, uy);
+    v2   = Kokkos::fma( Kokkos::fma( ux, cby, -uy*cbx ), v3, uz);
+    // Boris - rotation
+    ux  = Kokkos::fma( Kokkos::fma( v1, cbz, -v2*cby ), v4, ux);
+    uy  = Kokkos::fma( Kokkos::fma( v2, cbx, -v0*cbz ), v4, uy);
+    uz  = Kokkos::fma( Kokkos::fma( v0, cby, -v1*cbx ), v4, uz);
+    // Half advance E
+    ux  += hax;
+    uy  += hay;
+    uz  += haz;
+    // Store momentum in registers for later storage
+    v6 = ux; 
+    v7 = uy;
+    v8 = uz;
+
+    v0   = one/Kokkos::sqrt(one + Kokkos::fma(ux, ux , Kokkos::fma(uy, uy, uz*uz)));
+
+    /**/                                      // Get norm displacement
+    ux  *= cdt_dx;
+    uy  *= cdt_dy;
+    uz  *= cdt_dz;
+    ux  *= v0;
+    uy  *= v0;
+    uz  *= v0;
+    v0   = dx + ux;                           // Streak midpoint (inbnds)
+    v1   = dy + uy;
+    v2   = dz + uz;
+    v3   = v0 + ux;                           // New position
+    v4   = v1 + uy;
+    v5   = v2 + uz;
+
+    inbnds = v3<=one &&  v4<=one &&  v5<=one && 
+            -v3<=one && -v4<=one && -v5<=one;
+
+    KokkosSIMD::where(!inbnds, v3) = dx;
+    KokkosSIMD::where(!inbnds, v4) = dy;
+    KokkosSIMD::where(!inbnds, v5) = dz;
+    q *= qsp;
+    KokkosSIMD::where(!inbnds, q) = 0.0;
+
+    WHERE(mask, v3).copy_to(mem_dx, element_aligned_tag_t());
+    WHERE(mask, v4).copy_to(mem_dy, element_aligned_tag_t());
+    WHERE(mask, v5).copy_to(mem_dz, element_aligned_tag_t());
+    WHERE(mask, v6).copy_to(mem_ux, element_aligned_tag_t());
+    WHERE(mask, v7).copy_to(mem_uy, element_aligned_tag_t());
+    WHERE(mask, v8).copy_to(mem_uz, element_aligned_tag_t());
+    dx = v0;
+    dy = v1;
+    dz = v2;
+    v15 = q*ux*uy*uz*one_third;
+
+#   define ACCUMULATE_J(X,Y,Z,v0,v1,v2,v3)                            \
+    v12  = q*u##X;   /* v2 = q ux                            */        \
+    v1  = v12*d##Y;  /* v1 = q ux dy                         */        \
+    v0  = v12-v1;    /* v0 = q ux (1-dy)                     */        \
+    v1 += v12;       /* v1 = q ux (1+dy)                     */        \
+    v12  = one+d##Z; /* v12 = 1+dz                            */       \
+    v2  = v0*v12;    /* v2 = q ux (1-dy)(1+dz)               */        \
+    v3  = v1*v12;    /* v3 = q ux (1+dy)(1+dz)               */        \
+    v12  = one-d##Z; /* v12 = 1-dz                            */       \
+    v0 *= v12;       /* v0 = q ux (1-dy)(1-dz)               */        \
+    v1 *= v12;       /* v1 = q ux (1+dy)(1-dz)               */        \
+    v0 += v15;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+    v1 -= v15;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+    v2 -= v15;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+    v3 += v15;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+
+    // Accumulate current density
+    ACCUMULATE_J( x,y,z, v0,v1,v2,v3 );
+
+    ACCUMULATE_J( y,z,x, v4,v5,v6,v7 );
+
+    ACCUMULATE_J( z,x,y, v8,v9,v10,v11 );
+
+#   undef ACCUMULATE_J
+
+    // Store current contributions
+#ifdef VPIC_ENABLE_ACCUMULATORS
+    v0  *= cx; v1  *= cx; v2  *= cx; v3  *= cx;
+    v4  *= cy; v5  *= cy; v6  *= cy; v7  *= cy;
+    v8  *= cz; v9  *= cz; v10 *= cz; v11 *= cz;
+//    simd_float_t a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11;
+//    KokkosSIMD::where(mask, a0).gather_from( &(accumulator(0,0)),  ii);
+//    KokkosSIMD::where(mask, a1).gather_from( &(accumulator(0,1)),  ii);
+//    KokkosSIMD::where(mask, a2).gather_from( &(accumulator(0,2)),  ii);
+//    KokkosSIMD::where(mask, a3).gather_from( &(accumulator(0,3)),  ii);
+//    KokkosSIMD::where(mask, a4).gather_from( &(accumulator(0,4)),  ii);
+//    KokkosSIMD::where(mask, a5).gather_from( &(accumulator(0,5)),  ii);
+//    KokkosSIMD::where(mask, a6).gather_from( &(accumulator(0,6)),  ii);
+//    KokkosSIMD::where(mask, a7).gather_from( &(accumulator(0,7)),  ii);
+//    KokkosSIMD::where(mask, a8).gather_from( &(accumulator(0,8)),  ii);
+//    KokkosSIMD::where(mask, a9).gather_from( &(accumulator(0,9)),  ii);
+//    KokkosSIMD::where(mask, a10).gather_from(&(accumulator(0,10)), ii);
+//    KokkosSIMD::where(mask, a11).gather_from(&(accumulator(0,11)), ii);
+//    v0 += a0; v1 += a1; v2 += a2; v3 += a3; v4 += a4; v5 += a5;
+//    v6 += a6; v7 += a7; v8 += a8; v9 += a9; v10 += a10; v11 += a11;
+//    KokkosSIMD::where(mask, v0).scatter_to( &(accumulator(0,0)),  ii);
+//    KokkosSIMD::where(mask, v1).scatter_to( &(accumulator(0,1)),  ii);
+//    KokkosSIMD::where(mask, v2).scatter_to( &(accumulator(0,2)),  ii);
+//    KokkosSIMD::where(mask, v3).scatter_to( &(accumulator(0,3)),  ii);
+//    KokkosSIMD::where(mask, v4).scatter_to( &(accumulator(0,4)),  ii);
+//    KokkosSIMD::where(mask, v5).scatter_to( &(accumulator(0,5)),  ii);
+//    KokkosSIMD::where(mask, v6).scatter_to( &(accumulator(0,6)),  ii);
+//    KokkosSIMD::where(mask, v7).scatter_to( &(accumulator(0,7)),  ii);
+//    KokkosSIMD::where(mask, v8).scatter_to( &(accumulator(0,8)),  ii);
+//    KokkosSIMD::where(mask, v9).scatter_to( &(accumulator(0,9)),  ii);
+//    KokkosSIMD::where(mask, v10).scatter_to(&(accumulator(0,10)), ii);
+//    KokkosSIMD::where(mask, v11).scatter_to(&(accumulator(0,11)), ii);
+
+//    KokkosSIMD::where(mask, v0).scatter_to(&(current_sa(0,0).value), ii);
+//    KokkosSIMD::where(mask, v1).scatter_to(&(current_sa(0,1).value), ii);
+//    KokkosSIMD::where(mask, v2).scatter_to(&(current_sa(0,2).value), ii);
+//    KokkosSIMD::where(mask, v3).scatter_to(&(current_sa(0,3).value), ii);
+//    KokkosSIMD::where(mask, v4).scatter_to(&(current_sa(0,4).value), ii);
+//    KokkosSIMD::where(mask, v5).scatter_to(&(current_sa(0,5).value), ii);
+//    KokkosSIMD::where(mask, v6).scatter_to(&(current_sa(0,6).value), ii);
+//    KokkosSIMD::where(mask, v7).scatter_to(&(current_sa(0,7).value), ii);
+//    KokkosSIMD::where(mask, v8).scatter_to(&(current_sa(0,8).value), ii);
+//    KokkosSIMD::where(mask, v9).scatter_to(&(current_sa(0,9).value), ii);
+//    KokkosSIMD::where(mask, v10).scatter_to(&(current_sa(0,10).value), ii);
+//    KokkosSIMD::where(mask, v11).scatter_to(&(current_sa(0,11).value), ii);
+    for(size_t idx=0; idx<leftover; idx++) {
+      current_sa(ii[idx], 0)  += v0[idx];
+      current_sa(ii[idx], 1)  += v1[idx];
+      current_sa(ii[idx], 2)  += v2[idx];
+      current_sa(ii[idx], 3)  += v3[idx];
+      current_sa(ii[idx], 4)  += v4[idx];
+      current_sa(ii[idx], 5)  += v5[idx];
+      current_sa(ii[idx], 6)  += v6[idx];
+      current_sa(ii[idx], 7)  += v7[idx];
+      current_sa(ii[idx], 8)  += v8[idx];
+      current_sa(ii[idx], 9)  += v9[idx];
+      current_sa(ii[idx], 10) += v10[idx];
+      current_sa(ii[idx], 11) += v11[idx];
+      
+//      accumulator(ii[idx], 0)  += v0[idx];
+//      accumulator(ii[idx], 1)  += v1[idx];
+//      accumulator(ii[idx], 2)  += v2[idx];
+//      accumulator(ii[idx], 3)  += v3[idx];
+//      accumulator(ii[idx], 4)  += v4[idx];
+//      accumulator(ii[idx], 5)  += v5[idx];
+//      accumulator(ii[idx], 6)  += v6[idx];
+//      accumulator(ii[idx], 7)  += v7[idx];
+//      accumulator(ii[idx], 8)  += v8[idx];
+//      accumulator(ii[idx], 9)  += v9[idx];
+//      accumulator(ii[idx], 10) += v10[idx];
+//      accumulator(ii[idx], 11) += v11[idx];
+    }
+#else
+    for(size_t idx=0; idx<leftover; idx++) {
+      int iii = ii[idx];
+      int zi = iii/((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii/(nx+2);
+      int xi = iii - yi*(nx+2);
+      
+      current_sa(ii[idx], field_var::jfx)                      += (cx*v0)[idx];
+      current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz),   field_var::jfx) += (cx*v1)[idx];
+      current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz),   field_var::jfx) += (cx*v2)[idx];
+      current_sa(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += (cx*v3)[idx];
+      
+      current_sa(ii[idx], field_var::jfy)                      += (cy*v4)[idx];
+      current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz),   field_var::jfy) += (cy*v5)[idx];
+      current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz),   field_var::jfy) += (cy*v6)[idx];
+      current_sa(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += (cy*v7)[idx];
+      
+      current_sa(ii[idx], field_var::jfz)                      += (cz*v8)[idx];
+      current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz),   field_var::jfz) += (cz*v9)[idx];
+      current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz),   field_var::jfz) += (cz*v10)[idx];
+      current_sa(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += (cz*v11)[idx];
+    }
+#endif
+
+    for(size_t idx=0; idx<leftover; idx++) {
+      if(!inbnds[idx]) {
+        DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+        local_pm->dispx = ux[idx];
+        local_pm->dispy = uy[idx];
+        local_pm->dispz = uz[idx];
+        local_pm->i     = p_index*num_lanes+idx;
+
+        if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
+                           current_sv, g, k_neighbors, rangel, rangeh, qsp, cx_scalar, cy_scalar, cz_scalar, nx, ny, nz ) )
+        {
+          if( k_nm(0) < max_nm )
+          {
+              const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+              if (nm >= max_nm) Kokkos::abort("overran max_nm");
+
+              k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+              k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+              k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+              k_particle_movers_i(nm)   = local_pm->i;
+
+              // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+              k_particle_copy(nm, particle_var::dx) = k_particles(p_index*num_lanes+idx, particle_var::dx);
+              k_particle_copy(nm, particle_var::dy) = k_particles(p_index*num_lanes+idx, particle_var::dy);
+              k_particle_copy(nm, particle_var::dz) = k_particles(p_index*num_lanes+idx, particle_var::dz);
+              k_particle_copy(nm, particle_var::ux) = k_particles(p_index*num_lanes+idx, particle_var::ux);
+              k_particle_copy(nm, particle_var::uy) = k_particles(p_index*num_lanes+idx, particle_var::uy);
+              k_particle_copy(nm, particle_var::uz) = k_particles(p_index*num_lanes+idx, particle_var::uz);
+              k_particle_copy(nm, particle_var::w)  = k_particles(p_index*num_lanes+idx, particle_var::w);
+              k_particle_i_copy(nm) = k_particles_i(p_index*num_lanes+idx);
+          }
+        }
+      }
+    }
+  });
+
+#if defined( VPIC_ENABLE_ACCUMULATORS )
+  Kokkos::Experimental::contribute(accumulator, current_sv);
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nz+2, ny+2, nx+2});
+  Kokkos::parallel_for("unload accumulator array", unload_policy, 
+  KOKKOS_LAMBDA(const int z, const int y, const int x) {
+    int f0  = VOXEL(1, y, z, nx, ny, nz) + x-1;
+    int a0  = VOXEL(1, y, z, nx, ny, nz) + x-1;
+    int ax  = VOXEL(0, y, z, nx, ny, nz) + x-1;
+    int ay  = VOXEL(1, y-1, z, nx, ny, nz) + x-1;
+    int az  = VOXEL(1, y, z-1, nx, ny, nz) + x-1;
+    int ayz = VOXEL(1, y-1, z-1, nx, ny, nz) + x-1;
+    int azx = VOXEL(0, y, z-1, nx, ny, nz) + x-1;
+    int axy = VOXEL(0, y-1, z, nx, ny, nz) + x-1;
+    k_field(f0, field_var::jfx) += ( accumulator(a0, 0) +
+                                     accumulator(ay, 1) +
+                                     accumulator(az, 2) +
+                                     accumulator(ayz, 3) );
+    k_field(f0, field_var::jfy) += ( accumulator(a0, 4) +
+                                     accumulator(az, 5) +
+                                     accumulator(ax, 6) +
+                                     accumulator(azx, 7) );
+    k_field(f0, field_var::jfz) += ( accumulator(a0, 8) +
+                                     accumulator(ax, 9) +
+                                     accumulator(ay, 10) +
+                                     accumulator(axy, 11) );
+  });
+#else
+  Kokkos::Experimental::contribute(k_field, current_sv);
+#endif
+}
+
 
 void
 advance_p( /**/  species_t            * RESTRICT sp,
@@ -1143,9 +1636,12 @@ advance_p( /**/  species_t            * RESTRICT sp,
   #ifdef USE_GPU
     // Use the gpu kernel for slightly better performance
     #define ADVANCE_P advance_p_kokkos_gpu
+//    #define ADVANCE_P advance_p_kokkos_simd
   #else
     // Portable kernel with additional vectorization options
-    #define ADVANCE_P advance_p_kokkos_unified
+    //#define ADVANCE_P advance_p_kokkos_unified
+    #define ADVANCE_P advance_p_kokkos_gpu
+    //#define ADVANCE_P advance_p_kokkos_simd
   #endif
   KOKKOS_TIC();
   ADVANCE_P(
