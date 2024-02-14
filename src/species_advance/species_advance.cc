@@ -181,13 +181,15 @@ species_t::copy_to_host()
     host_execution_policy(0, np) ,
     KOKKOS_LAMBDA (int i) {
 
-      particles[i].dx = k_particle_h(i, particle_var::dx);
-      particles[i].dy = k_particle_h(i, particle_var::dy);
-      particles[i].dz = k_particle_h(i, particle_var::dz);
-      particles[i].ux = k_particle_h(i, particle_var::ux);
-      particles[i].uy = k_particle_h(i, particle_var::uy);
-      particles[i].uz = k_particle_h(i, particle_var::uz);
-      particles[i].w  = k_particle_h(i, particle_var::w);
+      auto tile = i/SIMD_LEN;
+      auto idx = i - tile*SIMD_LEN;
+      particles[i].dx = k_particle_h(idx, particle_var::dx, tile);
+      particles[i].dy = k_particle_h(idx, particle_var::dy, tile);
+      particles[i].dz = k_particle_h(idx, particle_var::dz, tile);
+      particles[i].ux = k_particle_h(idx, particle_var::ux, tile);
+      particles[i].uy = k_particle_h(idx, particle_var::uy, tile);
+      particles[i].uz = k_particle_h(idx, particle_var::uz, tile);
+      particles[i].w  = k_particle_h(idx, particle_var::w,  tile);
       particles[i].i  = k_particle_i_h(i);
 
     });
@@ -227,13 +229,15 @@ species_t::copy_to_device()
     host_execution_policy(0, np) ,
     KOKKOS_LAMBDA (int i) {
 
-      k_particle_h(i, particle_var::dx) = particles[i].dx;
-      k_particle_h(i, particle_var::dy) = particles[i].dy;
-      k_particle_h(i, particle_var::dz) = particles[i].dz;
-      k_particle_h(i, particle_var::ux) = particles[i].ux;
-      k_particle_h(i, particle_var::uy) = particles[i].uy;
-      k_particle_h(i, particle_var::uz) = particles[i].uz;
-      k_particle_h(i, particle_var::w)  = particles[i].w;
+      auto tile = i/SIMD_LEN;
+      auto idx = i - tile*SIMD_LEN;
+      k_particle_h(idx, particle_var::dx, tile) = particles[i].dx;
+      k_particle_h(idx, particle_var::dy, tile) = particles[i].dy;
+      k_particle_h(idx, particle_var::dz, tile) = particles[i].dz;
+      k_particle_h(idx, particle_var::ux, tile) = particles[i].ux;
+      k_particle_h(idx, particle_var::uy, tile) = particles[i].uy;
+      k_particle_h(idx, particle_var::uz, tile) = particles[i].uz;
+      k_particle_h(idx, particle_var::w,  tile)  = particles[i].w;
       k_particle_i_h(i) = particles[i].i;
 
     });
@@ -334,13 +338,15 @@ species_t::copy_inbound_to_device()
     KOKKOS_LAMBDA (int i) {
 
       int npi = npart+i; // i goes from 0..n so no need for -1
-      particles(npi, particle_var::dx) = particle_copy(i, particle_var::dx);
-      particles(npi, particle_var::dy) = particle_copy(i, particle_var::dy);
-      particles(npi, particle_var::dz) = particle_copy(i, particle_var::dz);
-      particles(npi, particle_var::ux) = particle_copy(i, particle_var::ux);
-      particles(npi, particle_var::uy) = particle_copy(i, particle_var::uy);
-      particles(npi, particle_var::uz) = particle_copy(i, particle_var::uz);
-      particles(npi, particle_var::w)  = particle_copy(i, particle_var::w);
+      auto tile = npi/SIMD_LEN;
+      auto idx = npi - tile*SIMD_LEN;
+      particles(idx, particle_var::dx, tile) = particle_copy(i, particle_var::dx);
+      particles(idx, particle_var::dy, tile) = particle_copy(i, particle_var::dy);
+      particles(idx, particle_var::dz, tile) = particle_copy(i, particle_var::dz);
+      particles(idx, particle_var::ux, tile) = particle_copy(i, particle_var::ux);
+      particles(idx, particle_var::uy, tile) = particle_copy(i, particle_var::uy);
+      particles(idx, particle_var::uz, tile) = particle_copy(i, particle_var::uz);
+      particles(idx, particle_var::w,  tile) = particle_copy(i, particle_var::w);
       particles_i(npi) = particle_copy_i(i);
 
     });

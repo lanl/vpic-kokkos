@@ -16,12 +16,12 @@ void uncenter_p_kokkos(
   const float two_fifteenths = 2./15.;
 
   // Particle defines (p->x)
-  #define p_dx    k_particles(p_index, particle_var::dx)
-  #define p_dy    k_particles(p_index, particle_var::dy)
-  #define p_dz    k_particles(p_index, particle_var::dz)
-  #define p_ux    k_particles(p_index, particle_var::ux) // Load momentum
-  #define p_uy    k_particles(p_index, particle_var::uy)
-  #define p_uz    k_particles(p_index, particle_var::uz)
+  #define p_dx    k_particles(pidx, particle_var::dx, tile)
+  #define p_dy    k_particles(pidx, particle_var::dy, tile)
+  #define p_dz    k_particles(pidx, particle_var::dz, tile)
+  #define p_ux    k_particles(pidx, particle_var::ux, tile) // Load momentum
+  #define p_uy    k_particles(pidx, particle_var::uy, tile)
+  #define p_uz    k_particles(pidx, particle_var::uz, tile)
   #define pii     k_particles_i(p_index)
 
   // Interpolator Defines (f->x)
@@ -57,31 +57,46 @@ void uncenter_p_kokkos(
     float hax, hay, haz, l_cbx, l_cby, l_cbz;
     float v0, v1, v2, v3, v4;
 
-    hax  = qdt_2mc*(      ( f_ex    + p_dy*f_dexdy    ) +
-                     p_dz*( f_dexdz + p_dy*f_d2exdydz ) );
-    hay  = qdt_2mc*(      ( f_ey    + p_dz*f_deydz    ) +
-                     p_dx*( f_deydx + p_dz*f_d2eydzdx ) );
-    haz  = qdt_2mc*(      ( f_ez    + p_dx*f_dezdx    ) +
-                     p_dy*( f_dezdy + p_dx*f_d2ezdxdy ) );
-    l_cbx  = f_cbx + p_dx*f_dcbxdx;            // Interpolate B
-    l_cby  = f_cby + p_dy*f_dcbydy;
-    l_cbz  = f_cbz + p_dz*f_dcbzdz;
-    v0   = qdt_4mc/(float)sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
+    auto tile = p_index / SIMD_LEN;
+    auto pidx = p_index - tile*SIMD_LEN;
+
+    float dx = p_dx; // Load position
+    float dy = p_dy;
+    float dz = p_dz;
+
+    hax  = qdt_2mc*(      ( f_ex    + dy*f_dexdy    ) +
+                     dz*( f_dexdz + dy*f_d2exdydz ) );
+    hay  = qdt_2mc*(      ( f_ey    + dz*f_deydz    ) +
+                     dx*( f_deydx + dz*f_d2eydzdx ) );
+    haz  = qdt_2mc*(      ( f_ez    + dx*f_dezdx    ) +
+                     dy*( f_dezdy + dx*f_d2ezdxdy ) );
+    l_cbx  = f_cbx + dx*f_dcbxdx;            // Interpolate B
+    l_cby  = f_cby + dy*f_dcbydy;
+    l_cbz  = f_cbz + dz*f_dcbzdz;
+
+    float ux = p_ux; // Load momentum
+    float uy = p_uy;
+    float uz = p_uz;
+
+    v0   = qdt_4mc/(float)sqrt(one + (ux*ux + (uy*uy + uz*uz)));
     /**/                                     // Boris - scalars
     v1    = l_cbx*l_cbx + (l_cby*l_cby + l_cbz*l_cbz);
     v2    = (v0*v0)*v1;
     v3    = v0*(one+v2*(one_third+v2*two_fifteenths));
     v4    = v3/(one+v1*(v3*v3));
     v4   += v4;
-    v0    = p_ux + v3*( p_uy*l_cbz - p_uz*l_cby );      // Boris - uprime
-    v1    = p_uy + v3*( p_uz*l_cbx - p_ux*l_cbz );
-    v2    = p_uz + v3*( p_ux*l_cby - p_uy*l_cbx );
-    p_ux += v4*( v1*l_cbz - v2*l_cby );           // Boris - rotation
-    p_uy += v4*( v2*l_cbx - v0*l_cbz );
-    p_uz += v4*( v0*l_cby - v1*l_cbx );
-    p_ux += hax;                              // Half advance E
-    p_uy += hay;
-    p_uz += haz;
+    v0    = ux + v3*( uy*l_cbz - uz*l_cby );      // Boris - uprime
+    v1    = uy + v3*( uz*l_cbx - ux*l_cbz );
+    v2    = uz + v3*( ux*l_cby - uy*l_cbx );
+    ux += v4*( v1*l_cbz - v2*l_cby );           // Boris - rotation
+    uy += v4*( v2*l_cbx - v0*l_cbz );
+    uz += v4*( v0*l_cby - v1*l_cbx );
+    ux += hax;                              // Half advance E
+    uy += hay;
+    uz += haz;
+    p_ux = ux;                              // Store momentum
+    p_uy = uy;
+    p_uz = uz;
   });
 
 }

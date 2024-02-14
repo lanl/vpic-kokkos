@@ -213,13 +213,15 @@ accumulate_hydro_p_kokkos(
     {
 
     // Load the particle
-    float dx = k_particles(p_index, particle_var::dx);
-    float dy = k_particles(p_index, particle_var::dy);
-    float dz = k_particles(p_index, particle_var::dz);
-    float ux = k_particles(p_index, particle_var::ux);
-    float uy = k_particles(p_index, particle_var::uy);
-    float uz = k_particles(p_index, particle_var::uz);
-    float w  = k_particles(p_index, particle_var::w);
+    auto tile = p_index / SIMD_LEN;
+    auto pidx = p_index - tile*SIMD_LEN;
+    float dx = k_particles(pidx, particle_var::dx, tile);
+    float dy = k_particles(pidx, particle_var::dy, tile);
+    float dz = k_particles(pidx, particle_var::dz, tile);
+    float ux = k_particles(pidx, particle_var::ux, tile);
+    float uy = k_particles(pidx, particle_var::uy, tile);
+    float uz = k_particles(pidx, particle_var::uz, tile);
+    float w  = k_particles(pidx, particle_var::w,  tile);
     int ii = k_particles_i(p_index);
 
     const float cbx = k_interp(ii, interpolator_var::cbx);

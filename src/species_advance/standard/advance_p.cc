@@ -370,13 +370,13 @@ advance_p_kokkos_unified(
   float cy = 0.25 * g->rdz * g->rdx / g->dt;
   float cz = 0.25 * g->rdx * g->rdy / g->dt;
 
-  #define p_dx    k_particles(p_index, particle_var::dx)
-  #define p_dy    k_particles(p_index, particle_var::dy)
-  #define p_dz    k_particles(p_index, particle_var::dz)
-  #define p_ux    k_particles(p_index, particle_var::ux)
-  #define p_uy    k_particles(p_index, particle_var::uy)
-  #define p_uz    k_particles(p_index, particle_var::uz)
-  #define p_w     k_particles(p_index, particle_var::w)
+  #define p_dx    k_particles(p_index%SIMD_LEN, particle_var::dx, p_index%SIMD_LEN)
+  #define p_dy    k_particles(p_index%SIMD_LEN, particle_var::dy, p_index%SIMD_LEN)
+  #define p_dz    k_particles(p_index%SIMD_LEN, particle_var::dz, p_index%SIMD_LEN)
+  #define p_ux    k_particles(p_index%SIMD_LEN, particle_var::ux, p_index%SIMD_LEN)
+  #define p_uy    k_particles(p_index%SIMD_LEN, particle_var::uy, p_index%SIMD_LEN)
+  #define p_uz    k_particles(p_index%SIMD_LEN, particle_var::uz, p_index%SIMD_LEN)
+  #define p_w     k_particles(p_index%SIMD_LEN, particle_var::w,  p_index%SIMD_LEN)
   #define pii     k_particles_i(p_index)
 
   #define f_cbx k_interp(ii[LANE], interpolator_var::cbx)
@@ -811,13 +811,13 @@ advance_p_kokkos_gpu(
 
   // Process particles for this pipeline
 
-  #define p_dx    k_particles(p_index, particle_var::dx)
-  #define p_dy    k_particles(p_index, particle_var::dy)
-  #define p_dz    k_particles(p_index, particle_var::dz)
-  #define p_ux    k_particles(p_index, particle_var::ux)
-  #define p_uy    k_particles(p_index, particle_var::uy)
-  #define p_uz    k_particles(p_index, particle_var::uz)
-  #define p_w     k_particles(p_index, particle_var::w)
+  #define p_dx    k_particles(p_index%SIMD_LEN, particle_var::dx, p_index/SIMD_LEN)
+  #define p_dy    k_particles(p_index%SIMD_LEN, particle_var::dy, p_index/SIMD_LEN)
+  #define p_dz    k_particles(p_index%SIMD_LEN, particle_var::dz, p_index/SIMD_LEN)
+  #define p_ux    k_particles(p_index%SIMD_LEN, particle_var::ux, p_index/SIMD_LEN)
+  #define p_uy    k_particles(p_index%SIMD_LEN, particle_var::uy, p_index/SIMD_LEN)
+  #define p_uz    k_particles(p_index%SIMD_LEN, particle_var::uz, p_index/SIMD_LEN)
+  #define p_w     k_particles(p_index%SIMD_LEN, particle_var::w, p_index/SIMD_LEN)
   #define pii     k_particles_i(p_index)
 
   #define f_cbx k_interp(ii, interpolator_var::cbx)
@@ -1184,7 +1184,8 @@ advance_p_kokkos_simd(
 //  using simd_int32_mask_t     = KokkosSIMD::simd_mask<int,KokkosSIMD::simd_abi::scalar>;
 
   using element_aligned_tag_t = KokkosSIMD::element_aligned_tag;
-  constexpr auto num_lanes = simd_float_t::size();
+//  constexpr auto num_lanes = simd_float_t::size();
+  constexpr auto num_lanes = SIMD_LEN;
 
   const simd_float_t one = 1.;
   const simd_float_t one_third = 1./3.;
@@ -1214,8 +1215,11 @@ advance_p_kokkos_simd(
   k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
 #endif
 
-  auto num_chunks = np/simd_float_t::size();
-  if(num_chunks*simd_float_t::size() < np)
+//  auto num_chunks = np/simd_float_t::size();
+//  if(num_chunks*simd_float_t::size() < np)
+//    num_chunks += 1;
+  auto num_chunks = np/SIMD_LEN;
+  if(num_chunks*SIMD_LEN < np)
     num_chunks += 1;
   auto policy = Kokkos::RangePolicy<size_t>(0,num_chunks);
   Kokkos::parallel_for("advance_p", policy, KOKKOS_LAMBDA (const size_t p_index) {
@@ -1240,13 +1244,14 @@ advance_p_kokkos_simd(
     if(p_index*num_lanes+leftover >= np)
       leftover = np - p_index*num_lanes;
 
-    float* mem_dx = &(k_particles(p_index*num_lanes, particle_var::dx));
-    float* mem_dy = &(k_particles(p_index*num_lanes, particle_var::dy));
-    float* mem_dz = &(k_particles(p_index*num_lanes, particle_var::dz));
-    float* mem_ux = &(k_particles(p_index*num_lanes, particle_var::ux));
-    float* mem_uy = &(k_particles(p_index*num_lanes, particle_var::uy));
-    float* mem_uz = &(k_particles(p_index*num_lanes, particle_var::uz));
-    float* mem_w  = &(k_particles(p_index*num_lanes, particle_var::w));
+    auto tile = p_index;
+    float* mem_dx = &(k_particles(0, particle_var::dx, p_index));
+    float* mem_dy = &(k_particles(0, particle_var::dy, p_index));
+    float* mem_dz = &(k_particles(0, particle_var::dz, p_index));
+    float* mem_ux = &(k_particles(0, particle_var::ux, p_index));
+    float* mem_uy = &(k_particles(0, particle_var::uy, p_index));
+    float* mem_uz = &(k_particles(0, particle_var::uz, p_index));
+    float* mem_w  = &(k_particles(0, particle_var::w,  p_index));
     int*   mem_ii = &(k_particles_i(p_index*num_lanes));
 
     // Load position
@@ -1559,13 +1564,13 @@ advance_p_kokkos_simd(
               k_particle_movers_i(nm)   = local_pm->i;
 
               // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-              k_particle_copy(nm, particle_var::dx) = k_particles(p_index*num_lanes+idx, particle_var::dx);
-              k_particle_copy(nm, particle_var::dy) = k_particles(p_index*num_lanes+idx, particle_var::dy);
-              k_particle_copy(nm, particle_var::dz) = k_particles(p_index*num_lanes+idx, particle_var::dz);
-              k_particle_copy(nm, particle_var::ux) = k_particles(p_index*num_lanes+idx, particle_var::ux);
-              k_particle_copy(nm, particle_var::uy) = k_particles(p_index*num_lanes+idx, particle_var::uy);
-              k_particle_copy(nm, particle_var::uz) = k_particles(p_index*num_lanes+idx, particle_var::uz);
-              k_particle_copy(nm, particle_var::w)  = k_particles(p_index*num_lanes+idx, particle_var::w);
+              k_particle_copy(nm, particle_var::dx) = k_particles(idx, particle_var::dx, p_index);
+              k_particle_copy(nm, particle_var::dy) = k_particles(idx, particle_var::dy, p_index);
+              k_particle_copy(nm, particle_var::dz) = k_particles(idx, particle_var::dz, p_index);
+              k_particle_copy(nm, particle_var::ux) = k_particles(idx, particle_var::ux, p_index);
+              k_particle_copy(nm, particle_var::uy) = k_particles(idx, particle_var::uy, p_index);
+              k_particle_copy(nm, particle_var::uz) = k_particles(idx, particle_var::uz, p_index);
+              k_particle_copy(nm, particle_var::w)  = k_particles(idx, particle_var::w,  p_index);
               k_particle_i_copy(nm) = k_particles_i(p_index*num_lanes+idx);
           }
         }

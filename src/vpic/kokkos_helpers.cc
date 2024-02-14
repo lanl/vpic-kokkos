@@ -37,13 +37,15 @@ void print_particles_d(
     {
         for (int z = 0; z < np; z++)
         {
+            auto tile = z/SIMD_LEN;
+            auto pidx = z - tile*SIMD_LEN;
             printf("accum part %d has %f %f %f %f %f %f \n", z,
-                    particles(z, particle_var::dx),
-                    particles(z, particle_var::dy),
-                    particles(z, particle_var::dz),
-                    particles(z, particle_var::ux),
-                    particles(z, particle_var::uy),
-                    particles(z, particle_var::uz)
+                    particles(pidx, particle_var::dx, tile),
+                    particles(pidx, particle_var::dy, tile),
+                    particles(pidx, particle_var::dz, tile),
+                    particles(pidx, particle_var::ux, tile),
+                    particles(pidx, particle_var::uy, tile),
+                    particles(pidx, particle_var::uz, tile)
                   );
         }
     });

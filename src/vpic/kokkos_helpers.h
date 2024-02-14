@@ -3,6 +3,7 @@
 
 #include <Kokkos_Core.hpp>
 #include <Kokkos_ScatterView.hpp>
+#include <Kokkos_SIMD.hpp>
 #include <iostream>
 
 #include "../material/material.h" // Need material_t
@@ -46,8 +47,12 @@ using k_field_accum_t = Kokkos::View<float *>;
 using k_jf_accum_t = Kokkos::View<float *[NUM_J_DIMS]>;
 
 //using k_particles_tiled_t = Kokkos::View<float **, Kokkos::Experimental::LayoutTiled<Kokkos::Iterate::Left, Kokkos::Iterate::Left, 8, 1> >;
-using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft>;
+// Particle struct with tiling (float*** corresponds to Tile row, Tile col, N tiles)
+using k_particles_t = Kokkos::View<float ***, Kokkos::LayoutLeft>;
+//using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft>;
 using k_particles_i_t = Kokkos::View<int*>;
+constexpr auto SIMD_LEN = Kokkos::Experimental::native_simd<float>::size();
+//constexpr auto SIMD_LEN = 32;
 
 // TODO: think about the layout here
 using k_particle_copy_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutRight>;

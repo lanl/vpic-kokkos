@@ -222,145 +222,145 @@ accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
 // computational domain; see note in synchronize_rhob about why this
 // is done this way.  All particles on the list must be inbounds.
 
-struct accum_rho_p_reduce {
-    typedef float value_type[];
+//struct accum_rho_p_reduce {
+//    typedef float value_type[];
+//
+//    k_field_t& kfield;
+//    k_particles_t& kparticles;
+//    k_particles_i_t& kparticles_i;
+//    int sy;
+//    int sz;
+//    float q_8V;
+//    int np;
+//    int value_count;
+//
+//
+//    KOKKOS_INLINE_FUNCTION
+//    accum_rho_p_reduce(k_field_t& k_f_, k_particles_t& k_p_, k_particles_i_t& k_p_i_, int sy_, int sz_, float q_8V_, int np_, int nv_) : kfield(k_f_), kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_), value_count(nv_) {kfield = k_f_;}
+//
+//    KOKKOS_INLINE_FUNCTION
+//    void init(value_type sums) const {
+//        for(int j=0; j<value_count; ++j) {
+//            sums[j] = 0.0;
+//        }
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION
+//    void join(volatile value_type dst, const volatile value_type src) const {
+//        for(int i=0; i<value_count; i++) {
+//            dst[i] += src[i];
+////            Kokkos::atomic_add(&(dst[i]),  src[i]);
+//        }
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION
+//    void operator() (const int n, value_type sums) const {
+//        float w0, w1, w2, w3, w4, w5, w6, w7, dz;
+//
+//        w0 = kparticles(n, particle_var::dx);
+//        w1 = kparticles(n, particle_var::dy);
+//        dz = kparticles(n, particle_var::dz);
+//        int v = kparticles_i(n);
+//        w7 = kparticles(n, particle_var::w) * q_8V;
+//
+//#   define FMA( x,y,z) ((z)+(x)*(y))
+//#   define FNMS(x,y,z) ((z)-(x)*(y))
+//        w6=FNMS(w0,w7,w7);                    // q(1-dx)
+//        w7=FMA( w0,w7,w7);                    // q(1+dx)
+//        w4=FNMS(w1,w6,w6); w5=FNMS(w1,w7,w7); // q(1-dx)(1-dy), q(1+dx)(1-dy)
+//        w6=FMA( w1,w6,w6); w7=FMA( w1,w7,w7); // q(1-dx)(1+dy), q(1+dx)(1+dy)
+//        w0=FNMS(dz,w4,w4); w1=FNMS(dz,w5,w5); w2=FNMS(dz,w6,w6); w3=FNMS(dz,w7,w7);
+//        w4=FMA( dz,w4,w4); w5=FMA( dz,w5,w5); w6=FMA( dz,w6,w6); w7=FMA( dz,w7,w7);
+//#   undef FNMS
+//#   undef FMA
+//
+//        sums[v        ] += w0;
+//        sums[v+1      ] += w1;
+//        sums[v+sy     ] += w2;
+//        sums[v+sy+1   ] += w3;
+//        sums[v+sz     ] += w4;
+//        sums[v+sz+1   ] += w5;
+//        sums[v+sy+sz  ] += w6;
+//        sums[v+sz+sy+1] += w7;
+///*
+//        Kokkos::atomic_add(&(sums[v         ]), w0);
+//        Kokkos::atomic_add(&(sums[v+1       ]), w1);
+//        Kokkos::atomic_add(&(sums[v+sy      ]), w2);
+//        Kokkos::atomic_add(&(sums[v+sy+1    ]), w3);
+//        Kokkos::atomic_add(&(sums[v+sz      ]), w4);
+//        Kokkos::atomic_add(&(sums[v+sz+1    ]), w5);
+//        Kokkos::atomic_add(&(sums[v+sz+sy   ]), w6);
+//        Kokkos::atomic_add(&(sums[v+sz+sy+1 ]), w7);
+//*/
+//    }
+//
+//    KOKKOS_INLINE_FUNCTION
+//    void final(value_type dst) const {
+//        for(int i=0; i<value_count; i++) {
+//            kfield(i, field_var::rhof) += dst[i];
+////            Kokkos::atomic_add(&(kfield(i, field_var::rhof)), dst[i]);
+//        }
+//    }
+//};
 
-    k_field_t& kfield;
-    k_particles_t& kparticles;
-    k_particles_i_t& kparticles_i;
-    int sy;
-    int sz;
-    float q_8V;
-    int np;
-    int value_count;
 
-
-    KOKKOS_INLINE_FUNCTION
-    accum_rho_p_reduce(k_field_t& k_f_, k_particles_t& k_p_, k_particles_i_t& k_p_i_, int sy_, int sz_, float q_8V_, int np_, int nv_) : kfield(k_f_), kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_), value_count(nv_) {kfield = k_f_;}
-
-    KOKKOS_INLINE_FUNCTION
-    void init(value_type sums) const {
-        for(int j=0; j<value_count; ++j) {
-            sums[j] = 0.0;
-        }
-    }
-
-    KOKKOS_INLINE_FUNCTION
-    void join(volatile value_type dst, const volatile value_type src) const {
-        for(int i=0; i<value_count; i++) {
-            dst[i] += src[i];
-//            Kokkos::atomic_add(&(dst[i]),  src[i]);
-        }
-    }
-
-    KOKKOS_INLINE_FUNCTION
-    void operator() (const int n, value_type sums) const {
-        float w0, w1, w2, w3, w4, w5, w6, w7, dz;
-
-        w0 = kparticles(n, particle_var::dx);
-        w1 = kparticles(n, particle_var::dy);
-        dz = kparticles(n, particle_var::dz);
-        int v = kparticles_i(n);
-        w7 = kparticles(n, particle_var::w) * q_8V;
-
-#   define FMA( x,y,z) ((z)+(x)*(y))
-#   define FNMS(x,y,z) ((z)-(x)*(y))
-        w6=FNMS(w0,w7,w7);                    // q(1-dx)
-        w7=FMA( w0,w7,w7);                    // q(1+dx)
-        w4=FNMS(w1,w6,w6); w5=FNMS(w1,w7,w7); // q(1-dx)(1-dy), q(1+dx)(1-dy)
-        w6=FMA( w1,w6,w6); w7=FMA( w1,w7,w7); // q(1-dx)(1+dy), q(1+dx)(1+dy)
-        w0=FNMS(dz,w4,w4); w1=FNMS(dz,w5,w5); w2=FNMS(dz,w6,w6); w3=FNMS(dz,w7,w7);
-        w4=FMA( dz,w4,w4); w5=FMA( dz,w5,w5); w6=FMA( dz,w6,w6); w7=FMA( dz,w7,w7);
-#   undef FNMS
-#   undef FMA
-
-        sums[v        ] += w0;
-        sums[v+1      ] += w1;
-        sums[v+sy     ] += w2;
-        sums[v+sy+1   ] += w3;
-        sums[v+sz     ] += w4;
-        sums[v+sz+1   ] += w5;
-        sums[v+sy+sz  ] += w6;
-        sums[v+sz+sy+1] += w7;
-/*
-        Kokkos::atomic_add(&(sums[v         ]), w0);
-        Kokkos::atomic_add(&(sums[v+1       ]), w1);
-        Kokkos::atomic_add(&(sums[v+sy      ]), w2);
-        Kokkos::atomic_add(&(sums[v+sy+1    ]), w3);
-        Kokkos::atomic_add(&(sums[v+sz      ]), w4);
-        Kokkos::atomic_add(&(sums[v+sz+1    ]), w5);
-        Kokkos::atomic_add(&(sums[v+sz+sy   ]), w6);
-        Kokkos::atomic_add(&(sums[v+sz+sy+1 ]), w7);
-*/
-    }
-
-    KOKKOS_INLINE_FUNCTION
-    void final(value_type dst) const {
-        for(int i=0; i<value_count; i++) {
-            kfield(i, field_var::rhof) += dst[i];
-//            Kokkos::atomic_add(&(kfield(i, field_var::rhof)), dst[i]);
-        }
-    }
-};
-
-
-// TODO replace with scatter add view
-struct accum_rho_p {
-    k_field_sa_t kfield;
-    k_particles_t kparticles;
-    k_particles_i_t kparticles_i;
-    int sy;
-    int sz;
-    float q_8V;
-    int np;
-
-    KOKKOS_INLINE_FUNCTION
-    accum_rho_p(k_field_sa_t& k_f_sa_, k_particles_t& k_p_, k_particles_i_t& k_p_i_, int sy_, int sz_, float q_8V_, int np_) : kfield(k_f_sa_), kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_) {}
-
-    KOKKOS_INLINE_FUNCTION
-    void operator() (const int n) const {
-        float w0, w1, w2, w3, w4, w5, w6, w7, dz;
-
-        w0 = kparticles(n, particle_var::dx);
-        w1 = kparticles(n, particle_var::dy);
-        dz = kparticles(n, particle_var::dz);
-        int v = kparticles_i(n);
-        w7 = kparticles(n, particle_var::w) * q_8V;
-
-#   define FMA( x,y,z) ((z)+(x)*(y))
-#   define FNMS(x,y,z) ((z)-(x)*(y))
-        w6=FNMS(w0,w7,w7);                    // q(1-dx)
-        w7=FMA( w0,w7,w7);                    // q(1+dx)
-        w4=FNMS(w1,w6,w6); w5=FNMS(w1,w7,w7); // q(1-dx)(1-dy), q(1+dx)(1-dy)
-        w6=FMA( w1,w6,w6); w7=FMA( w1,w7,w7); // q(1-dx)(1+dy), q(1+dx)(1+dy)
-        w0=FNMS(dz,w4,w4); w1=FNMS(dz,w5,w5); w2=FNMS(dz,w6,w6); w3=FNMS(dz,w7,w7);
-        w4=FMA( dz,w4,w4); w5=FMA( dz,w5,w5); w6=FMA( dz,w6,w6); w7=FMA( dz,w7,w7);
-#   undef FNMS
-#   undef FMA
-
-        auto scatter_view_access = kfield.access();
-
-        scatter_view_access(v,         field_var::rhof) += w0;
-        scatter_view_access(v+1,       field_var::rhof) += w1;
-        scatter_view_access(v+sy,      field_var::rhof) += w2;
-        scatter_view_access(v+sy+1,    field_var::rhof) += w3;
-        scatter_view_access(v+sz,      field_var::rhof) += w4;
-        scatter_view_access(v+sz+1,    field_var::rhof) += w5;
-        scatter_view_access(v+sz+sy,   field_var::rhof) += w6;
-        scatter_view_access(v+sz+sy+1, field_var::rhof) += w7;
-
-/*
-        Kokkos::atomic_add(&kfield(v,         field_var::rhof), w0);
-        Kokkos::atomic_add(&kfield(v+1,       field_var::rhof), w1);
-        Kokkos::atomic_add(&kfield(v+sy,      field_var::rhof), w2);
-        Kokkos::atomic_add(&kfield(v+sy+1,    field_var::rhof), w3);
-        Kokkos::atomic_add(&kfield(v+sz,      field_var::rhof), w4);
-        Kokkos::atomic_add(&kfield(v+sz+1,    field_var::rhof), w5);
-        Kokkos::atomic_add(&kfield(v+sz+sy,   field_var::rhof), w6);
-        Kokkos::atomic_add(&kfield(v+sz+sy+1, field_var::rhof), w7);
-*/
-    }
-};
+//// TODO replace with scatter add view
+//struct accum_rho_p {
+//    k_field_sa_t kfield;
+//    k_particles_t kparticles;
+//    k_particles_i_t kparticles_i;
+//    int sy;
+//    int sz;
+//    float q_8V;
+//    int np;
+//
+//    KOKKOS_INLINE_FUNCTION
+//    accum_rho_p(k_field_sa_t& k_f_sa_, k_particles_t& k_p_, k_particles_i_t& k_p_i_, int sy_, int sz_, float q_8V_, int np_) : kfield(k_f_sa_), kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_) {}
+//
+//    KOKKOS_INLINE_FUNCTION
+//    void operator() (const int n) const {
+//        float w0, w1, w2, w3, w4, w5, w6, w7, dz;
+//
+//        w0 = kparticles(n, particle_var::dx);
+//        w1 = kparticles(n, particle_var::dy);
+//        dz = kparticles(n, particle_var::dz);
+//        int v = kparticles_i(n);
+//        w7 = kparticles(n, particle_var::w) * q_8V;
+//
+//#   define FMA( x,y,z) ((z)+(x)*(y))
+//#   define FNMS(x,y,z) ((z)-(x)*(y))
+//        w6=FNMS(w0,w7,w7);                    // q(1-dx)
+//        w7=FMA( w0,w7,w7);                    // q(1+dx)
+//        w4=FNMS(w1,w6,w6); w5=FNMS(w1,w7,w7); // q(1-dx)(1-dy), q(1+dx)(1-dy)
+//        w6=FMA( w1,w6,w6); w7=FMA( w1,w7,w7); // q(1-dx)(1+dy), q(1+dx)(1+dy)
+//        w0=FNMS(dz,w4,w4); w1=FNMS(dz,w5,w5); w2=FNMS(dz,w6,w6); w3=FNMS(dz,w7,w7);
+//        w4=FMA( dz,w4,w4); w5=FMA( dz,w5,w5); w6=FMA( dz,w6,w6); w7=FMA( dz,w7,w7);
+//#   undef FNMS
+//#   undef FMA
+//
+//        auto scatter_view_access = kfield.access();
+//
+//        scatter_view_access(v,         field_var::rhof) += w0;
+//        scatter_view_access(v+1,       field_var::rhof) += w1;
+//        scatter_view_access(v+sy,      field_var::rhof) += w2;
+//        scatter_view_access(v+sy+1,    field_var::rhof) += w3;
+//        scatter_view_access(v+sz,      field_var::rhof) += w4;
+//        scatter_view_access(v+sz+1,    field_var::rhof) += w5;
+//        scatter_view_access(v+sz+sy,   field_var::rhof) += w6;
+//        scatter_view_access(v+sz+sy+1, field_var::rhof) += w7;
+//
+///*
+//        Kokkos::atomic_add(&kfield(v,         field_var::rhof), w0);
+//        Kokkos::atomic_add(&kfield(v+1,       field_var::rhof), w1);
+//        Kokkos::atomic_add(&kfield(v+sy,      field_var::rhof), w2);
+//        Kokkos::atomic_add(&kfield(v+sy+1,    field_var::rhof), w3);
+//        Kokkos::atomic_add(&kfield(v+sz,      field_var::rhof), w4);
+//        Kokkos::atomic_add(&kfield(v+sz+1,    field_var::rhof), w5);
+//        Kokkos::atomic_add(&kfield(v+sz+sy,   field_var::rhof), w6);
+//        Kokkos::atomic_add(&kfield(v+sz+sy+1, field_var::rhof), w7);
+//*/
+//    }
+//};
 
 struct accum_rhob {
     k_field_t kfield;
@@ -381,12 +381,15 @@ struct accum_rhob {
 
     KOKKOS_INLINE_FUNCTION
     void operator() (const int n) const {
+
         int part_idx = kpart_movers_i(n);
-        float w0 = kpart(part_idx, particle_var::dx);
-        float w1 = kpart(part_idx, particle_var::dy);
+        auto tile = part_idx / SIMD_LEN;
+        auto pidx = part_idx - tile*SIMD_LEN;
+        float w0 = kpart(pidx, particle_var::dx, tile);
+        float w1 = kpart(pidx, particle_var::dy, tile);
         float w2, w3, w4, w5, w6;
-        float w7 = (qsp * r8V) * kpart(part_idx, particle_var::w);
-        float dz = kpart(part_idx, particle_var::dz);
+        float w7 = (qsp * r8V) * kpart(pidx, particle_var::w, tile);
+        float dz = kpart(pidx, particle_var::dz, tile);
         int v = kpart_i(part_idx);
         int x, y, z;
 
@@ -497,11 +500,13 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np), KOKKOS_LAMBDA(const int n) {
         float w0, w1, w2, w3, w4, w5, w6, w7, dz;
 
-        w0 = kparticles(n, particle_var::dx);
-        w1 = kparticles(n, particle_var::dy);
-        dz = kparticles(n, particle_var::dz);
+        auto tile = n / SIMD_LEN;
+        auto pidx = n - tile*SIMD_LEN;
+        w0 = kparticles(pidx, particle_var::dx, tile);
+        w1 = kparticles(pidx, particle_var::dy, tile);
+        dz = kparticles(pidx, particle_var::dz, tile);
         int v = kparticles_i(n);
-        w7 = kparticles(n, particle_var::w) * q_8V;
+        w7 = kparticles(pidx, particle_var::w, tile) * q_8V;
 
 #   define FMA( x,y,z) ((z)+(x)*(y))
 #   define FNMS(x,y,z) ((z)-(x)*(y))

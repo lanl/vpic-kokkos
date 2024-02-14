@@ -200,7 +200,11 @@ class species_t {
         }
         void init_kokkos_particles(int n_particles, int n_pmovers)
         {
-            k_p_d = k_particles_t("k_particles", n_particles, PARTICLE_VAR_COUNT);
+            auto ntiles = n_particles / SIMD_LEN;
+            if(ntiles*SIMD_LEN < n_particles)
+              ntiles += 1;
+printf("SIMD_LEN: %d, Particle vars: %d, ntiles: %d\n", SIMD_LEN, PARTICLE_VAR_COUNT, ntiles);
+            k_p_d = k_particles_t("k_particles", SIMD_LEN, PARTICLE_VAR_COUNT, ntiles);
             k_p_i_d = k_particles_i_t("k_particles_i", n_particles);
             k_pc_d = k_particle_copy_t("k_particle_copy_for_movers", n_pmovers);
             k_pc_i_d = k_particle_i_copy_t("k_particle_copy_for_movers_i", n_pmovers);
@@ -413,13 +417,13 @@ move_p_kokkos(
 )
 {
 
-  #define p_dx    k_particles(pi, particle_var::dx)
-  #define p_dy    k_particles(pi, particle_var::dy)
-  #define p_dz    k_particles(pi, particle_var::dz)
-  #define p_ux    k_particles(pi, particle_var::ux)
-  #define p_uy    k_particles(pi, particle_var::uy)
-  #define p_uz    k_particles(pi, particle_var::uz)
-  #define p_w     k_particles(pi, particle_var::w)
+  #define p_dx    k_particles(pi%SIMD_LEN, particle_var::dx, pi/SIMD_LEN)
+  #define p_dy    k_particles(pi%SIMD_LEN, particle_var::dy, pi/SIMD_LEN)
+  #define p_dz    k_particles(pi%SIMD_LEN, particle_var::dz, pi/SIMD_LEN)
+  #define p_ux    k_particles(pi%SIMD_LEN, particle_var::ux, pi/SIMD_LEN)
+  #define p_uy    k_particles(pi%SIMD_LEN, particle_var::uy, pi/SIMD_LEN)
+  #define p_uz    k_particles(pi%SIMD_LEN, particle_var::uz, pi/SIMD_LEN)
+  #define p_w     k_particles(pi%SIMD_LEN, particle_var::w, pi/SIMD_LEN)
   #define pii     k_particles_i(pi)
 
   //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
@@ -587,7 +591,7 @@ move_p_kokkos(
     // +/-1 _exactly_ for the particle.
 
     v0 = s_dir[axis];
-    k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
+    k_particles(pi%SIMD_LEN, particle_var::dx + axis, pi/SIMD_LEN) = v0; // Avoid roundoff fiascos--put the particle
                            // _exactly_ on the boundary.
     face = axis; if( v0>0 ) face += 3;
 
@@ -605,7 +609,7 @@ move_p_kokkos(
       // Hit a reflecting boundary condition.  Reflect the particle
       // momentum and remaining displacement and keep moving the
       // particle.
-      k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
+      k_particles(pi%SIMD_LEN, particle_var::ux + axis, pi/SIMD_LEN) = -k_particles(pi%SIMD_LEN, particle_var::ux + axis, pi/SIMD_LEN);
       // Clearer and works with AMD GPUs
       float* disp = static_cast<float*>(&(pm->dispx));
       disp[axis] = -disp[axis];
@@ -626,7 +630,7 @@ move_p_kokkos(
 
     pii = neighbor - rangel;
     /**/                         // Note: neighbor - rangel < 2^31 / 6
-    k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+    k_particles(pi%SIMD_LEN, particle_var::dx + axis, pi/SIMD_LEN) = -v0;      // Convert coordinate system
   }
   #undef p_dx
   #undef p_dy

@@ -168,13 +168,13 @@ struct DefaultCompress {
             //write_to);
 
             // Move the particle from np-n to pm->i
-            particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
-            particles(write_to, particle_var::dy) = particles(pull_from, particle_var::dy);
-            particles(write_to, particle_var::dz) = particles(pull_from, particle_var::dz);
-            particles(write_to, particle_var::ux) = particles(pull_from, particle_var::ux);
-            particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
-            particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
-            particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
+            particles(write_to%SIMD_LEN, particle_var::dx, write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::dx, pull_from/SIMD_LEN);
+            particles(write_to%SIMD_LEN, particle_var::dy, write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::dy, pull_from/SIMD_LEN);
+            particles(write_to%SIMD_LEN, particle_var::dz, write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::dz, pull_from/SIMD_LEN);
+            particles(write_to%SIMD_LEN, particle_var::ux, write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::ux, pull_from/SIMD_LEN);
+            particles(write_to%SIMD_LEN, particle_var::uy, write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::uy, pull_from/SIMD_LEN);
+            particles(write_to%SIMD_LEN, particle_var::uz, write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::uz, pull_from/SIMD_LEN);
+            particles(write_to%SIMD_LEN, particle_var::w , write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::w, pull_from/SIMD_LEN);
             particles_i(write_to) = particles_i(pull_from);
         });
 
@@ -186,13 +186,13 @@ struct DefaultCompress {
             int write_to = clean_up_to(n);
             int pull_from = clean_up_from(n);
 
-            particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
-            particles(write_to, particle_var::dy) = particles(pull_from, particle_var::dy);
-            particles(write_to, particle_var::dz) = particles(pull_from, particle_var::dz);
-            particles(write_to, particle_var::ux) = particles(pull_from, particle_var::ux);
-            particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
-            particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
-            particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
+            particles(write_to%SIMD_LEN, particle_var::dx, write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::dx, pull_from/SIMD_LEN);
+            particles(write_to%SIMD_LEN, particle_var::dy, write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::dy, pull_from/SIMD_LEN);
+            particles(write_to%SIMD_LEN, particle_var::dz, write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::dz, pull_from/SIMD_LEN);
+            particles(write_to%SIMD_LEN, particle_var::ux, write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::ux, pull_from/SIMD_LEN);
+            particles(write_to%SIMD_LEN, particle_var::uy, write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::uy, pull_from/SIMD_LEN);
+            particles(write_to%SIMD_LEN, particle_var::uz, write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::uz, pull_from/SIMD_LEN);
+            particles(write_to%SIMD_LEN, particle_var::w , write_to/SIMD_LEN) = particles(pull_from%SIMD_LEN, particle_var::w , pull_from/SIMD_LEN);
             particles_i(write_to) = particles_i(pull_from);
         });
     }
