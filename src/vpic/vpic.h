@@ -249,6 +249,7 @@ public:
   void dump_species( const char *fname );
 #if defined(FIELD_IONIZATION)
   void dump_ionization_states( const char *fname, int append = 1 );
+  void dump_E_time_history( const char *fname, int append = 1 );
 #endif
 
   // Binary dumps

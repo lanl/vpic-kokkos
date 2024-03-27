@@ -137,10 +137,68 @@ vpic_simulation::dump_ionization_states( const char *fname,
       fileIO.print( "\n" );
       if( fileIO.close() ) ERROR(("File close failed on dump ionization states!!!"));
     }
-
+    
   } // species loop
+} // dump_ionization_states
 
-}
+
+
+
+
+
+void
+vpic_simulation::dump_E_time_history( const char *fname,
+                                int append ) {
+  
+  double E_value;
+  species_t *sp;
+  FileIO fileIO;
+  FileIOStatus status(fail);
+
+  if( !fname ) ERROR(("Invalid file name"));
+
+  // This gets the total QOI across all ranks 
+  LIST_FOR_EACH(sp,species_list) {
+    // Only use special particles with "time_history" in the name
+    if (std::string(sp->name).find("time_history") == std::string::npos) {
+      continue;
+    }
+
+    // This checks if the species has more than 1 particle
+    // This probably needs to be fixed so that multiple particles work
+    if (sp->np > 1) ERROR(("E-field time history species can only have 1 particle!!!"));
+
+    // Create a filename based on the original fname and species name
+    std::string speciesFileNameStr = std::string(fname) + "_" + sp->name;
+    const char* speciesFileName = speciesFileNameStr.c_str();
+    if (rank() == 0) {
+      // Open the file for the current species
+      status = fileIO.open(speciesFileName, append ? io_append : io_write);
+      
+      if (status == fail) ERROR(("Could not open \"%s\".", speciesFileName));
+      else {
+        if( append==0 ) {
+          fileIO.print( "%% Layout\n%% step location1" );
+          fileIO.print( "\n" );
+          fileIO.print( "%% timestep = %e\n", grid->dt*grid->t_to_SI );
+        }
+        fileIO.print( "%li", (long)step() );
+      }
+    } // if rank    
+
+    
+    E_value = E_time_history( sp, interpolator_array);
+    if( rank()==0 && status!=fail ) fileIO.print( " %e", E_value );
+
+    // Closes the file
+    if( rank()==0 && status!=fail ) {
+      fileIO.print( "\n" );
+      if( fileIO.close() ) ERROR(("File close failed on dump energies!!!"));
+    }
+    
+  } // list species
+
+} // dump_E_time_history
 #endif
 
 // Note: dump_species/materials assume that names do not contain any \n!

@@ -364,6 +364,10 @@ energy_p_kokkos( const species_t            * RESTRICT sp,
 #ifdef FIELD_IONIZATION
 Kokkos::View<double*, Kokkos::LayoutLeft>
 ionization_states_kokkos( const species_t * RESTRICT sp );
+
+double
+E_time_history( const species_t            * RESTRICT sp,
+                const interpolator_array_t * RESTRICT ia);
 #endif
 
 // In rho_p.cxx
