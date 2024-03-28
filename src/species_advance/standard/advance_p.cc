@@ -450,9 +450,7 @@ advance_p_kokkos_unified(
   
   float dt = g->dt*t_to_SI; // [s], timestep
   float q_e       = 1.60217663e-19;  // coulombs
-  float q_e_au    = 1.0;             // au
   float m_e       = 9.1093837e-31;   // kilograms
-  float m_e_au    = 1.0;             // au 
   float c         = 299792458;       // m/s
   float c_au      = 137.02;          // atomic units
   float epsilon_0_au = 1/(4*M_PI);   // au
@@ -474,7 +472,7 @@ advance_p_kokkos_unified(
    ERROR(( "Conversion factors and laser wavelength needs to be passed as grid variables when field ionization is enabled." ));
   }
 
-  if( sp!=sp_e && n == 0 )
+  if( (sp!=sp_e || sp->ionization_energy(0)) && n == 0 )
   {
     ERROR(( "Quantum numbers need to be passed to species struct when field ionization is enabled." )); 
   }
@@ -773,6 +771,7 @@ advance_p_kokkos_unified(
             auto generator = random_pool.get_state();
             double U = generator.drand(0,1);
             random_pool.free_state(generator);
+	    	    
             if ( U < 1 - exp(-Gamma * (dt-t_ionize) ) ) {
               // ionization occurs
               N_ionization++;
@@ -866,21 +865,20 @@ advance_p_kokkos_unified(
               }
 	    } 
     
-    	    float j_ionize_mag_c  = (N_ions * epsilon_t_c )/(g->dt * g->dV * ha_mag_c ); // code
-	    float jx_ionize = (epsilon_t_c * N_ions * hax_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
+    	    float jx_ionize = (epsilon_t_c * N_ions * hax_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
 	    float jy_ionize = (epsilon_t_c * N_ions * hay_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
 	    float jz_ionize = (epsilon_t_c * N_ions * haz_c) / (g->dt * g->dV * ha_mag_c*ha_mag_c);
 
             //Declaration of local variables
             int ip, id, jp, jd, kp, kd;
-            double xpn, xpmxip, xpmxid;
-            double ypn, ypmyjp, ypmyjd;
-            double zpn, zpmzkp, zpmzkd;
+            double xpmxip, xpmxid;
+            double ypmyjp, ypmyjd;
+            double zpmzkp, zpmzkd;
             double Sxp[2], Sxd[2], Syp[2], Syd[2], Szp[2], Szd[2];
-	    int N_voxel_x,N_voxel_y,N_voxel_z,N_voxel_xy;
+	    int N_voxel_x,N_voxel_y,N_voxel_xy;
 	    int voxel_indx,voxel_indy,voxel_indz;
             int xgrid,ygrid,zgrid;
-            int y_start,z_start,y_end,z_end;
+            int y_start,z_start;
 	    double xfrac,yfrac,zfrac;
 	    double xpos,ypos,zpos;
 	    double xcorner,ycorner,zcorner;
@@ -890,14 +888,11 @@ advance_p_kokkos_unified(
 	    int nghost = 2; // tophat shape
             N_voxel_x   = (g->nx + nghost); // number of voxels in the x direction
             N_voxel_y   = (g->ny + nghost);
-            N_voxel_z   = (g->nz + nghost);
             N_voxel_xy = N_voxel_x*N_voxel_y; // calculate the number of voxels in the xy plane
             zgrid = ceil( float(ii[LANE] + 1)/float( N_voxel_xy  ) - 1.0 ); // calculate the z-coordinate
             z_start = zgrid*N_voxel_xy;           // beginning voxel index for the z-coordinate
-            z_end   = (zgrid+1) * N_voxel_xy - 1; // final voxel index for the z-coordinate
             ygrid = floor( float(ii[LANE]-z_start)/(float)N_voxel_x ); // calculate y-coordinate
             y_start = ((nx)+2)*((ygrid) + ((ny)+2)*(zgrid));// beginning voxel index for the y,z-coordinates
-            y_end   = y_start + (N_voxel_x - 1); // final voxel index for the y,z-coordinates
             xgrid = ii[LANE]-y_start; // calculate x-coordinate
 
 	    // calculate the normalized particle position (global)
@@ -946,13 +941,13 @@ advance_p_kokkos_unified(
 
             for (unsigned int i=0 ; i<2 ; i++) {
                 int iploc=ip+i-1;
-                int idloc=id+i-2;
+                //int idloc=id+i-2;
                 for (unsigned int j=0 ; j<2 ; j++) {
                     int jploc=jp+j-1;
-                    int jdloc=jd+j-2;
+                    //int jdloc=jd+j-2;
 		    for (unsigned int k=0 ; k<2 ; k++) {
                       int kploc=kp+k-1;
-                      int kdloc=kd+k-2;
+                      //int kdloc=kd+k-2;
 
                       // Jx is nearest neighbor in x, Jy is nearest neighbor in y, ...
 		      voxel_indx = VOXEL(xgrid, jploc, kploc, g->nx,g->ny,g->nz); // Jx is staggered in x 
@@ -1338,9 +1333,7 @@ advance_p_kokkos_gpu(
   float dt_c      = g->dt;
   float dt        = g->dt*t_to_SI; // [s], timestep
   float q_e       = 1.60217663e-19;  // coulombs
-  float q_e_au    = 1.0;             // au
   float m_e       = 9.1093837e-31;   // kilograms
-  float m_e_au    = 1.0;             // au 
   float c         = 299792458;       // m/s
   float c_au      = 137.02;          // atomic units
   float epsilon_0_au = 1/(4*M_PI);   // au
@@ -1351,12 +1344,10 @@ advance_p_kokkos_gpu(
     
   auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<> random_pool(seed);
-  auto sp_name = sp->name;
   k_particles_t& k_electrons = sp_e->k_p_d; 
   k_particles_i_t& k_electrons_i = sp_e->k_p_i_d;  
   Kokkos::View<int> count("count");
   Kokkos::deep_copy(count, sp_e->np);
-  int timestep = g->step;
 
   auto epsilon_eV_list_h = Kokkos::create_mirror(sp->ionization_energy);
   Kokkos::deep_copy(epsilon_eV_list_h, sp->ionization_energy);
@@ -1366,13 +1357,14 @@ advance_p_kokkos_gpu(
   float m = sp->qm; // magnetic quantum number
   float l = sp->ql; // angular momentum quantum number
   float lambda_SI = g->lambda;
+  short int N_ionization_levels = sp->ionization_energy.extent(0);
 
   if( t_to_SI == 0 || l_to_SI == 0 || q_to_SI == 0 || m_to_SI == 0 || lambda_SI == 0)
   {
    ERROR(( "Conversion factors and laser wavelength needs to be passed as grid variables when field ionization is enabled." ));
   }
 
-  if( sp!=sp_e && (n == 0 || epsilon_eV_list_h(0) == 0) )
+  if( (sp!=sp_e || epsilon_eV_list_h(0) != 0) && n == 0 )
   {
     ERROR(( "Quantum numbers need to be passed to species struct when field ionization is enabled." ));
   }
@@ -1413,177 +1405,166 @@ advance_p_kokkos_gpu(
 
 #ifdef FIELD_IONIZATION
     // ***** Field Ioization *****
-    if (sp != sp_e && sp->ionization_energy(0) != 0){
-    // Declare varviables
-    bool multiphoton_ionised = false;
-    float K;
-	
-    // Check if the particle is fully ionized already
-    short int N_ionization        = abs(charge); // Current ionization state of the particle
-    short int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
-    short int N_ionization_levels = epsilon_eV_list_h.extent(0);
-
-    // code units
-    float hax_c = ( f_ex + dy*f_dexdy ) + dz*( f_dexdz + dy*f_d2exdydz );
-    float hay_c = ( f_ey + dz*f_deydz ) + dx*( f_deydx + dz*f_d2eydzdx );
-    float haz_c = ( f_ez + dx*f_dezdx ) + dy*( f_dezdy + dx*f_d2ezdxdy );
-    float ha_mag_c = sqrtf(pow(hax_c,2.0)+pow(hay_c,2.0)+pow(haz_c,2.0));
-    // SI units
-    float E_mag_SI = E_to_SI * ha_mag_c;
-
-    // Calculate the ionization rate and number of ionizations	
-    // Calculate stuff
-    float E_au       = E_mag_SI/E_field_conversion; // field strength, atomic units
-    float nu         = c/lambda_SI; // Hz
-    float omega_SI   = 2*M_PI*nu;   // Hz
-    float omega_eV   = 1.2398/(lambda_SI/1e-6); // eV
-    float omega_au   = omega_eV * 0.036749; // energy, Hartree units
-    float I_au       = 0.5*c_au*epsilon_0_au*pow(E_au,2.0); // intensity from the field, atomic units
-
-    // initialize variables for while loop
-    int ionization_flag = 1;
-    float t_ionize      = 0;
-    float Gamma = 0;
-
-    // loop for multiple ionization events in a single timestep
-    while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {
-        
-      // Get the appropriate ionization energy
-      float epsilon_eV = epsilon_eV_list_d(int(N_ionization)); // [eV], ionization energy
-      float epsilon_au = epsilon_eV/27.2;         // atomic units, ionization energy
-
+    if (sp != sp_e && epsilon_eV_list_d(0) != 0 && charge != N_ionization_levels){
+      // Declare varviables
+      bool multiphoton_ionised = false;
+      float K;
+  	
+      // Check if the particle is fully ionized already
+      short int N_ionization        = charge; // Current ionization state of the particle
+      short int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
+  
+      // code units
+      float hax_c = ( f_ex + dy*f_dexdy ) + dz*( f_dexdz + dy*f_d2exdydz );
+      float hay_c = ( f_ey + dz*f_deydz ) + dx*( f_deydx + dz*f_d2eydzdx );
+      float haz_c = ( f_ez + dx*f_dezdx ) + dy*( f_dezdy + dx*f_d2ezdxdy );
+      float ha_mag_c = sqrtf(pow(hax_c,2.0)+pow(hay_c,2.0)+pow(haz_c,2.0));
+      // SI units
+      float E_mag_SI = E_to_SI * ha_mag_c;
+  
+      // Calculate the ionization rate and number of ionizations	
       // Calculate stuff
-      K                    = floor(epsilon_au/omega_au)+1; // number of photons required for multiphoton ionization       
-      float Z              = N_ionization + 1;          // ion charge number after ionization
-      float Z_star         = N_ionization; // initial charge state
-      float n_star         = (Z_star + 1.0)/sqrt(2*epsilon_au); // effective principle quantum number
-      float l_star         = n_star - 1.0; // angular momentum
-      float T_0            = M_PI*Z/(abs(epsilon_au) * sqrt(2*abs(epsilon_au))); // period of classical radial trajectories
+      float E_au       = E_mag_SI/E_field_conversion; // field strength, atomic units
+      float nu         = c/lambda_SI; // Hz
+      float omega_SI   = 2*M_PI*nu;   // Hz
+      float omega_eV   = 1.2398/(lambda_SI/1e-6); // eV
+      float omega_au   = omega_eV * 0.036749; // energy, Hartree units
+      float I_au       = 0.5*c_au*epsilon_0_au*pow(E_au,2.0); // intensity from the field, atomic units
 
-      // Ionization events are tested for every particle with a bound electron at every timestep
-      // Choose the ionization process based on the E-field at the particle
-      // Specifically, Gamma =
-      // min( Gamma_MPI, Gamma_ADK ) for        E <= E_M
-      // Gamma_ADK                   for E_M <= E <= E_T
-      // min( Gamma_ADK, Gamma_BSI ) for E_T <= E <= E_B
-      // Gamma_BSI                   for        E >  E_B
-      // ** NOTE: E_B is defined such that dGamma_ADK(E_B)/dE = 0 so that we have a monotonically increasing rate. 
-      
-      // Choose the ionization process based on |E| at each particle
-      // Note E_T = epsilon^2/(4*Z) is the correct version but EPOCH uses epsilon^2/Z for some reason (maybe a typo in their paper?)
-      float E_M_au = omega_au*sqrt(2*epsilon_au); // atomic units
-      float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
-      float E_B_au = (2 * pow(2, 3.0 / 2.0)) / (3) * pow(epsilon_au, 3.0 / 2.0) / (2.0 * n_star - abs(m) - 1.0); // atomic units
+      // initialize variables for while loop
+      int ionization_flag = 1;
+      float t_ionize      = 0;
+      float Gamma = 0;
 
-      if (E_au<=E_M_au){
-	// MPI Ionization
-        // ionization rate per atom: Gamma^(K)
-        // sigma^(K) = (h_bar*omega)^K*Gamma^(K)/I^K : K-photon cross section, units [cm^2K * s^(K-1)]
-        // I: intensity of the laser field, units [W/cm^2]
-        //cout << "MPI Ionization" << endl;
-	multiphoton_ionised = true;
-        // FIXME: need to add the case of circularly polarized field
-        float T_K = 4.80*pow(1.30,2*K)*pow(2*K+1,-1)*pow(K,-1.0/2.0); // in the case of linearly polarized field
-        float sigma_K_au = pow(c_au*pow(tgamma(K+1),2)*pow(n,5)* pow(omega_au,(10*K-1)/3), -1)*T_K*pow(E_au,2*K-2); // atomic units, [cm^2K * s^(K-1)]
-	float flux = c_au*pow(E_au, 2.0)/(8*M_PI*omega_au);
-        float Gamma_MPI = sigma_K_au * pow(flux, K) *Gamma_conversion; // SI units
+
+      // loop for multiple ionization events in a single timestep
+      while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {
+        // Get the appropriate ionization energy
+        float epsilon_eV = epsilon_eV_list_d(int(N_ionization)); // [eV], ionization energy
+        float epsilon_au = epsilon_eV/27.2;         // atomic units, ionization energy
+  
+        // Calculate stuff
+        K                    = floor(epsilon_au/omega_au)+1; // number of photons required for multiphoton ionization       
+        float Z              = N_ionization + 1;          // ion charge number after ionization
+        float Z_star         = N_ionization; // initial charge state
+        float n_star         = (Z_star + 1.0)/sqrt(2*epsilon_au); // effective principle quantum number
+        float l_star         = n_star - 1.0; // angular momentum
+        float T_0            = M_PI*Z/(abs(epsilon_au) * sqrt(2*abs(epsilon_au))); // period of classical radial trajectories
+  
+        // Ionization events are tested for every particle with a bound electron at every timestep
+        // Choose the ionization process based on the E-field at the particle
+        // Specifically, Gamma =
+        // min( Gamma_MPI, Gamma_ADK ) for        E <= E_M
+        // Gamma_ADK                   for E_M <= E <= E_T
+        // min( Gamma_ADK, Gamma_BSI ) for E_T <= E <= E_B
+        // Gamma_BSI                   for        E >  E_B
+        // ** NOTE: E_B is defined such that dGamma_ADK(E_B)/dE = 0 so that we have a monotonically increasing rate. 
         
-        // Tunneling Regime
-        //cout << "Tunneling Ionization" << endl;
-        float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
-        float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
-        float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
-        float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
-        
-        Gamma = min(Gamma_MPI,Gamma_ADK_SI); 
-	if(Gamma_MPI < Gamma_ADK_SI){ multiphoton_ionised = true; }
-      }
-      
-      else if (E_au>E_M_au && E_au<=E_T_au) {
-        // Tunneling Regime
-        //cout << "Tunneling Ionization" << endl;
-        float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
-        float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
-        float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
-        float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
-        Gamma = Gamma_ADK_SI;
-      }
-      
-      else if (E_au>E_T_au && E_au<=E_B_au){
-        // Either classical ADK or with BSI correction
-        // Whichever has the minimum ionization rate
-        //cout << "Tunneling or BSI Regime" << endl;
-        // ADK (no correction)
-        float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
-        float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
-        float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
-        float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
-      
-        // With BSI correction: Gamma = Gamma_classical + Gamma_ADK(I_classical)
-        // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity, i.e, the intensity that corresponds to the threshold E-field magnitude
-        float Gamma_ADK_au_threshold = C_nstar_lstar_squared* f_n_l* epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_T_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_T_au));
-        float Gamma_ADK_SI_threshold = Gamma_ADK_au_threshold*Gamma_conversion;
-        // uniform field, FIXME: enable this
-        // gamma_cl_uniform_atomic = (1 - E_n_atomic^2./(4*Z*E_atomic))/(2*T_0);
-        // gamma_cl_uniform_SI = gamma_cl_uniform_atomic / (h_bar/(alpha^2*m_e*c^2));
-        // oscillating field
-        float Gamma_cl_au  = 1.0/(M_PI*T_0) * (  M_PI/2.0 - asin( pow(epsilon_au,2.0)/(4*Z*E_au)) + pow(epsilon_au,2.0)/(4*Z*E_au) * log( ( 4*Z*E_au - sqrt( 16*pow(Z,2.0)*pow(E_au,2.0) - pow(epsilon_au,4.0) ) )/pow(epsilon_au,2.0) ) );
-        float Gamma_cl_SI  = Gamma_cl_au* Gamma_conversion;
-        float Gamma_BSI_SI = Gamma_cl_SI + Gamma_ADK_SI_threshold;
-      
-        // Decide if the BSI correction is applicable
-        Gamma = min(Gamma_ADK_SI, Gamma_BSI_SI);
-      
-        /*
-        if (Gamma_ADK_SI < Gamma_BSI_SI) {
-          cout << "Tunneling Ionization" << endl;
-        }
-        else {
-          cout << "BSI Correction" << endl;
-        }
-        */
+        // Choose the ionization process based on |E| at each particle
+        // Note E_T = epsilon^2/(4*Z) is the correct version but EPOCH uses epsilon^2/Z for some reason (maybe a typo in their paper?)
+        float E_M_au = omega_au*sqrt(2*epsilon_au); // atomic units
+        float E_T_au = pow(epsilon_au,2.0)/(4*Z);      // atomic units
+        float E_B_au = (2 * pow(2, 3.0 / 2.0)) / (3) * pow(epsilon_au, 3.0 / 2.0) / (2.0 * n_star - abs(m) - 1.0); // atomic units
+
+        if (E_au<=E_M_au){
+          // MPI Ionization
+          // ionization rate per atom: Gamma^(K)
+          // sigma^(K) = (h_bar*omega)^K*Gamma^(K)/I^K : K-photon cross section, units [cm^2K * s^(K-1)]
+          // I: intensity of the laser field, units [W/cm^2]
+          //cout << "MPI Ionization" << endl;
+          multiphoton_ionised = true;
+          // FIXME: need to add the case of circularly polarized field
+          float T_K = 4.80*pow(1.30,2*K)*pow(2*K+1,-1)*pow(K,-1.0/2.0); // in the case of linearly polarized field
+          float sigma_K_au = pow(c_au*pow(tgamma(K+1),2)*pow(n,5)* pow(omega_au,(10*K-1)/3), -1)*T_K*pow(E_au,2*K-2); // atomic units, [cm^2K * s^(K-1)]
+          float flux = c_au*pow(E_au, 2.0)/(8*M_PI*omega_au);
+          float Gamma_MPI = sigma_K_au * pow(flux, K) *Gamma_conversion; // SI units
           
-      }
-      
-      else if (E_au>E_B_au) {
-        // BSI Ionization
-        //cout << "BSI Ionization" << endl;
-        // BSI Ionization: Gamma = Gamma_classical + Gamma_ADK(I_classical)
-        // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity
-        float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
-        float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
-        float Gamma_ADK_au_threshold = C_nstar_lstar_squared*f_n_l * sqrt(3*E_T_au*pow(n_star,3.0)/(M_PI*pow(Z,3.0))) * pow(Z,2.0)/(2*pow(n_star,2.0)) * pow(2*pow(Z,3.0)/(E_T_au*pow(n_star,3.0)),2*n_star-abs(m)-1)*exp(-2*pow(Z,3.0)/(3*pow(n_star,3.0)*E_T_au));
-        float Gamma_ADK_SI_threshold = Gamma_ADK_au_threshold*Gamma_conversion;
-        // uniform field, FIXME: enable this
-        // gamma_cl_uniform_atomic = (1 - E_n_atomic^2./(4*Z*E_atomic))/(2*T_0);
-        // oscillating field
-        float Gamma_cl_au  = 1.0/(M_PI*T_0) * (  M_PI/2.0 - asin( pow(epsilon_au,2.0)/(4*Z*E_au)) + pow(epsilon_au,2.0)/(4*Z*E_au) * log( ( 4*Z*E_au - sqrt( 16*pow(Z,2.0)*pow(E_au,2.0) - pow(epsilon_au,4.0) ) )/pow(epsilon_au,2.0) ) );
-        float Gamma_cl_SI  = Gamma_cl_au* Gamma_conversion;
-        float Gamma_BSI_SI = Gamma_cl_SI + Gamma_ADK_SI_threshold;
-        Gamma = Gamma_BSI_SI;
-      }
-      
-      // Ionization occurs if U_1 < 1 - exp(-Gamma * delta_t), for a uniform number U_1~[0,1]
-      auto generator = random_pool.get_state();
-      double U = generator.drand(0,1);
-      random_pool.free_state(generator);
+          // Tunneling Regime
+          //cout << "Tunneling Ionization" << endl;
+          float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
+          float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
+          float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
+          float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
+          
+          Gamma = min(Gamma_MPI,Gamma_ADK_SI); 
+          if(Gamma_MPI < Gamma_ADK_SI){ multiphoton_ionised = true; }
+        }
+        
+        else if (E_au>E_M_au && E_au<=E_T_au) {
+          // Tunneling Regime
+          //cout << "Tunneling Ionization" << endl;
+          float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
+          float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
+          float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
+          float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
+          Gamma = Gamma_ADK_SI;
+        }
+        
+        else if (E_au>E_T_au && E_au<=E_B_au){
+          // Either classical ADK or with BSI correction
+          // Whichever has the minimum ionization rate
+          //cout << "Tunneling or BSI Regime" << endl;
+          // ADK (no correction)
+          float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
+          float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
+          float Gamma_ADK_au = C_nstar_lstar_squared * f_n_l * epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_au));
+          float Gamma_ADK_SI = Gamma_ADK_au*Gamma_conversion;
+        
+          // With BSI correction: Gamma = Gamma_classical + Gamma_ADK(I_classical)
+          // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity, i.e, the intensity that corresponds to the threshold E-field magnitude
+          float Gamma_ADK_au_threshold = C_nstar_lstar_squared* f_n_l* epsilon_au * pow( 2*pow(2*epsilon_au, 3.0/2.0)/E_T_au, 2*n_star-abs(m)-1) * exp(-2*pow(2*epsilon_au,3.0/2.0)/(3*E_T_au));
+          float Gamma_ADK_SI_threshold = Gamma_ADK_au_threshold*Gamma_conversion;
+          // uniform field, FIXME: enable this
+          // gamma_cl_uniform_atomic = (1 - E_n_atomic^2./(4*Z*E_atomic))/(2*T_0);
+          // gamma_cl_uniform_SI = gamma_cl_uniform_atomic / (h_bar/(alpha^2*m_e*c^2));
+          // oscillating field
+          float Gamma_cl_au  = 1.0/(M_PI*T_0) * (  M_PI/2.0 - asin( pow(epsilon_au,2.0)/(4*Z*E_au)) + pow(epsilon_au,2.0)/(4*Z*E_au) * log( ( 4*Z*E_au - sqrt( 16*pow(Z,2.0)*pow(E_au,2.0) - pow(epsilon_au,4.0) ) )/pow(epsilon_au,2.0) ) );
+          float Gamma_cl_SI  = Gamma_cl_au* Gamma_conversion;
+          float Gamma_BSI_SI = Gamma_cl_SI + Gamma_ADK_SI_threshold;
+        
+          // Decide if the BSI correction is applicable
+          Gamma = min(Gamma_ADK_SI, Gamma_BSI_SI);            
+        }
+        
+        else if (E_au>E_B_au) {
+          // BSI Ionization
+          //cout << "BSI Ionization" << endl;
+          // BSI Ionization: Gamma = Gamma_classical + Gamma_ADK(I_classical)
+          // Gamma_ADK(I_classical): ADK at the classical appearanace (threshold) intensity
+          float f_n_l = ( ( 2*l+1 ) * tgamma( l+abs(m)+1 ) ) / ( pow(2,abs(m))*tgamma(abs(m)+1)*tgamma(l-abs(m)+1) );
+          float C_nstar_lstar_squared = pow(2,2*n_star)/(n_star*tgamma(n_star+l_star+1)*tgamma(n_star-l_star));
+          float Gamma_ADK_au_threshold = C_nstar_lstar_squared*f_n_l * sqrt(3*E_T_au*pow(n_star,3.0)/(M_PI*pow(Z,3.0))) * pow(Z,2.0)/(2*pow(n_star,2.0)) * pow(2*pow(Z,3.0)/(E_T_au*pow(n_star,3.0)),2*n_star-abs(m)-1)*exp(-2*pow(Z,3.0)/(3*pow(n_star,3.0)*E_T_au));
+          float Gamma_ADK_SI_threshold = Gamma_ADK_au_threshold*Gamma_conversion;
+          // uniform field, FIXME: enable this
+          // gamma_cl_uniform_atomic = (1 - E_n_atomic^2./(4*Z*E_atomic))/(2*T_0);
+          // oscillating field
+          float Gamma_cl_au  = 1.0/(M_PI*T_0) * (  M_PI/2.0 - asin( pow(epsilon_au,2.0)/(4*Z*E_au)) + pow(epsilon_au,2.0)/(4*Z*E_au) * log( ( 4*Z*E_au - sqrt( 16*pow(Z,2.0)*pow(E_au,2.0) - pow(epsilon_au,4.0) ) )/pow(epsilon_au,2.0) ) );
+          float Gamma_cl_SI  = Gamma_cl_au* Gamma_conversion;
+          float Gamma_BSI_SI = Gamma_cl_SI + Gamma_ADK_SI_threshold;
+          Gamma = Gamma_BSI_SI;
+        }
 
-      if ( U < 1 - exp(-Gamma * (dt-t_ionize) ) ) {
-        // ionization occurs
-        N_ionization++; 
-        ionization_flag = 1;
-        // deal with multiple ionizations
-	t_ionize = -1.0/Gamma * log(1-U); // use previous U to calc
-      } 
-      else {
-        // ionization doesnt occur
-        ionization_flag = 0;
-      }
-      
-    } // end while loop
+        // Ionization occurs if U_1 < 1 - exp(-Gamma * delta_t), for a uniform number U_1~[0,1]
+        auto generator = random_pool.get_state();
+        double U = generator.drand(0,1);
+        random_pool.free_state(generator);
 
-    // Check if ionization event occured
-    if (N_ionization_before < N_ionization){
+        if ( U < 1 - exp(-Gamma * (dt-t_ionize) ) ) {
+          // ionization occurs
+          N_ionization++; 
+          ionization_flag = 1;
+          // deal with multiple ionizations
+          t_ionize = -1.0/Gamma * log(1-U); // use previous U to calc
+        } 
+        else {
+          // ionization doesnt occur
+          ionization_flag = 0;
+        }
+  
+      } // end while loop
+  
+      // Check if ionization event occured
+      if (N_ionization_before < N_ionization){
         // Change the charge of the particle
         k_particles(p_index, particle_var::charge) = N_ionization * abs(q_e_c); // code units
 
@@ -1658,21 +1639,20 @@ advance_p_kokkos_gpu(
           }
 	} 
     
-    	float j_ionize_mag_c  = (N_ions * epsilon_t_c )/(dt_c * dV * ha_mag_c ); // code
 	float jx_ionize = (epsilon_t_c * N_ions * hax_c) / (dt_c * dV * ha_mag_c*ha_mag_c);
 	float jy_ionize = (epsilon_t_c * N_ions * hay_c) / (dt_c * dV * ha_mag_c*ha_mag_c);
 	float jz_ionize = (epsilon_t_c * N_ions * haz_c) / (dt_c * dV * ha_mag_c*ha_mag_c);
 
         //Declaration of local variables
         int ip, id, jp, jd, kp, kd;
-        double xpn, xpmxip, xpmxid;
-        double ypn, ypmyjp, ypmyjd;
-        double zpn, zpmzkp, zpmzkd;
+        double xpmxip, xpmxid;
+        double ypmyjp, ypmyjd;
+        double zpmzkp, zpmzkd;
         double Sxp[2], Sxd[2], Syp[2], Syd[2], Szp[2], Szd[2];
-	int N_voxel_x,N_voxel_y,N_voxel_z,N_voxel_xy;
+	int N_voxel_x,N_voxel_y,N_voxel_xy;
 	int voxel_indx,voxel_indy,voxel_indz;
         int xgrid,ygrid,zgrid;
-        int y_start,z_start,y_end,z_end;
+        int y_start,z_start;
 	double xfrac,yfrac,zfrac;
 	double xpos,ypos,zpos;
 	double xcorner,ycorner,zcorner;
@@ -1682,14 +1662,11 @@ advance_p_kokkos_gpu(
 	int nghost = 2; // tophat shape
         N_voxel_x   = (nx + nghost); // number of voxels in the x direction
         N_voxel_y   = (ny + nghost);
-        N_voxel_z   = (nz + nghost);
         N_voxel_xy = N_voxel_x*N_voxel_y; // calculate the number of voxels in the xy plane
         zgrid = ceil( float(ii + 1)/float( N_voxel_xy  ) - 1.0 ); // calculate the z-coordinate
         z_start = zgrid*N_voxel_xy;           // beginning voxel index for the z-coordinate
-        z_end   = (zgrid+1) * N_voxel_xy - 1; // final voxel index for the z-coordinate
         ygrid = floor( float(ii-z_start)/(float)N_voxel_x ); // calculate y-coordinate
         y_start = ((nx)+2)*((ygrid) + ((ny)+2)*(zgrid));// beginning voxel index for the y,z-coordinates
-        y_end   = y_start + (N_voxel_x - 1); // final voxel index for the y,z-coordinates
         xgrid = ii-y_start; // calculate x-coordinate
 
 	// calculate the normalized particle position (global)
@@ -1738,13 +1715,13 @@ advance_p_kokkos_gpu(
 
         for (unsigned int i=0 ; i<2 ; i++) {
             int iploc=ip+i-1;
-            int idloc=id+i-2;
+            //int idloc=id+i-2;
             for (unsigned int j=0 ; j<2 ; j++) {
                 int jploc=jp+j-1;
-                int jdloc=jd+j-2;
+                //int jdloc=jd+j-2;
 		for (unsigned int k=0 ; k<2 ; k++) {
                   int kploc=kp+k-1;
-                  int kdloc=kd+k-2;
+                  //int kdloc=kd+k-2;
 
                   // Jx is nearest neighbor in x, Jy is nearest neighbor in y, ...
 		  voxel_indx = VOXEL(xgrid, jploc, kploc, nx,ny,nz); // Jx is staggered in x 
@@ -1757,7 +1734,8 @@ advance_p_kokkos_gpu(
 	        }//k  
             }//j
         }//i
-    } // if ionization event occured
+   
+      } // if ionization event occured
     } // if not electrons
     
 #endif // FIELD_IONIZATION
@@ -2007,7 +1985,7 @@ advance_p_kokkos_gpu(
   //delete(k_local_particle_movers_p);
   //return h_nm(0);
 #ifdef FIELD_IONIZATION
-  Kokkos:deep_copy(sp_e->np,count);
+  Kokkos::deep_copy(sp_e->np,count);
 #endif  
 }
 
