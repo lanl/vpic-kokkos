@@ -362,7 +362,7 @@ energy_p_kokkos( const species_t            * RESTRICT sp,
           const interpolator_array_t * RESTRICT ia );
 
 #ifdef FIELD_IONIZATION
-Kokkos::View<double*, Kokkos::LayoutLeft>
+Kokkos::View<int*, Kokkos::LayoutLeft>
 ionization_states_kokkos( const species_t * RESTRICT sp );
 
 double

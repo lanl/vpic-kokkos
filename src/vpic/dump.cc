@@ -84,7 +84,10 @@ void
 vpic_simulation::dump_ionization_states( const char *fname,
                                 int append ) {
 
-  Kokkos::View<double*, Kokkos::LayoutLeft> N_ions;
+  Kokkos::View<int*, Kokkos::LayoutLeft> N_ions;
+  auto N_ions_h = Kokkos::create_mirror(N_ions);
+  Kokkos::deep_copy(N_ions_h,N_ions);
+
   species_t *sp;
   FileIO fileIO;
   FileIOStatus status(fail);
@@ -93,9 +96,12 @@ vpic_simulation::dump_ionization_states( const char *fname,
 
   // Iterate over each species
   LIST_FOR_EACH(sp, species_list) {
+    auto ionization_energy_h = Kokkos::create_mirror(sp->ionization_energy);
+    Kokkos::deep_copy(ionization_energy_h, sp->ionization_energy);
+    
     // Ignore electrons
     //auto ionization_energy = sp->ionization_energy;
-    if (std::string(sp->name) == "electron" || sp->ionization_energy(0) == 0) {
+    if (std::string(sp->name) == "electron" || ionization_energy_h(0) == 0) {
       // Skip file creation for the "electron" species or when ionization isnt desired for a species
       continue;
     }
@@ -114,7 +120,7 @@ vpic_simulation::dump_ionization_states( const char *fname,
         if (append == 0) {
           // Dynamically generate the layout string
           std::string layoutString = "%% Layout\n%% Number of particles in each ionization state\n%% step";
-          for (size_t i = 0; i <= (sp->ionization_energy).extent(0); ++i) {
+          for (size_t i = 0; i <= ionization_energy_h.extent(0); ++i) {
             layoutString += " " + std::to_string(i) + "+";
           }
           fileIO.print(layoutString.c_str());
@@ -125,11 +131,17 @@ vpic_simulation::dump_ionization_states( const char *fname,
       }
     } // if rank
 
+
     N_ions = ionization_states_kokkos( sp ); // Number of particles in each ionization state
 
+    //    printf("N_ions: %f, %f, %f, %f, %f, %f\n", N_ions(0), N_ions(1), N_ions(2), N_ions(3), N_ions(4), N_ions(5));
+    
+    auto N_ions_h = Kokkos::create_mirror(N_ions);
+    Kokkos::deep_copy(N_ions_h, N_ions);
+
     if (rank() == 0 && status != fail) {
-      for (size_t i = 0; i < N_ions.extent(0); ++i) {
-        fileIO.print(" %e", N_ions(i));
+      for (size_t i = 0; i < N_ions_h.extent(0); ++i) {
+        fileIO.print(" %d", N_ions_h(i));
       }
     }
 
