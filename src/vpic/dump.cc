@@ -226,7 +226,11 @@ vpic_simulation::dump_species( const char *fname ) {
   FileIOStatus status = fileIO.open(fname, io_write);
   if( status==fail ) ERROR(( "Could not open \"%s\".", fname ));
   LIST_FOR_EACH( sp, species_list )
+   #ifdef FIELD_IONIZATION
+    fileIO.print( "%s %i %e", sp->name, sp->id, sp->m );
+   #else
     fileIO.print( "%s %i %e %e", sp->name, sp->id, sp->q, sp->m );
+   #endif
   if( fileIO.close() ) ERROR(( "File close failed on dump species!!!" ));
 }
 
@@ -409,9 +413,11 @@ vpic_simulation::dump_hydro( const char *sp_name,
   dxout = grid->dx;
   dyout = grid->dy;
   dzout = grid->dz;
-
+#ifdef FIELD_IONIZATION
+  WRITE_HEADER_V0( dump_type::hydro_dump,sp->id,sp->m,fileIO);
+#else
   WRITE_HEADER_V0( dump_type::hydro_dump,sp->id,sp->q/sp->m,fileIO);
-
+#endif
   dim[0] = grid->nx+2;
   dim[1] = grid->ny+2;
   dim[2] = grid->nz+2;
@@ -464,9 +470,11 @@ vpic_simulation::dump_particles( const char *sp_name,
     dxout = grid->dx;
     dyout = grid->dy;
     dzout = grid->dz;
-
+#ifdef FIELD_IONIZATION
+    WRITE_HEADER_V0( dump_type::particle_dump, sp->id, sp->m, fileIO );
+#else
     WRITE_HEADER_V0( dump_type::particle_dump, sp->id, sp->q/sp->m, fileIO );
-
+#endif
     dim[0] = sp->np;
     WRITE_ARRAY_HEADER( p_buf, 1, dim, fileIO );
 
@@ -940,9 +948,11 @@ vpic_simulation::hydro_dump( const char * speciesname,
    * plus every "stride" elements in that dimension.
    */
   if(dumpParams.format == band) {
-
+#ifdef FIELD_IONIZATION
+    WRITE_HEADER_V0(dump_type::hydro_dump, sp->id, sp->m, fileIO);
+#else
     WRITE_HEADER_V0(dump_type::hydro_dump, sp->id, sp->q/sp->m, fileIO);
-
+#endif
     dim[0] = nxout+2;
     dim[1] = nyout+2;
     dim[2] = nzout+2;
@@ -984,9 +994,11 @@ vpic_simulation::hydro_dump( const char * speciesname,
     delete[] varlist;
 
   } else { // band_interleave
-
+#ifdef FIELD_IONIZATION
+    WRITE_HEADER_V0(dump_type::hydro_dump, sp->id, sp->m, fileIO);
+#else
     WRITE_HEADER_V0(dump_type::hydro_dump, sp->id, sp->q/sp->m, fileIO);
-
+#endif
     dim[0] = nxout;
     dim[1] = nyout;
     dim[2] = nzout;

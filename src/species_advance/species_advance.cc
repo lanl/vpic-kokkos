@@ -109,7 +109,6 @@ species( const char * name,
 	#ifndef FIELD_IONIZATION
          float q,
 	#else
-	 float q, // FIXME: need to remove
 	 Kokkos::View<double*> ionization_energy,
 	 float qn,
 	 float qm,
@@ -139,7 +138,6 @@ species( const char * name,
 #ifndef FIELD_IONIZATION
   sp->q = q;
 #else
-  sp->q = q; // FIXME: need to remove
   sp->ionization_energy = ionization_energy;
   sp->qn = qn;
   sp->qm = qm;

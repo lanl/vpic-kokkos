@@ -74,9 +74,9 @@ begin_initialization {
   Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
   double ionization_energy_values[] = {0}; // in eV
   ionization_energy(0) = ionization_energy_values[0];
-  this_sp = define_species( "test_species", 1., ionization_energy, 1,0,0, 1., npart, npart, 0, 0 );
+  this_sp = define_species( "test_species", ionization_energy, 1,0,0, 1., npart, npart, 0, 0 );
   // electron needs to be defined when  FI is enabled
-  species_t * electron = define_species("electron",-1.,ionization_energy, 0,0,0, 1., npart, npart, 0, 0);
+  species_t * electron = define_species("electron", ionization_energy, 0,0,0, 1., npart, npart, 0, 0);
  #else
   this_sp = define_species( "test_species", 1., 1., npart, npart, 0, 0 );
  #endif
@@ -99,7 +99,9 @@ begin_initialization {
                      uniform( rng(0), 0, L ),
                      uniform( rng(0), 0, L ),
                      uniform( rng(0), 0, L ),
-                     0., 0., 0., 1., 0., 0 );
+                     0., 0., 0.,
+		     1.,
+		     0., 0 );
    #endif
   }
 

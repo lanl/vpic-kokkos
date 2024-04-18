@@ -440,7 +440,6 @@ advance_p_kokkos_unified(
 
 #ifdef FIELD_IONIZATION
   // constants
-  float q_e_c   = sp_e->q;     // code units, FIXME: this might need to come from grid struct
   float t_to_SI = g->t_to_SI;  // code to SI
   float l_to_SI = g->l_to_SI;  // code to SI
   float q_to_SI = g->q_to_SI;  // code to SI
@@ -458,6 +457,8 @@ advance_p_kokkos_unified(
   float h_bar     = 1.054571817e-34; // J *s
   float E_field_conversion = 5.1422e+11;      // (alpha^3*m_e^2*c^3)/(q_e*h_bar), multiply AU to get SI
   float Gamma_conversion   = 1.0/(h_bar/(pow(alpha,2)*m_e*pow(c,2))); // multiply au to get sec^-1 
+
+  float q_e_c   = g->q_to_SI/q_e; // code units
   
   auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<> random_pool(seed);
@@ -1321,7 +1322,6 @@ advance_p_kokkos_gpu(
 
 #ifdef FIELD_IONIZATION
   // constants
-  float q_e_c   = sp_e->q;     // code units
   float t_to_SI = g->t_to_SI;  // code to SI
   float l_to_SI = g->l_to_SI;  // code to SI
   float q_to_SI = g->q_to_SI;  // code to SI
@@ -1340,8 +1340,10 @@ advance_p_kokkos_gpu(
   float alpha     = 0.00729735;      // fine structure constant
   float h_bar     = 1.054571817e-34; // J *s
   float E_field_conversion = 5.1422e+11;      // (alpha^3*m_e^2*c^3)/(q_e*h_bar), multiply AU to get SI
-  float Gamma_conversion   = 1.0/(h_bar/(pow(alpha,2)*m_e*pow(c,2))); // multiply au to get sec^-1 
-    
+  float Gamma_conversion   = 1.0/(h_bar/(pow(alpha,2)*m_e*pow(c,2))); // multiply au to get sec^-1
+
+  float q_e_c   = g->q_to_SI/q_e; // code units
+  
   auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<> random_pool(seed);
   k_particles_t& k_electrons = sp_e->k_p_d; 

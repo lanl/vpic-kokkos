@@ -10,9 +10,10 @@ center_p_pipeline( center_p_pipeline_args_t * args,
 
   particle_t           * ALIGNED(32)  p;
   const interpolator_t * ALIGNED(16)  f;
-
+#ifndef FIELD_IONIZATION
   const float qdt_2mc        =     args->qdt_2mc;
   const float qdt_4mc        = 0.5*args->qdt_2mc; // For half Boris rotate
+#endif
   const float one            = 1.;
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
@@ -31,6 +32,11 @@ center_p_pipeline( center_p_pipeline_args_t * args,
   // Process particles for this pipeline
 
   for(;n;n--,p++) {
+   #ifdef FIELD_IONIZATION
+    const float qdt_2mc  = p->charge * args->qdt_2mc;
+    const float qdt_4mc  = p->charge *0.5*args->qdt_2mc; // For half Boris rotat
+   #endif
+    
     dx   = p->dx;                            // Load position
     dy   = p->dy;
     dz   = p->dz;
@@ -85,9 +91,10 @@ center_p_pipeline_v4( center_p_pipeline_args_t * args,
   const float          * ALIGNED(16)  vp1;
   const float          * ALIGNED(16)  vp2;
   const float          * ALIGNED(16)  vp3;
-
+#ifndef FIELD_IONIZATION 
   const v4float qdt_2mc(    args->qdt_2mc);
   const v4float qdt_4mc(0.5*args->qdt_2mc); // For half Boris rotate
+#endif
   const v4float one(1.);
   const v4float one_third(1./3.);
   const v4float two_fifteenths(2./15.);
@@ -109,6 +116,11 @@ center_p_pipeline_v4( center_p_pipeline_args_t * args,
 
   for( ; nq; nq--, p+=4 ) {
     load_4x4_tr(&p[0].dx,&p[1].dx,&p[2].dx,&p[3].dx,dx,dy,dz,ii);
+
+    #ifndef FIELD_IONIZATION
+     const v4float qdt_2mc(p->charge * args->qdt_2mc);
+     const v4float qdt_4mc(p->charge *0.5*args->qdt_2mc); // For half Boris rotate
+    #endif
 
     // Interpolate fields
     vp0 = (const float * ALIGNED(16))(f0 + ii(0));
@@ -158,7 +170,11 @@ center_p( /**/  species_t            * RESTRICT sp,
 
   args->p0      = sp->p;
   args->f0      = ia->i;
+#ifdef FIELD_IONIZATION
+  args->qdt_2mc = (sp->g->dt)/(2*sp->m*sp->g->cvac); // need to multiply by q in center_p_pipelines
+#else
   args->qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+#endif
   args->np      = sp->np;
 
   EXEC_PIPELINES( center_p, args, 0 );

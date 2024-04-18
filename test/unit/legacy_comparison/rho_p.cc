@@ -51,9 +51,9 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
     double ionization_energy_values[] = {0}; // in eV
     ionization_energy(0) = ionization_energy_values[0];
-    sp = define_species( "test_species", 1.,ionization_energy, 1,0,0, 1., npart, npart, 0, 0);
+    sp = define_species( "test_species", ionization_energy, 1,0,0, 1., npart, npart, 0, 0);
     // electron needs to be defined when  FI is enabled
-    species_t * electron = define_species("electron",-1.,ionization_energy, 0,0,0, 1., npart, npart, 0, 0); 
+    species_t * electron = define_species("electron",ionization_energy, 0,0,0, 1., npart, npart, 0, 0); 
    #else
     sp = define_species( "test_species", 1., 1., npart, npart, 0, 0 );
    #endif
@@ -67,7 +67,11 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
         float z = uniform( rng(0), 0, L);
 
         // Put two sets of particle in the exact same space
+      #if defined(FIELD_IONIZATION)
+	inject_particle( sp , x, y, z, 0., 0., 0., 1., 1., 0., 0);
+      #else
         inject_particle( sp , x, y, z, 0., 0., 0., 1., 0., 0);
+      #endif
     }
 
     // Make sure kokkos views have correct data

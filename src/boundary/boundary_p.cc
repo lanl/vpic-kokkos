@@ -228,9 +228,9 @@ boundary_p_kokkos(
                 const auto& krhob_accum_h = fa->k_f_rhob_accum_h;
                 const auto& kparticle_move_h = sp->k_pc_h;
                 const auto& kparticle_move_i_h = sp->k_pc_i_h;
-
+              #ifndef FIELD_IONIZATION
                 float qsp = sp->q;
-
+              #endif
                 // Send the particle to the particle boundary diagnostic
                 if (sp->pb_diag->enable)
                     pbd_write_to_buffer(sp, kparticle_move_h, kparticle_move_i_h, copy_index);
@@ -241,7 +241,11 @@ boundary_p_kokkos(
                         kparticle_move_i_h,
                         copy_index,
                         g,
+                      #ifdef FIELD_IONIZATION
+			sp->k_pc_h(copy_index, particle_var::charge)
+		      #else
                         qsp
+		      #endif
                 );
                 //accumulate_rhob( f, p0+i, g, sp_q );
 
@@ -488,7 +492,11 @@ boundary_p_kokkos(
                 sp_[id]->g->k_neighbor_h,
                 rangel,
                 rangeh,
+	      #ifdef FIELD_IONIZATION
+		pi->charge
+	      #else
                 sp_[id]->q
+	      #endif
         );
 
         int keep_id = nm + ret_code - 1;
@@ -684,7 +692,9 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
     // For each species, load the movers
 
     LIST_FOR_EACH( sp, sp_list ) {
+     #ifndef FIELD_IONIZATION
       const float   sp_q  = sp->q;
+     #endif
       const int32_t sp_id = sp->id;
 
       particle_t * RESTRICT ALIGNED(128) p0 = sp->p;
@@ -720,7 +730,11 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         if( nn==absorb_particles ) {
           // Ideally, we would batch all rhob accumulations together
           // for efficiency
+	 #ifdef FIELD_IONIZATION
+          accumulate_rhob( f, p0+i, g, p0->charge );
+         #else
           accumulate_rhob( f, p0+i, g, sp_q );
+	 #endif
           goto backfill;
         }
 
@@ -887,7 +901,9 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
 
     particle_t       * RESTRICT ALIGNED(32) sp_p[ MAX_SP];
     particle_mover_t * RESTRICT ALIGNED(32) sp_pm[MAX_SP];
+   #ifndef FIELD_IONIZATION
     float sp_q[MAX_SP];
+   #endif
     int sp_np[MAX_SP];
     int sp_nm[MAX_SP];
 
@@ -901,7 +917,9 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
     LIST_FOR_EACH( sp, sp_list ) {
       sp_p[  sp->id ] = sp->p;
       sp_pm[ sp->id ] = sp->pm;
+     #ifndef FIELD_IONIZATION
       sp_q[  sp->id ] = sp->q;
+     #endif
       sp_np[ sp->id ] = sp->np;
       sp_nm[ sp->id ] = sp->nm;
 #     ifdef DISABLE_DYNAMIC_RESIZING
@@ -965,7 +983,11 @@ boundary_p( particle_bc_t       * RESTRICT pbc_list,
         pm[nm].dispx=pi->dispx; pm[nm].dispy=pi->dispy; pm[nm].dispz=pi->dispz;
         pm[nm].i=np;
 #       endif
+     #ifdef FIELD_IONIZATION
+	sp_nm[id] = nm + move_p( p, pm+nm, fa->k_jf_accum_h, g, p->charge );
+     #else
         sp_nm[id] = nm + move_p( p, pm+nm, fa->k_jf_accum_h, g, sp_q[id] );
+     #endif
       }
     } while(face!=5);
 

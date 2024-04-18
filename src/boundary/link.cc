@@ -63,12 +63,19 @@ link_boundary( link_boundary_t     * lb,
   // ASCII write of particle data as per Tom's request
   // FIXME: perform I/O without calls to fprintf and need for stdio.h
   // Fields: species id, x, y, z, ux, uy, uz, q
+#ifdef FIELD_IONIZATION
+  fprintf( fp, "%d %e %e %e %e %e %e %e\n",
+           sp->id, x, y, z, r->ux, r->uy, r->uz, r->charge*r->w );
+  lb->n_out++;
 
+  accumulate_rhob( f, r, g, r->charge );
+#else
   fprintf( fp, "%d %e %e %e %e %e %e %e\n",
            sp->id, x, y, z, r->ux, r->uy, r->uz, sp->q*r->w );
   lb->n_out++;
 
   accumulate_rhob( f, r, g, sp->q );
+#endif
 
   return 0;
 }

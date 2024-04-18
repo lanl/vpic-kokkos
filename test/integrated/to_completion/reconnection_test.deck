@@ -227,12 +227,12 @@ begin_initialization {
     Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
     double ionization_energy_values[] = {0}; // in eV
     ionization_energy(0) = ionization_energy_values[0];
-    electron1 = define_species("electron1",-ec, ionization_energy, 1,0,0, me, nmax, nmovers, electron_sort_interval, sort_method);
-    electron2 = define_species("electron2",-ec, ionization_energy, 1,0,0, me, nmax, nmovers, electron_sort_interval, sort_method);
-    ion1      = define_species("ion1",      ec, ionization_energy, 1,0,0, mi, nmax, nmovers, ion_sort_interval,      sort_method);
-    ion2      = define_species("ion2",      ec, ionization_energy, 1,0,0, mi, nmax, nmovers, ion_sort_interval,      sort_method);
+    electron1 = define_species("electron1", ionization_energy, 1,0,0, me, nmax, nmovers, electron_sort_interval, sort_method);
+    electron2 = define_species("electron2", ionization_energy, 1,0,0, me, nmax, nmovers, electron_sort_interval, sort_method);
+    ion1      = define_species("ion1",      ionization_energy, 1,0,0, mi, nmax, nmovers, ion_sort_interval,      sort_method);
+    ion2      = define_species("ion2",      ionization_energy, 1,0,0, mi, nmax, nmovers, ion_sort_interval,      sort_method);
     // electron needs to be defined when  FI is enabled
-    species_t *electron = define_species("electron",-ec, ionization_energy, 0,0,0, me, nmax, nmovers, electron_sort_interval, sort_method);
+    species_t *electron = define_species("electron", ionization_energy, 0,0,0, me, nmax, nmovers, electron_sort_interval, sort_method);
    #else
     electron1 = define_species("electron1",-ec, me, nmax, nmovers, electron_sort_interval, sort_method);
     electron2 = define_species("electron2",-ec, me, nmax, nmovers, electron_sort_interval, sort_method);
@@ -471,8 +471,11 @@ begin_initialization {
         } else {
             target_species = electron2;
         }
+      #if defined(FIELD_IONIZATION)
+        inject_particle(target_species, x, y, z, ux, uy, uz, weight, -ec, 0, 0);
+      #else
         inject_particle(target_species, x, y, z, ux, uy, uz, weight, 0, 0);
-
+      #endif
 
         // Ions are cold enough
         ua = normal( rng(0), 0, vthi);
@@ -486,7 +489,11 @@ begin_initialization {
         } else {
             target_species = ion2;
         }
+      #if defined(FIELD_IONIZATION)
+        inject_particle(target_species, x, y, z, ux, uy, uz, weight, ec, 0, 0);
+      #else
         inject_particle(target_species, x, y, z, ux, uy, uz, weight, 0, 0);
+      #endif
 
         particle_number++;
     }

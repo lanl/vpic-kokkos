@@ -100,7 +100,6 @@ class species_t {
 #ifndef FIELD_IONIZATION	
         short int q;                        // Species particle charge
 #else
-	float q;  // FIXME: need to remove
 	Kokkos::View<double*> ionization_energy; // Species ionization energies
 	float qn; // principal quantum number
 	float qm; // magnetic quantum number
@@ -292,7 +291,6 @@ species( const char * name,
 #ifndef FIELD_IONIZATION
          float q,
 #else
-	 float q, // FIXME: need to remove
 	 Kokkos::View<double*> ionization_energy,
 	 float qn,
 	 float qm,

@@ -29,7 +29,11 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   /**/  hydro_t        * RESTRICT ALIGNED(128) h;
   const particle_t     * RESTRICT ALIGNED(128) p;
   const interpolator_t * RESTRICT ALIGNED(128) f;
+#ifdef FIELD_IONIZATION
+  float c, p_q, mspc,  dt_2mc,  dt_4mc2, r8V;
+#else
   float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
+#endif
   int np, stride_10, stride_21, stride_43;
 
   float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
@@ -44,10 +48,15 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   f = ia->i;
 
   c        = sp->g->cvac;
-  qsp      = sp->q;
   mspc     = sp->m*c;
+#ifdef FIELD_IONIZATION
+  dt_2mc  = (sp->g->dt)/(2*mspc);
+  dt_4mc2 = dt_2mc / (2*c);
+#else
+  qsp      = sp->q;
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
+#endif
   r8V      = sp->g->r8V;
 
   np        = sp->np;
@@ -69,12 +78,16 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     uy = p[n].uy;
     uz = p[n].uz;
     w  = p[n].w;
+#ifdef FIELD_IONIZATION
+    p_q = p[n].charge;
+    float qdt_2mc  = p_q * dt_2mc;
+    float qdt_4mc2 = p_q * dt_4mc2;
+#endif
 
     // Half advance E
     ux += qdt_2mc*((f[i].ex+dy*f[i].dexdy) + dz*(f[i].dexdz+dy*f[i].d2exdydz));
     uy += qdt_2mc*((f[i].ey+dz*f[i].deydz) + dx*(f[i].deydx+dz*f[i].d2eydzdx));
     uz += qdt_2mc*((f[i].ez+dx*f[i].dezdx) + dy*(f[i].dezdy+dx*f[i].d2ezdxdy));
-
     // Boris rotation - Interpolate B field
     w5 = f[i].cbx + dx*f[i].dcbxdx;
     w6 = f[i].cby + dy*f[i].dcbydy;
@@ -131,6 +144,29 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     w3 *= dz;       // w3 = (1/8)(w/V)(1+x)(1+y)(1-z) = (w/V) trilin_7 *Done
 
     // Accumulate the hydro fields
+#ifdef FIELD_IONIZATION
+#   define ACCUM_HYDRO( wn)                             \
+    t  = p_q*wn;        /* t  = (qsp w/V) trilin_n */   \
+    h[i].jx  += t*vx;                                   \
+    h[i].jy  += t*vy;                                   \
+    h[i].jz  += t*vz;                                   \
+    h[i].rho += t;                                      \
+    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
+    dx = t*ux;          /* dx = (px w/V) trilin_n */    \
+    dy = t*uy;                                          \
+    dz = t*uz;                                          \
+    h[i].px  += dx;                                     \
+    h[i].py  += dy;                                     \
+    h[i].pz  += dz;                                     \
+    h[i].ke  += t*ke_mc;                                \
+    h[i].txx += dx*vx;                                  \
+    h[i].tyy += dy*vy;                                  \
+    h[i].tzz += dz*vz;                                  \
+    h[i].tyz += dy*vz;                                  \
+    h[i].tzx += dz*vx;                                  \
+    h[i].txy += dx*vy
+
+#else
 #   define ACCUM_HYDRO( wn)                             \
     t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
     h[i].jx  += t*vx;                                   \
@@ -151,7 +187,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     h[i].tyz += dy*vz;                                  \
     h[i].tzx += dz*vx;                                  \
     h[i].txy += dx*vy
-
+#endif // FIELD_IONIZATION
     /**/            ACCUM_HYDRO(w0); // Cell i,j,k
     i += stride_10; ACCUM_HYDRO(w1); // Cell i+1,j,k
     i += stride_21; ACCUM_HYDRO(w2); // Cell i,j+1,k
@@ -162,6 +198,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     i += stride_10; ACCUM_HYDRO(w7); // Cell i+1,j+1,k+1
 
 #   undef ACCUM_HYDRO
+
   }
 }
 

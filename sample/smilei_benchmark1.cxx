@@ -625,14 +625,14 @@ begin_initialization {
   sim_log("Setting up ions. ");
     if ( I1_present ) {
       #if defined(FIELD_IONIZATION)
-       ion_I1 = define_species("I1", q_I1, ionization_energy_I1_d, qn,qm,ql, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
+       ion_I1 = define_species("I1", ionization_energy_I1_d, qn,qm,ql, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
       #else
 	ion_I1 = define_species("I1", q_I1, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0); // FIXME: q needs to be removed from define_species when field ionization is on.
       #endif
     }
     if ( I2_present ) {
       #if defined(FIELD_IONIZATION)
-       ion_I2 = define_species("I2", q_I2, ionization_energy_I2_d, qn,qm,ql, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
+       ion_I2 = define_species("I2", ionization_energy_I2_d, qn,qm,ql, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
       #else
 	ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0); // FIXME: q needs to be removed from define_species when field ionization is on.
       #endif
@@ -650,7 +650,7 @@ begin_initialization {
   // Electrons need to be defined last in input deck when field ionization is enabled
   species_t *electron;
   #if defined(FIELD_IONIZATION)
-   electron = define_species("electron", -1.*e_c, ionization_energy_electron_d,0,0,0, m_e_c,max_local_np_e, max_local_nm_e, 20, 0);
+   electron = define_species("electron", ionization_energy_electron_d,0,0,0, m_e_c,max_local_np_e, max_local_nm_e, 20, 0);
   #else  
     electron = define_species("electron", -1.*e_c, m_e_c, max_local_np_e, max_local_nm_e, 20, 0);
   #endif
@@ -718,9 +718,9 @@ begin_initialization {
          
          if ( I1_present ) {
             #if defined(FIELD_IONIZATION)
-                inject_particle( ion_I1, x, y, z, 0, 0, 0, w_I1, q_I1,0,0);
+	       inject_particle( ion_I1, x, y, z, 0, 0, 0, w_I1, q_I1, 0,0);
             #else
-                inject_particle( ion_I1, x, y, z, 0, 0, 0, w_I1,0,0);
+               inject_particle( ion_I1, x, y, z, 0, 0, 0, w_I1,0,0);
             #endif
           } // if I1 present
 	  

@@ -42,9 +42,9 @@ begin_initialization {
   Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
   double ionization_energy_values[] = {0}; // in eV
   ionization_energy(0) = ionization_energy_values[0];
-  this_sp = define_species( "test_species", 2., ionization_energy, 1,0,0, 1., NPART, NPART, 0, 0 );
+  this_sp = define_species( "test_species", ionization_energy, 1,0,0, 1., NPART, NPART, 0, 0 );
   // electron needs to be defined when  FI is enabled
-  species_t * electron = define_species("electron",-1.,ionization_energy, 0,0,0, 1., NPART, NPART, 0, 0);
+  species_t * electron = define_species("electron", ionization_energy, 0,0,0, 1., NPART, NPART, 0, 0);
  #else
   this_sp = define_species( "test_species", 2., 1., NPART, NPART, 0, 0 );
  #endif
@@ -145,7 +145,11 @@ begin_initialization {
   CLEAR( rho1, 8 );
   for( int n=0; n<NPART; n++ ) {
     double dx = this_sp->p[n].dx, dy = this_sp->p[n].dy, dz = this_sp->p[n].dz;
+  #if defined(FIELD_IONIZATION)
+    double q  = 0.125*(double)this_sp->p[n].charge*(double)this_sp->p[n].w;
+  #else
     double q  = 0.125*(double)this_sp->q*(double)this_sp->p[n].w;
+  #endif
     rho1[0] += q * ( 1 - dx ) * ( 1 - dy ) * ( 1 - dz );
     rho1[1] += q * ( 1 + dx ) * ( 1 - dy ) * ( 1 - dz );
     rho1[2] += q * ( 1 - dx ) * ( 1 + dy ) * ( 1 - dz );

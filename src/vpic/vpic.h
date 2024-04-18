@@ -524,7 +524,6 @@ public:
 		 #if !defined(FIELD_IONIZATION)	  
                   double q,
 		 #else
-		  double q, // FIXME: need to remove
                   Kokkos::View<double*> ionization_energy,
 		  double qn, // quantum numbers n,m,l
 		  double qm,
@@ -547,7 +546,6 @@ public:
 				   #if !defined(FIELD_IONIZATION)
 				    (float)q,
 				   #else
-				    (float)q, //FIXME: need to remove
 				    (Kokkos::View<double*>)ionization_energy,
 				    (float)qn,
 		                    (float)qm,
@@ -582,7 +580,7 @@ public:
                    double ux, double uy, double uz,
                    double w,
 		   short int charge,
-      	           double age = 0, int update_rhob = 1 );
+      	           double age, int update_rhob );
 
  #else
   void
@@ -603,7 +601,35 @@ public:
   // - Injection with displacment may use up movers (i.e. don't use
   //   injection with displacement during initialization).
   // This injection is _ultra_ _fast_.
+#ifdef FIELD_IONIZATION
+  inline void
+  inject_particle_raw( species_t * RESTRICT sp,
+                       float dx, float dy, float dz, int32_t i,
+                       float ux, float uy, float uz, float w, short int charge ) {
+    particle_t * RESTRICT p = sp->p + (sp->np++);
+    p->dx = dx; p->dy = dy; p->dz = dz; p->i = i;
+    p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
+    p->charge = charge;
+  }
 
+  // This variant does a raw inject and moves the particles
+  
+  inline void
+  inject_particle_raw( species_t * RESTRICT sp,
+                       float dx, float dy, float dz, int32_t i,
+                       float ux, float uy, float uz, float w, short int charge,
+                       float dispx, float dispy, float dispz,
+                       int update_rhob ) {
+    particle_t       * RESTRICT p  = sp->p  + (sp->np++);
+    particle_mover_t * RESTRICT pm = sp->pm + sp->nm;
+    p->dx = dx; p->dy = dy; p->dz = dz; p->i = i;
+    p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
+    p->charge =	charge;
+    pm->dispx = dispx; pm->dispy = dispy; pm->dispz = dispz; pm->i = sp->np-1;
+    if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -p->charge );
+    sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, p->charge );
+  }
+#else
   inline void
   inject_particle_raw( species_t * RESTRICT sp,
                        float dx, float dy, float dz, int32_t i,
@@ -629,7 +655,7 @@ public:
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
     sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
   }
-
+#endif
   //////////////////////////////////
   // Random number generator helpers
 

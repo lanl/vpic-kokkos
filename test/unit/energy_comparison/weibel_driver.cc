@@ -190,8 +190,8 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
   double ionization_energy_values[] = {0}; // in eV
   ionization_energy(0) = ionization_energy_values[0];
-  ion      = define_species("ion",      ec, ionization_energy, 1,0,0, mi,2.4*Ne/nproc(),-1,0,0); //(GY)
-  electron = define_species("electron",-ec, ionization_energy, 0,0,0, me,2.4*Ne/nproc(),-1,0,0); //turn off sorting (GY)
+  ion      = define_species("ion",      ionization_energy, 1,0,0, mi,2.4*Ne/nproc(),-1,0,0); //(GY)
+  electron = define_species("electron", ionization_energy, 0,0,0, me,2.4*Ne/nproc(),-1,0,0); //turn off sorting (GY)
   #else
   ion      = define_species("ion",      ec,mi,2.4*Ne/nproc(),-1,0,0); //(GY)
   electron = define_species("electron",-ec,me,2.4*Ne/nproc(),-1,0,0); //turn off sorting (GY)
