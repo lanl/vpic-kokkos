@@ -311,7 +311,7 @@ if(VPIC_ENABLE_HDF5 OR VPIC_ENABLE_TRACER_PARTICLES)
     set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} -L${HDF5_VOL_ASYNC_DIR}/lib -L${HDF5_VOL_ABT_DIR}/lib -labt -lh5async -lasynchdf5")
     set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} -I${HDF5_VOL_ASYNC_DIR}/include -I${HDF5_VOL_ABT_DIR}/include")
   endif()
-endif(VPIC_ENABLE_HDF5)
+endif(VPIC_ENABLE_HDF5 OR VPIC_ENABLE_TRACER_PARTICLES)
 
 #------------------------------------------------------------------------------#
 # Act on build options set in project.cmake

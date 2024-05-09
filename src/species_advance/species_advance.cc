@@ -452,17 +452,6 @@ species_t::init_io_buffers(const int nparticles) {
   stress_tensor_io_buffer_h = Kokkos::create_mirror_view(stress_tensor_io_buffer_d); 
   particle_ke_io_buffer_h   = Kokkos::create_mirror_view(particle_ke_io_buffer_d  ); 
   annotations_io_buffer_h   = annotations_t<Kokkos::DefaultHostExecutionSpace>(annotations_io_buffer_d);
-//  particle_io_buffer       = k_particles_t::HostMirror("Particle io buffer", nparticles);
-//  particle_cell_io_buffer  = k_particles_i_t::HostMirror("Particle cell io buffer", nparticles);
-//  efields_io_buffer        = Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror("Efield io buffer", nparticles);
-//  bfields_io_buffer        = Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror("Bfield io buffer", nparticles);
-//  current_dens_io_buffer   = Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror("Current density io buffer", nparticles);
-//  charge_dens_io_buffer    = Kokkos::View<float*>::HostMirror("Charge density io buffer", nparticles);;
-//  momentum_dens_io_buffer  = Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror("Momentum density io buffer", nparticles);
-//  ke_dens_io_buffer        = Kokkos::View<float*>::HostMirror("KE density io buffer", nparticles);;
-//  stress_tensor_io_buffer  = Kokkos::View<float*[6], Kokkos::LayoutLeft>::HostMirror("Stress tensor io buffer", nparticles);
-//  particle_ke_io_buffer    = Kokkos::View<float*, Kokkos::LayoutLeft>::HostMirror("Particle KE io buffer", nparticles);
-//  annotations_io_buffer    = annotations_t<Kokkos::DefaultHostExecutionSpace>(nparticles, annotation_vars);
 }
 
 void 

@@ -2,6 +2,7 @@
 #include <string.h>
 #include <sstream>
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <algorithm>
 #include <map>
@@ -49,6 +50,29 @@ std::vector<std::string> split(const std::string &s, char delip) {
   return elems;
 }
 
+void handle_args(int argc, char** argv, std::string& fname, std::set<int>& selected_tracers, bool& output_single_file) {
+  auto select_arg = std::find(argv, argv+argc, std::string("--select-tracers"));
+  if(select_arg != argv+argc) {
+    std::string line;
+    std::fstream fs;
+    fs.open(*(select_arg+1), std::fstream::in);
+    while(std::getline(fs, line)) {
+      selected_tracers.insert(std::stoi(line.c_str(), NULL, 10));
+    }
+    fs.close();
+  } else {
+    printf("No tracers selected. Extracting all tracers.");
+  }
+  select_arg = std::find(argv, argv+argc, std::string("--output-single-file"));
+  if(select_arg != argv+argc) {
+    output_single_file = true;
+  } else {
+    output_single_file = false;
+  }
+  select_arg = std::find(argv, argv+argc, std::string("--tracer-file"));
+  fname = std::string(*(select_arg+1));
+}
+
 int main(int argc, char**argv) {
   MPI_Init(&argc, &argv);
   int comm_rank, comm_size;
@@ -56,21 +80,12 @@ int main(int argc, char**argv) {
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
   int arg_offset = 0;
-  bool select = false;
+  bool select = false, output_single_file=false;
   std::set<int> selected_tracers;
-  auto select_arg = std::find(argv, argv+argc, std::string("--select-tracers"));
-  if(select_arg != argv+argc) {
+  std::string fname;
+  handle_args(argc, argv, fname, selected_tracers, output_single_file);
+  if(selected_tracers.size() > 0)
     select = true;
-    arg_offset += 2;
-    std::string tracers(*(select_arg+1));
-    std::vector<std::string> selected_ids = split(tracers, ',');
-    for(size_t i=0; i<selected_ids.size(); i++) {
-      selected_tracers.insert(std::stoi(selected_ids[i].c_str(), NULL, 10));
-    }
-  } else {
-    if(comm_rank == 0) 
-      printf("No tracers selected. Extracting all tracers.");
-  }
 
   if(comm_rank == 0 && selected_tracers.size() > 0) {
     std::cout << "Selected tracers: ";
@@ -80,16 +95,8 @@ int main(int argc, char**argv) {
     std::cout << std::endl;
   }
 
-  bool output_single_file = false;
-  auto output_single_file_arg = std::find(argv, argv+argc, std::string("--output-single-file"));
-  if(output_single_file_arg != argv+argc) {
-    output_single_file = true;
-    arg_offset += 1;
-  }
-
-  const char* fname = argv[1+arg_offset];
   if(comm_rank == 0)
-    printf("Extracting tracers from %s\n", fname);
+    printf("Extracting tracers from %s\n", fname.c_str());
 
   hid_t file_id, access_id;
 
@@ -99,7 +106,7 @@ int main(int argc, char**argv) {
   if(ret == H5I_INVALID_HID)
     printf("Failed to set MPIO file access permission list\n");
 
-  file_id = H5Fopen(fname, H5F_ACC_RDWR, access_id);
+  file_id = H5Fopen(fname.c_str(), H5F_ACC_RDWR, access_id);
 
   std::vector<std::string> timesteps;
  
@@ -344,8 +351,8 @@ int main(int argc, char**argv) {
   // Iterate through all tracers
   for(auto it=tracer_set.begin(); it!=tracer_set.end(); it++) {
     int id = *it;
-if(comm_rank == 0)
-  std::cout << "Writing tracer " << counter << " (" << id << ")\n";
+    if(comm_rank == 0)
+      std::cout << "Writing tracer " << counter << " (" << id << ")\n";
     // Start offset and number of elements for this process
     hsize_t offset = beg_step;
     hsize_t count = ntimesteps[id];
@@ -376,11 +383,11 @@ if(comm_rank == 0)
     hid_t acpl_id = H5Pcreate(H5P_ATTRIBUTE_CREATE);
     hid_t attr_fspace_id = H5Screate(H5S_SCALAR);
     hid_t attr_id = H5Acreate(write_id, "TracerID", H5T_STD_I32LE, attr_fspace_id, acpl_id, H5P_DEFAULT);
-if(attr_id == H5I_INVALID_HID)
-printf("Failed to create attribute\n");
+    if(attr_id == H5I_INVALID_HID)
+      fprintf(stderr, "Failed to create attribute\n");
     int a = H5Awrite(attr_id, H5T_STD_I32LE, &id);
-if(a < 0)
-printf("Failed to write attribute\n");
+    if(a < 0)
+      fprintf(stderr, "Failed to write attribute\n");
     H5Aclose(attr_id);
     H5Sclose(attr_fspace_id);
     H5Pclose(acpl_id);

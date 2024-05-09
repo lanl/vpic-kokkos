@@ -623,7 +623,7 @@ class species_t {
           auto& k_particle_i_h = parent_species->k_p_i_h;
           auto& particles = parent_species->p;
 
-          Kokkos::parallel_for("copy particles to device",
+          Kokkos::parallel_for("copy legacy particles to host",
             host_execution_policy(0, parent_species->np) ,
             KOKKOS_LAMBDA (int i) {
 
@@ -641,58 +641,63 @@ class species_t {
 
           for(int i=0; i<parent_species->np; i++) {
             if(filter(parent_species->p[i])) { // Check if particle passes filter
-              k_p_h(np, particle_var::dx) = parent_species->k_p_h(i, particle_var::dx); // Copy particle to tracer
-              k_p_h(np, particle_var::dy) = parent_species->k_p_h(i, particle_var::dy); 
-              k_p_h(np, particle_var::dz) = parent_species->k_p_h(i, particle_var::dz); 
-              k_p_h(np, particle_var::ux) = parent_species->k_p_h(i, particle_var::ux); 
-              k_p_h(np, particle_var::uy) = parent_species->k_p_h(i, particle_var::uy); 
-              k_p_h(np, particle_var::uz) = parent_species->k_p_h(i, particle_var::uz); 
-              k_p_h(np, particle_var::w)  = parent_species->k_p_h(i, particle_var::w); 
-              k_p_i_h(np)                 = parent_species->k_p_i_h(i); 
-              p[np] = parent_species->p[i]; // Copy legacy particle FIXME Should be unnecessary
-
-              //TODO Test copying the rest of the annotations
-              for(uint32_t j=0; j<parent_species->annotation_vars.i32_vars.size(); j++) {
-                int k = annotation_vars.get_annotation_index<int>(parent_species->annotation_vars.i32_vars[j]);
-                annotations_h.set<int>(np, k, parent_species->annotations_h.get<int>(i, j));
-              }
-              for(uint32_t j=0; j<parent_species->annotation_vars.i64_vars.size(); j++) {
-                int k = annotation_vars.get_annotation_index<int64_t>(parent_species->annotation_vars.i64_vars[j]);
-                annotations_h.set<int64_t>(np, k, parent_species->annotations_h.get<int64_t>(i, j));
-              }
-              for(uint32_t j=0; j<parent_species->annotation_vars.f32_vars.size(); j++) {
-                int k = annotation_vars.get_annotation_index<float>(parent_species->annotation_vars.f32_vars[j]);
-                annotations_h.set<float>(np, k, parent_species->annotations_h.get<float>(i, j));
-              }
-              for(uint32_t j=0; j<parent_species->annotation_vars.f64_vars.size(); j++) {
-                int k = annotation_vars.get_annotation_index<double>(parent_species->annotation_vars.f64_vars[j]);
-                annotations_h.set<double>(np, k, parent_species->annotations_h.get<double>(i, j));
-              }
-
-              // Create unique tracer id (32-bit rank concatenated with particle index)
-              int tracer_idx = annotation_vars.get_annotation_index<int>(std::string("TracerID"));
-              annotations_h.set<int>(np, tracer_idx, rank*max_np + np);
-              if(tracer_type == TracerType::Copy) {
-                int w_idx = annotation_vars.get_annotation_index<float>(std::string("Weight")); // Get weight annotation index
-                annotations_h.set<float>(np, w_idx, k_p_h(np, particle_var::w)); // Save weight
-                k_p_h(np, particle_var::w) = 0.0f; // Set tracer weight to 0 so the particle is non interactive
-              } else if(tracer_type == TracerType::Move) {
-                // Move last particle over to fill in gap
-                parent_species->k_p_h(i, particle_var::dx) = parent_species->k_p_h(parent_species->np-1, particle_var::dx); 
-                parent_species->k_p_h(i, particle_var::dy) = parent_species->k_p_h(parent_species->np-1, particle_var::dy); 
-                parent_species->k_p_h(i, particle_var::dz) = parent_species->k_p_h(parent_species->np-1, particle_var::dz); 
-                parent_species->k_p_h(i, particle_var::ux) = parent_species->k_p_h(parent_species->np-1, particle_var::ux); 
-                parent_species->k_p_h(i, particle_var::uy) = parent_species->k_p_h(parent_species->np-1, particle_var::uy); 
-                parent_species->k_p_h(i, particle_var::uz) = parent_species->k_p_h(parent_species->np-1, particle_var::uz); 
-                parent_species->k_p_h(i, particle_var::w)  = parent_species->k_p_h(parent_species->np-1, particle_var::w); 
-                parent_species->k_p_i_h(i)                 = parent_species->k_p_i_h(parent_species->np - 1); 
-                parent_species->p[i] = parent_species->p[parent_species->np-1]; // FIXME remove legacy particles
-                parent_species->np -= 1; // Decrease number of particles in parent species
+              create_tracer_from(parent_species, i);
+              if(tracer_type == TracerType::Move) {
                 i -= 1;
-              } else {
-                ERROR(( "Invalid TracerType: %d", tracer_type ));
-              } 
-              np++; // Increase number of tracers
+              }
+
+//              k_p_h(np, particle_var::dx) = parent_species->k_p_h(i, particle_var::dx); // Copy particle to tracer
+//              k_p_h(np, particle_var::dy) = parent_species->k_p_h(i, particle_var::dy); 
+//              k_p_h(np, particle_var::dz) = parent_species->k_p_h(i, particle_var::dz); 
+//              k_p_h(np, particle_var::ux) = parent_species->k_p_h(i, particle_var::ux); 
+//              k_p_h(np, particle_var::uy) = parent_species->k_p_h(i, particle_var::uy); 
+//              k_p_h(np, particle_var::uz) = parent_species->k_p_h(i, particle_var::uz); 
+//              k_p_h(np, particle_var::w)  = parent_species->k_p_h(i, particle_var::w); 
+//              k_p_i_h(np)                 = parent_species->k_p_i_h(i); 
+//              p[np] = parent_species->p[i]; // Copy legacy particle FIXME Should be unnecessary
+//
+//              //TODO Test copying the rest of the annotations
+//              for(uint32_t j=0; j<parent_species->annotation_vars.i32_vars.size(); j++) {
+//                int k = annotation_vars.get_annotation_index<int>(parent_species->annotation_vars.i32_vars[j]);
+//                annotations_h.set<int>(np, k, parent_species->annotations_h.get<int>(i, j));
+//              }
+//              for(uint32_t j=0; j<parent_species->annotation_vars.i64_vars.size(); j++) {
+//                int k = annotation_vars.get_annotation_index<int64_t>(parent_species->annotation_vars.i64_vars[j]);
+//                annotations_h.set<int64_t>(np, k, parent_species->annotations_h.get<int64_t>(i, j));
+//              }
+//              for(uint32_t j=0; j<parent_species->annotation_vars.f32_vars.size(); j++) {
+//                int k = annotation_vars.get_annotation_index<float>(parent_species->annotation_vars.f32_vars[j]);
+//                annotations_h.set<float>(np, k, parent_species->annotations_h.get<float>(i, j));
+//              }
+//              for(uint32_t j=0; j<parent_species->annotation_vars.f64_vars.size(); j++) {
+//                int k = annotation_vars.get_annotation_index<double>(parent_species->annotation_vars.f64_vars[j]);
+//                annotations_h.set<double>(np, k, parent_species->annotations_h.get<double>(i, j));
+//              }
+//
+//              // Create unique tracer id (32-bit rank concatenated with particle index)
+//              int tracer_idx = annotation_vars.get_annotation_index<int>(std::string("TracerID"));
+//              annotations_h.set<int>(np, tracer_idx, rank*max_np + np);
+//              if(tracer_type == TracerType::Copy) {
+//                int w_idx = annotation_vars.get_annotation_index<float>(std::string("Weight")); // Get weight annotation index
+//                annotations_h.set<float>(np, w_idx, k_p_h(np, particle_var::w)); // Save weight
+//                k_p_h(np, particle_var::w) = 0.0f; // Set tracer weight to 0 so the particle is non interactive
+//              } else if(tracer_type == TracerType::Move) {
+//                // Move last particle over to fill in gap
+//                parent_species->k_p_h(i, particle_var::dx) = parent_species->k_p_h(parent_species->np-1, particle_var::dx); 
+//                parent_species->k_p_h(i, particle_var::dy) = parent_species->k_p_h(parent_species->np-1, particle_var::dy); 
+//                parent_species->k_p_h(i, particle_var::dz) = parent_species->k_p_h(parent_species->np-1, particle_var::dz); 
+//                parent_species->k_p_h(i, particle_var::ux) = parent_species->k_p_h(parent_species->np-1, particle_var::ux); 
+//                parent_species->k_p_h(i, particle_var::uy) = parent_species->k_p_h(parent_species->np-1, particle_var::uy); 
+//                parent_species->k_p_h(i, particle_var::uz) = parent_species->k_p_h(parent_species->np-1, particle_var::uz); 
+//                parent_species->k_p_h(i, particle_var::w)  = parent_species->k_p_h(parent_species->np-1, particle_var::w); 
+//                parent_species->k_p_i_h(i)                 = parent_species->k_p_i_h(parent_species->np - 1); 
+//                parent_species->p[i] = parent_species->p[parent_species->np-1]; // FIXME remove legacy particles
+//                parent_species->np -= 1; // Decrease number of particles in parent species
+//                i -= 1;
+//              } else {
+//                ERROR(( "Invalid TracerType: %d", tracer_type ));
+//              } 
+//              np++; // Increase number of tracers
             }
           }
         }
@@ -734,6 +739,11 @@ class species_t {
           np = 0;
           for(int i=0; i<parent_np; i++) {
             if(i >= skip*np) { // Check if particle passes filter
+//              create_tracer_from(parent_species, i);
+//              if(tracer_type == TracerType::Move) {
+//                i -= 1;
+//              }
+
               k_p_h(np, particle_var::dx) = parent_species->k_p_h(step, particle_var::dx); // Copy particle to tracer
               k_p_h(np, particle_var::dy) = parent_species->k_p_h(step, particle_var::dy); 
               k_p_h(np, particle_var::dz) = parent_species->k_p_h(step, particle_var::dz); 
@@ -743,6 +753,7 @@ class species_t {
               k_p_h(np, particle_var::w)  = parent_species->k_p_h(step, particle_var::w); 
               k_p_i_h(np) = parent_species->k_p_i_h(step); 
               p[np] = parent_species->p[step]; // Copy legacy particle FIXME Should be unnecessary
+
               // Create unique tracer id (32-bit rank concatenated with particle index)
               int tracer_idx = annotation_vars.get_annotation_index<int>(std::string("TracerID"));
               annotations_h.set<int>(np, tracer_idx, rank*max_np + np);

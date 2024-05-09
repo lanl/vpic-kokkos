@@ -400,8 +400,8 @@ begin_initialization {
     fprintf(out, "%d   Number of ranks\n", nproc());
     fprintf(out, "%d   Number of bins in the spectra\n", 0);
     fprintf(out, "%.17e   Spec max for electron, code units (gamma-1)\n",
-            0);
-    fprintf(out, "%.17e   Spec max for I2, code units (gamma-1)\n", 0);
+            0.0);
+    fprintf(out, "%.17e   Spec max for I2, code units (gamma-1)\n", 0.0);
     fprintf(out, "%d   Spectra Interval\n", spectra_interval);
     fprintf(out, "%d   This is my rank\n", rank());
     fclose(out);
@@ -667,14 +667,14 @@ printf("z box: [%f,%f]\n", zmin, zmax);
 //  species_t * electron_tracers = define_tracer_species_with_n("electron_tracers", electron, TracerType::Copy, 5.0, -1, 1.1, electron_annotations);
 //  species_t * electron_tracers = define_tracer_species("electron_tracers", electron, 1000, 1000, 100000, 1.1, electron_annotations);
   species_t * electron_tracers = define_tracer_species("electron_tracers", -1.*e_c, m_e_c, 1000, 1000, 20, 0);
-//  electron_tracers->parent_species = electron;
+  electron_tracers->parent_species = electron;
 
   annotation_vars_t ion_I2_annotations;
 //  species_t * ion_I2_tracers = define_tracer_species_by_percentage("ion_I2_tracers", ion_I2, TracerType::Copy, 0.1, -1, 1.1, ion_I2_annotations);
 //  species_t * ion_I2_tracers = define_tracer_species_with_n("ion_I2_tracers", ion_I2, TracerType::Copy, 5.0, -1, 1.1, ion_I2_annotations);
 //  species_t * ion_I2_tracers = define_tracer_species("ion_I2_tracers", ion_I2, 1000, 1000, 100000, 1.1, ion_I2_annotations);
   species_t * ion_I2_tracers = define_tracer_species("ion_I2_tracers", Z_I2*e_c, m_I2_c, 1000, 1000, 80, 0);
-//  ion_I2_tracers->parent_species = ion_I2;
+  ion_I2_tracers->parent_species = ion_I2;
 
   double xmin = grid->x0;
   double xmax = (grid->x0+grid->nx*grid->dx);
@@ -1091,28 +1091,23 @@ begin_diagnostics {
     /*--------------------------------------------------------------------------
      * Dump tracer species
      *------------------------------------------------------------------------*/
-    LIST_FOR_EACH(sp, tracers_list) {
-      sp->copy_to_host();
-    }
-    interpolator_array->copy_to_host();
-    
 //    dump_tracers_hdf5( "electron_tracers", DumpVar::All, 
-//                       "electron_tracers/electron_tracers_buffered", step() != 0);
+//                       "electron_tracers/electron_tracers_buffered");
 //    dump_tracers_hdf5( "ion_I2_tracers", DumpVar::All,
-//                       "ion_I2_tracers/ion_I2_tracers_buffered", step() != 0);
+//                       "ion_I2_tracers/ion_I2_tracers_buffered");
     dump_tracers_buffered_hdf5( "electron_tracers", DumpVar::All, 
-                                "electron_tracers/electron_tracers_buffered", step() != 0);
+                                "electron_tracers/electron_tracers_buffered");
 //    dump_tracers_buffered_hdf5( "ion_I2_tracers", DumpVar::All,
-//                                "ion_I2_tracers/ion_I2_tracers_buffered", step() != 0);
+//                                "ion_I2_tracers/ion_I2_tracers_buffered");
 
 //    dump_tracers_buffered_csv( "electron_tracers", DumpVar::All,
-//                               "electron_tracers/electron_tracers_buffered", step() != 0, 0);
+//                               "electron_tracers/electron_tracers_buffered");
 //    dump_tracers_buffered_csv( "ion_I2_tracers", DumpVar::All,
-//                               "ion_I2_tracers/ion_I2_tracers_buffered", step() != 0, 0);
+//                               "ion_I2_tracers/ion_I2_tracers_buffered");
 //    dump_tracers_csv( "electron_tracers", DumpVar::Efield | DumpVar::KEDensity | DumpVar::ParticleKE,
-//                      "electron_tracers/electron_tracers", step() != 0, 0);
+//                      "electron_tracers/electron_tracers");
 //    dump_tracers_csv( "ion_I2_tracers", DumpVar::All,
-//                      "ion_I2_tracers/ion_I2_tracers", step() != 0, 0);
+//                      "ion_I2_tracers/ion_I2_tracers");
 
 #endif
 

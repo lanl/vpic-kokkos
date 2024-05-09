@@ -14,6 +14,7 @@
 #include "vpic.h"
 #include "dumpmacros.h"
 #include "../util/io/FileUtils.h"
+#include <filesystem>
 
 /* -1 means no ranks talk */
 #define VERBOSE_rank -1
@@ -143,1081 +144,6 @@ vpic_simulation::dump_materials( const char *fname ) {
                   m->sigmax, m->sigmay, m->sigmaz );
   if( fileIO.close() ) ERROR(( "File close failed on dump materials!!!" ));
 }
-
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-void
-vpic_simulation::dump_particles_csv( const char *sp_name,
-                                     uint32_t dump_vars,
-                                     const char *fbase,
-                                     const int append,
-                                     int ftag )
-{
-    species_t *sp;
-    char fname[max_filename_bytes];
-    FileIO fileIO;
-
-    // Get species
-    sp = find_species_name( sp_name, species_list );
-    if(sp == NULL)
-      sp = find_species_name(sp_name, tracers_list);
-    if( !sp ) ERROR(( "Invalid species name \"%s\".", sp_name ));
-
-    if( !fbase ) ERROR(( "Invalid filename" ));
-
-    // Update the particles on the host only if they haven't been recently
-    if (step() > sp->last_copied)
-      sp->copy_to_host();
-
-    if( rank()==0 )
-        MESSAGE(("Dumping \"%s\" particles to \"%s\"",sp->name,fbase));
-
-    // Create output filename
-    if( ftag ) {
-        snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
-    }
-    else {
-        snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
-    }
-
-    FileIOStatus status = fileIO.open(fname, append ? io_append : io_write);
-    if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
-
-    // Create header string
-    std::string header_str = std::string("Timestep,rank,cell_id,dx,dy,dz,ux,uy,uz,w");
-    if(dump_vars & DumpVar::GlobalPos) {
-      header_str += ",posx,posy,posz";
-    }
-    if(dump_vars & DumpVar::Efield) {
-      header_str += ",ex,ey,ez";
-    }
-    if(dump_vars & DumpVar::Bfield) {
-      header_str += ",bx,by,bz";
-    }
-    if(dump_vars & DumpVar::CurrentDensity) {
-      header_str += ",jx,jy,jz";
-    }
-    if(dump_vars & DumpVar::ChargeDensity) {
-      header_str += ",rho";
-    }
-    if(dump_vars & DumpVar::MomentumDensity) {
-      header_str += ",px,py,pz";
-    }
-    if(dump_vars & DumpVar::KEDensity) {
-      header_str += ",ke_dens";
-    }
-    if(dump_vars & DumpVar::StressTensor) {
-      header_str += ",txx,tyy,tzz,tyz,tzx,txy";
-    }
-    if(dump_vars & DumpVar::ParticleKE) {
-      header_str += ",ke";
-    }
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-    if(sp->using_annotations) {
-      for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-        header_str += ",";
-        header_str += sp->annotation_vars.i32_vars[j].c_str();
-      }
-      for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-        header_str += ",";
-        header_str += sp->annotation_vars.i64_vars[j].c_str();
-      }
-      for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-        header_str += ",";
-        header_str += sp->annotation_vars.f32_vars[j].c_str();
-      }
-      for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-        header_str += ",";
-        header_str += sp->annotation_vars.f64_vars[j].c_str();
-      }
-    }
-#endif
-
-    // Write header string
-    if( append==0 ) {
-      fileIO.print( "%s\n", header_str.c_str() );
-    }
-
-    auto& particles = sp->k_p_d;
-    auto& particles_i = sp->k_p_i_d;
-    auto& interpolators_k = interpolator_array->k_i_d;
-
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-    // If needed, copy weight back to particles for hydro quantities
-    if(sp->using_annotations && sp->tracer_type == TracerType::Copy) {
-      int w_idx = sp->annotation_vars.get_annotation_index<float>("Weight");
-      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      auto w_annote = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL(), w_idx);
-      Kokkos::deep_copy(w_subview_h, w_annote);
-      Kokkos::deep_copy(w_subview_d, w_subview_h);
-    }
-#endif
-
-    // Compute hydro quantities
-    if(static_cast<uint32_t>(dump_vars) >= 2*DumpVar::ParticleKE) {
-      Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
-      accumulate_hydro_p_kokkos(
-          particles,
-          particles_i,
-          hydro_array->k_h_d,
-          interpolators_k,
-          sp
-      );
-
-      // This is slower in my tests
-      //synchronize_hydro_array_kokkos(hydro_array);
-
-      hydro_array->copy_to_host();
-
-      synchronize_hydro_array( hydro_array );
-    }
-
-//    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>("TracerID");
-    auto& interp = interpolator_array->k_i_h;
-
-#define _nxg (grid->nx + 2)
-#define _nyg (grid->ny + 2)
-#define _nzg (grid->nz + 2)
-#define i0 (ii%_nxg)
-#define j0 ((ii/_nxg)%_nyg)
-#define k0 (ii/(_nxg*_nyg))
-#define tracer_x ((i0 + (dx0-1)*0.5) * grid->dx + grid->x0)
-#define tracer_y ((j0 + (dy0-1)*0.5) * grid->dy + grid->y0)
-#define tracer_z ((k0 + (dz0-1)*0.5) * grid->dz + grid->z0)
-    // Write tracer data
-    for(int32_t i=0; i<sp->np; i++) {
-      float dx0 = sp->k_p_h(i, particle_var::dx);
-      float dy0 = sp->k_p_h(i, particle_var::dy);
-      float dz0 = sp->k_p_h(i, particle_var::dz);
-      float ux0 = sp->k_p_h(i, particle_var::ux);
-      float uy0 = sp->k_p_h(i, particle_var::uy);
-      float uz0 = sp->k_p_h(i, particle_var::uz);
-      float w0  = sp->k_p_h(i, particle_var::w);
-      int   ii  = sp->k_p_i_h(i);
-      fileIO.print("%ld,%d,%d,%e,%e,%e,%e,%e,%e,%e", 
-        step(), rank(), ii,
-        dx0, dy0, dz0, ux0, uy0, uz0, w0);
-      if(dump_vars & DumpVar::GlobalPos) {
-        fileIO.print(",%e,%e,%e", tracer_x, tracer_y, tracer_z);
-      }
-      if(dump_vars & DumpVar::Efield) {
-        float ex  = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
-        float ey  = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
-        float ez  = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
-        fileIO.print(",%e,%e,%e", ex, ey, ez);
-      }
-      if(dump_vars & DumpVar::Bfield) {
-        float bx  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
-        float by  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
-        float bz  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
-        fileIO.print(",%e,%e,%e", bx, by, bz);
-      }
-      if(dump_vars & DumpVar::CurrentDensity) {
-        float jx  = hydro_array->k_h_h(ii, hydro_var::jx);
-        float jy  = hydro_array->k_h_h(ii, hydro_var::jy);
-        float jz  = hydro_array->k_h_h(ii, hydro_var::jz);
-        fileIO.print(",%e,%e,%e", jx, jy, jz);
-      }
-      if(dump_vars & DumpVar::ChargeDensity) {
-        float rho = hydro_array->k_h_h(ii, hydro_var::rho);
-        fileIO.print(",%e", rho);
-      }
-      if(dump_vars & DumpVar::MomentumDensity) {
-        float px  = hydro_array->k_h_h(ii, hydro_var::px);
-        float py  = hydro_array->k_h_h(ii, hydro_var::py);
-        float pz  = hydro_array->k_h_h(ii, hydro_var::pz);
-        fileIO.print(",%e,%e,%e", px, py, pz);
-      }
-      if(dump_vars & DumpVar::KEDensity) {
-        float ke = hydro_array->k_h_h(ii, hydro_var::ke);
-        fileIO.print(",%e", ke);
-      }
-      if(dump_vars & DumpVar::StressTensor) {
-        float txx = hydro_array->k_h_h(ii, hydro_var::txx);
-        float tyy = hydro_array->k_h_h(ii, hydro_var::tyy);
-        float tzz = hydro_array->k_h_h(ii, hydro_var::tzz);
-        float tyz = hydro_array->k_h_h(ii, hydro_var::tyz);
-        float tzx = hydro_array->k_h_h(ii, hydro_var::tzx);
-        float txy = hydro_array->k_h_h(ii, hydro_var::txy);
-        fileIO.print(",%e,%e,%e,%e,%e,%e", txx, tyy, tzz, tyz, tzx, txy);
-      }
-      if(dump_vars & DumpVar::ParticleKE) {
-        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-        float msp = sp->m;
-        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
-        v0 = v0*v0 + v1*v1 + v2*v2;
-        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
-        fileIO.print(",%e", v0);
-      }
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-      // Print annotations
-      if(sp->using_annotations) {
-        for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-          fileIO.print(",%d", sp->annotations_h.get<int>(i, j));
-        }
-        for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-          fileIO.print(",%ld", sp->annotations_h.get<int64_t>(i, j));
-        }
-        for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-          fileIO.print(",%e", sp->annotations_h.get<float>(i, j));
-        }
-        for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-          fileIO.print(",%e", sp->annotations_h.get<double>(i, j));
-        }
-      }
-#endif
-      fileIO.print( "\n" );
-    }
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-    // If needed, copy weight back to particles for hydro quantities
-    if(sp->using_annotations && sp->tracer_type == TracerType::Copy) {
-      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      Kokkos::deep_copy(w_subview_h, 0.0);
-      Kokkos::deep_copy(w_subview_d, 0.0);
-    }
-#endif
-#undef nxg 
-#undef nyg 
-#undef nzg 
-#undef i0 
-#undef j0 
-#undef k0 
-#undef tracer_x 
-#undef tracer_y 
-#undef tracer_z 
-
-    if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
-}
-
-void
-vpic_simulation::dump_tracers_buffered_csv( const char *sp_name,
-                                            uint32_t dump_vars,
-                                            const char *fbase,
-                                            int ftag )
-{
-
-  species_t *sp;
-  char fname[max_filename_bytes];
-  FileIO fileIO;
-
-  // Get species
-  sp = find_species_name( sp_name, tracers_list );
-  if( !sp ) ERROR(( "Invalid tracer species name \"%s\".", sp_name ));
-
-  if( !fbase ) ERROR(( "Invalid filename" ));
-
-  // Create and write header string
-  bool append = access(fname, F_OK) == 0;
-  if( append==0 ) {
-    // Create output filename
-    if( ftag ) {
-        snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
-    } else {
-        snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
-    }
-
-    FileIOStatus status = fileIO.open(fname, append ? io_append : io_write);
-    if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
-
-    std::string header_str = std::string("Timestep,rank,tracer_id,cell_id,dx,dy,dz,ux,uy,uz,w");
-    if(dump_vars & DumpVar::GlobalPos) {
-      header_str += ",posx,posy,posz";
-    }
-    if(dump_vars & DumpVar::Efield) {
-      header_str += ",ex,ey,ez";
-    }
-    if(dump_vars & DumpVar::Bfield) {
-      header_str += ",bx,by,bz";
-    }
-    if(dump_vars & DumpVar::CurrentDensity) {
-      header_str += ",jx,jy,jz";
-    }
-    if(dump_vars & DumpVar::ChargeDensity) {
-      header_str += ",rho";
-    }
-    if(dump_vars & DumpVar::MomentumDensity) {
-      header_str += ",px,py,pz";
-    }
-    if(dump_vars & DumpVar::KEDensity) {
-      header_str += ",ke_dens";
-    }
-    if(dump_vars & DumpVar::StressTensor) {
-      header_str += ",txx,tyy,tzz,tyz,tzx,txy";
-    }
-    if(dump_vars & DumpVar::ParticleKE) {
-      header_str += ",ke";
-    }
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-    for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-      header_str += ",";
-      header_str += sp->annotation_vars.i32_vars[j].c_str();
-    }
-    for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-      header_str += ",";
-      header_str += sp->annotation_vars.i64_vars[j].c_str();
-    }
-    for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-      header_str += ",";
-      header_str += sp->annotation_vars.f32_vars[j].c_str();
-    }
-    for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-      header_str += ",";
-      header_str += sp->annotation_vars.f64_vars[j].c_str();
-    }
-#endif
-    fileIO.print( "%s\n", header_str.c_str() );
-    if( fileIO.close() ) ERROR(("File close failed on writing header for dump particles!!!"));
-  }
-
-  // Buffer tracers
-  if(sp->nparticles_buffered+sp->np < sp->particle_io_buffer_h.extent(0) && step() != num_step) {
-//    printf("Buffering %d particles (%d already buffered, %lu max)\n", sp->np, sp->nparticles_buffered, sp->particle_io_buffer.extent(0));
-    // Update the particles on the host only if they haven't been recently
-//    if (step() > sp->last_copied) {
-//      Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
-//      Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
-////      sp->copy_to_host();
-//    }
-
-    if( rank()==0 )
-        MESSAGE(("Buffering \"%s\" particles",sp->name));
-
-    auto& particles = sp->k_p_d;
-    auto& particles_i = sp->k_p_i_d;
-    auto& interpolators_k = interpolator_array->k_i_d;
-
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-    // If needed, copy weight back to particles for hydro quantities
-    if(sp->tracer_type == TracerType::Copy) {
-      int w_idx = sp->annotation_vars.get_annotation_index<float>("Weight");
-//      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      auto w_annote = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL(), w_idx);
-//      Kokkos::deep_copy(w_subview_h, w_annote);
-//      Kokkos::deep_copy(w_subview_d, w_subview_h);
-      Kokkos::deep_copy(w_subview_d, w_annote);
-    }
-#endif
-
-    // Compute hydro quantities
-    if(static_cast<uint32_t>(dump_vars) >= 2*DumpVar::ParticleKE) {
-      Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
-      accumulate_hydro_p_kokkos(
-          particles,
-          particles_i,
-          hydro_array->k_h_d,
-          interpolators_k,
-          sp
-      );
-
-      // This is slower in my tests
-      //synchronize_hydro_array_kokkos(hydro_array);
-
-      hydro_array->copy_to_host();
-
-      synchronize_hydro_array( hydro_array );
-
-//      hydro_array->copy_to_device();
-      Kokkos::deep_copy(hydro_array->k_h_d, hydro_array->k_h_h);
-    }
-
-    // Get index of tracer ID
-//    int tracer_idx = sp->annotation_vars.get_annotation_index<int64_t>("TracerID");
-    auto& interp = interpolator_array->k_i_d;
-
-    auto particle_slice = Kokkos::make_pair(0, sp->np);
-    auto buffer_slice = Kokkos::make_pair(sp->nparticles_buffered,sp->nparticles_buffered+sp->np);
-
-    // Copy particles into buffer
-    auto particle_subview = Kokkos::subview(sp->k_p_d, particle_slice, Kokkos::ALL());
-    auto particle_buffer_subview = Kokkos::subview(sp->particle_io_buffer_d, buffer_slice, Kokkos::ALL());
-    auto particle_cell_subview = Kokkos::subview(sp->k_p_i_d, particle_slice);
-    auto particle_cell_buffer_subview = Kokkos::subview(sp->particle_cell_io_buffer_d, buffer_slice);
-    Kokkos::deep_copy(particle_buffer_subview, particle_subview); 
-    Kokkos::deep_copy(particle_cell_buffer_subview, particle_cell_subview); 
-
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-    // Copy annotations into buffers
-    for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-      auto annote_subview = Kokkos::subview(sp->annotations_d.i32, particle_slice, j);
-      auto buffer_subview = Kokkos::subview(sp->annotations_io_buffer_d.i32, buffer_slice, j);
-      Kokkos::deep_copy(buffer_subview, annote_subview);
-    }
-    for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-      auto annote_subview = Kokkos::subview(sp->annotations_d.i64, particle_slice, j);
-      auto buffer_subview = Kokkos::subview(sp->annotations_io_buffer_d.i64, buffer_slice, j);
-      Kokkos::deep_copy(buffer_subview, annote_subview);
-    }
-    for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-      auto annote_subview = Kokkos::subview(sp->annotations_d.f32, particle_slice, j);
-      auto buffer_subview = Kokkos::subview(sp->annotations_io_buffer_d.f32, buffer_slice, j);
-      Kokkos::deep_copy(buffer_subview, annote_subview);
-    }
-    for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-      auto annote_subview = Kokkos::subview(sp->annotations_d.f64, particle_slice, j);
-      auto buffer_subview = Kokkos::subview(sp->annotations_io_buffer_d.f64, buffer_slice, j);
-      Kokkos::deep_copy(buffer_subview, annote_subview);
-    }
-#endif
-
-    // Buffer tracer data
-    sp->np_per_ts_io_buffer.push_back(std::make_pair(sp->np, step()));
-//    auto& particles = sp->k_p_d;
-//    auto& particles_i = sp->k_p_i_d;
-//    auto& interpolators_k = interpolator_array->k_i_d;
-    auto& e_buffer_d = sp->efields_io_buffer_d;
-    auto& b_buffer_d = sp->bfields_io_buffer_d;
-    auto& current_buffer_d = sp->current_dens_io_buffer_d;
-    auto& charge_buffer_d = sp->charge_dens_io_buffer_d;
-    auto& momentum_buffer_d = sp->momentum_dens_io_buffer_d;
-    auto& ke_buffer_d = sp->ke_dens_io_buffer_d;
-    auto& stress_buffer_d = sp->stress_tensor_io_buffer_d;
-    auto& particle_ke_buffer_d = sp->particle_ke_io_buffer_d;
-    auto& hydro_d = hydro_array->k_h_d;
-    float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-    float msp = sp->m;
-    int nbuffered = sp->nparticles_buffered;
-    
-    Kokkos::parallel_for("Buffer tracer data", Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-//    for(uint32_t i=0; i<sp->np; i++) {
-      float dx0 = particles(i, particle_var::dx);
-      float dy0 = particles(i, particle_var::dy);
-      float dz0 = particles(i, particle_var::dz);
-      float ux0 = particles(i, particle_var::ux);
-      float uy0 = particles(i, particle_var::uy);
-      float uz0 = particles(i, particle_var::uz);
-      float w0  = particles(i, particle_var::w);
-      int   ii  = particles_i(i);
-      if(dump_vars & DumpVar::Efield) {
-        float ex  = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
-        float ey  = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
-        float ez  = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
-        e_buffer_d(nbuffered+i, 0) = ex;
-        e_buffer_d(nbuffered+i, 1) = ey;
-        e_buffer_d(nbuffered+i, 2) = ez;
-      }
-      if(dump_vars & DumpVar::Bfield) {
-        float bx  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
-        float by  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
-        float bz  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
-        b_buffer_d(nbuffered+i, 0) = bx;
-        b_buffer_d(nbuffered+i, 1) = by;
-        b_buffer_d(nbuffered+i, 2) = bz;
-      }
-      if(dump_vars & DumpVar::CurrentDensity) {
-        float jx  = hydro_d(ii, hydro_var::jx);
-        float jy  = hydro_d(ii, hydro_var::jy);
-        float jz  = hydro_d(ii, hydro_var::jz);
-        current_buffer_d(nbuffered+i, 0) = jx;
-        current_buffer_d(nbuffered+i, 1) = jy;
-        current_buffer_d(nbuffered+i, 2) = jz;
-      }
-      if(dump_vars & DumpVar::ChargeDensity) {
-        float rho = hydro_d(ii, hydro_var::rho);
-        charge_buffer_d(nbuffered+i) = rho;
-      }
-      if(dump_vars & DumpVar::MomentumDensity) {
-        float px  = hydro_d(ii, hydro_var::px);
-        float py  = hydro_d(ii, hydro_var::py);
-        float pz  = hydro_d(ii, hydro_var::pz);
-        momentum_buffer_d(nbuffered+i, 0) = px;
-        momentum_buffer_d(nbuffered+i, 1) = py;
-        momentum_buffer_d(nbuffered+i, 2) = pz;
-      }
-      if(dump_vars & DumpVar::KEDensity) {
-        float ke = hydro_d(ii, hydro_var::ke);
-        ke_buffer_d(nbuffered+i) = ke;
-      }
-      if(dump_vars & DumpVar::StressTensor) {
-        float txx = hydro_d(ii, hydro_var::txx);
-        float tyy = hydro_d(ii, hydro_var::tyy);
-        float tzz = hydro_d(ii, hydro_var::tzz);
-        float tyz = hydro_d(ii, hydro_var::tyz);
-        float tzx = hydro_d(ii, hydro_var::tzx);
-        float txy = hydro_d(ii, hydro_var::txy);
-        stress_buffer_d(nbuffered+i, 0) = txx;
-        stress_buffer_d(nbuffered+i, 1) = tyy;
-        stress_buffer_d(nbuffered+i, 2) = tzz;
-        stress_buffer_d(nbuffered+i, 3) = tyz;
-        stress_buffer_d(nbuffered+i, 4) = tzx;
-        stress_buffer_d(nbuffered+i, 5) = txy;
-      }
-      if(dump_vars & DumpVar::ParticleKE) {
-//        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-//        float msp = sp->m;
-        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
-        v0 = v0*v0 + v1*v1 + v2*v2;
-        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
-        particle_ke_buffer_d(nbuffered+i) = v0;
-      }
-//    }
-    });
-    sp->nparticles_buffered += sp->np;     
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-    // If needed, copy weight back to particles for hydro quantities
-    if(sp->tracer_type == TracerType::Copy) {
-      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      Kokkos::deep_copy(w_subview_h, 0.0);
-      Kokkos::deep_copy(w_subview_d, 0.0);
-    }
-#endif
-  } else { // Dump buffered tracers
-//    printf("Writing %d particles and %d buffered particles\n", sp->np, sp->nparticles_buffered);
-    // Update the particles on the host only if they haven't been recently
-    if (step() > sp->last_copied) {
-      Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
-      Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
-//      sp->copy_to_host();
-    }
-
-    if( rank()==0 )
-        MESSAGE(("Dumping \"%s\" particles to \"%s\"",sp->name,fbase));
-
-    // Create output filename
-    if( ftag ) {
-        snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
-    }
-    else {
-        snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
-    }
-
-    FileIOStatus status = fileIO.open(fname, append ? io_append : io_write);
-    if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
-
-    // Get references to necessary data structures
-    auto& particles = sp->k_p_d;
-    auto& particles_i = sp->k_p_i_d;
-    auto& interpolators_k = interpolator_array->k_i_d;
-
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-    // If needed, copy weight back to particles for hydro quantities
-    if(sp->tracer_type == TracerType::Copy) {
-      int w_idx = sp->annotation_vars.get_annotation_index<float>("Weight");
-      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      auto w_annote = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL(), w_idx);
-      Kokkos::deep_copy(w_subview_h, w_annote);
-      Kokkos::deep_copy(w_subview_d, w_subview_h);
-    }
-#endif
-
-    // Compute hydro quantities
-    if(static_cast<uint32_t>(dump_vars) >= 2*DumpVar::ParticleKE) {
-      Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
-      accumulate_hydro_p_kokkos(
-          particles,
-          particles_i,
-          hydro_array->k_h_d,
-          interpolators_k,
-          sp
-      );
-
-      // This is slower in my tests
-      //synchronize_hydro_array_kokkos(hydro_array);
-
-      hydro_array->copy_to_host();
-
-      synchronize_hydro_array( hydro_array );
-    }
-
-    int tracer_idx = sp->annotation_vars.get_annotation_index<int>("TracerID");
-    auto& interp = interpolator_array->k_i_h;
-
-#define _nxg (grid->nx + 2)
-#define _nyg (grid->ny + 2)
-#define _nzg (grid->nz + 2)
-#define i0 (ii%_nxg)
-#define j0 ((ii/_nxg)%_nyg)
-#define k0 (ii/(_nxg*_nyg))
-#define tracer_x ((i0 + (dx0-1)*0.5) * grid->dx + grid->x0)
-#define tracer_y ((j0 + (dy0-1)*0.5) * grid->dy + grid->y0)
-#define tracer_z ((k0 + (dz0-1)*0.5) * grid->dz + grid->z0)
-    // Write buffered tracer data
-    uint32_t particle_idx = 0;
-    // Copy buffered tracers to host
-    Kokkos::deep_copy(sp->particle_io_buffer_h, sp->particle_io_buffer_d);
-    sp->annotations_io_buffer_h.copy_from(sp->annotations_io_buffer_d);
-    if(dump_vars & DumpVar::Efield) {
-      Kokkos::deep_copy(sp->efields_io_buffer_h, sp->efields_io_buffer_d);
-    }
-    if(dump_vars & DumpVar::Bfield) {
-      Kokkos::deep_copy(sp->bfields_io_buffer_h, sp->bfields_io_buffer_d);
-    }
-    if(dump_vars & DumpVar::CurrentDensity) {
-      Kokkos::deep_copy(sp->current_dens_io_buffer_h, sp->current_dens_io_buffer_d);
-    }
-    if(dump_vars & DumpVar::ChargeDensity) {
-      Kokkos::deep_copy(sp->charge_dens_io_buffer_h, sp->charge_dens_io_buffer_d);
-    }
-    if(dump_vars & DumpVar::MomentumDensity) {
-      Kokkos::deep_copy(sp->momentum_dens_io_buffer_h, sp->momentum_dens_io_buffer_d);
-    }
-    if(dump_vars & DumpVar::KEDensity) {
-      Kokkos::deep_copy(sp->ke_dens_io_buffer_h, sp->ke_dens_io_buffer_d);
-    }
-    if(dump_vars & DumpVar::StressTensor) {
-      Kokkos::deep_copy(sp->stress_tensor_io_buffer_h, sp->stress_tensor_io_buffer_d);
-    }
-    if(dump_vars & DumpVar::ParticleKE) {
-      Kokkos::deep_copy(sp->particle_ke_io_buffer_h, sp->particle_ke_io_buffer_d);
-    }
-    // Iterate through each timestep
-    for(uint32_t ts_idx=0; ts_idx < sp->np_per_ts_io_buffer.size(); ts_idx++) {
-      int64_t time_step = sp->np_per_ts_io_buffer[ts_idx].second;
-      // Iterate through each particle in the timestep
-      for(uint32_t p_idx=0; p_idx<sp->np_per_ts_io_buffer[ts_idx].first; p_idx++) {
-        uint32_t i = particle_idx + p_idx;
-        float dx0 = sp->particle_io_buffer_h(i, particle_var::dx);
-        float dy0 = sp->particle_io_buffer_h(i, particle_var::dy);
-        float dz0 = sp->particle_io_buffer_h(i, particle_var::dz);
-        float ux0 = sp->particle_io_buffer_h(i, particle_var::ux);
-        float uy0 = sp->particle_io_buffer_h(i, particle_var::uy);
-        float uz0 = sp->particle_io_buffer_h(i, particle_var::uz);
-        float w0  = sp->particle_io_buffer_h(i, particle_var::w);
-        int   ii  = sp->particle_cell_io_buffer_h(i);
-        fileIO.print("%ld,%d,%d,%d,%e,%e,%e,%e,%e,%e,%e", 
-          time_step, rank(), sp->annotations_io_buffer_h.get<int>(i,tracer_idx), ii,
-          dx0, dy0, dz0, ux0, uy0, uz0, w0);
-        if(dump_vars & DumpVar::GlobalPos) {
-          fileIO.print(",%e,%e,%e", tracer_x, tracer_y, tracer_z);
-        }
-        if(dump_vars & DumpVar::Efield) {
-          float ex  = sp->efields_io_buffer_h(i, 0);
-          float ey  = sp->efields_io_buffer_h(i, 1);
-          float ez  = sp->efields_io_buffer_h(i, 2);
-          fileIO.print(",%e,%e,%e", ex, ey, ez);
-        }
-        if(dump_vars & DumpVar::Bfield) {
-          float bx  = sp->bfields_io_buffer_h(i,0); 
-          float by  = sp->bfields_io_buffer_h(i,1); 
-          float bz  = sp->bfields_io_buffer_h(i,2); 
-          fileIO.print(",%e,%e,%e", bx, by, bz);
-        }
-        if(dump_vars & DumpVar::CurrentDensity) {
-          float jx  = sp->current_dens_io_buffer_h(i,0);
-          float jy  = sp->current_dens_io_buffer_h(i,1);
-          float jz  = sp->current_dens_io_buffer_h(i,2);
-          fileIO.print(",%e,%e,%e", jx, jy, jz);
-        }
-        if(dump_vars & DumpVar::ChargeDensity) {
-          float rho = sp->charge_dens_io_buffer_h(i);
-          fileIO.print(",%e", rho);
-        }
-        if(dump_vars & DumpVar::MomentumDensity) {
-          float px  = sp->momentum_dens_io_buffer_h(i,0);
-          float py  = sp->momentum_dens_io_buffer_h(i,1);
-          float pz  = sp->momentum_dens_io_buffer_h(i,2);
-          fileIO.print(",%e,%e,%e", px, py, pz);
-        }
-        if(dump_vars & DumpVar::KEDensity) {
-          float ke = sp->ke_dens_io_buffer_h(i);
-          fileIO.print(",%e", ke);
-        }
-        if(dump_vars & DumpVar::StressTensor) {
-          float txx = sp->stress_tensor_io_buffer_h(i,0);
-          float tyy = sp->stress_tensor_io_buffer_h(i,1);
-          float tzz = sp->stress_tensor_io_buffer_h(i,2);
-          float tyz = sp->stress_tensor_io_buffer_h(i,3);
-          float tzx = sp->stress_tensor_io_buffer_h(i,4);
-          float txy = sp->stress_tensor_io_buffer_h(i,5);
-          fileIO.print(",%e,%e,%e,%e,%e,%e", txx, tyy, tzz, tyz, tzx, txy);
-        }
-        if(dump_vars & DumpVar::ParticleKE) {
-          float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-          float msp = sp->m;
-          float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                                 dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-          float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                                 dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-          float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                                 dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
-          v0 = v0*v0 + v1*v1 + v2*v2;
-          v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
-          fileIO.print(",%e", v0);
-        }
-        // Print annotations
-        for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-          fileIO.print(",%d", sp->annotations_io_buffer_h.get<int>(i, j));
-        }
-        for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-          fileIO.print(",%ld", sp->annotations_io_buffer_h.get<int64_t>(i, j));
-        }
-        for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-          fileIO.print(",%e", sp->annotations_io_buffer_h.get<float>(i, j));
-        }
-        for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-          fileIO.print(",%e", sp->annotations_io_buffer_h.get<double>(i, j));
-        }
-        fileIO.print( "\n" );
-      }
-      particle_idx += sp->np_per_ts_io_buffer[ts_idx].first;
-    }
-
-    // Write tracer data
-    for(uint32_t i=0; i<sp->np; i++) {
-      float dx0 = sp->k_p_h(i, particle_var::dx);
-      float dy0 = sp->k_p_h(i, particle_var::dy);
-      float dz0 = sp->k_p_h(i, particle_var::dz);
-      float ux0 = sp->k_p_h(i, particle_var::ux);
-      float uy0 = sp->k_p_h(i, particle_var::uy);
-      float uz0 = sp->k_p_h(i, particle_var::uz);
-      float w0  = sp->k_p_h(i, particle_var::w);
-      int   ii  = sp->k_p_i_h(i);
-      fileIO.print("%ld,%d,%ld,%d,%e,%e,%e,%e,%e,%e,%e", 
-        step(), rank(), sp->annotations_h.get<int>(i,tracer_idx), ii,
-        dx0, dy0, dz0, ux0, uy0, uz0, w0);
-      if(dump_vars & DumpVar::GlobalPos) {
-        fileIO.print(",%e,%e,%e", tracer_x, tracer_y, tracer_z);
-      }
-      if(dump_vars & DumpVar::Efield) {
-        float ex  = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
-        float ey  = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
-        float ez  = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
-        fileIO.print(",%e,%e,%e", ex, ey, ez);
-      }
-      if(dump_vars & DumpVar::Bfield) {
-        float bx  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
-        float by  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
-        float bz  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
-        fileIO.print(",%e,%e,%e", bx, by, bz);
-      }
-      if(dump_vars & DumpVar::CurrentDensity) {
-        float jx  = hydro_array->k_h_h(ii, hydro_var::jx);
-        float jy  = hydro_array->k_h_h(ii, hydro_var::jy);
-        float jz  = hydro_array->k_h_h(ii, hydro_var::jz);
-        fileIO.print(",%e,%e,%e", jx, jy, jz);
-      }
-      if(dump_vars & DumpVar::ChargeDensity) {
-        float rho = hydro_array->k_h_h(ii, hydro_var::rho);
-        fileIO.print(",%e", rho);
-      }
-      if(dump_vars & DumpVar::MomentumDensity) {
-        float px  = hydro_array->k_h_h(ii, hydro_var::px);
-        float py  = hydro_array->k_h_h(ii, hydro_var::py);
-        float pz  = hydro_array->k_h_h(ii, hydro_var::pz);
-        fileIO.print(",%e,%e,%e", px, py, pz);
-      }
-      if(dump_vars & DumpVar::KEDensity) {
-        float ke = hydro_array->k_h_h(ii, hydro_var::ke);
-        fileIO.print(",%e", ke);
-      }
-      if(dump_vars & DumpVar::StressTensor) {
-        float txx = hydro_array->k_h_h(ii, hydro_var::txx);
-        float tyy = hydro_array->k_h_h(ii, hydro_var::tyy);
-        float tzz = hydro_array->k_h_h(ii, hydro_var::tzz);
-        float tyz = hydro_array->k_h_h(ii, hydro_var::tyz);
-        float tzx = hydro_array->k_h_h(ii, hydro_var::tzx);
-        float txy = hydro_array->k_h_h(ii, hydro_var::txy);
-        fileIO.print(",%e,%e,%e,%e,%e,%e", txx, tyy, tzz, tyz, tzx, txy);
-      }
-      if(dump_vars & DumpVar::ParticleKE) {
-        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-        float msp = sp->m;
-        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
-        v0 = v0*v0 + v1*v1 + v2*v2;
-        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
-        fileIO.print(",%e", v0);
-      }
-      // Print annotations
-      for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-        fileIO.print(",%d", sp->annotations_h.get<int>(i, j));
-      }
-      for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-        fileIO.print(",%ld", sp->annotations_h.get<int64_t>(i, j));
-      }
-      for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-        fileIO.print(",%e", sp->annotations_h.get<float>(i, j));
-      }
-      for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-        fileIO.print(",%e", sp->annotations_h.get<double>(i, j));
-      }
-      fileIO.print( "\n" );
-    }
-#undef nxg 
-#undef nyg 
-#undef nzg 
-#undef i0 
-#undef j0 
-#undef k0 
-#undef tracer_x 
-#undef tracer_y 
-#undef tracer_z 
-
-    if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-    // If needed, reset weight to 0 for copied particles
-    if(sp->tracer_type == TracerType::Copy) {
-      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      Kokkos::deep_copy(w_subview_h, 0.0);
-      Kokkos::deep_copy(w_subview_d, 0.0);
-    }
-#endif
-    sp->nparticles_buffered = 0;
-    sp->np_per_ts_io_buffer.clear();
-  }
-}
-
-void
-vpic_simulation::dump_tracers_csv( const char *sp_name,
-                                   uint32_t dump_vars,
-                                   const char *fbase,
-                                   int ftag )
-{
-    species_t *sp;
-    char fname[max_filename_bytes];
-    FileIO fileIO;
-//    int dim[1], buf_start;
-//    static particle_t * ALIGNED(128) p_buf = NULL;
-    bool append = access(fname, F_OK) == 0;
-
-    // Get species
-    sp = find_species_name( sp_name, tracers_list );
-    if( !sp ) ERROR(( "Invalid tracer species name \"%s\".", sp_name ));
-
-    if( !fbase ) ERROR(( "Invalid filename" ));
-
-    // Update the particles on the host only if they haven't been recently
-    if (step() > sp->last_copied) {
-      Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
-      Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
-//      sp->copy_to_host();
-    }
-
-    if( rank()==0 )
-        MESSAGE(("Dumping \"%s\" particles to \"%s\"",sp->name,fbase));
-
-    // Create output filename
-    if( ftag ) {
-        snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
-    }
-    else {
-        snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
-    }
-
-    FileIOStatus status = fileIO.open(fname, append ? io_append : io_write);
-    if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
-
-    // Create header string
-    std::string header_str = std::string("Timestep,rank,tracer_id,cell_id,dx,dy,dz,ux,uy,uz,w");
-    if(dump_vars & DumpVar::GlobalPos) {
-      header_str += ",posx,posy,posz";
-    }
-    if(dump_vars & DumpVar::Efield) {
-      header_str += ",ex,ey,ez";
-    }
-    if(dump_vars & DumpVar::Bfield) {
-      header_str += ",bx,by,bz";
-    }
-    if(dump_vars & DumpVar::CurrentDensity) {
-      header_str += ",jx,jy,jz";
-    }
-    if(dump_vars & DumpVar::ChargeDensity) {
-      header_str += ",rho";
-    }
-    if(dump_vars & DumpVar::MomentumDensity) {
-      header_str += ",px,py,pz";
-    }
-    if(dump_vars & DumpVar::KEDensity) {
-      header_str += ",ke_dens";
-    }
-    if(dump_vars & DumpVar::StressTensor) {
-      header_str += ",txx,tyy,tzz,tyz,tzx,txy";
-    }
-    if(dump_vars & DumpVar::ParticleKE) {
-      header_str += ",ke";
-    }
-    for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-      header_str += ",";
-      header_str += sp->annotation_vars.i32_vars[j].c_str();
-    }
-    for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-      header_str += ",";
-      header_str += sp->annotation_vars.i64_vars[j].c_str();
-    }
-    for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-      header_str += ",";
-      header_str += sp->annotation_vars.f32_vars[j].c_str();
-    }
-    for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-      header_str += ",";
-      header_str += sp->annotation_vars.f64_vars[j].c_str();
-    }
-
-    // Write header string
-    if( append==0 ) {
-      fileIO.print( "%s\n", header_str.c_str() );
-    }
-
-    auto& particles = sp->k_p_d;
-    auto& particles_i = sp->k_p_i_d;
-    auto& interpolators_k = interpolator_array->k_i_d;
-
-    // If needed, copy weight back to particles for hydro quantities
-    if(sp->tracer_type == TracerType::Copy) {
-      int w_idx = sp->annotation_vars.get_annotation_index<float>("Weight");
-      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      auto w_annote = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL(), w_idx);
-      Kokkos::deep_copy(w_subview_h, w_annote);
-      Kokkos::deep_copy(w_subview_d, w_subview_h);
-    }
-
-    // Compute hydro quantities
-    if(static_cast<uint32_t>(dump_vars) >= 2*DumpVar::ParticleKE) {
-      Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
-      accumulate_hydro_p_kokkos(
-          particles,
-          particles_i,
-          hydro_array->k_h_d,
-          interpolators_k,
-          sp
-      );
-
-      // This is slower in my tests
-      //synchronize_hydro_array_kokkos(hydro_array);
-
-      hydro_array->copy_to_host();
-
-      synchronize_hydro_array( hydro_array );
-    }
-
-    int tracer_idx = sp->annotation_vars.get_annotation_index<int>("TracerID");
-    auto& interp = interpolator_array->k_i_h;
-
-#define _nxg (grid->nx + 2)
-#define _nyg (grid->ny + 2)
-#define _nzg (grid->nz + 2)
-#define i0 (ii%_nxg)
-#define j0 ((ii/_nxg)%_nyg)
-#define k0 (ii/(_nxg*_nyg))
-#define tracer_x ((i0 + (dx0-1)*0.5) * grid->dx + grid->x0)
-#define tracer_y ((j0 + (dy0-1)*0.5) * grid->dy + grid->y0)
-#define tracer_z ((k0 + (dz0-1)*0.5) * grid->dz + grid->z0)
-    // Write tracer data
-    for(uint32_t i=0; i<sp->np; i++) {
-      float dx0 = sp->k_p_h(i, particle_var::dx);
-      float dy0 = sp->k_p_h(i, particle_var::dy);
-      float dz0 = sp->k_p_h(i, particle_var::dz);
-      float ux0 = sp->k_p_h(i, particle_var::ux);
-      float uy0 = sp->k_p_h(i, particle_var::uy);
-      float uz0 = sp->k_p_h(i, particle_var::uz);
-      float w0  = sp->k_p_h(i, particle_var::w);
-      int   ii  = sp->k_p_i_h(i);
-      fileIO.print("%ld,%d,%ld,%d,%e,%e,%e,%e,%e,%e,%e", 
-        step(), rank(), sp->annotations_h.get<int>(i,tracer_idx), ii,
-        dx0, dy0, dz0, ux0, uy0, uz0, w0);
-      if(dump_vars & DumpVar::GlobalPos) {
-        fileIO.print(",%e,%e,%e", tracer_x, tracer_y, tracer_z);
-      }
-      if(dump_vars & DumpVar::Efield) {
-        float ex  = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
-        float ey  = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
-        float ez  = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
-        fileIO.print(",%e,%e,%e", ex, ey, ez);
-      }
-      if(dump_vars & DumpVar::Bfield) {
-        float bx  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
-        float by  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
-        float bz  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
-        fileIO.print(",%e,%e,%e", bx, by, bz);
-      }
-      if(dump_vars & DumpVar::CurrentDensity) {
-        float jx  = hydro_array->k_h_h(ii, hydro_var::jx);
-        float jy  = hydro_array->k_h_h(ii, hydro_var::jy);
-        float jz  = hydro_array->k_h_h(ii, hydro_var::jz);
-        fileIO.print(",%e,%e,%e", jx, jy, jz);
-      }
-      if(dump_vars & DumpVar::ChargeDensity) {
-        float rho = hydro_array->k_h_h(ii, hydro_var::rho);
-        fileIO.print(",%e", rho);
-      }
-      if(dump_vars & DumpVar::MomentumDensity) {
-        float px  = hydro_array->k_h_h(ii, hydro_var::px);
-        float py  = hydro_array->k_h_h(ii, hydro_var::py);
-        float pz  = hydro_array->k_h_h(ii, hydro_var::pz);
-        fileIO.print(",%e,%e,%e", px, py, pz);
-      }
-      if(dump_vars & DumpVar::KEDensity) {
-        float ke = hydro_array->k_h_h(ii, hydro_var::ke);
-        fileIO.print(",%e", ke);
-      }
-      if(dump_vars & DumpVar::StressTensor) {
-        float txx = hydro_array->k_h_h(ii, hydro_var::txx);
-        float tyy = hydro_array->k_h_h(ii, hydro_var::tyy);
-        float tzz = hydro_array->k_h_h(ii, hydro_var::tzz);
-        float tyz = hydro_array->k_h_h(ii, hydro_var::tyz);
-        float tzx = hydro_array->k_h_h(ii, hydro_var::tzx);
-        float txy = hydro_array->k_h_h(ii, hydro_var::txy);
-        fileIO.print(",%e,%e,%e,%e,%e,%e", txx, tyy, tzz, tyz, tzx, txy);
-      }
-      if(dump_vars & DumpVar::ParticleKE) {
-        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-        float msp = sp->m;
-        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
-        v0 = v0*v0 + v1*v1 + v2*v2;
-        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
-        fileIO.print(",%e", v0);
-      }
-      // Print annotations
-      for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-        fileIO.print(",%d", sp->annotations_h.get<int>(i, j));
-      }
-      for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-        fileIO.print(",%ld", sp->annotations_h.get<int64_t>(i, j));
-      }
-      for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-        fileIO.print(",%e", sp->annotations_h.get<float>(i, j));
-      }
-      for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-        fileIO.print(",%e", sp->annotations_h.get<double>(i, j));
-      }
-      fileIO.print( "\n" );
-    }
-#undef nxg 
-#undef nyg 
-#undef nzg 
-#undef i0 
-#undef j0 
-#undef k0 
-#undef tracer_x 
-#undef tracer_y 
-#undef tracer_z 
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-    // If needed, reset weight to 0 for copied particles
-    if(sp->tracer_type == TracerType::Copy) {
-      auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
-      Kokkos::deep_copy(w_subview_h, 0.0);
-      Kokkos::deep_copy(w_subview_d, 0.0);
-    }
-#endif
-
-    if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
-}
-#endif
 
 /*****************************************************************************
  * Binary dump IO
@@ -1469,11 +395,16 @@ vpic_simulation::dump_particles( const char *sp_name,
  *---------------------------------------------------------------------------*/
 #ifdef VPIC_ENABLE_HDF5
 #ifdef VPIC_ENABLE_HDF5_ASYNC
+
+template<class Slice>
 void 
 write_tracers_to_hdf5_async(species_t* sp, 
                             grid_t* grid, 
                             hydro_array_t* hydro_array,
                             k_interpolator_t::HostMirror& interp, 
+                            Slice& slice,
+                            bool buffered,
+                            int num_particles,
                             const uint32_t dump_vars,
                             hid_t loc_id, 
                             hid_t dataspace_id, 
@@ -1481,15 +412,21 @@ write_tracers_to_hdf5_async(species_t* sp,
                             hid_t dxpl_id,
                             hid_t es_id) {
   herr_t status;
+  auto* particle_ptr = &(sp->k_p_h);
+  auto* particle_i_ptr = &(sp->k_p_i_h);
+  if(buffered) {
+    particle_ptr = &(sp->particle_io_buffer_h);
+    particle_i_ptr = &(sp->particle_cell_io_buffer_h);
+  }
   // Create subviews for data
-  auto dx_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dx));
-  auto dy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dy));
-  auto dz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dz));
-  auto ux_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::ux));
-  auto uy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uy));
-  auto uz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uz));
-  auto w_subview  = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::w));
-  auto i_subview = Kokkos::subview(sp->k_p_i_h, Kokkos::ALL());
+  auto dx_subview = Kokkos::subview(*particle_ptr, slice, (int)(particle_var::dx));
+  auto dy_subview = Kokkos::subview(*particle_ptr, slice, (int)(particle_var::dy));
+  auto dz_subview = Kokkos::subview(*particle_ptr, slice, (int)(particle_var::dz));
+  auto ux_subview = Kokkos::subview(*particle_ptr, slice, (int)(particle_var::ux));
+  auto uy_subview = Kokkos::subview(*particle_ptr, slice, (int)(particle_var::uy));
+  auto uz_subview = Kokkos::subview(*particle_ptr, slice, (int)(particle_var::uz));
+  auto w_subview  = Kokkos::subview(*particle_ptr, slice, (int)(particle_var::w));
+  auto i_subview  = Kokkos::subview(*particle_i_ptr, slice);
 
   // Create datasets, one for each variable, using dataspace and default property lists
   hid_t dataset_dx_id = H5Dcreate_async(loc_id, "dx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
@@ -1510,7 +447,6 @@ write_tracers_to_hdf5_async(species_t* sp,
   status = H5Dwrite_async(dataset_uz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, uz_subview.data(), es_id);
   status = H5Dwrite_async(dataset_w_id,  H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, w_subview.data(), es_id);
   status = H5Dwrite_async(dataset_i_id,  H5T_STD_I32LE,  memspace_id, dataspace_id, dxpl_id, i_subview.data(), es_id);
-//  status = H5Dwrite_async(dataset_i_id,  H5T_STD_I32LE,  memspace_id, dataspace_id, dxpl_id, sp->k_p_i_h.data(), es_id);
 
   status = H5Dclose_async(dataset_dx_id, es_id);
   status = H5Dclose_async(dataset_dy_id, es_id);
@@ -1523,10 +459,17 @@ write_tracers_to_hdf5_async(species_t* sp,
 
   using host_memory_space = Kokkos::DefaultHostExecutionSpace::memory_space;
 
+  auto& h_particles = sp->k_p_h;
+  auto& h_particles_i = sp->k_p_i_h;
+  auto& h_hydro = hydro_array->k_h_h;
+  int grid_nx = grid->nx, grid_ny=grid->ny, grid_nz=grid->nz;
+  float grid_dx = grid->dx, grid_dy=grid->dy, grid_dz=grid->dz;
+  float grid_x0 = grid->x0, grid_y0=grid->y0, grid_z0=grid->z0;
+
   // Dump Global position if specified
   if(dump_vars & DumpVar::GlobalPos) {
-    auto pos_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Pos Host View", sp->np);
-    Kokkos::parallel_for("Calculate global position", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
+    auto pos_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Pos Host View", num_particles);
+    Kokkos::parallel_for("Calculate global position", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, num_particles), KOKKOS_LAMBDA(const uint32_t i) {
       float dx0 = dx_subview(i);
       float dy0 = dx_subview(i);
       float dz0 = dx_subview(i);
@@ -1534,14 +477,14 @@ write_tracers_to_hdf5_async(species_t* sp,
       
       // Compute global position of particle
       if(dump_vars & DumpVar::GlobalPos) {
-        int nxg_ = grid->nx + 2;
-        int nyg_ = grid->ny + 2;
+        int nxg_ = grid_nx + 2;
+        int nyg_ = grid_ny + 2;
         int i0 = ii % nxg_;
         int j0 = (ii/nxg_) % nyg_;
         int k0 = ii/(nxg_*nyg_);
-        float tracer_x = (i0 + (dx0-1)*0.5) * grid->dx + grid->x0;
-        float tracer_y = (j0 + (dy0-1)*0.5) * grid->dy + grid->y0;
-        float tracer_z = (k0 + (dz0-1)*0.5) * grid->dz + grid->z0;
+        float tracer_x = (i0 + (dx0-1)*0.5) * grid_dx + grid_x0;
+        float tracer_y = (j0 + (dy0-1)*0.5) * grid_dy + grid_y0;
+        float tracer_z = (k0 + (dz0-1)*0.5) * grid_dz + grid_z0;
         pos_view(i, 0) = tracer_x;
         pos_view(i, 1) = tracer_y;
         pos_view(i, 2) = tracer_z;
@@ -1563,19 +506,26 @@ write_tracers_to_hdf5_async(species_t* sp,
 
   // Dump E field if specified
   if(dump_vars & DumpVar::Efield) {
-    auto efield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("E field Host View", sp->np);
-    Kokkos::parallel_for("Calculate E field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      float dx0 = dx_subview(i);
-      float dy0 = dx_subview(i);
-      float dz0 = dx_subview(i);
-      int   ii  = i_subview(i);
-      efield_view(i,0) = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
-      efield_view(i,1) = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
-      efield_view(i,2) = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
-    });
-    auto efieldx_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 0);
-    auto efieldy_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 1);
-    auto efieldz_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 2);
+    auto ex_subview = Kokkos::subview(sp->efields_io_buffer_h, slice, 0);
+    auto ey_subview = Kokkos::subview(sp->efields_io_buffer_h, slice, 1);
+    auto ez_subview = Kokkos::subview(sp->efields_io_buffer_h, slice, 2);
+    Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space> efield_view;
+    if(!buffered) {
+      efield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("E field Host View", num_particles);
+      Kokkos::parallel_for("Calculate E field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, num_particles), KOKKOS_LAMBDA(const uint32_t i) {
+        float dx0 = dx_subview(i);
+        float dy0 = dy_subview(i);
+        float dz0 = dz_subview(i);
+        int   ii  = i_subview(i);
+        efield_view(i,0) = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
+        efield_view(i,1) = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
+        efield_view(i,2) = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
+      });
+      Kokkos::fence();
+      ex_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 0);
+      ey_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 1);
+      ez_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 2);
+    }
     hid_t dataset_efieldx_id = H5Dcreate_async(loc_id, "ex", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     hid_t dataset_efieldy_id = H5Dcreate_async(loc_id, "ey", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     hid_t dataset_efieldz_id = H5Dcreate_async(loc_id, "ez", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
@@ -1589,19 +539,26 @@ write_tracers_to_hdf5_async(species_t* sp,
 
   // Dump B field if specified
   if(dump_vars & DumpVar::Bfield) {
-    auto bfield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("B field Host View", sp->np);
-    Kokkos::parallel_for("Calculate B field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      float dx0 = dx_subview(i);
-      float dy0 = dx_subview(i);
-      float dz0 = dx_subview(i);
-      int   ii  = i_subview(i);
-      bfield_view(i,0)  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
-      bfield_view(i,1)  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
-      bfield_view(i,2)  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
-    });
-    auto bfieldx_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 0);
-    auto bfieldy_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 1);
-    auto bfieldz_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 2);
+    auto bx_subview = Kokkos::subview(sp->bfields_io_buffer_h, slice, 0);
+    auto by_subview = Kokkos::subview(sp->bfields_io_buffer_h, slice, 1);
+    auto bz_subview = Kokkos::subview(sp->bfields_io_buffer_h, slice, 2);
+    Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space> bfield_view;
+    if(!buffered) {
+      bfield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("B field Host View", num_particles);
+      Kokkos::parallel_for("Calculate B field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, num_particles), KOKKOS_LAMBDA(const uint32_t i) {
+        float dx0 = dx_subview(i);
+        float dy0 = dy_subview(i);
+        float dz0 = dz_subview(i);
+        int   ii  = i_subview(i);
+        bfield_view(i,0)  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
+        bfield_view(i,1)  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
+        bfield_view(i,2)  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
+      });
+      Kokkos::fence();
+      bx_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 0);
+      by_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 1);
+      bz_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 2);
+    }
     hid_t dataset_bfieldx_id = H5Dcreate_async(loc_id, "bx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     hid_t dataset_bfieldy_id = H5Dcreate_async(loc_id, "by", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     hid_t dataset_bfieldz_id = H5Dcreate_async(loc_id, "bz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
@@ -1615,16 +572,23 @@ write_tracers_to_hdf5_async(species_t* sp,
 
   // Dump current density if specified
   if(dump_vars & DumpVar::CurrentDensity) {
-    auto current_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Current density Host View", sp->np);
-    Kokkos::parallel_for("Collect current density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = i_subview(i);
-      current_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::jx);
-      current_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::jy);
-      current_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::jz);
-    });
-    auto jx_subview = Kokkos::subview(current_view, Kokkos::ALL(), 0);
-    auto jy_subview = Kokkos::subview(current_view, Kokkos::ALL(), 1);
-    auto jz_subview = Kokkos::subview(current_view, Kokkos::ALL(), 2);
+    auto jx_subview = Kokkos::subview(sp->current_dens_io_buffer_h, slice, 0);
+    auto jy_subview = Kokkos::subview(sp->current_dens_io_buffer_h, slice, 1);
+    auto jz_subview = Kokkos::subview(sp->current_dens_io_buffer_h, slice, 2);
+    Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space> current_view;
+    if(!buffered) {
+      current_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Current density Host View", num_particles);
+      Kokkos::parallel_for("Collect current density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, num_particles), KOKKOS_LAMBDA(const uint32_t i) {
+        int   ii  = i_subview(i);
+        current_view(i, 0) = h_hydro(ii, hydro_var::jx);
+        current_view(i, 1) = h_hydro(ii, hydro_var::jy);
+        current_view(i, 2) = h_hydro(ii, hydro_var::jz);
+      });
+      Kokkos::fence();
+      jx_subview = Kokkos::subview(current_view, Kokkos::ALL(), 0);
+      jy_subview = Kokkos::subview(current_view, Kokkos::ALL(), 1);
+      jz_subview = Kokkos::subview(current_view, Kokkos::ALL(), 2);
+    }
     hid_t dataset_jx_id = H5Dcreate_async(loc_id, "jx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     hid_t dataset_jy_id = H5Dcreate_async(loc_id, "jy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     hid_t dataset_jz_id = H5Dcreate_async(loc_id, "jz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
@@ -1638,11 +602,17 @@ write_tracers_to_hdf5_async(species_t* sp,
 
   // Dump charge density if specified
   if(dump_vars & DumpVar::ChargeDensity) {
-    auto charge_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("Charge density Host View", sp->np);
-    Kokkos::parallel_for("Calculate charge density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = i_subview(i);
-      charge_view(i) = hydro_array->k_h_h(ii, hydro_var::rho);
-    });
+    auto charge_subview = Kokkos::subview(sp->charge_dens_io_buffer_h, slice);
+    Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space> charge_view;
+    if(!buffered) {
+      charge_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("Charge density Host View", num_particles);
+      Kokkos::parallel_for("Calculate charge density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, num_particles), KOKKOS_LAMBDA(const uint32_t i) {
+        int   ii  = i_subview(i);
+        charge_view(i) = h_hydro(ii, hydro_var::rho);
+      });
+      Kokkos::fence();
+      charge_subview = Kokkos::subview(charge_view, Kokkos::ALL);
+    }
     hid_t dataset_rho_id = H5Dcreate_async(loc_id, "rho", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     status = H5Dwrite_async(dataset_rho_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, charge_view.data(), es_id);
     H5Dclose_async(dataset_rho_id, es_id);
@@ -1650,16 +620,23 @@ write_tracers_to_hdf5_async(species_t* sp,
 
   // Dump momentum density if specified
   if(dump_vars & DumpVar::MomentumDensity) {
-    auto momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", sp->np);
-    Kokkos::parallel_for("Collect momentum density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = i_subview(i);
-      momentum_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::px);
-      momentum_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::py);
-      momentum_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::pz);
-    });
-    auto px_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 0);
-    auto py_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 1);
-    auto pz_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 2);
+    auto px_subview = Kokkos::subview(sp->momentum_dens_io_buffer_h, slice, 0);
+    auto py_subview = Kokkos::subview(sp->momentum_dens_io_buffer_h, slice, 1);
+    auto pz_subview = Kokkos::subview(sp->momentum_dens_io_buffer_h, slice, 2);
+    Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space> momentum_view;
+    if(!buffered) {
+      momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", num_particles);
+      Kokkos::parallel_for("Collect momentum density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, num_particles), KOKKOS_LAMBDA(const uint32_t i) {
+        int   ii  = i_subview(i);
+        momentum_view(i, 0) = h_hydro(ii, hydro_var::px);
+        momentum_view(i, 1) = h_hydro(ii, hydro_var::py);
+        momentum_view(i, 2) = h_hydro(ii, hydro_var::pz);
+      });
+      Kokkos::fence();
+      px_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 0);
+      py_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 1);
+      pz_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 2);
+    }
     hid_t dataset_px_id = H5Dcreate_async(loc_id, "px", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     hid_t dataset_py_id = H5Dcreate_async(loc_id, "py", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     hid_t dataset_pz_id = H5Dcreate_async(loc_id, "pz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
@@ -1673,11 +650,17 @@ write_tracers_to_hdf5_async(species_t* sp,
 
   // Dump kinetic energy density if specified
   if(dump_vars & DumpVar::KEDensity) {
-    auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-    Kokkos::parallel_for("Collect KE density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = i_subview(i);
-      ke_view(i) = hydro_array->k_h_h(ii, hydro_var::ke);
-    });
+    auto ke_subview = Kokkos::subview(sp->ke_dens_io_buffer_h, slice);
+    Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space> ke_view;
+    if(!buffered) {
+      ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", num_particles);
+      Kokkos::parallel_for("Collect KE density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, num_particles), KOKKOS_LAMBDA(const uint32_t i) {
+        int   ii  = i_subview(i);
+        ke_view(i) = h_hydro(ii, hydro_var::ke);
+      });
+      Kokkos::fence();
+      ke_subview = Kokkos::subview(ke_view, Kokkos::ALL());
+    }
     hid_t dataset_ke_id = H5Dcreate_async(loc_id, "ke_dens", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     status = H5Dwrite_async(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, ke_view.data(), es_id);
     H5Dclose_async(dataset_ke_id, es_id);
@@ -1685,22 +668,32 @@ write_tracers_to_hdf5_async(species_t* sp,
 
   // Dump stress tensor if specified
   if(dump_vars & DumpVar::StressTensor) {
-    auto stress_view = Kokkos::View<float*[6], Kokkos::LayoutLeft, host_memory_space>("Stress tensor Host View", sp->np);
-    Kokkos::parallel_for("Collect stress tensor", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = i_subview(i);
-      stress_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::txx);
-      stress_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::tyy);
-      stress_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::tzz);
-      stress_view(i, 3) = hydro_array->k_h_h(ii, hydro_var::tyz);
-      stress_view(i, 4) = hydro_array->k_h_h(ii, hydro_var::tzx);
-      stress_view(i, 5) = hydro_array->k_h_h(ii, hydro_var::txy);
-    });
-    auto txx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 0);
-    auto tyy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 1);
-    auto tzz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 2);
-    auto tyz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 3);
-    auto tzx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 4);
-    auto txy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 5);
+    auto txx_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 0);
+    auto tyy_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 1);
+    auto tzz_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 2);
+    auto tyz_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 3);
+    auto tzx_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 4);
+    auto txy_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 5);
+    Kokkos::View<float*[6], Kokkos::LayoutLeft, host_memory_space> stress_view;
+    if(!buffered) {
+      auto stress_view = Kokkos::View<float*[6], Kokkos::LayoutLeft, host_memory_space>("Stress tensor Host View", num_particles);
+      Kokkos::parallel_for("Collect stress tensor", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, num_particles), KOKKOS_LAMBDA(const uint32_t i) {
+        int   ii  = i_subview(i);
+        stress_view(i, 0) = h_hydro(ii, hydro_var::txx);
+        stress_view(i, 1) = h_hydro(ii, hydro_var::tyy);
+        stress_view(i, 2) = h_hydro(ii, hydro_var::tzz);
+        stress_view(i, 3) = h_hydro(ii, hydro_var::tyz);
+        stress_view(i, 4) = h_hydro(ii, hydro_var::tzx);
+        stress_view(i, 5) = h_hydro(ii, hydro_var::txy);
+      });
+      Kokkos::fence();
+      txx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 0);
+      tyy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 1);
+      tzz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 2);
+      tyz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 3);
+      tzx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 4);
+      txy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 5);
+    }
     hid_t dataset_txx_id = H5Dcreate_async(loc_id, "txx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     hid_t dataset_tyy_id = H5Dcreate_async(loc_id, "tyy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     hid_t dataset_tzz_id = H5Dcreate_async(loc_id, "tzz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
@@ -1723,379 +716,85 @@ write_tracers_to_hdf5_async(species_t* sp,
 
   // Dump kinetic energy of particle if specified
   if(dump_vars & DumpVar::ParticleKE) {
-    auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-    Kokkos::parallel_for("Calculate KE", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      float dx0 = dx_subview(i);
-      float dy0 = dx_subview(i);
-      float dz0 = dx_subview(i);
-      int   ii  = i_subview(i);
-      float ux0 = ux_subview(i);
-      float uy0 = ux_subview(i);
-      float uz0 = ux_subview(i);
-      int   w0  = w_subview(i);
+    if(buffered) {
+      auto ke_subview = Kokkos::subview(sp->particle_ke_io_buffer_h, slice);
+      hid_t dataset_ke_id = H5Dcreate_async(loc_id, "ke", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
+      status = H5Dwrite_async(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_subview.data(), es_id);
+      H5Dclose_async(dataset_ke_id, es_id);
+    } else {
       float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
       float msp = sp->m;
-      float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                             dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-      float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                             dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-      float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                             dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
-      v0 = v0*v0 + v1*v1 + v2*v2;
-      v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
-      ke_view(i) = v0;
-    });
-    hid_t dataset_ke_id = H5Dcreate_async(loc_id, "ke", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-    status = H5Dwrite_async(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, ke_view.data(), es_id);
-    H5Dclose_async(dataset_ke_id, es_id);
+      Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space> ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", num_particles);
+      Kokkos::parallel_for("Calculate KE", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, num_particles), KOKKOS_LAMBDA(const uint32_t i) {
+        float dx0 = dx_subview(i);
+        float dy0 = dy_subview(i);
+        float dz0 = dz_subview(i);
+        int   ii  = i_subview(i);
+        float ux0 = ux_subview(i);
+        float uy0 = uy_subview(i);
+        float uz0 = uz_subview(i);
+        float w0  = w_subview(i);
+        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+        float msp = sp->m;
+        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+        v0 = v0*v0 + v1*v1 + v2*v2;
+        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+        ke_view(i) = v0;
+      });
+      Kokkos::fence();
+      hid_t dataset_ke_id = H5Dcreate_async(loc_id, "ke", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
+      status = H5Dwrite_async(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, ke_view.data(), es_id);
+      H5Dclose_async(dataset_ke_id, es_id);
+    }
   }
 
   // Dump int annotations
   for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-    auto i32_subview = Kokkos::subview(sp->annotations_h.i32, Kokkos::ALL, j);
+    auto* annote = &(sp->annotations_h.i32);
+    if(buffered)
+      annote = &(sp->annotations_io_buffer_h.i32);
+    auto i32_subview = Kokkos::subview(*annote, slice, j);
     hid_t dataset_i32_annote_id = H5Dcreate_async(loc_id, sp->annotation_vars.i32_vars[j].c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     status = H5Dwrite_async(dataset_i32_annote_id, H5T_STD_I32LE, memspace_id, dataspace_id, dxpl_id, i32_subview.data(), es_id);
     H5Dclose_async(dataset_i32_annote_id, es_id);
   }
   // Dump 64-bit integer annotations
   for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-    auto i64_subview = Kokkos::subview(sp->annotations_h.i64, Kokkos::ALL, j);
+    auto* annote = &(sp->annotations_h.i64);
+    if(buffered)
+      annote = &(sp->annotations_io_buffer_h.i64);
+    auto i64_subview = Kokkos::subview(*annote, slice, j);
     hid_t dataset_i64_annote_id = H5Dcreate_async(loc_id, sp->annotation_vars.i64_vars[j].c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     status = H5Dwrite_async(dataset_i64_annote_id, H5T_STD_I64LE, memspace_id, dataspace_id, dxpl_id, i64_subview.data(), es_id);
     H5Dclose_async(dataset_i64_annote_id, es_id);
   }
   // Dump 32-bit floating-point annotations
   for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-    auto f32_subview = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL, j);
+    auto* annote = &(sp->annotations_h.f32);
+    if(buffered)
+      annote = &(sp->annotations_io_buffer_h.f32);
+    auto f32_subview = Kokkos::subview(*annote, slice, j);
     hid_t dataset_f32_annote_id = H5Dcreate_async(loc_id, sp->annotation_vars.f32_vars[j].c_str(), H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     status = H5Dwrite_async(dataset_f32_annote_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, f32_subview.data(), es_id);
     H5Dclose_async(dataset_f32_annote_id, es_id);
   }
   // Dump 64-bit floating-point annotations
   for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-    auto f64_subview = Kokkos::subview(sp->annotations_h.f64, Kokkos::ALL, j);
+    auto* annote = &(sp->annotations_h.f64);
+    if(buffered)
+      annote = &(sp->annotations_io_buffer_h.f64);
+    auto f64_subview = Kokkos::subview(*annote, slice, j);
     hid_t dataset_f64_annote_id = H5Dcreate_async(loc_id, sp->annotation_vars.f64_vars[j].c_str(), H5T_IEEE_F64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
     status = H5Dwrite_async(dataset_f64_annote_id, H5T_IEEE_F64LE, memspace_id, dataspace_id, dxpl_id, f64_subview.data(), es_id);
     H5Dclose_async(dataset_f64_annote_id, es_id);
   }
 }
 #endif
-
-void 
-write_tracers_to_hdf5(species_t* sp, 
-                      grid_t* grid, 
-                      hydro_array_t* hydro_array,
-                      k_interpolator_t::HostMirror& interp, 
-                      const uint32_t dump_vars,
-                      hid_t loc_id, 
-                      hid_t dataspace_id, 
-                      hid_t memspace_id,
-                      hid_t dxpl_id) {
-  herr_t status;
-  // Create subviews for data
-  auto dx_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dx));
-  auto dy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dy));
-  auto dz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dz));
-  auto ux_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::ux));
-  auto uy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uy));
-  auto uz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uz));
-  auto w_subview  = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::w));
-
-  // Create datasets, one for each variable, using dataspace and default property lists
-  hid_t dataset_dx_id = H5Dcreate(loc_id, "dx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_dy_id = H5Dcreate(loc_id, "dy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_dz_id = H5Dcreate(loc_id, "dz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_ux_id = H5Dcreate(loc_id, "ux", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_uy_id = H5Dcreate(loc_id, "uy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_uz_id = H5Dcreate(loc_id, "uz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_w_id  = H5Dcreate(loc_id, "w",  H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  hid_t dataset_i_id  = H5Dcreate(loc_id, "i",  H5T_STD_I32LE,    dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-  // Write data to slab
-  status = H5Dwrite(dataset_dx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dx_subview.data());
-  status = H5Dwrite(dataset_dy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dy_subview.data());
-  status = H5Dwrite(dataset_dz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dz_subview.data());
-  status = H5Dwrite(dataset_ux_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ux_subview.data());
-  status = H5Dwrite(dataset_uy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uy_subview.data());
-  status = H5Dwrite(dataset_uz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uz_subview.data());
-  status = H5Dwrite(dataset_w_id,  H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, w_subview.data());
-  status = H5Dwrite(dataset_i_id,  H5T_STD_I32LE,  memspace_id, dataspace_id, H5P_DEFAULT, sp->k_p_i_h.data());
-
-  using host_memory_space = Kokkos::DefaultHostExecutionSpace::memory_space;
-
-  auto& h_particles = sp->k_p_h;
-  auto& h_particles_i = sp->k_p_i_h;
-  auto& h_hydro = hydro_array->k_h_h;
-  int grid_nx = grid->nx, grid_ny=grid->ny, grid_nz=grid->nz;
-  float grid_dx = grid->dx, grid_dy=grid->dy, grid_dz=grid->dz;
-  float grid_x0 = grid->x0, grid_y0=grid->y0, grid_z0=grid->z0;
-
-  // Dump Global position if specified
-  if(dump_vars & DumpVar::GlobalPos) {
-    auto pos_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Pos Host View", sp->np);
-    Kokkos::parallel_for("Calculate global position", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      float dx0 = h_particles(i, particle_var::dx);
-      float dy0 = h_particles(i, particle_var::dy);
-      float dz0 = h_particles(i, particle_var::dz);
-      int   ii  = h_particles_i(i);
-      
-      // Compute global position of particle
-      if(dump_vars & DumpVar::GlobalPos) {
-        int nxg_ = grid_nx + 2;
-        int nyg_ = grid_ny + 2;
-        int i0 = ii % nxg_;
-        int j0 = (ii/nxg_) % nyg_;
-        int k0 = ii/(nxg_*nyg_);
-        float tracer_x = (i0 + (dx0-1)*0.5) * grid_dx + grid_x0;
-        float tracer_y = (j0 + (dy0-1)*0.5) * grid_dy + grid_y0;
-        float tracer_z = (k0 + (dz0-1)*0.5) * grid_dz + grid_z0;
-        pos_view(i, 0) = tracer_x;
-        pos_view(i, 1) = tracer_y;
-        pos_view(i, 2) = tracer_z;
-      }
-    });
-    auto posx_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 0);
-    auto posy_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 1);
-    auto posz_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 2);
-    hid_t dataset_posx_id = H5Dcreate(loc_id, "posx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_posy_id = H5Dcreate(loc_id, "posy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_posz_id = H5Dcreate(loc_id, "posz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_posx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posx_subview.data());
-    status = H5Dwrite(dataset_posy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posy_subview.data());
-    status = H5Dwrite(dataset_posz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posz_subview.data());
-    H5Dclose(dataset_posx_id);
-    H5Dclose(dataset_posy_id);
-    H5Dclose(dataset_posz_id);
-  }
-
-  // Dump E field if specified
-  if(dump_vars & DumpVar::Efield) {
-    auto efield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("E field Host View", sp->np);
-    Kokkos::parallel_for("Calculate E field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      float dx0 = h_particles(i, particle_var::dx);
-      float dy0 = h_particles(i, particle_var::dy);
-      float dz0 = h_particles(i, particle_var::dz);
-      int   ii  = h_particles_i(i);
-      efield_view(i,0) = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
-      efield_view(i,1) = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
-      efield_view(i,2) = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
-    });
-    auto efieldx_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 0);
-    auto efieldy_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 1);
-    auto efieldz_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 2);
-    hid_t dataset_efieldx_id = H5Dcreate(loc_id, "ex", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_efieldy_id = H5Dcreate(loc_id, "ey", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_efieldz_id = H5Dcreate(loc_id, "ez", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_efieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldx_subview.data());
-    status = H5Dwrite(dataset_efieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldy_subview.data());
-    status = H5Dwrite(dataset_efieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldz_subview.data());
-    H5Dclose(dataset_efieldx_id);
-    H5Dclose(dataset_efieldy_id);
-    H5Dclose(dataset_efieldz_id);
-  }
-
-  // Dump B field if specified
-  if(dump_vars & DumpVar::Bfield) {
-    auto bfield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("B field Host View", sp->np);
-    Kokkos::parallel_for("Calculate B field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      float dx0 = h_particles(i, particle_var::dx);
-      float dy0 = h_particles(i, particle_var::dy);
-      float dz0 = h_particles(i, particle_var::dz);
-      int   ii  = h_particles_i(i);
-      bfield_view(i,0)  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
-      bfield_view(i,1)  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
-      bfield_view(i,2)  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
-    });
-    auto bfieldx_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 0);
-    auto bfieldy_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 1);
-    auto bfieldz_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 2);
-    hid_t dataset_bfieldx_id = H5Dcreate(loc_id, "bx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_bfieldy_id = H5Dcreate(loc_id, "by", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_bfieldz_id = H5Dcreate(loc_id, "bz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_bfieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldx_subview.data());
-    status = H5Dwrite(dataset_bfieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldy_subview.data());
-    status = H5Dwrite(dataset_bfieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldz_subview.data());
-    H5Dclose(dataset_bfieldx_id);
-    H5Dclose(dataset_bfieldy_id);
-    H5Dclose(dataset_bfieldz_id);
-  }
-
-  // Dump current density if specified
-  if(dump_vars & DumpVar::CurrentDensity) {
-    auto current_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Current density Host View", sp->np);
-    Kokkos::parallel_for("Collect current density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = h_particles_i(i);
-      current_view(i, 0) = h_hydro(ii, hydro_var::jx);
-      current_view(i, 1) = h_hydro(ii, hydro_var::jy);
-      current_view(i, 2) = h_hydro(ii, hydro_var::jz);
-    });
-    auto jx_subview = Kokkos::subview(current_view, Kokkos::ALL(), 0);
-    auto jy_subview = Kokkos::subview(current_view, Kokkos::ALL(), 1);
-    auto jz_subview = Kokkos::subview(current_view, Kokkos::ALL(), 2);
-    hid_t dataset_jx_id = H5Dcreate(loc_id, "jx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_jy_id = H5Dcreate(loc_id, "jy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_jz_id = H5Dcreate(loc_id, "jz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_jx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jx_subview.data());
-    status = H5Dwrite(dataset_jy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jy_subview.data());
-    status = H5Dwrite(dataset_jz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jz_subview.data());
-    H5Dclose(dataset_jx_id);
-    H5Dclose(dataset_jy_id);
-    H5Dclose(dataset_jz_id);
-  }
-
-  // Dump charge density if specified
-  if(dump_vars & DumpVar::ChargeDensity) {
-    auto charge_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("Charge density Host View", sp->np);
-    Kokkos::parallel_for("Calculate charge density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = h_particles_i(i);
-      charge_view(i) = h_hydro(ii, hydro_var::rho);
-    });
-    hid_t dataset_rho_id = H5Dcreate(loc_id, "rho", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_rho_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, charge_view.data());
-    H5Dclose(dataset_rho_id);
-  }
-
-  // Dump momentum density if specified
-  if(dump_vars & DumpVar::MomentumDensity) {
-    auto momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", sp->np);
-    Kokkos::parallel_for("Collect momentum density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = h_particles_i(i);
-      momentum_view(i, 0) = h_hydro(ii, hydro_var::px);
-      momentum_view(i, 1) = h_hydro(ii, hydro_var::py);
-      momentum_view(i, 2) = h_hydro(ii, hydro_var::pz);
-    });
-    auto px_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 0);
-    auto py_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 1);
-    auto pz_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 2);
-    hid_t dataset_px_id = H5Dcreate(loc_id, "px", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_py_id = H5Dcreate(loc_id, "py", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_pz_id = H5Dcreate(loc_id, "pz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_px_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, px_subview.data());
-    status = H5Dwrite(dataset_py_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, py_subview.data());
-    status = H5Dwrite(dataset_pz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, pz_subview.data());
-    H5Dclose(dataset_px_id);
-    H5Dclose(dataset_py_id);
-    H5Dclose(dataset_pz_id);
-  }
-
-  // Dump kinetic energy density if specified
-  if(dump_vars & DumpVar::KEDensity) {
-    auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-    Kokkos::parallel_for("Collect KE density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = h_particles_i(i);
-      ke_view(i) = h_hydro(ii, hydro_var::ke);
-    });
-    hid_t dataset_ke_id = H5Dcreate(loc_id, "ke_dens", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
-    H5Dclose(dataset_ke_id);
-  }
-
-  // Dump stress tensor if specified
-  if(dump_vars & DumpVar::StressTensor) {
-    auto stress_view = Kokkos::View<float*[6], Kokkos::LayoutLeft, host_memory_space>("Stress tensor Host View", sp->np);
-    Kokkos::parallel_for("Collect stress tensor", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = h_particles_i(i);
-      stress_view(i, 0) = h_hydro(ii, hydro_var::txx);
-      stress_view(i, 1) = h_hydro(ii, hydro_var::tyy);
-      stress_view(i, 2) = h_hydro(ii, hydro_var::tzz);
-      stress_view(i, 3) = h_hydro(ii, hydro_var::tyz);
-      stress_view(i, 4) = h_hydro(ii, hydro_var::tzx);
-      stress_view(i, 5) = h_hydro(ii, hydro_var::txy);
-    });
-    auto txx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 0);
-    auto tyy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 1);
-    auto tzz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 2);
-    auto tyz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 3);
-    auto tzx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 4);
-    auto txy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 5);
-    hid_t dataset_txx_id = H5Dcreate(loc_id, "txx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_tyy_id = H5Dcreate(loc_id, "tyy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_tzz_id = H5Dcreate(loc_id, "tzz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_tyz_id = H5Dcreate(loc_id, "tyz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_tzx_id = H5Dcreate(loc_id, "tzx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hid_t dataset_txy_id = H5Dcreate(loc_id, "txy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_txx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txx_subview.data());
-    status = H5Dwrite(dataset_tyy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyy_subview.data());
-    status = H5Dwrite(dataset_tzz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzz_subview.data());
-    status = H5Dwrite(dataset_tyz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyz_subview.data());
-    status = H5Dwrite(dataset_tzx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzx_subview.data());
-    status = H5Dwrite(dataset_txy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txy_subview.data());
-    H5Dclose(dataset_txx_id);
-    H5Dclose(dataset_tyy_id);
-    H5Dclose(dataset_tzz_id);
-    H5Dclose(dataset_tyz_id);
-    H5Dclose(dataset_tzx_id);
-    H5Dclose(dataset_txy_id);
-  }
-
-  // Dump kinetic energy of particle if specified
-  if(dump_vars & DumpVar::ParticleKE) {
-    float msp = sp->m;
-    float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-    auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-    Kokkos::parallel_for("Calculate KE", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-      int   ii  = h_particles_i(i);
-      float dx0 = h_particles(i, particle_var::dx);
-      float dy0 = h_particles(i, particle_var::dy);
-      float dz0 = h_particles(i, particle_var::dz);
-      float ux0 = h_particles(i, particle_var::ux);
-      float uy0 = h_particles(i, particle_var::uy);
-      float uz0 = h_particles(i, particle_var::uz);
-      float w0  = h_particles(i, particle_var::w);
-      float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                             dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-      float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                             dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-      float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                             dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
-      v0 = v0*v0 + v1*v1 + v2*v2;
-      v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
-      ke_view(i) = v0;
-    });
-    hid_t dataset_ke_id = H5Dcreate(loc_id, "ke", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data());
-    H5Dclose(dataset_ke_id);
-  }
-
-  // Dump int annotations
-  for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-    auto i32_subview = Kokkos::subview(sp->annotations_h.i32, Kokkos::ALL, j);
-    hid_t dataset_i32_annote_id = H5Dcreate(loc_id, sp->annotation_vars.i32_vars[j].c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_i32_annote_id, H5T_STD_I32LE, memspace_id, dataspace_id, H5P_DEFAULT, i32_subview.data());
-    H5Dclose(dataset_i32_annote_id);
-  }
-  // Dump 64-bit integer annotations
-  for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-    auto i64_subview = Kokkos::subview(sp->annotations_h.i64, Kokkos::ALL, j);
-    hid_t dataset_i64_annote_id = H5Dcreate(loc_id, sp->annotation_vars.i64_vars[j].c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_i64_annote_id, H5T_STD_I64LE, memspace_id, dataspace_id, H5P_DEFAULT, i64_subview.data());
-    H5Dclose(dataset_i64_annote_id);
-  }
-  // Dump 32-bit floating-point annotations
-  for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-    auto f32_subview = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL, j);
-    hid_t dataset_f32_annote_id = H5Dcreate(loc_id, sp->annotation_vars.f32_vars[j].c_str(), H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_f32_annote_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, f32_subview.data());
-    H5Dclose(dataset_f32_annote_id);
-  }
-  // Dump 64-bit floating-point annotations
-  for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-    auto f64_subview = Kokkos::subview(sp->annotations_h.f64, Kokkos::ALL, j);
-    hid_t dataset_f64_annote_id = H5Dcreate(loc_id, sp->annotation_vars.f64_vars[j].c_str(), H5T_IEEE_F64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Dwrite(dataset_f64_annote_id, H5T_IEEE_F64LE, memspace_id, dataspace_id, H5P_DEFAULT, f64_subview.data());
-    H5Dclose(dataset_f64_annote_id);
-  }
-
-  // Close HDF5 objects 
-  status = H5Dclose(dataset_dx_id);
-  status = H5Dclose(dataset_dy_id);
-  status = H5Dclose(dataset_dz_id);
-  status = H5Dclose(dataset_ux_id);
-  status = H5Dclose(dataset_uy_id);
-  status = H5Dclose(dataset_uz_id);
-  status = H5Dclose(dataset_w_id);
-  status = H5Dclose(dataset_i_id);
-}
 
 template<class Slice>
 void 
@@ -2425,6 +1124,8 @@ write_tracers_to_hdf5(species_t* sp,
         float uy0 = uy_subview(i);
         float uz0 = uz_subview(i);
         float w0  = w_subview(i);
+        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+        float msp = sp->m;
         float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
                                dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
         float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
@@ -2501,7 +1202,6 @@ vpic_simulation::dump_tracers_buffered_hdf5_async( const char *sp_name,
                                                    const char *fbase)
 {
   species_t *sp;
-  char fname[max_filename_bytes];
   FileIO fileIO;
   char group_name[256];
 
@@ -2511,10 +1211,23 @@ vpic_simulation::dump_tracers_buffered_hdf5_async( const char *sp_name,
 
   if( !fbase ) ERROR(( "Invalid filename" ));
 
-  sprintf(fname, "%s.h5", fbase);
+  //Add filename if missing
+  std::string filename = std::string(sp_name) + std::string(".h5");
+  std::filesystem::path filepath(fbase);
+  if(filepath.filename().compare("") == 0) { 
+    filepath = filepath / std::filesystem::path(filename);
+  }
+  // Handle relative input path
+  if(filepath.is_relative()) { 
+    filepath = std::filesystem::current_path() / filepath;
+  }
+  // Make sure path exists
+  if(!std::filesystem::exists(filepath.parent_path())) {
+    std::filesystem::create_directories(filepath.parent_path());
+  }
 
   // Create event set at initial call
-  bool append = access(fname, F_OK) == 0;
+  bool append = std::filesystem::exists(filepath);
   if(append == 0) {
     sp->es_id = H5EScreate();
   }
@@ -2532,7 +1245,7 @@ vpic_simulation::dump_tracers_buffered_hdf5_async( const char *sp_name,
   // Try to create species HDF5 file with default file creation/access property lists
   hid_t file_id;
   if(append == 0) {
-    file_id = H5Fcreate_async(fname, H5F_ACC_EXCL, H5P_DEFAULT, plist_id, es_id);
+    file_id = H5Fcreate_async(filepath.c_str(), H5F_ACC_EXCL, H5P_DEFAULT, plist_id, es_id);
     status = H5Fclose_async(file_id, es_id);
   }
 
@@ -2542,7 +1255,6 @@ vpic_simulation::dump_tracers_buffered_hdf5_async( const char *sp_name,
     if (step() > sp->last_copied) {
       Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
       Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
-//      sp->copy_to_host();
     }
 
     if( rank()==0 )
@@ -2710,7 +1422,6 @@ vpic_simulation::dump_tracers_buffered_hdf5_async( const char *sp_name,
     if (step() > sp->last_copied) {
       Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
       Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
-//      sp->copy_to_host();
     }
 
     // Calculate total number of tracers and per rank offsets
@@ -2718,7 +1429,7 @@ vpic_simulation::dump_tracers_buffered_hdf5_async( const char *sp_name,
     uint64_t num_particles;
 
     if( rank()==0 )
-        MESSAGE(("Dumping %ld \"%s\" particles to \"%s\"", sp->particle_cell_io_buffer.extent(0), sp->name,fbase));
+        MESSAGE(("Dumping %ld \"%s\" particles to \"%s\"", sp->particle_cell_io_buffer.extent(0), sp->name,filepath.c_str()));
 
     // Get references to necessary data structures
     auto& particles = sp->k_p_d;
@@ -2758,7 +1469,7 @@ vpic_simulation::dump_tracers_buffered_hdf5_async( const char *sp_name,
     auto& interp = interpolator_array->k_i_h;
 
     // Open file
-    file_id = H5Fopen_async(fname, H5F_ACC_RDWR, plist_id, es_id);
+    file_id = H5Fopen_async(filepath.c_str(), H5F_ACC_RDWR, plist_id, es_id);
 
     // Write buffered tracer data
     uint32_t particle_idx = 0;
@@ -3090,312 +1801,16 @@ vpic_simulation::dump_tracers_buffered_hdf5_async( const char *sp_name,
       // Create memspace
       hid_t memspace_id = H5Screate_simple(1, (hsize_t*)(&num_particles), NULL);
 
-//      write_tracers_to_hdf5_async(sp, 
-//                                  grid, 
-//                                  hydro_array,
-//                                  interpolator_array->k_i_h, 
-//                                  dump_vars,
-//                                  group_id, 
-//                                  dataspace_id, 
-//                                  memspace_id, 
-//                                  plist_id,
-//                                  es_id);
-
-      // Create subviews for data
-      auto dx_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dx));
-      auto dy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dy));
-      auto dz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dz));
-      auto ux_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::ux));
-      auto uy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uy));
-      auto uz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uz));
-      auto w_subview  = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::w));
-
-      // Create datasets, one for each variable, using dataspace and default property lists
-      hid_t dataset_dx_id = H5Dcreate_async(group_id, "dx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-      hid_t dataset_dy_id = H5Dcreate_async(group_id, "dy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-      hid_t dataset_dz_id = H5Dcreate_async(group_id, "dz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-      hid_t dataset_ux_id = H5Dcreate_async(group_id, "ux", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-      hid_t dataset_uy_id = H5Dcreate_async(group_id, "uy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-      hid_t dataset_uz_id = H5Dcreate_async(group_id, "uz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-      hid_t dataset_w_id  = H5Dcreate_async(group_id, "w",  H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-      hid_t dataset_i_id  = H5Dcreate_async(group_id, "i",  H5T_STD_I32LE,    dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-
-      // Write data to slab
-      status = H5Dwrite_async(dataset_dx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dx_subview.data(), es_id);
-      status = H5Dwrite_async(dataset_dy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dy_subview.data(), es_id);
-      status = H5Dwrite_async(dataset_dz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dz_subview.data(), es_id);
-      status = H5Dwrite_async(dataset_ux_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ux_subview.data(), es_id);
-      status = H5Dwrite_async(dataset_uy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uy_subview.data(), es_id);
-      status = H5Dwrite_async(dataset_uz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uz_subview.data(), es_id);
-      status = H5Dwrite_async(dataset_w_id,  H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, w_subview.data(), es_id);
-      status = H5Dwrite_async(dataset_i_id,  H5T_STD_I32LE,  memspace_id, dataspace_id, H5P_DEFAULT, sp->k_p_i_h.data(), es_id);
-
-      status = H5Dclose_async(dataset_dx_id, es_id);
-      status = H5Dclose_async(dataset_dy_id, es_id);
-      status = H5Dclose_async(dataset_dz_id, es_id);
-      status = H5Dclose_async(dataset_ux_id, es_id);
-      status = H5Dclose_async(dataset_uy_id, es_id);
-      status = H5Dclose_async(dataset_uz_id, es_id);
-      status = H5Dclose_async(dataset_w_id, es_id);
-      status = H5Dclose_async(dataset_i_id, es_id);
-
-      using host_memory_space = Kokkos::DefaultHostExecutionSpace::memory_space;
-
-      // Dump Global position if specified
-      if(dump_vars & DumpVar::GlobalPos) {
-        auto pos_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Pos Host View", sp->np);
-        Kokkos::parallel_for("Calculate global position", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          float dx0 = sp->k_p_h(i, particle_var::dx);
-          float dy0 = sp->k_p_h(i, particle_var::dy);
-          float dz0 = sp->k_p_h(i, particle_var::dz);
-          int   ii  = sp->k_p_i_h(i);
-          
-          // Compute global position of particle
-          if(dump_vars & DumpVar::GlobalPos) {
-            int nxg_ = grid->nx + 2;
-            int nyg_ = grid->ny + 2;
-            int i0 = ii % nxg_;
-            int j0 = (ii/nxg_) % nyg_;
-            int k0 = ii/(nxg_*nyg_);
-            float tracer_x = (i0 + (dx0-1)*0.5) * grid->dx + grid->x0;
-            float tracer_y = (j0 + (dy0-1)*0.5) * grid->dy + grid->y0;
-            float tracer_z = (k0 + (dz0-1)*0.5) * grid->dz + grid->z0;
-            pos_view(i, 0) = tracer_x;
-            pos_view(i, 1) = tracer_y;
-            pos_view(i, 2) = tracer_z;
-          }
-        });
-        auto posx_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 0);
-        auto posy_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 1);
-        auto posz_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 2);
-        hid_t dataset_posx_id = H5Dcreate_async(group_id, "posx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_posy_id = H5Dcreate_async(group_id, "posy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_posz_id = H5Dcreate_async(group_id, "posz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_posx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posx_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_posy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posy_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_posz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posz_subview.data(), es_id);
-        H5Dclose_async(dataset_posx_id, es_id);
-        H5Dclose_async(dataset_posy_id, es_id);
-        H5Dclose_async(dataset_posz_id, es_id);
-      }
-
-      // Dump E field if specified
-      if(dump_vars & DumpVar::Efield) {
-        auto efield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("E field Host View", sp->np);
-        Kokkos::parallel_for("Calculate E field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          float dx0 = sp->k_p_h(i, particle_var::dx);
-          float dy0 = sp->k_p_h(i, particle_var::dy);
-          float dz0 = sp->k_p_h(i, particle_var::dz);
-          int   ii  = sp->k_p_i_h(i);
-          efield_view(i,0) = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
-          efield_view(i,1) = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
-          efield_view(i,2) = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
-        });
-        auto efieldx_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 0);
-        auto efieldy_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 1);
-        auto efieldz_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 2);
-        hid_t dataset_efieldx_id = H5Dcreate_async(group_id, "ex", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_efieldy_id = H5Dcreate_async(group_id, "ey", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_efieldz_id = H5Dcreate_async(group_id, "ez", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_efieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldx_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_efieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldy_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_efieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldz_subview.data(), es_id);
-        H5Dclose_async(dataset_efieldx_id, es_id);
-        H5Dclose_async(dataset_efieldy_id, es_id);
-        H5Dclose_async(dataset_efieldz_id, es_id);
-      }
-
-      // Dump B field if specified
-      if(dump_vars & DumpVar::Bfield) {
-        auto bfield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("B field Host View", sp->np);
-        Kokkos::parallel_for("Calculate B field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          float dx0 = sp->k_p_h(i, particle_var::dx);
-          float dy0 = sp->k_p_h(i, particle_var::dy);
-          float dz0 = sp->k_p_h(i, particle_var::dz);
-          int   ii  = sp->k_p_i_h(i);
-          bfield_view(i,0)  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
-          bfield_view(i,1)  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
-          bfield_view(i,2)  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
-        });
-        auto bfieldx_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 0);
-        auto bfieldy_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 1);
-        auto bfieldz_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 2);
-        hid_t dataset_bfieldx_id = H5Dcreate_async(group_id, "bx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_bfieldy_id = H5Dcreate_async(group_id, "by", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_bfieldz_id = H5Dcreate_async(group_id, "bz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_bfieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldx_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_bfieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldy_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_bfieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldz_subview.data(), es_id);
-        H5Dclose_async(dataset_bfieldx_id, es_id);
-        H5Dclose_async(dataset_bfieldy_id, es_id);
-        H5Dclose_async(dataset_bfieldz_id, es_id);
-      }
-
-      // Dump current density if specified
-      if(dump_vars & DumpVar::CurrentDensity) {
-        auto current_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Current density Host View", sp->np);
-        Kokkos::parallel_for("Collect current density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          int   ii  = sp->k_p_i_h(i);
-          current_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::jx);
-          current_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::jy);
-          current_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::jz);
-        });
-        auto jx_subview = Kokkos::subview(current_view, Kokkos::ALL(), 0);
-        auto jy_subview = Kokkos::subview(current_view, Kokkos::ALL(), 1);
-        auto jz_subview = Kokkos::subview(current_view, Kokkos::ALL(), 2);
-        hid_t dataset_jx_id = H5Dcreate_async(group_id, "jx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_jy_id = H5Dcreate_async(group_id, "jy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_jz_id = H5Dcreate_async(group_id, "jz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_jx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jx_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_jy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jy_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_jz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jz_subview.data(), es_id);
-        H5Dclose_async(dataset_jx_id, es_id);
-        H5Dclose_async(dataset_jy_id, es_id);
-        H5Dclose_async(dataset_jz_id, es_id);
-      }
-
-      // Dump charge density if specified
-      if(dump_vars & DumpVar::ChargeDensity) {
-        auto charge_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("Charge density Host View", sp->np);
-        Kokkos::parallel_for("Calculate charge density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          int   ii  = sp->k_p_i_h(i);
-          charge_view(i) = hydro_array->k_h_h(ii, hydro_var::rho);
-        });
-        hid_t dataset_rho_id = H5Dcreate_async(group_id, "rho", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_rho_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, charge_view.data(), es_id);
-        H5Dclose_async(dataset_rho_id, es_id);
-      }
-
-      // Dump momentum density if specified
-      if(dump_vars & DumpVar::MomentumDensity) {
-        auto momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", sp->np);
-        Kokkos::parallel_for("Collect momentum density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          int   ii  = sp->k_p_i_h(i);
-          momentum_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::px);
-          momentum_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::py);
-          momentum_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::pz);
-        });
-        auto px_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 0);
-        auto py_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 1);
-        auto pz_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 2);
-        hid_t dataset_px_id = H5Dcreate_async(group_id, "px", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_py_id = H5Dcreate_async(group_id, "py", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_pz_id = H5Dcreate_async(group_id, "pz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_px_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, px_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_py_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, py_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_pz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, pz_subview.data(), es_id);
-        H5Dclose_async(dataset_px_id, es_id);
-        H5Dclose_async(dataset_py_id, es_id);
-        H5Dclose_async(dataset_pz_id, es_id);
-      }
-
-      // Dump kinetic energy density if specified
-      if(dump_vars & DumpVar::KEDensity) {
-        auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-        Kokkos::parallel_for("Collect KE density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          int   ii  = sp->k_p_i_h(i);
-          ke_view(i) = hydro_array->k_h_h(ii, hydro_var::ke);
-        });
-        hid_t dataset_ke_id = H5Dcreate_async(group_id, "ke_dens", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data(), es_id);
-        H5Dclose_async(dataset_ke_id, es_id);
-      }
-
-      // Dump stress tensor if specified
-      if(dump_vars & DumpVar::StressTensor) {
-        auto stress_view = Kokkos::View<float*[6], Kokkos::LayoutLeft, host_memory_space>("Stress tensor Host View", sp->np);
-        Kokkos::parallel_for("Collect stress tensor", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          int   ii  = sp->k_p_i_h(i);
-          stress_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::txx);
-          stress_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::tyy);
-          stress_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::tzz);
-          stress_view(i, 3) = hydro_array->k_h_h(ii, hydro_var::tyz);
-          stress_view(i, 4) = hydro_array->k_h_h(ii, hydro_var::tzx);
-          stress_view(i, 5) = hydro_array->k_h_h(ii, hydro_var::txy);
-        });
-        auto txx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 0);
-        auto tyy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 1);
-        auto tzz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 2);
-        auto tyz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 3);
-        auto tzx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 4);
-        auto txy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 5);
-        hid_t dataset_txx_id = H5Dcreate_async(group_id, "txx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_tyy_id = H5Dcreate_async(group_id, "tyy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_tzz_id = H5Dcreate_async(group_id, "tzz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_tyz_id = H5Dcreate_async(group_id, "tyz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_tzx_id = H5Dcreate_async(group_id, "tzx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        hid_t dataset_txy_id = H5Dcreate_async(group_id, "txy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_txx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txx_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_tyy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyy_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_tzz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzz_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_tyz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyz_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_tzx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzx_subview.data(), es_id);
-        status = H5Dwrite_async(dataset_txy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txy_subview.data(), es_id);
-        H5Dclose_async(dataset_txx_id, es_id);
-        H5Dclose_async(dataset_tyy_id, es_id);
-        H5Dclose_async(dataset_tzz_id, es_id);
-        H5Dclose_async(dataset_tyz_id, es_id);
-        H5Dclose_async(dataset_tzx_id, es_id);
-        H5Dclose_async(dataset_txy_id, es_id);
-      }
-
-      // Dump kinetic energy of particle if specified
-      if(dump_vars & DumpVar::ParticleKE) {
-        auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-        Kokkos::parallel_for("Calculate KE", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-          float dx0 = sp->k_p_h(i, particle_var::dx);
-          float dy0 = sp->k_p_h(i, particle_var::dy);
-          float dz0 = sp->k_p_h(i, particle_var::dz);
-          int   ii  = sp->k_p_i_h(i);
-          float ux0 = sp->k_p_h(i, particle_var::ux);
-          float uy0 = sp->k_p_h(i, particle_var::uy);
-          float uz0 = sp->k_p_h(i, particle_var::uz);
-          float w0  = sp->k_p_h(i, particle_var::w);
-          float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-          float msp = sp->m;
-          float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                                 dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-          float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                                 dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-          float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                                 dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
-          v0 = v0*v0 + v1*v1 + v2*v2;
-          v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
-          ke_view(i) = v0;
-        });
-        hid_t dataset_ke_id = H5Dcreate_async(group_id, "ke", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data(), es_id);
-        H5Dclose_async(dataset_ke_id, es_id);
-      }
-
-      // Dump int annotations
-      for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-        auto i32_subview = Kokkos::subview(sp->annotations_h.i32, Kokkos::ALL, j);
-        hid_t dataset_i32_annote_id = H5Dcreate_async(group_id, sp->annotation_vars.i32_vars[j].c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_i32_annote_id, H5T_STD_I32LE, memspace_id, dataspace_id, H5P_DEFAULT, i32_subview.data(), es_id);
-        H5Dclose_async(dataset_i32_annote_id, es_id);
-      }
-      // Dump 64-bit integer annotations
-      for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-        auto i64_subview = Kokkos::subview(sp->annotations_h.i64, Kokkos::ALL, j);
-        hid_t dataset_i64_annote_id = H5Dcreate_async(group_id, sp->annotation_vars.i64_vars[j].c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_i64_annote_id, H5T_STD_I64LE, memspace_id, dataspace_id, H5P_DEFAULT, i64_subview.data(), es_id);
-        H5Dclose_async(dataset_i64_annote_id, es_id);
-      }
-      // Dump 32-bit floating-point annotations
-      for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-        auto f32_subview = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL, j);
-        hid_t dataset_f32_annote_id = H5Dcreate_async(group_id, sp->annotation_vars.f32_vars[j].c_str(), H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_f32_annote_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, f32_subview.data(), es_id);
-        H5Dclose_async(dataset_f32_annote_id, es_id);
-      }
-      // Dump 64-bit floating-point annotations
-      for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-        auto f64_subview = Kokkos::subview(sp->annotations_h.f64, Kokkos::ALL, j);
-        hid_t dataset_f64_annote_id = H5Dcreate_async(group_id, sp->annotation_vars.f64_vars[j].c_str(), H5T_IEEE_F64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-        status = H5Dwrite_async(dataset_f64_annote_id, H5T_IEEE_F64LE, memspace_id, dataspace_id, H5P_DEFAULT, f64_subview.data(), es_id);
-        H5Dclose_async(dataset_f64_annote_id, es_id);
-      }
+      write_tracers_to_hdf5_async(sp, 
+                                  grid, 
+                                  hydro_array,
+                                  interpolator_array->k_i_h, 
+                                  dump_vars,
+                                  group_id, 
+                                  dataspace_id, 
+                                  memspace_id, 
+                                  plist_id,
+                                  es_id);
 
       // Close HDF5 objects 
       status = H5Sclose(memspace_id);
@@ -3433,14 +1848,28 @@ vpic_simulation::dump_tracers_hdf5_async( const char *sp_name,
                                           uint32_t dump_vars,
                                           const char *fbase)
 {
-  char fname[256];
   char group_name[256];
 
   // Get species
   species_t* sp = find_species_name( sp_name, tracers_list );
   if( !sp ) ERROR(( "Invalid tracer species name \"%s\".", sp_name));
 
-  bool append = access(fname, F_OK) == 0;
+  //Add filename if missing
+  std::string filename = std::string(sp_name) + std::string(".h5");
+  std::filesystem::path filepath(fbase);
+  if(filepath.filename().compare("") == 0) { 
+    filepath = filepath / std::filesystem::path(filename);
+  }
+  // Handle relative input path
+  if(filepath.is_relative()) { 
+    filepath = std::filesystem::current_path() / filepath;
+  }
+  // Make sure path exists
+  if(!std::filesystem::exists(filepath.parent_path())) {
+    std::filesystem::create_directories(filepath.parent_path());
+  }
+
+  bool append = std::filesystem::exists(filepath);
   if(append == 0) {
     sp->es_id = H5EScreate();
   }
@@ -3450,7 +1879,6 @@ vpic_simulation::dump_tracers_hdf5_async( const char *sp_name,
   if (step() > sp->last_copied) {
     Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
     Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
-//    sp->copy_to_host();
   }
 
   // Calculate total number of tracers and per rank offsets
@@ -3497,11 +1925,10 @@ vpic_simulation::dump_tracers_hdf5_async( const char *sp_name,
   auto& interp = interpolator_array->k_i_h;
 
   // Set output file name and group name
-  sprintf(fname, "%s.h5", fbase);
   sprintf(group_name, "/Timestep_%ld", step());
 
   if( rank()==0 )
-      MESSAGE(("Dumping \"%s\" particles to \"%s\"",sp->name,fname));
+      MESSAGE(("Dumping \"%s\" particles to \"%s\"",sp->name,filepath.c_str()));
 
   // Create file access template with parallel IO access
   hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
@@ -3510,9 +1937,9 @@ vpic_simulation::dump_tracers_hdf5_async( const char *sp_name,
   // Try to create species HDF5 file with default file creation/access property lists
   hid_t file_id;
   if(append == 0) {
-    file_id = H5Fcreate_async(fname, H5F_ACC_EXCL, H5P_DEFAULT, plist_id, es_id);
+    file_id = H5Fcreate_async(filepath.c_str(), H5F_ACC_EXCL, H5P_DEFAULT, plist_id, es_id);
   } else {
-    file_id = H5Fopen_async(fname, H5F_ACC_RDWR, plist_id, es_id);
+    file_id = H5Fopen_async(filepath.c_str(), H5F_ACC_RDWR, plist_id, es_id);
   }
 
   // Create group for each step
@@ -3554,311 +1981,6 @@ vpic_simulation::dump_tracers_hdf5_async( const char *sp_name,
                               plist_id,
                               es_id);
 
-//  // Create subviews for data
-//  auto dx_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dx));
-//  auto dy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dy));
-//  auto dz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::dz));
-//  auto ux_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::ux));
-//  auto uy_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uy));
-//  auto uz_subview = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::uz));
-//  auto w_subview  = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), (int)(particle_var::w));
-//
-//  // Create datasets, one for each variable, using dataspace and default property lists
-//  hid_t dataset_dx_id = H5Dcreate_async(group_id, "dx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//  hid_t dataset_dy_id = H5Dcreate_async(group_id, "dy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//  hid_t dataset_dz_id = H5Dcreate_async(group_id, "dz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//  hid_t dataset_ux_id = H5Dcreate_async(group_id, "ux", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//  hid_t dataset_uy_id = H5Dcreate_async(group_id, "uy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//  hid_t dataset_uz_id = H5Dcreate_async(group_id, "uz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//  hid_t dataset_w_id  = H5Dcreate_async(group_id, "w",  H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//  hid_t dataset_i_id  = H5Dcreate_async(group_id, "i",  H5T_STD_I32LE,    dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//
-//  // Write data to slab
-//  status = H5Dwrite_async(dataset_dx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dx_subview.data(), es_id);
-//  status = H5Dwrite_async(dataset_dy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dy_subview.data(), es_id);
-//  status = H5Dwrite_async(dataset_dz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, dz_subview.data(), es_id);
-//  status = H5Dwrite_async(dataset_ux_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ux_subview.data(), es_id);
-//  status = H5Dwrite_async(dataset_uy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uy_subview.data(), es_id);
-//  status = H5Dwrite_async(dataset_uz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, uz_subview.data(), es_id);
-//  status = H5Dwrite_async(dataset_w_id,  H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, w_subview.data(), es_id);
-//  status = H5Dwrite_async(dataset_i_id,  H5T_STD_I32LE,  memspace_id, dataspace_id, H5P_DEFAULT, sp->k_p_i_h.data(), es_id);
-//
-//  using host_memory_space = Kokkos::DefaultHostExecutionSpace::memory_space;
-//
-//  // Dump Global position if specified
-//  if(dump_vars & DumpVar::GlobalPos) {
-//    auto pos_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Pos Host View", sp->np);
-//    Kokkos::parallel_for("Calculate global position", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-//      float dx0 = sp->k_p_h(i, particle_var::dx);
-//      float dy0 = sp->k_p_h(i, particle_var::dy);
-//      float dz0 = sp->k_p_h(i, particle_var::dz);
-//      int   ii  = sp->k_p_i_h(i);
-//      
-//      // Compute global position of particle
-//      if(dump_vars & DumpVar::GlobalPos) {
-//        int nxg_ = grid->nx + 2;
-//        int nyg_ = grid->ny + 2;
-//        int i0 = ii % nxg_;
-//        int j0 = (ii/nxg_) % nyg_;
-//        int k0 = ii/(nxg_*nyg_);
-//        float tracer_x = (i0 + (dx0-1)*0.5) * grid->dx + grid->x0;
-//        float tracer_y = (j0 + (dy0-1)*0.5) * grid->dy + grid->y0;
-//        float tracer_z = (k0 + (dz0-1)*0.5) * grid->dz + grid->z0;
-//        pos_view(i, 0) = tracer_x;
-//        pos_view(i, 1) = tracer_y;
-//        pos_view(i, 2) = tracer_z;
-//      }
-//    });
-//    auto posx_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 0);
-//    auto posy_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 1);
-//    auto posz_subview = Kokkos::subview(pos_view, Kokkos::ALL(), 2);
-//    hid_t dataset_posx_id = H5Dcreate_async(group_id, "posx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_posy_id = H5Dcreate_async(group_id, "posy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_posz_id = H5Dcreate_async(group_id, "posz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_posx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posx_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_posy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posy_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_posz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, posz_subview.data(), es_id);
-//    H5Dclose_async(dataset_posx_id, es_id);
-//    H5Dclose_async(dataset_posy_id, es_id);
-//    H5Dclose_async(dataset_posz_id, es_id);
-//  }
-//
-//  // Dump E field if specified
-//  if(dump_vars & DumpVar::Efield) {
-//    auto efield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("E field Host View", sp->np);
-//    Kokkos::parallel_for("Calculate E field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-//      float dx0 = sp->k_p_h(i, particle_var::dx);
-//      float dy0 = sp->k_p_h(i, particle_var::dy);
-//      float dz0 = sp->k_p_h(i, particle_var::dz);
-//      int   ii  = sp->k_p_i_h(i);
-//      efield_view(i,0) = interp(ii,interpolator_var::ex ) + dy0*interp(ii,interpolator_var::dexdy) + dz0*(interp(ii,interpolator_var::dexdz) + dy0*interp(ii,interpolator_var::d2exdydz)); 
-//      efield_view(i,1) = interp(ii,interpolator_var::ey ) + dz0*interp(ii,interpolator_var::deydz) + dx0*(interp(ii,interpolator_var::deydx) + dz0*interp(ii,interpolator_var::d2eydzdx)); 
-//      efield_view(i,2) = interp(ii,interpolator_var::ez ) + dx0*interp(ii,interpolator_var::dezdx) + dy0*(interp(ii,interpolator_var::dezdy) + dx0*interp(ii,interpolator_var::d2ezdxdy)); 
-//    });
-//    auto efieldx_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 0);
-//    auto efieldy_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 1);
-//    auto efieldz_subview = Kokkos::subview(efield_view, Kokkos::ALL(), 2);
-//    hid_t dataset_efieldx_id = H5Dcreate_async(group_id, "ex", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_efieldy_id = H5Dcreate_async(group_id, "ey", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_efieldz_id = H5Dcreate_async(group_id, "ez", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_efieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldx_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_efieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldy_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_efieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, efieldz_subview.data(), es_id);
-//    H5Dclose_async(dataset_efieldx_id, es_id);
-//    H5Dclose_async(dataset_efieldy_id, es_id);
-//    H5Dclose_async(dataset_efieldz_id, es_id);
-//  }
-//
-//  // Dump B field if specified
-//  if(dump_vars & DumpVar::Bfield) {
-//    auto bfield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("B field Host View", sp->np);
-//    Kokkos::parallel_for("Calculate B field", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-//      float dx0 = sp->k_p_h(i, particle_var::dx);
-//      float dy0 = sp->k_p_h(i, particle_var::dy);
-//      float dz0 = sp->k_p_h(i, particle_var::dz);
-//      int   ii  = sp->k_p_i_h(i);
-//      bfield_view(i,0)  = interp(ii,interpolator_var::cbx) + dx0*interp(ii,interpolator_var::dcbxdx); 
-//      bfield_view(i,1)  = interp(ii,interpolator_var::cby) + dy0*interp(ii,interpolator_var::dcbydy); 
-//      bfield_view(i,2)  = interp(ii,interpolator_var::cbz) + dz0*interp(ii,interpolator_var::dcbzdz); 
-//    });
-//    auto bfieldx_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 0);
-//    auto bfieldy_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 1);
-//    auto bfieldz_subview = Kokkos::subview(bfield_view, Kokkos::ALL(), 2);
-//    hid_t dataset_bfieldx_id = H5Dcreate_async(group_id, "bx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_bfieldy_id = H5Dcreate_async(group_id, "by", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_bfieldz_id = H5Dcreate_async(group_id, "bz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_bfieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldx_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_bfieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldy_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_bfieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, bfieldz_subview.data(), es_id);
-//    H5Dclose_async(dataset_bfieldx_id, es_id);
-//    H5Dclose_async(dataset_bfieldy_id, es_id);
-//    H5Dclose_async(dataset_bfieldz_id, es_id);
-//  }
-//
-//  // Dump current density if specified
-//  if(dump_vars & DumpVar::CurrentDensity) {
-//    auto current_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Current density Host View", sp->np);
-//    Kokkos::parallel_for("Collect current density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-//      int   ii  = sp->k_p_i_h(i);
-//      current_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::jx);
-//      current_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::jy);
-//      current_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::jz);
-//    });
-//    auto jx_subview = Kokkos::subview(current_view, Kokkos::ALL(), 0);
-//    auto jy_subview = Kokkos::subview(current_view, Kokkos::ALL(), 1);
-//    auto jz_subview = Kokkos::subview(current_view, Kokkos::ALL(), 2);
-//    hid_t dataset_jx_id = H5Dcreate_async(group_id, "jx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_jy_id = H5Dcreate_async(group_id, "jy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_jz_id = H5Dcreate_async(group_id, "jz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_jx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jx_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_jy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jy_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_jz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, jz_subview.data(), es_id);
-//    H5Dclose_async(dataset_jx_id, es_id);
-//    H5Dclose_async(dataset_jy_id, es_id);
-//    H5Dclose_async(dataset_jz_id, es_id);
-//  }
-//
-//  // Dump charge density if specified
-//  if(dump_vars & DumpVar::ChargeDensity) {
-//    auto charge_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("Charge density Host View", sp->np);
-//    Kokkos::parallel_for("Calculate charge density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-//      int   ii  = sp->k_p_i_h(i);
-//      charge_view(i) = hydro_array->k_h_h(ii, hydro_var::rho);
-//    });
-//    hid_t dataset_rho_id = H5Dcreate_async(group_id, "rho", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_rho_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, charge_view.data(), es_id);
-//    H5Dclose_async(dataset_rho_id, es_id);
-//  }
-//
-//  // Dump momentum density if specified
-//  if(dump_vars & DumpVar::MomentumDensity) {
-//    auto momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", sp->np);
-//    Kokkos::parallel_for("Collect momentum density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-//      int   ii  = sp->k_p_i_h(i);
-//      momentum_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::px);
-//      momentum_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::py);
-//      momentum_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::pz);
-//    });
-//    auto px_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 0);
-//    auto py_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 1);
-//    auto pz_subview = Kokkos::subview(momentum_view, Kokkos::ALL(), 2);
-//    hid_t dataset_px_id = H5Dcreate_async(group_id, "px", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_py_id = H5Dcreate_async(group_id, "py", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_pz_id = H5Dcreate_async(group_id, "pz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_px_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, px_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_py_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, py_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_pz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, pz_subview.data(), es_id);
-//    H5Dclose_async(dataset_px_id, es_id);
-//    H5Dclose_async(dataset_py_id, es_id);
-//    H5Dclose_async(dataset_pz_id, es_id);
-//  }
-//
-//  // Dump kinetic energy density if specified
-//  if(dump_vars & DumpVar::KEDensity) {
-//    auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-//    auto momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", sp->np);
-//    Kokkos::parallel_for("Collect KE density", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-//      int   ii  = sp->k_p_i_h(i);
-//      ke_view(i) = hydro_array->k_h_h(ii, hydro_var::ke);
-//    });
-//    hid_t dataset_ke_id = H5Dcreate_async(group_id, "ke_dens", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data(), es_id);
-//    H5Dclose_async(dataset_ke_id, es_id);
-//  }
-//
-//  // Dump stress tensor if specified
-//  if(dump_vars & DumpVar::StressTensor) {
-//    auto stress_view = Kokkos::View<float*[6], Kokkos::LayoutLeft, host_memory_space>("Stress tensor Host View", sp->np);
-//    Kokkos::parallel_for("Collect stress tensor", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-//      int   ii  = sp->k_p_i_h(i);
-//      stress_view(i, 0) = hydro_array->k_h_h(ii, hydro_var::txx);
-//      stress_view(i, 1) = hydro_array->k_h_h(ii, hydro_var::tyy);
-//      stress_view(i, 2) = hydro_array->k_h_h(ii, hydro_var::tzz);
-//      stress_view(i, 3) = hydro_array->k_h_h(ii, hydro_var::tyz);
-//      stress_view(i, 4) = hydro_array->k_h_h(ii, hydro_var::tzx);
-//      stress_view(i, 5) = hydro_array->k_h_h(ii, hydro_var::txy);
-//    });
-//    auto txx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 0);
-//    auto tyy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 1);
-//    auto tzz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 2);
-//    auto tyz_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 3);
-//    auto tzx_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 4);
-//    auto txy_subview = Kokkos::subview(stress_view, Kokkos::ALL(), 5);
-//    hid_t dataset_txx_id = H5Dcreate_async(group_id, "txx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_tyy_id = H5Dcreate_async(group_id, "tyy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_tzz_id = H5Dcreate_async(group_id, "tzz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_tyz_id = H5Dcreate_async(group_id, "tyz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_tzx_id = H5Dcreate_async(group_id, "tzx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    hid_t dataset_txy_id = H5Dcreate_async(group_id, "txy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_txx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txx_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_tyy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyy_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_tzz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzz_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_tyz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tyz_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_tzx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, tzx_subview.data(), es_id);
-//    status = H5Dwrite_async(dataset_txy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, txy_subview.data(), es_id);
-//    H5Dclose_async(dataset_txx_id, es_id);
-//    H5Dclose_async(dataset_tyy_id, es_id);
-//    H5Dclose_async(dataset_tzz_id, es_id);
-//    H5Dclose_async(dataset_tyz_id, es_id);
-//    H5Dclose_async(dataset_tzx_id, es_id);
-//    H5Dclose_async(dataset_txy_id, es_id);
-//  }
-//
-//  // Dump kinetic energy of particle if specified
-//  if(dump_vars & DumpVar::ParticleKE) {
-//    auto ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", sp->np);
-//    Kokkos::parallel_for("Calculate KE", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), KOKKOS_LAMBDA(const uint32_t i) {
-//      float dx0 = sp->k_p_h(i, particle_var::dx);
-//      float dy0 = sp->k_p_h(i, particle_var::dy);
-//      float dz0 = sp->k_p_h(i, particle_var::dz);
-//      int   ii  = sp->k_p_i_h(i);
-//      float ux0 = sp->k_p_h(i, particle_var::ux);
-//      float uy0 = sp->k_p_h(i, particle_var::uy);
-//      float uz0 = sp->k_p_h(i, particle_var::uz);
-//      float w0  = sp->k_p_h(i, particle_var::w);
-//      float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-//      float msp = sp->m;
-//      float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-//                             dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-//      float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-//                             dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-//      float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-//                             dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
-//      v0 = v0*v0 + v1*v1 + v2*v2;
-//      v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
-//      ke_view(i) = v0;
-//    });
-//    hid_t dataset_ke_id = H5Dcreate_async(group_id, "ke", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_view.data(), es_id);
-//    H5Dclose_async(dataset_ke_id, es_id);
-//  }
-//
-//  // Dump int annotations
-//  for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-//    auto i32_subview = Kokkos::subview(sp->annotations_h.i32, Kokkos::ALL, j);
-//    hid_t dataset_i32_annote_id = H5Dcreate_async(group_id, sp->annotation_vars.i32_vars[j].c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_i32_annote_id, H5T_STD_I32LE, memspace_id, dataspace_id, H5P_DEFAULT, i32_subview.data(), es_id);
-//    H5Dclose_async(dataset_i32_annote_id, es_id);
-//  }
-//  // Dump 64-bit integer annotations
-//  for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-//    auto i64_subview = Kokkos::subview(sp->annotations_h.i64, Kokkos::ALL, j);
-//    hid_t dataset_i64_annote_id = H5Dcreate_async(group_id, sp->annotation_vars.i64_vars[j].c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_i64_annote_id, H5T_STD_I64LE, memspace_id, dataspace_id, H5P_DEFAULT, i64_subview.data(), es_id);
-//    H5Dclose_async(dataset_i64_annote_id, es_id);
-//  }
-//  // Dump 32-bit floating-point annotations
-//  for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-//    auto f32_subview = Kokkos::subview(sp->annotations_h.f32, Kokkos::ALL, j);
-//    hid_t dataset_f32_annote_id = H5Dcreate_async(group_id, sp->annotation_vars.f32_vars[j].c_str(), H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_f32_annote_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, f32_subview.data(), es_id);
-//    H5Dclose_async(dataset_f32_annote_id, es_id);
-//  }
-//  // Dump 64-bit floating-point annotations
-//  for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-//    auto f64_subview = Kokkos::subview(sp->annotations_h.f64, Kokkos::ALL, j);
-//    hid_t dataset_f64_annote_id = H5Dcreate_async(group_id, sp->annotation_vars.f64_vars[j].c_str(), H5T_IEEE_F64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, es_id);
-//    status = H5Dwrite_async(dataset_f64_annote_id, H5T_IEEE_F64LE, memspace_id, dataspace_id, H5P_DEFAULT, f64_subview.data(), es_id);
-//    H5Dclose_async(dataset_f64_annote_id, es_id);
-//  }
-//
-//  // If needed, reset weight to 0 for copied particles
-//  if(sp->tracer_type == TracerType::Copy) {
-//    auto w_subview_h = Kokkos::subview(sp->k_p_h, Kokkos::ALL(), static_cast<int>(particle_var::w));
-//    auto w_subview_d = Kokkos::subview(sp->k_p_d, Kokkos::ALL(), static_cast<int>(particle_var::w));
-//    Kokkos::deep_copy(w_subview_h, 0.0);
-//    Kokkos::deep_copy(w_subview_d, 0.0);
-//  }
-//
-//  // Close 
-//  status = H5Dclose_async(dataset_dx_id, es_id);
-//  status = H5Dclose_async(dataset_dy_id, es_id);
-//  status = H5Dclose_async(dataset_dz_id, es_id);
-//  status = H5Dclose_async(dataset_ux_id, es_id);
-//  status = H5Dclose_async(dataset_uy_id, es_id);
-//  status = H5Dclose_async(dataset_uz_id, es_id);
-//  status = H5Dclose_async(dataset_w_id, es_id);
-//  status = H5Dclose_async(dataset_i_id, es_id);
   status = H5Gclose_async(group_id, es_id);
   status = H5Fclose_async(file_id, es_id);
   status = H5Sclose(memspace_id);
@@ -3901,7 +2023,6 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
                                             const char *fbase)
 {
   species_t *sp;
-  char fname[max_filename_bytes];
   FileIO fileIO;
   char group_name[256];
 
@@ -3911,7 +2032,20 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
 
   if( !fbase ) ERROR(( "Invalid filename" ));
 
-  sprintf(fname, "%s.h5", fbase);
+  //Add filename if missing
+  std::string filename = std::string(sp_name) + std::string("_buffered.h5");
+  std::filesystem::path filepath(fbase);
+  if(filepath.filename().compare("") == 0) { 
+    filepath = filepath / std::filesystem::path(filename);
+  }
+  // Handle relative input path
+  if(filepath.is_relative()) { 
+    filepath = std::filesystem::current_path() / filepath;
+  }
+  // Make sure path exists
+  if(!std::filesystem::exists(filepath.parent_path())) {
+    std::filesystem::create_directories(filepath.parent_path());
+  }
 
   // Create file access template with parallel IO access
   herr_t status;
@@ -3920,8 +2054,8 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
 
   // Try to create species HDF5 file with default file creation/access property lists
   hid_t file_id;
-  if(access(fname, F_OK) != 0) {
-    file_id = H5Fcreate(fname, H5F_ACC_EXCL, H5P_DEFAULT, plist_id);
+  if(!std::filesystem::exists(filepath)) {
+    file_id = H5Fcreate(filepath.c_str(), H5F_ACC_EXCL, H5P_DEFAULT, plist_id);
     status = H5Fclose(file_id);
   }
 
@@ -4156,7 +2290,7 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
     auto& interp = interpolator_array->k_i_h;
 
     // Open file
-    file_id = H5Fopen(fname, H5F_ACC_RDWR, plist_id);
+    file_id = H5Fopen(filepath.c_str(), H5F_ACC_RDWR, plist_id);
 
     // Write buffered tracer data
     uint32_t particle_idx = 0;
@@ -4200,7 +2334,7 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
       MPI_Scan(&num_particles, &offset, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
       offset -= num_particles;
 
-//      if(total_particles > 0) {
+      if(total_particles > 0) {
         // Create group for time step
         sprintf(group_name, "/Timestep_%ld", time_step);
         hid_t group_id = H5Gcreate(file_id, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
@@ -4223,246 +2357,18 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
         // Slice of buffered particles
         auto slice = Kokkos::make_pair(static_cast<uint64_t>(particle_idx), static_cast<uint64_t>(particle_idx) + num_particles);
 
-//      write_tracers_to_hdf5(sp, 
-//                            grid, 
-//                            hydro_array,
-//                            interp, 
-//                            slice,
-//                            true,
-//                            num_particles,
-//                            dump_vars,
-//                            group_id, 
-//                            dataspace_id, 
-//                            memspace_id,
-//                            plist_id);
-
-        // Create subviews for data
-        auto dx_subview = Kokkos::subview(sp->particle_io_buffer_h, slice, static_cast<int>(particle_var::dx));
-        auto dy_subview = Kokkos::subview(sp->particle_io_buffer_h, slice, static_cast<int>(particle_var::dy));
-        auto dz_subview = Kokkos::subview(sp->particle_io_buffer_h, slice, static_cast<int>(particle_var::dz));
-        auto ux_subview = Kokkos::subview(sp->particle_io_buffer_h, slice, static_cast<int>(particle_var::ux));
-        auto uy_subview = Kokkos::subview(sp->particle_io_buffer_h, slice, static_cast<int>(particle_var::uy));
-        auto uz_subview = Kokkos::subview(sp->particle_io_buffer_h, slice, static_cast<int>(particle_var::uz));
-        auto w_subview  = Kokkos::subview(sp->particle_io_buffer_h, slice, static_cast<int>(particle_var::w));
-        auto i_subview  = Kokkos::subview(sp->particle_cell_io_buffer_h, slice);
-
-        // Create datasets, one for each variable, using dataspace and default property lists
-        hid_t dataset_dx_id = H5Dcreate(group_id, "dx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_dy_id = H5Dcreate(group_id, "dy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_dz_id = H5Dcreate(group_id, "dz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_ux_id = H5Dcreate(group_id, "ux", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_uy_id = H5Dcreate(group_id, "uy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_uz_id = H5Dcreate(group_id, "uz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_w_id  = H5Dcreate(group_id, "w",  H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t dataset_i_id  = H5Dcreate(group_id, "i",  H5T_STD_I32LE,    dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-        // Write data to slab
-        status = H5Dwrite(dataset_dx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, dx_subview.data());
-        status = H5Dwrite(dataset_dy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, dy_subview.data());
-        status = H5Dwrite(dataset_dz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, dz_subview.data());
-        status = H5Dwrite(dataset_ux_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, ux_subview.data());
-        status = H5Dwrite(dataset_uy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, uy_subview.data());
-        status = H5Dwrite(dataset_uz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, uz_subview.data());
-        status = H5Dwrite(dataset_w_id,  H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, w_subview.data());
-        status = H5Dwrite(dataset_i_id,  H5T_STD_I32LE,  memspace_id, dataspace_id, dxpl_id, i_subview.data());
-    
-        // Close datasets
-        status = H5Dclose(dataset_dx_id);
-        status = H5Dclose(dataset_dy_id);
-        status = H5Dclose(dataset_dz_id);
-        status = H5Dclose(dataset_ux_id);
-        status = H5Dclose(dataset_uy_id);
-        status = H5Dclose(dataset_uz_id);
-        status = H5Dclose(dataset_w_id);
-        status = H5Dclose(dataset_i_id);
-
-        using host_memory_space = Kokkos::DefaultHostExecutionSpace::memory_space;
-
-        int grid_nx=grid->nx, grid_ny=grid->ny, grid_nz=grid->nz;
-        float grid_dx=grid->dx, grid_dy=grid->dy, grid_dz=grid->dz;
-        float grid_x0=grid->x0, grid_y0=grid->y0, grid_z0=grid->z0;
-  
-        // Dump Global position if specified
-        if(dump_vars & DumpVar::GlobalPos) {
-          auto pos_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Pos Host View", num_particles);
-          Kokkos::parallel_for("Calculate global position", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, num_particles), KOKKOS_LAMBDA(const uint32_t i) {
-            float dx0 = dx_subview(i);
-            float dy0 = dy_subview(i);
-            float dz0 = dz_subview(i);
-            int   ii  = i_subview(i);
-            // Compute global position of particle
-            int nxg_ = grid_nx + 2;
-            int nyg_ = grid_ny + 2;
-            int i0 = ii % nxg_;
-            int j0 = (ii/nxg_) % nyg_;
-            int k0 = ii/(nxg_*nyg_);
-            float tracer_x = (i0 + (dx0-1)*0.5) * grid_dx + grid_x0;
-            float tracer_y = (j0 + (dy0-1)*0.5) * grid_dy + grid_y0;
-            float tracer_z = (k0 + (dz0-1)*0.5) * grid_dz + grid_z0;
-            pos_view(i,0) = tracer_x;
-            pos_view(i,1) = tracer_y;
-            pos_view(i,2) = tracer_z;
-          });
-          auto posx_view = Kokkos::subview(pos_view, Kokkos::ALL(), 0);
-          auto posy_view = Kokkos::subview(pos_view, Kokkos::ALL(), 1);
-          auto posz_view = Kokkos::subview(pos_view, Kokkos::ALL(), 2);
-          hid_t dataset_posx_id = H5Dcreate(group_id, "posx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_posx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, posx_view.data());
-          status = H5Dclose(dataset_posx_id);
-
-          hid_t dataset_posy_id = H5Dcreate(group_id, "posy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_posy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, posy_view.data());
-          status = H5Dclose(dataset_posy_id);
-
-          hid_t dataset_posz_id = H5Dcreate(group_id, "posz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_posz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, posz_view.data());
-          status = H5Dclose(dataset_posz_id);
-        }
-  
-        // Dump E field if specified
-        if(dump_vars & DumpVar::Efield) {
-          auto efieldx_subview = Kokkos::subview(sp->efields_io_buffer_h, slice, 0);
-          auto efieldy_subview = Kokkos::subview(sp->efields_io_buffer_h, slice, 1);
-          auto efieldz_subview = Kokkos::subview(sp->efields_io_buffer_h, slice, 2);
-          hid_t dataset_efieldx_id = H5Dcreate(group_id, "ex", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_efieldy_id = H5Dcreate(group_id, "ey", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_efieldz_id = H5Dcreate(group_id, "ez", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_efieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, efieldx_subview.data());
-          status = H5Dwrite(dataset_efieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, efieldy_subview.data());
-          status = H5Dwrite(dataset_efieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, efieldz_subview.data());
-          H5Dclose(dataset_efieldx_id);
-          H5Dclose(dataset_efieldy_id);
-          H5Dclose(dataset_efieldz_id);
-        }
-  
-        // Dump B field if specified
-        if(dump_vars & DumpVar::Bfield) {
-          auto bfieldx_subview = Kokkos::subview(sp->bfields_io_buffer_h, slice, 0);
-          auto bfieldy_subview = Kokkos::subview(sp->bfields_io_buffer_h, slice, 1);
-          auto bfieldz_subview = Kokkos::subview(sp->bfields_io_buffer_h, slice, 2);
-          hid_t dataset_bfieldx_id = H5Dcreate(group_id, "bx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_bfieldy_id = H5Dcreate(group_id, "by", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_bfieldz_id = H5Dcreate(group_id, "bz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_bfieldx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, bfieldx_subview.data());
-          status = H5Dwrite(dataset_bfieldy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, bfieldy_subview.data());
-          status = H5Dwrite(dataset_bfieldz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, bfieldz_subview.data());
-          H5Dclose(dataset_bfieldx_id);
-          H5Dclose(dataset_bfieldy_id);
-          H5Dclose(dataset_bfieldz_id);
-        }
-  
-        // Dump current density if specified
-        if(dump_vars & DumpVar::CurrentDensity) {
-          auto jx_subview = Kokkos::subview(sp->current_dens_io_buffer_h, slice, 0);
-          auto jy_subview = Kokkos::subview(sp->current_dens_io_buffer_h, slice, 1);
-          auto jz_subview = Kokkos::subview(sp->current_dens_io_buffer_h, slice, 2);
-          hid_t dataset_jx_id = H5Dcreate(group_id, "jx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_jy_id = H5Dcreate(group_id, "jy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_jz_id = H5Dcreate(group_id, "jz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_jx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, jx_subview.data());
-          status = H5Dwrite(dataset_jy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, jy_subview.data());
-          status = H5Dwrite(dataset_jz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, jz_subview.data());
-          H5Dclose(dataset_jx_id);
-          H5Dclose(dataset_jy_id);
-          H5Dclose(dataset_jz_id);
-        }
-  
-        // Dump charge density if specified
-        if(dump_vars & DumpVar::ChargeDensity) {
-          auto charge_view = Kokkos::subview(sp->charge_dens_io_buffer_h, slice);
-          hid_t dataset_rho_id = H5Dcreate(group_id, "rho", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_rho_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, charge_view.data());
-          H5Dclose(dataset_rho_id);
-        }
-  
-        // Dump momentum density if specified
-        if(dump_vars & DumpVar::MomentumDensity) {
-          auto px_subview = Kokkos::subview(sp->momentum_dens_io_buffer_h, slice, 0);
-          auto py_subview = Kokkos::subview(sp->momentum_dens_io_buffer_h, slice, 1);
-          auto pz_subview = Kokkos::subview(sp->momentum_dens_io_buffer_h, slice, 2);
-          hid_t dataset_px_id = H5Dcreate(group_id, "px", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_py_id = H5Dcreate(group_id, "py", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_pz_id = H5Dcreate(group_id, "pz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_px_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, px_subview.data());
-          status = H5Dwrite(dataset_py_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, py_subview.data());
-          status = H5Dwrite(dataset_pz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, pz_subview.data());
-          H5Dclose(dataset_px_id);
-          H5Dclose(dataset_py_id);
-          H5Dclose(dataset_pz_id);
-        }
-  
-        // Dump kinetic energy density if specified
-        if(dump_vars & DumpVar::KEDensity) {
-          auto ke_view = Kokkos::subview(sp->ke_dens_io_buffer_h, slice);
-          hid_t dataset_ke_id = H5Dcreate(group_id, "ke_dens", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, ke_view.data());
-          H5Dclose(dataset_ke_id);
-        }
-  
-        // Dump stress tensor if specified
-        if(dump_vars & DumpVar::StressTensor) {
-          auto txx_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 0);
-          auto tyy_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 1);
-          auto tzz_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 2);
-          auto tyz_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 3);
-          auto tzx_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 4);
-          auto txy_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 5);
-          hid_t dataset_txx_id = H5Dcreate(group_id, "txx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_tyy_id = H5Dcreate(group_id, "tyy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_tzz_id = H5Dcreate(group_id, "tzz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_tyz_id = H5Dcreate(group_id, "tyz", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_tzx_id = H5Dcreate(group_id, "tzx", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          hid_t dataset_txy_id = H5Dcreate(group_id, "txy", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_txx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, txx_subview.data());
-          status = H5Dwrite(dataset_tyy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, tyy_subview.data());
-          status = H5Dwrite(dataset_tzz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, tzz_subview.data());
-          status = H5Dwrite(dataset_tyz_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, tyz_subview.data());
-          status = H5Dwrite(dataset_tzx_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, tzx_subview.data());
-          status = H5Dwrite(dataset_txy_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, txy_subview.data());
-          H5Dclose(dataset_txx_id);
-          H5Dclose(dataset_tyy_id);
-          H5Dclose(dataset_tzz_id);
-          H5Dclose(dataset_tyz_id);
-          H5Dclose(dataset_tzx_id);
-          H5Dclose(dataset_txy_id);
-        }
-
-        // Dump kinetic energy of particle if specified
-        if(dump_vars & DumpVar::ParticleKE) {
-          auto ke_view = Kokkos::subview(sp->particle_ke_io_buffer_h, slice);
-          hid_t dataset_ke_id = H5Dcreate(group_id, "ke", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, ke_view.data());
-          H5Dclose(dataset_ke_id);
-        }
-  
-        // Dump int annotations
-        for(uint32_t j=0; j<sp->annotation_vars.i32_vars.size(); j++) {
-          auto i32_subview = Kokkos::subview(sp->annotations_io_buffer_h.i32, slice, j);
-          hid_t dataset_i32_annote_id = H5Dcreate(group_id, sp->annotation_vars.i32_vars[j].c_str(), H5T_STD_I32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_i32_annote_id, H5T_STD_I32LE, memspace_id, dataspace_id, dxpl_id, i32_subview.data());
-          H5Dclose(dataset_i32_annote_id);
-        }
-        // Dump 64-bit integer annotations
-        for(uint32_t j=0; j<sp->annotation_vars.i64_vars.size(); j++) {
-          auto i64_subview = Kokkos::subview(sp->annotations_io_buffer_h.i64, slice, j);
-          hid_t dataset_i64_annote_id = H5Dcreate(group_id, sp->annotation_vars.i64_vars[j].c_str(), H5T_STD_I64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_i64_annote_id, H5T_STD_I64LE, memspace_id, dataspace_id, dxpl_id, i64_subview.data());
-          H5Dclose(dataset_i64_annote_id);
-        }
-        // Dump 32-bit floating-point annotations
-        for(uint32_t j=0; j<sp->annotation_vars.f32_vars.size(); j++) {
-          auto f32_subview = Kokkos::subview(sp->annotations_io_buffer_h.f32, slice, j);
-          hid_t dataset_f32_annote_id = H5Dcreate(group_id, sp->annotation_vars.f32_vars[j].c_str(), H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_f32_annote_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, dxpl_id, f32_subview.data());
-          H5Dclose(dataset_f32_annote_id);
-        }
-        // Dump 64-bit floating-point annotations
-        for(uint32_t j=0; j<sp->annotation_vars.f64_vars.size(); j++) {
-          auto f64_subview = Kokkos::subview(sp->annotations_io_buffer_h.f64, slice, j);
-          hid_t dataset_f64_annote_id = H5Dcreate(group_id, sp->annotation_vars.f64_vars[j].c_str(), H5T_IEEE_F64LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-          status = H5Dwrite(dataset_f64_annote_id, H5T_IEEE_F64LE, memspace_id, dataspace_id, dxpl_id, f64_subview.data());
-          H5Dclose(dataset_f64_annote_id);
-        }
+        write_tracers_to_hdf5(sp, 
+                              grid, 
+                              hydro_array,
+                              interp, 
+                              slice,
+                              true,
+                              num_particles,
+                              dump_vars,
+                              group_id, 
+                              dataspace_id, 
+                              memspace_id,
+                              plist_id);
 
         // Move to next time step
         particle_idx += sp->np_per_ts_io_buffer[ts_idx].first;
@@ -4471,7 +2377,7 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
         status = H5Sclose(dataspace_id);
         status = H5Gclose(group_id);
         status = H5Pclose(dxpl_id);
-//      }
+      }
     }
 
     // Write current tracer data
@@ -4511,25 +2417,14 @@ vpic_simulation::dump_tracers_buffered_hdf5( const char *sp_name,
                             grid, 
                             hydro_array,
                             interp, 
+                            Kokkos::ALL(),
+                            false,
+                            sp->np,
                             dump_vars,
                             group_id, 
                             dataspace_id, 
                             memspace_id,
                             plist_id);
-
-//      write_tracers_to_hdf5(sp, 
-//                            grid, 
-//                            hydro_array,
-//                            interp, 
-//                            Kokkos::ALL(),
-//                            false,
-//                            sp->np,
-//                            dump_vars,
-//                            group_id, 
-//                            dataspace_id, 
-//                            memspace_id,
-//                            plist_id);
-
 
       status = H5Sclose(memspace_id);
       status = H5Sclose(dataspace_id);
@@ -4556,7 +2451,6 @@ void vpic_simulation::dump_tracers_hdf5(const char* sp_name,
                                         const uint32_t dump_vars,
                                         const char*fbase) {
   species_t *sp;
-  char fname[max_filename_bytes];
   FileIO fileIO;
   char group_name[256];
 
@@ -4566,7 +2460,21 @@ void vpic_simulation::dump_tracers_hdf5(const char* sp_name,
 
   if( !fbase ) ERROR(( "Invalid filename" ));
 
-  sprintf(fname, "%s.h5", fbase);
+  //Add filename if missing
+  std::string filename = std::string(sp_name) + std::string(".h5");
+  std::filesystem::path filepath(fbase);
+  if(filepath.filename().compare("") == 0) { 
+    filepath = filepath / std::filesystem::path(filename);
+  }
+  // Handle relative input path
+  if(filepath.is_relative()) { 
+    filepath = std::filesystem::current_path() / filepath;
+  }
+  // Make sure path exists
+  if(!std::filesystem::exists(filepath.parent_path())) {
+    std::filesystem::create_directories(filepath.parent_path());
+  }
+
 
   // Create file access template with parallel IO access
   herr_t status;
@@ -4575,16 +2483,16 @@ void vpic_simulation::dump_tracers_hdf5(const char* sp_name,
 
   // Try to create species HDF5 file with default file creation/access property lists
   hid_t file_id;
-  if(access(fname, F_OK) != 0) {
-    file_id = H5Fcreate(fname, H5F_ACC_EXCL, H5P_DEFAULT, plist_id);
+  if(!std::filesystem::exists(filepath)) {
+    file_id = H5Fcreate(filepath.c_str(), H5F_ACC_EXCL, H5P_DEFAULT, plist_id);
     status = H5Fclose(file_id);
   }
 
 
   // Update the particles on the host only if they haven't been recently
   if (step() > sp->last_copied) {
-//    Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
-//    Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
+    //Kokkos::deep_copy(sp->k_p_h, sp->k_p_d);
+    //Kokkos::deep_copy(sp->k_p_i_h, sp->k_p_i_d);
     sp->copy_to_host();
   }
 
@@ -4632,7 +2540,7 @@ void vpic_simulation::dump_tracers_hdf5(const char* sp_name,
   auto& interp = interpolator_array->k_i_h;
 
   // Open file
-  file_id = H5Fopen(fname, H5F_ACC_RDWR, plist_id);
+  file_id = H5Fopen(filepath.c_str(), H5F_ACC_RDWR, plist_id);
 
   // Write current tracer data
   sprintf(group_name, "/Timestep_%ld", step());
@@ -4647,7 +2555,7 @@ void vpic_simulation::dump_tracers_hdf5(const char* sp_name,
   num_particles = sp->np;
   MPI_Allreduce(&num_particles, &total_particles, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
   if( rank()==0 ) {
-    MESSAGE(("Step %ld: Dumping %lu \"%s\" particles to \"%s\"", step(), total_particles, sp->name,fbase));
+    MESSAGE(("Step %ld: Dumping %lu \"%s\" particles to \"%s\"", step(), total_particles, sp->name,filepath.c_str()));
   }
 
   MPI_Scan(&num_particles, &offset, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
@@ -4675,25 +2583,14 @@ void vpic_simulation::dump_tracers_hdf5(const char* sp_name,
                           grid, 
                           hydro_array,
                           interp, 
+                          Kokkos::ALL(),
+                          false,
+                          sp->np,
                           dump_vars,
                           group_id, 
                           dataspace_id, 
                           memspace_id,
                           plist_id);
-
-//    write_tracers_to_hdf5(sp, 
-//                          grid, 
-//                          hydro_array,
-//                          interp, 
-//                          Kokkos::ALL(),
-//                          false,
-//                          sp->np,
-//                          dump_vars,
-//                          group_id, 
-//                          dataspace_id, 
-//                          memspace_id,
-//                          plist_id);
-
 
     status = H5Sclose(memspace_id);
     status = H5Sclose(dataspace_id);

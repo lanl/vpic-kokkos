@@ -38,6 +38,7 @@ def natural_sort_key(s):
 parser = argparse.ArgumentParser(description='Filter trajectories')
 parser.add_argument('filename', metavar='filename', type=str, nargs=1, help='Input file')
 parser.add_argument('N', type=int, nargs=1, help='Number of particles to select')
+parser.add_argument('--output-fname', type=str, default='filtered_tracers.txt', help='Output file for filtered tracers.')
 args = parser.parse_args()
 
 filename = args.filename[0]
@@ -52,6 +53,6 @@ data_dict = extract_quantity(tracer_data)
 selected_entries = select_trajectories(data_dict, args.N[0])
 
 # Print out selected tracers
-print("TracerID", "Energy")
-for entry in selected_entries[-args.N[0]:]:
-  print(entry, data_dict[entry])
+with open(args.output_fname, 'w') as outfile:
+  for entry in selected_entries[-args.N[0]:]:
+    outfile.write(str(entry)+',\n')

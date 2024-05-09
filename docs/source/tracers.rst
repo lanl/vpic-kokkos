@@ -50,6 +50,7 @@ There are three steps for adding tracer capabilities to input decks. Define the 
   * Tracer species can be defined as a distinct species or based on an existing species
   * Tracers also contain 3 additional parameters that control IO buffering, over allocation for memory, and user defined annotations
   * **Note** If you are using one of the helper function that automatically copies/moves particles from the parent species, always define tracer species after the parent species has finished injecting particles. 
+  * **Note** Tracer definitions are on a per rank basis. If you have P processors and need N total tracers then make sure that the tracer definition reserves space for P/N tracers.
 
     * Define distinct species (similar to defining normal species)
 
