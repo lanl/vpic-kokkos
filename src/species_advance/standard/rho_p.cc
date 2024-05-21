@@ -33,6 +33,8 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     const particle_t * RESTRICT ALIGNED(128) p = sp->p;
 #ifndef FIELD_IONIZATION
     const float q_8V = sp->q*sp->g->r8V;
+#else
+    const float r8V = sp->g->r8V;
 #endif
     const int np = sp->np;
     const int sy = sp->g->sy;
@@ -57,7 +59,7 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         // "trilinear" are slightly outweighed by the overhead of the
         // gather/scatters.
 #ifdef FIELD_IONIZATION
-        const float q_8V = p[n].charge*sp->g->r8V;
+        float q_8V = p[n].charge*r8V;
 #endif
         // Load the particle data
 
@@ -472,6 +474,8 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
    #ifndef FIELD_IONIZATION   
     const float q_8V = (sp->q)*(sp->g->r8V);
+   #else
+    const float r8V = (sp->g->r8V);
    #endif
     const int np = sp->np;
     const int sy = sp->g->sy;
@@ -502,7 +506,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np), KOKKOS_LAMBDA(const int n) {
         float w0, w1, w2, w3, w4, w5, w6, w7, dz;
 #ifdef FIELD_IONIZATION   
-        const float q_8V = kparticles(n, particle_var::charge)*(sp->g->r8V); //FIXME: q8V is using species charge
+        float q_8V = kparticles(n, particle_var::charge)* r8V;
 #endif	
 
         w0 = kparticles(n, particle_var::dx);
