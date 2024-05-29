@@ -462,8 +462,6 @@ advance_p_kokkos_unified(
   
   auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<> random_pool(seed);
-  Kokkos::View<int> count("count");
-  Kokkos::deep_copy(count, sp_e->np);
 
   float n = sp->qn; // principal quantum number
   float m = sp->qm; // magnetic quantum number
@@ -803,7 +801,7 @@ advance_p_kokkos_unified(
   	    // momentum and position as the ionized particle
   	    // Multiple ionization events are enabled so the injected
   	    // electron weight needs to account for that
-	    int electron_index = Kokkos::atomic_fetch_add(&count(),1);
+	    int electron_index = Kokkos::atomic_fetch_add(&sp_e->np, 1);
 	    
             #define p_dx_e    sp_e->k_p_h(electron_index, particle_var::dx)
             #define p_dy_e    sp_e->k_p_h(electron_index, particle_var::dy)
@@ -1186,10 +1184,6 @@ advance_p_kokkos_unified(
   Kokkos::Experimental::contribute(k_field, current_sv);
 #endif
 
-#ifdef FIELD_IONIZATION
-  Kokkos::deep_copy(sp_e->np,count);
-#endif
-  
 #undef p_dx
 #undef p_dy
 #undef p_dz
