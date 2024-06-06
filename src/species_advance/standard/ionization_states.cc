@@ -9,7 +9,7 @@ ionization_states_kokkos(const species_t* RESTRICT sp) {
 
     if(!sp) ERROR(("Bad args"));
 
-    const int np = sp->np;
+    const long long int np = sp->np;
     const k_particles_t& k_particles = sp->k_p_d;
 
     auto epsilon_eV_list_h = Kokkos::create_mirror(sp->ionization_energy);
@@ -26,7 +26,7 @@ ionization_states_kokkos(const species_t* RESTRICT sp) {
 
     // Calculate (local) number of particles in each charge state
     Kokkos::parallel_for("ionization_states_kokkos", np, KOKKOS_LAMBDA(const int n) {
-        int charge = k_particles(n, particle_var::charge);
+        long long int charge = k_particles(n, particle_var::charge);
 	Kokkos::atomic_increment(&charge_counts(charge));
     });
     Kokkos::fence();

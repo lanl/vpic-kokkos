@@ -100,7 +100,6 @@ vpic_simulation::dump_ionization_states( const char *fname,
     Kokkos::deep_copy(ionization_energy_h, sp->ionization_energy);
     
     // Ignore electrons
-    //auto ionization_energy = sp->ionization_energy;
     if (std::string(sp->name) == "electron" || ionization_energy_h(0) == 0) {
       // Skip file creation for the "electron" species or when ionization isnt desired for a species
       continue;
@@ -141,7 +140,7 @@ vpic_simulation::dump_ionization_states( const char *fname,
 
     if (rank() == 0 && status != fail) {
       for (size_t i = 0; i < N_ions_h.extent(0); ++i) {
-        fileIO.print(" %d", N_ions_h(i));
+        fileIO.print(" %lld", N_ions_h(i));
       }
     }
 
