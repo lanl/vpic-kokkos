@@ -1,0 +1,41 @@
+#! /usr/bin/env bash
+#~----------------------------------------------------------------------------~#
+# placeholder
+#~----------------------------------------------------------------------------~#
+
+#------------------------------------------------------------------------------#
+# Get the path to the project from which this script was called
+#------------------------------------------------------------------------------#
+
+src_dir="${0%/*}/.."
+
+KOKKOS_PATH=/usr/projects/maehem/packages/kokkos-06-19-2024/installs/linux-centos8-haswell/gcc-11.2.0/openmpi-4.1.2/kokkos-4.0.01-openmp-4.5-debug
+#------------------------------------------------------------------------------#
+# Check required environment variables
+#------------------------------------------------------------------------------#
+
+#------------------------------------------------------------------------------#
+# Call CMake command
+#------------------------------------------------------------------------------#
+
+# The flag -rdynamic removes warnings of the form:
+# Unable to find a safely writable symbol that corresponds to address 432af0
+# (the closest match was "(null)" from "./lpi_2d_F6_test.Linux").  Writing out
+# the raw address instead and keeping my fingers crossed.
+
+cmake \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DENABLE_INTEGRATED_TESTS=ON \
+  -DENABLE_UNIT_TESTS=ON \
+  -DBUILD_INTERNAL_KOKKOS=OFF \
+  -DCMAKE_PREFIX_PATH=${KOKKOS_PATH} \
+  -DCMAKE_CXX_FLAGS="-g -rdynamic" \
+  $src_dir
+
+#------------------------------------------------------------------------------#
+# vim: syntax=sh
+#------------------------------------------------------------------------------#
+
+#~---------------------------------------------------------------------------~-#
+# placeholder
+#~---------------------------------------------------------------------------~-#
