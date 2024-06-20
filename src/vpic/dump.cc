@@ -99,8 +99,8 @@ vpic_simulation::dump_ionization_states( const char *fname,
     auto ionization_energy_h = Kokkos::create_mirror(sp->ionization_energy);
     Kokkos::deep_copy(ionization_energy_h, sp->ionization_energy);
     
-    // Ignore electrons
-    if (std::string(sp->name) == "electron" || ionization_energy_h(0) == 0) {
+    // Ignore species with ionization energy set to 0, except for electrons
+    if (std::string(sp->name) != "electron" && ionization_energy_h(0) == 0) {
       // Skip file creation for the "electron" species or when ionization isnt desired for a species
       continue;
     }
@@ -132,15 +132,28 @@ vpic_simulation::dump_ionization_states( const char *fname,
 
 
     N_ions = ionization_states_kokkos( sp ); // Number of particles in each ionization state
-
-    //    printf("N_ions: %f, %f, %f, %f, %f, %f\n", N_ions(0), N_ions(1), N_ions(2), N_ions(3), N_ions(4), N_ions(5));
     
     auto N_ions_h = Kokkos::create_mirror(N_ions);
     Kokkos::deep_copy(N_ions_h, N_ions);
 
-    if (rank() == 0 && status != fail) {
-      for (size_t i = 0; i < N_ions_h.extent(0); ++i) {
-        fileIO.print(" %lld", N_ions_h(i));
+    // Calculate the total number of electrons
+    int np_global;
+    if (std::string(sp->name) == "electron") {
+      int np = sp->np;
+      mp_allsum_i( &np, &np_global, 1 );
+    }
+
+    // Print Number of particles in each ionization state
+    // For electrons, print total number
+    if (std::string(sp->name) != "electron") {
+      if (rank() == 0 && status != fail) {
+        for (size_t i = 0; i < N_ions_h.extent(0); ++i) {
+          fileIO.print(" %lld", N_ions_h(i));
+        }
+      }
+    } else {
+      if (rank() == 0 && status != fail) {
+	fileIO.print(" %lld", np_global);
       }
     }
 
