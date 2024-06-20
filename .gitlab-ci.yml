@@ -23,14 +23,14 @@ stages:
     - mkdir -p ${build_dir}
     - pushd ${build_dir}
       #- CXX=/mnt/local/ssd/vpic/kokkos/bin/nvcc_wrapper cmake -DCMAKE_PREFIX_PATH=/mnt/local/ssd/vpic/kokkos/build_gpu/install ..
-#    - CXX=/mnt/local/ssd/vpic/kokkos/bin/nvcc_wrapper cmake
-     - cmake
+      #- CXX=/mnt/local/ssd/vpic/kokkos/bin/nvcc_wrapper cmake
+    - cmake
       -DBUILD_INTERNAL_KOKKOS=ON
       -DENABLE_KOKKOS_CUDA=ON
       -DENABLE_INTEGRATED_TESTS=ON
       -DENABLE_UNIT_TESTS=ON
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-#      -DKOKKOS_ARCH=Kepler35
+      #-DKOKKOS_ARCH=Kepler35
       ${DEFINES:+${DEFINES}}
       ..
     - make -j ${j} -l ${l} VERBOSE=1
