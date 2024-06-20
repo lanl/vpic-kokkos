@@ -2,6 +2,8 @@ stages:
     - build_gcc
 
 .build_gcc:
+  tags:
+    - darwin-slurm-shared
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
   stage: build_gcc
