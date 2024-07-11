@@ -1,21 +1,21 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Postprocessing and Visualization &mdash; VPIC-Kokkos 2.0 documentation</title>
+  <title>OAPostprocessing and Visualization &mdash; VPIC-Kokkos 2.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
   
-        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
-        <script src="_static/jquery.js"></script>
-        <script src="_static/underscore.js"></script>
-        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
-        <script src="_static/doctools.js"></script>
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=60dbed4a"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -28,11 +28,15 @@
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-            <a href="index.html" class="icon icon-home"> VPIC-Kokkos
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            VPIC-Kokkos
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
@@ -44,7 +48,15 @@
 <li class="toctree-l1"><a class="reference internal" href="comp.html">Compiling VPIC</a></li>
 <li class="toctree-l1"><a class="reference internal" href="run.html">Running VPIC</a></li>
 <li class="toctree-l1"><a class="reference internal" href="porting.html">How to port user kernels to Kokkos</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Postprocessing and Visualization</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">OAPostprocessing and Visualization</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#visualization-with-pyvpic">Visualization with pyvpic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#visualization-with-paraview">Visualization with Paraview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#connecting-local-paraview-to-server-optional">Connecting local Paraview to server (optional)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#opening-vpic-data">Opening VPIC data:</a></li>
+</ul>
+</li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="pbd.html">Particle Boundary Diagnostic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcnplink.html">Linking VPIC to MCNP</a></li>
 <li class="toctree-l1"><a class="reference internal" href="issues.html">Known Issues</a></li>
@@ -63,8 +75,8 @@
         <div class="rst-content">
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
-      <li>Postprocessing and Visualization</li>
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">OAPostprocessing and Visualization</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/vis.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -74,16 +86,41 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="postprocessing-and-visualization">
-<h1>Postprocessing and Visualization<a class="headerlink" href="#postprocessing-and-visualization" title="Permalink to this heading"></a></h1>
+  <section id="oapostprocessing-and-visualization">
+<h1>OAPostprocessing and Visualization<a class="headerlink" href="#oapostprocessing-and-visualization" title="Link to this heading"></a></h1>
 <p>At present, there is no standardized way to visualize or postprocess VPIC data.
 Many people do this in their own unique way, and it may be easiest for you to find someone who knows how to do it and ask them nicely to help you.</p>
+<section id="visualization-with-pyvpic">
+<h2>Visualization with pyvpic<a class="headerlink" href="#visualization-with-pyvpic" title="Link to this heading"></a></h2>
 <p>For simple visualization of field and hydro data, <a class="reference external" href="https://github.com/PrincetonUniversity/pyvpic">pyvpic</a> may be a good option.
 Once you have it installed, the following python should work with at least <cite>sample/short_pulse.cxx</cite>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">pyvpic.viewer</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">pyvpic</span><span class="o">.</span><span class="n">viewer</span><span class="o">.</span><span class="n">main</span><span class="p">(</span><span class="s1">&#39;global.vpc&#39;</span><span class="p">,</span> <span class="n">interleave</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="s1">&#39;C&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
+</section>
+<section id="visualization-with-paraview">
+<h2>Visualization with Paraview<a class="headerlink" href="#visualization-with-paraview" title="Link to this heading"></a></h2>
+<p>Paraview can be used for both visualization and post-processing VPIC data.
+It can be utilized with a GUI or with python scripting via a module.</p>
+<p>Currently, this documentation only covers visualization of VPIC data with a local Paraview install.
+However, further documentation on using Paraview for post-processing is in the works.</p>
+<section id="connecting-local-paraview-to-server-optional">
+<h3>Connecting local Paraview to server (optional)<a class="headerlink" href="#connecting-local-paraview-to-server-optional" title="Link to this heading"></a></h3>
+<p>This step is necessary if you are working on a local verison of Paraview and the VPIC data is on a server:</p>
+<ol class="arabic simple">
+<li><p>Open local Paraview application</p></li>
+<li><p>Click the “Connect” button to connect Paraview to the server</p></li>
+<li><p>Enter the appropriate server configration</p></li>
+</ol>
+</section>
+<section id="opening-vpic-data">
+<h3>Opening VPIC data:<a class="headerlink" href="#opening-vpic-data" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>File -&gt; Open. Navigate and select the apprpriate file. Note, when running <cite>sample/short_pulse.cxx</cite> the file to open is <cite>global.vpc</cite></p></li>
+</ol>
+</section>
+</section>
 </section>
 
 

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Compiling VPIC &mdash; VPIC-Kokkos 2.0 documentation</title>
@@ -11,11 +11,11 @@
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
   
-        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
-        <script src="_static/jquery.js"></script>
-        <script src="_static/underscore.js"></script>
-        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
-        <script src="_static/doctools.js"></script>
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=60dbed4a"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -28,11 +28,15 @@
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-            <a href="index.html" class="icon icon-home"> VPIC-Kokkos
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            VPIC-Kokkos
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
@@ -52,7 +56,7 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="run.html">Running VPIC</a></li>
 <li class="toctree-l1"><a class="reference internal" href="porting.html">How to port user kernels to Kokkos</a></li>
-<li class="toctree-l1"><a class="reference internal" href="vis.html">Postprocessing and Visualization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vis.html">OAPostprocessing and Visualization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="pbd.html">Particle Boundary Diagnostic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcnplink.html">Linking VPIC to MCNP</a></li>
 <li class="toctree-l1"><a class="reference internal" href="issues.html">Known Issues</a></li>
@@ -71,8 +75,8 @@
         <div class="rst-content">
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
-      <li>Compiling VPIC</li>
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Compiling VPIC</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/comp.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -83,10 +87,10 @@
            <div itemprop="articleBody">
              
   <section id="compiling-vpic">
-<h1>Compiling VPIC<a class="headerlink" href="#compiling-vpic" title="Permalink to this heading"></a></h1>
+<h1>Compiling VPIC<a class="headerlink" href="#compiling-vpic" title="Link to this heading"></a></h1>
 <p>Compiling VPIC consists of two steps: compiling or finding a Kokkos install, and building VPIC against that Kokkos install.</p>
 <section id="quickstart">
-<h2>Quickstart<a class="headerlink" href="#quickstart" title="Permalink to this heading"></a></h2>
+<h2>Quickstart<a class="headerlink" href="#quickstart" title="Link to this heading"></a></h2>
 <p>1) Do a <em>recursive</em> clone of this repo, this will pull down a copy of Kokkos
 for you.
 <code class="docutils literal notranslate"><span class="pre">`</span>
@@ -117,7 +121,7 @@ currently on.</p>
 recommend you use GCC 6 or 7.</p>
 </section>
 <section id="manual-kokkos-install-more-powerful-more-effort">
-<h2>Manual Kokkos Install (more powerful, more effort)<a class="headerlink" href="#manual-kokkos-install-more-powerful-more-effort" title="Permalink to this heading"></a></h2>
+<h2>Manual Kokkos Install (more powerful, more effort)<a class="headerlink" href="#manual-kokkos-install-more-powerful-more-effort" title="Link to this heading"></a></h2>
 <p>It is typical to maintain many different installs of Kokkos (CPU, older
 GPU, new GPU, Debug, etc), so it’s worth while learning how to install Kokkos
 manually. To do this we will use cmake. On can achieve this by:</p>
@@ -131,7 +135,7 @@ manually. To do this we will use cmake. On can achieve this by:</p>
 <span class="pre">`</span></code></p>
 </section>
 <section id="legacy-non-cmake-build-for-old-kokkos-versions">
-<h2>Legacy non-cmake build for old Kokkos versions<a class="headerlink" href="#legacy-non-cmake-build-for-old-kokkos-versions" title="Permalink to this heading"></a></h2>
+<h2>Legacy non-cmake build for old Kokkos versions<a class="headerlink" href="#legacy-non-cmake-build-for-old-kokkos-versions" title="Link to this heading"></a></h2>
 <p>1) Clone Kokkos (or use ./kokkos in the recursive clone) from
 <a class="reference external" href="https://github.com/kokkos/kokkos">https://github.com/kokkos/kokkos</a>
 2) Make a build folder, and execute <cite>../generate_makefile.bash</cite>, passing the
@@ -145,7 +149,7 @@ like:</p>
 </div></blockquote>
 </section>
 <section id="further-reading">
-<h2>Further Reading<a class="headerlink" href="#further-reading" title="Permalink to this heading"></a></h2>
+<h2>Further Reading<a class="headerlink" href="#further-reading" title="Link to this heading"></a></h2>
 <p>One can cherry pick the Kokkos specific details from
 [here](<a class="reference external" href="https://github.com/ECP-copa/Cabana/wiki/Build-Instructions">https://github.com/ECP-copa/Cabana/wiki/Build-Instructions</a>) to get
 detailed build instructions for Kokkos (ignore the things about Cabana)</p>
@@ -160,7 +164,7 @@ options that are available. These include:</p>
 </ol>
 </section>
 <section id="building-vpic-kokkos">
-<h2>Building VPIC + Kokkos<a class="headerlink" href="#building-vpic-kokkos" title="Permalink to this heading"></a></h2>
+<h2>Building VPIC + Kokkos<a class="headerlink" href="#building-vpic-kokkos" title="Link to this heading"></a></h2>
 <p>Then when we build VPIC we need to make sure we using the GPU, you need to
 specify the Kokkos <cite>nvcc_wrapper</cite> to be the compiler. This typically looks
 something like:</p>
@@ -170,7 +174,7 @@ CMAKE_BUILD_TYPE (and other optimization flags) appropriately for your target
 system</p>
 </section>
 <section id="optimization-options">
-<h2>Optimization Options<a class="headerlink" href="#optimization-options" title="Permalink to this heading"></a></h2>
+<h2>Optimization Options<a class="headerlink" href="#optimization-options" title="Link to this heading"></a></h2>
 <p>VPIC has compilation flags for enabling/disabling various optimizations. VPIC will automatically selct optimizations settings. Users can supply their own settings for potentially better performance. The optimization options are as follows:</p>
 <ol class="arabic simple">
 <li><p><cite>VPIC_ENABLE_AUTO_TUNING=ON</cite></p></li>
