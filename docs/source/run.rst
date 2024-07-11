@@ -13,7 +13,10 @@ Running with field ionization
 ******************************
 Currently, field ionization is only available in the git branch `91-add-field-ionization`
 
-To enable field ionization in VPIC, you need to set the `option(FIELD_IONIZATION "Enable field ionization" ON)` in `CMakeLists.txt`
+To enable field ionization in VPIC, you need to set the
+`option(FIELD_IONIZATION "Enable field ionization" ON)` in
+`CMakeLists.txt`. This is enabled by default in branch
+`91-add-field-ionization`, but it is worthwhile to verify.
 
 To enable field ionization in your input deck the following additions
 and/or changes are required. Pro tip, these changes can be wrapped in
@@ -24,7 +27,9 @@ without field ionization.
 
    The user should use this parameter to define the ionizable species.
    Ionizable species will have non-zero values in eV. This parameter needs
-   to be defined as a kokkos::View, which is passed to `define_species`, see below. 
+   to be defined as a kokkos::View, which is passed to
+   `define_species`, see below. Note, copying the ionization energy to
+   the host and device allows the deck to be run on CPUs and GPUs.
    
    Example of ionizable species:
 
@@ -84,7 +89,8 @@ without field ionization.
 
 4. Grid parameters
 
-   - Users need to pass the laser wavelength in SI units via `grid->lambda`
+   - When setting up the grid, users need to pass the laser wavelength in SI units via
+     `grid->lambda` 
    - It is also required to define the conversions from code units to
      SI units for time, length, charge, and mass via: `grid->t_to_SI`, `grid->l_to_SI`, `grid->q_to_SI`, `grid->m_to_SI`
 
