@@ -13,7 +13,6 @@ This documentation is very much a work in progress.  Most documentation is still
 
    intro
    comp
-   run
    porting
    vis
    pbd
