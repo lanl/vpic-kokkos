@@ -7,19 +7,15 @@
  * March 2023
 
 ========================================================================
-  This input deck simulates the 1st benchmark problem found in:
-     J. Derouillat, A. Beck, F. Pérez, T. Vinci, M. Chiaramello, A. Grassi,
-     M. Flé, G. Bouchard, I. Plotnikov, N. Aunai, J. Dargent, C. Riconda, M. Grech,
-     Smilei : A collaborative, open-source, multi-purpose particle-in-cell code for plasma simulation,
-     Computer Physics Communications,Volume 222,2018,Pages 351-373,ISSN 0010-4655,
-     https://doi.org/10.1016/j.cpc.2017.09.024
+  This input deck simulates the ionization verification problems from:
+     Modeling and verification of dynamic field ionization for laser-target interactions
+     Brandon M. Medina, Scott V. Luedtke, Lin Yin and Brian J. Albright
 
   This simulation consists of irradiating a thin (1 cell long) neutral
-  material (hydrogen) with a short (few optical-cycle long) laser with
+  material (hydrogen or carbon) with a short (few optical-cycle long) laser with
   wavelength lambda_0 = 0.8 microns.
 
-  The laser intensity is kept constant at I_L = 1e14 W/cm^2, corresponding
-  to a normalized vector potential a_0 ~ 6.81e-3, over 10 optical cycles.
+  The laser intensity is kept constant at I_L = 1e14 or 1e20 W/cm^2.
   
 ========================================================================
 */
@@ -112,39 +108,6 @@ begin_globals {
 };
 
 #define VAC 5e-6*0
-// Updated by Scott V. Luedtke, XCP-6
-// Density function helpers for defining how dense the plasma is as a function
-// of position.  Uses SI units to avoid confusion at the expense of some extra
-// conversions.  The initialization function is responsible for feeding SI
-// units.  Returns a value between 0 and 1 which corresponds to the percetnage
-// of n_0 the density should be for position (x,y,z)
-
-/*
-double density_func(double x, double y, double z, double xmin, double xmax,
-        double ymin, double ymax, double zmin, double zmax){
-    double dens = 1.;
-    //Start with a nice vacuum inside the boundaries
-    // 3DCHANGE --- this needs to change when in 3D
-    //if( y<ymin+VAC || y > ymax-VAC) return 0.;
-    if( z<zmin+VAC || z > zmax-VAC) return 0.;
-    double ramp_length = 10e-6;
-    double ramp1_min = xmin+VAC;
-    double ramp1_max = ramp1_min+ramp_length;
-    double ramp2_max = xmax-VAC-10e-6;// More space for the pulse to pass
-                                      // electrons, maybe
-    double ramp2_min = ramp2_max-ramp_length;
-    if( x<ramp1_min || x>ramp2_max) return 0.;
-
-    if( x>=ramp1_min && x<ramp1_max )
-        dens *= (1. + cos( (x-ramp1_min)*M_PI/ramp_length - M_PI))/2.;
-
-    if( x>=ramp2_min && x<ramp2_max )
-        dens *= (1. + cos((x-ramp2_min)*M_PI/ramp_length))/2.;
-
-    return dens;
-}
-*/
-
 // A simple slab of thickness length starting at the origin
 static inline double slab(double x, double y, double z, double xstart,
         double length, double zmin, double zmax, double ymin, double ymax){
@@ -290,10 +253,8 @@ begin_initialization {
 #define mp_me 1836.15267343
   double A_I1    = 12;   // neutral carbon, mass number
   double A_I2    = 1;    // neutral hydrogen, mass number
-  double Z_I1    = 6;    
-  double Z_I2    = 1;
   short int q_I1    = 0;
-  short int q_I2    = 0;   // physical charge in code units, vpic doesnt like when charge is zero
+  short int q_I2    = 0;   // physical charge in code units
   double m_I1_SI = A_I1*mp_me*m_e_SI;
   double m_I2_SI = A_I2*mp_me*m_e_SI;
   double m_I1_c = m_I1_SI/mass_to_SI;
@@ -314,26 +275,19 @@ begin_initialization {
   Kokkos::deep_copy(ionization_energy_I1_d, ionization_energy_I1); // copy to device
 
   // I2 - hydrogen
-  const int num_elements_I2 = 1;
-  Kokkos::View<double*,Kokkos::HostSpace> ionization_energy_I2("my_kokkos_view", num_elements_I2);
-  double ionization_energy_I2_values[] = {13.6}; // in eV
-  for (int i = 0; i < num_elements_I2; ++i) {
-      ionization_energy_I2(i) = ionization_energy_I2_values[i];
-  }
-  Kokkos::View<double*> ionization_energy_I2_d("ionization_energy_I2_d",num_elements_I2);
+  Kokkos::View<double*, Kokkos::HostSpace> ionization_energy_I2("my_kokkos_view", 1);
+  ionization_energy_I2(0) = 13.6; // in eV
+  Kokkos::View<double*> ionization_energy_I2_d("ionization_energy_I2_d", 1);
   Kokkos::deep_copy(ionization_energy_I2_d, ionization_energy_I2); // copy to device
 
+
   // electron
-  const int num_elements_electron = 1;
-  Kokkos::View<double*,Kokkos::HostSpace> ionization_energy_electron("my_kokkos_view", num_elements_electron);
-  double ionization_energy_electron_values[] = {0}; // in eV
-  for (int i = 0; i < num_elements_electron; ++i) {
-      ionization_energy_electron(i) = ionization_energy_electron_values[i];
-  }
-  Kokkos::View<double*> ionization_energy_electron_d("ionization_energy_electron_d",num_elements_electron);
+  Kokkos::View<double*, Kokkos::HostSpace> ionization_energy_electron("my_kokkos_view", 1);
+  ionization_energy_electron(0) = 0; // in eV
+  Kokkos::View<double*> ionization_energy_electron_d("ionization_energy_electron_d", 1);
   Kokkos::deep_copy(ionization_energy_electron_d, ionization_energy_electron); // copy to device
 
-  
+
   double c2 = c_SI*c_SI;
   // In 3 dimensions, the average energy is 3 halves the temperature
   double E_e = T_e*1.5;
@@ -1134,32 +1088,30 @@ begin_current_injection {
 
 begin_field_injection { 
 
+
   if ( global->launch_wave == 0 ) return;
 
-  if ( grid->x0==float(global->xmin) ) { // Node is on left boundary
+  if ( grid->x0==float(global->xmin) ) { // Node is on left boundary                                                                                                                                                                                                                        
     double t=grid->dt*step();
-
     int ny = grid->ny;
-    int nz = grid->nz;
-    float dy = grid->dy;
-    float dz = grid->dz;
-    float y0 = grid->y0;
-    float z0 = grid->z0;
-    float omega_0 = global->omega_0;
+    int nz = grid->nz;;
     int sy = grid->sy;
     int sz = grid->sz;
-    //printf("Injecting\n");
-
+    int I1_present = global->I1_present;
+    int I2_present = global->I2_present;
+    double omega_0 = global->omega_0;
+    double emax    = global->emax;
+    double pulse_mean = global->pulse_mean;
+    double pulse_sigma = global->pulse_sigma;
     k_field_t& kfield = field_array->k_f_d;
 
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> left_edge({1, 1}, {nz+2, ny+1});
     Kokkos::parallel_for("Field injection", left_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
-	if ( global->I2_present==1 ){
-	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t));
-	} else if (global->I1_present==1 ){
-	  kfield(1+sy*iy+sz*iz, field_var::ey) = (global->emax * cos(global->omega_0*t)) * exp(-(t-global->pulse_mean)*(t-global->pulse_mean)/(2.*global->pulse_sigma*global->pulse_sigma));
-	}
-	
+        if ( I2_present==1 ){
+          kfield(1+sy*iy+sz*iz, field_var::ey) = (emax * cos(omega_0*t));
+        } else if ( I1_present==1 ){
+          kfield(1+sy*iy+sz*iz, field_var::ey) = (emax * cos(omega_0*t)) * exp(-(t-pulse_mean)*(t-pulse_mean)/(2.*pulse_sigma*pulse_sigma));
+        }
     });
 
   }
