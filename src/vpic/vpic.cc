@@ -122,19 +122,22 @@ void vpic_simulation::print_run_details()
         // physics focused params:
         // num steps, nx, ny, nz, num particles per species
         std::cout << "######### Run Details ##########" << std::endl;
+        std::cout << "# MPI Ranks: " << _world_size << std::endl;
+        std::cout << "# Threads: " << thread.n_pipeline << std::endl;
         std::cout << "## Global:" << std::endl;
         std::cout << "  # Num Step " << num_step << std::endl;
         std::cout << "  # px " << px << " py " << py << " pz " << pz << std::endl;
         std::cout << "  # gnx " << px*grid->nx << " gny " << py*grid->ny << " gnz " << pz*grid->nz << std::endl;
+        std::cout << "  # dx " << grid->dx << " dy " << grid->dy << " dz " << grid->dz << std::endl;
+        std::cout << "  # dt " << grid->dt << " cvac " << grid->cvac << " eps0 " << grid->eps0 << std::endl;
         std::cout << "## Local:" << std::endl;
         std::cout << "  # nx " << grid->nx << " ny " << grid->ny << " nz " << grid->nz << std::endl;
-        std::cout << "  # dx " << grid->dx << " dy " << grid->dy << " dz " << grid->dz << std::endl;
         if (species_list )
         {
-            std::cout << "## Particle Species: " <<  num_species( species_list ) << std::endl;
+            std::cout << "## Local Particle Species: " <<  num_species( species_list ) << std::endl;
             LIST_FOR_EACH( sp, species_list )
             {
-                std::cout << "  # " << sp->name << " np " << sp->np << std::endl;
+                std::cout << "  # " << sp->name << " np " << sp->np << " max_np " << sp->max_np << std::endl;
             }
         }
         std::cout << "######### End Run Details ######" << std::endl;
