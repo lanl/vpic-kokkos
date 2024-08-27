@@ -96,7 +96,7 @@ vpic_simulation::dump_ionization_states( const char *fname,
 
   // Iterate over each species
   LIST_FOR_EACH(sp, species_list) {
-    auto ionization_energy_h = Kokkos::create_mirror(sp->ionization_energy);
+    Kokkos::View<double*, Kokkos::HostSpace> ionization_energy_h("ionization_energy_h", sp->ionization_energy.extent(0));
     Kokkos::deep_copy(ionization_energy_h, sp->ionization_energy);
     
     // Ignore species with ionization energy set to 0, except for electrons

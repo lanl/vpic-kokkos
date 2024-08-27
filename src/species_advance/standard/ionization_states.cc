@@ -12,7 +12,7 @@ ionization_states_kokkos(const species_t* RESTRICT sp) {
     const long long int np = sp->np;
     const k_particles_t& k_particles = sp->k_p_d;
 
-    auto epsilon_eV_list_h = Kokkos::create_mirror(sp->ionization_energy);
+    Kokkos::View<double*, Kokkos::HostSpace> epsilon_eV_list_h("epsilon_eV_list_h", sp->ionization_energy.extent(0));
     Kokkos::deep_copy(epsilon_eV_list_h,sp->ionization_energy);
     const int N_states = epsilon_eV_list_h.extent(0)+1; // Include charge state 0
 

@@ -2900,7 +2900,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   #endif
   KOKKOS_TIC();
 #ifdef FIELD_IONIZATION
-  auto epsilon_eV_list_h = Kokkos::create_mirror(sp->ionization_energy);
+  Kokkos::View<double*, Kokkos::HostSpace> epsilon_eV_list_h("HostView", sp->ionization_energy.extent(0));
   Kokkos::deep_copy(epsilon_eV_list_h, sp->ionization_energy);
   if (sp != sp_e && epsilon_eV_list_h(0) != 0){
     ADVANCE_P_IONIZE(
