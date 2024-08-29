@@ -2175,10 +2175,8 @@ advance_p_kokkos_gpu_ionize(
   Kokkos::View<int> count("count");
   Kokkos::deep_copy(count, sp_e->np);
 
-  auto epsilon_eV_list_h = Kokkos::create_mirror(sp->ionization_energy);
-  Kokkos::deep_copy(epsilon_eV_list_h, sp->ionization_energy);
-  Kokkos::View<double*> epsilon_eV_list_d("epsilon_eV_list device", epsilon_eV_list_h.extent(0));
-  Kokkos::deep_copy(epsilon_eV_list_d, epsilon_eV_list_h);
+  Kokkos::View<double*> epsilon_eV_list_d("epsilon_eV_list_d", sp->ionization_energy.extent(0));
+  Kokkos::deep_copy(epsilon_eV_list_d, sp->ionization_energy);
   float n = sp->qn; // principal quantum number
   float m = sp->qm; // magnetic quantum number
   float l = sp->ql; // angular momentum quantum number
@@ -2190,7 +2188,7 @@ advance_p_kokkos_gpu_ionize(
    ERROR(( "Conversion factors and laser wavelength needs to be passed as grid variables when field ionization is enabled." ));
   }
 
-  if( (sp!=sp_e || epsilon_eV_list_h(0) != 0) && n == 0 )
+  if( (sp!=sp_e || sp->ionization_energy(0) != 0) && n == 0 )
   {
     ERROR(( "Quantum numbers need to be passed to species struct when field ionization is enabled." ));
   }
@@ -2900,9 +2898,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   #endif
   KOKKOS_TIC();
 #ifdef FIELD_IONIZATION
-  Kokkos::View<double*, Kokkos::HostSpace> epsilon_eV_list_h("HostView", sp->ionization_energy.extent(0));
-  Kokkos::deep_copy(epsilon_eV_list_h, sp->ionization_energy);
-  if (sp != sp_e && epsilon_eV_list_h(0) != 0){
+  if (sp != sp_e && sp->ionization_energy(0) != 0){
     ADVANCE_P_IONIZE(
       sp->k_p_d,
       sp->k_p_i_d,

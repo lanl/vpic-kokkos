@@ -96,11 +96,8 @@ vpic_simulation::dump_ionization_states( const char *fname,
 
   // Iterate over each species
   LIST_FOR_EACH(sp, species_list) {
-    Kokkos::View<double*, Kokkos::HostSpace> ionization_energy_h("ionization_energy_h", sp->ionization_energy.extent(0));
-    Kokkos::deep_copy(ionization_energy_h, sp->ionization_energy);
-    
     // Ignore species with ionization energy set to 0, except for electrons
-    if (std::string(sp->name) != "electron" && ionization_energy_h(0) == 0) {
+    if (std::string(sp->name) != "electron" && sp->ionization_energy(0) == 0) {
       // Skip file creation for the "electron" species or when ionization isnt desired for a species
       continue;
     }
@@ -119,7 +116,7 @@ vpic_simulation::dump_ionization_states( const char *fname,
         if (append == 0) {
           // Dynamically generate the layout string
           std::string layoutString = "%% Layout\n%% Number of particles in each ionization state\n%% step";
-          for (size_t i = 0; i <= ionization_energy_h.extent(0); ++i) {
+          for (size_t i = 0; i <= sp->ionization_energy.extent(0); ++i) {
             layoutString += " " + std::to_string(i) + "+";
           }
           fileIO.print(layoutString.c_str());

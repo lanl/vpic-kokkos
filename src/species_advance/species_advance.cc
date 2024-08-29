@@ -28,12 +28,13 @@ checkpt_species( const species_t * sp ) {
   CHECKPT_PTR( sp->g );
   CHECKPT_PTR( sp->next );
   CHECKPT_PTR( sp->pb_diag );
+
 #ifdef FIELD_IONIZATION
-  Kokkos::View<double*, Kokkos::HostSpace> ionization_energy_h("ionization_energy_h", sp->ionization_energy.size());
-  Kokkos::deep_copy(ionization_energy_h, sp->ionization_energy);
-  checkpt_data( ionization_energy_h.data(),
-                ionization_energy_h.size() * sizeof(double),
-                ionization_energy_h.size() * sizeof(double),
+  size_t ionization_energy_size = sp->ionization_energy.size();
+  CHECKPT_VAL(size_t, ionization_energy_size);
+  checkpt_data( sp->ionization_energy.data(),
+                sp->ionization_energy.size() * sizeof(double),
+                sp->ionization_energy.size() * sizeof(double),
                 1, 1, 128 );
 #endif
 }
@@ -49,17 +50,15 @@ restore_species( void ) {
   RESTORE_PTR( sp->g );
   RESTORE_PTR( sp->next );
   RESTORE_PTR( sp->pb_diag );
+  
 #ifdef FIELD_IONIZATION
-  // Restore the ionization_energy and create kokkos view
+  size_t ionization_energy_size;
+  RESTORE_VAL(size_t, ionization_energy_size);
+
   double *ionization_energies = (double *)restore_data();
-  const int num_elements = sp->ionization_energy.extent(0);
-  Kokkos::View<double*,Kokkos::HostSpace> ionization_energy_view("ionization_energy_view", num_elements);
-  Kokkos::parallel_for("Restore Ionization Energy", Kokkos::RangePolicy<>(0, num_elements), KOKKOS_LAMBDA(int i) {
-    ionization_energy_view(i) = ionization_energies[i];
-  });
-  Kokkos::fence();
-  Kokkos::deep_copy(sp->ionization_energy, ionization_energy_view);
+  std::copy(ionization_energies, ionization_energies + ionization_energy_size, sp->ionization_energy.data());
 #endif
+
   return sp;
 }
 
@@ -128,7 +127,7 @@ species( const char * name,
 	#ifndef FIELD_IONIZATION
          float q,
 	#else
-	 Kokkos::View<double*> ionization_energy,
+	 Kokkos::View<double*, Kokkos::HostSpace> ionization_energy,
 	 float qn,
 	 float qm,
 	 float ql,

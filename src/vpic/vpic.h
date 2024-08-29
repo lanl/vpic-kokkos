@@ -524,7 +524,7 @@ public:
 		 #if !defined(FIELD_IONIZATION)	  
                   double q,
 		 #else
-                  Kokkos::View<double*> ionization_energy,
+                  Kokkos::View<double*, Kokkos::HostSpace> ionization_energy,
 		  double qn, // quantum numbers n,m,l
 		  double qm,
 		  double ql,
@@ -546,7 +546,7 @@ public:
 				   #if !defined(FIELD_IONIZATION)
 				    (float)q,
 				   #else
-				    (Kokkos::View<double*>)ionization_energy,
+				    (Kokkos::View<double*,Kokkos::HostSpace>)ionization_energy,
 				    (float)qn,
 		                    (float)qm,
 		                    (float)ql,

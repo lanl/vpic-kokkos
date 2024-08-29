@@ -251,21 +251,21 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   
   // I1 - carbon
   const int num_elements_I1 = 6;
-  Kokkos::View<double*> ionization_energy_I1("my_kokkos_view", num_elements_I1);
+  Kokkos::View<double*, Kokkos::HostSpace> ionization_energy_I1("my_kokkos_view", num_elements_I1);
   double ionization_energy_I1_values[] = {11.26030, 24.38332, 47.8878, 64.4939, 392.087, 489.99334}; // in eV
   for (int i = 0; i < num_elements_I1; ++i) {
       ionization_energy_I1(i) = ionization_energy_I1_values[i];
   }
   // I2 - hydrogen
   const int num_elements_I2 = 1;
-  Kokkos::View<double*> ionization_energy_I2("my_kokkos_view", num_elements_I2);
+  Kokkos::View<double*, Kokkos::HostSpace> ionization_energy_I2("my_kokkos_view", num_elements_I2);
   double ionization_energy_I2_values[] = {13.6}; // in eV
   for (int i = 0; i < num_elements_I2; ++i) {
       ionization_energy_I2(i) = ionization_energy_I2_values[i];
   }
   // electron
   const int num_elements_electron = 1;
-  Kokkos::View<double*> ionization_energy_electron("my_kokkos_view", num_elements_electron);
+  Kokkos::View<double*, Kokkos::HostSpace> ionization_energy_electron("my_kokkos_view", num_elements_electron);
   double ionization_energy_electron_values[] = {0}; // in eV
   for (int i = 0; i < num_elements_electron; ++i) {
       ionization_energy_electron(i) = ionization_energy_electron_values[i];

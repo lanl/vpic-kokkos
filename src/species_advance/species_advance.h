@@ -100,7 +100,7 @@ class species_t {
 #ifndef FIELD_IONIZATION	
         short int q;                        // Species particle charge
 #else
-	Kokkos::View<double*> ionization_energy; // Species ionization energies
+	Kokkos::View<double*, Kokkos::HostSpace> ionization_energy; // Species ionization energies
 	float qn; // principal quantum number
 	float qm; // magnetic quantum number
 	float ql; // angular momentum quantum number
@@ -242,6 +242,7 @@ class species_t {
             k_nm_h = Kokkos::create_mirror_view(k_nm_d);
 
             clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
+
         }
 
         /**
@@ -291,7 +292,7 @@ species( const char * name,
 #ifndef FIELD_IONIZATION
          float q,
 #else
-	 Kokkos::View<double*> ionization_energy,
+	 Kokkos::View<double*, Kokkos::HostSpace> ionization_energy,
 	 float qn,
 	 float qm,
 	 float ql,

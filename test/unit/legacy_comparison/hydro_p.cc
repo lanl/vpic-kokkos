@@ -51,7 +51,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     species_t * sp_temp;
     species_t * sp;
    #if defined(FIELD_IONIZATION)
-    Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
+    Kokkos::View<double*, Kokkos::HostSpace> ionization_energy("my_kokkos_view", 1);
     double ionization_energy_values[] = {0}; // in eV
     ionization_energy(0) = ionization_energy_values[0];
     sp = define_species( "test_species", ionization_energy, 0,0,0, 1., npart, npart, 0, 0);

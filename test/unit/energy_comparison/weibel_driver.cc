@@ -187,7 +187,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   grid->l_to_SI = 1; 
   grid->q_to_SI = 1;
   grid->m_to_SI = 1;
-  Kokkos::View<double*> ionization_energy("my_kokkos_view", 1);
+  Kokkos::View<double*, Kokkos::HostSpace> ionization_energy("my_kokkos_view", 1);
   double ionization_energy_values[] = {0}; // in eV
   ionization_energy(0) = ionization_energy_values[0];
   ion      = define_species("ion",      ionization_energy, 1,0,0, mi,2.4*Ne/nproc(),-1,0,0); //(GY)
