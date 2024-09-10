@@ -30,12 +30,9 @@ checkpt_species( const species_t * sp ) {
   CHECKPT_PTR( sp->pb_diag );
 
 #ifdef FIELD_IONIZATION
-  size_t ionization_energy_size = sp->ionization_energy.size();
-  CHECKPT_VAL(size_t, ionization_energy_size);
-  checkpt_data( sp->ionization_energy.data(),
-                sp->ionization_energy.size() * sizeof(double),
-                sp->ionization_energy.size() * sizeof(double),
-                1, 1, 128 );
+  checkpt_data( sp->ionization_energy,
+                sp->n_energy * sizeof(double),
+                sp->n_energy * sizeof(double), 1, 1, 128 );
 #endif
 }
 
@@ -52,11 +49,7 @@ restore_species( void ) {
   RESTORE_PTR( sp->pb_diag );
   
 #ifdef FIELD_IONIZATION
-  size_t ionization_energy_size;
-  RESTORE_VAL(size_t, ionization_energy_size);
-
-  double *ionization_energies = (double *)restore_data();
-  std::copy(ionization_energies, ionization_energies + ionization_energy_size, sp->ionization_energy.data());
+  sp->ionization_energy = (double *)restore_data();
 #endif
 
   return sp;
@@ -127,7 +120,7 @@ species( const char * name,
 	#ifndef FIELD_IONIZATION
          float q,
 	#else
-	 Kokkos::View<double*, Kokkos::HostSpace> ionization_energy,
+	 int n_energy,
 	 float qn,
 	 float qm,
 	 float ql,
@@ -156,10 +149,11 @@ species( const char * name,
 #ifndef FIELD_IONIZATION
   sp->q = q;
 #else
-  sp->ionization_energy = ionization_energy;
+  sp->n_energy = n_energy;
   sp->qn = qn;
   sp->qm = qm;
   sp->ql = ql;
+  sp->ionization_energy = new double[n_energy];
 #endif
   sp->m = m;
 

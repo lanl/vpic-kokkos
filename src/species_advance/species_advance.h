@@ -100,10 +100,10 @@ class species_t {
 #ifndef FIELD_IONIZATION	
         short int q;                        // Species particle charge
 #else
-	Kokkos::View<double*, Kokkos::HostSpace> ionization_energy; // Species ionization energies
-	float qn; // principal quantum number
-	float qm; // magnetic quantum number
-	float ql; // angular momentum quantum number
+        int n_energy; // Species number of ionization energies
+        float qn; // principal quantum number
+        float qm; // magnetic quantum number
+        float ql; // angular momentum quantum number
 #endif	
         float m;                            // Species particle rest mass
 
@@ -203,6 +203,10 @@ class species_t {
         Kokkos::View<int*> clean_up_from;
         Kokkos::View<int*> clean_up_to;
 
+      #ifdef FIELD_IONIZATION
+        double * ionization_energy;
+      #endif
+
         // Init Kokkos Particle Arrays
         species_t(int n_particles, int n_pmovers)
         {
@@ -292,7 +296,7 @@ species( const char * name,
 #ifndef FIELD_IONIZATION
          float q,
 #else
-	 Kokkos::View<double*, Kokkos::HostSpace> ionization_energy,
+	 int n_energy,
 	 float qn,
 	 float qm,
 	 float ql,
@@ -361,7 +365,7 @@ energy_p_kokkos( const species_t            * RESTRICT sp,
           const interpolator_array_t * RESTRICT ia );
 
 #ifdef FIELD_IONIZATION
-Kokkos::View<int*, Kokkos::LayoutLeft>
+Kokkos::View<int*, Kokkos::HostSpace>
 ionization_states_kokkos( const species_t * RESTRICT sp );
 
 double

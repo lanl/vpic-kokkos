@@ -84,9 +84,7 @@ void
 vpic_simulation::dump_ionization_states( const char *fname,
                                 int append ) {
 
-  Kokkos::View<int*, Kokkos::LayoutLeft> N_ions;
-  auto N_ions_h = Kokkos::create_mirror(N_ions);
-  Kokkos::deep_copy(N_ions_h,N_ions);
+  Kokkos::View<int*, Kokkos::HostSpace> N_ions_h;
 
   species_t *sp;
   FileIO fileIO;
@@ -97,7 +95,7 @@ vpic_simulation::dump_ionization_states( const char *fname,
   // Iterate over each species
   LIST_FOR_EACH(sp, species_list) {
     // Ignore species with ionization energy set to 0, except for electrons
-    if (std::string(sp->name) != "electron" && sp->ionization_energy(0) == 0) {
+    if (std::string(sp->name) != "electron" && sp->n_energy == 0) {
       // Skip file creation for the "electron" species or when ionization isnt desired for a species
       continue;
     }
@@ -116,7 +114,7 @@ vpic_simulation::dump_ionization_states( const char *fname,
         if (append == 0) {
           // Dynamically generate the layout string
           std::string layoutString = "%% Layout\n%% Number of particles in each ionization state\n%% step";
-          for (size_t i = 0; i <= sp->ionization_energy.extent(0); ++i) {
+          for (size_t i = 0; i <= sp->n_energy; ++i) {
             layoutString += " " + std::to_string(i) + "+";
           }
           fileIO.print(layoutString.c_str());
@@ -127,17 +125,13 @@ vpic_simulation::dump_ionization_states( const char *fname,
       }
     } // if rank
 
-
-    N_ions = ionization_states_kokkos( sp ); // Number of particles in each ionization state
-    
-    auto N_ions_h = Kokkos::create_mirror(N_ions);
-    Kokkos::deep_copy(N_ions_h, N_ions);
-
-    // Calculate the total number of electrons
+    // Calculate the total number of electrons and ions
     int np_global;
     if (std::string(sp->name) == "electron") {
       int np = sp->np;
       mp_allsum_i( &np, &np_global, 1 );
+    } else {
+      N_ions_h = ionization_states_kokkos( sp ); // Number of particles in each ionization state
     }
 
     // Print Number of particles in each ionization state

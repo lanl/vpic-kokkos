@@ -250,26 +250,16 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   double ql     = 0;
   
   // I1 - carbon
-  const int num_elements_I1 = 6;
-  Kokkos::View<double*, Kokkos::HostSpace> ionization_energy_I1("my_kokkos_view", num_elements_I1);
+  const int n_energy_I1 = 6;
   double ionization_energy_I1_values[] = {11.26030, 24.38332, 47.8878, 64.4939, 392.087, 489.99334}; // in eV
-  for (int i = 0; i < num_elements_I1; ++i) {
-      ionization_energy_I1(i) = ionization_energy_I1_values[i];
-  }
+
   // I2 - hydrogen
-  const int num_elements_I2 = 1;
-  Kokkos::View<double*, Kokkos::HostSpace> ionization_energy_I2("my_kokkos_view", num_elements_I2);
+  const int n_energy_I2 = 1;
   double ionization_energy_I2_values[] = {13.6}; // in eV
-  for (int i = 0; i < num_elements_I2; ++i) {
-      ionization_energy_I2(i) = ionization_energy_I2_values[i];
-  }
+  
   // electron
-  const int num_elements_electron = 1;
-  Kokkos::View<double*, Kokkos::HostSpace> ionization_energy_electron("my_kokkos_view", num_elements_electron);
+  const int n_energy_electron = 1;
   double ionization_energy_electron_values[] = {0}; // in eV
-  for (int i = 0; i < num_elements_electron; ++i) {
-      ionization_energy_electron(i) = ionization_energy_electron_values[i];
-  }
 
   double c2 = c_SI*c_SI;
   // In 3 dimensions, the average energy is 3 halves the temperature
@@ -575,14 +565,20 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   sim_log("Setting up ions. ");
     if ( I1_present ) {
       #if defined(FIELD_IONIZATION)
-       ion_I1 = define_species("I1", ionization_energy_I1, qn,qm,ql, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
+       ion_I1 = define_species("I1", n_energy_I1, qn,qm,ql, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
+       for (int i = 0; i < n_energy_I1; i++) {
+         ion_I1->ionization_energy[i] = ionization_energy_I1_values[i];
+       }
       #else
         ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c, max_local_np_i1, max_local_nm_i1, 80, 0);
       #endif
     }
     if ( I2_present ) {
       #if defined(FIELD_IONIZATION)
-       ion_I2 = define_species("I2", ionization_energy_I2, qn,qm,ql, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
+       ion_I2 = define_species("I2", n_energy_I2, qn,qm,ql, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
+       for (int i = 0; i < n_energy_I2; i++) {
+         ion_I2->ionization_energy[i] = ionization_energy_I2_values[i];
+       }
       #else
         ion_I2 = define_species("I2", q_I2, m_I2_c, max_local_np_i2, max_local_nm_i2, 80, 0);
       #endif
@@ -600,7 +596,8 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   // Electrons need to be defined last in input deck when field ionization is enabled
   species_t *electron;
   #if defined(FIELD_IONIZATION)
-  electron = define_species("electron", ionization_energy_electron, 0,0,0, m_e_c,max_local_np_e, max_local_nm_e, 20, 0);
+    electron = define_species("electron", n_energy_electron, 0,0,0, m_e_c,max_local_np_e, max_local_nm_e, 20, 0);
+    electron->ionization_energy[0] = ionization_energy_electron_values[0];
   #else  
     electron = define_species("electron", -1.*e_c, m_e_c, max_local_np_e, max_local_nm_e, 20, 0);
   #endif

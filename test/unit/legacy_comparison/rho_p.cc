@@ -48,12 +48,11 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     grid->l_to_SI = 1; 
     grid->q_to_SI = 1;
     grid->m_to_SI = 1;
-    Kokkos::View<double*, Kokkos::HostSpace> ionization_energy("my_kokkos_view", 1);
-    double ionization_energy_values[] = {0}; // in eV
-    ionization_energy(0) = ionization_energy_values[0];
-    sp = define_species( "test_species", ionization_energy, 1,0,0, 1., npart, npart, 0, 0);
+    sp = define_species( "test_species", 1, 1,0,0, 1., npart, npart, 0, 0);
+    sp->ionization_energy[0] = 0;
     // electron needs to be defined when  FI is enabled
-    species_t * electron = define_species("electron",ionization_energy, 0,0,0, 1., npart, npart, 0, 0); 
+    species_t * electron = define_species("electron",1, 0,0,0, 1., npart, npart, 0, 0);
+    electron->ionization_energy[0] = 0;
    #else
     sp = define_species( "test_species", 1., 1., npart, npart, 0, 0 );
    #endif

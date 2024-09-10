@@ -146,11 +146,10 @@ begin_initialization {
   grid->l_to_SI = 1; 
   grid->q_to_SI = 1;
   grid->m_to_SI = 1;
-  Kokkos::View<double*, Kokkos::HostSpace> ionization_energy("my_kokkos_view", 1);
-  double ionization_energy_values[] = {0}; // in eV
-  ionization_energy(0) = ionization_energy_values[0];
-  ion      = define_species( "ion",      ionization_energy, 1,0,0, mi, 1.5*Ni/nproc(), -1, 40, 1 );
-  electron = define_species( "electron", ionization_energy, 1,0,0, me, 1.5*Ne/nproc(), -1, 20, 1 );
+  ion      = define_species( "ion",      1, 1,0,0, mi, 1.5*Ni/nproc(), -1, 40, 1 );
+  electron = define_species( "electron", 1, 1,0,0, me, 1.5*Ne/nproc(), -1, 20, 1 );
+  ion->ionization_energy[0] = 0;
+  electron->ionization_energy[0] = 0;
  #else
   ion      = define_species( "ion",       ec, mi, 1.5*Ni/nproc(), -1, 40, 1 );
   electron = define_species( "electron", -ec, me, 1.5*Ne/nproc(), -1, 20, 1 );

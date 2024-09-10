@@ -949,7 +949,7 @@ advance_p_kokkos_unified_ionize(
    ERROR(( "Conversion factors and laser wavelength needs to be passed as grid variables when field ionization is enabled." ));
   }
 
-  if( (sp!=sp_e || sp->ionization_energy(0)) && n == 0 )
+  if( (sp!=sp_e || sp->ionization_energy[0]) && n == 0 )
   {
     ERROR(( "Quantum numbers need to be passed to species struct when field ionization is enabled." )); 
   } 
@@ -1096,7 +1096,7 @@ advance_p_kokkos_unified_ionize(
         haz[LANE] = qdt_2mc*( (fez[LANE] + dx[LANE]*fdezdx[LANE] ) + dy[LANE]*(fdezdy[LANE] + dx[LANE]*fd2ezdxdy[LANE]) );
 		
 	// ***** Field Ioization *****
-       	if (charge[LANE] != sp->ionization_energy.extent(0)){
+	if (charge[LANE] != sp->n_energy){
        	  // Declate varviables
        	  bool multiphoton_ionised = false;
        	  float K;
@@ -1104,7 +1104,7 @@ advance_p_kokkos_unified_ionize(
 	  // Check if the particle is fully ionized already
           short int N_ionization        = abs(charge[LANE]); // Current ionization state of the particle
           short int N_ionization_before = N_ionization; // save variable to compare with ionization state after ionization algorithm
-	  short int N_ionization_levels = sp->ionization_energy.extent(0);
+	  short int N_ionization_levels = sp->n_energy;
 
           // code units
   	  float hax_c = (fex[LANE] + dy[LANE]*fdexdy[LANE] ) + dz[LANE]*(fdexdz[LANE] + dy[LANE]*fd2exdydz[LANE]);
@@ -1132,7 +1132,7 @@ advance_p_kokkos_unified_ionize(
           while (ionization_flag == 1 && t_ionize <= dt && N_ionization < N_ionization_levels) {
         
             // Get the appropriate ionization energy
-            float epsilon_eV = sp->ionization_energy(int(N_ionization)); // [eV], ionization energy
+            float epsilon_eV = sp->ionization_energy[int(N_ionization)]; // [eV], ionization energy
             float epsilon_au = epsilon_eV/27.2;         // atomic units, ionization energy
            
             // Calculate stuff
@@ -2175,20 +2175,20 @@ advance_p_kokkos_gpu_ionize(
   Kokkos::View<int> count("count");
   Kokkos::deep_copy(count, sp_e->np);
 
-  Kokkos::View<double*> epsilon_eV_list_d("epsilon_eV_list_d", sp->ionization_energy.extent(0));
-  Kokkos::deep_copy(epsilon_eV_list_d, sp->ionization_energy);
+  Kokkos::View<double*> epsilon_eV_list_d("epsilon_eV_list_d", sp->n_energy);
+  Kokkos::deep_copy(epsilon_eV_list_d, Kokkos::View<double*, Kokkos::HostSpace>(sp->ionization_energy, sp->n_energy));
   float n = sp->qn; // principal quantum number
   float m = sp->qm; // magnetic quantum number
   float l = sp->ql; // angular momentum quantum number
   float lambda_SI = g->lambda;
-  short int N_ionization_levels = sp->ionization_energy.extent(0);
+  short int N_ionization_levels = sp->n_energy; 
 
   if( t_to_SI == 0 || l_to_SI == 0 || q_to_SI == 0 || m_to_SI == 0 || lambda_SI == 0)
   {
    ERROR(( "Conversion factors and laser wavelength needs to be passed as grid variables when field ionization is enabled." ));
   }
 
-  if( (sp!=sp_e || sp->ionization_energy(0) != 0) && n == 0 )
+  if( (sp!=sp_e || sp->ionization_energy[0] != 0) && n == 0 )
   {
     ERROR(( "Quantum numbers need to be passed to species struct when field ionization is enabled." ));
   }
@@ -2898,7 +2898,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   #endif
   KOKKOS_TIC();
 #ifdef FIELD_IONIZATION
-  if (sp != sp_e && sp->ionization_energy(0) != 0){
+  if (sp != sp_e && sp->ionization_energy[0] != 0){
     ADVANCE_P_IONIZE(
       sp->k_p_d,
       sp->k_p_i_d,
