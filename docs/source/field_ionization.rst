@@ -96,4 +96,4 @@ without field ionization.
   This diagnostic also outputs a file with the number of macro-electrons in
   the reqested timesteps. This is specifically done for the species
   specifically named `electron`. This diagnostic doesn't create files
-  for species that do not ionize ( i.e., ionization_energy set 
+  for species that do not ionize ( i.e., ionization_energy set to 0)
