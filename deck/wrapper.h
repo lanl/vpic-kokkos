@@ -377,7 +377,36 @@ vpic_simulation::user_particle_collisions( void )
 // (This is not strictly inside the region)
 #define set_region_field( rgn,                                        \
                           eqn_ex, eqn_ey, eqn_ez,                     \
-                          eqn_bx, eqn_by, eqn_bz ) do {               \
+                          eqn_bx, eqn_by, eqn_bz ) do {	      \
+    const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;      \
+    const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;      \
+    const double _c  = grid->cvac;                                    \
+    const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;      \
+    for( int _k=0; _k<_nz+2; _k++ ) { const double _zl = _z0 + _dz*(_k-1.5), _ze = _z0 + _dz*_k, _zc = _z0 + _dz*(_k-0.5); \
+    for( int _j=0; _j<_ny+2; _j++ ) { const double _yl = _y0 + _dy*(_j-1.5), _ye = _y0 + _dy*_j, _yc = _y0 + _dy*(_j-0.5); field_t *_f = &field(0,_j,_k); \
+    for( int _i=0; _i<_nx+2; _i++ ) { const double _xl = _x0 + _dx*(_i-1.5), _xe = _x0 + _dx*_i, _xc = _x0 + _dx*(_i-0.5); double x, y, z; \
+          int _rccc, _rlcc, _rclc, _rllc, _rccl, _rlcl, _rcll;        \
+          x = _xc; y = _yc; z = _zc; _rccc = (rgn);                   \
+          x = _xl;                   _rlcc = (rgn);                   \
+          x = _xc; y = _yl;          _rclc = (rgn);                   \
+          x = _xl;                   _rllc = (rgn);                   \
+          x = _xc; y = _yc; z = _zl; _rccl = (rgn);                   \
+          x = _xl;                   _rlcl = (rgn);			\
+          x = _xc; y = _yl;          _rcll = (rgn);			\
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc || _rccl || _rcll ) _f->ex  =    (eqn_ex); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl || _rlcc || _rlcl ) _f->ey  =    (eqn_ey); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc || _rclc || _rllc ) _f->ez  =    (eqn_ez); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->cbx = _c*(eqn_bx); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc )                   _f->cby = _c*(eqn_by); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl )                   _f->cbz = _c*(eqn_bz); \
+          _f++;								\
+    }}}									\
+  } while(0)
+
+// The equations are only evaluated inside the mesh-mapped region
+// (This is not strictly inside the region)
+#define set_region_bext( rgn,                                        \
+                         eqn_bx, eqn_by, eqn_bz ) do {       \
     const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;      \
     const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;      \
     const double _c  = grid->cvac;                                    \
@@ -393,15 +422,65 @@ vpic_simulation::user_particle_collisions( void )
           x = _xc; y = _yc; z = _zl; _rccl = (rgn);                   \
           x = _xl;                   _rlcl = (rgn);                   \
           x = _xc; y = _yl;          _rcll = (rgn);                   \
-          x = _xc; y = _ye; z = _ze; if( _rccc || _rclc || _rccl || _rcll ) _f->ex  =    (eqn_ex); \
-          x = _xe; y = _yc; z = _ze; if( _rccc || _rccl || _rlcc || _rlcl ) _f->ey  =    (eqn_ey); \
-          x = _xe; y = _ye; z = _zc; if( _rccc || _rlcc || _rclc || _rllc ) _f->ez  =    (eqn_ez); \
-          x = _xe; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->cbx = _c*(eqn_bx); \
-          x = _xc; y = _ye; z = _zc; if( _rccc || _rclc )                   _f->cby = _c*(eqn_by); \
-          x = _xc; y = _yc; z = _ze; if( _rccc || _rccl )                   _f->cbz = _c*(eqn_bz); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->cbx0 = _c*(eqn_bx); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc )                   _f->cby0 = _c*(eqn_by); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl )                   _f->cbz0 = _c*(eqn_bz); \
           _f++;                                                       \
     }}}                                                               \
   } while(0)
+
+
+// The equations are only evaluated inside the mesh-mapped region
+// (This is not strictly inside the region)
+#define set_region_te( rgn,                                        \
+                         eqn_te ) do {       \
+    const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;      \
+    const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;      \
+    const double _c  = grid->cvac;                                    \
+    const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;      \
+    for( int _k=0; _k<_nz+2; _k++ ) { const double _zl = _z0 + _dz*(_k-1.5), _ze = _z0 + _dz*_k, _zc = _z0 + _dz*(_k-0.5); \
+    for( int _j=0; _j<_ny+2; _j++ ) { const double _yl = _y0 + _dy*(_j-1.5), _ye = _y0 + _dy*_j, _yc = _y0 + _dy*(_j-0.5); field_t *_f = &field(0,_j,_k); \
+    for( int _i=0; _i<_nx+2; _i++ ) { const double _xl = _x0 + _dx*(_i-1.5), _xe = _x0 + _dx*_i, _xc = _x0 + _dx*(_i-0.5); double x, y, z; \
+          int _rccc, _rlcc, _rclc, _rllc, _rccl, _rlcl, _rcll;        \
+          x = _xc; y = _yc; z = _zc; _rccc = (rgn);                   \
+          x = _xl;                   _rlcc = (rgn);                   \
+          x = _xc; y = _yl;          _rclc = (rgn);                   \
+          x = _xl;                   _rllc = (rgn);                   \
+          x = _xc; y = _yc; z = _zl; _rccl = (rgn);                   \
+          x = _xl;                   _rlcl = (rgn);                   \
+          x = _xc; y = _yl;          _rcll = (rgn);                   \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->te = _c*(eqn_te); \
+          _f++;                                                       \
+    }}}                                                               \
+  } while(0)
+
+// The equations are only evaluated inside the mesh-mapped region
+// (This is not strictly inside the region)
+#define set_region_eta_multipliers( rgn,                                        \
+                         eqn_tcax, eqn_tcay, eqn_tcaz ) do {       \
+    const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;      \
+    const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;      \
+    const double _c  = grid->cvac;                                    \
+    const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;      \
+    for( int _k=0; _k<_nz+2; _k++ ) { const double _zl = _z0 + _dz*(_k-1.5), _ze = _z0 + _dz*_k, _zc = _z0 + _dz*(_k-0.5); \
+    for( int _j=0; _j<_ny+2; _j++ ) { const double _yl = _y0 + _dy*(_j-1.5), _ye = _y0 + _dy*_j, _yc = _y0 + _dy*(_j-0.5); field_t *_f = &field(0,_j,_k); \
+    for( int _i=0; _i<_nx+2; _i++ ) { const double _xl = _x0 + _dx*(_i-1.5), _xe = _x0 + _dx*_i, _xc = _x0 + _dx*(_i-0.5); double x, y, z; \
+          int _rccc, _rlcc, _rclc, _rllc, _rccl, _rlcl, _rcll;        \
+          x = _xc; y = _yc; z = _zc; _rccc = (rgn);                   \
+          x = _xl;                   _rlcc = (rgn);                   \
+          x = _xc; y = _yl;          _rclc = (rgn);                   \
+          x = _xl;                   _rllc = (rgn);                   \
+          x = _xc; y = _yc; z = _zl; _rccl = (rgn);                   \
+          x = _xl;                   _rlcl = (rgn);                   \
+          x = _xc; y = _yl;          _rcll = (rgn);                   \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->tcax = _c*(eqn_tcax); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc )                   _f->tcay = _c*(eqn_tcay); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl )                   _f->tcaz = _c*(eqn_tcaz); \
+          _f++;                                                       \
+    }}}                                                               \
+  } while(0)
+
+
 
 // In main.cxx
 

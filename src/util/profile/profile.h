@@ -118,6 +118,7 @@ typedef struct profile_internal_use_only_timer {
   const char * name;
   double t, t_total;
   int n, n_total;
+  int rank;
 } profile_internal_use_only_timer_t;
 
 extern profile_internal_use_only_timer_t profile_internal_use_only[];
@@ -127,6 +128,9 @@ extern profile_internal_use_only_timer_t profile_internal_use_only[];
 
 void
 update_profile( int dump );
+
+void
+update_profile_meanminmax( int dump );
 
 // Returns a local wallclock in seconds.  Only relative values are
 // accurate, and then only within same "short run".

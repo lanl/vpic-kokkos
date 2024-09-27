@@ -169,7 +169,8 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
         float v2 = k_particles(n, particle_var::uz) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
                                 dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
         v0 = v0*v0 + v1*v1 + v2*v2;
-        v0 = (msp * k_particles(n, particle_var::w)) * (v0 / (1 + sqrtf(1 + v0)));
+        //v0 = (msp * k_particles(n, particle_var::w)) * (v0 / (1 + sqrtf(1 + v0)));  // Relativistic kinetic energy
+        v0 *= 0.5 * (msp * k_particles(n, particle_var::w));  // Non-relativistic kinetic energy
         update += static_cast<double>(v0);
     }, en);
     return en;

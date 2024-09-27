@@ -152,6 +152,50 @@ struct DMPPolicy {
 	 } // if
     TRAP( MPI_Allreduce( local, global, n, MPI_INT, MPI_SUM, world->comm ) );
   }
+
+  inline void
+  mp_allsum_li( int64_t * local,
+                int64_t * global,
+                int n ) {
+    if( !local || !global || n<1 || std::abs(local-global)<n ) {
+	 	ERROR(( "Bad args" ));
+	 } // if
+    TRAP( MPI_Allreduce( local, global, n, MPI_INT64_T, MPI_SUM, world->comm ) );
+  }
+
+  inline void
+  mp_allminloc_scalar_d( double * local,
+                         double * global,
+                         int    * globalrank ) {
+    if( !local || !global || !globalrank || std::abs(local-global)<1 ) ERROR(( "Bad args" ));
+    // https://www.open-mpi.org/doc/v4.1/man3/MPI_Reduce.3.php#sect11
+    struct {
+        double val;
+        int rank;
+    } ibuf, obuf;
+    ibuf.val = *local;
+    ibuf.rank = world_rank;
+    TRAP( MPI_Allreduce( &ibuf, &obuf, 1, MPI_DOUBLE_INT, MPI_MINLOC, world->comm ) );
+    *global     = obuf.val;
+    *globalrank = obuf.rank;
+  }
+
+  inline void
+  mp_allmaxloc_scalar_d( double * local,
+                         double * global,
+                         int    * globalrank ) {
+    if( !local || !global || !globalrank || std::abs(local-global)<1 ) ERROR(( "Bad args" ));
+    // https://www.open-mpi.org/doc/v4.1/man3/MPI_Reduce.3.php#sect11
+    struct {
+        double val;
+        int rank;
+    } ibuf, obuf;
+    ibuf.val = *local;
+    ibuf.rank = world_rank;
+    TRAP( MPI_Allreduce( &ibuf, &obuf, 1, MPI_DOUBLE_INT, MPI_MAXLOC, world->comm ) );
+    *global     = obuf.val;
+    *globalrank = obuf.rank;
+  }
   
   inline void
   mp_allgather_i( int * sbuf,

@@ -1427,6 +1427,638 @@ end_remote_ghost_div_b( field_t      * ALIGNED(128) field,
 # undef END_SEND
 }
 
+/*
+***** Hybrid 
+*/
+
+
+//Hybrid JF
+#define BRP(x_,y_,z_)							\
+  const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;			\
+  const int size = (4*n##y_*n##z_)*sizeof(float);			\
+  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+  
+
+template<typename T> void begin_recv_ghost_hyb_jf(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
+template<> void begin_recv_ghost_hyb_jf<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(x,y,z)}
+template<> void begin_recv_ghost_hyb_jf<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(y,z,x)}
+template<> void begin_recv_ghost_hyb_jf<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(z,x,y)}
+
+#undef BRP
+
+#define BSP(x_,y_,z_)							\
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		\
+  const int size = (4*n##y_*n##z_)*sizeof(float);				\
+  const int face = (i+j+k)<0 ? 1 : n##x_;				\
+  const k_field_t& k_field = fa->k_f_d;					\
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+  Kokkos::parallel_for("begin_send_ghost_hyb_jf<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+      const int x_ = face;						\
+      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx); \
+      sbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy); \
+      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz); \
+      sbuf_d(3*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);\
+    });									\
+  Kokkos::deep_copy(sbuf_h, sbuf_d);					\
+  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
+
+
+template<typename T> void begin_send_ghost_hyb_jf(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {}
+template<> void begin_send_ghost_hyb_jf<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(x,y,z)}
+template<> void begin_send_ghost_hyb_jf<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(y,z,x)}
+template<> void begin_send_ghost_hyb_jf<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(z,x,y)}
+
+#undef BSP
+
+
+void k_begin_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+// Start receiving
+    begin_recv_ghost_hyb_jf<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
+    begin_recv_ghost_hyb_jf<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
+    begin_recv_ghost_hyb_jf<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
+    begin_recv_ghost_hyb_jf<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    begin_recv_ghost_hyb_jf<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    begin_recv_ghost_hyb_jf<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+
+// Start sending
+    begin_send_ghost_hyb_jf<XYZ>(fa, -1,  0,  0, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
+    begin_send_ghost_hyb_jf<YZX>(fa,  0, -1,  0, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
+    begin_send_ghost_hyb_jf<ZXY>(fa,  0,  0, -1, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
+    begin_send_ghost_hyb_jf<XYZ>(fa,  1,  0,  0, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
+    begin_send_ghost_hyb_jf<YZX>(fa,  0,  1,  0, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
+    begin_send_ghost_hyb_jf<ZXY>(fa,  0,  0,  1, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
+}
+
+
+#define ERP(x_,y_,z_)							\
+  const grid_t* g = fa->g;						\
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));	\
+  if(p) {								\
+    const int nx = g->nx, ny = g->ny, nz = g->nz;			\
+    const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
+    const k_field_t& k_field = fa->k_f_d;				\
+    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+    Kokkos::parallel_for("end_recv_ghost_hyb_jf<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+	const int x_ = face;						\
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof)= rbuf_d(3*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      });								\
+  }									
+  
+template<typename T> void end_recv_ghost_hyb_jf(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
+template<> void end_recv_ghost_hyb_jf<XYZ>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(x,y,z)}
+template<> void end_recv_ghost_hyb_jf<YZX>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(y,z,x)}
+template<> void end_recv_ghost_hyb_jf<ZXY>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(z,x,y)}
+
+#undef ERP
+
+template<typename T> void end_send_ghost_hyb_jf(field_array_t* fa, const int i, const int j, const int k) {
+    end_send_port_k(i,j,k,fa->g);
+}
+
+void k_end_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+    
+// End receiving
+    end_recv_ghost_hyb_jf<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
+    end_recv_ghost_hyb_jf<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
+    end_recv_ghost_hyb_jf<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
+    end_recv_ghost_hyb_jf<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    end_recv_ghost_hyb_jf<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    end_recv_ghost_hyb_jf<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+
+// End sending
+    end_send_ghost_hyb_jf<XYZ>(fa, -1,  0,  0);
+    end_send_ghost_hyb_jf<YZX>(fa,  0, -1,  0);
+    end_send_ghost_hyb_jf<ZXY>(fa,  0,  0, -1);
+    end_send_ghost_hyb_jf<XYZ>(fa,  1,  0,  0);
+    end_send_ghost_hyb_jf<YZX>(fa,  0,  1,  0);
+    end_send_ghost_hyb_jf<ZXY>(fa,  0,  0,  1);
+}
+
+
+
+
+
+//Hybrid E
+#define BRP(x_,y_,z_)							\
+  const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;			\
+  const int size = (3*n##y_*n##z_)*sizeof(float);			\
+  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+  
+
+template<typename T> void begin_recv_ghost_hyb_e(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
+template<> void begin_recv_ghost_hyb_e<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(x,y,z)}
+template<> void begin_recv_ghost_hyb_e<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(y,z,x)}
+template<> void begin_recv_ghost_hyb_e<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(z,x,y)}
+
+#undef BRP
+
+#define BSP(x_,y_,z_)							\
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		\
+  const int size = (3*n##y_*n##z_)*sizeof(float);				\
+  const int face = (i+j+k)<0 ? 1 : n##x_;				\
+  const k_field_t& k_field = fa->k_f_d;					\
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+  Kokkos::parallel_for("begin_send_ghost_hyb_e<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+      const int x_ = face;						\
+      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex); \
+      sbuf_d(n##y_*n##z_   + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey); \
+      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez); \
+    });									\
+  Kokkos::deep_copy(sbuf_h, sbuf_d);					\
+  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
+
+
+template<typename T> void begin_send_ghost_hyb_e(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {}
+template<> void begin_send_ghost_hyb_e<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(x,y,z)}
+template<> void begin_send_ghost_hyb_e<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(y,z,x)}
+template<> void begin_send_ghost_hyb_e<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(z,x,y)}
+
+#undef BSP
+
+
+void k_begin_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+// Start receiving
+    begin_recv_ghost_hyb_e<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
+    begin_recv_ghost_hyb_e<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
+    begin_recv_ghost_hyb_e<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
+    begin_recv_ghost_hyb_e<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    begin_recv_ghost_hyb_e<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    begin_recv_ghost_hyb_e<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+
+// Start sending
+    begin_send_ghost_hyb_e<XYZ>(fa, -1,  0,  0, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
+    begin_send_ghost_hyb_e<YZX>(fa,  0, -1,  0, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
+    begin_send_ghost_hyb_e<ZXY>(fa,  0,  0, -1, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
+    begin_send_ghost_hyb_e<XYZ>(fa,  1,  0,  0, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
+    begin_send_ghost_hyb_e<YZX>(fa,  0,  1,  0, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
+    begin_send_ghost_hyb_e<ZXY>(fa,  0,  0,  1, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
+}
+
+
+#define ERP(x_,y_,z_)							\
+  const grid_t* g = fa->g;						\
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));	\
+  if(p) {								\
+    const int nx = g->nx, ny = g->ny, nz = g->nz;			\
+    const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
+    const k_field_t& k_field = fa->k_f_d;				\
+    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+    Kokkos::parallel_for("end_recv_ghost_hyb_e<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+	const int x_ = face;						\
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      });								\
+  }									
+  
+template<typename T> void end_recv_ghost_hyb_e(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
+template<> void end_recv_ghost_hyb_e<XYZ>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(x,y,z)}
+template<> void end_recv_ghost_hyb_e<YZX>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(y,z,x)}
+template<> void end_recv_ghost_hyb_e<ZXY>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(z,x,y)}
+
+#undef ERP
+
+template<typename T> void end_send_ghost_hyb_e(field_array_t* fa, const int i, const int j, const int k) {
+    end_send_port_k(i,j,k,fa->g);
+}
+
+void k_end_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+    
+// End receiving
+    end_recv_ghost_hyb_e<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
+    end_recv_ghost_hyb_e<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
+    end_recv_ghost_hyb_e<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
+    end_recv_ghost_hyb_e<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    end_recv_ghost_hyb_e<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    end_recv_ghost_hyb_e<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+
+// End sending
+    end_send_ghost_hyb_e<XYZ>(fa, -1,  0,  0);
+    end_send_ghost_hyb_e<YZX>(fa,  0, -1,  0);
+    end_send_ghost_hyb_e<ZXY>(fa,  0,  0, -1);
+    end_send_ghost_hyb_e<XYZ>(fa,  1,  0,  0);
+    end_send_ghost_hyb_e<YZX>(fa,  0,  1,  0);
+    end_send_ghost_hyb_e<ZXY>(fa,  0,  0,  1);
+}
+
+//Hybrid curl_lpl_B
+#define BRP(x_,y_,z_)							\
+  const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;			\
+  const int size = (3*n##y_*n##z_)*sizeof(float);			\
+  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+  
+
+template<typename T> void begin_recv_ghost_hyb_curl_lpl_b(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
+template<> void begin_recv_ghost_hyb_curl_lpl_b<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(x,y,z)}
+template<> void begin_recv_ghost_hyb_curl_lpl_b<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(y,z,x)}
+template<> void begin_recv_ghost_hyb_curl_lpl_b<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(z,x,y)}
+
+#undef BRP
+
+#define BSP(x_,y_,z_)							\
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		\
+  const int size = (3*n##y_*n##z_)*sizeof(float);				\
+  const int face = (i+j+k)<0 ? 1 : n##x_;				\
+  const k_field_t& k_field = fa->k_f_d;					\
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+  Kokkos::parallel_for("begin_send_ghost_hyb_curl_lpl_b<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+      const int x_ = face;						\
+      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pex); \
+      sbuf_d(n##y_*n##z_   + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pey); \
+      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pez); \
+    });									\
+  Kokkos::deep_copy(sbuf_h, sbuf_d);					\
+  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
+
+
+template<typename T> void begin_send_ghost_hyb_curl_lpl_b(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {}
+template<> void begin_send_ghost_hyb_curl_lpl_b<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(x,y,z)}
+template<> void begin_send_ghost_hyb_curl_lpl_b<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(y,z,x)}
+template<> void begin_send_ghost_hyb_curl_lpl_b<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(z,x,y)}
+
+#undef BSP
+
+
+void k_begin_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+// Start receiving
+    begin_recv_ghost_hyb_curl_lpl_b<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
+    begin_recv_ghost_hyb_curl_lpl_b<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
+    begin_recv_ghost_hyb_curl_lpl_b<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
+    begin_recv_ghost_hyb_curl_lpl_b<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    begin_recv_ghost_hyb_curl_lpl_b<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    begin_recv_ghost_hyb_curl_lpl_b<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+
+// Start sending
+    begin_send_ghost_hyb_curl_lpl_b<XYZ>(fa, -1,  0,  0, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
+    begin_send_ghost_hyb_curl_lpl_b<YZX>(fa,  0, -1,  0, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
+    begin_send_ghost_hyb_curl_lpl_b<ZXY>(fa,  0,  0, -1, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
+    begin_send_ghost_hyb_curl_lpl_b<XYZ>(fa,  1,  0,  0, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
+    begin_send_ghost_hyb_curl_lpl_b<YZX>(fa,  0,  1,  0, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
+    begin_send_ghost_hyb_curl_lpl_b<ZXY>(fa,  0,  0,  1, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
+}
+
+
+#define ERP(x_,y_,z_)							\
+  const grid_t* g = fa->g;						\
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));	\
+  if(p) {								\
+    const int nx = g->nx, ny = g->ny, nz = g->nz;			\
+    const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
+    const k_field_t& k_field = fa->k_f_d;				\
+    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+    Kokkos::parallel_for("end_recv_ghost_hyb_curl_lpl_b<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+	const int x_ = face;						\
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pex) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pey) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pez) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      });								\
+  }									
+  
+template<typename T> void end_recv_ghost_hyb_curl_lpl_b(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
+template<> void end_recv_ghost_hyb_curl_lpl_b<XYZ>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(x,y,z)}
+template<> void end_recv_ghost_hyb_curl_lpl_b<YZX>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(y,z,x)}
+template<> void end_recv_ghost_hyb_curl_lpl_b<ZXY>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(z,x,y)}
+
+#undef ERP
+
+template<typename T> void end_send_ghost_hyb_curl_lpl_b(field_array_t* fa, const int i, const int j, const int k) {
+    end_send_port_k(i,j,k,fa->g);
+}
+
+void k_end_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+    
+// End receiving
+    end_recv_ghost_hyb_curl_lpl_b<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
+    end_recv_ghost_hyb_curl_lpl_b<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
+    end_recv_ghost_hyb_curl_lpl_b<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
+    end_recv_ghost_hyb_curl_lpl_b<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    end_recv_ghost_hyb_curl_lpl_b<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    end_recv_ghost_hyb_curl_lpl_b<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+
+// End sending
+    end_send_ghost_hyb_curl_lpl_b<XYZ>(fa, -1,  0,  0);
+    end_send_ghost_hyb_curl_lpl_b<YZX>(fa,  0, -1,  0);
+    end_send_ghost_hyb_curl_lpl_b<ZXY>(fa,  0,  0, -1);
+    end_send_ghost_hyb_curl_lpl_b<XYZ>(fa,  1,  0,  0);
+    end_send_ghost_hyb_curl_lpl_b<YZX>(fa,  0,  1,  0);
+    end_send_ghost_hyb_curl_lpl_b<ZXY>(fa,  0,  0,  1);
+}
+
+
+//Hybrid B
+#define BRP(x_,y_,z_)							\
+  const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;			\
+  const int size = (3*n##y_*n##z_)*sizeof(float);			\
+  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+  
+
+template<typename T> void begin_recv_ghost_hyb_b(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
+template<> void begin_recv_ghost_hyb_b<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(x,y,z)}
+template<> void begin_recv_ghost_hyb_b<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(y,z,x)}
+template<> void begin_recv_ghost_hyb_b<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(z,x,y)}
+
+#undef BRP
+
+#define BSP(x_,y_,z_)							\
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		\
+  const int size = (3*n##y_*n##z_)*sizeof(float);				\
+  const int face = (i+j+k)<0 ? 1 : n##x_;				\
+  const k_field_t& k_field = fa->k_f_d;					\
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+  Kokkos::parallel_for("begin_send_ghost_hyb_b<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+      const int x_ = face;						\
+      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx); \
+      sbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby); \
+      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz); \
+    });									\
+  Kokkos::deep_copy(sbuf_h, sbuf_d);					\
+  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
+
+
+template<typename T> void begin_send_ghost_hyb_b(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {}
+template<> void begin_send_ghost_hyb_b<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(x,y,z)}
+template<> void begin_send_ghost_hyb_b<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(y,z,x)}
+template<> void begin_send_ghost_hyb_b<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(z,x,y)}
+
+#undef BSP
+
+
+void k_begin_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+// Start receiving
+    begin_recv_ghost_hyb_b<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
+    begin_recv_ghost_hyb_b<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
+    begin_recv_ghost_hyb_b<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
+    begin_recv_ghost_hyb_b<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    begin_recv_ghost_hyb_b<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    begin_recv_ghost_hyb_b<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+
+// Start sending
+    begin_send_ghost_hyb_b<XYZ>(fa, -1,  0,  0, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
+    begin_send_ghost_hyb_b<YZX>(fa,  0, -1,  0, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
+    begin_send_ghost_hyb_b<ZXY>(fa,  0,  0, -1, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
+    begin_send_ghost_hyb_b<XYZ>(fa,  1,  0,  0, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
+    begin_send_ghost_hyb_b<YZX>(fa,  0,  1,  0, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
+    begin_send_ghost_hyb_b<ZXY>(fa,  0,  0,  1, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
+}
+
+
+#define ERP(x_,y_,z_)							\
+  const grid_t* g = fa->g;						\
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));	\
+  if(p) {								\
+    const int nx = g->nx, ny = g->ny, nz = g->nz;			\
+    const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
+    const k_field_t& k_field = fa->k_f_d;				\
+    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+    Kokkos::parallel_for("end_recv_ghost_hyb_b<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+	const int x_ = face;						\
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      });								\
+  }									
+  
+template<typename T> void end_recv_ghost_hyb_b(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
+template<> void end_recv_ghost_hyb_b<XYZ>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(x,y,z)}
+template<> void end_recv_ghost_hyb_b<YZX>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(y,z,x)}
+template<> void end_recv_ghost_hyb_b<ZXY>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(z,x,y)}
+
+#undef ERP
+
+template<typename T> void end_send_ghost_hyb_b(field_array_t* fa, const int i, const int j, const int k) {
+    end_send_port_k(i,j,k,fa->g);
+}
+
+void k_end_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+    
+// End receiving
+    end_recv_ghost_hyb_b<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
+    end_recv_ghost_hyb_b<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
+    end_recv_ghost_hyb_b<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
+    end_recv_ghost_hyb_b<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    end_recv_ghost_hyb_b<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    end_recv_ghost_hyb_b<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+
+// End sending
+    end_send_ghost_hyb_b<XYZ>(fa, -1,  0,  0);
+    end_send_ghost_hyb_b<YZX>(fa,  0, -1,  0);
+    end_send_ghost_hyb_b<ZXY>(fa,  0,  0, -1);
+    end_send_ghost_hyb_b<XYZ>(fa,  1,  0,  0);
+    end_send_ghost_hyb_b<YZX>(fa,  0,  1,  0);
+    end_send_ghost_hyb_b<ZXY>(fa,  0,  0,  1);
+}
+
+/*****************************************************************************
+ * Hybrid temporary variables (tx,ty,tz) used for E-field smoothing
+ *****************************************************************************/
+
+#define BRP(x_,y_,z_)							\
+  const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;			\
+  const int size = (3*n##y_*n##z_)*sizeof(float);			\
+  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+
+template<typename T> void begin_recv_ghost_hyb_t(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
+template<> void begin_recv_ghost_hyb_t<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(x,y,z)}
+template<> void begin_recv_ghost_hyb_t<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(y,z,x)}
+template<> void begin_recv_ghost_hyb_t<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(z,x,y)}
+
+#undef BRP
+
+#define BSP(x_,y_,z_)							\
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		\
+  const int size = (3*n##y_*n##z_)*sizeof(float);			\
+  const int face = (i+j+k)<0 ? 1 : n##x_;				\
+  const k_field_t& k_field = fa->k_f_d;					\
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+  Kokkos::parallel_for("begin_send_ghost_hyb_t<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+      const int x_ = face;						\
+      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tx); \
+      sbuf_d(n##y_*n##z_   + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ty); \
+      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tz); \
+    });									\
+  Kokkos::deep_copy(sbuf_h, sbuf_d);					\
+  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
+
+template<typename T> void begin_send_ghost_hyb_t(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {}
+template<> void begin_send_ghost_hyb_t<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(x,y,z)}
+template<> void begin_send_ghost_hyb_t<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(y,z,x)}
+template<> void begin_send_ghost_hyb_t<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(z,x,y)}
+
+#undef BSP
+
+void k_begin_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+// Start receiving
+    begin_recv_ghost_hyb_t<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
+    begin_recv_ghost_hyb_t<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
+    begin_recv_ghost_hyb_t<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
+    begin_recv_ghost_hyb_t<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    begin_recv_ghost_hyb_t<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    begin_recv_ghost_hyb_t<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+
+// Start sending
+    begin_send_ghost_hyb_t<XYZ>(fa, -1,  0,  0, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
+    begin_send_ghost_hyb_t<YZX>(fa,  0, -1,  0, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
+    begin_send_ghost_hyb_t<ZXY>(fa,  0,  0, -1, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
+    begin_send_ghost_hyb_t<XYZ>(fa,  1,  0,  0, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
+    begin_send_ghost_hyb_t<YZX>(fa,  0,  1,  0, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
+    begin_send_ghost_hyb_t<ZXY>(fa,  0,  0,  1, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
+}
+
+#define ERP(x_,y_,z_)							\
+  const grid_t* g = fa->g;						\
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));	\
+  if(p) {								\
+    const int nx = g->nx, ny = g->ny, nz = g->nz;			\
+    const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
+    const k_field_t& k_field = fa->k_f_d;				\
+    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+    Kokkos::parallel_for("end_recv_ghost_hyb_t<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+	const int x_ = face;						\
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tx) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ty) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      });								\
+  }
+
+template<typename T> void end_recv_ghost_hyb_t(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
+template<> void end_recv_ghost_hyb_t<XYZ>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(x,y,z)}
+template<> void end_recv_ghost_hyb_t<YZX>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(y,z,x)}
+template<> void end_recv_ghost_hyb_t<ZXY>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(z,x,y)}
+
+#undef ERP
+
+template<typename T> void end_send_ghost_hyb_t(field_array_t* fa, const int i, const int j, const int k) {
+    end_send_port_k(i,j,k,fa->g);
+}
+
+void k_end_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+// End receiving
+    end_recv_ghost_hyb_t<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
+    end_recv_ghost_hyb_t<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
+    end_recv_ghost_hyb_t<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
+    end_recv_ghost_hyb_t<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    end_recv_ghost_hyb_t<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    end_recv_ghost_hyb_t<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+
+// End sending
+    end_send_ghost_hyb_t<XYZ>(fa, -1,  0,  0);
+    end_send_ghost_hyb_t<YZX>(fa,  0, -1,  0);
+    end_send_ghost_hyb_t<ZXY>(fa,  0,  0, -1);
+    end_send_ghost_hyb_t<XYZ>(fa,  1,  0,  0);
+    end_send_ghost_hyb_t<YZX>(fa,  0,  1,  0);
+    end_send_ghost_hyb_t<ZXY>(fa,  0,  0,  1);
+}
+
+/*****************************************************************************
+ * Hybrid temporary variables (ox,oy,oz) used for B-field smoothing
+ *****************************************************************************/
+
+#define BRP(x_,y_,z_)							\
+  const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;			\
+  const int size = (3*n##y_*n##z_)*sizeof(float);			\
+  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+
+template<typename T> void begin_recv_ghost_hyb_o(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
+template<> void begin_recv_ghost_hyb_o<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(x,y,z)}
+template<> void begin_recv_ghost_hyb_o<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(y,z,x)}
+template<> void begin_recv_ghost_hyb_o<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(z,x,y)}
+
+#undef BRP
+
+#define BSP(x_,y_,z_)							\
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		\
+  const int size = (3*n##y_*n##z_)*sizeof(float);			\
+  const int face = (i+j+k)<0 ? 1 : n##x_;				\
+  const k_field_t& k_field = fa->k_f_d;					\
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+  Kokkos::parallel_for("begin_send_ghost_hyb_o<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+      const int x_ = face;						\
+      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ox); \
+      sbuf_d(n##y_*n##z_   + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::oy); \
+      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::oz); \
+    });									\
+  Kokkos::deep_copy(sbuf_h, sbuf_d);					\
+  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
+
+template<typename T> void begin_send_ghost_hyb_o(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {}
+template<> void begin_send_ghost_hyb_o<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(x,y,z)}
+template<> void begin_send_ghost_hyb_o<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(y,z,x)}
+template<> void begin_send_ghost_hyb_o<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(z,x,y)}
+
+#undef BSP
+
+void k_begin_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+// Start receiving
+    begin_recv_ghost_hyb_o<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
+    begin_recv_ghost_hyb_o<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
+    begin_recv_ghost_hyb_o<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
+    begin_recv_ghost_hyb_o<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    begin_recv_ghost_hyb_o<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    begin_recv_ghost_hyb_o<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+
+// Start sending
+    begin_send_ghost_hyb_o<XYZ>(fa, -1,  0,  0, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
+    begin_send_ghost_hyb_o<YZX>(fa,  0, -1,  0, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
+    begin_send_ghost_hyb_o<ZXY>(fa,  0,  0, -1, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
+    begin_send_ghost_hyb_o<XYZ>(fa,  1,  0,  0, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
+    begin_send_ghost_hyb_o<YZX>(fa,  0,  1,  0, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
+    begin_send_ghost_hyb_o<ZXY>(fa,  0,  0,  1, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
+}
+
+#define ERP(x_,y_,z_)							\
+  const grid_t* g = fa->g;						\
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));	\
+  if(p) {								\
+    const int nx = g->nx, ny = g->ny, nz = g->nz;			\
+    const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
+    const k_field_t& k_field = fa->k_f_d;				\
+    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+    Kokkos::parallel_for("end_recv_ghost_hyb_o<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+	const int x_ = face;						\
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ox) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::oy) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::oz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      });								\
+  }
+
+template<typename T> void end_recv_ghost_hyb_o(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
+template<> void end_recv_ghost_hyb_o<XYZ>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(x,y,z)}
+template<> void end_recv_ghost_hyb_o<YZX>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(y,z,x)}
+template<> void end_recv_ghost_hyb_o<ZXY>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(z,x,y)}
+
+#undef ERP
+
+template<typename T> void end_send_ghost_hyb_o(field_array_t* fa, const int i, const int j, const int k) {
+    end_send_port_k(i,j,k,fa->g);
+}
+
+void k_end_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+// End receiving
+    end_recv_ghost_hyb_o<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
+    end_recv_ghost_hyb_o<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
+    end_recv_ghost_hyb_o<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
+    end_recv_ghost_hyb_o<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
+    end_recv_ghost_hyb_o<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
+    end_recv_ghost_hyb_o<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+
+// End sending
+    end_send_ghost_hyb_o<XYZ>(fa, -1,  0,  0);
+    end_send_ghost_hyb_o<YZX>(fa,  0, -1,  0);
+    end_send_ghost_hyb_o<ZXY>(fa,  0,  0, -1);
+    end_send_ghost_hyb_o<XYZ>(fa,  1,  0,  0);
+    end_send_ghost_hyb_o<YZX>(fa,  0,  1,  0);
+    end_send_ghost_hyb_o<ZXY>(fa,  0,  0,  1);
+}
+
 /*****************************************************************************
  * Synchronization functions
  *

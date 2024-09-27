@@ -36,22 +36,19 @@ center_p_pipeline( center_p_pipeline_args_t * args,
     dz   = p->dz;
     ii   = p->i;
     f    = f0 + ii;                          // Interpolate E
-    hax  = qdt_2mc*(    ( f->ex    + dy*f->dexdy    ) +
-                     dz*( f->dexdz + dy*f->d2exdydz ) );
-    hay  = qdt_2mc*(    ( f->ey    + dz*f->deydz    ) +
-                     dx*( f->deydx + dz*f->d2eydzdx ) );
-    haz  = qdt_2mc*(    ( f->ez    + dx*f->dezdx    ) +
-                     dy*( f->dezdy + dx*f->d2ezdxdy ) );
-    cbx  = f->cbx + dx*f->dcbxdx;            // Interpolate B
-    cby  = f->cby + dy*f->dcbydy;
-    cbz  = f->cbz + dz*f->dcbzdz;
+    hax  = qdt_2mc*(    ( f->ex     ) );
+    hay  = qdt_2mc*(    ( f->ey     ) );
+    haz  = qdt_2mc*(    ( f->ez     ) );
+    cbx  = f->cbx;// + dx*f->dcbxdx;            // Interpolate B
+    cby  = f->cby;// + dy*f->dcbydy;
+    cbz  = f->cbz;// + dz*f->dcbzdz;
     ux   = p->ux;                            // Load momentum
     uy   = p->uy;
     uz   = p->uz;
     ux  += hax;                              // Half advance E
     uy  += hay;
     uz  += haz;
-    v0   = qdt_4mc/(float)sqrt(one + (ux*ux + (uy*uy + uz*uz)));
+    v0   = qdt_4mc;///(float)sqrt(one + (ux*ux + (uy*uy + uz*uz)));
     /**/                                     // Boris - scalars
     v1   = cbx*cbx + (cby*cby + cbz*cbz);
     v2   = (v0*v0)*v1;
@@ -70,7 +67,7 @@ center_p_pipeline( center_p_pipeline_args_t * args,
   }
 }
 
-#if defined(V4_ACCELERATION) && defined(HAS_V4_PIPELINE)
+#if 0 &&  defined(V4_ACCELERATION) && defined(HAS_V4_PIPELINE)
 
 using namespace v4;
 

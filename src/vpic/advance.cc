@@ -11,7 +11,7 @@ int vpic_simulation::advance(void)
 
   species_t *sp;
   double err;
-
+  double frac;
   //printf("%d: Step %d \n", rank(), step());
 
   // Use default policy, for now
@@ -74,7 +74,7 @@ int vpic_simulation::advance(void)
   //printf("Pushed\n");
 
   // Reduce accumulator contributions into the device array
-  KOKKOS_TIC();
+ /////// KOKKOS_TIC();
   // These aren't behaving as I expect on CPUs, so I'm now doing this at the
   // end of advance_p.  This is rather wasteful of view allocs and contributes.
   // TODO: Only contribute once per timestep and do one view creation per
@@ -82,7 +82,7 @@ int vpic_simulation::advance(void)
   //Kokkos::Experimental::contribute(field_array->k_f_d, field_array->k_field_sa_d);
   //field_array->k_field_sa_d.reset_except(field_array->k_f_d);
   //field_array->k_field_sa_d.reset();
-  KOKKOS_TOC( field_sa_contributions, 1);
+  ////////KOKKOS_TOC( field_sa_contributions, 1);
 
   // Copy particle movers back to host
   KOKKOS_TIC();
@@ -217,7 +217,7 @@ int vpic_simulation::advance(void)
   FAK->k_reduce_jf(field_array);
   KOKKOS_TOC( JF_ACCUM_DATA_MOVEMENT, 1);
   //  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
-  TIC FAK->k_synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
+  /////TIC FAK->k_synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
 
   // At this point, the particle currents are known at jf_{1/2}.
   // Let the user add their own current contributions. It is the users
@@ -243,14 +243,19 @@ int vpic_simulation::advance(void)
   // DEVICE -- Touches fields
   // Half advance the magnetic field from B_0 to B_{1/2}
   KOKKOS_TIC();
-  FAK->advance_b( field_array, 0.5 );
+  grid->isub=0;
+  frac = 1.0/grid->nsub;
+  for(int i=0;i<grid->nsub;i++){
+    FAK->advance_b( field_array, frac );
+    grid->isub++;
+  }
   KOKKOS_TOC( advance_b, 1 );
 
   // Advance the electric field from E_0 to E_1
 
   // Device - Touches fields
-  //  TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
-  TIC FAK->advance_e_kokkos( field_array, 1.0 ); TOC( advance_e, 1 );
+  //TIC FAK->advance_e( field_array, 1.0 ); TOC( advance_e, 1 );
+  //TIC FAK->advance_e_kokkos( field_array, 1.0 ); TOC( advance_e, 1 );
 
   // Let the user add their own contributions to the electric field. It is the
   // users responsibility to insure injected electric fields are consistent
@@ -270,12 +275,22 @@ int vpic_simulation::advance(void)
       }
   }
 
+  KOKKOS_TIC();
+  // Smooth live (dynamically-evolved) B field
+  if (grid->nsmb > 0 && step()%grid->nsmb == 0 ) {
+    FAK->hyb_smooth_b( field_array );
+  }
+  // Smooth E/B fields interpolated to particles (but not fed into B advance)
+  FAK->hyb_smooth_eb_interp( field_array, true );
+  KOKKOS_TOC( advance_b, 1 ); // TODO may want separate timer -ATr,2024sep10
+
   // Half advance the magnetic field from B_{1/2} to B_1
 
   // DEVICE
   // Touches fields
-  TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
+  //TIC FAK->advance_b( field_array, 0.5 ); TOC( advance_b, 1 );
 
+  /*
   // Divergence clean e
 
   if( (clean_div_e_interval>0) && ((step() % clean_div_e_interval)==0) )
@@ -339,7 +354,7 @@ int vpic_simulation::advance(void)
           TIC FAK->clean_div_b_kokkos( field_array ); TOC( clean_div_b, 1 );
       }
   }
-
+  
   // Synchronize the shared faces
   // HOST
   // Touches fields
@@ -352,7 +367,7 @@ int vpic_simulation::advance(void)
   // Fields are updated ... load the interpolator for next time step and
   // particle diagnostics in user_diagnostics if there are any particle
   // species to worry about
-
+*/
   // DEVICE
   // Touches fields, interpolators
   if( species_list ) TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
@@ -361,8 +376,9 @@ int vpic_simulation::advance(void)
 
   // Print out status
   if( (status_interval>0) && ((step() % status_interval)==0) ) {
-      if( rank()==0 ) MESSAGE(( "Completed step %i of %i", step(), num_step ));
-      update_profile( rank()==0 );
+      if( rank()==status_timers_rank ) MESSAGE(( "Completed step %i of %i", step(), num_step ));
+      //update_profile( rank()==0 );
+      update_profile_meanminmax( rank()==status_timers_rank );
   }
 
   // Let the user compute diagnostics

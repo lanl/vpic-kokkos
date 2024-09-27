@@ -74,6 +74,21 @@ mp_allsum_i( int * local,
              int n );
 
 void
+mp_allsum_li( int64_t * local,
+              int64_t * global,
+              int n );
+
+void
+mp_allminloc_scalar_d( double * local,
+                       double * global,
+                       int    * globalrank );
+
+void
+mp_allmaxloc_scalar_d( double * local,
+                       double * global,
+                       int    * globalrank );
+
+void
 mp_allgather_i( int * sbuf,
                 int * rbuf,
                 int n );

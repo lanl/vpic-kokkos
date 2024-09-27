@@ -154,10 +154,17 @@
 typedef struct field {
   float ex,   ey,   ez,   div_e_err;     // Electric field and div E error
   float cbx,  cby,  cbz,  div_b_err;     // Magnetic field and div B error
-  float tcax, tcay, tcaz, rhob;          // TCA fields and bound charge density
+  float tcax, tcay, tcaz, rhob;          // hybrid: tcax multiplies hypereta, tcay multiplies eta, tcaz multiplies E field 
   float jfx,  jfy,  jfz,  rhof;          // Free current and charge density
+  float jfxold,  jfyold,  jfzold,  rhofold; // Free current and charge density
+  float cbx0, cby0, cbz0, tmpsm;         // External (potential) magnetic field
+  float tx, ty, tz, te;                  // Electron temperature + temp storage
+  float ox, oy, oz, oe;                  // For B field solve/smoothing
+  float pex, pey, pez, pe;               // pressure etc
   material_id ematx, ematy, ematz, nmat; // Material at edge centers and nodes
   material_id fmatx, fmaty, fmatz, cmat; // Material at face and cell centers
+ 
+
 } field_t;
 
 // field_advance_kernels holds all the function pointers to all the
@@ -181,6 +188,8 @@ typedef struct field_advance_kernels {
 
   void (*advance_b)( struct field_array * RESTRICT fa, float frac );
   void (*advance_e)( struct field_array * RESTRICT fa, float frac );
+  void (*hyb_smooth_b)( struct field_array * RESTRICT fa );
+  void (*hyb_smooth_eb_interp)( struct field_array * RESTRICT fa, bool smoothed );
 
   // Diagnostic interface
   // FIXME: MAY NEED MORE CAREFUL THOUGHT FOR CURVILINEAR SYSTEMS

@@ -9,16 +9,16 @@
 
 // This module implements kokkos macros
 
-#define FIELD_VAR_COUNT 16
+#define FIELD_VAR_COUNT 36
 #define FIELD_EDGE_COUNT 8
 #define PARTICLE_VAR_COUNT 7
 #define PARTICLE_MOVER_VAR_COUNT 3
-#define ACCUMULATOR_VAR_COUNT 3
+#define ACCUMULATOR_VAR_COUNT 4
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
 #define HYDRO_VAR_COUNT 14
-#define NUM_J_DIMS 3
+#define NUM_J_DIMS 4
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -136,7 +136,27 @@ namespace field_var {
     jfx       = 12,
     jfy       = 13,
     jfz       = 14,
-    rhof      = 15
+    rhof      = 15,
+    jfxold    = 16,
+    jfyold    = 17,
+    jfzold    = 18,
+    rhofold   = 19,
+    cbx0      = 20,
+    cby0      = 21,
+    cbz0      = 22,
+    tmpsm     = 23,
+    tx        = 24,
+    ty        = 25,
+    tz        = 26,
+    te        = 27,
+    ox        = 28,
+    oy        = 29,
+    oz        = 30,
+    oe        = 31,
+    pex       = 32,
+    pey       = 33,
+    pez       = 34,
+    pe        = 35
   };
 };
 namespace field_edge_var { \
@@ -148,7 +168,7 @@ namespace field_edge_var { \
     fmatx = 4,
     fmaty = 5,
     fmatz = 6,
-    cmat  = 7
+    cmat  = 7,
   };
 };
 
@@ -171,7 +191,7 @@ namespace interpolator_var {
     cby      = 14,
     dcbydy   = 15,
     cbz      = 16,
-    dcbzdz   = 17
+    dcbzdz   = 17,
   };
 };
 
@@ -202,6 +222,7 @@ namespace accumulator_var {
     jx = 0,
     jy = 1,
     jz = 2,
+    rho= 3,
   };
 };
 

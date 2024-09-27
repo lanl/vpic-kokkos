@@ -98,16 +98,17 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         int pfxy_index = VOXEL(2, y+1, z, nx,ny,nz) + x-1;
 
         // ex interpolation coefficients
+        // ex->tx from hyb_smooth_eb(...)
         //w0 = pf0->ex;
-        #define w0 k_field(pf0_index, field_var::ex)
+        #define w0 k_field(pf0_index, field_var::tx)
         //w1 = pfy->ex;
-        #define w1 k_field(pfy_index, field_var::ex)
+        #define w1 k_field(pfy_index, field_var::tx)
         //w2 = pfz->ex;
-        #define w2 k_field(pfz_index, field_var::ex)
+        #define w2 k_field(pfz_index, field_var::tx)
         //w3 = pfyz->ex;
-        #define w3 k_field(pfyz_index, field_var::ex)
+        #define w3 k_field(pfyz_index, field_var::tx)
 
-        pi_ex       = fourth*( (w3 + w0) + (w1 + w2) );
+        pi_ex       = w0;//fourth*( (w3 + w0) + (w1 + w2) );
         pi_dexdy    = fourth*( (w3 - w0) + (w1 - w2) );
         pi_dexdz    = fourth*( (w3 - w0) - (w1 - w2) );
         pi_d2exdydz = fourth*( (w3 + w0) - (w1 + w2) );
@@ -118,17 +119,18 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         #undef w3
 
         // ey interpolation coefficients
+        // ey->ty from hyb_smooth_eb(...)
 
         //w0 = pf0->ey;
-        #define w0 k_field(pf0_index, field_var::ey)
+        #define w0 k_field(pf0_index, field_var::ty)
         //w1 = pfz->ey;
-        #define w1 k_field(pfz_index, field_var::ey)
+        #define w1 k_field(pfz_index, field_var::ty)
         //w2 = pfx->ey;
-        #define w2 k_field(pfx_index, field_var::ey)
+        #define w2 k_field(pfx_index, field_var::ty)
         //w3 = pfzx->ey;
-        #define w3 k_field(pfzx_index, field_var::ey)
+        #define w3 k_field(pfzx_index, field_var::ty)
 
-        pi_ey       = fourth*( (w3 + w0) + (w1 + w2) );
+        pi_ey       = w0;//fourth*( (w3 + w0) + (w1 + w2) );
         pi_deydz    = fourth*( (w3 - w0) + (w1 - w2) );
         pi_deydx    = fourth*( (w3 - w0) - (w1 - w2) );
         pi_d2eydzdx = fourth*( (w3 + w0) - (w1 + w2) );
@@ -139,16 +141,17 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         #undef w3
 
         // ez interpolation coefficients
+        // ez->tz from hyb_smooth_eb(...)
 
         // w0 = pf0->ez;
-        #define w0 k_field(pf0_index, field_var::ez)
+        #define w0 k_field(pf0_index, field_var::tz)
         // w1 = pfx->ez;
-        #define w1 k_field(pfx_index, field_var::ez)
+        #define w1 k_field(pfx_index, field_var::tz)
         // w2 = pfy->ez;
-        #define w2 k_field(pfy_index, field_var::ez)
+        #define w2 k_field(pfy_index, field_var::tz)
         // w3 = pfxy->ez;
-        #define w3 k_field(pfxy_index, field_var::ez)
-        pi_ez       = fourth*( (w3 + w0) + (w1 + w2) );
+        #define w3 k_field(pfxy_index, field_var::tz)
+        pi_ez       = w0;//fourth*( (w3 + w0) + (w1 + w2) );
         pi_dezdx    = fourth*( (w3 - w0) + (w1 - w2) );
         pi_dezdy    = fourth*( (w3 - w0) - (w1 - w2) );
         pi_d2ezdxdy = fourth*( (w3 + w0) - (w1 + w2) );
@@ -159,40 +162,50 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
         #undef w3
 
         // bx interpolation coefficients
+        // cbx->ox from hyb_smooth_eb(...)
 
         //w0 = pf0->cbx;
-        #define w0 k_field(pf0_index, field_var::cbx)
+        #define w0 k_field(pf0_index, field_var::ox)
+	#define w0b k_field(pf0_index, field_var::cbx0)
         //w1 = pfx->cbx;
-        #define w1 k_field(pfx_index, field_var::cbx)
-        pi_cbx    = half*( w1 + w0 );
-        pi_dcbxdx = half*( w1 - w0 );
+        #define w1 k_field(pfx_index, field_var::ox)
+	//	#define w1b k_field(pfx_index, field_var::cbx0)
+        pi_cbx    = w0 + w0b;//half*( w1 + w0 );
+        pi_dcbxdx = half*( w1 - w0 ); // To-do: Fix for QS
 
         #undef w0
+	#undef w0b
         #undef w1
 
         // by interpolation coefficients
+        // cby->oy from hyb_smooth_eb(...)
 
         // w0 = pf0->cby;
-        #define w0 k_field(pf0_index, field_var::cby)
+        #define w0 k_field(pf0_index, field_var::oy)
+	#define w0b k_field(pf0_index, field_var::cby0)
         // w1 = pfy->cby;
-        #define w1 k_field(pfy_index, field_var::cby)
+        #define w1 k_field(pfy_index, field_var::oy)
 
-        pi_cby    = half*( w1 + w0 );
-        pi_dcbydy = half*( w1 - w0 );
+        pi_cby    = w0 + w0b;//half*( w1 + w0 );
+        pi_dcbydy = half*( w1 - w0 ); // To-do: Fix for QS
 
         #undef w0
+	#undef w0b
         #undef w1
 
         // bz interpolation coefficients
+        // cbz->oz from hyb_smooth_eb(...)
 
         // w0 = pf0->cbz;
-        #define w0 k_field(pf0_index, field_var::cbz)
+        #define w0 k_field(pf0_index, field_var::oz)
+	#define w0b k_field(pf0_index, field_var::cbz0)
         // w1 = pfz->cbz;
-        #define w1 k_field(pfz_index, field_var::cbz)
-        pi_cbz    = half*( w1 + w0 );
-        pi_dcbzdz = half*( w1 - w0 );
+        #define w1 k_field(pfz_index, field_var::oz)
+        pi_cbz    = w0 + w0b;//half*( w1 + w0 );
+        pi_dcbzdz = half*( w1 - w0 ); // To-do: Fix for QS
 
         #undef w0
+	#undef w0b
         #undef w1
 
         //pi++; pf0++; pfx++; pfy++; pfz++; pfyz++; pfzx++; pfxy++;

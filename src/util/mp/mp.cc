@@ -29,6 +29,18 @@ void mp_allsum_i( int *local, int *global, int n ) {
   return MPWrapper::instance().mp_allsum_i( local, global, n );
 }
 
+void mp_allsum_li( int64_t *local, int64_t *global, int n ) {
+  return MPWrapper::instance().mp_allsum_li( local, global, n );
+}
+
+void mp_allminloc_scalar_d( double * local, double * global, int * globalrank ) {
+  return MPWrapper::instance().mp_allminloc_scalar_d( local, global, globalrank );
+}
+
+void mp_allmaxloc_scalar_d( double * local, double * global, int * globalrank ) {
+  return MPWrapper::instance().mp_allmaxloc_scalar_d( local, global, globalrank );
+}
+
 void mp_allgather_i( int *sbuf, int *rbuf, int n ) {
   return MPWrapper::instance().mp_allgather_i( sbuf, rbuf, n );
 }

@@ -84,7 +84,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
     // is the numerically accurate way to compute gamma-1
     ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
-    vz = sqrt(1+ke_mc);            // vz = gamma    (invariant)
+    vz = 1;//sqrt(1+ke_mc);            // vz = gamma    (invariant)
     ke_mc *= c/(vz+1);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
     vz = c/vz;                     // vz = c/gamma
     w0 = qdt_4mc2*vz;

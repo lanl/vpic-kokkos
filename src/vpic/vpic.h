@@ -36,6 +36,7 @@
 
 typedef FileIO FILETYPE;
 
+const uint32_t allvars		(0xffffffff);
 const uint32_t electric		(1<<0 | 1<<1 | 1<<2);
 const uint32_t div_e_err	(1<<3);
 const uint32_t magnetic		(1<<4 | 1<<5 | 1<<6);
@@ -44,15 +45,25 @@ const uint32_t tca			(1<<8 | 1<<9 | 1<<10);
 const uint32_t rhob			(1<<11);
 const uint32_t current		(1<<12 | 1<<13 | 1<<14);
 const uint32_t rhof			(1<<15);
-const uint32_t emat			(1<<16 | 1<<17 | 1<<18);
-const uint32_t nmat			(1<<19);
-const uint32_t fmat			(1<<20 | 1<<21 | 1<<22);
-const uint32_t cmat			(1<<23);
+const uint32_t currentold	(1<<16 | 1<<17 | 1<<18);
+const uint32_t rhofold		(1<<19);
+const uint32_t magnetic0	(1<<20 | 1<<21 | 1<<22);
+const uint32_t tmpsm		(1<<23);
+const uint32_t tempt		(1<<24 | 1<<25 | 1<<26);
+const uint32_t te			(1<<27);
+const uint32_t tempo		(1<<28 | 1<<29 | 1<<30);
+const uint32_t oe			(1<<31);
+//const uint32_t tempp		(1<<32 | 1<<33 | 1<<34);
+//const uint32_t pe			(1<<35);
+//const uint32_t emat			(1<<36 | 1<<37 | 1<<38);
+//const uint32_t nmat			(1<<39);
+//const uint32_t fmat			(1<<40 | 1<<41 | 1<<42);
+//const uint32_t cmat			(1<<43);
 
-const size_t total_field_variables(24);
-const size_t total_field_groups(12); // this counts vectors, tensors etc...
+const size_t total_field_variables(32);
+const size_t total_field_groups(16); // this counts vectors, tensors etc...
 // These bits will be tested to determine which variables to output
-const size_t field_indeces[12] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23 };
+const size_t field_indeces[22] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31 };
 
 struct FieldInfo {
 	char name[128];
@@ -137,6 +148,7 @@ public:
   int clean_div_b_interval; // How often to clean div b
   int num_div_b_round;      // How many clean div b rounds per div b interval
   int sync_shared_interval; // How often to synchronize shared faces
+  int status_timers_rank;   // Which MPI rank should print status messages
 
   // Track whether injection functions necessary
   int field_injection_interval = -1;
@@ -234,6 +246,7 @@ public:
 
   // Text dumps
   void dump_energies( const char *fname, int append = 1 );
+  void dump_particles_count( const char *fname, int append = 1 );
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
 
@@ -477,6 +490,19 @@ public:
 
     field_array        = fa ? fa :
                          new_standard_field_array( grid, material_list, damp );
+
+    for(int k=0; k<=grid->nz+1; k++){
+      for(int j=0; j<=grid->ny+1; j++){
+	      field_t * f = &field(0,j,k);
+	for(int i=0; i<=grid->nx+1; i++){
+	  f->tcax = 1.0;
+	  f->tcay = 1.0;
+	  f->tcaz = 1.0;
+	  f++;
+	}
+      }
+    }
+    
     interpolator_array = new_interpolator_array( grid );
     hydro_array        = new_hydro_array( grid );
 
@@ -548,6 +574,16 @@ public:
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
                    double w,  double age = 0, int update_rhob = 1 );
+
+  
+  // Inject particle on receive list (so gets passed to device).
+  // Intended for user_particle_injection
+  void
+  inject_particle_r( species_t * sp,
+		     double x,  double y,  double z,
+		     double ux, double uy, double uz,
+		     double w,  double age = 0,
+		     int update_rhob = 0 );
 
   // Inject particle raw is for power users!
   // No nannyism _at_ _all_:

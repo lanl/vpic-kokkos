@@ -68,14 +68,67 @@ vpic_simulation::dump_energies( const char *fname,
                   en_f[0], en_f[1], en_f[2],
                   en_f[3], en_f[4], en_f[5] );
 
+  // Piggybacking on existing allreduce to do global NaN check
+  // and terminate simulation early if needed
+  bool hasnan_f = false;
+  bool hasnan_p = false;
+  hasnan_f = hasnan_f || (en_f[0] != en_f[0]);
+  hasnan_f = hasnan_f || (en_f[1] != en_f[1]);
+  hasnan_f = hasnan_f || (en_f[2] != en_f[2]);
+  hasnan_f = hasnan_f || (en_f[3] != en_f[3]);
+  hasnan_f = hasnan_f || (en_f[4] != en_f[4]);
+  hasnan_f = hasnan_f || (en_f[5] != en_f[5]);
+
   LIST_FOR_EACH(sp,species_list) {
     en_p = energy_p_kokkos( sp, interpolator_array );
     if( rank()==0 && status!=fail ) fileIO.print( " %e", en_p );
+    hasnan_p = hasnan_p || (en_p != en_p);
   }
 
   if( rank()==0 && status!=fail ) {
     fileIO.print( "\n" );
     if( fileIO.close() ) ERROR(("File close failed on dump energies!!!"));
+  }
+
+  // NaN check should come after file write closes cleanly
+  if (hasnan_f) ERROR(("NaN found in field energies, terminating early"));
+  if (hasnan_p) ERROR(("NaN found in particle energies, terminating early"));
+}
+
+void
+vpic_simulation::dump_particles_count( const char *fname,
+                                       int append ) {
+  species_t *sp;
+  FileIO fileIO;
+  FileIOStatus status(fail);
+
+  if( !fname ) ERROR(("Invalid file name"));
+
+  if( rank()==0 ) {
+    status = fileIO.open(fname, append ? io_append : io_write);
+    if( status==fail ) ERROR(( "Could not open \"%s\".", fname ));
+    else {
+      if( append==0 ) {
+        fileIO.print( "%% Layout\n%% step" );
+        LIST_FOR_EACH(sp,species_list)
+          fileIO.print( " \"%s\"", sp->name );
+        fileIO.print( "\n" );
+        fileIO.print( "%% timestep = %e\n", grid->dt );
+      }
+      fileIO.print( "%li", (long)step() );
+    }
+  }
+
+  LIST_FOR_EACH(sp,species_list) {
+    int64_t local = (int64_t)sp->np;
+    int64_t global;
+    mp_allsum_li( &local, &global, 1 );
+    if( rank()==0 && status!=fail ) fileIO.print( " %li", global );
+  }
+
+  if( rank()==0 && status!=fail ) {
+    fileIO.print( "\n" );
+    if( fileIO.close() ) ERROR(("File close failed on dump count particles!!!"));
   }
 }
 

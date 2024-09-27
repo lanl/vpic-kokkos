@@ -140,18 +140,22 @@ unload_accumulator_array_kokkos(field_array_t* RESTRICT fa,
         int ayz = VOXEL(1, y-1, z-1, nx, ny, nz) + x-1;
         int azx = VOXEL(0, y, z-1, nx, ny, nz) + x-1;
         int axy = VOXEL(0, y-1, z, nx, ny, nz) + x-1;
-        k_field(f0, field_var::jfx) += cx*( k_accum(a0, accumulator_var::jx, 0) +
+        k_field(f0, field_var::jfx) += ( k_accum(a0, accumulator_var::jx, 0) +
                                             k_accum(ay, accumulator_var::jx, 1) +
                                             k_accum(az, accumulator_var::jx, 2) +
                                             k_accum(ayz, accumulator_var::jx, 3) );
-        k_field(f0, field_var::jfy) += cy*( k_accum(a0, accumulator_var::jy, 0) +
+        k_field(f0, field_var::jfy) += ( k_accum(a0, accumulator_var::jy, 0) +
                                             k_accum(az, accumulator_var::jy, 1) +
                                             k_accum(ax, accumulator_var::jy, 2) +
                                             k_accum(azx, accumulator_var::jy, 3) );
-        k_field(f0, field_var::jfz) += cz*( k_accum(a0, accumulator_var::jz, 0) +
+        k_field(f0, field_var::jfz) += ( k_accum(a0, accumulator_var::jz, 0) +
                                             k_accum(ax, accumulator_var::jz, 1) +
                                             k_accum(ay, accumulator_var::jz, 2) +
                                             k_accum(axy, accumulator_var::jz, 3) );
+        k_field(f0, field_var::rhof) += ( k_accum(a0, accumulator_var::rho, 0) +
+                                            k_accum(ax, accumulator_var::rho, 1) +
+                                            k_accum(ay, accumulator_var::rho, 2) +
+                                            k_accum(axy, accumulator_var::rho, 3) );
     });
 /*
     Kokkos::parallel_for("unload_accumulator_array", KOKKOS_TEAM_POLICY_DEVICE(nz+1, Kokkos::AUTO),

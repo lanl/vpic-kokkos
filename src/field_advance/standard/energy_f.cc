@@ -42,24 +42,12 @@ typedef struct pipeline_args {
   }
 
 #define REDUCE_EN()                                       \
-  en_ex += 0.25*( m[ f0->ematx].epsx* f0->ex * f0->ex +   \
-                  m[ fy->ematx].epsx* fy->ex * fy->ex +   \
-                  m[ fz->ematx].epsx* fz->ex * fz->ex +   \
-                  m[fyz->ematx].epsx*fyz->ex *fyz->ex );  \
-  en_ey += 0.25*( m[ f0->ematy].epsy* f0->ey * f0->ey +   \
-                  m[ fz->ematy].epsy* fz->ey * fz->ey +   \
-                  m[ fx->ematy].epsy* fx->ey * fx->ey +   \
-                  m[fzx->ematy].epsy*fzx->ey *fzx->ey );  \
-  en_ez += 0.25*( m[ f0->ematz].epsz* f0->ez * f0->ez +   \
-                  m[ fx->ematz].epsz* fx->ez * fx->ez +   \
-                  m[ fy->ematz].epsz* fy->ez * fy->ez +   \
-                  m[fxy->ematz].epsz*fxy->ez *fxy->ez );  \
-  en_bx += 0.5 *( m[ f0->fmatx].rmux* f0->cbx* f0->cbx +  \
-                  m[ fx->fmatx].rmux* fx->cbx* fx->cbx ); \
-  en_by += 0.5 *( m[ f0->fmaty].rmuy* f0->cby* f0->cby +  \
-                  m[ fy->fmaty].rmuy* fy->cby* fy->cby ); \
-  en_bz += 0.5 *( m[ f0->fmatz].rmuz* f0->cbz* f0->cbz +  \
-                  m[ fz->fmatz].rmuz* fz->cbz* fz->cbz )
+  en_ex += f0->ex * f0->ex ;  \
+  en_ey += f0->ey * f0->ey ;  \
+  en_ez += f0->ez * f0->ez ;  \
+  en_bx += (f0->cbx + f0->cbx0) * (f0->cbx + f0->cbx0); \
+  en_by += (f0->cby + f0->cby0) * (f0->cby + f0->cby0); \
+  en_bz += (f0->cbz + f0->cbz0) * (f0->cbz + f0->cbz0);
 
 void
 energy_f_pipeline( pipeline_args_t * args,
@@ -78,12 +66,12 @@ energy_f_pipeline( pipeline_args_t * args,
     NEXT_STENCIL();
   }
 
-  args->en[pipeline_rank][0] = en_ex;
-  args->en[pipeline_rank][1] = en_ey;
-  args->en[pipeline_rank][2] = en_ez;
-  args->en[pipeline_rank][3] = en_bx;
-  args->en[pipeline_rank][4] = en_by;
-  args->en[pipeline_rank][5] = en_bz;
+  args->en[pipeline_rank][0] = 0.5*en_ex;
+  args->en[pipeline_rank][1] = 0.5*en_ey;
+  args->en[pipeline_rank][2] = 0.5*en_ez;
+  args->en[pipeline_rank][3] = 0.5*en_bx;
+  args->en[pipeline_rank][4] = 0.5*en_by;
+  args->en[pipeline_rank][5] = 0.5*en_bz;
 }
 
 #if defined(V4_ACCELERATION) && defined(HAS_V4_PIPELINE)
@@ -143,44 +131,22 @@ struct field_reduce {
     KOKKOS_INLINE_FUNCTION void
     operator() (const size_type z, const size_type y, const size_type x, value_type en) const {
         const int f0 =  VOXEL(x,   y,   z,   nx,ny,nz);
-        const int fx =  VOXEL(x+1, y,   z,   nx,ny,nz);
-        const int fy =  VOXEL(x,   y+1, z,   nx,ny,nz);
-        const int fz =  VOXEL(x,   y,   z+1, nx,ny,nz);
-        const int fyz = VOXEL(x,   y+1, z+1, nx,ny,nz);
-        const int fzx = VOXEL(x+1, y,   z+1, nx,ny,nz);
-        const int fxy = VOXEL(x+1, y+1, z,   nx,ny,nz);
-        en[0] += 0.25*( k_mat(k_field_edge(f0,  field_edge_var::ematx), material_coeff_var::epsx) * k_field(f0,  field_var::ex) * k_field(f0,  field_var::ex) +
-                        k_mat(k_field_edge(fy,  field_edge_var::ematx), material_coeff_var::epsx) * k_field(fy,  field_var::ex) * k_field(fy,  field_var::ex) +
-                        k_mat(k_field_edge(fz,  field_edge_var::ematx), material_coeff_var::epsx) * k_field(fz,  field_var::ex) * k_field(fz,  field_var::ex) +
-                        k_mat(k_field_edge(fyz, field_edge_var::ematx), material_coeff_var::epsx) * k_field(fyz, field_var::ex) * k_field(fyz, field_var::ex) );
+      
+        en[0] += k_field(f0,  field_var::ex) * k_field(f0,  field_var::ex);
+        en[1] += k_field(f0,  field_var::ey) * k_field(f0,  field_var::ey);
+        en[2] += k_field(f0,  field_var::ez) * k_field(f0,  field_var::ez);
+        en[3] += k_field(f0,  field_var::cbx) * k_field(f0,  field_var::cbx);
+        en[4] += k_field(f0,  field_var::cby) * k_field(f0,  field_var::cby);
+        en[5] += k_field(f0,  field_var::cbz) * k_field(f0,  field_var::cbz);
+        }
 
-        en[1] += 0.25*( k_mat(k_field_edge(f0,  field_edge_var::ematy), material_coeff_var::epsy) * k_field(f0,  field_var::ey) * k_field(f0,  field_var::ey) +
-                        k_mat(k_field_edge(fz,  field_edge_var::ematy), material_coeff_var::epsy) * k_field(fz,  field_var::ey) * k_field(fz,  field_var::ey) +
-                        k_mat(k_field_edge(fx,  field_edge_var::ematy), material_coeff_var::epsy) * k_field(fx,  field_var::ey) * k_field(fx,  field_var::ey) +
-                        k_mat(k_field_edge(fzx, field_edge_var::ematy), material_coeff_var::epsy) * k_field(fzx, field_var::ey) * k_field(fzx, field_var::ey) );
-
-        en[2] += 0.25*( k_mat(k_field_edge(f0,  field_edge_var::ematz), material_coeff_var::epsz) * k_field(f0,  field_var::ez) * k_field(f0,  field_var::ez) +
-                        k_mat(k_field_edge(fx,  field_edge_var::ematz), material_coeff_var::epsz) * k_field(fx,  field_var::ez) * k_field(fx,  field_var::ez) +
-                        k_mat(k_field_edge(fy,  field_edge_var::ematz), material_coeff_var::epsz) * k_field(fy,  field_var::ez) * k_field(fy,  field_var::ez) +
-                        k_mat(k_field_edge(fxy, field_edge_var::ematz), material_coeff_var::epsz) * k_field(fxy, field_var::ez) * k_field(fxy, field_var::ez) );
-
-        en[3] += 0.5*(  k_mat(k_field_edge(f0, field_edge_var::fmatx), material_coeff_var::rmux) * k_field(f0, field_var::cbx) * k_field(f0, field_var::cbx) +
-                        k_mat(k_field_edge(fx, field_edge_var::fmatx), material_coeff_var::rmux) * k_field(fx, field_var::cbx) * k_field(fx, field_var::cbx) );
-
-        en[4] += 0.5*(  k_mat(k_field_edge(f0, field_edge_var::fmaty), material_coeff_var::rmuy) * k_field(f0, field_var::cby) * k_field(f0, field_var::cby) +
-                        k_mat(k_field_edge(fy, field_edge_var::fmaty), material_coeff_var::rmuy) * k_field(fy, field_var::cby) * k_field(fy, field_var::cby) );
-
-        en[5] += 0.5*(  k_mat(k_field_edge(f0, field_edge_var::fmatz), material_coeff_var::rmuz) * k_field(f0, field_var::cbz) * k_field(f0, field_var::cbz) +
-                        k_mat(k_field_edge(fz, field_edge_var::fmatz), material_coeff_var::rmuz) * k_field(fz, field_var::cbz) * k_field(fz, field_var::cbz) );
-    }
-
-    KOKKOS_INLINE_FUNCTION void
+   KOKKOS_INLINE_FUNCTION void
     join(value_type dst, const value_type src) const {
         for(size_type i = 0; i < 6; i++) {
             dst[i] += src[i];
         }
     }
-
+    
     KOKKOS_INLINE_FUNCTION void
     init(value_type sums) const {
         for(size_type i=0; i<6; i++) {
@@ -200,7 +166,7 @@ void energy_f_kokkos(double* global, const field_array_t* RESTRICT fa) {
     field_reduce field_reducer(fa->k_f_d, fa->k_fe_d, sfa->k_mc_d, nx, ny, nz);
     Kokkos::parallel_reduce("field energy reduction", policy, field_reducer, en);
 
-    double v0 = 0.5*fa->g->eps0*fa->g->dV;
+    double v0 = 0.5*fa->g->dV;
     for(int i=0; i<6; i++) {
         en[i] *= v0;
     }

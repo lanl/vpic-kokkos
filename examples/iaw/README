@@ -1,0 +1,8 @@
+cd iaw
+emacs –nw iaw.cxx
+make
+srun –n 8 –N 1 ./iaw.Linux 2>&1 | tee hvpic.out                 (or mpirun –np 1 ./iaw..)
+ftn –o translateIAW translateIAW.f90
+mkdir data
+srun –n 1 ./translateIAW
+python ./plotsIAW.py  

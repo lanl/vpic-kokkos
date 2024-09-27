@@ -10,6 +10,8 @@ static field_advance_kernels_t sfa_kernels = {
 
   advance_b,
   advance_e,
+  hyb_smooth_b,
+  hyb_smooth_eb_interp,
 
   // Diagnostic interfaces
 
@@ -237,16 +239,23 @@ new_standard_field_array( grid_t           * RESTRICT g,
   fa->g = g;
   fa->params = create_sfa_params( g, m_list, damp );
   fa->kernel[0] = sfa_kernels;
+
+  fa->kernel->advance_b         = hyb_advance_b;
+  fa->kernel->advance_e         = hyb_advance_e;
+  fa->kernel->hyb_smooth_b      = hyb_smooth_b;
+  fa->kernel->hyb_smooth_eb_interp = hyb_smooth_eb_interp;
+
+
   if( !m_list->next ) {
     /* If there is only one material, then this material permeates all
        space and we can use high performance versions of some kernels. */
-    fa->kernel->advance_e         = vacuum_advance_e;
+    //fa->kernel->advance_e         = vacuum_advance_e;
     fa->kernel->energy_f          = vacuum_energy_f;
     fa->kernel->compute_rhob      = vacuum_compute_rhob;
     fa->kernel->compute_curl_b    = vacuum_compute_curl_b;
     fa->kernel->compute_div_e_err = vacuum_compute_div_e_err;
     fa->kernel->clean_div_e       = vacuum_clean_div_e;
-    fa->kernel->advance_e_kokkos  = vacuum_advance_e_kokkos;
+    fa->kernel->advance_e_kokkos  = hyb_static_e_kokkos;
     fa->kernel->compute_div_e_err_kokkos = vacuum_compute_div_e_err_kokkos;
     fa->kernel->clean_div_e_kokkos= vacuum_clean_div_e_kokkos;
     fa->kernel->energy_f_kokkos   = vacuum_energy_f_kokkos;
@@ -276,7 +285,7 @@ clear_jf( field_array_t * RESTRICT fa ) {
   if( !fa ) ERROR(( "Bad args" ));
   field_t * RESTRICT ALIGNED(128) f = fa->f;
   const int nv = fa->g->nv;
-  for( int v=0; v<nv; v++ ) f[v].jfx = 0, f[v].jfy = 0, f[v].jfz = 0;
+  for( int v=0; v<nv; v++ ) f[v].jfx = 0, f[v].jfy = 0, f[v].jfz = 0, f[v].rhof=0;
 }
 
 void
@@ -294,9 +303,16 @@ void clear_jf_kokkos(field_array_t* RESTRICT fa) {
     const int nv = fa->g->nv;
     Kokkos::parallel_for("clear_jf", Kokkos::RangePolicy<>(0,nv),
     KOKKOS_LAMBDA(const int v) {
+	kfield(v, field_var::jfxold) = 	kfield(v, field_var::jfx);
+	kfield(v, field_var::jfyold) = 	kfield(v, field_var::jfy);
+	kfield(v, field_var::jfzold) = 	kfield(v, field_var::jfz);
+	kfield(v, field_var::rhofold) =	kfield(v, field_var::rhof);
+
         kfield(v, field_var::jfx) = 0;
         kfield(v, field_var::jfy) = 0;
         kfield(v, field_var::jfz) = 0;
+        kfield(v, field_var::rhof) = 0;
+
     });
 }
 

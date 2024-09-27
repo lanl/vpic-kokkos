@@ -95,6 +95,16 @@ typedef struct grid {
   int   sx, sy, sz, nv;     // Voxel indexing x-, y-,z- strides and the
                             // number of local voxels (including ghosts,
                             // (nx+2)(ny+2)(nz+2)), (CONVENIENCE)
+  float eta;
+  float hypereta;
+  float nsub, isub;         // subcycling
+  int nsm;                  // smoothing for moments
+  int nsmb;                 // smooth B fields every nsmb steps
+
+  float den_floor_ohm;    // Density floor for Ohm's law update
+  float den_floor_pe;     // Density floor for electron pressure update
+  float eos_gamma, eos_den; // Electron fluid adiabatic index, reference density
+  
   int   bc[27];             // (-1:1,-1:1,-1:1) FORTRAN indexed array of
                             // boundary conditions to apply at domain edge
                             // 0 ... nproc-1 ... comm boundary condition

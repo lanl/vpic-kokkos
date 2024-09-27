@@ -35,8 +35,8 @@ module list 2>&1 | tee modules.txt
 
 CRAYPE_LINK_TYPE=dynamic cmake \
   -DCMAKE_BUILD_TYPE=Release \
-  -DENABLE_INTEGRATED_TESTS=ON \
-  -DENABLE_UNIT_TESTS=ON \
+  -DENABLE_INTEGRATED_TESTS=OFF \
+  -DENABLE_UNIT_TESTS=OFF \
   -DBUILD_INTERNAL_KOKKOS=ON \
   -DENABLE_KOKKOS_CUDA=ON \
   -DKokkos_ARCH_AMPERE80=ON \
@@ -44,7 +44,7 @@ CRAYPE_LINK_TYPE=dynamic cmake \
   -DKokkos_ENABLE_PTHREAD=OFF \
   -DKokkos_ENABLE_OPENMP=ON \
   -DCMAKE_CXX_COMPILER="CC" \
-  -DCMAKE_CXX_FLAGS="-g -rdynamic"\
+  -DCMAKE_CXX_FLAGS="-g -rdynamic "\
   $src_dir
 
 #------------------------------------------------------------------------------#

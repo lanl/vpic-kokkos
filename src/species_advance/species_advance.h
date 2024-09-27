@@ -35,7 +35,7 @@ typedef struct particle {
   float ux, uy, uz; // Particle normalized momentum
   float w;          // Particle weight (number of physical particles)
 } particle_t;
-
+ 
 // WARNING: FUNCTIONS THAT USE A PARTICLE_MOVER ASSUME THAT EVERYBODY
 // WHO USES THAT PARTICLE MOVER WILL HAVE ACCESS TO PARTICLE ARRAY
 
@@ -404,9 +404,10 @@ move_p_kokkos(
     const float qsp,
     //field_array_t* RESTRICT fa,
     //field_view_t& k_field,
-    float cx,
-    float cy,
-    float cz,
+    float gdx,
+    float gdy,
+    float gdz,
+    float gdt,
     const int nx,
     const int ny,
     const int nz
@@ -437,11 +438,18 @@ move_p_kokkos(
   int64_t neighbor;
   //int pi = int(local_pm_i);
   int pi = pm->i;
+  float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
+  const float one=1., two=2., three=3.;
+  //const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
+  const float rV = 1.0/gdx/gdy/gdz;
 //  auto  k_field_scatter_access = k_f_sa.access();
 //  auto accum_sa = accum_sv.access();
   auto scatter_access = scatter_view.access();
 
-  q = qsp*p_w;
+  //printf("in move_p %d \n", pi);
+
+
+  q = rV*qsp*p_w;
 
     //printf("in move %d \n", pi);
 
@@ -451,6 +459,15 @@ move_p_kokkos(
     s_midy = p_dy;
     s_midz = p_dz;
 
+    ux = p_ux;
+    uy = p_uy;
+    uz = p_uz;
+
+    v0 = one; // /   sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
+
+    ux *= v0;
+    uy *= v0;
+    uz *= v0;
 
     s_dispx = pm->dispx;
     s_dispy = pm->dispy;
@@ -458,6 +475,50 @@ move_p_kokkos(
 
     //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
 
+    //Find postition of particle at t_n+1/2
+    v0 = (ux==0) ? 0.0 : s_dispx/ux/gdt*gdx; //fraction of dt left to push
+    v1 = (uy==0) ? 0.0 : s_dispy/uy/gdt*gdy;  //should all be equal if not 0
+    v2 = (uz==0) ? 0.0 : s_dispz/uz/gdt*gdz;
+
+    fracdt = v0;
+    if(v1>fracdt) fracdt=v1;
+    if(v2>fracdt) fracdt=v2;
+    fracdt = 4.0*(fracdt-0.5);
+    
+    if(fracdt>0){
+      
+      x_half = s_midx + fracdt*ux*gdt/gdx;
+      y_half = s_midy + fracdt*uy*gdt/gdy; 
+      z_half = s_midz + fracdt*uz*gdt/gdz;
+      
+      if(x_half<=one && y_half<=one && z_half<=one
+	 && -x_half<=one && -y_half<=one && -z_half<=one) {
+        
+	// Accumulate the particle current density
+	
+	int iii = ii;
+	int zi = iii/((nx+2)*(ny+2));
+	iii -= zi*(nx+2)*(ny+2);
+	int yi = iii/(nx+2);
+	int xi = iii-yi*(nx+2);
+	
+	//printf("move_p accumulate here");
+	
+	
+	if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
+	  
+	  scatter_access(ii, field_var::jfx) += q*ux;
+	  scatter_access(ii, field_var::jfy) += q*uy;
+	  scatter_access(ii, field_var::jfz) += q*uz;
+	  scatter_access(ii, field_var::rhof) += q;
+	}
+	
+	
+      } //if indbds
+      
+    }
+    //ifmore than half dt left
+    
     //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
 
     s_dir[0] = (s_dispx>0) ? 1 : -1;
@@ -490,6 +551,7 @@ move_p_kokkos(
     s_midy += s_dispy;
     s_midz += s_dispz;
 
+#if 0
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
     // current quadrant in a time-step
@@ -562,7 +624,8 @@ move_p_kokkos(
     }
 
 #   undef accumulate_j
-
+#endif
+    
     // Compute the remaining particle displacment
     pm->dispx -= s_dispx;
     pm->dispy -= s_dispy;
@@ -662,6 +725,12 @@ move_p_kokkos_host_serial(
   const int nx = g->nx;
   const int ny = g->ny;
   const int nz = g->nz;
+
+  float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
+  const float one=1., two=2., three=3.;
+  const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
+  const float rV = g->rdx * g->rdy * g->rdz;
+
   float cx = 0.25 * g->rdy * g->rdz / g->dt;
   float cy = 0.25 * g->rdz * g->rdx / g->dt;
   float cz = 0.25 * g->rdx * g->rdy / g->dt;
@@ -700,14 +769,63 @@ move_p_kokkos_host_serial(
     s_midy = p_dy;
     s_midz = p_dz;
 
+    ux = p_ux;
+    uy = p_uy;
+    uz = p_uz;
 
+    v0 = one;///sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
+
+    ux *= v0;
+    uy *= v0;
+    uz *= v0;
+    
     s_dispx = pm->dispx;
     s_dispy = pm->dispy;
     s_dispz = pm->dispz;
 
     //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
 
-    //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
+    //Find postition of particle at t_n+1/2
+    v0 = (ux==0) ? 0.0 : s_dispx/ux/gdt*gdx; //fraction of dt left to push
+    v1 = (uy==0) ? 0.0 : s_dispy/uy/gdt*gdy;  //should all be equal if not 0
+    v2 = (uz==0) ? 0.0 : s_dispz/uz/gdt*gdz;
+
+    fracdt = v0;
+    if(v1>fracdt) fracdt=v1;
+    if(v2>fracdt) fracdt=v2;
+    fracdt = 4.0*(fracdt-0.5);
+
+      if(fracdt>0){
+
+      x_half = s_midx + fracdt*ux*gdt/gdx;
+      y_half = s_midy + fracdt*uy*gdt/gdy; 
+      z_half = s_midz + fracdt*uz*gdt/gdz;
+      
+      if(x_half<=one && y_half<=one && z_half<=one
+	 && -x_half<=one && -y_half<=one && -z_half<=one) {
+        
+	// Accumulate the particle current density
+	
+      int iii = ii;
+      int zi = iii/((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii/(nx+2);
+      int xi = iii-yi*(nx+2);
+      
+      k_jf_accum(ii, accumulator_var::jx) += rV*q*ux;
+      k_jf_accum(ii, accumulator_var::jy) += rV*q*uy;
+      k_jf_accum(ii, accumulator_var::jz) += rV*q*uz;
+      k_jf_accum(ii, accumulator_var::rho) += rV*q;
+      } //if indbds
+      
+    } //ifmore than half dt left
+
+
+    
+
+      //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
+
+      //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
 
     s_dir[0] = (s_dispx>0) ? 1 : -1;
     s_dir[1] = (s_dispy>0) ? 1 : -1;
@@ -739,6 +857,7 @@ move_p_kokkos_host_serial(
     s_midy += s_dispy;
     s_midz += s_dispz;
 
+#if 0
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
     // current quadrant in a time-step
@@ -786,6 +905,7 @@ move_p_kokkos_host_serial(
     k_jf_accum(VOXEL(xi+1,yi+1,zi,nx,ny,nz), accumulator_var::jz) += cz*v3;
 
 #   undef accumulate_j
+#endif
 
     // Compute the remaining particle displacment
     pm->dispx -= s_dispx;

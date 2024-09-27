@@ -57,16 +57,13 @@ void uncenter_p_kokkos(
     float hax, hay, haz, l_cbx, l_cby, l_cbz;
     float v0, v1, v2, v3, v4;
 
-    hax  = qdt_2mc*(      ( f_ex    + p_dy*f_dexdy    ) +
-                     p_dz*( f_dexdz + p_dy*f_d2exdydz ) );
-    hay  = qdt_2mc*(      ( f_ey    + p_dz*f_deydz    ) +
-                     p_dx*( f_deydx + p_dz*f_d2eydzdx ) );
-    haz  = qdt_2mc*(      ( f_ez    + p_dx*f_dezdx    ) +
-                     p_dy*( f_dezdy + p_dx*f_d2ezdxdy ) );
-    l_cbx  = f_cbx + p_dx*f_dcbxdx;            // Interpolate B
-    l_cby  = f_cby + p_dy*f_dcbydy;
-    l_cbz  = f_cbz + p_dz*f_dcbzdz;
-    v0   = qdt_4mc/(float)sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
+    hax  = qdt_2mc*(      ( f_ex    ) );
+    hay  = qdt_2mc*(      ( f_ey    ) );
+    haz  = qdt_2mc*(      ( f_ez    ) );
+    l_cbx  = f_cbx;// + p_dx*f_dcbxdx;            // Interpolate B
+    l_cby  = f_cby;// + p_dy*f_dcbydy;
+    l_cbz  = f_cbz;// + p_dz*f_dcbzdz;
+    v0   = qdt_4mc;///(float)sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
     /**/                                     // Boris - scalars
     v1    = l_cbx*l_cbx + (l_cby*l_cby + l_cbz*l_cbz);
     v2    = (v0*v0)*v1;

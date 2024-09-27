@@ -1,0 +1,12 @@
+cd islands
+emacs –nw islands.cxx
+make
+srun –n 16 –N 1 ./islands.Linux 2>&1 | tee hvpic.out                 (or mpirun –np 16 ./islands..)
+ftn –o translate_islands translate_islands.f90
+mkdir data
+srun –n 1 ./translate_islands
+ftn –o ayprog ay_gda_integrate.f90
+./ayprog
+IDL gui: “module load idl”  “idl”  “diagnostic”. Python: “mkdir figs” “python plotfigs.py”.
+python ./rate.py”, “python opoint.py
+
