@@ -95,7 +95,7 @@ begin_initialization {
 
   double nppc  = 50;         // Average number of macro particle per cell per species 
   
-  double topology_x = 8; // Number of domains in x, y, and z
+  double topology_x = 1; // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 2;
 
@@ -228,10 +228,10 @@ begin_initialization {
                          topology_x, topology_y, topology_z); // Topology
 
   //grid->te = Te;
-  grid->den = 1.0;
   grid->eta = eta;
   grid->hypereta = hypereta;
-  grid->gamma = gamma;
+  grid->eos_den = 1.0;
+  grid->eos_gamma = gamma;
 
   grid->nsub = 1;
   grid->nsm= 2;
@@ -578,7 +578,7 @@ sim_log( "Loading fields" );
   global->hHdParams.output_variables( current_density | charge_density | stress_tensor );
 
 
-  global->fdParams.output_variables( all );
+  global->fdParams.output_variables( allvars );
 // global->hedParams.output_variables( all );
 // global->hHdParams.output_variables( all );
 

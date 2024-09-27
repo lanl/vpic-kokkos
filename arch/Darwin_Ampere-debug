@@ -9,10 +9,13 @@
 
 src_dir="${0%/*}/.."
 
-KOKKOS_PATH=/usr/projects/maehem/packages/kokkos-06-19-2024/installs/linux-centos8-haswell/gcc-11.2.0/openmpi-4.1.2/kokkos-4.0.01-openmp-4.5-debug
 #------------------------------------------------------------------------------#
 # Check required environment variables
 #------------------------------------------------------------------------------#
+
+#module purge
+module load cmake openmpi/4.1.2-gcc_11.2.0 cuda/12.4.1
+module list 2>&1 | tee modules.txt
 
 #------------------------------------------------------------------------------#
 # Call CMake command
@@ -23,13 +26,24 @@ KOKKOS_PATH=/usr/projects/maehem/packages/kokkos-06-19-2024/installs/linux-cento
 # (the closest match was "(null)" from "./lpi_2d_F6_test.Linux").  Writing out
 # the raw address instead and keeping my fingers crossed.
 
-cmake \
+# In the Cray environment, there is a bit of confusion about compilers and
+# wrappers and such.  I've worked around it with some ad hoc CMake magic, but
+# this line might be helpful when troubleshooting (run it when compiling user
+# decks too).
+#export NVCC_WRAPPER_DEFAULT_COMPILER=$(which CC)
+
+CRAYPE_LINK_TYPE=dynamic cmake \
   -DCMAKE_BUILD_TYPE=Debug \
-  -DENABLE_INTEGRATED_TESTS=ON \
-  -DENABLE_UNIT_TESTS=ON \
-  -DBUILD_INTERNAL_KOKKOS=OFF \
-  -DCMAKE_PREFIX_PATH=${KOKKOS_PATH} \
-  -DCMAKE_CXX_FLAGS="-g -rdynamic" \
+  -DENABLE_INTEGRATED_TESTS=OFF \
+  -DENABLE_UNIT_TESTS=OFF \
+  -DBUILD_INTERNAL_KOKKOS=ON \
+  -DENABLE_KOKKOS_CUDA=ON \
+  -DKokkos_ARCH_AMPERE80=ON \
+  -DKokkos_ARCH_ZEN2=OFF \
+  -DKokkos_ENABLE_DEBUG=ON \
+  -DKokkos_ENABLE_OPENMP=ON \
+  -DCMAKE_CXX_COMPILER=/usr/projects/maehem/temp/maehem-HVPIC-K/kokkos/bin/nvcc_wrapper \
+  -DCMAKE_CXX_FLAGS="-g -rdynamic "\
   $src_dir
 
 #------------------------------------------------------------------------------#

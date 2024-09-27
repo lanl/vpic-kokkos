@@ -14,11 +14,7 @@ src_dir="${0%/*}/.."
 #------------------------------------------------------------------------------#
 
 #module purge
-#module load PrgEnv-gnu
-#module load cmake cuda cpe-cuda
-COMPILER_VENDOR=gcc
-COMPILER_VERSION=11.2.0
-module load git cmake cuda/11.6 openmpi/4.1.2-${COMPILER_VENDOR}_${COMPILER_VERSION}
+module load cmake openmpi/4.1.2-gcc_11.2.0 cuda/12.4.1
 module list 2>&1 | tee modules.txt
 
 #------------------------------------------------------------------------------#
@@ -35,20 +31,18 @@ module list 2>&1 | tee modules.txt
 # this line might be helpful when troubleshooting (run it when compiling user
 # decks too).
 #export NVCC_WRAPPER_DEFAULT_COMPILER=$(which CC)
-export KOKKOS_PATH=/usr/projects/maehem/packages/packages-06-19-2024/installs/gpu/gcc-11.2.0/openmpi-4.1.2/kokkos-4.0.01-openmp-4.5-cuda-11.6-debug
-
-export NVCC_WRAPPER=$KOKKOS_PATH/bin/nvcc_wrapper
-
 
 CRAYPE_LINK_TYPE=dynamic cmake \
-  -DCMAKE_BUILD_TYPE=Debug \
-  -DENABLE_INTEGRATED_TESTS=ON \
-  -DENABLE_UNIT_TESTS=ON \
-  -DBUILD_INTERNAL_KOKKOS=OFF \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DENABLE_INTEGRATED_TESTS=OFF \
+  -DENABLE_UNIT_TESTS=OFF \
+  -DBUILD_INTERNAL_KOKKOS=ON \
   -DENABLE_KOKKOS_CUDA=ON \
-  -DCMAKE_PREFIX_PATH=${KOKKOS_PATH} \
-  -DCMAKE_CXX_COMPILER=${NVCC_WRAPPER} \
-  -DCMAKE_CXX_FLAGS="-g -rdynamic"\
+  -DKokkos_ARCH_AMPERE80=ON \
+  -DKokkos_ARCH_ZEN2=OFF \
+  -DKokkos_ENABLE_OPENMP=ON \
+  -DCMAKE_CXX_COMPILER=/usr/projects/maehem/temp/maehem-HVPIC-K/kokkos/bin/nvcc_wrapper \
+  -DCMAKE_CXX_FLAGS="-g -rdynamic "\
   $src_dir
 
 #------------------------------------------------------------------------------#
