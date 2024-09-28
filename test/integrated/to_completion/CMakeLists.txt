@@ -14,6 +14,7 @@ list(APPEND DEFAULT_ARG_TESTS
 #    dump # This is a simple run which should dump restart files
 #    reconnection_test # This is a simple reconnection run
     pcai # proton cyclotron anisotropy instability for Hybrid-VPIC
+    shock
     )
 
 #list(APPEND SIMPLE_DECK simple) # Reuse existing deck and start half way

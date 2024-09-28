@@ -2,7 +2,7 @@ set(MPIEXEC_NUMPROC 1)
 set(ARGS "")
 
 list(APPEND DEFAULT_ARG_TESTS
-    weibel # This test is a simple run which should not die
+#    weibel # This test is a simple run which should not die
     dump) # This is a simple run which should dump restart files
 
 list(APPEND RESTART_DECK dump) # Reuse existing deck and start half way
