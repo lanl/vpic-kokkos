@@ -1,8 +1,21 @@
-Welcome to the Kokkos version of the Vector Particle-in-Cell code, VPIC 2.0!
-VPIC is a 3D3V, fully relativistic, kinetic, performance-first PIC code for
-solving the coupled Maxwell-Boltzmann system of equations. Utilizing the Kokkos
-performance-portable framework, VPIC achieves high performance on multiple CPU
-and GPU architectures.
+# Vector Particle-In-Cell (VPIC) Project
+
+VPIC is a general-purpose particle-in-cell (PIC) simulation code for modeling multi-species
+kinetic plasmas in one, two, or three spatial dimensions.
+VPIC can solve equations of motion for different plasma species using kinetic or fluid descriptions.
+To solve for the kinetic species, VPIC employs a variety of explicit and implicit time-stepping
+schemes to update charged particle positions and velocities.
+In contrast, the fluid species is advanced in time by solving a number of fluid moment equations on
+a spatial grid using finite-difference methods.
+The electromagnetic fields are also solved on a spatial grid using either the full Maxwell equations,
+or various approximations to the Maxwell equations that target particular temporal and spatial scales
+and physics approximations such as a low frequency quasi-neutral approximation that uses an Ohm's law
+for the electric field.
+The kinetic particle quantities are coupled with the grid-based fields and fluid moments by giving the
+particles a shape of selectable order.
+This allows the fields to be interpolated from spatial grid points to the particle positions, and current
+densities to be collected from the particles onto the spatial grid points.
+
 
 The primary documentation for VPIC has moved to Sphinx and is hosted on GitHub
 Pages [here](https://lanl.github.io/vpic-kokkos/index.html), and located in
@@ -11,29 +24,27 @@ sufficient to get most users started.
 
 # Attribution
 
-Researchers who use the VPIC code for scientific research are asked to cite
+Researchers who use the hybridVPIC-K code for scientific research are asked to cite
 the papers listed below.
 
-1. Bird, R., Tan, N., Luedtke, S. V., Harrell, S. L., Taufer, M., & Albright,
+1. Le, A., Winske, D., Stanier, A., Daughton, W., Cowee, M., Wetherton, B.,
+& Guo, F. (2021). Astrophysical explosions revisited: collisionless coupling
+of debris to magnetized plasma. Journal of Geophysical Research: Space Physics,
+126(9), e2021JA029125.
+
+2. Bird, R., Tan, N., Luedtke, S. V., Harrell, S. L., Taufer, M., & Albright,
 B. (2021). VPIC 2.0: Next generation particle-in-cell simulations. IEEE
 Transactions on Parallel and Distributed Systems, 33(4), 952-963.
 
-2. Bowers, K. J., B. J. Albright, B. Bergen, L. Yin, K. J. Barker and
-D. J. Kerbyson, "0.374 Pflop/s Trillion-Particle Kinetic Modeling of
-Laser Plasma Interaction on Road-runner," Proc. 2008 ACM/IEEE Conf.
-Supercomputing (Gordon Bell Prize Finalist Paper).
-http://dl.acm.org/citation.cfm?id=1413435
+# Getting the Code
 
-3. K.J. Bowers, B.J. Albright, B. Bergen and T.J.T. Kwan, Ultrahigh
-performance three-dimensional electromagnetic relativistic kinetic
-plasma simulation, Phys. Plasmas 15, 055703 (2008);
-http://dx.doi.org/10.1063/1.2840133
+VPIC uses nested submodules.  This requires the addition of the *--recursive*
+flag when cloning the repository:
 
-4. K.J. Bowers, B.J. Albright, L. Yin, W. Daughton, V. Roytershteyn,
-B. Bergen and T.J.T Kwan, Advances in petascale kinetic simulations
-with VPIC and Roadrunner, Journal of Physics: Conference Series 180,
-012055, 2009
+    % git clone https://github.com/lanl/vpic-kokkos.git
+    % git checkout hybridVPIC-K 
 
+This command will check out the VPIC source code.
 
 # Copyright
 
