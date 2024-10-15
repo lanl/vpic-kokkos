@@ -918,35 +918,15 @@ begin_field_injection {
   Kokkos::MDRangePolicy<Kokkos::Rank<2>> right_edge({1, 1}, {nz+1, ny+1});
 
   Kokkos::parallel_for("Field injection", right_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
-      //      kfield(1+sy*iy+sz*iz, field_var::cbx)
-      k_field(VOXEL(nx-1,y,z,nx,ny,nz), field_var::cbx) = (1.0-r)*k_field(VOXEL(nx-1,y,z,nx,ny,nz), field_var::cbx) + r*b0*sqrt(1-sn*sn); // To-do: Don't think we should set interior cell? Also, precompute sqrt above.
-      k_field(VOXEL(nx,y,z,nx,ny,nz), field_var::cbx) = (1.0-r)*k_field(VOXEL(nx,y,z,nx,ny,nz), field_var::cbx) + r*b0*sqrt(1-sn*sn);
-      k_field(VOXEL(nx-1,y,z,nx,ny,nz), field_var::cby) = (1.0-r)*k_field(VOXEL(nx-1,y,z,nx,ny,nz), field_var::cby);
-      k_field(VOXEL(nx,y,z,nx,ny,nz), field_var::cby) = (1.0-r)*k_field(VOXEL(nx,y,z,nx,ny,nz), field_var::cby);
-      k_field(VOXEL(nx-1,y,z,nx,ny,nz), field_var::cbz) = (1.0-r)*k_field(VOXEL(nx-1,y,z,nx,ny,nz), field_var::cbz) + r*b0*sn;
-      k_field(VOXEL(nx,y,z,nx,ny,nz), field_var::cbz) = (1.0-r)*k_field(VOXEL(nx,y,z,nx,ny,nz), field_var::cbz) + r*b0*sn;
+      k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbx) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbx) + r*b0*sqrt(1-sn*sn); // To-do: Don't think we should set interior cell? Also, precompute sqrt above.
+      k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbx) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbx) + r*b0*sqrt(1-sn*sn);
+      k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cby) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cby);
+      k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cby) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cby);
+      k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbz) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbz) + r*b0*sn;
+      k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbz) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbz) + r*b0*sn;
     });
 }
     
-/*  // There macros are from local.c to apply boundary conditions
-#define XYZ_LOOP(xl,xh,yl,yh,zl,zh)             \
-  for( z=zl; z<=zh; z++ )                       \
-    for( y=yl; y<=yh; y++ )                     \
-      for( x=xl; x<=xh; x++ )
-
-#define yz_EDGE_LOOP(x) XYZ_LOOP(x,x,0,ny+1,0,1+nz)
-
-  // Right Boundary
-  if (global->right) {
-    //XYZ_LOOP(nx-5,nx,0,ny+1,0,nz+1) field(x,y,z).ex  = 0;
-    //XYZ_LOOP(nx-5,nx,0,ny+1,0,nz+1) field(x,y,z).ey  = -Vflow*b0*sn;
-    //XYZ_LOOP(nx-5,nx,0,ny+1,0,nz+1) field(x,y,z).ez  = 0;
-    XYZ_LOOP(nx-1,nx,0,ny+1,0,nz+1)field(x,y,z).cbx = (1.0-r)*field(x,y,z).cbx + r*b0*sqrt(1-sn*sn);
-    XYZ_LOOP(nx-1,nx,0,ny+1,0,nz+1) field(x,y,z).cby = (1.0-r)*field(x,y,z).cby;
-    XYZ_LOOP(nx-1,nx,0,ny+1,0,nz+1)field(x,y,z).cbz = (1.0-r)*field(x,y,z).cbz + r*b0*sn;
-  }
-}  // end field injection
-*/
 
 //*******************  COLLISIONS ***************************
 begin_particle_collisions {
