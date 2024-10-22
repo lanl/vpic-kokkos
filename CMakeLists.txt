@@ -383,13 +383,13 @@ endif(ENABLE_COVERAGE_BUILD)
 # process Makefile.run.in to get a simple Makefile.run for a run. Points to
 # local built exe wrapper, and has example deck/platform.
 configure_file(
-    ${CMAKE_SOURCE_DIR}/sample/Makefile.run.in
+    ${CMAKE_CURRENT_SOURCE_DIR}/sample/Makefile.run.in
     ${CMAKE_BINARY_DIR}/bin/Makefile.run
 )
 
 # install script
 configure_file(
-    ${CMAKE_SOURCE_DIR}/bin/vpic.in
+    ${CMAKE_CURRENT_SOURCE_DIR}/bin/vpic.in
     ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic-install
     @ONLY
 )
@@ -403,22 +403,22 @@ install(FILES ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic-install
     WORLD_READ WORLD_EXECUTE
     )
 
-install(FILES ${CMAKE_SOURCE_DIR}/deck/main.cc
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/deck/main.cc
   DESTINATION share/vpic)
-install(FILES ${CMAKE_SOURCE_DIR}/deck/wrapper.cc
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/deck/wrapper.cc
   DESTINATION share/vpic)
 
 if(ENABLE_KOKKOS_CUDA AND DEFINED ENV{CRAYPE_VERSION})
 # local script
 configure_file(
-  ${CMAKE_SOURCE_DIR}/bin/vpic-localCrayA100.in
+  ${CMAKE_CURRENT_SOURCE_DIR}/bin/vpic-localCrayA100.in
     ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
     @ONLY
 )
 else()
 # local script
 configure_file(
-    ${CMAKE_SOURCE_DIR}/bin/vpic-local.in
+    ${CMAKE_CURRENT_SOURCE_DIR}/bin/vpic-local.in
     ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/vpic
     @ONLY
 )
@@ -451,7 +451,7 @@ else()
   set(VPIC_SRC)
   install(TARGETS vpic LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 endif()
-target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(vpic INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
 
