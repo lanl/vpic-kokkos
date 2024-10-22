@@ -154,10 +154,10 @@
 typedef struct field {
   float ex,   ey,   ez,   div_e_err;     // Electric field and div E error
   float cbx,  cby,  cbz,  div_b_err;     // Magnetic field and div B error
+  float cbx0, cby0, cbz0, tmpsm;         // External (potential) magnetic field
   float tcax, tcay, tcaz, rhob;          // hybrid: tcax multiplies hypereta, tcay multiplies eta, tcaz multiplies E field 
   float jfx,  jfy,  jfz,  rhof;          // Free current and charge density
   float jfxold,  jfyold,  jfzold,  rhofold; // Free current and charge density
-  float cbx0, cby0, cbz0, tmpsm;         // External (potential) magnetic field
   float tx, ty, tz, te;                  // Electron temperature + temp storage
   float ox, oy, oz, oe;                  // For B field solve/smoothing
   float pex, pey, pez, pe;               // pressure etc
