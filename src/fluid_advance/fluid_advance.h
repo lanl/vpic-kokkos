@@ -2,103 +2,51 @@
 #define _fluid_advance_h_
 
 #include "../grid/grid.h"
-#include "../vpic/kokkos_helpers.h"
+//#include "../vpic/kokkos_helpers.h"
 
+typedef int32_t fluid_species_id; // Must be 32-bit wide
+
+// Local fluid data
 typedef struct fluid {
-  float den,   tmp,   prs;     // density, temperature, pressure
-  float vx,  vy,  vz;          // velocity
-} field_t;
+  float den, tmp, prs;     // density, temperature, pressure
+  float ux, uy, uz;        // velocity
+} fluid_t;
+
+
+struct fluid_species; // To-do: Should this be a class like species_t?
 
 // fluid_advance_kernels holds all the function pointers to all the
 // kernels used by a specific fluid_advance instance.
+//typedef struct fluid_advance_kernels {
 
-
-struct fluid_array;
-
-typedef struct fluid_advance_kernels {
-
-  void (*delete_fl)( struct fluid_array * RESTRICT fl );
+//  void (*delete_fl)( struct fluid_species * RESTRICT fla );
 
   // Time stepping interface
-  void (*advance_fl)( struct fluid_array * RESTRICT fl );
+  //  void (*advance_fl)( struct fluid_array * RESTRICT fla );
   
   // Diagnostic interface
-  void (*energy_fl)( /**/  double        * RESTRICT en, // 6 elem
-                    const struct field_array * RESTRICT fa );
+  //  void (*energy_fl)( /**/  double        * RESTRICT en, // 6 elem
+  //                    const struct fluid_array * RESTRICT fla );
 
-} fluid_advance_kernels_t;
+//} fluid_advance_kernels_t;
 
-typedef struct field_buffers
-{
-    Kokkos::View<float*>   xyz_sbuf_pos;
-    Kokkos::View<float*>   yzx_sbuf_pos;
-    Kokkos::View<float*>   zxy_sbuf_pos;
-    Kokkos::View<float*>   xyz_rbuf_pos;
-    Kokkos::View<float*>   yzx_rbuf_pos;
-    Kokkos::View<float*>   zxy_rbuf_pos;
-    Kokkos::View<float*>   xyz_sbuf_neg;
-    Kokkos::View<float*>   yzx_sbuf_neg;
-    Kokkos::View<float*>   zxy_sbuf_neg;
-    Kokkos::View<float*>   xyz_rbuf_neg;
-    Kokkos::View<float*>   yzx_rbuf_neg;
-    Kokkos::View<float*>   zxy_rbuf_neg;
+typedef struct fluid_species { // To-do: Should this be a class like species_t?
 
-    Kokkos::View<float*>::HostMirror   xyz_sbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   yzx_sbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   zxy_sbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   xyz_rbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   yzx_rbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   zxy_rbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   xyz_sbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   yzx_sbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   zxy_sbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   xyz_rbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   yzx_rbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   zxy_rbuf_neg_h;
-
-    field_buffers() {
-        // User should try avoid calling this
-    }
-
-    field_buffers(int xyz_size, int yzx_size, int zxy_size) {
-        xyz_sbuf_pos = Kokkos::View<float*>("Send buffer for XYZ positive face", xyz_size);
-        xyz_rbuf_pos = Kokkos::View<float*>("Receive buffer for XYZ positive face", xyz_size);
-        yzx_sbuf_pos = Kokkos::View<float*>("Send buffer for YZX positive face", yzx_size);
-        yzx_rbuf_pos = Kokkos::View<float*>("Receive buffer for YZX positive face", yzx_size);
-        zxy_sbuf_pos = Kokkos::View<float*>("Send buffer for ZXY positive face", zxy_size);
-        zxy_rbuf_pos = Kokkos::View<float*>("Receive buffer for ZXY positive face", zxy_size);
-
-        xyz_sbuf_neg = Kokkos::View<float*>("Send buffer for XYZ negative face", xyz_size);
-        xyz_rbuf_neg = Kokkos::View<float*>("Receive buffer for XYZ negative face", xyz_size);
-        yzx_sbuf_neg = Kokkos::View<float*>("Send buffer for YZX negative face", yzx_size);
-        yzx_rbuf_neg = Kokkos::View<float*>("Receive buffer for YZX negative face", yzx_size);
-        zxy_sbuf_neg = Kokkos::View<float*>("Send buffer for ZXY negative face", zxy_size);
-        zxy_rbuf_neg = Kokkos::View<float*>("Receive buffer for ZXY negative face", zxy_size);
-
-        xyz_sbuf_pos_h = Kokkos::create_mirror_view(xyz_sbuf_pos);
-        yzx_sbuf_pos_h = Kokkos::create_mirror_view(yzx_sbuf_pos);
-        zxy_sbuf_pos_h = Kokkos::create_mirror_view(zxy_sbuf_pos);
-        xyz_rbuf_pos_h = Kokkos::create_mirror_view(xyz_rbuf_pos);
-        yzx_rbuf_pos_h = Kokkos::create_mirror_view(yzx_rbuf_pos);
-        zxy_rbuf_pos_h = Kokkos::create_mirror_view(zxy_rbuf_pos);
-
-        xyz_sbuf_neg_h = Kokkos::create_mirror_view(xyz_sbuf_neg);
-        yzx_sbuf_neg_h = Kokkos::create_mirror_view(yzx_sbuf_neg);
-        zxy_sbuf_neg_h = Kokkos::create_mirror_view(zxy_sbuf_neg);
-        xyz_rbuf_neg_h = Kokkos::create_mirror_view(xyz_rbuf_neg);
-        yzx_rbuf_neg_h = Kokkos::create_mirror_view(yzx_rbuf_neg);
-        zxy_rbuf_neg_h = Kokkos::create_mirror_view(zxy_rbuf_neg);
-    }
-} field_buffers_t;
-// A field_array holds all the field quanties and pointers to
-// kernels used to advance them.
-
-typedef struct field_array {
-  field_t * ALIGNED(128) f;           // Local field data
+  char * name;                        // Species name of fluid
+  float q;                            // Species charge
+  float m;                            // Species mass
+  
+  fluid_t * ALIGNED(128) fl;          // Local fluid data
   grid_t  * g;                        // Underlying grid
-  void    * params;                   // Field advance specific parameters
-  field_advance_kernels_t kernel[1];  // Field advance kernels
 
+  fluid_species_id id;                        // Unique identifier for a fluid species
+  fluid_species_t* next = NULL;         // Next species in the fluid list
+
+  
+  //  void    * params;                   // Field advance specific parameters
+  //  field_advance_kernels_t kernel[1];  // Field advance kernels
+
+  /*
   // I don't want this to be a pointer, but given it only holds Kokkos data
   // this avoids a fiasco when checkpointing...
   field_buffers_t* fb;
@@ -155,29 +103,51 @@ typedef struct field_array {
   {
       delete fb;
   }
-
+  */
+  
   /**
    * @brief Copies the field data to the host.
    */
-  void copy_to_host();
+  //  void copy_to_host();
 
   /**
    * @brief Copies the field data to the device.
    */
-  void copy_to_device();
+  //  void copy_to_device();
 
 
-} field_array_t;
+} fluid_species_t;
 
 
+// In fluid_advance.cc
 
-field_array_t *
-new_standard_field_array( grid_t           * RESTRICT g,
-                          const material_t * RESTRICT m_list,
-                          float                       damp );
+int
+num_fluid_species( const fluid_species_t * fsp_list );
 
 void
-delete_field_array( field_array_t * fa );
+delete_fluid_species_list( fluid_species_t * fsp_list );
+
+fluid_species_t *
+find_fluid_species_id( fluid_species_id id,
+		       fluid_species_t * fsp_list );
+
+fluid_species_t *
+find_fluid_species_name( const char * name,
+			 fluid_species_t * fsp_list );
+
+fluid_species_t *
+append_fluid_species( fluid_species_t * fsp,
+		      fluid_species_t ** fsp_list ); 
+
+fluid_species_t *
+fluid_species( const char * name,
+	       float q,
+	       float m,
+	       grid_t * g );
 
 
-#endif // _field_advance_h_
+void
+delete_fluid_species( fluid_species_t * fsp );
+
+
+#endif // _fluid_advance_h_
