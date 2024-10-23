@@ -17,6 +17,7 @@
 #include <cmath>
 
 #include "../boundary/boundary.h"
+#include "../fluid_advance/fluid_advance.h" // To-do: Will probably be included in collision.h later
 #include "../collision/collision.h"
 #include "../emitter/emitter.h"
 // FIXME: INCLUDES ONCE ALL IS CLEANED UP
@@ -208,6 +209,7 @@ public:
   hydro_array_t        * hydro_array;        // define_hydro_array
   species_t            * species_list;       // define_species /
                                              // species helpers
+  fluid_species_t      * fluid_species_list; // fluid species
   particle_bc_t        * particle_bc_list;   // define_particle_bc /
                                              // boundary helpers
   emitter_t            * emitter_list;       // define_emitter /
@@ -562,6 +564,29 @@ public:
      return find_species_id( id, species_list );
   }
 
+  //////////////////
+  // Fluid species helpers
+  
+  // FIXME: SILLY PROMOTIONS 
+  inline fluid_species_t *
+  define_fluid_species( const char *name,
+			double q,
+			double m ) {
+    return append_fluid_species( fluid_species( name, (float)q, (float)m,
+						grid ), &fluid_species_list );
+  }
+
+  inline fluid_species_t *
+  find_fluid_species( const char *name ) {
+    return find_fluid_species_name( name, fluid_species_list );
+  }
+
+  inline fluid_species_t *
+  find_fluid_species( int32_t id ) {
+    return find_fluid_species_id( id, fluid_species_list );
+  }
+
+  
   ///////////////////
   // Particle helpers
 

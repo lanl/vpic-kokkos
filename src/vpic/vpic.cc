@@ -97,6 +97,7 @@ vpic_simulation::~vpic_simulation() {
   delete_emitter_list( emitter_list );
   delete_particle_bc_list( particle_bc_list );
   delete_species_list( species_list );
+  delete_fluid_species_list( fluid_species_list );
   delete_hydro_array( hydro_array );
   delete_interpolator_array( interpolator_array );
   delete_field_array( field_array );
@@ -117,6 +118,7 @@ void vpic_simulation::print_run_details()
     if (rank() == 0)
     {
         species_t* sp = nullptr;
+	fluid_species_t* fsp = nullptr;
         // Read run details and print them out
         // Focus on performance detemring quantities, and allow the deck to print
         // physics focused params:
@@ -140,6 +142,14 @@ void vpic_simulation::print_run_details()
                 std::cout << "  # " << sp->name << " np " << sp->np << " max_np " << sp->max_np << std::endl;
             }
         }
+	if (fluid_species_list )
+	  {
+	    std::cout << "## Local Fluid Species: " <<  num_fluid_species( fluid_species_list ) << std::endl;
+	    LIST_FOR_EACH( fsp, fluid_species_list )
+	      {
+		std::cout << "  # " << fsp->name << std::endl;
+	      }
+	  }
         std::cout << "######### End Run Details ######" << std::endl;
         std::cout << std::endl; // blank line
     }
