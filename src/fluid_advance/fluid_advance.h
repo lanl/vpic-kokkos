@@ -13,7 +13,7 @@ typedef struct fluid {
 } fluid_t;
 
 
-struct fluid_species; // To-do: Should this be a class like species_t?
+struct fluid_species_t; // To-do: Should this be a class like species_t?
 
 // fluid_advance_kernels holds all the function pointers to all the
 // kernels used by a specific fluid_advance instance.
@@ -30,7 +30,7 @@ struct fluid_species; // To-do: Should this be a class like species_t?
 
 //} fluid_advance_kernels_t;
 
-typedef struct fluid_species { // To-do: Should this be a class like species_t?
+typedef struct fluid_species_t { // To-do: Should this be a class like species_t?
 
   char * name;                        // Species name of fluid
   float q;                            // Species charge
