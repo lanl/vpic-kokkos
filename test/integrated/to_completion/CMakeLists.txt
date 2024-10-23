@@ -15,6 +15,7 @@ list(APPEND DEFAULT_ARG_TESTS
 #    reconnection_test # This is a simple reconnection run
     pcai # proton cyclotron anisotropy instability for Hybrid-VPIC
     shock
+    fluid_species
     )
 
 #list(APPEND SIMPLE_DECK simple) # Reuse existing deck and start half way

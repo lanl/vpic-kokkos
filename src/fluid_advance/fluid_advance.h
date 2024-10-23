@@ -1,6 +1,7 @@
 #ifndef _fluid_advance_h_
 #define _fluid_advance_h_
 
+#include "../util/util_base.h"
 #include "../grid/grid.h"
 //#include "../vpic/kokkos_helpers.h"
 
@@ -13,7 +14,8 @@ typedef struct fluid {
 } fluid_t;
 
 
-struct fluid_species_t; // To-do: Should this be a class like species_t?
+//struct fluid_species_t; // To-do: Should this be a class like species_t?
+class fluid_species_t;
 
 // fluid_advance_kernels holds all the function pointers to all the
 // kernels used by a specific fluid_advance instance.
@@ -30,7 +32,9 @@ struct fluid_species_t; // To-do: Should this be a class like species_t?
 
 //} fluid_advance_kernels_t;
 
-typedef struct fluid_species_t { // To-do: Should this be a class like species_t?
+//typedef struct fluid_species_t { // To-do: Should this be a class like species_t?
+class fluid_species_t {
+ public: 
 
   char * name;                        // Species name of fluid
   float q;                            // Species charge
@@ -116,7 +120,7 @@ typedef struct fluid_species_t { // To-do: Should this be a class like species_t
   //  void copy_to_device();
 
 
-} fluid_species_t;
+};// fluid_species_t;
 
 
 // In fluid_advance.cc
