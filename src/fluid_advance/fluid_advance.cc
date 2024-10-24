@@ -3,38 +3,30 @@
 
 /* Private interface *********************************************************/
 
-/*
+
 void
-checkpt_species( const species_t * sp ) {
-    //std::cout << "checkpintg " << sp->name << " with nm = " << sp->nm << std::endl;
-  CHECKPT( sp, 1 );
-  CHECKPT_STR( sp->name );
-  checkpt_data( sp->p,
-                sp->np    *sizeof(particle_t),
-                sp->max_np*sizeof(particle_t), 1, 1, 128 );
-  checkpt_data( sp->pm,
-                sp->nm    *sizeof(particle_mover_t),
-                sp->max_nm*sizeof(particle_mover_t), 1, 1, 128 );
-  CHECKPT_ALIGNED( sp->partition, sp->g->nv+1, 128 );
-  CHECKPT_PTR( sp->g );
-  CHECKPT_PTR( sp->next );
-  CHECKPT_PTR( sp->pb_diag );
+checkpt_fluid_species( const fluid_species_t * fsp ) {
+  std::cout << "checkptg " << fsp->name << std::endl;
+  CHECKPT( fsp, 1 );
+  CHECKPT_STR( fsp->name );
+  checkpt_data( fsp->fl,
+                fsp->g->nv * sizeof(fluid_t),
+                fsp->g->nv * sizeof(fluid_t), 1, 1, 128 );
+  CHECKPT_PTR( fsp->g );
+  CHECKPT_PTR( fsp->next );
 }
 
-species_t *
-restore_species( void ) {
-  species_t * sp;
-  RESTORE( sp );
-  RESTORE_STR( sp->name );
-  sp->p  = (particle_t *)      restore_data();
-  sp->pm = (particle_mover_t *)restore_data();
-  RESTORE_ALIGNED( sp->partition );
-  RESTORE_PTR( sp->g );
-  RESTORE_PTR( sp->next );
-  RESTORE_PTR( sp->pb_diag );
-  return sp;
+fluid_species_t *
+restore_fluid_species( void ) {
+  fluid_species_t * fsp;
+  RESTORE( fsp );
+  RESTORE_STR( fsp->name );
+  fsp->fl = (fluid_t *) restore_data();
+  RESTORE_PTR( fsp->g );
+  RESTORE_PTR( fsp->next );
+  return fsp;
 }
-*/
+
 
 void
 delete_fluid_species( fluid_species_t * fsp ) {
@@ -138,7 +130,7 @@ fluid_species( const char * name,
   std::cout << "Creating fluid species. fsp->next=" << fsp->next << "\n";
   /* id, next are set by append fluid species */
 
-  //  REGISTER_OBJECT( fsp, checkpt_fluid_species, restore_fluid_species, NULL ); // To-do: Implement checkpointing.
+  REGISTER_OBJECT( fsp, checkpt_fluid_species, restore_fluid_species, NULL ); // To-do: Implement checkpointing.
   return fsp;
 }
 
