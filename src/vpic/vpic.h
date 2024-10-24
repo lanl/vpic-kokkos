@@ -97,6 +97,8 @@ struct HydroInfo {
 	size_t size;
 }; // struct FieldInfo
 
+const size_t total_fluid_variables(6);
+
 /*----------------------------------------------------------------------------
  * DumpFormat Enumeration
 ----------------------------------------------------------------------------*/
