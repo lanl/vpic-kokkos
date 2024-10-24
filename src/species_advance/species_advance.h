@@ -485,7 +485,7 @@ move_p_kokkos(
     if(v2>fracdt) fracdt=v2;
     fracdt = 2.0*(fracdt-0.5);
     
-    if(fracdt>0 && fracdt<1){
+    if(fracdt>0){
       
       x_half = s_midx + fracdt*ux*gdt/gdx;
       y_half = s_midy + fracdt*uy*gdt/gdy; 
@@ -795,7 +795,7 @@ move_p_kokkos_host_serial(
     if(v2>fracdt) fracdt=v2;
     fracdt = 2.0*(fracdt-0.5);
 
-      if(fracdt>0 && fracdt<1){
+      if(fracdt>0){
 
       x_half = s_midx + fracdt*ux*gdt/gdx;
       y_half = s_midy + fracdt*uy*gdt/gdy; 
@@ -819,9 +819,6 @@ move_p_kokkos_host_serial(
       } //if indbds
       
     } //ifmore than half dt left
-
-
-    
 
       //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
 
