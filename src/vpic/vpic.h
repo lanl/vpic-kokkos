@@ -97,7 +97,18 @@ struct HydroInfo {
 	size_t size;
 }; // struct FieldInfo
 
+// To-do: Add in groups for fluid variables
+const size_t total_fluid_groups(1);
+const size_t fluid_indeces[1] = {0};
 const size_t total_fluid_variables(6);
+
+struct fluidInfo {
+  char name[128];
+  char degree[128];
+  char elements[128];
+  char type[128];
+  size_t size;
+}; // struct fluidInfo
 
 /*----------------------------------------------------------------------------
  * DumpFormat Enumeration
@@ -253,7 +264,8 @@ public:
   void dump_particles_count( const char *fname, int append = 1 );
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
-
+  void dump_fluid_species( const char *fname );
+  
   // Binary dumps
   void dump_grid( const char *fbase );
   void dump_fields( const char *fbase, int fname_tag = 1 );
@@ -261,11 +273,14 @@ public:
                    int fname_tag = 1 );
   void dump_particles( const char *sp_name, const char *fbase,
                        int fname_tag = 1 );
+  void dump_fluids( const char *fsp_name, const char *fbase,
+		    int fname_tag = 1 );
 
   // convenience functions for simlog output
   void create_field_list(char * strlist, DumpParameters & dumpParams);
   void create_hydro_list(char * strlist, DumpParameters & dumpParams);
-
+  //  void create_fluid_list(char * strlist, DumpParameters & dumpParams);
+  
   void print_hashed_comment(FileIO & fileIO, const char * comment);
   void global_header(const char * base,
   	std::vector<DumpParameters *> dumpParams);
@@ -276,7 +291,8 @@ public:
 
   void field_dump(DumpParameters & dumpParams);
   void hydro_dump(const char * speciesname, DumpParameters & dumpParams);
-
+  void fluid_dump(const char * speciesname, DumpParameters & dumpParams);
+  
   ///////////////////
   // Useful accessors
 

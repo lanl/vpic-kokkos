@@ -10,8 +10,10 @@ begin_globals {
   int energies_interval;
   int fields_interval;
   int ehydro_interval;
-  int Hhydro_interval;
-  int eparticle_interval;
+  int Hhydro_interval;	
+  int Hfluid_interval;
+  int Ofluid_interval;  
+  int eparticle_interval;	
   int Hparticle_interval;
   int quota_check_interval;  // How frequently to check if quota exceeded
 
@@ -30,6 +32,8 @@ begin_globals {
   DumpParameters fdParams;
   DumpParameters hedParams;
   DumpParameters hHdParams;
+  DumpParameters flHdParams;
+  DumpParameters flOdParams;
   std::vector<DumpParameters *> outputParams;
 
 };
@@ -109,10 +113,12 @@ begin_initialization {
   // Intervals for output
   int restart_interval = 3000;
   int energies_interval = 200;
-  int interval = int(0.2/(wci*dt));
+  int interval = 50;//int(0.2/(wci*dt));
   int fields_interval = interval;
   int ehydro_interval = interval;
   int Hhydro_interval = interval;
+  int Hfluid_interval = interval;
+  int Ofluid_interval = interval;
   int eparticle_interval = 40*interval;
   int Hparticle_interval = 0*interval;
   int quota_check_interval     = 100;
@@ -131,6 +137,8 @@ begin_initialization {
   global->fields_interval      = fields_interval;
   global->ehydro_interval      = ehydro_interval;
   global->Hhydro_interval      = Hhydro_interval;
+  global->Hfluid_interval      = Hfluid_interval;
+  global->Ofluid_interval      = Ofluid_interval;
   global->eparticle_interval   = eparticle_interval;
   global->Hparticle_interval   = Hparticle_interval;
   global->quota_check_interval = quota_check_interval;
@@ -339,6 +347,12 @@ sim_log( "Loading fields" );
   global->hHdParams.format = band;
   sim_log ( "Ion species output format = band" );
 
+  global->flHdParams.format = band;
+  sim_log ( "Neutral H species output format = band" );
+
+  global->flOdParams.format = band; 
+  sim_log ( "Neutral O species output format = band" );
+
   /*--------------------------------------------------------------------------
    * Set stride
    *
@@ -421,6 +435,21 @@ sim_log( "Loading fields" );
   // add electron species parameters to list
   global->outputParams.push_back(&global->hHdParams);
 
+  sprintf(global->flHdParams.baseDir, "fluid");
+  sprintf(global->flOdParams.baseDir, "fluid");
+  dump_mkdir("fluid");
+  sprintf(global->flHdParams.baseFileName, "Hfluid");
+  sprintf(global->flOdParams.baseFileName, "Ofluid");
+  global->flHdParams.stride_x = 1;
+  global->flHdParams.stride_y = 1;
+  global->flHdParams.stride_z = 1;
+  global->flOdParams.stride_x = 1;
+  global->flOdParams.stride_y = 1;
+  global->flOdParams.stride_z = 1;
+
+  global->outputParams.push_back(&global->flHdParams);
+  global->outputParams.push_back(&global->flOdParams);
+
   /*--------------------------------------------------------------------------
    * Set output fields
    *
@@ -460,7 +489,9 @@ sim_log( "Loading fields" );
   global->hedParams.output_variables( current_density | charge_density | stress_tensor );
   global->hHdParams.output_variables( current_density | charge_density | stress_tensor );
 
-
+  global->flHdParams.output_variables( allvars );
+  global->flOdParams.output_variables( allvars );
+  
   const uint32_t allfields      (0xffffffff);
   
   global->fdParams.output_variables( allfields );
@@ -481,6 +512,9 @@ sim_log( "Loading fields" );
   //sim_log ( "Electron species variable list: " << varlist );
 
   create_hydro_list(varlist, global->hHdParams);
+
+//  create_fluid_list(varlist, global->flHdParams);
+//  create_fluid_list(varlist, global->flOdParams);
 
   sim_log ( "Ion species variable list: " << varlist );
 
@@ -641,6 +675,12 @@ begin_diagnostics {
 
   if(should_dump(Hhydro)) hydro_dump("ion", global->hHdParams);
 
+  /*--------------------------------------------------------------------------
+   * Fluid species output
+   *------------------------------------------------------------------------*/
+
+   if(should_dump(Hfluid)) fluid_dump("neutral_H", global->flHdParams);
+   if(should_dump(Ofluid)) fluid_dump("neutral_O", global->flOdParams);
 
   /*--------------------------------------------------------------------------
   * Time averaging

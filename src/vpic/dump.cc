@@ -538,6 +538,18 @@ vpic_simulation::create_hydro_list( char * strlist,
     }
 }
 
+/*void
+vpic_simulation::create_fluid_list( char * strlist,
+                                    DumpParameters & dumpParams ) {
+  strcpy(strlist, "");
+  for(size_t i(0), pass(0); i<total_fluid_groups; i++)
+    if(dumpParams.output_vars.bitset(fluid_indeces[i])) {
+      if(i>0 && pass) strcat(strlist, ", ");
+      else pass = 1;
+      strcat(strlist, fluidInfo[i].name);
+    }
+    }*/
+
 void
 vpic_simulation::print_hashed_comment( FileIO & fileIO,
                                        const char * comment) {
