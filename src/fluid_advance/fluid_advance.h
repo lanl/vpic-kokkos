@@ -3,7 +3,7 @@
 
 #include "../util/util_base.h"
 #include "../grid/grid.h"
-//#include "../vpic/kokkos_helpers.h"
+#include "../vpic/kokkos_helpers.h"
 
 typedef int32_t fluid_species_id; // Must be 32-bit wide
 
@@ -54,10 +54,12 @@ class fluid_species_t {
   // I don't want this to be a pointer, but given it only holds Kokkos data
   // this avoids a fiasco when checkpointing...
   field_buffers_t* fb;
+  */
 
-  k_field_t k_f_d;                   // Kokkos field data on device
-  k_field_t::HostMirror k_f_h;       // Kokkos field data on host
-  k_field_sa_t k_field_sa_d;
+  k_fluid_t k_fl_d;                  // Kokkos fluid data on device
+  k_fluid_t::HostMirror k_fl_h;      // Kokkos fluid data on host
+
+  /*k_field_sa_t k_field_sa_d;
   k_field_edge_t k_fe_d;             // Kokkos field_edge data (part of field_t) on device
   k_field_edge_t::HostMirror k_fe_h; // Kokkos field_edge data on host
 
@@ -67,7 +69,9 @@ class fluid_species_t {
   k_jf_accum_t k_jf_accum_d;
   k_jf_accum_t::HostMirror k_jf_accum_h;
 
-  // Step when the field was last copied to to the host.  The copy can
+  */
+  
+  // Step when the fluid was last copied to to the host.  The copy can
   // take place at any time during the step, so checking
   // last_copied==step() does not mean that the host and device
   // data are the same.  Typically, copy is called immediately after the
@@ -80,29 +84,25 @@ class fluid_species_t {
   int64_t last_copied = -1;
 
   // Constructors don't get called on restart..
-  // Initialize Kokkos Field Array
-  field_array(int n_fields, int xyz_sz, int yzx_sz, int zxy_sz)
+  // Initialize Kokkos Fluid Array
+  fluid_species_t(int n_fluids)//, int xyz_sz, int yzx_sz, int zxy_sz)
   {
-      init_kokkos_fields(n_fields, xyz_sz, yzx_sz, zxy_sz);
+    init_kokkos_fluids(n_fluids); //, xyz_sz, yzx_sz, zxy_sz);
   }
 
-  void init_kokkos_fields(int n_fields, int xyz_sz, int yzx_sz, int zxy_sz)
+  
+  void init_kokkos_fluids(int n_fluids) //, int xyz_sz, int yzx_sz, int zxy_sz)
   {
-      k_f_d = k_field_t("k_fields", n_fields);
-      k_field_sa_d = Kokkos::Experimental::create_scatter_view(k_f_d);
-      k_fe_d = k_field_edge_t("k_field_edges", n_fields);
-      k_f_h = Kokkos::create_mirror_view(k_f_d);
-      k_fe_h = Kokkos::create_mirror_view(k_fe_d);
+      k_fl_d = k_fluid_t("k_fluids", n_fluids);
+      //      k_field_sa_d = Kokkos::Experimental::create_scatter_view(k_f_d);
+      //      k_fe_d = k_field_edge_t("k_field_edges", n_fields);
+      k_fl_h = Kokkos::create_mirror_view(k_fl_d);
+      //      k_fe_h = Kokkos::create_mirror_view(k_fe_d);
 
-      k_f_rhob_accum_d = k_field_accum_t("k_rhob_accum", n_fields);
-      k_f_rhob_accum_h = Kokkos::create_mirror_view(k_f_rhob_accum_d);
-
-      k_jf_accum_d = k_jf_accum_t("k_jf_accum", n_fields);
-      k_jf_accum_h = Kokkos::create_mirror_view(k_jf_accum_d);
-
-      fb = new field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
+      //      fb = new field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
   }
 
+  /*
   ~field_array()
   {
       delete fb;
@@ -112,12 +112,12 @@ class fluid_species_t {
   /**
    * @brief Copies the field data to the host.
    */
-  //  void copy_to_host();
+  void copy_to_host();
 
   /**
    * @brief Copies the field data to the device.
    */
-  //  void copy_to_device();
+  void copy_to_device();
 
 
 };// fluid_species_t;

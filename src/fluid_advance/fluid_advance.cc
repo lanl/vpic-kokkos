@@ -109,8 +109,8 @@ fluid_species( const char * name,
   //int yzx_sz = 2*nz*(nx+1) + 2*nx*(nz+1) + nz*nx;
   //int zxy_sz = 2*nx*(ny+1) + 2*ny*(nx+1) + nx*ny;
   
-  //fsp = new fluid_species_t(g->nv, xyz_sz, yzx_sz, zxy_sz); // To-do: Use this for kokkos VPIC!
-  MALLOC( fsp, 1 );
+  fsp = new fluid_species_t(g->nv);//, xyz_sz, yzx_sz, zxy_sz); // To-do: Add back in for halo exchange buffers
+  //  MALLOC( fsp, 1 );
   //CLEAR( fsp, 1 );
 
   MALLOC( fsp->name, len+1 );
@@ -135,107 +135,58 @@ fluid_species( const char * name,
 }
 
 /* Class methods **************************************************************/
-/*
+
 void
-species_t::copy_to_host()
+fluid_species_t::copy_to_host()
 {
 
-  Kokkos::deep_copy(k_p_h, k_p_d);
-  Kokkos::deep_copy(k_p_i_h, k_p_i_d);
-  Kokkos::deep_copy(k_pm_h, k_pm_d);
-  Kokkos::deep_copy(k_pm_i_h, k_pm_i_d);
-  Kokkos::deep_copy(k_nm_h, k_nm_d);
-
-  nm = k_nm_h(0);
+  Kokkos::deep_copy(k_fl_h, k_fl_d);
 
   // Avoid capturing this
-  auto& k_particle_h = k_p_h;
-  auto& k_particle_i_h = k_p_i_h;
-  auto& particles = p;
-
-  Kokkos::parallel_for("copy particles to host",
-    host_execution_policy(0, np) ,
+  auto& k_fluid_h = k_fl_h;
+  //  auto& host_fluid = fl;
+  fluid_t * host_fluid = fl;
+  
+  Kokkos::parallel_for("copy fluid to host",
+    host_execution_policy(0, g->nv - 1) ,
     KOKKOS_LAMBDA (int i) {
 
-      particles[i].dx = k_particle_h(i, particle_var::dx);
-      particles[i].dy = k_particle_h(i, particle_var::dy);
-      particles[i].dz = k_particle_h(i, particle_var::dz);
-      particles[i].ux = k_particle_h(i, particle_var::ux);
-      particles[i].uy = k_particle_h(i, particle_var::uy);
-      particles[i].uz = k_particle_h(i, particle_var::uz);
-      particles[i].w  = k_particle_h(i, particle_var::w);
-      particles[i].i  = k_particle_i_h(i);
-
-    });
-
-  // Avoid capturing this
-  auto& k_particle_movers_h = k_pm_h;
-  auto& k_particle_i_movers_h = k_pm_i_h;
-  auto& movers = pm;
-
-  Kokkos::parallel_for("copy movers to host",
-    host_execution_policy(0, max_nm) ,
-    KOKKOS_LAMBDA (int i) {
-
-      movers[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
-      movers[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
-      movers[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
-      movers[i].i     = k_particle_i_movers_h(i);
+      host_fluid[i].den = k_fluid_h(i, fluid_var::den);
+      host_fluid[i].tmp = k_fluid_h(i, fluid_var::tmp);
+      host_fluid[i].prs = k_fluid_h(i, fluid_var::prs);
+      host_fluid[i].ux = k_fluid_h(i, fluid_var::ux);
+      host_fluid[i].uy = k_fluid_h(i, fluid_var::uy);
+      host_fluid[i].uz = k_fluid_h(i, fluid_var::uz);
 
     });
 
   last_copied = g->step;
 
 }
-*/
-/*
+
 void
-species_t::copy_to_device()
+fluid_species_t::copy_to_device()
 {
 
-  k_nm_h(0) = nm;
-
   // Avoid capturing this
-  auto& k_particle_h = k_p_h;
-  auto& k_particle_i_h = k_p_i_h;
-  auto& particles = p;
+  auto& k_fluid_h = k_fl_h;
+  //  auto& fluid = fl;
+  fluid_t * host_fluid = fl;
 
-  Kokkos::parallel_for("copy particles to device",
-    host_execution_policy(0, np) ,
+  Kokkos::parallel_for("copy fluid to device",
+    host_execution_policy(0, g->nv - 1) ,
     KOKKOS_LAMBDA (int i) {
 
-      k_particle_h(i, particle_var::dx) = particles[i].dx;
-      k_particle_h(i, particle_var::dy) = particles[i].dy;
-      k_particle_h(i, particle_var::dz) = particles[i].dz;
-      k_particle_h(i, particle_var::ux) = particles[i].ux;
-      k_particle_h(i, particle_var::uy) = particles[i].uy;
-      k_particle_h(i, particle_var::uz) = particles[i].uz;
-      k_particle_h(i, particle_var::w)  = particles[i].w;
-      k_particle_i_h(i) = particles[i].i;
+      k_fluid_h(i, fluid_var::den) = host_fluid[i].den;
+      k_fluid_h(i, fluid_var::tmp) = host_fluid[i].tmp;
+      k_fluid_h(i, fluid_var::prs) = host_fluid[i].prs;
+      k_fluid_h(i, fluid_var::ux) = host_fluid[i].ux;
+      k_fluid_h(i, fluid_var::uy) = host_fluid[i].uy;
+      k_fluid_h(i, fluid_var::uz) = host_fluid[i].uz;
 
     });
 
-  // Avoid capturing this
-  auto& k_particle_movers_h = k_pm_h;
-  auto& k_particle_i_movers_h = k_pm_i_h;
-  auto& movers = pm;
-
-  Kokkos::parallel_for("copy movers to device",
-    host_execution_policy(0, max_nm) ,
-    KOKKOS_LAMBDA (int i) {
-
-      k_particle_movers_h(i, particle_mover_var::dispx) = movers[i].dispx;
-      k_particle_movers_h(i, particle_mover_var::dispy) = movers[i].dispy;
-      k_particle_movers_h(i, particle_mover_var::dispz) = movers[i].dispz;
-      k_particle_i_movers_h(i) = movers[i].i;
-
-    });
-
-  Kokkos::deep_copy(k_p_d, k_p_h);
-  Kokkos::deep_copy(k_p_i_d, k_p_i_h);
-  Kokkos::deep_copy(k_pm_d, k_pm_h);
-  Kokkos::deep_copy(k_pm_i_d, k_pm_i_h);
-  Kokkos::deep_copy(k_nm_d, k_nm_h);
+  Kokkos::deep_copy(k_fl_d, k_fl_h);
 
 }
-*/
+

@@ -181,7 +181,8 @@ public:
   int hydro_interval;
   int field_interval;
   int particle_interval;
-
+  int fluid_interval;
+  
   size_t nxout, nyout, nzout;
   size_t px, py, pz;
   float dxout, dyout, dzout;
@@ -363,6 +364,10 @@ public:
     return hydro_array->h[ voxel(ix,iy,iz) ];
   }
 
+  //  inline float& k_fluid(const int ix, const int iy, const int iz, fluid_var::fl_v member) { 
+  //    return fluid_species->k_fl_d(voxel(ix,iy,iz), member);
+  //  }
+  
   inline rng_t *
   rng( const int n ) {
     return entropy->rng[n];
