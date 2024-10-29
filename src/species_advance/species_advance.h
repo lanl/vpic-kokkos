@@ -463,11 +463,11 @@ move_p_kokkos(
     uy = p_uy;
     uz = p_uz;
 
-    v0 = one; // /   sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
+    //v0 = one; // /   sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
 
-    ux *= v0;
-    uy *= v0;
-    uz *= v0;
+    //ux *= v0;
+    //uy *= v0;
+    //uz *= v0;
 
     s_dispx = pm->dispx;
     s_dispy = pm->dispy;
@@ -483,7 +483,7 @@ move_p_kokkos(
     fracdt = v0;
     if(v1>fracdt) fracdt=v1;
     if(v2>fracdt) fracdt=v2;
-    fracdt = 4.0*(fracdt-0.5);
+    fracdt = 2.0*(fracdt-0.5);
     
     if(fracdt>0){
       
@@ -496,22 +496,22 @@ move_p_kokkos(
         
 	// Accumulate the particle current density
 	
-	int iii = ii;
-	int zi = iii/((nx+2)*(ny+2));
-	iii -= zi*(nx+2)*(ny+2);
-	int yi = iii/(nx+2);
-	int xi = iii-yi*(nx+2);
+	//int iii = ii;
+	//int zi = iii/((nx+2)*(ny+2));
+	//iii -= zi*(nx+2)*(ny+2);
+	//int yi = iii/(nx+2);
+	//int xi = iii-yi*(nx+2);
 	
 	//printf("move_p accumulate here");
 	
 	
-	if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
+	//if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
 	  
 	  scatter_access(ii, field_var::jfx) += q*ux;
 	  scatter_access(ii, field_var::jfy) += q*uy;
 	  scatter_access(ii, field_var::jfz) += q*uz;
 	  scatter_access(ii, field_var::rhof) += q;
-	}
+	//}
 	
 	
       } //if indbds
@@ -773,11 +773,11 @@ move_p_kokkos_host_serial(
     uy = p_uy;
     uz = p_uz;
 
-    v0 = one;///sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
+    //v0 = one;///sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
 
-    ux *= v0;
-    uy *= v0;
-    uz *= v0;
+    //ux *= v0;
+    //uy *= v0;
+    //uz *= v0;
     
     s_dispx = pm->dispx;
     s_dispy = pm->dispy;
@@ -793,7 +793,7 @@ move_p_kokkos_host_serial(
     fracdt = v0;
     if(v1>fracdt) fracdt=v1;
     if(v2>fracdt) fracdt=v2;
-    fracdt = 4.0*(fracdt-0.5);
+    fracdt = 2.0*(fracdt-0.5);
 
       if(fracdt>0){
 
@@ -806,11 +806,11 @@ move_p_kokkos_host_serial(
         
 	// Accumulate the particle current density
 	
-      int iii = ii;
-      int zi = iii/((nx+2)*(ny+2));
-      iii -= zi*(nx+2)*(ny+2);
-      int yi = iii/(nx+2);
-      int xi = iii-yi*(nx+2);
+      //int iii = ii;
+      //int zi = iii/((nx+2)*(ny+2));
+      //iii -= zi*(nx+2)*(ny+2);
+      //int yi = iii/(nx+2);
+      //int xi = iii-yi*(nx+2);
       
       k_jf_accum(ii, accumulator_var::jx) += rV*q*ux;
       k_jf_accum(ii, accumulator_var::jy) += rV*q*uy;
@@ -819,9 +819,6 @@ move_p_kokkos_host_serial(
       } //if indbds
       
     } //ifmore than half dt left
-
-
-    
 
       //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
 
