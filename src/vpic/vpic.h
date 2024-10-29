@@ -127,6 +127,19 @@ struct DumpParameters {
     output_vars.set(mask);
   } // output_variables
 
+  void set_defaults() {
+    stride_x = 1;
+    stride_y = 1;
+    stride_z = 1;
+
+    format = band;
+
+    output_vars.set((0xffffffff));
+
+    //    strcpy(baseDir, dumptype);
+    //    strcpy(baseFileName, dumptype);
+  } // output_variables
+  
   BitField output_vars;
 
   size_t stride_x;
