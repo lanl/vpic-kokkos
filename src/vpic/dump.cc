@@ -367,9 +367,8 @@ vpic_simulation::dump_fluids( const char *fsp_name,
   fsp = find_fluid_species_name( fsp_name, fluid_species_list );
   if( !fsp ) ERROR(( "Invalid fluid species \"%s\"", fsp_name ));
 
-  /*
-  fsp->copy_to_host();             // To-do: Add back in when using kokkos.
-  */
+  if (step() > fsp->last_copied)  fsp->copy_to_host();
+  
   
   if( !fbase ) ERROR(( "Invalid filename" ));
 
@@ -1018,24 +1017,12 @@ vpic_simulation::fluid_dump( const char * speciesname,
   fluid_species_t * fsp = find_fluid_species_name(speciesname, fluid_species_list);
   if( !fsp ) ERROR(( "Invalid fluid species name: %s", speciesname ));
 
-  /*  auto& particles = sp->k_p_d;
-  auto& particles_i = sp->k_p_i_d;
-  auto& interpolators_k = interpolator_array->k_i_d;
-
-  Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
-  accumulate_hydro_p_kokkos(
-      particles,
-      particles_i,
-      hydro_array->k_h_d,
-      interpolators_k,
-      sp
-  );
-  */
-
   // The legacy synchronize is actually a bit faster
   //synchronize_hydro_array_kokkos(hydro_array);
 
-  /*  hydro_array->copy_to_host(); */ // To-do: Add back in when using kokkos.
+  if (step() > fsp->last_copied)
+    fsp->copy_to_host();
+  
 
   //  synchronize_hydro_array( hydro_array );
 
