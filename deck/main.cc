@@ -59,6 +59,15 @@ void checkpt(const char* fbase, int tag)
         }
     }
 
+    fluid_species_t* fsp;
+    LIST_FOR_EACH( fsp, simulation->fluid_species_list )
+    {
+        if (simulation->step() > fsp->last_copied)
+        {
+            fsp->copy_to_host();
+        }
+    }
+    
     simulation->field_array->copy_to_host();
     simulation->interpolator_array->copy_to_host();
 

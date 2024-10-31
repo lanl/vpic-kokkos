@@ -32,6 +32,7 @@ checkpt_vpic_simulation( const vpic_simulation * vpic ) {
   CHECKPT_FPTR( vpic->interpolator_array );
   CHECKPT_FPTR( vpic->hydro_array );
   CHECKPT_FPTR( vpic->species_list );
+  CHECKPT_FPTR( vpic->fluid_species_list );
   CHECKPT_FPTR( vpic->particle_bc_list );
   CHECKPT_FPTR( vpic->emitter_list );
   CHECKPT_FPTR( vpic->collision_op_list );
@@ -49,6 +50,7 @@ restore_vpic_simulation( void ) {
   RESTORE_FPTR( vpic->interpolator_array );
   RESTORE_FPTR( vpic->hydro_array );
   RESTORE_FPTR( vpic->species_list );
+  RESTORE_FPTR( vpic->fluid_species_list );
   RESTORE_FPTR( vpic->particle_bc_list );
   RESTORE_FPTR( vpic->emitter_list );
   RESTORE_FPTR( vpic->collision_op_list );
@@ -62,6 +64,7 @@ reanimate_vpic_simulation( vpic_simulation * vpic ) {
   REANIMATE_FPTR( vpic->interpolator_array );
   REANIMATE_FPTR( vpic->hydro_array );
   REANIMATE_FPTR( vpic->species_list );
+  REANIMATE_FPTR( vpic->fluid_species_list );
   REANIMATE_FPTR( vpic->particle_bc_list );
   REANIMATE_FPTR( vpic->emitter_list );
   REANIMATE_FPTR( vpic->collision_op_list );
@@ -97,6 +100,7 @@ vpic_simulation::~vpic_simulation() {
   delete_emitter_list( emitter_list );
   delete_particle_bc_list( particle_bc_list );
   delete_species_list( species_list );
+  delete_fluid_species_list( fluid_species_list );
   delete_hydro_array( hydro_array );
   delete_interpolator_array( interpolator_array );
   delete_field_array( field_array );
@@ -117,6 +121,7 @@ void vpic_simulation::print_run_details()
     if (rank() == 0)
     {
         species_t* sp = nullptr;
+	fluid_species_t* fsp = nullptr;
         // Read run details and print them out
         // Focus on performance detemring quantities, and allow the deck to print
         // physics focused params:
@@ -140,6 +145,14 @@ void vpic_simulation::print_run_details()
                 std::cout << "  # " << sp->name << " np " << sp->np << " max_np " << sp->max_np << std::endl;
             }
         }
+	if (fluid_species_list )
+	  {
+	    std::cout << "## Local Fluid Species: " <<  num_fluid_species( fluid_species_list ) << std::endl;
+	    LIST_FOR_EACH( fsp, fluid_species_list )
+	      {
+		std::cout << "  # " << fsp->name << std::endl;
+	      }
+	  }
         std::cout << "######### End Run Details ######" << std::endl;
         std::cout << std::endl; // blank line
     }
@@ -240,7 +253,18 @@ void restore_kokkos(vpic_simulation& simulation)
     ha->k_h_h = Kokkos::create_mirror_view(ha->k_h_d);
     // No need to populate hydro
 
+    // Restore Fluids
+    fluid_species_t* fsp;
+    LIST_FOR_EACH( fsp, simulation.fluid_species_list )
+    {
+      // TODO: we can bury this in the class?
+      new(&fsp->k_fl_d) k_fluid_t();
+      new(&fsp->k_fl_h) k_fluid_t::HostMirror();
 
+      fsp->init_kokkos_fluids( nv ); //, xyz_sz, yzx_sz, zxy_sz );
+      fsp->copy_to_device();
+    }
+	
     // Restore Material Data
     sfa_params_t* params = reinterpret_cast<sfa_params_t*>(fa->params);
     new(&params->k_mc_d) k_material_coefficient_t();

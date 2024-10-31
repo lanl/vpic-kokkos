@@ -19,6 +19,7 @@
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
 #define HYDRO_VAR_COUNT 14
 #define NUM_J_DIMS 4
+#define FLUID_VAR_COUNT 6
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -67,6 +68,8 @@ using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATO
 
 using k_hydro_d_t = Kokkos::View<float* [HYDRO_VAR_COUNT]>;
 using k_hydro_sv_t = Kokkos::Experimental::ScatterView<float* [HYDRO_VAR_COUNT]>;
+
+using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT]>;
 
 //using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
 
@@ -260,6 +263,17 @@ namespace hydro_var {
         tyz = 11,
         tzx = 12,
         txy = 13,
+    };
+};
+
+namespace fluid_var {
+    enum fl_v {
+        den  = 0,
+        tmp  = 1,
+        prs  = 2,
+        ux  = 3,
+        uy  = 4,
+        uz  = 5,
     };
 };
 

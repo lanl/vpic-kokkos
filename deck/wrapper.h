@@ -481,6 +481,24 @@ vpic_simulation::user_particle_collisions( void )
   } while(0)
 
 
+#define set_region_fluid( rgn, name,					\
+			  eqn_den, eqn_tmp, eqn_prs ) do {		\
+  fluid_species_t *_fsp = find_fluid_species_name( name, fluid_species_list ); \
+  /*fluid_t *_fl = _fsp->fl;*/						\
+  const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;		\
+  const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;		\
+  const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;		\
+  for( int _k=0; _k<_nz+2; _k++ ) { const double _zl = _z0 + _dz*(_k-1.5), _ze = _z0 + _dz*_k, _zc = _z0 + _dz*(_k-0.5); \
+  for( int _j=0; _j<_ny+2; _j++ ) { const double _yl = _y0 + _dy*(_j-1.5), _ye = _y0 + _dy*_j, _yc = _y0 + _dy*(_j-0.5); fluid_t *_fl = &_fsp->fl[ voxel(0,_j,_k) ]; \
+  for( int _i=0; _i<_nx+2; _i++ ) { const double _xl = _x0 + _dx*(_i-1.5), _xe = _x0 + _dx*_i, _xc = _x0 + _dx*(_i-0.5); double x, y, z; \
+    int _rccc, _rlcc, _rclc, _rllc, _rccl, _rlcl, _rcll;		\
+    x = _xc; y = _yc; z = _zc; _rccc = (rgn);				\
+    x = _xc; y = _yc; z = _zc; if( _rccc )                   _fl->den = (eqn_den); \
+    x = _xc; y = _yc; z = _zc; if( _rccc )                   _fl->tmp = (eqn_tmp); \
+    x = _xc; y = _yc; z = _zc; if( _rccc )                   _fl->prs = (eqn_prs); \
+    _fl++;								\
+  }}}									\
+} while(0)
 
 // In main.cxx
 
