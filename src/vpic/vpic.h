@@ -25,6 +25,10 @@
 #include "../util/checksum.h"
 #include "../util/system.h"
 
+#ifdef VPIC_ENABLE_HDF5
+#include "dump_hdf5.h"
+#endif
+
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
 #endif
@@ -257,6 +261,18 @@ public:
                    int fname_tag = 1 );
   void dump_particles( const char *sp_name, const char *fbase,
                        int fname_tag = 1 );
+
+#ifdef VPIC_ENABLE_HDF5
+  void dump_particles_hdf5( const char *sp_name, const char *fbase,
+                       int fname_tag = 1 );
+  void dump_hydro_hdf5( const char *sp_name, const char *fbase,
+                   int fname_tag = 1 );
+  void dump_fields_hdf5( const char *fbase, int fname_tag = 1 );
+
+  // Declare vars to use
+  hydro_dump_flag_t hydro_dump_flag;
+  field_dump_flag_t field_dump_flag;
+#endif
 
   // convenience functions for simlog output
   void create_field_list(char * strlist, DumpParameters & dumpParams);
