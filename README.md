@@ -41,7 +41,7 @@ Transactions on Parallel and Distributed Systems, 33(4), 952-963.
 VPIC uses nested submodules.  This requires the addition of the *--recursive*
 flag when cloning the repository:
 
-    % git clone https://github.com/lanl/vpic-kokkos.git
+    % git clone --recurse-submodules https://github.com/lanl/vpic-kokkos.git
     % git checkout hybridVPIC-K 
 
 This command will check out the VPIC source code.
