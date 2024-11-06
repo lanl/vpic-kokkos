@@ -609,7 +609,7 @@ advance_p_kokkos_unified(
         v3[LANE] = static_cast<float>(inbnds[LANE])*v3[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dx;
         v4[LANE] = static_cast<float>(inbnds[LANE])*v4[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dy;
         v5[LANE] = static_cast<float>(inbnds[LANE])*v5[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dz;
-        q[LANE]  = static_cast<float>(inbnds[LANE]*inbnds[LANE])*q[LANE]*qsp*rV;
+        q[LANE]  = static_cast<float>(inbnds[LANE])*q[LANE]*qsp*rV;
 
         p_dx = v3[LANE];
         p_dy = v4[LANE];
