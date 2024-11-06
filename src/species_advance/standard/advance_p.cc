@@ -464,7 +464,7 @@ advance_p_kokkos_unified(
       float q[num_lanes];
       int   ii[num_lanes];
       int   inbnds[num_lanes];
-      int   midbnds[num_lanes];
+      //int   midbnds[num_lanes];
 
 
       float fcbx[num_lanes];
@@ -592,8 +592,8 @@ advance_p_kokkos_unified(
         v4[LANE]   = v1[LANE] + uy[LANE];
         v5[LANE]   = v2[LANE] + uz[LANE];
   
-        midbnds[LANE] = v0[LANE]<=one &&  v1[LANE]<=one &&  v2[LANE]<=one &&
-                      -v0[LANE]<=one && -v1[LANE]<=one && -v2[LANE]<=one;
+        //midbnds[LANE] = v0[LANE]<=one &&  v1[LANE]<=one &&  v2[LANE]<=one &&
+          //            -v0[LANE]<=one && -v1[LANE]<=one && -v2[LANE]<=one;
 
         inbnds[LANE] = v3[LANE]<=one &&  v4[LANE]<=one &&  v5[LANE]<=one &&
                       -v3[LANE]<=one && -v4[LANE]<=one && -v5[LANE]<=one;
@@ -609,7 +609,7 @@ advance_p_kokkos_unified(
         v3[LANE] = static_cast<float>(inbnds[LANE])*v3[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dx;
         v4[LANE] = static_cast<float>(inbnds[LANE])*v4[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dy;
         v5[LANE] = static_cast<float>(inbnds[LANE])*v5[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dz;
-        q[LANE]  = static_cast<float>(midbnds[LANE])*q[LANE]*qsp*rV;
+        q[LANE]  = static_cast<float>(inbnds[LANE])*q[LANE]*qsp*rV;
 
         p_dx = v3[LANE];
         p_dy = v4[LANE];
@@ -934,9 +934,14 @@ advance_p_kokkos_gpu(
     reduce = min_inbnds == max_inbnds && min_index == max_index;
 #endif
 */
-    // FIXME-KJB: COULD SHORT CIRCUIT ACCUMULATION IN THE CASE WHERE QSP==0!
-    if(  v0<=one &&  v1<=one &&  v2<=one &&   // Check if inbnds
-        -v0<=one && -v1<=one && -v2<=one ) {
+
+    
+    if(  dx<=one  &&  dy<=one &&  dz<=one &&   // Check if inbnds
+	 -dx<=one && -dy<=one && -dz<=one ) {
+      
+      p_dx = dx;                             // Store new position
+      p_dy = dy;
+      p_dz = dz;
 
       // Common case (inbnds).  Note: accumulator values are 4 times
       // the total physical charge that passed through the appropriate
@@ -990,14 +995,7 @@ advance_p_kokkos_gpu(
         k_field_scatter_access(ii, field_var::jfy) += q*rV*uy;
         k_field_scatter_access(ii, field_var::jfz) += q*rV*uz;
 	k_field_scatter_access(ii, field_var::rhof) += q*rV;
-    }
-    
-    if(  dx<=one  &&  dy<=one &&  dz<=one &&   // Check if inbnds
-	 -dx<=one && -dy<=one && -dz<=one ) {
-      
-      p_dx = dx;                             // Store new position
-      p_dy = dy;
-      p_dz = dz;
+
       
     } else {
       

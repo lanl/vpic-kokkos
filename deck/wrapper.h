@@ -456,6 +456,7 @@ vpic_simulation::user_particle_collisions( void )
 
 // The equations are only evaluated inside the mesh-mapped region
 // (This is not strictly inside the region)
+// Multiply hypereta, eta, E field
 #define set_region_eta_multipliers( rgn,                                        \
                          eqn_tcax, eqn_tcay, eqn_tcaz ) do {       \
     const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;      \
