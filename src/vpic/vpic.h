@@ -24,6 +24,7 @@
 #include "../util/bitfield.h"
 #include "../util/checksum.h"
 #include "../util/system.h"
+#include "../util/rng_policy.h"
 
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
@@ -137,6 +138,21 @@ public:
   void finalize( void );
   void print_run_details( void );
 
+  // Set RNG policy. Use std::rng by default, optionally use Kokkos or
+  // "original"
+#ifdef USE_KOKKOS_RNG
+  // TODO: this only works on CPU right now...
+  _RNG::RandomNumberProvider< _RNG::KokkosRNG<Kokkos::DefaultHostExecutionSpace> > rng_policy;
+#elif USE_STL_RNG
+  _RNG::RandomNumberProvider<_RNG::CppRNG> rng_policy;
+#else // USE_ORIGINAL_RNG
+  _RNG::RandomNumberProvider<_RNG::OriginalRNG> rng_policy;
+#endif
+
+  // TODO: remove or improve this
+
+  kokkos_rng_pool_t * kokkos_rng;
+    
   // Directly initialized by user
 
   int verbose;              // Should system be verbose
@@ -634,21 +650,30 @@ public:
   // FIXME: MTRAND DESPERATELY NEEDS A LARGER SEED SPACE!
 
   inline void seed_entropy( int base ) {
-    seed_rng_pool( entropy,      base, 0 );
-    seed_rng_pool( sync_entropy, base, 1 );
+    rng_policy.seed( entropy, sync_entropy, base, 0 );
+    kokkos_rng->init(base, Kokkos::DefaultExecutionSpace::concurrency());
+    //seed_rng_pool( entropy,      base, 0 );
+    //seed_rng_pool( sync_entropy, base, 1 );
   }
 
   // Uniform random number on (low,high) (open interval)
   // FIXME: IS THE INTERVAL STILL OPEN IN FINITE PRECISION
   //        AND IS THE OPEN INTERVAL REALLY WHAT USERS WANT??
   inline double uniform( rng_t * rng, double low, double high ) {
-    double dx = drand( rng );
-    return low*(1-dx) + high*dx;
+    //double dx = drand( rng );
+    //return low*(1-dx) + high*dx;
+    return rng_policy.uniform(rng, low, high);
   }
 
   // Normal random number with mean mu and standard deviation sigma
   inline double normal( rng_t * rng, double mu, double sigma ) {
-    return mu + sigma*drandn( rng );
+    //return mu + sigma*drandn( rng );
+    return rng_policy.normal(rng, mu, sigma);
+  }
+
+  // Generate a random int between [0..max)
+  inline unsigned int random_uint( rng_t* rng, unsigned int max ) {
+    return rng_policy.uint(rng, max);
   }
 
   /////////////////////////////////

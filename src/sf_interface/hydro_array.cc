@@ -9,6 +9,17 @@
  */
 
 #include "sf_interface.h"
+#define RANK_TO_INDEX(rank,ix,iy,iz,nx,ny,nz) do {        \
+    int _ix, _iy, _iz;                                    \
+    _ix  = (rank);   /* ix = ix + gpx*( iy + gpy*iz ) */  \
+    _iy  = _ix/(nx); /* iy = iy + gpy*iz */               \
+    _ix -= _iy*(nx); /* ix = ix */                        \
+    _iz  = _iy/(ny); /* iz = iz */                        \
+    _iy -= _iz*(ny); /* iy = iy */                        \
+    (ix) = _ix;                                           \
+    (iy) = _iy;                                           \
+    (iz) = _iz;                                           \
+  } while(0)
 
 /* Though the checkpt/restore functions are not part of the public
    API, they must not be declared as static. */
@@ -522,7 +533,7 @@ hydro_array_t::copy_to_host() {
 
   //for(int i=0; i<hydro_array->k_h_h.extent(0); i++) {
   Kokkos::parallel_for("copy hydro to legacy array",
-    host_execution_policy(0, k_h_h.extent(0) - 1) ,
+    host_execution_policy(0, k_h_h.extent(0) ) ,
     KOKKOS_LAMBDA (int i) {
     h_l[i].jx = k_h(i, hydro_var::jx);
     h_l[i].jy = k_h(i, hydro_var::jy);
@@ -538,6 +549,13 @@ hydro_array_t::copy_to_host() {
     h_l[i].tyz = k_h(i, hydro_var::tyz);
     h_l[i].tzx = k_h(i, hydro_var::tzx);
     h_l[i].txy = k_h(i, hydro_var::txy);
-  });
 
+    int ix, iy, iz;
+    RANK_TO_INDEX(i, ix, iy, iz, 1, 1, 1);
+    
+    // if(h_l[i].ke>0) printf("%d (%d,%d,%d) %e \n",i,ix,iy,iz,h_l[i].ke);
+    if(h_l[i].ke>0) printf("%.15e\t%.15e\t%.15e\t%.15e",h_l[i].ke,h_l[i].txx,h_l[i].tyy,h_l[i].tzz);
+  });
+  // printf("k_h_h.extent(0)=%d\n",k_h_h.extent(0));
+  printf("\n");
 }

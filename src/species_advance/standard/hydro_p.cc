@@ -213,15 +213,19 @@ accumulate_hydro_p_kokkos(
     {
 
     // Load the particle
-    float dx = k_particles(p_index, particle_var::dx);
-    float dy = k_particles(p_index, particle_var::dy);
-    float dz = k_particles(p_index, particle_var::dz);
-    float ux = k_particles(p_index, particle_var::ux);
-    float uy = k_particles(p_index, particle_var::uy);
-    float uz = k_particles(p_index, particle_var::uz);
-    float w  = k_particles(p_index, particle_var::w);
+    double dx = k_particles(p_index, particle_var::dx);
+    double dy = k_particles(p_index, particle_var::dy);
+    double dz = k_particles(p_index, particle_var::dz);
+    double ux = k_particles(p_index, particle_var::ux);
+    double uy = k_particles(p_index, particle_var::uy);
+    double uz = k_particles(p_index, particle_var::uz);
+    double w  = k_particles(p_index, particle_var::w);
     int ii = k_particles_i(p_index);
 
+    double ke_mc = static_cast<double>(ux)*static_cast<double>(ux) + static_cast<double>(uy)*static_cast<double>(uy) + static_cast<double>(uz)*static_cast<double>(uz); // ke_mc = |u|^2 (invariant)
+    double vz = sqrt(1.0+ke_mc);            // vz = gamma    (invariant)    
+    ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
+    float w0,w1,w2,w3,w4,w5,w6,w7;
     const float cbx = k_interp(ii, interpolator_var::cbx);
     const float cby = k_interp(ii, interpolator_var::cby);
     const float cbz = k_interp(ii, interpolator_var::cbz);
@@ -245,7 +249,7 @@ accumulate_hydro_p_kokkos(
     const float dcbxdx = k_interp(ii, interpolator_var::dcbxdx);
     const float dcbydy = k_interp(ii, interpolator_var::dcbydy);
     const float dcbzdz = k_interp(ii, interpolator_var::dcbzdz);
-
+    /*
     // Half advance E
     ux += qdt_2mc*((ex+dy*dexdy) + dz*(dexdz+dy*d2exdydz));
     uy += qdt_2mc*((ey+dz*deydz) + dx*(deydx+dz*d2eydzdx));
@@ -278,7 +282,7 @@ accumulate_hydro_p_kokkos(
     ux += w4*( w1*w7 - w2*w6 );
     uy += w4*( w2*w5 - w0*w7 );
     uz += w4*( w0*w6 - w1*w5 );
-
+    */
     // Compute physical velocities
     float vx  = ux*vz;
     float vy  = uy*vz;
@@ -325,7 +329,7 @@ accumulate_hydro_p_kokkos(
     k_hydro_access(i, hydro_var::px)  += dx;                         \
     k_hydro_access(i, hydro_var::py)  += dy;                         \
     k_hydro_access(i, hydro_var::pz)  += dz;                         \
-    k_hydro_access(i, hydro_var::ke)  += t*ke_mc;                    \
+    k_hydro_access(i, hydro_var::ke)  += t*ke_mc;		     \
     k_hydro_access(i, hydro_var::txx) += dx*vx;                      \
     k_hydro_access(i, hydro_var::tyy) += dy*vy;                      \
     k_hydro_access(i, hydro_var::tzz) += dz*vz;                      \
@@ -336,6 +340,8 @@ accumulate_hydro_p_kokkos(
     // TODO: this serial adding to try and save adds is a bit sad
     // TODO: This is somehow going out of bounds right now
     const int i0 = ii;
+    ACCUM_HYDRO(w, i0); // Cell i,j,k
+    /*
     ACCUM_HYDRO(w0, i0); // Cell i,j,k
 
     const int i1 = i0 + stride_10;
@@ -358,8 +364,11 @@ accumulate_hydro_p_kokkos(
 
     const int i7 = i6 + stride_10;
     ACCUM_HYDRO(w7, i7); // Cell i+1,j+1,k+1
-
+    */
 #   undef ACCUM_HYDRO
+    // printf("i0-7=%d,%d,%d,%d,%d,%d,%d,%d\n",i0,i1,i2,i3,i4,i5,i6,i7);
+    // printf("w0-7=%e,%e,%e,%e,%e,%e,%e,%e\n",ke_mc*w0,ke_mc*w1,ke_mc*w2,ke_mc*w3,ke_mc*w4,ke_mc*w5,ke_mc*w6,ke_mc*w7);
+    //printf("interpolator=%e,%e,%e,%e,%e,%e,%e,%e\n",ex,ey,ez,dexdy,cbx,cby,cbz,dcbxdx);
   });
 
   Kokkos::Experimental::contribute(k_hydro, k_hydro_sv);

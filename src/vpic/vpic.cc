@@ -104,6 +104,8 @@ vpic_simulation::~vpic_simulation() {
   delete_grid( grid );
   delete_rng_pool( sync_entropy );
   delete_rng_pool( entropy );
+  printf("#Running On Kokkos execution space %s\nKokkos::Finalize().",
+            typeid (Kokkos::DefaultExecutionSpace).name ());
   Kokkos::finalize();
 }
 
