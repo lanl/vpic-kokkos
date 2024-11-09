@@ -931,6 +931,8 @@ vpic_simulation::hydro_dump( const char * speciesname,
 void
 vpic_simulation::dump_fields_hdf5( const char *fbase, int ftag )
 {
+  if ( rank()==0 ) log_printf("Dumping fields using HDF5\n");
+
   // Update the fields if necessary
   if (step() > field_array->last_copied)
     field_array->copy_to_host();
@@ -992,7 +994,7 @@ vpic_simulation::dump_fields_hdf5( const char *fbase, int ftag )
   hid_t group_id = H5Gcreate(file_id, fname, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   el1 = uptime() - el1;
-  if ( rank()==0 ) log_printf("TimeHDF5Open: %.2f s ", el1);
+  if ( rank()==0 ) log_printf("TimeHDF5Open: %.2f s\n", el1);
   double el2 = uptime();
 
   // prepare for writing the data
@@ -1078,7 +1080,7 @@ vpic_simulation::dump_fields_hdf5( const char *fbase, int ftag )
   if (field_dump_flag.oe) DUMP_FIELD_TO_HDF5("oe", oe, H5T_NATIVE_FLOAT);
 
   el2 = uptime() - el2;
-  if ( rank()==0 ) log_printf("TimeHDF5Write: %.2f s ", el2);
+  if ( rank()==0 ) log_printf("TimeHDF5Write: %.2f s\n", el2);
 
   double el3 = uptime();
 
@@ -1090,7 +1092,7 @@ vpic_simulation::dump_fields_hdf5( const char *fbase, int ftag )
   H5Fclose(file_id);
 
   el3 = uptime() - el3;
-  if ( rank()==0 ) log_printf("TimeHDF5Close: %.2f s ", el3);
+  if ( rank()==0 ) log_printf("TimeHDF5Close: %.2f s\n", el3);
 
   if (rank() == 0) {
     char const *output_xml_file = "./fields_hdf5/hdf5_field.xdmf";
@@ -1167,6 +1169,8 @@ vpic_simulation::dump_hydro_hdf5( const char *speciesname, const char *fbase, in
   species_t *sp = find_species_name(speciesname, species_list);
   if (!sp) ERROR(("Invalid species name: %s", speciesname));
 
+  if ( rank()==0 ) log_printf("Dumping hydro for %s using HDF5\n", speciesname);
+
   auto& particles = sp->k_p_d;
   auto& particles_i = sp->k_p_i_d;
   auto& interpolators_k = interpolator_array->k_i_d;
@@ -1208,7 +1212,7 @@ vpic_simulation::dump_hydro_hdf5( const char *speciesname, const char *fbase, in
   hid_t group_id = H5Gcreate(file_id, hname, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   el1 = uptime() - el1;
-  if ( rank()==0 ) log_printf("TimeHDF5Open: %.2f s ", el1);
+  if ( rank()==0 ) log_printf("TimeHDF5Open: %.2f s\n", el1);
   double el2 = uptime();
 
   // prepare for writing the data
@@ -1272,7 +1276,7 @@ vpic_simulation::dump_hydro_hdf5( const char *speciesname, const char *fbase, in
   if (hydro_dump_flag.txy) DUMP_HYDRO_TO_HDF5("txy", txy, H5T_NATIVE_FLOAT);
 
   el2 = uptime() - el2;
-  if ( rank()==0 ) log_printf("TimeHDF5Write: %.2f s ", el2);
+  if ( rank()==0 ) log_printf("TimeHDF5Write: %.2f s\n", el2);
 
   double el3 = uptime();
 
@@ -1284,7 +1288,7 @@ vpic_simulation::dump_hydro_hdf5( const char *speciesname, const char *fbase, in
   H5Fclose(file_id);
 
   el3 = uptime() - el3;
-  if ( rank()==0 ) log_printf("TimeHDF5Close: %.2f s ", el3);
+  if ( rank()==0 ) log_printf("TimeHDF5Close: %.2f s\n", el3);
 
   if (rank() == 0) {
     char output_xml_file[128];
@@ -1346,6 +1350,7 @@ vpic_simulation::dump_particles_hdf5( const char *speciesname, const char *fbase
 
   species_t * sp = find_species_name( speciesname, species_list );
   if( !sp ) ERROR(( "Invalid species name \"%s\".", speciesname ));
+  if ( rank()==0 ) log_printf("Dumping %s particles using HDF5\n", speciesname);
 
   // Update the particles on the host only if they haven't been recently
   if (step() > sp->last_copied)
@@ -1428,7 +1433,7 @@ vpic_simulation::dump_particles_hdf5( const char *speciesname, const char *fbase
   H5Sselect_hyperslab(memspace, H5S_SELECT_SET, &memspace_start, &memspace_stride, &memspace_count, NULL);
 
   el1 = uptime() - el1;
-  if(print_timing) MESSAGE(("Particle TimeHDF5Open: %fs", el1));
+  if(print_timing) MESSAGE(("Particle TimeHDF5Open: %f s\n", el1));
 
   double el2 = uptime();
 
@@ -1523,7 +1528,7 @@ vpic_simulation::dump_particles_hdf5( const char *speciesname, const char *fbase
   H5Dclose(dset_id);
 
   el2 = uptime() - el2;
-  if(print_timing) MESSAGE(("Particle TimeHDF5Write: %fs", el2));
+  if(print_timing) MESSAGE(("Particle TimeHDF5Write: %f s \n", el2));
 
   double el3 = uptime();
   H5Sclose(memspace);
@@ -1532,7 +1537,7 @@ vpic_simulation::dump_particles_hdf5( const char *speciesname, const char *fbase
   H5Gclose(group_id);
   H5Fclose(file_id);
   el3 = uptime() - el3;
-  if(print_timing) MESSAGE(("Particle TimeHDF5Close: %fs", el3));
+  if(print_timing) MESSAGE(("Particle TimeHDF5Close: %f s\n", el3));
 
   sp->p = sp_p;
   sp->np = sp_np;
@@ -1571,7 +1576,7 @@ vpic_simulation::dump_particles_hdf5( const char *speciesname, const char *fbase
   H5Pset_dxpl_mpio(meta_plist_id, H5FD_MPIO_COLLECTIVE);
   H5Sselect_hyperslab(meta_filespace, H5S_SELECT_SET, (hsize_t *)&meta_offset, NULL, (hsize_t *)&meta_numparticles, NULL);
   meta_el1 = uptime() - meta_el1;
-  if(print_timing) MESSAGE(("Metafile TimeHDF5Open: %fs", meta_el1));
+  if(print_timing) MESSAGE(("Metafile TimeHDF5Open: %f s\n", meta_el1));
 
   double meta_el2 = uptime();
 
@@ -1616,7 +1621,7 @@ vpic_simulation::dump_particles_hdf5( const char *speciesname, const char *fbase
   H5Dclose(meta_dset_id);
 
   meta_el2 = uptime() - meta_el2;
-  if(print_timing) MESSAGE(("Metafile TimeHDF5Write: %fs", meta_el2));
+  if(print_timing) MESSAGE(("Metafile TimeHDF5Write: %f s\n", meta_el2));
   double meta_el3 = uptime();
   H5Sclose(meta_memspace);
   H5Sclose(meta_filespace);
@@ -1624,6 +1629,6 @@ vpic_simulation::dump_particles_hdf5( const char *speciesname, const char *fbase
   H5Gclose(meta_group_id);
   H5Fclose(meta_file_id);
   meta_el3 = uptime() - meta_el3;
-  if(print_timing) MESSAGE(("Metafile TimeHDF5Close: %fs", meta_el3));
+  if(print_timing) MESSAGE(("Metafile TimeHDF5Close: %f s\n", meta_el3));
 }
 #endif // #ifdef VPIC_ENABLE_HDF5
