@@ -759,15 +759,19 @@ advance_p_kokkos_gpu(
         const int nz)
 {
 
+  constexpr float three          = 3.;
+  constexpr float two            = 2.;
   constexpr float one            = 1.;
   constexpr float one_third      = 1./3.;
   constexpr float two_fifteenths = 2./15.;
+  constexpr float one_twelfth    = 1./12.;
   k_field_t k_field = fa->k_f_d;
   k_field_sa_t k_f_sv = Kokkos::Experimental::create_scatter_view<>(k_field);
   float cx = 0.25 * g->rdy * g->rdz / g->dt;
   float cy = 0.25 * g->rdz * g->rdx / g->dt;
   float cz = 0.25 * g->rdx * g->rdy / g->dt;
   float rV = g->rdx*g->rdy*g->rdz;
+  float rV12 = rV*one_twelfth;
   float gdx=g->dx, gdy=g->dy, gdz = g->dz, gdt = g->dt;
 
 
@@ -785,28 +789,48 @@ advance_p_kokkos_gpu(
 #endif
   #define pii     k_particles_i(p_index)
 
-  #define f_cbx k_interp(ii, interpolator_var::cbx)
-  #define f_cby k_interp(ii, interpolator_var::cby)
-  #define f_cbz k_interp(ii, interpolator_var::cbz)
-  #define f_ex  k_interp(ii, interpolator_var::ex)
-  #define f_ey  k_interp(ii, interpolator_var::ey)
-  #define f_ez  k_interp(ii, interpolator_var::ez)
-
+  #define f_ex       k_interp(ii, interpolator_var::ex)
+  #define f_dexdx    k_interp(ii, interpolator_var::dexdx)
   #define f_dexdy    k_interp(ii, interpolator_var::dexdy)
   #define f_dexdz    k_interp(ii, interpolator_var::dexdz)
-
-  #define f_d2exdydz k_interp(ii, interpolator_var::d2exdydz)
+  #define f_d2exdx   k_interp(ii, interpolator_var::d2exdx)
+  #define f_d2exdy   k_interp(ii, interpolator_var::d2exdy)
+  #define f_d2exdz   k_interp(ii, interpolator_var::d2exdz)
+  #define f_ey       k_interp(ii, interpolator_var::ey)
   #define f_deydx    k_interp(ii, interpolator_var::deydx)
+  #define f_deydy    k_interp(ii, interpolator_var::deydy)
   #define f_deydz    k_interp(ii, interpolator_var::deydz)
-
-  #define f_d2eydzdx k_interp(ii, interpolator_var::d2eydzdx)
+  #define f_d2eydx   k_interp(ii, interpolator_var::d2eydx)
+  #define f_d2eydy   k_interp(ii, interpolator_var::d2eydy)
+  #define f_d2eydz   k_interp(ii, interpolator_var::d2eydz)
+  #define f_ez       k_interp(ii, interpolator_var::ez)
   #define f_dezdx    k_interp(ii, interpolator_var::dezdx)
   #define f_dezdy    k_interp(ii, interpolator_var::dezdy)
-
-  #define f_d2ezdxdy k_interp(ii, interpolator_var::d2ezdxdy)
+  #define f_dezdz    k_interp(ii, interpolator_var::dezdz)
+  #define f_d2ezdx   k_interp(ii, interpolator_var::d2ezdx)
+  #define f_d2ezdy   k_interp(ii, interpolator_var::d2ezdy)
+  #define f_d2ezdz   k_interp(ii, interpolator_var::d2ezdz)
+  #define f_cbx      k_interp(ii, interpolator_var::cbx)
   #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
+  #define f_dcbxdy   k_interp(ii, interpolator_var::dcbxdy)
+  #define f_dcbxdz   k_interp(ii, interpolator_var::dcbxdz)
+  #define f_d2cbxdx  k_interp(ii, interpolator_var::d2cbxdx)
+  #define f_d2cbxdy  k_interp(ii, interpolator_var::d2cbxdy)
+  #define f_d2cbxdz  k_interp(ii, interpolator_var::d2cbxdz)
+  #define f_cby      k_interp(ii, interpolator_var::cby)
+  #define f_dcbydx   k_interp(ii, interpolator_var::dcbydx)
   #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
+  #define f_dcbydz   k_interp(ii, interpolator_var::dcbydz)
+  #define f_d2cbydx  k_interp(ii, interpolator_var::d2cbydx)
+  #define f_d2cbydy  k_interp(ii, interpolator_var::d2cbydy)
+  #define f_d2cbydz  k_interp(ii, interpolator_var::d2cbydz)
+  #define f_cbz      k_interp(ii, interpolator_var::cbz)
+  #define f_dcbzdx   k_interp(ii, interpolator_var::dcbzdx)
+  #define f_dcbzdy   k_interp(ii, interpolator_var::dcbzdy)
   #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
+  #define f_d2cbzdx  k_interp(ii, interpolator_var::d2cbzdx)
+  #define f_d2cbzdy  k_interp(ii, interpolator_var::d2cbzdy)
+  #define f_d2cbzdz  k_interp(ii, interpolator_var::d2cbzdz)
 
   // copy local memmbers from grid
   //auto nfaces_per_voxel = 6;
@@ -837,6 +861,7 @@ advance_p_kokkos_gpu(
 #endif
       
     float v0, v1, v2, v3, v4, v5, v6;
+    float w0, wx, wy, wz, wmx, wmy, wmz;
     auto  k_field_scatter_access = k_f_sv.access();
 
 #ifdef VARIABLE_CHARGE
@@ -848,13 +873,37 @@ advance_p_kokkos_gpu(
     float dy   = p_dy;
     float dz   = p_dz;
     int   ii   = pii;
+#ifdef SHAPE_NGP
     float hax  = qdt_2mc*(    ( f_ex ) );
     float hay  = qdt_2mc*(    ( f_ey ) );
     float haz  = qdt_2mc*(    ( f_ez  ) );
-
     float cbx  = f_cbx;// + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby;// + dy*f_dcbydy;
     float cbz  = f_cbz;// + dz*f_dcbzdz;
+#else
+#ifdef SHAPE_QS
+    // Interpolate E
+    float hax  = qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
+                                + dy*( f_dexdy + dy*f_d2exdy )
+                                + dz*( f_dexdz + dz*f_d2exdz ) );
+    float hay  = qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
+                                + dy*( f_deydy + dy*f_d2eydy )
+                                + dz*( f_deydz + dz*f_d2eydz ) );
+    float haz  = qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
+                                + dy*( f_dezdy + dy*f_d2ezdy )
+                                + dz*( f_dezdz + dz*f_d2ezdz ) );
+    // Interpolate B
+    float cbx  = f_cbx + dx*( f_dcbxdx + dx*f_d2cbxdx )
+                       + dy*( f_dcbxdy + dy*f_d2cbxdy )
+                       + dz*( f_dcbxdz + dz*f_d2cbxdz );
+    float cby  = f_cby + dx*( f_dcbydx + dx*f_d2cbydx )
+                       + dy*( f_dcbydy + dy*f_d2cbydy )
+                       + dz*( f_dcbydz + dz*f_d2cbydz );
+    float cbz  = f_cbz + dx*( f_dcbzdx + dx*f_d2cbzdx )
+                       + dy*( f_dcbzdy + dy*f_d2cbzdy )
+                       + dz*( f_dcbzdz + dz*f_d2cbzdz );
+#endif
+#endif
     float ux   = p_ux;                             // Load momentum
     float uy   = p_uy;
     float uz   = p_uz;
@@ -977,10 +1026,80 @@ advance_p_kokkos_gpu(
         //int yi = iii/(nx+2);
         //int xi = iii - yi*(nx+2);
       
-           k_field_scatter_access(ii, field_var::jfx) += q*rV*ux;
-           k_field_scatter_access(ii, field_var::jfy) += q*rV*uy;
-           k_field_scatter_access(ii, field_var::jfz) += q*rV*uz;
-	   k_field_scatter_access(ii, field_var::rhof) += q*rV;
+#ifdef SHAPE_NGP
+      q *= rV;
+      k_field_scatter_access(ii, field_var::jfx) += q*ux;
+      k_field_scatter_access(ii, field_var::jfy) += q*uy;
+      k_field_scatter_access(ii, field_var::jfz) += q*uz;
+      k_field_scatter_access(ii, field_var::rhof) += q;
+#else
+#ifdef SHAPE_QS
+      // stencil coefficients
+      // ... OLD hybrid-VPIC with QS shape, the accumulator stores
+      // ... ... p->w*qsp * two*(three - ...)
+      // ... ... hyb_unload_accumulator(...) applies factor rV/12.
+      // ... NEW HVPIC-K not using accumulator (yet), scatter directly to mesh,
+      // ... ... so include all factors
+      q *= rV12;
+      w0 =  q*two*( three - v0*v0 - v1*v1 - v2*v2 );
+      wx =  q*( v0 + one )*( v0 + one );
+      wy =  q*( v1 + one )*( v1 + one );
+      wz =  q*( v2 + one )*( v2 + one );
+      wmx = q*( v0 - one )*( v0 - one );
+      wmy = q*( v1 - one )*( v1 - one );
+      wmz = q*( v2 - one )*( v2 - one );
+
+      // Voxel indices
+      int iii = ii;
+      int zi = iii/((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii/(nx+2);
+      int xi = iii - yi*(nx+2);
+      // Neighboring voxel 1D (flattened) indices
+      int iix = VOXEL(xi+1,yi,zi,nx,ny,nz);
+      int iiy = VOXEL(xi,yi+1,zi,nx,ny,nz);
+      int iiz = VOXEL(xi,yi,zi+1,nx,ny,nz);
+      int iimx = VOXEL(xi-1,yi,zi,nx,ny,nz);
+      int iimy = VOXEL(xi,yi-1,zi,nx,ny,nz);
+      int iimz = VOXEL(xi,yi,zi-1,nx,ny,nz);
+
+      k_field_scatter_access(ii, field_var::jfx)  += w0*ux;
+      k_field_scatter_access(ii, field_var::jfy)  += w0*uy;
+      k_field_scatter_access(ii, field_var::jfz)  += w0*uz;
+      k_field_scatter_access(ii, field_var::rhof) += w0;
+
+      k_field_scatter_access(iix, field_var::jfx)  += wx*ux;
+      k_field_scatter_access(iix, field_var::jfy)  += wx*uy;
+      k_field_scatter_access(iix, field_var::jfz)  += wx*uz;
+      k_field_scatter_access(iix, field_var::rhof) += wx;
+
+      k_field_scatter_access(iiy, field_var::jfx)  += wy*ux;
+      k_field_scatter_access(iiy, field_var::jfy)  += wy*uy;
+      k_field_scatter_access(iiy, field_var::jfz)  += wy*uz;
+      k_field_scatter_access(iiy, field_var::rhof) += wy;
+
+      k_field_scatter_access(iiz, field_var::jfx)  += wz*ux;
+      k_field_scatter_access(iiz, field_var::jfy)  += wz*uy;
+      k_field_scatter_access(iiz, field_var::jfz)  += wz*uz;
+      k_field_scatter_access(iiz, field_var::rhof) += wz;
+
+      k_field_scatter_access(iimx, field_var::jfx)  += wmx*ux;
+      k_field_scatter_access(iimx, field_var::jfy)  += wmx*uy;
+      k_field_scatter_access(iimx, field_var::jfz)  += wmx*uz;
+      k_field_scatter_access(iimx, field_var::rhof) += wmx;
+
+      k_field_scatter_access(iimy, field_var::jfx)  += wmy*ux;
+      k_field_scatter_access(iimy, field_var::jfy)  += wmy*uy;
+      k_field_scatter_access(iimy, field_var::jfz)  += wmy*uz;
+      k_field_scatter_access(iimy, field_var::rhof) += wmy;
+
+      k_field_scatter_access(iimz, field_var::jfx)  += wmz*ux;
+      k_field_scatter_access(iimz, field_var::jfy)  += wmz*uy;
+      k_field_scatter_access(iimz, field_var::jfz)  += wmz*uz;
+      k_field_scatter_access(iimz, field_var::rhof) += wmz;
+
+#endif
+#endif
     
 } else {
       
@@ -1051,6 +1170,49 @@ advance_p_kokkos_gpu(
   //args->seg[pipeline_rank].n_ignored = 0; // TODO: update this
   //delete(k_local_particle_movers_p);
   //return h_nm(0);
+
+  #undef f_ex
+  #undef f_dexdx
+  #undef f_dexdy
+  #undef f_dexdz
+  #undef f_d2exdx
+  #undef f_d2exdy
+  #undef f_d2exdz
+  #undef f_ey
+  #undef f_deydx
+  #undef f_deydy
+  #undef f_deydz
+  #undef f_d2eydx
+  #undef f_d2eydy
+  #undef f_d2eydz
+  #undef f_ez
+  #undef f_dezdx
+  #undef f_dezdy
+  #undef f_dezdz
+  #undef f_d2ezdx
+  #undef f_d2ezdy
+  #undef f_d2ezdz
+  #undef f_cbx
+  #undef f_dcbxdx
+  #undef f_dcbxdy
+  #undef f_dcbxdz
+  #undef f_d2cbxdx
+  #undef f_d2cbxdy
+  #undef f_d2cbxdz
+  #undef f_cby
+  #undef f_dcbydx
+  #undef f_dcbydy
+  #undef f_dcbydz
+  #undef f_d2cbydx
+  #undef f_d2cbydy
+  #undef f_d2cbydz
+  #undef f_cbz
+  #undef f_dcbzdx
+  #undef f_dcbzdy
+  #undef f_dcbzdz
+  #undef f_d2cbzdx
+  #undef f_d2cbzdy
+  #undef f_d2cbzdz
 
       } //advance_p_kokkos_gpu
 
