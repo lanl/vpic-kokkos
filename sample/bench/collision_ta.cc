@@ -89,7 +89,7 @@ begin_initialization {
   auto M_ln_Lamda = 10;
   auto mu= m*m/(m+m);
   auto dV=dx*dx*dx;
-  double cvar0 = q*q*q*q*M_ln_Lamda/(8.0*M_PI*mu*mu);       //in SI: (e^4*n0*Lambda)/(8*pi*eps0^2*m_e^2*c^3)
+  double cvar0 = q*q*q*q*M_ln_Lamda/(8.0*M_PI);       //in SI: (e^4*n0*Lambda)/(8*pi*eps0^2*m_e^2*c^3)
   // --> internal operator multiplies by dt!
   int sort_interval = 1;  
   int ncoll = (int) sort_interval;  // How frequently to do collisions
