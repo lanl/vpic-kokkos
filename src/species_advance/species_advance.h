@@ -428,6 +428,9 @@ move_p_kokkos(
   #define p_uy    k_particles(pi, particle_var::uy)
   #define p_uz    k_particles(pi, particle_var::uz)
   #define p_w     k_particles(pi, particle_var::w)
+#ifdef VARIABLE_CHARGE
+  #define p_q     k_particles(pi, particle_var::qp)
+#endif
   #define pii     k_particles_i(pi)
 
   //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
@@ -455,9 +458,11 @@ move_p_kokkos(
 
   //printf("in move_p %d \n", pi);
 
-
+#ifdef VARIABLE_CHARGE
+  q = rV*p_q*p_w;
+#else
   q = rV*qsp*p_w;
-
+#endif
     //printf("in move %d \n", pi);
 
   for(;;) {
@@ -705,6 +710,9 @@ move_p_kokkos(
   #undef p_uy
   #undef p_uz
   #undef p_w
+#ifdef VARIABLE_CHARGE
+  #undef p_q
+#endif
   #undef pii
 
   //#undef local_pm_dispx
@@ -749,6 +757,9 @@ move_p_kokkos_host_serial(
   #define p_uy    k_particles(pi, particle_var::uy)
   #define p_uz    k_particles(pi, particle_var::uz)
   #define p_w     k_particles(pi, particle_var::w)
+#ifdef VARIABLE_CHARGE
+  #define p_q     k_particles(pi, particle_var::qp)
+#endif
   #define pii     k_particles_i(pi)
 
   //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
@@ -766,8 +777,11 @@ move_p_kokkos_host_serial(
   //int pi = int(local_pm_i);
   int pi = pm->i;
 
+#ifdef VARIABLE_CHARGE
+  q = p_q*p_w;
+#else
   q = qsp*p_w;
-
+#endif
     //printf("in move %d \n", pi);
 
   for(;;) {
@@ -983,6 +997,9 @@ move_p_kokkos_host_serial(
   #undef p_uy
   #undef p_uz
   #undef p_w
+#ifdef VARIABLE_CHARGE
+  #undef p_q
+#endif
   #undef pii
 
   //#undef local_pm_dispx
