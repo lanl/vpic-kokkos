@@ -634,7 +634,8 @@ public:
   inject_particle( species_t * sp,
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
-                   double w,  double age = 0, int update_rhob = 1 );
+                   double w,  double age = 0, int update_rhob = 1,
+		   double qp = 0);
 
   
   // Inject particle on receive list (so gets passed to device).
@@ -644,7 +645,8 @@ public:
 		     double x,  double y,  double z,
 		     double ux, double uy, double uz,
 		     double w,  double age = 0,
-		     int update_rhob = 0 );
+		     int update_rhob = 0,
+		     double qp = 0);
 
   // Inject particle raw is for power users!
   // No nannyism _at_ _all_:

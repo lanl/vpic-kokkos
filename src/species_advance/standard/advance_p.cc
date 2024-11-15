@@ -360,6 +360,9 @@ advance_p_kokkos_unified(
   #define p_uy    k_particles(p_index, particle_var::uy)
   #define p_uz    k_particles(p_index, particle_var::uz)
   #define p_w     k_particles(p_index, particle_var::w)
+#ifdef VARIABLE_CHARGE
+  #define p_q     k_particles(p_index, particle_var::qp)
+#endif
   #define pii     k_particles_i(p_index)
 
   #define f_cbx k_interp(ii[LANE], interpolator_var::cbx)

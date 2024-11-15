@@ -34,6 +34,10 @@ typedef struct particle {
   /**/              // has a stricter limit on this (2^26).
   float ux, uy, uz; // Particle normalized momentum
   float w;          // Particle weight (number of physical particles)
+#ifdef VARIABLE_CHARGE
+  float qp;     // Particle charge
+#endif
+
 } particle_t;
  
 // WARNING: FUNCTIONS THAT USE A PARTICLE_MOVER ASSUME THAT EVERYBODY
@@ -52,6 +56,9 @@ typedef struct particle_injector {
   int32_t i;                 // Index of cell containing the particle
   float ux, uy, uz;          // Particle normalized momentum
   float w;                   // Particle weight (number of physical particles)
+#ifdef VARIABLE_CHARGE
+  float qp;     // Particle charge
+#endif
   float dispx, dispy, dispz; // Displacement of particle
   species_id sp_id;          // Species of particle
 } particle_injector_t;

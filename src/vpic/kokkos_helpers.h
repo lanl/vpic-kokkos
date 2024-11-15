@@ -11,7 +11,13 @@
 
 #define FIELD_VAR_COUNT 36
 #define FIELD_EDGE_COUNT 8
-#define PARTICLE_VAR_COUNT 7
+
+#ifdef VARIABLE_CHARGE
+  #define PARTICLE_VAR_COUNT 8
+#else
+  #define PARTICLE_VAR_COUNT 7
+#endif
+
 #define PARTICLE_MOVER_VAR_COUNT 3
 #define ACCUMULATOR_VAR_COUNT 4
 #define ACCUMULATOR_ARRAY_LENGTH 4
@@ -208,6 +214,9 @@ namespace particle_var {
     uy,
     uz,
     w,
+#ifdef VARIABLE_CHARGE
+    qp,
+#endif
   };
 };
 
