@@ -178,8 +178,11 @@ accumulate_hydro_p_kokkos(
 {
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
+#ifdef VARIABLE_CHARGE
+  float c, qsp, mspc, dt_2mc, dt_4mc2, r8V;
+#else
   float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
-
+#endif
   //int np, stride_10, stride_21, stride_43;
 
   //float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
@@ -195,8 +198,13 @@ accumulate_hydro_p_kokkos(
   c        = sp->g->cvac;
   qsp      = sp->q;
   mspc     = sp->m*c;
+#ifdef VARIABLE_CHARGE
+  dt_2mc  = (sp->g->dt)/(2*mspc); // Multiply by particle q later
+  dt_4mc2 = dt_2mc / (2*c);
+#else
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
+#endif
   r8V      = sp->g->r8V;
 
   const int np        = sp->np;
@@ -220,6 +228,11 @@ accumulate_hydro_p_kokkos(
     float uy = k_particles(p_index, particle_var::uy);
     float uz = k_particles(p_index, particle_var::uz);
     float w  = k_particles(p_index, particle_var::w);
+#ifdef VARIABLE_CHARGE
+    float qp = k_particles(p_index, particle_var::qp);
+    float qdt_2mc = qp*dt_2mc;
+    float qdt_4mc2 = qp*qdt_4mc2; 
+#endif
     int ii = k_particles_i(p_index);
 
     const float cbx = k_interp(ii, interpolator_var::cbx);
@@ -311,9 +324,15 @@ accumulate_hydro_p_kokkos(
     float t = 0.0; // used in macro
     auto k_hydro_access = k_hydro_sv.access();
 
+#ifdef VARIABLE_CHARGE
+    float q = qp;
+#else
+    float q = qsp;
+#endif
+    
     // Accumulate the hydro fields
     #define ACCUM_HYDRO( wn, i )                        \
-    t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
+    t  = q*wn;        /* t  = (q w/V) trilin_n */		     \
     k_hydro_access(i, hydro_var::jx)  += t*vx;                       \
     k_hydro_access(i, hydro_var::jy)  += t*vy;                       \
     k_hydro_access(i, hydro_var::jz)  += t*vz;                       \
