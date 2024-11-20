@@ -71,14 +71,14 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     w  = p[n].w;
 
     // Half advance E
-    ux += qdt_2mc*((f[i].ex+dy*f[i].dexdy) + dz*(f[i].dexdz+dy*f[i].d2exdydz));
-    uy += qdt_2mc*((f[i].ey+dz*f[i].deydz) + dx*(f[i].deydx+dz*f[i].d2eydzdx));
-    uz += qdt_2mc*((f[i].ez+dx*f[i].dezdx) + dy*(f[i].dezdy+dx*f[i].d2ezdxdy));
+    ux += qdt_2mc*((f[i].ex)); //+dy*f[i].dexdy) + dz*(f[i].dexdz+dy*f[i].d2exdydz));
+    uy += qdt_2mc*((f[i].ey)); //+dz*f[i].deydz) + dx*(f[i].deydx+dz*f[i].d2eydzdx));
+    uz += qdt_2mc*((f[i].ez)); //+dx*f[i].dezdx) + dy*(f[i].dezdy+dx*f[i].d2ezdxdy));
 
     // Boris rotation - Interpolate B field
-    w5 = f[i].cbx + dx*f[i].dcbxdx;
-    w6 = f[i].cby + dy*f[i].dcbydy;
-    w7 = f[i].cbz + dz*f[i].dcbzdz;
+    w5 = f[i].cbx; // + dx*f[i].dcbxdx;
+    w6 = f[i].cby; // + dy*f[i].dcbydy;
+    w7 = f[i].cbz; // + dz*f[i].dcbzdz;
 
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
@@ -247,20 +247,20 @@ accumulate_hydro_p_kokkos(
     const float dcbzdz = k_interp(ii, interpolator_var::dcbzdz);
 
     // Half advance E
-    ux += qdt_2mc*((ex+dy*dexdy) + dz*(dexdz+dy*d2exdydz));
-    uy += qdt_2mc*((ey+dz*deydz) + dx*(deydx+dz*d2eydzdx));
-    uz += qdt_2mc*((ez+dx*dezdx) + dy*(dezdy+dx*d2ezdxdy));
+    ux += qdt_2mc*((ex)); //+dy*dexdy) + dz*(dexdz+dy*d2exdydz));
+    uy += qdt_2mc*((ey)); //+dz*deydz) + dx*(deydx+dz*d2eydzdx));
+    uz += qdt_2mc*((ez)); //+dx*dezdx) + dy*(dezdy+dx*d2ezdxdy));
 
     // Boris rotation - Interpolate B field
-    float w5 = cbx + dx*dcbxdx;
-    float w6 = cby + dy*dcbydy;
-    float w7 = cbz + dz*dcbzdz;
+    float w5 = cbx; // + dx*dcbxdx;
+    float w6 = cby; // + dy*dcbydy;
+    float w7 = cbz; // + dz*dcbzdz;
 
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
     // is the numerically accurate way to compute gamma-1
     float ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
-    float vz = sqrt(1.0+ke_mc);            // vz = gamma    (invariant)
+    float vz = 1; //sqrt(1.0+ke_mc);            // vz = gamma    (invariant)
     ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
     vz = c/vz;                     // vz = c/gamma
     float w0 = qdt_4mc2*vz;
