@@ -144,7 +144,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     h[i].px  += dx;                                     \
     h[i].py  += dy;                                     \
     h[i].pz  += dz;                                     \
-    h[i].ke  += t*ke_mc;                                \
+    h[i].rho_m  += t; /* Prev. was *ke_mc; */		\
     h[i].txx += dx*vx;                                  \
     h[i].tyy += dy*vy;                                  \
     h[i].tzz += dz*vz;                                  \
@@ -344,7 +344,7 @@ accumulate_hydro_p_kokkos(
     k_hydro_access(i, hydro_var::px)  += dx;                         \
     k_hydro_access(i, hydro_var::py)  += dy;                         \
     k_hydro_access(i, hydro_var::pz)  += dz;                         \
-    k_hydro_access(i, hydro_var::ke)  += t*ke_mc;                    \
+    k_hydro_access(i, hydro_var::rho_m) += t; /* changed to mass density (previously ke_mc). Nb. for non-relativistic ke can be computed through trace of pressure tensor below;)*/		     \
     k_hydro_access(i, hydro_var::txx) += dx*vx;                      \
     k_hydro_access(i, hydro_var::tyy) += dy*vy;                      \
     k_hydro_access(i, hydro_var::tzz) += dz*vz;                      \

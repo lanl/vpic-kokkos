@@ -77,7 +77,7 @@ struct FieldInfo {
 const uint32_t current_density	(1<<0 | 1<<1 | 1<<2);
 const uint32_t charge_density	(1<<3);
 const uint32_t momentum_density	(1<<4 | 1<<5 | 1<<6);
-const uint32_t ke_density		(1<<7);
+const uint32_t mass_density		(1<<7);
 const uint32_t stress_tensor	(1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13);
 /* May want to use these instead
 const uint32_t stress_diagonal 		(1<<8 | 1<<9 | 1<<10);
