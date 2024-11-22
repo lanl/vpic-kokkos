@@ -141,13 +141,13 @@ struct binary_collision_pipeline {
     _spj_sortindex_ra = _spj->k_sortindex_d;
 
     // Am I being paranoid?
-    if( _spi->np      != _spi_sortindex_ra.extent(0) ||
+    if( _spi->np      > _spi_sortindex_ra.extent(0) || 
         _spi->g->nv+1 != _spi_partition_ra.extent(0) ){
 	printf("_spi->np (=%d) ?= _spi_sortindex_ra.extent(0) (=%d)\n",_spi->np,_spi_sortindex_ra.extent(0));
 	printf("_spi->g->nv+1 (=%d) ?= _spi_partition_ra.extent(0) (=%d)\n",_spi->g->nv+1,_spi_partition_ra.extent(0));
         ERROR(("Bad spi sort products."));
     }
-    if( _spj->np      != _spj_sortindex_ra.extent(0) ||
+    if( _spj->np      > _spj_sortindex_ra.extent(0) ||
         _spj->g->nv+1 != _spj_partition_ra.extent(0) ){
 	printf("_spi->np (=%d) ?= _spj_sortindex_ra.extent(0) (=%d)\n",_spj->np,_spj_sortindex_ra.extent(0));
 	printf("_spj->g->nv+1 (=%d) ?= _spj_partition_ra.extent(0) (=%d)\n",_spj->g->nv+1,_spj_partition_ra.extent(0));	
