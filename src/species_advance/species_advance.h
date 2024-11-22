@@ -388,6 +388,14 @@ void accumulate_hydro_p_kokkos(
         const species_t            * RESTRICT sp
 );
 
+void accumulate_hydro_p_kokkos_nomove_ngp(
+        k_particles_t& k_particles,
+        k_particles_i_t& k_particles_i,
+        k_hydro_d_t k_hydro,
+        k_interpolator_t& k_interp,
+        const species_t            * RESTRICT sp
+);
+
 // In move_p.cxx
 int
 move_p( particle_t       * ALIGNED(128) p0,

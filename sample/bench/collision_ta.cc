@@ -78,14 +78,14 @@ begin_initialization {
   auto& interpolators_k = interpolator_array->k_i_d;
 
   Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
-  accumulate_hydro_p_kokkos(
+  accumulate_hydro_p_kokkos_nomove_ngp(
       particles,
       particles_i,
       hydro_array->k_h_d,
       interpolators_k,
       sp
   );
-  hydro_array->copy_to_host();
+  hydro_array->copy_to_host(true); //print==true
   auto M_ln_Lamda = 10;
   auto mu= m*m/(m+m);
   auto dV=dx*dx*dx;
@@ -144,14 +144,14 @@ begin_initialization {
       apply_collision_op_list( collision_op_list, *kokkos_rng );
 
       Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
-      accumulate_hydro_p_kokkos(
+      accumulate_hydro_p_kokkos_nomove_ngp(
 				particles,
 				particles_i,
 				hydro_array->k_h_d,
 				interpolators_k,
 				sp
 				);
-      hydro_array->copy_to_host();            
+      hydro_array->copy_to_host(true); //print==true
   }
   elapsed = wallclock() - elapsed;
 
