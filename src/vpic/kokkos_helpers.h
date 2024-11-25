@@ -19,6 +19,7 @@
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
 #define HYDRO_VAR_COUNT 14
 #define NUM_J_DIMS 4
+#define FLUID_VAR_COUNT 6
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -76,7 +77,10 @@ using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATO
 using k_hydro_d_t = Kokkos::View<float* [HYDRO_VAR_COUNT]>;
 using k_hydro_sv_t = Kokkos::Experimental::ScatterView<float* [HYDRO_VAR_COUNT]>;
 
+
 using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
+
+using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT]>;
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
@@ -138,22 +142,22 @@ namespace field_var {
     cby       = 5,
     cbz       = 6,
     div_b_err = 7,
-    tcax      = 8,
-    tcay      = 9,
-    tcaz      = 10,
-    rhob      = 11,
-    jfx       = 12,
-    jfy       = 13,
-    jfz       = 14,
-    rhof      = 15,
-    jfxold    = 16,
-    jfyold    = 17,
-    jfzold    = 18,
-    rhofold   = 19,
-    cbx0      = 20,
-    cby0      = 21,
-    cbz0      = 22,
-    tmpsm     = 23,
+    cbx0      = 8,
+    cby0      = 9,
+    cbz0      = 10,
+    tmpsm     = 11,
+    tcax      = 12,
+    tcay      = 13,
+    tcaz      = 14,
+    rhob      = 15,
+    jfx       = 16,
+    jfy       = 17,
+    jfz       = 18,
+    rhof      = 19,
+    jfxold    = 20,
+    jfyold    = 21,
+    jfzold    = 22,
+    rhofold   = 23,
     tx        = 24,
     ty        = 25,
     tz        = 26,
@@ -269,6 +273,17 @@ namespace hydro_var {
         tyz = 11,
         tzx = 12,
         txy = 13,
+    };
+};
+
+namespace fluid_var {
+    enum fl_v {
+        den  = 0,
+        tmp  = 1,
+        prs  = 2,
+        ux  = 3,
+        uy  = 4,
+        uz  = 5,
     };
 };
 

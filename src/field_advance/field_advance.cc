@@ -118,6 +118,11 @@ field_array_t::copy_to_host() {
       host_field[i].cby = k_field(i, field_var::cby);
       host_field[i].cbz = k_field(i, field_var::cbz);
       host_field[i].div_b_err = k_field(i, field_var::div_b_err);
+      
+      host_field[i].cbx0 = k_field(i, field_var::cbx0);
+      host_field[i].cby0 = k_field(i, field_var::cby0);
+      host_field[i].cbz0 = k_field(i, field_var::cbz0);
+      host_field[i].tmpsm = k_field(i, field_var::tmpsm);
 
       host_field[i].tcax = k_field(i, field_var::tcax);
       host_field[i].tcay = k_field(i, field_var::tcay);
@@ -148,11 +153,6 @@ field_array_t::copy_to_host() {
       host_field[i].pey = k_field(i, field_var::pey);
       host_field[i].pez = k_field(i, field_var::pez);
       host_field[i].pe = k_field(i, field_var::pe);
-
-      host_field[i].cbx0 = k_field(i, field_var::cbx0);
-      host_field[i].cby0 = k_field(i, field_var::cby0);
-      host_field[i].cbz0 = k_field(i, field_var::cbz0);
-      host_field[i].tmpsm = k_field(i, field_var::tmpsm);
       
       host_field[i].ematx = k_field_edge(i, field_edge_var::ematx);
       host_field[i].ematy = k_field_edge(i, field_edge_var::ematy);
@@ -193,6 +193,11 @@ field_array_t::copy_to_device() {
       k_field(i, field_var::cby) = host_field[i].cby;
       k_field(i, field_var::cbz) = host_field[i].cbz;
       k_field(i, field_var::div_b_err) = host_field[i].div_b_err;
+      
+      k_field(i, field_var::cbx0) = host_field[i].cbx0;
+      k_field(i, field_var::cby0) = host_field[i].cby0;
+      k_field(i, field_var::cbz0) = host_field[i].cbz0;
+      k_field(i, field_var::tmpsm) = host_field[i].tmpsm;
 
       k_field(i, field_var::tcax) = host_field[i].tcax;
       k_field(i, field_var::tcay) = host_field[i].tcay;
@@ -224,11 +229,6 @@ field_array_t::copy_to_device() {
       k_field(i, field_var::pey) = host_field[i].pey;
       k_field(i, field_var::pez) = host_field[i].pez;
       k_field(i, field_var::pe) = host_field[i].pe;
-
-      k_field(i, field_var::cbx0) = host_field[i].cbx0;
-      k_field(i, field_var::cby0) = host_field[i].cby0;
-      k_field(i, field_var::cbz0) = host_field[i].cbz0;
-      k_field(i, field_var::tmpsm) = host_field[i].tmpsm;
       
       k_field_edge(i, field_edge_var::ematx) = host_field[i].ematx;
       k_field_edge(i, field_edge_var::ematy) = host_field[i].ematy;

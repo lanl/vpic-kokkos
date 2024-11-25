@@ -17,6 +17,7 @@
 #include <cmath>
 
 #include "../boundary/boundary.h"
+#include "../fluid_advance/fluid_advance.h" // To-do: Will probably be included in collision.h later
 #include "../collision/collision.h"
 #include "../emitter/emitter.h"
 // FIXME: INCLUDES ONCE ALL IS CLEANED UP
@@ -97,6 +98,19 @@ struct HydroInfo {
 	size_t size;
 }; // struct FieldInfo
 
+// To-do: Add in groups for fluid variables
+const size_t total_fluid_groups(1);
+const size_t fluid_indeces[1] = {0};
+const size_t total_fluid_variables(6);
+
+struct fluidInfo {
+  char name[128];
+  char degree[128];
+  char elements[128];
+  char type[128];
+  size_t size;
+}; // struct fluidInfo
+
 /*----------------------------------------------------------------------------
  * DumpFormat Enumeration
 ----------------------------------------------------------------------------*/
@@ -114,6 +128,19 @@ struct DumpParameters {
     output_vars.set(mask);
   } // output_variables
 
+  void set_defaults() {
+    stride_x = 1;
+    stride_y = 1;
+    stride_z = 1;
+
+    format = band;
+
+    output_vars.set((0xffffffff));
+
+    //    strcpy(baseDir, dumptype);
+    //    strcpy(baseFileName, dumptype);
+  } // output_variables
+  
   BitField output_vars;
 
   size_t stride_x;
@@ -183,7 +210,8 @@ public:
   int hydro_interval;
   int field_interval;
   int particle_interval;
-
+  int fluid_interval;
+  
   size_t nxout, nyout, nzout;
   size_t px, py, pz;
   float dxout, dyout, dzout;
@@ -224,6 +252,7 @@ public:
   hydro_array_t        * hydro_array;        // define_hydro_array
   species_t            * species_list;       // define_species /
                                              // species helpers
+  fluid_species_t      * fluid_species_list; // fluid species
   particle_bc_t        * particle_bc_list;   // define_particle_bc /
                                              // boundary helpers
   emitter_t            * emitter_list;       // define_emitter /
@@ -265,7 +294,8 @@ public:
   void dump_particles_count( const char *fname, int append = 1 );
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
-
+  void dump_fluid_species( const char *fname );
+  
   // Binary dumps
   void dump_grid( const char *fbase );
   void dump_fields( const char *fbase, int fname_tag = 1 );
@@ -273,11 +303,14 @@ public:
                    int fname_tag = 1 );
   void dump_particles( const char *sp_name, const char *fbase,
                        int fname_tag = 1 );
+  void dump_fluids( const char *fsp_name, const char *fbase,
+		    int fname_tag = 1 );
 
   // convenience functions for simlog output
   void create_field_list(char * strlist, DumpParameters & dumpParams);
   void create_hydro_list(char * strlist, DumpParameters & dumpParams);
-
+  //  void create_fluid_list(char * strlist, DumpParameters & dumpParams);
+  
   void print_hashed_comment(FileIO & fileIO, const char * comment);
   void global_header(const char * base,
   	std::vector<DumpParameters *> dumpParams);
@@ -288,7 +321,8 @@ public:
 
   void field_dump(DumpParameters & dumpParams);
   void hydro_dump(const char * speciesname, DumpParameters & dumpParams);
-
+  void fluid_dump(const char * speciesname, DumpParameters & dumpParams);
+  
   ///////////////////
   // Useful accessors
 
@@ -359,6 +393,10 @@ public:
     return hydro_array->h[ voxel(ix,iy,iz) ];
   }
 
+  //  inline float& k_fluid(const int ix, const int iy, const int iz, fluid_var::fl_v member) { 
+  //    return fluid_species->k_fl_d(voxel(ix,iy,iz), member);
+  //  }
+  
   inline rng_t *
   rng( const int n ) {
     return entropy->rng[n];
@@ -578,6 +616,29 @@ public:
      return find_species_id( id, species_list );
   }
 
+  //////////////////
+  // Fluid species helpers
+  
+  // FIXME: SILLY PROMOTIONS 
+  inline fluid_species_t *
+  define_fluid_species( const char *name,
+			double q,
+			double m ) {
+    return append_fluid_species( fluid_species( name, (float)q, (float)m,
+						grid ), &fluid_species_list );
+  }
+
+  inline fluid_species_t *
+  find_fluid_species( const char *name ) {
+    return find_fluid_species_name( name, fluid_species_list );
+  }
+
+  inline fluid_species_t *
+  find_fluid_species( int32_t id ) {
+    return find_fluid_species_id( id, fluid_species_list );
+  }
+
+  
   ///////////////////
   // Particle helpers
 

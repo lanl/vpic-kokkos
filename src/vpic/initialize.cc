@@ -8,7 +8,8 @@ vpic_simulation::initialize( int argc,
 
   double err;
   species_t * sp;
-
+  fluid_species_t * fsp;
+  
   // Initialize Kokkos
   // Moved to boot servcies
   //Kokkos::initialize( argc, argv );
@@ -85,6 +86,12 @@ vpic_simulation::initialize( int argc,
   }
   KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 
+  KOKKOS_TIC(); // Time this data movement
+  LIST_FOR_EACH( fsp, fluid_species_list ) {
+    fsp->copy_to_device();
+  }
+  KOKKOS_TOCN( FLUID_DATA_MOVEMENT, 1);
+  
   KOKKOS_TIC(); // Time this data movement
   interpolator_array->copy_to_device();
   KOKKOS_TOCN( INTERPOLATOR_DATA_MOVEMENT, 1);

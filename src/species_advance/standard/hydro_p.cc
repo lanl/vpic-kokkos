@@ -71,14 +71,14 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     w  = p[n].w;
 
     // Half advance E
-    ux += qdt_2mc*((f[i].ex+dy*f[i].dexdy) + dz*(f[i].dexdz+dy*f[i].d2exdydz));
-    uy += qdt_2mc*((f[i].ey+dz*f[i].deydz) + dx*(f[i].deydx+dz*f[i].d2eydzdx));
-    uz += qdt_2mc*((f[i].ez+dx*f[i].dezdx) + dy*(f[i].dezdy+dx*f[i].d2ezdxdy));
+    ux += qdt_2mc*((f[i].ex)); //+dy*f[i].dexdy) + dz*(f[i].dexdz+dy*f[i].d2exdydz));
+    uy += qdt_2mc*((f[i].ey)); //+dz*f[i].deydz) + dx*(f[i].deydx+dz*f[i].d2eydzdx));
+    uz += qdt_2mc*((f[i].ez)); //+dx*f[i].dezdx) + dy*(f[i].dezdy+dx*f[i].d2ezdxdy));
 
     // Boris rotation - Interpolate B field
-    w5 = f[i].cbx + dx*f[i].dcbxdx;
-    w6 = f[i].cby + dy*f[i].dcbydy;
-    w7 = f[i].cbz + dz*f[i].dcbzdz;
+    w5 = f[i].cbx; // + dx*f[i].dcbxdx;
+    w6 = f[i].cby; // + dy*f[i].dcbydy;
+    w7 = f[i].cbz; // + dz*f[i].dcbzdz;
 
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
