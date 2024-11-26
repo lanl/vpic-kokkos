@@ -878,45 +878,45 @@ void HDF5Dump::dump_fields(
   hid_t dataspace_id;
 
   // write the data
-  if (field_dump_flag.ex) DUMP_FIELD_TO_HDF5("ex", ex, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.ey) DUMP_FIELD_TO_HDF5("ey", ey, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.ez) DUMP_FIELD_TO_HDF5("ez", ez, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.div_e_err) DUMP_FIELD_TO_HDF5("div_e_err", div_e_err, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["ex"]) DUMP_FIELD_TO_HDF5("ex", ex, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["ey"]) DUMP_FIELD_TO_HDF5("ey", ey, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["ez"]) DUMP_FIELD_TO_HDF5("ez", ez, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["div_e_err"]) DUMP_FIELD_TO_HDF5("div_e_err", div_e_err, H5T_NATIVE_FLOAT);
 
-  if (field_dump_flag.cbx) DUMP_FIELD_TO_HDF5("cbx", cbx, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.cby) DUMP_FIELD_TO_HDF5("cby", cby, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.cbz) DUMP_FIELD_TO_HDF5("cbz", cbz, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.div_b_err) DUMP_FIELD_TO_HDF5("div_b_err", div_b_err, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["cbx"]) DUMP_FIELD_TO_HDF5("cbx", cbx, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["cby"]) DUMP_FIELD_TO_HDF5("cby", cby, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["cbz"]) DUMP_FIELD_TO_HDF5("cbz", cbz, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["div_b_err"]) DUMP_FIELD_TO_HDF5("div_b_err", div_b_err, H5T_NATIVE_FLOAT);
 
-  if (field_dump_flag.cbx0) DUMP_FIELD_TO_HDF5("cbx0", cbx0, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.cby0) DUMP_FIELD_TO_HDF5("cby0", cby0, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.cbz0) DUMP_FIELD_TO_HDF5("cbz0", cbz0, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.tmpsm) DUMP_FIELD_TO_HDF5("tmpsm", tmpsm, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["cbx0"]) DUMP_FIELD_TO_HDF5("cbx0", cbx0, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["cby0"]) DUMP_FIELD_TO_HDF5("cby0", cby0, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["cbz0"]) DUMP_FIELD_TO_HDF5("cbz0", cbz0, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["tmpsm"]) DUMP_FIELD_TO_HDF5("tmpsm", tmpsm, H5T_NATIVE_FLOAT);
 
-  if (field_dump_flag.tcax) DUMP_FIELD_TO_HDF5("tcax", tcax, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.tcay) DUMP_FIELD_TO_HDF5("tcay", tcay, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.tcaz) DUMP_FIELD_TO_HDF5("tcaz", tcaz, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.rhob) DUMP_FIELD_TO_HDF5("rhob", rhob, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["tcax"]) DUMP_FIELD_TO_HDF5("tcax", tcax, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["tcay"]) DUMP_FIELD_TO_HDF5("tcay", tcay, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["tcaz"]) DUMP_FIELD_TO_HDF5("tcaz", tcaz, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["rhob"]) DUMP_FIELD_TO_HDF5("rhob", rhob, H5T_NATIVE_FLOAT);
 
-  if (field_dump_flag.jfx) DUMP_FIELD_TO_HDF5("jfx", jfx, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.jfy) DUMP_FIELD_TO_HDF5("jfy", jfy, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.jfz) DUMP_FIELD_TO_HDF5("jfz", jfz, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.rhof) DUMP_FIELD_TO_HDF5("rhof", rhof, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["jfx"]) DUMP_FIELD_TO_HDF5("jfx", jfx, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["jfy"]) DUMP_FIELD_TO_HDF5("jfy", jfy, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["jfz"]) DUMP_FIELD_TO_HDF5("jfz", jfz, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["rhof"]) DUMP_FIELD_TO_HDF5("rhof", rhof, H5T_NATIVE_FLOAT);
 
-  if (field_dump_flag.jfxold) DUMP_FIELD_TO_HDF5("jfxold", jfxold, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.jfyold) DUMP_FIELD_TO_HDF5("jfyold", jfyold, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.jfzold) DUMP_FIELD_TO_HDF5("jfzold", jfzold, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.rhofold) DUMP_FIELD_TO_HDF5("rhofold", rhofold, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["jfxold"]) DUMP_FIELD_TO_HDF5("jfxold", jfxold, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["jfyold"]) DUMP_FIELD_TO_HDF5("jfyold", jfyold, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["jfzold"]) DUMP_FIELD_TO_HDF5("jfzold", jfzold, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["rhofold"]) DUMP_FIELD_TO_HDF5("rhofold", rhofold, H5T_NATIVE_FLOAT);
 
-  if (field_dump_flag.tx) DUMP_FIELD_TO_HDF5("tx", tx, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.ty) DUMP_FIELD_TO_HDF5("ty", ty, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.tz) DUMP_FIELD_TO_HDF5("tz", tz, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.te) DUMP_FIELD_TO_HDF5("te", te, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["tx"]) DUMP_FIELD_TO_HDF5("tx", tx, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["ty"]) DUMP_FIELD_TO_HDF5("ty", ty, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["tz"]) DUMP_FIELD_TO_HDF5("tz", tz, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["te"]) DUMP_FIELD_TO_HDF5("te", te, H5T_NATIVE_FLOAT);
 
-  if (field_dump_flag.ox) DUMP_FIELD_TO_HDF5("ox", ox, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.oy) DUMP_FIELD_TO_HDF5("oy", oy, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.oz) DUMP_FIELD_TO_HDF5("oz", oz, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.oe) DUMP_FIELD_TO_HDF5("oe", oe, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["ox"]) DUMP_FIELD_TO_HDF5("ox", ox, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["oy"]) DUMP_FIELD_TO_HDF5("oy", oy, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["oz"]) DUMP_FIELD_TO_HDF5("oz", oz, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["oe"]) DUMP_FIELD_TO_HDF5("oe", oe, H5T_NATIVE_FLOAT);
 
   el2 = uptime() - el2;
   if ( rank==0 ) log_printf("TimeHDF5Write: %.2f s\n", el2);
@@ -1087,23 +1087,23 @@ void HDF5Dump::dump_hydro(
   hid_t dataspace_id;
 
   // write the data
-  if (hydro_dump_flag.jx) DUMP_HYDRO_TO_HDF5("jx", jx, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.jy) DUMP_HYDRO_TO_HDF5("jy", jy, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.jz) DUMP_HYDRO_TO_HDF5("jz", jz, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.rho) DUMP_HYDRO_TO_HDF5("rho", rho, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["jx"]) DUMP_HYDRO_TO_HDF5("jx", jx, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["jy"]) DUMP_HYDRO_TO_HDF5("jy", jy, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["jz"]) DUMP_HYDRO_TO_HDF5("jz", jz, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["rho"]) DUMP_HYDRO_TO_HDF5("rho", rho, H5T_NATIVE_FLOAT);
 
-  if (hydro_dump_flag.px) DUMP_HYDRO_TO_HDF5("px", px, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.py) DUMP_HYDRO_TO_HDF5("py", py, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.pz) DUMP_HYDRO_TO_HDF5("pz", pz, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.ke) DUMP_HYDRO_TO_HDF5("ke", ke, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["px"]) DUMP_HYDRO_TO_HDF5("px", px, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["py"]) DUMP_HYDRO_TO_HDF5("py", py, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["pz"]) DUMP_HYDRO_TO_HDF5("pz", pz, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["ke"]) DUMP_HYDRO_TO_HDF5("ke", ke, H5T_NATIVE_FLOAT);
 
-  if (hydro_dump_flag.txx) DUMP_HYDRO_TO_HDF5("txx", txx, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.tyy) DUMP_HYDRO_TO_HDF5("tyy", tyy, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.tzz) DUMP_HYDRO_TO_HDF5("tzz", tzz, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["txx"]) DUMP_HYDRO_TO_HDF5("txx", txx, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["tyy"]) DUMP_HYDRO_TO_HDF5("tyy", tyy, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["tzz"]) DUMP_HYDRO_TO_HDF5("tzz", tzz, H5T_NATIVE_FLOAT);
 
-  if (hydro_dump_flag.tyz) DUMP_HYDRO_TO_HDF5("tyz", tyz, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.tzx) DUMP_HYDRO_TO_HDF5("tzx", tzx, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.txy) DUMP_HYDRO_TO_HDF5("txy", txy, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["tyz"]) DUMP_HYDRO_TO_HDF5("tyz", tyz, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["tzx"]) DUMP_HYDRO_TO_HDF5("tzx", tzx, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["txy"]) DUMP_HYDRO_TO_HDF5("txy", txy, H5T_NATIVE_FLOAT);
 
   el2 = uptime() - el2;
   if ( rank==0 ) log_printf("TimeHDF5Write: %.2f s\n", el2);
@@ -1625,6 +1625,17 @@ void HDF5Dump::field_dump(
       grid_t *grid,
       field_array_t *field_array)
 {
+  // Create a variable list of field values to output.
+  size_t numvars = std::min(dumpParams.output_vars.bitsum(),
+                            total_field_variables);
+
+  for(size_t i(0); i<total_field_variables; i++) {
+    if(dumpParams.output_vars.bitset(i))
+      field_dump_flag.flags[field_dump_flag.flag_keys[i]] = true;
+    else
+      field_dump_flag.flags[field_dump_flag.flag_keys[i]] = false;
+  }
+
   // convenience
   const size_t istride(dumpParams.stride_x);
   const size_t jstride(dumpParams.stride_y);
@@ -1651,6 +1662,16 @@ void HDF5Dump::hydro_dump(
     hydro_array_t *hydro_array,
     interpolator_array_t *interpolator_array)
 {
+  // Create a variable list of field values to output.
+  size_t numvars = std::min(dumpParams.output_vars.bitsum(),
+                            total_hydro_variables);
+
+  for(size_t i(0); i<total_hydro_variables; i++) {
+    if(dumpParams.output_vars.bitset(i))
+      hydro_dump_flag.flags[hydro_dump_flag.flag_keys[i]] = true;
+    else
+      hydro_dump_flag.flags[hydro_dump_flag.flag_keys[i]] = false;
+  }
   // convenience
   const size_t istride(dumpParams.stride_x);
   const size_t jstride(dumpParams.stride_y);

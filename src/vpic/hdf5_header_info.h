@@ -48,35 +48,35 @@ extern const char *main_body_attributeS;
     fprintf(fp, main_body_head, time_step);                                                                                                   \
     if (field_dump_flag.enabledE())                                                                                                           \
       write_main_body_attribute(fp, main_body_attributeV, "E", dims_4d, dims_3d, speciesname_p, time_step, "ex", "ey", "ez");                 \
-    if (field_dump_flag.div_e_err)                                                                                                            \
+    if (field_dump_flag.flags["div_e_err"])                                                                                                   \
       fprintf(fp, main_body_attributeS, "div_e_err", dims_3d, time_step, speciesname_p, time_step, time_step, "div_e_err");                   \
     if (field_dump_flag.enabledCB())                                                                                                          \
       write_main_body_attribute(fp, main_body_attributeV, "B", dims_4d, dims_3d, speciesname_p, time_step, "cbx", "cby", "cbz");              \
     if (field_dump_flag.enabledCB0())                                                                                                         \
       write_main_body_attribute(fp, main_body_attributeV, "B0", dims_4d, dims_3d, speciesname_p, time_step, "cbx0", "cby0", "cbz0");          \
-    if (field_dump_flag.div_b_err)                                                                                                            \
+    if (field_dump_flag.flags["div_b_err"])                                                                                                   \
       fprintf(fp, main_body_attributeS, "div_b_err", dims_3d, time_step, speciesname_p, time_step, time_step, "div_b_err");                   \
     if (field_dump_flag.enabledTCA())                                                                                                         \
       write_main_body_attribute(fp, main_body_attributeV, "TCA", dims_4d, dims_3d, speciesname_p, time_step, "tcax", "tcay", "tcaz");         \
-    if (field_dump_flag.rhob)                                                                                                                 \
+    if (field_dump_flag.flags["rhob"])                                                                                                        \
       fprintf(fp, main_body_attributeS, "rhob", dims_3d, time_step, speciesname_p, time_step, time_step, "rhob");                             \
     if (field_dump_flag.enabledJF())                                                                                                          \
       write_main_body_attribute(fp, main_body_attributeV, "JF", dims_4d, dims_3d, speciesname_p, time_step, "jfx", "jfy", "jfz");             \
-    if (field_dump_flag.rhof)                                                                                                                 \
+    if (field_dump_flag.flags["rhof"])                                                                                                        \
       fprintf(fp, main_body_attributeS, "rhof", dims_3d, time_step, speciesname_p, time_step, time_step, "rhof");                             \
     if (field_dump_flag.enabledJFOLD())                                                                                                       \
       write_main_body_attribute(fp, main_body_attributeV, "JFOLD", dims_4d, dims_3d, speciesname_p, time_step, "jfxold", "jfyold", "jfzold"); \
-    if (field_dump_flag.rhofold)                                                                                                              \
+    if (field_dump_flag.flags["rhofold"])                                                                                                     \
       fprintf(fp, main_body_attributeS, "rhofold", dims_3d, time_step, speciesname_p, time_step, time_step, "rhofold");                       \
-    if (field_dump_flag.tmpsm)                                                                                                                \
+    if (field_dump_flag.flags["tmpsm"])                                                                                                       \
       fprintf(fp, main_body_attributeS, "tmpsm", dims_3d, time_step, speciesname_p, time_step, time_step, "tmpsm");                           \
     if (field_dump_flag.enabledT())                                                                                                           \
       write_main_body_attribute(fp, main_body_attributeV, "T", dims_4d, dims_3d, speciesname_p, time_step, "tx", "ty", "tz");                 \
-    if (field_dump_flag.te)                                                                                                                   \
+    if (field_dump_flag.flags["te"])                                                                                                          \
       fprintf(fp, main_body_attributeS, "te", dims_3d, time_step, speciesname_p, time_step, time_step, "te");                                 \
     if (field_dump_flag.enabledO())                                                                                                           \
       write_main_body_attribute(fp, main_body_attributeV, "O", dims_4d, dims_3d, speciesname_p, time_step, "ox", "oy", "oz");                 \
-    if (field_dump_flag.oe)                                                                                                                   \
+    if (field_dump_flag.flags["oe"])                                                                                                          \
       fprintf(fp, main_body_attributeS, "oe", dims_3d, time_step, speciesname_p, time_step, time_step, "oe");                                 \
     fprintf(fp, "%s", main_body_foot);                                                                                                        \
     if (add_footer_flag)                                                                                                                      \
@@ -91,11 +91,11 @@ extern const char *main_body_attributeS;
     fprintf(fp, main_body_head, time_step);                                                                                        \
     if (hydro_dump_flag.enabledJ())                                                                                                \
       write_main_body_attribute(fp, main_body_attributeV, "J", dims_4d, dims_3d, speciesname_p, time_step, "jx", "jy", "jz");      \
-    if (hydro_dump_flag.rho)                                                                                                       \
+    if (hydro_dump_flag.flags["rho"])                                                                                              \
       fprintf(fp, main_body_attributeS, "rho", dims_3d, time_step, speciesname_p, time_step, time_step, "rho");                    \
     if (hydro_dump_flag.enabledP())                                                                                                \
       write_main_body_attribute(fp, main_body_attributeV, "P", dims_4d, dims_3d, speciesname_p, time_step, "px", "py", "pz");      \
-    if (hydro_dump_flag.ke)                                                                                                        \
+    if (hydro_dump_flag.flags["ke"])                                                                                               \
       fprintf(fp, main_body_attributeS, "ke", dims_3d, time_step, speciesname_p, time_step, time_step, "ke");                      \
     if (hydro_dump_flag.enabledTD())                                                                                               \
       write_main_body_attribute(fp, main_body_attributeV, "TD", dims_4d, dims_3d, speciesname_p, time_step, "txx", "tyy", "tzz");  \

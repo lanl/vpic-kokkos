@@ -2,10 +2,11 @@
 #define VPIC_DUMP_STRATEGY_H_
 
 // C++ headers
+#include <cassert>
+#include <iostream>
+#include <string>
 #include <unordered_map>
 #include <vector>
-#include <iostream>
-#include <cassert>
 
 // VPIC headers
 #include "../util/io/FileIO.h"
@@ -157,207 +158,207 @@ public:
 
 struct field_dump_flag_t
 {
-  bool ex = true, ey = true, ez = true, div_e_err = true;
-  bool cbx = true, cby = true, cbz = true, div_b_err = true;
-  // External (potential) magnetic field
-  bool cbx0 = true, cby0 = true, cbz0 = true, tmpsm = true;
-  // hybrid: tcax multiplies hypereta, tcay multiplies eta, tcaz multiplies E field
-  bool tcax = true, tcay = true, tcaz = true, rhob = true;
-  // Free current and charge density
-  bool jfx = true, jfy = true, jfz = true, rhof = true;
-  // Free current and charge density
-  bool jfxold = true, jfyold = true, jfzold = true, rhofold = true;
-  // Electron temperature + temp storage
-  bool tx = true, ty = true, tz = true, te = true;
-  // For B field solve/smoothing
-  bool ox = true, oy = true, oz = true, oe = true;
+  std::vector<std::string> flag_keys = {
+    "ex", "ey", "ez", "div_e_err",
+    "cbx", "cby", "cbz", "div_b_err",
+    "tcax", "tcay", "tcaz", "rhob",
+    "jfx", "jfy", "jfz", "rhof",
+    "jfxold", "jfyold", "jfzold", "rhofold",
+    "cbx0", "cby0", "cbz0", "tmpsm",
+    "tx", "ty", "tz", "te",
+    "ox", "oy", "oz", "oe"
+  };
+
+  std::unordered_map<std::string, bool> flags = {
+    {"ex", true}, {"ey", true}, {"ez", true}, {"div_e_err", true},
+    {"cbx", true}, {"cby", true}, {"cbz", true}, {"div_b_err", true},
+    {"tcax", true}, {"tcay", true}, {"tcaz", true}, {"rhob", true},
+    {"jfx", true}, {"jfy", true}, {"jfz", true}, {"rhof", true},
+    {"jfxold", true}, {"jfyold", true}, {"jfzold", true}, {"rhofold", true},
+    {"cbx0", true}, {"cby0", true}, {"cbz0", true}, {"tmpsm", true},
+    {"tx", true}, {"ty", true}, {"tz", true}, {"te", true},
+    {"ox", true}, {"oy", true}, {"oz", true}, {"oe", true}
+  };
 
   void disableE() {
-    ex = false, ey = false, ez = false;
+    flags["ex"] = false, flags["ey"] = false, flags["ez"] = false;
   }
 
   void disableCB() {
-    cbx = false, cby = false, cbz = false;
+    flags["cbx"] = false, flags["cby"] = false, flags["cbz"] = false;
   }
 
   void disableCB0() {
-    cbx0 = false, cby0 = false, cbz0 = false;
+    flags["cbx0"] = false, flags["cby0"] = false, flags["cbz0"] = false;
   }
 
   void disableTCA() {
-    tcax = false, tcay = false, tcaz = false;
+    flags["tcax"] = false, flags["tcay"] = false, flags["tcaz"] = false;
   }
 
   void disableJF() {
-    jfx = false, jfy = false, jfz = false;
+    flags["jfx"] = false, flags["jfy"] = false, flags["jfz"] = false;
   }
 
   void disableJFOLD() {
-    jfxold = false, jfyold = false, jfzold = false;
+    flags["jfxold"] = false, flags["jfyold"] = false, flags["jfzold"] = false;
   }
 
   void disableT() {
-    tx = false, ty = false, tz = false;
+    flags["tx"] = false, flags["ty"] = false, flags["tz"] = false;
   }
 
   void disableO() {
-    ox = false, oy = false, oz = false;
+    flags["ox"] = false, flags["oy"] = false, flags["oz"] = false;
   }
 
   void disableALL() {
-    ex = false, ey = false, ez = false, div_e_err = false;
-    cbx = false, cby = false, cbz = false, div_b_err = false;
-    cbx0 = false, cby0 = false, cbz0 = false, tmpsm = false;
-    tcax = false, tcay = false, tcaz = false, rhob = false;
-    jfx = false, jfy = false, jfz = false, rhof = false;
-    jfxold = false, jfyold = false, jfzold = false, rhofold = false;
-    tx = false, ty = false, tz = false, te = false;
-    ox = false, oy = false, oz = false, oe = false;
+    for (auto& [key,_] : flags)
+      flags[key] = false;
   }
 
   void enableE() {
-    ex = true, ey = true, ez = true;
+    flags["ex"] = true, flags["ey"] = true, flags["ez"] = true;
   }
 
   void enableCB() {
-    cbx = true, cby = true, cbz = true;
+    flags["cbx"] = true, flags["cby"] = true, flags["cbz"] = true;
   }
 
   void enableCB0() {
-    cbx0 = true, cby0 = true, cbz0 = true;
+    flags["cbx0"] = true, flags["cby0"] = true, flags["cbz0"] = true;
   }
 
   void enableTCA() {
-    tcax = true, tcay = true, tcaz = true;
+    flags["tcax"] = true, flags["tcay"] = true, flags["tcaz"] = true;
   }
 
   void enableJF() {
-    jfx = true, jfy = true, jfz = true;
+    flags["jfx"] = true, flags["jfy"] = true, flags["jfz"] = true;
   }
 
   void enableJFOLD() {
-    jfxold = true, jfyold = true, jfzold = true;
+    flags["jfxold"] = true, flags["jfyold"] = true, flags["jfzold"] = true;
   }
 
   void enableT() {
-    tx = true, ty = true, tz = true;
+    flags["tx"] = true, flags["ty"] = true, flags["tz"] = true;
   }
 
   void enableO() {
-    ox = true, oy = true, oz = true;
+    flags["ox"] = true, flags["oy"] = true, flags["oz"] = true;
   }
 
   void enableALL() {
-    ex = true, ey = true, ez = true, div_e_err = true;
-    cbx = true, cby = true, cbz = true, div_b_err = true;
-    cbx0 = true, cby0 = true, cbz0 = true, tmpsm = true;
-    tcax = true, tcay = true, tcaz = true, rhob = true;
-    jfx = true, jfy = true, jfz = true, rhof = true;
-    jfxold = true, jfyold = true, jfzold = true, rhofold = true;
-    tx = true, ty = true, tz = true, te = true;
-    ox = true, oy = true, oz = true, oe = true;
+    for (auto& [key,_] : flags)
+      flags[key] = true;
   }
 
   bool enabledE() {
-    return ex && ey && ez;
+    return flags["ex"] && flags["ey"] && flags["ez"];
   }
 
   bool enabledCB() {
-    return cbx && cby && cbz;
+    return flags["cbx"] && flags["cby"] && flags["cbz"];
   }
 
   bool enabledCB0() {
-    return cbx0 && cby0 && cbz0;
+    return flags["cbx0"] && flags["cby0"] && flags["cbz0"];
   }
 
   bool enabledTCA() {
-    return tcax && tcay && tcaz;
+    return flags["tcax"] && flags["tcay"] && flags["tcaz"];
   }
 
   bool enabledJF() {
-    return jfx && jfy && jfz;
+    return flags["jfx"] && flags["jfy"] && flags["jfz"];
   }
 
   bool enabledJFOLD() {
-    return jfxold && jfyold && jfzold;
+    return flags["jfxold"] && flags["jfyold"] && flags["jfzold"];
   }
 
   bool enabledT() {
-    return tx && ty && tz;
+    return flags["tx"] && flags["ty"] && flags["tz"];
   }
 
   bool enabledO() {
-    return ox && oy && oz;
+    return flags["ox"] && flags["oy"] && flags["oz"];
   }
 };
 
 struct hydro_dump_flag_t
 {
-  bool jx = true, jy = true, jz = true, rho = true;
-  bool px = true, py = true, pz = true, ke = true;
-  bool txx = true, tyy = true, tzz = true;
-  bool tyz = true, tzx = true, txy = true;
+  std::vector<std::string> flag_keys = {
+    "jx", "jy", "jz", "rho",
+    "px", "py", "pz", "ke",
+    "txx", "tyy", "tzz",
+    "tyz", "tzx", "txy"
+  };
+
+  std::unordered_map<std::string, bool> flags = {
+    {"jx", true}, {"jy", true}, {"jz", true}, {"rho", true},
+    {"px", true}, {"py", true}, {"pz", true}, {"ke", true},
+    {"txx", true}, {"tyy", true}, {"tzz", true},
+    {"tyz", true}, {"tzx", true}, {"txy", true}
+  };
 
   void disableJ() {
-    jx = false, jy = false, jz = false;
+    flags["jx"] = false, flags["jy"] = false, flags["jz"] = false;
   }
 
   void disableP() {
-    px = false, py = false, pz = false;
+    flags["px"] = false, flags["py"] = false, flags["pz"] = false;
   }
 
   void disableTD() { //Stress diagonal
-    txx = false, tyy = false, tzz = false;
+    flags["txx"] = false, flags["tyy"] = false, flags["tzz"] = false;
   }
 
   void disableTOD() { //Stress off-diagonal
-    tyz = false, tzx = false, txy = false;
+    flags["tyz"] = false, flags["tzx"] = false, flags["txy"] = false;
   }
 
   void disableALL() {
-    jx = false, jy = false, jz = false, rho = false;
-    px = false, py = false, pz = false, ke = false;
-    txx = false, tyy = false, tzz = false;
-    tyz = false, tzx = false, txy = false;
+    for (auto& [key,_] : flags)
+      flags[key] = false;
   }
 
   void enableJ() {
-    jx = true, jy = true, jz = true;
+    flags["jx"] = true, flags["jy"] = true, flags["jz"] = true;
   }
 
   void enableP() {
-    px = true, py = true, pz = true;
+    flags["px"] = true, flags["py"] = true, flags["pz"] = true;
   }
 
   void enableTD() { //Stress diagonal
-    txx = true, tyy = true, tzz = true;
+    flags["txx"] = true, flags["tyy"] = true, flags["tzz"] = true;
   }
 
   void enableTOD() { //Stress off-diagonal
-    tyz = true, tzx = true, txy = true;
+    flags["tyz"] = true, flags["tzx"] = true, flags["txy"] = true;
   }
 
   void enableALL() {
-    jx = true, jy = true, jz = true, rho = true;
-    px = true, py = true, pz = true, ke = true;
-    txx = true, tyy = true, tzz = true;
-    tyz = true, tzx = true, txy = true;
+    for (auto& [key,_] : flags)
+      flags[key] = true;
   }
 
   bool enabledJ() {
-    return jx && jy && jz;
+    return flags["jx"] && flags["jy"] && flags["jz"];
   }
 
   bool enabledP() {
-    return px && py && pz;
+    return flags["px"] && flags["py"] && flags["pz"];
   }
 
   bool enabledTD() {
-    return txx && tyy && tzz;
+    return flags["txx"] && flags["tyy"] && flags["tzz"];
   }
 
   bool enabledTOD() {
-    return tyz && tzx && txy;
+    return flags["tyz"] && flags["tzx"] && flags["txy"];
   }
 };
 
@@ -382,8 +383,6 @@ public:
     Dump_Strategy(_rank, _nproc), num_step(_ns), field_interval(_fieldi),
     hydro_interval(_hydroi), fluid_interval(_fluidi) {}
 
-  // TODO: replace these with a common dump interface
-  // Declare vars to use
   hydro_dump_flag_t hydro_dump_flag;
   field_dump_flag_t field_dump_flag;
 
