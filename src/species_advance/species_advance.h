@@ -108,10 +108,19 @@ class species_t {
         particle_mover_t * ALIGNED(128) pm; // Particle movers
 
         int64_t last_sorted;                // Step when the particles were last
+        int64_t last_indexed;               // Step when the particles were last indexed.    
         // sorted.
         int sort_interval;                  // How often to sort the species
         int sort_out_of_place;              // Sort method
         int * ALIGNED(128) partition;       // Static array indexed 0:
+
+        k_particle_partition_t k_partition_d;
+        k_particle_partition_t::HostMirror k_partition_h;
+
+        // Used for indirect sorts.
+        k_particle_sortindex_t k_sortindex_d;
+        k_particle_sortindex_t::HostMirror k_sortindex_h;
+
         /**/                                // (nx+2)*(ny+2)*(nz+2).  Each value
         /**/                                // corresponds to the associated particle
         /**/                                // array index of the first particle in
@@ -379,6 +388,14 @@ accumulate_hydro_p( /**/  hydro_array_t        * RESTRICT ha,
                     const interpolator_array_t * RESTRICT ia );
 
 void accumulate_hydro_p_kokkos(
+        k_particles_t& k_particles,
+        k_particles_i_t& k_particles_i,
+        k_hydro_d_t k_hydro,
+        k_interpolator_t& k_interp,
+        const species_t            * RESTRICT sp
+);
+
+void accumulate_hydro_p_kokkos_nomove_ngp(
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
         k_hydro_d_t k_hydro,

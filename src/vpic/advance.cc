@@ -58,8 +58,9 @@ int vpic_simulation::advance(void)
   //printf("Cleared jf\n");
   if( collision_op_list )
   {
-      Kokkos::abort("Collision is not supported");
-      TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
+    KOKKOS_TIC();
+    apply_collision_op_list( collision_op_list, *kokkos_rng );
+    KOKKOS_TOC( collision_model, 1 );
   }
 
   // TODO: implement

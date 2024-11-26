@@ -62,6 +62,14 @@ using k_particle_i_copy_t = Kokkos::View<int*>;
 using k_particle_movers_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT]>;
 using k_particle_i_movers_t = Kokkos::View<int*>;
 
+using k_particle_partition_t = Kokkos::View<Kokkos::DefaultExecutionSpace::size_type*>;
+using k_particle_partition_t_ra = Kokkos::View<const Kokkos::DefaultExecutionSpace::size_type*,
+                                               Kokkos::MemoryTraits<Kokkos::RandomAccess>>;
+
+using k_particle_sortindex_t = Kokkos::View<Kokkos::DefaultExecutionSpace::size_type*>;
+using k_particle_sortindex_t_ra = Kokkos::View<const Kokkos::DefaultExecutionSpace::size_type*,
+                                               Kokkos::MemoryTraits<Kokkos::RandomAccess>>;
+
 using k_neighbor_t = Kokkos::View<int64_t*>;
 
 using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
@@ -75,15 +83,17 @@ using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATO
 using k_hydro_d_t = Kokkos::View<float* [HYDRO_VAR_COUNT]>;
 using k_hydro_sv_t = Kokkos::Experimental::ScatterView<float* [HYDRO_VAR_COUNT]>;
 
-using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT]>;
 
-//using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
+using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
+
+using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT]>;
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
 
 using k_material_coefficient_t = Kokkos::View<float* [MATERIAL_COEFFICIENT_VAR_COUNT]>;
 
+using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
 
 #define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
 #define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
@@ -291,6 +301,7 @@ void print_particles_d(
         k_particles_t particles,
         int np
         );
+void print_accumulator(k_accumulators_t fields, int n);
 
 // The templating here is to defer the type until later in the head include chain
 template <class P>
