@@ -30,6 +30,8 @@ vpic_simulation::initialize( int argc,
   TIC user_initialization( argc, argv ); TOC( user_initialization, 1 );
 //  user_initialization( argc, argv );
 
+  dump_strategy = new_dump_strategy(dump_strategy_id, this);
+
   // Do some consistency checks on user initialized fields
 
   //if( rank()==0 ) MESSAGE(( "Checking interdomain synchronization" ));

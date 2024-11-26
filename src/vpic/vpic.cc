@@ -9,6 +9,7 @@
  */
 
 #include "vpic.h"
+#include "dump_strategy.h"
 
 /* Note that, when a vpic_simulation is created (and thus registered
    with the checkpt service), it is created empty; none of the simulation
@@ -54,6 +55,9 @@ restore_vpic_simulation( void ) {
   RESTORE_FPTR( vpic->particle_bc_list );
   RESTORE_FPTR( vpic->emitter_list );
   RESTORE_FPTR( vpic->collision_op_list );
+
+  vpic->dump_strategy = new_dump_strategy(vpic->dump_strategy_id, vpic);
+
   return vpic;
 }
 
@@ -90,17 +94,13 @@ vpic_simulation::vpic_simulation() {
   entropy      = new_rng_pool( n_rng, 0, 0 );
   sync_entropy = new_rng_pool( n_rng, 0, 1 );
   grid = new_grid();
+  dump_strategy = new_dump_strategy(dump_strategy_id, this);
 
   REGISTER_OBJECT( this, checkpt_vpic_simulation,
                    restore_vpic_simulation, reanimate_vpic_simulation );
 
-#ifdef VPIC_ENABLE_HDF5
-  // Default init hdf5 dump flags
   field_interval = 1;
   hydro_interval = 1;
-  field_dump_flag = field_dump_flag_t();
-  hydro_dump_flag = hydro_dump_flag_t();
-#endif
 
 }
 

@@ -25,10 +25,8 @@
 #include "../util/bitfield.h"
 #include "../util/checksum.h"
 #include "../util/system.h"
-
-#ifdef VPIC_ENABLE_HDF5
-#include "dump_hdf5.h"
-#endif
+#include "dump_strategy.h"
+#include "dumpmacros.h"
 
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
@@ -39,7 +37,7 @@
 #endif
 //  #include "dumpvars.h"
 
-typedef FileIO FILETYPE;
+/* typedef FileIO FILETYPE; */
 
 const uint32_t allvars		(0xffffffff);
 const uint32_t electric		(1<<0 | 1<<1 | 1<<2);
@@ -158,7 +156,14 @@ struct DumpParameters {
 
 }; // struct DumpParameters
 
+class Dump_Strategy;
+class BinaryDump;
+class HDF5Dump;
+
 class vpic_simulation {
+  friend class Dump_Strategy;
+  friend class BinaryDump;
+  friend class HDF5Dump;
 public:
   vpic_simulation();
   ~vpic_simulation();
@@ -167,6 +172,21 @@ public:
   int advance( void );
   void finalize( void );
   void print_run_details( void );
+
+  // TODO: decide if I should collapse this to an enum
+  // An enum would stop these ifdefs being so leaky
+  void enable_binary_dump();
+#ifdef VPIC_ENABLE_HDF5
+  void enable_hdf5_dump();
+#endif
+
+  // TODO: remake these protected
+
+  // Very likely a user will forgot to delete this if they change the strategy,
+  // a smart ptr will save us from the small leak
+  // std::unique_ptr<Dump_Strategy> dump_strategy;
+  Dump_Strategy *dump_strategy;
+  DumpStrategyID dump_strategy_id = DUMP_STRATEGY_BINARY; // 0 : binary; 1: HDF5
 
   // Directly initialized by user
 
@@ -293,18 +313,6 @@ public:
                        int fname_tag = 1 );
   void dump_fluids( const char *fsp_name, const char *fbase,
 		    int fname_tag = 1 );
-
-#ifdef VPIC_ENABLE_HDF5
-  void dump_particles_hdf5( const char *sp_name, const char *fbase,
-                       int fname_tag = 1 );
-  void dump_hydro_hdf5( const char *sp_name, const char *fbase,
-                   int fname_tag = 1 );
-  void dump_fields_hdf5( const char *fbase, int fname_tag = 1 );
-
-  // Declare vars to use
-  hydro_dump_flag_t hydro_dump_flag;
-  field_dump_flag_t field_dump_flag;
-#endif
 
   // convenience functions for simlog output
   void create_field_list(char * strlist, DumpParameters & dumpParams);
