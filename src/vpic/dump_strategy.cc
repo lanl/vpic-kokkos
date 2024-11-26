@@ -2,6 +2,9 @@
 #include "dump_strategy.h"
 #include "vpic.h"
 
+/* -1 means no ranks talk */
+#define VERBOSE_rank -1
+
 const int max_filename_bytes = 256;
 
 // Create a new dump strategy
@@ -27,7 +30,7 @@ new_dump_strategy(DumpStrategyID dump_strategy_id,
         std::cout << "DUMP_STRATEGY_HDF5 enabled \n";
       ds = new HDF5Dump(vpic_simu->rank(), vpic_simu->nproc(),
           vpic_simu->num_step, vpic_simu->field_interval,
-          vpic_simu->hydro_interval);
+          vpic_simu->hydro_interval, vpic_simu->fluid_interval);
 #else
       std::cout << "HDF5Dump is not enabled \n";
 #endif
@@ -47,6 +50,10 @@ void delete_dump_strategy(Dump_Strategy *ds)
   UNREGISTER_OBJECT(ds);
   FREE(ds);
 }
+
+/*****************************************************************************
+ * Binary dump IO
+ *****************************************************************************/
 
 // Dump fields in binary format
 void BinaryDump::dump_fields(
@@ -102,10 +109,10 @@ void BinaryDump::dump_fields(
 void BinaryDump::dump_hydro(
     const char *fbase,
     int step,
-    hydro_array_t *hydro_array,
     species_t *sp,
-    interpolator_array_t *interpolator_array,
     grid_t *grid,
+    hydro_array_t *hydro_array,
+    interpolator_array_t *interpolator_array,
     int ftag)
 {
   char fname[max_filename_bytes];
@@ -172,9 +179,9 @@ void BinaryDump::dump_hydro(
 // Dump particles in binary format
 void BinaryDump::dump_particles(
     const char *fbase,
+    int step,
     species_t *sp,
     grid_t *grid,
-    int step,
     interpolator_array_t *interpolator_array,
     int ftag)
 {
@@ -255,6 +262,522 @@ void BinaryDump::dump_particles(
     ERROR(("File close failed on dump particles!!!"));
 }
 
+// Dump fluids in binary format
+void BinaryDump::dump_fluids(
+    const char *fbase,
+    int step,
+    fluid_species_t *fsp,
+    grid_t *grid,
+    int ftag)
+{
+  char fname[max_filename_bytes];
+  FileIO fileIO;
+  int dim[3];
+
+  if( !fsp ) ERROR(( "Invalid fluid species \"%s\"", fsp->name ));
+
+  if (step > fsp->last_copied)  fsp->copy_to_host();
+
+
+  if( !fbase ) ERROR(( "Invalid filename" ));
+
+  if( rank==0 )
+    MESSAGE(("Dumping \"%s\" fluid species to \"%s\"",fsp->name,fbase));
+
+  if( ftag ) {
+      snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step, rank );
+  }
+  else {
+      snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank );
+  }
+
+  FileIOStatus status = fileIO.open(fname, io_write);
+  if( status==fail) ERROR(( "Could not open \"%s\".", fname ));
+
+  /* IMPORTANT: these values are written in WRITE_HEADER_V0 */
+  size_t nxout = grid->nx;
+  size_t nyout = grid->ny;
+  size_t nzout = grid->nz;
+  float dxout = grid->dx;
+  float dyout = grid->dy;
+  float dzout = grid->dz;
+
+  WRITE_HEADER_V0(dump_type::hydro_dump, fsp->id, fsp->q/fsp->m,
+      fileIO, step, rank, nproc); // To-do: Needs changing?
+
+  dim[0] = grid->nx+2; // To-do: Change if changing ghost cell #.
+  dim[1] = grid->ny+2;
+  dim[2] = grid->nz+2;
+  WRITE_ARRAY_HEADER( fsp->fl, 3, dim, fileIO );
+  fileIO.write( fsp->fl, dim[0]*dim[1]*dim[2] );
+  if( fileIO.close() ) ERROR(( "File close failed on dump fluids!!!" ));
+}
+
+// Field dump in binary format
+void BinaryDump::field_dump(
+    DumpParameters & dumpParams,
+    int step,
+    grid_t *grid,
+    field_array_t *field_array)
+{
+
+  // Update the fields if necessary
+  if (step > field_array->last_copied)
+    field_array->copy_to_host();
+
+  // Create directory for this time step
+  char timeDir[max_filename_bytes];
+  int ret = snprintf(timeDir, max_filename_bytes, "%s/T.%ld", dumpParams.baseDir, (long)step);
+  if (ret < 0) {
+      ERROR(("snprintf failed"));
+  }
+  FileUtils::makeDirectory(timeDir);
+
+  // Open the file for output
+  char filename[max_filename_bytes];
+  ret = snprintf(filename, max_filename_bytes, "%s/T.%ld/%s.%ld.%d", dumpParams.baseDir, (long)step,
+          dumpParams.baseFileName, (long)step, rank);
+  if (ret < 0) {
+      ERROR(("snprintf failed"));
+  }
+
+  FileIO fileIO;
+  FileIOStatus status;
+
+  status = fileIO.open(filename, io_write);
+  if( status==fail ) ERROR(( "Failed opening file: %s", filename ));
+
+  // convenience
+  const size_t istride(dumpParams.stride_x);
+  const size_t jstride(dumpParams.stride_y);
+  const size_t kstride(dumpParams.stride_z);
+
+  // Check stride values.
+  if(remainder(grid->nx, istride) != 0)
+    ERROR(("x stride must be an integer factor of nx"));
+  if(remainder(grid->ny, jstride) != 0)
+    ERROR(("y stride must be an integer factor of ny"));
+  if(remainder(grid->nz, kstride) != 0)
+    ERROR(("z stride must be an integer factor of nz"));
+
+  int dim[3];
+
+  /* define to do C-style indexing */
+# define f(x,y,z) f[ VOXEL(x,y,z, grid->nx,grid->ny,grid->nz) ]
+
+  /* IMPORTANT: these values are written in WRITE_HEADER_V0 */
+  size_t nxout = (grid->nx)/istride;
+  size_t nyout = (grid->ny)/jstride;
+  size_t nzout = (grid->nz)/kstride;
+  float dxout = (grid->dx)*istride;
+  float dyout = (grid->dy)*jstride;
+  float dzout = (grid->dz)*kstride;
+
+  /* Banded output will write data as a single block-array as opposed to
+   * the Array-of-Structure format that is used for native storage.
+   *
+   * Additionally, the user can specify a stride pattern to reduce
+   * the resolution of the data that are output.  If a stride is
+   * specified for a particular dimension, VPIC will write the boundary
+   * plus every "stride" elements in that dimension. */
+
+  if(dumpParams.format == band) {
+
+    WRITE_HEADER_V0(dump_type::field_dump, -1, 0, fileIO, step, rank, nproc);
+
+    dim[0] = nxout+2;
+    dim[1] = nyout+2;
+    dim[2] = nzout+2;
+
+    if( rank==VERBOSE_rank ) {
+      std::cerr << "nxout: " << nxout << std::endl;
+      std::cerr << "nyout: " << nyout << std::endl;
+      std::cerr << "nzout: " << nzout << std::endl;
+      std::cerr << "nx: " << grid->nx << std::endl;
+      std::cerr << "ny: " << grid->ny << std::endl;
+      std::cerr << "nz: " << grid->nz << std::endl;
+    }
+
+    WRITE_ARRAY_HEADER(field_array->f, 3, dim, fileIO);
+
+    // Create a variable list of field values to output.
+    size_t numvars = std::min(dumpParams.output_vars.bitsum(),
+                              total_field_variables);
+    size_t * varlist = new size_t[numvars];
+
+    for(size_t i(0), c(0); i<total_field_variables; i++)
+      if(dumpParams.output_vars.bitset(i)) varlist[c++] = i;
+
+    if( rank==VERBOSE_rank ) printf("\nBEGIN_OUTPUT\n");
+
+    // more efficient for standard case
+    if(istride == 1 && jstride == 1 && kstride == 1)
+      for(size_t v(0); v<numvars; v++) {
+      for(size_t k(0); k<nzout+2; k++) {
+      for(size_t j(0); j<nyout+2; j++) {
+      for(size_t i(0); i<nxout+2; i++) {
+              const uint32_t * fref = reinterpret_cast<uint32_t *>(&field_array->f(i,j,k));
+              fileIO.write(&fref[varlist[v]], 1);
+              if(rank==VERBOSE_rank) printf("%f ", field_array->f(i,j,k).ex);
+              if(rank==VERBOSE_rank) std::cout << "(" << i << " " << j << " " << k << ")" << std::endl;
+      } if(rank==VERBOSE_rank) std::cout << std::endl << "ROW_BREAK " << j << " " << k << std::endl;
+      } if(rank==VERBOSE_rank) std::cout << std::endl << "PLANE_BREAK " << k << std::endl;
+      } if(rank==VERBOSE_rank) std::cout << std::endl << "BLOCK_BREAK" << std::endl;
+      }
+
+    else
+
+      for(size_t v(0); v<numvars; v++) {
+      for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
+      for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
+      for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
+              const uint32_t * fref = reinterpret_cast<uint32_t *>(&field_array->f(ioff,joff,koff));
+              fileIO.write(&fref[varlist[v]], 1);
+              if(rank==VERBOSE_rank) printf("%f ", field_array->f(ioff,joff,koff).ex);
+              if(rank==VERBOSE_rank) std::cout << "(" << ioff << " " << joff << " " << koff << ")" << std::endl;
+      } if(rank==VERBOSE_rank) std::cout << std::endl << "ROW_BREAK " << joff << " " << koff << std::endl;
+      } if(rank==VERBOSE_rank) std::cout << std::endl << "PLANE_BREAK " << koff << std::endl;
+      } if(rank==VERBOSE_rank) std::cout << std::endl << "BLOCK_BREAK" << std::endl;
+      }
+
+    delete[] varlist;
+
+  } else { // band_interleave
+
+    WRITE_HEADER_V0(dump_type::field_dump, -1, 0, fileIO, step, rank, nproc);
+
+    dim[0] = nxout+2;
+    dim[1] = nyout+2;
+    dim[2] = nzout+2;
+
+    WRITE_ARRAY_HEADER(field_array->f, 3, dim, fileIO);
+
+    if(istride == 1 && jstride == 1 && kstride == 1)
+      fileIO.write(field_array->f, dim[0]*dim[1]*dim[2]);
+    else
+      for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
+      for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
+      for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
+            fileIO.write(&field_array->f(ioff,joff,koff), 1);
+      }
+      }
+      }
+  }
+
+# undef f
+
+  if( fileIO.close() ) ERROR(( "File close failed on field dump!!!" ));
+}
+
+// Hydro dump in binary format
+void BinaryDump::hydro_dump(
+    DumpParameters& dumpParams,
+    int step,
+    species_t *sp,
+    grid_t *grid,
+    hydro_array_t *hydro_array,
+    interpolator_array_t *interpolator_array)
+{
+  // Create directory for this time step
+  char timeDir[max_filename_bytes];
+  snprintf(timeDir, max_filename_bytes, "%s/T.%ld", dumpParams.baseDir, (long)step);
+  FileUtils::makeDirectory(timeDir);
+
+  // Open the file for output
+  char filename[max_filename_bytes];
+  int ret = snprintf( filename, max_filename_bytes, "%s/T.%ld/%s.%ld.%d", dumpParams.baseDir, (long)step,
+           dumpParams.baseFileName, (long)step, rank );
+  if (ret < 0) {
+      ERROR(("snprintf failed"));
+  }
+
+  FileIO fileIO;
+  FileIOStatus status;
+
+  status = fileIO.open(filename, io_write);
+  if(status == fail) ERROR(("Failed opening file: %s", filename));
+
+  if( !sp ) ERROR(( "Invalid species name: %s", sp->name ));
+
+  auto& particles = sp->k_p_d;
+  auto& particles_i = sp->k_p_i_d;
+  auto& interpolators_k = interpolator_array->k_i_d;
+
+  Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
+  accumulate_hydro_p_kokkos(
+      particles,
+      particles_i,
+      hydro_array->k_h_d,
+      interpolators_k,
+      sp
+  );
+
+  // The legacy synchronize is actually a bit faster
+  //synchronize_hydro_array_kokkos(hydro_array);
+
+  hydro_array->copy_to_host();
+
+  synchronize_hydro_array( hydro_array );
+
+  // convenience
+  const size_t istride(dumpParams.stride_x);
+  const size_t jstride(dumpParams.stride_y);
+  const size_t kstride(dumpParams.stride_z);
+
+  // Check stride values.
+  if(remainder(grid->nx, istride) != 0)
+    ERROR(("x stride must be an integer factor of nx"));
+  if(remainder(grid->ny, jstride) != 0)
+    ERROR(("y stride must be an integer factor of ny"));
+  if(remainder(grid->nz, kstride) != 0)
+    ERROR(("z stride must be an integer factor of nz"));
+
+  int dim[3];
+
+  /* define to do C-style indexing */
+# define hydro(x,y,z) hydro_array->h[VOXEL(x,y,z, grid->nx,grid->ny,grid->nz)]
+
+  /* IMPORTANT: these values are written in WRITE_HEADER_V0 */
+  size_t nxout = (grid->nx)/istride;
+  size_t nyout = (grid->ny)/jstride;
+  size_t nzout = (grid->nz)/kstride;
+  float dxout = (grid->dx)*istride;
+  float dyout = (grid->dy)*jstride;
+  float dzout = (grid->dz)*kstride;
+
+  /* Banded output will write data as a single block-array as opposed to
+   * the Array-of-Structure format that is used for native storage.
+   *
+   * Additionally, the user can specify a stride pattern to reduce
+   * the resolution of the data that are output.  If a stride is
+   * specified for a particular dimension, VPIC will write the boundary
+   * plus every "stride" elements in that dimension.
+   */
+  if(dumpParams.format == band) {
+
+    WRITE_HEADER_V0(dump_type::hydro_dump, sp->id, sp->q / sp->m, fileIO, step, rank, nproc);
+
+    dim[0] = nxout+2;
+    dim[1] = nyout+2;
+    dim[2] = nzout+2;
+
+    WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
+
+    /*
+     * Create a variable list of hydro values to output.
+     */
+    size_t numvars = std::min(dumpParams.output_vars.bitsum(),
+                              total_hydro_variables);
+    size_t * varlist = new size_t[numvars];
+    for(size_t i(0), c(0); i<total_hydro_variables; i++)
+      if( dumpParams.output_vars.bitset(i) ) varlist[c++] = i;
+
+    // More efficient for standard case
+    if(istride == 1 && jstride == 1 && kstride == 1)
+
+      for(size_t v(0); v<numvars; v++)
+      for(size_t k(0); k<nzout+2; k++)
+      for(size_t j(0); j<nyout+2; j++)
+      for(size_t i(0); i<nxout+2; i++) {
+              const uint32_t * href = reinterpret_cast<uint32_t *>(&hydro(i,j,k));
+              fileIO.write(&href[varlist[v]], 1);
+      }
+
+    else
+
+      for(size_t v(0); v<numvars; v++)
+      for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
+      for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
+      for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
+              const uint32_t * href = reinterpret_cast<uint32_t *>(&hydro(ioff,joff,koff));
+              fileIO.write(&href[varlist[v]], 1);
+      }
+      }
+      }
+
+    delete[] varlist;
+
+  } else { // band_interleave
+
+    WRITE_HEADER_V0(dump_type::hydro_dump, sp->id, sp->q / sp->m, fileIO, step, rank, nproc);
+
+    dim[0] = nxout;
+    dim[1] = nyout;
+    dim[2] = nzout;
+
+    WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
+
+    if(istride == 1 && jstride == 1 && kstride == 1)
+
+      fileIO.write(hydro_array->h, dim[0]*dim[1]*dim[2]);
+
+    else
+
+      for(size_t k(0); k<nzout; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
+      for(size_t j(0); j<nyout; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
+      for(size_t i(0); i<nxout; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
+            fileIO.write(&hydro(ioff,joff,koff), 1);
+      }
+      }
+      }
+  }
+
+# undef hydro
+
+  if( fileIO.close() ) ERROR(( "File close failed on hydro dump!!!" ));
+}
+
+
+// Fluid dump in binary format
+void BinaryDump::fluid_dump(
+    DumpParameters& dumpParams,
+    int step,
+    fluid_species_t *fsp,
+    grid_t *grid)
+{
+
+  // Create directory for this time step
+  char timeDir[max_filename_bytes];
+  snprintf(timeDir, max_filename_bytes, "%s/T.%ld", dumpParams.baseDir, (long)step);
+  FileUtils::makeDirectory(timeDir);
+
+  // Open the file for output
+  char filename[max_filename_bytes];
+  int ret = snprintf( filename, max_filename_bytes, "%s/T.%ld/%s.%ld.%d", dumpParams.baseDir, (long)step,
+           dumpParams.baseFileName, (long)step, rank );
+  if (ret < 0) {
+      ERROR(("snprintf failed"));
+  }
+
+  FileIO fileIO;
+  FileIOStatus status;
+
+  status = fileIO.open(filename, io_write);
+  if(status == fail) ERROR(("Failed opening file: %s", filename));
+
+  if( !fsp ) ERROR(( "Invalid fluid species name: %s", fsp->name ));
+
+  // The legacy synchronize is actually a bit faster
+  //synchronize_hydro_array_kokkos(hydro_array);
+
+  if (step > fsp->last_copied)
+    fsp->copy_to_host();
+
+
+  //  synchronize_hydro_array( hydro_array );
+
+  // convenience
+  const size_t istride(dumpParams.stride_x);
+  const size_t jstride(dumpParams.stride_y);
+  const size_t kstride(dumpParams.stride_z);
+
+  // Check stride values.
+  if(remainder(grid->nx, istride) != 0)
+    ERROR(("x stride must be an integer factor of nx"));
+  if(remainder(grid->ny, jstride) != 0)
+    ERROR(("y stride must be an integer factor of ny"));
+  if(remainder(grid->nz, kstride) != 0)
+    ERROR(("z stride must be an integer factor of nz"));
+
+  int dim[3];
+
+  /* define to do C-style indexing */
+# define fluid(x,y,z) fsp->fl[VOXEL(x,y,z, grid->nx,grid->ny,grid->nz)]
+
+  /* IMPORTANT: these values are written in WRITE_HEADER_V0 */
+  size_t nxout = (grid->nx)/istride;
+  size_t nyout = (grid->ny)/jstride;
+  size_t nzout = (grid->nz)/kstride;
+  float dxout = (grid->dx)*istride;
+  float dyout = (grid->dy)*jstride;
+  float dzout = (grid->dz)*kstride;
+
+  /* Banded output will write data as a single block-array as opposed to
+   * the Array-of-Structure format that is used for native storage.
+   *
+   * Additionally, the user can specify a stride pattern to reduce
+   * the resolution of the data that are output.  If a stride is
+   * specified for a particular dimension, VPIC will write the boundary
+   * plus every "stride" elements in that dimension.
+   */
+  if(dumpParams.format == band) {
+
+    WRITE_HEADER_V0(dump_type::hydro_dump, fsp->id, fsp->q / fsp->m, fileIO, step, rank, nproc);
+
+    dim[0] = nxout+2;
+    dim[1] = nyout+2;
+    dim[2] = nzout+2;
+
+    WRITE_ARRAY_HEADER(fsp->fl, 3, dim, fileIO);
+
+    /*
+     * Create a variable list of hydro values to output.
+     */
+    size_t numvars = std::min(dumpParams.output_vars.bitsum(),
+                              total_fluid_variables);  // To-do: Define this
+    size_t * varlist = new size_t[numvars];
+    for(size_t i(0), c(0); i<total_fluid_variables; i++)
+      if( dumpParams.output_vars.bitset(i) ) varlist[c++] = i;
+
+    // More efficient for standard case
+    if(istride == 1 && jstride == 1 && kstride == 1)
+
+      for(size_t v(0); v<numvars; v++)
+      for(size_t k(0); k<nzout+2; k++)
+      for(size_t j(0); j<nyout+2; j++)
+      for(size_t i(0); i<nxout+2; i++) {
+              const uint32_t * flref = reinterpret_cast<uint32_t *>(&fluid(i,j,k));
+              fileIO.write(&flref[varlist[v]], 1);
+      }
+
+    else
+
+      for(size_t v(0); v<numvars; v++)
+      for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
+      for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
+      for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
+              const uint32_t * flref = reinterpret_cast<uint32_t *>(&fluid(ioff,joff,koff));
+              fileIO.write(&flref[varlist[v]], 1);
+      }
+      }
+      }
+
+    delete[] varlist;
+
+  } else { // band_interleave
+
+    WRITE_HEADER_V0(dump_type::hydro_dump, fsp->id, fsp->q / fsp->m, fileIO, step, rank, nproc);
+
+    dim[0] = nxout;
+    dim[1] = nyout;
+    dim[2] = nzout;
+
+    WRITE_ARRAY_HEADER(fsp->fl, 3, dim, fileIO);
+
+    if(istride == 1 && jstride == 1 && kstride == 1)
+
+      fileIO.write(fsp->fl, dim[0]*dim[1]*dim[2]);
+
+    else
+
+      for(size_t k(0); k<nzout; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
+      for(size_t j(0); j<nyout; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
+      for(size_t i(0); i<nxout; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
+            fileIO.write(&fluid(ioff,joff,koff), 1);
+      }
+      }
+      }
+  }
+
+# undef fluid
+
+  if( fileIO.close() ) ERROR(( "File close failed on fluid dump!!!" ));
+}
+
+/*****************************************************************************
+ * HDF5 dump IO
+ *****************************************************************************/
+
 // Dump fields in HDF5 format
 void HDF5Dump::dump_fields(
     const char *fbase,
@@ -271,15 +794,15 @@ void HDF5Dump::dump_fields(
 
 #define fpp(x, y, z) f[VOXEL(x, y, z, grid->nx, grid->ny, grid->nz)]
 
-#define DUMP_FIELD_TO_HDF5(DSET_NAME, ATTRIBUTE_NAME, ELEMENT_TYPE)                                           \
+#define DUMP_FIELD_TO_HDF5(DSET_NAME, ATTRIBUTE_NAME, ELEMENT_TYPE)                                         \
 {                                                                                                           \
   dset_id = H5Dcreate(group_id, DSET_NAME, ELEMENT_TYPE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); \
   temp_buf_index = 0;                                                                                       \
-  for (size_t i(1); i < grid->nx + 1; i++)                                                                  \
+  for (size_t i(stride_x); i < grid->nx + 1; i += stride_x)                                                 \
   {                                                                                                         \
-    for (size_t j(1); j < grid->ny + 1; j++)                                                                \
+    for (size_t j(stride_y); j < grid->ny + 1; j += stride_y)                                               \
     {                                                                                                       \
-      for (size_t k(1); k < grid->nz + 1; k++)                                                              \
+      for (size_t k(stride_z); k < grid->nz + 1; k += stride_z)                                             \
       {                                                                                                     \
         temp_buf[temp_buf_index] = field_array->fpp(i, j, k).ATTRIBUTE_NAME;                                \
         temp_buf_index = temp_buf_index + 1;                                                                \
@@ -320,7 +843,9 @@ void HDF5Dump::dump_fields(
   double el2 = uptime();
 
   // prepare for writing the data
-  float *temp_buf = (float *)malloc(sizeof(float) * (grid->nx) * (grid->ny) * (grid->nz));
+  float *temp_buf = (float *)malloc(sizeof(float) * (grid->nx / stride_x) *
+                                                    (grid->ny / stride_y) *
+                                                    (grid->nz / stride_z));
   hsize_t temp_buf_index;
   hid_t dset_id;
   plist_id = H5Pcreate(H5P_DATASET_XFER);
@@ -328,13 +853,13 @@ void HDF5Dump::dump_fields(
 
   // data topology
   hsize_t field_global_size[3], field_local_size[3], global_offset[3];
-  field_global_size[0] = (grid->nx * grid->gpx);
-  field_global_size[1] = (grid->ny * grid->gpy);
-  field_global_size[2] = (grid->nz * grid->gpz);
+  field_global_size[0] = (grid->nx * grid->gpx) / stride_x;
+  field_global_size[1] = (grid->ny * grid->gpy) / stride_y;
+  field_global_size[2] = (grid->nz * grid->gpz) / stride_z;
 
-  field_local_size[0] = grid->nx;
-  field_local_size[1] = grid->ny;
-  field_local_size[2] = grid->nz;
+  field_local_size[0] = grid->nx / stride_x;
+  field_local_size[1] = grid->ny / stride_y;
+  field_local_size[2] = grid->nz / stride_z;
 
   int _ix, _iy, _iz;
   _ix = rank;
@@ -343,9 +868,9 @@ void HDF5Dump::dump_fields(
   _iz = _iy / grid->gpy;
   _iy -= _iz * grid->gpy;
 
-  global_offset[0] = grid->nx * _ix;
-  global_offset[1] = grid->ny * _iy;
-  global_offset[2] = grid->nz * _iz;
+  global_offset[0] = grid->nx * _ix / stride_x;
+  global_offset[1] = grid->ny * _iy / stride_y;
+  global_offset[2] = grid->nz * _iz / stride_z;
 
   // prepare the spaces for parallel writing
   hid_t filespace = H5Screate_simple(3, field_global_size, NULL);
@@ -415,9 +940,15 @@ void HDF5Dump::dump_fields(
     char dimensions_4d[128];
     sprintf(dimensions_4d, "%lld %lld %lld %d", field_global_size[0], field_global_size[1], field_global_size[2], 3);
     char orignal[128];
-    sprintf(orignal, "%f %f %f", grid->x0, grid->y0, grid->z0);
+    float dx = stride_x * grid->dx;
+    float dy = stride_y * grid->dy;
+    float dz = stride_z * grid->dz;
+    float x0 = grid->x0 + dx;
+    float y0 = grid->y0 + dy;
+    float z0 = grid->z0 + dz;
+    sprintf(orignal, "%f %f %f", x0, y0, z0);
     char dxdydz[128];
-    sprintf(dxdydz, "%f %f %f", grid->dx, grid->dy, grid->dz);
+    sprintf(dxdydz, "%f %f %f", dx, dy, dz);
 
     int nframes = num_step / field_interval + 1;
     static int field_tframe = 0;
@@ -445,21 +976,21 @@ void HDF5Dump::dump_fields(
 void HDF5Dump::dump_hydro(
     const char *fbase,
     int step,
-    hydro_array_t *hydro_array,
     species_t *sp,
-    interpolator_array_t *interpolator_array,
     grid_t *grid,
+    hydro_array_t *hydro_array,
+    interpolator_array_t *interpolator_array,
     int ftag)
 {
-#define DUMP_HYDRO_TO_HDF5(DSET_NAME, ATTRIBUTE_NAME, ELEMENT_TYPE)                                           \
+#define DUMP_HYDRO_TO_HDF5(DSET_NAME, ATTRIBUTE_NAME, ELEMENT_TYPE)                                         \
 {                                                                                                           \
   dset_id = H5Dcreate(group_id, DSET_NAME, ELEMENT_TYPE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); \
   temp_buf_index = 0;                                                                                       \
-  for (size_t i(1); i < grid->nx + 1; i++)                                                                  \
+  for (size_t i(stride_x); i < grid->nx + 1; i += stride_x)                                                 \
   {                                                                                                         \
-    for (size_t j(1); j < grid->ny + 1; j++)                                                                \
+    for (size_t j(stride_y); j < grid->ny + 1; j += stride_y)                                               \
     {                                                                                                       \
-      for (size_t k(1); k < grid->nz + 1; k++)                                                              \
+      for (size_t k(stride_z); k < grid->nz + 1; k += stride_z)                                             \
       {                                                                                                     \
         temp_buf[temp_buf_index] = hydro_array->h[VOXEL(i,j,k, grid->nx,grid->ny,grid->nz)].ATTRIBUTE_NAME; \
         temp_buf_index = temp_buf_index + 1;                                                                \
@@ -521,7 +1052,9 @@ void HDF5Dump::dump_hydro(
   double el2 = uptime();
 
   // prepare for writing the data
-  float *temp_buf = (float *)malloc(sizeof(float) * (grid->nx) * (grid->ny) * (grid->nz));
+  float *temp_buf = (float *)malloc(sizeof(float) * (grid->nx / stride_x) *
+                                                    (grid->ny / stride_y) *
+                                                    (grid->nz / stride_z));
   hsize_t temp_buf_index;
   hid_t dset_id;
   plist_id = H5Pcreate(H5P_DATASET_XFER);
@@ -529,13 +1062,13 @@ void HDF5Dump::dump_hydro(
 
   // data topology
   hsize_t hydro_global_size[3], hydro_local_size[3], global_offset[3];
-  hydro_global_size[0] = (grid->nx * grid->gpx);
-  hydro_global_size[1] = (grid->ny * grid->gpy);
-  hydro_global_size[2] = (grid->nz * grid->gpz);
+  hydro_global_size[0] = (grid->nx * grid->gpx) / stride_x;
+  hydro_global_size[1] = (grid->ny * grid->gpy) / stride_y;
+  hydro_global_size[2] = (grid->nz * grid->gpz) / stride_z;
 
-  hydro_local_size[0] = grid->nx;
-  hydro_local_size[1] = grid->ny;
-  hydro_local_size[2] = grid->nz;
+  hydro_local_size[0] = grid->nx / stride_x;
+  hydro_local_size[1] = grid->ny / stride_y;
+  hydro_local_size[2] = grid->nz / stride_z;
 
   int _ix, _iy, _iz;
   _ix = rank;
@@ -544,9 +1077,9 @@ void HDF5Dump::dump_hydro(
   _iz = _iy / grid->gpy;
   _iy -= _iz * grid->gpy;
 
-  global_offset[0] = (grid->nx) * _ix;
-  global_offset[1] = (grid->ny) * _iy;
-  global_offset[2] = (grid->nz) * _iz;
+  global_offset[0] = (grid->nx) * _ix / stride_x;
+  global_offset[1] = (grid->ny) * _iy / stride_y;
+  global_offset[2] = (grid->nz) * _iz / stride_z;
 
   // prepare the spaces for parallel writing
   hid_t filespace = H5Screate_simple(3, hydro_global_size, NULL);
@@ -595,9 +1128,15 @@ void HDF5Dump::dump_hydro(
     char dimensions_4d[128];
     sprintf(dimensions_4d, "%lld %lld %lld %d", hydro_global_size[0], hydro_global_size[1], hydro_global_size[2], 3);
     char orignal[128];
-    sprintf(orignal, "%f %f %f", grid->x0, grid->y0, grid->z0);
+    float dx = stride_x * grid->dx;
+    float dy = stride_y * grid->dy;
+    float dz = stride_z * grid->dz;
+    float x0 = grid->x0 + dx;
+    float y0 = grid->y0 + dy;
+    float z0 = grid->z0 + dz;
+    sprintf(orignal, "%f %f %f", x0, y0, z0);
     char dxdydz[128];
-    sprintf(dxdydz, "%f %f %f", grid->dx, grid->dy, grid->dz);
+    sprintf(dxdydz, "%f %f %f", dx, dy, dz);
 
     int nframes = num_step / hydro_interval + 1;
 
@@ -627,9 +1166,9 @@ void HDF5Dump::dump_hydro(
 // Dump particles in HDF5 format
 void HDF5Dump::dump_particles(
     const char *fbase,
+    int step,
     species_t *sp,
     grid_t *grid,
-    int step,
     interpolator_array_t *interpolator_array,
     int ftag)
 {
@@ -645,9 +1184,7 @@ void HDF5Dump::dump_particles(
   if (step > sp->last_copied)
     sp->copy_to_host();
 
-  // TODO: Allow the user to set this
-  const int stride_particle_dump = 1;
-  const long long np_local = (sp->np + stride_particle_dump - 1) / stride_particle_dump;
+  const long long np_local = (sp->np + stride_particle - 1) / stride_particle;
 
   // TODO: Allow the user to toggle the timing output
   const int print_timing = 0;
@@ -666,7 +1203,7 @@ void HDF5Dump::dump_particles(
   sp->np = np_local;
   sp->max_np = np_local;
 
-  for (long long iptl = 0, i = 0; iptl < sp_np; iptl += stride_particle_dump, ++i) {
+  for (long long iptl = 0, i = 0; iptl < sp_np; iptl += stride_particle, ++i) {
     COPY(&sp->p[i], &sp_p[iptl], 1);
   }
 
@@ -919,4 +1456,239 @@ void HDF5Dump::dump_particles(
   H5Fclose(meta_file_id);
   meta_el3 = uptime() - meta_el3;
   if(print_timing) MESSAGE(("Metafile TimeHDF5Close: %f s\n", meta_el3));
+}
+
+// Dump fluids in HDF5 format
+void HDF5Dump::dump_fluids(
+    const char *fbase,
+    int step,
+    fluid_species_t *fsp,
+    grid_t *grid,
+    int ftag)
+{
+  // prepare the data
+  if( !fsp ) ERROR(( "Invalid fluid species \"%s\"", fsp->name ));
+  if ( rank==0 ) log_printf("Dumping %s fluid using HDF5\n", fsp->name);
+
+  if (step > fsp->last_copied)  fsp->copy_to_host();
+
+#define DUMP_FLUID_TO_HDF5(DSET_NAME, ATTRIBUTE_NAME, ELEMENT_TYPE)                                         \
+{                                                                                                           \
+  dset_id = H5Dcreate(group_id, DSET_NAME, ELEMENT_TYPE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); \
+  temp_buf_index = 0;                                                                                       \
+  for (size_t i(stride_x); i < grid->nx + 1; i += stride_x)                                                 \
+  {                                                                                                         \
+    for (size_t j(stride_y); j < grid->ny + 1; j += stride_y)                                               \
+    {                                                                                                       \
+      for (size_t k(stride_z); k < grid->nz + 1; k += stride_z)                                             \
+      {                                                                                                     \
+        temp_buf[temp_buf_index] = fsp->fl[VOXEL(i,j,k, grid->nx,grid->ny,grid->nz)].ATTRIBUTE_NAME;        \
+        temp_buf_index = temp_buf_index + 1;                                                                \
+      }                                                                                                     \
+    }                                                                                                       \
+  }                                                                                                         \
+  dataspace_id = H5Dget_space(dset_id);                                                                     \
+  H5Sselect_hyperslab(dataspace_id, H5S_SELECT_SET, global_offset, NULL, fluid_local_size, NULL);           \
+  H5Dwrite(dset_id, ELEMENT_TYPE, memspace, dataspace_id, plist_id, temp_buf);                              \
+  H5Sclose(dataspace_id);                                                                                   \
+  H5Dclose(dset_id);                                                                                        \
+}
+  char hname[256];
+  char fluid_scratch[128];
+  char subfluid_scratch[128];
+
+  // create the directory and sub-directory
+  sprintf(fluid_scratch, "./%s", "fluid_hdf5");
+  FileUtils::makeDirectory(fluid_scratch);
+  sprintf(subfluid_scratch, "%s/T.%zu/", fluid_scratch, step);
+  FileUtils::makeDirectory(subfluid_scratch);
+
+  sprintf(hname, "%s/fluid_%s_%zu.h5", subfluid_scratch, fsp->name, step);
+  double el1 = uptime();
+  hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
+  H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
+  hid_t file_id = H5Fcreate(hname, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+  H5Pclose(plist_id);
+
+  sprintf(hname, "Timestep_%zu", step);
+  hid_t group_id = H5Gcreate(file_id, hname, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+  el1 = uptime() - el1;
+  if ( rank==0 ) log_printf("TimeHDF5Open: %.2f s\n", el1);
+  double el2 = uptime();
+
+  // prepare for writing the data
+  float *temp_buf = (float *)malloc(sizeof(float) * (grid->nx / stride_x) *
+                                                    (grid->ny / stride_y) *
+                                                    (grid->nz / stride_z));
+  hsize_t temp_buf_index;
+  hid_t dset_id;
+  plist_id = H5Pcreate(H5P_DATASET_XFER);
+  H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
+
+  // data topology
+  hsize_t fluid_global_size[3], fluid_local_size[3], global_offset[3];
+  fluid_global_size[0] = (grid->nx * grid->gpx) / stride_x;
+  fluid_global_size[1] = (grid->ny * grid->gpy) / stride_y;
+  fluid_global_size[2] = (grid->nz * grid->gpz) / stride_z;
+
+  fluid_local_size[0] = grid->nx / stride_x;
+  fluid_local_size[1] = grid->ny / stride_y;
+  fluid_local_size[2] = grid->nz / stride_z;
+
+  int _ix, _iy, _iz;
+  _ix = rank;
+  _iy = _ix / grid->gpx;
+  _ix -= _iy * grid->gpx;
+  _iz = _iy / grid->gpy;
+  _iy -= _iz * grid->gpy;
+
+  global_offset[0] = (grid->nx) * _ix / stride_x;
+  global_offset[1] = (grid->ny) * _iy / stride_y;
+  global_offset[2] = (grid->nz) * _iz / stride_z;
+
+  // prepare the spaces for parallel writing
+  hid_t filespace = H5Screate_simple(3, fluid_global_size, NULL);
+  hid_t memspace = H5Screate_simple(3, fluid_local_size, NULL);
+  hid_t dataspace_id;
+
+  // write the data
+  DUMP_FLUID_TO_HDF5("den", den, H5T_NATIVE_FLOAT);
+  DUMP_FLUID_TO_HDF5("tmp", tmp, H5T_NATIVE_FLOAT);
+  DUMP_FLUID_TO_HDF5("prs", prs, H5T_NATIVE_FLOAT);
+  DUMP_FLUID_TO_HDF5("ux", ux, H5T_NATIVE_FLOAT);
+  DUMP_FLUID_TO_HDF5("uy", uy, H5T_NATIVE_FLOAT);
+  DUMP_FLUID_TO_HDF5("uz", uz, H5T_NATIVE_FLOAT);
+
+  el2 = uptime() - el2;
+  if ( rank==0 ) log_printf("TimeHDF5Write: %.2f s\n", el2);
+
+  double el3 = uptime();
+
+  free(temp_buf);
+  H5Sclose(filespace);
+  H5Sclose(memspace);
+  H5Pclose(plist_id);
+  H5Gclose(group_id);
+  H5Fclose(file_id);
+
+  el3 = uptime() - el3;
+  if ( rank==0 ) log_printf("TimeHDF5Close: %.2f s\n", el3);
+
+  if (rank == 0) {
+    char output_xml_file[128];
+    sprintf(output_xml_file, "./%s/%s%s%s", "fluid_hdf5", "fluid-", fsp->name, ".xdmf");
+    char dimensions_3d[128];
+    sprintf(dimensions_3d, "%lld %lld %lld", fluid_global_size[0], fluid_global_size[1], fluid_global_size[2]);
+    char dimensions_4d[128];
+    sprintf(dimensions_4d, "%lld %lld %lld %d", fluid_global_size[0], fluid_global_size[1], fluid_global_size[2], 3);
+    char orignal[128];
+    float dx = stride_x * grid->dx;
+    float dy = stride_y * grid->dy;
+    float dz = stride_z * grid->dz;
+    float x0 = grid->x0 + dx;
+    float y0 = grid->y0 + dy;
+    float z0 = grid->z0 + dz;
+    sprintf(orignal, "%f %f %f", x0, y0, z0);
+    char dxdydz[128];
+    sprintf(dxdydz, "%f %f %f", dx, dy, dz);
+
+    int nframes = num_step / fluid_interval + 1;
+
+    const int tframe = tframe_map[fsp->id];
+
+    char speciesname_new[128];
+    sprintf(speciesname_new, "fluid_%s", fsp->name);
+    if (tframe >= 1)
+    {
+      if (tframe == (nframes - 1)) {
+        invert_fluid_xml_item(output_xml_file, speciesname_new, step, dimensions_4d, dimensions_3d, 1);
+      } else {
+        invert_fluid_xml_item(output_xml_file, speciesname_new, step, dimensions_4d, dimensions_3d, 0);
+      }
+    } else {
+      create_file_with_header(output_xml_file, dimensions_3d, orignal, dxdydz, nframes, fluid_interval);
+      if (tframe == (nframes - 1)) {
+        invert_fluid_xml_item(output_xml_file, speciesname_new, step, dimensions_4d, dimensions_3d, 1);
+      } else {
+        invert_fluid_xml_item(output_xml_file, speciesname_new, step, dimensions_4d, dimensions_3d, 0);
+      }
+    }
+    tframe_map[fsp->id]++;
+  }
+}
+
+// field_dump in HDF5 format
+void HDF5Dump::field_dump(
+      DumpParameters& dumpParams,
+      int step,
+      grid_t *grid,
+      field_array_t *field_array)
+{
+  // convenience
+  const size_t istride(dumpParams.stride_x);
+  const size_t jstride(dumpParams.stride_y);
+  const size_t kstride(dumpParams.stride_z);
+
+  // Check stride values.
+  if(remainder(grid->nx, istride) != 0)
+    ERROR(("x stride must be an integer factor of nx"));
+  if(remainder(grid->ny, jstride) != 0)
+    ERROR(("y stride must be an integer factor of ny"));
+  if(remainder(grid->nz, kstride) != 0)
+    ERROR(("z stride must be an integer factor of nz"));
+
+  set_strides(istride, jstride, kstride);
+  dump_fields(dumpParams.baseFileName, step, grid, field_array, 1);
+}
+
+// hydro_dump in HDF5 format
+void HDF5Dump::hydro_dump(
+    DumpParameters& dumpParams,
+    int step,
+    species_t *sp,
+    grid_t *grid,
+    hydro_array_t *hydro_array,
+    interpolator_array_t *interpolator_array)
+{
+  // convenience
+  const size_t istride(dumpParams.stride_x);
+  const size_t jstride(dumpParams.stride_y);
+  const size_t kstride(dumpParams.stride_z);
+
+  // Check stride values.
+  if(remainder(grid->nx, istride) != 0)
+    ERROR(("x stride must be an integer factor of nx"));
+  if(remainder(grid->ny, jstride) != 0)
+    ERROR(("y stride must be an integer factor of ny"));
+  if(remainder(grid->nz, kstride) != 0)
+    ERROR(("z stride must be an integer factor of nz"));
+
+  set_strides(istride, jstride, kstride);
+  dump_hydro(dumpParams.baseFileName, step, sp, grid, hydro_array,
+      interpolator_array, 1);
+}
+
+// fluid_dump in HDF5 format
+void HDF5Dump::fluid_dump(
+    DumpParameters& dumpParams,
+    int step,
+    fluid_species_t *fsp,
+    grid_t *grid)
+{
+  // convenience
+  const size_t istride(dumpParams.stride_x);
+  const size_t jstride(dumpParams.stride_y);
+  const size_t kstride(dumpParams.stride_z);
+
+  // Check stride values.
+  if(remainder(grid->nx, istride) != 0)
+    ERROR(("x stride must be an integer factor of nx"));
+  if(remainder(grid->ny, jstride) != 0)
+    ERROR(("y stride must be an integer factor of ny"));
+  if(remainder(grid->nz, kstride) != 0)
+    ERROR(("z stride must be an integer factor of nz"));
+
+  set_strides(istride, jstride, kstride);
+  dump_fluids(dumpParams.baseFileName, step, fsp, grid, 1);
 }

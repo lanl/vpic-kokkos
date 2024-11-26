@@ -107,4 +107,18 @@ extern const char *main_body_attributeS;
     fclose(fp);                                                                                                                    \
   }
 
+#define invert_fluid_xml_item(xml_file_name, speciesname_p, time_step, dims_4d, dims_3d, add_footer_flag)                          \
+  {                                                                                                                                \
+    FILE *fp;                                                                                                                      \
+    fp = fopen(xml_file_name, "a");                                                                                                \
+    fprintf(fp, main_body_head, time_step);                                                                                        \
+    fprintf(fp, main_body_attributeS, "den", dims_3d, time_step, speciesname_p, time_step, time_step, "den");                      \
+    fprintf(fp, main_body_attributeS, "tmp", dims_3d, time_step, speciesname_p, time_step, time_step, "tmp");                      \
+    fprintf(fp, main_body_attributeS, "prs", dims_3d, time_step, speciesname_p, time_step, time_step, "prs");                      \
+    write_main_body_attribute(fp, main_body_attributeV, "u", dims_4d, dims_3d, speciesname_p, time_step, "ux", "uy", "uz");        \
+    fprintf(fp, "%s", main_body_foot);                                                                                             \
+    if (add_footer_flag)                                                                                                           \
+      fputs(footer, fp);                                                                                                           \
+    fclose(fp);                                                                                                                    \
+  }
 #endif

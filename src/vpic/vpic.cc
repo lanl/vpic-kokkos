@@ -101,6 +101,7 @@ vpic_simulation::vpic_simulation() {
 
   field_interval = 1;
   hydro_interval = 1;
+  fluid_interval = 1;
 
 }
 

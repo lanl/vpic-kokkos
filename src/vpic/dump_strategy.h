@@ -12,6 +12,7 @@
 #include "../util/util_base.h"
 #include "../util/io/FileUtils.h"
 #include "../field_advance/field_advance.h"
+#include "../fluid_advance/fluid_advance.h"
 #include "../sf_interface/sf_interface.h"
 #include "../species_advance/species_advance.h"
 #include "dump.h"
@@ -24,6 +25,7 @@
 
 // Forward declarations
 class vpic_simulation;
+struct DumpParameters;
 
 typedef enum DumpStrategyID
 {
@@ -54,18 +56,41 @@ public:
   virtual void dump_hydro(
       const char *fbase,
       int step,
-      hydro_array_t *hydro_array,
       species_t *sp,
-      interpolator_array_t *interpolator_array,
       grid_t *grid,
+      hydro_array_t *hydro_array,
+      interpolator_array_t *interpolator_array,
       int ftag) = 0;
   virtual void dump_particles(
       const char *fbase,
+      int step,
       species_t *sp,
       grid_t *grid,
-      int step,
       interpolator_array_t *interpolator_array,
       int ftag) = 0;
+  virtual void dump_fluids(
+      const char *fbase,
+      int step,
+      fluid_species_t *fsp,
+      grid_t *grid,
+      int ftag) = 0;
+  virtual void field_dump(
+      DumpParameters& dumpParams,
+      int step,
+      grid_t *grid,
+      field_array_t *field_array) = 0;
+  virtual void hydro_dump(
+      DumpParameters& dumpParams,
+      int step,
+      species_t *sp,
+      grid_t *grid,
+      hydro_array_t *hydro_array,
+      interpolator_array_t *interpolator_array) = 0;
+  virtual void fluid_dump(
+      DumpParameters& dumpParams,
+      int step,
+      fluid_species_t *fsp,
+      grid_t *grid) = 0;
 };
 
 // functions to create and delete the dump strategy
@@ -91,18 +116,41 @@ public:
   void dump_hydro(
       const char *fbase,
       int step,
-      hydro_array_t *hydro_array,
       species_t *sp,
-      interpolator_array_t *interpolator_array,
       grid_t *grid,
+      hydro_array_t *hydro_array,
+      interpolator_array_t *interpolator_array,
       int ftag);
   void dump_particles(
       const char *fbase,
+      int step,
       species_t *sp,
       grid_t *grid,
-      int step,
       interpolator_array_t *interpolator_array,
       int ftag);
+  void dump_fluids(
+      const char *fbase,
+      int step,
+      fluid_species_t *fsp,
+      grid_t *grid,
+      int ftag);
+  void field_dump(
+      DumpParameters& dumpParams,
+      int step,
+      grid_t *grid,
+      field_array_t *field_array);
+  void hydro_dump(
+      DumpParameters& dumpParams,
+      int step,
+      species_t *sp,
+      grid_t *grid,
+      hydro_array_t *hydro_array,
+      interpolator_array_t *interpolator_array);
+  void fluid_dump(
+      DumpParameters& dumpParams,
+      int step,
+      fluid_species_t *fsp,
+      grid_t *grid);
 };
 
 #ifdef VPIC_ENABLE_HDF5
@@ -322,17 +370,32 @@ class HDF5Dump : public Dump_Strategy
 public:
   int field_interval;
   int hydro_interval;
+  int fluid_interval;
   int num_step;
+  size_t stride_x = 1; // stride along each direction
+  size_t stride_y = 1;
+  size_t stride_z = 1;
+  size_t stride_particle = 1; // stride for particle dump
   std::unordered_map<species_id, size_t> tframe_map;
 
-  HDF5Dump(int _rank, int _nproc, int _ns, int _fi, int _hi) :
-    Dump_Strategy(_rank, _nproc), num_step(_ns), field_interval(_fi),
-    hydro_interval(_hi) {}
+  HDF5Dump(int _rank, int _nproc, int _ns, int _fieldi, int _hydroi, int _fluidi) :
+    Dump_Strategy(_rank, _nproc), num_step(_ns), field_interval(_fieldi),
+    hydro_interval(_hydroi), fluid_interval(_fluidi) {}
 
   // TODO: replace these with a common dump interface
   // Declare vars to use
   hydro_dump_flag_t hydro_dump_flag;
   field_dump_flag_t field_dump_flag;
+
+  void set_strides(size_t sx, size_t sy, size_t sz) {
+    stride_x = sx;
+    stride_y = sy;
+    stride_z = sz;
+  };
+
+  void set_stride_particle(size_t stride) {
+    stride_particle = stride;
+  }
 
   void dump_fields(
       const char *fbase,
@@ -343,18 +406,41 @@ public:
   void dump_hydro(
       const char *fbase,
       int step,
-      hydro_array_t *hydro_array,
       species_t *sp,
-      interpolator_array_t *interpolator_array,
       grid_t *grid,
+      hydro_array_t *hydro_array,
+      interpolator_array_t *interpolator_array,
       int ftag);
   void dump_particles(
       const char *fbase,
+      int step,
       species_t *sp,
       grid_t *grid,
-      int step,
       interpolator_array_t *interpolator_array,
       int ftag);
+  void dump_fluids(
+      const char *fbase,
+      int step,
+      fluid_species_t *fsp,
+      grid_t *grid,
+      int ftag);
+  void field_dump(
+      DumpParameters& dumpParams,
+      int step,
+      grid_t *grid,
+      field_array_t *field_array);
+  void hydro_dump(
+      DumpParameters& dumpParams,
+      int step,
+      species_t *sp,
+      grid_t *grid,
+      hydro_array_t *hydro_array,
+      interpolator_array_t *interpolator_array);
+  void fluid_dump(
+      DumpParameters& dumpParams,
+      int step,
+      fluid_species_t *fsp,
+      grid_t *grid);
 };
 #endif  // #define VPIC_ENABLE_HDF5
 

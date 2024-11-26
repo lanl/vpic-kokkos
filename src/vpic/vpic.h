@@ -37,6 +37,11 @@
 #endif
 //  #include "dumpvars.h"
 
+// Forward declarations
+class Dump_Strategy;
+class BinaryDump;
+class HDF5Dump;
+
 /* typedef FileIO FILETYPE; */
 
 const uint32_t allvars		(0xffffffff);
@@ -155,10 +160,6 @@ struct DumpParameters {
   char baseFileName[128];
 
 }; // struct DumpParameters
-
-class Dump_Strategy;
-class BinaryDump;
-class HDF5Dump;
 
 class vpic_simulation {
   friend class Dump_Strategy;
