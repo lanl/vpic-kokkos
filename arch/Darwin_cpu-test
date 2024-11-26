@@ -21,12 +21,14 @@ src_dir="${0%/*}/.."
 # Unable to find a safely writable symbol that corresponds to address 432af0
 # (the closest match was "(null)" from "./lpi_2d_F6_test.Linux").  Writing out
 # the raw address instead and keeping my fingers crossed.
+export KOKKOS_INSTALL_DIR=/projects/maehem/packages/kokkos-06-19-2024/installs/linux-centos8-haswell/gcc-11.2.0/openmpi-4.1.2/kokkos-4.0.01-openmp-4.5-debug
 
 cmake \
-  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH=$KOKKOS_INSTALL_DIR \
+  -DCMAKE_BUILD_TYPE=Debug \
   -DENABLE_INTEGRATED_TESTS=ON \
   -DENABLE_UNIT_TESTS=ON \
-  -DBUILD_INTERNAL_KOKKOS=ON \
+  -DBUILD_INTERNAL_KOKKOS=OFF \
   -DKokkos_ARCH_ZEN2=OFF \
   -DKokkos_ENABLE_PTHREAD=OFF \
   -DKokkos_ENABLE_OPENMP=ON \
