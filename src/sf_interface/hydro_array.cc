@@ -554,8 +554,8 @@ hydro_array_t::copy_to_host(bool print /*=.false.*/) {
     RANK_TO_INDEX(i, ix, iy, iz, 1, 1, 1);
     
     // if(h_l[i].ke>0) printf("%d (%d,%d,%d) %e \n",i,ix,iy,iz,h_l[i].ke);
-    if(print && h_l[i].ke>0) {
-	printf("%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%d",h_l[i].ke,h_l[i].txx,h_l[i].tyy,h_l[i].tzz,h_l[i].px,h_l[i].py,h_l[i].pz,i);
+    if(print && (h_l[i].txx*h_l[i].txx + h_l[i].tyy*h_l[i].tyy + h_l[i].tzz*h_l[i].tzz) > 0) {
+	printf("%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%d",0.5*(h_l[i].txx*h_l[i].txx + h_l[i].tyy*h_l[i].tyy + h_l[i].tzz*h_l[i].tzz),h_l[i].txx,h_l[i].tyy,h_l[i].tzz,h_l[i].px,h_l[i].py,h_l[i].pz,i);
     }	
   });
   // printf("k_h_h.extent(0)=%d\n",k_h_h.extent(0));

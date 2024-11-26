@@ -217,7 +217,7 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     int ii = k_particles_i(p_index);
 
     double ke_mc = static_cast<double>(ux)*static_cast<double>(ux) + static_cast<double>(uy)*static_cast<double>(uy) + static_cast<double>(uz)*static_cast<double>(uz); // ke_mc = |u|^2 (invariant)
-    double vz = sqrt(1.0+ke_mc);            // vz = gamma    (invariant)    
+    double vz = 1.0;//sqrt(1.0+ke_mc);            // vz = gamma    (invariant)    
     ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
     
     // Compute physical velocities
@@ -242,7 +242,7 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     k_hydro_access(i, hydro_var::px)  += dx;                         \
     k_hydro_access(i, hydro_var::py)  += dy;                         \
     k_hydro_access(i, hydro_var::pz)  += dz;                         \
-    k_hydro_access(i, hydro_var::ke)  += t*ke_mc;		     \
+    k_hydro_access(i, hydro_var::rho_m)  += t;	/* Prev. was *ke_mc; */	     \
     k_hydro_access(i, hydro_var::txx) += dx*vx;                      \
     k_hydro_access(i, hydro_var::tyy) += dy*vy;                      \
     k_hydro_access(i, hydro_var::tzz) += dz*vz;                      \
