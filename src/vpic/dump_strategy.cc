@@ -69,13 +69,11 @@ void BinaryDump::dump_fields(
   char fname[max_filename_bytes];
   FileIO fileIO;
   int dim[3];
-  printf("Calling Binary dump_fields ... \n");
+  if (rank == 0) printf("Calling Binary dump_fields ... \n");
 
-  if (!fbase)
-    ERROR(("Invalid filename"));
+  if (!fbase) ERROR(("Invalid filename"));
 
-  if (rank == 0)
-    MESSAGE(("Dumping fields to \"%s\"", fbase));
+  if (rank == 0) MESSAGE(("Dumping fields to \"%s\"", fbase));
 
   if (ftag)
     snprintf(fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step, rank);
@@ -118,10 +116,9 @@ void BinaryDump::dump_hydro(
   char fname[max_filename_bytes];
   FileIO fileIO;
   int dim[3];
-  printf("Calling Binary dump_hydro ... \n");
 
-  if (!sp)
-    ERROR(("Invalid species \"%s\"", sp->name));
+  if (!sp) ERROR(("Invalid species \"%s\"", sp->name));
+  if ( rank==0 ) log_printf("Dumping hydro for %s using Binary\n", sp->name);
 
   auto& particles = sp->k_p_d;
   auto& particles_i = sp->k_p_i_d;
@@ -136,8 +133,8 @@ void BinaryDump::dump_hydro(
       sp
   );
 
-  // This is slower in my tests
-  //synchronize_hydro_array_kokkos(hydro_array);
+  // This does not give consistent results
+  /* synchronize_hydro_array_kokkos(hydro_array); */
 
   hydro_array->copy_to_host();
 
@@ -512,8 +509,8 @@ void BinaryDump::hydro_dump(
       sp
   );
 
-  // The legacy synchronize is actually a bit faster
-  //synchronize_hydro_array_kokkos(hydro_array);
+  // This does not give consistent results
+  /* synchronize_hydro_array_kokkos(hydro_array); */
 
   hydro_array->copy_to_host();
 
@@ -657,14 +654,13 @@ void BinaryDump::fluid_dump(
 
   if( !fsp ) ERROR(( "Invalid fluid species name: %s", fsp->name ));
 
-  // The legacy synchronize is actually a bit faster
+  // This does not give consistent results
   //synchronize_hydro_array_kokkos(hydro_array);
 
   if (step > fsp->last_copied)
     fsp->copy_to_host();
 
-
-  //  synchronize_hydro_array( hydro_array );
+  //synchronize_hydro_array( hydro_array );
 
   // convenience
   const size_t istride(dumpParams.stride_x);
@@ -1005,7 +1001,6 @@ void HDF5Dump::dump_hydro(
 }
   // prepare the data
   if (!sp) ERROR(("Invalid species name: %s", sp->name));
-
   if ( rank==0 ) log_printf("Dumping hydro for %s using HDF5\n", sp->name);
 
   auto& particles = sp->k_p_d;
@@ -1021,10 +1016,11 @@ void HDF5Dump::dump_hydro(
       sp
   );
 
-  // The legacy synchronize is actually a bit faster
-  //synchronize_hydro_array_kokkos(hydro_array);
+  // This does not give consistent results
+  /* synchronize_hydro_array_kokkos(hydro_array); */
 
   hydro_array->copy_to_host();
+
   synchronize_hydro_array( hydro_array );
 
   char hname[256];
