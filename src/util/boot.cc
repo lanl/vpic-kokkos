@@ -166,6 +166,9 @@ boot_services( int * pargc,
     }
 
     Kokkos::initialize( *pargc, *pargv );
+    if (world_rank == 0) 
+    printf("#Running On Kokkos execution space %s\n\n",
+            typeid (Kokkos::DefaultExecutionSpace).name ());
 }
 
 // This operates in reverse order from boot_services

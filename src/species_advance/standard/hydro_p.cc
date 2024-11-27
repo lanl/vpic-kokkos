@@ -166,6 +166,108 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
 }
 
 void
+accumulate_hydro_p_kokkos_nomove_ngp(
+        //hydro_array_t              * RESTRICT ha,
+        k_particles_t& k_particles,
+        k_particles_i_t& k_particles_i,
+        k_hydro_d_t k_hydro,
+        //k_hydro_sv_t k_hydro_sv, // don't need, can do locally
+        k_interpolator_t& k_interp,
+        const species_t            * RESTRICT sp
+)
+{
+  k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
+
+  float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
+
+  int nv = sp->g->nv; // TODO: delete
+
+  if( !sp ) {
+    ERROR(( "Bad args" ));
+  }
+
+  c        = sp->g->cvac;
+  qsp      = sp->q;
+  mspc     = sp->m*c;
+  qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
+  qdt_4mc2 = qdt_2mc / (2*c);
+  r8V      = sp->g->r8V;
+
+  const int np        = sp->np;
+  const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
+                        VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  const int stride_21 = VOXEL(0,1,0, sp->g->nx,sp->g->ny,sp->g->nz) -
+                        VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  const int stride_43 = VOXEL(0,0,1, sp->g->nx,sp->g->ny,sp->g->nz) -
+                        VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
+
+
+  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
+    KOKKOS_LAMBDA (size_t p_index)
+    {
+
+    // Load the particle
+    double dx = k_particles(p_index, particle_var::dx);
+    double dy = k_particles(p_index, particle_var::dy);
+    double dz = k_particles(p_index, particle_var::dz);
+    double ux = k_particles(p_index, particle_var::ux);
+    double uy = k_particles(p_index, particle_var::uy);
+    double uz = k_particles(p_index, particle_var::uz);
+    double w  = k_particles(p_index, particle_var::w);
+    int ii = k_particles_i(p_index);
+
+    double ke_mc = static_cast<double>(ux)*static_cast<double>(ux) + static_cast<double>(uy)*static_cast<double>(uy) + static_cast<double>(uz)*static_cast<double>(uz); // ke_mc = |u|^2 (invariant)
+    double vz = sqrt(1.0+ke_mc);            // vz = gamma    (invariant)    
+    ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
+    
+    // Compute physical velocities
+    float vx  = ux*vz;
+    float vy  = uy*vz;
+    vz *= uz;
+
+    float t = 0.0; // used in macro
+    auto k_hydro_access = k_hydro_sv.access();
+
+    // Accumulate the hydro fields
+    #define ACCUM_HYDRO( wn, i )                        \
+    t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
+    k_hydro_access(i, hydro_var::jx)  += t*vx;                       \
+    k_hydro_access(i, hydro_var::jy)  += t*vy;                       \
+    k_hydro_access(i, hydro_var::jz)  += t*vz;                       \
+    k_hydro_access(i, hydro_var::rho) += t;                          \
+    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
+    dx = t*ux;          /* dx = (px w/V) trilin_n */    \
+    dy = t*uy;                                          \
+    dz = t*uz;                                          \
+    k_hydro_access(i, hydro_var::px)  += dx;                         \
+    k_hydro_access(i, hydro_var::py)  += dy;                         \
+    k_hydro_access(i, hydro_var::pz)  += dz;                         \
+    k_hydro_access(i, hydro_var::ke)  += t*ke_mc;		     \
+    k_hydro_access(i, hydro_var::txx) += dx*vx;                      \
+    k_hydro_access(i, hydro_var::tyy) += dy*vy;                      \
+    k_hydro_access(i, hydro_var::tzz) += dz*vz;                      \
+    k_hydro_access(i, hydro_var::tyz) += dy*vz;                      \
+    k_hydro_access(i, hydro_var::tzx) += dz*vx;                      \
+    k_hydro_access(i, hydro_var::txy) += dx*vy;
+
+    // TODO: this serial adding to try and save adds is a bit sad
+    // TODO: This is somehow going out of bounds right now
+    const int i0 = ii;
+    ACCUM_HYDRO(w, i0); // Cell i,j,k
+#   undef ACCUM_HYDRO
+    // printf("i0-7=%d,%d,%d,%d,%d,%d,%d,%d\n",i0,i1,i2,i3,i4,i5,i6,i7);
+    // printf("w0-7=%e,%e,%e,%e,%e,%e,%e,%e\n",ke_mc*w0,ke_mc*w1,ke_mc*w2,ke_mc*w3,ke_mc*w4,ke_mc*w5,ke_mc*w6,ke_mc*w7);
+    //printf("interpolator=%e,%e,%e,%e,%e,%e,%e,%e\n",ex,ey,ez,dexdy,cbx,cby,cbz,dcbxdx);
+  });
+
+  Kokkos::Experimental::contribute(k_hydro, k_hydro_sv);
+  Kokkos::fence(); // TODO: Check if I need this to block the contribute
+
+  // Perform debug printing
+}
+
+
+void
 accumulate_hydro_p_kokkos(
         //hydro_array_t              * RESTRICT ha,
         k_particles_t& k_particles,

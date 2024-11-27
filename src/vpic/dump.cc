@@ -538,7 +538,6 @@ vpic_simulation::hydro_dump( const char * speciesname,
       interpolator_array);
 }
 
-
 void
 vpic_simulation::fluid_dump( const char * speciesname,
                              DumpParameters & dumpParams ) {

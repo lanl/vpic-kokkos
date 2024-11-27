@@ -13,7 +13,8 @@ vpic_simulation::initialize( int argc,
   // Initialize Kokkos
   // Moved to boot servcies
   //Kokkos::initialize( argc, argv );
-
+  kokkos_rng = new kokkos_rng_pool_t(rank()); // seed_entropy will re-seed.
+  
   // Hybrid-VPIC specific parameter defaults
   grid->eta           = 0.;
   grid->hypereta      = 0.;
