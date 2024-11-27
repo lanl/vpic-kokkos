@@ -770,6 +770,8 @@ void BinaryDump::fluid_dump(
   if( fileIO.close() ) ERROR(( "File close failed on fluid dump!!!" ));
 }
 
+#ifdef VPIC_ENABLE_HDF5
+
 /*****************************************************************************
  * HDF5 dump IO
  *****************************************************************************/
@@ -1709,3 +1711,6 @@ void HDF5Dump::fluid_dump(
   set_strides(istride, jstride, kstride);
   dump_fluids(dumpParams.baseFileName, step, fsp, grid, 1);
 }
+
+#endif // #ifdef VPIC_ENABLE_HDF5
+
