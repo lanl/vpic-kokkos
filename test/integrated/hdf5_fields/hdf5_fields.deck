@@ -1,0 +1,361 @@
+///////////////////////////////////////////////////////
+//
+//  Test deck for dumping and checking HDF5 field dump
+//
+///////////////////////////////////////////////////////
+
+begin_globals {
+
+  int restart_interval;
+  int energies_interval;
+  int fields_interval;
+  int ehydro_interval;
+  int Hhydro_interval;
+  int eparticle_interval;
+  int Hparticle_interval;
+  int quota_check_interval; // How frequently to check if quota exceeded
+
+  int rtoggle;              // enables save of last 2 restart dumps for safety
+  int write_restart;        // global flag for all to write restart files
+  int write_end_restart;    // global flag for all to write restart files
+
+  double quota_sec;         // Run quota in seconds
+  double b0;                // B0
+  double v_A;
+  double topology_x;        // domain topology
+  double topology_y;
+  double topology_z;
+
+  // Output variables
+  DumpParameters fdParams;
+  DumpParameters hHdParams;
+  DumpParameters flHdParams;
+  DumpParameters flOdParams;
+  std::vector<DumpParameters *> outputParams;
+
+};
+
+begin_initialization {
+
+  // Use natural hybrid-PIC units:
+  double ec   = 1.0;  // Charge normalization
+  double mi   = 1.0;  // Mass normalization
+  double mu0  = 1.0;  // Magnetic constanst
+  double b0 = 1.0;    // Magnetic field
+  double n0 = 1.0;    // Density
+
+  // Derived normalization parameters:
+  double v_A = b0/sqrt(mu0*n0*mi); // Alfven velocity
+  double wci = ec*b0/mi;           // Cyclotron freq.
+  double di = v_A/wci;             // Ion skin-depth
+
+  // Initial conditions for model
+  double betai_par = 1.0;   // Ratio of ion thermal to magnetic pressure.
+  double Tperp_Tpar = 1.0;  // Initial temperature anisotropy for ions.
+  //double gamma = 5.0/3.0;   // Ratio of specific heats.
+  double Tipar_Te = 1.0;    // Initial ratio of electron temperature to parallel ion temperature.
+
+  double eta = 0.0;      // Plasma resistivity.
+  //double hypereta = 0.0; // Plasma hyper-resistivity.
+
+  // Derived quantities for model:
+  double Tipar = betai_par*b0*b0/2.0/n0;
+  double vthipar = sqrt(Tipar/mi);
+  double vthiperp = vthipar*sqrt(Tperp_Tpar);
+  double Te = Tipar/Tipar_Te;
+
+  // Numerical settings
+  double taui    = 60;    // Simulation run time in wci^-1.
+  double quota   = 23.5;   // run quota in hours
+  double quota_sec = quota*3600;  // Run quota in seconds
+
+  double Lx = 2.0*di;   // size of box in x dimension
+  double Ly = 2.0*di;   // size of box in y dimension
+  double Lz = 2.0*di;   // size of box in z dimension
+
+  double nx = 4;
+  double ny = 4;
+  double nz = 4;
+
+  int nppc = 100; // Average number of macro particle per cell per species
+
+  double topology_x = 2; // Number of domains in x, y, and z
+  double topology_y = 1;
+  double topology_z = 1;
+
+  // Derived numerical parameters
+  double hx = Lx/nx;
+  double hy = Ly/ny;
+  double hz = Lz/nz;
+
+  double Ni  = nppc*nx*ny*nz;       // Total macroparticle ions in box
+  double Np  = n0*Lx*Ly*Lz;         // Total number of physical background ions
+  Ni = trunc_granular(Ni,nproc());  // Make it divisible by number of processors
+  double qi = ec*Np/Ni;             // Charge per macro ion
+
+  // Determine the time step
+  double dg = courant_length(Lx,Ly,Lz,nx,ny,nz);  // courant length
+  double dt = 0.01/wci;                           // time step
+
+  double sort_interval = 10;  // How often to sort particles
+
+  // Intervals for output
+  int restart_interval = 3000;
+  int energies_interval = 200;
+  int interval = 50;//int(0.2/(wci*dt));
+  int fields_interval = interval;
+  int ehydro_interval = interval;
+  int Hhydro_interval = interval;
+  int eparticle_interval = 40*interval;
+  int Hparticle_interval = 0*interval;
+  int quota_check_interval     = 100;
+
+  ///////////////////////////////////////////////
+  // Setup high level simulation parameters
+  num_step             = 4;
+  status_interval      = 2;
+  sync_shared_interval = status_interval/2;
+  clean_div_e_interval = status_interval/2;
+  clean_div_b_interval = status_interval/2;
+
+  global->restart_interval     = restart_interval;
+  global->energies_interval    = energies_interval;
+  global->fields_interval      = fields_interval;
+  global->ehydro_interval      = ehydro_interval;
+  global->Hhydro_interval      = Hhydro_interval;
+  global->eparticle_interval   = eparticle_interval;
+  global->Hparticle_interval   = Hparticle_interval;
+  global->quota_check_interval = quota_check_interval;
+  global->quota_sec            = quota_sec;
+  global->rtoggle              = 0;
+
+  global->b0  = b0;
+  global->v_A  = v_A;
+
+  global->topology_x  = topology_x;
+  global->topology_y  = topology_y;
+  global->topology_z  = topology_z;
+
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Setup the grid
+
+  // Setup basic grid parameters
+  define_units(1.0, 1.0);//c, eps0 );
+  define_timestep( dt );
+
+  // Define the grid
+  define_periodic_grid( -0.5*Lx, -0.5*Ly, -0.5*Lz,    // Low corner
+                         0.5*Lx,  0.5*Ly, 0.5*Lz,     // High corner
+                         nx, ny, nz,             // Resolution
+                         topology_x, topology_y, topology_z); // Topology
+
+  //  grid->te = Te;
+  //  grid->den = 1.0;
+  grid->eta = eta;
+  //  grid->hypereta = hypereta;
+  //  grid->gamma = gamma;
+
+  //  grid->nsub = 1;
+  //  grid->nsm= 0;
+
+
+  // ***** Set Field Boundary Conditions *****
+  sim_log("Periodic boundaries");
+  // Do nothing - periodic is default.
+
+  // ***** Set Particle Boundary Conditions *****
+  // Do nothing - periodic is default.
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Setup materials
+  sim_log("Setting up materials. ");
+  define_material( "vacuum", 1 );
+
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Finalize Field Advance
+  define_field_array(NULL); // second argument is damp, default to 0
+  sim_log("Finalized Field Advance");
+
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Setup the particle species
+
+  sim_log("Setting up particle species. ");
+  double nmax = 1.5*Ni/nproc();
+  double nmovers = 0.1*nmax;
+  double sort_method = 1;   // 0=in place and 1=out of place
+  species_t *ion = define_species("ion", ec, mi, nmax, nmovers, sort_interval, sort_method);
+
+  ////////////////////////////
+  // Load fields
+  // Just a homogeneous value in E & B
+  sim_log( "Loading fields" );
+  set_region_field(everywhere, 5.0, 6.0, 7.0, 17., 18., 19.);
+  set_region_te( everywhere, Te);
+
+  ///////////////////////////////////////////////////
+  // Log diagnostic information about this simulation
+
+  sim_log( "***********************************************" );
+  sim_log("* Topology:                       " << topology_x
+    << " " << topology_y << " " << topology_z);
+  sim_log ( "taui = " << taui );
+  sim_log ( "num_step = " << num_step );
+  sim_log ( "Lx/di = " << Lx/di );
+  sim_log ( "Ly/di = " << Ly/di );
+  sim_log ( "Lz/di = " << Lz/di );
+  sim_log ( "nx = " << nx );
+  sim_log ( "ny = " << ny );
+  sim_log ( "nz = " << nz );
+  sim_log ( "nproc = " << nproc()  );
+  sim_log ( "nppc = " << nppc );
+  sim_log ( "b0 = " << b0 );
+  sim_log ( "v_A = " << v_A );
+  sim_log ( "di = " << di );
+  sim_log ( "Ni = " << Ni );
+  sim_log ( "total # of particles = " << Ni );
+  sim_log ( "dt*wci = " << wci*dt );
+  sim_log ( "energies_interval: " << energies_interval );
+  sim_log ( "dx/di = " << Lx/(di*nx) );
+  sim_log ( "dy/di = " << Ly/(di*ny) );
+  sim_log ( "dz/di = " << Lz/(di*nz) );
+  sim_log ( "n0 = " << n0 );
+
+  // Dump simulation information to file "info.bin" for translate script
+  if (rank() == 0 ) {
+
+    FileIO fp_info;
+
+    // write binary info file
+
+    if ( ! (fp_info.open("info.bin", io_write)==ok) ) ERROR(("Cannot open file."));
+
+    fp_info.write(&topology_x, 1 );
+    fp_info.write(&topology_y, 1 );
+    fp_info.write(&topology_z, 1 );
+
+    fp_info.write(&Lx, 1 );
+    fp_info.write(&Ly, 1 );
+    fp_info.write(&Lz, 1 );
+
+    fp_info.write(&nx, 1 );
+    fp_info.write(&ny, 1 );
+    fp_info.write(&nz, 1 );
+
+    fp_info.write(&dt, 1 );
+
+    fp_info.close();
+
+  }
+
+  // different random numbers on different ranks
+  seed_entropy(rank());
+
+  // Note: No particles. This is fine for field tests, but we need to come up
+  // with something better for tests of hydro output and particle dumps
+
+  // LOAD PARTICLES
+  sim_log( "Loading particles" );
+
+  // Do a fast load of the particles
+  seed_entropy( rank() );  //Generators desynchronized
+  double xmin = grid->x0 , xmax = grid->x0+(grid->dx)*(grid->nx);
+  double ymin = grid->y0 , ymax = grid->y0+(grid->dy)*(grid->ny);
+  double zmin = grid->z0 , zmax = grid->z0+(grid->dz)*(grid->nz);
+
+  sim_log( "-> Seeding particles" );
+
+  repeat ( Ni/nproc() ) {
+    double x, y, z, ux, uy, uz;
+
+    x = uniform( rng(0), xmin, xmax );
+    y = uniform( rng(0), ymin, ymax );
+    z = uniform( rng(0), zmin, zmax );
+
+    ux = normal( rng(0), 0, vthipar);
+    uy = normal( rng(0), 0, vthiperp);
+    uz = normal( rng(0), 0, vthiperp);
+
+    inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0);
+
+  }
+
+  sim_log( "Finished loading particles" );
+
+  // Deck only works if VPIC was build with HDF support. Check for that:
+  #ifndef VPIC_ENABLE_HDF5
+  #error "VPIC_ENABLE_HDF5" is required
+  #endif
+
+  // Explicitly enable HDF5 backend for IO dump
+  enable_hdf5_dump();
+}
+
+
+begin_diagnostics {
+
+  // Write field output in every timestep
+#define set_region_field_loc( rgn,                                    \
+                          eqn_ex, eqn_ey, eqn_ez,                     \
+                          eqn_bx, eqn_by, eqn_bz ) do {               \
+    const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;      \
+    const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;      \
+    const double _c  = grid->cvac;                                    \
+    const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;      \
+    for( int _k=0; _k<_nz+2; _k++ ) { const double _zl = _z0 + _dz*(_k-1.5), _ze = _z0 + _dz*_k, _zc = _z0 + _dz*(_k-0.5); \
+    for( int _j=0; _j<_ny+2; _j++ ) { const double _yl = _y0 + _dy*(_j-1.5), _ye = _y0 + _dy*_j, _yc = _y0 + _dy*(_j-0.5); field_t *_f = &field(0,_j,_k); \
+    for( int _i=0; _i<_nx+2; _i++ ) { const double _xl = _x0 + _dx*(_i-1.5), _xe = _x0 + _dx*_i, _xc = _x0 + _dx*(_i-0.5); double x, y, z; \
+          memset(_f, 0, sizeof(field_t)) ;  \
+          int _rccc, _rlcc, _rclc, _rllc, _rccl, _rlcl, _rcll;        \
+          x = _xc; y = _yc; z = _zc; _rccc = (rgn);                   \
+          x = _xl;                   _rlcc = (rgn);                   \
+          x = _xc; y = _yl;          _rclc = (rgn);                   \
+          x = _xl;                   _rllc = (rgn);                   \
+          x = _xc; y = _yc; z = _zl; _rccl = (rgn);                   \
+          x = _xl;                   _rlcl = (rgn);                   \
+          x = _xc; y = _yl;          _rcll = (rgn);                   \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc || _rccl || _rcll ) _f->ex  =    (eqn_ex); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl || _rlcc || _rlcl ) _f->ey  =    (eqn_ey); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc || _rclc || _rllc ) _f->ez  =    (eqn_ez); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->cbx = _c*(eqn_bx); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc )                   _f->cby = _c*(eqn_by); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl )                   _f->cbz = _c*(eqn_bz); \
+          _f++;               \
+    }}}                                                               \
+  } while(0)
+  set_region_field_loc(everywhere, 5., 6., 7., 17., 18., 19.);
+  field_array->copy_to_device();
+  dump_fields("fields");
+
+  // Force a restart after step 1 to make sure that dump/restart works too
+  if(step() == 1) {
+      sim_log("Force restart");
+      dump_mkdir("restart0");
+      char fname[256];
+      sprintf(fname, "%s/restore.0.%i", "restart0", world_rank );
+      checkpt_objects(fname);
+      sim_log("Restart dump restart completed.");
+      mp_barrier();
+  }
+
+  // If we reach this in the last step without any fails we probably did well enough
+  if(step() == num_step) {
+    sim_log("passed");
+  }
+}
+
+begin_particle_injection {
+}
+
+begin_current_injection {
+}
+
+begin_field_injection {
+}
+
+begin_particle_collisions {
+}
+
+
