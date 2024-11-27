@@ -1,0 +1,74 @@
+#! /usr/bin/env bash
+#~----------------------------------------------------------------------------~#
+# placeholder
+#~----------------------------------------------------------------------------~#
+
+#------------------------------------------------------------------------------#
+# Get the path to the project from which this script was called
+#------------------------------------------------------------------------------#
+
+src_dir="${0%/*}/.."
+
+#------------------------------------------------------------------------------#
+# Check required environment variables
+#------------------------------------------------------------------------------#
+
+#module purge
+#module load PrgEnv-gnu
+#module load cmake cuda cpe-cuda
+
+module swap PrgEnv-cray PrgEnv-gnu
+module load cudatoolkit craype-accel-nvidia90; module list
+export CRAY_ACCEL_TARGET=nvidia90
+export CRAY_TCMALLOC_MEMFS_FORCE=1
+export CRAYPE_LINK_TYPE=dynamic
+export CRAY_ACCEL_VENDOR=nvidia
+export MPI_GPU_SUPPORT=1
+export CC=cc
+export CXX=CC
+
+module list 2>&1 | tee modules.txt
+
+
+
+#-D KOKKOS_CUDA_ARCH=sm_90                                     \
+#    -D KOKKOS_ARCH_FLAGS="-DKokkos_ARCH_HOPPER90=ON;"             \
+
+#------------------------------------------------------------------------------#
+# Call CMake command
+#------------------------------------------------------------------------------#
+
+# The flag -rdynamic removes warnings of the form:
+# Unable to find a safely writable symbol that corresponds to address 432af0
+# (the closest match was "(null)" from "./lpi_2d_F6_test.Linux").  Writing out
+# the raw address instead and keeping my fingers crossed.
+
+# In the Cray environment, there is a bit of confusion about compilers and
+# wrappers and such.  I've worked around it with some ad hoc CMake magic, but
+# this line might be helpful when troubleshooting (run it when compiling user
+# decks too).
+#export NVCC_WRAPPER_DEFAULT_COMPILER=$(which CC)
+
+CRAYPE_LINK_TYPE=dynamic cmake \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DENABLE_INTEGRATED_TESTS=OFF \
+  -DENABLE_UNIT_TESTS=OFF \
+  -DBUILD_INTERNAL_KOKKOS=ON \
+  -DENABLE_KOKKOS_CUDA=ON \
+  -DKokkos_ARCH_HOPPER90=ON \
+  -DKokkos_ENABLE_PTHREAD=OFF \
+  -DKokkos_ENABLE_OPENMP=ON \
+  -DKokkos_ENABLE_DEBUG=ON \
+  -DKokkos_ENABLE_IMPL_CUDA_MALLOC_ASYNC=off \
+  -DVPIC_ENABLE_VARIABLE_CHARGE=ON \
+  -DCMAKE_CXX_COMPILER="CC" \
+  -DCMAKE_CXX_FLAGS="-g -rdynamic "\
+  $src_dir
+
+#------------------------------------------------------------------------------#
+# vim: syntax=sh
+#------------------------------------------------------------------------------#
+
+#~---------------------------------------------------------------------------~-#
+# placeholder
+#~---------------------------------------------------------------------------~-#

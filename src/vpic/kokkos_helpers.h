@@ -23,7 +23,11 @@
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
-#define HYDRO_VAR_COUNT 14
+#ifdef VARIABLE_CHARGE
+  #define HYDRO_VAR_COUNT 16
+#else
+  #define HYDRO_VAR_COUNT 14
+#endif
 #define NUM_J_DIMS 4
 #define FLUID_VAR_COUNT 6
 
@@ -283,6 +287,10 @@ namespace hydro_var {
         tyz = 11,
         tzx = 12,
         txy = 13,
+#ifdef VARIABLE_CHARGE
+	min_q = 14,
+	max_q = 15,
+#endif
     };
 };
 

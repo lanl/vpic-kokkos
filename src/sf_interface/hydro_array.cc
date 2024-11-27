@@ -549,7 +549,11 @@ hydro_array_t::copy_to_host(bool print /*=.false.*/) {
     h_l[i].tyz = k_h(i, hydro_var::tyz);
     h_l[i].tzx = k_h(i, hydro_var::tzx);
     h_l[i].txy = k_h(i, hydro_var::txy);
-
+#ifdef VARIABLE_CHARGE
+    h_l[i].qmin = k_h(i, hydro_var::min_q);
+    h_l[i].qmax	= k_h(i, hydro_var::max_q);
+#endif
+    
     int ix, iy, iz;
     RANK_TO_INDEX(i, ix, iy, iz, 1, 1, 1);
     

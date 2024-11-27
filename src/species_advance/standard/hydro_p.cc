@@ -303,6 +303,7 @@ accumulate_hydro_p_kokkos(
 #ifdef VARIABLE_CHARGE
   dt_2mc  = (sp->g->dt)/(2*mspc); // Multiply by particle q later
   dt_4mc2 = dt_2mc / (2*c);
+  Kokkos::View<int*, Kokkos::DefaultExecutionSpace> particle_count("particle_count", nv);
 #else
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
@@ -333,7 +334,7 @@ accumulate_hydro_p_kokkos(
 #ifdef VARIABLE_CHARGE
     float qp = k_particles(p_index, particle_var::qp);
     float qdt_2mc = qp*dt_2mc;
-    float qdt_4mc2 = qp*qdt_4mc2; 
+    float qdt_4mc2 = qp*qdt_4mc2;
 #endif
     int ii = k_particles_i(p_index);
 
@@ -428,6 +429,11 @@ accumulate_hydro_p_kokkos(
 
 #ifdef VARIABLE_CHARGE
     float q = qp;
+    
+    Kokkos::atomic_fetch_min(&k_hydro(ii, hydro_var::min_q), q);
+    Kokkos::atomic_fetch_max(&k_hydro(ii, hydro_var::max_q), q);
+
+    Kokkos::atomic_add(&particle_count(ii), 1); // number of particles in each cell
 #else
     float q = qsp;
 #endif
@@ -483,6 +489,22 @@ accumulate_hydro_p_kokkos(
 #   undef ACCUM_HYDRO
   });
 
+#ifdef VARIABLE_CHARGE
+  // Give nan values to cells without particles
+  Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, nv),
+    KOKKOS_LAMBDA(size_t ii)
+    {
+      // Calculate mean charge only if there are particles in the cell
+      if (particle_count(ii) > 0) {
+	//	k_hydro(ii, hydro_var::avg_q) /= static_cast<float>(particle_count(ii));
+      } else {
+	//	k_hydro(ii, hydro_var::avg_q) = std::numeric_limits<double>::quiet_NaN();
+	k_hydro(ii, hydro_var::min_q) = std::numeric_limits<double>::quiet_NaN();
+	k_hydro(ii, hydro_var::max_q) = std::numeric_limits<double>::quiet_NaN();
+      }
+    });
+#endif
+  
   Kokkos::Experimental::contribute(k_hydro, k_hydro_sv);
   Kokkos::fence(); // TODO: Check if I need this to block the contribute
 
