@@ -32,6 +32,8 @@ stages:
       ${DEFINES:+${DEFINES}}
       ..
     - make -j ${j} -l ${l} VERBOSE=1
+    - module load miniconda3
+    - source activate myenv
     - make test CTEST_OUTPUT_ON_FAILURE=1
     - make install DESTDIR=${PWD}/install
       #TODO: set OMP_PROC_BIND=spread and OMP_PLACES=threads (or similar)
