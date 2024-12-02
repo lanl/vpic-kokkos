@@ -5,6 +5,7 @@
 
 cmake_minimum_required(VERSION 3.9)
 cmake_policy(SET CMP0074 NEW)
+ENABLE_LANGUAGE(C)
 
 #~----------------------------------------------------------------------------~#
 # VPIC project configuration

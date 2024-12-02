@@ -27,8 +27,21 @@ export MPI_GPU_SUPPORT=1
 export CC=cc
 export CXX=CC
 
-module list 2>&1 | tee modules.txt
 
+#------------------------------------------------------------------------------#
+# Choose support for HDF5 output for fields and hydro
+#------------------------------------------------------------------------------#
+# If SET_HDF5=OFF, the output of fields and hydro are in binary format.
+# If SET_HDF5=ON, the output of fields and hydro are in HDF5 format.
+#------------------------------------------------------------------------------#                                                                                                                                  
+# SET_HDF5="OFF"
+SET_HDF5="ON"
+if [ "$SET_HDF5" = "ON" ]
+then
+    module load cray-hdf5-parallel
+fi
+
+module list 2>&1 | tee modules.txt
 
 
 #-D KOKKOS_CUDA_ARCH=sm_90                                     \
@@ -62,6 +75,7 @@ CRAYPE_LINK_TYPE=dynamic cmake \
   -DKokkos_ENABLE_IMPL_CUDA_MALLOC_ASYNC=off \
   -DCMAKE_CXX_COMPILER="CC" \
   -DCMAKE_CXX_FLAGS="-g -rdynamic "\
+  -DVPIC_ENABLE_HDF5=${SET_HDF5} \
   $src_dir
 
 #------------------------------------------------------------------------------#
