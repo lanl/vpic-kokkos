@@ -1758,123 +1758,100 @@ void k_local_adjust_rhob(field_array_t* fa, const grid_t* g) {
 
 //Hybrid local B field
 
+#define F(ind,v) k_field(f##ind##_index, field_var::v)
+
 template<typename T> void apply_hyb_local_b(int i, int j, int k,
                                         const int nx, const int ny, const int nz,
-                                        const float cdt_dx, const float cdt_dy, const float cdt_dz,
-                                        float higend, field_array_t* RESTRICT f, const grid_t* g) {}
+                                        field_array_t* RESTRICT f, const grid_t* g) {}
+                                    
+#define APPLYLOCAL(x_,y_,z_)						\
+  int bc = g->bc[BOUNDARY(i,j,k)];					\
+  k_field_t k_field = f->k_f_d;						\
+  Kokkos::MDRangePolicy<Kokkos::Rank<2> > x_##_face({1,1},{n##y_+1,n##z_+1});\
+  if(bc < 0 || bc >= world_size) {					\
+    int x_ = (i+j+k)<0 ? 0 : n##x_+1;					\
+    switch(bc) {							\
+    case anti_symmetric_fields: 					\
+          Kokkos::parallel_for("apply_hyb_local_b: anti-symmetric_fields", \
+      x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##x_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##x_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##y_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##y_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##z_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##z_);\
+	});								\
+      break;								\
+    case symmetric_fields:						\
+     Kokkos::parallel_for("apply_hyb_local_b: symmetric_fields", \
+      x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##x_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##x_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##y_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##y_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##z_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##z_);\
+	});								\
+      break;								\
+    default:								\
+      ERROR(("Bad boundary condition encountered."));			\
+      break;								\
+    }									\
+  }									\
 
 template<> void apply_hyb_local_b<XYZ>(int i, int j, int k,
 				       const int nx, const int ny, const int nz,
-				       const float cdt_dx, const float cdt_dy, const float cdt_dz,
-				       float higend, field_array_t* RESTRICT f, const grid_t* g) {
-  //  float drive, decay;
-  int bc = g->bc[BOUNDARY(i,j,k)];
-  k_field_t k_field = f->k_f_d;
-  //  Kokkos::MDRangePolicy<Kokkos::Rank<2> > zy_edge({1,1},{nz+1,ny+2});
-  //  Kokkos::MDRangePolicy<Kokkos::Rank<2> > yz_edge({1,1},{nz+2,ny+1});
-  Kokkos::MDRangePolicy<Kokkos::Rank<2> > x_face({1,1},{ny+1,nz+1}); // To-do: Set corners?
-  
-  if(bc < 0 || bc >= world_size) {
-    int ghost = (i+j+k)<0 ? 0 : nx+1;
-    //    int face  = (i+j+k)<0 ? 1 : nx+1;
-    switch(bc) {
-    case anti_symmetric_fields:
-      Kokkos::parallel_for("apply_hyb_local_b<XYZ>: anti_symmetric_fields: X Face loop", x_face, KOKKOS_LAMBDA(const int y, const int z) {
-	  k_field(VOXEL(ghost,y,z,nx,ny,nz), field_var::cbx) = k_field(VOXEL(ghost-i,y-j,z-k,nx,ny,nz), field_var::cbx);
-	  k_field(VOXEL(ghost,y,z,nx,ny,nz), field_var::cby) = k_field(VOXEL(ghost-i,y-j,z-k,nx,ny,nz), field_var::cby);
-	  k_field(VOXEL(ghost,y,z,nx,ny,nz), field_var::cbz) = k_field(VOXEL(ghost-i,y-j,z-k,nx,ny,nz), field_var::cbz);
-	});
-      break;
-    default:
-      ERROR(("Bad boundary condition encountered."));
-      break;
-    }
-  }
-}
+				       field_array_t* RESTRICT f, const grid_t* g) {APPLYLOCAL(x,y,z);}
 
 template<> void apply_hyb_local_b<YZX>(int i, int j, int k,
 				       const int nx, const int ny, const int nz,
-				       const float cdt_dx, const float cdt_dy, const float cdt_dz,
-				       float higend, field_array_t* RESTRICT f, const grid_t* g) {
-  //  float drive, decay;
-  int bc = g->bc[BOUNDARY(i,j,k)];
-  k_field_t k_field = f->k_f_d;
-
-  Kokkos::MDRangePolicy<Kokkos::Rank<2> > y_face({1,1},{nz+1,nx+1}); // To-do: Set corners?
-  
-  if(bc < 0 || bc >= world_size) {
-    int ghost = (i+j+k)<0 ? 0 : ny+1;
-    //    int face = (i+j+k)<0 ? 1 : ny+1;
-    //    Kokkos::MDRangePolicy<Kokkos::Rank<2> > xz_edge({1,1},{nz+2,nx+1});
-    //    Kokkos::MDRangePolicy<Kokkos::Rank<2> > zx_edge({1,1},{nz+1,nx+2});
-    
-    switch(bc) {
-    case anti_symmetric_fields:
-      Kokkos::parallel_for("apply_hyb_local_b<YZX>: anti_symmetric_fields: Y Face loop", y_face, KOKKOS_LAMBDA(const int z, const int x) {
-	  const int y = ghost;
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cbx);
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cby);
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cbz);
-	});
-      break;
-    default:
-      ERROR(("Bad boundary condition encountered."));
-      break;
-    }
-  }
-}
-
+				       field_array_t* RESTRICT f, const grid_t* g) {APPLYLOCAL(y,z,x);}
 
 template<> void apply_hyb_local_b<ZXY>(int i, int j, int k,
 				       const int nx, const int ny, const int nz,
-				       const float cdt_dx, const float cdt_dy, const float cdt_dz,
-				       float higend, field_array_t* RESTRICT f, const grid_t* g) {
-  //  float drive, decay;
-  int bc = g->bc[BOUNDARY(i,j,k)];
-  k_field_t k_field = f->k_f_d;
-  Kokkos::MDRangePolicy<Kokkos::Rank<2> > z_face({1,1},{nx+1,ny+1}); // To-do: Set corners? 
-  if(bc < 0 || bc >= world_size) {
-    int ghost = (i+j+k)<0 ? 0 : nz+1;
-    //    int face = (i+j+k)<0 ? 1 : nz+1;
-    //    Kokkos::MDRangePolicy<Kokkos::Rank<2> > yx_edge({1,1},{ny+1,nx+2});
-    //    Kokkos::MDRangePolicy<Kokkos::Rank<2> > xy_edge({1,1},{ny+2,nx+1});
-    switch(bc) {
-    case anti_symmetric_fields:
-      Kokkos::parallel_for("apply_hyb_local_b<ZXY>: anti_symmetric_fields: Z Face loop", z_face, KOKKOS_LAMBDA(const int x, const int y) {
-	  const int z = ghost;
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cbx);
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cby);
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cbz);
-	});
-      break;
-    default:
-      ERROR(("Bad boundary condition encountered."));
-      break;
-    }
-  }
-}
+				       field_array_t* RESTRICT f, const grid_t* g) {APPLYLOCAL(z,x,y);}
 
 
 void
 k_hyb_local_ghost_b( field_array_t      * RESTRICT f,
                     const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
-  const float cdt_dx = g->cvac*g->dt*g->rdx;
-  const float cdt_dy = g->cvac*g->dt*g->rdy;
-  const float cdt_dz = g->cvac*g->dt*g->rdz;
-  float higend;
 
-  higend = ( nx>1 || ny>1 || nz>1 ) ? 1.03527618 : 1.; // To-do: Can remove this, or replace with hybrid specific absorb bcs.
-  apply_hyb_local_b<XYZ>(-1,0,0,nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
-  apply_hyb_local_b<YZX>(0,-1,0,nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
-  apply_hyb_local_b<ZXY>(0,0,-1,nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
-  apply_hyb_local_b<XYZ>(1,0,0,nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
-  apply_hyb_local_b<YZX>(0,1,0,nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
-  apply_hyb_local_b<ZXY>(0,0,1,nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
+  apply_hyb_local_b<XYZ>(-1,0,0,nx,ny,nz,f,g);
+  apply_hyb_local_b<YZX>(0,-1,0,nx,ny,nz,f,g);
+  apply_hyb_local_b<ZXY>(0,0,-1,nx,ny,nz,f,g);
+  apply_hyb_local_b<XYZ>(1,0,0, nx,ny,nz,f,g);
+  apply_hyb_local_b<YZX>(0,1,0, nx,ny,nz,f,g);
+  apply_hyb_local_b<ZXY>(0,0,1, nx,ny,nz,f,g);
 }
+
+#undef APPLYLOCAL
 
 
 //Hybrid local E field
+
+#define F(ind,v) k_field(f##ind##_index, field_var::v)
+
+#define INIT_STENCIL()								\
+  size_t fg_index  = VOXEL(x  ,   y  ,   z  ,    nx,ny,nz);			\
+  size_t f0_index  = VOXEL(x-i,   y-j,   z-k,    nx,ny,nz);			\
+  size_t fx_index  = VOXEL(x+1-i, y-j,   z-k,    nx,ny,nz);			\
+  size_t fy_index  = VOXEL(x-i,   y+1-j, z-k,    nx,ny,nz);			\
+  size_t fz_index  = VOXEL(x-i,   y-j,   z+1-k,  nx,ny,nz);			\
+  size_t fmx_index = VOXEL(x-1-i, y-j,   z-k,    nx,ny,nz);			\
+  size_t fmy_index = VOXEL(x-i,   y-1-j, z-k,    nx,ny,nz);			\
+  size_t fmz_index = VOXEL(x-i,   y-j,   z-1-k,  nx,ny,nz);			\
+  float  rho = half*( (one-hstep)*( F(0,rhof) + F(0,rhofold) ) + hstep*( three*F(0,rhof) - F(0,rhofold)) ) ; \
+  rho = (rho > den_floor_ohm) ? rho :  den_floor_ohm;			\
+  float  invrho = one/rho;						\
+  float hallinvrho = (rho > den_floor_ohm) ? invrho : 0 ;		\
+  float  ux = invrho*half*( (one-hstep)*( F(0,jfx) + F(0,jfxold) ) + hstep*( three*F(0,jfx) - F(0,jfxold)) ) ; \
+  float  uy = invrho*half*( (one-hstep)*( F(0,jfy) + F(0,jfyold) ) + hstep*( three*F(0,jfy) - F(0,jfyold)) ) ; \
+  float  uz = invrho*half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + hstep*( three*F(0,jfz) - F(0,jfzold)) ) ; 
+
+
+#define E(x_,y_,z_)							\
+  F(g,e##x_) =								\
+    invrho * (F(0,cb##z_) + F(0,cb##z_##0)) * ( p##z_*( F(z_,cb##x_) - F(m##z_,cb##x_) ) - p##x_*( F(x_,cb##z_) - F(m##x_,cb##z_)) ) \
+   +invrho * (F(0,cb##y_) + F(0,cb##y_##0)) * ( p##y_*( F(y_,cb##x_) - F(m##y_,cb##x_) ) - p##x_*( F(x_,cb##y_) - F(m##x_,cb##y_)) ) \
+       - u##y_ * (F(0,cb##z_)+F(0,cb##z_##0))  +   u##z_ * (F(0,cb##y_)+F(0,cb##y_##0)) \
+      - invrho * ( p##x_*( F(x_,pe) - F(m##x_,pe)) )			\
+    + eta*F(0,tcay)*( p##y_*( F(y_,cb##z_) - F(m##y_,cb##z_) ) - p##z_*( F(z_,cb##y_) - F(m##z_,cb##y_) ) );\
+  F(g,e##x_) *= F(0,tcaz);
 
 template<typename T> void apply_hyb_local_e(int i, int j, int k,
                                         const int nx, const int ny, const int nz,
@@ -1890,16 +1867,33 @@ template<typename T> void apply_hyb_local_e(int i, int j, int k,
     case anti_symmetric_fields:						\
       Kokkos::parallel_for("apply_hyb_local_e: anti_symmetric_fields", \
       x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##x_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##x_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##x_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##x_);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##y_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##y_);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##z_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##z_);\
 	});								\
+      break;       							\
+   case symmetric_fields:						\
+      {const float p##x_ = 0;						\
+      const float p##y_ = (n##y_>1) ? 0.5*g->rd##y_ : 0;		\
+      const float p##z_ = (n##z_>1) ? 0.5*g->rd##z_ : 0;		\
+      const float eta = g->eta;						\
+      const float den_floor_ohm = g->den_floor_ohm;			\
+      const float hstep = 0.5;						\
+      const float half = 1./2., one = 1., three = 3.;			\
+      size_t ind2  = 2, ind1 = 1;					\
+      Kokkos::parallel_for("apply_hyb_local_e: symmetric_fields", 	\
+      x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
+	INIT_STENCIL();							\
+	E(x_,y_,z_);							\
+	E(y_,z_,x_);							\
+	E(z_,x_,y_);							\
+	});}								\
       break;								\
     default:								\
       ERROR(("Bad boundary condition encountered."));			\
       break;								\
     }									\
-  }									\
+  }
 
 template<> void apply_hyb_local_e<XYZ>(int i, int j, int k,
 				       const int nx, const int ny, const int nz,
@@ -1928,7 +1922,9 @@ k_hyb_local_ghost_e( field_array_t      * RESTRICT f,
 }
 
 #undef APPLYLOCAL
-
+#undef F
+#undef INIT_STENCIL
+#undef E
 
 //Hybrid local moments field
 
@@ -1944,6 +1940,7 @@ template<typename T> void apply_hyb_local_jf(int i, int j, int k,
     int x_ = (i+j+k)<0 ? 0 : n##x_+1;					\
     switch(bc) {							\
     case anti_symmetric_fields:						\
+    case symmetric_fields:						\
       Kokkos::parallel_for("apply_hyb_local_jf: anti_symmetric_fields", \
       x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::jfx);\
@@ -2001,6 +1998,7 @@ template<typename T> void apply_hyb_local_ot(int i, int j, int k,
     int x_ = (i+j+k)<0 ? 0 : n##x_+1;					\
     switch(bc) {							\
     case anti_symmetric_fields:						\
+    case symmetric_fields:						\
       Kokkos::parallel_for("apply_hyb_local_ot: anti_symmetric_fields", \
       x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ox) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ox);\
@@ -2059,6 +2057,7 @@ template<typename T> void apply_hyb_local_lapl_b(int i, int j, int k,
     int x_ = (i+j+k)<0 ? 0 : n##x_+1;					\
     switch(bc) {							\
     case anti_symmetric_fields:						\
+    case symmetric_fields:						\
       Kokkos::parallel_for("apply_hyb_local_lapl_b: anti_symmetric_fields", \
       x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pex) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pex);\
