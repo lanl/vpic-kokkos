@@ -11,13 +11,23 @@
 
 #define FIELD_VAR_COUNT 36
 #define FIELD_EDGE_COUNT 8
-#define PARTICLE_VAR_COUNT 7
+
+#ifdef VARIABLE_CHARGE
+  #define PARTICLE_VAR_COUNT 8
+#else
+  #define PARTICLE_VAR_COUNT 7
+#endif
+
 #define PARTICLE_MOVER_VAR_COUNT 3
 #define ACCUMULATOR_VAR_COUNT 4
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
-#define HYDRO_VAR_COUNT 14
+#ifdef VARIABLE_CHARGE
+  #define HYDRO_VAR_COUNT 16
+#else
+  #define HYDRO_VAR_COUNT 14
+#endif
 #define NUM_J_DIMS 4
 #define FLUID_VAR_COUNT 6
 
@@ -218,6 +228,9 @@ namespace particle_var {
     uy,
     uz,
     w,
+#ifdef VARIABLE_CHARGE
+    qp,
+#endif
   };
 };
 
@@ -266,13 +279,18 @@ namespace hydro_var {
         px  = 4,
         py  = 5,
         pz  = 6,
-        ke  = 7,
+	//        ke  = 7,
+	rho_m = 7,
         txx = 8,
         tyy = 9,
         tzz = 10,
         tyz = 11,
         tzx = 12,
         txy = 13,
+#ifdef VARIABLE_CHARGE
+	min_q = 14,
+	max_q = 15,
+#endif
     };
 };
 

@@ -11,8 +11,14 @@ center_p_pipeline( center_p_pipeline_args_t * args,
   particle_t           * ALIGNED(32)  p;
   const interpolator_t * ALIGNED(16)  f;
 
+#ifndef VARIABLE_CHARGE
   const float qdt_2mc        =     args->qdt_2mc;
   const float qdt_4mc        = 0.5*args->qdt_2mc; // For half Boris rotate
+#else
+  float qp;
+  float qdt_2mc;
+  float qdt_4mc;
+#endif
   const float one            = 1.;
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
@@ -34,6 +40,11 @@ center_p_pipeline( center_p_pipeline_args_t * args,
     dx   = p->dx;                            // Load position
     dy   = p->dy;
     dz   = p->dz;
+#ifdef VARIABLE_CHARGE
+    qp   = p->qp;
+    qdt_2mc = qp*args->qdt_2mc;
+    qdt_4mc = 0.5*qdt_2mc;
+#endif
     ii   = p->i;
     f    = f0 + ii;                          // Interpolate E
     hax  = qdt_2mc*(    ( f->ex     ) );
@@ -155,7 +166,11 @@ center_p( /**/  species_t            * RESTRICT sp,
 
   args->p0      = sp->p;
   args->f0      = ia->i;
+#ifdef VARIABLE_CHARGE
+  args->qdt_2mc = (sp->g->dt)/(2*sp->m*sp->g->cvac); // Multiply by qp in pipelines
+#else
   args->qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+#endif
   args->np      = sp->np;
 
   EXEC_PIPELINES( center_p, args, 0 );

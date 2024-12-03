@@ -440,7 +440,7 @@ sim_log( "Loading fields" );
                      emat     | nmat      | fmat     | cmat );
 
    output_variables( current_density  | charge_density |
-                     momentum_density | ke_density     | stress_tensor );
+                     momentum_density | mass_density     | stress_tensor );
    */
 
   //global->fdParams.output_variables( electric | magnetic );

@@ -83,6 +83,12 @@ boot_services( int * pargc,
         std::cout << "# VPIC Git Hash: "  << GIT_REVISION << std::endl;
         std::cout << "# Built on: "  << BUILD_TIMESTAMP << std::endl;
         std::cout << "## CMake options ##" << std::endl;
+#if defined VARIABLE_CHARGE
+	std::cout << "# VARIABLE_CHARGE: ON" << std::endl;
+# else
+        std::cout << "# VARIABLE_CHARGE: OFF" << std::endl;
+#endif
+
 # if defined ENABLE_INTEGRATED_TESTS
         std::cout << "# ENABLE_INTEGRATED_TESTS: ON" << std::endl;
 # else

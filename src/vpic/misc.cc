@@ -17,7 +17,8 @@ vpic_simulation::inject_particle( species_t * sp,
                                   double x,  double y,  double z,
                                   double ux, double uy, double uz,
                                   double w,  double age,
-                                  int update_rhob ) {
+                                  int update_rhob,
+				  double qp) {
   int ix, iy, iz;
 
   // Check input parameters
@@ -81,6 +82,9 @@ vpic_simulation::inject_particle( species_t * sp,
   p->uy = (float)uy;
   p->uz = (float)uz;
   p->w  = w;
+#ifdef VARIABLE_CHARGE
+  p->qp = (float)qp;
+#endif
 
   if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
 
@@ -103,7 +107,8 @@ vpic_simulation::inject_particle_r( species_t * sp,
 				    double x,  double y,  double z,
 				    double ux, double uy, double uz,
 				    double w,  double age,
-				    int update_rhob ) {
+				    int update_rhob,
+				    double qp ) {
   int ix, iy, iz;
 
   // Check input parameters
@@ -172,7 +177,10 @@ vpic_simulation::inject_particle_r( species_t * sp,
   particle_recv(write_index, particle_var::uy) = (float)uy;
   particle_recv(write_index, particle_var::uz) = (float)uz;
   particle_recv(write_index, particle_var::w)  = w;
-
+#ifdef VARIABLE_CHARGE
+  particle_recv(write_index, particle_var::qp) = (float)qp;
+#endif
+  
   int pii = VOXEL(ix,iy,iz, nx,ny,nz);
   particle_recv_i(write_index) = pii;
 

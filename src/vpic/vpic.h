@@ -78,17 +78,27 @@ struct FieldInfo {
 const uint32_t current_density	(1<<0 | 1<<1 | 1<<2);
 const uint32_t charge_density	(1<<3);
 const uint32_t momentum_density	(1<<4 | 1<<5 | 1<<6);
-const uint32_t ke_density		(1<<7);
+const uint32_t mass_density		(1<<7);
 const uint32_t stress_tensor	(1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13);
+#ifdef VARIABLE_CHARGE
+const uint32_t charge_diags     (1<<14 | 1<<15);
+#endif
 /* May want to use these instead
 const uint32_t stress_diagonal 		(1<<8 | 1<<9 | 1<<10);
 const uint32_t stress_offdiagonal	(1<<11 | 1<<12 | 1<<13);
 */
 
-const size_t total_hydro_variables(14);
-const size_t total_hydro_groups(5); // this counts vectors, tensors etc...
-// These bits will be tested to determine which variables to output
-const size_t hydro_indeces[5] = { 0, 3, 4, 7, 8 };
+#ifdef VARIABLE_CHARGE
+  const size_t total_hydro_variables(16);
+  const size_t total_hydro_groups(6); // this counts vectors, tensors etc...
+  // These bits will be tested to determine which variables to output
+  const size_t hydro_indeces[6] = { 0, 3, 4, 7, 8, 14 };
+#else
+  const size_t total_hydro_variables(14);
+  const size_t total_hydro_groups(5); // this counts vectors, tensors etc...
+  // These bits will be tested to determine which variables to output
+  const size_t hydro_indeces[5] = { 0, 3, 4, 7, 8 };
+#endif
 
 struct HydroInfo {
 	char name[128];
@@ -650,7 +660,8 @@ public:
   inject_particle( species_t * sp,
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
-                   double w,  double age = 0, int update_rhob = 1 );
+                   double w,  double age = 0, int update_rhob = 1,
+		   double qp = 0);
 
   
   // Inject particle on receive list (so gets passed to device).
@@ -660,7 +671,8 @@ public:
 		     double x,  double y,  double z,
 		     double ux, double uy, double uz,
 		     double w,  double age = 0,
-		     int update_rhob = 0 );
+		     int update_rhob = 0,
+		     double qp = 0);
 
   // Inject particle raw is for power users!
   // No nannyism _at_ _all_:

@@ -144,7 +144,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     h[i].px  += dx;                                     \
     h[i].py  += dy;                                     \
     h[i].pz  += dz;                                     \
-    h[i].ke  += t*ke_mc;                                \
+    h[i].rho_m  += t; /* Prev. was *ke_mc; */		\
     h[i].txx += dx*vx;                                  \
     h[i].tyy += dy*vy;                                  \
     h[i].tzz += dz*vz;                                  \
@@ -217,7 +217,7 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     int ii = k_particles_i(p_index);
 
     double ke_mc = static_cast<double>(ux)*static_cast<double>(ux) + static_cast<double>(uy)*static_cast<double>(uy) + static_cast<double>(uz)*static_cast<double>(uz); // ke_mc = |u|^2 (invariant)
-    double vz = sqrt(1.0+ke_mc);            // vz = gamma    (invariant)    
+    double vz = 1.0;//sqrt(1.0+ke_mc);            // vz = gamma    (invariant)    
     ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
     
     // Compute physical velocities
@@ -242,7 +242,7 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     k_hydro_access(i, hydro_var::px)  += dx;                         \
     k_hydro_access(i, hydro_var::py)  += dy;                         \
     k_hydro_access(i, hydro_var::pz)  += dz;                         \
-    k_hydro_access(i, hydro_var::ke)  += t*ke_mc;		     \
+    k_hydro_access(i, hydro_var::rho_m)  += t;	/* Prev. was *ke_mc; */	     \
     k_hydro_access(i, hydro_var::txx) += dx*vx;                      \
     k_hydro_access(i, hydro_var::tyy) += dy*vy;                      \
     k_hydro_access(i, hydro_var::tzz) += dz*vz;                      \
@@ -280,8 +280,11 @@ accumulate_hydro_p_kokkos(
 {
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
+#ifdef VARIABLE_CHARGE
+  float c, qsp, mspc, dt_2mc, dt_4mc2, r8V;
+#else
   float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
-
+#endif
   //int np, stride_10, stride_21, stride_43;
 
   //float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
@@ -297,8 +300,22 @@ accumulate_hydro_p_kokkos(
   c        = sp->g->cvac;
   qsp      = sp->q;
   mspc     = sp->m*c;
+#ifdef VARIABLE_CHARGE
+  dt_2mc  = (sp->g->dt)/(2*mspc); // Multiply by particle q later
+  dt_4mc2 = dt_2mc / (2*c);
+  Kokkos::View<int*, Kokkos::DefaultExecutionSpace> particle_count("particle_count", nv);
+
+  // Set initial values to min_q
+  Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, nv),
+    KOKKOS_LAMBDA(size_t ii)
+    {
+        k_hydro(ii, hydro_var::min_q) = 999999999;
+    });
+
+#else
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
+#endif
   r8V      = sp->g->r8V;
 
   const int np        = sp->np;
@@ -322,6 +339,11 @@ accumulate_hydro_p_kokkos(
     float uy = k_particles(p_index, particle_var::uy);
     float uz = k_particles(p_index, particle_var::uz);
     float w  = k_particles(p_index, particle_var::w);
+#ifdef VARIABLE_CHARGE
+    float qp = k_particles(p_index, particle_var::qp);
+    float qdt_2mc = qp*dt_2mc;
+    float qdt_4mc2 = qp*qdt_4mc2;
+#endif
     int ii = k_particles_i(p_index);
 
     const float cbx = k_interp(ii, interpolator_var::cbx);
@@ -413,9 +435,22 @@ accumulate_hydro_p_kokkos(
     float t = 0.0; // used in macro
     auto k_hydro_access = k_hydro_sv.access();
 
+#ifdef VARIABLE_CHARGE
+    float q = qp;
+
+    //if ( q == 0 ) printf("qp=%e",q);
+    
+    Kokkos::atomic_fetch_min(&k_hydro(ii, hydro_var::min_q), q);
+    Kokkos::atomic_fetch_max(&k_hydro(ii, hydro_var::max_q), q);
+
+    Kokkos::atomic_add(&particle_count(ii), 1); // number of particles in each cell
+#else
+    float q = qsp;
+#endif
+    
     // Accumulate the hydro fields
     #define ACCUM_HYDRO( wn, i )                        \
-    t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
+    t  = q*wn;        /* t  = (q w/V) trilin_n */		     \
     k_hydro_access(i, hydro_var::jx)  += t*vx;                       \
     k_hydro_access(i, hydro_var::jy)  += t*vy;                       \
     k_hydro_access(i, hydro_var::jz)  += t*vz;                       \
@@ -427,7 +462,7 @@ accumulate_hydro_p_kokkos(
     k_hydro_access(i, hydro_var::px)  += dx;                         \
     k_hydro_access(i, hydro_var::py)  += dy;                         \
     k_hydro_access(i, hydro_var::pz)  += dz;                         \
-    k_hydro_access(i, hydro_var::ke)  += t*ke_mc;                    \
+    k_hydro_access(i, hydro_var::rho_m) += t; /* changed to mass density (previously ke_mc). Nb. for non-relativistic ke can be computed through trace of pressure tensor below;)*/		     \
     k_hydro_access(i, hydro_var::txx) += dx*vx;                      \
     k_hydro_access(i, hydro_var::tyy) += dy*vy;                      \
     k_hydro_access(i, hydro_var::tzz) += dz*vz;                      \
@@ -464,6 +499,23 @@ accumulate_hydro_p_kokkos(
 #   undef ACCUM_HYDRO
   });
 
+#ifdef VARIABLE_CHARGE
+  // Give nan values to cells without particles
+  Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, nv),
+    KOKKOS_LAMBDA(size_t ii)
+    {
+      // Calculate mean charge only if there are particles in the cell
+      if (particle_count(ii) > 0) {
+	//	k_hydro(ii, hydro_var::avg_q) /= static_cast<float>(particle_count(ii));
+	//if (k_hydro(ii, hydro_var::min_q) == 0) printf("ii=%d, minq=%e",ii,k_hydro(ii, hydro_var::min_q));
+      } else {
+	//	k_hydro(ii, hydro_var::avg_q) = std::numeric_limits<double>::quiet_NaN();
+	k_hydro(ii, hydro_var::min_q) = std::numeric_limits<double>::quiet_NaN();
+	k_hydro(ii, hydro_var::max_q) = std::numeric_limits<double>::quiet_NaN();
+      }
+    });
+#endif
+  
   Kokkos::Experimental::contribute(k_hydro, k_hydro_sv);
   Kokkos::fence(); // TODO: Check if I need this to block the contribute
 
