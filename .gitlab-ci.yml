@@ -10,6 +10,16 @@ stages:
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
   stage: build_gcc
+  cache:
+    paths:
+      - .cache/pip
+      - venv/
+  before_script:
+    - module load miniconda
+    - python --version  # For debugging
+    - pip install virtualenv
+    - virtualenv venv
+    - source venv/bin/activate
   script:
     - echo ${DEFINES}
     - module load gcc/11.2.0
@@ -32,8 +42,7 @@ stages:
       ${DEFINES:+${DEFINES}}
       ..
     - make -j ${j} -l ${l} VERBOSE=1
-    - module load miniconda3
-    - source activate myenv
+    - pip install numpy h5py
     - make test CTEST_OUTPUT_ON_FAILURE=1
     - make install DESTDIR=${PWD}/install
       #TODO: set OMP_PROC_BIND=spread and OMP_PLACES=threads (or similar)
