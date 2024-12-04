@@ -15,7 +15,7 @@ stages:
       - .cache/pip
       - venv/
   before_script:
-    - module load miniconda
+    - module load miniconda3
     - python --version  # For debugging
     - pip install virtualenv
     - virtualenv venv
