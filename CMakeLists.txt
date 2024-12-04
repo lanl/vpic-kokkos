@@ -70,7 +70,7 @@ option(VPIC_ENABLE_VECTORIZATION "Enable improved vectorization for CPUs" OFF)
 
 option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performnace on CPUs" OFF)
 
-option(VPIC_ENABLE_VARIABLE_CHARGE "Enable variable charge for particles" ON)
+option(VPIC_ENABLE_VARIABLE_CHARGE "Enable variable charge for particles" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
