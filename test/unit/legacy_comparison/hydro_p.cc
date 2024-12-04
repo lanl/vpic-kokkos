@@ -170,8 +170,8 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
             failed++;
         }
 
-        a = hydro_array_legacy->h[i].ke;
-        b = hydro_array_kokkos->h[i].ke;
+        a = hydro_array_legacy->h[i].rho_m;
+        b = hydro_array_kokkos->h[i].rho_m;
         rel_err = (a-b)/a;
         if (abs(rel_err) > reltol && abs(a)>abstol && abs(b)>abstol)
         {

@@ -34,6 +34,10 @@ typedef struct particle {
   /**/              // has a stricter limit on this (2^26).
   float ux, uy, uz; // Particle normalized momentum
   float w;          // Particle weight (number of physical particles)
+#ifdef VARIABLE_CHARGE
+  float qp;     // Particle charge
+#endif
+
 } particle_t;
  
 // WARNING: FUNCTIONS THAT USE A PARTICLE_MOVER ASSUME THAT EVERYBODY
@@ -52,6 +56,9 @@ typedef struct particle_injector {
   int32_t i;                 // Index of cell containing the particle
   float ux, uy, uz;          // Particle normalized momentum
   float w;                   // Particle weight (number of physical particles)
+#ifdef VARIABLE_CHARGE
+  float qp;     // Particle charge
+#endif
   float dispx, dispy, dispz; // Displacement of particle
   species_id sp_id;          // Species of particle
 } particle_injector_t;
@@ -438,6 +445,9 @@ move_p_kokkos(
   #define p_uy    k_particles(pi, particle_var::uy)
   #define p_uz    k_particles(pi, particle_var::uz)
   #define p_w     k_particles(pi, particle_var::w)
+#ifdef VARIABLE_CHARGE
+  #define p_q     k_particles(pi, particle_var::qp)
+#endif
   #define pii     k_particles_i(pi)
 
   //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
@@ -465,9 +475,11 @@ move_p_kokkos(
 
   //printf("in move_p %d \n", pi);
 
-
+#ifdef VARIABLE_CHARGE
+  q = rV*p_q*p_w;
+#else
   q = rV*qsp*p_w;
-
+#endif
     //printf("in move %d \n", pi);
 
   for(;;) {
@@ -715,6 +727,9 @@ move_p_kokkos(
   #undef p_uy
   #undef p_uz
   #undef p_w
+#ifdef VARIABLE_CHARGE
+  #undef p_q
+#endif
   #undef pii
 
   //#undef local_pm_dispx
@@ -759,6 +774,9 @@ move_p_kokkos_host_serial(
   #define p_uy    k_particles(pi, particle_var::uy)
   #define p_uz    k_particles(pi, particle_var::uz)
   #define p_w     k_particles(pi, particle_var::w)
+#ifdef VARIABLE_CHARGE
+  #define p_q     k_particles(pi, particle_var::qp)
+#endif
   #define pii     k_particles_i(pi)
 
   //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
@@ -776,8 +794,11 @@ move_p_kokkos_host_serial(
   //int pi = int(local_pm_i);
   int pi = pm->i;
 
+#ifdef VARIABLE_CHARGE
+  q = p_q*p_w;
+#else
   q = qsp*p_w;
-
+#endif
     //printf("in move %d \n", pi);
 
   for(;;) {
@@ -993,6 +1014,9 @@ move_p_kokkos_host_serial(
   #undef p_uy
   #undef p_uz
   #undef p_w
+#ifdef VARIABLE_CHARGE
+  #undef p_q
+#endif
   #undef pii
 
   //#undef local_pm_dispx

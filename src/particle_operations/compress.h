@@ -168,6 +168,9 @@ struct DefaultCompress {
             particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
             particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
             particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
+#ifdef VARIABLE_CHARGE
+	    particles(write_to, particle_var::qp)  = particles(pull_from, particle_var::qp);
+#endif
             particles_i(write_to) = particles_i(pull_from);
         });
 
@@ -187,6 +190,9 @@ struct DefaultCompress {
             particles(write_to, particle_var::uy) = particles(pull_from, particle_var::uy);
             particles(write_to, particle_var::uz) = particles(pull_from, particle_var::uz);
             particles(write_to, particle_var::w)  = particles(pull_from, particle_var::w);
+#ifdef VARIABLE_CHARGE
+	    particles(write_to, particle_var::qp)  = particles(pull_from, particle_var::qp);
+#endif
             particles_i(write_to) = particles_i(pull_from);
         });
     }

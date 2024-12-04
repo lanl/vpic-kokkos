@@ -9,8 +9,12 @@ void uncenter_p_kokkos(
         float qdt_2mc_c
 )
 {
+#ifndef VARIABLE_CHARGE
   const float qdt_2mc        =     -qdt_2mc_c; // For backward half advance
   const float qdt_4mc        = -0.5*qdt_2mc_c; // For backward half rotate
+#else
+  const float dt_2mc_c = qdt_2mc_c;
+#endif
   const float one            = 1.;
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
@@ -22,6 +26,9 @@ void uncenter_p_kokkos(
   #define p_ux    k_particles(p_index, particle_var::ux) // Load momentum
   #define p_uy    k_particles(p_index, particle_var::uy)
   #define p_uz    k_particles(p_index, particle_var::uz)
+#ifdef VARIABLE_CHARGE
+  #define p_q     k_particles(p_index, particle_var::qp)
+#endif
   #define pii     k_particles_i(p_index)
 
   // Interpolator Defines (f->x)
@@ -56,7 +63,12 @@ void uncenter_p_kokkos(
     int ii = pii;
     float hax, hay, haz, l_cbx, l_cby, l_cbz;
     float v0, v1, v2, v3, v4;
-
+    
+#ifdef VARIABLE_CHARGE
+    float qdt_2mc = -dt_2mc_c*p_q; // For backwards half advance
+    float qdt_4mc = 0.5*qdt_2mc;   // For backwards half rotation
+#endif
+    
     hax  = qdt_2mc*(      ( f_ex    ) );
     hay  = qdt_2mc*(      ( f_ey    ) );
     haz  = qdt_2mc*(      ( f_ez    ) );
@@ -94,6 +106,10 @@ uncenter_p( /**/  species_t            * RESTRICT sp,
   k_particles_i_t k_particles_i = sp->k_p_i_d;
   k_interpolator_t k_interp    = ia->k_i_d;
   const int np                 = sp->np;
+#ifdef VARIABLE_CHARGE
+  const float qdt_2mc          = (sp->g->dt)/(2*sp->m*sp->g->cvac); // Multiply by qp in pipeline
+#else
   const float qdt_2mc          = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+#endif
   uncenter_p_kokkos(k_particles, k_particles_i, k_interp, np, qdt_2mc);
 }

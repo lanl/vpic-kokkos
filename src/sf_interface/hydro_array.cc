@@ -114,7 +114,7 @@ synchronize_hydro_array( hydro_array_t * ha ) {
         h->px  *= 2;                            \
         h->py  *= 2;                            \
         h->pz  *= 2;                            \
-        h->ke  *= 2;                            \
+        h->rho_m  *= 2;                         \
         h->txx *= 2;                            \
         h->tyy *= 2;                            \
         h->tzz *= 2;                            \
@@ -152,7 +152,7 @@ synchronize_hydro_array( hydro_array_t * ha ) {
         (*(p++)) = h->px;                               \
         (*(p++)) = h->py;                               \
         (*(p++)) = h->pz;                               \
-        (*(p++)) = h->ke;                               \
+        (*(p++)) = h->rho_m;                            \
         (*(p++)) = h->txx;                              \
         (*(p++)) = h->tyy;                              \
         (*(p++)) = h->tzz;                              \
@@ -176,22 +176,22 @@ synchronize_hydro_array( hydro_array_t * ha ) {
       face = (i+j+k)<0 ? n##X+1 : 1; /* Twice weighted sum */   \
       X##_NODE_LOOP(face) {                                     \
         h = &hydro(x,y,z);                                      \
-        h->jx  = lw*h->jx  + rw*(*(p++));                       \
-        h->jy  = lw*h->jy  + rw*(*(p++));                       \
-        h->jz  = lw*h->jz  + rw*(*(p++));                       \
-        h->rho = lw*h->rho + rw*(*(p++));                       \
-        h->px  = lw*h->px  + rw*(*(p++));                       \
-        h->py  = lw*h->py  + rw*(*(p++));                       \
-        h->pz  = lw*h->pz  + rw*(*(p++));                       \
-        h->ke  = lw*h->ke  + rw*(*(p++));                       \
-        h->txx = lw*h->txx + rw*(*(p++));                       \
-        h->tyy = lw*h->tyy + rw*(*(p++));                       \
-        h->tzz = lw*h->tzz + rw*(*(p++));                       \
-        h->tyz = lw*h->tyz + rw*(*(p++));                       \
-        h->tzx = lw*h->tzx + rw*(*(p++));                       \
-        h->txy = lw*h->txy + rw*(*(p++));                       \
-      }                                                         \
-    }                                                           \
+        h->jx    = lw*h->jx  + rw*(*(p++));                       \
+        h->jy    = lw*h->jy  + rw*(*(p++));                       \
+        h->jz    = lw*h->jz  + rw*(*(p++));                       \
+        h->rho   = lw*h->rho + rw*(*(p++));                       \
+        h->px    = lw*h->px  + rw*(*(p++));                       \
+        h->py    = lw*h->py  + rw*(*(p++));                       \
+        h->pz    = lw*h->pz  + rw*(*(p++));                       \
+        h->rho_m = lw*h->rho_m  + rw*(*(p++));                    \
+        h->txx   = lw*h->txx + rw*(*(p++));                       \
+        h->tyy   = lw*h->tyy + rw*(*(p++));                       \
+        h->tzz   = lw*h->tzz + rw*(*(p++));                       \
+        h->tyz   = lw*h->tyz + rw*(*(p++));                       \
+        h->tzx   = lw*h->tzx + rw*(*(p++));                       \
+        h->txy   = lw*h->txy + rw*(*(p++));                       \
+      }                                                          \
+    }                                                            \
   } END_PRIMITIVE
 
 # define END_SEND(i,j,k,X,Y,Z) end_send_port( i, j, k, g )
@@ -274,7 +274,7 @@ synchronize_hydro_array_kokkos( hydro_array_t * ha ) {
         k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::px) *= 2;       \
         k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::py) *= 2;       \
         k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz) *= 2;       \
-        k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::ke) *= 2;       \
+        k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho_m) *= 2;       \
         k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx) *= 2;      \
         k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy) *= 2;      \
         k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz) *= 2;      \
@@ -315,7 +315,7 @@ synchronize_hydro_array_kokkos( hydro_array_t * ha ) {
         (*(p++)) = h->px;                               \
         (*(p++)) = h->py;                               \
         (*(p++)) = h->pz;                               \
-        (*(p++)) = h->ke;                               \
+        (*(p++)) = h->rho_m;                            \
         (*(p++)) = h->txx;                              \
         (*(p++)) = h->tyy;                              \
         (*(p++)) = h->tzz;                              \
@@ -339,7 +339,7 @@ synchronize_hydro_array_kokkos( hydro_array_t * ha ) {
       send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 4) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::px); \
       send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 5) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::py); \
       send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 6) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 7) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::ke); \
+      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 7) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho_m); \
       send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 8) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx); \
       send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 9) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy); \
       send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 10) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz); \
@@ -371,7 +371,7 @@ synchronize_hydro_array_kokkos( hydro_array_t * ha ) {
         h->px  = lw*h->px  + rw*(*(p++));                       \
         h->py  = lw*h->py  + rw*(*(p++));                       \
         h->pz  = lw*h->pz  + rw*(*(p++));                       \
-        h->ke  = lw*h->ke  + rw*(*(p++));                       \
+        h->rho_m  = lw*h->rho_m  + rw*(*(p++));                 \
         h->txx = lw*h->txx + rw*(*(p++));                       \
         h->tyy = lw*h->tyy + rw*(*(p++));                       \
         h->tzz = lw*h->tzz + rw*(*(p++));                       \
@@ -410,7 +410,7 @@ BEGIN_PRIMITIVE {                                                               
                                                   + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+5);    \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz)      \
                                                   + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+6);    \
-      k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::ke) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::ke)      \
+      k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho_m) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho_m)      \
                                                   + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+7);    \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx)    \
                                                   + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+8);    \
@@ -542,20 +542,24 @@ hydro_array_t::copy_to_host(bool print /*=.false.*/) {
     h_l[i].px = k_h(i, hydro_var::px);
     h_l[i].py = k_h(i, hydro_var::py);
     h_l[i].pz = k_h(i, hydro_var::pz);
-    h_l[i].ke = k_h(i, hydro_var::ke);
+    h_l[i].rho_m = k_h(i, hydro_var::rho_m);
     h_l[i].txx = k_h(i, hydro_var::txx);
     h_l[i].tyy = k_h(i, hydro_var::tyy);
     h_l[i].tzz = k_h(i, hydro_var::tzz);
     h_l[i].tyz = k_h(i, hydro_var::tyz);
     h_l[i].tzx = k_h(i, hydro_var::tzx);
     h_l[i].txy = k_h(i, hydro_var::txy);
-
+#ifdef VARIABLE_CHARGE
+    h_l[i].qmin = k_h(i, hydro_var::min_q);
+    h_l[i].qmax	= k_h(i, hydro_var::max_q);
+#endif
+    
     int ix, iy, iz;
     RANK_TO_INDEX(i, ix, iy, iz, 1, 1, 1);
     
     // if(h_l[i].ke>0) printf("%d (%d,%d,%d) %e \n",i,ix,iy,iz,h_l[i].ke);
-    if(print && h_l[i].ke>0) {
-	printf("%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%d",h_l[i].ke,h_l[i].txx,h_l[i].tyy,h_l[i].tzz,h_l[i].px,h_l[i].py,h_l[i].pz,i);
+    if(print && (h_l[i].txx*h_l[i].txx + h_l[i].tyy*h_l[i].tyy + h_l[i].tzz*h_l[i].tzz) > 0) {
+	printf("%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%d",0.5*(h_l[i].txx*h_l[i].txx + h_l[i].tyy*h_l[i].tyy + h_l[i].tzz*h_l[i].tzz),h_l[i].txx,h_l[i].tyy,h_l[i].tzz,h_l[i].px,h_l[i].py,h_l[i].pz,i);
     }	
   });
   // printf("k_h_h.extent(0)=%d\n",k_h_h.extent(0));

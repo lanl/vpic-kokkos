@@ -72,6 +72,8 @@ option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performn
 
 option(VPIC_ENABLE_HDF5 "Enable HDF5 for use during IO. VPIC does not help you install HDF5" OFF)
 
+option(VPIC_ENABLE_VARIABLE_CHARGE "Enable variable charge for particles" OFF)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -352,6 +354,11 @@ if (VPIC_ENABLE_ACCUMULATORS)
   add_definitions(-DVPIC_DISABLE_AUTOSETTINGS -DVPIC_ENABLE_ACCUMULATORS)
   message("--     VPIC: Enabled accumulators")
 endif(VPIC_ENABLE_ACCUMULATORS)
+
+if (VPIC_ENABLE_VARIABLE_CHARGE)
+   add_definitions(-DVARIABLE_CHARGE)
+   message("--     VPIC: Enabled variable charge for particles")
+endif(VPIC_ENABLE_VARIABLE_CHARGE)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)

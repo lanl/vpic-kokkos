@@ -330,7 +330,11 @@ advance_p_kokkos_unified(
         k_neighbor_t& k_neighbors,
         field_array_t* RESTRICT fa,
         const grid_t *g,
+#ifdef VARIABLE_CHARGE
+	const float dt_2mc,
+#else
         const float qdt_2mc,
+#endif
         const float cdt_dx,
         const float cdt_dy,
         const float cdt_dz,
@@ -360,6 +364,9 @@ advance_p_kokkos_unified(
   #define p_uy    k_particles(p_index, particle_var::uy)
   #define p_uz    k_particles(p_index, particle_var::uz)
   #define p_w     k_particles(p_index, particle_var::w)
+#ifdef VARIABLE_CHARGE
+  #define p_q     k_particles(p_index, particle_var::qp)
+#endif
   #define pii     k_particles_i(p_index)
 
   #define f_cbx k_interp(ii[LANE], interpolator_var::cbx)
@@ -462,6 +469,9 @@ advance_p_kokkos_unified(
       float cby[num_lanes];
       float cbz[num_lanes];
       float q[num_lanes];
+#ifdef VARIABLE_CHARGE
+      float qp[num_lanes];
+#endif
       int   ii[num_lanes];
       int   inbnds[num_lanes];
       //int   midbnds[num_lanes];
@@ -508,6 +518,10 @@ advance_p_kokkos_unified(
         uz[LANE] = p_uz;
         // Load weight
         q[LANE]  = p_w;
+#ifdef VARIABLE_CHARGE
+	qp[LANE] = p_q;
+#endif
+      
         // Load index
         ii[LANE] = pii;
       } END_VECTOR_BLOCK;
@@ -521,11 +535,16 @@ advance_p_kokkos_unified(
                                      ii, num_particles, k_interp);
 
       BEGIN_VECTOR_BLOCK {
+#ifdef VARIABLE_CHARGE
+	hax[LANE] = dt_2mc*qp[LANE]*( (fex[LANE] ) );
+	hay[LANE] = dt_2mc*qp[LANE]*( (fey[LANE] ) );
+	haz[LANE] = dt_2mc*qp[LANE]*( (fez[LANE] ) );
+#else
         // Interpolate E
         hax[LANE] = qdt_2mc*( (fex[LANE] ) );
         hay[LANE] = qdt_2mc*( (fey[LANE] ) );
         haz[LANE] = qdt_2mc*( (fez[LANE] ) );
-  
+#endif
         // Interpolate B
         cbx[LANE] = fcbx[LANE];// + dx[LANE]*fdcbxdx[LANE];
         cby[LANE] = fcby[LANE];// + dy[LANE]*fdcbydy[LANE];
@@ -538,7 +557,11 @@ advance_p_kokkos_unified(
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
+#ifdef VARIABLE_CHARGE
+	v0[LANE] = dt_2mc*qp[LANE]; ///sqrtf(one + (ux[LANE]*ux[LANE] + (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE]))); 
+#else
         v0[LANE] = qdt_2mc;///sqrtf(one + (ux[LANE]*ux[LANE] + (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE])));
+#endif
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
@@ -609,8 +632,12 @@ advance_p_kokkos_unified(
         v3[LANE] = static_cast<float>(inbnds[LANE])*v3[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dx;
         v4[LANE] = static_cast<float>(inbnds[LANE])*v4[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dy;
         v5[LANE] = static_cast<float>(inbnds[LANE])*v5[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dz;
+#ifdef VARIABLE_CHARGE
+	q[LANE]  = static_cast<float>(inbnds[LANE])*q[LANE]*qp[LANE]*rV; // q is previously weight
+#else
         q[LANE]  = static_cast<float>(inbnds[LANE])*q[LANE]*qsp*rV;
-
+#endif
+	
         p_dx = v3[LANE];
         p_dy = v4[LANE];
         p_dz = v5[LANE];
@@ -683,6 +710,9 @@ advance_p_kokkos_unified(
               k_particle_copy(nm, particle_var::uy) = p_uy;
               k_particle_copy(nm, particle_var::uz) = p_uz;
               k_particle_copy(nm, particle_var::w) = p_w;
+#ifdef VARIABLE_CHARGE
+	      k_particle_copy(nm, particle_var::qp) = p_q;
+#endif
               k_particle_i_copy(nm) = pii;
             }
           }
@@ -730,7 +760,12 @@ advance_p_kokkos_unified(
 #undef p_ux
 #undef p_uy
 #undef p_uz
-#undef p_w 
+#undef p_w
+  
+#ifdef VARIABLE_CHARGE
+  #undef p_q
+#endif
+  
 #undef pii 
 
 #undef f_cbx
@@ -771,7 +806,11 @@ advance_p_kokkos_gpu(
         k_neighbor_t& k_neighbors,
         field_array_t* RESTRICT fa,
         const grid_t *g,
+#ifdef VARIABLE_CHARGE
+	const float dt_2mc,
+#else
         const float qdt_2mc,
+#endif
         const float cdt_dx,
         const float cdt_dy,
         const float cdt_dz,
@@ -804,6 +843,9 @@ advance_p_kokkos_gpu(
   #define p_uy    k_particles(p_index, particle_var::uy)
   #define p_uz    k_particles(p_index, particle_var::uz)
   #define p_w     k_particles(p_index, particle_var::w)
+#ifdef VARIABLE_CHARGE
+  #define p_q     k_particles(p_index, particle_var::qp)
+#endif
   #define pii     k_particles_i(p_index)
 
   #define f_cbx k_interp(ii, interpolator_var::cbx)
@@ -860,6 +902,11 @@ advance_p_kokkos_gpu(
     float v0, v1, v2, v3, v4, v5, v6;
     auto  k_field_scatter_access = k_f_sv.access();
 
+#ifdef VARIABLE_CHARGE
+    float qp = p_q;
+    float qdt_2mc = qp*dt_2mc;
+#endif
+    
     float dx   = p_dx;                             // Load position
     float dy   = p_dy;
     float dz   = p_dz;
@@ -946,9 +993,11 @@ advance_p_kokkos_gpu(
          // Common case (inbnds).  Note: accumulator values are 4 times
          // the total physical charge that passed through the appropriate
          // current quadrant in a time-step
-
-         q *= qsp;
-    
+#ifdef VARIABLE_CHARGE
+      q *= qp;
+#else
+      q *= qsp;
+#endif
          //v5 = q*ux*uy*uz*one_third;              // Compute correction
 
 /*    
@@ -1026,6 +1075,9 @@ advance_p_kokkos_gpu(
 	      k_particle_copy(nm, particle_var::uy) = p_uy;
 	      k_particle_copy(nm, particle_var::uz) = p_uz;
 	      k_particle_copy(nm, particle_var::w) = p_w;
+#ifdef VARIABLE_CHARGE
+	      k_particle_copy(nm, particle_var::qp) = p_q;
+#endif
 	      k_particle_i_copy(nm) = pii;
 	      
 	      // Tag this one as having left
@@ -1087,8 +1139,11 @@ advance_p( /**/  species_t            * RESTRICT sp,
     ERROR(( "Bad args" ));
   }
 
-
+#ifdef VARIABLE_CHARGE
+  float dt_2mc = (sp->g->dt)/(2*sp->m*sp->g->cvac);
+#else
   float qdt_2mc  = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+#endif
   float cdt_dx   = sp->g->cvac*sp->g->dt*sp->g->rdx;
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
@@ -1114,7 +1169,11 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->g->k_neighbor_d,
           fa,
           sp->g,
+#ifdef VARIABLE_CHARGE
+	  dt_2mc,
+#else
           qdt_2mc,
+#endif
           cdt_dx,
           cdt_dy,
           cdt_dz,

@@ -200,10 +200,14 @@ combine_accumulators( accumulator_array_t * RESTRICT aa );
 
 typedef struct hydro {
   float jx, jy, jz, rho; // Current and charge density => <q v_i f>, <q f>
-  float px, py, pz, ke;  // Momentum and K.E. density  => <p_i f>, <m c^2 (gamma-1) f>
+  float px, py, pz, rho_m; // Momentum and mass density (changed from ke_density)
   float txx, tyy, tzz;   // Stress diagonal            => <p_i v_j f>, i==j
   float tyz, tzx, txy;   // Stress off-diagonal        => <p_i v_j f>, i!=j
+#if VARIABLE_CHARGE
+  float qmin, qmax;      // Minimum and maximum charge within a cell
+#else
   float _pad[2];         // 16-byte align
+#endif
 } hydro_t;
 
 typedef struct hydro_array {
