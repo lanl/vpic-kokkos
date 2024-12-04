@@ -84,6 +84,7 @@ extern const char *main_body_attributeS;
     fclose(fp);                                                                                                                               \
   }
 
+#ifdef VARIABLE_CHARGE
 #define invert_hydro_xml_item(xml_file_name, speciesname_p, time_step, dims_4d, dims_3d, add_footer_flag)                          \
   {                                                                                                                                \
     FILE *fp;                                                                                                                      \
@@ -95,8 +96,37 @@ extern const char *main_body_attributeS;
       fprintf(fp, main_body_attributeS, "rho", dims_3d, time_step, speciesname_p, time_step, time_step, "rho");                    \
     if (hydro_dump_flag.enabledP())                                                                                                \
       write_main_body_attribute(fp, main_body_attributeV, "P", dims_4d, dims_3d, speciesname_p, time_step, "px", "py", "pz");      \
-    if (hydro_dump_flag.flags["ke"])                                                                                               \
-      fprintf(fp, main_body_attributeS, "ke", dims_3d, time_step, speciesname_p, time_step, time_step, "ke");                      \
+    if (hydro_dump_flag.flags["rho_m"])                                                                                            \
+      fprintf(fp, main_body_attributeS, "rho_m", dims_3d, time_step, speciesname_p, time_step, time_step, "rho_m");                \
+    if (hydro_dump_flag.enabledTD())                                                                                               \
+      write_main_body_attribute(fp, main_body_attributeV, "TD", dims_4d, dims_3d, speciesname_p, time_step, "txx", "tyy", "tzz");  \
+    if (hydro_dump_flag.enabledTOD())                                                                                              \
+      write_main_body_attribute(fp, main_body_attributeV, "TOD", dims_4d, dims_3d, speciesname_p, time_step, "tyz", "tzx", "txy"); \
+    if (hydro_dump_flag["qmin"])                                                                                                   \
+      fprintf(fp, main_body_attributeS, "qmin", dims_3d, time_step, speciesname_p, time_step, time_step, "qmin");                  \
+    if (hydro_dump_flag["qmax"])                                                                                                   \
+      fprintf(fp, main_body_attributeS, "qmax", dims_3d, time_step, speciesname_p, time_step, time_step, "qmax");                  \
+    fprintf(fp, "%s", main_body_foot);                                                                                             \
+    if (add_footer_flag)                                                                                                           \
+      fputs(footer, fp);                                                                                                           \
+    fclose(fp);                                                                                                                    \
+  }
+
+#else
+
+#define invert_hydro_xml_item(xml_file_name, speciesname_p, time_step, dims_4d, dims_3d, add_footer_flag)                          \
+  {                                                                                                                                \
+    FILE *fp;                                                                                                                      \
+    fp = fopen(xml_file_name, "a");                                                                                                \
+    fprintf(fp, main_body_head, time_step);                                                                                        \
+    if (hydro_dump_flag.enabledJ())                                                                                                \
+      write_main_body_attribute(fp, main_body_attributeV, "J", dims_4d, dims_3d, speciesname_p, time_step, "jx", "jy", "jz");      \
+    if (hydro_dump_flag.flags["rho"])                                                                                              \
+      fprintf(fp, main_body_attributeS, "rho", dims_3d, time_step, speciesname_p, time_step, time_step, "rho");                    \
+    if (hydro_dump_flag.enabledP())                                                                                                \
+      write_main_body_attribute(fp, main_body_attributeV, "P", dims_4d, dims_3d, speciesname_p, time_step, "px", "py", "pz");      \
+    if (hydro_dump_flag.flags["rho_m"])                                                                                            \
+      fprintf(fp, main_body_attributeS, "rho_m", dims_3d, time_step, speciesname_p, time_step, time_step, "rho_m");                \
     if (hydro_dump_flag.enabledTD())                                                                                               \
       write_main_body_attribute(fp, main_body_attributeV, "TD", dims_4d, dims_3d, speciesname_p, time_step, "txx", "tyy", "tzz");  \
     if (hydro_dump_flag.enabledTOD())                                                                                              \
@@ -106,6 +136,7 @@ extern const char *main_body_attributeS;
       fputs(footer, fp);                                                                                                           \
     fclose(fp);                                                                                                                    \
   }
+#endif // #ifdef VARIABLE_CHARGE
 
 #define invert_fluid_xml_item(xml_file_name, speciesname_p, time_step, dims_4d, dims_3d, add_footer_flag)                          \
   {                                                                                                                                \

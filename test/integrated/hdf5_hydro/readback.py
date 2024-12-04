@@ -36,7 +36,7 @@ for step_name in step_names:
         hydro_data_bi_all = np.fromfile(bin_filename, dtype=np.float32, offset=123)
 
     hydro_names = ["jx", "jy", "jz", "rho",
-                   "px", "py", "pz", "ke",
+                   "px", "py", "pz", "rho_m",
                    "txx", "tyy", "tzz",
                    "tyz", "tzx", "txy"]
 

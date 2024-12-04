@@ -291,16 +291,26 @@ struct hydro_dump_flag_t
 {
   std::vector<std::string> flag_keys = {
     "jx", "jy", "jz", "rho",
-    "px", "py", "pz", "ke",
+    "px", "py", "pz", "rho_m",
     "txx", "tyy", "tzz",
-    "tyz", "tzx", "txy"
+    "tyz", "tzx", "txy",
+#ifdef VARIABLE_CHARGE
+    "qmin", "qmax"
+#else
+    "pad"
+#endif
   };
 
   std::unordered_map<std::string, bool> flags = {
     {"jx", true}, {"jy", true}, {"jz", true}, {"rho", true},
-    {"px", true}, {"py", true}, {"pz", true}, {"ke", true},
+    {"px", true}, {"py", true}, {"pz", true}, {"rho_m", true},
     {"txx", true}, {"tyy", true}, {"tzz", true},
-    {"tyz", true}, {"tzx", true}, {"txy", true}
+    {"tyz", true}, {"tzx", true}, {"txy", true},
+#ifdef VARIABLE_CHARGE
+    {"qmin", true}, {"qmax", true},
+#else
+    {"pad", true}
+#endif
   };
 
   void disableJ() {
