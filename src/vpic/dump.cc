@@ -315,11 +315,11 @@ vpic_simulation::dump_hydro( const char *sp_name,
   );
 
   // This is slower in my tests
-  synchronize_hydro_array_kokkos(hydro_array);
+  //synchronize_hydro_array_kokkos(hydro_array);
 
   hydro_array->copy_to_host();
 
-  //synchronize_hydro_array( hydro_array );
+  synchronize_hydro_array( hydro_array );
 
   if( !fbase ) ERROR(( "Invalid filename" ));
 
@@ -876,11 +876,11 @@ vpic_simulation::hydro_dump( const char * speciesname,
   );
 
   // The legacy synchronize is actually a bit faster
-  synchronize_hydro_array_kokkos(hydro_array);
+  //synchronize_hydro_array_kokkos(hydro_array);
 
   hydro_array->copy_to_host();
 
-  //synchronize_hydro_array( hydro_array );
+  synchronize_hydro_array( hydro_array );
 
   // convenience
   const size_t istride(dumpParams.stride_x);
