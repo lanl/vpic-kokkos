@@ -17,25 +17,83 @@ accumulate_current(CurrentScatterAccess& current_sa, int ii,
                    const float v0, const float v1, const float v2, const float v3,
                    const float v4, const float v5, const float v6, const float v7,
                    const float v8, const float v9, const float v10, const float v11) {
-#ifdef VPIC_ENABLE_ACCUMULATORS
-  current_sa(ii, 0)  += v0;
-  //current_sa(ii, 1)  += cx*v1;
-  //current_sa(ii, 2)  += cx*v2;
-  //current_sa(ii, 3)  += cx*v3; 
-  current_sa(ii, 4)  += v1;
-  current_sa(ii, 8)  += v2;
- 
+#ifdef SHAPE_NGP
+#   ifdef VPIC_ENABLE_ACCUMULATORS
+      current_sa(ii, 0)  += v0;
+      //current_sa(ii, 1)  += cx*v1;
+      //current_sa(ii, 2)  += cx*v2;
+      //current_sa(ii, 3)  += cx*v3;
+      current_sa(ii, 4)  += v1;
+      current_sa(ii, 8)  += v2;
+#   else
+      int iii = ii;
+      int zi = iii/((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii/(nx+2);
+      int xi = iii - yi*(nx+2);
+      current_sa(ii, field_var::jfx)                           += v0;
+      current_sa(ii, field_var::jfy)                           += v1;
+      current_sa(ii, field_var::jfz)                           += v2;
+      current_sa(ii, field_var::rhof)                          += v3;
+#   endif
 #else
-  int iii = ii;
-  int zi = iii/((nx+2)*(ny+2));
-  iii -= zi*(nx+2)*(ny+2);
-  int yi = iii/(nx+2);
-  int xi = iii - yi*(nx+2);
-  current_sa(ii, field_var::jfx)                           += v0;
-  current_sa(ii, field_var::jfy)                           += v1;
-  current_sa(ii, field_var::jfz)                           += v2;
-  current_sa(ii, field_var::rhof)                          += v3;
-#endif
+#ifdef SHAPE_QS
+#   ifdef VPIC_ENABLE_ACCUMULATORS
+      // not handling VPIC_ENABLE_ACCUMULATORS case
+      // so fail loudly by not depositing anything
+      Kokkos::abort("shape_qs lacks support for VPIC_ENABLE_ACCUMULATORS");
+#   else
+      // Voxel indices
+      int iii = ii;
+      int zi = iii/((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii/(nx+2);
+      int xi = iii - yi*(nx+2);
+      // Neighboring voxel 1D (flattened) indices
+      int iix = VOXEL(xi+1,yi,zi,nx,ny,nz);
+      int iiy = VOXEL(xi,yi+1,zi,nx,ny,nz);
+      int iiz = VOXEL(xi,yi,zi+1,nx,ny,nz);
+      int iimx = VOXEL(xi-1,yi,zi,nx,ny,nz);
+      int iimy = VOXEL(xi,yi-1,zi,nx,ny,nz);
+      int iimz = VOXEL(xi,yi,zi-1,nx,ny,nz);
+
+      current_sa(ii, field_var::jfx)  += v3*v6; // w0*ux;
+      current_sa(ii, field_var::jfy)  += v3*v7; // w0*uy;
+      current_sa(ii, field_var::jfz)  += v3*v8; // w0*uz;
+      current_sa(ii, field_var::rhof) += v3;    // w0;
+
+      current_sa(iix, field_var::jfx)  += v4*v6; // wx*ux;
+      current_sa(iix, field_var::jfy)  += v4*v7; // wx*uy;
+      current_sa(iix, field_var::jfz)  += v4*v8; // wx*uz;
+      current_sa(iix, field_var::rhof) += v4;    // wx;
+
+      current_sa(iiy, field_var::jfx)  += v5*v6; // wy*ux;
+      current_sa(iiy, field_var::jfy)  += v5*v7; // wy*uy;
+      current_sa(iiy, field_var::jfz)  += v5*v8; // wy*uz;
+      current_sa(iiy, field_var::rhof) += v5;    // wy;
+
+      current_sa(iiz, field_var::jfx)  += v9*v6; // wz*ux;
+      current_sa(iiz, field_var::jfy)  += v9*v7; // wz*uy;
+      current_sa(iiz, field_var::jfz)  += v9*v8; // wz*uz;
+      current_sa(iiz, field_var::rhof) += v9;    // wz;
+
+      current_sa(iimx, field_var::jfx)  += v0*v6; // wmx*ux;
+      current_sa(iimx, field_var::jfy)  += v0*v7; // wmx*uy;
+      current_sa(iimx, field_var::jfz)  += v0*v8; // wmx*uz;
+      current_sa(iimx, field_var::rhof) += v0;    // wmx;
+
+      current_sa(iimy, field_var::jfx)  += v1*v6; // wmy*ux;
+      current_sa(iimy, field_var::jfy)  += v1*v7; // wmy*uy;
+      current_sa(iimy, field_var::jfz)  += v1*v8; // wmy*uz;
+      current_sa(iimy, field_var::rhof) += v1;    // wmy;
+
+      current_sa(iimz, field_var::jfx)  += v2*v6; // wmz*ux;
+      current_sa(iimz, field_var::jfy)  += v2*v7; // wmz*uy;
+      current_sa(iimz, field_var::jfz)  += v2*v8; // wmz*uz;
+      current_sa(iimz, field_var::rhof) += v2;    // wmz;
+#   endif
+#endif // defined(SHAPE_QS)
+#endif // defined(SHAPE_NGP)
 }
 
 // Reduce the current for all active threads/lanes to reduce the number of writes to memory
@@ -523,6 +581,7 @@ advance_p_kokkos_unified(
   constexpr float one            = 1.;
   constexpr float one_third      = 1./3.;
   constexpr float two_fifteenths = 2./15.;
+  constexpr float one_twelfth    = 1./12.;
 
   k_field_t k_field = fa->k_f_d;
   float cx = 0.25 * g->rdy * g->rdz / g->dt;
@@ -888,14 +947,23 @@ advance_p_kokkos_unified(
         //dz[LANE] = v2[LANE];
         //v5[LANE] = q[LANE]*ux[LANE]*uy[LANE]*uz[LANE]*one_third;
 
-#       define ACCUMULATE_J()                                              \
-        v0[LANE]  = q[LANE]*v6[LANE];   /*  = q ux                            */        \
-        v1[LANE]  = q[LANE]*v7[LANE];   /*  = q uy                            */        \
-        v2[LANE]  = q[LANE]*v8[LANE];   /*  = q uz                            */        \
-        v3[LANE]  = q[LANE];   /* v2 = q                            */        \
-      
-        ACCUMULATE_J();
-
+#ifdef SHAPE_NGP
+        v0[LANE]  = q[LANE]*v6[LANE]; // q*ux
+        v1[LANE]  = q[LANE]*v7[LANE]; // q*uy
+        v2[LANE]  = q[LANE]*v8[LANE]; // q*uz
+        v3[LANE]  = q[LANE];
+#else
+#ifdef SHAPE_QS
+        q[LANE] *= one_twelfth;
+        v3[LANE] = q[LANE]*two*( three - v0[LANE]*v0[LANE] - v1[LANE]*v1[LANE] - v2[LANE]*v2[LANE] );  // w0
+        v4[LANE] = q[LANE]*( v0[LANE] + one )*( v0[LANE] + one );  // wx
+        v5[LANE] = q[LANE]*( v1[LANE] + one )*( v1[LANE] + one );  // wy
+        v9[LANE] = q[LANE]*( v2[LANE] + one )*( v2[LANE] + one );  // wz
+        v0[LANE] = q[LANE]*( v0[LANE] - one )*( v0[LANE] - one );  // wmx  // re-use due to limited number of slots
+        v1[LANE] = q[LANE]*( v1[LANE] - one )*( v1[LANE] - one );  // wmy  // in accumulate_current(...) signature
+        v2[LANE] = q[LANE]*( v2[LANE] - one )*( v2[LANE] - one );  // wmz
+#endif
+#endif
 
       } END_VECTOR_BLOCK;
 
@@ -913,8 +981,8 @@ advance_p_kokkos_unified(
           accumulate_current(current_sa, ii[LANE],
                        nx, ny, nz, rV,
 		       v0[LANE], v1[LANE], v2[LANE], v3[LANE],
-                       v6[LANE], v7[LANE], v8[LANE], v9[LANE],
-                       v10[LANE], v11[LANE], v12[LANE], v13[LANE]);
+                       v4[LANE], v5[LANE], v6[LANE], v7[LANE],
+                       v8[LANE], v9[LANE], v10[LANE], v11[LANE]);
         } END_VECTOR_BLOCK;
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
       }
