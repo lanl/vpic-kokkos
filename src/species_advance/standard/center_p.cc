@@ -46,13 +46,36 @@ center_p_pipeline( center_p_pipeline_args_t * args,
     qdt_4mc = 0.5*qdt_2mc;
 #endif
     ii   = p->i;
-    f    = f0 + ii;                          // Interpolate E
-    hax  = qdt_2mc*(    ( f->ex     ) );
+    f    = f0 + ii;                             // Load interpolator
+#ifdef SHAPE_NGP
+    hax  = qdt_2mc*(    ( f->ex     ) );        // Interpolate E
     hay  = qdt_2mc*(    ( f->ey     ) );
     haz  = qdt_2mc*(    ( f->ez     ) );
     cbx  = f->cbx;// + dx*f->dcbxdx;            // Interpolate B
     cby  = f->cby;// + dy*f->dcbydy;
     cbz  = f->cbz;// + dz*f->dcbzdz;
+#else
+#ifdef SHAPE_QS
+    hax  = qdt_2mc*( f->ex + dx*( f->dexdx + dx*f->d2exdx )   // Interpolate E
+                           + dy*( f->dexdy + dy*f->d2exdy )
+                           + dz*( f->dexdz + dz*f->d2exdz ) );
+    hay  = qdt_2mc*( f->ey + dx*( f->deydx + dx*f->d2eydx )
+                           + dy*( f->deydy + dy*f->d2eydy )
+                           + dz*( f->deydz + dz*f->d2eydz ) );
+    haz  = qdt_2mc*( f->ez + dx*( f->dezdx + dx*f->d2ezdx )
+                           + dy*( f->dezdy + dy*f->d2ezdy )
+                           + dz*( f->dezdz + dz*f->d2ezdz ) );
+    cbx  = f->cbx + dx*( f->dcbxdx + dx*f->d2cbxdx )          // Interpolate B
+                  + dy*( f->dcbxdy + dy*f->d2cbxdy )
+                  + dz*( f->dcbxdz + dz*f->d2cbxdz );
+    cby  = f->cby + dx*( f->dcbydx + dx*f->d2cbydx )
+                  + dy*( f->dcbydy + dy*f->d2cbydy )
+                  + dz*( f->dcbydz + dz*f->d2cbydz );
+    cbz  = f->cbz + dx*( f->dcbzdx + dx*f->d2cbzdx )
+                  + dy*( f->dcbzdy + dy*f->d2cbzdy )
+                  + dz*( f->dcbzdz + dz*f->d2cbzdz );
+#endif
+#endif
     ux   = p->ux;                            // Load momentum
     uy   = p->uy;
     uz   = p->uz;
