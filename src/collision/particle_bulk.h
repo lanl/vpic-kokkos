@@ -11,7 +11,7 @@
  */
 struct particle_bulk_collision_op_t : public collision_op_t {
   species_t  * spi;
-  fluid_species_t  * fspj;
+  fluid_species_t  * spj;
   int          interval;
 };
 
@@ -34,7 +34,7 @@ void apply_particle_bulk_collision_model_pipeline( particle_bulk_collision_op_t 
 
     particle_bulk_collision_pipeline<MonteCarlo> pipeline(
       cop->spi,
-      cop->fspj,
+      cop->spj,
       cop->interval,
       rng
     );
