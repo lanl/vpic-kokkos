@@ -3,6 +3,7 @@
 
 #include "../util/rng_policy.h"
 #include "../species_advance/species_advance.h"
+#include "../fluid_advance/fluid_advance.h"
 
 struct collision_op;
 typedef struct collision_op collision_op_t;
