@@ -21,7 +21,7 @@ void
 apply_cex_collision_op( collision_op_t * cop,
 			kokkos_rng_pool_t& rng ) {
   cex_collision_op_t * cex = (cex_collision_op_t *) cop;
-  cex_model model();
+  cex_model model;
   apply_particle_bulk_collision_model_pipeline<false>((particle_bulk_collision_op_t *) cop, model, rng); // To-do: Change MC to true!
 }
 
