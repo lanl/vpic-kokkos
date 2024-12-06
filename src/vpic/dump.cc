@@ -9,14 +9,20 @@
  * snell - revised to add strided dumps, time history dumps, others  20080404
  */
 
+// C++ headers
 #include <cassert>
+#include <iostream>
 
+// VPIC headers
 #include "vpic.h"
 #include "dumpmacros.h"
 #include "../util/io/FileUtils.h"
 
 /* -1 means no ranks talk */
 #define VERBOSE_rank -1
+
+// TODO: this should live somewhere more sensible
+std::unordered_map<species_id, size_t> tframe_map;
 
 // FIXME: NEW FIELDS IN THE GRID READ/WRITE WAS HACKED UP TO BE BACKWARD
 // COMPATIBLE WITH EXISTING EXTERNAL 3RD PARTY VISUALIZATION SOFTWARE.
@@ -25,12 +31,30 @@
 const int max_filename_bytes = 256;
 
 int vpic_simulation::dump_mkdir(const char * dname) {
-	return FileUtils::makeDirectory(dname);
+  return FileUtils::makeDirectory(dname);
 } // dump_mkdir
 
 int vpic_simulation::dump_cwd(char * dname, size_t size) {
-	return FileUtils::getCurrentWorkingDirectory(dname, size);
+  return FileUtils::getCurrentWorkingDirectory(dname, size);
 } // dump_mkdir
+
+void vpic_simulation::enable_binary_dump()
+{
+  //    dump_strategy = std::unique_ptr<Dump_Strategy>(new BinaryDump( rank(), nproc() ));
+  // dump_strategy = new BinaryDump(rank(), nproc());
+  dump_strategy_id = DUMP_STRATEGY_BINARY;
+}
+
+#ifdef VPIC_ENABLE_HDF5
+void vpic_simulation::enable_hdf5_dump()
+{
+  if (rank() == 0)
+    std::cout << "Enabling HDF5 IO backend" << std::endl;
+  // dump_strategy = std::unique_ptr<Dump_Strategy>(new HDF5Dump(rank(), nproc()));
+  // dump_strategy = new HDF5Dump(rank(), nproc());
+  dump_strategy_id = DUMP_STRATEGY_HDF5;
+}
+#endif
 
 /*****************************************************************************
  * ASCII dump IO
@@ -187,25 +211,6 @@ vpic_simulation::dump_materials( const char *fname ) {
  * Binary dump IO
  *****************************************************************************/
 
-/*
-enum dump_types {
-  grid_dump = 0,
-  field_dump = 1,
-  hydro_dump = 2,
-  particle_dump = 3,
-  restart_dump = 4
-};
-*/
-
-namespace dump_type {
-  const int grid_dump = 0;
-  const int field_dump = 1;
-  const int hydro_dump = 2;
-  const int particle_dump = 3;
-  const int restart_dump = 4;
-  const int history_dump = 5;
-} // namespace
-
 void
 vpic_simulation::dump_grid( const char *fbase ) {
   char fname[max_filename_bytes];
@@ -227,7 +232,7 @@ vpic_simulation::dump_grid( const char *fbase ) {
   dyout = grid->dy;
   dzout = grid->dz;
 
-  WRITE_HEADER_V0( dump_type::grid_dump, -1, 0, fileIO );
+  WRITE_HEADER_V0(dump_type::grid_dump, -1, 0, fileIO, step(), rank(), nproc());
 
   dim[0] = 3;
   dim[1] = 3;
@@ -251,266 +256,90 @@ vpic_simulation::dump_grid( const char *fbase ) {
 
 void
 vpic_simulation::dump_fields( const char *fbase, int ftag ) {
-    // Update the fields if necessary
-    if (step() > field_array->last_copied)
-        field_array->copy_to_host();
-
-  char fname[max_filename_bytes];
-  FileIO fileIO;
-  int dim[3];
-
-  if( !fbase ) ERROR(( "Invalid filename" ));
-
-  if( rank()==0 ) MESSAGE(( "Dumping fields to \"%s\"", fbase ));
-
-  if( ftag ) snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
-  else       snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
-
-  FileIOStatus status = fileIO.open(fname, io_write);
-  if( status==fail ) ERROR(( "Could not open \"%s\".", fname ));
-
-  /* IMPORTANT: these values are written in WRITE_HEADER_V0 */
-  nxout = grid->nx;
-  nyout = grid->ny;
-  nzout = grid->nz;
-  dxout = grid->dx;
-  dyout = grid->dy;
-  dzout = grid->dz;
-
-  WRITE_HEADER_V0( dump_type::field_dump, -1, 0, fileIO );
-
-  dim[0] = grid->nx+2;
-  dim[1] = grid->ny+2;
-  dim[2] = grid->nz+2;
-  WRITE_ARRAY_HEADER( field_array->f, 3, dim, fileIO );
-  fileIO.write( field_array->f, dim[0]*dim[1]*dim[2] );
-  if( fileIO.close() ) ERROR(( "File close failed on dump fields!!!" ));
+  dump_strategy->dump_fields(
+      fbase,
+      step(),
+      grid,
+      field_array,
+      ftag);
 }
 
 void
 vpic_simulation::dump_hydro( const char *sp_name,
                              const char *fbase,
                              int ftag ) {
-
-
-  species_t *sp;
-  char fname[max_filename_bytes];
-  FileIO fileIO;
-  int dim[3];
-
-  sp = find_species_name( sp_name, species_list );
-  if( !sp ) ERROR(( "Invalid species \"%s\"", sp_name ));
-
-  auto& particles = sp->k_p_d;
-  auto& particles_i = sp->k_p_i_d;
-  auto& interpolators_k = interpolator_array->k_i_d;
-
-  Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
-  accumulate_hydro_p_kokkos(
-      particles,
-      particles_i,
-      hydro_array->k_h_d,
-      interpolators_k,
-      sp
-  );
-
-  // This is slower in my tests
-  //synchronize_hydro_array_kokkos(hydro_array);
-
-  hydro_array->copy_to_host();
-
-  synchronize_hydro_array( hydro_array );
-
-  if( !fbase ) ERROR(( "Invalid filename" ));
-
-  if( rank()==0 )
-    MESSAGE(("Dumping \"%s\" hydro fields to \"%s\"",sp->name,fbase));
-
-  if( ftag ) {
-      snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
-  }
-  else {
-      snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
-  }
-
-  FileIOStatus status = fileIO.open(fname, io_write);
-  if( status==fail) ERROR(( "Could not open \"%s\".", fname ));
-
-  /* IMPORTANT: these values are written in WRITE_HEADER_V0 */
-  nxout = grid->nx;
-  nyout = grid->ny;
-  nzout = grid->nz;
-  dxout = grid->dx;
-  dyout = grid->dy;
-  dzout = grid->dz;
-
-  WRITE_HEADER_V0( dump_type::hydro_dump,sp->id,sp->q/sp->m,fileIO);
-
-  dim[0] = grid->nx+2;
-  dim[1] = grid->ny+2;
-  dim[2] = grid->nz+2;
-  WRITE_ARRAY_HEADER( hydro_array->h, 3, dim, fileIO );
-  fileIO.write( hydro_array->h, dim[0]*dim[1]*dim[2] );
-  if( fileIO.close() ) ERROR(( "File close failed on dump hydro!!!" ));
-}
-
-void
-vpic_simulation::dump_fluids( const char *fsp_name,
-			      const char *fbase,
-			      int ftag ) {
-
-  fluid_species_t *fsp;
-  char fname[max_filename_bytes];
-  FileIO fileIO;
-  int dim[3];
-
-  fsp = find_fluid_species_name( fsp_name, fluid_species_list );
-  if( !fsp ) ERROR(( "Invalid fluid species \"%s\"", fsp_name ));
-
-  if (step() > fsp->last_copied)  fsp->copy_to_host();
-  
-  
-  if( !fbase ) ERROR(( "Invalid filename" ));
-
-  if( rank()==0 )
-    MESSAGE(("Dumping \"%s\" fluid species to \"%s\"",fsp->name,fbase));
-
-  if( ftag ) {
-      snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
-  }
-  else {
-      snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
-  }
-
-  FileIOStatus status = fileIO.open(fname, io_write);
-  if( status==fail) ERROR(( "Could not open \"%s\".", fname ));
-
-  /* IMPORTANT: these values are written in WRITE_HEADER_V0 */
-  nxout = grid->nx;
-  nyout = grid->ny;
-  nzout = grid->nz;
-  dxout = grid->dx;
-  dyout = grid->dy;
-  dzout = grid->dz;
-
-  WRITE_HEADER_V0( dump_type::hydro_dump,fsp->id,fsp->q/fsp->m,fileIO); // To-do: Needs changing?
-
-  dim[0] = grid->nx+2; // To-do: Change if changing ghost cell #.
-  dim[1] = grid->ny+2;
-  dim[2] = grid->nz+2;
-  WRITE_ARRAY_HEADER( fsp->fl, 3, dim, fileIO );
-  fileIO.write( fsp->fl, dim[0]*dim[1]*dim[2] );
-  if( fileIO.close() ) ERROR(( "File close failed on dump fluids!!!" ));
+  species_t *sp = find_species_name(sp_name, species_list);
+  dump_strategy->dump_hydro(
+      fbase,
+      step(),
+      sp,
+      grid,
+      hydro_array,
+      interpolator_array,
+      ftag);
 }
 
 void
 vpic_simulation::dump_particles( const char *sp_name,
                                  const char *fbase,
-                                 int ftag )
-{
+                                 int ftag ) {
 
-    species_t *sp;
-    char fname[max_filename_bytes];
-    FileIO fileIO;
-    int dim[1], buf_start;
-    static particle_t * ALIGNED(128) p_buf = NULL;
-# define PBUF_SIZE 32768 // 1MB of particles
+  species_t *sp = find_species_name(sp_name, species_list);
+  dump_strategy->dump_particles(
+      fbase,
+      step(),
+      sp,
+      grid,
+      interpolator_array,
+      ftag);
+}
 
-    sp = find_species_name( sp_name, species_list );
-    if( !sp ) ERROR(( "Invalid species name \"%s\".", sp_name ));
+void
+vpic_simulation::dump_fluids( const char *fsp_name,
+            const char *fbase,
+            int ftag ) {
 
-    if( !fbase ) ERROR(( "Invalid filename" ));
-
-    // Update the particles on the host only if they haven't been recently
-    if (step() > sp->last_copied)
-      sp->copy_to_host();
-
-    if( !p_buf ) MALLOC_ALIGNED( p_buf, PBUF_SIZE, 128 );
-
-    if( rank()==0 )
-        MESSAGE(("Dumping \"%s\" particles to \"%s\"",sp->name,fbase));
-
-    if( ftag ) {
-        snprintf( fname, max_filename_bytes, "%s.%li.%i", fbase, (long)step(), rank() );
-    }
-    else {
-        snprintf( fname, max_filename_bytes, "%s.%i", fbase, rank() );
-    }
-
-    FileIOStatus status = fileIO.open(fname, io_write);
-    if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
-
-    /* IMPORTANT: these values are written in WRITE_HEADER_V0 */
-    nxout = grid->nx;
-    nyout = grid->ny;
-    nzout = grid->nz;
-    dxout = grid->dx;
-    dyout = grid->dy;
-    dzout = grid->dz;
-
-    WRITE_HEADER_V0( dump_type::particle_dump, sp->id, sp->q/sp->m, fileIO );
-
-    dim[0] = sp->np;
-    WRITE_ARRAY_HEADER( p_buf, 1, dim, fileIO );
-
-    // Copy a PBUF_SIZE hunk of the particle list into the particle
-    // buffer, timecenter it and write it out. This is done this way to
-    // guarantee the particle list unchanged while not requiring too
-    // much memory.
-
-    // FIXME: WITH A PIPELINED CENTER_P, PBUF NOMINALLY SHOULD BE QUITE
-    // LARGE.
-
-    particle_t * sp_p = sp->p;      sp->p      = p_buf;
-    int sp_np         = sp->np;     sp->np     = 0;
-    int sp_max_np     = sp->max_np; sp->max_np = PBUF_SIZE;
-    for( buf_start=0; buf_start<sp_np; buf_start += PBUF_SIZE ) {
-        sp->np = sp_np-buf_start; if( sp->np > PBUF_SIZE ) sp->np = PBUF_SIZE;
-        COPY( sp->p, &sp_p[buf_start], sp->np );
-        center_p( sp, interpolator_array );
-        fileIO.write( sp->p, sp->np );
-    }
-    sp->p      = sp_p;
-    sp->np     = sp_np;
-    sp->max_np = sp_max_np;
-
-    if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
+  fluid_species_t *fsp = find_fluid_species_name( fsp_name, fluid_species_list );
+  dump_strategy->dump_fluids(
+      fbase,
+      step(),
+      fsp,
+      grid,
+      ftag);
 }
 
 /*------------------------------------------------------------------------------
  * New dump logic
  *---------------------------------------------------------------------------*/
 
-#include <iostream>
-
 static FieldInfo fieldInfo[12] = {
-	{ "Electric Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-	{ "Electric Field Divergence Error", "SCALAR", "1", "FLOATING_POINT",
-		sizeof(float) },
-	{ "Magnetic Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-	{ "Magnetic Field Divergence Error", "SCALAR", "1", "FLOATING_POINT",
-		sizeof(float) },
-	{ "TCA Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-	{ "Bound Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
-	{ "Free Current Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-	{ "Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
-	{ "Edge Material", "VECTOR", "3", "INTEGER", sizeof(material_id) },
-	{ "Node Material", "SCALAR", "1", "INTEGER", sizeof(material_id) },
-	{ "Face Material", "VECTOR", "3", "INTEGER", sizeof(material_id) },
-	{ "Cell Material", "SCALAR", "1", "INTEGER", sizeof(material_id) }
+  { "Electric Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
+  { "Electric Field Divergence Error", "SCALAR", "1", "FLOATING_POINT",
+    sizeof(float) },
+  { "Magnetic Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
+  { "Magnetic Field Divergence Error", "SCALAR", "1", "FLOATING_POINT",
+    sizeof(float) },
+  { "TCA Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
+  { "Bound Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
+  { "Free Current Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
+  { "Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
+  { "Edge Material", "VECTOR", "3", "INTEGER", sizeof(material_id) },
+  { "Node Material", "SCALAR", "1", "INTEGER", sizeof(material_id) },
+  { "Face Material", "VECTOR", "3", "INTEGER", sizeof(material_id) },
+  { "Cell Material", "SCALAR", "1", "INTEGER", sizeof(material_id) }
 }; // fieldInfo
 
 static HydroInfo hydroInfo[5] = {
-	{ "Current Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-	{ "Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
-	{ "Momentum Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-	{ "Kinetic Energy Density", "SCALAR", "1", "FLOATING_POINT",
-		sizeof(float) },
-	{ "Stress Tensor", "TENSOR", "6", "FLOATING_POINT", sizeof(float) }
-	/*
-	{ "STRESS_DIAGONAL", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }
-	{ "STRESS_OFFDIAGONAL", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }
-	*/
+  { "Current Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
+  { "Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
+  { "Momentum Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
+  { "Kinetic Energy Density", "SCALAR", "1", "FLOATING_POINT",
+    sizeof(float) },
+  { "Stress Tensor", "TENSOR", "6", "FLOATING_POINT", sizeof(float) }
+  /*
+  { "STRESS_DIAGONAL", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }
+  { "STRESS_OFFDIAGONAL", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }
+  */
 }; // hydroInfo
 
 void
@@ -688,448 +517,35 @@ vpic_simulation::global_header( const char * base,
 void
 vpic_simulation::field_dump( DumpParameters & dumpParams ) {
 
-    // Update the fields if necessary
-    if (step() > field_array->last_copied)
-      field_array->copy_to_host();
-
-  // Create directory for this time step
-  char timeDir[max_filename_bytes];
-  int ret = snprintf(timeDir, max_filename_bytes, "%s/T.%ld", dumpParams.baseDir, (long)step());
-  if (ret < 0) {
-      ERROR(("snprintf failed"));
-  }
-  dump_mkdir(timeDir);
-
-  // Open the file for output
-  char filename[max_filename_bytes];
-  ret = snprintf(filename, max_filename_bytes, "%s/T.%ld/%s.%ld.%d", dumpParams.baseDir, (long)step(),
-          dumpParams.baseFileName, (long)step(), rank());
-  if (ret < 0) {
-      ERROR(("snprintf failed"));
-  }
-
-  FileIO fileIO;
-  FileIOStatus status;
-
-  status = fileIO.open(filename, io_write);
-  if( status==fail ) ERROR(( "Failed opening file: %s", filename ));
-
-  // convenience
-  const size_t istride(dumpParams.stride_x);
-  const size_t jstride(dumpParams.stride_y);
-  const size_t kstride(dumpParams.stride_z);
-
-  // Check stride values.
-  if(remainder(grid->nx, istride) != 0)
-    ERROR(("x stride must be an integer factor of nx"));
-  if(remainder(grid->ny, jstride) != 0)
-    ERROR(("y stride must be an integer factor of ny"));
-  if(remainder(grid->nz, kstride) != 0)
-    ERROR(("z stride must be an integer factor of nz"));
-
-  int dim[3];
-
-  /* define to do C-style indexing */
-# define f(x,y,z) f[ VOXEL(x,y,z, grid->nx,grid->ny,grid->nz) ]
-
-  /* IMPORTANT: these values are written in WRITE_HEADER_V0 */
-  nxout = (grid->nx)/istride;
-  nyout = (grid->ny)/jstride;
-  nzout = (grid->nz)/kstride;
-  dxout = (grid->dx)*istride;
-  dyout = (grid->dy)*jstride;
-  dzout = (grid->dz)*kstride;
-
-  /* Banded output will write data as a single block-array as opposed to
-   * the Array-of-Structure format that is used for native storage.
-   *
-   * Additionally, the user can specify a stride pattern to reduce
-   * the resolution of the data that are output.  If a stride is
-   * specified for a particular dimension, VPIC will write the boundary
-   * plus every "stride" elements in that dimension. */
-
-  if(dumpParams.format == band) {
-
-    WRITE_HEADER_V0(dump_type::field_dump, -1, 0, fileIO);
-
-    dim[0] = nxout+2;
-    dim[1] = nyout+2;
-    dim[2] = nzout+2;
-
-    if( rank()==VERBOSE_rank ) {
-      std::cerr << "nxout: " << nxout << std::endl;
-      std::cerr << "nyout: " << nyout << std::endl;
-      std::cerr << "nzout: " << nzout << std::endl;
-      std::cerr << "nx: " << grid->nx << std::endl;
-      std::cerr << "ny: " << grid->ny << std::endl;
-      std::cerr << "nz: " << grid->nz << std::endl;
-    }
-
-    WRITE_ARRAY_HEADER(field_array->f, 3, dim, fileIO);
-
-    // Create a variable list of field values to output.
-    size_t numvars = std::min(dumpParams.output_vars.bitsum(),
-                              total_field_variables);
-    size_t * varlist = new size_t[numvars];
-
-    for(size_t i(0), c(0); i<total_field_variables; i++)
-      if(dumpParams.output_vars.bitset(i)) varlist[c++] = i;
-
-    if( rank()==VERBOSE_rank ) printf("\nBEGIN_OUTPUT\n");
-
-    // more efficient for standard case
-    if(istride == 1 && jstride == 1 && kstride == 1)
-      for(size_t v(0); v<numvars; v++) {
-      for(size_t k(0); k<nzout+2; k++) {
-      for(size_t j(0); j<nyout+2; j++) {
-      for(size_t i(0); i<nxout+2; i++) {
-              const uint32_t * fref = reinterpret_cast<uint32_t *>(&field_array->f(i,j,k));
-              fileIO.write(&fref[varlist[v]], 1);
-              if(rank()==VERBOSE_rank) printf("%f ", field_array->f(i,j,k).ex);
-              if(rank()==VERBOSE_rank) std::cout << "(" << i << " " << j << " " << k << ")" << std::endl;
-      } if(rank()==VERBOSE_rank) std::cout << std::endl << "ROW_BREAK " << j << " " << k << std::endl;
-      } if(rank()==VERBOSE_rank) std::cout << std::endl << "PLANE_BREAK " << k << std::endl;
-      } if(rank()==VERBOSE_rank) std::cout << std::endl << "BLOCK_BREAK" << std::endl;
-      }
-
-    else
-
-      for(size_t v(0); v<numvars; v++) {
-      for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
-      for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
-      for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
-              const uint32_t * fref = reinterpret_cast<uint32_t *>(&field_array->f(ioff,joff,koff));
-              fileIO.write(&fref[varlist[v]], 1);
-              if(rank()==VERBOSE_rank) printf("%f ", field_array->f(ioff,joff,koff).ex);
-              if(rank()==VERBOSE_rank) std::cout << "(" << ioff << " " << joff << " " << koff << ")" << std::endl;
-      } if(rank()==VERBOSE_rank) std::cout << std::endl << "ROW_BREAK " << joff << " " << koff << std::endl;
-      } if(rank()==VERBOSE_rank) std::cout << std::endl << "PLANE_BREAK " << koff << std::endl;
-      } if(rank()==VERBOSE_rank) std::cout << std::endl << "BLOCK_BREAK" << std::endl;
-      }
-
-    delete[] varlist;
-
-  } else { // band_interleave
-
-    WRITE_HEADER_V0(dump_type::field_dump, -1, 0, fileIO);
-
-    dim[0] = nxout+2;
-    dim[1] = nyout+2;
-    dim[2] = nzout+2;
-
-    WRITE_ARRAY_HEADER(field_array->f, 3, dim, fileIO);
-
-    if(istride == 1 && jstride == 1 && kstride == 1)
-      fileIO.write(field_array->f, dim[0]*dim[1]*dim[2]);
-    else
-      for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
-      for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
-      for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
-            fileIO.write(&field_array->f(ioff,joff,koff), 1);
-      }
-      }
-      }
-  }
-
-# undef f
-
-  if( fileIO.close() ) ERROR(( "File close failed on field dump!!!" ));
+  dump_strategy->field_dump(
+      dumpParams,
+      step(),
+      grid,
+      field_array);
 }
 
 void
 vpic_simulation::hydro_dump( const char * speciesname,
                              DumpParameters & dumpParams ) {
 
-  // Create directory for this time step
-  char timeDir[max_filename_bytes];
-  snprintf(timeDir, max_filename_bytes, "%s/T.%ld", dumpParams.baseDir, (long)step());
-  dump_mkdir(timeDir);
-
-  // Open the file for output
-  char filename[max_filename_bytes];
-  int ret = snprintf( filename, max_filename_bytes, "%s/T.%ld/%s.%ld.%d", dumpParams.baseDir, (long)step(),
-           dumpParams.baseFileName, (long)step(), rank() );
-  if (ret < 0) {
-      ERROR(("snprintf failed"));
-  }
-
-  FileIO fileIO;
-  FileIOStatus status;
-
-  status = fileIO.open(filename, io_write);
-  if(status == fail) ERROR(("Failed opening file: %s", filename));
-
   species_t * sp = find_species_name(speciesname, species_list);
-  if( !sp ) ERROR(( "Invalid species name: %s", speciesname ));
-
-  auto& particles = sp->k_p_d;
-  auto& particles_i = sp->k_p_i_d;
-  auto& interpolators_k = interpolator_array->k_i_d;
-
-  Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
-  accumulate_hydro_p_kokkos(
-      particles,
-      particles_i,
-      hydro_array->k_h_d,
-      interpolators_k,
-      sp
-  );
-
-  // The legacy synchronize is actually a bit faster
-  //synchronize_hydro_array_kokkos(hydro_array);
-
-  hydro_array->copy_to_host();
-
-  synchronize_hydro_array( hydro_array );
-
-  // convenience
-  const size_t istride(dumpParams.stride_x);
-  const size_t jstride(dumpParams.stride_y);
-  const size_t kstride(dumpParams.stride_z);
-
-  // Check stride values.
-  if(remainder(grid->nx, istride) != 0)
-    ERROR(("x stride must be an integer factor of nx"));
-  if(remainder(grid->ny, jstride) != 0)
-    ERROR(("y stride must be an integer factor of ny"));
-  if(remainder(grid->nz, kstride) != 0)
-    ERROR(("z stride must be an integer factor of nz"));
-
-  int dim[3];
-
-  /* define to do C-style indexing */
-# define hydro(x,y,z) hydro_array->h[VOXEL(x,y,z, grid->nx,grid->ny,grid->nz)]
-
-  /* IMPORTANT: these values are written in WRITE_HEADER_V0 */
-  nxout = (grid->nx)/istride;
-  nyout = (grid->ny)/jstride;
-  nzout = (grid->nz)/kstride;
-  dxout = (grid->dx)*istride;
-  dyout = (grid->dy)*jstride;
-  dzout = (grid->dz)*kstride;
-
-  /* Banded output will write data as a single block-array as opposed to
-   * the Array-of-Structure format that is used for native storage.
-   *
-   * Additionally, the user can specify a stride pattern to reduce
-   * the resolution of the data that are output.  If a stride is
-   * specified for a particular dimension, VPIC will write the boundary
-   * plus every "stride" elements in that dimension.
-   */
-  if(dumpParams.format == band) {
-
-    WRITE_HEADER_V0(dump_type::hydro_dump, sp->id, sp->q/sp->m, fileIO);
-
-    dim[0] = nxout+2;
-    dim[1] = nyout+2;
-    dim[2] = nzout+2;
-
-    WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
-
-    /*
-     * Create a variable list of hydro values to output.
-     */
-    size_t numvars = std::min(dumpParams.output_vars.bitsum(),
-                              total_hydro_variables);
-    size_t * varlist = new size_t[numvars];
-    for(size_t i(0), c(0); i<total_hydro_variables; i++)
-      if( dumpParams.output_vars.bitset(i) ) varlist[c++] = i;
-
-    // More efficient for standard case
-    if(istride == 1 && jstride == 1 && kstride == 1)
-
-      for(size_t v(0); v<numvars; v++)
-      for(size_t k(0); k<nzout+2; k++)
-      for(size_t j(0); j<nyout+2; j++)
-      for(size_t i(0); i<nxout+2; i++) {
-              const uint32_t * href = reinterpret_cast<uint32_t *>(&hydro(i,j,k));
-              fileIO.write(&href[varlist[v]], 1);
-      }
-
-    else
-
-      for(size_t v(0); v<numvars; v++)
-      for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
-      for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
-      for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
-              const uint32_t * href = reinterpret_cast<uint32_t *>(&hydro(ioff,joff,koff));
-              fileIO.write(&href[varlist[v]], 1);
-      }
-      }
-      }
-
-    delete[] varlist;
-
-  } else { // band_interleave
-
-    WRITE_HEADER_V0(dump_type::hydro_dump, sp->id, sp->q/sp->m, fileIO);
-
-    dim[0] = nxout;
-    dim[1] = nyout;
-    dim[2] = nzout;
-
-    WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
-
-    if(istride == 1 && jstride == 1 && kstride == 1)
-
-      fileIO.write(hydro_array->h, dim[0]*dim[1]*dim[2]);
-
-    else
-
-      for(size_t k(0); k<nzout; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
-      for(size_t j(0); j<nyout; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
-      for(size_t i(0); i<nxout; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
-            fileIO.write(&hydro(ioff,joff,koff), 1);
-      }
-      }
-      }
-  }
-
-# undef hydro
-
-  if( fileIO.close() ) ERROR(( "File close failed on hydro dump!!!" ));
+  dump_strategy->hydro_dump(
+      dumpParams,
+      step(),
+      sp,
+      grid,
+      hydro_array,
+      interpolator_array);
 }
-
 
 void
 vpic_simulation::fluid_dump( const char * speciesname,
                              DumpParameters & dumpParams ) {
 
-  // Create directory for this time step
-  char timeDir[max_filename_bytes];
-  snprintf(timeDir, max_filename_bytes, "%s/T.%ld", dumpParams.baseDir, (long)step());
-  dump_mkdir(timeDir);
-
-  // Open the file for output
-  char filename[max_filename_bytes];
-  int ret = snprintf( filename, max_filename_bytes, "%s/T.%ld/%s.%ld.%d", dumpParams.baseDir, (long)step(),
-           dumpParams.baseFileName, (long)step(), rank() );
-  if (ret < 0) {
-      ERROR(("snprintf failed"));
-  }
-
-  FileIO fileIO;
-  FileIOStatus status;
-
-  status = fileIO.open(filename, io_write);
-  if(status == fail) ERROR(("Failed opening file: %s", filename));
-
-  fluid_species_t * fsp = find_fluid_species_name(speciesname, fluid_species_list);
-  if( !fsp ) ERROR(( "Invalid fluid species name: %s", speciesname ));
-
-  // The legacy synchronize is actually a bit faster
-  //synchronize_hydro_array_kokkos(hydro_array);
-
-  if (step() > fsp->last_copied)
-    fsp->copy_to_host();
-  
-
-  //  synchronize_hydro_array( hydro_array );
-
-  // convenience
-  const size_t istride(dumpParams.stride_x);
-  const size_t jstride(dumpParams.stride_y);
-  const size_t kstride(dumpParams.stride_z);
-
-  // Check stride values.
-  if(remainder(grid->nx, istride) != 0)
-    ERROR(("x stride must be an integer factor of nx"));
-  if(remainder(grid->ny, jstride) != 0)
-    ERROR(("y stride must be an integer factor of ny"));
-  if(remainder(grid->nz, kstride) != 0)
-    ERROR(("z stride must be an integer factor of nz"));
-
-  int dim[3];
-
-  /* define to do C-style indexing */
-# define fluid(x,y,z) fsp->fl[VOXEL(x,y,z, grid->nx,grid->ny,grid->nz)]
-
-  /* IMPORTANT: these values are written in WRITE_HEADER_V0 */
-  nxout = (grid->nx)/istride;
-  nyout = (grid->ny)/jstride;
-  nzout = (grid->nz)/kstride;
-  dxout = (grid->dx)*istride;
-  dyout = (grid->dy)*jstride;
-  dzout = (grid->dz)*kstride;
-
-  /* Banded output will write data as a single block-array as opposed to
-   * the Array-of-Structure format that is used for native storage.
-   *
-   * Additionally, the user can specify a stride pattern to reduce
-   * the resolution of the data that are output.  If a stride is
-   * specified for a particular dimension, VPIC will write the boundary
-   * plus every "stride" elements in that dimension.
-   */
-  if(dumpParams.format == band) {
-
-    WRITE_HEADER_V0(dump_type::hydro_dump, fsp->id, fsp->q/fsp->m, fileIO);
-
-    dim[0] = nxout+2;
-    dim[1] = nyout+2;
-    dim[2] = nzout+2;
-
-    WRITE_ARRAY_HEADER(fsp->fl, 3, dim, fileIO);
-
-    /*
-     * Create a variable list of hydro values to output.
-     */
-    size_t numvars = std::min(dumpParams.output_vars.bitsum(),
-                              total_fluid_variables);  // To-do: Define this
-    size_t * varlist = new size_t[numvars];
-    for(size_t i(0), c(0); i<total_fluid_variables; i++)
-      if( dumpParams.output_vars.bitset(i) ) varlist[c++] = i;
-
-    // More efficient for standard case
-    if(istride == 1 && jstride == 1 && kstride == 1)
-
-      for(size_t v(0); v<numvars; v++)
-      for(size_t k(0); k<nzout+2; k++)
-      for(size_t j(0); j<nyout+2; j++)
-      for(size_t i(0); i<nxout+2; i++) {
-              const uint32_t * flref = reinterpret_cast<uint32_t *>(&fluid(i,j,k));
-              fileIO.write(&flref[varlist[v]], 1);
-      }
-
-    else
-
-      for(size_t v(0); v<numvars; v++)
-      for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
-      for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
-      for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
-              const uint32_t * flref = reinterpret_cast<uint32_t *>(&fluid(ioff,joff,koff));
-              fileIO.write(&flref[varlist[v]], 1);
-      }
-      }
-      }
-
-    delete[] varlist;
-
-  } else { // band_interleave
-
-    WRITE_HEADER_V0(dump_type::hydro_dump, fsp->id, fsp->q/fsp->m, fileIO);
-
-    dim[0] = nxout;
-    dim[1] = nyout;
-    dim[2] = nzout;
-
-    WRITE_ARRAY_HEADER(fsp->fl, 3, dim, fileIO);
-
-    if(istride == 1 && jstride == 1 && kstride == 1)
-
-      fileIO.write(fsp->fl, dim[0]*dim[1]*dim[2]);
-
-    else
-
-      for(size_t k(0); k<nzout; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
-      for(size_t j(0); j<nyout; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
-      for(size_t i(0); i<nxout; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
-            fileIO.write(&fluid(ioff,joff,koff), 1);
-      }
-      }
-      }
-  }
-
-# undef fluid
-
-  if( fileIO.close() ) ERROR(( "File close failed on fluid dump!!!" ));
+  fluid_species_t *fsp = find_fluid_species_name( speciesname, fluid_species_list );
+  dump_strategy->fluid_dump(
+      dumpParams,
+      step(),
+      fsp,
+      grid);
 }

@@ -26,6 +26,8 @@
 #include "../util/checksum.h"
 #include "../util/system.h"
 #include "../util/rng_policy.h"
+#include "dump_strategy.h"
+#include "dumpmacros.h"
 
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
@@ -36,7 +38,12 @@
 #endif
 //  #include "dumpvars.h"
 
-typedef FileIO FILETYPE;
+// Forward declarations
+class Dump_Strategy;
+class BinaryDump;
+class HDF5Dump;
+
+/* typedef FileIO FILETYPE; */
 
 const uint32_t allvars		(0xffffffff);
 const uint32_t electric		(1<<0 | 1<<1 | 1<<2);
@@ -166,6 +173,9 @@ struct DumpParameters {
 }; // struct DumpParameters
 
 class vpic_simulation {
+  friend class Dump_Strategy;
+  friend class BinaryDump;
+  friend class HDF5Dump;
 public:
   vpic_simulation();
   ~vpic_simulation();
@@ -174,6 +184,21 @@ public:
   int advance( void );
   void finalize( void );
   void print_run_details( void );
+
+  // TODO: decide if I should collapse this to an enum
+  // An enum would stop these ifdefs being so leaky
+  void enable_binary_dump();
+#ifdef VPIC_ENABLE_HDF5
+  void enable_hdf5_dump();
+#endif
+
+  // TODO: remake these protected
+
+  // Very likely a user will forgot to delete this if they change the strategy,
+  // a smart ptr will save us from the small leak
+  // std::unique_ptr<Dump_Strategy> dump_strategy;
+  Dump_Strategy *dump_strategy;
+  DumpStrategyID dump_strategy_id = DUMP_STRATEGY_BINARY; // 0 : binary; 1: HDF5
 
   // Set RNG policy. Use std::rng by default, optionally use Kokkos or
   // "original"
