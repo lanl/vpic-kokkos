@@ -99,6 +99,18 @@ struct collision_model {
     return 1;
   }
 
+  /**
+   * @brief Modification of charge due to collision                                                                                                                                                                                
+   * e.g. +1 for electron loss, -1 for electron capture.
+   */
+  KOKKOS_INLINE_FUNCTION
+  constexpr float modify_charge( // To-do: Allow for two returned values for binary collisions?
+  // Any arguments?
+  ) const
+  {
+    return 0; // Default = no change in charge
+  }
+  
 };
 
 // In collision.cc

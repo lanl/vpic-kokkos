@@ -53,6 +53,16 @@ takizuka_abe(
   const int          interval
 );
 
+
+collision_op_t *
+charge_exchange(
+  const char       * name,
+  /**/  species_t  * spi,
+  /**/  fluid_species_t  * spj,
+  //  const double       cvar0,
+  const int          interval
+);
+
 /* In hard_sphere.cc */
 
 /* Binary hard sphere collisions between particles with equal radius. */
