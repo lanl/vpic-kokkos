@@ -60,7 +60,7 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
 
-option(VPIC_ENABLE_AUTO_TUNING "Enable automatic tuning based on architecture" ON)
+option(VPIC_ENABLE_AUTO_TUNING "Enable automatic tuning based on architecture" OFF)
 
 option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
 
