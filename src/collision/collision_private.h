@@ -92,8 +92,9 @@ struct collision_model {
   KOKKOS_INLINE_FUNCTION
   constexpr float restitution(
     kokkos_rng_state_t& rg,
-    float E,
-    float nvdt
+    float * param
+    //float E,
+    //float nvdt
   ) const
   {
     return 1;

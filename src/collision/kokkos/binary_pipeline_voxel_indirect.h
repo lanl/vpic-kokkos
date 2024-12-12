@@ -455,7 +455,8 @@ struct binary_collision_pipeline {
     }
 
     // Compute collision angle and coefficient of restitution
-    const float rr = model.restitution(rg, t2, t1);
+    float param[2] = {t2,t1};
+    const float rr = model.restitution(rg, param);
     dd = model.tan_theta_half(rg, t2, t1);
     PREVENT_BACKSCATTER(dd);
 

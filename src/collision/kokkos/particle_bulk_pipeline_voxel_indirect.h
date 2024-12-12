@@ -375,7 +375,7 @@ struct particle_bulk_collision_pipeline {
         d0 = 2;
         d1 = 0;
         d2 = 1;
-    }
+    } //make the smallerst |urx(,y,z)| in the d0 ( or z) direction
     t2 += t0;
 
     ur = sqrtf( t2 );
@@ -395,8 +395,9 @@ struct particle_bulk_collision_pipeline {
     }
 
     // Compute collision angle and coefficient of restitution
-    const float rr = model.restitution(rg, t2, t1);
-    dd = model.tan_theta_half(rg, t2, t1);
+    float param[4] = {ur, ujth, ndt/(mi*mi), mi/mj};
+    const float rr = model.restitution(rg, param);
+    dd = model.tan_theta_half(rg, param);
     PREVENT_BACKSCATTER(dd);
 
     stack[0] = urx;
@@ -421,25 +422,29 @@ struct particle_bulk_collision_pipeline {
     t1 = t0*ur*cosf(t1);
     t0 *= -dd;
 
-    /* stack = (1 - cos theta) u + |u| sin theta Tperp */
+    /* stack = (1 - cos theta) u + |u| sin theta + Tperp */
     stack[0] = (t0*urx + t1*tx) + t2*( ury*tz - urz*ty );
     stack[1] = (t0*ury + t1*ty) + t2*( urz*tx - urx*tz );
     stack[2] = (t0*urz + t1*tz) + t2*( urx*ty - ury*tx );
 
+    spi_p(i, particle_var::ux) = ujx_fl + stack[0]*rr;
+    spi_p(i, particle_var::uy) = ujy_fl + stack[1]*rr;
+    spi_p(i, particle_var::uz) = ujz_fl + stack[2]*rr;
+    
     // Scaled center of mass velocity.
-    t1 = (1-rr);
-    float cmx = t1*(mu_j*uix + mu_i*ujx_fl);
-    float cmy = t1*(mu_j*uiy + mu_i*ujy_fl);
-    float cmz = t1*(mu_j*uiz + mu_i*ujz_fl);
+    // t1 = (1-rr);
+    // float cmx = t1*(mu_j*uix + mu_i*ujx_fl);
+    // float cmy = t1*(mu_j*uiy + mu_i*ujy_fl);
+    // float cmz = t1*(mu_j*uiz + mu_i*ujz_fl);
 
-    // Handle unequal particle weights using detailed balance.
-    t0 = rg.frand(0, 1);
+    // // Handle unequal particle weights using detailed balance.
+    // t0 = rg.frand(0, 1);
 
     // TURN OF IF STATEMENT TO COMPILE (THIS CODE WILL BE REPLACED BY GY).
     //    if(wi*t0 <= wj) {
-    spi_p(i, particle_var::ux) = (uix + mu_i*stack[0])*rr + cmx;
-      spi_p(i, particle_var::uy) = (uiy + mu_i*stack[1])*rr + cmy;
-      spi_p(i, particle_var::uz) = (uiz + mu_i*stack[2])*rr + cmz;
+    // spi_p(i, particle_var::ux) = (uix + mu_i*stack[0])*rr + cmx;
+    //   spi_p(i, particle_var::uy) = (uiy + mu_i*stack[1])*rr + cmy;
+    //   spi_p(i, particle_var::uz) = (uiz + mu_i*stack[2])*rr + cmz;
       //    }
 
     /*    if(wj*t0 <= wi) {

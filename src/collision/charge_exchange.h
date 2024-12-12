@@ -38,8 +38,7 @@ struct cex_model : public collision_model {
   KOKKOS_INLINE_FUNCTION
   float tan_theta_half(
     kokkos_rng_state_t& rg,
-    float E,
-    float nvdt
+    float * param
   ) const
   {
     float value = 0;
