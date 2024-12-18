@@ -515,6 +515,10 @@ void
 k_hyb_local_ghost_lapl_b( field_array_t * RESTRICT f,
                            const grid_t *          g );
 
+void
+k_hyb_local_adjust_jf( field_array_t * RESTRICT f,
+                        const grid_t *          g );
+
 // In remote.c
 
 void
