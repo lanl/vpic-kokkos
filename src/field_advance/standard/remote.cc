@@ -3879,6 +3879,283 @@ k_end_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa,
 }
 
 /*****************************************************************************
+ * Edge value communications
+ *
+ * Like ghost communication routines, but opposite direction:
+ * Send ghost cell data, recv increment into live cells.
+ *****************************************************************************/
+
+//Hybrid edge JF
+#define BRP(x_,y_,z_)                                                   \
+  const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;                   \
+  const int size = (4*n##y_*n##z_)*sizeof(float);                       \
+  BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
+
+/**
+ * @brief Begin non blocking receive for adding remote jf ghost cells into
+ * local jf edge cells, needed for quadratic-sum or higher-order particle
+ * shape.
+ *
+ * Calculates size of receive buffer based on which face and orientation.
+ * BRP macro adjusts calculations for different face directions. Template
+ * function wraps the BRP macro to make profiling clearer.
+ *
+ * @tparam Face Enum denoting the face and order of dimensions for calculations
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param i X-dim face coordinate (-1.0: neg. x, 0: origin, 1.0: pos. x)
+ * @param j Y-dim face coordinate (-1.0: neg. y, 0: origin, 1.0: pos. y)
+ * @param k Z-dim face coordinate (-1.0: neg. z, 0: origin, 1.0: pos. z)
+ * @param rbuf_d Receive buffer on the device
+ * @param rbuf_h Mirror of rbuf_d on the Host
+ */
+template<typename Face>
+void
+begin_recv_edge_hyb_jf(field_array* fa, const int i, const int j, const int k) {
+  int src = fa->g->bc[BOUNDARY(-i,-j,-k)]; /**< Source rank */
+  // Only recv cells if src is a valid neighbor and not itself
+  if( 0 <= src && src < world_size ) {
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
+    auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
+    auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      BRP(x,y,z);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      BRP(y,z,x);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      BRP(z,x,y);
+    }
+  }
+}
+
+#undef BRP
+
+#define BSP(x_,y_,z_)                                                   \
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;             \
+  const int size = (4*n##y_*n##z_)*sizeof(float);                       \
+  const int face = (i+j+k)<0 ? 0 : n##x_+1; /* send ghosts to edges */  \
+  const k_field_t& k_field = fa->k_f_d;                                 \
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+  Kokkos::parallel_for("begin_send_edge_hyb_jf<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+      const int x_ = face;                                              \
+      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx); \
+      sbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy); \
+      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz); \
+      sbuf_d(3*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);\
+    });                                                                 \
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d);                                      \
+  BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
+
+/**
+ * @brief Begin non blocking send for adding local jf ghost cells into remote
+ * jf edge cells, needed for quadratic-sum or higher-order particle shape.
+ *
+ * Serializes jf data in contiguous buffer and sends data to a neighbors
+ * ghost cells. BSP macro adjusts calculations for different face directions.
+ * Template function wraps the BRP macro to make profiling clearer.
+ *
+ * @tparam Face Enum denoting the face and order of dimensions for calculations
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param i X-dim face coordinate (-1.0: neg. x, 0: origin, 1.0: pos. x)
+ * @param j Y-dim face coordinate (-1.0: neg. y, 0: origin, 1.0: pos. y)
+ * @param k Z-dim face coordinate (-1.0: neg. z, 0: origin, 1.0: pos. z)
+ * @param sbuf_d Send buffer on the device
+ * @param sbuf_h Mirror of sbuf_d on the Host
+ */
+template<typename Face>
+void
+begin_send_edge_hyb_jf(field_array* fa, const int i, const int j, const int k) {
+  int dst = fa->g->bc[BOUNDARY(i,j,k)]; /**< Destination rank */
+  // Only send cells if dst is a valid neighbor and not itself
+  if( 0 <= dst && dst < world_size ) {
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
+    auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
+    auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      BSP(x,y,z);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      BSP(y,z,x);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      BSP(z,x,y);
+    }
+  }
+}
+
+#undef BSP
+
+/**
+ * @brief Begin exchanging jf ghost cells between all neighbors to increment
+ * edge cells for quadratic-sum or higher-order particle particle shape.
+ *
+ * Prepares receive buffers, packs face cells into contiguous buffers
+ * and starts non blocking communication with neighbors. Only performs
+ * communication when necessary. Will ignore cases where the process is on a
+ * boundary or if the process topology would make the exchange redundant
+ * (ex. 1D and 2D grids).
+ *
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param g Pointer to grid structure
+ * @param fb Reference to field buffers used for MPI communication
+ */
+void k_begin_remote_edge_hyb_jf(field_array_t* ALIGNED(128) fa,
+                                const grid_t* g,
+                                field_buffers_t& fb) {
+  // TODO halo exchange not yet implemented for ghost->edge summation.
+  // Need modified versions of begin/end_halo_exchange(...)
+  //         to pack local ghosts, unpack by adding to remote edges
+  // instead of pack local edges,  unpack by replacing remote ghosts.
+  // --ATr,2025aug30
+//#ifdef VPIC_ENABLE_HALO_EXCHANGE
+//  begin_halo_add_exchange(fa, field_var::jfx, field_var::rhof+1);
+//#else
+  // Start receiving
+  begin_recv_edge_hyb_jf<XYZ>(fa, -1,  0,  0);
+  begin_recv_edge_hyb_jf<YZX>(fa,  0, -1,  0);
+  begin_recv_edge_hyb_jf<ZXY>(fa,  0,  0, -1);
+  begin_recv_edge_hyb_jf<XYZ>(fa,  1,  0,  0);
+  begin_recv_edge_hyb_jf<YZX>(fa,  0,  1,  0);
+  begin_recv_edge_hyb_jf<ZXY>(fa,  0,  0,  1);
+
+  // Start sending
+  begin_send_edge_hyb_jf<XYZ>(fa, -1,  0,  0);
+  begin_send_edge_hyb_jf<YZX>(fa,  0, -1,  0);
+  begin_send_edge_hyb_jf<ZXY>(fa,  0,  0, -1);
+  begin_send_edge_hyb_jf<XYZ>(fa,  1,  0,  0);
+  begin_send_edge_hyb_jf<YZX>(fa,  0,  1,  0);
+  begin_send_edge_hyb_jf<ZXY>(fa,  0,  0,  1);
+//#endif
+}
+
+#define ERP(x_,y_,z_)                                                   \
+  const grid_t* g = fa->g;                                              \
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));        \
+  if(p) {                                                               \
+    const int nx = g->nx, ny = g->ny, nz = g->nz;                       \
+    const int face = (i+j+k) < 0 ? n##x_ : 1; /*add ghosts to edges*/   \
+    const k_field_t& k_field = fa->k_f_d;                               \
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h);                                    \
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+    Kokkos::parallel_for("end_recv_edge_hyb_jf<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+        const int x_ = face;                                            \
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx)  += rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy)  += rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz)  += rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) += rbuf_d(3*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      });                                                               \
+  }
+
+/**
+ * @brief End non blocking receive for adding remote jf ghost cells into
+ * local jf edge cells, needed for quadratic-sum or higher-order particle
+ * shape.
+ *
+ * Wait for non blocking communication to complete and unpack the buffer into
+ * the local ranks edge cells. Wait and unpacking the buffer may be made to
+ * overlap between different faces in the future.
+ *
+ * @tparam Face Enum denoting the face and order of dimensions for calculations
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param i X-dim face coordinate (-1.0: neg. x, 0: origin, 1.0: pos. x)
+ * @param j Y-dim face coordinate (-1.0: neg. y, 0: origin, 1.0: pos. y)
+ * @param k Z-dim face coordinate (-1.0: neg. z, 0: origin, 1.0: pos. z)
+ * @param rbuf_d Receive buffer on the device
+ * @param rbuf_h Mirror of rbuf_d on the Host
+ */
+template<typename Face>
+void
+end_recv_edge_hyb_jf(field_array_t* fa, const int i, const int j, const int k) {
+  int src = fa->g->bc[BOUNDARY(-i,-j,-k)]; /**< Source rank */
+  // Only recv cells if src is a valid neighbor and not itself
+  if( 0 <= src && src < world_size ) {
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
+    auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
+    auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      ERP(x,y,z);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      ERP(y,z,x);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      ERP(z,x,y);
+    }
+  }
+}
+
+#undef ERP
+
+/**
+ * @brief End non blocking send for adding local jf ghost cells into remote jf
+ * edge cells, needed for quadratic-sum or higher-order particle shape.
+ *
+ * Ensures the prior send operation is complete and unsets the send buffer.
+ *
+ * @tparam Face Enum denoting the face and order of dimensions for calculations
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param i X-dim face coordinate (-1.0: neg. x, 0: origin, 1.0: pos. x)
+ * @param j Y-dim face coordinate (-1.0: neg. y, 0: origin, 1.0: pos. y)
+ * @param k Z-dim face coordinate (-1.0: neg. z, 0: origin, 1.0: pos. z)
+ */
+template<typename Face>
+void
+end_send_edge_hyb_jf(field_array_t* fa, const int i, const int j, const int k) {
+  int dst = fa->g->bc[BOUNDARY(i,j,k)]; /**< Destination rank */
+  // Only send cells if dst is a valid neighbor and not itself
+  if( 0 <= dst && dst < world_size ) {
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      end_send_port_k(i,j,k,fa->g);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      end_send_port_k(i,j,k,fa->g);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      end_send_port_k(i,j,k,fa->g);
+    }
+  }
+}
+
+/**
+ * @brief End exchanging jf ghost cells between all neighbors to increment
+ * edge cells for quadratic-sum or higher-order particle particle shape.
+ *
+ * Wait until MPI communication is complete then unpack the buffers and
+ * fill in the ghost cells with the communicated smoothing variables. Only
+ * performs communication when necessary. Will ignore cases where the process
+ * is on a boundary or if the process topology would make the exchange redundant
+ * (ex. 1D and 2D grids).
+ *
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param g Pointer to grid structure
+ * @param fb Reference to field buffers used for MPI communication
+ */
+void
+k_end_remote_edge_hyb_jf(field_array_t* ALIGNED(128) fa,
+                         const grid_t* g,
+                         field_buffers_t& fb) {
+  // TODO halo exchange not yet implemented for ghost->edge summation.
+  // Need modified versions of begin/end_halo_exchange(...)
+  //         to pack local ghosts, unpack by adding to remote edges
+  // instead of pack local edges,  unpack by replacing remote ghosts.
+  // --ATr,2025aug30
+//#ifdef VPIC_ENABLE_HALO_EXCHANGE
+//  end_halo_add_exchange(fa, field_var::jfx, field_var::rhof+1);
+//#else
+  // End receiving
+  end_recv_edge_hyb_jf<XYZ>(fa, -1,  0,  0);
+  end_recv_edge_hyb_jf<YZX>(fa,  0, -1,  0);
+  end_recv_edge_hyb_jf<ZXY>(fa,  0,  0, -1);
+  end_recv_edge_hyb_jf<XYZ>(fa,  1,  0,  0);
+  end_recv_edge_hyb_jf<YZX>(fa,  0,  1,  0);
+  end_recv_edge_hyb_jf<ZXY>(fa,  0,  0,  1);
+
+  // End sending
+  end_send_edge_hyb_jf<XYZ>(fa, -1,  0,  0);
+  end_send_edge_hyb_jf<YZX>(fa,  0, -1,  0);
+  end_send_edge_hyb_jf<ZXY>(fa,  0,  0, -1);
+  end_send_edge_hyb_jf<XYZ>(fa,  1,  0,  0);
+  end_send_edge_hyb_jf<YZX>(fa,  0,  1,  0);
+  end_send_edge_hyb_jf<ZXY>(fa,  0,  0,  1);
+
+  Kokkos::fence();
+//#endif
+}
+
+/*****************************************************************************
  * Synchronization functions
  *
  * The communication is done in three passes so that small edge and corner

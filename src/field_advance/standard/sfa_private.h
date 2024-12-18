@@ -655,5 +655,14 @@ k_end_remote_ghost_hyb_o( field_array_t      * ALIGNED(128) f,
                         const grid_t *              g,
                         field_buffers_t& f_buffers );
 
+void
+k_begin_remote_edge_hyb_jf( field_array_t      * ALIGNED(128) f,
+                            const grid_t *              g,
+                            field_buffers_t& f_buffers );
+void
+k_end_remote_edge_hyb_jf( field_array_t      * ALIGNED(128) f,
+                        const grid_t *              g,
+                        field_buffers_t& f_buffers );
+
 
 #endif // _sfa_private_h_
