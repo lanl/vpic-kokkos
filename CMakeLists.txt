@@ -3,7 +3,7 @@
 # All rights reserved.
 #------------------------------------------------------------------------------#
 
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.29.2)
 cmake_policy(SET CMP0074 NEW)
 
 #~----------------------------------------------------------------------------~#
@@ -60,7 +60,7 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
 
-option(VPIC_ENABLE_AUTO_TUNING "Enable automatic tuning based on architecture" ON)
+option(VPIC_ENABLE_AUTO_TUNING "Enable automatic tuning based on architecture" OFF)
 
 option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
 
@@ -70,7 +70,9 @@ option(VPIC_ENABLE_VECTORIZATION "Enable improved vectorization for CPUs" OFF)
 
 option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performnace on CPUs" OFF)
 
-option(VPIC_ENABLE_VARIABLE_CHARGE "Enable variable charge for particles" ON)
+option(VPIC_ENABLE_HDF5 "Enable HDF5 for use during IO. VPIC does not help you install HDF5" OFF)
+
+option(VPIC_ENABLE_VARIABLE_CHARGE "Enable variable charge for particles" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -86,7 +88,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 set(VPIC_CPPFLAGS)
 if(MPI_CPPFLAGS)
   string(REPLACE ";" " " string_cppflags "${MPI_CPPFLAGS}")
-  set(VPIC_CPPFLAGS "${string_cppflags}")
+  set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} ${string_cppflags}")
 endif(MPI_CPPFLAGS)
 
 # Append extra implicit includes
@@ -96,9 +98,9 @@ set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -I${string_cppflags}")
 #message(${VPIC_CPPFLAGS})
 
 
-string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
+string(REPLACE ";" " -I" string_includes "${MPI_CXX_INCLUDE_PATH}")
 if(NOT ${string_includes} STREQUAL "")
-  set(VPIC_CXX_FLAGS "-I${string_includes} ${MPI_C_LINK_FLAGS}")
+  set(VPIC_CXX_FLAGS "-I${string_includes} ${MPI_CXX_LINK_FLAGS}")
 endif(NOT ${string_includes} STREQUAL "")
 set(VPIC_CXX_FLAGS "${CMAKE_CXX17_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
 
@@ -135,6 +137,37 @@ if (OPENMP_FOUND)
 else()
   message("OpenMP not found...")
 endif()
+
+#------------------------------------------------------------------------------#
+# HDF5 Output for fields, hydro, and particles
+#------------------------------------------------------------------------------#
+
+if(VPIC_ENABLE_HDF5)
+    message("----------------------------")
+    # Enable HDF5, and the relevant defines
+    find_package(HDF5 REQUIRED COMPONENTS C)
+    if (NOT HDF5_IS_PARALLEL)
+        message(FATAL_ERROR "HDF5 Parallel support is required: ${HDF5_IS_PARALLEL}")
+    endif()
+    add_definitions(-DVPIC_ENABLE_HDF5)
+    set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DVPIC_ENABLE_HDF5")
+
+    # the hdf5 var we need changes based on version...
+    string(REPLACE ";" " " string_libraries "${HDF5_C_LIBRARY}")
+    set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+
+    # if (NOT "${HDF5_C_LIBRARY}" STREQUAL "")
+    #     string(REPLACE ";" " " string_libraries "${HDF5_C_LIBRARIES}")
+    #     set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+    # endif()
+
+    include_directories(${HDF5_INCLUDE_DIRS})
+
+    # Add includes to ./bin/vpic for users who need the headers in their decks
+    string(REPLACE ";" " -I" string_includes "${HDF5_INCLUDE_DIRS}")
+    set(VPIC_CXX_FLAGS "-I${string_includes} ${VPIC_CXX_FLAGS}")
+
+endif(VPIC_ENABLE_HDF5)
 
 # Allow files to be references from the root, (eg #include "src/vpic/vpic.h")
 include_directories(${PROJECT_SOURCE_DIR})
@@ -459,7 +492,7 @@ else()
   install(TARGETS vpic LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 endif()
 target_include_directories(vpic INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
+target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} ${HDF5_C_LIBRARIES} Kokkos::kokkos)
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
 
 macro(build_a_vpic name deck)

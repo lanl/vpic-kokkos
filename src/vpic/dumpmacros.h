@@ -6,7 +6,7 @@
 /* FIXME: WHEN THESE MACROS WERE HOISTED AND VARIOUS HACKS DONE TO THEm
    THEY BECAME _VERY_ _DANGEROUS. */
 
-#define WRITE_HEADER_V0(dump_type,sp_id,q_m,fileIO) do { \
+#define WRITE_HEADER_V0(dump_type,sp_id,q_m,fileIO,cstep,rank,nproc) do { \
     /* Binary compatibility information */               \
     WRITE( char,      CHAR_BIT,               fileIO );  \
     WRITE( char,      sizeof(short int),      fileIO );  \
@@ -21,7 +21,7 @@
     WRITE( int,       0 /* Version */,        fileIO );  \
     WRITE( int,       dump_type,              fileIO );  \
     /* High level information */                         \
-    WRITE( int,       step(),                 fileIO );  \
+    WRITE( int,       cstep,                   fileIO );  \
     WRITE( int,       nxout,                  fileIO );  \
     WRITE( int,       nyout,                  fileIO );  \
     WRITE( int,       nzout,                  fileIO );  \
@@ -35,12 +35,13 @@
     WRITE( float,     grid->cvac,             fileIO );  \
     WRITE( float,     grid->eps0,             fileIO );  \
     WRITE( float,     0 /* damp */,           fileIO );  \
-    WRITE( int,       rank(),                 fileIO );  \
-    WRITE( int,       nproc(),                fileIO );  \
+    WRITE( int,       rank,                 fileIO );  \
+    WRITE( int,       nproc,                fileIO );  \
     /* Species parameters */                             \
     WRITE( int,       sp_id,                  fileIO );  \
     WRITE( float,     q_m,                    fileIO );  \
   } while(0)
+
 /*
 void write_header_v0(const int dump_type, const int sp_id, const float q_m, FileIO& fileIO) {
     // Binary compatibility information

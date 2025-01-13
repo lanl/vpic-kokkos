@@ -14,38 +14,26 @@ src_dir="${0%/*}/.."
 #------------------------------------------------------------------------------#
 
 #module purge
-#module load PrgEnv-gnu
-#module load cmake cuda cpe-cuda
-
-module swap PrgEnv-cray PrgEnv-gnu
-module load cmake cudatoolkit craype-accel-nvidia90; module list
-export CRAY_ACCEL_TARGET=nvidia90
-export CRAY_TCMALLOC_MEMFS_FORCE=1
-export CRAYPE_LINK_TYPE=dynamic
-export CRAY_ACCEL_VENDOR=nvidia
-export MPI_GPU_SUPPORT=1
-export CC=cc
-export CXX=CC
-
+module load cmake openmpi/4.1.2-gcc_11.2.0 cuda/12.4.1
 
 #------------------------------------------------------------------------------#
 # Choose support for HDF5 output for fields and hydro
 #------------------------------------------------------------------------------#
+# One of the two available options must be chosen. Valid options are ON and
+# OFF.
+#
 # If SET_HDF5=OFF, the output of fields and hydro are in binary format.
+#
 # If SET_HDF5=ON, the output of fields and hydro are in HDF5 format.
-#------------------------------------------------------------------------------#                                                                                                                                  
+#------------------------------------------------------------------------------#
 # SET_HDF5="OFF"
 SET_HDF5="ON"
+
 if [ "$SET_HDF5" = "ON" ]
 then
-    module load cray-hdf5-parallel
+    module load hdf5
 fi
-
 module list 2>&1 | tee modules.txt
-
-
-#-D KOKKOS_CUDA_ARCH=sm_90                                     \
-#    -D KOKKOS_ARCH_FLAGS="-DKokkos_ARCH_HOPPER90=ON;"             \
 
 #------------------------------------------------------------------------------#
 # Call CMake command
@@ -63,19 +51,17 @@ module list 2>&1 | tee modules.txt
 #export NVCC_WRAPPER_DEFAULT_COMPILER=$(which CC)
 
 CRAYPE_LINK_TYPE=dynamic cmake \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_BUILD_TYPE=Release \
   -DENABLE_INTEGRATED_TESTS=OFF \
   -DENABLE_UNIT_TESTS=OFF \
   -DBUILD_INTERNAL_KOKKOS=ON \
   -DENABLE_KOKKOS_CUDA=ON \
-  -DKokkos_ARCH_HOPPER90=ON \
-  -DKokkos_ENABLE_CUDA=ON \
+  -DKokkos_ARCH_AMPERE80=ON \
+  -DKokkos_ARCH_ZEN2=OFF \
   -DKokkos_ENABLE_OPENMP=ON \
-  -DKokkos_ENABLE_DEBUG=ON \
-  -DKokkos_ENABLE_IMPL_CUDA_MALLOC_ASYNC=off \
-  -DCMAKE_CXX_COMPILER="CC" \
+  -DCMAKE_CXX_COMPILER=/usr/projects/maehem/users/xiaocanli/maehem/kokkos/bin/nvcc_wrapper \
   -DCMAKE_CXX_FLAGS="-g -rdynamic "\
-  -DVPIC_ENABLE_HDF5=${SET_HDF5} \
+  -DVPIC_ENABLE_HDF5=$SET_HDF5 \
   $src_dir
 
 #------------------------------------------------------------------------------#
