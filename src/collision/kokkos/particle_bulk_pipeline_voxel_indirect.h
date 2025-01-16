@@ -427,9 +427,9 @@ struct particle_bulk_collision_pipeline {
     stack[1] = (t0*ury + t1*ty) + t2*( urz*tx - urx*tz );
     stack[2] = (t0*urz + t1*tz) + t2*( urx*ty - ury*tx );
 
-    spi_p(i, particle_var::ux) = ujx_fl + stack[0]*rr;
-    spi_p(i, particle_var::uy) = ujy_fl + stack[1]*rr;
-    spi_p(i, particle_var::uz) = ujz_fl + stack[2]*rr;
+    spi_p(i, particle_var::ux) = ujx_fl + (urx + stack[0])*rr;
+    spi_p(i, particle_var::uy) = ujy_fl + (ury + stack[1])*rr;
+    spi_p(i, particle_var::uz) = ujz_fl + (urz + stack[2])*rr;
     
     // Scaled center of mass velocity.
     // t1 = (1-rr);
