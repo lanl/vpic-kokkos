@@ -400,6 +400,13 @@ struct particle_bulk_collision_pipeline {
     dd = model.tan_theta_half(rg, param);
     PREVENT_BACKSCATTER(dd);
 
+#ifdef VARIABLE_CHARGE
+    // To-do: Check if density associated with particle > neutral background density.
+    const float dq = model.modify_charge();
+    spi_p(i, particle_var::qp) += dq;
+    // To-do: Change fluid charge?
+#endif
+    
     stack[0] = urx;
     stack[1] = ury;
     stack[2] = urz;

@@ -49,8 +49,8 @@ struct cex_model : public collision_model {
   KOKKOS_INLINE_FUNCTION
     float modify_charge( ) const
   {
-    //    float capture = -1;
-    return 0;//capture;
+    float capture = -1;
+    return capture;
   }
   
 };
