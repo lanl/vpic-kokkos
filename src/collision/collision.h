@@ -60,7 +60,7 @@ charge_exchange(
   /**/  species_t  * spi,
   /**/  fluid_species_t  * spj,
   //  const double       cvar0,
-  float (*sigmafunc)(float),
+  float (*sigmafunc)(float,float),
   const int          interval
 );
 

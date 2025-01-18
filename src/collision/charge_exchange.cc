@@ -21,8 +21,8 @@ void
 apply_cex_collision_op( collision_op_t * cop,
 			kokkos_rng_pool_t& rng ) {
   cex_collision_op_t * cex = (cex_collision_op_t *) cop;
-  cex_model model;
-  apply_particle_bulk_collision_model_pipeline<false>((particle_bulk_collision_op_t *) cop, model, rng); // To-do: Change MC to true!
+  cex_model model(cex->sigma_cx0);
+  apply_particle_bulk_collision_model_pipeline<true>((particle_bulk_collision_op_t *) cop, model, rng); // To-do: Change MC to true!
 }
 
 void
@@ -40,7 +40,7 @@ charge_exchange(
   /**/  species_t  * spi,
   /**/  fluid_species_t  * spj,
   //  const double       cvar0,
-  float (*sigmafunc)(float),
+  float (*sigmafunc)(float,float),
   const int          interval
 )
 {
@@ -55,6 +55,7 @@ charge_exchange(
 
   cex->spi         = spi;
   cex->spj         = spj;
+  cex->sigma_cx0   = sigmafunc;
   //  ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
   cex->interval    = interval;
   cex->apply_cop   = &apply_cex_collision_op;
