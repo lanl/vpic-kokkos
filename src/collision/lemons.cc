@@ -5,31 +5,31 @@
 
 void
 checkpt_lemons_collision_op(const void * cop) {
-  lemons_collision_op_t * ta = (lemons_collision_op_t *) cop;
-  CHECKPT(ta, 1);
+  lemons_collision_op_t * le = (lemons_collision_op_t *) cop;
+  CHECKPT(le, 1);
   checkpt_particle_bulk_collision_op_internal( (const particle_bulk_collision_op_t *) cop );
 }
 
 void *
 restore_lemons_collision_op() {
-  lemons_collision_op_t * ta;
-  RESTORE(ta);
-  return restore_particle_bulk_collision_op_internal( (particle_bulk_collision_op_t *) ta );
+  lemons_collision_op_t * le;
+  RESTORE(le);
+  return restore_particle_bulk_collision_op_internal( (particle_bulk_collision_op_t *) le );
 }
 
 void
 apply_lemons_collision_op( collision_op_t * cop,
                                  kokkos_rng_pool_t& rng ) {
-  lemons_collision_op_t * ta = (lemons_collision_op_t *) cop;
-  lemons_model model(ta->cvar0);
+  lemons_collision_op_t * le = (lemons_collision_op_t *) cop;
+  lemons_model model(le->cvar0);
   apply_particle_bulk_collision_model_pipeline<false>((particle_bulk_collision_op_t *) cop, model, rng);
 }
 
 void
 delete_lemons_collision_op(collision_op_t * cop) {
-  lemons_collision_op_t * ta = (lemons_collision_op_t *) cop;
-  UNREGISTER_OBJECT(ta);
-  FREE(ta);
+  lemons_collision_op_t * le = (lemons_collision_op_t *) cop;
+  UNREGISTER_OBJECT(le);
+  FREE(le);
 }
 
 /* Public interface **********************************************************/
@@ -48,24 +48,24 @@ lemons(
       cvar0 <= 0 || interval <= 0 )
     ERROR(("Bad args."));
 
-  lemons_collision_op_t * ta;
-  MALLOC( ta, 1);
-  MALLOC( ta->name, strlen(name) +1 );
-  strncpy( ta->name, name, strlen(name)+1);
+  lemons_collision_op_t * le;
+  MALLOC( le, 1);
+  MALLOC( le->name, strlen(name) +1 );
+  strncpy( le->name, name, strlen(name)+1);
 
-  ta->spi         = spi;
-  ta->spj         = spj;
-  ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
-  ta->interval    = interval;
-  ta->apply_cop   = &apply_lemons_collision_op;
-  ta->delete_cop  = &delete_lemons_collision_op;
-  ta->next        = NULL;
+  le->spi         = spi;
+  le->spj         = spj;
+  le->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
+  le->interval    = interval;
+  le->apply_cop   = &apply_lemons_collision_op;
+  le->delete_cop  = &delete_lemons_collision_op;
+  le->next        = NULL;
 
-  REGISTER_OBJECT(ta,
+  REGISTER_OBJECT(le,
                   &checkpt_lemons_collision_op,
                   &restore_lemons_collision_op,
                   NULL);
 
-  return ta;
+  return le;
 
 }

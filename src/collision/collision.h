@@ -55,6 +55,15 @@ takizuka_abe(
 
 
 collision_op_t *
+lemons(
+  const char       * name,
+  /**/  species_t  * spi,
+  /**/  fluid_species_t  * spj,
+  const double       cvar0,
+  const int          interval
+);
+
+collision_op_t *
 charge_exchange(
   const char       * name,
   /**/  species_t  * spi,

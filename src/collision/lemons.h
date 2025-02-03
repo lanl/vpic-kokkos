@@ -54,7 +54,8 @@ struct lemons_model : public collision_model {
   ) const
   {      
       auto v0 = param[0];
-      assert(v0>0);
+      //assert(v0>0);
+      if(v0==0) return 0;
       auto v = v0;
       auto vjth = param[1];
       auto ndt_mi2 = param[2];
