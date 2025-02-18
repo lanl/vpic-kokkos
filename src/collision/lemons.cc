@@ -40,7 +40,8 @@ lemons(
   /**/  species_t  * spi,
   /**/  fluid_species_t  * spj,
   const double       cvar0,
-  const int          interval
+  const int          interval,
+  k_field_t k_field //optional
 )
 {
 
@@ -60,7 +61,12 @@ lemons(
   le->apply_cop   = &apply_lemons_collision_op;
   le->delete_cop  = &delete_lemons_collision_op;
   le->next        = NULL;
-
+  if (k_field.size() != 0) { //check if k_field is passed in
+      le->k_field = k_field;
+  } else {
+      printf("k_field not passed in lemons(). Quit()\n");
+      exit(1);
+  }
   REGISTER_OBJECT(le,
                   &checkpt_lemons_collision_op,
                   &restore_lemons_collision_op,

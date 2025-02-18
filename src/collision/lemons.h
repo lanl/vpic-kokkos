@@ -8,6 +8,7 @@
  */
 struct lemons_collision_op_t : public particle_bulk_collision_op_t {
   double cvar0;
+  k_field_t k_field;
 };
 
 
