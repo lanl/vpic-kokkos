@@ -161,7 +161,8 @@ typedef struct field {
   float tx, ty, tz, te;                  // Electron temperature + temp storage
   float ox, oy, oz, oe;                  // For B field solve/smoothing
   float pex, pey, pez, pe;               // pressure etc
-  material_id ematx, ematy, ematz, nmat; // Material at edge centers and nodes
+  float fx, fy, fz, fe;               // Momentum/Energy sources for electrons
+    material_id ematx, ematy, ematz, nmat; // Material at edge centers and nodes
   material_id fmatx, fmaty, fmatz, cmat; // Material at face and cell centers
  
 
