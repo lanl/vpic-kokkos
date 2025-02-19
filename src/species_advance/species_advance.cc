@@ -80,7 +80,19 @@ find_species_name( const char * name,
                    species_t * sp_list ) {
   species_t * sp;
   if( !name ) return NULL;
-  LIST_FIND_FIRST( sp, sp_list, strcmp( sp->name, name )==0 );
+//  LIST_FIND_FIRST( sp, sp_list, strcmp( sp->name, name )==0 );
+  for(sp = sp_list; sp; sp=sp->next) {
+    if(sp == NULL)
+      break;
+    if(sp->name == NULL)
+      break;
+    if(name == NULL)
+      break;
+    if(strcmp(sp->name, name) == 0)
+      break;
+//    if(sp == NULL || sp->name == NULL || strcmp(sp->name, name) == 0)
+//      break;
+  }
   return sp;
 }
 

@@ -629,7 +629,7 @@ move_p_kokkos(
 #if defined PARTICLE_WEIGHT_FLOAT
   #define p_w     k_part.w(pi)
 #elif defined PARTICLE_WEIGHT_SHORT
-  #define p_w     k_part.w(pi)*sp_w
+  #define p_w     (k_part.w(pi)*sp_w)
 #elif defined PARTICLE_WEIGHT_CONSTANT
   #define p_w     sp_w
 #endif
@@ -1153,7 +1153,7 @@ move_p_kokkos_host_serial(
 #if defined PARTICLE_WEIGHT_FLOAT
   #define p_w     k_particles.w(pi)
 #elif defined PARTICLE_WEIGHT_SHORT
-  #define p_w     k_particles.w(pi)*sp_w
+  #define p_w     (k_particles.w(pi)*sp_w)
 #elif defined PARTICLE_WEIGHT_CONSTANT
   #define p_w     sp_w
 #endif

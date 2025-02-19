@@ -561,11 +561,11 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         dz = kpart.get_dz(n);
         int v = kpart.i(n);
 #if defined PARTICLE_WEIGHT_FLOAT
-        w7 = kpart.w(n) * q_8V;
+        w7 = (kpart.w(n) * q_8V);
 #elif defined PARTICLE_WEIGHT_SHORT
-        w7 = kpart.w(n)*sp_w * q_8V;
+        w7 = (kpart.w(n)*sp_w * q_8V);
 #elif defined PARTICLE_WEIGHT_CONSTANT
-        w7 = sp_w * q_8V;
+        w7 = (sp_w * q_8V);
 #endif
 
 #   define FMA( x,y,z) ((z)+(x)*(y))

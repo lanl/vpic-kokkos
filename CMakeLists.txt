@@ -263,7 +263,7 @@ if (VPIC_DUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
 
 if (VPIC_ENABLE_PAPI)
-  add_definitions(-DVPIC_ENABLE_PAPI)
+    add_definitions(-DVPIC_ENABLE_PAPI)
 endif(VPIC_ENABLE_PAPI)
 
 set(USE_V4)

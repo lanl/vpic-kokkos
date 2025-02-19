@@ -93,7 +93,7 @@ int vpic_simulation::advance(void)
 
 // DEVICE function
 // Touches particles, particle movers, accumulators, interpolators
-//  KOKKOS_TIC();
+  KOKKOS_TIC();
 
   // DEVICE function - Touches particles, particle movers, accumulators, interpolators
   LIST_FOR_EACH( sp, species_list )
@@ -106,7 +106,7 @@ int vpic_simulation::advance(void)
       advance_p( sp, accumulator_array, interpolator_array );
 #endif
   }
-//  KOKKOS_TOC( advance_p, 1);
+  KOKKOS_TOC( advance_p, 1);
 
 #ifdef VPIC_ENABLE_PAPI
   Kokkos::Profiling::pushRegion(" " + step_str + " accumulator_contributions");

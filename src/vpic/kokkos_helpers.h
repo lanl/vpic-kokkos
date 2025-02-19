@@ -84,8 +84,8 @@ typedef float mixed_t;
 #else
 //typedef Q1_14 pos_t;
 //typedef __half pos_t;
-//typedef __fp16 pos_t;
 //typedef fp16_t pos_t;
+//typedef _Float16 pos_t;
 typedef float pos_t;
 typedef float mom_t;
 typedef float mixed_t;
@@ -118,7 +118,7 @@ class k_particles_struct {
             ux("Particle ux momentum", num_particles),
             uy("Particle uy momentum", num_particles),
             uz("Particle uz momentum", num_particles),
-#if !defined PARTICLE_WEIGHT_CONSTANT
+#ifndef PARTICLE_WEIGHT_CONSTANT
             i("Particle index", num_particles),
             w("Particle weight", num_particles){}
 #else
@@ -784,12 +784,10 @@ class k_particle_movers_host_struct {
         }
 };
 
-//using k_particles_soa_t      = k_particles_struct<fp16_t, mom_t>;
-//using k_particles_host_soa_t = k_particles_host_struct<fp16_t, mom_t>;
-
+//using k_particles_soa_t      = k_particles_struct<Q1_14, mom_t>;
+//using k_particles_host_soa_t = k_particles_host_struct<Q1_14, mom_t>;
 using k_particles_soa_t      = k_particles_struct<pos_t, mom_t>;
 using k_particles_host_soa_t = k_particles_host_struct<pos_t, mom_t>;
-
 using k_particle_movers_soa_t = k_particle_movers_struct;
 using k_particle_movers_host_soa_t = k_particle_movers_host_struct;
 
