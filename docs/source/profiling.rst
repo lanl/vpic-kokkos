@@ -95,6 +95,8 @@ Generating rooflines for CPU machines is a bit more complex than GPUs. First sel
       // Collect performance data in a two step process and open resulting profile in local GUI
       advixe-cl -collect survey -project-dir=OUTPUT_DIR -- ./DECK_NAME.Linux --tpp 1 --kokkos-num-threads=1
       advixe-cl -collect tripcounts -flop -project-dir=OUTPUT_DIR -- ./DECK_NAME.Linux --tpp 1 --kokkos-num-threads=1
+      // Optional: Convert output to html file for viewing without needing to install Advisor
+      advisor --report=roofline --project-dir=OUTPUT_DIR --report-output=./roofline.html
 
   * AMD uProf: (https://www.amd.com/content/dam/amd/en/documents/developer/version-4-1-documents/uprof/uprof-ug-rev-4.1.pdf)::
 
