@@ -10,6 +10,35 @@
   if(!isfinite(TAN) || (TAN) > TAN_THETA_HALF_MAX ) (TAN) = TAN_THETA_HALF_MAX; \
 } while(0)
 
+// Templated small array used for accumulation/reduction
+template <class ScalarType, int N>
+struct Accum {
+  // We'll store partial sums in v[0..N-1]
+  enum : int { n = N };
+  ScalarType v[n] = { 0 };
+
+  // Operator += for combining two partial sums
+  KOKKOS_INLINE_FUNCTION
+  Accum& operator+=(const Accum &b) {
+    for (int i = 0; i < n; ++i) {
+      v[i] += b.v[i];
+    }
+    return *this;
+  }
+};
+typedef Accum<float, 5> gmomType; //0:mass, 1-3:momentum, 4-energy
+
+namespace Kokkos { //required
+template <>
+struct reduction_identity<gmomType> {
+  KOKKOS_INLINE_FUNCTION
+  static gmomType sum() {
+    // If gmomType() is guaranteed to construct an identity for summation (e.g. init zeros),
+    // then returning a default-constructed object is fine.
+    return gmomType();
+  }
+};
+} 
 /**
  * @brief General purpose pipeline to produce particle-fluid bulk collisions.
  *
@@ -271,15 +300,37 @@ struct particle_bulk_collision_pipeline {
 	//// Extract fluid variables
 	//	const float n_fl = spj_fl(v, fluid_var::den);
 
+	//for each cell
+	gmomType Dm; 
 	
-	Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ni),
-	[&](const int& k) {
-	
+	Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team_member, ni),
+	[&](const int& k, gmomType &lsum) {
+	    float ux_n = spi_p(k, particle_var::ux);
+	    float uy_n = spi_p(k, particle_var::uy);
+	    float uz_n = spi_p(k, particle_var::uz);
+	    float wp   = spi_p(k, particle_var::w);
+
 	  particle_bulk_collision(mi, mj, mu, mu_i, mu_j, spi_p, spj_fl, model, rg, dt,
 				       spi_sortindex_ra(i0 + k),v
             );
+	    float ux_i = spi_p(k, particle_var::ux);
+	    float uy_i = spi_p(k, particle_var::uy);
+	    float uz_i = spi_p(k, particle_var::uz);
 
-	});
+	    auto dux = ( ux_i - ux_n ) * wp;
+	    auto duy = ( uy_i - uy_n ) * wp;
+	    auto duz = ( uz_i - uz_n ) * wp;
+	    auto den = 0.5 *
+		( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+		  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) ) *
+		wp;
+	    lsum.v[0] += wp;
+	    lsum.v[1] += dux;
+	    lsum.v[2] += duy;
+	    lsum.v[3] += duz;
+	    lsum.v[4] += den;
+	    
+	}, Dm);
 	
         // We *must* free generators.
         rp.free_state(rg);
