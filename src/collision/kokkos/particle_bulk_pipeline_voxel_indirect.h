@@ -10,35 +10,7 @@
   if(!isfinite(TAN) || (TAN) > TAN_THETA_HALF_MAX ) (TAN) = TAN_THETA_HALF_MAX; \
 } while(0)
 
-// Templated small array used for accumulation/reduction
-template <class ScalarType, int N>
-struct Accum {
-  // We'll store partial sums in v[0..N-1]
-  enum : int { n = N };
-  ScalarType v[n] = { 0 };
-
-  // Operator += for combining two partial sums
-  KOKKOS_INLINE_FUNCTION
-  Accum& operator+=(const Accum &b) {
-    for (int i = 0; i < n; ++i) {
-      v[i] += b.v[i];
-    }
-    return *this;
-  }
-};
-typedef Accum<float, 5> gmomType; //0:mass, 1-3:momentum, 4-energy
-
-namespace Kokkos { //required
-template <>
-struct reduction_identity<gmomType> {
-  KOKKOS_INLINE_FUNCTION
-  static gmomType sum() {
-    // If gmomType() is guaranteed to construct an identity for summation (e.g. init zeros),
-    // then returning a default-constructed object is fine.
-    return gmomType();
-  }
-};
-} 
+ 
 /**
  * @brief General purpose pipeline to produce particle-fluid bulk collisions.
  *
@@ -305,18 +277,26 @@ struct particle_bulk_collision_pipeline {
 	
 	Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team_member, ni),
 	[&](const int& k, gmomType &lsum) {
-	    float ux_n = spi_p(k, particle_var::ux);
-	    float uy_n = spi_p(k, particle_var::uy);
-	    float uz_n = spi_p(k, particle_var::uz);
-	    float wp   = spi_p(k, particle_var::w);
+	    float up[4] =   { spi_p(k, particle_var::w),
+			      spi_p(k, particle_var::ux),
+			      spi_p(k, particle_var::uy),
+			      spi_p(k, particle_var::uz)};
+	    float wp   = up[0];
+	    float ux_n = up[1];
+	    float uy_n = up[2];
+	    float uz_n = up[3];
 
-	  particle_bulk_collision(mi, mj, mu, mu_i, mu_j, spi_p, spj_fl, model, rg, dt,
+	  particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,
 				       spi_sortindex_ra(i0 + k),v
             );
-	    float ux_i = spi_p(k, particle_var::ux);
-	    float uy_i = spi_p(k, particle_var::uy);
-	    float uz_i = spi_p(k, particle_var::uz);
+ 	    float ux_i = up[1];
+	    float uy_i = up[2];
+	    float uz_i = up[3];
 
+	    spi_p(k, particle_var::ux) = ux_i;
+	    spi_p(k, particle_var::uy) = uy_i;
+	    spi_p(k, particle_var::uz) = uz_i;	  
+	    
 	    auto dux = ( ux_i - ux_n ) * wp;
 	    auto duy = ( uy_i - uy_n ) * wp;
 	    auto duz = ( uz_i - uz_n ) * wp;
@@ -329,9 +309,17 @@ struct particle_bulk_collision_pipeline {
 	    lsum.v[2] += duy;
 	    lsum.v[3] += duz;
 	    lsum.v[4] += den;
-	    
+	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",wp,dux,duy,duz,den);
+	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",lsum.v[0],lsum.v[1],lsum.v[2],lsum.v[3],lsum.v[4]);
 	}, Dm);
+	// printf("Dm=%e,%e,%e,%e,%e\n",Dm.v[0],Dm.v[1],Dm.v[2],Dm.v[3],Dm.v[4]);
+	if (team_member.team_rank() == 0) {
+	    // Code that runs once per team leader
+	    auto row_v = Kokkos::subview(spj_fl, v, Kokkos::ALL);
+	    model.upload_moment_src( row_v, Dm );
+	}
 	
+
         // We *must* free generators.
         rp.free_state(rg);
 
@@ -359,7 +347,8 @@ struct particle_bulk_collision_pipeline {
     const float mu,
     const float mu_i,
     const float mu_j,
-    const k_particles_t&   spi_p,
+    float (&up)[4],
+    //const k_particles_t&   spi_p,
     //    const k_particles_t&   spj_p,
     const k_fluid_t& spj_fl,
     collision_model& model,
@@ -373,10 +362,10 @@ struct particle_bulk_collision_pipeline {
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];
     int d0, d1, d2;
 
-    float uix = spi_p(i, particle_var::ux);
-    float uiy = spi_p(i, particle_var::uy);
-    float uiz = spi_p(i, particle_var::uz);
-    float wi  = spi_p(i, particle_var::w);
+    float uix = up[1];
+    float uiy = up[2];
+    float uiz = up[3];
+    float wi  = up[0];
 
     //    float ujx = spj_p(j, particle_var::ux);
     //    float ujy = spj_p(j, particle_var::uy);
@@ -485,9 +474,9 @@ struct particle_bulk_collision_pipeline {
     stack[1] = (t0*ury + t1*ty) + t2*( urz*tx - urx*tz );
     stack[2] = (t0*urz + t1*tz) + t2*( urx*ty - ury*tx );
 
-    spi_p(i, particle_var::ux) = ujx_fl + (urx + stack[0])*rr;
-    spi_p(i, particle_var::uy) = ujy_fl + (ury + stack[1])*rr;
-    spi_p(i, particle_var::uz) = ujz_fl + (urz + stack[2])*rr;
+    up[1] = ujx_fl + (urx + stack[0])*rr;
+    up[2] = ujy_fl + (ury + stack[1])*rr;
+    up[3] = ujz_fl + (urz + stack[2])*rr;
     
     // Scaled center of mass velocity.
     // t1 = (1-rr);

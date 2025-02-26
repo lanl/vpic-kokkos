@@ -8,14 +8,14 @@
  */
 struct lemons_collision_op_t : public particle_bulk_collision_op_t {
   double cvar0;
-  k_field_t k_field;
+  //k_field_t k_field;
 };
 
 
 /**
  * @brief Takizuka-Abe binary collision model.
  */
-struct lemons_model : public collision_model {
+struct lemons_model : public collision_model<lemons_model> {
   const float d_cvar0;
   const float d_twosqrtpi;
     lemons_model( float cvar0 ) : d_cvar0(cvar0), d_twosqrtpi(2.0 / sqrt( M_PI )) { };
@@ -103,7 +103,17 @@ struct lemons_model : public collision_model {
       
   }
     
-
+  KOKKOS_INLINE_FUNCTION
+  void upload_moment_src_impl( const k_fluid_1d & spj_v,
+			       const gmomType &Dm
+			       ) const {
+      printf("#upload_moment_src_impl()  in lemons model\n");
+      spj_v(fluid_var::msx) = Dm.v[1];
+      spj_v(fluid_var::msy) = Dm.v[2];
+      spj_v(fluid_var::msz) = Dm.v[3];
+      spj_v(fluid_var::ens) = Dm.v[4];
+      printf("#msxyz=%e,%e,%e, ens=%e\n",spj_v(fluid_var::msx),spj_v(fluid_var::msy),spj_v(fluid_var::msz),spj_v(fluid_var::ens));      
+  }
 };
 
 #endif /* _lemons_h_ */

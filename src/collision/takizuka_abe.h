@@ -14,7 +14,7 @@ struct takizuka_abe_collision_op_t : public binary_collision_op_t {
 /**
  * @brief Takizuka-Abe binary collision model.
  */
-struct takizuka_abe_model : public collision_model {
+struct takizuka_abe_model : public collision_model<takizuka_abe_model> {
   const float cvar;
 
   takizuka_abe_model( float cvar ) : cvar(cvar) { };

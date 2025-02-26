@@ -21,7 +21,7 @@ new_dump_strategy(DumpStrategyID dump_strategy_id,
   {
     case DUMP_STRATEGY_BINARY:
       if (vpic_simu->rank() == 0)
-        std::cout << "DUMP_STRATEGY_BINARY  enabled \n";
+        std::cout << "# DUMP_STRATEGY_BINARY  enabled \n";
       ds = new BinaryDump(vpic_simu->rank(), vpic_simu->nproc());
       break;
     case DUMP_STRATEGY_HDF5:

@@ -60,8 +60,12 @@ lemons(
   /**/  species_t  * spi,
   /**/  fluid_species_t  * spj,
   const double       cvar0,
-  const int          interval,
-  k_field_t k_field = k_field_t()
+  const int          interval
+);
+
+void transfer_mom_en_src(
+  k_field_t k_field,
+  fluid_species_t  * spj
 );
 
 collision_op_t *

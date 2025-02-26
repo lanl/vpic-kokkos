@@ -15,7 +15,7 @@ struct cex_collision_op_t : public particle_bulk_collision_op_t {
 /**
  * @brief Charge exchange collision model.
  */
-struct cex_model : public collision_model {
+struct cex_model : public collision_model<cex_model> {
   // const float cvar;
 
   float (*sigma_cx)(float,float);
