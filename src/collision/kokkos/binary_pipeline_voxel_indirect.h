@@ -252,22 +252,29 @@ struct binary_collision_pipeline {
         auto nj = spj_partition_ra(v+1) - j0;
 
         // TODO: convert this to be a more explicit check on if we have work
-        if( ni <= 0 || nj <= 0 ) return; //Nothing to do
+        if( ni <= 0 || nj <= 0 || (spi==spj && ni==1) ) return; //Nothing to do
 
         // Find the real densities.
         float density_i = spi_n(v);
         float density_j = spj_n(v);
 
         // Compute ndt
-        const float density_min = density_j > density_i ? density_i : density_j;
-        const float ndt = density_min*dtinterval;
+        //const float density_min = density_j > density_i ? density_i : density_j;
+        //const float ndt = density_min*dtinterval;
+        const float density_max = density_j < density_i ? density_i : density_j;
+        float ndt = density_max*dtinterval;
 
         // Get a random generator. Do not leave without freeing it.
         kokkos_rng_state_t rg = rp.get_state();
 
         // Handle intraspecies.
         if( spi == spj ) {
-
+	    if(ni & 1) //odd
+	    {
+		ndt *= (float)(ni)/(float)(ni-1);
+		//correspondingly, the collision probability decreased to (ni-1)/ni, i.e., one particle does not collide. We can use the same collision kernel.
+	    }   //else ni is even, and no adjustment needed
+	    /*
             // Odd number of particles.
             if( ni%2 && ni >= 3 ) {
 
@@ -300,14 +307,15 @@ struct binary_collision_pipeline {
               i0 += 3;
 
             }
-
+	    */
             // Even number of particles.
             nj = ni = ni/2;
             j0 = i0 + ni;
-
+	    
         }
 
         // Compute collisional pairings.
+	/*
         const bool ij    = ni > nj;
         const int nmax   = ij ? ni : nj;
         const int nmin   = ij ? nj : ni;
@@ -355,7 +363,16 @@ struct binary_collision_pipeline {
           }
 
         });
+	*/
 
+	const int nmin = std::min(ni, nj);
+
+	Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nmin),
+			     [&](const int c) {
+	 binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
+			  spi_sortindex_ra(i0 + c),
+			  spj_sortindex_ra(j0 + c));
+	 });
         // We *must* free generators.
         rp.free_state(rg);
 
