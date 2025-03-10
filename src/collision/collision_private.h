@@ -22,6 +22,44 @@
     (iz) = _iz;                                           \
   } while(0)
 
+// Templated small array used for accumulation/reduction
+template <class ScalarType, int N>
+struct Accum {
+  // We'll store partial sums in v[0..N-1]
+  enum : int { n = N };
+  ScalarType v[n] = { 0 };
+
+  // Operator += for combining two partial sums
+  KOKKOS_INLINE_FUNCTION
+  Accum& operator+=(const Accum &b) {
+    for (int i = 0; i < n; ++i) {
+      v[i] += b.v[i];
+    }
+    return *this;
+  }
+};
+typedef Accum<float, 5> gmomType; //0:mass, 1-3:momentum, 4-energy
+typedef Accum<float, 13> gmomType13; 
+
+namespace Kokkos { //required
+template <>
+struct reduction_identity<gmomType> {
+  KOKKOS_INLINE_FUNCTION
+  static gmomType sum() {
+    // If gmomType() is guaranteed to construct an identity for summation (e.g. init zeros),
+    // then returning a default-constructed object is fine.
+    return gmomType();
+  }
+};
+
+template<>
+struct reduction_identity<gmomType13> {
+    KOKKOS_INLINE_FUNCTION
+    static gmomType13 sum() { return gmomType13(); }
+};
+    
+}
+
 typedef void
 (*apply_collision_op_func_t)( struct collision_op * cop,
                               kokkos_rng_pool_t   & rng);

@@ -63,7 +63,7 @@ struct binary_collision_pipeline {
 
   const float _mu_i, _mu_j, _mu, _dtinterval, _rdV;
   const int   _nx, _ny, _nz;
-
+  const float _m_i, _m_j;
   //Member variables start with the symbol _ and this is used
   //to indicate they are not safe to be passed into a kokkos
   //lambda without first changing the reference type. Any var
@@ -90,6 +90,8 @@ struct binary_collision_pipeline {
     : _mu_i(spj->m / (spi->m + spj->m)),
       _mu_j(spi->m / (spi->m + spj->m)),
       _mu(spi->m*spj->m / (spi->m + spj->m)),
+      _m_i(spi->m),
+      _m_j(spj->m),
       _dtinterval(spi->g->dt * interval),
       _rdV(1/spi->g->dV),
       _nx(spi->g->nx),
@@ -220,6 +222,8 @@ struct binary_collision_pipeline {
     auto const& mu_i = _mu_i;
     auto const& mu_j = _mu_j;
     auto const& mu = _mu;
+    auto const& m_i= _m_i;
+    auto const& m_j= _m_j;
     auto const& nx = _nx;
     auto const& ny = _ny;
     auto const& nz = _nz;
@@ -258,123 +262,11 @@ struct binary_collision_pipeline {
         float density_i = spi_n(v);
         float density_j = spj_n(v);
 
-        // Compute ndt
-        //const float density_min = density_j > density_i ? density_i : density_j;
-        //const float ndt = density_min*dtinterval;
-        const float density_max = density_j < density_i ? density_i : density_j;
-        float ndt = density_max*dtinterval;
-
-        // Get a random generator. Do not leave without freeing it.
-        kokkos_rng_state_t rg = rp.get_state();
-
-        // Handle intraspecies.
-        if( spi == spj ) {
-	    if(ni & 1) //odd
-	    {
-		ndt *= (float)(ni)/(float)(ni-1);
-		//correspondingly, the collision probability decreased to (ni-1)/ni, i.e., one particle does not collide. We can use the same collision kernel.
-	    }   //else ni is even, and no adjustment needed
-	    /*
-            // Odd number of particles.
-            if( ni%2 && ni >= 3 ) {
-
-              Kokkos::single( Kokkos::PerTeam(team_member),
-              [&]() {
-
-                // These must be done serially to avoid atomics (same particles)
-
-                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 1)
-                );
-
-                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 2)
-                );
-
-                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0 + 1),
-                    spi_sortindex_ra(i0 + 2)
-                );
-
-              });
-
-              // FIXME: is this really needed?
-              team_member.team_barrier();
-
-              ni -= 3;
-              i0 += 3;
-
-            }
-	    */
-            // Even number of particles.
-            nj = ni = ni/2;
-            j0 = i0 + ni;
-	    
-        }
-
-        // Compute collisional pairings.
-	/*
-        const bool ij    = ni > nj;
-        const int nmax   = ij ? ni : nj;
-        const int nmin   = ij ? nj : ni;
-        const int ncoll  = nmin <= 0 ? 0 : nmax/nmin;
-        const int remain = nmin <= 0 ? 0 : nmax - ncoll*nmin;
-	//printf("ij=%d, nmax=%d, nmin=%d, ncoll=%d, remain=%d\n",ij,nmax,nmin,ncoll,remain);
-        // FIXME: Will combining these loops into one improve performance?
-
-        // The first remain particles of species min will collide ncoll+1 times
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, remain),
-        [&](const int& k) {
-
-          // Inner loop must be serialized to prevent atomics.
-          for(int l=0 ; l < ncoll+1 ; ++l) {
-
-            int i = l + k*(ncoll+1) ;
-            int j = k ;
-
-            binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
-                spi_sortindex_ra(i0 + (ij ? i : j)),
-                spj_sortindex_ra(j0 + (ij ? j : i))
-            );
-
-          }
-
-        });
-
-        // The bulk (nmin-remain) particles of species min will collide ncoll times
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nmin-remain),
-        [&](const int& k) {
-
-          // Inner loop must be serialized to prevent atomics.
-          for(int l=0 ; l < ncoll ; ++l) {
-
-            int i = k + remain*(ncoll+1) ;
-            int j = k + remain ;
-	    //printf("i=%d,j=%d\n",i,j);
-
-            binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
-			     spi_sortindex_ra(i0 + (ij ? i : j)),
-			     spj_sortindex_ra(j0 + (ij ? j : i))
-            );
-	    
-
-          }
-
-        });
-	*/
-
-	const int nmin = std::min(ni, nj);
-
-	Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nmin),
-			     [&](const int c) {
-	 binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
-			  spi_sortindex_ra(i0 + c),
-			  spj_sortindex_ra(j0 + c));
-	 });
-        // We *must* free generators.
-        rp.free_state(rg);
+	if(model.var_wt){
+	    collide_variabl_wt();
+	}else{
+	    collide_uniform_wt(m_i, m_j, density_i, density_j, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
+	}
 
       });
 
@@ -525,6 +417,140 @@ struct binary_collision_pipeline {
     }
 
   }
+
+template<class collision_model>    
+KOKKOS_INLINE_FUNCTION
+void collide_uniform_wt(const float m_i, const float m_j, const float density_i, const float density_j, int i0, int j0, int ni, int nj, const float dtinterval,     const k_particles_t& spi_p,  const k_particles_t& spj_p,     collision_model& model, k_particle_sortindex_t_ra spi_sortindex_ra, k_particle_sortindex_t_ra spj_sortindex_ra, const kokkos_rng_pool_t& rp, const Kokkos::TeamPolicy<>::member_type & team_member)
+{
+    const float mu_i = m_j/(m_i+m_j);
+    const float mu_j = m_i/(m_i+m_j);
+    const float mu = m_i*m_j/(m_i+m_j);
+    
+        // Compute ndt
+        //const float density_min = density_j > density_i ? density_i : density_j;
+        //const float ndt = density_min*dtinterval;
+        const float density_max = density_j < density_i ? density_i : density_j;
+        float ndt = density_max*dtinterval;
+
+        // Get a random generator. Do not leave without freeing it.
+        kokkos_rng_state_t rg = rp.get_state();
+
+        // Handle intraspecies.
+        if( spi_p == spj_p ) {
+	    if(ni & 1) //odd
+	    {
+		ndt *= (float)(ni)/(float)(ni-1);
+		//correspondingly, the collision probability decreased to (ni-1)/ni, i.e., one particle does not collide. We can use the same collision kernel.
+	    }   //else ni is even, and no adjustment needed
+	    /*
+            // Odd number of particles.
+            if( ni%2 && ni >= 3 ) {
+
+              Kokkos::single( Kokkos::PerTeam(team_member),
+              [&]() {
+
+                // These must be done serially to avoid atomics (same particles)
+
+                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                    spi_sortindex_ra(i0),
+                    spi_sortindex_ra(i0 + 1)
+                );
+
+                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                    spi_sortindex_ra(i0),
+                    spi_sortindex_ra(i0 + 2)
+                );
+
+                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
+                    spi_sortindex_ra(i0 + 1),
+                    spi_sortindex_ra(i0 + 2)
+                );
+
+              });
+
+              // FIXME: is this really needed?
+              team_member.team_barrier();
+
+              ni -= 3;
+              i0 += 3;
+
+            }
+	    */
+            // Even number of particles.
+            nj = ni = ni/2;
+            j0 = i0 + ni;
+	    
+        }
+
+        // Compute collisional pairings.
+	/*
+        const bool ij    = ni > nj;
+        const int nmax   = ij ? ni : nj;
+        const int nmin   = ij ? nj : ni;
+        const int ncoll  = nmin <= 0 ? 0 : nmax/nmin;
+        const int remain = nmin <= 0 ? 0 : nmax - ncoll*nmin;
+	//printf("ij=%d, nmax=%d, nmin=%d, ncoll=%d, remain=%d\n",ij,nmax,nmin,ncoll,remain);
+        // FIXME: Will combining these loops into one improve performance?
+
+        // The first remain particles of species min will collide ncoll+1 times
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, remain),
+        [&](const int& k) {
+
+          // Inner loop must be serialized to prevent atomics.
+          for(int l=0 ; l < ncoll+1 ; ++l) {
+
+            int i = l + k*(ncoll+1) ;
+            int j = k ;
+
+            binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
+                spi_sortindex_ra(i0 + (ij ? i : j)),
+                spj_sortindex_ra(j0 + (ij ? j : i))
+            );
+
+          }
+
+        });
+
+        // The bulk (nmin-remain) particles of species min will collide ncoll times
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nmin-remain),
+        [&](const int& k) {
+
+          // Inner loop must be serialized to prevent atomics.
+          for(int l=0 ; l < ncoll ; ++l) {
+
+            int i = k + remain*(ncoll+1) ;
+            int j = k + remain ;
+	    //printf("i=%d,j=%d\n",i,j);
+
+            binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
+			     spi_sortindex_ra(i0 + (ij ? i : j)),
+			     spj_sortindex_ra(j0 + (ij ? j : i))
+            );
+	    
+
+          }
+
+        });
+	*/
+
+	const int nmin = std::min(ni, nj);
+
+	Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nmin),
+			     [&](const int c) {
+	 binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
+			  spi_sortindex_ra(i0 + c),
+			  spj_sortindex_ra(j0 + c));
+	 });
+        // We *must* free generators.
+        rp.free_state(rg);
+}
+
+KOKKOS_INLINE_FUNCTION
+void collide_variabl_wt()
+{
+    
+}
+    
 
 };
 

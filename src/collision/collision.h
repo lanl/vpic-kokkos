@@ -49,7 +49,8 @@ takizuka_abe(
   /**/  species_t  * spi,
   /**/  species_t  * spj,
   const double       cvar0,
-  const int          interval
+  const int          interval,
+  const bool         var_wt=false
 );
 
 /* In hard_sphere.cc */

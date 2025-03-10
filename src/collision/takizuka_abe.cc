@@ -21,7 +21,7 @@ void
 apply_takizuka_abe_collision_op( collision_op_t * cop,
                                  kokkos_rng_pool_t& rng ) {
   takizuka_abe_collision_op_t * ta = (takizuka_abe_collision_op_t *) cop;
-  takizuka_abe_model model(ta->cvar0);
+  takizuka_abe_model model(ta->cvar0,ta->var_wt);
   apply_binary_collision_model_pipeline<false>((binary_collision_op_t *) cop, model, rng);
 }
 
@@ -40,7 +40,8 @@ takizuka_abe(
   /**/  species_t  * spi,
   /**/  species_t  * spj,
   const double       cvar0,
-  const int          interval
+  const int          interval,
+  const bool         var_wt //default false (uniform weight)
 )
 {
 
@@ -56,6 +57,7 @@ takizuka_abe(
   ta->spi         = spi;
   ta->spj         = spj;
   ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
+  ta->var_wt      = var_wt;
   ta->interval    = interval;
   ta->apply_cop   = &apply_takizuka_abe_collision_op;
   ta->delete_cop  = &delete_takizuka_abe_collision_op;
