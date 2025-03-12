@@ -10,6 +10,7 @@
   if(!isfinite(TAN) || (TAN) > TAN_THETA_HALF_MAX ) (TAN) = TAN_THETA_HALF_MAX; \
 } while(0)
 
+
 /**
  * @brief General purpose pipeline to produce binary collisions between particles.
  *
@@ -61,7 +62,7 @@ struct binary_collision_pipeline {
   using member_type=Kokkos::TeamPolicy<Space>::member_type;
   using k_density_t=Kokkos::View<float *, Space>;
 
-  const float _mu_i, _mu_j, _mu, _dtinterval, _rdV;
+  const float _mu_i, _mu_j, _mu, _dtinterval, _dV;
   const int   _nx, _ny, _nz;
   const float _m_i, _m_j;
   //Member variables start with the symbol _ and this is used
@@ -84,7 +85,7 @@ struct binary_collision_pipeline {
   binary_collision_pipeline(
     species_t * spi,
     species_t * spj,
-    double interval,
+    float interval,
     kokkos_rng_pool_t& rp
   )
     : _mu_i(spj->m / (spi->m + spj->m)),
@@ -93,7 +94,7 @@ struct binary_collision_pipeline {
       _m_i(spi->m),
       _m_j(spj->m),
       _dtinterval(spi->g->dt * interval),
-      _rdV(1/spi->g->dV),
+      _dV(spi->g->dV),
       _nx(spi->g->nx),
       _ny(spi->g->ny),
       _nz(spi->g->nz),
@@ -224,6 +225,7 @@ struct binary_collision_pipeline {
     auto const& mu = _mu;
     auto const& m_i= _m_i;
     auto const& m_j= _m_j;
+    auto const& dV = _dV;
     auto const& nx = _nx;
     auto const& ny = _ny;
     auto const& nz = _nz;
@@ -240,35 +242,61 @@ struct binary_collision_pipeline {
     auto const& spi_partition_ra = _spi_partition_ra;
     auto const& spj_partition_ra = _spj_partition_ra;
 
-    Kokkos::parallel_for("binary_collision_pipeline::apply_model",
-      Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
-      KOKKOS_LAMBDA (member_type team_member) {
+    // Choose the collision function based on model.var_wt.
+    // Both functions must be of the same signature.
+    if(model.var_wt){
+	Kokkos::parallel_for("binary_collision_pipeline::apply_model",
+			     Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
+			     KOKKOS_LAMBDA (member_type team_member) {
 
-        int ix, iy, iz;
-        RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
-        const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
+				 int ix, iy, iz;
+				 RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
+				 const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
+				 
+				 // Find number of particles for each species.
+				 auto i0 = spi_partition_ra(v);
+				 auto ni = spi_partition_ra(v+1) - i0;
+				 
+				 auto j0 = spj_partition_ra(v);
+				 auto nj = spj_partition_ra(v+1) - j0;
+				 
+				 // TODO: convert this to be a more explicit check on if we have work
+				 if( ni <= 0 || nj <= 0 || (spi==spj && ni==1) ) return; //Nothing to do
+				 
+				 // Find the real densities.
+				 float density_i = spi_n(v);
+				 float density_j = spj_n(v);
+				 
+				 collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
 
-        // Find number of particles for each species.
-        auto i0 = spi_partition_ra(v);
-        auto ni = spi_partition_ra(v+1) - i0;
+			     });
+    }else{
+	Kokkos::parallel_for("binary_collision_pipeline::apply_model",
+			     Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
+			     KOKKOS_LAMBDA (member_type team_member) {
 
-        auto j0 = spj_partition_ra(v);
-        auto nj = spj_partition_ra(v+1) - j0;
+				 int ix, iy, iz;
+				 RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
+				 const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
+				 
+				 // Find number of particles for each species.
+				 auto i0 = spi_partition_ra(v);
+				 auto ni = spi_partition_ra(v+1) - i0;
+				 
+				 auto j0 = spj_partition_ra(v);
+				 auto nj = spj_partition_ra(v+1) - j0;
+				 
+				 // TODO: convert this to be a more explicit check on if we have work
+				 if( ni <= 0 || nj <= 0 || (spi==spj && ni==1) ) return; //Nothing to do
+				 
+				 // Find the real densities.
+				 float density_i = spi_n(v);
+				 float density_j = spj_n(v);
+				 
+				 collide_uniform_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
+			     });
 
-        // TODO: convert this to be a more explicit check on if we have work
-        if( ni <= 0 || nj <= 0 || (spi==spj && ni==1) ) return; //Nothing to do
-
-        // Find the real densities.
-        float density_i = spi_n(v);
-        float density_j = spj_n(v);
-
-	if(model.var_wt){
-	    collide_variabl_wt();
-	}else{
-	    collide_uniform_wt(m_i, m_j, density_i, density_j, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
-	}
-
-      });
+    }
 
     // I don't know why we need this, but without it I get an illegal memory
     // access error ... suspicious.
@@ -276,151 +304,10 @@ struct binary_collision_pipeline {
 
   }
 
-  /**
-   * @brief Perform a collision between two particles.
-   */
-  //Must have all struct member types passed in directly to the inline function
-  //In terms of notation, all inline functions should not have variables that start
-  //with the _ (underscore), because _ is used to indicate a class member before it
-  //is caputred by a lambda. One lambda captured, we should refer to the variable
-  //as EX: mu not _mu
-  template<class collision_model>
-  KOKKOS_INLINE_FUNCTION
-  void binary_collision (
-    const float mu,
-    const float mu_i,
-    const float mu_j,
-    const k_particles_t&   spi_p,
-    const k_particles_t&   spj_p,
-    collision_model& model,
-    kokkos_rng_state_t& rg,
-    float ndt,
-    int i,
-    int j
-  )
-  {
-
-    float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];
-    int d0, d1, d2;
-
-    float uix = spi_p(i, particle_var::ux);
-    float uiy = spi_p(i, particle_var::uy);
-    float uiz = spi_p(i, particle_var::uz);
-    float wi  = spi_p(i, particle_var::w);
-
-    float ujx = spj_p(j, particle_var::ux);
-    float ujy = spj_p(j, particle_var::uy);
-    float ujz = spj_p(j, particle_var::uz);
-    float wj  = spj_p(j, particle_var::w);
-
-    // Relative velocity
-    float urx = uix - ujx;
-    float ury = uiy - ujy;
-    float urz = uiz - ujz;
-
-    /* There are lots of ways to formulate T vector formation    */
-    /* This has no branches (but uses L1 heavily)                */
-
-    t0 = urx*urx;
-    d0=0;
-    d1=1;
-    d2=2;
-    t1=t0;
-    t2=t0;
-
-    t0 = ury*ury;
-    if (t0 < t1)
-    {
-        d0 = 1;
-        d1 = 2;
-        d2 = 0;
-        t1 = t0;
-    }
-    t2 += t0;
-
-    t0 = urz*urz;
-    if (t0 < t1)
-    {
-        d0 = 2;
-        d1 = 0;
-        d2 = 1;
-    }
-    t2 += t0;
-
-    ur = sqrtf( t2 );
-
-    // Collision parameters
-    t2 *= mu;       // _mu v^2  = Collision energy
-    t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
-
-    // Monte-Carlo collision test
-    if( MonteCarlo ) {
-
-      // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
-      //        Would this be useful?
-      dd = model.cross_section(rg, t2, t1);
-      if( rg.frand() > dd*t1 ) return;
-
-    }
-
-    // Compute collision angle and coefficient of restitution
-    const float rr = model.restitution(rg, t2, t1);
-    dd = model.tan_theta_half(rg, t2, t1);
-    PREVENT_BACKSCATTER(dd);
-
-    stack[0] = urx;
-    stack[1] = ury;
-    stack[2] = urz;
-    t1  = stack[d1];
-    t2  = stack[d2];
-    t0  = 1 / sqrtf( t1*t1 + t2*t2 + FLT_MIN );
-    stack[d0] =  0;
-    stack[d1] =  t0*t2;
-    stack[d2] = -t0*t1;
-    tx = stack[0];
-    ty = stack[1];
-    tz = stack[2];
-
-    // Convert tan(theta/2) to sin/cos.
-    t0 = 2*dd/(1+dd*dd);
-
-    // Azimuthal angle is random.
-    t1 = rg.frand(0, 2*M_PI);
-    t2 = t0*sinf(t1);
-    t1 = t0*ur*cosf(t1);
-    t0 *= -dd;
-
-    /* stack = (1 - cos theta) u + |u| sin theta Tperp */
-    stack[0] = (t0*urx + t1*tx) + t2*( ury*tz - urz*ty );
-    stack[1] = (t0*ury + t1*ty) + t2*( urz*tx - urx*tz );
-    stack[2] = (t0*urz + t1*tz) + t2*( urx*ty - ury*tx );
-
-    // Scaled center of mass velocity.
-    t1 = (1-rr);
-    float cmx = t1*(mu_j*uix + mu_i*ujx);
-    float cmy = t1*(mu_j*uiy + mu_i*ujy);
-    float cmz = t1*(mu_j*uiz + mu_i*ujz);
-
-    // Handle unequal particle weights using detailed balance.
-    t0 = rg.frand(0, 1);
-
-    if(wi*t0 <= wj) {
-      spi_p(i, particle_var::ux) = (uix + mu_i*stack[0])*rr + cmx;
-      spi_p(i, particle_var::uy) = (uiy + mu_i*stack[1])*rr + cmy;
-      spi_p(i, particle_var::uz) = (uiz + mu_i*stack[2])*rr + cmz;
-    }
-
-    if(wj*t0 <= wi) {
-      spj_p(j, particle_var::ux) = (ujx - mu_j*stack[0])*rr + cmx;
-      spj_p(j, particle_var::uy) = (ujy - mu_j*stack[1])*rr + cmy;
-      spj_p(j, particle_var::uz) = (ujz - mu_j*stack[2])*rr + cmz;
-    }
-
-  }
-
+    
 template<class collision_model>    
 KOKKOS_INLINE_FUNCTION
-void collide_uniform_wt(const float m_i, const float m_j, const float density_i, const float density_j, int i0, int j0, int ni, int nj, const float dtinterval,     const k_particles_t& spi_p,  const k_particles_t& spj_p,     collision_model& model, k_particle_sortindex_t_ra spi_sortindex_ra, k_particle_sortindex_t_ra spj_sortindex_ra, const kokkos_rng_pool_t& rp, const Kokkos::TeamPolicy<>::member_type & team_member)
+void collide_uniform_wt(const float m_i, const float m_j, const float density_i, const float density_j, const float dV, int i0, int j0, int ni, int nj, const float dtinterval,     const k_particles_t& spi_p,  const k_particles_t& spj_p,     collision_model& model, k_particle_sortindex_t_ra spi_sortindex_ra, k_particle_sortindex_t_ra spj_sortindex_ra, const kokkos_rng_pool_t& rp, const Kokkos::TeamPolicy<>::member_type & team_member)
 {
     const float mu_i = m_j/(m_i+m_j);
     const float mu_j = m_i/(m_i+m_j);
@@ -537,20 +424,345 @@ void collide_uniform_wt(const float m_i, const float m_j, const float density_i,
 
 	Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nmin),
 			     [&](const int c) {
-	 binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
-			  spi_sortindex_ra(i0 + c),
-			  spj_sortindex_ra(j0 + c));
+	 int i = spi_sortindex_ra(i0 + c);
+	 int j = spi_sortindex_ra(j0 + c);
+
+	 float up[8] = { spi_p(i, particle_var::w ),
+			 spi_p(i, particle_var::ux),
+			 spi_p(i, particle_var::uy),
+			 spi_p(i, particle_var::uz),
+			 spj_p(j, particle_var::w ),
+			 spj_p(j, particle_var::ux),
+			 spj_p(j, particle_var::uy),
+			 spj_p(j, particle_var::uz)};
+	 
+	 binary_collision(mu, mu_i, mu_j, up, model, rg, ndt);
+
+	 spi_p(i, particle_var::ux) = up[1];
+	 spi_p(i, particle_var::uy) = up[2];
+	 spi_p(i, particle_var::uz) = up[3];	  
+	 spj_p(j, particle_var::ux) = up[5];
+	 spj_p(j, particle_var::uy) = up[6];
+	 spj_p(j, particle_var::uz) = up[7];	  	 
+	 
 	 });
         // We *must* free generators.
         rp.free_state(rg);
 }
 
+template<class collision_model>    
 KOKKOS_INLINE_FUNCTION
-void collide_variabl_wt()
+void collide_variabl_wt(const float m_i, const float m_j, const float density_i, const float density_j, const float dV, int i_0, int j_0, int ni, int nj, const float dtinterval,     const k_particles_t& spi_p,  const k_particles_t& spj_p,   const collision_model& model, k_particle_sortindex_t_ra spi_sortindex_ra, k_particle_sortindex_t_ra spj_sortindex_ra, const kokkos_rng_pool_t& rp, const Kokkos::TeamPolicy<>::member_type & team)
 {
+    const float mu_i = m_j/(m_i+m_j);
+    const float mu_j = m_i/(m_i+m_j);
+    const float mu = m_i*m_j/(m_i+m_j);
+    
+    float twt[2] = {density_i*dV,density_j*dV}; //total weight within a cell
+    // Compute ndt
+    const bool ij    = density_i > density_j;
+    int i0 = ij ? i_0 : j_0;
+    int j0 = ij ? j_0 : i_0;
+    auto sph_p = ij ? spi_p : spj_p;
+    auto spl_p = ij ? spj_p : spi_p;
+    auto sph_sortindex_ra = ij ? spi_sortindex_ra : spj_sortindex_ra;
+    auto spl_sortindex_ra = ij ? spj_sortindex_ra : spi_sortindex_ra;
+    auto WT = twt[ij]; 
+    
+    const float density_max = ij ?  density_i : density_j;
+    float ndt = density_max*dtinterval;
+
+    // Get a random generator. Do not leave without freeing it.
+    kokkos_rng_state_t rg = rp.get_state();
+
+    int nmin, nmax; // = std::min(ni, nj);
+
+    // Handle intraspecies.
+    if( spi_p == spj_p ) {
+	//for simplicity everyone collides
+	nj = ni/2;
+	ni = ni - nj; //ni may be nj+1
+	j0 = i0 + ni;
+	nmin = ni<nj ? ni : nj;
+	nmax = ni>nj ? ni : nj;
+    }else{
+	nmin = ij ? nj : ni; // note that in general the number of the other species can be >=< nmin
+	nmax = ij ? ni : nj;	
+    }
+
+    size_t Np_c, Np_hc, Np_lc;
+
+    // Allocate one integer in team scratch memory (slot 1 is used for the shared integer).
+    typedef Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Unmanaged>> scratch_int_view_t;
+    scratch_int_view_t team_first(team.team_scratch(1), 1);
+    // Initialize the shared integer to a sentinel value (-1)
+    Kokkos::single(Kokkos::PerTeam(team),
+		   [&]() {
+		       team_first(0) = -1;
+		   });
+    team.team_barrier();
+
+    float cumulative = 0.0f;
+    
+    // Only one thread per team does the serial scan.
+    Kokkos::single(Kokkos::PerTeam(team), [&]() {
+      for (int j = 0; j < nmax; j++) {
+        // Map the local index j to a global index.
+        int i = sph_sortindex_ra(i0 + j);
+	auto wp = sph_p(i, particle_var::w);
+        cumulative += wp;  // accumulate weight
+        // Check if cumulative sum exceeds WT.
+        if (cumulative > WT) {
+	    float r = rg.frand(0, 1.0);
+	    int candidate = (cumulative - r * wp < WT) ? j+1 : j;
+	    team_first(0) = candidate;
+          break;
+        }
+      }
+    });
+    // Make sure all team threads see the updated local_first.
+    team.team_barrier();
+    
+    // The running sum for this team.
+    // float running_sum = 0.0f;    
+    // Kokkos::parallel_scan(
+    // 			  Kokkos::TeamThreadRange(team, nmax),
+    // 			  [&](const int i, float & update, const bool final) -> void {
+    // 			      update += i;   // accumulate current element
+    //         // We are not storing intermediate prefix values.
+    //         // When 'final' is true, the final value for this iteration is available.
+    //       },
+    //       running_sum  // initial accumulator, and it will be updated to final value
+    //     );
+    /*
+    Kokkos::parallel_scan(Kokkos::TeamThreadRange(team, nmax),
+    [&] (const int j, float & update, const bool final) {
+	const int i = sph_sortindex_ra(i0 + j);
+	float wp = sph_p(i, particle_var::w);     // current weight
+	update += wp;
+	// In the final pass, if the cumulative sum exceeds WT, record this index.
+	if (final && update > WT) {
+	    float r = rg.frand(0, 1.0);
+	    int candidate = (update - r * wp < WT) ? j+1 : j;
+	    if (candidate < 0) candidate = 0;  // guard against negative index
+	    // Update team_first(0) using an atomic operation.
+	    // We want the smallest j among all threads where update exceeds WT.
+	    // If team_first(0) is still -1 or j is smaller than its current value, update it.
+	    Kokkos::atomic_min(&team_first(0), candidate);
+	}
+    }, running_sum );    
+    // Synchronize to make sure all threads see the updated team_first.
+    team.team_barrier();
+    */
+    Np_lc = nmin;
+    Np_hc = team_first(0);
+    Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc;
+
+    gmomType13 Dm;
+    Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, Np_c),
+			    [&](const int c, gmomType13 &lsum) {
+	 int i1 = c; 
+	 int i2 = c % nmin; //it may be possible that c > nmin
+	 int i = sph_sortindex_ra(i0 + i1);
+	 int j = spl_sortindex_ra(j0 + i2);
+	 float up[8] = { sph_p(i, particle_var::w ),
+			 sph_p(i, particle_var::ux),
+			 sph_p(i, particle_var::uy),
+			 sph_p(i, particle_var::uz),
+			 spl_p(j, particle_var::w ),
+			 spl_p(j, particle_var::ux),
+			 spl_p(j, particle_var::uy),
+			 spl_p(j, particle_var::uz)};
+	 float wp, ux, uy, uz;
+	 if(c < Np_hc) {
+	     wp = up[0];
+	     ux = up[1];
+	     uy = up[2];
+	     uz = up[3];
+	     lsum.v[0] += wp;
+	     lsum.v[1] += wp*ux;
+	     lsum.v[2] += wp*uy;
+	     lsum.v[3] += wp*uz;
+	     lsum.v[4] += wp*ux*ux;
+	     lsum.v[5] += wp*uy*uy;
+	     lsum.v[6] += wp*uz*uz;	     
+	 }
+	 if(c < Np_lc) {
+	     wp = up[4];
+	     ux = up[5];
+	     uy = up[6];
+	     uz = up[7];
+	     lsum.v[0] += wp;
+	     lsum.v[1] += wp*ux;
+	     lsum.v[2] += wp*uy;
+	     lsum.v[3] += wp*uz;
+	     lsum.v[4] += wp*ux*ux;
+	     lsum.v[5] += wp*uy*uy;
+	     lsum.v[6] += wp*uz*uz;	     
+	 }
+	 
+	 binary_collision(mu, mu_i, mu_j, up, model, rg, ndt);
+
+	 if(c < Np_hc) {
+	     wp = up[0];
+	     ux = up[1];
+	     uy = up[2];
+	     uz = up[3];
+	     lsum.v[7] += wp*ux;
+	     lsum.v[8] += wp*uy;
+	     lsum.v[9] += wp*uz;
+	     lsum.v[10] += wp*ux*ux;
+	     lsum.v[11] += wp*uy*uy;
+	     lsum.v[12] += wp*uz*uz;	     
+	 }
+	 if(c < Np_lc) {
+	     wp = up[4];
+	     ux = up[5];
+	     uy = up[6];
+	     uz = up[7];
+	     lsum.v[7] += wp*ux;
+	     lsum.v[8] += wp*uy;
+	     lsum.v[9] += wp*uz;
+	     lsum.v[10] += wp*ux*ux;
+	     lsum.v[11] += wp*uy*uy;
+	     lsum.v[12] += wp*uz*uz;
+	 }
+			    }, Dm);	 
     
 }
+
+  /**
+   * @brief Perform a collision between two particles.
+   */
+  //Must have all struct member types passed in directly to the inline function
+  //In terms of notation, all inline functions should not have variables that start
+  //with the _ (underscore), because _ is used to indicate a class member before it
+  //is caputred by a lambda. One lambda captured, we should refer to the variable
+  //as EX: mu not _mu
+  template<class collision_model>
+  KOKKOS_INLINE_FUNCTION
+  void binary_collision (
+    const float mu,
+    const float mu_i,
+    const float mu_j,
+    float (&up)[8],
+    collision_model& model,
+    kokkos_rng_state_t& rg,
+    float ndt
+  )
+  {
+
+    float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];
+    int d0, d1, d2;
     
+    float wi  = up[0];
+    float uix = up[1];
+    float uiy = up[2];
+    float uiz = up[3];
+
+    float wj  = up[4];
+    float ujx = up[5];
+    float ujy = up[6];
+    float ujz = up[7];
+
+
+    // Relative velocity
+    float urx = uix - ujx;
+    float ury = uiy - ujy;
+    float urz = uiz - ujz;
+
+    /* There are lots of ways to formulate T vector formation    */
+    /* This has no branches (but uses L1 heavily)                */
+
+    t0 = urx*urx;
+    d0=0;
+    d1=1;
+    d2=2;
+    t1=t0;
+    t2=t0;
+
+    t0 = ury*ury;
+    if (t0 < t1)
+    {
+        d0 = 1;
+        d1 = 2;
+        d2 = 0;
+        t1 = t0;
+    }
+    t2 += t0;
+
+    t0 = urz*urz;
+    if (t0 < t1)
+    {
+        d0 = 2;
+        d1 = 0;
+        d2 = 1;
+    }
+    t2 += t0;
+
+    ur = sqrtf( t2 );
+
+    // Collision parameters
+    t2 *= mu;       // _mu v^2  = Collision energy
+    t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
+
+    // Monte-Carlo collision test
+    if( MonteCarlo ) {
+
+      // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
+      //        Would this be useful?
+      dd = model.cross_section(rg, t2, t1);
+      if( rg.frand() > dd*t1 ) return;
+
+    }
+
+    // Compute collision angle and coefficient of restitution
+    const float rr = model.restitution(rg, t2, t1);
+    dd = model.tan_theta_half(rg, t2, t1);
+    PREVENT_BACKSCATTER(dd);
+
+    stack[0] = urx;
+    stack[1] = ury;
+    stack[2] = urz;
+    t1  = stack[d1];
+    t2  = stack[d2];
+    t0  = 1 / sqrtf( t1*t1 + t2*t2 + FLT_MIN );
+    stack[d0] =  0;
+    stack[d1] =  t0*t2;
+    stack[d2] = -t0*t1;
+    tx = stack[0];
+    ty = stack[1];
+    tz = stack[2];
+
+    // Convert tan(theta/2) to sin/cos.
+    t0 = 2*dd/(1+dd*dd);
+
+    // Azimuthal angle is random.
+    t1 = rg.frand(0, 2*M_PI);
+    t2 = t0*sinf(t1);
+    t1 = t0*ur*cosf(t1);
+    t0 *= -dd;
+
+    /* stack = (1 - cos theta) u + |u| sin theta Tperp */
+    stack[0] = (t0*urx + t1*tx) + t2*( ury*tz - urz*ty );
+    stack[1] = (t0*ury + t1*ty) + t2*( urz*tx - urx*tz );
+    stack[2] = (t0*urz + t1*tz) + t2*( urx*ty - ury*tx );
+
+    // Scaled center of mass velocity.
+    t1 = (1-rr);
+    float cmx = t1*(mu_j*uix + mu_i*ujx);
+    float cmy = t1*(mu_j*uiy + mu_i*ujy);
+    float cmz = t1*(mu_j*uiz + mu_i*ujz);
+
+    up[1] = (uix + mu_i*stack[0])*rr + cmx;
+    up[2] = (uiy + mu_i*stack[1])*rr + cmy;
+    up[3] = (uiz + mu_i*stack[2])*rr + cmz;
+               
+    up[5] = (ujx - mu_j*stack[0])*rr + cmx;
+    up[6] = (ujy - mu_j*stack[1])*rr + cmy;
+    up[7] = (ujz - mu_j*stack[2])*rr + cmz;
+    
+  }
 
 };
 
