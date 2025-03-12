@@ -501,7 +501,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 		       team_first(0) = -1;
 		   });
     team.team_barrier();
-
+    /*
     float cumulative = 0.0f;
     
     // Only one thread per team does the serial scan.
@@ -521,27 +521,15 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
       }
     });
     // Make sure all team threads see the updated local_first.
-    team.team_barrier();
-    
-    // The running sum for this team.
-    // float running_sum = 0.0f;    
-    // Kokkos::parallel_scan(
-    // 			  Kokkos::TeamThreadRange(team, nmax),
-    // 			  [&](const int i, float & update, const bool final) -> void {
-    // 			      update += i;   // accumulate current element
-    //         // We are not storing intermediate prefix values.
-    //         // When 'final' is true, the final value for this iteration is available.
-    //       },
-    //       running_sum  // initial accumulator, and it will be updated to final value
-    //     );
-    /*
+    team.team_barrier();    
+    */
     Kokkos::parallel_scan(Kokkos::TeamThreadRange(team, nmax),
     [&] (const int j, float & update, const bool final) {
 	const int i = sph_sortindex_ra(i0 + j);
 	float wp = sph_p(i, particle_var::w);     // current weight
 	update += wp;
 	// In the final pass, if the cumulative sum exceeds WT, record this index.
-	if (final && update > WT) {
+	if (final && update > WT) { //The "Final" Pass
 	    float r = rg.frand(0, 1.0);
 	    int candidate = (update - r * wp < WT) ? j+1 : j;
 	    if (candidate < 0) candidate = 0;  // guard against negative index
@@ -550,10 +538,10 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 	    // If team_first(0) is still -1 or j is smaller than its current value, update it.
 	    Kokkos::atomic_min(&team_first(0), candidate);
 	}
-    }, running_sum );    
+    });    
     // Synchronize to make sure all threads see the updated team_first.
     team.team_barrier();
-    */
+    
     Np_lc = nmin;
     Np_hc = team_first(0);
     Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc;
