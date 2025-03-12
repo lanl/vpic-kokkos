@@ -22,7 +22,10 @@ apply_takizuka_abe_collision_op( collision_op_t * cop,
                                  kokkos_rng_pool_t& rng ) {
   takizuka_abe_collision_op_t * ta = (takizuka_abe_collision_op_t *) cop;
   takizuka_abe_model model(ta->cvar0,ta->var_wt);
-  apply_binary_collision_model_pipeline<false>((binary_collision_op_t *) cop, model, rng);
+  if(ta->var_wt)
+      apply_binary_collision_model_pipeline<true>((binary_collision_op_t *) cop, model, rng);
+  else
+      apply_binary_collision_model_pipeline<false>((binary_collision_op_t *) cop, model, rng);
 }
 
 void

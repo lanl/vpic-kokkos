@@ -55,7 +55,7 @@
  *     https://github.com/kokkos/kokkos/wiki/Lambda-Dispatch
  * ############################################################
  */
-template<bool MonteCarlo>
+template<bool VariableWeight>
 struct binary_collision_pipeline {
 
   using Space=Kokkos::DefaultExecutionSpace;
@@ -244,59 +244,37 @@ struct binary_collision_pipeline {
 
     // Choose the collision function based on model.var_wt.
     // Both functions must be of the same signature.
-    if(model.var_wt){
-	Kokkos::parallel_for("binary_collision_pipeline::apply_model",
-			     Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
-			     KOKKOS_LAMBDA (member_type team_member) {
+    //    if(model.var_wt){
 
-				 int ix, iy, iz;
-				 RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
-				 const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
-				 
-				 // Find number of particles for each species.
-				 auto i0 = spi_partition_ra(v);
-				 auto ni = spi_partition_ra(v+1) - i0;
-				 
-				 auto j0 = spj_partition_ra(v);
-				 auto nj = spj_partition_ra(v+1) - j0;
-				 
-				 // TODO: convert this to be a more explicit check on if we have work
-				 if( ni <= 0 || nj <= 0 || (spi==spj && ni==1) ) return; //Nothing to do
-				 
-				 // Find the real densities.
-				 float density_i = spi_n(v);
-				 float density_j = spj_n(v);
-				 
-				 collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
+    Kokkos::parallel_for("binary_collision_pipeline::apply_model",
+			 Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
+			 KOKKOS_LAMBDA (member_type team_member) {
 
-			     });
-    }else{
-	Kokkos::parallel_for("binary_collision_pipeline::apply_model",
-			     Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
-			     KOKKOS_LAMBDA (member_type team_member) {
+			     int ix, iy, iz;
+			     RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
+			     const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
+			     
+			     // Find number of particles for each species.
+			     auto i0 = spi_partition_ra(v);
+			     auto ni = spi_partition_ra(v+1) - i0;
+			     
+			     auto j0 = spj_partition_ra(v);
+			     auto nj = spj_partition_ra(v+1) - j0;
+				 
+			     // TODO: convert this to be a more explicit check on if we have work
+			     if( ni <= 0 || nj <= 0 || (spi==spj && ni==1) ) return; //Nothing to do
+				 
+			     // Find the real densities.
+			     float density_i = spi_n(v);
+			     float density_j = spj_n(v);
+			     if constexpr (VariableWeight) {
+				     collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
+			     } else {
+				     collide_uniform_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
+			     }
+			 });
 
-				 int ix, iy, iz;
-				 RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
-				 const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
-				 
-				 // Find number of particles for each species.
-				 auto i0 = spi_partition_ra(v);
-				 auto ni = spi_partition_ra(v+1) - i0;
-				 
-				 auto j0 = spj_partition_ra(v);
-				 auto nj = spj_partition_ra(v+1) - j0;
-				 
-				 // TODO: convert this to be a more explicit check on if we have work
-				 if( ni <= 0 || nj <= 0 || (spi==spj && ni==1) ) return; //Nothing to do
-				 
-				 // Find the real densities.
-				 float density_i = spi_n(v);
-				 float density_j = spj_n(v);
-				 
-				 collide_uniform_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
-			     });
 
-    }
 
     // I don't know why we need this, but without it I get an illegal memory
     // access error ... suspicious.
@@ -693,7 +671,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     // Collision parameters
     t2 *= mu;       // _mu v^2  = Collision energy
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
-
+    /*
     // Monte-Carlo collision test
     if( MonteCarlo ) {
 
@@ -703,7 +681,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
       if( rg.frand() > dd*t1 ) return;
 
     }
-
+    */
     // Compute collision angle and coefficient of restitution
     const float rr = model.restitution(rg, t2, t1);
     dd = model.tan_theta_half(rg, t2, t1);
