@@ -17,6 +17,7 @@
 #define ACCUMULATOR_VAR_COUNT 3
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
+//#define INTERPOLATOR_VAR_COUNT 32
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
 #define HYDRO_VAR_COUNT 14
 #define NUM_J_DIMS 3
@@ -46,13 +47,8 @@ using k_field_accum_t = Kokkos::View<float *>;
 
 using k_jf_accum_t = Kokkos::View<float *[NUM_J_DIMS]>;
 
-//using k_particles_tiled_t = Kokkos::View<float **, Kokkos::Experimental::LayoutTiled<Kokkos::Iterate::Left, Kokkos::Iterate::Left, 8, 1> >;
-// Particle struct with tiling (float*** corresponds to Tile row, Tile col, N tiles)
-using k_particles_t = Kokkos::View<float ***, Kokkos::LayoutLeft>;
-//using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft>;
+using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft>;
 using k_particles_i_t = Kokkos::View<int*>;
-constexpr auto SIMD_LEN = Kokkos::Experimental::native_simd<float>::size();
-//constexpr auto SIMD_LEN = 32;
 
 // TODO: think about the layout here
 using k_particle_copy_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutRight>;
@@ -63,7 +59,7 @@ using k_particle_i_movers_t = Kokkos::View<int*>;
 
 using k_neighbor_t = Kokkos::View<int64_t*>;
 
-using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT], Kokkos::LayoutLeft>;
+using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 
 // TODO: Delete these
 using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;

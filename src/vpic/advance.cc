@@ -21,9 +21,8 @@ int vpic_simulation::advance(void)
   // Determine if we are done ... see note below why this is done here
   if( num_step>0 && step()>=num_step ) return 0;
 
-  KOKKOS_TIC();
-
   // Sort the particles for performance if desired.
+  KOKKOS_TIC();
   LIST_FOR_EACH( sp, species_list )
   {
       if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
@@ -32,7 +31,6 @@ int vpic_simulation::advance(void)
           sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, grid->nv);
       }
   }
-
   KOKKOS_TOC( sort_particles, 1);
 
   // At this point, fields are at E_0 and B_0 and the particle positions

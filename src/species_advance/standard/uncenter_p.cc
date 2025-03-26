@@ -16,12 +16,12 @@ void uncenter_p_kokkos(
   const float two_fifteenths = 2./15.;
 
   // Particle defines (p->x)
-  #define p_dx    k_particles(pidx, particle_var::dx, tile)
-  #define p_dy    k_particles(pidx, particle_var::dy, tile)
-  #define p_dz    k_particles(pidx, particle_var::dz, tile)
-  #define p_ux    k_particles(pidx, particle_var::ux, tile) // Load momentum
-  #define p_uy    k_particles(pidx, particle_var::uy, tile)
-  #define p_uz    k_particles(pidx, particle_var::uz, tile)
+  #define p_dx    k_particles( p_index, particle_var::dx)
+  #define p_dy    k_particles( p_index, particle_var::dy)
+  #define p_dz    k_particles( p_index, particle_var::dz)
+  #define p_ux    k_particles( p_index, particle_var::ux) // Load momentum
+  #define p_uy    k_particles( p_index, particle_var::uy)
+  #define p_uz    k_particles( p_index, particle_var::uz)
   #define pii     k_particles_i(p_index)
 
   // Interpolator Defines (f->x)
@@ -56,9 +56,6 @@ void uncenter_p_kokkos(
     int ii = pii;
     float hax, hay, haz, l_cbx, l_cby, l_cbz;
     float v0, v1, v2, v3, v4;
-
-    auto tile = p_index / SIMD_LEN;
-    auto pidx = p_index - tile*SIMD_LEN;
 
     float dx = p_dx; // Load position
     float dy = p_dy;

@@ -128,18 +128,18 @@ energy_p_kernel(const k_interpolator_t& k_interp,
   Kokkos::parallel_reduce(np, KOKKOS_LAMBDA(const int n, double& update) {
       auto tile = n / SIMD_LEN;
       auto pidx = n - tile*SIMD_LEN;
-      float dx = k_particles(pidx, particle_var::dx, tile);
-      float dy = k_particles(pidx, particle_var::dy, tile);
-      float dz = k_particles(pidx, particle_var::dz, tile);
+      float dx = k_particles( n, particle_var::dx);
+      float dy = k_particles( n, particle_var::dy);
+      float dz = k_particles( n, particle_var::dz);
       int   i  = k_particles_i(n);
-      float v0 = k_particles(pidx, particle_var::ux, tile) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
-                              dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
-      float v1 = k_particles(pidx, particle_var::uy, tile) + qdt_2mc*(    ( k_interp(i, interpolator_var::ey)    + dz*k_interp(i, interpolator_var::deydz)    ) +
-                              dx*( k_interp(i, interpolator_var::deydx) + dz*k_interp(i, interpolator_var::d2eydzdx) ) );
-      float v2 = k_particles(pidx, particle_var::uz, tile) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
+      float v0 = k_particles( n, particle_var::ux) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
+                       dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
+      float v1 = k_particles( n, particle_var::uy) + qdt_2mc*(    ( k_interp(i, interpolator_var::ey)    + dz*k_interp(i, interpolator_var::deydz)    ) +
+                       dx*( k_interp(i, interpolator_var::deydx) + dz*k_interp(i, interpolator_var::d2eydzdx) ) );
+      float v2 = k_particles( n, particle_var::uz) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
                               dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
       v0 = v0*v0 + v1*v1 + v2*v2;
-      v0 = (msp * k_particles(pidx, particle_var::w, tile)) * (v0 / (1 + sqrtf(1 + v0)));
+      v0 = (msp * k_particles( n, particle_var::w)) * (v0 / (1 + sqrtf(1 + v0)));
       update += static_cast<double>(v0);
   }, en);
   return en;

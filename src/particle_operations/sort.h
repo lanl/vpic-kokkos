@@ -30,36 +30,34 @@ struct min_max_functor_u64 {
 
 template< typename PermuteVector >
 void sort_particles(PermuteVector& perm_vec, k_particles_t& particles, int32_t np) {
-  k_particles_t copy("Sort scratch particles", particles.extent(0), particles.extent(1), particles.extent(2));
+  k_particles_t scratch(Kokkos::ViewAllocateWithoutInitializing("Sort scratch particles"), particles.extent(0), particles.extent(1), particles.extent(2));
   Kokkos::parallel_for("Kokkos::Sort::CopyPermuteTiled", Kokkos::RangePolicy<>(0, np), KOKKOS_LAMBDA(const uint32_t i) {
     auto dst_tile = i/SIMD_LEN;
     auto dst_pidx = i%SIMD_LEN;
     int src_i = perm_vec(i);
     auto src_tile = src_i/SIMD_LEN;
     auto src_pidx = src_i%SIMD_LEN;
-    copy(dst_pidx, particle_var::dx, dst_tile) = particles(src_pidx, particle_var::dx, src_tile);
-    copy(dst_pidx, particle_var::dy, dst_tile) = particles(src_pidx, particle_var::dy, src_tile);
-    copy(dst_pidx, particle_var::dz, dst_tile) = particles(src_pidx, particle_var::dz, src_tile);
-    copy(dst_pidx, particle_var::ux, dst_tile) = particles(src_pidx, particle_var::ux, src_tile);
-    copy(dst_pidx, particle_var::uy, dst_tile) = particles(src_pidx, particle_var::uy, src_tile);
-    copy(dst_pidx, particle_var::uz, dst_tile) = particles(src_pidx, particle_var::uz, src_tile);
-    copy(dst_pidx, particle_var::w , dst_tile) = particles(src_pidx, particle_var::w , src_tile);
+    scratch( i, particle_var::dx) = particles( src_i, particle_var::dx); 
+    scratch( i, particle_var::dy) = particles( src_i, particle_var::dy); 
+    scratch( i, particle_var::dz) = particles( src_i, particle_var::dz); 
+    scratch( i, particle_var::ux) = particles( src_i, particle_var::ux); 
+    scratch( i, particle_var::uy) = particles( src_i, particle_var::uy); 
+    scratch( i, particle_var::uz) = particles( src_i, particle_var::uz); 
+    scratch( i, particle_var::w ) = particles( src_i, particle_var::w ); 
   });
   Kokkos::parallel_for("Kokkos::Sort::CopyTiled", Kokkos::RangePolicy<>(0, np), KOKKOS_LAMBDA(const uint32_t i) {
     auto dst_tile = i/SIMD_LEN;
     auto dst_pidx = i%SIMD_LEN;
-    int src_i = perm_vec(i);
     auto src_tile = i/SIMD_LEN;
     auto src_pidx = i%SIMD_LEN;
-    copy(dst_pidx, particle_var::dx, dst_tile) = particles(src_pidx, particle_var::dx, src_tile);
-    copy(dst_pidx, particle_var::dy, dst_tile) = particles(src_pidx, particle_var::dy, src_tile);
-    copy(dst_pidx, particle_var::dz, dst_tile) = particles(src_pidx, particle_var::dz, src_tile);
-    copy(dst_pidx, particle_var::ux, dst_tile) = particles(src_pidx, particle_var::ux, src_tile);
-    copy(dst_pidx, particle_var::uy, dst_tile) = particles(src_pidx, particle_var::uy, src_tile);
-    copy(dst_pidx, particle_var::uz, dst_tile) = particles(src_pidx, particle_var::uz, src_tile);
-    copy(dst_pidx, particle_var::w , dst_tile) = particles(src_pidx, particle_var::w , src_tile);
+    particles( i, particle_var::dx) = scratch( i, particle_var::dx); 
+    particles( i, particle_var::dy) = scratch( i, particle_var::dy); 
+    particles( i, particle_var::dz) = scratch( i, particle_var::dz); 
+    particles( i, particle_var::ux) = scratch( i, particle_var::ux); 
+    particles( i, particle_var::uy) = scratch( i, particle_var::uy); 
+    particles( i, particle_var::uz) = scratch( i, particle_var::uz); 
+    particles( i, particle_var::w ) = scratch( i, particle_var::w ); 
   });
-Kokkos::fence();
 }
 
 /**
@@ -91,18 +89,21 @@ struct DefaultSort {
         int sort_within_bins = 0;
         Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, np, comp, sort_within_bins );
         bin_sort.create_permute_vector();
-        auto permute_vec = bin_sort.get_permute_vector();
-        sort_particles(permute_vec, particles, np);
-        // Sort particle data. 
-        // If using LayoutLeft we can save memory by sorting each particle variable separately.
-//      	if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
-//      		for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
-//      			auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
-//      			bin_sort.sort(sub_view);
-//      		}
-//      	} else {
-//          bin_sort.sort(particles);
-//      	}
+#ifdef TILED
+          auto permute_vec = bin_sort.get_permute_vector();
+          sort_particles(permute_vec, particles, np);
+#else
+          // Sort particle data. 
+          // If using LayoutLeft we can save memory by sorting each particle variable separately.
+        	if constexpr (std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+        		for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
+        			auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+        			bin_sort.sort(sub_view);
+        		}
+        	} else {
+            bin_sort.sort(particles);
+        	}
+#endif
         // Sort particle indices
         bin_sort.sort(particles_i);
     }
@@ -146,19 +147,22 @@ struct DefaultSort {
         int sort_within_bins = 0;
         Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, np, comp, sort_within_bins );
         bin_sort.create_permute_vector();
-        auto permute_vec = bin_sort.get_permute_vector();
-        sort_particles(permute_vec, particles, np);
 
-        // Sort particle data. 
-        // If using LayoutLeft we can save memory by sorting each particle variable separately.
-//        if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
-//        	for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
-//        		auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
-//        		bin_sort.sort(sub_view);
-//        	}
-//        } else {
-//          bin_sort.sort(particles);
-//        }
+#ifdef TILED
+          auto permute_vec = bin_sort.get_permute_vector();
+          sort_particles(permute_vec, particles, np);
+#else
+          // Sort particle data. 
+          // If using LayoutLeft we can save memory by sorting each particle variable separately.
+          if constexpr (std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+          	for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
+          		auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+          		bin_sort.sort(sub_view);
+          	}
+          } else {
+            bin_sort.sort(particles);
+          }
+#endif
         // Sort particle indices
         bin_sort.sort(particles_i);
     }
@@ -201,19 +205,22 @@ struct DefaultSort {
         int sort_within_bins = 0;
         Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, np, comp, sort_within_bins );
         bin_sort.create_permute_vector();
-        auto permute_vec = bin_sort.get_permute_vector();
-        sort_particles(permute_vec, particles, np);
 
-        // Sort particle data. 
-        // If using LayoutLeft we can save memory by sorting each particle variable separately.
-//        if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
-//        	for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
-//        		auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
-//        		bin_sort.sort(sub_view);
-//        	}
-//        } else {
-//              bin_sort.sort(particles);
-//        }
+#ifdef TILED
+          auto permute_vec = bin_sort.get_permute_vector();
+          sort_particles(permute_vec, particles, np);
+#else
+          // Sort particle data. 
+          // If using LayoutLeft we can save memory by sorting each particle variable separately.
+          if constexpr (std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+          	for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
+          		auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+          		bin_sort.sort(sub_view);
+          	}
+          } else {
+                bin_sort.sort(particles);
+          }
+#endif
         // Sort particle indices
         bin_sort.sort(particles_i);
     }
@@ -241,7 +248,7 @@ struct DefaultSort {
         Kokkos::deep_copy(bin_counter, 0);
         // Count number of particles in each cell
         Kokkos::parallel_for("get max nppc", Kokkos::RangePolicy<>(0, np), KOKKOS_LAMBDA(const int i) {
-          Kokkos::atomic_increment(&(bin_counter(key_view(i))));
+          Kokkos::atomic_inc(&(bin_counter(key_view(i))));
         });
         // Find the max and min number of particles per cell
         Kokkos::parallel_reduce("Get max/min nppc", Kokkos::RangePolicy<>(0,num_bins), 
@@ -271,19 +278,22 @@ struct DefaultSort {
         int sort_within_bins = 0;
         Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, np, comp, sort_within_bins );
         bin_sort.create_permute_vector();
-        auto permute_vec = bin_sort.get_permute_vector();
-        sort_particles(permute_vec, particles, np);
 
-        // Sort particle data. 
-        // If using LayoutLeft we can save memory by sorting each particle variable separately.
-//        if(std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
-//        	for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
-//        		auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
-//        		bin_sort.sort(sub_view);
-//        	}
-//        } else {
-//          bin_sort.sort(particles);
-//        }
+#ifdef TILED
+          auto permute_vec = bin_sort.get_permute_vector();
+          sort_particles(permute_vec, particles, np);
+#else
+          // Sort particle data. 
+          // If using LayoutLeft we can save memory by sorting each particle variable separately.
+          if constexpr (std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+          	for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
+          		auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+          		bin_sort.sort(sub_view);
+          	}
+          } else {
+            bin_sort.sort(particles);
+          }
+#endif
         // Sort particle indices
         bin_sort.sort(particles_i);
     }

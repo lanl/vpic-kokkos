@@ -383,13 +383,13 @@ struct accum_rhob {
     void operator() (const int n) const {
 
         int part_idx = kpart_movers_i(n);
-        auto tile = part_idx / SIMD_LEN;
-        auto pidx = part_idx - tile*SIMD_LEN;
-        float w0 = kpart(pidx, particle_var::dx, tile);
-        float w1 = kpart(pidx, particle_var::dy, tile);
+//        auto tile = part_idx / SIMD_LEN;
+//        auto pidx = part_idx - tile*SIMD_LEN;
+        float w0 = kpart( n, particle_var::dx);
+        float w1 = kpart( n, particle_var::dy);
         float w2, w3, w4, w5, w6;
-        float w7 = (qsp * r8V) * kpart(pidx, particle_var::w, tile);
-        float dz = kpart(pidx, particle_var::dz, tile);
+        float w7 = (qsp * r8V) * kpart(n, particle_var::w);
+        float dz = kpart(n, particle_var::dz);
         int v = kpart_i(part_idx);
         int x, y, z;
 
@@ -500,13 +500,13 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np), KOKKOS_LAMBDA(const int n) {
         float w0, w1, w2, w3, w4, w5, w6, w7, dz;
 
-        auto tile = n / SIMD_LEN;
-        auto pidx = n - tile*SIMD_LEN;
-        w0 = kparticles(pidx, particle_var::dx, tile);
-        w1 = kparticles(pidx, particle_var::dy, tile);
-        dz = kparticles(pidx, particle_var::dz, tile);
+//        auto tile = n / SIMD_LEN;
+//        auto pidx = n - tile*SIMD_LEN;
+        w0 = kparticles( n, particle_var::dx);
+        w1 = kparticles( n, particle_var::dy);
+        dz = kparticles( n, particle_var::dz);
         int v = kparticles_i(n);
-        w7 = kparticles(pidx, particle_var::w, tile) * q_8V;
+        w7 = kparticles( n, particle_var::w) * q_8V;
 
 #   define FMA( x,y,z) ((z)+(x)*(y))
 #   define FNMS(x,y,z) ((z)-(x)*(y))
