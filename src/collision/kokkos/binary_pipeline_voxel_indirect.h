@@ -244,10 +244,13 @@ struct binary_collision_pipeline {
 
     // Choose the collision function based on model.var_wt.
     // Both functions must be of the same signature.
-    //    if(model.var_wt){
+    auto policy = Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO());
+    if(model.var_wt){
+	policy = policy.set_scratch_size(1, Kokkos::PerTeam(sizeof(int)));
+    }
 
     Kokkos::parallel_for("binary_collision_pipeline::apply_model",
-			 Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
+			 policy,
 			 KOKKOS_LAMBDA (member_type team_member) {
 
 			     int ix, iy, iz;
@@ -268,6 +271,7 @@ struct binary_collision_pipeline {
 			     float density_i = spi_n(v);
 			     float density_j = spj_n(v);
 			     if constexpr (VariableWeight) {
+				     // printf("#call collide_variabl_wt()\n");
 				     collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
 			     } else {
 				     collide_uniform_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
@@ -432,6 +436,7 @@ template<class collision_model>
 KOKKOS_INLINE_FUNCTION
 void collide_variabl_wt(const float m_i, const float m_j, const float density_i, const float density_j, const float dV, int i_0, int j_0, int ni, int nj, const float dtinterval,     const k_particles_t& spi_p,  const k_particles_t& spj_p,   const collision_model& model, k_particle_sortindex_t_ra spi_sortindex_ra, k_particle_sortindex_t_ra spj_sortindex_ra, const kokkos_rng_pool_t& rp, const Kokkos::TeamPolicy<>::member_type & team)
 {
+    //printf("#in collide_variabl_wt()\n");
     const float mu_i = m_j/(m_i+m_j);
     const float mu_j = m_i/(m_i+m_j);
     const float mu = m_i*m_j/(m_i+m_j);
@@ -454,7 +459,8 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     kokkos_rng_state_t rg = rp.get_state();
 
     int nmin, nmax; // = std::min(ni, nj);
-
+    size_t Np_c, Np_hc, Np_lc;
+    
     // Handle intraspecies.
     if( spi_p == spj_p ) {
 	//for simplicity everyone collides
@@ -463,12 +469,12 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 	j0 = i0 + ni;
 	nmin = ni<nj ? ni : nj;
 	nmax = ni>nj ? ni : nj;
+	Np_lc = nmin;
+	Np_hc = nmax;
+	Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc;	
     }else{
 	nmin = ij ? nj : ni; // note that in general the number of the other species can be >=< nmin
 	nmax = ij ? ni : nj;	
-    }
-
-    size_t Np_c, Np_hc, Np_lc;
 
     // Allocate one integer in team scratch memory (slot 1 is used for the shared integer).
     typedef Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Unmanaged>> scratch_int_view_t;
@@ -479,9 +485,9 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 		       team_first(0) = -1;
 		   });
     team.team_barrier();
-    /*
+
     float cumulative = 0.0f;
-    
+    // printf("nmin=%d, nmax=%d, WT=%f\n", nmin, nmax, WT);
     // Only one thread per team does the serial scan.
     Kokkos::single(Kokkos::PerTeam(team), [&]() {
       for (int j = 0; j < nmax; j++) {
@@ -489,6 +495,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
         int i = sph_sortindex_ra(i0 + j);
 	auto wp = sph_p(i, particle_var::w);
         cumulative += wp;  // accumulate weight
+	//printf("j=%d,wp=%f,cum=%f\n",j,wp, cumulative);
         // Check if cumulative sum exceeds WT.
         if (cumulative > WT) {
 	    float r = rg.frand(0, 1.0);
@@ -500,7 +507,8 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     });
     // Make sure all team threads see the updated local_first.
     team.team_barrier();    
-    */
+    
+    /*
     Kokkos::parallel_scan(Kokkos::TeamThreadRange(team, nmax),
     [&] (const int j, float & update, const bool final) {
 	const int i = sph_sortindex_ra(i0 + j);
@@ -519,11 +527,12 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     });    
     // Synchronize to make sure all threads see the updated team_first.
     team.team_barrier();
-    
+    */
     Np_lc = nmin;
     Np_hc = team_first(0);
     Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc;
-
+    }
+    //printf("Np_lc=%d, Np_hc=%d, Np_c=%d, i0=%d, j0=%d\n", (int) Np_lc, (int) Np_hc, (int) Np_c, i0, j0);
     gmomType13 Dm;
     Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, Np_c),
 			    [&](const int c, gmomType13 &lsum) {
@@ -574,18 +583,25 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 	     ux = up[1];
 	     uy = up[2];
 	     uz = up[3];
+	     sph_p(i, particle_var::ux) = ux;
+	     sph_p(i, particle_var::uy) = uy;
+	     sph_p(i, particle_var::uz) = uz;
 	     lsum.v[7] += wp*ux;
 	     lsum.v[8] += wp*uy;
 	     lsum.v[9] += wp*uz;
 	     lsum.v[10] += wp*ux*ux;
 	     lsum.v[11] += wp*uy*uy;
-	     lsum.v[12] += wp*uz*uz;	     
+	     lsum.v[12] += wp*uz*uz;
+	     
 	 }
 	 if(c < Np_lc) {
 	     wp = up[4];
 	     ux = up[5];
 	     uy = up[6];
 	     uz = up[7];
+	     spl_p(j, particle_var::ux) = ux;
+	     spl_p(j, particle_var::uy) = uy;
+	     spl_p(j, particle_var::uz) = uz;
 	     lsum.v[7] += wp*ux;
 	     lsum.v[8] += wp*uy;
 	     lsum.v[9] += wp*uz;
@@ -594,7 +610,10 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 	     lsum.v[12] += wp*uz*uz;
 	 }
 			    }, Dm);	 
-    
+
+        // We *must* free generators.
+        rp.free_state(rg);
+ 
 }
 
   /**
