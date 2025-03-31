@@ -443,7 +443,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     
     float twt[2] = {density_i*dV,density_j*dV}; //total weight within a cell
     // Compute ndt
-    const bool ij    = density_i > density_j;
+    const bool ij    = density_i >= density_j;
     int i0 = ij ? i_0 : j_0;
     int j0 = ij ? j_0 : i_0;
     auto sph_p = ij ? spi_p : spj_p;
@@ -487,7 +487,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     team.team_barrier();
 
     float cumulative = 0.0f;
-    // printf("nmin=%d, nmax=%d, WT=%f\n", nmin, nmax, WT);
+    //printf("nmin=%d, nmax=%d, WT=%f, ni=%d, nj=%d, mi=%e, mj=%e, deni=%e, denj=%e, ij=%d\n", nmin, nmax, WT, ni, nj, m_i, m_j,density_i,density_j,ij);
     // Only one thread per team does the serial scan.
     Kokkos::single(Kokkos::PerTeam(team), [&]() {
       for (int j = 0; j < nmax; j++) {
@@ -497,9 +497,11 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
         cumulative += wp;  // accumulate weight
 	//printf("j=%d,wp=%f,cum=%f\n",j,wp, cumulative);
         // Check if cumulative sum exceeds WT.
-        if (cumulative > WT) {
+	if (cumulative == WT) {
+	    team_first(0) = j+1;
+        }else if (cumulative > WT) {
 	    float r = rg.frand(0, 1.0);
-	    int candidate = (cumulative - r * wp < WT) ? j+1 : j;
+	    int candidate = (cumulative - r * wp < WT) ? j+2 : j+1;
 	    team_first(0) = candidate;
           break;
         }
@@ -532,7 +534,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     Np_hc = team_first(0);
     Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc;
     }
-    //printf("Np_lc=%d, Np_hc=%d, Np_c=%d, i0=%d, j0=%d\n", (int) Np_lc, (int) Np_hc, (int) Np_c, i0, j0);
+    // printf("Np_lc=%d, Np_hc=%d, Np_c=%d, i0=%d, j0=%d\n", (int) Np_lc, (int) Np_hc, (int) Np_c, i0, j0);
     gmomType13 Dm;
     Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, Np_c),
 			    [&](const int c, gmomType13 &lsum) {
