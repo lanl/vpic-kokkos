@@ -32,13 +32,21 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     /**/  field_t    * RESTRICT ALIGNED(128) f = fa->f;
     const particle_t * RESTRICT ALIGNED(128) p = sp->p;
 
-    const float q_8V = sp->q*sp->g->r8V, one=1.0;
+    const float q_8V  = sp->q*sp->g->r8V;
+    const float q_V   = sp->q*(sp->g->rdx*sp->g->rdy*sp->g->rdz);
+    const float q_12V = q_V * 1./12.;
     const int np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
 
+    constexpr float three          = 3.;
+    constexpr float two            = 2.;
+    constexpr float one            = 1.;
+
 # if 1
-    float ux, uy, uz, w3, w4, w5, w6, w7, dz;
+    float ux, uy, uz; //, w3, w4, w5, w6, w7, dz;
+    float dx, dy, dz;
+    float q, w0, wx, wy, wz, wmx, wmy, wmz;
 # else
     using namespace v4;
     v4float q, wl, wh, rl, rh;
@@ -61,15 +69,13 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         ux = p[n].ux;
         uy = p[n].uy;
         uz = p[n].uz;
+        v  = p[n].i;
 
         // Disable relativistic gamma for Hybrid PIC
         //w3  = one/sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
         //ux *= w3;
         //uy *= w3;
         //uz *= w3;
-
-	v  = p[n].i;
-        w7 = p[n].w*q_8V*8.0;
 
         // Compute the trilinear weights
         // Though the PPE should have hardware fma/fmaf support, it was
@@ -89,10 +95,66 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
         // Reduce the particle charge to rhof
 
-        f[v      ].jfx += w7*ux;
-	f[v      ].jfy += w7*uy;
-        f[v      ].jfz += w7*uz;
-	f[v      ].rhof+= w7;
+#ifdef SHAPE_NGP
+        w0 = p[n].w * q_V;
+
+        f[v      ].jfx += w0*ux;
+        f[v      ].jfy += w0*uy;
+        f[v      ].jfz += w0*uz;
+        f[v      ].rhof+= w0;
+#else
+#ifdef SHAPE_QS
+
+        dx = p[n].dx;
+        dy = p[n].dy;
+        dz = p[n].dz;
+
+        q = p[n].w * q_12V;
+        w0 =  q*two*( three - dx*dx - dy*dy - dz*dz );
+        wx =  q*( dx + one )*( dx + one );
+        wy =  q*( dy + one )*( dy + one );
+        wz =  q*( dz + one )*( dz + one );
+        wmx = q*( dx - one )*( dx - one );
+        wmy = q*( dy - one )*( dy - one );
+        wmz = q*( dz - one )*( dz - one );
+
+        f[v   ].jfx  += w0*ux;
+        f[v   ].jfy  += w0*uy;
+        f[v   ].jfz  += w0*uz;
+        f[v   ].rhof += w0;
+
+        f[v+1 ].jfx  += wx*ux;
+        f[v+1 ].jfy  += wx*uy;
+        f[v+1 ].jfz  += wx*uz;
+        f[v+1 ].rhof += wx;
+
+        f[v+sy].jfx  += wy*ux;
+        f[v+sy].jfy  += wy*uy;
+        f[v+sy].jfz  += wy*uz;
+        f[v+sy].rhof += wy;
+
+        f[v+sz].jfx  += wz*ux;
+        f[v+sz].jfy  += wz*uy;
+        f[v+sz].jfz  += wz*uz;
+        f[v+sz].rhof += wz;
+
+        f[v-1 ].jfx  += wmx*ux;
+        f[v-1 ].jfy  += wmx*uy;
+        f[v-1 ].jfz  += wmx*uz;
+        f[v-1 ].rhof += wmx;
+
+        f[v-sy].jfx  += wmy*ux;
+        f[v-sy].jfy  += wmy*uy;
+        f[v-sy].jfz  += wmy*uz;
+        f[v-sy].rhof += wmy;
+
+        f[v-sz].jfx  += wmz*ux;
+        f[v-sz].jfy  += wmz*uy;
+        f[v-sz].jfz  += wmz*uz;
+        f[v-sz].rhof += wmz;
+
+#endif // defined(SHAPE_QS)
+#endif // defined(SHAPE_NGP)
 
 	//  ; f[v      +1].rhof += w1;
         //f[v   +sy].rhof += w2; f[v   +sy+1].rhof += w3;
@@ -480,9 +542,15 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     k_particles_i_t kparticles_i = sp->k_p_i_d;
 
     const float q_8V = (sp->q)*(sp->g->r8V);
+    const float q_V   = sp->q*(sp->g->rdx*sp->g->rdy*sp->g->rdz);
+    const float q_12V = q_V * 1./12.;
     const int np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
+
+    constexpr float three          = 3.;
+    constexpr float two            = 2.;
+    constexpr float one            = 1.;
 /*
     float sums[sp->g->nv];
     Kokkos::parallel_reduce("accumulate_rho_p", Kokkos::RangePolicy<>(0, np), accum_rho_p_reduce(kfield, kparticles, kparticles_i, sy, sz, q_8V, np, sp->g->nv), sums);
@@ -528,10 +596,13 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
         // Hybrid
         int ii = kparticles_i(n);
+        float dx  =            kparticles(n, particle_var::dx);
+        float dy  =            kparticles(n, particle_var::dy);
+        float dz  =            kparticles(n, particle_var::dz);
         float ux  =            kparticles(n, particle_var::ux);
         float uy  =            kparticles(n, particle_var::uy);
         float uz  =            kparticles(n, particle_var::uz);
-        float q_V = q_8V*8.0 * kparticles(n, particle_var::w);
+        float p_w =            kparticles(n, particle_var::w);
 
         auto scatter_view_access = scatter_view.access();
 
@@ -553,11 +624,60 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 //        Kokkos::atomic_add(&kfield(v+sz+sy,   field_var::rhof), w6);
 //        Kokkos::atomic_add(&kfield(v+sz+sy+1, field_var::rhof), w7);
 
+#ifdef SHAPE_NGP
         // Hybrid, nearest-grid-point shape
-        scatter_view_access(ii, field_var::jfx)  += q_V * ux;
-        scatter_view_access(ii, field_var::jfy)  += q_V * uy;
-        scatter_view_access(ii, field_var::jfz)  += q_V * uz;
-        scatter_view_access(ii, field_var::rhof) += q_V;
+        float w0 = q_V * p_w;
+
+        scatter_view_access(ii, field_var::jfx)  += w0 * ux;
+        scatter_view_access(ii, field_var::jfy)  += w0 * uy;
+        scatter_view_access(ii, field_var::jfz)  += w0 * uz;
+        scatter_view_access(ii, field_var::rhof) += w0;
+#else
+#ifdef SHAPE_QS
+        float w0 =  (q_12V*p_w) * two*( three - dx*dx - dy*dy - dz*dz );
+        float wx =  (q_12V*p_w) * ( dx + one )*( dx + one );
+        float wy =  (q_12V*p_w) * ( dy + one )*( dy + one );
+        float wz =  (q_12V*p_w) * ( dz + one )*( dz + one );
+        float wmx = (q_12V*p_w) * ( dx - one )*( dx - one );
+        float wmy = (q_12V*p_w) * ( dy - one )*( dy - one );
+        float wmz = (q_12V*p_w) * ( dz - one )*( dz - one );
+
+        scatter_view_access(ii,    field_var::jfx)  += w0 * ux;
+        scatter_view_access(ii,    field_var::jfy)  += w0 * uy;
+        scatter_view_access(ii,    field_var::jfz)  += w0 * uz;
+        scatter_view_access(ii,    field_var::rhof) += w0;
+
+        scatter_view_access(ii+1,  field_var::jfx)  += wx * ux;
+        scatter_view_access(ii+1,  field_var::jfy)  += wx * uy;
+        scatter_view_access(ii+1,  field_var::jfz)  += wx * uz;
+        scatter_view_access(ii+1,  field_var::rhof) += wx;
+
+        scatter_view_access(ii+sy, field_var::jfx)  += wy * ux;
+        scatter_view_access(ii+sy, field_var::jfy)  += wy * uy;
+        scatter_view_access(ii+sy, field_var::jfz)  += wy * uz;
+        scatter_view_access(ii+sy, field_var::rhof) += wy;
+
+        scatter_view_access(ii+sz, field_var::jfx)  += wz * ux;
+        scatter_view_access(ii+sz, field_var::jfy)  += wz * uy;
+        scatter_view_access(ii+sz, field_var::jfz)  += wz * uz;
+        scatter_view_access(ii+sz, field_var::rhof) += wz;
+
+        scatter_view_access(ii-1,  field_var::jfx)  += wmx * ux;
+        scatter_view_access(ii-1,  field_var::jfy)  += wmx * uy;
+        scatter_view_access(ii-1,  field_var::jfz)  += wmx * uz;
+        scatter_view_access(ii-1,  field_var::rhof) += wmx;
+
+        scatter_view_access(ii-sy, field_var::jfx)  += wmy * ux;
+        scatter_view_access(ii-sy, field_var::jfy)  += wmy * uy;
+        scatter_view_access(ii-sy, field_var::jfz)  += wmy * uz;
+        scatter_view_access(ii-sy, field_var::rhof) += wmy;
+
+        scatter_view_access(ii-sz, field_var::jfx)  += wmz * ux;
+        scatter_view_access(ii-sz, field_var::jfy)  += wmz * uy;
+        scatter_view_access(ii-sz, field_var::jfz)  += wmz * uz;
+        scatter_view_access(ii-sz, field_var::rhof) += wmz;
+#endif // defined(SHAPE_QS)
+#endif // defined(SHAPE_NGP)
 
     });
     Kokkos::Experimental::contribute(kfield, scatter_view);
