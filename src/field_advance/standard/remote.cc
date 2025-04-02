@@ -14,6 +14,27 @@
 
 //#define TEST_MPI_KOKKOS
 
+//#define TEST_HYB_OPT
+
+// GPU aware MPI macros
+#ifdef VPIC_ENABLE_GPU_AWARE_MPI
+
+#define SYNC_MPI_BUFFER(dst, src) Kokkos::fence();
+#define BEGIN_SEND_PORT_K(i, j, k, size, g, sendbuf_d, sendbuf_h); \
+  begin_send_port_k(i,j,k,size,g, reinterpret_cast<char*>(sendbuf_d.data())); 
+#define BEGIN_RECV_PORT_K(i, j, k, size, g, recvbuf_d, recvbuf_h); \
+  begin_recv_port_k(i,j,k,size,g, reinterpret_cast<char*>(recvbuf_d.data()));
+
+#else
+
+#define SYNC_MPI_BUFFER(dst, src) Kokkos::deep_copy(dst, src);
+#define BEGIN_SEND_PORT_K(i, j, k, size, g, sendbuf_d, sendbuf_h); \
+  begin_send_port_k(i,j,k,size,g, reinterpret_cast<char*>(sendbuf_h.data())); 
+#define BEGIN_RECV_PORT_K(i, j, k, size, g, recvbuf_d, recvbuf_h); \
+  begin_recv_port_k(i,j,k,size,g, reinterpret_cast<char*>(recvbuf_h.data()));
+
+#endif
+
 // Indexing macros
 #define field(x,y,z) field[ VOXEL(x,y,z, nx,ny,nz) ]
 
@@ -1436,7 +1457,8 @@ end_remote_ghost_div_b( field_t      * ALIGNED(128) field,
 #define BRP(x_,y_,z_)							\
   const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;			\
   const int size = (4*n##y_*n##z_)*sizeof(float);			\
-  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+  BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
+//  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
   
 
 template<typename T> void begin_recv_ghost_hyb_jf(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
@@ -1451,16 +1473,23 @@ template<> void begin_recv_ghost_hyb_jf<ZXY>(field_array* fa, const int i, const
   const int size = (4*n##y_*n##z_)*sizeof(float);				\
   const int face = (i+j+k)<0 ? 1 : n##x_;				\
   const k_field_t& k_field = fa->k_f_d;					\
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
-  Kokkos::parallel_for("begin_send_ghost_hyb_jf<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> x_##_face({1, 1, 0}, {n##z_+1, n##y_+1, 4}); \
+  Kokkos::parallel_for("begin_send_ghost_hyb_jf<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_, const int var) { \
       const int x_ = face;						\
-      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx); \
-      sbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy); \
-      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz); \
-      sbuf_d(3*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);\
+      sbuf_d(var*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx+var); \
     });									\
-  Kokkos::deep_copy(sbuf_h, sbuf_d);					\
-  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d); \
+  BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
+
+//      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx); \
+//      sbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy); \
+//      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz); \
+//      sbuf_d(3*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);\
+  //Kokkos::fence(); \
+  //begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_d.data())); 
+  //
+  //Kokkos::deep_copy(sbuf_h, sbuf_d);					\
+  //begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
 
 
 template<typename T> void begin_send_ghost_hyb_jf(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {}
@@ -1497,7 +1526,7 @@ void k_begin_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa, const grid_t* g
     const int nx = g->nx, ny = g->ny, nz = g->nz;			\
     const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
     const k_field_t& k_field = fa->k_f_d;				\
-    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h); \
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
     Kokkos::parallel_for("end_recv_ghost_hyb_jf<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
 	const int x_ = face;						\
@@ -1507,6 +1536,7 @@ void k_begin_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa, const grid_t* g
 	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof)= rbuf_d(3*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
       });								\
   }									
+//    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
   
 template<typename T> void end_recv_ghost_hyb_jf(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
 template<> void end_recv_ghost_hyb_jf<XYZ>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(x,y,z)}
@@ -1536,6 +1566,8 @@ void k_end_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa, const grid_t* g, 
     end_send_ghost_hyb_jf<XYZ>(fa,  1,  0,  0);
     end_send_ghost_hyb_jf<YZX>(fa,  0,  1,  0);
     end_send_ghost_hyb_jf<ZXY>(fa,  0,  0,  1);
+
+    Kokkos::fence(); 
 }
 
 
@@ -1546,7 +1578,9 @@ void k_end_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa, const grid_t* g, 
 #define BRP(x_,y_,z_)							\
   const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;			\
   const int size = (3*n##y_*n##z_)*sizeof(float);			\
-  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+  BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
+  //begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_d.data()));
+  //begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
   
 
 template<typename T> void begin_recv_ghost_hyb_e(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
@@ -1568,7 +1602,12 @@ template<> void begin_recv_ghost_hyb_e<ZXY>(field_array* fa, const int i, const 
       sbuf_d(n##y_*n##z_   + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey); \
       sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez); \
     });									\
-  Kokkos::deep_copy(sbuf_h, sbuf_d);					\
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d); \
+  BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
+
+  //Kokkos::fence(); \
+  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_d.data()));
+  //Kokkos::deep_copy(sbuf_h, sbuf_d);					\
   begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
 
 
@@ -1590,12 +1629,98 @@ void k_begin_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa, const grid_t* g,
     begin_recv_ghost_hyb_e<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
 
 // Start sending
+#ifndef TEST_HYB_OPT
     begin_send_ghost_hyb_e<XYZ>(fa, -1,  0,  0, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
     begin_send_ghost_hyb_e<YZX>(fa,  0, -1,  0, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
     begin_send_ghost_hyb_e<ZXY>(fa,  0,  0, -1, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
     begin_send_ghost_hyb_e<XYZ>(fa,  1,  0,  0, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
     begin_send_ghost_hyb_e<YZX>(fa,  0,  1,  0, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
     begin_send_ghost_hyb_e<ZXY>(fa,  0,  0,  1, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
+#else
+Kokkos::Profiling::pushRegion("Create streams");
+  cudaStream_t stream[3];
+  cudaStreamCreate(&stream[0]);
+  cudaStreamCreate(&stream[1]);
+  cudaStreamCreate(&stream[2]);
+Kokkos::Profiling::popRegion();
+
+  Kokkos::DefaultExecutionSpace x_space(stream[0]), y_space(stream[1]), z_space(stream[2]);
+  const k_field_t& k_field = fa->k_f_d;					
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		
+  const int sizex = (3*ny*nz)*sizeof(float);				
+  const int sizey = (3*nz*nx)*sizeof(float);				
+  const int sizez = (3*nx*ny)*sizeof(float);				
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_face(x_space, {1, 1}, {nz+1, ny+1}); 
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> y_face(y_space, {1, 1}, {nx+1, nz+1}); 
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> z_face(z_space, {1, 1}, {ny+1, nx+1}); 
+
+  auto sbuf_d = fb.xyz_sbuf_neg;
+  Kokkos::parallel_for("begin_send_ghost_hyb_e<XYZ>", x_face, KOKKOS_LAMBDA(const int z, const int y) { 
+      const int x = 1;						
+      sbuf_d(          (z-1)*ny + (y-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex); 
+      sbuf_d(ny*nz   + (z-1)*ny + (y-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey); 
+      sbuf_d(2*ny*nz + (z-1)*ny + (y-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez); 
+    });									
+  sbuf_d = fb.yzx_sbuf_neg;
+  Kokkos::parallel_for("begin_send_ghost_hyb_e<YZX>", y_face, KOKKOS_LAMBDA(const int x, const int z) { 
+      const int y = 1;						
+      sbuf_d(          (x-1)*nz + (z-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex); 
+      sbuf_d(nz*nx   + (x-1)*nz + (z-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey); 
+      sbuf_d(2*nz*nx + (x-1)*nz + (z-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez); 
+    });									
+  sbuf_d = fb.zxy_sbuf_neg;
+  Kokkos::parallel_for("begin_send_ghost_hyb_e<ZXY>", z_face, KOKKOS_LAMBDA(const int y, const int x) { 
+      const int z = 1;						
+      sbuf_d(          (y-1)*nx + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex); 
+      sbuf_d(nx*ny   + (y-1)*nx + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey); 
+      sbuf_d(2*nx*ny + (y-1)*nx + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez); 
+    });									
+  sbuf_d = fb.xyz_sbuf_pos;
+  Kokkos::parallel_for("begin_send_ghost_hyb_e<XYZ>", x_face, KOKKOS_LAMBDA(const int z, const int y) { 
+      const int x = 1;						
+      sbuf_d(          (z-1)*ny + (y-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex); 
+      sbuf_d(ny*nz   + (z-1)*ny + (y-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey); 
+      sbuf_d(2*ny*nz + (z-1)*ny + (y-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez); 
+    });									
+  sbuf_d = fb.yzx_sbuf_pos;
+  Kokkos::parallel_for("begin_send_ghost_hyb_e<YZX>", y_face, KOKKOS_LAMBDA(const int x, const int z) { 
+      const int y = 1;						
+      sbuf_d(          (x-1)*nz + (z-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex); 
+      sbuf_d(nz*nx   + (x-1)*nz + (z-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey); 
+      sbuf_d(2*nz*nx + (x-1)*nz + (z-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez); 
+    });									
+  sbuf_d = fb.zxy_sbuf_pos;
+  Kokkos::parallel_for("begin_send_ghost_hyb_e<ZXY>", z_face, KOKKOS_LAMBDA(const int y, const int x) { 
+      const int z = 1;						
+      sbuf_d(          (y-1)*nx + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex); 
+      sbuf_d(nx*ny   + (y-1)*nx + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey); 
+      sbuf_d(2*nx*ny + (y-1)*nx + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez); 
+    });									
+
+//  Kokkos::deep_copy(x_space, fb.xyz_sbuf_neg_h, fb.xyz_sbuf_neg);					
+//  Kokkos::deep_copy(y_space, fb.yzx_sbuf_neg_h, fb.yzx_sbuf_neg);					
+//  Kokkos::deep_copy(z_space, fb.zxy_sbuf_neg_h, fb.zxy_sbuf_neg);					
+//  Kokkos::deep_copy(x_space, fb.xyz_sbuf_pos_h, fb.xyz_sbuf_pos);					
+//  Kokkos::deep_copy(y_space, fb.yzx_sbuf_pos_h, fb.yzx_sbuf_pos);					
+//  Kokkos::deep_copy(z_space, fb.zxy_sbuf_pos_h, fb.zxy_sbuf_pos);					
+
+  x_space.fence();
+  y_space.fence();
+  z_space.fence();
+
+  begin_send_port_k(-1,0,0,sizex,fa->g, reinterpret_cast<char*>(fb.xyz_sbuf_neg.data()));
+  begin_send_port_k(0,-1,0,sizey,fa->g, reinterpret_cast<char*>(fb.yzx_sbuf_neg.data()));
+  begin_send_port_k(0,0,-1,sizez,fa->g, reinterpret_cast<char*>(fb.zxy_sbuf_neg.data()));
+  begin_send_port_k(1,0,0,sizex,fa->g, reinterpret_cast<char*>(fb.xyz_sbuf_pos.data()));
+  begin_send_port_k(0,1,0,sizey,fa->g, reinterpret_cast<char*>(fb.yzx_sbuf_pos.data()));
+  begin_send_port_k(0,0,1,sizez,fa->g, reinterpret_cast<char*>(fb.zxy_sbuf_pos.data()));
+
+//Kokkos::Profiling::pushRegion("Destroy streams");
+//  cudaStreamDestroy(stream[0]);
+//  cudaStreamDestroy(stream[1]);
+//  cudaStreamDestroy(stream[2]);
+//Kokkos::Profiling::popRegion();
+#endif
 }
 
 
@@ -1606,16 +1731,17 @@ void k_begin_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa, const grid_t* g,
     const int nx = g->nx, ny = g->ny, nz = g->nz;			\
     const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
     const k_field_t& k_field = fa->k_f_d;				\
-    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h); \
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
     Kokkos::parallel_for("end_recv_ghost_hyb_e<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
-	const int x_ = face;						\
-	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
-	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
-	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+    const int x_ = face;						\
+    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
+    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
       });								\
   }									
   
+//    Kokkos::deep_copy(rbuf_d, rbuf_h);					
 template<typename T> void end_recv_ghost_hyb_e(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
 template<> void end_recv_ghost_hyb_e<XYZ>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(x,y,z)}
 template<> void end_recv_ghost_hyb_e<YZX>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(y,z,x)}
@@ -1630,12 +1756,107 @@ template<typename T> void end_send_ghost_hyb_e(field_array_t* fa, const int i, c
 void k_end_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
     
 // End receiving
+#ifndef TEST_HYB_OPT
     end_recv_ghost_hyb_e<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
     end_recv_ghost_hyb_e<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
     end_recv_ghost_hyb_e<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
     end_recv_ghost_hyb_e<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
     end_recv_ghost_hyb_e<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
     end_recv_ghost_hyb_e<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+#else
+Kokkos::Profiling::pushRegion("Create streams");
+  cudaStream_t stream[3];
+  cudaStreamCreate(&stream[0]);
+  cudaStreamCreate(&stream[1]);
+  cudaStreamCreate(&stream[2]);
+Kokkos::Profiling::popRegion();
+
+  Kokkos::DefaultExecutionSpace x_space(stream[0]), y_space(stream[1]), z_space(stream[2]);
+  const int nx = g->nx, ny = g->ny, nz = g->nz;
+  const k_field_t& k_field = fa->k_f_d;
+  float* p = reinterpret_cast<float*>(end_recv_port_k(-1,0,0,g));
+  if(p) {
+//    Kokkos::deep_copy(x_space, fb.xyz_rbuf_neg_h, fb.xyz_rbuf_neg);
+    auto& rbuf_d = fb.xyz_rbuf_neg;
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_face(x_space, {1, 1}, {nz+1, ny+1}); 
+    Kokkos::parallel_for("end_recv_ghost_hyb_e<XYZ>", x_face, KOKKOS_LAMBDA(const int z, const int y) { 
+      const int x = nx+1;
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = rbuf_d(          (z-1)*ny + (y-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = rbuf_d(  ny*nz + (z-1)*ny + (y-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = rbuf_d(2*ny*nz + (z-1)*ny + (y-1)); 
+      });								
+  }
+  p = reinterpret_cast<float*>(end_recv_port_k(0,-1,0,g));
+  if(p) {
+//    Kokkos::deep_copy(y_space, fb.yzx_rbuf_neg_h, fb.yzx_rbuf_neg);
+    auto& rbuf_d = fb.yzx_rbuf_neg;
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> y_face(y_space, {1, 1}, {nx+1, nz+1}); 
+    Kokkos::parallel_for("end_recv_ghost_hyb_e<YZX>", y_face, KOKKOS_LAMBDA(const int x, const int z) { 
+      const int y = ny+1;
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = rbuf_d(          (x-1)*nz + (z-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = rbuf_d(  nz*nx + (x-1)*nz + (z-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = rbuf_d(2*nz*nx + (x-1)*nz + (z-1)); 
+      });								
+  }
+  p = reinterpret_cast<float*>(end_recv_port_k(0,0,-1,g));
+  if(p) {
+//    Kokkos::deep_copy(z_space, fb.zxy_rbuf_neg_h, fb.zxy_rbuf_neg);
+    auto& rbuf_d = fb.zxy_rbuf_neg;
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> z_face(z_space, {1, 1}, {ny+1, nx+1}); 
+    Kokkos::parallel_for("end_recv_ghost_hyb_e<ZXY>", z_face, KOKKOS_LAMBDA(const int y, const int x) { 
+      const int z = nz+1;
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = rbuf_d(          (y-1)*nx + (x-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = rbuf_d(  nx*ny + (y-1)*nx + (x-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = rbuf_d(2*nx*ny + (y-1)*nx + (x-1)); 
+      });								
+  }
+
+  p = reinterpret_cast<float*>(end_recv_port_k(1,0,0,g));
+  if(p) {
+//    Kokkos::deep_copy(x_space, fb.xyz_rbuf_pos_h, fb.xyz_rbuf_pos);
+    auto& rbuf_d = fb.xyz_rbuf_pos;
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_face(x_space, {1, 1}, {nz+1, ny+1}); 
+    Kokkos::parallel_for("end_recv_ghost_hyb_e<XYZ>", x_face, KOKKOS_LAMBDA(const int z, const int y) { 
+      const int x = 0;
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = rbuf_d(          (z-1)*ny + (y-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = rbuf_d(  ny*nz + (z-1)*ny + (y-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = rbuf_d(2*ny*nz + (z-1)*ny + (y-1)); 
+      });								
+  }
+  p = reinterpret_cast<float*>(end_recv_port_k(0,1,0,g));
+  if(p) {
+//    Kokkos::deep_copy(y_space, fb.yzx_rbuf_pos_h, fb.yzx_rbuf_pos);
+    auto& rbuf_d = fb.yzx_rbuf_pos;
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> y_face(y_space, {1, 1}, {nx+1, nz+1}); 
+    Kokkos::parallel_for("end_recv_ghost_hyb_e<YZX>", y_face, KOKKOS_LAMBDA(const int x, const int z) { 
+      const int y = 0;
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = rbuf_d(          (x-1)*nz + (z-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = rbuf_d(  nz*nx + (x-1)*nz + (z-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = rbuf_d(2*nz*nx + (x-1)*nz + (z-1)); 
+      });								
+  }
+  p = reinterpret_cast<float*>(end_recv_port_k(0,0,1,g));
+  if(p) {
+//    Kokkos::deep_copy(z_space, fb.zxy_rbuf_pos_h, fb.zxy_rbuf_pos);
+    auto& rbuf_d = fb.zxy_rbuf_pos;
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> z_face(z_space, {1, 1}, {ny+1, nx+1}); 
+    Kokkos::parallel_for("end_recv_ghost_hyb_e<ZXY>", z_face, KOKKOS_LAMBDA(const int y, const int x) { 
+      const int z = 0;
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = rbuf_d(          (y-1)*nx + (x-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = rbuf_d(  nx*ny + (y-1)*nx + (x-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = rbuf_d(2*nx*ny + (y-1)*nx + (x-1)); 
+      });								
+  }
+
+  x_space.fence();
+  y_space.fence();
+  z_space.fence();
+//Kokkos::Profiling::pushRegion("Destroy streams");
+//  cudaStreamDestroy(stream[0]);
+//  cudaStreamDestroy(stream[1]);
+//  cudaStreamDestroy(stream[2]);
+//Kokkos::Profiling::popRegion();
+#endif
 
 // End sending
     end_send_ghost_hyb_e<XYZ>(fa, -1,  0,  0);
@@ -1644,13 +1865,18 @@ void k_end_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa, const grid_t* g, f
     end_send_ghost_hyb_e<XYZ>(fa,  1,  0,  0);
     end_send_ghost_hyb_e<YZX>(fa,  0,  1,  0);
     end_send_ghost_hyb_e<ZXY>(fa,  0,  0,  1);
+
+    Kokkos::fence(); 
 }
 
 //Hybrid curl_lpl_B
 #define BRP(x_,y_,z_)							\
   const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;			\
   const int size = (3*n##y_*n##z_)*sizeof(float);			\
-  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+  BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h); 
+
+  //begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_d.data()));
+  //begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
   
 
 template<typename T> void begin_recv_ghost_hyb_curl_lpl_b(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
@@ -1672,7 +1898,12 @@ template<> void begin_recv_ghost_hyb_curl_lpl_b<ZXY>(field_array* fa, const int 
       sbuf_d(n##y_*n##z_   + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pey); \
       sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pez); \
     });									\
-  Kokkos::deep_copy(sbuf_h, sbuf_d);					\
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d); \
+  BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
+
+  //Kokkos::fence(); \
+  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_d.data()));
+  //Kokkos::deep_copy(sbuf_h, sbuf_d);					\
   begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
 
 
@@ -1710,7 +1941,7 @@ void k_begin_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa, const g
     const int nx = g->nx, ny = g->ny, nz = g->nz;			\
     const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
     const k_field_t& k_field = fa->k_f_d;				\
-    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h); \
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
     Kokkos::parallel_for("end_recv_ghost_hyb_curl_lpl_b<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
 	const int x_ = face;						\
@@ -1719,6 +1950,7 @@ void k_begin_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa, const g
 	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pez) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
       });								\
   }									
+//    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
   
 template<typename T> void end_recv_ghost_hyb_curl_lpl_b(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
 template<> void end_recv_ghost_hyb_curl_lpl_b<XYZ>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(x,y,z)}
@@ -1748,6 +1980,8 @@ void k_end_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa, const gri
     end_send_ghost_hyb_curl_lpl_b<XYZ>(fa,  1,  0,  0);
     end_send_ghost_hyb_curl_lpl_b<YZX>(fa,  0,  1,  0);
     end_send_ghost_hyb_curl_lpl_b<ZXY>(fa,  0,  0,  1);
+
+    Kokkos::fence(); 
 }
 
 
@@ -1755,7 +1989,10 @@ void k_end_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa, const gri
 #define BRP(x_,y_,z_)							\
   const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;			\
   const int size = (3*n##y_*n##z_)*sizeof(float);			\
-  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+  BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
+
+  //begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+  //begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_d.data()));
   
 
 template<typename T> void begin_recv_ghost_hyb_b(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
@@ -1770,65 +2007,198 @@ template<> void begin_recv_ghost_hyb_b<ZXY>(field_array* fa, const int i, const 
   const int size = (3*n##y_*n##z_)*sizeof(float);				\
   const int face = (i+j+k)<0 ? 1 : n##x_;				\
   const k_field_t& k_field = fa->k_f_d;					\
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
-  Kokkos::parallel_for("begin_send_ghost_hyb_b<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> x_##_face({1, 1, 0}, {n##y_+1, n##z_+1, 3}); \
+  Kokkos::parallel_for("begin_send_ghost_hyb_b<" #x_ #y_ #z_ ">", x_##_face, KOKKOS_LAMBDA(const int y_, const int z_, const int var) { \
       const int x_ = face;						\
-      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx); \
-      sbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby); \
-      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz); \
+      sbuf_d(var*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx+var); \
     });									\
-  Kokkos::deep_copy(sbuf_h, sbuf_d);					\
-  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d); \
+  BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
+
+  //Kokkos::deep_copy(sbuf_h, sbuf_d);					\
+  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data())); 
+  //begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_d.data())); 
+
+//      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx); \
+//      sbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby); \
+//      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz); \
 
 
 template<typename T> void begin_send_ghost_hyb_b(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {}
 template<> void begin_send_ghost_hyb_b<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(x,y,z)}
 template<> void begin_send_ghost_hyb_b<YZX>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(y,z,x)}
 template<> void begin_send_ghost_hyb_b<ZXY>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {BSP(z,x,y)}
+//{
+//  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		
+//  const int size = (3*nx*ny)*sizeof(float);				
+//  const int face = (i+j+k)<0 ? 1 : nz;				
+//  const k_field_t& k_field = fa->k_f_d;					
+//  Kokkos::Profiling::pushRegion("begin_send_ghost_hyb_b<ZXY>::copy_faces");
+//  Kokkos::pair<int,int> extent(VOXEL(1,1,face,nx,ny,nz), VOXEL(nx,ny,face,nx,ny,nz));
+//  auto cbx_face = Kokkos::subview(k_field, extent, (int)field_var::cbx);
+//  auto cby_face = Kokkos::subview(k_field, extent, (int)field_var::cby);
+//  auto cbz_face = Kokkos::subview(k_field, extent, (int)field_var::cbz);
+//  auto cbx_buff = Kokkos::subview(sbuf_d, Kokkos::pair<int,int>(      0,   nx*(ny-1)+(nx-1)));
+//  auto cby_buff = Kokkos::subview(sbuf_d, Kokkos::pair<int,int>(  nx*ny, nx*ny+(ny-1)*nx+(nx-1)));
+//  auto cbz_buff = Kokkos::subview(sbuf_d, Kokkos::pair<int,int>(2*nx*ny, 2*nx*ny+(ny-1)*nx+(nx-1)));
+//  Kokkos::deep_copy(cbx_buff, cbx_face);
+//  Kokkos::deep_copy(cby_buff, cby_face);
+//  Kokkos::deep_copy(cbz_buff, cbz_face);
+//  Kokkos::Profiling::popRegion();
+//  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_d.data()));
+//}
 
 #undef BSP
 
+//#define TEST_HYB_OPT
 
 void k_begin_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
 // Start receiving
+Kokkos::Profiling::pushRegion("HybridAdvanceE::Tangential_Ghost_Setup::Begin_Remote_Ghost_Hybrid_B::Begin_Recv");
     begin_recv_ghost_hyb_b<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
     begin_recv_ghost_hyb_b<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
     begin_recv_ghost_hyb_b<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
     begin_recv_ghost_hyb_b<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
     begin_recv_ghost_hyb_b<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
     begin_recv_ghost_hyb_b<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
+Kokkos::Profiling::popRegion();
 
 // Start sending
+#undef TEST_HYB_OPT
+#ifdef TEST_HYB_OPT
+Kokkos::Profiling::pushRegion("HybridAdvanceE::Tangential_Ghost_Setup::Begin_Remote_Ghost_Hybrid_B::Begin_Send");
+Kokkos::Profiling::pushRegion("Create streams");
+    cudaStream_t stream[3];
+    cudaStreamCreate(&stream[0]);
+    cudaStreamCreate(&stream[1]);
+    cudaStreamCreate(&stream[2]);
+Kokkos::Profiling::popRegion();
+
+    Kokkos::DefaultExecutionSpace x_space(stream[0]), y_space(stream[1]), z_space(stream[2]);
+    const k_field_t& k_field = fa->k_f_d;					
+    const int nx = fa->g->nx;
+    const int ny = fa->g->ny;
+    const int nz = fa->g->nz;
+    const int sizex = (3*ny*nz)*sizeof(float);				
+    const int sizey = (3*nz*nx)*sizeof(float);				
+    const int sizez = (3*nx*ny)*sizeof(float);				
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>> x_face(x_space, {1, 1, 0}, {ny+1, nz+1, 3}); 
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>> y_face(y_space, {1, 1, 0}, {nz+1, nx+1, 3}); 
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>> z_face(z_space, {1, 1, 0}, {nx+1, ny+1, 3}); 
+    auto sbuf_d = fb.xyz_sbuf_neg;
+    Kokkos::parallel_for("begin_send_ghost_hyb_b<XYZ>", x_face, KOKKOS_LAMBDA(const int y, const int z, const int var) { 
+        const int x = 1;						
+        sbuf_d(var*ny*nz + (z-1)*ny + (y-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx+var); 
+      });									
+    sbuf_d = fb.yzx_sbuf_neg;
+    Kokkos::parallel_for("begin_send_ghost_hyb_b<YZX>", y_face, KOKKOS_LAMBDA(const int z, const int x, const int var) { 
+        const int y = 1;						
+        sbuf_d(var*nz*nx + (x-1)*nz + (z-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx+var); 
+      });									
+    sbuf_d = fb.zxy_sbuf_neg;
+    Kokkos::parallel_for("begin_send_ghost_hyb_b<ZXY>", z_face, KOKKOS_LAMBDA(const int x, const int y, const int var) { 
+        const int z = 1;						
+        sbuf_d(var*nx*ny + (y-1)*nx + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx+var); 
+      });									
+
+    sbuf_d = fb.xyz_sbuf_neg;
+    Kokkos::parallel_for("begin_send_ghost_hyb_b<XYZ>", x_face, KOKKOS_LAMBDA(const int y, const int z, const int var) { 
+        const int x = nx;						
+        sbuf_d(var*ny*nz + (z-1)*ny + (y-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx+var); 
+      });									
+    sbuf_d = fb.yzx_sbuf_neg;
+    Kokkos::parallel_for("begin_send_ghost_hyb_b<YZX>", y_face, KOKKOS_LAMBDA(const int z, const int x, const int var) { 
+        const int y = ny;						
+        sbuf_d(var*nz*nx + (x-1)*nz + (z-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx+var); 
+      });									
+    sbuf_d = fb.zxy_sbuf_neg;
+    Kokkos::parallel_for("begin_send_ghost_hyb_b<ZXY>", z_face, KOKKOS_LAMBDA(const int x, const int y, const int var) { 
+        const int z = nz;						
+        sbuf_d(var*nx*ny + (y-1)*nx + (x-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx+var); 
+      });									
+//Kokkos::Profiling::pushRegion("HybridAdvanceE::Tangential_Ghost_Setup::Begin_Remote_Ghost_Hybrid_B::Begin_Send::Deep_Copy");
+//    Kokkos::deep_copy(x_space, fb.xyz_sbuf_neg_h, fb.xyz_sbuf_neg);
+//    Kokkos::deep_copy(y_space, fb.yzx_sbuf_neg_h, fb.yzx_sbuf_neg);
+//    Kokkos::deep_copy(z_space, fb.zxy_sbuf_neg_h, fb.zxy_sbuf_neg);
+//    Kokkos::deep_copy(x_space, fb.xyz_sbuf_pos_h, fb.xyz_sbuf_pos);
+//    Kokkos::deep_copy(y_space, fb.yzx_sbuf_pos_h, fb.yzx_sbuf_pos);
+//    Kokkos::deep_copy(z_space, fb.zxy_sbuf_pos_h, fb.zxy_sbuf_pos);
+//Kokkos::Profiling::popRegion();
+
+    x_space.fence();
+    y_space.fence();
+    z_space.fence();
+//Kokkos::Profiling::pushRegion("Destroy streams");
+//  cudaStreamDestroy(stream[0]);
+//  cudaStreamDestroy(stream[1]);
+//  cudaStreamDestroy(stream[2]);
+//Kokkos::Profiling::popRegion();
+
+Kokkos::Profiling::pushRegion("HybridAdvanceE::Tangential_Ghost_Setup::Begin_Remote_Ghost_Hybrid_B::Begin_Send::MPI_Send_Port");
+    begin_send_port_k(-1, 0, 0,sizex,fa->g, reinterpret_cast<char*>(fb.xyz_sbuf_neg.data()));
+    begin_send_port_k( 0,-1, 0,sizey,fa->g, reinterpret_cast<char*>(fb.yzx_sbuf_neg.data()));
+    begin_send_port_k( 0, 0,-1,sizez,fa->g, reinterpret_cast<char*>(fb.zxy_sbuf_neg.data()));
+    begin_send_port_k( 1, 0, 0,sizex,fa->g, reinterpret_cast<char*>(fb.xyz_sbuf_pos.data()));
+    begin_send_port_k( 0, 1, 0,sizey,fa->g, reinterpret_cast<char*>(fb.yzx_sbuf_pos.data()));
+    begin_send_port_k( 0, 0, 1,sizez,fa->g, reinterpret_cast<char*>(fb.zxy_sbuf_pos.data()));
+Kokkos::Profiling::popRegion();
+Kokkos::Profiling::popRegion();
+#else
     begin_send_ghost_hyb_b<XYZ>(fa, -1,  0,  0, fb.xyz_sbuf_neg, fb.xyz_sbuf_neg_h);
     begin_send_ghost_hyb_b<YZX>(fa,  0, -1,  0, fb.yzx_sbuf_neg, fb.yzx_sbuf_neg_h);
     begin_send_ghost_hyb_b<ZXY>(fa,  0,  0, -1, fb.zxy_sbuf_neg, fb.zxy_sbuf_neg_h);
     begin_send_ghost_hyb_b<XYZ>(fa,  1,  0,  0, fb.xyz_sbuf_pos, fb.xyz_sbuf_pos_h);
     begin_send_ghost_hyb_b<YZX>(fa,  0,  1,  0, fb.yzx_sbuf_pos, fb.yzx_sbuf_pos_h);
     begin_send_ghost_hyb_b<ZXY>(fa,  0,  0,  1, fb.zxy_sbuf_pos, fb.zxy_sbuf_pos_h);
+#endif
 }
 
 
 #define ERP(x_,y_,z_)							\
   const grid_t* g = fa->g;						\
+  Kokkos::Profiling::pushRegion("end_recv_ghost_hyb_b<XYZ>::wait"); \
   float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));	\
+  Kokkos::Profiling::popRegion(); \
   if(p) {								\
     const int nx = g->nx, ny = g->ny, nz = g->nz;			\
     const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
     const k_field_t& k_field = fa->k_f_d;				\
-    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h); \
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
     Kokkos::parallel_for("end_recv_ghost_hyb_b<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
-	const int x_ = face;						\
-	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
-	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
-	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      const int x_ = face;						\
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
       });								\
   }									
+//    Kokkos::deep_copy(rbuf_d, rbuf_h); \
   
 template<typename T> void end_recv_ghost_hyb_b(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
 template<> void end_recv_ghost_hyb_b<XYZ>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(x,y,z)}
 template<> void end_recv_ghost_hyb_b<YZX>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(y,z,x)}
 template<> void end_recv_ghost_hyb_b<ZXY>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(z,x,y)}
+//{
+//  const grid_t* g = fa->g;						
+//  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));	
+//  if(p) {								
+//    const int nx = g->nx, ny = g->ny, nz = g->nz;			
+//    const int face = (i+j+k) < 0 ? ny+1 : 0;				
+//    const k_field_t& k_field = fa->k_f_d;				
+//    Kokkos::Profiling::pushRegion("begin_send_ghost_hyb_b<ZXY>::copy_faces");
+//    Kokkos::pair<int,int> extent(VOXEL(1,1,face,nx,ny,nz), VOXEL(nx,ny,face,nx,ny,nz));
+//    auto cbx_face = Kokkos::subview(k_field, extent, (int) field_var::cbx);
+//    auto cby_face = Kokkos::subview(k_field, extent, (int) field_var::cby);
+//    auto cbz_face = Kokkos::subview(k_field, extent, (int) field_var::cbz);
+//    auto cbx_buff = Kokkos::subview(rbuf_d, Kokkos::pair<int,int>(      0,   nx*(ny-1)+(nx-1)));
+//    auto cby_buff = Kokkos::subview(rbuf_d, Kokkos::pair<int,int>(  nx*ny, nx*ny+(ny-1)*nx+(nx-1)));
+//    auto cbz_buff = Kokkos::subview(rbuf_d, Kokkos::pair<int,int>(2*nx*ny, 2*nx*ny+(ny-1)*nx+(nx-1)));
+//    Kokkos::deep_copy(cbx_face, cbx_buff);
+//    Kokkos::deep_copy(cby_face, cby_buff);
+//    Kokkos::deep_copy(cbz_face, cbz_buff);
+//    Kokkos::Profiling::popRegion();
+//  }									
+//}
 
 #undef ERP
 
@@ -1839,13 +2209,107 @@ template<typename T> void end_send_ghost_hyb_b(field_array_t* fa, const int i, c
 void k_end_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
     
 // End receiving
+#ifdef TEST_HYB_OPT
+Kokkos::Profiling::pushRegion("Create streams");
+  cudaStream_t stream[3];
+  cudaStreamCreate(&stream[0]);
+  cudaStreamCreate(&stream[1]);
+  cudaStreamCreate(&stream[2]);
+Kokkos::Profiling::popRegion();
+
+  Kokkos::DefaultExecutionSpace x_space(stream[0]), y_space(stream[1]), z_space(stream[2]);
+  const int nx = g->nx, ny = g->ny, nz = g->nz;
+  const k_field_t& k_field = fa->k_f_d;
+  float* p = reinterpret_cast<float*>(end_recv_port_k(-1,0,0,g));
+  if(p) {
+//    Kokkos::deep_copy(x_space, fb.xyz_rbuf_neg_h, fb.xyz_rbuf_neg);
+    auto& rbuf_d = fb.xyz_rbuf_neg;
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_face(x_space, {1, 1}, {nz+1, ny+1}); 
+    Kokkos::parallel_for("end_recv_ghost_hyb_b<XYZ>", x_face, KOKKOS_LAMBDA(const int z, const int y) { 
+      const int x = nx+1;
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rbuf_d(          (z-1)*ny + (y-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rbuf_d(  ny*nz + (z-1)*ny + (y-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = rbuf_d(2*ny*nz + (z-1)*ny + (y-1)); 
+      });								
+  }
+  p = reinterpret_cast<float*>(end_recv_port_k(0,-1,0,g));
+  if(p) {
+//    Kokkos::deep_copy(y_space, fb.yzx_rbuf_neg_h, fb.yzx_rbuf_neg);
+    auto& rbuf_d = fb.yzx_rbuf_neg;
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> y_face(y_space, {1, 1}, {nx+1, nz+1}); 
+    Kokkos::parallel_for("end_recv_ghost_hyb_b<YZX>", y_face, KOKKOS_LAMBDA(const int x, const int z) { 
+      const int y = ny+1;
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rbuf_d(          (x-1)*nz + (z-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rbuf_d(  nz*nx + (x-1)*nz + (z-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = rbuf_d(2*nz*nx + (x-1)*nz + (z-1)); 
+      });								
+  }
+  p = reinterpret_cast<float*>(end_recv_port_k(0,0,-1,g));
+  if(p) {
+//    Kokkos::deep_copy(z_space, fb.zxy_rbuf_neg_h, fb.zxy_rbuf_neg);
+    auto& rbuf_d = fb.zxy_rbuf_neg;
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> z_face(z_space, {1, 1}, {ny+1, nx+1}); 
+    Kokkos::parallel_for("end_recv_ghost_hyb_b<ZXY>", z_face, KOKKOS_LAMBDA(const int y, const int x) { 
+      const int z = nz+1;
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rbuf_d(          (y-1)*nx + (x-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rbuf_d(  nx*ny + (y-1)*nx + (x-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = rbuf_d(2*nx*ny + (y-1)*nx + (x-1)); 
+      });								
+  }
+
+  p = reinterpret_cast<float*>(end_recv_port_k(1,0,0,g));
+  if(p) {
+//    Kokkos::deep_copy(x_space, fb.xyz_rbuf_pos_h, fb.xyz_rbuf_pos);
+    auto& rbuf_d = fb.xyz_rbuf_pos;
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_face(x_space, {1, 1}, {nz+1, ny+1}); 
+    Kokkos::parallel_for("end_recv_ghost_hyb_b<XYZ>", x_face, KOKKOS_LAMBDA(const int z, const int y) { 
+      const int x = 0;
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rbuf_d(          (z-1)*ny + (y-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rbuf_d(  ny*nz + (z-1)*ny + (y-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = rbuf_d(2*ny*nz + (z-1)*ny + (y-1)); 
+      });								
+  }
+  p = reinterpret_cast<float*>(end_recv_port_k(0,1,0,g));
+  if(p) {
+//    Kokkos::deep_copy(y_space, fb.yzx_rbuf_pos_h, fb.yzx_rbuf_pos);
+    auto& rbuf_d = fb.yzx_rbuf_pos;
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> y_face(y_space, {1, 1}, {nx+1, nz+1}); 
+    Kokkos::parallel_for("end_recv_ghost_hyb_b<YZX>", y_face, KOKKOS_LAMBDA(const int x, const int z) { 
+      const int y = 0;
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rbuf_d(          (x-1)*nz + (z-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rbuf_d(  nz*nx + (x-1)*nz + (z-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = rbuf_d(2*nz*nx + (x-1)*nz + (z-1)); 
+      });								
+  }
+  p = reinterpret_cast<float*>(end_recv_port_k(0,0,1,g));
+  if(p) {
+//    Kokkos::deep_copy(z_space, fb.zxy_rbuf_pos_h, fb.zxy_rbuf_pos);
+    auto& rbuf_d = fb.zxy_rbuf_pos;
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> z_face(z_space, {1, 1}, {ny+1, nx+1}); 
+    Kokkos::parallel_for("end_recv_ghost_hyb_b<ZXY>", z_face, KOKKOS_LAMBDA(const int y, const int x) { 
+      const int z = 0;
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rbuf_d(          (y-1)*nx + (x-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rbuf_d(  nx*ny + (y-1)*nx + (x-1)); 
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = rbuf_d(2*nx*ny + (y-1)*nx + (x-1)); 
+      });								
+  }
+
+  x_space.fence();
+  y_space.fence();
+  z_space.fence();
+//Kokkos::Profiling::pushRegion("Destroy streams");
+//  cudaStreamDestroy(stream[0]);
+//  cudaStreamDestroy(stream[1]);
+//  cudaStreamDestroy(stream[2]);
+//Kokkos::Profiling::popRegion();
+#else
     end_recv_ghost_hyb_b<XYZ>(fa, -1,  0,  0, fb.xyz_rbuf_neg, fb.xyz_rbuf_neg_h);
     end_recv_ghost_hyb_b<YZX>(fa,  0, -1,  0, fb.yzx_rbuf_neg, fb.yzx_rbuf_neg_h);
     end_recv_ghost_hyb_b<ZXY>(fa,  0,  0, -1, fb.zxy_rbuf_neg, fb.zxy_rbuf_neg_h);
     end_recv_ghost_hyb_b<XYZ>(fa,  1,  0,  0, fb.xyz_rbuf_pos, fb.xyz_rbuf_pos_h);
     end_recv_ghost_hyb_b<YZX>(fa,  0,  1,  0, fb.yzx_rbuf_pos, fb.yzx_rbuf_pos_h);
     end_recv_ghost_hyb_b<ZXY>(fa,  0,  0,  1, fb.zxy_rbuf_pos, fb.zxy_rbuf_pos_h);
-
+#endif
 // End sending
     end_send_ghost_hyb_b<XYZ>(fa, -1,  0,  0);
     end_send_ghost_hyb_b<YZX>(fa,  0, -1,  0);
@@ -1853,6 +2317,7 @@ void k_end_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa, const grid_t* g, f
     end_send_ghost_hyb_b<XYZ>(fa,  1,  0,  0);
     end_send_ghost_hyb_b<YZX>(fa,  0,  1,  0);
     end_send_ghost_hyb_b<ZXY>(fa,  0,  0,  1);
+    Kokkos::fence(); 
 }
 
 /*****************************************************************************
@@ -1862,7 +2327,10 @@ void k_end_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa, const grid_t* g, f
 #define BRP(x_,y_,z_)							\
   const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;			\
   const int size = (3*n##y_*n##z_)*sizeof(float);			\
-  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+  BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
+
+  //begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_d.data()));
+  //begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
 
 template<typename T> void begin_recv_ghost_hyb_t(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
 template<> void begin_recv_ghost_hyb_t<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(x,y,z)}
@@ -1883,7 +2351,12 @@ template<> void begin_recv_ghost_hyb_t<ZXY>(field_array* fa, const int i, const 
       sbuf_d(n##y_*n##z_   + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ty); \
       sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tz); \
     });									\
-  Kokkos::deep_copy(sbuf_h, sbuf_d);					\
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d); \
+  BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
+
+  //Kokkos::fence(); \
+  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_d.data()));
+  //Kokkos::deep_copy(sbuf_h, sbuf_d);					\
   begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
 
 template<typename T> void begin_send_ghost_hyb_t(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {}
@@ -1918,7 +2391,7 @@ void k_begin_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa, const grid_t* g,
     const int nx = g->nx, ny = g->ny, nz = g->nz;			\
     const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
     const k_field_t& k_field = fa->k_f_d;				\
-    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h); \
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
     Kokkos::parallel_for("end_recv_ghost_hyb_t<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
 	const int x_ = face;						\
@@ -1927,6 +2400,8 @@ void k_begin_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa, const grid_t* g,
 	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
       });								\
   }
+
+    //Kokkos::deep_copy(rbuf_d, rbuf_h);					\
 
 template<typename T> void end_recv_ghost_hyb_t(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
 template<> void end_recv_ghost_hyb_t<XYZ>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(x,y,z)}
@@ -1955,6 +2430,8 @@ void k_end_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa, const grid_t* g, f
     end_send_ghost_hyb_t<XYZ>(fa,  1,  0,  0);
     end_send_ghost_hyb_t<YZX>(fa,  0,  1,  0);
     end_send_ghost_hyb_t<ZXY>(fa,  0,  0,  1);
+
+    Kokkos::fence(); 
 }
 
 /*****************************************************************************
@@ -1964,7 +2441,10 @@ void k_end_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa, const grid_t* g, f
 #define BRP(x_,y_,z_)							\
   const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;			\
   const int size = (3*n##y_*n##z_)*sizeof(float);			\
-  begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
+  BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
+
+  //begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_d.data()));
+  //begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
 
 template<typename T> void begin_recv_ghost_hyb_o(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
 template<> void begin_recv_ghost_hyb_o<XYZ>(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {BRP(x,y,z)}
@@ -1985,7 +2465,12 @@ template<> void begin_recv_ghost_hyb_o<ZXY>(field_array* fa, const int i, const 
       sbuf_d(n##y_*n##z_   + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::oy); \
       sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::oz); \
     });									\
-  Kokkos::deep_copy(sbuf_h, sbuf_d);					\
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d); \
+  BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
+
+  //Kokkos::fence(); \
+  begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_d.data()));
+  //Kokkos::deep_copy(sbuf_h, sbuf_d);					\
   begin_send_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(sbuf_h.data()));
 
 template<typename T> void begin_send_ghost_hyb_o(field_array* fa, const int i, const int j, const int k, Kokkos::View<float*>& sbuf_d, Kokkos::View<float*>::HostMirror& sbuf_h) {}
@@ -2020,7 +2505,7 @@ void k_begin_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa, const grid_t* g,
     const int nx = g->nx, ny = g->ny, nz = g->nz;			\
     const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
     const k_field_t& k_field = fa->k_f_d;				\
-    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h); \
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
     Kokkos::parallel_for("end_recv_ghost_hyb_o<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
 	const int x_ = face;						\
@@ -2029,6 +2514,7 @@ void k_begin_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa, const grid_t* g,
 	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::oz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
       });								\
   }
+//    Kokkos::deep_copy(rbuf_d, rbuf_h);					\
 
 template<typename T> void end_recv_ghost_hyb_o(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {}
 template<> void end_recv_ghost_hyb_o<XYZ>(field_array_t* fa, const int i, const int j, const int k, Kokkos::View<float*>& rbuf_d, Kokkos::View<float*>::HostMirror& rbuf_h) {ERP(x,y,z)}
@@ -2057,6 +2543,8 @@ void k_end_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa, const grid_t* g, f
     end_send_ghost_hyb_o<XYZ>(fa,  1,  0,  0);
     end_send_ghost_hyb_o<YZX>(fa,  0,  1,  0);
     end_send_ghost_hyb_o<ZXY>(fa,  0,  0,  1);
+
+    Kokkos::fence(); 
 }
 
 /*****************************************************************************
