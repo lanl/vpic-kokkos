@@ -31,6 +31,10 @@ vpic_simulation::initialize( int argc,
   grid->eos_den       = 1.;
   grid->kappa         = 0;
 
+  // need isub=0 initialized for advance_b(...) to
+  // migrate QS shape currents from ghosts to live cells
+  grid->isub          = 0;
+
   // Call the user initialize the simulation
 
   TIC user_initialization( argc, argv ); TOC( user_initialization, 1 );
