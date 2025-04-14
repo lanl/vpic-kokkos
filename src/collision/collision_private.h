@@ -39,7 +39,7 @@ struct Accum {
   }
 };
 typedef Accum<float, 5> gmomType; //0:mass, 1-3:momentum, 4-energy
-typedef Accum<float, 13> gmomType13; 
+typedef Accum<float, 26> gmomType26; //before+after collision for 2 species
 
 namespace Kokkos { //required
 template <>
@@ -53,9 +53,9 @@ struct reduction_identity<gmomType> {
 };
 
 template<>
-struct reduction_identity<gmomType13> {
+struct reduction_identity<gmomType26> {
     KOKKOS_INLINE_FUNCTION
-    static gmomType13 sum() { return gmomType13(); }
+    static gmomType26 sum() { return gmomType26(); }
 };
     
 }
