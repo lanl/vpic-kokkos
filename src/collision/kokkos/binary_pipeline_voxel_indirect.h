@@ -299,7 +299,7 @@ void collide_uniform_wt(const float m_i, const float m_j, const float density_i,
         // Compute ndt
         //const float density_min = density_j > density_i ? density_i : density_j;
         //const float ndt = density_min*dtinterval;
-        const float density_max = density_j < density_i ? density_i : density_j;
+        const float density_max = density_i >= density_j ? density_i : density_j;
         float ndt = density_max*dtinterval;
 
         // Get a random generator. Do not leave without freeing it.
@@ -312,104 +312,19 @@ void collide_uniform_wt(const float m_i, const float m_j, const float density_i,
 		ndt *= (float)(ni)/(float)(ni-1);
 		//correspondingly, the collision probability decreased to (ni-1)/ni, i.e., one particle does not collide. We can use the same collision kernel.
 	    }   //else ni is even, and no adjustment needed
-	    /*
-            // Odd number of particles.
-            if( ni%2 && ni >= 3 ) {
-
-              Kokkos::single( Kokkos::PerTeam(team_member),
-              [&]() {
-
-                // These must be done serially to avoid atomics (same particles)
-
-                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 1)
-                );
-
-                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0),
-                    spi_sortindex_ra(i0 + 2)
-                );
-
-                binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, 0.5*ndt,
-                    spi_sortindex_ra(i0 + 1),
-                    spi_sortindex_ra(i0 + 2)
-                );
-
-              });
-
-              // FIXME: is this really needed?
-              team_member.team_barrier();
-
-              ni -= 3;
-              i0 += 3;
-
-            }
-	    */
             // Even number of particles.
             nj = ni = ni/2;
             j0 = i0 + ni;
 	    
         }
-
-        // Compute collisional pairings.
-	/*
-        const bool ij    = ni > nj;
-        const int nmax   = ij ? ni : nj;
-        const int nmin   = ij ? nj : ni;
-        const int ncoll  = nmin <= 0 ? 0 : nmax/nmin;
-        const int remain = nmin <= 0 ? 0 : nmax - ncoll*nmin;
-	//printf("ij=%d, nmax=%d, nmin=%d, ncoll=%d, remain=%d\n",ij,nmax,nmin,ncoll,remain);
-        // FIXME: Will combining these loops into one improve performance?
-
-        // The first remain particles of species min will collide ncoll+1 times
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, remain),
-        [&](const int& k) {
-
-          // Inner loop must be serialized to prevent atomics.
-          for(int l=0 ; l < ncoll+1 ; ++l) {
-
-            int i = l + k*(ncoll+1) ;
-            int j = k ;
-
-            binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
-                spi_sortindex_ra(i0 + (ij ? i : j)),
-                spj_sortindex_ra(j0 + (ij ? j : i))
-            );
-
-          }
-
-        });
-
-        // The bulk (nmin-remain) particles of species min will collide ncoll times
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nmin-remain),
-        [&](const int& k) {
-
-          // Inner loop must be serialized to prevent atomics.
-          for(int l=0 ; l < ncoll ; ++l) {
-
-            int i = k + remain*(ncoll+1) ;
-            int j = k + remain ;
-	    //printf("i=%d,j=%d\n",i,j);
-
-            binary_collision(mu, mu_i, mu_j, spi_p, spj_p, model, rg, ndt,
-			     spi_sortindex_ra(i0 + (ij ? i : j)),
-			     spj_sortindex_ra(j0 + (ij ? j : i))
-            );
-	    
-
-          }
-
-        });
-	*/
-
+	
 	const int nmin = std::min(ni, nj);
 
 	Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nmin),
 			     [&](const int c) {
 	 int i = spi_sortindex_ra(i0 + c);
-	 int j = spi_sortindex_ra(j0 + c);
-
+	 int j = spj_sortindex_ra(j0 + c);
+	 // if(c<10) printf("i=%d, j=%d\n",i,j);
 	 float up[8] = { spi_p(i, particle_var::w ),
 			 spi_p(i, particle_var::ux),
 			 spi_p(i, particle_var::uy),
