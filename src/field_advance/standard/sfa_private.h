@@ -565,8 +565,7 @@ end_remote_ghost_div_b( field_t      * ALIGNED(128) f,
 
 void
 k_end_remote_ghost_div_b( field_array_t      * ALIGNED(128) f,
-                        const grid_t *              g,
-                        field_buffers_t& f_buffers );
+                        const grid_t *              g );
 
 void
 k_begin_remote_ghost_hyb_jf( field_array_t      * ALIGNED(128) f,

@@ -60,20 +60,25 @@ hyb_heta( field_array_t * RESTRICT fa ) {
 
   // Laplace B Loop
     
-  Kokkos::MDRangePolicy<Kokkos::Rank<3>> zyx_policy({1, 1, 1}, {nz+1, ny+1, nx+1});
-  Kokkos::parallel_for("hyb_hypereta_lpl_b", zyx_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
+  // Write: pex, pey, pez
+  // Read: cbx, cby, cbz
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
+  Kokkos::parallel_for("hyb_hypereta_lpl_b", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
       INIT_STENCIL();
       LPL_B();
     });
     
   // Operations on the ghost cells
-  k_begin_remote_ghost_hyb_curl_lpl_b(fa, fa->g, *(fa->fb));
-  k_end_remote_ghost_hyb_curl_lpl_b(fa, fa->g, *(fa->fb));
-  k_hyb_local_ghost_lapl_b(fa, fa->g);
+  k_begin_remote_ghost_hyb_curl_lpl_b(fa, fa->g, *(fa->fb)); // Read: pex, pey, pez
+  k_end_remote_ghost_hyb_curl_lpl_b(fa, fa->g, *(fa->fb)); // Write: pex, pey, pez
+  k_hyb_local_ghost_lapl_b(fa, fa->g); // R/W: pex, pey, pez
 
   // Curl Laplace B Loop
 
-  Kokkos::parallel_for("hyb_hypereta_curl_lpl_b", zyx_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> curl_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
+  // Read: tcax, tcay, tcaz, pex, pey, pez
+  // Write: ex, ey, ez
+  Kokkos::parallel_for("hyb_hypereta_curl_lpl_b", curl_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
       INIT_STENCIL();
       CURL_LPL_B(x,y,z);
       CURL_LPL_B(y,z,x);
