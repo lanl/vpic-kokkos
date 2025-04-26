@@ -277,10 +277,19 @@ struct particle_bulk_collision_pipeline {
 	
 	Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team_member, ni),
 	[&](const int& k, gmomType &lsum) {
-	    float up[4] =   { spi_p(k, particle_var::w),
+#ifdef VARIABLE_CHARGE
+	  float up[5] =   { spi_p(k, particle_var::w),
+                              spi_p(k, particle_var::ux),
+                              spi_p(k, particle_var::uy),
+                              spi_p(k, particle_var::uz),
+			      spi_p(k, particle_var::qp) };
+#else
+	  float up[4] =   { spi_p(k, particle_var::w),
 			      spi_p(k, particle_var::ux),
 			      spi_p(k, particle_var::uy),
-			      spi_p(k, particle_var::uz)};
+			      spi_p(k, particle_var::uz) };
+#endif			      
+
 	    float wp   = up[0];
 	    float ux_n = up[1];
 	    float uy_n = up[2];
@@ -296,6 +305,11 @@ struct particle_bulk_collision_pipeline {
 	    spi_p(k, particle_var::ux) = ux_i;
 	    spi_p(k, particle_var::uy) = uy_i;
 	    spi_p(k, particle_var::uz) = uz_i;	  
+
+#ifdef VARIABLE_CHARGE
+	    float qp = up[4];
+	    spi_p(k, particle_var::qp) = qp;
+#endif
 	    
 	    auto dux = ( ux_i - ux_n ) * wp;
 	    auto duy = ( uy_i - uy_n ) * wp;
@@ -347,7 +361,11 @@ struct particle_bulk_collision_pipeline {
     const float mu,
     const float mu_i,
     const float mu_j,
+#ifdef VARIABLE_CHARGE
+    float (&up)[5],
+#else
     float (&up)[4],
+#endif
     //const k_particles_t&   spi_p,
     //    const k_particles_t&   spj_p,
     const k_fluid_t& spj_fl,
@@ -366,6 +384,11 @@ struct particle_bulk_collision_pipeline {
     float uiy = up[2];
     float uiz = up[3];
     float wi  = up[0];
+
+    float qi = 0;
+#ifdef VARIABLE_CHARGE
+    qi  = up[4];
+#endif
 
     //    float ujx = spj_p(j, particle_var::ux);
     //    float ujy = spj_p(j, particle_var::uy);
@@ -429,7 +452,8 @@ struct particle_bulk_collision_pipeline {
 
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
       //        Would this be useful?
-      dd = model.cross_section(rg, t2, t1);
+      //      dd = model.cross_section(rg, t2, t1);
+      dd = model.cross_section( rg, qi, ur, t1 );
       if( rg.frand() > dd*t1 ) return;
 
     }
@@ -443,7 +467,8 @@ struct particle_bulk_collision_pipeline {
 #ifdef VARIABLE_CHARGE
     // To-do: Check if density associated with particle > neutral background density.
     const float dq = model.modify_charge();
-    spi_p(i, particle_var::qp) += dq;
+    //spi_p(i, particle_var::qp) += dq;
+    up[4] += dq;
     // To-do: Change fluid charge?
 #endif
     

@@ -106,6 +106,7 @@ struct collision_model {
   KOKKOS_INLINE_FUNCTION
   constexpr float cross_section(
     kokkos_rng_state_t& rg,
+    float q,
     float E,
     float nvdt
   ) const

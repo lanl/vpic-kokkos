@@ -26,16 +26,18 @@ struct cex_model : public collision_model<cex_model> {
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
+    float Z,     // Charge of particle
     float vr,    // Changed input variable.
     float nvdt
   ) const
   {
-    float Z = 5;
+     //    float Z = 5;
     float sig = sigma_cx(vr,Z);
-
-    printf("sigma = %f\n",sig);
+    //    float sig = 9999999;
     
-    return 0;
+    //    printf("Z = %f,vr = %f, sigma = %e, nvdt=%e\n",Z,vr,sig,(sig*nvdt));
+    
+    return sig;
   }
   
     

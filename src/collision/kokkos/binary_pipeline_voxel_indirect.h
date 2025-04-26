@@ -398,7 +398,10 @@ struct binary_collision_pipeline {
     float uiy = spi_p(i, particle_var::uy);
     float uiz = spi_p(i, particle_var::uz);
     float wi  = spi_p(i, particle_var::w);
-
+    float qi = 0;
+#ifdef VARIABLE_CHARGE
+    qi  = spi_p(i, particle_var::qp);
+#endif    
     float ujx = spj_p(j, particle_var::ux);
     float ujy = spj_p(j, particle_var::uy);
     float ujz = spj_p(j, particle_var::uz);
@@ -449,7 +452,8 @@ struct binary_collision_pipeline {
 
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
       //        Would this be useful?
-      dd = model.cross_section(rg, t2, t1);
+      //      dd = model.cross_section(rg, t2, t1);
+      dd = model.cross_section( rg, qi, ur, t1 );
       if( rg.frand() > dd*t1 ) return;
 
     }
