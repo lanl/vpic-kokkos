@@ -364,6 +364,8 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     int j0 = ij ? j_0 : i_0;
     auto mh = ij ? m_i : m_j;
     auto ml = ij ? m_j : m_i;
+    auto mu_h = ij ? mu_i : mu_j;
+    auto mu_l = ij ? mu_j : mu_i;
     auto sph_p = ij ? spi_p : spj_p;
     auto spl_p = ij ? spj_p : spi_p;
     auto sph_sortindex_ra = ij ? spi_sortindex_ra : spj_sortindex_ra;
@@ -496,7 +498,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 	     lsum.v[19] += wp*uz*uz;	     
 	 }
 	 
-	 binary_collision(mu, mu_i, mu_j, up, model, rg, ndt);
+	 binary_collision(mu, mu_h, mu_l, up, model, rg, ndt);
 
 	 if(c < Np_hc) {
 	     wp = up[0];
@@ -530,6 +532,57 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 	     lsum.v[25] += wp*uz*uz;
 	 }
 			    }, Dm);	 
+
+    /*
+    //correcting conservation (both species)
+    float tot_ms =  mh*Dm.v[0] + ml*Dm.v[13];
+    float V0_x   = (mh*Dm.v[1] + ml*Dm.v[14]) / tot_ms;
+    float V0_y   = (mh*Dm.v[2] + ml*Dm.v[15]) / tot_ms;
+    float V0_z   = (mh*Dm.v[3] + ml*Dm.v[16]) / tot_ms;
+    float tot_En = 0.5 * (mh*( Dm.v[4] + Dm.v[5] + Dm.v[6] ) + ml*( Dm.v[17] + Dm.v[18] + Dm.v[19] ));
+
+
+    float Vp_x   = (mh*Dm.v[7] + ml*Dm.v[20]) / tot_ms;
+    float Vp_y   = (mh*Dm.v[8] + ml*Dm.v[21]) / tot_ms;
+    float Vp_z   = (mh*Dm.v[9] + ml*Dm.v[22]) / tot_ms;
+    float tot_Ep = 0.5 * (mh*( Dm.v[10] + Dm.v[11] + Dm.v[12] ) + ml*( Dm.v[23] + Dm.v[24] + Dm.v[25] ));
+    
+    float alph =
+	sqrt( ( tot_En - 0.5 * tot_ms * ( V0_x * V0_x + V0_y * V0_y + V0_z * V0_z ) ) /
+	      ( tot_Ep - 0.5 * tot_ms * ( Vp_x * Vp_x + Vp_y * Vp_y + Vp_z * Vp_z ) ) );
+
+    auto _correction = KOKKOS_LAMBDA( const size_t c )
+	{
+	 int i1 = c; 
+	 int i2 = c % nmin; //it may be possible that c > nmin
+	 int i = sph_sortindex_ra(i0 + i1);
+	 int j = spl_sortindex_ra(j0 + i2);
+
+
+                if ( c < Np_hc ) {
+                    auto &ux_i = sph_p(i, particle_var::ux);
+                    auto &uy_i = sph_p(i, particle_var::uy);
+                    auto &uz_i = sph_p(i, particle_var::uz);
+
+                    ux_i = V0_x + alph * ( ux_i - Vp_x );
+                    uy_i = V0_y + alph * ( uy_i - Vp_y );
+                    uz_i = V0_z + alph * ( uz_i - Vp_z );
+                }
+
+                if ( c < Np_lc ) {
+                    auto &ux_j = spl_p(j, particle_var::ux);
+                    auto &uy_j = spl_p(j, particle_var::uy);
+                    auto &uz_j = spl_p(j, particle_var::uz);
+
+                    ux_j = V0_x + alph * ( ux_j - Vp_x );
+                    uy_j = V0_y + alph * ( uy_j - Vp_y );
+                    uz_j = V0_z + alph * ( uz_j - Vp_z );
+                }
+	};
+
+    Kokkos::parallel_for( Kokkos::TeamThreadRange( team, Np_c ), _correction );
+    */
+
     
     //correcting conservation (only for high-density species)
     float tot_ms = mh*Dm.v[0];    
@@ -563,7 +616,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 	};
 
     Kokkos::parallel_for( Kokkos::TeamThreadRange( team, Np_hc ), _correction );
-    
+
 
         // We *must* free generators.
         rp.free_state(rg);
