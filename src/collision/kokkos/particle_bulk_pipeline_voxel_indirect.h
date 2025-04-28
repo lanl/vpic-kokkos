@@ -277,17 +277,20 @@ struct particle_bulk_collision_pipeline {
 	
 	Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team_member, ni),
 	[&](const int& k, gmomType &lsum) {
+
+	  int i = spi_sortindex_ra(i0 + k);
+
 #ifdef VARIABLE_CHARGE
-	  float up[5] =   { spi_p(k, particle_var::w),
-                              spi_p(k, particle_var::ux),
-                              spi_p(k, particle_var::uy),
-                              spi_p(k, particle_var::uz),
-			      spi_p(k, particle_var::qp) };
+	  float up[5] =   { spi_p(i, particle_var::w),
+                            spi_p(i, particle_var::ux),
+                            spi_p(i, particle_var::uy),
+                            spi_p(i, particle_var::uz),
+			    spi_p(i, particle_var::qp) };
 #else
-	  float up[4] =   { spi_p(k, particle_var::w),
-			      spi_p(k, particle_var::ux),
-			      spi_p(k, particle_var::uy),
-			      spi_p(k, particle_var::uz) };
+	  float up[4] =   { spi_p(i, particle_var::w),
+			    spi_p(i, particle_var::ux),
+			    spi_p(i, particle_var::uy),
+			    spi_p(i, particle_var::uz) };
 #endif			      
 
 	    float wp   = up[0];
@@ -296,19 +299,19 @@ struct particle_bulk_collision_pipeline {
 	    float uz_n = up[3];
 
 	  particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,
-				       spi_sortindex_ra(i0 + k),v
+				  v
             );
  	    float ux_i = up[1];
 	    float uy_i = up[2];
 	    float uz_i = up[3];
 
-	    spi_p(k, particle_var::ux) = ux_i;
-	    spi_p(k, particle_var::uy) = uy_i;
-	    spi_p(k, particle_var::uz) = uz_i;	  
+	    spi_p(i, particle_var::ux) = ux_i;
+	    spi_p(i, particle_var::uy) = uy_i;
+	    spi_p(i, particle_var::uz) = uz_i;	  
 
 #ifdef VARIABLE_CHARGE
 	    float qp = up[4];
-	    spi_p(k, particle_var::qp) = qp;
+	    spi_p(i, particle_var::qp) = qp;
 #endif
 	    
 	    auto dux = ( ux_i - ux_n ) * wp;
@@ -372,7 +375,6 @@ struct particle_bulk_collision_pipeline {
     collision_model& model,
     kokkos_rng_state_t& rg,
     float dt,
-    int i,
     int ii
   )
   {
