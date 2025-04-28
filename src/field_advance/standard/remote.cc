@@ -12,8 +12,6 @@
 #include "sfa_private.h"
 #include "mpi.h"
 
-#define VPIC_ENABLE_HALO_EXCHANGE
-
 // GPU aware MPI macros
 #ifdef VPIC_ENABLE_GPU_AWARE_MPI
 
