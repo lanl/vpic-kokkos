@@ -87,16 +87,26 @@ hyb_advance_b(field_array_t * RESTRICT fa,
   if (isub==0) {
     
     //smooth moments
+    Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Exchange_JF");
     k_begin_remote_ghost_hyb_jf(fa, fa->g, *(fa->fb) );
     k_end_remote_ghost_hyb_jf  (fa, fa->g, *(fa->fb) );
+    Kokkos::Profiling::popRegion();
+    Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Apply_Local_Ghost_JF");
     k_hyb_local_ghost_jf  (fa, fa->g);
+    Kokkos::Profiling::popRegion();
 
     int ism = g->nsm;
     while(ism>0) {
+      Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Smooth_Moments");
       hyb_smooth_moments( fa );
+      Kokkos::Profiling::popRegion();
+      Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Exchange_JF");
       k_begin_remote_ghost_hyb_jf(fa, fa->g, *(fa->fb) );
       k_end_remote_ghost_hyb_jf  (fa, fa->g, *(fa->fb) );
+      Kokkos::Profiling::popRegion();
+      Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Apply_Local_Ghost_JF");
       k_hyb_local_ghost_jf  (fa, fa->g);
+      Kokkos::Profiling::popRegion();
       ism--;
     }
   }

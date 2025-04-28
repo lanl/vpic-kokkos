@@ -12,7 +12,7 @@
 #include "sfa_private.h"
 #include "mpi.h"
 
-#define TEST_HALO_EXCH
+#define VPIC_ENABLE_HALO_EXCHANGE
 
 // GPU aware MPI macros
 #ifdef VPIC_ENABLE_GPU_AWARE_MPI
@@ -160,17 +160,17 @@ typedef class XYZ {} XYZ;
 typedef class YZX {} YZX;
 typedef class ZXY {} ZXY;
 
-template <typename Face, int i, int j, int k> 
+template <int i, int j, int k> 
 void 
 begin_recv_kokkos(const grid_t* g, field_buffers_t& fb) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int size;
   Kokkos::DualView<float*> rbuf = fb.recv_buffer[BOUNDARY(i,j,k)];;
-  if constexpr (std::is_same<Face, XYZ>::value) {
+  if constexpr (i!=0 && j==0 && k==0) {
     size = (1 + ny*(nz+1) + nz*(ny+1))*sizeof(float);
-  } else if constexpr (std::is_same<Face, YZX>::value) {
+  } else if constexpr (i==0 && j!=0 && k==0) {
     size = (1 + nx*(nz+1) + nz*(nx+1))*sizeof(float);
-  } else if constexpr (std::is_same<Face, ZXY>::value) {
+  } else if constexpr (i==0 && j==0 && k!=0) {
     size = (1 + nx*(ny+1) + ny*(nx+1))*sizeof(float);
   }
 // Switch between CPU and GPU MPI
@@ -205,6 +205,57 @@ template <typename T> void begin_recv(int i, int j, int k, int nx, int ny, int n
 template <typename Face> 
 void 
 begin_send_kokkos(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::DualView<float*>& sbuf) {}
+
+//template <int i, int j, int k> 
+//void 
+//begin_send_kokkos(const grid_t* g, field_array_t* fa, Kokkos::DualView<float*>& sbuf) {
+//#define BEGIN_SEND(x_,y_,z_) \
+//  const size_t size = (1+n##y_*(n##z_+1)+n##z_*(n##y_+1));                     \
+//  const int face = (i+j+k)<0 ? 1 : n##x_;                                      \
+//  const float d##x_ = g->d##x_;                                                \
+//  Kokkos::MDRangePolicy<Kokkos::Rank<2>> y_##z_##_edge({1,1}, {n##y_+2, n##z_+1); \
+//  Kokkos::MDRangePolicy<Kokkos::Rank<2>> z_##y_##_edge({1,1}, {n##y_+1, n##z_+2); \
+//  Kokkos::parallel_for("begin_send<" #x_ #y_ #z_ ">", y_##z_##_edge,           \
+//    KOKKOS_LAMBDA(const int y_, const int z_) {                                \
+//      const int x = face;                                                      \
+//      const size_t idx = 1 + (z_-1)*(n##y_+1) + (y_-1);                        \
+//      sbuf_d(idx) = k_field(VOXEL(x,y,z, nx,ny,nz), field_var::cby);           \
+//    });                                                                        \
+//  Kokkos::parallel_for("begin_send<" #x_ #y_ #z_ ">", y_##z_##_edge,           \
+//    KOKKOS_LAMBDA(const int y_, const int z_) {                                \
+//      const int x = face;                                                      \
+//      const size_t idx = 1 + n##z_*(n##y_+1) + (z_-1)*n##y_ + (y_-1);          \
+//      sbuf_d(idx) = k_field(VOXEL(x,y,z, nx,ny,nz), field_var::cby);           \
+//    });
+//
+//  const int nx = g->nx, ny = y->ny, nz = g->nz;
+//  auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
+//  auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
+//  k_field_t& k_field = fa->k_f_d;
+//
+//  if constexpr (i!=0 && j==0 && k==0) {
+//    const size_t size = (1+ny*(nz+1)+nz*(ny+1));
+//    BEGIN_SEND(x,y,z);
+//  } else if constexpr (i==0 && j!=0 && k==0) {
+//    const size_t size = (1+nz*(nx+1)+nx*(nz+1));
+//    BEGIN_SEND(y,z,x);
+//  } else if constexpr (i==0 && j==0 && k!=0) {
+//    const size_t size = (1+nx*(ny+1)+ny*(nx+1));
+//    BEGIN_SEND(z,x,y);
+//  }
+//
+//  sbuf.modify<Kokkos::DefaultExecutionSpace>();
+//// CPU
+//  sbuf.sync<Kokkos::DefaultHostExecutionSpace>();
+////  Kokkos::deep_copy(sbuf_h, sbuf_d);
+//  sbuf_h(0) = dx;
+//  begin_send_port_k(i,j,k,size*sizeof(float), g, reinterpret_cast<char*>(sbuf_h.data()));
+//
+//// GPU
+////  begin_send_port_k(i,j,k,size*sizeof(float), g, reinterpret_cast<char*>(sbuf_d.data()));
+//
+//#undef BEGIN_SEND
+//}
 
 template <> void begin_send_kokkos<XYZ>(const grid_t* g, field_array_t* fa, int i, int j, int k, int nx, int ny, int nz, Kokkos::DualView<float*>& sbuf) {
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
@@ -433,12 +484,12 @@ kokkos_begin_remote_ghost_tang_b( field_array_t      * RESTRICT fa,
                                   field_buffers_t&            f_buffers) {
     const int nx = g->nx, ny = g->ny, nz = g->nz;
 
-    begin_recv_kokkos<XYZ,-1,0,0>(g, f_buffers);
-    begin_recv_kokkos<YZX,0,-1,0>(g, f_buffers);
-    begin_recv_kokkos<ZXY,0,0,-1>(g, f_buffers);
-    begin_recv_kokkos<XYZ,1,0,0>(g, f_buffers);
-    begin_recv_kokkos<YZX,0,1,0>(g, f_buffers);
-    begin_recv_kokkos<ZXY,0,0,1>(g, f_buffers);
+    begin_recv_kokkos<-1,0,0>(g, f_buffers);
+    begin_recv_kokkos<0,-1,0>(g, f_buffers);
+    begin_recv_kokkos<0,0,-1>(g, f_buffers);
+    begin_recv_kokkos<1,0,0>(g, f_buffers);
+    begin_recv_kokkos<0,1,0>(g, f_buffers);
+    begin_recv_kokkos<0,0,1>(g, f_buffers);
 
     begin_send_kokkos<XYZ>(g,fa,-1,0,0,nx,ny,nz, f_buffers.send_buffer[BOUNDARY(-1,0,0)]);
     begin_send_kokkos<YZX>(g,fa,0,-1,0,nx,ny,nz, f_buffers.send_buffer[BOUNDARY(0,-1,0)]);
@@ -2139,7 +2190,7 @@ void
 k_begin_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa, 
                             const grid_t* g, 
                             field_buffers_t& fb) {
-#ifdef TEST_HALO_EXCH
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::jfx, field_var::rhof+1);
 #else
   // Start receiving
@@ -2262,7 +2313,7 @@ void
 k_end_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa, 
                           const grid_t* g, 
                           field_buffers_t& fb) {
-#ifdef TEST_HALO_EXCH
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
   end_halo_exchange(fa, field_var::jfx, field_var::rhof+1);
 #else
   // End receiving
@@ -2401,7 +2452,7 @@ void
 k_begin_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa, 
                            const grid_t* g, 
                            field_buffers_t& fb) {
-#ifdef TEST_HALO_EXCH
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::ex, field_var::ez+1);
 #else
   // Start receiving
@@ -2523,7 +2574,7 @@ void
 k_end_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa, 
                          const grid_t* g, 
                          field_buffers_t& fb) {
-#ifdef TEST_HALO_EXCH
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
   // End receiving and sending
   end_halo_exchange(fa, field_var::ex, field_var::ez+1);
 #else
@@ -2664,7 +2715,7 @@ void
 k_begin_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa, 
                                     const grid_t* g, 
                                     field_buffers_t& fb) {
-#ifdef TEST_HALO_EXCH
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::pex, field_var::pez+1);
 #else
   // Start receiving
@@ -2784,7 +2835,7 @@ void
 k_end_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa, 
                                   const grid_t* g, 
                                   field_buffers_t& fb) {
-#ifdef TEST_HALO_EXCH
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
   end_halo_exchange(fa, field_var::pex, field_var::pez+1);
 #else
   // End receiving
@@ -2915,7 +2966,7 @@ void
 k_begin_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa, 
                            const grid_t* g, 
                            field_buffers_t& fb) {
-#ifdef TEST_HALO_EXCH
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::cbx, field_var::div_b_err);
 #else
   // Start receiving
@@ -3034,7 +3085,7 @@ k_end_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa,
                          const grid_t* g, 
                          field_buffers_t& fb) {
     
-#ifdef TEST_HALO_EXCH
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
   // End receiving
   end_halo_exchange(fa, field_var::cbx, field_var::cbz+1);
 #else
@@ -3168,7 +3219,7 @@ void
 k_begin_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa, 
                            const grid_t* g, 
                            field_buffers_t& fb) {
-#ifdef TEST_HALO_EXCH
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::tx, field_var::tz+1);
 #else
   // Start receiving
@@ -3286,7 +3337,7 @@ end_send_ghost_hyb_t(field_array_t* fa, const int i, const int j, const int k) {
 void k_end_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa, 
                               const grid_t* g, 
                               field_buffers_t& fb) {
-#ifdef TEST_HALO_EXCH
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
   end_halo_exchange(fa, field_var::tx, field_var::tz+1);
 #else
   // End receiving
@@ -3421,7 +3472,7 @@ void
 k_begin_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa, 
                            const grid_t* g, 
                            field_buffers_t& fb) {
-#ifdef TEST_HALO_EXCH
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::ox, field_var::oz+1);
 #else
   // Start receiving
@@ -3541,7 +3592,7 @@ void
 k_end_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa, 
                          const grid_t* g, 
                          field_buffers_t& fb) {
-#ifdef TEST_HALO_EXCH
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
   end_halo_exchange(fa, field_var::ox, field_var::oz+1);
 #else
   // End receiving

@@ -76,6 +76,8 @@ option(VPIC_ENABLE_VARIABLE_CHARGE "Enable variable charge for particles" OFF)
 
 option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU-aware MPI. Allows GPUs to communicate with each other directly rather than going through the CPU. If VPIC_ENABLE_GPU_AWARE_MPI is enabled but not supported in MPI, the code may crash." OFF)
 
+option(VPIC_ENABLE_HALO_EXCHANGE "Enable halo exchange code path for remote communication. Temporary option until halo exchange code is accurately tested." ON)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -366,6 +368,11 @@ if (VPIC_ENABLE_GPU_AWARE_MPI)
   add_definitions(-DVPIC_ENABLE_GPU_AWARE_MPI)
   message("--     VPIC: Enabled GPU-Aware MPI")
 endif(VPIC_ENABLE_GPU_AWARE_MPI)
+
+if (VPIC_ENABLE_HALO_EXCHANGE)
+  add_definitions(-DVPIC_ENABLE_HALO_EXCHANGE)
+  message("--     VPIC: Enabled Halo exchange path")
+endif(VPIC_ENABLE_HALO_EXCHANGE)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)
