@@ -277,25 +277,26 @@ struct particle_bulk_collision_pipeline {
 	
 	Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team_member, ni),
 	[&](const int& k, gmomType &lsum) {
-	    float up[4] =   { spi_p(k, particle_var::w),
-			      spi_p(k, particle_var::ux),
-			      spi_p(k, particle_var::uy),
-			      spi_p(k, particle_var::uz)};
+	    int i = spi_sortindex_ra(i0 + k);
+	    float up[4] =   { spi_p(i, particle_var::w),
+			      spi_p(i, particle_var::ux),
+			      spi_p(i, particle_var::uy),
+			      spi_p(i, particle_var::uz)};
 	    float wp   = up[0];
 	    float ux_n = up[1];
 	    float uy_n = up[2];
 	    float uz_n = up[3];
 
 	  particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,
-				       spi_sortindex_ra(i0 + k),v
+				  v
             );
  	    float ux_i = up[1];
 	    float uy_i = up[2];
 	    float uz_i = up[3];
 
-	    spi_p(k, particle_var::ux) = ux_i;
-	    spi_p(k, particle_var::uy) = uy_i;
-	    spi_p(k, particle_var::uz) = uz_i;	  
+	    spi_p(i, particle_var::ux) = ux_i;
+	    spi_p(i, particle_var::uy) = uy_i;
+	    spi_p(i, particle_var::uz) = uz_i;
 	    
 	    auto dux = ( ux_i - ux_n ) * wp;
 	    auto duy = ( uy_i - uy_n ) * wp;
@@ -354,7 +355,6 @@ struct particle_bulk_collision_pipeline {
     collision_model& model,
     kokkos_rng_state_t& rg,
     float dt,
-    int i,
     int ii
   )
   {
