@@ -339,15 +339,15 @@ typedef struct field_array {
   void init_kokkos_fields(int n_fields, int xyz_sz, int yzx_sz, int zxy_sz)
   {
       // Setup different execution space instances for asynchronous execution
-      exec_space_instances = Kokkos::Experimental::partition_space(default_space, 1, 1, 1, 1, 1, 1, 1, 1);
-      ghost_comm_space = exec_space_instances[0];
-      inner_comp_space = exec_space_instances[1];
-      pos_x_face_space = exec_space_instances[2];
-      neg_x_face_space = exec_space_instances[3];
-      pos_y_face_space = exec_space_instances[4];
-      neg_y_face_space = exec_space_instances[5];
-      pos_z_face_space = exec_space_instances[6];
-      neg_z_face_space = exec_space_instances[7];
+//      exec_space_instances = Kokkos::Experimental::partition_space(default_space, 1, 1, 1, 1, 1, 1, 1, 1);
+//      ghost_comm_space = exec_space_instances[0];
+//      inner_comp_space = exec_space_instances[1];
+//      pos_x_face_space = exec_space_instances[2];
+//      neg_x_face_space = exec_space_instances[3];
+//      pos_y_face_space = exec_space_instances[4];
+//      neg_y_face_space = exec_space_instances[5];
+//      pos_z_face_space = exec_space_instances[6];
+//      neg_z_face_space = exec_space_instances[7];
 
       k_f_d = k_field_t("k_fields", n_fields);
       k_field_sa_d = Kokkos::Experimental::create_scatter_view(k_f_d);
