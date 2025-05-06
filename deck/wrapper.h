@@ -449,7 +449,7 @@ vpic_simulation::user_particle_collisions( void )
           x = _xc; y = _yc; z = _zl; _rccl = (rgn);                   \
           x = _xl;                   _rlcl = (rgn);                   \
           x = _xc; y = _yl;          _rcll = (rgn);                   \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->te = _c*(eqn_te); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->te0 = _c*(eqn_te); \
           _f++;                                                       \
     }}}                                                               \
   } while(0)

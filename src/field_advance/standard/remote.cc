@@ -2596,6 +2596,270 @@ k_end_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa,
 #endif
 }
 
+//Hybrid Ue
+#define BRP(x_,y_,z_)							                     \
+  const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;  \
+  const int size = (3*n##y_*n##z_)*sizeof(float);      \
+  BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
+
+/**
+ * @brief Begin non blocking receive for sharing (ex,ey,ez) ghost cells. 
+ *
+ * Calculates size of receive buffer based on which face and orientation.
+ * BRP macro adjusts calculations for different face directions. Template 
+ * function wraps the BRP macro to make profiling clearer.
+ *
+ * @tparam Face Enum denoting the face and order of dimensions for calculations
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param i X-dim face coordinate (-1.0: neg. x, 0: origin, 1.0: pos. x)
+ * @param i Y-dim face coordinate (-1.0: neg. y, 0: origin, 1.0: pos. y)
+ * @param i Z-dim face coordinate (-1.0: neg. z, 0: origin, 1.0: pos. z)
+ * @param rbuf_d Receive buffer on the device
+ * @param rbuf_h Mirror of rbuf_d on the Host
+ */
+template<typename Face> 
+void 
+begin_recv_ghost_hyb_ue(field_array* fa, 
+                       const int i, const int j, const int k) {
+  int src = fa->g->bc[BOUNDARY(-i,-j,-k)]; /**< Source rank */
+  // Only recv cells if neighors are valid and not itself
+  if( 0 <= src && src < world_size ) {
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
+    auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
+    auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
+
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      BRP(x,y,z);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      BRP(y,z,x);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      BRP(z,x,y);
+    }
+  }
+}
+
+#undef BRP
+
+#define BSP(x_,y_,z_)							\
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		\
+  const int size = (3*n##y_*n##z_)*sizeof(float);				\
+  const int face = (i+j+k)<0 ? 1 : n##x_;				\
+  const k_field_t& k_field = fa->k_f_d;					\
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+  Kokkos::parallel_for("begin_send_ghost_hyb_ue<XYZ>", \
+  x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
+      const int x_ = face;						\
+      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ux); \
+      sbuf_d(n##y_*n##z_   + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::uy); \
+      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::uz); \
+    });									\
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d); \
+  BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
+
+/**
+ * @brief Begin non blocking send for sharing jf ghost cells. 
+ *
+ * Serializes jf data in contiguous buffer and sends data to a neighbors 
+ * ghost cells. BSP macro adjusts calculations for different face directions. 
+ * Template function wraps the BSP macro to make profiling clearer.
+ *
+ * @tparam Face Enum denoting the face and order of dimensions for calculations
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param i X-dim face coordinate (-1.0: neg. x, 0: origin, 1.0: pos. x)
+ * @param i Y-dim face coordinate (-1.0: neg. y, 0: origin, 1.0: pos. y)
+ * @param i Z-dim face coordinate (-1.0: neg. z, 0: origin, 1.0: pos. z)
+ * @param sbuf_d Send buffer on the device
+ * @param sbuf_h Mirror of sbuf_d on the Host
+ */
+template<typename Face> 
+void 
+begin_send_ghost_hyb_eu(field_array* fa, 
+                       const int i, const int j, const int k) {
+  int dst = fa->g->bc[BOUNDARY(i,j,k)]; /**< Destination rank */
+  // Only send cells if dst is a valid neighbor and not itself
+  if( 0 <= dst && dst < world_size ) {
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
+    auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
+    auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
+
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      BSP(x,y,z);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      BSP(y,z,x);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      BSP(z,x,y);
+    }
+  }
+}
+
+#undef BSP
+
+
+/**
+ * @brief Begin exchanging E fields between all neighbors.
+ *
+ * Prepares receive buffers, packs face cells into contiguous buffers
+ * and starts non blocking communication with neighbors. Only performs 
+ * communication when necessary. Will ignore cases where the process is on a
+ * boundary or if the process topology would make the exchange redundant 
+ * (ex. 1D and 2D grids).
+ *
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param g Pointer to grid structure 
+ * @param fb Reference to field buffers used for MPI communication
+ */
+void 
+k_begin_remote_ghost_hyb_ue(field_array_t* ALIGNED(128) fa, 
+                           const grid_t* g, 
+                           field_buffers_t& fb) {
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
+  begin_halo_exchange(fa, field_var::ux, field_var::uz+1);
+#else
+  // Start receiving
+  begin_recv_ghost_hyb_ue<XYZ>(fa, -1,  0,  0);
+  begin_recv_ghost_hyb_ue<YZX>(fa,  0, -1,  0);
+  begin_recv_ghost_hyb_ue<ZXY>(fa,  0,  0, -1);
+  begin_recv_ghost_hyb_ue<XYZ>(fa,  1,  0,  0);
+  begin_recv_ghost_hyb_ue<YZX>(fa,  0,  1,  0);
+  begin_recv_ghost_hyb_ue<ZXY>(fa,  0,  0,  1);
+
+  // Start sending
+  begin_send_ghost_hyb_ue<XYZ>(fa, -1,  0,  0);
+  begin_send_ghost_hyb_ue<YZX>(fa,  0, -1,  0);
+  begin_send_ghost_hyb_ue<ZXY>(fa,  0,  0, -1);
+  begin_send_ghost_hyb_ue<XYZ>(fa,  1,  0,  0);
+  begin_send_ghost_hyb_ue<YZX>(fa,  0,  1,  0);
+  begin_send_ghost_hyb_ue<ZXY>(fa,  0,  0,  1);
+#endif
+}
+
+
+#define ERP(x_,y_,z_)							                                \
+  const grid_t* g = fa->g;						                            \
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));  \
+  if(p) {                                                         \
+    field_buffers *fb = fa->fb;                                                   \
+    Kokkos::DualView<float*> rbuf = fb->recv_buffer[BOUNDARY(i,j,k)];             \
+    auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();                     \
+    auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();                 \
+                                                                                  \
+    const int nx = g->nx, ny = g->ny, nz = g->nz;			\
+    const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
+    const k_field_t& k_field = fa->k_f_d;				\
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h); \
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+    Kokkos::parallel_for("end_recv_ghost_hyb_ue<XYZ>", x_##_face,  \
+    KOKKOS_LAMBDA(const int z_, const int y_) { \
+      const int x_ = face;						\
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ux) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::uy) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::uz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      });								\
+  }									
+  
+/**
+ * @brief End non blocking receive for sharing Ue field ghost cells. 
+ *
+ * Wait for non blocking communication to complete and unpack the buffer into
+ * the local ranks ghost cells. Wait and unpacking the buffer may be made to 
+ * overlap between different faces in the future.
+ *
+ * @tparam Face Enum denoting the face and order of dimensions for calculations
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param i X-dim face coordinate (-1.0: neg. x, 0: origin, 1.0: pos. x)
+ * @param i Y-dim face coordinate (-1.0: neg. y, 0: origin, 1.0: pos. y)
+ * @param i Z-dim face coordinate (-1.0: neg. z, 0: origin, 1.0: pos. z)
+ * @param rbuf_d Receive buffer on the device
+ * @param rbuf_h Mirror of rbuf_d on the Host
+ */
+template<typename Face> 
+void 
+end_recv_ghost_hyb_ue(field_array_t* fa, 
+                     const int i, const int j, const int k) {
+  int src = fa->g->bc[BOUNDARY(-i,-j,-k)]; /**< Source rank */
+  // Only recv cells if src is a valid neighbor and not itself
+  if( 0 <= src && src < world_size ) {
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      ERP(x,y,z);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      ERP(y,z,x);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      ERP(z,x,y);
+    }
+  }
+}
+
+#undef ERP
+
+/**
+ * @brief End non blocking send for sharing E field ghost cells. 
+ *
+ * Ensures the prior send operation is complete and unsets the send buffer.
+ *
+ * @tparam Face Enum denoting the face and order of dimensions for calculations
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param i X-dim face coordinate (-1.0: neg. x, 0: origin, 1.0: pos. x)
+ * @param i Y-dim face coordinate (-1.0: neg. y, 0: origin, 1.0: pos. y)
+ * @param i Z-dim face coordinate (-1.0: neg. z, 0: origin, 1.0: pos. z)
+ */
+template<typename Face> 
+void 
+end_send_ghost_hyb_ue(field_array_t* fa, const int i, const int j, const int k) {
+  int dst = fa->g->bc[BOUNDARY(i,j,k)];
+  if( 0 <= dst && dst < world_size ) {
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      end_send_port_k(i,j,k,fa->g);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      end_send_port_k(i,j,k,fa->g);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      end_send_port_k(i,j,k,fa->g);
+    }
+  }
+}
+
+/**
+ * @brief End exchanging Ue field cells between all neighbors.
+ *
+ * Wait until MPI communication is complete then unpack the buffers and
+ * fill in the ghost cells with the communicated E field. Only performs 
+ * communication when necessary. Will ignore cases where the process is on a
+ * boundary or if the process topology would make the exchange redundant 
+ * (ex. 1D and 2D grids).
+ *
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param g Pointer to grid structure 
+ * @param fb Reference to field buffers used for MPI communication
+ */
+void 
+k_end_remote_ghost_hyb_ue(field_array_t* ALIGNED(128) fa, 
+                         const grid_t* g, 
+                         field_buffers_t& fb) {
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
+  // End receiving and sending
+  end_halo_exchange(fa, field_var::ue, field_var::uz+1);
+#else
+  // End receiving
+  end_recv_ghost_hyb_ue<XYZ>(fa, -1,  0,  0);
+  end_recv_ghost_hyb_ue<YZX>(fa,  0, -1,  0);
+  end_recv_ghost_hyb_ue<ZXY>(fa,  0,  0, -1);
+  end_recv_ghost_hyb_ue<XYZ>(fa,  1,  0,  0);
+  end_recv_ghost_hyb_ue<YZX>(fa,  0,  1,  0);
+  end_recv_ghost_hyb_ue<ZXY>(fa,  0,  0,  1);
+
+  // End sending
+  end_send_ghost_hyb_ue<XYZ>(fa, -1,  0,  0);
+  end_send_ghost_hyb_ue<YZX>(fa,  0, -1,  0);
+  end_send_ghost_hyb_ue<ZXY>(fa,  0,  0, -1);
+  end_send_ghost_hyb_ue<XYZ>(fa,  1,  0,  0);
+  end_send_ghost_hyb_ue<YZX>(fa,  0,  1,  0);
+  end_send_ghost_hyb_ue<ZXY>(fa,  0,  0,  1);
+
+  Kokkos::fence(); 
+#endif
+}
+
+
+
 //Hybrid curl_lpl_B
 #define BRP(x_,y_,z_)                                  \
   const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;  \
@@ -2860,7 +3124,7 @@ k_end_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa,
 //Hybrid B
 #define BRP(x_,y_,z_)							                     \
   const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;  \
-  const int size = (3*n##y_*n##z_)*sizeof(float);      \
+  const int size = (4*n##y_*n##z_)*sizeof(float);      \
   BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
 
 /**
@@ -2899,10 +3163,10 @@ begin_recv_ghost_hyb_b(field_array* fa,
 
 #define BSP(x_,y_,z_)							\
   const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		\
-  const int size = (3*n##y_*n##z_)*sizeof(float);				\
+  const int size = (4*n##y_*n##z_)*sizeof(float);				\
   const int face = (i+j+k)<0 ? 1 : n##x_;				\
   const k_field_t& k_field = fa->k_f_d;					\
-  Kokkos::MDRangePolicy<Kokkos::Rank<3>> x_##_face({1, 1, 0}, {n##y_+1, n##z_+1, 3}); \
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> x_##_face({1, 1, 0}, {n##y_+1, n##z_+1, 4}); \
   Kokkos::parallel_for("begin_send_ghost_hyb_b<" #x_ #y_ #z_ ">", \
     x_##_face, KOKKOS_LAMBDA(const int y_, const int z_, const int var) { \
       const int x_ = face;						\
@@ -2965,7 +3229,7 @@ k_begin_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa,
                            const grid_t* g, 
                            field_buffers_t& fb) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
-  begin_halo_exchange(fa, field_var::cbx, field_var::div_b_err);
+  begin_halo_exchange(fa, field_var::cbx, field_var::pe+1);
 #else
   // Start receiving
   begin_recv_ghost_hyb_b<XYZ>(fa, -1,  0,  0);
@@ -3005,6 +3269,7 @@ k_begin_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa,
       k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
       k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
       k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pe)  = rbuf_d(3*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
       });								\
   }									
   
@@ -3085,7 +3350,7 @@ k_end_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa,
     
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   // End receiving
-  end_halo_exchange(fa, field_var::cbx, field_var::cbz+1);
+  end_halo_exchange(fa, field_var::cbx, field_var::pe+1);
 #else
   // End receiving
   end_recv_ghost_hyb_b<XYZ>(fa, -1,  0,  0);

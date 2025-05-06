@@ -33,8 +33,8 @@ cmake \
   -DENABLE_UNIT_TESTS=OFF \
   -DBUILD_INTERNAL_KOKKOS=ON \
   -DKokkos_ARCH_ZEN2=ON \
-  -DKokkos_ENABLE_PTHREAD=OFF \
-  -DKokkos_ENABLE_OPENMP=ON \
+  -DKokkos_ENABLE_THREADS=ON \
+  -DKokkos_ENABLE_OPENMP=OFF \
   -DCMAKE_CXX_COMPILER="CC" \
   -DCMAKE_CXX_FLAGS="-g -O2 -rdynamic -dynamic"\
   $src_dir

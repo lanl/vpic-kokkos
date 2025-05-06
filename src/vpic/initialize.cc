@@ -23,8 +23,13 @@ vpic_simulation::initialize( int argc,
   grid->nsub          = 1;
   grid->den_floor_ohm = 0.;
   grid->den_floor_pe  = 0.;
+#ifdef HYB_USE_SEPARATE_PE
+  grid->eos_gamma     = 5./3.;
+#else
   grid->eos_gamma     = 1.;
+#endif
   grid->eos_den       = 1.;
+  grid->kappa         = 0;
 
   // Call the user initialize the simulation
 
@@ -54,7 +59,15 @@ vpic_simulation::initialize( int argc,
   TIC FAK->clear_rhof( field_array ); TOC( clear_jf, 1 );
   LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
 
+#ifdef HYB_USE_SEPARATE_PE
+  FAK->hyb_epress(field_array,-1);
+  int nsmcopy = g->nsm;
+  g->nsm=0;
   FAK->advance_b(field_array,0);
+  g->nsm=nsmcopy
+#else
+  FAK->advance_b(field_array,0);
+#endif
   
   TIC FAK->clear_rhof( field_array ); TOC( clear_jf, 1 );
   LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
@@ -63,7 +76,16 @@ vpic_simulation::initialize( int argc,
   //TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
   //TIC FAK->compute_rhob( field_array ); TOC( compute_rhob, 1 );
 
+#ifdef HYB_USE_SEPARATE_PE
+  FAK->hyb_epress(field_array,-1);
+  int nsmcopy = g->nsm;
+  g->nsm=0;
   FAK->advance_b(field_array,0);
+  g->nsm=nsmcopy
+#else
+  FAK->advance_b(field_array,0);
+#endif
+  
   // Internal sanity checks
 
   //if( rank()==0 ) MESSAGE(( "Checking electric field divergence" ));
@@ -119,7 +141,15 @@ vpic_simulation::initialize( int argc,
   TIC FAK->clear_rhof( field_array ); TOC( clear_jf, 1 );
   LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
 
+#ifdef HYB_USE_SEPARATE_PE
+  FAK->hyb_epress(field_array,-1);
+  int nsmcopy = g->nsm;
+  g->nsm=0;
   FAK->advance_b(field_array,0);
+  g->nsm=nsmcopy
+#else
+  FAK->advance_b(field_array,0);
+#endif
   
   TIC FAK->clear_rhof( field_array ); TOC( clear_jf, 1 );
   LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
@@ -128,7 +158,15 @@ vpic_simulation::initialize( int argc,
   //TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
   //TIC FAK->compute_rhob( field_array ); TOC( compute_rhob, 1 );
 
+#ifdef HYB_USE_SEPARATE_PE
+  FAK->hyb_epress(field_array,-1);
+  int nsmcopy = g->nsm;
+  g->nsm=0;
   FAK->advance_b(field_array,0);
+  g->nsm=nsmcopy
+#else
+  FAK->advance_b(field_array,0);
+#endif
 
   if( rank()==0 ) MESSAGE(( "Performing initial diagnostics" ));
 

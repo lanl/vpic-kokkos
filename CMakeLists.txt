@@ -78,6 +78,8 @@ option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU-aware MPI. Allows GPUs to communica
 
 option(VPIC_ENABLE_HALO_EXCHANGE "Enable halo exchange code path for remote communication. Temporary option until halo exchange code is accurately tested." ON)
 
+option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." ON)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 

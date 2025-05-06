@@ -18,7 +18,7 @@
   Kokkos::parallel_for("hyb_smooth copy_##fd_",                   \
                        Kokkos::RangePolicy<>(0,nv),               \
                        KOKKOS_LAMBDA(const int v) {               \
-      k_field(v, field_var::tmpsm) = k_field(v, field_var::fd_);   \
+      k_field(v, field_var::te) = k_field(v, field_var::fd_);   \
   });
 
 #define SMOOTH_FD(fd_)                                                        \
@@ -26,9 +26,9 @@
                        xyz_policy,                                            \
                        KOKKOS_LAMBDA(const int x, const int y, const int z) { \
       INIT_STENCIL();                                                         \
-      F(0,fd_) = twelfth*(six*F(0,tmpsm) + F(x,tmpsm) + F(mx,tmpsm)           \
-                                         + F(y,tmpsm) + F(my,tmpsm)           \
-                                         + F(z,tmpsm) + F(mz,tmpsm));         \
+      F(0,fd_) = twelfth*(six*F(0,te) + F(x,te) + F(mx,te)           \
+                                         + F(y,te) + F(my,te)           \
+                                         + F(z,te) + F(mz,te));         \
   });
 
 void
