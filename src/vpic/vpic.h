@@ -57,7 +57,7 @@ const uint32_t rhof			(1<<15);
 const uint32_t currentold	(1<<16 | 1<<17 | 1<<18);
 const uint32_t rhofold		(1<<19);
 const uint32_t magnetic0	(1<<20 | 1<<21 | 1<<22);
-const uint32_t tmpsm		(1<<23);
+const uint32_t te0		(1<<23);
 const uint32_t tempt		(1<<24 | 1<<25 | 1<<26);
 const uint32_t te			(1<<27);
 const uint32_t tempo		(1<<28 | 1<<29 | 1<<30);

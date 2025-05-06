@@ -57,7 +57,7 @@ for tframe in range(5):
             "tcax", "tcay", "tcaz", "rhob",
             "jfx",  "jfy", "jfz", "rhof",
             "jfxold",  "jfyold", "jfzold", "rhofold",
-            "cbx0", "cby0", "cbz0", "tmpsm",
+            "cbx0", "cby0", "cbz0", "te0",
             "tx", "ty", "tz", "te",
             "ox", "oy", "oz", "oe"]
 
