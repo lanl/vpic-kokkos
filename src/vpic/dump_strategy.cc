@@ -915,6 +915,8 @@ void HDF5Dump::dump_fields(
   if (field_dump_flag.flags["oy"]) DUMP_FIELD_TO_HDF5("oy", oy, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["oz"]) DUMP_FIELD_TO_HDF5("oz", oz, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["oe"]) DUMP_FIELD_TO_HDF5("oe", oe, H5T_NATIVE_FLOAT);
+  
+  if (field_dump_flag.flags["div_b_err"]) DUMP_FIELD_TO_HDF5("div_b_err", div_e_err, H5T_NATIVE_FLOAT);
 
   el2 = uptime() - el2;
   if ( rank==0 ) log_printf("TimeHDF5Write: %.2f s\n", el2);

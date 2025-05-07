@@ -49,7 +49,7 @@ const uint32_t allvars		(0xffffffff);
 const uint32_t electric		(1<<0 | 1<<1 | 1<<2);
 const uint32_t div_e_err	(1<<3);
 const uint32_t magnetic		(1<<4 | 1<<5 | 1<<6);
-const uint32_t div_b_err	(1<<7);
+const uint32_t pe  		(1<<7);
 const uint32_t tca			(1<<8 | 1<<9 | 1<<10);
 const uint32_t rhob			(1<<11);
 const uint32_t current		(1<<12 | 1<<13 | 1<<14);

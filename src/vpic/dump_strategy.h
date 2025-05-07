@@ -166,7 +166,7 @@ struct field_dump_flag_t
     "jfxold", "jfyold", "jfzold", "rhofold",
     "cbx0", "cby0", "cbz0", "te0",
     "tx", "ty", "tz", "te",
-    "ox", "oy", "oz", "oe"
+    "ox", "oy", "oz", "oe","div_b_err"
   };
 
   std::unordered_map<std::string, bool> flags = {
@@ -177,7 +177,7 @@ struct field_dump_flag_t
     {"jfxold", true}, {"jfyold", true}, {"jfzold", true}, {"rhofold", true},
     {"cbx0", true}, {"cby0", true}, {"cbz0", true}, {"te0", true},
     {"tx", true}, {"ty", true}, {"tz", true}, {"te", true},
-    {"ox", true}, {"oy", true}, {"oz", true}, {"oe", true}
+    {"ox", true}, {"oy", true}, {"oz", true}, {"oe", true}, {"div_b_err", true}
   };
 
   void disableE() {
