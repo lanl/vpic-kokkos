@@ -1,4 +1,4 @@
-OAPostprocessing and Visualization
+Postprocessing and Visualization
 ================================
 
 At present, there is no standardized way to visualize or postprocess VPIC data.
