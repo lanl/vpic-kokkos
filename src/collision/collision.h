@@ -78,6 +78,16 @@ charge_exchange(
   const int          interval
 );
 
+collision_op_t *
+drag(
+  const char       * name,
+  /**/  species_t  * spi,
+  /**/  fluid_species_t  * spj,
+  //  const double       cvar0,                                                                                                                              
+  float (*stoppingfunc)(float),
+  const int          interval
+);
+
 /* In hard_sphere.cc */
 
 /* Binary hard sphere collisions between particles with equal radius. */
