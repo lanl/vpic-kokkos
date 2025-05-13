@@ -6,6 +6,8 @@
 // _LOCAL_ NUMBER OF CELLS).  THIS LATENT BUG IS NOT EXPECTED TO
 // AFFECT ANY PRACTICAL SIMULATIONS.
 
+#include <Kokkos_DualView.hpp>
+#include "mpi.h"
 #include "../grid/grid.h"
 #include "../material/material.h"
 #include "../vpic/kokkos_helpers.h"
@@ -239,65 +241,29 @@ typedef struct field_advance_kernels {
 
 typedef struct field_buffers
 {
-    Kokkos::View<float*>   xyz_sbuf_pos;
-    Kokkos::View<float*>   yzx_sbuf_pos;
-    Kokkos::View<float*>   zxy_sbuf_pos;
-    Kokkos::View<float*>   xyz_rbuf_pos;
-    Kokkos::View<float*>   yzx_rbuf_pos;
-    Kokkos::View<float*>   zxy_rbuf_pos;
-    Kokkos::View<float*>   xyz_sbuf_neg;
-    Kokkos::View<float*>   yzx_sbuf_neg;
-    Kokkos::View<float*>   zxy_sbuf_neg;
-    Kokkos::View<float*>   xyz_rbuf_neg;
-    Kokkos::View<float*>   yzx_rbuf_neg;
-    Kokkos::View<float*>   zxy_rbuf_neg;
+  using view_type = Kokkos::DualView<float*>;
+  view_type send_buffer[27];
+  view_type recv_buffer[27];
 
-    Kokkos::View<float*>::HostMirror   xyz_sbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   yzx_sbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   zxy_sbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   xyz_rbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   yzx_rbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   zxy_rbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   xyz_sbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   yzx_sbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   zxy_sbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   xyz_rbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   yzx_rbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   zxy_rbuf_neg_h;
+  field_buffers() {
+    // User should try avoid calling this
+  }
 
-    field_buffers() {
-        // User should try avoid calling this
-    }
+  field_buffers(int xyz_size, int yzx_size, int zxy_size) {
+    send_buffer[BOUNDARY(1,0,0)]  = view_type("Pos x-face Send buffer", xyz_size);
+    send_buffer[BOUNDARY(0,1,0)]  = view_type("Pos y-face Send buffer", yzx_size);
+    send_buffer[BOUNDARY(0,0,1)]  = view_type("Pos z-face Send buffer", zxy_size);
+    send_buffer[BOUNDARY(-1,0,0)] = view_type("Neg x-face Send buffer", xyz_size);
+    send_buffer[BOUNDARY(0,-1,0)] = view_type("Neg y-face Send buffer", yzx_size);
+    send_buffer[BOUNDARY(0,0,-1)] = view_type("Neg z-face Send buffer", zxy_size);
 
-    field_buffers(int xyz_size, int yzx_size, int zxy_size) {
-        xyz_sbuf_pos = Kokkos::View<float*>("Send buffer for XYZ positive face", xyz_size);
-        xyz_rbuf_pos = Kokkos::View<float*>("Receive buffer for XYZ positive face", xyz_size);
-        yzx_sbuf_pos = Kokkos::View<float*>("Send buffer for YZX positive face", yzx_size);
-        yzx_rbuf_pos = Kokkos::View<float*>("Receive buffer for YZX positive face", yzx_size);
-        zxy_sbuf_pos = Kokkos::View<float*>("Send buffer for ZXY positive face", zxy_size);
-        zxy_rbuf_pos = Kokkos::View<float*>("Receive buffer for ZXY positive face", zxy_size);
-
-        xyz_sbuf_neg = Kokkos::View<float*>("Send buffer for XYZ negative face", xyz_size);
-        xyz_rbuf_neg = Kokkos::View<float*>("Receive buffer for XYZ negative face", xyz_size);
-        yzx_sbuf_neg = Kokkos::View<float*>("Send buffer for YZX negative face", yzx_size);
-        yzx_rbuf_neg = Kokkos::View<float*>("Receive buffer for YZX negative face", yzx_size);
-        zxy_sbuf_neg = Kokkos::View<float*>("Send buffer for ZXY negative face", zxy_size);
-        zxy_rbuf_neg = Kokkos::View<float*>("Receive buffer for ZXY negative face", zxy_size);
-
-        xyz_sbuf_pos_h = Kokkos::create_mirror_view(xyz_sbuf_pos);
-        yzx_sbuf_pos_h = Kokkos::create_mirror_view(yzx_sbuf_pos);
-        zxy_sbuf_pos_h = Kokkos::create_mirror_view(zxy_sbuf_pos);
-        xyz_rbuf_pos_h = Kokkos::create_mirror_view(xyz_rbuf_pos);
-        yzx_rbuf_pos_h = Kokkos::create_mirror_view(yzx_rbuf_pos);
-        zxy_rbuf_pos_h = Kokkos::create_mirror_view(zxy_rbuf_pos);
-
-        xyz_sbuf_neg_h = Kokkos::create_mirror_view(xyz_sbuf_neg);
-        yzx_sbuf_neg_h = Kokkos::create_mirror_view(yzx_sbuf_neg);
-        zxy_sbuf_neg_h = Kokkos::create_mirror_view(zxy_sbuf_neg);
-        xyz_rbuf_neg_h = Kokkos::create_mirror_view(xyz_rbuf_neg);
-        yzx_rbuf_neg_h = Kokkos::create_mirror_view(yzx_rbuf_neg);
-        zxy_rbuf_neg_h = Kokkos::create_mirror_view(zxy_rbuf_neg);
-    }
+    recv_buffer[BOUNDARY(1,0,0)]  = view_type("Pos x-face Recv buffer", xyz_size);
+    recv_buffer[BOUNDARY(0,1,0)]  = view_type("Pos y-face Recv buffer", yzx_size);
+    recv_buffer[BOUNDARY(0,0,1)]  = view_type("Pos z-face Recv buffer", zxy_size);
+    recv_buffer[BOUNDARY(-1,0,0)] = view_type("Neg x-face Recv buffer", xyz_size);
+    recv_buffer[BOUNDARY(0,-1,0)] = view_type("Neg y-face Recv buffer", yzx_size);
+    recv_buffer[BOUNDARY(0,0,-1)] = view_type("Neg z-face Recv buffer", zxy_size);
+  }
 } field_buffers_t;
 // A field_array holds all the field quanties and pointers to
 // kernels used to advance them.
@@ -323,6 +289,21 @@ typedef struct field_array {
 
   k_jf_accum_t k_jf_accum_d;
   k_jf_accum_t::HostMirror k_jf_accum_h;
+
+  // Execution spaces for async compute/data movement
+  std::vector<Kokkos::DefaultExecutionSpace> exec_space_instances;
+  Kokkos::DefaultExecutionSpace default_space;
+  Kokkos::DefaultExecutionSpace ghost_comm_space, inner_comp_space;
+  Kokkos::DefaultExecutionSpace pos_x_face_space, neg_x_face_space;
+  Kokkos::DefaultExecutionSpace pos_y_face_space, neg_y_face_space;
+  Kokkos::DefaultExecutionSpace pos_z_face_space, neg_z_face_space;
+
+  // Requests for MPI_Waitany
+  MPI_Request recv_req[27];
+  MPI_Request send_req[27];
+  int num_recv_wait = 0;
+  bool recv_handle_ready = false;
+  bool send_handle_ready = false;
 
   // Step when the field was last copied to to the host.  The copy can
   // take place at any time during the step, so checking

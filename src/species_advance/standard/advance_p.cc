@@ -782,7 +782,8 @@ advance_p_kokkos_gpu(
         k_particle_movers_t& k_particle_movers,
         k_particle_i_movers_t& k_particle_movers_i,
         k_field_sa_t k_f_sa,
-        k_interpolator_t& k_interp,
+        //k_interpolator_t& k_interp,
+        k_interpolator_t& k_interp_nonconst,
         k_counter_t& k_nm,
         k_neighbor_t& k_neighbors,
         field_array_t* RESTRICT fa,
@@ -807,6 +808,8 @@ advance_p_kokkos_gpu(
   float cx = 0.25 * g->rdy * g->rdz / g->dt;
   float cy = 0.25 * g->rdz * g->rdx / g->dt;
   float cz = 0.25 * g->rdx * g->rdy / g->dt;
+
+  Kokkos::View<const float*[INTERPOLATOR_VAR_COUNT], Kokkos::MemoryTraits<Kokkos::RandomAccess>> k_interp = k_interp_nonconst;
 
   // Process particles for this pipeline
 
