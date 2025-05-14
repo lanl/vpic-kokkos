@@ -357,6 +357,7 @@ endif(VPIC_ENABLE_ACCUMULATORS)
 
 if (VPIC_ENABLE_VARIABLE_CHARGE)
    add_definitions(-DVARIABLE_CHARGE)
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DVARIABLE_CHARGE")
    message("--     VPIC: Enabled variable charge for particles")
 endif(VPIC_ENABLE_VARIABLE_CHARGE)
 

@@ -5,8 +5,7 @@
 #include "../species_advance/species_advance.h"
 #include "../fluid_advance/fluid_advance.h"
 
-struct collision_op;
-typedef struct collision_op collision_op_t;
+#include "charge_exchange.h"
 
 /* In collision.cc */
 
@@ -66,16 +65,6 @@ lemons(
 void transfer_mom_en_src(
   k_field_t k_field,
   fluid_species_t  * spj
-);
-
-collision_op_t *
-charge_exchange(
-  const char       * name,
-  /**/  species_t  * spi,
-  /**/  fluid_species_t  * spj,
-  //  const double       cvar0,
-  float (*sigmafunc)(float,float),
-  const int          interval
 );
 
 /* In hard_sphere.cc */

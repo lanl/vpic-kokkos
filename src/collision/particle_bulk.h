@@ -1,19 +1,9 @@
 #ifndef _particle_bulk_h_
 #define _particle_bulk_h_
 
-#include "collision_private.h"
+//#include "collision_private.h"
 #include "kokkos/particle_bulk_pipeline_voxel_indirect.h"
-
-/**
- * @brief Base collision operator for particle-bulk binary collisions.
- *
- * Cannot be used directly, must be subclassed.
- */
-struct particle_bulk_collision_op_t : public collision_op_t {
-  species_t  * spi;
-  fluid_species_t  * spj;
-  int          interval;
-};
+//#include "charge_exchange_private.h"
 
 
 /**

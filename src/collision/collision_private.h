@@ -1,14 +1,40 @@
 #ifndef _collision_private_h_
 #define _collision_private_h_
 
-#ifndef IN_collision
-#error "Do not include collision_private.h; use collision.h"
-#endif
+//#ifndef IN_collision
+//#error "Do not include collision_private.h; use collision.h"
+//#endif
 
-#include "collision.h"
-#include "src/util/rng_policy.h"
+//#include "collision.h"
+#include "../util/rng_policy.h"
 #include "../particle_operations/sort.h"
 #include "../particle_operations/shuffle.h"
+#include "../fluid_advance/fluid_advance.h"
+typedef void
+(*apply_collision_op_func_t)( struct collision_op_t * cop,
+                              kokkos_rng_pool_t   & rng);
+
+typedef void
+(*delete_collision_op_func_t) ( struct collision_op_t * cop );
+
+struct collision_op_t {
+  char * name;
+  apply_collision_op_func_t  apply_cop;
+  delete_collision_op_func_t delete_cop;
+  collision_op_t * next;
+};
+
+/**
+ * @brief Base collision operator for particle-bulk binary collisions.
+ *
+ * Cannot be used directly, must be subclassed.
+ */
+struct particle_bulk_collision_op_t : public collision_op_t {
+  species_t  * spi;
+  fluid_species_t  * spj;
+  int          interval;
+};
+
 
 #define RANK_TO_INDEX(rank,ix,iy,iz,nx,ny,nz) do {        \
     int _ix, _iy, _iz;                                    \
@@ -51,20 +77,6 @@ struct reduction_identity<gmomType> {
   }
 };
 }
-
-typedef void
-(*apply_collision_op_func_t)( struct collision_op * cop,
-                              kokkos_rng_pool_t   & rng);
-
-typedef void
-(*delete_collision_op_func_t) ( struct collision_op * cop );
-
-struct collision_op {
-  char * name;
-  apply_collision_op_func_t  apply_cop;
-  delete_collision_op_func_t delete_cop;
-  collision_op_t * next;
-};
 
 /**
  * @brief Base collision model
