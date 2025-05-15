@@ -6,6 +6,7 @@
 #include "../fluid_advance/fluid_advance.h"
 
 #include "charge_exchange.h"
+#include "drag.h"
 
 /* In collision.cc */
 
@@ -67,15 +68,17 @@ void transfer_mom_en_src(
   fluid_species_t  * spj
 );
 
+/*
 collision_op_t *
 drag(
   const char       * name,
-  /**/  species_t  * spi,
-  /**/  fluid_species_t  * spj,
+    species_t  * spi,
+    fluid_species_t  * spj,
   //  const double       cvar0,                                                                                                                              
   float (*stoppingfunc)(float),
   const int          interval
 );
+*/
 
 
 /* In hard_sphere.cc */

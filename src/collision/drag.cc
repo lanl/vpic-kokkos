@@ -2,7 +2,7 @@
 #include "drag.h"
 
 /* Private interface *********************************************************/
-
+/*
 void
 checkpt_drag_collision_op(const void * cop) {
   drag_collision_op_t * drag = (drag_collision_op_t *) cop;
@@ -31,14 +31,15 @@ delete_drag_collision_op(collision_op_t * cop) {
   UNREGISTER_OBJECT(drag);
   FREE(drag);
 }
-
+*/
 /* Public interface **********************************************************/
 
+/*
 collision_op_t *
 drag(
   const char       * name,
-  /**/  species_t  * spi,
-  /**/  fluid_species_t  * spj,
+   species_t  * spi,
+   fluid_species_t  * spj,
   //  const double       cvar0,
   float (*stoppingfunc)(float),
   const int          interval
@@ -70,3 +71,4 @@ drag(
   return drag;
 
 }
+*/
