@@ -29,10 +29,12 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   /**/  hydro_t        * RESTRICT ALIGNED(128) h;
   const particle_t     * RESTRICT ALIGNED(128) p;
   const interpolator_t * RESTRICT ALIGNED(128) f;
-  float c, qsp, mspc, qdt_2mc, qdt_4mc2, rV;
+  //float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;  // rel push
+  float c, qsp, msp, qdt_2mc, qdt_4mc, rV;  // non-rel push
   int np, stride_10, stride_21, stride_43;
 
-  float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
+  //float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;  // rel push
+  float dx, dy, dz, ux, uy, uz, w;  // non-rel push
   float w0, w1, w2, w3, w4, w5, w6, w7, t;
   int i, n;
 
@@ -45,9 +47,12 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
 
   c        = sp->g->cvac;
   qsp      = sp->q;
-  mspc     = sp->m*c;
-  qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
-  qdt_4mc2 = qdt_2mc / (2*c);
+  //mspc     = sp->m*c;                   // rel push
+  //qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
+  //qdt_4mc2 = qdt_2mc / (2*c);
+  msp      = sp->m;                       // non-rel push
+  qdt_2mc  = (qsp*sp->g->dt)/(2*msp*c);
+  qdt_4mc  = qdt_2mc / 2;
   //r8V      = sp->g->r8V;
   rV       = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
 
@@ -84,11 +89,12 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
     // is the numerically accurate way to compute gamma-1
-    ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
-    vz = 1;//sqrt(1+ke_mc);            // vz = gamma    (invariant)
-    ke_mc *= c/(vz+1);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
-    vz = c/vz;                     // vz = c/gamma
-    w0 = qdt_4mc2*vz;
+    //ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
+    //vz = 1;//sqrt(1+ke_mc);            // vz = gamma    (invariant)
+    //ke_mc *= c/(vz+1);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
+    //vz = c/vz;                     // vz = c/gamma
+    //w0 = qdt_4mc2*vz;
+    w0 = qdt_4mc;  // non-rel push
     w1 = w5*w5 + w6*w6 + w7*w7;    // |cB|^2
     w2 = w0*w0*w1;
     w3 = w0*(1+(1./3.)*w2*(1+0.4*w2));
@@ -104,10 +110,13 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     uy += w4*( w2*w5 - w0*w7 );
     uz += w4*( w0*w6 - w1*w5 );
 
-    // Compute physical velocities
-    vx  = ux*vz;
-    vy  = uy*vz;
-    vz *= uz;
+    // Compute physical three-velocities
+    //vx  = ux*vz;  // rel push
+    //vy  = uy*vz;
+    //vz *= uz;
+    ux *= c;        // non-rel push
+    uy *= c;
+    uz *= c;
 
     // Compute the trilinear coefficients
     //w0  = r8V*w;    // w0 = (1/8)(w/V)
@@ -134,27 +143,49 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     // Hybrid-VPIC NGP shape
     w0 = w*rV;
 
-    // Accumulate the hydro fields
+    // Accumulate the hydro fields - relativistic version
+//#   define ACCUM_HYDRO( wn)                             \
+//    t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
+//    h[i].jx  += t*vx;                                   \
+//    h[i].jy  += t*vy;                                   \
+//    h[i].jz  += t*vz;                                   \
+//    h[i].rho += t;                                      \
+//    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
+//    dx = t*ux;          /* dx = (px w/V) trilin_n */    \
+//    dy = t*uy;                                          \
+//    dz = t*uz;                                          \
+//    h[i].px  += dx;                                     \
+//    h[i].py  += dy;                                     \
+//    h[i].pz  += dz;                                     \
+//    h[i].ke  += t*ke_mc;                                \
+//    h[i].txx += dx*vx;                                  \
+//    h[i].tyy += dy*vy;                                  \
+//    h[i].tzz += dz*vz;                                  \
+//    h[i].tyz += dy*vz;                                  \
+//    h[i].tzx += dz*vx;                                  \
+//    h[i].txy += dx*vy
+
+    // Accumulate the hydro fields - non-relativistic version
 #   define ACCUM_HYDRO( wn)                             \
     t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
-    h[i].jx  += t*vx;                                   \
-    h[i].jy  += t*vy;                                   \
-    h[i].jz  += t*vz;                                   \
+    h[i].jx  += t*ux;                                   \
+    h[i].jy  += t*uy;                                   \
+    h[i].jz  += t*uz;                                   \
     h[i].rho += t;                                      \
-    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
+    t  = msp*wn;        /* t = (msp w/V) trilin_n */    \
     dx = t*ux;          /* dx = (px w/V) trilin_n */    \
     dy = t*uy;                                          \
     dz = t*uz;                                          \
     h[i].px  += dx;                                     \
     h[i].py  += dy;                                     \
     h[i].pz  += dz;                                     \
-    h[i].ke  += t*ke_mc;                                \
-    h[i].txx += dx*vx;                                  \
-    h[i].tyy += dy*vy;                                  \
-    h[i].tzz += dz*vz;                                  \
-    h[i].tyz += dy*vz;                                  \
-    h[i].tzx += dz*vx;                                  \
-    h[i].txy += dx*vy
+    h[i].ke  += 0.5*(dx*ux + dy*uy + dz*uz);            \
+    h[i].txx += dx*ux;                                  \
+    h[i].tyy += dy*uy;                                  \
+    h[i].tzz += dz*uz;                                  \
+    h[i].tyz += dy*uz;                                  \
+    h[i].tzx += dz*ux;                                  \
+    h[i].txy += dx*uy
 
     /**/            ACCUM_HYDRO(w0); // Cell i,j,k
 //  i += stride_10; ACCUM_HYDRO(w1); // Cell i+1,j,k
@@ -182,7 +213,8 @@ accumulate_hydro_p_kokkos(
 {
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
-  float c, qsp, mspc, qdt_2mc, qdt_4mc2, rV;
+  //float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;  // rel push
+  float c, qsp, msp, qdt_2mc, qdt_4mc, rV;  // non-rel push
 
   //int np, stride_10, stride_21, stride_43;
 
@@ -198,9 +230,12 @@ accumulate_hydro_p_kokkos(
 
   c        = sp->g->cvac;
   qsp      = sp->q;
-  mspc     = sp->m*c;
-  qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
-  qdt_4mc2 = qdt_2mc / (2*c);
+  //mspc     = sp->m*c;                   // rel push
+  //qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
+  //qdt_4mc2 = qdt_2mc / (2*c);
+  msp      = sp->m;                       // non-rel push
+  qdt_2mc  = (qsp*sp->g->dt)/(2*msp*c);
+  qdt_4mc  = qdt_2mc / 2;
   //r8V      = sp->g->r8V;
   rV       = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
 
@@ -264,11 +299,12 @@ accumulate_hydro_p_kokkos(
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
     // is the numerically accurate way to compute gamma-1
-    float ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
-    float vz = sqrt(1.0+ke_mc);            // vz = gamma    (invariant)
-    ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
-    vz = c/vz;                     // vz = c/gamma
-    float w0 = qdt_4mc2*vz;
+    //float ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
+    //float vz = sqrt(1.0+ke_mc);            // vz = gamma    (invariant)
+    //ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
+    //vz = c/vz;                     // vz = c/gamma
+    //float w0 = qdt_4mc2*vz;
+    float w0 = qdt_4mc;  // non-rel push
     float w1 = w5*w5 + w6*w6 + w7*w7;    // |cB|^2
     float w2 = w0*w0*w1;
     float w3 = w0*(1.+(1./3.)*w2*(1.0+0.4*w2));
@@ -284,10 +320,13 @@ accumulate_hydro_p_kokkos(
     uy += w4*( w2*w5 - w0*w7 );
     uz += w4*( w0*w6 - w1*w5 );
 
-    // Compute physical velocities
-    float vx  = ux*vz;
-    float vy  = uy*vz;
-    vz *= uz;
+    // Compute physical three-velocities
+    //float vx  = ux*vz;  // rel push
+    //float vy  = uy*vz;
+    //vz *= uz;
+    ux *= c;              // non-rel push
+    uy *= c;
+    uz *= c;
 
     // Compute the trilinear coefficients
     //w0  = r8V*w;    // w0 = (1/8)(w/V)
@@ -319,27 +358,49 @@ accumulate_hydro_p_kokkos(
     float t = 0.0; // used in macro
     auto k_hydro_access = k_hydro_sv.access();
 
-    // Accumulate the hydro fields
+    // Accumulate the hydro fields - relativistic version
+//    #define ACCUM_HYDRO( wn, i )                        \
+//    t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
+//    k_hydro_access(i, hydro_var::jx)  += t*vx;          \
+//    k_hydro_access(i, hydro_var::jy)  += t*vy;          \
+//    k_hydro_access(i, hydro_var::jz)  += t*vz;          \
+//    k_hydro_access(i, hydro_var::rho) += t;             \
+//    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
+//    dx = t*ux;          /* dx = (px w/V) trilin_n */    \
+//    dy = t*uy;                                          \
+//    dz = t*uz;                                          \
+//    k_hydro_access(i, hydro_var::px)  += dx;            \
+//    k_hydro_access(i, hydro_var::py)  += dy;            \
+//    k_hydro_access(i, hydro_var::pz)  += dz;            \
+//    k_hydro_access(i, hydro_var::ke)  += t*ke_mc;       \
+//    k_hydro_access(i, hydro_var::txx) += dx*vx;         \
+//    k_hydro_access(i, hydro_var::tyy) += dy*vy;         \
+//    k_hydro_access(i, hydro_var::tzz) += dz*vz;         \
+//    k_hydro_access(i, hydro_var::tyz) += dy*vz;         \
+//    k_hydro_access(i, hydro_var::tzx) += dz*vx;         \
+//    k_hydro_access(i, hydro_var::txy) += dx*vy;
+
+    // Accumulate the hydro fields - non-relativistic version
     #define ACCUM_HYDRO( wn, i )                        \
     t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
-    k_hydro_access(i, hydro_var::jx)  += t*vx;                       \
-    k_hydro_access(i, hydro_var::jy)  += t*vy;                       \
-    k_hydro_access(i, hydro_var::jz)  += t*vz;                       \
-    k_hydro_access(i, hydro_var::rho) += t;                          \
-    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
+    k_hydro_access(i, hydro_var::jx)  += t*ux;          \
+    k_hydro_access(i, hydro_var::jy)  += t*uy;          \
+    k_hydro_access(i, hydro_var::jz)  += t*uz;          \
+    k_hydro_access(i, hydro_var::rho) += t;             \
+    t  = msp*wn;        /* t = (msp w/V) trilin_n */    \
     dx = t*ux;          /* dx = (px w/V) trilin_n */    \
     dy = t*uy;                                          \
     dz = t*uz;                                          \
-    k_hydro_access(i, hydro_var::px)  += dx;                         \
-    k_hydro_access(i, hydro_var::py)  += dy;                         \
-    k_hydro_access(i, hydro_var::pz)  += dz;                         \
-    k_hydro_access(i, hydro_var::ke)  += t*ke_mc;                    \
-    k_hydro_access(i, hydro_var::txx) += dx*vx;                      \
-    k_hydro_access(i, hydro_var::tyy) += dy*vy;                      \
-    k_hydro_access(i, hydro_var::tzz) += dz*vz;                      \
-    k_hydro_access(i, hydro_var::tyz) += dy*vz;                      \
-    k_hydro_access(i, hydro_var::tzx) += dz*vx;                      \
-    k_hydro_access(i, hydro_var::txy) += dx*vy;
+    k_hydro_access(i, hydro_var::px)  += dx;            \
+    k_hydro_access(i, hydro_var::py)  += dy;            \
+    k_hydro_access(i, hydro_var::pz)  += dz;            \
+    k_hydro_access(i, hydro_var::ke)  += 0.5*(dx*ux + dy*uy + dz*uz); \
+    k_hydro_access(i, hydro_var::txx) += dx*ux;         \
+    k_hydro_access(i, hydro_var::tyy) += dy*uy;         \
+    k_hydro_access(i, hydro_var::tzz) += dz*uz;         \
+    k_hydro_access(i, hydro_var::tyz) += dy*uz;         \
+    k_hydro_access(i, hydro_var::tzx) += dz*ux;         \
+    k_hydro_access(i, hydro_var::txy) += dx*uy;
 
     // TODO: this serial adding to try and save adds is a bit sad
     // TODO: This is somehow going out of bounds right now
