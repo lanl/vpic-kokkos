@@ -29,7 +29,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   /**/  hydro_t        * RESTRICT ALIGNED(128) h;
   const particle_t     * RESTRICT ALIGNED(128) p;
   const interpolator_t * RESTRICT ALIGNED(128) f;
-  float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
+  float c, qsp, mspc, qdt_2mc, qdt_4mc2, rV;
   int np, stride_10, stride_21, stride_43;
 
   float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
@@ -48,7 +48,8 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   mspc     = sp->m*c;
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
-  r8V      = sp->g->r8V;
+  //r8V      = sp->g->r8V;
+  rV       = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
 
   np        = sp->np;
   stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
@@ -109,26 +110,29 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     vz *= uz;
 
     // Compute the trilinear coefficients
-    w0  = r8V*w;    // w0 = (1/8)(w/V)
-    dx *= w0;       // dx = (1/8)(w/V) x
-    w1  = w0+dx;    // w1 = (1/8)(w/V) + (1/8)(w/V)x = (1/8)(w/V)(1+x)
-    w0 -= dx;       // w0 = (1/8)(w/V) - (1/8)(w/V)x = (1/8)(w/V)(1-x)
-    w3  = 1+dy;     // w3 = 1+y
-    w2  = w0*w3;    // w2 = (1/8)(w/V)(1-x)(1+y)
-    w3 *= w1;       // w3 = (1/8)(w/V)(1+x)(1+y)
-    dy  = 1-dy;     // dy = 1-y
-    w0 *= dy;       // w0 = (1/8)(w/V)(1-x)(1-y)
-    w1 *= dy;       // w1 = (1/8)(w/V)(1+x)(1-y)
-    w7  = 1+dz;     // w7 = 1+z
-    w4  = w0*w7;    // w4 = (1/8)(w/V)(1-x)(1-y)(1+z) = (w/V) trilin_0 *Done
-    w5  = w1*w7;    // w5 = (1/8)(w/V)(1+x)(1-y)(1+z) = (w/V) trilin_1 *Done
-    w6  = w2*w7;    // w6 = (1/8)(w/V)(1-x)(1+y)(1+z) = (w/V) trilin_2 *Done
-    w7 *= w3;       // w7 = (1/8)(w/V)(1+x)(1+y)(1+z) = (w/V) trilin_3 *Done
-    dz  = 1-dz;     // dz = 1-z
-    w0 *= dz;       // w0 = (1/8)(w/V)(1-x)(1-y)(1-z) = (w/V) trilin_4 *Done
-    w1 *= dz;       // w1 = (1/8)(w/V)(1+x)(1-y)(1-z) = (w/V) trilin_5 *Done
-    w2 *= dz;       // w2 = (1/8)(w/V)(1-x)(1+y)(1-z) = (w/V) trilin_6 *Done
-    w3 *= dz;       // w3 = (1/8)(w/V)(1+x)(1+y)(1-z) = (w/V) trilin_7 *Done
+    //w0  = r8V*w;    // w0 = (1/8)(w/V)
+    //dx *= w0;       // dx = (1/8)(w/V) x
+    //w1  = w0+dx;    // w1 = (1/8)(w/V) + (1/8)(w/V)x = (1/8)(w/V)(1+x)
+    //w0 -= dx;       // w0 = (1/8)(w/V) - (1/8)(w/V)x = (1/8)(w/V)(1-x)
+    //w3  = 1+dy;     // w3 = 1+y
+    //w2  = w0*w3;    // w2 = (1/8)(w/V)(1-x)(1+y)
+    //w3 *= w1;       // w3 = (1/8)(w/V)(1+x)(1+y)
+    //dy  = 1-dy;     // dy = 1-y
+    //w0 *= dy;       // w0 = (1/8)(w/V)(1-x)(1-y)
+    //w1 *= dy;       // w1 = (1/8)(w/V)(1+x)(1-y)
+    //w7  = 1+dz;     // w7 = 1+z
+    //w4  = w0*w7;    // w4 = (1/8)(w/V)(1-x)(1-y)(1+z) = (w/V) trilin_0 *Done
+    //w5  = w1*w7;    // w5 = (1/8)(w/V)(1+x)(1-y)(1+z) = (w/V) trilin_1 *Done
+    //w6  = w2*w7;    // w6 = (1/8)(w/V)(1-x)(1+y)(1+z) = (w/V) trilin_2 *Done
+    //w7 *= w3;       // w7 = (1/8)(w/V)(1+x)(1+y)(1+z) = (w/V) trilin_3 *Done
+    //dz  = 1-dz;     // dz = 1-z
+    //w0 *= dz;       // w0 = (1/8)(w/V)(1-x)(1-y)(1-z) = (w/V) trilin_4 *Done
+    //w1 *= dz;       // w1 = (1/8)(w/V)(1+x)(1-y)(1-z) = (w/V) trilin_5 *Done
+    //w2 *= dz;       // w2 = (1/8)(w/V)(1-x)(1+y)(1-z) = (w/V) trilin_6 *Done
+    //w3 *= dz;       // w3 = (1/8)(w/V)(1+x)(1+y)(1-z) = (w/V) trilin_7 *Done
+
+    // Hybrid-VPIC NGP shape
+    w0 = w*rV;
 
     // Accumulate the hydro fields
 #   define ACCUM_HYDRO( wn)                             \
@@ -153,13 +157,13 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     h[i].txy += dx*vy
 
     /**/            ACCUM_HYDRO(w0); // Cell i,j,k
-    i += stride_10; ACCUM_HYDRO(w1); // Cell i+1,j,k
-    i += stride_21; ACCUM_HYDRO(w2); // Cell i,j+1,k
-    i += stride_10; ACCUM_HYDRO(w3); // Cell i+1,j+1,k
-    i += stride_43; ACCUM_HYDRO(w4); // Cell i,j,k+1
-    i += stride_10; ACCUM_HYDRO(w5); // Cell i+1,j,k+1
-    i += stride_21; ACCUM_HYDRO(w6); // Cell i,j+1,k+1
-    i += stride_10; ACCUM_HYDRO(w7); // Cell i+1,j+1,k+1
+//  i += stride_10; ACCUM_HYDRO(w1); // Cell i+1,j,k
+//  i += stride_21; ACCUM_HYDRO(w2); // Cell i,j+1,k
+//  i += stride_10; ACCUM_HYDRO(w3); // Cell i+1,j+1,k
+//  i += stride_43; ACCUM_HYDRO(w4); // Cell i,j,k+1
+//  i += stride_10; ACCUM_HYDRO(w5); // Cell i+1,j,k+1
+//  i += stride_21; ACCUM_HYDRO(w6); // Cell i,j+1,k+1
+//  i += stride_10; ACCUM_HYDRO(w7); // Cell i+1,j+1,k+1
 
 #   undef ACCUM_HYDRO
   }
@@ -178,7 +182,7 @@ accumulate_hydro_p_kokkos(
 {
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
-  float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
+  float c, qsp, mspc, qdt_2mc, qdt_4mc2, rV;
 
   //int np, stride_10, stride_21, stride_43;
 
@@ -197,7 +201,8 @@ accumulate_hydro_p_kokkos(
   mspc     = sp->m*c;
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
-  r8V      = sp->g->r8V;
+  //r8V      = sp->g->r8V;
+  rV       = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
 
   const int np        = sp->np;
   const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
@@ -285,26 +290,29 @@ accumulate_hydro_p_kokkos(
     vz *= uz;
 
     // Compute the trilinear coefficients
-    w0  = r8V*w;    // w0 = (1/8)(w/V)
-    dx *= w0;       // dx = (1/8)(w/V) x
-    w1  = w0+dx;    // w1 = (1/8)(w/V) + (1/8)(w/V)x = (1/8)(w/V)(1+x)
-    w0 -= dx;       // w0 = (1/8)(w/V) - (1/8)(w/V)x = (1/8)(w/V)(1-x)
-    w3  = 1.0+dy;     // w3 = 1+y
-    w2  = w0*w3;    // w2 = (1/8)(w/V)(1-x)(1+y)
-    w3 *= w1;       // w3 = (1/8)(w/V)(1+x)(1+y)
-    dy  = 1.0-dy;     // dy = 1-y
-    w0 *= dy;       // w0 = (1/8)(w/V)(1-x)(1-y)
-    w1 *= dy;       // w1 = (1/8)(w/V)(1+x)(1-y)
-    w7  = 1.0+dz;     // w7 = 1+z
-    w4  = w0*w7;    // w4 = (1/8)(w/V)(1-x)(1-y)(1+z) = (w/V) trilin_0 *Done
-    w5  = w1*w7;    // w5 = (1/8)(w/V)(1+x)(1-y)(1+z) = (w/V) trilin_1 *Done
-    w6  = w2*w7;    // w6 = (1/8)(w/V)(1-x)(1+y)(1+z) = (w/V) trilin_2 *Done
-    w7 *= w3;       // w7 = (1/8)(w/V)(1+x)(1+y)(1+z) = (w/V) trilin_3 *Done
-    dz  = 1.0-dz;     // dz = 1-z
-    w0 *= dz;       // w0 = (1/8)(w/V)(1-x)(1-y)(1-z) = (w/V) trilin_4 *Done
-    w1 *= dz;       // w1 = (1/8)(w/V)(1+x)(1-y)(1-z) = (w/V) trilin_5 *Done
-    w2 *= dz;       // w2 = (1/8)(w/V)(1-x)(1+y)(1-z) = (w/V) trilin_6 *Done
-    w3 *= dz;       // w3 = (1/8)(w/V)(1+x)(1+y)(1-z) = (w/V) trilin_7 *Done
+    //w0  = r8V*w;    // w0 = (1/8)(w/V)
+    //dx *= w0;       // dx = (1/8)(w/V) x
+    //w1  = w0+dx;    // w1 = (1/8)(w/V) + (1/8)(w/V)x = (1/8)(w/V)(1+x)
+    //w0 -= dx;       // w0 = (1/8)(w/V) - (1/8)(w/V)x = (1/8)(w/V)(1-x)
+    //w3  = 1.0+dy;     // w3 = 1+y
+    //w2  = w0*w3;    // w2 = (1/8)(w/V)(1-x)(1+y)
+    //w3 *= w1;       // w3 = (1/8)(w/V)(1+x)(1+y)
+    //dy  = 1.0-dy;     // dy = 1-y
+    //w0 *= dy;       // w0 = (1/8)(w/V)(1-x)(1-y)
+    //w1 *= dy;       // w1 = (1/8)(w/V)(1+x)(1-y)
+    //w7  = 1.0+dz;     // w7 = 1+z
+    //w4  = w0*w7;    // w4 = (1/8)(w/V)(1-x)(1-y)(1+z) = (w/V) trilin_0 *Done
+    //w5  = w1*w7;    // w5 = (1/8)(w/V)(1+x)(1-y)(1+z) = (w/V) trilin_1 *Done
+    //w6  = w2*w7;    // w6 = (1/8)(w/V)(1-x)(1+y)(1+z) = (w/V) trilin_2 *Done
+    //w7 *= w3;       // w7 = (1/8)(w/V)(1+x)(1+y)(1+z) = (w/V) trilin_3 *Done
+    //dz  = 1.0-dz;     // dz = 1-z
+    //w0 *= dz;       // w0 = (1/8)(w/V)(1-x)(1-y)(1-z) = (w/V) trilin_4 *Done
+    //w1 *= dz;       // w1 = (1/8)(w/V)(1+x)(1-y)(1-z) = (w/V) trilin_5 *Done
+    //w2 *= dz;       // w2 = (1/8)(w/V)(1-x)(1+y)(1-z) = (w/V) trilin_6 *Done
+    //w3 *= dz;       // w3 = (1/8)(w/V)(1+x)(1+y)(1-z) = (w/V) trilin_7 *Done
+
+    // Hybrid-VPIC NGP shape
+    w0 = w*rV;
 
     // TODO: This could easily be a loop?
 
@@ -338,26 +346,26 @@ accumulate_hydro_p_kokkos(
     const int i0 = ii;
     ACCUM_HYDRO(w0, i0); // Cell i,j,k
 
-    const int i1 = i0 + stride_10;
-    ACCUM_HYDRO(w1, i1); // Cell i+1,j,k
-
-    const int i2 = i1 + stride_21;
-    ACCUM_HYDRO(w2, i2); // Cell i,j+1,k
-
-    const int i3 = i2 + stride_10;
-    ACCUM_HYDRO(w3, i3); // Cell i+1,j+1,k
-
-    const int i4 = i3 + stride_43;
-    ACCUM_HYDRO(w4, i4); // Cell i,j,k+1
-
-    const int i5 = i4 + stride_10;
-    ACCUM_HYDRO(w5, i5); // Cell i+1,j,k+1
-
-    const int i6 = i5 + stride_21;
-    ACCUM_HYDRO(w6, i6); // Cell i,j+1,k+1
-
-    const int i7 = i6 + stride_10;
-    ACCUM_HYDRO(w7, i7); // Cell i+1,j+1,k+1
+//    const int i1 = i0 + stride_10;
+//    ACCUM_HYDRO(w1, i1); // Cell i+1,j,k
+//
+//    const int i2 = i1 + stride_21;
+//    ACCUM_HYDRO(w2, i2); // Cell i,j+1,k
+//
+//    const int i3 = i2 + stride_10;
+//    ACCUM_HYDRO(w3, i3); // Cell i+1,j+1,k
+//
+//    const int i4 = i3 + stride_43;
+//    ACCUM_HYDRO(w4, i4); // Cell i,j,k+1
+//
+//    const int i5 = i4 + stride_10;
+//    ACCUM_HYDRO(w5, i5); // Cell i+1,j,k+1
+//
+//    const int i6 = i5 + stride_21;
+//    ACCUM_HYDRO(w6, i6); // Cell i,j+1,k+1
+//
+//    const int i7 = i6 + stride_10;
+//    ACCUM_HYDRO(w7, i7); // Cell i+1,j+1,k+1
 
 #   undef ACCUM_HYDRO
   });
