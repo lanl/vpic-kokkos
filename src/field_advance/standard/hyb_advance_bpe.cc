@@ -76,6 +76,8 @@
   F(0,cby) -= dt6*F(0,ty);	\
   F(0,cbz) -= dt6*F(0,tz);	\
   F(0,pe)  -= dt6*F(0,te);	\
+  F(0,pe)  += two_thirds*F(0,se);\
+  F(0,se)   = 0;                 \
   F(0,pe) = (F(0,rhof)>denmin) ? F(0,pe) : F(0,te0)*F(0,rhof);\
   F(0,pe) = (F(0,pe>0)) ? F(0,pe) : 0;
 
@@ -97,7 +99,7 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
 
   const float isub = g->isub;
   const float nsub = g->nsub;
-  const float dt=frac*(g->dt), dt6=dt/6.0, dt2=dt/2.0, two=2.0;
+  const float dt=frac*(g->dt), dt6=dt/6.0, dt2=dt/2.0, two=2.0, two_thirds=2./3.;
   const float denmin = g->den_floor_pe, gamma = g->eos_gamma, kappa = g->kappa;
   
 //printf("Advance_B kernel\n");
