@@ -76,7 +76,7 @@
   F(0,cby) -= dt6*F(0,ty);	\
   F(0,cbz) -= dt6*F(0,tz);	\
   F(0,pe)  -= dt6*F(0,te);	\
-  F(0,pe)  += two_thirds*F(0,se);\
+  F(0,pe)  += rV*two_thirds*F(0,se);\
   F(0,se)   = 0;                 \
   F(0,pe) = (F(0,rhof)>denmin) ? F(0,pe) : F(0,te0)*F(0,rhof);\
   F(0,pe) = (F(0,pe>0)) ? F(0,pe) : 0;
@@ -93,9 +93,10 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   size_t ny   = g->ny;
   size_t nz   = g->nz;
   size_t nv   = g->nv;
-  float  px   = (nx>1) ? 0.5*g->rdx : 0;
-  float  py   = (ny>1) ? 0.5*g->rdy : 0;
-  float  pz   = (nz>1) ? 0.5*g->rdz : 0;
+  const float  px   = (nx>1) ? 0.5*g->rdx : 0;
+  const float  py   = (ny>1) ? 0.5*g->rdy : 0;
+  const float  pz   = (nz>1) ? 0.5*g->rdz : 0;
+  const float  rV   = g->rdx*g->rdy*g->rdz;
 
   const float isub = g->isub;
   const float nsub = g->nsub;
