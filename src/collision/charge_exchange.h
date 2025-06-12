@@ -9,7 +9,7 @@
  */
 template<typename Functor>
 struct cex_collision_op_t : public particle_bulk_collision_op_t {
-  //  double cvar0;
+  double dq0;
   Functor sigma_cx0;
 };
 
@@ -19,11 +19,11 @@ struct cex_collision_op_t : public particle_bulk_collision_op_t {
 template<typename Functor>
 struct cex_model : public collision_model<cex_model<Functor>> {
   // const float cvar;
-
+  const float dq;
   Functor sigma_cx;
   //float (*sigma_cx)(float,float);
   //takizuka_abe_model( float cvar ) : cvar(cvar) { };
-  cex_model( Functor op ) : sigma_cx(op) { };
+  cex_model( Functor op, float dq ) : sigma_cx(op), dq(dq) { };
   //cex_model( cex_coll_func_t _sigma_cx0 ) : sigma_cx(_sigma_cx0) { };
   //cex_model( float (*sigma_cx0)(float,float) ) : sigma_cx(sigma_cx0) { };
 
@@ -63,9 +63,10 @@ struct cex_model : public collision_model<cex_model<Functor>> {
   KOKKOS_INLINE_FUNCTION
     float modify_charge( ) const
   {
-    float capture = -1;
-
-    return capture;
+    //float capture = -1;
+    float delta_charge = dq;
+    
+    return delta_charge;
   }
   
 };
@@ -93,7 +94,7 @@ void
 apply_cex_collision_op( collision_op_t * cop,
 			kokkos_rng_pool_t& rng ) {
   cex_collision_op_t<Functor> * cex = (cex_collision_op_t<Functor> *) cop;
-  cex_model model(cex->sigma_cx0);
+  cex_model model(cex->sigma_cx0,cex->dq0);
   apply_particle_bulk_collision_model_pipeline<true>((particle_bulk_collision_op_t *) cop, model, rng); // To-do: Change MC to true!
 }
 
@@ -113,7 +114,7 @@ charge_exchange(
   const char       * name,
   /**/  species_t  * spi,
   /**/  fluid_species_t  * spj,
-  //  const double       cvar0,
+  const double       dq0,
   Functor sigmafunc,
   const int          interval
 ) {
@@ -129,6 +130,7 @@ charge_exchange(
   cex->spi         = spi;
   cex->spj         = spj;
   cex->sigma_cx0   = sigmafunc;
+  cex->dq0         = dq0;
   //  ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
   cex->interval    = interval;
   cex->apply_cop   = &apply_cex_collision_op<Functor>;
