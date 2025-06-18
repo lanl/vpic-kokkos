@@ -1,0 +1,184 @@
+/* Lemons et al. 2007 model for test particle scattering off Maxwellian fluid field */
+
+/* Datatypes required by collision algorithm. */
+
+typedef struct _cdata_t {
+  species_t *s;    /* Particle species */
+  float     cvar;  /* Base variance of polar angle--see T&A paper */
+  float     m;     /* Particle mass / electron mass */
+  float     z;     /* Particle core charge */
+} cdata_t;
+
+
+#define COUPLE_TE 0 /*for energy conservation*/
+#define COUPLE_RE 1 /*for momentum conservation*/
+
+#define icell(i,j,k) INDEX_FORTRAN_3(i,j,k,0,nx+1,0,ny+1,0,nz+1)
+
+#define CELL_EFLUID()                                                         \
+          rho = field(i,j,k).rhof; rho = (rho>0) ? rho : FLT_MIN;         \
+          uex  = field(i,j,k).jfx/rho; /*ARI: add curl B, gradients...*/  \
+          uey  = field(i,j,k).jfy/rho;                                    \
+          uez  = field(i,j,k).jfz/rho;                                    \
+          vthe  = sqrt(2.0*field(i,j,k).pexx/rho/me);                     \
+          cvar = 4.0*global->cvar*rho*(s->q*s->q)*grid->dt*global->tstep_coll;  \
+          rfact = -1.0/rho/grid->dt/global->tstep_coll;  
+
+#define CLEAR_RE()                      \
+      for (i=1;i<=nx;i++) {                  \
+          for(j=1;j<=ny;j++) {               \
+              for(k=1;k<=nz;k++) {           \
+                field(i,j,k).rx = 0;         \
+                field(i,j,k).ry = 0;         \
+                field(i,j,k).rz = 0; }}}
+
+#define WX (c*sdth*cdphi)
+#define WY (c*sdth*sdphi)
+#define WZ (c*cdth)
+                     
+
+begin_particle_collisions {
+
+  // Put collision model here since particle injection occurs after the particle
+  // sort (collision models require sorted particle array).
+
+  // Eventually this needs to be integrated into the VPIC source tree, but for
+  // now leave this in the input deck.
+
+  int do_collisions = global->do_collisions ;
+  double const dt_coll = global->dt_coll;
+
+  if ( do_collisions &&  step() > 0 && step()%global->tstep_coll==0 ) {
+    species_t *s;
+    int icell, i, j, k, npar1, npar2, isp1, isp2;
+    const int nx=grid->nx, ny=grid->ny, nz=grid->nz;
+    static int initted=0, nsp;
+    static size_t karr_max_length;
+    static cdata_t cd[2 /* =nsp */];
+    float rho, uex, uey, uez, cvar, rx, ry, rz, vthe, wx, wy, wz, c, cx, cy, cz, z, 
+    dtheta, cdth, sdth, dphi, cdphi, sdphi, theta, phi, cth, sth, cphi, sphi,
+    gz, gamma, beta, dsq, uu, mfact, erfz, rfact;
+    const float me=global->me, twosqrtpi=2.0/sqrt(M_PI), twopi=2.0*M_PI, fthsqrtpi = 4.0/3.0/sqrt(M_PI), third=1.0/3.0;
+
+    if ( initted==0 ) {
+
+      MESSAGE(("Initializing collisional operator\n"));
+      isp1=0;
+      cd[isp1].s    = find_species( "Dion" );
+      cd[isp1].m    = global->mi[0];
+      cd[isp1].z    = global->Z[0];
+      cd[isp1].cvar = // Fix Brian's stupid bug!
+        global->cvar*pow(cd[isp1].z,4)/pow(cd[isp1].m*0.5,2);
+      MESSAGE(("cvar = %e\n", cd[isp1].cvar));
+
+      ++isp1;
+      cd[isp1].s    = find_species( "Cion" );
+      cd[isp1].m    = global->mi[1];  /* in m_e */
+      cd[isp1].z    = global->Z[1];     /* in e */
+      cd[isp1].cvar = // Fix Brian's stupid bug!
+        global->cvar*pow(cd[isp1].z,4)/pow(cd[isp1].m*0.5,2);//reduced mass
+      MESSAGE(("cvar = %e\n", cd[isp1].cvar));
+      
+      nsp=isp1+1;
+      initted=1;
+    } //end initialization
+
+
+#if COUPLE_RE
+      CLEAR_RE()
+#endif
+
+    //i-e
+    for ( isp1=0; isp1<nsp; ++isp1 ) {
+      //MESSAGE(("i-e collisions"));
+      s=cd[isp1].s;
+
+      mfact = 2.0*(1.0+s->m/me);
+
+      for (i=1;i<=nx;i++) {
+          for(j=1;j<=ny;j++) {
+              for(k=1;k<=nz;k++) {
+              int np     = s->partition[icell(i,j,k)];
+              int nstop  = s->partition[icell(i,j,k)+1];
+              
+              CELL_EFLUID();
+
+               while (np<nstop)           { //loop over particles in cell
+
+		 if (grid->step==1 && uex>10 ) MESSAGE(("uex big"));
+
+cx = s->p[np].ux - uex; /*particle velocity in electron frame*/
+cy = s->p[np].uy - uey;
+cz = s->p[np].uz - uez;
+               
+c = sqrt(cx*cx + cy*cy + cz*cz + FLT_MIN);
+
+theta = acos(cz/c); /*ARI: use biggest instead of z?*/
+sth = sin(theta);
+cth = cos(theta);
+
+phi = atan2(cy,cx);
+sphi = sin(phi);
+cphi = cos(phi);
+
+z = c/vthe;
+erfz=erf(z);
+
+gz = 0.5/z/z*( erfz - z*twosqrtpi*exp(-z*z) );
+
+gamma = cvar/c/c/c*( erfz-gz );
+gamma = (gamma>0) ? sqrt(gamma) : 0;
+
+beta = 0.5*cvar/c/c/c*(gz*( mfact*z*z + 1.0 ) - erfz );
+
+dsq = cvar*gz/c;
+dsq = (dsq>0) ? sqrt(dsq) : 0;
+
+dtheta = normal(rng(0),0,gamma);
+sdth = sin(dtheta);
+cdth =cos(dtheta);
+
+dphi  = uniform( rng(0),0, twopi);
+sdphi = sin(dphi);
+cdphi = cos(dphi);
+
+uu = fthsqrtpi*cvar/vthe;
+
+c = (c*c > uu) ?  c - beta*c + normal(rng(0),0,dsq) : sqrt(c*c+uu);
+
+cx = cth*cphi * WX  - sphi * WY + sth*cphi * WZ + uex;
+cy = cth*sphi * WX  + cphi * WY + sth*sphi * WZ + uey;
+cz = -sth     * WX              + cth      * WZ + uez;
+
+#if COUPLE_RE
+field(i,j,k).rx += s->m*s->p[np].w*(cx - s->p[np].ux)*rfact;
+field(i,j,k).ry += s->m*s->p[np].w*(cy - s->p[np].uy)*rfact;
+field(i,j,k).rz += s->m*s->p[np].w*(cz - s->p[np].uz)*rfact;
+#endif
+
+
+#if COUPLE_TE
+field(i,j,k).pexx -= third*s->m*s->p[np].w*(cx*cx + cy*cy + cz*cz 
+     - s->p[np].ux*s->p[np].ux - s->p[np].uy*s->p[np].uy - s->p[np].uz*s->p[np].uz);
+#endif
+
+s->p[np].ux = cx;
+s->p[np].uy = cy;
+s->p[np].uz = cz;
+
+np++;
+                                           } //loop over n particles in cell
+
+                                        } //loop i,x
+                                    } // j,y
+                                } // k,z
+
+
+
+	//MESSAGE(("npar1, density = %i  %e\n",npar1,density));
+    
+ } //loop isp over species
+
+} //if do collisions etc
+
+} //end user collisions

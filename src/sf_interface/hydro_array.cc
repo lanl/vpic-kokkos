@@ -559,7 +559,21 @@ hydro_array_t::copy_to_host(bool print /*=.false.*/) {
     
     // if(h_l[i].ke>0) printf("%d (%d,%d,%d) %e \n",i,ix,iy,iz,h_l[i].ke);
     if(print && (h_l[i].txx*h_l[i].txx + h_l[i].tyy*h_l[i].tyy + h_l[i].tzz*h_l[i].tzz) > 0) {
-	printf("%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%d",0.5*(h_l[i].txx*h_l[i].txx + h_l[i].tyy*h_l[i].tyy + h_l[i].tzz*h_l[i].tzz),h_l[i].txx,h_l[i].tyy,h_l[i].tzz,h_l[i].px,h_l[i].py,h_l[i].pz,i);
+	//get temperature
+	auto vx = h_l[i].px;
+	auto vy = h_l[i].py;
+	auto vz = h_l[i].pz;
+	auto Tx = h_l[i].txx;
+	auto Ty = h_l[i].tyy;
+	auto Tz = h_l[i].tzz;
+
+	Tx = ( Tx - vx * vx );
+	Ty = ( Ty - vy * vy );
+	Tz = ( Tz - vz * vz );
+
+	auto T = (Tx+Ty+Tz)/3.0;
+	
+	printf("%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%.15e\t%d",0.5*(h_l[i].txx*h_l[i].txx + h_l[i].tyy*h_l[i].tyy + h_l[i].tzz*h_l[i].tzz), h_l[i].txx, h_l[i].tyy, h_l[i].tzz, h_l[i].px,h_l[i].py,h_l[i].pz,T,i);
     }	
   });
   // printf("k_h_h.extent(0)=%d\n",k_h_h.extent(0));

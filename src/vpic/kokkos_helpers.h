@@ -29,7 +29,7 @@
   #define HYDRO_VAR_COUNT 14
 #endif
 #define NUM_J_DIMS 4
-#define FLUID_VAR_COUNT 6
+#define FLUID_VAR_COUNT 6+4
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -90,7 +90,9 @@ using k_hydro_sv_t = Kokkos::Experimental::ScatterView<float* [HYDRO_VAR_COUNT]>
 
 using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
 
-using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT]>;
+using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT], Kokkos::LayoutRight>;
+// 1D View: shape [FLUID_VAR_COUNT]
+using k_fluid_1d = Kokkos::View<float*>;
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
@@ -310,6 +312,10 @@ namespace fluid_var {
         ux  = 3,
         uy  = 4,
         uz  = 5,
+	msx = 6,
+	msy = 7,
+	msz = 8,
+	ens = 9,
     };
 };
 
