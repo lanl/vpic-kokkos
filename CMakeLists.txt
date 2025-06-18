@@ -3,7 +3,7 @@
 # All rights reserved.
 #------------------------------------------------------------------------------#
 
-cmake_minimum_required(VERSION 3.29.2)
+cmake_minimum_required(VERSION 3.27.2)
 cmake_policy(SET CMP0074 NEW)
 
 #~----------------------------------------------------------------------------~#
@@ -73,6 +73,12 @@ option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performn
 option(VPIC_ENABLE_HDF5 "Enable HDF5 for use during IO. VPIC does not help you install HDF5" OFF)
 
 option(VPIC_ENABLE_VARIABLE_CHARGE "Enable variable charge for particles" OFF)
+
+option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU-aware MPI. Allows GPUs to communicate with each other directly rather than going through the CPU. If VPIC_ENABLE_GPU_AWARE_MPI is enabled but not supported in MPI, the code may crash." OFF)
+
+option(VPIC_ENABLE_HALO_EXCHANGE "Enable halo exchange code path for remote communication. Temporary option until halo exchange code is accurately tested." ON)
+
+option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." ON)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -359,6 +365,16 @@ if (VPIC_ENABLE_VARIABLE_CHARGE)
    add_definitions(-DVARIABLE_CHARGE)
    message("--     VPIC: Enabled variable charge for particles")
 endif(VPIC_ENABLE_VARIABLE_CHARGE)
+
+if (VPIC_ENABLE_GPU_AWARE_MPI)
+  add_definitions(-DVPIC_ENABLE_GPU_AWARE_MPI)
+  message("--     VPIC: Enabled GPU-Aware MPI")
+endif(VPIC_ENABLE_GPU_AWARE_MPI)
+
+if (VPIC_ENABLE_HALO_EXCHANGE)
+  add_definitions(-DVPIC_ENABLE_HALO_EXCHANGE)
+  message("--     VPIC: Enabled Halo exchange path")
+endif(VPIC_ENABLE_HALO_EXCHANGE)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)

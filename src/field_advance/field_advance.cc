@@ -21,6 +21,9 @@ checkpt_field_advance_kernels( const field_advance_kernels_t * kernel ) {
   CHECKPT_SYM( kernel->synchronize_rho           );
   CHECKPT_SYM( kernel->compute_rhob              );
   CHECKPT_SYM( kernel->compute_curl_b            );
+#ifdef HYB_USE_SEPARATE_PE
+  CHECKPT_SYM( kernel->hyb_epress                );
+#endif
   CHECKPT_SYM( kernel->synchronize_tang_e_norm_b );
   CHECKPT_SYM( kernel->compute_div_e_err         );
   CHECKPT_SYM( kernel->compute_rms_div_e_err     );
@@ -64,6 +67,9 @@ restore_field_advance_kernels( field_advance_kernels_t * kernel ) {
   RESTORE_SYM( kernel->synchronize_rho           );
   RESTORE_SYM( kernel->compute_rhob              );
   RESTORE_SYM( kernel->compute_curl_b            );
+#ifdef HYB_USE_SEPARATE_PE
+  RESTORE_SYM( kernel->hyb_epress                );
+#endif
   RESTORE_SYM( kernel->synchronize_tang_e_norm_b );
   RESTORE_SYM( kernel->compute_div_e_err         );
   RESTORE_SYM( kernel->compute_rms_div_e_err     );
@@ -117,12 +123,12 @@ field_array_t::copy_to_host() {
       host_field[i].cbx = k_field(i, field_var::cbx);
       host_field[i].cby = k_field(i, field_var::cby);
       host_field[i].cbz = k_field(i, field_var::cbz);
-      host_field[i].div_b_err = k_field(i, field_var::div_b_err);
+      host_field[i].pe  = k_field(i, field_var::pe);
       
       host_field[i].cbx0 = k_field(i, field_var::cbx0);
       host_field[i].cby0 = k_field(i, field_var::cby0);
       host_field[i].cbz0 = k_field(i, field_var::cbz0);
-      host_field[i].tmpsm = k_field(i, field_var::tmpsm);
+      host_field[i].te0  = k_field(i, field_var::te0);
 
       host_field[i].tcax = k_field(i, field_var::tcax);
       host_field[i].tcay = k_field(i, field_var::tcay);
@@ -152,7 +158,17 @@ field_array_t::copy_to_host() {
       host_field[i].pex = k_field(i, field_var::pex);
       host_field[i].pey = k_field(i, field_var::pey);
       host_field[i].pez = k_field(i, field_var::pez);
-      host_field[i].pe = k_field(i, field_var::pe);
+      host_field[i].div_b_err = k_field(i, field_var::div_b_err);
+      
+      host_field[i].ux = k_field(i, field_var::ux);
+      host_field[i].uy = k_field(i, field_var::uy);
+      host_field[i].uz = k_field(i, field_var::uz);
+      host_field[i].ue = k_field(i, field_var::ue);
+      
+      host_field[i].sx = k_field(i, field_var::sx);
+      host_field[i].sy = k_field(i, field_var::sy);
+      host_field[i].sz = k_field(i, field_var::sz);
+      host_field[i].se = k_field(i, field_var::se);
       
       host_field[i].ematx = k_field_edge(i, field_edge_var::ematx);
       host_field[i].ematy = k_field_edge(i, field_edge_var::ematy);
@@ -192,12 +208,12 @@ field_array_t::copy_to_device() {
       k_field(i, field_var::cbx) = host_field[i].cbx;
       k_field(i, field_var::cby) = host_field[i].cby;
       k_field(i, field_var::cbz) = host_field[i].cbz;
-      k_field(i, field_var::div_b_err) = host_field[i].div_b_err;
+      k_field(i, field_var::pe)  = host_field[i].pe;
       
       k_field(i, field_var::cbx0) = host_field[i].cbx0;
       k_field(i, field_var::cby0) = host_field[i].cby0;
       k_field(i, field_var::cbz0) = host_field[i].cbz0;
-      k_field(i, field_var::tmpsm) = host_field[i].tmpsm;
+      k_field(i, field_var::te0)  = host_field[i].te0;
 
       k_field(i, field_var::tcax) = host_field[i].tcax;
       k_field(i, field_var::tcay) = host_field[i].tcay;
@@ -219,16 +235,25 @@ field_array_t::copy_to_device() {
       k_field(i, field_var::ty) = host_field[i].ty;
       k_field(i, field_var::tz) = host_field[i].tz;
 
-      
-      k_field(i, field_var::oe) = host_field[i].oe;
       k_field(i, field_var::ox) = host_field[i].ox;
       k_field(i, field_var::oy) = host_field[i].oy;
       k_field(i, field_var::oz) = host_field[i].oz;
+      k_field(i, field_var::oe) = host_field[i].oe;
 
       k_field(i, field_var::pex) = host_field[i].pex;
       k_field(i, field_var::pey) = host_field[i].pey;
       k_field(i, field_var::pez) = host_field[i].pez;
-      k_field(i, field_var::pe) = host_field[i].pe;
+      k_field(i, field_var::div_b_err) = host_field[i].div_b_err;
+      
+      k_field(i, field_var::ux) = host_field[i].ux;
+      k_field(i, field_var::uy) = host_field[i].uy;
+      k_field(i, field_var::uz) = host_field[i].uz;
+      k_field(i, field_var::ue) = host_field[i].ue;
+      
+      k_field(i, field_var::sx) = host_field[i].sx;
+      k_field(i, field_var::sy) = host_field[i].sy;
+      k_field(i, field_var::sz) = host_field[i].sz;
+      k_field(i, field_var::se) = host_field[i].se;
       
       k_field_edge(i, field_edge_var::ematx) = host_field[i].ematx;
       k_field_edge(i, field_edge_var::ematy) = host_field[i].ematy;
@@ -239,9 +264,6 @@ field_array_t::copy_to_device() {
       k_field_edge(i, field_edge_var::fmaty) = host_field[i].fmaty;
       k_field_edge(i, field_edge_var::fmatz) = host_field[i].fmatz;
       k_field_edge(i, field_edge_var::cmat) = host_field[i].cmat;
-
-
-
 
     });
 

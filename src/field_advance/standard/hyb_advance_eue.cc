@@ -23,18 +23,18 @@ typedef struct pipeline_args {
   rho = (rho > den_floor_ohm) ? rho :  den_floor_ohm;			\
   float  invrho = one/rho;						\
   float hallinvrho = (rho > den_floor_ohm) ? invrho : 0 ;		\
-  float  ux = invrho*half*( (one-hstep)*( F(0,jfx) + F(0,jfxold) ) + hstep*( three*F(0,jfx) - F(0,jfxold)) ) ; \
-  float  uy = invrho*half*( (one-hstep)*( F(0,jfy) + F(0,jfyold) ) + hstep*( three*F(0,jfy) - F(0,jfyold)) ) ; \
-  float  uz = invrho*half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + hstep*( three*F(0,jfz) - F(0,jfzold)) ) ; 
+  float  ux = half*( (one-hstep)*( F(0,jfx) + F(0,jfxold) ) + hstep*( three*F(0,jfx) - F(0,jfxold)) ) ; \
+  float  uy = half*( (one-hstep)*( F(0,jfy) + F(0,jfyold) ) + hstep*( three*F(0,jfy) - F(0,jfyold)) ) ; \
+  float  uz = half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + hstep*( three*F(0,jfz) - F(0,jfzold)) ) ; 
 
+#define UE(x_,y_,z_)							\
+  F(0,u##x_) = invrho * (ux - ( p##y_*( F(y_,cb##z_) - F(m##y_,cb##z_) ) - p##z_*( F(z_,cb##y_) - F(m##z_,cb##y_) ) ) )
 
-#define E(x_,y_,z_)							\
-  F(0,e##x_) =								\
-    invrho * (F(0,cb##z_) + F(0,cb##z_##0)) * ( p##z_*( F(z_,cb##x_) - F(m##z_,cb##x_) ) - p##x_*( F(x_,cb##z_) - F(m##x_,cb##z_)) ) \
-  + invrho * (F(0,cb##y_) + F(0,cb##y_##0)) * ( p##y_*( F(y_,cb##x_) - F(m##y_,cb##x_) ) - p##x_*( F(x_,cb##y_) - F(m##x_,cb##y_)) ) \
-       - u##y_ * (F(0,cb##z_)+F(0,cb##z_##0))  +   u##z_ * (F(0,cb##y_)+F(0,cb##y_##0)) \
-      - invrho * ( p##x_*( F(x_,pe) - F(m##x_,pe)) )			\
-    + eta*F(0,tcay)*( p##y_*( F(y_,cb##z_) - F(m##y_,cb##z_) ) - p##z_*( F(z_,cb##y_) - F(m##z_,cb##y_) ) );\
+#define E(x_,y_,z_)												\
+  F(0,e##x_) =													\
+    - F(0,u##y_) * (F(0,cb##z_) + F(0,cb##z_##0)) + F(0,u##z_) * (F(0,cb##y_) + F(0,cb##y_##0)) 		\
+      - invrho * ( p##x_*( F(x_,pe) - F(m##x_,pe)) )								\
+    + eta*F(0,tcay)*( p##y_*( F(y_,cb##z_) - F(m##y_,cb##z_) ) - p##z_*( F(z_,cb##y_) - F(m##z_,cb##y_) ) );	\
   F(0,e##x_) *= F(0,tcaz);
   
 /*
@@ -121,7 +121,7 @@ typedef struct pipeline_args {
 
 
 void
-hyb_advance_e( field_array_t * RESTRICT fa,
+hyb_advance_eue( field_array_t * RESTRICT fa,
                   float frac ) {
   if( !fa     ) ERROR(( "Bad args" ));
 
@@ -183,9 +183,9 @@ hyb_advance_e( field_array_t * RESTRICT fa,
   /***************************************************************************
    * Calculate electron pressure
    ***************************************************************************/
-  Kokkos::Profiling::pushRegion("HybridAdvanceE::Calculate_Electron_Pressure");
-  hyb_epress(fa, frac); // Read te, rhof, rhofold, Write: pe
-  Kokkos::Profiling::popRegion();
+  //Kokkos::Profiling::pushRegion("HybridAdvanceE::Calculate_Electron_Pressure");
+  //hyb_epress(fa, frac); // Read te, rhof, rhofold, Write: pe
+  //Kokkos::Profiling::popRegion();
 
   //Kokkos::Profiling::pushRegion("HybridAdvanceE::Update_E_Interior::Inner");
   //const int minx = nx > 2 ? 2 : 1;

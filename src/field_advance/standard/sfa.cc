@@ -28,6 +28,9 @@ static field_advance_kernels_t sfa_kernels = {
 
   compute_rhob,
   compute_curl_b,
+#ifdef HYB_USE_SEPARATE_PE
+  hyb_epress,
+#endif
 
   // Shared face cleaning interface
 
@@ -240,8 +243,14 @@ new_standard_field_array( grid_t           * RESTRICT g,
   fa->params = create_sfa_params( g, m_list, damp );
   fa->kernel[0] = sfa_kernels;
 
+#ifdef HYB_USE_SEPARATE_PE
+  fa->kernel->advance_b         = hyb_advance_bpe;
+  fa->kernel->advance_e         = hyb_advance_eue;
+  fa->kernel->hyb_epress        = hyb_epress;
+#else
   fa->kernel->advance_b         = hyb_advance_b;
   fa->kernel->advance_e         = hyb_advance_e;
+#endif
   fa->kernel->hyb_smooth_b      = hyb_smooth_b;
   fa->kernel->hyb_smooth_eb_interp = hyb_smooth_eb_interp;
 

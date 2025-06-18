@@ -9,7 +9,7 @@
 
 // This module implements kokkos macros
 
-#define FIELD_VAR_COUNT 36
+#define FIELD_VAR_COUNT 44
 #define FIELD_EDGE_COUNT 8
 
 #ifdef VARIABLE_CHARGE
@@ -151,11 +151,11 @@ namespace field_var {
     cbx       = 4,
     cby       = 5,
     cbz       = 6,
-    div_b_err = 7,
+    pe        = 7,
     cbx0      = 8,
     cby0      = 9,
     cbz0      = 10,
-    tmpsm     = 11,
+    te0       = 11,
     tcax      = 12,
     tcay      = 13,
     tcaz      = 14,
@@ -179,7 +179,15 @@ namespace field_var {
     pex       = 32,
     pey       = 33,
     pez       = 34,
-    pe        = 35
+    div_b_err = 35,
+    ux        = 36,
+    uy        = 37,
+    uz        = 38,
+    ue        = 39,
+    sx        = 40,
+    sy        = 41,
+    sz        = 42,
+    se        = 43
   };
 };
 namespace field_edge_var { \
