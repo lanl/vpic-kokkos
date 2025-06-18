@@ -451,7 +451,7 @@ clean_div_b_kokkos( field_array_t * fa ) {
     });
     // Finish setting derr ghosts
 
-    k_end_remote_ghost_div_b( fa, g, *(fa->fb) );
+    k_end_remote_ghost_div_b( fa, g );
 
     // Do Marder pass in exterior
 

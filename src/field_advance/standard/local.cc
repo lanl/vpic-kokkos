@@ -1777,6 +1777,7 @@ template<typename T> void apply_hyb_local_b(int i, int j, int k,
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##x_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##x_);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##y_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##y_);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##z_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##z_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pe) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pe);\
 	});								\
       break;								\
     case symmetric_fields:						\
@@ -1785,6 +1786,7 @@ template<typename T> void apply_hyb_local_b(int i, int j, int k,
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##x_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##x_);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##y_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##y_);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##z_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##z_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pe) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pe);\
 	});								\
       break;								\
     default:								\
@@ -1870,6 +1872,9 @@ template<typename T> void apply_hyb_local_e(int i, int j, int k,
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##x_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##x_);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##y_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##y_);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##z_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##z_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##x_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##x_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##y_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##y_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##z_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##z_);\
 	});								\
       break;       							\
    case symmetric_fields:						\
@@ -1886,7 +1891,10 @@ template<typename T> void apply_hyb_local_e(int i, int j, int k,
 	INIT_STENCIL();							\
 	E(x_,y_,z_);							\
 	E(y_,z_,x_);							\
-	E(z_,x_,y_);							\
+	E(z_,x_,y_); 							\
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##x_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##x_);\
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##y_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##y_);\
+	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##z_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##z_);\
 	});}								\
       break;								\
     default:								\

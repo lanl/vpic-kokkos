@@ -160,24 +160,24 @@ struct field_dump_flag_t
 {
   std::vector<std::string> flag_keys = {
     "ex", "ey", "ez", "div_e_err",
-    "cbx", "cby", "cbz", "div_b_err",
+    "cbx", "cby", "cbz", "pe",
     "tcax", "tcay", "tcaz", "rhob",
     "jfx", "jfy", "jfz", "rhof",
     "jfxold", "jfyold", "jfzold", "rhofold",
-    "cbx0", "cby0", "cbz0", "tmpsm",
+    "cbx0", "cby0", "cbz0", "te0",
     "tx", "ty", "tz", "te",
-    "ox", "oy", "oz", "oe"
+    "ox", "oy", "oz", "oe","div_b_err"
   };
 
   std::unordered_map<std::string, bool> flags = {
     {"ex", true}, {"ey", true}, {"ez", true}, {"div_e_err", true},
-    {"cbx", true}, {"cby", true}, {"cbz", true}, {"div_b_err", true},
+    {"cbx", true}, {"cby", true}, {"cbz", true}, {"pe", true},
     {"tcax", true}, {"tcay", true}, {"tcaz", true}, {"rhob", true},
     {"jfx", true}, {"jfy", true}, {"jfz", true}, {"rhof", true},
     {"jfxold", true}, {"jfyold", true}, {"jfzold", true}, {"rhofold", true},
-    {"cbx0", true}, {"cby0", true}, {"cbz0", true}, {"tmpsm", true},
+    {"cbx0", true}, {"cby0", true}, {"cbz0", true}, {"te0", true},
     {"tx", true}, {"ty", true}, {"tz", true}, {"te", true},
-    {"ox", true}, {"oy", true}, {"oz", true}, {"oe", true}
+    {"ox", true}, {"oy", true}, {"oz", true}, {"oe", true}, {"div_b_err", true}
   };
 
   void disableE() {

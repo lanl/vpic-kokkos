@@ -18,17 +18,17 @@
   Kokkos::parallel_for("hyb_smooth copy_##fd_",                   \
                        Kokkos::RangePolicy<>(0,nv),               \
                        KOKKOS_LAMBDA(const int v) {               \
-      k_field(v, field_var::tmpsm) = k_field(v, field_var::fd_);   \
+      k_field(v, field_var::te) = k_field(v, field_var::fd_);   \
   });
 
 #define SMOOTH_FD(fd_)                                                        \
   Kokkos::parallel_for("hyb_smooth smooth_##fd_",                             \
-                       zyx_policy,                                            \
-                       KOKKOS_LAMBDA(const int z, const int y, const int x) { \
+                       xyz_policy,                                            \
+                       KOKKOS_LAMBDA(const int x, const int y, const int z) { \
       INIT_STENCIL();                                                         \
-      F(0,fd_) = twelfth*(six*F(0,tmpsm) + F(x,tmpsm) + F(mx,tmpsm)           \
-                                         + F(y,tmpsm) + F(my,tmpsm)           \
-                                         + F(z,tmpsm) + F(mz,tmpsm));         \
+      F(0,fd_) = twelfth*(six*F(0,te) + F(x,te) + F(mx,te)           \
+                                         + F(y,te) + F(my,te)           \
+                                         + F(z,te) + F(mz,te));         \
   });
 
 void
@@ -42,7 +42,7 @@ hyb_smooth_moments( field_array_t * RESTRICT fa ) {
   size_t nz   = g->nz;
   size_t nv   = g->nv;
   const float twelfth = 1./12., six=6.;
-  Kokkos::MDRangePolicy<Kokkos::Rank<3>> zyx_policy({1, 1, 1}, {nz+1, ny+1, nx+1});
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
 
   COPY_FD(jfx);  SMOOTH_FD(jfx);
   COPY_FD(jfy);  SMOOTH_FD(jfy);
@@ -61,7 +61,7 @@ hyb_smooth_b( field_array_t * RESTRICT fa ) {
   size_t nz   = g->nz;
   size_t nv   = g->nv;
   const float twelfth = 1./12., six=6.;
-  Kokkos::MDRangePolicy<Kokkos::Rank<3>> zyx_policy({1, 1, 1}, {nz+1, ny+1, nx+1});
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
 
   COPY_FD(cbx); SMOOTH_FD(cbx);
   COPY_FD(cby); SMOOTH_FD(cby);
@@ -83,7 +83,7 @@ hyb_smooth_eb_interp( field_array_t * RESTRICT fa, bool smoothed ) {
   size_t nz   = g->nz;
   size_t nv   = g->nv;
   const float twelfth = 1./12., six=6.;
-  Kokkos::MDRangePolicy<Kokkos::Rank<3>> zyx_policy({1, 1, 1}, {nz+1, ny+1, nx+1});
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
 
   //Copy for smoothing
   //Copy is still necessary when nsm=0 because field->particle interpolator
@@ -101,27 +101,37 @@ hyb_smooth_eb_interp( field_array_t * RESTRICT fa, bool smoothed ) {
   int ism = g->nsm;
   while(ism>0) {
     if (smoothed) {
+Kokkos::Profiling::pushRegion("Smooth_eb_interp::Smoothed::ox,oy,oz,tx,tz,tz");
       COPY_FD(ox); SMOOTH_FD(ox);
       COPY_FD(oy); SMOOTH_FD(oy);
       COPY_FD(oz); SMOOTH_FD(oz);
       COPY_FD(tx); SMOOTH_FD(tx);
       COPY_FD(ty); SMOOTH_FD(ty);
       COPY_FD(tz); SMOOTH_FD(tz);
+Kokkos::Profiling::popRegion();
     } else {
+Kokkos::Profiling::pushRegion("Smooth_eb_interp::Not smoothed::cbx,cby,cbz,ex,ez,ez");
       COPY_FD(cbx); SMOOTH_FD(cbx);
       COPY_FD(cby); SMOOTH_FD(cby);
       COPY_FD(cbz); SMOOTH_FD(cbz);
       COPY_FD(ex);  SMOOTH_FD(ex);
       COPY_FD(ey);  SMOOTH_FD(ey);
       COPY_FD(ez);  SMOOTH_FD(ez);
+Kokkos::Profiling::popRegion();
     }
     // exchange (ox,oy,oz) ghosts
+Kokkos::Profiling::pushRegion("Smooth_eb_interp::Exchange ox,oy,oz ghosts");
     k_begin_remote_ghost_hyb_o(fa, fa->g, *(fa->fb) );
     k_end_remote_ghost_hyb_o  (fa, fa->g, *(fa->fb) );
+Kokkos::Profiling::popRegion();
     // exchange (tx,ty,tz) ghosts
+Kokkos::Profiling::pushRegion("Smooth_eb_interp::Exchange tx,ty,tz ghosts");
     k_begin_remote_ghost_hyb_t(fa, fa->g, *(fa->fb) );
     k_end_remote_ghost_hyb_t  (fa, fa->g, *(fa->fb) );
+Kokkos::Profiling::popRegion();
+Kokkos::Profiling::pushRegion("Smooth_eb_interp::Local ghost ot");
     k_hyb_local_ghost_ot(fa, fa->g );
+Kokkos::Profiling::popRegion();
     ism--;
   }
 }

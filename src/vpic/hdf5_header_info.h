@@ -68,8 +68,8 @@ extern const char *main_body_attributeS;
       write_main_body_attribute(fp, main_body_attributeV, "JFOLD", dims_4d, dims_3d, speciesname_p, time_step, "jfxold", "jfyold", "jfzold"); \
     if (field_dump_flag.flags["rhofold"])                                                                                                     \
       fprintf(fp, main_body_attributeS, "rhofold", dims_3d, time_step, speciesname_p, time_step, time_step, "rhofold");                       \
-    if (field_dump_flag.flags["tmpsm"])                                                                                                       \
-      fprintf(fp, main_body_attributeS, "tmpsm", dims_3d, time_step, speciesname_p, time_step, time_step, "tmpsm");                           \
+    if (field_dump_flag.flags["te0"])                                                                                                       \
+      fprintf(fp, main_body_attributeS, "te0", dims_3d, time_step, speciesname_p, time_step, time_step, "te0");                           \
     if (field_dump_flag.enabledT())                                                                                                           \
       write_main_body_attribute(fp, main_body_attributeV, "T", dims_4d, dims_3d, speciesname_p, time_step, "tx", "ty", "tz");                 \
     if (field_dump_flag.flags["te"])                                                                                                          \
