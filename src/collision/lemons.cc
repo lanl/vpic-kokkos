@@ -81,10 +81,10 @@ void transfer_mom_en_src(
     auto nv = k_field.extent(0);   
     Kokkos::parallel_for("copy momentum_energy_src to flield", nv, KOKKOS_LAMBDA (int i) {
 	    // Your code to copy fluid data for index i
-	    k_f_d(i, field_var::fx) = k_spj_fl(i, fluid_var::msx);
-	    k_f_d(i, field_var::fy) = k_spj_fl(i, fluid_var::msy);
-	    k_f_d(i, field_var::fz) = k_spj_fl(i, fluid_var::msz);
-	    k_f_d(i, field_var::fe) = k_spj_fl(i, fluid_var::ens);
+	    k_f_d(i, field_var::sx) = k_spj_fl(i, fluid_var::msx);
+	    k_f_d(i, field_var::sy) = k_spj_fl(i, fluid_var::msy);
+	    k_f_d(i, field_var::sz) = k_spj_fl(i, fluid_var::msz);
+	    k_f_d(i, field_var::se) = k_spj_fl(i, fluid_var::ens);
 	});    
     
 }
