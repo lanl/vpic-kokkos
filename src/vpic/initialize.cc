@@ -12,7 +12,8 @@ vpic_simulation::initialize( int argc,
   // Initialize Kokkos
   // Moved to boot servcies
   //Kokkos::initialize( argc, argv );
-
+  kokkos_rng = new kokkos_rng_pool_t(rank()); // seed_entropy will re-seed.
+  
   // Call the user initialize the simulation
 
   TIC user_initialization( argc, argv ); TOC( user_initialization, 1 );

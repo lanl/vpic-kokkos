@@ -102,6 +102,15 @@ void pbd_write_to_buffer(species_t * RESTRICT sp,
     if(diag->store_counter+diag->num_writes != store)
         ERROR(( "That's pretty bad." ));
     diag->store_counter = store;
+#undef nxg
+#undef nyg
+#undef nzg
+#undef i0
+#undef j0
+#undef k0
+#undef global_pos_x
+#undef global_pos_y
+#undef global_pos_z    
 }
 
 pb_diagnostic_t *

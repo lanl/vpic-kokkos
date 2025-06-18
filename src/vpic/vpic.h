@@ -24,6 +24,7 @@
 #include "../util/bitfield.h"
 #include "../util/checksum.h"
 #include "../util/system.h"
+#include "../util/rng_policy.h"
 
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
@@ -126,6 +127,20 @@ public:
   void finalize( void );
   void print_run_details( void );
 
+    // Set RNG policy. Use std::rng by default, optionally use Kokkos or
+    // "original"
+    #ifdef USE_KOKKOS_RNG
+    // TODO: this only works on CPU right now...
+    _RNG::RandomNumberProvider< _RNG::KokkosRNG<Kokkos::DefaultHostExecutionSpace> > rng_policy;
+    #elif USE_STL_RNG
+    _RNG::RandomNumberProvider<_RNG::CppRNG> rng_policy;
+#else // USE_ORIGINAL_RNG
+    _RNG::RandomNumberProvider<_RNG::OriginalRNG> rng_policy;
+    #endif
+
+    // TODO: remove or improve this
+    kokkos_rng_pool_t * kokkos_rng;
+                                                      
   // Directly initialized by user
 
   int verbose;              // Should system be verbose

@@ -512,6 +512,18 @@ BEGIN_PRIMITIVE {                                                               
 # undef END_SEND_KOKKOS
 }
 
+#define RANK_TO_INDEX(rank,ix,iy,iz,nx,ny,nz) do {        \
+    int _ix, _iy, _iz;                                    \
+    _ix  = (rank);   /* ix = ix + gpx*( iy + gpy*iz ) */  \
+    _iy  = _ix/(nx); /* iy = iy + gpy*iz */               \
+    _ix -= _iy*(nx); /* ix = ix */                        \
+    _iz  = _iy/(ny); /* iz = iz */                        \
+    _iy -= _iz*(ny); /* iy = iy */                        \
+    (ix) = _ix;                                           \
+    (iy) = _iy;                                           \
+    (iz) = _iz;                                           \
+  } while(0)
+
 void
 hydro_array_t::copy_to_host() {
   Kokkos::deep_copy( k_h_h , k_h_d);
