@@ -284,7 +284,7 @@ typedef struct field_array {
 
   // I don't want this to be a pointer, but given it only holds Kokkos data
   // this avoids a fiasco when checkpointing...
-  field_buffers_t* fb;
+  field_buffers_t fb;
 
   k_field_t k_f_d;                   // Kokkos field data on device
   k_field_t::HostMirror k_f_h;       // Kokkos field data on host
@@ -361,12 +361,11 @@ typedef struct field_array {
       k_jf_accum_d = k_jf_accum_t("k_jf_accum", n_fields);
       k_jf_accum_h = Kokkos::create_mirror_view(k_jf_accum_d);
 
-      fb = new field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
+      fb = field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
   }
 
   ~field_array()
   {
-      delete fb;
   }
 
   /**

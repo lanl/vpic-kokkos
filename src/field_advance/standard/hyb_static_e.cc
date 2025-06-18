@@ -94,12 +94,12 @@ hyb_static_e_kokkos( field_array_t * RESTRICT fa,
    ***************************************************************************/
 
   //k_begin_remote_ghost_hyb_jf( fa, fa->g );
-    k_begin_remote_ghost_hyb_jf(fa, fa->g, *(fa->fb) );
+    k_begin_remote_ghost_hyb_jf(fa, fa->g, fa->fb );
 
 //    k_local_ghost_tang_b( fa, fa->g );
 
 //k_end_remote_ghost_hyb_jf( fa, fa->g );
-    k_end_remote_ghost_hyb_jf(fa, fa->g, *(fa->fb) );
+    k_end_remote_ghost_hyb_jf(fa, fa->g, fa->fb );
 
     hyb_static_e_interior_kokkos(k_field, nx, ny, nz, px, py, pz);
 

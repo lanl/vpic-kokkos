@@ -391,7 +391,7 @@ clean_div_b_kokkos( field_array_t * fa ) {
 # endif
 
     // Begin setting derr ghosts
-    k_begin_remote_ghost_div_b( fa, g, *(fa->fb) );
+    k_begin_remote_ghost_div_b( fa, g, fa->fb );
     k_local_ghost_div_b( fa, g);
 
     // Have pipelines do interior of the local domain
