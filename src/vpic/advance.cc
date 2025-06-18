@@ -252,9 +252,17 @@ int vpic_simulation::advance(void)
   grid->isub=0;
   frac = 1.0/grid->nsub;
   for(int i=0;i<grid->nsub;i++){
-    FAK->advance_b( field_array, frac );
-    grid->isub++;
-  }
+#ifdef HYB_USE_STATIC_E
+     FAK->advance_pe( field_array, frac );
+#else      
+     FAK->advance_b( field_array, frac );
+#endif
+     grid->isub++;
+  } 
+#ifdef HYB_USE_STATIC_E
+  FAK->advance_e( field_array, 1.0 );
+#endif 
+  
   KOKKOS_TOC( advance_b, 1 );
   Kokkos::Profiling::popRegion();
 

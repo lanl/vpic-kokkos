@@ -38,6 +38,7 @@ module list 2>&1 | tee modules.txt
   -DKokkos_ENABLE_OPENMP=OFF \
   -DCMAKE_CXX_COMPILER="CC" \
   -DCMAKE_CXX_FLAGS="-g -O2 -rdynamic -dynamic"\
+  -DHYB_USE_STATIC_E=ON\
   $src_dir
 
 #------------------------------------------------------------------------------#

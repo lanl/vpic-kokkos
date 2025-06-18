@@ -242,14 +242,18 @@ new_standard_field_array( grid_t           * RESTRICT g,
   fa->g = g;
   fa->params = create_sfa_params( g, m_list, damp );
   fa->kernel[0] = sfa_kernels;
+  
+  fa->kernel->advance_b         = hyb_advance_b;
+  fa->kernel->advance_e         = hyb_advance_e;
 
 #ifdef HYB_USE_SEPARATE_PE
   fa->kernel->advance_b         = hyb_advance_bpe;
   fa->kernel->advance_e         = hyb_advance_eue;
   fa->kernel->hyb_epress        = hyb_epress;
-#else
-  fa->kernel->advance_b         = hyb_advance_b;
-  fa->kernel->advance_e         = hyb_advance_e;
+#endif
+#ifdef HYB_USE_STATIC_E
+  fa->kernel->advance_b         = hyb_advance_pe;
+  fa->kernel->advance_e         = hyb_static_e;
 #endif
   fa->kernel->hyb_smooth_b      = hyb_smooth_b;
   fa->kernel->hyb_smooth_eb_interp = hyb_smooth_eb_interp;
@@ -264,7 +268,7 @@ new_standard_field_array( grid_t           * RESTRICT g,
     fa->kernel->compute_curl_b    = vacuum_compute_curl_b;
     fa->kernel->compute_div_e_err = vacuum_compute_div_e_err;
     fa->kernel->clean_div_e       = vacuum_clean_div_e;
-    fa->kernel->advance_e_kokkos  = hyb_static_e_kokkos;
+    fa->kernel->advance_e_kokkos  = vacuum_advance_e_kokkos;
     fa->kernel->compute_div_e_err_kokkos = vacuum_compute_div_e_err_kokkos;
     fa->kernel->clean_div_e_kokkos= vacuum_clean_div_e_kokkos;
     fa->kernel->energy_f_kokkos   = vacuum_energy_f_kokkos;

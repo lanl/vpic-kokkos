@@ -95,12 +95,19 @@ vacuum_advance_e_kokkos( field_array_t * RESTRICT fa,
 
 
 void
-hyb_static_e_kokkos( field_array_t * RESTRICT fa,
+hyb_static_e( field_array_t * RESTRICT fa,
                   float                    frac );
 
 void
 hyb_advance_e( field_array_t * RESTRICT fa,
                   float                    frac );
+                  
+void
+hyb_advance_eue( field_array_t * RESTRICT fa,
+                  float                    frac );
+void                  
+hyb_advance_ue( field_array_t * RESTRICT fa,
+               float                    frac );
 
 void
 hyb_heta( field_array_t * RESTRICT fa);

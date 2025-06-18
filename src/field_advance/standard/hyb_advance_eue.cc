@@ -232,6 +232,9 @@ hyb_advance_eue( field_array_t * RESTRICT fa,
   // Read: rhof, rhofold, jfx, jfy, jfz, jfxold, jfyold, jfzold, cbx, cby, cbz, tcax, tcay, tcaz, pe
   Kokkos::parallel_for("hyb_advance_e_interior", xyz_inner_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
     INIT_STENCIL();
+    UE(x,y,z);
+    UE(y,z,x);
+    UE(z,x,y);
     E(x,y,z);
     E(y,z,x);
     E(z,x,y);
