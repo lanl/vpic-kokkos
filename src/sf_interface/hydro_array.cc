@@ -525,7 +525,8 @@ BEGIN_PRIMITIVE {                                                               
   } while(0)
 
 void
-hydro_array_t::copy_to_host() {
+hydro_array_t::copy_to_host(FILE *fp, const int step /*=0*/) {
+    //if( !fname ) ERROR(("Invalid file name"));
   Kokkos::deep_copy( k_h_h , k_h_d);
 
   // Avoid capturing this
@@ -534,7 +535,7 @@ hydro_array_t::copy_to_host() {
 
   //for(int i=0; i<hydro_array->k_h_h.extent(0); i++) {
   Kokkos::parallel_for("copy hydro to legacy array",
-    host_execution_policy(0, k_h_h.extent(0) - 1) ,
+    host_execution_policy(0, k_h_h.extent(0) ) ,
     KOKKOS_LAMBDA (int i) {
     h_l[i].jx = k_h(i, hydro_var::jx);
     h_l[i].jy = k_h(i, hydro_var::jy);
@@ -550,6 +551,19 @@ hydro_array_t::copy_to_host() {
     h_l[i].tyz = k_h(i, hydro_var::tyz);
     h_l[i].tzx = k_h(i, hydro_var::tzx);
     h_l[i].txy = k_h(i, hydro_var::txy);
+#ifdef VARIABLE_CHARGE
+    h_l[i].qmin = k_h(i, hydro_var::min_q);
+    h_l[i].qmax	= k_h(i, hydro_var::max_q);
+#endif
+    
+    int ix, iy, iz;
+    RANK_TO_INDEX(i, ix, iy, iz, 1, 1, 1);
+    
+    // if(h_l[i].ke>0) printf("%d (%d,%d,%d) %e \n",i,ix,iy,iz,h_l[i].ke);
+    if(world_rank==0 && fp && (h_l[i].txx*h_l[i].txx + h_l[i].tyy*h_l[i].tyy + h_l[i].tzz*h_l[i].tzz) > 0) {
+	fprintf(fp,"%d %.15e %.15e %.15e %.15e %.15e %.15e %d",step, h_l[i].txx,h_l[i].tyy,h_l[i].tzz,h_l[i].px,h_l[i].py,h_l[i].pz,i);
+    }
   });
-
+  // printf("k_h_h.extent(0)=%d\n",k_h_h.extent(0));
+  if(world_rank==0 && fp) fprintf(fp,"\n");
 }

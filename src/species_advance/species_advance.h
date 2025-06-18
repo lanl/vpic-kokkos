@@ -379,6 +379,13 @@ accumulate_hydro_p( /**/  hydro_array_t        * RESTRICT ha,
                     const species_t            * RESTRICT sp,
                     const interpolator_array_t * RESTRICT ia );
 
+void accumulate_hydro_p_kokkos_nomove_ngp(
+        k_particles_t& k_particles,
+        k_particles_i_t& k_particles_i,
+        k_hydro_d_t k_hydro,
+        const species_t* RESTRICT sp
+);
+
 void accumulate_hydro_p_kokkos(
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
