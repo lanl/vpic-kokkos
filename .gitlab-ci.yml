@@ -4,7 +4,7 @@ stages:
 .build_gcc:
   tags:
     - darwin-slurm-shared
-    - shell
+    - batch
     - jacamar
     - yellow 
     - darwin
@@ -13,6 +13,7 @@ stages:
       aud: https://lisdi-git.lanl.gov/
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
+    SCHEDULER_PARAMETERS: "-N 1 --qos=debug"
   stage: build_gcc
   cache:
     paths:
