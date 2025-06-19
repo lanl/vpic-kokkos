@@ -549,6 +549,12 @@ public:
                    double ux, double uy, double uz,
                    double w,  double age = 0, int update_rhob = 1 );
 
+void
+  inject_particle_r( species_t * sp,
+                   double x,  double y,  double z,
+                   double ux, double uy, double uz,
+                   double w,  double age = 0, int update_rhob = 0 );
+  
   // Inject particle raw is for power users!
   // No nannyism _at_ _all_:
   // - Availability of free stoarge is _not_ checked.
