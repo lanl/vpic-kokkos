@@ -1,0 +1,23 @@
+#!/bin/tcsh
+#SBATCH -t 3:00:00
+#SBATCH -N 5
+#SBATCH --ntasks-per-node=36
+#SBATCH -J Ma6
+#SBATCH --qos=interactive
+#SBATCH -A w20_hybplasma 
+
+# Now run the script as this group - so all data files will belong
+
+# Set number of times to restart the moving window
+
+#  Shell commands
+date
+echo '*** Starting Parallel Job ***'
+module purge
+module load gcc openmpi
+srun -n 180 ./shock-open.Linux >& outfile
+###--restore restore/checkpt.0  >& outfile
+date
+echo '*** All Done ***'
+
+# 

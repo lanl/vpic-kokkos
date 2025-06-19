@@ -1,0 +1,117 @@
+################################################################################
+# Header version information
+################################################################################
+VPIC_HEADER_VERSION 1.0.0
+
+################################################################################
+# Header size for data file headers in bytes
+################################################################################
+DATA_HEADER_SIZE 123
+
+################################################################################
+# Time step increment
+################################################################################
+GRID_DELTA_T 0.311127
+
+################################################################################
+# GRID_CVAC
+################################################################################
+GRID_CVAC 1.000000
+
+################################################################################
+# GRID_EPS0
+################################################################################
+GRID_EPS0 1.000000
+
+################################################################################
+# Grid extents in the x-dimension
+################################################################################
+GRID_EXTENTS_X 0.000000 200.000000
+
+################################################################################
+# Grid extents in the y-dimension
+################################################################################
+GRID_EXTENTS_Y -400.000000 0.000000
+
+################################################################################
+# Grid extents in the z-dimension
+################################################################################
+GRID_EXTENTS_Z -0.222222 0.222222
+
+################################################################################
+# Spatial step increment in x-dimension
+################################################################################
+GRID_DELTA_X 0.444444
+
+################################################################################
+# Spatial step increment in y-dimension
+################################################################################
+GRID_DELTA_Y 0.444444
+
+################################################################################
+# Spatial step increment in z-dimension
+################################################################################
+GRID_DELTA_Z 0.444444
+
+################################################################################
+# Domain partitions in x-dimension
+################################################################################
+GRID_TOPOLOGY_X 4
+
+################################################################################
+# Domain partitions in y-dimension
+################################################################################
+GRID_TOPOLOGY_Y 2
+
+################################################################################
+# Domain partitions in z-dimension
+################################################################################
+GRID_TOPOLOGY_Z 1
+
+################################################################################
+# Field data information
+################################################################################
+FIELD_DATA_DIRECTORY fields
+FIELD_DATA_BASE_FILENAME fields
+FIELD_DATA_VARIABLES 12
+"Electric Field" VECTOR 3 FLOATING_POINT 4
+"Electric Field Divergence Error" SCALAR 1 FLOATING_POINT 4
+"Magnetic Field" VECTOR 3 FLOATING_POINT 4
+"Magnetic Field Divergence Error" SCALAR 1 FLOATING_POINT 4
+"TCA Field" VECTOR 3 FLOATING_POINT 4
+"Bound Charge Density" SCALAR 1 FLOATING_POINT 4
+"Free Current Field" VECTOR 3 FLOATING_POINT 4
+"Charge Density" SCALAR 1 FLOATING_POINT 4
+"Edge Material" VECTOR 3 INTEGER 2
+"Node Material" SCALAR 1 INTEGER 2
+"Face Material" VECTOR 3 INTEGER 2
+"Cell Material" SCALAR 1 INTEGER 2
+
+################################################################################
+# Number of species with output data
+################################################################################
+NUM_OUTPUT_SPECIES 2
+
+################################################################################
+# Species(1) data information
+################################################################################
+SPECIES_DATA_DIRECTORY hydro
+SPECIES_DATA_BASE_FILENAME ehydro
+HYDRO_DATA_VARIABLES 5
+"Current Density" VECTOR 3 FLOATING_POINT 4
+"Charge Density" SCALAR 1 FLOATING_POINT 4
+"Momentum Density" VECTOR 3 FLOATING_POINT 4
+"Kinetic Energy Density" SCALAR 1 FLOATING_POINT 4
+"Stress Tensor" TENSOR 6 FLOATING_POINT 4
+
+################################################################################
+# Species(2) data information
+################################################################################
+SPECIES_DATA_DIRECTORY hydro
+SPECIES_DATA_BASE_FILENAME Hhydro
+HYDRO_DATA_VARIABLES 5
+"Current Density" VECTOR 3 FLOATING_POINT 4
+"Charge Density" SCALAR 1 FLOATING_POINT 4
+"Momentum Density" VECTOR 3 FLOATING_POINT 4
+"Kinetic Energy Density" SCALAR 1 FLOATING_POINT 4
+"Stress Tensor" TENSOR 6 FLOATING_POINT 4

@@ -1,0 +1,40 @@
+           ***** Simulation parameters ***** 
+		 mi/me =		4.000000e+02
+		 beta_e =		1.000000e-01
+		 beta_i =		5.000000e-01
+		 Te/(me*c**2) =		1.250000e-02
+		 Ti/(me*c**2) =		6.250000e-02
+		 wpe/wce =		2.000000e+00
+		 Gamma = 		1.019572e+00
+		 Vflow/c = 		1.950000e-01
+		 tau*wpe =		1.500000e+01
+		 wci =		1.250000e-03
+		 num_step = 		38569
+		 Lx/de = 		8.000000e+02
+		 Ly/de = 		8.000000e+02
+		 Lz/de =		4.444444e-01
+		 Lx/di = 		4.000000e+01
+		 Ly/di = 		4.000000e+01
+		 Lz/di =		2.222222e-02
+		 nx = 			1.800000e+03
+		 ny = 			1.800000e+03
+		 nz =			1.000000e+00
+		 damp =			0.000000e+00
+		 courant = 		9.900000e-01
+		 nproc = 		9.900000e-01
+		 nppc = 		5.000000e+01
+		 b0 =			5.000000e-01
+		 di = 			2.000000e+01
+		 Npart =        	1.620000e+08
+		 total # of particles = 3.240000e+08
+		 dt*wpe = 		3.111270e-01
+		 energies_interval: 	500
+		 dx/de =		4.444444e-01
+		 dy/de =		4.444444e-01
+		 dz/de =		4.444444e-01
+		 dx/debye = 		3.975232e+00
+		 vthi/c =		1.250000e-02
+		 vthe/c =		1.118034e-01
+		 dx/rhoe =		1.987616e+00
+		 dx/rhoi =		4.444444e-02
+		 ***************************
