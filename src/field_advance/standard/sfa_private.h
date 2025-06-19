@@ -623,6 +623,10 @@ void
 k_end_remote_ghost_hyb_o( field_array_t      * ALIGNED(128) f,
                         const grid_t *              g,
                         field_buffers_t& f_buffers );
+void 
+begin_halo_exchange(field_array* fa, const int beg_var, const int end_var);
 
+void 
+end_halo_exchange(field_array* fa, const int beg_var, const int end_var);
 
 #endif // _sfa_private_h_
