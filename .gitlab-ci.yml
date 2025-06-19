@@ -4,9 +4,13 @@ stages:
 .build_gcc:
   tags:
     - darwin-slurm-shared
+    - shell
+    - jacamar
+    - yellow 
+    - darwin
   id_tokens:
     SITE_ID_TOKEN:
-      aud: https://lisdi-git.lanl.gov
+      aud: https://lisdi-git.lanl.gov/
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
   stage: build_gcc
