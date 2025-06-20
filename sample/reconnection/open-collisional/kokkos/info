@@ -1,0 +1,53 @@
+           ***** Simulation parameters ***** 
+              L/di   =               5.000000e-01
+              L/de   =               1.000000e+01
+              rhoi/L =               1.825742e+00
+              Ti/Te  =               5.000000e+00
+              Tbi/Ti =               3.039000e-01
+              Tbe/Te =               7.598000e-01
+              nb/n0 =                2.280000e-01
+              wpe/wce =              2.000000e+00
+              mi/me =                4.000000e+02
+              theta =                0.000000e+00
+              taui =                 3.000000e+02
+              num_step =             666666
+              Lx/de =                4.000000e+02
+              Ly/de =                1.562000e-01
+              Lz/de =                4.000000e+02
+              Lx/di =                2.000000e+01
+              Ly/di =                7.810000e-03
+              Lz/di =                2.000000e+01
+              nx =                   3.200000e+02
+              ny =                   1.000000e+00
+              nz =                   3.200000e+02
+              damp =                 0.000000e+00
+              courant =              4.072935e-01
+              nproc =                4
+              nppc =                 4.000000e+02
+              b0 =                   5.000000e-01
+              v_A (based on nb) =    5.235674e-02
+              di =                   2.000000e+01
+              Ne =                   4.096000e+07
+              Ne_sheet =             7.366904e+06
+              Ne_back =              3.359309e+07
+              total # of particles = 8.191999e+07
+              dt*wpe =               3.600000e-01
+              dt*wce =               1.800000e-01
+              dt*wci =               4.500000e-04
+              energies_interval:     50
+              dx/de =                1.250000e+00
+              dy/de =                1.562000e-01
+              dz/de =                1.250000e+00
+              L/debye =              6.928203e+01
+              dx/rhoi =              9.682458e-02
+              dx/rhoe =              4.330127e+00
+              dx/debye =             8.660254e+00
+              n0 =                   1.000000e+00
+              vthi/c =               1.613743e-02
+              vthe/c =               1.443376e-01
+              vdri/c =               4.166667e-02
+              vdre/c =               -8.333333e-03
+ tstep_coll:                    10
+ nu/wce:                        0.05
+ nu*dt_coll:                    0.09
+              ***************************
