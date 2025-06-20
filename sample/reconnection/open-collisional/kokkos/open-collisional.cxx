@@ -22,6 +22,7 @@ begin_globals {
   int fields_interval;
   int ehydro_interval;
   int Hhydro_interval;
+  int injector_update_interval;
   int eparticle_interval;
   int Hparticle_interval;
   int quota_check_interval;  // How frequently to check if quota exceeded
@@ -137,8 +138,8 @@ begin_initialization {
   double rhoi_L = sqrt(Ti_Te/(1.0+Ti_Te))/L_di;
   double v_A= (wci/wpi)/sqrt(nb_n0); // based on nb
 
-  double ion_sort_interval = 25; // Injector moments also updated
-  double electron_sort_interval = 25; // Injector moments also updated
+  double sort_interval = 10;  // Also collision interval for this deck.
+  double injector_update_interval = 5*sort_interval; // Expensive as currently copies particles to host legacy particle arrays. Must be multiple of sort interval.
 
   // Parameters for Open BC model
   // Relaxation - density, velocity + particle flux, pressure tensor
@@ -148,7 +149,6 @@ begin_initialization {
   //double edrive = 0.0099;    // Setting edrive = 0 will give undriven limit
 
   double tdrive = 32000.0;
-  double sort_interval = 10;  // Injector moments also updated at this interval
 
   // Numerical parameters
   double nppc  = 400; // Average number of macro particle per cell per species
@@ -271,6 +271,7 @@ begin_initialization {
   global->fields_interval      = fields_interval;
   global->ehydro_interval      = ehydro_interval;
   global->Hhydro_interval      = Hhydro_interval;
+  global->injector_update_interval = injector_update_interval;
   global->eparticle_interval   = eparticle_interval;
   global->Hparticle_interval   = Hparticle_interval;
   global->quota_check_interval = quota_check_interval;
@@ -418,9 +419,9 @@ begin_initialization {
   double nmovers = 0.1*nmax;
   double sort_method = 1;   // 0=in place and 1=out of place
   species_t *electron = define_species("electron", -ec, me, nmax, nmovers,
-    electron_sort_interval, sort_method);
+    sort_interval, sort_method);
   species_t *ion = define_species("ion", ec, mi, nmax, nmovers,
-    ion_sort_interval, sort_method);
+    sort_interval, sort_method);
 
   ///////////////////////////////////////////////////
   // Log diagnostic information about this simulation
@@ -1318,16 +1319,14 @@ begin_particle_injection {
   } // end bottom injector
 
 #if 1
-  KOKKOS_TIC();
+  if(should_dump(injector_update)) {
   for ( int n=1; n<=nsp; n++ ) {
       species_t * species = find_species_id(n-1,species_list );
-      if (remainder(step(), global->sort[n-1]) == 0) { // To-do: Can make this less frequent
+      //      if (remainder(step(), global->sort[n-1]) == 0) { // To-do: Can make this less frequent
       //  LIST_FOR_EACH( sp, species_list ) {
       species->copy_to_host();
+      //  }
   }
-  }
-  KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
-
 
   // *******  Update the injector moments at every sort interval *********
   double v[3];
@@ -1565,6 +1564,8 @@ begin_particle_injection {
     }
   }  // end bottom moment update
 
+  } // End injector update
+  
 #endif
 
   // Periodically save injector moments on outflow boundaries
