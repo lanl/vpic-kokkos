@@ -203,23 +203,24 @@ if (BUILD_INTERNAL_KOKKOS)
   add_subdirectory(kokkos)
   set(Kokkos_ENABLE_LIBDL OFF)
   set(Kokkos_ENABLE_PROFILING OFF) # NO libDL => no profiling
-  #include_directories(${Kokkos_INCLUDE_DIRS_RET})
-  #set(KOKKOS_INCLUDE_DIRS ${Kokkos_INCLUDE_DIRS_RET})
+
+  # Get Kokkos::kokkosalgorithms include directories. 
+  # For some reason the internal build only works without the Kokkos parent target
+  get_target_property(KOKKOS_INCLUDE_ALGORITHMS kokkosalgorithms INTERFACE_INCLUDE_DIRECTORIES)
 else()
   # CONSIDER ADDING --expt-extended-lambda
-#  find_package(KOKKOS REQUIRED)
   find_package(Kokkos REQUIRED)
 
-  #get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INTERFACE_INCLUDE_DIRECTORIES)
-  #get_target_property(KOKKOS_LIB_DIR Kokkos::kokkos INTERFACE_LINK_LIBRARIES)
-  #message(${KOKKOS_INCLUDE_DIRS})
-  #link_directories(${KOKKOS_INCLUDE_DIRS}/../lib) # TODO: bad idea..
+  # Get Kokkos::kokkosalgorithms include directories. 
+  get_target_property(KOKKOS_INCLUDE_ALGORITHMS Kokkos::kokkosalgorithms INTERFACE_INCLUDE_DIRECTORIES)
 endif(BUILD_INTERNAL_KOKKOS)
 
-
 get_target_property(KOKKOS_COMPILE_OPTIONS Kokkos::kokkoscore INTERFACE_COMPILE_OPTIONS)
-get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(KOKKOS_INCLUDE_CORE Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE_INCLUDE_DIRECTORIES)
+#get_target_property(KOKKOS_INCLUDE_ALGORITHMS Kokkos::kokkosalgorithms INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(KOKKOS_INCLUDE_SIMD Kokkos::kokkossimd INTERFACE_INCLUDE_DIRECTORIES)
+set(KOKKOS_INCLUDE_DIRS ";${KOKKOS_INCLUDE_CORE};${KOKKOS_INCLUDE_CONTAINERS};${KOKKOS_INCLUDE_ALGORITHMS};${KOKKOS_INCLUDE_SIMD}")
 
 #message(${KOKKOS_COMPILE_OPTIONS})
 # TODO: this gives the external include path
@@ -228,20 +229,13 @@ get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE
 #get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
 #get_target_property(KOKKOS_LIB_CONTAINERS Kokkos::kokkoscontainers INTERFACE_LINK_DEPENDS)
 
-set(KOKKOS_CORE_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_core_includes)
-set(KOKKOS_CONTAINER_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_container_includes)
 set(KOKKOS_COMPILE_OPTIONS_FILE ${PROJECT_BINARY_DIR}/kokkos_compile_options)
-#set(KOKKOS_CORE_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_core_lib)
-#set(KOKKOS_CONTAINER_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_container_lib)
+set(KOKKOS_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_includes)
 
 # For an "external" build these will be the same, but for an internal we need to gather both
-file(GENERATE OUTPUT ${KOKKOS_CORE_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
-file(GENERATE OUTPUT ${KOKKOS_CONTAINER_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_CONTAINERS}")
 string(REPLACE ";" " " kokkos_compile_options "${KOKKOS_COMPILE_OPTIONS}")
 file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${kokkos_compile_options}")
-
-#file(GENERATE OUTPUT ${KOKKOS_CORE_LIB_FILE} CONTENT "${KOKKOS_LIB_DIRS}")
-#file(GENERATE OUTPUT ${KOKKOS_CONTAINER_LIB_FILE} CONTENT "${KOKKOS_LIB_CONTAINERS}")
+file(GENERATE OUTPUT ${KOKKOS_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 
 #include_directories(${KOKKOS_INCLUDE_DIRS})
 #string(REPLACE ";" " " KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS}")
