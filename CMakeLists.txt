@@ -481,6 +481,12 @@ endif()
 
 if(ENABLE_INTEGRATED_TESTS)
   enable_testing()
+
+  # NOTE: This can also be done by a subdirectory (useful when we have multiple tests)
+  # Add includes for Catch2
+  set(TEST_DIR "./test/include")
+  include_directories(${TEST_DIR})
+
   add_subdirectory(test/integrated)
 
 endif(ENABLE_INTEGRATED_TESTS)

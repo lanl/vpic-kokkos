@@ -12,8 +12,8 @@ struct min_max_functor {
   min_max_functor(const Kokkos::View<int*>& view_) : view(view_) {}
   KOKKOS_INLINE_FUNCTION
   void operator()(const size_t& i, minmax_scalar& minmax) const {
-    if(view(i) < minmax.min_val && view(i) != 0) minmax.min_val = view(i);
-    if(view(i) > minmax.max_val && view(i) != 0) minmax.max_val = view(i);
+    if(view(i) < minmax.min_val) minmax.min_val = view(i);
+    if(view(i) > minmax.max_val) minmax.max_val = view(i);
   }
 };
 
@@ -23,8 +23,8 @@ struct min_max_functor_u64 {
   min_max_functor_u64(const Kokkos::View<uint64_t*>& view_) : view(view_) {}
   KOKKOS_INLINE_FUNCTION
   void operator()(const size_t& i, minmax_scalar& minmax) const {
-    if(view(i) < minmax.min_val && view(i) != 0) minmax.min_val = view(i);
-    if(view(i) > minmax.max_val && view(i) != 0) minmax.max_val = view(i);
+    if(view(i) < minmax.min_val) minmax.min_val = view(i);
+    if(view(i) > minmax.max_val) minmax.max_val = view(i);
   }
 };
 
@@ -201,21 +201,19 @@ struct DefaultSort {
         Kokkos::deep_copy(bin_counter, 0);
         // Count number of particles in each cell
         Kokkos::parallel_for("get max nppc", Kokkos::RangePolicy<>(0, np), KOKKOS_LAMBDA(const int i) {
-          Kokkos::atomic_increment(&(bin_counter(key_view(i))));
+          Kokkos::atomic_inc(&(bin_counter(key_view(i))));
         });
         // Find the max and min number of particles per cell
         Kokkos::parallel_reduce("Get max/min nppc", Kokkos::RangePolicy<>(0,num_bins), 
           min_max_functor(bin_counter), nppc_reducer); 
+        const int chunk_size = tile_size*(nppc_result.max_val+1);
         // Reset bin_counter
         Kokkos::deep_copy(bin_counter, 0);
         // Update particle indices 
         Kokkos::parallel_for("Update keys", Kokkos::RangePolicy<>(0, np), KOKKOS_LAMBDA(const int i) {
-          int count = Kokkos::atomic_fetch_add(&(bin_counter(key_view(i))), 1);
-          int chunk_size = tile_size*nppc_result.max_val;
-          int chunk = (key_view(i)-result.min_val)/tile_size;
-          int min_idx = result.min_val + chunk*tile_size;
-          int offset = count*nppc_result.max_val;
-          key_view(i) += chunk*chunk_size + offset - min_idx + 1;
+          const int count = Kokkos::atomic_fetch_add(&(bin_counter(key_view(i))), 1);
+          const int chunk_idx = (key_view(i)-(result.min_val))/tile_size;
+          key_view(i) += chunk_idx*chunk_size + count*tile_size - result.min_val;
         });
         // Find smallest and largest index
         Kokkos::parallel_reduce("Get min/max bin", Kokkos::RangePolicy<>(0,particles_i.extent(0)), 
@@ -228,7 +226,7 @@ struct DefaultSort {
         Comparator comp(np, result.min_val, result.max_val);
 
         // Sort and create permutation View
-        int sort_within_bins = 0;
+        int sort_within_bins = 1;
         Kokkos::BinSort<key_type, Comparator> bin_sort(keys, 0, np, comp, sort_within_bins );
         bin_sort.create_permute_vector();
 
