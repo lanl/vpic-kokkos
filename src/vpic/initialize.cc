@@ -82,6 +82,8 @@ vpic_simulation::initialize( int argc,
   auto nfaces_per_voxel = 6;
   g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
+  g->init_curvilinear_grid();
+  
   KOKKOS_TIC();
   LIST_FOR_EACH( sp, species_list ) {
     sp->copy_to_device();

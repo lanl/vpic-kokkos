@@ -30,6 +30,7 @@
 #endif
 #define NUM_J_DIMS 4
 #define FLUID_VAR_COUNT 6
+#define CURVILINEAR_VAR_COUNT 4
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -75,6 +76,8 @@ using k_particle_sortindex_t_ra = Kokkos::View<const Kokkos::DefaultExecutionSpa
                                                Kokkos::MemoryTraits<Kokkos::RandomAccess>>;
 
 using k_neighbor_t = Kokkos::View<int64_t*>;
+
+using k_curvilinear_vars_t = Kokkos::View<float *[CURVILINEAR_VAR_COUNT]>; 
 
 using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 
@@ -303,6 +306,15 @@ namespace fluid_var {
         uy  = 4,
         uz  = 5,
     };
+};
+
+namespace curv_mesh_var {
+  enum cm_v {
+    h0       = 0,
+    h1       = 1,
+    h2       = 2,
+    jac      = 3,
+  };
 };
 
 void print_particles_d(

@@ -155,6 +155,10 @@ typedef struct grid {
   k_neighbor_t k_neighbor_d;                // kokkos neighbor view on device
   k_neighbor_t::HostMirror k_neighbor_h;    // kokkos neighbor view on host
 
+  k_curvilinear_vars_t k_curvilinear_vars_d; // kokkos view for curvilinear mesh quantities on device
+  k_curvilinear_vars_t::HostMirror k_curvilinear_vars_h; // kokkos view for curvilinear mesh quantities on host
+  
+  
   // We want to call this *only* once the neighbor is done
   void init_kokkos_grid(int num_neighbor)
   {
@@ -185,6 +189,29 @@ typedef struct grid {
   }
 
 
+void init_curvilinear_grid()
+  {
+    k_curvilinear_vars_d = k_curvilinear_vars_t("k_curvilinear_vars_d", nv);
+    k_curvilinear_vars_h = Kokkos::create_mirror_view(k_curvilinear_vars_d);
+
+    Kokkos::parallel_for("Fill curvilinear mesh view",
+			 host_execution_policy(0, nv - 1) , // Switch to loop over dimensions separately?
+			 KOKKOS_LAMBDA (int i) {
+
+      k_curvilinear_vars_h(i, curv_mesh_var::h0) = 1.0;
+      k_curvilinear_vars_h(i, curv_mesh_var::h1) = 1.0;
+      k_curvilinear_vars_h(i, curv_mesh_var::h2) = 1.0;
+      k_curvilinear_vars_h(i, curv_mesh_var::jac) = 1.0;
+			 });
+
+    Kokkos::deep_copy(k_curvilinear_vars_d, k_curvilinear_vars_h);
+  }
+
+			 
+
+			 
+
+      
 } grid_t;
 
 // Given a voxel mesh coordinates (on 0:nx+1,0:ny+1,0:nz+1) and
