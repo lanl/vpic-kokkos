@@ -94,6 +94,7 @@ vpic_simulation::vpic_simulation() {
 
 vpic_simulation::~vpic_simulation() {
   UNREGISTER_OBJECT( this );
+  delete_collision_op_list( collision_op_list );  
   delete_emitter_list( emitter_list );
   delete_particle_bc_list( particle_bc_list );
   delete_species_list( species_list );
@@ -104,6 +105,8 @@ vpic_simulation::~vpic_simulation() {
   delete_grid( grid );
   delete_rng_pool( sync_entropy );
   delete_rng_pool( entropy );
+  printf("#Running On Kokkos execution space %s\nKokkos::Finalize().",
+            typeid (Kokkos::DefaultExecutionSpace).name ());
   Kokkos::finalize();
 }
 
@@ -171,6 +174,11 @@ void restore_kokkos(vpic_simulation& simulation)
     LIST_FOR_EACH( sp, simulation.species_list )
     {
         // TODO: we can bury this in the class
+	new(&sp->k_partition_d) k_particle_partition_t();
+	new(&sp->k_partition_h) k_particle_partition_t::HostMirror();
+        new(&sp->k_sortindex_d) k_particle_sortindex_t();
+        new(&sp->k_sortindex_h) k_particle_sortindex_t::HostMirror();	
+	
         new(&sp->k_p_d) k_particles_t();
         new(&sp->k_p_i_d) k_particles_i_t();
         new(&sp->k_pc_d) k_particle_copy_t::HostMirror();
@@ -267,4 +275,9 @@ void restore_kokkos(vpic_simulation& simulation)
     // also restores the neighbors
     grid->init_kokkos_grid(nfaces_per_voxel*nv);
 
+    // set kokkos_rng
+    auto reseed = (int)boot_timestamp + simulation.rank();
+    //printf("reseed=%d\n",reseed);
+    simulation.kokkos_rng = new kokkos_rng_pool_t(reseed);     
+    //simulation.seed_entropy( reseed );
 }
