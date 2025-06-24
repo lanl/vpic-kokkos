@@ -40,7 +40,8 @@ lemons(
   /**/  species_t  * spi,
   /**/  fluid_species_t  * spj,
   const double       cvar0,
-  const int          interval
+  const int          interval,
+  field_array_t       * field
 )
 {
 
@@ -55,6 +56,8 @@ lemons(
 
   le->spi         = spi;
   le->spj         = spj;
+  if(field != NULL) le->field       = field;
+ 
   le->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
   le->interval    = interval;
   le->apply_cop   = &apply_lemons_collision_op;
@@ -75,7 +78,7 @@ void transfer_mom_en_src(
   fluid_species_t  * spj
 )
 {
-    printf("#Transfer mom srcs to field\n");
+    // printf("#Transfer mom srcs to field\n");
     auto& k_f_d = k_field;
     auto& k_spj_fl = spj->k_fl_d;
     auto nv = k_field.extent(0);   
