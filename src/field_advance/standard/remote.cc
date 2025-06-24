@@ -479,9 +479,9 @@ template <> void begin_send<ZXY>(int i, int j, int k, int nx, int ny, int nz, fi
 
 void
 kokkos_begin_remote_ghost_tang_b( field_array_t      * RESTRICT fa,
-                                  const grid_t *              g,
-                                  field_buffers_t&            f_buffers) {
+                                  const grid_t *              g) {
     const int nx = g->nx, ny = g->ny, nz = g->nz;
+    field_buffers_t f_buffers = *(fa->fb);
 
     begin_recv_kokkos<-1,0,0>(g, f_buffers);
     begin_recv_kokkos<0,-1,0>(g, f_buffers);
@@ -770,9 +770,9 @@ k_end_remote_ghost_tang_b( field_array_t      * RESTRICT field,
 
 void
 kokkos_end_remote_ghost_tang_b( field_array_t      * RESTRICT field,
-                         const grid_t *              g ,
-                            field_buffers_t&        f_buffers) {
+                         const grid_t *              g) {
     const int nx = g->nx, ny = g->ny, nz = g->nz;
+    field_buffers_t f_buffers = *(field->fb);
 
     end_recv_kokkos<XYZ>(g, field, -1, 0, 0, nx, ny, nz, f_buffers.recv_buffer[BOUNDARY(-1, 0, 0)]);
     end_recv_kokkos<YZX>(g, field, 0, -1, 0, nx, ny, nz, f_buffers.recv_buffer[BOUNDARY(0, -1, 0)]);
@@ -997,8 +997,8 @@ template<> void begin_send_ghost_norm_e<ZXY>(field_array_t* fa, const grid_t* g,
 
 void
 kokkos_begin_remote_ghost_norm_e( field_array_t      * ALIGNED(128) field,
-                                  const grid_t *              g,
-                                  field_buffers_t&            f_buffers) {
+                                  const grid_t *              g) {
+    field_buffers_t f_buffers = *(field->fb);
     begin_recv_ghost_norm_e_kokkos<XYZ>(g, -1,  0,  0, f_buffers.recv_buffer[BOUNDARY(-1,  0,  0)]);
     begin_recv_ghost_norm_e_kokkos<YZX>(g,  0, -1,  0, f_buffers.recv_buffer[BOUNDARY( 0, -1,  0)]);
     begin_recv_ghost_norm_e_kokkos<ZXY>(g,  0,  0, -1, f_buffers.recv_buffer[BOUNDARY( 0,  0, -1)]);
@@ -1242,9 +1242,9 @@ template<typename T> void end_send_ghost_norm_e(const grid_t* g, const int i, co
 
 void
 kokkos_end_remote_ghost_norm_e( field_array_t      * ALIGNED(128) field,
-                         const grid_t *              g,
-                            field_buffers_t&            f_buffers) {
+                         const grid_t *              g) {
 
+    field_buffers_t f_buffers = *(field->fb);
     end_recv_ghost_norm_e_kokkos<XYZ>(field, g, -1,  0,  0, f_buffers.recv_buffer[BOUNDARY(-1, 0, 0)]);
     end_recv_ghost_norm_e_kokkos<YZX>(field, g,  0, -1,  0, f_buffers.recv_buffer[BOUNDARY( 0,-1, 0)]);
     end_recv_ghost_norm_e_kokkos<ZXY>(field, g,  0,  0, -1, f_buffers.recv_buffer[BOUNDARY( 0, 0,-1)]);
@@ -1317,7 +1317,7 @@ end_remote_ghost_norm_e( field_t      * ALIGNED(128) field,
 template<typename Face> 
 void 
 begin_recv_ghost_div_b(field_array* fa, const int i, const int j, const int k) {
-  field_buffers_t& fb = fa->fb;
+  field_buffers_t *fb = fa->fb;
   const int nx = fa->g->nx, ny = fa->g->ny, nz=fa->g->nz;
   int size;
   if constexpr (std::is_same<Face,XYZ>::value) {
@@ -1327,7 +1327,7 @@ begin_recv_ghost_div_b(field_array* fa, const int i, const int j, const int k) {
   } else if constexpr (std::is_same<Face,ZXY>::value) {
     size = (1 + nx*ny)*sizeof(float);
   }
-  Kokkos::DualView<float*> rbuf = fb.recv_buffer[BOUNDARY(i,j,k)];;
+  Kokkos::DualView<float*> rbuf = fb->recv_buffer[BOUNDARY(i,j,k)];;
   auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
   begin_recv_port_k(i,j,k,size,fa->g, reinterpret_cast<char*>(rbuf_h.data()));
 }
@@ -1354,7 +1354,7 @@ begin_send_ghost_div_b(field_array* fa, const int i, const int j, const int k) {
 template<> 
 void 
 begin_send_ghost_div_b<XYZ>(field_array* fa, const int i, const int j, const int k) {
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
 
@@ -1377,7 +1377,7 @@ template<>
 void 
 begin_send_ghost_div_b<YZX>(field_array* fa, const int i, const int j, const int k) {
     auto fb = fa->fb;
-    Kokkos::DualView<float*> sbuf = fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
 
@@ -1400,7 +1400,7 @@ template<>
 void 
 begin_send_ghost_div_b<ZXY>(field_array* fa, const int i, const int j, const int k) {
     auto fb = fa->fb;
-    Kokkos::DualView<float*> sbuf = fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
 
@@ -1456,7 +1456,7 @@ begin_remote_ghost_div_b( field_t      * ALIGNED(128) field,
 # undef BEGIN_SEND
 }
 
-void k_begin_remote_ghost_div_b(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+void k_begin_remote_ghost_div_b(field_array_t* ALIGNED(128) fa, const grid_t* g) {
 // Start receiving
     begin_recv_ghost_div_b<XYZ>(fa, -1,  0,  0);
     begin_recv_ghost_div_b<YZX>(fa,  0, -1,  0);
@@ -1481,10 +1481,10 @@ void
 end_recv_ghost_div_b(field_array_t* fa, const int i, const int j, const int k) {
   int face;
   const grid_t* g = fa->g;
-  field_buffers_t& fb = fa->fb;
+  field_buffers_t *fb = fa->fb;
   float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));
   if(p) {
-    Kokkos::DualView<float*> rbuf = fb.recv_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> rbuf = fb->recv_buffer[BOUNDARY(i,j,k)];
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
     const k_field_t& k_field = fa->k_f_d;
@@ -1667,7 +1667,7 @@ get_face_size(const int nx, const int ny, const int nz) {
 inline 
 Kokkos::DualView<float*>& 
 get_recv_dualview(field_array *fa, const int i, const int j, const int k) {
-  return fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+  return fa->fb->recv_buffer[BOUNDARY(i,j,k)];
 }
 
 /**
@@ -1680,7 +1680,7 @@ get_recv_dualview(field_array *fa, const int i, const int j, const int k) {
 inline 
 Kokkos::DualView<float*>& 
 get_send_dualview(field_array *fa, const int i, const int j, const int k) {
-  return fa->fb.send_buffer[BOUNDARY(i,j,k)];
+  return fa->fb->send_buffer[BOUNDARY(i,j,k)];
 }
 
 /**
@@ -1729,7 +1729,7 @@ sync_comm_buffer(Kokkos::DualView<float*>& view) {
 #define COPY_FACE(x_,y_,z_,fields,i,j,k)                                       \
   const int x_##src = (i+j+k) < 0 ? 1 : n##x_;                                 \
   const int x_##dst = (i+j+k) < 0 ? n##x_+1 : 0;                               \
-  Kokkos::MDRangePolicy<Kokkos::Rank<3>> face_pol(fa->ghost_comm_space,{1,1,0},\
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> face_pol({1,1,0},\
                                                      {n##y_+1,n##z_+1,nvar});  \
   Kokkos::parallel_for("copy_face_2_ghost<" #x_ #y_ #z_ ">", face_pol,         \
     KOKKOS_LAMBDA(const int y_##src, const int z_##src, const int v) {         \
@@ -2069,7 +2069,7 @@ end_halo_exchange(field_array* fa, const int beg_var, const int end_var) {
   end_send_face<0,0,1>(fa);
 
   // Ensure all unpacking and copy kernels are complete
-  fa->ghost_comm_space.fence();
+  //fa->ghost_comm_space.fence();
   Kokkos::fence();
 }
 
@@ -2098,11 +2098,11 @@ end_halo_exchange(field_array* fa, const int beg_var, const int end_var) {
 template<typename Face> 
 void 
 begin_recv_ghost_hyb_jf(field_array* fa, const int i, const int j, const int k) {
-  field_buffers_t& fb = fa->fb;
+  field_buffers_t *fb = fa->fb;
   int src = fa->g->bc[BOUNDARY(-i,-j,-k)]; /**< Source rank */
   // Only recv cells if dst is a valid neighbor and not itself
   if( 0 <= src && src < world_size ) {
-    Kokkos::DualView<float*> rbuf = fb.recv_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> rbuf = fb->recv_buffer[BOUNDARY(i,j,k)];
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
 
@@ -2151,11 +2151,11 @@ begin_recv_ghost_hyb_jf(field_array* fa, const int i, const int j, const int k) 
 template<typename Face> 
 void 
 begin_send_ghost_hyb_jf(field_array* fa, const int i, const int j, const int k) {
-  field_buffers_t& fb = fa->fb;
+  field_buffers_t *fb = fa->fb;
   int dst = fa->g->bc[BOUNDARY(i,j,k)]; /**< Destination rank */
   // Only send cells if dst is a valid neighbor and not itself
   if( 0 <= dst && dst < world_size ) {
-    Kokkos::DualView<float*> sbuf = fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
 
@@ -2213,7 +2213,7 @@ k_begin_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa) {
   const grid_t* g = fa->g;						                                            \
   float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));                  \
   if(p) {								                                                          \
-    field_buffers& fb = fa->fb;                                                   \
+    field_buffers fb = *(fa->fb);                                                 \
     Kokkos::DualView<float*> rbuf = fb.recv_buffer[BOUNDARY(i,j,k)];             \
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();                     \
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();                 \
@@ -2359,7 +2359,7 @@ begin_recv_ghost_hyb_e(field_array* fa,
   int src = fa->g->bc[BOUNDARY(-i,-j,-k)]; /**< Source rank */
   // Only recv cells if neighors are valid and not itself
   if( 0 <= src && src < world_size ) {
-    Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
 
@@ -2413,7 +2413,7 @@ begin_send_ghost_hyb_e(field_array* fa,
   int dst = fa->g->bc[BOUNDARY(i,j,k)]; /**< Destination rank */
   // Only send cells if dst is a valid neighbor and not itself
   if( 0 <= dst && dst < world_size ) {
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
 
@@ -2471,8 +2471,8 @@ k_begin_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa) {
   const grid_t* g = fa->g;						                            \
   float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));  \
   if(p) {                                                         \
-    field_buffers& fb = fa->fb;                                                   \
-    Kokkos::DualView<float*> rbuf = fb.recv_buffer[BOUNDARY(i,j,k)];             \
+    field_buffers *fb = fa->fb;                                                   \
+    Kokkos::DualView<float*> rbuf = fb->recv_buffer[BOUNDARY(i,j,k)];             \
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();                     \
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();                 \
                                                                                   \
@@ -2617,7 +2617,7 @@ begin_recv_ghost_hyb_curl_lpl_b(field_array* fa,
   int src = fa->g->bc[BOUNDARY(-i,-j,-k)]; /**< Source rank */
   // Only recv cells if src is a valid neighbor and not itself
   if( 0 <= src && src < world_size ) {
-    Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
 
@@ -2672,7 +2672,7 @@ begin_send_ghost_hyb_curl_lpl_b(field_array* fa,
   int dst = fa->g->bc[BOUNDARY(i,j,k)]; /**< Destination rank */
   // Only recv cells if dst is a valid neighbor and not itself
   if( 0 <= dst && dst < world_size ) {
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
 
@@ -2730,7 +2730,7 @@ k_begin_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa) {
   const grid_t* g = fa->g;						\
   float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));	\
   if(p) {								\
-    Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];         \
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];         \
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();                     \
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();                 \
                                                                                   \
@@ -2871,7 +2871,7 @@ begin_recv_ghost_hyb_b(field_array* fa,
                        const int i, const int j, const int k) {
   int src = fa->g->bc[BOUNDARY(-i,-j,-k)];
   if( 0 <= src && src < world_size ) {
-    Kokkos::DualView<float*> sbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
     auto rbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto rbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
     if constexpr (std::is_same<Face,XYZ>::value) {
@@ -2921,7 +2921,7 @@ begin_send_ghost_hyb_b(field_array* fa,
                        const int i, const int j, const int k) {
   int dst = fa->g->bc[BOUNDARY(i,j,k)];
   if( 0 <= dst && dst < world_size ) {
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
     if constexpr (std::is_same<Face,XYZ>::value) {
@@ -2979,7 +2979,7 @@ k_begin_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa) {
   float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));	\
   Kokkos::Profiling::popRegion(); \
   if(p) {								\
-    Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];         \
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];         \
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();                     \
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();                 \
     const int nx = g->nx, ny = g->ny, nz = g->nz;			\
@@ -3119,7 +3119,7 @@ void
 begin_recv_ghost_hyb_t(field_array* fa, const int i, const int j, const int k) {
   int src = fa->g->bc[BOUNDARY(-i,-j,-k)];
   if( 0 <= src && src < world_size ) {
-    Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
     if constexpr (std::is_same<Face,XYZ>::value) {
@@ -3170,7 +3170,7 @@ void
 begin_send_ghost_hyb_t(field_array* fa, const int i, const int j, const int k) {
   int dst = fa->g->bc[BOUNDARY(i,j,k)];
   if( 0 <= dst && dst < world_size ) {
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
     if constexpr (std::is_same<Face,XYZ>::value) {
@@ -3258,7 +3258,7 @@ void
 end_recv_ghost_hyb_t(field_array_t* fa, const int i, const int j, const int k) {
   int src = fa->g->bc[BOUNDARY(-i,-j,-k)];
   if( 0 <= src && src < world_size ) {
-    Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
     if constexpr (std::is_same<Face,XYZ>::value) {
@@ -3289,7 +3289,7 @@ void
 end_send_ghost_hyb_t(field_array_t* fa, const int i, const int j, const int k) {
   int dst = fa->g->bc[BOUNDARY(i,j,k)];
   if( 0 <= dst && dst < world_size ) {
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
     if constexpr (std::is_same<Face,XYZ>::value) {
@@ -3369,7 +3369,7 @@ void
 begin_recv_ghost_hyb_o(field_array* fa, const int i, const int j, const int k) {
   int src = fa->g->bc[BOUNDARY(-i,-j,-k)];
   if( 0 <= src && src < world_size ) {
-    Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
     if constexpr (std::is_same<Face,XYZ>::value) {
@@ -3419,7 +3419,7 @@ void
 begin_send_ghost_hyb_o(field_array* fa, const int i, const int j, const int k) {
   int dst = fa->g->bc[BOUNDARY(i,j,k)];
   if( 0 <= dst && dst < world_size ) {
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
     if constexpr (std::is_same<Face,XYZ>::value) {
@@ -3508,7 +3508,7 @@ void
 end_recv_ghost_hyb_o(field_array_t* fa, const int i, const int j, const int k) {
   int src = fa->g->bc[BOUNDARY(-i,-j,-k)];
   if( 0 <= src && src < world_size ) {
-    Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
     if constexpr (std::is_same<Face,XYZ>::value) {
@@ -3539,7 +3539,7 @@ void
 end_send_ghost_hyb_o(field_array_t* fa, const int i, const int j, const int k) {
   int dst = fa->g->bc[BOUNDARY(i,j,k)];
   if( 0 <= dst && dst < world_size ) {
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
     if constexpr (std::is_same<Face,XYZ>::value) {
@@ -3731,7 +3731,7 @@ void
 begin_recv_tang_e_norm_b(field_array_t* fa, const int i, const int j, const int k) {
   const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;
   int size;
-  Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+  Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
   auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
   auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
   if constexpr(std::is_same<Face,XYZ>::value) {
@@ -3772,7 +3772,7 @@ begin_send_tang_e_norm_b<XYZ>(field_array_t* fa, const int i, const int j, const
     const int size = (2*ny*(nz+1) + 2*nz*(ny+1) + ny*nz)*sizeof(float);
     const int face = (i+j+k) < 0 ? 1 : nx + 1;
     const int x = face;
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
     k_field_t& k_field = fa->k_f_d;
@@ -3800,7 +3800,7 @@ begin_send_tang_e_norm_b<YZX>(field_array_t* fa, const int i, const int j, const
     const int size = (2*nz*(nx+1) + 2*nx*(nz+1) + nz*nx)*sizeof(float);
     const int face = (i+j+k) < 0 ? 1 : ny + 1;
     const int y = face;
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
     k_field_t& k_field = fa->k_f_d;
@@ -3829,7 +3829,7 @@ begin_send_tang_e_norm_b<ZXY>(field_array_t* fa, const int i, const int j, const
     const int face = (i+j+k) < 0 ? 1 : nz + 1;
     const int z = face;
     k_field_t& k_field = fa->k_f_d;
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> z_face({1, 1}, {ny+1, nx+1});
@@ -3864,7 +3864,7 @@ end_recv_tang_e_norm_b<XYZ>(field_array_t* fa, const int i, const int j, const i
         const int face = (i+j+k)<0 ? nx+1 : 1;
         const int x = face;
         k_field_t& k_field = fa->k_f_d;
-        Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+        Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
         auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
         auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
         Kokkos::deep_copy(rbuf_d, rbuf_h);
@@ -3913,7 +3913,7 @@ end_recv_tang_e_norm_b<YZX>(field_array_t* fa, const int i, const int j, const i
         const int face = (i+j+k)<0 ? ny+1 : 1;
         const int y = face;
         k_field_t& k_field = fa->k_f_d;
-        Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+        Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
         auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
         auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
         Kokkos::deep_copy(rbuf_d, rbuf_h);
@@ -3962,7 +3962,7 @@ end_recv_tang_e_norm_b<ZXY>(field_array_t* fa, const int i, const int j, const i
         const int face = (i+j+k)<0 ? nz+1 : 1;
         const int z = face;
         k_field_t& k_field = fa->k_f_d;
-        Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+        Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
         auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
         auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
         Kokkos::deep_copy(rbuf_d, rbuf_h);
@@ -4055,7 +4055,7 @@ void
 begin_recv_jf(const grid_t* g, field_array_t *fa, int i, int j, int k) {
   const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;
   int size;
-  Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+  Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
   auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
   auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
   if constexpr(std::is_same<Face,XYZ>::value) {
@@ -4109,7 +4109,7 @@ begin_send_jf<XYZ>(const grid_t* g, field_array_t* fa, int i, int j, int k) {
     const int nx = g->nx, ny = g->ny, nz = g->nz;
     const int size = ( 1 + ny*(nz+1) + nz*(ny+1) )*sizeof(float);
     k_field_t& k_field = fa->k_f_d;
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
     const int face = (i+j+k)<0 ? 1 : nx+1;
@@ -4131,7 +4131,7 @@ template<> void begin_send_jf<YZX>(const grid_t* g, field_array_t* fa, int i, in
     const int nx = g->nx, ny = g->ny, nz = g->nz;
     const int size = ( 1 + nz*(nx+1) + nx*(nz+1) )*sizeof(float);
     k_field_t& k_field = fa->k_f_d;
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
     const int face = (i+j+k)<0 ? 1 : ny+1;
@@ -4155,7 +4155,7 @@ begin_send_jf<ZXY>(const grid_t* g, field_array_t* fa, int i, int j, int k) {
     const int nx = g->nx, ny = g->ny, nz = g->nz;
     const int size = ( 1 + nx*(ny+1) + ny*(nx+1) )*sizeof(float);
     k_field_t& k_field = fa->k_f_d;
-    Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
     auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
     auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
     const int face = (i+j+k)<0 ? 1 : nz+1;
@@ -4185,7 +4185,7 @@ end_recv_jf<XYZ>(const grid_t* g, field_array_t* fa, int i, int j, int k) {
     k_field_t& k_field = fa->k_f_d;
     if(p) {
         const int nx = g->nx, ny = g->ny, nz = g->nz;
-        Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+        Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
         auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
         auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
         const int face = (i+j+k)<0 ? nx+1 : 1;
@@ -4218,7 +4218,7 @@ end_recv_jf<YZX>(const grid_t* g, field_array_t* fa, int i, int j, int k) {
     k_field_t& k_field = fa->k_f_d;
     if(p) {
         const int nx = g->nx, ny = g->ny, nz = g->nz;
-        Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+        Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
         auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
         auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
         const int face = (i+j+k)<0 ? ny+1 : 1;
@@ -4251,7 +4251,7 @@ end_recv_jf<ZXY>(const grid_t* g, field_array_t* fa, int i, int j, int k) {
     k_field_t& k_field = fa->k_f_d;
     if(p) {
         const int nx = g->nx, ny = g->ny, nz = g->nz;
-        Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+        Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
         auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
         auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
         const int face = (i+j+k)<0 ? nz+1 : 1;
@@ -4415,7 +4415,7 @@ void
 begin_recv_rho(field_array* fa, int i, int j, int k) {
   const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;
   int size;
-  Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+  Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
   auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
   auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
   if constexpr(std::is_same<Face,XYZ>::value) {
@@ -4451,7 +4451,7 @@ begin_send_rho<XYZ>(field_array_t* fa, int i, int j, int k) {
   const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;
   const int size = ( 1 + 2*(ny+1)*(nz+1) )*sizeof(float);
   k_field_t& k_field = fa->k_f_d;
-  Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+  Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
   auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
   auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
   const int face = (i+j+k)<0 ? 1 : nx+1;
@@ -4474,7 +4474,7 @@ begin_send_rho<YZX>(field_array_t* fa, int i, int j, int k) {
   int size = ( 1 + 2*(nz+1)*(nx+1) )*sizeof(float);
   k_field_t& k_field = fa->k_f_d;
   int face = (i+j+k)<0 ? 1 : ny+1;
-  Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+  Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
   auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
   auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
   Kokkos::MDRangePolicy<Kokkos::Rank<2>> y_node({1, 1}, {nz+2, nx+2});
@@ -4495,7 +4495,7 @@ begin_send_rho<ZXY>(field_array_t* fa, int i, int j, int k) {
   const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;
   int size = ( 1 + 2*(nx+1)*(ny+1) )*sizeof(float);
   k_field_t& k_field = fa->k_f_d;
-  Kokkos::DualView<float*> sbuf = fa->fb.send_buffer[BOUNDARY(i,j,k)];
+  Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
   auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
   auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
   int face = (i+j+k)<0 ? 1 : nz+1;
@@ -4525,7 +4525,7 @@ end_recv_rho<XYZ>(field_array_t* fa, int i, int j, int k) {
   float* p = reinterpret_cast<float *>(end_recv_port_k(i,j,k,fa->g));
   k_field_t& k_field = fa->k_f_d;
   if( p ) {
-    Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
     hrw  = rbuf_h(0);
@@ -4556,7 +4556,7 @@ end_recv_rho<YZX>(field_array_t* fa, int i, int j, int k) {
   float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,fa->g));
   if(p) {
     k_field_t& k_field = fa->k_f_d;
-    Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
     hrw  = rbuf_h(0);
@@ -4587,7 +4587,7 @@ end_recv_rho<ZXY>(field_array_t* fa, int i, int j, int k) {
   float* p = reinterpret_cast<float *>(end_recv_port_k(i,j,k,fa->g));
   k_field_t& k_field = fa->k_f_d;
   if( p ) {
-    Kokkos::DualView<float*> rbuf = fa->fb.recv_buffer[BOUNDARY(i,j,k)];
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
     hrw  = rbuf_h(0);
