@@ -385,6 +385,18 @@ if (VPIC_ENABLE_HALO_EXCHANGE)
   message("--     VPIC: Enabled Halo exchange path")
 endif(VPIC_ENABLE_HALO_EXCHANGE)
 
+if (HYB_USE_SEPARATE_PE)
+   add_definitions(-DHYB_USE_SEPARATE_PE)
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_SEPARATE_PE")
+   message("--     HYB: Using separate electron energy equation.")
+endif(HYB_USE_SEPARATE_PE)
+
+if (HYB_USE_STATIC_E)
+   add_definitions(-DHYB_USE_STATIC_E)
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_SEPARATE_PE")
+   message("--     HYB: Using electrostatic field solve.")
+endif(HYB_USE_STATIC_E)
+
 set(USE_V4)
 if(USE_V4_ALTIVEC)
   add_definitions(-DUSE_V4_ALTIVEC)

@@ -54,6 +54,8 @@ lemons(
   MALLOC( le->name, strlen(name) +1 );
   strncpy( le->name, name, strlen(name)+1);
 
+  spi->last_indexed = -1; //to ensure sort in collisions
+  
   le->spi         = spi;
   le->spj         = spj;
   if(field != NULL) le->field       = field;

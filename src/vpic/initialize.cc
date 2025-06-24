@@ -54,6 +54,11 @@ vpic_simulation::initialize( int argc,
 
   //if( rank()==0 ) MESSAGE(( "Initializing radiation damping fields" ));
   //TIC FAK->compute_curl_b( field_array ); TOC( compute_curl_b, 1 );
+  
+    // We want to call this once the neighbor is done
+  auto g = species_list->g;
+  auto nfaces_per_voxel = 6;
+  g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
   if( rank()==0 ) MESSAGE(( "Initializing bound charge density" ));
   TIC FAK->clear_rhof( field_array ); TOC( clear_jf, 1 );
@@ -64,7 +69,7 @@ vpic_simulation::initialize( int argc,
   int nsmcopy = g->nsm;
   g->nsm=0;
   FAK->advance_b(field_array,0);
-  g->nsm=nsmcopy
+  g->nsm=nsmcopy;
 #else
   FAK->advance_b(field_array,0);
 #endif
@@ -78,10 +83,10 @@ vpic_simulation::initialize( int argc,
 
 #ifdef HYB_USE_SEPARATE_PE
   FAK->hyb_epress(field_array,-1);
-  int nsmcopy = g->nsm;
+  nsmcopy = g->nsm;
   g->nsm=0;
   FAK->advance_b(field_array,0);
-  g->nsm=nsmcopy
+  g->nsm=nsmcopy;
 #else
   FAK->advance_b(field_array,0);
 #endif
@@ -99,10 +104,7 @@ vpic_simulation::initialize( int argc,
   //TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
   //if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
 
-  // We want to call this once the neighbor is done
-  auto g = species_list->g;
-  auto nfaces_per_voxel = 6;
-  g->init_kokkos_grid(nfaces_per_voxel*g->nv);
+
 
   KOKKOS_TIC();
   LIST_FOR_EACH( sp, species_list ) {
@@ -143,10 +145,10 @@ vpic_simulation::initialize( int argc,
 
 #ifdef HYB_USE_SEPARATE_PE
   FAK->hyb_epress(field_array,-1);
-  int nsmcopy = g->nsm;
+  nsmcopy = g->nsm;
   g->nsm=0;
   FAK->advance_b(field_array,0);
-  g->nsm=nsmcopy
+  g->nsm=nsmcopy;
 #else
   FAK->advance_b(field_array,0);
 #endif
@@ -160,10 +162,10 @@ vpic_simulation::initialize( int argc,
 
 #ifdef HYB_USE_SEPARATE_PE
   FAK->hyb_epress(field_array,-1);
-  int nsmcopy = g->nsm;
+  nsmcopy = g->nsm;
   g->nsm=0;
   FAK->advance_b(field_array,0);
-  g->nsm=nsmcopy
+  g->nsm=nsmcopy;
 #else
   FAK->advance_b(field_array,0);
 #endif
