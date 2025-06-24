@@ -33,6 +33,8 @@ vpic_simulation::initialize( int argc,
 
   dump_strategy = new_dump_strategy(dump_strategy_id, this);
 
+  grid->init_curvilinear_grid();
+  
   // Do some consistency checks on user initialized fields
 
   //if( rank()==0 ) MESSAGE(( "Checking interdomain synchronization" ));
@@ -82,7 +84,7 @@ vpic_simulation::initialize( int argc,
   auto nfaces_per_voxel = 6;
   g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
-  g->init_curvilinear_grid();
+  //  g->init_curvilinear_grid(); // Needs to be called before advance_b
   
   KOKKOS_TIC();
   LIST_FOR_EACH( sp, species_list ) {
