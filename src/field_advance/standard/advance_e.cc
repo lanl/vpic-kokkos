@@ -652,6 +652,7 @@ void advance_e_kokkos(field_array_t* RESTRICT fa, float frac) {
     const grid_t                 *              g = args->g;
     const int nx = g->nx, ny = g->ny, nz = g->nz;
 
+    
     const float damp = args->p->damp;
     const float px   = (nx>1) ? (1+damp)*g->cvac*g->dt*g->rdx : 0;
     const float py   = (ny>1) ? (1+damp)*g->cvac*g->dt*g->rdy : 0;

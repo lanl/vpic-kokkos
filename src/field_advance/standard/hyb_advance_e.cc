@@ -10,6 +10,7 @@ typedef struct pipeline_args {
 } pipeline_args_t;
 
 #define F(ind,v) k_field(f##ind##_index, field_var::v)
+#define CM(ind,cv) k_curv(f##ind##_index, curv_mesh_var::cv)
 
 #define INIT_STENCIL()							\
   size_t f0_index  = VOXEL(x,   y,   z,    nx,ny,nz);			\
@@ -33,11 +34,11 @@ typedef struct pipeline_args {
     invrho * (F(0,cb##z_) + F(0,cb##z_##0)) * ( p##z_*( F(z_,cb##x_) - F(m##z_,cb##x_) ) - p##x_*( F(x_,cb##z_) - F(m##x_,cb##z_)) ) \
   + invrho * (F(0,cb##y_) + F(0,cb##y_##0))  * ( p##y_*( F(y_,cb##x_) - F(m##y_,cb##x_) ) - p##x_*( F(x_,cb##y_) - F(m##x_,cb##y_)) ) \
        - u##y_ * (F(0,cb##z_)+F(0,cb##z_##0))  +   u##z_ * (F(0,cb##y_)+F(0,cb##y_##0)) \
-      - invrho * ( p##x_*( F(x_,pe) - F(m##x_,pe)) )			\
+    - invrho *(1.0/CM(0,h##x_))*( p##x_*( F(x_,pe) - F(m##x_,pe)) )	\
     + eta*F(0,tcay)*( p##y_*( F(y_,cb##z_) - F(m##y_,cb##z_) ) - p##z_*( F(z_,cb##y_) - F(m##z_,cb##y_) ) );\
   F(0,e##x_) *= F(0,tcaz);
   
-  
+//* (1.0/CM(0,h##x_))
   #define FIXEDGES()\
   Kokkos::parallel_for("advance_e", x_pos, KOKKOS_LAMBDA(const int z, const int y, const int x) {\
       INIT_STENCIL();\
@@ -89,9 +90,11 @@ hyb_advance_e( field_array_t * RESTRICT fa,
   args->g = fa->g;
   k_field_t k_field = fa->k_f_d;
   const material_coefficient_t * ALIGNED(128) m = args->p->mc;
+
   const grid_t                 *              g = args->g;
   const size_t nx = g->nx, ny = g->ny, nz = g->nz;
-
+  k_curvilinear_vars_t k_curv = g->k_curvilinear_vars_d;
+  
   const float px = (nx>1) ? 0.5*g->rdx : 0;
   const float py = (ny>1) ? 0.5*g->rdy : 0;
   const float pz = (nz>1) ? 0.5*g->rdz : 0;
