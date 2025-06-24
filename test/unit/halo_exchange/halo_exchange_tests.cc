@@ -1,18 +1,14 @@
-//#define CATCH_CONFIG_MAIN  // This tells Catch to provide a main()
 #define CATCH_CONFIG_RUNNER // We will provide a custom main
 #include "catch.hpp"
-
 #include "mpi.h"
-#include <algorithm>
-#include <iterator>
-#include <random>
-#include <vector>
 #include <string>
-
-#include "src/vpic/vpic.h"
-#include "src/field_advance/field_advance.h"
+#include <cstdlib>
+#include <chrono>
 #define IN_sfa
 #include "src/field_advance/standard/sfa_private.h"
+#include "src/vpic/vpic.h"
+
+int tx, ty, tz;
 
 void verify_faces(const field_array_t* fa, int field_var) {
   int i, j, k;
@@ -98,10 +94,6 @@ TEST_CASE( "Verify halo exchange functions operate correctly", "[HaloExchange]" 
   double Ny = 12;
   double Nz = 12;
 
-  double tx = 3;
-  double ty = 3;
-  double tz = 3;
-
   int size = -1;
   int rank = -1;
   MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -134,7 +126,8 @@ TEST_CASE( "Verify halo exchange functions operate correctly", "[HaloExchange]" 
   // it by its rank. This allows easy verification since each process knows
   // its neighbors rank along each face.
   using HostExecSpace = Kokkos::DefaultHostExecutionSpace;
-  Kokkos::MDRangePolicy<HostExecSpace, Kokkos::Rank<4>> setup_policy({1,1,1,0}, {nx+1,ny+1,nz+1,FIELD_VAR_COUNT});
+  using FieldMDRangePolicy = Kokkos::MDRangePolicy<HostExecSpace, Kokkos::Rank<4>>;
+  FieldMDRangePolicy setup_policy({1,1,1,0},  {nx+1,ny+1,nz+1,FIELD_VAR_COUNT});
   Kokkos::parallel_for("Setup fields", setup_policy,
   KOKKOS_LAMBDA(const int i, const int j, const int k, const int var) {
     int cell = VOXEL(i,j,k,nx,ny,nz);
@@ -142,11 +135,12 @@ TEST_CASE( "Verify halo exchange functions operate correctly", "[HaloExchange]" 
   });
   Kokkos::fence();
   Kokkos::deep_copy(fa->k_f_d, fa->k_f_h);
+  const auto postfill = std::chrono::high_resolution_clock::now();
 
   // Test different halo exchange functions
   SECTION( "Exchange E fields" ) {
-    k_begin_remote_ghost_hyb_e(fa, g, fa->fb);
-    k_end_remote_ghost_hyb_e(fa, g, fa->fb);
+    k_begin_remote_ghost_hyb_e(fa);
+    k_end_remote_ghost_hyb_e(fa);
 
     MPI_Barrier(MPI_COMM_WORLD);
     Kokkos::deep_copy(fa->k_f_h, fa->k_f_d);
@@ -157,8 +151,8 @@ TEST_CASE( "Verify halo exchange functions operate correctly", "[HaloExchange]" 
   }
 
   SECTION( "Exchange B fields" ) {
-    k_begin_remote_ghost_hyb_b(fa, g, fa->fb);
-    k_end_remote_ghost_hyb_b(fa, g, fa->fb);
+    k_begin_remote_ghost_hyb_b(fa);
+    k_end_remote_ghost_hyb_b(fa);
 
     MPI_Barrier(MPI_COMM_WORLD);
     Kokkos::deep_copy(fa->k_f_h, fa->k_f_d);
@@ -169,8 +163,8 @@ TEST_CASE( "Verify halo exchange functions operate correctly", "[HaloExchange]" 
   }
 
   SECTION( "Exchange JF + RhoF" ) {
-    k_begin_remote_ghost_hyb_jf(fa, g, fa->fb);
-    k_end_remote_ghost_hyb_jf(fa, g, fa->fb);
+    k_begin_remote_ghost_hyb_jf(fa);
+    k_end_remote_ghost_hyb_jf(fa);
 
     MPI_Barrier(MPI_COMM_WORLD);
     Kokkos::deep_copy(fa->k_f_h, fa->k_f_d);
@@ -182,8 +176,8 @@ TEST_CASE( "Verify halo exchange functions operate correctly", "[HaloExchange]" 
   }
 
   SECTION( "Exchange Pressure" ) {
-    k_begin_remote_ghost_hyb_curl_lpl_b(fa, g, fa->fb);
-    k_end_remote_ghost_hyb_curl_lpl_b(fa, g, fa->fb);
+    k_begin_remote_ghost_hyb_curl_lpl_b(fa);
+    k_end_remote_ghost_hyb_curl_lpl_b(fa);
 
     MPI_Barrier(MPI_COMM_WORLD);
     Kokkos::deep_copy(fa->k_f_h, fa->k_f_d);
@@ -194,8 +188,8 @@ TEST_CASE( "Verify halo exchange functions operate correctly", "[HaloExchange]" 
   }
 
   SECTION( "Exchange Electron Temperature" ) {
-    k_begin_remote_ghost_hyb_t(fa, g, fa->fb);
-    k_end_remote_ghost_hyb_t(fa, g, fa->fb);
+    k_begin_remote_ghost_hyb_t(fa);
+    k_end_remote_ghost_hyb_t(fa);
 
     MPI_Barrier(MPI_COMM_WORLD);
     Kokkos::deep_copy(fa->k_f_h, fa->k_f_d);
@@ -206,8 +200,8 @@ TEST_CASE( "Verify halo exchange functions operate correctly", "[HaloExchange]" 
   }
 
   SECTION( "Exchange B field smoothing" ) {
-    k_begin_remote_ghost_hyb_o(fa, g, fa->fb);
-    k_end_remote_ghost_hyb_o(fa, g, fa->fb);
+    k_begin_remote_ghost_hyb_o(fa);
+    k_end_remote_ghost_hyb_o(fa);
 
     MPI_Barrier(MPI_COMM_WORLD);
     Kokkos::deep_copy(fa->k_f_h, fa->k_f_d);
@@ -221,11 +215,16 @@ TEST_CASE( "Verify halo exchange functions operate correctly", "[HaloExchange]" 
 }
 
 int main(int argc, char** argv) {
-  int ret = 0;
   boot_services( &argc, &argv );
 
+  // Put process topology in global space
+  tx = std::atoi(argv[1]);
+  ty = std::atoi(argv[2]);
+  tz = std::atoi(argv[3]);
+
+  // Run tests
   Catch::Session session;
-  ret = session.run();
+  int ret = session.run();
 
   halt_services();
   return ret;

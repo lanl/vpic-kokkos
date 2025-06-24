@@ -2186,9 +2186,7 @@ begin_send_ghost_hyb_jf(field_array* fa, const int i, const int j, const int k) 
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa, 
-                            const grid_t* g, 
-                            field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::jfx, field_var::rhof+1);
 #else
@@ -2309,9 +2307,7 @@ end_send_ghost_hyb_jf(field_array_t* fa, const int i, const int j, const int k) 
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_end_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa, 
-                          const grid_t* g, 
-                          field_buffers_t& fb) {
+k_end_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   end_halo_exchange(fa, field_var::jfx, field_var::rhof+1);
 #else
@@ -2448,9 +2444,7 @@ begin_send_ghost_hyb_e(field_array* fa,
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa, 
-                           const grid_t* g, 
-                           field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::ex, field_var::ez+1);
 #else
@@ -2570,9 +2564,7 @@ end_send_ghost_hyb_e(field_array_t* fa, const int i, const int j, const int k) {
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_end_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa, 
-                         const grid_t* g, 
-                         field_buffers_t& fb) {
+k_end_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   // End receiving and sending
   end_halo_exchange(fa, field_var::ex, field_var::ez+1);
@@ -2711,9 +2703,7 @@ begin_send_ghost_hyb_curl_lpl_b(field_array* fa,
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa, 
-                                    const grid_t* g, 
-                                    field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::pex, field_var::pez+1);
 #else
@@ -2831,9 +2821,7 @@ end_send_ghost_hyb_curl_lpl_b(field_array_t* fa,
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_end_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa, 
-                                  const grid_t* g, 
-                                  field_buffers_t& fb) {
+k_end_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   end_halo_exchange(fa, field_var::pex, field_var::pez+1);
 #else
@@ -2962,9 +2950,7 @@ begin_send_ghost_hyb_b(field_array* fa,
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa, 
-                           const grid_t* g, 
-                           field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::cbx, field_var::div_b_err);
 #else
@@ -3080,9 +3066,7 @@ end_send_ghost_hyb_b(field_array_t* fa, const int i, const int j, const int k) {
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_end_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa, 
-                         const grid_t* g, 
-                         field_buffers_t& fb) {
+k_end_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa) {
     
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   // End receiving
@@ -3215,9 +3199,7 @@ begin_send_ghost_hyb_t(field_array* fa, const int i, const int j, const int k) {
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa, 
-                           const grid_t* g, 
-                           field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::tx, field_var::tz+1);
 #else
@@ -3333,9 +3315,7 @@ end_send_ghost_hyb_t(field_array_t* fa, const int i, const int j, const int k) {
  * @param g Pointer to grid structure 
  * @param fb Reference to field buffers used for MPI communication
  */
-void k_end_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa, 
-                              const grid_t* g, 
-                              field_buffers_t& fb) {
+void k_end_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   end_halo_exchange(fa, field_var::tx, field_var::tz+1);
 #else
@@ -3468,9 +3448,7 @@ begin_send_ghost_hyb_o(field_array* fa, const int i, const int j, const int k) {
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa, 
-                           const grid_t* g, 
-                           field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::ox, field_var::oz+1);
 #else
@@ -3588,9 +3566,7 @@ end_send_ghost_hyb_o(field_array_t* fa, const int i, const int j, const int k) {
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_end_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa, 
-                         const grid_t* g, 
-                         field_buffers_t& fb) {
+k_end_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   end_halo_exchange(fa, field_var::ox, field_var::oz+1);
 #else

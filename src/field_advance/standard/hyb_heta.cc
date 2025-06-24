@@ -87,8 +87,8 @@ hyb_heta( field_array_t * RESTRICT fa ) {
     });
     
   // Operations on the ghost cells
-  k_begin_remote_ghost_hyb_curl_lpl_b(fa, fa->g, fa->fb); // Read: pex, pey, pez
-  k_end_remote_ghost_hyb_curl_lpl_b(fa, fa->g, fa->fb); // Write: pex, pey, pez
+  k_begin_remote_ghost_hyb_curl_lpl_b(fa); // Read: pex, pey, pez
+  k_end_remote_ghost_hyb_curl_lpl_b(fa); // Write: pex, pey, pez
   k_hyb_local_ghost_lapl_b(fa, fa->g); // R/W: pex, pey, pez
 
   // Curl Laplace B Loop
