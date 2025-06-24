@@ -67,8 +67,8 @@ hyb_smooth_b( field_array_t * RESTRICT fa ) {
   COPY_FD(cby); SMOOTH_FD(cby);
   COPY_FD(cbz); SMOOTH_FD(cbz);
 
-  k_begin_remote_ghost_hyb_b(fa, fa->g, fa->fb );
-  k_end_remote_ghost_hyb_b  (fa, fa->g, fa->fb );
+  k_begin_remote_ghost_hyb_b(fa);
+  k_end_remote_ghost_hyb_b  (fa);
   k_hyb_local_ghost_b(fa, fa->g );
 }
 
@@ -121,13 +121,13 @@ Kokkos::Profiling::popRegion();
     }
     // exchange (ox,oy,oz) ghosts
 Kokkos::Profiling::pushRegion("Smooth_eb_interp::Exchange ox,oy,oz ghosts");
-    k_begin_remote_ghost_hyb_o(fa, fa->g, fa->fb );
-    k_end_remote_ghost_hyb_o  (fa, fa->g, fa->fb );
+    k_begin_remote_ghost_hyb_o(fa);
+    k_end_remote_ghost_hyb_o  (fa);
 Kokkos::Profiling::popRegion();
     // exchange (tx,ty,tz) ghosts
 Kokkos::Profiling::pushRegion("Smooth_eb_interp::Exchange tx,ty,tz ghosts");
-    k_begin_remote_ghost_hyb_t(fa, fa->g, fa->fb );
-    k_end_remote_ghost_hyb_t  (fa, fa->g, fa->fb );
+    k_begin_remote_ghost_hyb_t(fa);
+    k_end_remote_ghost_hyb_t  (fa);
 Kokkos::Profiling::popRegion();
 Kokkos::Profiling::pushRegion("Smooth_eb_interp::Local ghost ot");
     k_hyb_local_ghost_ot(fa, fa->g );
