@@ -41,7 +41,7 @@
   float rhomx  = (F(mx,rhof) > denmin) ? F(mx,rhof) : denmin; \
   float rhomy  = (F(my,rhof) > denmin) ? F(my,rhof) : denmin; \
   float rhomz  = (F(mz,rhof) > denmin) ? F(mz,rhof) : denmin; \
-  float dpedt  =  gamma * DIVUEP() + (1.0-gamma) * UEGRADP() + kappa * DIVQE();
+  float dpedt  =  gamma * DIVUEP() + (gamma - 1.0) * UEGRADP() + kappa * DIVQE();
 
 #define UPDATE_B(delt)				\
   F(0,cbx) = F(0,ox) - delt*ROTEX();		\
@@ -79,7 +79,7 @@
   F(0,pe)  += rV*two_thirds*F(0,se);\
   F(0,se)   = 0;                 \
   F(0,pe) = (F(0,rhof)>denmin) ? F(0,pe) : F(0,te0)*F(0,rhof);\
-  F(0,pe) = (F(0,pe>0)) ? F(0,pe) : 0;
+  F(0,pe) = (F(0,pe)>0) ? F(0,pe) : 0;
 
 
 void
@@ -172,7 +172,7 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1,1,1},{nx+1,ny+1,nz+1});
   
   Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1::UpdateStencil");
-  Kokkos::parallel_for("hyb_advance_b_update1", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+  Kokkos::parallel_for("hyb_advance_bpe_update1", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
       INIT_STENCIL();	  
       UPDATE1();	  
     });
@@ -194,7 +194,7 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   //fix local BCs
   k_hyb_local_ghost_e( fa, fa->g );
   
-  Kokkos::parallel_for("hyb_advance_b_update2", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+  Kokkos::parallel_for("hyb_advance_bpe_update2", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
       INIT_STENCIL();	  
       UPDATE2();	  
     });
@@ -214,7 +214,7 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   //fix local BCs
   k_hyb_local_ghost_e( fa, fa->g );
   
-  Kokkos::parallel_for("hyb_advance_b_update3", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+  Kokkos::parallel_for("hyb_advance_bpe_update3", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
       INIT_STENCIL();	  
       UPDATE3();	  
     });
@@ -235,7 +235,7 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   //fix local BCs
   k_hyb_local_ghost_e( fa, fa->g );
   
-  Kokkos::parallel_for("hyb_advance_b_update4", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+  Kokkos::parallel_for("hyb_advance_bpe_update4", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
       INIT_STENCIL();	  	  
       UPDATE4();	  
     });

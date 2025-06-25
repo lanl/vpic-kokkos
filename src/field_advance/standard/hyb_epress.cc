@@ -45,7 +45,6 @@ hyb_epress( field_array_t * RESTRICT fa,
   // Avoid possibly costly power(...) if possible
   // Keep conditional branch outside the loop
   
-  if (hstep>=0) { 
 	  if (eos_gamma == 1.0) {
 
     		Kokkos::parallel_for("hyb_epress", zyx_policy,
@@ -62,29 +61,6 @@ hyb_epress( field_array_t * RESTRICT fa,
         		F(0,pe) = F(0,te0) * pow(rho/eos_den,eos_gamma);
     		});
   	}
-  }
   
-  else{
-  
-  //smooth moments
-  k_begin_remote_ghost_hyb_jf(fa, fa->g, *(fa->fb) );
-  k_end_remote_ghost_hyb_jf  (fa, fa->g, *(fa->fb) );
-  k_hyb_local_ghost_jf  (fa, fa->g);
-
-  int ism = g->nsm;
-  while(ism>0) {
-  hyb_smooth_moments( fa );
-  k_begin_remote_ghost_hyb_jf(fa, fa->g, *(fa->fb) );
-  k_end_remote_ghost_hyb_jf  (fa, fa->g, *(fa->fb) );
-  k_hyb_local_ghost_jf  (fa, fa->g);
-  ism--;
-  }
-
-  Kokkos::parallel_for("hyb_epress", zyx_policy,
-                KOKKOS_LAMBDA(const int z, const int y, const int x) {
-   		INIT_STENCIL();
-        	F(0,pe) = F(0,te0) * (rho/eos_den);
-      		});
-  }
    
 }
