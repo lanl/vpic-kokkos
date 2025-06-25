@@ -845,6 +845,9 @@ public:
   void user_initialization( int argc, char **argv );
   void user_particle_injection(void);
   void user_current_injection(void);
+#ifdef HYB_USE_RADIATION
+  void user_radiation(void);
+#endif
   void user_field_injection(void);
   void user_diagnostics(void);
   void user_particle_collisions(void);
