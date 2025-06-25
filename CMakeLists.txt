@@ -82,7 +82,7 @@ option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS
 
 option(HYB_USE_STATIC_E "Use electrostatic hybrid field solver." OFF)
 
-option(HYB_USE_RADIATION "Include user radiation transport." ON)
+option(HYB_USE_RADIATION "Include user radiation transport." OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
