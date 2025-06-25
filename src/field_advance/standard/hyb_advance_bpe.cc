@@ -56,7 +56,7 @@
   F(0,tz) = ROTEZ();		\
   F(0,te) = dpedt
 
-#define UPDATE2()		\
+#define UPDATE2()		\../src/vpic/vpic.h
   UPDATE_B(dt2);		\
   F(0,tx) += two*ROTEX();	\
   F(0,ty) += two*ROTEY();	\
@@ -246,7 +246,7 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   // ----------------------------------------------------------
   
   Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_E");
-  hyb_advance_e( fa, (isub+1.0)/nsub ); //sets ghost Bs
+  hyb_advance_eue( fa, (isub+1.0)/nsub ); //sets ghost Bs
   k_begin_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );//ARI add cell-centered BCs
   k_end_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );
   //fix local BCs
