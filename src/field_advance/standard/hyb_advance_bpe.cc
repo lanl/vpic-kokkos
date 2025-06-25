@@ -56,7 +56,7 @@
   F(0,tz) = ROTEZ();		\
   F(0,te) = dpedt
 
-#define UPDATE2()		\../src/vpic/vpic.h
+#define UPDATE2()		\
   UPDATE_B(dt2);		\
   F(0,tx) += two*ROTEX();	\
   F(0,ty) += two*ROTEY();	\
