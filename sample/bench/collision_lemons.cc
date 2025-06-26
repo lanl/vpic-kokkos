@@ -101,12 +101,18 @@ begin_initialization {
   int sort_interval = 1;  
   int ncoll = (int) sort_interval;  // How frequently to do collisions
 
-#define FAK field_array->kernel
-  FAK->clear_rhof( field_array );
-  accumulate_rho_p( field_array, sp );
   set_region_te( everywhere, kT0_fl ); // Set the electron temperature
-  FAK->hyb_init(field_array,-1);
+  
+  sp->copy_to_device();
   field_array->copy_to_device();
+  
+#define FAK field_array->kernel
+  //Call accumulate_rho twice to set rho_old for extrapolation
+  FAK->clear_jf_kokkos( field_array );
+  k_accumulate_rho_p( field_array, sp );
+  FAK->clear_jf_kokkos( field_array );
+  k_accumulate_rho_p( field_array, sp );
+  FAK->hyb_init(field_array,0);
   auto &k_field = field_array->k_f_d;
   
   define_collision_op(lemons("lemons_coll", sp, sp_fl, cvar0, ncoll,field_array) );
