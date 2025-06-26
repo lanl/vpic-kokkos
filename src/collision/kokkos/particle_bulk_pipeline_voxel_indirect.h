@@ -427,6 +427,8 @@ struct particle_bulk_collision_pipeline {
       ujy_fl = spj_f(ii, field_var::uy);
       ujz_fl = spj_f(ii, field_var::uz);
       tmp_fl = spj_f(ii, field_var::pe)/nj_fl; //nj_fl should be non-zero
+      printf("nj_fl=%e, ujx_fl=%e, ujy_fl=%e, ujz_fl=%e, tmp_fl=%e\n",
+                      nj_fl, ujx_fl, ujy_fl, ujz_fl, tmp_fl);
     }
     float ndt = nj_fl * dt;
     //    printf("n=%14.8e, dt=%14.8e, mi=%14.8e\n",nj_fl, dt, mi);
