@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" >
+<html class="writer-html5" lang="en" data-content_root="./">
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Welcome to VPIC-Kokkos’s documentation! &mdash; VPIC-Kokkos 2.0 documentation</title>
-      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -14,7 +16,7 @@
         <script src="_static/jquery.js?v=5d32c60e"></script>
         <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
         <script src="_static/documentation_options.js?v=60dbed4a"></script>
-        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/doctools.js?v=9bcbadda"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
@@ -45,7 +47,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="intro.html">Introduction</a></li>
 <li class="toctree-l1"><a class="reference internal" href="comp.html">Compiling VPIC</a></li>
-<li class="toctree-l1"><a class="reference internal" href="porting.html">How to port user kernels to Kokkos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="porting.html">How to port user decks to Kokkos</a></li>
 <li class="toctree-l1"><a class="reference internal" href="vis.html">Postprocessing and Visualization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="pbd.html">Particle Boundary Diagnostic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcnplink.html">Linking VPIC to MCNP</a></li>
@@ -90,12 +92,16 @@
 <li class="toctree-l1"><a class="reference internal" href="comp.html">Compiling VPIC</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="comp.html#quickstart">Quickstart</a></li>
 <li class="toctree-l2"><a class="reference internal" href="comp.html#manual-kokkos-install-more-powerful-more-effort">Manual Kokkos Install (more powerful, more effort)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="comp.html#legacy-non-cmake-build-for-old-kokkos-versions">Legacy non-cmake build for old Kokkos versions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="comp.html#further-reading">Further Reading</a></li>
 <li class="toctree-l2"><a class="reference internal" href="comp.html#optimization-options">Optimization Options</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="porting.html">How to port user kernels to Kokkos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="porting.html">How to port user decks to Kokkos</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="porting.html#initialization-and-output">Initialization and output</a></li>
+<li class="toctree-l2"><a class="reference internal" href="porting.html#understanding-and-managing-data-movement">Understanding and managing data movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="porting.html#how-to-port-user-kernels-to-kokkos">How to port user kernels to Kokkos</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="vis.html">Postprocessing and Visualization</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="vis.html#visualization-with-pyvpic">Visualization with pyvpic</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vis.html#visualization-with-paraview">Visualization with Paraview</a></li>

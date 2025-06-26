@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" >
+<html class="writer-html5" lang="en" data-content_root="./">
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>How to port user kernels to Kokkos &mdash; VPIC-Kokkos 2.0 documentation</title>
-      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <title>How to port user decks to Kokkos &mdash; VPIC-Kokkos 2.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -14,7 +16,7 @@
         <script src="_static/jquery.js?v=5d32c60e"></script>
         <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
         <script src="_static/documentation_options.js?v=60dbed4a"></script>
-        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/doctools.js?v=9bcbadda"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
@@ -46,7 +48,12 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="intro.html">Introduction</a></li>
 <li class="toctree-l1"><a class="reference internal" href="comp.html">Compiling VPIC</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">How to port user kernels to Kokkos</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">How to port user decks to Kokkos</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#initialization-and-output">Initialization and output</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#understanding-and-managing-data-movement">Understanding and managing data movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#how-to-port-user-kernels-to-kokkos">How to port user kernels to Kokkos</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="vis.html">Postprocessing and Visualization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="pbd.html">Particle Boundary Diagnostic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcnplink.html">Linking VPIC to MCNP</a></li>
@@ -68,7 +75,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">How to port user kernels to Kokkos</li>
+      <li class="breadcrumb-item active">How to port user decks to Kokkos</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/porting.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -78,48 +85,82 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="how-to-port-user-kernels-to-kokkos">
-<h1>How to port user kernels to Kokkos<a class="headerlink" href="#how-to-port-user-kernels-to-kokkos" title="Link to this heading"></a></h1>
+  <section id="how-to-port-user-decks-to-kokkos">
+<h1>How to port user decks to Kokkos<a class="headerlink" href="#how-to-port-user-decks-to-kokkos" title="Link to this heading"></a></h1>
+<p>The amount of work required to convert legacy decks to VPIC 2.0 varies greatly depending on the deck.  Some decks will just work or require only a few lines to change.  Others, with custom boundary conditions and user-added physics, will require extensive modifications.  Most will be in between.  With a willingness to learn a little Kokkos and search the source code for examples, conversion will typically be a manageable task.</p>
+<section id="initialization-and-output">
+<h2>Initialization and output<a class="headerlink" href="#initialization-and-output" title="Link to this heading"></a></h2>
+<p>Initialization and the built-in output functions (particles, fields, and hydro) mostly function as is and require no changes from legacy decks.  VPIC is smart enough to move data to the proper place after initialization and during output while avoiding unnecessary data movement.  Basic decks may work without modification.</p>
+</section>
+<section id="understanding-and-managing-data-movement">
+<h2>Understanding and managing data movement<a class="headerlink" href="#understanding-and-managing-data-movement" title="Link to this heading"></a></h2>
+<p>The key to a good port is understanding where data is, whether it is up to date, and eliminating unnecessary data movement.  The same data can exist in up to three places: the legacy arrays that play well with legacy decks, the Kokkos host view, and the Kokkos device view.  To quickly get something that works, you can set::</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">kokkos_field_injection</span> <span class="o">=</span> <span class="n">false</span><span class="p">;</span>
+<span class="n">kokkos_particle_injection</span> <span class="o">=</span> <span class="n">false</span><span class="p">;</span>
+<span class="n">kokkos_current_injection</span> <span class="o">=</span> <span class="n">false</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>in the initialization in your deck.  (This is the default behavior.)  This will make most legacy user injection functions work as is.  However, this will copy the entire field or particle array from the device to the host to the legacy array and back every time the injection is called, which can be extremely inefficient.  If your deck does not use any of the injections, set their intervals to -1 (default) to avoid this excess movement::</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">field_injection_interval</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+<span class="n">particle_injection_interval</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+<span class="n">current_injection_interval</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>The best option is to convert any injection function to run on the device and operate on the Kokkos views directly, though this may take some work.  Once completed, you can set <code class="docutils literal notranslate"><span class="pre">kokkos_*_injection</span> <span class="pre">=</span> <span class="pre">true;</span></code> and be assured that you are not moving data unnecessarily.</p>
+<p>Custom diagnostics operate similarly.  You can call <code class="docutils literal notranslate"><span class="pre">field_array-&gt;copy_to_host();</span></code> and <code class="docutils literal notranslate"><span class="pre">sp-&gt;copy_to_host();</span></code> and run your diagnostics normally.  (You should not be calling any <code class="docutils literal notranslate"><span class="pre">copy_to_device()</span></code> function in the diagnostics; that’s what the injection functions are for.)  If your diagnostics run every few hundred steps, this is a pretty reasonable data movement cost, but if you run them often or every step, it’s best to port these to operate on the device.</p>
+</section>
+<section id="how-to-port-user-kernels-to-kokkos">
+<h2>How to port user kernels to Kokkos<a class="headerlink" href="#how-to-port-user-kernels-to-kokkos" title="Link to this heading"></a></h2>
 <p>Most user code/loops can be easily converted to run on the GPU, as long as we follow
 some simple rules:</p>
 <ol class="arabic simple">
-<li><p>The code must be safe to run in parallel (there is no [sane] way to run serial on the GPU). A kokkos scatter view can be used to generate atomics and handle data races. See <cite>advance_p</cite> for an example.</p></li>
-<li><p>The ported loop <em>cannot</em> call code that dereferences pointers. This is because the lambdas capture all variables by values, meaning the code will capture the pointer value from CPU space, and try use it in GPU space. This is often the source of pretty tricky bugs, as it may work on CPU but not GPU. An example of #2 above is something like calling the function <cite>voxel()</cite> in a field loop to convert from 2/3D. The function voxel calls <cite>grid-&gt;sz</cite> internally. We need to capture dereferenced pointer variables in a local variable above the lambdas</p></li>
+<li><p>The code must be safe to run in parallel (there is no [sane] way to run serial on the GPU). A kokkos scatter view can be used to generate atomics and handle data races. See <cite>hydro_p</cite> for an example.</p></li>
+<li><p>The ported loop <em>cannot</em> call code that dereferences pointers. This is because the lambdas capture all variables by values, meaning the code will capture the pointer value from CPU space, and try use it in GPU space. This is often the source of pretty tricky bugs, as it may work on CPU but not GPU. An example of this is calling the function <cite>voxel()</cite> in a field loop to convert from 3D. The function voxel calls <cite>grid-&gt;sz</cite> internally. We need to capture dereferenced pointer variables in a local variable above the lambdas</p></li>
 </ol>
-<p>An example of porting a user defined field injection is included below:</p>
+<p>An example of porting a user defined field injection is included below (see <cite>sample/short_pulse.cxx</cite> for full context):</p>
 <p>Original::</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>    <span class="k">for</span> <span class="p">(</span> <span class="nb">int</span> <span class="n">iz</span><span class="o">=</span><span class="mi">1</span><span class="p">;</span> <span class="n">iz</span><span class="o">&lt;=</span><span class="n">grid</span><span class="o">-&gt;</span><span class="n">nz</span><span class="o">+</span><span class="mi">1</span><span class="p">;</span> <span class="o">++</span><span class="n">iz</span> <span class="p">)</span>
-      <span class="k">for</span> <span class="p">(</span> <span class="nb">int</span> <span class="n">iy</span><span class="o">=</span><span class="mi">1</span><span class="p">;</span> <span class="n">iy</span><span class="o">&lt;=</span><span class="n">grid</span><span class="o">-&gt;</span><span class="n">ny</span><span class="p">;</span> <span class="o">++</span><span class="n">iy</span> <span class="p">)</span>
-        <span class="n">field</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">iy</span><span class="p">,</span><span class="n">iz</span><span class="p">)</span><span class="o">.</span><span class="n">ey</span> <span class="o">+=</span> <span class="n">prefactor</span>
-                             <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="n">PHASE</span><span class="p">)</span>
-<span class="o">//</span>                           <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">R2</span><span class="o">/</span><span class="p">(</span><span class="k">global</span><span class="o">-&gt;</span><span class="n">width</span><span class="o">*</span><span class="k">global</span><span class="o">-&gt;</span><span class="n">width</span><span class="p">))</span>  <span class="o">//</span> <span class="mi">3</span><span class="n">D</span>
-                             <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">R2Z</span><span class="o">/</span><span class="p">(</span><span class="k">global</span><span class="o">-&gt;</span><span class="n">width</span><span class="o">*</span><span class="k">global</span><span class="o">-&gt;</span><span class="n">width</span><span class="p">))</span>
-                             <span class="o">*</span> <span class="n">MASK</span> <span class="o">*</span> <span class="n">pulse_shape_factor</span><span class="p">;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># define DY    ( grid-&gt;y0 + (iy-0.5)*grid-&gt;dy - global-&gt;ycenter )</span>
+<span class="c1"># define DZ    ( grid-&gt;z0 +  (iz-1) *grid-&gt;dz - global-&gt;zcenter )</span>
+<span class="c1"># define R2    ( DY*DY+DZ*DZ )</span>
+<span class="c1"># define PHASE ( global-&gt;omega_0*t + h*R2/(global-&gt;width*global-&gt;width) )</span>
+<span class="c1"># define MASK  ( R2&lt;=pow(global-&gt;mask*global-&gt;width,2) ? 1 : 0 )</span>
+
+  <span class="k">for</span> <span class="p">(</span> <span class="nb">int</span> <span class="n">iz</span><span class="o">=</span><span class="mi">1</span><span class="p">;</span> <span class="n">iz</span><span class="o">&lt;=</span><span class="n">grid</span><span class="o">-&gt;</span><span class="n">nz</span><span class="o">+</span><span class="mi">1</span><span class="p">;</span> <span class="o">++</span><span class="n">iz</span> <span class="p">)</span>
+    <span class="k">for</span> <span class="p">(</span> <span class="nb">int</span> <span class="n">iy</span><span class="o">=</span><span class="mi">1</span><span class="p">;</span> <span class="n">iy</span><span class="o">&lt;=</span><span class="n">grid</span><span class="o">-&gt;</span><span class="n">ny</span><span class="p">;</span> <span class="o">++</span><span class="n">iy</span> <span class="p">)</span>
+      <span class="n">field</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">iy</span><span class="p">,</span><span class="n">iz</span><span class="p">)</span><span class="o">.</span><span class="n">ey</span> <span class="o">+=</span> <span class="n">prefactor</span>
+                           <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="n">PHASE</span><span class="p">)</span>
+                           <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">R2</span><span class="o">/</span><span class="p">(</span><span class="k">global</span><span class="o">-&gt;</span><span class="n">width</span><span class="o">*</span><span class="k">global</span><span class="o">-&gt;</span><span class="n">width</span><span class="p">))</span>
+                           <span class="o">*</span> <span class="n">MASK</span> <span class="o">*</span> <span class="n">pulse_shape_factor</span><span class="p">;</span>
 </pre></div>
 </div>
 <p>Modified::</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>int _sy = grid-&gt;sy; // safe to dereference grid outside of the loop
 int _sz = grid-&gt;sz;
+float width = global-&gt;width;
+float width2 = width*width;
+
+k_field_t&amp; kfield = field_array-&gt;k_f_d; // Need local reference
+
 // Complex, fast, multiple dimension loop
-Kokkos::MDRangePolicy&lt;Kokkos::Rank&lt;2&gt;&gt; left_edge({1, 1}, {nz+2, ny+1});
+Kokkos::MDRangePolicy&lt;Kokkos::Rank&lt;2&gt;&gt; left_edge({1, 1}, {nz+2, ny+1}); // Top of the range is &lt;, not &lt;=.
 Kokkos::parallel_for(&quot;Field injection&quot;, left_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
-    auto DY   =( y0 + (iy-0.5)*dy - ycenter );
-    auto DZ   =( z0 + (iz-1  )*dz - zcenter );
-    auto R2   =( DY*DY + DZ*DZ );
-    auto R2Z  = ( DZ*DZ );
-    auto PHASE=( -omega_0*t + h*R2Z/(width*width) );
-    auto MASK =( R2Z&lt;=pow(mask*width,2) ? 1 : 0 );
+    auto DY = y0 + (iy-0.5)*dy - ycenter; // y0, dy, t, width, etc. all calculated locally above the loop
+    auto DZ = z0 + (iz-1  )*dz - zcenter;
+    auto R2 = DY*DY + DZ*DZ;
+    auto phase = -omega_0*t + h*R2/width2;
+    auto mask = R2&lt;=pow(mask*width,2) ? 1 : 0;
     // We want to call the function voxel(1,iy,iz) (from vpic.h, not the
-    //   macro) but that would cause an illegal defeference of grid!
-    //   Instead we can use local variables, or use static functions.
+    // macro) but that would cause an illegal defeference of grid!
+    // Instead we can use local variables, or use static functions.
     int vox = ix + _sy*iy + _sz*iz; // locally captured above
     kfield(vox, field_var::ey) += prefactor
-                                 * cos(PHASE)
-                                 * exp(-R2Z/(width*width))
-                                 * MASK * pulse_shape_factor;
+                                 * cos(phase)
+                                 * exp(-R2/width2)
+                                 * mask * pulse_shape_factor;
 });
 </pre></div>
 </div>
+</section>
 </section>
 
 
