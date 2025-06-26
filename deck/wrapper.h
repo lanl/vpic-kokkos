@@ -43,6 +43,12 @@ vpic_simulation::user_field_injection( void )
 void                              \
 vpic_simulation::user_particle_collisions( void )
 
+#ifdef HYB_USE_RADIATION
+#define begin_radiation \
+void                      \
+vpic_simulation::user_radiation( void )
+#endif
+
 #define repeat( count ) for( int64_t _remain=(int64_t)(count); _remain; _remain-- )
 
 #define _SIM_LOG_PREFIX \

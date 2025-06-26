@@ -22,7 +22,7 @@ checkpt_field_advance_kernels( const field_advance_kernels_t * kernel ) {
   CHECKPT_SYM( kernel->compute_rhob              );
   CHECKPT_SYM( kernel->compute_curl_b            );
 #ifdef HYB_USE_SEPARATE_PE
-  CHECKPT_SYM( kernel->hyb_epress                );
+  CHECKPT_SYM( kernel->hyb_init                );
 #endif
   CHECKPT_SYM( kernel->synchronize_tang_e_norm_b );
   CHECKPT_SYM( kernel->compute_div_e_err         );
@@ -68,7 +68,7 @@ restore_field_advance_kernels( field_advance_kernels_t * kernel ) {
   RESTORE_SYM( kernel->compute_rhob              );
   RESTORE_SYM( kernel->compute_curl_b            );
 #ifdef HYB_USE_SEPARATE_PE
-  RESTORE_SYM( kernel->hyb_epress                );
+  RESTORE_SYM( kernel->hyb_init                  );
 #endif
   RESTORE_SYM( kernel->synchronize_tang_e_norm_b );
   RESTORE_SYM( kernel->compute_div_e_err         );

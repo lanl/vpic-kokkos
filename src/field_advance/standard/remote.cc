@@ -2836,7 +2836,7 @@ k_end_remote_ghost_hyb_ue(field_array_t* ALIGNED(128) fa,
                          field_buffers_t& fb) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   // End receiving and sending
-  end_halo_exchange(fa, field_var::ue, field_var::uz+1);
+  end_halo_exchange(fa, field_var::ux, field_var::uz+1);
 #else
   // End receiving
   end_recv_ghost_hyb_ue<XYZ>(fa, -1,  0,  0);

@@ -38,73 +38,15 @@ vpic_simulation::initialize( int argc,
 
   dump_strategy = new_dump_strategy(dump_strategy_id, this);
 
-  // Do some consistency checks on user initialized fields
+ // -----------------------------------------------
+  // Sync everything host -> device
 
-  //if( rank()==0 ) MESSAGE(( "Checking interdomain synchronization" ));
-  //TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
-  //if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
+  if( rank()==0 ) MESSAGE(( "Initializing particles, B field on device from host" ));
 
-  //if( rank()==0 ) MESSAGE(( "Checking magnetic field divergence" ));
-  //TIC FAK->compute_div_b_err( field_array ); TOC( compute_div_b_err, 1 );
-  //TIC err = FAK->compute_rms_div_b_err( field_array ); TOC( compute_rms_div_b_err, 1 );
-  //if( rank()==0 ) MESSAGE(( "RMS error = %e (charge/volume)", err ));
-  //TIC FAK->clean_div_b( field_array ); TOC( clean_div_b, 1 );
-
-  // Load fields not initialized by the user
-
-  //if( rank()==0 ) MESSAGE(( "Initializing radiation damping fields" ));
-  //TIC FAK->compute_curl_b( field_array ); TOC( compute_curl_b, 1 );
-  
-    // We want to call this once the neighbor is done
+  // We want to call this once the neighbor is done
   auto g = species_list->g;
   auto nfaces_per_voxel = 6;
   g->init_kokkos_grid(nfaces_per_voxel*g->nv);
-
-  if( rank()==0 ) MESSAGE(( "Initializing bound charge density" ));
-  TIC FAK->clear_rhof( field_array ); TOC( clear_jf, 1 );
-  LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
-
-#ifdef HYB_USE_SEPARATE_PE
-  FAK->hyb_epress(field_array,-1);
-  int nsmcopy = g->nsm;
-  g->nsm=0;
-  FAK->advance_b(field_array,0);
-  g->nsm=nsmcopy;
-#else
-  FAK->advance_b(field_array,0);
-#endif
-  
-  TIC FAK->clear_rhof( field_array ); TOC( clear_jf, 1 );
-  LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
-
-  
-  //TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
-  //TIC FAK->compute_rhob( field_array ); TOC( compute_rhob, 1 );
-
-#ifdef HYB_USE_SEPARATE_PE
-  FAK->hyb_epress(field_array,-1);
-  nsmcopy = g->nsm;
-  g->nsm=0;
-  FAK->advance_b(field_array,0);
-  g->nsm=nsmcopy;
-#else
-  FAK->advance_b(field_array,0);
-#endif
-  
-  // Internal sanity checks
-
-  //if( rank()==0 ) MESSAGE(( "Checking electric field divergence" ));
-
-  //TIC FAK->compute_div_e_err( field_array ); TOC( compute_div_e_err, 1 );
-  //TIC err = FAK->compute_rms_div_e_err( field_array ); TOC( compute_rms_div_e_err, 1 );
-  //if( rank()==0 ) MESSAGE(( "RMS error = %e (charge/volume)", err ));
-  //TIC FAK->clean_div_e( field_array ); TOC( clean_div_e, 1 );
-
-  //f( rank()==0 ) MESSAGE(( "Rechecking interdomain synchronization" ));
-  //TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
-  //if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
-
-
 
   KOKKOS_TIC();
   LIST_FOR_EACH( sp, species_list ) {
@@ -112,68 +54,69 @@ vpic_simulation::initialize( int argc,
   }
   KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 
-  KOKKOS_TIC(); // Time this data movement
-  LIST_FOR_EACH( fsp, fluid_species_list ) {
-    fsp->copy_to_device();
-  }
-  KOKKOS_TOCN( FLUID_DATA_MOVEMENT, 1);
-  
-  KOKKOS_TIC(); // Time this data movement
-  interpolator_array->copy_to_device();
-  KOKKOS_TOCN( INTERPOLATOR_DATA_MOVEMENT, 1);
+  // Hybrid - later we will compute interpolator coeffs on device, no need to sync w/host
+  //KOKKOS_TIC();
+  //interpolator_array->copy_to_device();
+  //KOKKOS_TOCN( INTERPOLATOR_DATA_MOVEMENT, 1);
 
+  // Hybrid - not using accumulators
+  //KOKKOS_TIC();
+  //FAK->k_reduce_jf(field_array);
+  //KOKKOS_TOC( JF_ACCUM_DATA_MOVEMENT, 1);
+
+  // Hybrid - jf,rhof and jfold,rhofold not populated with valid data yet
   KOKKOS_TIC();
-  FAK->k_reduce_jf(field_array);
-  KOKKOS_TOC( JF_ACCUM_DATA_MOVEMENT, 1);
+  field_array->copy_to_device();
+  KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
 
+  // -----------------------------------------------
+  // Accumulate rhof,jf on device; compute E(t=0) on device
+
+  if( rank()==0 ) MESSAGE(( "Initializing rho, J, E fields on device" ));
+
+  // Initialize jf,rhof at t=0 (ghosts bad)
+  // jf,rhof_old are garbage
+  TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
+  LIST_FOR_EACH( sp, species_list ) TIC k_accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
+
+  // Fix jf,rhof ghosts
+  // E,B will be garbage because jf,rhof_old not set
+#ifdef HYB_USE_SEPARATE_PE
+  FAK->hyb_init(field_array,0);
+#else
+  FAK->advance_b(field_array,0);
+#endif
+
+  // Initialize jf,rhof_old at t=0
+  // Re-initialize jf,rhof at t=0 (ghosts bad)
+  TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
+  LIST_FOR_EACH( sp, species_list ) TIC k_accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
+
+  // Fix jf,rhof ghosts
+  // E,B will now be valid
+#ifdef HYB_USE_SEPARATE_PE
+  FAK->hyb_init(field_array,0);
+#else
+  FAK->advance_b(field_array,0);
+#endif
+
+  // -----------------------------------------------
+  // Setup remaining device data for evolution loop
+
+  if( rank()==0 ) MESSAGE(( "Initializing interpolators" ));
   if( species_list ) {
-    KOKKOS_TIC(); // Time this data movement
-    field_array->copy_to_device();
-    KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
-
-    if( rank()==0 ) MESSAGE(( "Uncentering particles" ));
     TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
   }
+
+  if( rank()==0 ) MESSAGE(( "Uncentering particles" ));
   LIST_FOR_EACH( sp, species_list ) {
-      KOKKOS_TIC();
-      uncenter_p( sp, interpolator_array );
-      KOKKOS_TOC( uncenter_p, 1 );
+    KOKKOS_TIC();
+    uncenter_p( sp, interpolator_array );
+    KOKKOS_TOC( uncenter_p, 1 );
   }
-  
-  TIC FAK->clear_rhof( field_array ); TOC( clear_jf, 1 );
-  LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
-
-#ifdef HYB_USE_SEPARATE_PE
-  FAK->hyb_epress(field_array,-1);
-  nsmcopy = g->nsm;
-  g->nsm=0;
-  FAK->advance_b(field_array,0);
-  g->nsm=nsmcopy;
-#else
-  FAK->advance_b(field_array,0);
-#endif
-  
-  TIC FAK->clear_rhof( field_array ); TOC( clear_jf, 1 );
-  LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
-
-  
-  //TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
-  //TIC FAK->compute_rhob( field_array ); TOC( compute_rhob, 1 );
-
-#ifdef HYB_USE_SEPARATE_PE
-  FAK->hyb_epress(field_array,-1);
-  nsmcopy = g->nsm;
-  g->nsm=0;
-  FAK->advance_b(field_array,0);
-  g->nsm=nsmcopy;
-#else
-  FAK->advance_b(field_array,0);
-#endif
-
-  if( rank()==0 ) MESSAGE(( "Performing initial diagnostics" ));
 
   // Let the user to perform diagnostics on the initial condition
-  // field(i,j,k).jfx, jfy, jfz will not be valid at this point.
+  if( rank()==0 ) MESSAGE(( "Performing initial diagnostics" ));
   TIC user_diagnostics(); TOC( user_diagnostics, 1 );
 
   if( rank()==0 ) MESSAGE(( "Initialization complete" ));

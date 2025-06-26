@@ -213,7 +213,7 @@ typedef struct field_advance_kernels {
   void (*compute_rhob  )( struct field_array * RESTRICT fa );
   void (*compute_curl_b)( struct field_array * RESTRICT fa );
 #ifdef HYB_USE_SEPARATE_PE
-  void (*hyb_epress)( struct field_array * RESTRICT fa, float frac );
+  void (*hyb_init)( struct field_array * RESTRICT fa, float frac );
 #endif
   // Local/remote shared face cleaning
 

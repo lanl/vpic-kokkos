@@ -249,7 +249,7 @@ new_standard_field_array( grid_t           * RESTRICT g,
 #ifdef HYB_USE_SEPARATE_PE
   fa->kernel->advance_b         = hyb_advance_bpe;
   fa->kernel->advance_e         = hyb_advance_eue;
-  fa->kernel->hyb_epress        = hyb_epress;
+  fa->kernel->hyb_init          = hyb_advance_b;
 #endif
 #ifdef HYB_USE_STATIC_E
   fa->kernel->advance_b         = hyb_advance_pe;

@@ -245,6 +245,12 @@ int vpic_simulation::advance(void)
       }
   }
 
+
+#ifdef HYB_USE_RADIATION
+  // Couple radiation
+     TIC user_radiation(); TOC( user_radiation, 1 );
+#endif
+
   // DEVICE -- Touches fields
   // Half advance the magnetic field from B_0 to B_{1/2}
   Kokkos::Profiling::pushRegion("Advance B");
