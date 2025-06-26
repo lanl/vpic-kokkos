@@ -4,16 +4,15 @@
 // loading, 3D domain decomposition, better restarts, and now featuring SI
 // units and known conversion factors from code units to SI units.
 //
-// no need to "mkdir log field hydro particle restart rundata"
 //========================================================================
 
 //??????????????????????????????????????????????????????????????????????
 
-#include <mpi.h>
 #include <ctime>
 
-// This is probably unnecessary on modern parallel file systems, e.g., lustre
-#define NUM_TURNSTILES 3000  
+// This is probably unnecessary on modern parallel file systems, e.g., lustre,
+// so set to something high to effectively disable it.
+#define NUM_TURNSTILES 300000  
 
 #if 0
 #  define DIAG_LOG(MSG)                                          \
@@ -962,26 +961,22 @@ begin_diagnostics {
   } //if
 
   if ( should_dump(field) ) {
-    field_array->copy_to_host();
-
+    //field_array->copy_to_host();// field_dump() will do this if necessary.
     field_dump( global->fdParams );
 
     if ( global->load_particles ) {
-      species_t * sp;
-      LIST_FOR_EACH(sp, species_list){
-          sp->copy_to_host();
-      }
       hydro_dump( "electron", global->hedParams );
       if ( global->mobile_ions ) {
         if ( global->I1_present ) hydro_dump( "I1", global->hI1dParams );
         if ( global->I2_present ) hydro_dump( "I2", global->hI2dParams );
       }
-    }
+  
 
-    // This is also a good time to write the pb_diag buffers to disk
-    species_t * sp;
-    LIST_FOR_EACH(sp, species_list){
-        if(sp->pb_diag) pbd_buff_to_disk(sp->pb_diag);
+      // This is also a good time to write the pb_diag buffers to disk
+      species_t * sp;
+      LIST_FOR_EACH(sp, species_list){
+          if(sp->pb_diag) pbd_buff_to_disk(sp->pb_diag);
+      }
     }
 
   }
@@ -1006,6 +1001,12 @@ begin_diagnostics {
   // Particle dump data
 #if 1
   if ( should_dump(particle) && global->load_particles ) {
+    // dump_particles will do this if necessary
+    /*species_t * sp;
+      LIST_FOR_EACH(sp, species_list){
+          sp->copy_to_host();
+      }*/
+
     dump_particles( "electron", "particle/eparticle" );
     if ( global->mobile_ions ) {
       if (global->I1_present) dump_particles( "I1", "particle/I1particle" );
@@ -1078,7 +1079,7 @@ begin_diagnostics {
     //double dumpstart = uptime();
 
     // NOTE: If you want an accurate start time, you need an MPI barrier.
-    // This can feasibly slow down the simulation, so you might not want it
+    // This can feasibly slow down the simulation, so you probably don't want it
     // unless you are benchmarking the dump.
     //mp_barrier();
     std::time_t dumpstart = std::time(NULL);
@@ -1135,15 +1136,6 @@ begin_field_injection {
   //   phi = k*global->xfocus+atan(h)/2    (2D)
   //   phi = k*global->xfocus+atan(h)      (3D)
 
-//# define loop_over_left_boundary \
-//    for ( int iz=1; iz<=grid->nz+1; ++iz ) for ( int iy=1; iy<=grid->ny; ++iy )
-//# define DY    ( grid->y0 + (iy-0.5)*grid->dy - global->ycenter )
-//# define DZ    ( grid->z0 +  (iz-1) *grid->dz - global->zcenter )
-//# define R2    ( DY*DY+DZ*DZ )
-//# define PHASE ( global->omega_0*t + h*R2/(global->width*global->width) )
-//# define MASK  ( R2<=pow(global->mask*global->width,2) ? 1 : 0 )
-
-
   if ( global->launch_wave == 0 ) return;
 
   if ( grid->x0==float(global->xmin) ) { // Node is on left boundary
@@ -1158,7 +1150,7 @@ begin_field_injection {
     if ( global->pulse_shape==2 ) {
     float sin_t_tau = sin(t*M_PI/global->pulse_FWHM);
       pulse_shape_factor =( t<global->pulse_FWHM ? sin_t_tau : 0 );
-  }
+    }
     // Hyperbolic secant profile
     if (global->pulse_shape==3){
         double fac = 2.*log(1.+sqrt(2.))/global->pulse_FWHM;
@@ -1172,38 +1164,40 @@ begin_field_injection {
     double prefactor = emax_coeff*sqrt(2.0/M_PI); // Wave norm at edge of box
 //  double prefactor = emax_coeff;  // Wave norm at edge of box
     // Rayleigh length
-    double rl     = M_PI*global->waist*global->waist/global->lambda;
+    double rl = M_PI*global->waist*global->waist/global->lambda;
     double h = global->xfocus/rl;                 // distance/Rayleigh length
 
 // Kokkos Port
     int ny = grid->ny;
     int nz = grid->nz;
-    float dy = grid->dy;
+    //float dy = grid->dy; // 3DCHANGE
     float dz = grid->dz;
     float y0 = grid->y0;
     float z0 = grid->z0;
     float ycenter = global->ycenter;
     float zcenter = global->zcenter;
     float width = global->width;
+    float width2 = width*width;
     float mask = global->mask;
     float omega_0 = global->omega_0;
     float dy_offset = y0 - ycenter;
     float dz_offset = z0 - zcenter;
     int sy = grid->sy;
     int sz = grid->sz;
-    //printf("Injecting\n");
 
     k_field_t& kfield = field_array->k_f_d;
 
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> left_edge({1, 1}, {nz+2, ny+1});
     Kokkos::parallel_for("Field injection", left_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
-        auto DY =( (iy-0.5)*dy + dy_offset );
-        if(ny==1) DY = 0.;
-        auto DZ =( (iz-1  )*dz + dz_offset );
-        auto R2   =( DY*DY + DZ*DZ );
-        auto PHASE=( omega_0*t + h*R2/(width*width) );
-        auto MASK =( R2<=pow(mask*width,2) ? 1 : 0 );
-        kfield(1+sy*iy+sz*iz, field_var::ey) += (prefactor * cos(PHASE) * exp(-R2/(width*width)) * MASK * pulse_shape_factor);
+        //auto DY = (iy-0.5)*dy + dy_offset; // 3DCHANGE
+        //if(ny==1) DY = 0.; // Auto 3D change at small computational cost
+        auto DZ = (iz-1)*dz + dz_offset;
+        //auto R2 = DY*DY + DZ*DZ; // 3DCHANGE
+	    auto R2 = DZ*DZ; // 2D
+        auto phase= omega_0*t + h*R2/(width2);
+        auto MASK = R2<=pow(mask*width,2) ? 1 : 0;
+        kfield(1+sy*iy+sz*iz, field_var::ey) += prefactor * cos(phase)
+                        * exp(-R2/(width2)) * MASK * pulse_shape_factor;
     });
 
   }
