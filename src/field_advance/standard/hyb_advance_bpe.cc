@@ -21,9 +21,9 @@
   + F(0,uz) * pz * ( F(z,pe) - F(mz,pe) ) )
 
 #define DIVQE() \
-  ( px*(2.0*F(0,pe)/rho - F(x,pe)/rhox - F(mx,pe)/rhomx)	\
-  + py*(2.0*F(0,pe)/rho - F(y,pe)/rhoy - F(my,pe)/rhomy)	\
-  + pz*(2.0*F(0,pe)/rho - F(z,pe)/rhoz - F(mz,pe)/rhomz) )
+  ( 4.0*px*px*(2.0*F(0,pe)/rho - F(x,pe)/rhox - F(mx,pe)/rhomx)	\
+  + 4.0*py*py*(2.0*F(0,pe)/rho - F(y,pe)/rhoy - F(my,pe)/rhomy)	\
+  + 4.0*pz*pz*(2.0*F(0,pe)/rho - F(z,pe)/rhoz - F(mz,pe)/rhomz) )
 
 
 #define INIT_STENCIL()						\
@@ -41,7 +41,7 @@
   float rhomx  = (F(mx,rhof) > denmin) ? F(mx,rhof) : denmin; \
   float rhomy  = (F(my,rhof) > denmin) ? F(my,rhof) : denmin; \
   float rhomz  = (F(mz,rhof) > denmin) ? F(mz,rhof) : denmin; \
-  float dpedt  =  gamma * DIVUEP() + (gamma - 1.0) * UEGRADP() + kappa * DIVQE();
+  float dpedt  =  gamma * DIVUEP() + (gamma - 1.0) * (-UEGRADP() + kappa * DIVQE());
 
 #define UPDATE_B(delt)				\
   F(0,cbx) = F(0,ox) - delt*ROTEX();		\
