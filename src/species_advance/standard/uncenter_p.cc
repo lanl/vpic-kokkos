@@ -9,8 +9,10 @@ void uncenter_p_kokkos(
         float qdt_2mc_c
 )
 {
+#ifndef FIELD_IONIZATION
   const float qdt_2mc        =     -qdt_2mc_c; // For backward half advance
   const float qdt_4mc        = -0.5*qdt_2mc_c; // For backward half rotate
+#endif
   const float one            = 1.;
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
@@ -23,7 +25,9 @@ void uncenter_p_kokkos(
   #define p_uy    k_particles(p_index, particle_var::uy)
   #define p_uz    k_particles(p_index, particle_var::uz)
   #define pii     k_particles_i(p_index)
-
+#ifdef FIELD_IONIZATION
+  #define p_q    k_particles(p_index, particle_var::charge)
+#endif
   // Interpolator Defines (f->x)
   #define f_cbx k_interp(ii, interpolator_var::cbx)
   #define f_cby k_interp(ii, interpolator_var::cby)
@@ -57,6 +61,11 @@ void uncenter_p_kokkos(
     float hax, hay, haz, l_cbx, l_cby, l_cbz;
     float v0, v1, v2, v3, v4;
 
+  #ifdef FIELD_IONIZATION
+    const float qdt_2mc  = p_q *     -qdt_2mc_c; // For backward half advance
+    const float qdt_4mc  = p_q * -0.5*qdt_2mc_c; // For backward half rotate
+  #endif
+    
     hax  = qdt_2mc*(      ( f_ex    + p_dy*f_dexdy    ) +
                      p_dz*( f_dexdz + p_dy*f_d2exdydz ) );
     hay  = qdt_2mc*(      ( f_ey    + p_dz*f_deydz    ) +
@@ -97,6 +106,10 @@ uncenter_p( /**/  species_t            * RESTRICT sp,
   k_particles_i_t k_particles_i = sp->k_p_i_d;
   k_interpolator_t k_interp    = ia->k_i_d;
   const int np                 = sp->np;
+#ifdef FIELD_IONIZATION
+  const float qdt_2mc          = (sp->g->dt)/(2*sp->m*sp->g->cvac); //need to multiply by particle charge
+#else
   const float qdt_2mc          = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+#endif
   uncenter_p_kokkos(k_particles, k_particles_i, k_interp, np, qdt_2mc);
 }

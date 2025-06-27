@@ -81,6 +81,15 @@ typedef struct grid {
   int64_t step;             // Current timestep
   double t0;                // Simulation time corresponding to step 0
 
+#ifdef FIELD_IONIZATION
+  // laser wavethength, needed for ionization
+  double lambda; // SI units
+  double t_to_SI; // code to SI
+  double l_to_SI; // code to SI
+  double q_to_SI; // code to SI
+  double m_to_SI; // code to SI
+#endif
+
   // Phase 2 grid data structures
   float x0, y0, z0;         // Min corner local domain (must be coherent)
   float x1, y1, z1;         // Max corner local domain (must be coherent)

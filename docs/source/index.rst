@@ -16,6 +16,7 @@ This documentation is very much a work in progress.  Most documentation is still
    porting
    vis
    pbd
+   field_ionization
    mcnplink
    issues
    dev

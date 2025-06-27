@@ -29,7 +29,11 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   /**/  hydro_t        * RESTRICT ALIGNED(128) h;
   const particle_t     * RESTRICT ALIGNED(128) p;
   const interpolator_t * RESTRICT ALIGNED(128) f;
+#ifdef FIELD_IONIZATION
+  float c, p_q, mspc,  dt_2mc,  dt_4mc2, r8V;
+#else
   float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
+#endif
   int np, stride_10, stride_21, stride_43;
 
   float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
@@ -44,10 +48,15 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   f = ia->i;
 
   c        = sp->g->cvac;
-  qsp      = sp->q;
   mspc     = sp->m*c;
+#ifdef FIELD_IONIZATION
+  dt_2mc  = (sp->g->dt)/(2*mspc);
+  dt_4mc2 = dt_2mc / (2*c);
+#else
+  qsp      = sp->q;
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
+#endif
   r8V      = sp->g->r8V;
 
   np        = sp->np;
@@ -69,12 +78,16 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     uy = p[n].uy;
     uz = p[n].uz;
     w  = p[n].w;
+#ifdef FIELD_IONIZATION
+    p_q = p[n].charge;
+    float qdt_2mc  = p_q * dt_2mc;
+    float qdt_4mc2 = p_q * dt_4mc2;
+#endif
 
     // Half advance E
     ux += qdt_2mc*((f[i].ex+dy*f[i].dexdy) + dz*(f[i].dexdz+dy*f[i].d2exdydz));
     uy += qdt_2mc*((f[i].ey+dz*f[i].deydz) + dx*(f[i].deydx+dz*f[i].d2eydzdx));
     uz += qdt_2mc*((f[i].ez+dx*f[i].dezdx) + dy*(f[i].dezdy+dx*f[i].d2ezdxdy));
-
     // Boris rotation - Interpolate B field
     w5 = f[i].cbx + dx*f[i].dcbxdx;
     w6 = f[i].cby + dy*f[i].dcbydy;
@@ -131,6 +144,29 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     w3 *= dz;       // w3 = (1/8)(w/V)(1+x)(1+y)(1-z) = (w/V) trilin_7 *Done
 
     // Accumulate the hydro fields
+#ifdef FIELD_IONIZATION
+#   define ACCUM_HYDRO( wn)                             \
+    t  = p_q*wn;        /* t  = (qsp w/V) trilin_n */   \
+    h[i].jx  += t*vx;                                   \
+    h[i].jy  += t*vy;                                   \
+    h[i].jz  += t*vz;                                   \
+    h[i].rho += t;                                      \
+    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
+    dx = t*ux;          /* dx = (px w/V) trilin_n */    \
+    dy = t*uy;                                          \
+    dz = t*uz;                                          \
+    h[i].px  += dx;                                     \
+    h[i].py  += dy;                                     \
+    h[i].pz  += dz;                                     \
+    h[i].ke  += t*ke_mc;                                \
+    h[i].txx += dx*vx;                                  \
+    h[i].tyy += dy*vy;                                  \
+    h[i].tzz += dz*vz;                                  \
+    h[i].tyz += dy*vz;                                  \
+    h[i].tzx += dz*vx;                                  \
+    h[i].txy += dx*vy
+
+#else
 #   define ACCUM_HYDRO( wn)                             \
     t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
     h[i].jx  += t*vx;                                   \
@@ -151,7 +187,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     h[i].tyz += dy*vz;                                  \
     h[i].tzx += dz*vx;                                  \
     h[i].txy += dx*vy
-
+#endif // FIELD_IONIZATION
     /**/            ACCUM_HYDRO(w0); // Cell i,j,k
     i += stride_10; ACCUM_HYDRO(w1); // Cell i+1,j,k
     i += stride_21; ACCUM_HYDRO(w2); // Cell i,j+1,k
@@ -162,6 +198,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     i += stride_10; ACCUM_HYDRO(w7); // Cell i+1,j+1,k+1
 
 #   undef ACCUM_HYDRO
+
   }
 }
 
@@ -178,8 +215,12 @@ accumulate_hydro_p_kokkos(
 {
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
+#ifdef FIELD_IONIZATION
+  float c, mspc, dt_2mc, dt_4mc2, r8V;
+#else  
   float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
-
+#endif
+  
   //int np, stride_10, stride_21, stride_43;
 
   //float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
@@ -193,12 +234,18 @@ accumulate_hydro_p_kokkos(
   }
 
   c        = sp->g->cvac;
-  qsp      = sp->q;
   mspc     = sp->m*c;
+#ifdef FIELD_IONIZATION
+  dt_2mc  = (sp->g->dt)/(2*mspc);
+  dt_4mc2 = dt_2mc / (2*c);
+  Kokkos::View<int*, Kokkos::DefaultExecutionSpace> particle_count("particle_count", nv);
+#else  
+  qsp      = sp->q;
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
+#endif  
   r8V      = sp->g->r8V;
-
+  
   const int np        = sp->np;
   const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
                         VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
@@ -206,12 +253,12 @@ accumulate_hydro_p_kokkos(
                         VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
   const int stride_43 = VOXEL(0,0,1, sp->g->nx,sp->g->ny,sp->g->nz) -
                         VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
-
+  
   //for( n=0; n<np; n++ ) {
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index)
     {
-
+    
     // Load the particle
     float dx = k_particles(p_index, particle_var::dx);
     float dy = k_particles(p_index, particle_var::dy);
@@ -220,6 +267,11 @@ accumulate_hydro_p_kokkos(
     float uy = k_particles(p_index, particle_var::uy);
     float uz = k_particles(p_index, particle_var::uz);
     float w  = k_particles(p_index, particle_var::w);
+#ifdef FIELD_IONIZATION    
+    short int p_q  = k_particles(p_index, particle_var::charge);
+    float qdt_2mc  = p_q * dt_2mc;  
+    float qdt_4mc2 = p_q * dt_4mc2;
+#endif    
     int ii = k_particles_i(p_index);
 
     const float cbx = k_interp(ii, interpolator_var::cbx);
@@ -244,8 +296,8 @@ accumulate_hydro_p_kokkos(
 
     const float dcbxdx = k_interp(ii, interpolator_var::dcbxdx);
     const float dcbydy = k_interp(ii, interpolator_var::dcbydy);
-    const float dcbzdz = k_interp(ii, interpolator_var::dcbzdz);
-
+    const float dcbzdz = k_interp(ii, interpolator_var::dcbzdz);     
+    
     // Half advance E
     ux += qdt_2mc*((ex+dy*dexdy) + dz*(dexdz+dy*d2exdydz));
     uy += qdt_2mc*((ey+dz*deydz) + dx*(deydx+dz*d2eydzdx));
@@ -311,7 +363,42 @@ accumulate_hydro_p_kokkos(
     float t = 0.0; // used in macro
     auto k_hydro_access = k_hydro_sv.access();
 
+          
     // Accumulate the hydro fields
+#ifdef FIELD_IONIZATION
+    //FIXME: check performace on cpu
+    // Add maximum macro charge 
+    //   there is no comperator so I need to do this with the view and not the SA
+    if (p_q < 0) {
+      Kokkos::atomic_fetch_min(&k_hydro(ii, hydro_var::max_q), p_q); //electrons
+    } else {
+      Kokkos::atomic_fetch_max(&k_hydro(ii, hydro_var::max_q), p_q);
+    }
+    Kokkos::atomic_add(&particle_count(ii), 1); // number of particles in each cell
+    Kokkos::atomic_add(&k_hydro(ii, hydro_var::avg_q), p_q); // total macro charge in each cell
+	
+    #define ACCUM_HYDRO( wn, i )                        \
+    t  = p_q*wn;        /* t  = (p_q w/V) trilin_n */   \
+    k_hydro_access(i, hydro_var::jx)  += t*vx;                       \
+    k_hydro_access(i, hydro_var::jy)  += t*vy;                       \
+    k_hydro_access(i, hydro_var::jz)  += t*vz;                       \
+    k_hydro_access(i, hydro_var::rho) += t;                          \
+    k_hydro_access(i, hydro_var::n_p) += wn;                         \
+    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
+    dx = t*ux;          /* dx = (px w/V) trilin_n */    \
+    dy = t*uy;                                          \
+    dz = t*uz;                                          \
+    k_hydro_access(i, hydro_var::px)  += dx;                         \
+    k_hydro_access(i, hydro_var::py)  += dy;                         \
+    k_hydro_access(i, hydro_var::pz)  += dz;                         \
+    k_hydro_access(i, hydro_var::ke)  += t*ke_mc;                    \
+    k_hydro_access(i, hydro_var::txx) += dx*vx;                      \
+    k_hydro_access(i, hydro_var::tyy) += dy*vy;                      \
+    k_hydro_access(i, hydro_var::tzz) += dz*vz;                      \
+    k_hydro_access(i, hydro_var::tyz) += dy*vz;                      \
+    k_hydro_access(i, hydro_var::tzx) += dz*vx;                      \
+    k_hydro_access(i, hydro_var::txy) += dx*vy;
+#else    
     #define ACCUM_HYDRO( wn, i )                        \
     t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
     k_hydro_access(i, hydro_var::jx)  += t*vx;                       \
@@ -332,7 +419,8 @@ accumulate_hydro_p_kokkos(
     k_hydro_access(i, hydro_var::tyz) += dy*vz;                      \
     k_hydro_access(i, hydro_var::tzx) += dz*vx;                      \
     k_hydro_access(i, hydro_var::txy) += dx*vy;
-
+#endif
+    
     // TODO: this serial adding to try and save adds is a bit sad
     // TODO: This is somehow going out of bounds right now
     const int i0 = ii;
@@ -361,6 +449,23 @@ accumulate_hydro_p_kokkos(
 
 #   undef ACCUM_HYDRO
   });
+
+#ifdef FIELD_IONIZATION
+  // Calculate the average macro charge
+  // Give nan values to cells without particles
+  //FIXME: check performace on cpu
+  Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, nv),
+    KOKKOS_LAMBDA(size_t ii)
+    {
+      // Calculate mean charge only if there are particles in the cell
+      if (particle_count(ii) > 0) {
+	k_hydro(ii, hydro_var::avg_q) /= static_cast<float>(particle_count(ii));
+      } else {
+	k_hydro(ii, hydro_var::avg_q) = std::numeric_limits<double>::quiet_NaN();
+	k_hydro(ii, hydro_var::max_q) = std::numeric_limits<double>::quiet_NaN();
+      }
+    });
+#endif
 
   Kokkos::Experimental::contribute(k_hydro, k_hydro_sv);
   Kokkos::fence(); // TODO: Check if I need this to block the contribute

@@ -212,18 +212,29 @@ large_angle_coulomb_fluid(
     const float q0,             /* Fluid particle charge (CHARGE) */
     const float m0,             /* Fluid particle mass (MASS) */
     species_t * RESTRICT sp,    /* Species */
+  #ifdef FIELD_IONIZATION
+    const float sp_q,           /* species charge */
+  #endif
     const float bmax,           /* Impact parameter cutoff */
     rng_pool_t * RESTRICT rp,   /* Entropy pool */
     const int interval ) {      /* How often to apply this */
   large_angle_coulomb_t * lac;
-
+#ifdef FIELD_IONIZATION
+  if( n0<0 || kT0<0 || !q0 || m0<=0 || !sp || !sp_q || sp->m<=0 || bmax<0 )
+    ERROR(( "Bad args" ));
+#else
   if( n0<0 || kT0<0 || !q0 || m0<=0 || !sp || !sp->q || sp->m<=0 || bmax<0 )
     ERROR(( "Bad args" ));
+#endif
 
   MALLOC( lac, 1 );
-  
+#ifdef FIELD_IONIZATION
+  lac->cc       = (4.*M_PI*sp->g->eps0*sp->m*m0*sp->g->cvac*sp->g->cvac*bmax) /
+                  ((sp->m + m0)*sp_q*q0);
+#else
   lac->cc       = (4.*M_PI*sp->g->eps0*sp->m*m0*sp->g->cvac*sp->g->cvac*bmax) /
                   ((sp->m + m0)*sp->q*q0);
+#endif
   lac->twomu_mi = 2.*m0    / (sp->m + m0);
   lac->twomu_mj = 2.*sp->m / (sp->m + m0);
   lac->Kc       = M_PI*bmax*bmax*sp->g->cvac;
@@ -252,19 +263,31 @@ collision_op_t *
 large_angle_coulomb( const char * RESTRICT name, /* Model name */
                      species_t * RESTRICT spi,   /* Species-i */
                      species_t * RESTRICT spj,   /* Species-j */
+		   #ifdef FIELD_IONIZATION
+                     const float spi_q,          /* species-i charge */
+		     const float spj_q,          /* species-j charge */
+		   #endif
                      const float bmax,           /* Impact parameter cutoff */
                      rng_pool_t * RESTRICT rp,   /* Entropy pool */
                      const double sample,        /* Sampling density */
                      const int interval ) {      /* How often to apply this */
   large_angle_coulomb_t * lac;
-
+#ifdef FIELD_IONIZATION
+  if( !spi || !spi_q || spi->m<=0 ||
+      !spj || !spj_q || spj->m<=0 || spi->g!=spj->g ) ERROR(( "Bad args" ));
+#else
   if( !spi || !spi->q || spi->m<=0 || 
       !spj || !spj->q || spj->m<=0 || spi->g!=spj->g ) ERROR(( "Bad args" ));
-
+#endif
   MALLOC( lac, 1 );
   CLEAR(  lac, 1 );
+#ifdef FIELD_IONIZATION
+  lac->cc       = (4.*M_PI*spi->g->eps0*spi->m*spj->m*spi->g->cvac*spi->g->cvac*bmax) /
+                  ((spi->m + spj->m)*spi_q*spj_q);
+#else
   lac->cc       = (4.*M_PI*spi->g->eps0*spi->m*spj->m*spi->g->cvac*spi->g->cvac*bmax) /
                   ((spi->m + spj->m)*spi->q*spj->q);
+#endif
   lac->twomu_mi = 2*spj->m/(spi->m+spj->m);
   lac->twomu_mj = 2*spi->m/(spi->m+spj->m);
   lac->Kc       = spi->g->cvac*M_PI*bmax*bmax;

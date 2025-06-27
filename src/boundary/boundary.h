@@ -95,7 +95,10 @@ void pbd_write_to_buffer(species_t * RESTRICT sp,
 
 
     if(diag->write_weight) buff[store++] = kpart(i, particle_var::w);
-
+   #ifdef FIELD_IONIZATION
+    //if(diag->write_charge) buff[store++] = kpart(i, particle_var::charge); // FIXME: should probably add this to pd_diagnistic at some point
+   #endif
+    
     // TODO: Write the user values
     //if(diag->enable_user) Call the user function
 

@@ -31,8 +31,11 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
     /**/  field_t    * RESTRICT ALIGNED(128) f = fa->f;
     const particle_t * RESTRICT ALIGNED(128) p = sp->p;
-
+#ifndef FIELD_IONIZATION
     const float q_8V = sp->q*sp->g->r8V;
+#else
+    const float r8V = sp->g->r8V;
+#endif
     const int np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
@@ -55,7 +58,9 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         // SIMD memory gather/scatter operations, the savings from using
         // "trilinear" are slightly outweighed by the overhead of the
         // gather/scatters.
-
+#ifdef FIELD_IONIZATION
+        float q_8V = p[n].charge*r8V;
+#endif
         // Load the particle data
 
         w0 = p[n].dx;
@@ -467,7 +472,11 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     k_particles_t kparticles = sp->k_p_d;
     k_particles_i_t kparticles_i = sp->k_p_i_d;
 
+   #ifndef FIELD_IONIZATION   
     const float q_8V = (sp->q)*(sp->g->r8V);
+   #else
+    const float r8V = (sp->g->r8V);
+   #endif
     const int np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
@@ -496,6 +505,9 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
     Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np), KOKKOS_LAMBDA(const int n) {
         float w0, w1, w2, w3, w4, w5, w6, w7, dz;
+#ifdef FIELD_IONIZATION   
+        float q_8V = kparticles(n, particle_var::charge)* r8V;
+#endif	
 
         w0 = kparticles(n, particle_var::dx);
         w1 = kparticles(n, particle_var::dy);

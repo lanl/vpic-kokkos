@@ -49,7 +49,13 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
     std::cout << "Initializing particles" << std::endl;
     species_t * sp_temp;
-    species_t * sp = define_species( "test_species", 1., 1., npart, npart, 0, 0 );
+    species_t * sp;
+   #if defined(FIELD_IONIZATION)
+    sp = define_species( "test_species", 1, 0,0,0, 1., npart, npart, 0, 0);
+    sp->ionization_energy[0] = 0;
+   #else
+    sp = define_species( "test_species", 1., 1., npart, npart, 0, 0 );
+   #endif
 
     int failed = 0;
 
@@ -63,8 +69,11 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
         float px = normal( rng(0), 0, 0.5);
         float py = normal( rng(0), 0, 1);
         float pz = normal( rng(0), 0, 2);
-        
-        inject_particle( sp , x, y, z, px, py, pz, 1., 0., 0);
+      #if defined(FIELD_IONIZATION)  
+        inject_particle( sp , x, y, z, px, py, pz, 1., 1., 0., 0);
+      #else
+	inject_particle( sp , x, y, z, px, py, pz, 1., 0., 0);
+      #endif
     }
 
     // Make sure kokkos views have correct data

@@ -11,13 +11,21 @@
 
 #define FIELD_VAR_COUNT 16
 #define FIELD_EDGE_COUNT 8
-#define PARTICLE_VAR_COUNT 7
+#ifdef FIELD_IONIZATION
+  #define PARTICLE_VAR_COUNT 8
+#else
+  #define PARTICLE_VAR_COUNT 7
+#endif
 #define PARTICLE_MOVER_VAR_COUNT 3
 #define ACCUMULATOR_VAR_COUNT 3
 #define ACCUMULATOR_ARRAY_LENGTH 4
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
+#ifdef FIELD_IONIZATION
+#define HYDRO_VAR_COUNT 17
+#else
 #define HYDRO_VAR_COUNT 14
+#endif
 #define NUM_J_DIMS 3
 
 #ifdef KOKKOS_ENABLE_CUDA
@@ -185,6 +193,9 @@ namespace particle_var {
     uy,
     uz,
     w,
+#ifdef FIELD_IONIZATION    
+    charge,
+#endif    
   };
 };
 
@@ -239,6 +250,11 @@ namespace hydro_var {
         tyz = 11,
         tzx = 12,
         txy = 13,
+      #ifdef FIELD_IONIZATION
+	n_p   = 14,
+        max_q = 15,
+	avg_q = 16,
+      #endif
     };
 };
 

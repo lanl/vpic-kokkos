@@ -24,7 +24,11 @@ interact_absorb_tally( absorb_tally_t      * RESTRICT at,
                        int                            max_pi,
                        int                            face ) {
   at->tally[ sp->id ]++;
+ #ifdef FIELD_IONIZATION
+  accumulate_rhob( at->fa->f, p, at->fa->g, p->charge );
+ #else
   accumulate_rhob( at->fa->f, p, at->fa->g, sp->q );
+ #endif
   return 0;
 }
 

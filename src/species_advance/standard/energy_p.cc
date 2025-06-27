@@ -9,7 +9,12 @@ energy_p_pipeline( energy_p_pipeline_args_t * RESTRICT args,
                    int n_pipeline ) {
   const interpolator_t * RESTRICT ALIGNED(128) f = args->f;
   const particle_t     * RESTRICT ALIGNED(32)  p = args->p;
+#ifdef FIELD_IONIZATION
+  float p_q;
+  float qdt_2mc = args->qdt_2mc;
+#else
   const float qdt_2mc = args->qdt_2mc;
+#endif
   const float msp     = args->msp;
   const float one     = 1;
 
@@ -27,6 +32,11 @@ energy_p_pipeline( energy_p_pipeline_args_t * RESTRICT args,
   // Process particles quads for this pipeline
 
   for( n=n0; n<n1; n++ ) {
+   #ifdef FIELD_IONIZATION
+    p_q = p[n].charge;
+    qdt_2mc = p_q * qdt_2mc;
+   #endif
+    
     dx  = p[n].dx;
     dy  = p[n].dy;
     dz  = p[n].dz;
@@ -118,6 +128,33 @@ energy_p_pipeline_v4( energy_p_pipeline_args_t * args,
 
 #endif
 
+#ifdef FIELD_IONIZATION
+double
+energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particles, const k_particles_i_t& k_particles_i, const float dt_2mc, const float msp, const int np) {
+
+  double en = 0;
+
+    Kokkos::parallel_reduce(np, KOKKOS_LAMBDA(const int n, double& update) {
+        float p_q = k_particles(n, particle_var::charge);
+	float qdt_2mc = p_q * dt_2mc;
+	  
+        float dx = k_particles(n, particle_var::dx);
+        float dy = k_particles(n, particle_var::dy);
+        float dz = k_particles(n, particle_var::dz);
+        int   i  = k_particles_i(n);
+        float v0 = k_particles(n, particle_var::ux) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
+                                dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
+        float v1 = k_particles(n, particle_var::uy) + qdt_2mc*(    ( k_interp(i, interpolator_var::ey)    + dz*k_interp(i, interpolator_var::deydz)    ) +
+                                dx*( k_interp(i, interpolator_var::deydx) + dz*k_interp(i, interpolator_var::d2eydzdx) ) );
+        float v2 = k_particles(n, particle_var::uz) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
+                                dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
+        v0 = v0*v0 + v1*v1 + v2*v2;
+        v0 = (msp * k_particles(n, particle_var::w)) * (v0 / (1 + sqrtf(1 + v0)));
+        update += static_cast<double>(v0);
+    }, en);
+    return en;
+}
+#else
 double
 energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particles, const k_particles_i_t& k_particles_i, const float qdt_2mc, const float msp, const int np) {
 //  const interpolator_t * RESTRICT ALIGNED(128) f = args->f;
@@ -174,6 +211,8 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
     }, en);
     return en;
 }
+#endif // FIELD_IONIZATION
+
 
 double
 energy_p( const species_t            * RESTRICT sp,
@@ -191,7 +230,11 @@ energy_p( const species_t            * RESTRICT sp,
   args->p       = sp->p;
   args->f       = ia->i;
   args->en      = en;
+#ifdef FIELD_IONIZATION
+  args->qdt_2mc = (sp->g->dt)/(2*sp->m*sp->g->cvac);
+#else
   args->qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+#endif
   args->msp     = sp->m;
   args->np      = sp->np;
 
@@ -210,11 +253,15 @@ energy_p_kokkos(const species_t* RESTRICT sp,
     double local, global;
 
     if(!sp || !ia || sp->g != ia->g) ERROR(("Bad args"));
-
+#ifdef FIELD_IONIZATION
+    float  dt_2mc = (sp->g->dt)/(2*sp->m*sp->g->cvac);
+    local = energy_p_kernel(ia->k_i_d, sp->k_p_d, sp->k_p_i_d,  dt_2mc, sp->m, sp->np);
+    Kokkos::fence();
+#else
     float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-
     local = energy_p_kernel(ia->k_i_d, sp->k_p_d, sp->k_p_i_d, qdt_2mc, sp->m, sp->np);
     Kokkos::fence();
+#endif
 
     mp_allsum_d( &local, &global, 1 );
     return global*(static_cast<double>(sp->g->cvac) * static_cast<double>(sp->g->cvac));

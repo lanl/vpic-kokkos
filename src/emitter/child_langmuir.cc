@@ -48,21 +48,23 @@ emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
   const int max_np           = sp->max_np;
   const int max_nm           = sp->max_nm;
   const int np_emit_per_face = cl->n_emit_per_face;
-
-  const float qsp     = sp->q;
   const float rdx     = g->rdx;
   const float rdy     = g->rdy;
   const float rdz     = g->rdz;
   const float cdt     = g->cvac*g->dt;
+  const float ut_para = cl->ut_para;
+  const float ut_perp = cl->ut_perp;
+#ifdef FIELD_IONIZATION
+  const float thresh_over_qsp  = cl->thresh_e_norm;
+#else
+  const float qsp     = sp->q;
   const float norm    = ( cl->norm*g->eps0*g->dt ) /
                         ( sqrtf(fabsf(qsp*sp->m))*(float)np_emit_per_face );
   const float norm_x  = norm*sqrtf(rdx)*g->dy*g->dz;
   const float norm_y  = norm*sqrtf(rdy)*g->dz*g->dx;
   const float norm_z  = norm*sqrtf(rdz)*g->dx*g->dy;
-  const float ut_para = cl->ut_para;
-  const float ut_perp = cl->ut_perp;
   const float thresh  = fabsf(qsp)*cl->thresh_e_norm;
-
+#endif
   int np = sp->np, np_skipped = 0;
   int nm = sp->nm, nm_skipped = 0;
 
@@ -77,7 +79,50 @@ emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
 
     // FIXME: COULD PROBABLY ACCELERATE BY GETTING RID OF SWITCH (USE
     // MAXWELLIAN_REFLUX TRICKS?)
+#ifdef FIELD_IONIZATION
+// FIXME-BMM: need to enable this, I think charge needs to be an input parameter
+WARNING(("EMIT_CHILD_LANGUMIR IS CURRENTLY DISABLED WHEN FIELD IONIZATION IS ENABLED"));
+#   define EMIT_PARTICLES(X,Y,Z,dir)		   	  	        \
+//    w = fi[i].e##X;                                                     \
+//    if( dir w > thresh_over_qsp ) { /* This face can emit */            \
+//      w = norm_##X*sqrtf(fabsf(w*w*w));                                 \
+//      for( np_emit=np_emit_per_face; np_emit; np_emit-- ) {             \
+//                                                                        \
+//        /* Emit the particle */                                         \
+//                                                                        \
+//        if( np>=max_np ) { np_skipped++; continue; }                    \
+//        u##X = dir ut_para*sqrtf(2*frande(rng));                        \
+//        u##Y = ut_perp*frandn(rng);                                     \
+//        u##Z = ut_perp*frandn(rng);                                     \
+//        p[np].d##X = -(dir 1);                                          \
+//        p[np].d##Y = 2*frand_c0(rng)-1;                                 \
+//        p[np].d##Z = 2*frand_c0(rng)-1;                                 \
+//        p[np].i    = i;                                                 \
+//        p[np].u##X = u##X;                                              \
+//        p[np].u##Y = u##Y;                                              \
+//        p[np].u##Z = u##Z;                                              \
+//        p[np].w    = w;                                                 \
+//	p[np].charge = charge;                                          \
+//        accumulate_rhob( f, p+np, g, -qsp );                            \
+//        np++;                                                           \
+//                                                                        \
+//        /* Age the particle */                                          \
+//                                                                        \
+//        if( nm>=max_nm ) { nm_skipped++; continue; }                    \
+//        w = ( frand_c0(rng)*cdt ) /                                     \
+//          sqrtf( ( u##X*u##X + u##Y*u##Y ) + ( u##Z*u##Z + 1 ) );       \
+//        DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );     \
+//        local_pm->disp##X = w*u##X*rd##X;                               \
+//        local_pm->disp##Y = w*u##Y*rd##Y;                               \
+//        local_pm->disp##Z = w*u##Z*rd##Z;                               \
+//        local_pm->i       = np-1;                                       \
+//        if (move_p( p, local_pm, cl->fa->k_jf_accum_h, g, qsp )) {                         \
+//            pm[nm++] = local_pm[0];                                     \
+//        }                                                               \
+//      }                                                                 \
+//    }
 
+#else
 #   define EMIT_PARTICLES(X,Y,Z,dir)                                    \
     w = fi[i].e##X;                                                     \
     if( dir qsp*w > thresh ) { /* This face can emit */                 \
@@ -116,6 +161,7 @@ emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
         }                                                               \
       }                                                                 \
     }
+#endif // FIELD_IONIZATION
 
     switch( EXTRACT_COMPONENT_TYPE( cc ) ) {
     case BOUNDARY(-1, 0, 0): EMIT_PARTICLES(x,y,z,+) break;

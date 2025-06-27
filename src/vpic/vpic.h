@@ -67,15 +67,26 @@ const uint32_t charge_density	(1<<3);
 const uint32_t momentum_density	(1<<4 | 1<<5 | 1<<6);
 const uint32_t ke_density		(1<<7);
 const uint32_t stress_tensor	(1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13);
+#ifdef FIELD_IONIZATION
+const uint32_t number_density	(1<<14);
+const uint32_t maximum_charge	(1<<15);
+const uint32_t average_charge	(1<<16);
+#endif
 /* May want to use these instead
 const uint32_t stress_diagonal 		(1<<8 | 1<<9 | 1<<10);
 const uint32_t stress_offdiagonal	(1<<11 | 1<<12 | 1<<13);
 */
-
+#ifdef FIELD_IONIZATION
+const size_t total_hydro_variables(17);
+const size_t total_hydro_groups(8); // this counts vectors, tensors etc...
+// These bits will be tested to determine which variables to output
+const size_t hydro_indeces[8] = { 0, 3, 4, 7, 8, 14, 15, 16 };
+#else
 const size_t total_hydro_variables(14);
 const size_t total_hydro_groups(5); // this counts vectors, tensors etc...
 // These bits will be tested to determine which variables to output
 const size_t hydro_indeces[5] = { 0, 3, 4, 7, 8 };
+#endif
 
 struct HydroInfo {
 	char name[128];
@@ -221,7 +232,7 @@ public:
   void output_checksum_species(const char * species);
   void checksum_species(const char * species, CheckSum & cs);
 #endif // ENABLE_OPENSSL
-
+  
   void print_available_ram() {
     SystemRAM::print_available();
   } // print_available_ram
@@ -236,6 +247,10 @@ public:
   void dump_energies( const char *fname, int append = 1 );
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
+#if defined(FIELD_IONIZATION)
+  void dump_ionization_states( const char *fname, int append = 1 );
+  void dump_E_time_history( const char *fname, int append = 1 );
+#endif
 
   // Binary dumps
   void dump_grid( const char *fbase );
@@ -506,7 +521,14 @@ public:
   // FIXME: SILLY PROMOTIONS
   inline species_t *
   define_species( const char *name,
+		 #if !defined(FIELD_IONIZATION)	  
                   double q,
+		 #else
+		  int n_energy,
+		  double qn, // quantum numbers n,m,l
+		  double qm,
+		  double ql,
+		 #endif
                   double m,
                   double max_local_np,
                   double max_local_nm,
@@ -520,7 +542,16 @@ public:
       if( max_local_nm<16*(MAX_PIPELINE+1) )
         max_local_nm = 16*(MAX_PIPELINE+1);
     }
-    return append_species( species( name, (float)q, (float)m,
+    return append_species( species( name,
+				   #if !defined(FIELD_IONIZATION)
+				    (float)q,
+				   #else
+				    (int) n_energy,
+				    (float)qn,
+		                    (float)qm,
+		                    (float)ql,
+				   #endif    
+				    (float)m,
                                     (int)max_local_np, (int)max_local_nm,
                                     (int)sort_interval, (int)sort_out_of_place,
                                     grid ), &species_list );
@@ -542,12 +573,25 @@ public:
   // Note: Don't use injection with aging during initialization
 
   // Defaults in the declaration below enable backwards compatibility.
-
+ #if defined(FIELD_IONIZATION)
   void
   inject_particle( species_t * sp,
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
-                   double w,  double age = 0, int update_rhob = 1 );
+                   double w,
+		   short int charge,
+      	           double age, int update_rhob );
+
+ #else
+  void
+  inject_particle( species_t * sp,
+                   double x,  double y,  double z,
+                   double ux, double uy, double uz,
+                   double w,
+      		   double age = 0, int update_rhob = 1 );  
+ #endif // FIELD_IONIZATION
+ 
+  
 
   // Inject particle raw is for power users!
   // No nannyism _at_ _all_:
@@ -557,7 +601,35 @@ public:
   // - Injection with displacment may use up movers (i.e. don't use
   //   injection with displacement during initialization).
   // This injection is _ultra_ _fast_.
+#ifdef FIELD_IONIZATION
+  inline void
+  inject_particle_raw( species_t * RESTRICT sp,
+                       float dx, float dy, float dz, int32_t i,
+                       float ux, float uy, float uz, float w, short int charge ) {
+    particle_t * RESTRICT p = sp->p + (sp->np++);
+    p->dx = dx; p->dy = dy; p->dz = dz; p->i = i;
+    p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
+    p->charge = charge;
+  }
 
+  // This variant does a raw inject and moves the particles
+  
+  inline void
+  inject_particle_raw( species_t * RESTRICT sp,
+                       float dx, float dy, float dz, int32_t i,
+                       float ux, float uy, float uz, float w, short int charge,
+                       float dispx, float dispy, float dispz,
+                       int update_rhob ) {
+    particle_t       * RESTRICT p  = sp->p  + (sp->np++);
+    particle_mover_t * RESTRICT pm = sp->pm + sp->nm;
+    p->dx = dx; p->dy = dy; p->dz = dz; p->i = i;
+    p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
+    p->charge =	charge;
+    pm->dispx = dispx; pm->dispy = dispy; pm->dispz = dispz; pm->i = sp->np-1;
+    if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -p->charge );
+    sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, p->charge );
+  }
+#else
   inline void
   inject_particle_raw( species_t * RESTRICT sp,
                        float dx, float dy, float dz, int32_t i,
@@ -583,7 +655,7 @@ public:
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
     sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
   }
-
+#endif
   //////////////////////////////////
   // Random number generator helpers
 

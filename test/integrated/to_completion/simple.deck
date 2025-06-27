@@ -133,8 +133,22 @@ begin_initialization {
   // Allow 50% more local_particles in case of non-uniformity
   // VPIC will pick the number of movers to use for each species
   // Both species use out-of-place sorting
-  species_t * ion      = define_species( "ion",       ec, mi, 1.5*Ni/nproc(), -1, 40, 1 );
-  species_t * electron = define_species( "electron", -ec, me, 1.5*Ne/nproc(), -1, 20, 1 );
+  species_t * ion;
+  species_t * electron;
+ #if defined(FIELD_IONIZATION)
+  grid->lambda  = 1; // these need to de defined as nonzero when 
+  grid->t_to_SI = 1; // field ionization is enabled 
+  grid->l_to_SI = 1; 
+  grid->q_to_SI = 1;
+  grid->m_to_SI = 1;
+  ion      = define_species( "ion",      1, 1,0,0, mi, 1.5*Ni/nproc(), -1, 40, 1 );
+  electron = define_species( "electron", 1, 1,0,0, me, 1.5*Ne/nproc(), -1, 20, 1 );
+  ion->ionization_energy[0] = 0;
+  electron->ionization_energy[0] = 0;
+ #else
+  ion      = define_species( "ion",       ec, mi, 1.5*Ni/nproc(), -1, 40, 1 );
+  electron = define_species( "electron", -ec, me, 1.5*Ne/nproc(), -1, 20, 1 );
+ #endif
 
   ///////////////////////////////////////////////////
   // Log diagnostic information about this simulation
@@ -175,15 +189,23 @@ begin_initialization {
     d0 = gdri*uy + sqrt(ux*ux+uy*uy+uz*uz+1)*udri;
     uy = d0*cs - uz*sn;
     uz = d0*sn + uz*cs;
+  #if defined(FIELD_IONIZATION)
+    inject_particle( ion,      x, y, z, ux, uy, uz, wi, ec, 0, 0 );
+  #else
     inject_particle( ion,      x, y, z, ux, uy, uz, wi, 0, 0 );
-
+  #endif
+  
     ux = normal( rng(0), 0, uthe );
     uy = normal( rng(0), 0, uthe );
     uz = normal( rng(0), 0, uthe );
     d0 = gdre*uy + sqrt(ux*ux+uy*uy+uz*uz+1)*udre;
     uy = d0*cs - uz*sn;
     uz = d0*sn + uz*cs;
+  #if defined(FIELD_IONIZATION)
+    inject_particle( electron, x, y, z, ux, uy, uz, we, -ec, 0, 0 );
+  #else
     inject_particle( electron, x, y, z, ux, uy, uz, we, 0, 0 );
+  #endif
   }
 
   // Upon completion of the initialization, the following occurs:

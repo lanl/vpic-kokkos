@@ -28,6 +28,12 @@ checkpt_species( const species_t * sp ) {
   CHECKPT_PTR( sp->g );
   CHECKPT_PTR( sp->next );
   CHECKPT_PTR( sp->pb_diag );
+
+#ifdef FIELD_IONIZATION
+  checkpt_data( sp->ionization_energy,
+                sp->n_energy * sizeof(double),
+                sp->n_energy * sizeof(double), 1, 1, 128 );
+#endif
 }
 
 species_t *
@@ -41,6 +47,11 @@ restore_species( void ) {
   RESTORE_PTR( sp->g );
   RESTORE_PTR( sp->next );
   RESTORE_PTR( sp->pb_diag );
+  
+#ifdef FIELD_IONIZATION
+  sp->ionization_energy = (double *)restore_data();
+#endif
+
   return sp;
 }
 
@@ -106,7 +117,14 @@ append_species( species_t * sp,
 
 species_t *
 species( const char * name,
+	#ifndef FIELD_IONIZATION
          float q,
+	#else
+	 int n_energy,
+	 float qn,
+	 float qm,
+	 float ql,
+	#endif
          float m,
          int max_local_np,
          int max_local_nm,
@@ -128,8 +146,15 @@ species( const char * name,
 
   MALLOC( sp->name, len+1 );
   strcpy( sp->name, name );
-
+#ifndef FIELD_IONIZATION
   sp->q = q;
+#else
+  sp->n_energy = n_energy;
+  sp->qn = qn;
+  sp->qm = qm;
+  sp->ql = ql;
+  sp->ionization_energy = new double[n_energy];
+#endif
   sp->m = m;
 
   if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for species %s.\n",
@@ -188,6 +213,9 @@ species_t::copy_to_host()
       particles[i].uy = k_particle_h(i, particle_var::uy);
       particles[i].uz = k_particle_h(i, particle_var::uz);
       particles[i].w  = k_particle_h(i, particle_var::w);
+#ifdef FIELD_IONIZATION      
+      particles[i].charge  = k_particle_h(i, particle_var::charge);
+#endif      
       particles[i].i  = k_particle_i_h(i);
 
     });
@@ -234,6 +262,9 @@ species_t::copy_to_device()
       k_particle_h(i, particle_var::uy) = particles[i].uy;
       k_particle_h(i, particle_var::uz) = particles[i].uz;
       k_particle_h(i, particle_var::w)  = particles[i].w;
+#ifdef FIELD_IONIZATION      
+      k_particle_h(i, particle_var::charge)  = particles[i].charge;
+#endif      
       k_particle_i_h(i) = particles[i].i;
 
     });
@@ -341,6 +372,9 @@ species_t::copy_inbound_to_device()
       particles(npi, particle_var::uy) = particle_copy(i, particle_var::uy);
       particles(npi, particle_var::uz) = particle_copy(i, particle_var::uz);
       particles(npi, particle_var::w)  = particle_copy(i, particle_var::w);
+#ifdef FIELD_IONIZATION      
+      particles(npi, particle_var::charge)  = particle_copy(i, particle_var::charge);
+#endif      
       particles_i(npi) = particle_copy_i(i);
 
     });

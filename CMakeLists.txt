@@ -39,6 +39,7 @@ include_directories(${MPI_CXX_INCLUDE_PATH})
 #------------------------------------------------------------------------------#
 # Add build options
 #------------------------------------------------------------------------------#
+option(FIELD_IONIZATION "Enable field ionization" ON)
 
 option(ENABLE_INTEGRATED_TESTS "enable integrated tests" OFF)
 
@@ -59,6 +60,8 @@ option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
+
+option(VPIC_DUMP_IONIZATION_STATES "If the code should dump ionizationstates everytimestep for debugging" OFF)
 
 option(VPIC_ENABLE_AUTO_TUNING "Enable automatic tuning based on architecture" ON)
 
@@ -340,6 +343,16 @@ if(ENABLE_OPENSSL)
   add_definitions(-DENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
 
+if(FIELD_IONIZATION)
+  add_definitions(-DFIELD_IONIZATION)
+#  add_compile_definitions(-DFIELD_IONIZATION)
+  set(FIELD_IONIZATION True)
+
+  if (VPIC_DUMP_IONIZATION_STATES)
+      add_definitions(-DDUMP_IONIZATION_STATES)
+  endif(VPIC_DUMP_IONIZATION_STATES)
+endif(FIELD_IONIZATION)
+
 #------------------------------------------------------------------------------#
 # Output log variables
 #------------------------------------------------------------------------------#
@@ -386,6 +399,10 @@ configure_file(
     ${CMAKE_SOURCE_DIR}/sample/Makefile.run.in
     ${CMAKE_BINARY_DIR}/bin/Makefile.run
 )
+
+#The compile definitions are associated with a directory, and won't automatically be available for the deck compile scripts.
+get_directory_property( DirDefs COMPILE_DEFINITIONS )
+string(REPLACE ";" " -D" DirDefs "-D${DirDefs}")
 
 # install script
 configure_file(

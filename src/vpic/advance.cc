@@ -68,8 +68,12 @@ int vpic_simulation::advance(void)
   // DEVICE function - Touches particles, particle movers, accumulators, interpolators
   LIST_FOR_EACH( sp, species_list )
   {
-      // Now Times internally
-      advance_p( sp, interpolator_array, field_array );
+    // Now Times internally
+   #ifdef FIELD_IONIZATION
+    advance_p( sp, interpolator_array, field_array, species_list );
+   #else
+    advance_p( sp, interpolator_array, field_array );
+   #endif
   }
   //printf("Pushed\n");
 
@@ -376,6 +380,10 @@ int vpic_simulation::advance(void)
 
 #ifdef DUMP_ENERGIES
   TIC dump_energies("energies.txt", 1); TOC( dump_energies, 1);
+#endif
+
+#if defined(DUMP_IONIZATION_STATES) && defined(FIELD_IONIZATION)
+  TIC dump_ionization_states("ionization_states.txt", 1); TOC( dump_ionization_states, 1);
 #endif
 
   return 1;

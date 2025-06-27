@@ -79,6 +79,143 @@ vpic_simulation::dump_energies( const char *fname,
   }
 }
 
+#ifdef FIELD_IONIZATION
+void
+vpic_simulation::dump_ionization_states( const char *fname,
+                                int append ) {
+
+  Kokkos::View<int*, Kokkos::HostSpace> N_ions_h;
+
+  species_t *sp;
+  FileIO fileIO;
+  FileIOStatus status(fail);
+
+  if( !fname ) ERROR(("Invalid file name"));
+
+  // Iterate over each species
+  LIST_FOR_EACH(sp, species_list) {
+    // Ignore species with ionization energy set to 0, except for electrons
+    if (std::string(sp->name) != "electron" && sp->n_energy == 0) {
+      // Skip file creation for the "electron" species or when ionization isnt desired for a species
+      continue;
+    }
+
+    // Create a filename based on the original fname and species name
+    std::string speciesFileNameStr = std::string(fname) + "_" + sp->name;
+    const char* speciesFileName = speciesFileNameStr.c_str();
+
+    if (rank() == 0) {
+      // Open the file for the current species
+      status = fileIO.open(speciesFileName, append ? io_append : io_write);
+
+      if (status == fail)
+        ERROR(("Could not open \"%s\".", speciesFileName));
+      else {
+        if (append == 0) {
+          // Dynamically generate the layout string
+          std::string layoutString = "%% Layout\n%% Number of particles in each ionization state\n%% step";
+          for (size_t i = 0; i <= sp->n_energy; ++i) {
+            layoutString += " " + std::to_string(i) + "+";
+          }
+          fileIO.print(layoutString.c_str());
+          fileIO.print("\n");
+          fileIO.print("%% timestep_to_SI = %e\n", grid->dt*grid->t_to_SI);
+        }
+        fileIO.print("%li", (long)step());
+      }
+    } // if rank
+
+    // Calculate the total number of electrons and ions
+    int np_global;
+    if (std::string(sp->name) == "electron") {
+      int np = sp->np;
+      mp_allsum_i( &np, &np_global, 1 );
+    } else {
+      N_ions_h = ionization_states_kokkos( sp ); // Number of particles in each ionization state
+    }
+
+    // Print Number of particles in each ionization state
+    // For electrons, print total number
+    if (std::string(sp->name) != "electron") {
+      if (rank() == 0 && status != fail) {
+        for (size_t i = 0; i < N_ions_h.extent(0); ++i) {
+          fileIO.print(" %lld", N_ions_h(i));
+        }
+      }
+    } else {
+      if (rank() == 0 && status != fail) {
+	fileIO.print(" %lld", np_global);
+      }
+    }
+
+    if( rank()==0 && status!=fail ) {
+      fileIO.print( "\n" );
+      if( fileIO.close() ) ERROR(("File close failed on dump ionization states!!!"));
+    }
+    
+  } // species loop
+} // dump_ionization_states
+
+
+
+
+
+
+void
+vpic_simulation::dump_E_time_history( const char *fname,
+                                int append ) {
+  
+  double E_value;
+  species_t *sp;
+  FileIO fileIO;
+  FileIOStatus status(fail);
+
+  if( !fname ) ERROR(("Invalid file name"));
+
+  // This gets the total QOI across all ranks 
+  LIST_FOR_EACH(sp,species_list) {
+    // Only use special particles with "time_history" in the name
+    if (std::string(sp->name).find("time_history") == std::string::npos) {
+      continue;
+    }
+
+    // This checks if the species has more than 1 particle
+    // This probably needs to be fixed so that multiple particles work
+    if (sp->np > 1) ERROR(("E-field time history species can only have 1 particle!!!"));
+
+    // Create a filename based on the original fname and species name
+    std::string speciesFileNameStr = std::string(fname) + "_" + sp->name;
+    const char* speciesFileName = speciesFileNameStr.c_str();
+    if (rank() == 0) {
+      // Open the file for the current species
+      status = fileIO.open(speciesFileName, append ? io_append : io_write);
+      
+      if (status == fail) ERROR(("Could not open \"%s\".", speciesFileName));
+      else {
+        if( append==0 ) {
+          fileIO.print( "%% Layout\n%% step location1" );
+          fileIO.print( "\n" );
+          fileIO.print( "%% timestep = %e\n", grid->dt*grid->t_to_SI );
+        }
+        fileIO.print( "%li", (long)step() );
+      }
+    } // if rank    
+
+    
+    E_value = E_time_history( sp, interpolator_array);
+    if( rank()==0 && status!=fail ) fileIO.print( " %e", E_value );
+
+    // Closes the file
+    if( rank()==0 && status!=fail ) {
+      fileIO.print( "\n" );
+      if( fileIO.close() ) ERROR(("File close failed on dump energies!!!"));
+    }
+    
+  } // list species
+
+} // dump_E_time_history
+#endif
+
 // Note: dump_species/materials assume that names do not contain any \n!
 
 void
@@ -92,7 +229,11 @@ vpic_simulation::dump_species( const char *fname ) {
   FileIOStatus status = fileIO.open(fname, io_write);
   if( status==fail ) ERROR(( "Could not open \"%s\".", fname ));
   LIST_FOR_EACH( sp, species_list )
+   #ifdef FIELD_IONIZATION
+    fileIO.print( "%s %i %e", sp->name, sp->id, sp->m );
+   #else
     fileIO.print( "%s %i %e %e", sp->name, sp->id, sp->q, sp->m );
+   #endif
   if( fileIO.close() ) ERROR(( "File close failed on dump species!!!" ));
 }
 
@@ -275,9 +416,11 @@ vpic_simulation::dump_hydro( const char *sp_name,
   dxout = grid->dx;
   dyout = grid->dy;
   dzout = grid->dz;
-
+#ifdef FIELD_IONIZATION
+  WRITE_HEADER_V0( dump_type::hydro_dump,sp->id,sp->m,fileIO);
+#else
   WRITE_HEADER_V0( dump_type::hydro_dump,sp->id,sp->q/sp->m,fileIO);
-
+#endif
   dim[0] = grid->nx+2;
   dim[1] = grid->ny+2;
   dim[2] = grid->nz+2;
@@ -330,9 +473,11 @@ vpic_simulation::dump_particles( const char *sp_name,
     dxout = grid->dx;
     dyout = grid->dy;
     dzout = grid->dz;
-
+#ifdef FIELD_IONIZATION
+    WRITE_HEADER_V0( dump_type::particle_dump, sp->id, sp->m, fileIO );
+#else
     WRITE_HEADER_V0( dump_type::particle_dump, sp->id, sp->q/sp->m, fileIO );
-
+#endif
     dim[0] = sp->np;
     WRITE_ARRAY_HEADER( p_buf, 1, dim, fileIO );
 
@@ -383,6 +528,23 @@ static FieldInfo fieldInfo[12] = {
 	{ "Cell Material", "SCALAR", "1", "INTEGER", sizeof(material_id) }
 }; // fieldInfo
 
+#ifdef FIELD_IONIZATION
+static HydroInfo hydroInfo[8] = {
+	{ "Current Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
+	{ "Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
+	{ "Momentum Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
+	{ "Kinetic Energy Density", "SCALAR", "1", "FLOATING_POINT",
+		sizeof(float) },
+	{ "Stress Tensor", "TENSOR", "6", "FLOATING_POINT", sizeof(float) },
+	{ "Number Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
+	{ "Maximum Macro Charge", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
+	{ "Average Macro Charge", "SCALAR", "1", "FLOATING_POINT", sizeof(float) }
+	/*
+	{ "STRESS_DIAGONAL", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }
+	{ "STRESS_OFFDIAGONAL", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }
+	*/
+}; // hydroInfo
+#else //FIELD_IONIZATION
 static HydroInfo hydroInfo[5] = {
 	{ "Current Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
 	{ "Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
@@ -395,6 +557,7 @@ static HydroInfo hydroInfo[5] = {
 	{ "STRESS_OFFDIAGONAL", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }
 	*/
 }; // hydroInfo
+#endif //FIELD_IONIZATION
 
 void
 vpic_simulation::create_field_list( char * strlist,
@@ -788,9 +951,11 @@ vpic_simulation::hydro_dump( const char * speciesname,
    * plus every "stride" elements in that dimension.
    */
   if(dumpParams.format == band) {
-
+#ifdef FIELD_IONIZATION
+    WRITE_HEADER_V0(dump_type::hydro_dump, sp->id, sp->m, fileIO);
+#else
     WRITE_HEADER_V0(dump_type::hydro_dump, sp->id, sp->q/sp->m, fileIO);
-
+#endif
     dim[0] = nxout+2;
     dim[1] = nyout+2;
     dim[2] = nzout+2;
@@ -832,9 +997,11 @@ vpic_simulation::hydro_dump( const char * speciesname,
     delete[] varlist;
 
   } else { // band_interleave
-
+#ifdef FIELD_IONIZATION
+    WRITE_HEADER_V0(dump_type::hydro_dump, sp->id, sp->m, fileIO);
+#else
     WRITE_HEADER_V0(dump_type::hydro_dump, sp->id, sp->q/sp->m, fileIO);
-
+#endif
     dim[0] = nxout;
     dim[1] = nyout;
     dim[2] = nzout;
