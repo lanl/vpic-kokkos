@@ -61,7 +61,7 @@ lemons(
   /**/  fluid_species_t  * spj,
   const double       cvar0,
   const int          interval,
-  field_array_t* field = nullptr
+  field_array_t* field = NULL
 );
 
 void transfer_mom_en_src(

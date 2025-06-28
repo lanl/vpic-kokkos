@@ -53,7 +53,7 @@ begin_initialization {
   double bmax     = sqrt( p_coll / ( 4.*sqrt(M_PI)*wp*debye*dt*interval*n0 ) );
   double sample   = 1;
 
-  int n_step = 10;
+  int n_step = 30;
 
   define_units( 1, 1 );
   define_timestep( dt );
@@ -113,9 +113,11 @@ begin_initialization {
   FAK->clear_jf_kokkos( field_array );
   k_accumulate_rho_p( field_array, sp );
   FAK->hyb_init(field_array,0);
+  
   auto &k_field = field_array->k_f_d;
   
   define_collision_op(lemons("lemons_coll", sp, sp_fl, cvar0, ncoll,field_array) );
+  // define_collision_op(lemons("lemons_coll", sp, sp_fl, cvar0, ncoll) );
   
 /*
   define_collision_op( langevin( kT0, 1./dt, sp, entropy, 1*(int)interval ) );
@@ -163,7 +165,7 @@ begin_initialization {
   double elapsed = wallclock();
   printf("#start collisions\n");
   repeat( n_step ) {
-      printf("#step=%d\n",n_step-_remain);
+      // printf("#step=%d\n",n_step-_remain);
       apply_collision_op_list( collision_op_list, *kokkos_rng );
 
       Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
@@ -175,7 +177,7 @@ begin_initialization {
       				sp
       				);
       hydro_array->copy_to_host(true); //print_to_screen == true
-      transfer_mom_en_src(k_field, sp_fl);
+      // transfer_mom_en_src(k_field, sp_fl);
   }
   elapsed = wallclock() - elapsed;
 

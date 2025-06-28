@@ -92,9 +92,9 @@ using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULAT
 
 using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT], Kokkos::LayoutRight>;
 // 1D View: shape [FLUID_VAR_COUNT]
-using k_fluid_1d = Kokkos::View<float*>;
-struct field_tag {};  // Just an empty struct for tagging
-using k_field_1d = Kokkos::View<float*, field_tag>;
+// using k_fluid_1d = Kokkos::View<float*>;
+// struct field_tag {};  // Just an empty struct for tagging
+// using k_field_1d = Kokkos::View<float*, field_tag>;
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;

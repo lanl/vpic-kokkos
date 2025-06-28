@@ -74,7 +74,8 @@ struct particle_bulk_collision_pipeline {
   k_fluid_t _spj_fl;
   field_array_t *_field; //for electron-ion collisions
   k_field_t _spj_fd; 
-
+  bool _use_e_field;
+    
   // Random access, read-only Views
   // TODO : Does RandomAccess trait really matter?
   k_particle_sortindex_t_ra _spi_sortindex_ra;//, _spj_sortindex_ra;
@@ -105,7 +106,9 @@ struct particle_bulk_collision_pipeline {
     //TODO: is interval needed here?
     if( !_spi || !_spj || !_spi->g || !_spj->g || _spi->g != _spj->g || interval <= 0)
       ERROR(("Bad args."));
-
+    if(_field==NULL) _use_e_field = false;
+    else _use_e_field = true;
+    // printf("use_e_field=%d\n",_use_e_field);
   }
 
   /**
@@ -136,7 +139,7 @@ struct particle_bulk_collision_pipeline {
 
     // TO-DO: NEED TO DO THIS FOR FLUID?
     _spj_fl           = _spj->k_fl_d;
-    if(_field!=NULL) _spj_fd = _field->k_f_d;
+    if(_use_e_field) _spj_fd = _field->k_f_d;
     // else  printf("Pointer _field: %p\n", _field);
     //    _spj_p            = _spj->k_p_d;
     //    _spj_i            = _spj->k_p_i_d;
@@ -242,7 +245,8 @@ struct particle_bulk_collision_pipeline {
     //    auto const& spj_sortindex_ra = _spj_sortindex_ra;
     auto const& spi_partition_ra = _spi_partition_ra;
     //    auto const& spj_partition_ra = _spj_partition_ra;
-
+    auto const& use_e_field = _use_e_field;
+    
     Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
       KOKKOS_LAMBDA (member_type team_member) {
@@ -273,7 +277,7 @@ struct particle_bulk_collision_pipeline {
 	
         // Get a random generator. Do not leave without freeing it.
         kokkos_rng_state_t rg = rp.get_state();
-
+	
 
 	//// Extract fluid variables
 	//	const float n_fl = spj_fl(v, fluid_var::den);
@@ -303,11 +307,13 @@ struct particle_bulk_collision_pipeline {
 	    float ux_n = up[1];
 	    float uy_n = up[2];
 	    float uz_n = up[3];
-      if( _field==NULL ) {
-	      particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,v);
-      } else {      
-        particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt,v);
-      }
+	    
+	    if( use_e_field ) {
+	    	particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt,v);
+	    } else {      
+	     	particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,v);
+	    }
+	    
  	    float ux_i = up[1];
 	    float uy_i = up[2];
 	    float uz_i = up[3];
@@ -339,24 +345,21 @@ struct particle_bulk_collision_pipeline {
 	// printf("Dm=%e,%e,%e,%e,%e\n",Dm.v[0],Dm.v[1],Dm.v[2],Dm.v[3],Dm.v[4]);
 	if (team_member.team_rank() == 0) {
 	    // Code that runs once per team leader
-      if( _field==NULL ) {
-        //auto row_v = Kokkos::subview(spj_fl, v, Kokkos::ALL);
+	    if( use_e_field ) {
+	    	// If we have a field, we upload the moment source to the field.
+	     	// Upload the moment source to the field.
+	     	model.upload_moment_src( spj_fd, v, Dm );
+	    } else {    
 	      model.upload_moment_src( spj_fl, v, Dm );   
-      } else {
-        // If we have a field, we upload the moment source to the field.
-        // Upload the moment source to the field.
-        //auto row_f = Kokkos::subview(_spj_fd, v, Kokkos::ALL);
-        model.upload_moment_src( spj_fd, v, Dm );
-      }
+	    }
 	    
 	}
-	
 
         // We *must* free generators.
         rp.free_state(rg);
 
 			 });
-
+    
     // I don't know why we need this, but without it I get an illegal memory
     // access error ... suspicious.
     Kokkos::fence();
@@ -371,7 +374,8 @@ struct particle_bulk_collision_pipeline {
   //with the _ (underscore), because _ is used to indicate a class member before it
   //is caputred by a lambda. One lambda captured, we should refer to the variable
   //as EX: mu not _mu
-  template<class collision_model, typename ViewType>
+    template<class view_type, class collision_model>
+    //template<class collision_model>
   KOKKOS_INLINE_FUNCTION
   void particle_bulk_collision (
     const float mi,
@@ -386,7 +390,8 @@ struct particle_bulk_collision_pipeline {
 #endif
     //const k_particles_t&   spi_p,
     //    const k_particles_t&   spj_p,
-    const ViewType& spj_f,
+    const view_type& spj_f,
+    //const k_field_t spj_f,
     collision_model& model,
     kokkos_rng_state_t& rg,
     float dt,
@@ -414,22 +419,22 @@ struct particle_bulk_collision_pipeline {
 
     // Extract fluid vars
     float nj_fl, ujx_fl, ujy_fl, ujz_fl, tmp_fl;
-    if constexpr (std::is_same<ViewType, k_fluid_t>::value) {
-      nj_fl = spj_f(ii, fluid_var::den);
-      ujx_fl = spj_f(ii, fluid_var::ux);
-      ujy_fl = spj_f(ii, fluid_var::uy);
-      ujz_fl = spj_f(ii, fluid_var::uz);
-      tmp_fl = spj_f(ii, fluid_var::tmp);
-    }else{
-      // If not a fluid, we assume the fluid is at rest.
-      nj_fl = spj_f(ii, field_var::rhof);
-      ujx_fl = spj_f(ii, field_var::ux);
-      ujy_fl = spj_f(ii, field_var::uy);
-      ujz_fl = spj_f(ii, field_var::uz);
-      tmp_fl = spj_f(ii, field_var::pe)/nj_fl; //nj_fl should be non-zero
-      printf("nj_fl=%e, ujx_fl=%e, ujy_fl=%e, ujz_fl=%e, tmp_fl=%e\n",
-                      nj_fl, ujx_fl, ujy_fl, ujz_fl, tmp_fl);
-    }
+    if constexpr (std::is_same<view_type, k_fluid_t>::value) {
+	    nj_fl = spj_f(ii, fluid_var::den);
+	    ujx_fl = spj_f(ii, fluid_var::ux);
+	    ujy_fl = spj_f(ii, fluid_var::uy);
+	    ujz_fl = spj_f(ii, fluid_var::uz);
+	    tmp_fl = spj_f(ii, fluid_var::tmp);
+	  } else if constexpr (std::is_same<view_type, k_field_t>::value) {
+	    nj_fl = spj_f(ii, field_var::rhof);
+	    ujx_fl = spj_f(ii, field_var::ux);
+	    ujy_fl = spj_f(ii, field_var::uy);
+	    ujz_fl = spj_f(ii, field_var::uz);
+	    tmp_fl = spj_f(ii, field_var::pe)/nj_fl; //nj_fl should be non-zero
+	  }
+    // printf("nj_fl=%e, ujx_fl=%e, ujy_fl=%e, ujz_fl=%e, tmp_fl=%e\n",
+    //  	   nj_fl, ujx_fl, ujy_fl, ujz_fl, tmp_fl);
+
     float ndt = nj_fl * dt;
     //    printf("n=%14.8e, dt=%14.8e, mi=%14.8e\n",nj_fl, dt, mi);
     
