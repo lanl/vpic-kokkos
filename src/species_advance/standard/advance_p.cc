@@ -343,7 +343,9 @@ advance_p_kokkos_unified(
         const int max_nm,
         const int nx,
         const int ny,
-        const int nz)
+        const int nz,
+        const float ut_para,
+        const float ut_perp)
 {
 
   constexpr float one            = 1.;
@@ -691,7 +693,7 @@ advance_p_kokkos_unified(
           local_pm->i     = p_index;
 
           if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                             current_sv, g, k_neighbors, rangel, rangeh, qsp, gdx,gdy,gdz,gdt, nx, ny, nz ) )
+                             current_sv, g, k_neighbors, rangel, rangeh, qsp, gdx,gdy,gdz,gdt, nx, ny, nz, ut_para, ut_perp ) )
           {
             if( k_nm(0)<max_nm ) {
               const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
@@ -819,7 +821,9 @@ advance_p_kokkos_gpu(
         const int max_nm,
         const int nx,
         const int ny,
-        const int nz)
+        const int nz,
+        const float ut_para,
+        const float ut_perp)
 {
 
   constexpr float one            = 1.;
@@ -1055,7 +1059,7 @@ advance_p_kokkos_gpu(
       
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e uz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-			 k_f_sv, g, k_neighbors, rangel, rangeh, qsp, gdx, gdy, gdz, gdt, nx, ny, nz ) )
+			 k_f_sv, g, k_neighbors, rangel, rangeh, qsp, gdx, gdy, gdz, gdt, nx, ny, nz, ut_para, ut_perp  ) )
 	{
 	  if( k_nm(0) < max_nm )
 	    {
@@ -1182,7 +1186,9 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->max_nm,
           sp->g->nx,
           sp->g->ny,
-          sp->g->nz
+          sp->g->nz,
+          sp->ut_para,
+          sp->ut_perp
   );
   KOKKOS_TOC( advance_p, 1);
 

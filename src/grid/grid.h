@@ -28,7 +28,9 @@ enum grid_enums {
 
   // Phase 3 boundary conditions
   reflect_particles = -1, // Cell boundary should reflect particles
-  absorb_particles  = -2  // Cell boundary should absorb particles
+  absorb_particles  = -2,  // Cell boundary should absorb particles
+  Maxwellian_reflux = -3  // Cell boundary should reinject from Maxwellian
+                          // distribution
 
   // Symmetry in the field boundary conditions refers to image charge
   // sign
@@ -130,7 +132,8 @@ typedef struct grid {
   int64_t * ALIGNED(128) neighbor;
                           // (0:5,0:local_num_voxel-1) FORTRAN indexed
                           // array neighbor(0:5,lidx) are the global
-                          // indexes of neighboring voxels of the
+                          // Cell boundary should reinject from Maxwellian
+                          // distribution // indexes of neighboring voxels of the
                           // voxel with local index "lidx".  Negative
                           // if neighbor is a boundary condition.
 
