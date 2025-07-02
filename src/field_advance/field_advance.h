@@ -258,8 +258,10 @@ typedef struct field_buffers {
   view_type recv_buffer[27];
 
   field_buffers() {
-    // User should try avoid calling this
-  }
+  };
+
+  ~field_buffers() {
+  };
 
   field_buffers(int xyz_size, int yzx_size, int zxy_size) {
     send_buffer[BOUNDARY(1,0,0)]  = view_type("Pos x-face Send buffer", xyz_size);
@@ -288,7 +290,7 @@ typedef struct field_array {
 
   // I don't want this to be a pointer, but given it only holds Kokkos data
   // this avoids a fiasco when checkpointing...
-  field_buffers_t* fb;
+  field_buffers_t *fb;
 
   k_field_t k_f_d;                   // Kokkos field data on device
   k_field_t::HostMirror k_f_h;       // Kokkos field data on host
@@ -303,12 +305,12 @@ typedef struct field_array {
   k_jf_accum_t::HostMirror k_jf_accum_h;
 
   // Execution spaces for async compute/data movement
-  std::vector<Kokkos::DefaultExecutionSpace> exec_space_instances;
-  Kokkos::DefaultExecutionSpace default_space;
-  Kokkos::DefaultExecutionSpace ghost_comm_space, inner_comp_space;
-  Kokkos::DefaultExecutionSpace pos_x_face_space, neg_x_face_space;
-  Kokkos::DefaultExecutionSpace pos_y_face_space, neg_y_face_space;
-  Kokkos::DefaultExecutionSpace pos_z_face_space, neg_z_face_space;
+//  std::vector<Kokkos::DefaultExecutionSpace> exec_space_instances;
+//  Kokkos::DefaultExecutionSpace default_space;
+//  Kokkos::DefaultExecutionSpace ghost_comm_space, inner_comp_space;
+//  Kokkos::DefaultExecutionSpace pos_x_face_space, neg_x_face_space;
+//  Kokkos::DefaultExecutionSpace pos_y_face_space, neg_y_face_space;
+//  Kokkos::DefaultExecutionSpace pos_z_face_space, neg_z_face_space;
 
   // Requests for MPI_Waitany
   MPI_Request recv_req[27];

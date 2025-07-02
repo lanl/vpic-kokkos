@@ -95,6 +95,7 @@ begin_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
   BEGIN_RECV( 0, 0, 1,z,x,y);
 # undef BEGIN_RECV
 
+
 # define BEGIN_SEND(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {          \
     size = (1+n##Y*(n##Z+1)+n##Z*(n##Y+1))*sizeof(float);   \
     p = (float *)size_send_port( i, j, k, size, g );        \
@@ -478,9 +479,9 @@ template <> void begin_send<ZXY>(int i, int j, int k, int nx, int ny, int nz, fi
 
 void
 kokkos_begin_remote_ghost_tang_b( field_array_t      * RESTRICT fa,
-                                  const grid_t *              g,
-                                  field_buffers_t&            f_buffers) {
+                                  const grid_t *              g) {
     const int nx = g->nx, ny = g->ny, nz = g->nz;
+    field_buffers_t f_buffers = *(fa->fb);
 
     begin_recv_kokkos<-1,0,0>(g, f_buffers);
     begin_recv_kokkos<0,-1,0>(g, f_buffers);
@@ -769,9 +770,9 @@ k_end_remote_ghost_tang_b( field_array_t      * RESTRICT field,
 
 void
 kokkos_end_remote_ghost_tang_b( field_array_t      * RESTRICT field,
-                         const grid_t *              g ,
-                            field_buffers_t&        f_buffers) {
+                         const grid_t *              g) {
     const int nx = g->nx, ny = g->ny, nz = g->nz;
+    field_buffers_t f_buffers = *(field->fb);
 
     end_recv_kokkos<XYZ>(g, field, -1, 0, 0, nx, ny, nz, f_buffers.recv_buffer[BOUNDARY(-1, 0, 0)]);
     end_recv_kokkos<YZX>(g, field, 0, -1, 0, nx, ny, nz, f_buffers.recv_buffer[BOUNDARY(0, -1, 0)]);
@@ -996,8 +997,8 @@ template<> void begin_send_ghost_norm_e<ZXY>(field_array_t* fa, const grid_t* g,
 
 void
 kokkos_begin_remote_ghost_norm_e( field_array_t      * ALIGNED(128) field,
-                                  const grid_t *              g,
-                                  field_buffers_t&            f_buffers) {
+                                  const grid_t *              g) {
+    field_buffers_t f_buffers = *(field->fb);
     begin_recv_ghost_norm_e_kokkos<XYZ>(g, -1,  0,  0, f_buffers.recv_buffer[BOUNDARY(-1,  0,  0)]);
     begin_recv_ghost_norm_e_kokkos<YZX>(g,  0, -1,  0, f_buffers.recv_buffer[BOUNDARY( 0, -1,  0)]);
     begin_recv_ghost_norm_e_kokkos<ZXY>(g,  0,  0, -1, f_buffers.recv_buffer[BOUNDARY( 0,  0, -1)]);
@@ -1241,9 +1242,9 @@ template<typename T> void end_send_ghost_norm_e(const grid_t* g, const int i, co
 
 void
 kokkos_end_remote_ghost_norm_e( field_array_t      * ALIGNED(128) field,
-                         const grid_t *              g,
-                            field_buffers_t&            f_buffers) {
+                         const grid_t *              g) {
 
+    field_buffers_t f_buffers = *(field->fb);
     end_recv_ghost_norm_e_kokkos<XYZ>(field, g, -1,  0,  0, f_buffers.recv_buffer[BOUNDARY(-1, 0, 0)]);
     end_recv_ghost_norm_e_kokkos<YZX>(field, g,  0, -1,  0, f_buffers.recv_buffer[BOUNDARY( 0,-1, 0)]);
     end_recv_ghost_norm_e_kokkos<ZXY>(field, g,  0,  0, -1, f_buffers.recv_buffer[BOUNDARY( 0, 0,-1)]);
@@ -1316,7 +1317,7 @@ end_remote_ghost_norm_e( field_t      * ALIGNED(128) field,
 template<typename Face> 
 void 
 begin_recv_ghost_div_b(field_array* fa, const int i, const int j, const int k) {
-  field_buffers_t* fb = fa->fb;
+  field_buffers_t *fb = fa->fb;
   const int nx = fa->g->nx, ny = fa->g->ny, nz=fa->g->nz;
   int size;
   if constexpr (std::is_same<Face,XYZ>::value) {
@@ -1455,7 +1456,7 @@ begin_remote_ghost_div_b( field_t      * ALIGNED(128) field,
 # undef BEGIN_SEND
 }
 
-void k_begin_remote_ghost_div_b(field_array_t* ALIGNED(128) fa, const grid_t* g, field_buffers_t& fb) {
+void k_begin_remote_ghost_div_b(field_array_t* ALIGNED(128) fa, const grid_t* g) {
 // Start receiving
     begin_recv_ghost_div_b<XYZ>(fa, -1,  0,  0);
     begin_recv_ghost_div_b<YZX>(fa,  0, -1,  0);
@@ -1480,7 +1481,7 @@ void
 end_recv_ghost_div_b(field_array_t* fa, const int i, const int j, const int k) {
   int face;
   const grid_t* g = fa->g;
-  field_buffers_t* fb = fa->fb;
+  field_buffers_t *fb = fa->fb;
   float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));
   if(p) {
     Kokkos::DualView<float*> rbuf = fb->recv_buffer[BOUNDARY(i,j,k)];
@@ -1728,7 +1729,7 @@ sync_comm_buffer(Kokkos::DualView<float*>& view) {
 #define COPY_FACE(x_,y_,z_,fields,i,j,k)                                       \
   const int x_##src = (i+j+k) < 0 ? 1 : n##x_;                                 \
   const int x_##dst = (i+j+k) < 0 ? n##x_+1 : 0;                               \
-  Kokkos::MDRangePolicy<Kokkos::Rank<3>> face_pol(fa->ghost_comm_space,{1,1,0},\
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> face_pol({1,1,0},\
                                                      {n##y_+1,n##z_+1,nvar});  \
   Kokkos::parallel_for("copy_face_2_ghost<" #x_ #y_ #z_ ">", face_pol,         \
     KOKKOS_LAMBDA(const int y_##src, const int z_##src, const int v) {         \
@@ -2068,7 +2069,7 @@ end_halo_exchange(field_array* fa, const int beg_var, const int end_var) {
   end_send_face<0,0,1>(fa);
 
   // Ensure all unpacking and copy kernels are complete
-  fa->ghost_comm_space.fence();
+  //fa->ghost_comm_space.fence();
   Kokkos::fence();
 }
 
@@ -2097,7 +2098,7 @@ end_halo_exchange(field_array* fa, const int beg_var, const int end_var) {
 template<typename Face> 
 void 
 begin_recv_ghost_hyb_jf(field_array* fa, const int i, const int j, const int k) {
-  field_buffers_t* fb = fa->fb;
+  field_buffers_t *fb = fa->fb;
   int src = fa->g->bc[BOUNDARY(-i,-j,-k)]; /**< Source rank */
   // Only recv cells if dst is a valid neighbor and not itself
   if( 0 <= src && src < world_size ) {
@@ -2185,9 +2186,7 @@ begin_send_ghost_hyb_jf(field_array* fa, const int i, const int j, const int k) 
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa, 
-                            const grid_t* g, 
-                            field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::jfx, field_var::rhof+1);
 #else
@@ -2214,8 +2213,8 @@ k_begin_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa,
   const grid_t* g = fa->g;						                                            \
   float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));                  \
   if(p) {								                                                          \
-    field_buffers *fb = fa->fb;                                                   \
-    Kokkos::DualView<float*> rbuf = fb->recv_buffer[BOUNDARY(i,j,k)];             \
+    field_buffers fb = *(fa->fb);                                                 \
+    Kokkos::DualView<float*> rbuf = fb.recv_buffer[BOUNDARY(i,j,k)];             \
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();                     \
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();                 \
                                                                                   \
@@ -2308,9 +2307,7 @@ end_send_ghost_hyb_jf(field_array_t* fa, const int i, const int j, const int k) 
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_end_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa, 
-                          const grid_t* g, 
-                          field_buffers_t& fb) {
+k_end_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   end_halo_exchange(fa, field_var::jfx, field_var::rhof+1);
 #else
@@ -2447,9 +2444,7 @@ begin_send_ghost_hyb_e(field_array* fa,
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa, 
-                           const grid_t* g, 
-                           field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::ex, field_var::ez+1);
 #else
@@ -2569,9 +2564,7 @@ end_send_ghost_hyb_e(field_array_t* fa, const int i, const int j, const int k) {
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_end_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa, 
-                         const grid_t* g, 
-                         field_buffers_t& fb) {
+k_end_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   // End receiving and sending
   end_halo_exchange(fa, field_var::ex, field_var::ez+1);
@@ -2709,9 +2702,7 @@ begin_send_ghost_hyb_eu(field_array* fa,
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_ue(field_array_t* ALIGNED(128) fa, 
-                           const grid_t* g, 
-                           field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_ue(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::ux, field_var::uz+1);
 #else
@@ -2831,9 +2822,7 @@ end_send_ghost_hyb_ue(field_array_t* fa, const int i, const int j, const int k) 
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_end_remote_ghost_hyb_ue(field_array_t* ALIGNED(128) fa, 
-                         const grid_t* g, 
-                         field_buffers_t& fb) {
+k_end_remote_ghost_hyb_ue(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   // End receiving and sending
   end_halo_exchange(fa, field_var::ux, field_var::uz+1);
@@ -2974,9 +2963,7 @@ begin_send_ghost_hyb_curl_lpl_b(field_array* fa,
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa, 
-                                    const grid_t* g, 
-                                    field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::pex, field_var::pez+1);
 #else
@@ -3094,9 +3081,7 @@ end_send_ghost_hyb_curl_lpl_b(field_array_t* fa,
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_end_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa, 
-                                  const grid_t* g, 
-                                  field_buffers_t& fb) {
+k_end_remote_ghost_hyb_curl_lpl_b(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   end_halo_exchange(fa, field_var::pex, field_var::pez+1);
 #else
@@ -3225,9 +3210,7 @@ begin_send_ghost_hyb_b(field_array* fa,
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa, 
-                           const grid_t* g, 
-                           field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::cbx, field_var::pe+1);
 #else
@@ -3344,9 +3327,7 @@ end_send_ghost_hyb_b(field_array_t* fa, const int i, const int j, const int k) {
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_end_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa, 
-                         const grid_t* g, 
-                         field_buffers_t& fb) {
+k_end_remote_ghost_hyb_b(field_array_t* ALIGNED(128) fa) {
     
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   // End receiving
@@ -3479,9 +3460,7 @@ begin_send_ghost_hyb_t(field_array* fa, const int i, const int j, const int k) {
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa, 
-                           const grid_t* g, 
-                           field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::tx, field_var::tz+1);
 #else
@@ -3597,9 +3576,7 @@ end_send_ghost_hyb_t(field_array_t* fa, const int i, const int j, const int k) {
  * @param g Pointer to grid structure 
  * @param fb Reference to field buffers used for MPI communication
  */
-void k_end_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa, 
-                              const grid_t* g, 
-                              field_buffers_t& fb) {
+void k_end_remote_ghost_hyb_t(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   end_halo_exchange(fa, field_var::tx, field_var::tz+1);
 #else
@@ -3732,9 +3709,7 @@ begin_send_ghost_hyb_o(field_array* fa, const int i, const int j, const int k) {
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa, 
-                           const grid_t* g, 
-                           field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::ox, field_var::oz+1);
 #else
@@ -3852,9 +3827,7 @@ end_send_ghost_hyb_o(field_array_t* fa, const int i, const int j, const int k) {
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_end_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa, 
-                         const grid_t* g, 
-                         field_buffers_t& fb) {
+k_end_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   end_halo_exchange(fa, field_var::ox, field_var::oz+1);
 #else
@@ -4996,7 +4969,6 @@ synchronize_rho( field_array_t * RESTRICT fa ) {
   BEGIN_SEND( 0,-1, 0,y,z,x);
   BEGIN_SEND( 0, 1, 0,y,z,x);
   BEGIN_RECV( 0,-1, 0,y,z,x);
-  BEGIN_RECV( 0, 1, 0,y,z,x);
   END_RECV( 0,-1, 0,y,z,x);
   END_RECV( 0, 1, 0,y,z,x);
   END_SEND( 0,-1, 0,y,z,x);

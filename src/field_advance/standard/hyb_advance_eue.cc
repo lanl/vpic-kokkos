@@ -70,23 +70,23 @@ hyb_advance_eue( field_array_t * RESTRICT fa,
    * Begin tangential B ghost setup
    ***************************************************************************/
     
-  Kokkos::Profiling::pushRegion("HybridAdvanceE::Tangential_Ghost_Setup");
-  Kokkos::Profiling::pushRegion("HybridAdvanceE::Tangential_Ghost_Setup::Begin_Remote_Ghost_Hybrid_B");
-  k_begin_remote_ghost_hyb_b(fa, fa->g, *(fa->fb) ); // Read: cbx, cby, cbz
+  Kokkos::Profiling::pushRegion("HybridAdvanceEUE::Tangential_Ghost_Setup");
+  Kokkos::Profiling::pushRegion("HybridAdvanceEUE::Tangential_Ghost_Setup::Begin_Remote_Ghost_Hybrid_B");
+  k_begin_remote_ghost_hyb_b(fa ); // Read: cbx, cby, cbz
   Kokkos::Profiling::popRegion();
 
 
   /***************************************************************************
    * End tangential B ghost setup
    ***************************************************************************/
-  Kokkos::Profiling::pushRegion("HybridAdvanceE::Tangential_Ghost_Setup::End_Remote_Ghost_Hybrid_B");
-  k_end_remote_ghost_hyb_b(fa, fa->g, *(fa->fb) ); // Write: cbx, cby, cbz
+  Kokkos::Profiling::pushRegion("HybridAdvanceEUE::Tangential_Ghost_Setup::End_Remote_Ghost_Hybrid_B");
+  k_end_remote_ghost_hyb_b(fa ); // Write: cbx, cby, cbz
   Kokkos::Profiling::popRegion();
 
   /***************************************************************************
    * Apply local hybrid ghost b
    ***************************************************************************/
-  Kokkos::Profiling::pushRegion("HybridAdvanceE::Tangential_Ghost_Setup::Hybrid_Local_Ghost_B");
+  Kokkos::Profiling::pushRegion("HybridAdvanceEUE::Tangential_Ghost_Setup::Hybrid_Local_Ghost_B");
   k_hyb_local_ghost_b( fa, fa->g ); // R/W: cbx, cby, cbz
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::popRegion();
@@ -97,7 +97,7 @@ hyb_advance_eue( field_array_t * RESTRICT fa,
     
   //Compute E. Interior cells correct 
    
-  Kokkos::Profiling::pushRegion("HybridAdvanceE::Update_E_Interior");
+  Kokkos::Profiling::pushRegion("HybridAdvanceEUE::Update_E_Interior");
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_inner_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
   // Write: ex,ey,ez 
   // Read: rhof, rhofold, jfx, jfy, jfz, jfxold, jfyold, jfzold, cbx, cby, cbz, tcax, tcay, tcaz, pe
@@ -114,7 +114,7 @@ hyb_advance_eue( field_array_t * RESTRICT fa,
 
   //Fix edge cells
   
-  //k_end_remote_ghost_hyb_b(fa, fa->g, *(fa->fb) );
+  //k_end_remote_ghost_hyb_b(fa );
   //k_hyb_local_ghost_b( fa, fa->g );
   //FIXEDGES()
   //fa->inner_comp_space.fence();
@@ -127,7 +127,7 @@ hyb_advance_eue( field_array_t * RESTRICT fa,
 
   //Apply hypereta to E field
    
-  Kokkos::Profiling::pushRegion("HybridAdvanceE::Apply_Hyper_Eta");
+  Kokkos::Profiling::pushRegion("HybridAdvanceEUE::Apply_Hyper_Eta");
   // Read: cbx, cby, cbz, tcax, tcay, tcaz, ex, ey, ez
   // Write: pex, pey, pez, ex, ey, ez
   if(fa->g->hypereta>0) hyb_heta(fa);
