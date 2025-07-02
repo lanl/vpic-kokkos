@@ -116,24 +116,24 @@ hyb_advance_b(field_array_t * RESTRICT fa,
   // 1: Calculate electric field E_n(B_n), update B=B_n+dt/2*K1
   // ----------------------------------------------------------
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1");
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1::Advance_E");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K1");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K1::Advance_E");
   hyb_advance_e( fa, isub/nsub ); //sets ghost B + computes E
   Kokkos::Profiling::popRegion();
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1::Remote");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K1::Remote");
   k_begin_remote_ghost_hyb_e( fa );//ARI add cell-centered BCs
   k_end_remote_ghost_hyb_e( fa );
   Kokkos::Profiling::popRegion();
 
   //fix local BCs
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1::Local");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K1::Local");
   k_hyb_local_ghost_e( fa, fa->g );
   Kokkos::Profiling::popRegion();
   
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1,1,1},{nx+1,ny+1,nz+1});
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1::UpdateStencil");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K1::UpdateStencil");
   Kokkos::parallel_for("hyb_advance_b_update1", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
       INIT_STENCIL();	  
       UPDATE1();	  
@@ -146,12 +146,16 @@ hyb_advance_b(field_array_t * RESTRICT fa,
   // 2: Update B=B_n+dt/2*K2 and store temp data
   // ----------------------------------------------------------
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K2_Store_Temp");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K2");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K2::Advance_E");
   hyb_advance_e( fa, (isub+0.5)/nsub) ; //sets ghost B's
+  Kokkos::Profiling::popRegion();
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K2::Remote");
   k_begin_remote_ghost_hyb_e( fa );//ARI add cell-centered BCs
   k_end_remote_ghost_hyb_e( fa );
+  Kokkos::Profiling::popRegion();
   //fix local BCs
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1::Local");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K2::Local");
   k_hyb_local_ghost_e( fa, fa->g );
   Kokkos::Profiling::popRegion();
   
@@ -165,12 +169,16 @@ hyb_advance_b(field_array_t * RESTRICT fa,
   // 3: Update B=B_n+dt*K3 and store temp data
   // ----------------------------------------------------------
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K3_Store_Temp");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K3");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K3::Advance_E");
   hyb_advance_e( fa, (isub+0.5)/nsub); //sets ghost B's
+  Kokkos::Profiling::popRegion();
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K3::Remote");
   k_begin_remote_ghost_hyb_e( fa );//ARI add cell-centered BCs
   k_end_remote_ghost_hyb_e( fa );
+  Kokkos::Profiling::popRegion();
   //fix local BCs
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1::Local");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K3::Local");
   k_hyb_local_ghost_e( fa, fa->g );
   Kokkos::Profiling::popRegion();
   
@@ -186,12 +194,16 @@ hyb_advance_b(field_array_t * RESTRICT fa,
   // ----------------------------------------------------------
   
   Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K4");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K4::Advance_E");
   hyb_advance_e( fa, (isub+1.0)/nsub ); //sets ghost Bs
-  
+  Kokkos::Profiling::popRegion();
+
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K4::Remote");
   k_begin_remote_ghost_hyb_e( fa );//ARI add cell-centered BCs
   k_end_remote_ghost_hyb_e( fa );
+  Kokkos::Profiling::popRegion();
   //fix local BCs
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1::Local");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K4::Local");
   k_hyb_local_ghost_e( fa, fa->g );
   Kokkos::Profiling::popRegion();
   
@@ -206,11 +218,17 @@ hyb_advance_b(field_array_t * RESTRICT fa,
   // ----------------------------------------------------------
   
   Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_E");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_E::Advance_E");
   hyb_advance_e( fa, (isub+1.0)/nsub ); //sets ghost Bs
+  Kokkos::Profiling::popRegion();
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_E::Remote");
   k_begin_remote_ghost_hyb_e( fa );//ARI add cell-centered BCs
   k_end_remote_ghost_hyb_e( fa );
+  Kokkos::Profiling::popRegion();
   //fix local BCs
+  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_E::Local");
   k_hyb_local_ghost_e( fa, fa->g );
+  Kokkos::Profiling::popRegion();
   Kokkos::Profiling::popRegion();
 
 }

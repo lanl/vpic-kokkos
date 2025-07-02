@@ -163,13 +163,13 @@ hyb_advance_e( field_array_t * RESTRICT fa,
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> z_neg({ind1,ind1,ind1},{nx+ind1,ny+ind1,   ind2});
   
   
-//  /***************************************************************************
-//   * Calculate electron pressure
-//   ***************************************************************************/
-//    
-//  Kokkos::Profiling::pushRegion("HybridAdvanceE::Calculate_Electron_Pressure");
-    hyb_epress(fa, frac); // Read te, rhof, rhofold, Write pe
-//  Kokkos::Profiling::popRegion();
+  /***************************************************************************
+   * Calculate electron pressure
+   ***************************************************************************/
+    
+  Kokkos::Profiling::pushRegion("HybridAdvanceE::Calculate_Electron_Pressure");
+  hyb_epress(fa, frac); // Read te, rhof, rhofold, Write pe
+  Kokkos::Profiling::popRegion();
 
   /***************************************************************************
    * Begin tangential B ghost setup

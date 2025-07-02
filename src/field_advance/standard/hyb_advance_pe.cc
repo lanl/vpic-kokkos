@@ -103,8 +103,8 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
     
     //smooth moments
     Kokkos::Profiling::pushRegion("HybridAdvancePe::Smooth_Ion_Moments::Exchange_JF");
-    k_begin_remote_ghost_hyb_jf(fa, fa->g, *(fa->fb) );
-    k_end_remote_ghost_hyb_jf  (fa, fa->g, *(fa->fb) );
+    k_begin_remote_ghost_hyb_jf(fa );
+    k_end_remote_ghost_hyb_jf  (fa );
     Kokkos::Profiling::popRegion();
     Kokkos::Profiling::pushRegion("HybridAdvancePe::Smooth_Ion_Moments::Apply_Local_Ghost_JF");
     k_hyb_local_ghost_jf  (fa, fa->g);
@@ -116,8 +116,8 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
       hyb_smooth_moments( fa );
       Kokkos::Profiling::popRegion();
       Kokkos::Profiling::pushRegion("HybridAdvancePe::Smooth_Ion_Moments::Exchange_JF");
-      k_begin_remote_ghost_hyb_jf(fa, fa->g, *(fa->fb) );
-      k_end_remote_ghost_hyb_jf  (fa, fa->g, *(fa->fb) );
+      k_begin_remote_ghost_hyb_jf(fa );
+      k_end_remote_ghost_hyb_jf  (fa );
       Kokkos::Profiling::popRegion();
       Kokkos::Profiling::pushRegion("HybridAdvancePe::Smooth_Ion_Moments::Apply_Local_Ghost_JF");
       k_hyb_local_ghost_jf  (fa, fa->g);
@@ -137,8 +137,8 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   Kokkos::Profiling::popRegion();
   
   Kokkos::Profiling::pushRegion("HybridAdvancePe::Calc_E_Update_B_K1::Remote");
-  k_begin_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
-  k_end_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
+  k_begin_remote_ghost_hyb_ue( fa );
+  k_end_remote_ghost_hyb_ue( fa );
   Kokkos::Profiling::popRegion();
 
   //fix local BCs
@@ -163,8 +163,8 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   
   Kokkos::Profiling::pushRegion("HybridAdvancePe::Update_B_K2_Store_Temp");
   hyb_advance_ue( fa, (isub+0.5)/nsub) ; //sets ghost B's
-  k_begin_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
-  k_end_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
+  k_begin_remote_ghost_hyb_ue( fa );
+  k_end_remote_ghost_hyb_ue( fa );
   //fix local BCs
   k_hyb_local_ghost_e( fa, fa->g );
   
@@ -181,8 +181,8 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   Kokkos::Profiling::pushRegion("HybyridAdvancePe::Update_B_K3_Store_Temp");
   hyb_advance_ue( fa, (isub+0.5)/nsub); //sets ghost B's
   
-  k_begin_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
-  k_end_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
+  k_begin_remote_ghost_hyb_ue( fa );
+  k_end_remote_ghost_hyb_ue( fa );
   //fix local BCs
   k_hyb_local_ghost_e( fa, fa->g );
   
@@ -200,8 +200,8 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   Kokkos::Profiling::pushRegion("HybyridAdvancePe::Update_B_K4");
   hyb_advance_ue( fa, (isub+1.0)/nsub ); //sets ghost Bs
   
-    k_begin_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
-  k_end_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
+    k_begin_remote_ghost_hyb_ue( fa );
+  k_end_remote_ghost_hyb_ue( fa );
   //fix local BCs
   k_hyb_local_ghost_e( fa, fa->g );
   
