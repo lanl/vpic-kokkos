@@ -588,18 +588,12 @@ k_end_remote_ghost_hyb_jf( field_array_t      * ALIGNED(128) f );
 void
 k_begin_remote_ghost_hyb_e( field_array_t      * ALIGNED(128) f );
 void
-k_end_remote_ghost_hyb_e( field_array_t      * ALIGNED(128) f,
-                        const grid_t *              g,
-                        field_buffers_t& f_buffers );
+k_end_remote_ghost_hyb_e( field_array_t      * ALIGNED(128) f );
                         
 void
-k_begin_remote_ghost_hyb_ue( field_array_t      * ALIGNED(128) f,
-                            const grid_t *              g,
-                            field_buffers_t& f_buffers );
+k_begin_remote_ghost_hyb_ue( field_array_t      * ALIGNED(128) f );
 void
-k_end_remote_ghost_hyb_ue( field_array_t      * ALIGNED(128) f,
-                        const grid_t *              g,
-                        field_buffers_t& f_buffers );
+k_end_remote_ghost_hyb_ue( field_array_t      * ALIGNED(128) f );
 
 void
 k_begin_remote_ghost_hyb_curl_lpl_b( field_array_t      * ALIGNED(128) f );
