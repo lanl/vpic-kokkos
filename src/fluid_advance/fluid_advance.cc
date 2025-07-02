@@ -74,8 +74,8 @@ fluid_species_t *
 append_fluid_species( fluid_species_t * fsp,
 		      fluid_species_t ** fsp_list ) {
   if( !fsp || !fsp_list ) ERROR(( "Bad args" ));
-  std::cout << "Appending fluid species. fsp->next=" << fsp->next << "\n";
-  std::cout << "NULL=" << NULL << "\n";
+  std::cout << "# Appending fluid species. fsp->next=" << fsp->next << "\n";
+  //std::cout << "NULL=" << NULL << "\n";
   if( fsp->next ) WARNING(( "Fluid species \"%s\" already in a list", fsp->name ));
   if( find_fluid_species_name( fsp->name, *fsp_list ) )
     ERROR(( "There is already a fluid species in the list named \"%s\"", fsp->name ));
@@ -127,7 +127,7 @@ fluid_species( const char * name,
 
   fsp->g = g;
 
-  std::cout << "Creating fluid species. fsp->next=" << fsp->next << "\n";
+  std::cout << "# Creating fluid species. fsp->next=" << fsp->next << "\n";
   /* id, next are set by append fluid species */
 
   REGISTER_OBJECT( fsp, checkpt_fluid_species, restore_fluid_species, NULL ); // To-do: Implement checkpointing.
@@ -189,4 +189,3 @@ fluid_species_t::copy_to_device()
   Kokkos::deep_copy(k_fl_d, k_fl_h);
 
 }
-

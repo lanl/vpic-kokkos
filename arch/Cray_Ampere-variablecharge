@@ -16,7 +16,21 @@ src_dir="${0%/*}/.."
 #module purge
 module load PrgEnv-gnu
 module load cmake cudatoolkit cpe-cuda
+#module list 2>&1 | tee modules.txt
+
+#------------------------------------------------------------------------------#
+# Choose support for HDF5 output for fields and hydro
+#------------------------------------------------------------------------------#
+# If SET_HDF5=OFF, the output of fields and hydro are in binary format.
+# If SET_HDF5=ON, the output of fields and hydro are in HDF5 format.
+#------------------------------------------------------------------------------#
+SET_HDF5="OFF"
+if [ "$SET_HDF5" = "ON" ]
+then
+    module load cray-hdf5-parallel
+fi
 module list 2>&1 | tee modules.txt
+
 
 #------------------------------------------------------------------------------#
 # Call CMake command
@@ -44,8 +58,10 @@ CRAYPE_LINK_TYPE=dynamic /usr/projects/maehem/packages/cmake-3.29.9/build/bin/cm
   -DKokkos_ARCH_ZEN2=ON \
   -DKokkos_ENABLE_PTHREAD=OFF \
   -DKokkos_ENABLE_OPENMP=ON \
+  -DVPIC_ENABLE_VARIABLE_CHARGE=ON \
   -DCMAKE_CXX_COMPILER="CC" \
   -DCMAKE_CXX_FLAGS="-g -rdynamic "\
+   -DVPIC_ENABLE_HDF5=${SET_HDF5} \
   $src_dir
 
 #------------------------------------------------------------------------------#

@@ -22,15 +22,18 @@ typedef struct pipeline_args {
   float  rho = half*( (one-hstep)*( F(0,rhof) + F(0,rhofold) ) + hstep*( three*F(0,rhof) - F(0,rhofold)) ) ; \
   rho = (rho > den_floor_ohm) ? rho :  den_floor_ohm;			\
   float  invrho = one/rho;						\
-  float hallinvrho = (rho > den_floor_ohm) ? invrho : 0 ;		
+  float hallinvrho = (rho > den_floor_ohm) ? invrho : 0 ;		\
+  float  ux = half*( (one-hstep)*( F(0,jfx) + F(0,jfxold) ) + hstep*( three*F(0,jfx) - F(0,jfxold)) ) ; \
+  float  uy = half*( (one-hstep)*( F(0,jfy) + F(0,jfyold) ) + hstep*( three*F(0,jfy) - F(0,jfyold)) ) ; \
+  float  uz = half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + hstep*( three*F(0,jfz) - F(0,jfzold)) ) ; 
+
+#define UE(x_,y_,z_)							\
+  F(0,u##x_) = invrho * (ux)
 
 
-#define E(x_,y_,z_)							\
-  F(0,e##x_) = - invrho * ( p##x_*( F(x_,pe) - F(m##x_,pe)) );		\
-  F(0,e##x_) *= F(0,tcaz);
-  
+
 void
-hyb_static_e( field_array_t * RESTRICT fa,
+hyb_advance_ue( field_array_t * RESTRICT fa,
                   float frac ) {
   if( !fa     ) ERROR(( "Bad args" ));
 
@@ -57,9 +60,9 @@ hyb_static_e( field_array_t * RESTRICT fa,
   //for interior cells
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1,1,1},{nx+1,ny+1,nz+1});
   
-  
+   
   /***************************************************************************
-   * Update E fields
+   * Update ue fields
    ***************************************************************************/ 
     
   //Compute E. Interior cells correct 
@@ -70,11 +73,12 @@ hyb_static_e( field_array_t * RESTRICT fa,
   // Read: rhof, rhofold, jfx, jfy, jfz, jfxold, jfyold, jfzold, cbx, cby, cbz, tcax, tcay, tcaz, pe
   Kokkos::parallel_for("hyb_advance_e_interior", xyz_inner_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
     INIT_STENCIL();
-    E(x,y,z);
-    E(y,z,x);
-    E(z,x,y);
+    UE(x,y,z);
+    UE(y,z,x);
+    UE(z,x,y);
   });
   Kokkos::Profiling::popRegion();
+
     
 Kokkos::fence();
 }

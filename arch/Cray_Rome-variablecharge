@@ -14,8 +14,9 @@ src_dir="${0%/*}/.."
 #------------------------------------------------------------------------------#
 
 #module purge
+#module load PrgEnv-cray
+#module load cmake
 module load PrgEnv-gnu
-module load cmake cudatoolkit cpe-cuda
 module list 2>&1 | tee modules.txt
 
 #------------------------------------------------------------------------------#
@@ -27,25 +28,17 @@ module list 2>&1 | tee modules.txt
 # (the closest match was "(null)" from "./lpi_2d_F6_test.Linux").  Writing out
 # the raw address instead and keeping my fingers crossed.
 
-# In the Cray environment, there is a bit of confusion about compilers and
-# wrappers and such.  I've worked around it with some ad hoc CMake magic, but
-# this line might be helpful when troubleshooting (run it when compiling user
-# decks too).
-#export NVCC_WRAPPER_DEFAULT_COMPILER=$(which CC)
-
-CRAYPE_LINK_TYPE=dynamic /usr/projects/maehem/packages/cmake-3.29.9/build/bin/cmake \
+/usr/projects/maehem/packages/cmake-3.29.9/build/bin/cmake \
   -DCMAKE_BUILD_TYPE=Release \
   -DENABLE_INTEGRATED_TESTS=OFF \
   -DENABLE_UNIT_TESTS=OFF \
   -DBUILD_INTERNAL_KOKKOS=ON \
-  -DENABLE_KOKKOS_CUDA=ON \
-  -DKokkos_ENABLE_CUDA=ON \
-  -DKokkos_ARCH_AMPERE80=ON \
   -DKokkos_ARCH_ZEN2=ON \
   -DKokkos_ENABLE_PTHREAD=OFF \
   -DKokkos_ENABLE_OPENMP=ON \
+  -DVPIC_ENABLE_VARIABLE_CHARGE=ON \
   -DCMAKE_CXX_COMPILER="CC" \
-  -DCMAKE_CXX_FLAGS="-g -rdynamic "\
+  -DCMAKE_CXX_FLAGS="-g -O2 -rdynamic -dynamic"\
   $src_dir
 
 #------------------------------------------------------------------------------#

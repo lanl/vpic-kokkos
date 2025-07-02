@@ -11,6 +11,7 @@ typedef int32_t fluid_species_id; // Must be 32-bit wide
 typedef struct fluid {
   float den, tmp, prs;     // density, temperature, pressure
   float ux, uy, uz;        // velocity
+  float fx,fy,fz,fe;    //momentum and energy source    
 } fluid_t;
 
 
@@ -55,7 +56,7 @@ class fluid_species_t {
   // this avoids a fiasco when checkpointing...
   field_buffers_t* fb;
   */
-
+    
   k_fluid_t k_fl_d;                  // Kokkos fluid data on device
   k_fluid_t::HostMirror k_fl_h;      // Kokkos fluid data on host
 
@@ -101,7 +102,7 @@ class fluid_species_t {
 
       //      fb = new field_buffers_t(xyz_sz, yzx_sz, zxy_sz);
   }
-
+    
   /*
   ~field_array()
   {
@@ -118,7 +119,6 @@ class fluid_species_t {
    * @brief Copies the field data to the device.
    */
   void copy_to_device();
-
 
 };// fluid_species_t;
 

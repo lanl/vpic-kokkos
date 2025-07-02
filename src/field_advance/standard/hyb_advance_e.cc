@@ -168,7 +168,7 @@ hyb_advance_e( field_array_t * RESTRICT fa,
 //   ***************************************************************************/
 //    
 //  Kokkos::Profiling::pushRegion("HybridAdvanceE::Calculate_Electron_Pressure");
-//   hyb_epress(fa, frac); // Read te, rhof, rhofold, Write pe
+    hyb_epress(fa, frac); // Read te, rhof, rhofold, Write pe
 //  Kokkos::Profiling::popRegion();
 
   /***************************************************************************

@@ -155,14 +155,16 @@
 
 typedef struct field {
   float ex,   ey,   ez,   div_e_err;     // Electric field and div E error
-  float cbx,  cby,  cbz,  div_b_err;     // Magnetic field and div B error
-  float cbx0, cby0, cbz0, tmpsm;         // External (potential) magnetic field
+  float cbx,  cby,  cbz,  pe;            // Magnetic field and div B error
+  float cbx0, cby0, cbz0, te0;           // External (potential) magnetic field & initial electron temperature
   float tcax, tcay, tcaz, rhob;          // hybrid: tcax multiplies hypereta, tcay multiplies eta, tcaz multiplies E field 
   float jfx,  jfy,  jfz,  rhof;          // Free current and charge density
   float jfxold,  jfyold,  jfzold,  rhofold; // Free current and charge density
-  float tx, ty, tz, te;                  // Electron temperature + temp storage
+  float tx, ty, tz, te;                  // Temp storage
   float ox, oy, oz, oe;                  // For B field solve/smoothing
-  float pex, pey, pez, pe;               // pressure etc
+  float pex, pey, pez,div_b_err ;        // pressure etc
+  float ux, uy, uz, ue;                  // Electron bulk flow velocity
+  float sx, sy, sz, se;                  // Electron momentum and energy sources
   material_id ematx, ematy, ematz, nmat; // Material at edge centers and nodes
   material_id fmatx, fmaty, fmatz, cmat; // Material at face and cell centers
  
@@ -210,7 +212,9 @@ typedef struct field_advance_kernels {
 
   void (*compute_rhob  )( struct field_array * RESTRICT fa );
   void (*compute_curl_b)( struct field_array * RESTRICT fa );
-
+#ifdef HYB_USE_SEPARATE_PE
+  void (*hyb_init)( struct field_array * RESTRICT fa, float frac );
+#endif
   // Local/remote shared face cleaning
 
   double (*synchronize_tang_e_norm_b)( struct field_array * RESTRICT fa );

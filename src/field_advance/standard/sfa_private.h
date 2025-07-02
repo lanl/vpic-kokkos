@@ -44,6 +44,11 @@ void
 hyb_advance_b(
       field_array_t * RESTRICT fa,
       float                    frac);
+      
+void
+hyb_advance_bpe(
+      field_array_t * RESTRICT fa,
+      float                    frac);
 
 void
 hyb_advance_b_kokkos( field_array_t * RESTRICT fa,
@@ -71,6 +76,10 @@ hyb_advance_b_kokkos( field_array_t * RESTRICT fa,
 void
 advance_e( field_array_t * RESTRICT fa,
            float                    frac );
+           void
+           
+advance_eue( field_array_t * RESTRICT fa,
+           float                    frac );
 
 void
 advance_e_kokkos( field_array_t * RESTRICT fa,
@@ -86,12 +95,19 @@ vacuum_advance_e_kokkos( field_array_t * RESTRICT fa,
 
 
 void
-hyb_static_e_kokkos( field_array_t * RESTRICT fa,
+hyb_static_e( field_array_t * RESTRICT fa,
                   float                    frac );
 
 void
 hyb_advance_e( field_array_t * RESTRICT fa,
                   float                    frac );
+                  
+void
+hyb_advance_eue( field_array_t * RESTRICT fa,
+                  float                    frac );
+void                  
+hyb_advance_ue( field_array_t * RESTRICT fa,
+               float                    frac );
 
 void
 hyb_heta( field_array_t * RESTRICT fa);
@@ -572,7 +588,18 @@ k_end_remote_ghost_hyb_jf( field_array_t      * ALIGNED(128) f );
 void
 k_begin_remote_ghost_hyb_e( field_array_t      * ALIGNED(128) f );
 void
-k_end_remote_ghost_hyb_e( field_array_t      * ALIGNED(128) f );
+k_end_remote_ghost_hyb_e( field_array_t      * ALIGNED(128) f,
+                        const grid_t *              g,
+                        field_buffers_t& f_buffers );
+                        
+void
+k_begin_remote_ghost_hyb_ue( field_array_t      * ALIGNED(128) f,
+                            const grid_t *              g,
+                            field_buffers_t& f_buffers );
+void
+k_end_remote_ghost_hyb_ue( field_array_t      * ALIGNED(128) f,
+                        const grid_t *              g,
+                        field_buffers_t& f_buffers );
 
 void
 k_begin_remote_ghost_hyb_curl_lpl_b( field_array_t      * ALIGNED(128) f );
