@@ -2702,9 +2702,7 @@ begin_send_ghost_hyb_eu(field_array* fa,
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_begin_remote_ghost_hyb_ue(field_array_t* ALIGNED(128) fa, 
-                           const grid_t* g, 
-                           field_buffers_t& fb) {
+k_begin_remote_ghost_hyb_ue(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   begin_halo_exchange(fa, field_var::ux, field_var::uz+1);
 #else
@@ -2824,9 +2822,7 @@ end_send_ghost_hyb_ue(field_array_t* fa, const int i, const int j, const int k) 
  * @param fb Reference to field buffers used for MPI communication
  */
 void 
-k_end_remote_ghost_hyb_ue(field_array_t* ALIGNED(128) fa, 
-                         const grid_t* g, 
-                         field_buffers_t& fb) {
+k_end_remote_ghost_hyb_ue(field_array_t* ALIGNED(128) fa) {
 #ifdef VPIC_ENABLE_HALO_EXCHANGE
   // End receiving and sending
   end_halo_exchange(fa, field_var::ux, field_var::uz+1);
