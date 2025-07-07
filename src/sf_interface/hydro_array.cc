@@ -80,10 +80,15 @@ clear_hydro_array( hydro_array_t * ha ) {
 #define y_NODE_LOOP(y) XYZ_LOOP(1,nx+1,y,y,1,nz+1)
 #define z_NODE_LOOP(z) XYZ_LOOP(1,nx+1,1,ny+1,z,z)
 
+// x_FACE_LOOP => Loop over all at plane x
+#define x_FACE_LOOP(x) XYZ_LOOP(x,x,1,ny,1,nz)
+#define y_FACE_LOOP(y) XYZ_LOOP(1,nx,y,y,1,nz)
+#define z_FACE_LOOP(z) XYZ_LOOP(1,nx,1,ny,z,z)
+
 void
 synchronize_hydro_array( hydro_array_t * ha ) {
   int size, face, bc, x, y, z, nx, ny, nz;
-  float *p, lw, rw;
+  float *p;
   hydro_t * h0, * h;
   grid_t * g;
 
@@ -104,8 +109,8 @@ synchronize_hydro_array( hydro_array_t * ha ) {
   do {                                          \
     bc = g->bc[BOUNDARY(i,j,k)];                \
     if( bc<0 || bc>=world_size ) {              \
-      face = (i+j+k)<0 ? 1 : n##X+1;            \
-      X##_NODE_LOOP(face) {                     \
+      face = (i+j+k)<0 ? 1 : n##X;              \
+      X##_FACE_LOOP(face) {                     \
         h = &hydro(x,y,z);                      \
         h->jx  *= 2;                            \
         h->jy  *= 2;                            \
@@ -124,26 +129,25 @@ synchronize_hydro_array( hydro_array_t * ha ) {
       }                                         \
     }                                           \
   } while(0)
-  
+  /*
   ADJUST_HYDRO(-1, 0, 0,x,y,z);
   ADJUST_HYDRO( 0,-1, 0,y,z,x);
   ADJUST_HYDRO( 0, 0,-1,z,x,y);
   ADJUST_HYDRO( 1, 0, 0,x,y,z);
   ADJUST_HYDRO( 0, 1, 0,y,z,x);
   ADJUST_HYDRO( 0, 0, 1,z,x,y);
-
+  */
 # undef ADJUST_HYDRO
 
 # define BEGIN_RECV(i,j,k,X,Y,Z) \
-  begin_recv_port(i,j,k,( 1 + 14*(n##Y+1)*(n##Z+1) )*sizeof(float),g)
+  begin_recv_port(i,j,k,( 14*(n##Y)*(n##Z) )*sizeof(float),g)
 
 # define BEGIN_SEND(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {      \
-    size = ( 1 + 14*(n##Y+1)*(n##Z+1) )*sizeof(float);  \
+    size = ( 14*(n##Y)*(n##Z) )*sizeof(float);      \
     p = (float *)size_send_port( i, j, k, size, g );    \
     if( p ) {                                           \
-      (*(p++)) = g->d##X;                               \
-      face = (i+j+k)<0 ? 1 : n##X+1;                    \
-      X##_NODE_LOOP(face) {                             \
+      face = (i+j+k)<0 ? 0 : n##X+1;                    \
+      X##_FACE_LOOP(face) {                             \
         h = &hydro(x,y,z);                              \
         (*(p++)) = h->jx;                               \
         (*(p++)) = h->jy;                               \
@@ -167,31 +171,25 @@ synchronize_hydro_array( hydro_array_t * ha ) {
 # define END_RECV(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                \
     p = (float *)end_recv_port(i,j,k,g);                        \
     if( p ) {                                                   \
-      rw = (*(p++));                 /* Remote g->d##X */       \
-      lw = rw + g->d##X;                                        \
-      rw /= lw;                                                 \
-      lw = g->d##X/lw;                                          \
-      lw += lw;                                                 \
-      rw += rw;                                                 \
-      face = (i+j+k)<0 ? n##X+1 : 1; /* Twice weighted sum */   \
-      X##_NODE_LOOP(face) {                                     \
+      face = (i+j+k)<0 ? n##X : 1;                              \
+      X##_FACE_LOOP(face) {                                     \
         h = &hydro(x,y,z);                                      \
-        h->jx    = lw*h->jx  + rw*(*(p++));                       \
-        h->jy    = lw*h->jy  + rw*(*(p++));                       \
-        h->jz    = lw*h->jz  + rw*(*(p++));                       \
-        h->rho   = lw*h->rho + rw*(*(p++));                       \
-        h->px    = lw*h->px  + rw*(*(p++));                       \
-        h->py    = lw*h->py  + rw*(*(p++));                       \
-        h->pz    = lw*h->pz  + rw*(*(p++));                       \
-        h->rho_m = lw*h->rho_m  + rw*(*(p++));                    \
-        h->txx   = lw*h->txx + rw*(*(p++));                       \
-        h->tyy   = lw*h->tyy + rw*(*(p++));                       \
-        h->tzz   = lw*h->tzz + rw*(*(p++));                       \
-        h->tyz   = lw*h->tyz + rw*(*(p++));                       \
-        h->tzx   = lw*h->tzx + rw*(*(p++));                       \
-        h->txy   = lw*h->txy + rw*(*(p++));                       \
-      }                                                          \
-    }                                                            \
+        h->jx  += (*(p++));                                     \
+        h->jy  += (*(p++));                                     \
+        h->jz  += (*(p++));                                     \
+        h->rho += (*(p++));                                     \
+        h->px  += (*(p++));                                     \
+        h->py  += (*(p++));                                     \
+        h->pz  += (*(p++));                                     \
+        h->rho_m += (*(p++));                                   \
+        h->txx += (*(p++));                                     \
+        h->tyy += (*(p++));                                     \
+        h->tzz += (*(p++));                                     \
+        h->tyz += (*(p++));                                     \
+        h->tzx += (*(p++));                                     \
+        h->txy += (*(p++));                                     \
+      }                                                         \
+    }                                                           \
   } END_PRIMITIVE
 
 # define END_SEND(i,j,k,X,Y,Z) end_send_port( i, j, k, g )
