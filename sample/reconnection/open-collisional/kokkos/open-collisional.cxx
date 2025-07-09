@@ -36,18 +36,6 @@ begin_globals {
   double topology_y;
   double topology_z;
 
-  // parameters for the collision model
-  int    ee_collisions; // Flag to signal we want to do e-e collisions.
-  int    ei_collisions; // Flag to signal we want to do e-i collisions.
-  int    ii_collisions; // Flag to signal we want to do i-i collisions.
-
-  double cvar; // Base variance (dimensionless) used in particle collision
-  double nppc_max; // Max number of particles/cell (used to def key array size).
-  int tstep_coll;  // Collision interval (=multiple of sort interval).
-  double Z;
-  double mi_me;
-  double wpewce;
-
   // Variables for Open BC Model
   double nb;      // Background density
   int nsp;        // Number of Species
@@ -223,10 +211,6 @@ begin_initialization {
   // In CGS, variance of tan theta =
   // 2 pi e^4 n_e dt_coll loglambda / (m_ab^2 u^3)
 
-  int ii_collisions = 1; // do collisions between the corresponding species
-  int ee_collisions = 1;
-  int ei_collisions = 1;
-
   int tstep_coll = (int) sort_interval;  // How frequently to do collisions
   double dt_coll = dt*(tstep_coll);      // in (1/wpe)
   double nuei_wce = 0.05;
@@ -314,19 +298,6 @@ begin_initialization {
   global->sort[1]  = sort_interval;
   global->nfac  = nfac;
   global->L_de  = L;
-
-  // Collision model parameters
-  global->ee_collisions            = ee_collisions;
-  global->ii_collisions            = ii_collisions;
-  global->ei_collisions            = ei_collisions;
-
-  global->cvar                     = cvar;
-  global->nppc_max                 = nppc_max;
-  global->tstep_coll               = tstep_coll;
-  global->mi_me                    = mi_me;
-  global->Z                        = Z;
-  global->wpewce                   = wpe_wce;
-  global->nfac                     = nfac;
 
 
   // User injection parameters (Kokkos)
@@ -422,6 +393,17 @@ begin_initialization {
     sort_interval, sort_method);
   species_t *ion = define_species("ion", ec, mi, nmax, nmovers,
     sort_interval, sort_method);
+
+
+
+  //////////////////////////////////////////////////////////////////////////////
+  //Define collision operators
+  define_collision_op( takizuka_abe("ee", electron, electron,cvar,tstep_coll) ); 
+  define_collision_op( takizuka_abe("ii", ion,      ion,     cvar,tstep_coll) ); 
+  define_collision_op( takizuka_abe("ei", electron, ion,     cvar,tstep_coll) );
+  
+  ion->last_indexed=-1;
+  electron->last_indexed=-1;
 
   ///////////////////////////////////////////////////
   // Log diagnostic information about this simulation
@@ -1310,7 +1292,7 @@ begin_particle_injection {
             y = grid->y0 + hy*(j-1) + hy*uniform( rng(0), 0, 1 );
             z = grid->z0;
             age = 0;
-            inject_particle_r(species, x, y, z, uv[0], uv[1], uv[2], q(n), age,
+           inject_particle_r(species, x, y, z, uv[0], uv[1], uv[2], q(n), age,
 			      0 );//1 );
           }
         }
