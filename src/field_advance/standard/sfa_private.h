@@ -525,8 +525,7 @@ k_begin_remote_ghost_tang_b(field_array_t* RESTRICT f,
 
 void
 kokkos_begin_remote_ghost_tang_b(field_array_t* RESTRICT f,
-                            const grid_t* g,
-                            field_buffers_t& f_buffers);
+                            const grid_t* g);
 
 void
 end_remote_ghost_tang_b( field_t      * ALIGNED(128) f,
@@ -538,8 +537,7 @@ k_end_remote_ghost_tang_b(field_array_t* RESTRICT f,
 
 void
 kokkos_end_remote_ghost_tang_b(field_array_t* RESTRICT f,
-                            const grid_t* g,
-                            field_buffers_t& f_buffers);
+                            const grid_t* g);
 
 void
 begin_remote_ghost_norm_e( field_t      * ALIGNED(128) f,
@@ -550,8 +548,7 @@ k_begin_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
                            const grid_t *              g );
 void
 kokkos_begin_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
-                           const grid_t *              g,
-                            field_buffers_t& f_buffers);
+                           const grid_t *              g);
 
 void
 end_remote_ghost_norm_e( field_t      * ALIGNED(128) f,
@@ -563,8 +560,7 @@ k_end_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
 
 void
 kokkos_end_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
-                         const grid_t *              g,
-                            field_buffers_t& f_buffers );
+                         const grid_t *              g );
 
 void
 begin_remote_ghost_div_b( field_t      * ALIGNED(128) f,
@@ -572,8 +568,7 @@ begin_remote_ghost_div_b( field_t      * ALIGNED(128) f,
 
 void
 k_begin_remote_ghost_div_b( field_array_t      * ALIGNED(128) f,
-                            const grid_t *              g,
-                            field_buffers_t& f_buffers );
+                            const grid_t *              g );
 
 void
 end_remote_ghost_div_b( field_t      * ALIGNED(128) f,
@@ -584,70 +579,46 @@ k_end_remote_ghost_div_b( field_array_t      * ALIGNED(128) f,
                         const grid_t *              g );
 
 void
-k_begin_remote_ghost_hyb_jf( field_array_t      * ALIGNED(128) f,
-                            const grid_t *              g,
-                            field_buffers_t& f_buffers );
+k_begin_remote_ghost_hyb_jf( field_array_t      * ALIGNED(128) f );
 
 
 void
-k_end_remote_ghost_hyb_jf( field_array_t      * ALIGNED(128) f,
-                        const grid_t *              g,
-                        field_buffers_t& f_buffers );
+k_end_remote_ghost_hyb_jf( field_array_t      * ALIGNED(128) f );
 
 void
-k_begin_remote_ghost_hyb_e( field_array_t      * ALIGNED(128) f,
-                            const grid_t *              g,
-                            field_buffers_t& f_buffers );
+k_begin_remote_ghost_hyb_e( field_array_t      * ALIGNED(128) f );
 void
-k_end_remote_ghost_hyb_e( field_array_t      * ALIGNED(128) f,
-                        const grid_t *              g,
-                        field_buffers_t& f_buffers );
+k_end_remote_ghost_hyb_e( field_array_t      * ALIGNED(128) f );
                         
 void
-k_begin_remote_ghost_hyb_ue( field_array_t      * ALIGNED(128) f,
-                            const grid_t *              g,
-                            field_buffers_t& f_buffers );
+k_begin_remote_ghost_hyb_ue( field_array_t      * ALIGNED(128) f );
 void
-k_end_remote_ghost_hyb_ue( field_array_t      * ALIGNED(128) f,
-                        const grid_t *              g,
-                        field_buffers_t& f_buffers );
+k_end_remote_ghost_hyb_ue( field_array_t      * ALIGNED(128) f );
 
 void
-k_begin_remote_ghost_hyb_curl_lpl_b( field_array_t      * ALIGNED(128) f,
-				     const grid_t *              g,
-				     field_buffers_t& f_buffers );
+k_begin_remote_ghost_hyb_curl_lpl_b( field_array_t      * ALIGNED(128) f );
 
 void
-k_end_remote_ghost_hyb_curl_lpl_b( field_array_t      * ALIGNED(128) f,
-				   const grid_t *              g,
-				   field_buffers_t& f_buffers );
+k_end_remote_ghost_hyb_curl_lpl_b( field_array_t      * ALIGNED(128) f );
 
 void
-k_begin_remote_ghost_hyb_b( field_array_t      * ALIGNED(128) f,
-                            const grid_t *              g,
-                            field_buffers_t& f_buffers );
+k_begin_remote_ghost_hyb_b( field_array_t      * ALIGNED(128) f );
 void
-k_end_remote_ghost_hyb_b( field_array_t      * ALIGNED(128) f,
-                        const grid_t *              g,
-                        field_buffers_t& f_buffers );
+k_end_remote_ghost_hyb_b( field_array_t      * ALIGNED(128) f );
 
 void
-k_begin_remote_ghost_hyb_t( field_array_t      * ALIGNED(128) f,
-                            const grid_t *              g,
-                            field_buffers_t& f_buffers );
+k_begin_remote_ghost_hyb_t( field_array_t      * ALIGNED(128) f );
 void
-k_end_remote_ghost_hyb_t( field_array_t      * ALIGNED(128) f,
-                        const grid_t *              g,
-                        field_buffers_t& f_buffers );
+k_end_remote_ghost_hyb_t( field_array_t      * ALIGNED(128) f );
 
 void
-k_begin_remote_ghost_hyb_o( field_array_t      * ALIGNED(128) f,
-                            const grid_t *              g,
-                            field_buffers_t& f_buffers );
+k_begin_remote_ghost_hyb_o( field_array_t      * ALIGNED(128) f );
 void
-k_end_remote_ghost_hyb_o( field_array_t      * ALIGNED(128) f,
-                        const grid_t *              g,
-                        field_buffers_t& f_buffers );
+k_end_remote_ghost_hyb_o( field_array_t      * ALIGNED(128) f );
+void 
+begin_halo_exchange(field_array* fa, const int beg_var, const int end_var);
 
+void 
+end_halo_exchange(field_array* fa, const int beg_var, const int end_var);
 
 #endif // _sfa_private_h_

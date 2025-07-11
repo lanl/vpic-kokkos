@@ -21,9 +21,9 @@
   + F(0,uz) * pz * ( F(z,pe) - F(mz,pe) ) )
 
 #define DIVQE() \
-  ( px*(2.0*F(0,pe)/rho - F(x,pe)/rhox - F(mx,pe)/rhomx)	\
-  + py*(2.0*F(0,pe)/rho - F(y,pe)/rhoy - F(my,pe)/rhomy)	\
-  + pz*(2.0*F(0,pe)/rho - F(z,pe)/rhoz - F(mz,pe)/rhomz) )
+  ( 4.0*px*px*(2.0*F(0,pe)/rho - F(x,pe)/rhox - F(mx,pe)/rhomx)	\
+  + 4.0*py*py*(2.0*F(0,pe)/rho - F(y,pe)/rhoy - F(my,pe)/rhomy)	\
+  + 4.0*pz*pz*(2.0*F(0,pe)/rho - F(z,pe)/rhoz - F(mz,pe)/rhomz) )
 
 
 #define INIT_STENCIL()						\
@@ -41,7 +41,7 @@
   float rhomx  = (F(mx,rhof) > denmin) ? F(mx,rhof) : denmin; \
   float rhomy  = (F(my,rhof) > denmin) ? F(my,rhof) : denmin; \
   float rhomz  = (F(mz,rhof) > denmin) ? F(mz,rhof) : denmin; \
-  float dpedt  =  gamma * DIVUEP() + (gamma - 1.0) * UEGRADP() + kappa * DIVQE();
+  float dpedt  =  gamma * DIVUEP() + (gamma - 1.0) * (-UEGRADP() + kappa * DIVQE());
 
 #define UPDATE_B(delt)				\
   F(0,cbx) = F(0,ox) - delt*ROTEX();		\
@@ -118,29 +118,29 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   // 0: Setup and smooth ion moments
   // ----------------------------------------------------------
     
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Smooth_Ion_Moments");
   //Only smooth on the first subcycle
   if (isub==0) {
     
     //smooth moments
-    Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Exchange_JF");
-    k_begin_remote_ghost_hyb_jf(fa, fa->g, *(fa->fb) );
-    k_end_remote_ghost_hyb_jf  (fa, fa->g, *(fa->fb) );
+    Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Smooth_Ion_Moments::Exchange_JF");
+    k_begin_remote_ghost_hyb_jf(fa );
+    k_end_remote_ghost_hyb_jf  (fa );
     Kokkos::Profiling::popRegion();
-    Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Apply_Local_Ghost_JF");
+    Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Smooth_Ion_Moments::Apply_Local_Ghost_JF");
     k_hyb_local_ghost_jf  (fa, fa->g);
     Kokkos::Profiling::popRegion();
 
     int ism = g->nsm;
     while(ism>0) {
-      Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Smooth_Moments");
+      Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Smooth_Ion_Moments::Smooth_Moments");
       hyb_smooth_moments( fa );
       Kokkos::Profiling::popRegion();
-      Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Exchange_JF");
-      k_begin_remote_ghost_hyb_jf(fa, fa->g, *(fa->fb) );
-      k_end_remote_ghost_hyb_jf  (fa, fa->g, *(fa->fb) );
+      Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Smooth_Ion_Moments::Exchange_JF");
+      k_begin_remote_ghost_hyb_jf(fa );
+      k_end_remote_ghost_hyb_jf  (fa );
       Kokkos::Profiling::popRegion();
-      Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Apply_Local_Ghost_JF");
+      Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Smooth_Ion_Moments::Apply_Local_Ghost_JF");
       k_hyb_local_ghost_jf  (fa, fa->g);
       Kokkos::Profiling::popRegion();
       ism--;
@@ -152,26 +152,26 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   // 1: Calculate electric field E_n(B_n), update B=B_n+dt/2*K1
   // ----------------------------------------------------------
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1");
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1::Advance_E");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Update_B_K1");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Update_B_K1::Advance_E");
   hyb_advance_eue( fa, isub/nsub ); //sets ghost B + computes E
   Kokkos::Profiling::popRegion();
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1::Remote");
-  k_begin_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );//ARI add cell-centered BCs
-  k_end_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );
-  k_begin_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
-  k_end_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Update_B_K1::Remote");
+  k_begin_remote_ghost_hyb_e( fa );//ARI add cell-centered BCs
+  k_end_remote_ghost_hyb_e( fa );
+  k_begin_remote_ghost_hyb_ue( fa );
+  k_end_remote_ghost_hyb_ue( fa );
   Kokkos::Profiling::popRegion();
 
   //fix local BCs
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1::Local");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Update_B_K1::Local");
   k_hyb_local_ghost_e( fa, fa->g );
   Kokkos::Profiling::popRegion();
   
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1,1,1},{nx+1,ny+1,nz+1});
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Calc_E_Update_B_K1::UpdateStencil");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Update_B_K1::UpdateStencil");
   Kokkos::parallel_for("hyb_advance_bpe_update1", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
       INIT_STENCIL();	  
       UPDATE1();	  
@@ -184,13 +184,13 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   // 2: Update B=B_n+dt/2*K2 and store temp data
   // ----------------------------------------------------------
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K2_Store_Temp");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Update_B_K2");
   hyb_advance_eue( fa, (isub+0.5)/nsub) ; //sets ghost B's
   
-  k_begin_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );//ARI add cell-centered BCs
-  k_end_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );
-  k_begin_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
-  k_end_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
+  k_begin_remote_ghost_hyb_e( fa );//ARI add cell-centered BCs
+  k_end_remote_ghost_hyb_e( fa );
+  k_begin_remote_ghost_hyb_ue( fa );
+  k_end_remote_ghost_hyb_ue( fa );
   //fix local BCs
   k_hyb_local_ghost_e( fa, fa->g );
   
@@ -204,13 +204,13 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   // 3: Update B=B_n+dt*K3 and store temp data
   // ----------------------------------------------------------
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K3_Store_Temp");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Update_B_K3");
   hyb_advance_eue( fa, (isub+0.5)/nsub); //sets ghost B's
   
-  k_begin_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );//ARI add cell-centered BCs
-  k_end_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );
-  k_begin_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
-  k_end_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
+  k_begin_remote_ghost_hyb_e( fa );//ARI add cell-centered BCs
+  k_end_remote_ghost_hyb_e( fa );
+  k_begin_remote_ghost_hyb_ue( fa );
+  k_end_remote_ghost_hyb_ue( fa );
   //fix local BCs
   k_hyb_local_ghost_e( fa, fa->g );
   
@@ -225,13 +225,13 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   // 4: Update B=B_n+dt*(K1+2*K2+2*K3+K4)/6
   // ----------------------------------------------------------
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_B_K4");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Update_B_K4");
   hyb_advance_eue( fa, (isub+1.0)/nsub ); //sets ghost Bs
   
-  k_begin_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );//ARI add cell-centered BCs
-  k_end_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );
-  k_begin_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
-  k_end_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
+  k_begin_remote_ghost_hyb_e( fa );//ARI add cell-centered BCs
+  k_end_remote_ghost_hyb_e( fa );
+  k_begin_remote_ghost_hyb_ue( fa );
+  k_end_remote_ghost_hyb_ue( fa );
   //fix local BCs
   k_hyb_local_ghost_e( fa, fa->g );
   
@@ -245,10 +245,10 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   // 5: Last E update
   // ----------------------------------------------------------
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_E");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Update_E");
   hyb_advance_eue( fa, (isub+1.0)/nsub ); //sets ghost Bs
-  k_begin_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );//ARI add cell-centered BCs
-  k_end_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );
+  k_begin_remote_ghost_hyb_e( fa );//ARI add cell-centered BCs
+  k_end_remote_ghost_hyb_e( fa );
   //fix local BCs
   k_hyb_local_ghost_e( fa, fa->g );
   Kokkos::Profiling::popRegion();

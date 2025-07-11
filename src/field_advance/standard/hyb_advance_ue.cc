@@ -67,7 +67,7 @@ hyb_advance_ue( field_array_t * RESTRICT fa,
     
   //Compute E. Interior cells correct 
    
-  Kokkos::Profiling::pushRegion("HybridAdvanceE::Update_E_Interior");
+  Kokkos::Profiling::pushRegion("HybridAdvanceUE::Update_E_Interior");
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_inner_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
   // Write: ex,ey,ez 
   // Read: rhof, rhofold, jfx, jfy, jfz, jfxold, jfyold, jfzold, cbx, cby, cbz, tcax, tcay, tcaz, pe

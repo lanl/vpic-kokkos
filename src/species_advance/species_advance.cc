@@ -311,20 +311,12 @@ void
 species_t::copy_inbound_to_device()
 {
 
-  // TODO: Why do we need particle_copy as an intermediate?
-  // currently the recv particles are in particles_recv, not particle_copy
   auto pr_h_subview  = Kokkos::subview(k_pr_h,   std::make_pair(0, num_to_copy), Kokkos::ALL);
-  auto pc_h_subview  = Kokkos::subview(k_pc_h,   std::make_pair(0, num_to_copy), Kokkos::ALL);
   auto pri_h_subview = Kokkos::subview(k_pr_i_h, std::make_pair(0, num_to_copy));
-  auto pci_h_subview = Kokkos::subview(k_pc_i_h, std::make_pair(0, num_to_copy));
-  Kokkos::deep_copy(pc_h_subview, pr_h_subview);
-  Kokkos::deep_copy(pci_h_subview, pri_h_subview);
-
-
   auto pc_d_subview  = Kokkos::subview(k_pc_d,   std::make_pair(0, num_to_copy), Kokkos::ALL);
   auto pci_d_subview = Kokkos::subview(k_pc_i_d, std::make_pair(0, num_to_copy));
-  Kokkos::deep_copy(pc_d_subview, pc_h_subview);
-  Kokkos::deep_copy(pci_d_subview, pci_h_subview);
+  Kokkos::deep_copy(pc_d_subview, pr_h_subview);
+  Kokkos::deep_copy(pci_d_subview, pri_h_subview);
 
   // Append it to the particles
 
