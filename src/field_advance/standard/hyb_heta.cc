@@ -48,9 +48,8 @@ typedef struct pipeline_args {
 		  pz2*( F(z,cbz) + F(mz,cbz) - 2.0*F(0,cbz) ) ); \
 
 #define CURL_LPL_B(x_,y_,z_)						\
-  F(0,e##x_) -= hypereta*F(0,tcax)*(p##y_*( F(y_,pe##z_) - F(m##y_,pe##z_) - \
-				     p##z_*( F(z_,pe##y_) - F(m##z,pe##y_))))  
-
+  F(0,e##x_) -= hypereta*F(0,tcax)*F(0,tcaz)*( p##y_*( F(y_,pe##z_) - F(m##y_,pe##z_) ) - \
+				             - p##z_*( F(z_,pe##y_) - F(m##z_,pe##y_) ) )
 
 
 void
