@@ -192,9 +192,9 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
     #define f_d2ezdz   k_interp(ii, interpolator_var::d2ezdz)
 
     Kokkos::parallel_reduce(np, KOKKOS_LAMBDA(const int n, double& update) {
-        float ux = k_particles(n, particle_var::dx);
-        float uy = k_particles(n, particle_var::dy);
-        float uz = k_particles(n, particle_var::dz);
+        float ux = k_particles(n, particle_var::ux);
+        float uy = k_particles(n, particle_var::uy);
+        float uz = k_particles(n, particle_var::uz);
         float dx = k_particles(n, particle_var::dx);
         float dy = k_particles(n, particle_var::dy);
         float dz = k_particles(n, particle_var::dz);
