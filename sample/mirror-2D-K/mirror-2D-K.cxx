@@ -533,7 +533,7 @@ begin_initialization {
     fp_info.write(&Lz, 1 );
 
     fp_info.write(&nx, 1 );
-    fp_info.write(&ny, 1 );https://www.nytimes.com/2025/07/07/magazine/always-sunny-in-philadelphia.html
+    fp_info.write(&ny, 1 );
     fp_info.write(&nz, 1 );
 
     fp_info.write(&dt, 1 );
