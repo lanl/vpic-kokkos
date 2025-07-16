@@ -1,4 +1,4 @@
-LIST(APPEND TESTS lemons_driver)
+LIST(APPEND TESTS lemons_driver lemons_driver_ewfield)
 
 list(APPEND gold_file "${CMAKE_CURRENT_SOURCE_DIR}/moments_gold")
 add_definitions(-DGOLD_ENERGY_FILE="${gold_file}")
