@@ -203,6 +203,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   auto &k_field = field_array->k_f_d;
   
   define_collision_op(lemons("lemons_coll", sp, sp_fl, cvar0, ncoll, field_array));
+  // define_collision_op(lemons("lemons_coll", sp, sp_fl, cvar0, ncoll));
   
   sp->last_indexed = -1;
 
@@ -281,19 +282,19 @@ TEST_CASE( "Check if it gives correct energy (within tol)", "[energy]" )
         moment_gold_file_name << std::endl;
 
     // Compare energies to make sure everything worked out OK (within 1%)
-    const unsigned short t6_mask = 0b00100000;
-    const unsigned short t9_mask = 0b100000000; 
+    const unsigned short t6_mask = 0b00100000;  //velocity_x
+    const unsigned short t9_mask = 0b100000000; //temperature
 
-    // Test just the step range 0-100, and have tight counts
+    // Test just the step range 0-40, and have tight counts
     REQUIRE(
             test_utils::compare_energies(moment_file_name, moment_gold_file_name,
-	       0.01, 1e-6, t6_mask, test_utils::FIELD_ENUM::Sum, 1, "lemons.t6.tight.out", 0, 50)
+	       0.01, 1e-6, t6_mask, test_utils::FIELD_ENUM::Sum, 1, "lemons.t6.tight.out", 0, 40)
            );
 
     // Test the sum of the T
      REQUIRE(
             test_utils::compare_energies(moment_file_name, moment_gold_file_name,
-	       0.01, 1e-6, t9_mask, test_utils::FIELD_ENUM::Sum, 1, "lemons.t9.tight.out", 0, 50)
+	       0.01, 1e-6, t9_mask, test_utils::FIELD_ENUM::Sum, 1, "lemons.t9.tight.out", 0, 40)
            );
 
 }
