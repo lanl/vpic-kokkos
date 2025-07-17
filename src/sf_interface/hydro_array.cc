@@ -337,7 +337,7 @@ synchronize_hydro_array_kokkos( hydro_array_t * ha ) {
       send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 13) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy); \
     }); \
     Kokkos::deep_copy(send_buff_h, send_buff_d); \
-    send_buff_h(0) = size; \
+    send_buff_h(0) = g->d##X; \
     begin_send_port_k(i,j,k,size,g, reinterpret_cast<char*>(send_buff_h.data())); \
   } END_PRIMITIVE
 
