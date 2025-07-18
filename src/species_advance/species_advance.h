@@ -159,6 +159,11 @@ class species_t {
         k_particle_movers_t::HostMirror k_pm_h;  // kokkos particle movers on host
         k_particle_i_movers_t::HostMirror k_pm_i_h;  // kokkos particle movers on host
 
+  k_counter_t             num_temp_movers_d;
+  k_counter_t::HostMirror num_temp_movers_h;
+  k_particle_movers_t     temp_movers;
+  k_particle_i_movers_t   temp_movers_i;
+
         // TODO: what is an iterator here??
         k_counter_t k_nm_d;               // nm iterator
         k_counter_t::HostMirror k_nm_h;
@@ -227,6 +232,11 @@ class species_t {
             k_nm_h = Kokkos::create_mirror_view(k_nm_d);
 
             clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
+
+num_temp_movers_d = k_counter_t("Num temp movers");
+num_temp_movers_h = Kokkos::create_mirror_view(num_temp_movers_d);
+temp_movers = k_particle_movers_t("Temp movers", n_particles);
+temp_movers_i = k_particle_i_movers_t("Temp mover indices", n_particles);
         }
 
         /**
@@ -442,14 +452,23 @@ move_p_kokkos(
   auto scatter_access = scatter_view.access();
 
   q = qsp*p_w;
+  int ii = pii;
+  float r[3];
+  r[0] = p_dx;
+  r[1] = p_dy;
+  r[2] = p_dz;
 
     //printf("in move %d \n", pi);
 
   for(;;) {
-    int ii = pii;
-    s_midx = p_dx;
-    s_midy = p_dy;
-    s_midz = p_dz;
+//    int ii = pii;
+//    s_midx = p_dx;
+//    s_midy = p_dy;
+//    s_midz = p_dz;
+
+    s_midx = r[0];
+    s_midy = r[1];
+    s_midz = r[2];
 
 
     s_dispx = pm->dispx;
@@ -570,14 +589,23 @@ move_p_kokkos(
 
     //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset
-    p_dx += s_dispx+s_dispx;
-    p_dy += s_dispy+s_dispy;
-    p_dz += s_dispz+s_dispz;
+//    p_dx += s_dispx+s_dispx;
+//    p_dy += s_dispy+s_dispy;
+//    p_dz += s_dispz+s_dispz;
+    r[0] += s_dispx+s_dispx;
+    r[1] += s_dispy+s_dispy;
+    r[2] += s_dispz+s_dispz;
 
     // If an end streak, return success (should be ~50% of the time)
     //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
 
-    if( axis==3 ) break;
+    if( axis==3 ) {
+      pii = ii;
+      p_dx = r[0];
+      p_dy = r[1];
+      p_dz = r[2];
+      break;
+    }
 
     // Determine if the particle crossed into a local cell or if it
     // hit a boundary and convert the coordinate system accordingly.
@@ -587,7 +615,8 @@ move_p_kokkos(
     // +/-1 _exactly_ for the particle.
 
     v0 = s_dir[axis];
-    k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
+    //k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
+    r[axis] = v0; // Avoid roundoff fiascos--put the particle
                            // _exactly_ on the boundary.
     face = axis; if( v0>0 ) face += 3;
 
@@ -617,16 +646,22 @@ move_p_kokkos(
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
       // displacement in the particle mover.
-      pii = 8*pii + face;
+      //pii = 8*pii + face;
+      pii = 8*ii + face;
+      p_dx = r[0];
+      p_dy = r[1];
+      p_dz = r[2];
       return 1; // Return "mover still in use"
-      }
+    }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
 
-    pii = neighbor - rangel;
+    //pii = neighbor - rangel;
+    ii = neighbor - rangel;
     /**/                         // Note: neighbor - rangel < 2^31 / 6
-    k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+    //k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+    r[axis] = -v0;      // Convert coordinate system
   }
   #undef p_dx
   #undef p_dy
