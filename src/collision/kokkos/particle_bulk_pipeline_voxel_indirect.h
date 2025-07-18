@@ -405,7 +405,7 @@ struct particle_bulk_collision_pipeline {
     const float tmp_fl = spj_fl(ii, fluid_var::tmp);
 
     float ndt = nj_fl * dt;
-    //    printf("n=%14.8e, dt=%14.8e, mi=%14.8e\n",nj_fl, dt, mi);
+    printf("n=%14.8e, dt=%14.8e, mi=%14.8e\n",nj_fl, dt, mi);
     
     // Relative velocity
     float urx = uix - ujx_fl;

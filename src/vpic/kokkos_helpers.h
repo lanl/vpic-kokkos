@@ -24,7 +24,7 @@
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
 #ifdef VARIABLE_CHARGE
-  #define HYDRO_VAR_COUNT 16
+  #define HYDRO_VAR_COUNT 22
 #else
   #define HYDRO_VAR_COUNT 14
 #endif
@@ -300,6 +300,12 @@ namespace hydro_var {
 #ifdef VARIABLE_CHARGE
 	min_q = 14,
 	max_q = 15,
+	n_q0  = 16,
+	n_q1  = 17,
+	n_q2  = 18,
+	n_q3  = 19,
+	n_q4  = 20,
+	n_q5  = 21,
 #endif
     };
 };

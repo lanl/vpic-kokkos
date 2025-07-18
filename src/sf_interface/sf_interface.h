@@ -205,6 +205,8 @@ typedef struct hydro {
   float tyz, tzx, txy;   // Stress off-diagonal        => <p_i v_j f>, i!=j
 #if VARIABLE_CHARGE
   float qmin, qmax;      // Minimum and maximum charge within a cell
+  float n_q0, n_q1, n_q2, n_q3, n_q4, n_q5;
+  float _pad[2];
 #else
   float _pad[2];         // 16-byte align
 #endif
