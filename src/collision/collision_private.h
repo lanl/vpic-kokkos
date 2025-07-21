@@ -32,6 +32,7 @@ struct collision_op_t {
 struct particle_bulk_collision_op_t : public collision_op_t {
   species_t  * spi;
   fluid_species_t  * spj;
+  field_array_t * field=NULL; // field for electron collisions, can be NULL
   int          interval;
 };
 
@@ -161,15 +162,17 @@ struct collision_model {
   /**
    * @brief upload collected moment sources to field array
    */
+  template <typename ViewType>
   KOKKOS_INLINE_FUNCTION
-  void upload_moment_src(const k_fluid_1d & spj_fl,
+  void upload_moment_src(const ViewType & spj_fl, const int v,
                                const gmomType &Dm) const {
     // By default do nothing, or call a derived "implementation" if it exists:
-      static_cast<const DerivedT*>(this)->upload_moment_src_impl(spj_fl, Dm);
+      static_cast<const DerivedT*>(this)->upload_moment_src_impl(spj_fl, v, Dm);
   }
-    
+  
+  template <typename ViewType>
   KOKKOS_INLINE_FUNCTION
-  void upload_moment_src_impl(const k_fluid_1d& spj_fl,
+  void upload_moment_src_impl(const ViewType& spj_fl, const int v,
                                const gmomType &Dm ) const
   {
       // default no-op

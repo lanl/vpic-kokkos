@@ -26,7 +26,8 @@ void apply_particle_bulk_collision_model_pipeline( particle_bulk_collision_op_t 
       cop->spi,
       cop->spj,
       cop->interval,
-      rng
+      rng,
+      cop->field
     );
 
     pipeline.dispatch(model);

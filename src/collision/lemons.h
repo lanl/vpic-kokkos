@@ -4,7 +4,7 @@
 #include "particle_bulk.h"
 
 /**
- * @brief Takizuka-Abe collision operator.
+ * @brief Lemons collision operator.
  */
 struct lemons_collision_op_t : public particle_bulk_collision_op_t {
   double cvar0;
@@ -13,7 +13,7 @@ struct lemons_collision_op_t : public particle_bulk_collision_op_t {
 
 
 /**
- * @brief Takizuka-Abe binary collision model.
+ * @brief Lemons binary collision model.
  */
 struct lemons_model : public collision_model<lemons_model> {
   const float d_cvar0;
@@ -102,18 +102,30 @@ struct lemons_model : public collision_model<lemons_model> {
       return v/v0;
       
   }
-    
+  
+  template <class ViewType>
   KOKKOS_INLINE_FUNCTION
-  void upload_moment_src_impl( const k_fluid_1d & spj_v,
+  void upload_moment_src_impl( const ViewType & spj_v, const int v,
 			       const gmomType &Dm
 			       ) const {
-      printf("#upload_moment_src_impl()  in lemons model\n");
-      spj_v(fluid_var::msx) = Dm.v[1];
-      spj_v(fluid_var::msy) = Dm.v[2];
-      spj_v(fluid_var::msz) = Dm.v[3];
-      spj_v(fluid_var::ens) = Dm.v[4];
-      printf("#msxyz=%e,%e,%e, ens=%e\n",spj_v(fluid_var::msx),spj_v(fluid_var::msy),spj_v(fluid_var::msz),spj_v(fluid_var::ens));      
-  }
+    if constexpr (std::is_same<ViewType, k_fluid_t>::value) {
+	    // printf("#upload_moment_src_impl()  in lemons model\n");
+      spj_v(v, fluid_var::msx) = Dm.v[1];
+      spj_v(v, fluid_var::msy) = Dm.v[2];
+      spj_v(v, fluid_var::msz) = Dm.v[3];
+      spj_v(v, fluid_var::ens) = Dm.v[4];
+      // printf("#msxyz=%e,%e,%e, ens=%e\n",spj_v(v, fluid_var::msx),spj_v(v, fluid_var::msy),spj_v(v, fluid_var::msz),spj_v(v, fluid_var::ens));
+    } else if constexpr (std::is_same<ViewType, k_field_t>::value) {
+      // FIELD implementation
+	    // printf("lemons_model: uploading to field\n");
+      spj_v(v, field_var::sx) = Dm.v[1];
+      spj_v(v, field_var::sy) = Dm.v[2];
+      spj_v(v, field_var::sz) = Dm.v[3];
+      spj_v(v, field_var::se) = Dm.v[4];
+      // printf("#msxyz=%e,%e,%e, ens=%e\n",spj_v(v, field_var::sx),spj_v(v, field_var::sy),spj_v(v, field_var::sz),spj_v(v, field_var::se));
+    }
+    
+  } 
 };
 
 #endif /* _lemons_h_ */
