@@ -28,18 +28,30 @@ typedef struct pipeline_args {
   float  uy = invrho*half*( (one-hstep)*( F(0,jfy) + F(0,jfyold) ) + hstep*( three*F(0,jfy) - F(0,jfyold)) ) ; \
   float  uz = invrho*half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + hstep*( three*F(0,jfz) - F(0,jfzold)) ) ; 
 
-
-#define E(x_,y_,z_)							\
-  F(0,e##x_) =								\
-    invrho * (F(0,cb##z_) + F(0,cb##z_##0)) * ( p##z_*( F(z_,cb##x_) - F(m##z_,cb##x_) ) - p##x_*( F(x_,cb##z_) - F(m##x_,cb##z_)) ) \
-  + invrho * (F(0,cb##y_) + F(0,cb##y_##0))  * ( p##y_*( F(y_,cb##x_) - F(m##y_,cb##x_) ) - p##x_*( F(x_,cb##y_) - F(m##x_,cb##y_)) ) \
-       - u##y_ * (F(0,cb##z_)+F(0,cb##z_##0))  +   u##z_ * (F(0,cb##y_)+F(0,cb##y_##0)) \
-    - invrho *(1.0/CM(0,h##x_))*( p##x_*( F(x_,pe) - F(m##x_,pe)) )	\
-    + eta*F(0,tcay)*( p##y_*( F(y_,cb##z_) - F(m##y_,cb##z_) ) - p##z_*( F(z_,cb##y_) - F(m##z_,cb##y_) ) );\
+//#define E(x_,y_,z_)							\
+//  F(0,e##x_) =								\
+//    invrho * (F(0,cb##z_) + F(0,cb##z_##0)) * ( p##z_*( F(z_,cb##x_) - F(m##z_,cb##x_) ) - p##x_*( F(x_,cb##z_) - F(m##x_,cb##z_)) ) \
+//  + invrho * (F(0,cb##y_) + F(0,cb##y_##0))  * ( p##y_*( F(y_,cb##x_) - F(m##y_,cb##x_) ) - p##x_*( F(x_,cb##y_) - F(m##x_,cb##y_)) ) \
+//       - u##y_ * (F(0,cb##z_)+F(0,cb##z_##0))  +   u##z_ * (F(0,cb##y_)+F(0,cb##y_##0)) \
+//    - invrho *(1.0/CM(0,h##x_))*( p##x_*( F(x_,pe) - F(m##x_,pe)) )	\
+//    + eta*F(0,tcay)*( p##y_*( F(y_,cb##z_) - F(m##y_,cb##z_) ) - p##z_*( F(z_,cb##y_) - F(m##z_,cb##y_) ) );
+#define E(x_,y_,z_)						                         \
+  F(0,e##x_) =							        	         \
+    invrho * (CM(0,h##y_)/CM(0,jac)) * (F(0,cb##z_) + F(0,cb##z_##0))                    \
+           * (  p##z_ * (CM(z_,h##x_)*F(z_,cb##x_) - CM(m##z_,h##x_)*F(m##z_,cb##x_))    \
+              - p##x_ * (CM(x_,h##z_)*F(x_,cb##z_) - CM(m##x_,h##z_)*F(m##x_,cb##z_)))   \
+  + invrho * (CM(0,h##z_)/CM(0,jac)) * (F(0,cb##y_) + F(0,cb##y_##0))                    \
+           * (  p##y_ * (CM(y_,h##x_)*F(y_,cb##x_) - CM(m##y_,h##x_)*F(m##y_,cb##x_))    \
+              - p##x_ * (CM(x_,h##y_)*F(x_,cb##y_) - CM(m##x_,h##y_)*F(m##x_,cb##y_)))   \
+  - u##y_  * (F(0,cb##z_)+F(0,cb##z_##0)) + u##z_ * (F(0,cb##y_) + F(0,cb##y_##0))       \
+  - invrho * (1.0/CM(0,h##x_)) * (p##x_*(F(x_,pe) - F(m##x_,pe)))                        \
+  + eta * F(0,tcay) * (CM(0,h##x_)/CM(0,jac))                                            \
+        * (  p##y_*(CM(y_,h##z_)*F(y_,cb##z_) - CM(m##y_,h##z_)*F(m##y_,cb##z_))         \
+           - p##z_*(CM(z_,h##y_)*F(z_,cb##y_) - CM(m##y_,h##y_)*F(m##z_,cb##y_)));       \
   F(0,e##x_) *= F(0,tcaz);
   
 //* (1.0/CM(0,h##x_))
-  #define FIXEDGES()\
+  #define FIXEDGES();\
   Kokkos::parallel_for("advance_e", x_pos, KOKKOS_LAMBDA(const int z, const int y, const int x) {\
       INIT_STENCIL();\
 	E(x,y,z);\
@@ -77,8 +89,6 @@ typedef struct pipeline_args {
 	E(z,x,y);\
     });\
 
-
-
 void
 hyb_advance_e( field_array_t * RESTRICT fa,
                   float frac ) {
@@ -89,10 +99,11 @@ hyb_advance_e( field_array_t * RESTRICT fa,
   args->p = (sfa_params_t *)fa->params;
   args->g = fa->g;
   k_field_t k_field = fa->k_f_d;
-  const material_coefficient_t * ALIGNED(128) m = args->p->mc;
 
-  const grid_t                 *              g = args->g;
+  const material_coefficient_t * ALIGNED(128) m = args->p->mc;
+  const grid_t *g = args->g;
   const size_t nx = g->nx, ny = g->ny, nz = g->nz;
+
   k_curvilinear_vars_t k_curv = g->k_curvilinear_vars_d;
   
   const float px = (nx>1) ? 0.5*g->rdx : 0;

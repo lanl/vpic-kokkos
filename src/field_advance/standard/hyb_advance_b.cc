@@ -5,10 +5,20 @@
 #include <iostream>
 
 #define F(ind,v) k_field(f##ind##_index, field_var::v)
+#define CM(ind,cv) k_curv(f##ind##_index, curv_mesh_var::cv)
   
-#define  ROTEX()  ( py*( F(y,ez) - F(my,ez) ) - pz*( F(z,ey) - F(mz,ey) ) )	
-#define  ROTEY()  ( pz*( F(z,ex) - F(mz,ex) ) - px*( F(x,ez) - F(mx,ez) ) )	
-#define  ROTEZ()  ( px*( F(x,ey) - F(mx,ey) ) - py*( F(y,ex) - F(my,ex) ) )	
+//#define  ROTEX()  ( py*( F(y,ez) - F(my,ez) ) - pz*( F(z,ey) - F(mz,ey) ) )	
+//#define  ROTEY()  ( pz*( F(z,ex) - F(mz,ex) ) - px*( F(x,ez) - F(mx,ez) ) )	
+//#define  ROTEZ()  ( px*( F(x,ey) - F(mx,ey) ) - py*( F(y,ex) - F(my,ex) ) )	
+#define ROTEX()                                      \
+  (CM(0,hx)/CM(0,jac)) * (  py*(CM(y,hz)*F(y,ez) - CM(my,hz)*F(my,ez))   \
+                          - pz*(CM(z,hy)*F(z,ey) - CM(mz,hy)*F(mz,ey)))
+#define ROTEY()                                      \
+  (CM(0,hy)/CM(0,jac)) * (  pz*(CM(z,hx)*F(z,ex) - CM(mz,hx)*F(mz,ex))   \
+                          - px*(CM(x,hz)*F(x,ez) - CM(mx,hz)*F(mx,ez)))
+#define ROTEZ()                                      \
+  (CM(0,hz)/CM(0,jac)) * (  px*(CM(x,hy)*F(x,ey) - CM(mx,hy)*F(mx,ey))   \
+                          - py*(CM(y,hx)*F(y,ex) - CM(my,hx)*F(my,ex)))
 
 #define INIT_STENCIL()						\
   size_t f0_index  = VOXEL(x,   y,   z,    nx,ny,nz);		\
@@ -32,14 +42,14 @@
 
 #define UPDATE2()					 \
   UPDATE_B(dt2);					 \
-  F(0,tx) += two*ROTEX();					 \
-  F(0,ty) += two*ROTEY();					 \
+  F(0,tx) += two*ROTEX();			         \
+  F(0,ty) += two*ROTEY();				 \
   F(0,tz) += two*ROTEZ()
 
 #define UPDATE3()					 \
   UPDATE_B(dt);						 \
-  F(0,tx) += two*ROTEX();					 \
-  F(0,ty) += two*ROTEY();					 \
+  F(0,tx) += two*ROTEX();				 \
+  F(0,ty) += two*ROTEY();				 \
   F(0,tz) += two*ROTEZ();
 
 #define UPDATE4()					 \
@@ -60,6 +70,9 @@ hyb_advance_b(field_array_t * RESTRICT fa,
   size_t ny   = g->ny;
   size_t nz   = g->nz;
   size_t nv   = g->nv;
+
+  k_curvilinear_vars_t k_curv = g->k_curvilinear_vars_d;
+
   float  px   = (nx>1) ? 0.5*g->rdx : 0;
   float  py   = (ny>1) ? 0.5*g->rdy : 0;
   float  pz   = (nz>1) ? 0.5*g->rdz : 0;
