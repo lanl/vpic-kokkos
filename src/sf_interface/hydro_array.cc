@@ -530,7 +530,8 @@ hydro_array_t::copy_to_host(FILE *fp, const int step /*=0*/) {
   // Avoid capturing this
   auto& k_h = k_h_h;
   hydro_t * h_l = h;
-
+  auto wr = world_rank;
+  
   //for(int i=0; i<hydro_array->k_h_h.extent(0); i++) {
   Kokkos::parallel_for("copy hydro to legacy array",
     host_execution_policy(0, k_h_h.extent(0) ) ,
@@ -557,7 +558,7 @@ hydro_array_t::copy_to_host(FILE *fp, const int step /*=0*/) {
     int ix, iy, iz;
     RANK_TO_INDEX(i, ix, iy, iz, 1, 1, 1);
     
-    if(world_rank==0 && fp && (h_l[i].txx*h_l[i].txx + h_l[i].tyy*h_l[i].tyy + h_l[i].tzz*h_l[i].tzz) > 0) {	
+    if(fp && wr==0 && (h_l[i].txx*h_l[i].txx + h_l[i].tyy*h_l[i].tyy + h_l[i].tzz*h_l[i].tzz) > 0) {	
 	//get temperature
 	auto vx = h_l[i].px;
 	auto vy = h_l[i].py;
@@ -576,5 +577,5 @@ hydro_array_t::copy_to_host(FILE *fp, const int step /*=0*/) {
     }	
   });
   // printf("k_h_h.extent(0)=%d\n",k_h_h.extent(0));
-  if(world_rank==0 && fp) fprintf(fp,"\n");
+  if(fp && wr==0) fprintf(fp,"\n");
 }
