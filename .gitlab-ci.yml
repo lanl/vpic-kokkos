@@ -24,7 +24,7 @@ stages:
     - module load miniconda3
     - python --version  # For debugging
     - pip install virtualenv
-    - virtualenv venv
+    - virtualenv --system-site-packages venv
     - source venv/bin/activate
   script:
     - echo ${DEFINES}
@@ -48,7 +48,6 @@ stages:
       ${DEFINES:+${DEFINES}}
       ..
     - make -j ${j} -l ${l} VERBOSE=1
-    - pip install numpy h5py
     - make test CTEST_OUTPUT_ON_FAILURE=1
     - make install DESTDIR=${PWD}/install
       #TODO: set OMP_PROC_BIND=spread and OMP_PLACES=threads (or similar)
