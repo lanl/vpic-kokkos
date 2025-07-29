@@ -207,7 +207,7 @@ void init_curvilinear_grid()
 
     Kokkos::deep_copy(k_curvilinear_vars_d, k_curvilinear_vars_h);
 
-    
+/*    
     Kokkos::parallel_for("Print curvilinear mesh values",
 			 //                         host_execution_policy(0, nv - 1) ,
 			 Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, nv),
@@ -223,6 +223,7 @@ void init_curvilinear_grid()
 			   			   printf("i=%d, h0=%f, h1=%f, h2=%f, jac=%f", i, h0lcl, h1lcl, h2lcl, jaclcl );
 			   
 			 });
+*/
   }
 		    
       

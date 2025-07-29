@@ -289,8 +289,36 @@ sim_log( "Loading fields" );
  set_region_te(everywhere, 0*Te);
  
 //Set up curvilinear grid
-set_region_curvilinear(everywhere, 2.0, 1.0, 3.0, 6.0);
- // LOAD PARTICLES
+sim_log ("Loading curvilinear grid.");
+grid->init_curvilinear_grid();
+
+#define HX (1.0)
+#define HY (1.0)
+#define HZ (1.0)
+set_region_curvilinear(everywhere, HX, HY, HZ, HX*HY*HZ);
+
+
+#if 1
+    k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;    
+Kokkos::parallel_for("Print curvilinear mesh values",
+			 //                         host_execution_policy(0, nv - 1) ,
+			 Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, grid->nv),
+                         KOKKOS_CLASS_LAMBDA (const int i) {
+
+			   float h0lcl = k_curv_d(i, curv_mesh_var::hx);
+			   float h1lcl = k_curv_d(i, curv_mesh_var::hy);
+			   float h2lcl = k_curv_d(i, curv_mesh_var::hz);
+			   float jaclcl= k_curv_d(i, curv_mesh_var::jac);
+			   
+			   //			   printf("i=%d, h0=%f, h1=%f, h2=%f, jac=%f", i, k_curvilinear_vars_d(i, curv_mesh_var::h0), k_curvilinear_vars_d(i, curv_mesh_var::h1), k_curvilinear_vars_d(i, curv_mesh_var::h2), k_curvilinear_vars_d(i, curv_mesh_var::jac));
+
+			   			   printf("i=%d, h0=%f, h1=%f, h2=%f, jac=%f", i, h0lcl, h1lcl, h2lcl, jaclcl );
+			   
+			 });
+#endif
+
+
+// LOAD PARTICLES
   sim_log( "Loading particles" );
 
   double xmin = grid->x0 , xmax = grid->x0+(grid->dx)*(grid->nx);

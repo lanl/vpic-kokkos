@@ -23,18 +23,19 @@ vpic_simulation::initialize( int argc,
   grid->nsub          = 1;
   grid->den_floor_ohm = 0.;
   grid->den_floor_pe  = 0.;
-  grid->eos_gamma     = 1.;
   grid->eos_den       = 1.;
+
 
   // Call the user initialize the simulation
 
   TIC user_initialization( argc, argv ); TOC( user_initialization, 1 );
 //  user_initialization( argc, argv );
 
+  //grid->init_curvilinear_grid();
+
   dump_strategy = new_dump_strategy(dump_strategy_id, this);
 
-  grid->init_curvilinear_grid();
-  
+
   // Do some consistency checks on user initialized fields
 
   //if( rank()==0 ) MESSAGE(( "Checking interdomain synchronization" ));
