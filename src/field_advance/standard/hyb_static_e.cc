@@ -9,72 +9,30 @@ typedef struct pipeline_args {
   const grid_t       *              g;
 } pipeline_args_t;
 
+#define F(ind,v) k_field(f##ind##_index, field_var::v)
 
-KOKKOS_INLINE_FUNCTION void update_ex(const k_field_t& k_field, const size_t f0,
-				      const size_t f, const size_t fm, const float p) {
+#define INIT_STENCIL()							\
+  size_t f0_index  = VOXEL(x,   y,   z,    nx,ny,nz);			\
+  size_t fx_index  = VOXEL(x+1, y,   z,    nx,ny,nz);			\
+  size_t fy_index  = VOXEL(x,   y+1, z,    nx,ny,nz);			\
+  size_t fz_index  = VOXEL(x,   y,   z+1,  nx,ny,nz);			\
+  size_t fmx_index = VOXEL(x-1, y,   z,    nx,ny,nz);			\
+  size_t fmy_index = VOXEL(x,   y-1, z,    nx,ny,nz);			\
+  size_t fmz_index = VOXEL(x,   y,   z-1,  nx,ny,nz);			\
+  float  rho = half*( (one-hstep)*( F(0,rhof) + F(0,rhofold) ) + hstep*( three*F(0,rhof) - F(0,rhofold)) ) ; \
+  rho = (rho > den_floor_ohm) ? rho :  den_floor_ohm;			\
+  float  invrho = one/rho;						\
+  float hallinvrho = (rho > den_floor_ohm) ? invrho : 0 ;		
 
-    const float f_te   = k_field(f, field_var::te);
-    const float f_rho  = k_field(f, field_var::rhof);
-    const float fm_te  = k_field(fm,field_var::te);
-    const float fm_rho = k_field(fm,field_var::rhof);
 
-
-    k_field(f0, field_var::ex) = -p * (f_rho - fm_rho);
-}
-KOKKOS_INLINE_FUNCTION void update_ey(const k_field_t& k_field, const size_t f0,
-				      const size_t f, const size_t fm, const float p) {
+#define E(x_,y_,z_)							\
+  F(0,e##x_) = - invrho * ( p##x_*( F(x_,pe) - F(m##x_,pe)) );		\
+  F(0,e##x_) *= F(0,tcaz);
   
-    const float f_te   = k_field(f,  field_var::te);
-    const float f_rho  = k_field(f,  field_var::rhof);
-    const float fm_te  = k_field(fm, field_var::te);
-    const float fm_rho = k_field(fm, field_var::rhof);
-
-
-    k_field(f0, field_var::ey) = -p * (f_te*f_rho - fm_te*fm_rho);
-}
-KOKKOS_INLINE_FUNCTION void update_ez(const k_field_t& k_field, const size_t f0,
-				      const size_t f, const size_t fm, const float p) {
-  
-    const float f_te   = k_field(f,  field_var::te);
-    const float f_rho  = k_field(f,  field_var::rhof);
-    const float fm_te  = k_field(fm, field_var::te);
-    const float fm_rho = k_field(fm, field_var::rhof);
-
-
-    k_field(f0, field_var::ez) = -p * (f_te*f_rho - fm_te*fm_rho);
-}
-
-
-
-void hyb_static_e_interior_kokkos(k_field_t& k_field,
-                                const size_t nx, const size_t ny, const size_t nz,
-                                const float px,  const float py, const float pz) {
-
-    // EXEC_PIPELINE
-    Kokkos::MDRangePolicy<Kokkos::Rank<3>> zyx_policy({1, 1, 1}, {nz+1, ny+1, nx+1});
-    Kokkos::parallel_for("hyb_static_e: Majority of interior", zyx_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
-        const int f0 =  VOXEL(x,   y,   z,   nx, ny, nz);
-        const int fx =  VOXEL(x+1, y,   z,   nx, ny, nz);
-        const int fy =  VOXEL(x,   y+1, z,   nx, ny, nz);
-        const int fz =  VOXEL(x,   y,   z+1, nx, ny, nz);
-        const int fmx = VOXEL(x-1, y,   z,   nx, ny, nz);
-        const int fmy = VOXEL(x,   y-1, z,   nx, ny, nz);
-        const int fmz = VOXEL(x,   y,   z-1, nx, ny, nz);
-	
-        update_ex(k_field, f0, fx, fmx, px);
-        update_ey(k_field, f0, fy, fmy, py);
-        update_ez(k_field, f0, fz, fmz, pz);
-    });
-
-}
-
-
-
 void
-hyb_static_e_kokkos( field_array_t * RESTRICT fa,
+hyb_static_e( field_array_t * RESTRICT fa,
                   float frac ) {
   if( !fa     ) ERROR(( "Bad args" ));
-  if( frac!=1 ) ERROR(( "standard advance_e does not support frac!=1 yet" ));
 
   pipeline_args_t args[1];
   args->f = fa->f;
@@ -83,26 +41,40 @@ hyb_static_e_kokkos( field_array_t * RESTRICT fa,
   k_field_t k_field = fa->k_f_d;
   const material_coefficient_t * ALIGNED(128) m = args->p->mc;
   const grid_t                 *              g = args->g;
-  const int nx = g->nx, ny = g->ny, nz = g->nz;
+  const size_t nx = g->nx, ny = g->ny, nz = g->nz;
 
-  const float px     = (nx>1) ? 0.5*g->rdx : 0;
-  const float py     = (ny>1) ? 0.5*g->rdy : 0;
-  const float pz     = (nz>1) ? 0.5*g->rdz : 0;
+  const float px = (nx>1) ? 0.5*g->rdx : 0;
+  const float py = (ny>1) ? 0.5*g->rdy : 0;
+  const float pz = (nz>1) ? 0.5*g->rdz : 0;
+  const float eta = g->eta;
+  const float den_floor_ohm = g->den_floor_ohm;
 
+  const float hstep = frac;
+  constexpr float half = 1./2., one = 1., three = 3.;
+  constexpr size_t ind2  = 2, ind1 = 1;
+  
+  
+  //for interior cells
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1,1,1},{nx+1,ny+1,nz+1});
+  
+  
   /***************************************************************************
-   * Begin tangential B ghost setup
-   ***************************************************************************/
-
-  //k_begin_remote_ghost_hyb_jf( fa, fa->g );
-    k_begin_remote_ghost_hyb_jf(fa, fa->g, *(fa->fb) );
-
-//    k_local_ghost_tang_b( fa, fa->g );
-
-//k_end_remote_ghost_hyb_jf( fa, fa->g );
-    k_end_remote_ghost_hyb_jf(fa, fa->g, *(fa->fb) );
-
-    hyb_static_e_interior_kokkos(k_field, nx, ny, nz, px, py, pz);
-
+   * Update E fields
+   ***************************************************************************/ 
     
-    //   k_local_adjust_tang_e( fa, fa->g );
+  //Compute E. Interior cells correct 
+   
+  Kokkos::Profiling::pushRegion("HybridAdvanceE::Update_E_Interior");
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_inner_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
+  // Write: ex,ey,ez 
+  // Read: rhof, rhofold, jfx, jfy, jfz, jfxold, jfyold, jfzold, cbx, cby, cbz, tcax, tcay, tcaz, pe
+  Kokkos::parallel_for("hyb_advance_e_interior", xyz_inner_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+    INIT_STENCIL();
+    E(x,y,z);
+    E(y,z,x);
+    E(z,x,y);
+  });
+  Kokkos::Profiling::popRegion();
+    
+Kokkos::fence();
 }

@@ -21,7 +21,7 @@ new_dump_strategy(DumpStrategyID dump_strategy_id,
   {
     case DUMP_STRATEGY_BINARY:
       if (vpic_simu->rank() == 0)
-        std::cout << "DUMP_STRATEGY_BINARY  enabled \n";
+        std::cout << "# DUMP_STRATEGY_BINARY  enabled \n";
       ds = new BinaryDump(vpic_simu->rank(), vpic_simu->nproc());
       break;
     case DUMP_STRATEGY_HDF5:
@@ -884,12 +884,12 @@ void HDF5Dump::dump_fields(
   if (field_dump_flag.flags["cbx"]) DUMP_FIELD_TO_HDF5("cbx", cbx, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["cby"]) DUMP_FIELD_TO_HDF5("cby", cby, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["cbz"]) DUMP_FIELD_TO_HDF5("cbz", cbz, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.flags["div_b_err"]) DUMP_FIELD_TO_HDF5("div_b_err", div_b_err, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["pe"]) DUMP_FIELD_TO_HDF5("pe", div_b_err, H5T_NATIVE_FLOAT);
 
   if (field_dump_flag.flags["cbx0"]) DUMP_FIELD_TO_HDF5("cbx0", cbx0, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["cby0"]) DUMP_FIELD_TO_HDF5("cby0", cby0, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["cbz0"]) DUMP_FIELD_TO_HDF5("cbz0", cbz0, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.flags["tmpsm"]) DUMP_FIELD_TO_HDF5("tmpsm", tmpsm, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["te0"]) DUMP_FIELD_TO_HDF5("te0", te0, H5T_NATIVE_FLOAT);
 
   if (field_dump_flag.flags["tcax"]) DUMP_FIELD_TO_HDF5("tcax", tcax, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["tcay"]) DUMP_FIELD_TO_HDF5("tcay", tcay, H5T_NATIVE_FLOAT);
@@ -915,6 +915,8 @@ void HDF5Dump::dump_fields(
   if (field_dump_flag.flags["oy"]) DUMP_FIELD_TO_HDF5("oy", oy, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["oz"]) DUMP_FIELD_TO_HDF5("oz", oz, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["oe"]) DUMP_FIELD_TO_HDF5("oe", oe, H5T_NATIVE_FLOAT);
+  
+  if (field_dump_flag.flags["div_b_err"]) DUMP_FIELD_TO_HDF5("div_b_err", div_e_err, H5T_NATIVE_FLOAT);
 
   el2 = uptime() - el2;
   if ( rank==0 ) log_printf("TimeHDF5Write: %.2f s\n", el2);

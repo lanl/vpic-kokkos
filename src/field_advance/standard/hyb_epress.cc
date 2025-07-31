@@ -44,21 +44,23 @@ hyb_epress( field_array_t * RESTRICT fa,
 
   // Avoid possibly costly power(...) if possible
   // Keep conditional branch outside the loop
-  if (eos_gamma == 1.0) {
+  
+	  if (eos_gamma == 1.0) {
 
-    Kokkos::parallel_for("hyb_epress", zyx_policy,
+    		Kokkos::parallel_for("hyb_epress", zyx_policy,
                          KOKKOS_LAMBDA(const int z, const int y, const int x) {
-        INIT_STENCIL();
-        F(0,pe) = F(0,te) * (rho/eos_den);
-    });
+        		INIT_STENCIL();
+        		F(0,pe) = F(0,te0) * (rho/eos_den);
+    		});
 
-  } else {
+  	} else {
 
-    Kokkos::parallel_for("hyb_epress", zyx_policy,
+    		Kokkos::parallel_for("hyb_epress", zyx_policy,
                          KOKKOS_LAMBDA(const int z, const int y, const int x) {
-        INIT_STENCIL();
-        F(0,pe) = F(0,te) * pow(rho/eos_den,eos_gamma);
-    });
-
-  }
+        		INIT_STENCIL();
+        		F(0,pe) = F(0,te0) * pow(rho/eos_den,eos_gamma);
+    		});
+  	}
+  
+   
 }

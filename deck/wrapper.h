@@ -43,6 +43,12 @@ vpic_simulation::user_field_injection( void )
 void                              \
 vpic_simulation::user_particle_collisions( void )
 
+#ifdef HYB_USE_RADIATION
+#define begin_radiation \
+void                      \
+vpic_simulation::user_radiation( void )
+#endif
+
 #define repeat( count ) for( int64_t _remain=(int64_t)(count); _remain; _remain-- )
 
 #define _SIM_LOG_PREFIX \
@@ -449,7 +455,7 @@ vpic_simulation::user_particle_collisions( void )
           x = _xc; y = _yc; z = _zl; _rccl = (rgn);                   \
           x = _xl;                   _rlcl = (rgn);                   \
           x = _xc; y = _yl;          _rcll = (rgn);                   \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->te = _c*(eqn_te); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->te0 = _c*(eqn_te); \
           _f++;                                                       \
     }}}                                                               \
   } while(0)

@@ -1,0 +1,50 @@
+#! /usr/bin/env bash
+#~----------------------------------------------------------------------------~#
+# placeholder
+#~----------------------------------------------------------------------------~#
+
+#------------------------------------------------------------------------------#
+# Get the path to the project from which this script was called
+#------------------------------------------------------------------------------#
+
+src_dir="${0%/*}/.."
+
+#------------------------------------------------------------------------------#
+# Check required environment variables
+#------------------------------------------------------------------------------#
+
+#module purge
+#module load PrgEnv-cray
+#module load cmake
+module load PrgEnv-gnu
+module list 2>&1 | tee modules.txt
+
+#------------------------------------------------------------------------------#
+# Call CMake command
+#------------------------------------------------------------------------------#
+
+# The flag -rdynamic removes warnings of the form:
+# Unable to find a safely writable symbol that corresponds to address 432af0
+# (the closest match was "(null)" from "./lpi_2d_F6_test.Linux").  Writing out
+# the raw address instead and keeping my fingers crossed.
+
+/usr/projects/maehem/packages/cmake-3.29.9/build/bin/cmake \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DENABLE_INTEGRATED_TESTS=OFF \
+  -DENABLE_UNIT_TESTS=OFF \
+  -DBUILD_INTERNAL_KOKKOS=ON \
+  -DKokkos_ARCH_ZEN2=ON \
+  -DKokkos_ENABLE_THREADS=ON \
+  -DKokkos_ENABLE_OPENMP=OFF \
+  -DCMAKE_CXX_COMPILER="CC" \
+  -DCMAKE_CXX_FLAGS="-g -O2 -rdynamic -dynamic"\
+  -DHYB_USE_STATIC_E=ON\
+  $src_dir
+
+#------------------------------------------------------------------------------#
+# vim: syntax=sh
+#------------------------------------------------------------------------------#
+
+#~---------------------------------------------------------------------------~-#
+# placeholder
+#~---------------------------------------------------------------------------~-#

@@ -4,11 +4,17 @@ stages:
 .build_gcc:
   tags:
     - darwin-slurm-shared
+    - batch
+    - jacamar
+    - yellow 
+    - darwin
   id_tokens:
     SITE_ID_TOKEN:
-      aud: https://gitlab.lanl.gov
+      aud: https://lisdi-git.lanl.gov/
   variables:
+    #GIT_CLONE_PATH: '$CI_BUILDS_DIR/$CI_PROJECT_NAME/job_$CI_JOB_ID'
     GIT_SUBMODULE_STRATEGY: recursive
+    SCHEDULER_PARAMETERS: "-N 1 --qos=debug"
   stage: build_gcc
   cache:
     paths:
@@ -18,7 +24,7 @@ stages:
     - module load miniconda3
     - python --version  # For debugging
     - pip install virtualenv
-    - virtualenv venv
+    - virtualenv --system-site-packages venv
     - source venv/bin/activate
   script:
     - echo ${DEFINES}
@@ -42,7 +48,6 @@ stages:
       ${DEFINES:+${DEFINES}}
       ..
     - make -j ${j} -l ${l} VERBOSE=1
-    - pip install numpy h5py
     - make test CTEST_OUTPUT_ON_FAILURE=1
     - make install DESTDIR=${PWD}/install
       #TODO: set OMP_PROC_BIND=spread and OMP_PLACES=threads (or similar)

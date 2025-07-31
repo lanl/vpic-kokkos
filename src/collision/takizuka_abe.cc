@@ -57,6 +57,9 @@ takizuka_abe(
   MALLOC( ta->name, strlen(name) +1 );
   strncpy( ta->name, name, strlen(name)+1);
 
+  spi->last_indexed = -1; //to ensure sort in collisions
+  spj->last_indexed = -1;
+  
   ta->spi         = spi;
   ta->spj         = spj;
   ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;

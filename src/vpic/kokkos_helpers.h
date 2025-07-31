@@ -9,7 +9,7 @@
 
 // This module implements kokkos macros
 
-#define FIELD_VAR_COUNT 36
+#define FIELD_VAR_COUNT 44
 #define FIELD_EDGE_COUNT 8
 
 #ifdef VARIABLE_CHARGE
@@ -29,7 +29,7 @@
   #define HYDRO_VAR_COUNT 14
 #endif
 #define NUM_J_DIMS 4
-#define FLUID_VAR_COUNT 6
+#define FLUID_VAR_COUNT 6+4
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -90,7 +90,11 @@ using k_hydro_sv_t = Kokkos::Experimental::ScatterView<float* [HYDRO_VAR_COUNT]>
 
 using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
 
-using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT]>;
+using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT], Kokkos::LayoutRight>;
+// 1D View: shape [FLUID_VAR_COUNT]
+// using k_fluid_1d = Kokkos::View<float*>;
+// struct field_tag {};  // Just an empty struct for tagging
+// using k_field_1d = Kokkos::View<float*, field_tag>;
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
@@ -151,11 +155,11 @@ namespace field_var {
     cbx       = 4,
     cby       = 5,
     cbz       = 6,
-    div_b_err = 7,
+    pe        = 7,
     cbx0      = 8,
     cby0      = 9,
     cbz0      = 10,
-    tmpsm     = 11,
+    te0       = 11,
     tcax      = 12,
     tcay      = 13,
     tcaz      = 14,
@@ -179,7 +183,15 @@ namespace field_var {
     pex       = 32,
     pey       = 33,
     pez       = 34,
-    pe        = 35
+    div_b_err = 35,
+    ux        = 36,
+    uy        = 37,
+    uz        = 38,
+    ue        = 39,
+    sx        = 40,
+    sy        = 41,
+    sz        = 42,
+    se        = 43
   };
 };
 namespace field_edge_var { \
@@ -302,6 +314,10 @@ namespace fluid_var {
         ux  = 3,
         uy  = 4,
         uz  = 5,
+	msx = 6,
+	msy = 7,
+	msz = 8,
+	ens = 9,
     };
 };
 

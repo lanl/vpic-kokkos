@@ -18,7 +18,7 @@ src_dir="${0%/*}/.."
 #module load cmake cuda cpe-cuda
 
 module swap PrgEnv-cray PrgEnv-gnu
-module load cudatoolkit craype-accel-nvidia90; module list
+module load cmake cudatoolkit craype-accel-nvidia90; module list
 export CRAY_ACCEL_TARGET=nvidia90
 export CRAY_TCMALLOC_MEMFS_FORCE=1
 export CRAYPE_LINK_TYPE=dynamic
@@ -27,9 +27,16 @@ export MPI_GPU_SUPPORT=1
 export CC=cc
 export CXX=CC
 
+
+#------------------------------------------------------------------------------#                                                                                                                                                                                # Choose support for HDF5 output for fields and hydro                                                                                                                                                                                                           #------------------------------------------------------------------------------#                                                                                                                                                                                # If SET_HDF5=OFF, the output of fields and hydro are in binary format.                                                                                                                                                                                         # If SET_HDF5=ON, the output of fields and hydro are in HDF5 format.                                                                                                                                                                                            #------------------------------------------------------------------------------#                                                                                                                                                                                 
+ SET_HDF5="OFF"                                                                                                                                                                                                                                                 
+#SET_HDF5="ON"
+if [ "$SET_HDF5" = "ON" ]
+then
+    module load cray-hdf5-parallel
+fi
+
 module list 2>&1 | tee modules.txt
-
-
 
 #-D KOKKOS_CUDA_ARCH=sm_90                                     \
 #    -D KOKKOS_ARCH_FLAGS="-DKokkos_ARCH_HOPPER90=ON;"             \
@@ -58,11 +65,13 @@ CRAYPE_LINK_TYPE=dynamic cmake \
   -DKokkos_ARCH_HOPPER90=ON \
   -DKokkos_ENABLE_PTHREAD=OFF \
   -DKokkos_ENABLE_OPENMP=ON \
+  -DKokkos_ENABLE_CUDA=ON \
   -DKokkos_ENABLE_DEBUG=ON \
   -DKokkos_ENABLE_IMPL_CUDA_MALLOC_ASYNC=off \
   -DVPIC_ENABLE_VARIABLE_CHARGE=ON \
   -DCMAKE_CXX_COMPILER="CC" \
   -DCMAKE_CXX_FLAGS="-g -rdynamic "\
+  -DVPIC_ENABLE_HDF5=${SET_HDF5} \
   $src_dir
 
 #------------------------------------------------------------------------------#

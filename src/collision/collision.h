@@ -3,9 +3,10 @@
 
 #include "../util/rng_policy.h"
 #include "../species_advance/species_advance.h"
+#include "../fluid_advance/fluid_advance.h"
 
-struct collision_op;
-typedef struct collision_op collision_op_t;
+#include "charge_exchange.h"
+#include "drag.h"
 
 /* In collision.cc */
 
@@ -52,6 +53,35 @@ takizuka_abe(
   const int          interval,
   const bool         var_wt=false
 );
+
+
+collision_op_t *
+lemons(
+  const char       * name,
+  /**/  species_t  * spi,
+  /**/  fluid_species_t  * spj,
+  const double       cvar0,
+  const int          interval,
+  field_array_t* field = NULL
+);
+
+void transfer_mom_en_src(
+  k_field_t k_field,
+  fluid_species_t  * spj
+);
+
+/*
+collision_op_t *
+drag(
+  const char       * name,
+    species_t  * spi,
+    fluid_species_t  * spj,
+  //  const double       cvar0,                                                                                                                              
+  float (*stoppingfunc)(float),
+  const int          interval
+);
+*/
+
 
 /* In hard_sphere.cc */
 

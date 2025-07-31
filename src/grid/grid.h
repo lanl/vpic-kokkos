@@ -95,8 +95,8 @@ typedef struct grid {
   int   sx, sy, sz, nv;     // Voxel indexing x-, y-,z- strides and the
                             // number of local voxels (including ghosts,
                             // (nx+2)(ny+2)(nz+2)), (CONVENIENCE)
-  float eta;
-  float hypereta;
+  float eta, kappa;         // For J and Te diffusion
+  float hypereta;           //
   float nsub, isub;         // subcycling
   int nsm;                  // smoothing for moments
   int nsmb;                 // smooth B fields every nsmb steps

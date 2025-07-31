@@ -22,7 +22,7 @@ typedef struct pipeline_args {
 
 //modified version of old hypereta macro curlbXYZ -> pXYZ
 //note the pz here in the multiplier is NOT the curl
-#define LPL_B()\
+//#define LPL_B()\
   F(0,pex) = 4.0*( px*px*( F(x,cbx) + F(mx,cbx) - 2.0*F(0,cbx) ) +  \
 		  py*py*( F(y,cbx) + F(my,cbx) - 2.0*F(0,cbx) ) +  \
 		  pz*pz*( F(z,cbx) + F(mz,cbx) - 2.0*F(0,cbx) ) ); \
@@ -33,10 +33,23 @@ typedef struct pipeline_args {
 		  py*py*( F(y,cbz) + F(my,cbz) - 2.0*F(0,cbz) ) +  \
 		  pz*pz*( F(z,cbz) + F(mz,cbz) - 2.0*F(0,cbz) ) ); \
 
-#define CURL_LPL_B(x_,y_,z_)						\
-  F(0,e##x_) -= hypereta*F(0,tcax)*(p##y_*( F(y_,pe##z_) - F(m##y_,pe##z_) - \
-				     p##z_*( F(z_,pe##y_) - F(m##z,pe##y_))))  
+#define LPL_B()\
+  F(0,pex) = 4.0*(                                   \
+      px2*( F(x,cbx) + F(mx,cbx) - 2.0*F(0,cbx) ) +  \
+		  py2*( F(y,cbx) + F(my,cbx) - 2.0*F(0,cbx) ) +  \
+		  pz2*( F(z,cbx) + F(mz,cbx) - 2.0*F(0,cbx) ) ); \
+  F(0,pey) = 4.0*(                                   \
+      px2*( F(x,cby) + F(mx,cby) - 2.0*F(0,cby) ) +  \
+		  py2*( F(y,cby) + F(my,cby) - 2.0*F(0,cby) ) +  \
+		  pz2*( F(z,cby) + F(mz,cby) - 2.0*F(0,cby) ) ); \
+  F(0,pez) = 4.0*(                                   \
+      px2*( F(x,cbz) + F(mx,cbz) - 2.0*F(0,cbz) ) +  \
+		  py2*( F(y,cbz) + F(my,cbz) - 2.0*F(0,cbz) ) +  \
+		  pz2*( F(z,cbz) + F(mz,cbz) - 2.0*F(0,cbz) ) ); \
 
+#define CURL_LPL_B(x_,y_,z_)						\
+  F(0,e##x_) -= hypereta*F(0,tcax)*F(0,tcaz)*( p##y_*( F(y_,pe##z_) - F(m##y_,pe##z_) ) \
+				                                     - p##z_*( F(z_,pe##y_) - F(m##z_,pe##y_) ) )
 
 
 void
@@ -58,22 +71,31 @@ hyb_heta( field_array_t * RESTRICT fa ) {
   const float hypereta = g->hypereta;
   //const float den_floor_ohm = g->den_floor_ohm;
 
+  const float px2 = px*px;
+  const float py2 = px*px;
+  const float pz2 = px*px;
+
   // Laplace B Loop
     
-  Kokkos::MDRangePolicy<Kokkos::Rank<3>> zyx_policy({1, 1, 1}, {nz+1, ny+1, nx+1});
-  Kokkos::parallel_for("hyb_hypereta_lpl_b", zyx_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
+  // Write: pex, pey, pez
+  // Read: cbx, cby, cbz
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
+  Kokkos::parallel_for("hyb_hypereta_lpl_b", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
       INIT_STENCIL();
       LPL_B();
     });
     
   // Operations on the ghost cells
-  k_begin_remote_ghost_hyb_curl_lpl_b(fa, fa->g, *(fa->fb));
-  k_end_remote_ghost_hyb_curl_lpl_b(fa, fa->g, *(fa->fb));
-  k_hyb_local_ghost_lapl_b(fa, fa->g);
+  k_begin_remote_ghost_hyb_curl_lpl_b(fa); // Read: pex, pey, pez
+  k_end_remote_ghost_hyb_curl_lpl_b(fa); // Write: pex, pey, pez
+  k_hyb_local_ghost_lapl_b(fa, fa->g); // R/W: pex, pey, pez
 
   // Curl Laplace B Loop
 
-  Kokkos::parallel_for("hyb_hypereta_curl_lpl_b", zyx_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> curl_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
+  // Read: tcax, tcay, tcaz, pex, pey, pez
+  // Write: ex, ey, ez
+  Kokkos::parallel_for("hyb_hypereta_curl_lpl_b", curl_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
       INIT_STENCIL();
       CURL_LPL_B(x,y,z);
       CURL_LPL_B(y,z,x);

@@ -1,14 +1,41 @@
 #ifndef _collision_private_h_
 #define _collision_private_h_
 
-#ifndef IN_collision
-#error "Do not include collision_private.h; use collision.h"
-#endif
+//#ifndef IN_collision
+//#error "Do not include collision_private.h; use collision.h"
+//#endif
 
-#include "collision.h"
-#include "src/util/rng_policy.h"
+//#include "collision.h"
+#include "../util/rng_policy.h"
 #include "../particle_operations/sort.h"
 #include "../particle_operations/shuffle.h"
+#include "../fluid_advance/fluid_advance.h"
+typedef void
+(*apply_collision_op_func_t)( struct collision_op_t * cop,
+                              kokkos_rng_pool_t   & rng);
+
+typedef void
+(*delete_collision_op_func_t) ( struct collision_op_t * cop );
+
+struct collision_op_t {
+  char * name;
+  apply_collision_op_func_t  apply_cop;
+  delete_collision_op_func_t delete_cop;
+  collision_op_t * next;
+};
+
+/**
+ * @brief Base collision operator for particle-bulk binary collisions.
+ *
+ * Cannot be used directly, must be subclassed.
+ */
+struct particle_bulk_collision_op_t : public collision_op_t {
+  species_t  * spi;
+  fluid_species_t  * spj;
+  field_array_t * field=NULL; // field for electron collisions, can be NULL
+  int          interval;
+};
+
 
 #define RANK_TO_INDEX(rank,ix,iy,iz,nx,ny,nz) do {        \
     int _ix, _iy, _iz;                                    \
@@ -78,7 +105,10 @@ struct collision_op {
  * @brief Base collision model
  *
  * Implements all required methods, but does nothing.
+ * 
+ * CRTP for optionally overriding functions (the default one do nothing)
  */
+template <typename DerivedT> 
 struct collision_model {
 
   /**
@@ -111,6 +141,7 @@ struct collision_model {
   KOKKOS_INLINE_FUNCTION
   constexpr float cross_section(
     kokkos_rng_state_t& rg,
+    float q,
     float E,
     float nvdt
   ) const
@@ -130,13 +161,45 @@ struct collision_model {
   KOKKOS_INLINE_FUNCTION
   constexpr float restitution(
     kokkos_rng_state_t& rg,
-    float E,
-    float nvdt
+    float * param
+    //float E,
+    //float nvdt
   ) const
   {
     return 1;
   }
 
+  /**
+   * @brief Modification of charge due to collision                                                                                                                                                                                
+   * e.g. +1 for electron loss, -1 for electron capture.
+   */
+  KOKKOS_INLINE_FUNCTION
+  constexpr float modify_charge( // To-do: Allow for two returned values for binary collisions?
+  // Any arguments?
+  ) const
+  {
+    return 0; // Default = no change in charge
+  }
+
+  /**
+   * @brief upload collected moment sources to field array
+   */
+  template <typename ViewType>
+  KOKKOS_INLINE_FUNCTION
+  void upload_moment_src(const ViewType & spj_fl, const int v,
+                               const gmomType &Dm) const {
+    // By default do nothing, or call a derived "implementation" if it exists:
+      static_cast<const DerivedT*>(this)->upload_moment_src_impl(spj_fl, v, Dm);
+  }
+  
+  template <typename ViewType>
+  KOKKOS_INLINE_FUNCTION
+  void upload_moment_src_impl(const ViewType& spj_fl, const int v,
+                               const gmomType &Dm ) const
+  {
+      // default no-op
+  }
+    
 };
 
 // In collision.cc

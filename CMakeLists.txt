@@ -3,7 +3,7 @@
 # All rights reserved.
 #------------------------------------------------------------------------------#
 
-cmake_minimum_required(VERSION 3.29.2)
+cmake_minimum_required(VERSION 3.27.2)
 cmake_policy(SET CMP0074 NEW)
 
 #~----------------------------------------------------------------------------~#
@@ -73,6 +73,16 @@ option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performn
 option(VPIC_ENABLE_HDF5 "Enable HDF5 for use during IO. VPIC does not help you install HDF5" OFF)
 
 option(VPIC_ENABLE_VARIABLE_CHARGE "Enable variable charge for particles" OFF)
+
+option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU-aware MPI. Allows GPUs to communicate with each other directly rather than going through the CPU. If VPIC_ENABLE_GPU_AWARE_MPI is enabled but not supported in MPI, the code may crash." OFF)
+
+option(VPIC_ENABLE_HALO_EXCHANGE "Enable halo exchange code path for remote communication. Temporary option until halo exchange code is accurately tested." ON)
+
+option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." ON)
+
+option(HYB_USE_STATIC_E "Use electrostatic hybrid field solver." OFF)
+
+option(HYB_USE_RADIATION "Include user radiation transport." OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -357,8 +367,43 @@ endif(VPIC_ENABLE_ACCUMULATORS)
 
 if (VPIC_ENABLE_VARIABLE_CHARGE)
    add_definitions(-DVARIABLE_CHARGE)
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DVARIABLE_CHARGE")
    message("--     VPIC: Enabled variable charge for particles")
 endif(VPIC_ENABLE_VARIABLE_CHARGE)
+
+if (HYB_USE_SEPARATE_PE)
+   add_definitions(-DHYB_USE_SEPARATE_PE)
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_SEPARATE_PE")
+   message("--     VPIC: Enabled variable charge for particles")
+endif(HYB_USE_SEPARATE_PE)
+
+if (VPIC_ENABLE_GPU_AWARE_MPI)
+  add_definitions(-DVPIC_ENABLE_GPU_AWARE_MPI)
+  message("--     VPIC: Enabled GPU-Aware MPI")
+endif(VPIC_ENABLE_GPU_AWARE_MPI)
+
+if (VPIC_ENABLE_HALO_EXCHANGE)
+  add_definitions(-DVPIC_ENABLE_HALO_EXCHANGE)
+  message("--     VPIC: Enabled Halo exchange path")
+endif(VPIC_ENABLE_HALO_EXCHANGE)
+
+if (HYB_USE_SEPARATE_PE)
+   add_definitions(-DHYB_USE_SEPARATE_PE)
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_SEPARATE_PE")
+   message("--     HYB: Using separate electron energy equation.")
+endif(HYB_USE_SEPARATE_PE)
+
+if (HYB_USE_STATIC_E)
+   add_definitions(-DHYB_USE_STATIC_E)
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_SEPARATE_PE")
+   message("--     HYB: Using electrostatic field solve.")
+endif(HYB_USE_STATIC_E)
+
+if (HYB_USE_RADIATION)
+   add_definitions(-DHYB_USE_RADIATION)
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_RADIATION")
+   message("--     HYB: User radiation transport enabled.")
+endif(HYB_USE_RADIATION)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)

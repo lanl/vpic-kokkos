@@ -56,22 +56,26 @@ int vpic_simulation::advance(void)
   // order accurate factorization).
 
   //printf("Cleared jf\n");
+  Kokkos::Profiling::pushRegion("Collisions");
   if( collision_op_list )
   {
     KOKKOS_TIC();
     apply_collision_op_list( collision_op_list, *kokkos_rng );
     KOKKOS_TOC( collision_model, 1 );
   }
+  Kokkos::Profiling::popRegion();
 
   // TODO: implement
   //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
   // DEVICE function - Touches particles, particle movers, accumulators, interpolators
+  Kokkos::Profiling::pushRegion("Advance Particles");
   LIST_FOR_EACH( sp, species_list )
   {
       // Now Times internally
       advance_p( sp, interpolator_array, field_array );
   }
+  Kokkos::Profiling::popRegion();
   //printf("Pushed\n");
 
   // Reduce accumulator contributions into the device array
@@ -241,16 +245,32 @@ int vpic_simulation::advance(void)
       }
   }
 
+
+#ifdef HYB_USE_RADIATION
+  // Couple radiation
+     TIC user_radiation(); TOC( user_radiation, 1 );
+#endif
+
   // DEVICE -- Touches fields
   // Half advance the magnetic field from B_0 to B_{1/2}
+  Kokkos::Profiling::pushRegion("Advance B");
   KOKKOS_TIC();
   grid->isub=0;
   frac = 1.0/grid->nsub;
   for(int i=0;i<grid->nsub;i++){
-    FAK->advance_b( field_array, frac );
-    grid->isub++;
-  }
+#ifdef HYB_USE_STATIC_E
+     FAK->advance_pe( field_array, frac );
+#else      
+     FAK->advance_b( field_array, frac );
+#endif
+     grid->isub++;
+  } 
+#ifdef HYB_USE_STATIC_E
+  FAK->advance_e( field_array, 1.0 );
+#endif 
+  
   KOKKOS_TOC( advance_b, 1 );
+  Kokkos::Profiling::popRegion();
 
   // Advance the electric field from E_0 to E_1
 
@@ -276,6 +296,7 @@ int vpic_simulation::advance(void)
       }
   }
 
+  Kokkos::Profiling::pushRegion("Advance B Hybrid Smooth");
   KOKKOS_TIC();
   // Smooth live (dynamically-evolved) B field
   if (grid->nsmb > 0 && step()%grid->nsmb == 0 ) {
@@ -284,6 +305,7 @@ int vpic_simulation::advance(void)
   // Smooth E/B fields interpolated to particles (but not fed into B advance)
   FAK->hyb_smooth_eb_interp( field_array, true );
   KOKKOS_TOC( advance_b, 1 ); // TODO may want separate timer -ATr,2024sep10
+  Kokkos::Profiling::popRegion();
 
   // Half advance the magnetic field from B_{1/2} to B_1
 
