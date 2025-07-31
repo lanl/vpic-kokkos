@@ -2,6 +2,7 @@
 #define _binary_h_
 
 // Forward declaration of collision_model and takizuka_abe_model
+template <typename DerivedT>
 struct collision_model;
 struct takizuka_abe_model;
 

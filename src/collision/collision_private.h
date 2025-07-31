@@ -87,13 +87,6 @@ struct reduction_identity<gmomType26> {
     
 }
 
-typedef void
-(*apply_collision_op_func_t)( struct collision_op * cop,
-                              kokkos_rng_pool_t   & rng);
-
-typedef void
-(*delete_collision_op_func_t) ( struct collision_op * cop );
-
 struct collision_op {
   char * name;
   apply_collision_op_func_t  apply_cop;
