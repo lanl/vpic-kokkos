@@ -93,9 +93,9 @@ begin_initialization {
 
 
   // Derived numerical parameters
-  double hx = Lx/nx;
-  double hy = Ly/ny;
-  double hz = Lz/nz;
+  double dx = Lx/nx;
+  double dy = Ly/ny;
+  double dz = Lz/nz;
 
 
   double Ni  = nppc*nx*ny*nz;       // Total macroparticle ions in box
@@ -292,11 +292,72 @@ sim_log( "Loading fields" );
 sim_log ("Loading curvilinear grid.");
 grid->init_curvilinear_grid();
 
-#define HX (1.0)
+#define HX (1.0 + 0.3*sin(x))
 #define HY (1.0)
 #define HZ (1.0)
 set_region_curvilinear(everywhere, HX, HY, HZ, HX*HY*HZ);
 
+//  Determine global position of domains
+
+# define RANK_TO_INDEX(rank,ix,iy,iz) BEGIN_PRIMITIVE {                   \
+    int _ix, _iy, _iz;                                                    \
+    _ix  = (rank);                        /* ix = ix+gpx*( iy+gpy*iz ) */ \
+    _iy  = _ix/int(global->topology_x);   /* iy = iy+gpy*iz */                    \
+    _ix -= _iy*int(global->topology_x);   /* ix = ix */                           \
+    _iz  = _iy/int(global->topology_y);   /* iz = iz */                           \
+    _iy -= _iz*int(global->topology_y);   /* iy = iy */ 	        	  \
+    (ix) = _ix;                                                           \
+    (iy) = _iy;                                                           \
+    (iz) = _iz;                                                           \
+  } END_PRIMITIVE 
+
+  int ig0, jg0, kg0;
+  RANK_TO_INDEX( int(rank()), ig0, jg0, kg0 );
+  
+  
+  
+// TO DO:
+//Need global positions of each cell
+////Generate global geometric factors
+////Probably need to generate global X,Y,Z meshes on each rank
+////Figure out where each rank is on global mesh
+////Set kokkos xg,yg,zg
+//Re-write wrapper.h macros to use global positions
+//
+
+double[nx+2] jacg,hxg,hyg,hzg,xg,yg,zg;
+
+//for loop i=0 to nx+1 hxg[i]=...
+//repeat for y and z
+
+//xg[0] = -0.5*Lx - 0.5*dx*hxg[0]
+//for loop i=1 to nx+1 xg[i]=xg[i-1] + 0.5*dx*(hxg[i-1]+hxg[i])...
+//repeat for y and z
+
+ // The equations are only evaluated inside the mesh-mapped region
+// (This is not strictly inside the region)
+#define CM(i_,j_,k_,cv) k_curv( int (VOXEL(i_, j_, k_, nxl,nyl,nzl)), curv_mesh_var::cv)
+
+k_curvilinear_vars_t k_curv = grid->k_curvilinear_vars_h;  
+k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;
+const int    nxl = grid->nx, nyl = grid->ny, nzl = grid->nz;
+int  ig,jg,kg;
+    for( int k=0; k<nzl+2; k++ ) {
+    for( int j=0; j<nyl+2; j++ ) { 
+    for( int i=0; i<nxl+2; i++ ) {
+          ig = i + ig0;
+          jg = j + jg0;
+          kg = k + kg0;
+          CM(i,j,k,hx) = hxg[ig];
+          CM(i,j,k,hy) = hxg[jg];
+          CM(i,j,k,hz) = hxg[kg];////////////////////////////////////////
+          CM(i,j,k,jac) = jacgg[ig];
+          CM(i,j,k,hx) = hxg[ig];
+          CM(i,j,k,hx) = hxg[ig];
+          CM(i,j,k,hx) = hxg[ig];
+    }}}
+    Kokkos::deep_copy(k_curv_d, k_curv);\
+  } while(0)
 
 #if 1
     k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;    

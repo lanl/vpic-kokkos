@@ -403,6 +403,29 @@ vpic_simulation::user_particle_collisions( void )
     }}}									\
   } while(0)
   
+  //////////TODO rewrite this 
+  // The equations are only evaluated inside the mesh-mapped region
+// (This is not strictly inside the region)
+#define CM(i_,j_,k_,cv) k_curv( int (VOXEL(i_,   j_,   k_,    nx,ny,nz)), curv_mesh_var::cv)
+#define set_region_field( rgn,                                        \
+                          eqn_ex, eqn_ey, eqn_ez,                     \
+                          eqn_bx, eqn_by, eqn_bz ) do {	      \
+    const double _c  = grid->cvac;                                    \
+    const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;      \
+    k_curvilinear_vars_t k_curv = grid->k_curvilinear_vars_h;          \
+    for( int _k=0; _k<_nz+2; _k++ ) { \
+    for( int _j=0; _j<_ny+2; _j++ ) { \
+    for( int _i=0; _i<_nx+2; _i++ ) {double x, y, z; \
+          x = CM(_i,_j,_k,xg) ;                                    \
+         _f->ex  =    (eqn_ex); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl || _rlcc || _rlcl ) _f->ey  =    (eqn_ey); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc || _rclc || _rllc ) _f->ez  =    (eqn_ez); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->cbx = _c*(eqn_bx); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc )                   _f->cby = _c*(eqn_by); \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl )                   _f->cbz = _c*(eqn_bz); \
+          _f++;								\
+    }}}									\
+  } while(0)
   
   // The equations are only evaluated inside the mesh-mapped region
 // (This is not strictly inside the region)

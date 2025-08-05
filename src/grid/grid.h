@@ -203,6 +203,9 @@ void init_curvilinear_grid()
       k_curvilinear_vars_h(i, curv_mesh_var::hy) = 1.0;
       k_curvilinear_vars_h(i, curv_mesh_var::hz) = 1.0;
       k_curvilinear_vars_h(i, curv_mesh_var::jac) = 1.0;
+      k_curvilinear_vars_h(i, curv_mesh_var::xg) = 0;
+      k_curvilinear_vars_h(i, curv_mesh_var::yg) = 0;
+      k_curvilinear_vars_h(i, curv_mesh_var::zg) = 0;
 			 });
 
     Kokkos::deep_copy(k_curvilinear_vars_d, k_curvilinear_vars_h);

@@ -30,7 +30,7 @@
 #endif
 #define NUM_J_DIMS 4
 #define FLUID_VAR_COUNT 6
-#define CURVILINEAR_VAR_COUNT 4
+#define CURVILINEAR_VAR_COUNT 7
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -314,6 +314,9 @@ namespace curv_mesh_var {
     hy       = 1,
     hz       = 2,
     jac      = 3,
+    xg       = 4,
+    yg       = 5,
+    zg       = 6,
   };
 };
 
