@@ -600,7 +600,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
       //low-density species
       for (int j = 0; j < nmin; j++) {
         // Map the local index j to a global index.
-        int i = spl_sortindex_ra(i0 + j);
+        int i = spl_sortindex_ra(j0 + j);
 	auto wp = spl_p(i, particle_var::w);
         cumulative[il] += wp;  // accumulate weight
 	
