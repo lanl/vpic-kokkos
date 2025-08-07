@@ -69,7 +69,6 @@ begin_initialization {
   double eta = 0.0;         // Plasma resistivity.
   double hypereta = 0.0;    // Plasma hyper-resistivity.
 
-  
   // Derived quantities for model:
   double Te = 0;//c_s/(gamma);  // Electron temperature.
   double vthi = sqrt(Ti/mi);// Ion thermal velocity
@@ -91,18 +90,15 @@ begin_initialization {
   double topology_y = 1;
   double topology_z = 1;
 
-
   // Derived numerical parameters
   double dx = Lx/nx;
   double dy = Ly/ny;
   double dz = Lz/nz;
 
-
   double Ni  = nppc*nx*ny*nz;       // Total macroparticle ions in box
   double Np  = n0*Lx*Ly*Lz;         // Total number of physical background ions
   Ni = trunc_granular(Ni,nproc());  // Make it divisible by number of processors
   double qi = ec*Np/Ni;             // Charge per macro ion
-
   
   // Determine the time step
   double dg = courant_length(Lx,Ly,Lz,nx,ny,nz);  // courant length
@@ -121,7 +117,6 @@ begin_initialization {
   int eparticle_interval = 0*interval;
   int Hparticle_interval = 0*interval;
   int quota_check_interval     = 100;
-
 
   ///////////////////////////////////////////////
   // Setup high level simulation parameters
@@ -190,13 +185,12 @@ begin_initialization {
   // Setup materials
   sim_log("Setting up materials. ");
   define_material( "vacuum", 1 );
+  //////////////////////////////////////////////////////////////////////////////
 
-  
-  //////////////////////////////////////////////////////////////////////////////                                                                                                                                                                                                       // Finalize Field Advance
+  // Finalize Field Advance
   define_field_array(NULL); // second argument is damp, default to 0
   sim_log("Finalized Field Advance");
 
-  
   //////////////////////////////////////////////////////////////////////////////
   // Setup the species
   sim_log("Setting up species. ");
@@ -205,13 +199,11 @@ begin_initialization {
   double sort_method = 1;   // 0=in place and 1=out of place
   species_t *ion = define_species("ion", ec, mi, nmax, nmovers, sort_interval, sort_method);
 
-  
   ///////////////////////////////////////////////////
   // Log diagnostic information about this simulation
 
   sim_log( "***********************************************" );
-  sim_log("* Topology:                       " << topology_x
-    << " " << topology_y << " " << topology_z);
+  sim_log("* Topology:   " << topology_x << "  " << topology_y << "  " << topology_z);
   sim_log ( "taui = " << taui );
   sim_log ( "num_step = " << num_step );
   sim_log ( "Lx = " << Lx/di );
@@ -230,7 +222,7 @@ begin_initialization {
   sim_log ( "v_A = " << v_A );
   sim_log ( "di = " << di );
   sim_log ( "Ni = " << Ni );
-    sim_log ( "total # of particles = " << Ni );
+  sim_log ( "total # of particles = " << Ni );
   sim_log ( "dt*wci = " << wci*dt );
   sim_log ( "energies_interval: " << energies_interval );
   sim_log ( "dx = " << Lx/(di*nx) );
@@ -238,13 +230,11 @@ begin_initialization {
   sim_log ( "dz = " << Lz/(di*nz) );
   sim_log ( "n0 = " << n0 );
 
- // Dump simulation information to file "info.bin" for translate script
+  // Dump simulation information to file "info.bin" for translate script
   if (rank() == 0 ) {
-
     FileIO fp_info;
 
     // write binary info file
-
     if ( ! (fp_info.open("info.bin", io_write)==ok) ) ERROR(("Cannot open file."));
     
     fp_info.write(&topology_x, 1 );
@@ -263,105 +253,94 @@ begin_initialization {
 
     fp_info.close();
 
-}
-
+  }
 
   ////////////////////////////
-  // Load fields
-sim_log( "Loading fields" );
+  // Set up curvilinear grid
+  sim_log ("Loading curvilinear grid.");
+  grid->init_curvilinear_grid();
 
-// Note: everywhere is a region that encompasses the entire simulation                                                                                                                   
-// In general, regions are specied as logical equations (i.e. x>0 && x+y<2)
+// Local geometric factors
+//#define HX (1.0 + 0.3*sin((2*M_PI*x)/Lx))
+//#define HY (1.0)
+//#define HZ (1.0)
+  //set_region_curvilinear(everywhere, HX, HY, HZ, HX*HY*HZ);
 
-#define BX (1./sqrt(2.0))
-#define BY (1./sqrt(2.0))
-#define KdotX (kx*x + ky*y)
-#define K (sqrt(kx*kx+ky*ky))
-
-#define DBX (-pert*ky/K*cos(KdotX))
-#define DBY (+pert*kx/K*cos(KdotX))
-#define DBZ (-pert*sin(KdotX))
-
-#define OMEGA (K * ( 0.5*K + sqrt(1 + 0.25*K*K)))
-#define DrV (K/OMEGA)
-
- set_region_field( everywhere, 0,0,0,BX+DBX,BY+DBY,DBZ);
- set_region_te(everywhere, 0*Te);
- 
-//Set up curvilinear grid
-sim_log ("Loading curvilinear grid.");
-grid->init_curvilinear_grid();
-
-#define HX (1.0 + 0.3*sin(x))
-#define HY (1.0)
-#define HZ (1.0)
-set_region_curvilinear(everywhere, HX, HY, HZ, HX*HY*HZ);
-
-//  Determine global position of domains
-
-# define RANK_TO_INDEX(rank,ix,iy,iz) BEGIN_PRIMITIVE {                   \
-    int _ix, _iy, _iz;                                                    \
-    _ix  = (rank);                        /* ix = ix+gpx*( iy+gpy*iz ) */ \
-    _iy  = _ix/int(global->topology_x);   /* iy = iy+gpy*iz */                    \
-    _ix -= _iy*int(global->topology_x);   /* ix = ix */                           \
-    _iz  = _iy/int(global->topology_y);   /* iz = iz */                           \
-    _iy -= _iz*int(global->topology_y);   /* iy = iy */ 	        	  \
-    (ix) = _ix;                                                           \
-    (iy) = _iy;                                                           \
-    (iz) = _iz;                                                           \
+// Determine global position of domains
+#define RANK_TO_INDEX(rank,ix,iy,iz) BEGIN_PRIMITIVE {                     \
+    int _ix, _iy, _iz;                                                     \
+    _ix  = (rank);                        /* ix = ix+gpx*( iy+gpy*iz ) */  \
+    _iy  = _ix/int(global->topology_x);   /* iy = iy+gpy*iz */             \
+    _ix -= _iy*int(global->topology_x);   /* ix = ix */                    \
+    _iz  = _iy/int(global->topology_y);   /* iz = iz */                    \
+    _iy -= _iz*int(global->topology_y);   /* iy = iy */ 	           \
+    (ix) = _ix;                                                            \
+    (iy) = _iy;                                                            \
+    (iz) = _iz;                                                            \
   } END_PRIMITIVE 
 
+  // Global integers
   int ig0, jg0, kg0;
   RANK_TO_INDEX( int(rank()), ig0, jg0, kg0 );
   
-  
-  
-// TO DO:
+// TODO:
 //Need global positions of each cell
 ////Generate global geometric factors
 ////Probably need to generate global X,Y,Z meshes on each rank
 ////Figure out where each rank is on global mesh
 ////Set kokkos xg,yg,zg
 //Re-write wrapper.h macros to use global positions
-//
 
-double[nx+2] jacg,hxg,hyg,hzg,xg,yg,zg;
+  // Static allocation of global variables
+  size_t lx=nx+2, ly=ny+2, lz=nz+2;
+  double hxg[lx], hyg[ly], hzg[lz];
+  double xg[lx], yg[ly], zg[lz];
 
-//for loop i=0 to nx+1 hxg[i]=...
-//repeat for y and z
+  //for loop i=0 to nx+1 hxg[i]=...
+  //repeat for y and z
+  for ( int i=0; i<nx+2; i++ ) { hxg[i] = 1.0 + 0.3*sin((2*M_PI*i)/Lx); }
+  for ( int j=0; j<ny+2; j++ ) { hyg[j] = 1.0; }
+  for ( int k=0; k<nz+2; k++ ) { hzg[k] = 1.0; }
 
-//xg[0] = -0.5*Lx - 0.5*dx*hxg[0]
-//for loop i=1 to nx+1 xg[i]=xg[i-1] + 0.5*dx*(hxg[i-1]+hxg[i])...
-//repeat for y and z
+  //xg[0] = -0.5*Lx - 0.5*dx*hxg[0]
+  //for loop i=1 to nx+1 xg[i]=xg[i-1] + 0.5*dx*(hxg[i-1]+hxg[i])...
+  //repeat for y and z
+  xg[0] = -0.5*Lx - 0.5*dx*hxg[0];
+  yg[0] = -0.5*Ly - 0.5*dy*hyg[0];
+  zg[0] = -0.5*Lz - 0.5*dz*hzg[0];
+  for (int i=1; i<nx+2; i++) { xg[i] = xg[i-1] + 0.5*dx*(hxg[i-1] + hxg[i]); }
+  for (int j=1; j<ny+2; j++) { yg[j] = yg[j-1] + 0.5*dy*(hyg[j-1] + hyg[j]); }
+  for (int k=1; k<nz+2; k++) { zg[k] = zg[k-1] + 0.5*dz*(hzg[k-1] + hzg[k]); }
 
- // The equations are only evaluated inside the mesh-mapped region
+// The equations are only evaluated inside the mesh-mapped region
 // (This is not strictly inside the region)
-#define CM(i_,j_,k_,cv) k_curv( int (VOXEL(i_, j_, k_, nxl,nyl,nzl)), curv_mesh_var::cv)
-
-k_curvilinear_vars_t k_curv = grid->k_curvilinear_vars_h;  
-k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;
-const int    nxl = grid->nx, nyl = grid->ny, nzl = grid->nz;
-int  ig,jg,kg;
-    for( int k=0; k<nzl+2; k++ ) {
+#define CM(_i, _j, _k, cv) k_curv( int (VOXEL(_i, _j, _k, nxl, nyl, nzl)), curv_mesh_var::cv)
+  k_curvilinear_vars_t k_curv = grid->k_curvilinear_vars_h;  
+  k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;
+  const int nxl = grid->nx, nyl = grid->ny, nzl = grid->nz;
+  int ig, jg, kg;
+  for( int k=0; k<nzl+2; k++ ) {
     for( int j=0; j<nyl+2; j++ ) { 
-    for( int i=0; i<nxl+2; i++ ) {
-          ig = i + ig0;
-          jg = j + jg0;
-          kg = k + kg0;
-          CM(i,j,k,hx) = hxg[ig];
-          CM(i,j,k,hy) = hxg[jg];
-          CM(i,j,k,hz) = hxg[kg];////////////////////////////////////////
-          CM(i,j,k,jac) = jacgg[ig];
-          CM(i,j,k,hx) = hxg[ig];
-          CM(i,j,k,hx) = hxg[ig];
-          CM(i,j,k,hx) = hxg[ig];
-    }}}
-    Kokkos::deep_copy(k_curv_d, k_curv);\
-  } while(0)
+      for( int i=0; i<nxl+2; i++ ) {
+        ig = i + ig0;
+        jg = j + jg0;
+        kg = k + kg0;
+        CM(i,j,k,hx)  = hxg[ig];
+        CM(i,j,k,hy)  = hxg[jg];
+        CM(i,j,k,hz)  = hxg[kg];
+        CM(i,j,k,jac) = hxg[ig]*hyg[jg]*hzg[kg];
+        CM(i,j,k,xg)  = xg[ig];
+        CM(i,j,k,yg)  = yg[jg];
+        CM(i,j,k,zg)  = zg[kg];
+      }
+    }
+  }
+  Kokkos::deep_copy(k_curv_d, k_curv);
+#undef CM
 
-#if 1
-    k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;    
-Kokkos::parallel_for("Print curvilinear mesh values",
+#if 0
+  k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;    
+  Kokkos::parallel_for("Print curvilinear mesh values",
 			 //                         host_execution_policy(0, nv - 1) ,
 			 Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, grid->nv),
                          KOKKOS_CLASS_LAMBDA (const int i) {
@@ -378,8 +357,31 @@ Kokkos::parallel_for("Print curvilinear mesh values",
 			 });
 #endif
 
+  ////////////////////////////
+  // Load fields
+  sim_log( "Loading fields" );
 
-// LOAD PARTICLES
+  // Note: everywhere is a region that encompasses the entire simulation
+  // In general, regions are specied as logical equations (i.e. x>0 && x+y<2)
+#define BX (1./sqrt(2.0))
+#define BY (1./sqrt(2.0))
+#define KdotX (kx*x + ky*y)
+#define K (sqrt(kx*kx+ky*ky))
+
+#define DBX (-pert*ky/K*cos(KdotX))
+#define DBY (+pert*kx/K*cos(KdotX))
+#define DBZ (-pert*sin(KdotX))
+
+#define OMEGA (K * ( 0.5*K + sqrt(1 + 0.25*K*K)))
+#define DrV (K/OMEGA)
+
+#define CM(_i, _j, _k, cv) k_curv( int (VOXEL(_i, _j, _k, _nx, _ny, _nz)), curv_mesh_var::cv)
+  set_region_field( everywhere, 0,0,0,BX+DBX,BY+DBY,DBZ);
+  set_region_te(everywhere, 0*Te);
+#undef CM
+ 
+  ////////////////////////////
+  // LOAD PARTICLES
   sim_log( "Loading particles" );
 
   double xmin = grid->x0 , xmax = grid->x0+(grid->dx)*(grid->nx);
@@ -387,19 +389,18 @@ Kokkos::parallel_for("Print curvilinear mesh values",
   double zmin = grid->z0 , zmax = grid->z0+(grid->dz)*(grid->nz);
 
 #if LOAD_PARTICLES
- repeat( Ni ) {
+  repeat( Ni ) {
     double x, y, z, r, ux, uy, uz, d0;
-     x = uniform( rng(0), xmin, xmax );
-     y = uniform( rng(0), ymin, ymax );
-     z = uniform( rng(0), zmin, zmax );
+    x = uniform( rng(0), xmin, xmax );
+    y = uniform( rng(0), ymin, ymax );
+    z = uniform( rng(0), zmin, zmax );
       
-      ux =  - DrV*DBX;
-      uy =  - DrV*DBY;
-      uz =  - DrV*DBZ;
-      inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0 );
-    }
+    ux =  - DrV*DBX;
+    uy =  - DrV*DBY;
+    uz =  - DrV*DBZ;
+    inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0 );
+  }
 #endif
- 
   sim_log( "Finished loading particles" );
 
   /*--------------------------------------------------------------------------
@@ -471,11 +472,11 @@ Kokkos::parallel_for("Print curvilinear mesh values",
   //  sprintf(global->fdParams.baseDir, "fields");
   //  // base file name for fields output
   //  sprintf(global->fdParams.baseFileName, "fields");
-   sprintf(global->fdParams.baseDir, "fields/");
-   dump_mkdir("fields");
-   dump_mkdir(global->fdParams.baseDir);
-   // base file name for fields output
-   sprintf(global->fdParams.baseFileName, "fields");
+  sprintf(global->fdParams.baseDir, "fields/");
+  dump_mkdir("fields");
+  dump_mkdir(global->fdParams.baseDir);
+  // base file name for fields output
+  sprintf(global->fdParams.baseFileName, "fields");
 
   global->fdParams.stride_x = 1;
   global->fdParams.stride_y = 1;
@@ -554,7 +555,6 @@ Kokkos::parallel_for("Print curvilinear mesh values",
   global->hedParams.output_variables( current_density | charge_density | stress_tensor );
   global->hHdParams.output_variables( current_density | charge_density | stress_tensor );
 
-
   const uint32_t allfields      (0xffffffff);
   
   global->fdParams.output_variables( allfields );
@@ -609,11 +609,10 @@ Kokkos::parallel_for("Print curvilinear mesh values",
 
 } //begin_initialization
 
-#define should_dump(x)                                                  \
+#define should_dump(x)                                                    \
   (global->x##_interval>0 && remainder(step(), global->x##_interval) == 0)
 
 begin_diagnostics {
-
   /*--------------------------------------------------------------------------
    * NOTE: YOU CANNOT DIRECTLY USE C FILE DESCRIPTORS OR SYSTEM CALLS ANYMORE
    *
@@ -748,11 +747,12 @@ begin_diagnostics {
    *------------------------------------------------------------------------*/
 
   if(step() && !(step()%global->restart_interval)) {
-    global->write_restart = 1; // set restart flag. the actual restart files are written during the next step
+    // set restart flag. the actual restart files are written during the next step
+    global->write_restart = 1;
   } else {
     if (global->write_restart) {
-
-      global->write_restart = 0; // reset restart flag
+      // Reset start flag
+      global->write_restart = 0;
       double dumpstart = uptime();
       if(!global->rtoggle) {
         global->rtoggle = 1;

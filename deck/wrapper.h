@@ -373,84 +373,61 @@ vpic_simulation::user_particle_collisions( void )
     }}}                                                          \
   } while(0)
 
+//////////TODO rewrite this 
 // The equations are only evaluated inside the mesh-mapped region
 // (This is not strictly inside the region)
-#define set_region_field( rgn,                                        \
-                          eqn_ex, eqn_ey, eqn_ez,                     \
-                          eqn_bx, eqn_by, eqn_bz ) do {	      \
-    const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;      \
-    const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;      \
-    const double _c  = grid->cvac;                                    \
-    const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;      \
-    for( int _k=0; _k<_nz+2; _k++ ) { const double _zl = _z0 + _dz*(_k-1.5), _ze = _z0 + _dz*_k, _zc = _z0 + _dz*(_k-0.5); \
-    for( int _j=0; _j<_ny+2; _j++ ) { const double _yl = _y0 + _dy*(_j-1.5), _ye = _y0 + _dy*_j, _yc = _y0 + _dy*(_j-0.5); field_t *_f = &field(0,_j,_k); \
-    for( int _i=0; _i<_nx+2; _i++ ) { const double _xl = _x0 + _dx*(_i-1.5), _xe = _x0 + _dx*_i, _xc = _x0 + _dx*(_i-0.5); double x, y, z; \
-          int _rccc, _rlcc, _rclc, _rllc, _rccl, _rlcl, _rcll;        \
-          x = _xc; y = _yc; z = _zc; _rccc = (rgn);                   \
-          x = _xl;                   _rlcc = (rgn);                   \
-          x = _xc; y = _yl;          _rclc = (rgn);                   \
-          x = _xl;                   _rllc = (rgn);                   \
-          x = _xc; y = _yc; z = _zl; _rccl = (rgn);                   \
-          x = _xl;                   _rlcl = (rgn);			\
-          x = _xc; y = _yl;          _rcll = (rgn);			\
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc || _rccl || _rcll ) _f->ex  =    (eqn_ex); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl || _rlcc || _rlcl ) _f->ey  =    (eqn_ey); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc || _rclc || _rllc ) _f->ez  =    (eqn_ez); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->cbx = _c*(eqn_bx); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc )                   _f->cby = _c*(eqn_by); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl )                   _f->cbz = _c*(eqn_bz); \
-          _f++;								\
-    }}}									\
+//#define CM( _i, _j, _k, cv) k_curv( int (VOXEL(_i, _j, _k, _nx, _ny, _nz)), curv_mesh_var::cv )
+#define set_region_field( rgn, eqn_ex, eqn_ey, eqn_ez, eqn_bx, eqn_by, eqn_bz ) \
+  do {                                                                          \
+    const double _c = grid->cvac;                                               \
+    const int _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;                   \
+    k_curvilinear_vars_t k_curv = grid->k_curvilinear_vars_h;                   \
+    for( int _k=0; _k<_nz+2; _k++ ) {                                           \
+      for( int _j=0; _j<_ny+2; _j++ ) {                                         \
+        for( int _i=0; _i<_nx+2; _i++ ) {                                       \
+          double x, y, z;                                                       \
+          field_t* _f = &field(_i, _j, _k);                                     \
+          x = CM(_i, _j, _k, xg);                                               \
+          y = CM(_i, _j, _k, yg);                                               \
+          z = CM(_i, _j, _k, zg);                                               \
+          _f->ex  = (eqn_ex);                                                   \
+          _f->ey  = (eqn_ey);                                                   \
+          _f->ez  = (eqn_ez);                                                   \
+          _f->cbx = _c*(eqn_bx);                                                \
+          _f->cby = _c*(eqn_by);                                                \
+          _f->cbz = _c*(eqn_bz);                                                \
+          _f++;                                                                 \
+        }                                                                       \
+      }                                                                         \
+    }                                                                           \
   } while(0)
+//#undef CM
   
-  //////////TODO rewrite this 
-  // The equations are only evaluated inside the mesh-mapped region
+// The equations are only evaluated inside the mesh-mapped region
 // (This is not strictly inside the region)
-#define CM(i_,j_,k_,cv) k_curv( int (VOXEL(i_,   j_,   k_,    nx,ny,nz)), curv_mesh_var::cv)
-#define set_region_field( rgn,                                        \
-                          eqn_ex, eqn_ey, eqn_ez,                     \
-                          eqn_bx, eqn_by, eqn_bz ) do {	      \
-    const double _c  = grid->cvac;                                    \
-    const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;      \
-    k_curvilinear_vars_t k_curv = grid->k_curvilinear_vars_h;          \
-    for( int _k=0; _k<_nz+2; _k++ ) { \
-    for( int _j=0; _j<_ny+2; _j++ ) { \
-    for( int _i=0; _i<_nx+2; _i++ ) {double x, y, z; \
-          x = CM(_i,_j,_k,xg) ;                                    \
-         _f->ex  =    (eqn_ex); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl || _rlcc || _rlcl ) _f->ey  =    (eqn_ey); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc || _rclc || _rllc ) _f->ez  =    (eqn_ez); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->cbx = _c*(eqn_bx); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc )                   _f->cby = _c*(eqn_by); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl )                   _f->cbz = _c*(eqn_bz); \
-          _f++;								\
-    }}}									\
-  } while(0)
-  
-  // The equations are only evaluated inside the mesh-mapped region
-// (This is not strictly inside the region)
-#define CM(i_,j_,k_,cv) k_curv( int (VOXEL(i_,   j_,   k_,    nx,ny,nz)), curv_mesh_var::cv)
-#define set_region_curvilinear( rgn,                                        \
+//#define CM( _i, _j, _k, cv) k_curv( int (VOXEL(_i, _j, _k, _nx, _ny, _nz)), curv_mesh_var::cv )
+#define set_region_curvilinear( rgn,                                  \
                           eqn_hx, eqn_hy, eqn_hz,                     \
-                          eqn_jac ) do {	      \
+                          eqn_jac ) do {	                      \
     const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;      \
     const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;      \
     const double _c  = grid->cvac;                                    \
     const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;      \
-    k_curvilinear_vars_t k_curv = grid->k_curvilinear_vars_h;          \
-    k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;      \
+    k_curvilinear_vars_t k_curv = grid->k_curvilinear_vars_h;         \
+    k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;       \
     for( int _k=0; _k<_nz+2; _k++ ) { const double _zl = _z0 + _dz*(_k-1.5), _ze = _z0 + _dz*_k, _zc = _z0 + _dz*(_k-0.5); \
     for( int _j=0; _j<_ny+2; _j++ ) { const double _yl = _y0 + _dy*(_j-1.5), _ye = _y0 + _dy*_j, _yc = _y0 + _dy*(_j-0.5); \
     for( int _i=0; _i<_nx+2; _i++ ) { const double _xl = _x0 + _dx*(_i-1.5), _xe = _x0 + _dx*_i, _xc = _x0 + _dx*(_i-0.5); double x, y, z; \
-          int _rccc;						      \
+          int _rccc; \
           x = _xc; y = _yc; z = _zc; _rccc = (rgn);                   \
-          x = _xc; y = _yc; z = _zc; if( _rccc ) CM(_i,_j,_k,hx)  =    (eqn_hx); \
-          x = _xc; y = _yc; z = _zc; if( _rccc ) CM(_i,_j,_k,hy)  =    (eqn_hy); \
-          x = _xc; y = _yc; z = _zc; if( _rccc ) CM(_i,_j,_k,hz)  =    (eqn_hz); \
-          x = _xc; y = _yc; z = _zc; if( _rccc ) CM(_i,_j,_k,jac)  =   (eqn_jac); \
-    }}}								\
-    Kokkos::deep_copy(k_curv_d, k_curv);\
+          x = _xc; y = _yc; z = _zc; if( _rccc ) CM(_i,_j,_k,hx)  = (eqn_hx);  \
+          x = _xc; y = _yc; z = _zc; if( _rccc ) CM(_i,_j,_k,hy)  = (eqn_hy);  \
+          x = _xc; y = _yc; z = _zc; if( _rccc ) CM(_i,_j,_k,hz)  = (eqn_hz);  \
+          x = _xc; y = _yc; z = _zc; if( _rccc ) CM(_i,_j,_k,jac) = (eqn_jac); \
+    }}}	\
+    Kokkos::deep_copy(k_curv_d, k_curv); \
   } while(0)
+//#undef CM
 
 // The equations are only evaluated inside the mesh-mapped region
 // (This is not strictly inside the region)

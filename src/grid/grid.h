@@ -188,16 +188,14 @@ typedef struct grid {
       //      k_mpi_h = Kokkos::create_mirror_view(k_mpi_d);
   }
 
-
-void init_curvilinear_grid()
+  void init_curvilinear_grid()
   {
-    printf("nv=%d",nv);
+    //printf("nv=%d",nv);
     k_curvilinear_vars_d = k_curvilinear_vars_t("k_curvilinear_vars_d", nv);
     k_curvilinear_vars_h = Kokkos::create_mirror_view(k_curvilinear_vars_d);
 
-    Kokkos::parallel_for("Fill curvilinear mesh view",
-			 host_execution_policy(0, nv), // Switch to loop over dimensions separately? Should this be nv ratherthan nv-1??
-			 KOKKOS_CLASS_LAMBDA (const int i) {
+    Kokkos::parallel_for( "Fill curvilinear mesh view",
+                          host_execution_policy(0, nv), KOKKOS_CLASS_LAMBDA (const int i) {
 
       k_curvilinear_vars_h(i, curv_mesh_var::hx) = 1.0;
       k_curvilinear_vars_h(i, curv_mesh_var::hy) = 1.0;
@@ -206,29 +204,11 @@ void init_curvilinear_grid()
       k_curvilinear_vars_h(i, curv_mesh_var::xg) = 0;
       k_curvilinear_vars_h(i, curv_mesh_var::yg) = 0;
       k_curvilinear_vars_h(i, curv_mesh_var::zg) = 0;
-			 });
+    
+    });
 
     Kokkos::deep_copy(k_curvilinear_vars_d, k_curvilinear_vars_h);
-
-/*    
-    Kokkos::parallel_for("Print curvilinear mesh values",
-			 //                         host_execution_policy(0, nv - 1) ,
-			 Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, nv),
-                         KOKKOS_CLASS_LAMBDA (const int i) {
-
-			   float h0lcl = k_curvilinear_vars_d(i, curv_mesh_var::hx);
-			   float h1lcl = k_curvilinear_vars_d(i, curv_mesh_var::hy);
-			   float h2lcl = k_curvilinear_vars_d(i, curv_mesh_var::hz);
-			   float jaclcl= k_curvilinear_vars_d(i, curv_mesh_var::jac);
-			   
-			   //			   printf("i=%d, h0=%f, h1=%f, h2=%f, jac=%f", i, k_curvilinear_vars_d(i, curv_mesh_var::h0), k_curvilinear_vars_d(i, curv_mesh_var::h1), k_curvilinear_vars_d(i, curv_mesh_var::h2), k_curvilinear_vars_d(i, curv_mesh_var::jac));
-
-			   			   printf("i=%d, h0=%f, h1=%f, h2=%f, jac=%f", i, h0lcl, h1lcl, h2lcl, jaclcl );
-			   
-			 });
-*/
   }
-		    
       
 } grid_t;
 
