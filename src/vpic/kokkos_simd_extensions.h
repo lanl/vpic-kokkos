@@ -13,34 +13,42 @@ using element_aligned_tag_t = KokkosSIMD::element_aligned_tag;
 using vector_aligned_tag_t  = KokkosSIMD::vector_aligned_tag;
 
 #if defined(KOKKOS_ARCH_AVX512XEON)
+constexpr int native_32 = 16;
+constexpr int native_64 = 8;
 using native_abi_32 = KokkosSIMD::simd_abi::avx512_fixed_size<16>;
 using native_abi_64 = KokkosSIMD::simd_abi::avx512_fixed_size<8>;
-using abi_x4 = KokkosSIMD::simd_abi::avx2_fixed_size<4>;
+using abi_x4 = KokkosSIMD::simd_abi::avx512_fixed_size<4>;
 #elif defined(KOKKOS_ARCH_AVX2)
+constexpr int native_32 = 8;
+constexpr int native_64 = 4;
 using native_abi_32 = KokkosSIMD::simd_abi::avx2_fixed_size<8>;
 using native_abi_64 = KokkosSIMD::simd_abi::avx2_fixed_size<4>;
 using abi_x4 = KokkosSIMD::simd_abi::avx2_fixed_size<4>;
 #elif defined(KOKKOS_ARCH_ARM_NEON)
+constexpr int native_32 = 4;
+constexpr int native_64 = 2;
 using native_abi_32 = KokkosSIMD::simd_abi::neon_fixed_size<4>;
 using native_abi_64 = KokkosSIMD::simd_abi::neon_fixed_size<2>;
 using abi_x4 = KokkosSIMD::simd_abi::neon_fixed_size<4>;
 #else
+constexpr int native_32 = 0;
+constexpr int native_64 = 0;
 using native_abi_32 = KokkosSIMD::simd_abi::scalar;
 using native_abi_64 = KokkosSIMD::simd_abi::scalar;
 using native_x4 = KokkosSIMD::simd_abi::scalar;
 #endif
 
-using simd_float_t          = KokkosSIMD::simd<float,   native_abi_32>;
-using simd_int32_t          = KokkosSIMD::simd<int32_t, native_abi_32>;
-using simd_int64_t          = KokkosSIMD::simd<int64_t, native_abi_64>;
-using simd_float_mask_t     = KokkosSIMD::simd_mask<float,   native_abi_32>;
-using simd_int32_mask_t     = KokkosSIMD::simd_mask<int32_t, native_abi_32>;
-using simd_int64_mask_t     = KokkosSIMD::simd_mask<int64_t, native_abi_64>;
+using simd_float_t          = KokkosSIMD::simd<float, native_32>;
+using simd_int32_t          = KokkosSIMD::simd<int32_t, native_32>;
+using simd_int64_t          = KokkosSIMD::simd<int64_t, native_64>;
+using simd_float_mask_t     = KokkosSIMD::simd_mask<float, native_32>;
+using simd_int32_mask_t     = KokkosSIMD::simd_mask<int32_t, native_32>;
+using simd_int64_mask_t     = KokkosSIMD::simd_mask<int64_t, native_64>;
 
-using simd_float32x4_t      = KokkosSIMD::simd<float, abi_x4>;
-using simd_int32x4_t        = KokkosSIMD::simd<int,   abi_x4>;
-using simd_float32x4_mask_t = KokkosSIMD::simd_mask<float, abi_x4>;
-using simd_int32x4_mask_t   = KokkosSIMD::simd_mask<int,   abi_x4>;
+//using simd_float32x4_t      = KokkosSIMD::simd<float, 4>;
+//using simd_int32x4_t        = KokkosSIMD::simd<int,   4>;
+//using simd_float32x4_mask_t = KokkosSIMD::simd_mask<float, 4>;
+//using simd_int32x4_mask_t   = KokkosSIMD::simd_mask<int,   4>;
 
 //using simd_float_t          = KokkosSIMD::simd<float,  KokkosSIMD::simd_abi::auto_fixed_size<16>>;
 //using simd_int32_t          = KokkosSIMD::simd<int32_t,KokkosSIMD::simd_abi::auto_fixed_size<16>>;
@@ -51,8 +59,7 @@ using simd_int32x4_mask_t   = KokkosSIMD::simd_mask<int,   abi_x4>;
 
 constexpr auto SIMD_LEN = simd_float_t::size();
 
-template<typename ABI>
-using SIMDFloat_t = Kokkos::Experimental::simd<float, ABI>;
+//using SIMDFloat_t = Kokkos::Experimental::simd<float>;
 
 template<int i0, int i1, int i2, int i3>
 struct permute
@@ -60,10 +67,10 @@ struct permute
   constexpr static int value = i0 + i1*4 + i2*16 + i3*64;
 };
 
-template<typename ABI>
+template<typename SIMDFloat_t>
 KOKKOS_FORCEINLINE_FUNCTION
-void increment( float * p, const SIMDFloat_t<ABI> &v ) {
-  SIMDFloat_t<ABI> a;
+void increment( float * p, const SIMDFloat_t &v ) {
+  SIMDFloat_t a;
   a.copy_from(p, element_aligned_tag_t());
   a += v;
   a.copy_to(  p, element_aligned_tag_t());
@@ -77,12 +84,12 @@ void swap(float& a, float& b) {
 }
 
 #ifdef __AVX512F__
-template<typename ABI, typename std::enable_if<std::is_same<ABI, Kokkos::Experimental::simd_abi::avx512_fixed_size<16>>::value, bool>::type=true >
+template<typename SIMDFloat_t, typename std::enable_if<SIMDFloat_t::size() == 16, bool>::type=true >
 KOKKOS_INLINE_FUNCTION
-void transpose(SIMDFloat_t<ABI>& a00, SIMDFloat_t<ABI>& a01, SIMDFloat_t<ABI>& a02, SIMDFloat_t<ABI>& a03,
-           		 SIMDFloat_t<ABI>& a04, SIMDFloat_t<ABI>& a05, SIMDFloat_t<ABI>& a06, SIMDFloat_t<ABI>& a07,
-           		 SIMDFloat_t<ABI>& a08, SIMDFloat_t<ABI>& a09, SIMDFloat_t<ABI>& a10, SIMDFloat_t<ABI>& a11,
-           		 SIMDFloat_t<ABI>& a12, SIMDFloat_t<ABI>& a13, SIMDFloat_t<ABI>& a14, SIMDFloat_t<ABI>& a15 )
+void transpose(SIMDFloat_t& a00, SIMDFloat_t& a01, SIMDFloat_t& a02, SIMDFloat_t& a03,
+           		 SIMDFloat_t& a04, SIMDFloat_t& a05, SIMDFloat_t& a06, SIMDFloat_t& a07,
+           		 SIMDFloat_t& a08, SIMDFloat_t& a09, SIMDFloat_t& a10, SIMDFloat_t& a11,
+           		 SIMDFloat_t& a12, SIMDFloat_t& a13, SIMDFloat_t& a14, SIMDFloat_t& a15 )
 {
   __m512 t00, t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11, t12, t13, t14, t15;
 
@@ -103,73 +110,73 @@ void transpose(SIMDFloat_t<ABI>& a00, SIMDFloat_t<ABI>& a01, SIMDFloat_t<ABI>& a
   //                                       a14 = 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239
   //                                       a15 = 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255
 
-  t00 = _mm512_unpacklo_ps( (__m512)(a00), (__m512)(a01) ); //   0  16   1  17   4  20   5  21   8  24   9  25  12  28  13  29 
-  t01 = _mm512_unpackhi_ps( (__m512)(a00), (__m512)(a01) ); //   2  18   3  19   6  22   7  23  10  26  11  27  14  30  15  31
-  t02 = _mm512_unpacklo_ps( (__m512)(a02), (__m512)(a03) ); //  32  48  33  49  36  52  37  53  40  56  41  57  44  60  45  61
-  t03 = _mm512_unpackhi_ps( (__m512)(a02), (__m512)(a03) ); //  34  50  35  51  38  54  39  55  42  58  43  59  46  62  47  63
-  t04 = _mm512_unpacklo_ps( (__m512)(a04), (__m512)(a05) ); //  64  80  65  81  68  84  69  85  72  88  73  89  76  92  77  93
-  t05 = _mm512_unpackhi_ps( (__m512)(a04), (__m512)(a05) ); //  66  82  67  83  70  86  71  87  74  90  75  91  78  94  79  95
-  t06 = _mm512_unpacklo_ps( (__m512)(a06), (__m512)(a07) ); //  96 112  97 113 100 116 101 117 104 120 105 121 108 124 109 125
-  t07 = _mm512_unpackhi_ps( (__m512)(a06), (__m512)(a07) ); //  98 114  99 115 102 118 103 119 106 122 107 123 110 126 111 127
-  t08 = _mm512_unpacklo_ps( (__m512)(a08), (__m512)(a09) ); // 128 144 129 145 132 148 133 149 136 152 137 153 140 156 141 157
-  t09 = _mm512_unpackhi_ps( (__m512)(a08), (__m512)(a09) ); // 130 146 131 147 134 150 135 151 138 154 139 155 142 158 143 159
-  t10 = _mm512_unpacklo_ps( (__m512)(a10), (__m512)(a11) ); // 160 176 161 177 164 180 165 181 168 184 169 185 172 188 173 189
-  t11 = _mm512_unpackhi_ps( (__m512)(a10), (__m512)(a11) ); // 162 178 163 179 166 182 167 183 170 186 171 187 174 190 175 191
-  t12 = _mm512_unpacklo_ps( (__m512)(a12), (__m512)(a13) ); // 192 208 193 209 196 212 197 213 200 216 201 217 204 220 205 221
-  t13 = _mm512_unpackhi_ps( (__m512)(a12), (__m512)(a13) ); // 194 210 195 211 198 214 199 215 202 218 203 219 206 222 207 223
-  t14 = _mm512_unpacklo_ps( (__m512)(a14), (__m512)(a15) ); // 224 240 225 241 228 244 229 245 232 248 233 249 236 252 237 253
-  t15 = _mm512_unpackhi_ps( (__m512)(a14), (__m512)(a15) ); // 226 242 227 243 230 246 231 247 234 250 235 251 238 254 239 255
+  t00 = _mm512_unpacklo_ps( static_cast<__m512>(a00), static_cast<__m512>(a01) ); //   0  16   1  17   4  20   5  21   8  24   9  25  12  28  13  29 
+  t01 = _mm512_unpackhi_ps( static_cast<__m512>(a00), static_cast<__m512>(a01) ); //   2  18   3  19   6  22   7  23  10  26  11  27  14  30  15  31
+  t02 = _mm512_unpacklo_ps( static_cast<__m512>(a02), static_cast<__m512>(a03) ); //  32  48  33  49  36  52  37  53  40  56  41  57  44  60  45  61
+  t03 = _mm512_unpackhi_ps( static_cast<__m512>(a02), static_cast<__m512>(a03) ); //  34  50  35  51  38  54  39  55  42  58  43  59  46  62  47  63
+  t04 = _mm512_unpacklo_ps( static_cast<__m512>(a04), static_cast<__m512>(a05) ); //  64  80  65  81  68  84  69  85  72  88  73  89  76  92  77  93
+  t05 = _mm512_unpackhi_ps( static_cast<__m512>(a04), static_cast<__m512>(a05) ); //  66  82  67  83  70  86  71  87  74  90  75  91  78  94  79  95
+  t06 = _mm512_unpacklo_ps( static_cast<__m512>(a06), static_cast<__m512>(a07) ); //  96 112  97 113 100 116 101 117 104 120 105 121 108 124 109 125
+  t07 = _mm512_unpackhi_ps( static_cast<__m512>(a06), static_cast<__m512>(a07) ); //  98 114  99 115 102 118 103 119 106 122 107 123 110 126 111 127
+  t08 = _mm512_unpacklo_ps( static_cast<__m512>(a08), static_cast<__m512>(a09) ); // 128 144 129 145 132 148 133 149 136 152 137 153 140 156 141 157
+  t09 = _mm512_unpackhi_ps( static_cast<__m512>(a08), static_cast<__m512>(a09) ); // 130 146 131 147 134 150 135 151 138 154 139 155 142 158 143 159
+  t10 = _mm512_unpacklo_ps( static_cast<__m512>(a10), static_cast<__m512>(a11) ); // 160 176 161 177 164 180 165 181 168 184 169 185 172 188 173 189
+  t11 = _mm512_unpackhi_ps( static_cast<__m512>(a10), static_cast<__m512>(a11) ); // 162 178 163 179 166 182 167 183 170 186 171 187 174 190 175 191
+  t12 = _mm512_unpacklo_ps( static_cast<__m512>(a12), static_cast<__m512>(a13) ); // 192 208 193 209 196 212 197 213 200 216 201 217 204 220 205 221
+  t13 = _mm512_unpackhi_ps( static_cast<__m512>(a12), static_cast<__m512>(a13) ); // 194 210 195 211 198 214 199 215 202 218 203 219 206 222 207 223
+  t14 = _mm512_unpacklo_ps( static_cast<__m512>(a14), static_cast<__m512>(a15) ); // 224 240 225 241 228 244 229 245 232 248 233 249 236 252 237 253
+  t15 = _mm512_unpackhi_ps( static_cast<__m512>(a14), static_cast<__m512>(a15) ); // 226 242 227 243 230 246 231 247 234 250 235 251 238 254 239 255
 
-  a00 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t00, t02, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  //   0  16  32  48
-  a01 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t00, t02, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  //   1  17  33  49
-  a02 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t01, t03, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  //   2  18  34  50 
-  a03 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t01, t03, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  //   3  19  35  51 
-  a04 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t04, t06, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  //  64  80  96 112 
-  a05 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t04, t06, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  //  65  81  97 113
-  a06 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t05, t07, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  //  66  82  98 114 
-  a07 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t05, t07, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  //  67  83  99 115 
-  a08 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t08, t10, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  // 128 144 160 176 
-  a09 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t08, t10, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  // 129 145 161 177 
-  a10 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t09, t11, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  // 130 146 162 178 
-  a11 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t09, t11, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  // 131 147 163 179 
-  a12 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t12, t14, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  // 192 208 228 240 
-  a13 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t12, t14, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  // 193 209 229 241 
-  a14 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t13, t15, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  // 194 210 230 242 
-  a15 = SIMDFloat_t<ABI>( _mm512_shuffle_ps( t13, t15, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  // 195 211 231 243 
+  a00 = SIMDFloat_t( _mm512_shuffle_ps( t00, t02, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  //   0  16  32  48
+  a01 = SIMDFloat_t( _mm512_shuffle_ps( t00, t02, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  //   1  17  33  49
+  a02 = SIMDFloat_t( _mm512_shuffle_ps( t01, t03, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  //   2  18  34  50 
+  a03 = SIMDFloat_t( _mm512_shuffle_ps( t01, t03, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  //   3  19  35  51 
+  a04 = SIMDFloat_t( _mm512_shuffle_ps( t04, t06, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  //  64  80  96 112 
+  a05 = SIMDFloat_t( _mm512_shuffle_ps( t04, t06, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  //  65  81  97 113
+  a06 = SIMDFloat_t( _mm512_shuffle_ps( t05, t07, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  //  66  82  98 114 
+  a07 = SIMDFloat_t( _mm512_shuffle_ps( t05, t07, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  //  67  83  99 115 
+  a08 = SIMDFloat_t( _mm512_shuffle_ps( t08, t10, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  // 128 144 160 176 
+  a09 = SIMDFloat_t( _mm512_shuffle_ps( t08, t10, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  // 129 145 161 177 
+  a10 = SIMDFloat_t( _mm512_shuffle_ps( t09, t11, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  // 130 146 162 178 
+  a11 = SIMDFloat_t( _mm512_shuffle_ps( t09, t11, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  // 131 147 163 179 
+  a12 = SIMDFloat_t( _mm512_shuffle_ps( t12, t14, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  // 192 208 228 240 
+  a13 = SIMDFloat_t( _mm512_shuffle_ps( t12, t14, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  // 193 209 229 241 
+  a14 = SIMDFloat_t( _mm512_shuffle_ps( t13, t15, _MM_SHUFFLE( 1, 0, 1, 0 ) ) );  // 194 210 230 242 
+  a15 = SIMDFloat_t( _mm512_shuffle_ps( t13, t15, _MM_SHUFFLE( 3, 2, 3, 2 ) ) );  // 195 211 231 243 
 
-  t00 = _mm512_shuffle_f32x4( (__m512)(a00), (__m512)(a04), 0x88 ); //   0  16  32  48   8  24  40  56  64  80  96  112 ...
-  t01 = _mm512_shuffle_f32x4( (__m512)(a01), (__m512)(a05), 0x88 ); //   1  17  33  49 ...
-  t02 = _mm512_shuffle_f32x4( (__m512)(a02), (__m512)(a06), 0x88 ); //   2  18  34  50 ...
-  t03 = _mm512_shuffle_f32x4( (__m512)(a03), (__m512)(a07), 0x88 ); //   3  19  35  51 ...
-  t04 = _mm512_shuffle_f32x4( (__m512)(a00), (__m512)(a04), 0xdd ); //   4  20  36  52 ...
-  t05 = _mm512_shuffle_f32x4( (__m512)(a01), (__m512)(a05), 0xdd ); //   5  21  37  53 ...
-  t06 = _mm512_shuffle_f32x4( (__m512)(a02), (__m512)(a06), 0xdd ); //   6  22  38  54 ...
-  t07 = _mm512_shuffle_f32x4( (__m512)(a03), (__m512)(a07), 0xdd ); //   7  23  39  55 ...
-  t08 = _mm512_shuffle_f32x4( (__m512)(a08), (__m512)(a12), 0x88 ); // 128 144 160 176 ...
-  t09 = _mm512_shuffle_f32x4( (__m512)(a09), (__m512)(a13), 0x88 ); // 129 145 161 177 ...
-  t10 = _mm512_shuffle_f32x4( (__m512)(a10), (__m512)(a14), 0x88 ); // 130 146 162 178 ...
-  t11 = _mm512_shuffle_f32x4( (__m512)(a11), (__m512)(a15), 0x88 ); // 131 147 163 179 ...
-  t12 = _mm512_shuffle_f32x4( (__m512)(a08), (__m512)(a12), 0xdd ); // 132 148 164 180 ...
-  t13 = _mm512_shuffle_f32x4( (__m512)(a09), (__m512)(a13), 0xdd ); // 133 149 165 181 ...
-  t14 = _mm512_shuffle_f32x4( (__m512)(a10), (__m512)(a14), 0xdd ); // 134 150 166 182 ...
-  t15 = _mm512_shuffle_f32x4( (__m512)(a11), (__m512)(a15), 0xdd ); // 135 151 167 183 ...
+  t00 = _mm512_shuffle_f32x4( static_cast<__m512>(a00), static_cast<__m512>(a04), 0x88 ); //   0  16  32  48   8  24  40  56  64  80  96  112 ...
+  t01 = _mm512_shuffle_f32x4( static_cast<__m512>(a01), static_cast<__m512>(a05), 0x88 ); //   1  17  33  49 ...
+  t02 = _mm512_shuffle_f32x4( static_cast<__m512>(a02), static_cast<__m512>(a06), 0x88 ); //   2  18  34  50 ...
+  t03 = _mm512_shuffle_f32x4( static_cast<__m512>(a03), static_cast<__m512>(a07), 0x88 ); //   3  19  35  51 ...
+  t04 = _mm512_shuffle_f32x4( static_cast<__m512>(a00), static_cast<__m512>(a04), 0xdd ); //   4  20  36  52 ...
+  t05 = _mm512_shuffle_f32x4( static_cast<__m512>(a01), static_cast<__m512>(a05), 0xdd ); //   5  21  37  53 ...
+  t06 = _mm512_shuffle_f32x4( static_cast<__m512>(a02), static_cast<__m512>(a06), 0xdd ); //   6  22  38  54 ...
+  t07 = _mm512_shuffle_f32x4( static_cast<__m512>(a03), static_cast<__m512>(a07), 0xdd ); //   7  23  39  55 ...
+  t08 = _mm512_shuffle_f32x4( static_cast<__m512>(a08), static_cast<__m512>(a12), 0x88 ); // 128 144 160 176 ...
+  t09 = _mm512_shuffle_f32x4( static_cast<__m512>(a09), static_cast<__m512>(a13), 0x88 ); // 129 145 161 177 ...
+  t10 = _mm512_shuffle_f32x4( static_cast<__m512>(a10), static_cast<__m512>(a14), 0x88 ); // 130 146 162 178 ...
+  t11 = _mm512_shuffle_f32x4( static_cast<__m512>(a11), static_cast<__m512>(a15), 0x88 ); // 131 147 163 179 ...
+  t12 = _mm512_shuffle_f32x4( static_cast<__m512>(a08), static_cast<__m512>(a12), 0xdd ); // 132 148 164 180 ...
+  t13 = _mm512_shuffle_f32x4( static_cast<__m512>(a09), static_cast<__m512>(a13), 0xdd ); // 133 149 165 181 ...
+  t14 = _mm512_shuffle_f32x4( static_cast<__m512>(a10), static_cast<__m512>(a14), 0xdd ); // 134 150 166 182 ...
+  t15 = _mm512_shuffle_f32x4( static_cast<__m512>(a11), static_cast<__m512>(a15), 0xdd ); // 135 151 167 183 ...
 
-  a00 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t00, t08, 0x88 ) ); //   0  16  32  48  64  80  96 112 ... 240
-  a01 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t01, t09, 0x88 ) ); //   1  17  33  49  66  81  97 113 ... 241
-  a02 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t02, t10, 0x88 ) ); //   2  18  34  50  67  82  98 114 ... 242
-  a03 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t03, t11, 0x88 ) ); //   3  19  35  51  68  83  99 115 ... 243
-  a04 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t04, t12, 0x88 ) ); //   4 ...
-  a05 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t05, t13, 0x88 ) ); //   5 ...
-  a06 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t06, t14, 0x88 ) ); //   6 ...
-  a07 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t07, t15, 0x88 ) ); //   7 ...
-  a08 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t00, t08, 0xdd ) ); //   8 ...
-  a09 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t01, t09, 0xdd ) ); //   9 ...
-  a10 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t02, t10, 0xdd ) ); //  10 ...
-  a11 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t03, t11, 0xdd ) ); //  11 ...
-  a12 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t04, t12, 0xdd ) ); //  12 ...
-  a13 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t05, t13, 0xdd ) ); //  13 ...
-  a14 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t06, t14, 0xdd ) ); //  14 ...
-  a15 = SIMDFloat_t<ABI>( _mm512_shuffle_f32x4( t07, t15, 0xdd ) ); //  15  31  47  63  79  96 111 127 ... 255
+  a00 = SIMDFloat_t( _mm512_shuffle_f32x4( t00, t08, 0x88 ) ); //   0  16  32  48  64  80  96 112 ... 240
+  a01 = SIMDFloat_t( _mm512_shuffle_f32x4( t01, t09, 0x88 ) ); //   1  17  33  49  66  81  97 113 ... 241
+  a02 = SIMDFloat_t( _mm512_shuffle_f32x4( t02, t10, 0x88 ) ); //   2  18  34  50  67  82  98 114 ... 242
+  a03 = SIMDFloat_t( _mm512_shuffle_f32x4( t03, t11, 0x88 ) ); //   3  19  35  51  68  83  99 115 ... 243
+  a04 = SIMDFloat_t( _mm512_shuffle_f32x4( t04, t12, 0x88 ) ); //   4 ...
+  a05 = SIMDFloat_t( _mm512_shuffle_f32x4( t05, t13, 0x88 ) ); //   5 ...
+  a06 = SIMDFloat_t( _mm512_shuffle_f32x4( t06, t14, 0x88 ) ); //   6 ...
+  a07 = SIMDFloat_t( _mm512_shuffle_f32x4( t07, t15, 0x88 ) ); //   7 ...
+  a08 = SIMDFloat_t( _mm512_shuffle_f32x4( t00, t08, 0xdd ) ); //   8 ...
+  a09 = SIMDFloat_t( _mm512_shuffle_f32x4( t01, t09, 0xdd ) ); //   9 ...
+  a10 = SIMDFloat_t( _mm512_shuffle_f32x4( t02, t10, 0xdd ) ); //  10 ...
+  a11 = SIMDFloat_t( _mm512_shuffle_f32x4( t03, t11, 0xdd ) ); //  11 ...
+  a12 = SIMDFloat_t( _mm512_shuffle_f32x4( t04, t12, 0xdd ) ); //  12 ...
+  a13 = SIMDFloat_t( _mm512_shuffle_f32x4( t05, t13, 0xdd ) ); //  13 ...
+  a14 = SIMDFloat_t( _mm512_shuffle_f32x4( t06, t14, 0xdd ) ); //  14 ...
+  a15 = SIMDFloat_t( _mm512_shuffle_f32x4( t07, t15, 0xdd ) ); //  15  31  47  63  79  96 111 127 ... 255
 }
 #else
 template< typename Float16 >
@@ -232,10 +239,10 @@ void transpose(Float16& a00, Float16& a01, Float16& a02, Float16& a03,
 //
 #ifdef __AVX2__
 
-template<typename ABI, typename std::enable_if<SIMDFloat_t<ABI>::size() == 8, bool>::type=true >
+template<typename SIMDFloat_t, typename std::enable_if<SIMDFloat_t::size() == 8, bool>::type=true >
 KOKKOS_INLINE_FUNCTION
-void transpose(SIMDFloat_t<ABI>& a0, SIMDFloat_t<ABI>& a1, SIMDFloat_t<ABI>& a2, SIMDFloat_t<ABI>& a3,
-               SIMDFloat_t<ABI>& a4, SIMDFloat_t<ABI>& a5, SIMDFloat_t<ABI>& a6, SIMDFloat_t<ABI>& a7) {
+void transpose(SIMDFloat_t& a0, SIMDFloat_t& a1, SIMDFloat_t& a2, SIMDFloat_t& a3,
+               SIMDFloat_t& a4, SIMDFloat_t& a5, SIMDFloat_t& a6, SIMDFloat_t& a7) {
   __m256 t0, t1, t2, t3, t4, t5, t6, t7;
 
   __m256 u0, u1, u2, u3, u4, u5, u6, u7;
@@ -258,14 +265,14 @@ void transpose(SIMDFloat_t<ABI>& a0, SIMDFloat_t<ABI>& a1, SIMDFloat_t<ABI>& a2,
   u6 = _mm256_shuffle_ps( t5, t7, _MM_SHUFFLE( 1, 0, 1, 0 ) );
   u7 = _mm256_shuffle_ps( t5, t7, _MM_SHUFFLE( 3, 2, 3, 2 ) );
 
-  a0 = SIMDFloat_t<ABI>( _mm256_permute2f128_ps( u0, u4, 0x20 ) );
-  a1 = SIMDFloat_t<ABI>( _mm256_permute2f128_ps( u1, u5, 0x20 ) );
-  a2 = SIMDFloat_t<ABI>( _mm256_permute2f128_ps( u2, u6, 0x20 ) );
-  a3 = SIMDFloat_t<ABI>( _mm256_permute2f128_ps( u3, u7, 0x20 ) );
-  a4 = SIMDFloat_t<ABI>( _mm256_permute2f128_ps( u0, u4, 0x31 ) );
-  a5 = SIMDFloat_t<ABI>( _mm256_permute2f128_ps( u1, u5, 0x31 ) );
-  a6 = SIMDFloat_t<ABI>( _mm256_permute2f128_ps( u2, u6, 0x31 ) );
-  a7 = SIMDFloat_t<ABI>( _mm256_permute2f128_ps( u3, u7, 0x31 ) );
+  a0 = SIMDFloat_t( _mm256_permute2f128_ps( u0, u4, 0x20 ) );
+  a1 = SIMDFloat_t( _mm256_permute2f128_ps( u1, u5, 0x20 ) );
+  a2 = SIMDFloat_t( _mm256_permute2f128_ps( u2, u6, 0x20 ) );
+  a3 = SIMDFloat_t( _mm256_permute2f128_ps( u3, u7, 0x20 ) );
+  a4 = SIMDFloat_t( _mm256_permute2f128_ps( u0, u4, 0x31 ) );
+  a5 = SIMDFloat_t( _mm256_permute2f128_ps( u1, u5, 0x31 ) );
+  a6 = SIMDFloat_t( _mm256_permute2f128_ps( u2, u6, 0x31 ) );
+  a7 = SIMDFloat_t( _mm256_permute2f128_ps( u3, u7, 0x31 ) );
 
   return;
 }
@@ -286,15 +293,15 @@ void transpose(Float8& a0, Float8& a1, Float8& a2, Float8& a3,
 #endif
 
 #ifdef __AVX__
-template< int i0, int i1, int i2, int i3>
-KOKKOS_FORCEINLINE_FUNCTION
-simd_float32x4_t shuffle(simd_float32x4_t& a) {
-  return simd_float32x4_t( _mm_shuffle_ps( (__m128)(a), (__m128)(a), ( permute<i0,i1,i2,i3>::value ) ) );
-}
+//template< int i0, int i1, int i2, int i3>
+//KOKKOS_FORCEINLINE_FUNCTION
+//simd_float32x4_t shuffle(simd_float32x4_t& a) {
+//  return simd_float32x4_t( _mm_shuffle_ps( (__m128)(a), (__m128)(a), ( permute<i0,i1,i2,i3>::value ) ) );
+//}
 
-template<typename ABI, typename std::enable_if<SIMDFloat_t<ABI>::size() == 4, bool>::type=true >
+template<typename SIMDFloat_t, typename std::enable_if<SIMDFloat_t::size() == 4, bool>::type=true >
 KOKKOS_INLINE_FUNCTION
-void transpose(SIMDFloat_t<ABI>& a, SIMDFloat_t<ABI>& b, SIMDFloat_t<ABI>& c, SIMDFloat_t<ABI>& d) {
+void transpose(SIMDFloat_t& a, SIMDFloat_t& b, SIMDFloat_t& c, SIMDFloat_t& d) {
   // a =  0  1  2  3
   // b =  4  5  6  7
   // c =  8  9 10 11
@@ -307,10 +314,10 @@ void transpose(SIMDFloat_t<ABI>& a, SIMDFloat_t<ABI>& b, SIMDFloat_t<ABI>& c, SI
   t   = _mm_unpackhi_ps( (__m128)(c), (__m128)(d) ); // t = 10 14 11 15
   u   = _mm_unpacklo_ps( (__m128)(c), (__m128)(d) ); // u =  8 12  9 13
 
-  a = SIMDFloat_t<ABI>(_mm_movelh_ps( s, u )); // a = 0 4  8 12
-  b = SIMDFloat_t<ABI>(_mm_movehl_ps( u, s )); // b = 1 5  9 13
-  c = SIMDFloat_t<ABI>(_mm_movelh_ps( r, t )); // c = 2 6 10 14
-  d = SIMDFloat_t<ABI>(_mm_movehl_ps( t, r )); // d = 3 7 11 15
+  a = SIMDFloat_t(_mm_movelh_ps( s, u )); // a = 0 4  8 12
+  b = SIMDFloat_t(_mm_movehl_ps( u, s )); // b = 1 5  9 13
+  c = SIMDFloat_t(_mm_movelh_ps( r, t )); // c = 2 6 10 14
+  d = SIMDFloat_t(_mm_movehl_ps( t, r )); // d = 3 7 11 15
 
   // a = 0 4  8 12
   // b = 1 5  9 13
@@ -322,13 +329,13 @@ void transpose(SIMDFloat_t<ABI>& a, SIMDFloat_t<ABI>& b, SIMDFloat_t<ABI>& c, SI
 #elif defined KOKKOS_ARCH_ARM_NEON
 #include <arm_neon.h>
 
-template< int i0, int i1, int i2, int i3 >
-KOKKOS_FORCEINLINE_FUNCTION
-simd_float32x4_t shuffle(simd_float32x4_t& a) {
-  int32x4_t mask = {i0, i1, i2, i3};
-  simd_float32x4_t b = __builtin_shuffle((float32x4_t) a, mask);
-  return b;
-}
+//template< int i0, int i1, int i2, int i3 >
+//KOKKOS_FORCEINLINE_FUNCTION
+//simd_float32x4_t shuffle(simd_float32x4_t& a) {
+//  int32x4_t mask = {i0, i1, i2, i3};
+//  simd_float32x4_t b = __builtin_shuffle((float32x4_t) a, mask);
+//  return b;
+//}
 
 KOKKOS_INLINE_FUNCTION
 void transpose(simd_float_t& a, simd_float_t& b, simd_float_t& c, simd_float_t& d) {

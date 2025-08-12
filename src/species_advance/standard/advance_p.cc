@@ -142,22 +142,22 @@ load_interpolators(const k_interpolator_t& k_interp, size_t active_lanes, SIMDFl
         const float* mem_13 = &(k_interp(ii[13], interpolator_var::ex)); 
         const float* mem_14 = &(k_interp(ii[14], interpolator_var::ex));    
         const float* mem_15 = &(k_interp(ii[15], interpolator_var::ex)); 
-        fex.copy_from(mem_00, element_aligned_tag_t());
-        fdexdy.copy_from(mem_01, element_aligned_tag_t());    
-        fdexdz.copy_from(mem_02, element_aligned_tag_t());    
+        fex.copy_from(      mem_00, element_aligned_tag_t());
+        fdexdy.copy_from(   mem_01, element_aligned_tag_t());    
+        fdexdz.copy_from(   mem_02, element_aligned_tag_t());    
         fd2exdydz.copy_from(mem_03, element_aligned_tag_t()); 
-        fey.copy_from(mem_04, element_aligned_tag_t());       
-        fdeydz.copy_from(mem_05, element_aligned_tag_t());    
-        fdeydx.copy_from(mem_06, element_aligned_tag_t());    
+        fey.copy_from(      mem_04, element_aligned_tag_t());       
+        fdeydz.copy_from(   mem_05, element_aligned_tag_t());    
+        fdeydx.copy_from(   mem_06, element_aligned_tag_t());    
         fd2eydzdx.copy_from(mem_07, element_aligned_tag_t()); 
-        fez.copy_from(mem_08, element_aligned_tag_t());       
-        fdezdx.copy_from(mem_09, element_aligned_tag_t());    
-        fdezdy.copy_from(mem_10, element_aligned_tag_t());    
+        fez.copy_from(      mem_08, element_aligned_tag_t());       
+        fdezdx.copy_from(   mem_09, element_aligned_tag_t());    
+        fdezdy.copy_from(   mem_10, element_aligned_tag_t());    
         fd2ezdxdy.copy_from(mem_11, element_aligned_tag_t()); 
-        fcbx.copy_from(mem_12, element_aligned_tag_t());      
-        fdcbxdx.copy_from(mem_13, element_aligned_tag_t());   
-        fcby.copy_from(mem_14, element_aligned_tag_t());      
-        fdcbydy.copy_from(mem_15, element_aligned_tag_t());   
+        fcbx.copy_from(     mem_12, element_aligned_tag_t());      
+        fdcbxdx.copy_from(  mem_13, element_aligned_tag_t());   
+        fcby.copy_from(     mem_14, element_aligned_tag_t());      
+        fdcbydy.copy_from(  mem_15, element_aligned_tag_t());   
         transpose(fex, fdexdy, fdexdz, fd2exdydz, 
                   fey, fdeydz, fdeydx, fd2eydzdx, 
                   fez, fdezdx, fdezdy, fd2ezdxdy, 
@@ -668,7 +668,7 @@ advance_p_kokkos_unified(
 
 // Setting up work distribution settings
 #if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
-  constexpr int num_lanes = 32;
+  constexpr int num_lanes = 16;
   int chunk_size = num_lanes;
   int num_chunks = np/num_lanes;
   if(num_chunks*num_lanes < np)
@@ -1482,6 +1482,7 @@ advance_p_kokkos_simd(
     simd_float_t fdcbxdx, fdcbydy, fdcbzdz;
 
     simd_float_mask_t mask([p_index,np] (std::size_t lane) { return p_index*num_lanes + int(lane) < np; });
+    simd_int32_mask_t mask_int([p_index,np] (std::size_t lane) { return p_index*num_lanes + int(lane) < np; });
     size_t active_lanes = num_lanes;
     if(p_index*num_lanes+active_lanes >= np)
       active_lanes = np - p_index*num_lanes;
@@ -1522,7 +1523,7 @@ advance_p_kokkos_simd(
       // Load weight
       KokkosSIMD::where(mask, q ).gather_from(mem_w , indices);
       // Load cell index
-      KokkosSIMD::where(mask, ii).copy_from(mem_ii, element_aligned_tag_t());
+      KokkosSIMD::where(mask_int, ii).copy_from(mem_ii, element_aligned_tag_t());
     }
 
     // Load interpolators
@@ -1822,8 +1823,8 @@ advance_p( /**/  species_t            * RESTRICT sp,
   #else
     // Portable kernel with additional vectorization options
     //#define ADVANCE_P advance_p_kokkos_gpu
-    //#define ADVANCE_P advance_p_kokkos_unified
-    #define ADVANCE_P advance_p_kokkos_simd
+    #define ADVANCE_P advance_p_kokkos_unified
+    //#define ADVANCE_P advance_p_kokkos_simd
   #endif
   KOKKOS_TIC();
   ADVANCE_P(
