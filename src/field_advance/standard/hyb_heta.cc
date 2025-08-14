@@ -74,8 +74,8 @@ hyb_heta( field_array_t * RESTRICT fa ) {
   //const float den_floor_ohm = g->den_floor_ohm;
 
   const float px2 = px*px;
-  const float py2 = px*px;
-  const float pz2 = px*px;
+  const float py2 = py*py;
+  const float pz2 = pz*pz;
 
   // Laplace B Loop
     
