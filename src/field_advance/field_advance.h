@@ -193,7 +193,7 @@ typedef struct field_advance_kernels {
   void (*advance_b)( struct field_array * RESTRICT fa, float frac );
   void (*advance_e)( struct field_array * RESTRICT fa, float frac );
   void (*hyb_smooth_b)( struct field_array * RESTRICT fa );
-  void (*hyb_smooth_eb_interp)( struct field_array * RESTRICT fa, bool smoothed );
+  void (*hyb_smooth_eb_interp)( struct field_array * RESTRICT fa );
 
   // Diagnostic interface
   // FIXME: MAY NEED MORE CAREFUL THOUGHT FOR CURVILINEAR SYSTEMS

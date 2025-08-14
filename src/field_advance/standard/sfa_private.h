@@ -123,7 +123,7 @@ void
 hyb_smooth_b( field_array_t * RESTRICT fa );
 
 void
-hyb_smooth_eb_interp( field_array_t * RESTRICT fa, bool smoothed );
+hyb_smooth_eb_interp( field_array_t * RESTRICT fa );
 
 
 // In energy_f.c
