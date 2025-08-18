@@ -2,6 +2,85 @@
 #define HAS_V4_PIPELINE
 #include "spa_private.h"
 
+struct center_p_kernel {
+  species_t* sp;
+  k_particles_t::HostMirror p;
+  k_particles_i_t::HostMirror p_i;
+  k_interpolator_t::HostMirror f;
+  float qdt_2mc, qdt_4mc, qp;
+
+  center_p_kernel(species_t* _sp,
+                  k_particles_t::HostMirror& _p, 
+                  const k_particles_i_t::HostMirror& _p_i, 
+                  const k_interpolator_t::HostMirror& _interp,
+                  const float _qdt_2mc) : sp(_sp), p(_p), p_i(_p_i), f(_interp) {
+#ifndef VARIABLE_CHARGE
+    qdt_2mc        =     _qdt_2mc;
+    qdt_4mc        = 0.5*_qdt_2mc; // For half Boris rotate
+#endif
+  }
+  
+  KOKKOS_INLINE_FUNCTION 
+  void 
+  operator() (const int n) const {
+    float dx, dy, dz, ux, uy, uz;
+    float hax, hay, haz, cbx, cby, cbz;
+    float v0, v1, v2, v3, v4;
+    int ii;
+    constexpr float one            = 1.;
+    constexpr float one_third      = 1./3.;
+    constexpr float two_fifteenths = 2./15.;
+
+    //dx   = p(n, particle_var::dx); // Load position
+    //dy   = p(n, particle_var::dy);
+    //dz   = p(n, particle_var::dz);
+    dx   = sp->p[n].dx; // Load position
+    dy   = sp->p[n].dy;
+    dz   = sp->p[n].dz;
+#ifdef VARIABLE_CHARGE
+    //qp   = p(n, particle_var::qp);
+    qp   = sp->p[n].qp;
+    qdt_2mc = qp*qdt_2mc;
+    qdt_4mc = 0.5*qdt_2mc;
+#endif
+    ii   = p_i(n);
+    hax  = qdt_2mc * f(ii, interpolator_var::ex);  // Interpolate E  
+    hay  = qdt_2mc * f(ii, interpolator_var::ey);   
+    haz  = qdt_2mc * f(ii, interpolator_var::ez);   
+    cbx  = f(ii, interpolator_var::cbx); // Interpolate B
+    cby  = f(ii, interpolator_var::cby); 
+    cbz  = f(ii, interpolator_var::cbz); 
+    //ux   = p(n, particle_var::ux); // Load momentum
+    //uy   = p(n, particle_var::uy);
+    //uz   = p(n, particle_var::uz);
+    ux   = sp->p[n].ux; // Load momentum
+    uy   = sp->p[n].uy;
+    uz   = sp->p[n].uz;
+    ux  += hax; // Half advance E
+    uy  += hay;
+    uz  += haz;
+    v0   = qdt_4mc;///(float)sqrt(one + (ux*ux + (uy*uy + uz*uz)));
+    /**/                                     // Boris - scalars
+    v1   = cbx*cbx + (cby*cby + cbz*cbz);
+    v2   = (v0*v0)*v1;
+    v3   = v0*(one+v2*(one_third+v2*two_fifteenths));
+    v4   = v3/(one+v1*(v3*v3));
+    v4  += v4;
+    v0   = ux + v3*( uy*cbz - uz*cby );      // Boris - uprime
+    v1   = uy + v3*( uz*cbx - ux*cbz );
+    v2   = uz + v3*( ux*cby - uy*cbx );
+    ux  += v4*( v1*cbz - v2*cby );           // Boris - rotation
+    uy  += v4*( v2*cbx - v0*cbz );
+    uz  += v4*( v0*cby - v1*cbx );
+//    p(n, particle_var::ux) = ux;             // Store momentum
+//    p(n, particle_var::uy) = uy;
+//    p(n, particle_var::uz) = uz;
+    sp->p[n].ux = ux;             // Store momentum
+    sp->p[n].uy = uy;
+    sp->p[n].uz = uz;
+  }
+};
+
 void
 center_p_pipeline( center_p_pipeline_args_t * args,
                    int pipeline_rank,
@@ -157,22 +236,34 @@ center_p_pipeline_v4( center_p_pipeline_args_t * args,
 void
 center_p( /**/  species_t            * RESTRICT sp,
           const interpolator_array_t * RESTRICT ia ) {
-  DECLARE_ALIGNED_ARRAY( center_p_pipeline_args_t, 128, args, 1 );
 
   if( !sp || !ia || sp->g!=ia->g ) ERROR(( "Bad args" ));
+
+  float qdt_2mc;
+#ifdef VARIABLE_CHARGE
+  qdt_2mc = (sp->g->dt)/(2*sp->m*sp->g->cvac); // Multiply by qp in pipelines
+#else
+  qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+#endif
+
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+  // Use legacy data structures for center_p
+  DECLARE_ALIGNED_ARRAY( center_p_pipeline_args_t, 128, args, 1 );
 
   // Have the pipelines do the bulk of particles in quads and have the
   // host do the final incomplete quad.
 
   args->p0      = sp->p;
   args->f0      = ia->i;
-#ifdef VARIABLE_CHARGE
-  args->qdt_2mc = (sp->g->dt)/(2*sp->m*sp->g->cvac); // Multiply by qp in pipelines
-#else
-  args->qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-#endif
+  args->qdt_2mc = qdt_2mc;
   args->np      = sp->np;
 
   EXEC_PIPELINES( center_p, args, 0 );
   WAIT_PIPELINES();
+
+#else
+  // Use host data structures for center_p_kernel
+  center_p_kernel center_particles(sp, sp->k_p_h, sp->k_p_i_h, ia->k_i_h, qdt_2mc);
+  Kokkos::parallel_for("center_p", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), center_particles);
+#endif
 }

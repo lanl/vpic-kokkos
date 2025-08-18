@@ -2,6 +2,8 @@
 #define HAS_V4_PIPELINE
 #include "spa_private.h"
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+
 // This function calculates kinetic energy, normalized by c^2.
 void
 energy_p_pipeline( energy_p_pipeline_args_t * RESTRICT args,
@@ -119,6 +121,35 @@ energy_p_pipeline_v4( energy_p_pipeline_args_t * args,
 #endif
 
 double
+energy_p( const species_t            * RESTRICT sp,
+          const interpolator_array_t * RESTRICT ia ) {
+  DECLARE_ALIGNED_ARRAY( energy_p_pipeline_args_t, 128, args, 1 );
+  DECLARE_ALIGNED_ARRAY( double, 128, en, MAX_PIPELINE+1 );
+  double local, global;
+  int rank;
+
+  if( !sp || !ia || sp->g!=ia->g ) ERROR(( "Bad args" ));
+
+  // Have the pipelines do the bulk of particles in quads and have the
+  // host do the final incomplete quad.
+
+  args->p       = sp->p;
+  args->f       = ia->i;
+  args->en      = en;
+  args->qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+  args->msp     = sp->m;
+  args->np      = sp->np;
+
+  EXEC_PIPELINES( energy_p, args, 0 );
+  WAIT_PIPELINES();
+
+  local = 0; for( rank=0; rank<=N_PIPELINE; rank++ ) local += en[rank];
+  mp_allsum_d( &local, &global, 1 );
+  return global*((double)sp->g->cvac*(double)sp->g->cvac);
+}
+#endif
+
+double
 energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particles, const k_particles_i_t& k_particles_i, const float qdt_2mc, const float msp, const int np) {
 //  const interpolator_t * RESTRICT ALIGNED(128) f = args->f;
 //  const particle_t     * RESTRICT ALIGNED(32)  p = args->p;
@@ -174,34 +205,6 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
         update += static_cast<double>(v0);
     }, en);
     return en;
-}
-
-double
-energy_p( const species_t            * RESTRICT sp,
-          const interpolator_array_t * RESTRICT ia ) {
-  DECLARE_ALIGNED_ARRAY( energy_p_pipeline_args_t, 128, args, 1 );
-  DECLARE_ALIGNED_ARRAY( double, 128, en, MAX_PIPELINE+1 );
-  double local, global;
-  int rank;
-
-  if( !sp || !ia || sp->g!=ia->g ) ERROR(( "Bad args" ));
-
-  // Have the pipelines do the bulk of particles in quads and have the
-  // host do the final incomplete quad.
-
-  args->p       = sp->p;
-  args->f       = ia->i;
-  args->en      = en;
-  args->qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-  args->msp     = sp->m;
-  args->np      = sp->np;
-
-  EXEC_PIPELINES( energy_p, args, 0 );
-  WAIT_PIPELINES();
-
-  local = 0; for( rank=0; rank<=N_PIPELINE; rank++ ) local += en[rank];
-  mp_allsum_d( &local, &global, 1 );
-  return global*((double)sp->g->cvac*(double)sp->g->cvac);
 }
 
 double

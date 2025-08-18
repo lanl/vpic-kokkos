@@ -16,6 +16,7 @@
 void
 checkpt_species( const species_t * sp ) {
     //std::cout << "checkpintg " << sp->name << " with nm = " << sp->nm << std::endl;
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   CHECKPT( sp, 1 );
   CHECKPT_STR( sp->name );
   checkpt_data( sp->p,
@@ -28,6 +29,17 @@ checkpt_species( const species_t * sp ) {
   CHECKPT_PTR( sp->g );
   CHECKPT_PTR( sp->next );
   CHECKPT_PTR( sp->pb_diag );
+//#else
+//  CHECKPT_STR( sp->name );
+//  CHECKPT_VIEW( sp->k_p_h );
+//  CHECKPT_VIEW( sp->k_p_i_h );
+//  CHECKPT_VIEW( sp->k_pm_h );
+//  CHECKPT_VIEW( sp->k_pm_i_h );
+//  CHECKPT_ALIGNED( sp->partition, sp->g->nv+1, 128 );
+//  CHECKPT_PTR( sp->g );
+//  CHECKPT_PTR( sp->next );
+//  CHECKPT_PTR( sp->pb_diag );
+//#endif
 }
 
 species_t *
@@ -172,10 +184,14 @@ species_t::copy_to_host()
 
   nm = k_nm_h(0);
 
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   // Avoid capturing this
   auto& k_particle_h = k_p_h;
   auto& k_particle_i_h = k_p_i_h;
   auto& particles = p;
+  auto& k_particle_movers_h = k_pm_h;
+  auto& k_particle_i_movers_h = k_pm_i_h;
+  auto& movers = pm;
 
   Kokkos::parallel_for("copy particles to host",
     host_execution_policy(0, np) ,
@@ -195,11 +211,6 @@ species_t::copy_to_host()
 
     });
 
-  // Avoid capturing this
-  auto& k_particle_movers_h = k_pm_h;
-  auto& k_particle_i_movers_h = k_pm_i_h;
-  auto& movers = pm;
-
   Kokkos::parallel_for("copy movers to host",
     host_execution_policy(0, max_nm) ,
     KOKKOS_LAMBDA (int i) {
@@ -210,6 +221,7 @@ species_t::copy_to_host()
       movers[i].i     = k_particle_i_movers_h(i);
 
     });
+//#endif
 
   last_copied = g->step;
 
@@ -225,7 +237,12 @@ species_t::copy_to_device()
   auto& k_particle_h = k_p_h;
   auto& k_particle_i_h = k_p_i_h;
   auto& particles = p;
+  auto& k_particle_movers_h = k_pm_h;
+  auto& k_particle_i_movers_h = k_pm_i_h;
+  auto& movers = pm;
 
+
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   Kokkos::parallel_for("copy particles to device",
     host_execution_policy(0, np) ,
     KOKKOS_LAMBDA (int i) {
@@ -244,11 +261,6 @@ species_t::copy_to_device()
 
     });
 
-  // Avoid capturing this
-  auto& k_particle_movers_h = k_pm_h;
-  auto& k_particle_i_movers_h = k_pm_i_h;
-  auto& movers = pm;
-
   Kokkos::parallel_for("copy movers to device",
     host_execution_policy(0, max_nm) ,
     KOKKOS_LAMBDA (int i) {
@@ -259,6 +271,7 @@ species_t::copy_to_device()
       k_particle_i_movers_h(i) = movers[i].i;
 
     });
+//#endif
 
   Kokkos::deep_copy(k_p_d, k_p_h);
   Kokkos::deep_copy(k_p_i_d, k_p_i_h);
@@ -295,6 +308,7 @@ species_t::copy_outbound_to_host()
   auto& k_particle_i_movers_h = k_pm_i_h;
   auto& movers = pm;
 
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   Kokkos::parallel_for("copy movers to host",
     host_execution_policy(0, nm) ,
     KOKKOS_LAMBDA (int i) {
@@ -303,8 +317,7 @@ species_t::copy_outbound_to_host()
       movers[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
       movers[i].i     = k_particle_i_movers_h(i);
     });
-
-
+//#endif
 }
 
 void
@@ -327,6 +340,7 @@ species_t::copy_inbound_to_device()
   auto& particles_i = k_p_i_d;
   const int npart = np;
 
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   Kokkos::parallel_for("append moved particles",
     Kokkos::RangePolicy <Kokkos::DefaultExecutionSpace> (0, num_to_copy),
     KOKKOS_LAMBDA (int i) {
@@ -345,6 +359,7 @@ species_t::copy_inbound_to_device()
       particles_i(npi) = particle_copy_i(i);
 
     });
+//#endif
 
   // Reset this to zero now we've done the write back
   this->np += num_to_copy;
