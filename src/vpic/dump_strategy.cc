@@ -1321,7 +1321,16 @@ void HDF5Dump::dump_particles(
   sp->max_np = np_local;
 
   for (long long iptl = 0, i = 0; iptl < sp_np; iptl += stride_particle, ++i) {
-    COPY(&sp->p[i], &sp_p[iptl], 1);
+    //COPY(&sp->p[i], &sp_p[iptl], 1);
+
+    sp->p[iptl].dx = sp->k_p_h(iptl, particle_var::dx);
+    sp->p[iptl].dy = sp->k_p_h(iptl, particle_var::dy);
+    sp->p[iptl].dz = sp->k_p_h(iptl, particle_var::dz);
+    sp->p[iptl].i  = sp->k_p_i_h(iptl);
+    sp->p[iptl].ux = sp->k_p_h(iptl, particle_var::ux);
+    sp->p[iptl].uy = sp->k_p_h(iptl, particle_var::uy);
+    sp->p[iptl].uz = sp->k_p_h(iptl, particle_var::uz);
+    sp->p[iptl].w  = sp->k_p_h(iptl, particle_var::w);
   }
 
   center_p(sp, interpolator_array);
@@ -1408,7 +1417,7 @@ void HDF5Dump::dump_particles(
   ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 7);
   H5Dclose(dset_id);
 
-#define OUTPUT_CONVERT_GLOBAL_ID 0
+#define OUTPUT_CONVERT_GLOBAL_ID 1
 #ifdef OUTPUT_CONVERT_GLOBAL_ID
 # define UNVOXEL(rank, ix, iy, iz, nx, ny, nz) BEGIN_PRIMITIVE {   \
   int _ix, _iy, _iz;                                               \
