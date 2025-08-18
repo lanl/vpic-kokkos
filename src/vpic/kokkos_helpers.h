@@ -5,7 +5,7 @@
 #include <Kokkos_ScatterView.hpp>
 #include <iostream>
 
-#include "../material/material.h" // Need material_t
+//#include "../material/material.h" // Need material_t
 
 // This module implements kokkos macros
 
@@ -40,6 +40,29 @@
   #define KOKKOS_SCATTER_ATOMIC Kokkos::Experimental::ScatterNonAtomic
   #define KOKKOS_LAYOUT Kokkos::LayoutRight
 #endif
+
+/**
+ * @brief Mapping for data structures to integers for checkpointing
+ */
+namespace vpic_data_struct {
+  enum TypeIDs {
+    Fields            = 0,
+    FieldEdges        = 1,
+    FieldAccum        = 2,
+    CurrentAccum      = 3,
+    Interpolators     = 4,
+    Accumulators      = 5,
+    Hydro             = 6,
+    Particles         = 7,
+    ParticleCellID    = 8,
+    ParticleMovers    = 9,
+    ParticleMoverIDs  = 10,
+    ParticlePartition = 11,
+    Fluid             = 12,
+    GridNeighbors     = 13,
+    Other
+  };
+};
 
 typedef int16_t material_id;
 

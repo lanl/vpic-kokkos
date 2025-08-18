@@ -78,6 +78,8 @@ option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU-aware MPI. Allows GPUs to communica
 
 option(VPIC_ENABLE_HALO_EXCHANGE "Enable halo exchange code path for remote communication. Temporary option until halo exchange code is accurately tested." ON)
 
+option(VPIC_ENABLE_LEGACY_DATA_STRUCTURES "Enable use of legacy data structures for compatibility" OFF)
+
 option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." ON)
 
 option(HYB_USE_STATIC_E "Use electrostatic hybrid field solver." OFF)
@@ -384,8 +386,13 @@ endif(VPIC_ENABLE_GPU_AWARE_MPI)
 
 if (VPIC_ENABLE_HALO_EXCHANGE)
   add_definitions(-DVPIC_ENABLE_HALO_EXCHANGE)
-  message("--     VPIC: Enabled Halo exchange path")
+  message("--     VPIC: Enabled halo exchange path")
 endif(VPIC_ENABLE_HALO_EXCHANGE)
+
+if (VPIC_ENABLE_LEGACY_DATA_STRUCTURES)
+  add_definitions(-DVPIC_ENABLE_LEGACY_DATA_STRUCTURES)
+  message("--     VPIC: Enabled legacy data structures")
+endif(VPIC_ENABLE_LEGACY_DATA_STRUCTURES)
 
 if (HYB_USE_SEPARATE_PE)
    add_definitions(-DHYB_USE_SEPARATE_PE)
