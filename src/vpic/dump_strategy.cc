@@ -217,6 +217,9 @@ void BinaryDump::dump_particles(
   if (step > sp->last_copied)
     sp->copy_to_host();
 
+  // Update interpolators on host
+  interpolator_array->copy_to_host();
+
   if (!p_buf)
     MALLOC_ALIGNED(p_buf, PBUF_SIZE, 128);
 
@@ -263,7 +266,19 @@ void BinaryDump::dump_particles(
     sp->np = sp_np - buf_start;
     if (sp->np > PBUF_SIZE)
         sp->np = PBUF_SIZE;
-    COPY(sp->p, &sp_p[buf_start], sp->np);
+    //COPY(sp->p, &sp_p[buf_start], sp->np);
+    Kokkos::parallel_for("Copy particles to write buffer", 
+      Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), 
+      KOKKOS_LAMBDA(const int idx) {
+      sp->p[idx].dx = sp->k_p_h(idx+buf_start, particle_var::dx);
+      sp->p[idx].dy = sp->k_p_h(idx+buf_start, particle_var::dy);
+      sp->p[idx].dz = sp->k_p_h(idx+buf_start, particle_var::dz);
+      sp->p[idx].i  = sp->k_p_i_h(idx+buf_start);
+      sp->p[idx].ux = sp->k_p_h(idx+buf_start, particle_var::ux);
+      sp->p[idx].uy = sp->k_p_h(idx+buf_start, particle_var::uy);
+      sp->p[idx].uz = sp->k_p_h(idx+buf_start, particle_var::uz);
+      sp->p[idx].w  = sp->k_p_h(idx+buf_start, particle_var::w);
+    });
     center_p(sp, interpolator_array);
     fileIO.write(sp->p, sp->np);
   }
@@ -1289,6 +1304,9 @@ void HDF5Dump::dump_particles(
   // Update the particles on the host only if they haven't been recently
   if (step > sp->last_copied)
     sp->copy_to_host();
+
+  // Update interpolators on host
+  //interpolator_array->copy_to_host();
 
   const long long np_local = (sp->np + stride_particle - 1) / stride_particle;
 
