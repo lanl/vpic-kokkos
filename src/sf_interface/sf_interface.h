@@ -31,7 +31,9 @@ typedef struct interpolator {
 } interpolator_t;
 
 typedef struct interpolator_array {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   interpolator_t * ALIGNED(128) i;
+#endif
   grid_t * g;
   k_interpolator_t k_i_d;
   k_interpolator_t::HostMirror k_i_h;
@@ -213,7 +215,9 @@ typedef struct hydro {
 } hydro_t;
 
 typedef struct hydro_array {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   hydro_t * ALIGNED(128) h;
+#endif
   k_hydro_d_t k_h_d;
   k_hydro_d_t::HostMirror k_h_h;
   grid_t * g;

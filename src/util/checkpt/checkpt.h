@@ -1,6 +1,7 @@
 #ifndef _checkpt_h_
 #define _checkpt_h_
 
+#include "../../vpic/kokkos_helpers.h"
 #include "../util_base.h"
 
 /* A checkpt_func_t serializes an object to a checkpt.  It takes a
@@ -301,6 +302,7 @@ restore_sym( void );
 #define CHECKPT_FPTR(p)    checkpt_fptr( (p) )
 #define CHECKPT_PTR(p)     checkpt_ptr(  (p) )
 #define CHECKPT_SYM(p)     checkpt_sym((const void *)(size_t)(p))
+#define CHECKPT_VIEW(v)    checkpt_view( (v) )
 
 #define RESTORE_VAL( T, val ) do {              \
     T _val;                                     \
@@ -315,6 +317,7 @@ restore_sym( void );
 #define RESTORE_PTR(p)     CXX_ILLEGAL_PTR_COPY( (p), restore_ptr()  )
 #define RESTORE_SYM(p)     CXX_ILLEGAL_PTR_COPY( (p), restore_sym()  )
 #define REANIMATE_FPTR(p)  CXX_ILLEGAL_PTR_COPY( (p), reanimate_fptr((p)) )
+#define RESTORE_VIEW(v)    restore_view( (v) )
 
 /* This macro could be done without a function call, to the effect
    of "((*((void const **)(&(lv)))) = (rv))" but I think this violates
@@ -329,5 +332,231 @@ restore_sym( void );
 void
 _cxx_illegal_ptr_copy( void * lv_ref,
                        const void * rv );
+
+/**
+ * @brief Mapping for View value_type to integer
+ */
+enum ViewValueType {
+  Char   = 0,
+  UInt8  = 1,
+  UInt16 = 2,
+  UInt32 = 3,
+  UInt64 = 4,
+  Int8   = 5,
+  Int16  = 6,
+  Int32  = 7,
+  Int64  = 8,
+  Float16= 9,
+  Float32= 10,
+  Float64= 11
+};
+
+/**
+ * @brief Checkpoint a Kokkos View. Stores dimensions, capacity, and any memory
+ * traits of the View. Since View type varies, this must be a template function
+ * defined in the header.
+ * 
+ * @param view View to checkpoint
+ */
+template<typename View>
+void checkpt_view( const View& view ) {
+  size_t rank = view.rank();
+  size_t span = view.span();
+  size_t size = view.size();
+  size_t dims[Kokkos::ARRAY_LAYOUT_MAX_RANK];
+  for(size_t i=0; i<rank; i++) {
+    dims[i] = view.extent(0);
+  }
+
+  size_t datastruct = 99999;
+  if( std::is_same<View, k_field_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::Fields;
+  } else if( std::is_same<View, k_field_edge_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::FieldEdges;
+  } else if( std::is_same<View, k_field_accum_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::FieldAccum;
+  } else if( std::is_same<View, k_jf_accum_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::CurrentAccum;
+  } else if( std::is_same<View, k_interpolator_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::Interpolators;
+  } else if( std::is_same<View, k_accumulators_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::Accumulators;
+  } else if( std::is_same<View, k_hydro_d_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::Hydro;
+  } else if( std::is_same<View, k_particles_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::Particles;
+  } else if( std::is_same<View, k_particles_i_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::ParticleCellID;
+  } else if( std::is_same<View, k_particle_movers_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::ParticleMovers;
+  } else if( std::is_same<View, k_particle_i_movers_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::ParticleMoverIDs;
+  } else if( std::is_same<View, k_particle_partition_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::ParticlePartition;
+  } else if( std::is_same<View, k_fluid_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::Fluid;
+  } else if( std::is_same<View, k_neighbor_t::HostMirror>::value ) {
+    datastruct = vpic_data_struct::GridNeighbors;
+  } else {
+    datastruct = vpic_data_struct::Other;
+  }
+  using ValueType = typename View::non_const_value_type;
+  size_t type_id = 32;
+  if( std::is_same<ValueType, char>::value ) {
+    type_id = 0;
+  } else if( std::is_same<ValueType, uint8_t>::value ) {
+    type_id = 1;
+  } else if( std::is_same<ValueType, uint16_t>::value ) {
+    type_id = 2;
+  } else if( std::is_same<ValueType, uint32_t>::value ) {
+    type_id = 3;
+  } else if( std::is_same<ValueType, uint64_t>::value ) {
+    type_id = 4;
+  } else if( std::is_same<ValueType, int8_t>::value ) {
+    type_id = 5;
+  } else if( std::is_same<ValueType, int16_t>::value ) {
+    type_id = 6;
+  } else if( std::is_same<ValueType, int32_t>::value ) {
+    type_id = 7;
+  } else if( std::is_same<ValueType, int64_t>::value ) {
+    type_id = 8;
+//  } else if( std::is_same<ValueType, float16_t>::value ) {
+//    type_id = 9;
+  } else if( std::is_same<ValueType, float>::value ) {
+    type_id = 10;
+  } else if( std::is_same<ValueType, double>::value ) {
+    type_id = 11;
+  }
+  size_t layout;
+  if( std::is_same<typename View::array_layout, Kokkos::LayoutLeft>::value ) {
+    layout = 0;
+  } else {
+    layout = 1;
+  }
+
+  /* Write the data header */
+
+  CHECKPT_VAL( size_t, 0x51E55 ); // View header ID
+  CHECKPT_VAL( size_t, datastruct ); // Standard data structures used in VPIC
+  CHECKPT_VAL( size_t, type_id ); // TypeID if not one of the standard data types
+  CHECKPT_VAL( size_t, layout ); // Memory layout
+  CHECKPT_VAL( size_t, rank ); // Number of View dimensions
+  for( size_t i=0; i<rank; i++ ) 
+    CHECKPT_VAL( size_t, dims[i] );
+
+  /* Write out the individual elements */
+
+  checkpt_raw( view.data(), sizeof(ValueType)*span );
+}
+
+/**
+ * @brief Restore a Kokkos View. Loads dimensions, capacity, and any memory
+ * traits of the View. Since View type varies, this must be a template function
+ * defined in the header.
+ * 
+ * @param view View to restore
+ */
+template<typename View>
+void restore_view( View& view ) {
+  size_t dims[Kokkos::ARRAY_LAYOUT_MAX_RANK];
+
+  size_t n, datastruct, type_id, layout, rank;
+
+  /* Read the data header */
+
+  restore_raw(&n, sizeof(size_t)); // View header ID
+  //RESTORE_VAL( size_t, n ); // View header ID
+  if( n!=0x51E55 ) ERROR(( "malformed checkpt (expected a View header)" ));
+  restore_raw( &datastruct, sizeof(size_t) ); // Standard data structures used in VPIC
+  restore_raw( &type_id, sizeof(size_t) ); // TypeID if not one of the standard data types
+  restore_raw( &layout, sizeof(size_t) ); // Memory layout
+  restore_raw( &rank, sizeof(size_t) ); // Number of View dimensions
+  for( size_t i=0; i<rank; i++ ) 
+    restore_raw( &(dims[i]), sizeof(size_t) );
+
+  // Verify checkpt header matches supplied View
+  size_t view_type = 99999;
+  if( std::is_same<View, k_field_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::Fields;
+  } else if( std::is_same<View, k_field_edge_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::FieldEdges;
+  } else if( std::is_same<View, k_field_accum_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::FieldAccum;
+  } else if( std::is_same<View, k_jf_accum_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::CurrentAccum;
+  } else if( std::is_same<View, k_interpolator_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::Interpolators;
+  } else if( std::is_same<View, k_accumulators_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::Accumulators;
+  } else if( std::is_same<View, k_hydro_d_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::Hydro;
+  } else if( std::is_same<View, k_particles_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::Particles;
+  } else if( std::is_same<View, k_particles_i_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::ParticleCellID;
+  } else if( std::is_same<View, k_particle_movers_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::ParticleMovers;
+  } else if( std::is_same<View, k_particle_i_movers_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::ParticleMoverIDs;
+  } else if( std::is_same<View, k_particle_partition_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::ParticlePartition;
+  } else if( std::is_same<View, k_fluid_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::Fluid;
+  } else if( std::is_same<View, k_neighbor_t::HostMirror>::value ) {
+    view_type = vpic_data_struct::GridNeighbors;
+  } else {
+    view_type = vpic_data_struct::Other;
+  }
+  if( view_type != datastruct ) ERROR(( "incorrect checkpt View type (expected %zu, got %zu)", view_type, datastruct));
+
+  using ValueType = typename View::non_const_value_type;
+  size_t value_type_id = 32;
+  if( std::is_same<ValueType, char>::value ) {
+    value_type_id = 0;
+  } else if( std::is_same<ValueType, uint8_t>::value ) {
+    value_type_id = 1;
+  } else if( std::is_same<ValueType, uint16_t>::value ) {
+    value_type_id = 2;
+  } else if( std::is_same<ValueType, uint32_t>::value ) {
+    value_type_id = 3;
+  } else if( std::is_same<ValueType, uint64_t>::value ) {
+    value_type_id = 4;
+  } else if( std::is_same<ValueType, int8_t>::value ) {
+    value_type_id = 5;
+  } else if( std::is_same<ValueType, int16_t>::value ) {
+    value_type_id = 6;
+  } else if( std::is_same<ValueType, int32_t>::value ) {
+    value_type_id = 7;
+  } else if( std::is_same<ValueType, int64_t>::value ) {
+    value_type_id = 8;
+//  } else if( std::is_same<ValueType, float16_t>::value ) {
+//    value_type_id = 9;
+  } else if( std::is_same<ValueType, float>::value ) {
+    value_type_id = 10;
+  } else if( std::is_same<ValueType, double>::value ) {
+    value_type_id = 11;
+  }
+  if( value_type_id != type_id ) ERROR(( "incorrect checkpt View value type (expected %zu, got %zu)", value_type_id, type_id));
+
+  if( std::is_same<typename View::array_layout, Kokkos::LayoutLeft>::value ) {
+    if( layout != 0 ) ERROR(( "incorrect View layout (expected LayoutLeft, got LayoutRight)" ));
+  } else if( std::is_same<typename View::array_layout, Kokkos::LayoutRight>::value ) {
+    if( layout != 1 ) ERROR(( "incorrect View layout (expected LayoutRight, got LayoutLeft)" ));
+  } else {
+    ERROR(( "non standard View Layout" ));
+  }
+
+  if( rank != view.rank() ) ERROR(( "rank of supplied View did not match checkpt (%zu vs %zu)", view.rank(), rank ));
+  typename View::array_layout array_layout;
+  for( size_t i=0; i<rank; i++ ) 
+    array_layout.dimension[i] = dims[i];
+
+  // Resize View to fit data
+  Kokkos::resize(view, array_layout);
+
+  /* And read in the checkpointed elements */
+
+  restore_raw( view.data(), sizeof(ValueType)*view.span() );
+}
 
 #endif /* _checkpt_h_ */

@@ -36,7 +36,8 @@ emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
                      const int        * RESTRICT ALIGNED(128) component,
                      int                                      n_component ) {
   /**/  species_t        * RESTRICT              sp  = cl->sp;
-  const interpolator_t   * RESTRICT ALIGNED(128) fi  = cl->ia->i;
+  //const interpolator_t   * RESTRICT ALIGNED(128) fi  = cl->ia->i;
+  auto& fi = cl->ia->k_i_h;
   /**/  field_t          * RESTRICT ALIGNED(128) f   = cl->fa->f;
   /**/  accumulator_t    * RESTRICT ALIGNED(128) a   = cl->aa->a;
   /**/  rng_t            * RESTRICT              rng = cl->rng;
@@ -78,8 +79,10 @@ emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
     // FIXME: COULD PROBABLY ACCELERATE BY GETTING RID OF SWITCH (USE
     // MAXWELLIAN_REFLUX TRICKS?)
 
+    //w = fi[i].e##X;                                                     
+    
 #   define EMIT_PARTICLES(X,Y,Z,dir)                                    \
-    w = fi[i].e##X;                                                     \
+    w = fi(i, interpolator_var::e##X);                                  \
     if( dir qsp*w > thresh ) { /* This face can emit */                 \
       w = norm_##X*sqrtf(fabsf(w*w*w));                                 \
       for( np_emit=np_emit_per_face; np_emit; np_emit-- ) {             \

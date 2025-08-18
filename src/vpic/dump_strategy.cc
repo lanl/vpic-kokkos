@@ -133,12 +133,14 @@ void BinaryDump::dump_hydro(
       sp
   );
 
-  // This does not give consistent results
-  /* synchronize_hydro_array_kokkos(hydro_array); */
 
   hydro_array->copy_to_host();
-
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   synchronize_hydro_array( hydro_array );
+#else
+  // This does not give consistent results
+  synchronize_hydro_array_kokkos(hydro_array);
+#endif
 
   if (!fbase)
     ERROR(("Invalid filename"));
@@ -167,8 +169,22 @@ void BinaryDump::dump_hydro(
   dim[0] = grid->nx + 2;
   dim[1] = grid->ny + 2;
   dim[2] = grid->nz + 2;
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
   fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
+#else
+  hydro_t h[1];
+  WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
+  for(int i=0; i<dim[0]*dim[1]*dim[2]; i++) {
+    for(int v=0; v<HYDRO_VAR_COUNT; v++) {
+      fileIO.write(&hydro_array->k_h_h(i, v), 1);
+    }
+    // Additional padding to match legacy structures
+    float _pad = 0;
+    fileIO.write(&_pad, 1);
+    fileIO.write(&_pad, 1);
+  }
+#endif
   if (fileIO.close())
     ERROR(("File close failed on dump hydro!!!"));
 }
@@ -509,12 +525,13 @@ void BinaryDump::hydro_dump(
       sp
   );
 
-  // This does not give consistent results
-  /* synchronize_hydro_array_kokkos(hydro_array); */
-
   hydro_array->copy_to_host();
-
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   synchronize_hydro_array( hydro_array );
+#else
+  // This does not give consistent results
+  synchronize_hydro_array_kokkos(hydro_array);
+#endif
 
   // convenience
   const size_t istride(dumpParams.stride_x);
@@ -558,7 +575,14 @@ void BinaryDump::hydro_dump(
     dim[1] = nyout+2;
     dim[2] = nzout+2;
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
+    fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
+#else
+    hydro_t h[1];
+    WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
+    fileIO.write(hydro_array->k_h_h.data(), dim[0] * dim[1] * dim[2]);
+#endif
 
     /*
      * Create a variable list of hydro values to output.
@@ -576,8 +600,12 @@ void BinaryDump::hydro_dump(
       for(size_t k(0); k<nzout+2; k++)
       for(size_t j(0); j<nyout+2; j++)
       for(size_t i(0); i<nxout+2; i++) {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
               const uint32_t * href = reinterpret_cast<uint32_t *>(&hydro(i,j,k));
               fileIO.write(&href[varlist[v]], 1);
+#else
+              fileIO.write(&(hydro_array->k_h_h(VOXEL(i,j,k,grid->nx,grid->ny,grid->nz), varlist[v])), 1);
+#endif
       }
 
     else
@@ -586,8 +614,12 @@ void BinaryDump::hydro_dump(
       for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
       for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
       for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
               const uint32_t * href = reinterpret_cast<uint32_t *>(&hydro(ioff,joff,koff));
               fileIO.write(&href[varlist[v]], 1);
+#else
+              fileIO.write(&(hydro_array->k_h_h(VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz), varlist[v])), 1);
+#endif
       }
       }
       }
@@ -602,21 +634,55 @@ void BinaryDump::hydro_dump(
     dim[1] = nyout;
     dim[2] = nzout;
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
+    fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
+#else
+    hydro_t h[1];
+    WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
+    fileIO.write(hydro_array->k_h_h.data(), dim[0] * dim[1] * dim[2]);
+#endif
 
-    if(istride == 1 && jstride == 1 && kstride == 1)
+    if(istride == 1 && jstride == 1 && kstride == 1) {
 
-      fileIO.write(hydro_array->h, dim[0]*dim[1]*dim[2]);
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+      WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
+      fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
+#else
+      hydro_t h[1];
+      WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
+      if( std::is_same<Kokkos::LayoutRight, k_hydro_d_t::array_layout>::value ) {
+        fileIO.write(hydro_array->k_h_h.data(), dim[0] * dim[1] * dim[2]);
+      } else {
+        for(size_t i=0; i<dim[0]; i++) {
+          for(size_t j=0; j<dim[1]; j++) {
+            for(size_t k=0; k<dim[2]; k++) {
+              for(size_t v=0; v<HYDRO_VAR_COUNT; v++) {
+                fileIO.write(&hydro_array->k_h_h(VOXEL(i,j,k,grid->nx,grid->ny,grid->nz), v), 1);
+              }
+              float _pad = 0;
+              fileIO.write(&_pad, 1);
+            }
+          }
+        }
+      }
+#endif
 
-    else
+    } else {
 
       for(size_t k(0); k<nzout; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
       for(size_t j(0); j<nyout; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
       for(size_t i(0); i<nxout; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
             fileIO.write(&hydro(ioff,joff,koff), 1);
+#else
+        for(size_t v; v<HYDRO_VAR_COUNT; v++) 
+          fileIO.write(&(hydro_array->k_h_h(VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz), v)), 1);
+#endif
       }
       }
       }
+    }
   }
 
 # undef hydro
@@ -796,11 +862,11 @@ void HDF5Dump::dump_fields(
 {                                                                                                           \
   dset_id = H5Dcreate(group_id, DSET_NAME, ELEMENT_TYPE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); \
   temp_buf_index = 0;                                                                                       \
-  for (size_t i(stride_x); i < grid->nx + 1; i += stride_x)                                                 \
+  for (int i(stride_x); i < grid->nx + 1; i += stride_x)                                                    \
   {                                                                                                         \
-    for (size_t j(stride_y); j < grid->ny + 1; j += stride_y)                                               \
+    for (int j(stride_y); j < grid->ny + 1; j += stride_y)                                                  \
     {                                                                                                       \
-      for (size_t k(stride_z); k < grid->nz + 1; k += stride_z)                                             \
+      for (int k(stride_z); k < grid->nz + 1; k += stride_z)                                                \
       {                                                                                                     \
         temp_buf[temp_buf_index] = field_array->fpp(i, j, k).ATTRIBUTE_NAME;                                \
         temp_buf_index = temp_buf_index + 1;                                                                \
@@ -982,15 +1048,16 @@ void HDF5Dump::dump_hydro(
     interpolator_array_t *interpolator_array,
     int ftag)
 {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
 #define DUMP_HYDRO_TO_HDF5(DSET_NAME, ATTRIBUTE_NAME, ELEMENT_TYPE)                                         \
 {                                                                                                           \
   dset_id = H5Dcreate(group_id, DSET_NAME, ELEMENT_TYPE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); \
   temp_buf_index = 0;                                                                                       \
-  for (size_t i(stride_x); i < grid->nx + 1; i += stride_x)                                                 \
+  for (int i(stride_x); i < grid->nx + 1; i += stride_x)                                                    \
   {                                                                                                         \
-    for (size_t j(stride_y); j < grid->ny + 1; j += stride_y)                                               \
+    for (int j(stride_y); j < grid->ny + 1; j += stride_y)                                                  \
     {                                                                                                       \
-      for (size_t k(stride_z); k < grid->nz + 1; k += stride_z)                                             \
+      for (int k(stride_z); k < grid->nz + 1; k += stride_z)                                                \
       {                                                                                                     \
         temp_buf[temp_buf_index] = hydro_array->h[VOXEL(i,j,k, grid->nx,grid->ny,grid->nz)].ATTRIBUTE_NAME; \
         temp_buf_index = temp_buf_index + 1;                                                                \
@@ -1003,6 +1070,30 @@ void HDF5Dump::dump_hydro(
   H5Sclose(dataspace_id);                                                                                   \
   H5Dclose(dset_id);                                                                                        \
 }
+#else
+#define DUMP_HYDRO_TO_HDF5(DSET_NAME, ATTRIBUTE_NAME, ELEMENT_TYPE)                                         \
+{                                                                                                           \
+  dset_id = H5Dcreate(group_id, DSET_NAME, ELEMENT_TYPE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); \
+  temp_buf_index = 0;                                                                                       \
+  for (int i(stride_x); i < grid->nx + 1; i += stride_x)                                                    \
+  {                                                                                                         \
+    for (int j(stride_y); j < grid->ny + 1; j += stride_y)                                                  \
+    {                                                                                                       \
+      for (int k(stride_z); k < grid->nz + 1; k += stride_z)                                                \
+      {                                                                                                     \
+        temp_buf[temp_buf_index] = hydro_array->k_h_h(VOXEL(i,j,k, grid->nx,grid->ny,grid->nz),             \
+                                                      hydro_var::ATTRIBUTE_NAME);                           \
+        temp_buf_index = temp_buf_index + 1;                                                                \
+      }                                                                                                     \
+    }                                                                                                       \
+  }                                                                                                         \
+  dataspace_id = H5Dget_space(dset_id);                                                                     \
+  H5Sselect_hyperslab(dataspace_id, H5S_SELECT_SET, global_offset, NULL, hydro_local_size, NULL);           \
+  H5Dwrite(dset_id, ELEMENT_TYPE, memspace, dataspace_id, plist_id, temp_buf);                              \
+  H5Sclose(dataspace_id);                                                                                   \
+  H5Dclose(dset_id);                                                                                        \
+}
+#endif
   // prepare the data
   if (!sp) ERROR(("Invalid species name: %s", sp->name));
   if ( rank==0 ) log_printf("Dumping hydro for %s using HDF5\n", sp->name);
@@ -1020,12 +1111,15 @@ void HDF5Dump::dump_hydro(
       sp
   );
 
-  // This does not give consistent results
-  /* synchronize_hydro_array_kokkos(hydro_array); */
-
   hydro_array->copy_to_host();
 
+  hydro_array->copy_to_host();
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   synchronize_hydro_array( hydro_array );
+#else
+  // This does not give consistent results
+  synchronize_hydro_array_kokkos(hydro_array);
+#endif
 
   char hname[256];
   char hydro_scratch[128];
@@ -1287,7 +1381,23 @@ void HDF5Dump::dump_particles(
   ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 2);
   H5Dclose(dset_id);
 
-#define OUTPUT_CONVERT_GLOBAL_ID 1
+  dset_id = H5Dcreate(group_id, "Ux", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 4);
+  H5Dclose(dset_id);
+
+  dset_id = H5Dcreate(group_id, "Uy", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 5);
+  H5Dclose(dset_id);
+
+  dset_id = H5Dcreate(group_id, "Uz", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 6);
+  H5Dclose(dset_id);
+
+  dset_id = H5Dcreate(group_id, "q", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 7);
+  H5Dclose(dset_id);
+
+#define OUTPUT_CONVERT_GLOBAL_ID 0
 #ifdef OUTPUT_CONVERT_GLOBAL_ID
 # define UNVOXEL(rank, ix, iy, iz, nx, ny, nz) BEGIN_PRIMITIVE {   \
   int _ix, _iy, _iz;                                               \
@@ -1348,22 +1458,6 @@ void HDF5Dump::dump_particles(
   ierr = H5Dwrite(dset_id, H5T_NATIVE_INT, memspace, filespace, plist_id, Pi + 3);
   H5Dclose(dset_id);
 #endif
-
-  dset_id = H5Dcreate(group_id, "Ux", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 4);
-  H5Dclose(dset_id);
-
-  dset_id = H5Dcreate(group_id, "Uy", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 5);
-  H5Dclose(dset_id);
-
-  dset_id = H5Dcreate(group_id, "Uz", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 6);
-  H5Dclose(dset_id);
-
-  dset_id = H5Dcreate(group_id, "q", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 7);
-  H5Dclose(dset_id);
 
   el2 = uptime() - el2;
   if(print_timing) MESSAGE(("Particle TimeHDF5Write: %f s \n", el2));
@@ -1488,11 +1582,11 @@ void HDF5Dump::dump_fluids(
 {                                                                                                           \
   dset_id = H5Dcreate(group_id, DSET_NAME, ELEMENT_TYPE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); \
   temp_buf_index = 0;                                                                                       \
-  for (size_t i(stride_x); i < grid->nx + 1; i += stride_x)                                                 \
+  for (int i(stride_x); i < grid->nx + 1; i += stride_x)                                                    \
   {                                                                                                         \
-    for (size_t j(stride_y); j < grid->ny + 1; j += stride_y)                                               \
+    for (int j(stride_y); j < grid->ny + 1; j += stride_y)                                                  \
     {                                                                                                       \
-      for (size_t k(stride_z); k < grid->nz + 1; k += stride_z)                                             \
+      for (int k(stride_z); k < grid->nz + 1; k += stride_z)                                                \
       {                                                                                                     \
         temp_buf[temp_buf_index] = fsp->fl[VOXEL(i,j,k, grid->nx,grid->ny,grid->nz)].ATTRIBUTE_NAME;        \
         temp_buf_index = temp_buf_index + 1;                                                                \

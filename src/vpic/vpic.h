@@ -381,11 +381,6 @@ public:
    return grid->step;
   }
 
-  inline field_t &
-  field( const int v ) {
-    return field_array->f[ v ];
-  }
-
   inline int
   voxel( const int ix, const int iy, const int iz ) {
     return ix + grid->sy*iy + grid->sz*iz;
@@ -396,10 +391,17 @@ public:
     return ix + sy*iy +sz*iz;
   }
 
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+  inline field_t &
+  field( const int v ) {
+    return field_array->f[ v ];
+  }
+
   inline field_t &
   field( const int ix, const int iy, const int iz ) {
     return field_array->f[ voxel(ix,iy,iz) ];
   }
+//#endif
 
   inline k_field_t& get_field() {
       return field_array->k_f_d;
@@ -409,6 +411,7 @@ public:
       return field_array->k_f_d(voxel(ix,iy,iz), member);
   }
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   inline interpolator_t &
   interpolator( const int v ) {
     return interpolator_array->i[ v ];
@@ -428,6 +431,7 @@ public:
   hydro( const int ix, const int iy, const int iz ) {
     return hydro_array->h[ voxel(ix,iy,iz) ];
   }
+#endif
 
   //  inline float& k_fluid(const int ix, const int iy, const int iz, fluid_var::fl_v member) { 
   //    return fluid_species->k_fl_d(voxel(ix,iy,iz), member);
@@ -581,17 +585,37 @@ public:
     field_array        = fa ? fa :
                          new_standard_field_array( grid, material_list, damp );
 
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     for(int k=0; k<=grid->nz+1; k++){
       for(int j=0; j<=grid->ny+1; j++){
 	      field_t * f = &field(0,j,k);
-	for(int i=0; i<=grid->nx+1; i++){
-	  f->tcax = 1.0;
-	  f->tcay = 1.0;
-	  f->tcaz = 1.0;
-	  f++;
-	}
+        for(int i=0; i<=grid->nx+1; i++){
+          f->tcax = 1.0;
+          f->tcay = 1.0;
+          f->tcaz = 1.0;
+          f++;
+        }
       }
     }
+//#else
+//    auto& fields = fa->k_f_h;
+//    int nx = grid->nx, ny = grid->ny, nz = grid->nz;
+//    auto tcax_view = Kokkos::subview(fa->k_f_h, Kokkos::ALL, (int)field_var::tcax);
+//    auto tcay_view = Kokkos::subview(fa->k_f_h, Kokkos::ALL, (int)field_var::tcay);
+//    auto tcaz_view = Kokkos::subview(fa->k_f_h, Kokkos::ALL, (int)field_var::tcaz);
+//    Kokkos::deep_copy(tcax_view, 1.0);
+//    Kokkos::deep_copy(tcay_view, 1.0);
+//    Kokkos::deep_copy(tcaz_view, 1.0);
+////    using PolicyType = Kokkos::MDRangePolicy<Kokkos::DefaultHostExecutionSpace, Kokkos::Rank<3>>;
+////    PolicyType fill_policy({0,0,0}, {nx+2, ny+2, nz+2});
+////
+////    Kokkos::parallel_for("Init field tca", fill_policy, 
+////      KOKKOS_LAMBDA(const int i, const int j, const int k) {
+////      fields(voxel(i,j,k), field_var::tcax) = 1.0;
+////      fields(voxel(i,j,k), field_var::tcay) = 1.0;
+////      fields(voxel(i,j,k), field_var::tcaz) = 1.0;
+////    });
+//#endif
     
     interpolator_array = new_interpolator_array( grid );
     hydro_array        = new_hydro_array( grid );
