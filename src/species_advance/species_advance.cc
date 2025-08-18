@@ -184,7 +184,7 @@ species_t::copy_to_host()
 
   nm = k_nm_h(0);
 
-//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   // Avoid capturing this
   auto& k_particle_h = k_p_h;
   auto& k_particle_i_h = k_p_i_h;
@@ -221,7 +221,7 @@ species_t::copy_to_host()
       movers[i].i     = k_particle_i_movers_h(i);
 
     });
-//#endif
+#endif
 
   last_copied = g->step;
 
@@ -242,7 +242,7 @@ species_t::copy_to_device()
   auto& movers = pm;
 
 
-//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   Kokkos::parallel_for("copy particles to device",
     host_execution_policy(0, np) ,
     KOKKOS_LAMBDA (int i) {
@@ -271,7 +271,7 @@ species_t::copy_to_device()
       k_particle_i_movers_h(i) = movers[i].i;
 
     });
-//#endif
+#endif
 
   Kokkos::deep_copy(k_p_d, k_p_h);
   Kokkos::deep_copy(k_p_i_d, k_p_i_h);
