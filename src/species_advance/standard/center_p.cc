@@ -31,12 +31,15 @@ struct center_p_kernel {
     constexpr float one_third      = 1./3.;
     constexpr float two_fifteenths = 2./15.;
 
-    //dx   = p(n, particle_var::dx); // Load position
-    //dy   = p(n, particle_var::dy);
-    //dz   = p(n, particle_var::dz);
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     dx   = sp->p[n].dx; // Load position
     dy   = sp->p[n].dy;
     dz   = sp->p[n].dz;
+#else
+    dx   = p(n, particle_var::dx); // Load position
+    dy   = p(n, particle_var::dy);
+    dz   = p(n, particle_var::dz);
+#endif
 #ifdef VARIABLE_CHARGE
     //qp   = p(n, particle_var::qp);
     qp   = sp->p[n].qp;
@@ -50,12 +53,15 @@ struct center_p_kernel {
     cbx  = f(ii, interpolator_var::cbx); // Interpolate B
     cby  = f(ii, interpolator_var::cby); 
     cbz  = f(ii, interpolator_var::cbz); 
-    //ux   = p(n, particle_var::ux); // Load momentum
-    //uy   = p(n, particle_var::uy);
-    //uz   = p(n, particle_var::uz);
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     ux   = sp->p[n].ux; // Load momentum
     uy   = sp->p[n].uy;
     uz   = sp->p[n].uz;
+#else
+    ux   = p(n, particle_var::ux); // Load momentum
+    uy   = p(n, particle_var::uy);
+    uz   = p(n, particle_var::uz);
+#endif
     ux  += hax; // Half advance E
     uy  += hay;
     uz  += haz;
@@ -72,12 +78,15 @@ struct center_p_kernel {
     ux  += v4*( v1*cbz - v2*cby );           // Boris - rotation
     uy  += v4*( v2*cbx - v0*cbz );
     uz  += v4*( v0*cby - v1*cbx );
-//    p(n, particle_var::ux) = ux;             // Store momentum
-//    p(n, particle_var::uy) = uy;
-//    p(n, particle_var::uz) = uz;
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     sp->p[n].ux = ux;             // Store momentum
     sp->p[n].uy = uy;
     sp->p[n].uz = uz;
+#else
+    p(n, particle_var::ux) = ux;             // Store momentum
+    p(n, particle_var::uy) = uy;
+    p(n, particle_var::uz) = uz;
+#endif
   }
 };
 

@@ -16,7 +16,7 @@
 void
 checkpt_species( const species_t * sp ) {
     //std::cout << "checkpintg " << sp->name << " with nm = " << sp->nm << std::endl;
-//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   CHECKPT( sp, 1 );
   CHECKPT_STR( sp->name );
   checkpt_data( sp->p,
@@ -29,21 +29,22 @@ checkpt_species( const species_t * sp ) {
   CHECKPT_PTR( sp->g );
   CHECKPT_PTR( sp->next );
   CHECKPT_PTR( sp->pb_diag );
-//#else
-//  CHECKPT_STR( sp->name );
-//  CHECKPT_VIEW( sp->k_p_h );
-//  CHECKPT_VIEW( sp->k_p_i_h );
-//  CHECKPT_VIEW( sp->k_pm_h );
-//  CHECKPT_VIEW( sp->k_pm_i_h );
-//  CHECKPT_ALIGNED( sp->partition, sp->g->nv+1, 128 );
-//  CHECKPT_PTR( sp->g );
-//  CHECKPT_PTR( sp->next );
-//  CHECKPT_PTR( sp->pb_diag );
-//#endif
+#else
+  CHECKPT_STR( sp->name );
+  CHECKPT_VIEW( sp->k_p_h );
+  CHECKPT_VIEW( sp->k_p_i_h );
+  CHECKPT_VIEW( sp->k_pm_h );
+  CHECKPT_VIEW( sp->k_pm_i_h );
+  CHECKPT_ALIGNED( sp->partition, sp->g->nv+1, 128 );
+  CHECKPT_PTR( sp->g );
+  CHECKPT_PTR( sp->next );
+  CHECKPT_PTR( sp->pb_diag );
+#endif
 }
 
 species_t *
 restore_species( void ) {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   species_t * sp;
   RESTORE( sp );
   RESTORE_STR( sp->name );
@@ -53,6 +54,18 @@ restore_species( void ) {
   RESTORE_PTR( sp->g );
   RESTORE_PTR( sp->next );
   RESTORE_PTR( sp->pb_diag );
+#else
+  species_t * sp = new species_t();
+  RESTORE_STR( sp->name );
+  RESTORE_VIEW( sp->k_p_h );
+  RESTORE_VIEW( sp->k_p_i_h );
+  RESTORE_VIEW( sp->k_pm_h );
+  RESTORE_VIEW( sp->k_pm_i_h );
+  RESTORE_ALIGNED( sp->partition );
+  RESTORE_PTR( sp->g );
+  RESTORE_PTR( sp->next );
+  RESTORE_PTR( sp->pb_diag );
+#endif
   return sp;
 }
 
@@ -62,7 +75,9 @@ delete_species( species_t * sp ) {
   UNREGISTER_OBJECT( sp );
   FREE_ALIGNED( sp->partition );
   FREE_ALIGNED( sp->pm );
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   FREE_ALIGNED( sp->p );
+#endif
   FREE( sp->name );
   FREE( sp );
 }
@@ -146,7 +161,9 @@ species( const char * name,
 
   if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for species %s.\n",
           (double (max_local_np*sizeof(particle_t)))/pow(2,30), sp->name);
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   MALLOC_ALIGNED( sp->p, max_local_np, 128 );
+#endif
   sp->max_np = max_local_np;
 
   if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for species %s movers.\n",
@@ -236,7 +253,9 @@ species_t::copy_to_device()
   // Avoid capturing this
   auto& k_particle_h = k_p_h;
   auto& k_particle_i_h = k_p_i_h;
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   auto& particles = p;
+#endif
   auto& k_particle_movers_h = k_pm_h;
   auto& k_particle_i_movers_h = k_pm_i_h;
   auto& movers = pm;

@@ -22,6 +22,7 @@
 // hydro jx,jy,jz are for diagnostic purposes only; they are not
 // accumulated with a charge conserving algorithm.
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
 void
 accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
                     const species_t            * RESTRICT sp,
@@ -164,6 +165,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
 #   undef ACCUM_HYDRO
   }
 }
+#endif
 
 void
 accumulate_hydro_p_kokkos_nomove_ngp(
@@ -216,7 +218,9 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     double w  = k_particles(p_index, particle_var::w);
     int ii = k_particles_i(p_index);
 
-    double ke_mc = static_cast<double>(ux)*static_cast<double>(ux) + static_cast<double>(uy)*static_cast<double>(uy) + static_cast<double>(uz)*static_cast<double>(uz); // ke_mc = |u|^2 (invariant)
+    double ke_mc = static_cast<double>(ux)*static_cast<double>(ux) 
+                 + static_cast<double>(uy)*static_cast<double>(uy) 
+                 + static_cast<double>(uz)*static_cast<double>(uz); // ke_mc = |u|^2 (invariant)
     double vz = 1.0;//sqrt(1.0+ke_mc);            // vz = gamma    (invariant)    
     ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
     

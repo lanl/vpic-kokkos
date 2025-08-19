@@ -100,7 +100,9 @@ class species_t {
         float m;                            // Species particle rest mass
 
         int np = 0, max_np = 0;             // Number and max local particles
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
         particle_t * ALIGNED(128) p;        // Array of particles for the species
+#endif
 
         // TODO: these could be unsigned?
         int nm = 0, max_nm = 0;             // Number and max local movers in use
@@ -205,6 +207,8 @@ class species_t {
         Kokkos::View<int*> clean_up_to;
 
         // Init Kokkos Particle Arrays
+        species_t() = default;
+
         species_t(int n_particles, int n_pmovers)
         {
            init_kokkos_particles(n_particles, n_pmovers);
