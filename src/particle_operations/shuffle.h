@@ -114,7 +114,7 @@ struct FisherYatesShuffle {
             Kokkos::single(Kokkos::PerTeam(team_member),
             [&]() {
 
-              for(int i=0 ; i < ni-1 ; ++i ) {
+              for(size_t i=0 ; i < ni-1 ; ++i ) {
 
                 if (ni == 0) { return; }
                 int j = rg.urand(i, ni); // [i, ni)

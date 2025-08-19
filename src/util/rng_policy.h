@@ -4,6 +4,7 @@
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Random.hpp>
 #include "../vpic/kokkos_helpers.h"
+#include "rng/rng.h"
 #include <random>
 
 // TODO: These don't belong here, do they?
