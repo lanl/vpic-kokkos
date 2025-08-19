@@ -737,9 +737,21 @@ public:
   inject_particle_raw( species_t * RESTRICT sp,
                        float dx, float dy, float dz, int32_t i,
                        float ux, float uy, float uz, float w ) {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     particle_t * RESTRICT p = sp->p + (sp->np++);
     p->dx = dx; p->dy = dy; p->dz = dz; p->i = i;
     p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
+#else
+    int idx = sp->np++;
+    sp->k_p_h(idx, particle_var::dx) = dx;
+    sp->k_p_h(idx, particle_var::dy) = dy;
+    sp->k_p_h(idx, particle_var::dz) = dz;
+    sp->k_p_h(idx, particle_var::ux) = ux;
+    sp->k_p_h(idx, particle_var::uy) = uy;
+    sp->k_p_h(idx, particle_var::uz) = uz;
+    sp->k_p_h(idx, particle_var::w ) = w;
+    sp->k_p_i_h(idx) = i;
+#endif
   }
 
   // This variant does a raw inject and moves the particles
@@ -750,6 +762,7 @@ public:
                        float ux, float uy, float uz, float w,
                        float dispx, float dispy, float dispz,
                        int update_rhob ) {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     particle_t       * RESTRICT p  = sp->p  + (sp->np++);
     particle_mover_t * RESTRICT pm = sp->pm + sp->nm;
     p->dx = dx; p->dy = dy; p->dz = dz; p->i = i;
@@ -757,6 +770,34 @@ public:
     pm->dispx = dispx; pm->dispy = dispy; pm->dispz = dispz; pm->i = sp->np-1;
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
     sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
+#else
+    int idx = sp->np++;
+    sp->k_p_h(idx, particle_var::dx) = dx;
+    sp->k_p_h(idx, particle_var::dy) = dy;
+    sp->k_p_h(idx, particle_var::dz) = dz;
+    sp->k_p_h(idx, particle_var::ux) = ux;
+    sp->k_p_h(idx, particle_var::uy) = uy;
+    sp->k_p_h(idx, particle_var::uz) = uz;
+    sp->k_p_h(idx, particle_var::w ) = w;
+    sp->k_p_i_h(idx) = i;
+    particle_mover_t local_pm;
+    local_pm.dispx = dispx;
+    local_pm.dispy = dispy;
+    local_pm.dispz = dispz;
+    local_pm.i     = sp->np-1;
+    if( move_p_kokkos_host_serial(sp->k_p_h, sp->k_p_i_h, &local_pm, 
+                                  field_array->k_jf_accum_h, 
+                                  grid, grid->k_neighbor_h, 
+                                  grid->rangel, grid->rangeh, 
+                                  sp->q) ) {
+      sp->nm += 1;
+      int pm_i = sp->nm;
+      sp->k_pm_h(pm_i, particle_mover_var::dispx) = local_pm.dispx;
+      sp->k_pm_h(pm_i, particle_mover_var::dispx) = local_pm.dispx;
+      sp->k_pm_h(pm_i, particle_mover_var::dispx) = local_pm.dispx;
+      sp->k_pm_i_h(pm_i) = local_pm.i;
+    }
+#endif
   }
 
   //////////////////////////////////

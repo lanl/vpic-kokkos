@@ -255,6 +255,7 @@ void BinaryDump::dump_particles(
   // FIXME: WITH A PIPELINED CENTER_P, PBUF NOMINALLY SHOULD BE QUITE
   // LARGE.
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   particle_t *sp_p = sp->p;
   sp->p = p_buf;
   int sp_np = sp->np;
@@ -285,6 +286,30 @@ void BinaryDump::dump_particles(
   sp->p = sp_p;
   sp->np = sp_np;
   sp->max_np = sp_max_np;
+#else
+  int p_buf_np = 0;
+  center_p(sp, interpolator_array);
+  for (buf_start = 0; buf_start < sp->np; buf_start += PBUF_SIZE)
+  {
+    p_buf_np = sp->np - buf_start;
+    if (p_buf_np > PBUF_SIZE)
+        p_buf_np = PBUF_SIZE;
+    Kokkos::parallel_for("Copy particles to write buffer", 
+      Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), 
+      KOKKOS_LAMBDA(const int idx) {
+      p_buf[idx].dx = sp->k_p_h(idx+buf_start, particle_var::dx);
+      p_buf[idx].dy = sp->k_p_h(idx+buf_start, particle_var::dy);
+      p_buf[idx].dz = sp->k_p_h(idx+buf_start, particle_var::dz);
+      p_buf[idx].i  = sp->k_p_i_h(idx+buf_start);
+      p_buf[idx].ux = sp->k_p_h(idx+buf_start, particle_var::ux);
+      p_buf[idx].uy = sp->k_p_h(idx+buf_start, particle_var::uy);
+      p_buf[idx].uz = sp->k_p_h(idx+buf_start, particle_var::uz);
+      p_buf[idx].w  = sp->k_p_h(idx+buf_start, particle_var::w);
+    });
+    fileIO.write(p_buf, p_buf_np);
+  }
+  uncenter_p(sp, interpolator_array);
+#endif
 
   if (fileIO.close())
     ERROR(("File close failed on dump particles!!!"));
@@ -1322,6 +1347,10 @@ void HDF5Dump::dump_particles(
   particle_t *ALIGNED(128) p_buf = NULL;
   if (!p_buf)
     MALLOC_ALIGNED(p_buf, np_local, 128);
+
+  center_p(sp, interpolator_array);
+
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   particle_t *sp_p = sp->p;
   sp->p = p_buf;
   sp->np = np_local;
@@ -1330,25 +1359,40 @@ void HDF5Dump::dump_particles(
   for (long long iptl = 0, i = 0; iptl < sp_np; iptl += stride_particle, ++i) {
     //COPY(&sp->p[i], &sp_p[iptl], 1);
 
-    sp->p[iptl].dx = sp->k_p_h(iptl, particle_var::dx);
-    sp->p[iptl].dy = sp->k_p_h(iptl, particle_var::dy);
-    sp->p[iptl].dz = sp->k_p_h(iptl, particle_var::dz);
-    sp->p[iptl].i  = sp->k_p_i_h(iptl);
-    sp->p[iptl].ux = sp->k_p_h(iptl, particle_var::ux);
-    sp->p[iptl].uy = sp->k_p_h(iptl, particle_var::uy);
-    sp->p[iptl].uz = sp->k_p_h(iptl, particle_var::uz);
-    sp->p[iptl].w  = sp->k_p_h(iptl, particle_var::w);
+    sp->p[i].dx = sp->k_p_h(iptl, particle_var::dx);
+    sp->p[i].dy = sp->k_p_h(iptl, particle_var::dy);
+    sp->p[i].dz = sp->k_p_h(iptl, particle_var::dz);
+    sp->p[i].i  = sp->k_p_i_h(iptl);
+    sp->p[i].ux = sp->k_p_h(iptl, particle_var::ux);
+    sp->p[i].uy = sp->k_p_h(iptl, particle_var::uy);
+    sp->p[i].uz = sp->k_p_h(iptl, particle_var::uz);
+    sp->p[i].w  = sp->k_p_h(iptl, particle_var::w);
   }
-
-  center_p(sp, interpolator_array);
-
-  ec1 = uptime() - ec1;
-  if(print_timing)
-    MESSAGE(("time in copying particle data: %fs, np_local = %lld", ec1, np_local));
 
   //extract float and int data out of particle struct. This is a bit silly and looses type safety
   float * Pf = (float *)sp->p;
   int *   Pi = (int *)sp->p;
+#else
+  sp->np = np_local;
+  sp->max_np = np_local;
+  for (long long iptl = 0, i = 0; iptl < sp_np; iptl += stride_particle, ++i) {
+    p_buf[i].dx = sp->k_p_h(iptl, particle_var::dx);
+    p_buf[i].dy = sp->k_p_h(iptl, particle_var::dy);
+    p_buf[i].dz = sp->k_p_h(iptl, particle_var::dz);
+    p_buf[i].ux = sp->k_p_h(iptl, particle_var::ux);
+    p_buf[i].uy = sp->k_p_h(iptl, particle_var::uy);
+    p_buf[i].uz = sp->k_p_h(iptl, particle_var::uz);
+    p_buf[i].w  = sp->k_p_h(iptl, particle_var::w );
+    p_buf[i].i  = sp->k_p_i_h(iptl);
+  }
+  //extract float and int data out of particle struct. This is a bit silly and looses type safety
+  float * Pf = (float *)p_buf;
+  int *   Pi = (int *)p_buf;
+#endif
+
+  ec1 = uptime() - ec1;
+  if(print_timing)
+    MESSAGE(("time in copying particle data: %fs, np_local = %lld", ec1, np_local));
 
   // Create target directory and subdirectory for the timestep
   sprintf(particle_scratch, "./%s", "particle_hdf5");
@@ -1438,13 +1482,13 @@ void HDF5Dump::dump_particles(
   (iz) = _iz;                                                      \
 } END_PRIMITIVE
 
-  std::vector<int> global_pi;
-  global_pi.reserve(numparticles);
+  Kokkos::View<int*, Kokkos::DefaultHostExecutionSpace> global_pi("Global IDs", numparticles);
   const int mpi_rank = rank;
 
-  // TODO: this could be parallel
-  for (int i = 0; i < numparticles; i++) {
-    int local_i = sp->p[i].i;
+  Kokkos::parallel_for("Convert Global ID", 
+  Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, numparticles), 
+  KOKKOS_LAMBDA(const int i) {
+    int local_i = sp->k_p_i_h(i);
 
     int ix, iy, iz, rx, ry, rz;
     // Convert rank to local x/y/z
@@ -1472,8 +1516,8 @@ void HDF5Dump::dump_particles(
     int global_i = VOXEL(gix, giy, giz, gnx-2, gny-2, gnz-2);
 
     //std::cout << mpi_rank << " local i " << local_i << " becomes " << global_i << std::endl;
-    global_pi[i] = global_i;
-  }
+    global_pi(i) = global_i;
+  });
 #undef UNVOXEL
 
   dset_id = H5Dcreate(group_id, "i", H5T_NATIVE_INT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
@@ -1498,10 +1542,13 @@ void HDF5Dump::dump_particles(
   el3 = uptime() - el3;
   if(print_timing) MESSAGE(("Particle TimeHDF5Close: %f s\n", el3));
 
+  uncenter_p( sp, interpolator_array );
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   sp->p = sp_p;
+#endif
+  FREE_ALIGNED(p_buf);
   sp->np = sp_np;
   sp->max_np = sp_max_np;
-  FREE_ALIGNED(p_buf);
 
   // Write metadata
   // Note that these are all "local" metadata for each rank. Global metadata

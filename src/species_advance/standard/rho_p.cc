@@ -23,6 +23,8 @@
 // computational domain; see note in synchronize_rhob about why this
 // is done this way.  All particles on the list must be inbounds.
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+
 void
 accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         const species_t     * RESTRICT sp )
@@ -225,6 +227,7 @@ accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
 
 # endif
 }
+#endif
 
 // KOKKOS VERSION
 // accumulate_rho_p adds the charge density associated with the
