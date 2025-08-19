@@ -283,7 +283,9 @@ typedef struct field_buffers {
 // A field_array holds all the field quanties and pointers to
 // kernels used to advance them.
 typedef struct field_array {
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   field_t * ALIGNED(128) f;           // Local field data
+//#endif
   grid_t  * g;                        // Underlying grid
   void    * params;                   // Field advance specific parameters
   field_advance_kernels_t kernel[1];  // Field advance kernels
