@@ -42,7 +42,7 @@ emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
   /**/  accumulator_t    * RESTRICT ALIGNED(128) a   = cl->aa->a;
   /**/  rng_t            * RESTRICT              rng = cl->rng;
 
-  /**/  particle_t       * RESTRICT ALIGNED(128) p   = sp->p;
+//  /**/  particle_t       * RESTRICT ALIGNED(128) p   = sp->p;
   /**/  particle_mover_t * RESTRICT ALIGNED(128) pm  = sp->pm;
   /**/  grid_t           * RESTRICT              g   = sp->g;
 
@@ -93,15 +93,17 @@ emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
         u##X = dir ut_para*sqrtf(2*frande(rng));                        \
         u##Y = ut_perp*frandn(rng);                                     \
         u##Z = ut_perp*frandn(rng);                                     \
-        p[np].d##X = -(dir 1);                                          \
-        p[np].d##Y = 2*frand_c0(rng)-1;                                 \
-        p[np].d##Z = 2*frand_c0(rng)-1;                                 \
-        p[np].i    = i;                                                 \
-        p[np].u##X = u##X;                                              \
-        p[np].u##Y = u##Y;                                              \
-        p[np].u##Z = u##Z;                                              \
-        p[np].w    = w;                                                 \
-        accumulate_rhob( f, p+np, g, -qsp );                            \
+        sp->k_p_h(np, particle_var::d##X) = -(dir 1);                   \
+        sp->k_p_h(np, particle_var::d##Y) = 2*frand_c0(rng)-1;          \
+        sp->k_p_h(np, particle_var::d##Z) = 2*frand_c0(rng)-1;          \
+        sp->k_p_i_h(np)    = i;                                         \
+        sp->k_p_h(np, particle_var::u##X) = u##X;                       \
+        sp->k_p_h(np, particle_var::u##Y) = u##Y;                       \
+        sp->k_p_h(np, particle_var::u##Z) = u##Z;                       \
+        sp->k_p_h(np, particle_var::w)    = w;                          \
+        k_accumulate_rhob_single_cpu( cl->fa->k_f_rhob_accum_h,         \
+                                      sp->k_p_h, sp->k_p_i_h,           \
+                                      np, g, -qsp);                     \
         np++;                                                           \
                                                                         \
         /* Age the particle */                                          \
@@ -114,12 +116,16 @@ emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
         local_pm->disp##Y = w*u##Y*rd##Y;                               \
         local_pm->disp##Z = w*u##Z*rd##Z;                               \
         local_pm->i       = np-1;                                       \
-        if (move_p( p, local_pm, cl->fa->k_jf_accum_h, g, qsp )) {                         \
+        if (move_p_kokkos_host_serial( sp->k_p_h, sp->k_p_i_h, local_pm,\
+                                        cl->fa->k_jf_accum_h,           \
+                                        g, g->k_neighbor_h,             \
+                                        g->rangel, g->rangeh, qsp )) {  \
             pm[nm++] = local_pm[0];                                     \
         }                                                               \
       }                                                                 \
     }
 
+//        accumulate_rhob( f, p+np, g, -qsp );                            
     switch( EXTRACT_COMPONENT_TYPE( cc ) ) {
     case BOUNDARY(-1, 0, 0): EMIT_PARTICLES(x,y,z,+) break;
     case BOUNDARY( 0,-1, 0): EMIT_PARTICLES(y,z,x,+) break;
