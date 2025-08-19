@@ -181,9 +181,6 @@ if(VPIC_ENABLE_HDF5)
 
     set(HDF5_LIB_PATH "${HDF5_INCLUDE_DIRS}")
     string(REPLACE "include" "lib" HDF5_LIB_PATH "${HDF5_INCLUDE_DIRS}")
-
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath -Wl,${HDF5_LIB_PATH}")
-
 endif(VPIC_ENABLE_HDF5)
 
 # Allow files to be references from the root, (eg #include "src/vpic/vpic.h")
