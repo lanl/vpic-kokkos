@@ -61,7 +61,7 @@ const uint32_t te0		(1<<23);
 const uint32_t tempt		(1<<24 | 1<<25 | 1<<26);
 const uint32_t te			(1<<27);
 const uint32_t tempo		(1<<28 | 1<<29 | 1<<30);
-const uint32_t oe			(1<<31);
+const uint32_t oe			(1u<<31);
 //const uint32_t tempp		(1<<32 | 1<<33 | 1<<34);
 //const uint32_t pe			(1<<35);
 //const uint32_t emat			(1<<36 | 1<<37 | 1<<38);
@@ -433,6 +433,30 @@ public:
   }
 #endif
 
+  inline k_interpolator_t& interpolator_d() {
+    return interpolator_array->k_i_d;
+  }
+
+  inline k_interpolator_t::HostMirror& interpolator_h() {
+    return interpolator_array->k_i_h;
+  }
+
+  inline float& interpolator_h( const int v, const int var ) {
+    return interpolator_array->k_i_h(v, var);
+  }
+
+  inline k_hydro_t& hydro_d() {
+    return hydro_array->k_h_d;
+  }
+
+  inline k_hydro_t::HostMirror& hydro_h() {
+    return hydro_array->k_h_h;
+  }
+ 
+  inline float& hydro_h( const int vox, const int var ) {
+    return hydro_array->k_h_h(vox, var);
+  }
+
   //  inline float& k_fluid(const int ix, const int iy, const int iz, fluid_var::fl_v member) { 
   //    return fluid_species->k_fl_d(voxel(ix,iy,iz), member);
   //  }
@@ -785,6 +809,10 @@ public:
     local_pm.dispy = dispy;
     local_pm.dispz = dispz;
     local_pm.i     = sp->np-1;
+    if( update_rhob ) 
+      k_accumulate_rhob_single_cpu( field_array->k_f_rhob_accum_h,
+                                    sp->k_p_h, sp->k_p_i_h,
+                                    idx, grid, -sp->q );
     if( move_p_kokkos_host_serial(sp->k_p_h, sp->k_p_i_h, &local_pm, 
                                   field_array->k_jf_accum_h, 
                                   grid, grid->k_neighbor_h, 

@@ -397,7 +397,7 @@ accumulate_hydro_p( /**/  hydro_array_t        * RESTRICT ha,
 void accumulate_hydro_p_kokkos(
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
-        k_hydro_d_t k_hydro,
+        k_hydro_t k_hydro,
         k_interpolator_t& k_interp,
         const species_t            * RESTRICT sp
 );
@@ -405,7 +405,7 @@ void accumulate_hydro_p_kokkos(
 void accumulate_hydro_p_kokkos_nomove_ngp(
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
-        k_hydro_d_t k_hydro,
+        k_hydro_t k_hydro,
         k_interpolator_t& k_interp,
         const species_t            * RESTRICT sp
 );
@@ -467,13 +467,14 @@ move_p_kokkos(
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
-  float v0, v1, v2, v3, v4, v5, q;
+  float v0, v1, v2, v3, q; //v4, v5, q;
   int axis, face;
   int64_t neighbor;
   //int pi = int(local_pm_i);
   int pi = pm->i;
-  float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
-  const float one=1., two=2., three=3.;
+  //float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
+  float ux,uy,uz,x_half,y_half,z_half,fracdt;
+  const float one=1.; //, two=2., three=3.;
   //const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
   const float rV = 1.0/gdx/gdy/gdz;
 //  auto  k_field_scatter_access = k_f_sa.access();
@@ -761,18 +762,19 @@ move_p_kokkos_host_serial(
     const float qsp
 )
 {
-  const int nx = g->nx;
-  const int ny = g->ny;
-  const int nz = g->nz;
+  //const int nx = g->nx;
+  //const int ny = g->ny;
+  //const int nz = g->nz;
 
-  float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
-  const float one=1., two=2., three=3.;
+  //float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
+  float ux,uy,uz,x_half,y_half,z_half,fracdt;
+  const float one=1.; //, two=2., three=3.;
   const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
   const float rV = g->rdx * g->rdy * g->rdz;
 
-  float cx = 0.25 * g->rdy * g->rdz / g->dt;
-  float cy = 0.25 * g->rdz * g->rdx / g->dt;
-  float cz = 0.25 * g->rdx * g->rdy / g->dt;
+  //float cx = 0.25 * g->rdy * g->rdz / g->dt;
+  //float cy = 0.25 * g->rdz * g->rdx / g->dt;
+  //float cz = 0.25 * g->rdx * g->rdy / g->dt;
 
   #define p_dx    k_particles(pi, particle_var::dx)
   #define p_dy    k_particles(pi, particle_var::dy)
@@ -795,7 +797,7 @@ move_p_kokkos_host_serial(
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
-  float v0, v1, v2, v3, v4, v5, q;
+  float v0, v1, v2, v3, q; //v4, v5, q;
   int axis, face;
   int64_t neighbor;
   //int pi = int(local_pm_i);

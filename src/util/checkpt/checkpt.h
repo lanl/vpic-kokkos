@@ -362,7 +362,7 @@ template<typename View>
 void checkpt_view( const View& view ) {
   size_t rank = view.rank();
   size_t span = view.span();
-  size_t size = view.size();
+  //size_t size = view.size();
   size_t dims[Kokkos::ARRAY_LAYOUT_MAX_RANK];
   for(size_t i=0; i<rank; i++) {
     dims[i] = view.extent(0);
@@ -381,7 +381,7 @@ void checkpt_view( const View& view ) {
     datastruct = vpic_data_struct::Interpolators;
   } else if( std::is_same<View, k_accumulators_t::HostMirror>::value ) {
     datastruct = vpic_data_struct::Accumulators;
-  } else if( std::is_same<View, k_hydro_d_t::HostMirror>::value ) {
+  } else if( std::is_same<View, k_hydro_t::HostMirror>::value ) {
     datastruct = vpic_data_struct::Hydro;
   } else if( std::is_same<View, k_particles_t::HostMirror>::value ) {
     datastruct = vpic_data_struct::Particles;
@@ -488,7 +488,7 @@ void restore_view( View& view ) {
     view_type = vpic_data_struct::Interpolators;
   } else if( std::is_same<View, k_accumulators_t::HostMirror>::value ) {
     view_type = vpic_data_struct::Accumulators;
-  } else if( std::is_same<View, k_hydro_d_t::HostMirror>::value ) {
+  } else if( std::is_same<View, k_hydro_t::HostMirror>::value ) {
     view_type = vpic_data_struct::Hydro;
   } else if( std::is_same<View, k_particles_t::HostMirror>::value ) {
     view_type = vpic_data_struct::Particles;

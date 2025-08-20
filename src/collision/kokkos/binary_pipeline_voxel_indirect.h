@@ -141,16 +141,16 @@ struct binary_collision_pipeline {
     _spj_sortindex_ra = _spj->k_sortindex_d;
 
     // Am I being paranoid?
-    if( _spi->np      > _spi_sortindex_ra.extent(0) || 
-        _spi->g->nv+1 != _spi_partition_ra.extent(0) ){
-	printf("_spi->np (=%d) ?= _spi_sortindex_ra.extent(0) (=%d)\n",_spi->np,_spi_sortindex_ra.extent(0));
-	printf("_spi->g->nv+1 (=%d) ?= _spi_partition_ra.extent(0) (=%d)\n",_spi->g->nv+1,_spi_partition_ra.extent(0));
+    if( static_cast<uint32_t>(_spi->np)       > _spi_sortindex_ra.extent(0) || 
+        static_cast<uint32_t>(_spi->g->nv+1) != _spi_partition_ra.extent(0) ){
+	printf("_spi->np (=%d) ?= _spi_sortindex_ra.extent(0) (=%zu)\n",_spi->np,_spi_sortindex_ra.extent(0));
+	printf("_spi->g->nv+1 (=%d) ?= _spi_partition_ra.extent(0) (=%zu)\n",_spi->g->nv+1,_spi_partition_ra.extent(0));
         ERROR(("Bad spi sort products."));
     }
-    if( _spj->np      > _spj_sortindex_ra.extent(0) ||
-        _spj->g->nv+1 != _spj_partition_ra.extent(0) ){
-	printf("_spi->np (=%d) ?= _spj_sortindex_ra.extent(0) (=%d)\n",_spj->np,_spj_sortindex_ra.extent(0));
-	printf("_spj->g->nv+1 (=%d) ?= _spj_partition_ra.extent(0) (=%d)\n",_spj->g->nv+1,_spj_partition_ra.extent(0));	
+    if( static_cast<uint32_t>(_spj->np)       > _spj_sortindex_ra.extent(0) ||
+        static_cast<uint32_t>(_spj->g->nv+1) != _spj_partition_ra.extent(0) ){
+	printf("_spi->np (=%d) ?= _spj_sortindex_ra.extent(0) (=%zu)\n",_spj->np,_spj_sortindex_ra.extent(0));
+	printf("_spj->g->nv+1 (=%d) ?= _spj_partition_ra.extent(0) (=%zu)\n",_spj->g->nv+1,_spj_partition_ra.extent(0));	
         ERROR(("Bad spj sort products."));
     }
     // We only need to shuffle one species to ensure random pairings.
@@ -238,10 +238,10 @@ struct binary_collision_pipeline {
 
     Kokkos::parallel_for("binary_collision_pipeline::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
-      KOKKOS_LAMBDA (member_type team_member) {
+      KOKKOS_CLASS_LAMBDA (member_type team_member) {
 
         int ix, iy, iz;
-        RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
+        RANK_TO_3D_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
         const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
 
         // Find number of particles for each species.
@@ -388,7 +388,7 @@ struct binary_collision_pipeline {
     float ndt,
     int i,
     int j
-  )
+  ) const
   {
 
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];

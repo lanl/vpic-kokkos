@@ -126,9 +126,9 @@ unload_accumulator_array_kokkos(field_array_t* RESTRICT fa,
     int nx = fa->g->nx;
     int ny = fa->g->ny;
     int nz = fa->g->nz;
-    float cx = 0.25 * fa->g->rdy * fa->g->rdz / fa->g->dt;
-    float cy = 0.25 * fa->g->rdz * fa->g->rdx / fa->g->dt;
-    float cz = 0.25 * fa->g->rdx * fa->g->rdy / fa->g->dt;
+    //float cx = 0.25 * fa->g->rdy * fa->g->rdz / fa->g->dt;
+    //float cy = 0.25 * fa->g->rdz * fa->g->rdx / fa->g->dt;
+    //float cz = 0.25 * fa->g->rdx * fa->g->rdy / fa->g->dt;
 
     Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nz+2, ny+2, nx+2});
     Kokkos::parallel_for("unload accumulator array", unload_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {

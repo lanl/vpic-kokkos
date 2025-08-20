@@ -251,15 +251,14 @@ species_t::copy_to_device()
   k_nm_h(0) = nm;
 
   // Avoid capturing this
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   auto& k_particle_h = k_p_h;
   auto& k_particle_i_h = k_p_i_h;
-#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   auto& particles = p;
-#endif
   auto& k_particle_movers_h = k_pm_h;
   auto& k_particle_i_movers_h = k_pm_i_h;
   auto& movers = pm;
-
+#endif
 
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   Kokkos::parallel_for("copy particles to device",
