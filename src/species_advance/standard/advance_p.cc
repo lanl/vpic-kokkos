@@ -345,7 +345,8 @@ advance_p_kokkos_unified(
         const int ny,
         const int nz,
         const float ut_para,
-        const float ut_perp)
+        const float ut_perp,
+        const float gdt_2)
 {
 
   constexpr float one            = 1.;
@@ -538,12 +539,12 @@ advance_p_kokkos_unified(
 
       BEGIN_VECTOR_BLOCK {
 #ifdef VARIABLE_CHARGE
-	hax[LANE] = dt_2mc*qp[LANE]*( (fex[LANE] ) );
+	hax[LANE] = dt_2mc*qp[LANE]*( (fex[LANE] ) ) + gdt_2;
 	hay[LANE] = dt_2mc*qp[LANE]*( (fey[LANE] ) );
 	haz[LANE] = dt_2mc*qp[LANE]*( (fez[LANE] ) );
 #else
         // Interpolate E
-        hax[LANE] = qdt_2mc*( (fex[LANE] ) );
+        hax[LANE] = qdt_2mc*( (fex[LANE] ) ) + gdt_2;
         hay[LANE] = qdt_2mc*( (fey[LANE] ) );
         haz[LANE] = qdt_2mc*( (fez[LANE] ) );
 #endif
@@ -823,7 +824,8 @@ advance_p_kokkos_gpu(
         const int ny,
         const int nz,
         const float ut_para,
-        const float ut_perp)
+        const float ut_perp,
+        const float gdt_2)
 {
 
   constexpr float one            = 1.;
@@ -915,9 +917,9 @@ advance_p_kokkos_gpu(
     float dy   = p_dy;
     float dz   = p_dz;
     int   ii   = pii;
-    float hax  = qdt_2mc*(    ( f_ex ) );
-    float hay  = qdt_2mc*(    ( f_ey ) );
-    float haz  = qdt_2mc*(    ( f_ez  ) );
+    float hax  = qdt_2mc*( f_ex ) + gdt_2;
+    float hay  = qdt_2mc*( f_ey );
+    float haz  = qdt_2mc*( f_ez );
 
     float cbx  = f_cbx;// + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby;// + dy*f_dcbydy;
@@ -1151,6 +1153,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dx   = sp->g->cvac*sp->g->dt*sp->g->rdx;
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
+  float gdt_2    = 0.5*sp->g->gravity*sp->g->dt;
 
   #ifdef USE_GPU
     // Use the gpu kernel for slightly better performance
@@ -1188,7 +1191,8 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->g->ny,
           sp->g->nz,
           sp->ut_para,
-          sp->ut_perp
+          sp->ut_perp,
+          gdt_2
   );
   KOKKOS_TOC( advance_p, 1);
 

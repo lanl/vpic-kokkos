@@ -102,6 +102,10 @@ void
 hyb_advance_e( field_array_t * RESTRICT fa,
                   float                    frac );
                   
+                  void
+hyb_advance_pe( field_array_t * RESTRICT fa,
+                  float                    frac );
+                  
 void
 hyb_advance_eue( field_array_t * RESTRICT fa,
                   float                    frac );

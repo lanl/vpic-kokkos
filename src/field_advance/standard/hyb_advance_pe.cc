@@ -18,9 +18,9 @@
   + F(0,uz) * pz * ( F(z,pe) - F(mz,pe) ) )
 
 #define DIVQE() \
-  ( px*(2.0*F(0,pe)/rho - F(x,pe)/rhox - F(mx,pe)/rhomx)	\
-  + py*(2.0*F(0,pe)/rho - F(y,pe)/rhoy - F(my,pe)/rhomy)	\
-  + pz*(2.0*F(0,pe)/rho - F(z,pe)/rhoz - F(mz,pe)/rhomz) )
+  ( 4.0*px*px*(2.0*F(0,pe)/rho - F(x,pe)/rhox - F(mx,pe)/rhomx)	\
+  + 4.0*py*py*(2.0*F(0,pe)/rho - F(y,pe)/rhoy - F(my,pe)/rhomy)	\
+  + 4.0*pz*pz*(2.0*F(0,pe)/rho - F(z,pe)/rhoz - F(mz,pe)/rhomz) )
 
 
 #define INIT_STENCIL()						\
@@ -38,7 +38,7 @@
   float rhomx  = (F(mx,rhof) > denmin) ? F(mx,rhof) : denmin; \
   float rhomy  = (F(my,rhof) > denmin) ? F(my,rhof) : denmin; \
   float rhomz  = (F(mz,rhof) > denmin) ? F(mz,rhof) : denmin; \
-  float dpedt  =  gamma * DIVUEP() + (1.0-gamma) * UEGRADP() + kappa * DIVQE();
+  float dpedt  =  gamma * DIVUEP() + (gamma-1.0) * (-UEGRADP() + kappa * DIVQE());
 
 #define UPDATE_B(delt)				\
    F(0,pe)  = (F(0,rhof) > denmin) ? F(0,oe) - delt*dpedt : F(0,te0)*F(0,rhof);
@@ -65,7 +65,7 @@
 
 
 void
-hyb_advance_bpe(field_array_t * RESTRICT fa,
+hyb_advance_pe(field_array_t * RESTRICT fa,
           float       frac) {
 
   k_field_t k_field = fa->k_f_d;
@@ -88,7 +88,7 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
 //printf("Advance_B kernel\n");
   
 //Store initial B
-  Kokkos::parallel_for("store b_old", Kokkos::RangePolicy<>(0,nv),
+  Kokkos::parallel_for("store pe_old", Kokkos::RangePolicy<>(0,nv),
 		       KOKKOS_LAMBDA(const int v) {
 			k_field(v, field_var::oe) = k_field(v, field_var::pe);
 		       });
@@ -200,7 +200,7 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   Kokkos::Profiling::pushRegion("HybyridAdvancePe::Update_B_K4");
   hyb_advance_ue( fa, (isub+1.0)/nsub ); //sets ghost Bs
   
-    k_begin_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
+  k_begin_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
   k_end_remote_ghost_hyb_ue( fa, fa->g, *(fa->fb) );
   //fix local BCs
   k_hyb_local_ghost_e( fa, fa->g );
@@ -209,6 +209,19 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
       INIT_STENCIL();	  	  
       UPDATE4();	  
     });
+  Kokkos::Profiling::popRegion();
+  
+  
+  // ----------------------------------------------------------
+  // 5: Last update
+  // ----------------------------------------------------------
+  
+  Kokkos::Profiling::pushRegion("HybyridAdvancePe::Update_5");
+  hyb_advance_ue( fa, (isub+1.0)/nsub ); //sets ghost pe s
+  //k_begin_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );//ARI add cell-centered BCs
+  //k_end_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );
+  //fix local BCs
+  //k_hyb_local_ghost_e( fa, fa->g );
   Kokkos::Profiling::popRegion();
 
 }
