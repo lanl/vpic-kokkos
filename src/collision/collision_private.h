@@ -37,7 +37,7 @@ struct particle_bulk_collision_op_t : public collision_op_t {
 };
 
 
-#define RANK_TO_INDEX(rank,ix,iy,iz,nx,ny,nz) do {        \
+#define RANK_TO_3D_INDEX(rank,ix,iy,iz,nx,ny,nz) do {        \
     int _ix, _iy, _iz;                                    \
     _ix  = (rank);   /* ix = ix + gpx*( iy + gpy*iz ) */  \
     _iy  = _ix/(nx); /* iy = iy + gpy*iz */               \

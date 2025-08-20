@@ -7,7 +7,7 @@ void BinSort::sort( species_t* sp,
     const int num_bins = sp->g->nv;
 
     // Create partition.
-    if( sp->k_partition_d.extent(0) < num_bins + 1) {
+    if( sp->k_partition_d.extent(0) < static_cast<uint32_t>(num_bins + 1)) {
       sp->k_partition_d = k_particle_partition_t(
         Kokkos::ViewAllocateWithoutInitializing("k_partition_d"),
         num_bins + 1
@@ -16,7 +16,7 @@ void BinSort::sort( species_t* sp,
     }
 
     // Create sortindex.
-    if( sp->k_sortindex_d.extent(0) < sp->np ) {
+    if( sp->k_sortindex_d.extent(0) < static_cast<uint32_t>(sp->np) ) {
 	//printf("create sortindex\n");
       sp->k_sortindex_d = k_particle_sortindex_t(
         Kokkos::ViewAllocateWithoutInitializing("k_sortindex_d"),
@@ -48,7 +48,7 @@ void BinSort::sort( species_t* sp,
     Kokkos::parallel_for("DefaultSort::sort::count",
       Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, sp->np),
       KOKKOS_LAMBDA (const size_t i) {
-        Kokkos::atomic_increment(&partition(index_ra(i)));
+        Kokkos::atomic_inc(&partition(index_ra(i)));
       });
 
     Kokkos::parallel_scan("DefaultSort::sort::partiiton",

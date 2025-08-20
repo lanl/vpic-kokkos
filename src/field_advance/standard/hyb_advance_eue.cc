@@ -22,7 +22,7 @@ typedef struct pipeline_args {
   float  rho = half*( (one-hstep)*( F(0,rhof) + F(0,rhofold) ) + hstep*( three*F(0,rhof) - F(0,rhofold)) ) ; \
   rho = (rho > den_floor_ohm) ? rho :  den_floor_ohm;			\
   float  invrho = one/rho;						\
-  float hallinvrho = (rho > den_floor_ohm) ? invrho : 0 ;		\
+  /*float hallinvrho = (rho > den_floor_ohm) ? invrho : 0 ;*/ \
   float  ux = half*( (one-hstep)*( F(0,jfx) + F(0,jfxold) ) + hstep*( three*F(0,jfx) - F(0,jfxold)) ) ; \
   float  uy = half*( (one-hstep)*( F(0,jfy) + F(0,jfyold) ) + hstep*( three*F(0,jfy) - F(0,jfyold)) ) ; \
   float  uz = half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + hstep*( three*F(0,jfz) - F(0,jfzold)) ) ; 
@@ -47,7 +47,7 @@ hyb_advance_eue( field_array_t * RESTRICT fa,
   args->p = (sfa_params_t *)fa->params;
   args->g = fa->g;
   k_field_t k_field = fa->k_f_d;
-  const material_coefficient_t * ALIGNED(128) m = args->p->mc;
+  //const material_coefficient_t * ALIGNED(128) m = args->p->mc;
   const grid_t                 *              g = args->g;
   const size_t nx = g->nx, ny = g->ny, nz = g->nz;
 
@@ -59,7 +59,7 @@ hyb_advance_eue( field_array_t * RESTRICT fa,
 
   const float hstep = frac;
   constexpr float half = 1./2., one = 1., three = 3.;
-  constexpr size_t ind2  = 2, ind1 = 1;
+  //constexpr size_t ind2  = 2, ind1 = 1;
   
   
   //for interior cells

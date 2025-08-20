@@ -10,7 +10,7 @@ int vpic_simulation::advance(void)
 {
 
   species_t *sp;
-  double err;
+  //double err;
   double frac;
   //printf("%d: Step %d \n", rank(), step());
 

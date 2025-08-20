@@ -61,7 +61,7 @@ struct drag_model : public collision_model<drag_model<Functor>> {
       float mS = stopping_cx(v0); 
 
       auto Cr = 1.0 - ndt_mi2*mS/v0;
-      auto Crterm2 = ndt_mi2*mS/v0;
+      //auto Crterm2 = ndt_mi2*mS/v0;
 
       //if (Crterm2 > 1.0e-1) {
 	//	printf("v0=%14.8e, ndt_mi2=%14.8e, mS=%14.8e, Crterm2=%14.8e, Cr=%14.8e",v0

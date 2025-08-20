@@ -14,7 +14,7 @@ new_dump_strategy(DumpStrategyID dump_strategy_id,
 {
   Dump_Strategy *ds;
   MALLOC(ds, 1);
-  CLEAR(ds, 1);
+  //CLEAR(ds, 1);
 
   // Do any post init/restore simulation modifications
   switch (dump_strategy_id)
@@ -289,6 +289,7 @@ void BinaryDump::dump_particles(
 #else
   int p_buf_np = 0;
   center_p(sp, interpolator_array);
+  Kokkos::View<particle_t*, Kokkos::DefaultHostExecutionSpace> p_buffer("Particle buffer", PBUF_SIZE);
   for (buf_start = 0; buf_start < sp->np; buf_start += PBUF_SIZE)
   {
     p_buf_np = sp->np - buf_start;
@@ -297,16 +298,24 @@ void BinaryDump::dump_particles(
     Kokkos::parallel_for("Copy particles to write buffer", 
       Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), 
       KOKKOS_LAMBDA(const int idx) {
-      p_buf[idx].dx = sp->k_p_h(idx+buf_start, particle_var::dx);
-      p_buf[idx].dy = sp->k_p_h(idx+buf_start, particle_var::dy);
-      p_buf[idx].dz = sp->k_p_h(idx+buf_start, particle_var::dz);
-      p_buf[idx].i  = sp->k_p_i_h(idx+buf_start);
-      p_buf[idx].ux = sp->k_p_h(idx+buf_start, particle_var::ux);
-      p_buf[idx].uy = sp->k_p_h(idx+buf_start, particle_var::uy);
-      p_buf[idx].uz = sp->k_p_h(idx+buf_start, particle_var::uz);
-      p_buf[idx].w  = sp->k_p_h(idx+buf_start, particle_var::w);
+      //p_buf[idx].dx = sp->k_p_h(idx+buf_start, particle_var::dx);
+      //p_buf[idx].dy = sp->k_p_h(idx+buf_start, particle_var::dy);
+      //p_buf[idx].dz = sp->k_p_h(idx+buf_start, particle_var::dz);
+      //p_buf[idx].i  = sp->k_p_i_h(idx+buf_start);
+      //p_buf[idx].ux = sp->k_p_h(idx+buf_start, particle_var::ux);
+      //p_buf[idx].uy = sp->k_p_h(idx+buf_start, particle_var::uy);
+      //p_buf[idx].uz = sp->k_p_h(idx+buf_start, particle_var::uz);
+      //p_buf[idx].w  = sp->k_p_h(idx+buf_start, particle_var::w);
+      p_buffer(idx).dx = sp->k_p_h(idx+buf_start, particle_var::dx);
+      p_buffer(idx).dy = sp->k_p_h(idx+buf_start, particle_var::dy);
+      p_buffer(idx).dz = sp->k_p_h(idx+buf_start, particle_var::dz);
+      p_buffer(idx).i  = sp->k_p_i_h(idx+buf_start);
+      p_buffer(idx).ux = sp->k_p_h(idx+buf_start, particle_var::ux);
+      p_buffer(idx).uy = sp->k_p_h(idx+buf_start, particle_var::uy);
+      p_buffer(idx).uz = sp->k_p_h(idx+buf_start, particle_var::uz);
+      p_buffer(idx).w  = sp->k_p_h(idx+buf_start, particle_var::w);
     });
-    fileIO.write(p_buf, p_buf_np);
+    fileIO.write(p_buffer.data(), p_buf_np);
   }
   uncenter_p(sp, interpolator_array);
 #endif
@@ -691,12 +700,12 @@ void BinaryDump::hydro_dump(
 #else
       hydro_t h[1];
       WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
-      if( std::is_same<Kokkos::LayoutRight, k_hydro_d_t::array_layout>::value ) {
+      if( std::is_same<Kokkos::LayoutRight, k_hydro_t::array_layout>::value ) {
         fileIO.write(hydro_array->k_h_h.data(), dim[0] * dim[1] * dim[2]);
       } else {
-        for(size_t i=0; i<dim[0]; i++) {
-          for(size_t j=0; j<dim[1]; j++) {
-            for(size_t k=0; k<dim[2]; k++) {
+        for(int i=0; i<dim[0]; i++) {
+          for(int j=0; j<dim[1]; j++) {
+            for(int k=0; k<dim[2]; k++) {
               for(size_t v=0; v<HYDRO_VAR_COUNT; v++) {
                 fileIO.write(&hydro_array->k_h_h(VOXEL(i,j,k,grid->nx,grid->ny,grid->nz), v), 1);
               }
@@ -716,7 +725,7 @@ void BinaryDump::hydro_dump(
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
             fileIO.write(&hydro(ioff,joff,koff), 1);
 #else
-        for(size_t v; v<HYDRO_VAR_COUNT; v++) 
+        for(size_t v=0; v<HYDRO_VAR_COUNT; v++) 
           fileIO.write(&(hydro_array->k_h_h(VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz), v)), 1);
 #endif
       }
@@ -920,27 +929,33 @@ void HDF5Dump::dump_fields(
   H5Dclose(dset_id);                                                                                        \
 }
 
-  char fname[256];
-  char field_scratch[128];
-  char subfield_scratch[128];
+  //char fname[256];
+  //char field_scratch[128];
+  //char subfield_scratch[256];
 
   // create the directory and sub-directory
-  sprintf(field_scratch, "./%s", "fields_hdf5");
-  FileUtils::makeDirectory(field_scratch);
-  sprintf(subfield_scratch, "%s/T.%zu/", field_scratch, step);
-  FileUtils::makeDirectory(subfield_scratch);
+  std::string field_dir = "./fields_hdf5";
+  FileUtils::makeDirectory(field_dir.c_str());
+  //sprintf(field_scratch, "./%s", "fields_hdf5");
+  //FileUtils::makeDirectory(field_scratch);
+  std::string subfield_dir = field_dir + "/T." + std::to_string(step) + "/";
+  FileUtils::makeDirectory(subfield_dir.c_str());
+  //sprintf(subfield_scratch, "%s/T.%d/", field_scratch, step);
+  //FileUtils::makeDirectory(subfield_scratch);
 
   // create the file
-  sprintf(fname, "%s/%s_%zu.h5", subfield_scratch, "fields", step);
+  std::string filename = subfield_dir + "/fields_" + std::to_string(step) + ".h5";
+  //sprintf(fname, "%s/%s_%d.h5", subfield_scratch, "fields", step);
   double el1 = uptime();
   hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
   H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
-  hid_t file_id = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+  hid_t file_id = H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
   H5Pclose(plist_id);
 
   // create the group for the time step
-  sprintf(fname, "Timestep_%zu", step);
-  hid_t group_id = H5Gcreate(file_id, fname, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  std::string group_name = "Timestep_" + std::to_string(step);
+  //sprintf(fname, "Timestep_%d", step);
+  hid_t group_id = H5Gcreate(file_id, group_name.c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   el1 = uptime() - el1;
   if ( rank==0 ) log_printf("TimeHDF5Open: %.2f s\n", el1);
@@ -1161,25 +1176,31 @@ void HDF5Dump::dump_hydro(
   synchronize_hydro_array_kokkos(hydro_array);
 #endif
 
-  char hname[256];
-  char hydro_scratch[128];
-  char subhydro_scratch[128];
+  //char hname[256];
+  //char hydro_scratch[128];
+  //char subhydro_scratch[128];
 
   // create the directory and sub-directory
-  sprintf(hydro_scratch, "./%s", "hydro_hdf5");
-  FileUtils::makeDirectory(hydro_scratch);
-  sprintf(subhydro_scratch, "%s/T.%zu/", hydro_scratch, step);
-  FileUtils::makeDirectory(subhydro_scratch);
+  std::string hydro_dir = "./hydro_hdf5";
+  std::string subhydro_dir = hydro_dir + "/T." + std::to_string(step) + "/";
+  FileUtils::makeDirectory(hydro_dir.c_str());
+  FileUtils::makeDirectory(subhydro_dir.c_str());
+  //sprintf(hydro_scratch, "./%s", "hydro_hdf5");
+  //FileUtils::makeDirectory(hydro_scratch);
+  //sprintf(subhydro_scratch, "%s/T.%d/", hydro_scratch, step);
+  //FileUtils::makeDirectory(subhydro_scratch);
 
-  sprintf(hname, "%s/hydro_%s_%zu.h5", subhydro_scratch, sp->name, step);
+  std::string hydro_fname = subhydro_dir + "/hydro_" + std::string(sp->name) + "_" + std::to_string(step) + ".h5";
+  //sprintf(hname, "%s/hydro_%s_%d.h5", subhydro_scratch, sp->name, step);
   double el1 = uptime();
   hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
   H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
-  hid_t file_id = H5Fcreate(hname, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+  hid_t file_id = H5Fcreate(hydro_fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
   H5Pclose(plist_id);
 
-  sprintf(hname, "Timestep_%zu", step);
-  hid_t group_id = H5Gcreate(file_id, hname, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  std::string hydro_gname = "Timestep_" + std::to_string(step);
+  //sprintf(hname, "Timestep_%d", step);
+  hid_t group_id = H5Gcreate(file_id, hydro_gname.c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   el1 = uptime() - el1;
   if ( rank==0 ) log_printf("TimeHDF5Open: %.2f s\n", el1);
@@ -1311,9 +1332,9 @@ void HDF5Dump::dump_particles(
     interpolator_array_t *interpolator_array,
     int ftag)
 {
-  char fname[256];
+  //char fname[256];
   char group_name[256];
-  char particle_scratch[128];
+  //char particle_scratch[128];
   char subparticle_scratch[128];
 
   if( !sp ) ERROR(( "Invalid species name \"%s\".", sp->name ));
@@ -1388,19 +1409,24 @@ void HDF5Dump::dump_particles(
     MESSAGE(("time in copying particle data: %fs, np_local = %lld", ec1, np_local));
 
   // Create target directory and subdirectory for the timestep
-  sprintf(particle_scratch, "./%s", "particle_hdf5");
-  FileUtils::makeDirectory(particle_scratch);
-  sprintf(subparticle_scratch, "%s/T.%ld/", particle_scratch, step);
-  FileUtils::makeDirectory(subparticle_scratch);
+  std::string particle_dir = "./particle_hdf5";
+  std::string subparticle_dir = particle_dir + "/T." + std::to_string(step) + "/";
+  FileUtils::makeDirectory(particle_dir.c_str());
+  FileUtils::makeDirectory(subparticle_dir.c_str());
+  //sprintf(particle_scratch, "./%s", "particle_hdf5");
+  //FileUtils::makeDirectory(particle_scratch);
+  //sprintf(subparticle_scratch, "%s/T.%d/", particle_scratch, step);
+  //FileUtils::makeDirectory(subparticle_scratch);
 
   // open HDF5 file for species
-  sprintf(fname, "%s/%s_%ld.h5", subparticle_scratch, sp->name, step);
-  sprintf(group_name, "/Timestep_%ld", step);
+  std::string particle_fname = subparticle_dir + "/" + std::string(sp->name) + "_" + std::to_string(step) + ".h5";
+  //sprintf(fname, "%s/%s_%d.h5", subparticle_scratch, sp->name, step);
+  sprintf(group_name, "/Timestep_%d", step);
   double el1 = uptime();
 
   hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
   H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
-  hid_t file_id = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+  hid_t file_id = H5Fcreate(particle_fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
   hid_t group_id = H5Gcreate(file_id, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   H5Pclose(plist_id);
@@ -1553,7 +1579,7 @@ void HDF5Dump::dump_particles(
 
   char meta_fname[256];
 
-  sprintf(meta_fname, "%s/grid_metadata_%s_%ld.h5", subparticle_scratch, sp->name, step);
+  sprintf(meta_fname, "%s/grid_metadata_%s_%d.h5", subparticle_scratch, sp->name, step);
 
   double meta_el1 = uptime();
 
@@ -1667,23 +1693,28 @@ void HDF5Dump::dump_fluids(
   H5Dclose(dset_id);                                                                                        \
 }
   char hname[256];
-  char fluid_scratch[128];
-  char subfluid_scratch[128];
+  //char fluid_scratch[128];
+  //char subfluid_scratch[128];
 
   // create the directory and sub-directory
-  sprintf(fluid_scratch, "./%s", "fluid_hdf5");
-  FileUtils::makeDirectory(fluid_scratch);
-  sprintf(subfluid_scratch, "%s/T.%zu/", fluid_scratch, step);
-  FileUtils::makeDirectory(subfluid_scratch);
+  std::string fluid_dir = "./fluid_hdf5";
+  std::string subfluid_dir = fluid_dir + "/T." + std::to_string(step) + "/";
+  FileUtils::makeDirectory(fluid_dir.c_str());
+  FileUtils::makeDirectory(subfluid_dir.c_str());
+  //sprintf(fluid_scratch, "./%s", "fluid_hdf5");
+  //FileUtils::makeDirectory(fluid_scratch);
+  //sprintf(subfluid_scratch, "%s/T.%d/", fluid_scratch, step);
+  //FileUtils::makeDirectory(subfluid_scratch);
 
-  sprintf(hname, "%s/fluid_%s_%zu.h5", subfluid_scratch, fsp->name, step);
+  std::string fluid_fname = subfluid_dir + "/fluid_" + std::string(fsp->name) + "_" + std::to_string(step) + ".h5";
+  //sprintf(hname, "%s/fluid_%s_%d.h5", subfluid_scratch, fsp->name, step);
   double el1 = uptime();
   hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
   H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
-  hid_t file_id = H5Fcreate(hname, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+  hid_t file_id = H5Fcreate(fluid_fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
   H5Pclose(plist_id);
 
-  sprintf(hname, "Timestep_%zu", step);
+  sprintf(hname, "Timestep_%d", step);
   hid_t group_id = H5Gcreate(file_id, hname, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   el1 = uptime() - el1;
@@ -1799,8 +1830,8 @@ void HDF5Dump::field_dump(
       field_array_t *field_array)
 {
   // Create a variable list of field values to output.
-  size_t numvars = std::min(dumpParams.output_vars.bitsum(),
-                            total_field_variables);
+  //size_t numvars = std::min(dumpParams.output_vars.bitsum(),
+  //                          total_field_variables);
 
   for(size_t i(0); i<total_field_variables; i++) {
     if(dumpParams.output_vars.bitset(i))

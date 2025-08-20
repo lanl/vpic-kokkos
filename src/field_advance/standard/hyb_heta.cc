@@ -22,7 +22,8 @@ typedef struct pipeline_args {
 
 //modified version of old hypereta macro curlbXYZ -> pXYZ
 //note the pz here in the multiplier is NOT the curl
-//#define LPL_B()\
+/*
+#define LPL_B()\
   F(0,pex) = 4.0*( px*px*( F(x,cbx) + F(mx,cbx) - 2.0*F(0,cbx) ) +  \
 		  py*py*( F(y,cbx) + F(my,cbx) - 2.0*F(0,cbx) ) +  \
 		  pz*pz*( F(z,cbx) + F(mz,cbx) - 2.0*F(0,cbx) ) ); \
@@ -32,6 +33,7 @@ typedef struct pipeline_args {
   F(0,pez) = 4.0*( px*px*( F(x,cbz) + F(mx,cbz) - 2.0*F(0,cbz) ) +  \
 		  py*py*( F(y,cbz) + F(my,cbz) - 2.0*F(0,cbz) ) +  \
 		  pz*pz*( F(z,cbz) + F(mz,cbz) - 2.0*F(0,cbz) ) ); \
+*/
 
 #define LPL_B()\
   F(0,pex) = 4.0*(                                   \
@@ -61,7 +63,7 @@ hyb_heta( field_array_t * RESTRICT fa ) {
   args->p = (sfa_params_t *)fa->params;
   args->g = fa->g;
   k_field_t k_field = fa->k_f_d;
-  const material_coefficient_t * ALIGNED(128) m = args->p->mc;
+  //const material_coefficient_t * ALIGNED(128) m = args->p->mc;
   const grid_t                 *              g = args->g;
   const int nx = g->nx, ny = g->ny, nz = g->nz;
 

@@ -107,23 +107,23 @@ typedef struct accumulator_array {
 
   k_accumulators_t k_a_d;
   k_accumulators_t::HostMirror k_a_h;
-  k_accumulators_sa_t k_a_sa;
+  k_accumulators_sv_t k_a_sv;
   //k_accumulators_sah_t k_a_sah;
   k_accumulators_t k_a_d_copy;
 
   accumulator_array(int _na)
   {
-      init_kokoks_accum(_na);
+    init_kokoks_accum(_na);
   }
 
   void init_kokoks_accum(int _na)
   {
-      na = _na;
+    na = _na;
 
-      k_a_d = k_accumulators_t("k_accumulators", _na);
-      k_a_d_copy = k_accumulators_t("k_accumulators_copy", _na);
-      k_a_sa = Kokkos::Experimental::create_scatter_view(k_a_d);
-      k_a_h  = Kokkos::create_mirror_view(k_a_d);
+    k_a_d = k_accumulators_t("k_accumulators", _na);
+    k_a_d_copy = k_accumulators_t("k_accumulators_copy", _na);
+    k_a_sv = Kokkos::Experimental::create_scatter_view(k_a_d);
+    k_a_h  = Kokkos::create_mirror_view(k_a_d);
   }
 
   /**
@@ -216,13 +216,13 @@ typedef struct hydro_array {
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   hydro_t * ALIGNED(128) h;
 #endif
-  k_hydro_d_t k_h_d;
-  k_hydro_d_t::HostMirror k_h_h;
+  k_hydro_t k_h_d;
+  k_hydro_t::HostMirror k_h_h;
   grid_t * g;
   
   hydro_array(int nv)
   {
-    k_h_d = k_hydro_d_t("k_hydro", nv);
+    k_h_d = k_hydro_t("k_hydro", nv);
     k_h_h = Kokkos::create_mirror_view(k_h_d);
   }
 

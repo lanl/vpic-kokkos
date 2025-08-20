@@ -390,8 +390,8 @@ public:
   std::unordered_map<species_id, size_t> tframe_map;
 
   HDF5Dump(int _rank, int _nproc, int _ns, int _fieldi, int _hydroi, int _fluidi) :
-    Dump_Strategy(_rank, _nproc), num_step(_ns), field_interval(_fieldi),
-    hydro_interval(_hydroi), fluid_interval(_fluidi) {}
+    Dump_Strategy(_rank, _nproc), field_interval(_fieldi),
+    hydro_interval(_hydroi), fluid_interval(_fluidi), num_step(_ns) {}
 
   hydro_dump_flag_t hydro_dump_flag;
   field_dump_flag_t field_dump_flag;

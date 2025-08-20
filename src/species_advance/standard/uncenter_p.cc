@@ -1,7 +1,8 @@
 #define IN_spa
 #include "spa_private.h"
 
-void uncenter_p_kokkos(
+void 
+uncenter_p_kokkos(
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
         k_interpolator_t& k_interp,
@@ -57,8 +58,8 @@ void uncenter_p_kokkos(
 
 
   // this goes to np using p_index
-  Kokkos::parallel_for("uncenter p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
-      (0, np), KOKKOS_LAMBDA (int p_index) {
+  Kokkos::parallel_for("uncenter p", Kokkos::RangePolicy <>(0, np), 
+    KOKKOS_LAMBDA (int p_index) {
 
     int ii = pii;
     float hax, hay, haz, l_cbx, l_cby, l_cbz;

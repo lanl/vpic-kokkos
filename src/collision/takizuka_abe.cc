@@ -49,9 +49,10 @@ takizuka_abe(
     ERROR(("Bad args."));
 
   takizuka_abe_collision_op_t * ta;
+  auto namelen = strlen(name)+1;
   MALLOC( ta, 1);
-  MALLOC( ta->name, strlen(name) +1 );
-  strncpy( ta->name, name, strlen(name)+1);
+  MALLOC( ta->name, namelen );
+  strncpy( ta->name, name, namelen);
 
   spi->last_indexed = -1; //to ensure sort in collisions
   spj->last_indexed = -1;

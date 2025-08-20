@@ -64,8 +64,8 @@ struct particle_bulk_collision_pipeline {
   //starting with _ in a lambda will likely throw and illegal
   //memory error. As convention we reccomend not using _varName
   //in an inline fucntion but rather just varName
-  species_t *_spi;
   kokkos_rng_pool_t& _rp;
+  species_t *_spi;
   k_density_t     _spi_n;//,  _spj_n;
   k_particles_t   _spi_p;//,  _spj_p;
   k_particles_i_t _spi_i;//,  _spj_i;
@@ -98,9 +98,9 @@ struct particle_bulk_collision_pipeline {
       _nx(spi->g->nx),
       _ny(spi->g->ny),
       _nz(spi->g->nz),
+      _rp(rp),
       _spi(spi),
       _spj(spj),
-      _rp(rp),
       _field(field)
   {
     //TODO: is interval needed here?
@@ -147,10 +147,10 @@ struct particle_bulk_collision_pipeline {
     //    _spj_sortindex_ra = _spj->k_sortindex_d;
 
     // Am I being paranoid?
-    if( _spi->np      > _spi_sortindex_ra.extent(0) || 
-        _spi->g->nv+1 != _spi_partition_ra.extent(0) ){
-	printf("_spi->np (=%d) ?= _spi_sortindex_ra.extent(0) (=%d)\n",_spi->np,_spi_sortindex_ra.extent(0));
-	printf("_spi->g->nv+1 (=%d) ?= _spi_partition_ra.extent(0) (=%d)\n",_spi->g->nv+1,_spi_partition_ra.extent(0));
+    if( static_cast<std::uint32_t>(_spi->np)       > _spi_sortindex_ra.extent(0) || 
+        static_cast<std::uint32_t>(_spi->g->nv+1) != _spi_partition_ra.extent(0) ){
+	printf("_spi->np (=%d) ?= _spi_sortindex_ra.extent(0) (=%zu)\n",_spi->np,_spi_sortindex_ra.extent(0));
+	printf("_spi->g->nv+1 (=%d) ?= _spi_partition_ra.extent(0) (=%zu)\n",_spi->g->nv+1,_spi_partition_ra.extent(0));
         ERROR(("Bad spi sort products."));
     }
 
@@ -230,11 +230,11 @@ struct particle_bulk_collision_pipeline {
     auto const& nx = _nx;
     auto const& ny = _ny;
     auto const& nz = _nz;
-    auto const& spi = _spi;
-    auto const& spj = _spj;
+    //auto const& spi = _spi;
+    //auto const& spj = _spj;
     auto const& rp  = _rp;
-    auto const& spi_n = _spi_n;
-    auto const& spi_i = _spi_i;
+    //auto const& spi_n = _spi_n;
+    //auto const& spi_i = _spi_i;
     //    auto const& spj_n = _spj_n;
     auto const& spi_p = _spi_p;
     auto const& spj_fl = _spj_fl;
@@ -249,10 +249,10 @@ struct particle_bulk_collision_pipeline {
     
     Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
-      KOKKOS_LAMBDA (member_type team_member) {
+      KOKKOS_CLASS_LAMBDA (member_type team_member) {
 
         int ix, iy, iz;
-        RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
+        RANK_TO_3D_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
         const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
 
         // Find number of particles for each species.
@@ -374,8 +374,8 @@ struct particle_bulk_collision_pipeline {
   //with the _ (underscore), because _ is used to indicate a class member before it
   //is caputred by a lambda. One lambda captured, we should refer to the variable
   //as EX: mu not _mu
-    template<class view_type, class collision_model>
-    //template<class collision_model>
+  template<class view_type, class collision_model>
+  //template<class collision_model>
   KOKKOS_INLINE_FUNCTION
   void particle_bulk_collision (
     const float mi,
@@ -396,7 +396,7 @@ struct particle_bulk_collision_pipeline {
     kokkos_rng_state_t& rg,
     float dt,
     int ii
-  )
+  ) const
   {
 
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];
@@ -405,7 +405,7 @@ struct particle_bulk_collision_pipeline {
     float uix = up[1];
     float uiy = up[2];
     float uiz = up[3];
-    float wi  = up[0];
+    //float wi  = up[0];
 
     float qi = 0;
 #ifdef VARIABLE_CHARGE

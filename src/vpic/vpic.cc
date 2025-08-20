@@ -239,7 +239,7 @@ void restore_kokkos(vpic_simulation& simulation)
     // Restore field array
     field_array_t* fa = simulation.field_array;
     new(&fa->k_f_d) k_field_t();
-    new(&fa->k_field_sa_d) k_field_sa_t();
+    new(&fa->k_field_sv_d) k_field_sv_t();
     new(&fa->k_fe_d) k_field_edge_t();
     new(&fa->k_f_h) k_field_t::HostMirror();
     new(&fa->k_fe_h) k_field_edge_t::HostMirror();
@@ -265,9 +265,9 @@ void restore_kokkos(vpic_simulation& simulation)
 
     // Restore hydro array
     hydro_array_t* ha = simulation.hydro_array;
-    new(&ha->k_h_d) k_hydro_d_t();
-    new(&ha->k_h_h) k_hydro_d_t::HostMirror();
-    ha->k_h_d = k_hydro_d_t("k_hydro", nv);
+    new(&ha->k_h_d) k_hydro_t();
+    new(&ha->k_h_h) k_hydro_t::HostMirror();
+    ha->k_h_d = k_hydro_t("k_hydro", nv);
     ha->k_h_h = Kokkos::create_mirror_view(ha->k_h_d);
     // No need to populate hydro
 

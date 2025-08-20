@@ -38,8 +38,8 @@ emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
   /**/  species_t        * RESTRICT              sp  = cl->sp;
   //const interpolator_t   * RESTRICT ALIGNED(128) fi  = cl->ia->i;
   auto& fi = cl->ia->k_i_h;
-  /**/  field_t          * RESTRICT ALIGNED(128) f   = cl->fa->f;
-  /**/  accumulator_t    * RESTRICT ALIGNED(128) a   = cl->aa->a;
+//  /**/  field_t          * RESTRICT ALIGNED(128) f   = cl->fa->f;
+//  /**/  accumulator_t    * RESTRICT ALIGNED(128) a   = cl->aa->a;
   /**/  rng_t            * RESTRICT              rng = cl->rng;
 
 //  /**/  particle_t       * RESTRICT ALIGNED(128) p   = sp->p;

@@ -26,11 +26,11 @@ accumulate_current(CurrentScatterAccess& current_sa, int ii,
   current_sa(ii, 8)  += v2;
  
 #else
-  int iii = ii;
-  int zi = iii/((nx+2)*(ny+2));
-  iii -= zi*(nx+2)*(ny+2);
-  int yi = iii/(nx+2);
-  int xi = iii - yi*(nx+2);
+  //int iii = ii;
+  //int zi = iii/((nx+2)*(ny+2));
+  //iii -= zi*(nx+2)*(ny+2);
+  //int yi = iii/(nx+2);
+  //int xi = iii - yi*(nx+2);
   current_sa(ii, field_var::jfx)                           += v0;
   current_sa(ii, field_var::jfy)                           += v1;
   current_sa(ii, field_var::jfz)                           += v2;
@@ -323,7 +323,7 @@ advance_p_kokkos_unified(
         k_particle_i_copy_t& k_particle_i_copy,
         k_particle_movers_t& k_particle_movers,
         k_particle_i_movers_t& k_particle_movers_i,
-        k_field_sa_t k_f_sa,
+        k_field_sv_t k_f_sv,
         k_interpolator_t& k_interp,
         //k_particle_movers_t k_local_particle_movers,
         k_counter_t& k_nm,
@@ -351,9 +351,9 @@ advance_p_kokkos_unified(
   constexpr float two_fifteenths = 2./15.;
 
   k_field_t k_field = fa->k_f_d;
-  float cx = 0.25 * g->rdy * g->rdz / g->dt;
-  float cy = 0.25 * g->rdz * g->rdx / g->dt;
-  float cz = 0.25 * g->rdx * g->rdy / g->dt;
+  //float cx = 0.25 * g->rdy * g->rdz / g->dt;
+  //float cy = 0.25 * g->rdz * g->rdx / g->dt;
+  //float cz = 0.25 * g->rdx * g->rdy / g->dt;
   float rV = g->rdx * g->rdy * g->rdz;
   float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
 
@@ -404,7 +404,7 @@ advance_p_kokkos_unified(
   Kokkos::deep_copy(accumulator, 0);
   auto current_sv = Kokkos::Experimental::create_scatter_view(accumulator);
 #else
-  k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);
+  k_field_sv_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);
 #endif
 
 // Setting up work distribution settings
@@ -800,7 +800,7 @@ advance_p_kokkos_gpu(
         k_particle_i_copy_t& k_particle_i_copy,
         k_particle_movers_t& k_particle_movers,
         k_particle_i_movers_t& k_particle_movers_i,
-        k_field_sa_t k_f_sa,
+        k_field_sv_t k_f_sv,
         k_interpolator_t& k_interp,
         k_counter_t& k_nm,
         k_neighbor_t& k_neighbors,
@@ -826,10 +826,10 @@ advance_p_kokkos_gpu(
   constexpr float one_third      = 1./3.;
   constexpr float two_fifteenths = 2./15.;
   k_field_t k_field = fa->k_f_d;
-  k_field_sa_t k_f_sv = Kokkos::Experimental::create_scatter_view<>(k_field);
-  float cx = 0.25 * g->rdy * g->rdz / g->dt;
-  float cy = 0.25 * g->rdz * g->rdx / g->dt;
-  float cz = 0.25 * g->rdx * g->rdy / g->dt;
+  //k_field_sv_t k_f_sv = Kokkos::Experimental::create_scatter_view<>(k_field);
+  //float cx = 0.25 * g->rdy * g->rdz / g->dt;
+  //float cy = 0.25 * g->rdz * g->rdx / g->dt;
+  //float cz = 0.25 * g->rdx * g->rdy / g->dt;
   float rV = g->rdx*g->rdy*g->rdz;
   float gdx=g->dx, gdy=g->dy, gdz = g->dz, gdt = g->dt;
 
@@ -1163,7 +1163,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->k_pc_i_d,
           sp->k_pm_d,
           sp->k_pm_i_d,
-          fa->k_field_sa_d,
+          fa->k_field_sv_d,
           ia->k_i_d,
           sp->k_nm_d,
           sp->g->k_neighbor_d,
