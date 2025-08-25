@@ -38,7 +38,7 @@
   float rhomx  = (F(mx,rhof) > denmin) ? F(mx,rhof) : denmin; \
   float rhomy  = (F(my,rhof) > denmin) ? F(my,rhof) : denmin; \
   float rhomz  = (F(mz,rhof) > denmin) ? F(mz,rhof) : denmin; \
-  float dpedt  =  gamma * DIVUEP() + (gamma-1.0) * (-UEGRADP() + kappa * DIVQE());
+  float dpedt  =  gamma * DIVUEP() + (gamma-1.0) * (-UEGRADP())  + (kappa * DIVQE());
 
 #define UPDATE_B(delt)				\
    F(0,pe)  = (F(0,rhof) > denmin) ? F(0,oe) - delt*dpedt : F(0,te0)*F(0,rhof);
@@ -57,11 +57,11 @@
   
 #define UPDATE4()		\
   UPDATE_B(dt6);		\
-    F(0,pe)  -= dt6*F(0,te);	\
-  F(0,pe)  -= rV*two_thirds*F(0,se);\
+  F(0,pe)  -= dt6*F(0,te);	\
+  F(0,pe)  += 0*rV*two_thirds*F(0,se);\
   F(0,se)   = 0;                 \
   F(0,pe) = (F(0,rhof)>denmin) ? F(0,pe) : F(0,te0)*F(0,rhof);\
-  F(0,pe) = (F(0,pe>0)) ? F(0,pe) : 0;
+  F(0,pe) = (F(0,pe)>0)? F(0,pe) : 0;
 
 
 void
