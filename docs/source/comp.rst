@@ -9,7 +9,7 @@ Quickstart
 Compile Kokkos and VPIC
 -----------------------
 
-1. Do a *recursive* clone of this repo, this will pull down a copy of Kokkos for you.  ``git clone --recursive git@github.com:lanl/vpic-kokkos.git``  If you switch branches, you might need to update the Kokkos submodule.  ``git submodule update --init``
+1. Do a *recursive* clone of this repo, this will pull down a copy of Kokkos for you.  ``git clone --recursive git@github.com:lanl/vpic-kokkos.git``  If you switch branches, the Kokkos submodule will not automatically switch to the version that branch is using.  ``git submodule update --init`` will do that.  If you are running on very new hardware, you may want to update Kokkos to the most recent release or even an experimental branch.
 2. Load modules for CMake, your compiler, MPI, and any platform specific packages like CUDA.  GNU compilers are the most consistent.  Other compilers might perform slightly better and/or break the build system and/or break physics and/or cause any maner of problems.
 3. Find a file in `arch/` that is close to your intended system and modify as necessary.  "Cray" means "Cray."  As in, it's for Cray systems.  People seem to not understand that.  Pay particular attention to lines like::
     
@@ -17,7 +17,7 @@ Compile Kokkos and VPIC
     -DKokkos_ARCH_VOLTA70=ON
     -DKokkos_ARCH_POWER9=ON
 
-4. Make a build directory and run the arch file, keeping in mind that the arch files expect the source directory to be its parent.
+4. Make a build directory and run the arch file, keeping in mind that the arch files expect the source directory to be its parent.  (You may need to set the ``NVCC_WRAPPER_DEFAULT_COMPILER`` environment variable to something compatible with your version of CUDA.)
 5. Type ``make``.
 
 This should give you a simple working of the code, and if you selected the correct backend (CUDA/HIP) and architecture optimization targets, there's a good chance VPIC will select the best performance optimizations too.
@@ -26,6 +26,8 @@ Build a deck
 ------------
 
 Compiling VPIC creates a script `bin/vpic` that compiles decks.  From the folder your deck is in, type ``$BUILD_PATH/bin/vpic MyDeck.cxx`` to produce an executable.
+
+Sample decks are located in `sample`, but note that most have not been updated to work with the Kokkos version of VPIC (or even legacy VPIC as of ~2015).  `sample/short_pulse.cxx` is a likely a good, up-to-date starting point.
 
 Run the executable
 ------------------
@@ -38,22 +40,6 @@ Manual Kokkos Install (more powerful, more effort)
 **************************************************
 
 It is possible to have a version of Kokkos tuned for a specific machine that may outperform VPIC's internal Kokkos build.  This does not seem to be very popular at present, and VPIC's builds are generally very good with the right architectures and backends set, but you can link to an external Kokkos build.  Make sure the `BUILD_INTERNAL_KOKKOS` option is off.
-
-Further Reading
-***************
-
-One can cherry pick the Kokkos specific details from
-[here](https://github.com/ECP-copa/Cabana/wiki/Build-Instructions) to get
-detailed build instructions for Kokkos (ignore the things about Cabana).
-
-The advanced user should review `CMakeLists.txt` for the Kokkos specific
-options that are available. These include:
-
-1. `ENABLE_KOKKOS_OPENMP`
-2. `ENABLE_KOKKOS_CUDA`
-3. `BUILD_INTERNAL_KOKKOS`
-4. `VPIC_KOKKOS_DEBUG`
-5. `KOKKOS_ARCH`
 
 Optimization Options
 ********************

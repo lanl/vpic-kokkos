@@ -10,6 +10,8 @@
 
 #include <ctime>
 
+#define RUN3D 0
+
 // This is probably unnecessary on modern parallel file systems, e.g., lustre,
 // so set to something high to effectively disable it.
 #define NUM_TURNSTILES 300000  
@@ -95,7 +97,6 @@ begin_globals {
   DumpParameters fdParams;
   DumpParameters hedParams;
   DumpParameters hI1dParams;
-  DumpParameters hI2dParams;
   std::vector<DumpParameters *> outputParams;
 
 };
@@ -112,8 +113,9 @@ double density_func(double x, double y, double z, double xmin, double xmax,
         double ymin, double ymax, double zmin, double zmax){
     double dens = 1.;
     //Start with a nice vacuum inside the boundaries
-    // 3DCHANGE --- this needs to change when in 3D
-    //if( y<ymin+VAC || y > ymax-VAC) return 0.;
+#if RUN3D
+    if( y<ymin+VAC || y > ymax-VAC) return 0.; // Compile warning in 2D
+#endif
     if( z<zmin+VAC || z > zmax-VAC) return 0.;
     double ramp_length = 10e-6;
     double ramp1_min = xmin+VAC;
@@ -136,8 +138,9 @@ double density_func(double x, double y, double z, double xmin, double xmax,
 static inline double slab(double x, double y, double z, double xstart,
         double length, double zmin, double zmax, double ymin, double ymax){
     //Start with a nice vacuum inside the boundaries
-    // 3DCHANGE --- this needs to change when in 3D
-    //if( y<ymin+VAC || y > ymax-VAC) return 0.;
+#if RUN3D
+    if( y<ymin+VAC || y > ymax-VAC) return 0.; // Compile warning in 2D
+#endif
     if( z<zmin+VAC || z > zmax-VAC) return 0.;
 	if (x>=xstart && x < (xstart+length))
 		return 1.;
@@ -199,14 +202,17 @@ begin_initialization {
   double lambda_SI  = 1058e-9;
   double w0_SI = 1.25e-6; // Beam waist
 
-  double Lx_SI         = 30e-6; // Simulation box size
-  double Ly_SI         = w0_SI*sqrt(M_PI/2.);  // 3DCHANGE
-  double Lz_SI         = 30e-6;
+  double Lx_SI = 30e-6; // Simulation box size
+#if RUN3D
+  double Ly_SI = 30e-6;
+#else
+  double Ly_SI = w0_SI*sqrt(M_PI/2.); // Preserves total energy in laser pulse
+#endif
+  double Lz_SI = 30e-6;
   double t_stop = 1.2e-12 / time_to_SI; // Simulation run time
 
   double T_e = 5. * e_SI; // Technically, this is k_B*T.  e_SI is eV to J.
   double T_i = 5. * e_SI;
-  float dfrac               = 0.0; // fraction of charge density for n_Al12/ne
 
   double dist_to_focus = 10e-6;// For this run, put the origin at the focus
 
@@ -214,7 +220,11 @@ begin_initialization {
   // These are floating point to avoid a lot of casting
   // Increase resolution to ~3000 for physical results
   double nx = 500;
+#if RUN3D
+  double ny = 500;
+#else
   double ny = 1;
+#endif
   double nz = 500;
 
   double nppc = 60;  // Average number of macro particles/cell of each species
@@ -239,8 +249,6 @@ begin_initialization {
   int load_particles = 1;         // Flag to turn off particle load for testing
                                   // wave launch. William Daughton.
   int mobile_ions         = 1;           // whether or not to push ions
-  // For the first run particle_tracing=1, and particle_tracing=2 for the
-  // second run
 
   // Derived quantities
   double omega_L_SI = 2.*M_PI*c_SI/lambda_SI;
@@ -252,14 +260,10 @@ begin_initialization {
 
 
 #define mp_me 1836.15267343
-  double A_I1      = 1;                 // proton
-  double A_I2     = 12;             // carbon
-  double Z_I1      = 1;
-  double Z_I2     = 6;
+  double A_I1     = 12;             // carbon
+  double Z_I1     = 6;
   double m_I1_SI = A_I1*mp_me*m_e_SI;
-  double m_I2_SI = A_I2*mp_me*m_e_SI;
   double m_I1_c = m_I1_SI/mass_to_SI;
-  double m_I2_c = m_I2_SI/mass_to_SI;
 
   double c2 = c_SI*c_SI;
   // In 3 dimensions, the average energy is 3 halves the temperature
@@ -268,11 +272,9 @@ begin_initialization {
   // Relativistically corrected average momentum in each dimension
   double px_e_SI = sqrt(1./3.)*sqrt(E_e*E_e+2.*E_e*m_e_SI*c2)/c_SI;
   double px_I1_SI = sqrt(1./3.)*sqrt(E_i*E_i+2.*E_i*m_I1_SI*c2)/c_SI;
-  double px_I2_SI = sqrt(1./3.)*sqrt(E_i*E_i+2.*E_i*m_I2_SI*c2)/c_SI;
   // VPIC uses normalized momentum, not momentum in code units.
   double px_e_norm = px_e_SI/(m_e_SI*c_SI);
   double px_I1_norm = px_I1_SI/(m_I1_SI*c_SI);
-  double px_I2_norm = px_I2_SI/(m_I2_SI*c_SI);
 
   // Code units
   double dx = Lx_SI/nx / length_to_SI;
@@ -307,7 +309,7 @@ begin_initialization {
   double lambda    = lambda_SI / length_to_SI;  // Wavelength
   double xfocus    = dist_to_focus / length_to_SI; // Distance from boundary to
                                                    // focus
-  double f_number  = 1.5; // Not used!    // f number of beam
+  //double f_number  = 1.5; // Not used!    // f number of beam
   double waist     = w0_SI / length_to_SI;  // width of beam at focus
   double ycenter   = 0;         // spot centered in y on lhs boundary
   double zcenter   = 0;         // spot centered in z on lhs boundary
@@ -317,14 +319,17 @@ begin_initialization {
   double omega_0 = omega_L_SI * time_to_SI;
   double emax = sqrt(2.*laser_intensity_SI/(c_SI*eps0_SI)) / E_to_SI;
 // if plane wave:
-  emax = emax*sqrt(waist/width); // at entrance if 2D Gaussian
-  //emax = emax*(waist/width); // at entrance if 3D Gaussian 3DCHANGE
+#if RUN3D
+  emax = emax*sqrt(waist/width); // at entrance
+#else
+  emax = emax*(waist/width); // at entrance
+#endif
 
 
   // Diagnostics intervals.  
   int energies_interval = 50;
   int field_interval    = 400;//int(5./omega_L_SI / time_to_SI / dt);
-  int particle_interval = 10*field_interval;
+  int particle_interval = 10*field_interval; // Check if disabled in user_diag
 
   int restart_interval = 400;
   int quota_check_interval = 200;
@@ -339,13 +344,8 @@ begin_initialization {
   double Npe   = n_e_SI * Lx_SI*Ly_SI*Lz_SI; // Number of physical electrons in
                                              // box
   double qe    = -Npe/Ne;                   // Charge per macro electron
-  // TODO: Make compatible with species dependent ppc
-  double qi_I1 = -dfrac*qe;                 // Charge per macro ion of type 1.
-                                            // Note that species
-  double qi_I2 = -(1.0-dfrac)*qe;           // I2 and I1 are separate from one
-                                            // another in the loading.
-  int I1_present=0;
-  int I2_present=1;
+  double qi_I1 = qe;                 // Charge per macro ion of type 1.
+  int I1_present=1;
 
   // Print stuff that I need for plotters and such, and with enough sig figs!
   // Be very careful modifying this.  Plotters depend on explicit locations of
@@ -421,7 +421,6 @@ begin_initialization {
           *length_to_SI<<" "<<Lz*length_to_SI);
   sim_log("* nx, ny, nz =                   "<<nx<<" "<<ny<<" "<<nz);
   sim_log("* Physical/macro electron =      "<<fabs(qe));
-  sim_log("* Physical I2/macro I2 =         "<<qi_I2);
   sim_log("* Physical I1/macro I1 =         "<<qi_I1);
   sim_log("* particles_alloc =              "<<particles_alloc);
   sim_log("* Average particles/processor:   "<<Ne/nproc());
@@ -434,8 +433,8 @@ begin_initialization {
   sim_log("* Vac wavelength, I_laser:       "<<lambda_SI<<" "
           <<laser_intensity_SI);
   sim_log("* T_e, T_i (eV):                 "<<T_e<<" "<<T_i<<" "<<m_e_c<<" "
-          <<m_I1_c<<" "<<m_I2_c);
-  sim_log("* m_e, m_I1, m_I2 (code units):  "<<m_e_c<<" "<<m_I1_c<<" "<<m_I2_c);
+          <<m_I1_c);
+  sim_log("* m_e, m_I1 (code units):        "<<m_e_c<<" "<<m_I1_c);
   sim_log("* Radiation damping:             "<<damp);
   sim_log("* Fraction of courant limit:     "<<cfl_req);
   sim_log("* emax at entrance, waist:       "<<emax<<" "<<emax/sqrt(waist
@@ -476,7 +475,6 @@ begin_initialization {
   global->omega_0                  = omega_0;
   global->mobile_ions              = mobile_ions; 
   global->I1_present                = I1_present;
-  global->I2_present               = I2_present;
   global->launch_wave              = launch_wave; 
   global->lambda                   = lambda;
   global->waist                    = waist;
@@ -502,7 +500,6 @@ begin_initialization {
 
   
   global->I1_present           = I1_present; 
-  global->I2_present           = I2_present; 
 
   // SETUP THE GRID
   sim_log("Setting up computational grid."); 
@@ -532,11 +529,9 @@ begin_initialization {
   double over_alloc_fac = 3;
   double max_local_np_e            = over_alloc_fac*particles_alloc/nproc();
   double max_local_np_i1            = max_local_np_e;
-  double max_local_np_i2            = max_local_np_e;
   // The movers are NOT resized and must be set big enough here.
   double max_local_nm_e            = max_local_np_e / 8.0;
   double max_local_nm_i1            = max_local_nm_e;
-  double max_local_nm_i2            = max_local_nm_e;
 
   species_t * electron = define_species("electron", -1.*e_c, m_e_c,
           max_local_np_e, max_local_nm_e, 20, 0);
@@ -548,22 +543,20 @@ begin_initialization {
   electron->pb_diag->write_posy = 1;
   electron->pb_diag->write_posz = 1;
   finalize_pb_diagnostic(electron);
-  species_t *ion_I1, *ion_I2;
+  species_t *ion_I1;
   if ( mobile_ions ) {
   sim_log("Setting up ions. ");
-    if ( I1_present  ) ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c,
+    if ( I1_present  ) {
+        ion_I1 = define_species("I1", Z_I1*e_c, m_I1_c,
             max_local_np_i1, max_local_nm_i1, 80, 0);
-    if ( I2_present  ) {
-        ion_I2 = define_species("I2", Z_I2*e_c, m_I2_c,
-            max_local_np_i2, max_local_nm_i2, 80, 0);
-        ion_I2->pb_diag->write_ux = 1;
-        ion_I2->pb_diag->write_uy = 1;
-        ion_I2->pb_diag->write_uz = 1;
-        ion_I2->pb_diag->write_weight = 1;
-        ion_I2->pb_diag->write_posx = 1;
-        ion_I2->pb_diag->write_posy = 1;
-        ion_I2->pb_diag->write_posz = 1;
-        finalize_pb_diagnostic(ion_I2);
+        ion_I1->pb_diag->write_ux = 1;
+        ion_I1->pb_diag->write_uy = 1;
+        ion_I1->pb_diag->write_uz = 1;
+        ion_I1->pb_diag->write_weight = 1;
+        ion_I1->pb_diag->write_posx = 1;
+        ion_I1->pb_diag->write_posy = 1;
+        ion_I1->pb_diag->write_posz = 1;
+        finalize_pb_diagnostic(ion_I1);
     }
   }
 
@@ -579,10 +572,21 @@ begin_initialization {
 
 
   // Paint the simulation volume with materials and boundary conditions
-# define iv_region ( x<global->xmin + dx*iv_thick || x>global->xmax-dx*iv_thick\
-        /*3DCHANGE*/  \
-	    /* || y<-global->ymin+dy*iv_thick || y>global->ymax-dy*iv_thick*/  \
-        || z<global->zmin+dz*iv_thick || z>global->zmax-dz*iv_thick )
+
+  double _xmin = global->xmin + dx*iv_thick;
+  double _xmax = global->xmax - dx*iv_thick;
+  double _ymin = global->ymin + dy*iv_thick;
+  double _ymax = global->ymax - dy*iv_thick;
+  double _zmin = global->zmin + dz*iv_thick;
+  double _zmax = global->zmax - dz*iv_thick;
+#if RUN3D
+# define iv_region ( x < _xmin || x > _xmax \
+	              || y < _ymin || y > _ymax \
+                  || z < _zmin || z > _zmax )
+#else
+# define iv_region ( x < _xmin || x > _xmax \
+                  || z < _zmin || z > _zmax )
+#endif
   /* all boundaries are i.v. */
 
 
@@ -621,24 +625,17 @@ begin_initialization {
                   z*length_to_SI, global->xmin*length_to_SI+10e-6, 10e-6,
                   global->zmin*length_to_SI, global->zmax*length_to_SI,
                   global->ymin*length_to_SI, global->ymax*length_to_SI) ) {
-      // third to last arg is "weight," a positive number
           //std::cout<< " injecting electron " << std::endl;
           inject_particle( electron, x, y, z,
                          normal( rng(0), 0, px_e_norm ),
                          normal( rng(0), 0, px_e_norm ),
                          normal( rng(0), 0, px_e_norm ), fabs(qe), 0, 0 );
   
-//        if ( mobile_ions )
-//          inject_particle( ion_I2, x, y, z,
-//                           normal( rng(0), 0, uthi_I2 ),
-//                           normal( rng(0), 0, uthi_I2 ),
-//                           normal( rng(0), 0, uthi_I2 ), qi_I2 );
-
         if ( mobile_ions ) {
-            inject_particle( ion_I2, x, y, z,
-                             normal( rng(0), 0, px_I2_norm ),
-                             normal( rng(0), 0, px_I2_norm ),
-                             normal( rng(0), 0, px_I2_norm ), fabs(qi_I2)/Z_I2,
+            inject_particle( ion_I1, x, y, z,
+                             normal( rng(0), 0, px_I1_norm ),
+                             normal( rng(0), 0, px_I1_norm ),
+                             normal( rng(0), 0, px_I1_norm ), fabs(qi_I1)/Z_I1,
                              0, 0 );
         }
  
@@ -680,9 +677,6 @@ begin_initialization {
 
   global->hI1dParams.format = band;
   sim_log ( "I1 hydro output format : band" );
-
-  global->hI2dParams.format = band;
-  sim_log ( "I2 hydro output format   : band" );
 
 
  /*--------------------------------------------------------------------------
@@ -789,26 +783,6 @@ begin_initialization {
   // add hydrogen hydro parameters to list
   global->outputParams.push_back(&global->hI1dParams);
 
-  //----------------------------------------------------------------------
-  // ion I2 hydro
-
-  // relative path to electron species data from global header
-  sprintf(global->hI2dParams.baseDir, "I2hydro");
-
-  // base file name for fields output
-  sprintf(global->hI2dParams.baseFileName, "I2_hydro");
-
-  // set helium hydro strides
-  global->hI2dParams.stride_x = stride_x;
-  global->hI2dParams.stride_y = stride_y;
-  global->hI2dParams.stride_z = stride_z;
-  sim_log ( "Ion species x-stride " << global->hI2dParams.stride_x );
-  sim_log ( "Ion species y-stride " << global->hI2dParams.stride_y );
-  sim_log ( "Ion species z-stride " << global->hI2dParams.stride_z );
-
-  // add helium hydro parameters to list
-  global->outputParams.push_back(&global->hI2dParams);
-
  /*-----------------------------------------------------------------------
   * Set output fields
   *
@@ -834,6 +808,7 @@ begin_initialization {
  /* CUT AND PASTE AS A STARTING POINT
   * REMEMBER TO ADD APPROPRIATE GLOBAL DUMPPARAMETERS VARIABLE
 
+  // "all" has been removed because it doesn't play well with CUDA
    output_variables( all );
 
    output_variables( electric | div_e_err | magnetic | div_b_err |
@@ -844,17 +819,12 @@ begin_initialization {
                      momentum_density | ke_density     | stress_tensor );
   */
 
-  //global->fdParams.output_variables( all );
   global->fdParams.output_variables( electric | magnetic );
 
-  //global->hedParams.output_variables( all );
   global->hedParams.output_variables(  current_density  | charge_density |
                                        momentum_density | ke_density |
                                        stress_tensor );
   global->hI1dParams.output_variables(  current_density  | charge_density |
-                                       momentum_density | ke_density |
-                                       stress_tensor );
-  global->hI2dParams.output_variables( current_density  | charge_density |
                                        momentum_density | ke_density |
                                        stress_tensor );
 
@@ -871,9 +841,6 @@ begin_initialization {
 
   create_hydro_list(varlist, global->hI1dParams);
   sim_log ( "I1 species variable list: " << varlist );
-
-  create_hydro_list(varlist, global->hI2dParams);
-  sim_log ( "I2 species variable list: " << varlist );
 
  /*------------------------------------------------------------------------*/
 
@@ -968,7 +935,6 @@ begin_diagnostics {
       hydro_dump( "electron", global->hedParams );
       if ( global->mobile_ions ) {
         if ( global->I1_present ) hydro_dump( "I1", global->hI1dParams );
-        if ( global->I2_present ) hydro_dump( "I2", global->hI2dParams );
       }
   
 
@@ -999,7 +965,7 @@ begin_diagnostics {
   }
 
   // Particle dump data
-#if 1
+#if 0
   if ( should_dump(particle) && global->load_particles ) {
     // dump_particles will do this if necessary
     /*species_t * sp;
@@ -1010,7 +976,6 @@ begin_diagnostics {
     dump_particles( "electron", "particle/eparticle" );
     if ( global->mobile_ions ) {
       if (global->I1_present) dump_particles( "I1", "particle/I1particle" );
-      if (global->I2_present) dump_particles( "I2", "particle/I2particle" );
     }
   }
 #endif
@@ -1086,7 +1051,6 @@ begin_diagnostics {
 
 //???????????????????????????????????????????????????????????????????????
     BEGIN_TURNSTILE(NUM_TURNSTILES) {
-//    checkpt( restart_fbase[global->rtoggle], step() );
       checkpt("restart/restart", global->rtoggle);
  } END_TURNSTILE;
 
@@ -1143,7 +1107,6 @@ begin_field_injection {
     double emax_coeff = ((4/(1+alpha))*global->omega_0*grid->dt*global->emax);
     double t=grid->dt*step();
 
-#if 1
     double pulse_shape_factor=1;
     if ( global->pulse_shape>=1 ) pulse_shape_factor=( t<global->pulse_FWHM ? 1
             : 0 );
@@ -1159,7 +1122,6 @@ begin_field_injection {
         z *= fac;
         pulse_shape_factor = 2./(exp(z)+exp(-z));
     }
-#endif 
 
     double prefactor = emax_coeff*sqrt(2.0/M_PI); // Wave norm at edge of box
 //  double prefactor = emax_coeff;  // Wave norm at edge of box
@@ -1170,7 +1132,9 @@ begin_field_injection {
 // Kokkos Port
     int ny = grid->ny;
     int nz = grid->nz;
-    //float dy = grid->dy; // 3DCHANGE
+#if RUN3D
+    float dy = grid->dy;
+#endif
     float dz = grid->dz;
     float y0 = grid->y0;
     float z0 = grid->z0;
@@ -1189,11 +1153,13 @@ begin_field_injection {
 
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> left_edge({1, 1}, {nz+2, ny+1});
     Kokkos::parallel_for("Field injection", left_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
-        //auto DY = (iy-0.5)*dy + dy_offset; // 3DCHANGE
-        //if(ny==1) DY = 0.; // Auto 3D change at small computational cost
+#if RUN3D
+        auto DY = (iy-0.5)*dy + dy_offset;
+#else
+        auto DY = 0.;
+#endif
         auto DZ = (iz-1)*dz + dz_offset;
-        //auto R2 = DY*DY + DZ*DZ; // 3DCHANGE
-	    auto R2 = DZ*DZ; // 2D
+        auto R2 = DY*DY + DZ*DZ;
         auto phase= omega_0*t + h*R2/(width2);
         auto MASK = R2<=pow(mask*width,2) ? 1 : 0;
         kfield(1+sy*iy+sz*iz, field_var::ey) += prefactor * cos(phase)
