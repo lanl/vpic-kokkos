@@ -55,7 +55,6 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#manual-kokkos-install-more-powerful-more-effort">Manual Kokkos Install (more powerful, more effort)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#further-reading">Further Reading</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#optimization-options">Optimization Options</a></li>
 </ul>
 </li>
@@ -99,7 +98,7 @@
 <section id="compile-kokkos-and-vpic">
 <h3>Compile Kokkos and VPIC<a class="headerlink" href="#compile-kokkos-and-vpic" title="Link to this heading"></a></h3>
 <ol class="arabic">
-<li><p>Do a <em>recursive</em> clone of this repo, this will pull down a copy of Kokkos for you.  <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">clone</span> <span class="pre">--recursive</span> <span class="pre">git&#64;github.com:lanl/vpic-kokkos.git</span></code>  If you switch branches, you might need to update the Kokkos submodule.  <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">submodule</span> <span class="pre">update</span> <span class="pre">--init</span></code></p></li>
+<li><p>Do a <em>recursive</em> clone of this repo, this will pull down a copy of Kokkos for you.  <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">clone</span> <span class="pre">--recursive</span> <span class="pre">git&#64;github.com:lanl/vpic-kokkos.git</span></code>  If you switch branches, the Kokkos submodule will not automatically switch to the version that branch is using.  <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">submodule</span> <span class="pre">update</span> <span class="pre">--init</span></code> will do that.  If you are running on very new hardware, you may want to update Kokkos to the most recent release or even an experimental branch.</p></li>
 <li><p>Load modules for CMake, your compiler, MPI, and any platform specific packages like CUDA.  GNU compilers are the most consistent.  Other compilers might perform slightly better and/or break the build system and/or break physics and/or cause any maner of problems.</p></li>
 <li><p>Find a file in <cite>arch/</cite> that is close to your intended system and modify as necessary.  “Cray” means “Cray.”  As in, it’s for Cray systems.  People seem to not understand that.  Pay particular attention to lines like:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">-</span><span class="n">DENABLE_KOKKOS_CUDA</span><span class="o">=</span><span class="n">ON</span>
@@ -108,7 +107,7 @@
 </pre></div>
 </div>
 </li>
-<li><p>Make a build directory and run the arch file, keeping in mind that the arch files expect the source directory to be its parent.</p></li>
+<li><p>Make a build directory and run the arch file, keeping in mind that the arch files expect the source directory to be its parent.  (You may need to set the <code class="docutils literal notranslate"><span class="pre">NVCC_WRAPPER_DEFAULT_COMPILER</span></code> environment variable to something compatible with your version of CUDA.)</p></li>
 <li><p>Type <code class="docutils literal notranslate"><span class="pre">make</span></code>.</p></li>
 </ol>
 <p>This should give you a simple working of the code, and if you selected the correct backend (CUDA/HIP) and architecture optimization targets, there’s a good chance VPIC will select the best performance optimizations too.</p>
@@ -116,6 +115,7 @@
 <section id="build-a-deck">
 <h3>Build a deck<a class="headerlink" href="#build-a-deck" title="Link to this heading"></a></h3>
 <p>Compiling VPIC creates a script <cite>bin/vpic</cite> that compiles decks.  From the folder your deck is in, type <code class="docutils literal notranslate"><span class="pre">$BUILD_PATH/bin/vpic</span> <span class="pre">MyDeck.cxx</span></code> to produce an executable.</p>
+<p>Sample decks are located in <cite>sample</cite>, but note that most have not been updated to work with the Kokkos version of VPIC (or even legacy VPIC as of ~2015).  <cite>sample/short_pulse.cxx</cite> is a likely a good, up-to-date starting point.</p>
 </section>
 <section id="run-the-executable">
 <h3>Run the executable<a class="headerlink" href="#run-the-executable" title="Link to this heading"></a></h3>
@@ -126,21 +126,6 @@
 <section id="manual-kokkos-install-more-powerful-more-effort">
 <h2>Manual Kokkos Install (more powerful, more effort)<a class="headerlink" href="#manual-kokkos-install-more-powerful-more-effort" title="Link to this heading"></a></h2>
 <p>It is possible to have a version of Kokkos tuned for a specific machine that may outperform VPIC’s internal Kokkos build.  This does not seem to be very popular at present, and VPIC’s builds are generally very good with the right architectures and backends set, but you can link to an external Kokkos build.  Make sure the <cite>BUILD_INTERNAL_KOKKOS</cite> option is off.</p>
-</section>
-<section id="further-reading">
-<h2>Further Reading<a class="headerlink" href="#further-reading" title="Link to this heading"></a></h2>
-<p>One can cherry pick the Kokkos specific details from
-[here](<a class="reference external" href="https://github.com/ECP-copa/Cabana/wiki/Build-Instructions">https://github.com/ECP-copa/Cabana/wiki/Build-Instructions</a>) to get
-detailed build instructions for Kokkos (ignore the things about Cabana).</p>
-<p>The advanced user should review <cite>CMakeLists.txt</cite> for the Kokkos specific
-options that are available. These include:</p>
-<ol class="arabic simple">
-<li><p><cite>ENABLE_KOKKOS_OPENMP</cite></p></li>
-<li><p><cite>ENABLE_KOKKOS_CUDA</cite></p></li>
-<li><p><cite>BUILD_INTERNAL_KOKKOS</cite></p></li>
-<li><p><cite>VPIC_KOKKOS_DEBUG</cite></p></li>
-<li><p><cite>KOKKOS_ARCH</cite></p></li>
-</ol>
 </section>
 <section id="optimization-options">
 <h2>Optimization Options<a class="headerlink" href="#optimization-options" title="Link to this heading"></a></h2>
