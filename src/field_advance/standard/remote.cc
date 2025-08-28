@@ -404,12 +404,12 @@ kokkos_begin_remote_ghost_tang_b( field_array_t      * RESTRICT fa,
                             field_buffers_t&            f_buffers) {
     const int nx = g->nx, ny = g->ny, nz = g->nz;
 
-    begin_recv_kokkos<XYZ>(g,-1,0,0,nx,ny,nz, f_buffers.xyz_sbuf_neg, f_buffers.xyz_rbuf_neg_h);
-    begin_recv_kokkos<YZX>(g,0,-1,0,nx,ny,nz, f_buffers.yzx_sbuf_neg, f_buffers.yzx_rbuf_neg_h);
-    begin_recv_kokkos<ZXY>(g,0,0,-1,nx,ny,nz, f_buffers.zxy_sbuf_neg, f_buffers.zxy_rbuf_neg_h);
-    begin_recv_kokkos<XYZ>(g,1,0,0,nx,ny,nz,  f_buffers.xyz_sbuf_pos, f_buffers.xyz_rbuf_pos_h);
-    begin_recv_kokkos<YZX>(g,0,1,0,nx,ny,nz,  f_buffers.yzx_sbuf_pos, f_buffers.yzx_rbuf_pos_h);
-    begin_recv_kokkos<ZXY>(g,0,0,1,nx,ny,nz,  f_buffers.zxy_sbuf_pos, f_buffers.zxy_rbuf_pos_h);
+    begin_recv_kokkos<XYZ>(g,-1,0,0,nx,ny,nz, f_buffers.xyz_rbuf_neg, f_buffers.xyz_rbuf_neg_h);
+    begin_recv_kokkos<YZX>(g,0,-1,0,nx,ny,nz, f_buffers.yzx_rbuf_neg, f_buffers.yzx_rbuf_neg_h);
+    begin_recv_kokkos<ZXY>(g,0,0,-1,nx,ny,nz, f_buffers.zxy_rbuf_neg, f_buffers.zxy_rbuf_neg_h);
+    begin_recv_kokkos<XYZ>(g,1,0,0,nx,ny,nz,  f_buffers.xyz_rbuf_pos, f_buffers.xyz_rbuf_pos_h);
+    begin_recv_kokkos<YZX>(g,0,1,0,nx,ny,nz,  f_buffers.yzx_rbuf_pos, f_buffers.yzx_rbuf_pos_h);
+    begin_recv_kokkos<ZXY>(g,0,0,1,nx,ny,nz,  f_buffers.zxy_rbuf_pos, f_buffers.zxy_rbuf_pos_h);
 
     begin_send_kokkos<XYZ>(g,fa,-1,0,0,nx,ny,nz, f_buffers.xyz_sbuf_neg, f_buffers.xyz_sbuf_neg_h);
     begin_send_kokkos<YZX>(g,fa,0,-1,0,nx,ny,nz, f_buffers.yzx_sbuf_neg, f_buffers.yzx_sbuf_neg_h);
