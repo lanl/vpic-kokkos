@@ -35,6 +35,10 @@ accumulate_current(CurrentScatterAccess& current_sa, int ii,
   current_sa(ii, field_var::jfy)                           += v1;
   current_sa(ii, field_var::jfz)                           += v2;
   current_sa(ii, field_var::rhof)                          += v3;
+  current_sa(ii, field_var::zx)                            += v4;
+  current_sa(ii, field_var::zy)                            += v5;
+  current_sa(ii, field_var::zz)                            += v6;
+  current_sa(ii, field_var::ze)                            += v7;
 #endif
 }
 
@@ -648,12 +652,16 @@ advance_p_kokkos_unified(
         //dy[LANE] = v1[LANE];
         //dz[LANE] = v2[LANE];
         //v5[LANE] = q[LANE]*ux[LANE]*uy[LANE]*uz[LANE]*one_third;
-
-#       define ACCUMULATE_J()                                              \
-        v0[LANE]  = q[LANE]*v6[LANE];   /*  = q ux                            */        \
-        v1[LANE]  = q[LANE]*v7[LANE];   /*  = q uy                            */        \
-        v2[LANE]  = q[LANE]*v8[LANE];   /*  = q uz                            */        \
-        v3[LANE]  = q[LANE];   /* v2 = q                            */        \
+        
+#       define ACCUMULATE_J()                                  \
+        v0[LANE]  = q[LANE]*v6[LANE];   /*  = q ux         */  \
+        v1[LANE]  = q[LANE]*v7[LANE];   /*  = q uy         */  \
+        v2[LANE]  = q[LANE]*v8[LANE];   /*  = q uz         */  \
+        v3[LANE]  = q[LANE];            /* v2 = q          */  \
+        v4[LANE]  = qsp*q[LANE]*v6[LANE];   /* v2 = q      */  \
+        v5[LANE]  = qsp*q[LANE]*v7[LANE];   /* v2 = q      */  \
+        v6[LANE]  = qsp*q[LANE]*v8[LANE];   /* v2 = q      */  \
+        v7[LANE]  = qsp*q[LANE];            /* v2 = q      */  \
       
         ACCUMULATE_J();
 
@@ -674,7 +682,7 @@ advance_p_kokkos_unified(
           accumulate_current(current_sa, ii[LANE],
                        nx, ny, nz, rV,
 		       v0[LANE], v1[LANE], v2[LANE], v3[LANE],
-                       v6[LANE], v7[LANE], v8[LANE], v9[LANE],
+                       v4[LANE], v5[LANE], v6[LANE], v7[LANE],
                        v10[LANE], v11[LANE], v12[LANE], v13[LANE]);
         } END_VECTOR_BLOCK;
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
@@ -1049,7 +1057,12 @@ advance_p_kokkos_gpu(
            k_field_scatter_access(ii, field_var::jfx) += q*rV*ux;
            k_field_scatter_access(ii, field_var::jfy) += q*rV*uy;
            k_field_scatter_access(ii, field_var::jfz) += q*rV*uz;
-	   k_field_scatter_access(ii, field_var::rhof) += q*rV;
+	   k_field_scatter_access(ii, field_var::rhof)+= q*rV;
+	   
+	   k_field_scatter_access(ii, field_var::zx) += qsp*q*rV*ux;
+           k_field_scatter_access(ii, field_var::zy) += qsp*q*rV*uy;
+           k_field_scatter_access(ii, field_var::zz) += qsp*q*rV*uz;
+	   k_field_scatter_access(ii, field_var::ze) += qsp*q*rV;
     
 } else {
       

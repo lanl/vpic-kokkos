@@ -92,6 +92,12 @@ hyb_advance_b(field_array_t * RESTRICT fa,
     k_end_remote_ghost_hyb_jf  (fa);
     Kokkos::Profiling::popRegion();
     Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Apply_Local_Ghost_JF");
+    Kokkos::Profiling::popRegion();
+    
+    k_begin_remote_ghost_hyb_z(fa, fa->g, *(fa->fb) );
+    k_end_remote_ghost_hyb_z  (fa, fa->g, *(fa->fb) );
+    Kokkos::Profiling::popRegion();
+    Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Apply_Local_Ghost_Z");
     k_hyb_local_ghost_jf  (fa, fa->g);
     Kokkos::Profiling::popRegion();
 
@@ -105,6 +111,13 @@ hyb_advance_b(field_array_t * RESTRICT fa,
       k_end_remote_ghost_hyb_jf  (fa);
       Kokkos::Profiling::popRegion();
       Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Apply_Local_Ghost_JF");
+      //k_hyb_local_ghost_jf  (fa, fa->g);
+      Kokkos::Profiling::popRegion();
+      
+      k_begin_remote_ghost_hyb_z(fa, fa->g, *(fa->fb) );
+      k_end_remote_ghost_hyb_z  (fa, fa->g, *(fa->fb) );
+      Kokkos::Profiling::popRegion();
+      Kokkos::Profiling::pushRegion("HybyridAdvanceB::Smooth_Ion_Moments::Apply_Local_Ghost_Z");
       k_hyb_local_ghost_jf  (fa, fa->g);
       Kokkos::Profiling::popRegion();
       ism--;

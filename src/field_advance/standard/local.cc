@@ -1532,6 +1532,10 @@ void k_reduce_jf(field_array_t* RESTRICT fa ) {
               kfd(i, field_var::jfy) += kad(i, accumulator_var::jy);
               kfd(i, field_var::jfz) += kad(i, accumulator_var::jz);
               kfd(i, field_var::rhof)+= kad(i, accumulator_var::rho);
+              kfd(i, field_var::zx)  += kad(i, accumulator_var::zx);
+              kfd(i, field_var::zy)  += kad(i, accumulator_var::zy);
+              kfd(i, field_var::zz)  += kad(i, accumulator_var::zz);
+              kfd(i, field_var::ze)  += kad(i, accumulator_var::ze);
 
     });
     // Clear the accumulators on the host
@@ -1955,6 +1959,10 @@ template<typename T> void apply_hyb_local_jf(int i, int j, int k,
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::jfy);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::jfz);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::rhof);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::zx) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::zx);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::zy) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::zy);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::zz) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::zz);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ze) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ze);\
 	});								\
       break;								\
     default:								\

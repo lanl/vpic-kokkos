@@ -30,8 +30,6 @@ typedef struct pipeline_args {
 #define UE(x_,y_,z_)							\
   F(0,u##x_) = invrho * (u##x_)
 
-
-
 void
 hyb_advance_ue( field_array_t * RESTRICT fa,
                   float frac ) {
@@ -59,34 +57,7 @@ hyb_advance_ue( field_array_t * RESTRICT fa,
   
   //for interior cells
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1,1,1},{nx+1,ny+1,nz+1});
-  
-  //TODO: this passes B also, just need pe
-  /***************************************************************************
-   * Begin tangential B ghost setup
-   ***************************************************************************/
     
-  Kokkos::Profiling::pushRegion("HybridAdvanceE::Tangential_Ghost_Setup");
-  Kokkos::Profiling::pushRegion("HybridAdvanceE::Tangential_Ghost_Setup::Begin_Remote_Ghost_Hybrid_B");
-  k_begin_remote_ghost_hyb_b(fa, fa->g, *(fa->fb) ); // Read: cbx, cby, cbz
-  Kokkos::Profiling::popRegion();
-
-
-  /***************************************************************************
-   * End tangential B ghost setup
-   ***************************************************************************/
-  Kokkos::Profiling::pushRegion("HybridAdvanceE::Tangential_Ghost_Setup::End_Remote_Ghost_Hybrid_B");
-  k_end_remote_ghost_hyb_b(fa, fa->g, *(fa->fb) ); // Write: cbx, cby, cbz
-  Kokkos::Profiling::popRegion();
-
-  /***************************************************************************
-   * Apply local hybrid ghost b
-   ***************************************************************************/
-  Kokkos::Profiling::pushRegion("HybridAdvanceE::Tangential_Ghost_Setup::Hybrid_Local_Ghost_B");
-  k_hyb_local_ghost_b( fa, fa->g ); // R/W: cbx, cby, cbz
-  Kokkos::Profiling::popRegion();
-  Kokkos::Profiling::popRegion();
-  
-   
   /***************************************************************************
    * Update ue fields
    ***************************************************************************/ 
