@@ -28,9 +28,7 @@ enum grid_enums {
 
   // Phase 3 boundary conditions
   reflect_particles = -1, // Cell boundary should reflect particles
-  absorb_particles  = -2,  // Cell boundary should absorb particles
-  Maxwellian_reflux = -3  // Cell boundary should reinject from Maxwellian
-                          // distribution
+  absorb_particles  = -2  // Cell boundary should absorb particles
 
   // Symmetry in the field boundary conditions refers to image charge
   // sign
@@ -105,8 +103,7 @@ typedef struct grid {
 
   float den_floor_ohm;    // Density floor for Ohm's law update
   float den_floor_pe;     // Density floor for electron pressure update
-  float eos_gamma, eos_den, gravity; // Electron fluid adiabatic index, reference density, g in x direction
-  float nu, me;             //For electron collisional heat flux closure
+  float eos_gamma, eos_den; // Electron fluid adiabatic index, reference density
   
   int   bc[27];             // (-1:1,-1:1,-1:1) FORTRAN indexed array of
                             // boundary conditions to apply at domain edge
@@ -133,8 +130,7 @@ typedef struct grid {
   int64_t * ALIGNED(128) neighbor;
                           // (0:5,0:local_num_voxel-1) FORTRAN indexed
                           // array neighbor(0:5,lidx) are the global
-                          // Cell boundary should reinject from Maxwellian
-                          // distribution // indexes of neighboring voxels of the
+                          // indexes of neighboring voxels of the
                           // voxel with local index "lidx".  Negative
                           // if neighbor is a boundary condition.
 

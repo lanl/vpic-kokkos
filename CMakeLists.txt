@@ -80,7 +80,7 @@ option(VPIC_ENABLE_HALO_EXCHANGE "Enable halo exchange code path for remote comm
 
 option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." ON)
 
-option(HYB_USE_STATIC_E "Use electrostatic hybrid field solver." ON)
+option(HYB_USE_STATIC_E "Use electrostatic hybrid field solver." OFF)
 
 option(HYB_USE_RADIATION "Include user radiation transport." OFF)
 
