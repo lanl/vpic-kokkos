@@ -82,7 +82,7 @@ option(VPIC_ENABLE_LEGACY_DATA_STRUCTURES "Enable use of legacy data structures 
 
 option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." ON)
 
-option(HYB_USE_STATIC_E "Use electrostatic hybrid field solver." ON)
+option(HYB_USE_STATIC_E "Use electrostatic hybrid field solver." OFF)
 
 option(HYB_USE_RADIATION "Include user radiation transport." OFF)
 

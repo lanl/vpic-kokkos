@@ -26,7 +26,8 @@ typedef struct pipeline_args {
 
 
 #define E(x_,y_,z_)							\
-  F(0,e##x_) = - invrho * F(0,tcaz) * ( p##x_*( F(x_,pe) - F(m##x_,pe)) );
+  F(0,e##x_) = - invrho * ( p##x_*( F(x_,pe) - F(m##x_,pe)) );		\
+  F(0,e##x_) *= F(0,tcaz);
   
 void
 hyb_static_e( field_array_t * RESTRICT fa,
@@ -74,11 +75,6 @@ hyb_static_e( field_array_t * RESTRICT fa,
     E(z,x,y);
   });
   Kokkos::Profiling::popRegion();
-  
-  k_begin_remote_ghost_hyb_e( fa );
-  k_end_remote_ghost_hyb_e( fa );
-  //fix local BCs
-  k_hyb_local_ghost_e( fa, fa->g );
     
 Kokkos::fence();
 }
