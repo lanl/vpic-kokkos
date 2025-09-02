@@ -165,6 +165,8 @@ typedef struct field {
   float pex, pey, pez,div_b_err ;        // pressure etc
   float ux, uy, uz, ue;                  // Electron bulk flow velocity
   float sx, sy, sz, se;                  // Electron momentum and energy sources
+  float zx,  zy,  zz,  ze;               // Z^2 moments for transport model
+  float zxold,  zyold,  zzold,  zeold;   // Z^2 moments for transport model
   material_id ematx, ematy, ematz, nmat; // Material at edge centers and nodes
   material_id fmatx, fmaty, fmatz, cmat; // Material at face and cell centers
  

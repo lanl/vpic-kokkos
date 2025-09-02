@@ -2334,6 +2334,189 @@ k_end_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa,
 #endif
 }
 
+
+//Hybrid Z
+#define BRP(x_,y_,z_)							                     \
+  const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;	 \
+  const int size = (4*n##y_*n##z_)*sizeof(float);			 \
+  BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
+  
+
+template<typename Face> 
+void 
+begin_recv_ghost_hyb_z(field_array* fa, const int i, const int j, const int k) {
+  field_buffers_t* fb = fa->fb;
+  int src = fa->g->bc[BOUNDARY(-i,-j,-k)]; /**< Source rank */
+  // Only recv cells if dst is a valid neighbor and not itself
+  if( 0 <= src && src < world_size ) {
+    Kokkos::DualView<float*> rbuf = fb->recv_buffer[BOUNDARY(i,j,k)];
+    auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
+    auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
+
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      BRP(x,y,z);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      BRP(y,z,x);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      BRP(z,x,y);
+    }
+  }
+}
+
+#undef BRP
+
+#define BSP(x_,y_,z_)							                                                  \
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		                      \
+  const int size = (4*n##y_*n##z_)*sizeof(float);				                            \
+  const int face = (i+j+k)<0 ? 1 : n##x_;				                                    \
+  const k_field_t& k_field = fa->k_f_d;					                                    \
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> x_##_face({1,1,0}, {n##z_+1, n##y_+1, 4}); \
+  Kokkos::parallel_for("begin_send_ghost_hyb_z<XYZ>", x_##_face,                   \
+  KOKKOS_LAMBDA(const int z_, const int y_, const int var) {                        \
+      const int x_ = face;						                                              \
+      sbuf_d(var*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::zx+var); \
+    });									                                                            \
+  sbuf.modify_device();                                                             \
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d);                                                  \
+  BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
+
+template<typename Face> 
+void 
+begin_send_ghost_hyb_z(field_array* fa, const int i, const int j, const int k) {
+  field_buffers_t *fb = fa->fb;
+  int dst = fa->g->bc[BOUNDARY(i,j,k)]; /**< Destination rank */
+  // Only send cells if dst is a valid neighbor and not itself
+  if( 0 <= dst && dst < world_size ) {
+    Kokkos::DualView<float*> sbuf = fb->send_buffer[BOUNDARY(i,j,k)];
+    auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
+    auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
+
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      BSP(x,y,z);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      BSP(y,z,x);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      BSP(z,x,y);
+    }
+  }
+}
+
+#undef BSP
+
+void 
+k_begin_remote_ghost_hyb_z(field_array_t* ALIGNED(128) fa, 
+                            const grid_t* g, 
+                            field_buffers_t& fb) {
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
+  begin_halo_exchange(fa, field_var::zx, field_var::ze+1);
+#else
+  // Start receiving
+  begin_recv_ghost_hyb_z<XYZ>(fa, -1,  0,  0);
+  begin_recv_ghost_hyb_z<YZX>(fa,  0, -1,  0);
+  begin_recv_ghost_hyb_z<ZXY>(fa,  0,  0, -1);
+  begin_recv_ghost_hyb_z<XYZ>(fa,  1,  0,  0);
+  begin_recv_ghost_hyb_z<YZX>(fa,  0,  1,  0);
+  begin_recv_ghost_hyb_z<ZXY>(fa,  0,  0,  1);
+
+  // Start sending
+  begin_send_ghost_hyb_z<XYZ>(fa, -1,  0,  0);
+  begin_send_ghost_hyb_z<YZX>(fa,  0, -1,  0);
+  begin_send_ghost_hyb_z<ZXY>(fa,  0,  0, -1);
+  begin_send_ghost_hyb_z<XYZ>(fa,  1,  0,  0);
+  begin_send_ghost_hyb_z<YZX>(fa,  0,  1,  0);
+  begin_send_ghost_hyb_z<ZXY>(fa,  0,  0,  1);
+#endif
+}
+
+
+#define ERP(x_,y_,z_)							                                                \
+  const grid_t* g = fa->g;						                                            \
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));                  \
+  if(p) {								                                                          \
+    field_buffers *fb = fa->fb;                                                   \
+    Kokkos::DualView<float*> rbuf = fb->recv_buffer[BOUNDARY(i,j,k)];             \
+    auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();                     \
+    auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();                 \
+                                                                                  \
+    const int nx = g->nx, ny = g->ny, nz = g->nz;			                            \
+    const int face = (i+j+k) < 0 ? n##x_+1 : 0;				                            \
+    const k_field_t& k_field = fa->k_f_d;				                                  \
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h);                                              \
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
+    Kokkos::parallel_for("end_recv_ghost_hyb_z<XYZ>", x_##_face,                 \
+    KOKKOS_LAMBDA(const int z_, const int y_) {                                   \
+      const int x_ = face;						                                            \
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::zx) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::zy) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::zz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ze) = rbuf_d(3*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
+      });								                                                          \
+  }									
+  
+
+template<typename Face> 
+void 
+end_recv_ghost_hyb_z(field_array_t* fa, const int i, const int j, const int k) {
+  int src = fa->g->bc[BOUNDARY(-i,-j,-k)]; /**< Source rank */
+  // Only recv cells if src is a valid neighbor and not itself
+  if( 0 <= src && src < world_size ) {
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      ERP(x,y,z);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      ERP(y,z,x);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      ERP(z,x,y);
+    }
+  }
+}
+
+#undef ERP
+
+template<typename Face> 
+void 
+end_send_ghost_hyb_z(field_array_t* fa, const int i, const int j, const int k) {
+  int dst = fa->g->bc[BOUNDARY(i,j,k)]; /**< Destination rank */
+  // Only send cells if dst is a valid neighbor and not itself
+  if( 0 <= dst && dst < world_size ) {
+    if constexpr (std::is_same<Face,XYZ>::value) {
+        end_send_port_k(i,j,k,fa->g);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+        end_send_port_k(i,j,k,fa->g);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+        end_send_port_k(i,j,k,fa->g);
+    }
+  }
+}
+
+void 
+k_end_remote_ghost_hyb_z(field_array_t* ALIGNED(128) fa, 
+                          const grid_t* g, 
+                          field_buffers_t& fb) {
+#ifdef VPIC_ENABLE_HALO_EXCHANGE
+  end_halo_exchange(fa, field_var::zx, field_var::ze+1);
+#else
+  // End receiving
+  end_recv_ghost_hyb_z<XYZ>(fa, -1,  0,  0);
+  end_recv_ghost_hyb_z<YZX>(fa,  0, -1,  0);
+  end_recv_ghost_hyb_z<ZXY>(fa,  0,  0, -1);
+  end_recv_ghost_hyb_z<XYZ>(fa,  1,  0,  0);
+  end_recv_ghost_hyb_z<YZX>(fa,  0,  1,  0);
+  end_recv_ghost_hyb_z<ZXY>(fa,  0,  0,  1);
+
+  // End sending
+  end_send_ghost_hyb_z<XYZ>(fa, -1,  0,  0);
+  end_send_ghost_hyb_z<YZX>(fa,  0, -1,  0);
+  end_send_ghost_hyb_z<ZXY>(fa,  0,  0, -1);
+  end_send_ghost_hyb_z<XYZ>(fa,  1,  0,  0);
+  end_send_ghost_hyb_z<YZX>(fa,  0,  1,  0);
+  end_send_ghost_hyb_z<ZXY>(fa,  0,  0,  1);
+  // Fence to make sure all ghost cells are done unpacking
+  Kokkos::fence(); 
+#endif
+}
+
+
+
 //Hybrid E
 #define BRP(x_,y_,z_)							                     \
   const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;  \

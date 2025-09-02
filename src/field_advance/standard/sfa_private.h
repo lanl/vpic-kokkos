@@ -76,8 +76,8 @@ hyb_advance_b_kokkos( field_array_t * RESTRICT fa,
 void
 advance_e( field_array_t * RESTRICT fa,
            float                    frac );
-           void
-           
+
+void
 advance_eue( field_array_t * RESTRICT fa,
            float                    frac );
 
@@ -111,6 +111,10 @@ hyb_advance_eue( field_array_t * RESTRICT fa,
                   float                    frac );
 void                  
 hyb_advance_ue( field_array_t * RESTRICT fa,
+               float                    frac );
+               
+void                  
+hyb_heatflux_ue( field_array_t * RESTRICT fa,
                float                    frac );
 
 void
@@ -595,6 +599,17 @@ k_begin_remote_ghost_hyb_jf( field_array_t      * ALIGNED(128) f,
 
 void
 k_end_remote_ghost_hyb_jf( field_array_t      * ALIGNED(128) f,
+                        const grid_t *              g,
+                        field_buffers_t& f_buffers );
+                        
+void
+k_begin_remote_ghost_hyb_z( field_array_t      * ALIGNED(128) f,
+                            const grid_t *              g,
+                            field_buffers_t& f_buffers );
+
+
+void
+k_end_remote_ghost_hyb_z( field_array_t      * ALIGNED(128) f,
                         const grid_t *              g,
                         field_buffers_t& f_buffers );
 

@@ -48,6 +48,11 @@ hyb_smooth_moments( field_array_t * RESTRICT fa ) {
   COPY_FD(jfy);  SMOOTH_FD(jfy);
   COPY_FD(jfz);  SMOOTH_FD(jfz);
   COPY_FD(rhof); SMOOTH_FD(rhof);
+  
+  COPY_FD(zx);  SMOOTH_FD(zx);
+  COPY_FD(zy);  SMOOTH_FD(zy);
+  COPY_FD(zz);  SMOOTH_FD(zz);
+  COPY_FD(ze); SMOOTH_FD(ze);
 }
 
 void
@@ -100,7 +105,6 @@ hyb_smooth_eb_interp( field_array_t * RESTRICT fa, bool smoothed ) {
 
   int ism = g->nsm;
   while(ism>0) {
-    if (smoothed) {
 Kokkos::Profiling::pushRegion("Smooth_eb_interp::Smoothed::ox,oy,oz,tx,tz,tz");
       COPY_FD(ox); SMOOTH_FD(ox);
       COPY_FD(oy); SMOOTH_FD(oy);
@@ -109,16 +113,8 @@ Kokkos::Profiling::pushRegion("Smooth_eb_interp::Smoothed::ox,oy,oz,tx,tz,tz");
       COPY_FD(ty); SMOOTH_FD(ty);
       COPY_FD(tz); SMOOTH_FD(tz);
 Kokkos::Profiling::popRegion();
-    } else {
-Kokkos::Profiling::pushRegion("Smooth_eb_interp::Not smoothed::cbx,cby,cbz,ex,ez,ez");
-      COPY_FD(cbx); SMOOTH_FD(cbx);
-      COPY_FD(cby); SMOOTH_FD(cby);
-      COPY_FD(cbz); SMOOTH_FD(cbz);
-      COPY_FD(ex);  SMOOTH_FD(ex);
-      COPY_FD(ey);  SMOOTH_FD(ey);
-      COPY_FD(ez);  SMOOTH_FD(ez);
-Kokkos::Profiling::popRegion();
-    }
+    } 
+    
     // exchange (ox,oy,oz) ghosts
 Kokkos::Profiling::pushRegion("Smooth_eb_interp::Exchange ox,oy,oz ghosts");
     k_begin_remote_ghost_hyb_o(fa, fa->g, *(fa->fb) );
@@ -133,5 +129,5 @@ Kokkos::Profiling::pushRegion("Smooth_eb_interp::Local ghost ot");
     k_hyb_local_ghost_ot(fa, fa->g );
 Kokkos::Profiling::popRegion();
     ism--;
-  }
 }
+
