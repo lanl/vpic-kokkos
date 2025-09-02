@@ -30,6 +30,8 @@ typedef struct pipeline_args {
 #define UE(x_,y_,z_)							\
   F(0,u##x_) = invrho * (u##x_)
 
+
+
 void
 hyb_advance_ue( field_array_t * RESTRICT fa,
                   float frac ) {
@@ -57,7 +59,8 @@ hyb_advance_ue( field_array_t * RESTRICT fa,
   
   //for interior cells
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1,1,1},{nx+1,ny+1,nz+1});
-    
+  
+   
   /***************************************************************************
    * Update ue fields
    ***************************************************************************/ 
