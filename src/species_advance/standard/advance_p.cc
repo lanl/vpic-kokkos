@@ -35,6 +35,10 @@ accumulate_current(CurrentScatterAccess& current_sa, int ii,
   current_sa(ii, field_var::jfy)                           += v1;
   current_sa(ii, field_var::jfz)                           += v2;
   current_sa(ii, field_var::rhof)                          += v3;
+  current_sa(ii, field_var::zx)                            += v4;
+  current_sa(ii, field_var::zy)                            += v5;
+  current_sa(ii, field_var::zz)                            += v6;
+  current_sa(ii, field_var::ze)                            += v7;
 #endif
 }
 
@@ -343,7 +347,10 @@ advance_p_kokkos_unified(
         const int max_nm,
         const int nx,
         const int ny,
-        const int nz)
+        const int nz,
+        const float ut_para,
+        const float ut_perp,
+        const float gdt_2)
 {
 
   constexpr float one            = 1.;
@@ -536,12 +543,12 @@ advance_p_kokkos_unified(
 
       BEGIN_VECTOR_BLOCK {
 #ifdef VARIABLE_CHARGE
-	hax[LANE] = dt_2mc*qp[LANE]*( (fex[LANE] ) );
+	hax[LANE] = dt_2mc*qp[LANE]*( (fex[LANE] ) ) + gdt_2;
 	hay[LANE] = dt_2mc*qp[LANE]*( (fey[LANE] ) );
 	haz[LANE] = dt_2mc*qp[LANE]*( (fez[LANE] ) );
 #else
         // Interpolate E
-        hax[LANE] = qdt_2mc*( (fex[LANE] ) );
+        hax[LANE] = qdt_2mc*( (fex[LANE] ) ) + gdt_2;
         hay[LANE] = qdt_2mc*( (fey[LANE] ) );
         haz[LANE] = qdt_2mc*( (fez[LANE] ) );
 #endif
@@ -645,12 +652,16 @@ advance_p_kokkos_unified(
         //dy[LANE] = v1[LANE];
         //dz[LANE] = v2[LANE];
         //v5[LANE] = q[LANE]*ux[LANE]*uy[LANE]*uz[LANE]*one_third;
-
-#       define ACCUMULATE_J()                                              \
-        v0[LANE]  = q[LANE]*v6[LANE];   /*  = q ux                            */        \
-        v1[LANE]  = q[LANE]*v7[LANE];   /*  = q uy                            */        \
-        v2[LANE]  = q[LANE]*v8[LANE];   /*  = q uz                            */        \
-        v3[LANE]  = q[LANE];   /* v2 = q                            */        \
+        
+#       define ACCUMULATE_J()                                  \
+        v0[LANE]  = q[LANE]*v6[LANE];   /*  = q ux         */  \
+        v1[LANE]  = q[LANE]*v7[LANE];   /*  = q uy         */  \
+        v2[LANE]  = q[LANE]*v8[LANE];   /*  = q uz         */  \
+        v3[LANE]  = q[LANE];            /* v2 = q          */  \
+        v4[LANE]  = qsp*q[LANE]*v6[LANE];   /* v2 = q      */  \
+        v5[LANE]  = qsp*q[LANE]*v7[LANE];   /* v2 = q      */  \
+        v6[LANE]  = qsp*q[LANE]*v8[LANE];   /* v2 = q      */  \
+        v7[LANE]  = qsp*q[LANE];            /* v2 = q      */  \
       
         ACCUMULATE_J();
 
@@ -671,7 +682,7 @@ advance_p_kokkos_unified(
           accumulate_current(current_sa, ii[LANE],
                        nx, ny, nz, rV,
 		       v0[LANE], v1[LANE], v2[LANE], v3[LANE],
-                       v6[LANE], v7[LANE], v8[LANE], v9[LANE],
+                       v4[LANE], v5[LANE], v6[LANE], v7[LANE],
                        v10[LANE], v11[LANE], v12[LANE], v13[LANE]);
         } END_VECTOR_BLOCK;
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
@@ -691,7 +702,7 @@ advance_p_kokkos_unified(
           local_pm->i     = p_index;
 
           if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                             current_sv, g, k_neighbors, rangel, rangeh, qsp, gdx,gdy,gdz,gdt, nx, ny, nz ) )
+                             current_sv, g, k_neighbors, rangel, rangeh, qsp, gdx,gdy,gdz,gdt, nx, ny, nz, ut_para, ut_perp ) )
           {
             if( k_nm(0)<max_nm ) {
               const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
@@ -819,7 +830,10 @@ advance_p_kokkos_gpu(
         const int max_nm,
         const int nx,
         const int ny,
-        const int nz)
+        const int nz,
+        const float ut_para,
+        const float ut_perp,
+        const float gdt_2)
 {
 
   constexpr float one            = 1.;
@@ -911,9 +925,9 @@ advance_p_kokkos_gpu(
     float dy   = p_dy;
     float dz   = p_dz;
     int   ii   = pii;
-    float hax  = qdt_2mc*(    ( f_ex ) );
-    float hay  = qdt_2mc*(    ( f_ey ) );
-    float haz  = qdt_2mc*(    ( f_ez  ) );
+    float hax  = qdt_2mc*( f_ex ) + gdt_2;
+    float hay  = qdt_2mc*( f_ey );
+    float haz  = qdt_2mc*( f_ez );
 
     float cbx  = f_cbx;// + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby;// + dy*f_dcbydy;
@@ -1043,7 +1057,12 @@ advance_p_kokkos_gpu(
            k_field_scatter_access(ii, field_var::jfx) += q*rV*ux;
            k_field_scatter_access(ii, field_var::jfy) += q*rV*uy;
            k_field_scatter_access(ii, field_var::jfz) += q*rV*uz;
-	   k_field_scatter_access(ii, field_var::rhof) += q*rV;
+	   k_field_scatter_access(ii, field_var::rhof)+= q*rV;
+	   
+	   k_field_scatter_access(ii, field_var::zx) += qsp*q*rV*ux;
+           k_field_scatter_access(ii, field_var::zy) += qsp*q*rV*uy;
+           k_field_scatter_access(ii, field_var::zz) += qsp*q*rV*uz;
+	   k_field_scatter_access(ii, field_var::ze) += qsp*q*rV;
     
 } else {
       
@@ -1055,7 +1074,7 @@ advance_p_kokkos_gpu(
       
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e uz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-			 k_f_sv, g, k_neighbors, rangel, rangeh, qsp, gdx, gdy, gdz, gdt, nx, ny, nz ) )
+			 k_f_sv, g, k_neighbors, rangel, rangeh, qsp, gdx, gdy, gdz, gdt, nx, ny, nz, ut_para, ut_perp  ) )
 	{
 	  if( k_nm(0) < max_nm )
 	    {
@@ -1147,6 +1166,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   float cdt_dx   = sp->g->cvac*sp->g->dt*sp->g->rdx;
   float cdt_dy   = sp->g->cvac*sp->g->dt*sp->g->rdy;
   float cdt_dz   = sp->g->cvac*sp->g->dt*sp->g->rdz;
+  float gdt_2    = 0.5*sp->g->gravity*sp->g->dt;
 
   #ifdef USE_GPU
     // Use the gpu kernel for slightly better performance
@@ -1182,7 +1202,10 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->max_nm,
           sp->g->nx,
           sp->g->ny,
-          sp->g->nz
+          sp->g->nz,
+          sp->ut_para,
+          sp->ut_perp,
+          gdt_2
   );
   KOKKOS_TOC( advance_p, 1);
 

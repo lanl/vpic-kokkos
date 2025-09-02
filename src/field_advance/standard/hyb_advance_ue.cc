@@ -28,9 +28,7 @@ typedef struct pipeline_args {
   float  uz = half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + hstep*( three*F(0,jfz) - F(0,jfzold)) ) ; 
 
 #define UE(x_,y_,z_)							\
-  F(0,u##x_) = invrho * (ux)
-
-
+  F(0,u##x_) = invrho * (u##x_)
 
 void
 hyb_advance_ue( field_array_t * RESTRICT fa,
@@ -59,8 +57,7 @@ hyb_advance_ue( field_array_t * RESTRICT fa,
   
   //for interior cells
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1,1,1},{nx+1,ny+1,nz+1});
-  
-   
+    
   /***************************************************************************
    * Update ue fields
    ***************************************************************************/ 

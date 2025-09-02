@@ -169,6 +169,16 @@ field_array_t::copy_to_host() {
       host_field[i].sy = k_field(i, field_var::sy);
       host_field[i].sz = k_field(i, field_var::sz);
       host_field[i].se = k_field(i, field_var::se);
+
+      host_field[i].zx = k_field(i, field_var::zx);
+      host_field[i].zy = k_field(i, field_var::zy);
+      host_field[i].zz = k_field(i, field_var::zz);
+      host_field[i].ze = k_field(i, field_var::ze);
+      
+      host_field[i].zxold = k_field(i, field_var::zxold);
+      host_field[i].zyold = k_field(i, field_var::zyold);
+      host_field[i].zzold = k_field(i, field_var::zzold);
+      host_field[i].zeold = k_field(i, field_var::zeold);
       
       host_field[i].ematx = k_field_edge(i, field_edge_var::ematx);
       host_field[i].ematy = k_field_edge(i, field_edge_var::ematy);
@@ -254,6 +264,16 @@ field_array_t::copy_to_device() {
       k_field(i, field_var::sy) = host_field[i].sy;
       k_field(i, field_var::sz) = host_field[i].sz;
       k_field(i, field_var::se) = host_field[i].se;
+      
+      k_field(i, field_var::zx) = host_field[i].zx;
+      k_field(i, field_var::zy) = host_field[i].zy;
+      k_field(i, field_var::zz) = host_field[i].zz;
+      k_field(i, field_var::ze) = host_field[i].ze;
+      
+      k_field(i, field_var::zxold) = host_field[i].zxold;
+      k_field(i, field_var::zyold) = host_field[i].zyold;
+      k_field(i, field_var::zzold) = host_field[i].zzold;
+      k_field(i, field_var::zeold) = host_field[i].zeold;
       
       k_field_edge(i, field_edge_var::ematx) = host_field[i].ematx;
       k_field_edge(i, field_edge_var::ematy) = host_field[i].ematy;
