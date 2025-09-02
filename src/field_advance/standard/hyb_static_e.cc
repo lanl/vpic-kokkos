@@ -75,8 +75,8 @@ hyb_static_e( field_array_t * RESTRICT fa,
   });
   Kokkos::Profiling::popRegion();
   
-  k_begin_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );
-  k_end_remote_ghost_hyb_e( fa, fa->g, *(fa->fb) );
+  k_begin_remote_ghost_hyb_e( fa );
+  k_end_remote_ghost_hyb_e( fa );
   //fix local BCs
   k_hyb_local_ghost_e( fa, fa->g );
     

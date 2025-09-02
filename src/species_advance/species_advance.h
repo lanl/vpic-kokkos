@@ -695,6 +695,11 @@ move_p_kokkos(
 	  scatter_access(ii, field_var::jfy) += q*uy;
 	  scatter_access(ii, field_var::jfz) += q*uz;
 	  scatter_access(ii, field_var::rhof) += q;
+	  
+	  scatter_access(ii, field_var::zx) += qsp*q*ux;
+	  scatter_access(ii, field_var::zy) += qsp*q*uy;
+	  scatter_access(ii, field_var::zz) += qsp*q*uz;
+	  scatter_access(ii, field_var::ze) += qsp*q;
 	//}
 	
 	
@@ -1017,6 +1022,10 @@ move_p_kokkos_host_serial(
       k_jf_accum(ii, accumulator_var::jy) += rV*q*uy;
       k_jf_accum(ii, accumulator_var::jz) += rV*q*uz;
       k_jf_accum(ii, accumulator_var::rho) += rV*q;
+      k_jf_accum(ii, accumulator_var::zx) += rV*qsp*q*ux;
+      k_jf_accum(ii, accumulator_var::zy) += rV*qsp*q*uy;
+      k_jf_accum(ii, accumulator_var::zz) += rV*qsp*q*uz;
+      k_jf_accum(ii, accumulator_var::ze) += rV*qsp*q;
       } //if indbds
       
     } //ifmore than half dt left

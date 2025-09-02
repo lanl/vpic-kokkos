@@ -48,6 +48,11 @@ hyb_smooth_moments( field_array_t * RESTRICT fa ) {
   COPY_FD(jfy);  SMOOTH_FD(jfy);
   COPY_FD(jfz);  SMOOTH_FD(jfz);
   COPY_FD(rhof); SMOOTH_FD(rhof);
+  
+  COPY_FD(zx);  SMOOTH_FD(zx);
+  COPY_FD(zy);  SMOOTH_FD(zy);
+  COPY_FD(zz);  SMOOTH_FD(zz);
+  COPY_FD(ze); SMOOTH_FD(ze);
 }
 
 void
@@ -125,3 +130,4 @@ Kokkos::Profiling::popRegion();
     ism--;
   }
 }
+
