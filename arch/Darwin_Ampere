@@ -14,7 +14,7 @@ src_dir="${0%/*}/.."
 #------------------------------------------------------------------------------#
 
 #module purge
-#module load cmake openmpi/4.1.2-gcc_11.2.0 cuda/12.4.1
+module load cmake openmpi/4.1.2-gcc_11.2.0 cuda/12.4.1
 module list 2>&1 | tee modules.txt
 
 #------------------------------------------------------------------------------#
@@ -41,7 +41,7 @@ CRAYPE_LINK_TYPE=dynamic cmake \
   -DKokkos_ARCH_AMPERE80=ON \
   -DKokkos_ARCH_ZEN2=OFF \
   -DKokkos_ENABLE_OPENMP=ON \
-  -DCMAKE_CXX_COMPILER="c++" \
+  -DCMAKE_CXX_COMPILER=/projects/maehem/maehem-HVPIC-K/kokkos/bin/nvcc_wrapper \
   -DCMAKE_CXX_FLAGS="-g -rdynamic "\
   $src_dir
 

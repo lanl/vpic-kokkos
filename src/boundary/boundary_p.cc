@@ -468,9 +468,7 @@ boundary_p_kokkos(
                 sp_[id]->g->k_neighbor_h,
                 rangel,
                 rangeh,
-                sp_[id]->q,
-                sp_[id]->ut_para,
-                sp_[id]->ut_perp
+                sp_[id]->q
         );
 
         int keep_id = nm + ret_code - 1;

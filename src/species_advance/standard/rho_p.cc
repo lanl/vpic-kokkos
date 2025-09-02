@@ -467,9 +467,8 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
     const float q_8V = (sp->q)*(sp->g->r8V);
     const int np = sp->np;
-    //const int sy = sp->g->sy;
-    //const int sz = sp->g->sz;
-    const float qsp = sp->q;
+    const int sy = sp->g->sy;
+    const int sz = sp->g->sz;
 /*
     float sums[sp->g->nv];
     Kokkos::parallel_reduce("accumulate_rho_p", Kokkos::RangePolicy<>(0, np), accum_rho_p_reduce(kfield, kparticles, kparticles_i, sy, sz, q_8V, np, sp->g->nv), sums);
@@ -545,11 +544,6 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         scatter_view_access(ii, field_var::jfy)  += q_V * uy;
         scatter_view_access(ii, field_var::jfz)  += q_V * uz;
         scatter_view_access(ii, field_var::rhof) += q_V;
-        
-        scatter_view_access(ii, field_var::zx)  += qsp * q_V * ux;
-        scatter_view_access(ii, field_var::zy)  += qsp * q_V * uy;
-        scatter_view_access(ii, field_var::zz)  += qsp * q_V * uz;
-        scatter_view_access(ii, field_var::ze)  += qsp * q_V;
 
     });
     Kokkos::Experimental::contribute(kfield, scatter_view);
