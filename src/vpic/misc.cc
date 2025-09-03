@@ -130,7 +130,7 @@ vpic_simulation::inject_particle( species_t * sp,
                                field_array->k_jf_accum_h, 
                                grid, grid->k_neighbor_h, 
                                grid->rangel, grid->rangeh, 
-                               sp->q, sp->ut_para, sp->ut_perp );
+                               sp->q );
   }
 #endif
 }
