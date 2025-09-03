@@ -31,7 +31,7 @@
 #define FLUID_VAR_COUNT 6+4
 
 #ifdef SHAPE_NGP
-  #define INTERPOLATOR_VAR_COUNT 18
+  #define INTERPOLATOR_VAR_COUNT 6
 #else
 #ifdef SHAPE_QS
   #define INTERPOLATOR_VAR_COUNT 42
@@ -216,23 +216,11 @@ namespace interpolator_var {
   enum i_r {
 #ifdef SHAPE_NGP
     ex       = 0,
-    dexdy    = 1,
-    dexdz    = 2,
-    d2exdydz = 3,
-    ey       = 4,
-    deydz    = 5,
-    deydx    = 6,
-    d2eydzdx = 7,
-    ez       = 8,
-    dezdx    = 9,
-    dezdy    = 10,
-    d2ezdxdy = 11,
-    cbx      = 12,
-    dcbxdx   = 13,
-    cby      = 14,
-    dcbydy   = 15,
-    cbz      = 16,
-    dcbzdz   = 17,
+    ey       = 1,
+    ez       = 2,
+    cbx      = 3,
+    cby      = 4,
+    cbz      = 5,
 #else
 #ifdef SHAPE_QS
     ex       = 0,

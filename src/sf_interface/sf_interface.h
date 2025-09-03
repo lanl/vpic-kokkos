@@ -22,13 +22,14 @@
 
 typedef struct interpolator {
 #ifdef SHAPE_NGP
-  // TODO trim memory usage, only 6 floats + 2 pad needed!! --ATr,2024nov08
-  float ex, dexdy, dexdz, d2exdydz;
-  float ey, deydz, deydx, d2eydzdx;
-  float ez, dezdx, dezdy, d2ezdxdy;
-  float cbx, dcbxdx;
-  float cby, dcbydy;
-  float cbz, dcbzdz;
+  //float ex, dexdy, dexdz, d2exdydz;
+  //float ey, deydz, deydx, d2eydzdx;
+  //float ez, dezdx, dezdy, d2ezdxdy;
+  //float cbx, dcbxdx;
+  //float cby, dcbydy;
+  //float cbz, dcbzdz;
+  float ex, ey, ez;
+  float cbx, cby, cbz;
   float _pad[2];  // 16-byte align
 #else
 #ifdef SHAPE_QS

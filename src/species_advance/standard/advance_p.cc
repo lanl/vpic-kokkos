@@ -185,7 +185,7 @@ template<int N>
 KOKKOS_INLINE_FUNCTION
 void unrolled_simd_load(float* vals, const int* ii, const k_interpolator_t& k_interp, int len) {
   unrolled_simd_load<N-1>(vals, ii, k_interp, len);
-  simd_load_interpolator_var(vals+(N-1)*18, ii[N-1], k_interp, len);
+  simd_load_interpolator_var(vals+(N-1)*INTERPOLATOR_VAR_COUNT, ii[N-1], k_interp, len);
 }
 template<>
 KOKKOS_INLINE_FUNCTION
@@ -204,23 +204,11 @@ template<int NumLanes>
 KOKKOS_INLINE_FUNCTION
 void load_interpolators(
                         float* fex,
-                        float* fdexdy,
-                        float* fdexdz,
-                        float* fd2exdydz,
                         float* fey,
-                        float* fdeydz,
-                        float* fdeydx,
-                        float* fd2eydzdx,
                         float* fez,
-                        float* fdezdx,
-                        float* fdezdy,
-                        float* fd2ezdxdy,
                         float* fcbx,
-                        float* fdcbxdx,
                         float* fcby,
-                        float* fdcbydy,
                         float* fcbz,
-                        float* fdcbzdz,
                         const int* ii,
 			const int num_part,
                         const k_interpolator_t& k_interp
@@ -236,81 +224,45 @@ void load_interpolators(
 
   // Try to reduce the number of loads if all particles are in the same cell
   if(same_cell) {
-    float vals[18];
+    float vals[INTERPOLATOR_VAR_COUNT];
 
-    simd_load_interpolator_var(vals, ii[0], k_interp, 18);
+    simd_load_interpolator_var(vals, ii[0], k_interp, INTERPOLATOR_VAR_COUNT);
     #pragma omp simd
     for(int i=0; i<NumLanes; i++) {
       fex[i]       = vals[0];
-      //fdexdy[i]    = vals[1];
-      //fdexdz[i]    = vals[2];
-      //fd2exdydz[i] = vals[3];
-      fey[i]       = vals[4];
-      //fdeydz[i]    = vals[5];
-      //fdeydx[i]    = vals[6];
-      //fd2eydzdx[i] = vals[7];
-      fez[i]       = vals[8];
-      //fdezdx[i]    = vals[9];
-      //fdezdy[i]    = vals[10];
-      //fd2ezdxdy[i] = vals[11];
-      fcbx[i]      = vals[12];
-      //fdcbxdx[i]   = vals[13];
-      fcby[i]      = vals[14];
-      //fdcbydy[i]   = vals[15];
-      fcbz[i]      = vals[16];
-      //dcbzdz[i]   = vals[17];
+      fey[i]       = vals[1];
+      fez[i]       = vals[2];
+      fcbx[i]      = vals[3];
+      fcby[i]      = vals[4];
+      fcbz[i]      = vals[5];
     }
   } else {
 
     // Efficient vectorized load
-    float vals[18*NumLanes];
-    unrolled_simd_load(vals, ii, k_interp, 18, num_part);
-//    unrolled_simd_load<NumLanes>(vals, ii, k_interp, 18);
+    float vals[INTERPOLATOR_VAR_COUNT*NumLanes];
+    unrolled_simd_load(vals, ii, k_interp, INTERPOLATOR_VAR_COUNT, num_part);
+//    unrolled_simd_load<NumLanes>(vals, ii, k_interp, INTERPOLATOR_VAR_COUNT);
 
     // Essentially a transpose
     #pragma omp simd
     for(int i=0; i<num_part; i++) {
-      fex[i]       = vals[18*i];
-      //fdexdy[i]    = vals[1+18*i];
-      //fdexdz[i]    = vals[2+18*i];
-      //fd2exdydz[i] = vals[3+18*i];
-      fey[i]       = vals[4+18*i];
-      //fdeydz[i]    = vals[5+18*i];
-      //fdeydx[i]    = vals[6+18*i];
-      //fd2eydzdx[i] = vals[7+18*i];
-      fez[i]       = vals[8+18*i];
-      //fdezdx[i]    = vals[9+18*i];
-      //fdezdy[i]    = vals[10+18*i];
-      //fd2ezdxdy[i] = vals[11+18*i];
-      fcbx[i]      = vals[12+18*i];
-      //fdcbxdx[i]   = vals[13+18*i];
-      fcby[i]      = vals[14+18*i];
-      //fdcbydy[i]   = vals[15+18*i];
-      fcbz[i]      = vals[16+18*i];
-      //fdcbzdz[i]   = vals[17+18*i];
+      fex[i]       = vals[  INTERPOLATOR_VAR_COUNT*i];
+      fey[i]       = vals[1+INTERPOLATOR_VAR_COUNT*i];
+      fez[i]       = vals[2+INTERPOLATOR_VAR_COUNT*i];
+      fcbx[i]      = vals[3+INTERPOLATOR_VAR_COUNT*i];
+      fcby[i]      = vals[4+INTERPOLATOR_VAR_COUNT*i];
+      fcbz[i]      = vals[5+INTERPOLATOR_VAR_COUNT*i];
     }
   }
 #else
   for(int lane=0; lane<NumLanes; lane++) {
     // Load interpolators
     fex[LANE]       = k_interp(ii[LANE], interpolator_var::ex);     
-    //fdexdy[LANE]    = k_interp(ii[LANE], interpolator_var::dexdy);  
-    //fdexdz[LANE]    = k_interp(ii[LANE], interpolator_var::dexdz);  
-    //fd2exdydz[LANE] = k_interp(ii[LANE], interpolator_var::d2exdydz);
     fey[LANE]       = k_interp(ii[LANE], interpolator_var::ey);     
-    //fdeydz[LANE]    = k_interp(ii[LANE], interpolator_var::deydz);  
-    //fdeydx[LANE]    = k_interp(ii[LANE], interpolator_var::deydx);  
-    //fd2eydzdx[LANE] = k_interp(ii[LANE], interpolator_var::d2eydzdx);
     fez[LANE]       = k_interp(ii[LANE], interpolator_var::ez);     
-    //fdezdx[LANE]    = k_interp(ii[LANE], interpolator_var::dezdx);  
-    //fdezdy[LANE]    = k_interp(ii[LANE], interpolator_var::dezdy);  
-    //fd2ezdxdy[LANE] = k_interp(ii[LANE], interpolator_var::d2ezdxdy);
     fcbx[LANE]      = k_interp(ii[LANE], interpolator_var::cbx);    
-    //fdcbxdx[LANE]   = k_interp(ii[LANE], interpolator_var::dcbxdx); 
     fcby[LANE]      = k_interp(ii[LANE], interpolator_var::cby);    
-    //fdcbydy[LANE]   = k_interp(ii[LANE], interpolator_var::dcbydy); 
     fcbz[LANE]      = k_interp(ii[LANE], interpolator_var::cbz);    
-    //fdcbzdz[LANE]   = k_interp(ii[LANE], interpolator_var::dcbzdz); 
   }
 #endif
 }
@@ -483,26 +435,16 @@ advance_p_kokkos_unified(
       float fex[num_lanes];
       float fey[num_lanes];
       float fez[num_lanes];
-      float fdexdy[num_lanes];
-      float fdexdz[num_lanes];
-      float fd2exdydz[num_lanes];
-      float fdeydx[num_lanes];
-      float fdeydz[num_lanes];
-      float fd2eydzdx[num_lanes];
-      float fdezdx[num_lanes];
-      float fdezdy[num_lanes];
-      float fd2ezdxdy[num_lanes];
-      float fdcbxdx[num_lanes];
-      float fdcbydy[num_lanes];
-      float fdcbzdz[num_lanes];
+      float tmp0[num_lanes];
+      float tmp1[num_lanes];
       float *v6 = fex;
-      float *v7 = fdexdy;
-      float *v8 = fdexdz;
-      float *v9 = fd2exdydz;
-      float *v10 = fey;
-      float *v11 = fdeydz;
-      float *v12 = fdeydx;
-      float *v13 = fd2eydzdx;
+      float *v7 = fey;
+      float *v8 = fez;
+      float *v9 = fcbx;
+      float *v10 = fcby;
+      float *v11 = fcbz;
+      float *v12 = tmp0;
+      float *v13 = tmp1;
 
       size_t p_index = pi_offset;
 
@@ -526,12 +468,7 @@ advance_p_kokkos_unified(
         ii[LANE] = pii;
       } END_VECTOR_BLOCK;
 
-      load_interpolators<num_lanes>( fex, fdexdy, fdexdz, fd2exdydz,
-                                     fey, fdeydz, fdeydx, fd2eydzdx,
-                                     fez, fdezdx, fdezdy, fd2ezdxdy,
-                                     fcbx, fdcbxdx,
-                                     fcby, fdcbydy,
-                                     fcbz, fdcbzdz,
+      load_interpolators<num_lanes>( fex, fey, fez, fcbx, fcby, fcbz,
                                      ii, num_particles, k_interp);
 
       BEGIN_VECTOR_BLOCK {
