@@ -119,8 +119,7 @@ emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
         if (move_p_kokkos_host_serial( sp->k_p_h, sp->k_p_i_h, local_pm,\
                                         cl->fa->k_jf_accum_h,           \
                                         g, g->k_neighbor_h,             \
-                                        g->rangel, g->rangeh, qsp,      \
-                                        sp->ut_para, sp->ut_perp )) {   \
+                                        g->rangel, g->rangeh, qsp )) {  \
             pm[nm++] = local_pm[0];                                     \
         }                                                               \
       }                                                                 \
