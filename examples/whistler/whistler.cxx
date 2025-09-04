@@ -8,6 +8,8 @@
 
 //////////////////////////////////////////////////////
 
+#define LOAD_PARTICLES 0
+
 begin_globals {
 
   int restart_interval;
@@ -55,34 +57,35 @@ begin_initialization {
 
   
   // Initial conditions for model:
-  double Ti = 1.0/3.0;      // Ion temperature
+  double Ti = 0;//1.0/3.0;      // Ion temperature
   double gamma = 1.0;//5.0/3.0;   // Ratio of specific heats.
   double c_s = 1.0;         // Electron sound speed.
-  double pert = 0.02;       // Size of density perturbation.
-  double Lx = 16;           // Size of domain.
-  double kx = 2.0*M_PI/Lx;  // Wavenumber of perturbation.
+  double pert = 0.02;       // Size of magnetic field perturbation.
+  double Lx = 32;           // Size of domain.
+  double Ly = 32;           // Size of domain.
+  double kx = 2.0*M_PI/16;  // Wavenumber of perturbation.
+  double ky = 2.0*M_PI/16;  // Wavenumber of perturbation.
   
   double eta = 0.0;         // Plasma resistivity.
   double hypereta = 0.0;    // Plasma hyper-resistivity.
 
   
   // Derived quantities for model:
-  double Te = c_s/(gamma);  // Electron temperature.
+  double Te = 0;//c_s/(gamma);  // Electron temperature.
   double vthi = sqrt(Ti/mi);// Ion thermal velocity
 
   // Numerical parameters
-  double taui    = 50;      // Simulation run time in wci^-1.
+  double taui    = 10;      // Simulation run time in wci^-1.
   double quota   = 2.0;     // run quota in hours
   double quota_sec = quota*3600;  // Run quota in seconds
   
-  double Ly    = 1.0*di;    // size of box in y dimension
   double Lz    = 1.0*di;    // size of box in z dimension
 
   double nx = 48;
-  double ny = 1;
+  double ny = 48;
   double nz = 1;
 
-  double nppc  = 150000;    // Average number of macro particle per cell per species 
+  double nppc  = 1000;    // Average number of macro particle per cell per species 
   
   double topology_x = 1; // Number of domains in x, y, and z
   double topology_y = 1;
@@ -161,11 +164,18 @@ begin_initialization {
 
   //  grid->te = Te;
   //  grid->den = 1.0;
-  grid->eta = eta;
+  //  grid->eta = eta;
   //  grid->hypereta = hypereta;
-  grid->eos_gamma = gamma;
+  //  grid->gamma = gamma;
 
-  //  grid->nsub = 1; // Number of substeps for field solve.
+  grid->nsub = 1; // Number of substeps for field solve.
+#if LOAD_PARTICLES
+  grid->den_floor_ohm= .1;
+  grid->den_floor_pe = .1;
+#else
+  grid->den_floor_ohm= 1.0;
+  grid->den_floor_pe = 1.0;
+#endif
   //  grid->nsm = 2;  // Number of binomial smoothing passes (to fields & moments).
   //  grid->nsmb = 0; // Timesteps between additional smooths of magnetic field (0 is off).
 
@@ -261,9 +271,22 @@ begin_initialization {
 sim_log( "Loading fields" );
 
 // Note: everywhere is a region that encompasses the entire simulation                                                                                                                   
-// In general, regions are specied as logical equations (i.e. x>0 && x+y<2) 
- set_region_field( everywhere, 0, 0, 0, 0.0, 0, 0);
- set_region_te(everywhere, Te);
+// In general, regions are specied as logical equations (i.e. x>0 && x+y<2)
+
+#define BX (1./sqrt(2.0))
+#define BY (1./sqrt(2.0))
+#define KdotX (kx*x + ky*y)
+#define K (sqrt(kx*kx+ky*ky))
+
+#define DBX (-pert*ky/K*cos(KdotX))
+#define DBY (+pert*kx/K*cos(KdotX))
+#define DBZ (-pert*sin(KdotX))
+
+#define OMEGA (K * ( 0.5*K + sqrt(1 + 0.25*K*K)))
+#define DrV (K/OMEGA)
+
+ set_region_field( everywhere, 0,0,0,BX+DBX,BY+DBY,DBZ);
+ set_region_te(everywhere, 0*Te);
 
  // LOAD PARTICLES
   sim_log( "Loading particles" );
@@ -272,26 +295,19 @@ sim_log( "Loading fields" );
   double ymin = grid->y0 , ymax = grid->y0+(grid->dy)*(grid->ny);
   double zmin = grid->z0 , zmax = grid->z0+(grid->dz)*(grid->nz);
 
+#if LOAD_PARTICLES
  repeat( Ni ) {
     double x, y, z, r, ux, uy, uz, d0;
-    // rejection method, sine profile                                                                                                                                                                    
-    do {
-      x = uniform( rng(0), -Lx/2, Lx/2 );
-      r = uniform(rng(0) , 0   , 1.0+pert);
-    } while( r > (1.0+pert*sin(kx*x))) ;
-
-    if (x>=xmin && x<= xmax) {
-      //      x = uniform( rng(0), xmin, xmax );
-      y = uniform( rng(0), ymin, ymax );
-      z = uniform( rng(0), zmin, zmax );
+     x = uniform( rng(0), xmin, xmax );
+     y = uniform( rng(0), ymin, ymax );
+     z = uniform( rng(0), zmin, zmax );
       
-      ux = normal( rng(0), 0, vthi );                                                                                                                                             
-      uy = normal( rng(0), 0, vthi );
-      uz = normal( rng(0), 0, vthi );
+      ux =  - DrV*DBX;
+      uy =  - DrV*DBY;
+      uz =  - DrV*DBZ;
       inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0 );
     }
- }
-
+#endif
  
   sim_log( "Finished loading particles" );
 
