@@ -344,25 +344,30 @@ vpic_simulation::dump_particles( const char *sp_name,
 
     //particle_t * sp_p = sp->p;      sp->p      = p_buf;
     auto& pbuf = p_buf;
+    auto& k_p_h = sp->k_p_h;
+    auto& k_p_i_h = sp->k_p_i_h;
     int sp_np         = sp->np;     sp->np     = 0;
     int sp_max_np     = sp->max_np; sp->max_np = PBUF_SIZE;
     for( buf_start=0; buf_start<sp_np; buf_start += PBUF_SIZE ) {
         sp->np = sp_np-buf_start; if( sp->np > PBUF_SIZE ) sp->np = PBUF_SIZE;
         //COPY( sp->p, &sp_p[buf_start], sp->np );
-        Kokkos::parallel_for("Populate particle dump buffer",
-                host_execution_policy(0, sp->np),
-                KOKKOS_LAMBDA (int i) {
+        // FIXME: This host loop won't compile because stuff is undefined in
+        // device code
+        //Kokkos::parallel_for("Populate particle dump buffer",
+        //        host_execution_policy(0, sp->np),
+        //        KOKKOS_LAMBDA (int i) {
+        for( int i=0; i<sp->np; i++){
+                pbuf[i].dx = k_p_h(buf_start + i, particle_var::dx);
+                pbuf[i].dy = k_p_h(buf_start + i, particle_var::dy);
+                pbuf[i].dz = k_p_h(buf_start + i, particle_var::dz);
+                pbuf[i].ux = k_p_h(buf_start + i, particle_var::ux);
+                pbuf[i].uy = k_p_h(buf_start + i, particle_var::uy);
+                pbuf[i].uz = k_p_h(buf_start + i, particle_var::uz);
+                pbuf[i].w  = k_p_h(buf_start + i, particle_var::w);
+                pbuf[i].i  = k_p_i_h(buf_start + i);
 
-                pbuf[i].dx = sp->k_p_h(buf_start + i, particle_var::dx);
-                pbuf[i].dy = sp->k_p_h(buf_start + i, particle_var::dy);
-                pbuf[i].dz = sp->k_p_h(buf_start + i, particle_var::dz);
-                pbuf[i].ux = sp->k_p_h(buf_start + i, particle_var::ux);
-                pbuf[i].uy = sp->k_p_h(buf_start + i, particle_var::uy);
-                pbuf[i].uz = sp->k_p_h(buf_start + i, particle_var::uz);
-                pbuf[i].w  = sp->k_p_h(buf_start + i, particle_var::w);
-                pbuf[i].i  = sp->k_p_i_h(buf_start + i);
-
-                });
+                //});
+        };
         //center_p( sp, interpolator_array );
         center_p_dump( sp, p_buf, interpolator_array );
         fileIO.write( p_buf, sp->np );

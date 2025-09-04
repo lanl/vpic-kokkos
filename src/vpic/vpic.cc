@@ -177,9 +177,12 @@ void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
         int bufsize = PBUF_SIZE;
         for( buf_start=0; buf_start<sp->np; buf_start += PBUF_SIZE ) {
             if (buf_start + bufsize > sp->np) bufsize = sp->np - buf_start;
-            Kokkos::parallel_for("Populate particle dump buffer",
-                    host_execution_policy(0, bufsize),
-                    KOKKOS_LAMBDA (int i) {
+            // FIXME: This host loop won't compile because stuff is undefined
+            // in device code
+            //Kokkos::parallel_for("Populate particle dump buffer",
+            //        host_execution_policy(0, bufsize),
+            //        KOKKOS_LAMBDA (int i) {
+            for( int i=0; i<bufsize; i++){
 
                     pbuf[i].dx = sp->k_p_h(buf_start + i, particle_var::dx);
                     pbuf[i].dy = sp->k_p_h(buf_start + i, particle_var::dy);
@@ -190,7 +193,8 @@ void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
                     pbuf[i].w  = sp->k_p_h(buf_start + i, particle_var::w);
                     pbuf[i].i  = sp->k_p_i_h(buf_start + i);
 
-                    });
+                    //});
+            };
             fileIO.write( p_buf, bufsize );
         }
         if( fileIO.close() ) ERROR(("File close failed on checkpt_kokkos particles!!!"));
@@ -278,9 +282,12 @@ void restore_kokkos(vpic_simulation& simulation, const char * fbase)
         for( buf_start=0; buf_start<sp->np; buf_start += PBUF_SIZE ) {
             if (buf_start + bufsize > sp->np) bufsize = sp->np - buf_start;
             fileIO.read( p_buf, bufsize );
-            Kokkos::parallel_for("Populate particle dump buffer",
-                    host_execution_policy(0, bufsize),
-                    KOKKOS_LAMBDA (int i) {
+            // FIXME: This host loop won't compile because stuff is undefined
+            // in device code
+            //Kokkos::parallel_for("Populate particle dump buffer",
+            //        host_execution_policy(0, bufsize),
+            //        KOKKOS_LAMBDA (int i) {
+            for( int i=0; i<bufsize; i++){
 
                     sp->k_p_h(buf_start + i, particle_var::dx) = pbuf[i].dx;
                     sp->k_p_h(buf_start + i, particle_var::dy) = pbuf[i].dy;
@@ -291,7 +298,8 @@ void restore_kokkos(vpic_simulation& simulation, const char * fbase)
                     sp->k_p_h(buf_start + i, particle_var::w)  = pbuf[i].w ;
                     sp->k_p_i_h(buf_start + i) = pbuf[i].i;
 
-                    });
+                    //});
+            };
         }
         
         if( fileIO.close() ) ERROR(("File close failed in restore_kokkos!!!"));
