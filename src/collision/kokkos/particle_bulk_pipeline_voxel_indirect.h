@@ -436,7 +436,7 @@ struct particle_bulk_collision_pipeline {
     //  	   nj_fl, ujx_fl, ujy_fl, ujz_fl, tmp_fl);
 
     float ndt = nj_fl * dt;
-    //    printf("n=%14.8e, dt=%14.8e, mi=%14.8e\n",nj_fl, dt, mi);
+    //printf("n=%14.8e, dt=%14.8e, mi=%14.8e\n",nj_fl, dt, mi);
     
     // Relative velocity
     float urx = uix - ujx_fl;

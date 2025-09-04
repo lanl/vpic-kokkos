@@ -54,6 +54,13 @@ vpic_simulation::initialize( int argc,
   }
   KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 
+  KOKKOS_TIC(); // Time this data movement
+  LIST_FOR_EACH( fsp, fluid_species_list ) {
+    fsp->copy_to_device();
+  }
+  KOKKOS_TOCN( FLUID_DATA_MOVEMENT, 1);
+
+  
   // Hybrid - later we will compute interpolator coeffs on device, no need to sync w/host
   //KOKKOS_TIC();
   //interpolator_array->copy_to_device();

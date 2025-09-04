@@ -89,6 +89,7 @@ const uint32_t mass_density		(1<<7);
 const uint32_t stress_tensor	(1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13);
 #ifdef VARIABLE_CHARGE
 const uint32_t charge_diags     (1<<14 | 1<<15);
+const uint32_t charge_state_densities (1<<16 | 1<<17 | 1<<18 | 1<<19 | 1<<20 | 1<<21 );
 #endif
 /* May want to use these instead
 const uint32_t stress_diagonal 		(1<<8 | 1<<9 | 1<<10);
@@ -96,10 +97,10 @@ const uint32_t stress_offdiagonal	(1<<11 | 1<<12 | 1<<13);
 */
 
 #ifdef VARIABLE_CHARGE
-  const size_t total_hydro_variables(16);
+  const size_t total_hydro_variables(22);
   const size_t total_hydro_groups(6); // this counts vectors, tensors etc...
   // These bits will be tested to determine which variables to output
-  const size_t hydro_indeces[6] = { 0, 3, 4, 7, 8, 14 };
+  const size_t hydro_indeces[7] = { 0, 3, 4, 7, 8, 14, 16 };
 #else
   const size_t total_hydro_variables(14);
   const size_t total_hydro_groups(5); // this counts vectors, tensors etc...

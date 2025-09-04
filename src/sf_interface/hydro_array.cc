@@ -553,6 +553,12 @@ hydro_array_t::copy_to_host(FILE *fp, const int step /*=0*/) {
 #ifdef VARIABLE_CHARGE
     h_l[i].qmin = k_h(i, hydro_var::min_q);
     h_l[i].qmax	= k_h(i, hydro_var::max_q);
+    h_l[i].n_q0 = k_h(i, hydro_var::n_q0);
+    h_l[i].n_q1	= k_h(i, hydro_var::n_q1);
+    h_l[i].n_q2	= k_h(i, hydro_var::n_q2);
+    h_l[i].n_q3	= k_h(i, hydro_var::n_q3);
+    h_l[i].n_q4	= k_h(i, hydro_var::n_q4);
+    h_l[i].n_q5	= k_h(i, hydro_var::n_q5);
 #endif
     
     int ix, iy, iz;
