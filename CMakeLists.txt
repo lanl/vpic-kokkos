@@ -78,7 +78,7 @@ option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU-aware MPI. Allows GPUs to communica
 
 option(VPIC_ENABLE_HALO_EXCHANGE "Enable halo exchange code path for remote communication. Temporary option until halo exchange code is accurately tested." ON)
 
-option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." ON)
+option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." OFF)
 
 option(HYB_USE_STATIC_E "Use electrostatic hybrid field solver." OFF)
 

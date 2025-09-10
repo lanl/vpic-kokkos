@@ -327,13 +327,13 @@ struct particle_bulk_collision_pipeline {
 	    spi_p(i, particle_var::qp) = qp;
 #endif
 	    
-	    auto dux = ( ux_i - ux_n ) * wp;
-	    auto duy = ( uy_i - uy_n ) * wp;
-	    auto duz = ( uz_i - uz_n ) * wp;
+	    auto dux = ( ux_i - ux_n ) * wp * mi;
+	    auto duy = ( uy_i - uy_n ) * wp * mi;
+	    auto duz = ( uz_i - uz_n ) * wp * mi;
 	    auto den = 0.5 *
 		( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
 		  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) ) *
-		wp;
+		wp * mi;
 	    lsum.v[0] += wp;
 	    lsum.v[1] += dux;
 	    lsum.v[2] += duy;

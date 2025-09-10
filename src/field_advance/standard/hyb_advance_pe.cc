@@ -58,7 +58,7 @@
 #define UPDATE4()		\
   UPDATE_B(dt6);		\
     F(0,pe)  -= dt6*F(0,te);	\
-  F(0,pe)  += rV*two_thirds*F(0,se);\
+  F(0,pe)  -= rV*two_thirds*F(0,se);\
   F(0,se)   = 0;                 \
   F(0,pe) = (F(0,rhof)>denmin) ? F(0,pe) : F(0,te0)*F(0,rhof);\
   F(0,pe) = (F(0,pe>0)) ? F(0,pe) : 0;
