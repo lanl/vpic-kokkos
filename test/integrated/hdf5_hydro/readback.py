@@ -5,7 +5,7 @@ import numpy as np
 import os.path
 import sys
 
-if len(sys.argv) != 2:
+if len(sys.argv) > 3:
     sys.stderr.write("Usage: "+str(sys.argv[0])+" rundir\n")
     sys.exit(1)
 
@@ -19,6 +19,17 @@ nzg = nz + 2
 rundir = sys.argv[1]
 
 step_names = ["0",  "1"]
+
+hydro_names = ["jx", "jy", "jz", "rho",
+               "px", "py", "pz", "rho_m",
+               "txx", "tyy", "tzz",
+               "tyz", "tzx", "txy"]
+
+if len(sys.argv) == 3 and sys.argv[2] == '--variable-charge':
+    hydro_names.append("qmin")
+    hydro_names.append("qmax")
+
+print(hydro_names)
 
 for step_name in step_names:
     filename = rundir + "/hydro_hdf5/T." + step_name + "/hydro_ion_" + step_name + ".h5"
@@ -35,11 +46,6 @@ for step_name in step_names:
     with open(bin_filename, 'r') as fh:
         hydro_data_bi_all = np.fromfile(bin_filename, dtype=np.float32, offset=123)
 
-    hydro_names = ["jx", "jy", "jz", "rho",
-                   "px", "py", "pz", "rho_m",
-                   "txx", "tyy", "tzz",
-                   "tyz", "tzx", "txy"]
-
     for ihydro, hydro_name in enumerate(hydro_names):
         hydro_data_h5 = np.array(datagroup[hydro_name]).flatten()
         fdata_tmp = hydro_data_bi_all[ihydro::16].reshape([nzg, nyg, nxg])
@@ -50,9 +56,9 @@ for step_name in step_names:
             print_max_element = 0
             print("     Binary Output", ",  ", "HDF5 Output",  ",  ", "Difference")
             for i in range(0, hydro_data_h5.shape[0]):
-                if hydro_data_bi[i] - hydro_data_h5[i] > 0.0000000001:
-                    print(i, hydro_data_bi[i], ",  ", hydro_data_h5[i], ",  ", hydro_data_bi[i] - hydro_data_h5[i])
-                    print_max_element = print_max_element + 1
+#                if hydro_data_bi[i] - hydro_data_h5[i] > 0.0000000001:
+                print(i, hydro_data_bi[i], ",  ", hydro_data_h5[i], ",  ", hydro_data_bi[i] - hydro_data_h5[i])
+                print_max_element = print_max_element + 1
                 if print_max_element == 10:
                     break
             sys.exit(1)

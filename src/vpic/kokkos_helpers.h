@@ -314,7 +314,7 @@ namespace hydro_var {
         py  = 5,
         pz  = 6,
 	//        ke  = 7,
-	rho_m = 7,
+        rho_m = 7,
         txx = 8,
         tyy = 9,
         tzz = 10,
@@ -322,8 +322,8 @@ namespace hydro_var {
         tzx = 12,
         txy = 13,
 #ifdef VARIABLE_CHARGE
-	min_q = 14,
-	max_q = 15,
+        qmin = 14,
+        qmax = 15,
 #endif
     };
 };

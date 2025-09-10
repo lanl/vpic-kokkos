@@ -192,8 +192,8 @@ accumulate_hydro_p_kokkos_nomove_ngp(
 //  qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
 //  qdt_4mc2 = qdt_2mc / (2*c);
 #ifdef VARIABLE_CHARGE
-  dt_2mc  = (sp->g->dt)/(2*mspc); // Multiply by particle q later
-  dt_4mc2 = dt_2mc / (2*c);
+  float dt_2mc  = (sp->g->dt)/(2*mspc); // Multiply by particle q later
+  float dt_4mc2 = dt_2mc / (2*c);
 #else
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
@@ -319,11 +319,11 @@ accumulate_hydro_p_kokkos(
   dt_4mc2 = dt_2mc / (2*c);
   Kokkos::View<int*, Kokkos::DefaultExecutionSpace> particle_count("particle_count", nv);
 
-  // Set initial values to min_q
+  // Set initial values to qmin
   Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, nv),
     KOKKOS_LAMBDA(size_t ii)
     {
-        k_hydro(ii, hydro_var::min_q) = 999999999;
+        k_hydro(ii, hydro_var::qmin) = 999999999;
     });
 
 #else
@@ -453,8 +453,8 @@ accumulate_hydro_p_kokkos(
     float q = qp;
 
     // TODO: Why? Nothing is done with the results.
-    Kokkos::atomic_fetch_min(&k_hydro(ii, hydro_var::min_q), q);
-    Kokkos::atomic_fetch_max(&k_hydro(ii, hydro_var::max_q), q);
+    Kokkos::atomic_fetch_min(&k_hydro(ii, hydro_var::qmin), q);
+    Kokkos::atomic_fetch_max(&k_hydro(ii, hydro_var::qmax), q);
 
     Kokkos::atomic_add(&particle_count(ii), 1); // number of particles in each cell
 #else
@@ -520,11 +520,11 @@ accumulate_hydro_p_kokkos(
       // Calculate mean charge only if there are particles in the cell
       if (particle_count(ii) > 0) {
         //	k_hydro(ii, hydro_var::avg_q) /= static_cast<float>(particle_count(ii));
-        //if (k_hydro(ii, hydro_var::min_q) == 0) printf("ii=%d, minq=%e",ii,k_hydro(ii, hydro_var::min_q));
+        //if (k_hydro(ii, hydro_var::qmin) == 0) printf("ii=%d, minq=%e",ii,k_hydro(ii, hydro_var::qmin));
       } else {
         //	k_hydro(ii, hydro_var::avg_q) = std::numeric_limits<double>::quiet_NaN();
-        k_hydro(ii, hydro_var::min_q) = std::numeric_limits<double>::quiet_NaN();
-        k_hydro(ii, hydro_var::max_q) = std::numeric_limits<double>::quiet_NaN();
+        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<double>::quiet_NaN();
+        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<double>::quiet_NaN();
       }
     });
 #endif

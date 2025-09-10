@@ -119,6 +119,34 @@ synchronize_hydro_array( hydro_array_t * ha ) {
   // diagnostic, correct the hydro along local boundaries to account
   // for accumulations over partial cell volumes
 
+#ifdef VARIABLE_CHARGE
+# define ADJUST_HYDRO(i,j,k,X,Y,Z)              \
+  do {                                          \
+    bc = g->bc[BOUNDARY(i,j,k)];                \
+    if( bc<0 || bc>=world_size ) {              \
+      face = (i+j+k)<0 ? 1 : n##X+1;            \
+      X##_NODE_LOOP(face) {                     \
+        h = &hydro(x,y,z);                      \
+        h->jx  *= 2;                            \
+        h->jy  *= 2;                            \
+        h->jz  *= 2;                            \
+        h->rho *= 2;                            \
+        h->px  *= 2;                            \
+        h->py  *= 2;                            \
+        h->pz  *= 2;                            \
+        h->rho_m  *= 2;                         \
+        h->txx *= 2;                            \
+        h->tyy *= 2;                            \
+        h->tzz *= 2;                            \
+        h->tyz *= 2;                            \
+        h->tzx *= 2;                            \
+        h->txy *= 2;                            \
+        h->qmin *= 2;                           \
+        h->qmax *= 2;                           \
+      }                                         \
+    }                                           \
+  } while(0)
+#else
 # define ADJUST_HYDRO(i,j,k,X,Y,Z)              \
   do {                                          \
     bc = g->bc[BOUNDARY(i,j,k)];                \
@@ -143,6 +171,7 @@ synchronize_hydro_array( hydro_array_t * ha ) {
       }                                         \
     }                                           \
   } while(0)
+#endif
   
   ADJUST_HYDRO(-1, 0, 0,x,y,z);
   ADJUST_HYDRO( 0,-1, 0,y,z,x);
@@ -156,62 +185,125 @@ synchronize_hydro_array( hydro_array_t * ha ) {
 # define BEGIN_RECV(i,j,k,X,Y,Z) \
   begin_recv_port(i,j,k,( 1 + 14*(n##Y+1)*(n##Z+1) )*sizeof(float),g)
 
-# define BEGIN_SEND(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {      \
-    size = ( 1 + 14*(n##Y+1)*(n##Z+1) )*sizeof(float);  \
-    p = (float *)size_send_port( i, j, k, size, g );    \
-    if( p ) {                                           \
-      (*(p++)) = g->d##X;                               \
-      face = (i+j+k)<0 ? 1 : n##X+1;                    \
-      X##_NODE_LOOP(face) {                             \
-        h = &hydro(x,y,z);                              \
-        (*(p++)) = h->jx;                               \
-        (*(p++)) = h->jy;                               \
-        (*(p++)) = h->jz;                               \
-        (*(p++)) = h->rho;                              \
-        (*(p++)) = h->px;                               \
-        (*(p++)) = h->py;                               \
-        (*(p++)) = h->pz;                               \
-        (*(p++)) = h->rho_m;                            \
-        (*(p++)) = h->txx;                              \
-        (*(p++)) = h->tyy;                              \
-        (*(p++)) = h->tzz;                              \
-        (*(p++)) = h->tyz;                              \
-        (*(p++)) = h->tzx;                              \
-        (*(p++)) = h->txy;                              \
-      }                                                 \
-      begin_send_port( i, j, k, size, g );              \
-    }                                                   \
-  } END_PRIMITIVE
-
-# define END_RECV(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                \
-    p = (float *)end_recv_port(i,j,k,g);                        \
-    if( p ) {                                                   \
-      rw = (*(p++));                 /* Remote g->d##X */       \
-      lw = rw + g->d##X;                                        \
-      rw /= lw;                                                 \
-      lw = g->d##X/lw;                                          \
-      lw += lw;                                                 \
-      rw += rw;                                                 \
-      face = (i+j+k)<0 ? n##X+1 : 1; /* Twice weighted sum */   \
-      X##_NODE_LOOP(face) {                                     \
-        h = &hydro(x,y,z);                                      \
-        h->jx    = lw*h->jx  + rw*(*(p++));                       \
-        h->jy    = lw*h->jy  + rw*(*(p++));                       \
-        h->jz    = lw*h->jz  + rw*(*(p++));                       \
-        h->rho   = lw*h->rho + rw*(*(p++));                       \
-        h->px    = lw*h->px  + rw*(*(p++));                       \
-        h->py    = lw*h->py  + rw*(*(p++));                       \
-        h->pz    = lw*h->pz  + rw*(*(p++));                       \
-        h->rho_m = lw*h->rho_m  + rw*(*(p++));                    \
-        h->txx   = lw*h->txx + rw*(*(p++));                       \
-        h->tyy   = lw*h->tyy + rw*(*(p++));                       \
-        h->tzz   = lw*h->tzz + rw*(*(p++));                       \
-        h->tyz   = lw*h->tyz + rw*(*(p++));                       \
-        h->tzx   = lw*h->tzx + rw*(*(p++));                       \
-        h->txy   = lw*h->txy + rw*(*(p++));                       \
-      }                                                          \
-    }                                                            \
-  } END_PRIMITIVE
+# ifdef VARIABLE_CHARGE
+  # define BEGIN_SEND(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {      \
+      size = ( 1 + 14*(n##Y+1)*(n##Z+1) )*sizeof(float);  \
+      p = (float *)size_send_port( i, j, k, size, g );    \
+      if( p ) {                                           \
+        (*(p++)) = g->d##X;                               \
+        face = (i+j+k)<0 ? 1 : n##X+1;                    \
+        X##_NODE_LOOP(face) {                             \
+          h = &hydro(x,y,z);                              \
+          (*(p++)) = h->jx;                               \
+          (*(p++)) = h->jy;                               \
+          (*(p++)) = h->jz;                               \
+          (*(p++)) = h->rho;                              \
+          (*(p++)) = h->px;                               \
+          (*(p++)) = h->py;                               \
+          (*(p++)) = h->pz;                               \
+          (*(p++)) = h->rho_m;                            \
+          (*(p++)) = h->txx;                              \
+          (*(p++)) = h->tyy;                              \
+          (*(p++)) = h->tzz;                              \
+          (*(p++)) = h->tyz;                              \
+          (*(p++)) = h->tzx;                              \
+          (*(p++)) = h->txy;                              \
+          (*(p++)) = h->qmin;                             \
+          (*(p++)) = h->qmax;                             \
+        }                                                 \
+        begin_send_port( i, j, k, size, g );              \
+      }                                                   \
+    } END_PRIMITIVE
+  
+  # define END_RECV(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                \
+      p = (float *)end_recv_port(i,j,k,g);                        \
+      if( p ) {                                                   \
+        rw = (*(p++));                 /* Remote g->d##X */       \
+        lw = rw + g->d##X;                                        \
+        rw /= lw;                                                 \
+        lw = g->d##X/lw;                                          \
+        lw += lw;                                                 \
+        rw += rw;                                                 \
+        face = (i+j+k)<0 ? n##X+1 : 1; /* Twice weighted sum */   \
+        X##_NODE_LOOP(face) {                                     \
+          h = &hydro(x,y,z);                                      \
+          h->jx    = lw*h->jx  + rw*(*(p++));                       \
+          h->jy    = lw*h->jy  + rw*(*(p++));                       \
+          h->jz    = lw*h->jz  + rw*(*(p++));                       \
+          h->rho   = lw*h->rho + rw*(*(p++));                       \
+          h->px    = lw*h->px  + rw*(*(p++));                       \
+          h->py    = lw*h->py  + rw*(*(p++));                       \
+          h->pz    = lw*h->pz  + rw*(*(p++));                       \
+          h->rho_m = lw*h->rho_m  + rw*(*(p++));                    \
+          h->txx   = lw*h->txx + rw*(*(p++));                       \
+          h->tyy   = lw*h->tyy + rw*(*(p++));                       \
+          h->tzz   = lw*h->tzz + rw*(*(p++));                       \
+          h->tyz   = lw*h->tyz + rw*(*(p++));                       \
+          h->tzx   = lw*h->tzx + rw*(*(p++));                       \
+          h->txy   = lw*h->txy + rw*(*(p++));                       \
+          h->qmin   = lw*h->qmin + rw*(*(p++));                     \
+          h->qmax   = lw*h->qmax + rw*(*(p++));                     \
+        }                                                          \
+      }                                                            \
+    } END_PRIMITIVE
+# else
+  # define BEGIN_SEND(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {      \
+      size = ( 1 + 14*(n##Y+1)*(n##Z+1) )*sizeof(float);  \
+      p = (float *)size_send_port( i, j, k, size, g );    \
+      if( p ) {                                           \
+        (*(p++)) = g->d##X;                               \
+        face = (i+j+k)<0 ? 1 : n##X+1;                    \
+        X##_NODE_LOOP(face) {                             \
+          h = &hydro(x,y,z);                              \
+          (*(p++)) = h->jx;                               \
+          (*(p++)) = h->jy;                               \
+          (*(p++)) = h->jz;                               \
+          (*(p++)) = h->rho;                              \
+          (*(p++)) = h->px;                               \
+          (*(p++)) = h->py;                               \
+          (*(p++)) = h->pz;                               \
+          (*(p++)) = h->rho_m;                            \
+          (*(p++)) = h->txx;                              \
+          (*(p++)) = h->tyy;                              \
+          (*(p++)) = h->tzz;                              \
+          (*(p++)) = h->tyz;                              \
+          (*(p++)) = h->tzx;                              \
+          (*(p++)) = h->txy;                              \
+        }                                                 \
+        begin_send_port( i, j, k, size, g );              \
+      }                                                   \
+    } END_PRIMITIVE
+  
+  # define END_RECV(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                \
+      p = (float *)end_recv_port(i,j,k,g);                        \
+      if( p ) {                                                   \
+        rw = (*(p++));                 /* Remote g->d##X */       \
+        lw = rw + g->d##X;                                        \
+        rw /= lw;                                                 \
+        lw = g->d##X/lw;                                          \
+        lw += lw;                                                 \
+        rw += rw;                                                 \
+        face = (i+j+k)<0 ? n##X+1 : 1; /* Twice weighted sum */   \
+        X##_NODE_LOOP(face) {                                     \
+          h = &hydro(x,y,z);                                      \
+          h->jx    = lw*h->jx  + rw*(*(p++));                       \
+          h->jy    = lw*h->jy  + rw*(*(p++));                       \
+          h->jz    = lw*h->jz  + rw*(*(p++));                       \
+          h->rho   = lw*h->rho + rw*(*(p++));                       \
+          h->px    = lw*h->px  + rw*(*(p++));                       \
+          h->py    = lw*h->py  + rw*(*(p++));                       \
+          h->pz    = lw*h->pz  + rw*(*(p++));                       \
+          h->rho_m = lw*h->rho_m  + rw*(*(p++));                    \
+          h->txx   = lw*h->txx + rw*(*(p++));                       \
+          h->tyy   = lw*h->tyy + rw*(*(p++));                       \
+          h->tzz   = lw*h->tzz + rw*(*(p++));                       \
+          h->tyz   = lw*h->tyz + rw*(*(p++));                       \
+          h->tzx   = lw*h->tzx + rw*(*(p++));                       \
+          h->txy   = lw*h->txy + rw*(*(p++));                       \
+        }                                                          \
+      }                                                            \
+    } END_PRIMITIVE
+#endif
 
 # define END_SEND(i,j,k,X,Y,Z) end_send_port( i, j, k, g )
 
@@ -561,29 +653,33 @@ synchronize_hydro_array_kokkos( hydro_array_t * ha ) {
   // diagnostic, correct the hydro along local boundaries to account
   // for accumulations over partial cell volumes
 
-# define ADJUST_HYDRO(i,j,k,X,Y,Z)              \
-  do {                                          \
-    bc = g->bc[BOUNDARY(i,j,k)];                \
-    if( bc<0 || bc>=world_size ) {              \
-      face = (i+j+k)<0 ? 1 : n##X+1;            \
-      X##_NODE_LOOP(face) {                     \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jx)    *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jy)    *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jz)    *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho)   *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::px)    *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::py)    *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz)    *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho_m) *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx)   *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy)   *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz)   *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyz)   *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzx)   *= 2; \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy)   *= 2; \
-      }                                         \
-    }                                           \
+# define ADJUST_HYDRO(i,j,k,X,Y,Z)                    \
+  do {                                                \
+    bc = g->bc[BOUNDARY(i,j,k)];                      \
+    if( bc<0 || bc>=world_size ) {                    \
+      face = (i+j+k)<0 ? 1 : n##X+1;                  \
+      X##_NODE_LOOP(face) {                           \
+        for (int var=0; var<HYDRO_VAR_COUNT; var++) { \
+          ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), var) *= 2; \
+        }                                             \
+      }                                               \
+    }                                                 \
   } while(0)
+
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jx)    *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jy)    *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jz)    *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho)   *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::px)    *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::py)    *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz)    *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho_m) *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx)   *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy)   *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz)   *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyz)   *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzx)   *= 2; \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy)   *= 2; \
   
   ADJUST_HYDRO(-1, 0, 0,x,y,z);
   ADJUST_HYDRO( 0,-1, 0,y,z,x);
@@ -597,60 +693,69 @@ synchronize_hydro_array_kokkos( hydro_array_t * ha ) {
 # define BEGIN_RECV(i,j,k,X,Y,Z) \
   begin_recv_port(i,j,k,( 1 + 14*(n##Y+1)*(n##Z+1) )*sizeof(float),g)
 
-# define BEGIN_SEND(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {      \
-    size = ( 1 + 14*(n##Y+1)*(n##Z+1) )*sizeof(float);  \
-    p = (float *)size_send_port( i, j, k, size, g );    \
-    if( p ) {                                           \
-      (*(p++)) = g->d##X;                               \
-      face = (i+j+k)<0 ? 1 : n##X+1;                    \
-      X##_NODE_LOOP(face) {                             \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jx);    \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jy);    \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jz);    \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho);   \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::px);    \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::py);    \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz);    \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho_m); \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx);   \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy);   \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz);   \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyz);   \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzx);   \
-        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy);   \
-      }                                                 \
-      begin_send_port( i, j, k, size, g );              \
-    }                                                   \
+# define BEGIN_SEND(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {             \
+    size = ( 1 + 14*(n##Y+1)*(n##Z+1) )*sizeof(float);         \
+    p = (float *)size_send_port( i, j, k, size, g );           \
+    if( p ) {                                                  \
+      (*(p++)) = g->d##X;                                      \
+      face = (i+j+k)<0 ? 1 : n##X+1;                           \
+      X##_NODE_LOOP(face) {                                    \
+        for (int var=0; var<HYDRO_VAR_COUNT; var++) {          \
+          (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), var);    \
+        }                                                      \
+      }                                                        \
+      begin_send_port( i, j, k, size, g );                     \
+    }                                                          \
   } END_PRIMITIVE
 
-# define END_RECV(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                \
-    p = (float *)end_recv_port(i,j,k,g);                        \
-    if( p ) {                                                   \
-      rw = (*(p++));                 /* Remote g->d##X */       \
-      lw = rw + g->d##X;                                        \
-      rw /= lw;                                                 \
-      lw = g->d##X/lw;                                          \
-      lw += lw;                                                 \
-      rw += rw;                                                 \
-      face = (i+j+k)<0 ? n##X+1 : 1; /* Twice weighted sum */   \
-      X##_NODE_LOOP(face) {                                     \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jx)    = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jx)     + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jy)    = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jy)     + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jz)    = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jz)     + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho)    + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::px)    = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::px)     + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::py)    = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::py)     + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz)    = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz)     + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho_m) = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho_m)  + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx)    + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy)    + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz)    + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyz)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyz)    + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzx)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzx)    + rw*(*(p++)); \
-        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy)    + rw*(*(p++)); \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jx);    \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jy);    \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jz);    \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho);   \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::px);    \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::py);    \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz);    \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho_m); \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx);   \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy);   \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz);   \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyz);   \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzx);   \
+//        (*(p++)) = ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy);   \
+
+# define END_RECV(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                        \
+    p = (float *)end_recv_port(i,j,k,g);                                \
+    if( p ) {                                                           \
+      rw = (*(p++));                 /* Remote g->d##X */               \
+      lw = rw + g->d##X;                                                \
+      rw /= lw;                                                         \
+      lw = g->d##X/lw;                                                  \
+      lw += lw;                                                         \
+      rw += rw;                                                         \
+      face = (i+j+k)<0 ? n##X+1 : 1; /* Twice weighted sum */           \
+      X##_NODE_LOOP(face) {                                             \
+        int cell = VOXEL(x,y,z,nx,ny,nz);                               \
+        for (int var=0; var<HYDRO_VAR_COUNT; var++) {                   \
+          ha->k_h_h(cell, var) = lw*ha->k_h_h(cell, var) + rw*(*(p++)); \
+        }                                                               \
       }                                                          \
     }                                                            \
   } END_PRIMITIVE
+
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jx)    = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jx)     + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jy)    = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jy)     + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jz)    = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::jz)     + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho)    + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::px)    = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::px)     + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::py)    = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::py)     + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz)    = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz)     + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho_m) = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho_m)  + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx)    + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy)    + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz)    + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyz)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyz)    + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzx)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzx)    + rw*(*(p++)); \
+//        ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy)   = lw*ha->k_h_h(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy)    + rw*(*(p++)); \
 
 # define END_SEND(i,j,k,X,Y,Z) end_send_port( i, j, k, g )
 
