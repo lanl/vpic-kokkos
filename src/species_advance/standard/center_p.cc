@@ -7,16 +7,16 @@ struct center_p_kernel {
   k_particles_t::HostMirror p;
   k_particles_i_t::HostMirror p_i;
   k_interpolator_t::HostMirror f;
-  float qdt_2mc, qdt_4mc, qp;
+  float _qdt_2mc, _qdt_4mc;
 
   center_p_kernel(species_t* _sp,
                   k_particles_t::HostMirror& _p, 
                   const k_particles_i_t::HostMirror& _p_i, 
                   const k_interpolator_t::HostMirror& _interp,
-                  const float _qdt_2mc) : sp(_sp), p(_p), p_i(_p_i), f(_interp) {
+                  const float _qdt_2mc_) : sp(_sp), p(_p), p_i(_p_i), f(_interp) {
 #ifndef VARIABLE_CHARGE
-    qdt_2mc        =     _qdt_2mc;
-    qdt_4mc        = 0.5*_qdt_2mc; // For half Boris rotate
+    _qdt_2mc        =     _qdt_2mc_;
+    _qdt_4mc        = 0.5*_qdt_2mc_; // For half Boris rotate
 #endif
   }
   
@@ -37,9 +37,12 @@ struct center_p_kernel {
 //    dy   = sp->p[n].dy;
 //    dz   = sp->p[n].dz;
 #ifdef VARIABLE_CHARGE
-    qp   = sp->p[n].qp;
-    qdt_2mc = qp*qdt_2mc;
-    qdt_4mc = 0.5*qdt_2mc;
+    float qp   = sp->p[n].qp;
+    float qdt_2mc = qp*_qdt_2mc;
+    float qdt_4mc = 0.5*_qdt_2mc;
+#else
+    float qdt_2mc = _qdt_2mc;
+    float qdt_4mc = _qdt_4mc;
 #endif
     ii   = sp->p[n].i;
 #else
@@ -47,9 +50,12 @@ struct center_p_kernel {
 //    dy   = p(n, particle_var::dy);
 //    dz   = p(n, particle_var::dz);
 #ifdef VARIABLE_CHARGE
-    qp   = p(n, particle_var::qp);
-    qdt_2mc = qp*qdt_2mc;
-    qdt_4mc = 0.5*qdt_2mc;
+    float qp   = p(n, particle_var::qp);
+    float qdt_2mc = qp*_qdt_2mc;
+    float qdt_4mc = 0.5*_qdt_2mc;
+#else
+    float qdt_2mc = _qdt_2mc;
+    float qdt_4mc = _qdt_4mc;
 #endif
     ii   = p_i(n);
 #endif

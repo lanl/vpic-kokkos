@@ -314,7 +314,7 @@ namespace hydro_var {
         py  = 5,
         pz  = 6,
 	//        ke  = 7,
-	rho_m = 7,
+        rho_m = 7,
         txx = 8,
         tyy = 9,
         tzz = 10,
@@ -322,14 +322,14 @@ namespace hydro_var {
         tzx = 12,
         txy = 13,
 #ifdef VARIABLE_CHARGE
-	min_q = 14,
-	max_q = 15,
-	n_q0  = 16,
-	n_q1  = 17,
-	n_q2  = 18,
-	n_q3  = 19,
-	n_q4  = 20,
-	n_q5  = 21,
+        qmin = 14,
+        qmax = 15,
+        n_q0  = 16,
+        n_q1  = 17,
+        n_q2  = 18,
+        n_q3  = 19,
+        n_q4  = 20,
+        n_q5  = 21,
 #endif
     };
 };
@@ -342,10 +342,10 @@ namespace fluid_var {
         ux  = 3,
         uy  = 4,
         uz  = 5,
-	msx = 6,
-	msy = 7,
-	msz = 8,
-	ens = 9,
+        msx = 6,
+        msy = 7,
+        msz = 8,
+        ens = 9,
     };
 };
 

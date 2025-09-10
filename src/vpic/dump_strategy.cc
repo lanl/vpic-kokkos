@@ -133,7 +133,6 @@ void BinaryDump::dump_hydro(
       sp
   );
 
-
   hydro_array->copy_to_host();
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   synchronize_hydro_array( hydro_array );
@@ -179,10 +178,12 @@ void BinaryDump::dump_hydro(
     for(int v=0; v<HYDRO_VAR_COUNT; v++) {
       fileIO.write(&hydro_array->k_h_h(i, v), 1);
     }
+#ifndef VARIABLE_CHARGE
     // Additional padding to match legacy structures
     float _pad = 0;
     fileIO.write(&_pad, 1);
     fileIO.write(&_pad, 1);
+#endif
   }
 #endif
   if (fileIO.close())
@@ -279,6 +280,9 @@ void BinaryDump::dump_particles(
       sp->p[idx].uy = sp->k_p_h(idx+buf_start, particle_var::uy);
       sp->p[idx].uz = sp->k_p_h(idx+buf_start, particle_var::uz);
       sp->p[idx].w  = sp->k_p_h(idx+buf_start, particle_var::w);
+#ifdef VARIABLE_CHARGE
+      sp->p[idx].qp = sp->k_p_h(idx+buf_start, particle_var::qp);
+#endif
     });
     center_p(sp, interpolator_array);
     fileIO.write(sp->p, sp->np);
@@ -298,14 +302,6 @@ void BinaryDump::dump_particles(
     Kokkos::parallel_for("Copy particles to write buffer", 
       Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), 
       KOKKOS_LAMBDA(const int idx) {
-      //p_buf[idx].dx = sp->k_p_h(idx+buf_start, particle_var::dx);
-      //p_buf[idx].dy = sp->k_p_h(idx+buf_start, particle_var::dy);
-      //p_buf[idx].dz = sp->k_p_h(idx+buf_start, particle_var::dz);
-      //p_buf[idx].i  = sp->k_p_i_h(idx+buf_start);
-      //p_buf[idx].ux = sp->k_p_h(idx+buf_start, particle_var::ux);
-      //p_buf[idx].uy = sp->k_p_h(idx+buf_start, particle_var::uy);
-      //p_buf[idx].uz = sp->k_p_h(idx+buf_start, particle_var::uz);
-      //p_buf[idx].w  = sp->k_p_h(idx+buf_start, particle_var::w);
       p_buffer(idx).dx = sp->k_p_h(idx+buf_start, particle_var::dx);
       p_buffer(idx).dy = sp->k_p_h(idx+buf_start, particle_var::dy);
       p_buffer(idx).dz = sp->k_p_h(idx+buf_start, particle_var::dz);
@@ -314,6 +310,9 @@ void BinaryDump::dump_particles(
       p_buffer(idx).uy = sp->k_p_h(idx+buf_start, particle_var::uy);
       p_buffer(idx).uz = sp->k_p_h(idx+buf_start, particle_var::uz);
       p_buffer(idx).w  = sp->k_p_h(idx+buf_start, particle_var::w);
+#ifdef VARIABLE_CHARGE
+      p_buffer(idx).qp = sp->k_p_h(idx+buf_start, particle_var::qp);
+#endif
     });
     fileIO.write(p_buffer.data(), p_buf_np);
   }
@@ -1388,6 +1387,9 @@ void HDF5Dump::dump_particles(
     sp->p[i].uy = sp->k_p_h(iptl, particle_var::uy);
     sp->p[i].uz = sp->k_p_h(iptl, particle_var::uz);
     sp->p[i].w  = sp->k_p_h(iptl, particle_var::w);
+#ifdef VARIABLE_CHARGE
+    sp->p[i].qp = sp->k_p_h(iptl, particle_var::qp);
+#endif
   }
 
   //extract float and int data out of particle struct. This is a bit silly and looses type safety
@@ -1400,11 +1402,14 @@ void HDF5Dump::dump_particles(
     p_buf[i].dx = sp->k_p_h(iptl, particle_var::dx);
     p_buf[i].dy = sp->k_p_h(iptl, particle_var::dy);
     p_buf[i].dz = sp->k_p_h(iptl, particle_var::dz);
+    p_buf[i].i  = sp->k_p_i_h(iptl);
     p_buf[i].ux = sp->k_p_h(iptl, particle_var::ux);
     p_buf[i].uy = sp->k_p_h(iptl, particle_var::uy);
     p_buf[i].uz = sp->k_p_h(iptl, particle_var::uz);
     p_buf[i].w  = sp->k_p_h(iptl, particle_var::w );
-    p_buf[i].i  = sp->k_p_i_h(iptl);
+#ifdef VARIABLE_CHARGE
+    p_buf[i].qp = sp->k_p_h(iptl, particle_var::qp);
+#endif
   }
   //extract float and int data out of particle struct. This is a bit silly and looses type safety
   float * Pf = (float *)p_buf;
@@ -1446,7 +1451,9 @@ void HDF5Dump::dump_particles(
 
   hid_t filespace = H5Screate_simple(1, (hsize_t *)&total_particles, NULL);
 
-  hsize_t memspace_count_temp = numparticles * 8;
+  int num_vars = sizeof(particle_t)/sizeof(float);
+printf("Number of vars: %d\n",num_vars);
+  hsize_t memspace_count_temp = numparticles * num_vars;
   hid_t memspace = H5Screate_simple(1, &memspace_count_temp, NULL);
 
   // The converted global_ids are stored compact, not strided
@@ -1458,7 +1465,7 @@ void HDF5Dump::dump_particles(
   H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
   H5Sselect_hyperslab(filespace, H5S_SELECT_SET, (hsize_t *)&offset, NULL, (hsize_t *)&numparticles, NULL);
 
-  hsize_t memspace_start = 0, memspace_stride = 8, memspace_count = np_local;
+  hsize_t memspace_start = 0, memspace_stride = num_vars, memspace_count = np_local;
   H5Sselect_hyperslab(memspace, H5S_SELECT_SET, &memspace_start, &memspace_stride, &memspace_count, NULL);
 
   el1 = uptime() - el1;
@@ -1492,6 +1499,11 @@ void HDF5Dump::dump_particles(
 
   dset_id = H5Dcreate(group_id, "q", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
   ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 7);
+
+#ifdef VARIABLE_CHARGE
+  dset_id = H5Dcreate(group_id, "qp", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 8);
+#endif
   H5Dclose(dset_id);
 
 #define OUTPUT_CONVERT_GLOBAL_ID 1

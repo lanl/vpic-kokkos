@@ -16,5 +16,9 @@ if(VPIC_ENABLE_HDF5)
     add_TEST(${TEST_BINARY} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPI_NUM_RANKS} ${MPIEXEC_PREFLAGS} ./${TEST_BINARY} ${MPIEXEC_POSTFLAGS} ${ARGS} --kokkos-num-threads=1)
 
     #and check that the output is ok
-    add_TEST(particles_compare_binary_hdf5 python3 ${CMAKE_CURRENT_SOURCE_DIR}/readback.py ${CMAKE_CURRENT_BINARY_DIR})
+    if(VPIC_ENABLE_VARIABLE_CHARGE)
+        add_TEST(particles_compare_binary_hdf5 python3 ${CMAKE_CURRENT_SOURCE_DIR}/readback.py ${CMAKE_CURRENT_BINARY_DIR} --variable-charge)
+    else()
+        add_TEST(particles_compare_binary_hdf5 python3 ${CMAKE_CURRENT_SOURCE_DIR}/readback.py ${CMAKE_CURRENT_BINARY_DIR})
+    endif()
 endif()
