@@ -371,7 +371,6 @@ vpic_simulation::dump_particles( const char *sp_name,
     sp->np     = sp_np;
     sp->max_np = sp_max_np;
 
-    p_buf = NULL;
     FREE_ALIGNED(p_buf);
 #undef PBUF_SIZE
 
