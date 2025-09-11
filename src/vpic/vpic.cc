@@ -162,7 +162,7 @@ void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
     int buf_start;
     static particle_t * ALIGNED(128) p_buf = NULL;
     if( !p_buf ) MALLOC_ALIGNED( p_buf, PBUF_SIZE, 128 );
-    auto& pbuf = p_buf;
+    Kokkos::View<particle_t*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged> > pbuf(p_buf, PBUF_SIZE);
 
     species_t* sp;
     LIST_FOR_EACH( sp, simulation.species_list )
@@ -177,29 +177,24 @@ void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
         int bufsize = PBUF_SIZE;
         for( buf_start=0; buf_start<sp->np; buf_start += PBUF_SIZE ) {
             if (buf_start + bufsize > sp->np) bufsize = sp->np - buf_start;
-            // FIXME: This host loop won't compile because stuff is undefined
-            // in device code
-            //Kokkos::parallel_for("Populate particle dump buffer",
-            //        host_execution_policy(0, bufsize),
-            //        KOKKOS_LAMBDA (int i) {
-            for( int i=0; i<bufsize; i++){
+            Kokkos::parallel_for("Populate particle dump buffer",
+                    host_execution_policy(0, bufsize),
+                    KOKKOS_LAMBDA (int i) {
 
-                    pbuf[i].dx = sp->k_p_h(buf_start + i, particle_var::dx);
-                    pbuf[i].dy = sp->k_p_h(buf_start + i, particle_var::dy);
-                    pbuf[i].dz = sp->k_p_h(buf_start + i, particle_var::dz);
-                    pbuf[i].ux = sp->k_p_h(buf_start + i, particle_var::ux);
-                    pbuf[i].uy = sp->k_p_h(buf_start + i, particle_var::uy);
-                    pbuf[i].uz = sp->k_p_h(buf_start + i, particle_var::uz);
-                    pbuf[i].w  = sp->k_p_h(buf_start + i, particle_var::w);
-                    pbuf[i].i  = sp->k_p_i_h(buf_start + i);
+                    pbuf(i).dx = sp->k_p_h(buf_start + i, particle_var::dx);
+                    pbuf(i).dy = sp->k_p_h(buf_start + i, particle_var::dy);
+                    pbuf(i).dz = sp->k_p_h(buf_start + i, particle_var::dz);
+                    pbuf(i).ux = sp->k_p_h(buf_start + i, particle_var::ux);
+                    pbuf(i).uy = sp->k_p_h(buf_start + i, particle_var::uy);
+                    pbuf(i).uz = sp->k_p_h(buf_start + i, particle_var::uz);
+                    pbuf(i).w  = sp->k_p_h(buf_start + i, particle_var::w);
+                    pbuf(i).i  = sp->k_p_i_h(buf_start + i);
 
-                    //});
-            };
+            });
             fileIO.write( p_buf, bufsize );
         }
         if( fileIO.close() ) ERROR(("File close failed on checkpt_kokkos particles!!!"));
     }
-    pbuf = NULL;
     FREE_ALIGNED(p_buf);
 
 #endif
@@ -234,7 +229,9 @@ void restore_kokkos(vpic_simulation& simulation, const char * fbase)
     int buf_start;
     static particle_t * ALIGNED(128) p_buf = NULL;
     if( !p_buf ) MALLOC_ALIGNED( p_buf, PBUF_SIZE, 128 );
-    auto& pbuf = p_buf;
+    Kokkos::View< particle_t*, 
+                  Kokkos::HostSpace, 
+                  Kokkos::MemoryTraits<Kokkos::Unmanaged> > pbuf(p_buf, PBUF_SIZE);
 #endif
 
     species_t* sp;
@@ -282,24 +279,20 @@ void restore_kokkos(vpic_simulation& simulation, const char * fbase)
         for( buf_start=0; buf_start<sp->np; buf_start += PBUF_SIZE ) {
             if (buf_start + bufsize > sp->np) bufsize = sp->np - buf_start;
             fileIO.read( p_buf, bufsize );
-            // FIXME: This host loop won't compile because stuff is undefined
-            // in device code
-            //Kokkos::parallel_for("Populate particle dump buffer",
-            //        host_execution_policy(0, bufsize),
-            //        KOKKOS_LAMBDA (int i) {
-            for( int i=0; i<bufsize; i++){
+            Kokkos::parallel_for("Populate particle dump buffer",
+                    host_execution_policy(0, bufsize),
+                    KOKKOS_LAMBDA (int i) {
 
-                    sp->k_p_h(buf_start + i, particle_var::dx) = pbuf[i].dx;
-                    sp->k_p_h(buf_start + i, particle_var::dy) = pbuf[i].dy;
-                    sp->k_p_h(buf_start + i, particle_var::dz) = pbuf[i].dz;
-                    sp->k_p_h(buf_start + i, particle_var::ux) = pbuf[i].ux;
-                    sp->k_p_h(buf_start + i, particle_var::uy) = pbuf[i].uy;
-                    sp->k_p_h(buf_start + i, particle_var::uz) = pbuf[i].uz;
-                    sp->k_p_h(buf_start + i, particle_var::w)  = pbuf[i].w ;
-                    sp->k_p_i_h(buf_start + i) = pbuf[i].i;
+                    sp->k_p_h(buf_start + i, particle_var::dx) = pbuf(i).dx;
+                    sp->k_p_h(buf_start + i, particle_var::dy) = pbuf(i).dy;
+                    sp->k_p_h(buf_start + i, particle_var::dz) = pbuf(i).dz;
+                    sp->k_p_h(buf_start + i, particle_var::ux) = pbuf(i).ux;
+                    sp->k_p_h(buf_start + i, particle_var::uy) = pbuf(i).uy;
+                    sp->k_p_h(buf_start + i, particle_var::uz) = pbuf(i).uz;
+                    sp->k_p_h(buf_start + i, particle_var::w)  = pbuf(i).w ;
+                    sp->k_p_i_h(buf_start + i)                 = pbuf(i).i;
 
-                    //});
-            };
+            });
         }
         
         if( fileIO.close() ) ERROR(("File close failed in restore_kokkos!!!"));
@@ -308,7 +301,6 @@ void restore_kokkos(vpic_simulation& simulation, const char * fbase)
         sp->copy_to_device();
     }
 #ifndef USE_LEGACY_PARTICLE_ARRAY
-    pbuf = NULL;
     FREE_ALIGNED(p_buf);
 #endif
 #undef PBUF_SIZE
