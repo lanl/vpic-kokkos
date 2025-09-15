@@ -62,7 +62,11 @@ takizuka_abe(
   
   ta->spi         = spi;
   ta->spj         = spj;
+#ifdef VARIABLE_CHARGE  
+  ta->cvar0       = cvar0; //charges are to be multiplied by particles
+#else
   ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
+#endif  
   ta->var_wt      = var_wt;
   ta->interval    = interval;
   ta->apply_cop   = &apply_takizuka_abe_collision_op;

@@ -61,7 +61,8 @@ struct binary_collision_pipeline {
   using Space=Kokkos::DefaultExecutionSpace;
   using member_type=Kokkos::TeamPolicy<Space>::member_type;
   using k_density_t=Kokkos::View<float *, Space>;
-
+  using k_particles_c_t = Kokkos::View<int*,Space>; //for indexing collision pairs
+    
   const float _mu_i, _mu_j, _mu, _dtinterval, _dV;
   const int   _nx, _ny, _nz;
   const float _m_i, _m_j;
@@ -76,7 +77,8 @@ struct binary_collision_pipeline {
   k_density_t     _spi_n,  _spj_n;
   k_particles_t   _spi_p,  _spj_p;
   k_particles_i_t _spi_i,  _spj_i;
-
+  k_particles_c_t _spi_c,  _spj_c;
+    
   // Random access, read-only Views
   // TODO : Does RandomAccess trait really matter?
   k_particle_sortindex_t_ra _spi_sortindex_ra, _spj_sortindex_ra;
@@ -168,7 +170,9 @@ struct binary_collision_pipeline {
     // beforehand is much faster than doing it inline.
     _spi_n = k_density_t("spi_n", _spi->g->nv);
     _spj_n = k_density_t("spj_n", _spj->g->nv);
-
+    _spi_c = k_particles_c_t("spi_c", _spi->np);
+    _spj_c = k_particles_c_t("spj_c", _spj->np);
+    // printf("npi=%d, npj=%d\n",_spi->np, _spj->np);
     //Not sure if this is needed to be redefined here
     const float rdV = (1/_spi->g->dV);
 
@@ -237,6 +241,8 @@ struct binary_collision_pipeline {
     auto const& spj_n = _spj_n;
     auto const& spi_p = _spi_p;
     auto const& spj_p = _spj_p;
+    auto const& spi_c = _spi_c;
+    auto const& spj_c = _spj_c;
     auto const& dtinterval = _dtinterval;
     auto const& spi_sortindex_ra = _spi_sortindex_ra;
     auto const& spj_sortindex_ra = _spj_sortindex_ra;
@@ -280,7 +286,7 @@ struct binary_collision_pipeline {
 			     if(spi_p == spj_p){
 				 collide_self_varwt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member); 
 			     }else{
-				 collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
+				 collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member, spi_c, spj_c);
 			     }
 			 });
 
@@ -308,7 +314,6 @@ struct binary_collision_pipeline {
 			     float density_i = spi_n(v);
 			     float density_j = spj_n(v);
 
-			     // printf("#call collide_variabl_wt()\n");
 			     collide_uniform_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
 			 });
 
@@ -526,6 +531,468 @@ void collide_self_varwt(const float m_i, const float m_j, const float density_i,
     
 }
 
+
+template<class collision_model>    
+KOKKOS_INLINE_FUNCTION
+void collide_variabl_wt(const float m_i, const float m_j, const float density_i, const float density_j, const float dV, int i_0, int j_0, int ni, int nj, const float dtinterval,     const k_particles_t& spi_p,  const k_particles_t& spj_p,   const collision_model& model, k_particle_sortindex_t_ra spi_sortindex_ra, k_particle_sortindex_t_ra spj_sortindex_ra, const kokkos_rng_pool_t& rp, const Kokkos::TeamPolicy<>::member_type & team, const k_particles_c_t& spi_c, const k_particles_c_t& spj_c)
+{
+    //printf("#in collide_variabl_wt()\n");
+    float mu_i = m_j/(m_i+m_j);
+    float mu_j = m_i/(m_i+m_j);
+    float mu = m_i*m_j/(m_i+m_j);
+    
+    float twt[2] = {density_i*dV,density_j*dV}; //total weight within a cell
+    // Compute ndt
+    const bool ij    = density_i >= density_j;
+    int i0 = ij ? i_0 : j_0;
+    int j0 = ij ? j_0 : i_0;
+    auto mh = ij ? m_i : m_j;
+    auto ml = ij ? m_j : m_i;
+    auto mu_h = ij ? mu_i : mu_j;
+    auto mu_l = ij ? mu_j : mu_i;
+    auto sph_p = ij ? spi_p : spj_p;
+    auto spl_p = ij ? spj_p : spi_p;
+    auto sphc = ij ? spi_c : spj_c;
+    auto splc = ij ? spj_c : spi_c;
+    auto sph_sortindex_ra = ij ? spi_sortindex_ra : spj_sortindex_ra;
+    auto spl_sortindex_ra = ij ? spj_sortindex_ra : spi_sortindex_ra;
+    auto il = ij;
+    auto ih = !ij;
+    auto WT = twt[ih] + twt[il]; // sum of density weight
+    auto WT_2 = twt[il]*twt[ih]/WT;
+    auto WT_h = twt[ih]*twt[ih]/WT;
+    auto WT_l = twt[il]*twt[il]/WT;    
+    auto nh = ij ? ni : nj;
+    auto nl = ij ? nj : ni;
+    const float density_max = density_i + density_j;
+    float ndt = density_max*dtinterval; 
+
+    // Get a random generator. Do not leave without freeing it.
+    kokkos_rng_state_t rg = rp.get_state();
+
+    int nmin, nmax; 
+    size_t Np_c, Np_hc, Np_lc;
+    
+    nmin = ij ? nj : ni; // note that in general the number of the other species can be >=< nmin
+    nmax = ij ? ni : nj;	
+
+    // Allocate one integer in team scratch memory (slot 1 is used for the shared integer).
+    typedef Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Unmanaged>> scratch_int_view_t;
+    auto n_sp = 2;
+    scratch_int_view_t team_first(team.team_scratch(1), n_sp); // extent = 2
+    // Initialize the shared integer to a sentinel value (-1)
+    Kokkos::single(Kokkos::PerTeam(team),
+		   [&]() {
+      for(int i=0; i<n_sp; ++i) team_first(i) = -1;
+
+      float cumulative[2] = {0.0f,0.0f};
+      float wp;
+      // printf("nmin=%d, nmax=%d, WT=%f, ni=%d, nj=%d, mi=%e, mj=%e, deni=%e, denj=%e, ij=%d\n", nmin, nmax, WT, ni, nj, m_i, m_j,density_i,density_j,ij);
+    // Only one thread per team does the serial scan.
+      int jh = 0;
+      int jl = 0; //indexing the low density species
+      for (int j = 0; j < nmax; j++) {
+	jh = j;
+        // Map the local index j to a global index.
+        int i = sph_sortindex_ra(i0 + j);
+	sphc(i0+jh) = jl; //jh will collide with jl
+	wp = sph_p(i, particle_var::w);
+        cumulative[ih] += wp;  // accumulate weight
+	
+	while(cumulative[il]<cumulative[ih]){ //keep adding wp of il 
+	    splc(j0+jl) = jh; //jl will collide with jh
+	    i = spl_sortindex_ra(j0 + jl);
+	    wp = spl_p(i, particle_var::w);
+	    cumulative[il] += wp;  // accumulate weight
+	    ++jl;
+	}
+
+	if (cumulative[ih] >= WT_2) {
+	    ++jh;
+	    team_first(ih) = jh;
+	    team_first(il) = jl;
+	    cumulative[ih] -= WT_2;
+	    cumulative[il] -= WT_2;
+	    // printf("jh=%d,jl=%d,cum=%.17f,%.17f,WT_2=%e\n",jh,jl, cumulative[ih],cumulative[il],WT_2);
+	    break;
+	}
+	// 
+        // Check if cumulative sum exceeds WT.
+	// if (cumulative[ih] == WT_2) {
+	//     team_first(ih) = j+1;
+        // }else if (cumulative[ih] > WT_2) {
+	//     float r = rg.frand(0, 1.0);
+	//     int candidate = (cumulative[ih] - r * wp < WT) ? j+2 : j+1;
+	//     team_first(ih) = candidate;
+        //   break;
+        // }
+      }
+
+      //for self-collisions
+      
+      //high-density species
+      int js = nmax-1;
+      float cums = 0;
+      bool done = false;
+      for (int j = jh;j < nmax; j++) {
+	  while(cums<cumulative[ih]){ //keep adding wp of js
+	      int i = sph_sortindex_ra(i0 + js);
+	      wp = sph_p(i, particle_var::w);
+	      cums += wp;  // accumulate weight
+	      //printf("js=%d,jh=%d,wt_sum=%e\n",js,jh,cumulative[ih]+cums);
+	      //if (cumulative[ih]+cums >= WT_h) {
+	      if(js<=jh){
+		  // printf("wp=%e,jh=%d,js=%d,cums=%.17f,%.17f,WT_h=%e\n",wp,jh,js, cumulative[ih],cums,WT_h);
+		  done = true;
+		  break;
+	      }else{
+		  sphc(i0+js) = jh; //js will collide with jh
+		  --js;
+	      }
+	}	
+	if (done) break;       // now break out of the `for`
+	jh = j;
+        // Map the local index j to a global index.
+        int i = sph_sortindex_ra(i0 + jh);
+	sphc(i0+jh) = js; //jh will collide with js
+	auto wp = sph_p(i, particle_var::w);
+        cumulative[ih] += wp;  // accumulate weight
+      }
+
+      //low-density species
+      js = nmin-1;
+      cums = 0;
+      done = false;
+      for (int j = jl;j < nmin; j++) {
+        while(cums<cumulative[il]){ //keep adding wp of js
+	    int i = spl_sortindex_ra(j0 + js);
+	    wp = spl_p(i, particle_var::w);
+	    cums += wp;  // accumulate weight
+	    //printf("js=%d,jl=%d,wt_sum=%e,splc(jl)=%d\n",js,jl,cumulative[il]+cums,splc(j0+jl));
+	    //if (cumulative[il]+cums >= WT_l) {
+	    if(js<=jl){
+		// printf("wp=%e,jl=%d,js=%d,cums=%.17f,%.17f,WT_l=%e,splc(jl)=%d\n",wp,jl,js, cumulative[il],cums,WT_l,splc(j0+jl));
+		done = true;
+		break;
+	    }else{
+		splc(j0+js) = jl; //js will collide with jl
+		--js;
+	    }
+	}	
+	if (done) break;       // now break out of the `for`
+	jl = j;
+        // Map the local index j to a global index.
+        int i = spl_sortindex_ra(j0 + jl);
+	splc(j0+jl) = js; //jh will collide with js
+	auto wp = spl_p(i, particle_var::w);
+        cumulative[il] += wp;  // accumulate weight
+      }
+      
+    }); 
+    // Make sure all team threads see the updated local_first.
+    team.team_barrier();    
+    // exit(1);
+    /*
+    Kokkos::parallel_scan(Kokkos::TeamThreadRange(team, nmax),
+    [&] (const int j, float & update, const bool final) {
+	const int i = sph_sortindex_ra(i0 + j);
+	float wp = sph_p(i, particle_var::w);     // current weight
+	update += wp;
+	// In the final pass, if the cumulative sum exceeds WT, record this index.
+	if (final && update > WT) { //The "Final" Pass
+	    float r = rg.frand(0, 1.0);
+	    int candidate = (update - r * wp < WT) ? j+1 : j;
+	    if (candidate < 0) candidate = 0;  // guard against negative index
+	    // Update team_first(0) using an atomic operation.
+	    // We want the smallest j among all threads where update exceeds WT.
+	    // If team_first(0) is still -1 or j is smaller than its current value, update it.
+	    Kokkos::atomic_min(&team_first(0), candidate);
+	}
+    });    
+    // Synchronize to make sure all threads see the updated team_first.
+    team.team_barrier();
+    */
+    Np_lc = nmin; //team_first(1);
+    Np_hc = nmax; //team_first(0);
+    Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc;
+
+    // printf("Np_lc=%d, Np_hc=%d, Np_c=%d, i0=%d, j0=%d\n", (int) Np_lc, (int) Np_hc, (int) Np_c, i0, j0);
+    gmomType26 Dm;
+    //inter-species
+    Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, Np_c),
+			    [&](const int c, gmomType26 &lsum) {
+				//first pair update i				
+	 int i;
+ 	 int j;
+	 float up[10];
+	 up[8] = 1.0;
+	 up[9] = 1.0;		    
+
+	 float u2[10];
+	 u2[8] = 1.0;
+	 u2[9] = 1.0;		    
+
+	 float wp, ux, uy, uz;	 
+
+	 if(c < Np_hc){
+	     i = sph_sortindex_ra(i0 + c);
+	     j = sphc(i0 + c);
+	     if(c < team_first[0]) {
+		 up[0] = sph_p(i, particle_var::w);
+		 up[1] = sph_p(i, particle_var::ux);
+		 up[2] = sph_p(i, particle_var::uy);
+		 up[3] = sph_p(i, particle_var::uz);
+		 up[4] = spl_p(j, particle_var::w);
+		 up[5] = spl_p(j, particle_var::ux);
+		 up[6] = spl_p(j, particle_var::uy);
+		 up[7] = spl_p(j, particle_var::uz);
+#ifdef VARIABLE_CHARGE
+		 up[8] = sph_p(i, particle_var::qp);
+		 up[9] = spl_p(j, particle_var::qp);
+#endif		 
+	     }else{ //self-coll
+		 mu_h = 0.5;
+		 mu_l = 0.5;
+		 mu   = 0.5*mh;
+		 up[0] = sph_p(i, particle_var::w);
+		 up[1] = sph_p(i, particle_var::ux);
+		 up[2] = sph_p(i, particle_var::uy);
+		 up[3] = sph_p(i, particle_var::uz);
+		 up[4] = sph_p(j, particle_var::w);
+		 up[5] = sph_p(j, particle_var::ux);
+		 up[6] = sph_p(j, particle_var::uy);
+		 up[7] = sph_p(j, particle_var::uz);
+#ifdef VARIABLE_CHARGE
+		 up[8] = sph_p(i, particle_var::qp);
+		 up[9] = sph_p(j, particle_var::qp);
+#endif		 		 
+	     }
+	     if(up[8]!=0&&up[9]!=0){
+		 wp = up[0];
+		 ux = up[1];
+		 uy = up[2];
+		 uz = up[3];
+		 lsum.v[0] += wp;
+		 lsum.v[1] += wp*ux;
+		 lsum.v[2] += wp*uy;
+		 lsum.v[3] += wp*uz;
+		 lsum.v[4] += wp*ux*ux;
+		 lsum.v[5] += wp*uy*uy;
+		 lsum.v[6] += wp*uz*uz;
+	     }
+	     
+	 }
+
+	 //second pair update j
+	 int i2;  
+	 int j2; 
+
+	 if( c < Np_lc ){
+	     i2 = splc(j0 + c);
+	     j2 = spl_sortindex_ra(j0 + c);
+	     
+	     if(c < team_first[1]) {
+		 u2[0] = sph_p(i2, particle_var::w);
+		 u2[1] = sph_p(i2, particle_var::ux);
+		 u2[2] = sph_p(i2, particle_var::uy);
+		 u2[3] = sph_p(i2, particle_var::uz);
+		 u2[4] = spl_p(j2, particle_var::w);
+		 u2[5] = spl_p(j2, particle_var::ux);
+		 u2[6] = spl_p(j2, particle_var::uy);
+		 u2[7] = spl_p(j2, particle_var::uz);
+#ifdef VARIABLE_CHARGE
+		 u2[8] = sph_p(i2, particle_var::qp);
+		 u2[9] = spl_p(j2, particle_var::qp);
+#endif		 		 		 
+	     }else{ //self-coll
+		 mu_h = 0.5;
+		 mu_l = 0.5;
+		 mu   = 0.5*ml;
+
+		 u2[0] = spl_p(i2, particle_var::w);
+		 u2[1] = spl_p(i2, particle_var::ux);
+		 u2[2] = spl_p(i2, particle_var::uy);
+		 u2[3] = spl_p(i2, particle_var::uz);
+		 u2[4] = spl_p(j2, particle_var::w);
+		 u2[5] = spl_p(j2, particle_var::ux);
+		 u2[6] = spl_p(j2, particle_var::uy);
+		 u2[7] = spl_p(j2, particle_var::uz);
+#ifdef VARIABLE_CHARGE
+		 u2[8] = spl_p(i2, particle_var::qp);
+		 u2[9] = spl_p(j2, particle_var::qp);
+#endif		 		 		 		 
+	     }
+	     if(u2[8]!=0&&u2[9]!=0){	     
+		 wp = u2[4];
+		 ux = u2[5];
+		 uy = u2[6];
+		 uz = u2[7];
+		 lsum.v[13] += wp;
+		 lsum.v[14] += wp*ux;
+		 lsum.v[15] += wp*uy;
+		 lsum.v[16] += wp*uz;
+		 lsum.v[17] += wp*ux*ux;
+		 lsum.v[18] += wp*uy*uy;
+		 lsum.v[19] += wp*uz*uz;
+	     }
+	     // if(c<Np_lc && c>Np_lc-10) printf("j2=%d,wp=%e,uxyz=%e,%e,%e\n",j2,wp,ux,uy,uz);
+	 }
+	 
+	 //after setting the collsion-pairs
+	 if(c < Np_hc && up[8]!=0 && up[9]!=0) {
+	 //if(c < Np_hc) {
+	     auto ux0=up[1];
+	     auto uy0=up[2];
+	     auto uz0=up[3];
+	     
+	     binary_collision(mu, mu_h, mu_l, up, model, rg, ndt);
+	     wp = up[0];
+	     ux = up[1];
+	     uy = up[2];
+	     uz = up[3];
+	     sph_p(i, particle_var::ux) = ux;
+	     sph_p(i, particle_var::uy) = uy;
+	     sph_p(i, particle_var::uz) = uz;
+	     lsum.v[7] += wp*ux;
+	     lsum.v[8] += wp*uy;
+	     lsum.v[9] += wp*uz;
+	     lsum.v[10] += wp*ux*ux;
+	     lsum.v[11] += wp*uy*uy;
+	     lsum.v[12] += wp*uz*uz;
+	     if(ux!=ux || uy!=uy || uz!=uz) {
+		 printf("h, i=%d, j=%d, %d, c=%d, Np_hc=%d, uxyz0=%e,%e,%e, uxyz = %e,%e,%e\n",i,j, sphc(i0+c), c, Np_hc, ux0, uy0, uz0, ux,uy,uz);
+		 exit(1);
+	     }
+	 }
+
+	 
+	 if(c < Np_lc && u2[8]!=0 && u2[9]!=0) {
+	 //if(c < Np_lc) {	     
+	     binary_collision(mu, mu_h, mu_l, u2, model, rg, ndt);
+	     wp = u2[4];
+	     ux = u2[5];
+	     uy = u2[6];
+	     uz = u2[7];
+	     spl_p(j2, particle_var::ux) = ux;
+	     spl_p(j2, particle_var::uy) = uy;
+	     spl_p(j2, particle_var::uz) = uz;
+	     lsum.v[20] += wp*ux;
+	     lsum.v[21] += wp*uy;
+	     lsum.v[22] += wp*uz;
+	     lsum.v[23] += wp*ux*ux;
+	     lsum.v[24] += wp*uy*uy;
+	     lsum.v[25] += wp*uz*uz;
+	     if(ux!=ux || uy!=uy || uz!=uz) {
+		 printf("l, i2=%d, uxyz = %e,%e,%e\n",i2, ux,uy,uz);
+		 exit(1);
+	     }
+	 }
+			    }, Dm);	 
+
+    // for(int i =0; i<25; ++i) printf("Dm[%i]=%e ",i,Dm.v[i]);
+    //correcting conservation (both species)
+    float tot_ms =  mh*Dm.v[0] + ml*Dm.v[13];
+    float V0_x   = (mh*Dm.v[1] + ml*Dm.v[14]) / tot_ms;
+    float V0_y   = (mh*Dm.v[2] + ml*Dm.v[15]) / tot_ms;
+    float V0_z   = (mh*Dm.v[3] + ml*Dm.v[16]) / tot_ms;
+    float tot_En = 0.5 * (mh*( Dm.v[4] + Dm.v[5] + Dm.v[6] ) + ml*( Dm.v[17] + Dm.v[18] + Dm.v[19] ));
+
+
+    float Vp_x   = (mh*Dm.v[7] + ml*Dm.v[20]) / tot_ms;
+    float Vp_y   = (mh*Dm.v[8] + ml*Dm.v[21]) / tot_ms;
+    float Vp_z   = (mh*Dm.v[9] + ml*Dm.v[22]) / tot_ms;
+    float tot_Ep = 0.5 * (mh*( Dm.v[10] + Dm.v[11] + Dm.v[12] ) + ml*( Dm.v[23] + Dm.v[24] + Dm.v[25] ));
+    
+    float alph =
+	sqrt( ( tot_En - 0.5 * tot_ms * ( V0_x * V0_x + V0_y * V0_y + V0_z * V0_z ) ) /
+	      ( tot_Ep - 0.5 * tot_ms * ( Vp_x * Vp_x + Vp_y * Vp_y + Vp_z * Vp_z ) ) );
+    // printf("tot_En = %e, 0.5mv02 = %e, tot_Ep = %e, 0.5mvp2 = %e\n",tot_En, 0.5 * tot_ms * ( V0_x * V0_x + V0_y * V0_y + V0_z * V0_z ) , tot_Ep, 0.5 * tot_ms * ( Vp_x * Vp_x + Vp_y * Vp_y + Vp_z * Vp_z ) );
+    
+    auto _correction = KOKKOS_LAMBDA( const size_t c )
+	{
+	 int i1 = c; 
+	 int i2 = c % nmin; //it may be possible that c > nmin
+	 int i = sph_sortindex_ra(i0 + i1);
+	 int j = spl_sortindex_ra(j0 + i2);
+
+
+                if ( c < Np_hc ) {
+                    auto &ux_i = sph_p(i, particle_var::ux);
+                    auto &uy_i = sph_p(i, particle_var::uy);
+                    auto &uz_i = sph_p(i, particle_var::uz);
+
+		    auto ux0 = ux_i;
+		    auto uy0 = uy_i;
+		    auto uz0 = uz_i;
+                    ux_i = V0_x + alph * ( ux_i - Vp_x );
+                    uy_i = V0_y + alph * ( uy_i - Vp_y );
+                    uz_i = V0_z + alph * ( uz_i - Vp_z );
+		    if(ux_i!=ux_i || uy_i!=uy_i || uz_i!=uz_i) {
+			printf("h, c=%d, uxyz = %e,%e,%e, u0xyz = %e, %e, %e,V0xyz = %e,%e,%e, alph = %e\n",c, ux_i,uy_i,uz_i, ux0,uy0,uz0,V0_x, V0_y, V0_z, alph);
+			exit(1);
+		    }
+		    
+                }
+
+                if ( c < Np_lc ) {
+                    auto &ux_j = spl_p(j, particle_var::ux);
+                    auto &uy_j = spl_p(j, particle_var::uy);
+                    auto &uz_j = spl_p(j, particle_var::uz);
+
+                    ux_j = V0_x + alph * ( ux_j - Vp_x );
+                    uy_j = V0_y + alph * ( uy_j - Vp_y );
+                    uz_j = V0_z + alph * ( uz_j - Vp_z );
+		    if(ux_j!=ux_j || uy_j!=uy_j || uz_j!=uz_j) {
+			printf("l, c=%d, uxyz = %e,%e,%e\n",c, ux_j,uy_j,uz_j);
+			exit(1);
+		    }
+		    
+                }
+	};
+
+    Kokkos::parallel_for( Kokkos::TeamThreadRange( team, Np_c ), _correction );
+    // printf("#performed conservation correction\n");
+    
+
+    /*    
+    //correcting conservation (only for high-density species)
+    float tot_ms = mh*Dm.v[0];    
+    float V0_x   = (mh*Dm.v[1] + ml*Dm.v[14] - ml*Dm.v[20]) / tot_ms;
+    float V0_y   = (mh*Dm.v[2] + ml*Dm.v[15] - ml*Dm.v[21]) / tot_ms;
+    float V0_z   = (mh*Dm.v[3] + ml*Dm.v[16] - ml*Dm.v[22]) / tot_ms;
+    float tot_En = 0.5 * (mh*( Dm.v[4] + Dm.v[5] + Dm.v[6] ) + ml*( Dm.v[17] + Dm.v[18] + Dm.v[19] ) - ml*( Dm.v[23] + Dm.v[24] + Dm.v[25] ));
+
+
+    float Vp_x   = mh*Dm.v[7] / tot_ms;
+    float Vp_y   = mh*Dm.v[8] / tot_ms;
+    float Vp_z   = mh*Dm.v[9] / tot_ms;
+    float tot_Ep = 0.5 * mh*( Dm.v[10] + Dm.v[11] + Dm.v[12] );
+    
+    float alph =
+	sqrt( ( tot_En - 0.5 * tot_ms * ( V0_x * V0_x + V0_y * V0_y + V0_z * V0_z ) ) /
+	      ( tot_Ep - 0.5 * tot_ms * ( Vp_x * Vp_x + Vp_y * Vp_y + Vp_z * Vp_z ) ) );
+
+    auto _correction = KOKKOS_LAMBDA( const size_t c )
+	{
+	 int i1 = c; 
+	 int i = sph_sortindex_ra(i0 + i1);
+
+	 auto &ux_i = sph_p(i, particle_var::ux);
+	 auto &uy_i = sph_p(i, particle_var::uy);
+	 auto &uz_i = sph_p(i, particle_var::uz);
+	 
+	 ux_i = V0_x + alph * ( ux_i - Vp_x );
+	 uy_i = V0_y + alph * ( uy_i - Vp_y );
+	 uz_i = V0_z + alph * ( uz_i - Vp_z );
+	};
+
+    Kokkos::parallel_for( Kokkos::TeamThreadRange( team, Np_hc ), _correction );
+    */
+    
+    // We *must* free generators.    
+    rp.free_state(rg);
+ 
+}
 
 template<class collision_model>    
 KOKKOS_INLINE_FUNCTION
@@ -1063,6 +1530,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
  
 }
 
+
   /**
    * @brief Perform a collision between two particles.
    */
@@ -1077,7 +1545,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     const float mu,
     const float mu_i,
     const float mu_j,
-    float (&up)[8],
+    float* up,
     collision_model& model,
     kokkos_rng_state_t& rg,
     float ndt
@@ -1091,15 +1559,21 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     float uix = up[1];
     float uiy = up[2];
     float uiz = up[3];
-    float qi = 0;
+    float qi  = 1.0;
 #ifdef VARIABLE_CHARGE
-    qi  = spi_p(i, particle_var::qp);
-#endif 
-
+    qi = up[8];
+#endif
     float wj  = up[4];
     float ujx = up[5];
     float ujy = up[6];
     float ujz = up[7];
+    float qj  = 1.0; //
+#ifdef VARIABLE_CHARGE
+    qj = up[9];
+#endif    
+    // printf("qi,j=%e,%e\n",qi,qj);
+    // exit(1);
+
 
 
     // Relative velocity
@@ -1109,7 +1583,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 
     /* There are lots of ways to formulate T vector formation    */
     /* This has no branches (but uses L1 heavily)                */
-
+    if(urx!=0 || ury!=0 || urz!=0){
     t0 = urx*urx;
     d0=0;
     d1=1;
@@ -1156,7 +1630,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     // Compute collision angle and coefficient of restitution
     float param[2] = {t2,t1};
     const float rr = model.restitution(rg, param);
-    dd = model.tan_theta_half(rg, t2, t1);
+    dd = model.tan_theta_half(rg, t2, t1*qi*qi*qj*qj);
     PREVENT_BACKSCATTER(dd);
 
     stack[0] = urx;
@@ -1199,7 +1673,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     up[5] = (ujx - mu_j*stack[0])*rr + cmx;
     up[6] = (ujy - mu_j*stack[1])*rr + cmy;
     up[7] = (ujz - mu_j*stack[2])*rr + cmz;
-    
+    }//non-zero relative velocity -- update 
   }
 
 };

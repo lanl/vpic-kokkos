@@ -215,6 +215,10 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     double uz = k_particles(p_index, particle_var::uz);
     double w  = k_particles(p_index, particle_var::w);
     int ii = k_particles_i(p_index);
+    float qp  = 1.0;
+#ifdef VARIABLE_CHARGE
+    qp = k_particles(p_index, particle_var::qp);
+#endif
 
     double ke_mc = static_cast<double>(ux)*static_cast<double>(ux) + static_cast<double>(uy)*static_cast<double>(uy) + static_cast<double>(uz)*static_cast<double>(uz); // ke_mc = |u|^2 (invariant)
     double vz = 1.0;//sqrt(1.0+ke_mc);            // vz = gamma    (invariant)    
@@ -253,7 +257,12 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     // TODO: this serial adding to try and save adds is a bit sad
     // TODO: This is somehow going out of bounds right now
     const int i0 = ii;
-    ACCUM_HYDRO(w, i0); // Cell i,j,k
+    if(qp!=0) {
+	ACCUM_HYDRO(w, i0); // Cell i,j,k
+    } else {
+	// printf("i0=%d,qp = %f, qsp = %f\n",i0,qp,qsp);
+	// exit(1);
+    }
 #   undef ACCUM_HYDRO
     // printf("i0-7=%d,%d,%d,%d,%d,%d,%d,%d\n",i0,i1,i2,i3,i4,i5,i6,i7);
     // printf("w0-7=%e,%e,%e,%e,%e,%e,%e,%e\n",ke_mc*w0,ke_mc*w1,ke_mc*w2,ke_mc*w3,ke_mc*w4,ke_mc*w5,ke_mc*w6,ke_mc*w7);
