@@ -138,6 +138,9 @@ init_pb_diagnostic() {
     diag->write_posy = 0;
     diag->write_posz = 0;
     diag->write_weight = 0;
+#ifdef VARIABLE_CHARGE
+    diag->write_pq = 0;
+#endif
 
     return diag;
 }
@@ -145,6 +148,7 @@ init_pb_diagnostic() {
 void
 finalize_pb_diagnostic(species_t * sp){
     pb_diagnostic_t *diag = sp->pb_diag;
+    diag->num_writes = 1; // time
     if(diag->write_ux) diag->num_writes += 1;
     if(diag->write_uy) diag->num_writes += 1;
     if(diag->write_uz) diag->num_writes += 1;
@@ -153,6 +157,9 @@ finalize_pb_diagnostic(species_t * sp){
     if(diag->write_posy) diag->num_writes += 1;
     if(diag->write_posz) diag->num_writes += 1;
     if(diag->write_weight) diag->num_writes += 1;
+#ifdef VARIABLE_CHARGE
+    if(diag->write_pq) diag->num_writes += 1;
+#endif
 
     diag->num_writes += diag->num_user_writes;
 
