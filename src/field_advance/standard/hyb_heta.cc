@@ -48,8 +48,8 @@ typedef struct pipeline_args {
 		  pz2*( F(z,cbz) + F(mz,cbz) - 2.0*F(0,cbz) ) ); \
 
 #define CURL_LPL_B(x_,y_,z_)						\
-  F(0,e##x_) -= hypereta*F(0,tcax)*F(0,tcaz)*( p##y_*( F(y_,pe##z_) - F(m##y_,pe##z_) ) - \
-				             - p##z_*( F(z_,pe##y_) - F(m##z_,pe##y_) ) )
+  F(0,e##x_) -= hypereta*F(0,tcax)*F(0,tcaz)*( p##y_*( F(y_,pe##z_) - F(m##y_,pe##z_) ) \
+				                                     - p##z_*( F(z_,pe##y_) - F(m##z_,pe##y_) ) )
 
 
 void
@@ -72,8 +72,8 @@ hyb_heta( field_array_t * RESTRICT fa ) {
   //const float den_floor_ohm = g->den_floor_ohm;
 
   const float px2 = px*px;
-  const float py2 = px*px;
-  const float pz2 = px*px;
+  const float py2 = py*py;
+  const float pz2 = pz*pz;
 
   // Laplace B Loop
     

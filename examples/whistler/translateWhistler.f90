@@ -13,7 +13,7 @@ module MPI
 
   ! MPI IO stuff
   integer nfiles, nbands
-  parameter(nfiles=15)
+  parameter(nfiles=14)
   parameter(nbands=0)
 
   integer sizes(3), subsizes(3), starts(3)
@@ -47,7 +47,7 @@ program translate
   real(kind=8) nx_d,ny_d,nz_d,mi_me,dt
   real(kind=8) xmax,ymax,zmax
   real(kind=4), allocatable, dimension(:,:,:) :: ex,ey,ez,bx,by,bz,jx,jy,jz,rho,ne,ux,uy,uz,pxx,pyy,pzz,pxy,pxz,pyz,phi, phit
-  real(kind=4), allocatable, dimension(:,:,:) :: rhob,rhof,exc,ezc,buffer,absJ,absB,aniso
+  real(kind=4), allocatable, dimension(:,:,:) :: rhob,rhof,exc,ezc,buffer,absJ,absB
   real(kind=4), allocatable, dimension(:,:,:,:) :: eb
   character(40) fname,fname1
   logical dfile,check
@@ -135,7 +135,7 @@ program translate
 
 ! read the info file
 
-  open(unit=10,file='info.bin',form='unformatted', access='stream') !status='old',form='unformatted')
+  open(unit=10,file='info.bin',status='old',form='unformatted',access='stream')
   read(10)tx
   read(10)ty
   read(10)tz
@@ -150,9 +150,9 @@ program translate
   
   read(10)dt
   
+
   close(10)
 
-  mi_me=1
 
  
   topology_x = floor(tx+0.5)
@@ -321,8 +321,6 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
   allocate(jy(ht%nx,ht%ny,ht%nz))
   allocate(jz(ht%nx,ht%ny,ht%nz))
   allocate(rho(ht%nx,ht%ny,ht%nz))
-
-  allocate(aniso(ht%nx,ht%ny,ht%nz))
   
   if (nbands > 0)  allocate(eb(nbands,ht%nx,ht%ny,ht%nz))
 
@@ -331,7 +329,7 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
      ! Write information file for IDL viewer
 
      open(unit=17,file='data/info',status='replace',form='unformatted')
-     write(17)nx,ny,nz
+     write(17)nx,nz,ny !flip for 2d diagnostic.pro
      write(17)real(xmax,kind=4),real(ymax,kind=4),real(zmax,kind=4)
      close(17)
      
@@ -373,15 +371,15 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
   fnames(5) = 'data/By'
   fnames(6) = 'data/Bz'
 
-!  fnames(7) = 'data/Uix'
-!  fnames(8) = 'data/Uiy'
-!  fnames(9) = 'data/Uiz'
+  fnames(7) = 'data/Uix'
+  fnames(8) = 'data/Uiy'
+  fnames(9) = 'data/Uiz'
   fnames(10) = 'data/ni'
-  fnames(11) = 'data/Uix'
-  fnames(12) = 'data/Uiy'
-  fnames(13) = 'data/Uiz'
+  fnames(11) = 'data/Uixold'
+  fnames(12) = 'data/Uiyold'
+  fnames(13) = 'data/Uizold'
   fnames(14) = 'data/niold'
-  fnames(15) = 'data/aniso'
+  !fnames(15) = 'data/Pi-xz1'
   !fnames(16) = 'data/Pi-xy1'
 
   !fnames(17) = 'data/Uix0'
@@ -514,15 +512,16 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
                  buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
 
               read(10)buffer   ! skip div_b error
-              read(10)buffer   ! skip b0
+              
+              read(10)buffer   ! skip B0
               read(10)buffer   ! skip 
               read(10)buffer   ! skip 
-              read(10)buffer   ! skip 
+              read(10)buffer   ! skip Te0
               
               read(10)buffer   ! skip tca
               read(10)buffer   ! skip 
               read(10)buffer   ! skip 
-              read(10)buffer   ! skip 
+              read(10)buffer   ! skip rhob
 
 
               read(10)buffer
@@ -560,46 +559,14 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
 
          
               close(10)
-
-
-!              write(fname,"(A9,I0,A,I0,A,I0)")"fields/T.",tindex,"/fields.",tindex,".",n-1
-              write(fname,"(A8,I0,A8,I0,A1,I0)")"hydro/T.",tindex,"/Hhydro.",tindex,".",n-1
-              inquire(file=trim(fname),exist=check)
-              if (check) then
-                 open(unit=10,file=trim(fname),form='unformatted',access='stream')!status='unknown',form='unformatted')
-              else
-                 print *,"Can't find file:",fname
-                 print *
-                 print *," ***  Terminating ***"
-                 stop
-              endif
-              call read_boilerplate(10)
-              read(10)v0
-              read(10)itype
-              read(10)ndim
-              read(10)nc
-
-              read(10)buffer ! ux
-              read(10)buffer ! uy
-              read(10)buffer ! uz
-              read(10)buffer ! ne
-              read(10)buffer ! pxx
-              pxx(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
-                 buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
-              read(10)buffer ! pyy
-              pyy(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
-                   buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
-              read(10)buffer ! pzz
-              pzz(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
-                 buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
-              
               deallocate(buffer)
            enddo
         enddo
      enddo
 
    
-     
+
+!     print*,ne
              
      if (output_format == continuous) then
      
@@ -621,30 +588,23 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
         
      endif
 
-!     print*,'pxx=',pxx
-!     print*,'pyy=',pyy
-!     print*,'pzz=',pzz
-
-     aniso=(pyy+pzz)/(2.0*pxx)
-!     print*,'aniso=',aniso
-     
      call MPI_FILE_WRITE_AT_ALL(fh(1), offset, ex, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(2), offset, ey, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(3), offset, ez, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(4), offset, bx, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(5), offset, by, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(6), offset, bz, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
-!     call MPI_FILE_WRITE_AT_ALL(fh(7), offset, jx, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
-!     call MPI_FILE_WRITE_AT_ALL(fh(8), offset, jy, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
-!     call MPI_FILE_WRITE_AT_ALL(fh(9), offset, jz, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
+     call MPI_FILE_WRITE_AT_ALL(fh(7), offset, jx, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
+     call MPI_FILE_WRITE_AT_ALL(fh(8), offset, jy, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
+     call MPI_FILE_WRITE_AT_ALL(fh(9), offset, jz, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(10), offset, rho, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(11), offset, ux, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(12), offset, uy, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(13), offset, uz, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(14), offset, ne, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
-     call MPI_FILE_WRITE_AT_ALL(fh(15), offset, aniso, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
 
 
+   
  
 
      if (output_format == file_per_slice) then

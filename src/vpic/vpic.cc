@@ -107,6 +107,7 @@ vpic_simulation::vpic_simulation() {
 
 vpic_simulation::~vpic_simulation() {
   UNREGISTER_OBJECT( this );
+  delete_collision_op_list( collision_op_list );
   delete_emitter_list( emitter_list );
   delete_particle_bc_list( particle_bc_list );
   delete_species_list( species_list );

@@ -371,6 +371,12 @@ if (VPIC_ENABLE_VARIABLE_CHARGE)
    message("--     VPIC: Enabled variable charge for particles")
 endif(VPIC_ENABLE_VARIABLE_CHARGE)
 
+if (HYB_USE_SEPARATE_PE)
+   add_definitions(-DHYB_USE_SEPARATE_PE)
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_SEPARATE_PE")
+   message("--     VPIC: Enabled variable charge for particles")
+endif(HYB_USE_SEPARATE_PE)
+
 if (VPIC_ENABLE_GPU_AWARE_MPI)
   add_definitions(-DVPIC_ENABLE_GPU_AWARE_MPI)
   message("--     VPIC: Enabled GPU-Aware MPI")
