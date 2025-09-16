@@ -93,7 +93,9 @@ class species_t {
         float m;                            // Species particle rest mass
 
         int np = 0, max_np = 0;             // Number and max local particles
+#ifdef USE_LEGACY_PARTICLE_ARRAY
         particle_t * ALIGNED(128) p;        // Array of particles for the species
+#endif
 
         // TODO: these could be unsigned?
         int nm = 0, max_nm = 0;             // Number and max local movers in use
@@ -297,6 +299,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
                  interpolator_array_t * RESTRICT ia,
                  field_array_t* RESTRICT fa );
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 // In center_p.cxx
 
 // This does a half advance field advance and a half Boris rotate on
@@ -307,6 +310,16 @@ advance_p( /**/  species_t            * RESTRICT sp,
 void
 center_p( /**/  species_t            * RESTRICT sp,
           const interpolator_array_t * RESTRICT ia );
+#endif
+
+// In center_p.cxx
+
+// This version does not assume that a species_t has a legacy particle array.
+
+void
+center_p_dump( /**/  species_t            * RESTRICT sp,
+                particle_t                 * RESTRICT p,
+                const interpolator_array_t * RESTRICT ia );
 
 // In uncenter_p.cxx
 
@@ -324,9 +337,11 @@ uncenter_p( /**/  species_t            * RESTRICT sp,
 // calculation is done numerically robustly.  All nodes get the same
 // result.
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 double
 energy_p( const species_t            * RESTRICT sp,
           const interpolator_array_t * RESTRICT ia );
+#endif
 
 double
 energy_p_kokkos( const species_t            * RESTRICT sp,
@@ -334,9 +349,11 @@ energy_p_kokkos( const species_t            * RESTRICT sp,
 
 // In rho_p.cxx
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 void
 accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
                   const species_t     * RESTRICT sp );
+#endif
 
 void
 accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
@@ -366,10 +383,12 @@ void k_accumulate_rhob_single_cpu(
 
 // In hydro_p.c
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 void
 accumulate_hydro_p( /**/  hydro_array_t        * RESTRICT ha,
                     const species_t            * RESTRICT sp,
                     const interpolator_array_t * RESTRICT ia );
+#endif
 
 void accumulate_hydro_p_kokkos(
         k_particles_t& k_particles,

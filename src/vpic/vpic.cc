@@ -34,7 +34,7 @@ checkpt_vpic_simulation( const vpic_simulation * vpic ) {
   CHECKPT_FPTR( vpic->species_list );
   CHECKPT_FPTR( vpic->particle_bc_list );
   CHECKPT_FPTR( vpic->emitter_list );
-  CHECKPT_FPTR( vpic->collision_op_list );
+  //CHECKPT_FPTR( vpic->collision_op_list );
 }
 
 vpic_simulation *
@@ -51,7 +51,7 @@ restore_vpic_simulation( void ) {
   RESTORE_FPTR( vpic->species_list );
   RESTORE_FPTR( vpic->particle_bc_list );
   RESTORE_FPTR( vpic->emitter_list );
-  RESTORE_FPTR( vpic->collision_op_list );
+  //RESTORE_FPTR( vpic->collision_op_list );
   return vpic;
 }
 
@@ -64,7 +64,7 @@ reanimate_vpic_simulation( vpic_simulation * vpic ) {
   REANIMATE_FPTR( vpic->species_list );
   REANIMATE_FPTR( vpic->particle_bc_list );
   REANIMATE_FPTR( vpic->emitter_list );
-  REANIMATE_FPTR( vpic->collision_op_list );
+  //REANIMATE_FPTR( vpic->collision_op_list );
 }
 
 
@@ -145,14 +145,70 @@ void vpic_simulation::print_run_details()
     }
 }
 
+/**
+ * @brief The checkpoint macros will not work on the Kokkos views, so we bypass
+ * the checkpointing infrustructure and manually write this data to disk for
+ * all views without a legacy array.
+ *
+ * @param simulation The vpic_simulation that was restored
+ * @param fbase The base name for the checkpoint files
+ */
+void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
+{
+# define PBUF_SIZE 32768 // 1MB of particles
+#ifndef USE_LEGACY_PARTICLE_ARRAY
+    char fname[256];
+    FileIO fileIO;
+    int buf_start;
+    static particle_t * ALIGNED(128) p_buf = NULL;
+    if( !p_buf ) MALLOC_ALIGNED( p_buf, PBUF_SIZE, 128 );
+    Kokkos::View<particle_t*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged> > pbuf(p_buf, PBUF_SIZE);
+
+    species_t* sp;
+    LIST_FOR_EACH( sp, simulation.species_list )
+    {
+        sprintf( fname, "%s.%s", fbase, sp->name );
+        FileIOStatus status = fileIO.open(fname, io_write);
+        if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
+
+        // Copy a PBUF_SIZE hunk of the particle list into the particle buffer,
+        // and write it out.  This is simplified from dump_particles since we
+        // don't need to call center_p.
+        int bufsize = PBUF_SIZE;
+        for( buf_start=0; buf_start<sp->np; buf_start += PBUF_SIZE ) {
+            if (buf_start + bufsize > sp->np) bufsize = sp->np - buf_start;
+            Kokkos::parallel_for("Populate particle dump buffer",
+                    host_execution_policy(0, bufsize),
+                    KOKKOS_LAMBDA (int i) {
+
+                    pbuf(i).dx = sp->k_p_h(buf_start + i, particle_var::dx);
+                    pbuf(i).dy = sp->k_p_h(buf_start + i, particle_var::dy);
+                    pbuf(i).dz = sp->k_p_h(buf_start + i, particle_var::dz);
+                    pbuf(i).ux = sp->k_p_h(buf_start + i, particle_var::ux);
+                    pbuf(i).uy = sp->k_p_h(buf_start + i, particle_var::uy);
+                    pbuf(i).uz = sp->k_p_h(buf_start + i, particle_var::uz);
+                    pbuf(i).w  = sp->k_p_h(buf_start + i, particle_var::w);
+                    pbuf(i).i  = sp->k_p_i_h(buf_start + i);
+
+            });
+            fileIO.write( p_buf, bufsize );
+        }
+        if( fileIO.close() ) ERROR(("File close failed on checkpt_kokkos particles!!!"));
+    }
+    FREE_ALIGNED(p_buf);
+
+#endif
+
+}
 
 /**
  * @brief After a checkpoint restore, we must move the data back over to the
  * Kokkos objects. This currently must be done for all views
  *
  * @param simulation The vpic_simulation that was restored
+ * @param fbase The base name for the checkpoint files
  */
-void restore_kokkos(vpic_simulation& simulation)
+void restore_kokkos(vpic_simulation& simulation, const char * fbase)
 {
     // The way the VPIC checkpoint/restore works is by copying raw bytes and
     // pointers.  It messes with the reference counting built into Kokkos, and
@@ -166,7 +222,18 @@ void restore_kokkos(vpic_simulation& simulation)
     // 2) Overwrite that be doing normal init
     // We may be able to do that one in one step, but this way is clearer
 
+#ifndef USE_LEGACY_PARTICLE_ARRAY
     // Restore Particles
+    char fname[256];
+    FileIO fileIO;
+    int buf_start;
+    static particle_t * ALIGNED(128) p_buf = NULL;
+    if( !p_buf ) MALLOC_ALIGNED( p_buf, PBUF_SIZE, 128 );
+    Kokkos::View< particle_t*, 
+                  Kokkos::HostSpace, 
+                  Kokkos::MemoryTraits<Kokkos::Unmanaged> > pbuf(p_buf, PBUF_SIZE);
+#endif
+
     species_t* sp;
     LIST_FOR_EACH( sp, simulation.species_list )
     {
@@ -200,8 +267,43 @@ void restore_kokkos(vpic_simulation& simulation)
 
         sp->init_kokkos_particles();
 
+#ifndef USE_LEGACY_PARTICLE_ARRAY
+        sprintf( fname, "%s.%s", fbase, sp->name );
+        FileIOStatus status = fileIO.open(fname, io_read);
+        if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
+
+        // Copy a PBUF_SIZE hunk of the particle list into the particle buffer,
+        // and write it out.  This is simplified from dump_particles since we
+        // don't need to call center_p.
+        int bufsize = PBUF_SIZE;
+        for( buf_start=0; buf_start<sp->np; buf_start += PBUF_SIZE ) {
+            if (buf_start + bufsize > sp->np) bufsize = sp->np - buf_start;
+            fileIO.read( p_buf, bufsize );
+            Kokkos::parallel_for("Populate particle dump buffer",
+                    host_execution_policy(0, bufsize),
+                    KOKKOS_LAMBDA (int i) {
+
+                    sp->k_p_h(buf_start + i, particle_var::dx) = pbuf(i).dx;
+                    sp->k_p_h(buf_start + i, particle_var::dy) = pbuf(i).dy;
+                    sp->k_p_h(buf_start + i, particle_var::dz) = pbuf(i).dz;
+                    sp->k_p_h(buf_start + i, particle_var::ux) = pbuf(i).ux;
+                    sp->k_p_h(buf_start + i, particle_var::uy) = pbuf(i).uy;
+                    sp->k_p_h(buf_start + i, particle_var::uz) = pbuf(i).uz;
+                    sp->k_p_h(buf_start + i, particle_var::w)  = pbuf(i).w ;
+                    sp->k_p_i_h(buf_start + i)                 = pbuf(i).i;
+
+            });
+        }
+        
+        if( fileIO.close() ) ERROR(("File close failed in restore_kokkos!!!"));
+#endif
+
         sp->copy_to_device();
     }
+#ifndef USE_LEGACY_PARTICLE_ARRAY
+    FREE_ALIGNED(p_buf);
+#endif
+#undef PBUF_SIZE
 
     int nv = simulation.grid->nv;
 

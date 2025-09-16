@@ -12,6 +12,7 @@
 
 // FIXME: MOVE THIS INTO VPIC.HXX TO BE TRULY INLINE
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 void
 vpic_simulation::inject_particle( species_t * sp,
                                   double x,  double y,  double z,
@@ -97,6 +98,159 @@ vpic_simulation::inject_particle( species_t * sp,
   }
 
 }
+
+#else // USE_LEGACY_PARTICLE_ARRAY
+void
+vpic_simulation::inject_particle( species_t * sp,
+                                  double x,  double y,  double z,
+                                  double ux, double uy, double uz,
+                                  double w,  double age,
+                                  int update_rhob ) {
+  int ix, iy, iz;
+
+  // Check input parameters
+  if( !sp                ) ERROR(( "Invalid species" ));
+  if( w < 0              ) ERROR(( "inject_particle: w < 0" ));
+
+  const double x0 = (double)grid->x0, y0 = (double)grid->y0, z0 = (double)grid->z0;
+  const double x1 = (double)grid->x1, y1 = (double)grid->y1, z1 = (double)grid->z1;
+  const int    nx = grid->nx,         ny = grid->ny,         nz = grid->nz;
+  
+  // Do not inject if the particle is strictly outside the local domain
+  // or if a far wall of local domain shared with a neighbor
+  // FIXME: DO THIS THE PHASE-3 WAY WITH GRID->NEIGHBOR
+  // NOT THE PHASE-2 WAY WITH GRID->BC
+
+  if( (x<x0) | (x>x1) | ( (x==x1) & (grid->bc[BOUNDARY(1,0,0)]>=0 ) ) ) return;
+  if( (y<y0) | (y>y1) | ( (y==y1) & (grid->bc[BOUNDARY(0,1,0)]>=0 ) ) ) return;
+  if( (z<z0) | (z>z1) | ( (z==z1) & (grid->bc[BOUNDARY(0,0,1)]>=0 ) ) ) return;
+
+  // This node should inject the particle
+    
+  if( sp->np>=sp->max_np ) ERROR(( "No room to inject particle" ));
+
+  // Compute the injection cell and coordinate in cell coordinate system
+  // BJA:  Note the use of double precision here for accurate particle 
+  //       placement on large meshes. 
+ 
+  // The ifs allow for injection on the far walls of the local computational
+  // domain when necessary
+ 
+  x  = ((double)nx)*((x-x0)/(x1-x0)); // x is rigorously on [0,nx]
+  ix = (int)x;                        // ix is rigorously on [0,nx]
+  x -= (double)ix;                    // x is rigorously on [0,1)
+  x  = (x+x)-1;                       // x is rigorously on [-1,1)
+  if( ix==nx ) x = 1;                 // On far wall ... conditional move
+  if( ix==nx ) ix = nx-1;             // On far wall ... conditional move
+  ix++;                               // Adjust for mesh indexing
+
+  y  = ((double)ny)*((y-y0)/(y1-y0)); // y is rigorously on [0,ny]
+  iy = (int)y;                        // iy is rigorously on [0,ny]
+  y -= (double)iy;                    // y is rigorously on [0,1)
+  y  = (y+y)-1;                       // y is rigorously on [-1,1)
+  if( iy==ny ) y = 1;                 // On far wall ... conditional move
+  if( iy==ny ) iy = ny-1;             // On far wall ... conditional move
+  iy++;                               // Adjust for mesh indexing
+
+  z  = ((double)nz)*((z-z0)/(z1-z0)); // z is rigorously on [0,nz]
+  iz = (int)z;                        // iz is rigorously on [0,nz]
+  z -= (double)iz;                    // z is rigorously on [0,1)
+  z  = (z+z)-1;                       // z is rigorously on [-1,1)
+  if( iz==nz ) z = 1;                 // On far wall ... conditional move
+  if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
+  iz++;                               // Adjust for mesh indexing
+
+  int p_index = sp->np++;
+  //k_particles_t& k_particles = sp->k_p_h;
+  //k_particles_i_t& k_particles_i = sp->k_p_i_h;
+
+  #define p_dx    sp->k_p_h(p_index, particle_var::dx)
+  #define p_dy    sp->k_p_h(p_index, particle_var::dy)
+  #define p_dz    sp->k_p_h(p_index, particle_var::dz)
+  #define p_ux    sp->k_p_h(p_index, particle_var::ux)
+  #define p_uy    sp->k_p_h(p_index, particle_var::uy)
+  #define p_uz    sp->k_p_h(p_index, particle_var::uz)
+  #define p_w     sp->k_p_h(p_index, particle_var::w)
+  #define pii     sp->k_p_i_h(p_index)
+
+
+  p_dx = (float)x; // Note: Might be rounded to be on [-1,1]
+  p_dy = (float)y; // Note: Might be rounded to be on [-1,1]
+  p_dz = (float)z; // Note: Might be rounded to be on [-1,1]
+  pii  = VOXEL(ix,iy,iz, nx,ny,nz);
+  p_ux = (float)ux;
+  p_uy = (float)uy;
+  p_uz = (float)uz;
+  p_w  = w;
+
+  if( update_rhob ) Kokkos::abort("update_rhob for particle injection not implemented when not using legacy particle arrays");
+
+  if( age!=0 ) {
+      Kokkos::abort( "Ageing not yet implemented for particle injection" );
+#if 0
+    if( sp->nm>=sp->max_nm )
+      Kokkos::abort( "No movers available to age injected particle" );
+    DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+    local_pm->dispx = ux;
+    local_pm->dispy = uy;
+    local_pm->dispz = uz;
+    local_pm->i     = p_index;
+    age *= grid->cvac*grid->dt/sqrt( ux*ux + uy*uy + uz*uz + 1 );
+    local_pm->dispx = ux*age*grid->rdx;
+    local_pm->dispy = uy*age*grid->rdy;
+    local_pm->dispz = uz*age*grid->rdz;
+    local_pm->i     = sp->np-1;
+    k_field_sa_t k_f_sv = Kokkos::Experimental::create_scatter_view<>(field_array->k_f_d);
+    float cx = 0.25 * grid->rdy * grid->rdz / grid->dt;
+    float cy = 0.25 * grid->rdz * grid->rdx / grid->dt;
+    float cz = 0.25 * grid->rdx * grid->rdy / grid->dt;
+    if( move_p_kokkos( k_particles, k_particles_i, local_pm, k_f_sv, grid, grid->k_neighbor_d, grid->rangel, grid->rangeh, sp->q, cx, cy, cz, nx, ny, nz ){
+        if( k_nm(0) < max_nm )
+        {
+            const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+            if (nm >= max_nm) Kokkos::abort("overran max_nm");
+
+            k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+            k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+            k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+            k_particle_movers_i(nm)   = local_pm->i;
+
+            // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+            k_particle_copy(nm, particle_var::dx) = p_dx;
+            k_particle_copy(nm, particle_var::dy) = p_dy;
+            k_particle_copy(nm, particle_var::dz) = p_dz;
+            k_particle_copy(nm, particle_var::ux) = p_ux;
+            k_particle_copy(nm, particle_var::uy) = p_uy;
+            k_particle_copy(nm, particle_var::uz) = p_uz;
+            k_particle_copy(nm, particle_var::w) = p_w;
+            k_particle_i_copy(nm) = pii;
+
+            // Tag this one as having left
+            //k_particles(p_index, particle_var::pi) = 999999;
+
+            // Copy local local_pm back
+            //local_pm_dispx = local_pm->dispx;
+            //local_pm_dispy = local_pm->dispy;
+            //local_pm_dispz = local_pm->dispz;
+            //local_pm_i = local_pm->i;
+            //printf("rank copying %d to nm %d \n", local_pm_i, nm);
+            //copy_local_to_pm(nm);
+        }
+    }
+#endif
+  }
+
+#undef p_dx
+#undef p_dy
+#undef p_dz
+#undef p_ux
+#undef p_uy
+#undef p_uz
+#undef p_w 
+#undef pii 
+
+}
+#endif // USE_LEGACY_PARTICLE_ARRAY
  
 // Add capability to modify certain fields "on the fly" so that one
 // can, e.g., extend a run, change a quota, or modify a dump interval

@@ -7,13 +7,6 @@
 struct particle_bc;
 typedef struct particle_bc particle_bc_t;
 
-// may have been moved by Kevin
-typedef struct link_boundary {
-char fbase[256];	// base of file name to contain link info
-double n_out;		// number of writes so far on this node (double to
-						// accomodate long long runs)
-} link_boundary_t;
-
 /* In boundary.c */
 
 int
@@ -111,12 +104,6 @@ void
 finalize_pb_diagnostic(species_t * sp);
 
 /* In boundary_p.cxx */
-
-void
-boundary_p( particle_bc_t       * RESTRICT pbc_list,
-            species_t           * RESTRICT sp_list,
-            field_array_t       * RESTRICT fa,
-            accumulator_array_t * RESTRICT aa );
 
 void
 boundary_p_kokkos( particle_bc_t       * RESTRICT pbc_list,

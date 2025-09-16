@@ -117,11 +117,8 @@ int main( int argc, char *argv[] ) {
   double elecekMeVconst = m_e_SI*c_SI*c_SI*1e-6/e_SI;
   double carbekMeVconst = 12.*mp_me*elecekMeVconst;
   double protonekMeVconst = mp_me*elecekMeVconst;
-  if (strcmp(particle, "I2")==0) ekMeVconst = carbekMeVconst;
-  else if (strcmp(particle, "proton")==0){
-      ekMeVconst = protonekMeVconst;
-      particle = "I2";
-  }
+  if (strcmp(particle, "I1")==0) ekMeVconst = carbekMeVconst;
+  else if (strcmp(particle, "I2")==0) ekMeVconst = protonekMeVconst;
   else ekMeVconst = elecekMeVconst;
 
   //TODO: Race this (untested!) bit of code against glob on a large VPIC run on

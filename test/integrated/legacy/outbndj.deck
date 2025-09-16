@@ -66,35 +66,44 @@ begin_initialization {
 
       /* Check that the injection worked */
 
-      const particle_t * p = &sp->p[sp->np-1];
-      double dx = p->dx;
-      double dy = p->dy;
-      double dz = p->dz;
-      int ix0 = p->i;
+      //const particle_t * p = &sp->p[sp->np-1];
+      particle_t p;
+      p.dx = sp->k_p_h(sp->np-1, particle_var::dx);
+      p.dy = sp->k_p_h(sp->np-1, particle_var::dy);
+      p.dz = sp->k_p_h(sp->np-1, particle_var::dz);
+      p.ux = sp->k_p_h(sp->np-1, particle_var::ux);
+      p.uy = sp->k_p_h(sp->np-1, particle_var::uy);
+      p.uz = sp->k_p_h(sp->np-1, particle_var::uz);
+      p.w = sp->k_p_h(sp->np-1, particle_var::w);
+      p.i = sp->k_p_i_h(sp->np-1);
+      double dx = p.dx;
+      double dy = p.dy;
+      double dz = p.dz;
+      int ix0 = p.i;
       int iy0 = ix0/(nx+2); ix0 -= iy0*(nx+2); ix0--; int ix1 = (ix0+1)%nx;
       int iz0 = iy0/(ny+2); iy0 -= iz0*(ny+2); iy0--; int iy1 = (iy0+1)%ny;
       /**/                                     iz0--; int iz1 = (iz0+1)%nz;
       if( fabs(rx-(ix0+0.5*(1+dx))) > 1e-6*nx       ||
           fabs(ry-(iy0+0.5*(1+dy))) > 1e-6*ny       ||
           fabs(rz-(iz0+0.5*(1+dz))) > 1e-6*nz       ||
-          fabs(ux-(double)p->ux   ) > 1e-6*fabs(ux) ||
-          fabs(uy-(double)p->uy   ) > 1e-6*fabs(uy) ||
-          fabs(uz-(double)p->uz   ) > 1e-6*fabs(uz) ||
-          fabs(w -(double)p->w    ) > 1e-6*fabs(w)  ) {
+          fabs(ux-(double)p.ux   ) > 1e-6*fabs(ux) ||
+          fabs(uy-(double)p.uy   ) > 1e-6*fabs(uy) ||
+          fabs(uz-(double)p.uz   ) > 1e-6*fabs(uz) ||
+          fabs(w -(double)p.w    ) > 1e-6*fabs(w)  ) {
         sim_log( "inject_particle: FAIL " <<
                  fabs(rx-(ix0+0.5*(1+dx))) << " " <<
                  fabs(ry-(iy0+0.5*(1+dy))) << " " <<
                  fabs(rz-(iz0+0.5*(1+dz))) << " " <<
-                 fabs(ux-(double)p->ux   ) << " " <<
-                 fabs(uy-(double)p->uy   ) << " " <<
-                 fabs(uz-(double)p->uz   ) << " " <<
-                 fabs(w -(double)p->w    ) );
+                 fabs(ux-(double)p.ux   ) << " " <<
+                 fabs(uy-(double)p.uy   ) << " " <<
+                 fabs(uz-(double)p.uz   ) << " " <<
+                 fabs(w -(double)p.w    ) );
         abort(1);
       }
 
       /* Compute the initial charge density */
 
-      double q = 0.125*(double)sp->q*(double)p->w;
+      double q = 0.125*(double)sp->q*(double)p.w;
       ix0++; iy0++; iz0++;
       ix1++; iy1++; iz1++;
       rho0(ix0,iy0,iz0) += q*(1-dx)*(1-dy)*(1-dz);

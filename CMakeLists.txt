@@ -60,6 +60,8 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
 
+option(VPIC_USE_LEGACY_PARTICLE_ARRAY "Use the legacy particle array for compatibility" ON)
+
 option(VPIC_ENABLE_AUTO_TUNING "Enable automatic tuning based on architecture" ON)
 
 option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
@@ -221,7 +223,6 @@ get_target_property(KOKKOS_COMPILE_OPTIONS Kokkos::kokkoscore INTERFACE_COMPILE_
 get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE_INCLUDE_DIRECTORIES)
 
-#message(${KOKKOS_COMPILE_OPTIONS})
 # TODO: this gives the external include path
 #get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
 
@@ -288,11 +289,15 @@ find_package(Threads REQUIRED)
 # Act on build options set in project.cmake
 #------------------------------------------------------------------------------#
 
-message("-- VPIC Optimization Settings")
+if (VPIC_USE_LEGACY_PARTICLE_ARRAY)
+    add_definitions(-DUSE_LEGACY_PARTICLE_ARRAY)
+endif(VPIC_USE_LEGACY_PARTICLE_ARRAY)
+
 if (VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
 
+message("-- VPIC Optimization Settings")
 if(VPIC_ENABLE_AUTO_TUNING)
   add_definitions(-DVPIC_ENABLE_AUTO_TUNING)
   message("--     VPIC: Enabled automatic tuning.  Optimizations will be selected during compilation.")
@@ -386,6 +391,10 @@ configure_file(
     ${CMAKE_SOURCE_DIR}/sample/Makefile.run.in
     ${CMAKE_BINARY_DIR}/bin/Makefile.run
 )
+
+#The compile definitions are associated with a directory, and won't automatically be available for the deck compile scripts.
+get_directory_property( DirDefs COMPILE_DEFINITIONS )
+string(REPLACE ";" " -D" DirDefs "-D${DirDefs}")
 
 # install script
 configure_file(
