@@ -8,7 +8,7 @@ vpic_simulation::initialize( int argc,
 
   //double err;
   species_t * sp;
-  //fluid_species_t * fsp;
+  fluid_species_t * fsp;
   
   // Initialize Kokkos
   // Moved to boot servcies
