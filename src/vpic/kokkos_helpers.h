@@ -9,7 +9,7 @@
 
 // This module implements kokkos macros
 
-#define FIELD_VAR_COUNT 52
+#define FIELD_VAR_COUNT 44
 #define FIELD_EDGE_COUNT 8
 
 #ifdef VARIABLE_CHARGE
@@ -24,11 +24,11 @@
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
 #ifdef VARIABLE_CHARGE
-  #define HYDRO_VAR_COUNT 16
+  #define HYDRO_VAR_COUNT 22
 #else
   #define HYDRO_VAR_COUNT 14
 #endif
-#define NUM_J_DIMS 8
+#define NUM_J_DIMS 4
 #define FLUID_VAR_COUNT 6+4
 
 #ifdef KOKKOS_ENABLE_CUDA
@@ -191,15 +191,7 @@ namespace field_var {
     sx        = 40,
     sy        = 41,
     sz        = 42,
-    se        = 43,
-    zx        = 44,
-    zy        = 45,
-    zz        = 46,
-    ze        = 47,
-    zxold     = 48,
-    zyold     = 49,
-    zzold     = 50,
-    zeold     = 51
+    se        = 43
   };
 };
 namespace field_edge_var { \
@@ -269,10 +261,6 @@ namespace accumulator_var {
     jy = 1,
     jz = 2,
     rho= 3,
-    zx = 4,
-    zy = 5,
-    zz = 6,
-    ze = 7,
   };
 };
 
@@ -314,6 +302,12 @@ namespace hydro_var {
 #ifdef VARIABLE_CHARGE
 	min_q = 14,
 	max_q = 15,
+	n_q0  = 16,
+	n_q1  = 17,
+	n_q2  = 18,
+	n_q3  = 19,
+	n_q4  = 20,
+	n_q5  = 21,
 #endif
     };
 };

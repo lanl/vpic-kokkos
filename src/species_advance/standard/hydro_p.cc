@@ -443,6 +443,27 @@ accumulate_hydro_p_kokkos(
     Kokkos::atomic_fetch_min(&k_hydro(ii, hydro_var::min_q), q);
     Kokkos::atomic_fetch_max(&k_hydro(ii, hydro_var::max_q), q);
 
+    float w_ngp = 8.0*r8V*w;
+    if (q==0) {
+      k_hydro_access(ii, hydro_var::n_q0) += w_ngp;
+      //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q0), w_ngp); }
+    } else if (q==1) {
+      k_hydro_access(ii, hydro_var::n_q1) += w_ngp;
+      //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q1), w_ngp); }
+    } else if (q==2) {
+      k_hydro_access(ii, hydro_var::n_q2) += w_ngp;
+      //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q2), w_ngp); }
+    } else if (q==3) {
+      k_hydro_access(ii, hydro_var::n_q3) += w_ngp;
+      //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q3), w_ngp); }
+    } else if (q==4) {
+      k_hydro_access(ii, hydro_var::n_q4) += w_ngp;
+      //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q4), w_ngp); }
+    } else if (q==5) {
+      k_hydro_access(ii, hydro_var::n_q5) += w_ngp;
+      //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q5), w_ngp); }
+    }
+		       
     Kokkos::atomic_add(&particle_count(ii), 1); // number of particles in each cell
 #else
     float q = qsp;

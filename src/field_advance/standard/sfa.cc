@@ -325,16 +325,6 @@ void clear_jf_kokkos(field_array_t* RESTRICT fa) {
         kfield(v, field_var::jfy) = 0;
         kfield(v, field_var::jfz) = 0;
         kfield(v, field_var::rhof) = 0;
-        
-        kfield(v, field_var::zxold) = 	kfield(v, field_var::zx);
-	kfield(v, field_var::zyold) = 	kfield(v, field_var::zy);
-	kfield(v, field_var::zzold) = 	kfield(v, field_var::zz);
-	kfield(v, field_var::zeold) =	kfield(v, field_var::ze);
-
-        kfield(v, field_var::zx) = 0;
-        kfield(v, field_var::zy) = 0;
-        kfield(v, field_var::zz) = 0;
-        kfield(v, field_var::ze) = 0;
 
     });
 }

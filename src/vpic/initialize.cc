@@ -54,6 +54,13 @@ vpic_simulation::initialize( int argc,
   }
   KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 
+  KOKKOS_TIC(); // Time this data movement
+  LIST_FOR_EACH( fsp, fluid_species_list ) {
+    fsp->copy_to_device();
+  }
+  KOKKOS_TOCN( FLUID_DATA_MOVEMENT, 1);
+
+  
   // Hybrid - later we will compute interpolator coeffs on device, no need to sync w/host
   //KOKKOS_TIC();
   //interpolator_array->copy_to_device();
@@ -82,10 +89,7 @@ vpic_simulation::initialize( int argc,
   // Fix jf,rhof ghosts
   // E,B will be garbage because jf,rhof_old not set
 #ifdef HYB_USE_SEPARATE_PE
-  float gamma_copy = grid->eos_gamma;
-  grid->eos_gamma = 1.0;
   FAK->hyb_init(field_array,0);
-  grid->eos_gamma = gamma_copy;
 #else
   FAK->advance_b(field_array,0);
 #endif
@@ -98,10 +102,7 @@ vpic_simulation::initialize( int argc,
   // Fix jf,rhof ghosts
   // E,B will now be valid
 #ifdef HYB_USE_SEPARATE_PE
-  gamma_copy = grid->eos_gamma;
-  grid->eos_gamma = 1.0;
   FAK->hyb_init(field_array,0);
-  grid->eos_gamma = gamma_copy;
 #else
   FAK->advance_b(field_array,0);
 #endif
