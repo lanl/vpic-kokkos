@@ -89,6 +89,7 @@ typedef struct pb_diagnostic {
     int         write_posy;
     int         write_posz;
     int         write_weight;
+    int         write_pq;
 
 } pb_diagnostic_t;
 
