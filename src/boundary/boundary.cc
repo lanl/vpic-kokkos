@@ -124,7 +124,7 @@ init_pb_diagnostic() {
     diag->sp = NULL;
     diag->fname = NULL;
 
-    diag->bufflen = pow(2,20); // Somewhat arbitrary
+    diag->bufflen = pow(2,23); //pow(2,23).  Somewhat arbitrary Todo: allow user to specify in deck?
     diag->buff = NULL;
 
     diag->num_user_writes = 0;
