@@ -114,7 +114,7 @@ hyb_heta( field_array_t * RESTRICT fa);
 
 void
 hyb_epress( field_array_t * RESTRICT fa,
-                  float                    frac );
+	    float                    frac );
 
 void
 hyb_smooth_moments( field_array_t * RESTRICT fa );
