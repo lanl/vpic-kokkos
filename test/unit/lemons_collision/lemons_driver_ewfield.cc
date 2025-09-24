@@ -9,7 +9,7 @@
 #include "src/species_advance/species_advance.h"
 #include "src/vpic/vpic.h"
 
-#include "compare_energies.h"
+#include "../ta_collision/compare_energies.h"
 
 void  sample_Maxwellian(std::vector<double> &v, double m, double s, int N, std::mt19937_64& rng,
 			std::normal_distribution<double>& dist)

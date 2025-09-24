@@ -639,6 +639,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   }
   elapsed = wallclock() - elapsed;
   fclose(fp);
+  delete_hydro_array(hydro_array_ion);
   sim_log( (double)np*(double)n_step/elapsed/1e6 );
 
   //exit(1);
