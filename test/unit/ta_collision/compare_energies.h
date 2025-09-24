@@ -309,7 +309,7 @@ bool compare_energies(
                 err_per_line /= agg_total; // Reduce by aggregation factor
             }
 
-            std::cout << "Writing error output " << errs.size() << std::endl;
+            std::cout << "Writing err_to_ref output " << errs.size() << std::endl;
             write_error_ouput( errs, err_per_line, err_file_base_name);
         }
         return match;
