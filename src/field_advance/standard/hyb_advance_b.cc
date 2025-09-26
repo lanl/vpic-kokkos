@@ -397,8 +397,8 @@ hyb_advance_b( field_array_t * RESTRICT fa,
      }
    }
 
- //4: Update B=B_n+dt*(K1+2*K2+2*K3+K4)/6
-  hyb_advance_e(fa,(isub+1)/nsub); //sets ghost Bs
+ //4: Last update for E, subtract resistive terms for interpolation to ions
+  hyb_advance_e(fa,2.0); //sets ghost Bs
   begin_remote_ghost_e( fa->f, fa->g );//ARI add cell-centered BCs
   end_remote_ghost_e( fa->f, fa->g );
 

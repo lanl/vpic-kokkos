@@ -31,7 +31,7 @@ typedef struct pipeline_args {
   field_t * ALIGNED(16) fx, * ALIGNED(16) fy, * ALIGNED(16) fz;       \
   field_t * ALIGNED(16) fmx, * ALIGNED(16) fmy, * ALIGNED(16) fmz;    \
   int x, y, z;							      \
-  float ux,uy,uz,rho,hstep
+  float ux,uy,uz,rho,hstep,res
 
 #define f(x,y,z) f[ VOXEL(x,y,z, nx,ny,nz) ]
 
@@ -84,21 +84,21 @@ typedef struct pipeline_args {
     f0->ex = (f0->cbz + f0->cbz0)*( pz*( (fz->cbx - fmz->cbx) )  -  px*( fx->cbz - fmx->cbz ) ) \
 	   + (f0->cby + f0->cby0)*( py*( (fy->cbx - fmy->cbx) )  -  px*( fx->cby - fmx->cby ) )  \
     - uy*(f0->cbz+f0->cbz0) + uz*(f0->cby+f0->cby0) - px*( fx->pexx - fmx->pexx )  \
-    +  m[f0->cmat].epsz*eta*rho*(py*( fy->cbz - fmy->cbz ) - pz*( fz->cby - fmz->cby) );\
+    +  res*m[f0->cmat].epsz*eta*rho*(py*( fy->cbz - fmy->cbz ) - pz*( fz->cby - fmz->cby) );\
   f0->ex = m[f0->cmat].epsx*f0->ex;
 
 #define UPDATE_EY()							\
     f0->ey = (f0->cbx+f0->cbx0)*( px*( (fx->cby - fmx->cby) )   - py*( fy->cbx - fmy->cbx ) ) \
 	   + (f0->cbz+f0->cbz0)*( pz*( (fz->cby - fmz->cby) )   - py*( fy->cbz - fmy->cbz ) )  \
            - uz*(f0->cbx+f0->cbx0) + ux*(f0->cbz+f0->cbz0) - py*( fy->pexx - fmy->pexx )		\
-      + m[f0->cmat].epsz*eta*rho*(pz*( fz->cbx - fmz->cbx ) - px*( fz->cbz - fmz->cbz) ); \
+      + res*m[f0->cmat].epsz*eta*rho*(pz*( fz->cbx - fmz->cbx ) - px*( fz->cbz - fmz->cbz) ); \
   f0->ey = m[f0->cmat].epsx*f0->ey;
     
 #define UPDATE_EZ() \
   f0->ez = (f0->cby+f0->cby0)*( py*( (fy->cbz - fmy->cbz) )   - pz*( fz->cby - fmz->cby ) ) \
 	 + (f0->cbx+f0->cbx0)*( px*( (fx->cbz - fmx->cbz) )   - pz*( fz->cbx - fmz->cbx ) )  \
          - ux*(f0->cby+f0->cby0) + uy*(f0->cbx+f0->cbx0) - pz*( fz->pexx - fmz->pexx )		\
-         + m[f0->cmat].epsz*eta*rho*(px*( fx->cby - fmx->cby ) - py*( fy->cbx - fmy->cbx) );	\
+         + res*m[f0->cmat].epsz*eta*rho*(px*( fx->cby - fmx->cby ) - py*( fy->cbx - fmy->cbx) );	\
   f0->ez = m[f0->cmat].epsx*f0->ez;
 
 
@@ -240,7 +240,8 @@ hyb_advance_e( field_array_t * RESTRICT fa,
   args->hstep=frac;
 
   DECLARE_STENCIL();
-  hstep=frac;
+  hstep = (frac>1.5) ? 1. : frac;
+  res   = (frac>1.5) ? 0. : 1.;
   //have to fix
   //if (nmx*nmy*nmz) {
   //EXEC_PIPELINES( hyb_advance_e, args, 0 );
@@ -279,7 +280,7 @@ hyb_advance_e( field_array_t * RESTRICT fa,
   }
 
 
-  if(fa->g->hypereta>0)  hyb_hypereta(fa);
+  if(fa->g->hypereta>0 && res>0)  hyb_hypereta(fa);
 
 
   /*//to initialize E
