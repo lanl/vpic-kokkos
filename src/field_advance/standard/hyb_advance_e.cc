@@ -221,7 +221,8 @@ hyb_advance_e( field_array_t * RESTRICT fa,
    ***************************************************************************/
   
   begin_remote_ghost_b( fa->f, fa->g );//ARI add cell-centered BCs
-  hyb_epress(fa,frac);
+  float   pressfrac = (frac>1.5) ? 1. : frac;
+  hyb_epress(fa,pressfrac);
   
   /***************************************************************************
    * Update interior fields CELL CENTERED

@@ -397,6 +397,8 @@ hyb_advance_b( field_array_t * RESTRICT fa,
      }
    }
 
+
+  if((isub+1.0)/nsub == 1.0) {
  //4: Last update for E, subtract resistive terms for interpolation to ions
   hyb_advance_e(fa,2.0); //sets ghost Bs
   begin_remote_ghost_e( fa->f, fa->g );//ARI add cell-centered BCs
@@ -415,5 +417,7 @@ hyb_advance_b( field_array_t * RESTRICT fa,
       }
     }
   }
-
+ } //Last update
+ 
+ 
 }
