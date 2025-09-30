@@ -16,7 +16,7 @@ src_dir="${0%/*}/.."
 #module purge
 #module load PrgEnv-cray
 #module load cmake
-module load PrgEnv-gnu
+#module load PrgEnv-gnu
 module list 2>&1 | tee modules.txt
 
 #------------------------------------------------------------------------------#

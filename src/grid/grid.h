@@ -197,13 +197,13 @@ typedef struct grid {
     Kokkos::parallel_for( "Fill curvilinear mesh view",
                           host_execution_policy(0, nv), KOKKOS_CLASS_LAMBDA (const int i) {
 
-      k_curvilinear_vars_h(i, curv_mesh_var::hx) = 1.0;
-      k_curvilinear_vars_h(i, curv_mesh_var::hy) = 1.0;
-      k_curvilinear_vars_h(i, curv_mesh_var::hz) = 1.0;
+      k_curvilinear_vars_h(i, curv_mesh_var::hx)  = 1.0;
+      k_curvilinear_vars_h(i, curv_mesh_var::hy)  = 1.0;
+      k_curvilinear_vars_h(i, curv_mesh_var::hz)  = 1.0;
       k_curvilinear_vars_h(i, curv_mesh_var::jac) = 1.0;
-      k_curvilinear_vars_h(i, curv_mesh_var::xg) = 0;
-      k_curvilinear_vars_h(i, curv_mesh_var::yg) = 0;
-      k_curvilinear_vars_h(i, curv_mesh_var::zg) = 0;
+      k_curvilinear_vars_h(i, curv_mesh_var::xg)  = 0.0;
+      k_curvilinear_vars_h(i, curv_mesh_var::yg)  = 0.0;
+      k_curvilinear_vars_h(i, curv_mesh_var::zg)  = 0.0;
     
     });
 

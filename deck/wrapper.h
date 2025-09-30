@@ -402,6 +402,19 @@ vpic_simulation::user_particle_collisions( void )
     }                                                                           \
   } while(0)
 //#undef CM
+
+// Determine global position of domains
+#define RANK_TO_INDEX(rank,ix,iy,iz) BEGIN_PRIMITIVE {                     \
+    int _ix, _iy, _iz;                                                     \
+    _ix  = (rank);                        /* ix = ix+gpx*( iy+gpy*iz ) */  \
+    _iy  = _ix/int(global->topology_x);   /* iy = iy+gpy*iz */             \
+    _ix -= _iy*int(global->topology_x);   /* ix = ix */                    \
+    _iz  = _iy/int(global->topology_y);   /* iz = iz */                    \
+    _iy -= _iz*int(global->topology_y);   /* iy = iy */                    \
+    (ix) = _ix;                                                            \
+    (iy) = _iy;                                                            \
+    (iz) = _iz;                                                            \
+  } END_PRIMITIVE
   
 // The equations are only evaluated inside the mesh-mapped region
 // (This is not strictly inside the region)
@@ -424,6 +437,7 @@ vpic_simulation::user_particle_collisions( void )
           x = _xc; y = _yc; z = _zc; if( _rccc ) CM(_i,_j,_k,hy)  = (eqn_hy);  \
           x = _xc; y = _yc; z = _zc; if( _rccc ) CM(_i,_j,_k,hz)  = (eqn_hz);  \
           x = _xc; y = _yc; z = _zc; if( _rccc ) CM(_i,_j,_k,jac) = (eqn_jac); \
+          std::cout << "x, y, z = " << x << ", " << y << ", " << z << "\n"; \
     }}}	\
     Kokkos::deep_copy(k_curv_d, k_curv); \
   } while(0)

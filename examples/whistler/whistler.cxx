@@ -61,8 +61,6 @@ begin_initialization {
   double gamma = 1.0;//5.0/3.0;   // Ratio of specific heats.
   double c_s = 1.0;         // Electron sound speed.
   double pert = 0.02;       // Size of magnetic field perturbation.
-  double Lx = 32;           // Size of domain.
-  double Ly = 32;           // Size of domain.
   double kx = 2.0*M_PI/16;  // Wavenumber of perturbation.
   double ky = 2.0*M_PI/16;  // Wavenumber of perturbation.
   
@@ -78,22 +76,24 @@ begin_initialization {
   double quota   = 2.0;     // run quota in hours
   double quota_sec = quota*3600;  // Run quota in seconds
   
-  double Lz    = 1.0*di;    // size of box in z dimension
+  double Lx = 32;         // Size of domain.
+  double Ly = 32;         // Size of domain.
+  double Lz  = 1.0*di;    // size of box in z dimension
 
-  double nx = 48;
-  double ny = 48;
+  double nx = 48*2;
+  double ny = 48*2;
   double nz = 1;
-
-  double nppc  = 1000;    // Average number of macro particle per cell per species 
-  
-  double topology_x = 1; // Number of domains in x, y, and z
-  double topology_y = 1;
-  double topology_z = 1;
 
   // Derived numerical parameters
   double dx = Lx/nx;
   double dy = Ly/ny;
   double dz = Lz/nz;
+  
+  double topology_x = 1; // Number of domains in x, y, and z
+  double topology_y = 1;
+  double topology_z = 1;
+
+  double nppc  = 1000;    // Average number of macro particle per cell per species 
 
   double Ni  = nppc*nx*ny*nz;       // Total macroparticle ions in box
   double Np  = n0*Lx*Ly*Lz;         // Total number of physical background ions
@@ -102,7 +102,7 @@ begin_initialization {
   
   // Determine the time step
   double dg = courant_length(Lx,Ly,Lz,nx,ny,nz);  // courant length
-  double dt = 0.02;                               // time step
+  double dt = 0.01;                               // time step
 
   double sort_interval = 10;  // How often to sort particles
   
@@ -264,20 +264,9 @@ begin_initialization {
 //#define HX (1.0 + 0.3*sin((2*M_PI*x)/Lx))
 //#define HY (1.0)
 //#define HZ (1.0)
-  //set_region_curvilinear(everywhere, HX, HY, HZ, HX*HY*HZ);
-
-// Determine global position of domains
-#define RANK_TO_INDEX(rank,ix,iy,iz) BEGIN_PRIMITIVE {                     \
-    int _ix, _iy, _iz;                                                     \
-    _ix  = (rank);                        /* ix = ix+gpx*( iy+gpy*iz ) */  \
-    _iy  = _ix/int(global->topology_x);   /* iy = iy+gpy*iz */             \
-    _ix -= _iy*int(global->topology_x);   /* ix = ix */                    \
-    _iz  = _iy/int(global->topology_y);   /* iz = iz */                    \
-    _iy -= _iz*int(global->topology_y);   /* iy = iy */ 	           \
-    (ix) = _ix;                                                            \
-    (iy) = _iy;                                                            \
-    (iz) = _iz;                                                            \
-  } END_PRIMITIVE 
+//#define CM(_i, _j, _k, cv) k_curv( int (VOXEL(_i, _j, _k, _nx, _ny, _nz)), curv_mesh_var::cv)
+//  set_region_curvilinear(everywhere, HX, HY, HZ, HX*HY*HZ);
+//#undef CM
 
   // Global integers
   int ig0, jg0, kg0;
@@ -292,14 +281,13 @@ begin_initialization {
 //Re-write wrapper.h macros to use global positions
 
   // Static allocation of global variables
-  size_t lx=nx+2, ly=ny+2, lz=nz+2;
-  double hxg[lx], hyg[ly], hzg[lz];
-  double xg[lx], yg[ly], zg[lz];
+  double hxg[(int)nx+2], hyg[(int)ny+2], hzg[(int)nz+2];
+  double xg[(int)nx+2], yg[(int)ny+2], zg[(int)nz+2];
 
   //for loop i=0 to nx+1 hxg[i]=...
   //repeat for y and z
-  for ( int i=0; i<nx+2; i++ ) { hxg[i] = 1.0 + 0.3*sin((2*M_PI*i)/Lx); }
-  for ( int j=0; j<ny+2; j++ ) { hyg[j] = 1.0; }
+  for ( int i=0; i<nx+2; i++ ) { hxg[i] = 1.0 + 0.3*sin((2*M_PI*(i-1))/nx); }
+  for ( int j=0; j<ny+2; j++ ) { hyg[j] = 1.0 + 0.3*sin((2*M_PI*(j-1))/ny); }
   for ( int k=0; k<nz+2; k++ ) { hzg[k] = 1.0; }
 
   //xg[0] = -0.5*Lx - 0.5*dx*hxg[0]
@@ -317,17 +305,17 @@ begin_initialization {
 #define CM(_i, _j, _k, cv) k_curv( int (VOXEL(_i, _j, _k, nxl, nyl, nzl)), curv_mesh_var::cv)
   k_curvilinear_vars_t k_curv = grid->k_curvilinear_vars_h;  
   k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;
-  const int nxl = grid->nx, nyl = grid->ny, nzl = grid->nz;
+  int nxl = grid->nx, nyl = grid->ny, nzl = grid->nz;
   int ig, jg, kg;
   for( int k=0; k<nzl+2; k++ ) {
     for( int j=0; j<nyl+2; j++ ) { 
       for( int i=0; i<nxl+2; i++ ) {
-        ig = i + ig0;
-        jg = j + jg0;
-        kg = k + kg0;
+        ig = ig0 + i;
+        jg = jg0 + j;
+        kg = kg0 + k;
         CM(i,j,k,hx)  = hxg[ig];
-        CM(i,j,k,hy)  = hxg[jg];
-        CM(i,j,k,hz)  = hxg[kg];
+        CM(i,j,k,hy)  = hyg[jg];
+        CM(i,j,k,hz)  = hzg[kg];
         CM(i,j,k,jac) = hxg[ig]*hyg[jg]*hzg[kg];
         CM(i,j,k,xg)  = xg[ig];
         CM(i,j,k,yg)  = yg[jg];
@@ -339,20 +327,26 @@ begin_initialization {
 #undef CM
 
 #if 0
-  k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;    
+  //k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;    
   Kokkos::parallel_for("Print curvilinear mesh values",
 			 //                         host_execution_policy(0, nv - 1) ,
-			 Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, grid->nv),
+			 Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, grid->nv+1),
                          KOKKOS_CLASS_LAMBDA (const int i) {
 
 			   float h0lcl = k_curv_d(i, curv_mesh_var::hx);
 			   float h1lcl = k_curv_d(i, curv_mesh_var::hy);
 			   float h2lcl = k_curv_d(i, curv_mesh_var::hz);
+			   float dumb1 = k_curv_d(i, curv_mesh_var::xg);
+			   float dumb2 = k_curv_d(i, curv_mesh_var::yg);
+			   float dumb3 = k_curv_d(i, curv_mesh_var::zg);
 			   float jaclcl= k_curv_d(i, curv_mesh_var::jac);
 			   
 			   //			   printf("i=%d, h0=%f, h1=%f, h2=%f, jac=%f", i, k_curvilinear_vars_d(i, curv_mesh_var::h0), k_curvilinear_vars_d(i, curv_mesh_var::h1), k_curvilinear_vars_d(i, curv_mesh_var::h2), k_curvilinear_vars_d(i, curv_mesh_var::jac));
 
-			   			   printf("i=%d, h0=%f, h1=%f, h2=%f, jac=%f", i, h0lcl, h1lcl, h2lcl, jaclcl );
+                if (i == grid->nv) {
+			   printf("i=%d, xg = %f, yg = %f, zg=%f", i, dumb1, dumb2, dumb3 );
+                }
+			   			   //printf("i=%d, h0=%f, h1=%f, h2=%f, jac=%f", i, h0lcl, h1lcl, h2lcl, jaclcl );
 			   
 			 });
 #endif
