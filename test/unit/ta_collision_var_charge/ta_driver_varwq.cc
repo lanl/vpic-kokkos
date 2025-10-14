@@ -9,7 +9,7 @@
 #include "src/species_advance/species_advance.h"
 #include "src/vpic/vpic.h"
 
-#include "compare_energies.h"
+#include "../lemons_collision/compare_energies.h"
 
 
 int pick_q(std::int64_t i) {
