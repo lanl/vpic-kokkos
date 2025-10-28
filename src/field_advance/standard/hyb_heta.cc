@@ -34,22 +34,19 @@ typedef struct pipeline_args {
 		  pz*pz*( F(z,cbz) + F(mz,cbz) - 2.0*F(0,cbz) ) ); \
 
 #define LPL_B()\
-  F(0,pex) = 4.0*(                                   \
-      px2*( F(x,cbx) + F(mx,cbx) - 2.0*F(0,cbx) ) +  \
-		  py2*( F(y,cbx) + F(my,cbx) - 2.0*F(0,cbx) ) +  \
-		  pz2*( F(z,cbx) + F(mz,cbx) - 2.0*F(0,cbx) ) ); \
-  F(0,pey) = 4.0*(                                   \
-      px2*( F(x,cby) + F(mx,cby) - 2.0*F(0,cby) ) +  \
-		  py2*( F(y,cby) + F(my,cby) - 2.0*F(0,cby) ) +  \
-		  pz2*( F(z,cby) + F(mz,cby) - 2.0*F(0,cby) ) ); \
-  F(0,pez) = 4.0*(                                   \
-      px2*( F(x,cbz) + F(mx,cbz) - 2.0*F(0,cbz) ) +  \
-		  py2*( F(y,cbz) + F(my,cbz) - 2.0*F(0,cbz) ) +  \
-		  pz2*( F(z,cbz) + F(mz,cbz) - 2.0*F(0,cbz) ) ); \
+  F(0,pex) = (px2*( F(x,cbx) + F(mx,cbx) - 2.0*F(0,cbx) ) +  \
+              py2*( F(y,cbx) + F(my,cbx) - 2.0*F(0,cbx) ) +  \
+              pz2*( F(z,cbx) + F(mz,cbx) - 2.0*F(0,cbx) ) ); \
+  F(0,pey) = (px2*( F(x,cby) + F(mx,cby) - 2.0*F(0,cby) ) +  \
+              py2*( F(y,cby) + F(my,cby) - 2.0*F(0,cby) ) +  \
+              pz2*( F(z,cby) + F(mz,cby) - 2.0*F(0,cby) ) ); \
+  F(0,pez) = (px2*( F(x,cbz) + F(mx,cbz) - 2.0*F(0,cbz) ) +  \
+              py2*( F(y,cbz) + F(my,cbz) - 2.0*F(0,cbz) ) +  \
+              pz2*( F(z,cbz) + F(mz,cbz) - 2.0*F(0,cbz) ) ); \
 
 #define CURL_LPL_B(x_,y_,z_)						\
   F(0,e##x_) -= hypereta*F(0,tcax)*F(0,tcaz)*( p##y_*( F(y_,pe##z_) - F(m##y_,pe##z_) ) \
-				                                     - p##z_*( F(z_,pe##y_) - F(m##z_,pe##y_) ) )
+				             - p##z_*( F(z_,pe##y_) - F(m##z_,pe##y_) ) )
 
 
 void
@@ -71,9 +68,9 @@ hyb_heta( field_array_t * RESTRICT fa ) {
   const float hypereta = g->hypereta;
   //const float den_floor_ohm = g->den_floor_ohm;
 
-  const float px2 = px*px;
-  const float py2 = py*py;
-  const float pz2 = pz*pz;
+  const float px2 = 4.0*px*px;
+  const float py2 = 4.0*py*py;
+  const float pz2 = 4.0*pz*pz;
 
   // Laplace B Loop
     
