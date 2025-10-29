@@ -342,7 +342,7 @@ accumulate_hydro_p_kokkos(
 #ifdef VARIABLE_CHARGE
     float qp = k_particles(p_index, particle_var::qp);
     float qdt_2mc = qp*dt_2mc;
-    float qdt_4mc2 = qp*qdt_4mc2;
+    float qdt_4mc2 = qp*dt_4mc2;
 #endif
     int ii = k_particles_i(p_index);
 
