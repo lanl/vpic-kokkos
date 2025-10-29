@@ -241,16 +241,24 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
     });
   Kokkos::Profiling::popRegion();
   
-  // ----------------------------------------------------------
-  // 5: Last E update
+// ----------------------------------------------------------
+  // 5: Last E update last subcycle only
   // ----------------------------------------------------------
   
-  Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Update_E");
-  hyb_advance_eue( fa, (isub+1.0)/nsub ); //sets ghost Bs
+  if((isub+1)==nsub) {
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBP::Update_EU");
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBP::Update_EU::Advance_EU");
+  hyb_advance_eue( fa, -1. ); //sets ghost Bs
+  Kokkos::Profiling::popRegion();
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBP::Update_EU::Remote");
   k_begin_remote_ghost_hyb_e( fa );//ARI add cell-centered BCs
   k_end_remote_ghost_hyb_e( fa );
+  Kokkos::Profiling::popRegion();
   //fix local BCs
+  Kokkos::Profiling::pushRegion("HybyridAdvanceBP::Update_EU::Local");
   k_hyb_local_ghost_e( fa, fa->g );
   Kokkos::Profiling::popRegion();
+  Kokkos::Profiling::popRegion();
+ }
 
 }
