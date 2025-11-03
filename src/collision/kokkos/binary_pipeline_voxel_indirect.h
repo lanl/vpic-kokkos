@@ -253,9 +253,10 @@ struct binary_collision_pipeline {
     // Both functions must be of the same signature.
     auto policy = Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO());
     if(model.var_wt){
-	constexpr int n_int   = 2;
+	constexpr int n_int   = 1;
+	constexpr int n_float   = 1;	
 	constexpr int level   = 1;
-	policy = policy.set_scratch_size(level, Kokkos::PerTeam(n_int*sizeof(int)));
+	policy = policy.set_scratch_size(level, Kokkos::PerTeam(n_int*sizeof(int)+n_float*sizeof(float)));
     }
 
     if constexpr (VariableWeight) {    
@@ -286,7 +287,8 @@ struct binary_collision_pipeline {
 			     if(spi_p == spj_p){
 				 collide_self_varwt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member); 
 			     }else{
-				 collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member, spi_c, spj_c);
+				 collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
+				 //collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member, spi_c, spj_c);
 			     }
 			 });
 
@@ -427,14 +429,24 @@ void collide_self_varwt(const float m_i, const float m_j, const float density_i,
 	 int i2 = c % nmin; //it may be possible that c > nmin
 	 int i = spl_sortindex_ra(i0_2 + i1);
 	 int j = spl_sortindex_ra(j0_2 + i2);
-	 float up[8] = { spl_p(i, particle_var::w ),
-			 spl_p(i, particle_var::ux),
-			 spl_p(i, particle_var::uy),
-			 spl_p(i, particle_var::uz),
-			 spl_p(j, particle_var::w ),
-			 spl_p(j, particle_var::ux),
-			 spl_p(j, particle_var::uy),
-			 spl_p(j, particle_var::uz)};
+
+	     float up[10];
+	     up[8] = 1.0;
+	     up[9] = 1.0;		    
+	     
+		 up[0] = sph_p(i, particle_var::w);
+		 up[1] = sph_p(i, particle_var::ux);
+		 up[2] = sph_p(i, particle_var::uy);
+		 up[3] = sph_p(i, particle_var::uz);
+		 up[4] = spl_p(j, particle_var::w);
+		 up[5] = spl_p(j, particle_var::ux);
+		 up[6] = spl_p(j, particle_var::uy);
+		 up[7] = spl_p(j, particle_var::uz);
+#ifdef VARIABLE_CHARGE
+		 up[8] = sph_p(i, particle_var::qp);
+		 up[9] = spl_p(j, particle_var::qp);
+#endif		 
+	 
 	 float wp, ux, uy, uz;
 	 if(c < Np_hc) {
 	     wp = up[0];
@@ -1022,7 +1034,8 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     auto WT_2 = twt[il]*twt[ih]/WT; 
     auto nh = ij ? ni : nj;
     auto nl = ij ? nj : ni;
-    const float density_max = density_i + density_j;
+    //const float density_max = density_i + density_j;
+    const float density_max = ij ? density_i : density_j; //use high density
     float ndt = density_max*dtinterval; 
 
     // Get a random generator. Do not leave without freeing it.
@@ -1033,7 +1046,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     
     nmin = ij ? nj : ni; // note that in general the number of the other species can be >=< nmin
     nmax = ij ? ni : nj;	
-
+    /*
     // Allocate one integer in team scratch memory (slot 1 is used for the shared integer).
     typedef Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Unmanaged>> scratch_int_view_t;
     auto n_sp = 2;
@@ -1085,7 +1098,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     }); 
     // Make sure all team threads see the updated local_first.
     team.team_barrier();    
-    
+    */    
     /*
     Kokkos::parallel_scan(Kokkos::TeamThreadRange(team, nmax),
     [&] (const int j, float & update, const bool final) {
@@ -1105,28 +1118,64 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     });    
     // Synchronize to make sure all threads see the updated team_first.
     team.team_barrier();
-    */
+   
     Np_lc = team_first(1);
     Np_hc = team_first(0);
+    */
+
+    //every lp collide
+    Np_lc = nl;
+    //some hp will collide (to be found dynamically)
+    Np_hc = nh;
+    float* current_sum = (float*)team.team_shmem().get_shmem(sizeof(float));
+    int* found_index = (int*)team.team_shmem().get_shmem(sizeof(int));
+    if (team.team_rank() == 0) {
+	*current_sum = 0.0;
+	*found_index = -1;  // -1 means threshold not reached
+    }
+    team.team_barrier();
+    
     Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc;
 
     // printf("Np_lc=%d, Np_hc=%d, Np_c=%d, i0=%d, j0=%d\n", (int) Np_lc, (int) Np_hc, (int) Np_c, i0, j0);
     gmomType26 Dm;
     Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, Np_c),
 			    [&](const int c, gmomType26 &lsum) {
-	 int i1 = c; 
+	 int i1 = c % nmax; 
 	 int i2 = c % nmin; //it may be possible that c > nmin
 	 int i = sph_sortindex_ra(i0 + i1);
 	 int j = spl_sortindex_ra(j0 + i2);
-	 float up[8] = { sph_p(i, particle_var::w ),
-			 sph_p(i, particle_var::ux),
-			 sph_p(i, particle_var::uy),
-			 sph_p(i, particle_var::uz),
-			 spl_p(j, particle_var::w ),
-			 spl_p(j, particle_var::ux),
-			 spl_p(j, particle_var::uy),
-			 spl_p(j, particle_var::uz)};
-	 float wp, ux, uy, uz;
+	 auto threshold_weight = twt[il];
+	 // Only process if threshold not found yet
+	 if (c<Np_hc&&Kokkos::atomic_compare_exchange_strong(found_index, -1, -1)) {
+	     float weight = sph_p(i, particle_var::w );
+	     float old_sum = Kokkos::atomic_fetch_add(current_sum, weight);
+	     //if(c<10)printf("c=%d, wt = %e, old_sum = %e\n",c, weight, old_sum);
+	     // Check if THIS particle pushes us over threshold
+	     if (old_sum <= threshold_weight && (old_sum + weight) > threshold_weight) {
+		 // We found the exact particle where threshold is crossed!
+		 Kokkos::atomic_compare_exchange_strong(found_index, -1, i);
+	     }
+	 }
+	 if(*found_index == -1 || c < Np_lc){
+	     float up[10];
+	     up[8] = 1.0;
+	     up[9] = 1.0;		    
+	     
+		 up[0] = sph_p(i, particle_var::w);
+		 up[1] = sph_p(i, particle_var::ux);
+		 up[2] = sph_p(i, particle_var::uy);
+		 up[3] = sph_p(i, particle_var::uz);
+		 up[4] = spl_p(j, particle_var::w);
+		 up[5] = spl_p(j, particle_var::ux);
+		 up[6] = spl_p(j, particle_var::uy);
+		 up[7] = spl_p(j, particle_var::uz);
+#ifdef VARIABLE_CHARGE
+		 up[8] = sph_p(i, particle_var::qp);
+		 up[9] = spl_p(j, particle_var::qp);
+#endif		 
+
+		 float wp, ux, uy, uz;
 	 if(c < Np_hc) {
 	     wp = up[0];
 	     ux = up[1];
@@ -1186,6 +1235,9 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 	     lsum.v[23] += wp*ux*ux;
 	     lsum.v[24] += wp*uy*uy;
 	     lsum.v[25] += wp*uz*uz;
+	 }
+	 }else{
+	     //printf("found_index = %d\n",*found_index);
 	 }
 			    }, Dm);	 
 
@@ -1273,7 +1325,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 
     Kokkos::parallel_for( Kokkos::TeamThreadRange( team, Np_hc ), _correction );
 
-    
+    /*    
     //self-collisions
     //low-density speceis
     auto ni_2 = nl-team_first(il);
@@ -1524,7 +1576,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 			      uy_i = V0_y + alph * (uy_i - Vp_y);
 			      uz_i = V0_z + alph * (uz_i - Vp_z);
 			  });
-     
+    */     
     // We *must* free generators.    
     rp.free_state(rg);
  
