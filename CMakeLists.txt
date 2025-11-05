@@ -389,7 +389,7 @@ endif(HYB_USE_SEPARATE_PE)
 
 if (HYB_USE_STATIC_E)
    add_definitions(-DHYB_USE_STATIC_E)
-   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_SEPARATE_PE")
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_STATIC_E")
    message("--     HYB: Using electrostatic field solve.")
 endif(HYB_USE_STATIC_E)
 
