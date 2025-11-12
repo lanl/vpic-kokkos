@@ -99,8 +99,6 @@ begin_initialization {
   double Np  = n0*Lx*Ly*Lz;         // Total number of physical background ions
   Ni = trunc_granular(Ni,nproc());  // Make it divisible by number of processors
   double qi = ec*Np/Ni;             // Charge per macro ion
-  
-  std::cout << "Ni="<<Ni << " Np="<<Np<< " Ni="<<Ni<<std::endl;
 
   // Determine the time step
   double dg = courant_length(Lx,Ly,Lz,nx,ny,nz);  // courant length
@@ -110,12 +108,12 @@ begin_initialization {
   
   // Intervals for output
   num_step = 10; //int(taui/(wci*dt));
-  int restart_interval = 20000;
-  int energies_interval = 10;
-  int interval = int(num_step/100);
-  int fields_interval = interval;
+  int interval = 1; // int(num_step/100);
   int Ihydro_interval = interval;
   int Bhydro_interval = interval;
+  int energies_interval = interval;
+  int restart_interval = 0*interval;
+  int fields_interval = 0*interval;
   int Iparticle_interval = 0*interval;
   int Bparticle_interval = 0*interval;
   int quota_check_interval = 100;
@@ -192,8 +190,6 @@ begin_initialization {
   species_t *ion = define_species("ion", ec, mi, nmax, nmovers, sort_interval, sort_method);
   species_t *beam = define_species("beam", ec, mi, nmax, nmovers, sort_interval, sort_method);
 
-  std::cout << "nmax = " << nmax << std::endl;
-
   //////////////////////////////////////////////////////////////////////////////
   // Define Coulomb collisions
   int ncoll_coulomb = (int) 1*sort_interval;
@@ -206,12 +202,12 @@ begin_initialization {
   // double cvar0_ii = (ion->q * ion->q) * (ion->q *  ion->q) * lnL_8pi;
   // double cvar0_bb = (beam->q * beam_dion->q) * (beam->q * beam->q) * lnL_8pi;
 
-  define_collision_op(takizuka_abe("ta_bi", ion,  beam, cvar0_ib, ncoll_coulomb, var_wt));
+  //define_collision_op(takizuka_abe("ta_bi", ion,  beam, cvar0_ib, ncoll_coulomb, var_wt));
   //define_collision_op(takizuka_abe("ta_hi", hion,  ion, cvar0_hi, ncoll_coulomb, var_wt));
   //define_collision_op(takizuka_abe("ta_dh", dion, hion, cvar0_dh, ncoll_coulomb, var_wt));
 
-  ion->last_indexed = -1;
-  beam->last_indexed = -1;
+  // ion->last_indexed = -1;
+  // beam->last_indexed = -1;
   
   
   ///////////////////////////////////////////////////
@@ -311,9 +307,6 @@ begin_initialization {
    *
    *------------------------------------------------------------------------*/
 
-  global->fdParams.format = band;
-  sim_log ( "Fields output format = band" );
-
   // global->hedParams.format = band;
   // sim_log ( "Electron species output format = band" );
 
@@ -356,24 +349,6 @@ begin_initialization {
    *
    *   global->fdParams.stride_x = 8; // illegal!!! -> 150/8 = 18.75
    *------------------------------------------------------------------------*/
-
-  //  // relative path to fields data from global header
-   sprintf(global->fdParams.baseDir, "fields/");
-   dump_mkdir("fields");
-   dump_mkdir(global->fdParams.baseDir);
-   // base file name for fields output
-   sprintf(global->fdParams.baseFileName, "fields");
-
-  global->fdParams.stride_x = 1;
-  global->fdParams.stride_y = 1;
-  global->fdParams.stride_z = 1;
-
-  // add field parameters to list
-  global->outputParams.push_back(&global->fdParams);
-
-  sim_log ( "Fields x-stride " << global->fdParams.stride_x );
-  sim_log ( "Fields y-stride " << global->fdParams.stride_y );
-  sim_log ( "Fields z-stride " << global->fdParams.stride_z );
 
   dump_mkdir("hydro");
 
@@ -438,17 +413,10 @@ begin_initialization {
                      momentum_density | mass_density     | stress_tensor );
    */
 
-  //global->fdParams.output_variables( electric | magnetic );
-  // global->hedParams.output_variables( current_density | charge_density | stress_tensor );
-  global->hIdParams.output_variables( current_density | charge_density | stress_tensor );
-  global->hBdParams.output_variables( current_density | charge_density | stress_tensor );
-
-
   const uint32_t allfields      (0xffffffff);
-  
-  global->fdParams.output_variables( allfields );
-// global->hIdParams.output_variables( all );
-// global->hBdParams.output_variables( all );
+
+  global->hIdParams.output_variables( allfields ); // current_density | charge_density | stress_tensor );
+  global->hBdParams.output_variables( allfields ); // current_density | charge_density | stress_tensor );
 
 #ifdef DUMP_WITH_HDF5
   // For writing XDMF file when using HDF5 dump
@@ -463,9 +431,6 @@ begin_initialization {
    *------------------------------------------------------------------------*/
 
   char varlist[512];
-  create_field_list(varlist, global->fdParams);
-  sim_log ( "Fields variable list: " << varlist );
-
   create_hydro_list(varlist, global->hIdParams);
   sim_log ( "Ion species variable list: " << varlist );
 
@@ -550,12 +515,7 @@ begin_diagnostics {
    * THE LOCATION OF THE GLOBAL HEADER!!!
    *------------------------------------------------------------------------*/
 
-  // Adam: Can override some global params here
-  // num_step = 171000;
-  //global->fields_interval = 1358;
-  //global->Hhydro_interval = 1358;
-
-  global->restart_interval = 3000;
+  global->restart_interval = 10000;
   global->quota_sec = 23.5*3600.0;
 
   //  const int nsp=global->nsp;
@@ -575,28 +535,7 @@ begin_diagnostics {
     dump_mkdir("particle");
     dump_mkdir("rundata");
 
-    
-    // Make subfolders for restart
-    //    char restorefold[128];
-    //sprintf(restorefold, "restore0/%i", NUMFOLD);
-    //    sprintf(restorefold, "restore0");
-    //    dump_mkdir(restorefold);
-    //    sprintf(restorefold, "restore1/%i", NUMFOLD);
-    //    sprintf(restorefold, "restore1");
-    //    dump_mkdir(restorefold);
-    //    sprintf(restorefold, "restore2/%i", NUMFOLD);
-    //    dump_mkdir(restorefold);
-
-    // And rundata 
-    //    char rundatafold[128];
-    //    char rundatafile[128];
-    //    sprintf(rundatafold, "rundata/%i", NUMFOLD);
-    ///    sprintf(rundatafold, "rundata");
-    //    dump_mkdir(rundatafold);
-
     dump_grid("rundata/grid");
-    //    sprintf(rundatafile, "rundata/%i/grid", NUMFOLD);
-    //    dump_grid(rundatafile);
 
     dump_materials("rundata/materials");
     dump_species("rundata/species");
@@ -609,12 +548,6 @@ begin_diagnostics {
   if(should_dump(energies)) {
     dump_energies("rundata/energies", step() == 0 ? 0 : 1);
   } // if
-
-  /*--------------------------------------------------------------------------
-   * Field data output
-   *------------------------------------------------------------------------*/
-
-  if(step() == 1 || should_dump(fields)) field_dump(global->fdParams);
 
   /*--------------------------------------------------------------------------
    * Ion species output
@@ -632,51 +565,8 @@ begin_diagnostics {
   * Time averaging
   *------------------------------------------------------------------------*/
 
-  //  #include "time_average.cxx"
-   //#include "time_average_cori.cxx"
-
-  /*--------------------------------------------------------------------------
-   * Restart dump
-   *------------------------------------------------------------------------*/
-
-  if(step() && !(step()%global->restart_interval)) {
-    global->write_restart = 1; // set restart flag. the actual restart files are written during the next step
-  } else {
-    if (global->write_restart) {
-
-      global->write_restart = 0; // reset restart flag
-      double dumpstart = uptime();
-      if(!global->rtoggle) {
-        global->rtoggle = 1;
-        //      BEGIN_TURNSTILE(NUM_TURNSTILES) {
-	checkpt("restore1/restore", 0);
-	//	DUMP_INJECTORS(1);
-	//    } END_TURNSTILE;
-      } else {
-        global->rtoggle = 0;
-        //      BEGIN_TURNSTILE(NUM_TURNSTILES) {
-	checkpt("restore0/restore", 0);
-	//	DUMP_INJECTORS(0);
-	//    } END_TURNSTILE;
-      } // if
-
-      //    mp_barrier();
-      sim_log( "Restart dump completed");
-      double dumpelapsed = uptime() - dumpstart;
-      sim_log("Restart duration "<<dumpelapsed);
-    } // if global->write_restart
-  }
-
-
-  /*  // Dump particle data
-
-  char subdir[36];
-
-  if ( should_dump(Hparticle) && step() !=0
-       && step() > 56*(global->fields_interval)  ) {
-    sprintf(subdir,"particle/T.%d/Hparticle",step());
-    dump_particles("ion", subdir);
-    }*/
+  //#include "time_average.cxx"
+  //#include "time_average_cori.cxx"
 
   // Shut down simulation when wall clock time exceeds global->quota_sec.
   // Note that the mp_elapsed() is guaranteed to return the same value for all
