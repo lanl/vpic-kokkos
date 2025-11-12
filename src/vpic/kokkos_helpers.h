@@ -9,7 +9,7 @@
 
 // This module implements kokkos macros
 
-#define FIELD_VAR_COUNT 44
+#define FIELD_VAR_COUNT 45
 #define FIELD_EDGE_COUNT 8
 
 #ifdef VARIABLE_CHARGE
@@ -92,9 +92,7 @@ using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULAT
 
 using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT], Kokkos::LayoutRight>;
 // 1D View: shape [FLUID_VAR_COUNT]
-// using k_fluid_1d = Kokkos::View<float*>;
-// struct field_tag {};  // Just an empty struct for tagging
-// using k_field_1d = Kokkos::View<float*, field_tag>;
+using k_fluid_1d = Kokkos::View<float*>;
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
@@ -191,7 +189,8 @@ namespace field_var {
     sx        = 40,
     sy        = 41,
     sz        = 42,
-    se        = 43
+    se        = 43,
+    trad      = 44
   };
 };
 namespace field_edge_var { \
