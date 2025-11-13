@@ -230,5 +230,16 @@ hyb_advance_b(field_array_t * RESTRICT fa,
   k_hyb_local_ghost_e( fa, fa->g );
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::popRegion();
+  
+  
+  if(isub+1==nsub) {
+  //Clear momentum source
+  Kokkos::parallel_for("clear s", Kokkos::RangePolicy<>(0,nv),
+		       KOKKOS_LAMBDA(const int v) {
+			 k_field(v, field_var::sx) = 0;
+			 k_field(v, field_var::sy) = 0;
+			 k_field(v, field_var::sz) = 0;
+		       });
+		   }
 
 }
