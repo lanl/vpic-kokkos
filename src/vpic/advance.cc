@@ -42,13 +42,13 @@ int vpic_simulation::advance(void)
 
   //printf("Sorted\n");
   // HOST - Touches accumulators
-  if( species_list )
-  {
-    // TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
-    //TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
-  TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
-  }
-
+  // if( species_list )
+  // {
+  //   // TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
+  //   //TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
+  // TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
+  // }
+  //printf("in advance: rhof=%e\n",field_array->k_f_d(13, field_var::rhof));
   // Note: Particles should not have moved since the last performance sort
   // when calling collision operators.
   // FIXME: Technically, this placement of the collision operators only
@@ -56,6 +56,7 @@ int vpic_simulation::advance(void)
   // order accurate factorization).
 
   //printf("Cleared jf\n");
+
   Kokkos::Profiling::pushRegion("Collisions");
   if( collision_op_list )
   {
@@ -63,6 +64,14 @@ int vpic_simulation::advance(void)
     apply_collision_op_list( collision_op_list, *kokkos_rng );
     KOKKOS_TOC( collision_model, 1 );
   }
+
+  if( species_list )
+  {
+    // TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
+    //TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
+  TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
+  }
+  
   Kokkos::Profiling::popRegion();
 
   // TODO: implement
