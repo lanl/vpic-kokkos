@@ -24,7 +24,7 @@ vpic_simulation::initialize( int argc,
   grid->den_floor_ohm = 0.;
   grid->den_floor_pe  = 0.;
 #ifdef HYB_USE_SEPARATE_PE
-  grid->eos_gamma     = 5./3.;
+  grid->eos_gamma     = 1; //5./3.;
 #else
   grid->eos_gamma     = 1.;
 #endif

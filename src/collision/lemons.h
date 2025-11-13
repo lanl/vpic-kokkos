@@ -106,23 +106,23 @@ struct lemons_model : public collision_model<lemons_model> {
   template <class ViewType>
   KOKKOS_INLINE_FUNCTION
   void upload_moment_src_impl( const ViewType & spj_v, const int v,
-			       const gmomType &Dm
+			       const gmomType &Dm, const float mi
 			       ) const {
     if constexpr (std::is_same<ViewType, k_fluid_t>::value) {
 	    // printf("#upload_moment_src_impl()  in lemons model\n");
-      spj_v(v, fluid_var::msx) = Dm.v[1];
-      spj_v(v, fluid_var::msy) = Dm.v[2];
-      spj_v(v, fluid_var::msz) = Dm.v[3];
-      spj_v(v, fluid_var::ens) = Dm.v[4];
+      spj_v(v, fluid_var::msx) += -Dm.v[1]*mi;
+      spj_v(v, fluid_var::msy) += -Dm.v[2]*mi;
+      spj_v(v, fluid_var::msz) += -Dm.v[3]*mi;
+      spj_v(v, fluid_var::ens) += -Dm.v[4]*mi;
       // printf("#msxyz=%e,%e,%e, ens=%e\n",spj_v(v, fluid_var::msx),spj_v(v, fluid_var::msy),spj_v(v, fluid_var::msz),spj_v(v, fluid_var::ens));
     } else if constexpr (std::is_same<ViewType, k_field_t>::value) {
       // FIELD implementation
 	    // printf("lemons_model: uploading to field\n");
-      spj_v(v, field_var::sx) = Dm.v[1];
-      spj_v(v, field_var::sy) = Dm.v[2];
-      spj_v(v, field_var::sz) = Dm.v[3];
-      spj_v(v, field_var::se) = Dm.v[4];
-      // printf("#msxyz=%e,%e,%e, ens=%e\n",spj_v(v, field_var::sx),spj_v(v, field_var::sy),spj_v(v, field_var::sz),spj_v(v, field_var::se));
+      spj_v(v, field_var::sx) += -Dm.v[1]*mi;
+      spj_v(v, field_var::sy) += -Dm.v[2]*mi;
+      spj_v(v, field_var::sz) += -Dm.v[3]*mi;
+      spj_v(v, field_var::se) += -Dm.v[4]*mi;
+      //printf("#msxyz=%e,%e,%e, ens=%e\n",spj_v(v, field_var::sx),spj_v(v, field_var::sy),spj_v(v, field_var::sz),spj_v(v, field_var::se));
     }
     
   } 

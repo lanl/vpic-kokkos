@@ -140,7 +140,8 @@ struct particle_bulk_collision_pipeline {
     // TO-DO: NEED TO DO THIS FOR FLUID?
     _spj_fl           = _spj->k_fl_d;
     if(_use_e_field) _spj_fd = _field->k_f_d;
-    // else  printf("Pointer _field: %p\n", _field);
+    // else
+    //printf("Pointer _field: %p, %p, %p, _use_e_field=%d\n", _field, (void*)&_field->k_f_d, _spj_fd,_use_e_field);
     //    _spj_p            = _spj->k_p_d;
     //    _spj_i            = _spj->k_p_i_d;
     //    _spj_partition_ra = _spj->k_partition_d;
@@ -348,11 +349,14 @@ struct particle_bulk_collision_pipeline {
 	    if( use_e_field ) {
 	    	// If we have a field, we upload the moment source to the field.
 	     	// Upload the moment source to the field.
-	     	model.upload_moment_src( spj_fd, v, Dm );
+	     	model.upload_moment_src( spj_fd, v, Dm, mi );
 	    } else {    
-	      model.upload_moment_src( spj_fl, v, Dm );   
+		model.upload_moment_src( spj_fl, v, Dm, mi );   
 	    }
-	    
+	    //printf("check: #msxyz=%e,%e,%e, ens=%e, v=%d\n",spj_fd(v, field_var::sx),spj_fd(v, field_var::sy),spj_fd(v, field_var::sz),spj_fd(v, field_var::se), v);
+	    //printf("spj_fl data=%p\n", (void*)spj_fl.data());
+	    // printf("[call]  spj_fd data=%p ext=(%zu,%zu) v=%d, FIELD_VAR_COUNT=%d\n",
+	    // 	   (void*)spj_fd.data(), spj_fd.extent(0), spj_fd.extent(1), v, FIELD_VAR_COUNT);
 	}
 
         // We *must* free generators.
@@ -432,8 +436,8 @@ struct particle_bulk_collision_pipeline {
 	    ujz_fl = spj_f(ii, field_var::uz);
 	    tmp_fl = spj_f(ii, field_var::pe)/nj_fl; //nj_fl should be non-zero
 	  }
-    // printf("nj_fl=%e, ujx_fl=%e, ujy_fl=%e, ujz_fl=%e, tmp_fl=%e\n",
-    //  	   nj_fl, ujx_fl, ujy_fl, ujz_fl, tmp_fl);
+    // printf("nj_fl=%e, ujx_fl=%e, ujy_fl=%e, ujz_fl=%e, pe=%e, tmp_fl=%e\n",
+    //   	   nj_fl, ujx_fl, ujy_fl, ujz_fl, spj_f(ii, field_var::pe), tmp_fl);
 
     float ndt = nj_fl * dt;
     //    printf("n=%14.8e, dt=%14.8e, mi=%14.8e\n",nj_fl, dt, mi);

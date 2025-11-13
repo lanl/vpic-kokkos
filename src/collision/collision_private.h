@@ -180,15 +180,15 @@ struct collision_model {
   template <typename ViewType>
   KOKKOS_INLINE_FUNCTION
   void upload_moment_src(const ViewType & spj_fl, const int v,
-                               const gmomType &Dm) const {
+			 const gmomType &Dm, const float mi) const {
     // By default do nothing, or call a derived "implementation" if it exists:
-      static_cast<const DerivedT*>(this)->upload_moment_src_impl(spj_fl, v, Dm);
+      static_cast<const DerivedT*>(this)->upload_moment_src_impl(spj_fl, v, Dm, mi);
   }
   
   template <typename ViewType>
   KOKKOS_INLINE_FUNCTION
   void upload_moment_src_impl(const ViewType& spj_fl, const int v,
-                               const gmomType &Dm ) const
+			      const gmomType &Dm, const float mi ) const
   {
       // default no-op
   }
