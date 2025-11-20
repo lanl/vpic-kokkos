@@ -22,7 +22,7 @@ begin_globals {
   int rtoggle;               // enables save of last 2 restart dumps for safety
   int write_restart;     // global flag for all to write restart files
   int write_end_restart; // global flag for all to write restart files
-  
+
   double quota_sec;          // Run quota in seconds
   double b0;                 // B0
   double v_A;
@@ -39,7 +39,7 @@ begin_globals {
 };
 
 begin_initialization {
-  
+
   // Use natural hybrid-PIC units:
   double ec   = 1.0;  // Charge normalization
   double mi   = 1.0;  // Mass normalization
@@ -47,13 +47,13 @@ begin_initialization {
   double b0 = 1.0;    // Magnetic field
   double n0 = 1.0;    // Density
 
-  
+
   // Derived normalization parameters:
   double v_A = b0/sqrt(mu0*n0*mi); // Alfven velocity
   double wci = ec*b0/mi;          // Cyclotron freq.
   double di = v_A/wci;            // Ion skin-depth
 
-  
+
   // Initial conditions for model:
   double betai_par = 1.0;   // Ratio of ion thermal to magnetic pressure.
   double Tperp_Tpar = 3.0;  // Initial temperature anisotropy for ions.
@@ -64,19 +64,19 @@ begin_initialization {
   double eta = 0.0;      // Plasma resistivity.
   double hypereta = 0.0; // Plasma hyper-resistivity.
 
-  
+
   // Derived quantities for model:
   double Tipar = betai_par*b0*b0/2.0/n0;
   double vthipar = sqrt(Tipar/mi);
   double vthiperp = vthipar*sqrt(Tperp_Tpar);
   double Te = Tipar/Tipar_Te;
- 
+
 
   // Numerical parameters
   double taui    = 60;    // Simulation run time in wci^-1.
   double quota   = 23.5;   // run quota in hours
   double quota_sec = quota*3600;  // Run quota in seconds
-  
+
   double Lx    = Lx_di*di; // size of box in x dimension
   double Ly    = 1.0*di;   // size of box in y dimension
   double Lz    = 1.0*di;   // size of box in z dimension
@@ -85,8 +85,8 @@ begin_initialization {
   double ny = 1;
   double nz = 1;
 
-  double nppc  = 100;// TODO testing github runner 10000;         // Average number of macro particle per cell per species 
-  
+  double nppc  = 100;// TODO testing github runner 10000;         // Average number of macro particle per cell per species
+
   double topology_x = 1; // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 1;
@@ -103,13 +103,13 @@ begin_initialization {
   Ni = trunc_granular(Ni,nproc());  // Make it divisible by number of processors
   double qi = ec*Np/Ni;             // Charge per macro ion
 
-  
+
   // Determine the time step
   double dg = courant_length(Lx,Ly,Lz,nx,ny,nz);  // courant length
   double dt = 0.01/wci;                           // time step
 
   double sort_interval = 10;  // How often to sort particles
-  
+
   // Intervals for output
   int restart_interval = 3000;
   int energies_interval = 200;
@@ -148,7 +148,7 @@ begin_initialization {
   global->topology_y  = topology_y;
   global->topology_z  = topology_z;
 
- 
+
   //////////////////////////////////////////////////////////////////////////////
   // Setup the grid
 
@@ -178,18 +178,18 @@ begin_initialization {
 
   // ***** Set Particle Boundary Conditions *****
   // Do nothing - periodic is default.
- 
+
   //////////////////////////////////////////////////////////////////////////////
   // Setup materials
   sim_log("Setting up materials. ");
   define_material( "vacuum", 1 );
 
-  
+
   //////////////////////////////////////////////////////////////////////////////                                                                                                               // Finalize Field Advance
   define_field_array(NULL); // second argument is damp, default to 0
   sim_log("Finalized Field Advance");
 
-  
+
   //////////////////////////////////////////////////////////////////////////////
   // Setup the species
   sim_log("Setting up species. ");
@@ -198,7 +198,7 @@ begin_initialization {
   double sort_method = 1;   // 0=in place and 1=out of place
   species_t *ion = define_species("ion", ec, mi, nmax, nmovers, sort_interval, sort_method);
 
-  
+
   ///////////////////////////////////////////////////
   // Log diagnostic information about this simulation
 
@@ -240,7 +240,7 @@ begin_initialization {
     // write binary info file
 
     if ( ! (fp_info.open("info.bin", io_write)==ok) ) ERROR(("Cannot open file."));
-    
+
     fp_info.write(&topology_x, 1 );
     fp_info.write(&topology_y, 1 );
     fp_info.write(&topology_z, 1 );
@@ -265,8 +265,8 @@ begin_initialization {
   // Load fields
 sim_log( "Loading fields" );
 
-// Note: everywhere is a region that encompasses the entire simulation                                                                                                                   
-// In general, regions are specied as logical equations (i.e. x>0 && x+y<2) 
+// Note: everywhere is a region that encompasses the entire simulation
+// In general, regions are specied as logical equations (i.e. x>0 && x+y<2)
  set_region_field( everywhere, 0, 0, 0, 1.0, 0, 0);
  set_region_te( everywhere, Te);
 
@@ -274,7 +274,7 @@ sim_log( "Loading fields" );
   sim_log( "Loading particles" );
 
   // Do a fast load of the particles
-  int rng_seed     = 1;     // Random number seed increment 
+  int rng_seed     = 1;     // Random number seed increment
   seed_entropy( rank() );  //Generators desynchronized
   double xmin = grid->x0 , xmax = grid->x0+(grid->dx)*(grid->nx);
   double ymin = grid->y0 , ymax = grid->y0+(grid->dy)*(grid->ny);
@@ -453,7 +453,7 @@ sim_log( "Loading fields" );
 
 
   const uint32_t allfields      (0xffffffff);
-  
+
   global->fdParams.output_variables( allfields );
 // global->hedParams.output_variables( all );
 // global->hHdParams.output_variables( all );
@@ -579,7 +579,7 @@ begin_diagnostics {
     dump_mkdir("particle");
     dump_mkdir("rundata");
 
-    
+
     // Make subfolders for restart
     //    char restorefold[128];
     //sprintf(restorefold, "restore0/%i", NUMFOLD);
@@ -591,7 +591,7 @@ begin_diagnostics {
     //    sprintf(restorefold, "restore2/%i", NUMFOLD);
     //    dump_mkdir(restorefold);
 
-    // And rundata 
+    // And rundata
     //    char rundatafold[128];
     //    char rundatafile[128];
     //    sprintf(rundatafold, "rundata/%i", NUMFOLD);
@@ -717,9 +717,9 @@ begin_diagnostics {
       sim_log( "Restart dump restart completed." );
       double dumpelapsed = uptime() - dumpstart;
       sim_log("Restart duration "<< dumpelapsed);
-      exit(0); // Exit or abort?                                                                                
+      exit(0); // Exit or abort?
     }
-    //    } 
+    //    }
     if( uptime() > global->quota_sec ) global->write_end_restart = 1;
   }
 
@@ -738,8 +738,11 @@ begin_current_injection {
 begin_field_injection {
 }  // end field injection
 
-
 //*******************  COLLISIONS ***************************
 begin_particle_collisions {
 } // end collisions
 
+//******************* RADIATION ***************************
+begin_radiation {
+ // No radiation for this simulation
+}
