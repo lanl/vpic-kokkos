@@ -37,7 +37,6 @@ begin_globals {
   double topology_z;
 
   // Output variables
-  DumpParameters fdParams;
   DumpParameters hIdParams;
   DumpParameters hBdParams;
   std::vector<DumpParameters *> outputParams;
@@ -52,14 +51,15 @@ begin_initialization {
   double mu0  = 1.0;  // Magnetic constanst
   double b0 = 1.0;    // Magnetic field. // Note for this problem B=0 (but we can still pick a reference field/units).
   double n0 = 1.0;    // Density
-  
+
   // Derived normalization parameters:
   double v_A = b0/sqrt(mu0*n0*mi); // Alfven velocity
   double wci = ec*b0/mi;          // Cyclotron freq.
   double di = v_A/wci;            // Ion skin-depth
 
   // Initial conditions for model:
-  double vbeam = 10.0;      // Beam velocity.
+  double qi = 1.0;          // Particle charge
+  double vbeam = 10.33;     // Beam velocity (655 km/s)
   double nbeam = 0.1;       // Beam density.
   double Ti = 1.0;          // Ion temperature
   double c_s = 1.0;         // Electron sound speed.
@@ -83,8 +83,6 @@ begin_initialization {
   double nx = 1;
   double ny = 1;
   double nz = 1;
-
-  double nppc  = 10000;    // Average number of macro particle per cell per species 
   
   double topology_x = 1; // Number of domains in x, y, and z
   double topology_y = 1;
@@ -95,20 +93,46 @@ begin_initialization {
   double hy = Ly/ny;
   double hz = Lz/nz;
 
-  double Ni  = nppc*nx*ny*nz;       // Total macroparticle ions in box
-  double Np  = n0*Lx*Ly*Lz;         // Total number of physical background ions
-  Ni = trunc_granular(Ni,nproc());  // Make it divisible by number of processors
-  double qi = ec*Np/Ni;             // Charge per macro ion
+  // Calculate particle weights
+  bool var_wt = true;
+  double nppc = 10000;
+  double nppc_backgrnd, nppc_beam;
+  double qi_backgrnd, qi_beam;
+  double Ni_backgrnd, Ni_beam;
+  double Np_backgrnd, Np_beam;
 
-  // Determine the time step
-  double dg = courant_length(Lx,Ly,Lz,nx,ny,nz);  // courant length
-  double dt = 0.02;                               // time step
+  if (var_wt) { // equal ppc, unequal weights, weight = nV/N
 
-  double sort_interval = 1;  // How often to sort particles
-  
+    nppc_backgrnd = nppc;
+    Np_backgrnd = n0*Lx*Ly*Lz;
+    Ni_backgrnd = nppc*nx*ny*nz;
+    Ni_backgrnd = trunc_granular(Ni_backgrnd,nproc());
+    qi_backgrnd = ec*Np_backgrnd/Ni_backgrnd;
+
+    nppc_beam = nppc;
+    Np_beam = nbeam*Lx*Ly*Lz;
+    Ni_beam = nppc_beam*nx*ny*nz;
+    Ni_beam = trunc_granular(Ni_beam,nproc());
+    qi_beam = ec*Np_beam/Ni_beam;
+
+  } else { 
+
+    nppc_backgrnd = nppc;                              // Average number of macro particle per cell per species 
+    Np_backgrnd = n0*Lx*Ly*Lz;                         // Total number of physical background ions
+    Ni_backgrnd = nppc_backgrnd*nx*ny*nz;              // Total macroparticle ions in box
+    Ni_backgrnd = trunc_granular(Ni_backgrnd,nproc()); // Make it divisible by number of processors
+    qi_backgrnd = ec*Np_backgrnd/Ni_backgrnd;          // Charge per macro ion
+
+    nppc_beam = nppc * nbeam / n0;
+    Np_beam = nbeam*Lx*Ly*Lz;
+    Ni_beam = nppc_beam*nx*ny*nz;
+    Ni_beam = trunc_granular(Ni_beam,nproc());
+    qi_beam = ec*Np_beam/Ni_beam;
+
+  } // endif(var_wt)
+
   // Intervals for output
-  num_step = 10; //int(taui/(wci*dt));
-  int interval = 1; // int(num_step/100);
+  int interval = 200; // int(num_step/100);
   int Ihydro_interval = interval;
   int Bhydro_interval = interval;
   int energies_interval = interval;
@@ -121,7 +145,7 @@ begin_initialization {
 
   ///////////////////////////////////////////////
   // Setup high level simulation parameters
-  status_interval      = num_step/100;
+  status_interval      = 10000; //num_step/10;
   sync_shared_interval = status_interval;
   clean_div_e_interval = status_interval;
   clean_div_b_interval = status_interval;
@@ -150,7 +174,7 @@ begin_initialization {
 
   // Setup basic grid parameters
   define_units(1.0, 1.0);
-  define_timestep( dt );
+  // define_timestep( dt );
 
   // Define the grid
   define_periodic_grid(  -0.5*Lx, -0.5*Ly, -0.5*Lz,    // Low corner
@@ -179,36 +203,50 @@ begin_initialization {
   //////////////////////////////////////////////////////////////////////////////                                                                                                                                                                                                       // Finalize Field Advance
   define_field_array(NULL); // second argument is damp, default to 0
   sim_log("Finalized Field Advance");
+ 
 
-  
   //////////////////////////////////////////////////////////////////////////////
   // Setup the species
   sim_log("Setting up species. ");
-  double nmax = 1.5*Ni/nproc();
-  double nmovers = 0.1*nmax;
-  double sort_method = 1;   // 0=in place and 1=out of place
-  species_t *ion = define_species("ion", ec, mi, nmax, nmovers, sort_interval, sort_method);
-  species_t *beam = define_species("beam", ec, mi, nmax, nmovers, sort_interval, sort_method);
+  double nmax_backgrnd = 1.5*Ni_backgrnd/nproc();
+  double nmovers_backgrnd = 0.1*nmax_backgrnd;
+  double nmax_beam = 1.5*Ni_beam/nproc();
+  double nmovers_beam = 0.1*nmax_beam;
+
+  double sort_interval = 10000;  // How often to sort particles (1 cell so dont sort)
+  double sort_method = 1;        // 0=in place and 1=out of place
+  species_t *ion = define_species("ion", ec, mi, nmax_backgrnd, nmovers_backgrnd, sort_interval, sort_method);
+  species_t *beam = define_species("beam", ec, mi, nmax_beam, nmovers_beam, sort_interval, sort_method);
 
   //////////////////////////////////////////////////////////////////////////////
   // Define Coulomb collisions
-  int ncoll_coulomb = (int) 1*sort_interval;
-  bool var_wt = true;
+  sim_log("Setting up collisions. ");
+  int ncoll_coulomb = 1;
   double ln_Lambda = 10.0;
   double lnL_8pi = ln_Lambda / (8.0 * M_PI);
 
   // cvar0 = q1^2 * q2^2 * lnL / (8 * pi)
-  double cvar0_ib = (ion->q * beam->q) * (ion->q *  beam->q) * lnL_8pi;
-  // double cvar0_ii = (ion->q * ion->q) * (ion->q *  ion->q) * lnL_8pi;
-  // double cvar0_bb = (beam->q * beam_dion->q) * (beam->q * beam->q) * lnL_8pi;
+  double cvar0_ib = (ion->q * ion->q) * (beam->q *  beam->q) * lnL_8pi;
+  double cvar0_ii = (ion->q * ion->q) * (ion->q *  ion->q) * lnL_8pi;
+  double cvar0_bb = (beam->q * beam->q) * (beam->q * beam->q) * lnL_8pi;
 
-  //define_collision_op(takizuka_abe("ta_bi", ion,  beam, cvar0_ib, ncoll_coulomb, var_wt));
-  //define_collision_op(takizuka_abe("ta_hi", hion,  ion, cvar0_hi, ncoll_coulomb, var_wt));
-  //define_collision_op(takizuka_abe("ta_dh", dion, hion, cvar0_dh, ncoll_coulomb, var_wt));
+  define_collision_op(takizuka_abe("ta_bi", ion,  beam, cvar0_ib, ncoll_coulomb, var_wt));
+  // define_collision_op(takizuka_abe("ta_ii", ion,  ion, cvar0_ii, ncoll_coulomb, var_wt));
+  // define_collision_op(takizuka_abe("ta_bb", beam, beam, cvar0_bb, ncoll_coulomb, var_wt));
 
-  // ion->last_indexed = -1;
-  // beam->last_indexed = -1;
-  
+  ion->last_indexed = -1;
+  beam->last_indexed = -1;
+
+  ///////////////////////////////////////////////
+  // Setup time steps
+
+  // Determine the time step
+  double tau_ib = 1.0 / (std::sqrt(2) * cvar0_ib);
+  double t_final = 1000.0 * tau_ib;
+  double dt = tau_ib / 50.0;
+  num_step = (int)(t_final / dt);
+
+  define_timestep( dt );
   
   ///////////////////////////////////////////////////
   // Log diagnostic information about this simulation
@@ -221,26 +259,28 @@ begin_initialization {
   sim_log ( "Lx = " << Lx/di );
   sim_log ( "Ly = " << Ly/di );
   sim_log ( "Lz = " << Lz/di );
-  sim_log ( "vbeam = " << vbeam );
-  sim_log ( "nbeam = " << nbeam );
-  sim_log ( "cvar0_ib = " << cvar0_ib );
   sim_log ( "Ti = " << Ti );
   sim_log ( "nx = " << nx );
   sim_log ( "ny = " << ny );
   sim_log ( "nz = " << nz );
   sim_log ( "nproc = " << nproc ()  );
-  sim_log ( "nppc = " << nppc );
+  sim_log ( "nppc_backgrnd = " << nppc_backgrnd );
+  sim_log ( "nppc_beam = " << nppc_beam );
   sim_log ( "b0 = " << b0 );
   sim_log ( "v_A = " << v_A );
   sim_log ( "di = " << di );
-  sim_log ( "Ni = " << Ni );
-  sim_log ( "total # of particles = " << Ni );
+  sim_log ( "Ni_backgrnd = " << Ni_backgrnd );
+  sim_log ( "Ni_beam = " << Ni_beam );
+  sim_log ( "total # of particles = " << Ni_backgrnd + Ni_beam );
   sim_log ( "dt*wci = " << wci*dt );
   sim_log ( "energies_interval: " << energies_interval );
   sim_log ( "dx = " << Lx/(di*nx) );
   sim_log ( "dy = " << Ly/(di*ny) );
   sim_log ( "dz = " << Lz/(di*nz) );
   sim_log ( "n0 = " << n0 );
+  sim_log ( "vbeam = " << vbeam );
+  sim_log ( "nbeam = " << nbeam );
+  sim_log ( "cvar0_ib = " << cvar0_ib );
 
   ////////////////////////////
   // Load fields
@@ -249,6 +289,8 @@ begin_initialization {
   // Note: everywhere is a region that encompasses the entire simulation                                                                                                                   
   // In general, regions are specied as logical equations (i.e. x>0 && x+y<2) 
   set_region_field( everywhere, 0, 0, 0, 0.0, 0, 0);
+  set_region_eta_multipliers( everywhere, 1, 1, 0 );
+  set_region_te( everywhere, 1.0);
 
   // LOAD PARTICLES
   sim_log( "Loading particles" );
@@ -257,7 +299,7 @@ begin_initialization {
   double ymin = grid->y0 , ymax = grid->y0+(grid->dy)*(grid->ny);
   double zmin = grid->z0 , zmax = grid->z0+(grid->dz)*(grid->nz);
 
-  repeat( Ni ) {
+  repeat( Ni_backgrnd ) {
     double x, y, z, r, ux, uy, uz, d0;
     x = uniform( rng(0), xmin, xmax );
     y = uniform( rng(0), ymin, ymax );
@@ -266,20 +308,30 @@ begin_initialization {
     ux = normal( rng(0), 0, vthi );                                                                                                                                             
     uy = normal( rng(0), 0, vthi );
     uz = normal( rng(0), 0, vthi );
-    inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0 );
+
+#ifdef VARIABLE_CHARGE
+    inject_particle( ion, x, y, z, ux, uy, uz, qi_backgrnd, 0, 0, qi );
+#else
+    inject_particle( ion, x, y, z, ux, uy, uz, qi_backgrnd, 0, 0 );
+#endif
   }
 
   // Low-density ion beam
-  repeat( Ni ) {
+  repeat( Ni_beam ) {
     double x, y, z, r, ux, uy, uz, d0;
     x = uniform( rng(0), xmin, xmax );
     y = uniform( rng(0), ymin, ymax );
     z = uniform( rng(0), zmin, zmax );
     
-    ux = normal( rng(0), vbeam, vthi );                                                                                                                                             
-    uy = normal( rng(0), vbeam, vthi );
+    ux = normal( rng(0), 0.0, vthi );                                                                                                                                             
+    uy = normal( rng(0), 0.0, vthi );
     uz = normal( rng(0), vbeam, vthi );
-    inject_particle( beam, x, y, z, ux, uy, uz, qi * nbeam, 0, 0 );
+
+#ifdef VARIABLE_CHARGE
+    inject_particle( beam, x, y, z, ux, uy, uz, qi_beam, 0, 0, qi );
+#else
+    inject_particle( beam, x, y, z, ux, uy, uz, qi_beam, 0, 0 );
+#endif
   }
 
  
@@ -515,7 +567,7 @@ begin_diagnostics {
    * THE LOCATION OF THE GLOBAL HEADER!!!
    *------------------------------------------------------------------------*/
 
-  global->restart_interval = 10000;
+  global->restart_interval = 1000000;
   global->quota_sec = 23.5*3600.0;
 
   //  const int nsp=global->nsp;
@@ -530,8 +582,8 @@ begin_diagnostics {
     dump_mkdir("fields");
     dump_mkdir("hydro");
     dump_mkdir("rundata");
-    dump_mkdir("restore0");
-    dump_mkdir("restore1");  // 1st backup
+    // dump_mkdir("restore0");
+    // dump_mkdir("restore1");  // 1st backup
     dump_mkdir("particle");
     dump_mkdir("rundata");
 
@@ -576,37 +628,37 @@ begin_diagnostics {
   // timestep. mp_elapsed has an ALL_REDUCE in it!
 
 
-  if ( (step()>0 && global->quota_check_interval>0
-        && (step() & global->quota_check_interval)==0 ) || (global->write_end_restart) ) {
+  // if ( (step()>0 && global->quota_check_interval>0
+  //       && (step() & global->quota_check_interval)==0 ) || (global->write_end_restart) ) {
 
-    if ( (global->write_end_restart) ) {
-      global->write_end_restart = 0; // reset restart flag
+  //   if ( (global->write_end_restart) ) {
+  //     global->write_end_restart = 0; // reset restart flag
 
-      //   if( uptime() > global->quota_sec ) {
-      sim_log( "Allowed runtime exceeded for this job.  Terminating....\n");
-      double dumpstart = uptime();
+  //     //   if( uptime() > global->quota_sec ) {
+  //     sim_log( "Allowed runtime exceeded for this job.  Terminating....\n");
+  //     double dumpstart = uptime();
 
-      if(!global->rtoggle) {
-        global->rtoggle = 1;
-        //      BEGIN_TURNSTILE(NUM_TURNSTILES) {
-        checkpt("restore1", 0);
-        //    } END_TURNSTILE;
-      } else {
-        global->rtoggle = 0;
-        //      BEGIN_TURNSTILE(NUM_TURNSTILES) {
-        checkpt("restore0", 0);
-        //    } END_TURNSTILE;
-      } // if
+  //     if(!global->rtoggle) {
+  //       global->rtoggle = 1;
+  //       //      BEGIN_TURNSTILE(NUM_TURNSTILES) {
+  //       checkpt("restore1", 0);
+  //       //    } END_TURNSTILE;
+  //     } else {
+  //       global->rtoggle = 0;
+  //       //      BEGIN_TURNSTILE(NUM_TURNSTILES) {
+  //       checkpt("restore0", 0);
+  //       //    } END_TURNSTILE;
+  //     } // if
 
-      mp_barrier(  ); // Just to be safe
-      sim_log( "Restart dump restart completed." );
-      double dumpelapsed = uptime() - dumpstart;
-      sim_log("Restart duration "<< dumpelapsed);
-      exit(0); // Exit or abort?                                                                                
-    }
-    //    } 
-    if( uptime() > global->quota_sec ) global->write_end_restart = 1;
-  }
+  //     mp_barrier(  ); // Just to be safe
+  //     sim_log( "Restart dump restart completed." );
+  //     double dumpelapsed = uptime() - dumpstart;
+  //     sim_log("Restart duration "<< dumpelapsed);
+  //     exit(0); // Exit or abort?                                                                                
+  //   }
+  //   //    } 
+  //   if( uptime() > global->quota_sec ) global->write_end_restart = 1;
+  // }
 
 
 } // end diagnostics
