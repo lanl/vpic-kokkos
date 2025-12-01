@@ -107,7 +107,6 @@ struct binary_collision_pipeline {
     //TODO: is interval needed here?
     if( !_spi || !_spj || !_spi->g || !_spj->g || _spi->g != _spj->g || interval <= 0)
       ERROR(("Bad args."));
-
   }
 
   /**
@@ -120,7 +119,6 @@ struct binary_collision_pipeline {
     collision_model& _model
   )
   {
-
       k_ParticleSorter<BinSort> sorter;
       //k_ParticleSorter<> sorter;      
     ParticleShuffler<> shuffler;
@@ -132,8 +130,9 @@ struct binary_collision_pipeline {
 
     if( _spj->last_indexed != _spj->g->step ) {
       sorter.sort( _spj, false );
-    }
+    }    
 
+    
     // Always reload in case Views were invalidated.
     _spi_p            = _spi->k_p_d;
     _spi_i            = _spi->k_p_i_d;
@@ -158,9 +157,10 @@ struct binary_collision_pipeline {
 	printf("_spj->g->nv+1 (=%d) ?= _spj_partition_ra.extent(0) (=%d)\n",_spj->g->nv+1,_spj_partition_ra.extent(0));	
         ERROR(("Bad spj sort products."));
     }
+
     // We need to shuffle both species to ensure random pairings.
-    shuffler.shuffle( _spi, _rp, false );
-    shuffler.shuffle( _spj, _rp, false );
+    shuffler.shuffle( _spi, _rp, false );    //may want to move sort and shuffle into one place to avoid repeated operations
+    if(_spi!=_spj)  shuffler.shuffle( _spj, _rp, false );
 
     // TODO: Move this out of dispatch so we can dispatch multiple models
     //       without recomputing the density. Kokkos won't let me put it in
@@ -255,7 +255,7 @@ struct binary_collision_pipeline {
     if(model.var_wt){
 	constexpr int n_int   = 1;
 	constexpr int n_float   = 1;	
-	constexpr int level   = 1;
+	constexpr int level   = 0; //per team shared momery
 	policy = policy.set_scratch_size(level, Kokkos::PerTeam(n_int*sizeof(int)+n_float*sizeof(float)));
     }
 
@@ -283,7 +283,7 @@ struct binary_collision_pipeline {
 			     float density_i = spi_n(v);
 			     float density_j = spj_n(v);
 
-			     //if(team_member.league_rank()==0 && team_member.team_rank()==0) printf("#call collide_variabl_wt()\n");
+			     // if(team_member.league_rank()==0 && team_member.team_rank()==0) printf("#call collide_variabl_wt()\n");
 			     if(spi_p == spj_p){
 				 collide_self_varwt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member); 
 			     }else{
@@ -393,6 +393,7 @@ template<class collision_model>
 KOKKOS_INLINE_FUNCTION
 void collide_self_varwt(const float m_i, const float m_j, const float density_i, const float density_j, const float dV, int i_0, int j_0, int ni, int nj, const float dtinterval,     const k_particles_t& spi_p,  const k_particles_t& spj_p,   const collision_model& model, k_particle_sortindex_t_ra spi_sortindex_ra, k_particle_sortindex_t_ra spj_sortindex_ra, const kokkos_rng_pool_t& rp, const Kokkos::TeamPolicy<>::member_type & team)
 {
+    //printf("in collide_self_varwt()\n");
     kokkos_rng_state_t rg = rp.get_state();
     
     const float mu_i = m_j/(m_i+m_j);
@@ -404,7 +405,7 @@ void collide_self_varwt(const float m_i, const float m_j, const float density_i,
     
     auto nj_2 = ni/2;
     auto ni_2 = ni - nj_2;
-    auto i0_2 = 0;
+    auto i0_2 = i_0;
     auto j0_2 = i0_2 + ni_2;
 
     auto nmax = ni_2;
@@ -422,10 +423,12 @@ void collide_self_varwt(const float m_i, const float m_j, const float density_i,
     auto mu_h = mu_i;
     auto mu_l = mu_i;
     auto ml = m_i;
+
+    // if (team.team_rank() == 0) printf("in collide_self_varwt(), Np_lc=%d, Np_hc=%d, Np_c=%d\n", (int) Np_lc, (int) Np_hc, (int) Np_c);
     
     Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, Np_c),
 			    [&](const int c, gmomType26 &lsum) {
-	 int i1 = c; 
+	 int i1 = c % nmax; 
 	 int i2 = c % nmin; //it may be possible that c > nmin
 	 int i = spl_sortindex_ra(i0_2 + i1);
 	 int j = spl_sortindex_ra(j0_2 + i2);
@@ -526,7 +529,7 @@ void collide_self_varwt(const float m_i, const float m_j, const float density_i,
      auto alph =
 	sqrt( ( tot_En - 0.5 * tot_ms * ( V0_x * V0_x + V0_y * V0_y + V0_z * V0_z ) ) /
 	      ( tot_Ep - 0.5 * tot_ms * ( Vp_x * Vp_x + Vp_y * Vp_y + Vp_z * Vp_z ) ) );
-
+     // if (team.team_rank() == 0) printf("in collide_self_varwt(), alph=%e\n", alph);
      Kokkos::parallel_for(Kokkos::TeamThreadRange(team, Np_hc),
 			  [&](const size_t c) {
 			      int i1 = c;
@@ -540,7 +543,7 @@ void collide_self_varwt(const float m_i, const float m_j, const float density_i,
 			      uy_i = V0_y + alph * (uy_i - Vp_y);
 			      uz_i = V0_z + alph * (uz_i - Vp_z);
 			  });
-    
+     rp.free_state(rg);    
 }
 
 
@@ -1010,7 +1013,6 @@ template<class collision_model>
 KOKKOS_INLINE_FUNCTION
 void collide_variabl_wt(const float m_i, const float m_j, const float density_i, const float density_j, const float dV, int i_0, int j_0, int ni, int nj, const float dtinterval,     const k_particles_t& spi_p,  const k_particles_t& spj_p,   const collision_model& model, k_particle_sortindex_t_ra spi_sortindex_ra, k_particle_sortindex_t_ra spj_sortindex_ra, const kokkos_rng_pool_t& rp, const Kokkos::TeamPolicy<>::member_type & team)
 {
-    //printf("#in collide_variabl_wt()\n");
     const float mu_i = m_j/(m_i+m_j);
     const float mu_j = m_i/(m_i+m_j);
     const float mu = m_i*m_j/(m_i+m_j);
@@ -1122,7 +1124,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     Np_lc = team_first(1);
     Np_hc = team_first(0);
     */
-
+    //if (team.team_rank() == 0) printf("#in collide_variabl_wt()\n");
     //every lp collide
     Np_lc = nl;
     //some hp will collide (to be found dynamically)
@@ -1137,7 +1139,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     
     Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc;
 
-    // printf("Np_lc=%d, Np_hc=%d, Np_c=%d, i0=%d, j0=%d\n", (int) Np_lc, (int) Np_hc, (int) Np_c, i0, j0);
+    //if (team.team_rank() == 0)  printf("Np_lc=%d, Np_hc=%d, Np_c=%d, i0=%d, j0=%d\n", (int) Np_lc, (int) Np_hc, (int) Np_c, i0, j0);
     gmomType26 Dm;
     Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, Np_c),
 			    [&](const int c, gmomType26 &lsum) {
