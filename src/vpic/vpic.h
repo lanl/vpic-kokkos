@@ -214,6 +214,23 @@ public:
   /*----------------------------------------------------------------------------
    * Diagnostics
    ---------------------------------------------------------------------------*/
+  enum FaceEnum {
+    NegXFace = 1,
+    PosXFace = 2,
+    NegYFace = 4,
+    PosYFace = 8,
+    NegZFace = 16,
+    PosZFace = 32,
+    PoyntingSum = 64,
+    All = 128,
+  };
+
+  std::tuple<Kokkos::View<double*[5]>, Kokkos::View<double[6]>> 
+  poynting_flux(const int face_enum, const double e0);
+
+  Kokkos::View<double[6]> 
+  poynting_flux_tally(const int face_enum, const double e0);
+
   double poynting_flux(double e0);
 
   /*----------------------------------------------------------------------------
