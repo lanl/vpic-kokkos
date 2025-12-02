@@ -221,7 +221,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   if ( f_He==0 ) He_present=0; 
 
   int load_particles = 1;         // Flag to turn off particle load for testing wave launch. 
-  double nppc        = 256;
+  double nppc        = 32;
 
   // FIXME:  Put in the real values here rather than approximate values: 
   float A_H      = 1;                 
@@ -242,9 +242,9 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   double debye = uthe*delta;
   double wpe1ps=1e-12* speed_of_light/delta;
 
-  double nx = 560; //11250;
+  double nx = 256; //11250;
   double ny = 1;         // 2D problem in x-z plane
-  double nz = 396; //7950;
+  double nz = 128; //7950;
 
   double hx = box_size_x/(delta*nx);   // in c/wpe
   double hz = box_size_z/(delta*nz);
