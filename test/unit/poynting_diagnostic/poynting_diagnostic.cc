@@ -1,8 +1,5 @@
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
-//#include "mpi.h"
-//#include "src/species_advance/species_advance.h"
-//#include "src/vpic/vpic.h"
 #include "deck/wrapper.h"
 
 int tx, ty, tz;
@@ -1177,11 +1174,9 @@ void vpic_simulation::user_diagnostics() {
 #endif
 }
 
-
 begin_particle_injection {
   // No particle injection for this simulation
 }
-
 
 begin_current_injection {
   // No current injection for this simulation
@@ -1212,13 +1207,13 @@ TEST_CASE( "Verify Poynting flux diagnostics are correct", "[PoyntingFlux]" )
 
 int main(int argc, char** argv) {
 
-    // Setup
-    boot_services( &argc, &argv );
+  // Setup
+  boot_services( &argc, &argv );
 
-    int result = Catch::Session().run( argc, argv );
+  int result = Catch::Session().run( argc, argv );
 
-    // clean-up...
-    halt_services();
+  // clean-up...
+  halt_services();
 
-    return result;
+  return result;
 }

@@ -233,9 +233,6 @@ vpic_simulation::poynting_flux_tally(const int face_enum, const double e0) {
   KOKKOS_LAMBDA(const int j, const int k) {                                    \
     float e1, e2, cb1, cb2;                                                    \
     auto psum_sa = psum_sv.access();                                           \
-    int index = int(  ((i##Y*n##Y) + j-1)                                      \
-                    + ((i##Z*n##Z) + k-1) * (n##Y*t##Y)                        \
-                    + skip);                                                   \
     e1  = 0.25*(  field(X##VOXEL(face,  j,  k),   field_var::e##Y)             \
                 + field(X##VOXEL(face,  j,  k+1), field_var::e##Y)             \
                 + field(X##VOXEL(face+1,j,  k),   field_var::e##Y)             \
@@ -292,60 +289,25 @@ vpic_simulation::poynting_flux_tally(const int face_enum, const double e0) {
 } // poynting_flux
 
 /*------------------------------------------------------------------------------
- * Compute poynting flux at left boundary
- *
- * Note: This should maybe be made more general by adding which face to use.
- *
- * Note: This implementation is taken from Brian's GB deck
+ * Compute poynting flux sum over all boundaries
  *
  * Inputs:
  *   e0 Peak instantaneous E field in "natural units"
  *----------------------------------------------------------------------------*/
-// FIXME: THIS COULD BE WRITTEN MUCH CLEANER NOW
 double vpic_simulation::poynting_flux(double e0) {
 	double psum=0.0, gpsum=0.0;
-	int stride = (grid->ny-1)*(grid->nz-1);
-
-	float * pvec = new float[stride];
-
-	if(!pvec) {
-		ERROR(("Failed pvec allocation in poynting flux diagnostic"));
-	} // if
-
-	memset(pvec, 0, stride);
-
-	int ix, iy, iz, k1, k2;
-	RANK_TO_INDEX( int(rank()), ix, iy, iz);
-
-	// Compute Poynting for domains on left of box
-	if(ix==0) {
-		for(int j(1); j<grid->ny; j++) {
-			for(int k(1); k<grid->nz; k++) {
-				k1 = INDEX_FORTRAN_3(1, j+1, k+1, 0, grid->nx+1,
-					0, grid->ny+1, 0, grid->nz+1);
-				k2 = INDEX_FORTRAN_3(2, j+1, k+1, 0, grid->nx+1,
-					0, grid->ny+1, 0, grid->nz+1);
-
-				pvec[(j-1)*(grid->nz-1)+k-1] =
-					(field(k2).ey*0.5*(field(k1).cbz+field(k2).cbz) -
-					field(k2).ez*0.5*(field(k1).cby+field(k2).cby)) /
-					(grid->cvac*grid->cvac*e0*e0);
-			} // for
-		} // for
-	} // if
+  int face_enum = All;
+  // Compute Poynting flux sum for all 6 faces
+  auto flux_tally = poynting_flux_tally(face_enum, e0);
+  auto flux_tally_h = Kokkos::create_mirror_view(flux_tally);
+  Kokkos::deep_copy(flux_tally_h, flux_tally);
 
 	// Sum flux contributions
-	for(int i(0); i<stride; i++) {
-		psum += pvec[i];
-	} // for
+  for(size_t i=0; i<flux_tally_h.size(); i++)
+    psum += flux_tally_h(i);
 
 	// Collect sums over all ranks
 	mp_allsum_d( &psum, &gpsum, 1 );
-
-	// Normalize flux
-	gpsum /= stride*py*pz;
-
-	delete[] pvec;
 
 	return gpsum;
 } // poynting_flux
