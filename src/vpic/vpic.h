@@ -158,7 +158,7 @@ struct DumpParameters {
     //    strcpy(baseDir, dumptype);
     //    strcpy(baseFileName, dumptype);
   } // output_variables
-  
+
   BitField output_vars;
 
   size_t stride_x;
@@ -215,7 +215,7 @@ public:
   // TODO: remove or improve this
 
   kokkos_rng_pool_t * kokkos_rng;
-    
+
   // Directly initialized by user
 
   int verbose;              // Should system be verbose
@@ -247,7 +247,7 @@ public:
   int field_interval;
   int particle_interval;
   int fluid_interval;
-  
+
   size_t nxout, nyout, nzout;
   size_t px, py, pz;
   float dxout, dyout, dzout;
@@ -331,7 +331,7 @@ public:
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
   void dump_fluid_species( const char *fname );
-  
+
   // Binary dumps
   void dump_grid( const char *fbase );
   void dump_fields( const char *fbase, int fname_tag = 1 );
@@ -346,7 +346,7 @@ public:
   void create_field_list(char * strlist, DumpParameters & dumpParams);
   void create_hydro_list(char * strlist, DumpParameters & dumpParams);
   //  void create_fluid_list(char * strlist, DumpParameters & dumpParams);
-  
+
   void print_hashed_comment(FileIO & fileIO, const char * comment);
   void global_header(const char * base,
   	std::vector<DumpParameters *> dumpParams);
@@ -358,7 +358,7 @@ public:
   void field_dump(DumpParameters & dumpParams);
   void hydro_dump(const char * speciesname, DumpParameters & dumpParams);
   void fluid_dump(const char * speciesname, DumpParameters & dumpParams);
-  
+
   ///////////////////
   // Useful accessors
 
@@ -429,10 +429,10 @@ public:
     return hydro_array->h[ voxel(ix,iy,iz) ];
   }
 
-  //  inline float& k_fluid(const int ix, const int iy, const int iz, fluid_var::fl_v member) { 
+  //  inline float& k_fluid(const int ix, const int iy, const int iz, fluid_var::fl_v member) {
   //    return fluid_species->k_fl_d(voxel(ix,iy,iz), member);
   //  }
-  
+
   inline rng_t *
   rng( const int n ) {
     return entropy->rng[n];
@@ -592,7 +592,7 @@ public:
 	}
       }
     }
-    
+
     interpolator_array = new_interpolator_array( grid );
     hydro_array        = new_hydro_array( grid );
 
@@ -654,8 +654,8 @@ public:
 
   //////////////////
   // Fluid species helpers
-  
-  // FIXME: SILLY PROMOTIONS 
+
+  // FIXME: SILLY PROMOTIONS
   inline fluid_species_t *
   define_fluid_species( const char *name,
 			double q,
@@ -674,7 +674,7 @@ public:
     return find_fluid_species_id( id, fluid_species_list );
   }
 
-  
+
   ///////////////////
   // Particle helpers
 
@@ -689,7 +689,7 @@ public:
                    double w,  double age = 0, int update_rhob = 1,
 		   double qp = 0);
 
-  
+
   // Inject particle on receive list (so gets passed to device).
   // Intended for user_particle_injection
   void
@@ -848,6 +848,8 @@ public:
   void user_current_injection(void);
 #ifdef HYB_USE_RADIATION
   void user_radiation(void);
+#else
+  void user_radiation(void) {};
 #endif
   void user_field_injection(void);
   void user_diagnostics(void);
