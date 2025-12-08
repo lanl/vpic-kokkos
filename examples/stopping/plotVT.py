@@ -128,6 +128,19 @@ ax[0].plot(time_ps, velc[1, :] * vth0_kms, label='Beam')
 ax[1].plot(time_ps, temp[0, :] * T0_keV, label='Background')
 ax[1].plot(time_ps, temp[1, :] * T0_keV, label='Beam')
 
+# inlude kinetic solution from Rambo and Procassini 1995
+# (solid curves in Fig 4a and Fig 4b)
+plot_rambo = True
+if plot_rambo:
+  v_rambo = np.loadtxt('rambo_soln/rambo_v_alpha.csv', delimiter=',')
+  T_rambo = np.loadtxt('rambo_soln/rambo_T_alpha.csv', delimiter=',')
+
+  cms_to_kms = 1.0e-5
+  ax[0].plot(v_rambo[::2, 0], v_rambo[::2, 1] * cms_to_kms, 'xk', ms=8, mew=2, label='RP95')
+  ax[1].plot(T_rambo[::2, 0], T_rambo[::2, 1], 'xk', ms=8, mew=2, label='RP95')
+  
 ax[0].legend()
 fig.tight_layout(pad=0.5, rect=[0, 0, 1, 1])
+
+# plt.savefig('figures/momt_equil_soln.png')
 plt.show()
