@@ -583,6 +583,8 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   int sort_interval = 1;  
   int ncoll = (int) sort_interval;  // How frequently to do collisions
   bool var_wt = true;
+  define_collision_op(takizuka_abe("ta_coll_sp", sp, sp, cvar0, ncoll, var_wt));
+  define_collision_op(takizuka_abe("ta_coll_ion", ion, ion, cvar0, ncoll, var_wt));    
   define_collision_op(takizuka_abe("ta_coll", sp, ion, cvar0, ncoll, var_wt));
   
   sp->last_indexed = -1;
