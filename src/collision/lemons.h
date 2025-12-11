@@ -122,7 +122,8 @@ struct lemons_model : public collision_model<lemons_model> {
       spj_v(v, field_var::sy) += -Dm.v[2]*mi;
       spj_v(v, field_var::sz) += -Dm.v[3]*mi;
       spj_v(v, field_var::se) += -Dm.v[4]*mi;
-      //printf("#msxyz=%e,%e,%e, ens=%e\n",spj_v(v, field_var::sx),spj_v(v, field_var::sy),spj_v(v, field_var::sz),spj_v(v, field_var::se));
+
+      //printf("#mi=%e,wsum=%e, msxyz=%e,%e,%e, ens=%e\n",mi,Dm.v[0],spj_v(v, field_var::sx),spj_v(v, field_var::sy),spj_v(v, field_var::sz),spj_v(v, field_var::se));
     }
     
   } 

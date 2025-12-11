@@ -22,7 +22,7 @@ int vpic_simulation::advance(void)
   if( num_step>0 && step()>=num_step ) return 0;
 
   KOKKOS_TIC();
-
+  
   // Sort the particles for performance if desired.
   LIST_FOR_EACH( sp, species_list )
   {
@@ -48,7 +48,7 @@ int vpic_simulation::advance(void)
   //   //TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
   // TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
   // }
-  //printf("in advance: rhof=%e\n",field_array->k_f_d(13, field_var::rhof));
+
   // Note: Particles should not have moved since the last performance sort
   // when calling collision operators.
   // FIXME: Technically, this placement of the collision operators only
@@ -57,26 +57,18 @@ int vpic_simulation::advance(void)
 
   //printf("Cleared jf\n");
 
-  Kokkos::Profiling::pushRegion("Collisions");
-  if( collision_op_list )
-  {
-    KOKKOS_TIC();
-    apply_collision_op_list( collision_op_list, *kokkos_rng );
-    KOKKOS_TOC( collision_model, 1 );
-  }
-
   if( species_list )
   {
     // TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
     //TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
   TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
   }
-  
-  Kokkos::Profiling::popRegion();
 
+   
   // TODO: implement
   //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
+  //printf("in advance: sx=%e, se=%e, ex=%e\n",field_array->k_f_d(13, field_var::sx),field_array->k_f_d(13, field_var::se), field_array->k_f_d(13, field_var::ex));
   // DEVICE function - Touches particles, particle movers, accumulators, interpolators
   Kokkos::Profiling::pushRegion("Advance Particles");
   LIST_FOR_EACH( sp, species_list )
@@ -183,7 +175,7 @@ int vpic_simulation::advance(void)
   {
       KOKKOS_TIC(); // Time this data movement
       const int nm = sp->k_nm_h(0);
-
+      
       // TODO: this can be hoisted to the end of advance_p if desired
       compressor.compress(
               sp->k_p_d,
@@ -229,9 +221,18 @@ int vpic_simulation::advance(void)
   // TODO: The interior should all be zero, so it can be ignored.
   KOKKOS_TIC();
   FAK->k_reduce_jf(field_array);
-  KOKKOS_TOC( JF_ACCUM_DATA_MOVEMENT, 1);
+  KOKKOS_TOC( JF_ACCUM_DATA_MOVEMENT, 1); 
   //  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
   /////TIC FAK->k_synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
+
+  Kokkos::Profiling::pushRegion("Collisions");
+  if( collision_op_list )
+  {
+    KOKKOS_TIC();
+    apply_collision_op_list( collision_op_list, *kokkos_rng );
+    KOKKOS_TOC( collision_model, 1 );
+  }
+  Kokkos::Profiling::popRegion();
 
   // At this point, the particle currents are known at jf_{1/2}.
   // Let the user add their own current contributions. It is the users
