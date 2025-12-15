@@ -18,6 +18,7 @@ struct cex_collision_op_t : public particle_bulk_collision_op_t {
  */
 template<typename Functor>
 struct cex_model : public collision_model<cex_model<Functor>> {
+  CollisionType collision_type = CollisionType::BulkChargeExchange;
   // const float cvar;
   const float dq;
   Functor sigma_cx;
@@ -72,8 +73,10 @@ struct cex_model : public collision_model<cex_model<Functor>> {
 
   /**
    * @brief Implemention of upload_moment_src_impl() for charge exchange
-   *         model accumulations change in density.
+   *        model accumulations change in density.
    * todo: add change in momentum
+   * todo: change in fluid density assumes cell volume = 1.0
+   *       (should use particle density)
    */
   template <class ViewType>
   KOKKOS_INLINE_FUNCTION

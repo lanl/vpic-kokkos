@@ -308,8 +308,10 @@ struct particle_bulk_collision_pipeline {
 	    float ux_n = up[1];
 	    float uy_n = up[2];
 	    float uz_n = up[3];
+
+      float qp_n = 0.0, qp_i = 0.0;
 #ifdef VARIABLE_CHARGE
-      float qp_n = up[4];
+      qp_n = up[4];
 #endif
 
 	    if( use_e_field ) {
@@ -318,18 +320,37 @@ struct particle_bulk_collision_pipeline {
 	     	particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,v);
 	    }
 	    
- 	    float ux_i = up[1];
-	    float uy_i = up[2];
-	    float uz_i = up[3];
+      float ux_i = up[1];
+      float uy_i = up[2];
+      float uz_i = up[3];
+#ifdef VARIABLE_CHARGE
+	    qp_i = up[4];
+	    spi_p(i, particle_var::qp) = qp_i;
+#endif
+
+      // If the particle charge changes via charge exchange, 
+      // then decrement fluid density by the particle weight and
+      // assign the new kinetic particle velocity to that of the
+      // fluid velocity plus a thermal component
+      float dw = 0.0;
+      float dq = qp_n - qp_i;
+
+      if (model.collision_type == CollisionType::BulkChargeExchange && dq != 0.0) {
+        dw = wp;
+        // The new kinetic particle takes the fluid bulk velociy plus a thermal component
+        float uj_thermal = sqrt(2.0 * spj_fl(v, fluid_var::tmp) / mj);
+        float ux_k = rg.normal(spj_fd(v, fluid_var::ux), uj_thermal);
+        float uy_k = rg.normal(spj_fd(v, fluid_var::uy), uj_thermal);
+        float uz_k = rg.normal(spj_fd(v, fluid_var::uz), uj_thermal);
+
+        // todo: create kinetic particle
+        // todo: decrement fluid momentum and energy based on new kinetic particle...
+
+      } // endif(cex)
 
 	    spi_p(i, particle_var::ux) = ux_i;
 	    spi_p(i, particle_var::uy) = uy_i;
 	    spi_p(i, particle_var::uz) = uz_i;	  
-
-#ifdef VARIABLE_CHARGE
-	    float qp_i = up[4];
-	    spi_p(i, particle_var::qp) = qp_i;
-#endif
 	    
 	    auto dux = ( ux_i - ux_n ) * wp;
 	    auto duy = ( uy_i - uy_n ) * wp;
@@ -340,30 +361,15 @@ struct particle_bulk_collision_pipeline {
 	    // 	wp;
 
 	    auto den = 0.5 * wp*
-		(( ux_i-ux_n) * (ux_i-ux_n)+
-		 ( uy_i-uy_n) * (uy_i-uy_n)+
-		 ( uz_i-uz_n) * (uz_i-uz_n) );
-
-      // If the particle charge changes (via charge exchange), 
-      // then modify fluid density and momentum
-      float dw = 0.0;
-      if (qp_n - qp_i != 0.0) {
-        dw = wp;
-
-        // todo: fix the following based on generated particle
-        // for the case of charge exchange, the neutral fluid losses
-        // momentum equal to that of the new charged particle 
-        // (roughly equal to momentum of neutralized particle)
-        dux = 0.0; //ux_i * wp;
-        duy = 0.0; //uy_i * wp;
-        duz = 0.0; //uz_i * wp;
-      }
+        (( ux_i-ux_n) * (ux_i-ux_n)+
+        ( uy_i-uy_n) * (uy_i-uy_n)+
+        ( uz_i-uz_n) * (uz_i-uz_n) );
 	    
-	    lsum.v[0] += wp; //dw;
+	    lsum.v[0] += wp;
 	    lsum.v[1] += dux;
 	    lsum.v[2] += duy;
 	    lsum.v[3] += duz;
-	    //lsum.v[4] += 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i); // mjl: why this instead of den?
+	    // lsum.v[4] += 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i); // mjl: why this instead of den?
       lsum.v[4] += den;
       lsum.v[5] += dw;
 	    
@@ -534,7 +540,6 @@ struct particle_bulk_collision_pipeline {
     const float dq = model.modify_charge();
     //spi_p(i, particle_var::qp) += dq;
     up[4] += dq;
-    // To-do: Change fluid charge?
 #endif
     
     stack[0] = urx;

@@ -16,6 +16,7 @@ struct lemons_collision_op_t : public particle_bulk_collision_op_t {
  * @brief Lemons binary collision model.
  */
 struct lemons_model : public collision_model<lemons_model> {
+  CollisionType collision_type = CollisionType::BulkLemons;
   const float d_cvar0;
   const float d_twosqrtpi;
     lemons_model( float cvar0 ) : d_cvar0(cvar0), d_twosqrtpi(2.0 / sqrt( M_PI )) { };

@@ -18,6 +18,7 @@ struct drag_collision_op_t : public particle_bulk_collision_op_t {
  */
 template<typename Functor>
 struct drag_model : public collision_model<drag_model<Functor>> {
+  CollisionType collision_type = CollisionType::BulkDrag;
   // const float cvar;
 
   Functor stopping_cx;

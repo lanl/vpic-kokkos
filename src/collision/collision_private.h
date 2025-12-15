@@ -10,6 +10,10 @@
 #include "../particle_operations/sort.h"
 #include "../particle_operations/shuffle.h"
 #include "../fluid_advance/fluid_advance.h"
+
+// CollisionType tag is provided to each collision model
+enum class CollisionType : unsigned { BinaryTA, BulkLemons, BulkDrag, BulkChargeExchange };
+
 typedef void
 (*apply_collision_op_func_t)( struct collision_op_t * cop,
                               kokkos_rng_pool_t   & rng);
@@ -103,7 +107,8 @@ struct collision_op {
  */
 template <typename DerivedT> 
 struct collision_model {
-
+  CollisionType collision_type;
+  
   /**
    * @brief Tangent of half the polar scattering angle.
    *
