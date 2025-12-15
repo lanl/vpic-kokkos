@@ -264,32 +264,31 @@ struct binary_collision_pipeline {
 			 policy,
 			 KOKKOS_LAMBDA (member_type team_member) {
 
-			     int ix, iy, iz;
-			     RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
-			     const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
-			     
-			     // Find number of particles for each species.
-			     auto i0 = spi_partition_ra(v);
-			     auto ni = spi_partition_ra(v+1) - i0;
-			     
-			     auto j0 = spj_partition_ra(v);
-			     auto nj = spj_partition_ra(v+1) - j0;
-				 
-			     // TODO: convert this to be a more explicit check on if we have work
-			     if( ni <= 0 || nj <= 0 || (spi==spj && ni==1) ) return; //Nothing to do
-				 
-			     // Find the real densities.
-			     // printf("cell index =%d\n",v);
-			     float density_i = spi_n(v);
-			     float density_j = spj_n(v);
+				int ix, iy, iz;
+				RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
+				const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
+				
+				// Find number of particles for each species.
+				auto i0 = spi_partition_ra(v);
+				auto ni = spi_partition_ra(v+1) - i0;
+				
+				auto j0 = spj_partition_ra(v);
+				auto nj = spj_partition_ra(v+1) - j0;
+				
+				// TODO: convert this to be a more explicit check on if we have work
+				if( ni <= 0 || nj <= 0 || (spi==spj && ni==1) ) return; //Nothing to do
+				
+				// Find the real densities.
+				// printf("cell index =%d\n",v);
+				float density_i = spi_n(v);
+				float density_j = spj_n(v);
 
-			     // if(team_member.league_rank()==0 && team_member.team_rank()==0) printf("#call collide_variabl_wt()\n");
-			     if(spi_p == spj_p){
-				 collide_self_varwt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member); 
-			     }else{
-				 collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
-				 //collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member, spi_c, spj_c);
-			     }
+				// if(team_member.league_rank()==0 && team_member.team_rank()==0) printf("#call collide_variabl_wt()\n");
+				if(spi_p == spj_p) {
+					collide_self_varwt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member); 
+				} else {
+					collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, dtinterval, spi_p, spj_p, model, spi_sortindex_ra, spj_sortindex_ra, rp, team_member);
+				}
 			 });
 
 	} else {
@@ -365,15 +364,31 @@ void collide_uniform_wt(const float m_i, const float m_j, const float density_i,
 	 int i = spi_sortindex_ra(i0 + c);
 	 int j = spj_sortindex_ra(j0 + c);
 	 // if(c<10) printf("i=%d, j=%d\n",i,j);
-	 float up[8] = { spi_p(i, particle_var::w ),
-			 spi_p(i, particle_var::ux),
-			 spi_p(i, particle_var::uy),
-			 spi_p(i, particle_var::uz),
-			 spj_p(j, particle_var::w ),
-			 spj_p(j, particle_var::ux),
-			 spj_p(j, particle_var::uy),
-			 spj_p(j, particle_var::uz)};
-	 
+	//  float up[8] = { spi_p(i, particle_var::w ),
+	// 		 spi_p(i, particle_var::ux),
+	// 		 spi_p(i, particle_var::uy),
+	// 		 spi_p(i, particle_var::uz),
+	// 		 spj_p(j, particle_var::w ),
+	// 		 spj_p(j, particle_var::ux),
+	// 		 spj_p(j, particle_var::uy),
+	// 		 spj_p(j, particle_var::uz)};
+
+	    float up[10];    
+		up[0] = spi_p(i, particle_var::w);
+		up[1] = spi_p(i, particle_var::ux);
+		up[2] = spi_p(i, particle_var::uy);
+		up[3] = spi_p(i, particle_var::uz);
+		up[4] = spj_p(j, particle_var::w);
+		up[5] = spj_p(j, particle_var::ux);
+		up[6] = spj_p(j, particle_var::uy);
+		up[7] = spj_p(j, particle_var::uz);
+		up[8] = 1.0;
+	    up[9] = 1.0;	
+#ifdef VARIABLE_CHARGE
+		 up[8] = spi_p(i, particle_var::qp);
+		 up[9] = spj_p(j, particle_var::qp);
+#endif	
+
 	 binary_collision(mu, mu_i, mu_j, up, model, rg, ndt);
 
 	 spi_p(i, particle_var::ux) = up[1];
@@ -731,7 +746,6 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     Np_hc = nmax; //team_first(0);
     Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc;
 
-    // printf("Np_lc=%d, Np_hc=%d, Np_c=%d, i0=%d, j0=%d\n", (int) Np_lc, (int) Np_hc, (int) Np_c, i0, j0);
     gmomType26 Dm;
     //inter-species
     Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, Np_c),
@@ -1625,10 +1639,6 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
 #ifdef VARIABLE_CHARGE
     qj = up[9];
 #endif    
-    // printf("qi,j=%e,%e\n",qi,qj);
-    // exit(1);
-
-
 
     // Relative velocity
     float urx = uix - ujx;
@@ -1669,6 +1679,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
     // Collision parameters
     t2 *= mu;       // _mu v^2  = Collision energy
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
+
     /*
     // Monte-Carlo collision test
     if( MonteCarlo ) {
