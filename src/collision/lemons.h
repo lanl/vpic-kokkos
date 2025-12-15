@@ -106,7 +106,7 @@ struct lemons_model : public collision_model<lemons_model> {
   template <class ViewType>
   KOKKOS_INLINE_FUNCTION
   void upload_moment_src_impl( const ViewType & spj_v, const int v,
-			       const gmomType &Dm, const float mi
+			       const gmomType &Dm, const float mi, const float mj
 			       ) const {
     if constexpr (std::is_same<ViewType, k_fluid_t>::value) {
 	    // printf("#upload_moment_src_impl()  in lemons model\n");

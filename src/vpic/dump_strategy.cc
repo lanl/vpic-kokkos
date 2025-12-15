@@ -1251,7 +1251,7 @@ void HDF5Dump::dump_particles(
 #ifdef VARIABLE_CHARGE
   hsize_t n_p_vars = 9;
 #else 
-  hsize_t n_p_var = 8;
+  hsize_t n_p_vars = 8;
 #endif
 
   hsize_t memspace_count_temp = numparticles * n_p_vars;

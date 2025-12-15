@@ -84,6 +84,27 @@ struct drag_model : public collision_model<drag_model<Functor>> {
     return value; // No scattering for now. TO-DO: Add scattering for elastic collisions
   }
 
+  /**
+   * @brief Implemention of upload_moment_src_impl() for drag model accumulations
+   *        change in momentum and energy.
+   */
+  template <class ViewType>
+  KOKKOS_INLINE_FUNCTION
+  void upload_moment_src_impl( 
+    const ViewType & spj_v, 
+    const int v,
+		const gmomType &Dm, 
+    const float mi,
+    const float mj) const 
+  {
+    spj_v(v, fluid_var::ux) += -Dm.v[1] / (mj * Dm.v[0]); // du_2 = dp_1 / m_2
+    spj_v(v, fluid_var::uy) += -Dm.v[2] / (mj * Dm.v[0]);
+    spj_v(v, fluid_var::uz) += -Dm.v[3] / (mj * Dm.v[0]);
+    // spj_v(v, fluid_var::msx) += -Dm.v[1]*mi;
+    // spj_v(v, fluid_var::msy) += -Dm.v[2]*mi;
+    // spj_v(v, fluid_var::msz) += -Dm.v[3]*mi;
+    // spj_v(v, fluid_var::ens) += -Dm.v[4]*mi;
+  } // end upload_moment_src_impl()
   
 };
 

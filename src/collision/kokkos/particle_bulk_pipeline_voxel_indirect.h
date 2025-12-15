@@ -308,7 +308,10 @@ struct particle_bulk_collision_pipeline {
 	    float ux_n = up[1];
 	    float uy_n = up[2];
 	    float uz_n = up[3];
-	    
+#ifdef VARIABLE_CHARGE
+      float qp_n = up[4];
+#endif
+
 	    if( use_e_field ) {
 	    	particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt,v);
 	    } else {      
@@ -324,8 +327,8 @@ struct particle_bulk_collision_pipeline {
 	    spi_p(i, particle_var::uz) = uz_i;	  
 
 #ifdef VARIABLE_CHARGE
-	    float qp = up[4];
-	    spi_p(i, particle_var::qp) = qp;
+	    float qp_i = up[4];
+	    spi_p(i, particle_var::qp) = qp_i;
 #endif
 	    
 	    auto dux = ( ux_i - ux_n ) * wp;
@@ -337,16 +340,32 @@ struct particle_bulk_collision_pipeline {
 	    // 	wp;
 
 	    auto den = 0.5 * wp*
-		(( ux_i+ux_n) * (ux_i-ux_n)+
-		 ( uy_i+uy_n) * (uy_i-uy_n)+
-		 ( uz_i+uz_n) * (uz_i-uz_n) );
+		(( ux_i-ux_n) * (ux_i-ux_n)+
+		 ( uy_i-uy_n) * (uy_i-uy_n)+
+		 ( uz_i-uz_n) * (uz_i-uz_n) );
 
+      // If the particle charge changes (via charge exchange), 
+      // then modify fluid density and momentum
+      float dw = 0.0;
+      if (qp_n - qp_i != 0.0) {
+        dw = wp;
+
+        // todo: fix the following based on generated particle
+        // for the case of charge exchange, the neutral fluid losses
+        // momentum equal to that of the new charged particle 
+        // (roughly equal to momentum of neutralized particle)
+        dux = 0.0; //ux_i * wp;
+        duy = 0.0; //uy_i * wp;
+        duz = 0.0; //uz_i * wp;
+      }
 	    
-	    lsum.v[0] += wp;
+	    lsum.v[0] += wp; //dw;
 	    lsum.v[1] += dux;
 	    lsum.v[2] += duy;
 	    lsum.v[3] += duz;
-	    lsum.v[4] += 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i);
+	    //lsum.v[4] += 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i); // mjl: why this instead of den?
+      lsum.v[4] += den;
+      lsum.v[5] += dw;
 	    
 	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",wp,dux,duy,duz,den);
 	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",lsum.v[0],lsum.v[1],lsum.v[2],lsum.v[3],lsum.v[4]);
@@ -357,9 +376,9 @@ struct particle_bulk_collision_pipeline {
 	    if( use_e_field ) {
 	    	// If we have a field, we upload the moment source to the field.
 	     	// Upload the moment source to the field.
-	     	model.upload_moment_src( spj_fd, v, Dm, mi );
+        model.upload_moment_src( spj_fd, v, Dm, mi, mj );
 	    } else {    
-		model.upload_moment_src( spj_fl, v, Dm, mi );   
+        model.upload_moment_src( spj_fl, v, Dm, mi, mj );   
 	    }
 	    //printf("check: #msxyz=%e,%e,%e, ens=%e, v=%d\n",spj_fd(v, field_var::sx),spj_fd(v, field_var::sy),spj_fd(v, field_var::sz),spj_fd(v, field_var::se), v);
 	    //printf("spj_fl data=%p\n", (void*)spj_fl.data());

@@ -65,7 +65,7 @@ struct Accum {
     return *this;
   }
 };
-typedef Accum<float, 5> gmomType; //0:mass, 1-3:momentum, 4-energy
+typedef Accum<float, 6> gmomType; //0:total mass, 1-3:momentum, 4:energy, 5:change in mass
 typedef Accum<float, 26> gmomType26; //before+after collision for 2 species
 
 namespace Kokkos { //required
@@ -180,15 +180,15 @@ struct collision_model {
   template <typename ViewType>
   KOKKOS_INLINE_FUNCTION
   void upload_moment_src(const ViewType & spj_fl, const int v,
-			 const gmomType &Dm, const float mi) const {
+			 const gmomType &Dm, const float mi, const float mj) const {
     // By default do nothing, or call a derived "implementation" if it exists:
-      static_cast<const DerivedT*>(this)->upload_moment_src_impl(spj_fl, v, Dm, mi);
+      static_cast<const DerivedT*>(this)->upload_moment_src_impl(spj_fl, v, Dm, mi, mj);
   }
   
   template <typename ViewType>
   KOKKOS_INLINE_FUNCTION
   void upload_moment_src_impl(const ViewType& spj_fl, const int v,
-			      const gmomType &Dm, const float mi ) const
+			      const gmomType &Dm, const float mi, const float mj ) const
   {
       // default no-op
   }

@@ -69,6 +69,30 @@ struct cex_model : public collision_model<cex_model<Functor>> {
     return delta_charge;
   }
   
+
+  /**
+   * @brief Implemention of upload_moment_src_impl() for charge exchange
+   *         model accumulations change in density.
+   * todo: add change in momentum
+   */
+  template <class ViewType>
+  KOKKOS_INLINE_FUNCTION
+  void upload_moment_src_impl( 
+    const ViewType & spj_v, 
+    const int v,
+		const gmomType &Dm, 
+    const float mi,
+    const float mj) const 
+  {
+    spj_v(v, fluid_var::den) += -Dm.v[5];
+    // spj_v(v, fluid_var::ux) += -Dm.v[1] / (mj * Dm.v[0]);
+    // spj_v(v, fluid_var::uy) += -Dm.v[2] / (mj * Dm.v[0]);
+    // spj_v(v, fluid_var::uz) += -Dm.v[3] / (mj * Dm.v[0]);
+    // spj_v(v, fluid_var::msx) += -Dm.v[1] * mi;
+    // spj_v(v, fluid_var::msy) += -Dm.v[2] * mi;
+    // spj_v(v, fluid_var::msz) += -Dm.v[3] * mi;
+    // spj_v(v, fluid_var::ens) += -Dm.v[4] * mi;
+  } // end upload_moment_src_impl()
 };
 
 /* Private interface *********************************************************/
