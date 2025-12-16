@@ -101,10 +101,7 @@ struct drag_model : public collision_model<drag_model<Functor>> {
     spj_v(v, fluid_var::ux) += -Dm.v[1] / (mj * Dm.v[0]); // du_2 = dp_1 / m_2
     spj_v(v, fluid_var::uy) += -Dm.v[2] / (mj * Dm.v[0]);
     spj_v(v, fluid_var::uz) += -Dm.v[3] / (mj * Dm.v[0]);
-    // spj_v(v, fluid_var::msx) += -Dm.v[1]*mi;
-    // spj_v(v, fluid_var::msy) += -Dm.v[2]*mi;
-    // spj_v(v, fluid_var::msz) += -Dm.v[3]*mi;
-    // spj_v(v, fluid_var::ens) += -Dm.v[4]*mi;
+    spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi * 2.0 / 3.0; // dT ~ 2/3 dE
   } // end upload_moment_src_impl()
   
 };

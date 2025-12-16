@@ -357,7 +357,13 @@ struct particle_bulk_collision_pipeline {
 	    auto duy = ( uy_i - uy_n ) * wp;
 	    auto duz = ( uz_i - uz_n ) * wp;
 
-      auto den = 0.5 * wp*
+      // If kinetic particle energy increased, then remove 
+      // energy from the fluid
+      auto u_n_mag2 = ux_n*ux_n + uy_n*uy_n + uz_n*uz_n;
+      auto u_i_mag2 = ux_i*ux_i + uy_i*uy_i + uz_i*uz_i;
+      auto den_sign = (u_n_mag2 < u_i_mag2) ? 1.0 : -1.0;
+
+      auto den = 0.5 * wp * den_sign *
         (( ux_i-ux_n) * (ux_i-ux_n)+
          ( uy_i-uy_n) * (uy_i-uy_n)+
          ( uz_i-uz_n) * (uz_i-uz_n) );
@@ -368,8 +374,8 @@ struct particle_bulk_collision_pipeline {
 	    lsum.v[3] += duz;
 	    // lsum.v[4] += 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i); // mjl: why this instead of den?
       lsum.v[4] += den;
-      lsum.v[5] += dn; //dw;
-	    
+      lsum.v[5] += dn;
+      
 	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",wp,dux,duy,duz,den);
 	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",lsum.v[0],lsum.v[1],lsum.v[2],lsum.v[3],lsum.v[4]);
 	}, Dm);
