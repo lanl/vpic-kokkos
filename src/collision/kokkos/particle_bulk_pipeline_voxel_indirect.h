@@ -228,6 +228,7 @@ struct particle_bulk_collision_pipeline {
     auto const& mu_i = _mu_i;
     auto const& mu_j = _mu_j;
     auto const& mu = _mu;
+    auto const& rdV = _rdV;
     auto const& nx = _nx;
     auto const& ny = _ny;
     auto const& nz = _nz;
@@ -332,11 +333,11 @@ struct particle_bulk_collision_pipeline {
       // then decrement fluid density by the particle weight and
       // assign the new kinetic particle velocity to that of the
       // fluid velocity plus a thermal component
-      float dw = 0.0;
+      float dn = 0.0;
       float dq = qp_n - qp_i;
 
       if (model.collision_type == CollisionType::BulkChargeExchange && dq != 0.0) {
-        dw = wp;
+        dn = wp * rdV;
         // The new kinetic particle takes the fluid bulk velociy plus a thermal component
         float uj_thermal = sqrt(2.0 * spj_fl(v, fluid_var::tmp) / mj);
         float ux_k = rg.normal(spj_fd(v, fluid_var::ux), uj_thermal);
@@ -355,15 +356,11 @@ struct particle_bulk_collision_pipeline {
 	    auto dux = ( ux_i - ux_n ) * wp;
 	    auto duy = ( uy_i - uy_n ) * wp;
 	    auto duz = ( uz_i - uz_n ) * wp;
-	    // auto den = 0.5 *
-	    // 	( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
-	    // 	  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) ) *
-	    // 	wp;
 
-	    auto den = 0.5 * wp*
+      auto den = 0.5 * wp*
         (( ux_i-ux_n) * (ux_i-ux_n)+
-        ( uy_i-uy_n) * (uy_i-uy_n)+
-        ( uz_i-uz_n) * (uz_i-uz_n) );
+         ( uy_i-uy_n) * (uy_i-uy_n)+
+         ( uz_i-uz_n) * (uz_i-uz_n) );
 	    
 	    lsum.v[0] += wp;
 	    lsum.v[1] += dux;
@@ -371,7 +368,7 @@ struct particle_bulk_collision_pipeline {
 	    lsum.v[3] += duz;
 	    // lsum.v[4] += 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i); // mjl: why this instead of den?
       lsum.v[4] += den;
-      lsum.v[5] += dw;
+      lsum.v[5] += dn; //dw;
 	    
 	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",wp,dux,duy,duz,den);
 	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",lsum.v[0],lsum.v[1],lsum.v[2],lsum.v[3],lsum.v[4]);

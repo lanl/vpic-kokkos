@@ -361,17 +361,8 @@ void collide_uniform_wt(const float m_i, const float m_j, const float density_i,
 
 	Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nmin),
 			     [&](const int c) {
-	 int i = spi_sortindex_ra(i0 + c);
-	 int j = spj_sortindex_ra(j0 + c);
-	 // if(c<10) printf("i=%d, j=%d\n",i,j);
-	//  float up[8] = { spi_p(i, particle_var::w ),
-	// 		 spi_p(i, particle_var::ux),
-	// 		 spi_p(i, particle_var::uy),
-	// 		 spi_p(i, particle_var::uz),
-	// 		 spj_p(j, particle_var::w ),
-	// 		 spj_p(j, particle_var::ux),
-	// 		 spj_p(j, particle_var::uy),
-	// 		 spj_p(j, particle_var::uz)};
+		int i = spi_sortindex_ra(i0 + c);
+		int j = spj_sortindex_ra(j0 + c);
 
 	    float up[10];    
 		up[0] = spi_p(i, particle_var::w);
@@ -389,18 +380,18 @@ void collide_uniform_wt(const float m_i, const float m_j, const float density_i,
 		 up[9] = spj_p(j, particle_var::qp);
 #endif	
 
-	 binary_collision(mu, mu_i, mu_j, up, model, rg, ndt);
+		binary_collision(mu, mu_i, mu_j, up, model, rg, ndt);
 
-	 spi_p(i, particle_var::ux) = up[1];
-	 spi_p(i, particle_var::uy) = up[2];
-	 spi_p(i, particle_var::uz) = up[3];	  
-	 spj_p(j, particle_var::ux) = up[5];
-	 spj_p(j, particle_var::uy) = up[6];
-	 spj_p(j, particle_var::uz) = up[7];	  	 
+		spi_p(i, particle_var::ux) = up[1];
+		spi_p(i, particle_var::uy) = up[2];
+		spi_p(i, particle_var::uz) = up[3];	  
+		spj_p(j, particle_var::ux) = up[5];
+		spj_p(j, particle_var::uy) = up[6];
+		spj_p(j, particle_var::uz) = up[7];	  	 
 	 
-	 });
-        // We *must* free generators.
-        rp.free_state(rg);
+	});
+    // We *must* free generators.
+	rp.free_state(rg);
 }
 
 

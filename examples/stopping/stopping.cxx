@@ -94,7 +94,7 @@ begin_initialization {
   double hz = Lz/nz;
 
   // Calculate particle weights
-  bool var_wt = true;
+  bool var_wt = false;
   double nppc = 10000;
   double nppc_backgrnd, nppc_beam;
   double qi_backgrnd, qi_beam;
@@ -115,7 +115,7 @@ begin_initialization {
     Ni_beam = trunc_granular(Ni_beam,nproc());
     qi_beam = ec*Np_beam/Ni_beam;
 
-  } else { 
+  } else { // var_wt=false
 
     nppc_backgrnd = nppc;                              // Average number of macro particle per cell per species 
     Np_backgrnd = n0*Lx*Ly*Lz;                         // Total number of physical background ions
@@ -136,10 +136,10 @@ begin_initialization {
   int Ihydro_interval = interval;
   int Bhydro_interval = interval;
   int energies_interval = interval;
+  int Iparticle_interval = interval;
+  int Bparticle_interval = interval;
   int restart_interval = 0*interval;
   int fields_interval = 0*interval;
-  int Iparticle_interval = 0*interval;
-  int Bparticle_interval = 0*interval;
   int quota_check_interval = 100;
 
 
@@ -430,6 +430,8 @@ begin_initialization {
   sim_log ( "Beam species y-stride " << global->hBdParams.stride_y );
   sim_log ( "Beam species z-stride " << global->hBdParams.stride_z );
 
+  dump_mkdir("particle");
+
   /*--------------------------------------------------------------------------
    * Set output fields
    *
@@ -582,8 +584,6 @@ begin_diagnostics {
     dump_mkdir("fields");
     dump_mkdir("hydro");
     dump_mkdir("rundata");
-    // dump_mkdir("restore0");
-    // dump_mkdir("restore1");  // 1st backup
     dump_mkdir("particle");
     dump_mkdir("rundata");
 
@@ -612,6 +612,14 @@ begin_diagnostics {
     hydro_dump("beam", global->hBdParams);
   }
 
+  char subdir[36];
+  sprintf(subdir,"particle/T.%d/particle",step());
+  if(should_dump(Iparticle)) {
+    dump_particles("ion", "Iparticle");
+  } 
+  if(should_dump(Bparticle)) {
+    dump_particles("beam", "Bparticle");
+  } 
 
   /*--------------------------------------------------------------------------
   * Time averaging

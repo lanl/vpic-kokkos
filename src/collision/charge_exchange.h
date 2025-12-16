@@ -74,9 +74,7 @@ struct cex_model : public collision_model<cex_model<Functor>> {
   /**
    * @brief Implemention of upload_moment_src_impl() for charge exchange
    *        model accumulations change in density.
-   * todo: add change in momentum
-   * todo: change in fluid density assumes cell volume = 1.0
-   *       (should use particle density)
+   * todo: add change in momentum (depends on new kinetic particle)
    */
   template <class ViewType>
   KOKKOS_INLINE_FUNCTION
