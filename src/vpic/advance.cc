@@ -313,7 +313,7 @@ int vpic_simulation::advance(void)
     FAK->hyb_smooth_b( field_array );
   }
   // Smooth E/B fields interpolated to particles (but not fed into B advance)
-  FAK->hyb_smooth_eb_interp( field_array, true );
+  FAK->hyb_smooth_eb_interp( field_array );
   KOKKOS_TOC( advance_b, 1 ); // TODO may want separate timer -ATr,2024sep10
   Kokkos::Profiling::popRegion();
 

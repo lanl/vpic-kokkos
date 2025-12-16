@@ -62,6 +62,7 @@ void pbd_write_to_buffer(species_t * RESTRICT sp,
 
     if(store>diag->bufflen) ERROR(( "Well, that shouldn't have happened." ));
     
+    buff[store++] = sp->g->dt * sp->g->step;
     if(diag->write_ux) buff[store++] = kpart(i, particle_var::ux);
     if(diag->write_uy) buff[store++] = kpart(i, particle_var::uy);
     if(diag->write_uz) buff[store++] = kpart(i, particle_var::uz);
@@ -95,6 +96,10 @@ void pbd_write_to_buffer(species_t * RESTRICT sp,
 
 
     if(diag->write_weight) buff[store++] = kpart(i, particle_var::w);
+
+#ifdef VARIABLE_CHARGE
+    if(diag->write_pq) buff[store++] = kpart(i, particle_var::qp);
+#endif
 
     // TODO: Write the user values
     //if(diag->enable_user) Call the user function

@@ -172,6 +172,7 @@ drag(
   drag->apply_cop   = &apply_drag_collision_op<Functor>;
   drag->delete_cop  = &delete_drag_collision_op<Functor>;
   drag->next        = NULL;
+  drag->field       = NULL;
 
   REGISTER_OBJECT(drag,
                   &checkpt_drag_collision_op<Functor>,

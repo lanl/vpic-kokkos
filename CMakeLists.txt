@@ -78,7 +78,7 @@ option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU-aware MPI. Allows GPUs to communica
 
 option(VPIC_ENABLE_HALO_EXCHANGE "Enable halo exchange code path for remote communication. Temporary option until halo exchange code is accurately tested." ON)
 
-option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." ON)
+option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." OFF)
 
 option(HYB_USE_STATIC_E "Use electrostatic hybrid field solver." OFF)
 
@@ -371,12 +371,6 @@ if (VPIC_ENABLE_VARIABLE_CHARGE)
    message("--     VPIC: Enabled variable charge for particles")
 endif(VPIC_ENABLE_VARIABLE_CHARGE)
 
-if (HYB_USE_SEPARATE_PE)
-   add_definitions(-DHYB_USE_SEPARATE_PE)
-   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_SEPARATE_PE")
-   message("--     VPIC: Enabled variable charge for particles")
-endif(HYB_USE_SEPARATE_PE)
-
 if (VPIC_ENABLE_GPU_AWARE_MPI)
   add_definitions(-DVPIC_ENABLE_GPU_AWARE_MPI)
   message("--     VPIC: Enabled GPU-Aware MPI")
@@ -395,7 +389,7 @@ endif(HYB_USE_SEPARATE_PE)
 
 if (HYB_USE_STATIC_E)
    add_definitions(-DHYB_USE_STATIC_E)
-   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_SEPARATE_PE")
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_STATIC_E")
    message("--     HYB: Using electrostatic field solve.")
 endif(HYB_USE_STATIC_E)
 
@@ -539,6 +533,9 @@ endif()
 target_include_directories(vpic INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} ${HDF5_C_LIBRARIES} Kokkos::kokkos)
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
+if (HYB_USE_RADIATION)
+  target_compile_definitions(vpic PUBLIC HYB_USE_RADIATION)
+endif(HYB_USE_RADIATION)
 
 macro(build_a_vpic name deck)
   if(NOT EXISTS ${deck})

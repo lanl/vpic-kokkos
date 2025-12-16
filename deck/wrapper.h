@@ -47,6 +47,8 @@ vpic_simulation::user_particle_collisions( void )
 #define begin_radiation \
 void                      \
 vpic_simulation::user_radiation( void )
+#else
+#define begin_radiation  void unused_user_radiation( void) 
 #endif
 
 #define repeat( count ) for( int64_t _remain=(int64_t)(count); _remain; _remain-- )

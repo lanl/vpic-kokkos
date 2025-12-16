@@ -295,7 +295,9 @@ struct hydro_dump_flag_t
     "txx", "tyy", "tzz",
     "tyz", "tzx", "txy",
 #ifdef VARIABLE_CHARGE
-    "qmin", "qmax"
+    "qmin", "qmax",
+    "n_q0", "n_q1", "n_q2", "n_q3",
+    "n_q4", "n_q5"
 #else
     "pad"
 #endif
@@ -308,6 +310,8 @@ struct hydro_dump_flag_t
     {"tyz", true}, {"tzx", true}, {"txy", true},
 #ifdef VARIABLE_CHARGE
     {"qmin", true}, {"qmax", true},
+    {"n_q0", true}, {"n_q1", true}, {"n_q2", true}, {"n_q3", true},
+    {"n_q4", true}, {"n_q5", true}
 #else
     {"pad", true}
 #endif

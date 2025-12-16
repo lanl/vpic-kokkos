@@ -161,6 +161,7 @@ charge_exchange(
   cex->apply_cop   = &apply_cex_collision_op<Functor>;
   cex->delete_cop  = &delete_cex_collision_op<Functor>;
   cex->next        = NULL;
+  cex->field       = NULL;
 
   REGISTER_OBJECT(cex,
                   &checkpt_cex_collision_op<Functor>,

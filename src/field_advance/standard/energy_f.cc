@@ -135,9 +135,9 @@ struct field_reduce {
         en[0] += k_field(f0,  field_var::ex) * k_field(f0,  field_var::ex);
         en[1] += k_field(f0,  field_var::ey) * k_field(f0,  field_var::ey);
         en[2] += k_field(f0,  field_var::ez) * k_field(f0,  field_var::ez);
-        en[3] += k_field(f0,  field_var::cbx) * k_field(f0,  field_var::cbx);
-        en[4] += k_field(f0,  field_var::cby) * k_field(f0,  field_var::cby);
-        en[5] += k_field(f0,  field_var::cbz) * k_field(f0,  field_var::cbz);
+        en[3] += (k_field(f0,  field_var::cbx) + k_field(f0, field_var::cbx0)) * (k_field(f0,  field_var::cbx) + k_field(f0, field_var::cbx0));
+        en[4] += (k_field(f0,  field_var::cby) + k_field(f0, field_var::cby0)) * (k_field(f0,  field_var::cby) + k_field(f0, field_var::cby0));
+        en[5] += (k_field(f0,  field_var::cbz) + k_field(f0, field_var::cbz0)) * (k_field(f0,  field_var::cbz) + k_field(f0, field_var::cbz0));
         }
 
    KOKKOS_INLINE_FUNCTION void

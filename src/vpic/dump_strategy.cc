@@ -1108,6 +1108,13 @@ void HDF5Dump::dump_hydro(
 #ifdef VARIABLE_CHARGE
   if (hydro_dump_flag.flags["qmin"]) DUMP_HYDRO_TO_HDF5("qmin", qmin, H5T_NATIVE_FLOAT);
   if (hydro_dump_flag.flags["qmax"]) DUMP_HYDRO_TO_HDF5("qmax", qmax, H5T_NATIVE_FLOAT);
+
+  if (hydro_dump_flag.flags["n_q0"]) DUMP_HYDRO_TO_HDF5("n_q0", n_q0, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q1"]) DUMP_HYDRO_TO_HDF5("n_q1", n_q1, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q2"]) DUMP_HYDRO_TO_HDF5("n_q2", n_q2, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q3"]) DUMP_HYDRO_TO_HDF5("n_q3", n_q3, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q4"]) DUMP_HYDRO_TO_HDF5("n_q4", n_q4, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q5"]) DUMP_HYDRO_TO_HDF5("n_q5", n_q5, H5T_NATIVE_FLOAT);
 #endif
 
   el2 = uptime() - el2;

@@ -102,10 +102,22 @@ extern const char *main_body_attributeS;
       write_main_body_attribute(fp, main_body_attributeV, "TD", dims_4d, dims_3d, speciesname_p, time_step, "txx", "tyy", "tzz");  \
     if (hydro_dump_flag.enabledTOD())                                                                                              \
       write_main_body_attribute(fp, main_body_attributeV, "TOD", dims_4d, dims_3d, speciesname_p, time_step, "tyz", "tzx", "txy"); \
-    if (hydro_dump_flag.flags["qmin"])                                                                                                   \
+    if (hydro_dump_flag.flags["qmin"])                                                                                             \
       fprintf(fp, main_body_attributeS, "qmin", dims_3d, time_step, speciesname_p, time_step, time_step, "qmin");                  \
-    if (hydro_dump_flag.flags["qmax"])                                                                                                   \
+    if (hydro_dump_flag.flags["qmax"])                                                                                             \
       fprintf(fp, main_body_attributeS, "qmax", dims_3d, time_step, speciesname_p, time_step, time_step, "qmax");                  \
+    if (hydro_dump_flag.flags["n_q0"])                                                                                             \
+      fprintf(fp, main_body_attributeS, "n_q0", dims_3d, time_step, speciesname_p, time_step, time_step, "n_q0");                  \
+    if (hydro_dump_flag.flags["n_q1"])      	      	      	      	      	      	      	      	      	      	      	     \
+      fprintf(fp, main_body_attributeS, "n_q1", dims_3d, time_step, speciesname_p, time_step, time_step, "n_q1");                  \
+    if (hydro_dump_flag.flags["n_q2"])      	      	      	      	      	      	      	      	      	      	      	     \
+      fprintf(fp, main_body_attributeS, "n_q2", dims_3d, time_step, speciesname_p, time_step, time_step, "n_q2");                  \
+    if (hydro_dump_flag.flags["n_q3"])      	      	      	      	      	      	      	      	      	      	      	     \
+      fprintf(fp, main_body_attributeS, "n_q3", dims_3d, time_step, speciesname_p, time_step, time_step, "n_q3");                  \
+    if (hydro_dump_flag.flags["n_q4"])      	      	      	      	      	      	      	      	      	      	      	     \
+      fprintf(fp, main_body_attributeS, "n_q4", dims_3d, time_step, speciesname_p, time_step, time_step, "n_q4");                  \
+    if (hydro_dump_flag.flags["n_q5"])      	      	      	      	      	      	      	      	      	      	      	     \
+      fprintf(fp, main_body_attributeS, "n_q5", dims_3d, time_step, speciesname_p, time_step, time_step, "n_q5");                  \
     fprintf(fp, "%s", main_body_foot);                                                                                             \
     if (add_footer_flag)                                                                                                           \
       fputs(footer, fp);                                                                                                           \

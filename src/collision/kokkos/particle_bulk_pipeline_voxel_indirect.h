@@ -353,21 +353,14 @@ struct particle_bulk_collision_pipeline {
 	    spi_p(i, particle_var::uy) = uy_i;
 	    spi_p(i, particle_var::uz) = uz_i;	  
 	    
-	    auto dux = ( ux_i - ux_n ) * wp;
-	    auto duy = ( uy_i - uy_n ) * wp;
-	    auto duz = ( uz_i - uz_n ) * wp;
-
-      // If kinetic particle energy increased, then remove 
-      // energy from the fluid
-      auto u_n_mag2 = ux_n*ux_n + uy_n*uy_n + uz_n*uz_n;
-      auto u_i_mag2 = ux_i*ux_i + uy_i*uy_i + uz_i*uz_i;
-      auto den_sign = (u_n_mag2 < u_i_mag2) ? 1.0 : -1.0;
-
-      auto den = 0.5 * wp * den_sign *
-        (( ux_i-ux_n) * (ux_i-ux_n)+
-         ( uy_i-uy_n) * (uy_i-uy_n)+
-         ( uz_i-uz_n) * (uz_i-uz_n) );
-	    
+	    auto dux = ( ux_i - ux_n ) * wp * mi;
+	    auto duy = ( uy_i - uy_n ) * wp * mi;
+	    auto duz = ( uz_i - uz_n ) * wp * mi;
+	    auto den = 0.5 *
+		( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+		  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) ) *
+		wp * mi;
+    
 	    lsum.v[0] += wp;
 	    lsum.v[1] += dux;
 	    lsum.v[2] += duy;
@@ -476,7 +469,7 @@ struct particle_bulk_collision_pipeline {
     //   	   nj_fl, ujx_fl, ujy_fl, ujz_fl, spj_f(ii, field_var::pe), tmp_fl);
 
     float ndt = nj_fl * dt;
-    //    printf("n=%14.8e, dt=%14.8e, mi=%14.8e\n",nj_fl, dt, mi);
+    //printf("n=%14.8e, dt=%14.8e, mi=%14.8e\n",nj_fl, dt, mi);
     
     // Relative velocity
     float urx = uix - ujx_fl;

@@ -214,12 +214,13 @@ hyb_advance_b(field_array_t * RESTRICT fa,
   Kokkos::Profiling::popRegion();
   
   // ----------------------------------------------------------
-  // 5: Last E update
+  // 5: Last E update last subcycle only
   // ----------------------------------------------------------
   
+  if((isub+1)==nsub) {
   Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_E");
   Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_E::Advance_E");
-  hyb_advance_e( fa, (isub+1.0)/nsub ); //sets ghost Bs
+  hyb_advance_e( fa, -1. ); //sets ghost Bs
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::pushRegion("HybyridAdvanceB::Update_E::Remote");
   k_begin_remote_ghost_hyb_e( fa );//ARI add cell-centered BCs

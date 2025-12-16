@@ -165,6 +165,7 @@ typedef struct field {
   float pex, pey, pez,div_b_err ;        // pressure etc
   float ux, uy, uz, ue;                  // Electron bulk flow velocity
   float sx, sy, sz, se;                  // Electron momentum and energy sources
+  float trad;
   material_id ematx, ematy, ematz, nmat; // Material at edge centers and nodes
   material_id fmatx, fmaty, fmatz, cmat; // Material at face and cell centers
  
@@ -193,7 +194,7 @@ typedef struct field_advance_kernels {
   void (*advance_b)( struct field_array * RESTRICT fa, float frac );
   void (*advance_e)( struct field_array * RESTRICT fa, float frac );
   void (*hyb_smooth_b)( struct field_array * RESTRICT fa );
-  void (*hyb_smooth_eb_interp)( struct field_array * RESTRICT fa, bool smoothed );
+  void (*hyb_smooth_eb_interp)( struct field_array * RESTRICT fa );
 
   // Diagnostic interface
   // FIXME: MAY NEED MORE CAREFUL THOUGHT FOR CURVILINEAR SYSTEMS
@@ -212,9 +213,8 @@ typedef struct field_advance_kernels {
 
   void (*compute_rhob  )( struct field_array * RESTRICT fa );
   void (*compute_curl_b)( struct field_array * RESTRICT fa );
-#ifdef HYB_USE_SEPARATE_PE
   void (*hyb_init)( struct field_array * RESTRICT fa, float frac );
-#endif
+
   // Local/remote shared face cleaning
 
   double (*synchronize_tang_e_norm_b)( struct field_array * RESTRICT fa );

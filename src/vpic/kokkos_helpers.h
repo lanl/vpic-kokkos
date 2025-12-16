@@ -9,7 +9,7 @@
 
 // This module implements kokkos macros
 
-#define FIELD_VAR_COUNT 44
+#define FIELD_VAR_COUNT 45
 #define FIELD_EDGE_COUNT 8
 
 #ifdef VARIABLE_CHARGE
@@ -24,7 +24,7 @@
 #define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
 #ifdef VARIABLE_CHARGE
-  #define HYDRO_VAR_COUNT 16
+  #define HYDRO_VAR_COUNT 22
 #else
   #define HYDRO_VAR_COUNT 14
 #endif
@@ -92,9 +92,7 @@ using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULAT
 
 using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT], Kokkos::LayoutRight>;
 // 1D View: shape [FLUID_VAR_COUNT]
-// using k_fluid_1d = Kokkos::View<float*>;
-// struct field_tag {};  // Just an empty struct for tagging
-// using k_field_1d = Kokkos::View<float*, field_tag>;
+using k_fluid_1d = Kokkos::View<float*>;
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
@@ -191,7 +189,8 @@ namespace field_var {
     sx        = 40,
     sy        = 41,
     sz        = 42,
-    se        = 43
+    se        = 43,
+    trad      = 44
   };
 };
 namespace field_edge_var { \
@@ -302,6 +301,12 @@ namespace hydro_var {
 #ifdef VARIABLE_CHARGE
 	min_q = 14,
 	max_q = 15,
+	n_q0  = 16,
+	n_q1  = 17,
+	n_q2  = 18,
+	n_q3  = 19,
+	n_q4  = 20,
+	n_q5  = 21,
 #endif
     };
 };
