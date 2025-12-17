@@ -3,6 +3,7 @@
   add_subdirectory(legacy_comparison)
   add_subdirectory(halo_exchange)
   add_subdirectory(lemons_collision)
+  add_subdirectory(momentum_equil)
 if(VPIC_ENABLE_VARIABLE_CHARGE)
   add_subdirectory(ta_collision_var_charge)  
 endif()
