@@ -35,7 +35,7 @@ typedef struct pipeline_args {
     - F(0,u##y_) * (F(0,cb##z_) + F(0,cb##z_##0)) + F(0,u##z_) * (F(0,cb##y_) + F(0,cb##y_##0)) 		\
       - invrho * ( p##x_*( F(x_,pe) - F(m##x_,pe)) )								\
     + do_eta*eta*F(0,tcay)*( p##y_*( F(y_,cb##z_) - F(m##y_,cb##z_) ) - p##z_*( F(z_,cb##y_) - F(m##z_,cb##y_) ) )\
-    - invrho * rVt * F(0,s##x_);
+    - invrho * rVt * F(0,s##x_); \
   F(0,e##x_) *= F(0,tcaz);
   
 void

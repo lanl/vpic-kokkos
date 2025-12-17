@@ -242,5 +242,5 @@ hyb_advance_b(field_array_t * RESTRICT fa,
 			 k_field(v, field_var::sz) = 0;
 		       });
 		   }
-
+      }
 }

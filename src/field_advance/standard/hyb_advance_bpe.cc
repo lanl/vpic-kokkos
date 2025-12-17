@@ -268,5 +268,5 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
 			 k_field(v, field_var::sz) = 0;
 		       });
 		   }
-
+      }
 }
