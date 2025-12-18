@@ -28,8 +28,8 @@ CXX=$src_dir/kokkos/bin/nvcc_wrapper cmake \
   -DENABLE_UNIT_TESTS=ON \
   -DBUILD_INTERNAL_KOKKOS=ON \
   -DENABLE_KOKKOS_CUDA=ON \
-  -DKokkos_ARCH_BDW=ON \
-  -DKokkos_ARCH_TURING75=ON \
+  -DKokkos_ARCH_ZEN2=ON \
+  -DKokkos_ARCH_ADA89=ON \
   -DCMAKE_CXX_FLAGS="-rdynamic" \
   $src_dir
 

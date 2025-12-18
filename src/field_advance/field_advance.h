@@ -252,18 +252,18 @@ typedef struct field_buffers
     Kokkos::View<float*>   yzx_rbuf_neg;
     Kokkos::View<float*>   zxy_rbuf_neg;
 
-    Kokkos::View<float*>::HostMirror   xyz_sbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   yzx_sbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   zxy_sbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   xyz_rbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   yzx_rbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   zxy_rbuf_pos_h;
-    Kokkos::View<float*>::HostMirror   xyz_sbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   yzx_sbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   zxy_sbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   xyz_rbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   yzx_rbuf_neg_h;
-    Kokkos::View<float*>::HostMirror   zxy_rbuf_neg_h;
+    Kokkos::View<float*>::host_mirror_type   xyz_sbuf_pos_h;
+    Kokkos::View<float*>::host_mirror_type   yzx_sbuf_pos_h;
+    Kokkos::View<float*>::host_mirror_type   zxy_sbuf_pos_h;
+    Kokkos::View<float*>::host_mirror_type   xyz_rbuf_pos_h;
+    Kokkos::View<float*>::host_mirror_type   yzx_rbuf_pos_h;
+    Kokkos::View<float*>::host_mirror_type   zxy_rbuf_pos_h;
+    Kokkos::View<float*>::host_mirror_type   xyz_sbuf_neg_h;
+    Kokkos::View<float*>::host_mirror_type   yzx_sbuf_neg_h;
+    Kokkos::View<float*>::host_mirror_type   zxy_sbuf_neg_h;
+    Kokkos::View<float*>::host_mirror_type   xyz_rbuf_neg_h;
+    Kokkos::View<float*>::host_mirror_type   yzx_rbuf_neg_h;
+    Kokkos::View<float*>::host_mirror_type   zxy_rbuf_neg_h;
 
     field_buffers() {
         // User should try avoid calling this
@@ -313,16 +313,16 @@ typedef struct field_array {
   field_buffers_t* fb;
 
   k_field_t k_f_d;                   // Kokkos field data on device
-  k_field_t::HostMirror k_f_h;       // Kokkos field data on host
+  k_field_t::host_mirror_type k_f_h;       // Kokkos field data on host
   k_field_sa_t k_field_sa_d;
   k_field_edge_t k_fe_d;             // Kokkos field_edge data (part of field_t) on device
-  k_field_edge_t::HostMirror k_fe_h; // Kokkos field_edge data on host
+  k_field_edge_t::host_mirror_type k_fe_h; // Kokkos field_edge data on host
 
   k_field_accum_t k_f_rhob_accum_d;//TODO: Remove when absorbing pbc on device
-  k_field_accum_t::HostMirror k_f_rhob_accum_h;
+  k_field_accum_t::host_mirror_type k_f_rhob_accum_h;
 
   k_jf_accum_t k_jf_accum_d;
-  k_jf_accum_t::HostMirror k_jf_accum_h;
+  k_jf_accum_t::host_mirror_type k_jf_accum_h;
 
   // Step when the field was last copied to to the host.  The copy can
   // take place at any time during the step, so checking
@@ -406,7 +406,7 @@ typedef struct sfa_params {
     float damp;
 
     k_material_coefficient_t k_mc_d;
-    k_material_coefficient_t::HostMirror k_mc_h;
+    k_material_coefficient_t::host_mirror_type k_mc_h;
 
     int n_materials;
 

@@ -217,7 +217,7 @@ int
 move_p( particle_t       * ALIGNED(128) p0,
         particle_mover_t * ALIGNED(16)  pm,
         //accumulator_t    * ALIGNED(128) a0,
-        k_jf_accum_t::HostMirror& k_jf_accum,
+        k_jf_accum_t::host_mirror_type& k_jf_accum,
         const grid_t     *              g,
         const float                     qsp ) {
 

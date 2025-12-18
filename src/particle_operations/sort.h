@@ -201,7 +201,7 @@ struct DefaultSort {
         Kokkos::deep_copy(bin_counter, 0);
         // Count number of particles in each cell
         Kokkos::parallel_for("get max nppc", Kokkos::RangePolicy<>(0, np), KOKKOS_LAMBDA(const int i) {
-          Kokkos::atomic_increment(&(bin_counter(key_view(i))));
+          Kokkos::atomic_inc(&(bin_counter(key_view(i))));
         });
         // Find the max and min number of particles per cell
         Kokkos::parallel_reduce("Get max/min nppc", Kokkos::RangePolicy<>(0,num_bins), 

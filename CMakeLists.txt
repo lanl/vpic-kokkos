@@ -19,9 +19,10 @@ project(vpic CXX)
 # Kokkos build, feel free to try a lower standard.
 # Fixing the this capture requires C++17, but if you don't mind the warnings,
 # feel free to experiment with lower standards.
+# Kokkos 5.0 requires C++20.s
 #------------------------------------------------------------------------------#
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #------------------------------------------------------------------------------#
@@ -100,7 +101,7 @@ string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
 if(NOT ${string_includes} STREQUAL "")
   set(VPIC_CXX_FLAGS "-I${string_includes} ${MPI_C_LINK_FLAGS}")
 endif(NOT ${string_includes} STREQUAL "")
-set(VPIC_CXX_FLAGS "${CMAKE_CXX17_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
+set(VPIC_CXX_FLAGS "${CMAKE_CXX20_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
 
 # Add Debug flags to VPIC_CXX_FLAGS
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")

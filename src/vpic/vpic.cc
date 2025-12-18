@@ -240,28 +240,28 @@ void restore_kokkos(vpic_simulation& simulation, const char * fbase)
         // TODO: we can bury this in the class
         new(&sp->k_p_d) k_particles_t();
         new(&sp->k_p_i_d) k_particles_i_t();
-        new(&sp->k_pc_d) k_particle_copy_t::HostMirror();
-        new(&sp->k_pc_i_d) k_particle_i_copy_t::HostMirror();
-        new(&sp->k_pr_h) k_particle_copy_t::HostMirror();
-        new(&sp->k_pr_i_h) k_particle_i_copy_t::HostMirror();
+        new(&sp->k_pc_d) k_particle_copy_t::host_mirror_type();
+        new(&sp->k_pc_i_d) k_particle_i_copy_t::host_mirror_type();
+        new(&sp->k_pr_h) k_particle_copy_t::host_mirror_type();
+        new(&sp->k_pr_i_h) k_particle_i_copy_t::host_mirror_type();
         new(&sp->k_pm_d) k_particle_movers_t();
         new(&sp->k_pm_i_d) k_particle_i_movers_t();
         new(&sp->k_nm_d) k_counter_t();
-        new(&sp->k_nm_h) k_counter_t::HostMirror();
+        new(&sp->k_nm_h) k_counter_t::host_mirror_type();
 
-        new(&sp->k_p_h) k_particles_t::HostMirror();
-        new(&sp->k_p_i_h) k_particles_i_t::HostMirror();
+        new(&sp->k_p_h) k_particles_t::host_mirror_type();
+        new(&sp->k_p_i_h) k_particles_i_t::host_mirror_type();
 
-        new(&sp->k_pc_h) k_particle_copy_t::HostMirror();
-        new(&sp->k_pc_i_h) k_particle_i_copy_t::HostMirror();
+        new(&sp->k_pc_h) k_particle_copy_t::host_mirror_type();
+        new(&sp->k_pc_i_h) k_particle_i_copy_t::host_mirror_type();
 
-        new(&sp->k_pm_h) k_particle_movers_t::HostMirror();
-        new(&sp->k_pm_i_h) k_particle_i_movers_t::HostMirror();
+        new(&sp->k_pm_h) k_particle_movers_t::host_mirror_type();
+        new(&sp->k_pm_i_h) k_particle_i_movers_t::host_mirror_type();
 
         new(&sp->unsafe_index) Kokkos::View<int*>();
         new(&sp->clean_up_to_count) Kokkos::View<int>();
         new(&sp->clean_up_from_count) Kokkos::View<int>();
-        new(&sp->clean_up_from_count_h) Kokkos::View<int>::HostMirror();
+        new(&sp->clean_up_from_count_h) Kokkos::View<int>::host_mirror_type();
         new(&sp->clean_up_from) Kokkos::View<int*>();
         new(&sp->clean_up_to) Kokkos::View<int*>();
 
@@ -312,14 +312,14 @@ void restore_kokkos(vpic_simulation& simulation, const char * fbase)
     new(&fa->k_f_d) k_field_t();
     new(&fa->k_field_sa_d) k_field_sa_t();
     new(&fa->k_fe_d) k_field_edge_t();
-    new(&fa->k_f_h) k_field_t::HostMirror();
-    new(&fa->k_fe_h) k_field_edge_t::HostMirror();
+    new(&fa->k_f_h) k_field_t::host_mirror_type();
+    new(&fa->k_fe_h) k_field_edge_t::host_mirror_type();
 
     new(&fa->k_f_rhob_accum_d) k_field_accum_t();
-    new(&fa->k_f_rhob_accum_h) k_field_accum_t::HostMirror();
+    new(&fa->k_f_rhob_accum_h) k_field_accum_t::host_mirror_type();
 
     new(&fa->k_jf_accum_d) k_jf_accum_t();
-    new(&fa->k_jf_accum_h) k_jf_accum_t::HostMirror();
+    new(&fa->k_jf_accum_h) k_jf_accum_t::host_mirror_type();
 
     grid_t* grid = simulation.grid;
 
@@ -337,7 +337,7 @@ void restore_kokkos(vpic_simulation& simulation, const char * fbase)
     // Restore hydro array
     hydro_array_t* ha = simulation.hydro_array;
     new(&ha->k_h_d) k_hydro_d_t();
-    new(&ha->k_h_h) k_hydro_d_t::HostMirror();
+    new(&ha->k_h_h) k_hydro_d_t::host_mirror_type();
     ha->k_h_d = k_hydro_d_t("k_hydro", nv);
     ha->k_h_h = Kokkos::create_mirror_view(ha->k_h_d);
     // No need to populate hydro
@@ -346,7 +346,7 @@ void restore_kokkos(vpic_simulation& simulation, const char * fbase)
     // Restore Material Data
     sfa_params_t* params = reinterpret_cast<sfa_params_t*>(fa->params);
     new(&params->k_mc_d) k_material_coefficient_t();
-    new(&params->k_mc_h) k_material_coefficient_t::HostMirror();
+    new(&params->k_mc_h) k_material_coefficient_t::host_mirror_type();
 
     params->init_kokkos_sfa_params(params->n_materials);
     params->populate_kokkos_data();
@@ -355,14 +355,14 @@ void restore_kokkos(vpic_simulation& simulation, const char * fbase)
     interpolator_array_t* interp = simulation.interpolator_array;
 
     new(&interp->k_i_d) k_interpolator_t();
-    new(&interp->k_i_h) k_interpolator_t::HostMirror();
+    new(&interp->k_i_h) k_interpolator_t::host_mirror_type();
 
     interp->init_kokkos_interp(nv);
     interp->copy_to_device();
 
     // Restore Grid/Neighbors
     new(&grid->k_neighbor_d) k_neighbor_t();
-    new(&grid->k_neighbor_h) k_neighbor_t::HostMirror();
+    new(&grid->k_neighbor_h) k_neighbor_t::host_mirror_type();
 
     auto nfaces_per_voxel = 6;
 
