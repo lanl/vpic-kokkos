@@ -22,6 +22,7 @@ struct cex_model : public collision_model<cex_model<Functor>> {
   // const float cvar;
   const float dq;
   Functor sigma_cx;
+
   //float (*sigma_cx)(float,float);
   //takizuka_abe_model( float cvar ) : cvar(cvar) { };
   cex_model( Functor op, float dq ) : sigma_cx(op), dq(dq) { };
@@ -140,8 +141,9 @@ charge_exchange(
   /**/  species_t  * spi,
   /**/  fluid_species_t  * spj,
   const double       dq0,
-  Functor sigmafunc,
-  const int          interval
+  Functor            sigmafunc,
+  const int          interval,
+  species_t        * spp=NULL
 ) {
 
   if( !name || !spi || !spj || !spi->g || !spj->g || spi->g != spj->g || interval <= 0 )
@@ -154,6 +156,7 @@ charge_exchange(
 
   cex->spi         = spi;
   cex->spj         = spj;
+  cex->spp         = spp;
   cex->sigma_cx0   = sigmafunc;
   cex->dq0         = dq0;
   //  ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;

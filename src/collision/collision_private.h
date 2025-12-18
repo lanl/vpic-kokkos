@@ -34,10 +34,11 @@ struct collision_op_t {
  * Cannot be used directly, must be subclassed.
  */
 struct particle_bulk_collision_op_t : public collision_op_t {
-  species_t  * spi;
-  fluid_species_t  * spj;
-  field_array_t * field=NULL; // field for electron collisions, can be NULL
-  int          interval;
+  species_t       * spi;
+  fluid_species_t * spj;
+  field_array_t   * field=NULL; // field for electron collisions, can be NULL
+  int               interval;
+  species_t       * spp=NULL; // product species
 };
 
 

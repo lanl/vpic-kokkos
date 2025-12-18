@@ -76,6 +76,10 @@ struct particle_bulk_collision_pipeline {
   k_field_t _spj_fd; 
   bool _use_e_field;
     
+  species_t *_spp;
+  k_particles_t _spp_p;
+  k_particles_i_t *_spp_i;
+
   // Random access, read-only Views
   // TODO : Does RandomAccess trait really matter?
   k_particle_sortindex_t_ra _spi_sortindex_ra;//, _spj_sortindex_ra;
@@ -86,7 +90,8 @@ struct particle_bulk_collision_pipeline {
     fluid_species_t * spj,
     double interval,
     kokkos_rng_pool_t& rp,
-    field_array_t * field
+    field_array_t * field,
+    species_t * spp=NULL
   )
     : _mi( spi->m ),
       _mj( spj->m ),
@@ -101,7 +106,8 @@ struct particle_bulk_collision_pipeline {
       _spi(spi),
       _spj(spj),
       _rp(rp),
-      _field(field)
+      _field(field),
+      _spp(spp)
   {
     //TODO: is interval needed here?
     if( !_spi || !_spj || !_spi->g || !_spj->g || _spi->g != _spj->g || interval <= 0)
@@ -121,7 +127,6 @@ struct particle_bulk_collision_pipeline {
     collision_model& _model
   )
   {
-
     k_ParticleSorter<BinSort> sorter;
       //k_ParticleSorter<> sorter;      
     ParticleShuffler<> shuffler;
@@ -136,6 +141,11 @@ struct particle_bulk_collision_pipeline {
     _spi_i            = _spi->k_p_i_d;
     _spi_partition_ra = _spi->k_partition_d;
     _spi_sortindex_ra = _spi->k_sortindex_d;
+
+    if (_spp != NULL) {
+      _spp_p = _spp->k_p_d;
+      _spp_i = &_spp->k_p_i_d;
+    }
 
     // TO-DO: NEED TO DO THIS FOR FLUID?
     _spj_fl           = _spj->k_fl_d;
@@ -248,7 +258,16 @@ struct particle_bulk_collision_pipeline {
     auto const& spi_partition_ra = _spi_partition_ra;
     //    auto const& spj_partition_ra = _spj_partition_ra;
     auto const& use_e_field = _use_e_field;
-    
+
+    auto const& spp = _spp;
+    auto const& spp_p = _spp_p;
+    auto const& spp_i = *_spp_i;
+
+    // Number of particles in product group
+    const int np_products0 = spp->np;
+    Kokkos::View<int*> np_new_products("np_new_products", 0);
+    np_new_products(0) = 0;
+
     Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
       KOKKOS_LAMBDA (member_type team_member) {
@@ -281,8 +300,14 @@ struct particle_bulk_collision_pipeline {
         kokkos_rng_state_t rg = rp.get_state();
 	
 
-	//// Extract fluid variables
-	//	const float n_fl = spj_fl(v, fluid_var::den);
+	// Extract fluid variables
+  const float n_fl   = spj_fl(v, fluid_var::den);
+  const float ux_fl  = spj_fl(v, fluid_var::ux);
+  const float uy_fl  = spj_fl(v, fluid_var::uy);
+  const float uz_fl  = spj_fl(v, fluid_var::uz);
+  const float tmp_fl = spj_fl(v, fluid_var::tmp);
+  const float uth_fl = sqrt(2.0 * tmp_fl / mj);
+  //std::cout << "~~~~~ FLUID: n=" << n_fl << " ux=" << ux_fl << " tmp=" << tmp_fl << " uth_fl=" << uth_fl << std::endl;
 
 	//for each cell
 	gmomType Dm; 
@@ -334,17 +359,40 @@ struct particle_bulk_collision_pipeline {
       // assign the new kinetic particle velocity to that of the
       // fluid velocity plus a thermal component
       float dn = 0.0;
-      float dq = qp_n - qp_i;
+      int dq = qp_n - qp_i;
 
-      if (model.collision_type == CollisionType::BulkChargeExchange && dq != 0.0) {
+      if (model.collision_type == CollisionType::BulkChargeExchange && dq != 0) {
+
+        // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
         dn = wp * rdV;
-        // The new kinetic particle takes the fluid bulk velociy plus a thermal component
-        float uj_thermal = sqrt(2.0 * spj_fl(v, fluid_var::tmp) / mj);
-        float ux_k = rg.normal(spj_fd(v, fluid_var::ux), uj_thermal);
-        float uy_k = rg.normal(spj_fd(v, fluid_var::uy), uj_thermal);
-        float uz_k = rg.normal(spj_fd(v, fluid_var::uz), uj_thermal);
 
-        // todo: create kinetic particle
+        // The new kinetic particle takes the fluid bulk velociy plus a thermal component
+        float ux_pr = rg.normal(ux_fl, uth_fl);
+        float uy_pr = rg.normal(uy_fl, uth_fl);
+        float uz_pr = rg.normal(uz_fl, uth_fl);
+        float w_pr = wp;
+
+        // Create kinetic particle (lock and increment ipr or stide for cell)
+        // Get particle index and incremenent number of new products
+        int i_pr = np_products0 + np_new_products(0);
+        //std::cout << "CEX ocurred, np_new = " << np_new_products(0) << ",  i_pr = " << i_pr << " ux=" << ux_pr << std::endl;
+        Kokkos::atomic_add(&np_new_products(0), 1);
+
+        // Kokkos::atomic_store(&spp_p(i_pr, particle_var::w), w_pr);
+        spp_p(i_pr, particle_var::w)  = w_pr;
+        spp_p(i_pr, particle_var::ux) = ux_pr;
+        spp_p(i_pr, particle_var::uy) = uy_pr;
+        spp_p(i_pr, particle_var::uz) = uz_pr;	  
+        spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
+        spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
+        spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
+        spp_i(i_pr) = spi_i(i);
+
+#ifdef VARIABLE_CHARGE
+        int q_pr = spj->q + dq;
+        spp_p(i_pr, particle_var::qp) = q_pr;
+#endif
+
         // todo: decrement fluid momentum and energy based on new kinetic particle...
 
       } // endif(cex)
@@ -393,6 +441,11 @@ struct particle_bulk_collision_pipeline {
 
 			 });
     
+    // Increment number of particles in product species
+    spp->np += np_new_products(0);
+
+    // std::cout << " END of CEX, np_prod = " << spp->np << std::endl;
+
     // I don't know why we need this, but without it I get an illegal memory
     // access error ... suspicious.
     Kokkos::fence();

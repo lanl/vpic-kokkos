@@ -7,6 +7,7 @@ void
 checkpt_particle_bulk_collision_op_internal(const particle_bulk_collision_op_t * cop) {
   CHECKPT_PTR( cop->spi );
   CHECKPT_PTR( cop->spj );
+  CHECKPT_PTR( cop->spp );
   checkpt_collision_op_internal( cop );
 }
 
@@ -14,6 +15,7 @@ void *
 restore_particle_bulk_collision_op_internal(particle_bulk_collision_op_t * cop) {
   RESTORE_PTR( cop->spi );
   RESTORE_PTR( cop->spj );
+  RESTORE_PTR( cop->spp );
   return restore_collision_op_internal( cop );
 }
 
