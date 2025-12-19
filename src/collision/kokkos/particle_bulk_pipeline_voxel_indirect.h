@@ -142,11 +142,6 @@ struct particle_bulk_collision_pipeline {
     _spi_partition_ra = _spi->k_partition_d;
     _spi_sortindex_ra = _spi->k_sortindex_d;
 
-    if (_spp != NULL) {
-      _spp_p = _spp->k_p_d;
-      _spp_i = &_spp->k_p_i_d;
-    }
-
     // TO-DO: NEED TO DO THIS FOR FLUID?
     _spj_fl           = _spj->k_fl_d;
     if(_use_e_field) _spj_fd = _field->k_f_d;
@@ -217,14 +212,34 @@ struct particle_bulk_collision_pipeline {
 
     */
     
-    // Do collisions.
-    apply_model(_model);
+    /* todo: specialize pipeline on whether products are created
+      (cannot partially speciallize templated function apply_model..)
+      
+      template<class collision_model, bool create_products>
+      void apply_model ( collision_model& _model ) {}
 
+      template<class collision_model>
+      void apply_model<collision_model, false> ( collision_model& _model) {}
+
+      template<class collision_model>
+      void apply_model<collision_model, true> ( collision_model& _model) {}
+
+    */
+
+    if (_spp == NULL) {
+      apply_model(_model);
+    } else {
+      _spp_p = _spp->k_p_d;
+      _spp_i = &_spp->k_p_i_d;
+      apply_model_products(_model);
+    }
   }
 
   /**
    * @brief Loop over particles performing collisions.
    */
+
+
   template<class collision_model>
   void apply_model (
     collision_model& _model
@@ -258,15 +273,6 @@ struct particle_bulk_collision_pipeline {
     auto const& spi_partition_ra = _spi_partition_ra;
     //    auto const& spj_partition_ra = _spj_partition_ra;
     auto const& use_e_field = _use_e_field;
-
-    auto const& spp = _spp;
-    auto const& spp_p = _spp_p;
-    auto const& spp_i = *_spp_i;
-
-    // Number of particles in product group
-    const int np_products0 = spp->np;
-    Kokkos::View<int*> np_new_products("np_new_products", 0);
-    np_new_products(0) = 0;
 
     Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
@@ -353,67 +359,53 @@ struct particle_bulk_collision_pipeline {
 	    qp_i = up[4];
 	    spi_p(i, particle_var::qp) = qp_i;
 #endif
-
-      // If the particle charge changes via charge exchange, 
-      // then decrement fluid density by the particle weight and
-      // assign the new kinetic particle velocity to that of the
-      // fluid velocity plus a thermal component
-      float dn = 0.0;
-      int dq = qp_n - qp_i;
-
-      if (model.collision_type == CollisionType::BulkChargeExchange && dq != 0) {
-
-        // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
-        dn = wp * rdV;
-
-        // The new kinetic particle takes the fluid bulk velociy plus a thermal component
-        float ux_pr = rg.normal(ux_fl, uth_fl);
-        float uy_pr = rg.normal(uy_fl, uth_fl);
-        float uz_pr = rg.normal(uz_fl, uth_fl);
-        float w_pr = wp;
-
-        // Create kinetic particle (lock and increment ipr or stide for cell)
-        // Get particle index and incremenent number of new products
-        int i_pr = np_products0 + np_new_products(0);
-        //std::cout << "CEX ocurred, np_new = " << np_new_products(0) << ",  i_pr = " << i_pr << " ux=" << ux_pr << std::endl;
-        Kokkos::atomic_add(&np_new_products(0), 1);
-
-        // Kokkos::atomic_store(&spp_p(i_pr, particle_var::w), w_pr);
-        spp_p(i_pr, particle_var::w)  = w_pr;
-        spp_p(i_pr, particle_var::ux) = ux_pr;
-        spp_p(i_pr, particle_var::uy) = uy_pr;
-        spp_p(i_pr, particle_var::uz) = uz_pr;	  
-        spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
-        spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
-        spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
-        spp_i(i_pr) = spi_i(i);
-
-#ifdef VARIABLE_CHARGE
-        int q_pr = spj->q + dq;
-        spp_p(i_pr, particle_var::qp) = q_pr;
-#endif
-
-        // todo: decrement fluid momentum and energy based on new kinetic particle...
-
-      } // endif(cex)
-
 	    spi_p(i, particle_var::ux) = ux_i;
 	    spi_p(i, particle_var::uy) = uy_i;
-	    spi_p(i, particle_var::uz) = uz_i;	  
-	    
-	    auto dux = ( ux_i - ux_n ) * wp;
-	    auto duy = ( uy_i - uy_n ) * wp;
-	    auto duz = ( uz_i - uz_n ) * wp;
-	    auto den = 0.5 *
-		( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
-		  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) ) *
-		wp;
+	    spi_p(i, particle_var::uz) = uz_i;	 
+
+      // Accumulate change in moments. Depends on collision type.
+      float dn = 0.0, dux = 0.0, duy = 0.0, duz = 0.0, den = 0.0;
+
+      switch (model.collision_type) {
+          case CollisionType::BulkChargeExchange:
+          {
+              // If the particle charge changes via charge exchange, 
+              // then decrement fluid density by the particle weight and
+              // assign the new kinetic particle velocity to that of the
+              // fluid velocity plus a thermal component
+              int dq = qp_n - qp_i;
+
+              // Skip if charge exchange did not occur
+              if (dq == 0) { break; }
+
+              // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
+              dn = wp * rdV;
+
+              break; // end case(charge exchange)
+          }
+          case CollisionType::BulkDrag:
+          case CollisionType::BulkLemons:
+          {
+              // Change in the fluid momentum and energy due to drag 
+              // is due to the slowing down of the particle
+
+              dux = ( ux_i - ux_n ) * wp;
+              duy = ( uy_i - uy_n ) * wp;
+              duz = ( uz_i - uz_n ) * wp;
+              den = 0.5 * wp *
+                ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+                  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+
+              break; // end case(drag,lemons)
+          }
+          default:
+              break;
+      } // end switch(model.collision_type) 
     
 	    lsum.v[0] += wp;
 	    lsum.v[1] += dux;
 	    lsum.v[2] += duy;
 	    lsum.v[3] += duz;
-	    // lsum.v[4] += 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i); // mjl: why this instead of den?
       lsum.v[4] += den;
       lsum.v[5] += dn;
       
@@ -440,17 +432,232 @@ struct particle_bulk_collision_pipeline {
         rp.free_state(rg);
 
 			 });
-    
-    // Increment number of particles in product species
-    spp->np += np_new_products(0);
-
-    // std::cout << " END of CEX, np_prod = " << spp->np << std::endl;
 
     // I don't know why we need this, but without it I get an illegal memory
     // access error ... suspicious.
     Kokkos::fence();
 
   }
+
+  /**
+   * @brief Loop over particles performing collisions.
+   *        Same as apply_model() but adds products
+   *        to other particle groups.
+   */
+  template<class collision_model>
+  void apply_model_products (
+    collision_model& _model
+  )
+  {
+    // NOTE: workaround to avoid implicit capture of this
+    // SEE:  kokkos lambda dispatch link at top
+    auto const& model = _model;
+    auto const& mi   = _mi;
+    auto const& mj   = _mj;
+    auto const& mu_i = _mu_i;
+    auto const& mu_j = _mu_j;
+    auto const& mu = _mu;
+    auto const& rdV = _rdV;
+    auto const& nx = _nx;
+    auto const& ny = _ny;
+    auto const& nz = _nz;
+    auto const& spi = _spi;
+    auto const& spj = _spj;
+    auto const& rp  = _rp;
+    auto const& spi_n = _spi_n;
+    auto const& spi_i = _spi_i;
+    auto const& spi_p = _spi_p;
+    auto const& spj_fl = _spj_fl;
+    auto const& spj_fd = _spj_fd;
+    auto const& dtinterval = _dtinterval;
+    auto const& spi_sortindex_ra = _spi_sortindex_ra;
+    auto const& spi_partition_ra = _spi_partition_ra;
+    auto const& use_e_field = _use_e_field;
+
+    auto const& spp = _spp;
+    auto const& spp_p = _spp_p;
+    auto const& spp_i = *_spp_i;
+
+    // Number of particles in product group
+    const int np_products0 = spp->np;
+    Kokkos::View<int*> np_new_products("np_new_products", 0);
+    np_new_products(0) = 0;
+
+    Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
+      Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
+      KOKKOS_LAMBDA (member_type team_member) {
+
+        int ix, iy, iz;
+        RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
+        const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
+
+        // Find number of particles for each species.
+        auto i0 = spi_partition_ra(v);
+        auto ni = spi_partition_ra(v+1) - i0;
+
+	      if( ni <= 0 ) return; // Nothing to do
+
+	      const float dt = dtinterval;
+	
+        // Get a random generator. Do not leave without freeing it.
+        kokkos_rng_state_t rg = rp.get_state();
+	
+        // Extract fluid variables
+        const float n_fl   = spj_fl(v, fluid_var::den);
+        const float ux_fl  = spj_fl(v, fluid_var::ux);
+        const float uy_fl  = spj_fl(v, fluid_var::uy);
+        const float uz_fl  = spj_fl(v, fluid_var::uz);
+        const float tmp_fl = spj_fl(v, fluid_var::tmp);
+        const float uth_fl = sqrt(2.0 * tmp_fl / mj);
+
+        // Accumulate moments for each cell
+        gmomType Dm; 
+	
+        Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team_member, ni),
+        [&](const int& k, gmomType &lsum) {
+
+          int i = spi_sortindex_ra(i0 + k);
+
+#ifdef VARIABLE_CHARGE
+          float up[5] = { spi_p(i, particle_var::w),
+                          spi_p(i, particle_var::ux),
+                          spi_p(i, particle_var::uy),
+                          spi_p(i, particle_var::uz),
+                          spi_p(i, particle_var::qp) };
+#else
+          float up[4] = { spi_p(i, particle_var::w),
+                          spi_p(i, particle_var::ux),
+                          spi_p(i, particle_var::uy),
+                          spi_p(i, particle_var::uz) };
+#endif			      
+
+          float wp   = up[0];
+          float ux_n = up[1];
+          float uy_n = up[2];
+          float uz_n = up[3];
+
+          float qp_n = 0.0, qp_i = 0.0;
+#ifdef VARIABLE_CHARGE
+          qp_n = up[4];
+#endif
+
+          if( use_e_field ) {
+            particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt,v);
+          } else {      
+            particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,v);
+          }
+	    
+          float ux_i = up[1];
+          float uy_i = up[2];
+          float uz_i = up[3];
+#ifdef VARIABLE_CHARGE
+          qp_i = up[4];
+          spi_p(i, particle_var::qp) = qp_i;
+#endif
+          spi_p(i, particle_var::ux) = ux_i;
+          spi_p(i, particle_var::uy) = uy_i;
+          spi_p(i, particle_var::uz) = uz_i;	 
+
+          // Accumulate change in moments. Depends on collision type.
+          float dn = 0.0, dux = 0.0, duy = 0.0, duz = 0.0, den = 0.0;
+
+          switch (model.collision_type) {
+            case CollisionType::BulkChargeExchange:
+            {
+              // If the particle charge changes via charge exchange, 
+              // then decrement fluid density by the particle weight and
+              // assign the new kinetic particle velocity to that of the
+              // fluid velocity plus a thermal component
+              int dq = qp_n - qp_i;
+
+              // Skip if charge exchange did not occur
+              if (dq == 0) { break; }
+
+              // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
+              dn = wp * rdV;
+
+              // The new kinetic particle takes the fluid bulk velociy plus a thermal component
+              float ux_pr = rg.normal(ux_fl, uth_fl);
+              float uy_pr = rg.normal(uy_fl, uth_fl);
+              float uz_pr = rg.normal(uz_fl, uth_fl);
+              float w_pr = wp;
+
+              // Create kinetic particle. Get particle index and incremenent number of new products
+              int i_pr = np_products0 + np_new_products(0);
+              Kokkos::atomic_add(&np_new_products(0), 1);
+
+              spp_p(i_pr, particle_var::w)  = w_pr;
+              spp_p(i_pr, particle_var::ux) = ux_pr;
+              spp_p(i_pr, particle_var::uy) = uy_pr;
+              spp_p(i_pr, particle_var::uz) = uz_pr;	  
+              spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
+              spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
+              spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
+              spp_i(i_pr) = spi_i(i);
+#ifdef VARIABLE_CHARGE
+              spp_p(i_pr, particle_var::qp) = spj->q + dq;
+#endif
+
+              // Decrement fluid momentum and energy based on new kinetic particle
+              dux = ux_pr * w_pr;
+              duy = ux_pr * w_pr;
+              duz = ux_pr * w_pr;
+              den = 0.5 * w_pr *
+                ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+                  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+              break; // end case(charge exchange)
+            }
+            case CollisionType::BulkDrag:
+            case CollisionType::BulkLemons:
+            {
+              // Change in the fluid momentum and energy due to drag 
+              // is due to the slowing down of the particle
+
+              dux = ( ux_i - ux_n ) * wp;
+              duy = ( uy_i - uy_n ) * wp;
+              duz = ( uz_i - uz_n ) * wp;
+              den = 0.5 * wp *
+                ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+                  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+
+              break; // end case(drag,lemons)
+            }
+            default:
+              break;
+          } // end switch(model.collision_type) 
+    
+          lsum.v[0] += wp;
+          lsum.v[1] += dux;
+          lsum.v[2] += duy;
+          lsum.v[3] += duz;
+          lsum.v[4] += den;
+          lsum.v[5] += dn;
+      
+	      }, Dm); // end Kokkos::parallel_reduce
+	
+        if (team_member.team_rank() == 0) {
+          // Code that runs once per team leader
+          if( use_e_field ) {
+            // If we have a field, we upload the moment source to the field.
+            // Upload the moment source to the field.
+            model.upload_moment_src( spj_fd, v, Dm, mi, mj );
+          } else {    
+            model.upload_moment_src( spj_fl, v, Dm, mi, mj );   
+          }
+      	}
+
+        // We *must* free generators.
+        rp.free_state(rg);
+    }); // end Kokkos::parallel_for
+    
+    // Increment number of particles in product species
+    spp->np += np_new_products(0);
+
+    // I don't know why we need this, but without it I get an illegal memory
+    // access error ... suspicious.
+    Kokkos::fence();
+  } // end apply_model_products()
+
 
   /**
    * @brief Perform a collision between two particles.
