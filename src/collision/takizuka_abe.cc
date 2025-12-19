@@ -72,6 +72,7 @@ takizuka_abe(
   ta->apply_cop   = &apply_takizuka_abe_collision_op;
   ta->delete_cop  = &delete_takizuka_abe_collision_op;
   ta->next        = NULL;
+  ta->field       = NULL;
 
   REGISTER_OBJECT(ta,
                   &checkpt_takizuka_abe_collision_op,
