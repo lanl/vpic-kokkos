@@ -98,9 +98,9 @@ struct drag_model : public collision_model<drag_model<Functor>> {
     const float mi,
     const float mj) const 
   {
-    spj_v(v, fluid_var::ux) += -Dm.v[1] / (mj * Dm.v[0]); // du_2 = dp_1 / m_2
-    spj_v(v, fluid_var::uy) += -Dm.v[2] / (mj * Dm.v[0]);
-    spj_v(v, fluid_var::uz) += -Dm.v[3] / (mj * Dm.v[0]);
+    spj_v(v, fluid_var::ux) += -Dm.v[1] * mi / (mj * Dm.v[0]); // du_2 = dp_1 / m_2
+    spj_v(v, fluid_var::uy) += -Dm.v[2] * mi / (mj * Dm.v[0]);
+    spj_v(v, fluid_var::uz) += -Dm.v[3] * mi / (mj * Dm.v[0]);
     spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi * 2.0 / 3.0; // dT ~ 2/3 dE
   } // end upload_moment_src_impl()
   
