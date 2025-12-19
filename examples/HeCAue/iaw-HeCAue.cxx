@@ -740,20 +740,20 @@ begin_diagnostics {
 	fp_coll.print("%.15e\t%.15e\t%.15e\t%.15e\t ",vi1,vi2,vi3,Ti);	
 	--si;
     }
-    tot_momentum1 += field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::sx);
-    fp_coll.print("%.15e\t%.15e\t%.15e\t%.15e\t ",tot_momentum1,tot_momentum2, tot_momentum3, tot_en+field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::pe)*1.5);
+    tot_momentum1 += field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::sx);
+    fp_coll.print("%.15e\t%.15e\t%.15e\t%.15e\t ",tot_momentum1,tot_momentum2, tot_momentum3, tot_en+field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::pe)*1.5);
     
     fp_coll.print("\n");
 
     fp_coll.close();
 
     ue /=32.6; //ne
-    field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::ux) = ue;
-    field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::uy) = 0;
-    field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::uz) = 0;
+    field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::ux) = ue;
+    field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::uy) = 0;
+    field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::uz) = 0;
     
-    field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::sx) = 0;
-    field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::se) = tot_en;
+    field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::sx) = 0;
+    field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::se) = tot_en;
     //field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::sen) = tot_en;
     //printf("%e, sx=%e, ne=%e, pe=%e uxyz=%e,%e,%e Pointer _field: %p, %p\n",step()*grid->dt, field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::sx), field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::rhof), field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::pe), field_array->k_f_h(13, field_var::ux), field_array->k_f_h(13, field_var::uy), field_array->k_f_h(13, field_var::uz), field_array, (void *)&field_array->k_f_d);
   
