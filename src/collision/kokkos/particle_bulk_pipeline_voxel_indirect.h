@@ -610,16 +610,6 @@ struct particle_bulk_collision_pipeline {
             case CollisionType::BulkDrag:
             case CollisionType::BulkLemons:
             {
-              // Change in the fluid momentum and energy due to drag 
-              // is due to the slowing down of the particle
-
-              dux = ( ux_i - ux_n ) * wp;
-              duy = ( uy_i - uy_n ) * wp;
-              duz = ( uz_i - uz_n ) * wp;
-              den = 0.5 * wp *
-                ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
-                  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
-
               break; // end case(drag,lemons)
             }
             default:
