@@ -66,6 +66,7 @@ lemons(
   le->apply_cop   = &apply_lemons_collision_op;
   le->delete_cop  = &delete_lemons_collision_op;
   le->next        = NULL;
+  le->field       = NULL;
 
   REGISTER_OBJECT(le,
                   &checkpt_lemons_collision_op,
