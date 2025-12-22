@@ -7,6 +7,7 @@
 
 #include "charge_exchange.h"
 #include "drag.h"
+#include "ion_impact_ionization.h"
 
 /* In collision.cc */
 

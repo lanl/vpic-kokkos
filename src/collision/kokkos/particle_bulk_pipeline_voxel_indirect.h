@@ -227,8 +227,10 @@ struct particle_bulk_collision_pipeline {
     */
 
     if (_spp == NULL) {
+      std::cout<<"APPLYING COLLISION MODEL 1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
       apply_model(_model);
     } else {
+      std::cout<<"APPLYING COLLISION MODEL 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
       _spp_p = _spp->k_p_d;
       _spp_i = &_spp->k_p_i_d;
       apply_model_products(_model);
@@ -346,10 +348,11 @@ struct particle_bulk_collision_pipeline {
       qp_n = up[4];
 #endif
 
+      bool MC_col_occurred;
 	    if( use_e_field ) {
-	    	particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt,v);
+	    	MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt,v);
 	    } else {      
-	     	particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,v);
+	     	MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,v);
 	    }
 	    
       float ux_i = up[1];
@@ -369,6 +372,8 @@ struct particle_bulk_collision_pipeline {
       switch (model.collision_type) {
           case CollisionType::BulkChargeExchange:
           {
+              if (!MC_col_occurred) { break; }
+
               // If the particle charge changes via charge exchange, 
               // then decrement fluid density by the particle weight and
               // assign the new kinetic particle velocity to that of the
@@ -376,12 +381,13 @@ struct particle_bulk_collision_pipeline {
               int dq = qp_n - qp_i;
 
               // Skip if charge exchange did not occur
-              if (dq == 0) { break; }
+              // if (dq == 0) { break; }
 
               // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
               dn = wp * rdV;
 
               break; // end case(charge exchange)
+
           }
           case CollisionType::BulkDrag:
           case CollisionType::BulkLemons:
@@ -541,10 +547,11 @@ struct particle_bulk_collision_pipeline {
           qp_n = up[4];
 #endif
 
+          bool MC_col_occurred;
           if( use_e_field ) {
-            particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt,v);
+            MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt,v);
           } else {      
-            particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,v);
+            MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,v);
           }
 	    
           float ux_i = up[1];
@@ -564,6 +571,7 @@ struct particle_bulk_collision_pipeline {
           switch (model.collision_type) {
             case CollisionType::BulkChargeExchange:
             {
+              if (!MC_col_occurred) { break; }
               // If the particle charge changes via charge exchange, 
               // then decrement fluid density by the particle weight and
               // assign the new kinetic particle velocity to that of the
@@ -571,7 +579,7 @@ struct particle_bulk_collision_pipeline {
               int dq = qp_n - qp_i;
 
               // Skip if charge exchange did not occur
-              if (dq == 0) { break; }
+              // if (dq == 0) { break; }
 
               // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
               dn = wp * rdV;
@@ -606,6 +614,46 @@ struct particle_bulk_collision_pipeline {
                 ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
                   ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
               break; // end case(charge exchange)
+            }
+            case CollisionType::BulkIonImpactIoniz:
+            {
+              if (!MC_col_occurred) { break; }
+              // std::cout << " BulkIonImpactIoniz ~~~~~~~~~~~~~~~" << std::endl;
+              // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
+              dn = wp * rdV;
+
+//               // The new kinetic particle takes the fluid bulk velociy plus a thermal component
+//               float ux_pr = rg.normal(ux_fl, uth_fl);
+//               float uy_pr = rg.normal(uy_fl, uth_fl);
+//               float uz_pr = rg.normal(uz_fl, uth_fl);
+//               float w_pr = wp;
+
+//               // Create kinetic particle. Get particle index and incremenent number of new products
+//               int i_pr = np_products0 + np_new_products(0);
+//               Kokkos::atomic_add(&np_new_products(0), 1);
+
+//               spp_p(i_pr, particle_var::w)  = w_pr;
+//               spp_p(i_pr, particle_var::ux) = ux_pr;
+//               spp_p(i_pr, particle_var::uy) = uy_pr;
+//               spp_p(i_pr, particle_var::uz) = uz_pr;	  
+//               spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
+//               spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
+//               spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
+//               spp_i(i_pr) = spi_i(i);
+// #ifdef VARIABLE_CHARGE
+//               // Currently only considering ionizing neutral fluid to +1
+//               spp_p(i_pr, particle_var::qp) = 1;
+// #endif
+
+              // // Decrement fluid momentum and energy based on new kinetic particle
+              // dux = ux_pr * w_pr;
+              // duy = ux_pr * w_pr;
+              // duz = ux_pr * w_pr;
+              // den = 0.5 * w_pr *
+              //   ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+              //     ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+
+              break; // end case(ion impact ionization)
             }
             case CollisionType::BulkDrag:
             case CollisionType::BulkLemons:
@@ -660,7 +708,7 @@ struct particle_bulk_collision_pipeline {
     template<class view_type, class collision_model>
     //template<class collision_model>
   KOKKOS_INLINE_FUNCTION
-  void particle_bulk_collision (
+  bool particle_bulk_collision (
     const float mi,
     const float mj,
     const float mu,
@@ -765,14 +813,22 @@ struct particle_bulk_collision_pipeline {
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
 
     // Monte-Carlo collision test
+    bool MC_collision_occurred;
     if( MonteCarlo ) {
 
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
       //        Would this be useful?
       //      dd = model.cross_section(rg, t2, t1);
       dd = model.cross_section( rg, qi, ur, t1 );
-      if( rg.frand() > dd*t1 ) return;
 
+      // std::cout << "sigma="<<dd<< " ur=" <<ur << " n="<<nj_fl << " dt="<<dt << " sig*n*v*dt="<<dd*t1 << std::endl;
+
+      if( rg.frand() > dd*t1 ) {
+        MC_collision_occurred = false;
+        return MC_collision_occurred;
+      } else {
+        MC_collision_occurred = true;
+      }
     }
 
     // Compute collision angle and coefficient of restitution
@@ -841,6 +897,7 @@ struct particle_bulk_collision_pipeline {
       spj_p(j, particle_var::uz) = (ujz - mu_j*stack[2])*rr + cmz;
       }*/
 
+    return MC_collision_occurred;
   }
 
 };

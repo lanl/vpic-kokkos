@@ -12,7 +12,9 @@
 #include "../fluid_advance/fluid_advance.h"
 
 // CollisionType tag is provided to each collision model
-enum class CollisionType : unsigned { BinaryTA, BulkLemons, BulkDrag, BulkChargeExchange };
+enum class CollisionType : unsigned { 
+  BinaryTA, BulkLemons, BulkDrag, BulkChargeExchange, BulkIon, BulkIonImpactIoniz
+ };
 
 typedef void
 (*apply_collision_op_func_t)( struct collision_op_t * cop,
