@@ -232,8 +232,8 @@ load_interpolators(const k_interpolator_t& k_interp, size_t active_lanes, SIMDFl
         t0.copy_from(mem_02+16, element_aligned_tag_t());      
         t1.copy_from(mem_03+16, element_aligned_tag_t());   
         transpose(fcbz, fdcbzdz, t0,t1);
-//        KokkosSIMD::where(mask, fcbz     ).gather_from(&(k_interp(0, interpolator_var::cbz)),      ii*INTERPOLATOR_VAR_COUNT);
-//        KokkosSIMD::where(mask, fdcbzdz  ).gather_from(&(k_interp(0, interpolator_var::dcbzdz)),   ii*INTERPOLATOR_VAR_COUNT);
+        KokkosSIMD::where(mask, fcbz     ).gather_from(&(k_interp(0, interpolator_var::cbz)),      ii*INTERPOLATOR_VAR_COUNT);
+        KokkosSIMD::where(mask, fdcbzdz  ).gather_from(&(k_interp(0, interpolator_var::dcbzdz)),   ii*INTERPOLATOR_VAR_COUNT);
       }
     } else {
       KokkosSIMD::where(mask, fex      ).gather_from(&(k_interp(0, interpolator_var::ex)),       ii*INTERPOLATOR_VAR_COUNT);
@@ -591,7 +591,7 @@ advance_p_kokkos_unified(
         k_particle_i_copy_t& k_particle_i_copy,
         k_particle_movers_t& k_particle_movers,
         k_particle_i_movers_t& k_particle_movers_i,
-        k_field_sa_t k_f_sa,
+        k_field_sv_t k_f_sa,
         k_interpolator_t& k_interp,
         //k_particle_movers_t k_local_particle_movers,
         k_counter_t& k_nm,
@@ -663,7 +663,7 @@ advance_p_kokkos_unified(
   Kokkos::deep_copy(accumulator, 0);
   auto current_sv = Kokkos::Experimental::create_scatter_view(accumulator);
 #else
-  k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
+  k_field_sv_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
 #endif
 
 // Setting up work distribution settings
@@ -709,12 +709,6 @@ advance_p_kokkos_unified(
       int num_particles = num_lanes;
       if(pi_offset+num_particles > np)
         num_particles = np - pi_offset;
-      float v0[num_lanes];
-      float v1[num_lanes];
-      float v2[num_lanes];
-      float v3[num_lanes];
-      float v4[num_lanes];
-      float v5[num_lanes];
       float dx[num_lanes];
       float dy[num_lanes];
       float dz[num_lanes];
@@ -749,6 +743,12 @@ advance_p_kokkos_unified(
       float fdcbxdx[num_lanes];
       float fdcbydy[num_lanes];
       float fdcbzdz[num_lanes];
+      float  v0[num_lanes];
+      float  v1[num_lanes];
+      float  v2[num_lanes];
+      float  v3[num_lanes];
+      float  v4[num_lanes];
+      float  v5[num_lanes];
       float *v6 = fex;
       float *v7 = fdexdy;
       float *v8 = fdexdz;
@@ -962,28 +962,28 @@ advance_p_kokkos_unified(
 
 #if defined( VPIC_ENABLE_ACCUMULATORS )
   Kokkos::Experimental::contribute(accumulator, current_sv);
-  Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nz+2, ny+2, nx+2});
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nx+2, ny+2, nz+2});
   Kokkos::parallel_for("unload accumulator array", unload_policy, 
-  KOKKOS_LAMBDA(const int z, const int y, const int x) {
-      int f0  = VOXEL(1, y, z, nx, ny, nz) + x-1;
-      int a0  = VOXEL(1, y, z, nx, ny, nz) + x-1;
-      int ax  = VOXEL(0, y, z, nx, ny, nz) + x-1;
-      int ay  = VOXEL(1, y-1, z, nx, ny, nz) + x-1;
-      int az  = VOXEL(1, y, z-1, nx, ny, nz) + x-1;
-      int ayz = VOXEL(1, y-1, z-1, nx, ny, nz) + x-1;
-      int azx = VOXEL(0, y, z-1, nx, ny, nz) + x-1;
-      int axy = VOXEL(0, y-1, z, nx, ny, nz) + x-1;
-      k_field(f0, field_var::jfx) += ( accumulator(a0, 0) +
-                                       accumulator(ay, 1) +
-                                       accumulator(az, 2) +
+  KOKKOS_LAMBDA(const int x, const int y, const int z) {
+      int f0  = VOXEL(x, y, z, nx, ny, nz);
+      int a0  = VOXEL(x, y, z, nx, ny, nz);
+      int ax  = VOXEL(x-1, y,   z,   nx, ny, nz);
+      int ay  = VOXEL(x,   y-1, z,   nx, ny, nz);
+      int az  = VOXEL(x,   y,   z-1, nx, ny, nz);
+      int ayz = VOXEL(x,   y-1, z-1, nx, ny, nz);
+      int azx = VOXEL(x-1, y,   z-1, nx, ny, nz);
+      int axy = VOXEL(x-1, y-1, z,   nx, ny, nz);
+      k_field(f0, field_var::jfx) += ( accumulator(a0,  0) +
+                                       accumulator(ay,  1) +
+                                       accumulator(az,  2) +
                                        accumulator(ayz, 3) );
-      k_field(f0, field_var::jfy) += ( accumulator(a0, 4) +
-                                       accumulator(az, 5) +
-                                       accumulator(ax, 6) +
+      k_field(f0, field_var::jfy) += ( accumulator(a0,  4) +
+                                       accumulator(az,  5) +
+                                       accumulator(ax,  6) +
                                        accumulator(azx, 7) );
-      k_field(f0, field_var::jfz) += ( accumulator(a0, 8) +
-                                       accumulator(ax, 9) +
-                                       accumulator(ay, 10) +
+      k_field(f0, field_var::jfz) += ( accumulator(a0,  8) +
+                                       accumulator(ax,  9) +
+                                       accumulator(ay,  10) +
                                        accumulator(axy, 11) );
   });
 #else
@@ -1031,7 +1031,7 @@ advance_p_kokkos_gpu(
         k_particle_i_copy_t& k_particle_i_copy,
         k_particle_movers_t& k_particle_movers,
         k_particle_i_movers_t& k_particle_movers_i,
-        k_field_sa_t k_f_sa,
+        k_field_sv_t k_f_sa,
         k_interpolator_t& k_interp,
         k_counter_t& k_nm,
         k_neighbor_t& k_neighbors,
@@ -1052,11 +1052,9 @@ advance_p_kokkos_gpu(
   constexpr float one            = 1.;
   constexpr float one_third      = 1./3.;
   constexpr float two_fifteenths = 2./15.;
-  k_field_t k_field = fa->k_f_d;
-  k_field_sa_t k_f_sv = Kokkos::Experimental::create_scatter_view<>(k_field);
-  float cx = 0.25 * g->rdy * g->rdz / g->dt;
-  float cy = 0.25 * g->rdz * g->rdx / g->dt;
-  float cz = 0.25 * g->rdx * g->rdy / g->dt;
+  const float cx = 0.25 * g->rdy * g->rdz / g->dt;
+  const float cy = 0.25 * g->rdz * g->rdx / g->dt;
+  const float cz = 0.25 * g->rdx * g->rdy / g->dt;
 
   // Process particles for this pipeline
 
@@ -1092,6 +1090,16 @@ advance_p_kokkos_gpu(
   #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
   #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
 
+  k_field_t k_field = fa->k_f_d;
+// Determine whether to use accumulators
+#if defined( VPIC_ENABLE_ACCUMULATORS )
+  Kokkos::View<float*[12]> accumulator("Accumulator", k_field.extent(0));
+  Kokkos::deep_copy(accumulator, 0);
+  auto current_sv = Kokkos::Experimental::create_scatter_view(accumulator);
+#else
+  k_field_sv_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
+#endif
+
   // copy local memmbers from grid
   //auto nfaces_per_voxel = 6;
   //auto nvoxels = g->nv;
@@ -1120,8 +1128,8 @@ advance_p_kokkos_gpu(
   Kokkos::parallel_for("advance_p", range_policy, KOKKOS_LAMBDA (size_t p_index) {
 #endif
       
-    float v0, v1, v2, v3, v4, v5;
-    auto  k_f_sa = k_f_sv.access();
+    float v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13;
+    auto  current_sa = current_sv.access();
 
     float dx   = p_dx;                             // Load position
     float dy   = p_dy;
@@ -1209,78 +1217,126 @@ advance_p_kokkos_gpu(
       dx = v0;                                // Streak midpoint
       dy = v1;
       dz = v2;
-      v5 = q*ux*uy*uz*one_third;              // Compute correction
+      v13 = q*ux*uy*uz*one_third;              // Compute correction
+      v12 = v4;
 
-#     define ACCUMULATE_J(X,Y,Z)                                 \
-      v4  = q*u##X;   /* v2 = q ux                            */        \
-      v1  = v4*d##Y;  /* v1 = q ux dy                         */        \
-      v0  = v4-v1;    /* v0 = q ux (1-dy)                     */        \
-      v1 += v4;       /* v1 = q ux (1+dy)                     */        \
-      v4  = one+d##Z; /* v4 = 1+dz                            */        \
-      v2  = v0*v4;    /* v2 = q ux (1-dy)(1+dz)               */        \
-      v3  = v1*v4;    /* v3 = q ux (1+dy)(1+dz)               */        \
-      v4  = one-d##Z; /* v4 = 1-dz                            */        \
-      v0 *= v4;       /* v0 = q ux (1-dy)(1-dz)               */        \
-      v1 *= v4;       /* v1 = q ux (1+dy)(1-dz)               */        \
-      v0 += v5;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
-      v1 -= v5;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
-      v2 -= v5;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-      v3 += v5;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+#     define ACCUMULATE_J(X,Y,Z,v0,v1,v2,v3)                            \
+      v12  = q*u##X;   /* v2 = q ux                            */       \
+      v1  = v12*d##Y;  /* v1 = q ux dy                         */       \
+      v0  = v12-v1;    /* v0 = q ux (1-dy)                     */       \
+      v1 += v12;       /* v1 = q ux (1+dy)                     */       \
+      v12  = one+d##Z; /* v12 = 1+dz                           */       \
+      v2  = v0*v12;    /* v2 = q ux (1-dy)(1+dz)               */       \
+      v3  = v1*v12;    /* v3 = q ux (1+dy)(1+dz)               */       \
+      v12  = one-d##Z; /* v12 = 1-dz                           */       \
+      v0 *= v12;       /* v0 = q ux (1-dy)(1-dz)               */       \
+      v1 *= v12;       /* v1 = q ux (1+dy)(1-dz)               */       \
+      v0 += v13;       /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */       \
+      v1 -= v13;       /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */       \
+      v2 -= v13;       /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */       \
+      v3 += v13;       /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+
+      ACCUMULATE_J( x,y,z, v0,v1,v2,v3 );
+
+      ACCUMULATE_J( y,z,x, v4,v5,v6,v7 );
+
+      ACCUMULATE_J( z,x,y, v8,v9,v10,v11 );
 
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
       if(reduce) {
-        int iii = ii;
-        int zi = iii/((nx+2)*(ny+2));
-        iii -= zi*(nx+2)*(ny+2);
-        int yi = iii/(nx+2);
-        int xi = iii - yi*(nx+2);
-
-        int i0 = ii;
-        int i1 = VOXEL(xi,yi+1,zi,nx,ny,nz);
-        int i2 = VOXEL(xi,yi,zi+1,nx,ny,nz);
-        int i3 = VOXEL(xi,yi+1,zi+1,nx,ny,nz);
-        ACCUMULATE_J( x,y,z );
-        contribute_current(team_member, k_f_sa, i0, i1, i2, i3, 
-                            field_var::jfx, cx*v0, cx*v1, cx*v2, cx*v3);
-
-        i1 = VOXEL(xi,yi,zi+1,nx,ny,nz);
-        i2 = VOXEL(xi+1,yi,zi,nx,ny,nz);
-        i3 = VOXEL(xi+1,yi,zi+1,nx,ny,nz);
-        ACCUMULATE_J( y,z,x );
-        contribute_current(team_member, k_f_sa, i0, i1, i2, i3, 
-                            field_var::jfy, cy*v0, cy*v1, cy*v2, cy*v3);
-
-        i1 = VOXEL(xi+1,yi,zi,nx,ny,nz);
-        i2 = VOXEL(xi,yi+1,zi,nx,ny,nz);
-        i3 = VOXEL(xi+1,yi+1,zi,nx,ny,nz);
-        ACCUMULATE_J( z,x,y );
-        contribute_current(team_member, k_f_sa, i0, i1, i2, i3, 
-                            field_var::jfz, cz*v0, cz*v1, cz*v2, cz*v3);
+#ifdef __CUDA_ARCH__
+  int mask = 0xffffffff;
+  int team_rank = team_member.team_rank();
+  for(int i=16; i>0; i=i/2) {
+    v0  += __shfl_down_sync(mask, v0, i);
+    v1  += __shfl_down_sync(mask, v1, i);
+    v2  += __shfl_down_sync(mask, v2, i);
+    v3  += __shfl_down_sync(mask, v3, i);
+    v4  += __shfl_down_sync(mask, v4, i);
+    v5  += __shfl_down_sync(mask, v5, i);
+    v6  += __shfl_down_sync(mask, v6, i);
+    v7  += __shfl_down_sync(mask, v7, i);
+    v8  += __shfl_down_sync(mask, v8, i);
+    v9  += __shfl_down_sync(mask, v9, i);
+    v10 += __shfl_down_sync(mask, v10, i);
+    v11 += __shfl_down_sync(mask, v11, i);
+  }
+#else
+  team_member.team_reduce(Kokkos::Sum<float>(v0));
+  team_member.team_reduce(Kokkos::Sum<float>(v1));
+  team_member.team_reduce(Kokkos::Sum<float>(v2));
+  team_member.team_reduce(Kokkos::Sum<float>(v3));
+  team_member.team_reduce(Kokkos::Sum<float>(v4));
+  team_member.team_reduce(Kokkos::Sum<float>(v5));
+  team_member.team_reduce(Kokkos::Sum<float>(v6));
+  team_member.team_reduce(Kokkos::Sum<float>(v7));
+  team_member.team_reduce(Kokkos::Sum<float>(v8));
+  team_member.team_reduce(Kokkos::Sum<float>(v9));
+  team_member.team_reduce(Kokkos::Sum<float>(v10));
+  team_member.team_reduce(Kokkos::Sum<float>(v11));
+#endif
+  if(team_member.team_rank() == 0) {
+    accumulate_current(current_sa, ii, nx, ny, nz, cx, cy, cz, 
+                       v0, v1, v2, v3,
+                       v4, v5, v6, v7,
+                       v8, v9, v10, v11);
+  }
+//        int iii = ii;
+//        int zi = iii/((nx+2)*(ny+2));
+//        iii -= zi*(nx+2)*(ny+2);
+//        int yi = iii/(nx+2);
+//        int xi = iii - yi*(nx+2);
+//
+//        int i0 = ii;
+//        int i1 = VOXEL(xi,yi+1,zi,nx,ny,nz);
+//        int i2 = VOXEL(xi,yi,zi+1,nx,ny,nz);
+//        int i3 = VOXEL(xi,yi+1,zi+1,nx,ny,nz);
+////        ACCUMULATE_J( x,y,z );
+//        contribute_current(team_member, current_sa, i0, i1, i2, i3, 
+//                            field_var::jfx, cx*v0, cx*v1, cx*v2, cx*v3);
+//
+//        i1 = VOXEL(xi,yi,zi+1,nx,ny,nz);
+//        i2 = VOXEL(xi+1,yi,zi,nx,ny,nz);
+//        i3 = VOXEL(xi+1,yi,zi+1,nx,ny,nz);
+////        ACCUMULATE_J( y,z,x );
+//        contribute_current(team_member, current_sa, i0, i1, i2, i3, 
+//                            field_var::jfy, cy*v4, cy*v5, cy*v6, cy*v7);
+//
+//        i1 = VOXEL(xi+1,yi,zi,nx,ny,nz);
+//        i2 = VOXEL(xi,yi+1,zi,nx,ny,nz);
+//        i3 = VOXEL(xi+1,yi+1,zi,nx,ny,nz);
+////        ACCUMULATE_J( z,x,y );
+//        contribute_current(team_member, current_sa, i0, i1, i2, i3, 
+//                            field_var::jfz, cz*v8, cz*v9, cz*v10, cz*v11);
       } else {
 #endif
         // TODO: That 2 needs to be 2*NGHOST eventually
-        int iii = ii;
-        int zi = iii/((nx+2)*(ny+2));
-        iii -= zi*(nx+2)*(ny+2);
-        int yi = iii/(nx+2);
-        int xi = iii - yi*(nx+2);
-        ACCUMULATE_J( x,y,z );
-        k_f_sa(ii, field_var::jfx) += cx*v0;
-        k_f_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
-        k_f_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
-        k_f_sa(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
-
-        ACCUMULATE_J( y,z,x );
-        k_f_sa(ii, field_var::jfy) += cy*v0;
-        k_f_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
-        k_f_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
-        k_f_sa(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
-
-        ACCUMULATE_J( z,x,y );
-        k_f_sa(ii, field_var::jfz) += cz*v0;
-        k_f_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
-        k_f_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
-        k_f_sa(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
+        accumulate_current(current_sa, ii, nx, ny, nz, cx, cy, cz, 
+                           v0, v1, v2, v3,
+                           v4, v5, v6, v7,
+                           v8, v9, v10, v11);
+//        int iii = ii;
+//        int zi = iii/((nx+2)*(ny+2));
+//        iii -= zi*(nx+2)*(ny+2);
+//        int yi = iii/(nx+2);
+//        int xi = iii - yi*(nx+2);
+//        ACCUMULATE_J( x,y,z );
+//        current_sa(ii, field_var::jfx) += cx*v0;
+//        current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
+//        current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
+//        current_sa(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
+//
+//        ACCUMULATE_J( y,z,x );
+//        current_sa(ii, field_var::jfy) += cy*v0;
+//        current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
+//        current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
+//        current_sa(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
+//
+//        ACCUMULATE_J( z,x,y );
+//        current_sa(ii, field_var::jfz) += cz*v0;
+//        current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
+//        current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
+//        current_sa(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
       }
 #endif
@@ -1295,7 +1351,7 @@ advance_p_kokkos_gpu(
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                         k_f_sa, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
+                         current_sa, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
       {
         if( k_nm(0) < max_nm )
         {
@@ -1335,7 +1391,35 @@ advance_p_kokkos_gpu(
   });
 #endif
   });
-  Kokkos::Experimental::contribute(k_field, k_f_sv);
+#if defined( VPIC_ENABLE_ACCUMULATORS )
+  Kokkos::Experimental::contribute(accumulator, current_sv);
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nx+2, ny+2, nz+2});
+  Kokkos::parallel_for("unload accumulator array", unload_policy, 
+  KOKKOS_LAMBDA(const int x, const int y, const int z) {
+      int f0  = VOXEL(x, y, z, nx, ny, nz);
+      int a0  = VOXEL(x, y, z, nx, ny, nz);
+      int ax  = VOXEL(x-1, y,   z,   nx, ny, nz);
+      int ay  = VOXEL(x,   y-1, z,   nx, ny, nz);
+      int az  = VOXEL(x,   y,   z-1, nx, ny, nz);
+      int ayz = VOXEL(x,   y-1, z-1, nx, ny, nz);
+      int azx = VOXEL(x-1, y,   z-1, nx, ny, nz);
+      int axy = VOXEL(x-1, y-1, z,   nx, ny, nz);
+      k_field(f0, field_var::jfx) += ( accumulator(a0,  0) +
+                                       accumulator(ay,  1) +
+                                       accumulator(az,  2) +
+                                       accumulator(ayz, 3) );
+      k_field(f0, field_var::jfy) += ( accumulator(a0,  4) +
+                                       accumulator(az,  5) +
+                                       accumulator(ax,  6) +
+                                       accumulator(azx, 7) );
+      k_field(f0, field_var::jfz) += ( accumulator(a0,  8) +
+                                       accumulator(ax,  9) +
+                                       accumulator(ay,  10) +
+                                       accumulator(axy, 11) );
+  });
+#else
+  Kokkos::Experimental::contribute(k_field, current_sv);
+#endif
 
 
   // TODO: abstract this manual data copy
@@ -1389,7 +1473,7 @@ advance_p_kokkos_simd(
         k_particle_i_copy_t& k_particle_i_copy,
         k_particle_movers_t& k_particle_movers,
         k_particle_i_movers_t& k_particle_movers_i,
-        k_field_sa_t k_f_sa,
+        k_field_sv_t k_f_sa,
         k_interpolator_t& k_interp,
         //k_particle_movers_t k_local_particle_movers,
         k_counter_t& k_nm,
@@ -1436,7 +1520,7 @@ advance_p_kokkos_simd(
   Kokkos::View<float***, Kokkos::LayoutRight> accumulator("Accumulator", Kokkos::num_threads(), k_field.extent(0), 12);
   Kokkos::deep_copy(accumulator, 0);
 #else
-  k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
+  k_field_sv_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
 #endif
 
 //// Setting up work distribution settings
@@ -1534,9 +1618,9 @@ advance_p_kokkos_simd(
                        fcbx, fdcbxdx, fcby, fdcbydy, fcbz, fdcbzdz);
 
     // Interpolate E
-    simd_float_t hax  = qdt_2mc*( Kokkos::fma( Kokkos::fma(dy, fd2exdydz, fdexdz), dz, Kokkos::fma(dy, fdexdy, fex)));
-    simd_float_t hay  = qdt_2mc*( Kokkos::fma( Kokkos::fma(dy, fd2eydzdx, fdeydx), dx, Kokkos::fma(dz, fdeydz, fey)));
-    simd_float_t haz  = qdt_2mc*( Kokkos::fma( Kokkos::fma(dy, fd2ezdxdy, fdezdy), dy, Kokkos::fma(dx, fdezdx, fez)));
+    simd_float_t hax  = simd_float_t(qdt_2mc)*( Kokkos::fma( Kokkos::fma(dy, fd2exdydz, fdexdz), dz, Kokkos::fma(dy, fdexdy, fex)));
+    simd_float_t hay  = simd_float_t(qdt_2mc)*( Kokkos::fma( Kokkos::fma(dy, fd2eydzdx, fdeydx), dx, Kokkos::fma(dz, fdeydz, fey)));
+    simd_float_t haz  = simd_float_t(qdt_2mc)*( Kokkos::fma( Kokkos::fma(dy, fd2ezdxdy, fdezdy), dy, Kokkos::fma(dx, fdezdx, fez)));
 
     // Interpolate B
     simd_float_t cbx  = Kokkos::fma(dx, fdcbxdx, fcbx);
@@ -1546,7 +1630,7 @@ advance_p_kokkos_simd(
     ux  += hax;
     uy  += hay;
     uz  += haz;
-    v0   = qdt_2mc/Kokkos::sqrt(one + Kokkos::fma(ux, ux , Kokkos::fma(uy, uy, uz*uz)));
+    v0   = simd_float_t(qdt_2mc)/Kokkos::sqrt(one + Kokkos::fma(ux, ux , Kokkos::fma(uy, uy, uz*uz)));
     // Boris - scalars
     v1   = Kokkos::fma(cbx, cbx, Kokkos::fma(cby, cby, cbz*cbz));
     v2   = (v0*v0)*v1;
@@ -1823,8 +1907,8 @@ advance_p( /**/  species_t            * RESTRICT sp,
   #else
     // Portable kernel with additional vectorization options
     //#define ADVANCE_P advance_p_kokkos_gpu
-    #define ADVANCE_P advance_p_kokkos_unified
-    //#define ADVANCE_P advance_p_kokkos_simd
+    //#define ADVANCE_P advance_p_kokkos_unified
+    #define ADVANCE_P advance_p_kokkos_simd
   #endif
   KOKKOS_TIC();
   ADVANCE_P(
@@ -1834,7 +1918,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->k_pc_i_d,
           sp->k_pm_d,
           sp->k_pm_i_d,
-          fa->k_field_sa_d,
+          fa->k_field_sv_d,
           ia->k_i_d,
           sp->k_nm_d,
           sp->g->k_neighbor_d,

@@ -1428,7 +1428,7 @@ move_p( particle_t       * ALIGNED(128) p0,
 //    //Kokkos::atomic_add(&a[2], v2);
 //    //Kokkos::atomic_add(&a[3], v3);
 //
-//    if constexpr (std::is_same<scatter_view_t,k_field_sa_t>::value) {
+//    if constexpr (std::is_same<scatter_view_t,k_field_sv_t>::value) {
 //      int iii = ii;
 //      int zi = iii/((nx+2)*(ny+2));
 //      iii -= zi*(nx+2)*(ny+2);
@@ -1698,7 +1698,26 @@ move_p_kokkos(
     //Kokkos::atomic_add(&a[2], v2);
     //Kokkos::atomic_add(&a[3], v3);
 
-    if constexpr (!Kokkos::is_view<scatter_view_t>::value) {
+#if defined( VPIC_ENABLE_ACCUMULATORS )
+      //auto& scatter_access = scatter_view;
+      accumulate_j(x,y,z);
+      scatter_access(ii, 0) += cx*v0;
+      scatter_access(ii, 1) += cx*v1;
+      scatter_access(ii, 2) += cx*v2;
+      scatter_access(ii, 3) += cx*v3;
+
+      accumulate_j(y,z,x);
+      scatter_access(ii, 4) += cy*v0;
+      scatter_access(ii, 5) += cy*v1;
+      scatter_access(ii, 6) += cy*v2;
+      scatter_access(ii, 7) += cy*v3;
+
+      accumulate_j(z,x,y);
+      scatter_access(ii, 8) += cz*v0;
+      scatter_access(ii, 9) += cz*v1;
+      scatter_access(ii, 10) += cz*v2;
+      scatter_access(ii, 11) += cz*v3;
+#else
       //auto scatter_access = scatter_view.access();
       int iii = ii;
       int zi = iii/((nx+2)*(ny+2));
@@ -1722,26 +1741,7 @@ move_p_kokkos(
       scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
       scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
       scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
-    } else {
-      //auto& scatter_access = scatter_view;
-      accumulate_j(x,y,z);
-      scatter_access(ii, 0) += cx*v0;
-      scatter_access(ii, 1) += cx*v1;
-      scatter_access(ii, 2) += cx*v2;
-      scatter_access(ii, 3) += cx*v3;
-
-      accumulate_j(y,z,x);
-      scatter_access(ii, 4) += cy*v0;
-      scatter_access(ii, 5) += cy*v1;
-      scatter_access(ii, 6) += cy*v2;
-      scatter_access(ii, 7) += cy*v3;
-
-      accumulate_j(z,x,y);
-      scatter_access(ii, 8) += cz*v0;
-      scatter_access(ii, 9) += cz*v1;
-      scatter_access(ii, 10) += cz*v2;
-      scatter_access(ii, 11) += cz*v3;
-    }
+#endif
 
 #   undef accumulate_j
 

@@ -314,7 +314,7 @@ typedef struct field_array {
 
   k_field_t k_f_d;                   // Kokkos field data on device
   k_field_t::HostMirror k_f_h;       // Kokkos field data on host
-  k_field_sa_t k_field_sa_d;
+  k_field_sv_t k_field_sv_d;
   k_field_edge_t k_fe_d;             // Kokkos field_edge data (part of field_t) on device
   k_field_edge_t::HostMirror k_fe_h; // Kokkos field_edge data on host
 
@@ -346,7 +346,7 @@ typedef struct field_array {
   void init_kokkos_fields(int n_fields, int xyz_sz, int yzx_sz, int zxy_sz)
   {
       k_f_d = k_field_t("k_fields", n_fields);
-      k_field_sa_d = Kokkos::Experimental::create_scatter_view(k_f_d);
+      k_field_sv_d = Kokkos::Experimental::create_scatter_view(k_f_d);
       k_fe_d = k_field_edge_t("k_field_edges", n_fields);
       k_f_h = Kokkos::create_mirror_view(k_f_d);
       k_fe_h = Kokkos::create_mirror_view(k_fe_d);

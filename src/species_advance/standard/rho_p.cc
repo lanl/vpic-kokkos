@@ -335,7 +335,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
 
-    k_field_sa_t scatter_view = Kokkos::Experimental::create_scatter_view<>(kfield);
+    k_field_sv_t scatter_view = Kokkos::Experimental::create_scatter_view<>(kfield);
 
 ////#if VPIC_ENABLE_VECTORIZATION == Manual
 ////#elif VPIC_ENABLE_VECTORIZATION == Guided

@@ -41,7 +41,7 @@ using k_counter_t = Kokkos::View<int[1]>;
 using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
 // TODO: This scatter access is needed only for jfxyz, not all field vars.
 // This is probably terrible on CPU.
-using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
+using k_field_sv_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
 using k_field_edge_t = Kokkos::View<material_id* [FIELD_EDGE_COUNT]>;
 using k_field_accum_t = Kokkos::View<float *>;
 
