@@ -15,27 +15,15 @@ using vector_aligned_tag_t  = KokkosSIMD::vector_aligned_tag;
 #if defined(KOKKOS_ARCH_AVX512XEON)
 constexpr int native_32 = 16;
 constexpr int native_64 = 8;
-using native_abi_32 = KokkosSIMD::simd_abi::avx512_fixed_size<16>;
-using native_abi_64 = KokkosSIMD::simd_abi::avx512_fixed_size<8>;
-using abi_x4 = KokkosSIMD::simd_abi::avx512_fixed_size<4>;
 #elif defined(KOKKOS_ARCH_AVX2)
 constexpr int native_32 = 8;
 constexpr int native_64 = 4;
-using native_abi_32 = KokkosSIMD::simd_abi::avx2_fixed_size<8>;
-using native_abi_64 = KokkosSIMD::simd_abi::avx2_fixed_size<4>;
-using abi_x4 = KokkosSIMD::simd_abi::avx2_fixed_size<4>;
 #elif defined(KOKKOS_ARCH_ARM_NEON)
 constexpr int native_32 = 4;
 constexpr int native_64 = 2;
-using native_abi_32 = KokkosSIMD::simd_abi::neon_fixed_size<4>;
-using native_abi_64 = KokkosSIMD::simd_abi::neon_fixed_size<2>;
-using abi_x4 = KokkosSIMD::simd_abi::neon_fixed_size<4>;
 #else
-constexpr int native_32 = 0;
-constexpr int native_64 = 0;
-using native_abi_32 = KokkosSIMD::simd_abi::scalar;
-using native_abi_64 = KokkosSIMD::simd_abi::scalar;
-using native_x4 = KokkosSIMD::simd_abi::scalar;
+constexpr int native_32 = 1;
+constexpr int native_64 = 1;
 #endif
 
 using simd_float_t          = KokkosSIMD::simd<float, native_32>;
@@ -44,6 +32,8 @@ using simd_int64_t          = KokkosSIMD::simd<int64_t, native_64>;
 using simd_float_mask_t     = KokkosSIMD::simd_mask<float, native_32>;
 using simd_int32_mask_t     = KokkosSIMD::simd_mask<int32_t, native_32>;
 using simd_int64_mask_t     = KokkosSIMD::simd_mask<int64_t, native_64>;
+using simd_float32x4_t      = KokkosSIMD::simd<float, 4>;
+using simd_float32x4_mask_t = KokkosSIMD::simd_mask<float, 4>;
 
 //using simd_float32x4_t      = KokkosSIMD::simd<float, 4>;
 //using simd_int32x4_t        = KokkosSIMD::simd<int,   4>;
@@ -293,11 +283,11 @@ void transpose(Float8& a0, Float8& a1, Float8& a2, Float8& a3,
 #endif
 
 #ifdef __AVX__
-//template< int i0, int i1, int i2, int i3>
-//KOKKOS_FORCEINLINE_FUNCTION
-//simd_float32x4_t shuffle(simd_float32x4_t& a) {
-//  return simd_float32x4_t( _mm_shuffle_ps( (__m128)(a), (__m128)(a), ( permute<i0,i1,i2,i3>::value ) ) );
-//}
+template< int i0, int i1, int i2, int i3>
+KOKKOS_FORCEINLINE_FUNCTION
+simd_float32x4_t shuffle(simd_float32x4_t& a) {
+  return simd_float32x4_t( _mm_shuffle_ps( (__m128)(a), (__m128)(a), ( permute<i0,i1,i2,i3>::value ) ) );
+}
 
 template<typename SIMDFloat_t, typename std::enable_if<SIMDFloat_t::size() == 4, bool>::type=true >
 KOKKOS_INLINE_FUNCTION
@@ -329,13 +319,13 @@ void transpose(SIMDFloat_t& a, SIMDFloat_t& b, SIMDFloat_t& c, SIMDFloat_t& d) {
 #elif defined KOKKOS_ARCH_ARM_NEON
 #include <arm_neon.h>
 
-//template< int i0, int i1, int i2, int i3 >
-//KOKKOS_FORCEINLINE_FUNCTION
-//simd_float32x4_t shuffle(simd_float32x4_t& a) {
-//  int32x4_t mask = {i0, i1, i2, i3};
-//  simd_float32x4_t b = __builtin_shuffle((float32x4_t) a, mask);
-//  return b;
-//}
+template< int i0, int i1, int i2, int i3 >
+KOKKOS_FORCEINLINE_FUNCTION
+simd_float32x4_t shuffle(simd_float32x4_t& a) {
+  int32x4_t mask = {i0, i1, i2, i3};
+  simd_float32x4_t b = __builtin_shuffle((float32x4_t) a, mask);
+  return b;
+}
 
 KOKKOS_INLINE_FUNCTION
 void transpose(simd_float_t& a, simd_float_t& b, simd_float_t& c, simd_float_t& d) {

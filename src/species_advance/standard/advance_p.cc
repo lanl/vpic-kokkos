@@ -1480,7 +1480,7 @@ advance_p_kokkos_simd(
         k_neighbor_t& k_neighbors,
         field_array_t* RESTRICT fa,
         const grid_t *g,
-        const float qdt_2mc,
+        const float _qdt_2mc,
         const float cdt_dx,
         const float cdt_dy,
         const float cdt_dz,
@@ -1502,6 +1502,7 @@ advance_p_kokkos_simd(
   const simd_float_t cx = 0.25 * g->rdy * g->rdz / g->dt;
   const simd_float_t cy = 0.25 * g->rdz * g->rdx / g->dt;
   const simd_float_t cz = 0.25 * g->rdx * g->rdy / g->dt;
+  const simd_float_t qdt_2mc(_qdt_2mc);
 
   const auto rangel = g->rangel;
   const auto rangeh = g->rangeh;
@@ -1618,41 +1619,40 @@ advance_p_kokkos_simd(
                        fcbx, fdcbxdx, fcby, fdcbydy, fcbz, fdcbzdz);
 
     // Interpolate E
-    simd_float_t hax  = simd_float_t(qdt_2mc)*( Kokkos::fma( Kokkos::fma(dy, fd2exdydz, fdexdz), dz, Kokkos::fma(dy, fdexdy, fex)));
-    simd_float_t hay  = simd_float_t(qdt_2mc)*( Kokkos::fma( Kokkos::fma(dy, fd2eydzdx, fdeydx), dx, Kokkos::fma(dz, fdeydz, fey)));
-    simd_float_t haz  = simd_float_t(qdt_2mc)*( Kokkos::fma( Kokkos::fma(dy, fd2ezdxdy, fdezdy), dy, Kokkos::fma(dx, fdezdx, fez)));
-
+    simd_float_t hax  = qdt_2mc*( Kokkos::fma( Kokkos::fma(dy, fd2exdydz, fdexdz), dz, Kokkos::fma(dy, fdexdy, fex)));
+    simd_float_t hay  = qdt_2mc*( Kokkos::fma( Kokkos::fma(dy, fd2eydzdx, fdeydx), dx, Kokkos::fma(dz, fdeydz, fey)));
+    simd_float_t haz  = qdt_2mc*( Kokkos::fma( Kokkos::fma(dy, fd2ezdxdy, fdezdy), dy, Kokkos::fma(dx, fdezdx, fez)));
     // Interpolate B
     simd_float_t cbx  = Kokkos::fma(dx, fdcbxdx, fcbx);
     simd_float_t cby  = Kokkos::fma(dy, fdcbydy, fcby);
     simd_float_t cbz  = Kokkos::fma(dz, fdcbzdz, fcbz);
     // Half advance E
-    ux  += hax;
-    uy  += hay;
-    uz  += haz;
-    v0   = simd_float_t(qdt_2mc)/Kokkos::sqrt(one + Kokkos::fma(ux, ux , Kokkos::fma(uy, uy, uz*uz)));
+    ux += hax;
+    uy += hay;
+    uz += haz;
+    v0  = qdt_2mc/Kokkos::sqrt(one + Kokkos::fma(ux, ux, Kokkos::fma(uy, uy, uz*uz)));
     // Boris - scalars
-    v1   = Kokkos::fma(cbx, cbx, Kokkos::fma(cby, cby, cbz*cbz));
-    v2   = (v0*v0)*v1;
-    v3   = v0*Kokkos::fma(v2, Kokkos::fma(v2, two_fifteenths, one_third), one);
-    v4   = v3/Kokkos::fma(v1, (v3*v3), one);
-    v4  += v4;
+    v1  = Kokkos::fma(cbx, cbx, Kokkos::fma(cby, cby, cbz*cbz));
+    v2  = (v0*v0)*v1;
+    v3  = v0*Kokkos::fma(v2, Kokkos::fma(v2, two_fifteenths, one_third), one);
+    v4  = v3/Kokkos::fma(v1, (v3*v3), one);
+    v4 += v4;
     // Boris - uprime
-    v0   = Kokkos::fma( Kokkos::fma( uy, cbz, -uz*cby ), v3, ux);
-    v1   = Kokkos::fma( Kokkos::fma( uz, cbx, -ux*cbz ), v3, uy);
-    v2   = Kokkos::fma( Kokkos::fma( ux, cby, -uy*cbx ), v3, uz);
+    v0  = Kokkos::fma( Kokkos::fma( uy, cbz, -uz*cby ), v3, ux);
+    v1  = Kokkos::fma( Kokkos::fma( uz, cbx, -ux*cbz ), v3, uy);
+    v2  = Kokkos::fma( Kokkos::fma( ux, cby, -uy*cbx ), v3, uz);
     // Boris - rotation
     ux  = Kokkos::fma( Kokkos::fma( v1, cbz, -v2*cby ), v4, ux);
     uy  = Kokkos::fma( Kokkos::fma( v2, cbx, -v0*cbz ), v4, uy);
     uz  = Kokkos::fma( Kokkos::fma( v0, cby, -v1*cbx ), v4, uz);
     // Half advance E
-    ux  += hax;
-    uy  += hay;
-    uz  += haz;
+    ux += hax;
+    uy += hay;
+    uz += haz;
     // Store momentum in registers for later storage
-    v6 = ux; 
-    v7 = uy;
-    v8 = uz;
+    v6  = ux; 
+    v7  = uy;
+    v8  = uz;
 
     v0   = one/Kokkos::sqrt(one + Kokkos::fma(ux, ux , Kokkos::fma(uy, uy, uz*uz)));
 
@@ -1741,13 +1741,13 @@ advance_p_kokkos_simd(
 
     // Accumulate current density
     ACCUMULATE_J( x,y,z, v0,v1,v2,v3 );
-    v0  *= cx; v1  *= cx; v2  *= cx; v3  *= cx;
+    v0 *= cx; v1 *= cx; v2  *= cx; v3  *= cx;
 
     ACCUMULATE_J( y,z,x, v4,v5,v6,v7 );
-    v4  *= cy; v5  *= cy; v6  *= cy; v7  *= cy;
+    v4 *= cy; v5 *= cy; v6  *= cy; v7  *= cy;
 
     ACCUMULATE_J( z,x,y, v8,v9,v10,v11 );
-    v8  *= cz; v9  *= cz; v10 *= cz; v11 *= cz;
+    v8 *= cz; v9 *= cz; v10 *= cz; v11 *= cz;
 
 #   undef ACCUMULATE_J
     // Store current contributions
@@ -1756,45 +1756,45 @@ advance_p_kokkos_simd(
                     v0,  v1,  v2,  v3,
                     v4,  v5,  v6,  v7,
                     v8,  v9,  v10, v11);
-/*
-    if(KokkosSIMD::any_of(!inbnds)) {
 
-      simd_float_t dispx = ux;
-      simd_float_t dispy = uy;
-      simd_float_t dispz = uz;
-      simd_int32_t pm_i([p_index,np, num_lanes] (std::size_t lane) { return p_index*num_lanes + int(lane); });
-      simd_float_mask_t outbnds = !inbnds && mask;
-      simd_float_mask_t moved = move_p_kokkos_simd_a(k_particles, k_particles_i, 
-                                                   dispx, dispy, dispz, pm_i, outbnds, active_lanes,
-                                                   current, g, k_neighbors, rangel, rangeh, qsp, 
-                                                   cx[0], cy[0], cz[0], nx, ny, nz);
+//    if(KokkosSIMD::any_of(!inbnds)) {
+//
+//      simd_float_t dispx = ux;
+//      simd_float_t dispy = uy;
+//      simd_float_t dispz = uz;
+//      simd_int32_t pm_i([p_index,np, num_lanes] (std::size_t lane) { return p_index*num_lanes + int(lane); });
+//      simd_float_mask_t outbnds = !inbnds && mask;
+//      simd_float_mask_t moved = move_p_kokkos_simd_a(k_particles, k_particles_i, 
+//                                                   dispx, dispy, dispz, pm_i, outbnds, active_lanes,
+//                                                   current, g, k_neighbors, rangel, rangeh, qsp, 
+//                                                   cx[0], cy[0], cz[0], nx, ny, nz);
+//
+//      for(size_t idx=0; idx<active_lanes; idx++) {
+//        if(!inbnds[idx] && moved[idx]) {
+//          if( k_nm(0) < max_nm )
+//          {
+//              const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+//              if (nm >= max_nm) Kokkos::abort("overran max_nm");
+//
+//              k_particle_movers(nm, particle_mover_var::dispx) = dispx[idx]; //local_pm->dispx; //mover_list(mover_idx, particle_mover_var::dispx);
+//              k_particle_movers(nm, particle_mover_var::dispy) = dispy[idx]; //local_pm->dispy; //mover_list(mover_idx, particle_mover_var::dispy);
+//              k_particle_movers(nm, particle_mover_var::dispz) = dispz[idx]; //local_pm->dispz; //mover_list(mover_idx, particle_mover_var::dispz);
+//              k_particle_movers_i(nm)   = pm_i[idx]; //local_pm->i; // mover_list_i(mover_idx);
+//
+//              // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+//              k_particle_copy(nm, particle_var::dx) = k_particles( p_index*SIMD_LEN+idx, particle_var::dx);
+//              k_particle_copy(nm, particle_var::dy) = k_particles( p_index*SIMD_LEN+idx, particle_var::dy);
+//              k_particle_copy(nm, particle_var::dz) = k_particles( p_index*SIMD_LEN+idx, particle_var::dz);
+//              k_particle_copy(nm, particle_var::ux) = k_particles( p_index*SIMD_LEN+idx, particle_var::ux);
+//              k_particle_copy(nm, particle_var::uy) = k_particles( p_index*SIMD_LEN+idx, particle_var::uy);
+//              k_particle_copy(nm, particle_var::uz) = k_particles( p_index*SIMD_LEN+idx, particle_var::uz);
+//              k_particle_copy(nm, particle_var::w)  = k_particles( p_index*SIMD_LEN+idx, particle_var::w );
+//              k_particle_i_copy(nm) = k_particles_i(p_index*SIMD_LEN+idx);
+//          }
+//        }
+//      }
+//    }
 
-      for(size_t idx=0; idx<active_lanes; idx++) {
-        if(!inbnds[idx] && moved[idx]) {
-          if( k_nm(0) < max_nm )
-          {
-              const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
-              if (nm >= max_nm) Kokkos::abort("overran max_nm");
-
-              k_particle_movers(nm, particle_mover_var::dispx) = dispx[idx]; //local_pm->dispx; //mover_list(mover_idx, particle_mover_var::dispx);
-              k_particle_movers(nm, particle_mover_var::dispy) = dispy[idx]; //local_pm->dispy; //mover_list(mover_idx, particle_mover_var::dispy);
-              k_particle_movers(nm, particle_mover_var::dispz) = dispz[idx]; //local_pm->dispz; //mover_list(mover_idx, particle_mover_var::dispz);
-              k_particle_movers_i(nm)   = pm_i[idx]; //local_pm->i; // mover_list_i(mover_idx);
-
-              // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-              k_particle_copy(nm, particle_var::dx) = k_particles( p_index*SIMD_LEN+idx, particle_var::dx);
-              k_particle_copy(nm, particle_var::dy) = k_particles( p_index*SIMD_LEN+idx, particle_var::dy);
-              k_particle_copy(nm, particle_var::dz) = k_particles( p_index*SIMD_LEN+idx, particle_var::dz);
-              k_particle_copy(nm, particle_var::ux) = k_particles( p_index*SIMD_LEN+idx, particle_var::ux);
-              k_particle_copy(nm, particle_var::uy) = k_particles( p_index*SIMD_LEN+idx, particle_var::uy);
-              k_particle_copy(nm, particle_var::uz) = k_particles( p_index*SIMD_LEN+idx, particle_var::uz);
-              k_particle_copy(nm, particle_var::w)  = k_particles( p_index*SIMD_LEN+idx, particle_var::w );
-              k_particle_i_copy(nm) = k_particles_i(p_index*SIMD_LEN+idx);
-          }
-        }
-      }
-    }
-*/
     for(size_t idx=0; idx<active_lanes; idx++) {
       if(!inbnds[idx]) {
         DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
@@ -1803,20 +1803,20 @@ advance_p_kokkos_simd(
         local_pm->dispz = uz[idx];
         local_pm->i     = p_index*num_lanes+idx;
 
-        if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                           current, g, k_neighbors, rangel, rangeh, qsp, cx[0], cy[0], cz[0], nx, ny, nz ) )
-//        if( move_p_kokkos_simd_b( k_particles, k_particles_i, local_pm, // Unlikely
+//        if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
 //                           current, g, k_neighbors, rangel, rangeh, qsp, cx[0], cy[0], cz[0], nx, ny, nz ) )
+        if( move_p_kokkos_simd_b( k_particles, k_particles_i, local_pm, // Unlikely
+                           current, g, k_neighbors, rangel, rangeh, qsp, cx[0], cy[0], cz[0], nx, ny, nz ) )
         {
           if( k_nm(0) < max_nm )
           {
               const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
               if (nm >= max_nm) Kokkos::abort("overran max_nm");
 
-              k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx; //mover_list(mover_idx, particle_mover_var::dispx);
-              k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy; //mover_list(mover_idx, particle_mover_var::dispy);
-              k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz; //mover_list(mover_idx, particle_mover_var::dispz);
-              k_particle_movers_i(nm)   = local_pm->i; // mover_list_i(mover_idx);
+              k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx; 
+              k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy; 
+              k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz; 
+              k_particle_movers_i(nm)   = local_pm->i; 
 
               // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
               k_particle_copy(nm, particle_var::dx) = k_particles( p_index*SIMD_LEN+idx, particle_var::dx);
@@ -1841,9 +1841,9 @@ advance_p_kokkos_simd(
       accumulator(0, i, j) += accumulator(tid, i,  j);
     }
   });
-  Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nz+2, ny+2, nx+2});
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nx+2, ny+2, nz+2});
   Kokkos::parallel_for("unload accumulator array", unload_policy, 
-  KOKKOS_LAMBDA(const int z, const int y, const int x) {
+  KOKKOS_LAMBDA(const int x, const int y, const int z) {
     int f0  = VOXEL(x, y, z, nx, ny, nz);
     int a0  = VOXEL(x, y, z, nx, ny, nz);
     int ax  = VOXEL(x-1, y, z, nx, ny, nz);
