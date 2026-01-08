@@ -227,10 +227,10 @@ struct particle_bulk_collision_pipeline {
     */
 
     if (_spp == NULL) {
-      std::cout<<"APPLYING COLLISION MODEL 1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
+      // std::cout<<"APPLYING COLLISION MODEL 1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
       apply_model(_model);
     } else {
-      std::cout<<"APPLYING COLLISION MODEL 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
+      // std::cout<<"APPLYING COLLISION MODEL 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
       _spp_p = _spp->k_p_d;
       _spp_i = &_spp->k_p_i_d;
       apply_model_products(_model);
@@ -374,20 +374,18 @@ struct particle_bulk_collision_pipeline {
           {
               if (!MC_col_occurred) { break; }
 
-              // If the particle charge changes via charge exchange, 
-              // then decrement fluid density by the particle weight and
-              // assign the new kinetic particle velocity to that of the
-              // fluid velocity plus a thermal component
-              int dq = qp_n - qp_i;
+              // When a particle undergoes charge exchange and 
+              // the projectile particle captures an electron,
+              // then decrement the neutral fluid density              
+              int dq = qp_i - qp_n;
+              if (dq == -1) {
+                // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
+                dn = wp * rdV;
+              }
 
-              // Skip if charge exchange did not occur
-              // if (dq == 0) { break; }
-
-              // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
-              dn = wp * rdV;
-
+              // todo: If the projectile losses an electron, 
+              // should produce a free electron (ie increase n_e)
               break; // end case(charge exchange)
-
           }
           case CollisionType::BulkDrag:
           case CollisionType::BulkLemons:
@@ -486,8 +484,8 @@ struct particle_bulk_collision_pipeline {
 
     // Number of particles in product group
     const int np_products0 = spp->np;
-    Kokkos::View<int*> np_new_products("np_new_products", 0);
-    np_new_products(0) = 0;
+    Kokkos::View<int*, Space::memory_space> dev_np_products("dev_np_products", 1);
+    Kokkos::deep_copy(dev_np_products, 0);
 
     Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
@@ -572,47 +570,52 @@ struct particle_bulk_collision_pipeline {
             case CollisionType::BulkChargeExchange:
             {
               if (!MC_col_occurred) { break; }
-              // If the particle charge changes via charge exchange, 
-              // then decrement fluid density by the particle weight and
-              // assign the new kinetic particle velocity to that of the
-              // fluid velocity plus a thermal component
-              int dq = qp_n - qp_i;
 
-              // Skip if charge exchange did not occur
-              // if (dq == 0) { break; }
+              // When a particle undergoes charge exchange and 
+              // the projectile particle captures an electron,
+              // then decrement the neutral fluid density              
+              int dq = qp_i - qp_n;
+              if (dq == -1) {
+                
+                // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
+                dn = wp * rdV;
 
-              // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
-              dn = wp * rdV;
 
-              // The new kinetic particle takes the fluid bulk velociy plus a thermal component
-              float ux_pr = rg.normal(ux_fl, uth_fl);
-              float uy_pr = rg.normal(uy_fl, uth_fl);
-              float uz_pr = rg.normal(uz_fl, uth_fl);
-              float w_pr = wp;
+                // The new kinetic particle takes the fluid bulk velociy plus a thermal component
+                float ux_pr = rg.normal(ux_fl, uth_fl);
+                float uy_pr = rg.normal(uy_fl, uth_fl);
+                float uz_pr = rg.normal(uz_fl, uth_fl);
+                float w_pr = wp;
 
-              // Create kinetic particle. Get particle index and incremenent number of new products
-              int i_pr = np_products0 + np_new_products(0);
-              Kokkos::atomic_add(&np_new_products(0), 1);
+                // Create kinetic particle. Get particle index and incremenent number of new products
+                int i_pr = np_products0 + dev_np_products(0);
+                Kokkos::atomic_add(&dev_np_products(0), 1);
 
-              spp_p(i_pr, particle_var::w)  = w_pr;
-              spp_p(i_pr, particle_var::ux) = ux_pr;
-              spp_p(i_pr, particle_var::uy) = uy_pr;
-              spp_p(i_pr, particle_var::uz) = uz_pr;	  
-              spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
-              spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
-              spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
-              spp_i(i_pr) = spi_i(i);
+                spp_p(i_pr, particle_var::w)  = w_pr;
+                spp_p(i_pr, particle_var::ux) = ux_pr;
+                spp_p(i_pr, particle_var::uy) = uy_pr;
+                spp_p(i_pr, particle_var::uz) = uz_pr;	  
+                spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
+                spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
+                spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
+                spp_i(i_pr) = spi_i(i);
 #ifdef VARIABLE_CHARGE
-              spp_p(i_pr, particle_var::qp) = spj->q + dq;
+                spp_p(i_pr, particle_var::qp) = spj->q - dq;
 #endif
 
-              // Decrement fluid momentum and energy based on new kinetic particle
-              dux = ux_pr * w_pr;
-              duy = ux_pr * w_pr;
-              duz = ux_pr * w_pr;
-              den = 0.5 * w_pr *
-                ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
-                  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+                // Decrement fluid momentum and energy based on new kinetic particle
+                dux = ux_pr * w_pr;
+                duy = ux_pr * w_pr;
+                duz = ux_pr * w_pr;
+                den = 0.5 * w_pr *
+                  ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+                    ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+
+              } // endif(electron-capture)
+              
+              // todo: If the projectile losses an electron, 
+              // should produce a free electron (ie increase n_e)
+
               break; // end case(charge exchange)
             }
             case CollisionType::BulkIonImpactIoniz:
@@ -687,13 +690,16 @@ struct particle_bulk_collision_pipeline {
         // We *must* free generators.
         rp.free_state(rg);
     }); // end Kokkos::parallel_for
-    
-    // Increment number of particles in product species
-    spp->np += np_new_products(0);
 
     // I don't know why we need this, but without it I get an illegal memory
     // access error ... suspicious.
     Kokkos::fence();
+
+    // Increment number of particles in product species
+    Kokkos::View<int*, Space>::HostMirror host_np_products = Kokkos::create_mirror_view(dev_np_products);
+    Kokkos::deep_copy(host_np_products, dev_np_products);
+    spp->np += host_np_products(0);
+
   } // end apply_model_products()
 
 
@@ -821,7 +827,7 @@ struct particle_bulk_collision_pipeline {
       //      dd = model.cross_section(rg, t2, t1);
       dd = model.cross_section( rg, qi, ur, t1 );
 
-      // std::cout << "sigma="<<dd<< " ur=" <<ur << " n="<<nj_fl << " dt="<<dt << " sig*n*v*dt="<<dd*t1 << std::endl;
+      // std::cout << "sigma="<<dd<< " qi="<<qi<< " ur=" <<ur << " n="<<nj_fl << " dt="<<dt << " sig*n*v*dt="<<dd*t1 << std::endl;
 
       if( rg.frand() > dd*t1 ) {
         MC_collision_occurred = false;
@@ -875,6 +881,24 @@ struct particle_bulk_collision_pipeline {
     up[2] = ujy_fl + (ury + stack[1])*rr;
     up[3] = ujz_fl + (urz + stack[2])*rr;
     
+
+// #ifdef VARIABLE_CHARGE
+//     // If electron loss (modify_charge=-1), then remove KE from projectile
+//     //float dE = -6.37; // dE for Sr^+ + O_2 -> Sr + O_2^+
+//     float dE = (-6.37 * 1.602e-19) / 7.516e-11; // (E_eV * e) / (0.5 * m_p * c^2)
+//     float E0 = 0.5 * mi * (up[3] * up[3]); //(up[1] * up[1]) * (up[2] * up[2]) * (up[3] * up[3]);
+//     if (dq == -1) {
+//       float dv = std::sqrt((E0 - dE) / E0);
+//       // up[1] *= dv;
+//       // up[2] *= dv;
+//       up[3] *= dv; //1.0 + 1.0e-4;
+//     } else if (dq == 1) {
+//       float dv = std::sqrt((E0 + dE) / E0);
+//       up[3] *= dv;
+//       // up[3] *= 1.0 - 1.0e-4;
+//     }
+// #endif
+
     // Scaled center of mass velocity.
     // t1 = (1-rr);
     // float cmx = t1*(mu_j*uix + mu_i*ujx_fl);
