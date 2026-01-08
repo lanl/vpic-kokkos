@@ -577,6 +577,7 @@ struct particle_bulk_collision_pipeline {
               int dq = qp_i - qp_n;
               if (dq == -1) {
                 
+
                 // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
                 dn = wp * rdV;
 
@@ -588,8 +589,8 @@ struct particle_bulk_collision_pipeline {
                 float w_pr = wp;
 
                 // Create kinetic particle. Get particle index and incremenent number of new products
-                int i_pr = np_products0 + dev_np_products(0);
-                Kokkos::atomic_add(&dev_np_products(0), 1);
+                int cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
+                int i_pr = np_products0 + cntr;
 
                 spp_p(i_pr, particle_var::w)  = w_pr;
                 spp_p(i_pr, particle_var::ux) = ux_pr;
@@ -698,7 +699,7 @@ struct particle_bulk_collision_pipeline {
     // Increment number of particles in product species
     Kokkos::View<int*, Space>::HostMirror host_np_products = Kokkos::create_mirror_view(dev_np_products);
     Kokkos::deep_copy(host_np_products, dev_np_products);
-    spp->np += host_np_products(0);
+    spp->np += host_np_products(0);    
 
   } // end apply_model_products()
 
