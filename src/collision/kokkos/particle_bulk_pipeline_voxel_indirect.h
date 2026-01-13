@@ -336,13 +336,15 @@ struct particle_bulk_collision_pipeline {
       float dn = 0.0;
       float dq = qp_n - qp_i;
 
-      if (model.collision_type == CollisionType::BulkChargeExchange && dq != 0.0) {
+      // Only decrement neutral fluid density if projectile captures an electron
+      // todo: modify electron density if profictile losses an electron
+      if (model.collision_type == CollisionType::BulkChargeExchange && dq == 1) {
         dn = wp * rdV;
         // The new kinetic particle takes the fluid bulk velociy plus a thermal component
-        float uj_thermal = sqrt(2.0 * spj_fl(v, fluid_var::tmp) / mj);
-        float ux_k = rg.normal(spj_fd(v, fluid_var::ux), uj_thermal);
-        float uy_k = rg.normal(spj_fd(v, fluid_var::uy), uj_thermal);
-        float uz_k = rg.normal(spj_fd(v, fluid_var::uz), uj_thermal);
+        // float uj_thermal = sqrt(2.0 * spj_fl(v, fluid_var::tmp) / mj);
+        // float ux_k = rg.normal(spj_fd(v, fluid_var::ux), uj_thermal);
+        // float uy_k = rg.normal(spj_fd(v, fluid_var::uy), uj_thermal);
+        // float uz_k = rg.normal(spj_fd(v, fluid_var::uz), uj_thermal);
 
         // todo: create kinetic particle
         // todo: decrement fluid momentum and energy based on new kinetic particle...
