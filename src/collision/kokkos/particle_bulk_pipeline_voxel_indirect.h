@@ -358,17 +358,16 @@ struct particle_bulk_collision_pipeline {
 	    auto dux = ( ux_i - ux_n ) * wp;
 	    auto duy = ( uy_i - uy_n ) * wp;
 	    auto duz = ( uz_i - uz_n ) * wp;
-	    auto den = 0.5 *
-		( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
-		  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) ) *
-		wp;
+	  //   auto den = 0.5 *
+		// ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+		//   ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) ) *
+		// wp;
     
 	    lsum.v[0] += wp;
 	    lsum.v[1] += dux;
 	    lsum.v[2] += duy;
 	    lsum.v[3] += duz;
-	    // lsum.v[4] += 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i); // mjl: why this instead of den?
-      lsum.v[4] += den;
+	    lsum.v[4] += 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i);
       lsum.v[5] += dn;
       
 	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",wp,dux,duy,duz,den);
