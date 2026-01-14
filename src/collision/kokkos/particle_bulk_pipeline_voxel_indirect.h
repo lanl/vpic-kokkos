@@ -396,9 +396,10 @@ struct particle_bulk_collision_pipeline {
               dux = ( ux_i - ux_n ) * wp;
               duy = ( uy_i - uy_n ) * wp;
               duz = ( uz_i - uz_n ) * wp;
-              den = 0.5 * wp *
-                ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
-                  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+              // den = 0.5 * wp *
+              //   ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+              //     ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+              den = 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i);
 
               break; // end case(drag,lemons)
           }
@@ -512,7 +513,7 @@ struct particle_bulk_collision_pipeline {
         const float uy_fl  = spj_fl(v, fluid_var::uy);
         const float uz_fl  = spj_fl(v, fluid_var::uz);
         const float tmp_fl = spj_fl(v, fluid_var::tmp);
-        const float uth_fl = sqrt(2.0 * tmp_fl / mj);
+        const float uth_fl = (tmp_fl > 0.0) ? sqrt(2.0 * tmp_fl / mj) : 0.0;
 
         // Accumulate moments for each cell
         gmomType Dm; 
@@ -577,10 +578,8 @@ struct particle_bulk_collision_pipeline {
               int dq = qp_i - qp_n;
               if (dq == -1) {
                 
-
                 // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
                 dn = wp * rdV;
-
 
                 // The new kinetic particle takes the fluid bulk velociy plus a thermal component
                 float ux_pr = rg.normal(ux_fl, uth_fl);
@@ -601,7 +600,7 @@ struct particle_bulk_collision_pipeline {
                 spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
                 spp_i(i_pr) = spi_i(i);
 #ifdef VARIABLE_CHARGE
-                spp_p(i_pr, particle_var::qp) = spj->q - dq;
+                spp_p(i_pr, particle_var::qp) = 1; // spj->q - dq;
 #endif
 
                 // Decrement fluid momentum and energy based on new kinetic particle
