@@ -301,7 +301,7 @@ boundary_p_kokkos(
             // charge neutral, this means most boundary handlers do
             // nothing to rhob.
             int64_t old_nn = nn;
-            nn = -nn - 3; // Assumes reflective/absorbing are -1, -2
+            nn = -nn - 4; // Assumes reflective/absorbing are -1, -2, Max reflux -3
             /*
                if( (nn>=0) & (nn<nb) ) {
                Kokkos::abort("Custom boundary not implemented");
@@ -471,6 +471,7 @@ boundary_p_kokkos(
         //pm[nm].i=np;
         pm[nm].i = write_index; // Try tell it the index we wrote to
 
+        auto& max_tally = sp_[id]->max_tally_h;
         // FIXME: this relies on serial for now -- maybe bad?
         //sp_nm[id] = nm + move_p( p, pm+nm, a0, g, sp_q[id] );
         int ret_code = move_p_kokkos_host_serial(
@@ -482,7 +483,12 @@ boundary_p_kokkos(
                 sp_[id]->g->k_neighbor_h,
                 rangel,
                 rangeh,
-                sp_[id]->q
+                sp_[id]->q,
+                sp_[id]->ut_para,
+                sp_[id]->ut_perp,
+                sp_[id]->dke,
+                sp_[id]->kemax,
+                max_tally
         );
 
         int keep_id = nm + ret_code - 1;

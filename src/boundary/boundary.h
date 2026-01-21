@@ -125,17 +125,17 @@ boundary_p_kokkos( particle_bc_t       * RESTRICT pbc_list,
         );
 
 /* In maxwellian_reflux.c */
-
-particle_bc_t *
-maxwellian_reflux( species_t  * RESTRICT sp_list,
-                   rng_pool_t * RESTRICT rp );
-
-void
-set_reflux_temp( /**/  particle_bc_t * RESTRICT mr,
-                 const species_t     * RESTRICT sp,
-                 float ut_para,
-                 float ut_perp );
-
+//
+//particle_bc_t *
+//maxwellian_reflux( species_t  * RESTRICT sp_list,
+//                   rng_pool_t * RESTRICT rp );
+//
+//void
+//set_reflux_temp( /**/  particle_bc_t * RESTRICT mr,
+//                 const species_t     * RESTRICT sp,
+//                 float ut_para,
+//                 float ut_perp );
+//
 /* In absorb_tally.c */
 
 particle_bc_t *

@@ -357,7 +357,12 @@ advance_p_kokkos_unified(
         const int max_nm,
         const int nx,
         const int ny,
-        const int nz)
+        const int nz,
+        const float ut_para,
+        const float ut_perp,
+        const float dke,
+        const float kemax,
+        k_max_tally_t& max_tally)
 {
 
   constexpr float one            = 1.;
@@ -368,6 +373,14 @@ advance_p_kokkos_unified(
   float cx = 0.25 * g->rdy * g->rdz / g->dt;
   float cy = 0.25 * g->rdz * g->rdx / g->dt;
   float cz = 0.25 * g->rdx * g->rdy / g->dt;
+
+  // For Maxwellian reflux boundary
+  const float gdx = g->dx;
+  const float gdy = g->dy;
+  const float gdz = g->dz;
+  const float rdx = g->rdx;
+  const float rdy = g->rdy;
+  const float rdz = g->rdz;
 
   #define p_dx    k_particles(p_index, particle_var::dx)
   #define p_dy    k_particles(p_index, particle_var::dy)
@@ -681,7 +694,7 @@ advance_p_kokkos_unified(
           local_pm->i     = p_index;
 
           if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                             current_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
+                             current_sv, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz, ut_para, ut_perp, gdx, gdy, gdz, rdx, rdy, rdz, dke, kemax, max_tally ) )
           {
             if( k_nm(0)<max_nm ) {
               const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
@@ -796,7 +809,12 @@ advance_p_kokkos_gpu(
         const int max_nm,
         const int nx,
         const int ny,
-        const int nz)
+        const int nz,
+        const float ut_para,
+        const float ut_perp,
+        const float dke,
+        const float kemax,
+        k_max_tally_t& max_tally)
 {
 
   constexpr float one            = 1.;
@@ -807,6 +825,14 @@ advance_p_kokkos_gpu(
   float cx = 0.25 * g->rdy * g->rdz / g->dt;
   float cy = 0.25 * g->rdz * g->rdx / g->dt;
   float cz = 0.25 * g->rdx * g->rdy / g->dt;
+
+  // For Maxwellian reflux boundary
+  const float gdx = g->dx;
+  const float gdy = g->dy;
+  const float gdz = g->dz;
+  const float rdx = g->rdx;
+  const float rdy = g->rdy;
+  const float rdz = g->rdz;
 
   // Process particles for this pipeline
 
@@ -1057,7 +1083,7 @@ advance_p_kokkos_gpu(
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                         k_f_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
+                         k_f_sv, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz, ut_para, ut_perp, gdx, gdy, gdz, rdx, rdy, rdz, dke, kemax, max_tally ) )
       {
         if( k_nm(0) < max_nm )
         {
@@ -1170,7 +1196,12 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->max_nm,
           sp->g->nx,
           sp->g->ny,
-          sp->g->nz
+          sp->g->nz,
+          sp->ut_para,
+          sp->ut_perp,
+          sp->dke,
+          sp->kemax,
+          sp->max_tally_d
   );
   KOKKOS_TOC( advance_p, 1);
 

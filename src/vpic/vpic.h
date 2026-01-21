@@ -181,6 +181,9 @@ public:
 
   // Helper initialized by user
 
+  // TODO: let user pick seed
+  //Kokkos::Random_XorShift64_Pool<> * random_pool_k(/*seed=*/12345);
+
   /* There are enough synchronous and local random number generators
      to permit the host thread plus all the pipeline threads for one
      dispatcher to simultaneously produce both synchronous and local

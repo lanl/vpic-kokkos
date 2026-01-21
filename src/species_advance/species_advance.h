@@ -16,6 +16,8 @@
 
 #include "../sf_interface/sf_interface.h"
 #include "Kokkos_DualView.hpp"
+#include "../vpic/kokkos_helpers.h"
+#include <Kokkos_Random.hpp>
 
 typedef int32_t species_id; // Must be 32-bit wide for particle_injector_t
 
@@ -132,6 +134,12 @@ class species_t {
 
         // Particle boundary diagnostic.
         pb_diagnostic_t * pb_diag = NULL;
+        float ut_para;                      // Parallel temperature for Maxwellian reflux
+        float ut_perp;                      // Perpendicular temperature for Maxwellian reflux
+
+        float dke;                          // Bin info for Max reflux histogram
+        float kemax;
+        float nbins;
 
 
         //// END CHECKPOINTED DATA, START KOKKOS //////
@@ -188,6 +196,10 @@ class species_t {
         Kokkos::View<int*> clean_up_from;
         Kokkos::View<int*> clean_up_to;
 
+        // Maxwellian reflux tally histogram
+        k_max_tally_t max_tally_d;
+        k_max_tally_t::HostMirror max_tally_h;
+
         // Init Kokkos Particle Arrays
         species_t(int n_particles, int n_pmovers)
         {
@@ -227,6 +239,13 @@ class species_t {
             k_nm_h = Kokkos::create_mirror_view(k_nm_d);
 
             clean_up_from_count_h = Kokkos::create_mirror_view(clean_up_from_count);
+
+            // TODO: Make hist size user selectable
+            nbins = 200;
+            kemax = 100;
+            dke = kemax=nbins;
+            max_tally_d = k_max_tally_t("max_tally_d", nbins+1);
+            max_tally_h = Kokkos::create_mirror_view(max_tally_d);
         }
 
         /**
@@ -379,6 +398,175 @@ void accumulate_hydro_p_kokkos(
         const species_t            * RESTRICT sp
 );
 
+template<typename particle_view_t, class max_tally_t>
+void
+//KOKKOS_INLINE_FUNCTION
+interact_maxwellian_reflux_k(
+        const particle_view_t& k_particles,
+        const int pi,
+        //float disp[3],
+        particle_mover_t* ALIGNED(16)  pm,
+        const float ut_para,
+        const float ut_perp,
+        const float dke,
+        const float kemax,
+        const int face,
+        const float dx,
+        const float dy,
+        const float dz,
+        const float rdx,
+        const float rdy,
+        const float rdz,
+        const max_tally_t& max_tally  ) {
+
+  // FIXME: Initializing this every time is horrible and embarrassing.
+  auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  Kokkos::Random_XorShift64_Pool<> random_pool(seed);
+  auto generator = random_pool.get_state();
+
+  float u[3];                // u0 = para, u1 & u2 = perp
+  float ux, uy, uz;          // x, y, z normalized momenta
+  float dispx, dispy, dispz; // Particle displacement
+  float ratio;  
+
+  /**/                      // axis x  y  z 
+  static const int perm[6][3] = { { 0, 1, 2 },   // -x face
+                                  { 2, 0, 1 },   // -y face
+                                  { 1, 2, 0 },   // -z face 
+                                  { 0, 1, 2 },   // +x face
+                                  { 2, 0, 1 },   // +y face
+                                  { 1, 2, 0 } }; // +z face
+  static const float scale[6] = {  M_SQRT2,  M_SQRT2,  M_SQRT2,
+                                  -M_SQRT2, -M_SQRT2, -M_SQRT2 };
+
+  #define p_dx    k_particles(pi, particle_var::dx)
+  #define p_dy    k_particles(pi, particle_var::dy)
+  #define p_dz    k_particles(pi, particle_var::dz)
+  #define p_ux    k_particles(pi, particle_var::ux)
+  #define p_uy    k_particles(pi, particle_var::uy)
+  #define p_uz    k_particles(pi, particle_var::uz)
+  #define p_w     k_particles(pi, particle_var::w)
+
+  float u2 = p_ux*p_ux + p_uy*p_uy + p_uz*p_uz;
+  float ke = u2 / (sqrtf(1. + u2) + 1.); // gamma - 1, multiply by mc^2 for kinetic energy
+
+  if (ke > kemax) ke = kemax - FLT_MIN;
+  Kokkos::atomic_add(&max_tally(int(ke/dke)), p_w);
+
+  // compute velocity of injected particle
+  //
+  // Suppose you have a Maxwellian at a boundary: p(u) ~ exp(-u^2/(2
+  // ub^2)) where u is the || speed and ub is the thermal speed.  In a
+  // time delta t, if the boundary has surface area delta A, there
+  // will be
+  //   
+  //   p_inj(u) du ~ u exp(-u^2/(2 ub^2)) (delta t)(delta A) du
+  //   
+  // particles injected from the boundary between speeds u and
+  // u+du. p_inj(u) is the distribution function we wish to sample.
+  // It has a cumulative i distribution function
+  //   
+  //   cdf(u) = \int_0^u du p_inj(u) = 1 - exp(-u^2/(2 ub^2))
+  //   
+  // (I've adjusted the constants out front to give a proper cdf
+  // ranging from 0 to 1, the range of h).
+  //   
+  // Let mu be a uniformly distributed random number from 0 to 1.
+  // Setting cdf(u)=mu and solving for u gives the means for sampling
+  // u:
+  //   
+  //   exp(-u^2/(2 ub^2)) = mu - 1 = mu
+  //
+  // (Note that 1-mu has same dist as mu.)  This implies that
+  //
+  //   u = sqrt(2) ub sqrt( -log(mu) ).
+  //
+  // Note that -log(mu) is an _exponentially_ distributed random
+  // number.
+
+  // Note: This assumes ut_para > 0
+  
+  //u[0] = ut_para*scale[face]*sqrtf(frande(rng));
+  //u[1] = ut_perp*frandn(rng);
+  //u[2] = ut_perp*frandn(rng);
+  u[0] = ut_para*scale[face]*sqrtf(-logf(generator.frand()+FLT_MIN));
+  // FIXME: Kokkos does not have a float normal, so we should write our own.
+  u[1] = ut_perp*float(generator.normal());
+  u[2] = ut_perp*float(generator.normal());
+  ux   = u[perm[face][0]];
+  uy   = u[perm[face][1]];
+  uz   = u[perm[face][2]];
+
+  // Compute the amount of aging to due of the refluxed particle.
+  //
+  // The displacement of the refluxed particle should be:
+  //
+  //   dr' = c dt u' (1-a) / gamma'
+  //
+  // where u' and gamma' refer to the refluxed 4-momentum and
+  // a is when the particle's time step "age" when it hit the
+  // boundary.
+  //
+  //   1-a = |remaining_dr| / ( c dt |u| / gamma )
+  //
+  // Thus, we have:
+  //
+  //   dr' = u' gamma |remaining_dr| / ( gamma' |u| )
+  //
+  // or:
+  //
+  //   dr' = u' sqrt(( (1+|u|^2) |remaining_dr|^2 ) / ( (1+|u'|^2) |u|^2 ))
+
+  float* disp = static_cast<float*>(&pm->dispx);
+
+  //printf("disps for %d are %e %e %e\n", pi, pm->dispx, disp[1], disp[2]);
+  dispx = dx * disp[0];
+  dispy = dy * disp[1];
+  dispz = dz * disp[2];
+  //dispx = dx * pm->dispx;
+  //dispy = dy * pm->dispy;
+  //dispz = dz * pm->dispz;
+  ratio = p_ux*p_ux + p_uy*p_uy + p_uz*p_uz;
+  ratio = sqrtf( ( ( 1+ratio )*( dispx*dispx + dispy*dispy + dispz*dispz ) ) /
+                 ( ( 1+(ux*ux+uy*uy+uz*uz) )*( FLT_MIN+ratio ) ) );
+  dispx = ux * ratio * rdx;
+  dispy = uy * ratio * rdy;
+  dispz = uz * ratio * rdz;
+
+  // If disp and u passed to this are consistent, ratio is sane in and
+  // the displacment is non-zero in exact arithmetic.  However,
+  // paranoid checking like the below can be done here if desired.
+  //
+  // if( ratio<=0 || ratio>=g->dt*g->cvac )
+  //   WARNING(( "Bizarre behavior detected in maxwellian_reflux" ));
+
+  p_ux    = ux;
+  p_uy    = uy;
+  p_uz    = uz;
+  disp[0] = dispx;
+  disp[1] = dispy;
+  disp[2] = dispz;
+  //pm->dispx = dispx;
+  //pm->dispy = dispy;
+  //pm->dispz = dispz;
+  //printf("updated disps for %d are %e %e %e\n", pi, disp[0], disp[1], disp[2]);
+  
+  u2 = p_ux*p_ux + p_uy*p_uy + p_uz*p_uz;
+  float kenew = u2 / (sqrtf(1. + u2) + 1.); // gamma - 1, multiply by mc^2 for kinetic energy
+  // TODO: Should be able to save a divide here.
+  Kokkos::atomic_add(&max_tally(int(kemax/dke)), p_w*(kenew - ke));
+
+  #undef p_dx
+  #undef p_dy
+  #undef p_dz
+  #undef p_ux
+  #undef p_uy
+  #undef p_uz
+  #undef p_w
+
+  return;
+}
+
 // In move_p.cxx
 int
 move_p( particle_t       * ALIGNED(128) p0,
@@ -388,7 +576,7 @@ move_p( particle_t       * ALIGNED(128) p0,
         const grid_t     *              g,
         const float                     qsp );
 
-template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class scatter_view_t>
+template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class scatter_view_t, class max_tally_t>
 int
 KOKKOS_INLINE_FUNCTION
 move_p_kokkos(
@@ -397,7 +585,6 @@ move_p_kokkos(
     particle_mover_t* ALIGNED(16)  pm,
     //accumulator_sa_t k_accumulators_sa,
     scatter_view_t scatter_view,
-    const grid_t* g,
     neighbor_view_t& d_neighbor,
     int64_t rangel,
     int64_t rangeh,
@@ -409,7 +596,18 @@ move_p_kokkos(
     float cz,
     const int nx,
     const int ny,
-    const int nz
+    const int nz,
+    const float ut_para,
+    const float ut_perp,
+    const float dx,
+    const float dy,
+    const float dz,
+    const float rdx,
+    const float rdy,
+    const float rdz,
+    const float dke,
+    const float kemax,
+    const max_tally_t& max_tally
 )
 {
 
@@ -613,6 +811,20 @@ move_p_kokkos(
       continue;
     }
 
+    if( neighbor==Maxwellian_reflux ) {
+        //printf("Maxfluxing %e %e %e %d\n", pm->dispx, pm->dispy, pm->dispz, pm->i);
+        //float* disp = static_cast<float*>(&(pm->dispx));
+        //float disp[3];
+        //disp[0] = pm->dispx;
+        //disp[1] = pm->dispy;
+        //disp[2] = pm->dispz;
+        interact_maxwellian_reflux_k( k_particles, pi, pm, ut_para, ut_perp, dke, kemax, face, dx, dy, dz, rdx, rdy, rdz, max_tally);
+        //pm->dispx = disp[0];
+        //pm->dispy = disp[1];
+        //pm->dispz = disp[2];
+        continue;
+    }
+
     if( neighbor<rangel || neighbor>rangeh ) {
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
@@ -645,7 +857,7 @@ move_p_kokkos(
 }
 
 // this has no data race protection for write into the accumulators
-template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class accum_view_t>
+template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class accum_view_t, class max_tally_t>
 int
 move_p_kokkos_host_serial(
     const particle_view_t& k_particles,
@@ -656,7 +868,12 @@ move_p_kokkos_host_serial(
     neighbor_view_t& d_neighbor,
     int64_t rangel,
     int64_t rangeh,
-    const float qsp
+    const float qsp,
+    const float ut_para,
+    const float ut_perp,
+    const float dke,
+    const float kemax,
+    const max_tally_t& max_tally
 )
 {
   const int nx = g->nx;
@@ -835,6 +1052,20 @@ move_p_kokkos_host_serial(
       disp[axis] = -disp[axis];
 
       continue;
+    }
+
+    if( neighbor==Maxwellian_reflux ) {
+        //printf("Maxfluxing %e %e %e %d\n", pm->dispx, pm->dispy, pm->dispz, pm->i);
+        //float* disp = static_cast<float*>(&(pm->dispx));
+        //float disp[3];
+        //disp[0] = pm->dispx;
+        //disp[1] = pm->dispy;
+        //disp[2] = pm->dispz;
+        interact_maxwellian_reflux_k( k_particles, pi, pm, ut_para, ut_perp, dke, kemax, face, g->dx, g->dy, g->dz, g->rdx, g->rdy, g->rdz, max_tally);
+        //pm->dispx = disp[0];
+        //pm->dispy = disp[1];
+        //pm->dispz = disp[2];
+        continue;
     }
 
     if( neighbor<rangel || neighbor>rangeh ) {

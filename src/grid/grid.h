@@ -28,7 +28,9 @@ enum grid_enums {
 
   // Phase 3 boundary conditions
   reflect_particles = -1, // Cell boundary should reflect particles
-  absorb_particles  = -2  // Cell boundary should absorb particles
+  absorb_particles  = -2,  // Cell boundary should absorb particles
+  Maxwellian_reflux = -3  // Cell boundary should reinject from Maxwellian
+                          // distribution
 
   // Symmetry in the field boundary conditions refers to image charge
   // sign

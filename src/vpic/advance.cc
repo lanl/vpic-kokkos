@@ -21,11 +21,13 @@ int vpic_simulation::advance(void)
   // Determine if we are done ... see note below why this is done here
   if( num_step>0 && step()>=num_step ) return 0;
 
+  //printf("Starting sorting\n");
   KOKKOS_TIC();
 
   // Sort the particles for performance if desired.
   LIST_FOR_EACH( sp, species_list )
   {
+  //printf("sorting a species\n");
       if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
       {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
@@ -34,6 +36,7 @@ int vpic_simulation::advance(void)
   }
 
   KOKKOS_TOC( sort_particles, 1);
+  //printf("Done sorting\n");
 
   // At this point, fields are at E_0 and B_0 and the particle positions
   // are at r_0 and u_{-1/2}.  Further the mover lists for the particles should
@@ -48,6 +51,7 @@ int vpic_simulation::advance(void)
     //TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
   TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
   }
+  //printf("Jf cleared\n");
 
   // Note: Particles should not have moved since the last performance sort
   // when calling collision operators.
@@ -68,6 +72,7 @@ int vpic_simulation::advance(void)
   // DEVICE function - Touches particles, particle movers, accumulators, interpolators
   LIST_FOR_EACH( sp, species_list )
   {
+    //printf("Advancing a species\n");
       // Now Times internally
       advance_p( sp, interpolator_array, field_array );
   }

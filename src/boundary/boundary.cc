@@ -68,8 +68,8 @@ append_particle_bc( particle_bc_t * pbc,
                     particle_bc_t ** pbc_list ) {
   if( !pbc || !pbc_list ) ERROR(( "Bad args" ));
   if( pbc->next ) ERROR(( "Particle boundary condition already in a list" ));
-  // Assumes reflective/absorbing are -1, -2
-  pbc->id   = -3-num_particle_bc( *pbc_list );
+  // Assumes reflective/absorbing/Maxwellian reflux are -1, -2, -3
+  pbc->id   = -4-num_particle_bc( *pbc_list );
   pbc->next = *pbc_list;
   *pbc_list = pbc;
   return pbc;
@@ -80,6 +80,7 @@ get_particle_bc_id( particle_bc_t * pbc ) {
   if( !pbc ) return 0;
   if( pbc==(particle_bc_t *) absorb_particles ) return  absorb_particles;
   if( pbc==(particle_bc_t *)reflect_particles ) return reflect_particles;
+  if( pbc==(particle_bc_t *)Maxwellian_reflux ) return Maxwellian_reflux;
   return pbc->id;
 }
 
