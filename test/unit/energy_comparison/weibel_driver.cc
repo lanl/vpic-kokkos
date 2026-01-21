@@ -326,7 +326,7 @@ TEST_CASE( "Check if Weibel gives correct energy (within tol)", "[energy]" )
     // Test just the step range 50-250, and have tight counts
     REQUIRE(
             test_utils::compare_energies(energy_file_name, energy_gold_file_name,
-                0.01, e_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.e.tight.out", 50, 200)
+                0.001, e_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.e.tight.out", 50, 200)
            );
 
     // Test the sum of the b_field
