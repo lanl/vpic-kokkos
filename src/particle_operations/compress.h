@@ -66,7 +66,7 @@ struct DefaultCompress {
         Kokkos::View<int> clean_up_to_count = sp->clean_up_to_count;
         Kokkos::View<int> clean_up_from_count = sp->clean_up_from_count;
 
-        Kokkos::View<int>::HostMirror clean_up_from_count_h = sp->clean_up_from_count_h;
+        Kokkos::View<int>::host_mirror_type clean_up_from_count_h = sp->clean_up_from_count_h;
 
         Kokkos::View<int*> clean_up_from = sp->clean_up_from;
         Kokkos::View<int*> clean_up_to = sp->clean_up_to;

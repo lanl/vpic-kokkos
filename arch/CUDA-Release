@@ -24,6 +24,7 @@ src_dir="${0%/*}/.."
 
 CXX=$src_dir/kokkos/bin/nvcc_wrapper cmake \
   -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
   -DENABLE_INTEGRATED_TESTS=ON \
   -DENABLE_UNIT_TESTS=ON \
   -DBUILD_INTERNAL_KOKKOS=ON \

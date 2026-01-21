@@ -22,6 +22,7 @@
 // hydro jx,jy,jz are for diagnostic purposes only; they are not
 // accumulated with a charge conserving algorithm.
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 void
 accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
                     const species_t            * RESTRICT sp,
@@ -164,6 +165,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
 #   undef ACCUM_HYDRO
   }
 }
+#endif // USE_LEGACY_PARTICLE_ARRAY
 
 void
 accumulate_hydro_p_kokkos(

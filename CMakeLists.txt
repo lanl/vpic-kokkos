@@ -19,9 +19,10 @@ project(vpic CXX)
 # Kokkos build, feel free to try a lower standard.
 # Fixing the this capture requires C++17, but if you don't mind the warnings,
 # feel free to experiment with lower standards.
+# Kokkos 5.0 requires C++20.s
 #------------------------------------------------------------------------------#
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #------------------------------------------------------------------------------#
@@ -59,6 +60,8 @@ option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
+
+option(VPIC_USE_LEGACY_PARTICLE_ARRAY "Use the legacy particle array for compatibility" ON)
 
 option(VPIC_ENABLE_AUTO_TUNING "Enable automatic tuning based on architecture" ON)
 
@@ -98,7 +101,7 @@ string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
 if(NOT ${string_includes} STREQUAL "")
   set(VPIC_CXX_FLAGS "-I${string_includes} ${MPI_C_LINK_FLAGS}")
 endif(NOT ${string_includes} STREQUAL "")
-set(VPIC_CXX_FLAGS "${CMAKE_CXX17_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
+set(VPIC_CXX_FLAGS "${CMAKE_CXX20_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
 
 # Add Debug flags to VPIC_CXX_FLAGS
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
@@ -224,7 +227,6 @@ get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkoscore INTERFACE_INCLUDE_DIR
 get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE_INCLUDE_DIRECTORIES)
 #get_target_property(KOKKOS_INCLUDE_ALGORITHMS Kokkos::kokkosalgorithms INTERFACE_INCLUDE_DIRECTORIES)
 
-#message(${KOKKOS_COMPILE_OPTIONS})
 # TODO: this gives the external include path
 #get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
 
@@ -293,11 +295,15 @@ find_package(Threads REQUIRED)
 # Act on build options set in project.cmake
 #------------------------------------------------------------------------------#
 
-message("-- VPIC Optimization Settings")
+if (VPIC_USE_LEGACY_PARTICLE_ARRAY)
+    add_definitions(-DUSE_LEGACY_PARTICLE_ARRAY)
+endif(VPIC_USE_LEGACY_PARTICLE_ARRAY)
+
 if (VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
 
+message("-- VPIC Optimization Settings")
 if(VPIC_ENABLE_AUTO_TUNING)
   add_definitions(-DVPIC_ENABLE_AUTO_TUNING)
   message("--     VPIC: Enabled automatic tuning.  Optimizations will be selected during compilation.")
