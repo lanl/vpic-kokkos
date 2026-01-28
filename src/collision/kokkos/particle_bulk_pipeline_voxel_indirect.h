@@ -411,7 +411,11 @@ struct particle_bulk_collision_pipeline {
 	    lsum.v[1] += dux;
 	    lsum.v[2] += duy;
 	    lsum.v[3] += duz;
+<<<<<<< HEAD
       lsum.v[4] += den;
+=======
+	    lsum.v[4] += 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i);
+>>>>>>> upgrade_ta_collision_v2
       lsum.v[5] += dn;
       
 	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",wp,dux,duy,duz,den);

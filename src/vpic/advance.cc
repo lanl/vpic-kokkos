@@ -68,6 +68,8 @@ int vpic_simulation::advance(void)
   // TODO: implement
   //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
 
+  if( species_list ) TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
+  
   //printf("in advance: sx=%e, se=%e, ex=%e\n",field_array->k_f_d(13, field_var::sx),field_array->k_f_d(13, field_var::se), field_array->k_f_d(13, field_var::ex));
   // DEVICE function - Touches particles, particle movers, accumulators, interpolators
   Kokkos::Profiling::pushRegion("Advance Particles");
@@ -403,7 +405,7 @@ int vpic_simulation::advance(void)
 */
   // DEVICE
   // Touches fields, interpolators
-  if( species_list ) TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
+  //if( species_list ) TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
 
   step()++;
 
