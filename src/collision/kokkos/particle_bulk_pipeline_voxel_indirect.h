@@ -383,8 +383,6 @@ struct particle_bulk_collision_pipeline {
                 dn = wp * rdV;
               }
 
-              // todo: If the projectile losses an electron, 
-              // should produce a free electron (ie increase n_e)
               break; // end case(charge exchange)
           }
           case CollisionType::BulkDrag:
@@ -403,6 +401,7 @@ struct particle_bulk_collision_pipeline {
 
               break; // end case(drag,lemons)
           }
+          case CollisionType::BulkIonImpactIoniz:
           default:
               break;
       } // end switch(model.collision_type) 
@@ -576,46 +575,41 @@ struct particle_bulk_collision_pipeline {
               // the projectile particle captures an electron,
               // then decrement the neutral fluid density              
               int dq = qp_i - qp_n;
-              if (dq == -1) {
+              if (dq != -1) { break; }
                 
-                // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
-                dn = wp * rdV;
+              // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
+              dn = wp * rdV;
 
-                // The new kinetic particle takes the fluid bulk velociy plus a thermal component
-                float ux_pr = rg.normal(ux_fl, uth_fl);
-                float uy_pr = rg.normal(uy_fl, uth_fl);
-                float uz_pr = rg.normal(uz_fl, uth_fl);
-                float w_pr = wp;
+              // The new kinetic particle takes the fluid bulk velociy plus a thermal component
+              float ux_pr = rg.normal(ux_fl, uth_fl);
+              float uy_pr = rg.normal(uy_fl, uth_fl);
+              float uz_pr = rg.normal(uz_fl, uth_fl);
+              float w_pr = wp;
 
-                // Create kinetic particle. Get particle index and incremenent number of new products
-                int cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
-                int i_pr = np_products0 + cntr;
+              // Create kinetic particle. Get particle index and incremenent number of new products
+              int cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
+              int i_pr = np_products0 + cntr;
 
-                spp_p(i_pr, particle_var::w)  = w_pr;
-                spp_p(i_pr, particle_var::ux) = ux_pr;
-                spp_p(i_pr, particle_var::uy) = uy_pr;
-                spp_p(i_pr, particle_var::uz) = uz_pr;	  
-                spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
-                spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
-                spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
-                spp_i(i_pr) = spi_i(i);
+              spp_p(i_pr, particle_var::w)  = w_pr;
+              spp_p(i_pr, particle_var::ux) = ux_pr;
+              spp_p(i_pr, particle_var::uy) = uy_pr;
+              spp_p(i_pr, particle_var::uz) = uz_pr;	  
+              spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
+              spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
+              spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
+              spp_i(i_pr) = spi_i(i);
 #ifdef VARIABLE_CHARGE
-                spp_p(i_pr, particle_var::qp) = 1; // spj->q - dq;
+              spp_p(i_pr, particle_var::qp) = 1; // spj->q - dq;
 #endif
 
-                // Decrement fluid momentum and energy based on new kinetic particle
-                dux = ux_pr * w_pr;
-                duy = ux_pr * w_pr;
-                duz = ux_pr * w_pr;
-                den = 0.5 * w_pr *
-                  ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
-                    ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
-
-              } // endif(electron-capture)
-              
-              // todo: If the projectile losses an electron, 
-              // should produce a free electron (ie increase n_e)
-
+              // Decrement fluid momentum and energy based on new kinetic particle
+              dux = ux_pr * w_pr;
+              duy = ux_pr * w_pr;
+              duz = ux_pr * w_pr;
+              den = 0.5 * w_pr *
+                ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+                  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+                  
               break; // end case(charge exchange)
             }
             case CollisionType::BulkIonImpactIoniz:
@@ -625,36 +619,46 @@ struct particle_bulk_collision_pipeline {
               // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
               dn = wp * rdV;
 
-//               // The new kinetic particle takes the fluid bulk velociy plus a thermal component
-//               float ux_pr = rg.normal(ux_fl, uth_fl);
-//               float uy_pr = rg.normal(uy_fl, uth_fl);
-//               float uz_pr = rg.normal(uz_fl, uth_fl);
-//               float w_pr = wp;
+              // The new kinetic particle takes the fluid bulk velociy plus a thermal component
+              float ux_pr = rg.normal(ux_fl, uth_fl);
+              float uy_pr = rg.normal(uy_fl, uth_fl);
+              float uz_pr = rg.normal(uz_fl, uth_fl);
+              float w_pr = wp;
 
-//               // Create kinetic particle. Get particle index and incremenent number of new products
-//               int i_pr = np_products0 + np_new_products(0);
-//               Kokkos::atomic_add(&np_new_products(0), 1);
+              
+              // std::cout << "tmp="<<tmp_fl << " uth_fl=" << uth_fl << " up=" << ux_pr << " " << uy_pr << " " << uz_pr << " dn=" << dn << std::endl;
 
-//               spp_p(i_pr, particle_var::w)  = w_pr;
-//               spp_p(i_pr, particle_var::ux) = ux_pr;
-//               spp_p(i_pr, particle_var::uy) = uy_pr;
-//               spp_p(i_pr, particle_var::uz) = uz_pr;	  
-//               spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
-//               spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
-//               spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
-//               spp_i(i_pr) = spi_i(i);
-// #ifdef VARIABLE_CHARGE
-//               // Currently only considering ionizing neutral fluid to +1
-//               spp_p(i_pr, particle_var::qp) = 1;
-// #endif
+              // Create kinetic particle. Get particle index and incremenent number of new products
+              int cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
+              int i_pr = np_products0 + cntr;
 
-              // // Decrement fluid momentum and energy based on new kinetic particle
-              // dux = ux_pr * w_pr;
-              // duy = ux_pr * w_pr;
-              // duz = ux_pr * w_pr;
-              // den = 0.5 * w_pr *
-              //   ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
-              //     ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+              spp_p(i_pr, particle_var::w)  = w_pr;
+              spp_p(i_pr, particle_var::ux) = 0.0; //ux_pr;
+              spp_p(i_pr, particle_var::uy) = 0.0; //uy_pr;
+              spp_p(i_pr, particle_var::uz) = 0.0; //uz_pr;	  
+              spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
+              spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
+              spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
+              spp_i(i_pr) = spi_i(i);
+#ifdef VARIABLE_CHARGE
+              // Currently only considering ionizing neutral fluid (0->1)
+              spp_p(i_pr, particle_var::qp) = 1;
+#endif
+
+              // Decrement fluid momentum and energy based on new kinetic particle
+              dux = ux_pr * w_pr;
+              duy = ux_pr * w_pr;
+              duz = ux_pr * w_pr;
+              den = 0.5 * w_pr *
+                ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+                  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+
+              // todo: Reduce energy of incoming ion by ionization energy (need to pass dE_ionz)
+              // (in the binary collision treatment we will remove a fraction of the 
+              //  ionization energy from the ion and electron fluid)
+              // DO IN RESTITUTION
+              // double E0 = 
+              // double dv = std::sqrt(dE_ionz /  );
 
               break; // end case(ion impact ionization)
             }
