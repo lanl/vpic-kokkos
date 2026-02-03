@@ -9,8 +9,7 @@
 template<typename Functor>
 struct ion_ioniz_collision_op_t : public particle_bulk_collision_op_t {
   Functor sigma_cx0;
-  std::vector<double> dE; // change in energy for projectile
-  std::vector<int> q_projectile; // possible charge states of projectile
+  double dE;
 };
 
 /**
@@ -20,11 +19,10 @@ template<typename Functor>
 struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
   CollisionType collision_type = CollisionType::BulkIonImpactIoniz;
   Functor sigma_cx;
-  std::vector<double> dE;
-  std::vector<int> q_projectile;
+  double dE;
 
-  ion_ioniz_model( Functor op, std::vector<double> dE, std::vector<int> q_projectile) : 
-    sigma_cx(op), dE{dE}, q_projectile{q_projectile} {};
+  ion_ioniz_model( Functor op, double dE) : 
+    sigma_cx(op), dE{dE} {};
 
   
   KOKKOS_INLINE_FUNCTION
@@ -48,20 +46,8 @@ struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
     float *param
   ) const
   {
-    auto qi = param[4]; // projectile charge
-    auto E0 = param[5]; // projectile energy
-    
-    auto iter = std::find(q_projectile.begin(), q_projectile.end(), int(qi));
-    if (iter == q_projectile.end()) {
-      // projectile charge does not have an associated cross section
-      return 1.0;
-    }
-
-    auto charge_index = std::distance(q_projectile.begin(), iter);
-    auto dE_i = dE[charge_index]; // 
-
-
-    auto Cr = std::sqrt((E0 - dE_i) / E0); // scale factor for change in velocity
+    auto E0 = param[4]; // projectile energy
+    auto Cr = std::sqrt((E0 - dE) / E0); // scale factor for change in velocity
     // std::cout << "Cr = " << Cr << "Cr2 = " << (E0 - dE_i) / E0 << " dE/E0 = " << dE_i/E0 << std::endl;
     return Cr;
   }
@@ -135,7 +121,7 @@ void
 apply_ion_ioniz_collision_op( collision_op_t * cop,
 			kokkos_rng_pool_t& rng ) {
   ion_ioniz_collision_op_t<Functor> * ion_ioniz = (ion_ioniz_collision_op_t<Functor> *) cop;
-  ion_ioniz_model model(ion_ioniz->sigma_cx0, ion_ioniz->dE, ion_ioniz->q_projectile);
+  ion_ioniz_model model(ion_ioniz->sigma_cx0, ion_ioniz->dE);
   apply_particle_bulk_collision_model_pipeline<true>((particle_bulk_collision_op_t *) cop, model, rng); // To-do: Change MC to true!
 }
 
@@ -155,12 +141,10 @@ ion_impact_ionization(
   const char       * name,
   /**/  species_t  * spi,
   /**/  fluid_species_t  * spj,
-  const double       dq0,
+  const double       dE,
   Functor            sigmafunc,
   const int          interval,
-  species_t        * spp=NULL,
-  std::vector<double> dE = {},
-  std::vector<int> q_projectile = {}
+  species_t        * spp=NULL
 ) {
 
   if( !name || !spi || !spj || !spi->g || !spj->g || spi->g != spj->g || interval <= 0 )
@@ -175,9 +159,7 @@ ion_impact_ionization(
   ion_ioniz->spj         = spj;
   ion_ioniz->spp         = spp;
   ion_ioniz->sigma_cx0   = sigmafunc;
-  // ion_ioniz->dq0         = dq0;
   ion_ioniz->dE          = dE;
-  ion_ioniz->q_projectile = q_projectile;
   ion_ioniz->interval    = interval;
   ion_ioniz->apply_cop   = &apply_ion_ioniz_collision_op<Functor>;
   ion_ioniz->delete_cop  = &delete_ion_ioniz_collision_op<Functor>;

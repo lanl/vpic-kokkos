@@ -834,7 +834,7 @@ struct particle_bulk_collision_pipeline {
 
     // Compute collision angle and coefficient of restitution
     float E0 = 0.5 * mi * ((uix*uix) + (uiy*uiy) + (uiz*uiz));
-    float param[6] = {ur, ujth, ndt/(mi*mi), mi/mj, qi, E0};
+    float param[5] = {ur, ujth, ndt/(mi*mi), mi/mj, E0};
     const float rr = model.restitution(rg, param);
     dd = model.tan_theta_half(rg, param);
     PREVENT_BACKSCATTER(dd);
