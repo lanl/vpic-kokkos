@@ -20,8 +20,6 @@ void apply_particle_bulk_collision_model_pipeline( particle_bulk_collision_op_t 
         return;
     }
 
-    //std::cout << "Applying Collisions" << std::endl;
-
     particle_bulk_collision_pipeline<MonteCarlo> pipeline(
       cop->spi,
       cop->spj,

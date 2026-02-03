@@ -227,10 +227,8 @@ struct particle_bulk_collision_pipeline {
     */
 
     if (_spp == NULL) {
-      // std::cout<<"APPLYING COLLISION MODEL 1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
       apply_model(_model);
     } else {
-      // std::cout<<"APPLYING COLLISION MODEL 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
       _spp_p = _spp->k_p_d;
       _spp_i = &_spp->k_p_i_d;
       apply_model_products(_model);
@@ -401,7 +399,7 @@ struct particle_bulk_collision_pipeline {
 
               break; // end case(drag,lemons)
           }
-          case CollisionType::BulkIonImpactIoniz:
+          case CollisionType::BulkIonImpactIoniz: // only implemented for case with products
           default:
               break;
       } // end switch(model.collision_type) 
@@ -555,6 +553,9 @@ struct particle_bulk_collision_pipeline {
           float ux_i = up[1];
           float uy_i = up[2];
           float uz_i = up[3];
+          // std::cout << "vf = " << sqrt(ux_i * ux_i) << std::endl;
+          // std::cout << "(vf/v0) = " << (ux_i)/(ux_n) << std::endl;
+          // std::cout << "(vf/v0)^2 = " << (ux_i * ux_i)/(ux_n * ux_n) << std::endl;
 #ifdef VARIABLE_CHARGE
           qp_i = up[4];
           spi_p(i, particle_var::qp) = qp_i;
@@ -615,7 +616,7 @@ struct particle_bulk_collision_pipeline {
             case CollisionType::BulkIonImpactIoniz:
             {
               if (!MC_col_occurred) { break; }
-              // std::cout << " BulkIonImpactIoniz ~~~~~~~~~~~~~~~" << std::endl;
+
               // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
               dn = wp * rdV;
 
@@ -624,9 +625,6 @@ struct particle_bulk_collision_pipeline {
               float uy_pr = rg.normal(uy_fl, uth_fl);
               float uz_pr = rg.normal(uz_fl, uth_fl);
               float w_pr = wp;
-
-              
-              // std::cout << "tmp="<<tmp_fl << " uth_fl=" << uth_fl << " up=" << ux_pr << " " << uy_pr << " " << uz_pr << " dn=" << dn << std::endl;
 
               // Create kinetic particle. Get particle index and incremenent number of new products
               int cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
@@ -652,13 +650,6 @@ struct particle_bulk_collision_pipeline {
               den = 0.5 * w_pr *
                 ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
                   ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
-
-              // todo: Reduce energy of incoming ion by ionization energy (need to pass dE_ionz)
-              // (in the binary collision treatment we will remove a fraction of the 
-              //  ionization energy from the ion and electron fluid)
-              // DO IN RESTITUTION
-              // double E0 = 
-              // double dv = std::sqrt(dE_ionz /  );
 
               break; // end case(ion impact ionization)
             }
@@ -842,7 +833,8 @@ struct particle_bulk_collision_pipeline {
     }
 
     // Compute collision angle and coefficient of restitution
-    float param[4] = {ur, ujth, ndt/(mi*mi), mi/mj};
+    float E0 = 0.5 * mi * ((uix*uix) + (uiy*uiy) + (uiz*uiz));
+    float param[6] = {ur, ujth, ndt/(mi*mi), mi/mj, qi, E0};
     const float rr = model.restitution(rg, param);
     dd = model.tan_theta_half(rg, param);
     PREVENT_BACKSCATTER(dd);
@@ -885,23 +877,6 @@ struct particle_bulk_collision_pipeline {
     up[2] = ujy_fl + (ury + stack[1])*rr;
     up[3] = ujz_fl + (urz + stack[2])*rr;
     
-
-// #ifdef VARIABLE_CHARGE
-//     // If electron loss (modify_charge=-1), then remove KE from projectile
-//     //float dE = -6.37; // dE for Sr^+ + O_2 -> Sr + O_2^+
-//     float dE = (-6.37 * 1.602e-19) / 7.516e-11; // (E_eV * e) / (0.5 * m_p * c^2)
-//     float E0 = 0.5 * mi * (up[3] * up[3]); //(up[1] * up[1]) * (up[2] * up[2]) * (up[3] * up[3]);
-//     if (dq == -1) {
-//       float dv = std::sqrt((E0 - dE) / E0);
-//       // up[1] *= dv;
-//       // up[2] *= dv;
-//       up[3] *= dv; //1.0 + 1.0e-4;
-//     } else if (dq == 1) {
-//       float dv = std::sqrt((E0 + dE) / E0);
-//       up[3] *= dv;
-//       // up[3] *= 1.0 - 1.0e-4;
-//     }
-// #endif
 
     // Scaled center of mass velocity.
     // t1 = (1-rr);

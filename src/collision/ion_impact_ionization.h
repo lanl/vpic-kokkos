@@ -8,8 +8,9 @@
  */
 template<typename Functor>
 struct ion_ioniz_collision_op_t : public particle_bulk_collision_op_t {
-  double dq0;
   Functor sigma_cx0;
+  std::vector<double> dE; // change in energy for projectile
+  std::vector<int> q_projectile; // possible charge states of projectile
 };
 
 /**
@@ -18,10 +19,12 @@ struct ion_ioniz_collision_op_t : public particle_bulk_collision_op_t {
 template<typename Functor>
 struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
   CollisionType collision_type = CollisionType::BulkIonImpactIoniz;
-  const float dq;
   Functor sigma_cx;
+  std::vector<double> dE;
+  std::vector<int> q_projectile;
 
-  ion_ioniz_model( Functor op, float dq ) : sigma_cx(op), dq(dq) {};
+  ion_ioniz_model( Functor op, std::vector<double> dE, std::vector<int> q_projectile) : 
+    sigma_cx(op), dE{dE}, q_projectile{q_projectile} {};
 
   
   KOKKOS_INLINE_FUNCTION
@@ -36,6 +39,32 @@ struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
     return sig;
   }
   
+  /**
+   * @brief restitution returns the scale factor of relative speed
+   */
+  KOKKOS_INLINE_FUNCTION
+  float restitution(
+    kokkos_rng_state_t& rg,
+    float *param
+  ) const
+  {
+    auto qi = param[4]; // projectile charge
+    auto E0 = param[5]; // projectile energy
+    
+    auto iter = std::find(q_projectile.begin(), q_projectile.end(), int(qi));
+    if (iter == q_projectile.end()) {
+      // projectile charge does not have an associated cross section
+      return 1.0;
+    }
+
+    auto charge_index = std::distance(q_projectile.begin(), iter);
+    auto dE_i = dE[charge_index]; // 
+
+
+    auto Cr = std::sqrt((E0 - dE_i) / E0); // scale factor for change in velocity
+    // std::cout << "Cr = " << Cr << "Cr2 = " << (E0 - dE_i) / E0 << " dE/E0 = " << dE_i/E0 << std::endl;
+    return Cr;
+  }
     
   /**
    * @brief tan(theta/2)
@@ -51,6 +80,7 @@ struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
   }
 
 
+  // Incoming ion does not change charge
   // KOKKOS_INLINE_FUNCTION
   //   float modify_charge( ) const
   // {
@@ -73,6 +103,7 @@ struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
     const float mi,
     const float mj) const 
   {
+    // std::cout << " den0=" << spj_v(v, fluid_var::den) << "  dn=" << Dm.v[5] << std::endl;
     // spj_v(v, fluid_var::ux)  += -Dm.v[1] * mi / (mj * Dm.v[0]); // du_2 = dp_1 / m_2
     // spj_v(v, fluid_var::uy)  += -Dm.v[2] * mi / (mj * Dm.v[0]);
     // spj_v(v, fluid_var::uz)  += -Dm.v[3] * mi / (mj * Dm.v[0]);
@@ -104,7 +135,7 @@ void
 apply_ion_ioniz_collision_op( collision_op_t * cop,
 			kokkos_rng_pool_t& rng ) {
   ion_ioniz_collision_op_t<Functor> * ion_ioniz = (ion_ioniz_collision_op_t<Functor> *) cop;
-  ion_ioniz_model model(ion_ioniz->sigma_cx0,ion_ioniz->dq0);
+  ion_ioniz_model model(ion_ioniz->sigma_cx0, ion_ioniz->dE, ion_ioniz->q_projectile);
   apply_particle_bulk_collision_model_pipeline<true>((particle_bulk_collision_op_t *) cop, model, rng); // To-do: Change MC to true!
 }
 
@@ -127,8 +158,9 @@ ion_impact_ionization(
   const double       dq0,
   Functor            sigmafunc,
   const int          interval,
-  // fluid_species_t  * spe // electron species
-  species_t        * spp=NULL
+  species_t        * spp=NULL,
+  std::vector<double> dE = {},
+  std::vector<int> q_projectile = {}
 ) {
 
   if( !name || !spi || !spj || !spi->g || !spj->g || spi->g != spj->g || interval <= 0 )
@@ -143,7 +175,9 @@ ion_impact_ionization(
   ion_ioniz->spj         = spj;
   ion_ioniz->spp         = spp;
   ion_ioniz->sigma_cx0   = sigmafunc;
-  ion_ioniz->dq0         = dq0;
+  // ion_ioniz->dq0         = dq0;
+  ion_ioniz->dE          = dE;
+  ion_ioniz->q_projectile = q_projectile;
   ion_ioniz->interval    = interval;
   ion_ioniz->apply_cop   = &apply_ion_ioniz_collision_op<Functor>;
   ion_ioniz->delete_cop  = &delete_ion_ioniz_collision_op<Functor>;
