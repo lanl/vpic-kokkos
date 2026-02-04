@@ -2,6 +2,7 @@
 #define HAS_V4_PIPELINE
 #include "spa_private.h"
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 // This function calculates kinetic energy, normalized by c^2.
 void
 energy_p_pipeline( energy_p_pipeline_args_t * RESTRICT args,
@@ -117,6 +118,7 @@ energy_p_pipeline_v4( energy_p_pipeline_args_t * args,
 }
 
 #endif
+#endif // USE_LEGACY_PARTICLE_ARRAY
 
 double
 energy_p_kernel(const k_interpolator_t& k_interp, 
@@ -145,6 +147,7 @@ energy_p_kernel(const k_interpolator_t& k_interp,
   return en;
 }
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
 double
 energy_p( const species_t            * RESTRICT sp,
           const interpolator_array_t * RESTRICT ia ) {
@@ -172,6 +175,7 @@ energy_p( const species_t            * RESTRICT sp,
   mp_allsum_d( &local, &global, 1 );
   return global*((double)sp->g->cvac*(double)sp->g->cvac);
 }
+#endif // USE_LEGACY_PARTICLE_ARRAY
 
 double
 energy_p_kokkos(const species_t* RESTRICT sp,

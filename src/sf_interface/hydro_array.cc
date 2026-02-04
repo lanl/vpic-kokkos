@@ -321,23 +321,23 @@ synchronize_hydro_array_kokkos( hydro_array_t * ha ) {
     face = (i+j+k)<0 ? 1 : n##X+1;                      \
     Kokkos::parallel_for("load vals", X##_node_policy(face), \
     KOKKOS_LAMBDA(const int x, const int y, const int z) { \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 0) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::jx); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 1) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::jy); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 2) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::jz); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 3) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 4) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::px); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 5) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::py); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 6) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 7) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::ke); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 8) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 9) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 10) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 11) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyz); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 12) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzx); \
-      send_buff_d(1+14*((Z-1)*(n##Y)+(Y-1)) + 13) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 0) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::jx); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 1) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::jy); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 2) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::jz); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 3) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 4) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::px); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 5) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::py); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 6) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 7) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::ke); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 8) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 9) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 10) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 11) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyz); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 12) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzx); \
+      send_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1)) + 13) = k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy); \
     }); \
     Kokkos::deep_copy(send_buff_h, send_buff_d); \
-    send_buff_h(0) = size; \
+    send_buff_h(0) = g->d##X; \
     begin_send_port_k(i,j,k,size,g, reinterpret_cast<char*>(send_buff_h.data())); \
   } END_PRIMITIVE
 
@@ -386,33 +386,33 @@ BEGIN_PRIMITIVE {                                                               
     Kokkos::parallel_for("load vals", X##_node_policy(face),                                            \
     KOKKOS_LAMBDA(const int x, const int y, const int z) {                                              \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::jx) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::jx)      \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+0);    \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+0);    \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::jy) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::jy)      \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+1);    \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+1);    \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::jz) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::jz)      \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+2);    \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+2);    \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::rho)    \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+3);    \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+3);    \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::px) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::px)      \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+4);    \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+4);    \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::py) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::py)      \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+5);    \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+5);    \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::pz)      \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+6);    \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+6);    \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::ke) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::ke)      \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+7);    \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+7);    \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txx)    \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+8);    \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+8);    \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyy)    \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+9);    \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+9);    \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzz)    \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+10);   \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+10);   \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyz) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tyz)    \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+11);   \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+11);   \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzx) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::tzx)    \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+12);   \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+12);   \
       k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy) = lw*k_h_d(VOXEL(x,y,z,nx,ny,nz), hydro_var::txy)    \
-                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y)+(Y-1))+13);   \
+                                                  + rw*recv_buff_d(1+14*((Z-1)*(n##Y+1)+(Y-1))+13);   \
     });                                                                                                 \
   }                                                                                                     \
 } END_PRIMITIVE
@@ -425,10 +425,10 @@ BEGIN_PRIMITIVE {                                                               
   Kokkos::View<float*> sbuf_neg_d("Send buffer neg", 1+14*(ny+1)*(nz+1));
   Kokkos::View<float*> rbuf_pos_d("Recv buffer pos", 1+14*(ny+1)*(nz+1));
   Kokkos::View<float*> rbuf_neg_d("Recv buffer neg", 1+14*(ny+1)*(nz+1));
-  Kokkos::View<float*>::HostMirror sbuf_pos_h = Kokkos::create_mirror_view(sbuf_pos_d);
-  Kokkos::View<float*>::HostMirror sbuf_neg_h = Kokkos::create_mirror_view(sbuf_neg_d);
-  Kokkos::View<float*>::HostMirror rbuf_pos_h = Kokkos::create_mirror_view(rbuf_pos_d);
-  Kokkos::View<float*>::HostMirror rbuf_neg_h = Kokkos::create_mirror_view(rbuf_neg_d);
+  Kokkos::View<float*>::host_mirror_type sbuf_pos_h = Kokkos::create_mirror_view(sbuf_pos_d);
+  Kokkos::View<float*>::host_mirror_type sbuf_neg_h = Kokkos::create_mirror_view(sbuf_neg_d);
+  Kokkos::View<float*>::host_mirror_type rbuf_pos_h = Kokkos::create_mirror_view(rbuf_pos_d);
+  Kokkos::View<float*>::host_mirror_type rbuf_neg_h = Kokkos::create_mirror_view(rbuf_neg_d);
   BEGIN_SEND_KOKKOS(-1, 0, 0,x,y,z,sbuf_neg_d, sbuf_neg_h);
   BEGIN_SEND_KOKKOS( 1, 0, 0,x,y,z,sbuf_pos_d, sbuf_pos_h);
   BEGIN_RECV_KOKKOS(-1, 0, 0,x,y,z,rbuf_neg_h);

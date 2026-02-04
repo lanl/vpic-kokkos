@@ -18,9 +18,11 @@ checkpt_species( const species_t * sp ) {
     //std::cout << "checkpintg " << sp->name << " with nm = " << sp->nm << std::endl;
   CHECKPT( sp, 1 );
   CHECKPT_STR( sp->name );
+#ifdef USE_LEGACY_PARTICLE_ARRAY
   checkpt_data( sp->p,
                 sp->np    *sizeof(particle_t),
                 sp->max_np*sizeof(particle_t), 1, 1, 128 );
+#endif
   checkpt_data( sp->pm,
                 sp->nm    *sizeof(particle_mover_t),
                 sp->max_nm*sizeof(particle_mover_t), 1, 1, 128 );
@@ -35,7 +37,9 @@ restore_species( void ) {
   species_t * sp;
   RESTORE( sp );
   RESTORE_STR( sp->name );
+#ifdef USE_LEGACY_PARTICLE_ARRAY
   sp->p  = (particle_t *)      restore_data();
+#endif
   sp->pm = (particle_mover_t *)restore_data();
   RESTORE_ALIGNED( sp->partition );
   RESTORE_PTR( sp->g );
@@ -50,7 +54,9 @@ delete_species( species_t * sp ) {
   UNREGISTER_OBJECT( sp );
   FREE_ALIGNED( sp->partition );
   FREE_ALIGNED( sp->pm );
+#ifdef USE_LEGACY_PARTICLE_ARRAY
   FREE_ALIGNED( sp->p );
+#endif
   FREE( sp->name );
   FREE( sp );
 }
@@ -134,7 +140,9 @@ species( const char * name,
 
   if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for species %s.\n",
           (double (max_local_np*sizeof(particle_t)))/pow(2,30), sp->name);
+#ifdef USE_LEGACY_PARTICLE_ARRAY
   MALLOC_ALIGNED( sp->p, max_local_np, 128 );
+#endif
   sp->max_np = max_local_np;
 
   if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for species %s movers.\n",
@@ -172,6 +180,7 @@ species_t::copy_to_host()
 
   nm = k_nm_h(0);
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
   // Avoid capturing this
   auto& k_particle_h = k_p_h;
   auto& k_particle_i_h = k_p_i_h;
@@ -193,6 +202,7 @@ species_t::copy_to_host()
       particles[i].i  = k_particle_i_h(i);
 
     });
+#endif
 
   // Avoid capturing this
   auto& k_particle_movers_h = k_pm_h;
@@ -220,6 +230,7 @@ species_t::copy_to_device()
 
   k_nm_h(0) = nm;
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
   // Avoid capturing this
   auto& k_particle_h = k_p_h;
   auto& k_particle_i_h = k_p_i_h;
@@ -239,6 +250,7 @@ species_t::copy_to_device()
       k_particle_i_h(i) = particles[i].i;
 
     });
+#endif
 
   // Avoid capturing this
   auto& k_particle_movers_h = k_pm_h;

@@ -37,7 +37,28 @@ vpic_simulation::initialize( int argc,
 
   if( rank()==0 ) MESSAGE(( "Initializing bound charge density" ));
   TIC FAK->clear_rhof( field_array ); TOC( clear_rhof, 1 );
+
+  KOKKOS_TIC();
+  LIST_FOR_EACH( sp, species_list ) {
+    sp->copy_to_device();
+  }
+  KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
+#ifdef USE_LEGACY_PARTICLE_ARRAY
   LIST_FOR_EACH( sp, species_list ) TIC accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
+#else
+  KOKKOS_TIC(); // User could have initialized rhof.
+  field_array->copy_to_device();
+  KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
+  KOKKOS_TIC();
+  LIST_FOR_EACH(sp, species_list ) {
+      k_accumulate_rho_p( field_array, sp );
+  }
+  KOKKOS_TOCN( accumulate_rho_p, 1);
+  KOKKOS_TIC(); // Time this data movement
+  field_array->copy_to_host();
+  KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
+#endif
+
   TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
   TIC FAK->compute_rhob( field_array ); TOC( compute_rhob, 1 );
 
@@ -59,12 +80,6 @@ vpic_simulation::initialize( int argc,
   auto nfaces_per_voxel = 6;
   g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
-  KOKKOS_TIC();
-  LIST_FOR_EACH( sp, species_list ) {
-    sp->copy_to_device();
-  }
-  KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
-
   KOKKOS_TIC(); // Time this data movement
   interpolator_array->copy_to_device();
   KOKKOS_TOCN( INTERPOLATOR_DATA_MOVEMENT, 1);
@@ -73,11 +88,11 @@ vpic_simulation::initialize( int argc,
   FAK->k_reduce_jf(field_array);
   KOKKOS_TOC( JF_ACCUM_DATA_MOVEMENT, 1);
 
-  if( species_list ) {
-    KOKKOS_TIC(); // Time this data movement
-    field_array->copy_to_device();
-    KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
+  KOKKOS_TIC(); // Time this data movement
+  field_array->copy_to_device();
+  KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
 
+  if( species_list ) {
     if( rank()==0 ) MESSAGE(( "Uncentering particles" ));
     TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
   }
