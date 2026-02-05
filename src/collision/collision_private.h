@@ -13,7 +13,8 @@
 
 // CollisionType tag is provided to each collision model
 enum class CollisionType : unsigned { 
-  BinaryTA, BulkLemons, BulkDrag, BulkChargeExchange, BulkIon, BulkIonImpactIoniz
+  BulkLemons, BulkDrag, BulkChargeExchange, BulkIon, BulkIonImpactIoniz,
+  BinaryTA, BinaryChargeExchange, BinaryIonImpactIoniz
  };
 
 typedef void
@@ -41,6 +42,24 @@ struct particle_bulk_collision_op_t : public collision_op_t {
   field_array_t   * field=NULL; // field for electron collisions, can be NULL
   int               interval;
   species_t       * spp=NULL; // product species
+};
+
+
+/**
+ * @brief Base collision operator for binary neutral collisions including
+ * charge-exchange, ionization, etc. The collisions can be between
+ * between particles of any charge including neutrals, unlike the
+ * Takizuka-Abe model which is only between charged particles
+ *
+ * Cannot be used directly, must be subclassed.
+ */
+struct binary_neutral_collision_op_t : public collision_op_t {
+  species_t       * spi;
+  species_t       * spj;
+  field_array_t   * field=NULL; // field for electron collisions, can be NULL
+  int               interval;
+  // species_t       * spp1=NULL; // product species (for fusion products)
+  // species_t       * spp2=NULL; // product species
 };
 
 

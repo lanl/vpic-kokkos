@@ -814,7 +814,7 @@ struct particle_bulk_collision_pipeline {
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
 
     // Monte-Carlo collision test
-    bool MC_collision_occurred;
+    bool MC_collision_occurred = false;
     if( MonteCarlo ) {
 
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
@@ -825,7 +825,6 @@ struct particle_bulk_collision_pipeline {
       // std::cout << "sigma="<<dd<< " qi="<<qi<< " ur=" <<ur << " n="<<nj_fl << " dt="<<dt << " sig*n*v*dt="<<dd*t1 << std::endl;
 
       if( rg.frand() > dd*t1 ) {
-        MC_collision_occurred = false;
         return MC_collision_occurred;
       } else {
         MC_collision_occurred = true;

@@ -9,6 +9,8 @@
 #include "drag.h"
 #include "ion_impact_ionization.h"
 
+#include "binary_charge_exchange.h"
+
 /* In collision.cc */
 
 int
