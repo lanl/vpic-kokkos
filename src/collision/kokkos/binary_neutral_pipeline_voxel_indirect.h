@@ -205,7 +205,7 @@ struct binary_neutral_collision_pipeline {
    * @brief Loop over particles performing collisions.
    */
   template<class collision_model>
-  void apply_model (collision_model& _model)
+  void apply_model(collision_model& _model)
   {
     // NOTE: workaround to avoid implicit capture of this
     // SEE:  kokkos lambda dispatch link at top
@@ -307,11 +307,21 @@ struct binary_neutral_collision_pipeline {
 template<class collision_model>    
 KOKKOS_INLINE_FUNCTION
 void collide_uniform_wt(
-  const float m_i, const float m_j, const float density_i, const float density_j,
-  const float dV, int i0, int j0, int ni, int nj, const float dtinterval,
-  const k_particles_t& spi_p, const k_particles_t& spj_p, collision_model& model,
-  k_particle_sortindex_t_ra spi_sortindex_ra, k_particle_sortindex_t_ra spj_sortindex_ra,
-  const kokkos_rng_pool_t& rp, const Kokkos::TeamPolicy<>::member_type & team_member)
+  const float m_i, 
+  const float m_j, 
+  const float density_i, 
+  const float density_j,
+  const float dV, 
+  int i0, int j0, 
+  int ni, int nj, 
+  const float dtinterval,
+  const k_particles_t& spi_p, 
+  const k_particles_t& spj_p, 
+  collision_model& model,
+  k_particle_sortindex_t_ra spi_sortindex_ra, 
+  k_particle_sortindex_t_ra spj_sortindex_ra,
+  const kokkos_rng_pool_t& rp, 
+  const Kokkos::TeamPolicy<>::member_type & team_member)
 {
   const float mu_i = m_j/(m_i+m_j);
   const float mu_j = m_i/(m_i+m_j);
@@ -425,7 +435,7 @@ void collide_uniform_wt(
     float ujx = up[5];
     float ujy = up[6];
     float ujz = up[7];
-    float qj  = 1.0; //
+    float qj  = 1.0;
 #ifdef VARIABLE_CHARGE
     qj = up[9];
 #endif    
@@ -473,7 +483,7 @@ void collide_uniform_wt(
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
 
     // Monte-Carlo collision test
-    dd = model.cross_section( rg, qi, ur, t1 );
+    dd = model.cross_section( rg, ur, t1, qi, qj );
 
     // Determine if collision occurs, if (U > sigma * n * v * dt) then no collision
     if( rg.frand() > dd*t1 ) {
@@ -482,8 +492,10 @@ void collide_uniform_wt(
       MC_col_occurred = true;
     }
 
+    // std::cout << "q1="<<qi<<" q2="<<qj<<" dq="<<model.modify_charge() << std::endl;
+
     // Compute collision angle and coefficient of restitution
-    float param[2] = {t2,t1};
+    float param[2] = {t2, t1};
     const float rr = model.restitution(rg, param);
     dd = model.tan_theta_half(rg, t2, t1*qi*qi*qj*qj);
     PREVENT_BACKSCATTER(dd);
@@ -495,12 +507,16 @@ void collide_uniform_wt(
       {
         up[8] += dq;
         up[9] -= dq;
+
+        // if (up[8] != 0.0 || up[9] != 1.0) {
+        //   std::cout << "~~~~ q1="<<up[8]<<" q2="<<up[9]<<" dq="<<dq << std::endl;
+        // }
         break;
       }
       case CollisionType::BinaryIonImpactIoniz:
       {
         // Second species in collision operator constructor drops electrons
-        up[9] += dq;
+        up[9] += 1.0; // dq;
         break;
       }
     }

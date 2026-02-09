@@ -157,13 +157,16 @@ struct collision_model {
    * @param rg Random number generator
    * @param E Collision energy
    * @param nvdt Areal density of particles encountered
+   * @param q1 Charge of first particle
+   * @param q2 Charge of second particle (default neutral)
    */
   KOKKOS_INLINE_FUNCTION
   constexpr float cross_section(
     kokkos_rng_state_t& rg,
-    float q,
     float E,
-    float nvdt
+    float nvdt,
+    float q1,
+    float q2=0.0
   ) const
   {
     return 0;

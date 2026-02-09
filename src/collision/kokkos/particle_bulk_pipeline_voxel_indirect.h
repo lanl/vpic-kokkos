@@ -820,7 +820,7 @@ struct particle_bulk_collision_pipeline {
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
       //        Would this be useful?
       //      dd = model.cross_section(rg, t2, t1);
-      dd = model.cross_section( rg, qi, ur, t1 );
+      dd = model.cross_section( rg, ur, t1, qi );
 
       // std::cout << "sigma="<<dd<< " qi="<<qi<< " ur=" <<ur << " n="<<nj_fl << " dt="<<dt << " sig*n*v*dt="<<dd*t1 << std::endl;
 

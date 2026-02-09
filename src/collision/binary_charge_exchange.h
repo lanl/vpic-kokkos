@@ -26,15 +26,19 @@ struct binary_charge_exchange_model : public collision_model<binary_charge_excha
   binary_charge_exchange_model( Functor op, int dq, bool var_wt ) : sigma_cx(op), dq(dq), var_wt(var_wt) { };
 
 
+  /**
+   * @brief cross_section(E,nvdt,Z1,Z2)
+   */
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
-    float Z,     // Charge of particle
-    float vr,    // Changed input variable.
-    float nvdt
+    float vr,     // Changed input variable.
+    float nvdt,
+    float Z1,      // Charge of first particle
+    float Z2=0.0   // Charge of second particle
   ) const
   {
-    return sigma_cx(vr, Z);
+    return sigma_cx(vr, Z1, Z2);
   }
 
   KOKKOS_INLINE_FUNCTION

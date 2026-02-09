@@ -28,12 +28,13 @@ struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
-    float Z,     // Charge of particle
     float vr,    // Changed input variable.
-    float nvdt
+    float nvdt,
+    float Z1,     // Charge of particle
+    float Z2=0.0  // Charge of particle
   ) const
   {
-    float sig = sigma_cx(vr,Z);
+    float sig = sigma_cx(vr, Z1);
     return sig;
   }
   

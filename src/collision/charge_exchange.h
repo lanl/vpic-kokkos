@@ -29,21 +29,19 @@ struct cex_model : public collision_model<cex_model<Functor>> {
   //cex_model( cex_coll_func_t _sigma_cx0 ) : sigma_cx(_sigma_cx0) { };
   //cex_model( float (*sigma_cx0)(float,float) ) : sigma_cx(sigma_cx0) { };
 
-  
+  /**
+   * @brief cross_section(E,nvdt,Z1,Z2)
+   */
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
-    float Z,     // Charge of particle
     float vr,    // Changed input variable.
-    float nvdt
+    float nvdt,
+    float Z1,     // Charge of particle
+    float Z2=0.0  // Charge of fluid
   ) const
   {
-     //    float Z = 5;
-    float sig = sigma_cx(vr,Z);
-    //    float sig = 9999999;
-    
-    //    printf("Z = %f,vr = %f, sigma = %e, nvdt=%e\n",Z,vr,sig,(sig*nvdt));
-    
+    float sig = sigma_cx(vr, Z1);
     return sig;
   }
   

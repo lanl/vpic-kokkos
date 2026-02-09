@@ -1678,7 +1678,7 @@ void collide_variabl_wt(const float m_i, const float m_j, const float density_i,
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
       //        Would this be useful?
       //      dd = model.cross_section(rg, t2, t1);
-      dd = model.cross_section( rg, qi, ur, t1 );
+      dd = model.cross_section( rg, ur, t1, qi, qj );
       if( rg.frand() > dd*t1 ) return;
 
     }
