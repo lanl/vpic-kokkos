@@ -47,6 +47,7 @@ struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
     float *param
   ) const
   {
+    // Removing energy only from particle assumes fluid is at rest
     auto E0 = param[4]; // projectile energy
     auto Cr = std::sqrt((E0 - dE) / E0); // scale factor for change in velocity
     // std::cout << "Cr = " << Cr << "Cr2 = " << (E0 - dE_i) / E0 << " dE/E0 = " << dE_i/E0 << std::endl;

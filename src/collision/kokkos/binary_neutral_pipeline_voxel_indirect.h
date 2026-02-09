@@ -492,8 +492,6 @@ void collide_uniform_wt(
       MC_col_occurred = true;
     }
 
-    // std::cout << "q1="<<qi<<" q2="<<qj<<" dq="<<model.modify_charge() << std::endl;
-
     // Compute collision angle and coefficient of restitution
     float param[2] = {t2, t1};
     const float rr = model.restitution(rg, param);
@@ -507,16 +505,12 @@ void collide_uniform_wt(
       {
         up[8] += dq;
         up[9] -= dq;
-
-        // if (up[8] != 0.0 || up[9] != 1.0) {
-        //   std::cout << "~~~~ q1="<<up[8]<<" q2="<<up[9]<<" dq="<<dq << std::endl;
-        // }
         break;
       }
       case CollisionType::BinaryIonImpactIoniz:
       {
         // Second species in collision operator constructor drops electrons
-        up[9] += 1.0; // dq;
+        up[9] += 1.0;
         break;
       }
     }
