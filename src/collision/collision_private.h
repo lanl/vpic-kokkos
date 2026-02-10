@@ -69,8 +69,42 @@ struct Accum {
     return *this;
   }
 };
-typedef Accum<float, 6> gmomType; //0:total mass, 1-3:momentum, 4:energy, 5:change in mass
+//typedef Accum<double, 6> gmomType; //0:total mass, 1-3:momentum, 4:energy, 5:change in mass
 typedef Accum<float, 26> gmomType26; //before+after collision for 2 species
+
+template <class ScalarType, int N>
+struct AccumKahan {
+    enum : int { n = N };
+    ScalarType v[n];
+    ScalarType c[n];
+
+      KOKKOS_INLINE_FUNCTION
+      AccumKahan() {
+	  for (int i = 0; i < n; ++i) { v[i] = ScalarType(0); c[i] = ScalarType(0); }
+      }
+
+      KOKKOS_INLINE_FUNCTION
+      void add(const int i, const ScalarType x) {
+	  // Kahan: accumulate x into v[i] with compensation c[i]
+	  ScalarType y = x - c[i];
+	  ScalarType t = v[i] + y;
+	  c[i] = (t - v[i]) - y;
+	  v[i] = t;
+      }
+
+      KOKKOS_INLINE_FUNCTION
+      AccumKahan& operator+=(const AccumKahan& b) {
+	  // Merge partials: add both b.v and b.c so we don't lose compensation
+	  for (int i = 0; i < n; ++i) {
+	      add(i, b.v[i]);
+	      add(i, b.c[i]);
+	  }
+	  return *this;
+      }
+};
+
+using gmomType = AccumKahan<float, 6>;
+
 
 namespace Kokkos { //required
 template <>

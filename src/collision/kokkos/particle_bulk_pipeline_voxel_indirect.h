@@ -363,12 +363,16 @@ struct particle_bulk_collision_pipeline {
 		//   ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) ) *
 		// wp;
     
-	    lsum.v[0] += wp;
-	    lsum.v[1] += dux;
-	    lsum.v[2] += duy;
-	    lsum.v[3] += duz;
-	    lsum.v[4] += 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i);
-      lsum.v[5] += dn;
+	    lsum.add(0, wp); //lsum.v[0] += wp;
+	    lsum.add(1, dux); //lsum.v[1] += dux;
+	    lsum.add(2, duy); //lsum.v[2] += duy;
+	    lsum.add(3, duz); //lsum.v[3] += duz;
+	    double term = 0.5 * static_cast<double>(wp)
+		  * ( static_cast<double>(ux_i)*ux_i
+		    + static_cast<double>(uy_i)*uy_i
+		    + static_cast<double>(uz_i)*uz_i );
+	    lsum.add(4, term); //lsum.v[4] += term; //0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i);
+	    lsum.add(5, dn); //lsum.v[5] += dn;
       
 	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",wp,dux,duy,duz,den);
 	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",lsum.v[0],lsum.v[1],lsum.v[2],lsum.v[3],lsum.v[4]);

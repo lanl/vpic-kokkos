@@ -215,7 +215,7 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     double uz = k_particles(p_index, particle_var::uz);
     double w  = k_particles(p_index, particle_var::w);
     int ii = k_particles_i(p_index);
-    float qp  = 1.0;
+    double qp  = 1.0;
 #ifdef VARIABLE_CHARGE
     qp = k_particles(p_index, particle_var::qp);
 #endif
@@ -225,11 +225,11 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
     
     // Compute physical velocities
-    float vx  = ux*vz;
-    float vy  = uy*vz;
+    double vx  = ux*vz;
+    double vy  = uy*vz;
     vz *= uz;
 
-    float t = 0.0; // used in macro
+    double t = 0.0; // used in macro
     auto k_hydro_access = k_hydro_sv.access();
 
     // Accumulate the hydro fields
