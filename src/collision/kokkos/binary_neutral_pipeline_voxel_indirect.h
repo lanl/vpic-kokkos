@@ -173,11 +173,11 @@ struct binary_neutral_collision_pipeline {
     });
 
     if( _spi != _spj ) {
-        // NOTE: workaround to avoid implicit capture of this
-        // SEE:  kokkos lambda dispatch link at top
-        auto const& spj_n = _spj_n;
-        auto const& spj_p = _spj_p;
-        auto const& spj_i = _spj_i;
+      // NOTE: workaround to avoid implicit capture of this
+      // SEE:  kokkos lambda dispatch link at top
+      auto const& spj_n = _spj_n;
+      auto const& spj_p = _spj_p;
+      auto const& spj_i = _spj_i;
       Kokkos::parallel_for("binary_neutral_collision_pipeline::spj_denisty",
         Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, _spj->np),
         KOKKOS_LAMBDA (int i) {
@@ -346,12 +346,14 @@ void collide_variabl_wt(
   auto spl_p = ij ? spj_p : spi_p;
   auto sph_sortindex_ra = ij ? spi_sortindex_ra : spj_sortindex_ra;
   auto spl_sortindex_ra = ij ? spj_sortindex_ra : spi_sortindex_ra;
-  // auto nh = ij ? ni : nj;
-  // auto nl = ij ? nj : ni;
   auto nmax = ij ? ni : nj;
   auto nmin = ij ? nj : ni;
   auto il = ij;
   auto ih = !ij;
+
+  // Check if order switches based on density and number count
+  const bool ordered = (ij && ni <= nj);
+  //auto np_min = (nmax > nmin) ? nmin : nmax;
 
   auto density_max = ij ? density_i : density_j;
   auto ndt = density_max * dtinterval;
@@ -369,10 +371,10 @@ void collide_variabl_wt(
   team.team_barrier();
 
   // All particles in l-group collide, some in h-group collide
-  size_t np_lc = nmin; //nl;
-  size_t np_hc = nmax; //nh;
+  size_t np_lc = nmin;
+  size_t np_hc = nmax;
   size_t np_c  = np_hc > np_lc ? np_hc : np_lc;
-  
+
   gmomType26 Dm;
   Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, np_c),
     [&](const int c, gmomType26 &lsum)
@@ -384,9 +386,11 @@ void collide_variabl_wt(
     auto threshold_weight = ttl_weight[il];
 
     // Only process if threshold not found yet
-    if (c < np_hc && Kokkos::atomic_compare_exchange_strong(found_index, -1, 01)) {
+    if (c < np_hc && Kokkos::atomic_compare_exchange_strong(found_index, -1, -1)) {
       float weight = sph_p(i, particle_var::w);
       float old_sum = Kokkos::atomic_fetch_add(current_sum, weight);
+
+      // Check if particle exceeds weight threshold
       if (old_sum <= threshold_weight && (old_sum + weight) > threshold_weight) {
         Kokkos::atomic_compare_exchange_strong(found_index, -1, i);
       }
@@ -408,42 +412,54 @@ void collide_variabl_wt(
 #ifdef VARIABLE_CHARGE
       up[8] = sph_p(i, particle_var::qp);
       up[9] = spl_p(j, particle_var::qp);
+
+    double q1_0 = up[8];
+    double q2_0 = up[9];
 #endif	
 
-      float wp, ux, uy, uz, qp;
+      float wp1, wp2, ux, uy, uz, qp;
       
       if (c < np_hc) {
-        wp = up[0];
+        wp1 = up[0];
         ux = up[1];
         uy = up[2];
         uz = up[3];
-        lsum.v[0] += wp;
-        lsum.v[1] += wp * ux;
-        lsum.v[2] += wp * uy;
-        lsum.v[3] += wp * uz;
-        lsum.v[4] += wp * ux * ux;
-        lsum.v[5] += wp * uy * uy;
-        lsum.v[6] += wp * uz * uz;
+        lsum.v[0] += wp1;
+        lsum.v[1] += wp1 * ux;
+        lsum.v[2] += wp1 * uy;
+        lsum.v[3] += wp1 * uz;
+        lsum.v[4] += wp1 * ux * ux;
+        lsum.v[5] += wp1 * uy * uy;
+        lsum.v[6] += wp1 * uz * uz;
       }
 
       if (c < np_lc) {
-        wp = up[4];
+        wp2 = up[4];
         ux = up[5];
         uy = up[6];
         uz = up[7];
-        lsum.v[13] += wp;
-        lsum.v[14] += wp * ux;
-        lsum.v[15] += wp * uy;
-        lsum.v[16] += wp * uz;
-        lsum.v[17] += wp * ux * ux;
-        lsum.v[18] += wp * uy * uy;
-        lsum.v[19] += wp * uz * uz;
+        lsum.v[13] += wp2;
+        lsum.v[14] += wp2 * ux;
+        lsum.v[15] += wp2 * uy;
+        lsum.v[16] += wp2 * uz;
+        lsum.v[17] += wp2 * ux * ux;
+        lsum.v[18] += wp2 * uy * uy;
+        lsum.v[19] += wp2 * uz * uz;
       }
 
-      bool MC_col_occurred = binary_collision(mu, mu_h, mu_l, up, model, rg, ndt);
+      bool MC_col_occurred = binary_collision(mu, mu_h, mu_l, up, model, rg, ndt, ordered);
 
-      if (c < np_hc) {
-        wp = up[0];
+      wp1 = up[0];
+      wp2 = up[4];
+      const double wmax = std::max(wp1, wp2);
+
+      // Note: case with unequal density not working. The following
+      // commented expression should get the correct rate for VARIABLE_CHARGE=false
+      const bool update_p1 = true; //(rg.frand() < wp2 / wmax * nmin / np_min);
+      const bool update_p2 = true; //(rg.frand() < wp1 / wmax * nmax / np_min);
+
+      if (c < np_hc && update_p1) {
+        //wp = up[0];
         ux = up[1];
         uy = up[2];
         uz = up[3];
@@ -454,16 +470,16 @@ void collide_variabl_wt(
         qp = up[8];
         sph_p(i, particle_var::qp) = qp;
 #endif
-        lsum.v[7] += wp * ux;
-        lsum.v[8] += wp * uy;
-        lsum.v[9] += wp * uz;
-        lsum.v[10] += wp * ux * ux;
-        lsum.v[11] += wp * uy * uy;
-        lsum.v[12] += wp * uz * uz;
+        lsum.v[7] += wp1 * ux;
+        lsum.v[8] += wp1 * uy;
+        lsum.v[9] += wp1 * uz;
+        lsum.v[10] += wp1 * ux * ux;
+        lsum.v[11] += wp1 * uy * uy;
+        lsum.v[12] += wp1 * uz * uz;
       }
 
-      if (c < np_lc) {
-        wp = up[4];
+      if (c < np_lc && update_p2) {
+        //wp = up[4];
         ux = up[5];
         uy = up[6];
         uz = up[7];
@@ -474,12 +490,12 @@ void collide_variabl_wt(
         qp = up[9];
         spl_p(j, particle_var::qp) = qp;
 #endif
-        lsum.v[20] += wp * ux;
-        lsum.v[21] += wp * uy;
-        lsum.v[22] += wp * uz;
-        lsum.v[23] += wp * ux * ux;
-        lsum.v[24] += wp * uy * uy;
-        lsum.v[25] += wp * uz * uz;
+        lsum.v[20] += wp2 * ux;
+        lsum.v[21] += wp2 * uy;
+        lsum.v[22] += wp2 * uz;
+        lsum.v[23] += wp2 * ux * ux;
+        lsum.v[24] += wp2 * uy * uy;
+        lsum.v[25] += wp2 * uz * uz;
       }
     } // endif
   }, Dm); // end Kokkos::parallel_reduce()
@@ -551,6 +567,9 @@ void collide_uniform_wt(
   const float density_max = density_i >= density_j ? density_i : density_j;
   float ndt = density_max*dtinterval;
 
+  // For uniform weighting, the order of the species do not change
+  const bool ordered = true;
+
   // Get a random generator. Do not leave without freeing it.
   kokkos_rng_state_t rg = rp.get_state();
 
@@ -589,7 +608,7 @@ void collide_uniform_wt(
       up[9] = spj_p(j, particle_var::qp);
 #endif	
 
-      bool MC_col_occurred = binary_collision(mu, mu_i, mu_j, up, model, rg, ndt);
+      bool MC_col_occurred = binary_collision(mu, mu_i, mu_j, up, model, rg, ndt, ordered);
 
       spi_p(i, particle_var::ux) = up[1];
       spi_p(i, particle_var::uy) = up[2];
@@ -625,11 +644,12 @@ void collide_uniform_wt(
     float* up,
     collision_model& model,
     kokkos_rng_state_t& rg,
-    float ndt
+    float ndt,
+    const bool ordered
   )
   {
 
-    float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];
+    float dd, ur, tx, ty, tz, t0, t1, t2, stack[3], qii, qjj;
     int d0, d1, d2;
     
     float wi  = up[0];
@@ -691,9 +711,13 @@ void collide_uniform_wt(
     t2 *= mu;       // _mu v^2  = Collision energy
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
 
-    // Monte-Carlo collision test
-    dd = model.cross_section( rg, ur, t1, qi, qj );
+    // Cross sections depend on charge states of incoming particles
+    // and their species which may be switched during the pairing
+    qii = ordered ? qi : qj;
+    qjj = ordered ? qj : qi;
+    dd = model.cross_section( rg, ur, t1, qii, qjj);
 
+    // Monte-Carlo collision test
     // Determine if collision occurs, if (U > sigma * n * v * dt) then no collision
     if( rg.frand() > dd*t1 ) {
       return MC_col_occurred; 
@@ -708,10 +732,11 @@ void collide_uniform_wt(
     PREVENT_BACKSCATTER(dd);
 
 #ifdef VARIABLE_CHARGE
-    const float dq = model.modify_charge();
+    float dq = model.modify_charge();
     switch (model.collision_type) {
       case CollisionType::BinaryChargeExchange:
       {
+        dq = ordered ? dq : -1.0*dq;
         up[8] += dq;
         up[9] -= dq;
         break;
@@ -719,7 +744,8 @@ void collide_uniform_wt(
       case CollisionType::BinaryIonImpactIoniz:
       {
         // Second species in collision operator constructor drops electrons
-        up[9] += 1.0;
+        int dw_index = ordered ? 9 : 8;
+        up[dw_index] += 1.0;
         break;
       }
     }
