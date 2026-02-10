@@ -310,13 +310,13 @@ namespace fluid_var {
 
 namespace curv_mesh_var {
   enum cm_v {
-    hx       = 0, // names of scale factors chosen to work within existing field advance macros.
-    hy       = 1,
-    hz       = 2,
-    jac      = 3,
-    xg       = 4,
-    yg       = 5,
-    zg       = 6,
+    hx  = 0, // names of scale factors chosen to work within existing field advance macros.
+    hy  = 1,
+    hz  = 2,
+    jac = 3,
+    xg  = 4,
+    yg  = 5,
+    zg  = 6,
   };
 };
 

@@ -328,6 +328,7 @@ advance_p_kokkos_unified(
         //k_particle_movers_t k_local_particle_movers,
         k_counter_t& k_nm,
         k_neighbor_t& k_neighbors,
+        k_curvilinear_vars_t& k_curv,
         field_array_t* RESTRICT fa,
         const grid_t *g,
 #ifdef VARIABLE_CHARGE
@@ -792,6 +793,21 @@ advance_p_kokkos_unified(
 #undef f_dcbzdz  
 		       }
 
+// TT: define some macros
+#define CM(_i, cv) k_curv(_i, curv_mesh_var::cv)
+#define IDX_TO_VOX(x,y,z,nx,ny,nz) ((x) + ((nx)+2)*((y) + ((ny)+2)*(z)))
+#define VOX_TO_IDX(vox_idx,ix,iy,iz) do {  \
+    int _ix, _iy, _iz;                     \
+    _ix  = (vox_idx);                      \
+    _iy  = _ix/(nx+2);                     \
+    _ix -= _iy*(nx+2);                     \
+    _iz  = _iy/(ny+2);                     \
+    _iy -= _iz*(ny+2);                     \
+    (ix) = _ix;                            \
+    (iy) = _iy;                            \
+    (iz) = _iz;                            \
+} while(0)
+
 void
 advance_p_kokkos_gpu(
         k_particles_t& k_particles,
@@ -804,6 +820,8 @@ advance_p_kokkos_gpu(
         k_interpolator_t& k_interp,
         k_counter_t& k_nm,
         k_neighbor_t& k_neighbors,
+        // TT: try passing by reference
+        k_curvilinear_vars_t& k_curv,
         field_array_t* RESTRICT fa,
         const grid_t *g,
 #ifdef VARIABLE_CHARGE
@@ -832,6 +850,11 @@ advance_p_kokkos_gpu(
   float cz = 0.25 * g->rdx * g->rdy / g->dt;
   float rV = g->rdx*g->rdy*g->rdz;
   float gdx=g->dx, gdy=g->dy, gdz = g->dz, gdt = g->dt;
+
+  //float hx = k_curv(0, curv_mesh_var::hx);
+  //float hy = k_curv(0, curv_mesh_var::hy);
+  //float hz = k_curv(0, curv_mesh_var::hz);
+  //std::cout << "hx = " << hx << ", hy = " << hy << ", hz = " << hz << std::endl;
 
 
   // Process particles for this pipeline
@@ -870,6 +893,12 @@ advance_p_kokkos_gpu(
   #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
   #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
   #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
+
+  // TT: NEED TO GET GRID VALUES xg,yg,zg SOMEHOW
+  // ** pii or ii gives the voxel index of the particle
+  // ** probably not the way to do it
+  //k_curvilinear_vars_t k_curv   = g->k_curvilinear_vars_h;
+  //k_curvilinear_vars_t k_curv_d = g->k_curvilinear_vars_d;
 
   // copy local memmbers from grid
   //auto nfaces_per_voxel = 6;
@@ -945,7 +974,85 @@ advance_p_kokkos_gpu(
     p_ux = ux;                               // Store momentum
     p_uy = uy;
     p_uz = uz;
+// ---------------------------------------------------------------------------------------
+// TT: quadratic basis functions and derivatives defined on interval [-1,1]
+// *** dx,dy,dz see line 910 - 912, I think the particle position in voxel is loaded.
 
+    // allocation, c++ should initialize to zero.
+    double Sx[3], dSx[3];
+    double Sy[3], dSy[3];
+    double Sz[3], dSz[3];
+
+    // quadratic basis functions
+    Sx[0] = 0.125*(1 - dx)*(1 - dx);
+    Sx[1] = 0.25*(3.0 - dx*dx);
+    Sx[2] = 0.125*(1 + dx)*(1 + dx);
+    Sy[0] = 0.125*(1 - dy)*(1 - dy);
+    Sy[1] = 0.25*(3.0 - dy*dy);
+    Sy[2] = 0.125*(1 + dy)*(1 + dy);
+    Sz[0] = 0.125*(1 - dz)*(1 - dz);
+    Sz[1] = 0.25*(3.0 - dz*dz);
+    Sz[2] = 0.125*(1 + dz)*(1 + dz);
+
+    // derivatives of quadratic basis functions
+    dSx[0] = 0.25*(dx - 1);
+    dSx[1] =-0.5*dx;
+    dSx[2] = 0.25*(dx + 1);
+    dSy[0] = 0.25*(dy - 1);
+    dSy[1] =-0.5*dy;
+    dSy[2] = 0.25*(dy + 1);
+    dSz[0] = 0.25*(dz - 1);
+    dSz[1] =-0.5*dz;
+    dSz[2] = 0.25*(dz + 1);
+
+    // particle position derivatives
+    // ** xg,yg,zg are grid locations from physical space, need to import grid values.
+    // ** for quadratic basis function only adjacent cells, i-1, i, i+1.
+    double dxdu = 0.0, dxdv = 0.0, dxdw = 0.0;
+    double dydu = 0.0, dydv = 0.0, dydw = 0.0;
+    double dzdu = 0.0, dzdv = 0.0, dzdw = 0.0;
+    int ig, jg, kg, idx;
+    VOX_TO_IDX(ii, ig, jg, kg);
+
+    for (int i=ig-1; i<ig+2; i++) {
+      for (int j=jg-1; j<jg+2; j++) {
+        for (int k=kg-1; k<kg+2; k++) {
+          idx   = IDX_TO_VOX(i, j, k, nx, ny, nz);
+          dxdu += CM(idx,xg) * dSx[idx] *  Sy[idx] *  Sz[idx];
+          dxdv += CM(idx,xg) *  Sx[idx] * dSy[idx] *  Sz[idx];
+          dxdw += CM(idx,xg) *  Sx[idx] *  Sy[idx] * dSz[idx];
+          dydu += CM(idx,yg) * dSx[idx] *  Sy[idx] *  Sz[idx];
+          dydv += CM(idx,yg) *  Sx[idx] * dSy[idx] *  Sz[idx];
+          dydw += CM(idx,yg) *  Sx[idx] *  Sy[idx] * dSz[idx];
+          dzdu += CM(idx,zg) * dSx[idx] *  Sy[idx] *  Sz[idx];
+          dzdv += CM(idx,zg) *  Sx[idx] * dSy[idx] *  Sz[idx];
+          dzdw += CM(idx,zg) *  Sx[idx] *  Sy[idx] * dSz[idx];
+        }
+      }
+    }
+
+    // jacobian
+    double jac = 0.0, ijac = 0.0;
+    jac  = dxdu*(dydv*dzdw-dydw*dzdv) - dxdv*(dydu*dzdw-dydw*dzdu) + dxdw*(dydu*dzdv-dydv*dzdu);
+    ijac = 1.0/jac;
+
+    // reciprocal basis vectors
+    double du[3], dv[3], dw[3];
+    du[0] = ijac * (dydv*dzdw - dydw*dzdv);
+    du[1] = ijac * (dxdw*dzdv - dxdv*dzdw);
+    du[2] = ijac * (dxdv*dydw - dxdw*dzdv);
+    dv[0] = ijac * (dydw*dzdu - dydu*dzdw);
+    dv[1] = ijac * (dxdu*dzdw - dxdw*dzdu);
+    dv[2] = ijac * (dxdw*dydu - dxdu*dydw);
+    dw[0] = ijac * (dydu*dzdv - dydv*dzdu);
+    dw[1] = ijac * (dxdv*dzdu - dxdu*dzdv);
+    dw[2] = ijac * (dxdu*dydv - dxdv*dydu);
+
+    // project physical space velocity to logical space using reciprocal basis vectors
+    ux = ux*du[0] + uy*du[1] + uz*du[2];
+    uy = ux*dv[0] + uy*dv[1] + uz*dv[2];
+    uz = ux*dw[0] + uy*dw[1] + uz*dw[2];
+// ---------------------------------------------------------------------------------------
     v3   = one;///sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
 
     /**/                                      // Get norm displacement
@@ -1116,6 +1223,10 @@ advance_p_kokkos_gpu(
   //return h_nm(0);
 
       } //advance_p_kokkos_gpu
+// TT: undefine
+#undef CM
+#undef IDX_TO_VOX
+#undef VOX_TO_IDX
 
 void
 advance_p( /**/  species_t            * RESTRICT sp,
@@ -1167,6 +1278,8 @@ advance_p( /**/  species_t            * RESTRICT sp,
           ia->k_i_d,
           sp->k_nm_d,
           sp->g->k_neighbor_d,
+// TT: added curv stuff
+          sp->g->k_curvilinear_vars_d,
           fa,
           sp->g,
 #ifdef VARIABLE_CHARGE

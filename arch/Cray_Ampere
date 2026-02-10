@@ -14,8 +14,8 @@ src_dir="${0%/*}/.."
 #------------------------------------------------------------------------------#
 
 #module purge
-module load PrgEnv-gnu
-module load cmake cudatoolkit cpe-cuda
+#module load PrgEnv-gnu
+#module load cmake cudatoolkit cpe-cuda
 module list 2>&1 | tee modules.txt
 
 #------------------------------------------------------------------------------#
