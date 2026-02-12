@@ -821,7 +821,7 @@ advance_p_kokkos_gpu(
         k_counter_t& k_nm,
         k_neighbor_t& k_neighbors,
         // TT: try passing by reference
-        k_curvilinear_vars_t& k_curv,
+        //k_curvilinear_vars_t& k_curv,
         field_array_t* RESTRICT fa,
         const grid_t *g,
 #ifdef VARIABLE_CHARGE
@@ -851,14 +851,10 @@ advance_p_kokkos_gpu(
   float rV = g->rdx*g->rdy*g->rdz;
   float gdx=g->dx, gdy=g->dy, gdz = g->dz, gdt = g->dt;
 
-  //float hx = k_curv(0, curv_mesh_var::hx);
-  //float hy = k_curv(0, curv_mesh_var::hy);
-  //float hz = k_curv(0, curv_mesh_var::hz);
-  //std::cout << "hx = " << hx << ", hy = " << hy << ", hz = " << hz << std::endl;
-
+  // TT: grab curvilinear variables
+  k_curvilinear_vars_t k_curv = g->k_curvilinear_vars_d;
 
   // Process particles for this pipeline
-
   #define p_dx    k_particles(p_index, particle_var::dx)
   #define p_dy    k_particles(p_index, particle_var::dy)
   #define p_dz    k_particles(p_index, particle_var::dz)
@@ -894,12 +890,6 @@ advance_p_kokkos_gpu(
   #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
   #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
 
-  // TT: NEED TO GET GRID VALUES xg,yg,zg SOMEHOW
-  // ** pii or ii gives the voxel index of the particle
-  // ** probably not the way to do it
-  //k_curvilinear_vars_t k_curv   = g->k_curvilinear_vars_h;
-  //k_curvilinear_vars_t k_curv_d = g->k_curvilinear_vars_d;
-
   // copy local memmbers from grid
   //auto nfaces_per_voxel = 6;
   //auto nvoxels = g->nv;
@@ -920,7 +910,7 @@ advance_p_kokkos_gpu(
   if(np%LEAGUE_SIZE > 0)
     per_league += 1;
   Kokkos::parallel_for("advance_p", team_policy, KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, per_league), [=] (size_t pindex) {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, per_league), [=] (size_t p_index) {
       int p_index = team_member.league_rank()*per_league + pindex;
       if(p_index < np) {
 #else
@@ -976,14 +966,13 @@ advance_p_kokkos_gpu(
     p_uz = uz;
 // ---------------------------------------------------------------------------------------
 // TT: quadratic basis functions and derivatives defined on interval [-1,1]
-// *** dx,dy,dz see line 910 - 912, I think the particle position in voxel is loaded.
-
-    // allocation, c++ should initialize to zero.
+    // allocate
     double Sx[3], dSx[3];
     double Sy[3], dSy[3];
     double Sz[3], dSz[3];
 
     // quadratic basis functions
+    // ** for quadratic basis function only adjacent cells are needed
     Sx[0] = 0.125*(1 - dx)*(1 - dx);
     Sx[1] = 0.25*(3.0 - dx*dx);
     Sx[2] = 0.125*(1 + dx)*(1 + dx);
@@ -1006,8 +995,7 @@ advance_p_kokkos_gpu(
     dSz[2] = 0.25*(dz + 1);
 
     // particle position derivatives
-    // ** xg,yg,zg are grid locations from physical space, need to import grid values.
-    // ** for quadratic basis function only adjacent cells, i-1, i, i+1.
+    // ** xg,yg,zg are grid locations, ii is the index of voxel particle is in
     double dxdu = 0.0, dxdv = 0.0, dxdw = 0.0;
     double dydu = 0.0, dydv = 0.0, dydw = 0.0;
     double dzdu = 0.0, dzdv = 0.0, dzdw = 0.0;
@@ -1018,20 +1006,22 @@ advance_p_kokkos_gpu(
       for (int j=jg-1; j<jg+2; j++) {
         for (int k=kg-1; k<kg+2; k++) {
           idx   = IDX_TO_VOX(i, j, k, nx, ny, nz);
-          dxdu += CM(idx,xg) * dSx[idx] *  Sy[idx] *  Sz[idx];
-          dxdv += CM(idx,xg) *  Sx[idx] * dSy[idx] *  Sz[idx];
-          dxdw += CM(idx,xg) *  Sx[idx] *  Sy[idx] * dSz[idx];
-          dydu += CM(idx,yg) * dSx[idx] *  Sy[idx] *  Sz[idx];
-          dydv += CM(idx,yg) *  Sx[idx] * dSy[idx] *  Sz[idx];
-          dydw += CM(idx,yg) *  Sx[idx] *  Sy[idx] * dSz[idx];
-          dzdu += CM(idx,zg) * dSx[idx] *  Sy[idx] *  Sz[idx];
-          dzdv += CM(idx,zg) *  Sx[idx] * dSy[idx] *  Sz[idx];
-          dzdw += CM(idx,zg) *  Sx[idx] *  Sy[idx] * dSz[idx];
+          //Kokkos::printf("idx, ii, jj, kk: %d, %d, %d, %d\n",idx,i+1-ig,j+1-jg,k+1-kg);
+          //Kokkos::printf("CM: %f\n",CM(idx,xg));
+          dxdu += CM(idx,xg) * dSx[i+1-ig] *  Sy[j+1-jg] *  Sz[k+1-kg];
+          dxdv += CM(idx,xg) *  Sx[i+1-ig] * dSy[j+1-jg] *  Sz[k+1-kg];
+          dxdw += CM(idx,xg) *  Sx[i+1-ig] *  Sy[j+1-jg] * dSz[k+1-kg];
+          dydu += CM(idx,yg) * dSx[i+1-ig] *  Sy[j+1-jg] *  Sz[k+1-kg];
+          dydv += CM(idx,yg) *  Sx[i+1-ig] * dSy[j+1-jg] *  Sz[k+1-kg];
+          dydw += CM(idx,yg) *  Sx[i+1-ig] *  Sy[j+1-jg] * dSz[k+1-kg];
+          dzdu += CM(idx,zg) * dSx[i+1-ig] *  Sy[j+1-jg] *  Sz[k+1-kg];
+          dzdv += CM(idx,zg) *  Sx[i+1-ig] * dSy[j+1-jg] *  Sz[k+1-kg];
+          dzdw += CM(idx,zg) *  Sx[i+1-ig] *  Sy[j+1-jg] * dSz[k+1-kg];
         }
       }
     }
 
-    // jacobian
+    // jacobian and inverse jacobian
     double jac = 0.0, ijac = 0.0;
     jac  = dxdu*(dydv*dzdw-dydw*dzdv) - dxdv*(dydu*dzdw-dydw*dzdu) + dxdw*(dydu*dzdv-dydv*dzdu);
     ijac = 1.0/jac;
@@ -1051,7 +1041,7 @@ advance_p_kokkos_gpu(
     // project physical space velocity to logical space using reciprocal basis vectors
     ux = ux*du[0] + uy*du[1] + uz*du[2];
     uy = ux*dv[0] + uy*dv[1] + uz*dv[2];
-    uz = ux*dw[0] + uy*dw[1] + uz*dw[2];
+    uz = ux*dw[0] + uy*dw[1] + uz*dw[2]; 
 // ---------------------------------------------------------------------------------------
     v3   = one;///sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
 
@@ -1279,7 +1269,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
           sp->k_nm_d,
           sp->g->k_neighbor_d,
 // TT: added curv stuff
-          sp->g->k_curvilinear_vars_d,
+          //sp->g->k_curvilinear_vars_d,
           fa,
           sp->g,
 #ifdef VARIABLE_CHARGE

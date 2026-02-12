@@ -8,7 +8,7 @@
 
 //////////////////////////////////////////////////////
 
-#define LOAD_PARTICLES 1
+#define LOAD_PARTICLES 0
 
 begin_globals {
 
@@ -93,8 +93,7 @@ begin_initialization {
   double topology_y = 1;
   double topology_z = 1;
 
-  //double nppc  = 1000;    // Average number of macro particle per cell per species 
-  double nppc  = 400;     // Average number of macro particle per cell per species 
+  double nppc  = 1000;    // Average number of macro particle per cell per species 
 
   double Ni  = nppc*nx*ny*nz;       // Total macroparticle ions in box
   double Np  = n0*Lx*Ly*Lz;         // Total number of physical background ions
@@ -103,8 +102,7 @@ begin_initialization {
   
   // Determine the time step
   double dg = courant_length(Lx,Ly,Lz,nx,ny,nz);  // courant length
-  //double dt = 0.01;                               // time step
-  double dt = 0.0125;                             // Delta_t * Omega_ci
+  double dt = 0.01;                               // time step
 
   double sort_interval = 10;  // How often to sort particles
   
@@ -259,14 +257,14 @@ begin_initialization {
 
   ////////////////////////////
   // Set up curvilinear grid
-  sim_log ( "Loading curvilinear grid." );
+  sim_log ("Loading curvilinear grid.");
   grid->init_curvilinear_grid();
 
 // Local geometric factors
 //#define HX (1.0 + 0.3*sin((2*M_PI*x)/Lx))
 //#define HY (1.0)
 //#define HZ (1.0)
-//#define CM(_i,_j,_k,cv) grid->k_curvilinear_var_h(int(VOXEL(_i,_j,_k,_nx,_ny,_nz)),curv_mesh_var::cv)
+//#define CM(_i, _j, _k, cv) k_curv( int (VOXEL(_i, _j, _k, _nx, _ny, _nz)), curv_mesh_var::cv)
 //  set_region_curvilinear(everywhere, HX, HY, HZ, HX*HY*HZ);
 //#undef CM
 
@@ -286,10 +284,15 @@ begin_initialization {
   double hxg[(int)nx+2], hyg[(int)ny+2], hzg[(int)nz+2];
   double xg[(int)nx+2], yg[(int)ny+2], zg[(int)nz+2];
 
+  //for loop i=0 to nx+1 hxg[i]=...
+  //repeat for y and z
   for ( int i=0; i<nx+2; i++ ) { hxg[i] = 1.0 + 0.3*sin((2*M_PI*(i-1))/nx); }
   for ( int j=0; j<ny+2; j++ ) { hyg[j] = 1.0 + 0.3*sin((2*M_PI*(j-1))/ny); }
   for ( int k=0; k<nz+2; k++ ) { hzg[k] = 1.0; }
 
+  //xg[0] = -0.5*Lx - 0.5*dx*hxg[0]
+  //for loop i=1 to nx+1 xg[i]=xg[i-1] + 0.5*dx*(hxg[i-1]+hxg[i])...
+  //repeat for y and z
   xg[0] = -0.5*Lx - 0.5*dx*hxg[0];
   yg[0] = -0.5*Ly - 0.5*dy*hyg[0];
   zg[0] = -0.5*Lz - 0.5*dz*hzg[0];
@@ -299,7 +302,9 @@ begin_initialization {
 
 // The equations are only evaluated inside the mesh-mapped region
 // (This is not strictly inside the region)
-#define CM(_i,_j,_k,cv) grid->k_curvilinear_vars_h(int(VOXEL(_i,_j,_k,nxl,nyl,nzl)),curv_mesh_var::cv)
+#define CM(_i, _j, _k, cv) k_curv( int (VOXEL(_i, _j, _k, nxl, nyl, nzl)), curv_mesh_var::cv)
+  k_curvilinear_vars_t k_curv = grid->k_curvilinear_vars_h;  
+  k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;
   int nxl = grid->nx, nyl = grid->ny, nzl = grid->nz;
   int ig, jg, kg;
   for( int k=0; k<nzl+2; k++ ) {
@@ -318,7 +323,8 @@ begin_initialization {
       }
     }
   }
-  Kokkos::deep_copy(grid->k_curvilinear_vars_d, grid->k_curvilinear_vars_h);
+  Kokkos::deep_copy(k_curv_d, k_curv);
+#undef CM
 
 #if 0
   //k_curvilinear_vars_t k_curv_d = grid->k_curvilinear_vars_d;    
@@ -363,10 +369,10 @@ begin_initialization {
 #define OMEGA (K * ( 0.5*K + sqrt(1 + 0.25*K*K)))
 #define DrV (K/OMEGA)
 
-//#define CM(_i, _j, _k, cv) grid->k_curvilinear_vars_h( int (VOXEL(_i, _j, _k, _nx, _ny, _nz)), curv_mesh_var::cv)
+#define CM(_i, _j, _k, cv) k_curv( int (VOXEL(_i, _j, _k, _nx, _ny, _nz)), curv_mesh_var::cv)
   set_region_field( everywhere, 0,0,0,BX+DBX,BY+DBY,DBZ);
   set_region_te(everywhere, 0*Te);
-//#undef CM
+#undef CM
  
   ////////////////////////////
   // LOAD PARTICLES
