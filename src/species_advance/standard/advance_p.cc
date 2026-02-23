@@ -697,6 +697,7 @@ advance_p_kokkos_unified(
                              current_sv, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz, ut_para, ut_perp, gdx, gdy, gdz, rdx, rdy, rdz, dke, kemax, max_tally ) )
           {
             if( k_nm(0)<max_nm ) {
+                printf("k_nm and max_nm are %d %d\n", k_nm(0), max_nm);
               const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
               if (nm >= max_nm) Kokkos::abort("overran max_nm");
 
@@ -1088,6 +1089,7 @@ advance_p_kokkos_gpu(
         if( k_nm(0) < max_nm )
         {
             const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+                //printf("k_nm and max_nm are %d %d\n", k_nm(0), max_nm);
             if (nm >= max_nm) Kokkos::abort("overran max_nm");
 
             k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;

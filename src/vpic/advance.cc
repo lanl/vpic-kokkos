@@ -75,6 +75,7 @@ int vpic_simulation::advance(void)
     //printf("Advancing a species\n");
       // Now Times internally
       advance_p( sp, interpolator_array, field_array );
+    //printf("Advanced a species\n");
   }
   //printf("Pushed\n");
 
@@ -87,7 +88,9 @@ int vpic_simulation::advance(void)
   //Kokkos::Experimental::contribute(field_array->k_f_d, field_array->k_field_sa_d);
   //field_array->k_field_sa_d.reset_except(field_array->k_f_d);
   //field_array->k_field_sa_d.reset();
+  //printf("sa contributions\n");
   KOKKOS_TOC( field_sa_contributions, 1);
+  //printf("sa contributions done\n");
 
   // Copy particle movers back to host
   KOKKOS_TIC();

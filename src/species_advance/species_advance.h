@@ -200,7 +200,7 @@ class species_t {
 
         // Maxwellian reflux tally histogram
         k_max_tally_t max_tally_d;
-        k_max_tally_t::HostMirror max_tally_h;
+        k_max_tally_t::host_mirror_type max_tally_h;
 
         // Init Kokkos Particle Arrays
         species_t(int n_particles, int n_pmovers)
@@ -419,7 +419,7 @@ void accumulate_hydro_p_kokkos(
 
 template<typename particle_view_t, class max_tally_t>
 void
-//KOKKOS_INLINE_FUNCTION
+KOKKOS_INLINE_FUNCTION
 interact_maxwellian_reflux_k(
         const particle_view_t& k_particles,
         const int pi,
@@ -538,7 +538,7 @@ interact_maxwellian_reflux_k(
 
   float* disp = static_cast<float*>(&pm->dispx);
 
-  //printf("disps for %d are %e %e %e\n", pi, pm->dispx, disp[1], disp[2]);
+  printf("disps for %d are %e %e %e\n", pi, pm->dispx, disp[1], disp[2]);
   dispx = dx * disp[0];
   dispy = dy * disp[1];
   dispz = dz * disp[2];
@@ -568,12 +568,14 @@ interact_maxwellian_reflux_k(
   //pm->dispx = dispx;
   //pm->dispy = dispy;
   //pm->dispz = dispz;
-  //printf("updated disps for %d are %e %e %e\n", pi, disp[0], disp[1], disp[2]);
+  printf("updated disps for %d are %e %e %e\n", pi, disp[0], disp[1], disp[2]);
   
   u2 = p_ux*p_ux + p_uy*p_uy + p_uz*p_uz;
   float kenew = u2 / (sqrtf(1. + u2) + 1.); // gamma - 1, multiply by mc^2 for kinetic energy
   // TODO: Should be able to save a divide here.
   Kokkos::atomic_add(&max_tally(int(kemax/dke)), p_w*(kenew - ke));
+  
+  random_pool.free_state(generator);
 
   #undef p_dx
   #undef p_dy
@@ -838,10 +840,12 @@ move_p_kokkos(
         //disp[1] = pm->dispy;
         //disp[2] = pm->dispz;
         interact_maxwellian_reflux_k( k_particles, pi, pm, ut_para, ut_perp, dke, kemax, face, dx, dy, dz, rdx, rdy, rdz, max_tally);
+        //printf("New disps %e %e %e %d\n", pm->dispx, pm->dispy, pm->dispz, pm->i);
         //pm->dispx = disp[0];
         //pm->dispy = disp[1];
         //pm->dispz = disp[2];
         continue;
+        //return 0;
     }
 
     if( neighbor<rangel || neighbor>rangeh ) {
