@@ -916,15 +916,16 @@ begin_field_injection {
 
   k_field_t& k_field = field_array->k_f_d;
   Kokkos::MDRangePolicy<Kokkos::Rank<2>> right_edge({1, 1}, {nz+1, ny+1});
-
+if(global->right){
   Kokkos::parallel_for("Field injection", right_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
-      k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbx) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbx) + r*b0*sqrt(1-sn*sn); // To-do: Don't think we should set interior cell? Also, precompute sqrt above.
-      k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbx) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbx) + r*b0*sqrt(1-sn*sn);
-      k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cby) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cby);
+      //k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbx) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbx) + r*b0*sqrt(1-sn*sn); // To-do: Don't think we should set interior cell? Also, precompute sqrt above.
+      //k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbx) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbx) + r*b0*sqrt(1-sn*sn);
+      //k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cby) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cby);
       k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cby) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cby);
-      k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbz) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbz) + r*b0*sn;
+      //k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbz) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbz) + r*b0*sn;
       k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbz) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbz) + r*b0*sn;
     });
+  }
 }
     
 
