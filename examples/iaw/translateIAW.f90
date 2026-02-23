@@ -513,6 +513,12 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
 
               read(10)buffer   ! skip div_b error
 
+              read(10)buffer   ! skip cb0
+              read(10)buffer   ! skip 
+              read(10)buffer   ! skip 
+              read(10)buffer   ! skip 
+              
+              
               read(10)buffer   ! skip tca
               read(10)buffer   ! skip 
               read(10)buffer   ! skip 
