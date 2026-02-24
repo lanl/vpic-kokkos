@@ -57,6 +57,8 @@ option(ENABLE_KOKKOS_OPENMP "Enable Kokkos OpenMP" ON)
 
 option(ENABLE_KOKKOS_CUDA "Enable Kokkos CUDA" OFF)
 
+option(ENABLE_CABANA "Enable Cabana support" ON)
+
 option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look in $CMAKE_PREFIX_PATH" OFF)
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
@@ -120,6 +122,8 @@ endif("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
 
 string(REPLACE ";" " " string_libraries "${MPI_CXX_LIBRARIES} ${MPI_C_LIBRARIES}")
 set(VPIC_CXX_LIBRARIES "${string_libraries}")
+
+set(LINK_LIBS "")
 
 #------------------------------------------------------------------------------#
 # OpenMP
@@ -265,6 +269,7 @@ file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${kokkos_compile_op
 # Libs
 string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
 set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+set(LINK_LIBS ${LINK_LIBS} Kokkos::kokkos)
 
 # Includes (TODO: this is definitely abuse of the CXX variable..)
 #string(REPLACE ";" " -I" string_libraries "-I${KOKKOS_INCLUDE_DIRS}")
@@ -273,6 +278,20 @@ set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
 #string(REPLACE ";" " -L" string_libraries "-L${KOKKOS_INCLUDE_DIRS}")
 #set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
 
+#------------------------------------------------------------------------------#
+# Cabana
+#------------------------------------------------------------------------------#
+if(ENABLE_CABANA)
+  find_package(Cabana REQUIRED)
+
+  get_target_property(CABANA_INCLUDE_DIRS Cabana::Core INTERFACE_INCLUDE_DIRECTORIES)
+  
+  set(CABANA_CORE_INCLUDES_FILE ${PROJECT_BINARY_DIR}/cabana_core_includes)
+  
+  # For an "external" build these will be the same, but for an internal we need to gather both
+  file(GENERATE OUTPUT ${CABANA_CORE_INCLUDES_FILE} CONTENT "-I${CABANA_INCLUDE_DIRS}")
+  set(LINK_LIBS ${LINK_LIBS} Cabana::Core)
+endif(ENABLE_CABANA)
 
 #------------------------------------------------------------------------------#
 # OpenSSL
@@ -327,6 +346,11 @@ if (VPIC_ENABLE_ACCUMULATORS)
   add_definitions(-DVPIC_DISABLE_AUTOSETTINGS -DVPIC_ENABLE_ACCUMULATORS)
   message("--     VPIC: Enabled accumulators")
 endif(VPIC_ENABLE_ACCUMULATORS)
+
+if (ENABLE_CABANA)
+  add_definitions(-DENABLE_CABANA)
+  message("--     VPIC: Enabled Cabana for AoSoA support")
+endif(ENABLE_CABANA)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)
@@ -464,7 +488,7 @@ else()
   install(TARGETS vpic LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 endif()
 target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
+target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} ${LINK_LIBS})
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
 
 macro(build_a_vpic name deck)
@@ -472,7 +496,7 @@ macro(build_a_vpic name deck)
     message(FATAL_ERROR "Could not find deck '${deck}'")
   endif()
   add_executable(${name} ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc ${VPIC_SRC})
-  target_link_libraries(${name} vpic Kokkos::kokkos)
+  target_link_libraries(${name} vpic ${LINK_LIBS})
   target_compile_definitions(${name} PRIVATE INPUT_DECK="${deck}")
 endmacro(build_a_vpic)
 
@@ -514,7 +538,7 @@ if(ENABLE_UNIT_TESTS)
 
   # RNG tests
   add_executable(rng src/util/rng/test/rng.cc)
-  target_link_libraries(rng vpic Kokkos::kokkos)
+  target_link_libraries(rng vpic ${LINK_LIBS})
   get_target_property(OUT rng LINK_LIBRARIES)
 
   add_test(NAME rng COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ./rng)

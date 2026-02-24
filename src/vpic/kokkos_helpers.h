@@ -4,9 +4,13 @@
 #include <Kokkos_Core.hpp>
 #include <Kokkos_ScatterView.hpp>
 #include <Kokkos_SIMD.hpp>
+#ifdef ENABLE_CABANA
+#include <Cabana_Core.hpp>
+#endif
 #include <iostream>
 
 #include "../material/material.h" // Need material_t
+#include "kokkos_simd_extensions.h"
 
 // This module implements kokkos macros
 
@@ -21,6 +25,24 @@
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
 #define HYDRO_VAR_COUNT 14
 #define NUM_J_DIMS 3
+
+//----------------------------------------------------------------------------//
+// We want to conditionally define pad sizes for various structs so they will
+// be properly aligned for performance and also for various intrinsics calls
+// because many intrinsics will fail if not operating on properly aligned
+// data. Check for the most restrictive alignment need first and make sure it
+// has priority in being satisfied.
+//----------------------------------------------------------------------------//
+constexpr int get_pad_size(const int alignment, const int struct_size) {
+  if(alignment < struct_size) {
+    return ((struct_size/alignment)+1)*alignment - struct_size;
+  } else {
+    return alignment - struct_size;
+  }
+}
+constexpr int PAD_SIZE_INTERPOLATOR = get_pad_size(simd_float_t::size()*sizeof(float), sizeof(float)*INTERPOLATOR_VAR_COUNT) / sizeof(float); 
+constexpr int PAD_SIZE_ACCUMULATOR  = get_pad_size(simd_float_t::size()*sizeof(float), sizeof(float)*ACCUMULATOR_VAR_COUNT)  / sizeof(float); 
+constexpr int PAD_SIZE_HYDRO        = get_pad_size(simd_float_t::size()*sizeof(float), sizeof(float)*HYDRO_VAR_COUNT)        / sizeof(float); 
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -47,8 +69,18 @@ using k_field_accum_t = Kokkos::View<float *>;
 
 using k_jf_accum_t = Kokkos::View<float *[NUM_J_DIMS]>;
 
+#ifdef ENABLE_CABANA
+using particle_types_t = Cabana::MemberTypes<float[3],int,float[3],float>;
+using particle_aosoa_t = Cabana::AoSoA<particle_types_t, Kokkos::HostSpace, simd_float_t::size()>;
+#endif
 using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft>;
 using k_particles_i_t = Kokkos::View<int*>;
+union ParticleVar {
+  float   f32;
+  int32_t i32;
+};
+using particles_union_t = Kokkos::View<ParticleVar *[8], Kokkos::LayoutRight>;
+using particles_union_copy_t = Kokkos::View<ParticleVar *[8], Kokkos::LayoutRight>;
 
 // TODO: think about the layout here
 using k_particle_copy_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutRight>;
@@ -59,7 +91,7 @@ using k_particle_i_movers_t = Kokkos::View<int*>;
 
 using k_neighbor_t = Kokkos::View<int64_t*>;
 
-using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
+using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT+PAD_SIZE_INTERPOLATOR], Kokkos::LayoutLeft>;
 
 // TODO: Delete these
 using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;

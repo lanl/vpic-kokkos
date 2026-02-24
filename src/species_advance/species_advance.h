@@ -203,16 +203,9 @@ class species_t {
         }
         void init_kokkos_particles(int n_particles, int n_pmovers)
         {
-#ifdef TILED
-            auto ntiles = n_particles / 64;
-            if(ntiles*64 < n_particles)
-              ntiles += 1;
-printf("SIMD_LEN: %d, Particle vars: %d, ntiles: %d\n", 64, PARTICLE_VAR_COUNT, ntiles);
-            k_p_d = k_particles_t("k_particles", 64, PARTICLE_VAR_COUNT, ntiles);
-#else
-            k_p_d = k_particles_t("k_particles", n_particles);
-#endif
-            k_p_i_d = k_particles_i_t("k_particles_i", n_particles);
+            int aligned_n_particles = n_particles % 16 == 0 ? n_particles : 16*((n_particles/16)+1);
+            k_p_d = k_particles_t("k_particles", aligned_n_particles);
+            k_p_i_d = k_particles_i_t("k_particles_i", aligned_n_particles);
             k_pc_d = k_particle_copy_t("k_particle_copy_for_movers", n_pmovers);
             k_pc_i_d = k_particle_i_copy_t("k_particle_copy_for_movers_i", n_pmovers);
             k_pr_h = k_particle_copy_t::host_mirror_type("k_particle_send_for_movers", n_pmovers);
@@ -407,7 +400,7 @@ void accumulate_hydro_p_kokkos(
         const species_t            * RESTRICT sp
 );
 
-template<class CurrentView, typename SIMDFloat, typename SIMDFloatMask, typename SIMDInt32>
+template<class Layout, class CurrentView, typename SIMDFloat, typename SIMDFloatMask, typename SIMDInt32>
 void KOKKOS_INLINE_FUNCTION 
 accumulate_simd(CurrentView& current, size_t active_lanes, SIMDFloatMask mask,
                 SIMDInt32& ii,  const int nx,  const int ny,  const int nz,
@@ -417,8 +410,6 @@ accumulate_simd(CurrentView& current, size_t active_lanes, SIMDFloatMask mask,
 )
 {
 #ifdef VPIC_ENABLE_ACCUMULATORS 
-  namespace KokkosSIMD = Kokkos::Experimental;
-  using element_aligned_tag_t = KokkosSIMD::element_aligned_tag;
   SIMDFloat v12 = 0.0, v13 = 0.0, v14 = 0.0, v15 = 0.0;
   SIMDFloat* v[16];
   v[0]  = &v0;  v[1]  = &v1;  v[2]  = &v2;  v[3]  = &v3;
@@ -431,29 +422,58 @@ accumulate_simd(CurrentView& current, size_t active_lanes, SIMDFloatMask mask,
   auto same = temp == ii;
 
   // Accumulators are LayoutLeft (Column major)
-  if constexpr (std::is_same<Kokkos::LayoutLeft, typename CurrentView::array_layout>::value) {
+  if constexpr (std::is_same<Kokkos::LayoutLeft, Layout>::value) {
     if((SIMDInt32::size() == active_lanes) && KokkosSIMD::all_of(same)) {
       for(int i=0; i<12; i++) {
-        current(ii[0],  i) += KokkosSIMD::reduce(KokkosSIMD::where(mask,  *v[i]), std::plus{}); 
+        auto temp = KokkosSIMD::condition(mask, *v[i], 0.0f);
+        current(ii[0], i) += KokkosSIMD::reduce(temp, std::plus{});
       }
     } else {
-      for(int i=0; i<12; i++) {
-        KokkosSIMD::where(mask, *v[i]).scatter_to( &(current(0, i)), ii);
+      for(size_t idx=0; idx<active_lanes; idx++) {
+        current((int)ii[idx], 0)  += v0[idx];
+        current((int)ii[idx], 1)  += v1[idx];
+        current((int)ii[idx], 2)  += v2[idx];
+        current((int)ii[idx], 3)  += v3[idx];
+        current((int)ii[idx], 4)  += v4[idx];
+        current((int)ii[idx], 5)  += v5[idx];
+        current((int)ii[idx], 6)  += v6[idx];
+        current((int)ii[idx], 7)  += v7[idx];
+        current((int)ii[idx], 8)  += v8[idx];
+        current((int)ii[idx], 9)  += v9[idx];
+        current((int)ii[idx], 10) += v10[idx];
+        current((int)ii[idx], 11) += v11[idx];
       }
     }
-  } else if constexpr (std::is_same<Kokkos::LayoutRight, typename CurrentView::array_layout>::value) {
+  } else if constexpr (std::is_same<Kokkos::LayoutRight, Layout>::value) {
     // Accumulators are LayoutRight (Row major)
     if constexpr(SIMD_LEN == 16) {
       // All particles in the same cell
+      transpose(v0, v1, v2, v3, v4, v5, v6, v7, 
+                v8, v9, v10, v11, v12, v13, v14, v15);
       if((SIMDInt32::size() == active_lanes) && KokkosSIMD::all_of(same)) {
-        transpose(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15);
                    v0 += v1;  v0 += v2;  v0 += v3;
         v0 += v4;  v0 += v5;  v0 += v6;  v0 += v7;
         v0 += v8;  v0 += v9;  v0 += v10; v0 += v11;
         v0 += v12; v0 += v13; v0 += v14; v0 += v15;
         increment(&(current(ii[0], 0)), v0);
+      } else if(SIMDInt32::size() == active_lanes) {
+        increment( &(current(ii[ 0], 0)), v0 );
+        increment( &(current(ii[ 1], 0)), v1 );
+        increment( &(current(ii[ 2], 0)), v2 );
+        increment( &(current(ii[ 3], 0)), v3 );
+        increment( &(current(ii[ 4], 0)), v4 );
+        increment( &(current(ii[ 5], 0)), v5 );
+        increment( &(current(ii[ 6], 0)), v6 );
+        increment( &(current(ii[ 7], 0)), v7 );
+        increment( &(current(ii[ 8], 0)), v8 );
+        increment( &(current(ii[ 9], 0)), v9 );
+        increment( &(current(ii[10], 0)), v10 );
+        increment( &(current(ii[11], 0)), v11 );
+        increment( &(current(ii[12], 0)), v12 );
+        increment( &(current(ii[13], 0)), v13 );
+        increment( &(current(ii[14], 0)), v14 );
+        increment( &(current(ii[15], 0)), v15 );
       } else { // Particles belong to different cells
-        transpose(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15);
         for(int i=0; i<active_lanes; i++) {
           increment( &(current(ii[ i], 0)), *v[i] );
         }
@@ -469,13 +489,32 @@ accumulate_simd(CurrentView& current, size_t active_lanes, SIMDFloatMask mask,
                    v8 += v9;  v8 += v10; v8 += v11;
         v8 += v12; v8 += v13; v8 += v14; v8 += v15;
         increment(&(current(ii[0], 8)), v8);
-      } else { // Particles belong to different cells
+      } else if(SIMDInt32::size() == active_lanes) { // Particles belong to different cells
         transpose(v0, v1, v2, v3, v4, v5, v6, v7);
-        for(int i=0; i<active_lanes; i++) {
+        increment( &(current(ii[ 0], 0)), v0 );
+        increment( &(current(ii[ 1], 0)), v1 );
+        increment( &(current(ii[ 2], 0)), v2 );
+        increment( &(current(ii[ 3], 0)), v3 );
+        increment( &(current(ii[ 4], 0)), v4 );
+        increment( &(current(ii[ 5], 0)), v5 );
+        increment( &(current(ii[ 6], 0)), v6 );
+        increment( &(current(ii[ 7], 0)), v7 );
+        transpose(v8, v9, v10, v11, v12, v13, v14, v15);
+        increment( &(current(ii[ 0], 8)), v8 );
+        increment( &(current(ii[ 1], 8)), v9 );
+        increment( &(current(ii[ 2], 8)), v10 );
+        increment( &(current(ii[ 3], 8)), v11 );
+        increment( &(current(ii[ 4], 8)), v12 );
+        increment( &(current(ii[ 5], 8)), v13 );
+        increment( &(current(ii[ 6], 8)), v14 );
+        increment( &(current(ii[ 7], 8)), v15 );
+      } else [[unlikely]] { // Particles belong to different cells
+        transpose(v0, v1, v2, v3, v4, v5, v6, v7);
+        for(size_t i=0; i<active_lanes; i++) {
           increment( &(current(ii[ i], 0)), *v[i] );
         }
         transpose(v8, v9, v10, v11, v12, v13, v14, v15);
-        for(int i=0; i<active_lanes; i++) {
+        for(size_t i=0; i<active_lanes; i++) {
           increment( &(current(ii[ i], 8)), *v[i+8] );
         }
       }
@@ -490,17 +529,33 @@ accumulate_simd(CurrentView& current, size_t active_lanes, SIMDFloatMask mask,
         transpose(v8, v9, v10, v11);
         v8 += v9;  v8 += v10; v8 += v11;
         increment(&(current((int)ii[0], 8)), v8);
+      } else if(SIMDInt32::size() == active_lanes) { // Particles belong to different cells
+        transpose(v0, v1, v2, v3);
+        increment( &(current(ii[ 0], 0)), v0 );
+        increment( &(current(ii[ 1], 0)), v1 );
+        increment( &(current(ii[ 2], 0)), v2 );
+        increment( &(current(ii[ 3], 0)), v3 );
+        transpose(v4, v5, v6, v7);
+        increment( &(current(ii[ 0], 4)), v4 );
+        increment( &(current(ii[ 1], 4)), v5 );
+        increment( &(current(ii[ 2], 4)), v6 );
+        increment( &(current(ii[ 3], 4)), v7 );
+        transpose(v8, v9, v10, v11);
+        increment( &(current(ii[ 0], 8)), v8 );
+        increment( &(current(ii[ 1], 8)), v9 );
+        increment( &(current(ii[ 2], 8)), v10 );
+        increment( &(current(ii[ 3], 8)), v11 );
       } else { // Particles belong to different cells
         transpose(v0, v1, v2, v3);
-        for(int i=0; i<active_lanes; i++) {
+        for(size_t i=0; i<active_lanes; i++) {
           increment( &(current((int)ii[ i], 0)), *(v[i]) );
         }
         transpose(v4, v5, v6, v7);
-        for(int i=0; i<active_lanes; i++) {
+        for(size_t i=0; i<active_lanes; i++) {
           increment( &(current((int)ii[ i], 4)), *(v[i+4]) );
         }
         transpose(v8, v9, v10, v11);
-        for(int i=0; i<active_lanes; i++) {
+        for(size_t i=0; i<active_lanes; i++) {
           increment( &(current((int)ii[ i], 8)), *(v[i+8]) );
         }
       }
@@ -530,17 +585,17 @@ accumulate_simd(CurrentView& current, size_t active_lanes, SIMDFloatMask mask,
     int yi = iii/(nx+2);
     int xi = iii - yi*(nx+2);
     
-    current((int)ii[idx], field_var::jfx)                      += v0[idx];
+    current(ii[idx],                      field_var::jfx) += v0[idx];
     current(VOXEL(xi,yi+1,zi,nx,ny,nz),   field_var::jfx) += v1[idx];
     current(VOXEL(xi,yi,zi+1,nx,ny,nz),   field_var::jfx) += v2[idx];
     current(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += v3[idx];
     
-    current((int)ii[idx], field_var::jfy)                      += v4[idx];
+    current(ii[idx],                      field_var::jfy) += v4[idx];
     current(VOXEL(xi,yi,zi+1,nx,ny,nz),   field_var::jfy) += v5[idx];
     current(VOXEL(xi+1,yi,zi,nx,ny,nz),   field_var::jfy) += v6[idx];
     current(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += v7[idx];
     
-    current((int)ii[idx], field_var::jfz)                      += v8[idx];
+    current(ii[idx],                      field_var::jfz) += v8[idx];
     current(VOXEL(xi+1,yi,zi,nx,ny,nz),   field_var::jfz) += v9[idx];
     current(VOXEL(xi,yi+1,zi,nx,ny,nz),   field_var::jfz) += v10[idx];
     current(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += v11[idx];
@@ -557,1007 +612,90 @@ move_p( particle_t       * ALIGNED(128) p0,
         const grid_t     *              g,
         const float                     qsp );
 
-template<class particle_view_t, class particle_i_view_t, typename scatter_view_t, class neighbor_view_t>
-simd_float_mask_t
-KOKKOS_INLINE_FUNCTION
-move_p_kokkos_simd_a(
-    const particle_view_t& k_particles,
-    const particle_i_view_t& k_particles_i,
-    simd_float_t& dispx,
-    simd_float_t& dispy,
-    simd_float_t& dispz,
-    simd_int32_t& pm_i,
-    simd_float_mask_t mask,
-    size_t active_lanes,
-    scatter_view_t& scatter_access,
-    const grid_t* g,
-    neighbor_view_t& d_neighbor,
-    int64_t rangel,
-    int64_t rangeh,
-    const float qsp,
-    float cx, float cy, float cz,
-    const int nx, const int ny, const int nz
-)
-{
-  simd_float_mask_t lane_mask([active_lanes](std::size_t i) { return i < active_lanes; });
-  simd_float_mask_t res(false), not_done=mask && lane_mask;;
-  const simd_float_t one_third = (1./3.);
-  simd_float_t s_midx, s_midy, s_midz;
-  simd_float_t s_dispx, s_dispy, s_dispz;
-  simd_float_t dx, dy, dz;
-  simd_float_t v0, v1, v2, v3, v4, v5, q;
-  simd_float_t v6, v7, v8, v9, v10, v11, v12, v13;
-  simd_float_t s_dir[3];
-  simd_float_t r[3], dr[3];
-  simd_int32_t axis, face;
-  simd_int32_t ii([k_particles_i, pm_i, not_done](int i){if(not_done[i]) return k_particles_i(pm_i[i]); else return 0;});
-  int64_t neighbor;
+typedef struct particle_temp {
+  float   r[3];
+  int32_t i;
+  float   u[3];
+  float   w;
+} particle_temp_t;
 
-  float* mem_dx = &(k_particles(0, particle_var::dx));
-  float* mem_dy = &(k_particles(0, particle_var::dy));
-  float* mem_dz = &(k_particles(0, particle_var::dz));
-  float* mem_ux = &(k_particles(0, particle_var::ux));
-  float* mem_uy = &(k_particles(0, particle_var::uy));
-  float* mem_uz = &(k_particles(0, particle_var::uz));
-  float* mem_w  = &(k_particles(0, particle_var::w ));
-  int*   mem_ii = &(k_particles_i(0));
-
-  simd_int32_mask_t not_done_int([not_done](int i){return not_done[i];});
-  KokkosSIMD::where(not_done_int, ii).gather_from(mem_ii, pm_i);
-  if constexpr (std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
-    KokkosSIMD::where(not_done, r[0]).gather_from(mem_dx, pm_i);
-    KokkosSIMD::where(not_done, r[1]).gather_from(mem_dy, pm_i);
-    KokkosSIMD::where(not_done, r[2]).gather_from(mem_dz, pm_i);
-    KokkosSIMD::where(not_done, q).gather_from(mem_w, pm_i);
-  } else {
-    simd_int32_t indices([pm_i](std::size_t i) { return pm_i[i]*PARTICLE_VAR_COUNT; });
-    KokkosSIMD::where(not_done, r[0]).gather_from(mem_dx, indices);
-    KokkosSIMD::where(not_done, r[1]).gather_from(mem_dy, indices);
-    KokkosSIMD::where(not_done, r[2]).gather_from(mem_dz, indices);
-    KokkosSIMD::where(not_done, q).gather_from(mem_w, indices);
-  }
-//  q = qsp*p_w;
-  KokkosSIMD::where(not_done, q) = q*qsp;
-  dr[0] = dispx;
-  dr[1] = dispy;
-  dr[2] = dispz;
-
-
-  while(KokkosSIMD::any_of(not_done)) {
-//  int pi = pm_i[idx];
-//    int ii = pii;
-//    s_midx = p_dx;
-//    s_midy = p_dy;
-//    s_midz = p_dz;
-    s_midx = r[0];
-    s_midy = r[1];
-    s_midz = r[2];
-
-//    s_dispx = dispx[idx];
-//    s_dispy = dispy[idx];
-//    s_dispz = dispz[idx];
-    s_dispx = dr[0];
-    s_dispy = dr[1];
-    s_dispz = dr[2];
-
-    //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
-
-    //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
-
-//    s_dir[0] = (s_dispx>0) ? 1 : -1;
-//    s_dir[1] = (s_dispy>0) ? 1 : -1;
-//    s_dir[2] = (s_dispz>0) ? 1 : -1;
-    s_dir[0] = -1;
-    s_dir[1] = -1;
-    s_dir[2] = -1;
-    KokkosSIMD::where(s_dispx>0, s_dir[0]) = 1;
-    KokkosSIMD::where(s_dispy>0, s_dir[1]) = 1;
-    KokkosSIMD::where(s_dispz>0, s_dir[2]) = 1;
-//    s_dir[0] = KokkosSIMD::condition(s_dispx>0, 1, -1);
-//    s_dir[1] = KokkosSIMD::condition(s_dispy>0, 1, -1);
-//    s_dir[2] = KokkosSIMD::condition(s_dispz>0, 1, -1);
-
-    // Compute the twice the fractional distance to each potential
-    // streak/cell face intersection.
-//    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
-//    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
-//    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
-    v0 = (s_dir[0]-s_midx)/s_dispx;
-    v1 = (s_dir[1]-s_midy)/s_dispy;
-    v2 = (s_dir[2]-s_midz)/s_dispz;
-    KokkosSIMD::where(s_dispx==0, v0) = 3.4e38f;
-    KokkosSIMD::where(s_dispy==0, v1) = 3.4e38f;
-    KokkosSIMD::where(s_dispz==0, v2) = 3.4e38f;
-
-    // Determine the fractional length and axis of current streak. The
-    // streak ends on either the first face intersected by the
-    // particle track or at the end of the particle track.
-    //
-    //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
-    //   axis 3        ... streak ends at end of the particle track
-//    /**/      v3=2,  axis=3;
-//    if(v0<v3) v3=v0, axis=0;
-//    if(v1<v3) v3=v1, axis=1;
-//    if(v2<v3) v3=v2, axis=2;
-//    v3 *= 0.5;
-    v3=2.0f; axis=simd_int32_t(3);
-    simd_int32_mask_t axis_mask([v0,v3](int i){return v0[i]<v3[i];});
-    KokkosSIMD::where(axis_mask, axis) = 0;
-    KokkosSIMD::where(v0<v3, v3) = v0;
-    axis_mask = simd_int32_mask_t([v1,v3](int i){return v1[i]<v3[i];});
-    KokkosSIMD::where(axis_mask, axis) = 1;
-    KokkosSIMD::where(v1<v3, v3) = v1;
-    axis_mask = simd_int32_mask_t([v2,v3](int i){return v2[i]<v3[i];});
-    KokkosSIMD::where(axis_mask, axis) = 2;
-    KokkosSIMD::where(v2<v3, v3) = v2;
-    v3 *= 0.5f;
-
-    // Compute the midpoint and the normalized displacement of the streak
-    s_dispx *= v3;
-    s_dispy *= v3;
-    s_dispz *= v3;
-    s_midx += s_dispx;
-    s_midy += s_dispy;
-    s_midz += s_dispz;
-
-    // Accumulate the streak.  Note: accumulator values are 4 times
-    // the total physical charge that passed through the appropriate
-    // current quadrant in a time-step
-//    v5 = q*s_dispx*s_dispy*s_dispz*(1.f/3.f);
-    v13 = q*s_dispx*s_dispy*s_dispz*one_third;
-
-    //a = (float *)(&d_accumulators[ci]);
-
-#   define accumulate_j(X,Y,Z,v0,v1,v2,v3)                                        \
-    v12 = q*s_disp##X;     /* v2 = q ux                            */  \
-    v1  = v12*s_mid##Y;    /* v1 = q ux dy                         */  \
-    v0  = v12-v1;          /* v0 = q ux (1-dy)                     */  \
-    v1 += v12;             /* v1 = q ux (1+dy)                     */  \
-    v12 = 1+s_mid##Z;      /* v4 = 1+dz                            */  \
-    v2  = v0*v12;          /* v2 = q ux (1-dy)(1+dz)               */  \
-    v3  = v1*v12;          /* v3 = q ux (1+dy)(1+dz)               */  \
-    v12  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
-    v0 *= v12;             /* v0 = q ux (1-dy)(1-dz)               */  \
-    v1 *= v12;             /* v1 = q ux (1+dy)(1-dz)               */  \
-    v0 += v13;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
-    v1 -= v13;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
-    v2 -= v13;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
-    v3 += v13;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-
-    accumulate_j(x,y,z,v0,v1,v2,v3);
-    v0  *= cx; v1  *= cx; v2  *= cx; v3  *= cx;
-    accumulate_j(y,z,x,v4,v5,v6,v7);
-    v4  *= cy; v5  *= cy; v6  *= cy; v7  *= cy;
-    accumulate_j(z,x,y,v8,v9,v10,v11);
-    v8  *= cz; v9  *= cz; v10 *= cz; v11 *= cz;
-//    accumulate_simd(scatter_access, active_lanes, not_done,
-//                    ii,  nx,  ny,  nz,
-//                    v0,  v1,  v2,  v3,
-//                    v4,  v5,  v6,  v7,
-//                    v8,  v9,  v10, v11);
-
-#if defined( VPIC_ENABLE_ACCUMULATORS )
-//    simd_float_t v12 = 0.0, v13 = 0.0, v14 = 0.0, v15 = 0.0;
-//    transpose(v0, v1, v2, v3, v4, v5, v6, v7);
-//    transpose(v8, v9, v10, v11, v12, v13, v14, v15);
-//    if(not_done[0]) {
-//      increment(&(scatter_access(ii[ 0], 0)), v0);
-//      increment(&(scatter_access(ii[ 0], 8)), v8);
-//    }
-//    if(not_done[1]) {
-//      increment(&(scatter_access(ii[ 1], 0)), v1);
-//      increment(&(scatter_access(ii[ 1], 8)), v9);
-//    }
-//    if(not_done[2]) {
-//      increment(&(scatter_access(ii[ 2], 0)), v2);
-//      increment(&(scatter_access(ii[ 2], 8)), v10);
-//    }
-//    if(not_done[3]) {
-//      increment(&(scatter_access(ii[ 3], 0)), v3);
-//      increment(&(scatter_access(ii[ 3], 8)), v11);
-//    }
-//    if(not_done[4]) {
-//      increment(&(scatter_access(ii[ 4], 0)), v4);
-//      increment(&(scatter_access(ii[ 4], 8)), v12);
-//    }
-//    if(not_done[5]) {
-//      increment(&(scatter_access(ii[ 5], 0)), v5);
-//      increment(&(scatter_access(ii[ 5], 8)), v13);
-//    }
-//    if(not_done[6]) {
-//      increment(&(scatter_access(ii[ 6], 0)), v6);
-//      increment(&(scatter_access(ii[ 6], 8)), v14);
-//    }
-//    if(not_done[7]) {
-//      increment(&(scatter_access(ii[ 7], 0)), v7);
-//      increment(&(scatter_access(ii[ 7], 8)), v15);
-//    }
-
-    for(size_t idx=0; idx<active_lanes; idx++) {
-      if(not_done[idx]) {
-        scatter_access(ii[idx], 0)  += v0[idx];
-        scatter_access(ii[idx], 1)  += v1[idx];
-        scatter_access(ii[idx], 2)  += v2[idx];
-        scatter_access(ii[idx], 3)  += v3[idx];
-        scatter_access(ii[idx], 4)  += v4[idx];
-        scatter_access(ii[idx], 5)  += v5[idx];
-        scatter_access(ii[idx], 6)  += v6[idx];
-        scatter_access(ii[idx], 7)  += v7[idx];
-        scatter_access(ii[idx], 8)  += v8[idx];
-        scatter_access(ii[idx], 9)  += v9[idx];
-        scatter_access(ii[idx], 10) += v10[idx];
-        scatter_access(ii[idx], 11) += v11[idx];
-      }
-    }
-#else
-    for(size_t idx=0; idx<active_lanes; idx++) {
-      if(not_done[idx]) {
-        int iii = ii[idx];
-        int zi = iii/((nx+2)*(ny+2));
-        iii -= zi*(nx+2)*(ny+2);
-        int yi = iii/(nx+2);
-        int xi = iii-yi*(nx+2);
-        scatter_access(ii[idx], field_var::jfx)                      += v0[idx];
-        scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx)   += v1[idx];
-        scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx)   += v2[idx];
-        scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += v3[idx];
-    
-        scatter_access(ii[idx], field_var::jfy)                      += v4[idx];
-        scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy)   += v5[idx];
-        scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy)   += v6[idx];
-        scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += v7[idx];
-    
-        scatter_access(ii[idx], field_var::jfz)                      += v8[idx];
-        scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz)   += v9[idx];
-        scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz)   += v10[idx];
-        scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += v11[idx];
-      }
-    }
-#endif
-
-#   undef accumulate_j
-
-    // Compute the remaining particle displacment
-    dr[0] -= s_dispx;
-    dr[1] -= s_dispy;
-    dr[2] -= s_dispz;
-//    dispx -= s_dispx;
-//    dispy -= s_dispy;
-//    dispz -= s_dispz;
-
-    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
-    // Compute the new particle offset
-//    p_dx += s_dispx+s_dispx;
-//    p_dy += s_dispy+s_dispy;
-//    p_dz += s_dispz+s_dispz;
-    r[0] += s_dispx+s_dispx;
-    r[1] += s_dispy+s_dispy;
-    r[2] += s_dispz+s_dispz;
-
-    // If an end streak, return success (should be ~50% of the time)
-    //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
-//    if( axis==3 ) {
-//      not_done[idx] = false;
-//      continue;
-//    }
-//
-    simd_float_mask_t temp([axis](int i) {return axis[i] == 3;});
-    if constexpr (std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
-      KokkosSIMD::where(temp, r[0]).scatter_to(mem_dx, pm_i);
-      KokkosSIMD::where(temp, r[1]).scatter_to(mem_dy, pm_i);
-      KokkosSIMD::where(temp, r[2]).scatter_to(mem_dz, pm_i);
-//      KokkosSIMD::where(temp, ii).scatter_to(mem_ii, pm_i);
-    } else {
-      simd_int32_t indices([pm_i](std::size_t i) { return pm_i[i]*PARTICLE_VAR_COUNT; });
-      KokkosSIMD::where(temp, r[0]).scatter_to(mem_dx, indices);
-      KokkosSIMD::where(temp, r[1]).scatter_to(mem_dy, indices);
-      KokkosSIMD::where(temp, r[2]).scatter_to(mem_dz, indices);
-//      KokkosSIMD::where(temp, ii).scatter_to(mem_ii, pm_i);
-    }
-//    KokkosSIMD::where((axis == 3) && not_done, r[0]).scatter_to(mem_dx, pm_i);
-//    KokkosSIMD::where((axis == 3) && not_done, r[1]).scatter_to(mem_dy, pm_i);
-//    KokkosSIMD::where((axis == 3) && not_done, r[2]).scatter_to(mem_dz, pm_i);
-    KokkosSIMD::where((axis == 3) && not_done_int, ii  ).scatter_to(mem_ii, pm_i);
-    not_done = not_done && !temp;
-
-//for(size_t idx=0; idx<active_lanes; idx++) {
-//  if(not_done[idx]) {
-//    if(axis[idx] == 3) {
-////      k_particles( pm_i[idx], particle_var::dx) = r[0][idx];
-////      k_particles( pm_i[idx], particle_var::dy) = r[1][idx];
-////      k_particles( pm_i[idx], particle_var::dz) = r[2][idx];
-//      k_particles_i(pm_i[idx]) = ii[idx];
-//      not_done[idx] = false;
-//      continue;
-//    }
-//  }
-//}
-
-    // Determine if the particle crossed into a local cell or if it
-    // hit a boundary and convert the coordinate system accordingly.
-    // Note: Crossing into a local cell should happen ~50% of the
-    // time; hitting a boundary is usually a rare event.  Note: the
-    // entry / exit coordinate for the particle is guaranteed to be
-    // +/-1 _exactly_ for the particle.
-
-//    v0 = s_dir[axis];
-//    k_particles( pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
-//                           // _exactly_ on the boundary.
-//    face = axis; if( v0>0 ) face += 3;
-
-//    v0[idx] = s_dir[axis[idx]][idx];
-//    k_particles( pm_i[idx], particle_var::dx + axis[idx]) = v0[idx];
-//    face[idx] = axis[idx]; if(v0[idx]>0) face[idx] += 3;
-
-    simd_float_t axis_float([axis](int i) {return static_cast<float>(axis[i]);});
-    KokkosSIMD::where(simd_float_mask_t(axis_float == 0.f), v0) = s_dir[0];
-    KokkosSIMD::where(simd_float_mask_t(axis_float == 1.f), v0) = s_dir[1];
-    KokkosSIMD::where(simd_float_mask_t(axis_float == 2.f), v0) = s_dir[2];
-    face = axis;
-    simd_int32_mask_t face_update([v0](int i){return v0[i] > 0;});
-    KokkosSIMD::where(face_update, face) = face + 3;
-//    KokkosSIMD::where(not_done, v0).scatter_to(mem_dx, pm_i);
-//    KokkosSIMD::where(not_done, v0).scatter_to(mem_dy, pm_i);
-//    KokkosSIMD::where(not_done, v0).scatter_to(mem_dz, pm_i);
-
-    int64_t neighbors[simd_int32_t::size()];
-    int32_t _new_voxel[simd_int32_t::size()];
-    for(size_t idx=0; idx<active_lanes; idx++) {
-      neighbors[idx] = d_neighbor( 6*ii[idx] + face[idx] );
-      _new_voxel[idx] = neighbors[idx] - rangel;
-      if(not_done[idx]) {
-        k_particles( pm_i[idx], particle_var::dx + axis[idx]) = v0[idx];
-      }
-    }
-    simd_int32_t new_voxel;
-    new_voxel.copy_from(_new_voxel, KokkosSIMD::element_aligned_tag());
-    simd_float_mask_t reflect([neighbors](int i) {
-      return neighbors[i] == reflect_particles;
-    });
-    simd_float_mask_t boundary([neighbors, rangel, rangeh](int i) {
-      return (neighbors[i] < rangel || neighbors[i] > rangeh);
-    });
-    KokkosSIMD::where(not_done && reflect && axis_float == 0, dr[0]) = -dr[0];
-    KokkosSIMD::where(not_done && reflect && axis_float == 1, dr[1]) = -dr[1];
-    KokkosSIMD::where(not_done && reflect && axis_float == 2, dr[2]) = -dr[2];
-    KokkosSIMD::where(not_done && boundary && axis_float == 0, dispx) = dr[0];
-    KokkosSIMD::where(not_done && boundary && axis_float == 1, dispy) = dr[1];
-    KokkosSIMD::where(not_done && boundary && axis_float == 2, dispz) = dr[2];
-    res = res || (not_done && boundary);
-    not_done = not_done || (not_done && boundary);
-    simd_int32_mask_t update_voxel([not_done, reflect, boundary](int i){return not_done[i] && !reflect[i] && !boundary[i];});
-    KokkosSIMD::where(update_voxel, ii) = new_voxel;
-    KokkosSIMD::where(not_done && !reflect && !boundary && axis_float == 0, r[0]) = -r[0];
-    KokkosSIMD::where(not_done && !reflect && !boundary && axis_float == 1, r[1]) = -r[1];
-    KokkosSIMD::where(not_done && !reflect && !boundary && axis_float == 2, r[2]) = -r[2];
-    
-//    for(size_t idx=0; idx<active_lanes; idx++) {
-//      if(not_done[idx]) {
-//        k_particles( pm_i[idx], particle_var::dx + axis[idx]) = v0[idx];
-//
-//        // TODO: clean this fixed index to an enum
-//        //neighbor = g->neighbor[ 6*ii + face ];
-//        neighbor = d_neighbor( 6*ii[idx] + face[idx] );
-//
-//        // TODO: these two if statements used to be marked UNLIKELY,
-//        // but that intrinsic doesn't work on GPU.
-//        // for performance portability, maybe specialize UNLIKELY
-//        // for CUDA mode and put it back
-//
-//        if( neighbor==reflect_particles ) {
-//          // Hit a reflecting boundary condition.  Reflect the particle
-//          // momentum and remaining displacement and keep moving the
-//          // particle.
-//          k_particles( pm_i[idx], particle_var::ux + axis[idx]) = -k_particles( pm_i[idx], particle_var::ux + axis[idx]);
-//          // Clearer and works with AMD GPUs
-////          float* disp = static_cast<float*>(&(pm->dispx));
-////          disp[axis] = -disp[axis];
-//          dr[axis[idx]][idx] = -dr[axis[idx]][idx];
-//          continue;
-//        }
-//
-//        if( neighbor<rangel || neighbor>rangeh ) {
-//          // Cannot handle the boundary condition here.  Save the updated
-//          // particle position, face it hit and update the remaining
-//          // displacement in the particle mover.
-////          pii = 8*pii + face;
-////          return 1; // Return "mover still in use"
-//
-//          k_particles(pm_i[idx], particle_var::dx) = r[0][idx];
-//          k_particles(pm_i[idx], particle_var::dy) = r[1][idx];
-//          k_particles(pm_i[idx], particle_var::dz) = r[2][idx];
-//          k_particles_i(pm_i[idx]) = 8*k_particles_i(pm_i[idx]) + face[idx];
-//          dispx[idx] = dr[0][idx];
-//          dispy[idx] = dr[1][idx];
-//          dispz[idx] = dr[2][idx];
-//          res[idx] = true;
-//          not_done[idx] = false;
-//          continue;
-//        }
-//
-//        // Crossed into a normal voxel.  Update the voxel index, convert the
-//        // particle coordinate system and keep moving the particle.
-//
-////        pii = neighbor - rangel;
-////        k_particles_i(pm_i[idx]) = neighbor - rangel;
-//        ii[idx] = neighbor - rangel;
-//        /**/                         // Note: neighbor - rangel < 2^31 / 6
-////        k_particles( pm_i[idx], particle_var::dx + axis[idx]) = -v0[idx];      // Convert coordinate system
-//        r[axis[idx]][idx] = -r[axis[idx]][idx];
-//      }
-//    }
-  }
-
-//  #undef p_dx
-//  #undef p_dy
-//  #undef p_dz
-//  #undef p_ux
-//  #undef p_uy
-//  #undef p_uz
-//  #undef p_w
-//  #undef pii
-
-//  return 0; // Return "mover not in use"
-  return res;
-}
-
-template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, typename scatter_view_t>
-int
-KOKKOS_FUNCTION
-move_p_kokkos_simd_b(
-    const particle_view_t& k_particles,
-    const particle_i_view_t& k_particles_i,
-    particle_mover_t* ALIGNED(16)  pm,
-    scatter_view_t& scatter_access,
-    const grid_t* g,
-    neighbor_view_t& d_neighbor,
-    int64_t rangel,
-    int64_t rangeh,
-    const float qsp,
-    float cx, float cy, float cz,
-    const int nx, const int ny, const int nz
-)
-{
-  #define p_dx    k_particles( pi, particle_var::dx)
-  #define p_dy    k_particles( pi, particle_var::dy)
-  #define p_dz    k_particles( pi, particle_var::dz)
-  #define p_ux    k_particles( pi, particle_var::ux)
-  #define p_uy    k_particles( pi, particle_var::uy)
-  #define p_uz    k_particles( pi, particle_var::uz)
-  #define p_w     k_particles( pi, particle_var::w)
-  #define pii     k_particles_i(pi)
-
-  int64_t neighbor;
-  int pi = pm->i;
-
-  float f0;
-  int axis, face;
-  simd_float32x4_t s_mid, s_disp, s_dir;
-  simd_float32x4_t v0, v1, v2, v3, v4, v5;
-  simd_float32x4_t q(qsp * p_w);
-  const simd_float32x4_t one(1.f), large_num(3.4e38f);
-  constexpr float one_third = 1.f/3.f;
-
-    //printf("in move %d \n", pi);
-
-  int ii = pii;
-  simd_float32x4_t r([k_particles, pi](std::size_t i) {
-    if(i==0) {
-      return p_dx;
-    } else if(i==1) {
-      return p_dy;
-    } else if(i==2) {
-      return p_dz;
-    } else {
-      return 0.0f;
-    }
-  }); 
-  simd_float32x4_t dr;
-  dr.copy_from((float*)(&pm[0]), KokkosSIMD::element_aligned_tag());
-
-  for(;;) {
-    // At this point:
-    //   r     = current particle position in local voxel coordinates
-    //           (note the current voxel is on [-1,1]^3.
-    //   dr    = remaining particle displacment
-    //           (note: this is in voxel edge lengths!)
-    //   voxel = local voxel of particle
-    // Thus, in the local coordinate system, it is desired to move the
-    // particle through all points in the local coordinate system:
-    //   streak_r(s) = r + 2 disp s for s in [0,1]
-    //
-    // Determine the fractional length and type of current
-    // streak made by the particle through this voxel.  The streak
-    // ends on either the first voxel face intersected by the
-    // particle track or at the end of the particle track.
-    //
-    // Note: a divide by zero cannot occur below due to the shift of
-    // the denominator by tiny.  Also, the shift by tiny is large
-    // enough that the divide will never overflow when dr is tiny
-    // (|sgn_dr-r|<=2 => 2/tiny = 2e+37 < FLT_MAX = 3.4e38).
-    // Likewise, due to speed of light limitations, generally dr
-    // cannot get much larger than 1 or so and the numerator, if not
-    // zero, can generally never be smaller than FLT_EPS/2.  Thus,
-    // likewise, the divide will never underflow either.
-
-    s_mid = r;
-    s_disp = dr;
-    s_dir = KokkosSIMD::condition(s_disp > 0, 1, -1);
-
-    // Compute the twice the fractional distance to each potential
-    // streak/cell face intersection.
-    v0 = KokkosSIMD::condition(s_disp==0, large_num, (s_dir - s_mid)/s_disp);
-
-    // Determine the fractional length and axis of current streak. The
-    // streak ends on either the first face intersected by the
-    // particle track or at the end of the particle track.
-    //
-    //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
-    //   axis 3        ... streak ends at end of the particle track
-    /**/      
-                 f0=2.0f,  axis=3;
-    if(v0[0]<f0) f0=v0[0], axis=0;
-    if(v0[1]<f0) f0=v0[1], axis=1;
-    if(v0[2]<f0) f0=v0[2], axis=2;
-    f0 *= 0.5;
-
-    simd_float32x4_t sign_flip([axis](int i){return i==axis ? -1.0f : 1.0f;});
-
-    // Compute the midpoint and the normalized displacement of the streak
-    s_disp *= simd_float32x4_t(f0);
-    s_mid += s_disp;
-    // Compute the remaining particle displacment
-    dr -= s_disp;
-    // Compute the new particle offset
-    r += s_disp + s_disp;
-
-    // Accumulate the streak.  Note: accumulator values are 4 times
-    // the total physical charge that passed through the appropriate
-    // current quadrant in a time-step
-    v5 = simd_float32x4_t((float)q[0]*(float)s_disp[0]*s_disp[1]*s_disp[2]*one_third); // q( ux*uy*uz*(1/3) )
-    v4  = q*s_disp;                    // v4 = q( ux, uy, uz, D/C)
-    v1  = v4*shuffle<1,2,0,3>(s_mid);  // v1 = q( uxdy, uydz, uzdx, D/C )
-    v0  = v4-v1;                       // v0 = q( ux(1-dy), uy(1-dz), uz(1-dx), D/C )
-    v1 += v4;                          // v1 = q( ux(1+dy), uy(1+dz), uz(1+dx), D/C )
-    v4  = one+shuffle<2,0,1,3>(s_mid); // v4 = 1+dz, 1+dx, 1+dy, D/C
-    v2  = v0*v4;                       // v2 = q( ux(1-dy)(1+dz), uy(1-dz)(1+dx), uz(1-dx)(1+dy), D/C )
-    v3  = v1*v4;                       // v3 = q( ux(1+dy)(1+dz), uy(1+dz)(1+dx), uz(1+dx)(1+dy), D/C )
-    v4  = one-shuffle<2,0,1,3>(s_mid); // v4 = 1-dz, 1-dx, 1-dy, D/C
-    v0 *= v4;                          // v0 = q( ux(1-dy)(1-dz), uy(1-dz)(1-dx), uz(1-dx)(1-dy), D/C )
-    v1 *= v4;                          // v1 = q( ux(1+dy)(1-dz), uy(1+dz)(1-dx), uz(1+dx)(1-dy), D/C )
-    v0 += v5;                          // v0 = q( ux( (1-dy)(1-dz) + uy*uz/3 ), uy( (1-dz)(1-dx) + uxuz/3 ), uz( (1-dx)(1-dy) + uxuy/3 ), D/C )
-    v1 -= v5;                          // v1 = q( ux( (1+dy)(1-dz) - uy*uz/3 ), uy( (1+dz)(1-dx) - uxuz/3 ), uz( (1+dx)(1-dy) - uxuy/3 ), D/C ) 
-    v2 -= v5;                          // v2 = q( ux( (1-dy)(1+dz) - uy*uz/3 ), uy( (1-dz)(1+dx) - uxuz/3 ), uz( (1-dx)(1+dy) - uxuy/3 ), D/C ) 
-    v3 += v5;                          // v3 = q( ux( (1+dy)(1+dz) + uy*uz/3 ), uy( (1+dz)(1+dx) + uxuz/3 ), uz( (1+dx)(1+dy) + uxuy/3 ), D/C ) 
-    transpose(v0, v1, v2, v3);
-    v0 *= cx;
-    v1 *= cy;
-    v2 *= cz;
-    
-#ifdef VPIC_ENABLE_ACCUMULATORS 
-    increment((float*)(&scatter_access(ii, 0)), v0);
-    increment((float*)(&scatter_access(ii, 4)), v1);
-    increment((float*)(&scatter_access(ii, 8)), v2);
-#else
-    int iii = ii;
-    int zi = iii/((nx+2)*(ny+2));
-    iii -= zi*(nx+2)*(ny+2);
-    int yi = iii/(nx+2);
-    int xi = iii-yi*(nx+2);
-
-    scatter_access(ii, field_var::jfx) += v0[0];
-    scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += v0[1];
-    scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += v0[2];
-    scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += v0[3];
-
-    scatter_access(ii, field_var::jfy) += v1[0];
-    scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += v1[1];
-    scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += v1[2];
-    scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += v1[3];
-
-    scatter_access(ii, field_var::jfz) += v2[0];
-    scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += v2[1];
-    scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += v2[2];
-    scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += v2[3];
-#endif
-
-#   undef accumulate_j
-
-    // If an end streak, return success (should be ~50% of the time)
-    if( axis==3 ) {
-      p_dx = r[0]; p_dy = r[1]; p_dz = r[2];
-      pii = ii;
-      break;
-    }
-
-    // Determine if the particle crossed into a local cell or if it
-    // hit a boundary and convert the coordinate system accordingly.
-    // Note: Crossing into a local cell should happen ~50% of the
-    // time; hitting a boundary is usually a rare event.  Note: the
-    // entry / exit coordinate for the particle is guaranteed to be
-    // +/-1 _exactly_ for the particle.
-    f0 = s_dir[axis];
-    k_particles( pi, particle_var::dx + axis) = f0; // Avoid roundoff fiascos--put the particle
-    
-    // _exactly_ on the boundary.
-    face = axis; if( f0>0 ) face += 3;
-
-    // TODO: clean this fixed index to an enum
-    //neighbor = g->neighbor[ 6*ii + face ];
-    neighbor = d_neighbor( 6*ii + face );
-
-    // TODO: these two if statements used to be marked UNLIKELY,
-    // but that intrinsic doesn't work on GPU.
-    // for performance portability, maybe specialize UNLIKELY
-    // for CUDA mode and put it back
-    if( neighbor==reflect_particles ) {
-      // Hit a reflecting boundary condition.  Reflect the particle
-      // momentum and remaining displacement and keep moving the
-      // particle.
-      k_particles( pi, particle_var::ux + axis) = -k_particles( pi, particle_var::ux + axis);
-      dr *= sign_flip;
-//      dr[axis] = -dr[axis];     
-
-      continue;
-    }
-
-    if( neighbor<rangel || neighbor>rangeh ) {
-      // Cannot handle the boundary condition here.  Save the updated
-      // particle position, face it hit and update the remaining
-      // displacement in the particle mover.
-      p_dx = r[0]; p_dy = r[1]; p_dz = r[2];
-      pii = 8*pii + face;
-      dr.copy_to((float*)(&pm[0]), KokkosSIMD::element_aligned_tag());
-      pm->i = pi;
-      return 1; // Return "mover still in use"
-    }
-
-    // Crossed into a normal voxel.  Update the voxel index, convert the
-    // particle coordinate system and keep moving the particle.
-    /**/                         // Note: neighbor - rangel < 2^31 / 6
-    ii = neighbor - rangel;
-    r *= sign_flip;
-//    r[axis] = -r[axis];
-  }
-  #undef p_dx
-  #undef p_dy
-  #undef p_dz
-  #undef p_ux
-  #undef p_uy
-  #undef p_uz
-  #undef p_w
-  #undef pii
-  return 0; // Return "mover not in use"
-}
-
-//template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class scatter_view_t>
-//int
-//KOKKOS_INLINE_FUNCTION
-//move_p_kokkos(
-//    const particle_view_t& k_particles,
-//    const particle_i_view_t& k_particles_i,
-//    const k_particle_movers_t&  pm,
-//    const k_particle_i_movers_t&  pmi,
-//    const int idx,
-//    //accumulator_sa_t k_accumulators_sa,
-//    scatter_view_t& scatter_view,
-//    const grid_t* g,
-//    neighbor_view_t& d_neighbor,
-//    int64_t rangel,
-//    int64_t rangeh,
-//    const float qsp,
-//    //field_array_t* RESTRICT fa,
-//    //field_view_t& k_field,
-//    float cx,
-//    float cy,
-//    float cz,
-//    const int nx,
-//    const int ny,
-//    const int nz
-//)
-//{
-//
-//  #define p_dx    k_particles( pi, particle_var::dx)
-//  #define p_dy    k_particles( pi, particle_var::dy)
-//  #define p_dz    k_particles( pi, particle_var::dz)
-//  #define p_ux    k_particles( pi, particle_var::ux)
-//  #define p_uy    k_particles( pi, particle_var::uy)
-//  #define p_uz    k_particles( pi, particle_var::uz)
-//  #define p_w     k_particles( pi, particle_var::w)
-//  #define pii     k_particles_i(pi)
-//
-//  //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
-//  //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
-//  //#define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
-//  //#define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
-//
-//
-//  //k_field_t& k_field = fa->k_f_d;
-//  float s_midx, s_midy, s_midz;
-//  float s_dispx, s_dispy, s_dispz;
-//  float s_dir[3];
-//  float v0, v1, v2, v3, v4, v5, q;
-//  int axis, face;
-//  int64_t neighbor;
-//  //int pi = int(local_pm_i);
-//  int pi = pmi(idx);
-////  auto  k_field_scatter_access = k_f_sa.access();
-////  auto accum_sa = accum_sv.access();
-//#if defined( VPIC_ENABLE_ACCUMULATORS )
-//  auto scatter_access = scatter_view.access();
-//#else
-//  auto& scatter_access = scatter_view;
-//#endif
-//
-//  q = qsp*p_w;
-//
-//    //printf("in move %d \n", pi);
-//
-//  for(;;) {
-//    int ii = pii;
-//    s_midx = p_dx;
-//    s_midy = p_dy;
-//    s_midz = p_dz;
-//
-//
-//    s_dispx = pm(idx, particle_mover_var::dispx);
-//    s_dispy = pm(idx, particle_mover_var::dispy);
-//    s_dispz = pm(idx, particle_mover_var::dispz);
-//
-//    //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
-//
-//    //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
-//
-//    s_dir[0] = (s_dispx>0) ? 1 : -1;
-//    s_dir[1] = (s_dispy>0) ? 1 : -1;
-//    s_dir[2] = (s_dispz>0) ? 1 : -1;
-//
-//    // Compute the twice the fractional distance to each potential
-//    // streak/cell face intersection.
-//    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
-//    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
-//    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
-//
-//    // Determine the fractional length and axis of current streak. The
-//    // streak ends on either the first face intersected by the
-//    // particle track or at the end of the particle track.
-//    //
-//    //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
-//    //   axis 3        ... streak ends at end of the particle track
-//    /**/      v3=2,  axis=3;
-//    if(v0<v3) v3=v0, axis=0;
-//    if(v1<v3) v3=v1, axis=1;
-//    if(v2<v3) v3=v2, axis=2;
-//    v3 *= 0.5;
-//
-//    // Compute the midpoint and the normalized displacement of the streak
-//    s_dispx *= v3;
-//    s_dispy *= v3;
-//    s_dispz *= v3;
-//    s_midx += s_dispx;
-//    s_midy += s_dispy;
-//    s_midz += s_dispz;
-//
-//    // Accumulate the streak.  Note: accumulator values are 4 times
-//    // the total physical charge that passed through the appropriate
-//    // current quadrant in a time-step
-//    v5 = q*s_dispx*s_dispy*s_dispz*(1.f/3.f);
-//
-//    //a = (float *)(&d_accumulators[ci]);
-//
-//#   define accumulate_j(X,Y,Z)                                        \
-//    v4  = q*s_disp##X;    /* v2 = q ux                            */  \
-//    v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
-//    v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
-//    v1 += v4;             /* v1 = q ux (1+dy)                     */  \
-//    v4  = 1+s_mid##Z;     /* v4 = 1+dz                            */  \
-//    v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
-//    v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
-//    v4  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
-//    v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
-//    v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
-//    v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
-//    v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
-//    v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
-//    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-//
-//    //Kokkos::atomic_add(&a[0], v0);
-//    //Kokkos::atomic_add(&a[1], v1);
-//    //Kokkos::atomic_add(&a[2], v2);
-//    //Kokkos::atomic_add(&a[3], v3);
-//
-//    if constexpr (std::is_same<scatter_view_t,k_field_sv_t>::value) {
-//      int iii = ii;
-//      int zi = iii/((nx+2)*(ny+2));
-//      iii -= zi*(nx+2)*(ny+2);
-//      int yi = iii/(nx+2);
-//      int xi = iii-yi*(nx+2);
-//      accumulate_j(x,y,z);
-//      scatter_access(ii, field_var::jfx) += cx*v0;
-//      scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
-//      scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
-//      scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
-//
-//      accumulate_j(y,z,x);
-//      scatter_access(ii, field_var::jfy) += cy*v0;
-//      scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
-//      scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
-//      scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
-//
-//      accumulate_j(z,x,y);
-//      scatter_access(ii, field_var::jfz) += cz*v0;
-//      scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
-//      scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
-//      scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
-//    } else if constexpr (std::is_same<scatter_view_t,Kokkos::View<float*[12]>>::value) {
-//      accumulate_j(x,y,z);
-//      scatter_access(ii, 0) += cx*v0;
-//      scatter_access(ii, 1) += cx*v1;
-//      scatter_access(ii, 2) += cx*v2;
-//      scatter_access(ii, 3) += cx*v3;
-//
-//      accumulate_j(y,z,x);
-//      scatter_access(ii, 4) += cy*v0;
-//      scatter_access(ii, 5) += cy*v1;
-//      scatter_access(ii, 6) += cy*v2;
-//      scatter_access(ii, 7) += cy*v3;
-//
-//      accumulate_j(z,x,y);
-//      scatter_access(ii, 8) += cz*v0;
-//      scatter_access(ii, 9) += cz*v1;
-//      scatter_access(ii, 10) += cz*v2;
-//      scatter_access(ii, 11) += cz*v3;
-//    }
-//
-//#   undef accumulate_j
-//
-//    // Compute the remaining particle displacment
-//    pm(idx, particle_mover_var::dispx) -= s_dispx;
-//    pm(idx, particle_mover_var::dispy) -= s_dispy;
-//    pm(idx, particle_mover_var::dispz) -= s_dispz;
-//
-//    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
-//    // Compute the new particle offset
-//    p_dx += s_dispx+s_dispx;
-//    p_dy += s_dispy+s_dispy;
-//    p_dz += s_dispz+s_dispz;
-//
-//    // If an end streak, return success (should be ~50% of the time)
-//    //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
-//
-//    if( axis==3 ) break;
-//
-//    // Determine if the particle crossed into a local cell or if it
-//    // hit a boundary and convert the coordinate system accordingly.
-//    // Note: Crossing into a local cell should happen ~50% of the
-//    // time; hitting a boundary is usually a rare event.  Note: the
-//    // entry / exit coordinate for the particle is guaranteed to be
-//    // +/-1 _exactly_ for the particle.
-//
-//    v0 = s_dir[axis];
-//    k_particles( pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
-//                           // _exactly_ on the boundary.
-//    face = axis; if( v0>0 ) face += 3;
-//
-//    // TODO: clean this fixed index to an enum
-//    //neighbor = g->neighbor[ 6*ii + face ];
-//    neighbor = d_neighbor( 6*ii + face );
-//
-//    // TODO: these two if statements used to be marked UNLIKELY,
-//    // but that intrinsic doesn't work on GPU.
-//    // for performance portability, maybe specialize UNLIKELY
-//    // for CUDA mode and put it back
-//
-//
-//    if( neighbor==reflect_particles ) {
-//      // Hit a reflecting boundary condition.  Reflect the particle
-//      // momentum and remaining displacement and keep moving the
-//      // particle.
-//      k_particles( pi, particle_var::ux + axis) = -k_particles( pi, particle_var::ux + axis);
-//      // Clearer and works with AMD GPUs
-//      float* disp = static_cast<float*>(&(pm(idx, particle_mover_var::dispx)));
-//      disp[axis] = -disp[axis];
-//
-//      continue;
-//    }
-//
-//    if( neighbor<rangel || neighbor>rangeh ) {
-//      // Cannot handle the boundary condition here.  Save the updated
-//      // particle position, face it hit and update the remaining
-//      // displacement in the particle mover.
-//      pii = 8*pii + face;
-//      return 1; // Return "mover still in use"
-//      }
-//
-//    // Crossed into a normal voxel.  Update the voxel index, convert the
-//    // particle coordinate system and keep moving the particle.
-//
-//    pii = neighbor - rangel;
-//    /**/                         // Note: neighbor - rangel < 2^31 / 6
-//    k_particles( pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
-//  }
-//  #undef p_dx
-//  #undef p_dy
-//  #undef p_dz
-//  #undef p_ux
-//  #undef p_uy
-//  #undef p_uz
-//  #undef p_w
-//  #undef pii
-//
-//  //#undef local_pm_dispx
-//  //#undef local_pm_dispy
-//  //#undef local_pm_dispz
-//  //#undef local_pm_i
-//  return 0; // Return "mover not in use"
-//}
-
-template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class scatter_view_t>
+template<class scatter_view_t>
 int
 KOKKOS_INLINE_FUNCTION
-move_p_kokkos(
-    const particle_view_t& k_particles,
-    const particle_i_view_t& k_particles_i,
+move_p_kokkos_union(
+    const particles_union_t& k_particles,
     particle_mover_t* ALIGNED(16)  pm,
     //accumulator_sa_t k_accumulators_sa,
     scatter_view_t& scatter_access,
     const grid_t* g,
-    neighbor_view_t& d_neighbor,
+    const k_neighbor_t& d_neighbor,
     int64_t rangel,
     int64_t rangeh,
     const float qsp,
     //field_array_t* RESTRICT fa,
     //field_view_t& k_field,
-    float cx,
-    float cy,
-    float cz,
+    const float cx,
+    const float cy,
+    const float cz,
     const int nx,
     const int ny,
     const int nz
 )
 {
 
-  #define p_dx    k_particles( pi, particle_var::dx)
-  #define p_dy    k_particles( pi, particle_var::dy)
-  #define p_dz    k_particles( pi, particle_var::dz)
-  #define p_ux    k_particles( pi, particle_var::ux)
-  #define p_uy    k_particles( pi, particle_var::uy)
-  #define p_uz    k_particles( pi, particle_var::uz)
-  #define p_w     k_particles( pi, particle_var::w)
-  #define pii     k_particles_i(pi)
+  #define p_dx    k_particles( pi, 0).f32
+  #define p_dy    k_particles( pi, 1).f32
+  #define p_dz    k_particles( pi, 2).f32
+  #define pii     k_particles( pi, 3).i32
+  #define p_ux    k_particles( pi, 4).f32
+  #define p_uy    k_particles( pi, 5).f32
+  #define p_uz    k_particles( pi, 6).f32
+  #define p_w     k_particles( pi, 7).f32
 
+  constexpr float one_third = 1.0f/3.0f;
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
   float v0, v1, v2, v3, v4, v5, q;
-  int axis, face;
+  int axis, face, ii;
   int64_t neighbor;
   int pi = pm->i;
 
-  int ii = pii;
-  float r[3], dr[3];
-  r[0] = p_dx; r[1] = p_dy; r[2] = p_dz;
-  dr[0] = pm->dispx; dr[1] = pm->dispy; dr[2] = pm->dispz;
-  q = qsp*p_w;
+  particle_temp_t p;
+  memcpy(&p, &k_particles(pi, 0), sizeof(particle_temp_t));
+
+  float r[3], dr[3], u[3];
+//  r[0] = p_dx; 
+//  r[1] = p_dy; 
+//  r[2] = p_dz;
+//  ii   = pii;
+//  u[0] = p_ux; 
+//  u[1] = p_uy; 
+//  u[2] = p_uz;
+//  q = qsp*p_w;
+
+  dr[0] = pm->dispx; 
+  dr[1] = pm->dispy; 
+  dr[2] = pm->dispz;
 
   for(;;) {
-    s_midx = r[0];
-    s_midy = r[1];
-    s_midz = r[2];
+    s_midx = p.r[0]; //r[0];
+    s_midy = p.r[1]; //r[1];
+    s_midz = p.r[2]; //r[2];
 
     s_dispx = dr[0];
     s_dispy = dr[1];
     s_dispz = dr[2];
 
-    s_dir[0] = (s_dispx>0) ? 1 : -1;
-    s_dir[1] = (s_dispy>0) ? 1 : -1;
-    s_dir[2] = (s_dispz>0) ? 1 : -1;
+    s_dir[0] = (s_dispx>0.0f) ? 1.0f : -1.0f;
+    s_dir[1] = (s_dispy>0.0f) ? 1.0f : -1.0f;
+    s_dir[2] = (s_dispz>0.0f) ? 1.0f : -1.0f;
 
     // Compute the twice the fractional distance to each potential
     // streak/cell face intersection.
-    v0 = (s_dispx==0) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
-    v1 = (s_dispy==0) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
-    v2 = (s_dispz==0) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
+    v0 = (s_dispx==0.0f) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
+    v1 = (s_dispy==0.0f) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
+    v2 = (s_dispz==0.0f) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
 
     // Determine the fractional length and axis of current streak. The
     // streak ends on either the first face intersected by the
@@ -1582,7 +720,271 @@ move_p_kokkos(
     // Accumulate the streak.  Note: accumulator values are 4 times
     // the total physical charge that passed through the appropriate
     // current quadrant in a time-step
-    v5 = q*s_dispx*s_dispy*s_dispz*(1.f/3.f);
+    //v5 = q*s_dispx*s_dispy*s_dispz*one_third;
+    v5 = p.w*qsp*s_dispx*s_dispy*s_dispz*one_third;
+
+#   define accumulate_j(X,Y,Z)                                        \
+    v4  = p.w*qsp*s_disp##X;    /* v2 = q ux                            */  \
+    v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
+    v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
+    v1 += v4;             /* v1 = q ux (1+dy)                     */  \
+    v4  = 1+s_mid##Z;     /* v4 = 1+dz                            */  \
+    v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
+    v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
+    v4  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
+    v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
+    v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
+    v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
+    v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
+    v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
+    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
+
+#if defined( VPIC_ENABLE_ACCUMULATORS )
+    accumulate_j(x,y,z);
+    scatter_access(p.i, 0) += cx*v0;
+    scatter_access(p.i, 1) += cx*v1;
+    scatter_access(p.i, 2) += cx*v2;
+    scatter_access(p.i, 3) += cx*v3;
+
+    accumulate_j(y,z,x);
+    scatter_access(p.i, 4) += cy*v0;
+    scatter_access(p.i, 5) += cy*v1;
+    scatter_access(p.i, 6) += cy*v2;
+    scatter_access(p.i, 7) += cy*v3;
+
+    accumulate_j(z,x,y);
+    scatter_access(p.i, 8)  += cz*v0;
+    scatter_access(p.i, 9)  += cz*v1;
+    scatter_access(p.i, 10) += cz*v2;
+    scatter_access(p.i, 11) += cz*v3;
+#else
+    int iii = p.i;
+    int zi = iii/((nx+2)*(ny+2));
+    iii -= zi*(nx+2)*(ny+2);
+    int yi = iii/(nx+2);
+    int xi = iii-yi*(nx+2);
+    accumulate_j(x,y,z);
+    scatter_access(p.i, field_var::jfx)                           += cx*v0;
+    scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx)   += cx*v1;
+    scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx)   += cx*v2;
+    scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
+
+    accumulate_j(y,z,x);
+    scatter_access(p.i, field_var::jfy)                           += cy*v0;
+    scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy)   += cy*v1;
+    scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy)   += cy*v2;
+    scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
+
+    accumulate_j(z,x,y);
+    scatter_access(p.i, field_var::jfz)                           += cz*v0;
+    scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz)   += cz*v1;
+    scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz)   += cz*v2;
+    scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
+#endif
+
+#   undef accumulate_j
+
+    // Compute the remaining particle displacment
+    dr[0] -= s_dispx;
+    dr[1] -= s_dispy;
+    dr[2] -= s_dispz;
+
+    // Compute the new particle offset
+    //r[0] += s_dispx+s_dispx;
+    //r[1] += s_dispy+s_dispy;
+    //r[2] += s_dispz+s_dispz;
+    p.r[0] += s_dispx+s_dispx;
+    p.r[1] += s_dispy+s_dispy;
+    p.r[2] += s_dispz+s_dispz;
+
+    // If an end streak, return success (should be ~50% of the time)
+    if( axis==3 ) {
+      memcpy(&k_particles(pi, 0), &p, sizeof(particle_temp_t));
+//      p_dx = r[0];
+//      p_dy = r[1];
+//      p_dz = r[2];
+//      pii = ii;
+//      p_ux = u[0];
+//      p_uy = u[1];
+//      p_uz = u[2];
+      break;
+    }
+
+    // Determine if the particle crossed into a local cell or if it
+    // hit a boundary and convert the coordinate system accordingly.
+    // Note: Crossing into a local cell should happen ~50% of the
+    // time; hitting a boundary is usually a rare event.  Note: the
+    // entry / exit coordinate for the particle is guaranteed to be
+    // +/-1 _exactly_ for the particle.
+
+    // Avoid roundoff fiascos -- put the particle exactly on the boundary.
+    v0 = s_dir[axis];
+
+//    r[axis] = v0;
+    p.r[axis] = v0;
+    face = axis; if( v0>0 ) face += 3;
+
+    // TODO: clean this fixed index to an enum
+    neighbor = d_neighbor( 6*p.i + face );
+
+    // TODO: these two if statements used to be marked UNLIKELY,
+    // but that intrinsic doesn't work on GPU.
+    // for performance portability, maybe specialize UNLIKELY
+    // for CUDA mode and put it back
+    if( neighbor==reflect_particles ) {
+      // Hit a reflecting boundary condition.  Reflect the particle
+      // momentum and remaining displacement and keep moving the
+      // particle.
+      p.u[axis] = -p.u[axis];
+//      u[axis]  = -u[axis];
+      dr[axis] = -dr[axis];
+      continue;
+    }
+
+    if( neighbor<rangel || neighbor>rangeh ) {
+      // Cannot handle the boundary condition here.  Save the updated
+      // particle position, face it hit and update the remaining
+      // displacement in the particle mover.
+//      p_dx = r[0]; 
+//      p_dy = r[1]; 
+//      p_dz = r[2];
+//      pii = 8*ii + face;
+//      p_ux = u[0];
+//      p_uy = u[1];
+//      p_uz = u[2];
+      p.i = 8*p.i + face;
+      memcpy(&k_particles(pi, 0), &p, sizeof(particle_temp_t));
+      pm->dispx = dr[0];
+      pm->dispy = dr[1];
+      pm->dispz = dr[2];
+      pm->i = pi;
+      return 1; // Return "mover still in use"
+    }
+
+    // Crossed into a normal voxel.  Update the voxel index, convert the
+    // particle coordinate system and keep moving the particle.
+
+//    ii = neighbor - rangel;
+//    /**/                         // Note: neighbor - rangel < 2^31 / 6
+//    r[axis] = -r[axis];
+    p.i = neighbor - rangel;
+    p.r[axis] = -p.r[axis];
+  }
+  #undef p_dx
+  #undef p_dy
+  #undef p_dz
+  #undef p_ux
+  #undef p_uy
+  #undef p_uz
+  #undef p_w
+  #undef pii
+
+  //#undef local_pm_dispx
+  //#undef local_pm_dispy
+  //#undef local_pm_dispz
+  //#undef local_pm_i
+  return 0; // Return "mover not in use"
+}
+
+#ifdef ENABLE_CABANA
+template<class PosSlice, class CellSlice, class MomSlice, class WeightSlice, class neighbor_view_t, class scatter_view_t>
+int
+KOKKOS_INLINE_FUNCTION
+move_p_kokkos_cabana(
+    PosSlice&    pos_slice,
+    CellSlice&   cel_slice,
+    MomSlice&    mom_slice,
+    WeightSlice& wgt_slice,
+    particle_mover_t* ALIGNED(16)  pm,
+    scatter_view_t& scatter_access,
+    const grid_t* g,
+    neighbor_view_t& d_neighbor,
+    const int64_t rangel,
+    const int64_t rangeh,
+    const float qsp,
+    const float cx,
+    const float cy,
+    const float cz,
+    const int nx,
+    const int ny,
+    const int nz
+)
+{
+  #define p_dx    pos_slice(pi, 0)
+  #define p_dy    pos_slice(pi, 1)
+  #define p_dz    pos_slice(pi, 2)
+  #define p_ii    cel_slice(pi)
+  #define p_ux    mom_slice(pi, 0)
+  #define p_uy    mom_slice(pi, 1)
+  #define p_uz    mom_slice(pi, 2)
+  #define p_w     wgt_slice(pi)
+
+  constexpr float one_third = 1.0f/3.0f;
+  float s_midx, s_midy, s_midz;
+  float s_dispx, s_dispy, s_dispz;
+  float s_dir[3];
+  float v0, v1, v2, v3, v4, v5, q;
+  int axis, face, ii;
+  int64_t neighbor;
+  int pi = pm->i;
+
+  float r[3], dr[3], u[3];
+  r[0] = p_dx; 
+  r[1] = p_dy; 
+  r[2] = p_dz;
+  ii   = p_ii;
+  u[0] = p_ux; 
+  u[1] = p_uy; 
+  u[2] = p_uz;
+  q = qsp*p_w;
+
+  dr[0] = pm->dispx; 
+  dr[1] = pm->dispy; 
+  dr[2] = pm->dispz;
+
+  for(;;) {
+    s_midx = r[0];
+    s_midy = r[1];
+    s_midz = r[2];
+
+    s_dispx = dr[0];
+    s_dispy = dr[1];
+    s_dispz = dr[2];
+
+    s_dir[0] = (s_dispx>0.0f) ? 1.0f : -1.0f;
+    s_dir[1] = (s_dispy>0.0f) ? 1.0f : -1.0f;
+    s_dir[2] = (s_dispz>0.0f) ? 1.0f : -1.0f;
+
+    // Compute the twice the fractional distance to each potential
+    // streak/cell face intersection.
+    v0 = (s_dispx==0.0f) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
+    v1 = (s_dispy==0.0f) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
+    v2 = (s_dispz==0.0f) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
+
+    // Determine the fractional length and axis of current streak. The
+    // streak ends on either the first face intersected by the
+    // particle track or at the end of the particle track.
+    //
+    //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
+    //   axis 3        ... streak ends at end of the particle track
+    /**/      v3=2,  axis=3;
+    if(v0<v3) v3=v0, axis=0;
+    if(v1<v3) v3=v1, axis=1;
+    if(v2<v3) v3=v2, axis=2;
+    v3 *= 0.5;
+
+    // Compute the midpoint and the normalized displacement of the streak
+    s_dispx *= v3;
+    s_dispy *= v3;
+    s_dispz *= v3;
+    s_midx += s_dispx;
+    s_midy += s_dispy;
+    s_midz += s_dispz;
+
+    // Accumulate the streak.  Note: accumulator values are 4 times
+    // the total physical charge that passed through the appropriate
+    // current quadrant in a time-step
+    v5 = q*s_dispx*s_dispy*s_dispz*one_third;
 
 #   define accumulate_j(X,Y,Z)                                        \
     v4  = q*s_disp##X;    /* v2 = q ux                            */  \
@@ -1625,21 +1027,21 @@ move_p_kokkos(
     int yi = iii/(nx+2);
     int xi = iii-yi*(nx+2);
     accumulate_j(x,y,z);
-    scatter_access(ii, field_var::jfx) += cx*v0;
-    scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
-    scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
+    scatter_access(ii, field_var::jfx)                           += cx*v0;
+    scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx)   += cx*v1;
+    scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx)   += cx*v2;
     scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
 
     accumulate_j(y,z,x);
-    scatter_access(ii, field_var::jfy) += cy*v0;
-    scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
-    scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
+    scatter_access(ii, field_var::jfy)                           += cy*v0;
+    scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy)   += cy*v1;
+    scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy)   += cy*v2;
     scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
 
     accumulate_j(z,x,y);
-    scatter_access(ii, field_var::jfz) += cz*v0;
-    scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
-    scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
+    scatter_access(ii, field_var::jfz)                           += cz*v0;
+    scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz)   += cz*v1;
+    scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz)   += cz*v2;
     scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
 #endif
 
@@ -1660,7 +1062,10 @@ move_p_kokkos(
       p_dx = r[0];
       p_dy = r[1];
       p_dz = r[2];
-      pii = ii;
+      p_ii = ii;
+      p_ux = u[0];
+      p_uy = u[1];
+      p_uz = u[2];
       break;
     }
 
@@ -1688,6 +1093,7 @@ move_p_kokkos(
       // Hit a reflecting boundary condition.  Reflect the particle
       // momentum and remaining displacement and keep moving the
       // particle.
+      u[axis]  = -u[axis];
       dr[axis] = -dr[axis];
       continue;
     }
@@ -1696,8 +1102,876 @@ move_p_kokkos(
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
       // displacement in the particle mover.
-      p_dx = r[0]; p_dy = r[1]; p_dz = r[2];
-      pii = 8*pii + face;
+      p_dx = r[0]; 
+      p_dy = r[1]; 
+      p_dz = r[2];
+      p_ii = 8*ii + face;
+      p_ux = u[0];
+      p_uy = u[1];
+      p_uz = u[2];
+      pm->dispx = dr[0];
+      pm->dispy = dr[1];
+      pm->dispz = dr[2];
+      pm->i = pi;
+      return 1; // Return "mover still in use"
+    }
+
+    // Crossed into a normal voxel.  Update the voxel index, convert the
+    // particle coordinate system and keep moving the particle.
+
+    ii = neighbor - rangel;
+    /**/                         // Note: neighbor - rangel < 2^31 / 6
+    r[axis] = -r[axis];
+  }
+  #undef p_dx
+  #undef p_dy
+  #undef p_dz
+  #undef p_ux
+  #undef p_uy
+  #undef p_uz
+  #undef p_w
+  #undef p_ii
+
+  //#undef local_pm_dispx
+  //#undef local_pm_dispy
+  //#undef local_pm_dispz
+  //#undef local_pm_i
+  return 0; // Return "mover not in use"
+}
+#endif
+
+//template<class particle_view_t, class particle_i_view_t, typename accumulator_view_t, class neighbor_view_t>
+//simd_float_mask_t
+//KOKKOS_INLINE_FUNCTION
+//move_p_kokkos_simd_a(
+//    const particle_view_t& k_particles,
+//    const particle_i_view_t& k_particles_i,
+//    simd_float_t& dispx,
+//    simd_float_t& dispy,
+//    simd_float_t& dispz,
+//    simd_int32_t& pm_i,
+//    simd_float_mask_t& not_done,
+//    size_t active_lanes,
+//    accumulator_view_t& scatter_access,
+//    const grid_t* g,
+//    neighbor_view_t& d_neighbor,
+//    int64_t rangel,
+//    int64_t rangeh,
+//    const float qsp,
+//    float cx, float cy, float cz,
+//    const int nx, const int ny, const int nz
+//)
+//{
+//  float* mem_dx = &(k_particles(0, particle_var::dx));
+//  float* mem_dy = &(k_particles(0, particle_var::dy));
+//  float* mem_dz = &(k_particles(0, particle_var::dz));
+//  float* mem_ux = &(k_particles(0, particle_var::ux));
+//  float* mem_uy = &(k_particles(0, particle_var::uy));
+//  float* mem_uz = &(k_particles(0, particle_var::uz));
+//  float* mem_wt = &(k_particles(0, particle_var::w ));
+//  int*   mem_ii = &(k_particles_i(0));
+//
+//  simd_float_mask_t moved(false);
+//  const simd_float_t one_third = (1.0f/3.0f);
+//  simd_float_t s_midx, s_midy, s_midz;
+//  simd_float_t s_dispx, s_dispy, s_dispz;
+//  simd_float_t dx, dy, dz;
+//  simd_float_t v0, v1, v2, v3, v4, v5, q;
+//  simd_float_t v6, v7, v8, v9, v10, v11, v12, v13;
+//  simd_float_t s_dir[3];
+//  simd_float_t r[3], dr[3];
+//  simd_int32_t axis, face; 
+//  simd_int32_t ii(mem_ii+pm_i[0], element_aligned_tag_t());
+//
+//#if KOKKOS_VERSION_MAJOR == 5
+//  if constexpr (std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+//    r[0] = KokkosSIMD::simd_unchecked_load<simd_float_t>(mem_dx+pm_i[0], element_aligned_tag_t()); 
+//    r[1] = KokkosSIMD::simd_unchecked_load<simd_float_t>(mem_dy+pm_i[0], element_aligned_tag_t()); 
+//    r[2] = KokkosSIMD::simd_unchecked_load<simd_float_t>(mem_dz+pm_i[0], element_aligned_tag_t()); 
+//    q    = KokkosSIMD::simd_unchecked_load<simd_float_t>(mem_wt+pm_i[0], element_aligned_tag_t()); 
+//  } else {
+//    simd_int32_t indices([pm_i](std::size_t i) { return pm_i[i]*PARTICLE_VAR_COUNT; });
+//    r[0] = simd_float_t([mem_dx, indices, not_done](std::size_t idx) {return not_done[idx] ? mem_dx[indices[idx]] : 0.0f;});
+//    r[1] = simd_float_t([mem_dy, indices, not_done](std::size_t idx) {return not_done[idx] ? mem_dy[indices[idx]] : 0.0f;});
+//    r[2] = simd_float_t([mem_dz, indices, not_done](std::size_t idx) {return not_done[idx] ? mem_dz[indices[idx]] : 0.0f;});
+//    q    = simd_float_t([mem_wt, indices, not_done](std::size_t idx) {return not_done[idx] ? mem_wt[indices[idx]] : 0.0f;});
+//  }
+//  q = q*qsp;
+//#else
+//  simd_int32_mask_t not_done_int([not_done](int i){return not_done[i];});
+//  KokkosSIMD::where(not_done_int, ii).gather_from(mem_ii, pm_i);
+//  if constexpr (std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+//    KokkosSIMD::where(not_done, r[0]).gather_from(mem_dx, pm_i);
+//    KokkosSIMD::where(not_done, r[1]).gather_from(mem_dy, pm_i);
+//    KokkosSIMD::where(not_done, r[2]).gather_from(mem_dz, pm_i);
+//    KokkosSIMD::where(not_done, q).gather_from(mem_wt, pm_i);
+//  } else {
+//    simd_int32_t indices([pm_i](std::size_t i) { return pm_i[i]*PARTICLE_VAR_COUNT; });
+//    KokkosSIMD::where(not_done, r[0]).gather_from(mem_dx, indices);
+//    KokkosSIMD::where(not_done, r[1]).gather_from(mem_dy, indices);
+//    KokkosSIMD::where(not_done, r[2]).gather_from(mem_dz, indices);
+//    KokkosSIMD::where(not_done, q).gather_from(mem_wt, indices);
+//  }
+//  KokkosSIMD::where(not_done, q) = q*qsp;
+//#endif
+//  dr[0] = dispx;
+//  dr[1] = dispy;
+//  dr[2] = dispz;
+//
+//  while(KokkosSIMD::any_of(not_done)) {
+//    s_midx = r[0];
+//    s_midy = r[1];
+//    s_midz = r[2];
+//
+//    s_dispx = dr[0];
+//    s_dispy = dr[1];
+//    s_dispz = dr[2];
+//
+//#if KOKKOS_VERSION_MAJOR == 5
+//    s_dir[0] = KokkosSIMD::condition(s_dispx>0.0f, simd_float_t(1.0f), simd_float_t(-1.0f));
+//    s_dir[1] = KokkosSIMD::condition(s_dispy>0.0f, simd_float_t(1.0f), simd_float_t(-1.0f));
+//    s_dir[2] = KokkosSIMD::condition(s_dispz>0.0f, simd_float_t(1.0f), simd_float_t(-1.0f));
+//#else
+//    s_dir[0] = -1;
+//    s_dir[1] = -1;
+//    s_dir[2] = -1;
+//    KokkosSIMD::where(s_dispx>0, s_dir[0]) = 1;
+//    KokkosSIMD::where(s_dispy>0, s_dir[1]) = 1;
+//    KokkosSIMD::where(s_dispz>0, s_dir[2]) = 1;
+//#endif
+//
+//    // Compute the twice the fractional distance to each potential
+//    // streak/cell face intersection.
+//#if KOKKOS_VERSION_MAJOR == 5
+//    v0 = KokkosSIMD::condition(s_dispx == 0.0f, simd_float_t(3.4e38f), (s_dir[0]-s_midx)/s_dispx);
+//    v1 = KokkosSIMD::condition(s_dispy == 0.0f, simd_float_t(3.4e38f), (s_dir[1]-s_midy)/s_dispy);
+//    v2 = KokkosSIMD::condition(s_dispz == 0.0f, simd_float_t(3.4e38f), (s_dir[2]-s_midz)/s_dispz);
+//#else
+//    v0 = (s_dir[0]-s_midx)/s_dispx;
+//    v1 = (s_dir[1]-s_midy)/s_dispy;
+//    v2 = (s_dir[2]-s_midz)/s_dispz;
+//    KokkosSIMD::where(s_dispx==0, v0) = 3.4e38f;
+//    KokkosSIMD::where(s_dispy==0, v1) = 3.4e38f;
+//    KokkosSIMD::where(s_dispz==0, v2) = 3.4e38f;
+//#endif
+//
+//    // Determine the fractional length and axis of current streak. The
+//    // streak ends on either the first face intersected by the
+//    // particle track or at the end of the particle track.
+//    //
+//    //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
+//    //   axis 3        ... streak ends at end of the particle track
+//#if KOKKOS_VERSION_MAJOR == 5
+//    v3=simd_float_t(2.0f); axis=simd_int32_t(3);
+//    axis = KokkosSIMD::condition(simd_int32_mask_t(v0<v3), simd_int32_t(0), axis);
+//    v3   = KokkosSIMD::condition(v0<v3, v0, v3);
+//    axis = KokkosSIMD::condition(simd_int32_mask_t(v1<v3), simd_int32_t(1), axis);
+//    v3   = KokkosSIMD::condition(v1<v3, v1, v3);
+//    axis = KokkosSIMD::condition(simd_int32_mask_t(v2<v3), simd_int32_t(2), axis);
+//    v3   = KokkosSIMD::condition(v2<v3, v2, v3);
+//    v3 *= 0.5f;
+//#else
+//    v3=2.0f; axis=simd_int32_t(3);
+//    simd_int32_mask_t axis_mask([v0,v3](int i){return v0[i]<v3[i];});
+//    KokkosSIMD::where(axis_mask, axis) = 0;
+//    KokkosSIMD::where(v0<v3, v3) = v0;
+//    axis_mask = simd_int32_mask_t([v1,v3](int i){return v1[i]<v3[i];});
+//    KokkosSIMD::where(axis_mask, axis) = 1;
+//    KokkosSIMD::where(v1<v3, v3) = v1;
+//    axis_mask = simd_int32_mask_t([v2,v3](int i){return v2[i]<v3[i];});
+//    KokkosSIMD::where(axis_mask, axis) = 2;
+//    KokkosSIMD::where(v2<v3, v3) = v2;
+//    v3 *= 0.5f;
+//#endif
+//
+//    // Compute the midpoint and the normalized displacement of the streak
+//    s_dispx *= v3;
+//    s_dispy *= v3;
+//    s_dispz *= v3;
+//    s_midx += s_dispx;
+//    s_midy += s_dispy;
+//    s_midz += s_dispz;
+//
+//    // Accumulate the streak.  Note: accumulator values are 4 times
+//    // the total physical charge that passed through the appropriate
+//    // current quadrant in a time-step
+//    v13 = q*s_dispx*s_dispy*s_dispz*one_third;
+//
+//#   define accumulate_j(X,Y,Z,_v0,_v1,_v2,_v3)                         \
+//    v12  = q*s_disp##X;    /* v2 = q ux                            */  \
+//    _v1  = v12*s_mid##Y;   /* v1 = q ux dy                         */  \
+//    _v0  = v12-_v1;        /* v0 = q ux (1-dy)                     */  \
+//    _v1 += v12;            /* v1 = q ux (1+dy)                     */  \
+//    v12  = 1+s_mid##Z;     /* v4 = 1+dz                            */  \
+//    _v2  = _v0*v12;        /* v2 = q ux (1-dy)(1+dz)               */  \
+//    _v3  = _v1*v12;        /* v3 = q ux (1+dy)(1+dz)               */  \
+//    v12  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
+//    _v0 *= v12;            /* v0 = q ux (1-dy)(1-dz)               */  \
+//    _v1 *= v12;            /* v1 = q ux (1+dy)(1-dz)               */  \
+//    _v0 += v13;            /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
+//    _v1 -= v13;            /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
+//    _v2 -= v13;            /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
+//    _v3 += v13;            /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
+//
+//    accumulate_j(x,y,z, v0,v1,v2,v3);
+//    v0  *= cx; v1  *= cx; v2  *= cx; v3  *= cx;
+//    accumulate_j(y,z,x, v4,v5,v6,v7);
+//    v4  *= cy; v5  *= cy; v6  *= cy; v7  *= cy;
+//    accumulate_j(z,x,y, v8,v9,v10,v11);
+//    v8  *= cz; v9  *= cz; v10 *= cz; v11 *= cz;
+//
+////    accumulate_simd(scatter_access, active_lanes, not_done,
+////                    ii,  nx,  ny,  nz,
+////                    v0,  v1,  v2,  v3,
+////                    v4,  v5,  v6,  v7,
+////                    v8,  v9,  v10, v11);
+//
+//#if defined( VPIC_ENABLE_ACCUMULATORS )
+//    for(size_t idx=0; idx<active_lanes; idx++) {
+//      if(not_done[idx]) {
+//        scatter_access(ii[idx], 0)  += v0[idx];
+//        scatter_access(ii[idx], 1)  += v1[idx];
+//        scatter_access(ii[idx], 2)  += v2[idx];
+//        scatter_access(ii[idx], 3)  += v3[idx];
+//        scatter_access(ii[idx], 4)  += v4[idx];
+//        scatter_access(ii[idx], 5)  += v5[idx];
+//        scatter_access(ii[idx], 6)  += v6[idx];
+//        scatter_access(ii[idx], 7)  += v7[idx];
+//        scatter_access(ii[idx], 8)  += v8[idx];
+//        scatter_access(ii[idx], 9)  += v9[idx];
+//        scatter_access(ii[idx], 10) += v10[idx];
+//        scatter_access(ii[idx], 11) += v11[idx];
+//      }
+//    }
+//#else
+//    for(size_t idx=0; idx<active_lanes; idx++) {
+//      if(not_done[idx]) {
+//        int iii = ii[idx];
+//        int zi = iii/((nx+2)*(ny+2));
+//        iii -= zi*(nx+2)*(ny+2);
+//        int yi = iii/(nx+2);
+//        int xi = iii-yi*(nx+2);
+//        scatter_access(ii[idx], field_var::jfx)                      += v0[idx];
+//        scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx)   += v1[idx];
+//        scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx)   += v2[idx];
+//        scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += v3[idx];
+//    
+//        scatter_access(ii[idx], field_var::jfy)                      += v4[idx];
+//        scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy)   += v5[idx];
+//        scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy)   += v6[idx];
+//        scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += v7[idx];
+//    
+//        scatter_access(ii[idx], field_var::jfz)                      += v8[idx];
+//        scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz)   += v9[idx];
+//        scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz)   += v10[idx];
+//        scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += v11[idx];
+//      }
+//    }
+//#endif
+//
+//
+//#   undef accumulate_j
+//
+//    // Compute the remaining particle displacment
+//    dr[0] -= s_dispx;
+//    dr[1] -= s_dispy;
+//    dr[2] -= s_dispz;
+//
+//    // Compute the new particle offset
+//    r[0] += s_dispx+s_dispx;
+//    r[1] += s_dispy+s_dispy;
+//    r[2] += s_dispz+s_dispz;
+//
+//    // If an end streak, return success (should be ~50% of the time)
+//    simd_float_mask_t axis3 = simd_float_mask_t(axis == 3);
+//#if KOKKOS_VERSION_MAJOR == 5
+//    if constexpr (std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+//      KokkosSIMD::simd_unchecked_store(r[0], mem_dx+pm_i[0], not_done && axis3, element_aligned_tag_t());
+//      KokkosSIMD::simd_unchecked_store(r[1], mem_dy+pm_i[0], not_done && axis3, element_aligned_tag_t());
+//      KokkosSIMD::simd_unchecked_store(r[2], mem_dz+pm_i[0], not_done && axis3, element_aligned_tag_t());
+//      KokkosSIMD::simd_unchecked_store(ii,   mem_ii+pm_i[0], simd_int32_mask_t(not_done) && (axis == 3), element_aligned_tag_t());
+//    } else {
+//      simd_int32_t indices([pm_i](std::size_t i) { return pm_i[i]*PARTICLE_VAR_COUNT; });
+//      for(size_t idx=0; idx<simd_int32_t::size(); idx++) {
+//        if(not_done[idx] && axis[idx] == 3) {
+//          // Store position
+//          mem_dx[indices[idx]] = r[0][idx];
+//          mem_dy[indices[idx]] = r[1][idx];
+//          mem_dz[indices[idx]] = r[2][idx];
+//          mem_ii[indices[idx]] = ii[idx];
+//        }
+//      }
+//    }
+//#else
+//    if constexpr (std::is_same<Kokkos::LayoutLeft, k_particles_t::array_layout>::value) {
+//      KokkosSIMD::where(axis3, r[0]).scatter_to(mem_dx, pm_i);
+//      KokkosSIMD::where(axis3, r[1]).scatter_to(mem_dy, pm_i);
+//      KokkosSIMD::where(axis3, r[2]).scatter_to(mem_dz, pm_i);
+////      KokkosSIMD::where(axis3, ii).scatter_to(mem_ii, pm_i);
+//    } else {
+//      simd_int32_t indices([pm_i](std::size_t i) { return pm_i[i]*PARTICLE_VAR_COUNT; });
+//      KokkosSIMD::where(axis3, r[0]).scatter_to(mem_dx, indices);
+//      KokkosSIMD::where(axis3, r[1]).scatter_to(mem_dy, indices);
+//      KokkosSIMD::where(axis3, r[2]).scatter_to(mem_dz, indices);
+////      KokkosSIMD::where(axis3, ii).scatter_to(mem_ii, pm_i);
+//    }
+////    KokkosSIMD::where((axis == 3) && not_done, r[0]).scatter_to(mem_dx, pm_i);
+////    KokkosSIMD::where((axis == 3) && not_done, r[1]).scatter_to(mem_dy, pm_i);
+////    KokkosSIMD::where((axis == 3) && not_done, r[2]).scatter_to(mem_dz, pm_i);
+//    KokkosSIMD::where((axis == 3) && not_done_int, ii  ).scatter_to(mem_ii, pm_i);
+//#endif
+//    not_done = not_done && !axis3;
+//
+//    // Determine if the particle crossed into a local cell or if it
+//    // hit a boundary and convert the coordinate system accordingly.
+//    // Note: Crossing into a local cell should happen ~50% of the
+//    // time; hitting a boundary is usually a rare event.  Note: the
+//    // entry / exit coordinate for the particle is guaranteed to be
+//    // +/-1 _exactly_ for the particle.
+//#if KOKKOS_VERSION_MAJOR == 5
+//    v0   = KokkosSIMD::condition(simd_float_mask_t(axis == 0), s_dir[0], v0);
+//    v0   = KokkosSIMD::condition(simd_float_mask_t(axis == 1), s_dir[1], v0);
+//    v0   = KokkosSIMD::condition(simd_float_mask_t(axis == 2), s_dir[2], v0);
+//    r[0] = KokkosSIMD::condition(simd_float_mask_t(axis == 0), v0, r[0]);
+//    r[1] = KokkosSIMD::condition(simd_float_mask_t(axis == 1), v0, r[1]);
+//    r[2] = KokkosSIMD::condition(simd_float_mask_t(axis == 2), v0, r[2]);
+//    face = KokkosSIMD::condition(simd_int32_mask_t(v0 > 0.0), axis + simd_int32_t(3), axis);
+//#else
+//    simd_float_t axis_float([axis](int i) {return static_cast<float>(axis[i]);});
+//    KokkosSIMD::where(simd_float_mask_t(axis_float == 0), v0) = s_dir[0];
+//    KokkosSIMD::where(simd_float_mask_t(axis_float == 1), v0) = s_dir[1];
+//    KokkosSIMD::where(simd_float_mask_t(axis_float == 2), v0) = s_dir[2];
+//    face = axis;
+//    simd_int32_mask_t face_update([v0](int i){return v0[i] > 0;});
+//    KokkosSIMD::where(face_update, face) = face + 3;
+////    KokkosSIMD::where(not_done, v0).scatter_to(mem_dx, pm_i);
+////    KokkosSIMD::where(not_done, v0).scatter_to(mem_dy, pm_i);
+////    KokkosSIMD::where(not_done, v0).scatter_to(mem_dz, pm_i);
+//#endif
+//
+//    int64_t neighbor[simd_int32_t::size()];
+//    int32_t _new_voxel[simd_int32_t::size()];
+//    for(size_t idx=0; idx<active_lanes; idx++) {
+//      neighbor[idx] = d_neighbor( 6*ii[idx] + face[idx] );
+//      _new_voxel[idx] = static_cast<int>(neighbor[idx] - rangel);
+//    }
+//    simd_float_mask_t reflect([neighbor](int i) {
+//      return neighbor[i] == reflect_particles;
+//    });
+//    //simd_float_mask_t boundary = !reflect && ((neighbor < rangel) || (neighbor > rangeh));
+//    simd_float_mask_t boundary([neighbor, rangel, rangeh, reflect](int i) {
+//      return (!reflect[i] && (neighbor[i] < rangel) || (neighbor[i] > rangeh));
+//    });
+//    simd_int32_t new_voxel;
+//
+//#if KOKKOS_VERSION_MAJOR == 5
+//    // Reflect boundary
+//    dr[0] = KokkosSIMD::condition(reflect && simd_float_mask_t(axis == 0), -dr[0], dr[0]);
+//    dr[1] = KokkosSIMD::condition(reflect && simd_float_mask_t(axis == 1), -dr[1], dr[1]);
+//    dr[2] = KokkosSIMD::condition(reflect && simd_float_mask_t(axis == 2), -dr[2], dr[2]);
+//
+//    // Hit boundary, handle elsewhere
+//    KokkosSIMD::simd_unchecked_store(r[0], mem_dx+pm_i[0], not_done && boundary, element_aligned_tag_t());
+//    KokkosSIMD::simd_unchecked_store(r[1], mem_dy+pm_i[0], not_done && boundary, element_aligned_tag_t());
+//    KokkosSIMD::simd_unchecked_store(r[2], mem_dz+pm_i[0], not_done && boundary, element_aligned_tag_t());
+//    KokkosSIMD::simd_unchecked_store(ii*8 + face, mem_ii+pm_i[0], simd_int32_mask_t(not_done && boundary), element_aligned_tag_t());
+//    dispx = KokkosSIMD::condition(not_done && boundary, dr[0], dispx);
+//    dispy = KokkosSIMD::condition(not_done && boundary, dr[1], dispy);
+//    dispz = KokkosSIMD::condition(not_done && boundary, dr[2], dispz);
+//    moved = moved || (not_done && boundary);
+//    not_done = not_done && !boundary;
+//
+//    // Cross into normal voxel
+//    auto cross_normal_voxel = not_done && !reflect && !boundary && !axis3;
+//    ii   = KokkosSIMD::simd_unchecked_load(_new_voxel, simd_int32_mask_t(cross_normal_voxel), element_aligned_tag_t());
+//    r[0] = KokkosSIMD::condition(cross_normal_voxel && simd_float_mask_t(axis == 0), -r[0], r[0]);
+//    r[1] = KokkosSIMD::condition(cross_normal_voxel && simd_float_mask_t(axis == 1), -r[1], r[1]);
+//    r[2] = KokkosSIMD::condition(cross_normal_voxel && simd_float_mask_t(axis == 2), -r[2], r[2]);
+//#else
+//    new_voxel.copy_from(_new_voxel, KokkosSIMD::element_aligned_tag());
+//    KokkosSIMD::where(not_done && reflect && axis_float == 0, dr[0]) = -dr[0];
+//    KokkosSIMD::where(not_done && reflect && axis_float == 1, dr[1]) = -dr[1];
+//    KokkosSIMD::where(not_done && reflect && axis_float == 2, dr[2]) = -dr[2];
+//    KokkosSIMD::where(not_done && boundary && axis_float == 0, dispx) = dr[0];
+//    KokkosSIMD::where(not_done && boundary && axis_float == 1, dispy) = dr[1];
+//    KokkosSIMD::where(not_done && boundary && axis_float == 2, dispz) = dr[2];
+//    moved = moved || (not_done && boundary);
+//    not_done = not_done || (not_done && boundary);
+//    simd_int32_mask_t update_voxel([not_done, reflect, boundary](int i){return not_done[i] && !reflect[i] && !boundary[i];});
+//    KokkosSIMD::where(update_voxel, ii) = new_voxel;
+//    KokkosSIMD::where(not_done && !reflect && !boundary && axis_float == 0, r[0]) = -r[0];
+//    KokkosSIMD::where(not_done && !reflect && !boundary && axis_float == 1, r[1]) = -r[1];
+//    KokkosSIMD::where(not_done && !reflect && !boundary && axis_float == 2, r[2]) = -r[2];
+//#endif
+//  }
+//
+//  return moved;
+//}
+
+//template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, typename scatter_view_t>
+//int
+//KOKKOS_FUNCTION
+//move_p_kokkos_simd_b(
+//    const particle_view_t& k_particles,
+//    const particle_i_view_t& k_particles_i,
+//    //particle_t* ALIGNED(32) p,
+//    particle_mover_t* ALIGNED(16)  pm,
+//    scatter_view_t& scatter_access,
+//    const grid_t* g,
+//    neighbor_view_t& d_neighbor,
+//    int64_t rangel,
+//    int64_t rangeh,
+//    const float qsp,
+//    float cx, float cy, float cz,
+//    const int nx, const int ny, const int nz
+//)
+//{
+//  #define p_dx    k_particles( pi, particle_var::dx)
+//  #define p_dy    k_particles( pi, particle_var::dy)
+//  #define p_dz    k_particles( pi, particle_var::dz)
+//  #define p_ux    k_particles( pi, particle_var::ux)
+//  #define p_uy    k_particles( pi, particle_var::uy)
+//  #define p_uz    k_particles( pi, particle_var::uz)
+//  #define p_w     k_particles( pi, particle_var::w)
+//  #define pii     k_particles_i(pi)
+//
+//  int64_t neighbor;
+//  int pi = pm->i;
+//
+//  float f0;
+//  int axis, face;
+//  simd_float32x4_t s_mid, s_disp, s_dir, sgn_dr;
+//  simd_float32x4_t v0, v1, v2, v3, v4, v5;
+//  simd_float32x4_t q(qsp * p_w);
+//  const simd_float32x4_t one(1.f), large_num(3.4e38f), tiny(1.0e-37f);
+//  constexpr float one_third = 1.f/3.f;
+//
+//    //printf("in move %d \n", pi);
+//
+////  int ii = p->i;
+////  simd_float32x4_t r((float*)(&p[0]), element_aligned_tag_t());
+//  int ii = pii;
+//  simd_float32x4_t r([k_particles, pi](std::size_t i) {
+//    if(i==0) {
+//      return p_dx;
+//    } else if(i==1) {
+//      return p_dy;
+//    } else if(i==2) {
+//      return p_dz;
+//    } else {
+//      return 0.0f;
+//    }
+//  }); 
+//#if KOKKOS_VERSION_MAJOR == 5
+//  simd_float32x4_t dr((float*)(&pm[0]), element_aligned_tag_t());
+//#else
+//  simd_float32x4_t dr;
+//  dr.copy_from((float*)(&pm[0]), KokkosSIMD::element_aligned_tag());
+//#endif
+//
+//  for(;;) {
+//    // At this point:
+//    //   r     = current particle position in local voxel coordinates
+//    //           (note the current voxel is on [-1,1]^3.
+//    //   dr    = remaining particle displacment
+//    //           (note: this is in voxel edge lengths!)
+//    //   voxel = local voxel of particle
+//    // Thus, in the local coordinate system, it is desired to move the
+//    // particle through all points in the local coordinate system:
+//    //   streak_r(s) = r + 2 disp s for s in [0,1]
+//    //
+//    // Determine the fractional length and type of current
+//    // streak made by the particle through this voxel.  The streak
+//    // ends on either the first voxel face intersected by the
+//    // particle track or at the end of the particle track.
+//    //
+//    // Note: a divide by zero cannot occur below due to the shift of
+//    // the denominator by tiny.  Also, the shift by tiny is large
+//    // enough that the divide will never overflow when dr is tiny
+//    // (|sgn_dr-r|<=2 => 2/tiny = 2e+37 < FLT_MAX = 3.4e38).
+//    // Likewise, due to speed of light limitations, generally dr
+//    // cannot get much larger than 1 or so and the numerator, if not
+//    // zero, can generally never be smaller than FLT_EPS/2.  Thus,
+//    // likewise, the divide will never underflow either.
+//    s_mid = r;
+//    s_disp = dr;
+//    s_dir = KokkosSIMD::condition(s_disp > simd_float32x4_t(0.0f), 1.0f, -1.0f);
+//
+//    // Compute the twice the fractional distance to each potential
+//    // streak/cell face intersection.
+//    v0 = KokkosSIMD::condition(s_disp==0.0f, large_num, (s_dir - s_mid)/s_disp);
+//
+//    // Determine the fractional length and axis of current streak. The
+//    // streak ends on either the first face intersected by the
+//    // particle track or at the end of the particle track.
+//    //
+//    //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
+//    //   axis 3        ... streak ends at end of the particle track
+//    /**/      
+//                 f0=2.0f,  axis=3;
+//    if(v0[0]<f0) f0=v0[0], axis=0;
+//    if(v0[1]<f0) f0=v0[1], axis=1;
+//    if(v0[2]<f0) f0=v0[2], axis=2;
+//    f0 *= 0.5;
+//
+//    simd_float32x4_t sign_flip([axis](int i){return i==axis ? -1.0f : 1.0f;});
+//
+//    // Compute the midpoint and the normalized displacement of the streak
+//    s_disp *= simd_float32x4_t(f0);
+//    s_mid += s_disp;
+//    // Compute the remaining particle displacment
+//    dr -= s_disp;
+//    // Compute the new particle offset
+//    r += s_disp + s_disp;
+//
+//    // Accumulate the streak.  Note: accumulator values are 4 times
+//    // the total physical charge that passed through the appropriate
+//    // current quadrant in a time-step
+//    v5 = simd_float32x4_t(q[0]*s_disp[0]*s_disp[1]*s_disp[2]*one_third); // q( ux*uy*uz*(1/3) )
+//    v4  = q*s_disp;                    // v4 = q( ux, uy, uz, D/C)
+//    v1  = v4*shuffle<1,2,0,3>(s_mid);  // v1 = q( uxdy, uydz, uzdx, D/C )
+//    v0  = v4-v1;                       // v0 = q( ux(1-dy), uy(1-dz), uz(1-dx), D/C )
+//    v1 += v4;                          // v1 = q( ux(1+dy), uy(1+dz), uz(1+dx), D/C )
+//    v4  = one+shuffle<2,0,1,3>(s_mid); // v4 = 1+dz, 1+dx, 1+dy, D/C
+//    v2  = v0*v4;                       // v2 = q( ux(1-dy)(1+dz), uy(1-dz)(1+dx), uz(1-dx)(1+dy), D/C )
+//    v3  = v1*v4;                       // v3 = q( ux(1+dy)(1+dz), uy(1+dz)(1+dx), uz(1+dx)(1+dy), D/C )
+//    v4  = one-shuffle<2,0,1,3>(s_mid); // v4 = 1-dz, 1-dx, 1-dy, D/C
+//    v0 *= v4;                          // v0 = q( ux(1-dy)(1-dz), uy(1-dz)(1-dx), uz(1-dx)(1-dy), D/C )
+//    v1 *= v4;                          // v1 = q( ux(1+dy)(1-dz), uy(1+dz)(1-dx), uz(1+dx)(1-dy), D/C )
+//    v0 += v5;                          // v0 = q( ux( (1-dy)(1-dz) + uy*uz/3 ), uy( (1-dz)(1-dx) + uxuz/3 ), uz( (1-dx)(1-dy) + uxuy/3 ), D/C )
+//    v1 -= v5;                          // v1 = q( ux( (1+dy)(1-dz) - uy*uz/3 ), uy( (1+dz)(1-dx) - uxuz/3 ), uz( (1+dx)(1-dy) - uxuy/3 ), D/C ) 
+//    v2 -= v5;                          // v2 = q( ux( (1-dy)(1+dz) - uy*uz/3 ), uy( (1-dz)(1+dx) - uxuz/3 ), uz( (1-dx)(1+dy) - uxuy/3 ), D/C ) 
+//    v3 += v5;                          // v3 = q( ux( (1+dy)(1+dz) + uy*uz/3 ), uy( (1+dz)(1+dx) + uxuz/3 ), uz( (1+dx)(1+dy) + uxuy/3 ), D/C ) 
+//    transpose(v0, v1, v2, v3);
+//    v0 *= cx;
+//    v1 *= cy;
+//    v2 *= cz;
+//    
+//#ifdef VPIC_ENABLE_ACCUMULATORS 
+//    increment((float*)(&scatter_access(ii, 0)), v0);
+//    increment((float*)(&scatter_access(ii, 4)), v1);
+//    increment((float*)(&scatter_access(ii, 8)), v2);
+//#else
+//    int iii = ii;
+//    int zi = iii/((nx+2)*(ny+2));
+//    iii -= zi*(nx+2)*(ny+2);
+//    int yi = iii/(nx+2);
+//    int xi = iii-yi*(nx+2);
+//
+//    scatter_access(ii, field_var::jfx) += v0[0];
+//    scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += v0[1];
+//    scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += v0[2];
+//    scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += v0[3];
+//
+//    scatter_access(ii, field_var::jfy) += v1[0];
+//    scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += v1[1];
+//    scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += v1[2];
+//    scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += v1[3];
+//
+//    scatter_access(ii, field_var::jfz) += v2[0];
+//    scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += v2[1];
+//    scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += v2[2];
+//    scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += v2[3];
+//#endif
+//
+//#   undef accumulate_j
+//
+//    // If an end streak, return success (should be ~50% of the time)
+//    if( axis==3 ) {
+//      p_dx = r[0]; p_dy = r[1]; p_dz = r[2];
+//      pii = ii;
+//      break;
+//    }
+//
+//    // Determine if the particle crossed into a local cell or if it
+//    // hit a boundary and convert the coordinate system accordingly.
+//    // Note: Crossing into a local cell should happen ~50% of the
+//    // time; hitting a boundary is usually a rare event.  Note: the
+//    // entry / exit coordinate for the particle is guaranteed to be
+//    // +/-1 _exactly_ for the particle.
+//    f0 = s_dir[axis];
+//    k_particles( pi, particle_var::dx + axis) = f0; // Avoid roundoff fiascos--put the particle
+//    
+//    // _exactly_ on the boundary.
+//    face = axis; if( f0>0 ) face += 3;
+//
+//    // TODO: clean this fixed index to an enum
+//    neighbor = d_neighbor( 6*ii + face );
+//
+//    // TODO: these two if statements used to be marked UNLIKELY,
+//    // but that intrinsic doesn't work on GPU.
+//    // for performance portability, maybe specialize UNLIKELY
+//    // for CUDA mode and put it back
+//    if( neighbor==reflect_particles ) [[unlikely]] {
+//      // Hit a reflecting boundary condition.  Reflect the particle
+//      // momentum and remaining displacement and keep moving the
+//      // particle.
+//      //( &( p->ux     ) )[axis] = - ( &( p->ux     ) )[axis];
+//      k_particles( pi, particle_var::ux + axis) = -k_particles( pi, particle_var::ux + axis);
+//      dr *= sign_flip;
+////      dr[axis] = -dr[axis];     
+//
+//      continue;
+//    }
+//
+//    if( neighbor<rangel || neighbor>rangeh ) [[unlikely]] {
+//      // Cannot handle the boundary condition here.  Save the updated
+//      // particle position, face it hit and update the remaining
+//      // displacement in the particle mover.
+//      //p->dx = r[0]; p->dy = r[1]; p->dz = r[2]; p->i = 8*ii + face;
+//      p_dx = r[0]; p_dy = r[1]; p_dz = r[2];
+//      pii = 8*ii + face;
+//#if KOKKOS_VERSION_MAJOR == 5
+//      KokkosSIMD::simd_unchecked_store(dr, (float*)(&pm[0]), element_aligned_tag_t());
+//#else
+//      dr.copy_to((float*)(&pm[0]), KokkosSIMD::element_aligned_tag());
+//#endif
+//      pm->i = pi;
+//      return 1; // Return "mover still in use"
+//    }
+//
+//    // Crossed into a normal voxel.  Update the voxel index, convert the
+//    // particle coordinate system and keep moving the particle.
+//    /**/                         // Note: neighbor - rangel < 2^31 / 6
+//    ii = static_cast<int32_t>(neighbor - rangel);
+//    r *= sign_flip;
+////    r[axis] = -r[axis];
+//  }
+//  #undef p_dx
+//  #undef p_dy
+//  #undef p_dz
+//  #undef p_ux
+//  #undef p_uy
+//  #undef p_uz
+//  #undef p_w
+//  #undef pii
+//  return 0; // Return "mover not in use"
+//}
+
+template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class scatter_view_t>
+int
+KOKKOS_INLINE_FUNCTION
+move_p_kokkos(
+    const particle_view_t& k_particles,
+    const particle_i_view_t& k_particles_i,
+    particle_mover_t* ALIGNED(16)  pm,
+    //accumulator_sa_t k_accumulators_sa,
+    scatter_view_t& scatter_access,
+    const grid_t* g,
+    neighbor_view_t& d_neighbor,
+    int64_t rangel,
+    int64_t rangeh,
+    const float qsp,
+    //field_array_t* RESTRICT fa,
+    //field_view_t& k_field,
+    float cx,
+    float cy,
+    float cz,
+    const int nx,
+    const int ny,
+    const int nz
+)
+{
+
+  #define p_dx    k_particles( pi, particle_var::dx)
+  #define p_dy    k_particles( pi, particle_var::dy)
+  #define p_dz    k_particles( pi, particle_var::dz)
+  #define p_ux    k_particles( pi, particle_var::ux)
+  #define p_uy    k_particles( pi, particle_var::uy)
+  #define p_uz    k_particles( pi, particle_var::uz)
+  #define p_w     k_particles( pi, particle_var::w)
+  #define pii     k_particles_i(pi)
+
+  constexpr float one_third = 1.0f/3.0f;
+  float s_midx, s_midy, s_midz;
+  float s_dispx, s_dispy, s_dispz;
+  float s_dir[3];
+  float v0, v1, v2, v3, v4, v5, q;
+  int axis, face, ii;
+  int64_t neighbor;
+  int pi = pm->i;
+
+  float r[3], dr[3], u[3];
+  r[0] = p_dx; 
+  r[1] = p_dy; 
+  r[2] = p_dz;
+  ii   = pii;
+  u[0] = p_ux; 
+  u[1] = p_uy; 
+  u[2] = p_uz;
+  q = qsp*p_w;
+
+  dr[0] = pm->dispx; 
+  dr[1] = pm->dispy; 
+  dr[2] = pm->dispz;
+
+  for(;;) {
+    s_midx = r[0];
+    s_midy = r[1];
+    s_midz = r[2];
+
+    s_dispx = dr[0];
+    s_dispy = dr[1];
+    s_dispz = dr[2];
+
+    s_dir[0] = (s_dispx>0.0f) ? 1.0f : -1.0f;
+    s_dir[1] = (s_dispy>0.0f) ? 1.0f : -1.0f;
+    s_dir[2] = (s_dispz>0.0f) ? 1.0f : -1.0f;
+
+    // Compute the twice the fractional distance to each potential
+    // streak/cell face intersection.
+    v0 = (s_dispx==0.0f) ? 3.4e38f : (s_dir[0]-s_midx)/s_dispx;
+    v1 = (s_dispy==0.0f) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
+    v2 = (s_dispz==0.0f) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
+
+    // Determine the fractional length and axis of current streak. The
+    // streak ends on either the first face intersected by the
+    // particle track or at the end of the particle track.
+    //
+    //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
+    //   axis 3        ... streak ends at end of the particle track
+    /**/      v3=2,  axis=3;
+    if(v0<v3) v3=v0, axis=0;
+    if(v1<v3) v3=v1, axis=1;
+    if(v2<v3) v3=v2, axis=2;
+    v3 *= 0.5;
+
+    // Compute the midpoint and the normalized displacement of the streak
+    s_dispx *= v3;
+    s_dispy *= v3;
+    s_dispz *= v3;
+    s_midx += s_dispx;
+    s_midy += s_dispy;
+    s_midz += s_dispz;
+
+    // Accumulate the streak.  Note: accumulator values are 4 times
+    // the total physical charge that passed through the appropriate
+    // current quadrant in a time-step
+    v5 = q*s_dispx*s_dispy*s_dispz*one_third;
+
+#   define accumulate_j(X,Y,Z)                                        \
+    v4  = q*s_disp##X;    /* v2 = q ux                            */  \
+    v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
+    v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
+    v1 += v4;             /* v1 = q ux (1+dy)                     */  \
+    v4  = 1+s_mid##Z;     /* v4 = 1+dz                            */  \
+    v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
+    v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
+    v4  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
+    v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
+    v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
+    v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
+    v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
+    v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
+    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
+
+#if defined( VPIC_ENABLE_ACCUMULATORS )
+    accumulate_j(x,y,z);
+    scatter_access(ii, 0) += cx*v0;
+    scatter_access(ii, 1) += cx*v1;
+    scatter_access(ii, 2) += cx*v2;
+    scatter_access(ii, 3) += cx*v3;
+
+    accumulate_j(y,z,x);
+    scatter_access(ii, 4) += cy*v0;
+    scatter_access(ii, 5) += cy*v1;
+    scatter_access(ii, 6) += cy*v2;
+    scatter_access(ii, 7) += cy*v3;
+
+    accumulate_j(z,x,y);
+    scatter_access(ii, 8)  += cz*v0;
+    scatter_access(ii, 9)  += cz*v1;
+    scatter_access(ii, 10) += cz*v2;
+    scatter_access(ii, 11) += cz*v3;
+#else
+    int iii = ii;
+    int zi = iii/((nx+2)*(ny+2));
+    iii -= zi*(nx+2)*(ny+2);
+    int yi = iii/(nx+2);
+    int xi = iii-yi*(nx+2);
+    accumulate_j(x,y,z);
+    scatter_access(ii, field_var::jfx)                           += cx*v0;
+    scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx)   += cx*v1;
+    scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx)   += cx*v2;
+    scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
+
+    accumulate_j(y,z,x);
+    scatter_access(ii, field_var::jfy)                           += cy*v0;
+    scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy)   += cy*v1;
+    scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy)   += cy*v2;
+    scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
+
+    accumulate_j(z,x,y);
+    scatter_access(ii, field_var::jfz)                           += cz*v0;
+    scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz)   += cz*v1;
+    scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz)   += cz*v2;
+    scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
+#endif
+
+#   undef accumulate_j
+
+    // Compute the remaining particle displacment
+    dr[0] -= s_dispx;
+    dr[1] -= s_dispy;
+    dr[2] -= s_dispz;
+
+    // Compute the new particle offset
+    r[0] += s_dispx+s_dispx;
+    r[1] += s_dispy+s_dispy;
+    r[2] += s_dispz+s_dispz;
+
+    // If an end streak, return success (should be ~50% of the time)
+    if( axis==3 ) {
+      p_dx = r[0];
+      p_dy = r[1];
+      p_dz = r[2];
+      pii = ii;
+      p_ux = u[0];
+      p_uy = u[1];
+      p_uz = u[2];
+      break;
+    }
+
+    // Determine if the particle crossed into a local cell or if it
+    // hit a boundary and convert the coordinate system accordingly.
+    // Note: Crossing into a local cell should happen ~50% of the
+    // time; hitting a boundary is usually a rare event.  Note: the
+    // entry / exit coordinate for the particle is guaranteed to be
+    // +/-1 _exactly_ for the particle.
+
+    // Avoid roundoff fiascos -- put the particle exactly on the boundary.
+    v0 = s_dir[axis];
+
+    r[axis] = v0;
+    face = axis; if( v0>0 ) face += 3;
+
+    // TODO: clean this fixed index to an enum
+    neighbor = d_neighbor( 6*ii + face );
+
+    // TODO: these two if statements used to be marked UNLIKELY,
+    // but that intrinsic doesn't work on GPU.
+    // for performance portability, maybe specialize UNLIKELY
+    // for CUDA mode and put it back
+    if( neighbor==reflect_particles ) {
+      // Hit a reflecting boundary condition.  Reflect the particle
+      // momentum and remaining displacement and keep moving the
+      // particle.
+      u[axis]  = -u[axis];
+      dr[axis] = -dr[axis];
+      continue;
+    }
+
+    if( neighbor<rangel || neighbor>rangeh ) {
+      // Cannot handle the boundary condition here.  Save the updated
+      // particle position, face it hit and update the remaining
+      // displacement in the particle mover.
+      p_dx = r[0]; 
+      p_dy = r[1]; 
+      p_dz = r[2];
+      pii = 8*ii + face;
+      p_ux = u[0];
+      p_uy = u[1];
+      p_uz = u[2];
       pm->dispx = dr[0];
       pm->dispy = dr[1];
       pm->dispz = dr[2];
