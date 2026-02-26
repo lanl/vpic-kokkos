@@ -427,6 +427,8 @@ interact_maxwellian_reflux_k(
         particle_mover_t* ALIGNED(16)  pm,
         const float ut_para,
         const float ut_perp,
+        //const Kokkos::Random_XorShift64_Pool<> pool,
+        const auto pool,
         const float dke,
         const float kemax,
         const int face,
@@ -438,10 +440,7 @@ interact_maxwellian_reflux_k(
         const float rdz,
         const max_tally_t& max_tally  ) {
 
-  // FIXME: Initializing this every time is horrible and embarrassing.
-  auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-  Kokkos::Random_XorShift64_Pool<> random_pool(seed);
-  auto generator = random_pool.get_state();
+  auto generator = pool.get_state();
 
   float u[3];                // u0 = para, u1 & u2 = perp
   float ux, uy, uz;          // x, y, z normalized momenta
@@ -538,7 +537,7 @@ interact_maxwellian_reflux_k(
 
   float* disp = static_cast<float*>(&pm->dispx);
 
-  printf("disps for %d are %e %e %e\n", pi, pm->dispx, disp[1], disp[2]);
+  //printf("disps for %d are %e %e %e\n", pi, pm->dispx, disp[1], disp[2]);
   dispx = dx * disp[0];
   dispy = dy * disp[1];
   dispz = dz * disp[2];
@@ -568,14 +567,14 @@ interact_maxwellian_reflux_k(
   //pm->dispx = dispx;
   //pm->dispy = dispy;
   //pm->dispz = dispz;
-  printf("updated disps for %d are %e %e %e\n", pi, disp[0], disp[1], disp[2]);
+  //printf("updated disps for %d are %e %e %e\n", pi, disp[0], disp[1], disp[2]);
   
   u2 = p_ux*p_ux + p_uy*p_uy + p_uz*p_uz;
   float kenew = u2 / (sqrtf(1. + u2) + 1.); // gamma - 1, multiply by mc^2 for kinetic energy
   // TODO: Should be able to save a divide here.
   Kokkos::atomic_add(&max_tally(int(kemax/dke)), p_w*(kenew - ke));
   
-  random_pool.free_state(generator);
+  pool.free_state(generator);
 
   #undef p_dx
   #undef p_dy
@@ -620,6 +619,7 @@ move_p_kokkos(
     const int nz,
     const float ut_para,
     const float ut_perp,
+    const Kokkos::Random_XorShift64_Pool<> pool,
     const float dx,
     const float dy,
     const float dz,
@@ -839,7 +839,7 @@ move_p_kokkos(
         //disp[0] = pm->dispx;
         //disp[1] = pm->dispy;
         //disp[2] = pm->dispz;
-        interact_maxwellian_reflux_k( k_particles, pi, pm, ut_para, ut_perp, dke, kemax, face, dx, dy, dz, rdx, rdy, rdz, max_tally);
+        interact_maxwellian_reflux_k( k_particles, pi, pm, ut_para, ut_perp, pool, dke, kemax, face, dx, dy, dz, rdx, rdy, rdz, max_tally);
         //printf("New disps %e %e %e %d\n", pm->dispx, pm->dispy, pm->dispz, pm->i);
         //pm->dispx = disp[0];
         //pm->dispy = disp[1];
@@ -894,6 +894,7 @@ move_p_kokkos_host_serial(
     const float qsp,
     const float ut_para,
     const float ut_perp,
+    const Kokkos::Random_XorShift64_Pool<Kokkos::HostSpace> pool,
     const float dke,
     const float kemax,
     const max_tally_t& max_tally
@@ -1084,7 +1085,7 @@ move_p_kokkos_host_serial(
         //disp[0] = pm->dispx;
         //disp[1] = pm->dispy;
         //disp[2] = pm->dispz;
-        interact_maxwellian_reflux_k( k_particles, pi, pm, ut_para, ut_perp, dke, kemax, face, g->dx, g->dy, g->dz, g->rdx, g->rdy, g->rdz, max_tally);
+        interact_maxwellian_reflux_k( k_particles, pi, pm, ut_para, ut_perp, pool, dke, kemax, face, g->dx, g->dy, g->dz, g->rdx, g->rdy, g->rdz, max_tally);
         //pm->dispx = disp[0];
         //pm->dispy = disp[1];
         //pm->dispz = disp[2];

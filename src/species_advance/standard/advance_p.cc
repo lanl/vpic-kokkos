@@ -420,6 +420,10 @@ advance_p_kokkos_unified(
   // TODO: is this the right place to do this?
   Kokkos::deep_copy(k_nm, 0);
 
+  // TODO: Do this once, not once per timestep
+  auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  Kokkos::Random_XorShift64_Pool<> random_pool(seed);
+
 // Determine whether to use accumulators
 #if defined( VPIC_ENABLE_ACCUMULATORS )
   Kokkos::View<float*[12]> accumulator("Accumulator", k_field.extent(0));
@@ -694,10 +698,10 @@ advance_p_kokkos_unified(
           local_pm->i     = p_index;
 
           if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                             current_sv, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz, ut_para, ut_perp, gdx, gdy, gdz, rdx, rdy, rdz, dke, kemax, max_tally ) )
+                             current_sv, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz, ut_para, ut_perp, random_pool, gdx, gdy, gdz, rdx, rdy, rdz, dke, kemax, max_tally ) )
           {
             if( k_nm(0)<max_nm ) {
-                printf("k_nm and max_nm are %d %d\n", k_nm(0), max_nm);
+                //printf("k_nm and max_nm are %d %d\n", k_nm(0), max_nm);
               const unsigned int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
               if (nm >= max_nm) Kokkos::abort("overran max_nm");
 
@@ -882,6 +886,10 @@ advance_p_kokkos_gpu(
   // zero out nm, we could probably do this earlier if we're worried about it
   // slowing things down
   Kokkos::deep_copy(k_nm, 0);
+
+  // TODO: Do this once, not once per timestep
+  auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  Kokkos::Random_XorShift64_Pool<> random_pool(seed);
 
 #ifdef VPIC_ENABLE_HIERARCHICAL
   auto team_policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE);
@@ -1084,7 +1092,7 @@ advance_p_kokkos_gpu(
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                         k_f_sv, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz, ut_para, ut_perp, gdx, gdy, gdz, rdx, rdy, rdz, dke, kemax, max_tally ) )
+                         k_f_sv, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz, ut_para, ut_perp, random_pool, gdx, gdy, gdz, rdx, rdy, rdz, dke, kemax, max_tally ) )
       {
         if( k_nm(0) < max_nm )
         {
