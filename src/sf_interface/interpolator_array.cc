@@ -475,6 +475,14 @@ interpolator_array_t::copy_to_host() {
       host_interp[i].cbx      = k_interpolator_h(i, interpolator_var::cbx);
       host_interp[i].cby      = k_interpolator_h(i, interpolator_var::cby);
       host_interp[i].cbz      = k_interpolator_h(i, interpolator_var::cbz);
+  #ifdef EXTERNAL_FORCE
+      host_interp[i].Ex0      = k_interpolator_h(i, interpolator_var::Ex0);
+      host_interp[i].Ey0      = k_interpolator_h(i, interpolator_var::Ey0);
+      host_interp[i].Ez0      = k_interpolator_h(i, interpolator_var::Ez0);
+      host_interp[i].Gx0      = k_interpolator_h(i, interpolator_var::Gx0);
+      host_interp[i].Gy0      = k_interpolator_h(i, interpolator_var::Gy0);
+      host_interp[i].Gz0      = k_interpolator_h(i, interpolator_var::Gz0);
+  #endif
 #else
 #ifdef SHAPE_QS
       host_interp[i].ex      = k_interpolator_h(i, interpolator_var::ex     );
@@ -519,6 +527,52 @@ interpolator_array_t::copy_to_host() {
       host_interp[i].d2cbzdx = k_interpolator_h(i, interpolator_var::d2cbzdx);
       host_interp[i].d2cbzdy = k_interpolator_h(i, interpolator_var::d2cbzdy);
       host_interp[i].d2cbzdz = k_interpolator_h(i, interpolator_var::d2cbzdz);
+
+  #ifdef EXTERNAL_FORCE
+      host_interp[i].Ex0      = k_interpolator_h(i, interpolator_var::Ex0     );
+      host_interp[i].dEx0dx   = k_interpolator_h(i, interpolator_var::dEx0dx  );
+      host_interp[i].dEx0dy   = k_interpolator_h(i, interpolator_var::dEx0dy  );
+      host_interp[i].dEx0dz   = k_interpolator_h(i, interpolator_var::dEx0dz  );
+      host_interp[i].d2Ex0dx  = k_interpolator_h(i, interpolator_var::d2Ex0dx );
+      host_interp[i].d2Ex0dy  = k_interpolator_h(i, interpolator_var::d2Ex0dy );
+      host_interp[i].d2Ex0dz  = k_interpolator_h(i, interpolator_var::d2Ex0dz );
+      host_interp[i].Ey0      = k_interpolator_h(i, interpolator_var::Ey0     );
+      host_interp[i].dEy0dx   = k_interpolator_h(i, interpolator_var::dEy0dx  );
+      host_interp[i].dEy0dy   = k_interpolator_h(i, interpolator_var::dEy0dy  );
+      host_interp[i].dEy0dz   = k_interpolator_h(i, interpolator_var::dEy0dz  );
+      host_interp[i].d2Ey0dx  = k_interpolator_h(i, interpolator_var::d2Ey0dx );
+      host_interp[i].d2Ey0dy  = k_interpolator_h(i, interpolator_var::d2Ey0dy );
+      host_interp[i].d2Ey0dz  = k_interpolator_h(i, interpolator_var::d2Ey0dz );
+      host_interp[i].Ez0      = k_interpolator_h(i, interpolator_var::Ez0     );
+      host_interp[i].dEz0dx   = k_interpolator_h(i, interpolator_var::dEz0dx  );
+      host_interp[i].dEz0dy   = k_interpolator_h(i, interpolator_var::dEz0dy  );
+      host_interp[i].dEz0dz   = k_interpolator_h(i, interpolator_var::dEz0dz  );
+      host_interp[i].d2Ez0dx  = k_interpolator_h(i, interpolator_var::d2Ez0dx );
+      host_interp[i].d2Ez0dy  = k_interpolator_h(i, interpolator_var::d2Ez0dy );
+      host_interp[i].d2Ez0dz  = k_interpolator_h(i, interpolator_var::d2Ez0dz );
+
+      host_interp[i].Gx0      = k_interpolator_h(i, interpolator_var::Gx0     );
+      host_interp[i].dGx0dx   = k_interpolator_h(i, interpolator_var::dGx0dx  );
+      host_interp[i].dGx0dy   = k_interpolator_h(i, interpolator_var::dGx0dy  );
+      host_interp[i].dGx0dz   = k_interpolator_h(i, interpolator_var::dGx0dz  );
+      host_interp[i].d2Gx0dx  = k_interpolator_h(i, interpolator_var::d2Gx0dx );
+      host_interp[i].d2Gx0dy  = k_interpolator_h(i, interpolator_var::d2Gx0dy );
+      host_interp[i].d2Gx0dz  = k_interpolator_h(i, interpolator_var::d2Gx0dz );
+      host_interp[i].Gy0      = k_interpolator_h(i, interpolator_var::Gy0     );
+      host_interp[i].dGy0dx   = k_interpolator_h(i, interpolator_var::dGy0dx  );
+      host_interp[i].dGy0dy   = k_interpolator_h(i, interpolator_var::dGy0dy  );
+      host_interp[i].dGy0dz   = k_interpolator_h(i, interpolator_var::dGy0dz  );
+      host_interp[i].d2Gy0dx  = k_interpolator_h(i, interpolator_var::d2Gy0dx );
+      host_interp[i].d2Gy0dy  = k_interpolator_h(i, interpolator_var::d2Gy0dy );
+      host_interp[i].d2Gy0dz  = k_interpolator_h(i, interpolator_var::d2Gy0dz );
+      host_interp[i].Gz0      = k_interpolator_h(i, interpolator_var::Gz0     );
+      host_interp[i].dGz0dx   = k_interpolator_h(i, interpolator_var::dGz0dx  );
+      host_interp[i].dGz0dy   = k_interpolator_h(i, interpolator_var::dGz0dy  );
+      host_interp[i].dGz0dz   = k_interpolator_h(i, interpolator_var::dGz0dz  );
+      host_interp[i].d2Gz0dx  = k_interpolator_h(i, interpolator_var::d2Gz0dx );
+      host_interp[i].d2Gz0dy  = k_interpolator_h(i, interpolator_var::d2Gz0dy );
+      host_interp[i].d2Gz0dz  = k_interpolator_h(i, interpolator_var::d2Gz0dz );
+  #endif
 #endif
 #endif
     });
@@ -542,6 +596,14 @@ interpolator_array_t::copy_to_device() {
       k_interpolator_h(i, interpolator_var::cbx)      = host_interp[i].cbx;
       k_interpolator_h(i, interpolator_var::cby)      = host_interp[i].cby;
       k_interpolator_h(i, interpolator_var::cbz)      = host_interp[i].cbz;
+  #ifdef EXTERNAL_FORCE
+      k_interpolator_h(i, interpolator_var::Ex0)       = host_interp[i].Ex0;
+      k_interpolator_h(i, interpolator_var::Ey0)       = host_interp[i].Ey0;
+      k_interpolator_h(i, interpolator_var::Ez0)       = host_interp[i].Ez0;
+      k_interpolator_h(i, interpolator_var::Gx0)       = host_interp[i].Gx0;
+      k_interpolator_h(i, interpolator_var::Gy0)       = host_interp[i].Gy0;
+      k_interpolator_h(i, interpolator_var::Gz0)       = host_interp[i].Gz0;
+  #endif
 #else
 #ifdef SHAPE_QS
       k_interpolator_h(i, interpolator_var::ex      ) = host_interp[i].ex     ;
@@ -586,6 +648,52 @@ interpolator_array_t::copy_to_device() {
       k_interpolator_h(i, interpolator_var::d2cbzdx ) = host_interp[i].d2cbzdx;
       k_interpolator_h(i, interpolator_var::d2cbzdy ) = host_interp[i].d2cbzdy;
       k_interpolator_h(i, interpolator_var::d2cbzdz ) = host_interp[i].d2cbzdz;
+
+  #ifdef EXTERNAL_FORCE
+      k_interpolator_h(i, interpolator_var::Ex0     ) = host_interp[i].Ex0    ;
+      k_interpolator_h(i, interpolator_var::dEx0dx  ) = host_interp[i].dEx0dx ;
+      k_interpolator_h(i, interpolator_var::dEx0dy  ) = host_interp[i].dEx0dy ;
+      k_interpolator_h(i, interpolator_var::dEx0dz  ) = host_interp[i].dEx0dz ;
+      k_interpolator_h(i, interpolator_var::d2Ex0dx ) = host_interp[i].d2Ex0dx;
+      k_interpolator_h(i, interpolator_var::d2Ex0dy ) = host_interp[i].d2Ex0dy;
+      k_interpolator_h(i, interpolator_var::d2Ex0dz ) = host_interp[i].d2Ex0dz;
+      k_interpolator_h(i, interpolator_var::Ey0     ) = host_interp[i].Ey0    ;
+      k_interpolator_h(i, interpolator_var::dEy0dx  ) = host_interp[i].dEy0dx ;
+      k_interpolator_h(i, interpolator_var::dEy0dy  ) = host_interp[i].dEy0dy ;
+      k_interpolator_h(i, interpolator_var::dEy0dz  ) = host_interp[i].dEy0dz ;
+      k_interpolator_h(i, interpolator_var::d2Ey0dx ) = host_interp[i].d2Ey0dx;
+      k_interpolator_h(i, interpolator_var::d2Ey0dy ) = host_interp[i].d2Ey0dy;
+      k_interpolator_h(i, interpolator_var::d2Ey0dz ) = host_interp[i].d2Ey0dz;
+      k_interpolator_h(i, interpolator_var::Ez0     ) = host_interp[i].Ez0    ;
+      k_interpolator_h(i, interpolator_var::dEz0dx  ) = host_interp[i].dEz0dx ;
+      k_interpolator_h(i, interpolator_var::dEz0dy  ) = host_interp[i].dEz0dy ;
+      k_interpolator_h(i, interpolator_var::dEz0dz  ) = host_interp[i].dEz0dz ;
+      k_interpolator_h(i, interpolator_var::d2Ez0dx ) = host_interp[i].d2Ez0dx;
+      k_interpolator_h(i, interpolator_var::d2Ez0dy ) = host_interp[i].d2Ez0dy;
+      k_interpolator_h(i, interpolator_var::d2Ez0dz ) = host_interp[i].d2Ez0dz;
+
+      k_interpolator_h(i, interpolator_var::Gx0     ) = host_interp[i].Gx0    ;
+      k_interpolator_h(i, interpolator_var::dGx0dx  ) = host_interp[i].dGx0dx ;
+      k_interpolator_h(i, interpolator_var::dGx0dy  ) = host_interp[i].dGx0dy ;
+      k_interpolator_h(i, interpolator_var::dGx0dz  ) = host_interp[i].dGx0dz ;
+      k_interpolator_h(i, interpolator_var::d2Gx0dx ) = host_interp[i].d2Gx0dx;
+      k_interpolator_h(i, interpolator_var::d2Gx0dy ) = host_interp[i].d2Gx0dy;
+      k_interpolator_h(i, interpolator_var::d2Gx0dz ) = host_interp[i].d2Gx0dz;
+      k_interpolator_h(i, interpolator_var::Gy0     ) = host_interp[i].Gy0    ;
+      k_interpolator_h(i, interpolator_var::dGy0dx  ) = host_interp[i].dGy0dx ;
+      k_interpolator_h(i, interpolator_var::dGy0dy  ) = host_interp[i].dGy0dy ;
+      k_interpolator_h(i, interpolator_var::dGy0dz  ) = host_interp[i].dGy0dz ;
+      k_interpolator_h(i, interpolator_var::d2Gy0dx ) = host_interp[i].d2Gy0dx;
+      k_interpolator_h(i, interpolator_var::d2Gy0dy ) = host_interp[i].d2Gy0dy;
+      k_interpolator_h(i, interpolator_var::d2Gy0dz ) = host_interp[i].d2Gy0dz;
+      k_interpolator_h(i, interpolator_var::Gz0     ) = host_interp[i].Gz0    ;
+      k_interpolator_h(i, interpolator_var::dGz0dx  ) = host_interp[i].dGz0dx ;
+      k_interpolator_h(i, interpolator_var::dGz0dy  ) = host_interp[i].dGz0dy ;
+      k_interpolator_h(i, interpolator_var::dGz0dz  ) = host_interp[i].dGz0dz ;
+      k_interpolator_h(i, interpolator_var::d2Gz0dx ) = host_interp[i].d2Gz0dx;
+      k_interpolator_h(i, interpolator_var::d2Gz0dy ) = host_interp[i].d2Gz0dy;
+      k_interpolator_h(i, interpolator_var::d2Gz0dz ) = host_interp[i].d2Gz0dz;
+  #endif
 #endif
 #endif
     });

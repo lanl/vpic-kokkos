@@ -9,8 +9,13 @@
 
 // This module implements kokkos macros
 
-#define FIELD_VAR_COUNT 44
-#define FIELD_EDGE_COUNT 8
+#ifdef EXTERNAL_FORCE
+  #define FIELD_VAR_COUNT 52
+  #define FIELD_EDGE_COUNT 8
+#else
+  #define FIELD_VAR_COUNT 44
+  #define FIELD_EDGE_COUNT 8
+#endif
 
 #ifdef VARIABLE_CHARGE
   #define PARTICLE_VAR_COUNT 8
@@ -31,10 +36,18 @@
 #define FLUID_VAR_COUNT 6+4
 
 #ifdef SHAPE_NGP
-  #define INTERPOLATOR_VAR_COUNT 6
+  #ifdef EXTERNAL_FORCE
+    #define INTERPOLATOR_VAR_COUNT 12
+  #else
+    #define INTERPOLATOR_VAR_COUNT 6
+  #endif
 #else
 #ifdef SHAPE_QS
-  #define INTERPOLATOR_VAR_COUNT 42
+  #ifdef EXTERNAL_FORCE
+    #define INTERPOLATOR_VAR_COUNT 84
+  #else
+    #define INTERPOLATOR_VAR_COUNT 42
+  #endif
 #endif
 #endif
 
@@ -196,7 +209,15 @@ namespace field_var {
     sx        = 40,
     sy        = 41,
     sz        = 42,
-    se        = 43
+    se        = 43,
+  #ifdef EXTERNAL_FORCE
+    Ex0       = 44,
+    Ey0       = 45,
+    Ez0       = 46,
+    Gx0       = 47,
+    Gy0       = 48,
+    Gz0       = 49,
+  #endif
   };
 };
 namespace field_edge_var { \
@@ -221,6 +242,14 @@ namespace interpolator_var {
     cbx      = 3,
     cby      = 4,
     cbz      = 5,
+  #ifdef EXTERNAL_FORCE
+    Ex0      = 6,
+    Ey0      = 7,
+    Ez0      = 8,
+    Gx0      = 9,
+    Gy0      = 10,
+    Gz0      = 11,
+  #endif
 #else
 #ifdef SHAPE_QS
     ex       = 0,
@@ -265,6 +294,50 @@ namespace interpolator_var {
     d2cbzdx  = 39,
     d2cbzdy  = 40,
     d2cbzdz  = 41,
+  #ifdef EXTERNAL_FORCE
+    Ex0       = 42,
+    dEx0dx    = 43,
+    dEx0dy    = 44,
+    dEx0dz    = 45,
+    d2Ex0dx   = 46,
+    d2Ex0dy   = 47,
+    d2Ex0dz   = 48,
+    Ey0       = 49,
+    dEy0dx    = 50,
+    dEy0dy    = 51,
+    dEy0dz    = 52,
+    d2Ey0dx   = 53,
+    d2Ey0dy   = 54,
+    d2Ey0dz   = 55,
+    Ez0       = 56,
+    dEz0dx    = 57,
+    dEz0dy    = 58,
+    dEz0dz    = 59,
+    d2Ez0dx   = 60,
+    d2Ez0dy   = 61,
+    d2Ez0dz   = 62,
+    Gx0       = 63,
+    dGx0dx    = 64,
+    dGx0dy    = 65,
+    dGx0dz    = 66,
+    d2Gx0dx   = 67,
+    d2Gx0dy   = 68,
+    d2Gx0dz   = 69,
+    Gy0       = 70,
+    dGy0dx    = 71,
+    dGy0dy    = 72,
+    dGy0dz    = 73,
+    d2Gy0dx   = 74,
+    d2Gy0dy   = 75,
+    d2Gy0dz   = 76,
+    Gz0       = 77,
+    dGz0dx    = 78,
+    dGz0dy    = 79,
+    dGz0dz    = 80,
+    d2Gz0dx   = 81,
+    d2Gz0dy   = 82,
+    d2Gz0dz   = 83,
+  #endif
 #endif
 #endif
   };

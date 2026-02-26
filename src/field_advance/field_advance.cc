@@ -169,6 +169,16 @@ field_array_t::copy_to_host() {
       host_field[i].sy = k_field(i, field_var::sy);
       host_field[i].sz = k_field(i, field_var::sz);
       host_field[i].se = k_field(i, field_var::se);
+
+#ifdef EXTERNAL_FORCE
+      host_field[i].Ex0   = k_field(i, field_var::Ex0);
+      host_field[i].Ey0   = k_field(i, field_var::Ey0);
+      host_field[i].Ez0   = k_field(i, field_var::Ez0);
+
+      host_field[i].Gx0   = k_field(i, field_var::Gx0);
+      host_field[i].Gy0   = k_field(i, field_var::Gy0);
+      host_field[i].Gz0   = k_field(i, field_var::Gz0);
+#endif
       
       host_field[i].ematx = k_field_edge(i, field_edge_var::ematx);
       host_field[i].ematy = k_field_edge(i, field_edge_var::ematy);
@@ -254,6 +264,16 @@ field_array_t::copy_to_device() {
       k_field(i, field_var::sy) = host_field[i].sy;
       k_field(i, field_var::sz) = host_field[i].sz;
       k_field(i, field_var::se) = host_field[i].se;
+
+#ifdef EXTERNAL_FORCE
+      k_field(i, field_var::Ex0)   = host_field[i].Ex0;
+      k_field(i, field_var::Ey0)   = host_field[i].Ey0;
+      k_field(i, field_var::Ez0)   = host_field[i].Ez0;
+
+      k_field(i, field_var::Gx0)   = host_field[i].Gx0;
+      k_field(i, field_var::Gy0)   = host_field[i].Gy0;
+      k_field(i, field_var::Gz0)   = host_field[i].Gz0;
+#endif
       
       k_field_edge(i, field_edge_var::ematx) = host_field[i].ematx;
       k_field_edge(i, field_edge_var::ematy) = host_field[i].ematy;
