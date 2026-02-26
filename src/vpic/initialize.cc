@@ -35,6 +35,18 @@ vpic_simulation::initialize( int argc,
   // migrate QS shape currents from ghosts to live cells
   grid->isub          = 0;
 
+#ifdef EXTERNAL_FORCE
+  // Initialize E0, G0 fields to default values
+  for (int ii = 0; ii < grid->nv; ii++) {
+    field(ii).Ex0 = 0.;
+    field(ii).Ey0 = 0.;
+    field(ii).Ez0 = 0.;
+    field(ii).Gx0 = 0.;
+    field(ii).Gy0 = 0.;
+    field(ii).Gz0 = 0.;
+  }
+#endif
+
   // Call the user initialize the simulation
 
   TIC user_initialization( argc, argv ); TOC( user_initialization, 1 );
