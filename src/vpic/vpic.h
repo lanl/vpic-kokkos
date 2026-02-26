@@ -68,12 +68,23 @@ const uint64_t oe           (1ULL<<31);
 //const uint64_t nmat       (1ULL<<39);
 //const uint64_t fmat       (1ULL<<40 | 1ULL<<41 | 1ULL<<42);
 //const uint64_t cmat       (1ULL<<43);
+const uint64_t electric0    (1ULL<<44 | 1ULL<<45 | 1ULL<<46);
+const uint64_t gravity0     (1ULL<<48 | 1ULL<<49 | 1ULL<<50);
 // 1ULL = unsigned long long ensures 64bits for bitshift operators
 
-const size_t total_field_variables(32);
-const size_t total_field_groups(16); // this counts vectors, tensors etc...
+#ifdef EXTERNAL_FORCE
+const size_t total_field_variables(60);
+const size_t total_field_groups(30); // this counts vectors, tensors etc...
 // These bits will be tested to determine which variables to output
-const size_t field_indeces[22] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31 };
+const size_t field_indeces[30] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31,
+                                   32, 35, 36, 39, 40, 43, 44, 47, 48, 51, 52, 55, 56, 59 };
+#else
+const size_t total_field_variables(52);
+const size_t total_field_groups(26); // this counts vectors, tensors etc...
+// These bits will be tested to determine which variables to output
+const size_t field_indeces[26] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31,
+                                   32, 35, 36, 39, 40, 43, 44, 47, 48, 51 };
+#endif
 
 struct FieldInfo {
 	char name[128];

@@ -918,6 +918,16 @@ void HDF5Dump::dump_fields(
   
   if (field_dump_flag.flags["div_b_err"]) DUMP_FIELD_TO_HDF5("div_b_err", div_e_err, H5T_NATIVE_FLOAT);
 
+#ifdef EXTERNAL_FORCE
+  if (field_dump_flag.flags["Ex0"]) DUMP_FIELD_TO_HDF5("Ex0", Ex0, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["Ey0"]) DUMP_FIELD_TO_HDF5("Ey0", Ey0, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["Ez0"]) DUMP_FIELD_TO_HDF5("Ez0", Ez0, H5T_NATIVE_FLOAT);
+
+  if (field_dump_flag.flags["Gx0"]) DUMP_FIELD_TO_HDF5("Gx0", Gx0, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["Gy0"]) DUMP_FIELD_TO_HDF5("Gy0", Gy0, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["Gz0"]) DUMP_FIELD_TO_HDF5("Gz0", Gz0, H5T_NATIVE_FLOAT);
+#endif
+
   el2 = uptime() - el2;
   if ( rank==0 ) log_printf("TimeHDF5Write: %.2f s\n", el2);
 

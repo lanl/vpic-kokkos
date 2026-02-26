@@ -167,6 +167,10 @@ struct field_dump_flag_t
     "cbx0", "cby0", "cbz0", "te0",
     "tx", "ty", "tz", "te",
     "ox", "oy", "oz", "oe","div_b_err"
+#ifdef EXTERNAL_FORCE
+    "Ex0", "Ey0", "Ez0",
+    "Gx0", "Gy0", "Gz0",
+#endif
   };
 
   std::unordered_map<std::string, bool> flags = {
@@ -178,6 +182,10 @@ struct field_dump_flag_t
     {"cbx0", true}, {"cby0", true}, {"cbz0", true}, {"te0", true},
     {"tx", true}, {"ty", true}, {"tz", true}, {"te", true},
     {"ox", true}, {"oy", true}, {"oz", true}, {"oe", true}, {"div_b_err", true}
+#ifdef EXTERNAL_FORCE
+    {"Ex0", true}, {"Ey0", true}, {"Ez0", true},
+    {"Gx0", true}, {"Gy0", true}, {"Gz0", true},
+#endif
   };
 
   void disableE() {
@@ -211,6 +219,16 @@ struct field_dump_flag_t
   void disableO() {
     flags["ox"] = false, flags["oy"] = false, flags["oz"] = false;
   }
+
+#ifdef EXTERNAL_FORCE
+  void disableE0() {
+    flags["Ex0"] = false, flags["Ey0"] = false, flags["Ez0"] = false;
+  }
+
+  void disableG0() {
+    flags["Gx0"] = false, flags["Gy0"] = false, flags["Gz0"] = false;
+  }
+#endif
 
   void disableALL() {
     for (auto& [key,_] : flags)
@@ -249,6 +267,16 @@ struct field_dump_flag_t
     flags["ox"] = true, flags["oy"] = true, flags["oz"] = true;
   }
 
+#ifdef EXTERNAL_FORCE
+  void enableE0() {
+    flags["Ex0"] = true, flags["Ey0"] = true, flags["Ez0"] = true;
+  }
+
+  void enableG0() {
+    flags["Gx0"] = true, flags["Gy0"] = true, flags["Gz0"] = true;
+  }
+#endif
+
   void enableALL() {
     for (auto& [key,_] : flags)
       flags[key] = true;
@@ -285,6 +313,17 @@ struct field_dump_flag_t
   bool enabledO() {
     return flags["ox"] && flags["oy"] && flags["oz"];
   }
+
+#ifdef EXTERNAL_FORCE
+  bool enabledE0() {
+    return flags["Ex0"] && flags["Ey0"] && flags["Ez0"];
+  }
+
+  bool enabledG0() {
+    return flags["Gx0"] && flags["Gy0"] && flags["Gz0"];
+  }
+#endif
+
 };
 
 struct hydro_dump_flag_t
