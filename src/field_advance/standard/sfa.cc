@@ -258,12 +258,14 @@ new_standard_field_array( grid_t           * RESTRICT g,
   fa->kernel->hyb_smooth_b      = hyb_smooth_b;
   fa->kernel->hyb_smooth_eb_interp = hyb_smooth_eb_interp;
 
+  fa->kernel->energy_f          = energy_f;
+  fa->kernel->energy_f_kokkos   = energy_f_kokkos;
 
   if( !m_list->next ) {
     /* If there is only one material, then this material permeates all
        space and we can use high performance versions of some kernels. */
     //fa->kernel->advance_e         = vacuum_advance_e;
-    fa->kernel->energy_f          = vacuum_energy_f;
+    //fa->kernel->energy_f          = vacuum_energy_f;
     fa->kernel->compute_rhob      = vacuum_compute_rhob;
     fa->kernel->compute_curl_b    = vacuum_compute_curl_b;
     fa->kernel->compute_div_e_err = vacuum_compute_div_e_err;
@@ -271,7 +273,7 @@ new_standard_field_array( grid_t           * RESTRICT g,
     fa->kernel->advance_e_kokkos  = vacuum_advance_e_kokkos;
     fa->kernel->compute_div_e_err_kokkos = vacuum_compute_div_e_err_kokkos;
     fa->kernel->clean_div_e_kokkos= vacuum_clean_div_e_kokkos;
-    fa->kernel->energy_f_kokkos   = vacuum_energy_f_kokkos;
+    //fa->kernel->energy_f_kokkos   = vacuum_energy_f_kokkos;
   }
 
   REGISTER_OBJECT( fa, checkpt_standard_field_array,
