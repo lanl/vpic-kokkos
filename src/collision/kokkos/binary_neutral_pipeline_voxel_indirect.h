@@ -142,9 +142,9 @@ struct binary_neutral_collision_pipeline {
     // Am I being paranoid?
     if( _spi->np      > _spi_sortindex_ra.extent(0) || 
         _spi->g->nv+1 != _spi_partition_ra.extent(0) ){
-	printf("_spi->np (=%d) ?= _spi_sortindex_ra.extent(0) (=%d)\n",_spi->np,_spi_sortindex_ra.extent(0));
-	printf("_spi->g->nv+1 (=%d) ?= _spi_partition_ra.extent(0) (=%d)\n",_spi->g->nv+1,_spi_partition_ra.extent(0));
-        ERROR(("Bad spi sort products."));
+      printf("_spi->np (=%d) ?= _spi_sortindex_ra.extent(0) (=%d)\n",_spi->np,_spi_sortindex_ra.extent(0));
+      printf("_spi->g->nv+1 (=%d) ?= _spi_partition_ra.extent(0) (=%d)\n",_spi->g->nv+1,_spi_partition_ra.extent(0));
+      ERROR(("Bad spi sort products."));
     }
 
     // We only need to shuffle one species to ensure random pairings.
@@ -261,7 +261,7 @@ struct binary_neutral_collision_pipeline {
 				auto nj = spj_partition_ra(v+1) - j0;
 				
 				if( ni <= 0 || nj <= 0 || (spi==spj && ni==1) ) return; // Nothing to do
-				
+
 				// Find the real densities.
 				float density_i = spi_n(v);
 				float density_j = spj_n(v);
@@ -380,6 +380,8 @@ void collide_self_varwt(
     float ndt = w_max * np_min * dtinterval / dV;
 
     bool MC_col_occurred = binary_collision(mu, mu_i, mu_i, up, model, rg, ndt, ordered);
+
+    if (!MC_col_occurred) { return; }
 
     // The larger weighted particle is updated with probability w_min/w_max
     // and the smaller weighted particle is always updated
@@ -523,6 +525,8 @@ void collide_variabl_wt(
     float ndt = w_max * np_min * dtinterval / dV;
 
     bool MC_col_occurred = binary_collision(mu, mu_h, mu_l, up, model, rg, ndt, ij);
+
+    if (!MC_col_occurred) { return; }
 
     // The larger weighted particle is updated with probability w_min/w_max
     // and the smaller weighted particle is always updated
@@ -877,6 +881,8 @@ void collide_uniform_wt(
 #endif	
 
       bool MC_col_occurred = binary_collision(mu, mu_i, mu_j, up, model, rg, ndt, ordered);
+
+      if (!MC_col_occurred) { return; }
 
       spi_p(i, particle_var::ux) = up[1];
       spi_p(i, particle_var::uy) = up[2];
