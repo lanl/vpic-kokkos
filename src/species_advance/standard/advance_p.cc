@@ -689,6 +689,8 @@ advance_p_kokkos_unified(
 #       undef ACCUMULATE_J
       BEGIN_THREAD_BLOCK {
         if(!inbnds[LANE]) {
+            // FIXME This should be moved outside this block, or, idealy outside the advance
+            auto generator = random_pool.get_state();
           p_index = pi_offset + LANE;
 
           DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
@@ -698,7 +700,7 @@ advance_p_kokkos_unified(
           local_pm->i     = p_index;
 
           if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                             current_sv, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz, ut_para, ut_perp, random_pool, gdx, gdy, gdz, rdx, rdy, rdz, dke, kemax, max_tally ) )
+                             current_sv, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz, ut_para, ut_perp, generator, gdx, gdy, gdz, rdx, rdy, rdz, dke, kemax, max_tally ) )
           {
             if( k_nm(0)<max_nm ) {
                 //printf("k_nm and max_nm are %d %d\n", k_nm(0), max_nm);
@@ -721,6 +723,7 @@ advance_p_kokkos_unified(
               k_particle_i_copy(nm) = pii;
             }
           }
+          random_pool.free_state(generator);
         }
       } END_THREAD_BLOCK;
 #if defined( VPIC_ENABLE_HIERARCHICAL ) && !defined( VPIC_ENABLE_VECTORIZATION )
@@ -907,6 +910,7 @@ advance_p_kokkos_gpu(
       
     float v0, v1, v2, v3, v4, v5;
     auto  k_field_scatter_access = k_f_sv.access();
+    auto generator = random_pool.get_state();
 
     float dx   = p_dx;                             // Load position
     float dy   = p_dy;
@@ -1092,7 +1096,7 @@ advance_p_kokkos_gpu(
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                         k_f_sv, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz, ut_para, ut_perp, random_pool, gdx, gdy, gdz, rdx, rdy, rdz, dke, kemax, max_tally ) )
+                         k_f_sv, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz, ut_para, ut_perp, generator, gdx, gdy, gdz, rdx, rdy, rdz, dke, kemax, max_tally ) )
       {
         if( k_nm(0) < max_nm )
         {
@@ -1128,6 +1132,7 @@ advance_p_kokkos_gpu(
         }
       }
     }
+    random_pool.free_state(generator);
 #ifdef VPIC_ENABLE_HIERARCHICAL
   }
   });

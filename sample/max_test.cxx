@@ -200,12 +200,12 @@ begin_initialization {
   double lambda_SI  = 1058e-9;
   double w0_SI = 1.25e-6; // Beam waist
 
-  double Lx_SI         = 3e-6; // Simulation box size
+  double Lx_SI         = 3e-7; // Simulation box size
   double Ly_SI         = w0_SI*sqrt(M_PI/2.);  // 3DCHANGE
-  double Lz_SI         = 3e-6;
-  double t_stop = 0.5e-12 / time_to_SI; // Simulation run time
+  double Lz_SI         = 3e-7;
+  double t_stop = 5e-14 / time_to_SI; // Simulation run time
 
-  double T_e = 5.e2 * e_SI; // Technically, this is k_B*T.  e_SI is eV to J.
+  double T_e = 5.e3 * e_SI; // Technically, this is k_B*T.  e_SI is eV to J.
   double T_i = 5.e2 * e_SI;
   float dfrac               = 0.0; // fraction of charge density for n_Al12/ne
 
@@ -216,13 +216,13 @@ begin_initialization {
   // Increase resolution to ~3000 for physical results
   double nx = 30;
   double ny = 1;
-  double nz = 32;
+  double nz = 33;
 
-  double nppc = 2;  // Average number of macro particles/cell of each species
+  double nppc = 60;  // Average number of macro particles/cell of each species
 
   int topology_x = 2;
   int topology_y = 1;
-  int topology_z = 1;
+  int topology_z = 3;
   double quota = 1;             // Run quota in hours.  
   double quota_sec = quota*3600;  // Run quota in seconds. 
 
@@ -324,7 +324,7 @@ begin_initialization {
 
   // Diagnostics intervals.  
   int energies_interval = 50;
-  int field_interval    = 50;//int(5./omega_L_SI / time_to_SI / dt);
+  int field_interval    = 10;//int(5./omega_L_SI / time_to_SI / dt);
   int particle_interval = 10*field_interval;
 
   int restart_interval = -1;

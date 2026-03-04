@@ -382,6 +382,7 @@ boundary_p_kokkos(
   // TODO: Do this once, not once per timestep
   auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<Kokkos::HostSpace> random_pool(seed);
+  auto generator = random_pool.get_state();
 
   do {
     // Unpack the species list for random acesss
@@ -490,7 +491,8 @@ boundary_p_kokkos(
                 sp_[id]->q,
                 sp_[id]->ut_para,
                 sp_[id]->ut_perp,
-                random_pool,
+                //random_pool,
+                generator,
                 sp_[id]->dke,
                 sp_[id]->kemax,
                 max_tally
@@ -523,6 +525,8 @@ boundary_p_kokkos(
     }
 
   } while(0);
+
+  random_pool.free_state(generator);
 
   for( face=0; face<6; face++ )
   {
