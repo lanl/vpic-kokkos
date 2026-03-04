@@ -53,22 +53,18 @@ struct drag_model : public collision_model<drag_model<Functor>> {
     float *param
   ) const
   {
-      auto v0 = param[0];
-      //assert(v0>0);
-      if(v0==0) return 0;
+    auto v0 = param[0];
+    //assert(v0>0);
+    if(v0==0) return 0;
 
-      auto ndt_mi2 = param[2]; // Actually need n*dt/mi -> multiply by mi in stopping_cx.
-      
-      float mS = stopping_cx(v0); 
+    auto ndt_mi2 = param[2]; // Actually need n*dt/mi -> multiply by mi in stopping_cx.
+    
+    float mS = stopping_cx(v0); 
 
-      auto Cr = 1.0 - ndt_mi2*mS/v0;
-      auto Crterm2 = ndt_mi2*mS/v0;
+    auto Cr = 1.0 - ndt_mi2*mS/v0;
+    //auto Crterm2 = ndt_mi2*mS/v0;
 
-      //if (Crterm2 > 1.0e-1) {
-	//	printf("v0=%14.8e, ndt_mi2=%14.8e, mS=%14.8e, Crterm2=%14.8e, Cr=%14.8e",v0
-	//	,ndt_mi2,mS,Crterm2, Cr);
-      //      }
-      return Cr;
+    return Cr;
   }
   
     
@@ -94,7 +90,7 @@ struct drag_model : public collision_model<drag_model<Functor>> {
   void upload_moment_src_impl( 
     const ViewType & spj_v, 
     const int v,
-		const gmomType &Dm, 
+    const gmomType &Dm, 
     const float mi,
     const float mj) const 
   {

@@ -23,9 +23,9 @@ apply_takizuka_abe_collision_op( collision_op_t * cop,
   takizuka_abe_collision_op_t * ta = (takizuka_abe_collision_op_t *) cop;
   takizuka_abe_model model(ta->cvar0,ta->var_wt);
   if(ta->var_wt)
-      apply_binary_collision_model_pipeline<true>((binary_collision_op_t *) cop, model, rng);
+    apply_binary_collision_model_pipeline<true>((binary_collision_op_t *) cop, model, rng);
   else
-      apply_binary_collision_model_pipeline<false>((binary_collision_op_t *) cop, model, rng);
+    apply_binary_collision_model_pipeline<false>((binary_collision_op_t *) cop, model, rng);
 }
 
 void
@@ -55,7 +55,8 @@ takizuka_abe(
   takizuka_abe_collision_op_t * ta;
   MALLOC( ta, 1);
   MALLOC( ta->name, strlen(name) +1 );
-  strncpy( ta->name, name, strlen(name)+1);
+  //strncpy( ta->name, name, strlen(name)+1);
+  strncpy( ta->name, name, strlen(ta->name) );
 
   spi->last_indexed = -1; //to ensure sort in collisions
   spj->last_indexed = -1;
