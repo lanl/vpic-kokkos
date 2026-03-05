@@ -121,7 +121,7 @@ energy_p_pipeline_v4( energy_p_pipeline_args_t * args,
 #endif // USE_LEGACY_PARTICLE_ARRAY
 
 double
-energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particles, const k_particles_i_t& k_particles_i, const float qdt_2mc, const float msp, const int np) {
+energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particles, const k_particles_i_t& k_particles_i, const float qdt_2mc, const float msp, const size_t np) {
 //  const interpolator_t * RESTRICT ALIGNED(128) f = args->f;
 //  const particle_t     * RESTRICT ALIGNED(32)  p = args->p;
 //  const float qdt_2mc = args->qdt_2mc;
@@ -159,7 +159,7 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
     en += (double)v0;
   }
 */
-    Kokkos::parallel_reduce(np, KOKKOS_LAMBDA(const int n, double& update) {
+    Kokkos::parallel_reduce(np, KOKKOS_LAMBDA(const size_t n, double& update) {
         float dx = k_particles(n, particle_var::dx);
         float dy = k_particles(n, particle_var::dy);
         float dz = k_particles(n, particle_var::dz);

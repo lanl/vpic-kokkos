@@ -28,14 +28,14 @@ void print_accumulator(k_accumulators_t& f, int n)
 }
 void print_particles_d(
         k_particles_t particles,
-        int np
+        size_t np
         )
 {
     printf("Particle printer from 0 to %d \n", np);
     Kokkos::parallel_for("particle printer", Kokkos::RangePolicy <
             Kokkos::DefaultExecutionSpace > (0, 1), KOKKOS_LAMBDA (int i)
     {
-        for (int z = 0; z < np; z++)
+        for (size_t z = 0; z < np; z++)
         {
             printf("accum part %d has %f %f %f %f %f %f \n", z,
                     particles(z, particle_var::dx),

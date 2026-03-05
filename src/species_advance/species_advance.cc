@@ -114,8 +114,8 @@ species_t *
 species( const char * name,
          float q,
          float m,
-         int max_local_np,
-         int max_local_nm,
+         size_t max_local_np,
+         size_t max_local_nm,
          int sort_interval,
          int sort_out_of_place,
          grid_t * g ) {
@@ -188,7 +188,7 @@ species_t::copy_to_host()
 
   Kokkos::parallel_for("copy particles to host",
     host_execution_policy(0, np) ,
-    KOKKOS_LAMBDA (int i) {
+    KOKKOS_LAMBDA (size_t i) {
 
       particles[i].dx = k_particle_h(i, particle_var::dx);
       particles[i].dy = k_particle_h(i, particle_var::dy);
@@ -209,7 +209,7 @@ species_t::copy_to_host()
 
   Kokkos::parallel_for("copy movers to host",
     host_execution_policy(0, max_nm) ,
-    KOKKOS_LAMBDA (int i) {
+    KOKKOS_LAMBDA (size_t i) {
 
       movers[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
       movers[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
@@ -235,8 +235,8 @@ species_t::copy_to_device()
   auto& particles = p;
 
   Kokkos::parallel_for("copy particles to device",
-    host_execution_policy(0, np) ,
-    KOKKOS_LAMBDA (int i) {
+    Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, size_t>(0, np) ,
+    KOKKOS_LAMBDA (size_t i) {
 
       k_particle_h(i, particle_var::dx) = particles[i].dx;
       k_particle_h(i, particle_var::dy) = particles[i].dy;
@@ -257,7 +257,7 @@ species_t::copy_to_device()
 
   Kokkos::parallel_for("copy movers to device",
     host_execution_policy(0, max_nm) ,
-    KOKKOS_LAMBDA (int i) {
+    KOKKOS_LAMBDA (size_t i) {
 
       k_particle_movers_h(i, particle_mover_var::dispx) = movers[i].dispx;
       k_particle_movers_h(i, particle_mover_var::dispy) = movers[i].dispy;
@@ -281,15 +281,15 @@ species_t::copy_outbound_to_host()
   Kokkos::deep_copy(k_nm_h, k_nm_d);
   nm = k_nm_h(0);
 
-  auto pm_h_dispx = Kokkos::subview(k_pm_h, std::make_pair(0, nm), 0);
-  auto pm_d_dispx = Kokkos::subview(k_pm_d, std::make_pair(0, nm), 0);
-  auto pm_h_dispy = Kokkos::subview(k_pm_h, std::make_pair(0, nm), 1);
-  auto pm_d_dispy = Kokkos::subview(k_pm_d, std::make_pair(0, nm), 1);
-  auto pm_h_dispz = Kokkos::subview(k_pm_h, std::make_pair(0, nm), 2);
-  auto pm_d_dispz = Kokkos::subview(k_pm_d, std::make_pair(0, nm), 2);
+  auto pm_h_dispx = Kokkos::subview(k_pm_h, std::make_pair(static_cast<size_t>(0), nm), 0);
+  auto pm_d_dispx = Kokkos::subview(k_pm_d, std::make_pair(static_cast<size_t>(0), nm), 0);
+  auto pm_h_dispy = Kokkos::subview(k_pm_h, std::make_pair(static_cast<size_t>(0), nm), 1);
+  auto pm_d_dispy = Kokkos::subview(k_pm_d, std::make_pair(static_cast<size_t>(0), nm), 1);
+  auto pm_h_dispz = Kokkos::subview(k_pm_h, std::make_pair(static_cast<size_t>(0), nm), 2);
+  auto pm_d_dispz = Kokkos::subview(k_pm_d, std::make_pair(static_cast<size_t>(0), nm), 2);
 
-  auto pm_i_h_subview = Kokkos::subview(k_pm_i_h, std::make_pair(0, nm));
-  auto pm_i_d_subview = Kokkos::subview(k_pm_i_d, std::make_pair(0, nm));
+  auto pm_i_h_subview = Kokkos::subview(k_pm_i_h, std::make_pair(static_cast<size_t>(0), nm));
+  auto pm_i_d_subview = Kokkos::subview(k_pm_i_d, std::make_pair(static_cast<size_t>(0), nm));
 
   Kokkos::deep_copy(pm_h_dispx, pm_d_dispx);
   Kokkos::deep_copy(pm_h_dispy, pm_d_dispy);
@@ -303,7 +303,7 @@ species_t::copy_outbound_to_host()
 
   Kokkos::parallel_for("copy movers to host",
     host_execution_policy(0, nm) ,
-    KOKKOS_LAMBDA (int i) {
+    KOKKOS_LAMBDA (size_t i) {
       movers[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
       movers[i].dispy = k_particle_movers_h(i, particle_mover_var::dispy);
       movers[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
@@ -319,16 +319,16 @@ species_t::copy_inbound_to_device()
 
   // TODO: Why do we need particle_copy as an intermediate?
   // currently the recv particles are in particles_recv, not particle_copy
-  auto pr_h_subview  = Kokkos::subview(k_pr_h,   std::make_pair(0, num_to_copy), Kokkos::ALL);
-  auto pc_h_subview  = Kokkos::subview(k_pc_h,   std::make_pair(0, num_to_copy), Kokkos::ALL);
-  auto pri_h_subview = Kokkos::subview(k_pr_i_h, std::make_pair(0, num_to_copy));
-  auto pci_h_subview = Kokkos::subview(k_pc_i_h, std::make_pair(0, num_to_copy));
+  auto pr_h_subview  = Kokkos::subview(k_pr_h,   std::make_pair(static_cast<size_t>(0), num_to_copy), Kokkos::ALL);
+  auto pc_h_subview  = Kokkos::subview(k_pc_h,   std::make_pair(static_cast<size_t>(0), num_to_copy), Kokkos::ALL);
+  auto pri_h_subview = Kokkos::subview(k_pr_i_h, std::make_pair(static_cast<size_t>(0), num_to_copy));
+  auto pci_h_subview = Kokkos::subview(k_pc_i_h, std::make_pair(static_cast<size_t>(0), num_to_copy));
   Kokkos::deep_copy(pc_h_subview, pr_h_subview);
   Kokkos::deep_copy(pci_h_subview, pri_h_subview);
 
 
-  auto pc_d_subview  = Kokkos::subview(k_pc_d,   std::make_pair(0, num_to_copy), Kokkos::ALL);
-  auto pci_d_subview = Kokkos::subview(k_pc_i_d, std::make_pair(0, num_to_copy));
+  auto pc_d_subview  = Kokkos::subview(k_pc_d,   std::make_pair(static_cast<size_t>(0), num_to_copy), Kokkos::ALL);
+  auto pci_d_subview = Kokkos::subview(k_pc_i_d, std::make_pair(static_cast<size_t>(0), num_to_copy));
   Kokkos::deep_copy(pc_d_subview, pc_h_subview);
   Kokkos::deep_copy(pci_d_subview, pci_h_subview);
 
@@ -339,13 +339,13 @@ species_t::copy_inbound_to_device()
   auto& particle_copy_i = k_pc_i_d;
   auto& particles = k_p_d;
   auto& particles_i = k_p_i_d;
-  const int npart = np;
+  const size_t npart = np;
 
   Kokkos::parallel_for("append moved particles",
     Kokkos::RangePolicy <Kokkos::DefaultExecutionSpace> (0, num_to_copy),
-    KOKKOS_LAMBDA (int i) {
+    KOKKOS_LAMBDA (size_t i) {
 
-      int npi = npart+i; // i goes from 0..n so no need for -1
+      size_t npi = npart+i; // i goes from 0..n so no need for -1
       particles(npi, particle_var::dx) = particle_copy(i, particle_var::dx);
       particles(npi, particle_var::dy) = particle_copy(i, particle_var::dy);
       particles(npi, particle_var::dz) = particle_copy(i, particle_var::dz);
