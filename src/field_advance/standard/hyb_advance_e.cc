@@ -11,30 +11,35 @@ typedef struct pipeline_args {
 
 #define F(ind,v) k_field(f##ind##_index, field_var::v)
 
-#define INIT_STENCIL()							\
-  size_t f0_index  = VOXEL(x,   y,   z,    nx,ny,nz);			\
-  size_t fx_index  = VOXEL(x+1, y,   z,    nx,ny,nz);			\
-  size_t fy_index  = VOXEL(x,   y+1, z,    nx,ny,nz);			\
-  size_t fz_index  = VOXEL(x,   y,   z+1,  nx,ny,nz);			\
-  size_t fmx_index = VOXEL(x-1, y,   z,    nx,ny,nz);			\
-  size_t fmy_index = VOXEL(x,   y-1, z,    nx,ny,nz);			\
-  size_t fmz_index = VOXEL(x,   y,   z-1,  nx,ny,nz);			\
-  float  rho = half*( (one-hstep)*( F(0,rhof) + F(0,rhofold) ) + hstep*( three*F(0,rhof) - F(0,rhofold)) ) ; \
-  rho = (rho > den_floor_ohm) ? rho :  den_floor_ohm;			\
-  float  invrho = one/rho;						\
-  float hallinvrho = (rho > den_floor_ohm) ? invrho : 0 ;		\
-  float  ux = invrho*half*( (one-hstep)*( F(0,jfx) + F(0,jfxold) ) + hstep*( three*F(0,jfx) - F(0,jfxold)) ) ; \
-  float  uy = invrho*half*( (one-hstep)*( F(0,jfy) + F(0,jfyold) ) + hstep*( three*F(0,jfy) - F(0,jfyold)) ) ; \
-  float  uz = invrho*half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + hstep*( three*F(0,jfz) - F(0,jfzold)) ) ;
+#define INIT_STENCIL()                                               \
+  size_t f0_index  = VOXEL(x,   y,   z,    nx,ny,nz);                \
+  size_t fx_index  = VOXEL(x+1, y,   z,    nx,ny,nz);                \
+  size_t fy_index  = VOXEL(x,   y+1, z,    nx,ny,nz);                \
+  size_t fz_index  = VOXEL(x,   y,   z+1,  nx,ny,nz);                \
+  size_t fmx_index = VOXEL(x-1, y,   z,    nx,ny,nz);                \
+  size_t fmy_index = VOXEL(x,   y-1, z,    nx,ny,nz);                \
+  size_t fmz_index = VOXEL(x,   y,   z-1,  nx,ny,nz);                \
+  float  rho = half*( (one-hstep)*( F(0,rhof) + F(0,rhofold) ) +     \
+                      hstep*( three*F(0,rhof) - F(0,rhofold)) );     \
+  rho = (rho > den_floor_ohm) ? rho :  den_floor_ohm;                \
+  float  invrho = one/rho;                                           \
+  /*float hallinvrho = (rho > den_floor_ohm) ? invrho : 0 ;*/        \
+  float  ux = invrho*half*( (one-hstep)*( F(0,jfx) + F(0,jfxold) ) + \
+                            hstep*( three*F(0,jfx) - F(0,jfxold)) ); \
+  float  uy = invrho*half*( (one-hstep)*( F(0,jfy) + F(0,jfyold) ) + \
+                            hstep*( three*F(0,jfy) - F(0,jfyold)) ); \
+  float  uz = invrho*half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + \
+                            hstep*( three*F(0,jfz) - F(0,jfzold)) );
 
 
-#define E(x_,y_,z_)							\
-  F(0,e##x_) =								\
+#define E(x_,y_,z_) \
+  F(0,e##x_) =      \
     invrho * (F(0,cb##z_) + F(0,cb##z_##0)) * ( p##z_*( F(z_,cb##x_) - F(m##z_,cb##x_) ) - p##x_*( F(x_,cb##z_) - F(m##x_,cb##z_)) ) \
   + invrho * (F(0,cb##y_) + F(0,cb##y_##0)) * ( p##y_*( F(y_,cb##x_) - F(m##y_,cb##x_) ) - p##x_*( F(x_,cb##y_) - F(m##x_,cb##y_)) ) \
        - u##y_ * (F(0,cb##z_)+F(0,cb##z_##0))  +   u##z_ * (F(0,cb##y_)+F(0,cb##y_##0)) \
-      - invrho * ( p##x_*( F(x_,pe) - F(m##x_,pe)) )			\
-    + do_eta*eta*F(0,tcay)*( p##y_*( F(y_,cb##z_) - F(m##y_,cb##z_) ) - p##z_*( F(z_,cb##y_) - F(m##z_,cb##y_) ) );\
+      - invrho * ( p##x_*( F(x_,pe) - F(m##x_,pe)) ) \
+    + do_eta*eta*F(0,tcay)*( p##y_*( F(y_,cb##z_) - F(m##y_,cb##z_) ) - p##z_*( F(z_,cb##y_) - F(m##z_,cb##y_) ) )\
+    - invrho * rVt * F(0,s##x_); \
   F(0,e##x_) *= F(0,tcaz);
   
 /*
@@ -82,9 +87,9 @@ typedef struct pipeline_args {
   if(nx > 1 || ny > 1) { \
   Kokkos::parallel_for("advance_e_z_neg", z_neg, KOKKOS_LAMBDA(const int x, const int y, const int z) {\
     INIT_STENCIL();\
-	  E(x,y,z);\
-	  E(y,z,x);\
-	  E(z,x,y);\
+    E(x,y,z);\
+    E(y,z,x);\
+    E(z,x,y);\
     });\
   }
 */
@@ -130,7 +135,7 @@ hyb_advance_e( field_array_t * RESTRICT fa,
   args->p = (sfa_params_t *)fa->params;
   args->g = fa->g;
   k_field_t k_field = fa->k_f_d;
-  const material_coefficient_t * ALIGNED(128) m = args->p->mc;
+  //const material_coefficient_t * ALIGNED(128) m = args->p->mc;
   const grid_t                 *              g = args->g;
   const size_t nx = g->nx, ny = g->ny, nz = g->nz;
 
@@ -139,6 +144,7 @@ hyb_advance_e( field_array_t * RESTRICT fa,
   const float pz = (nz>1) ? 0.5*g->rdz : 0;
   const float eta = g->eta;
   const float den_floor_ohm = g->den_floor_ohm;
+  const float rVt = g->rdx*g->rdy*g->rdz/g->dt;
 
   const float hstep = abs(frac);
   constexpr float half = 1./2., one = 1., three = 3.;
@@ -257,6 +263,5 @@ hyb_advance_e( field_array_t * RESTRICT fa,
   // Write: pex, pey, pez, ex, ey, ez
   if(fa->g->hypereta>0 && do_eta) hyb_heta(fa);
   Kokkos::Profiling::popRegion();
-    
-Kokkos::fence();
+  Kokkos::fence();
 }

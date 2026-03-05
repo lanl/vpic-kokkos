@@ -1,0 +1,6 @@
+Test ion-ion equilibration via binary collisions
+
+salloc -N 1 -A w25_maehem
+../../build-cpu/bin/vpic stopping.cxx
+srun -n 1 stopping.Linux
+

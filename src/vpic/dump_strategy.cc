@@ -1255,7 +1255,13 @@ void HDF5Dump::dump_particles(
 
   hid_t filespace = H5Screate_simple(1, (hsize_t *)&total_particles, NULL);
 
-  hsize_t memspace_count_temp = numparticles * 8;
+#ifdef VARIABLE_CHARGE
+  hsize_t n_p_vars = 9;
+#else 
+  hsize_t n_p_vars = 8;
+#endif
+
+  hsize_t memspace_count_temp = numparticles * n_p_vars;
   hid_t memspace = H5Screate_simple(1, &memspace_count_temp, NULL);
 
   // The converted global_ids are stored compact, not strided
@@ -1267,7 +1273,7 @@ void HDF5Dump::dump_particles(
   H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
   H5Sselect_hyperslab(filespace, H5S_SELECT_SET, (hsize_t *)&offset, NULL, (hsize_t *)&numparticles, NULL);
 
-  hsize_t memspace_start = 0, memspace_stride = 8, memspace_count = np_local;
+  hsize_t memspace_start = 0, memspace_stride = n_p_vars, memspace_count = np_local;
   H5Sselect_hyperslab(memspace, H5S_SELECT_SET, &memspace_start, &memspace_stride, &memspace_count, NULL);
 
   el1 = uptime() - el1;
@@ -1361,9 +1367,15 @@ void HDF5Dump::dump_particles(
   ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 6);
   H5Dclose(dset_id);
 
-  dset_id = H5Dcreate(group_id, "q", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  dset_id = H5Dcreate(group_id, "w", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
   ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 7);
   H5Dclose(dset_id);
+
+#ifdef VARIABLE_CHARGE
+  dset_id = H5Dcreate(group_id, "q", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 8);
+  H5Dclose(dset_id);
+#endif
 
   el2 = uptime() - el2;
   if(print_timing) MESSAGE(("Particle TimeHDF5Write: %f s \n", el2));

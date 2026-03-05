@@ -21,8 +21,11 @@ void
 apply_takizuka_abe_collision_op( collision_op_t * cop,
                                  kokkos_rng_pool_t& rng ) {
   takizuka_abe_collision_op_t * ta = (takizuka_abe_collision_op_t *) cop;
-  takizuka_abe_model model(ta->cvar0);
-  apply_binary_collision_model_pipeline<false>((binary_collision_op_t *) cop, model, rng);
+  takizuka_abe_model model(ta->cvar0,ta->var_wt);
+  if(ta->var_wt)
+    apply_binary_collision_model_pipeline<true>((binary_collision_op_t *) cop, model, rng);
+  else
+    apply_binary_collision_model_pipeline<false>((binary_collision_op_t *) cop, model, rng);
 }
 
 void
@@ -40,7 +43,8 @@ takizuka_abe(
   /**/  species_t  * spi,
   /**/  species_t  * spj,
   const double       cvar0,
-  const int          interval
+  const int          interval,
+  const bool         var_wt //default false (uniform weight)
 )
 {
 
@@ -51,14 +55,20 @@ takizuka_abe(
   takizuka_abe_collision_op_t * ta;
   MALLOC( ta, 1);
   MALLOC( ta->name, strlen(name) +1 );
-  strncpy( ta->name, name, strlen(name)+1);
+  //strncpy( ta->name, name, strlen(name)+1);
+  strncpy( ta->name, name, strlen(ta->name) );
 
   spi->last_indexed = -1; //to ensure sort in collisions
   spj->last_indexed = -1;
   
   ta->spi         = spi;
   ta->spj         = spj;
+#ifdef VARIABLE_CHARGE  
+  ta->cvar0       = cvar0; //charges are to be multiplied by particles
+#else
   ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
+#endif  
+  ta->var_wt      = var_wt;
   ta->interval    = interval;
   ta->apply_cop   = &apply_takizuka_abe_collision_op;
   ta->delete_cop  = &delete_takizuka_abe_collision_op;
