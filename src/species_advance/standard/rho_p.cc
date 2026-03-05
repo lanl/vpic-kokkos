@@ -33,7 +33,7 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     const particle_t * RESTRICT ALIGNED(128) p = sp->p;
 
     const float q_8V = sp->q*sp->g->r8V, one=1.0;
-    const int np = sp->np;
+    const size_t np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
 
@@ -44,7 +44,7 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     v4float q, wl, wh, rl, rh;
 # endif
 
-    int n, v;
+    size_t n, v;
 
     // Load the grid data
     for( n=0; n<np; n++ ) {
@@ -243,12 +243,12 @@ struct accum_rho_p_reduce {
     int sy;
     int sz;
     float q_8V;
-    int np;
+    size_t np;
     int value_count;
 
 
     KOKKOS_INLINE_FUNCTION
-    accum_rho_p_reduce(k_field_t& k_f_, k_particles_t& k_p_, k_particles_i_t& k_p_i_, int sy_, int sz_, float q_8V_, int np_, int nv_) : kfield(k_f_), kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_), value_count(nv_) {kfield = k_f_;}
+    accum_rho_p_reduce(k_field_t& k_f_, k_particles_t& k_p_, k_particles_i_t& k_p_i_, int sy_, int sz_, float q_8V_, size_t np_, int nv_) : kfield(k_f_), kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_), value_count(nv_) {kfield = k_f_;}
 
     KOKKOS_INLINE_FUNCTION
     void init(value_type sums) const {
@@ -324,10 +324,10 @@ struct accum_rho_p {
     int sy;
     int sz;
     float q_8V;
-    int np;
+    size_t np;
 
     KOKKOS_INLINE_FUNCTION
-    accum_rho_p(k_field_sa_t& k_f_sa_, k_particles_t& k_p_, k_particles_i_t& k_p_i_, int sy_, int sz_, float q_8V_, int np_) : kfield(k_f_sa_), kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_) {}
+    accum_rho_p(k_field_sa_t& k_f_sa_, k_particles_t& k_p_, k_particles_i_t& k_p_i_, int sy_, int sz_, float q_8V_, size_t np_) : kfield(k_f_sa_), kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), q_8V(q_8V_), np(np_) {}
 
     KOKKOS_INLINE_FUNCTION
     void operator() (const int n) const {
@@ -480,7 +480,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     k_particles_i_t kparticles_i = sp->k_p_i_d;
 
     const float q_8V = (sp->q)*(sp->g->r8V);
-    const int np = sp->np;
+    const size_t np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
 /*
@@ -506,25 +506,8 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     }
 */
 
-    Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np), KOKKOS_LAMBDA(const int n) {
-//        float w0, w1, w2, w3, w4, w5, w6, w7, dz;
-//
-//        w0 = kparticles(n, particle_var::dx);
-//        w1 = kparticles(n, particle_var::dy);
-//        dz = kparticles(n, particle_var::dz);
-//        int v = kparticles_i(n);
-//        w7 = kparticles(n, particle_var::w) * q_8V;
-//
-//#   define FMA( x,y,z) ((z)+(x)*(y))
-//#   define FNMS(x,y,z) ((z)-(x)*(y))
-//        w6=FNMS(w0,w7,w7);                    // q(1-dx)
-//        w7=FMA( w0,w7,w7);                    // q(1+dx)
-//        w4=FNMS(w1,w6,w6); w5=FNMS(w1,w7,w7); // q(1-dx)(1-dy), q(1+dx)(1-dy)
-//        w6=FMA( w1,w6,w6); w7=FMA( w1,w7,w7); // q(1-dx)(1+dy), q(1+dx)(1+dy)
-//        w0=FNMS(dz,w4,w4); w1=FNMS(dz,w5,w5); w2=FNMS(dz,w6,w6); w3=FNMS(dz,w7,w7);
-//        w4=FMA( dz,w4,w4); w5=FMA( dz,w5,w5); w6=FMA( dz,w6,w6); w7=FMA( dz,w7,w7);
-//#   undef FNMS
-//#   undef FMA
+    Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np), KOKKOS_LAMBDA(const size_t n) {
+        float w0, w1, w2, w3, w4, w5, w6, w7, dz;
 
         // Hybrid
         int ii = kparticles_i(n);
@@ -571,7 +554,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
 }
 
-void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, k_particles_i_t& kpart_i, k_particle_i_movers_t& k_part_movers_i, const grid_t* RESTRICT g, const float qsp, const int nm) {
+void k_accumulate_rhob(k_field_t& kfield, k_particles_t& kpart, k_particles_i_t& kpart_i, k_particle_i_movers_t& k_part_movers_i, const grid_t* RESTRICT g, const float qsp, const size_t nm) {
     int sy = g->sy, sz = g->sz;
     float r8V = g->r8V;
     int nx = g->nx;

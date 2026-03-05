@@ -637,7 +637,7 @@ public:
         max_local_nm = 16*(MAX_PIPELINE+1);
     }
     return append_species( species( name, (float)q, (float)m,
-                                    (int)max_local_np, (int)max_local_nm,
+                                    (size_t)max_local_np, (size_t)max_local_nm,
                                     (int)sort_interval, (int)sort_out_of_place,
                                     grid ), &species_list );
   }
@@ -699,6 +699,12 @@ public:
 		     double w,  double age = 0,
 		     int update_rhob = 0,
 		     double qp = 0);
+
+  size_t 
+  inject_particle_parallel( species_t * sp,
+                            double x,  double y,  double z,
+                            double ux, double uy, double uz,
+                            double w,  double age = 0, int update_rhob = 1 );
 
   // Inject particle raw is for power users!
   // No nannyism _at_ _all_:
@@ -817,7 +823,7 @@ public:
   }
 
   // Truncate "a" to the nearest integer multiple of "b"
-  inline double trunc_granular( double a, double b ) { return b*int(a/b); }
+  inline double trunc_granular( double a, double b ) { return b*uint64_t(a/b); }
 
   // Compute the remainder of a/b
   inline double remainder( double a, double b ) { return std::remainder(a,b); }

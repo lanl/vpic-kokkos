@@ -176,7 +176,7 @@ int vpic_simulation::advance(void)
   LIST_FOR_EACH( sp, species_list )
   {
     KOKKOS_TIC(); // Time this data movement
-    const int nm = sp->k_nm_h(0);
+    const size_t nm = sp->k_nm_h(0);
     
     // TODO: this can be hoisted to the end of advance_p if desired
     compressor.compress(
