@@ -5,11 +5,12 @@
 
 // Assumes single precision.
 // Chosen as a cutoff < sqrt(FLT_MAX) such that dd/(1+dd*dd) is always in range.
-#define TAN_THETA_HALF_MAX 1.30e19f
-#define PREVENT_BACKSCATTER(TAN) do  {                                          \
-  if(!isfinite(TAN) || (TAN) > TAN_THETA_HALF_MAX ) (TAN) = TAN_THETA_HALF_MAX; \
-} while(0)
-
+KOKKOS_INLINE_FUNCTION
+void PREVENT_BACKSCATTER(float& TAN) {
+  constexpr float TAN_THETA_HALF_MAX = 1.30e19f;
+  if(!Kokkos::isfinite(TAN) || (TAN > TAN_THETA_HALF_MAX) )
+    TAN = TAN_THETA_HALF_MAX;
+}
  
 /**
  * @brief General purpose pipeline to produce particle-fluid bulk collisions.
@@ -104,8 +105,8 @@ struct particle_bulk_collision_pipeline {
       _ny(spi->g->ny),
       _nz(spi->g->nz),
       _spi(spi),
-      _spj(spj),
       _rp(rp),
+      _spj(spj),
       _field(field),
       _spp(spp)
   {
@@ -153,11 +154,11 @@ struct particle_bulk_collision_pipeline {
     //    _spj_sortindex_ra = _spj->k_sortindex_d;
 
     // Am I being paranoid?
-    if( _spi->np      > _spi_sortindex_ra.extent(0) || 
-        _spi->g->nv+1 != _spi_partition_ra.extent(0) ){
-	printf("_spi->np (=%d) ?= _spi_sortindex_ra.extent(0) (=%d)\n",_spi->np,_spi_sortindex_ra.extent(0));
-	printf("_spi->g->nv+1 (=%d) ?= _spi_partition_ra.extent(0) (=%d)\n",_spi->g->nv+1,_spi_partition_ra.extent(0));
-        ERROR(("Bad spi sort products."));
+    if( static_cast<size_t>(_spi->np)      > _spi_sortindex_ra.extent(0) || 
+        static_cast<size_t>(_spi->g->nv)+1 != _spi_partition_ra.extent(0) ){
+      printf("_spi->np (=%d) ?= _spi_sortindex_ra.extent(0) (=%lu)\n",_spi->np,_spi_sortindex_ra.extent(0));
+      printf("_spi->g->nv+1 (=%d) ?= _spi_partition_ra.extent(0) (=%lu)\n",_spi->g->nv+1,_spi_partition_ra.extent(0));
+      ERROR(("Bad spi sort products."));
     }
 
     // We only need to shuffle one species to ensure random pairings.
@@ -199,7 +200,7 @@ struct particle_bulk_collision_pipeline {
         auto const& spj_i = _spj_i;
       Kokkos::parallel_for("binary_collision_pipeline::spj_denisty",
         Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, _spj->np),
-        KOKKOS_LAMBDA (int i) {
+        KOKKOS_LAMBDA (size_t i) {
           Kokkos::atomic_add(
             &spj_n(spj_i(i)),
             spj_p(i, particle_var::w)*rdV
@@ -257,11 +258,11 @@ struct particle_bulk_collision_pipeline {
     auto const& nx = _nx;
     auto const& ny = _ny;
     auto const& nz = _nz;
-    auto const& spi = _spi;
-    auto const& spj = _spj;
+    //auto const& spi = _spi;
+    //auto const& spj = _spj;
     auto const& rp  = _rp;
-    auto const& spi_n = _spi_n;
-    auto const& spi_i = _spi_i;
+    //auto const& spi_n = _spi_n;
+    //auto const& spi_i = _spi_i;
     //    auto const& spj_n = _spj_n;
     auto const& spi_p = _spi_p;
     auto const& spj_fl = _spj_fl;
@@ -275,170 +276,161 @@ struct particle_bulk_collision_pipeline {
     auto const& use_e_field = _use_e_field;
 
     Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
-      Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
-      KOKKOS_LAMBDA (member_type team_member) {
+    Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
+    KOKKOS_LAMBDA (member_type team_member) {
 
-        int ix, iy, iz;
-        RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
-        const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
+      int ix, iy, iz;
+      RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
+      const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
 
-        // Find number of particles for each species.
-        auto i0 = spi_partition_ra(v);
-        auto ni = spi_partition_ra(v+1) - i0;
+      // Find number of particles for each species.
+      auto i0 = spi_partition_ra(v);
+      auto ni = spi_partition_ra(v+1) - i0;
 
-	//        auto j0 = spj_partition_ra(v);
-	//        auto nj = spj_partition_ra(v+1) - j0;
+      //auto j0 = spj_partition_ra(v);
+      //auto nj = spj_partition_ra(v+1) - j0;
+      
+      // TODO: convert this to be a more explicit check on if we have work
+      //if( ni <= 0 || nj <= 0 ) return; //Nothing to do
+      if( ni <= 0 ) return; //Nothing to do
+      
+      //// Find the real densities.
+      //float density_i = spi_n(v);
+      //float density_j = spj_n(v);
+      
+      //// Compute ndt
+      //const float density_min = density_j > density_i ? density_i : density_j;
+      //const float ndt = density_min*dtinterval;
+      const float dt = dtinterval;
 
-        // TODO: convert this to be a more explicit check on if we have work
-	//        if( ni <= 0 || nj <= 0 ) return; //Nothing to do
-	if( ni <= 0 ) return; //Nothing to do
+      // Get a random generator. Do not leave without freeing it.
+      kokkos_rng_state_t rg = rp.get_state();
 
-	//        // Find the real densities.
-	//        float density_i = spi_n(v);
-	//        float density_j = spj_n(v);
-
-	//        // Compute ndt
-	//        const float density_min = density_j > density_i ? density_i : density_j;
-	//        const float ndt = density_min*dtinterval;
-	const float dt = dtinterval;
-	
-        // Get a random generator. Do not leave without freeing it.
-        kokkos_rng_state_t rg = rp.get_state();
-	
-
-	// Extract fluid variables
-  const float n_fl   = spj_fl(v, fluid_var::den);
-  const float ux_fl  = spj_fl(v, fluid_var::ux);
-  const float uy_fl  = spj_fl(v, fluid_var::uy);
-  const float uz_fl  = spj_fl(v, fluid_var::uz);
-  const float tmp_fl = spj_fl(v, fluid_var::tmp);
-  const float uth_fl = sqrt(2.0 * tmp_fl / mj);
-  //std::cout << "~~~~~ FLUID: n=" << n_fl << " ux=" << ux_fl << " tmp=" << tmp_fl << " uth_fl=" << uth_fl << std::endl;
-
-	//for each cell
-	gmomType Dm; 
-	
-	Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team_member, ni),
-	[&](const int& k, gmomType &lsum) {
-
-	  int i = spi_sortindex_ra(i0 + k);
+      //// Extract fluid variables
+      const float n_fl   = spj_fl(v, fluid_var::den);
+      const float ux_fl  = spj_fl(v, fluid_var::ux);
+      const float uy_fl  = spj_fl(v, fluid_var::uy);
+      const float uz_fl  = spj_fl(v, fluid_var::uz);
+      const float tmp_fl = spj_fl(v, fluid_var::tmp);
+      const float uth_fl = sqrt(2.0 * tmp_fl / mj);
+      
+      //for each cell
+      gmomType Dm; 
+      
+      Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team_member, ni),
+      [&](const size_t& k, gmomType &lsum) {
+      
+        int i = spi_sortindex_ra(i0 + k);
 
 #ifdef VARIABLE_CHARGE
-	  float up[5] =   { spi_p(i, particle_var::w),
-                            spi_p(i, particle_var::ux),
-                            spi_p(i, particle_var::uy),
-                            spi_p(i, particle_var::uz),
-			    spi_p(i, particle_var::qp) };
+        float up[5] = { spi_p(i, particle_var::w),
+                        spi_p(i, particle_var::ux),
+                        spi_p(i, particle_var::uy),
+                        spi_p(i, particle_var::uz),
+                        spi_p(i, particle_var::qp) };
 #else
-	  float up[4] =   { spi_p(i, particle_var::w),
-			    spi_p(i, particle_var::ux),
-			    spi_p(i, particle_var::uy),
-			    spi_p(i, particle_var::uz) };
-#endif			      
+        float up[4] = { spi_p(i, particle_var::w),
+                        spi_p(i, particle_var::ux),
+                        spi_p(i, particle_var::uy),
+                        spi_p(i, particle_var::uz) };
+#endif      
 
-	    float wp   = up[0];
-	    float ux_n = up[1];
-	    float uy_n = up[2];
-	    float uz_n = up[3];
+        float wp   = up[0];
+        float ux_n = up[1];
+        float uy_n = up[2];
+        float uz_n = up[3];
 
-      float qp_n = 0.0, qp_i = 0.0;
+        float qp_n = 0.0, qp_i = 0.0;
 #ifdef VARIABLE_CHARGE
-      qp_n = up[4];
+        qp_n = up[4];
 #endif
 
-      bool MC_col_occurred;
-	    if( use_e_field ) {
-	    	MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt,v);
-	    } else {      
-	     	MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,v);
-	    }
-	    
-      float ux_i = up[1];
-      float uy_i = up[2];
-      float uz_i = up[3];
+        bool MC_col_occurred;
+        if( use_e_field ) {
+          // MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v);
+          particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v, MC_col_occurred);
+        } else {      
+          // MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v);
+          particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v, MC_col_occurred);
+        }
+    
+        float ux_i = up[1];
+        float uy_i = up[2];
+        float uz_i = up[3];
 #ifdef VARIABLE_CHARGE
-	    qp_i = up[4];
-	    spi_p(i, particle_var::qp) = qp_i;
+        qp_i = up[4];
+        spi_p(i, particle_var::qp) = qp_i;
 #endif
-	    spi_p(i, particle_var::ux) = ux_i;
-	    spi_p(i, particle_var::uy) = uy_i;
-	    spi_p(i, particle_var::uz) = uz_i;	 
+        spi_p(i, particle_var::ux) = ux_i;
+        spi_p(i, particle_var::uy) = uy_i;
+        spi_p(i, particle_var::uz) = uz_i;	 
 
-      // Accumulate change in moments. Depends on collision type.
-      float dn = 0.0, dux = 0.0, duy = 0.0, duz = 0.0, den = 0.0;
+        // Accumulate change in moments. Depends on collision type.
+        float dn = 0.0, dux = 0.0, duy = 0.0, duz = 0.0;
 
-      switch (model.collision_type) {
+        switch (model.collision_type) 
+        {
           case CollisionType::BulkChargeExchange:
           {
-              if (!MC_col_occurred) { break; }
+            if (!MC_col_occurred) { break; }
 
-              // When a particle undergoes charge exchange and 
-              // the projectile particle captures an electron,
-              // then decrement the neutral fluid density              
-              int dq = qp_i - qp_n;
-              if (dq == -1) {
-                // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
-                dn = wp * rdV;
-              }
+            // When a particle undergoes charge exchange and 
+            // the projectile particle captures an electron,
+            // then decrement the neutral fluid density              
+            int dq = qp_i - qp_n;
+            if (dq == -1) {
+              // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
+              dn = wp * rdV;
+            }
 
-              break; // end case(charge exchange)
+            break; // end case(charge exchange)
           }
           case CollisionType::BulkDrag:
           case CollisionType::BulkLemons:
           {
-              // Change in the fluid momentum and energy due to drag 
-              // is due to the slowing down of the particle
+            // Change in the fluid momentum and energy due to drag 
+            // is due to the slowing down of the particle
+            dux = ( ux_i - ux_n ) * wp;
+            duy = ( uy_i - uy_n ) * wp;
+            duz = ( uz_i - uz_n ) * wp;
 
-              dux = ( ux_i - ux_n ) * wp;
-              duy = ( uy_i - uy_n ) * wp;
-              duz = ( uz_i - uz_n ) * wp;
-              // den = 0.5 * wp *
-              //   ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
-              //     ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
-              den = 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i);
-
-              break; // end case(drag,lemons)
+            break; // end case(drag,lemons)
           }
           case CollisionType::BulkIonImpactIoniz: // only implemented for case with products
           default:
               break;
-      } // end switch(model.collision_type) 
-    
-	    lsum.v[0] += wp;
-	    lsum.v[1] += dux;
-	    lsum.v[2] += duy;
-	    lsum.v[3] += duz;
-	    lsum.v[4] += 0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i);
-      lsum.v[5] += dn;
-      
-	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",wp,dux,duy,duz,den);
-	    // if(k<10) 	printf("lsum=%e,%e,%e,%e,%e\n",lsum.v[0],lsum.v[1],lsum.v[2],lsum.v[3],lsum.v[4]);
-	}, Dm);
-	// printf("Dm=%e,%e,%e,%e,%e\n",Dm.v[0],Dm.v[1],Dm.v[2],Dm.v[3],Dm.v[4]);
-	if (team_member.team_rank() == 0) {
-	    // Code that runs once per team leader
-	    if( use_e_field ) {
-	    	// If we have a field, we upload the moment source to the field.
-	     	// Upload the moment source to the field.
-        model.upload_moment_src( spj_fd, v, Dm, mi, mj );
-	    } else {    
-        model.upload_moment_src( spj_fl, v, Dm, mi, mj );   
-	    }
-	    //printf("check: #msxyz=%e,%e,%e, ens=%e, v=%d\n",spj_fd(v, field_var::sx),spj_fd(v, field_var::sy),spj_fd(v, field_var::sz),spj_fd(v, field_var::se), v);
-	    //printf("spj_fl data=%p\n", (void*)spj_fl.data());
-	    // printf("[call]  spj_fd data=%p ext=(%zu,%zu) v=%d, FIELD_VAR_COUNT=%d\n",
-	    // 	   (void*)spj_fd.data(), spj_fd.extent(0), spj_fd.extent(1), v, FIELD_VAR_COUNT);
-	}
+        } // end switch(model.collision_type) 
+  
+        lsum.add(0, wp); //lsum.v[0] += wp;
+        lsum.add(1, dux); //lsum.v[1] += dux;
+        lsum.add(2, duy); //lsum.v[2] += duy;
+        lsum.add(3, duz); //lsum.v[3] += duz;
+        double term = 0.5 * static_cast<double>(wp)
+                    * ( static_cast<double>(ux_i)*ux_i
+                      + static_cast<double>(uy_i)*uy_i
+                      + static_cast<double>(uz_i)*uz_i );
+        lsum.add(4, term); //lsum.v[4] += term; //0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i);
+        lsum.add(5, dn); //lsum.v[5] += dn;
+      }, Dm);
+      if (team_member.team_rank() == 0) {
+        // Code that runs once per team leader
+        if( use_e_field ) {
+          // If we have a field, we upload the moment source to the field.
+          // Upload the moment source to the field.
+          model.upload_moment_src( spj_fd, v, Dm, mi, mj );
+        } else {    
+          model.upload_moment_src( spj_fl, v, Dm, mi, mj );   
+        }
+      }
 
         // We *must* free generators.
-        rp.free_state(rg);
+      rp.free_state(rg);
 
-			 });
-
+    });
+    
     // I don't know why we need this, but without it I get an illegal memory
     // access error ... suspicious.
     Kokkos::fence();
-
   }
 
   /**
@@ -463,10 +455,10 @@ struct particle_bulk_collision_pipeline {
     auto const& nx = _nx;
     auto const& ny = _ny;
     auto const& nz = _nz;
-    auto const& spi = _spi;
-    auto const& spj = _spj;
+    // auto const& spi = _spi;
+    // auto const& spj = _spj;
     auto const& rp  = _rp;
-    auto const& spi_n = _spi_n;
+    // auto const& spi_n = _spi_n;
     auto const& spi_i = _spi_i;
     auto const& spi_p = _spi_p;
     auto const& spj_fl = _spj_fl;
@@ -545,9 +537,11 @@ struct particle_bulk_collision_pipeline {
 
           bool MC_col_occurred;
           if( use_e_field ) {
-            MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt,v);
+            // MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v);
+            particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v, MC_col_occurred);
           } else {      
-            MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt,v);
+            // MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v);
+            particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v, MC_col_occurred);
           }
 	    
           float ux_i = up[1];
@@ -706,10 +700,9 @@ struct particle_bulk_collision_pipeline {
   //with the _ (underscore), because _ is used to indicate a class member before it
   //is caputred by a lambda. One lambda captured, we should refer to the variable
   //as EX: mu not _mu
-    template<class view_type, class collision_model>
-    //template<class collision_model>
+  template<class view_type, class collision_model>
   KOKKOS_INLINE_FUNCTION
-  bool particle_bulk_collision (
+  void particle_bulk_collision (
     const float mi,
     const float mj,
     const float mu,
@@ -720,14 +713,12 @@ struct particle_bulk_collision_pipeline {
 #else
     float (&up)[4],
 #endif
-    //const k_particles_t&   spi_p,
-    //    const k_particles_t&   spj_p,
     const view_type& spj_f,
-    //const k_field_t spj_f,
     collision_model& model,
     kokkos_rng_state_t& rg,
     float dt,
-    int ii
+    int ii,
+    bool& MC_collision_occurred
   )
   {
 
@@ -737,7 +728,7 @@ struct particle_bulk_collision_pipeline {
     float uix = up[1];
     float uiy = up[2];
     float uiz = up[3];
-    float wi  = up[0];
+    //float wi  = up[0];
 
     float qi = 0;
 #ifdef VARIABLE_CHARGE
@@ -752,23 +743,20 @@ struct particle_bulk_collision_pipeline {
     // Extract fluid vars
     float nj_fl, ujx_fl, ujy_fl, ujz_fl, tmp_fl;
     if constexpr (std::is_same<view_type, k_fluid_t>::value) {
-	    nj_fl = spj_f(ii, fluid_var::den);
-	    ujx_fl = spj_f(ii, fluid_var::ux);
-	    ujy_fl = spj_f(ii, fluid_var::uy);
-	    ujz_fl = spj_f(ii, fluid_var::uz);
-	    tmp_fl = spj_f(ii, fluid_var::tmp);
-	  } else if constexpr (std::is_same<view_type, k_field_t>::value) {
-	    nj_fl = spj_f(ii, field_var::rhof);
-	    ujx_fl = spj_f(ii, field_var::ux);
-	    ujy_fl = spj_f(ii, field_var::uy);
-	    ujz_fl = spj_f(ii, field_var::uz);
-	    tmp_fl = spj_f(ii, field_var::pe)/nj_fl; //nj_fl should be non-zero
-	  }
-    // printf("nj_fl=%e, ujx_fl=%e, ujy_fl=%e, ujz_fl=%e, pe=%e, tmp_fl=%e\n",
-    //   	   nj_fl, ujx_fl, ujy_fl, ujz_fl, spj_f(ii, field_var::pe), tmp_fl);
+      nj_fl  = spj_f(ii, fluid_var::den);
+      ujx_fl = spj_f(ii, fluid_var::ux);
+      ujy_fl = spj_f(ii, fluid_var::uy);
+      ujz_fl = spj_f(ii, fluid_var::uz);
+      tmp_fl = spj_f(ii, fluid_var::tmp);
+    } else if constexpr (std::is_same<view_type, k_field_t>::value) {
+      nj_fl  = spj_f(ii, field_var::rhof);
+      ujx_fl = spj_f(ii, field_var::ux);
+      ujy_fl = spj_f(ii, field_var::uy);
+      ujz_fl = spj_f(ii, field_var::uz);
+      tmp_fl = spj_f(ii, field_var::pe)/nj_fl; //nj_fl should be non-zero
+    }
 
     float ndt = nj_fl * dt;
-    //printf("n=%14.8e, dt=%14.8e, mi=%14.8e\n",nj_fl, dt, mi);
     
     // Relative velocity
     float urx = uix - ujx_fl;
@@ -814,7 +802,7 @@ struct particle_bulk_collision_pipeline {
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
 
     // Monte-Carlo collision test
-    bool MC_collision_occurred = false;
+    // bool MC_collision_occurred = false;
     if( MonteCarlo ) {
 
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
@@ -825,7 +813,9 @@ struct particle_bulk_collision_pipeline {
       // std::cout << "sigma="<<dd<< " qi="<<qi<< " ur=" <<ur << " n="<<nj_fl << " dt="<<dt << " sig*n*v*dt="<<dd*t1 << std::endl;
 
       if( rg.frand() > dd*t1 ) {
-        return MC_collision_occurred;
+        // return MC_collision_occurred;
+        MC_collision_occurred = false;
+        return;
       } else {
         MC_collision_occurred = true;
       }
@@ -841,7 +831,6 @@ struct particle_bulk_collision_pipeline {
 #ifdef VARIABLE_CHARGE
     // To-do: Check if density associated with particle > neutral background density.
     const float dq = model.modify_charge();
-    //spi_p(i, particle_var::qp) += dq;
     up[4] += dq;
 #endif
     
@@ -899,7 +888,7 @@ struct particle_bulk_collision_pipeline {
       spj_p(j, particle_var::uz) = (ujz - mu_j*stack[2])*rr + cmz;
       }*/
 
-    return MC_collision_occurred;
+    return;// MC_collision_occurred;
   }
 
 };

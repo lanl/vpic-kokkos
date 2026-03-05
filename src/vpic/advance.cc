@@ -26,11 +26,11 @@ int vpic_simulation::advance(void)
   // Sort the particles for performance if desired.
   LIST_FOR_EACH( sp, species_list )
   {
-      if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
-      {
-          if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-          sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, grid->nv);
-      }
+    if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
+    {
+      if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
+      sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, grid->nv);
+    }
   }
 
   KOKKOS_TOC( sort_particles, 1);
@@ -61,7 +61,7 @@ int vpic_simulation::advance(void)
   {
     // TIC clear_accumulator_array( accumulator_array ); TOC( clear_accumulators, 1 );
     //TIC clear_accumulator_array_kokkos( accumulator_array ); TOC( clear_accumulators, 1 );
-  TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
+    TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
   }
 
    
@@ -75,8 +75,8 @@ int vpic_simulation::advance(void)
   Kokkos::Profiling::pushRegion("Advance Particles");
   LIST_FOR_EACH( sp, species_list )
   {
-      // Now Times internally
-      advance_p( sp, interpolator_array, field_array );
+    // Now Times internally
+    advance_p( sp, interpolator_array, field_array );
   }
   Kokkos::Profiling::popRegion();
   //printf("Pushed\n");
@@ -113,21 +113,21 @@ int vpic_simulation::advance(void)
   }
 
   if((particle_injection_interval>0) && ((step() % particle_injection_interval)==0)) {
-      if(!kokkos_particle_injection) {
-          KOKKOS_TIC();
-          LIST_FOR_EACH( sp, species_list ) {
-            sp->copy_to_host();
-          }
-          KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
+    if(!kokkos_particle_injection) {
+      KOKKOS_TIC();
+      LIST_FOR_EACH( sp, species_list ) {
+        sp->copy_to_host();
       }
-      TIC user_particle_injection(); TOC( user_particle_injection, 1 );
-      if(!kokkos_particle_injection) {
-          KOKKOS_TIC();
-          LIST_FOR_EACH( sp, species_list ) {
-            sp->copy_to_device();
-          }
-          KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
+      KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
+    }
+    TIC user_particle_injection(); TOC( user_particle_injection, 1 );
+    if(!kokkos_particle_injection) {
+      KOKKOS_TIC();
+      LIST_FOR_EACH( sp, species_list ) {
+        sp->copy_to_device();
       }
+      KOKKOS_TOC(PARTICLE_DATA_MOVEMENT, 1);
+    }
   }
 
   //bool accumulate_in_place = false; // This has to be outside the scoped timing block
@@ -162,11 +162,11 @@ int vpic_simulation::advance(void)
   // HOST - Touches particle copies, particle_movers, particle_injectors,
   // accumulators (move_p), neighbors
   TIC
-    for( int round=0; round<num_comm_round; round++ )
-    {
-      //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
-      boundary_p_kokkos( particle_bc_list, species_list, field_array );
-    }
+  for( int round=0; round<num_comm_round; round++ )
+  {
+    //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
+    boundary_p_kokkos( particle_bc_list, species_list, field_array );
+  }
   TOC( boundary_p, num_comm_round );
 
   // Clean_up once boundary p is done
@@ -175,33 +175,33 @@ int vpic_simulation::advance(void)
   // Touches particles, particle_movers
   LIST_FOR_EACH( sp, species_list )
   {
-      KOKKOS_TIC(); // Time this data movement
-      const int nm = sp->k_nm_h(0);
-      
-      // TODO: this can be hoisted to the end of advance_p if desired
-      compressor.compress(
-              sp->k_p_d,
-              sp->k_p_i_d,
-              sp->k_pm_i_d,
-              nm,
-              sp->np,
-              sp
-      );
+    KOKKOS_TIC(); // Time this data movement
+    const int nm = sp->k_nm_h(0);
+    
+    // TODO: this can be hoisted to the end of advance_p if desired
+    compressor.compress(
+            sp->k_p_d,
+            sp->k_p_i_d,
+            sp->k_pm_i_d,
+            nm,
+            sp->np,
+            sp
+    );
 
-      // Update np now we removed them...
-      sp->np -= nm;
-      KOKKOS_TOC( BACKFILL, 1);
+    // Update np now we removed them...
+    sp->np -= nm;
+    KOKKOS_TOC( BACKFILL, 1);
 
-      // Copy data for copies back to device
-      KOKKOS_TIC();
-        sp->copy_inbound_to_device();
-      KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+    // Copy data for copies back to device
+    KOKKOS_TIC();
+    sp->copy_inbound_to_device();
+    KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 
   }
 
   // This copies over a val for nm, which is a lie
   LIST_FOR_EACH( sp, species_list ) {
-      sp->nm = 0;
+    sp->nm = 0;
   }
 
   // At this point, all particle positions are at r_1 and u_{1/2}, the
@@ -244,23 +244,23 @@ int vpic_simulation::advance(void)
   // the user wants electric field divergence cleaning to work.
 
   if((current_injection_interval>0) && ((step() % current_injection_interval)==0)) {
-      if(!kokkos_current_injection) {
-          KOKKOS_TIC();
-          field_array->copy_to_host();
-          KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
-      }
-      TIC user_current_injection(); TOC( user_current_injection, 1 );
-      if(!kokkos_current_injection) {
-          KOKKOS_TIC();
-          field_array->copy_to_device();
-          KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
-      }
+    if(!kokkos_current_injection) {
+      KOKKOS_TIC();
+      field_array->copy_to_host();
+      KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+    }
+    TIC user_current_injection(); TOC( user_current_injection, 1 );
+    if(!kokkos_current_injection) {
+      KOKKOS_TIC();
+      field_array->copy_to_device();
+      KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+    }
   }
 
 
 #ifdef HYB_USE_RADIATION
   // Couple radiation
-     TIC user_radiation(); TOC( user_radiation, 1 );
+  TIC user_radiation(); TOC( user_radiation, 1 );
 #endif
 
   // DEVICE -- Touches fields
@@ -271,11 +271,11 @@ int vpic_simulation::advance(void)
   frac = 1.0/grid->nsub;
   for(int i=0;i<grid->nsub;i++){
 #ifdef HYB_USE_STATIC_E
-     FAK->advance_pe( field_array, frac );
+    FAK->advance_pe( field_array, frac );
 #else      
-     FAK->advance_b( field_array, frac );
+    FAK->advance_b( field_array, frac );
 #endif
-     grid->isub++;
+    grid->isub++;
   } 
 #ifdef HYB_USE_STATIC_E
   FAK->advance_e( field_array, 1.0 );
@@ -295,17 +295,17 @@ int vpic_simulation::advance(void)
   // across domains.
 
   if ((field_injection_interval>0) && ((step() % field_injection_interval)==0)) {
-      if (!kokkos_field_injection) {
-          KOKKOS_TIC();
-          field_array->copy_to_host();
-          KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
-      }
-      TIC user_field_injection(); TOC( user_field_injection, 1 );
-      if (!kokkos_field_injection) {
-          KOKKOS_TIC();
-          field_array->copy_to_device();
-          KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
-      }
+    if (!kokkos_field_injection) {
+      KOKKOS_TIC();
+      field_array->copy_to_host();
+      KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+    }
+    TIC user_field_injection(); TOC( user_field_injection, 1 );
+    if (!kokkos_field_injection) {
+      KOKKOS_TIC();
+      field_array->copy_to_device();
+      KOKKOS_TOC(FIELD_DATA_MOVEMENT, 1);
+    }
   }
 
   Kokkos::Profiling::pushRegion("Advance B Hybrid Smooth");
@@ -411,9 +411,9 @@ int vpic_simulation::advance(void)
 
   // Print out status
   if( (status_interval>0) && ((step() % status_interval)==0) ) {
-      if( rank()==status_timers_rank ) MESSAGE(( "Completed step %i of %i", step(), num_step ));
-      //update_profile( rank()==0 );
-      update_profile_meanminmax( rank()==status_timers_rank );
+    if( rank()==status_timers_rank ) MESSAGE(( "Completed step %i of %i", step(), num_step ));
+    //update_profile( rank()==0 );
+    update_profile_meanminmax( rank()==status_timers_rank );
   }
 
   // Let the user compute diagnostics

@@ -2,7 +2,6 @@
 #define _charge_exchange_h_
 
 #include "particle_bulk.h"
-//#include "collision_private.h"
 
 /**
  * @brief Charge exchange collision operator.
@@ -19,19 +18,10 @@ struct cex_collision_op_t : public particle_bulk_collision_op_t {
 template<typename Functor>
 struct cex_model : public collision_model<cex_model<Functor>> {
   CollisionType collision_type = CollisionType::BulkChargeExchange;
-  // const float cvar;
   const float dq;
   Functor sigma_cx;
-
-  //float (*sigma_cx)(float,float);
-  //takizuka_abe_model( float cvar ) : cvar(cvar) { };
   cex_model( Functor op, float dq ) : sigma_cx(op), dq(dq) { };
-  //cex_model( cex_coll_func_t _sigma_cx0 ) : sigma_cx(_sigma_cx0) { };
-  //cex_model( float (*sigma_cx0)(float,float) ) : sigma_cx(sigma_cx0) { };
-
-  /**
-   * @brief cross_section(E,nvdt,Z1,Z2)
-   */
+  
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
@@ -41,7 +31,7 @@ struct cex_model : public collision_model<cex_model<Functor>> {
     float Z2=0.0  // Charge of fluid
   ) const
   {
-    float sig = sigma_cx(vr, Z1);
+    float sig = sigma_cx(vr,Z1);
     return sig;
   }
   
@@ -63,7 +53,6 @@ struct cex_model : public collision_model<cex_model<Functor>> {
   KOKKOS_INLINE_FUNCTION
     float modify_charge( ) const
   {
-    //float capture = -1;
     float delta_charge = dq;
     
     return delta_charge;
@@ -80,7 +69,7 @@ struct cex_model : public collision_model<cex_model<Functor>> {
   void upload_moment_src_impl( 
     const ViewType & spj_v, 
     const int v,
-		const gmomType &Dm, 
+    const gmomType &Dm, 
     const float mi,
     const float mj) const 
   {
@@ -113,7 +102,7 @@ restore_cex_collision_op() {
 template<typename Functor>
 void
 apply_cex_collision_op( collision_op_t * cop,
-			kokkos_rng_pool_t& rng ) {
+                        kokkos_rng_pool_t& rng ) {
   cex_collision_op_t<Functor> * cex = (cex_collision_op_t<Functor> *) cop;
   cex_model model(cex->sigma_cx0,cex->dq0);
   apply_particle_bulk_collision_model_pipeline<true>((particle_bulk_collision_op_t *) cop, model, rng); // To-do: Change MC to true!

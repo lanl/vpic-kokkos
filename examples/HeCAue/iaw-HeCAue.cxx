@@ -699,16 +699,18 @@ begin_diagnostics {
     field_array->copy_to_host();
     interpolator_array->copy_to_device();
     auto& interpolators_k = interpolator_array->k_i_d;
-    //printf("%e ne=%e, pe=%.15e uxyz=%e,%e,%e, se=%e, Pointer _field: %p, %p\n",step()*grid->dt, field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::rhof), field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::pe), field_array->k_f_h(13, field_var::ux), field_array->k_f_h(13, field_var::uy), field_array->k_f_h(13, field_var::uz), field_array->k_f_h(13, field_var::se), field_array, (void *)&field_array->k_f_d);
+    // printf("%e ne=%e, pe=%.15e uxyz=%e,%e,%e, se=%e, Pointer _field: %p, %p\n",step()*grid->dt, field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::rhof), field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::pe), field_array->k_f_h(13, field_var::ux), field_array->k_f_h(13, field_var::uy), field_array->k_f_h(13, field_var::uz), field_array->k_f_h(13, field_var::se), field_array, (void *)&field_array->k_f_h);
     float tot_momentum1,tot_momentum2, tot_momentum3, tot_en;
     tot_en = 0; //1.5*field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::pe); //assuming dV=1
     tot_momentum1 = 0;
     tot_momentum2 = 0;
     tot_momentum3 = 0;
     fp_coll.print("%e\t%.15e\t%.15e\t%.15e\t%.15e\t ",step()*grid->dt,field_array->k_f_h(13, field_var::ux), field_array->k_f_h(13, field_var::uy), field_array->k_f_h(13, field_var::uz), field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::pe)/32.6);
+    
     float ue = 0.0;
     species_t *sp;
     int si = ion_cfg.size()-1;
+    
     LIST_FOR_EACH( sp, species_list )
     {
 	auto& particles = sp->k_p_d;
@@ -748,15 +750,17 @@ begin_diagnostics {
     fp_coll.close();
 
     ue /=32.6; //ne
-    field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::ux) = ue;
-    field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::uy) = 0;
-    field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::uz) = 0;
+    auto icell = VOXEL(1,1,1,1,1,1);
+    field_array->f[icell].ux = ue;
+    field_array->f[icell].uy = 0;
+    field_array->f[icell].uz = 0;
     
-    field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::sx) = 0;
-    field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::se) = tot_en;
-    //field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::sen) = tot_en;
-    //printf("%e, sx=%e, ne=%e, pe=%e uxyz=%e,%e,%e Pointer _field: %p, %p\n",step()*grid->dt, field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::sx), field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::rhof), field_array->k_f_d(VOXEL(1,1,1,1,1,1), field_var::pe), field_array->k_f_h(13, field_var::ux), field_array->k_f_h(13, field_var::uy), field_array->k_f_h(13, field_var::uz), field_array, (void *)&field_array->k_f_d);
-  
+    field_array->f[icell].sx = 0;
+    field_array->f[icell].se = tot_en; //for finding d(tot_en) see lemons.h
+    //field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::sen) = tot_en;
+    //printf("%e, sx=%e, ne=%e, pe=%e uxyz=%e,%e,%e Pointer _field: %p, %p\n",step()*grid->dt, field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::sx), field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::rhof), field_array->k_f_h(VOXEL(1,1,1,1,1,1), field_var::pe), field_array->k_f_h(13, field_var::ux), field_array->k_f_h(13, field_var::uy), field_array->k_f_h(13, field_var::uz), field_array, (void *)&field_array->k_f_h);
+    field_array->copy_to_device();
+    
   global->restart_interval = 3000;
   global->quota_sec = 23.5*3600.0;
 

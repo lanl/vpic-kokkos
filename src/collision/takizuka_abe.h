@@ -33,7 +33,6 @@ struct takizuka_abe_model : public collision_model<takizuka_abe_model> {
   {
     float sigma = sqrtf(cvar*nvdt/(E*E));
     sigma = sigma > 1 ? 1 : sigma;
-    //    printf("#sigma=%e\n",sigma);
     return rg.normal(0, sigma);
   }
 
