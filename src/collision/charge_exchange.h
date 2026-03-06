@@ -25,12 +25,13 @@ struct cex_model : public collision_model<cex_model<Functor>> {
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
-    float Z,     // Charge of particle
     float vr,    // Changed input variable.
-    float nvdt
+    float nvdt,
+    float Z1,     // Charge of particle
+    float Z2=0.0  // Charge of fluid
   ) const
   {
-    float sig = sigma_cx(vr,Z);
+    float sig = sigma_cx(vr,Z1);
     return sig;
   }
   
@@ -72,14 +73,11 @@ struct cex_model : public collision_model<cex_model<Functor>> {
     const float mi,
     const float mj) const 
   {
+    spj_v(v, fluid_var::ux)  += -Dm.v[1] * mi / (mj * Dm.v[0]); // du_2 = dp_1 / m_2
+    spj_v(v, fluid_var::uy)  += -Dm.v[2] * mi / (mj * Dm.v[0]);
+    spj_v(v, fluid_var::uz)  += -Dm.v[3] * mi / (mj * Dm.v[0]);
+    spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi * 2.0 / 3.0; // dT ~ 2/3 dE
     spj_v(v, fluid_var::den) += -Dm.v[5];
-    // spj_v(v, fluid_var::ux) += -Dm.v[1] / (mj * Dm.v[0]);
-    // spj_v(v, fluid_var::uy) += -Dm.v[2] / (mj * Dm.v[0]);
-    // spj_v(v, fluid_var::uz) += -Dm.v[3] / (mj * Dm.v[0]);
-    // spj_v(v, fluid_var::msx) += -Dm.v[1] * mi;
-    // spj_v(v, fluid_var::msy) += -Dm.v[2] * mi;
-    // spj_v(v, fluid_var::msz) += -Dm.v[3] * mi;
-    // spj_v(v, fluid_var::ens) += -Dm.v[4] * mi;
   } // end upload_moment_src_impl()
 };
 
@@ -127,8 +125,9 @@ charge_exchange(
   /**/  species_t  * spi,
   /**/  fluid_species_t  * spj,
   const double       dq0,
-  Functor sigmafunc,
-  const int          interval
+  Functor            sigmafunc,
+  const int          interval,
+  species_t        * spp=NULL
 ) {
 
   if( !name || !spi || !spj || !spi->g || !spj->g || spi->g != spj->g || interval <= 0 )
@@ -141,6 +140,7 @@ charge_exchange(
 
   cex->spi         = spi;
   cex->spj         = spj;
+  cex->spp         = spp;
   cex->sigma_cx0   = sigmafunc;
   cex->dq0         = dq0;
   //  ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;

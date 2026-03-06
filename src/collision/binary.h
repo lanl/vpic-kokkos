@@ -36,8 +36,6 @@ void apply_binary_collision_model_pipeline( binary_collision_op_t * cop,
         return;
     }
 
-    //std::cout << "Applying Collisions" << std::endl;
-
     binary_collision_pipeline<MonteCarlo> pipeline(
       cop->spi,
       cop->spj,

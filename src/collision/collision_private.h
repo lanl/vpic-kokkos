@@ -14,9 +14,12 @@
 // CollisionType tag is provided to each collision model
 enum class CollisionType : unsigned { 
   BinaryTA, 
+  BinaryChargeExchange,
+  BinaryIonImpactIoniz,
   BulkLemons, 
   BulkDrag, 
-  BulkChargeExchange 
+  BulkChargeExchange,
+  BulkIonImpactIoniz
 };
 
 typedef void
@@ -39,10 +42,29 @@ struct collision_op_t {
  * Cannot be used directly, must be subclassed.
  */
 struct particle_bulk_collision_op_t : public collision_op_t {
-  species_t  * spi;
-  fluid_species_t  * spj;
-  field_array_t * field=NULL; // field for electron collisions, can be NULL
-  int          interval;
+  species_t       * spi;
+  fluid_species_t * spj;
+  field_array_t   * field=NULL; // field for electron collisions, can be NULL
+  int               interval;
+  species_t       * spp=NULL; // product species
+};
+
+
+/**
+ * @brief Base collision operator for binary neutral collisions including
+ * charge-exchange, ionization, etc. The collisions can be between
+ * between particles of any charge including neutrals, unlike the
+ * Takizuka-Abe model which is only between charged particles
+ *
+ * Cannot be used directly, must be subclassed.
+ */
+struct binary_neutral_collision_op_t : public collision_op_t {
+  species_t       * spi;
+  species_t       * spj;
+  field_array_t   * field=NULL; // field for electron collisions, can be NULL
+  int               interval;
+  // species_t       * spp1=NULL; // product species (for fusion products)
+  // species_t       * spp2=NULL; // product species
 };
 
 
@@ -177,13 +199,16 @@ struct collision_model {
    * @param rg Random number generator
    * @param E Collision energy
    * @param nvdt Areal density of particles encountered
+   * @param q1 Charge of first particle
+   * @param q2 Charge of second particle (default neutral)
    */
   KOKKOS_INLINE_FUNCTION
   constexpr float cross_section(
     kokkos_rng_state_t& rg,
-    float q,
     float E,
-    float nvdt
+    float nvdt,
+    float q1,
+    float q2=0.0
   ) const
   {
     return 0;
