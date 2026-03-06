@@ -65,6 +65,8 @@ lemons(
     le->field = NULL;
   }
   
+  le->spp = NULL;
+
   le->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
   le->interval    = interval;
   le->apply_cop   = &apply_lemons_collision_op;
