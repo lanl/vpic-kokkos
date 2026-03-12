@@ -28,6 +28,7 @@
 #include "../util/rng_policy.h"
 #include "dump_strategy.h"
 #include "dumpmacros.h"
+#include "../particle_operations/sort.h"
 
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
@@ -294,6 +295,8 @@ public:
   emitter_t            * emitter_list;       // define_emitter /
                                              // emitter helpers
   collision_op_t       * collision_op_list;  // collision helpers
+
+  ParticleSorter<>* sorter;
 
   // User defined checkpt preserved variables
   // Note: user_global is aliased with user_global_t (see deck_wrapper.cxx)
@@ -636,6 +639,8 @@ public:
       if( max_local_nm<16*(MAX_PIPELINE+1) )
         max_local_nm = 16*(MAX_PIPELINE+1);
     }
+    sorter->resize(max_local_np, grid->nv);
+
     return append_species( species( name, (float)q, (float)m,
                                     (size_t)max_local_np, (size_t)max_local_nm,
                                     (int)sort_interval, (int)sort_out_of_place,
@@ -699,12 +704,6 @@ public:
 		     double w,  double age = 0,
 		     int update_rhob = 0,
 		     double qp = 0);
-
-  size_t 
-  inject_particle_parallel( species_t * sp,
-                            double x,  double y,  double z,
-                            double ux, double uy, double uz,
-                            double w,  double age = 0, int update_rhob = 1 );
 
   // Inject particle raw is for power users!
   // No nannyism _at_ _all_:

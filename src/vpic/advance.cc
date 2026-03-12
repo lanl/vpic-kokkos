@@ -16,7 +16,7 @@ int vpic_simulation::advance(void)
 
   // Use default policy, for now
   ParticleCompressor<> compressor;
-  ParticleSorter<> sorter;
+  //ParticleSorter<> sorter;
 
   // Determine if we are done ... see note below why this is done here
   if( num_step>0 && step()>=num_step ) return 0;
@@ -26,11 +26,11 @@ int vpic_simulation::advance(void)
   // Sort the particles for performance if desired.
   LIST_FOR_EACH( sp, species_list )
   {
-    if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
-    {
-      if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-      sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, grid->nv);
-    }
+      if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
+      {
+          if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
+          sorter->sort( sp->k_p_d, sp->k_p_i_d, sp->np, grid->nv);
+      }
   }
 
   KOKKOS_TOC( sort_particles, 1);

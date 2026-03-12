@@ -57,6 +57,9 @@ restore_vpic_simulation( void ) {
   RESTORE_FPTR( vpic->collision_op_list );
 
   vpic->dump_strategy = new_dump_strategy(vpic->dump_strategy_id, vpic);
+  //RESTORE_FPTR( vpic->collision_op_list );
+
+  vpic->sorter = new ParticleSorter<>();
 
   return vpic;
 }
@@ -96,6 +99,8 @@ vpic_simulation::vpic_simulation() {
   grid = new_grid();
   dump_strategy = new_dump_strategy(dump_strategy_id, this);
 
+  sorter = new ParticleSorter<>();
+
   REGISTER_OBJECT( this, checkpt_vpic_simulation,
                    restore_vpic_simulation, reanimate_vpic_simulation );
 
@@ -119,8 +124,9 @@ vpic_simulation::~vpic_simulation() {
   delete_grid( grid );
   delete_rng_pool( sync_entropy );
   delete_rng_pool( entropy );
-  printf("#Running On Kokkos execution space %s\nKokkos::Finalize().",
+  printf("#Running On Kokkos execution space %s\nKokkos::Finalize().\n",
             typeid (Kokkos::DefaultExecutionSpace).name ());
+  delete sorter;
   Kokkos::finalize();
 }
 
