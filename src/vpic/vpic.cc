@@ -52,6 +52,9 @@ restore_vpic_simulation( void ) {
   RESTORE_FPTR( vpic->particle_bc_list );
   RESTORE_FPTR( vpic->emitter_list );
   //RESTORE_FPTR( vpic->collision_op_list );
+
+  vpic->sorter = new ParticleSorter<>();
+
   return vpic;
 }
 
@@ -88,6 +91,8 @@ vpic_simulation::vpic_simulation() {
   sync_entropy = new_rng_pool( n_rng, 0, 1 );
   grid = new_grid();
 
+  sorter = new ParticleSorter<>();
+
   REGISTER_OBJECT( this, checkpt_vpic_simulation,
                    restore_vpic_simulation, reanimate_vpic_simulation );
 }
@@ -104,6 +109,7 @@ vpic_simulation::~vpic_simulation() {
   delete_grid( grid );
   delete_rng_pool( sync_entropy );
   delete_rng_pool( entropy );
+  delete sorter;
   Kokkos::finalize();
 }
 

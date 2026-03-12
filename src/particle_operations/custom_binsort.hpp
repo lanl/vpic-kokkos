@@ -3,6 +3,7 @@
 
 #include <Kokkos_Core.hpp>
 #include <algorithm>
+#include <iostream>
 
 template <class KeyViewType>
 struct CustomBinOp1D {
@@ -263,6 +264,44 @@ class CustomBinSort {
       : CustomBinSort(exec_space{}, keys_, bin_op_, sort_within_bins_) {}
 
   //----------------------------------------
+  // Reset sorter with new keys, range, and bin op
+  template <typename ExecutionSpace>
+  void reset(const ExecutionSpace& exec, const_key_view_type keys_,
+             size_t range_begin_, size_t range_end_, BinSortOp bin_op_,
+             bool sort_within_bins_ = false) {
+    static_assert(
+        Kokkos::SpaceAccessibility<ExecutionSpace,
+                                   typename Space::memory_space>::accessible,
+        "The provided execution space must be able to access the memory space "
+        "CustomBinSort was initialized with!");
+    if (bin_op.max_bins() <= 0)
+      Kokkos::abort(
+          "The number of bins in the BinSortOp object must be greater than 0!");
+
+    keys = keys_;
+    keys_rnd = keys_;
+    bin_op = bin_op_;
+    range_begin = range_begin_;
+    range_end = range_end_;
+    sort_within_bins = sort_within_bins_;
+
+    if(bin_count_atomic.extent(0) < bin_op.max_bins())
+      bin_count_atomic = Kokkos::View<size_t*, Space>(
+          "Kokkos::SortImpl::CustomBinSortFunctor::bin_count", bin_op.max_bins());
+    bin_count_const = bin_count_atomic;
+    if(bin_offsets.extent(0) < bin_op.max_bins())
+      bin_offsets =
+          offset_type(view_alloc(exec, Kokkos::WithoutInitializing,
+                                 "Kokkos::SortImpl::CustomBinSortFunctor::bin_offsets"),
+                      bin_op.max_bins());
+    if(sort_order.extent(0) < range_end - range_begin)
+      sort_order =
+          offset_type(view_alloc(exec, Kokkos::WithoutInitializing,
+                                 "Kokkos::SortImpl::CustomBinSortFunctor::sort_order"),
+                      range_end - range_begin);
+  }
+
+  //----------------------------------------
   // Create the permutation vector, the bin_offset array and the bin_count
   // array. Can be called again if keys changed
   template <class ExecutionSpace>
@@ -304,6 +343,80 @@ class CustomBinSort {
     exec_space e{};
     create_permute_vector(e);
     e.fence("Kokkos::Binsort::create_permute_vector: after");
+  }
+
+  // Sort a subset of a view with respect to the first dimension using the
+  // permutation array and supplied scratch Views
+  template <class ExecutionSpace, class ValuesViewType>
+  void sort_scratch(const ExecutionSpace& exec, ValuesViewType const& values,
+            Kokkos::View<typename ValuesViewType::data_type,
+                         typename ValuesViewType::device_type> sorted_values,
+            size_t values_range_begin, size_t values_range_end) const {
+    if (values.extent(0) == 0) {
+      return;
+    }
+
+    static_assert(
+        Kokkos::SpaceAccessibility<ExecutionSpace,
+                                   typename Space::memory_space>::accessible,
+        "The provided execution space must be able to access the memory space "
+        "CustomBinSort was initialized with!");
+    static_assert(
+        Kokkos::SpaceAccessibility<
+            ExecutionSpace, typename ValuesViewType::memory_space>::accessible,
+        "The provided execution space must be able to access the memory space "
+        "of the View argument!");
+
+    const size_t len        = range_end - range_begin;
+    const size_t values_len = values_range_end - values_range_begin;
+    if (len != values_len) {
+      Kokkos::abort(
+          "CustomBinSort::sort: values range length != permutation vector length");
+    }
+
+    using scratch_view_type =
+        Kokkos::View<typename ValuesViewType::data_type,
+                     typename ValuesViewType::device_type>;
+//    scratch_view_type sorted_values(
+//        view_alloc(exec, Kokkos::WithoutInitializing,
+//                   "Kokkos::SortImpl::CustomBinSortFunctor::sorted_values"),
+//        values.rank_dynamic > 0 ? len : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
+//        values.rank_dynamic > 1 ? values.extent(1)
+//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
+//        values.rank_dynamic > 2 ? values.extent(2)
+//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
+//        values.rank_dynamic > 3 ? values.extent(3)
+//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
+//        values.rank_dynamic > 4 ? values.extent(4)
+//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
+//        values.rank_dynamic > 5 ? values.extent(5)
+//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
+//        values.rank_dynamic > 6 ? values.extent(6)
+//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
+//        values.rank_dynamic > 7 ? values.extent(7)
+//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG);
+
+    {
+      copy_permute_functor<scratch_view_type /* DstViewType */
+                           ,
+                           offset_type /* PermuteViewType */
+                           ,
+                           ValuesViewType /* SrcViewType */
+                           >
+          functor(sorted_values, sort_order, values,
+                  values_range_begin - range_begin);
+
+      parallel_for("Kokkos::Sort::CopyPermute",
+                   Kokkos::RangePolicy<ExecutionSpace>(exec, 0, len), functor);
+    }
+
+    {
+      copy_functor<ValuesViewType, scratch_view_type> functor(
+          values, range_begin, sorted_values);
+
+      parallel_for("Kokkos::Sort::Copy",
+                   Kokkos::RangePolicy<ExecutionSpace>(exec, 0, len), functor);
+    }
   }
 
   // Sort a subset of a view with respect to the first dimension using the

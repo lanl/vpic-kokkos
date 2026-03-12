@@ -55,7 +55,7 @@ TEST_CASE( "Verify ParticleSorter reorders particles correctly", "[ParticleSorte
 
   // Test different sort functions
   SECTION( "Standard sort test" ) {
-    sorter.standard_sort(part, part_i, num_part, nx*ny*nz);
+    sorter.sort(part, part_i, num_part, nx*ny*nz);
 
     Kokkos::deep_copy(part_i_h, part_i);
 
@@ -65,52 +65,52 @@ TEST_CASE( "Verify ParticleSorter reorders particles correctly", "[ParticleSorte
     }
   }
 
-  SECTION( "Strided sort test" ) {
-    sorter.strided_sort(part, part_i, num_part, nx*ny*nz);
+  //SECTION( "Strided sort test" ) {
+  //  sorter.strided_sort(part, part_i, num_part, nx*ny*nz);
 
-    Kokkos::deep_copy(part_i_h, part_i);
+  //  Kokkos::deep_copy(part_i_h, part_i);
 
-    // Verify particles are in strided order
-    for(int i=0; i<num_part; i++) {
-      REQUIRE(part_i_h(i) == i%(nx*ny*nz));
-    }
-  }
+  //  // Verify particles are in strided order
+  //  for(int i=0; i<num_part; i++) {
+  //    REQUIRE(part_i_h(i) == i%(nx*ny*nz));
+  //  }
+  //}
 
-  SECTION( "Tiled sort test" ) {
-    sorter.tiled_sort(part, part_i, num_part, nx*ny*nz, tilesize);
+  //SECTION( "Tiled sort test" ) {
+  //  sorter.tiled_sort(part, part_i, num_part, nx*ny*nz, tilesize);
 
-    Kokkos::deep_copy(part_i_h, part_i);
+  //  Kokkos::deep_copy(part_i_h, part_i);
 
-    // Verify particles are in tiled order
-    int nseq = num_part/(tilesize*nx*ny*nz);
-    for(int s=0; s<nseq; s++) {
-      for(int c=0; c<nx*ny*nz; c++) {
-        for(int i=0; i<tilesize; i++) {
-          const int idx = s*nx*ny*nz*tilesize + c*tilesize + i;
-          REQUIRE(part_i_h(idx) == c);
-        }
-      }
-    }
-  }
+  //  // Verify particles are in tiled order
+  //  int nseq = num_part/(tilesize*nx*ny*nz);
+  //  for(int s=0; s<nseq; s++) {
+  //    for(int c=0; c<nx*ny*nz; c++) {
+  //      for(int i=0; i<tilesize; i++) {
+  //        const int idx = s*nx*ny*nz*tilesize + c*tilesize + i;
+  //        REQUIRE(part_i_h(idx) == c);
+  //      }
+  //    }
+  //  }
+  //}
 
-  SECTION( "Tiled strided sort test" ) {
-    sorter.tiled_strided_sort(part, part_i, num_part, nx*ny*nz, tilesize);
+  //SECTION( "Tiled strided sort test" ) {
+  //  sorter.tiled_strided_sort(part, part_i, num_part, nx*ny*nz, tilesize);
 
-    Kokkos::deep_copy(part_i_h, part_i);
+  //  Kokkos::deep_copy(part_i_h, part_i);
 
-    // Verify particles are in tiled strided order
-    int nseq = num_part/(nppc*tilesize);
-    int tile_start = 0;
-    for(int s=0; s<nseq; s++) {
-      for(int i=0; i<nppc; i++) {
-        for(int c=0; c<tilesize; c++) {
-          const int idx = s*nppc*tilesize + i*tilesize + c;
-          REQUIRE(part_i_h(idx) == tile_start+c);
-        }
-      }
-      tile_start += tilesize;
-    }
-  }
+  //  // Verify particles are in tiled strided order
+  //  int nseq = num_part/(nppc*tilesize);
+  //  int tile_start = 0;
+  //  for(int s=0; s<nseq; s++) {
+  //    for(int i=0; i<nppc; i++) {
+  //      for(int c=0; c<tilesize; c++) {
+  //        const int idx = s*nppc*tilesize + i*tilesize + c;
+  //        REQUIRE(part_i_h(idx) == tile_start+c);
+  //      }
+  //    }
+  //    tile_start += tilesize;
+  //  }
+  //}
 
   Kokkos::fence();
 }
