@@ -65,11 +65,14 @@
 #if defined(KOKKOS_ENABLE_CUDA) || defined(KOKKOS_ENABLE_HIP)
   // Check if using team reduction optimization
   #if defined(VPIC_ENABLE_TEAM_REDUCTION) || defined(VPIC_ENABLE_HIERARCHICAL)
+    #define DEFAULT_SORT_ORDER StandardSortOrder
     #define SORT standard_sort
   #else
+    #define DEFAULT_SORT_ORDER StridedSortOrder
     #define SORT strided_sort
   #endif
 #else
+  #define DEFAULT_SORT_ORDER StandardSortOrder
   #define SORT standard_sort
 #endif
 
