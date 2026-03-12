@@ -56,7 +56,7 @@ typedef struct center_p_pipeline_args {
   MEM_PTR( particle_t,           128 ) p0;      // Particle array
   MEM_PTR( const interpolator_t, 128 ) f0;      // Interpolator array
   float                                qdt_2mc; // Particle/field coupling
-  size_t                                  np;      // Number of particles
+  size_t                               np;      // Number of particles
 
   PAD_STRUCT( 2*SIZEOF_MEM_PTR + sizeof(float) + sizeof(int) )
 

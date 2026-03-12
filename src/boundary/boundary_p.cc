@@ -201,7 +201,8 @@ boundary_p_kokkos(
         // property if all aged particle injection occurs after
         // advance_p and before this
 
-        // Here we essentially need to remove all accesses of the particle array (p0) and instead read from k_pc_h
+        // Here we essentially need to remove all accesses of the particle 
+        // array (p0) and instead read from k_pc_h
         for( ; nm; pm--, nm-- )
         {
             //int i = pm->i;
