@@ -208,7 +208,6 @@ class species_t {
         // Init Kokkos Particle Arrays
         species_t(size_t n_particles, size_t n_pmovers)
         {
-printf("Initializing Views for %zu particles and %zu movers\n", n_particles, n_pmovers);
            init_kokkos_particles(n_particles, n_pmovers);
         }
 
