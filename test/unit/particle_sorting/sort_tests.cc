@@ -53,7 +53,7 @@ TEST_CASE( "Verify ParticleSorter reorders particles correctly", "[ParticleSorte
 
   // Test different sort functions
   SECTION( "Standard sort test" ) {
-    ParticleSorter<> sorter;
+    ParticleSorter<StandardSortOrder> sorter;
 
     sorter.sort(part, part_i, num_part, nx*ny*nz);
 
@@ -96,10 +96,20 @@ TEST_CASE( "Verify ParticleSorter reorders particles correctly", "[ParticleSorte
   }
 
   SECTION( "Tiled strided sort test" ) {
+std::cout << "Calling tiled strided sort\n";
+std::cout << "Pre sort: {";
+for(size_t i=0; i<part_i.extent(0); i++)
+  std::cout << " " << part_i_h(i);
+std::cout << " }\n";
     ParticleSorter<TiledStridedSortOrder> sorter;
     sorter.sort(part, part_i, num_part, nx*ny*nz, tilesize);
 
     Kokkos::deep_copy(part_i_h, part_i);
+
+std::cout << "Post sort: {";
+for(size_t i=0; i<part_i.extent(0); i++)
+  std::cout << " " << part_i_h(i);
+std::cout << " }\n";
 
     // Verify particles are in tiled strided order
     int nseq = num_part/(nppc*tilesize);
