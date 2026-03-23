@@ -719,19 +719,32 @@ void collide_uniform_wt(
     t2 *= mu;       // _mu v^2  = Collision energy
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
 
-    // Cross sections depend on charge states of incoming particles
-    // and their species which may be switched during the pairing
-    qii = ordered ? qi : qj;
-    qjj = ordered ? qj : qi;
-    dd = model.cross_section( rg, ur, t1, qii, qjj);
+    // Binary Coulomb collisions always occur (ie we don't need to 
+    // sample a cross section) so MonteCarlo=False even if the particles
+    // have variable weight.
+    // For charge exchange and ionization, we sample the collision
+    // frequency to determine if a collision occurs so MonteCarlo=True
+    //
+    // if (MonteCarlo) {
+    if (model.collision_type != CollisionType::BinaryCoulomb) {
+      // Cross sections depend on charge states of incoming particles
+      // and their species which may be switched during the pairing
+      qii = ordered ? qi : qj;
+      qjj = ordered ? qj : qi;
+      dd = model.cross_section( rg, ur, t1, qii, qjj);
 
-    // Monte-Carlo collision test
-    // Determine if collision occurs, if (U > sigma * n * v * dt) then no collision
-    if( rg.frand() > dd*t1 ) {
-      return; // collision does not occur 
-    } else {
-      MC_col_occurred = true;
+      // Monte-Carlo collision test
+      // Determine if collision occurs, if (U > sigma * n * v * dt) then no collision
+      if( rg.frand() > dd*t1) {
+        return; // collision does not occur 
+      // } else {
+      //   MC_col_occurred = true;
+      }
+    // } else {
+    //   MC_col_occurred = true;
     }
+
+    MC_col_occurred = true;
 
     // Compute collision angle and coefficient of restitution
     float param[2] = {t2, t1};

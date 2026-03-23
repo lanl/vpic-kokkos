@@ -9,6 +9,7 @@
 #include "drag.h"
 #include "ion_impact_ionization.h"
 
+#include "binary_coulomb.h"
 #include "binary_charge_exchange.h"
 #include "binary_ion_impact_ionization.h"
 
