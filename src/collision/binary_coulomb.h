@@ -23,7 +23,7 @@ struct binary_coulomb_model : public collision_model<binary_coulomb_model<Functo
   const double cvar0;
   const bool var_wt;
   Functor sigma_cx;
-  binary_coulomb_model( Functor op, int cvar0, bool var_wt ) : sigma_cx(op), cvar0(cvar0), var_wt(var_wt) { };
+  binary_coulomb_model( Functor op, double cvar0, bool var_wt ) : sigma_cx(op), cvar0(cvar0), var_wt(var_wt) { };
 
 
   /**
@@ -91,10 +91,10 @@ apply_binary_coulomb_collision_op( collision_op_t * cop,
                                            kokkos_rng_pool_t& rng ) {
   binary_coulomb_collision_op_t<Functor> * coul = (binary_coulomb_collision_op_t<Functor> *) cop;
   binary_coulomb_model model(coul->sigma_cx0, coul->cvar0, coul->var_wt);
-  // if(coul->var_wt)
-  //   apply_binary_neutral_collision_model_pipeline<true>((binary_neutral_collision_op_t *) cop, model, rng);
-  // else
-  apply_binary_neutral_collision_model_pipeline<false>((binary_neutral_collision_op_t *) cop, model, rng);
+  if(coul->var_wt)
+    apply_binary_neutral_collision_model_pipeline<true>((binary_neutral_collision_op_t *) cop, model, rng);
+  else
+    apply_binary_neutral_collision_model_pipeline<false>((binary_neutral_collision_op_t *) cop, model, rng);
 }
 
 template<typename Functor>
@@ -156,9 +156,6 @@ binary_coulomb(
                   NULL);
 
   return coul;
-
 }
-
-
 
 #endif  /* _binary_coulomb_h_ */

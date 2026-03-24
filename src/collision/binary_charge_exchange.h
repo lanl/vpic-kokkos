@@ -90,10 +90,10 @@ apply_binary_charge_exchange_collision_op( collision_op_t * cop,
                                            kokkos_rng_pool_t& rng ) {
   binary_charge_exchange_collision_op_t<Functor> * cex = (binary_charge_exchange_collision_op_t<Functor> *) cop;
   binary_charge_exchange_model model(cex->sigma_cx0, cex->dq, cex->var_wt);
-  // if(cex->var_wt)
-  apply_binary_neutral_collision_model_pipeline<true>((binary_neutral_collision_op_t *) cop, model, rng);
-  //  else
-  //    apply_binary_neutral_collision_model_pipeline<false>((binary_neutral_collision_op_t *) cop, model, rng);
+  if(cex->var_wt)
+    apply_binary_neutral_collision_model_pipeline<true>((binary_neutral_collision_op_t *) cop, model, rng);
+   else
+     apply_binary_neutral_collision_model_pipeline<false>((binary_neutral_collision_op_t *) cop, model, rng);
   }
 
 template<typename Functor>
@@ -151,9 +151,6 @@ binary_charge_exchange(
                   NULL);
 
   return cex;
-
 }
-
-
 
 #endif  /* _binary_charge_exchange_h_ */

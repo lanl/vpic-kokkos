@@ -346,6 +346,20 @@ void collide_self_varwt(
   // All particles in h-group collide once and particles
   // in l-group collide an average of np_max/np_min times
 
+  // For particle-particle scattering within a species where a specific
+  // ordering is assumed [ie "if (Z1 != 1.0 || Z2 != 0.0) {return 0.0;}"] 
+  // the scattering rate needs an extra factor of 2x to account for pairs with 
+  // reverse order (ie accept q1-q2 but reject q2-q1). This is a result of the
+  // cross section being for a reaction between specific charge states while
+  // supporting variable charge within a species.
+  //
+  float nu_modifier = 1.0;
+  if (model.collision_type == CollisionType::BinaryChargeExchange ||
+      model.collision_type == CollisionType::BinaryIonImpactIoniz) 
+  {
+    nu_modifier *= 2.0;
+  } 
+
   gmomType26 Dm;
   Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, np_max),
     [&](const size_t c, gmomType26 &lsum)
@@ -377,7 +391,7 @@ void collide_self_varwt(
     wp1 = up[0];
     wp2 = up[4];
     const double w_max = std::max(wp1, wp2);
-    float ndt = w_max * np_min * dtinterval / dV;
+    float ndt = w_max * np_min * dtinterval / dV * nu_modifier;
 
     bool MC_col_occurred;
     binary_collision(mu, mu_i, mu_i, up, model, rg, ndt, ordered, MC_col_occurred);
@@ -585,6 +599,19 @@ void collide_uniform_wt(
     // Even number of particles.
     nj = ni = ni/2;
     j0 = i0 + ni;
+
+    // For particle-particle scattering within a species where a specific
+    // ordering is assumed [ie "if (Z1 != 1.0 || Z2 != 0.0) {return 0.0;}"] 
+    // the scattering rate needs an extra factor of 2x to account for pairs with 
+    // reverse order (ie accept q1-q2 but reject q2-q1). This is a result of the
+    // cross section being for a reaction between specific charge states while
+    // supporting variable charge within a species.
+    //
+    if (model.collision_type == CollisionType::BinaryChargeExchange ||
+        model.collision_type == CollisionType::BinaryIonImpactIoniz) 
+    {
+      ndt *= 2.0;
+    } 
   }
 	
 	const int nmin = ni < nj ? ni : nj;

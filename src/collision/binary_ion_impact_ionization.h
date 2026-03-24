@@ -113,10 +113,10 @@ apply_binary_ion_impact_ioniz_collision_op( collision_op_t * cop,
                                             kokkos_rng_pool_t& rng ) {
   binary_ion_impact_ioniz_collision_op_t<Functor> * ioniz = (binary_ion_impact_ioniz_collision_op_t<Functor> *) cop;
   binary_ion_impact_ioniz_model model(ioniz->sigma_cx0, ioniz->dE, ioniz->var_wt);
-  // if(ioniz->var_wt)
-  apply_binary_neutral_collision_model_pipeline<true>((binary_neutral_collision_op_t *) cop, model, rng);
-  // else
-  //   apply_binary_neutral_collision_model_pipeline<false>((binary_neutral_collision_op_t *) cop, model, rng);
+  if(ioniz->var_wt)
+    apply_binary_neutral_collision_model_pipeline<true>((binary_neutral_collision_op_t *) cop, model, rng);
+  else
+    apply_binary_neutral_collision_model_pipeline<false>((binary_neutral_collision_op_t *) cop, model, rng);
 }
 
 template<typename Functor>
@@ -174,9 +174,6 @@ binary_ion_impact_ioniz(
                   NULL);
 
   return ioniz;
-
 }
-
-
 
 #endif  /* _binary_ion_impact_ioniz_h_ */
