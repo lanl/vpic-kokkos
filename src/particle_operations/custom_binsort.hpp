@@ -285,20 +285,10 @@ class CustomBinSort {
     range_end = range_end_;
     sort_within_bins = sort_within_bins_;
 
-    if(bin_count_atomic.extent(0) < bin_op.max_bins())
-      bin_count_atomic = Kokkos::View<size_t*, Space>(
-          "Kokkos::SortImpl::CustomBinSortFunctor::bin_count", bin_op.max_bins());
+    Kokkos::resize(bin_count_atomic, bin_op.max_bins());
     bin_count_const = bin_count_atomic;
-    if(bin_offsets.extent(0) < bin_op.max_bins())
-      bin_offsets =
-          offset_type(view_alloc(exec, Kokkos::WithoutInitializing,
-                                 "Kokkos::SortImpl::CustomBinSortFunctor::bin_offsets"),
-                      bin_op.max_bins());
-    if(sort_order.extent(0) < range_end - range_begin)
-      sort_order =
-          offset_type(view_alloc(exec, Kokkos::WithoutInitializing,
-                                 "Kokkos::SortImpl::CustomBinSortFunctor::sort_order"),
-                      range_end - range_begin);
+    Kokkos::resize(bin_offsets, bin_op.max_bins());
+    Kokkos::resize(sort_order, range_end - range_begin);
   }
 
   //----------------------------------------
@@ -377,24 +367,6 @@ class CustomBinSort {
     using scratch_view_type =
         Kokkos::View<typename ValuesViewType::data_type,
                      typename ValuesViewType::device_type>;
-//    scratch_view_type sorted_values(
-//        view_alloc(exec, Kokkos::WithoutInitializing,
-//                   "Kokkos::SortImpl::CustomBinSortFunctor::sorted_values"),
-//        values.rank_dynamic > 0 ? len : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
-//        values.rank_dynamic > 1 ? values.extent(1)
-//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
-//        values.rank_dynamic > 2 ? values.extent(2)
-//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
-//        values.rank_dynamic > 3 ? values.extent(3)
-//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
-//        values.rank_dynamic > 4 ? values.extent(4)
-//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
-//        values.rank_dynamic > 5 ? values.extent(5)
-//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
-//        values.rank_dynamic > 6 ? values.extent(6)
-//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG,
-//        values.rank_dynamic > 7 ? values.extent(7)
-//                                : KOKKOS_IMPL_CTOR_DEFAULT_ARG);
 
     {
       copy_permute_functor<scratch_view_type /* DstViewType */
@@ -407,7 +379,7 @@ class CustomBinSort {
                   values_range_begin - range_begin);
 
       parallel_for("Kokkos::Sort::CopyPermute",
-                   Kokkos::RangePolicy<ExecutionSpace>(exec, 0, len), functor);
+                   Kokkos::RangePolicy<ExecutionSpace, size_t>(exec, 0, len), functor);
     }
 
     {
@@ -415,7 +387,7 @@ class CustomBinSort {
           values, range_begin, sorted_values);
 
       parallel_for("Kokkos::Sort::Copy",
-                   Kokkos::RangePolicy<ExecutionSpace>(exec, 0, len), functor);
+                   Kokkos::RangePolicy<ExecutionSpace, size_t>(exec, 0, len), functor);
     }
   }
 
