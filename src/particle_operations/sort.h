@@ -2,11 +2,49 @@
 #define PARTICLE_SORT_POLICY_H
 
 #include <Kokkos_Sort.hpp>
-#include <Kokkos_DualView.hpp>
 #include "../vpic/kokkos_helpers.h"
 #include "../vpic/kokkos_tuning.hpp"
 #include "shuffle.h"
 #include "custom_binsort.hpp"
+#include <concepts>
+
+/** @concept SorterConcept
+ *  @brief Concept outlining the required member functions for a Sorter class 
+ *
+ *  Requires resize(...) to adjust any internal View data. Important for cases 
+ *  where memory allocations/deallocations are expensive. The sort(...) 
+ *  function performs the actual particle sorting.
+ */
+template<typename T, typename KeyViewType>
+concept SorterConcept = requires(T a, KeyViewType& _key_view, 
+                                 k_particles_t& part, 
+                                 k_particles_i_t& part_i, 
+                                 const size_t _np, const size_t _num_bins, 
+                                 CustomBinOp1D<KeyViewType> _comp,
+                                 bool _sort_in_bins) {
+  { a.sort(_key_view, part, part_i, _np, _num_bins, _comp, _sort_in_bins) };
+  { a.resize(_np, _num_bins) };
+};
+
+/** @concept ParticleReorderer
+ *  @brief Concept outlining the required member functions for reordering keys
+ *
+ *  Requires resize(...) to adjust any internal View data. Important for cases 
+ *  where memory allocations/deallocations are expensive. The reorder(...) 
+ *  function takes particle data and returns a key View with adjusted keys for 
+ *  more control over sorting. The get_bin_op() function returns a comparator 
+ *  to use with Kokkos sort.
+ */
+template<typename T>
+concept ParticleReorderer = requires(T a, k_particles_t _part, 
+                                     k_particles_i_t _part_i, 
+                                     const size_t _np, const size_t _nbins,
+                                     const uint32_t _tile_size) {
+  { a.resize(_np, _nbins) };
+  { a.reorder(_part, _part_i, 
+              _np, _nbins, _tile_size) } -> std::same_as<typename T::key_type>;
+  { a.get_bin_op() } -> std::same_as<CustomBinOp1D<typename T::key_type> >;
+};
 
 /**
  * @brief Find min and max value in a 1D View
@@ -54,13 +92,78 @@ struct DefaultSorter {
     CustomBinSort<KeyViewType, Comparator> bin_sort(keys, 0, np, comp, sort_within_bins);
     bin_sort.create_permute_vector();
 
-    // Sort particle data. 
+    // Sort particle data using subviews to reduce memory usage. 
     for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
       auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
-      bin_sort.sort(sub_view, 0, keys.extent(0));
+      bin_sort.sort(sub_view, 0, np);
     }
     // Sort particle indices
-    bin_sort.sort(particles_i, 0, keys.extent(0));
+    auto cell_ids = Kokkos::subview(particles_i, Kokkos::make_pair<size_t,size_t>(0, np));
+    bin_sort.sort(cell_ids);
+  }
+};
+
+/**
+ * @brief Sort particles using the sort_by_key interface
+ *
+ * Allocates a permutation View and uses sort_by_key to get the correct
+ * permutation indices. Applies permutation to remaining particle data.
+ * The sort_by_key function will use backend specific sort functions like
+ * thrust.
+ */
+template<typename KeyViewType>
+struct SortByKeySorter {
+  using Comparator = CustomBinOp1D<KeyViewType>;
+
+  // No need to resize anything. Everything is allocated on the fly
+  void resize(const size_t np, const size_t nbins) {}
+
+  // TODO: should the sort interface just take the sp?
+  void sort(KeyViewType& key_view,
+            k_particles_t& particles,
+            k_particles_i_t& particles_i,
+            const size_t np,
+            const size_t num_bins,
+            Comparator comp,
+            bool sort_within_bins=false
+  )
+  {
+    auto np_range = Kokkos::make_pair<size_t,size_t>(0, np);
+    auto np_policy = Kokkos::RangePolicy<size_t>(0, np);
+
+    // Get subset of particle indices as keys
+    auto keys = Kokkos::subview(key_view, np_range);
+
+    Kokkos::View<size_t*> permute_view("Permutation view", np);
+    Kokkos::parallel_for("Iota", np_policy, KOKKOS_LAMBDA(const size_t i) {
+      permute_view(i) = i;
+    });
+
+    Kokkos::Experimental::sort_by_key(Kokkos::DefaultExecutionSpace(), 
+                                      keys, permute_view);
+
+    // Sort particle data. 
+    Kokkos::View<float*> f32_scratch("particles scratch", np);
+    for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
+      auto sub_view = Kokkos::subview(particles, np_range, i);
+      Kokkos::deep_copy(f32_scratch, sub_view);
+      Kokkos::parallel_for("Permute particle var", np_policy, 
+        KOKKOS_LAMBDA(const size_t idx) {
+        particles(idx, i) = f32_scratch(permute_view(idx));
+      });
+    }
+
+    // Sort particle indices. If the keys haven't been reordered then 
+    // particles_i will be sorted by the initial sort_by_key call.
+    if constexpr (!std::is_same_v<KeyViewType, k_particles_i_t>) {
+      auto cell_ids = Kokkos::subview(particles_i, np_range);
+      k_particles_i_t scratch("particles_i scratch", np);
+      Kokkos::deep_copy(scratch, cell_ids);
+      Kokkos::parallel_for("Permute cell indices", np_policy, 
+        KOKKOS_LAMBDA(const size_t i) {
+        particles_i(i) = scratch(permute_view(i));
+      });
+    }
   }
 };
 
@@ -85,8 +188,8 @@ struct PreAllocSorter {
     f32_scratch = Kokkos::View<float*>("Float scratch", 1);
     i32_scratch = Kokkos::View<int*>("Int32 scratch", 1);
     KeyViewType temp("temp particles_i", 1);
-    CustomBinOp1D<KeyViewType> temp_bin_op(1, 0, 1);
-    bin_sort = new CustomBinSort<KeyViewType, Comparator>(temp, 0, 1, temp_bin_op);
+    CustomBinOp1D<KeyViewType> bin_op(1, 0, 1);
+    bin_sort = new CustomBinSort<KeyViewType, Comparator>(temp, 0, 1, bin_op);
   }
 
   ~PreAllocSorter() {
@@ -98,10 +201,10 @@ struct PreAllocSorter {
    */
   void resize(const size_t np, const size_t nbins) {
     if(f32_scratch.extent(0) < np) {
-        Kokkos::resize(f32_scratch, np);
-        Kokkos::resize(i32_scratch, np);
+      Kokkos::resize(f32_scratch, np);
+      Kokkos::resize(i32_scratch, np);
     }
-    Comparator comp(nbins, 0, nbins);
+    Comparator comp(nbins, 0, np);
     KeyViewType temp("temp particles_i", 1);
     bin_sort->reset(Kokkos::DefaultExecutionSpace(), temp, 0, np, comp, 0);
   }
@@ -121,15 +224,16 @@ struct PreAllocSorter {
     resize(np, num_bins);
     
     // Get subset of particle indices as keys
-    auto keys = Kokkos::subview(key_view, Kokkos::make_pair<size_t,size_t>(0, np));
+    auto subview_pair = Kokkos::make_pair<size_t,size_t>(0, np);
+    auto keys = Kokkos::subview(key_view, subview_pair);
 
     // Sort and make permutation View
-    bin_sort->reset(Kokkos::DefaultExecutionSpace(), keys, static_cast<size_t>(0), np, comp, sort_within_bins);
+    bin_sort->reset(Kokkos::DefaultExecutionSpace(), keys, 0, np, comp, sort_within_bins);
     bin_sort->create_permute_vector();
 
     // Sort particle data. 
     for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
-      auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+      auto sub_view = Kokkos::subview(particles, subview_pair, i);
       bin_sort->sort_scratch(Kokkos::DefaultExecutionSpace(), sub_view, f32_scratch, 0, np);
     }
 
@@ -156,7 +260,8 @@ struct StandardSortOrder {
                           k_particles_t particles,
                           k_particles_i_t particles_i,
                           const size_t np,
-                          const size_t num_bins
+                          const size_t num_bins,
+                          const uint32_t tile_size=1   // # of cells per tile
   )
   {
     min_val = 0;
@@ -192,7 +297,7 @@ struct StridedSortOrder {
   void resize(const size_t np, const size_t nbins) {
     if(sort_keys.extent(0) < np) 
       Kokkos::resize(sort_keys, np);
-    if(bin_counter.extent(0) < nbins)
+    if(bin_counter.extent(0) < nbins+1)
       Kokkos::resize(bin_counter, nbins+1);
   }
 
@@ -201,17 +306,20 @@ struct StridedSortOrder {
                                 k_particles_t particles,
                                 k_particles_i_t particles_i,
                                 const size_t np,
-                                const size_t num_bins
+                                const size_t num_bins,
+                                const uint32_t tile_size=1 // # cells per tile
   )
   {
     // Resize scratch views
     resize(np, num_bins);
 
+    auto np_range = Kokkos::RangePolicy<size_t>(0,np);
+
     Kokkos::MinMaxScalar<int> result;
     // Find max particle index
     size_t max_cell = 0;
-    Kokkos::parallel_reduce("Get max cell ID", Kokkos::RangePolicy<size_t>(0,np), 
-    KOKKOS_LAMBDA(const size_t& i, size_t& max_cell_id) {
+    Kokkos::parallel_reduce("Get max cell ID", np_range, 
+      KOKKOS_LAMBDA(const size_t& i, size_t& max_cell_id) {
       if(particles_i(i) > max_cell_id)
         max_cell_id = particles_i(i);
     }, Kokkos::Max<size_t>(max_cell));
@@ -219,14 +327,15 @@ struct StridedSortOrder {
     Kokkos::deep_copy(bin_counter, 0);
     // Count number of particles in each cell and add an offset 
     // (current number of particles in cell multiplied by the largest index)
-    Kokkos::parallel_for("Update keys", Kokkos::RangePolicy<size_t>(0, np), KOKKOS_CLASS_LAMBDA(const size_t i) {
+    Kokkos::parallel_for("Update keys", np_range, 
+      KOKKOS_CLASS_LAMBDA(const size_t i) {
       size_t count = Kokkos::atomic_fetch_inc(&(bin_counter(particles_i(i))));
       sort_keys(i) = static_cast<size_t>(particles_i(i)) + count*(max_cell+1);
     });
     // Save the max particle index to undo the offset after sorting
     // Get the new max index
     Kokkos::MinMaxScalar<size_t> result_u64;
-    Kokkos::parallel_reduce("Get min/max bin", Kokkos::RangePolicy<size_t>(0,particles_i.extent(0)), 
+    Kokkos::parallel_reduce("Get min/max bin", np_range, 
       min_max_functor(sort_keys), Kokkos::MinMax<size_t>(result_u64));
     min_val = result_u64.min_val;
     max_val = result_u64.max_val;
@@ -267,8 +376,8 @@ struct TiledSortOrder {
 
   // TODO: should the sort interface just take the sp?
   Kokkos::View<size_t*> reorder(
-          k_particles_t particles,
-          k_particles_i_t particles_i,
+          k_particles_t part,
+          k_particles_i_t part_i,
           const size_t np,
           const size_t num_bins,
           const uint32_t tile_size   // # of cells per tile
@@ -277,24 +386,27 @@ struct TiledSortOrder {
     // Resize scratch views
     resize(np, num_bins);
 
+    auto np_range = Kokkos::RangePolicy<size_t>(0,np);
+
     // Find max particle index
     size_t max_cell = 0;
-    Kokkos::parallel_reduce("Get max cell ID", Kokkos::RangePolicy<size_t>(0,np), 
+    Kokkos::parallel_reduce("Get max cell ID", np_range, 
     KOKKOS_LAMBDA(const size_t& i, size_t& max_cell_id) {
-      if(particles_i(i) > max_cell_id)
-        max_cell_id = particles_i(i);
+      if(part_i(i) > max_cell_id)
+        max_cell_id = part_i(i);
     }, Kokkos::Max<size_t>(max_cell));
 
     Kokkos::deep_copy(bin_counter, 0);
     // Count number of particles in each cell and add an offset 
-    Kokkos::parallel_for("Update keys", Kokkos::RangePolicy<size_t>(0, np), 
+    Kokkos::parallel_for("Update keys", np_range, 
     KOKKOS_CLASS_LAMBDA(const size_t i) {
-      size_t count = Kokkos::atomic_fetch_add(&(bin_counter(particles_i(i))), 1);
-      sort_keys(i) = static_cast<size_t>(particles_i(i)) + (max_cell+1)*(count/tile_size);
+      size_t count = Kokkos::atomic_fetch_add(&(bin_counter(part_i(i))), 1);
+      sort_keys(i) = static_cast<size_t>(part_i(i)) 
+                   + (max_cell+1)*(count/tile_size);
     });
     // Get the new max index
     Kokkos::MinMaxScalar<size_t> key_bounds;
-    Kokkos::parallel_reduce("Get min/max bin post update", Kokkos::RangePolicy<size_t>(0,np), 
+    Kokkos::parallel_reduce("Get min/max bin post update", np_range, 
       min_max_functor(sort_keys), Kokkos::MinMax<size_t>(key_bounds));
 
     min_val = key_bounds.min_val;
@@ -336,41 +448,42 @@ struct TiledStridedSortOrder {
 
   // TODO: should the sort interface just take the sp?
   Kokkos::View<size_t*> reorder(
-          k_particles_t particles,
-          k_particles_i_t particles_i,
+          k_particles_t part,
+          k_particles_i_t part_i,
           const size_t np,
           const size_t num_bins,
           const uint32_t tile_size   // # of cells per tile
   )
   {
-    // Resize scratch views
-    resize(np, num_bins);
-
     auto range_policy = Kokkos::RangePolicy<size_t>(0, np);
     auto bin_range_policy = Kokkos::RangePolicy<size_t>(0, num_bins);
+    // Resize scratch views
+    resize(np, num_bins);
     Kokkos::MinMaxScalar<int> cell_id, cell_size;
     // Find max and min particle index
     Kokkos::parallel_reduce("Get min/max bin", range_policy, 
-      min_max_functor(particles_i), Kokkos::MinMax<int>(cell_id));
+      min_max_functor(part_i), Kokkos::MinMax<int>(cell_id));
     const int min_cell = cell_id.min_val;
     Kokkos::deep_copy(bin_counter, 0);
     // Count number of particles in each cell
     Kokkos::parallel_for("get max nppc", range_policy, 
     KOKKOS_CLASS_LAMBDA(const size_t i) {
-      Kokkos::atomic_inc(&(bin_counter(particles_i(i))));
+      Kokkos::atomic_inc(&(bin_counter(part_i(i))));
     });
     // Find the max and min number of particles per cell
     Kokkos::parallel_reduce("Get max/min nppc", bin_range_policy, 
       min_max_functor(bin_counter), Kokkos::MinMax<int>(cell_size)); 
-    const size_t chunk_size = tile_size * static_cast<size_t>(cell_size.max_val + 1);
+    const size_t chunk_size = tile_size 
+                            * static_cast<size_t>(cell_size.max_val + 1);
     // Reset bin_counter
     Kokkos::deep_copy(bin_counter, 0);
     // Update particle indices 
     Kokkos::parallel_for("Update keys", range_policy, 
     KOKKOS_CLASS_LAMBDA(const size_t i) {
-      const size_t count = Kokkos::atomic_fetch_inc(&(bin_counter(particles_i(i))));
-      const size_t chunk_idx = static_cast<size_t>(particles_i(i) - min_cell) / tile_size;
-      sort_keys(i) = static_cast<size_t>(particles_i(i) - min_cell)  
+      const size_t count = Kokkos::atomic_fetch_inc(&(bin_counter(part_i(i))));
+      const size_t chunk_idx = static_cast<size_t>(part_i(i) - min_cell) 
+                             / tile_size;
+      sort_keys(i) = static_cast<size_t>(part_i(i) - min_cell)  
                    + chunk_idx*chunk_size + count*tile_size;
     });
 
@@ -381,7 +494,7 @@ struct TiledStridedSortOrder {
 
     min_val = new_keys.min_val;
     max_val = new_keys.max_val;
-    num_bin = np;
+    num_bin = max_val - min_val + 1;
     return sort_keys;
   }
 
@@ -390,8 +503,9 @@ struct TiledStridedSortOrder {
   }
 };
 
-template < typename SortOrder = DEFAULT_SORT_ORDER, 
-           typename Sorter = PreAllocSorter<typename SortOrder::key_type> >
+template < ParticleReorderer SortOrder = DEFAULT_SORT_ORDER, 
+           SorterConcept<typename SortOrder::key_type> Sorter 
+             = DefaultSorter<typename SortOrder::key_type> >
 struct ParticleSorter {
   SortOrder order;
   Sorter sorter;
@@ -401,18 +515,18 @@ struct ParticleSorter {
     sorter.resize(np, nbins);
   }
 
-  void sort(k_particles_t particles, k_particles_i_t particles_i, 
+  void sort(k_particles_t part, k_particles_i_t part_i, 
             const size_t np, const size_t num_bins, const size_t tile_size=1) {
     if constexpr (std::is_same_v<SortOrder,TiledSortOrder> ||
                   std::is_same_v<SortOrder,TiledStridedSortOrder>) {
-      auto keys = order.reorder(particles, particles_i, np, num_bins, tile_size);
+      auto keys = order.reorder(part, part_i, np, num_bins, tile_size);
       auto binop = order.get_bin_op();
       bool sort_bins = true;
-      sorter.sort(keys, particles, particles_i, np, num_bins, binop, sort_bins);
+      sorter.sort(keys, part, part_i, np, num_bins, binop, sort_bins);
     } else {
-      auto keys = order.reorder(particles, particles_i, np, num_bins);
+      auto keys = order.reorder(part, part_i, np, num_bins);
       auto binop = order.get_bin_op();
-      sorter.sort(keys, particles, particles_i, np, num_bins, binop);
+      sorter.sort(keys, part, part_i, np, num_bins, binop);
     }
   }
 };
