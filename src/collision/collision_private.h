@@ -20,7 +20,8 @@ enum class CollisionType : unsigned {
   BulkLemons, 
   BulkDrag, 
   BulkChargeExchange,
-  BulkIonImpactIoniz
+  BulkIonImpactIoniz,
+  BulkElectronImpactIoniz
 };
 
 typedef void

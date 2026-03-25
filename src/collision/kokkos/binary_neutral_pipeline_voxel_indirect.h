@@ -343,9 +343,6 @@ void collide_self_varwt(
   // Get a random generator. Do not leave without freeing it.
   kokkos_rng_state_t rg = rp.get_state();
 
-  // All particles in h-group collide once and particles
-  // in l-group collide an average of np_max/np_min times
-
   // For particle-particle scattering within a species where a specific
   // ordering is assumed [ie "if (Z1 != 1.0 || Z2 != 0.0) {return 0.0;}"] 
   // the scattering rate needs an extra factor of 2x to account for pairs with 
@@ -353,12 +350,20 @@ void collide_self_varwt(
   // cross section being for a reaction between specific charge states while
   // supporting variable charge within a species.
   //
-  float nu_modifier = 1.0;
-  if (model.collision_type == CollisionType::BinaryChargeExchange ||
-      model.collision_type == CollisionType::BinaryIonImpactIoniz) 
-  {
-    nu_modifier *= 2.0;
-  } 
+  // todo: found binary Coulomb collision self-scattering is missing
+  // a factor of two. Do the inelastic collisions require an additional
+  // factor of two for the reason above?
+  // 
+  float nu_modifier = 2.0;
+  // if (model.collision_type == CollisionType::BinaryChargeExchange ||
+  //     model.collision_type == CollisionType::BinaryIonImpactIoniz) 
+  // {
+  //   nu_modifier *= 2.0;
+  // } 
+
+
+  // All particles in h-group collide once and particles
+  // in l-group collide an average of np_max/np_min times
 
   gmomType26 Dm;
   Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, np_max),
@@ -796,6 +801,8 @@ void collide_uniform_wt(
         up[dw_index] += 1.0;
         break;
       }
+      default:
+        break;
     }
 #endif
 
