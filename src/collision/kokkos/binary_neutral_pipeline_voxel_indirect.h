@@ -612,11 +612,16 @@ void collide_uniform_wt(
     // cross section being for a reaction between specific charge states while
     // supporting variable charge within a species.
     //
-    if (model.collision_type == CollisionType::BinaryChargeExchange ||
-        model.collision_type == CollisionType::BinaryIonImpactIoniz) 
-    {
-      ndt *= 2.0;
-    } 
+    // todo: found binary Coulomb collision self-scattering is missing
+    // a factor of two. Do the inelastic collisions require an additional
+    // factor of two for the reason above?
+    // 
+    float nu_modifier = 2.0;
+    // if (model.collision_type == CollisionType::BinaryChargeExchange ||
+    //     model.collision_type == CollisionType::BinaryIonImpactIoniz) 
+    // {
+    //   nu_modifier *= 2.0;
+    // } 
   }
 	
 	const int nmin = ni < nj ? ni : nj;

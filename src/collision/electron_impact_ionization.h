@@ -91,10 +91,10 @@ struct electron_ioniz_model : public collision_model<electron_ioniz_model<Functo
     const float mi,
     const float mj) const 
   {
-    // spj_v(v, field_var::sx) += -Dm.v[1]*mi;
-    // spj_v(v, field_var::sy) += -Dm.v[2]*mi;
-    // spj_v(v, field_var::sz) += -Dm.v[3]*mi;
-    // spj_v(v, field_var::se) += -Dm.v[4]*mi;
+    spj_v(v, field_var::sx) += -mj * Dm.v[1] / Dm.v[0]; // m * sum(w*dv) / sum(w)
+    spj_v(v, field_var::sy) += -mj * Dm.v[2] / Dm.v[0];
+    spj_v(v, field_var::sz) += -mj * Dm.v[3] / Dm.v[0];
+    spj_v(v, field_var::se) += -Dm.v[4] / Dm.v[0]; // sum(w*dE)/sum(w)
   } // end upload_moment_src_impl()
 };
 
