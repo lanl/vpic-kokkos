@@ -6,45 +6,45 @@
 #include "../vpic/kokkos_tuning.hpp"
 #include "shuffle.h"
 #include "custom_binsort.hpp"
-#include <concepts>
+//#include <concepts>
 
-/** @concept SorterConcept
- *  @brief Concept outlining the required member functions for a Sorter class 
- *
- *  Requires resize(...) to adjust any internal View data. Important for cases 
- *  where memory allocations/deallocations are expensive. The sort(...) 
- *  function performs the actual particle sorting.
- */
-template<typename T, typename KeyViewType>
-concept SorterConcept = requires(T a, KeyViewType& _key_view, 
-                                 k_particles_t& part, 
-                                 k_particles_i_t& part_i, 
-                                 const size_t _np, const size_t _num_bins, 
-                                 CustomBinOp1D<KeyViewType> _comp,
-                                 bool _sort_in_bins) {
-  { a.sort(_key_view, part, part_i, _np, _num_bins, _comp, _sort_in_bins) };
-  { a.resize(_np, _num_bins) };
-};
-
-/** @concept ParticleReorderer
- *  @brief Concept outlining the required member functions for reordering keys
- *
- *  Requires resize(...) to adjust any internal View data. Important for cases 
- *  where memory allocations/deallocations are expensive. The reorder(...) 
- *  function takes particle data and returns a key View with adjusted keys for 
- *  more control over sorting. The get_bin_op() function returns a comparator 
- *  to use with Kokkos sort.
- */
-template<typename T>
-concept ParticleReorderer = requires(T a, k_particles_t _part, 
-                                     k_particles_i_t _part_i, 
-                                     const size_t _np, const size_t _nbins,
-                                     const uint32_t _tile_size) {
-  { a.resize(_np, _nbins) };
-  { a.reorder(_part, _part_i, 
-              _np, _nbins, _tile_size) } -> std::same_as<typename T::key_type>;
-  { a.get_bin_op() } -> std::same_as<CustomBinOp1D<typename T::key_type> >;
-};
+///** @concept SorterConcept
+// *  @brief Concept outlining the required member functions for a Sorter class 
+// *
+// *  Requires resize(...) to adjust any internal View data. Important for cases 
+// *  where memory allocations/deallocations are expensive. The sort(...) 
+// *  function performs the actual particle sorting.
+// */
+//template<typename T, typename KeyViewType>
+//concept SorterConcept = requires(T a, KeyViewType& _key_view, 
+//                                 k_particles_t& part, 
+//                                 k_particles_i_t& part_i, 
+//                                 const size_t _np, const size_t _num_bins, 
+//                                 CustomBinOp1D<KeyViewType> _comp,
+//                                 bool _sort_in_bins) {
+//  { a.sort(_key_view, part, part_i, _np, _num_bins, _comp, _sort_in_bins) };
+//  { a.resize(_np, _num_bins) };
+//};
+//
+///** @concept ParticleReorderer
+// *  @brief Concept outlining the required member functions for reordering keys
+// *
+// *  Requires resize(...) to adjust any internal View data. Important for cases 
+// *  where memory allocations/deallocations are expensive. The reorder(...) 
+// *  function takes particle data and returns a key View with adjusted keys for 
+// *  more control over sorting. The get_bin_op() function returns a comparator 
+// *  to use with Kokkos sort.
+// */
+//template<typename T>
+//concept ParticleReorderer = requires(T a, k_particles_t _part, 
+//                                     k_particles_i_t _part_i, 
+//                                     const size_t _np, const size_t _nbins,
+//                                     const uint32_t _tile_size) {
+//  { a.resize(_np, _nbins) };
+//  { a.reorder(_part, _part_i, 
+//              _np, _nbins, _tile_size) } -> std::same_as<typename T::key_type>;
+//  { a.get_bin_op() } -> std::same_as<CustomBinOp1D<typename T::key_type> >;
+//};
 
 /**
  * @brief Find min and max value in a 1D View
@@ -178,6 +178,7 @@ struct SortByKeySorter {
  */
 template<typename KeyViewType>
 struct PreAllocSorter {
+  using exec_space = typename KeyViewType::execution_space;
   using Comparator = CustomBinOp1D<KeyViewType>;
 
   CustomBinSort<KeyViewType, Comparator>* bin_sort;
@@ -206,7 +207,7 @@ struct PreAllocSorter {
     }
     Comparator comp(nbins, 0, np);
     KeyViewType temp("temp particles_i", 1);
-    bin_sort->reset(Kokkos::DefaultExecutionSpace(), temp, 0, np, comp, 0);
+    bin_sort->reset(exec_space(), temp, 0, np, comp, 0);
   }
 
   // TODO: should the sort interface just take the sp?
@@ -228,17 +229,17 @@ struct PreAllocSorter {
     auto keys = Kokkos::subview(key_view, subview_pair);
 
     // Sort and make permutation View
-    bin_sort->reset(Kokkos::DefaultExecutionSpace(), keys, 0, np, comp, sort_within_bins);
+    bin_sort->reset(exec_space(), keys, 0, np, comp, sort_within_bins);
     bin_sort->create_permute_vector();
 
     // Sort particle data. 
     for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
       auto sub_view = Kokkos::subview(particles, subview_pair, i);
-      bin_sort->sort_scratch(Kokkos::DefaultExecutionSpace(), sub_view, f32_scratch, 0, np);
+      bin_sort->sort_scratch(exec_space(), sub_view, f32_scratch, 0, np);
     }
 
     // Sort particle indices
-    bin_sort->sort_scratch(Kokkos::DefaultExecutionSpace(), particles_i, i32_scratch, 0, np);
+    bin_sort->sort_scratch(exec_space(), particles_i, i32_scratch, 0, np);
   }
 };
 
@@ -503,9 +504,11 @@ struct TiledStridedSortOrder {
   }
 };
 
-template < ParticleReorderer SortOrder = DEFAULT_SORT_ORDER, 
-           SorterConcept<typename SortOrder::key_type> Sorter 
-             = DefaultSorter<typename SortOrder::key_type> >
+//template < ParticleReorderer SortOrder = DEFAULT_SORT_ORDER, 
+//           SorterConcept<typename SortOrder::key_type> Sorter 
+//             = DefaultSorter<typename SortOrder::key_type> >
+template < typename SortOrder = DEFAULT_SORT_ORDER, 
+           typename Sorter = PreAllocSorter<typename SortOrder::key_type> >
 struct ParticleSorter {
   SortOrder order;
   Sorter sorter;
@@ -517,17 +520,10 @@ struct ParticleSorter {
 
   void sort(k_particles_t part, k_particles_i_t part_i, 
             const size_t np, const size_t num_bins, const size_t tile_size=1) {
-    if constexpr (std::is_same_v<SortOrder,TiledSortOrder> ||
-                  std::is_same_v<SortOrder,TiledStridedSortOrder>) {
-      auto keys = order.reorder(part, part_i, np, num_bins, tile_size);
-      auto binop = order.get_bin_op();
-      bool sort_bins = true;
-      sorter.sort(keys, part, part_i, np, num_bins, binop, sort_bins);
-    } else {
-      auto keys = order.reorder(part, part_i, np, num_bins);
-      auto binop = order.get_bin_op();
-      sorter.sort(keys, part, part_i, np, num_bins, binop);
-    }
+    auto keys = order.reorder(part, part_i, np, num_bins, tile_size);
+    auto binop = order.get_bin_op();
+    const bool sort_bins = false;
+    sorter.sort(keys, part, part_i, np, num_bins, binop, sort_bins);
   }
 };
 #endif //guard

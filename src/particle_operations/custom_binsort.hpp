@@ -285,10 +285,19 @@ class CustomBinSort {
     range_end = range_end_;
     sort_within_bins = sort_within_bins_;
 
-    Kokkos::resize(bin_count_atomic, bin_op.max_bins());
+//    if(bin_count_atomic.extent(0) < bin_op.max_bins()) {
+      Kokkos::resize(bin_count_atomic, bin_op.max_bins());
+      Kokkos::deep_copy(bin_count_atomic, 0);
+//    }
     bin_count_const = bin_count_atomic;
-    Kokkos::resize(bin_offsets, bin_op.max_bins());
-    Kokkos::resize(sort_order, range_end - range_begin);
+//    if(bin_offsets.extent(0) < bin_op.max_bins()) {
+      Kokkos::resize(bin_offsets, bin_op.max_bins());
+      Kokkos::deep_copy(bin_offsets, 0);
+//    }
+//    if(sort_order.extent(0) < range_end - range_begin) {
+      Kokkos::resize(sort_order, range_end - range_begin);
+      Kokkos::deep_copy(sort_order, 0);
+//    }
   }
 
   //----------------------------------------
