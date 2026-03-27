@@ -33,9 +33,9 @@
 #endif
 #if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
   #define LANE lane
-  #define BEGIN_THREAD_BLOCK Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (int lane) {
+  #define BEGIN_THREAD_BLOCK Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (size_t lane) {
   #define END_THREAD_BLOCK });
-  #define BEGIN_VECTOR_BLOCK Kokkos::parallel_for_simd(Kokkos::ThreadVectorRange(team_member, num_iters), [&] (int lane) {
+  #define BEGIN_VECTOR_BLOCK Kokkos::parallel_for_simd(Kokkos::ThreadVectorRange(team_member, num_iters), [&] (size_t lane) {
   #define END_VECTOR_BLOCK });
 #else
   #define LANE 0
