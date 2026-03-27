@@ -42,6 +42,7 @@ typedef struct particle {
 typedef struct particle_mover {
   float dispx, dispy, dispz; // Displacement of particle
   size_t i;                 // Index of the particle to move
+  float _pad[3];
 } particle_mover_t;
 
 // NOTE: THE LAYOUT OF A PARTICLE_INJECTOR _MUST_ BE COMPATIBLE WITH

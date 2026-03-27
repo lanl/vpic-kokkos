@@ -401,8 +401,8 @@ advance_p_kokkos_unified(
   #define f_dcbydy   k_interp(ii[LANE], interpolator_var::dcbydy)
   #define f_dcbzdz   k_interp(ii[LANE], interpolator_var::dcbzdz)
 
-  auto rangel = g->rangel;
-  auto rangeh = g->rangeh;
+  const auto rangel = g->rangel;
+  const auto rangeh = g->rangeh;
 
   // TODO: is this the right place to do this?
   Kokkos::deep_copy(k_nm, 0);
@@ -419,18 +419,18 @@ advance_p_kokkos_unified(
 // Setting up work distribution settings
 #if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
   constexpr size_t num_lanes = 32;
-  size_t chunk_size = num_lanes;
+  const size_t chunk_size = num_lanes;
   size_t num_chunks = np/num_lanes;
   if(num_chunks*num_lanes < np)
     num_chunks += 1;
-  auto policy = Kokkos::TeamPolicy<>(num_chunks, 1, num_lanes);
+  auto policy = Kokkos::TeamPolicy<size_t>(num_chunks, 1, num_lanes);
 #elif defined( VPIC_ENABLE_HIERARCHICAL )
-  auto policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE);
+  auto policy = Kokkos::TeamPolicy<size_t>(LEAGUE_SIZE, TEAM_SIZE);
   size_t chunk_size = np/LEAGUE_SIZE;
   if(chunk_size*LEAGUE_SIZE < np)
     chunk_size += 1;
   constexpr int num_lanes = 1;
-  size_t num_chunks = LEAGUE_SIZE;
+  const size_t num_chunks = LEAGUE_SIZE;
 #else
   constexpr size_t num_lanes = 1;
 #endif
@@ -440,13 +440,13 @@ advance_p_kokkos_unified(
   Kokkos::parallel_for("advance_p", policy, 
   KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
       auto current_sa = current_sv.access();
-      size_t chunk = team_member.league_rank();
+      const size_t chunk = team_member.league_rank();
       size_t num_iters = chunk_size;
       if((chunk+1)*chunk_size > np)
         num_iters = np - chunk*chunk_size;
-      size_t pi_offset = chunk*chunk_size;
+      const size_t pi_offset = chunk*chunk_size;
 #else
-  auto policy = Kokkos::RangePolicy<>(0,np);
+  auto policy = Kokkos::RangePolicy<size_t>(0,np);
   Kokkos::parallel_for("advance_p", policy, KOKKOS_LAMBDA (const size_t pi_offset) {
       auto current_sa = current_sv.access();
 #endif
@@ -454,7 +454,7 @@ advance_p_kokkos_unified(
 // Inner parallelization loop
 #if defined ( VPIC_ENABLE_HIERARCHICAL ) && !defined( VPIC_ENABLE_VECTORIZATION )
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (const size_t index) {
-      size_t pi_offset = chunk*chunk_size + index;
+      const size_t pi_offset = chunk*chunk_size + index;
 #endif
       size_t num_particles = num_lanes;
       if(pi_offset+num_particles > np)
@@ -613,9 +613,13 @@ advance_p_kokkos_unified(
       BEGIN_VECTOR_BLOCK {
         p_index = pi_offset + LANE;
 
-        v3[LANE] = static_cast<float>(inbnds[LANE])*v3[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dx;
-        v4[LANE] = static_cast<float>(inbnds[LANE])*v4[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dy;
-        v5[LANE] = static_cast<float>(inbnds[LANE])*v5[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dz;
+        //v3[LANE] = static_cast<float>(inbnds[LANE])*v3[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dx;
+        //v4[LANE] = static_cast<float>(inbnds[LANE])*v4[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dy;
+        //v5[LANE] = static_cast<float>(inbnds[LANE])*v5[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dz;
+        //q[LANE]  = static_cast<float>(inbnds[LANE])*q[LANE]*qsp;
+        v3[LANE] = inbnds[LANE] ? v3[LANE] : p_dx;
+        v4[LANE] = inbnds[LANE] ? v4[LANE] : p_dy;
+        v5[LANE] = inbnds[LANE] ? v5[LANE] : p_dz;
         q[LANE]  = static_cast<float>(inbnds[LANE])*q[LANE]*qsp;
 
         p_dx = v3[LANE];
@@ -674,7 +678,7 @@ advance_p_kokkos_unified(
         if(!inbnds[LANE]) {
           p_index = pi_offset + LANE;
 
-          DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
+          DECLARE_ALIGNED_ARRAY( particle_mover_t, 32, local_pm, 1 );
           local_pm->dispx = ux[LANE];
           local_pm->dispy = uy[LANE];
           local_pm->dispz = uz[LANE];
@@ -715,14 +719,14 @@ advance_p_kokkos_unified(
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nz+2, ny+2, nx+2});
   Kokkos::parallel_for("unload accumulator array", unload_policy, 
   KOKKOS_LAMBDA(const int z, const int y, const int x) {
-      int f0  = VOXEL(1, y, z, nx, ny, nz) + x-1;
-      int a0  = VOXEL(1, y, z, nx, ny, nz) + x-1;
-      int ax  = VOXEL(0, y, z, nx, ny, nz) + x-1;
-      int ay  = VOXEL(1, y-1, z, nx, ny, nz) + x-1;
-      int az  = VOXEL(1, y, z-1, nx, ny, nz) + x-1;
-      int ayz = VOXEL(1, y-1, z-1, nx, ny, nz) + x-1;
-      int azx = VOXEL(0, y, z-1, nx, ny, nz) + x-1;
-      int axy = VOXEL(0, y-1, z, nx, ny, nz) + x-1;
+      const int f0  = VOXEL(1, y, z, nx, ny, nz) + x-1;
+      const int a0  = VOXEL(1, y, z, nx, ny, nz) + x-1;
+      const int ax  = VOXEL(0, y, z, nx, ny, nz) + x-1;
+      const int ay  = VOXEL(1, y-1, z, nx, ny, nz) + x-1;
+      const int az  = VOXEL(1, y, z-1, nx, ny, nz) + x-1;
+      const int ayz = VOXEL(1, y-1, z-1, nx, ny, nz) + x-1;
+      const int azx = VOXEL(0, y, z-1, nx, ny, nz) + x-1;
+      const int axy = VOXEL(0, y-1, z, nx, ny, nz) + x-1;
       k_field(f0, field_var::jfx) += ( accumulator(a0, 0) +
                                        accumulator(ay, 1) +
                                        accumulator(az, 2) +
