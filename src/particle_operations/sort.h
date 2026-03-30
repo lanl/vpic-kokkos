@@ -178,19 +178,19 @@ struct SortByKeySorter {
  */
 template<typename KeyViewType>
 struct PreAllocSorter {
+  using device_type = k_particles_i_t::device_type;
   using exec_space = typename KeyViewType::execution_space;
   using Comparator = CustomBinOp1D<KeyViewType>;
 
   CustomBinSort<KeyViewType, Comparator>* bin_sort;
-  Kokkos::View<float*, k_particles_i_t::device_type> f32_scratch;
-  Kokkos::View<int*, k_particles_i_t::device_type>   i32_scratch;
+  Kokkos::View<float*, device_type> scratch;
+  KeyViewType temp_keys;
 
   PreAllocSorter() {
-    f32_scratch = Kokkos::View<float*>("Float scratch", 1);
-    i32_scratch = Kokkos::View<int*>("Int32 scratch", 1);
-    KeyViewType temp("temp particles_i", 1);
+    scratch = Kokkos::View<float*>("Float scratch", 1);
+    temp_keys = KeyViewType("temp particles_i", 1);
     CustomBinOp1D<KeyViewType> bin_op(1, 0, 1);
-    bin_sort = new CustomBinSort<KeyViewType, Comparator>(temp, 0, 1, bin_op);
+    bin_sort = new CustomBinSort<KeyViewType, Comparator>(temp_keys, 0, 1, bin_op);
   }
 
   ~PreAllocSorter() {
@@ -201,13 +201,11 @@ struct PreAllocSorter {
    * @brief Resize scratch and sorting Views
    */
   void resize(const size_t np, const size_t nbins) {
-    if(f32_scratch.extent(0) < np) {
-      Kokkos::resize(f32_scratch, np);
-      Kokkos::resize(i32_scratch, np);
+    if(scratch.extent(0) < np) {
+      Kokkos::resize(scratch, np);
     }
     Comparator comp(nbins, 0, np);
-    KeyViewType temp("temp particles_i", 1);
-    bin_sort->reset(exec_space(), temp, 0, np, comp, 0);
+    bin_sort->reset(exec_space(), temp_keys, 0, np, comp, 0);
   }
 
   // TODO: should the sort interface just take the sp?
@@ -235,11 +233,13 @@ struct PreAllocSorter {
     // Sort particle data. 
     for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
       auto sub_view = Kokkos::subview(particles, subview_pair, i);
-      bin_sort->sort_scratch(exec_space(), sub_view, f32_scratch, 0, np);
+      bin_sort->sort_scratch(exec_space(), sub_view, scratch, 0, np);
     }
 
     // Sort particle indices
-    bin_sort->sort_scratch(exec_space(), particles_i, i32_scratch, 0, np);
+    using i32_scratch=Kokkos::View<int*, device_type, Kokkos::MemoryUnmanaged>;
+    i32_scratch int_scratch((int*)(scratch.data()), np);
+    bin_sort->sort_scratch(exec_space(), particles_i, int_scratch, 0, np);
   }
 };
 
