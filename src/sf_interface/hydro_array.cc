@@ -522,7 +522,7 @@ hydro_array_t::copy_to_host() {
 
   //for(int i=0; i<hydro_array->k_h_h.extent(0); i++) {
   Kokkos::parallel_for("copy hydro to legacy array",
-    host_execution_policy(0, k_h_h.extent(0) - 1) ,
+    host_execution_policy(0, k_h_h.extent(0)) ,
     KOKKOS_LAMBDA (int i) {
     h_l[i].jx = k_h(i, hydro_var::jx);
     h_l[i].jy = k_h(i, hydro_var::jy);
