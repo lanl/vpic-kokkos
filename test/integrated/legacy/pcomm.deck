@@ -88,6 +88,8 @@ begin_diagnostics {
 
     species_t * sp = find_species_name( "test_species", species_list );
 
+    sp->copy_to_host();
+
     if( step()==0 ) {
         if( rank()==0 ) {
             sp->copy_to_host();
