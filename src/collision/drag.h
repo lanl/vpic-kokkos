@@ -58,6 +58,13 @@ struct drag_model : public collision_model<drag_model<Functor>> {
     float mS = stopping_cx(v0); 
 
     auto Cr = 1.0 - ndt_mi2*mS/v0;
+
+    // Prevent stiff drag from going unstable (temporary until can find a better solution):
+    if ( Cr < 0.85 ) {
+      //      printf("Warning. Cr = %f < 0.9. Limiting Cr=0.9\n",Cr);
+      //      Cr = 0.9; // Matlab tests start to show issues when ndt_mi2*mS/v0 > 0.1.
+      Cr = Kokkos::exp(-ndt_mi2*mS/v0); // Exact for linear drag function. 
+    }
     //auto Crterm2 = ndt_mi2*mS/v0;
 
     return Cr;
