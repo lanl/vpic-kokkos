@@ -67,7 +67,6 @@ struct binary_neutral_collision_pipeline {
   // species_t *_spp1, *_spp2;
   // k_particles_t _spp1_p, _spp2_p;
   // k_particles_i_t *_spp1_i, *_spp2_i;
-
   // Random access, read-only Views
   // TODO : Does RandomAccess trait really matter?
   k_particle_sortindex_t_ra _spi_sortindex_ra, _spj_sortindex_ra;
@@ -774,11 +773,11 @@ void collide_uniform_wt(
       // Determine if collision occurs, if (U > sigma * n * v * dt) then no collision
       if( rg.frand() > dd*t1) {
         return; // collision does not occur 
-      // } else {
-      //   MC_col_occurred = true;
       }
-    // } else {
-    //   MC_col_occurred = true;
+    } else if (qii == 0.0 || qjj == 0.0) {
+      // If it is a Coulomb collisiona and one of the particles is neutral,
+      // do not perform the collision
+      return;
     }
 
     MC_col_occurred = true;

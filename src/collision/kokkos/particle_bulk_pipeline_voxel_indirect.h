@@ -345,7 +345,7 @@ struct particle_bulk_collision_pipeline {
         qp_n = up[4];
 #endif
 
-        bool MC_col_occurred;
+        bool MC_col_occurred = false;
         if( use_e_field ) {
           particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v, MC_col_occurred);
         } else {      
@@ -385,6 +385,9 @@ struct particle_bulk_collision_pipeline {
           }
           case CollisionType::BulkElectronImpactIoniz:
           {
+            if (!MC_col_occurred) { break; }
+            // todo: modify electron fluid
+
             // Change in electron fluid energy due to the inelastic collision
             // is given by conservation of energy. It equals the ionization 
             // energy minus the energy removed from the ionizing atom
@@ -392,32 +395,18 @@ struct particle_bulk_collision_pipeline {
             // dE_e = E_e1 - (E_e1' + E_e2')
             //      = E_ionize - (E_n - E_i)
             //      = E_ionize - dE_n
-            den = wp * ( model.dE - 0.5 * mj *
-              ( ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) -
-                ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) ) );
-
-            // Reduce the electron fluid momentum (no scattering for now)
-            // Use particle weight wp as fraction of fluid that scatters
-            // v_e' = v_e * sqrt(1 - dE_e / E_e0) < v_e
-            // v_e' += -v_e * (1 - sqrt(1 - dE_e / E_e0))
-            // float ujx_fl = spj_fd(v, field_var::ux);
-            // float ujy_fl = spj_fd(v, field_var::uy);
-            // float ujz_fl = spj_fd(v, field_var::uz);
-            // float E_e0 = 0.5 * wp * (ujx_fl * ujx_fl + ujy_fl * ujy_fl + ujz_fl * ujz_fl);
-            // float dv_e = sqrt(1.0 - den / E_e0); // dv ~< 1
-
-            // dux = wp * ujx_fl * (1.0 - dv_e);
-            // duy = wp * ujy_fl * (1.0 - dv_e);
-            // duz = wp * ujz_fl * (1.0 - dv_e);
+            // den = wp * ( model.dE - 0.5 * mj *
+            //   ( ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) -
+            //     ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) ) );
 
             // Choose electron momentum from conservation
             // p_n + p_e1 = p_i + p_e1' + p_e2'
             // p_n - p_i = (p_e1' + p_e2') - p_e1
             // dp_n = -dp_e
             
-            dux = wp * mi / mj * (ux_i - ux_n);
-            duy = wp * mi / mj * (uy_i - uy_n);
-            duz = wp * mi / mj * (uz_i - uz_n);
+            // dux = wp * mi / mj * (ux_i - ux_n);
+            // duy = wp * mi / mj * (uy_i - uy_n);
+            // duz = wp * mi / mj * (uz_i - uz_n);
             
             break; // end case(electron impact ionization)
           }
@@ -572,7 +561,7 @@ struct particle_bulk_collision_pipeline {
           qp_n = up[4];
 #endif
 
-          bool MC_col_occurred;
+          bool MC_col_occurred = false;
           if( use_e_field ) {
             particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v, MC_col_occurred);
           } else {      
@@ -782,14 +771,14 @@ struct particle_bulk_collision_pipeline {
       ujz_fl = spj_f(ii, field_var::uz);
       tmp_fl = spj_f(ii, field_var::pe)/nj_fl; //nj_fl should be non-zero
 
-      // Use bulk electron flow for Lemon's collision and
-      // sample thermal velocity for electron impact ionization
-      if (model.collision_type == CollisionType::BulkElectronImpactIoniz) {
-        float uth_fl = sqrt(2.0 * tmp_fl / mj);
-        ujx_fl = rg.normal(ujx_fl, uth_fl);
-        ujy_fl = rg.normal(ujy_fl, uth_fl);
-        ujz_fl = rg.normal(ujz_fl, uth_fl);
-      }
+      // // Use bulk electron flow for Lemon's collision and
+      // // sample thermal velocity for electron impact ionization
+      // if (model.collision_type == CollisionType::BulkElectronImpactIoniz) {
+      //   float uth_fl = sqrt(2.0 * tmp_fl / mj);
+      //   ujx_fl = rg.normal(ujx_fl, uth_fl);
+      //   ujy_fl = rg.normal(ujy_fl, uth_fl);
+      //   ujz_fl = rg.normal(ujz_fl, uth_fl);
+      // }
     }
 
     float ndt = nj_fl * dt;
@@ -838,16 +827,13 @@ struct particle_bulk_collision_pipeline {
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
 
     // Monte-Carlo collision test
-    // bool MC_collision_occurred = false;
     if( MonteCarlo ) {
 
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
       //        Would this be useful?
-      //      dd = model.cross_section(rg, t2, t1);
-      dd = model.cross_section( rg, ur, t1, qi );
+      dd = model.cross_section( rg, ur, t1, qi, t2 );
 
       if( rg.frand() > dd*t1 ) {
-        // return MC_collision_occurred;
         MC_collision_occurred = false;
         return;
       } else {
@@ -882,14 +868,6 @@ struct particle_bulk_collision_pipeline {
       case CollisionType::BulkElectronImpactIoniz:
       {
         E0 = t2;
-        // Add extra catch to ensure ionization does not occur
-        // if the relative energy is below the ionization energy.
-        // (Note the cross section should be zero below the 
-        // the ionization energy, but lets be safe)
-        if (model.dE > E0) {
-          MC_collision_occurred = false;
-          return;
-        }
         up[4] += 1.0;
         break;
       }
@@ -954,7 +932,7 @@ struct particle_bulk_collision_pipeline {
 
     }
 
-    return;// MC_collision_occurred;
+    return;
   }
 
 };

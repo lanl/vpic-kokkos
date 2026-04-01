@@ -31,9 +31,17 @@ struct electron_ioniz_model : public collision_model<electron_ioniz_model<Functo
     float vr,    // Changed input variable.
     float nvdt,
     float Z1,    // Charge of particle
-    float Z2=0.0 // Charge of second particle (only for binary)
+    float E0=0.0 // relative energy
   ) const
   {
+    // Add extra catch to ensure ionization does not occur
+    // if the relative energy is below the ionization energy.
+    // (Note the cross section should be zero below the 
+    // the ionization energy, but lets be safe)
+    if (dE > E0) {
+      return 0.0;
+    }
+
     float sig = sigma_cx(vr, Z1);
     return sig;
   }
@@ -50,7 +58,6 @@ struct electron_ioniz_model : public collision_model<electron_ioniz_model<Functo
     // Removing energy only from particle assumes fluid is at rest
     auto E0 = param[4]; // projectile energy
     auto Cr = std::sqrt((E0 - dE) / E0); // scale factor for change in velocity
-    std::cout << "rest: dE="<<dE << " E0=" << E0 << " Cr="<<Cr << std::endl;
     return Cr;
   }
     
