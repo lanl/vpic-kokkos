@@ -781,6 +781,9 @@ struct particle_bulk_collision_pipeline {
       // }
     }
 
+    // Skip if there is no more fluid present
+    if (nj_fl <= 0.0) { return; }
+
     float ndt = nj_fl * dt;
     
     // Relative velocity
