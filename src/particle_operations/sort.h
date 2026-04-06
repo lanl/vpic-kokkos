@@ -49,15 +49,15 @@
 /**
  * @brief Find min and max value in a 1D View
  */
-template<typename T>
+template<typename KeyView>
 struct min_max_functor {
-  typedef Kokkos::MinMaxScalar<T> minmax_scalar;
-  Kokkos::View<T*> view;
-  min_max_functor(const Kokkos::View<T*>& view_) : view(view_) {}
+  typedef Kokkos::MinMaxScalar<typename KeyView::non_const_value_type> minmax_scalar;
+  KeyView view;
+  min_max_functor(const KeyView& view_) : view(view_) {}
   KOKKOS_INLINE_FUNCTION
   void operator()(const size_t& i, minmax_scalar& minmax) const {
-    if(view(i) < minmax.min_val && view(i) != 0) minmax.min_val = view(i);
-    if(view(i) > minmax.max_val && view(i) != 0) minmax.max_val = view(i);
+    if(view(i) < minmax.min_val) minmax.min_val = view(i);
+    if(view(i) > minmax.max_val) minmax.max_val = view(i);
   }
 };
 
@@ -86,7 +86,8 @@ struct DefaultSorter {
   )
   {
     // Get subset of particle indices as keys
-    auto keys = Kokkos::subview(key_view, Kokkos::make_pair<size_t,size_t>(0, np));
+    auto slice = Kokkos::make_pair<size_t,size_t>(0, np);
+    auto keys = Kokkos::subview(key_view, slice);
     
     // Sort and make permutation View
     CustomBinSort<KeyViewType, Comparator> bin_sort(keys, 0, np, comp, sort_within_bins);
@@ -94,11 +95,11 @@ struct DefaultSorter {
 
     // Sort particle data using subviews to reduce memory usage. 
     for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
-      auto sub_view = Kokkos::subview(particles, Kokkos::ALL, i);
+      auto sub_view = Kokkos::subview(particles, slice, i);
       bin_sort.sort(sub_view, 0, np);
     }
     // Sort particle indices
-    auto cell_ids = Kokkos::subview(particles_i, Kokkos::make_pair<size_t,size_t>(0, np));
+    auto cell_ids = Kokkos::subview(particles_i, slice);
     bin_sort.sort(cell_ids);
   }
 };
@@ -201,6 +202,9 @@ struct PreAllocSorter {
    * @brief Resize scratch and sorting Views
    */
   void resize(const size_t np, const size_t nbins) {
+    if(temp_keys.extent(0) < np) {
+      Kokkos::resize(temp_keys, np);
+    }
     if(scratch.extent(0) < np) {
       Kokkos::resize(scratch, np);
     }
@@ -508,7 +512,7 @@ struct TiledStridedSortOrder {
 //           SorterConcept<typename SortOrder::key_type> Sorter 
 //             = DefaultSorter<typename SortOrder::key_type> >
 template < typename SortOrder = DEFAULT_SORT_ORDER, 
-           typename Sorter = PreAllocSorter<typename SortOrder::key_type> >
+           typename Sorter = DefaultSorter<typename SortOrder::key_type> >
 struct ParticleSorter {
   SortOrder order;
   Sorter sorter;
