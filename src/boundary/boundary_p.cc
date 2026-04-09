@@ -67,9 +67,9 @@ boundary_p_kokkos(
   // Temporary store for local particle injectors
   // FIXME: Ugly static usage
   static particle_injector_t * RESTRICT ALIGNED(16) ci = NULL;
-  static int max_ci = 0;
+  static size_t max_ci = 0;
 
-  int n_send[6], n_recv[6], n_ci;
+  size_t n_send[6], n_recv[6], n_ci;
 
   species_t * sp;
   int face;
@@ -158,7 +158,7 @@ boundary_p_kokkos(
     // more flexible though in the future (especially given above the
     // above overalloc).
 
-    int nm = 0; LIST_FOR_EACH( sp, sp_list ) nm += sp->nm;
+    size_t nm = 0; LIST_FOR_EACH( sp, sp_list ) nm += sp->nm;
 
     for( face=0; face<6; face++ )
       if( shared[face] ) {
@@ -201,11 +201,12 @@ boundary_p_kokkos(
         // property if all aged particle injection occurs after
         // advance_p and before this
 
-        // Here we essentially need to remove all accesses of the particle array (p0) and instead read from k_pc_h
+        // Here we essentially need to remove all accesses of the particle 
+        // array (p0) and instead read from k_pc_h
         for( ; nm; pm--, nm-- )
         {
             //int i = pm->i;
-            int copy_index = nm -1;
+            size_t copy_index = nm -1;
 
             //int voxel = p0[i].i;
             int voxel = particle_send(copy_index);
@@ -387,7 +388,7 @@ boundary_p_kokkos(
     particle_mover_t * RESTRICT ALIGNED(32) sp_pm[MAX_SP];
     //float sp_q[MAX_SP];
     //int sp_np[MAX_SP];
-    int sp_nm[MAX_SP];
+    size_t sp_nm[MAX_SP];
 
     if( num_species( sp_list ) > MAX_SP )
     {
@@ -409,7 +410,7 @@ boundary_p_kokkos(
       //particle_t          * RESTRICT ALIGNED(32) p;
       particle_mover_t    * RESTRICT ALIGNED(16) pm;
       const particle_injector_t * RESTRICT ALIGNED(16) pi;
-      int nm, n, id;
+      size_t nm, n, id;
 
       face++; if( face==7 ) face = 0;
       if( face==6 ) pi = ci, n = n_ci;
@@ -436,7 +437,7 @@ boundary_p_kokkos(
         auto& particle_send = sp_[id]->k_pc_h;
         auto& particle_send_i = sp_[id]->k_pc_i_h;
 
-        int write_index = sp_[id]->num_to_copy;
+        size_t write_index = sp_[id]->num_to_copy;
 
         // Write out received particle data
         //p[np].dx=pi->dx;
@@ -485,7 +486,7 @@ boundary_p_kokkos(
                 sp_[id]->q
         );
 
-        int keep_id = nm + ret_code - 1;
+        size_t keep_id = nm + ret_code - 1;
         sp_nm[id] = keep_id+1; // +1 to convert from index to count:w
 
         if (ret_code)

@@ -73,7 +73,8 @@ vpic_simulation::inject_particle( species_t * sp,
   if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
   iz++;                               // Adjust for mesh indexing
 
-  particle_t * p = sp->p + (sp->np++);
+  size_t p_index = Kokkos::atomic_fetch_inc(&(sp->np));
+  particle_t * p = sp->p + p_index;
   p->dx = (float)x; // Note: Might be rounded to be on [-1,1]
   p->dy = (float)y; // Note: Might be rounded to be on [-1,1]
   p->dz = (float)z; // Note: Might be rounded to be on [-1,1]
@@ -160,9 +161,7 @@ vpic_simulation::inject_particle( species_t * sp,
   if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
   iz++;                               // Adjust for mesh indexing
 
-  int p_index = sp->np++;
-  //k_particles_t& k_particles = sp->k_p_h;
-  //k_particles_i_t& k_particles_i = sp->k_p_i_h;
+  size_t p_index = Kokkos::atomic_fetch_inc(&(sp->np));
 
   #define p_dx    sp->k_p_h(p_index, particle_var::dx)
   #define p_dy    sp->k_p_h(p_index, particle_var::dy)
@@ -181,7 +180,7 @@ vpic_simulation::inject_particle( species_t * sp,
   p_ux = (float)ux;
   p_uy = (float)uy;
   p_uz = (float)uz;
-  p_w  = w;
+  p_w  = (float)w;
 
   if( update_rhob ) Kokkos::abort("update_rhob for particle injection not implemented when not using legacy particle arrays");
 

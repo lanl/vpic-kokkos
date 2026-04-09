@@ -34,7 +34,7 @@ typedef int16_t material_id;
 
 // TODO: we dont need the [1] here
 // TODO: this can likely be unsigned, but that tends to upset Kokkos
-using k_counter_t = Kokkos::View<int[1]>;
+using k_counter_t = Kokkos::View<size_t[1]>;
 
 using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
 // TODO: This scatter access is needed only for jfxyz, not all field vars.
@@ -53,7 +53,7 @@ using k_particle_copy_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::Layo
 using k_particle_i_copy_t = Kokkos::View<int*>;
 
 using k_particle_movers_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT]>;
-using k_particle_i_movers_t = Kokkos::View<int*>;
+using k_particle_i_movers_t = Kokkos::View<size_t*>;
 
 using k_neighbor_t = Kokkos::View<int64_t*>;
 
@@ -244,7 +244,7 @@ namespace hydro_var {
 
 void print_particles_d(
         k_particles_t particles,
-        int np
+        size_t np
         );
 
 // The templating here is to defer the type until later in the head include chain
