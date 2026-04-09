@@ -19,8 +19,8 @@ TEST_CASE( "Verify ParticleSorter reorders particles correctly", "[ParticleSorte
 
   k_particles_t part("Particles", num_part);
   k_particles_i_t part_i("Particle cell indices", num_part);
-  k_particles_t::HostMirror part_h = Kokkos::create_mirror_view(part);
-  k_particles_i_t::HostMirror part_i_h = Kokkos::create_mirror_view(part_i);
+  k_particles_t::host_mirror_type part_h = Kokkos::create_mirror_view(part);
+  k_particles_i_t::host_mirror_type part_i_h = Kokkos::create_mirror_view(part_i);
 
   // Initialize cell indices using stdlib for correctness
   std::vector<int> cell_indices;
