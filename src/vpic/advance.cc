@@ -16,7 +16,7 @@ int vpic_simulation::advance(void)
 
   // Use default policy, for now
   ParticleCompressor<> compressor;
-  ParticleSorter<> sorter;
+  //ParticleSorter<> sorter;
 
   // Determine if we are done ... see note below why this is done here
   if( num_step>0 && step()>=num_step ) return 0;
@@ -29,7 +29,7 @@ int vpic_simulation::advance(void)
       if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
       {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-          sorter.sort( sp->k_p_d, sp->k_p_i_d, sp->np, grid->nv);
+          sorter->sort( sp->k_p_d, sp->k_p_i_d, sp->np, grid->nv);
       }
   }
 
@@ -168,7 +168,7 @@ int vpic_simulation::advance(void)
   LIST_FOR_EACH( sp, species_list )
   {
       KOKKOS_TIC(); // Time this data movement
-      const int nm = sp->k_nm_h(0);
+      const size_t nm = sp->k_nm_h(0);
 
       // TODO: this can be hoisted to the end of advance_p if desired
       compressor.compress(

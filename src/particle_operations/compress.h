@@ -19,8 +19,8 @@ struct DefaultCompress {
             k_particles_t particles,
             k_particles_i_t particles_i,
             k_particle_i_movers_t particle_movers_i,
-            const int32_t nm,
-            const int32_t np,
+            const size_t nm,
+            const size_t np,
             species_t* sp
             )
     {
@@ -58,27 +58,27 @@ struct DefaultCompress {
         // This is annoying, but it will give a back fill order more consistent
         // with VPIC's serial algorithm
 
-        Kokkos::View<int*> unsafe_index = sp->unsafe_index;
+        Kokkos::View<size_t*> unsafe_index = sp->unsafe_index;
 
         // Track (atomically) the id's we've tried to pull from when dealing with a
         // We use this to store a list of things we bailed out on moving. Typically because the mapping of pull_from->write_to got skipped.
 
-        Kokkos::View<int> clean_up_to_count = sp->clean_up_to_count;
-        Kokkos::View<int> clean_up_from_count = sp->clean_up_from_count;
+        Kokkos::View<size_t> clean_up_to_count = sp->clean_up_to_count;
+        Kokkos::View<size_t> clean_up_from_count = sp->clean_up_from_count;
 
-        Kokkos::View<int>::HostMirror clean_up_from_count_h = sp->clean_up_from_count_h;
+        Kokkos::View<size_t>::HostMirror clean_up_from_count_h = sp->clean_up_from_count_h;
 
-        Kokkos::View<int*> clean_up_from = sp->clean_up_from;
-        Kokkos::View<int*> clean_up_to = sp->clean_up_to;
+        Kokkos::View<size_t*> clean_up_from = sp->clean_up_from;
+        Kokkos::View<size_t*> clean_up_to = sp->clean_up_to;
         
         // Zero out the arrays and counters
         Kokkos::deep_copy(clean_up_to_count, 0);
         Kokkos::deep_copy(clean_up_from_count, 0);
-        Kokkos::parallel_for("Clean clean up arrays", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int i) {
+        Kokkos::parallel_for("Clean clean up arrays", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (size_t i) {
                 clean_up_from(i) = 0;
                 clean_up_to(i) = 0;
                 });
-        Kokkos::parallel_for("Clean clean up arrays", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 2*nm), KOKKOS_LAMBDA (int i) {
+        Kokkos::parallel_for("Clean clean up arrays", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, 2*nm), KOKKOS_LAMBDA (size_t i) {
                 unsafe_index(i) = 0;
                 });
 
@@ -88,18 +88,18 @@ struct DefaultCompress {
 
         // TODO: we can probably do this online while we do the advance_p
         Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
-        Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int i)
+        Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (size_t i)
         {
             // If the id of this particle is in the danger zone, don't add it
             // otherwise, do
-            int cut_off = np-(2*nm);
+            size_t cut_off = np-(2*nm);
 
-            int pmi = particle_movers_i(i);
+            size_t pmi = particle_movers_i(i);
 
             // If it's less than the cut off, it's safe
             if ( pmi >= cut_off) // danger zone
             {
-                int index = ((np-1) - pmi); // Map to the reverse indexing
+                size_t index = ((np-1) - pmi); // Map to the reverse indexing
                 unsafe_index(index) = 1; // 1 marks it as unsafe
             }
         });
@@ -107,14 +107,14 @@ struct DefaultCompress {
         // We will use the first 0-nm of safe_index to pull from
         // We will use the nm -> 2nm range for "panic picks", if the first wasn't safe (involves atomics..)
         Kokkos::parallel_for("particle compress", Kokkos::RangePolicy <
-                Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (int n)
+                Kokkos::DefaultExecutionSpace > (0, nm), KOKKOS_LAMBDA (size_t n)
         {
 
             // TODO: is this np or np-1?
             // Doing this in the "inverse order" to match vpic
-            int pull_from = (np-1) - (n); // grab a particle from the end block
-            int write_to = particle_movers_i(nm-n-1); // put it in a gap
-            int danger_zone = np - nm;
+            size_t pull_from = (np-1) - (n); // grab a particle from the end block
+            size_t write_to = particle_movers_i(nm-n-1); // put it in a gap
+            size_t danger_zone = np - nm;
 
             // if they're the same, no need to do it. This can happen below in
             // the danger zone and we want to avoid "cleaning it up"
@@ -135,7 +135,7 @@ struct DefaultCompress {
                 // TODO: by skipping this move, we neglect to move the
                 // pull_from to somewhere sensible...  For now we put it on
                 // a clean up list..but that sucks
-                int clean_up_from_index = Kokkos::atomic_fetch_add( &clean_up_from_count(), 1 );
+                size_t clean_up_from_index = Kokkos::atomic_fetch_add( &clean_up_from_count(), 1 );
                 clean_up_from(clean_up_from_index) = pull_from;
             }
             }
@@ -151,7 +151,7 @@ struct DefaultCompress {
             if ( unsafe_index( n ) )
             {
                 // Instead we'll get this on the second pass
-                int clean_up_to_index = Kokkos::atomic_fetch_add( &clean_up_to_count(), 1 );
+                size_t clean_up_to_index = Kokkos::atomic_fetch_add( &clean_up_to_count(), 1 );
                 clean_up_to(clean_up_to_index) = write_to;
 
                 return;
@@ -181,10 +181,10 @@ struct DefaultCompress {
         Kokkos::deep_copy(clean_up_from_count_h, clean_up_from_count);
 
         Kokkos::parallel_for("compress clean up", Kokkos::RangePolicy <
-        Kokkos::DefaultExecutionSpace > (0, clean_up_from_count_h() ), KOKKOS_LAMBDA (int n)
+        Kokkos::DefaultExecutionSpace > (0, clean_up_from_count_h() ), KOKKOS_LAMBDA (size_t n)
         {
-            int write_to = clean_up_to(n);
-            int pull_from = clean_up_from(n);
+            size_t write_to = clean_up_to(n);
+            size_t pull_from = clean_up_from(n);
 
             particles(write_to, particle_var::dx) = particles(pull_from, particle_var::dx);
             particles(write_to, particle_var::dy) = particles(pull_from, particle_var::dy);
@@ -201,31 +201,31 @@ struct DefaultCompress {
 //            k_particles_t particles,
 //            k_particles_i_t particles_i,
 //            k_particle_i_movers_t particle_movers_i,
-//            const int32_t nm,
-//            const int32_t np,
+//            const size_t nm,
+//            const size_t np,
 //            species_t* sp
 //            )
 //    {
-//        Kokkos::View<int*> replacements("replacement indices", nm);
-////        Kokkos::View<int*> safe_spots("copy", nm);
-//        Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Atomic> > safe_spots("copy", nm);
-//        Kokkos::parallel_for("remove particles", Kokkos::RangePolicy<>(0, nm), KOKKOS_LAMBDA(const int n) {
-//            int pm_i = particle_movers_i(n);
-//            int p_i = particles_i(n);
+//        Kokkos::View<size_t*> replacements("replacement indices", nm);
+////        Kokkos::View<size_t*> safe_spots("copy", nm);
+//        Kokkos::View<size_t*, Kokkos::MemoryTraits<Kokkos::Atomic> > safe_spots("copy", nm);
+//        Kokkos::parallel_for("remove particles", Kokkos::RangePolicy<>(0, nm), KOKKOS_LAMBDA(const size_t n) {
+//            size_t pm_i = particle_movers_i(n);
+//            size_t p_i = particles_i(n);
 //            particles_i(pm_i) = p_i >> 3;
 //
 //            safe_spots(n) = (np + nm) + n;
 //            if(pm_i >= np-nm) 
 //                safe_spots(pm_i-(np-nm)) = 0;
 //            if(pm_i < np-nm) {
-//                int counter = n;
-//                for(int j=0; j<nm; j++) {
+//                size_t counter = n;
+//                for(size_t j=0; j<nm; j++) {
 //                    if(safe_spots(j) == 0) {
 //                        continue;
 //                    } else if(counter > 0) {
 //                        counter--;
 //                    } else {
-//                        int spot = safe_spots(j);
+//                        size_t spot = safe_spots(j);
 //                        replacements(n) = spot;
 //                        break;
 //                    }
@@ -233,10 +233,10 @@ struct DefaultCompress {
 //            }
 //        });
 //
-//        Kokkos::parallel_for("fill holes", Kokkos::RangePolicy<>(0, nm), KOKKOS_LAMBDA(const int n) {
-//            int pm_i = particle_movers_i(n);
+//        Kokkos::parallel_for("fill holes", Kokkos::RangePolicy<>(0, nm), KOKKOS_LAMBDA(const size_t n) {
+//            size_t pm_i = particle_movers_i(n);
 //            if(replacements(n) != 0) {
-//                int replace_id = replacements(n);
+//                size_t replace_id = replacements(n);
 //                particles(pm_i, particle_var::dx) = particles(replace_id, particle_var::dx);
 //                particles(pm_i, particle_var::dy) = particles(replace_id, particle_var::dy);
 //                particles(pm_i, particle_var::dz) = particles(replace_id, particle_var::dz);
@@ -256,8 +256,8 @@ struct SortCompress {
     static void compress(
             k_particles_t particles,
             k_particle_movers_t particle_movers,
-            const int32_t nm,
-            const int32_t np,
+            const size_t nm,
+            const size_t np,
             species_t* sp
             )
     {

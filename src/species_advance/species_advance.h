@@ -41,7 +41,8 @@ typedef struct particle {
 
 typedef struct particle_mover {
   float dispx, dispy, dispz; // Displacement of particle
-  int32_t i;                 // Index of the particle to move
+  size_t i;                 // Index of the particle to move
+  float _pad[3];
 } particle_mover_t;
 
 // NOTE: THE LAYOUT OF A PARTICLE_INJECTOR _MUST_ BE COMPATIBLE WITH
@@ -92,13 +93,13 @@ class species_t {
         float q;                            // Species particle charge
         float m;                            // Species particle rest mass
 
-        int np = 0, max_np = 0;             // Number and max local particles
+        size_t np = 0, max_np = 0;             // Number and max local particles
 #ifdef USE_LEGACY_PARTICLE_ARRAY
         particle_t * ALIGNED(128) p;        // Array of particles for the species
 #endif
 
         // TODO: these could be unsigned?
-        int nm = 0, max_nm = 0;             // Number and max local movers in use
+        size_t nm = 0, max_nm = 0;             // Number and max local movers in use
 
         particle_mover_t * ALIGNED(128) pm; // Particle movers
 
@@ -168,7 +169,7 @@ class species_t {
         // TODO: this should ultimatley be removeable.
         // This tracks the number of particles we need to move back to the device
         // And is basically the same as nm at certain times?
-        int num_to_copy = 0;
+        size_t num_to_copy = 0;
 
         // Step when the species was last copied to to the host.  The copy can
         // take place at any time during the step, so checking
@@ -183,15 +184,15 @@ class species_t {
         int64_t last_copied = -1;
 
         // Static allocations for the compressor
-        Kokkos::View<int*> unsafe_index;
-        Kokkos::View<int> clean_up_to_count;
-        Kokkos::View<int> clean_up_from_count;
-        Kokkos::View<int>::HostMirror clean_up_from_count_h;
-        Kokkos::View<int*> clean_up_from;
-        Kokkos::View<int*> clean_up_to;
+        Kokkos::View<size_t*> unsafe_index;
+        Kokkos::View<size_t> clean_up_to_count;
+        Kokkos::View<size_t> clean_up_from_count;
+        Kokkos::View<size_t>::HostMirror clean_up_from_count_h;
+        Kokkos::View<size_t*> clean_up_from;
+        Kokkos::View<size_t*> clean_up_to;
 
         // Init Kokkos Particle Arrays
-        species_t(int n_particles, int n_pmovers)
+        species_t(size_t n_particles, size_t n_pmovers)
         {
            init_kokkos_particles(n_particles, n_pmovers);
         }
@@ -200,7 +201,7 @@ class species_t {
         {
             init_kokkos_particles(max_np, max_nm);
         }
-        void init_kokkos_particles(int n_particles, int n_pmovers)
+        void init_kokkos_particles(size_t n_particles, size_t n_pmovers)
         {
             k_p_d = k_particles_t("k_particles", n_particles);
             k_p_i_d = k_particles_i_t("k_particles_i", n_particles);
@@ -211,11 +212,11 @@ class species_t {
             k_pm_d = k_particle_movers_t("k_particle_movers", n_pmovers);
             k_pm_i_d = k_particle_i_movers_t("k_particle_movers_i", n_pmovers);
             k_nm_d = k_counter_t("k_nm"); // size 1 encoded in type
-            unsafe_index = Kokkos::View<int*>("safe index", 2*n_pmovers);
-            clean_up_to_count = Kokkos::View<int>("clean up to count");
-            clean_up_from_count = Kokkos::View<int>("clean up from count");
-            clean_up_from = Kokkos::View<int*>("clean up from", n_pmovers);
-            clean_up_to = Kokkos::View<int*>("clean up to", n_pmovers);
+            unsafe_index = Kokkos::View<size_t*>("safe index", 2*n_pmovers);
+            clean_up_to_count = Kokkos::View<size_t>("clean up to count");
+            clean_up_from_count = Kokkos::View<size_t>("clean up from count");
+            clean_up_from = Kokkos::View<size_t*>("clean up from", n_pmovers);
+            clean_up_to = Kokkos::View<size_t*>("clean up to", n_pmovers);
 
             k_p_h = Kokkos::create_mirror_view(k_p_d);
             k_p_i_h = Kokkos::create_mirror_view(k_p_i_d);
@@ -277,8 +278,8 @@ species_t *
 species( const char * name,
          float q,
          float m,
-         int max_local_np,
-         int max_local_nm,
+         size_t max_local_np,
+         size_t max_local_nm,
          int sort_interval,
          int sort_out_of_place,
          grid_t * g );
@@ -370,7 +371,7 @@ void k_accumulate_rhob(
             k_particle_movers_t& kpart_movers,
             const grid_t* RESTRICT g,
             const float qsp,
-            const int nm);
+            const size_t nm);
 
 void k_accumulate_rhob_single_cpu(
             k_field_t& kfield,
@@ -455,7 +456,7 @@ move_p_kokkos(
   int axis, face;
   int64_t neighbor;
   //int pi = int(local_pm_i);
-  int pi = pm->i;
+  size_t pi = pm->i;
 //  auto  k_field_scatter_access = k_f_sa.access();
 //  auto accum_sa = accum_sv.access();
   auto scatter_access = scatter_view.access();
@@ -707,7 +708,7 @@ move_p_kokkos_host_serial(
   int axis, face;
   int64_t neighbor;
   //int pi = int(local_pm_i);
-  int pi = pm->i;
+  size_t pi = pm->i;
 
   q = qsp*p_w;
 

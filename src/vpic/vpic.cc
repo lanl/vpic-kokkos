@@ -52,6 +52,9 @@ restore_vpic_simulation( void ) {
   RESTORE_FPTR( vpic->particle_bc_list );
   RESTORE_FPTR( vpic->emitter_list );
   //RESTORE_FPTR( vpic->collision_op_list );
+
+  vpic->sorter = new ParticleSorter<>();
+
   return vpic;
 }
 
@@ -88,6 +91,8 @@ vpic_simulation::vpic_simulation() {
   sync_entropy = new_rng_pool( n_rng, 0, 1 );
   grid = new_grid();
 
+  sorter = new ParticleSorter<>();
+
   REGISTER_OBJECT( this, checkpt_vpic_simulation,
                    restore_vpic_simulation, reanimate_vpic_simulation );
 }
@@ -104,6 +109,7 @@ vpic_simulation::~vpic_simulation() {
   delete_grid( grid );
   delete_rng_pool( sync_entropy );
   delete_rng_pool( entropy );
+  delete sorter;
   Kokkos::finalize();
 }
 
@@ -159,7 +165,7 @@ void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
 #ifndef USE_LEGACY_PARTICLE_ARRAY
     char fname[256];
     FileIO fileIO;
-    int buf_start;
+    size_t buf_start;
     static particle_t * ALIGNED(128) p_buf = NULL;
     if( !p_buf ) MALLOC_ALIGNED( p_buf, PBUF_SIZE, 128 );
     Kokkos::View<particle_t*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged> > pbuf(p_buf, PBUF_SIZE);
@@ -174,12 +180,12 @@ void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
         // Copy a PBUF_SIZE hunk of the particle list into the particle buffer,
         // and write it out.  This is simplified from dump_particles since we
         // don't need to call center_p.
-        int bufsize = PBUF_SIZE;
+        size_t bufsize = PBUF_SIZE;
         for( buf_start=0; buf_start<sp->np; buf_start += PBUF_SIZE ) {
             if (buf_start + bufsize > sp->np) bufsize = sp->np - buf_start;
             Kokkos::parallel_for("Populate particle dump buffer",
                     host_execution_policy(0, bufsize),
-                    KOKKOS_LAMBDA (int i) {
+                    KOKKOS_LAMBDA (size_t i) {
 
                     pbuf(i).dx = sp->k_p_h(buf_start + i, particle_var::dx);
                     pbuf(i).dy = sp->k_p_h(buf_start + i, particle_var::dy);

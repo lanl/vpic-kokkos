@@ -295,7 +295,7 @@ vpic_simulation::dump_particles( const char *sp_name,
     species_t *sp;
     char fname[max_filename_bytes];
     FileIO fileIO;
-    int dim[1], buf_start;
+    size_t dim[1], buf_start;
     static particle_t * ALIGNED(128) p_buf = NULL;
 # define PBUF_SIZE 32768 // 1MB of particles
 
@@ -346,14 +346,14 @@ vpic_simulation::dump_particles( const char *sp_name,
     Kokkos::View<particle_t*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged> > pbuf(p_buf, PBUF_SIZE);
     auto& k_p_h = sp->k_p_h;
     auto& k_p_i_h = sp->k_p_i_h;
-    int sp_np         = sp->np;     sp->np     = 0;
-    int sp_max_np     = sp->max_np; sp->max_np = PBUF_SIZE;
+    size_t sp_np         = sp->np;     sp->np     = 0;
+    size_t sp_max_np     = sp->max_np; sp->max_np = PBUF_SIZE;
     for( buf_start=0; buf_start<sp_np; buf_start += PBUF_SIZE ) {
         sp->np = sp_np-buf_start; if( sp->np > PBUF_SIZE ) sp->np = PBUF_SIZE;
         //COPY( sp->p, &sp_p[buf_start], sp->np );
         Kokkos::parallel_for("Populate particle dump buffer",
             host_execution_policy(0, sp->np),
-            KOKKOS_LAMBDA (int i) {
+            KOKKOS_LAMBDA (size_t i) {
             pbuf(i).dx = k_p_h(buf_start + i, particle_var::dx);
             pbuf(i).dy = k_p_h(buf_start + i, particle_var::dy);
             pbuf(i).dz = k_p_h(buf_start + i, particle_var::dz);
@@ -537,7 +537,7 @@ vpic_simulation::global_header( const char * base,
   // Create a variable list for each species to output
   print_hashed_comment(fileIO, "Number of species with output data");
   fileIO.print("NUM_OUTPUT_SPECIES %d\n\n", dumpParams.size()-1);
-  char species_comment[128];
+  char species_comment[max_filename_bytes];
   for(size_t i(1); i<dumpParams.size(); i++) {
     numvars = std::min(dumpParams[i]->output_vars.bitsum(hydro_indeces,
                                                          total_hydro_groups),

@@ -25,6 +25,7 @@
 #include "../util/bitfield.h"
 #include "../util/checksum.h"
 #include "../util/system.h"
+#include "../particle_operations/sort.h"
 
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
@@ -205,6 +206,8 @@ public:
 #if 0
   collision_op_t       * collision_op_list;  // collision helpers
 #endif
+
+  ParticleSorter<>* sorter;
 
   // User defined checkpt preserved variables
   // Note: user_global is aliased with user_global_t (see deck_wrapper.cxx)
@@ -524,8 +527,10 @@ public:
       if( max_local_nm<16*(MAX_PIPELINE+1) )
         max_local_nm = 16*(MAX_PIPELINE+1);
     }
+    sorter->resize(max_local_np, grid->nv);
+
     return append_species( species( name, (float)q, (float)m,
-                                    (int)max_local_np, (int)max_local_nm,
+                                    (size_t)max_local_np, (size_t)max_local_nm,
                                     (int)sort_interval, (int)sort_out_of_place,
                                     grid ), &species_list );
   }
@@ -667,7 +672,7 @@ public:
   }
 
   // Truncate "a" to the nearest integer multiple of "b"
-  inline double trunc_granular( double a, double b ) { return b*int(a/b); }
+  inline double trunc_granular( double a, double b ) { return b*uint64_t(a/b); }
 
   // Compute the remainder of a/b
   inline double remainder( double a, double b ) { return std::remainder(a,b); }

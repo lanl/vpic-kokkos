@@ -13,9 +13,9 @@
 typedef struct particle_mover_seg {
 
   MEM_PTR( particle_mover_t, 16 ) pm; // First mover in segment
-  int max_nm;                         // Maximum number of movers
-  int nm;                             // Number of movers used
-  int n_ignored;                      // Number of movers ignored
+  size_t max_nm;                      // Maximum number of movers
+  size_t nm;                          // Number of movers used
+  size_t n_ignored;                      // Number of movers ignored
 
   PAD_STRUCT( SIZEOF_MEM_PTR+3*sizeof(int) )
 
@@ -36,8 +36,8 @@ typedef struct advance_p_pipeline_args {
   float                                cdt_dz;   // z-space/time coupling
   float                                qsp;      // Species particle charge
 
-  int                                  np;       // Number of particles
-  int                                  max_nm;   // Number of movers
+  size_t                               np;       // Number of particles
+  size_t                               max_nm;   // Number of movers
   int                                  nx;       // x-mesh resolution
   int                                  ny;       // y-mesh resolution
   int                                  nz;       // z-mesh resolution
@@ -56,7 +56,7 @@ typedef struct center_p_pipeline_args {
   MEM_PTR( particle_t,           128 ) p0;      // Particle array
   MEM_PTR( const interpolator_t, 128 ) f0;      // Interpolator array
   float                                qdt_2mc; // Particle/field coupling
-  int                                  np;      // Number of particles
+  size_t                               np;      // Number of particles
 
   PAD_STRUCT( 2*SIZEOF_MEM_PTR + sizeof(float) + sizeof(int) )
 
@@ -79,7 +79,7 @@ typedef struct energy_p_pipeline_args {
   MEM_PTR( double,               128 ) en;      // Return values
   float                                qdt_2mc; // Particle/field coupling
   float                                msp;     // Species particle rest mass
-  int                                  np;      // Number of particles
+  size_t                               np;      // Number of particles
 
   PAD_STRUCT( 3*SIZEOF_MEM_PTR + 2*sizeof(float) + sizeof(int) )
 

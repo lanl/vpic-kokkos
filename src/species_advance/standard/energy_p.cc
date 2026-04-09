@@ -121,7 +121,10 @@ energy_p_pipeline_v4( energy_p_pipeline_args_t * args,
 #endif // USE_LEGACY_PARTICLE_ARRAY
 
 double
-energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particles, const k_particles_i_t& k_particles_i, const float qdt_2mc, const float msp, const int np) {
+energy_p_kernel(const k_interpolator_t& k_interp, 
+                const k_particles_t& k_particles, 
+                const k_particles_i_t& k_particles_i, 
+                const float qdt_2mc, const float msp, const size_t np) {
 //  const interpolator_t * RESTRICT ALIGNED(128) f = args->f;
 //  const particle_t     * RESTRICT ALIGNED(32)  p = args->p;
 //  const float qdt_2mc = args->qdt_2mc;
@@ -159,17 +162,17 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
     en += (double)v0;
   }
 */
-    Kokkos::parallel_reduce(np, KOKKOS_LAMBDA(const int n, double& update) {
+    Kokkos::parallel_reduce(np, KOKKOS_LAMBDA(const size_t n, double& update) {
         float dx = k_particles(n, particle_var::dx);
         float dy = k_particles(n, particle_var::dy);
         float dz = k_particles(n, particle_var::dz);
         int   i  = k_particles_i(n);
-        float v0 = k_particles(n, particle_var::ux) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
-                                dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
-        float v1 = k_particles(n, particle_var::uy) + qdt_2mc*(    ( k_interp(i, interpolator_var::ey)    + dz*k_interp(i, interpolator_var::deydz)    ) +
-                                dx*( k_interp(i, interpolator_var::deydx) + dz*k_interp(i, interpolator_var::d2eydzdx) ) );
-        float v2 = k_particles(n, particle_var::uz) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
-                                dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
+        float v0 = k_particles(n, particle_var::ux) + qdt_2mc*( ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
+                                                             dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
+        float v1 = k_particles(n, particle_var::uy) + qdt_2mc*( ( k_interp(i, interpolator_var::ey)    + dz*k_interp(i, interpolator_var::deydz)    ) +
+                                                             dx*( k_interp(i, interpolator_var::deydx) + dz*k_interp(i, interpolator_var::d2eydzdx) ) );
+        float v2 = k_particles(n, particle_var::uz) + qdt_2mc*( ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
+                                                             dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
         v0 = v0*v0 + v1*v1 + v2*v2;
         v0 = (msp * k_particles(n, particle_var::w)) * (v0 / (1 + sqrtf(1 + v0)));
         update += static_cast<double>(v0);
