@@ -666,8 +666,8 @@ struct BijectiveShuffle {
       team_member.team_barrier();
 
       // Compute bijection
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<size_t>(team_member, niters), 
-        [=] (size_t idx) {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, niters), 
+        [=] (const size_t idx) {
         const uint64_t b = (*bijective_func)(idx);
         //const size_t b = variable_philox(idx, left_side_bits, right_side_bits, 
         //                                 left_side_mask, right_side_mask, keys);
@@ -703,14 +703,13 @@ struct BijectiveShuffle {
       team_member.team_barrier();
 
       // Get output indices
-      size_t total = 0;
-      Kokkos::parallel_scan(Kokkos::TeamThreadRange<size_t>(team_member, niters),
-        [=] (size_t i, size_t& partial_sum, bool is_final) {
+      Kokkos::parallel_scan(Kokkos::TeamThreadRange(team_member, niters),
+        [=] (const size_t i, size_t& partial_sum, bool is_final) {
         if(is_final) 
           out_subview(i) = partial_sum;
         //partial_sum += size_t( flags_subview(i) );
         partial_sum += size_t( flags_bitset.test(padded_i0+i) );
-      }, total);
+      });
 
       team_member.team_barrier();
 
@@ -727,8 +726,8 @@ struct BijectiveShuffle {
       //});
       
       // Shuffle data
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<size_t>(team_member, niters), 
-        [=] (size_t i) {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, niters), 
+        [=] (const size_t i) {
         if(bijection_map(i) < ni) {
           subview(out_subview(i)) = copy_subview(bijection_map(i));
         }
@@ -788,7 +787,13 @@ struct BijectiveShuffle {
   }
 };
 
-template <typename Policy = BijectiveShuffle<PhiloxBijectiveFunction> >
+using DefaultShuffle = std::conditional<std::is_same_v<Kokkos::DefaultExecutionSpace,
+                                                       Kokkos::DefaultHostExecutionSpace>, 
+                                        MergeShuffle, 
+                                        BijectiveShuffle<PhiloxBijectiveFunction> >::type;
+
+//template <typename Policy = BijectiveShuffle<PhiloxBijectiveFunction> >
+template <typename Policy = DefaultShuffle>
 struct ParticleShuffler : private Policy {
     using Policy::shuffle;
 };
