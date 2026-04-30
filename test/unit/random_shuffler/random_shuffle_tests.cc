@@ -103,7 +103,6 @@ printf("Setup grid\n");
   int max_local_nm = int(nx*ny*nz*nppc*1.00);
   int sort_interval = 10000;
   int sort_out_of_place = 1;
-  float w = 1.0;
   double vthi = 1.0;
 
   // Create species

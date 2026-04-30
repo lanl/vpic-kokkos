@@ -545,6 +545,9 @@ struct PhiloxBijectiveFunction {
     return uint32_t( product );
   }
 
+  /**
+   * @brief Compute bijective mapping of input value
+   */
   KOKKOS_INLINE_FUNCTION
   uint64_t
   operator()(const uint64_t val) {
@@ -613,7 +616,7 @@ struct BijectiveShuffle {
         padded_partition(i) = partial_sum; 
         if(i == partition.extent(0)-2)
           padded_partition(i+1) = partial_sum + padded_cell_len;
-          partial_sum += padded_cell_len;
+        partial_sum += padded_cell_len;
       }
       partial_sum += padded_cell_len;
     }, padded_len);
@@ -621,7 +624,6 @@ struct BijectiveShuffle {
     view_type copy("View copy", view.extent(0));
     Kokkos::deep_copy(copy, view);
     Kokkos::View<size_t*> bijection("Bijection mapping", padded_len);
-    //Kokkos::View<bool*> flags("Valid flag", padded_len);
     Kokkos::Bitset<Kokkos::DefaultExecutionSpace> flags_bitset(padded_len);
     flags_bitset.reset();
     Kokkos::View<size_t*> out_idx("Output indices", padded_len);
@@ -646,7 +648,6 @@ struct BijectiveShuffle {
       auto padded_slice = Kokkos::make_pair(padded_i0, padded_i0+padded_ni);
 
       auto bijection_map = Kokkos::subview(bijection, padded_slice);
-      //auto flags_subview = Kokkos::subview(flags, padded_slice);
       auto out_subview = Kokkos::subview(out_idx, padded_slice);
 
       auto subview = Kokkos::subview(view, slice);
@@ -657,10 +658,6 @@ struct BijectiveShuffle {
       BijectiveFunction* bijective_func = (BijectiveFunction*) team_member.team_shmem().get_shmem(sizeof(BijectiveFunction));
       Kokkos::single(Kokkos::PerTeam(team_member), [&]() {
         bijective_func->setup(padded_ni, rg);
-
-        //printf("League %d\tCell %d, v %d\n", team_member.league_rank(), cell, v);
-        //printf("League %d\tPartition: [%lu,%lu)\n", team_member.league_rank(), i0, i0+ni);
-        //printf("League %d\tPadded Partition: [%lu,%lu)\n", team_member.league_rank(), padded_i0, padded_i0+padded_ni);
       });
 
       team_member.team_barrier();
@@ -669,9 +666,6 @@ struct BijectiveShuffle {
       Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, niters), 
         [=] (const size_t idx) {
         const uint64_t b = (*bijective_func)(idx);
-        //const size_t b = variable_philox(idx, left_side_bits, right_side_bits, 
-        //                                 left_side_mask, right_side_mask, keys);
-        //flags_subview(idx) = b<ni; //b < ni ? uint32_t(1) : uint32_t(0);
         if(b < ni)
           flags_bitset.set(padded_i0+idx);
         bijection_map(idx) = b;
@@ -679,52 +673,16 @@ struct BijectiveShuffle {
 
       team_member.team_barrier();
 
-      //Kokkos::single(Kokkos::PerTeam(team_member), [&]() {
-      //  printf("League %d\tBijection map: \n[", team_member.league_rank());
-      //  for(size_t i=0; i<bijection_map.extent(0); i++) {
-      //    printf("%lu:%lu\t", i, bijection_map(i));
-      //  }
-      //  printf("]\n");
-      //  printf("League %d\tFlags map: \n[", team_member.league_rank());
-      //  for(size_t i=0; i<bijection_map.extent(0); i++) {
-      //    printf("%d\t", flags_bitset.test(padded_i0+i));
-      //  }
-      //  printf("]\n");
-      //  //printf("League %d\tBijection map:  %d:%zu  %d:%zu  %d:%zu  %d:%zu  %d:%zu  %d:%zu  %d:%zu  %d:%zu\n", team_member.league_rank(),
-      //  //  0, bijection_map(0), 1, bijection_map(1), 2, bijection_map(2), 3, bijection_map(3),
-      //  //  4, bijection_map(4), 5, bijection_map(5), 6, bijection_map(6), 7, bijection_map(7)
-      //  //);
-      //  //printf("League %d\tFlags:  %zu  %zu  %zu  %zu  %zu  %zu  %zu  %zu\n", team_member.league_rank(),
-      //  //  flags_subview(0), flags_subview(1), flags_subview(2), flags_subview(3),
-      //  //  flags_subview(4), flags_subview(5), flags_subview(6), flags_subview(7)
-      //  //);
-      //});
-      
-      team_member.team_barrier();
-
       // Get output indices
       Kokkos::parallel_scan(Kokkos::TeamThreadRange(team_member, niters),
         [=] (const size_t i, size_t& partial_sum, bool is_final) {
         if(is_final) 
           out_subview(i) = partial_sum;
-        //partial_sum += size_t( flags_subview(i) );
         partial_sum += size_t( flags_bitset.test(padded_i0+i) );
       });
 
       team_member.team_barrier();
 
-      //Kokkos::single(Kokkos::PerTeam(team_member), [&]() {
-      //  printf("League %d\tOutput idx: \n[", team_member.league_rank());
-      //  for(size_t i=0; i<out_subview.extent(0); i++) {
-      //    printf("%lu\t", out_subview(i));
-      //  }
-      //  printf("]\n");
-      //  //printf("League %d\tOutput indices:  %zu  %zu  %zu  %zu  %zu  %zu  %zu  %zu\n", team_member.league_rank(),
-      //  //  out_subview(0), out_subview(1), out_subview(2), out_subview(3),
-      //  //  out_subview(4), out_subview(5), out_subview(6), out_subview(7)
-      //  //);
-      //});
-      
       // Shuffle data
       Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, niters), 
         [=] (const size_t i) {
@@ -787,12 +745,12 @@ struct BijectiveShuffle {
   }
 };
 
+// Use Merge shuffle on CPUs and Philox shuffle on GPUs
 using DefaultShuffle = std::conditional<std::is_same_v<Kokkos::DefaultExecutionSpace,
                                                        Kokkos::DefaultHostExecutionSpace>, 
                                         MergeShuffle, 
                                         BijectiveShuffle<PhiloxBijectiveFunction> >::type;
 
-//template <typename Policy = BijectiveShuffle<PhiloxBijectiveFunction> >
 template <typename Policy = DefaultShuffle>
 struct ParticleShuffler : private Policy {
     using Policy::shuffle;
