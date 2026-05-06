@@ -52,7 +52,7 @@ delete_species( species_t * sp ) {
   FREE_ALIGNED( sp->pm );
   FREE_ALIGNED( sp->p );
   FREE( sp->name );
-  FREE( sp );
+  delete sp;
 }
 
 /* Public interface **********************************************************/

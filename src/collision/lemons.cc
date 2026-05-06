@@ -50,10 +50,10 @@ lemons(
     ERROR(("Bad args."));
 
   lemons_collision_op_t * le;
+  const auto name_len = strlen(name);
   MALLOC( le, 1);
   MALLOC( le->name, strlen(name) +1 );
-  strncpy( le->name, name, strlen(le->name));
-  //strncpy( le->name, name, strlen(name)+1);
+  strncpy( le->name, name, name_len+1);
 
   spi->last_indexed = -1; //to ensure sort in collisions
   

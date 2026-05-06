@@ -58,7 +58,7 @@ delete_hydro_array( hydro_array_t * ha ) {
   if( !ha ) return;
   UNREGISTER_OBJECT( ha );
   FREE_ALIGNED( ha->h );
-  FREE( ha );
+  delete ha;
 }
 
 void
