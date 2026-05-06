@@ -13,7 +13,7 @@ cmake_policy(SET CMP0074 NEW)
 project(vpic CXX)
 
 #------------------------------------------------------------------------------#
-# If a C++14 compiler is available, then set the appropriate flags
+# If a C++17 compiler is available, then set the appropriate flags
 # Note: As of February 2021, VPIC requires only C++11, but requiring C++14
 # makes building Kokkos easier.  If you are adventurous and using your own
 # Kokkos build, feel free to try a lower standard.
@@ -265,55 +265,35 @@ endif(BUILD_INTERNAL_KOKKOS)
 get_target_property(KOKKOS_COMPILE_OPTIONS Kokkos::kokkoscore INTERFACE_COMPILE_OPTIONS)
 get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE_INCLUDE_DIRECTORIES)
-
-#message(${KOKKOS_COMPILE_OPTIONS})
-# TODO: this gives the external include path
-#get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
-
-#get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
-#get_target_property(KOKKOS_LIB_CONTAINERS Kokkos::kokkoscontainers INTERFACE_LINK_DEPENDS)
+get_target_property(KOKKOS_INCLUDE_ALGORITHMS Kokkos::kokkosalgorithms INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(KOKKOS_INCLUDE_SIMD Kokkos::kokkossimd INTERFACE_INCLUDE_DIRECTORIES)
 
 set(KOKKOS_CORE_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_core_includes)
 set(KOKKOS_CONTAINER_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_container_includes)
+set(KOKKOS_ALGORITHM_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_algorithm_includes)
 set(KOKKOS_COMPILE_OPTIONS_FILE ${PROJECT_BINARY_DIR}/kokkos_compile_options)
-#set(KOKKOS_CORE_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_core_lib)
-#set(KOKKOS_CONTAINER_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_container_lib)
+set(KOKKOS_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_includes)
 
 # For an "external" build these will be the same, but for an internal we need to gather both
 file(GENERATE OUTPUT ${KOKKOS_CORE_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 file(GENERATE OUTPUT ${KOKKOS_CONTAINER_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_CONTAINERS}")
+file(GENERATE OUTPUT ${KOKKOS_ALGORITHM_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_ALGORITHMS}")
 string(REPLACE ";" " " kokkos_compile_options "${KOKKOS_COMPILE_OPTIONS}")
 file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${kokkos_compile_options}")
-
-#file(GENERATE OUTPUT ${KOKKOS_CORE_LIB_FILE} CONTENT "${KOKKOS_LIB_DIRS}")
-#file(GENERATE OUTPUT ${KOKKOS_CONTAINER_LIB_FILE} CONTENT "${KOKKOS_LIB_CONTAINERS}")
-
-#include_directories(${KOKKOS_INCLUDE_DIRS})
-#string(REPLACE ";" " " KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS}")
-#message(dirs: ${KOKKOS_INCLUDE_DIRS})
-
-#FOREACH (P ${KOKKOS_INCLUDE_DIRS})
-    #message(${P})
-    #include_directories(${P})
-    #link_directories(${P})
-    #ENDFOREACH(P)
-
-# TODO: bad idea.. at best, this is just going to add it to the last one in the
-# array
-#link_directories(${KOKKOS_INCLUDE_DIRS}/../lib)
-#link_directories(${KOKKOS_INCLUDE_DIRS}/lib)
+if(NOT "${KOKKOS_INCLUDE_DIRS}" STREQUAL "${KOKKOS_INCLUDE_CONTAINERS}")
+  set(KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS};${KOKKOS_INCLUDE_CONTAINERS}")
+endif()
+if(NOT "${KOKKOS_INCLUDE_DIRS}" STREQUAL "${KOKKOS_INCLUDE_ALGORITHMS}")
+  set(KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS};${KOKKOS_INCLUDE_ALGORITHMS}")
+endif()
+if(NOT "${KOKKOS_INCLUDE_DIRS}" STREQUAL "${KOKKOS_INCLUDE_SIMD}")
+  set(KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS};${KOKKOS_INCLUDE_SIMD}")
+endif()
+file(GENERATE OUTPUT ${KOKKOS_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 
 # Libs
 string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
 set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-
-# Includes (TODO: this is definitely abuse of the CXX variable..)
-#string(REPLACE ";" " -I" string_libraries "-I${KOKKOS_INCLUDE_DIRS}")
-#set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-
-#string(REPLACE ";" " -L" string_libraries "-L${KOKKOS_INCLUDE_DIRS}")
-#set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-
 
 #------------------------------------------------------------------------------#
 # OpenSSL

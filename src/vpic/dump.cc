@@ -478,7 +478,7 @@ vpic_simulation::global_header( const char * base,
   // Create a variable list for each species to output
   print_hashed_comment(fileIO, "Number of species with output data");
   fileIO.print("NUM_OUTPUT_SPECIES %d\n\n", dumpParams.size()-1);
-  char species_comment[128];
+  char species_comment[max_filename_bytes];
   for(size_t i(1); i<dumpParams.size(); i++) {
     numvars = std::min(dumpParams[i]->output_vars.bitsum(hydro_indeces,
                                                          total_hydro_groups),
