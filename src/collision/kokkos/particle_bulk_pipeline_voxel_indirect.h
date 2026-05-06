@@ -306,14 +306,13 @@ struct particle_bulk_collision_pipeline {
       // Get a random generator. Do not leave without freeing it.
       kokkos_rng_state_t rg = rp.get_state();
 
-      //// Extract fluid variables
-      const float n_fl   = spj_fl(v, fluid_var::den);
-      const float ux_fl  = spj_fl(v, fluid_var::ux);
-      const float uy_fl  = spj_fl(v, fluid_var::uy);
-      const float uz_fl  = spj_fl(v, fluid_var::uz);
-      const float tmp_fl = spj_fl(v, fluid_var::tmp);
-      const float uth_fl = sqrt(2.0 * tmp_fl / mj);
-      
+      // Extract fluid variables
+      // const float n_fl   = spj_fl(v, fluid_var::den);
+      // const float ux_fl  = spj_fl(v, fluid_var::ux);
+      // const float uy_fl  = spj_fl(v, fluid_var::uy);
+      // const float uz_fl  = spj_fl(v, fluid_var::uz);
+      // const float tmp_fl = spj_fl(v, fluid_var::tmp);
+
       //for each cell
       gmomType Dm; 
       
@@ -366,7 +365,7 @@ struct particle_bulk_collision_pipeline {
         spi_p(i, particle_var::uz) = uz_i;	 
 
         // Accumulate change in moments. Depends on collision type.
-        float dn = 0.0, dux = 0.0, duy = 0.0, duz = 0.0;
+        float dn = 0.0, dux = 0.0, duy = 0.0, duz = 0.0, den = 0.0;
 
         switch (model.collision_type) 
         {
@@ -386,31 +385,39 @@ struct particle_bulk_collision_pipeline {
             break; // end case(charge exchange)
           }
           case CollisionType::BulkDrag:
-          case CollisionType::BulkLemons:
           {
             // Change in the fluid momentum and energy due to drag 
             // is due to the slowing down of the particle
             dux = ( ux_i - ux_n ) * wp;
             duy = ( uy_i - uy_n ) * wp;
             duz = ( uz_i - uz_n ) * wp;
-
-            break; // end case(drag,lemons)
+            den = 0.5 * wp *
+                ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+                  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+            break; // end case(drag)
+          }
+          case CollisionType::BulkLemons:
+          {
+            dux = ( ux_i - ux_n ) * wp;
+            duy = ( uy_i - uy_n ) * wp;
+            duz = ( uz_i - uz_n ) * wp;
+            den = 0.5 * static_cast<double>(wp)
+                      * ( static_cast<double>(ux_i)*ux_i
+                        + static_cast<double>(uy_i)*uy_i
+                        + static_cast<double>(uz_i)*uz_i );
+            break; // end case(lemons)
           }
           case CollisionType::BulkIonImpactIoniz: // only implemented for case with products
           default:
               break;
         } // end switch(model.collision_type) 
   
-        lsum.add(0, wp); //lsum.v[0] += wp;
-        lsum.add(1, dux); //lsum.v[1] += dux;
-        lsum.add(2, duy); //lsum.v[2] += duy;
-        lsum.add(3, duz); //lsum.v[3] += duz;
-        double term = 0.5 * static_cast<double>(wp)
-                    * ( static_cast<double>(ux_i)*ux_i
-                      + static_cast<double>(uy_i)*uy_i
-                      + static_cast<double>(uz_i)*uz_i );
-        lsum.add(4, term); //lsum.v[4] += term; //0.5*wp*(ux_i*ux_i+uy_i*uy_i+uz_i*uz_i);
-        lsum.add(5, dn); //lsum.v[5] += dn;
+        lsum.add(0, wp);
+        lsum.add(1, dux);
+        lsum.add(2, duy);
+        lsum.add(3, duz);
+        lsum.add(4, den);
+        lsum.add(5, dn);
       }, Dm);
       if (team_member.team_rank() == 0) {
         // Code that runs once per team leader
@@ -419,7 +426,8 @@ struct particle_bulk_collision_pipeline {
           // Upload the moment source to the field.
           model.upload_moment_src( spj_fd, v, Dm, mi, mj );
         } else {    
-          model.upload_moment_src( spj_fl, v, Dm, mi, mj );   
+          float m_fluid_ttl = spj_fl(v, fluid_var::den) / rdV; // use total fluid mass = n*dV
+          model.upload_moment_src( spj_fl, v, Dm, mi, m_fluid_ttl );   
         }
       }
 
@@ -502,7 +510,7 @@ struct particle_bulk_collision_pipeline {
         const float uy_fl  = spj_fl(v, fluid_var::uy);
         const float uz_fl  = spj_fl(v, fluid_var::uz);
         const float tmp_fl = spj_fl(v, fluid_var::tmp);
-        const float uth_fl = (tmp_fl > 0.0) ? sqrt(2.0 * tmp_fl / mj) : 0.0;
+        const float uth_fl = (tmp_fl > 0.0) ? sqrt(tmp_fl / mj) : 0.0;
 
         // Accumulate moments for each cell
         gmomType Dm; 
@@ -537,19 +545,15 @@ struct particle_bulk_collision_pipeline {
 
           bool MC_col_occurred;
           if( use_e_field ) {
-            // MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v);
             particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v, MC_col_occurred);
-          } else {      
-            // MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v);
+          } else {
             particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v, MC_col_occurred);
           }
 	    
           float ux_i = up[1];
           float uy_i = up[2];
           float uz_i = up[3];
-          // std::cout << "vf = " << sqrt(ux_i * ux_i) << std::endl;
-          // std::cout << "(vf/v0) = " << (ux_i)/(ux_n) << std::endl;
-          // std::cout << "(vf/v0)^2 = " << (ux_i * ux_i)/(ux_n * ux_n) << std::endl;
+
 #ifdef VARIABLE_CHARGE
           qp_i = up[4];
           spi_p(i, particle_var::qp) = qp_i;
@@ -598,13 +602,11 @@ struct particle_bulk_collision_pipeline {
 #endif
 
               // Decrement fluid momentum and energy based on new kinetic particle
-              dux = ux_pr * w_pr;
-              duy = ux_pr * w_pr;
-              duz = ux_pr * w_pr;
-              den = 0.5 * w_pr *
-                ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
-                  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
-                  
+              dux = (ux_fl - ux_pr) * w_pr;
+              duy = (uy_fl - uy_pr) * w_pr;
+              duz = (uz_fl - uz_pr) * w_pr;
+              den = 0.5 * ( dux * dux + duy * duy + duz * duz ) / w_pr;
+
               break; // end case(charge exchange)
             }
             case CollisionType::BulkIonImpactIoniz:
@@ -625,9 +627,9 @@ struct particle_bulk_collision_pipeline {
               int i_pr = np_products0 + cntr;
 
               spp_p(i_pr, particle_var::w)  = w_pr;
-              spp_p(i_pr, particle_var::ux) = 0.0; //ux_pr;
-              spp_p(i_pr, particle_var::uy) = 0.0; //uy_pr;
-              spp_p(i_pr, particle_var::uz) = 0.0; //uz_pr;	  
+              spp_p(i_pr, particle_var::ux) = ux_pr;
+              spp_p(i_pr, particle_var::uy) = uy_pr;
+              spp_p(i_pr, particle_var::uz) = uz_pr;	  
               spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
               spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
               spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
@@ -639,11 +641,9 @@ struct particle_bulk_collision_pipeline {
 
               // Decrement fluid momentum and energy based on new kinetic particle
               dux = ux_pr * w_pr;
-              duy = ux_pr * w_pr;
-              duz = ux_pr * w_pr;
-              den = 0.5 * w_pr *
-                ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
-                  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
+              duy = uy_pr * w_pr;
+              duz = uz_pr * w_pr;
+              den = 0.5 * w_pr * ( ux_pr * ux_pr + uy_pr * uy_pr + uz_pr * uz_pr );
 
               break; // end case(ion impact ionization)
             }
@@ -672,7 +672,10 @@ struct particle_bulk_collision_pipeline {
             // Upload the moment source to the field.
             model.upload_moment_src( spj_fd, v, Dm, mi, mj );
           } else {    
-            model.upload_moment_src( spj_fl, v, Dm, mi, mj );   
+            float m_fluid_ttl = spj_fl(v, fluid_var::den) / rdV; // use total fluid mass = n*dV
+            if (m_fluid_ttl > 0.0) {
+              model.upload_moment_src( spj_fl, v, Dm, mi, m_fluid_ttl );   
+            }   
           }
       	}
 

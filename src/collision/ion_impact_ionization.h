@@ -80,7 +80,6 @@ struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
   /**
    * @brief Implemention of upload_moment_src_impl() for ion impact ionization
    *        model accumulations change in density.
-   * todo: add change in momentum (depends on new kinetic particle)
    */
   template <class ViewType>
   KOKKOS_INLINE_FUNCTION
@@ -91,11 +90,10 @@ struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
     const float mi,
     const float mj) const 
   {
-    // std::cout << " den0=" << spj_v(v, fluid_var::den) << "  dn=" << Dm.v[5] << std::endl;
-    // spj_v(v, fluid_var::ux)  += -Dm.v[1] * mi / (mj * Dm.v[0]); // du_2 = dp_1 / m_2
-    // spj_v(v, fluid_var::uy)  += -Dm.v[2] * mi / (mj * Dm.v[0]);
-    // spj_v(v, fluid_var::uz)  += -Dm.v[3] * mi / (mj * Dm.v[0]);
-    // spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi * 2.0 / 3.0; // dT ~ 2/3 dE
+    spj_v(v, fluid_var::ux)  += -Dm.v[1] * mi / mj; // du_2 = dp_1 / m_2
+    spj_v(v, fluid_var::uy)  += -Dm.v[2] * mi / mj;
+    spj_v(v, fluid_var::uz)  += -Dm.v[3] * mi / mj;
+    spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi / mj * 1.0 / 3.0; // dT ~ 2/3 dE
     spj_v(v, fluid_var::den) += -Dm.v[5];
   } // end upload_moment_src_impl()
 };

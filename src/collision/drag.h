@@ -25,7 +25,7 @@ struct drag_model : public collision_model<drag_model<Functor>> {
 
   drag_model( Functor op ) : stopping_cx(op) { };
 
-  /* 
+  /*
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
@@ -79,7 +79,8 @@ struct drag_model : public collision_model<drag_model<Functor>> {
 
   /**
    * @brief Implemention of upload_moment_src_impl() for drag model accumulations
-   *        change in momentum and energy.
+   *        change in momentum and energy. Note mj is the total fluid mass in the
+   *        cell, not just the mass of an individual fluid particle. 
    */
   template <class ViewType>
   KOKKOS_INLINE_FUNCTION
@@ -90,10 +91,10 @@ struct drag_model : public collision_model<drag_model<Functor>> {
     const float mi,
     const float mj) const 
   {
-    spj_v(v, fluid_var::ux) += -Dm.v[1] * mi / (mj * Dm.v[0]); // du_2 = dp_1 / m_2
-    spj_v(v, fluid_var::uy) += -Dm.v[2] * mi / (mj * Dm.v[0]);
-    spj_v(v, fluid_var::uz) += -Dm.v[3] * mi / (mj * Dm.v[0]);
-    spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi * 2.0 / 3.0; // dT ~ 2/3 dE
+    spj_v(v, fluid_var::ux) += -Dm.v[1] * mi / mj; // du_2 = dp_1 / m_2
+    spj_v(v, fluid_var::uy) += -Dm.v[2] * mi / mj;
+    spj_v(v, fluid_var::uz) += -Dm.v[3] * mi / mj;
+    spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi / mj * 1.0 / 3.0; // dT ~ 2/3 dE
   } // end upload_moment_src_impl()
   
 };
@@ -165,6 +166,7 @@ drag(
   drag->delete_cop  = &delete_drag_collision_op<Functor>;
   drag->next        = NULL;
   drag->field       = NULL;
+  drag->spp         = NULL;
 
   REGISTER_OBJECT(drag,
                   &checkpt_drag_collision_op<Functor>,
