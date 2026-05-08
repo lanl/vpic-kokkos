@@ -71,13 +71,19 @@ struct cex_model : public collision_model<cex_model<Functor>> {
     const int v,
     const gmomType &Dm, 
     const float mi,
-    const float mj) const 
+    const float mj,
+    const float mj_ttl) const 
   {
-    spj_v(v, fluid_var::ux)  += -Dm.v[1] * mi / mj; // du_2 = dp_1 / m_2
-    spj_v(v, fluid_var::uy)  += -Dm.v[2] * mi / mj;
-    spj_v(v, fluid_var::uz)  += -Dm.v[3] * mi / mj;
-    spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi / mj * 1.0 / 3.0; // dT ~ 2/3 dE (vpic doesn't have 2)
-    spj_v(v, fluid_var::den) += -Dm.v[5];
+    spj_v(v, fluid_var::ux)  += -Dm.v[1] * mi / mj_ttl; // du_2 = dp_1 / m_2
+    spj_v(v, fluid_var::uy)  += -Dm.v[2] * mi / mj_ttl;
+    spj_v(v, fluid_var::uz)  += -Dm.v[3] * mi / mj_ttl;
+
+    // dT = 2/3 * dE_ave = 2/3 * dE_ttl / N,  where N = m_fluid_ttl / m_fluid_particle
+    spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi / (mj_ttl / mj) * 2.0 / 3.0;
+
+    // drho = dn * m_fluid_particle
+    spj_v(v, fluid_var::den) += -Dm.v[5] * mj; 
+    spj_v(v, fluid_var::den) = max(0.0, spj_v(v, fluid_var::den));
   } // end upload_moment_src_impl()
 };
 

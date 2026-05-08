@@ -292,7 +292,7 @@ struct particle_bulk_collision_pipeline {
       
       // TODO: convert this to be a more explicit check on if we have work
       //if( ni <= 0 || nj <= 0 ) return; //Nothing to do
-      if( ni <= 0 ) return; //Nothing to do
+      if( ni <= 0 || spj_fl(v, fluid_var::den) <= 0 ) return; //Nothing to do
       
       //// Find the real densities.
       //float density_i = spi_n(v);
@@ -424,10 +424,12 @@ struct particle_bulk_collision_pipeline {
         if( use_e_field ) {
           // If we have a field, we upload the moment source to the field.
           // Upload the moment source to the field.
-          model.upload_moment_src( spj_fd, v, Dm, mi, mj );
+          model.upload_moment_src( spj_fd, v, Dm, mi, mj, 0.0 );
         } else {    
           float m_fluid_ttl = spj_fl(v, fluid_var::den) / rdV; // use total fluid mass = n*dV
-          model.upload_moment_src( spj_fl, v, Dm, mi, m_fluid_ttl );   
+          if (m_fluid_ttl > 0.0) {
+            model.upload_moment_src( spj_fl, v, Dm, mi, mj, m_fluid_ttl );   
+          }
         }
       }
 
@@ -497,8 +499,6 @@ struct particle_bulk_collision_pipeline {
         auto i0 = spi_partition_ra(v);
         auto ni = spi_partition_ra(v+1) - i0;
 
-	      if( ni <= 0 ) return; // Nothing to do
-
 	      const float dt = dtinterval;
 	
         // Get a random generator. Do not leave without freeing it.
@@ -511,6 +511,8 @@ struct particle_bulk_collision_pipeline {
         const float uz_fl  = spj_fl(v, fluid_var::uz);
         const float tmp_fl = spj_fl(v, fluid_var::tmp);
         const float uth_fl = (tmp_fl > 0.0) ? sqrt(tmp_fl / mj) : 0.0;
+
+        if( ni <= 0 || n_fl <= 0 ) return; // Nothing to do
 
         // Accumulate moments for each cell
         gmomType Dm; 
@@ -670,11 +672,11 @@ struct particle_bulk_collision_pipeline {
           if( use_e_field ) {
             // If we have a field, we upload the moment source to the field.
             // Upload the moment source to the field.
-            model.upload_moment_src( spj_fd, v, Dm, mi, mj );
+            model.upload_moment_src( spj_fd, v, Dm, mi, mj, 0.0 );
           } else {    
             float m_fluid_ttl = spj_fl(v, fluid_var::den) / rdV; // use total fluid mass = n*dV
             if (m_fluid_ttl > 0.0) {
-              model.upload_moment_src( spj_fl, v, Dm, mi, m_fluid_ttl );   
+              model.upload_moment_src( spj_fl, v, Dm, mi, mj, m_fluid_ttl );   
             }   
           }
       	}
