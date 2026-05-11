@@ -80,10 +80,11 @@ struct cex_model : public collision_model<cex_model<Functor>> {
 
     // dT = 2/3 * dE_ave = 2/3 * dE_ttl / N,  where N = m_fluid_ttl / m_fluid_particle
     spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi / (mj_ttl / mj) * 2.0 / 3.0;
+    spj_v(v, fluid_var::tmp) = (spj_v(v, fluid_var::tmp) > 0.0) ? spj_v(v, fluid_var::tmp) : 0.0;
 
     // drho = dn * m_fluid_particle
     spj_v(v, fluid_var::den) += -Dm.v[5] * mj; 
-    spj_v(v, fluid_var::den) = max(0.0, spj_v(v, fluid_var::den));
+    spj_v(v, fluid_var::den) = (spj_v(v, fluid_var::den) > 0.0) ? spj_v(v, fluid_var::den) : 0.0;
   } // end upload_moment_src_impl()
 };
 

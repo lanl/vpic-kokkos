@@ -287,16 +287,8 @@ struct particle_bulk_collision_pipeline {
       auto i0 = spi_partition_ra(v);
       auto ni = spi_partition_ra(v+1) - i0;
 
-      //auto j0 = spj_partition_ra(v);
-      //auto nj = spj_partition_ra(v+1) - j0;
-      
       // TODO: convert this to be a more explicit check on if we have work
-      //if( ni <= 0 || nj <= 0 ) return; //Nothing to do
-      if( ni <= 0 || spj_fl(v, fluid_var::den) <= 0 ) return; //Nothing to do
-      
-      //// Find the real densities.
-      //float density_i = spi_n(v);
-      //float density_j = spj_n(v);
+      if( ni <= 0 ) return; //Nothing to do
       
       //// Compute ndt
       //const float density_min = density_j > density_i ? density_i : density_j;
@@ -346,10 +338,8 @@ struct particle_bulk_collision_pipeline {
 
         bool MC_col_occurred;
         if( use_e_field ) {
-          // MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v);
           particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v, MC_col_occurred);
         } else {      
-          // MC_col_occurred = particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v);
           particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v, MC_col_occurred);
         }
     
@@ -499,6 +489,8 @@ struct particle_bulk_collision_pipeline {
         auto i0 = spi_partition_ra(v);
         auto ni = spi_partition_ra(v+1) - i0;
 
+        if( ni <= 0 ) return; // Nothing to do
+
 	      const float dt = dtinterval;
 	
         // Get a random generator. Do not leave without freeing it.
@@ -511,8 +503,6 @@ struct particle_bulk_collision_pipeline {
         const float uz_fl  = spj_fl(v, fluid_var::uz);
         const float tmp_fl = spj_fl(v, fluid_var::tmp);
         const float uth_fl = (tmp_fl > 0.0) ? sqrt(tmp_fl / mj) : 0.0;
-
-        if( ni <= 0 || n_fl <= 0 ) return; // Nothing to do
 
         // Accumulate moments for each cell
         gmomType Dm; 
@@ -658,13 +648,12 @@ struct particle_bulk_collision_pipeline {
               break;
           } // end switch(model.collision_type) 
     
-          lsum.v[0] += wp;
-          lsum.v[1] += dux;
-          lsum.v[2] += duy;
-          lsum.v[3] += duz;
-          lsum.v[4] += den;
-          lsum.v[5] += dn;
-      
+          lsum.add(0, wp);
+          lsum.add(1, dux);
+          lsum.add(2, duy);
+          lsum.add(3, duz);
+          lsum.add(4, den);
+          lsum.add(5, dn);
 	      }, Dm); // end Kokkos::parallel_reduce
 	
         if (team_member.team_rank() == 0) {
