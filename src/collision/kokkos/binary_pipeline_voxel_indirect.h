@@ -220,7 +220,7 @@ struct binary_collision_pipeline {
       auto const& spj_p = _spj_p;
       auto const& spj_i = _spj_i;
 
-      auto spj_np = _spj->np;
+      size_t spj_np = _spj->np;
       chunk_size = spj_np / league_size;
       auto team_policy = Kokkos::TeamPolicy<>(league_size, Kokkos::AUTO()).set_scratch_size(1, Kokkos::PerTeam(k_density_t::shmem_size(nv)));
       Kokkos::parallel_for("binary_collision_pipeline::spj_density", team_policy,

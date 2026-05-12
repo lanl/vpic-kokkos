@@ -12,7 +12,7 @@
 
 int tx, ty, tz;
 
-void verify_shuffle(const species_t* sp, std::map<int,std::pair<int,int>>& partition_range) {
+void verify_shuffle(const species_t* sp, std::map<int,std::pair<uint64_t,uint64_t>>& partition_range) {
   Kokkos::deep_copy(sp->k_sortindex_h, sp->k_sortindex_d);
   Kokkos::deep_copy(sp->k_partition_h, sp->k_partition_d);
   int nx = sp->g->nx;
@@ -20,7 +20,7 @@ void verify_shuffle(const species_t* sp, std::map<int,std::pair<int,int>>& parti
   int nz = sp->g->nz;
 
   std::cout << "\tSort indices: \n";
-  for(size_t p=0; p<nx*ny*nz; p++) {
+  for(int p=0; p<nx*ny*nz; p++) {
     int ix, iy, iz;
     _RANK_TO_INDEX(p, ix, iy, iz, nx, ny, nz);
     const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
@@ -35,7 +35,7 @@ void verify_shuffle(const species_t* sp, std::map<int,std::pair<int,int>>& parti
       std::cout << std::endl;
     }
   }
-  for(size_t p=0; p<nx*ny*nz; p++) {
+  for(int p=0; p<nx*ny*nz; p++) {
     int ix, iy, iz;
     _RANK_TO_INDEX(p, ix, iy, iz, nx, ny, nz);
     const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
@@ -197,11 +197,11 @@ printf("Sorted particles to host\n");
 printf("Synced particles\n");
   Kokkos::fence();
 
-  std::map<int,std::pair<int,int>> partition_map;
+  std::map<int,std::pair<uint64_t,uint64_t>> partition_map;
 
   printf("\tSort index len: %zu\n", sp->k_sortindex_d.extent(0));
   printf("\tPartition len: %zu: [",  sp->k_partition_d.extent(0));
-  for(size_t p=0; p<nx*ny*nz; p++) {
+  for(int p=0; p<nx*ny*nz; p++) {
     int ix, iy, iz;
     _RANK_TO_INDEX(p, ix, iy, iz, nx, ny, nz);
     const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
@@ -209,7 +209,7 @@ printf("Synced particles\n");
   }
   std::cout << "]\n";
   std::cout << "\tSort indices: \n";
-  for(size_t p=0; p<nx*ny*nz; p++) {
+  for(int p=0; p<nx*ny*nz; p++) {
     int ix, iy, iz;
     _RANK_TO_INDEX(p, ix, iy, iz, nx, ny, nz);
     const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
@@ -217,7 +217,7 @@ printf("Synced particles\n");
     const auto i1 = sp->k_partition_h(v+1);
     if(i1-i0 > 0) {
       std::cout << "\t\tPartition " << v << "[" << i0 << "," << i1 << "): [";
-      int min_idx=INT_MAX, max_idx=0;
+      uint64_t min_idx=ULONG_MAX, max_idx=0;
       for(size_t i=i0; i<i1; i++) {
         std::cout << sp->k_sortindex_h(i) << " ";
         if(sp->k_sortindex_h(i) < min_idx)
