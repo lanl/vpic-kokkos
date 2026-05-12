@@ -14,12 +14,14 @@
 // CollisionType tag is provided to each collision model
 enum class CollisionType : unsigned { 
   BinaryTA, 
+  BinaryCoulomb,
   BinaryChargeExchange,
   BinaryIonImpactIoniz,
   BulkLemons, 
   BulkDrag, 
   BulkChargeExchange,
-  BulkIonImpactIoniz
+  BulkIonImpactIoniz,
+  BulkElectronImpactIoniz
 };
 
 typedef void
