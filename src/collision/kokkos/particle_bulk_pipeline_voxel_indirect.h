@@ -156,7 +156,7 @@ struct particle_bulk_collision_pipeline {
     // Am I being paranoid?
     if( static_cast<size_t>(_spi->np)      > _spi_sortindex_ra.extent(0) || 
         static_cast<size_t>(_spi->g->nv)+1 != _spi_partition_ra.extent(0) ){
-      printf("_spi->np (=%d) ?= _spi_sortindex_ra.extent(0) (=%lu)\n",_spi->np,_spi_sortindex_ra.extent(0));
+      printf("_spi->np (=%zu) ?= _spi_sortindex_ra.extent(0) (=%lu)\n",_spi->np,_spi_sortindex_ra.extent(0));
       printf("_spi->g->nv+1 (=%d) ?= _spi_partition_ra.extent(0) (=%lu)\n",_spi->g->nv+1,_spi_partition_ra.extent(0));
       ERROR(("Bad spi sort products."));
     }

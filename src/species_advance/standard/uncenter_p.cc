@@ -5,7 +5,7 @@ void uncenter_p_kokkos(
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
         k_interpolator_t& k_interp,
-        int np,
+        size_t np,
         float qdt_2mc_c
 )
 {
@@ -58,7 +58,7 @@ void uncenter_p_kokkos(
 
   // this goes to np using p_index
   Kokkos::parallel_for("uncenter p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
-      (0, np), KOKKOS_LAMBDA (int p_index) {
+      (0, np), KOKKOS_LAMBDA (size_t p_index) {
 
     int ii = pii;
     float hax, hay, haz, l_cbx, l_cby, l_cbz;
@@ -105,7 +105,7 @@ uncenter_p( /**/  species_t            * RESTRICT sp,
   k_particles_t k_particles = sp->k_p_d;
   k_particles_i_t k_particles_i = sp->k_p_i_d;
   k_interpolator_t k_interp    = ia->k_i_d;
-  const int np                 = sp->np;
+  const size_t np              = sp->np;
 #ifdef VARIABLE_CHARGE
   const float qdt_2mc          = (sp->g->dt)/(2*sp->m*sp->g->cvac); // Multiply by qp in pipeline
 #else
