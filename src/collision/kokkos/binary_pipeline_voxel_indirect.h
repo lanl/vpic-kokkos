@@ -181,12 +181,36 @@ struct binary_collision_pipeline {
     auto const& spi_n = _spi_n;
     auto const& spi_p = _spi_p;
     auto const& spi_i = _spi_i;
-    Kokkos::parallel_for("binary_collision_pipeline::spi_denisty",
-      Kokkos::RangePolicy<>(0, _spi->np), KOKKOS_LAMBDA (const size_t i) {
-        Kokkos::atomic_add(
-          &spi_n(spi_i(i)),
-          spi_p(i, particle_var::w)*rdV
-        );
+    const int nv = _spi->g->nv;
+    const size_t spi_np = _spi->np;
+    const int league_size = 256;
+    int chunk_size = spi_np / league_size;
+    using member_type = Kokkos::TeamPolicy<>::member_type;
+    using ScratchSpace  = Space::scratch_memory_space;
+    using scratch_dens_t = Kokkos::View<float*, ScratchSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+    auto team_policy = Kokkos::TeamPolicy<>(league_size, Kokkos::AUTO()).set_scratch_size(1, Kokkos::PerTeam(k_density_t::shmem_size(nv)));
+    Kokkos::parallel_for("binary_collision_pipeline::spi_density", team_policy,
+      KOKKOS_LAMBDA(member_type team_member) {
+      const size_t i = team_member.league_rank()*chunk_size;
+      size_t loop_count = chunk_size;
+      if(loop_count * (team_member.league_rank()+1) > spi_np)
+        loop_count = spi_np - team_member.league_rank()*chunk_size;
+
+      scratch_dens_t dens(team_member.team_scratch(1), nv);
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<size_t>(team_member, nv), 
+        [=] (size_t& j) {
+          dens(j) = 0.0f;
+      });
+      team_member.team_barrier();
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<size_t>(team_member, loop_count), 
+        [=] (size_t& j) {
+        Kokkos::atomic_add(&dens(spi_i(i+j)), spi_p(i+j, particle_var::w)*rdV);
+      });
+      team_member.team_barrier();
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<size_t>(team_member, nv), 
+        [=] (size_t& j) {
+        Kokkos::atomic_add(&spi_n(j), dens(j));
+      });
     });
 
     if( _spi != _spj ) {
@@ -195,16 +219,38 @@ struct binary_collision_pipeline {
       auto const& spj_n = _spj_n;
       auto const& spj_p = _spj_p;
       auto const& spj_i = _spj_i;
-      Kokkos::parallel_for("binary_collision_pipeline::spj_denisty",
-        Kokkos::RangePolicy<>(0, _spj->np), KOKKOS_LAMBDA (const size_t i) {
-          Kokkos::atomic_add(
-            &spj_n(spj_i(i)),
-            spj_p(i, particle_var::w)*rdV
-          );
+
+      size_t spj_np = _spj->np;
+      chunk_size = spj_np / league_size;
+      auto team_policy = Kokkos::TeamPolicy<>(league_size, Kokkos::AUTO()).set_scratch_size(1, Kokkos::PerTeam(k_density_t::shmem_size(nv)));
+      Kokkos::parallel_for("binary_collision_pipeline::spj_density", team_policy,
+        KOKKOS_LAMBDA(member_type team_member) {
+        const size_t i = team_member.league_rank()*chunk_size;
+        size_t loop_count = chunk_size;
+        if(loop_count * (team_member.league_rank()+1) > spj_np)
+          loop_count = spj_np - team_member.league_rank()*chunk_size;
+
+        scratch_dens_t dens(team_member.team_scratch(1), nv);
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<size_t>(team_member, nv), 
+          [=] (size_t& j) {
+            dens(j) = 0.0f;
         });
+        team_member.team_barrier();
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<size_t>(team_member, loop_count), 
+          [=] (size_t& j) {
+          Kokkos::atomic_add(&dens(spj_i(i+j)), spj_p(i+j, particle_var::w)*rdV);
+        });
+        team_member.team_barrier();
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<size_t>(team_member, nv), 
+          [=] (size_t& j) {
+          Kokkos::atomic_add(&spj_n(j), dens(j));
+        });
+      });
     } else {
       _spj_n = _spi_n;
     }
+
+    Kokkos::fence();
 
     // Do collisions.
     apply_model(_model);

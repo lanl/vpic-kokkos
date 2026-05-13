@@ -179,7 +179,7 @@ create_sfa_params( grid_t           * g,
 void
 destroy_sfa_params( sfa_params_t * p ) {
   FREE_ALIGNED( p->mc );
-  FREE( p );
+  delete p;
 }
 
 /*****************************************************************************/

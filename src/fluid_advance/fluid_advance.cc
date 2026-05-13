@@ -33,7 +33,7 @@ delete_fluid_species( fluid_species_t * fsp ) {
   UNREGISTER_OBJECT( fsp );
   FREE_ALIGNED( fsp->fl );
   FREE( fsp->name );
-  FREE( fsp );
+  delete fsp;
 }
 
 /* Public interface **********************************************************/

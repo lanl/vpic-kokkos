@@ -7,3 +7,4 @@
 if(VPIC_ENABLE_VARIABLE_CHARGE)
   add_subdirectory(ta_collision_var_charge)  
 endif()
+  add_subdirectory(random_shuffler)
