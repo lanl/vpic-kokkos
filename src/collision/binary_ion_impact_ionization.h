@@ -32,10 +32,11 @@ struct binary_ion_impact_ioniz_model : public collision_model<binary_ion_impact_
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
-    float vr,     // Changed input variable.
+    float vr,    // relatvie velocity
     float nvdt,
-    float Z1,      // Charge of first particle
-    float Z2=0.0   // Charge of second particle
+    float E0,    // relative energy
+    float Z1,    // Charge of particle
+    float Z2=0  // Charge of particle
   ) const
   {
     return sigma_cx(vr, Z1, Z2);

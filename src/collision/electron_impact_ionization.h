@@ -28,10 +28,11 @@ struct electron_ioniz_model : public collision_model<electron_ioniz_model<Functo
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
-    float vr,    // Changed input variable.
+    float vr,    // relatvie velocity
     float nvdt,
+    float E0,    // relative energy
     float Z1,    // Charge of particle
-    float E0=0.0 // relative energy
+    float Z2=0  // Charge of particle
   ) const
   {
     // Add extra catch to ensure ionization does not occur

@@ -390,17 +390,10 @@ void collide_self_varwt(
   // cross section being for a reaction between specific charge states while
   // supporting variable charge within a species.
   //
-  // todo: found binary Coulomb collision self-scattering is missing
-  // a factor of two. Do the inelastic collisions require an additional
-  // factor of two for the reason above?
+  // Binary Coulomb collision self-scattering needs a factor of two for the 
+  // modified reduced mass.
   // 
   float nu_modifier = 2.0;
-  // if (model.collision_type == CollisionType::BinaryChargeExchange ||
-  //     model.collision_type == CollisionType::BinaryIonImpactIoniz) 
-  // {
-  //   nu_modifier *= 2.0;
-  // } 
-
 
   // All particles in h-group collide once and particles
   // in l-group collide an average of np_max/np_min times
@@ -435,7 +428,7 @@ void collide_self_varwt(
   
     wp1 = up[0];
     wp2 = up[4];
-    const double w_max = std::max(wp1, wp2);
+    const double w_max = (wp1 > wp2) ? wp1 : wp2;
     float ndt = w_max * np_min * dtinterval / dV * nu_modifier;
 
     bool MC_col_occurred;
@@ -557,7 +550,7 @@ void collide_variabl_wt(
   
     wp1 = up[0];
     wp2 = up[4];
-    const double w_max = std::max(wp1, wp2);
+    const double w_max = (wp1 > wp2) ? wp1 : wp2;
     float ndt = w_max * np_min * dtinterval / dV;
 
     bool MC_col_occurred;
@@ -652,16 +645,10 @@ void collide_uniform_wt(
     // cross section being for a reaction between specific charge states while
     // supporting variable charge within a species.
     //
-    // todo: found binary Coulomb collision self-scattering is missing
-    // a factor of two. Do the inelastic collisions require an additional
-    // factor of two for the reason above?
+    // Binary Coulomb collision self-scattering needs a factor of two for the 
+    // modified reduced mass.
     // 
     float nu_modifier = 2.0;
-    // if (model.collision_type == CollisionType::BinaryChargeExchange ||
-    //     model.collision_type == CollisionType::BinaryIonImpactIoniz) 
-    // {
-    //   nu_modifier *= 2.0;
-    // } 
   }
 	
 	const int nmin = ni < nj ? ni : nj;
@@ -809,7 +796,7 @@ void collide_uniform_wt(
     //
     // if (MonteCarlo) {
     if (model.collision_type != CollisionType::BinaryCoulomb) {
-      dd = model.cross_section( rg, ur, t1, qii, qjj);
+      dd = model.cross_section( rg, ur, t1, t2, qii, qjj );
 
       // Monte-Carlo collision test
       // Determine if collision occurs, if (U > sigma * n * v * dt) then no collision

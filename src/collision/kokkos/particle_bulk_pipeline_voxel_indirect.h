@@ -500,8 +500,8 @@ struct particle_bulk_collision_pipeline {
     auto const& spp_i = *_spp_i;
 
     // Number of particles in product group
-    const int np_products0 = spp->np;
-    Kokkos::View<int*, Space::memory_space> dev_np_products("dev_np_products", 1);
+    const size_t np_products0 = spp->np;
+    Kokkos::View<size_t*, Space::memory_space> dev_np_products("dev_np_products", 1);
     Kokkos::deep_copy(dev_np_products, 0);
 
     Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
@@ -594,9 +594,6 @@ struct particle_bulk_collision_pipeline {
               int dq = qp_i - qp_n;
               if (dq != -1) { break; }
                 
-              // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
-              dn = wp * rdV;
-
               // The new kinetic particle takes the fluid bulk velociy plus a thermal component
               float ux_pr = rg.normal(ux_fl, uth_fl);
               float uy_pr = rg.normal(uy_fl, uth_fl);
@@ -604,26 +601,36 @@ struct particle_bulk_collision_pipeline {
               float w_pr = wp;
 
               // Create kinetic particle. Get particle index and incremenent number of new products
-              int cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
-              int i_pr = np_products0 + cntr;
+              size_t cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
+              size_t i_pr = np_products0 + cntr;
 
-              spp_p(i_pr, particle_var::w)  = w_pr;
-              spp_p(i_pr, particle_var::ux) = ux_pr;
-              spp_p(i_pr, particle_var::uy) = uy_pr;
-              spp_p(i_pr, particle_var::uz) = uz_pr;	  
-              spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
-              spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
-              spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
-              spp_i(i_pr) = spi_i(i);
+              // Ensure new particle does not exceed species limit
+              if (i_pr < static_cast<size_t>(0.95 * spp->max_np)) {
+                spp_p(i_pr, particle_var::w)  = w_pr;
+                spp_p(i_pr, particle_var::ux) = ux_pr;
+                spp_p(i_pr, particle_var::uy) = uy_pr;
+                spp_p(i_pr, particle_var::uz) = uz_pr;	  
+                spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
+                spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
+                spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
+                spp_i(i_pr) = spi_i(i);
 #ifdef VARIABLE_CHARGE
-              spp_p(i_pr, particle_var::qp) = 1; // spj->q - dq;
+                spp_p(i_pr, particle_var::qp) = 1; // spj->q - dq;
 #endif
 
-              // Decrement fluid momentum and energy based on new kinetic particle
-              dux = (ux_fl - ux_pr) * w_pr;
-              duy = (uy_fl - uy_pr) * w_pr;
-              duz = (uz_fl - uz_pr) * w_pr;
-              den = 0.5 * ( dux * dux + duy * duy + duz * duz ) / w_pr;
+                // Decrement fluid momentum and energy based on new kinetic particle
+                dux = (ux_fl - ux_pr) * w_pr;
+                duy = (uy_fl - uy_pr) * w_pr;
+                duz = (uz_fl - uz_pr) * w_pr;
+                den = 0.5 * ( dux * dux + duy * duy + duz * duz ) / w_pr;
+                
+                // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
+                dn = wp * rdV;
+
+              // } else { // endif (i_pr < spp->np)
+                // WARNING(("No room for addition products macroparticles"));
+                // std::cout << "WARNING: No room for addition products macroparticles" << std::endl;
+              }
 
               break; // end case(charge exchange)
             }
@@ -631,9 +638,6 @@ struct particle_bulk_collision_pipeline {
             {
               if (!MC_col_occurred) { break; }
 
-              // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
-              dn = wp * rdV;
-
               // The new kinetic particle takes the fluid bulk velociy plus a thermal component
               float ux_pr = rg.normal(ux_fl, uth_fl);
               float uy_pr = rg.normal(uy_fl, uth_fl);
@@ -641,27 +645,37 @@ struct particle_bulk_collision_pipeline {
               float w_pr = wp;
 
               // Create kinetic particle. Get particle index and incremenent number of new products
-              int cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
-              int i_pr = np_products0 + cntr;
+              size_t cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
+              size_t i_pr = np_products0 + cntr;
 
-              spp_p(i_pr, particle_var::w)  = w_pr;
-              spp_p(i_pr, particle_var::ux) = ux_pr;
-              spp_p(i_pr, particle_var::uy) = uy_pr;
-              spp_p(i_pr, particle_var::uz) = uz_pr;	  
-              spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
-              spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
-              spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
-              spp_i(i_pr) = spi_i(i);
+              // Ensure new particle does not exceed species limit
+              if (i_pr < static_cast<size_t>(0.95 * spp->max_np)) {
+                spp_p(i_pr, particle_var::w)  = w_pr;
+                spp_p(i_pr, particle_var::ux) = ux_pr;
+                spp_p(i_pr, particle_var::uy) = uy_pr;
+                spp_p(i_pr, particle_var::uz) = uz_pr;	  
+                spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
+                spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
+                spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
+                spp_i(i_pr) = spi_i(i);
 #ifdef VARIABLE_CHARGE
-              // Currently only considering ionizing neutral fluid (0->1)
-              spp_p(i_pr, particle_var::qp) = 1;
+                // Currently only considering ionizing neutral fluid (0->1)
+                spp_p(i_pr, particle_var::qp) = 1;
 #endif
 
-              // Decrement fluid momentum and energy based on new kinetic particle
-              dux = ux_pr * w_pr;
-              duy = uy_pr * w_pr;
-              duz = uz_pr * w_pr;
-              den = 0.5 * w_pr * ( ux_pr * ux_pr + uy_pr * uy_pr + uz_pr * uz_pr );
+                // Decrement fluid momentum and energy based on new kinetic particle
+                dux = ux_pr * w_pr;
+                duy = uy_pr * w_pr;
+                duz = uz_pr * w_pr;
+                den = 0.5 * w_pr * ( ux_pr * ux_pr + uy_pr * uy_pr + uz_pr * uz_pr );
+
+                // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
+                dn = wp * rdV;
+
+              // } else { // endif (i_pr < spp->np)
+                // WARNING(("No room for addition products macroparticles"));
+                // std::cout << "WARNING: No room for addition products macroparticles" << std::endl;
+              }
 
               break; // end case(ion impact ionization)
             }
@@ -704,7 +718,7 @@ struct particle_bulk_collision_pipeline {
     Kokkos::fence();
 
     // Increment number of particles in product species
-    Kokkos::View<int*, Space>::HostMirror host_np_products = Kokkos::create_mirror_view(dev_np_products);
+    Kokkos::View<size_t*, Space>::HostMirror host_np_products = Kokkos::create_mirror_view(dev_np_products);
     Kokkos::deep_copy(host_np_products, dev_np_products);
     spp->np += host_np_products(0);    
 
@@ -832,7 +846,7 @@ struct particle_bulk_collision_pipeline {
 
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
       //        Would this be useful?
-      dd = model.cross_section( rg, ur, t1, qi, t2 );
+      dd = model.cross_section( rg, ur, t1, t2, qi, 0.0 );
 
       if( rg.frand() > dd*t1 ) {
         MC_collision_occurred = false;
