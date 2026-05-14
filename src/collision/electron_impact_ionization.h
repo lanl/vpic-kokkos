@@ -87,21 +87,22 @@ struct electron_ioniz_model : public collision_model<electron_ioniz_model<Functo
   /**
    * @brief Implemention of upload_moment_src_impl() for electron impact ionization
    *        model accumulations change in momentum and energy.
-   * todo: add change in momentum (depends on new kinetic particle)
+   * todo: confirm moment transfer, currently doing same as lemons model
    */
   template <class ViewType>
   KOKKOS_INLINE_FUNCTION
   void upload_moment_src_impl( 
     const ViewType & spj_v, 
     const int v,
-		const gmomType &Dm, 
+    const gmomType &Dm, 
     const float mi,
-    const float mj) const 
+    const float mj,
+    const float mj_ttl) const 
   {
-    spj_v(v, field_var::sx) += -mj * Dm.v[1] / Dm.v[0]; // m * sum(w*dv) / sum(w)
-    spj_v(v, field_var::sy) += -mj * Dm.v[2] / Dm.v[0];
-    spj_v(v, field_var::sz) += -mj * Dm.v[3] / Dm.v[0];
-    spj_v(v, field_var::se) += -Dm.v[4] / Dm.v[0]; // sum(w*dE)/sum(w)
+    // spj_v(v, field_var::sx) += -mj * Dm.v[1];
+    // spj_v(v, field_var::sy) += -mj * Dm.v[2];
+    // spj_v(v, field_var::sz) += -mj * Dm.v[3];
+    // spj_v(v, field_var::se) += -mj * Dm.v[4];
   } // end upload_moment_src_impl()
 };
 
