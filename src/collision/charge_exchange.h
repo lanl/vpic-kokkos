@@ -2,7 +2,6 @@
 #define _charge_exchange_h_
 
 #include "particle_bulk.h"
-//#include "collision_private.h"
 
 /**
  * @brief Charge exchange collision operator.
@@ -18,30 +17,21 @@ struct cex_collision_op_t : public particle_bulk_collision_op_t {
  */
 template<typename Functor>
 struct cex_model : public collision_model<cex_model<Functor>> {
-  // const float cvar;
+  CollisionType collision_type = CollisionType::BulkChargeExchange;
   const float dq;
   Functor sigma_cx;
-  //float (*sigma_cx)(float,float);
-  //takizuka_abe_model( float cvar ) : cvar(cvar) { };
   cex_model( Functor op, float dq ) : sigma_cx(op), dq(dq) { };
-  //cex_model( cex_coll_func_t _sigma_cx0 ) : sigma_cx(_sigma_cx0) { };
-  //cex_model( float (*sigma_cx0)(float,float) ) : sigma_cx(sigma_cx0) { };
-
   
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
-    float Z,     // Charge of particle
     float vr,    // Changed input variable.
-    float nvdt
+    float nvdt,
+    float Z1,     // Charge of particle
+    float Z2=0.0  // Charge of fluid
   ) const
   {
-     //    float Z = 5;
-    float sig = sigma_cx(vr,Z);
-    //    float sig = 9999999;
-    
-    //    printf("Z = %f,vr = %f, sigma = %e, nvdt=%e\n",Z,vr,sig,(sig*nvdt));
-    
+    float sig = sigma_cx(vr,Z1);
     return sig;
   }
   
@@ -63,12 +53,32 @@ struct cex_model : public collision_model<cex_model<Functor>> {
   KOKKOS_INLINE_FUNCTION
     float modify_charge( ) const
   {
-    //float capture = -1;
     float delta_charge = dq;
     
     return delta_charge;
   }
   
+
+  /**
+   * @brief Implemention of upload_moment_src_impl() for charge exchange
+   *        model accumulations change in density.
+   * todo: add change in momentum (depends on new kinetic particle)
+   */
+  template <class ViewType>
+  KOKKOS_INLINE_FUNCTION
+  void upload_moment_src_impl( 
+    const ViewType & spj_v, 
+    const int v,
+    const gmomType &Dm, 
+    const float mi,
+    const float mj) const 
+  {
+    spj_v(v, fluid_var::ux)  += -Dm.v[1] * mi / (mj * Dm.v[0]); // du_2 = dp_1 / m_2
+    spj_v(v, fluid_var::uy)  += -Dm.v[2] * mi / (mj * Dm.v[0]);
+    spj_v(v, fluid_var::uz)  += -Dm.v[3] * mi / (mj * Dm.v[0]);
+    spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi * 2.0 / 3.0; // dT ~ 2/3 dE
+    spj_v(v, fluid_var::den) += -Dm.v[5];
+  } // end upload_moment_src_impl()
 };
 
 /* Private interface *********************************************************/
@@ -92,7 +102,7 @@ restore_cex_collision_op() {
 template<typename Functor>
 void
 apply_cex_collision_op( collision_op_t * cop,
-			kokkos_rng_pool_t& rng ) {
+                        kokkos_rng_pool_t& rng ) {
   cex_collision_op_t<Functor> * cex = (cex_collision_op_t<Functor> *) cop;
   cex_model model(cex->sigma_cx0,cex->dq0);
   apply_particle_bulk_collision_model_pipeline<true>((particle_bulk_collision_op_t *) cop, model, rng); // To-do: Change MC to true!
@@ -115,8 +125,9 @@ charge_exchange(
   /**/  species_t  * spi,
   /**/  fluid_species_t  * spj,
   const double       dq0,
-  Functor sigmafunc,
-  const int          interval
+  Functor            sigmafunc,
+  const int          interval,
+  species_t        * spp=NULL
 ) {
 
   if( !name || !spi || !spj || !spi->g || !spj->g || spi->g != spj->g || interval <= 0 )
@@ -129,6 +140,7 @@ charge_exchange(
 
   cex->spi         = spi;
   cex->spj         = spj;
+  cex->spp         = spp;
   cex->sigma_cx0   = sigmafunc;
   cex->dq0         = dq0;
   //  ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
@@ -136,6 +148,7 @@ charge_exchange(
   cex->apply_cop   = &apply_cex_collision_op<Functor>;
   cex->delete_cop  = &delete_cex_collision_op<Functor>;
   cex->next        = NULL;
+  cex->field       = NULL;
 
   REGISTER_OBJECT(cex,
                   &checkpt_cex_collision_op<Functor>,

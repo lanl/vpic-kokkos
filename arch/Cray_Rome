@@ -28,7 +28,7 @@ module list 2>&1 | tee modules.txt
 # (the closest match was "(null)" from "./lpi_2d_F6_test.Linux").  Writing out
 # the raw address instead and keeping my fingers crossed.
 
-/usr/projects/maehem/packages/cmake-3.29.9/build/bin/cmake \
+cmake \
   -DCMAKE_BUILD_TYPE=Release \
   -DENABLE_INTEGRATED_TESTS=OFF \
   -DENABLE_UNIT_TESTS=OFF \

@@ -58,6 +58,6 @@ delete_grid( grid_t * g ) {
   delete_mp( g->mp );
   delete_mp( g->mp_k );
 //    delete_mp_kokkos(g->mp_k);
-  FREE( g );
+  delete g;
 }
 

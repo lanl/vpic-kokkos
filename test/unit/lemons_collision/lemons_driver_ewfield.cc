@@ -9,7 +9,7 @@
 #include "src/species_advance/species_advance.h"
 #include "src/vpic/vpic.h"
 
-#include "compare_energies.h"
+#include "./compare_energies.h"
 
 void  sample_Maxwellian(std::vector<double> &v, double m, double s, int N, std::mt19937_64& rng,
 			std::normal_distribution<double>& dist)
@@ -35,7 +35,7 @@ void  sample_Maxwellian(std::vector<double> &v, double m, double s, int N, std::
 	    v[i] = m + s*x;
 	}
     } else {
-	printf("pop_stddev(%f)<=0. exit.",pop_stddev);
+	printf("pop_stddev(%Lf)<=0. exit.",pop_stddev);
 	exit(1);
     }
     
@@ -143,7 +143,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   auto sigma_x = vt;
   auto sigma_y = vt;
   auto sigma_z = vt;
-  std::mt19937_64 mtrng{ std::random_device{}() };
+  std::mt19937_64 mtrng;
   // 2) Create a N(0,1) distribution object
   std::normal_distribution<double> dist{0.0, 1.0};
   sample_Maxwellian(vx,mean_x,sigma_x,np,mtrng,dist);

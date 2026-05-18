@@ -10,6 +10,18 @@
 #include "../particle_operations/sort.h"
 #include "../particle_operations/shuffle.h"
 #include "../fluid_advance/fluid_advance.h"
+
+// CollisionType tag is provided to each collision model
+enum class CollisionType : unsigned { 
+  BinaryTA, 
+  BinaryChargeExchange,
+  BinaryIonImpactIoniz,
+  BulkLemons, 
+  BulkDrag, 
+  BulkChargeExchange,
+  BulkIonImpactIoniz
+};
+
 typedef void
 (*apply_collision_op_func_t)( struct collision_op_t * cop,
                               kokkos_rng_pool_t   & rng);
@@ -30,14 +42,33 @@ struct collision_op_t {
  * Cannot be used directly, must be subclassed.
  */
 struct particle_bulk_collision_op_t : public collision_op_t {
-  species_t  * spi;
-  fluid_species_t  * spj;
-  field_array_t * field=NULL; // field for electron collisions, can be NULL
-  int          interval;
+  species_t       * spi;
+  fluid_species_t * spj;
+  field_array_t   * field=NULL; // field for electron collisions, can be NULL
+  int               interval;
+  species_t       * spp=NULL; // product species
 };
 
 
-#define RANK_TO_3D_INDEX(rank,ix,iy,iz,nx,ny,nz) do {        \
+/**
+ * @brief Base collision operator for binary neutral collisions including
+ * charge-exchange, ionization, etc. The collisions can be between
+ * between particles of any charge including neutrals, unlike the
+ * Takizuka-Abe model which is only between charged particles
+ *
+ * Cannot be used directly, must be subclassed.
+ */
+struct binary_neutral_collision_op_t : public collision_op_t {
+  species_t       * spi;
+  species_t       * spj;
+  field_array_t   * field=NULL; // field for electron collisions, can be NULL
+  int               interval;
+  // species_t       * spp1=NULL; // product species (for fusion products)
+  // species_t       * spp2=NULL; // product species
+};
+
+
+#define RANK_TO_INDEX(rank,ix,iy,iz,nx,ny,nz) do {        \
     int _ix, _iy, _iz;                                    \
     _ix  = (rank);   /* ix = ix + gpx*( iy + gpy*iz ) */  \
     _iy  = _ix/(nx); /* iy = iy + gpy*iz */               \
@@ -65,7 +96,45 @@ struct Accum {
     return *this;
   }
 };
-typedef Accum<float, 5> gmomType; //0:mass, 1-3:momentum, 4-energy
+//typedef Accum<double, 6> gmomType; //0:total mass, 1-3:momentum, 4:energy, 5:change in mass
+typedef Accum<float, 26> gmomType26; //before+after collision for 2 species
+
+template <class ScalarType, int N>
+struct AccumKahan {
+  enum : int { n = N };
+  ScalarType v[n];
+  ScalarType c[n];
+
+  KOKKOS_INLINE_FUNCTION
+  AccumKahan() {
+    for (int i = 0; i < n; ++i) { 
+      v[i] = ScalarType(0); 
+      c[i] = ScalarType(0); 
+    }
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void add(const int i, const ScalarType x) {
+    // Kahan: accumulate x into v[i] with compensation c[i]
+    ScalarType y = x - c[i];
+    ScalarType t = v[i] + y;
+    c[i] = (t - v[i]) - y;
+    v[i] = t;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  AccumKahan& operator+=(const AccumKahan& b) {
+    // Merge partials: add both b.v and b.c so we don't lose compensation
+    for (int i = 0; i < n; ++i) {
+      add(i, b.v[i]);
+      add(i, b.c[i]);
+    }
+    return *this;
+  }
+};
+
+using gmomType = AccumKahan<float, 6>;
+
 
 namespace Kokkos { //required
 template <>
@@ -77,7 +146,21 @@ struct reduction_identity<gmomType> {
     return gmomType();
   }
 };
+
+template<>
+struct reduction_identity<gmomType26> {
+  KOKKOS_INLINE_FUNCTION
+  static gmomType26 sum() { return gmomType26(); }
+};
+    
 }
+
+struct collision_op {
+  char * name;
+  apply_collision_op_func_t  apply_cop;
+  delete_collision_op_func_t delete_cop;
+  collision_op_t * next;
+};
 
 /**
  * @brief Base collision model
@@ -88,7 +171,8 @@ struct reduction_identity<gmomType> {
  */
 template <typename DerivedT> 
 struct collision_model {
-
+  CollisionType collision_type;
+  
   /**
    * @brief Tangent of half the polar scattering angle.
    *
@@ -115,13 +199,16 @@ struct collision_model {
    * @param rg Random number generator
    * @param E Collision energy
    * @param nvdt Areal density of particles encountered
+   * @param q1 Charge of first particle
+   * @param q2 Charge of second particle (default neutral)
    */
   KOKKOS_INLINE_FUNCTION
   constexpr float cross_section(
     kokkos_rng_state_t& rg,
-    float q,
     float E,
-    float nvdt
+    float nvdt,
+    float q1,
+    float q2=0.0
   ) const
   {
     return 0;
@@ -165,15 +252,15 @@ struct collision_model {
   template <typename ViewType>
   KOKKOS_INLINE_FUNCTION
   void upload_moment_src(const ViewType & spj_fl, const int v,
-                               const gmomType &Dm) const {
+                         const gmomType &Dm, const float mi, const float mj) const {
     // By default do nothing, or call a derived "implementation" if it exists:
-      static_cast<const DerivedT*>(this)->upload_moment_src_impl(spj_fl, v, Dm);
+    static_cast<const DerivedT*>(this)->upload_moment_src_impl(spj_fl, v, Dm, mi, mj);
   }
   
   template <typename ViewType>
   KOKKOS_INLINE_FUNCTION
   void upload_moment_src_impl(const ViewType& spj_fl, const int v,
-                               const gmomType &Dm ) const
+                              const gmomType &Dm, const float mi, const float mj ) const
   {
       // default no-op
   }

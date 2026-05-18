@@ -18,6 +18,7 @@ struct drag_collision_op_t : public particle_bulk_collision_op_t {
  */
 template<typename Functor>
 struct drag_model : public collision_model<drag_model<Functor>> {
+  CollisionType collision_type = CollisionType::BulkDrag;
   // const float cvar;
 
   Functor stopping_cx;
@@ -28,17 +29,13 @@ struct drag_model : public collision_model<drag_model<Functor>> {
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
-    float Z,     // Charge of particle
     float vr,    // Changed input variable.
-    float nvdt
+    float nvdt,
+    float Z1,      // Charge of particle
+    float Z2=0.0,  // Charge of particle
   ) const
   {
-     //    float Z = 5;
-    float sig = sigma_cx(vr,Z);
-    //    float sig = 9999999;
-    
-    //    printf("Z = %f,vr = %f, sigma = %e, nvdt=%e\n",Z,vr,sig,(sig*nvdt));
-    
+    float sig = sigma_cx(vr, Z1);
     return sig;
   }
   */
@@ -52,22 +49,18 @@ struct drag_model : public collision_model<drag_model<Functor>> {
     float *param
   ) const
   {
-      auto v0 = param[0];
-      //assert(v0>0);
-      if(v0==0) return 0;
+    auto v0 = param[0];
+    //assert(v0>0);
+    if(v0==0) return 0;
 
-      auto ndt_mi2 = param[2]; // Actually need n*dt/mi -> multiply by mi in stopping_cx.
-      
-      float mS = stopping_cx(v0); 
+    auto ndt_mi2 = param[2]; // Actually need n*dt/mi -> multiply by mi in stopping_cx.
+    
+    float mS = stopping_cx(v0); 
 
-      auto Cr = 1.0 - ndt_mi2*mS/v0;
-      //auto Crterm2 = ndt_mi2*mS/v0;
+    auto Cr = 1.0 - ndt_mi2*mS/v0;
+    //auto Crterm2 = ndt_mi2*mS/v0;
 
-      //if (Crterm2 > 1.0e-1) {
-	//	printf("v0=%14.8e, ndt_mi2=%14.8e, mS=%14.8e, Crterm2=%14.8e, Cr=%14.8e",v0
-	//	,ndt_mi2,mS,Crterm2, Cr);
-      //      }
-      return Cr;
+    return Cr;
   }
   
     
@@ -84,6 +77,24 @@ struct drag_model : public collision_model<drag_model<Functor>> {
     return value; // No scattering for now. TO-DO: Add scattering for elastic collisions
   }
 
+  /**
+   * @brief Implemention of upload_moment_src_impl() for drag model accumulations
+   *        change in momentum and energy.
+   */
+  template <class ViewType>
+  KOKKOS_INLINE_FUNCTION
+  void upload_moment_src_impl( 
+    const ViewType & spj_v, 
+    const int v,
+    const gmomType &Dm, 
+    const float mi,
+    const float mj) const 
+  {
+    spj_v(v, fluid_var::ux) += -Dm.v[1] * mi / (mj * Dm.v[0]); // du_2 = dp_1 / m_2
+    spj_v(v, fluid_var::uy) += -Dm.v[2] * mi / (mj * Dm.v[0]);
+    spj_v(v, fluid_var::uz) += -Dm.v[3] * mi / (mj * Dm.v[0]);
+    spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi * 2.0 / 3.0; // dT ~ 2/3 dE
+  } // end upload_moment_src_impl()
   
 };
 
@@ -153,6 +164,7 @@ drag(
   drag->apply_cop   = &apply_drag_collision_op<Functor>;
   drag->delete_cop  = &delete_drag_collision_op<Functor>;
   drag->next        = NULL;
+  drag->field       = NULL;
 
   REGISTER_OBJECT(drag,
                   &checkpt_drag_collision_op<Functor>,

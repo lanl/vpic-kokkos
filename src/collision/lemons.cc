@@ -50,18 +50,23 @@ lemons(
     ERROR(("Bad args."));
 
   lemons_collision_op_t * le;
-  auto namelen = strlen(name)+1;
+  const auto name_len = strlen(name);
   MALLOC( le, 1);
   MALLOC( le->name, strlen(name) +1 );
-  strncpy( le->name, name, namelen);
+  strncpy( le->name, name, name_len+1);
 
   spi->last_indexed = -1; //to ensure sort in collisions
   
   le->spi         = spi;
   le->spj         = spj;
-  if(field != NULL) le->field       = field;
-  else le->field = NULL;
+  if(field != NULL) {
+    le->field = field;
+  } else {
+    le->field = NULL;
+  }
   
+  le->spp = NULL;
+
   le->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
   le->interval    = interval;
   le->apply_cop   = &apply_lemons_collision_op;
@@ -82,18 +87,16 @@ void transfer_mom_en_src(
   fluid_species_t  * spj
 )
 {
-    // printf("#Transfer mom srcs to field\n");
-    auto& k_f_d = k_field;
-    auto& k_spj_fl = spj->k_fl_d;
-    auto nv = k_field.extent(0);   
-    Kokkos::parallel_for("copy momentum_energy_src to flield", nv, KOKKOS_LAMBDA (int i) {
-	    // Your code to copy fluid data for index i
-	    k_f_d(i, field_var::sx) = k_spj_fl(i, fluid_var::msx);
-	    k_f_d(i, field_var::sy) = k_spj_fl(i, fluid_var::msy);
-	    k_f_d(i, field_var::sz) = k_spj_fl(i, fluid_var::msz);
-	    k_f_d(i, field_var::se) = k_spj_fl(i, fluid_var::ens);
-	});    
-    
+  auto& k_f_d = k_field;
+  auto& k_spj_fl = spj->k_fl_d;
+  auto nv = k_field.extent(0);   
+  Kokkos::parallel_for("copy momentum_energy_src to flield", nv, KOKKOS_LAMBDA (int i) {
+    // Your code to copy fluid data for index i
+    k_f_d(i, field_var::sx) = k_spj_fl(i, fluid_var::msx);
+    k_f_d(i, field_var::sy) = k_spj_fl(i, fluid_var::msy);
+    k_f_d(i, field_var::sz) = k_spj_fl(i, fluid_var::msz);
+    k_f_d(i, field_var::se) = k_spj_fl(i, fluid_var::ens);
+  });    
 }
 
 

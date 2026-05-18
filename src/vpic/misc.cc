@@ -18,7 +18,7 @@ vpic_simulation::inject_particle( species_t * sp,
                                   double ux, double uy, double uz,
                                   double w,  double age,
                                   int update_rhob,
-				  double qp) {
+                                  double qp) {
   int ix, iy, iz;
 
   // Check input parameters
@@ -74,7 +74,8 @@ vpic_simulation::inject_particle( species_t * sp,
   iz++;                               // Adjust for mesh indexing
 
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
-  particle_t * p = sp->p + (sp->np++);
+  size_t p_index = Kokkos::atomic_fetch_inc(&(sp->np));
+  particle_t * p = sp->p + p_index;
   p->dx = (float)x; // Note: Might be rounded to be on [-1,1]
   p->dy = (float)y; // Note: Might be rounded to be on [-1,1]
   p->dz = (float)z; // Note: Might be rounded to be on [-1,1]
@@ -101,7 +102,7 @@ vpic_simulation::inject_particle( species_t * sp,
     sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
   }
 #else
-  int idx = sp->np++;
+  size_t idx = Kokkos::atomic_fetch_inc(&(sp->np));
   sp->k_p_h(idx, particle_var::dx) = static_cast<float>(x);
   sp->k_p_h(idx, particle_var::dy) = static_cast<float>(y);
   sp->k_p_h(idx, particle_var::dz) = static_cast<float>(z);
@@ -137,11 +138,11 @@ vpic_simulation::inject_particle( species_t * sp,
 
 void
 vpic_simulation::inject_particle_r( species_t * sp,
-				    double x,  double y,  double z,
-				    double ux, double uy, double uz,
-				    double w,  double age,
-				    int update_rhob,
-				    double qp ) {
+                                    double x,  double y,  double z,
+                                    double ux, double uy, double uz,
+                                    double w,  double age,
+                                    int update_rhob,
+                                    double qp ) {
   int ix, iy, iz;
 
   // Check input parameters
@@ -196,6 +197,7 @@ vpic_simulation::inject_particle_r( species_t * sp,
   if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
   iz++;                               // Adjust for mesh indexing
 
+  size_t p_index = Kokkos::atomic_fetch_inc(&(sp->np));
 
   // Add particle to receive list (on host), so it will be copied to
   // device along with the boundary_p particles.
@@ -361,17 +363,17 @@ void vpic_simulation::checksum_species(const char * species, CheckSum & cs) {
     const unsigned int csels = cs.length*nproc();
     unsigned char * sums(NULL);
 
-	if(rank() == 0) {
-    	sums = new unsigned char[csels];
-	} // if
+    if(rank() == 0) {
+      sums = new unsigned char[csels];
+    } // if
 
-	// gather sums from all ranks
-	mp_gather_uc(cs.value, sums, cs.length);
+    // gather sums from all ranks
+    mp_gather_uc(cs.value, sums, cs.length);
 
-	if(rank() == 0) {
-		checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
-		MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
-		delete[] sums;
+    if(rank() == 0) {
+      checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
+      MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
+      delete[] sums;
     } // if
   } // if
 } // vpic_simulation::checksum_species
@@ -389,20 +391,19 @@ void vpic_simulation::output_checksum_species(const char * species) {
     const unsigned int csels = cs.length*nproc();
     unsigned char * sums(NULL);
 
-	if( rank() == 0) {
-    	sums = new unsigned char[csels];
-	} // if
-
-	// gather sums from all ranks
-	mp_gather_uc(cs.value, sums, cs.length);
-
-	if( rank() == 0) {
-		checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
-		MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
-		delete[] sums;
+    if( rank() == 0) {
+      sums = new unsigned char[csels];
     } // if
-  }
-  else {
+
+    // gather sums from all ranks
+    mp_gather_uc(cs.value, sums, cs.length);
+
+    if( rank() == 0) {
+      checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
+      MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
+      delete[] sums;
+    } // if
+  } else {
     MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
   } // if
 } // vpic_simulation::output_checksum_species

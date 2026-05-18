@@ -33,9 +33,9 @@
 #endif
 #if defined( VPIC_ENABLE_VECTORIZATION ) && !defined( USE_GPU )
   #define LANE lane
-  #define BEGIN_THREAD_BLOCK Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (int lane) {
+  #define BEGIN_THREAD_BLOCK Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (size_t lane) {
   #define END_THREAD_BLOCK });
-  #define BEGIN_VECTOR_BLOCK Kokkos::parallel_for_simd(Kokkos::ThreadVectorRange(team_member, num_iters), [&] (int lane) {
+  #define BEGIN_VECTOR_BLOCK Kokkos::parallel_for_simd(Kokkos::ThreadVectorRange(team_member, num_iters), [&] (size_t lane) {
   #define END_VECTOR_BLOCK });
 #else
   #define LANE 0
@@ -65,11 +65,14 @@
 #if defined(KOKKOS_ENABLE_CUDA) || defined(KOKKOS_ENABLE_HIP)
   // Check if using team reduction optimization
   #if defined(VPIC_ENABLE_TEAM_REDUCTION) || defined(VPIC_ENABLE_HIERARCHICAL)
+    #define DEFAULT_SORT_ORDER StandardSortOrder
     #define SORT standard_sort
   #else
+    #define DEFAULT_SORT_ORDER StridedSortOrder
     #define SORT strided_sort
   #endif
 #else
+  #define DEFAULT_SORT_ORDER StandardSortOrder
   #define SORT standard_sort
 #endif
 

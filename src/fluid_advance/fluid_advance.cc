@@ -6,7 +6,7 @@
 
 void
 checkpt_fluid_species( const fluid_species_t * fsp ) {
-  std::cout << "checkptg " << fsp->name << std::endl;
+  //  std::cout << "checkptg " << fsp->name << std::endl;
   CHECKPT( fsp, 1 );
   CHECKPT_STR( fsp->name );
   checkpt_data( fsp->fl,
@@ -33,7 +33,7 @@ delete_fluid_species( fluid_species_t * fsp ) {
   UNREGISTER_OBJECT( fsp );
   FREE_ALIGNED( fsp->fl );
   FREE( fsp->name );
-  FREE( fsp );
+  delete fsp;
 }
 
 /* Public interface **********************************************************/
@@ -74,7 +74,7 @@ fluid_species_t *
 append_fluid_species( fluid_species_t * fsp,
 		      fluid_species_t ** fsp_list ) {
   if( !fsp || !fsp_list ) ERROR(( "Bad args" ));
-  std::cout << "# Appending fluid species. fsp->next=" << fsp->next << "\n";
+  //  std::cout << "# Appending fluid species. fsp->next=" << fsp->next << "\n";
   //std::cout << "NULL=" << NULL << "\n";
   if( fsp->next ) WARNING(( "Fluid species \"%s\" already in a list", fsp->name ));
   if( find_fluid_species_name( fsp->name, *fsp_list ) )
@@ -127,7 +127,7 @@ fluid_species( const char * name,
 
   fsp->g = g;
 
-  std::cout << "# Creating fluid species. fsp->next=" << fsp->next << "\n";
+  //  std::cout << "# Creating fluid species. fsp->next=" << fsp->next << "\n";
   /* id, next are set by append fluid species */
 
   REGISTER_OBJECT( fsp, checkpt_fluid_species, restore_fluid_species, NULL ); // To-do: Implement checkpointing.

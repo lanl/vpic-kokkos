@@ -1,8 +1,14 @@
 #ifndef _binary_h_
 #define _binary_h_
 
+// Forward declaration of collision_model and takizuka_abe_model
+template <typename DerivedT>
+struct collision_model;
+struct takizuka_abe_model;
+
 #include "collision_private.h"
 #include "kokkos/binary_pipeline_voxel_indirect.h"
+
 
 /**
  * @brief Base collision operator for binary collsiions.
@@ -29,8 +35,6 @@ void apply_binary_collision_model_pipeline( binary_collision_op_t * cop,
     if( cop->interval<1 || (step % cop->interval) ) {
         return;
     }
-
-    //std::cout << "Applying Collisions" << std::endl;
 
     binary_collision_pipeline<MonteCarlo> pipeline(
       cop->spi,

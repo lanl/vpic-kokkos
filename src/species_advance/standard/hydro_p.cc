@@ -31,11 +31,12 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   const particle_t     * RESTRICT ALIGNED(128) p;
   const interpolator_t * RESTRICT ALIGNED(128) f;
   float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
-  int np, stride_10, stride_21, stride_43;
+  size_t np, stride_10, stride_21, stride_43;
 
   float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
   float w0, w1, w2, w3, w4, w5, w6, w7, t;
-  int i, n;
+  int i; 
+  size_t n;
 
   if( !ha || !sp || !ia || ha->g!=sp->g || ha->g!=ia->g )
     ERROR(( "Bad args" ));
@@ -145,7 +146,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     h[i].px  += dx;                                     \
     h[i].py  += dy;                                     \
     h[i].pz  += dz;                                     \
-    h[i].rho_m  += t; /* Prev. was *ke_mc; */		\
+    h[i].rho_m  += t; /* Prev. was *ke_mc; */           \
     h[i].txx += dx*vx;                                  \
     h[i].tyy += dy*vy;                                  \
     h[i].tzz += dz*vz;                                  \
@@ -214,37 +215,34 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     {
 
     // Load the particle
-    double dx = k_particles(p_index, particle_var::dx);
-    double dy = k_particles(p_index, particle_var::dy);
-    double dz = k_particles(p_index, particle_var::dz);
-    double ux = k_particles(p_index, particle_var::ux);
-    double uy = k_particles(p_index, particle_var::uy);
-    double uz = k_particles(p_index, particle_var::uz);
-    double w  = k_particles(p_index, particle_var::w);
-#ifdef VARIABLE_CHARGE
-    float qp  = k_particles(p_index, particle_var::qp);
-    float qdt_2mc = qp*dt_2mc;
-    float qdt_4mc2 = qp*qdt_4mc2;
-#endif
+    double dx = static_cast<double>(k_particles(p_index, particle_var::dx));
+    double dy = static_cast<double>(k_particles(p_index, particle_var::dy));
+    double dz = static_cast<double>(k_particles(p_index, particle_var::dz));
+    double ux = static_cast<double>(k_particles(p_index, particle_var::ux));
+    double uy = static_cast<double>(k_particles(p_index, particle_var::uy));
+    double uz = static_cast<double>(k_particles(p_index, particle_var::uz));
+    double w  = static_cast<double>(k_particles(p_index, particle_var::w ));
     int ii = k_particles_i(p_index);
+    double qp  = 1.0;
+#ifdef VARIABLE_CHARGE
+    qp = k_particles(p_index, particle_var::qp);
+#endif
 
-//    double ke_mc = static_cast<double>(ux)*static_cast<double>(ux) 
-//                 + static_cast<double>(uy)*static_cast<double>(uy) 
-//                 + static_cast<double>(uz)*static_cast<double>(uz); // ke_mc = |u|^2 (invariant)
+    double ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
     double vz = 1.0;//sqrt(1.0+ke_mc);            // vz = gamma    (invariant)    
 //    ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
     
     // Compute physical velocities
-    float vx  = ux*vz;
-    float vy  = uy*vz;
+    double vx  = ux*vz;
+    double vy  = uy*vz;
     vz *= uz;
 
-    float t = 0.0; // used in macro
+    double t = 0.0; // used in macro
     auto hydro_sa = k_hydro_sv.access();
 #ifdef VARIABLE_CHARGE
-    float q = qp;
+    const float q = qp;
 #else
-    float q = qsp;
+    const float q = qsp;
 #endif
 
     // Accumulate the hydro fields
@@ -261,7 +259,7 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     hydro_sa(i, hydro_var::px)    += dx;                         \
     hydro_sa(i, hydro_var::py)    += dy;                         \
     hydro_sa(i, hydro_var::pz)    += dz;                         \
-    hydro_sa(i, hydro_var::rho_m) += t;	/* Prev. was *ke_mc; */	 \
+    hydro_sa(i, hydro_var::rho_m) += t; /* Prev. was *ke_mc; */  \
     hydro_sa(i, hydro_var::txx)   += dx*vx;                      \
     hydro_sa(i, hydro_var::tyy)   += dy*vy;                      \
     hydro_sa(i, hydro_var::tzz)   += dz*vz;                      \
@@ -272,7 +270,9 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     // TODO: this serial adding to try and save adds is a bit sad
     // TODO: This is somehow going out of bounds right now
     const int i0 = ii;
-    ACCUM_HYDRO(w, i0); // Cell i,j,k
+    if(qp!=0) {
+      ACCUM_HYDRO(w, i0); // Cell i,j,k
+    }
 #   undef ACCUM_HYDRO
   });
 
@@ -317,13 +317,15 @@ accumulate_hydro_p_kokkos(
   int nv = sp->g->nv; 
   dt_2mc  = (sp->g->dt)/(2*mspc); // Multiply by particle q later
   dt_4mc2 = dt_2mc / (2*c);
-  Kokkos::View<int*, Kokkos::DefaultExecutionSpace> particle_count("particle_count", nv);
+  Kokkos::View<int*> particle_count("particle_count", nv);
+  Kokkos::deep_copy(particle_count, 0);
 
   // Set initial values to qmin
   Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, nv),
     KOKKOS_LAMBDA(size_t ii)
     {
-        k_hydro(ii, hydro_var::qmin) = 999999999;
+        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<k_hydro_t::non_const_value_type>::max();
+        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<k_hydro_t::non_const_value_type>::min();
     });
 
 #else
@@ -332,7 +334,7 @@ accumulate_hydro_p_kokkos(
 #endif
   r8V      = sp->g->r8V;
 
-  const int np        = sp->np;
+  const size_t np     = sp->np;
   const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
                         VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
   const int stride_21 = VOXEL(0,1,0, sp->g->nx,sp->g->ny,sp->g->nz) -
@@ -340,7 +342,6 @@ accumulate_hydro_p_kokkos(
   const int stride_43 = VOXEL(0,0,1, sp->g->nx,sp->g->ny,sp->g->nz) -
                         VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
 
-  //for( n=0; n<np; n++ ) {
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
     KOKKOS_LAMBDA (size_t p_index)
     {
@@ -354,11 +355,11 @@ accumulate_hydro_p_kokkos(
     float uz = k_particles(p_index, particle_var::uz);
     float w  = k_particles(p_index, particle_var::w);
 #ifdef VARIABLE_CHARGE
-    float qp = k_particles(p_index, particle_var::qp);
-    float qdt_2mc = qp*dt_2mc;
-    float qdt_4mc2 = qp*qdt_4mc2;
+    const float qp = k_particles(p_index, particle_var::qp);
+    const float qdt_2mc = qp*dt_2mc;
+    const float qdt_4mc2 = qp*dt_4mc2;
 #endif
-    int ii = k_particles_i(p_index);
+    const int ii = k_particles_i(p_index);
 
     const float cbx = k_interp(ii, interpolator_var::cbx);
     const float cby = k_interp(ii, interpolator_var::cby);
@@ -450,11 +451,11 @@ accumulate_hydro_p_kokkos(
     auto k_hydro_access = k_hydro_sv.access();
 
 #ifdef VARIABLE_CHARGE
-    float q = qp;
+    const double q = qp;
 
     // TODO: Why? Nothing is done with the results.
-    Kokkos::atomic_fetch_min(&k_hydro(ii, hydro_var::qmin), q);
-    Kokkos::atomic_fetch_max(&k_hydro(ii, hydro_var::qmax), q);
+    Kokkos::atomic_min(&k_hydro(ii, hydro_var::qmin), q);
+    Kokkos::atomic_max(&k_hydro(ii, hydro_var::qmax), q);
 
     float w_ngp = 8.0*r8V*w;
     if (q==0) {
@@ -476,15 +477,15 @@ accumulate_hydro_p_kokkos(
       k_hydro_access(ii, hydro_var::n_q5) += w_ngp;
       //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q5), w_ngp); }
     }
-		       
-    Kokkos::atomic_add(&particle_count(ii), 1); // number of particles in each cell
+       
+    Kokkos::atomic_inc(&particle_count(ii)); // number of particles in each cell
 #else
     float q = qsp;
 #endif
     
     // Accumulate the hydro fields
     #define ACCUM_HYDRO( wn, i )                                       \
-    t  = q*wn;        /* t  = (q w/V) trilin_n */		                   \
+    t  = q*wn;        /* t  = (q w/V) trilin_n */                      \
     k_hydro_access(i, hydro_var::jx)    += t*vx;                       \
     k_hydro_access(i, hydro_var::jy)    += t*vy;                       \
     k_hydro_access(i, hydro_var::jz)    += t*vz;                       \
@@ -496,7 +497,7 @@ accumulate_hydro_p_kokkos(
     k_hydro_access(i, hydro_var::px)    += dx;                         \
     k_hydro_access(i, hydro_var::py)    += dy;                         \
     k_hydro_access(i, hydro_var::pz)    += dz;                         \
-    k_hydro_access(i, hydro_var::rho_m) += t; /* changed to mass density (previously ke_mc). Nb. for non-relativistic ke can be computed through trace of pressure tensor below;)*/		     \
+    k_hydro_access(i, hydro_var::rho_m) += t; /* changed to mass density (previously ke_mc). Nb. for non-relativistic ke can be computed through trace of pressure tensor below;)*/       \
     k_hydro_access(i, hydro_var::txx)   += dx*vx;                      \
     k_hydro_access(i, hydro_var::tyy)   += dy*vy;                      \
     k_hydro_access(i, hydro_var::tzz)   += dz*vz;                      \
@@ -540,12 +541,12 @@ accumulate_hydro_p_kokkos(
     {
       // Calculate mean charge only if there are particles in the cell
       if (particle_count(ii) > 0) {
-        //	k_hydro(ii, hydro_var::avg_q) /= static_cast<float>(particle_count(ii));
-        //if (k_hydro(ii, hydro_var::qmin) == 0) printf("ii=%d, minq=%e",ii,k_hydro(ii, hydro_var::qmin));
+        //k_hydro(ii, hydro_var::avg_q) /= static_cast<float>(particle_count(ii));
+        //if (k_hydro(ii, hydro_var::min_q) == 0) printf("ii=%d, minq=%e",ii,k_hydro(ii, hydro_var::min_q));
       } else {
-        //	k_hydro(ii, hydro_var::avg_q) = std::numeric_limits<double>::quiet_NaN();
-        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<double>::quiet_NaN();
-        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<double>::quiet_NaN();
+        //k_hydro(ii, hydro_var::avg_q) = std::numeric_limits<double>::quiet_NaN();
+        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<k_hydro_t::non_const_value_type>::quiet_NaN();
+        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<k_hydro_t::non_const_value_type>::quiet_NaN();
       }
     });
 #endif

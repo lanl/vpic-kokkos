@@ -28,6 +28,7 @@
 #include "../util/rng_policy.h"
 #include "dump_strategy.h"
 #include "dumpmacros.h"
+#include "../particle_operations/sort.h"
 
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
@@ -45,29 +46,29 @@ class HDF5Dump;
 
 /* typedef FileIO FILETYPE; */
 
-const uint32_t allvars		(0xffffffff);
-const uint32_t electric		(1<<0 | 1<<1 | 1<<2);
-const uint32_t div_e_err	(1<<3);
-const uint32_t magnetic		(1<<4 | 1<<5 | 1<<6);
-const uint32_t pe  		(1<<7);
-const uint32_t tca			(1<<8 | 1<<9 | 1<<10);
-const uint32_t rhob			(1<<11);
-const uint32_t current		(1<<12 | 1<<13 | 1<<14);
-const uint32_t rhof			(1<<15);
-const uint32_t currentold	(1<<16 | 1<<17 | 1<<18);
-const uint32_t rhofold		(1<<19);
-const uint32_t magnetic0	(1<<20 | 1<<21 | 1<<22);
-const uint32_t te0		(1<<23);
-const uint32_t tempt		(1<<24 | 1<<25 | 1<<26);
-const uint32_t te			(1<<27);
-const uint32_t tempo		(1<<28 | 1<<29 | 1<<30);
-const uint32_t oe			(1u<<31);
-//const uint32_t tempp		(1<<32 | 1<<33 | 1<<34);
-//const uint32_t pe			(1<<35);
-//const uint32_t emat			(1<<36 | 1<<37 | 1<<38);
-//const uint32_t nmat			(1<<39);
-//const uint32_t fmat			(1<<40 | 1<<41 | 1<<42);
-//const uint32_t cmat			(1<<43);
+const uint32_t allvars    (0xffffffff);
+const uint32_t electric   (1<<0 | 1<<1 | 1<<2);
+const uint32_t div_e_err  (1<<3);
+const uint32_t magnetic   (1<<4 | 1<<5 | 1<<6);
+const uint32_t pe         (1<<7);
+const uint32_t tca        (1<<8 | 1<<9 | 1<<10);
+const uint32_t rhob       (1<<11);
+const uint32_t current    (1<<12 | 1<<13 | 1<<14);
+const uint32_t rhof       (1<<15);
+const uint32_t currentold (1<<16 | 1<<17 | 1<<18);
+const uint32_t rhofold    (1<<19);
+const uint32_t magnetic0  (1<<20 | 1<<21 | 1<<22);
+const uint32_t te0        (1<<23);
+const uint32_t tempt      (1<<24 | 1<<25 | 1<<26);
+const uint32_t te         (1<<27);
+const uint32_t tempo      (1<<28 | 1<<29 | 1<<30);
+const uint32_t oe         (1u<<31);
+//const uint32_t tempp      (1<<32 | 1<<33 | 1<<34);
+//const uint32_t pe         (1<<35);
+//const uint32_t emat       (1<<36 | 1<<37 | 1<<38);
+//const uint32_t nmat       (1<<39);
+//const uint32_t fmat       (1<<40 | 1<<41 | 1<<42);
+//const uint32_t cmat       (1<<43);
 
 const size_t total_field_variables(32);
 const size_t total_field_groups(16); // this counts vectors, tensors etc...
@@ -75,25 +76,25 @@ const size_t total_field_groups(16); // this counts vectors, tensors etc...
 const size_t field_indeces[22] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31 };
 
 struct FieldInfo {
-	char name[128];
-	char degree[128];
-	char elements[128];
-	char type[128];
-	size_t size;
+  char name[128];
+  char degree[128];
+  char elements[128];
+  char type[128];
+  size_t size;
 }; // struct FieldInfo
 
-const uint32_t current_density	(1<<0 | 1<<1 | 1<<2);
-const uint32_t charge_density	(1<<3);
-const uint32_t momentum_density	(1<<4 | 1<<5 | 1<<6);
-const uint32_t mass_density		(1<<7);
-const uint32_t stress_tensor	(1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13);
+const uint32_t current_density  (1<<0 | 1<<1 | 1<<2);
+const uint32_t charge_density   (1<<3);
+const uint32_t momentum_density (1<<4 | 1<<5 | 1<<6);
+const uint32_t mass_density     (1<<7);
+const uint32_t stress_tensor    (1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13);
 #ifdef VARIABLE_CHARGE
 const uint32_t charge_diags     (1<<14 | 1<<15);
 const uint32_t charge_state_densities (1<<16 | 1<<17 | 1<<18 | 1<<19 | 1<<20 | 1<<21 );
 #endif
 /* May want to use these instead
-const uint32_t stress_diagonal 		(1<<8 | 1<<9 | 1<<10);
-const uint32_t stress_offdiagonal	(1<<11 | 1<<12 | 1<<13);
+const uint32_t stress_diagonal    (1<<8 | 1<<9 | 1<<10);
+const uint32_t stress_offdiagonal (1<<11 | 1<<12 | 1<<13);
 */
 
 #ifdef VARIABLE_CHARGE
@@ -109,11 +110,11 @@ const uint32_t stress_offdiagonal	(1<<11 | 1<<12 | 1<<13);
 #endif
 
 struct HydroInfo {
-	char name[128];
-	char degree[128];
-	char elements[128];
-	char type[128];
-	size_t size;
+  char name[128];
+  char degree[128];
+  char elements[128];
+  char type[128];
+  size_t size;
 }; // struct FieldInfo
 
 // To-do: Add in groups for fluid variables
@@ -158,7 +159,7 @@ struct DumpParameters {
     //    strcpy(baseDir, dumptype);
     //    strcpy(baseFileName, dumptype);
   } // output_variables
-  
+
   BitField output_vars;
 
   size_t stride_x;
@@ -215,7 +216,7 @@ public:
   // TODO: remove or improve this
 
   kokkos_rng_pool_t * kokkos_rng;
-    
+
   // Directly initialized by user
 
   int verbose;              // Should system be verbose
@@ -247,7 +248,7 @@ public:
   int field_interval;
   int particle_interval;
   int fluid_interval;
-  
+
   size_t nxout, nyout, nzout;
   size_t px, py, pz;
   float dxout, dyout, dzout;
@@ -295,6 +296,8 @@ public:
                                              // emitter helpers
   collision_op_t       * collision_op_list;  // collision helpers
 
+  ParticleSorter<>* sorter;
+
   // User defined checkpt preserved variables
   // Note: user_global is aliased with user_global_t (see deck_wrapper.cxx)
 
@@ -331,7 +334,7 @@ public:
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
   void dump_fluid_species( const char *fname );
-  
+
   // Binary dumps
   void dump_grid( const char *fbase );
   void dump_fields( const char *fbase, int fname_tag = 1 );
@@ -340,16 +343,16 @@ public:
   void dump_particles( const char *sp_name, const char *fbase,
                        int fname_tag = 1 );
   void dump_fluids( const char *fsp_name, const char *fbase,
-		    int fname_tag = 1 );
+                    int fname_tag = 1 );
 
   // convenience functions for simlog output
   void create_field_list(char * strlist, DumpParameters & dumpParams);
   void create_hydro_list(char * strlist, DumpParameters & dumpParams);
   //  void create_fluid_list(char * strlist, DumpParameters & dumpParams);
-  
+
   void print_hashed_comment(FileIO & fileIO, const char * comment);
   void global_header(const char * base,
-  	std::vector<DumpParameters *> dumpParams);
+                     std::vector<DumpParameters *> dumpParams);
 
   void field_header(const char * fbase, DumpParameters & dumpParams);
   void hydro_header(const char * speciesname, const char * hbase,
@@ -358,7 +361,7 @@ public:
   void field_dump(DumpParameters & dumpParams);
   void hydro_dump(const char * speciesname, DumpParameters & dumpParams);
   void fluid_dump(const char * speciesname, DumpParameters & dumpParams);
-  
+
   ///////////////////
   // Useful accessors
 
@@ -453,14 +456,14 @@ public:
     return hydro_array->k_h_h;
   }
  
-  inline float& hydro_h( const int vox, const int var ) {
+  inline double& hydro_h( const int vox, const int var ) {
     return hydro_array->k_h_h(vox, var);
   }
 
-  //  inline float& k_fluid(const int ix, const int iy, const int iz, fluid_var::fl_v member) { 
+  //  inline float& k_fluid(const int ix, const int iy, const int iz, fluid_var::fl_v member) {
   //    return fluid_species->k_fl_d(voxel(ix,iy,iz), member);
   //  }
-  
+
   inline rng_t *
   rng( const int n ) {
     return entropy->rng[n];
@@ -572,7 +575,7 @@ public:
                    double epsx,        double epsy,       double epsz,
                    double mux,         double muy,        double muz,
                    double sigmax,      double sigmay,     double sigmaz,
-		   double zetax = 0 ,  double zetay = 0,  double zetaz = 0 ) {
+                   double zetax = 0 ,  double zetay = 0,  double zetaz = 0 ) {
     return append_material( material( name,
                                       epsx,   epsy,   epsz,
                                       mux,    muy,    muz,
@@ -612,7 +615,7 @@ public:
 //#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     for(int k=0; k<=grid->nz+1; k++){
       for(int j=0; j<=grid->ny+1; j++){
-	      field_t * f = &field(0,j,k);
+        field_t * f = &field(0,j,k);
         for(int i=0; i<=grid->nx+1; i++){
           f->tcax = 1.0;
           f->tcay = 1.0;
@@ -640,7 +643,6 @@ public:
 ////      fields(voxel(i,j,k), field_var::tcaz) = 1.0;
 ////    });
 //#endif
-    
     interpolator_array = new_interpolator_array( grid );
     hydro_array        = new_hydro_array( grid );
 
@@ -684,8 +686,10 @@ public:
       if( max_local_nm<16*(MAX_PIPELINE+1) )
         max_local_nm = 16*(MAX_PIPELINE+1);
     }
+    sorter->resize(max_local_np, grid->nv);
+
     return append_species( species( name, (float)q, (float)m,
-                                    (int)max_local_np, (int)max_local_nm,
+                                    (size_t)max_local_np, (size_t)max_local_nm,
                                     (int)sort_interval, (int)sort_out_of_place,
                                     grid ), &species_list );
   }
@@ -702,14 +706,14 @@ public:
 
   //////////////////
   // Fluid species helpers
-  
-  // FIXME: SILLY PROMOTIONS 
+
+  // FIXME: SILLY PROMOTIONS
   inline fluid_species_t *
   define_fluid_species( const char *name,
-			double q,
-			double m ) {
+                        double q,
+                        double m ) {
     return append_fluid_species( fluid_species( name, (float)q, (float)m,
-						grid ), &fluid_species_list );
+                                 grid ), &fluid_species_list );
   }
 
   inline fluid_species_t *
@@ -722,7 +726,7 @@ public:
     return find_fluid_species_id( id, fluid_species_list );
   }
 
-  
+
   ///////////////////
   // Particle helpers
 
@@ -735,18 +739,18 @@ public:
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
                    double w,  double age = 0, int update_rhob = 1,
-		   double qp = 0);
+                   double qp = 0);
 
-  
+
   // Inject particle on receive list (so gets passed to device).
   // Intended for user_particle_injection
   void
   inject_particle_r( species_t * sp,
-		     double x,  double y,  double z,
-		     double ux, double uy, double uz,
-		     double w,  double age = 0,
-		     int update_rhob = 0,
-		     double qp = 0);
+                     double x,  double y,  double z,
+                     double ux, double uy, double uz,
+                     double w,  double age = 0,
+                     int update_rhob = 0,
+                     double qp = 0);
 
   // Inject particle raw is for power users!
   // No nannyism _at_ _all_:
@@ -909,7 +913,7 @@ public:
   }
 
   // Truncate "a" to the nearest integer multiple of "b"
-  inline double trunc_granular( double a, double b ) { return b*int(a/b); }
+  inline double trunc_granular( double a, double b ) { return b*uint64_t(a/b); }
 
   // Compute the remainder of a/b
   inline double remainder( double a, double b ) { return std::remainder(a,b); }
@@ -917,7 +921,7 @@ public:
 
   // Compute the Courant length on a regular mesh
   inline double courant_length( double lx, double ly, double lz,
-				double nx, double ny, double nz ) {
+                                double nx, double ny, double nz ) {
     double w0, w1 = 0;
     if( nx>1 ) w0 = nx/lx, w1 += w0*w0;
     if( ny>1 ) w0 = ny/ly, w1 += w0*w0;
@@ -940,6 +944,8 @@ public:
   void user_current_injection(void);
 #ifdef HYB_USE_RADIATION
   void user_radiation(void);
+#else
+  void user_radiation(void) {};
 #endif
   void user_field_injection(void);
   void user_diagnostics(void);

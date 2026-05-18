@@ -37,12 +37,12 @@ struct center_p_kernel {
 //    dy   = sp->p[n].dy;
 //    dz   = sp->p[n].dz;
 #ifdef VARIABLE_CHARGE
-    float qp   = sp->p[n].qp;
-    float qdt_2mc = qp*_qdt_2mc;
-    float qdt_4mc = 0.5*_qdt_2mc;
+    const float qp   = sp->p[n].qp;
+    const float qdt_2mc = qp*_qdt_2mc;
+    const float qdt_4mc = 0.5*qdt_2mc;
 #else
-    float qdt_2mc = _qdt_2mc;
-    float qdt_4mc = _qdt_4mc;
+    const float qdt_2mc = _qdt_2mc;
+    const float qdt_4mc = _qdt_4mc;
 #endif
     ii   = sp->p[n].i;
 #else
@@ -50,12 +50,12 @@ struct center_p_kernel {
 //    dy   = p(n, particle_var::dy);
 //    dz   = p(n, particle_var::dz);
 #ifdef VARIABLE_CHARGE
-    float qp   = p(n, particle_var::qp);
-    float qdt_2mc = qp*_qdt_2mc;
-    float qdt_4mc = 0.5*_qdt_2mc;
+    const float qp   = p(n, particle_var::qp);
+    const float qdt_2mc = qp*_qdt_2mc;
+    const float qdt_4mc = 0.5*qdt_2mc;
 #else
-    float qdt_2mc = _qdt_2mc;
-    float qdt_4mc = _qdt_4mc;
+    const float qdt_2mc = _qdt_2mc;
+    const float qdt_4mc = _qdt_4mc;
 #endif
     ii   = p_i(n);
 #endif

@@ -241,3 +241,7 @@ begin_particle_collisions{
   // No collisions for this simulation
 
 }
+
+begin_radiation {
+ // No radiation for this simulation
+}

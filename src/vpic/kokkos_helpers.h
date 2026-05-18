@@ -9,7 +9,7 @@
 
 // This module implements kokkos macros
 
-#define FIELD_VAR_COUNT 44
+#define FIELD_VAR_COUNT 45
 #define FIELD_EDGE_COUNT 8
 
 #ifdef VARIABLE_CHARGE
@@ -28,6 +28,7 @@
 #else
   #define HYDRO_VAR_COUNT 14
 #endif
+#define HYDRO_SYNC_COUNT 14
 #define NUM_J_DIMS 4
 #define FLUID_VAR_COUNT 6+4
 
@@ -68,7 +69,7 @@ typedef int16_t material_id;
 
 // TODO: we dont need the [1] here
 // TODO: this can likely be unsigned, but that tends to upset Kokkos
-using k_counter_t = Kokkos::View<int[1]>;
+using k_counter_t = Kokkos::View<size_t[1]>;
 
 using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
 // TODO: This scatter access is needed only for jfxyz, not all field vars.
@@ -87,7 +88,7 @@ using k_particle_copy_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::Layo
 using k_particle_i_copy_t = Kokkos::View<int*>;
 
 using k_particle_movers_t = Kokkos::View<float *[PARTICLE_MOVER_VAR_COUNT]>;
-using k_particle_i_movers_t = Kokkos::View<int*>;
+using k_particle_i_movers_t = Kokkos::View<size_t*>;
 
 using k_particle_partition_t = Kokkos::View<Kokkos::DefaultExecutionSpace::size_type*>;
 using k_particle_partition_t_ra = Kokkos::View<const Kokkos::DefaultExecutionSpace::size_type*,
@@ -106,17 +107,14 @@ using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR
 
 using k_accumulators_sv_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
-using k_hydro_t = Kokkos::View<float* [HYDRO_VAR_COUNT]>;
-using k_hydro_sv_t = Kokkos::Experimental::ScatterView<float* [HYDRO_VAR_COUNT]>;
-
+using k_hydro_t = Kokkos::View<double* [HYDRO_VAR_COUNT]>;
+using k_hydro_sv_t = Kokkos::Experimental::ScatterView<double* [HYDRO_VAR_COUNT]>;
 
 using k_accumulators_svh_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
 
 using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT], Kokkos::LayoutRight>;
 // 1D View: shape [FLUID_VAR_COUNT]
-// using k_fluid_1d = Kokkos::View<float*>;
-// struct field_tag {};  // Just an empty struct for tagging
-// using k_field_1d = Kokkos::View<float*, field_tag>;
+using k_fluid_1d = Kokkos::View<float*>;
 
 using static_sched = Kokkos::Schedule<Kokkos::Static>;
 using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, static_sched, int>;
@@ -213,7 +211,8 @@ namespace field_var {
     sx        = 40,
     sy        = 41,
     sz        = 42,
-    se        = 43
+    se        = 43,
+    trad      = 44
   };
 };
 namespace field_edge_var { \
@@ -313,7 +312,7 @@ namespace hydro_var {
         px  = 4,
         py  = 5,
         pz  = 6,
-	//        ke  = 7,
+//        ke  = 7,
         rho_m = 7,
         txx = 8,
         tyy = 9,
@@ -351,7 +350,7 @@ namespace fluid_var {
 
 void print_particles_d(
         k_particles_t particles,
-        int np
+        size_t np
         );
 void print_accumulator(k_accumulators_t fields, int n);
 
