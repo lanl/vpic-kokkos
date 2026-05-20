@@ -29,8 +29,10 @@ checkpt_species( const species_t * sp ) {
   CHECKPT_PTR( sp->next );
   CHECKPT_PTR( sp->pb_diag );
   CHECKPT_PTR( sp->parent_species );
+#ifdef VPIC_ENABLE_ANNOTATIONS
   CHECKPT_VAL( bool, sp->is_tracer );
   CHECKPT_VAL( bool, sp->using_annotations );
+#endif
 }
 
 species_t *
@@ -45,8 +47,10 @@ restore_species( void ) {
   RESTORE_PTR( sp->next );
   RESTORE_PTR( sp->pb_diag );
   RESTORE_PTR( sp->parent_species );
+#ifdef VPIC_ENABLE_ANNOTATIONS
   RESTORE_VAL( bool, sp->is_tracer );
   RESTORE_VAL( bool, sp->using_annotations );
+#endif
   return sp;
 }
 
