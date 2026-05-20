@@ -242,12 +242,15 @@ begin_diagnostics {
   const int bz_idx = sp->annotation_vars.get_annotation_index<float>("Bz");
   const int b_idx  = sp->annotation_vars.get_annotation_index<float>("|B|");
   auto f32_annotations = sp->annotations_d.f32;
+  auto& particles = sp->k_p_d;
+  auto& particles_i = sp->k_p_i_d;
+  auto& i32_annotations = sp->annotations_d.i32;
   Kokkos::parallel_for("Interpolate fields annotation", Kokkos::RangePolicy<>(0,sp->np), KOKKOS_LAMBDA(const uint32_t idx) {
-    const int i = sp->k_p_i_d(idx);
+    const int i = particles_i(idx);
     // Load displacement in the cell
-    const float dx0 = sp->k_p_d(idx, particle_var::dx);
-    const float dy0 = sp->k_p_d(idx, particle_var::dy);
-    const float dz0 = sp->k_p_d(idx, particle_var::dz);
+    const float dx0 = particles(idx, particle_var::dx);
+    const float dy0 = particles(idx, particle_var::dy);
+    const float dz0 = particles(idx, particle_var::dz);
     // Interpolate field values
     const float ex = interp(i, interpolator_var::ex) + dy0*interp(i,interpolator_var::dexdy) + dz0*(interp(i,interpolator_var::dexdz)+dy0*interp(i,interpolator_var::d2exdydz));
     const float ey = interp(i, interpolator_var::ey) + dz0*interp(i,interpolator_var::deydz) + dx0*(interp(i,interpolator_var::deydx)+dz0*interp(i,interpolator_var::d2eydzdx));
@@ -268,12 +271,14 @@ begin_diagnostics {
 
   sp->copy_to_host();
 
-  int tracer_idx = sp->annotation_vars.get_annotation_index<int>("TracerID");
+  const int tracer_idx = sp->annotation_vars.get_annotation_index<int>("TracerID");
 
   // Check that particles involve sane and that annotations stay with the right particle
   if(rank() == 0) {
     for(int n=0; n<sp->np; n++) {
-      sim_log("Step " << step() << ", Particle " << n << ", dx " << sp->p[n].dx << ", dy " << sp->p[n].dy << ", dz " << sp->p[n].dz << ", TracerID " << sp->annotations_h.get<int>(n,tracer_idx));
+      sim_log("Step " << step() << ", Particle " << n 
+              << ", dx " << sp->p[n].dx << ", dy " << sp->p[n].dy << ", dz " << sp->p[n].dz 
+              << ", TracerID " << sp->annotations_h.get<int>(n,tracer_idx));
 
       if(step() < 3) { // Before first cell crossing and communication
         if(sp->p[n].dz > 0.5) { sim_log("FAIL: z coordinate indicates particle came from wrong rank"); exit(1); }
@@ -328,7 +333,7 @@ begin_diagnostics {
 
   // Check that accumulation works
   for(int n=0; n<sp->np; n++) {
-    if(sp->annotations_h.get<int>(n,0) != step() ) { sim_log("FAIL: counter does not match time step on particle "<<n<<" of rank "<<rank()); exit(1); }
+    if(sp->annotations_h.get<int>(n,0) != step() ) { sim_log("FAIL: counter (" << sp->annotations_h.get<int>(n,0) << ") does not match time step (" << step() << ") on particle "<<n<<" of rank "<<rank()); exit(1); }
     sp->annotations_h.set<int>(n,0, sp->annotations_h.get<int>(n,0) + 1.);
   }
 
@@ -342,6 +347,8 @@ begin_diagnostics {
       sim_log("Restart dump restart completed.");
       mp_barrier();
   }
+
+  sp->copy_to_device();
 
   // If we reach this in the last step without any fails we probably did well enough
   if(step() == num_step) {

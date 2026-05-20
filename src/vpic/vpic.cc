@@ -161,97 +161,100 @@ void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
   FileIO fileIO;
 
   species_t* sp;
-#ifdef VPIC_ENABLE_TRACER_PARTICLES
+#if defined( VPIC_ENABLE_TRACER_PARTICLES ) || defined( VPIC_ENABLE_ANNOTATIONS )
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  LIST_FOR_EACH( sp, simulation.tracers_list )
+  LIST_FOR_EACH_SPECIES( sp, simulation.species_list, simulation.tracers_list )
   {
-    sprintf( fname, "%s.%s.annotations", fbase, sp->name );
-    FileIOStatus status = fileIO.open(fname, io_write);
-    if(status == fail) ERROR(("Could not open \"%s\"", fname));
+    if(sp->using_annotations) {
+      sprintf( fname, "%s.%s.annotations", fbase, sp->name );
+      FileIOStatus status = fileIO.open(fname, io_write);
+      if(status == fail) ERROR(("Could not open \"%s\"", fname));
 
-    // Write annotation var map for each type 
-    int n_i32_vars = sp->annotation_vars.i32_vars.size();
-    fileIO.write(&n_i32_vars, 1);
-    if(n_i32_vars > 0) {
-      std::string i32_str;
-      for(int i=0; i<n_i32_vars; i++)
-        i32_str = i32_str + sp->annotation_vars.i32_vars[i] + std::string(";");
-      int str_len = i32_str.size();
-      fileIO.write(&str_len, 1);
-      fileIO.write(i32_str.c_str(), i32_str.size());
-    }
+      // Write annotation var map for each type 
+      auto& annot = sp->annotation_vars;
+      int n_i32_vars = annot.i32_vars.size();
+      fileIO.write(&n_i32_vars, 1);
+      if(n_i32_vars > 0) {
+        std::string i32_str;
+        for(int i=0; i<n_i32_vars; i++)
+          i32_str += annot.i32_vars[i] + std::string(";");
+        const int str_len = i32_str.size();
+        fileIO.write(&str_len, 1);
+        fileIO.write(i32_str.c_str(), i32_str.size());
+      }
 
-    int n_i64_vars = sp->annotation_vars.i64_vars.size();
-    fileIO.write(&n_i64_vars, 1);
-    if(n_i64_vars > 0) {
-      std::string i64_str;
-      for(int i=0; i<n_i64_vars; i++)
-        i64_str = i64_str + sp->annotation_vars.i64_vars[i] + ";";
-      int str_len = i64_str.size();
-      fileIO.write(&str_len, 1);
-      fileIO.write(i64_str.c_str(), i64_str.size());
-    }
+      int n_i64_vars = annot.i64_vars.size();
+      fileIO.write(&n_i64_vars, 1);
+      if(n_i64_vars > 0) {
+        std::string i64_str;
+        for(int i=0; i<n_i64_vars; i++)
+          i64_str += annot.i64_vars[i] + ";";
+        const int str_len = i64_str.size();
+        fileIO.write(&str_len, 1);
+        fileIO.write(i64_str.c_str(), i64_str.size());
+      }
 
-    int n_f32_vars = sp->annotation_vars.f32_vars.size();
-    fileIO.write(&n_f32_vars, 1);
-    if(n_f32_vars > 0) {
-      std::string f32_str;
-      for(int i=0; i<n_f32_vars; i++)
-        f32_str = f32_str + sp->annotation_vars.f32_vars[i] + ";";
-      int str_len = f32_str.size();
-      fileIO.write(&str_len, 1);
-      fileIO.write(f32_str.c_str(), f32_str.size());
-    }
+      int n_f32_vars = sp->annotation_vars.f32_vars.size();
+      fileIO.write(&n_f32_vars, 1);
+      if(n_f32_vars > 0) {
+        std::string f32_str;
+        for(int i=0; i<n_f32_vars; i++)
+          f32_str += annot.f32_vars[i] + ";";
+        const int str_len = f32_str.size();
+        fileIO.write(&str_len, 1);
+        fileIO.write(f32_str.c_str(), f32_str.size());
+      }
 
-    int n_f64_vars = sp->annotation_vars.f64_vars.size();
-    fileIO.write(&n_f64_vars, 1);
-    if(n_f64_vars > 0) {
-      std::string f64_str;
-      for(int i=0; i<n_f64_vars; i++)
-        f64_str = f64_str + sp->annotation_vars.f64_vars[i] + ";";
-      int str_len = f64_str.size();
-      fileIO.write(&str_len, 1);
-      fileIO.write(f64_str.c_str(), f64_str.size());
-    }
+      int n_f64_vars = sp->annotation_vars.f64_vars.size();
+      fileIO.write(&n_f64_vars, 1);
+      if(n_f64_vars > 0) {
+        std::string f64_str;
+        for(int i=0; i<n_f64_vars; i++)
+          f64_str += annot.f64_vars[i] + ";";
+        const int str_len = f64_str.size();
+        fileIO.write(&str_len, 1);
+        fileIO.write(f64_str.c_str(), f64_str.size());
+      }
 
-    // Write annotation data
-    if(n_i32_vars > 0) {
-      fileIO.write(sp->annotations_h.i32.data(), sp->annotations_h.i32.span());
-      fileIO.write(sp->annotations_copy_h.i32.data(), sp->annotations_copy_h.i32.span());
-      fileIO.write(sp->annotations_recv_h.i32.data(), sp->annotations_recv_h.i32.span());
+      // Write annotation data
+      if(n_i32_vars > 0) {
+        fileIO.write(sp->annotations_h.i32.data(), sp->annotations_h.i32.span());
+        fileIO.write(sp->annotations_copy_h.i32.data(), sp->annotations_copy_h.i32.span());
+        fileIO.write(sp->annotations_recv_h.i32.data(), sp->annotations_recv_h.i32.span());
+      }
+      if(n_i64_vars > 0) {
+        fileIO.write(sp->annotations_h.i64.data(), sp->annotations_h.i64.span());
+        fileIO.write(sp->annotations_copy_h.i64.data(), sp->annotations_copy_h.i64.span());
+        fileIO.write(sp->annotations_recv_h.i64.data(), sp->annotations_recv_h.i64.span());
+      }
+      if(n_f32_vars > 0) {
+        fileIO.write(sp->annotations_h.f32.data(), sp->annotations_h.f32.span());
+        fileIO.write(sp->annotations_copy_h.f32.data(), sp->annotations_copy_h.f32.span());
+        fileIO.write(sp->annotations_recv_h.f32.data(), sp->annotations_recv_h.f32.span());
+      }
+      if(n_f64_vars > 0) {
+        fileIO.write(sp->annotations_h.f64.data(), sp->annotations_h.f64.span());
+        fileIO.write(sp->annotations_copy_h.f64.data(), sp->annotations_copy_h.f64.span());
+        fileIO.write(sp->annotations_recv_h.f64.data(), sp->annotations_recv_h.f64.span());
+      }
+      // Write buffer data
+      fileIO.write(sp->particle_io_buffer_h.data(), sp->particle_io_buffer_h.span());
+      fileIO.write(sp->particle_cell_io_buffer_h.data(), sp->particle_cell_io_buffer_h.span());
+      fileIO.write(sp->efields_io_buffer_h.data(), sp->efields_io_buffer_h.span());
+      fileIO.write(sp->bfields_io_buffer_h.data(), sp->bfields_io_buffer_h.span());
+      fileIO.write(sp->current_dens_io_buffer_h.data(), sp->current_dens_io_buffer_h.span());
+      fileIO.write(sp->charge_dens_io_buffer_h.data(), sp->charge_dens_io_buffer_h.span());
+      fileIO.write(sp->momentum_dens_io_buffer_h.data(), sp->momentum_dens_io_buffer_h.span());
+      fileIO.write(sp->ke_dens_io_buffer_h.data(), sp->ke_dens_io_buffer_h.span());
+      fileIO.write(sp->stress_tensor_io_buffer_h.data(), sp->stress_tensor_io_buffer_h.span());
+      fileIO.write(sp->particle_ke_io_buffer_h.data(), sp->particle_ke_io_buffer_h.span());
+      fileIO.write(sp->annotations_io_buffer_h.i32.data(), sp->annotations_io_buffer_h.i32.span());
+      fileIO.write(sp->annotations_io_buffer_h.i64.data(), sp->annotations_io_buffer_h.i64.span());
+      fileIO.write(sp->annotations_io_buffer_h.f32.data(), sp->annotations_io_buffer_h.f32.span());
+      fileIO.write(sp->annotations_io_buffer_h.f64.data(), sp->annotations_io_buffer_h.f64.span());
+      if( fileIO.close() ) ERROR(( "File close failed on checkpoint tracers!!!" ));
     }
-    if(n_i64_vars > 0) {
-      fileIO.write(sp->annotations_h.i64.data(), sp->annotations_h.i64.span());
-      fileIO.write(sp->annotations_copy_h.i64.data(), sp->annotations_copy_h.i64.span());
-      fileIO.write(sp->annotations_recv_h.i64.data(), sp->annotations_recv_h.i64.span());
-    }
-    if(n_f32_vars > 0) {
-      fileIO.write(sp->annotations_h.f32.data(), sp->annotations_h.f32.span());
-      fileIO.write(sp->annotations_copy_h.f32.data(), sp->annotations_copy_h.f32.span());
-      fileIO.write(sp->annotations_recv_h.f32.data(), sp->annotations_recv_h.f32.span());
-    }
-    if(n_f64_vars > 0) {
-      fileIO.write(sp->annotations_h.f64.data(), sp->annotations_h.f64.span());
-      fileIO.write(sp->annotations_copy_h.f64.data(), sp->annotations_copy_h.f64.span());
-      fileIO.write(sp->annotations_recv_h.f64.data(), sp->annotations_recv_h.f64.span());
-    }
-    // Write buffer data
-    fileIO.write(sp->particle_io_buffer_h.data(), sp->particle_io_buffer_h.span());
-    fileIO.write(sp->particle_cell_io_buffer_h.data(), sp->particle_cell_io_buffer_h.span());
-    fileIO.write(sp->efields_io_buffer_h.data(), sp->efields_io_buffer_h.span());
-    fileIO.write(sp->bfields_io_buffer_h.data(), sp->bfields_io_buffer_h.span());
-    fileIO.write(sp->current_dens_io_buffer_h.data(), sp->current_dens_io_buffer_h.span());
-    fileIO.write(sp->charge_dens_io_buffer_h.data(), sp->charge_dens_io_buffer_h.span());
-    fileIO.write(sp->momentum_dens_io_buffer_h.data(), sp->momentum_dens_io_buffer_h.span());
-    fileIO.write(sp->ke_dens_io_buffer_h.data(), sp->ke_dens_io_buffer_h.span());
-    fileIO.write(sp->stress_tensor_io_buffer_h.data(), sp->stress_tensor_io_buffer_h.span());
-    fileIO.write(sp->particle_ke_io_buffer_h.data(), sp->particle_ke_io_buffer_h.span());
-    fileIO.write(sp->annotations_io_buffer_h.i32.data(), sp->annotations_io_buffer_h.i32.span());
-    fileIO.write(sp->annotations_io_buffer_h.i64.data(), sp->annotations_io_buffer_h.i64.span());
-    fileIO.write(sp->annotations_io_buffer_h.f32.data(), sp->annotations_io_buffer_h.f32.span());
-    fileIO.write(sp->annotations_io_buffer_h.f64.data(), sp->annotations_io_buffer_h.f64.span());
-    if( fileIO.close() ) ERROR(( "File close failed on checkpoint tracers!!!" ));
   }
 #endif
 }
@@ -349,153 +352,127 @@ void restore_kokkos(vpic_simulation& simulation, const char *fbase)
 #endif
         }
 
-        if(!sp->using_annotations) {
-          sp->copy_to_device();
-        }
+      if(!sp->using_annotations) {
+        sp->copy_to_device();
+      }
 #endif
-          sp->copy_to_device();
+      sp->copy_to_device();
     }
-#ifdef VPIC_ENABLE_TRACER_PARTICLES
+#if defined( VPIC_ENABLE_TRACER_PARTICLES ) || defined( VPIC_ENABLE_PARTICLE_ANNOTATIONS )
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    LIST_FOR_EACH( sp, simulation.tracers_list )
+    LIST_FOR_EACH_SPECIES( sp, simulation.species_list, simulation.tracers_list )
     {
-      char fname[256];
-      FileIO fileIO;
-      sprintf(fname, "%s.%s.annotations", fbase, sp->name);
-      FileIOStatus status = fileIO.open(fname, io_read);
-      if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
+      if(sp->using_annotations) {
+        char fname[256];
+        FileIO fileIO;
+        sprintf(fname, "%s.%s.annotations", fbase, sp->name);
+        FileIOStatus status = fileIO.open(fname, io_read);
+        if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
 
-      annotation_vars_t annotation_vars;
-      // Read annotation var map for each type 
-      int n_i32_vars = 0, n_i64_vars=0, n_f32_vars=0, n_f64_vars=0;
+        annotation_vars_t annotation_vars;
+        // Read annotation var map for each type 
+        int n_i32_vars = 0, n_i64_vars=0, n_f32_vars=0, n_f64_vars=0;
 
-      // Read i32 var map
-      fileIO.read(&n_i32_vars, 1);
-      if(n_i32_vars > 0) {
-        int str_len;
-        fileIO.read(&str_len, 1);
-        std::string var_str(str_len, 'a');
-        fileIO.read(var_str.data(), str_len);
-        std::vector<int> substr_ends(n_i32_vars, -1);
-        int idx = 0;
-        for(int i=0; i<var_str.size(); i++) {
-          if(var_str[i] == ';') {
-            substr_ends[idx++] = i;
+        // Read i32 var map
+        fileIO.read(&n_i32_vars, 1);
+        if(n_i32_vars > 0) {
+          int str_len;
+          fileIO.read(&str_len, 1);
+          std::string var_str(str_len, 'a');
+          fileIO.read(var_str.data(), str_len);
+          size_t next = 0, last = 0;
+          while((next = var_str.find(";", last)) != std::string::npos) {
+            annotation_vars.i32_vars.push_back(var_str.substr(last, next-last));
+            last = next+1;
           }
         }
-        int start=0;
-        for(int i=0; i<n_i32_vars; i++) {
-          std::string substr = var_str.substr(start, substr_ends[i]-start);
-          annotation_vars.i32_vars.push_back(substr);
-        }
-      }
 
-      // Read i64 var map
-      fileIO.read(&n_i64_vars, 1);
-      if(n_i64_vars > 0) {
-        int str_len;
-        fileIO.read(&str_len, 1);
-        std::string var_str(str_len, 'a');
-        fileIO.read(var_str.data(), str_len);
-        std::vector<int> substr_ends(n_i64_vars, -1);
-        int idx = 0;
-        for(int i=0; i<var_str.size(); i++) {
-          if(var_str[i] == ';') {
-            substr_ends[idx++] = i;
+        // Read i64 var map
+        fileIO.read(&n_i64_vars, 1);
+        if(n_i64_vars > 0) {
+          int str_len;
+          fileIO.read(&str_len, 1);
+          std::string var_str(str_len, 'a');
+          fileIO.read(var_str.data(), str_len);
+          size_t next = 0, last = 0;
+          while((next = var_str.find(";", last)) != std::string::npos) {
+            annotation_vars.i64_vars.push_back(var_str.substr(last, next-last));
+            last = next+1;
           }
         }
-        int start=0;
-        for(int i=0; i<n_i64_vars; i++) {
-          std::string substr = var_str.substr(start, substr_ends[i]-start);
-          annotation_vars.i64_vars.push_back(substr);
-        }
-      }
 
-      // Read f32 var map
-      fileIO.read(&n_f32_vars, 1);
-      if(n_f32_vars > 0) {
-        int str_len;
-        fileIO.read(&str_len, 1);
-        std::string var_str(str_len, 'a');
-        fileIO.read(var_str.data(), str_len);
-        std::vector<int> substr_ends(n_f32_vars, -1);
-        int idx = 0;
-        for(int i=0; i<var_str.size(); i++) {
-          if(var_str[i] == ';') {
-            substr_ends[idx++] = i;
+        // Read f32 var map
+        fileIO.read(&n_f32_vars, 1);
+        if(n_f32_vars > 0) {
+          int str_len;
+          fileIO.read(&str_len, 1);
+          std::string var_str(str_len, 'a');
+          fileIO.read(var_str.data(), str_len);
+          size_t next = 0, last = 0;
+          while((next = var_str.find(";", last)) != std::string::npos) {
+            annotation_vars.f32_vars.push_back(var_str.substr(last, next-last));
+            last = next+1;
           }
         }
-        int start=0;
-        for(int i=0; i<n_f32_vars; i++) {
-          std::string substr = var_str.substr(start, substr_ends[i]-start);
-          annotation_vars.f32_vars.push_back(substr);
-        }
-      }
 
-      // Read f64 var map
-      fileIO.read(&n_f64_vars, 1);
-      if(n_f64_vars > 0) {
-        int str_len;
-        fileIO.read(&str_len, 1);
-        std::string var_str(str_len, 'a');
-        fileIO.read(var_str.data(), str_len);
-        std::vector<int> substr_ends(n_f64_vars, -1);
-        int idx = 0;
-        for(int i=0; i<var_str.size(); i++) {
-          if(var_str[i] == ';') {
-            substr_ends[idx++] = i;
+        // Read f64 var map
+        fileIO.read(&n_f64_vars, 1);
+        if(n_f64_vars > 0) {
+          int str_len;
+          fileIO.read(&str_len, 1);
+          std::string var_str(str_len, 'a');
+          fileIO.read(var_str.data(), str_len);
+          size_t next = 0, last = 0;
+          while((next = var_str.find(";", last)) != std::string::npos) {
+            annotation_vars.f64_vars.push_back(var_str.substr(last, next-last));
+            last = next+1;
           }
         }
-        int start=0;
-        for(int i=0; i<n_f64_vars; i++) {
-          std::string substr = var_str.substr(start, substr_ends[i]-start);
-          annotation_vars.f64_vars.push_back(substr);
+
+        // Initialize annotations and buffers
+        sp->init_annotations(sp->max_np, sp->max_nm, annotation_vars);
+        sp->init_io_buffers(sp->nparticles_buffered_max);
+
+        // Read annotation data
+        if(n_i32_vars > 0) {
+          fileIO.read(sp->annotations_h.i32.data(), sp->annotations_h.i32.span());
+          fileIO.read(sp->annotations_copy_h.i32.data(), sp->annotations_copy_h.i32.span());
+          fileIO.read(sp->annotations_recv_h.i32.data(), sp->annotations_recv_h.i32.span());
         }
+        if(n_i64_vars > 0) {
+          fileIO.read(sp->annotations_h.i64.data(), sp->annotations_h.i64.span());
+          fileIO.read(sp->annotations_copy_h.i64.data(), sp->annotations_copy_h.i64.span());
+          fileIO.read(sp->annotations_recv_h.i64.data(), sp->annotations_recv_h.i64.span());
+        }
+        if(n_f32_vars > 0) {
+          fileIO.read(sp->annotations_h.f32.data(), sp->annotations_h.f32.span());
+          fileIO.read(sp->annotations_copy_h.f32.data(), sp->annotations_copy_h.f32.span());
+          fileIO.read(sp->annotations_recv_h.f32.data(), sp->annotations_recv_h.f32.span());
+        }
+        if(n_f64_vars > 0) {
+          fileIO.read(sp->annotations_h.f64.data(), sp->annotations_h.f64.span());
+          fileIO.read(sp->annotations_copy_h.f64.data(), sp->annotations_copy_h.f64.span());
+          fileIO.read(sp->annotations_recv_h.f64.data(), sp->annotations_recv_h.f64.span());
+        }
+        // Read io buffers
+        fileIO.read(sp->particle_io_buffer_h.data(),        sp->particle_io_buffer_h.span());
+        fileIO.read(sp->particle_cell_io_buffer_h.data(),   sp->particle_cell_io_buffer_h.span());
+        fileIO.read(sp->efields_io_buffer_h.data(),         sp->efields_io_buffer_h.span());
+        fileIO.read(sp->bfields_io_buffer_h.data(),         sp->bfields_io_buffer_h.span());
+        fileIO.read(sp->current_dens_io_buffer_h.data(),    sp->current_dens_io_buffer_h.span());
+        fileIO.read(sp->charge_dens_io_buffer_h.data(),     sp->charge_dens_io_buffer_h.span());
+        fileIO.read(sp->momentum_dens_io_buffer_h.data(),   sp->momentum_dens_io_buffer_h.span());
+        fileIO.read(sp->ke_dens_io_buffer_h.data(),         sp->ke_dens_io_buffer_h.span());
+        fileIO.read(sp->stress_tensor_io_buffer_h.data(),   sp->stress_tensor_io_buffer_h.span());
+        fileIO.read(sp->particle_ke_io_buffer_h.data(),     sp->particle_ke_io_buffer_h.span());
+        fileIO.read(sp->annotations_io_buffer_h.i32.data(), sp->annotations_io_buffer_h.i32.span());
+        fileIO.read(sp->annotations_io_buffer_h.i64.data(), sp->annotations_io_buffer_h.i64.span());
+        fileIO.read(sp->annotations_io_buffer_h.f32.data(), sp->annotations_io_buffer_h.f32.span());
+        fileIO.read(sp->annotations_io_buffer_h.f64.data(), sp->annotations_io_buffer_h.f64.span());
+        if( fileIO.close() ) ERROR(( "File close failed on restore tracers!!!" ));
+        sp->copy_to_device();
       }
-
-      // Initialize annotations and buffers
-      sp->init_annotations(sp->max_np, sp->max_nm, annotation_vars);
-      sp->init_io_buffers(sp->nparticles_buffered_max);
-
-      // Read annotation data
-      if(n_i32_vars > 0) {
-        fileIO.read(sp->annotations_h.i32.data(), sp->annotations_h.i32.span());
-        fileIO.read(sp->annotations_copy_h.i32.data(), sp->annotations_copy_h.i32.span());
-        fileIO.read(sp->annotations_recv_h.i32.data(), sp->annotations_recv_h.i32.span());
-      }
-      if(n_i64_vars > 0) {
-        fileIO.read(sp->annotations_h.i64.data(), sp->annotations_h.i64.span());
-        fileIO.read(sp->annotations_copy_h.i64.data(), sp->annotations_copy_h.i64.span());
-        fileIO.read(sp->annotations_recv_h.i64.data(), sp->annotations_recv_h.i64.span());
-      }
-      if(n_f32_vars > 0) {
-        fileIO.read(sp->annotations_h.f32.data(), sp->annotations_h.f32.span());
-        fileIO.read(sp->annotations_copy_h.f32.data(), sp->annotations_copy_h.f32.span());
-        fileIO.read(sp->annotations_recv_h.f32.data(), sp->annotations_recv_h.f32.span());
-      }
-      if(n_f64_vars > 0) {
-        fileIO.read(sp->annotations_h.f64.data(), sp->annotations_h.f64.span());
-        fileIO.read(sp->annotations_copy_h.f64.data(), sp->annotations_copy_h.f64.span());
-        fileIO.read(sp->annotations_recv_h.f64.data(), sp->annotations_recv_h.f64.span());
-      }
-      // Read io buffers
-      fileIO.read(sp->particle_io_buffer_h.data(),        sp->particle_io_buffer_h.span());
-      fileIO.read(sp->particle_cell_io_buffer_h.data(),   sp->particle_cell_io_buffer_h.span());
-      fileIO.read(sp->efields_io_buffer_h.data(),         sp->efields_io_buffer_h.span());
-      fileIO.read(sp->bfields_io_buffer_h.data(),         sp->bfields_io_buffer_h.span());
-      fileIO.read(sp->current_dens_io_buffer_h.data(),    sp->current_dens_io_buffer_h.span());
-      fileIO.read(sp->charge_dens_io_buffer_h.data(),     sp->charge_dens_io_buffer_h.span());
-      fileIO.read(sp->momentum_dens_io_buffer_h.data(),   sp->momentum_dens_io_buffer_h.span());
-      fileIO.read(sp->ke_dens_io_buffer_h.data(),         sp->ke_dens_io_buffer_h.span());
-      fileIO.read(sp->stress_tensor_io_buffer_h.data(),   sp->stress_tensor_io_buffer_h.span());
-      fileIO.read(sp->particle_ke_io_buffer_h.data(),     sp->particle_ke_io_buffer_h.span());
-      fileIO.read(sp->annotations_io_buffer_h.i32.data(), sp->annotations_io_buffer_h.i32.span());
-      fileIO.read(sp->annotations_io_buffer_h.i64.data(), sp->annotations_io_buffer_h.i64.span());
-      fileIO.read(sp->annotations_io_buffer_h.f32.data(), sp->annotations_io_buffer_h.f32.span());
-      fileIO.read(sp->annotations_io_buffer_h.f64.data(), sp->annotations_io_buffer_h.f64.span());
-      if( fileIO.close() ) ERROR(( "File close failed on restore tracers!!!" ));
-      sp->copy_to_device();
     }
 #endif
 

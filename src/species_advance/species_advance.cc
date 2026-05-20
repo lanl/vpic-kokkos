@@ -29,6 +29,8 @@ checkpt_species( const species_t * sp ) {
   CHECKPT_PTR( sp->next );
   CHECKPT_PTR( sp->pb_diag );
   CHECKPT_PTR( sp->parent_species );
+  CHECKPT_VAL( bool, sp->is_tracer );
+  CHECKPT_VAL( bool, sp->using_annotations );
 }
 
 species_t *
@@ -43,6 +45,8 @@ restore_species( void ) {
   RESTORE_PTR( sp->next );
   RESTORE_PTR( sp->pb_diag );
   RESTORE_PTR( sp->parent_species );
+  RESTORE_VAL( bool, sp->is_tracer );
+  RESTORE_VAL( bool, sp->using_annotations );
   return sp;
 }
 
