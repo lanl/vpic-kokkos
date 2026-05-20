@@ -77,14 +77,16 @@ struct DefaultSorter {
 
   // TODO: should the sort interface just take the sp?
   void sort(KeyViewType key_view,
-            k_particles_t& particles,
-            k_particles_i_t& particles_i,
+            species_t* sp,
             const size_t np,
             const size_t num_bins,
             Comparator comp,
             bool sort_within_bins=false
   )
   {
+    auto& particles = sp->k_p_d;
+    auto& particles_i = sp->k_p_i_d;
+
     // Get subset of particle indices as keys
     auto slice = Kokkos::make_pair<size_t,size_t>(0, np);
     auto keys = Kokkos::subview(key_view, slice);
@@ -98,6 +100,25 @@ struct DefaultSorter {
       auto sub_view = Kokkos::subview(particles, slice, i);
       bin_sort.sort(sub_view, 0, np);
     }
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+    // Sort annotations
+    for(uint32_t i=0; i<sp->annotation_vars.i32_vars.size(); i++) {
+      auto sub_view = Kokkos::subview(sp->annotations_d.i32, slice, i);
+      bin_sort.sort(sub_view, 0, np);
+    }
+    for(uint32_t i=0; i<sp->annotation_vars.i64_vars.size(); i++) {
+      auto sub_view = Kokkos::subview(sp->annotations_d.i64, slice, i);
+      bin_sort.sort(sub_view, 0, np);
+    }
+    for(uint32_t i=0; i<sp->annotation_vars.f32_vars.size(); i++) {
+      auto sub_view = Kokkos::subview(sp->annotations_d.f32, slice, i);
+      bin_sort.sort(sub_view, 0, np);
+    }
+    for(uint32_t i=0; i<sp->annotation_vars.f64_vars.size(); i++) {
+      auto sub_view = Kokkos::subview(sp->annotations_d.f64, slice, i);
+      bin_sort.sort(sub_view, 0, np);
+    }
+#endif
     // Sort particle indices
     auto cell_ids = Kokkos::subview(particles_i, slice);
     bin_sort.sort(cell_ids);
@@ -121,14 +142,15 @@ struct SortByKeySorter {
 
   // TODO: should the sort interface just take the sp?
   void sort(KeyViewType& key_view,
-            k_particles_t& particles,
-            k_particles_i_t& particles_i,
+            species_t* sp,
             const size_t np,
             const size_t num_bins,
             Comparator comp,
             bool sort_within_bins=false
   )
   {
+    auto& particles = sp->k_p_d;
+    auto& particles_i = sp->k_p_i_d;
     auto np_range = Kokkos::make_pair<size_t,size_t>(0, np);
     auto np_policy = Kokkos::RangePolicy<size_t>(0, np);
 
@@ -153,6 +175,50 @@ struct SortByKeySorter {
         particles(idx, i) = f32_scratch(permute_view(idx));
       });
     }
+
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+    // Sort annotations
+    if(sp->annotation_vars.i32_vars.size() > 0) {
+      Kokkos::View<int32_t*> i32_scratch("i32 scratch", np);
+      for(uint32_t i=0; i<sp->annotation_vars.i32_vars.size(); i++) {
+        auto sub_view = Kokkos::subview(sp->annotations_d.i32, np_range, i);
+        Kokkos::deep_copy(i32_scratch, sub_view);
+        Kokkos::parallel_for("Permute i32 annotation", np_policy, KOKKOS_LAMBDA(const size_t idx) {
+          sub_view(idx) = i32_scratch(permute_view(idx));
+        });
+      }
+    }
+    if(sp->annotation_vars.i64_vars.size() > 0) {
+      Kokkos::View<int32_t*> i64_scratch("i64 scratch", np);
+      for(uint32_t i=0; i<sp->annotation_vars.i64_vars.size(); i++) {
+        auto sub_view = Kokkos::subview(sp->annotations_d.i64, np_range, i);
+        Kokkos::deep_copy(i64_scratch, sub_view);
+        Kokkos::parallel_for("Permute i64 annotation", np_policy, KOKKOS_LAMBDA(const size_t idx) {
+          sub_view(idx) = i64_scratch(permute_view(idx));
+        });
+      }
+    }
+    if(sp->annotation_vars.f32_vars.size() > 0) {
+      //Kokkos::View<int32_t*> f32_scratch("f32 scratch", np);
+      for(uint32_t i=0; i<sp->annotation_vars.f32_vars.size(); i++) {
+        auto sub_view = Kokkos::subview(sp->annotations_d.f32, np_range, i);
+        Kokkos::deep_copy(f32_scratch, sub_view);
+        Kokkos::parallel_for("Permute f32 annotation", np_policy, KOKKOS_LAMBDA(const size_t idx) {
+          sub_view(idx) = f32_scratch(permute_view(idx));
+        });
+      }
+    }
+    if(sp->annotation_vars.f64_vars.size() > 0) {
+      Kokkos::View<int32_t*> f64_scratch("f64 scratch", np);
+      for(uint32_t i=0; i<sp->annotation_vars.f64_vars.size(); i++) {
+        auto sub_view = Kokkos::subview(sp->annotations_d.f64, np_range, i);
+        Kokkos::deep_copy(f64_scratch, sub_view);
+        Kokkos::parallel_for("Permute i64 annotation", np_policy, KOKKOS_LAMBDA(const size_t idx) {
+          sub_view(idx) = f64_scratch(permute_view(idx));
+        });
+      }
+    }
+#endif
 
     // Sort particle indices. If the keys haven't been reordered then 
     // particles_i will be sorted by the initial sort_by_key call.
@@ -184,11 +250,13 @@ struct PreAllocSorter {
   using Comparator = CustomBinOp1D<KeyViewType>;
 
   CustomBinSort<KeyViewType, Comparator>* bin_sort;
-  Kokkos::View<float*, device_type> scratch;
+  Kokkos::View<int32_t*, device_type> scratch_32b;
+  Kokkos::View<int64_t*, device_type> scratch_64b;
   KeyViewType temp_keys;
 
   PreAllocSorter() {
-    scratch = Kokkos::View<float*>("Float scratch", 1);
+    scratch_32b = Kokkos::View<int32_t*>("32-bit scratch", 1);
+    scratch_64b = Kokkos::View<int64_t*>("64-bit scratch", 1);
     temp_keys = KeyViewType("temp particles_i", 1);
     CustomBinOp1D<KeyViewType> bin_op(1, 0, 1);
     bin_sort = new CustomBinSort<KeyViewType, Comparator>(temp_keys, 0, 1, bin_op);
@@ -205,9 +273,14 @@ struct PreAllocSorter {
     if(temp_keys.extent(0) < np) {
       Kokkos::resize(temp_keys, np);
     }
-    if(scratch.extent(0) < np) {
-      Kokkos::resize(scratch, np);
+    if(scratch_32b.extent(0) < np) {
+      Kokkos::resize(scratch_32b, np);
     }
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+    if( scratch_64b.extent(0) < np ) {
+      Kokkos::resize(scratch_64b, np);
+    }
+#endif
     Comparator comp(nbins, 0, np);
     bin_sort->reset(exec_space(), temp_keys, 0, np, comp, 0);
   }
@@ -215,14 +288,21 @@ struct PreAllocSorter {
   // TODO: should the sort interface just take the sp?
   void sort(
             KeyViewType& key_view,
-            k_particles_t& particles,
-            k_particles_i_t& particles_i,
+            species_t* sp,
             const size_t np,
             const size_t num_bins,
             Comparator comp,
             bool sort_within_bins=false
   )
   {
+    using i32_scratch_t=Kokkos::View<int32_t*, device_type, Kokkos::MemoryUnmanaged>;
+    using i64_scratch_t=Kokkos::View<int64_t*, device_type, Kokkos::MemoryUnmanaged>;
+    using f32_scratch_t=Kokkos::View<float*, device_type, Kokkos::MemoryUnmanaged>;
+    using f64_scratch_t=Kokkos::View<double*, device_type, Kokkos::MemoryUnmanaged>;
+
+    auto& particles = sp->k_p_d;
+    auto& particles_i = sp->k_p_i_d;
+
     // Resize scratch views
     resize(np, num_bins);
     
@@ -234,16 +314,39 @@ struct PreAllocSorter {
     bin_sort->reset(exec_space(), keys, 0, np, comp, sort_within_bins);
     bin_sort->create_permute_vector();
 
+    i32_scratch_t i32_scratch((int32_t*)(scratch_32b.data()), np);
+    i64_scratch_t i64_scratch((int64_t*)(scratch_64b.data()), np);
+    f32_scratch_t f32_scratch((float*)(scratch_32b.data()), np);
+    f64_scratch_t f64_scratch((double*)(scratch_64b.data()), np);
+
     // Sort particle data. 
     for(int i=0; i<PARTICLE_VAR_COUNT; i++) {
       auto sub_view = Kokkos::subview(particles, subview_pair, i);
-      bin_sort->sort_scratch(exec_space(), sub_view, scratch, 0, np);
+      bin_sort->sort_scratch(exec_space(), sub_view, f32_scratch, 0, np);
     }
 
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+    // Sort annotations
+    for(uint32_t i=0; i<sp->annotation_vars.i32_vars.size(); i++) {
+      auto sub_view = Kokkos::subview(sp->annotations_d.i32, subview_pair, i);
+      bin_sort->sort_scratch(exec_space(), sub_view, i32_scratch, 0, np);
+    }
+    for(uint32_t i=0; i<sp->annotation_vars.i64_vars.size(); i++) {
+      auto sub_view = Kokkos::subview(sp->annotations_d.i64, subview_pair, i);
+      bin_sort->sort_scratch(exec_space(), sub_view, i64_scratch, 0, np);
+    }
+    for(uint32_t i=0; i<sp->annotation_vars.f32_vars.size(); i++) {
+      auto sub_view = Kokkos::subview(sp->annotations_d.f32, subview_pair, i);
+      bin_sort->sort_scratch(exec_space(), sub_view, f32_scratch, 0, np);
+    }
+    for(uint32_t i=0; i<sp->annotation_vars.f64_vars.size(); i++) {
+      auto sub_view = Kokkos::subview(sp->annotations_d.f64, subview_pair, i);
+      bin_sort->sort_scratch(exec_space(), sub_view, f64_scratch, 0, np);
+    }
+#endif
+
     // Sort particle indices
-    using i32_scratch=Kokkos::View<int*, device_type, Kokkos::MemoryUnmanaged>;
-    i32_scratch int_scratch((int*)(scratch.data()), np);
-    bin_sort->sort_scratch(exec_space(), particles_i, int_scratch, 0, np);
+    bin_sort->sort_scratch(exec_space(), particles_i, i32_scratch, 0, np);
   }
 };
 
@@ -522,12 +625,14 @@ struct ParticleSorter {
     sorter.resize(np, nbins);
   }
 
-  void sort(k_particles_t part, k_particles_i_t part_i, 
-            const size_t np, const size_t num_bins, const size_t tile_size=1) {
+  void sort(species_t* sp, const size_t np, const size_t num_bins, 
+            const size_t tile_size=1) {
+    auto& part = sp->k_p_d;
+    auto& part_i = sp->k_p_i_d;
     auto keys = order.reorder(part, part_i, np, num_bins, tile_size);
     auto binop = order.get_bin_op();
     const bool sort_bins = false;
-    sorter.sort(keys, part, part_i, np, num_bins, binop, sort_bins);
+    sorter.sort(keys, sp, np, num_bins, binop, sort_bins);
   }
 };
 
@@ -602,6 +707,25 @@ struct k_DefaultSort {
       // Kokkos::deep_copy(sp->k_partition_h, sp->k_partition_d);
 
       bin_sort.sort(sp->k_p_d);
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+      // Sort annotations
+      for(uint32_t i=0; i<sp->annotation_vars.i32_vars.size(); i++) {
+        auto sub_view = Kokkos::subview(sp->annotations_d.i32, Kokkos::ALL(), i);
+        bin_sort.sort(sub_view);
+      }
+      for(uint32_t i=0; i<sp->annotation_vars.i64_vars.size(); i++) {
+        auto sub_view = Kokkos::subview(sp->annotations_d.i64, Kokkos::ALL(), i);
+        bin_sort.sort(sub_view);
+      }
+      for(uint32_t i=0; i<sp->annotation_vars.f32_vars.size(); i++) {
+        auto sub_view = Kokkos::subview(sp->annotations_d.f32, Kokkos::ALL(), i);
+        bin_sort.sort(sub_view);
+      }
+      for(uint32_t i=0; i<sp->annotation_vars.f64_vars.size(); i++) {
+        auto sub_view = Kokkos::subview(sp->annotations_d.f64, Kokkos::ALL(), i);
+        bin_sort.sort(sub_view);
+      }
+#endif
       bin_sort.sort(sp->k_p_i_d);
       sp->last_sorted = sp->g->step;
 

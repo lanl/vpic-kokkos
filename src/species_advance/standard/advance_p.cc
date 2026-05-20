@@ -317,6 +317,7 @@ void load_interpolators(
 
 void
 advance_p_kokkos_unified(
+        species_t* sp,
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
         k_particle_copy_t& k_particle_copy,
@@ -331,7 +332,7 @@ advance_p_kokkos_unified(
         field_array_t* RESTRICT fa,
         const grid_t *g,
 #ifdef VARIABLE_CHARGE
-	const float dt_2mc,
+        const float dt_2mc,
 #else
         const float qdt_2mc,
 #endif
@@ -397,6 +398,21 @@ advance_p_kokkos_unified(
 
   // TODO: is this the right place to do this?
   Kokkos::deep_copy(k_nm, 0);
+
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+  auto& i32_annotations = sp->annotations_d.i32;
+  auto& i64_annotations = sp->annotations_d.i64;
+  auto& f32_annotations = sp->annotations_d.f32;
+  auto& f64_annotations = sp->annotations_d.f64;
+  auto& i32_annotations_copy = sp->annotations_copy_d.i32;
+  auto& i64_annotations_copy = sp->annotations_copy_d.i64;
+  auto& f32_annotations_copy = sp->annotations_copy_d.f32;
+  auto& f64_annotations_copy = sp->annotations_copy_d.f64;
+  int num_i32 = sp->annotation_vars.i32_vars.size();
+  int num_i64 = sp->annotation_vars.i64_vars.size();
+  int num_f32 = sp->annotation_vars.f32_vars.size();
+  int num_f64 = sp->annotation_vars.f64_vars.size();
+#endif
 
 // Determine whether to use accumulators
 #if defined( VPIC_ENABLE_ACCUMULATORS )
@@ -519,7 +535,7 @@ advance_p_kokkos_unified(
         // Load weight
         q[LANE]  = p_w;
 #ifdef VARIABLE_CHARGE
-	qp[LANE] = p_q;
+        qp[LANE] = p_q;
 #endif
       
         // Load index
@@ -536,9 +552,9 @@ advance_p_kokkos_unified(
 
       BEGIN_VECTOR_BLOCK {
 #ifdef VARIABLE_CHARGE
-	hax[LANE] = dt_2mc*qp[LANE]*( (fex[LANE] ) );
-	hay[LANE] = dt_2mc*qp[LANE]*( (fey[LANE] ) );
-	haz[LANE] = dt_2mc*qp[LANE]*( (fez[LANE] ) );
+        hax[LANE] = dt_2mc*qp[LANE]*( (fex[LANE] ) );
+        hay[LANE] = dt_2mc*qp[LANE]*( (fey[LANE] ) );
+        haz[LANE] = dt_2mc*qp[LANE]*( (fez[LANE] ) );
 #else
         // Interpolate E
         hax[LANE] = qdt_2mc*( (fex[LANE] ) );
@@ -558,7 +574,7 @@ advance_p_kokkos_unified(
 
       BEGIN_VECTOR_BLOCK {
 #ifdef VARIABLE_CHARGE
-	v0[LANE] = dt_2mc*qp[LANE]; ///sqrtf(one + (ux[LANE]*ux[LANE] + (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE]))); 
+        v0[LANE] = dt_2mc*qp[LANE]; ///sqrtf(one + (ux[LANE]*ux[LANE] + (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE]))); 
 #else
         v0[LANE] = qdt_2mc;///sqrtf(one + (ux[LANE]*ux[LANE] + (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE])));
 #endif
@@ -598,12 +614,12 @@ advance_p_kokkos_unified(
       BEGIN_VECTOR_BLOCK {
 
         /**/                                      // Get norm displacement
-	ux[LANE]  *= v0[LANE];
+        ux[LANE]  *= v0[LANE];
         uy[LANE]  *= v0[LANE];
         uz[LANE]  *= v0[LANE];
-	v6[LANE]   = ux[LANE];
-	v7[LANE]   = uy[LANE];
-	v8[LANE]   = uz[LANE];
+        v6[LANE]   = ux[LANE];
+        v7[LANE]   = uy[LANE];
+        v8[LANE]   = uz[LANE];
         ux[LANE]  *= cdt_dx;
         uy[LANE]  *= cdt_dy;
         uz[LANE]  *= cdt_dz;
@@ -637,7 +653,7 @@ advance_p_kokkos_unified(
 #else
         q[LANE]  = static_cast<float>(inbnds[LANE])*q[LANE]*qsp*rV;
 #endif
-	
+
         p_dx = v3[LANE];
         p_dy = v4[LANE];
         p_dz = v5[LANE];
@@ -662,7 +678,7 @@ advance_p_kokkos_unified(
         int first = ii[0];
         reduce_and_accumulate_current(team_member, current_sa, num_iters, first, 
                                       nx, ny, nz, rV,
-				      v0, v1, v2, v3,
+                                      v0, v1, v2, v3,
                                       v6, v7, v8, v9,
                                       v10, v11, v12, v13);
       } else {
@@ -670,7 +686,7 @@ advance_p_kokkos_unified(
         BEGIN_VECTOR_BLOCK {
           accumulate_current(current_sa, ii[LANE],
                        nx, ny, nz, rV,
-		       v0[LANE], v1[LANE], v2[LANE], v3[LANE],
+                       v0[LANE], v1[LANE], v2[LANE], v3[LANE],
                        v6[LANE], v7[LANE], v8[LANE], v9[LANE],
                        v10[LANE], v11[LANE], v12[LANE], v13[LANE]);
         } END_VECTOR_BLOCK;
@@ -711,9 +727,28 @@ advance_p_kokkos_unified(
               k_particle_copy(nm, particle_var::uz) = p_uz;
               k_particle_copy(nm, particle_var::w) = p_w;
 #ifdef VARIABLE_CHARGE
-	      k_particle_copy(nm, particle_var::qp) = p_q;
+              k_particle_copy(nm, particle_var::qp) = p_q;
 #endif
               k_particle_i_copy(nm) = pii;
+
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+              // Copy int annotations
+              for(int j=0; j<num_i32; j++) {
+                i32_annotations_copy(nm,j) = i32_annotations(p_index,j);
+              }
+              // Copy int64_t annotations
+              for(int j=0; j<num_i64; j++) {
+                i64_annotations_copy(nm,j) = i64_annotations(p_index,j);
+              }
+              // Copy float annnotations
+              for(int j=0; j<num_f32; j++) {
+                f32_annotations_copy(nm,j) = f32_annotations(p_index,j);
+              }
+              // Copy double annnotations
+              for(int j=0; j<num_f64; j++) {
+                f64_annotations_copy(nm,j) = f64_annotations(p_index,j);
+              }
+#endif
             }
           }
         }
@@ -722,7 +757,7 @@ advance_p_kokkos_unified(
     });
 #endif
     });
-		    
+    
 
 #if defined( VPIC_ENABLE_ACCUMULATORS )
   Kokkos::Experimental::contribute(accumulator, current_sv);
@@ -749,7 +784,7 @@ advance_p_kokkos_unified(
                                        accumulator(ax, 9) +
                                        accumulator(ay, 10) +
                                        accumulator(axy, 11) );
-		       });
+  });
 #else
   Kokkos::Experimental::contribute(k_field, current_sv);
 #endif
@@ -790,10 +825,11 @@ advance_p_kokkos_unified(
 #undef f_dcbxdx  
 #undef f_dcbydy  
 #undef f_dcbzdz  
-		       }
+}
 
 void
 advance_p_kokkos_gpu(
+        species_t* sp,
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
         k_particle_copy_t& k_particle_copy,
@@ -807,7 +843,7 @@ advance_p_kokkos_gpu(
         field_array_t* RESTRICT fa,
         const grid_t *g,
 #ifdef VARIABLE_CHARGE
-	const float dt_2mc,
+        const float dt_2mc,
 #else
         const float qdt_2mc,
 #endif
@@ -885,6 +921,22 @@ advance_p_kokkos_gpu(
   // slowing things down
   Kokkos::deep_copy(k_nm, 0);
 
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+  auto& i32_annotations = sp->annotations_d.i32;
+  auto& i64_annotations = sp->annotations_d.i64;
+  auto& f32_annotations = sp->annotations_d.f32;
+  auto& f64_annotations = sp->annotations_d.f64;
+  auto& i32_annotations_copy = sp->annotations_copy_d.i32;
+  auto& i64_annotations_copy = sp->annotations_copy_d.i64;
+  auto& f32_annotations_copy = sp->annotations_copy_d.f32;
+  auto& f64_annotations_copy = sp->annotations_copy_d.f64;
+  int num_i32 = sp->annotation_vars.i32_vars.size();
+  int num_i64 = sp->annotation_vars.i64_vars.size();
+  int num_f32 = sp->annotation_vars.f32_vars.size();
+  int num_f64 = sp->annotation_vars.f64_vars.size();
+  bool annotations_on = sp->using_annotations;
+#endif
+
 #ifdef VPIC_ENABLE_HIERARCHICAL
   auto team_policy = Kokkos::TeamPolicy<>(LEAGUE_SIZE, TEAM_SIZE);
   size_t per_league = np/LEAGUE_SIZE;
@@ -896,7 +948,7 @@ advance_p_kokkos_gpu(
       if(p_index < np) {
 #else
   auto range_policy = Kokkos::RangePolicy<>(0,np);
-  Kokkos::parallel_for("advance_p", range_policy, KOKKOS_LAMBDA (size_t p_index) {
+  Kokkos::parallel_for("advance_p", range_policy, KOKKOS_LAMBDA (int p_index) {
 #endif
       
     float v0, v1, v2, v3, v4, v5, v6;
@@ -984,21 +1036,21 @@ advance_p_kokkos_gpu(
 
 
     if(  dx<=one  && dy<=one &&  dz<=one &&   // Check if inbnds
-	-dx<=one && -dy<=one && -dz<=one ) {
+        -dx<=one && -dy<=one && -dz<=one ) {
       
       p_dx = dx;                             // Store new position
       p_dy = dy;
       p_dz = dz;
 
-         // Common case (inbnds).  Note: accumulator values are 4 times
-         // the total physical charge that passed through the appropriate
-         // current quadrant in a time-step
+      // Common case (inbnds).  Note: accumulator values are 4 times
+      // the total physical charge that passed through the appropriate
+      // current quadrant in a time-step
 #ifdef VARIABLE_CHARGE
       q *= qp;
 #else
       q *= qsp;
 #endif
-         //v5 = q*ux*uy*uz*one_third;              // Compute correction
+      //v5 = q*ux*uy*uz*one_third;              // Compute correction
 
 /*    
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
@@ -1043,7 +1095,7 @@ advance_p_kokkos_gpu(
            k_field_scatter_access(ii, field_var::jfx) += q*rV*ux;
            k_field_scatter_access(ii, field_var::jfy) += q*rV*uy;
            k_field_scatter_access(ii, field_var::jfz) += q*rV*uz;
-	   k_field_scatter_access(ii, field_var::rhof) += q*rV;
+           k_field_scatter_access(ii, field_var::rhof) += q*rV;
     
 } else {
       
@@ -1055,43 +1107,64 @@ advance_p_kokkos_gpu(
       
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e uz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-			 k_f_sv, g, k_neighbors, rangel, rangeh, qsp, gdx, gdy, gdz, gdt, nx, ny, nz ) )
-	{
-	  if( k_nm(0) < max_nm )
-	    {
-	      const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
-	      if (nm >= max_nm) Kokkos::abort("overran max_nm");
-	      
-	      k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
-	      k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
-	      k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
-	      k_particle_movers_i(nm)   = local_pm->i;
-	      
-	      // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
-	      k_particle_copy(nm, particle_var::dx) = p_dx;
-	      k_particle_copy(nm, particle_var::dy) = p_dy;
-	      k_particle_copy(nm, particle_var::dz) = p_dz;
-	      k_particle_copy(nm, particle_var::ux) = p_ux;
-	      k_particle_copy(nm, particle_var::uy) = p_uy;
-	      k_particle_copy(nm, particle_var::uz) = p_uz;
-	      k_particle_copy(nm, particle_var::w) = p_w;
+                         k_f_sv, g, k_neighbors, rangel, rangeh, qsp, gdx, gdy, gdz, gdt, nx, ny, nz ) )
+      {
+        if( k_nm(0) < max_nm )
+          {
+            const int nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
+            if (nm >= max_nm) Kokkos::abort("overran max_nm");
+            
+            k_particle_movers(nm, particle_mover_var::dispx) = local_pm->dispx;
+            k_particle_movers(nm, particle_mover_var::dispy) = local_pm->dispy;
+            k_particle_movers(nm, particle_mover_var::dispz) = local_pm->dispz;
+            k_particle_movers_i(nm)   = local_pm->i;
+            
+            // Keep existing mover structure, but also copy the particle data so we have a reduced set to move to host
+            k_particle_copy(nm, particle_var::dx) = p_dx;
+            k_particle_copy(nm, particle_var::dy) = p_dy;
+            k_particle_copy(nm, particle_var::dz) = p_dz;
+            k_particle_copy(nm, particle_var::ux) = p_ux;
+            k_particle_copy(nm, particle_var::uy) = p_uy;
+            k_particle_copy(nm, particle_var::uz) = p_uz;
+            k_particle_copy(nm, particle_var::w) = p_w;
 #ifdef VARIABLE_CHARGE
-	      k_particle_copy(nm, particle_var::qp) = p_q;
+            k_particle_copy(nm, particle_var::qp) = p_q;
 #endif
-	      k_particle_i_copy(nm) = pii;
-	      
-	      // Tag this one as having left
-	      //k_particles(p_index, particle_var::pi) = 999999;
-	      
-	      // Copy local local_pm back
-	      //local_pm_dispx = local_pm->dispx;
-	      //local_pm_dispy = local_pm->dispy;
-	      //local_pm_dispz = local_pm->dispz;
-	      //local_pm_i = local_pm->i;
-	      //printf("rank copying %d to nm %d \n", local_pm_i, nm);
-	      //copy_local_to_pm(nm);
-	    }
-      	}
+            k_particle_i_copy(nm) = pii;
+
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+            if(annotations_on) {
+              // Copy int annotations
+              for(int j=0; j<num_i32; j++) {
+                i32_annotations_copy(nm,j) = i32_annotations(p_index,j);
+              }
+              // Copy int64_t annotations
+              for(int j=0; j<num_i64; j++) {
+                i64_annotations_copy(nm,j) = i64_annotations(p_index,j);
+              }
+              // Copy float annnotations
+              for(int j=0; j<num_f32; j++) {
+                f32_annotations_copy(nm,j) = f32_annotations(p_index,j);
+              }
+              // Copy double annnotations
+              for(int j=0; j<num_f64; j++) {
+                f64_annotations_copy(nm,j) = f64_annotations(p_index,j);
+              }
+            }
+#endif
+            
+            // Tag this one as having left
+            //k_particles(p_index, particle_var::pi) = 999999;
+            
+            // Copy local local_pm back
+            //local_pm_dispx = local_pm->dispx;
+            //local_pm_dispy = local_pm->dispy;
+            //local_pm_dispz = local_pm->dispz;
+            //local_pm_i = local_pm->i;
+            //printf("rank copying %d to nm %d \n", local_pm_i, nm);
+            //copy_local_to_pm(nm);
+          }
+       }
     }
     //printf("Finished advance_p loop index %d dx %e y %e z %e ux %e uy %e uz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
 #ifdef VPIC_ENABLE_HIERARCHICAL
@@ -1157,6 +1230,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
   #endif
   KOKKOS_TIC();
   ADVANCE_P(
+          sp,
           sp->k_p_d,
           sp->k_p_i_d,
           sp->k_pc_d,
@@ -1170,7 +1244,7 @@ advance_p( /**/  species_t            * RESTRICT sp,
           fa,
           sp->g,
 #ifdef VARIABLE_CHARGE
-	  dt_2mc,
+          dt_2mc,
 #else
           qdt_2mc,
 #endif
@@ -1208,7 +1282,16 @@ advance_p( /**/  species_t            * RESTRICT sp,
   //  Kokkos::deep_copy(sp->k_pc_h, sp->k_pc_d);
   //  Kokkos::deep_copy(sp->k_pc_i_h, sp->k_pc_i_d);
 
+  
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+  if(sp->using_annotations && sp->k_nm_h(0) > 0) {
+    sp->annotations_copy_h.copy_from(sp->annotations_copy_d);
+//    sp->annotations_copy_h.copy_from(sp->annotations_copy_d, sp->k_nm_h(0));
+  }
+#endif
+
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+  Kokkos::fence();
 }
 
 

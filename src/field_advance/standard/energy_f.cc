@@ -140,7 +140,7 @@ struct field_reduce {
         en[5] += (k_field(f0,  field_var::cbz) + k_field(f0, field_var::cbz0)) * (k_field(f0,  field_var::cbz) + k_field(f0, field_var::cbz0));
         }
 
-   KOKKOS_INLINE_FUNCTION void
+    KOKKOS_INLINE_FUNCTION void
     join(value_type dst, const value_type src) const {
         for(size_type i = 0; i < 6; i++) {
             dst[i] += src[i];

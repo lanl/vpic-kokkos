@@ -59,6 +59,12 @@ using k_jf_accum_t = Kokkos::View<float *[NUM_J_DIMS]>;
 using k_particles_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutLeft>;
 using k_particles_i_t = Kokkos::View<int*>;
 
+// Optional additional particle variables
+//using int_annotations_t = Kokkos::View<int**>;
+//using int64_annotations_t = Kokkos::View<int64_t**>;
+//using float_annotations_t = Kokkos::View<float**>;
+//using double_annotations_t = Kokkos::View<double**>;
+
 // TODO: think about the layout here
 using k_particle_copy_t = Kokkos::View<float *[PARTICLE_VAR_COUNT], Kokkos::LayoutRight>;
 using k_particle_i_copy_t = Kokkos::View<int*>;
@@ -86,7 +92,6 @@ using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATO
 
 using k_hydro_d_t = Kokkos::View<double* [HYDRO_VAR_COUNT]>;
 using k_hydro_sv_t = Kokkos::Experimental::ScatterView<double* [HYDRO_VAR_COUNT]>;
-
 
 using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
 
@@ -290,8 +295,8 @@ namespace hydro_var {
         px  = 4,
         py  = 5,
         pz  = 6,
-	//        ke  = 7,
-	rho_m = 7,
+//        ke  = 7,
+        rho_m = 7,
         txx = 8,
         tyy = 9,
         tzz = 10,
@@ -299,14 +304,14 @@ namespace hydro_var {
         tzx = 12,
         txy = 13,
 #ifdef VARIABLE_CHARGE
-	min_q = 14,
-	max_q = 15,
-	n_q0  = 16,
-	n_q1  = 17,
-	n_q2  = 18,
-	n_q3  = 19,
-	n_q4  = 20,
-	n_q5  = 21,
+        min_q = 14,
+        max_q = 15,
+        n_q0  = 16,
+        n_q1  = 17,
+        n_q2  = 18,
+        n_q3  = 19,
+        n_q4  = 20,
+        n_q5  = 21,
 #endif
     };
 };
@@ -319,10 +324,10 @@ namespace fluid_var {
         ux  = 3,
         uy  = 4,
         uz  = 5,
-	msx = 6,
-	msy = 7,
-	msz = 8,
-	ens = 9,
+        msx = 6,
+        msy = 7,
+        msz = 8,
+        ens = 9,
     };
 };
 

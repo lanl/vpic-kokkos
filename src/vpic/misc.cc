@@ -18,7 +18,7 @@ vpic_simulation::inject_particle( species_t * sp,
                                   double ux, double uy, double uz,
                                   double w,  double age,
                                   int update_rhob,
-				  double qp) {
+                                  double qp) {
   int ix, iy, iz;
 
   // Check input parameters
@@ -86,6 +86,12 @@ vpic_simulation::inject_particle( species_t * sp,
 #ifdef VARIABLE_CHARGE
   p->qp = (float)qp;
 #endif
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  if(sp->is_tracer) {
+    int tracer_idx = sp->annotation_vars.get_annotation_index<int>(std::string("TracerID"));
+    sp->annotations_h.set<int>(sp->np-1, tracer_idx, rank()*sp->max_np + sp->np - 1); 
+  }
+#endif
 
   if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
 
@@ -105,11 +111,11 @@ vpic_simulation::inject_particle( species_t * sp,
 
 void
 vpic_simulation::inject_particle_r( species_t * sp,
-				    double x,  double y,  double z,
-				    double ux, double uy, double uz,
-				    double w,  double age,
-				    int update_rhob,
-				    double qp ) {
+                                    double x,  double y,  double z,
+                                    double ux, double uy, double uz,
+                                    double w,  double age,
+                                    int update_rhob,
+                                    double qp ) {
   int ix, iy, iz;
 
   // Check input parameters
@@ -330,17 +336,17 @@ void vpic_simulation::checksum_species(const char * species, CheckSum & cs) {
     const unsigned int csels = cs.length*nproc();
     unsigned char * sums(NULL);
 
-	if(rank() == 0) {
-    	sums = new unsigned char[csels];
-	} // if
+    if(rank() == 0) {
+      sums = new unsigned char[csels];
+    } // if
 
-	// gather sums from all ranks
-	mp_gather_uc(cs.value, sums, cs.length);
+    // gather sums from all ranks
+    mp_gather_uc(cs.value, sums, cs.length);
 
-	if(rank() == 0) {
-		checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
-		MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
-		delete[] sums;
+    if(rank() == 0) {
+      checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
+      MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
+      delete[] sums;
     } // if
   } // if
 } // vpic_simulation::checksum_species
@@ -358,17 +364,17 @@ void vpic_simulation::output_checksum_species(const char * species) {
     const unsigned int csels = cs.length*nproc();
     unsigned char * sums(NULL);
 
-	if( rank() == 0) {
-    	sums = new unsigned char[csels];
-	} // if
+    if( rank() == 0) {
+      sums = new unsigned char[csels];
+    } // if
 
-	// gather sums from all ranks
-	mp_gather_uc(cs.value, sums, cs.length);
+    // gather sums from all ranks
+    mp_gather_uc(cs.value, sums, cs.length);
 
-	if( rank() == 0) {
-		checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
-		MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
-		delete[] sums;
+    if( rank() == 0) {
+      checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
+      MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
+      delete[] sums;
     } // if
   }
   else {

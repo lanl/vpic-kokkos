@@ -585,3 +585,4 @@ hydro_array_t::copy_to_host(FILE *fp, const int step /*=0*/) {
   // printf("k_h_h.extent(0)=%d\n",k_h_h.extent(0));
   if(fp && wr==0) fprintf(fp,"\n");
 }
+

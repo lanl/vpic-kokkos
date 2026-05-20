@@ -28,6 +28,9 @@ checkpt_species( const species_t * sp ) {
   CHECKPT_PTR( sp->g );
   CHECKPT_PTR( sp->next );
   CHECKPT_PTR( sp->pb_diag );
+  CHECKPT_PTR( sp->parent_species );
+  CHECKPT_VAL( bool, sp->is_tracer );
+  CHECKPT_VAL( bool, sp->using_annotations );
 }
 
 species_t *
@@ -41,6 +44,9 @@ restore_species( void ) {
   RESTORE_PTR( sp->g );
   RESTORE_PTR( sp->next );
   RESTORE_PTR( sp->pb_diag );
+  RESTORE_PTR( sp->parent_species );
+  RESTORE_VAL( bool, sp->is_tracer );
+  RESTORE_VAL( bool, sp->using_annotations );
   return sp;
 }
 
@@ -170,6 +176,15 @@ species_t::copy_to_host()
   Kokkos::deep_copy(k_pm_i_h, k_pm_i_d);
   Kokkos::deep_copy(k_nm_h, k_nm_d);
 
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+  if(using_annotations) {
+    Kokkos::deep_copy(annotations_h.i32, annotations_d.i32);
+    Kokkos::deep_copy(annotations_h.i64, annotations_d.i64);
+    Kokkos::deep_copy(annotations_h.f32, annotations_d.f32);
+    Kokkos::deep_copy(annotations_h.f64, annotations_d.f64);
+  }
+#endif
+
   nm = k_nm_h(0);
 
   // Avoid capturing this
@@ -266,6 +281,14 @@ species_t::copy_to_device()
   Kokkos::deep_copy(k_pm_i_d, k_pm_i_h);
   Kokkos::deep_copy(k_nm_d, k_nm_h);
 
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+  if(using_annotations) {
+    Kokkos::deep_copy(annotations_d.i32, annotations_h.i32);
+    Kokkos::deep_copy(annotations_d.i64, annotations_h.i64);
+    Kokkos::deep_copy(annotations_d.f32, annotations_h.f32);
+    Kokkos::deep_copy(annotations_d.f64, annotations_h.f64);
+  }
+#endif
 }
 
 void
@@ -303,8 +326,6 @@ species_t::copy_outbound_to_host()
       movers[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
       movers[i].i     = k_particle_i_movers_h(i);
     });
-
-
 }
 
 void
@@ -318,6 +339,24 @@ species_t::copy_inbound_to_device()
   Kokkos::deep_copy(pc_d_subview, pr_h_subview);
   Kokkos::deep_copy(pci_d_subview, pri_h_subview);
 
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+  if(using_annotations) {
+    Kokkos::deep_copy(annotations_copy_h.i32, annotations_recv_h.i32);
+    Kokkos::deep_copy(annotations_copy_h.i64, annotations_recv_h.i64);
+    Kokkos::deep_copy(annotations_copy_h.f32, annotations_recv_h.f32);
+    Kokkos::deep_copy(annotations_copy_h.f64, annotations_recv_h.f64);
+  }
+#endif
+
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+  if(using_annotations) {
+    Kokkos::deep_copy(annotations_copy_d.i32, annotations_copy_h.i32);
+    Kokkos::deep_copy(annotations_copy_d.i64, annotations_copy_h.i64);
+    Kokkos::deep_copy(annotations_copy_d.f32, annotations_copy_h.f32);
+    Kokkos::deep_copy(annotations_copy_d.f64, annotations_copy_h.f64);
+  }
+#endif
+
   // Append it to the particles
 
   // Avoid capturing this
@@ -326,6 +365,21 @@ species_t::copy_inbound_to_device()
   auto& particles = k_p_d;
   auto& particles_i = k_p_i_d;
   const size_t npart = np;
+
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+  auto& i32_annotations = annotations_d.i32;
+  auto& i64_annotations = annotations_d.i64;
+  auto& f32_annotations = annotations_d.f32;
+  auto& f64_annotations = annotations_d.f64;
+  auto& i32_annotations_copy = annotations_copy_d.i32;
+  auto& i64_annotations_copy = annotations_copy_d.i64;
+  auto& f32_annotations_copy = annotations_copy_d.f32;
+  auto& f64_annotations_copy = annotations_copy_d.f64;
+  int num_i32 = annotation_vars.i32_vars.size();
+  int num_i64 = annotation_vars.i64_vars.size();
+  int num_f32 = annotation_vars.f32_vars.size();
+  int num_f64 = annotation_vars.f64_vars.size();
+#endif
 
   Kokkos::parallel_for("append moved particles",
     Kokkos::RangePolicy <Kokkos::DefaultExecutionSpace> (0, num_to_copy),
@@ -344,10 +398,77 @@ species_t::copy_inbound_to_device()
 #endif
       particles_i(npi) = particle_copy_i(i);
 
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+      // Copy int annotations
+      for(int j=0; j<num_i32; j++) {
+        i32_annotations(npi,j) = i32_annotations_copy(i,j);
+      }
+      // Copy int64_t annotations
+      for(int j=0; j<num_i64; j++) {
+        i64_annotations(npi,j) = i64_annotations_copy(i,j);
+      }
+      // Copy float annnotations
+      for(int j=0; j<num_f32; j++) {
+        f32_annotations(npi,j) = f32_annotations_copy(i,j);
+      }
+      // Copy double annnotations
+      for(int j=0; j<num_f64; j++) {
+        f64_annotations(npi,j) = f64_annotations_copy(i,j);
+      }
+#endif
+
     });
 
   // Reset this to zero now we've done the write back
   this->np += num_to_copy;
   num_to_copy = 0;
-
 }
+
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+void 
+species_t::init_io_buffers(const int N_steps, const float over_alloc_factor) {
+  const int nparticles = static_cast<int>(static_cast<float>(N_steps) * over_alloc_factor);
+  init_io_buffers(nparticles);
+}
+void 
+species_t::init_io_buffers(const int nparticles) {
+  nparticles_buffered_max = nparticles;
+  nparticles_buffered = 0;
+
+  particle_io_buffer_d      = k_particles_t("Particle io buffer_d", nparticles);
+  particle_cell_io_buffer_d = k_particles_i_t("Particle cell io buffer_d", nparticles);
+  efields_io_buffer_d       = Kokkos::View<float*[3], Kokkos::LayoutLeft>("Efield io buffer_d", nparticles);
+  bfields_io_buffer_d       = Kokkos::View<float*[3], Kokkos::LayoutLeft>("Bfield io buffer_d", nparticles);
+  current_dens_io_buffer_d  = Kokkos::View<float*[3], Kokkos::LayoutLeft>("Current density io buffer_d", nparticles);
+  charge_dens_io_buffer_d   = Kokkos::View<float*>("Charge density io buffer_d", nparticles);;
+  momentum_dens_io_buffer_d = Kokkos::View<float*[3], Kokkos::LayoutLeft>("Momentum density io buffer_d", nparticles);
+  ke_dens_io_buffer_d       = Kokkos::View<float*>("KE density io buffer_d", nparticles);;
+  stress_tensor_io_buffer_d = Kokkos::View<float*[6], Kokkos::LayoutLeft>("Stress tensor io buffer_d", nparticles);
+  particle_ke_io_buffer_d   = Kokkos::View<float*, Kokkos::LayoutLeft>("Particle KE io buffer_d", nparticles);
+  annotations_io_buffer_d   = annotations_t<Kokkos::DefaultExecutionSpace>(nparticles, annotation_vars);
+
+  particle_io_buffer_h      = Kokkos::create_mirror_view(particle_io_buffer_d     ); 
+  particle_cell_io_buffer_h = Kokkos::create_mirror_view(particle_cell_io_buffer_d); 
+  efields_io_buffer_h       = Kokkos::create_mirror_view(efields_io_buffer_d      ); 
+  bfields_io_buffer_h       = Kokkos::create_mirror_view(bfields_io_buffer_d      ); 
+  current_dens_io_buffer_h  = Kokkos::create_mirror_view(current_dens_io_buffer_d ); 
+  charge_dens_io_buffer_h   = Kokkos::create_mirror_view(charge_dens_io_buffer_d  ); 
+  momentum_dens_io_buffer_h = Kokkos::create_mirror_view(momentum_dens_io_buffer_d); 
+  ke_dens_io_buffer_h       = Kokkos::create_mirror_view(ke_dens_io_buffer_d      ); 
+  stress_tensor_io_buffer_h = Kokkos::create_mirror_view(stress_tensor_io_buffer_d); 
+  particle_ke_io_buffer_h   = Kokkos::create_mirror_view(particle_ke_io_buffer_d  ); 
+  annotations_io_buffer_h   = annotations_t<Kokkos::DefaultHostExecutionSpace>(annotations_io_buffer_d);
+}
+
+void 
+species_t::init_annotations(int num_particles, int num_movers, annotation_vars_t& vars) 
+{
+  using_annotations = true;
+  annotation_vars = vars;
+  annotations_d = annotations_t<Kokkos::DefaultExecutionSpace>(num_particles, vars);
+  annotations_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(annotations_d);
+  annotations_copy_d = annotations_t<Kokkos::DefaultExecutionSpace>(num_movers, vars);
+  annotations_copy_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(annotations_copy_d);
+  annotations_recv_h = annotations_t<Kokkos::DefaultHostExecutionSpace>(num_movers, vars);
+}
+#endif
