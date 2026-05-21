@@ -15,6 +15,7 @@
 #include <string>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdint>
 
 #include "FileIOData.h"
 

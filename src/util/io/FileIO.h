@@ -14,6 +14,7 @@
 
 #include <stdarg.h>
 #include "FileIOData.h"
+#include <cstdint>
 
 /*!
 	\class FileIO FileIO.h
