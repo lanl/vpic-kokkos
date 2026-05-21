@@ -194,6 +194,75 @@ vpic_simulation::inject_particle_r( species_t * sp,
 }
 
 
+void
+vpic_simulation::apply_artificial_loss_cone( species_t * sp,
+                                             float tan2_alpha_lc,
+                                             float dt_lc,
+                                             float ML ) {
+  if( !sp ) ERROR(( "apply_artificial_loss_cone: Invalid species" ));
+  if( tan2_alpha_lc < 0 ) ERROR(( "apply_artificial_loss_cone: tan2_alpha_lc < 0" ));
+
+  const int np = sp->np;
+  if( np <= 0 ) return;
+
+  auto kp  = sp->k_p_d;
+  auto kpi = sp->k_p_i_d;
+  auto kf  = field_array->k_f_d;
+
+  const int nv = grid->nv;
+
+  Kokkos::parallel_for(
+    "apply_artificial_loss_cone",
+    Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np),
+    KOKKOS_LAMBDA (const int n) {
+
+      const float w = kp(n, particle_var::w);
+      if( w == 0.f ) return;
+
+      const int cell = kpi(n);
+      if( cell < 0 || cell >= nv ) return;
+
+      const float ux = kp(n, particle_var::ux);
+      const float uy = kp(n, particle_var::uy);
+      const float uz = kp(n, particle_var::uz);
+
+      const float Bx = kf(cell, field_var::cbx) + kf(cell, field_var::cbx0);
+      const float By = kf(cell, field_var::cby) + kf(cell, field_var::cby0);
+      const float Bz = kf(cell, field_var::cbz) + kf(cell, field_var::cbz0);
+
+      const float B2 = Bx*Bx + By*By + Bz*Bz;
+      if( B2 <= 0.f ) return;
+
+      const float invB = 1.f / sqrtf(B2);
+      const float bhx  = Bx * invB;
+      const float bhy  = By * invB;
+      const float bhz  = Bz * invB;
+
+      const float upar  = ux*bhx + uy*bhy + uz*bhz;
+      const float upar2 = upar*upar;
+      if( upar2 <= 0.f ) return;
+
+      const float u2 = ux*ux + uy*uy + uz*uz;
+      float uperp2 = u2 - upar2;
+      if( uperp2 < 0.f ) uperp2 = 0.f;
+
+      if( uperp2 < upar2 * tan2_alpha_lc ) {
+        // hard cut model
+        //kp(n, particle_var::w)  = 0.f;
+
+        //decay model
+        float wnew = w * Kokkos::exp( -dt_lc * Kokkos::abs(upar) / ML );
+        // if( wnew < 1e-12f ) {
+        //   wnew = 0.f;
+        // }
+        kp(n, particle_var::w) = wnew;
+      }
+    });
+
+  Kokkos::fence();
+}
+
+
 // Add capability to modify certain fields "on the fly" so that one
 // can, e.g., extend a run, change a quota, or modify a dump interval
 // without having to rerun from the start.

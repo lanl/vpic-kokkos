@@ -735,6 +735,12 @@ public:
     sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
   }
 
+  void
+  apply_artificial_loss_cone( species_t * sp,
+                              float tan2_alpha_lc,
+                              float dt_lc,
+                              float ML );
+
   //////////////////////////////////
   // Random number generator helpers
 
