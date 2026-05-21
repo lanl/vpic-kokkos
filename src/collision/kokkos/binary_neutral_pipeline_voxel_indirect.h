@@ -67,7 +67,6 @@ struct binary_neutral_collision_pipeline {
   // species_t *_spp1, *_spp2;
   // k_particles_t _spp1_p, _spp2_p;
   // k_particles_i_t *_spp1_i, *_spp2_i;
-
   // Random access, read-only Views
   // TODO : Does RandomAccess trait really matter?
   k_particle_sortindex_t_ra _spi_sortindex_ra, _spj_sortindex_ra;
@@ -384,6 +383,18 @@ void collide_self_varwt(
   // Get a random generator. Do not leave without freeing it.
   kokkos_rng_state_t rg = rp.get_state();
 
+  // For particle-particle scattering within a species where a specific
+  // ordering is assumed [ie "if (Z1 != 1.0 || Z2 != 0.0) {return 0.0;}"] 
+  // the scattering rate needs an extra factor of 2x to account for pairs with 
+  // reverse order (ie accept q1-q2 but reject q2-q1). This is a result of the
+  // cross section being for a reaction between specific charge states while
+  // supporting variable charge within a species.
+  //
+  // Binary Coulomb collision self-scattering needs a factor of two for the 
+  // modified reduced mass.
+  // 
+  float nu_modifier = 2.0;
+
   // All particles in h-group collide once and particles
   // in l-group collide an average of np_max/np_min times
 
@@ -417,8 +428,8 @@ void collide_self_varwt(
   
     wp1 = up[0];
     wp2 = up[4];
-    const double w_max = std::max(wp1, wp2);
-    float ndt = w_max * np_min * dtinterval / dV;
+    const double w_max = (wp1 > wp2) ? wp1 : wp2;
+    float ndt = w_max * np_min * dtinterval / dV * nu_modifier;
 
     bool MC_col_occurred;
     binary_collision(mu, mu_i, mu_i, up, model, rg, ndt, ordered, MC_col_occurred);
@@ -539,7 +550,7 @@ void collide_variabl_wt(
   
     wp1 = up[0];
     wp2 = up[4];
-    const double w_max = std::max(wp1, wp2);
+    const double w_max = (wp1 > wp2) ? wp1 : wp2;
     float ndt = w_max * np_min * dtinterval / dV;
 
     bool MC_col_occurred;
@@ -626,6 +637,18 @@ void collide_uniform_wt(
     // Even number of particles.
     nj = ni = ni/2;
     j0 = i0 + ni;
+
+    // For particle-particle scattering within a species where a specific
+    // ordering is assumed [ie "if (Z1 != 1.0 || Z2 != 0.0) {return 0.0;}"] 
+    // the scattering rate needs an extra factor of 2x to account for pairs with 
+    // reverse order (ie accept q1-q2 but reject q2-q1). This is a result of the
+    // cross section being for a reaction between specific charge states while
+    // supporting variable charge within a species.
+    //
+    // Binary Coulomb collision self-scattering needs a factor of two for the 
+    // modified reduced mass.
+    // 
+    float nu_modifier = 2.0;
   }
 	
 	const int nmin = ni < nj ? ni : nj;
@@ -760,24 +783,46 @@ void collide_uniform_wt(
     t2 *= mu;       // _mu v^2  = Collision energy
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
 
-    // Cross sections depend on charge states of incoming particles
+    // Cross sections may depend on charge states of incoming particles
     // and their species which may be switched during the pairing
     qii = ordered ? qi : qj;
     qjj = ordered ? qj : qi;
-    dd = model.cross_section( rg, ur, t1, qii, qjj);
 
-    // Monte-Carlo collision test
-    // Determine if collision occurs, if (U > sigma * n * v * dt) then no collision
-    if( rg.frand() > dd*t1 ) {
-      return; // collision does not occur 
-    } else {
-      MC_col_occurred = true;
+    // Binary Coulomb collisions always occur (ie we don't need to 
+    // sample a cross section) so MonteCarlo=False even if the particles
+    // have variable weight.
+    // For charge exchange and ionization, we sample the collision
+    // frequency to determine if a collision occurs so MonteCarlo=True
+    //
+    // if (MonteCarlo) {
+    if (model.collision_type != CollisionType::BinaryCoulomb) {
+      dd = model.cross_section( rg, ur, t1, t2, qii, qjj );
+
+      // Monte-Carlo collision test
+      // Determine if collision occurs, if (U > sigma * n * v * dt) then no collision
+      if( rg.frand() > dd*t1) {
+        return; // collision does not occur 
+      }
+    } else if (qii == 0.0 || qjj == 0.0) {
+      // If it is a Coulomb collisiona and one of the particles is neutral,
+      // do not perform the collision
+      return;
     }
+
+    MC_col_occurred = true;
+
+#ifdef VARIABLE_CHARGE
+    // Pass n*v*dt to tan(theta/2), include charge for variable charge
+    float nvdt = t1*qi*qi*qj*qj;
+#else
+    // if constant charge, then cvar0 is multiplied by qi^2*qj^2 during constrction
+    float nvdt = t1;
+#endif
 
     // Compute collision angle and coefficient of restitution
     float param[2] = {t2, t1};
     const float rr = model.restitution(rg, param);
-    dd = model.tan_theta_half(rg, t2, t1*qi*qi*qj*qj);
+    dd = model.tan_theta_half(rg, t2, nvdt);
     PREVENT_BACKSCATTER(dd);
 
 #ifdef VARIABLE_CHARGE
@@ -797,6 +842,8 @@ void collide_uniform_wt(
         up[dw_index] += 1.0;
         break;
       }
+      default:
+        break;
     }
 #endif
 
