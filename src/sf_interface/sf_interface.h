@@ -21,6 +21,8 @@
 // fi(0,:,:) or fi(nx+1,:,:)) are not used.
 
 typedef struct interpolator {
+#ifdef SHAPE_NGP
+  // TODO trim memory usage, only 6 floats + 2 pad needed!! --ATr,2024nov08
   float ex, dexdy, dexdz, d2exdydz;
   float ey, deydz, deydx, d2eydzdx;
   float ez, dezdx, dezdy, d2ezdxdy;
@@ -28,6 +30,20 @@ typedef struct interpolator {
   float cby, dcbydy;
   float cbz, dcbzdz;
   float _pad[2];  // 16-byte align
+#else
+#ifdef SHAPE_QS
+  // TODO(low-priority) TEST LAYOUT - is it better to interleave padding so ex,ey,ez;bx,by,bz
+  // are cleanly spaced on 32-byte boundaries, or only pad end of struct????
+  // --ATr,2024nov08
+  float ex,   dexdx,  dexdy,  dexdz,  d2exdx,  d2exdy,  d2exdz;
+  float ey,   deydx,  deydy,  deydz,  d2eydx,  d2eydy,  d2eydz;
+  float ez,   dezdx,  dezdy,  dezdz,  d2ezdx,  d2ezdy,  d2ezdz;
+  float cbx, dcbxdx, dcbxdy, dcbxdz, d2cbxdx, d2cbxdy, d2cbxdz;
+  float cby, dcbydx, dcbydy, dcbydz, d2cbydx, d2cbydy, d2cbydz;
+  float cbz, dcbzdx, dcbzdy, dcbzdz, d2cbzdx, d2cbzdy, d2cbzdz;
+  float _pad[2]; // 16-byte align
+#endif
+#endif
 } interpolator_t;
 
 typedef struct interpolator_array {
