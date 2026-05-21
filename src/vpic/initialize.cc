@@ -103,6 +103,9 @@ vpic_simulation::initialize( int argc,
   // -----------------------------------------------
   // Setup remaining device data for evolution loop
 
+  // Smooth E/B fields interpolated to particles (but not fed into B advance)
+  FAK->hyb_smooth_eb_interp( field_array, true );
+
   if( rank()==0 ) MESSAGE(( "Initializing interpolators" ));
   if( species_list ) {
     TIC load_interpolator_array( interpolator_array, field_array ); TOC( load_interpolator, 1 );
