@@ -31,11 +31,12 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   const particle_t     * RESTRICT ALIGNED(128) p;
   const interpolator_t * RESTRICT ALIGNED(128) f;
   float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
-  int np, stride_10, stride_21, stride_43;
+  size_t np, stride_10, stride_21, stride_43;
 
   float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
   float w0, w1, w2, w3, w4, w5, w6, w7, t;
-  int i, n;
+  int i; 
+  size_t n;
 
   if( !ha || !sp || !ia || ha->g!=sp->g || ha->g!=ia->g )
     ERROR(( "Bad args" ));
@@ -201,7 +202,7 @@ accumulate_hydro_p_kokkos(
   qdt_4mc2 = qdt_2mc / (2*c);
   r8V      = sp->g->r8V;
 
-  const int np        = sp->np;
+  const size_t np     = sp->np;
   const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
                         VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
   const int stride_21 = VOXEL(0,1,0, sp->g->nx,sp->g->ny,sp->g->nz) -

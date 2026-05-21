@@ -13,7 +13,7 @@ cmake_policy(SET CMP0074 NEW)
 project(vpic CXX)
 
 #------------------------------------------------------------------------------#
-# If a C++14 compiler is available, then set the appropriate flags
+# If a C++17 compiler is available, then set the appropriate flags
 # Note: As of February 2021, VPIC requires only C++11, but requiring C++14
 # makes building Kokkos easier.  If you are adventurous and using your own
 # Kokkos build, feel free to try a lower standard.
@@ -76,6 +76,62 @@ option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performn
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
+# Function to recursively resolve target libraries to actual paths
+function(resolve_target_libraries target output_var)
+    set(resolved_libs "")
+    
+    if(TARGET ${target})
+        # Get the link libraries for this target
+        get_target_property(target_libs ${target} INTERFACE_LINK_LIBRARIES)
+        
+        if(target_libs)
+            foreach(lib ${target_libs})
+                if(TARGET ${lib})
+                    # Recursively resolve if it's a target
+                    resolve_target_libraries(${lib} nested_libs)
+                    list(APPEND resolved_libs ${nested_libs})
+                elseif(lib MATCHES "^-l" OR lib MATCHES "^-L" OR lib MATCHES "^-Wl,")
+                    # Keep linker flags as-is
+                    list(APPEND resolved_libs ${lib})
+                elseif(EXISTS ${lib})
+                    # Keep existing files as-is
+                    list(APPEND resolved_libs ${lib})
+                endif()
+            endforeach()
+        endif()
+        
+        # Also get the location of the target itself if it's a library
+        get_target_property(target_type ${target} TYPE)
+        if(target_type MATCHES "LIBRARY" OR target_type MATCHES "ARCHIVE")
+            get_target_property(target_location ${target} LOCATION)
+            if(target_location)
+                list(APPEND resolved_libs ${target_location})
+            endif()
+        endif()
+        
+        # Get imported location for imported targets
+        get_target_property(is_imported ${target} IMPORTED)
+        if(is_imported)
+            get_target_property(imported_location ${target} IMPORTED_LOCATION)
+            if(NOT imported_location)
+                get_target_property(imported_location ${target} IMPORTED_LOCATION_RELEASE)
+            endif()
+            if(NOT imported_location)
+                get_target_property(imported_location ${target} IMPORTED_LOCATION_RELWITHDEBINFO)
+            endif()
+            if(imported_location)
+                list(APPEND resolved_libs ${imported_location})
+            endif()
+        endif()
+    else()
+        # Not a target, treat as a library name or path
+        list(APPEND resolved_libs ${target})
+    endif()
+    
+    list(REMOVE_DUPLICATES resolved_libs)
+    set(${output_var} ${resolved_libs} PARENT_SCOPE)
+endfunction()
+
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
 #
@@ -117,8 +173,6 @@ endif("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
   set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
 endif("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
-
-set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} -I${PROJECT_SOURCE_DIR}/kokkos/algorithms/src")
 
 string(REPLACE ";" " " string_libraries "${MPI_CXX_LIBRARIES} ${MPI_C_LIBRARIES}")
 set(VPIC_CXX_LIBRARIES "${string_libraries}")
@@ -225,57 +279,98 @@ endif(BUILD_INTERNAL_KOKKOS)
 get_target_property(KOKKOS_COMPILE_OPTIONS Kokkos::kokkoscore INTERFACE_COMPILE_OPTIONS)
 get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE_INCLUDE_DIRECTORIES)
-#get_target_property(KOKKOS_INCLUDE_ALGORITHMS Kokkos::kokkosalgorithms INTERFACE_INCLUDE_DIRECTORIES)
-
-# TODO: this gives the external include path
-#get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
-
-#get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
-#get_target_property(KOKKOS_LIB_CONTAINERS Kokkos::kokkoscontainers INTERFACE_LINK_DEPENDS)
+get_target_property(KOKKOS_INCLUDE_ALGORITHMS Kokkos::kokkosalgorithms INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(KOKKOS_INCLUDE_SIMD Kokkos::kokkossimd INTERFACE_INCLUDE_DIRECTORIES)
 
 set(KOKKOS_CORE_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_core_includes)
 set(KOKKOS_CONTAINER_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_container_includes)
-#set(KOKKOS_ALGORITHM_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_algorithm_includes)
+set(KOKKOS_ALGORITHM_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_algorithm_includes)
 set(KOKKOS_COMPILE_OPTIONS_FILE ${PROJECT_BINARY_DIR}/kokkos_compile_options)
-#set(KOKKOS_CORE_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_core_lib)
-#set(KOKKOS_CONTAINER_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_container_lib)
+set(KOKKOS_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_includes)
 
 # For an "external" build these will be the same, but for an internal we need to gather both
 file(GENERATE OUTPUT ${KOKKOS_CORE_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 file(GENERATE OUTPUT ${KOKKOS_CONTAINER_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_CONTAINERS}")
-#file(GENERATE OUTPUT ${KOKKOS_ALGORITHM_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_ALGORITHM}")
+file(GENERATE OUTPUT ${KOKKOS_ALGORITHM_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_ALGORITHMS}")
 string(REPLACE ";" " " kokkos_compile_options "${KOKKOS_COMPILE_OPTIONS}")
 file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${kokkos_compile_options}")
-
-#file(GENERATE OUTPUT ${KOKKOS_CORE_LIB_FILE} CONTENT "${KOKKOS_LIB_DIRS}")
-#file(GENERATE OUTPUT ${KOKKOS_CONTAINER_LIB_FILE} CONTENT "${KOKKOS_LIB_CONTAINERS}")
-
-#include_directories(${KOKKOS_INCLUDE_DIRS})
-#string(REPLACE ";" " " KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS}")
-#message(dirs: ${KOKKOS_INCLUDE_DIRS})
-
-#FOREACH (P ${KOKKOS_INCLUDE_DIRS})
-    #message(${P})
-    #include_directories(${P})
-    #link_directories(${P})
-    #ENDFOREACH(P)
-
-# TODO: bad idea.. at best, this is just going to add it to the last one in the
-# array
-#link_directories(${KOKKOS_INCLUDE_DIRS}/../lib)
-#link_directories(${KOKKOS_INCLUDE_DIRS}/lib)
+if(NOT "${KOKKOS_INCLUDE_DIRS}" STREQUAL "${KOKKOS_INCLUDE_CONTAINERS}")
+  set(KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS};${KOKKOS_INCLUDE_CONTAINERS}")
+endif()
+if(NOT "${KOKKOS_INCLUDE_DIRS}" STREQUAL "${KOKKOS_INCLUDE_ALGORITHMS}")
+  set(KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS};${KOKKOS_INCLUDE_ALGORITHMS}")
+endif()
+if(NOT "${KOKKOS_INCLUDE_DIRS}" STREQUAL "${KOKKOS_INCLUDE_SIMD}")
+  set(KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS};${KOKKOS_INCLUDE_SIMD}")
+endif()
+file(GENERATE OUTPUT ${KOKKOS_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 
 # Libs
 string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
-set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries} -L${PROJECT_SOURCE_DIR}/kokkos/algorithms/src ")
+set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
 
-# Includes (TODO: this is definitely abuse of the CXX variable..)
-#string(REPLACE ";" " -I" string_libraries "-I${KOKKOS_INCLUDE_DIRS}")
-#set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+# Get Kokkos link libraries - resolve all targets to actual paths
+get_target_property(KOKKOS_LINK_LIBS Kokkos::kokkoscore INTERFACE_LINK_LIBRARIES)
+if(NOT KOKKOS_LINK_LIBS)
+  set(KOKKOS_LINK_LIBS "")
+endif()
 
-#string(REPLACE ";" " -L" string_libraries "-L${KOKKOS_INCLUDE_DIRS}")
-#set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+message("KOKKOS_LINK_LIBS are ${KOKKOS_LINK_LIBS}")
 
+# Resolve all target dependencies to actual library paths
+set(KOKKOS_RESOLVED_LIBS "")
+foreach(lib ${KOKKOS_LINK_LIBS})
+    resolve_target_libraries(${lib} resolved)
+    list(APPEND KOKKOS_RESOLVED_LIBS ${resolved})
+endforeach()
+
+# For CUDA builds, explicitly add CUDA libraries
+if(ENABLE_KOKKOS_CUDA AND CUDA_FOUND)
+    if(CUDA_CUDA_LIBRARY)
+        list(APPEND KOKKOS_RESOLVED_LIBS ${CUDA_CUDA_LIBRARY})
+    endif()
+    if(CUDA_CUDART_LIBRARY)
+        list(APPEND KOKKOS_RESOLVED_LIBS ${CUDA_CUDART_LIBRARY})
+    endif()
+    # Also check for libraries in standard locations
+    find_library(CUDA_DRIVER_LIBRARY cuda HINTS ${CUDA_TOOLKIT_ROOT_DIR}/lib64 ${CUDA_TOOLKIT_ROOT_DIR}/lib/stubs)
+    if(CUDA_DRIVER_LIBRARY)
+        list(APPEND KOKKOS_RESOLVED_LIBS ${CUDA_DRIVER_LIBRARY})
+    endif()
+endif()
+
+# For HIP/ROCm builds
+if(Kokkos_ENABLE_HIP)
+    find_package(hip QUIET)
+    if(hip_FOUND)
+        list(APPEND KOKKOS_RESOLVED_LIBS ${HIP_LIBRARIES})
+    endif()
+    # Also try direct paths
+    find_library(AMDHIP64_LIBRARY amdhip64 HINTS /opt/rocm/lib)
+    if(AMDHIP64_LIBRARY)
+        list(APPEND KOKKOS_RESOLVED_LIBS ${AMDHIP64_LIBRARY})
+    endif()
+endif()
+
+# Add OpenMP libraries if found
+# This is redundant with the resolved libs above
+if(OPENMP_FOUND AND OpenMP_CXX_LIBRARIES)
+    list(APPEND KOKKOS_RESOLVED_LIBS ${OpenMP_CXX_LIBRARIES})
+endif()
+
+# Add other system libraries that Kokkos might need
+list(APPEND KOKKOS_RESOLVED_LIBS "-ldl")
+if(NOT APPLE)
+    list(APPEND KOKKOS_RESOLVED_LIBS "-lrt")
+endif()
+
+# Clean up the list
+list(REMOVE_DUPLICATES KOKKOS_RESOLVED_LIBS)
+
+# Save to file for vpic script
+set(KOKKOS_LINK_LIBS_FILE ${PROJECT_BINARY_DIR}/kokkos_link_libs)
+string(REPLACE ";" " " kokkos_link_libs_str "${KOKKOS_RESOLVED_LIBS}")
+file(GENERATE OUTPUT ${KOKKOS_LINK_LIBS_FILE} CONTENT "${kokkos_link_libs_str}")
 
 #------------------------------------------------------------------------------#
 # OpenSSL
@@ -496,6 +591,12 @@ endif()
 
 if(ENABLE_INTEGRATED_TESTS)
   enable_testing()
+
+  # NOTE: This can also be done by a subdirectory (useful when we have multiple tests)
+  # Add includes for Catch2
+  set(TEST_DIR "./test/include")
+  include_directories(${TEST_DIR})
+
   add_subdirectory(test/integrated)
 
 endif(ENABLE_INTEGRATED_TESTS)
