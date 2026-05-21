@@ -4,6 +4,7 @@
   add_subdirectory(halo_exchange)
   add_subdirectory(lemons_collision)
   add_subdirectory(momentum_equil)
+  add_subdirectory(momentum_equil_binary_coulomb)
 if(VPIC_ENABLE_VARIABLE_CHARGE)
   add_subdirectory(ta_collision_var_charge)  
 endif()
