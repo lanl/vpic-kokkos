@@ -161,31 +161,41 @@ struct field_dump_flag_t
   std::vector<std::string> flag_keys = {
     "ex", "ey", "ez", "div_e_err",
     "cbx", "cby", "cbz", "pe",
+    "cbx0", "cby0", "cbz0", "te0",
     "tcax", "tcay", "tcaz", "rhob",
     "jfx", "jfy", "jfz", "rhof",
     "jfxold", "jfyold", "jfzold", "rhofold",
-    "cbx0", "cby0", "cbz0", "te0",
     "tx", "ty", "tz", "te",
-    "ox", "oy", "oz", "oe","div_b_err"
+    "ox", "oy", "oz", "oe",
+    "pex", "pey", "pez", "div_b_err",
+    "ux", "uy", "uz", "ue",
+    "sx", "sy", "sz", "se",
 #ifdef EXTERNAL_FORCE
-    "Ex0", "Ey0", "Ez0",
-    "Gx0", "Gy0", "Gz0",
+    "Ex0", "Ey0", "Ez0", "_pad1",
+    "Gx0", "Gy0", "Gz0", "_pad2",
 #endif
+    "ematx", "ematy", "ematz", "nmat",
+    "fmatx", "fmaty", "fmatz", "cmat",
   };
 
   std::unordered_map<std::string, bool> flags = {
     {"ex", true}, {"ey", true}, {"ez", true}, {"div_e_err", true},
     {"cbx", true}, {"cby", true}, {"cbz", true}, {"pe", true},
+    {"cbx0", true}, {"cby0", true}, {"cbz0", true}, {"te0", true},
     {"tcax", true}, {"tcay", true}, {"tcaz", true}, {"rhob", true},
     {"jfx", true}, {"jfy", true}, {"jfz", true}, {"rhof", true},
     {"jfxold", true}, {"jfyold", true}, {"jfzold", true}, {"rhofold", true},
-    {"cbx0", true}, {"cby0", true}, {"cbz0", true}, {"te0", true},
     {"tx", true}, {"ty", true}, {"tz", true}, {"te", true},
-    {"ox", true}, {"oy", true}, {"oz", true}, {"oe", true}, {"div_b_err", true}
+    {"ox", true}, {"oy", true}, {"oz", true}, {"oe", true},
+    {"pex", true}, {"pey", true}, {"pez", true}, {"div_b_err", true},
+    {"ux", true}, {"uy", true}, {"uz", true}, {"ue", true},
+    {"sx", true}, {"sy", true}, {"sz", true}, {"se", true},
 #ifdef EXTERNAL_FORCE
-    {"Ex0", true}, {"Ey0", true}, {"Ez0", true},
-    {"Gx0", true}, {"Gy0", true}, {"Gz0", true},
+    {"Ex0", true}, {"Ey0", true}, {"Ez0", true}, {"_pad1", true},
+    {"Gx0", true}, {"Gy0", true}, {"Gz0", true}, {"_pad2", true},
 #endif
+    {"ematx", true}, {"ematy", true}, {"ematz", true}, {"nmat", true},
+    {"fmatx", true}, {"fmaty", true}, {"fmatz", true}, {"cmat", true},
   };
 
   void disableE() {
