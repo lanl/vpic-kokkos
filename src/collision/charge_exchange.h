@@ -25,10 +25,11 @@ struct cex_model : public collision_model<cex_model<Functor>> {
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
-    float vr,    // Changed input variable.
+    float vr,    // relatvie velocity
     float nvdt,
-    float Z1,     // Charge of particle
-    float Z2=0.0  // Charge of fluid
+    float E0,    // relative energy
+    float Z1,    // Charge of particle
+    float Z2=0  // Charge of particle
   ) const
   {
     float sig = sigma_cx(vr,Z1);
@@ -71,13 +72,20 @@ struct cex_model : public collision_model<cex_model<Functor>> {
     const int v,
     const gmomType &Dm, 
     const float mi,
-    const float mj) const 
+    const float mj,
+    const float mj_ttl) const 
   {
-    spj_v(v, fluid_var::ux)  += -Dm.v[1] * mi / (mj * Dm.v[0]); // du_2 = dp_1 / m_2
-    spj_v(v, fluid_var::uy)  += -Dm.v[2] * mi / (mj * Dm.v[0]);
-    spj_v(v, fluid_var::uz)  += -Dm.v[3] * mi / (mj * Dm.v[0]);
-    spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi * 2.0 / 3.0; // dT ~ 2/3 dE
-    spj_v(v, fluid_var::den) += -Dm.v[5];
+    spj_v(v, fluid_var::ux)  += -Dm.v[1] * mi / mj_ttl; // du_2 = dp_1 / m_2
+    spj_v(v, fluid_var::uy)  += -Dm.v[2] * mi / mj_ttl;
+    spj_v(v, fluid_var::uz)  += -Dm.v[3] * mi / mj_ttl;
+
+    // dT = 2/3 * dE_ave = 2/3 * dE_ttl / N,  where N = m_fluid_ttl / m_fluid_particle
+    spj_v(v, fluid_var::tmp) += -Dm.v[4] * mi / (mj_ttl / mj) * 2.0 / 3.0;
+    spj_v(v, fluid_var::tmp) = (spj_v(v, fluid_var::tmp) > 0.0) ? spj_v(v, fluid_var::tmp) : 0.0;
+
+    // drho = dn * m_fluid_particle
+    spj_v(v, fluid_var::den) += -Dm.v[5] * mj; 
+    spj_v(v, fluid_var::den) = (spj_v(v, fluid_var::den) > 0.0) ? spj_v(v, fluid_var::den) : 0.0;
   } // end upload_moment_src_impl()
 };
 

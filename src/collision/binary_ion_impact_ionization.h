@@ -32,10 +32,11 @@ struct binary_ion_impact_ioniz_model : public collision_model<binary_ion_impact_
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
-    float vr,     // Changed input variable.
+    float vr,    // relatvie velocity
     float nvdt,
-    float Z1,      // Charge of first particle
-    float Z2=0.0   // Charge of second particle
+    float E0,    // relative energy
+    float Z1,    // Charge of particle
+    float Z2=0  // Charge of particle
   ) const
   {
     return sigma_cx(vr, Z1, Z2);
@@ -114,9 +115,9 @@ apply_binary_ion_impact_ioniz_collision_op( collision_op_t * cop,
   binary_ion_impact_ioniz_collision_op_t<Functor> * ioniz = (binary_ion_impact_ioniz_collision_op_t<Functor> *) cop;
   binary_ion_impact_ioniz_model model(ioniz->sigma_cx0, ioniz->dE, ioniz->var_wt);
   if(ioniz->var_wt)
-      apply_binary_neutral_collision_model_pipeline<true>((binary_neutral_collision_op_t *) cop, model, rng);
+    apply_binary_neutral_collision_model_pipeline<true>((binary_neutral_collision_op_t *) cop, model, rng);
   else
-      apply_binary_neutral_collision_model_pipeline<false>((binary_neutral_collision_op_t *) cop, model, rng);
+    apply_binary_neutral_collision_model_pipeline<false>((binary_neutral_collision_op_t *) cop, model, rng);
 }
 
 template<typename Functor>
@@ -174,9 +175,6 @@ binary_ion_impact_ioniz(
                   NULL);
 
   return ioniz;
-
 }
-
-
 
 #endif  /* _binary_ion_impact_ioniz_h_ */

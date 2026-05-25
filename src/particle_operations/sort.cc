@@ -48,7 +48,7 @@ void BinSort::sort( species_t* sp,
     Kokkos::parallel_for("DefaultSort::sort::count",
       Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, sp->np),
       KOKKOS_LAMBDA (const size_t i) {
-        Kokkos::atomic_increment(&partition(index_ra(i)));
+        Kokkos::atomic_inc(&partition(index_ra(i)));
       });
 
     Kokkos::parallel_scan("DefaultSort::sort::partiiton",

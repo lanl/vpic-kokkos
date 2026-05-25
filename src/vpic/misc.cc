@@ -73,7 +73,8 @@ vpic_simulation::inject_particle( species_t * sp,
   if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
   iz++;                               // Adjust for mesh indexing
 
-  particle_t * p = sp->p + (sp->np++);
+  size_t p_index = Kokkos::atomic_fetch_inc(&(sp->np));
+  particle_t * p = sp->p + p_index;
   p->dx = (float)x; // Note: Might be rounded to be on [-1,1]
   p->dy = (float)y; // Note: Might be rounded to be on [-1,1]
   p->dz = (float)z; // Note: Might be rounded to be on [-1,1]
@@ -163,6 +164,7 @@ vpic_simulation::inject_particle_r( species_t * sp,
   if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
   iz++;                               // Adjust for mesh indexing
 
+  size_t p_index = Kokkos::atomic_fetch_inc(&(sp->np));
 
   // Add particle to receive list (on host), so it will be copied to
   // device along with the boundary_p particles.

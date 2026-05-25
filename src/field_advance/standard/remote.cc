@@ -2666,7 +2666,7 @@ begin_recv_ghost_hyb_ue(field_array* fa,
  */
 template<typename Face> 
 void 
-begin_send_ghost_hyb_eu(field_array* fa, 
+begin_send_ghost_hyb_ue(field_array* fa, 
                        const int i, const int j, const int k) {
   int dst = fa->g->bc[BOUNDARY(i,j,k)]; /**< Destination rank */
   // Only send cells if dst is a valid neighbor and not itself

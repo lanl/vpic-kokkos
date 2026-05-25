@@ -14,6 +14,15 @@
 
 //////////////////////////////////////////////////////
 
+// Dummy collision model for Coulomb collisions
+struct CCModel {
+  KOKKOS_INLINE_FUNCTION float
+  operator() (float vr, float Z1, float Z2=0.0) const 
+  {
+    return 1.0;
+  }
+};
+
 begin_globals {
 
   int restart_interval;
@@ -233,6 +242,10 @@ begin_initialization {
   define_collision_op(takizuka_abe("ta_bi", ion,  beam, cvar0_ib, ncoll_coulomb, var_wt));
   // define_collision_op(takizuka_abe("ta_ii", ion,  ion, cvar0_ii, ncoll_coulomb, var_wt));
   // define_collision_op(takizuka_abe("ta_bb", beam, beam, cvar0_bb, ncoll_coulomb, var_wt));
+
+  // Test alternative binary pairing scheme based off of Takizuka and Abe
+  // CCModel ccm;
+  // define_collision_op(binary_coulomb("ta_coll", ion, beam, cvar0_ib, ccm, ncoll_coulomb, var_wt));
 
   ion->last_indexed = -1;
   beam->last_indexed = -1;

@@ -32,10 +32,11 @@ struct binary_charge_exchange_model : public collision_model<binary_charge_excha
   KOKKOS_INLINE_FUNCTION
   float cross_section(
     kokkos_rng_state_t& rg,
-    float vr,     // Changed input variable.
+    float vr,    // relatvie velocity
     float nvdt,
-    float Z1,      // Charge of first particle
-    float Z2=0.0   // Charge of second particle
+    float E0,    // relative energy
+    float Z1,    // Charge of particle
+    float Z2=0  // Charge of particle
   ) const
   {
     return sigma_cx(vr, Z1, Z2);
@@ -91,10 +92,10 @@ apply_binary_charge_exchange_collision_op( collision_op_t * cop,
   binary_charge_exchange_collision_op_t<Functor> * cex = (binary_charge_exchange_collision_op_t<Functor> *) cop;
   binary_charge_exchange_model model(cex->sigma_cx0, cex->dq, cex->var_wt);
   if(cex->var_wt)
-      apply_binary_neutral_collision_model_pipeline<true>((binary_neutral_collision_op_t *) cop, model, rng);
-  else
-      apply_binary_neutral_collision_model_pipeline<false>((binary_neutral_collision_op_t *) cop, model, rng);
-}
+    apply_binary_neutral_collision_model_pipeline<true>((binary_neutral_collision_op_t *) cop, model, rng);
+   else
+     apply_binary_neutral_collision_model_pipeline<false>((binary_neutral_collision_op_t *) cop, model, rng);
+  }
 
 template<typename Functor>
 void
@@ -151,9 +152,6 @@ binary_charge_exchange(
                   NULL);
 
   return cex;
-
 }
-
-
 
 #endif  /* _binary_charge_exchange_h_ */

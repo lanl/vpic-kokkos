@@ -14,12 +14,14 @@
 // CollisionType tag is provided to each collision model
 enum class CollisionType : unsigned { 
   BinaryTA, 
+  BinaryCoulomb,
   BinaryChargeExchange,
   BinaryIonImpactIoniz,
   BulkLemons, 
   BulkDrag, 
   BulkChargeExchange,
-  BulkIonImpactIoniz
+  BulkIonImpactIoniz,
+  BulkElectronImpactIoniz
 };
 
 typedef void
@@ -197,18 +199,20 @@ struct collision_model {
    * A collision will occur with probability cross_section*nvdt.
    *
    * @param rg Random number generator
-   * @param E Collision energy
+   * @param vr Relvative velocity
+   * @param E  Collision energy
    * @param nvdt Areal density of particles encountered
-   * @param q1 Charge of first particle
-   * @param q2 Charge of second particle (default neutral)
+   * @param Z1 Charge of first particle
+   * @param Z2 Charge of second particle (default neutral)
    */
   KOKKOS_INLINE_FUNCTION
   constexpr float cross_section(
     kokkos_rng_state_t& rg,
-    float E,
+    float vr,    // relatvie velocity
     float nvdt,
-    float q1,
-    float q2=0.0
+    float E0,    // relative energy
+    float Z1,    // Charge of particle
+    float Z2=0  // Charge of particle
   ) const
   {
     return 0;
@@ -252,15 +256,15 @@ struct collision_model {
   template <typename ViewType>
   KOKKOS_INLINE_FUNCTION
   void upload_moment_src(const ViewType & spj_fl, const int v,
-                         const gmomType &Dm, const float mi, const float mj) const {
+                         const gmomType &Dm, const float mi, const float mj, const float mj_ttl) const {
     // By default do nothing, or call a derived "implementation" if it exists:
-    static_cast<const DerivedT*>(this)->upload_moment_src_impl(spj_fl, v, Dm, mi, mj);
+    static_cast<const DerivedT*>(this)->upload_moment_src_impl(spj_fl, v, Dm, mi, mj, mj_ttl);
   }
   
   template <typename ViewType>
   KOKKOS_INLINE_FUNCTION
   void upload_moment_src_impl(const ViewType& spj_fl, const int v,
-                              const gmomType &Dm, const float mi, const float mj ) const
+                              const gmomType &Dm, const float mi, const float mj, const float mj_ttl ) const
   {
       // default no-op
   }
