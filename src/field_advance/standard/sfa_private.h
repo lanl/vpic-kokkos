@@ -76,8 +76,8 @@ hyb_advance_b_kokkos( field_array_t * RESTRICT fa,
 void
 advance_e( field_array_t * RESTRICT fa,
            float                    frac );
-           void
-           
+
+void
 advance_eue( field_array_t * RESTRICT fa,
            float                    frac );
 
