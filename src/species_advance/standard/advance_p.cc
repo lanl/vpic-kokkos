@@ -898,16 +898,16 @@ advance_p_kokkos_unified(
         p_uz = uz[LANE];
       } END_VECTOR_BLOCK;
 
-      BEGIN_VECTOR_BLOCK {
-        v0[LANE]   = one;///sqrtf(one + (ux[LANE]*ux[LANE]+ (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE])));
-      } END_VECTOR_BLOCK;
+      //BEGIN_VECTOR_BLOCK {
+      //  v0[LANE]   = one;///sqrtf(one + (ux[LANE]*ux[LANE]+ (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE])));
+      //} END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
 
         /**/                                      // Get norm displacement
-	ux[LANE]  *= v0[LANE];
-        uy[LANE]  *= v0[LANE];
-        uz[LANE]  *= v0[LANE];
+        //ux[LANE]  *= v0[LANE];
+        //uy[LANE]  *= v0[LANE];
+        //uz[LANE]  *= v0[LANE];
 	v6[LANE]   = ux[LANE];
 	v7[LANE]   = uy[LANE];
 	v8[LANE]   = uz[LANE];
@@ -1372,15 +1372,15 @@ advance_p_kokkos_gpu(
     p_uy = uy;
     p_uz = uz;
 
-    v3   = one;///sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
+    //v3   = one;///sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
 
     /**/                                      // Get norm displacement
     v4  = ux*cdt_dx;
     v5  = uy*cdt_dy;
     v6  = uz*cdt_dz;
-    v4  *= v3;
-    v5  *= v3;
-    v6  *= v3;
+    //v4  *= v3;
+    //v5  *= v3;
+    //v6  *= v3;
     v0   = dx + v4;                           // Streak midpoint (inbnds)
     v1   = dy + v5;
     v2   = dz + v6;
