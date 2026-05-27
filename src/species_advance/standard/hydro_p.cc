@@ -73,15 +73,37 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     uz = p[n].uz;
     w  = p[n].w;
 
+#ifdef SHAPE_NGP
     // Half advance E
-    ux += qdt_2mc*((f[i].ex)); //+dy*f[i].dexdy) + dz*(f[i].dexdz+dy*f[i].d2exdydz));
-    uy += qdt_2mc*((f[i].ey)); //+dz*f[i].deydz) + dx*(f[i].deydx+dz*f[i].d2eydzdx));
-    uz += qdt_2mc*((f[i].ez)); //+dx*f[i].dezdx) + dy*(f[i].dezdy+dx*f[i].d2ezdxdy));
-
+    ux += qdt_2mc*f[i].ex;
+    uy += qdt_2mc*f[i].ey;
+    uz += qdt_2mc*f[i].ez;
     // Boris rotation - Interpolate B field
-    w5 = f[i].cbx; // + dx*f[i].dcbxdx;
-    w6 = f[i].cby; // + dy*f[i].dcbydy;
-    w7 = f[i].cbz; // + dz*f[i].dcbzdz;
+    w5 = f[i].cbx;
+    w6 = f[i].cby;
+    w7 = f[i].cbz;
+#elif defined( SHAPE_QS )
+    // Half advance E
+    ux += qdt_2mc*( f[i].ex + dx*( f[i].dexdx + dx*f[i].d2exdx )
+                            + dy*( f[i].dexdy + dy*f[i].d2exdy )
+                            + dz*( f[i].dexdz + dz*f[i].d2exdz ) );
+    uy += qdt_2mc*( f[i].ey + dx*( f[i].deydx + dx*f[i].d2eydx )
+                            + dy*( f[i].deydy + dy*f[i].d2eydy )
+                            + dz*( f[i].deydz + dz*f[i].d2eydz ) );
+    uz += qdt_2mc*( f[i].ez + dx*( f[i].dezdx + dx*f[i].d2ezdx )
+                            + dy*( f[i].dezdy + dy*f[i].d2ezdy )
+                            + dz*( f[i].dezdz + dz*f[i].d2ezdz ) );
+    // Boris rotation - Interpolate B field
+    w5 = f[i].cbx + dx*( f[i].dcbxdx + dx*f[i].d2cbxdx )
+                  + dy*( f[i].dcbxdy + dy*f[i].d2cbxdy )
+                  + dz*( f[i].dcbxdz + dz*f[i].d2cbxdz );
+    w6 = f[i].cby + dx*( f[i].dcbydx + dx*f[i].d2cbydx )
+                  + dy*( f[i].dcbydy + dy*f[i].d2cbydy )
+                  + dz*( f[i].dcbydz + dz*f[i].d2cbydz );
+    w7 = f[i].cbz + dx*( f[i].dcbzdx + dx*f[i].d2cbzdx )
+                  + dy*( f[i].dcbzdy + dy*f[i].d2cbzdy )
+                  + dz*( f[i].dcbzdz + dz*f[i].d2cbzdz );
+#endif
 
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
@@ -313,10 +335,13 @@ accumulate_hydro_p_kokkos(
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
 #ifdef VARIABLE_CHARGE
-  float c, qsp, msp, dt_2mc, dt_4mc, rV;
+  float c, qsp, msp, dt_2mc, dt_4mc, rV, r12V;
 #else
-  float c, qsp, msp, qdt_2mc, qdt_4mc, rV;
+  float c, qsp, msp, qdt_2mc, qdt_4mc, rV, r12V;
 #endif
+
+  constexpr float one=1.0f, two=2.0f, three=3.0f;
+
   //int np, stride_10, stride_21, stride_43;
 
   //float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
@@ -351,15 +376,18 @@ accumulate_hydro_p_kokkos(
   qdt_2mc  = (qsp*sp->g->dt)/(2*msp*c);
   qdt_4mc  = qdt_2mc / 2;
 #endif
-  rV        = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
+  rV        = 1.f/(sp->g->dx*sp->g->dy*sp->g->dz);
+  r12V      = rV/12.f;
 
   const int np        = sp->np;
-  const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
-                        VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
-  const int stride_21 = VOXEL(0,1,0, sp->g->nx,sp->g->ny,sp->g->nz) -
-                        VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
-  const int stride_43 = VOXEL(0,0,1, sp->g->nx,sp->g->ny,sp->g->nz) -
-                        VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  //const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
+  //                      VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  //const int stride_21 = VOXEL(0,1,0, sp->g->nx,sp->g->ny,sp->g->nz) -
+  //                      VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  //const int stride_43 = VOXEL(0,0,1, sp->g->nx,sp->g->ny,sp->g->nz) -
+  //                      VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  const int sy = sp->g->sy;
+  const int sz = sp->g->sz;
 
   //for( n=0; n<np; n++ ) {
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
@@ -381,39 +409,80 @@ accumulate_hydro_p_kokkos(
 #endif
     int ii = k_particles_i(p_index);
 
-    const float cbx = k_interp(ii, interpolator_var::cbx);
-    const float cby = k_interp(ii, interpolator_var::cby);
-    const float cbz = k_interp(ii, interpolator_var::cbz);
+    #define f_ex       k_interp(ii, interpolator_var::ex)
+    #define f_dexdx    k_interp(ii, interpolator_var::dexdx)
+    #define f_dexdy    k_interp(ii, interpolator_var::dexdy)
+    #define f_dexdz    k_interp(ii, interpolator_var::dexdz)
+    #define f_d2exdx   k_interp(ii, interpolator_var::d2exdx)
+    #define f_d2exdy   k_interp(ii, interpolator_var::d2exdy)
+    #define f_d2exdz   k_interp(ii, interpolator_var::d2exdz)
+    #define f_ey       k_interp(ii, interpolator_var::ey)
+    #define f_deydx    k_interp(ii, interpolator_var::deydx)
+    #define f_deydy    k_interp(ii, interpolator_var::deydy)
+    #define f_deydz    k_interp(ii, interpolator_var::deydz)
+    #define f_d2eydx   k_interp(ii, interpolator_var::d2eydx)
+    #define f_d2eydy   k_interp(ii, interpolator_var::d2eydy)
+    #define f_d2eydz   k_interp(ii, interpolator_var::d2eydz)
+    #define f_ez       k_interp(ii, interpolator_var::ez)
+    #define f_dezdx    k_interp(ii, interpolator_var::dezdx)
+    #define f_dezdy    k_interp(ii, interpolator_var::dezdy)
+    #define f_dezdz    k_interp(ii, interpolator_var::dezdz)
+    #define f_d2ezdx   k_interp(ii, interpolator_var::d2ezdx)
+    #define f_d2ezdy   k_interp(ii, interpolator_var::d2ezdy)
+    #define f_d2ezdz   k_interp(ii, interpolator_var::d2ezdz)
+    #define f_cbx      k_interp(ii, interpolator_var::cbx)
+    #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
+    #define f_dcbxdy   k_interp(ii, interpolator_var::dcbxdy)
+    #define f_dcbxdz   k_interp(ii, interpolator_var::dcbxdz)
+    #define f_d2cbxdx  k_interp(ii, interpolator_var::d2cbxdx)
+    #define f_d2cbxdy  k_interp(ii, interpolator_var::d2cbxdy)
+    #define f_d2cbxdz  k_interp(ii, interpolator_var::d2cbxdz)
+    #define f_cby      k_interp(ii, interpolator_var::cby)
+    #define f_dcbydx   k_interp(ii, interpolator_var::dcbydx)
+    #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
+    #define f_dcbydz   k_interp(ii, interpolator_var::dcbydz)
+    #define f_d2cbydx  k_interp(ii, interpolator_var::d2cbydx)
+    #define f_d2cbydy  k_interp(ii, interpolator_var::d2cbydy)
+    #define f_d2cbydz  k_interp(ii, interpolator_var::d2cbydz)
+    #define f_cbz      k_interp(ii, interpolator_var::cbz)
+    #define f_dcbzdx   k_interp(ii, interpolator_var::dcbzdx)
+    #define f_dcbzdy   k_interp(ii, interpolator_var::dcbzdy)
+    #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
+    #define f_d2cbzdx  k_interp(ii, interpolator_var::d2cbzdx)
+    #define f_d2cbzdy  k_interp(ii, interpolator_var::d2cbzdy)
+    #define f_d2cbzdz  k_interp(ii, interpolator_var::d2cbzdz)
 
-    const float ex = k_interp(ii, interpolator_var::ex);
-    const float ey = k_interp(ii, interpolator_var::ey);
-    const float ez = k_interp(ii, interpolator_var::ez);
-
-    const float dexdy = k_interp(ii, interpolator_var::dexdy);
-    const float deydz = k_interp(ii, interpolator_var::deydz);
-    const float dezdx = k_interp(ii, interpolator_var::dezdx);
-
-    const float dexdz = k_interp(ii, interpolator_var::dexdz);
-    const float deydx = k_interp(ii, interpolator_var::deydx);
-    const float dezdy = k_interp(ii, interpolator_var::dezdy);
-
-    const float d2exdydz = k_interp(ii, interpolator_var::d2exdydz);
-    const float d2eydzdx = k_interp(ii, interpolator_var::d2eydzdx);
-    const float d2ezdxdy = k_interp(ii, interpolator_var::d2ezdxdy);
-
-    const float dcbxdx = k_interp(ii, interpolator_var::dcbxdx);
-    const float dcbydy = k_interp(ii, interpolator_var::dcbydy);
-    const float dcbzdz = k_interp(ii, interpolator_var::dcbzdz);
-
+#ifdef SHAPE_NGP
     // Half advance E
-    ux += qdt_2mc*((ex)); //+dy*dexdy) + dz*(dexdz+dy*d2exdydz));
-    uy += qdt_2mc*((ey)); //+dz*deydz) + dx*(deydx+dz*d2eydzdx));
-    uz += qdt_2mc*((ez)); //+dx*dezdx) + dy*(dezdy+dx*d2ezdxdy));
-
+    ux += qdt_2mc * f_ex;
+    uy += qdt_2mc * f_ey;
+    uz += qdt_2mc * f_ez;
     // Boris rotation - Interpolate B field
-    float w5 = cbx; // + dx*dcbxdx;
-    float w6 = cby; // + dy*dcbydy;
-    float w7 = cbz; // + dz*dcbzdz;
+    float w5 = f_cbx;
+    float w6 = f_cby;
+    float w7 = f_cbz;
+#elif defined( SHAPE_QS )
+    // Half advance E
+    ux += qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
+                         + dy*( f_dexdy + dy*f_d2exdy )
+                         + dz*( f_dexdz + dz*f_d2exdz ) );
+    uy += qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
+                         + dy*( f_deydy + dy*f_d2eydy )
+                         + dz*( f_deydz + dz*f_d2eydz ) );
+    uz += qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
+                         + dy*( f_dezdy + dy*f_d2ezdy )
+                         + dz*( f_dezdz + dz*f_d2ezdz ) );
+    // Boris rotation - Interpolate B field
+    float w5 = f_cbx + dx*( f_dcbxdx + dx*f_d2cbxdx )
+                     + dy*( f_dcbxdy + dy*f_d2cbxdy )
+                     + dz*( f_dcbxdz + dz*f_d2cbxdz );
+    float w6 = f_cby + dx*( f_dcbydx + dx*f_d2cbydx )
+                     + dy*( f_dcbydy + dy*f_d2cbydy )
+                     + dz*( f_dcbydz + dz*f_d2cbydz );
+    float w7 = f_cbz + dx*( f_dcbzdx + dx*f_d2cbzdx )
+                     + dy*( f_dcbzdy + dy*f_d2cbzdy )
+                     + dz*( f_dcbzdz + dz*f_d2cbzdz );
+#endif
 
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
@@ -469,8 +538,20 @@ accumulate_hydro_p_kokkos(
     //w2 *= dz;       // w2 = (1/8)(w/V)(1-x)(1+y)(1-z) = (w/V) trilin_6 *Done
     //w3 *= dz;       // w3 = (1/8)(w/V)(1+x)(1+y)(1-z) = (w/V) trilin_7 *Done
 
-    // Hybrid-VPIC NGP shape
+    // Stencil weights omit species' electric charge.
+    // Charge is accounted for in ACCUM_HYDRO below, in order to distinguish
+    // electric-charge outputs (j, rho) from mass-charge outputs (p, Tij)
+#ifdef SHAPE_NGP
     w0 = w*rV;
+#elif defined( SHAPE_QS )
+    w0 =  (w*r12V) * two*( three - dx*dx - dy*dy - dz*dz );
+    float wx =  (w*r12V) * ( dx + one )*( dx + one );
+    float wy =  (w*r12V) * ( dy + one )*( dy + one );
+    float wz =  (w*r12V) * ( dz + one )*( dz + one );
+    float wmx = (w*r12V) * ( dx - one )*( dx - one );
+    float wmy = (w*r12V) * ( dy - one )*( dy - one );
+    float wmz = (w*r12V) * ( dz - one )*( dz - one );
+#endif
 
     // TODO: This could easily be a loop?
 
@@ -536,9 +617,9 @@ accumulate_hydro_p_kokkos(
 
     // TODO: this serial adding to try and save adds is a bit sad
     // TODO: This is somehow going out of bounds right now
-    const int i0 = ii;
-    ACCUM_HYDRO(w0, i0); // Cell i,j,k
-
+//    const int i0 = ii;
+//    ACCUM_HYDRO(w0, i0); // Cell i,j,k
+//
 //    const int i1 = i0 + stride_10;
 //    ACCUM_HYDRO(w1, i1); // Cell i+1,j,k
 //
@@ -559,6 +640,18 @@ accumulate_hydro_p_kokkos(
 //
 //    const int i7 = i6 + stride_10;
 //    ACCUM_HYDRO(w7, i7); // Cell i+1,j+1,k+1
+
+#ifdef SHAPE_NGP
+    ACCUM_HYDRO(w0, ii); // Cell i,j,k
+#elif defined( SHAPE_QS )
+    ACCUM_HYDRO(w0,  ii     ); // Cell i,j,k
+    ACCUM_HYDRO(wx,  ii +  1); // Cell i+1,j,k
+    ACCUM_HYDRO(wy,  ii + sy); // Cell i,j+1,k
+    ACCUM_HYDRO(wz,  ii + sz); // Cell i,j,k+1
+    ACCUM_HYDRO(wmx, ii -  1); // Cell i-1,j,k
+    ACCUM_HYDRO(wmy, ii - sy); // Cell i,j-1,k
+    ACCUM_HYDRO(wmz, ii - sz); // Cell i,j,k-1
+#endif
 
 #   undef ACCUM_HYDRO
   });
@@ -582,6 +675,49 @@ accumulate_hydro_p_kokkos(
   
   Kokkos::Experimental::contribute(k_hydro, k_hydro_sv);
   Kokkos::fence(); // TODO: Check if I need this to block the contribute
+
+  #undef f_ex
+  #undef f_dexdx
+  #undef f_dexdy
+  #undef f_dexdz
+  #undef f_d2exdx
+  #undef f_d2exdy
+  #undef f_d2exdz
+  #undef f_ey
+  #undef f_deydx
+  #undef f_deydy
+  #undef f_deydz
+  #undef f_d2eydx
+  #undef f_d2eydy
+  #undef f_d2eydz
+  #undef f_ez
+  #undef f_dezdx
+  #undef f_dezdy
+  #undef f_dezdz
+  #undef f_d2ezdx
+  #undef f_d2ezdy
+  #undef f_d2ezdz
+  #undef f_cbx
+  #undef f_dcbxdx
+  #undef f_dcbxdy
+  #undef f_dcbxdz
+  #undef f_d2cbxdx
+  #undef f_d2cbxdy
+  #undef f_d2cbxdz
+  #undef f_cby
+  #undef f_dcbydx
+  #undef f_dcbydy
+  #undef f_dcbydz
+  #undef f_d2cbydx
+  #undef f_d2cbydy
+  #undef f_d2cbydz
+  #undef f_cbz
+  #undef f_dcbzdx
+  #undef f_dcbzdy
+  #undef f_dcbzdz
+  #undef f_d2cbzdx
+  #undef f_d2cbzdy
+  #undef f_d2cbzdz
 
   // Perform debug printing
 }

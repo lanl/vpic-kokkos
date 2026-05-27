@@ -1755,6 +1755,9 @@ void k_local_adjust_rhob(field_array_t* fa, const grid_t* g) {
     adjust_rhob<ZXY>(fa, g, 0, 0, 1);
 }
 
+/*****************************************************************************
+ * Hybrid local ghosts
+ *****************************************************************************/
 
 //Hybrid local B field
 
@@ -2107,3 +2110,66 @@ k_hyb_local_ghost_lapl_b( field_array_t      * RESTRICT f,
 
 #undef APPLYLOCAL
 
+/*****************************************************************************
+ * Hybrid local adjusts
+ *****************************************************************************/
+
+//Hybrid adjust jf,rhof
+
+#define ADJUST_LOCAL(x_,y_,z_)                                                 \
+  int bc = g->bc[BOUNDARY(i,j,k)];                                             \
+  k_field_t k_field = f->k_f_d;                                                \
+  Kokkos::MDRangePolicy<Kokkos::Rank<2> > x_##_face({1,1},{n##y_+1,n##z_+1});  \
+  if(bc < 0 || bc >= world_size) {                                             \
+    int x_ = (i+j+k)<0 ? 1 : n##x_;  /* adjust edges */                        \
+    switch(bc) {                                                               \
+    case anti_symmetric_fields:                                                \
+    case symmetric_fields:                                                     \
+      Kokkos::parallel_for("adjust_hyb_local_jf: symmetric_fields", x_##_face, \
+                           KOKKOS_LAMBDA(const int y_, const int z_) {         \
+          /*  add ghost cell to adjacent local BC cell, then set ghost to 0 */ \
+          const int local = VOXEL(x,y,z,nx,ny,nz);                             \
+          const int ghost = VOXEL(x+i,y+j,z+k,nx,ny,nz);                       \
+          k_field(local, field_var::jfx)  += k_field(ghost, field_var::jfx);   \
+          k_field(local, field_var::jfy)  += k_field(ghost, field_var::jfy);   \
+          k_field(local, field_var::jfz)  += k_field(ghost, field_var::jfz);   \
+          k_field(local, field_var::rhof) += k_field(ghost, field_var::rhof);  \
+          k_field(ghost, field_var::jfx)  = 0;                                 \
+          k_field(ghost, field_var::jfy)  = 0;                                 \
+          k_field(ghost, field_var::jfz)  = 0;                                 \
+          k_field(ghost, field_var::rhof) = 0;                                 \
+        });                                                                    \
+      break;                                                                   \
+    default:                                                                   \
+      ERROR(("Bad boundary condition encountered."));                          \
+      break;                                                                   \
+    }                                                                          \
+  }
+
+template<typename T> 
+void adjust_hyb_local_jf(const int i, const int j, const int k,
+                         const int nx, const int ny, const int nz,
+                         field_array_t* RESTRICT f, const grid_t* g) {
+  if constexpr (std::is_same_v<T,XYZ>) {
+    ADJUST_LOCAL(x,y,z);
+  } else if constexpr (std::is_same_v<T,YZX>) {
+    ADJUST_LOCAL(y,z,x);
+  } else if constexpr (std::is_same_v<T,YZX>) {
+    ADJUST_LOCAL(z,x,y);
+  }
+}
+
+void
+k_hyb_local_adjust_jf( field_array_t * RESTRICT f,
+                        const grid_t *          g ) {
+    const int nx = g->nx, ny = g->ny, nz = g->nz;
+
+    adjust_hyb_local_jf<XYZ>(-1,0,0,nx,ny,nz,f,g);
+    adjust_hyb_local_jf<YZX>(0,-1,0,nx,ny,nz,f,g);
+    adjust_hyb_local_jf<ZXY>(0,0,-1,nx,ny,nz,f,g);
+    adjust_hyb_local_jf<XYZ>(1,0,0, nx,ny,nz,f,g);
+    adjust_hyb_local_jf<YZX>(0,1,0, nx,ny,nz,f,g);
+    adjust_hyb_local_jf<ZXY>(0,0,1, nx,ny,nz,f,g);
+}
+
+#undef ADJUSTLOCAL

@@ -78,6 +78,8 @@ option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU-aware MPI. Allows GPUs to communica
 
 option(VPIC_ENABLE_HALO_EXCHANGE "Enable halo exchange code path for remote communication. Temporary option until halo exchange code is accurately tested." ON)
 
+option(VPIC_SHAPE_QS "Use quadratic-sum particle shape" OFF)
+
 option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." OFF)
 
 option(HYB_USE_STATIC_E "Use electrostatic hybrid field solver." OFF)
@@ -380,6 +382,16 @@ if (VPIC_ENABLE_HALO_EXCHANGE)
   add_definitions(-DVPIC_ENABLE_HALO_EXCHANGE)
   message("--     VPIC: Enabled Halo exchange path")
 endif(VPIC_ENABLE_HALO_EXCHANGE)
+
+if (VPIC_SHAPE_QS)
+  add_definitions(-DSHAPE_QS)
+  message("--     VPIC: Using quadratic-sum particle shape")
+  set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} -DSHAPE_QS")
+else()
+  add_definitions(-DSHAPE_NGP)
+  message("--     VPIC: Using nearest-grid-point particle shape")
+  set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} -DSHAPE_NGP")
+endif(VPIC_SHAPE_QS)
 
 if (HYB_USE_SEPARATE_PE)
    add_definitions(-DHYB_USE_SEPARATE_PE)

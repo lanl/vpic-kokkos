@@ -21,7 +21,6 @@
 #define PARTICLE_MOVER_VAR_COUNT 3
 #define ACCUMULATOR_VAR_COUNT 4
 #define ACCUMULATOR_ARRAY_LENGTH 4
-#define INTERPOLATOR_VAR_COUNT 18
 #define MATERIAL_COEFFICIENT_VAR_COUNT 13
 #ifdef VARIABLE_CHARGE
   #define HYDRO_VAR_COUNT 16
@@ -30,6 +29,12 @@
 #endif
 #define NUM_J_DIMS 4
 #define FLUID_VAR_COUNT 6+4
+
+#ifdef SHAPE_NGP
+  #define INTERPOLATOR_VAR_COUNT 6
+#elif defined( SHAPE_QS )
+  #define INTERPOLATOR_VAR_COUNT 42
+#endif
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -207,24 +212,57 @@ namespace field_edge_var { \
 
 namespace interpolator_var {
   enum i_r {
+#ifdef SHAPE_NGP
     ex       = 0,
-    dexdy    = 1,
-    dexdz    = 2,
-    d2exdydz = 3,
-    ey       = 4,
-    deydz    = 5,
-    deydx    = 6,
-    d2eydzdx = 7,
-    ez       = 8,
-    dezdx    = 9,
-    dezdy    = 10,
-    d2ezdxdy = 11,
-    cbx      = 12,
-    dcbxdx   = 13,
-    cby      = 14,
-    dcbydy   = 15,
-    cbz      = 16,
-    dcbzdz   = 17,
+    ey       = 1,
+    ez       = 2,
+    cbx      = 3,
+    cby      = 4,
+    cbz      = 5,
+#elif defined( SHAPE_QS )
+    ex       = 0,
+    dexdx    = 1,
+    dexdy    = 2,
+    dexdz    = 3,
+    d2exdx   = 4,
+    d2exdy   = 5,
+    d2exdz   = 6,
+    ey       = 7,
+    deydx    = 8,
+    deydy    = 9,
+    deydz    = 10,
+    d2eydx   = 11,
+    d2eydy   = 12,
+    d2eydz   = 13,
+    ez       = 14,
+    dezdx    = 15,
+    dezdy    = 16,
+    dezdz    = 17,
+    d2ezdx   = 18,
+    d2ezdy   = 19,
+    d2ezdz   = 20,
+    cbx      = 21,
+    dcbxdx   = 22,
+    dcbxdy   = 23,
+    dcbxdz   = 24,
+    d2cbxdx  = 25,
+    d2cbxdy  = 26,
+    d2cbxdz  = 27,
+    cby      = 28,
+    dcbydx   = 29,
+    dcbydy   = 30,
+    dcbydz   = 31,
+    d2cbydx  = 32,
+    d2cbydy  = 33,
+    d2cbydz  = 34,
+    cbz      = 35,
+    dcbzdx   = 36,
+    dcbzdy   = 37,
+    dcbzdz   = 38,
+    d2cbzdx  = 39,
+    d2cbzdy  = 40,
+    d2cbzdz  = 41,
+#endif
   };
 };
 

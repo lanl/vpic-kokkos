@@ -461,14 +461,16 @@ move_p_kokkos(
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
   float v0, v1, v2, v3, v4, v5, q;
+  float w0, wx, wy, wz, wmx, wmy, wmz;
   int axis, face;
   int64_t neighbor;
   //int pi = int(local_pm_i);
   int pi = pm->i;
   float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
-  const float one=1., two=2., three=3.;
+  constexpr float one=1., two=2., three=3., one_twelfth=1./12.;
   //const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
   const float rV = 1.0/gdx/gdy/gdz;
+  const float rV12 = rV*one_twelfth;
 //  auto  k_field_scatter_access = k_f_sa.access();
 //  auto accum_sa = accum_sv.access();
   auto scatter_access = scatter_view.access();
@@ -476,10 +478,11 @@ move_p_kokkos(
   //printf("in move_p %d \n", pi);
 
 #ifdef VARIABLE_CHARGE
-  q = rV*p_q*p_w;
+  q = p_q*p_w;
 #else
-  q = rV*qsp*p_w;
+  q = qsp*p_w;
 #endif
+
     //printf("in move %d \n", pi);
 
   for(;;) {
@@ -525,21 +528,80 @@ move_p_kokkos(
         
 	// Accumulate the particle current density
 	
-	//int iii = ii;
-	//int zi = iii/((nx+2)*(ny+2));
-	//iii -= zi*(nx+2)*(ny+2);
-	//int yi = iii/(nx+2);
-	//int xi = iii-yi*(nx+2);
-	
 	//printf("move_p accumulate here");
 	
 	
 	//if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
 	  
-	  scatter_access(ii, field_var::jfx) += q*ux;
-	  scatter_access(ii, field_var::jfy) += q*uy;
-	  scatter_access(ii, field_var::jfz) += q*uz;
-	  scatter_access(ii, field_var::rhof) += q;
+#ifdef SHAPE_NGP
+          scatter_access(ii, field_var::jfx) += q*rV*ux;
+          scatter_access(ii, field_var::jfy) += q*rV*uy;
+          scatter_access(ii, field_var::jfz) += q*rV*uz;
+          scatter_access(ii, field_var::rhof) += q*rV;
+#elif defined( SHAPE_QS )
+          // stencil coefficients
+          // ... OLD hybrid-VPIC with QS shape, the accumulator stores
+          // ... ... p->w*qsp * two*(three - ...)
+          // ... ... hyb_unload_accumulator(...) applies factor rV/12.
+          // ... NEW HVPIC-K not using accumulator (yet), scatter directly to mesh,
+          // ... ... so include all factors
+          w0 =  q*rV12*2.f*( 3.f - x_half*x_half - y_half*y_half - z_half*z_half );
+          wx =  q*rV12*( x_half + 1.f )*( x_half + 1.f );
+          wy =  q*rV12*( y_half + 1.f )*( y_half + 1.f );
+          wz =  q*rV12*( z_half + 1.f )*( z_half + 1.f );
+          wmx = q*rV12*( x_half - 1.f )*( x_half - 1.f );
+          wmy = q*rV12*( y_half - 1.f )*( y_half - 1.f );
+          wmz = q*rV12*( z_half - 1.f )*( z_half - 1.f );
+
+          // Voxel indices
+          int iii = ii;
+          int zi = iii/((nx+2)*(ny+2));
+          iii -= zi*(nx+2)*(ny+2);
+          int yi = iii/(nx+2);
+          int xi = iii-yi*(nx+2);
+          // Neighboring voxel 1D (flattened) indices
+          int iix = VOXEL(xi+1,yi,zi,nx,ny,nz);
+          int iiy = VOXEL(xi,yi+1,zi,nx,ny,nz);
+          int iiz = VOXEL(xi,yi,zi+1,nx,ny,nz);
+          int iimx = VOXEL(xi-1,yi,zi,nx,ny,nz);
+          int iimy = VOXEL(xi,yi-1,zi,nx,ny,nz);
+          int iimz = VOXEL(xi,yi,zi-1,nx,ny,nz);
+
+          scatter_access(ii, field_var::jfx)  += w0*ux;
+          scatter_access(ii, field_var::jfy)  += w0*uy;
+          scatter_access(ii, field_var::jfz)  += w0*uz;
+          scatter_access(ii, field_var::rhof) += w0;
+
+          scatter_access(iix, field_var::jfx)  += wx*ux;
+          scatter_access(iix, field_var::jfy)  += wx*uy;
+          scatter_access(iix, field_var::jfz)  += wx*uz;
+          scatter_access(iix, field_var::rhof) += wx;
+
+          scatter_access(iiy, field_var::jfx)  += wy*ux;
+          scatter_access(iiy, field_var::jfy)  += wy*uy;
+          scatter_access(iiy, field_var::jfz)  += wy*uz;
+          scatter_access(iiy, field_var::rhof) += wy;
+
+          scatter_access(iiz, field_var::jfx)  += wz*ux;
+          scatter_access(iiz, field_var::jfy)  += wz*uy;
+          scatter_access(iiz, field_var::jfz)  += wz*uz;
+          scatter_access(iiz, field_var::rhof) += wz;
+
+          scatter_access(iimx, field_var::jfx)  += wmx*ux;
+          scatter_access(iimx, field_var::jfy)  += wmx*uy;
+          scatter_access(iimx, field_var::jfz)  += wmx*uz;
+          scatter_access(iimx, field_var::rhof) += wmx;
+
+          scatter_access(iimy, field_var::jfx)  += wmy*ux;
+          scatter_access(iimy, field_var::jfy)  += wmy*uy;
+          scatter_access(iimy, field_var::jfz)  += wmy*uz;
+          scatter_access(iimy, field_var::rhof) += wmy;
+
+          scatter_access(iimz, field_var::jfx)  += wmz*ux;
+          scatter_access(iimz, field_var::jfy)  += wmz*uy;
+          scatter_access(iimz, field_var::jfz)  += wmz*uz;
+          scatter_access(iimz, field_var::rhof) += wmz;
+#endif // defined(SHAPE_QS)
 	//}
 	
 	
@@ -759,9 +821,10 @@ move_p_kokkos_host_serial(
   const int nz = g->nz;
 
   float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
-  const float one=1., two=2., three=3.;
+  constexpr float one=1., two=2., three=3., one_twelfth=1./12.;
   const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
   const float rV = g->rdx * g->rdy * g->rdz;
+  const float rV12 = rV*one_twelfth;
 
   float cx = 0.25 * g->rdy * g->rdz / g->dt;
   float cy = 0.25 * g->rdz * g->rdx / g->dt;
@@ -789,6 +852,7 @@ move_p_kokkos_host_serial(
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
   float v0, v1, v2, v3, v4, v5, q;
+  float w0, wx, wy, wz, wmx, wmy, wmz;
   int axis, face;
   int64_t neighbor;
   //int pi = int(local_pm_i);
@@ -799,6 +863,7 @@ move_p_kokkos_host_serial(
 #else
   q = qsp*p_w;
 #endif
+
     //printf("in move %d \n", pi);
 
   for(;;) {
@@ -843,17 +908,77 @@ move_p_kokkos_host_serial(
 	 && -x_half<=one && -y_half<=one && -z_half<=one) {
         
 	// Accumulate the particle current density
-	
-      //int iii = ii;
-      //int zi = iii/((nx+2)*(ny+2));
-      //iii -= zi*(nx+2)*(ny+2);
-      //int yi = iii/(nx+2);
-      //int xi = iii-yi*(nx+2);
-      
-      k_jf_accum(ii, accumulator_var::jx) += rV*q*ux;
-      k_jf_accum(ii, accumulator_var::jy) += rV*q*uy;
-      k_jf_accum(ii, accumulator_var::jz) += rV*q*uz;
-      k_jf_accum(ii, accumulator_var::rho) += rV*q;
+
+#ifdef SHAPE_NGP
+        k_jf_accum(ii, accumulator_var::jx) += q*rV*ux;
+        k_jf_accum(ii, accumulator_var::jy) += q*rV*uy;
+        k_jf_accum(ii, accumulator_var::jz) += q*rV*uz;
+        k_jf_accum(ii, accumulator_var::rho) += q*rV;
+#elif defined( SHAPE_QS )
+        // stencil coefficients
+        // ... OLD hybrid-VPIC with QS shape, the accumulator stores
+        // ... ... p->w*qsp * two*(three - ...)
+        // ... ... hyb_unload_accumulator(...) applies factor rV/12.
+        // ... NEW HVPIC-K not using accumulator (yet), scatter directly to mesh,
+        // ... ... so include all factors
+        w0 =  q*rV12*2.f*( 3.f - x_half*x_half - y_half*y_half - z_half*z_half );
+        wx =  q*rV12*( x_half + 1.f )*( x_half + 1.f );
+        wy =  q*rV12*( y_half + 1.f )*( y_half + 1.f );
+        wz =  q*rV12*( z_half + 1.f )*( z_half + 1.f );
+        wmx = q*rV12*( x_half - 1.f )*( x_half - 1.f );
+        wmy = q*rV12*( y_half - 1.f )*( y_half - 1.f );
+        wmz = q*rV12*( z_half - 1.f )*( z_half - 1.f );
+
+        // Voxel indices
+        int iii = ii;
+        int zi = iii/((nx+2)*(ny+2));
+        iii -= zi*(nx+2)*(ny+2);
+        int yi = iii/(nx+2);
+        int xi = iii-yi*(nx+2);
+        // Neighboring voxel 1D (flattened) indices
+        int iix = VOXEL(xi+1,yi,zi,nx,ny,nz);
+        int iiy = VOXEL(xi,yi+1,zi,nx,ny,nz);
+        int iiz = VOXEL(xi,yi,zi+1,nx,ny,nz);
+        int iimx = VOXEL(xi-1,yi,zi,nx,ny,nz);
+        int iimy = VOXEL(xi,yi-1,zi,nx,ny,nz);
+        int iimz = VOXEL(xi,yi,zi-1,nx,ny,nz);
+
+        k_jf_accum(ii, accumulator_var::jx)  += w0*ux;
+        k_jf_accum(ii, accumulator_var::jy)  += w0*uy;
+        k_jf_accum(ii, accumulator_var::jz)  += w0*uz;
+        k_jf_accum(ii, accumulator_var::rho) += w0;
+
+        k_jf_accum(iix, accumulator_var::jx)  += wx*ux;
+        k_jf_accum(iix, accumulator_var::jy)  += wx*uy;
+        k_jf_accum(iix, accumulator_var::jz)  += wx*uz;
+        k_jf_accum(iix, accumulator_var::rho) += wx;
+
+        k_jf_accum(iiy, accumulator_var::jx)  += wy*ux;
+        k_jf_accum(iiy, accumulator_var::jy)  += wy*uy;
+        k_jf_accum(iiy, accumulator_var::jz)  += wy*uz;
+        k_jf_accum(iiy, accumulator_var::rho) += wy;
+
+        k_jf_accum(iiz, accumulator_var::jx)  += wz*ux;
+        k_jf_accum(iiz, accumulator_var::jy)  += wz*uy;
+        k_jf_accum(iiz, accumulator_var::jz)  += wz*uz;
+        k_jf_accum(iiz, accumulator_var::rho) += wz;
+
+        k_jf_accum(iimx, accumulator_var::jx)  += wmx*ux;
+        k_jf_accum(iimx, accumulator_var::jy)  += wmx*uy;
+        k_jf_accum(iimx, accumulator_var::jz)  += wmx*uz;
+        k_jf_accum(iimx, accumulator_var::rho) += wmx;
+
+        k_jf_accum(iimy, accumulator_var::jx)  += wmy*ux;
+        k_jf_accum(iimy, accumulator_var::jy)  += wmy*uy;
+        k_jf_accum(iimy, accumulator_var::jz)  += wmy*uz;
+        k_jf_accum(iimy, accumulator_var::rho) += wmy;
+
+        k_jf_accum(iimz, accumulator_var::jx)  += wmz*ux;
+        k_jf_accum(iimz, accumulator_var::jy)  += wmz*uy;
+        k_jf_accum(iimz, accumulator_var::jz)  += wmz*uz;
+        k_jf_accum(iimz, accumulator_var::rho) += wmz;
+#endif // defined(SHAPE_QS)
+
       } //if indbds
       
     } //ifmore than half dt left

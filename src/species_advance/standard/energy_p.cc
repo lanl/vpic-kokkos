@@ -31,12 +31,21 @@ energy_p_pipeline( energy_p_pipeline_args_t * RESTRICT args,
     dy  = p[n].dy;
     dz  = p[n].dz;
     i   = p[n].i;
-    v0  = p[n].ux + qdt_2mc*(    ( f[i].ex    + dy*f[i].dexdy    ) +
-                              dz*( f[i].dexdz + dy*f[i].d2exdydz ) );
-    v1  = p[n].uy + qdt_2mc*(    ( f[i].ey    + dz*f[i].deydz    ) +
-                              dx*( f[i].deydx + dz*f[i].d2eydzdx ) );
-    v2  = p[n].uz + qdt_2mc*(    ( f[i].ez    + dx*f[i].dezdx    ) +
-                              dy*( f[i].dezdy + dx*f[i].d2ezdxdy ) );
+#ifdef SHAPE_NGP
+    v0  = p[n].ux + qdt_2mc * f[i].ex;
+    v1  = p[n].uy + qdt_2mc * f[i].ey;
+    v2  = p[n].uz + qdt_2mc * f[i].ez;
+#elif defined( SHAPE_QS )
+    v0 = p[n].ux + qdt_2mc*( f[i].ex + dx*( f[i].dexdx + dx*f[i].d2exdx )
+                                     + dy*( f[i].dexdy + dy*f[i].d2exdy )
+                                     + dz*( f[i].dexdz + dz*f[i].d2exdz ) );
+    v1 = p[n].uy + qdt_2mc*( f[i].ey + dx*( f[i].deydx + dx*f[i].d2eydx )
+                                     + dy*( f[i].deydy + dy*f[i].d2eydy )
+                                     + dz*( f[i].deydz + dz*f[i].d2eydz ) );
+    v2 = p[n].uz + qdt_2mc*( f[i].ez + dx*( f[i].dezdx + dx*f[i].d2ezdx )
+                                     + dy*( f[i].dezdy + dy*f[i].d2ezdy )
+                                     + dz*( f[i].dezdz + dz*f[i].d2ezdz ) );
+#endif
     v0  = v0*v0 + v1*v1 + v2*v2;
     v0  = (msp * p[n].w) * (v0 / (one + sqrtf(one + v0)));
     en += (double)v0;
@@ -157,24 +166,82 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
     en += (double)v0;
   }
 */
+
+    #define f_ex       k_interp(ii, interpolator_var::ex)
+    #define f_dexdx    k_interp(ii, interpolator_var::dexdx)
+    #define f_dexdy    k_interp(ii, interpolator_var::dexdy)
+    #define f_dexdz    k_interp(ii, interpolator_var::dexdz)
+    #define f_d2exdx   k_interp(ii, interpolator_var::d2exdx)
+    #define f_d2exdy   k_interp(ii, interpolator_var::d2exdy)
+    #define f_d2exdz   k_interp(ii, interpolator_var::d2exdz)
+    #define f_ey       k_interp(ii, interpolator_var::ey)
+    #define f_deydx    k_interp(ii, interpolator_var::deydx)
+    #define f_deydy    k_interp(ii, interpolator_var::deydy)
+    #define f_deydz    k_interp(ii, interpolator_var::deydz)
+    #define f_d2eydx   k_interp(ii, interpolator_var::d2eydx)
+    #define f_d2eydy   k_interp(ii, interpolator_var::d2eydy)
+    #define f_d2eydz   k_interp(ii, interpolator_var::d2eydz)
+    #define f_ez       k_interp(ii, interpolator_var::ez)
+    #define f_dezdx    k_interp(ii, interpolator_var::dezdx)
+    #define f_dezdy    k_interp(ii, interpolator_var::dezdy)
+    #define f_dezdz    k_interp(ii, interpolator_var::dezdz)
+    #define f_d2ezdx   k_interp(ii, interpolator_var::d2ezdx)
+    #define f_d2ezdy   k_interp(ii, interpolator_var::d2ezdy)
+    #define f_d2ezdz   k_interp(ii, interpolator_var::d2ezdz)
+
     Kokkos::parallel_reduce(np, KOKKOS_LAMBDA(const int n, double& update) {
+        float ux = k_particles(n, particle_var::ux);
+        float uy = k_particles(n, particle_var::uy);
+        float uz = k_particles(n, particle_var::uz);
         float dx = k_particles(n, particle_var::dx);
         float dy = k_particles(n, particle_var::dy);
         float dz = k_particles(n, particle_var::dz);
-        int   i  = k_particles_i(n);
-        float v0 = k_particles(n, particle_var::ux) + qdt_2mc*(    ( k_interp(i, interpolator_var::ex)    + dy*k_interp(i, interpolator_var::dexdy)    ) +
-                                dz*( k_interp(i, interpolator_var::dexdz) + dy*k_interp(i, interpolator_var::d2exdydz) ) );
-        float v1 = k_particles(n, particle_var::uy) + qdt_2mc*(    ( k_interp(i, interpolator_var::ey)    + dz*k_interp(i, interpolator_var::deydz)    ) +
-                                dx*( k_interp(i, interpolator_var::deydx) + dz*k_interp(i, interpolator_var::d2eydzdx) ) );
-        float v2 = k_particles(n, particle_var::uz) + qdt_2mc*(    ( k_interp(i, interpolator_var::ez)    + dx*k_interp(i, interpolator_var::dezdx)    ) +
-                                dy*( k_interp(i, interpolator_var::dezdy) + dx*k_interp(i, interpolator_var::d2ezdxdy) ) );
+        int   ii = k_particles_i(n);
+#ifdef SHAPE_NGP
+        float v0 = ux + qdt_2mc * f_ex;
+        float v1 = uy + qdt_2mc * f_ey;
+        float v2 = uz + qdt_2mc * f_ez;
+#elif defined( SHAPE_QS )
+        // Interpolate E
+        float v0 = ux + qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
+                                       + dy*( f_dexdy + dy*f_d2exdy )
+                                       + dz*( f_dexdz + dz*f_d2exdz ) );
+        float v1 = uy + qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
+                                       + dy*( f_deydy + dy*f_d2eydy )
+                                       + dz*( f_deydz + dz*f_d2eydz ) );
+        float v2 = uz + qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
+                                       + dy*( f_dezdy + dy*f_d2ezdy )
+                                       + dz*( f_dezdz + dz*f_d2ezdz ) );
+#endif
         v0 = v0*v0 + v1*v1 + v2*v2;
         //v0 = (msp * k_particles(n, particle_var::w)) * (v0 / (1 + sqrtf(1 + v0)));  // Relativistic kinetic energy
         v0 *= 0.5 * (msp * k_particles(n, particle_var::w));  // Non-relativistic kinetic energy
         update += static_cast<double>(v0);
     }, en);
     return en;
-}
+
+    #undef f_ex
+    #undef f_dexdx
+    #undef f_dexdy
+    #undef f_dexdz
+    #undef f_d2exdx
+    #undef f_d2exdy
+    #undef f_d2exdz
+    #undef f_ey
+    #undef f_deydx
+    #undef f_deydy
+    #undef f_deydz
+    #undef f_d2eydx
+    #undef f_d2eydy
+    #undef f_d2eydz
+    #undef f_ez
+    #undef f_dezdx
+    #undef f_dezdy
+    #undef f_dezdz
+    #undef f_d2ezdx
+    #undef f_d2ezdy
+    #undef f_d2ezdz
+} // energy_p_kernel(...)
 
 double
 energy_p( const species_t            * RESTRICT sp,
