@@ -3929,20 +3929,31 @@ begin_recv_edge_hyb_jf(field_array* fa, const int i, const int j, const int k) {
 
 #undef BRP
 
-#define BSP(x_,y_,z_)                                                   \
-  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;             \
-  const int size = (4*n##y_*n##z_)*sizeof(float);                       \
-  const int face = (i+j+k)<0 ? 0 : n##x_+1; /* send ghosts to edges */  \
-  const k_field_t& k_field = fa->k_f_d;                                 \
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
-  Kokkos::parallel_for("begin_send_edge_hyb_jf<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
-      const int x_ = face;                                              \
-      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx); \
-      sbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy); \
-      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz); \
-      sbuf_d(3*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof);\
-    });                                                                 \
-  SYNC_MPI_BUFFER(sbuf_h, sbuf_d);                                      \
+#define BSP(x_,y_,z_)                                                          \
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;                    \
+  const int size = (4*n##y_*n##z_)*sizeof(float);                              \
+  const int face = (i+j+k)<0 ? 0 : n##x_+1; /* send ghosts to edges */         \
+  const k_field_t& k_field = fa->k_f_d;                                        \
+  const int face_len = n##y_ * n##z_;                                          \
+  auto jfx_buff  = Kokkos::subview(sbuf_d, Kokkos::make_pair(0*face_len,       \
+                                                             1*face_len));     \
+  auto jfy_buff  = Kokkos::subview(sbuf_d, Kokkos::make_pair(1*face_len,       \
+                                                             2*face_len));     \
+  auto jfz_buff  = Kokkos::subview(sbuf_d, Kokkos::make_pair(2*face_len,       \
+                                                             3*face_len));     \
+  auto rhof_buff = Kokkos::subview(sbuf_d, Kokkos::make_pair(3*face_len,       \
+                                                             4*face_len));     \
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1,1}, {n##y_+1, n##z_+1}); \
+  Kokkos::parallel_for("begin_send_edge_hyb_jf<" #x_ #y_ #z_ ">", x_##_face,   \
+    KOKKOS_LAMBDA(const int y_, const int z_) {                                \
+      const int x_ = face;                                                     \
+      const int voxel = VOXEL(x,y,z,nx,ny,nz);                                 \
+      jfx_buff( (z_-1)*n##y_ + (y_-1)) = k_field(voxel, field_var::jfx);       \
+      jfy_buff( (z_-1)*n##y_ + (y_-1)) = k_field(voxel, field_var::jfy);       \
+      jfz_buff( (z_-1)*n##y_ + (y_-1)) = k_field(voxel, field_var::jfz);       \
+      rhof_buff((z_-1)*n##y_ + (y_-1)) = k_field(voxel, field_var::rhof);      \
+    });                                                                        \
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d);                                             \
   BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
 
 /**
@@ -4025,22 +4036,33 @@ void k_begin_remote_edge_hyb_jf(field_array_t* ALIGNED(128) fa,
 //#endif
 }
 
-#define ERP(x_,y_,z_)                                                   \
-  const grid_t* g = fa->g;                                              \
-  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));        \
-  if(p) {                                                               \
-    const int nx = g->nx, ny = g->ny, nz = g->nz;                       \
-    const int face = (i+j+k) < 0 ? n##x_ : 1; /*add ghosts to edges*/   \
-    const k_field_t& k_field = fa->k_f_d;                               \
-    SYNC_MPI_BUFFER(rbuf_d, rbuf_h);                                    \
-    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
-    Kokkos::parallel_for("end_recv_edge_hyb_jf<XYZ>", x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
-        const int x_ = face;                                            \
-        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx)  += rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
-        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy)  += rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
-        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz)  += rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
-        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) += rbuf_d(3*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
-      });                                                               \
+#define ERP(x_,y_,z_)                                                          \
+  const grid_t* g = fa->g;                                                     \
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));               \
+  if(p) {                                                                      \
+    const int nx = g->nx, ny = g->ny, nz = g->nz;                              \
+    const int face = (i+j+k) < 0 ? n##x_ : 1; /*add ghosts to edges*/          \
+    const k_field_t& k_field = fa->k_f_d;                                      \
+    const int face_len = n##y_ * n##z_;                                        \
+    auto jfx_buff  = Kokkos::subview(rbuf_d, Kokkos::make_pair(0*face_len,     \
+                                                               1*face_len));   \
+    auto jfy_buff  = Kokkos::subview(rbuf_d, Kokkos::make_pair(1*face_len,     \
+                                                               2*face_len));   \
+    auto jfz_buff  = Kokkos::subview(rbuf_d, Kokkos::make_pair(2*face_len,     \
+                                                               3*face_len));   \
+    auto rhof_buff = Kokkos::subview(rbuf_d, Kokkos::make_pair(3*face_len,     \
+                                                               4*face_len));   \
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h);                                           \
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1,1},{n##y_+1,n##z_+1}); \
+    Kokkos::parallel_for("end_recv_edge_hyb_jf<" #x_ #y_ #z_ ">", x_##_face,   \
+      KOKKOS_LAMBDA(const int y_, const int z_) {                              \
+        const int x_ = face;                                                   \
+        const int voxel = VOXEL(x,y,z,nx,ny,nz);                               \
+        k_field(voxel, field_var::jfx)  += jfx_buff( (z_-1)*n##y_ + (y_-1));   \
+        k_field(voxel, field_var::jfy)  += jfy_buff( (z_-1)*n##y_ + (y_-1));   \
+        k_field(voxel, field_var::jfz)  += jfz_buff( (z_-1)*n##y_ + (y_-1));   \
+        k_field(voxel, field_var::rhof) += rhof_buff((z_-1)*n##y_ + (y_-1));   \
+      });                                                                      \
   }
 
 /**

@@ -48,14 +48,13 @@ center_p_pipeline( center_p_pipeline_args_t * args,
     ii   = p->i;
     f    = f0 + ii;                             // Load interpolator
 #ifdef SHAPE_NGP
-    hax  = qdt_2mc*(    ( f->ex     ) );        // Interpolate E
-    hay  = qdt_2mc*(    ( f->ey     ) );
-    haz  = qdt_2mc*(    ( f->ez     ) );
-    cbx  = f->cbx;// + dx*f->dcbxdx;            // Interpolate B
-    cby  = f->cby;// + dy*f->dcbydy;
-    cbz  = f->cbz;// + dz*f->dcbzdz;
-#else
-#ifdef SHAPE_QS
+    hax  = qdt_2mc*( f->ex );        // Interpolate E
+    hay  = qdt_2mc*( f->ey );
+    haz  = qdt_2mc*( f->ez );
+    cbx  = f->cbx;            // Interpolate B
+    cby  = f->cby;
+    cbz  = f->cbz;
+#elif defined( SHAPE_QS )
     hax  = qdt_2mc*( f->ex + dx*( f->dexdx + dx*f->d2exdx )   // Interpolate E
                            + dy*( f->dexdy + dy*f->d2exdy )
                            + dz*( f->dexdz + dz*f->d2exdz ) );
@@ -74,7 +73,6 @@ center_p_pipeline( center_p_pipeline_args_t * args,
     cbz  = f->cbz + dx*( f->dcbzdx + dx*f->d2cbzdx )
                   + dy*( f->dcbzdy + dy*f->d2cbzdy )
                   + dz*( f->dcbzdz + dz*f->d2cbzdz );
-#endif
 #endif
     ux   = p->ux;                            // Load momentum
     uy   = p->uy;

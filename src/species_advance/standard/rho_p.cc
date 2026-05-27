@@ -102,8 +102,7 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         f[v      ].jfy += w0*uy;
         f[v      ].jfz += w0*uz;
         f[v      ].rhof+= w0;
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
 
         dx = p[n].dx;
         dy = p[n].dy;
@@ -153,7 +152,6 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         f[v-sz].jfz  += wmz*uz;
         f[v-sz].rhof += wmz;
 
-#endif // defined(SHAPE_QS)
 #endif // defined(SHAPE_NGP)
 
 	//  ; f[v      +1].rhof += w1;
@@ -632,8 +630,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         scatter_view_access(ii, field_var::jfy)  += w0 * uy;
         scatter_view_access(ii, field_var::jfz)  += w0 * uz;
         scatter_view_access(ii, field_var::rhof) += w0;
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
         float w0 =  (q_12V*p_w) * two*( three - dx*dx - dy*dy - dz*dz );
         float wx =  (q_12V*p_w) * ( dx + one )*( dx + one );
         float wy =  (q_12V*p_w) * ( dy + one )*( dy + one );
@@ -676,7 +673,6 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         scatter_view_access(ii-sz, field_var::jfy)  += wmz * uy;
         scatter_view_access(ii-sz, field_var::jfz)  += wmz * uz;
         scatter_view_access(ii-sz, field_var::rhof) += wmz;
-#endif // defined(SHAPE_QS)
 #endif // defined(SHAPE_NGP)
 
     });

@@ -90,14 +90,13 @@ void uncenter_p_kokkos(
 #endif
     
 #ifdef SHAPE_NGP
-    hax  = qdt_2mc*(      ( f_ex    ) );
-    hay  = qdt_2mc*(      ( f_ey    ) );
-    haz  = qdt_2mc*(      ( f_ez    ) );
-    l_cbx  = f_cbx;// + p_dx*f_dcbxdx;            // Interpolate B
-    l_cby  = f_cby;// + p_dy*f_dcbydy;
-    l_cbz  = f_cbz;// + p_dz*f_dcbzdz;
-#else
-#ifdef SHAPE_QS
+    hax  = qdt_2mc*f_ex; // Interpolate E
+    hay  = qdt_2mc*f_ey;
+    haz  = qdt_2mc*f_ez;
+    l_cbx  = f_cbx;            // Interpolate B
+    l_cby  = f_cby;
+    l_cbz  = f_cbz;
+#elif defined( SHAPE_QS )
     hax  = qdt_2mc*( f_ex + p_dx*( f_dexdx + p_dx*f_d2exdx )      // Interpolate E
                           + p_dy*( f_dexdy + p_dy*f_d2exdy )
                           + p_dz*( f_dexdz + p_dz*f_d2exdz ) );
@@ -117,7 +116,6 @@ void uncenter_p_kokkos(
                    + p_dy*( f_dcbzdy + p_dy*f_d2cbzdy )
                    + p_dz*( f_dcbzdz + p_dz*f_d2cbzdz );
 #endif
-#endif
     v0   = qdt_4mc;///(float)sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
     /**/                                     // Boris - scalars
     v1    = l_cbx*l_cbx + (l_cby*l_cby + l_cbz*l_cbz);
@@ -135,7 +133,6 @@ void uncenter_p_kokkos(
     p_uy += hay;
     p_uz += haz;
   });
-
 }
 
 void

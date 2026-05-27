@@ -82,8 +82,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     w5 = f[i].cbx;
     w6 = f[i].cby;
     w7 = f[i].cbz;
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
     // Half advance E
     ux += qdt_2mc*( f[i].ex + dx*( f[i].dexdx + dx*f[i].d2exdx )
                             + dy*( f[i].dexdy + dy*f[i].d2exdy )
@@ -104,7 +103,6 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     w7 = f[i].cbz + dx*( f[i].dcbzdx + dx*f[i].d2cbzdx )
                   + dy*( f[i].dcbzdy + dy*f[i].d2cbzdy )
                   + dz*( f[i].dcbzdz + dz*f[i].d2cbzdz );
-#endif
 #endif
 
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
@@ -342,7 +340,7 @@ accumulate_hydro_p_kokkos(
   float c, qsp, msp, qdt_2mc, qdt_4mc, rV, r12V;
 #endif
 
-  constexpr float one=1.0, two=2.0, three=3.0;
+  constexpr float one=1.0f, two=2.0f, three=3.0f;
 
   //int np, stride_10, stride_21, stride_43;
 
@@ -378,8 +376,8 @@ accumulate_hydro_p_kokkos(
   qdt_2mc  = (qsp*sp->g->dt)/(2*msp*c);
   qdt_4mc  = qdt_2mc / 2;
 #endif
-  rV        = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
-  r12V      = rV/12.;
+  rV        = 1.f/(sp->g->dx*sp->g->dy*sp->g->dz);
+  r12V      = rV/12.f;
 
   const int np        = sp->np;
   //const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
@@ -463,8 +461,7 @@ accumulate_hydro_p_kokkos(
     float w5 = f_cbx;
     float w6 = f_cby;
     float w7 = f_cbz;
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
     // Half advance E
     ux += qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
                          + dy*( f_dexdy + dy*f_d2exdy )
@@ -485,7 +482,6 @@ accumulate_hydro_p_kokkos(
     float w7 = f_cbz + dx*( f_dcbzdx + dx*f_d2cbzdx )
                      + dy*( f_dcbzdy + dy*f_d2cbzdy )
                      + dz*( f_dcbzdz + dz*f_d2cbzdz );
-#endif
 #endif
 
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
@@ -547,8 +543,7 @@ accumulate_hydro_p_kokkos(
     // electric-charge outputs (j, rho) from mass-charge outputs (p, Tij)
 #ifdef SHAPE_NGP
     w0 = w*rV;
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
     w0 =  (w*r12V) * two*( three - dx*dx - dy*dy - dz*dz );
     float wx =  (w*r12V) * ( dx + one )*( dx + one );
     float wy =  (w*r12V) * ( dy + one )*( dy + one );
@@ -556,7 +551,6 @@ accumulate_hydro_p_kokkos(
     float wmx = (w*r12V) * ( dx - one )*( dx - one );
     float wmy = (w*r12V) * ( dy - one )*( dy - one );
     float wmz = (w*r12V) * ( dz - one )*( dz - one );
-#endif
 #endif
 
     // TODO: This could easily be a loop?
@@ -649,8 +643,7 @@ accumulate_hydro_p_kokkos(
 
 #ifdef SHAPE_NGP
     ACCUM_HYDRO(w0, ii); // Cell i,j,k
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
     ACCUM_HYDRO(w0,  ii     ); // Cell i,j,k
     ACCUM_HYDRO(wx,  ii +  1); // Cell i+1,j,k
     ACCUM_HYDRO(wy,  ii + sy); // Cell i,j+1,k
@@ -658,7 +651,6 @@ accumulate_hydro_p_kokkos(
     ACCUM_HYDRO(wmx, ii -  1); // Cell i-1,j,k
     ACCUM_HYDRO(wmy, ii - sy); // Cell i,j-1,k
     ACCUM_HYDRO(wmz, ii - sz); // Cell i,j,k-1
-#endif
 #endif
 
 #   undef ACCUM_HYDRO

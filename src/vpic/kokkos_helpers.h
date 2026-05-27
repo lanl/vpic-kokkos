@@ -32,10 +32,8 @@
 
 #ifdef SHAPE_NGP
   #define INTERPOLATOR_VAR_COUNT 6
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
   #define INTERPOLATOR_VAR_COUNT 42
-#endif
 #endif
 
 #ifdef KOKKOS_ENABLE_CUDA
@@ -221,8 +219,7 @@ namespace interpolator_var {
     cbx      = 3,
     cby      = 4,
     cbz      = 5,
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
     ex       = 0,
     dexdx    = 1,
     dexdy    = 2,
@@ -265,7 +262,6 @@ namespace interpolator_var {
     d2cbzdx  = 39,
     d2cbzdy  = 40,
     d2cbzdz  = 41,
-#endif
 #endif
   };
 };
