@@ -82,9 +82,9 @@ begin_initialization {
   double ny = 1;
   double nz = 1;
 
-  double nppc  = 150000;    // Average number of macro particle per cell per species 
+  double nppc  = 150000;    // Average number of macro particle per cell per species
   
-  double topology_x = 8; // Number of domains in x, y, and z
+  double topology_x = 4; // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 1;
 
@@ -159,15 +159,17 @@ begin_initialization {
                          nx, ny, nz,             // Resolution
                          topology_x, topology_y, topology_z); // Topology
 
-  grid->te = Te;
-  grid->den = 1.0;
+  //  grid->te = Te;
+  grid->eos_den = 1.0;
   grid->eta = eta;
   grid->hypereta = hypereta;
-  grid->gamma = gamma;
+  grid->eos_gamma = gamma;
 
   grid->nsub = 1; // Number of substeps for field solve.
   grid->nsm = 0;  // Number of binomial smoothing passes (to fields & moments).
   grid->nsmb = 0; // Timesteps between additional smooths of magnetic field (0 is off).
+  grid->den_floor_ohm = 0.05;
+  grid->den_floor_pe  = 0.05;
 
   // ***** Set Field Boundary Conditions *****
   sim_log("Periodic boundaries");
@@ -263,7 +265,7 @@ sim_log( "Loading fields" );
 // Note: everywhere is a region that encompasses the entire simulation                                                                                                                   
 // In general, regions are specied as logical equations (i.e. x>0 && x+y<2) 
  set_region_field( everywhere, 0, 0, 0, 0.0, 0, 0);
-
+ set_region_te(everywhere, Te);
 
  // LOAD PARTICLES
   sim_log( "Loading particles" );
@@ -440,7 +442,7 @@ sim_log( "Loading fields" );
                      emat     | nmat      | fmat     | cmat );
 
    output_variables( current_density  | charge_density |
-                     momentum_density | ke_density     | stress_tensor );
+                     momentum_density | mass_density   | stress_tensor );
    */
 
   //global->fdParams.output_variables( electric | magnetic );
@@ -448,7 +450,9 @@ sim_log( "Loading fields" );
   global->hHdParams.output_variables( current_density | charge_density | stress_tensor );
 
 
-  global->fdParams.output_variables( all );
+  const uint32_t allfields      (0xffffffff);
+
+  global->fdParams.output_variables( allfields );
 // global->hedParams.output_variables( all );
 // global->hHdParams.output_variables( all );
 
