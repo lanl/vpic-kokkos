@@ -1,7 +1,7 @@
 cd islands
-emacs -nw islands.cxx
+emacs -nw islands_hyb.cxx
 make
-srun -n 16 -N 1 ./islands.Linux 2>&1 | tee hvpic.out                 (or mpirun -np 16 ./islands..)
+srun -n 2 -N 1 ./islands_hyb.Linux 2>&1 | tee hvpic.out                 (or mpirun -np 16 ./islands..)
 ftn -o translate_islands translate_islands.f90
 mkdir data
 srun -n 1 ./translate_islands
