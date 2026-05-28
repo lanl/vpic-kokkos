@@ -916,7 +916,32 @@ void HDF5Dump::dump_fields(
   if (field_dump_flag.flags["oz"]) DUMP_FIELD_TO_HDF5("oz", oz, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["oe"]) DUMP_FIELD_TO_HDF5("oe", oe, H5T_NATIVE_FLOAT);
   
+  if (field_dump_flag.flags["pex"]) DUMP_FIELD_TO_HDF5("pex", pex, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["pey"]) DUMP_FIELD_TO_HDF5("pey", pey, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["pez"]) DUMP_FIELD_TO_HDF5("pez", pez, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["div_b_err"]) DUMP_FIELD_TO_HDF5("div_b_err", div_e_err, H5T_NATIVE_FLOAT);
+
+  if (field_dump_flag.flags["ux"]) DUMP_FIELD_TO_HDF5("ux", ux, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["uy"]) DUMP_FIELD_TO_HDF5("uy", uy, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["uz"]) DUMP_FIELD_TO_HDF5("uz", uz, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["ue"]) DUMP_FIELD_TO_HDF5("ue", ue, H5T_NATIVE_FLOAT);
+
+  if (field_dump_flag.flags["sx"]) DUMP_FIELD_TO_HDF5("sx", sx, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["sy"]) DUMP_FIELD_TO_HDF5("sy", sy, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["sz"]) DUMP_FIELD_TO_HDF5("sz", sz, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["se"]) DUMP_FIELD_TO_HDF5("se", se, H5T_NATIVE_FLOAT);
+
+#ifdef EXTERNAL_FORCE
+  if (field_dump_flag.flags["Ex0"]) DUMP_FIELD_TO_HDF5("Ex0", Ex0, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["Ey0"]) DUMP_FIELD_TO_HDF5("Ey0", Ey0, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["Ez0"]) DUMP_FIELD_TO_HDF5("Ez0", Ez0, H5T_NATIVE_FLOAT);
+  //if (field_dump_flag.flags["_pad1"]) DUMP_FIELD_TO_HDF5("_pad1", _pad1, H5T_NATIVE_FLOAT);
+
+  if (field_dump_flag.flags["Gx0"]) DUMP_FIELD_TO_HDF5("Gx0", Gx0, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["Gy0"]) DUMP_FIELD_TO_HDF5("Gy0", Gy0, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["Gz0"]) DUMP_FIELD_TO_HDF5("Gz0", Gz0, H5T_NATIVE_FLOAT);
+  //if (field_dump_flag.flags["_pad2"]) DUMP_FIELD_TO_HDF5("_pad2", _pad2, H5T_NATIVE_FLOAT);
+#endif
 
   el2 = uptime() - el2;
   if ( rank==0 ) log_printf("TimeHDF5Write: %.2f s\n", el2);

@@ -542,7 +542,7 @@ sim_log( "Loading fields" );
    * Convenience functions for simlog output
    *------------------------------------------------------------------------*/
 
-  char varlist[512];
+  char varlist[1024]; // accommodate "allvars" for fields
   create_field_list(varlist, global->fdParams);
 
   sim_log ( "Fields variable list: " << varlist );
