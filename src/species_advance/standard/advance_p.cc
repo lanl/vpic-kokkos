@@ -590,6 +590,12 @@ advance_p_kokkos_unified(
   float rV = g->rdx * g->rdy * g->rdz;
   float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
 
+#ifdef EXTERNAL_FORCE
+  // Don't futz with interpolator loading code that we won't even use
+  // --ATr,2026feb25
+  Kokkos::abort("External force is not implemented for CPU particle advance");
+#endif
+
   #define p_dx    k_particles(p_index, particle_var::dx)
   #define p_dy    k_particles(p_index, particle_var::dy)
   #define p_dz    k_particles(p_index, particle_var::dz)
@@ -1124,6 +1130,9 @@ advance_p_kokkos_gpu(
   float rV12 = rV*one_twelfth;
   float gdx=g->dx, gdy=g->dy, gdz = g->dz, gdt = g->dt;
 
+#ifdef EXTERNAL_FORCE
+  const float dt_2c = (g->dt)/(2*g->cvac);
+#endif
 
   // Process particles for this pipeline
 
@@ -1182,6 +1191,50 @@ advance_p_kokkos_gpu(
   #define f_d2cbzdy  k_interp(ii, interpolator_var::d2cbzdy)
   #define f_d2cbzdz  k_interp(ii, interpolator_var::d2cbzdz)
 
+  #define f_Ex0       k_interp(ii, interpolator_var::Ex0)
+  #define f_dEx0dx    k_interp(ii, interpolator_var::dEx0dx)
+  #define f_dEx0dy    k_interp(ii, interpolator_var::dEx0dy)
+  #define f_dEx0dz    k_interp(ii, interpolator_var::dEx0dz)
+  #define f_d2Ex0dx   k_interp(ii, interpolator_var::d2Ex0dx)
+  #define f_d2Ex0dy   k_interp(ii, interpolator_var::d2Ex0dy)
+  #define f_d2Ex0dz   k_interp(ii, interpolator_var::d2Ex0dz)
+  #define f_Ey0       k_interp(ii, interpolator_var::Ey0)
+  #define f_dEy0dx    k_interp(ii, interpolator_var::dEy0dx)
+  #define f_dEy0dy    k_interp(ii, interpolator_var::dEy0dy)
+  #define f_dEy0dz    k_interp(ii, interpolator_var::dEy0dz)
+  #define f_d2Ey0dx   k_interp(ii, interpolator_var::d2Ey0dx)
+  #define f_d2Ey0dy   k_interp(ii, interpolator_var::d2Ey0dy)
+  #define f_d2Ey0dz   k_interp(ii, interpolator_var::d2Ey0dz)
+  #define f_Ez0       k_interp(ii, interpolator_var::Ez0)
+  #define f_dEz0dx    k_interp(ii, interpolator_var::dEz0dx)
+  #define f_dEz0dy    k_interp(ii, interpolator_var::dEz0dy)
+  #define f_dEz0dz    k_interp(ii, interpolator_var::dEz0dz)
+  #define f_d2Ez0dx   k_interp(ii, interpolator_var::d2Ez0dx)
+  #define f_d2Ez0dy   k_interp(ii, interpolator_var::d2Ez0dy)
+  #define f_d2Ez0dz   k_interp(ii, interpolator_var::d2Ez0dz)
+
+  #define f_Gx0       k_interp(ii, interpolator_var::Gx0)
+  #define f_dGx0dx    k_interp(ii, interpolator_var::dGx0dx)
+  #define f_dGx0dy    k_interp(ii, interpolator_var::dGx0dy)
+  #define f_dGx0dz    k_interp(ii, interpolator_var::dGx0dz)
+  #define f_d2Gx0dx   k_interp(ii, interpolator_var::d2Gx0dx)
+  #define f_d2Gx0dy   k_interp(ii, interpolator_var::d2Gx0dy)
+  #define f_d2Gx0dz   k_interp(ii, interpolator_var::d2Gx0dz)
+  #define f_Gy0       k_interp(ii, interpolator_var::Gy0)
+  #define f_dGy0dx    k_interp(ii, interpolator_var::dGy0dx)
+  #define f_dGy0dy    k_interp(ii, interpolator_var::dGy0dy)
+  #define f_dGy0dz    k_interp(ii, interpolator_var::dGy0dz)
+  #define f_d2Gy0dx   k_interp(ii, interpolator_var::d2Gy0dx)
+  #define f_d2Gy0dy   k_interp(ii, interpolator_var::d2Gy0dy)
+  #define f_d2Gy0dz   k_interp(ii, interpolator_var::d2Gy0dz)
+  #define f_Gz0       k_interp(ii, interpolator_var::Gz0)
+  #define f_dGz0dx    k_interp(ii, interpolator_var::dGz0dx)
+  #define f_dGz0dy    k_interp(ii, interpolator_var::dGz0dy)
+  #define f_dGz0dz    k_interp(ii, interpolator_var::dGz0dz)
+  #define f_d2Gz0dx   k_interp(ii, interpolator_var::d2Gz0dx)
+  #define f_d2Gz0dy   k_interp(ii, interpolator_var::d2Gz0dy)
+  #define f_d2Gz0dz   k_interp(ii, interpolator_var::d2Gz0dz)
+
   // copy local memmbers from grid
   //auto nfaces_per_voxel = 6;
   //auto nvoxels = g->nv;
@@ -1224,14 +1277,50 @@ advance_p_kokkos_gpu(
     float dz   = p_dz;
     int   ii   = pii;
 #ifdef SHAPE_NGP
+  #ifdef EXTERNAL_FORCE
+    float hax  = qdt_2mc*( f_ex + f_Ex0 ) + dt_2c * f_Gx0;
+    float hay  = qdt_2mc*( f_ey + f_Ey0 ) + dt_2c * f_Gy0;
+    float haz  = qdt_2mc*( f_ez + f_Ez0 ) + dt_2c * f_Gz0;
+  #else
     float hax  = qdt_2mc*(    ( f_ex ) );
     float hay  = qdt_2mc*(    ( f_ey ) );
     float haz  = qdt_2mc*(    ( f_ez  ) );
+  #endif
     float cbx  = f_cbx;// + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby;// + dy*f_dcbydy;
     float cbz  = f_cbz;// + dz*f_dcbzdz;
 #else
 #ifdef SHAPE_QS
+  #ifdef EXTERNAL_FORCE
+    // Interpolate E, E0, G0
+    float hax  = qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
+                                + dy*( f_dexdy + dy*f_d2exdy )
+                                + dz*( f_dexdz + dz*f_d2exdz )
+                           + f_Ex0 + dx*( f_dEx0dx + dx*f_d2Ex0dx )
+                                   + dy*( f_dEx0dy + dy*f_d2Ex0dy )
+                                   + dz*( f_dEx0dz + dz*f_d2Ex0dz ) );
+    float hay  = qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
+                                + dy*( f_deydy + dy*f_d2eydy )
+                                + dz*( f_deydz + dz*f_d2eydz )
+                           + f_Ey0 + dx*( f_dEy0dx + dx*f_d2Ey0dx )
+                                   + dy*( f_dEy0dy + dy*f_d2Ey0dy )
+                                   + dz*( f_dEy0dz + dz*f_d2Ey0dz ) );
+    float haz  = qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
+                                + dy*( f_dezdy + dy*f_d2ezdy )
+                                + dz*( f_dezdz + dz*f_d2ezdz )
+                           + f_Ez0 + dx*( f_dEz0dx + dx*f_d2Ez0dx )
+                                   + dy*( f_dEz0dy + dy*f_d2Ez0dy )
+                                   + dz*( f_dEz0dz + dz*f_d2Ez0dz ) );
+    hax += dt_2c *( f_Gx0 + dx*( f_dGx0dx + dx*f_d2Gx0dx )
+                          + dy*( f_dGx0dy + dy*f_d2Gx0dy )
+                          + dz*( f_dGx0dz + dz*f_d2Gx0dz ) );
+    hay += dt_2c *( f_Gy0 + dx*( f_dGy0dx + dx*f_d2Gy0dx )
+                          + dy*( f_dGy0dy + dy*f_d2Gy0dy )
+                          + dz*( f_dGy0dz + dz*f_d2Gy0dz ) );
+    haz += dt_2c *( f_Gz0 + dx*( f_dGz0dx + dx*f_d2Gz0dx )
+                          + dy*( f_dGz0dy + dy*f_d2Gz0dy )
+                          + dz*( f_dGz0dz + dz*f_d2Gz0dz ) );
+  #else
     // Interpolate E
     float hax  = qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
                                 + dy*( f_dexdy + dy*f_d2exdy )
@@ -1242,6 +1331,7 @@ advance_p_kokkos_gpu(
     float haz  = qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
                                 + dy*( f_dezdy + dy*f_d2ezdy )
                                 + dz*( f_dezdz + dz*f_d2ezdz ) );
+  #endif
     // Interpolate B
     float cbx  = f_cbx + dx*( f_dcbxdx + dx*f_d2cbxdx )
                        + dy*( f_dcbxdy + dy*f_d2cbxdy )
@@ -1563,6 +1653,50 @@ advance_p_kokkos_gpu(
   #undef f_d2cbzdx
   #undef f_d2cbzdy
   #undef f_d2cbzdz
+
+  #undef f_Ex0
+  #undef f_dEx0dx
+  #undef f_dEx0dy
+  #undef f_dEx0dz
+  #undef f_d2Ex0dx
+  #undef f_d2Ex0dy
+  #undef f_d2Ex0dz
+  #undef f_Ey0
+  #undef f_dEy0dx
+  #undef f_dEy0dy
+  #undef f_dEy0dz
+  #undef f_d2Ey0dx
+  #undef f_d2Ey0dy
+  #undef f_d2Ey0dz
+  #undef f_Ez0
+  #undef f_dEz0dx
+  #undef f_dEz0dy
+  #undef f_dEz0dz
+  #undef f_d2Ez0dx
+  #undef f_d2Ez0dy
+  #undef f_d2Ez0dz
+
+  #undef f_Gx0
+  #undef f_dGx0dx
+  #undef f_dGx0dy
+  #undef f_dGx0dz
+  #undef f_d2Gx0dx
+  #undef f_d2Gx0dy
+  #undef f_d2Gx0dz
+  #undef f_Gy0
+  #undef f_dGy0dx
+  #undef f_dGy0dy
+  #undef f_dGy0dz
+  #undef f_d2Gy0dx
+  #undef f_d2Gy0dy
+  #undef f_d2Gy0dz
+  #undef f_Gz0
+  #undef f_dGz0dx
+  #undef f_dGz0dy
+  #undef f_dGz0dz
+  #undef f_d2Gz0dx
+  #undef f_d2Gz0dy
+  #undef f_d2Gz0dz
 
       } //advance_p_kokkos_gpu
 

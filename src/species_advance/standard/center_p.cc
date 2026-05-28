@@ -19,6 +19,9 @@ center_p_pipeline( center_p_pipeline_args_t * args,
   float qdt_2mc;
   float qdt_4mc;
 #endif
+#ifdef EXTERNAL_FORCE
+  const float dt_2c = args->dt_2c;
+#endif
   const float one            = 1.;
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
@@ -48,13 +51,48 @@ center_p_pipeline( center_p_pipeline_args_t * args,
     ii   = p->i;
     f    = f0 + ii;                             // Load interpolator
 #ifdef SHAPE_NGP
-    hax  = qdt_2mc*( f->ex );        // Interpolate E
-    hay  = qdt_2mc*( f->ey );
-    haz  = qdt_2mc*( f->ez );
-    cbx  = f->cbx;            // Interpolate B
-    cby  = f->cby;
-    cbz  = f->cbz;
+  #ifdef EXTERNAL_FORCE
+    hax  = qdt_2mc*( f->ex + f->Ex0 ) + dt_2c * f->Gx0;        // Interpolate E, E0, G0
+    hay  = qdt_2mc*( f->ey + f->Ey0 ) + dt_2c * f->Gy0;
+    haz  = qdt_2mc*( f->ez + f->Ez0 ) + dt_2c * f->Gz0;
+  #else
+    hax  = qdt_2mc*(    ( f->ex     ) );        // Interpolate E
+    hay  = qdt_2mc*(    ( f->ey     ) );
+    haz  = qdt_2mc*(    ( f->ez     ) );
+  #endif
+    cbx  = f->cbx;// + dx*f->dcbxdx;            // Interpolate B
+    cby  = f->cby;// + dy*f->dcbydy;
+    cbz  = f->cbz;// + dz*f->dcbzdz;
 #elif defined( SHAPE_QS )
+  #ifdef EXTERNAL_FORCE
+    hax  = qdt_2mc*( f->ex + dx*( f->dexdx + dx*f->d2exdx )   // Interpolate E, E0
+                           + dy*( f->dexdy + dy*f->d2exdy )
+                           + dz*( f->dexdz + dz*f->d2exdz )
+                     + f->Ex0 + dx*( f->dEx0dx + dx*f->d2Ex0dx )
+                              + dy*( f->dEx0dy + dy*f->d2Ex0dy )
+                              + dz*( f->dEx0dz + dz*f->d2Ex0dz ) );
+    hay  = qdt_2mc*( f->ey + dx*( f->deydx + dx*f->d2eydx )
+                           + dy*( f->deydy + dy*f->d2eydy )
+                           + dz*( f->deydz + dz*f->d2eydz )
+                     + f->Ey0 + dx*( f->dEy0dx + dx*f->d2Ey0dx )
+                              + dy*( f->dEy0dy + dy*f->d2Ey0dy )
+                              + dz*( f->dEy0dz + dz*f->d2Ey0dz ) );
+    haz  = qdt_2mc*( f->ez + dx*( f->dezdx + dx*f->d2ezdx )
+                           + dy*( f->dezdy + dy*f->d2ezdy )
+                           + dz*( f->dezdz + dz*f->d2ezdz )
+                     + f->Ez0 + dx*( f->dEz0dx + dx*f->d2Ez0dx )
+                              + dy*( f->dEz0dy + dy*f->d2Ez0dy )
+                              + dz*( f->dEz0dz + dz*f->d2Ez0dz ) );
+    hax += dt_2c *( f->Gx0 + dx*( f->dGx0dx + dx*f->d2Gx0dx )   // Interpolate G0
+                           + dy*( f->dGx0dy + dy*f->d2Gx0dy )
+                           + dz*( f->dGx0dz + dz*f->d2Gx0dz ) );
+    hay += dt_2c *( f->Gy0 + dx*( f->dGy0dx + dx*f->d2Gy0dx )
+                           + dy*( f->dGy0dy + dy*f->d2Gy0dy )
+                           + dz*( f->dGy0dz + dz*f->d2Gy0dz ) );
+    haz += dt_2c *( f->Gz0 + dx*( f->dGz0dx + dx*f->d2Gz0dx )
+                           + dy*( f->dGz0dy + dy*f->d2Gz0dy )
+                           + dz*( f->dGz0dz + dz*f->d2Gz0dz ) );
+  #else
     hax  = qdt_2mc*( f->ex + dx*( f->dexdx + dx*f->d2exdx )   // Interpolate E
                            + dy*( f->dexdy + dy*f->d2exdy )
                            + dz*( f->dexdz + dz*f->d2exdz ) );
@@ -64,6 +102,7 @@ center_p_pipeline( center_p_pipeline_args_t * args,
     haz  = qdt_2mc*( f->ez + dx*( f->dezdx + dx*f->d2ezdx )
                            + dy*( f->dezdy + dy*f->d2ezdy )
                            + dz*( f->dezdz + dz*f->d2ezdz ) );
+  #endif
     cbx  = f->cbx + dx*( f->dcbxdx + dx*f->d2cbxdx )          // Interpolate B
                   + dy*( f->dcbxdy + dy*f->d2cbxdy )
                   + dz*( f->dcbxdz + dz*f->d2cbxdz );
@@ -193,6 +232,9 @@ center_p( /**/  species_t            * RESTRICT sp,
   args->qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
 #endif
   args->np      = sp->np;
+#ifdef EXTERNAL_FORCE
+  args->dt_2c = (sp->g->dt)/(2*sp->g->cvac);
+#endif
 
   EXEC_PIPELINES( center_p, args, 0 );
   WAIT_PIPELINES();

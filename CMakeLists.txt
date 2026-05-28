@@ -74,6 +74,8 @@ option(VPIC_ENABLE_HDF5 "Enable HDF5 for use during IO. VPIC does not help you i
 
 option(VPIC_ENABLE_VARIABLE_CHARGE "Enable variable charge for particles" OFF)
 
+option(VPIC_ENABLE_EXTERNAL_FORCE "Enable external force for particles" OFF)
+
 option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU-aware MPI. Allows GPUs to communicate with each other directly rather than going through the CPU. If VPIC_ENABLE_GPU_AWARE_MPI is enabled but not supported in MPI, the code may crash." OFF)
 
 option(VPIC_ENABLE_HALO_EXCHANGE "Enable halo exchange code path for remote communication. Temporary option until halo exchange code is accurately tested." ON)
@@ -372,6 +374,12 @@ if (VPIC_ENABLE_VARIABLE_CHARGE)
    set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DVARIABLE_CHARGE")
    message("--     VPIC: Enabled variable charge for particles")
 endif(VPIC_ENABLE_VARIABLE_CHARGE)
+
+if (VPIC_ENABLE_EXTERNAL_FORCE)
+   add_definitions(-DEXTERNAL_FORCE)
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DEXTERNAL_FORCE")
+   message("--     VPIC: Enabled external force for particles")
+endif(VPIC_ENABLE_EXTERNAL_FORCE)
 
 if (VPIC_ENABLE_GPU_AWARE_MPI)
   add_definitions(-DVPIC_ENABLE_GPU_AWARE_MPI)
