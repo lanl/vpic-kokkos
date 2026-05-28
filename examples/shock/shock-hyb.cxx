@@ -242,7 +242,7 @@ begin_initialization {
   if ( ix==0 )
     set_domain_field_bc( BOUNDARY(-1,0,0), pec_fields );
   if ( ix==topology_x-1 )
-   set_domain_field_bc( BOUNDARY( 1,0,0), pec_fields );
+   set_domain_field_bc( BOUNDARY( 1,0,0), symmetric_fields );
 
   // ***** Set Particle Boundary Conditions *****
   if ( ix==0 )    set_domain_particle_bc( BOUNDARY(-1,0,0), reflect_particles );
@@ -911,23 +911,20 @@ begin_field_injection {
   const int nz=grid->nz;
   int x,y,z;
   double b0 = global->b0;
-  double sn = global->sn;
+  double sn = global->sn, cs = sqrt(1-sn*sn);
   double Vflow = global->ur, r=0.005;
 
   k_field_t& k_field = field_array->k_f_d;
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>> right_edge({1, 1}, {nz+1, ny+1});
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> right_edge({0, 0, nx}, {nz+2, ny+2, nx+2});
+#define F(i_,j_,k_,var) (k_field(VOXEL(i_,j_,k_,nx,ny,nz), field_var::var))
 if(global->right){
-  Kokkos::parallel_for("Field injection", right_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
-      //k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbx) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbx) + r*b0*sqrt(1-sn*sn); // To-do: Don't think we should set interior cell? Also, precompute sqrt above.
-      //k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbx) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbx) + r*b0*sqrt(1-sn*sn);
-      //k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cby) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cby);
-      k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cby) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cby);
-      //k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbz) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbz) + r*b0*sn;
-      k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbz) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbz) + r*b0*sn;
+  Kokkos::parallel_for("Field injection", right_edge, KOKKOS_LAMBDA(const int iz, const int iy, const int ix) {
+      F(ix,iy,iz,cby) = (1.0-r)*F(ix,iy,iz,cby);
+      F(ix,iy,iz,cbz) = (1.0-r)*F(ix,iy,iz,cbz) + r*b0*sn;
     });
   }
+#undef F
 }
-    
 
 //*******************  COLLISIONS ***************************
 begin_particle_collisions {
