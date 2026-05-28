@@ -56,7 +56,7 @@ begin_initialization {
   
   // Initial conditions for model:
   double Ti = 1.0/3.0;      // Ion temperature
-  double gamma = 1.0;//5.0/3.0;   // Ratio of specific heats.
+  double gamma = 5.0/3.0;   // Ratio of specific heats.
   double c_s = 1.0;         // Electron sound speed.
   double pert = 0.02;       // Size of density perturbation.
   double Lx = 16;           // Size of domain.
@@ -82,7 +82,7 @@ begin_initialization {
   double ny = 1;
   double nz = 1;
 
-  double nppc  = 1500000;    // Average number of macro particle per cell per species 
+  double nppc  = 150000;    // Average number of macro particle per cell per species
   
   double topology_x = 4; // Number of domains in x, y, and z
   double topology_y = 1;
@@ -160,14 +160,16 @@ begin_initialization {
                          topology_x, topology_y, topology_z); // Topology
 
   //  grid->te = Te;
-  //  grid->den = 1.0;
+  grid->eos_den = 1.0;
   grid->eta = eta;
-  //  grid->hypereta = hypereta;
-  //  grid->gamma = gamma;
+  grid->hypereta = hypereta;
+  grid->eos_gamma = gamma;
 
-  //  grid->nsub = 1; // Number of substeps for field solve.
-  //  grid->nsm = 2;  // Number of binomial smoothing passes (to fields & moments).
-  //  grid->nsmb = 0; // Timesteps between additional smooths of magnetic field (0 is off).
+  grid->nsub = 1; // Number of substeps for field solve.
+  grid->nsm = 2;  // Number of binomial smoothing passes (to fields & moments).
+  grid->nsmb = 0; // Timesteps between additional smooths of magnetic field (0 is off).
+  grid->den_floor_ohm = 0.05;
+  grid->den_floor_pe  = 0.05;
 
   // ***** Set Field Boundary Conditions *****
   sim_log("Periodic boundaries");
@@ -440,7 +442,7 @@ sim_log( "Loading fields" );
                      emat     | nmat      | fmat     | cmat );
 
    output_variables( current_density  | charge_density |
-                     momentum_density | mass_density     | stress_tensor );
+                     momentum_density | mass_density   | stress_tensor );
    */
 
   //global->fdParams.output_variables( electric | magnetic );
@@ -449,7 +451,7 @@ sim_log( "Loading fields" );
 
 
   const uint32_t allfields      (0xffffffff);
-  
+
   global->fdParams.output_variables( allfields );
 // global->hedParams.output_variables( all );
 // global->hHdParams.output_variables( all );
