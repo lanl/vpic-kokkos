@@ -1289,8 +1289,7 @@ advance_p_kokkos_gpu(
     float cbx  = f_cbx;// + dx*f_dcbxdx;             // Interpolate B
     float cby  = f_cby;// + dy*f_dcbydy;
     float cbz  = f_cbz;// + dz*f_dcbzdz;
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
   #ifdef EXTERNAL_FORCE
     // Interpolate E, E0, G0
     float hax  = qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
@@ -1342,7 +1341,6 @@ advance_p_kokkos_gpu(
     float cbz  = f_cbz + dx*( f_dcbzdx + dx*f_d2cbzdx )
                        + dy*( f_dcbzdy + dy*f_d2cbzdy )
                        + dz*( f_dcbzdz + dz*f_d2cbzdz );
-#endif
 #endif
     float ux   = p_ux;                             // Load momentum
     float uy   = p_uy;
@@ -1472,8 +1470,7 @@ advance_p_kokkos_gpu(
       k_field_scatter_access(ii, field_var::jfy) += q*uy;
       k_field_scatter_access(ii, field_var::jfz) += q*uz;
       k_field_scatter_access(ii, field_var::rhof) += q;
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
       // stencil coefficients
       // ... OLD hybrid-VPIC with QS shape, the accumulator stores
       // ... ... p->w*qsp * two*(three - ...)
@@ -1538,7 +1535,6 @@ advance_p_kokkos_gpu(
       k_field_scatter_access(iimz, field_var::jfz)  += wmz*uz;
       k_field_scatter_access(iimz, field_var::rhof) += wmz;
 
-#endif
 #endif
     
 } else {
@@ -1736,7 +1732,8 @@ advance_p( /**/  species_t            * RESTRICT sp,
     #define ADVANCE_P advance_p_kokkos_gpu
   #else
     // Portable kernel with additional vectorization options
-    #define ADVANCE_P advance_p_kokkos_unified
+    //#define ADVANCE_P advance_p_kokkos_unified
+    #define ADVANCE_P advance_p_kokkos_gpu
   #endif
   KOKKOS_TIC();
   ADVANCE_P(
