@@ -44,8 +44,7 @@ energy_p_pipeline( energy_p_pipeline_args_t * RESTRICT args,
     v1  = p[n].uy + qdt_2mc * f[i].ey;
     v2  = p[n].uz + qdt_2mc * f[i].ez;
   #endif
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
   #ifdef EXTERNAL_FORCE
     v0 = p[n].ux + qdt_2mc*( f[i].ex + dx*( f[i].dexdx + dx*f[i].d2exdx )
                                      + dy*( f[i].dexdy + dy*f[i].d2exdy )
@@ -85,7 +84,6 @@ energy_p_pipeline( energy_p_pipeline_args_t * RESTRICT args,
                                      + dy*( f[i].dezdy + dy*f[i].d2ezdy )
                                      + dz*( f[i].dezdz + dz*f[i].d2ezdz ) );
   #endif
-#endif
 #endif
     v0  = v0*v0 + v1*v1 + v2*v2;
     v0  = (msp * p[n].w) * (v0 / (one + sqrtf(one + v0)));
@@ -292,8 +290,7 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
         float v1 = uy + qdt_2mc * f_ey;
         float v2 = uz + qdt_2mc * f_ez;
   #endif
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
         // Interpolate E
   #ifdef EXTERNAL_FORCE
         float v0 = ux + qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
@@ -334,7 +331,6 @@ energy_p_kernel(const k_interpolator_t& k_interp, const k_particles_t& k_particl
                                        + dy*( f_dezdy + dy*f_d2ezdy )
                                        + dz*( f_dezdz + dz*f_d2ezdz ) );
   #endif
-#endif
 #endif
         v0 = v0*v0 + v1*v1 + v2*v2;
         //v0 = (msp * k_particles(n, particle_var::w)) * (v0 / (1 + sqrtf(1 + v0)));  // Relativistic kinetic energy

@@ -148,8 +148,7 @@ void uncenter_p_kokkos(
     l_cbx  = f_cbx;// + p_dx*f_dcbxdx;            // Interpolate B
     l_cby  = f_cby;// + p_dy*f_dcbydy;
     l_cbz  = f_cbz;// + p_dz*f_dcbzdz;
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
   #ifdef EXTERNAL_FORCE
     hax  = qdt_2mc*( f_ex + p_dx*( f_dexdx + p_dx*f_d2exdx )      // Interpolate E, E0
                           + p_dy*( f_dexdy + p_dy*f_d2exdy )
@@ -198,7 +197,6 @@ void uncenter_p_kokkos(
     l_cbz  = f_cbz + p_dx*( f_dcbzdx + p_dx*f_d2cbzdx )
                    + p_dy*( f_dcbzdy + p_dy*f_d2cbzdy )
                    + p_dz*( f_dcbzdz + p_dz*f_d2cbzdz );
-#endif
 #endif
     v0   = qdt_4mc;///(float)sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
     /**/                                     // Boris - scalars

@@ -63,8 +63,7 @@ center_p_pipeline( center_p_pipeline_args_t * args,
     cbx  = f->cbx;// + dx*f->dcbxdx;            // Interpolate B
     cby  = f->cby;// + dy*f->dcbydy;
     cbz  = f->cbz;// + dz*f->dcbzdz;
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
   #ifdef EXTERNAL_FORCE
     hax  = qdt_2mc*( f->ex + dx*( f->dexdx + dx*f->d2exdx )   // Interpolate E, E0
                            + dy*( f->dexdy + dy*f->d2exdy )
@@ -113,7 +112,6 @@ center_p_pipeline( center_p_pipeline_args_t * args,
     cbz  = f->cbz + dx*( f->dcbzdx + dx*f->d2cbzdx )
                   + dy*( f->dcbzdy + dy*f->d2cbzdy )
                   + dz*( f->dcbzdz + dz*f->d2cbzdz );
-#endif
 #endif
     ux   = p->ux;                            // Load momentum
     uy   = p->uy;

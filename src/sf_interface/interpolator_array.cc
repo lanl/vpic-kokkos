@@ -42,7 +42,9 @@ delete_interpolator_array( interpolator_array_t * ia ) {
   //FREE( ia );
 }
 
-void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field, int nx, int ny, int nz) {
+void 
+load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field, 
+                               int nx, int ny, int nz) {
 
   #define pi_ex       k_interp(pi_index, interpolator_var::ex)
   #define pi_dexdx    k_interp(pi_index, interpolator_var::dexdx)
@@ -131,313 +133,250 @@ void load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field
   #define pi_d2Gz0dy   k_interp(pi_index, interpolator_var::d2Gz0dy)
   #define pi_d2Gz0dz   k_interp(pi_index, interpolator_var::d2Gz0dz)
 
-  const float twelfth = 1./12.;
-  const float sixth   = 1./6.;
-  const float half    = 0.5;
-  const float two     = 2.0;
-  const float six     = 6.;
+  constexpr float twelfth = 1./12.;
+  constexpr float sixth   = 1./6.;
 
-    Kokkos::MDRangePolicy<Kokkos::Rank<3>> load_policy({1, 1, 1}, {nz+1, ny+1, nx+1});
-    Kokkos::parallel_for("load interpolator", load_policy, KOKKOS_LAMBDA(const int z, const int y, const int x) {
-        int pi_index = VOXEL(1,   y,   z, nx,ny,nz) + x-1; //pi = &fi(1,y,z);
-        int pf0_index = VOXEL(1,  y,   z, nx,ny,nz) + x-1; //pf0 = &f(1,y,z);
-        int pfx_index = VOXEL(2,  y,   z, nx,ny,nz) + x-1; //pfx = &f(2,y,z);
-        int pfy_index = VOXEL(1,  y+1, z, nx,ny,nz) + x-1; //pfy = &f(1,y+1,z);
-        int pfz_index = VOXEL(1,  y,   z+1, nx,ny,nz) + x-1; //pfz = &f(1,y,z+1);
-        int pfmx_index = VOXEL(x-1, y,   z,   nx,ny,nz);
-        int pfmy_index = VOXEL(x,   y-1, z,   nx,ny,nz);
-        int pfmz_index = VOXEL(x,   y,   z-1, nx,ny,nz);
-
-        // ex interpolation coefficients
-        // ex->tx from hyb_smooth_eb(...)
-        auto w0  = k_field(pf0_index,  field_var::tx);
-        auto wx  = k_field(pfx_index,  field_var::tx);
-        auto wy  = k_field(pfy_index,  field_var::tx);
-        auto wz  = k_field(pfz_index,  field_var::tx);
-        auto wmx = k_field(pfmx_index, field_var::tx);
-        auto wmy = k_field(pfmy_index, field_var::tx);
-        auto wmz = k_field(pfmz_index, field_var::tx);
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> load_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
+  Kokkos::parallel_for("load interpolator", load_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+      const int pi_index   = VOXEL(x,   y,   z,   nx,ny,nz); 
+      const int pf0_index  = VOXEL(x,   y,   z,   nx,ny,nz); 
+      const int pfx_index  = VOXEL(x+1, y,   z,   nx,ny,nz); 
+      const int pfy_index  = VOXEL(x,   y+1, z,   nx,ny,nz); 
+      const int pfz_index  = VOXEL(x,   y,   z+1, nx,ny,nz); 
+      const int pfmx_index = VOXEL(x-1, y,   z,   nx,ny,nz);
+      const int pfmy_index = VOXEL(x,   y-1, z,   nx,ny,nz);
+      const int pfmz_index = VOXEL(x,   y,   z-1, nx,ny,nz);
 
 #ifdef SHAPE_NGP
-        pi_ex     = w0;
-#else
-#ifdef SHAPE_QS
-        pi_ex     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
-        pi_dexdx  = sixth*(wx - wmx);
-        pi_dexdy  = sixth*(wy - wmy);
-        pi_dexdz  = sixth*(wz - wmz);
-        pi_d2exdx = twelfth*(wx + wmx - two*w0);
-        pi_d2exdy = twelfth*(wy + wmy - two*w0);
-        pi_d2exdz = twelfth*(wz + wmz - two*w0);
-#endif
-#endif
+      // ex interpolation coefficients
+      // ex->tx from hyb_smooth_eb(...)
+      pi_ex = k_field(pf0_index, field_var::tx);
+      // ey interpolation coefficients
+      // ey->ty from hyb_smooth_eb(...)
+      pi_ey = k_field(pf0_index, field_var::ty);
+      // ez interpolation coefficients
+      // ez->tz from hyb_smooth_eb(...)
+      pi_ez = k_field(pf0_index, field_var::tz);
 
-        // ey interpolation coefficients
-        // ey->ty from hyb_smooth_eb(...)
-        w0  = k_field(pf0_index,  field_var::ty);
-        wx  = k_field(pfx_index,  field_var::ty);
-        wy  = k_field(pfy_index,  field_var::ty);
-        wz  = k_field(pfz_index,  field_var::ty);
-        wmx = k_field(pfmx_index, field_var::ty);
-        wmy = k_field(pfmy_index, field_var::ty);
-        wmz = k_field(pfmz_index, field_var::ty);
+      // bx interpolation coefficients
+      // cbx->ox from hyb_smooth_eb(...)
+      pi_cbx = k_field(pf0_index, field_var::ox) + k_field(pf0_index, field_var::cbx0);
+      // by interpolation coefficients
+      // cby->oy from hyb_smooth_eb(...)
+      pi_cby = k_field(pf0_index, field_var::oy) + k_field(pf0_index, field_var::cby0);
+      // bz interpolation coefficients
+      // cbz->oz from hyb_smooth_eb(...)
+      pi_cbz = k_field(pf0_index, field_var::oz) + k_field(pf0_index, field_var::cbz0);
+    
+#ifdef EXTERNAL_FORCE
+      // Ex0 interpolation coefficients
+      pi_Ex0 = k_field(pf0_index,  field_var::Ex0);
+      // Ey0 interpolation coefficients
+      pi_Ey0 = k_field(pf0_index,  field_var::Ey0);
+      // Ez0 interpolation coefficients
+      pi_Ez0 = k_field(pf0_index,  field_var::Ez0);
+      
+      // Gx0 interpolation coefficients
+      pi_Gx0 = k_field(pf0_index,  field_var::Gx0);
+      // Gy0 interpolation coefficients
+      pi_Gy0 = k_field(pf0_index,  field_var::Gy0);
+      // Gz0 interpolation coefficients
+      pi_Gz0 = k_field(pf0_index,  field_var::Gz0);
+#endif
+#elif defined( SHAPE_QS )
+      // ex interpolation coefficients
+      // ex->tx from hyb_smooth_eb(...)
+      auto w0  = k_field(pf0_index,  field_var::tx);
+      auto wx  = k_field(pfx_index,  field_var::tx);
+      auto wy  = k_field(pfy_index,  field_var::tx);
+      auto wz  = k_field(pfz_index,  field_var::tx);
+      auto wmx = k_field(pfmx_index, field_var::tx);
+      auto wmy = k_field(pfmy_index, field_var::tx);
+      auto wmz = k_field(pfmz_index, field_var::tx);
+      pi_ex     = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      pi_dexdx  = sixth*(wx - wmx);
+      pi_dexdy  = sixth*(wy - wmy);
+      pi_dexdz  = sixth*(wz - wmz);
+      pi_d2exdx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2exdy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2exdz = twelfth*(wz + wmz - 2.f*w0);
+      // ey interpolation coefficients
+      // ey->ty from hyb_smooth_eb(...)
+      w0  = k_field(pf0_index,  field_var::ty);
+      wx  = k_field(pfx_index,  field_var::ty);
+      wy  = k_field(pfy_index,  field_var::ty);
+      wz  = k_field(pfz_index,  field_var::ty);
+      wmx = k_field(pfmx_index, field_var::ty);
+      wmy = k_field(pfmy_index, field_var::ty);
+      wmz = k_field(pfmz_index, field_var::ty);
+      pi_ey     = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      pi_deydx  = sixth*(wx - wmx);
+      pi_deydy  = sixth*(wy - wmy);
+      pi_deydz  = sixth*(wz - wmz);
+      pi_d2eydx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2eydy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2eydz = twelfth*(wz + wmz - 2.f*w0);
+      // ez interpolation coefficients
+      // ez->tz from hyb_smooth_eb(...)
+      w0  = k_field(pf0_index,  field_var::tz);
+      wx  = k_field(pfx_index,  field_var::tz);
+      wy  = k_field(pfy_index,  field_var::tz);
+      wz  = k_field(pfz_index,  field_var::tz);
+      wmx = k_field(pfmx_index, field_var::tz);
+      wmy = k_field(pfmy_index, field_var::tz);
+      wmz = k_field(pfmz_index, field_var::tz);
+      pi_ez     = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      pi_dezdx  = sixth*(wx - wmx);
+      pi_dezdy  = sixth*(wy - wmy);
+      pi_dezdz  = sixth*(wz - wmz);
+      pi_d2ezdx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2ezdy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2ezdz = twelfth*(wz + wmz - 2.f*w0);
 
-#ifdef SHAPE_NGP
-        pi_ey     = w0;
-#else
-#ifdef SHAPE_QS
-        pi_ey     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
-        pi_deydx  = sixth*(wx - wmx);
-        pi_deydy  = sixth*(wy - wmy);
-        pi_deydz  = sixth*(wz - wmz);
-        pi_d2eydx = twelfth*(wx + wmx - two*w0);
-        pi_d2eydy = twelfth*(wy + wmy - two*w0);
-        pi_d2eydz = twelfth*(wz + wmz - two*w0);
-#endif
-#endif
-
-        // ez interpolation coefficients
-        // ez->tz from hyb_smooth_eb(...)
-        w0  = k_field(pf0_index,  field_var::tz);
-        wx  = k_field(pfx_index,  field_var::tz);
-        wy  = k_field(pfy_index,  field_var::tz);
-        wz  = k_field(pfz_index,  field_var::tz);
-        wmx = k_field(pfmx_index, field_var::tz);
-        wmy = k_field(pfmy_index, field_var::tz);
-        wmz = k_field(pfmz_index, field_var::tz);
-
-#ifdef SHAPE_NGP
-        pi_ez     = w0;
-#else
-#ifdef SHAPE_QS
-        pi_ez     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
-        pi_dezdx  = sixth*(wx - wmx);
-        pi_dezdy  = sixth*(wy - wmy);
-        pi_dezdz  = sixth*(wz - wmz);
-        pi_d2ezdx = twelfth*(wx + wmx - two*w0);
-        pi_d2ezdy = twelfth*(wy + wmy - two*w0);
-        pi_d2ezdz = twelfth*(wz + wmz - two*w0);
-#endif
-#endif
-
-        // bx interpolation coefficients
-        // cbx->ox from hyb_smooth_eb(...)
-        w0  = k_field(pf0_index,  field_var::ox) + k_field(pf0_index,  field_var::cbx0);
-        wx  = k_field(pfx_index,  field_var::ox) + k_field(pfx_index,  field_var::cbx0);
-        wy  = k_field(pfy_index,  field_var::ox) + k_field(pfy_index,  field_var::cbx0);
-        wz  = k_field(pfz_index,  field_var::ox) + k_field(pfz_index,  field_var::cbx0);
-        wmx = k_field(pfmx_index, field_var::ox) + k_field(pfmx_index, field_var::cbx0);
-        wmy = k_field(pfmy_index, field_var::ox) + k_field(pfmy_index, field_var::cbx0);
-        wmz = k_field(pfmz_index, field_var::ox) + k_field(pfmz_index, field_var::cbx0);
-
-#ifdef SHAPE_NGP
-        pi_cbx     = w0;
-#else
-#ifdef SHAPE_QS
-        pi_cbx     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
-        pi_dcbxdx  = sixth*(wx - wmx);
-        pi_dcbxdy  = sixth*(wy - wmy);
-        pi_dcbxdz  = sixth*(wz - wmz);
-        pi_d2cbxdx = twelfth*(wx + wmx - two*w0);
-        pi_d2cbxdy = twelfth*(wy + wmy - two*w0);
-        pi_d2cbxdz = twelfth*(wz + wmz - two*w0);
-#endif
-#endif
-
-        // by interpolation coefficients
-        // cby->oy from hyb_smooth_eb(...)
-        w0  = k_field(pf0_index,  field_var::oy) + k_field(pf0_index,  field_var::cby0);
-        wx  = k_field(pfx_index,  field_var::oy) + k_field(pfx_index,  field_var::cby0);
-        wy  = k_field(pfy_index,  field_var::oy) + k_field(pfy_index,  field_var::cby0);
-        wz  = k_field(pfz_index,  field_var::oy) + k_field(pfz_index,  field_var::cby0);
-        wmx = k_field(pfmx_index, field_var::oy) + k_field(pfmx_index, field_var::cby0);
-        wmy = k_field(pfmy_index, field_var::oy) + k_field(pfmy_index, field_var::cby0);
-        wmz = k_field(pfmz_index, field_var::oy) + k_field(pfmz_index, field_var::cby0);
-
-#ifdef SHAPE_NGP
-        pi_cby     = w0;
-#else
-#ifdef SHAPE_QS
-        pi_cby     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
-        pi_dcbydx  = sixth*(wx - wmx);
-        pi_dcbydy  = sixth*(wy - wmy);
-        pi_dcbydz  = sixth*(wz - wmz);
-        pi_d2cbydx = twelfth*(wx + wmx - two*w0);
-        pi_d2cbydy = twelfth*(wy + wmy - two*w0);
-        pi_d2cbydz = twelfth*(wz + wmz - two*w0);
-#endif
-#endif
-
-        // bz interpolation coefficients
-        // cbz->oz from hyb_smooth_eb(...)
-        w0  = k_field(pf0_index,  field_var::oz) + k_field(pf0_index,  field_var::cbz0);
-        wx  = k_field(pfx_index,  field_var::oz) + k_field(pfx_index,  field_var::cbz0);
-        wy  = k_field(pfy_index,  field_var::oz) + k_field(pfy_index,  field_var::cbz0);
-        wz  = k_field(pfz_index,  field_var::oz) + k_field(pfz_index,  field_var::cbz0);
-        wmx = k_field(pfmx_index, field_var::oz) + k_field(pfmx_index, field_var::cbz0);
-        wmy = k_field(pfmy_index, field_var::oz) + k_field(pfmy_index, field_var::cbz0);
-        wmz = k_field(pfmz_index, field_var::oz) + k_field(pfmz_index, field_var::cbz0);
-
-#ifdef SHAPE_NGP
-        pi_cbz     = w0;
-#else
-#ifdef SHAPE_QS
-        pi_cbz     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
-        pi_dcbzdx  = sixth*(wx - wmx);
-        pi_dcbzdy  = sixth*(wy - wmy);
-        pi_dcbzdz  = sixth*(wz - wmz);
-        pi_d2cbzdx = twelfth*(wx + wmx - two*w0);
-        pi_d2cbzdy = twelfth*(wy + wmy - two*w0);
-        pi_d2cbzdz = twelfth*(wz + wmz - two*w0);
-#endif
-#endif
+      // bx interpolation coefficients
+      // cbx->ox from hyb_smooth_eb(...)
+      w0  = k_field(pf0_index,  field_var::ox) + k_field(pf0_index,  field_var::cbx0);
+      wx  = k_field(pfx_index,  field_var::ox) + k_field(pfx_index,  field_var::cbx0);
+      wy  = k_field(pfy_index,  field_var::ox) + k_field(pfy_index,  field_var::cbx0);
+      wz  = k_field(pfz_index,  field_var::ox) + k_field(pfz_index,  field_var::cbx0);
+      wmx = k_field(pfmx_index, field_var::ox) + k_field(pfmx_index, field_var::cbx0);
+      wmy = k_field(pfmy_index, field_var::ox) + k_field(pfmy_index, field_var::cbx0);
+      wmz = k_field(pfmz_index, field_var::ox) + k_field(pfmz_index, field_var::cbx0);
+      pi_cbx     = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      pi_dcbxdx  = sixth*(wx - wmx);
+      pi_dcbxdy  = sixth*(wy - wmy);
+      pi_dcbxdz  = sixth*(wz - wmz);
+      pi_d2cbxdx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2cbxdy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2cbxdz = twelfth*(wz + wmz - 2.f*w0);
+      // by interpolation coefficients
+      // cby->oy from hyb_smooth_eb(...)
+      w0  = k_field(pf0_index,  field_var::oy) + k_field(pf0_index,  field_var::cby0);
+      wx  = k_field(pfx_index,  field_var::oy) + k_field(pfx_index,  field_var::cby0);
+      wy  = k_field(pfy_index,  field_var::oy) + k_field(pfy_index,  field_var::cby0);
+      wz  = k_field(pfz_index,  field_var::oy) + k_field(pfz_index,  field_var::cby0);
+      wmx = k_field(pfmx_index, field_var::oy) + k_field(pfmx_index, field_var::cby0);
+      wmy = k_field(pfmy_index, field_var::oy) + k_field(pfmy_index, field_var::cby0);
+      wmz = k_field(pfmz_index, field_var::oy) + k_field(pfmz_index, field_var::cby0);
+      pi_cby     = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      pi_dcbydx  = sixth*(wx - wmx);
+      pi_dcbydy  = sixth*(wy - wmy);
+      pi_dcbydz  = sixth*(wz - wmz);
+      pi_d2cbydx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2cbydy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2cbydz = twelfth*(wz + wmz - 2.f*w0);
+      // bz interpolation coefficients
+      // cbz->oz from hyb_smooth_eb(...)
+      w0  = k_field(pf0_index,  field_var::oz) + k_field(pf0_index,  field_var::cbz0);
+      wx  = k_field(pfx_index,  field_var::oz) + k_field(pfx_index,  field_var::cbz0);
+      wy  = k_field(pfy_index,  field_var::oz) + k_field(pfy_index,  field_var::cbz0);
+      wz  = k_field(pfz_index,  field_var::oz) + k_field(pfz_index,  field_var::cbz0);
+      wmx = k_field(pfmx_index, field_var::oz) + k_field(pfmx_index, field_var::cbz0);
+      wmy = k_field(pfmy_index, field_var::oz) + k_field(pfmy_index, field_var::cbz0);
+      wmz = k_field(pfmz_index, field_var::oz) + k_field(pfmz_index, field_var::cbz0);
+      pi_cbz     = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      pi_dcbzdx  = sixth*(wx - wmx);
+      pi_dcbzdy  = sixth*(wy - wmy);
+      pi_dcbzdz  = sixth*(wz - wmz);
+      pi_d2cbzdx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2cbzdy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2cbzdz = twelfth*(wz + wmz - 2.f*w0);
 
 #ifdef EXTERNAL_FORCE
-
-        // Ex0 interpolation coefficients
-        w0  = k_field(pf0_index,  field_var::Ex0);
-        wx  = k_field(pfx_index,  field_var::Ex0);
-        wy  = k_field(pfy_index,  field_var::Ex0);
-        wz  = k_field(pfz_index,  field_var::Ex0);
-        wmx = k_field(pfmx_index, field_var::Ex0);
-        wmy = k_field(pfmy_index, field_var::Ex0);
-        wmz = k_field(pfmz_index, field_var::Ex0);
-
-#ifdef SHAPE_NGP
-        pi_Ex0     = w0;
-#else
-#ifdef SHAPE_QS
-        pi_Ex0     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
-        pi_dEx0dx  = sixth*(wx - wmx);
-        pi_dEx0dy  = sixth*(wy - wmy);
-        pi_dEx0dz  = sixth*(wz - wmz);
-        pi_d2Ex0dx = twelfth*(wx + wmx - two*w0);
-        pi_d2Ex0dy = twelfth*(wy + wmy - two*w0);
-        pi_d2Ex0dz = twelfth*(wz + wmz - two*w0);
+      // Ex0 interpolation coefficients
+      w0  = k_field(pf0_index,  field_var::Ex0);
+      wx  = k_field(pfx_index,  field_var::Ex0);
+      wy  = k_field(pfy_index,  field_var::Ex0);
+      wz  = k_field(pfz_index,  field_var::Ex0);
+      wmx = k_field(pfmx_index, field_var::Ex0);
+      wmy = k_field(pfmy_index, field_var::Ex0);
+      wmz = k_field(pfmz_index, field_var::Ex0);
+      pi_Ex0     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
+      pi_dEx0dx  = sixth*(wx - wmx);
+      pi_dEx0dy  = sixth*(wy - wmy);
+      pi_dEx0dz  = sixth*(wz - wmz);
+      pi_d2Ex0dx = twelfth*(wx + wmx - two*w0);
+      pi_d2Ex0dy = twelfth*(wy + wmy - two*w0);
+      pi_d2Ex0dz = twelfth*(wz + wmz - two*w0);
+      // Ey0 interpolation coefficients
+      w0  = k_field(pf0_index,  field_var::Ey0);
+      wx  = k_field(pfx_index,  field_var::Ey0);
+      wy  = k_field(pfy_index,  field_var::Ey0);
+      wz  = k_field(pfz_index,  field_var::Ey0);
+      wmx = k_field(pfmx_index, field_var::Ey0);
+      wmy = k_field(pfmy_index, field_var::Ey0);
+      wmz = k_field(pfmz_index, field_var::Ey0);
+      pi_Ey0     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
+      pi_dEy0dx  = sixth*(wx - wmx);
+      pi_dEy0dy  = sixth*(wy - wmy);
+      pi_dEy0dz  = sixth*(wz - wmz);
+      pi_d2Ey0dx = twelfth*(wx + wmx - two*w0);
+      pi_d2Ey0dy = twelfth*(wy + wmy - two*w0);
+      pi_d2Ey0dz = twelfth*(wz + wmz - two*w0);
+      // Ez0 interpolation coefficients
+      w0  = k_field(pf0_index,  field_var::Ez0);
+      wx  = k_field(pfx_index,  field_var::Ez0);
+      wy  = k_field(pfy_index,  field_var::Ez0);
+      wz  = k_field(pfz_index,  field_var::Ez0);
+      wmx = k_field(pfmx_index, field_var::Ez0);
+      wmy = k_field(pfmy_index, field_var::Ez0);
+      wmz = k_field(pfmz_index, field_var::Ez0);
+      pi_Ez0     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
+      pi_dEz0dx  = sixth*(wx - wmx);
+      pi_dEz0dy  = sixth*(wy - wmy);
+      pi_dEz0dz  = sixth*(wz - wmz);
+      pi_d2Ez0dx = twelfth*(wx + wmx - two*w0);
+      pi_d2Ez0dy = twelfth*(wy + wmy - two*w0);
+      pi_d2Ez0dz = twelfth*(wz + wmz - two*w0);
+    
+      // Gx0 interpolation coefficients
+      w0  = k_field(pf0_index,  field_var::Gx0);
+      wx  = k_field(pfx_index,  field_var::Gx0);
+      wy  = k_field(pfy_index,  field_var::Gx0);
+      wz  = k_field(pfz_index,  field_var::Gx0);
+      wmx = k_field(pfmx_index, field_var::Gx0);
+      wmy = k_field(pfmy_index, field_var::Gx0);
+      wmz = k_field(pfmz_index, field_var::Gx0);
+      pi_Gx0     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
+      pi_dGx0dx  = sixth*(wx - wmx);
+      pi_dGx0dy  = sixth*(wy - wmy);
+      pi_dGx0dz  = sixth*(wz - wmz);
+      pi_d2Gx0dx = twelfth*(wx + wmx - two*w0);
+      pi_d2Gx0dy = twelfth*(wy + wmy - two*w0);
+      pi_d2Gx0dz = twelfth*(wz + wmz - two*w0);
+      // Gy0 interpolation coefficients
+      w0  = k_field(pf0_index,  field_var::Gy0);
+      wx  = k_field(pfx_index,  field_var::Gy0);
+      wy  = k_field(pfy_index,  field_var::Gy0);
+      wz  = k_field(pfz_index,  field_var::Gy0);
+      wmx = k_field(pfmx_index, field_var::Gy0);
+      wmy = k_field(pfmy_index, field_var::Gy0);
+      wmz = k_field(pfmz_index, field_var::Gy0);
+      pi_Gy0     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
+      pi_dGy0dx  = sixth*(wx - wmx);
+      pi_dGy0dy  = sixth*(wy - wmy);
+      pi_dGy0dz  = sixth*(wz - wmz);
+      pi_d2Gy0dx = twelfth*(wx + wmx - two*w0);
+      pi_d2Gy0dy = twelfth*(wy + wmy - two*w0);
+      pi_d2Gy0dz = twelfth*(wz + wmz - two*w0);
+      // Gz0 interpolation coefficients
+      w0  = k_field(pf0_index,  field_var::Gz0);
+      wx  = k_field(pfx_index,  field_var::Gz0);
+      wy  = k_field(pfy_index,  field_var::Gz0);
+      wz  = k_field(pfz_index,  field_var::Gz0);
+      wmx = k_field(pfmx_index, field_var::Gz0);
+      wmy = k_field(pfmy_index, field_var::Gz0);
+      wmz = k_field(pfmz_index, field_var::Gz0);
+      pi_Gz0     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
+      pi_dGz0dx  = sixth*(wx - wmx);
+      pi_dGz0dy  = sixth*(wy - wmy);
+      pi_dGz0dz  = sixth*(wz - wmz);
+      pi_d2Gz0dx = twelfth*(wx + wmx - two*w0);
+      pi_d2Gz0dy = twelfth*(wy + wmy - two*w0);
+      pi_d2Gz0dz = twelfth*(wz + wmz - two*w0);
 #endif
 #endif
-
-        // Ey0 interpolation coefficients
-        w0  = k_field(pf0_index,  field_var::Ey0);
-        wx  = k_field(pfx_index,  field_var::Ey0);
-        wy  = k_field(pfy_index,  field_var::Ey0);
-        wz  = k_field(pfz_index,  field_var::Ey0);
-        wmx = k_field(pfmx_index, field_var::Ey0);
-        wmy = k_field(pfmy_index, field_var::Ey0);
-        wmz = k_field(pfmz_index, field_var::Ey0);
-
-#ifdef SHAPE_NGP
-        pi_Ey0     = w0;
-#else
-#ifdef SHAPE_QS
-        pi_Ey0     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
-        pi_dEy0dx  = sixth*(wx - wmx);
-        pi_dEy0dy  = sixth*(wy - wmy);
-        pi_dEy0dz  = sixth*(wz - wmz);
-        pi_d2Ey0dx = twelfth*(wx + wmx - two*w0);
-        pi_d2Ey0dy = twelfth*(wy + wmy - two*w0);
-        pi_d2Ey0dz = twelfth*(wz + wmz - two*w0);
-#endif
-#endif
-
-        // Ez0 interpolation coefficients
-        w0  = k_field(pf0_index,  field_var::Ez0);
-        wx  = k_field(pfx_index,  field_var::Ez0);
-        wy  = k_field(pfy_index,  field_var::Ez0);
-        wz  = k_field(pfz_index,  field_var::Ez0);
-        wmx = k_field(pfmx_index, field_var::Ez0);
-        wmy = k_field(pfmy_index, field_var::Ez0);
-        wmz = k_field(pfmz_index, field_var::Ez0);
-
-#ifdef SHAPE_NGP
-        pi_Ez0     = w0;
-#else
-#ifdef SHAPE_QS
-        pi_Ez0     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
-        pi_dEz0dx  = sixth*(wx - wmx);
-        pi_dEz0dy  = sixth*(wy - wmy);
-        pi_dEz0dz  = sixth*(wz - wmz);
-        pi_d2Ez0dx = twelfth*(wx + wmx - two*w0);
-        pi_d2Ez0dy = twelfth*(wy + wmy - two*w0);
-        pi_d2Ez0dz = twelfth*(wz + wmz - two*w0);
-#endif
-#endif
-
-        // Gx0 interpolation coefficients
-        w0  = k_field(pf0_index,  field_var::Gx0);
-        wx  = k_field(pfx_index,  field_var::Gx0);
-        wy  = k_field(pfy_index,  field_var::Gx0);
-        wz  = k_field(pfz_index,  field_var::Gx0);
-        wmx = k_field(pfmx_index, field_var::Gx0);
-        wmy = k_field(pfmy_index, field_var::Gx0);
-        wmz = k_field(pfmz_index, field_var::Gx0);
-
-#ifdef SHAPE_NGP
-        pi_Gx0     = w0;
-#else
-#ifdef SHAPE_QS
-        pi_Gx0     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
-        pi_dGx0dx  = sixth*(wx - wmx);
-        pi_dGx0dy  = sixth*(wy - wmy);
-        pi_dGx0dz  = sixth*(wz - wmz);
-        pi_d2Gx0dx = twelfth*(wx + wmx - two*w0);
-        pi_d2Gx0dy = twelfth*(wy + wmy - two*w0);
-        pi_d2Gx0dz = twelfth*(wz + wmz - two*w0);
-#endif
-#endif
-
-        // Gy0 interpolation coefficients
-        w0  = k_field(pf0_index,  field_var::Gy0);
-        wx  = k_field(pfx_index,  field_var::Gy0);
-        wy  = k_field(pfy_index,  field_var::Gy0);
-        wz  = k_field(pfz_index,  field_var::Gy0);
-        wmx = k_field(pfmx_index, field_var::Gy0);
-        wmy = k_field(pfmy_index, field_var::Gy0);
-        wmz = k_field(pfmz_index, field_var::Gy0);
-
-#ifdef SHAPE_NGP
-        pi_Gy0     = w0;
-#else
-#ifdef SHAPE_QS
-        pi_Gy0     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
-        pi_dGy0dx  = sixth*(wx - wmx);
-        pi_dGy0dy  = sixth*(wy - wmy);
-        pi_dGy0dz  = sixth*(wz - wmz);
-        pi_d2Gy0dx = twelfth*(wx + wmx - two*w0);
-        pi_d2Gy0dy = twelfth*(wy + wmy - two*w0);
-        pi_d2Gy0dz = twelfth*(wz + wmz - two*w0);
-#endif
-#endif
-
-        // Gz0 interpolation coefficients
-        w0  = k_field(pf0_index,  field_var::Gz0);
-        wx  = k_field(pfx_index,  field_var::Gz0);
-        wy  = k_field(pfy_index,  field_var::Gz0);
-        wz  = k_field(pfz_index,  field_var::Gz0);
-        wmx = k_field(pfmx_index, field_var::Gz0);
-        wmy = k_field(pfmy_index, field_var::Gz0);
-        wmz = k_field(pfmz_index, field_var::Gz0);
-
-#ifdef SHAPE_NGP
-        pi_Gz0     = w0;
-#else
-#ifdef SHAPE_QS
-        pi_Gz0     = twelfth*(six*w0 + wx + wy + wz + wmx + wmy + wmz);
-        pi_dGz0dx  = sixth*(wx - wmx);
-        pi_dGz0dy  = sixth*(wy - wmy);
-        pi_dGz0dz  = sixth*(wz - wmz);
-        pi_d2Gz0dx = twelfth*(wx + wmx - two*w0);
-        pi_d2Gz0dy = twelfth*(wy + wmy - two*w0);
-        pi_d2Gz0dz = twelfth*(wz + wmz - two*w0);
-#endif
-#endif
-
-// close EXTERNAL_FORCE macro block
-#endif
-
-        //pi++; pf0++; pfx++; pfy++; pfz++; pfyz++; pfzx++; pfxy++;
-
-    }); // end Kokkos::parallel_for("load interpolator")
+  }); // end Kokkos::parallel_for("load interpolator")
 
   #undef pi_ex
   #undef pi_dexdx
@@ -714,8 +653,7 @@ interpolator_array_t::copy_to_host() {
       host_interp[i].Gy0      = k_interpolator_h(i, interpolator_var::Gy0);
       host_interp[i].Gz0      = k_interpolator_h(i, interpolator_var::Gz0);
   #endif
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
       host_interp[i].ex      = k_interpolator_h(i, interpolator_var::ex     );
       host_interp[i].dexdx   = k_interpolator_h(i, interpolator_var::dexdx  );
       host_interp[i].dexdy   = k_interpolator_h(i, interpolator_var::dexdy  );
@@ -805,7 +743,6 @@ interpolator_array_t::copy_to_host() {
       host_interp[i].d2Gz0dz  = k_interpolator_h(i, interpolator_var::d2Gz0dz );
   #endif
 #endif
-#endif
     });
 
 }
@@ -835,8 +772,7 @@ interpolator_array_t::copy_to_device() {
       k_interpolator_h(i, interpolator_var::Gy0)       = host_interp[i].Gy0;
       k_interpolator_h(i, interpolator_var::Gz0)       = host_interp[i].Gz0;
   #endif
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
       k_interpolator_h(i, interpolator_var::ex      ) = host_interp[i].ex     ;
       k_interpolator_h(i, interpolator_var::dexdx   ) = host_interp[i].dexdx  ;
       k_interpolator_h(i, interpolator_var::dexdy   ) = host_interp[i].dexdy  ;
@@ -925,7 +861,6 @@ interpolator_array_t::copy_to_device() {
       k_interpolator_h(i, interpolator_var::d2Gz0dy ) = host_interp[i].d2Gz0dy;
       k_interpolator_h(i, interpolator_var::d2Gz0dz ) = host_interp[i].d2Gz0dz;
   #endif
-#endif
 #endif
     });
 

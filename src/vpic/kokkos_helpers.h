@@ -41,14 +41,12 @@
   #else
     #define INTERPOLATOR_VAR_COUNT 6
   #endif
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
   #ifdef EXTERNAL_FORCE
     #define INTERPOLATOR_VAR_COUNT 84
   #else
     #define INTERPOLATOR_VAR_COUNT 42
   #endif
-#endif
 #endif
 
 #ifdef KOKKOS_ENABLE_CUDA
@@ -250,8 +248,7 @@ namespace interpolator_var {
     Gy0      = 10,
     Gz0      = 11,
   #endif
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
     ex       = 0,
     dexdx    = 1,
     dexdy    = 2,
@@ -338,7 +335,6 @@ namespace interpolator_var {
     d2Gz0dy   = 82,
     d2Gz0dz   = 83,
   #endif
-#endif
 #endif
   };
 };

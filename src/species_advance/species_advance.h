@@ -467,7 +467,7 @@ move_p_kokkos(
   //int pi = int(local_pm_i);
   int pi = pm->i;
   float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
-  const float one=1., two=2., three=3., one_twelfth=1./12.;
+  constexpr float one=1., two=2., three=3., one_twelfth=1./12.;
   //const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
   const float rV = 1.0/gdx/gdy/gdz;
   const float rV12 = rV*one_twelfth;
@@ -534,25 +534,24 @@ move_p_kokkos(
 	//if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
 	  
 #ifdef SHAPE_NGP
-	  scatter_access(ii, field_var::jfx) += q*rV*ux;
-	  scatter_access(ii, field_var::jfy) += q*rV*uy;
-	  scatter_access(ii, field_var::jfz) += q*rV*uz;
-	  scatter_access(ii, field_var::rhof) += q*rV;
-#else
-#ifdef SHAPE_QS
+          scatter_access(ii, field_var::jfx) += q*rV*ux;
+          scatter_access(ii, field_var::jfy) += q*rV*uy;
+          scatter_access(ii, field_var::jfz) += q*rV*uz;
+          scatter_access(ii, field_var::rhof) += q*rV;
+#elif defined( SHAPE_QS )
           // stencil coefficients
           // ... OLD hybrid-VPIC with QS shape, the accumulator stores
           // ... ... p->w*qsp * two*(three - ...)
           // ... ... hyb_unload_accumulator(...) applies factor rV/12.
           // ... NEW HVPIC-K not using accumulator (yet), scatter directly to mesh,
           // ... ... so include all factors
-          w0 =  q*rV12*two*( three - x_half*x_half - y_half*y_half - z_half*z_half );
-          wx =  q*rV12*( x_half + one )*( x_half + one );
-          wy =  q*rV12*( y_half + one )*( y_half + one );
-          wz =  q*rV12*( z_half + one )*( z_half + one );
-          wmx = q*rV12*( x_half - one )*( x_half - one );
-          wmy = q*rV12*( y_half - one )*( y_half - one );
-          wmz = q*rV12*( z_half - one )*( z_half - one );
+          w0 =  q*rV12*2.f*( 3.f - x_half*x_half - y_half*y_half - z_half*z_half );
+          wx =  q*rV12*( x_half + 1.f )*( x_half + 1.f );
+          wy =  q*rV12*( y_half + 1.f )*( y_half + 1.f );
+          wz =  q*rV12*( z_half + 1.f )*( z_half + 1.f );
+          wmx = q*rV12*( x_half - 1.f )*( x_half - 1.f );
+          wmy = q*rV12*( y_half - 1.f )*( y_half - 1.f );
+          wmz = q*rV12*( z_half - 1.f )*( z_half - 1.f );
 
           // Voxel indices
           int iii = ii;
@@ -603,7 +602,6 @@ move_p_kokkos(
           scatter_access(iimz, field_var::jfz)  += wmz*uz;
           scatter_access(iimz, field_var::rhof) += wmz;
 #endif // defined(SHAPE_QS)
-#endif // defined(SHAPE_NGP)
 	//}
 	
 	
@@ -823,7 +821,7 @@ move_p_kokkos_host_serial(
   const int nz = g->nz;
 
   float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
-  const float one=1., two=2., three=3., one_twelfth=1./12.;
+  constexpr float one=1., two=2., three=3., one_twelfth=1./12.;
   const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
   const float rV = g->rdx * g->rdy * g->rdz;
   const float rV12 = rV*one_twelfth;
@@ -916,21 +914,20 @@ move_p_kokkos_host_serial(
         k_jf_accum(ii, accumulator_var::jy) += q*rV*uy;
         k_jf_accum(ii, accumulator_var::jz) += q*rV*uz;
         k_jf_accum(ii, accumulator_var::rho) += q*rV;
-#else
-#ifdef SHAPE_QS
+#elif defined( SHAPE_QS )
         // stencil coefficients
         // ... OLD hybrid-VPIC with QS shape, the accumulator stores
         // ... ... p->w*qsp * two*(three - ...)
         // ... ... hyb_unload_accumulator(...) applies factor rV/12.
         // ... NEW HVPIC-K not using accumulator (yet), scatter directly to mesh,
         // ... ... so include all factors
-        w0 =  q*rV12*two*( three - x_half*x_half - y_half*y_half - z_half*z_half );
-        wx =  q*rV12*( x_half + one )*( x_half + one );
-        wy =  q*rV12*( y_half + one )*( y_half + one );
-        wz =  q*rV12*( z_half + one )*( z_half + one );
-        wmx = q*rV12*( x_half - one )*( x_half - one );
-        wmy = q*rV12*( y_half - one )*( y_half - one );
-        wmz = q*rV12*( z_half - one )*( z_half - one );
+        w0 =  q*rV12*2.f*( 3.f - x_half*x_half - y_half*y_half - z_half*z_half );
+        wx =  q*rV12*( x_half + 1.f )*( x_half + 1.f );
+        wy =  q*rV12*( y_half + 1.f )*( y_half + 1.f );
+        wz =  q*rV12*( z_half + 1.f )*( z_half + 1.f );
+        wmx = q*rV12*( x_half - 1.f )*( x_half - 1.f );
+        wmy = q*rV12*( y_half - 1.f )*( y_half - 1.f );
+        wmz = q*rV12*( z_half - 1.f )*( z_half - 1.f );
 
         // Voxel indices
         int iii = ii;
@@ -981,7 +978,6 @@ move_p_kokkos_host_serial(
         k_jf_accum(iimz, accumulator_var::jz)  += wmz*uz;
         k_jf_accum(iimz, accumulator_var::rho) += wmz;
 #endif // defined(SHAPE_QS)
-#endif // defined(SHAPE_NGP)
 
       } //if indbds
       
