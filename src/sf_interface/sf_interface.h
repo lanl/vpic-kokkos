@@ -228,7 +228,11 @@ typedef struct hydro_array {
     * @brief Copies the hydro data to host legacy array
     */
   void copy_to_host(FILE *fp=nullptr,  const int step = 0);
-  // I don't think we need a copy_to_device, but I could write one easily.
+
+  /**
+    * @brief Copies the hydro data to device from the host legacy array 
+    */
+  void copy_to_device(FILE *fp=nullptr,  const int step = 0);
 
 } hydro_array_t;
 

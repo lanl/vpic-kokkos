@@ -356,6 +356,7 @@ public:
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
   void dump_fluid_species( const char *fname );
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
   void dump_tracers_buffered_csv( const char *sp_name, uint32_t dump_vars, 
                                   const char *fbase, int fname_tag = 1 );
   void dump_tracers_csv( const char *sp_name, uint32_t dump_vars, 
@@ -365,6 +366,7 @@ public:
                            const char *fbase,
                            const int append=1,
                            int ftag=1 );
+#endif
 
   // Binary dumps
   void dump_grid( const char *fbase );
@@ -378,13 +380,16 @@ public:
 
   // HDF5 dumps
 #if defined( VPIC_ENABLE_HDF5 ) && defined( VPIC_ENABLE_TRACER_PARTICLES )
+  void dump_tracers(const char* sp_name, const uint32_t dump_vars, const char* fbase,
+                    const bool buffer_enabled=true, const bool async_enabled=false);
+  void dump_tracers_hdf5(const char* sp_name, const uint32_t dump_vars, const char*fbase);
+  void dump_tracers_buffered_hdf5( const char *sp_name, uint32_t dump_vars, 
+                                   const char *fbase);
+  void tracer_dump(const char* species_name, DumpParameters& dumpParams);
 #ifdef VPIC_ENABLE_HDF5_ASYNC
   void dump_tracers_hdf5_async(const char* sp_name, const uint32_t dump_vars, const char*fbase);
   void dump_tracers_buffered_hdf5_async( const char *sp_name, uint32_t dump_vars, const char *fbase );
 #endif
-  void dump_tracers_hdf5(const char* sp_name, const uint32_t dump_vars, const char*fbase);
-  void dump_tracers_buffered_hdf5( const char *sp_name, uint32_t dump_vars, const char *fbase );
-  void tracer_dump(const char* species_name, DumpParameters& dumpParams);
 #endif
 
   // convenience functions for simlog output
@@ -1066,7 +1071,7 @@ public:
     // Adjust amount of local particles/movers for tracers
     const size_t count_true = std::count_if(original_species->p, original_species->p + original_species->np, filter);
     const size_t max_local_np = ceil(original_species->max_np * over_alloc_factor * count_true/float(original_species->np)) + 1;
-    const size_t max_local_nm = ceil(original_species->max_nm * over_alloc_factor * count_true/float(original_species->nm)) + 1;
+    const size_t max_local_nm = ceil(original_species->max_nm * over_alloc_factor * count_true/float(original_species->np)) + 1;
     
     // Create tracer species based on the original species
     species_t* tracers = species( name, 

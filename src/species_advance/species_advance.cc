@@ -197,7 +197,7 @@ species_t::copy_to_host()
   auto& particles = p;
 
   Kokkos::parallel_for("copy particles to host",
-    host_execution_policy(0, np) ,
+    Kokkos::RangePolicy<size_t,Kokkos::DefaultHostExecutionSpace>(0LLU, np) ,
     KOKKOS_LAMBDA (size_t i) {
 
       particles[i].dx = k_particle_h(i, particle_var::dx);
@@ -220,7 +220,7 @@ species_t::copy_to_host()
   auto& movers = pm;
 
   Kokkos::parallel_for("copy movers to host",
-    host_execution_policy(0, max_nm) ,
+    Kokkos::RangePolicy<size_t,Kokkos::DefaultHostExecutionSpace>(0, max_nm) ,
     KOKKOS_LAMBDA (size_t i) {
 
       movers[i].dispx = k_particle_movers_h(i, particle_mover_var::dispx);
@@ -247,7 +247,7 @@ species_t::copy_to_device()
 
   Kokkos::parallel_for("copy particles to device",
     Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, size_t>(0, np) ,
-    KOKKOS_LAMBDA (size_t i) {
+    KOKKOS_LAMBDA (const size_t i) {
 
       k_particle_h(i, particle_var::dx) = particles[i].dx;
       k_particle_h(i, particle_var::dy) = particles[i].dy;
@@ -269,8 +269,8 @@ species_t::copy_to_device()
   auto& movers = pm;
 
   Kokkos::parallel_for("copy movers to device",
-    host_execution_policy(0, max_nm) ,
-    KOKKOS_LAMBDA (size_t i) {
+    Kokkos::RangePolicy<size_t,Kokkos::DefaultHostExecutionSpace>(0, max_nm) ,
+    KOKKOS_LAMBDA (const size_t i) {
 
       k_particle_movers_h(i, particle_mover_var::dispx) = movers[i].dispx;
       k_particle_movers_h(i, particle_mover_var::dispy) = movers[i].dispy;

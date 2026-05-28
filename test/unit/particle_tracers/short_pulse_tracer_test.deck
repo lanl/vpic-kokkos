@@ -1394,14 +1394,11 @@ begin_initialization {
 
   //global->hedParams.output_variables( all );
   global->hedParams.output_variables(  current_density  | charge_density |
-                                       momentum_density | ke_density |
-                                       stress_tensor );
-  global->hI1dParams.output_variables(  current_density  | charge_density |
-                                       momentum_density | ke_density |
-                                       stress_tensor );
+                                       momentum_density | stress_tensor );
+  global->hI1dParams.output_variables(  current_density | charge_density |
+                                       momentum_density | stress_tensor );
   global->hI2dParams.output_variables( current_density  | charge_density |
-                                       momentum_density | ke_density |
-                                       stress_tensor );
+                                       momentum_density | stress_tensor );
 
  /*--------------------------------------------------------------------------
   * Convenience functions for simlog output

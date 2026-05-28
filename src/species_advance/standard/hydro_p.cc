@@ -203,7 +203,7 @@ accumulate_hydro_p_kokkos_nomove_ngp(
                         VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
 
 
-  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
+  Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace,size_t > (0LLU, np),
     KOKKOS_LAMBDA (size_t p_index)
     {
 
@@ -295,7 +295,7 @@ accumulate_hydro_p_kokkos(
   //float w0, w1, w2, w3, w4, w5, w6, w7, t;
   //int i, n;
   //
-  int nv = sp->g->nv; // TODO: delete
+  size_t nv = static_cast<size_t>(sp->g->nv); // TODO: delete
 
   if( !sp ) {
     ERROR(( "Bad args" ));
@@ -310,7 +310,7 @@ accumulate_hydro_p_kokkos(
   Kokkos::View<int*, Kokkos::DefaultExecutionSpace> particle_count("particle_count", nv);
 
   // Set initial values to min_q
-  Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, nv),
+  Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace, size_t>(0LLU, nv),
     KOKKOS_LAMBDA(size_t ii)
     {
         k_hydro(ii, hydro_var::min_q) = 999999999;
@@ -331,8 +331,8 @@ accumulate_hydro_p_kokkos(
                         VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
 
   //for( n=0; n<np; n++ ) {
-  Kokkos::parallel_for("hydro_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, np),
-    KOKKOS_LAMBDA (size_t p_index)
+  Kokkos::parallel_for("hydro_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace,size_t > (0LLU, np),
+    KOKKOS_LAMBDA (const size_t p_index)
     {
 
     // Load the particle
@@ -526,7 +526,7 @@ accumulate_hydro_p_kokkos(
 
 #ifdef VARIABLE_CHARGE
   // Give nan values to cells without particles
-  Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, nv),
+  Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace, size_t>(0LLU, nv),
     KOKKOS_LAMBDA(size_t ii)
     {
       // Calculate mean charge only if there are particles in the cell
