@@ -404,7 +404,7 @@ void restore_kokkos(vpic_simulation& simulation, const char *fbase)
           new(&sp->annotations_recv_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
 
 #ifdef VPIC_ENABLE_TRACER_PARTICLES
-          new(&sp->np_per_ts_io_buffer) std::vector<std::pair<int64_t,int64_t>>();
+          new(&sp->np_per_ts) std::vector<std::pair<int64_t,int64_t>>();
 
           new(&sp->particle_io_buffer_d) k_particles_t();
           new(&sp->particle_cell_io_buffer_d) k_particles_t();
@@ -512,7 +512,7 @@ void restore_kokkos(vpic_simulation& simulation, const char *fbase)
 
         // Initialize annotations and buffers
         sp->init_annotations(sp->max_np, sp->max_nm, annotation_vars);
-        sp->init_io_buffers(sp->nparticles_buffered_max);
+        sp->init_io_buffers(sp->np_buffered_max);
 
         // Read annotation data
         if(n_i32_vars > 0) {

@@ -665,7 +665,7 @@ void buffer_tracers(species_t* sp,
   auto& particles_i = sp->k_p_i_d;
   auto& interp = ia->k_i_d;
 
-  size_t nbuffered = sp->nparticles_buffered;
+  size_t nbuffered = sp->np_buffered;
   auto particle_slice = Kokkos::make_pair(static_cast<size_t>(0), sp->np);
   auto buffer_slice = Kokkos::make_pair(nbuffered, nbuffered+sp->np);
 
@@ -700,7 +700,7 @@ void buffer_tracers(species_t* sp,
   }
 
   // Buffer tracer data
-  sp->np_per_ts_io_buffer.push_back(std::make_pair(sp->np, step));
+  sp->np_per_ts.push_back(std::make_pair(sp->np, step));
   auto& e_buffer_d = sp->efields_io_buffer_d;
   auto& b_buffer_d = sp->bfields_io_buffer_d;
   auto& current_buffer_d = sp->current_dens_io_buffer_d;
@@ -765,7 +765,7 @@ void buffer_tracers(species_t* sp,
       particle_ke_buffer_d(nbuffered+i) = v0;
     }
   });
-  sp->nparticles_buffered += sp->np;     
+  sp->np_buffered += sp->np;     
 }
 
 void
@@ -818,7 +818,7 @@ vpic_simulation::dump_tracers(const char *sp_name,
 #endif
 
   // Check if any buffers are filled. If any process needs to dump then all must do it together
-  int buff_has_space = (sp->nparticles_buffered+sp->np <= sp->particle_io_buffer_h.extent(0));
+  int buff_has_space = (sp->np_buffered+sp->np <= sp->particle_io_buffer_h.extent(0));
   if(buffer_enabled) {
     MPI_Allreduce(MPI_IN_PLACE, &buff_has_space, 1, MPI_INT, MPI_PROD, MPI_COMM_WORLD);
   } else {
@@ -940,7 +940,7 @@ vpic_simulation::dump_tracers(const char *sp_name,
     // Write buffered tracer data
     uint64_t particle_idx = 0;
     // Iterate through each timestep, write non buffered particles last
-    const auto steps_buffered = buffer_enabled ? sp->np_per_ts_io_buffer.size() : 0;
+    const auto steps_buffered = buffer_enabled ? sp->np_per_ts.size() : 0;
     for(uint32_t ts_idx=0; ts_idx < steps_buffered+1; ts_idx++) {
       int64_t time_step;
 
@@ -949,8 +949,8 @@ vpic_simulation::dump_tracers(const char *sp_name,
         time_step = step();
         num_particles = sp->np;
       } else {
-        time_step = sp->np_per_ts_io_buffer[ts_idx].second;
-        num_particles = sp->np_per_ts_io_buffer[ts_idx].first;
+        time_step = sp->np_per_ts[ts_idx].second;
+        num_particles = sp->np_per_ts[ts_idx].first;
       }
 
       // Calculate the total number of particles for this timestep
@@ -993,7 +993,7 @@ vpic_simulation::dump_tracers(const char *sp_name,
                       memspace_id, dxpl_id);
         // Move slice beg to next time step in buffer
         if(write_buffered) {
-          particle_idx += sp->np_per_ts_io_buffer[ts_idx].first;
+          particle_idx += sp->np_per_ts[ts_idx].first;
         }
 
         status = H5Sclose(memspace_id);
@@ -1011,8 +1011,8 @@ vpic_simulation::dump_tracers(const char *sp_name,
 
       if(buffer_enabled && (ts_idx == steps_buffered)) {
         // Clear buffers
-        sp->nparticles_buffered = 0;
-        sp->np_per_ts_io_buffer.clear();
+        sp->np_buffered = 0;
+        sp->np_per_ts.clear();
       }
     }
 
