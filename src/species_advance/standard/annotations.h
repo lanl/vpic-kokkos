@@ -98,7 +98,7 @@ struct annotation_vars_t {
 
 };
 
-template<typename ExecSpace>
+template<typename ExecSpace=Kokkos::DefaultExecutionSpace>
 class annotations_t {
 public:
   using memory_space = typename ExecSpace::memory_space;

@@ -216,27 +216,13 @@ class species_t {
 
         k_particles_t                                particle_io_buffer_d;
         k_particles_i_t                              particle_cell_io_buffer_d;
-        Kokkos::View<float*[3], Kokkos::LayoutLeft>  efields_io_buffer_d;
-        Kokkos::View<float*[3], Kokkos::LayoutLeft>  bfields_io_buffer_d;
-        Kokkos::View<float*[3], Kokkos::LayoutLeft>  current_dens_io_buffer_d;
-        Kokkos::View<float*>                         charge_dens_io_buffer_d;
-        Kokkos::View<float*[3], Kokkos::LayoutLeft>  momentum_dens_io_buffer_d;
-        Kokkos::View<float*>                         ke_dens_io_buffer_d;
-        Kokkos::View<float*[6], Kokkos::LayoutLeft>  stress_tensor_io_buffer_d;
-        Kokkos::View<float*>                         particle_ke_io_buffer_d;
         annotations_t<Kokkos::DefaultExecutionSpace> annotations_io_buffer_d;
+        Kokkos::View<float**, Kokkos::LayoutLeft>    tracer_buffer_d;
 
         k_particles_t::HostMirror                               particle_io_buffer_h;
         k_particles_i_t::HostMirror                             particle_cell_io_buffer_h;
-        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror efields_io_buffer_h;
-        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror bfields_io_buffer_h;
-        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror current_dens_io_buffer_h;
-        Kokkos::View<float*>::HostMirror                        charge_dens_io_buffer_h;
-        Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror momentum_dens_io_buffer_h;
-        Kokkos::View<float*>::HostMirror                        ke_dens_io_buffer_h;
-        Kokkos::View<float*[6], Kokkos::LayoutLeft>::HostMirror stress_tensor_io_buffer_h;
-        Kokkos::View<float*>::HostMirror                        particle_ke_io_buffer_h;
         annotations_t<Kokkos::DefaultHostExecutionSpace>        annotations_io_buffer_h;
+        Kokkos::View<float**, Kokkos::LayoutLeft>::HostMirror   tracer_buffer_h;
 #endif
 
 
@@ -341,8 +327,8 @@ class species_t {
          *  @param N_particles       Number of particles to buffer before dumping
          *  @param over_alloc_factor Multiplier for over allocating space
          */
-        void init_io_buffers(const int N_particles, const float over_alloc_factor);
-        void init_io_buffers(const int N_particles);
+        void init_io_buffers(const size_t N_particles, const float over_alloc_factor);
+        void init_io_buffers(const size_t N_particles);
 
         /**
          * @brief Add additional per particle annotations. 
@@ -351,7 +337,7 @@ class species_t {
          * @param num_movers    Number of movers that need annotations
          * @param vars          Annotation variables
          */
-        void init_annotations( int num_particles, int num_movers, annotation_vars_t& vars );
+        void init_annotations( const size_t num_particles, const size_t num_movers, annotation_vars_t& vars );
 
         /**
          * Create tracer particles from parent species using a predicate

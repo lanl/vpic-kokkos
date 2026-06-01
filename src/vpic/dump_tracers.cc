@@ -87,9 +87,9 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
     if(dump_vars & DumpVar::MomentumDensity) {
       header_str += ",px,py,pz";
     }
-    //if(dump_vars & DumpVar::KEDensity) {
-    //  header_str += ",ke_dens";
-    //}
+    if(dump_vars & DumpVar::MassDensity) {
+      header_str += ",mass_dens";
+    }
     if(dump_vars & DumpVar::StressTensor) {
       header_str += ",txx,tyy,tzz,tyz,tzx,txy";
     }
@@ -210,10 +210,10 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
         float pz  = hydro_array->k_h_h(ii, hydro_var::pz);
         fileIO.print(",%e,%e,%e", px, py, pz);
       }
-      //if(dump_vars & DumpVar::KEDensity) {
-      //  float ke = hydro_array->k_h_h(ii, hydro_var::ke);
-      //  fileIO.print(",%e", ke);
-      //}
+      if(dump_vars & DumpVar::MassDensity) {
+        float rho_m = hydro_array->k_h_h(ii, hydro_var::rho_m);
+        fileIO.print(",%e", rho_m);
+      }
       if(dump_vars & DumpVar::StressTensor) {
         float txx = hydro_array->k_h_h(ii, hydro_var::txx);
         float tyy = hydro_array->k_h_h(ii, hydro_var::tyy);
@@ -417,9 +417,9 @@ write_tracers(species_t* sp,
 
   // Dump E field if specified
   if(dump_vars & DumpVar::Efield) {
-    auto ex_subview = Kokkos::subview(sp->efields_io_buffer_h, slice, 0);
-    auto ey_subview = Kokkos::subview(sp->efields_io_buffer_h, slice, 1);
-    auto ez_subview = Kokkos::subview(sp->efields_io_buffer_h, slice, 2);
+    auto ex_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::ex);
+    auto ey_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::ey);
+    auto ez_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::ez);
     Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space> efield_view;
     if(!buffered) {
       efield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("E field Host View", num_particles);
@@ -441,9 +441,9 @@ write_tracers(species_t* sp,
 
   // Dump B field if specified
   if(dump_vars & DumpVar::Bfield) {
-    auto bx_subview = Kokkos::subview(sp->bfields_io_buffer_h, slice, 0);
-    auto by_subview = Kokkos::subview(sp->bfields_io_buffer_h, slice, 1);
-    auto bz_subview = Kokkos::subview(sp->bfields_io_buffer_h, slice, 2);
+    auto bx_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::bx);
+    auto by_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::by);
+    auto bz_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::bz);
     Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space> bfield_view;
     if(!buffered) {
       bfield_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("B field Host View", num_particles);
@@ -465,9 +465,9 @@ write_tracers(species_t* sp,
 
   // Dump current density if specified
   if(dump_vars & DumpVar::CurrentDensity) {
-    auto jx_subview = Kokkos::subview(sp->current_dens_io_buffer_h, slice, 0);
-    auto jy_subview = Kokkos::subview(sp->current_dens_io_buffer_h, slice, 1);
-    auto jz_subview = Kokkos::subview(sp->current_dens_io_buffer_h, slice, 2);
+    auto jx_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::jx);
+    auto jy_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::jy);
+    auto jz_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::jz);
     Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space> current_view;
     if(!buffered) {
       current_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Current density Host View", num_particles);
@@ -489,7 +489,7 @@ write_tracers(species_t* sp,
 
   // Dump charge density if specified
   if(dump_vars & DumpVar::ChargeDensity) {
-    auto charge_subview = Kokkos::subview(sp->charge_dens_io_buffer_h, slice);
+    auto charge_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::rho);
     Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space> charge_view;
     if(!buffered) {
       charge_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("Charge density Host View", num_particles);
@@ -505,9 +505,9 @@ write_tracers(species_t* sp,
 
   // Dump momentum density if specified
   if(dump_vars & DumpVar::MomentumDensity) {
-    auto px_subview = Kokkos::subview(sp->momentum_dens_io_buffer_h, slice, 0);
-    auto py_subview = Kokkos::subview(sp->momentum_dens_io_buffer_h, slice, 1);
-    auto pz_subview = Kokkos::subview(sp->momentum_dens_io_buffer_h, slice, 2);
+    auto px_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::px);
+    auto py_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::py);
+    auto pz_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::pz);
     Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space> momentum_view;
     if(!buffered) {
       momentum_view = Kokkos::View<float*[3], Kokkos::LayoutLeft, host_memory_space>("Momentum Host View", num_particles);
@@ -527,32 +527,30 @@ write_tracers(species_t* sp,
     status = write_dataset(pz_subview, "pz", loc_id, H5T_IEEE_F32LE, dataspace_id, memspace_id, H5P_DEFAULT, es_id);
   }
 
-  // Dump kinetic energy density if specified
-  //if(dump_vars & DumpVar::KEDensity) {
-  //  auto ke_subview = Kokkos::subview(sp->ke_dens_io_buffer_h, slice);
-  //  Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space> ke_view;
-  //  if(!buffered) {
-  //    ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", num_particles);
-  //    Kokkos::parallel_for("Collect KE density", pack_policy, KOKKOS_LAMBDA(const size_t i) {
-  //      int   ii  = i_subview(i);
-  //      ke_view(i) = h_hydro(ii, hydro_var::ke);
-  //    });
-  //    Kokkos::fence();
-  //    ke_subview = Kokkos::subview(ke_view, Kokkos::ALL());
-  //  }
-  //  hid_t dataset_ke_id = H5Dcreate(loc_id, "ke_dens", H5T_IEEE_F32LE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  //  status = H5Dwrite(dataset_ke_id, H5T_IEEE_F32LE, memspace_id, dataspace_id, H5P_DEFAULT, ke_subview.data());
-  //  H5Dclose(dataset_ke_id);
-  //}
+  // Dump mass density if specified
+  if(dump_vars & DumpVar::MassDensity) {
+    auto rho_m_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::rho_m);
+    Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space> rho_m_view;
+    if(!buffered) {
+      rho_m_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("Mass dens Host View", num_particles);
+      Kokkos::parallel_for("Collect KE density", pack_policy, KOKKOS_LAMBDA(const size_t i) {
+        int   ii  = i_subview(i);
+        rho_m_view(i) = h_hydro(ii, hydro_var::rho_m);
+      });
+      Kokkos::fence();
+      rho_m_subview = Kokkos::subview(rho_m_view, Kokkos::ALL());
+    }
+    status = write_dataset(rho_m_subview, "mass_dens", loc_id, H5T_IEEE_F32LE, dataspace_id, memspace_id, H5P_DEFAULT, es_id);
+  }
 
   // Dump stress tensor if specified
   if(dump_vars & DumpVar::StressTensor) {
-    auto txx_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 0);
-    auto tyy_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 1);
-    auto tzz_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 2);
-    auto tyz_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 3);
-    auto tzx_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 4);
-    auto txy_subview = Kokkos::subview(sp->stress_tensor_io_buffer_h, slice, 5);
+    auto txx_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::txx);
+    auto tyy_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::tyy);
+    auto tzz_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::tzz);
+    auto tyz_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::tyz);
+    auto tzx_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::tzx);
+    auto txy_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::txy);
     Kokkos::View<float*[6], Kokkos::LayoutLeft, host_memory_space> stress_view;
     if(!buffered) {
       auto stress_view = Kokkos::View<float*[6], Kokkos::LayoutLeft, host_memory_space>("Stress tensor Host View", num_particles);
@@ -584,7 +582,7 @@ write_tracers(species_t* sp,
   // Dump kinetic energy of particle if specified
   if(dump_vars & DumpVar::ParticleKE) {
     if(buffered) {
-      auto ke_subview = Kokkos::subview(sp->particle_ke_io_buffer_h, slice);
+      auto ke_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::ke);
       status = write_dataset(ke_subview, "ke", loc_id, H5T_IEEE_F32LE, dataspace_id, memspace_id, H5P_DEFAULT, es_id);
     } else {
       float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
@@ -701,14 +699,14 @@ void buffer_tracers(species_t* sp,
 
   // Buffer tracer data
   sp->np_per_ts.push_back(std::make_pair(sp->np, step));
-  auto& e_buffer_d = sp->efields_io_buffer_d;
-  auto& b_buffer_d = sp->bfields_io_buffer_d;
-  auto& current_buffer_d = sp->current_dens_io_buffer_d;
-  auto& charge_buffer_d = sp->charge_dens_io_buffer_d;
-  auto& momentum_buffer_d = sp->momentum_dens_io_buffer_d;
-  auto& ke_buffer_d = sp->ke_dens_io_buffer_d;
-  auto& stress_buffer_d = sp->stress_tensor_io_buffer_d;
-  auto& particle_ke_buffer_d = sp->particle_ke_io_buffer_d;
+  auto e_buffer_d           = Kokkos::subview(sp->tracer_buffer_d, Kokkos::ALL, Kokkos::make_pair((int)tracer_buffer_var::ex, (int)tracer_buffer_var::ez+1));
+  auto b_buffer_d           = Kokkos::subview(sp->tracer_buffer_d, Kokkos::ALL, Kokkos::make_pair((int)tracer_buffer_var::bx, (int)tracer_buffer_var::bz+1));
+  auto current_buffer_d     = Kokkos::subview(sp->tracer_buffer_d, Kokkos::ALL, Kokkos::make_pair((int)tracer_buffer_var::jx, (int)tracer_buffer_var::jz+1));
+  auto charge_buffer_d      = Kokkos::subview(sp->tracer_buffer_d, Kokkos::ALL, (int)tracer_buffer_var::rho);
+  auto momentum_buffer_d    = Kokkos::subview(sp->tracer_buffer_d, Kokkos::ALL, Kokkos::make_pair((int)tracer_buffer_var::px, (int)tracer_buffer_var::pz+1));
+  auto mass_dens_buffer_d   = Kokkos::subview(sp->tracer_buffer_d, Kokkos::ALL, (int)tracer_buffer_var::rho_m);
+  auto stress_buffer_d      = Kokkos::subview(sp->tracer_buffer_d, Kokkos::ALL, Kokkos::make_pair((int)tracer_buffer_var::txx, (int)tracer_buffer_var::txy+1));
+  auto particle_ke_buffer_d = Kokkos::subview(sp->tracer_buffer_d, Kokkos::ALL, (int)tracer_buffer_var::ke);
   auto& hydro_d = ha->k_h_d;
   float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
   float msp = sp->m;
@@ -744,6 +742,9 @@ void buffer_tracers(species_t* sp,
       momentum_buffer_d(nbuffered+i, 0) = hydro_d(ii, hydro_var::px);
       momentum_buffer_d(nbuffered+i, 1) = hydro_d(ii, hydro_var::py);
       momentum_buffer_d(nbuffered+i, 2) = hydro_d(ii, hydro_var::pz);
+    }
+    if(dump_vars & DumpVar::MassDensity) {
+      mass_dens_buffer_d(nbuffered+i) = hydro_d(ii, hydro_var::rho_m);
     }
     if(dump_vars & DumpVar::StressTensor) {
       stress_buffer_d(nbuffered+i, 0) = hydro_d(ii, hydro_var::txx);
@@ -911,29 +912,8 @@ vpic_simulation::dump_tracers(const char *sp_name,
       Kokkos::deep_copy(sp->particle_io_buffer_h, sp->particle_io_buffer_d);
       Kokkos::deep_copy(sp->particle_cell_io_buffer_h, sp->particle_cell_io_buffer_d);
       sp->annotations_io_buffer_h.copy_from(sp->annotations_io_buffer_d);
-      if(dump_vars & DumpVar::Efield) {
-        Kokkos::deep_copy(sp->efields_io_buffer_h, sp->efields_io_buffer_d);
-      }
-      if(dump_vars & DumpVar::Bfield) {
-        Kokkos::deep_copy(sp->bfields_io_buffer_h, sp->bfields_io_buffer_d);
-      }
-      if(dump_vars & DumpVar::CurrentDensity) {
-        Kokkos::deep_copy(sp->current_dens_io_buffer_h, sp->current_dens_io_buffer_d);
-      }
-      if(dump_vars & DumpVar::ChargeDensity) {
-        Kokkos::deep_copy(sp->charge_dens_io_buffer_h, sp->charge_dens_io_buffer_d);
-      }
-      if(dump_vars & DumpVar::MomentumDensity) {
-        Kokkos::deep_copy(sp->momentum_dens_io_buffer_h, sp->momentum_dens_io_buffer_d);
-      }
-      if(dump_vars & DumpVar::KEDensity) {
-        Kokkos::deep_copy(sp->ke_dens_io_buffer_h, sp->ke_dens_io_buffer_d);
-      }
-      if(dump_vars & DumpVar::StressTensor) {
-        Kokkos::deep_copy(sp->stress_tensor_io_buffer_h, sp->stress_tensor_io_buffer_d);
-      }
-      if(dump_vars & DumpVar::ParticleKE) {
-        Kokkos::deep_copy(sp->particle_ke_io_buffer_h, sp->particle_ke_io_buffer_d);
+      if(dump_vars > 0) {
+        Kokkos::deep_copy(sp->tracer_buffer_h, sp->tracer_buffer_d);
       }
     }
     Kokkos::fence();

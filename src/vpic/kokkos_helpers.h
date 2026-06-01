@@ -30,6 +30,7 @@
 #endif
 #define NUM_J_DIMS 4
 #define FLUID_VAR_COUNT 6+4
+#define TRACER_BUFFER_VAR_COUNT 21
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -328,6 +329,32 @@ namespace fluid_var {
         msy = 7,
         msz = 8,
         ens = 9,
+    };
+};
+
+namespace tracer_buffer_var {
+    enum tracer_buff_v {
+      ex    = 0,
+      ey    = 1,
+      ez    = 2,
+      bx    = 3,
+      by    = 4,
+      bz    = 5,
+      jx    = 6,
+      jy    = 7,
+      jz    = 8,
+      rho   = 9,
+      px    = 10,
+      py    = 11,
+      pz    = 12,
+      rho_m = 13,
+      txx   = 14,
+      tyy   = 15,
+      tzz   = 16,
+      tyz   = 17,
+      tzx   = 18,
+      txy   = 19,
+      ke    = 20,
     };
 };
 

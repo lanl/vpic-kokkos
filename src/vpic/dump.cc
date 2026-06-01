@@ -593,7 +593,7 @@ vpic_simulation::tracer_dump(const char* species_name,
   }
   species_t* sp = find_species_name( species_name, tracers_list );
   // Dump tracers to buffer or file
-  if(sp->nparticles_buffered_max > 0) {
+  if(sp->np_buffered_max > 0) {
     dump_tracers_buffered_hdf5(species_name, dump_vars, filename.c_str());
   } else {
     dump_tracers_hdf5(species_name, dump_vars, filename.c_str());

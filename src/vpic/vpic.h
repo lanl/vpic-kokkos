@@ -124,7 +124,7 @@ enum DumpVar {
   CurrentDensity  = (1<<10 | 1<<11 | 1<<12),
   ChargeDensity   = (1<<13),
   MomentumDensity = (1<<14 | 1<<15 | 1<<16),
-  KEDensity       = (1<<17),
+  MassDensity     = (1<<17),
   StressTensor    = (1<<18 | 1<<19 | 1<<20 | 1<<21 | 1<<22 | 1<<23),
   All             = 0xFFFFFFFF
 };
@@ -990,49 +990,6 @@ public:
     float skip = original_species->np / (static_cast<float>(original_species->np) * (percentage/100.0));
     return define_tracer_species_by_nth(name, original_species, tracer_type, skip, 
                                         num_particles_buffer, over_alloc_factor, annotations);
-    
-//    // Adjust amount of local particles/movers for tracers
-//    int max_local_np = (static_cast<int>(static_cast<float>(original_species->max_np) * over_alloc_factor) * (percentage/100.0)) + 1;
-//    int max_local_nm = (static_cast<int>(static_cast<float>(original_species->max_nm) * over_alloc_factor) * (percentage/100.0)) + 1;
-//
-//    // Create tracer species based on the original species
-//    species_t* tracers = species( name, 
-//                                  original_species->q, original_species->m, 
-//                                  max_local_np, max_local_nm, 
-//                                  original_species->sort_interval, original_species->sort_out_of_place, 
-//                                  grid);
-//    
-//    // Mark species as tracer
-//    tracers->is_tracer = true;
-//
-//    // Add annotations for globas tracer ID
-//    annotations.add_annotation<int>(std::string("TracerID"));
-//    if(tracer_type == TracerType::Copy)
-//      annotations.add_annotation<float>(std::string("Weight"));
-//
-//    // Copy any annotations from the parent species
-//    if(original_species->using_annotations) {
-//      annotations.combine(original_species->annotation_vars);
-//    }
-//
-//    int buffer_size = num_particles_buffer;
-//    if(num_particles_buffer == -1)
-//      buffer_size = max_local_np * 10;
-//
-//    tracers->init_annotations(max_local_np, max_local_nm, annotations);
-//    tracers->init_io_buffers(buffer_size, over_alloc_factor);
-//
-//    // Set parent species pointer
-//    tracers->parent_species = original_species;
-//
-//    // Set tracer type
-//    tracers->tracer_type = tracer_type;
-//
-//    // Copy of move particles to tracers
-//    float skip = original_species->np / (static_cast<float>(original_species->np) * (percentage/100.0));
-//    tracers->create_tracers_by_nth(original_species, tracer_type, skip, rank());
-//
-//    return append_species(tracers, &tracers_list); 
   }
 
   /**

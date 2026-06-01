@@ -430,42 +430,29 @@ species_t::copy_inbound_to_device()
 
 #ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
 void 
-species_t::init_io_buffers(const int N_steps, const float over_alloc_factor) {
-  const int nparticles = static_cast<int>(static_cast<float>(N_steps) * over_alloc_factor);
+species_t::init_io_buffers(const size_t N_particles, const float over_alloc_factor) {
+  const size_t nparticles = static_cast<size_t>(static_cast<float>(N_particles) * over_alloc_factor);
   init_io_buffers(nparticles);
 }
+
 void 
-species_t::init_io_buffers(const int nparticles) {
-  nparticles_buffered_max = nparticles;
-  nparticles_buffered = 0;
+species_t::init_io_buffers(const size_t nparticles) {
+  np_buffered_max = nparticles;
+  np_buffered = 0;
 
   particle_io_buffer_d      = k_particles_t("Particle io buffer_d", nparticles);
   particle_cell_io_buffer_d = k_particles_i_t("Particle cell io buffer_d", nparticles);
-  efields_io_buffer_d       = Kokkos::View<float*[3], Kokkos::LayoutLeft>("Efield io buffer_d", nparticles);
-  bfields_io_buffer_d       = Kokkos::View<float*[3], Kokkos::LayoutLeft>("Bfield io buffer_d", nparticles);
-  current_dens_io_buffer_d  = Kokkos::View<float*[3], Kokkos::LayoutLeft>("Current density io buffer_d", nparticles);
-  charge_dens_io_buffer_d   = Kokkos::View<float*>("Charge density io buffer_d", nparticles);;
-  momentum_dens_io_buffer_d = Kokkos::View<float*[3], Kokkos::LayoutLeft>("Momentum density io buffer_d", nparticles);
-  ke_dens_io_buffer_d       = Kokkos::View<float*>("KE density io buffer_d", nparticles);;
-  stress_tensor_io_buffer_d = Kokkos::View<float*[6], Kokkos::LayoutLeft>("Stress tensor io buffer_d", nparticles);
-  particle_ke_io_buffer_d   = Kokkos::View<float*, Kokkos::LayoutLeft>("Particle KE io buffer_d", nparticles);
   annotations_io_buffer_d   = annotations_t<Kokkos::DefaultExecutionSpace>(nparticles, annotation_vars);
+  tracer_buffer_d           = Kokkos::View<float**, Kokkos::LayoutLeft>("Tracer buffer", nparticles, TRACER_BUFFER_VAR_COUNT);
 
   particle_io_buffer_h      = Kokkos::create_mirror_view(particle_io_buffer_d     ); 
   particle_cell_io_buffer_h = Kokkos::create_mirror_view(particle_cell_io_buffer_d); 
-  efields_io_buffer_h       = Kokkos::create_mirror_view(efields_io_buffer_d      ); 
-  bfields_io_buffer_h       = Kokkos::create_mirror_view(bfields_io_buffer_d      ); 
-  current_dens_io_buffer_h  = Kokkos::create_mirror_view(current_dens_io_buffer_d ); 
-  charge_dens_io_buffer_h   = Kokkos::create_mirror_view(charge_dens_io_buffer_d  ); 
-  momentum_dens_io_buffer_h = Kokkos::create_mirror_view(momentum_dens_io_buffer_d); 
-  ke_dens_io_buffer_h       = Kokkos::create_mirror_view(ke_dens_io_buffer_d      ); 
-  stress_tensor_io_buffer_h = Kokkos::create_mirror_view(stress_tensor_io_buffer_d); 
-  particle_ke_io_buffer_h   = Kokkos::create_mirror_view(particle_ke_io_buffer_d  ); 
   annotations_io_buffer_h   = annotations_t<Kokkos::DefaultHostExecutionSpace>(annotations_io_buffer_d);
+  tracer_buffer_h           = Kokkos::create_mirror_view(tracer_buffer_d);
 }
 
 void 
-species_t::init_annotations(int num_particles, int num_movers, annotation_vars_t& vars) 
+species_t::init_annotations(const size_t num_particles, const size_t num_movers, annotation_vars_t& vars) 
 {
   using_annotations = true;
   annotation_vars = vars;
