@@ -12,6 +12,7 @@
 #include "hdf5.h"
 #endif
 
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
 /*------------------------------------------------------------------------------
  * Text Dumps
  *---------------------------------------------------------------------------*/
@@ -276,7 +277,6 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
 /*------------------------------------------------------------------------------
  * HDF5 Dumps
  *---------------------------------------------------------------------------*/
-#ifdef VPIC_ENABLE_TRACER_PARTICLES
 #ifdef VPIC_ENABLE_HDF5
 template<class ViewSlice>
 herr_t write_dataset(const ViewSlice& slice, 

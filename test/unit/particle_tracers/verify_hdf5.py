@@ -47,7 +47,7 @@ for test in ['tracers/ion_tracers_percentage', 'tracers/ion_tracers_predicate']:
       reordered_h5_df = reordered_h5_df.sort_values(by='TracerID', ignore_index=True)
       
       pd.set_eng_float_format(accuracy=6)
-      frames_same = np.allclose(filtered_csv_df, reordered_h5_df)
+      frames_same = np.allclose(filtered_csv_df, reordered_h5_df, equal_nan=True)
       print("Step " + str(tframe) + ": CSV and HDF5 match? " + str(frames_same))
       if not frames_same:
         print("CSV")
@@ -56,12 +56,12 @@ for test in ['tracers/ion_tracers_percentage', 'tracers/ion_tracers_predicate']:
         print("HDF5")
         print(reordered_h5_df)
         print('====')
-        print(np.isclose(filtered_csv_df, reordered_h5_df))
-        print(np.logical_not(np.isclose(filtered_csv_df, reordered_h5_df)))
+        print(np.isclose(filtered_csv_df, reordered_h5_df, equal_nan=True))
+        print(np.logical_not(np.isclose(filtered_csv_df, reordered_h5_df, equal_nan=True)))
         print('====')
         print(filtered_csv_df.compare(reordered_h5_df))
         print('====')
-        not_close = pd.DataFrame(np.logical_not(np.isclose(filtered_csv_df, reordered_h5_df)))
+        not_close = pd.DataFrame(np.logical_not(np.isclose(filtered_csv_df, reordered_h5_df, equal_nan=True)))
         not_close.columns = filtered_csv_df.columns
         #print(not_close.to_string())
         print('====')

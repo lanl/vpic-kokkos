@@ -579,6 +579,7 @@ vpic_simulation::fluid_dump( const char * speciesname,
       grid);
 }
 
+#if defined( VPIC_ENABLE_HDF5 ) && defined( VPIC_ENABLE_TRACER_PARTICLES )
 void 
 vpic_simulation::tracer_dump(const char* species_name, 
                              DumpParameters& dumpParams)
@@ -599,4 +600,4 @@ vpic_simulation::tracer_dump(const char* species_name,
     dump_tracers_hdf5(species_name, dump_vars, filename.c_str());
   }
 }
-
+#endif
