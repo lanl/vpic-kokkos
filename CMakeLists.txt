@@ -171,13 +171,9 @@ if(VPIC_ENABLE_HDF5)
     set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DVPIC_ENABLE_HDF5")
 
     # the hdf5 var we need changes based on version...
-    string(REPLACE ";" " " string_libraries "${HDF5_C_LIBRARY}")
-    set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-
-    # if (NOT "${HDF5_C_LIBRARY}" STREQUAL "")
-    #     string(REPLACE ";" " " string_libraries "${HDF5_C_LIBRARIES}")
-    #     set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-    # endif()
+    set(H5LIB "${HDF5_C_LIBRARY}")
+    cmake_path(GET H5LIB PARENT_PATH hdf5_path)
+    set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} -L${hdf5_path} -lhdf5")
 
     include_directories(${HDF5_INCLUDE_DIRS})
 
@@ -185,8 +181,6 @@ if(VPIC_ENABLE_HDF5)
     string(REPLACE ";" " -I" string_includes "${HDF5_INCLUDE_DIRS}")
     set(VPIC_CXX_FLAGS "-I${string_includes} ${VPIC_CXX_FLAGS}")
 
-    set(HDF5_LIB_PATH "${HDF5_INCLUDE_DIRS}")
-    string(REPLACE "include" "lib" HDF5_LIB_PATH "${HDF5_INCLUDE_DIRS}")
 endif(VPIC_ENABLE_HDF5)
 
 # Allow files to be references from the root, (eg #include "src/vpic/vpic.h")
