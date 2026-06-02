@@ -365,7 +365,7 @@ void collide_self_varwt(
   k_particle_sortindex_t_ra spi_sortindex_ra, 
   k_particle_sortindex_t_ra spj_sortindex_ra,
   const kokkos_rng_pool_t& rp, 
-  const Kokkos::TeamPolicy<>::member_type & team)
+  const Kokkos::TeamPolicy<>::member_type & team) const
 {
   const float mu_i = m_j/(m_i+m_j);
   const float mu = m_i*m_j/(m_i+m_j);
@@ -491,7 +491,7 @@ void collide_variabl_wt(
   k_particle_sortindex_t_ra spi_sortindex_ra, 
   k_particle_sortindex_t_ra spj_sortindex_ra,
   const kokkos_rng_pool_t& rp, 
-  const Kokkos::TeamPolicy<>::member_type & team)
+  const Kokkos::TeamPolicy<>::member_type & team) const
 {
   const float mu_i = m_j/(m_i+m_j);
   const float mu_j = m_i/(m_i+m_j);
@@ -612,7 +612,7 @@ void collide_uniform_wt(
   k_particle_sortindex_t_ra spi_sortindex_ra, 
   k_particle_sortindex_t_ra spj_sortindex_ra,
   const kokkos_rng_pool_t& rp, 
-  const Kokkos::TeamPolicy<>::member_type & team_member)
+  const Kokkos::TeamPolicy<>::member_type & team_member) const
 {
   const float mu_i = m_j/(m_i+m_j);
   const float mu_j = m_i/(m_i+m_j);
@@ -717,7 +717,7 @@ void collide_uniform_wt(
     float ndt,
     const bool ordered,
     bool& MC_col_occurred
-  )
+  ) const
   {
 
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3], qii, qjj;

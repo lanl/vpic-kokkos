@@ -349,11 +349,7 @@ species_t::copy_inbound_to_device()
     Kokkos::deep_copy(annotations_copy_h.i64, annotations_recv_h.i64);
     Kokkos::deep_copy(annotations_copy_h.f32, annotations_recv_h.f32);
     Kokkos::deep_copy(annotations_copy_h.f64, annotations_recv_h.f64);
-  }
-#endif
 
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
-  if(using_annotations) {
     Kokkos::deep_copy(annotations_copy_d.i32, annotations_copy_h.i32);
     Kokkos::deep_copy(annotations_copy_d.i64, annotations_copy_h.i64);
     Kokkos::deep_copy(annotations_copy_d.f32, annotations_copy_h.f32);
