@@ -72,6 +72,12 @@ option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performn
 
 option(VPIC_ENABLE_HDF5 "Enable HDF5 for use during IO. VPIC does not help you install HDF5" OFF)
 
+option(VPIC_ENABLE_HDF5_ASYNC "Enable asynchronous support for HDF5 (EXPERIMENTAL!!!)" OFF)
+
+option(VPIC_ENABLE_PARTICLE_ANNOTATIONS "Enable particle annotations for additional per particle values" OFF)
+
+option(VPIC_ENABLE_TRACER_PARTICLES "Enable tracer particles" OFF)
+
 option(VPIC_ENABLE_VARIABLE_CHARGE "Enable variable charge for particles" OFF)
 
 option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU-aware MPI. Allows GPUs to communicate with each other directly rather than going through the CPU. If VPIC_ENABLE_GPU_AWARE_MPI is enabled but not supported in MPI, the code may crash." OFF)
@@ -215,7 +221,7 @@ if(ENABLE_KOKKOS_CUDA)
     endif()
     set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
     set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "Enable cuda lambda support")
-    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
 
     # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
     # see https://github.com/UoB-HPC/BabelStream/issues/16
@@ -361,6 +367,18 @@ if (VPIC_ENABLE_HALO_EXCHANGE)
   message("--     VPIC: Enabled Halo exchange path")
 endif(VPIC_ENABLE_HALO_EXCHANGE)
 
+if (VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+  add_definitions(-DVPIC_ENABLE_PARTICLE_ANNOTATIONS)
+  set(ENABLE_ANNOTATIONS ON CACHE INTERNAL "")
+endif(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+
+if (VPIC_ENABLE_TRACER_PARTICLES)
+  add_definitions(-DVPIC_ENABLE_TRACER_PARTICLES -DVPIC_ENABLE_PARTICLE_ANNOTATIONS -DVPIC_ENABLE_HDF5)
+  set(ENABLE_ANNOTATIONS ON CACHE INTERNAL "")
+  set(ENABLE_TRACERS ON CACHE INTERNAL "")
+  set(ENABLE_HDF5 ON CACHE INTERNAL "")
+endif(VPIC_ENABLE_TRACER_PARTICLES)
+
 if (HYB_USE_SEPARATE_PE)
    add_definitions(-DHYB_USE_SEPARATE_PE)
    set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DHYB_USE_SEPARATE_PE")
@@ -398,6 +416,13 @@ endif(USE_V4_SSE)
 if(ENABLE_OPENSSL)
   add_definitions(-DENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
+
+#------------------------------------------------------------------------------#
+# Add compile definitions
+#------------------------------------------------------------------------------#
+#set(EXTERNAL_DEFINITIONS_FILE ${PROJECT_BINARY_DIR}/external_definitions)
+get_directory_property( DirDefs DIRECTORY ${CMAKE_SOURCE_DIR} COMPILE_DEFINITIONS )
+string(REPLACE ";" " -D" DirDefs "-D${DirDefs}")
 
 #------------------------------------------------------------------------------#
 # Output log variables
@@ -512,6 +537,19 @@ else()
 endif()
 target_include_directories(vpic INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} ${HDF5_C_LIBRARIES} Kokkos::kokkos)
+
+#target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
+#if(VPIC_ENABLE_HDF5)
+#  if(VPIC_ENABLE_HDF5_ASYNC)
+#    target_link_directories(vpic INTERFACE "/vast/home/nphtan/vol-async/install/lib/" "/vast/home/nphtan/vol-async/argobots/install/lib")
+#    target_link_libraries(vpic PRIVATE ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} HDF5::HDF5 Kokkos::kokkos h5async asynchdf5 abt)
+#  else()
+#    target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} HDF5::HDF5 Kokkos::kokkos)
+#  endif()
+#else()
+#  target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
+#endif()
+
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
 if (HYB_USE_RADIATION)
   target_compile_definitions(vpic PUBLIC HYB_USE_RADIATION)
@@ -522,7 +560,13 @@ macro(build_a_vpic name deck)
     message(FATAL_ERROR "Could not find deck '${deck}'")
   endif()
   add_executable(${name} ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc ${VPIC_SRC})
-  target_link_libraries(${name} vpic Kokkos::kokkos)
+  target_link_directories(${name} PUBLIC "/vast/home/nphtan/vol-async/install/lib/")
+  target_compile_options(${name} PRIVATE ${KOKKOS_COMPILE_OPTIONS})
+  if(VPIC_ENABLE_HDF5)
+    target_link_libraries(${name} vpic Kokkos::kokkos HDF5::HDF5)
+  else()
+    target_link_libraries(${name} vpic Kokkos::kokkos)
+  endif()
   target_compile_definitions(${name} PRIVATE INPUT_DECK="${deck}")
 endmacro(build_a_vpic)
 
@@ -536,6 +580,12 @@ if(USER_DECKS)
     build_a_vpic(${NAME} ${DECK})
   endforeach()
 endif()
+
+#string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)
+#message("Build mode flags ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
+#message("Debug build flags ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
+#message("Release build flags ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
+#message("RelWithDebInfo build flags ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 
 #------------------------------------------------------------------------------#
 # Add VPIC integrated test mechanism

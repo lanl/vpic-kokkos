@@ -124,7 +124,7 @@ void BinaryDump::dump_hydro(
   auto& particles_i = sp->k_p_i_d;
   auto& interpolators_k = interpolator_array->k_i_d;
 
-  Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
+  Kokkos::deep_copy(hydro_array->k_h_d, 0.0);
   accumulate_hydro_p_kokkos(
       particles,
       particles_i,
@@ -982,6 +982,9 @@ void HDF5Dump::dump_hydro(
     interpolator_array_t *interpolator_array,
     int ftag)
 {
+
+#define GET_HYDRO_VAR(HYDRO, VOXEL, VAR) HYDRO->h[VOXEL].VAR
+
 #define DUMP_HYDRO_TO_HDF5(DSET_NAME, ATTRIBUTE_NAME, ELEMENT_TYPE)                                         \
 {                                                                                                           \
   dset_id = H5Dcreate(group_id, DSET_NAME, ELEMENT_TYPE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); \
@@ -992,7 +995,8 @@ void HDF5Dump::dump_hydro(
     {                                                                                                       \
       for (size_t k(stride_z); k < grid->nz + 1; k += stride_z)                                             \
       {                                                                                                     \
-        temp_buf[temp_buf_index] = hydro_array->h[VOXEL(i,j,k, grid->nx,grid->ny,grid->nz)].ATTRIBUTE_NAME; \
+        auto voxel = VOXEL(i,j,k,grid->nx, grid->ny, grid->nz);                                             \
+        temp_buf[temp_buf_index] = GET_HYDRO_VAR(hydro_array, voxel, ATTRIBUTE_NAME);                       \
         temp_buf_index = temp_buf_index + 1;                                                                \
       }                                                                                                     \
     }                                                                                                       \
@@ -1011,7 +1015,7 @@ void HDF5Dump::dump_hydro(
   auto& particles_i = sp->k_p_i_d;
   auto& interpolators_k = interpolator_array->k_i_d;
 
-  Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
+  Kokkos::deep_copy(hydro_array->k_h_d, 0.0);
   accumulate_hydro_p_kokkos(
       particles,
       particles_i,
@@ -1052,9 +1056,10 @@ void HDF5Dump::dump_hydro(
   double el2 = uptime();
 
   // prepare for writing the data
-  float *temp_buf = (float *)malloc(sizeof(float) * (grid->nx / stride_x) *
-                                                    (grid->ny / stride_y) *
-                                                    (grid->nz / stride_z));
+  using val_type = k_hydro_d_t::non_const_value_type;
+  val_type *temp_buf = (val_type *)malloc(sizeof(val_type) * (grid->nx / stride_x) *
+                                                             (grid->ny / stride_y) *
+                                                             (grid->nz / stride_z));
   hsize_t temp_buf_index;
   hid_t dset_id;
   plist_id = H5Pcreate(H5P_DATASET_XFER);
@@ -1087,34 +1092,34 @@ void HDF5Dump::dump_hydro(
   hid_t dataspace_id;
 
   // write the data
-  if (hydro_dump_flag.flags["jx"]) DUMP_HYDRO_TO_HDF5("jx", jx, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["jy"]) DUMP_HYDRO_TO_HDF5("jy", jy, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["jz"]) DUMP_HYDRO_TO_HDF5("jz", jz, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["rho"]) DUMP_HYDRO_TO_HDF5("rho", rho, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["jx"]) DUMP_HYDRO_TO_HDF5("jx", jx, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["jy"]) DUMP_HYDRO_TO_HDF5("jy", jy, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["jz"]) DUMP_HYDRO_TO_HDF5("jz", jz, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["rho"]) DUMP_HYDRO_TO_HDF5("rho", rho, H5T_NATIVE_DOUBLE);
 
-  if (hydro_dump_flag.flags["px"]) DUMP_HYDRO_TO_HDF5("px", px, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["py"]) DUMP_HYDRO_TO_HDF5("py", py, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["pz"]) DUMP_HYDRO_TO_HDF5("pz", pz, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["rho_m"]) DUMP_HYDRO_TO_HDF5("rho_m", rho_m, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["px"]) DUMP_HYDRO_TO_HDF5("px", px, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["py"]) DUMP_HYDRO_TO_HDF5("py", py, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["pz"]) DUMP_HYDRO_TO_HDF5("pz", pz, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["rho_m"]) DUMP_HYDRO_TO_HDF5("rho_m", rho_m, H5T_NATIVE_DOUBLE);
 
-  if (hydro_dump_flag.flags["txx"]) DUMP_HYDRO_TO_HDF5("txx", txx, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["tyy"]) DUMP_HYDRO_TO_HDF5("tyy", tyy, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["tzz"]) DUMP_HYDRO_TO_HDF5("tzz", tzz, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["txx"]) DUMP_HYDRO_TO_HDF5("txx", txx, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["tyy"]) DUMP_HYDRO_TO_HDF5("tyy", tyy, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["tzz"]) DUMP_HYDRO_TO_HDF5("tzz", tzz, H5T_NATIVE_DOUBLE);
 
-  if (hydro_dump_flag.flags["tyz"]) DUMP_HYDRO_TO_HDF5("tyz", tyz, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["tzx"]) DUMP_HYDRO_TO_HDF5("tzx", tzx, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["txy"]) DUMP_HYDRO_TO_HDF5("txy", txy, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["tyz"]) DUMP_HYDRO_TO_HDF5("tyz", tyz, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["tzx"]) DUMP_HYDRO_TO_HDF5("tzx", tzx, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["txy"]) DUMP_HYDRO_TO_HDF5("txy", txy, H5T_NATIVE_DOUBLE);
 
 #ifdef VARIABLE_CHARGE
-  if (hydro_dump_flag.flags["qmin"]) DUMP_HYDRO_TO_HDF5("qmin", qmin, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["qmax"]) DUMP_HYDRO_TO_HDF5("qmax", qmax, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["qmin"]) DUMP_HYDRO_TO_HDF5("qmin", qmin, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["qmax"]) DUMP_HYDRO_TO_HDF5("qmax", qmax, H5T_NATIVE_DOUBLE);
 
-  if (hydro_dump_flag.flags["n_q0"]) DUMP_HYDRO_TO_HDF5("n_q0", n_q0, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["n_q1"]) DUMP_HYDRO_TO_HDF5("n_q1", n_q1, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["n_q2"]) DUMP_HYDRO_TO_HDF5("n_q2", n_q2, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["n_q3"]) DUMP_HYDRO_TO_HDF5("n_q3", n_q3, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["n_q4"]) DUMP_HYDRO_TO_HDF5("n_q4", n_q4, H5T_NATIVE_FLOAT);
-  if (hydro_dump_flag.flags["n_q5"]) DUMP_HYDRO_TO_HDF5("n_q5", n_q5, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q0"]) DUMP_HYDRO_TO_HDF5("n_q0", n_q0, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["n_q1"]) DUMP_HYDRO_TO_HDF5("n_q1", n_q1, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["n_q2"]) DUMP_HYDRO_TO_HDF5("n_q2", n_q2, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["n_q3"]) DUMP_HYDRO_TO_HDF5("n_q3", n_q3, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["n_q4"]) DUMP_HYDRO_TO_HDF5("n_q4", n_q4, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["n_q5"]) DUMP_HYDRO_TO_HDF5("n_q5", n_q5, H5T_NATIVE_DOUBLE);
 #endif
 
   el2 = uptime() - el2;

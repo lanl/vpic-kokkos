@@ -52,6 +52,11 @@ vpic_simulation::initialize( int argc,
   LIST_FOR_EACH( sp, species_list ) {
     sp->copy_to_device();
   }
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  LIST_FOR_EACH( sp, tracers_list ) {
+    sp->copy_to_device();
+  }
+#endif
   KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
 
   KOKKOS_TIC(); // Time this data movement
@@ -127,6 +132,13 @@ vpic_simulation::initialize( int argc,
     uncenter_p( sp, interpolator_array );
     KOKKOS_TOC( uncenter_p, 1 );
   }
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  LIST_FOR_EACH( sp, tracers_list ) {
+      KOKKOS_TIC();
+      uncenter_p( sp, interpolator_array );
+      KOKKOS_TOC( uncenter_p, 1 );
+  }
+#endif
 
   // Let the user to perform diagnostics on the initial condition
   if( rank()==0 ) MESSAGE(( "Performing initial diagnostics" ));

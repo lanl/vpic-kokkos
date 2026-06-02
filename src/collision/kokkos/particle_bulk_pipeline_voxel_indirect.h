@@ -277,7 +277,7 @@ struct particle_bulk_collision_pipeline {
 
     Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
     Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
-    KOKKOS_LAMBDA (member_type team_member) {
+    KOKKOS_CLASS_LAMBDA (member_type team_member) {
 
       int ix, iy, iz;
       RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
@@ -506,7 +506,7 @@ struct particle_bulk_collision_pipeline {
 
     Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
-      KOKKOS_LAMBDA (member_type team_member) {
+      KOKKOS_CLASS_LAMBDA (member_type team_member) {
 
         int ix, iy, iz;
         RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
@@ -535,7 +535,7 @@ struct particle_bulk_collision_pipeline {
         gmomType Dm; 
 	
         Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team_member, ni),
-        [&](const int& k, gmomType &lsum) {
+        [&,this](const int& k, gmomType &lsum) {
 
           int i = spi_sortindex_ra(i0 + k);
 
@@ -752,7 +752,7 @@ struct particle_bulk_collision_pipeline {
     float dt,
     int ii,
     bool& MC_collision_occurred
-  )
+  ) const
   {
 
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];

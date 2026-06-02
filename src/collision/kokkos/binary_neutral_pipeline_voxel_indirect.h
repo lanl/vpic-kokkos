@@ -288,7 +288,7 @@ struct binary_neutral_collision_pipeline {
     if constexpr (VariableWeight) {    
 	    Kokkos::parallel_for("binary_neutral_collision_pipeline::apply_model::var_wt",
 			 policy,
-			 KOKKOS_LAMBDA (member_type team_member) {
+			 KOKKOS_CLASS_LAMBDA (member_type team_member) {
 				int ix, iy, iz;
 				RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
 				const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);
@@ -320,7 +320,7 @@ struct binary_neutral_collision_pipeline {
   	} else {
 	    Kokkos::parallel_for("binary_neutral_collision_pipeline::apply_model::uniform_wt",
 			 policy,
-			 KOKKOS_LAMBDA (member_type team_member) {
+			 KOKKOS_CLASS_LAMBDA (member_type team_member) {
           int ix, iy, iz;
           RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
           const int v = VOXEL(ix+1, iy+1, iz+1, nx, ny, nz);

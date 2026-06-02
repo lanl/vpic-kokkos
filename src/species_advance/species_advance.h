@@ -17,6 +17,16 @@
 #include "../sf_interface/sf_interface.h"
 #include "Kokkos_DualView.hpp"
 
+#ifdef VPIC_ENABLE_HDF5
+#include "hdf5.h"
+#endif
+#ifdef VPIC_ENABLE_HDF5_ASYNC
+#include "h5_async_vol.h"
+#endif
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+#include "standard/annotations.h"
+#endif
+
 typedef int32_t species_id; // Must be 32-bit wide for particle_injector_t
 
 // FIXME: Eventually particle_t (definitely) and ther other formats
@@ -94,6 +104,8 @@ typedef struct pb_diagnostic {
 
 } pb_diagnostic_t;
 
+enum class TracerType { Copy, Move };
+
 class species_t {
     public:
 
@@ -151,6 +163,10 @@ class species_t {
         // Particle boundary diagnostic.
         pb_diagnostic_t * pb_diag = NULL;
 
+        // Tracer type
+        TracerType tracer_type;
+        species_t* parent_species = NULL;
+
 
         //// END CHECKPOINTED DATA, START KOKKOS //////
 
@@ -180,6 +196,35 @@ class species_t {
         // TODO: what is an iterator here??
         k_counter_t k_nm_d;               // nm iterator
         k_counter_t::HostMirror k_nm_h;
+
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+#ifdef VPIC_ENABLE_HDF5_ASYNC
+        hid_t es_id;
+#endif
+        bool is_tracer = false;
+        bool using_annotations = false;
+        annotation_vars_t annotation_vars;
+        annotations_t<Kokkos::DefaultExecutionSpace>     annotations_d;
+        annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_h;
+        annotations_t<Kokkos::DefaultExecutionSpace>     annotations_copy_d;
+        annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_copy_h;
+        annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_recv_h;
+
+        size_t np_buffered=0;
+        size_t np_buffered_max=0;
+        std::vector<std::pair<int64_t,int64_t>> np_per_ts; // (np, ts)
+
+        k_particles_t                                particle_io_buffer_d;
+        k_particles_i_t                              particle_cell_io_buffer_d;
+        annotations_t<Kokkos::DefaultExecutionSpace> annotations_io_buffer_d;
+        Kokkos::View<float**, Kokkos::LayoutLeft>    tracer_buffer_d;
+
+        k_particles_t::HostMirror                               particle_io_buffer_h;
+        k_particles_i_t::HostMirror                             particle_cell_io_buffer_h;
+        annotations_t<Kokkos::DefaultHostExecutionSpace>        annotations_io_buffer_h;
+        Kokkos::View<float**, Kokkos::LayoutLeft>::HostMirror   tracer_buffer_h;
+#endif
+
 
         // TODO: this should ultimatley be removeable.
         // This tracks the number of particles we need to move back to the device
@@ -267,6 +312,55 @@ class species_t {
          */
         void copy_inbound_to_device();
 
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+        /**
+         *  @brief Create tracer particle from existing species
+         *
+         *  @param src_species    Species to create particle from
+         *  @param index          Index of particle to use
+         */
+        void create_tracer_from(species_t* src_species, const size_t index); 
+
+        /**
+         *  @brief Allocate memory for IO buffering tracers
+         *
+         *  @param N_particles       Number of particles to buffer before dumping
+         *  @param over_alloc_factor Multiplier for over allocating space
+         */
+        void init_io_buffers(const size_t N_particles, const float over_alloc_factor);
+        void init_io_buffers(const size_t N_particles);
+
+        /**
+         * @brief Add additional per particle annotations. 
+         *
+         * @param num_particles Number of particles using annotations
+         * @param num_movers    Number of movers that need annotations
+         * @param vars          Annotation variables
+         */
+        void init_annotations( const size_t num_particles, const size_t num_movers, annotation_vars_t& vars );
+
+        /**
+         * Create tracer particles from parent species using a predicate
+         *
+         * @param parent_species Species of particles to create tracers from
+         * @param tracer_type    Whether to Copy or Move particles to tracers
+         * @param filter         Generic function to decide whether particle is a tracer
+         */
+        void create_tracers_by_predicate( species_t* parent_species,
+                                          const TracerType tracer_type,
+                                          std::function <bool (particle_t)> filter, const int rank ); 
+
+        /**
+         * Create tracer particles from parent species. Select every Nth particle
+         *
+         * @param parent_species Species of particles to create tracers from
+         * @param tracer_type    Whether to Copy or Move particles to tracers
+         * @param skip           Amount of particles to skip between selections
+         */
+        void create_tracers_by_nth( species_t* parent_species,
+                                    const TracerType tracer_type,
+                                    float skip, int rank); 
+#endif
 };
 
 // In species_advance.c
@@ -522,29 +616,29 @@ move_p_kokkos(
       y_half = s_midy + fracdt*uy*gdt/gdy; 
       z_half = s_midz + fracdt*uz*gdt/gdz;
       
-      if(x_half<=one && y_half<=one && z_half<=one
-	 && -x_half<=one && -y_half<=one && -z_half<=one) {
+      if( x_half<=one &&  y_half<=one &&  z_half<=one &&
+         -x_half<=one && -y_half<=one && -z_half<=one) {
         
-	// Accumulate the particle current density
-	
-	//int iii = ii;
-	//int zi = iii/((nx+2)*(ny+2));
-	//iii -= zi*(nx+2)*(ny+2);
-	//int yi = iii/(nx+2);
-	//int xi = iii-yi*(nx+2);
-	
-	//printf("move_p accumulate here");
-	
-	
-	//if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
-	  
-	  scatter_access(ii, field_var::jfx) += q*ux;
-	  scatter_access(ii, field_var::jfy) += q*uy;
-	  scatter_access(ii, field_var::jfz) += q*uz;
-	  scatter_access(ii, field_var::rhof) += q;
-	//}
-	
-	
+        // Accumulate the particle current density
+        
+        //int iii = ii;
+        //int zi = iii/((nx+2)*(ny+2));
+        //iii -= zi*(nx+2)*(ny+2);
+        //int yi = iii/(nx+2);
+        //int xi = iii-yi*(nx+2);
+        
+        //printf("move_p accumulate here");
+        
+        
+        //if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
+          
+          scatter_access(ii, field_var::jfx) += q*ux;
+          scatter_access(ii, field_var::jfy) += q*uy;
+          scatter_access(ii, field_var::jfz) += q*uz;
+          scatter_access(ii, field_var::rhof) += q;
+        //}
+        
+
       } //if indbds
       
     }
@@ -662,14 +756,12 @@ move_p_kokkos(
     pm->dispy -= s_dispy;
     pm->dispz -= s_dispz;
 
-    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset
     p_dx += s_dispx+s_dispx;
     p_dy += s_dispy+s_dispy;
     p_dz += s_dispz+s_dispz;
 
     // If an end streak, return success (should be ~50% of the time)
-    //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
 
     if( axis==3 ) break;
 
@@ -703,7 +795,6 @@ move_p_kokkos(
       // Clearer and works with AMD GPUs
       float* disp = static_cast<float*>(&(pm->dispx));
       disp[axis] = -disp[axis];
-
       continue;
     }
 
@@ -713,7 +804,7 @@ move_p_kokkos(
       // displacement in the particle mover.
       pii = 8*pii + face;
       return 1; // Return "mover still in use"
-      }
+    }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
@@ -835,27 +926,27 @@ move_p_kokkos_host_serial(
     if(v2>fracdt) fracdt=v2;
     fracdt = 2.0*(fracdt-0.5);
 
-      if(fracdt>0){
+    if(fracdt>0){
 
       x_half = s_midx + fracdt*ux*gdt/gdx;
       y_half = s_midy + fracdt*uy*gdt/gdy; 
       z_half = s_midz + fracdt*uz*gdt/gdz;
       
-      if(x_half<=one && y_half<=one && z_half<=one
-	 && -x_half<=one && -y_half<=one && -z_half<=one) {
+      if( x_half<=one &&  y_half<=one &&  z_half<=one && 
+         -x_half<=one && -y_half<=one && -z_half<=one) {
         
-	// Accumulate the particle current density
-	
-      //int iii = ii;
-      //int zi = iii/((nx+2)*(ny+2));
-      //iii -= zi*(nx+2)*(ny+2);
-      //int yi = iii/(nx+2);
-      //int xi = iii-yi*(nx+2);
-      
-      k_jf_accum(ii, accumulator_var::jx) += rV*q*ux;
-      k_jf_accum(ii, accumulator_var::jy) += rV*q*uy;
-      k_jf_accum(ii, accumulator_var::jz) += rV*q*uz;
-      k_jf_accum(ii, accumulator_var::rho) += rV*q;
+        // Accumulate the particle current density
+        
+        //int iii = ii;
+        //int zi = iii/((nx+2)*(ny+2));
+        //iii -= zi*(nx+2)*(ny+2);
+        //int yi = iii/(nx+2);
+        //int xi = iii-yi*(nx+2);
+        
+        k_jf_accum(ii, accumulator_var::jx) += rV*q*ux;
+        k_jf_accum(ii, accumulator_var::jy) += rV*q*uy;
+        k_jf_accum(ii, accumulator_var::jz) += rV*q*uz;
+        k_jf_accum(ii, accumulator_var::rho) += rV*q;
       } //if indbds
       
     } //ifmore than half dt left

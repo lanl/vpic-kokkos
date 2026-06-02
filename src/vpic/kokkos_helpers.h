@@ -30,6 +30,7 @@
 #endif
 #define NUM_J_DIMS 4
 #define FLUID_VAR_COUNT 6+4
+#define TRACER_BUFFER_VAR_COUNT 21
 
 #ifdef KOKKOS_ENABLE_CUDA
   #define KOKKOS_SCATTER_DUPLICATED Kokkos::Experimental::ScatterNonDuplicated
@@ -86,7 +87,6 @@ using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATO
 
 using k_hydro_d_t = Kokkos::View<double* [HYDRO_VAR_COUNT]>;
 using k_hydro_sv_t = Kokkos::Experimental::ScatterView<double* [HYDRO_VAR_COUNT]>;
-
 
 using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
 
@@ -290,8 +290,8 @@ namespace hydro_var {
         px  = 4,
         py  = 5,
         pz  = 6,
-	//        ke  = 7,
-	rho_m = 7,
+//        ke  = 7,
+        rho_m = 7,
         txx = 8,
         tyy = 9,
         tzz = 10,
@@ -299,14 +299,14 @@ namespace hydro_var {
         tzx = 12,
         txy = 13,
 #ifdef VARIABLE_CHARGE
-	min_q = 14,
-	max_q = 15,
-	n_q0  = 16,
-	n_q1  = 17,
-	n_q2  = 18,
-	n_q3  = 19,
-	n_q4  = 20,
-	n_q5  = 21,
+        min_q = 14,
+        max_q = 15,
+        n_q0  = 16,
+        n_q1  = 17,
+        n_q2  = 18,
+        n_q3  = 19,
+        n_q4  = 20,
+        n_q5  = 21,
 #endif
     };
 };
@@ -319,10 +319,36 @@ namespace fluid_var {
         ux  = 3,
         uy  = 4,
         uz  = 5,
-	msx = 6,
-	msy = 7,
-	msz = 8,
-	ens = 9,
+        msx = 6,
+        msy = 7,
+        msz = 8,
+        ens = 9,
+    };
+};
+
+namespace tracer_buffer_var {
+    enum tracer_buff_v {
+      ex    = 0,
+      ey    = 1,
+      ez    = 2,
+      bx    = 3,
+      by    = 4,
+      bz    = 5,
+      jx    = 6,
+      jy    = 7,
+      jz    = 8,
+      rho   = 9,
+      px    = 10,
+      py    = 11,
+      pz    = 12,
+      rho_m = 13,
+      txx   = 14,
+      tyy   = 15,
+      tzz   = 16,
+      tyz   = 17,
+      tzx   = 18,
+      txy   = 19,
+      ke    = 20,
     };
 };
 

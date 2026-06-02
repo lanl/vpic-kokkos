@@ -24,16 +24,17 @@ int vpic_simulation::advance(void)
   KOKKOS_TIC();
   
   // Sort the particles for performance if desired.
-  LIST_FOR_EACH( sp, species_list )
+  LIST_FOR_EACH_SPECIES(sp, species_list, tracers_list) 
   {
       if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
       {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-          sorter->sort( sp->k_p_d, sp->k_p_i_d, sp->np, grid->nv);
+          sorter->sort( sp, sp->np, grid->nv);
       }
   }
 
-  KOKKOS_TOC( sort_particles, 1);
+  KOKKOS_TOCN( sort_particles, 1);
+//printf("Sorted normal and tracer species\n");
 
   // At this point, fields are at E_0 and B_0 and the particle positions
   // are at r_0 and u_{-1/2}.  Further the mover lists for the particles should
@@ -94,10 +95,11 @@ int vpic_simulation::advance(void)
 
   // Copy particle movers back to host
   KOKKOS_TIC();
-  LIST_FOR_EACH( sp, species_list ) {
+  LIST_FOR_EACH_SPECIES(sp, species_list, tracers_list) {
     sp->copy_outbound_to_host();
   }
-  KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
+  KOKKOS_TOCN( PARTICLE_DATA_MOVEMENT, 1);
+//printf("Copied outbound to host for species and tracers\n");
 
   // Because the partial position push when injecting aged particles might
   // place those particles onto the guard list (boundary interaction) and
@@ -112,6 +114,8 @@ int vpic_simulation::advance(void)
     TIC apply_emitter_list( emitter_list ); TOC( emission_model, 1 );
   }
 
+// Change default behavior?
+// Scott's removal of legacy branch should make this uneeded
   if((particle_injection_interval>0) && ((step() % particle_injection_interval)==0)) {
     if(!kokkos_particle_injection) {
       KOKKOS_TIC();
@@ -143,7 +147,7 @@ int vpic_simulation::advance(void)
   //    Kokkos::deep_copy(accumulator_array->k_a_h, 0.0f);
   //}
 
-  //KOKKOS_TOC( ACCUMULATOR_DATA_MOVEMENT, 1);
+  //KOKKOS_TOCN( ACCUMULATOR_DATA_MOVEMENT, 1);
 
   // This should be after the emission and injection to allow for the
   // possibility of thread parallelizing these operations
@@ -166,6 +170,9 @@ int vpic_simulation::advance(void)
   {
     //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
     boundary_p_kokkos( particle_bc_list, species_list, field_array );
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+    boundary_p_kokkos( particle_bc_list, tracers_list, field_array );
+#endif
   }
   TOC( boundary_p, num_comm_round );
 
@@ -173,8 +180,7 @@ int vpic_simulation::advance(void)
   // Copy back the right data to GPU
   // Device
   // Touches particles, particle_movers
-  LIST_FOR_EACH( sp, species_list )
-  {
+  LIST_FOR_EACH_SPECIES( sp, species_list, tracers_list ) {
     KOKKOS_TIC(); // Time this data movement
     const size_t nm = sp->k_nm_h(0);
     
@@ -200,8 +206,8 @@ int vpic_simulation::advance(void)
   }
 
   // This copies over a val for nm, which is a lie
-  LIST_FOR_EACH( sp, species_list ) {
-    sp->nm = 0;
+  LIST_FOR_EACH_SPECIES( sp, species_list, tracers_list ) {
+      sp->nm = 0;
   }
 
   // At this point, all particle positions are at r_1 and u_{1/2}, the
@@ -345,7 +351,17 @@ int vpic_simulation::advance(void)
               //accumulate_rho_p( field_array, sp ); //TOC( accumulate_rho_p, species_list->id );
               k_accumulate_rho_p( field_array, sp );
           }
-          KOKKOS_TOC( accumulate_rho_p, species_list->id );
+          KOKKOS_TOCN( accumulate_rho_p, species_list->id );
+      }
+      if( tracers_list )
+      {
+          KOKKOS_TIC();
+          LIST_FOR_EACH( sp, tracers_list )
+          {
+              //accumulate_rho_p( field_array, sp ); //TOC( accumulate_rho_p, tracers_list->id );
+              k_accumulate_rho_p( field_array, sp );
+          }
+          KOKKOS_TOCN( accumulate_rho_p, tracers_list->id );
       }
 
       // TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
