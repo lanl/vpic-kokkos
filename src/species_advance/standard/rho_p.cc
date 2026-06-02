@@ -34,7 +34,7 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     /**/  field_t    * RESTRICT ALIGNED(128) f = fa->f;
     const particle_t * RESTRICT ALIGNED(128) p = sp->p;
 
-    const float q_8V = sp->q*sp->g->r8V, one=1.0;
+    const float q = sp->q, _8V=sp->g->r8V, one=1.0;
     const size_t np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
@@ -71,8 +71,11 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         //uz *= w3;
 
         v  = p[n].i;
-        w7 = p[n].w*q_8V*8.0;
-
+#ifdef VARIABLE_CHARGE
+        w7 = p[n].w*p[n].qp*_8V*8.0;
+#else
+        w7 = p[n].w*q*_8V*8.0;
+#endif
         // Compute the trilinear weights
         // Though the PPE should have hardware fma/fmaf support, it was
         // measured to be more efficient _not_ to use it here.  (Maybe the
@@ -471,7 +474,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     k_particles_t kparticles = sp->k_p_d;
     k_particles_i_t kparticles_i = sp->k_p_i_d;
 
-    const float q_8V = (sp->q)*(sp->g->r8V);
+    const float q = sp->q, rV = 8.0*(sp->g->r8V);
     const size_t np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
@@ -487,8 +490,12 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         float ux  =            kparticles(n, particle_var::ux);
         float uy  =            kparticles(n, particle_var::uy);
         float uz  =            kparticles(n, particle_var::uz);
-        float q_V = q_8V*8.0 * kparticles(n, particle_var::w);
-
+        
+#ifdef VARIABLE_CHARGE
+        float q_V = rV * kparticles(n, particle_var::qp)*kparticles(n, particle_var::w);
+#else
+        float q_V = q * rV * kparticles(n, particle_var::w);
+#endif
         auto scatter_view_access = scatter_view.access();
 
         // Hybrid, nearest-grid-point shape
