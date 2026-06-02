@@ -37,4 +37,6 @@ KOKKOS_LIBS="-lkokkoscore -lkokkoscontainers -lkokkosalgorithms -lkokkossimd"
 echo "$1"
 set -x
 @CMAKE_CXX_COMPILER@ @VPIC_CPPFLAGS@ @CMAKE_CXX_FLAGS@ -I. -I@CMAKE_INSTALL_PREFIX@/src @VPIC_CXX_FLAGS@ $KOKKOS_COMPILE_OPTIONS -DINPUT_DECK='"'$1'"' @DirDefs@ @CMAKE_INSTALL_PREFIX@/deck/main.cc @CMAKE_INSTALL_PREFIX@/deck/wrapper.cc -o $deck.@CMAKE_SYSTEM_NAME@ -Wl,-rpath,@CMAKE_INSTALL_PREFIX@ -L@CMAKE_INSTALL_PREFIX@ -lvpic @VPIC_CXX_LIBRARIES@ -lpthread -ldl $KOKKOS_LIB_PATHS $KOKKOS_INCLUDES $KOKKOS_LIBS
+ret_code=$?
 set +x
+exit $ret_code
