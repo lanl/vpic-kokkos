@@ -1840,7 +1840,7 @@ k_hyb_local_ghost_b( field_array_t      * RESTRICT f,
   float  rho = half*( (one-hstep)*( F(0,rhof) + F(0,rhofold) ) + hstep*( three*F(0,rhof) - F(0,rhofold)) ) ; \
   rho = (rho > den_floor_ohm) ? rho :  den_floor_ohm;			\
   float  invrho = one/rho;						\
-  float hallinvrho = (rho > den_floor_ohm) ? invrho : 0 ;		\
+  /*float hallinvrho = (rho > den_floor_ohm) ? invrho : 0 ;*/		\
   float  ux = invrho*half*( (one-hstep)*( F(0,jfx) + F(0,jfxold) ) + hstep*( three*F(0,jfx) - F(0,jfxold)) ) ; \
   float  uy = invrho*half*( (one-hstep)*( F(0,jfy) + F(0,jfyold) ) + hstep*( three*F(0,jfy) - F(0,jfyold)) ) ; \
   float  uz = invrho*half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + hstep*( three*F(0,jfz) - F(0,jfzold)) ) ; 
@@ -1869,13 +1869,13 @@ template<typename T> void apply_hyb_local_e(int i, int j, int k,
     case anti_symmetric_fields:						\
       Kokkos::parallel_for("apply_hyb_local_e: anti_symmetric_fields", \
       x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##x_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##x_);\
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##y_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##y_);\
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##z_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##z_);\
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##x_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##x_);\
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##y_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##y_);\
-	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##z_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##z_);\
-	});								\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##x_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##x_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##y_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##y_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##z_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##z_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##x_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##x_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##y_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##y_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##z_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##z_);\
+      });								\
       break;       							\
    case symmetric_fields:						\
       {const float p##x_ = 0;						\
@@ -1885,17 +1885,17 @@ template<typename T> void apply_hyb_local_e(int i, int j, int k,
       const float den_floor_ohm = g->den_floor_ohm;			\
       const float hstep = 0.5;						\
       const float half = 1./2., one = 1., three = 3.;			\
-      size_t ind2  = 2, ind1 = 1;					\
+      /*size_t ind2  = 2, ind1 = 1;*/					\
       Kokkos::parallel_for("apply_hyb_local_e: symmetric_fields", 	\
       x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
-	INIT_STENCIL();							\
-	E(x_,y_,z_);							\
-	E(y_,z_,x_);							\
-	E(z_,x_,y_); 							\
-	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##x_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##x_);\
-	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##y_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##y_);\
-	k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##z_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##z_);\
-	});}								\
+        INIT_STENCIL();							\
+        E(x_,y_,z_);							\
+        E(y_,z_,x_);							\
+        E(z_,x_,y_); 							\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##x_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##x_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##y_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##y_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##z_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##z_);\
+      });}								\
       break;								\
     default:								\
       ERROR(("Bad boundary condition encountered."));			\

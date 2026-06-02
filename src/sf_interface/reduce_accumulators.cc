@@ -183,12 +183,12 @@ reduce_accumulator_array_kokkos( accumulator_array_t* RESTRICT aa) {
 
     Kokkos::MDRangePolicy<Kokkos::Rank<3>> accum_policy({0, 0, start}, {4, 3, end});
     Kokkos::parallel_for("reduce accumulator", accum_policy, KOKKOS_LAMBDA(const int i, const int j, const int v) {
-        auto k_accum_sa = aa->k_a_sa.access();
+        auto k_accum_sa = aa->k_a_sv.access();
         const float next = k_accum(v+1, j, i);
         k_accum_sa(v,j,i) += next;
     });
-    Kokkos::Experimental::contribute(aa->k_a_d, aa->k_a_sa);
-    aa->k_a_sa.reset_except(aa->k_a_d);
+    Kokkos::Experimental::contribute(aa->k_a_d, aa->k_a_sv);
+    aa->k_a_sv.reset_except(aa->k_a_d);
 
 /*
     Kokkos::parallel_for("reduce accumulator", 1, KOKKOS_LAMBDA(const int i) {

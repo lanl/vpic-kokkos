@@ -146,13 +146,13 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
       );
 
       // This is slower in my tests
-      //synchronize_hydro_array_kokkos(hydro_array);
+      synchronize_hydro_array_kokkos(hydro_array);
 
       hydro_array->copy_to_host();
 
-      synchronize_hydro_array( hydro_array );
+      //synchronize_hydro_array( hydro_array );
 
-      hydro_array->copy_to_device();
+      //hydro_array->copy_to_device();
     }
 
     int tracer_idx = sp->annotation_vars.get_annotation_index<int>("TracerID");
@@ -859,7 +859,7 @@ vpic_simulation::dump_tracers(const char *sp_name,
     // This is slower in my tests
     synchronize_hydro_array_kokkos(hydro_array);
 
-    //hydro_array->copy_to_host();
+    hydro_array->copy_to_host();
 
     //synchronize_hydro_array( hydro_array );
 

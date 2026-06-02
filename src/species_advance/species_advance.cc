@@ -16,6 +16,7 @@
 void
 checkpt_species( const species_t * sp ) {
     //std::cout << "checkpintg " << sp->name << " with nm = " << sp->nm << std::endl;
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   CHECKPT( sp, 1 );
   CHECKPT_STR( sp->name );
   checkpt_data( sp->p,
@@ -33,10 +34,27 @@ checkpt_species( const species_t * sp ) {
   CHECKPT_VAL( bool, sp->is_tracer );
   CHECKPT_VAL( bool, sp->using_annotations );
 #endif
+#else
+  CHECKPT_STR( sp->name );
+  CHECKPT_VIEW( sp->k_p_h );
+  CHECKPT_VIEW( sp->k_p_i_h );
+  CHECKPT_VIEW( sp->k_pm_h );
+  CHECKPT_VIEW( sp->k_pm_i_h );
+  CHECKPT_ALIGNED( sp->partition, sp->g->nv+1, 128 );
+  CHECKPT_PTR( sp->g );
+  CHECKPT_PTR( sp->next );
+  CHECKPT_PTR( sp->pb_diag );
+  CHECKPT_PTR( sp->parent_species );
+#ifdef VPIC_ENABLE_ANNOTATIONS
+  CHECKPT_VAL( bool, sp->is_tracer );
+  CHECKPT_VAL( bool, sp->using_annotations );
+#endif
+#endif
 }
 
 species_t *
 restore_species( void ) {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   species_t * sp;
   RESTORE( sp );
   RESTORE_STR( sp->name );
@@ -51,6 +69,23 @@ restore_species( void ) {
   RESTORE_VAL( bool, sp->is_tracer );
   RESTORE_VAL( bool, sp->using_annotations );
 #endif
+#else
+  species_t * sp = new species_t();
+  RESTORE_STR( sp->name );
+  RESTORE_VIEW( sp->k_p_h );
+  RESTORE_VIEW( sp->k_p_i_h );
+  RESTORE_VIEW( sp->k_pm_h );
+  RESTORE_VIEW( sp->k_pm_i_h );
+  RESTORE_ALIGNED( sp->partition );
+  RESTORE_PTR( sp->g );
+  RESTORE_PTR( sp->next );
+  RESTORE_PTR( sp->pb_diag );
+  RESTORE_PTR( sp->parent_species );
+#ifdef VPIC_ENABLE_ANNOTATIONS
+  RESTORE_VAL( bool, sp->is_tracer );
+  RESTORE_VAL( bool, sp->using_annotations );
+#endif
+#endif
   return sp;
 }
 
@@ -60,7 +95,9 @@ delete_species( species_t * sp ) {
   UNREGISTER_OBJECT( sp );
   FREE_ALIGNED( sp->partition );
   FREE_ALIGNED( sp->pm );
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   FREE_ALIGNED( sp->p );
+#endif
   FREE( sp->name );
   delete sp;
 }
@@ -144,7 +181,9 @@ species( const char * name,
 
   if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for species %s.\n",
           (double (max_local_np*sizeof(particle_t)))/pow(2,30), sp->name);
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   MALLOC_ALIGNED( sp->p, max_local_np, 128 );
+#endif
   sp->max_np = max_local_np;
 
   if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for species %s movers.\n",
@@ -191,10 +230,14 @@ species_t::copy_to_host()
 
   nm = k_nm_h(0);
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   // Avoid capturing this
   auto& k_particle_h = k_p_h;
   auto& k_particle_i_h = k_p_i_h;
   auto& particles = p;
+  auto& k_particle_movers_h = k_pm_h;
+  auto& k_particle_i_movers_h = k_pm_i_h;
+  auto& movers = pm;
 
   Kokkos::parallel_for("copy particles to host",
     Kokkos::RangePolicy<size_t,Kokkos::DefaultHostExecutionSpace>(0LLU, np) ,
@@ -214,11 +257,6 @@ species_t::copy_to_host()
 
     });
 
-  // Avoid capturing this
-  auto& k_particle_movers_h = k_pm_h;
-  auto& k_particle_i_movers_h = k_pm_i_h;
-  auto& movers = pm;
-
   Kokkos::parallel_for("copy movers to host",
     Kokkos::RangePolicy<size_t,Kokkos::DefaultHostExecutionSpace>(0, max_nm) ,
     KOKKOS_LAMBDA (size_t i) {
@@ -229,6 +267,7 @@ species_t::copy_to_host()
       movers[i].i     = k_particle_i_movers_h(i);
 
     });
+#endif
 
   last_copied = g->step;
 
@@ -241,10 +280,16 @@ species_t::copy_to_device()
   k_nm_h(0) = nm;
 
   // Avoid capturing this
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   auto& k_particle_h = k_p_h;
   auto& k_particle_i_h = k_p_i_h;
   auto& particles = p;
+  auto& k_particle_movers_h = k_pm_h;
+  auto& k_particle_i_movers_h = k_pm_i_h;
+  auto& movers = pm;
+#endif
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   Kokkos::parallel_for("copy particles to device",
     Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, size_t>(0, np) ,
     KOKKOS_LAMBDA (const size_t i) {
@@ -263,11 +308,6 @@ species_t::copy_to_device()
 
     });
 
-  // Avoid capturing this
-  auto& k_particle_movers_h = k_pm_h;
-  auto& k_particle_i_movers_h = k_pm_i_h;
-  auto& movers = pm;
-
   Kokkos::parallel_for("copy movers to device",
     Kokkos::RangePolicy<size_t,Kokkos::DefaultHostExecutionSpace>(0, max_nm) ,
     KOKKOS_LAMBDA (const size_t i) {
@@ -278,6 +318,7 @@ species_t::copy_to_device()
       k_particle_i_movers_h(i) = movers[i].i;
 
     });
+#endif
 
   Kokkos::deep_copy(k_p_d, k_p_h);
   Kokkos::deep_copy(k_p_i_d, k_p_i_h);
@@ -322,6 +363,7 @@ species_t::copy_outbound_to_host()
   auto& k_particle_i_movers_h = k_pm_i_h;
   auto& movers = pm;
 
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   Kokkos::parallel_for("copy movers to host",
     host_execution_policy(0, nm) ,
     KOKKOS_LAMBDA (size_t i) {
@@ -330,6 +372,7 @@ species_t::copy_outbound_to_host()
       movers[i].dispz = k_particle_movers_h(i, particle_mover_var::dispz);
       movers[i].i     = k_particle_i_movers_h(i);
     });
+//#endif
 }
 
 void
@@ -381,6 +424,7 @@ species_t::copy_inbound_to_device()
   int num_f64 = annotation_vars.f64_vars.size();
 #endif
 
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   Kokkos::parallel_for("append moved particles",
     Kokkos::RangePolicy <Kokkos::DefaultExecutionSpace> (0, num_to_copy),
     KOKKOS_LAMBDA (size_t i) {
@@ -418,6 +462,7 @@ species_t::copy_inbound_to_device()
 #endif
 
     });
+//#endif
 
   // Reset this to zero now we've done the write back
   this->np += num_to_copy;
@@ -467,6 +512,7 @@ species_t::create_tracer_from(species_t* src_species, const size_t index) {
     ERROR(( "Species is full" ));
     return;
   }
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   k_p_h(np, particle_var::dx) = src_species->p[index].dx; // Copy particle to tracer
   k_p_h(np, particle_var::dy) = src_species->p[index].dy; 
   k_p_h(np, particle_var::dz) = src_species->p[index].dz; 
@@ -476,6 +522,16 @@ species_t::create_tracer_from(species_t* src_species, const size_t index) {
   k_p_h(np, particle_var::w)  = src_species->p[index].w; 
   k_p_i_h(np)                 = src_species->p[index].i; 
   p[np] = src_species->p[index]; // Copy legacy particle FIXME Should be unnecessary
+#else
+  k_p_h(np, particle_var::dx) = src_species->k_p_h(index, particle_var::dx); // Copy particle to tracer
+  k_p_h(np, particle_var::dy) = src_species->k_p_h(index, particle_var::dy); 
+  k_p_h(np, particle_var::dz) = src_species->k_p_h(index, particle_var::dz); 
+  k_p_h(np, particle_var::ux) = src_species->k_p_h(index, particle_var::ux); 
+  k_p_h(np, particle_var::uy) = src_species->k_p_h(index, particle_var::uy); 
+  k_p_h(np, particle_var::uz) = src_species->k_p_h(index, particle_var::uz); 
+  k_p_h(np, particle_var::w)  = src_species->k_p_h(index, particle_var::w ); 
+  k_p_i_h(np)                 = src_species->k_p_i_h(index); 
+#endif
 
   //TODO Test copying the rest of the annotations
   for(uint32_t j=0; j<src_species->annotation_vars.i32_vars.size(); j++) {
@@ -512,7 +568,9 @@ species_t::create_tracer_from(species_t* src_species, const size_t index) {
     src_species->k_p_h(index, particle_var::uz) = src_species->k_p_h(src_species->np-1, particle_var::uz); 
     src_species->k_p_h(index, particle_var::w)  = src_species->k_p_h(src_species->np-1, particle_var::w); 
     src_species->k_p_i_h(index)                 = src_species->k_p_i_h(src_species->np - 1); 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     src_species->p[index] = src_species->p[src_species->np-1]; // FIXME remove legacy particles
+#endif
     src_species->np -= 1; // Decrease number of particles in parent species
   } else {
     ERROR(( "Invalid TracerType: %d", tracer_type ));
@@ -524,6 +582,7 @@ void
 species_t::create_tracers_by_predicate( species_t* parent_species,
                                         const TracerType tracer_type,
                                         std::function <bool (particle_t)> filter, const int rank ) {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   // Make sure parent species particles are in Kokkos Views
   auto& k_particle_h = parent_species->k_p_h;
   auto& k_particle_i_h = parent_species->k_p_i_h;
@@ -544,9 +603,20 @@ species_t::create_tracers_by_predicate( species_t* parent_species,
 
     });
   Kokkos::fence();
+#endif
 
   for(size_t i=0; i<parent_species->np; i++) {
-    if(filter(parent_species->p[i])) { // Check if particle passes filter
+    particle_t p {
+      parent_species->k_p_h(i, particle_var::dx),
+      parent_species->k_p_h(i, particle_var::dy),
+      parent_species->k_p_h(i, particle_var::dz),
+      parent_species->k_p_i_h(i),
+      parent_species->k_p_h(i, particle_var::ux),
+      parent_species->k_p_h(i, particle_var::uy),
+      parent_species->k_p_h(i, particle_var::uz),
+      parent_species->k_p_h(i, particle_var::w ),
+    };
+    if(filter(p)) { // Check if particle passes filter
       create_tracer_from(parent_species, i);
       if(tracer_type == TracerType::Move) {
         i -= 1;
@@ -560,6 +630,7 @@ species_t::create_tracers_by_nth( species_t* parent_species,
                                   const TracerType tracer_type,
                                   float skip, int rank) {
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   // Make sure parent species particles are in Kokkos Views
   auto& k_particle_h = parent_species->k_p_h;
   auto& k_particle_i_h = parent_species->k_p_i_h;
@@ -580,6 +651,7 @@ species_t::create_tracers_by_nth( species_t* parent_species,
 
     });
   Kokkos::fence();
+#endif
 
   np = 0;
   const size_t parent_np = parent_species->np;

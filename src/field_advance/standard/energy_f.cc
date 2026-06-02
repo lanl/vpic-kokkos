@@ -10,35 +10,36 @@ typedef struct pipeline_args {
   double en[MAX_PIPELINE+1][6];
 } pipeline_args_t;
 
-#define DECLARE_STENCIL()                                                  \
-  const field_t                * ALIGNED(128) f = args->f;                 \
-  const material_coefficient_t * ALIGNED(128) m = args->p->mc;             \
-  const grid_t                 *              g = args->g;                 \
-  const int nx = g->nx, ny = g->ny, nz = g->nz;                            \
-                                                                           \
-  const field_t * ALIGNED(16) f0;                                          \
-  const field_t * ALIGNED(16) fx,  * ALIGNED(16) fy,  * ALIGNED(16) fz;    \
-  const field_t * ALIGNED(16) fyz, * ALIGNED(16) fzx, * ALIGNED(16) fxy;   \
-  double en_ex = 0, en_ey = 0, en_ez = 0, en_bx = 0, en_by = 0, en_bz = 0; \
+#define DECLARE_STENCIL()                                                    \
+  const field_t                * ALIGNED(128) f = args->f;                   \
+  /*const material_coefficient_t * ALIGNED(128) m = args->p->mc;*/           \
+  const grid_t                 *              g = args->g;                   \
+  const int nx = g->nx, ny = g->ny, nz = g->nz;                              \
+                                                                             \
+  const field_t * ALIGNED(16) f0;                                            \
+  /*const field_t * ALIGNED(16) fx,  * ALIGNED(16) fy,  * ALIGNED(16) fz;*/  \
+  /*const field_t * ALIGNED(16) fyz, * ALIGNED(16) fzx, * ALIGNED(16) fxy;*/ \
+  double en_ex = 0, en_ey = 0, en_ez = 0, en_bx = 0, en_by = 0, en_bz = 0;   \
   int x, y, z
 
 #define f(x,y,z) f[ VOXEL(x,y,z, nx,ny,nz) ]
 
 #define INIT_STENCIL()   \
   f0  = &f(x,  y,  z  ); \
-  fx  = &f(x+1,y,  z  ); \
-  fy  = &f(x,  y+1,z  ); \
-  fz  = &f(x,  y,  z+1); \
-  fyz = &f(x,  y+1,z+1); \
-  fzx = &f(x+1,y,  z+1); \
-  fxy = &f(x+1,y+1,z  )
 
-#define NEXT_STENCIL()                              \
-  f0++; fx++; fy++; fz++; fyz++; fzx++; fxy++; x++; \
-  if( x>nx ) {                                      \
-    /**/       y++;            x = 1;               \
-    if( y>ny ) z++; if( y>ny ) y = 1;               \
-    INIT_STENCIL();                                 \
+//  fx  = &f(x+1,y,  z  ); 
+//  fy  = &f(x,  y+1,z  ); 
+//  fz  = &f(x,  y,  z+1); 
+//  fyz = &f(x,  y+1,z+1); 
+//  fzx = &f(x+1,y,  z+1); 
+//  fxy = &f(x+1,y+1,z  )
+
+#define NEXT_STENCIL()                                  \
+  f0++; /*fx++; fy++; fz++; fyz++; fzx++; fxy++; x++;*/ \
+  if( x>nx ) {                                          \
+    /**/       y++;            x = 1;                   \
+    if( y>ny ) z++; if( y>ny ) y = 1;                   \
+    INIT_STENCIL();                                     \
   }
 
 #define REDUCE_EN()                                       \

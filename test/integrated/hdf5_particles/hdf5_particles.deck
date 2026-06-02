@@ -35,10 +35,10 @@ begin_initialization
   double Lx = 16 * L;    // How big should the box be in the x direction
   double Ly = 16 * L;    // How big should the box be in the y direction
   double Lz = 16 * L;    // How big should the box be in the z direction
-  double nx = 64;        // Global resolution in the x direction
-  double ny = 64;        // Global resolution in the y direction
+  double nx = 10;        // Global resolution in the x direction
+  double ny = 10;        // Global resolution in the y direction
   double nz = 1;         // Global resolution in the z direction
-  double nppc = 64;      // Average number of macro particles per cell (both species combined!)
+  double nppc = 1;      // Average number of macro particles per cell (both species combined!)
   double cfl_req = 0.99; // How close to Courant should we try to run
   double damp = 0.0;     // Level of radiation damping
 
@@ -136,7 +136,7 @@ begin_initialization
         const double w = 1.;
         const double age = 0.;
         const int update_rhob = 0;
-        inject_particle(ion, x, y, z, ux, uy, uz, w, age, update_rhob, 1);
+        inject_particle(ion, x, y, z, ux, uy, uz, w, age, update_rhob);
         nparticle++;
       }
     }
@@ -190,7 +190,7 @@ begin_diagnostics
   // accumulated using a self-consistent charge-conserving method. Hydro dumps
   // are in a binary format. Each rank makes a hydro dump.
 
-  dump_hydro("ion", "Hhydro");
+  dump_particles("ion", "Hion");
 
   // Force a restart after step 1 to make sure that dump/restart works too
   if (step() == 1)

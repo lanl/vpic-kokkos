@@ -132,7 +132,7 @@ printf("Setup grid\n");
   sp->g = g;
   sp->np = nx*ny*nz*nppc;
 
-printf("Created species of %d particles\n", sp->np);
+printf("Created species of %zu particles\n", sp->np);
 
   // Create rng
   kokkos_rng_pool_t rng_pool(12345);

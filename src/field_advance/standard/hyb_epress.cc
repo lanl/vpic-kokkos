@@ -28,11 +28,11 @@ hyb_epress( field_array_t * RESTRICT fa,
   args->p = (sfa_params_t *)fa->params;
   args->g = fa->g;
   k_field_t k_field = fa->k_f_d;
-  const material_coefficient_t * ALIGNED(128) m = args->p->mc;
+  //const material_coefficient_t * ALIGNED(128) m = args->p->mc;
   const grid_t                 *              g = args->g;
   const int nx = g->nx, ny = g->ny, nz = g->nz;
 
-  const float den_floor_pe = g->den_floor_pe;
+  //const float den_floor_pe = g->den_floor_pe;
 
   const float hstep = frac;
   const float half = 1./2., one = 1., three = 3.;

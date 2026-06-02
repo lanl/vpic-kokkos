@@ -2,7 +2,7 @@
 #include "spa_private.h"
 
 // FIXME: HOOK UP IN-PLACE / OUT-PLACE OPTIONS AGAIN
-
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
 void
 coarse_count_pipeline( sort_p_pipeline_args_t * args,
                        int pipeline_rank,
@@ -302,5 +302,5 @@ sort_p( species_t * sp ) {
     }
   }
 }
-
+#endif
 #endif

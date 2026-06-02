@@ -2,6 +2,8 @@
 #define HAS_V4_PIPELINE
 #include "spa_private.h"
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+
 // This function calculates kinetic energy, normalized by c^2.
 void
 energy_p_pipeline( energy_p_pipeline_args_t * RESTRICT args,
@@ -206,20 +208,49 @@ energy_p( const species_t            * RESTRICT sp,
   mp_allsum_d( &local, &global, 1 );
   return global*((double)sp->g->cvac*(double)sp->g->cvac);
 }
+#endif
+
+double
+energy_p_kernel(const k_interpolator_t& interp, 
+                const k_particles_t& p, 
+                const k_particles_i_t& p_i, 
+                const float qdt_2mc, const float msp, const int np) {
+  double en = 0;
+
+  Kokkos::parallel_reduce(np, KOKKOS_LAMBDA(const int n, double& update) {
+      float dx = p(n, particle_var::dx);
+      float dy = p(n, particle_var::dy);
+      float dz = p(n, particle_var::dz);
+      int   i  = p_i(n);
+      float v0 = p(n, particle_var::ux) + qdt_2mc*( ( interp(i, interpolator_var::ex   ) + dy*interp(i, interpolator_var::dexdy   ) ) +
+                                                       dz*(   interp(i, interpolator_var::dexdz) + dy*interp(i, interpolator_var::d2exdydz) ) );
+      float v1 = p(n, particle_var::uy) + qdt_2mc*( ( interp(i, interpolator_var::ey   ) + dz*interp(i, interpolator_var::deydz   ) ) +
+                                                       dx*(   interp(i, interpolator_var::deydx) + dz*interp(i, interpolator_var::d2eydzdx) ) );
+      float v2 = p(n, particle_var::uz) + qdt_2mc*( ( interp(i, interpolator_var::ez   ) + dx*interp(i, interpolator_var::dezdx   ) ) +
+                                                       dy*(   interp(i, interpolator_var::dezdy) + dx*interp(i, interpolator_var::d2ezdxdy) ) );
+      v0 = v0*v0 + v1*v1 + v2*v2;
+      //v0 = (msp * p(n, particle_var::w)) * (v0 / (1 + sqrtf(1 + v0)));  // Relativistic kinetic energy
+      v0 *= 0.5 * (msp * p(n, particle_var::w));  // Non-relativistic kinetic energy
+      update += static_cast<double>(v0);
+  }, en);
+  return en;
+}
 
 double
 energy_p_kokkos(const species_t* RESTRICT sp,
          const interpolator_array_t* RESTRICT ia) {
 
     double local, global;
+    grid_t* g = sp->g;
 
     if(!sp || !ia || sp->g != ia->g) ERROR(("Bad args"));
 
     float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
 
-    local = energy_p_kernel(ia->k_i_d, sp->k_p_d, sp->k_p_i_d, qdt_2mc, sp->m, sp->np);
+    local = energy_p_kernel(ia->k_i_d, sp->k_p_d, sp->k_p_i_d, 
+                            qdt_2mc, sp->m, sp->np);
     Kokkos::fence();
 
     mp_allsum_d( &local, &global, 1 );
-    return global*(static_cast<double>(sp->g->cvac) * static_cast<double>(sp->g->cvac));
+    return global*(static_cast<double>(g->cvac) * static_cast<double>(g->cvac));
 }

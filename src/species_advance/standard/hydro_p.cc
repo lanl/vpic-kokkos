@@ -22,6 +22,7 @@
 // hydro jx,jy,jz are for diagnostic purposes only; they are not
 // accumulated with a charge conserving algorithm.
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
 void
 accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
                     const species_t            * RESTRICT sp,
@@ -165,23 +166,22 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
 #   undef ACCUM_HYDRO
   }
 }
+#endif
 
 void
 accumulate_hydro_p_kokkos_nomove_ngp(
-        //hydro_array_t              * RESTRICT ha,
-        k_particles_t& k_particles,
-        k_particles_i_t& k_particles_i,
-        k_hydro_d_t k_hydro,
-        //k_hydro_sv_t k_hydro_sv, // don't need, can do locally
-        k_interpolator_t& k_interp,
-        const species_t            * RESTRICT sp
+                                      k_particles_t& k_particles,
+                                      k_particles_i_t& k_particles_i,
+                                      k_hydro_t k_hydro,
+                                      k_interpolator_t& k_interp,
+                                      const species_t            * RESTRICT sp
 )
 {
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
   float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
 
-  int nv = sp->g->nv; // TODO: delete
+  //int nv = sp->g->nv; // TODO: delete
 
   if( !sp ) {
     ERROR(( "Bad args" ));
@@ -190,17 +190,24 @@ accumulate_hydro_p_kokkos_nomove_ngp(
   c        = sp->g->cvac;
   qsp      = sp->q;
   mspc     = sp->m*c;
+//  qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
+//  qdt_4mc2 = qdt_2mc / (2*c);
+#ifdef VARIABLE_CHARGE
+  float dt_2mc  = (sp->g->dt)/(2*mspc); // Multiply by particle q later
+  float dt_4mc2 = dt_2mc / (2*c);
+#else
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
-  r8V      = sp->g->r8V;
+#endif
+  //r8V      = sp->g->r8V;
 
   const int np        = sp->np;
-  const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
-                        VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
-  const int stride_21 = VOXEL(0,1,0, sp->g->nx,sp->g->ny,sp->g->nz) -
-                        VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
-  const int stride_43 = VOXEL(0,0,1, sp->g->nx,sp->g->ny,sp->g->nz) -
-                        VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  //const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
+  //                      VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  //const int stride_21 = VOXEL(0,1,0, sp->g->nx,sp->g->ny,sp->g->nz) -
+  //                      VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  //const int stride_43 = VOXEL(0,0,1, sp->g->nx,sp->g->ny,sp->g->nz) -
+  //                      VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
 
 
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace,size_t > (0LLU, np),
@@ -223,7 +230,7 @@ accumulate_hydro_p_kokkos_nomove_ngp(
 
     double ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
     double vz = 1.0;//sqrt(1.0+ke_mc);            // vz = gamma    (invariant)    
-    ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
+//    ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
     
     // Compute physical velocities
     double vx  = ux*vz;
@@ -231,29 +238,34 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     vz *= uz;
 
     double t = 0.0; // used in macro
-    auto k_hydro_access = k_hydro_sv.access();
+    auto hydro_sa = k_hydro_sv.access();
+#ifdef VARIABLE_CHARGE
+    const float q = qp;
+#else
+    const float q = qsp;
+#endif
 
     // Accumulate the hydro fields
-    #define ACCUM_HYDRO( wn, i )                                       \
-    t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */                  \
-    k_hydro_access(i, hydro_var::jx)  += t*vx;                         \
-    k_hydro_access(i, hydro_var::jy)  += t*vy;                         \
-    k_hydro_access(i, hydro_var::jz)  += t*vz;                         \
-    k_hydro_access(i, hydro_var::rho) += t;                            \
-    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */                 \
-    dx = t*ux;          /* dx = (px w/V) trilin_n */                   \
-    dy = t*uy;                                                         \
-    dz = t*uz;                                                         \
-    k_hydro_access(i, hydro_var::px)  += dx;                           \
-    k_hydro_access(i, hydro_var::py)  += dy;                           \
-    k_hydro_access(i, hydro_var::pz)  += dz;                           \
-    k_hydro_access(i, hydro_var::rho_m)  += t; /* Prev. was *ke_mc; */ \
-    k_hydro_access(i, hydro_var::txx) += dx*vx;                        \
-    k_hydro_access(i, hydro_var::tyy) += dy*vy;                        \
-    k_hydro_access(i, hydro_var::tzz) += dz*vz;                        \
-    k_hydro_access(i, hydro_var::tyz) += dy*vz;                        \
-    k_hydro_access(i, hydro_var::tzx) += dz*vx;                        \
-    k_hydro_access(i, hydro_var::txy) += dx*vy;
+    #define ACCUM_HYDRO( wn, i )                                 \
+    t  = q*wn;        /* t  = (qsp w/V) trilin_n */              \
+    hydro_sa(i, hydro_var::jx)  += t*vx;                         \
+    hydro_sa(i, hydro_var::jy)  += t*vy;                         \
+    hydro_sa(i, hydro_var::jz)  += t*vz;                         \
+    hydro_sa(i, hydro_var::rho) += t;                            \
+    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */           \
+    dx = t*ux;          /* dx = (px w/V) trilin_n */             \
+    dy = t*uy;                                                   \
+    dz = t*uz;                                                   \
+    hydro_sa(i, hydro_var::px)    += dx;                         \
+    hydro_sa(i, hydro_var::py)    += dy;                         \
+    hydro_sa(i, hydro_var::pz)    += dz;                         \
+    hydro_sa(i, hydro_var::rho_m) += t; /* Prev. was *ke_mc; */  \
+    hydro_sa(i, hydro_var::txx)   += dx*vx;                      \
+    hydro_sa(i, hydro_var::tyy)   += dy*vy;                      \
+    hydro_sa(i, hydro_var::tzz)   += dz*vz;                      \
+    hydro_sa(i, hydro_var::tyz)   += dy*vz;                      \
+    hydro_sa(i, hydro_var::tzx)   += dz*vx;                      \
+    hydro_sa(i, hydro_var::txy)   += dx*vy;
 
     // TODO: this serial adding to try and save adds is a bit sad
     // TODO: This is somehow going out of bounds right now
@@ -266,8 +278,6 @@ accumulate_hydro_p_kokkos_nomove_ngp(
 
   Kokkos::Experimental::contribute(k_hydro, k_hydro_sv);
   Kokkos::fence(); // TODO: Check if I need this to block the contribute
-
-  // Perform debug printing
 }
 
 
@@ -276,7 +286,7 @@ accumulate_hydro_p_kokkos(
         //hydro_array_t              * RESTRICT ha,
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
-        k_hydro_d_t k_hydro,
+        k_hydro_t k_hydro,
         //k_hydro_sv_t k_hydro_sv, // don't need, can do locally
         k_interpolator_t& k_interp,
         const species_t            * RESTRICT sp
@@ -307,13 +317,15 @@ accumulate_hydro_p_kokkos(
 #ifdef VARIABLE_CHARGE
   dt_2mc  = (sp->g->dt)/(2*mspc); // Multiply by particle q later
   dt_4mc2 = dt_2mc / (2*c);
-  Kokkos::View<int*, Kokkos::DefaultExecutionSpace> particle_count("particle_count", nv);
+  Kokkos::View<int*> particle_count("particle_count", nv);
+  Kokkos::deep_copy(particle_count, 0);
 
   // Set initial values to min_q
   Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace, size_t>(0LLU, nv),
     KOKKOS_LAMBDA(size_t ii)
     {
-        k_hydro(ii, hydro_var::min_q) = 999999999;
+        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<k_hydro_t::non_const_value_type>::max();
+        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<k_hydro_t::non_const_value_type>::min();
     });
 
 #else
@@ -344,11 +356,11 @@ accumulate_hydro_p_kokkos(
     float uz = k_particles(p_index, particle_var::uz);
     float w  = k_particles(p_index, particle_var::w);
 #ifdef VARIABLE_CHARGE
-    float qp = k_particles(p_index, particle_var::qp);
-    float qdt_2mc = qp*dt_2mc;
-    float qdt_4mc2 = qp*dt_4mc2;
+    const float qp = k_particles(p_index, particle_var::qp);
+    const float qdt_2mc = qp*dt_2mc;
+    const float qdt_4mc2 = qp*dt_4mc2;
 #endif
-    int ii = k_particles_i(p_index);
+    const int ii = k_particles_i(p_index);
 
     const float cbx = k_interp(ii, interpolator_var::cbx);
     const float cby = k_interp(ii, interpolator_var::cby);
@@ -358,21 +370,21 @@ accumulate_hydro_p_kokkos(
     const float ey = k_interp(ii, interpolator_var::ey);
     const float ez = k_interp(ii, interpolator_var::ez);
 
-    const float dexdy = k_interp(ii, interpolator_var::dexdy);
-    const float deydz = k_interp(ii, interpolator_var::deydz);
-    const float dezdx = k_interp(ii, interpolator_var::dezdx);
+    //const float dexdy = k_interp(ii, interpolator_var::dexdy);
+    //const float deydz = k_interp(ii, interpolator_var::deydz);
+    //const float dezdx = k_interp(ii, interpolator_var::dezdx);
 
-    const float dexdz = k_interp(ii, interpolator_var::dexdz);
-    const float deydx = k_interp(ii, interpolator_var::deydx);
-    const float dezdy = k_interp(ii, interpolator_var::dezdy);
+    //const float dexdz = k_interp(ii, interpolator_var::dexdz);
+    //const float deydx = k_interp(ii, interpolator_var::deydx);
+    //const float dezdy = k_interp(ii, interpolator_var::dezdy);
 
-    const float d2exdydz = k_interp(ii, interpolator_var::d2exdydz);
-    const float d2eydzdx = k_interp(ii, interpolator_var::d2eydzdx);
-    const float d2ezdxdy = k_interp(ii, interpolator_var::d2ezdxdy);
+    //const float d2exdydz = k_interp(ii, interpolator_var::d2exdydz);
+    //const float d2eydzdx = k_interp(ii, interpolator_var::d2eydzdx);
+    //const float d2ezdxdy = k_interp(ii, interpolator_var::d2ezdxdy);
 
-    const float dcbxdx = k_interp(ii, interpolator_var::dcbxdx);
-    const float dcbydy = k_interp(ii, interpolator_var::dcbydy);
-    const float dcbzdz = k_interp(ii, interpolator_var::dcbzdz);
+    //const float dcbxdx = k_interp(ii, interpolator_var::dcbxdx);
+    //const float dcbydy = k_interp(ii, interpolator_var::dcbydy);
+    //const float dcbzdz = k_interp(ii, interpolator_var::dcbzdz);
 
     // Half advance E
     ux += qdt_2mc*((ex)); //+dy*dexdy) + dz*(dexdz+dy*d2exdydz));
@@ -387,9 +399,9 @@ accumulate_hydro_p_kokkos(
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
     // is the numerically accurate way to compute gamma-1
-    float ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
+    //float ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
     float vz = 1; //sqrt(1.0+ke_mc);            // vz = gamma    (invariant)
-    ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
+    //ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
     vz = c/vz;                     // vz = c/gamma
     float w0 = qdt_4mc2*vz;
     float w1 = w5*w5 + w6*w6 + w7*w7;    // |cB|^2
@@ -440,12 +452,11 @@ accumulate_hydro_p_kokkos(
     auto k_hydro_access = k_hydro_sv.access();
 
 #ifdef VARIABLE_CHARGE
-    float q = qp;
+    const double q = qp;
 
-    //if ( q == 0 ) printf("qp=%e",q);
-    
-    Kokkos::atomic_fetch_min(&k_hydro(ii, hydro_var::min_q), q);
-    Kokkos::atomic_fetch_max(&k_hydro(ii, hydro_var::max_q), q);
+    // TODO: Why? Nothing is done with the results.
+    Kokkos::atomic_min(&k_hydro(ii, hydro_var::qmin), q);
+    Kokkos::atomic_max(&k_hydro(ii, hydro_var::qmax), q);
 
     float w_ngp = 8.0*r8V*w;
     if (q==0) {
@@ -468,32 +479,32 @@ accumulate_hydro_p_kokkos(
       //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q5), w_ngp); }
     }
        
-    Kokkos::atomic_add(&particle_count(ii), 1); // number of particles in each cell
+    Kokkos::atomic_inc(&particle_count(ii)); // number of particles in each cell
 #else
     float q = qsp;
 #endif
     
     // Accumulate the hydro fields
-    #define ACCUM_HYDRO( wn, i )                        \
-    t  = q*wn;        /* t  = (q w/V) trilin_n */     \
-    k_hydro_access(i, hydro_var::jx)  += t*vx;                       \
-    k_hydro_access(i, hydro_var::jy)  += t*vy;                       \
-    k_hydro_access(i, hydro_var::jz)  += t*vz;                       \
-    k_hydro_access(i, hydro_var::rho) += t;                          \
-    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
-    dx = t*ux;          /* dx = (px w/V) trilin_n */    \
-    dy = t*uy;                                          \
-    dz = t*uz;                                          \
-    k_hydro_access(i, hydro_var::px)  += dx;                         \
-    k_hydro_access(i, hydro_var::py)  += dy;                         \
-    k_hydro_access(i, hydro_var::pz)  += dz;                         \
-    k_hydro_access(i, hydro_var::rho_m) += t; /* changed to mass density (previously ke_mc). Nb. for non-relativistic ke can be computed through trace of pressure tensor below;)*/ \
-    k_hydro_access(i, hydro_var::txx) += dx*vx;                      \
-    k_hydro_access(i, hydro_var::tyy) += dy*vy;                      \
-    k_hydro_access(i, hydro_var::tzz) += dz*vz;                      \
-    k_hydro_access(i, hydro_var::tyz) += dy*vz;                      \
-    k_hydro_access(i, hydro_var::tzx) += dz*vx;                      \
-    k_hydro_access(i, hydro_var::txy) += dx*vy;
+    #define ACCUM_HYDRO( wn, i )                                       \
+    t  = q*wn;        /* t  = (q w/V) trilin_n */                      \
+    k_hydro_access(i, hydro_var::jx)    += t*vx;                       \
+    k_hydro_access(i, hydro_var::jy)    += t*vy;                       \
+    k_hydro_access(i, hydro_var::jz)    += t*vz;                       \
+    k_hydro_access(i, hydro_var::rho)   += t;                          \
+    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */                 \
+    dx = t*ux;          /* dx = (px w/V) trilin_n */                   \
+    dy = t*uy;                                                         \
+    dz = t*uz;                                                         \
+    k_hydro_access(i, hydro_var::px)    += dx;                         \
+    k_hydro_access(i, hydro_var::py)    += dy;                         \
+    k_hydro_access(i, hydro_var::pz)    += dz;                         \
+    k_hydro_access(i, hydro_var::rho_m) += t; /* changed to mass density (previously ke_mc). Nb. for non-relativistic ke can be computed through trace of pressure tensor below;)*/       \
+    k_hydro_access(i, hydro_var::txx)   += dx*vx;                      \
+    k_hydro_access(i, hydro_var::tyy)   += dy*vy;                      \
+    k_hydro_access(i, hydro_var::tzz)   += dz*vz;                      \
+    k_hydro_access(i, hydro_var::tyz)   += dy*vz;                      \
+    k_hydro_access(i, hydro_var::tzx)   += dz*vx;                      \
+    k_hydro_access(i, hydro_var::txy)   += dx*vy;
 
     // TODO: this serial adding to try and save adds is a bit sad
     // TODO: This is somehow going out of bounds right now
@@ -535,14 +546,12 @@ accumulate_hydro_p_kokkos(
         //if (k_hydro(ii, hydro_var::min_q) == 0) printf("ii=%d, minq=%e",ii,k_hydro(ii, hydro_var::min_q));
       } else {
         //k_hydro(ii, hydro_var::avg_q) = std::numeric_limits<double>::quiet_NaN();
-        k_hydro(ii, hydro_var::min_q) = std::numeric_limits<double>::quiet_NaN();
-        k_hydro(ii, hydro_var::max_q) = std::numeric_limits<double>::quiet_NaN();
+        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<k_hydro_t::non_const_value_type>::quiet_NaN();
+        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<k_hydro_t::non_const_value_type>::quiet_NaN();
       }
     });
 #endif
   
   Kokkos::Experimental::contribute(k_hydro, k_hydro_sv);
   Kokkos::fence(); // TODO: Check if I need this to block the contribute
-
-  // Perform debug printing
 }

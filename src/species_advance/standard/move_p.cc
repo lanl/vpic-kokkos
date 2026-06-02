@@ -223,7 +223,7 @@ move_p( particle_t       * ALIGNED(128) p0,
 
   const int nx = g->nx;
   const int ny = g->ny;
-  const int nz = g->nz;
+  //const int nz = g->nz;
   float cx = 0.25 * g->rdy * g->rdz / g->dt;
   float cy = 0.25 * g->rdz * g->rdx / g->dt;
   float cz = 0.25 * g->rdx * g->rdy / g->dt;
@@ -306,21 +306,21 @@ move_p( particle_t       * ALIGNED(128) p0,
     int yi = iii/(nx+2);
     int xi = iii - yi*(nx+2);
     accumulate_j(x,y,z);
-    k_jf_accum(ii, accumulator_var::jx) += cx*v0;
-    k_jf_accum(VOXEL(xi,yi+1,zi,nx,ny,nz), accumulator_var::jx) += cx*v1;
-    k_jf_accum(VOXEL(xi,yi,zi+1,nx,ny,nz), accumulator_var::jx) += cx*v2;
+    k_jf_accum(ii,                           accumulator_var::jx) += cx*v0;
+    k_jf_accum(VOXEL(xi,yi+1,zi,  nx,ny,nz), accumulator_var::jx) += cx*v1;
+    k_jf_accum(VOXEL(xi,yi,  zi+1,nx,ny,nz), accumulator_var::jx) += cx*v2;
     k_jf_accum(VOXEL(xi,yi+1,zi+1,nx,ny,nz), accumulator_var::jx) += cx*v3;
 
     accumulate_j(y,z,x);
-    k_jf_accum(ii, accumulator_var::jy) += cy*v0;
-    k_jf_accum(VOXEL(xi,yi,zi+1,nx,ny,nz), accumulator_var::jy) += cy*v1;
-    k_jf_accum(VOXEL(xi+1,yi,zi,nx,ny,nz), accumulator_var::jy) += cy*v2;
+    k_jf_accum(ii,                           accumulator_var::jy) += cy*v0;
+    k_jf_accum(VOXEL(xi  ,yi,zi+1,nx,ny,nz), accumulator_var::jy) += cy*v1;
+    k_jf_accum(VOXEL(xi+1,yi,zi  ,nx,ny,nz), accumulator_var::jy) += cy*v2;
     k_jf_accum(VOXEL(xi+1,yi,zi+1,nx,ny,nz), accumulator_var::jy) += cy*v3;
 
     accumulate_j(z,x,y);
-    k_jf_accum(ii, accumulator_var::jz) += cz*v0;
-    k_jf_accum(VOXEL(xi+1,yi,zi,nx,ny,nz), accumulator_var::jz) += cz*v1;
-    k_jf_accum(VOXEL(xi,yi+1,zi,nx,ny,nz), accumulator_var::jz) += cz*v2;
+    k_jf_accum(ii,                           accumulator_var::jz) += cz*v0;
+    k_jf_accum(VOXEL(xi+1,yi,  zi,nx,ny,nz), accumulator_var::jz) += cz*v1;
+    k_jf_accum(VOXEL(xi,  yi+1,zi,nx,ny,nz), accumulator_var::jz) += cz*v2;
     k_jf_accum(VOXEL(xi+1,yi+1,zi,nx,ny,nz), accumulator_var::jz) += cz*v3;
 
 #   undef accumulate_j

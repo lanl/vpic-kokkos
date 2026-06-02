@@ -23,6 +23,8 @@
 // computational domain; see note in synchronize_rhob about why this
 // is done this way.  All particles on the list must be inbounds.
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+
 void
 accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         const species_t     * RESTRICT sp )
@@ -68,7 +70,7 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         //uy *= w3;
         //uz *= w3;
 
-	v  = p[n].i;
+        v  = p[n].i;
         w7 = p[n].w*q_8V*8.0;
 
         // Compute the trilinear weights
@@ -76,25 +78,25 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         // measured to be more efficient _not_ to use it here.  (Maybe the
         // compiler isn't actually generating the assembly for it.
 
-	//#   define FMA( x,y,z) ((z)+(x)*(y))
-	//#   define FNMS(x,y,z) ((z)-(x)*(y))
+    //#   define FMA( x,y,z) ((z)+(x)*(y))
+    //#   define FNMS(x,y,z) ((z)-(x)*(y))
         //w6=FNMS(w0,w7,w7);                    // q(1-dx)
         //w7=FMA( w0,w7,w7);                    // q(1+dx)
         //w4=FNMS(w1,w6,w6); w5=FNMS(w1,w7,w7); // q(1-dx)(1-dy), q(1+dx)(1-dy)
         //w6=FMA( w1,w6,w6); w7=FMA( w1,w7,w7); // q(1-dx)(1+dy), q(1+dx)(1+dy)
         //w0=FNMS(dz,w4,w4); w1=FNMS(dz,w5,w5); w2=FNMS(dz,w6,w6); w3=FNMS(dz,w7,w7);
         //w4=FMA( dz,w4,w4); w5=FMA( dz,w5,w5); w6=FMA( dz,w6,w6); w7=FMA( dz,w7,w7);
-	//#   undef FNMS
-	//#   undef FMA
+    //#   undef FNMS
+    //#   undef FMA
 
         // Reduce the particle charge to rhof
 
         f[v      ].jfx += w7*ux;
-	f[v      ].jfy += w7*uy;
+        f[v      ].jfy += w7*uy;
         f[v      ].jfz += w7*uz;
-	f[v      ].rhof+= w7;
+        f[v      ].rhof+= w7;
 
-	//  ; f[v      +1].rhof += w1;
+        //f[v    +1].rhof += w1;
         //f[v   +sy].rhof += w2; f[v   +sy+1].rhof += w3;
         //f[v+sz   ].rhof += w4; f[v+sz   +1].rhof += w5;
         //f[v+sz+sy].rhof += w6; f[v+sz+sy+1].rhof += w7;
@@ -225,6 +227,7 @@ accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
 
 # endif
 }
+#endif
 
 // KOKKOS VERSION
 // accumulate_rho_p adds the charge density associated with the
@@ -310,7 +313,7 @@ struct accum_rho_p_reduce {
 
 // TODO replace with scatter add view
 struct accum_rho_p {
-    k_field_sa_t kfield;
+    k_field_sv_t kfield;
     k_particles_t kparticles;
     k_particles_i_t kparticles_i;
     int sy;
@@ -319,7 +322,7 @@ struct accum_rho_p {
     size_t np;
 
     KOKKOS_INLINE_FUNCTION
-    accum_rho_p(k_field_sa_t& k_f_sa_, 
+    accum_rho_p(k_field_sv_t& k_f_sa_, 
                 k_particles_t& k_p_, k_particles_i_t& k_p_i_, 
                 int sy_, int sz_, float q_8V_, size_t np_) : kfield(k_f_sa_), 
       kparticles(k_p_), kparticles_i(k_p_i_), sy(sy_), sz(sz_), 
@@ -360,102 +363,102 @@ struct accum_rho_p {
 };
 
 struct accum_rhob {
-    k_field_t kfield;
-    k_particles_t kpart;
-    k_particles_i_t kpart_i;
-    k_particle_i_movers_t kpart_movers_i;
-    float qsp;
-    float r8V;
-    int nx;
-    int ny;
-    int nz;
-    int sy;
-    int sz;
+  k_field_t kfield;
+  k_particles_t kpart;
+  k_particles_i_t kpart_i;
+  k_particle_i_movers_t kpart_movers_i;
+  float qsp;
+  float r8V;
+  int nx;
+  int ny;
+  int nz;
+  int sy;
+  int sz;
 
-    KOKKOS_INLINE_FUNCTION
-    accum_rhob(k_field_t k_f_, k_particles_t k_p_, k_particles_i_t k_p_i_, 
-               k_particle_i_movers_t kpart_movers_i_, float qsp_, float r8V_, 
-               int nx_, int ny_, int nz_, int sy_, int sz_) :
-        kfield(k_f_), kpart(k_p_), kpart_i(k_p_i_), 
-        kpart_movers_i(kpart_movers_i_), qsp(qsp_), r8V(r8V_), 
-        nx(nx_), ny(ny_), nz(nz_), sy(sy_), sz(sz_) {}
+  KOKKOS_INLINE_FUNCTION
+  accum_rhob(k_field_t k_f_, k_particles_t k_p_, k_particles_i_t k_p_i_, 
+             k_particle_i_movers_t kpart_movers_i_, float qsp_, float r8V_, 
+             int nx_, int ny_, int nz_, int sy_, int sz_) :
+      kfield(k_f_), kpart(k_p_), kpart_i(k_p_i_), 
+      kpart_movers_i(kpart_movers_i_), qsp(qsp_), r8V(r8V_), 
+      nx(nx_), ny(ny_), nz(nz_), sy(sy_), sz(sz_) {}
 
-    KOKKOS_INLINE_FUNCTION
-    void operator() (const int n) const {
-        int part_idx = kpart_movers_i(n);
-        float w0 = kpart(part_idx, particle_var::dx);
-        float w1 = kpart(part_idx, particle_var::dy);
-        float w2, w3, w4, w5, w6;
-        float w7 = (qsp * r8V) * kpart(part_idx, particle_var::w);
-        float dz = kpart(part_idx, particle_var::dz);
-        int v = kpart_i(part_idx);
-        int x, y, z;
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const int n) const {
+    int part_idx = kpart_movers_i(n);
+    float w0 = kpart(part_idx, particle_var::dx);
+    float w1 = kpart(part_idx, particle_var::dy);
+    float w2, w3, w4, w5, w6;
+    float w7 = (qsp * r8V) * kpart(part_idx, particle_var::w);
+    float dz = kpart(part_idx, particle_var::dz);
+    int v = kpart_i(part_idx);
+    int x, y, z;
 
-        w6 = w7 - w0 * w7;
-        w7 = w7 + w0 * w7;
-        w4 = w6 - w1 * w6;
-        w5 = w7 - w1 * w7;
-        w6 = w6 + w1 * w6;
-        w7 = w7 + w1 * w7;
-        w0 = w4 - dz * w4;
-        w1 = w5 - dz * w5;
-        w2 = w6 - dz * w6;
-        w3 = w7 - dz * w7;
-        w4 = w4 + dz * w4;
-        w5 = w5 + dz * w5;
-        w6 = w6 + dz * w6;
-        w7 = w7 + dz * w7;
+    w6 = w7 - w0 * w7;
+    w7 = w7 + w0 * w7;
+    w4 = w6 - w1 * w6;
+    w5 = w7 - w1 * w7;
+    w6 = w6 + w1 * w6;
+    w7 = w7 + w1 * w7;
+    w0 = w4 - dz * w4;
+    w1 = w5 - dz * w5;
+    w2 = w6 - dz * w6;
+    w3 = w7 - dz * w7;
+    w4 = w4 + dz * w4;
+    w5 = w5 + dz * w5;
+    w6 = w6 + dz * w6;
+    w7 = w7 + dz * w7;
 
-        x = v;
-        z = x/sz;
-        if(z == 1) {
-            w0 += w0;
-            w1 += w1;
-            w2 += w2;
-            w3 += w3;
-        }
-        if(z == nz) {
-            w4 += w4;
-            w5 += w5;
-            w6 += w6;
-            w7 += w7;
-        }
-        x -= sz * z;
-        y = x/sy;
-        if(y == 1) {
-            w0 += w0;
-            w1 += w1;
-            w4 += w4;
-            w5 += w5;
-        }
-        if(y == ny) {
-            w2 += w2;
-            w3 += w3;
-            w6 += w6;
-            w7 += w7;
-        }
-        x -= sy * y;
-        if(x == 1) {
-            w0 += w0;
-            w2 += w2;
-            w4 += w4;
-            w6 += w6;
-        }
-        if(x == nx) {
-            w1 += w1;
-            w3 += w3;
-            w5 += w5;
-            w7 += w7;
-        }
-        kfield(v,         field_var::rhob) += w0;
-        kfield(v+1,       field_var::rhob) += w1;
-        kfield(v+sy,      field_var::rhob) += w2;
-        kfield(v+sy+1,    field_var::rhob) += w3;
-        kfield(v+sz,      field_var::rhob) += w4;
-        kfield(v+sz+1,    field_var::rhob) += w5;
-        kfield(v+sz+sy,   field_var::rhob) += w6;
-        kfield(v+sz+sy+1, field_var::rhob) += w7;
+    x = v;
+    z = x/sz;
+    if(z == 1) {
+      w0 += w0;
+      w1 += w1;
+      w2 += w2;
+      w3 += w3;
     }
+    if(z == nz) {
+      w4 += w4;
+      w5 += w5;
+      w6 += w6;
+      w7 += w7;
+    }
+    x -= sz * z;
+    y  = x  / sy;
+    if(y == 1) {
+      w0 += w0;
+      w1 += w1;
+      w4 += w4;
+      w5 += w5;
+    }
+    if(y == ny) {
+      w2 += w2;
+      w3 += w3;
+      w6 += w6;
+      w7 += w7;
+    }
+    x -= sy * y;
+    if(x == 1) {
+      w0 += w0;
+      w2 += w2;
+      w4 += w4;
+      w6 += w6;
+    }
+    if(x == nx) {
+      w1 += w1;
+      w3 += w3;
+      w5 += w5;
+      w7 += w7;
+    }
+    kfield(v,         field_var::rhob) += w0;
+    kfield(v+1,       field_var::rhob) += w1;
+    kfield(v+sy,      field_var::rhob) += w2;
+    kfield(v+sy+1,    field_var::rhob) += w3;
+    kfield(v+sz,      field_var::rhob) += w4;
+    kfield(v+sz+1,    field_var::rhob) += w5;
+    kfield(v+sz+sy,   field_var::rhob) += w6;
+    kfield(v+sz+sy+1, field_var::rhob) += w7;
+  }
 };
 
 void
@@ -473,7 +476,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
 
-    k_field_sa_t scatter_view = Kokkos::Experimental::create_scatter_view<>(kfield);
+    k_field_sv_t scatter_view = Kokkos::Experimental::create_scatter_view<>(kfield);
 
     Kokkos::parallel_for("accumulate_rho_p", Kokkos::RangePolicy<>(0, np), 
       KOKKOS_LAMBDA(const size_t n) {

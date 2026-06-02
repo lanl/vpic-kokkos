@@ -2,6 +2,7 @@
 
 import h5py
 import numpy as np
+import matplotlib.pyplot as plt
 import os.path
 import sys
 
@@ -27,15 +28,17 @@ hydro_names = ["jx", "jy", "jz", "rho",
                "tyz", "tzx", "txy"]
 
 if len(sys.argv) == 3 and sys.argv[2] == '--variable-charge':
-  hydro_names.append("qmin")
-  hydro_names.append("qmin")
-  hydro_names.append("n_q0")
-  hydro_names.append("n_q1")
-  hydro_names.append("n_q2")
-  hydro_names.append("n_q3")
-  hydro_names.append("n_q4")
-  hydro_names.append("n_q5")
-  num_var = 24
+    hydro_names.append("qmin")
+    hydro_names.append("qmax")
+    hydro_names.append("n_q0")
+    hydro_names.append("n_q1")
+    hydro_names.append("n_q2")
+    hydro_names.append("n_q3")
+    hydro_names.append("n_q4")
+    hydro_names.append("n_q5")
+    num_var = 24
+
+print(hydro_names)
 
 for step_name in step_names:
     filename = rundir + "/hydro_hdf5/T." + step_name + "/hydro_ion_" + step_name + ".h5"
@@ -50,9 +53,11 @@ for step_name in step_names:
     # Binary data
     bin_filename = "Hhydro." + step_name + ".0"
     with open(bin_filename, 'r') as fh:
-        hydro_data_bi_all = np.fromfile(bin_filename, dtype=np.float64, offset=123)
-    
+        hydro_data_bi_all = np.fromfile(bin_filename, dtype=np.float64, offset=123) # Changes to hydro made all hydro variables doubles
+        print(hydro_data_bi_all.shape)
+
     for ihydro, hydro_name in enumerate(hydro_names):
+        print(hydro_name)
         hydro_data_h5 = np.array(datagroup[hydro_name]).flatten()
         print(hydro_data_bi_all.shape)
         fdata_tmp = hydro_data_bi_all[ihydro::num_var].reshape([nzg, nyg, nxg])

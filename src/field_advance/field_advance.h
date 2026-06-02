@@ -283,7 +283,9 @@ typedef struct field_buffers {
 // A field_array holds all the field quanties and pointers to
 // kernels used to advance them.
 typedef struct field_array {
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   field_t * ALIGNED(128) f;           // Local field data
+//#endif
   grid_t  * g;                        // Underlying grid
   void    * params;                   // Field advance specific parameters
   field_advance_kernels_t kernel[1];  // Field advance kernels
@@ -294,7 +296,7 @@ typedef struct field_array {
 
   k_field_t k_f_d;                   // Kokkos field data on device
   k_field_t::HostMirror k_f_h;       // Kokkos field data on host
-  k_field_sa_t k_field_sa_d;
+  k_field_sv_t k_field_sv_d;
   k_field_edge_t k_fe_d;             // Kokkos field_edge data (part of field_t) on device
   k_field_edge_t::HostMirror k_fe_h; // Kokkos field_edge data on host
 
@@ -356,7 +358,7 @@ typedef struct field_array {
 //      neg_z_face_space = exec_space_instances[7];
 
       k_f_d = k_field_t("k_fields", n_fields);
-      k_field_sa_d = Kokkos::Experimental::create_scatter_view(k_f_d);
+      k_field_sv_d = Kokkos::Experimental::create_scatter_view(k_f_d);
       k_fe_d = k_field_edge_t("k_field_edges", n_fields);
       k_f_h = Kokkos::create_mirror_view(k_f_d);
       k_fe_h = Kokkos::create_mirror_view(k_fe_d);

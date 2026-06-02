@@ -76,19 +76,29 @@ int test_tracer_copy(species_t* parent, species_t* tracer, int _world_rank) {
     int j=0;
     success = false;
     for(j=0; j<parent->np; j++) {
-      if(parent->p[j].dx == tracer->p[i].dx &&
-         parent->p[j].dy == tracer->p[i].dy &&
-         parent->p[j].dz == tracer->p[i].dz &&
-         parent->p[j].ux == tracer->p[i].ux &&
-         parent->p[j].uy == tracer->p[i].uy &&
-         parent->p[j].uz == tracer->p[i].uz &&
-         parent->p[j].i == tracer->p[i].i) {
-        success = true;
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+      success = ( parent->p[j].dx == tracer->p[i].dx ) &&
+                ( parent->p[j].dy == tracer->p[i].dy ) &&
+                ( parent->p[j].dz == tracer->p[i].dz ) &&
+                ( parent->p[j].ux == tracer->p[i].ux ) &&
+                ( parent->p[j].uy == tracer->p[i].uy ) &&
+                ( parent->p[j].uz == tracer->p[i].uz ) &&
+                ( parent->p[j].i  == tracer->p[i].i );
+#else
+      success = ( parent->k_p_h(j, particle_var::dx) == tracer->k_p_h(i, particle_var::dx) ) &&
+                ( parent->k_p_h(j, particle_var::dy) == tracer->k_p_h(i, particle_var::dy) ) &&
+                ( parent->k_p_h(j, particle_var::dz) == tracer->k_p_h(i, particle_var::dz) ) &&
+                ( parent->k_p_h(j, particle_var::ux) == tracer->k_p_h(i, particle_var::ux) ) &&
+                ( parent->k_p_h(j, particle_var::uy) == tracer->k_p_h(i, particle_var::uy) ) &&
+                ( parent->k_p_h(j, particle_var::uz) == tracer->k_p_h(i, particle_var::uz) ) &&
+                ( parent->k_p_i_h(j) == tracer->k_p_i_h(i) );
+#endif
+      if(success)
         break;
-      }
     }
     if(!success) {
       sim_log("FAIL: Tracer " << j << " not properly copied from parent species\n"); 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
       sim_log("FAIL: dx: " << tracer->p[i].dx << "\n");
       sim_log("FAIL: dy: " << tracer->p[i].dy << "\n");
       sim_log("FAIL: dz: " << tracer->p[i].dz << "\n");
@@ -97,6 +107,16 @@ int test_tracer_copy(species_t* parent, species_t* tracer, int _world_rank) {
       sim_log("FAIL: uz: " << tracer->p[i].uz << "\n");
       sim_log("FAIL: w: "  << tracer->p[i].w << "\n");
       sim_log("FAIL: i: "  << tracer->p[i].i << "\n");
+#else
+      sim_log("FAIL: dx: " << tracer->k_p_h(i, particle_var::dx) << "\n");
+      sim_log("FAIL: dy: " << tracer->k_p_h(i, particle_var::dy) << "\n");
+      sim_log("FAIL: dz: " << tracer->k_p_h(i, particle_var::dz) << "\n");
+      sim_log("FAIL: ux: " << tracer->k_p_h(i, particle_var::ux) << "\n");
+      sim_log("FAIL: uy: " << tracer->k_p_h(i, particle_var::uy) << "\n");
+      sim_log("FAIL: uz: " << tracer->k_p_h(i, particle_var::uz) << "\n");
+      sim_log("FAIL: w: "  << tracer->k_p_h(i, particle_var::w ) << "\n");
+      sim_log("FAIL: i: "  << tracer->k_p_i_h(i) << "\n");
+#endif
       return 8;
       break;
     }
@@ -153,19 +173,29 @@ int test_tracer_move(species_t* parent, species_t* tracer, int _world_rank) {
     int j=0;
     found = false;
     for(j=0; j<parent->np; j++) {
-      if(parent->p[j].dx == tracer->p[i].dx &&
-         parent->p[j].dy == tracer->p[i].dy &&
-         parent->p[j].dz == tracer->p[i].dz &&
-         parent->p[j].ux == tracer->p[i].ux &&
-         parent->p[j].uy == tracer->p[i].uy &&
-         parent->p[j].uz == tracer->p[i].uz &&
-         parent->p[j].i == tracer->p[i].i) {
-        found = true;
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+      found = ( parent->p[j].dx == tracer->p[i].dx ) &&
+              ( parent->p[j].dy == tracer->p[i].dy ) &&
+              ( parent->p[j].dz == tracer->p[i].dz ) &&
+              ( parent->p[j].ux == tracer->p[i].ux ) &&
+              ( parent->p[j].uy == tracer->p[i].uy ) &&
+              ( parent->p[j].uz == tracer->p[i].uz ) &&
+              ( parent->p[j].i  == tracer->p[i].i  );
+#else
+      found = ( parent->k_p_h(j, particle_var::dx) == tracer->k_p_h(i, particle_var::dx) ) &&
+              ( parent->k_p_h(j, particle_var::dy) == tracer->k_p_h(i, particle_var::dy) ) &&
+              ( parent->k_p_h(j, particle_var::dz) == tracer->k_p_h(i, particle_var::dz) ) &&
+              ( parent->k_p_h(j, particle_var::ux) == tracer->k_p_h(i, particle_var::ux) ) &&
+              ( parent->k_p_h(j, particle_var::uy) == tracer->k_p_h(i, particle_var::uy) ) &&
+              ( parent->k_p_h(j, particle_var::uz) == tracer->k_p_h(i, particle_var::uz) ) &&
+              ( parent->k_p_i_h(j) == tracer->k_p_i_h(i) );
+#endif
+      if(found)
         break;
-      }
     }
     if(found) {
       sim_log("FAIL: Tracer " << j << " not properly moved from parent species\n"); 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
       sim_log("FAIL: dx: " << tracer->p[i].dx << "\n");
       sim_log("FAIL: dy: " << tracer->p[i].dy << "\n");
       sim_log("FAIL: dz: " << tracer->p[i].dz << "\n");
@@ -174,6 +204,16 @@ int test_tracer_move(species_t* parent, species_t* tracer, int _world_rank) {
       sim_log("FAIL: uz: " << tracer->p[i].uz << "\n");
       sim_log("FAIL: w: "  << tracer->p[i].w << "\n");
       sim_log("FAIL: i: "  << tracer->p[i].i << "\n");
+#else
+      sim_log("FAIL: dx: " << tracer->k_p_h(i, particle_var::dx) << "\n");
+      sim_log("FAIL: dy: " << tracer->k_p_h(i, particle_var::dy) << "\n");
+      sim_log("FAIL: dz: " << tracer->k_p_h(i, particle_var::dz) << "\n");
+      sim_log("FAIL: ux: " << tracer->k_p_h(i, particle_var::ux) << "\n");
+      sim_log("FAIL: uy: " << tracer->k_p_h(i, particle_var::uy) << "\n");
+      sim_log("FAIL: uz: " << tracer->k_p_h(i, particle_var::uz) << "\n");
+      sim_log("FAIL: w: "  << tracer->k_p_h(i, particle_var::w ) << "\n");
+      sim_log("FAIL: i: "  << tracer->k_p_i_h(i) << "\n");
+#endif
       return 12;
       break;
     }

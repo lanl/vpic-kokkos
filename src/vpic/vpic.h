@@ -69,7 +69,7 @@ const uint32_t te0        (1<<23);
 const uint32_t tempt      (1<<24 | 1<<25 | 1<<26);
 const uint32_t te         (1<<27);
 const uint32_t tempo      (1<<28 | 1<<29 | 1<<30);
-const uint32_t oe         (1<<31);
+const uint32_t oe         (1u<<31);
 //const uint32_t tempp      (1<<32 | 1<<33 | 1<<34);
 //const uint32_t pe         (1<<35);
 //const uint32_t emat       (1<<36 | 1<<37 | 1<<38);
@@ -431,11 +431,6 @@ public:
    return grid->step;
   }
 
-  inline field_t &
-  field( const int v ) {
-    return field_array->f[ v ];
-  }
-
   inline int
   voxel( const int ix, const int iy, const int iz ) {
     return ix + grid->sy*iy + grid->sz*iz;
@@ -446,10 +441,17 @@ public:
     return ix + sy*iy +sz*iz;
   }
 
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+  inline field_t &
+  field( const int v ) {
+    return field_array->f[ v ];
+  }
+
   inline field_t &
   field( const int ix, const int iy, const int iz ) {
     return field_array->f[ voxel(ix,iy,iz) ];
   }
+//#endif
 
   inline k_field_t& get_field() {
       return field_array->k_f_d;
@@ -459,6 +461,7 @@ public:
       return field_array->k_f_d(voxel(ix,iy,iz), member);
   }
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   inline interpolator_t &
   interpolator( const int v ) {
     return interpolator_array->i[ v ];
@@ -477,6 +480,31 @@ public:
   inline hydro_t &
   hydro( const int ix, const int iy, const int iz ) {
     return hydro_array->h[ voxel(ix,iy,iz) ];
+  }
+#endif
+
+  inline k_interpolator_t& interpolator_d() {
+    return interpolator_array->k_i_d;
+  }
+
+  inline k_interpolator_t::HostMirror& interpolator_h() {
+    return interpolator_array->k_i_h;
+  }
+
+  inline float& interpolator_h( const int v, const int var ) {
+    return interpolator_array->k_i_h(v, var);
+  }
+
+  inline k_hydro_t& hydro_d() {
+    return hydro_array->k_h_d;
+  }
+
+  inline k_hydro_t::HostMirror& hydro_h() {
+    return hydro_array->k_h_h;
+  }
+ 
+  inline double& hydro_h( const int vox, const int var ) {
+    return hydro_array->k_h_h(vox, var);
   }
 
   //  inline float& k_fluid(const int ix, const int iy, const int iz, fluid_var::fl_v member) {
@@ -631,6 +659,7 @@ public:
     field_array        = fa ? fa :
                          new_standard_field_array( grid, material_list, damp );
 
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     for(int k=0; k<=grid->nz+1; k++){
       for(int j=0; j<=grid->ny+1; j++){
         field_t * f = &field(0,j,k);
@@ -642,7 +671,25 @@ public:
         }
       }
     }
-
+//#else
+//    auto& fields = fa->k_f_h;
+//    int nx = grid->nx, ny = grid->ny, nz = grid->nz;
+//    auto tcax_view = Kokkos::subview(fa->k_f_h, Kokkos::ALL, (int)field_var::tcax);
+//    auto tcay_view = Kokkos::subview(fa->k_f_h, Kokkos::ALL, (int)field_var::tcay);
+//    auto tcaz_view = Kokkos::subview(fa->k_f_h, Kokkos::ALL, (int)field_var::tcaz);
+//    Kokkos::deep_copy(tcax_view, 1.0);
+//    Kokkos::deep_copy(tcay_view, 1.0);
+//    Kokkos::deep_copy(tcaz_view, 1.0);
+////    using PolicyType = Kokkos::MDRangePolicy<Kokkos::DefaultHostExecutionSpace, Kokkos::Rank<3>>;
+////    PolicyType fill_policy({0,0,0}, {nx+2, ny+2, nz+2});
+////
+////    Kokkos::parallel_for("Init field tca", fill_policy, 
+////      KOKKOS_LAMBDA(const int i, const int j, const int k) {
+////      fields(voxel(i,j,k), field_var::tcax) = 1.0;
+////      fields(voxel(i,j,k), field_var::tcay) = 1.0;
+////      fields(voxel(i,j,k), field_var::tcaz) = 1.0;
+////    });
+//#endif
     interpolator_array = new_interpolator_array( grid );
     hydro_array        = new_hydro_array( grid );
 
@@ -1026,7 +1073,27 @@ public:
                                       annotation_vars_t annotations = annotation_vars_t()) {
 
     // Adjust amount of local particles/movers for tracers
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     const size_t count_true = std::count_if(original_species->p, original_species->p + original_species->np, filter);
+#else
+    auto parent_particles = original_species->k_p_h;
+    auto parent_cells = original_species->k_p_i_h;
+    size_t count_true = 0;
+    Kokkos::parallel_reduce("Count if", Kokkos::RangePolicy<size_t, Kokkos::DefaultHostExecutionSpace>(0LLU, original_species->np), 
+    KOKKOS_LAMBDA(const size_t idx, size_t& update) {
+      particle_t p{parent_particles(idx, particle_var::dx),
+                   parent_particles(idx, particle_var::dy),
+                   parent_particles(idx, particle_var::dz),
+                   parent_cells(idx),
+                   parent_particles(idx, particle_var::ux),
+                   parent_particles(idx, particle_var::uy),
+                   parent_particles(idx, particle_var::uz),
+                   parent_particles(idx, particle_var::w)
+                  };
+      if(filter(p))
+        update += 1;
+    }, count_true);
+#endif
     const size_t max_local_np = ceil(original_species->max_np * over_alloc_factor * count_true/float(original_species->np)) + 1;
     const size_t max_local_nm = ceil(original_species->max_nm * over_alloc_factor * count_true/float(original_species->np)) + 1;
     
@@ -1141,9 +1208,21 @@ public:
   inject_particle_raw( species_t * RESTRICT sp,
                        float dx, float dy, float dz, int32_t i,
                        float ux, float uy, float uz, float w ) {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     particle_t * RESTRICT p = sp->p + (sp->np++);
     p->dx = dx; p->dy = dy; p->dz = dz; p->i = i;
     p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
+#else
+    int idx = sp->np++;
+    sp->k_p_h(idx, particle_var::dx) = dx;
+    sp->k_p_h(idx, particle_var::dy) = dy;
+    sp->k_p_h(idx, particle_var::dz) = dz;
+    sp->k_p_h(idx, particle_var::ux) = ux;
+    sp->k_p_h(idx, particle_var::uy) = uy;
+    sp->k_p_h(idx, particle_var::uz) = uz;
+    sp->k_p_h(idx, particle_var::w ) = w;
+    sp->k_p_i_h(idx) = i;
+#endif
   }
 
   // This variant does a raw inject and moves the particles
@@ -1154,6 +1233,7 @@ public:
                        float ux, float uy, float uz, float w,
                        float dispx, float dispy, float dispz,
                        int update_rhob ) {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     particle_t       * RESTRICT p  = sp->p  + (sp->np++);
     particle_mover_t * RESTRICT pm = sp->pm + sp->nm;
     p->dx = dx; p->dy = dy; p->dz = dz; p->i = i;
@@ -1161,6 +1241,37 @@ public:
     pm->dispx = dispx; pm->dispy = dispy; pm->dispz = dispz; pm->i = sp->np-1;
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
     sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
+#else
+    int idx = sp->np++;
+    sp->k_p_h(idx, particle_var::dx) = dx;
+    sp->k_p_h(idx, particle_var::dy) = dy;
+    sp->k_p_h(idx, particle_var::dz) = dz;
+    sp->k_p_h(idx, particle_var::ux) = ux;
+    sp->k_p_h(idx, particle_var::uy) = uy;
+    sp->k_p_h(idx, particle_var::uz) = uz;
+    sp->k_p_h(idx, particle_var::w ) = w;
+    sp->k_p_i_h(idx) = i;
+    particle_mover_t local_pm;
+    local_pm.dispx = dispx;
+    local_pm.dispy = dispy;
+    local_pm.dispz = dispz;
+    local_pm.i     = sp->np-1;
+    if( update_rhob ) 
+      k_accumulate_rhob_single_cpu( field_array->k_f_rhob_accum_h,
+                                    sp->k_p_h, sp->k_p_i_h,
+                                    idx, grid, -sp->q );
+    if( move_p_kokkos_host_serial(sp->k_p_h, sp->k_p_i_h, &local_pm, 
+                                  field_array->k_jf_accum_h, 
+                                  grid, grid->k_neighbor_h, 
+                                  grid->rangel, grid->rangeh, sp->q) ) {
+      sp->nm += 1;
+      int pm_i = sp->nm;
+      sp->k_pm_h(pm_i, particle_mover_var::dispx) = local_pm.dispx;
+      sp->k_pm_h(pm_i, particle_mover_var::dispx) = local_pm.dispx;
+      sp->k_pm_h(pm_i, particle_mover_var::dispx) = local_pm.dispx;
+      sp->k_pm_i_h(pm_i) = local_pm.i;
+    }
+#endif
   }
 
   //////////////////////////////////

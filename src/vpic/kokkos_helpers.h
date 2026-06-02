@@ -5,7 +5,7 @@
 #include <Kokkos_ScatterView.hpp>
 #include <iostream>
 
-#include "../material/material.h" // Need material_t
+//#include "../material/material.h" // Need material_t
 
 // This module implements kokkos macros
 
@@ -28,6 +28,7 @@
 #else
   #define HYDRO_VAR_COUNT 14
 #endif
+#define HYDRO_SYNC_COUNT 14
 #define NUM_J_DIMS 4
 #define FLUID_VAR_COUNT 6+4
 #define TRACER_BUFFER_VAR_COUNT 21
@@ -42,6 +43,29 @@
   #define KOKKOS_LAYOUT Kokkos::LayoutRight
 #endif
 
+/**
+ * @brief Mapping for data structures to integers for checkpointing
+ */
+namespace vpic_data_struct {
+  enum TypeIDs {
+    Fields            = 0,
+    FieldEdges        = 1,
+    FieldAccum        = 2,
+    CurrentAccum      = 3,
+    Interpolators     = 4,
+    Accumulators      = 5,
+    Hydro             = 6,
+    Particles         = 7,
+    ParticleCellID    = 8,
+    ParticleMovers    = 9,
+    ParticleMoverIDs  = 10,
+    ParticlePartition = 11,
+    Fluid             = 12,
+    GridNeighbors     = 13,
+    Other
+  };
+};
+
 typedef int16_t material_id;
 
 // TODO: we dont need the [1] here
@@ -51,7 +75,7 @@ using k_counter_t = Kokkos::View<size_t[1]>;
 using k_field_t = Kokkos::View<float *[FIELD_VAR_COUNT]>;
 // TODO: This scatter access is needed only for jfxyz, not all field vars.
 // This is probably terrible on CPU.
-using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
+using k_field_sv_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
 using k_field_edge_t = Kokkos::View<material_id* [FIELD_EDGE_COUNT]>;
 using k_field_accum_t = Kokkos::View<float *>;
 
@@ -82,13 +106,12 @@ using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 // TODO: Delete these
 using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
-// TODO: why is this _sa_ not _sv_?
-using k_accumulators_sa_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
+using k_accumulators_sv_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
-using k_hydro_d_t = Kokkos::View<double* [HYDRO_VAR_COUNT]>;
+using k_hydro_t = Kokkos::View<double* [HYDRO_VAR_COUNT]>;
 using k_hydro_sv_t = Kokkos::Experimental::ScatterView<double* [HYDRO_VAR_COUNT]>;
 
-using k_accumulators_sah_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
+using k_accumulators_svh_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
 
 using k_fluid_t = Kokkos::View<float *[FLUID_VAR_COUNT], Kokkos::LayoutRight>;
 // 1D View: shape [FLUID_VAR_COUNT]
@@ -99,7 +122,7 @@ using host_execution_policy = Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSp
 
 using k_material_coefficient_t = Kokkos::View<float* [MATERIAL_COEFFICIENT_VAR_COUNT]>;
 
-using k_field_sa_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
+using k_field_sv_t = Kokkos::Experimental::ScatterView<float *[FIELD_VAR_COUNT]>;
 
 #define KOKKOS_TEAM_POLICY_DEVICE  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>
 #define KOKKOS_TEAM_POLICY_HOST  Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace>
@@ -299,8 +322,8 @@ namespace hydro_var {
         tzx = 12,
         txy = 13,
 #ifdef VARIABLE_CHARGE
-        min_q = 14,
-        max_q = 15,
+        qmin = 14,
+        qmax = 15,
         n_q0  = 16,
         n_q1  = 17,
         n_q2  = 18,

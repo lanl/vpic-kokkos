@@ -14,7 +14,7 @@ new_dump_strategy(DumpStrategyID dump_strategy_id,
 {
   Dump_Strategy *ds;
   MALLOC(ds, 1);
-  CLEAR(ds, 1);
+  //CLEAR(ds, 1);
 
   // Do any post init/restore simulation modifications
   switch (dump_strategy_id)
@@ -133,12 +133,13 @@ void BinaryDump::dump_hydro(
       sp
   );
 
-  // This does not give consistent results
-  /* synchronize_hydro_array_kokkos(hydro_array); */
-
   hydro_array->copy_to_host();
-
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   synchronize_hydro_array( hydro_array );
+#else
+  // This does not give consistent results
+  synchronize_hydro_array_kokkos(hydro_array);
+#endif
 
   if (!fbase)
     ERROR(("Invalid filename"));
@@ -167,8 +168,24 @@ void BinaryDump::dump_hydro(
   dim[0] = grid->nx + 2;
   dim[1] = grid->ny + 2;
   dim[2] = grid->nz + 2;
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
   fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
+#else
+  hydro_t h[1];
+  WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
+  for(int i=0; i<dim[0]*dim[1]*dim[2]; i++) {
+    for(int v=0; v<HYDRO_VAR_COUNT; v++) {
+      fileIO.write(&hydro_array->k_h_h(i, v), 1);
+    }
+
+//#ifndef VARIABLE_CHARGE
+    // Additional padding to match legacy structures
+    double _pad = 0;
+    fileIO.write(&_pad, 2);
+//#endif
+  }
+#endif
   if (fileIO.close())
     ERROR(("File close failed on dump hydro!!!"));
 }
@@ -184,7 +201,8 @@ void BinaryDump::dump_particles(
 {
   char fname[max_filename_bytes];
   FileIO fileIO;
-  int dim[1], buf_start;
+  int dim[1];
+  size_t buf_start;
   static particle_t *ALIGNED(128) p_buf = NULL;
 
   // TODO: reconcile this with MAX_IO_CHUNK, and update Cmake option
@@ -200,6 +218,9 @@ void BinaryDump::dump_particles(
   // Update the particles on the host only if they haven't been recently
   if (step > sp->last_copied)
     sp->copy_to_host();
+
+  // Update interpolators on host
+  interpolator_array->copy_to_host();
 
   if (!p_buf)
     MALLOC_ALIGNED(p_buf, PBUF_SIZE, 128);
@@ -236,24 +257,72 @@ void BinaryDump::dump_particles(
   // FIXME: WITH A PIPELINED CENTER_P, PBUF NOMINALLY SHOULD BE QUITE
   // LARGE.
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   particle_t *sp_p = sp->p;
   sp->p = p_buf;
-  int sp_np = sp->np;
+  size_t sp_np = sp->np;
   sp->np = 0;
-  int sp_max_np = sp->max_np;
+  size_t sp_max_np = sp->max_np;
   sp->max_np = PBUF_SIZE;
   for (buf_start = 0; buf_start < sp_np; buf_start += PBUF_SIZE)
   {
     sp->np = sp_np - buf_start;
     if (sp->np > PBUF_SIZE)
         sp->np = PBUF_SIZE;
-    COPY(sp->p, &sp_p[buf_start], sp->np);
+    //COPY(sp->p, &sp_p[buf_start], sp->np);
+    Kokkos::parallel_for("Copy particles to write buffer", 
+      Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, size_t>(static_cast<size_t>(0), sp->np), 
+      KOKKOS_LAMBDA(const size_t idx) {
+      sp->p[idx].dx = sp->k_p_h(idx+buf_start, particle_var::dx);
+      sp->p[idx].dy = sp->k_p_h(idx+buf_start, particle_var::dy);
+      sp->p[idx].dz = sp->k_p_h(idx+buf_start, particle_var::dz);
+      sp->p[idx].i  = sp->k_p_i_h(idx+buf_start);
+      sp->p[idx].ux = sp->k_p_h(idx+buf_start, particle_var::ux);
+      sp->p[idx].uy = sp->k_p_h(idx+buf_start, particle_var::uy);
+      sp->p[idx].uz = sp->k_p_h(idx+buf_start, particle_var::uz);
+      sp->p[idx].w  = sp->k_p_h(idx+buf_start, particle_var::w);
+#ifdef VARIABLE_CHARGE
+      sp->p[idx].qp = sp->k_p_h(idx+buf_start, particle_var::qp);
+#endif
+    });
     center_p(sp, interpolator_array);
     fileIO.write(sp->p, sp->np);
   }
   sp->p = sp_p;
   sp->np = sp_np;
   sp->max_np = sp_max_np;
+#else
+  size_t p_buf_np = 0;
+  center_p(sp, interpolator_array);
+  Kokkos::fence();
+  Kokkos::View<particle_t*, Kokkos::DefaultHostExecutionSpace, 
+               Kokkos::MemoryTraits<Kokkos::Unmanaged> > p_buffer(p_buf, PBUF_SIZE);
+  for (buf_start = 0; buf_start < sp->np; buf_start += PBUF_SIZE)
+  {
+    const size_t p_buf_np = std::min(sp->np - buf_start, static_cast<size_t>(PBUF_SIZE));
+    Kokkos::parallel_for("Copy particles to write buffer", 
+      Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, size_t>(static_cast<size_t>(0), p_buf_np), 
+      KOKKOS_LAMBDA(const size_t idx) {
+      p_buffer(idx).dx = sp->k_p_h(idx+buf_start, particle_var::dx);
+      p_buffer(idx).dy = sp->k_p_h(idx+buf_start, particle_var::dy);
+      p_buffer(idx).dz = sp->k_p_h(idx+buf_start, particle_var::dz);
+      p_buffer(idx).i  = sp->k_p_i_h(idx+buf_start);
+      p_buffer(idx).ux = sp->k_p_h(idx+buf_start, particle_var::ux);
+      p_buffer(idx).uy = sp->k_p_h(idx+buf_start, particle_var::uy);
+      p_buffer(idx).uz = sp->k_p_h(idx+buf_start, particle_var::uz);
+      p_buffer(idx).w  = sp->k_p_h(idx+buf_start, particle_var::w);
+#ifdef VARIABLE_CHARGE
+      p_buffer(idx).qp = sp->k_p_h(idx+buf_start, particle_var::qp);
+#endif
+    });
+    Kokkos::fence();
+    fileIO.write(p_buffer.data(), p_buf_np);
+  }
+  uncenter_p(sp, interpolator_array);
+#endif
+
+  if(p_buf)
+    FREE_ALIGNED(p_buf);
 
   if (fileIO.close())
     ERROR(("File close failed on dump particles!!!"));
@@ -509,12 +578,13 @@ void BinaryDump::hydro_dump(
       sp
   );
 
-  // This does not give consistent results
-  /* synchronize_hydro_array_kokkos(hydro_array); */
-
   hydro_array->copy_to_host();
-
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   synchronize_hydro_array( hydro_array );
+#else
+  // This does not give consistent results
+  synchronize_hydro_array_kokkos(hydro_array);
+#endif
 
   // convenience
   const size_t istride(dumpParams.stride_x);
@@ -558,7 +628,14 @@ void BinaryDump::hydro_dump(
     dim[1] = nyout+2;
     dim[2] = nzout+2;
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
+    fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
+#else
+    hydro_t h[1];
+    WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
+    fileIO.write(hydro_array->k_h_h.data(), dim[0] * dim[1] * dim[2]);
+#endif
 
     /*
      * Create a variable list of hydro values to output.
@@ -576,8 +653,12 @@ void BinaryDump::hydro_dump(
       for(size_t k(0); k<nzout+2; k++)
       for(size_t j(0); j<nyout+2; j++)
       for(size_t i(0); i<nxout+2; i++) {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
               const uint32_t * href = reinterpret_cast<uint32_t *>(&hydro(i,j,k));
               fileIO.write(&href[varlist[v]], 1);
+#else
+              fileIO.write(&(hydro_array->k_h_h(VOXEL(i,j,k,grid->nx,grid->ny,grid->nz), varlist[v])), 1);
+#endif
       }
 
     else
@@ -586,8 +667,12 @@ void BinaryDump::hydro_dump(
       for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
       for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
       for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
               const uint32_t * href = reinterpret_cast<uint32_t *>(&hydro(ioff,joff,koff));
               fileIO.write(&href[varlist[v]], 1);
+#else
+              fileIO.write(&(hydro_array->k_h_h(VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz), varlist[v])), 1);
+#endif
       }
       }
       }
@@ -602,21 +687,55 @@ void BinaryDump::hydro_dump(
     dim[1] = nyout;
     dim[2] = nzout;
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
+    fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
+#else
+    hydro_t h[1];
+    WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
+    fileIO.write(hydro_array->k_h_h.data(), dim[0] * dim[1] * dim[2]);
+#endif
 
-    if(istride == 1 && jstride == 1 && kstride == 1)
+    if(istride == 1 && jstride == 1 && kstride == 1) {
 
-      fileIO.write(hydro_array->h, dim[0]*dim[1]*dim[2]);
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+      WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
+      fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
+#else
+      hydro_t h[1];
+      WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
+      if( std::is_same<Kokkos::LayoutRight, k_hydro_t::array_layout>::value ) {
+        fileIO.write(hydro_array->k_h_h.data(), dim[0] * dim[1] * dim[2]);
+      } else {
+        for(int i=0; i<dim[0]; i++) {
+          for(int j=0; j<dim[1]; j++) {
+            for(int k=0; k<dim[2]; k++) {
+              for(size_t v=0; v<HYDRO_VAR_COUNT; v++) {
+                fileIO.write(&hydro_array->k_h_h(VOXEL(i,j,k,grid->nx,grid->ny,grid->nz), v), 1);
+              }
+              float _pad = 0;
+              fileIO.write(&_pad, 1);
+            }
+          }
+        }
+      }
+#endif
 
-    else
+    } else {
 
       for(size_t k(0); k<nzout; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
       for(size_t j(0); j<nyout; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
       for(size_t i(0); i<nxout; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
             fileIO.write(&hydro(ioff,joff,koff), 1);
+#else
+        for(size_t v=0; v<HYDRO_VAR_COUNT; v++) 
+          fileIO.write(&(hydro_array->k_h_h(VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz), v)), 1);
+#endif
       }
       }
       }
+    }
   }
 
 # undef hydro
@@ -796,11 +915,11 @@ void HDF5Dump::dump_fields(
 {                                                                                                           \
   dset_id = H5Dcreate(group_id, DSET_NAME, ELEMENT_TYPE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); \
   temp_buf_index = 0;                                                                                       \
-  for (size_t i(stride_x); i < grid->nx + 1; i += stride_x)                                                 \
+  for (int i(stride_x); i < grid->nx + 1; i += stride_x)                                                    \
   {                                                                                                         \
-    for (size_t j(stride_y); j < grid->ny + 1; j += stride_y)                                               \
+    for (int j(stride_y); j < grid->ny + 1; j += stride_y)                                                  \
     {                                                                                                       \
-      for (size_t k(stride_z); k < grid->nz + 1; k += stride_z)                                             \
+      for (int k(stride_z); k < grid->nz + 1; k += stride_z)                                                \
       {                                                                                                     \
         temp_buf[temp_buf_index] = field_array->fpp(i, j, k).ATTRIBUTE_NAME;                                \
         temp_buf_index = temp_buf_index + 1;                                                                \
@@ -814,27 +933,33 @@ void HDF5Dump::dump_fields(
   H5Dclose(dset_id);                                                                                        \
 }
 
-  char fname[256];
-  char field_scratch[128];
-  char subfield_scratch[128];
+  //char fname[256];
+  //char field_scratch[128];
+  //char subfield_scratch[256];
 
   // create the directory and sub-directory
-  sprintf(field_scratch, "./%s", "fields_hdf5");
-  FileUtils::makeDirectory(field_scratch);
-  sprintf(subfield_scratch, "%s/T.%zu/", field_scratch, step);
-  FileUtils::makeDirectory(subfield_scratch);
+  std::string field_dir = "./fields_hdf5";
+  FileUtils::makeDirectory(field_dir.c_str());
+  //sprintf(field_scratch, "./%s", "fields_hdf5");
+  //FileUtils::makeDirectory(field_scratch);
+  std::string subfield_dir = field_dir + "/T." + std::to_string(step) + "/";
+  FileUtils::makeDirectory(subfield_dir.c_str());
+  //sprintf(subfield_scratch, "%s/T.%d/", field_scratch, step);
+  //FileUtils::makeDirectory(subfield_scratch);
 
   // create the file
-  sprintf(fname, "%s/%s_%zu.h5", subfield_scratch, "fields", step);
+  std::string filename = subfield_dir + "/fields_" + std::to_string(step) + ".h5";
+  //sprintf(fname, "%s/%s_%d.h5", subfield_scratch, "fields", step);
   double el1 = uptime();
   hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
   H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
-  hid_t file_id = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+  hid_t file_id = H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
   H5Pclose(plist_id);
 
   // create the group for the time step
-  sprintf(fname, "Timestep_%zu", step);
-  hid_t group_id = H5Gcreate(file_id, fname, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  std::string group_name = "Timestep_" + std::to_string(step);
+  //sprintf(fname, "Timestep_%d", step);
+  hid_t group_id = H5Gcreate(file_id, group_name.c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   el1 = uptime() - el1;
   if ( rank==0 ) log_printf("TimeHDF5Open: %.2f s\n", el1);
@@ -982,18 +1107,21 @@ void HDF5Dump::dump_hydro(
     interpolator_array_t *interpolator_array,
     int ftag)
 {
-
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
 #define GET_HYDRO_VAR(HYDRO, VOXEL, VAR) HYDRO->h[VOXEL].VAR
+#else
+#define GET_HYDRO_VAR(HYDRO, VOXEL, VAR) HYDRO->k_h_h(VOXEL, hydro_var::VAR)
+#endif
 
 #define DUMP_HYDRO_TO_HDF5(DSET_NAME, ATTRIBUTE_NAME, ELEMENT_TYPE)                                         \
 {                                                                                                           \
   dset_id = H5Dcreate(group_id, DSET_NAME, ELEMENT_TYPE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); \
   temp_buf_index = 0;                                                                                       \
-  for (size_t i(stride_x); i < grid->nx + 1; i += stride_x)                                                 \
+  for (int i(stride_x); i < grid->nx + 1; i += stride_x)                                                    \
   {                                                                                                         \
-    for (size_t j(stride_y); j < grid->ny + 1; j += stride_y)                                               \
+    for (int j(stride_y); j < grid->ny + 1; j += stride_y)                                                  \
     {                                                                                                       \
-      for (size_t k(stride_z); k < grid->nz + 1; k += stride_z)                                             \
+      for (int k(stride_z); k < grid->nz + 1; k += stride_z)                                                \
       {                                                                                                     \
         auto voxel = VOXEL(i,j,k,grid->nx, grid->ny, grid->nz);                                             \
         temp_buf[temp_buf_index] = GET_HYDRO_VAR(hydro_array, voxel, ATTRIBUTE_NAME);                       \
@@ -1007,6 +1135,7 @@ void HDF5Dump::dump_hydro(
   H5Sclose(dataspace_id);                                                                                   \
   H5Dclose(dset_id);                                                                                        \
 }
+  //
   // prepare the data
   if (!sp) ERROR(("Invalid species name: %s", sp->name));
   if ( rank==0 ) log_printf("Dumping hydro for %s using HDF5\n", sp->name);
@@ -1024,42 +1153,51 @@ void HDF5Dump::dump_hydro(
       sp
   );
 
-  // This does not give consistent results
-  /* synchronize_hydro_array_kokkos(hydro_array); */
-
   hydro_array->copy_to_host();
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   synchronize_hydro_array( hydro_array );
+#else
+  // This does not give consistent results
+  synchronize_hydro_array_kokkos(hydro_array);
+#endif
 
-  char hname[256];
-  char hydro_scratch[128];
-  char subhydro_scratch[128];
+  //char hname[256];
+  //char hydro_scratch[128];
+  //char subhydro_scratch[128];
 
   // create the directory and sub-directory
-  sprintf(hydro_scratch, "./%s", "hydro_hdf5");
-  FileUtils::makeDirectory(hydro_scratch);
-  sprintf(subhydro_scratch, "%s/T.%zu/", hydro_scratch, step);
-  FileUtils::makeDirectory(subhydro_scratch);
+  std::string hydro_dir = "./hydro_hdf5";
+  std::string subhydro_dir = hydro_dir + "/T." + std::to_string(step) + "/";
+  FileUtils::makeDirectory(hydro_dir.c_str());
+  FileUtils::makeDirectory(subhydro_dir.c_str());
+  //sprintf(hydro_scratch, "./%s", "hydro_hdf5");
+  //FileUtils::makeDirectory(hydro_scratch);
+  //sprintf(subhydro_scratch, "%s/T.%d/", hydro_scratch, step);
+  //FileUtils::makeDirectory(subhydro_scratch);
 
-  sprintf(hname, "%s/hydro_%s_%zu.h5", subhydro_scratch, sp->name, step);
+  std::string hydro_fname = subhydro_dir + "/hydro_" + std::string(sp->name) + "_" + std::to_string(step) + ".h5";
+  //sprintf(hname, "%s/hydro_%s_%d.h5", subhydro_scratch, sp->name, step);
   double el1 = uptime();
   hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
   H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
-  hid_t file_id = H5Fcreate(hname, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+  hid_t file_id = H5Fcreate(hydro_fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
   H5Pclose(plist_id);
 
-  sprintf(hname, "Timestep_%zu", step);
-  hid_t group_id = H5Gcreate(file_id, hname, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  std::string hydro_gname = "Timestep_" + std::to_string(step);
+  //sprintf(hname, "Timestep_%d", step);
+  hid_t group_id = H5Gcreate(file_id, hydro_gname.c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   el1 = uptime() - el1;
   if ( rank==0 ) log_printf("TimeHDF5Open: %.2f s\n", el1);
   double el2 = uptime();
 
   // prepare for writing the data
-  using val_type = k_hydro_d_t::non_const_value_type;
-  val_type *temp_buf = (val_type *)malloc(sizeof(val_type) * (grid->nx / stride_x) *
-                                                             (grid->ny / stride_y) *
-                                                             (grid->nz / stride_z));
+  using val_type = k_hydro_t::non_const_value_type;
+  val_type *temp_buf = (val_type *)malloc(sizeof(val_type) * 
+                                          (grid->nx / stride_x) *
+                                          (grid->ny / stride_y) *
+                                          (grid->nz / stride_z));
   hsize_t temp_buf_index;
   hid_t dset_id;
   plist_id = H5Pcreate(H5P_DATASET_XFER);
@@ -1189,9 +1327,9 @@ void HDF5Dump::dump_particles(
     interpolator_array_t *interpolator_array,
     int ftag)
 {
-  char fname[256];
+  //char fname[256];
   char group_name[256];
-  char particle_scratch[128];
+  //char particle_scratch[128];
   char subparticle_scratch[128];
 
   if( !sp ) ERROR(( "Invalid species name \"%s\".", sp->name ));
@@ -1200,6 +1338,9 @@ void HDF5Dump::dump_particles(
   // Update the particles on the host only if they haven't been recently
   if (step > sp->last_copied)
     sp->copy_to_host();
+
+  // Update interpolators on host
+  interpolator_array->copy_to_host();
 
   const long long np_local = (sp->np + stride_particle - 1) / stride_particle;
 
@@ -1215,39 +1356,78 @@ void HDF5Dump::dump_particles(
   particle_t *ALIGNED(128) p_buf = NULL;
   if (!p_buf)
     MALLOC_ALIGNED(p_buf, np_local, 128);
+
+  center_p(sp, interpolator_array);
+
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   particle_t *sp_p = sp->p;
   sp->p = p_buf;
   sp->np = np_local;
   sp->max_np = np_local;
 
   for (long long iptl = 0, i = 0; iptl < sp_np; iptl += stride_particle, ++i) {
-    COPY(&sp->p[i], &sp_p[iptl], 1);
+    //COPY(&sp->p[i], &sp_p[iptl], 1);
+
+    sp->p[i].dx = sp->k_p_h(iptl, particle_var::dx);
+    sp->p[i].dy = sp->k_p_h(iptl, particle_var::dy);
+    sp->p[i].dz = sp->k_p_h(iptl, particle_var::dz);
+    sp->p[i].i  = sp->k_p_i_h(iptl);
+    sp->p[i].ux = sp->k_p_h(iptl, particle_var::ux);
+    sp->p[i].uy = sp->k_p_h(iptl, particle_var::uy);
+    sp->p[i].uz = sp->k_p_h(iptl, particle_var::uz);
+    sp->p[i].w  = sp->k_p_h(iptl, particle_var::w);
+#ifdef VARIABLE_CHARGE
+    sp->p[i].qp = sp->k_p_h(iptl, particle_var::qp);
+#endif
   }
 
-  center_p(sp, interpolator_array);
+  //extract float and int data out of particle struct. This is a bit silly and looses type safety
+  float * Pf = (float *)sp->p;
+  int *   Pi = (int *)sp->p;
+#else
+  sp->np = np_local;
+  sp->max_np = np_local;
+  for (long long iptl = 0, i = 0; iptl < sp_np; iptl += stride_particle, ++i) {
+    p_buf[i].dx = sp->k_p_h(iptl, particle_var::dx);
+    p_buf[i].dy = sp->k_p_h(iptl, particle_var::dy);
+    p_buf[i].dz = sp->k_p_h(iptl, particle_var::dz);
+    p_buf[i].i  = sp->k_p_i_h(iptl);
+    p_buf[i].ux = sp->k_p_h(iptl, particle_var::ux);
+    p_buf[i].uy = sp->k_p_h(iptl, particle_var::uy);
+    p_buf[i].uz = sp->k_p_h(iptl, particle_var::uz);
+    p_buf[i].w  = sp->k_p_h(iptl, particle_var::w );
+#ifdef VARIABLE_CHARGE
+    p_buf[i].qp = sp->k_p_h(iptl, particle_var::qp);
+#endif
+  }
+  //extract float and int data out of particle struct. This is a bit silly and looses type safety
+  float * Pf = (float *)p_buf;
+  int *   Pi = (int *)p_buf;
+#endif
 
   ec1 = uptime() - ec1;
   if(print_timing)
     MESSAGE(("time in copying particle data: %fs, np_local = %lld", ec1, np_local));
 
-  //extract float and int data out of particle struct. This is a bit silly and looses type safety
-  float * Pf = (float *)sp->p;
-  int *   Pi = (int *)sp->p;
-
   // Create target directory and subdirectory for the timestep
-  sprintf(particle_scratch, "./%s", "particle_hdf5");
-  FileUtils::makeDirectory(particle_scratch);
-  sprintf(subparticle_scratch, "%s/T.%ld/", particle_scratch, step);
-  FileUtils::makeDirectory(subparticle_scratch);
+  std::string particle_dir = "./particle_hdf5";
+  std::string subparticle_dir = particle_dir + "/T." + std::to_string(step) + "/";
+  FileUtils::makeDirectory(particle_dir.c_str());
+  FileUtils::makeDirectory(subparticle_dir.c_str());
+  //sprintf(particle_scratch, "./%s", "particle_hdf5");
+  //FileUtils::makeDirectory(particle_scratch);
+  //sprintf(subparticle_scratch, "%s/T.%d/", particle_scratch, step);
+  //FileUtils::makeDirectory(subparticle_scratch);
 
   // open HDF5 file for species
-  sprintf(fname, "%s/%s_%ld.h5", subparticle_scratch, sp->name, step);
-  sprintf(group_name, "/Timestep_%ld", step);
+  std::string particle_fname = subparticle_dir + "/" + std::string(sp->name) + "_" + std::to_string(step) + ".h5";
+  //sprintf(fname, "%s/%s_%d.h5", subparticle_scratch, sp->name, step);
+  sprintf(group_name, "/Timestep_%d", step);
   double el1 = uptime();
 
   hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
   H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
-  hid_t file_id = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+  hid_t file_id = H5Fcreate(particle_fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
   hid_t group_id = H5Gcreate(file_id, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   H5Pclose(plist_id);
@@ -1298,6 +1478,27 @@ void HDF5Dump::dump_particles(
   ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 2);
   H5Dclose(dset_id);
 
+  dset_id = H5Dcreate(group_id, "Ux", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 4);
+  H5Dclose(dset_id);
+
+  dset_id = H5Dcreate(group_id, "Uy", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 5);
+  H5Dclose(dset_id);
+
+  dset_id = H5Dcreate(group_id, "Uz", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 6);
+  H5Dclose(dset_id);
+
+  dset_id = H5Dcreate(group_id, "q", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 7);
+
+#ifdef VARIABLE_CHARGE
+  dset_id = H5Dcreate(group_id, "qp", H5T_NATIVE_FLOAT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  ierr = H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace, plist_id, Pf + 8);
+#endif
+  H5Dclose(dset_id);
+
 #define OUTPUT_CONVERT_GLOBAL_ID 1
 #ifdef OUTPUT_CONVERT_GLOBAL_ID
 # define UNVOXEL(rank, ix, iy, iz, nx, ny, nz) BEGIN_PRIMITIVE {   \
@@ -1312,13 +1513,13 @@ void HDF5Dump::dump_particles(
   (iz) = _iz;                                                      \
 } END_PRIMITIVE
 
-  std::vector<int> global_pi;
-  global_pi.reserve(numparticles);
+  Kokkos::View<int*, Kokkos::DefaultHostExecutionSpace> global_pi("Global IDs", numparticles);
   const int mpi_rank = rank;
 
-  // TODO: this could be parallel
-  for (int i = 0; i < numparticles; i++) {
-    int local_i = sp->p[i].i;
+  Kokkos::parallel_for("Convert Global ID", 
+  Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, numparticles), 
+  KOKKOS_LAMBDA(const int i) {
+    int local_i = sp->k_p_i_h(i);
 
     int ix, iy, iz, rx, ry, rz;
     // Convert rank to local x/y/z
@@ -1346,8 +1547,8 @@ void HDF5Dump::dump_particles(
     int global_i = VOXEL(gix, giy, giz, gnx-2, gny-2, gnz-2);
 
     //std::cout << mpi_rank << " local i " << local_i << " becomes " << global_i << std::endl;
-    global_pi[i] = global_i;
-  }
+    global_pi(i) = global_i;
+  });
 #undef UNVOXEL
 
   dset_id = H5Dcreate(group_id, "i", H5T_NATIVE_INT, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
@@ -1394,10 +1595,13 @@ void HDF5Dump::dump_particles(
   el3 = uptime() - el3;
   if(print_timing) MESSAGE(("Particle TimeHDF5Close: %f s\n", el3));
 
+  uncenter_p( sp, interpolator_array );
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   sp->p = sp_p;
+#endif
+  FREE_ALIGNED(p_buf);
   sp->np = sp_np;
   sp->max_np = sp_max_np;
-  FREE_ALIGNED(p_buf);
 
   // Write metadata
   // Note that these are all "local" metadata for each rank. Global metadata
@@ -1409,7 +1613,7 @@ void HDF5Dump::dump_particles(
 
   char meta_fname[256];
 
-  sprintf(meta_fname, "%s/grid_metadata_%s_%ld.h5", subparticle_scratch, sp->name, step);
+  sprintf(meta_fname, "%s/grid_metadata_%s_%d.h5", subparticle_scratch, sp->name, step);
 
   double meta_el1 = uptime();
 
@@ -1505,11 +1709,11 @@ void HDF5Dump::dump_fluids(
 {                                                                                                           \
   dset_id = H5Dcreate(group_id, DSET_NAME, ELEMENT_TYPE, filespace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); \
   temp_buf_index = 0;                                                                                       \
-  for (size_t i(stride_x); i < grid->nx + 1; i += stride_x)                                                 \
+  for (int i(stride_x); i < grid->nx + 1; i += stride_x)                                                    \
   {                                                                                                         \
-    for (size_t j(stride_y); j < grid->ny + 1; j += stride_y)                                               \
+    for (int j(stride_y); j < grid->ny + 1; j += stride_y)                                                  \
     {                                                                                                       \
-      for (size_t k(stride_z); k < grid->nz + 1; k += stride_z)                                             \
+      for (int k(stride_z); k < grid->nz + 1; k += stride_z)                                                \
       {                                                                                                     \
         temp_buf[temp_buf_index] = fsp->fl[VOXEL(i,j,k, grid->nx,grid->ny,grid->nz)].ATTRIBUTE_NAME;        \
         temp_buf_index = temp_buf_index + 1;                                                                \
@@ -1523,23 +1727,28 @@ void HDF5Dump::dump_fluids(
   H5Dclose(dset_id);                                                                                        \
 }
   char hname[256];
-  char fluid_scratch[128];
-  char subfluid_scratch[128];
+  //char fluid_scratch[128];
+  //char subfluid_scratch[128];
 
   // create the directory and sub-directory
-  sprintf(fluid_scratch, "./%s", "fluid_hdf5");
-  FileUtils::makeDirectory(fluid_scratch);
-  sprintf(subfluid_scratch, "%s/T.%zu/", fluid_scratch, step);
-  FileUtils::makeDirectory(subfluid_scratch);
+  std::string fluid_dir = "./fluid_hdf5";
+  std::string subfluid_dir = fluid_dir + "/T." + std::to_string(step) + "/";
+  FileUtils::makeDirectory(fluid_dir.c_str());
+  FileUtils::makeDirectory(subfluid_dir.c_str());
+  //sprintf(fluid_scratch, "./%s", "fluid_hdf5");
+  //FileUtils::makeDirectory(fluid_scratch);
+  //sprintf(subfluid_scratch, "%s/T.%d/", fluid_scratch, step);
+  //FileUtils::makeDirectory(subfluid_scratch);
 
-  sprintf(hname, "%s/fluid_%s_%zu.h5", subfluid_scratch, fsp->name, step);
+  std::string fluid_fname = subfluid_dir + "/fluid_" + std::string(fsp->name) + "_" + std::to_string(step) + ".h5";
+  //sprintf(hname, "%s/fluid_%s_%d.h5", subfluid_scratch, fsp->name, step);
   double el1 = uptime();
   hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
   H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
-  hid_t file_id = H5Fcreate(hname, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+  hid_t file_id = H5Fcreate(fluid_fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
   H5Pclose(plist_id);
 
-  sprintf(hname, "Timestep_%zu", step);
+  sprintf(hname, "Timestep_%d", step);
   hid_t group_id = H5Gcreate(file_id, hname, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   el1 = uptime() - el1;
@@ -1655,8 +1864,8 @@ void HDF5Dump::field_dump(
       field_array_t *field_array)
 {
   // Create a variable list of field values to output.
-  size_t numvars = std::min(dumpParams.output_vars.bitsum(),
-                            total_field_variables);
+  //size_t numvars = std::min(dumpParams.output_vars.bitsum(),
+  //                          total_field_variables);
 
   for(size_t i(0); i<total_field_variables; i++) {
     if(dumpParams.output_vars.bitset(i))

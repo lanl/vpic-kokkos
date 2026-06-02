@@ -5,11 +5,11 @@
 // in util_base.h and other low level includes automatically.
 
 #include "v4/v4.h" // Must be first (FIXME: REALLY?)
-#include "checkpt/checkpt.h"
 #include "mp/mp.h"
 #include "rng/rng.h"
 #include "pipelines/pipelines.h"
 #include "profile/profile.h"
+#include "checkpt/checkpt.h"
 
 // Boot all util functionality (should be the first thing in the program)
 

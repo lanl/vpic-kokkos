@@ -542,10 +542,12 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
   hydro_array->copy_to_host();
 
-  float ve1 = (hydro_array->h[13]).px/m;
-  float ve2 = (hydro_array->h[13]).py/m;
-  float ve3 = (hydro_array->h[13]).pz/m;
-  float ke2 = (hydro_array->h[13]).txx + (hydro_array->h[13]).tyy + (hydro_array->h[13]).tzz;
+  float ve1 = hydro_array->k_h_h(13, hydro_var::px)/m; //(hydro_array->h[13]).px/m;
+  float ve2 = hydro_array->k_h_h(13, hydro_var::py)/m; //(hydro_array->h[13]).py/m;
+  float ve3 = hydro_array->k_h_h(13, hydro_var::pz)/m; //(hydro_array->h[13]).pz/m;
+  float ke2 = hydro_array->k_h_h(13, hydro_var::txx) 
+            + hydro_array->k_h_h(13, hydro_var::tyy) 
+            + hydro_array->k_h_h(13, hydro_var::tzz); // (hydro_array->h[13]).txx + (hydro_array->h[13]).tyy + (hydro_array->h[13]).tzz;
   float Te = (ke2 - m*(ve1*ve1 + ve2*ve2 + ve3*ve3))/3.0;
 
   auto& ions = ion->k_p_d;
@@ -560,10 +562,13 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
       ion
   );
   hydro_array_ion->copy_to_host();  
-  float vi1 = (hydro_array_ion->h[13]).px/(ni_neq0*mi);
-  float vi2 = (hydro_array_ion->h[13]).py/(ni_neq0*mi);
-  float vi3 = (hydro_array_ion->h[13]).pz/(ni_neq0*mi);
-  float ki2 = ((hydro_array_ion->h[13]).txx + (hydro_array_ion->h[13]).tyy + (hydro_array_ion->h[13]).tzz)/ni_neq0;
+  float vi1 = hydro_array_ion->k_h_h(13, hydro_var::px)/(ni_neq0*mi); //(hydro_array_ion->h[13]).px/(ni_neq0*mi);
+  float vi2 = hydro_array_ion->k_h_h(13, hydro_var::py)/(ni_neq0*mi); //(hydro_array_ion->h[13]).py/(ni_neq0*mi);
+  float vi3 = hydro_array_ion->k_h_h(13, hydro_var::pz)/(ni_neq0*mi); //(hydro_array_ion->h[13]).pz/(ni_neq0*mi);
+  float ki2 = hydro_array_ion->k_h_h(13, hydro_var::txx) 
+            + hydro_array_ion->k_h_h(13, hydro_var::tyy) 
+            + hydro_array_ion->k_h_h(13, hydro_var::tzz); // (hydro_array_ion->h[13]).txx + (hydro_array_ion->h[13]).tyy + (hydro_array_ion->h[13]).tzz;
+  //float ki2 = ((hydro_array_ion->h[13]).txx + (hydro_array_ion->h[13]).tyy + (hydro_array_ion->h[13]).tzz)/ni_neq0;
   float Ti = (ki2 - mi*(vi1*vi1 + vi2*vi2 + vi3*vi3))/3.0;
   float tot_momentum1_0 = n0*m*ve1 + ni_neq0*mi*vi1;
   float tot_momentum2_0 = n0*m*ve2 + ni_neq0*mi*vi2;
@@ -605,10 +610,16 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 				sp
 				);
       hydro_array->copy_to_host();
-  float ve1 = (hydro_array->h[13]).px/m;
-  float ve2 = (hydro_array->h[13]).py/m;
-  float ve3 = (hydro_array->h[13]).pz/m;
-  float ke2 = (hydro_array->h[13]).txx + (hydro_array->h[13]).tyy + (hydro_array->h[13]).tzz;
+  //float ve1 = (hydro_array->h[13]).px/m;
+  //float ve2 = (hydro_array->h[13]).py/m;
+  //float ve3 = (hydro_array->h[13]).pz/m;
+  //float ke2 = (hydro_array->h[13]).txx + (hydro_array->h[13]).tyy + (hydro_array->h[13]).tzz;
+  float ve1 = hydro_array->k_h_h(13, hydro_var::px)/m; //(hydro_array->h[13]).px/m;
+  float ve2 = hydro_array->k_h_h(13, hydro_var::py)/m; //(hydro_array->h[13]).py/m;
+  float ve3 = hydro_array->k_h_h(13, hydro_var::pz)/m; //(hydro_array->h[13]).pz/m;
+  float ke2 = hydro_array->k_h_h(13, hydro_var::txx) 
+            + hydro_array->k_h_h(13, hydro_var::tyy) 
+            + hydro_array->k_h_h(13, hydro_var::tzz); // (hydro_array->h[13]).txx + (hydro_array->h[13]).tyy + (hydro_array->h[13]).tzz;
   float Te = (ke2 - m*(ve1*ve1 + ve2*ve2 + ve3*ve3))/3.0;
 
   Kokkos::deep_copy(hydro_array_ion->k_h_d, 0.0f);
@@ -620,10 +631,16 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
       ion
   );
   hydro_array_ion->copy_to_host();  
-  float vi1 = (hydro_array_ion->h[13]).px/(ni_neq0*mi);
-  float vi2 = (hydro_array_ion->h[13]).py/(ni_neq0*mi);
-  float vi3 = (hydro_array_ion->h[13]).pz/(ni_neq0*mi);
-  float ki2 = ((hydro_array_ion->h[13]).txx + (hydro_array_ion->h[13]).tyy + (hydro_array_ion->h[13]).tzz)/ni_neq0;
+  //float vi1 = (hydro_array_ion->h[13]).px/(ni_neq0*mi);
+  //float vi2 = (hydro_array_ion->h[13]).py/(ni_neq0*mi);
+  //float vi3 = (hydro_array_ion->h[13]).pz/(ni_neq0*mi);
+  //float ki2 = ((hydro_array_ion->h[13]).txx + (hydro_array_ion->h[13]).tyy + (hydro_array_ion->h[13]).tzz)/ni_neq0;
+  float vi1 = hydro_array_ion->k_h_h(13, hydro_var::px)/(ni_neq0*mi); //(hydro_array_ion->h[13]).px/(ni_neq0*mi);
+  float vi2 = hydro_array_ion->k_h_h(13, hydro_var::py)/(ni_neq0*mi); //(hydro_array_ion->h[13]).py/(ni_neq0*mi);
+  float vi3 = hydro_array_ion->k_h_h(13, hydro_var::pz)/(ni_neq0*mi); //(hydro_array_ion->h[13]).pz/(ni_neq0*mi);
+  float ki2 = hydro_array_ion->k_h_h(13, hydro_var::txx) 
+            + hydro_array_ion->k_h_h(13, hydro_var::tyy) 
+            + hydro_array_ion->k_h_h(13, hydro_var::tzz); // (hydro_array_ion->h[13]).txx + (hydro_array_ion->h[13]).tyy + (hydro_array_ion->h[13]).tzz;
   float Ti = (ki2 - mi*(vi1*vi1 + vi2*vi2 + vi3*vi3))/3.0;
 
   float tot_momentum1 = n0*m*ve1 + ni_neq0*mi*vi1;

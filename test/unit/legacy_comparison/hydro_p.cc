@@ -98,7 +98,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     hydro_array_kokkos->copy_to_host();
 
     synchronize_hydro_array( hydro_array_legacy );
-    synchronize_hydro_array( hydro_array_kokkos );
+    synchronize_hydro_array_kokkos( hydro_array_kokkos );
 
     // If two numbers are very close to zero, the relative error can get big
     // just from numerical rounding

@@ -35,7 +35,7 @@ void  sample_Maxwellian(std::vector<double> &v, double m, double s, int N, std::
 	    v[i] = m + s*x;
 	}
     } else {
-	printf("pop_stddev(%f)<=0. exit.",pop_stddev);
+	printf("pop_stddev(%Lf)<=0. exit.",pop_stddev);
 	exit(1);
     }
     
