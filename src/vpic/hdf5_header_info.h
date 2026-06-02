@@ -102,9 +102,9 @@ extern const char *main_body_attributeS;
       write_main_body_attribute(fp, main_body_attributeV, "TD", dims_4d, dims_3d, speciesname_p, time_step, "txx", "tyy", "tzz");  \
     if (hydro_dump_flag.enabledTOD())                                                                                              \
       write_main_body_attribute(fp, main_body_attributeV, "TOD", dims_4d, dims_3d, speciesname_p, time_step, "tyz", "tzx", "txy"); \
-    if (hydro_dump_flag["qmin"])                                                                                                   \
+    if (hydro_dump_flag.flags["qmin"])                                                                                                   \
       fprintf(fp, main_body_attributeS, "qmin", dims_3d, time_step, speciesname_p, time_step, time_step, "qmin");                  \
-    if (hydro_dump_flag["qmax"])                                                                                                   \
+    if (hydro_dump_flag.flags["qmax"])                                                                                                   \
       fprintf(fp, main_body_attributeS, "qmax", dims_3d, time_step, speciesname_p, time_step, time_step, "qmax");                  \
     fprintf(fp, "%s", main_body_foot);                                                                                             \
     if (add_footer_flag)                                                                                                           \
