@@ -135,6 +135,7 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
     }
 
     // Compute hydro quantities
+MESSAGE(("Start computing hydro\n"));
     if(static_cast<uint32_t>(dump_vars) >= 2*DumpVar::ParticleKE) {
       Kokkos::deep_copy(hydro_array->k_h_d, 0.0f);
       accumulate_hydro_p_kokkos(
@@ -145,9 +146,11 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
           sp
       );
 
+MESSAGE(("Start synchronizing hydro\n"));
       // This is slower in my tests
       synchronize_hydro_array_kokkos(hydro_array);
 
+MESSAGE(("Start copying hydro\n"));
       hydro_array->copy_to_host();
 
       //synchronize_hydro_array( hydro_array );
@@ -158,28 +161,29 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
     int tracer_idx = sp->annotation_vars.get_annotation_index<int>("TracerID");
     auto& interp = interpolator_array->k_i_h;
 
+MESSAGE(("Start writing tracer data\n"));
 #define _nxg (grid->nx + 2)
 #define _nyg (grid->ny + 2)
 #define _nzg (grid->nz + 2)
 #define i0 (ii%_nxg)
 #define j0 ((ii/_nxg)%_nyg)
 #define k0 (ii/(_nxg*_nyg))
-#define tracer_x ((i0 + (dx0-1)*0.5) * grid->dx + grid->x0)
-#define tracer_y ((j0 + (dy0-1)*0.5) * grid->dy + grid->y0)
-#define tracer_z ((k0 + (dz0-1)*0.5) * grid->dz + grid->z0)
+#define tracer_x ((i0 + (dx-1)*0.5) * grid->dx + grid->x0)
+#define tracer_y ((j0 + (dy-1)*0.5) * grid->dy + grid->y0)
+#define tracer_z ((k0 + (dz-1)*0.5) * grid->dz + grid->z0)
     // Write tracer data
     for(size_t i=0; i<sp->np; i++) {
-      float dx0 = sp->k_p_h(i, particle_var::dx);
-      float dy0 = sp->k_p_h(i, particle_var::dy);
-      float dz0 = sp->k_p_h(i, particle_var::dz);
-      float ux0 = sp->k_p_h(i, particle_var::ux);
-      float uy0 = sp->k_p_h(i, particle_var::uy);
-      float uz0 = sp->k_p_h(i, particle_var::uz);
-      float w0  = sp->k_p_h(i, particle_var::w);
-      int   ii  = sp->k_p_i_h(i);
+      float dx = sp->k_p_h(i, particle_var::dx);
+      float dy = sp->k_p_h(i, particle_var::dy);
+      float dz = sp->k_p_h(i, particle_var::dz);
+      float ux = sp->k_p_h(i, particle_var::ux);
+      float uy = sp->k_p_h(i, particle_var::uy);
+      float uz = sp->k_p_h(i, particle_var::uz);
+      float wt = sp->k_p_h(i, particle_var::w);
+      int   ii = sp->k_p_i_h(i);
       fileIO.print("%ld,%d,%ld,%d,%e,%e,%e,%e,%e,%e,%e", 
         step(), rank(), sp->annotations_h.get<int>(i,tracer_idx), ii,
-        dx0, dy0, dz0, ux0, uy0, uz0, w0);
+        dx, dy, dz, ux, uy, uz, wt);
       if(dump_vars & DumpVar::GlobalPos) {
         fileIO.print(",%e,%e,%e", tracer_x, tracer_y, tracer_z);
       }
@@ -225,16 +229,146 @@ vpic_simulation::dump_tracers_csv( const char *sp_name,
         fileIO.print(",%e,%e,%e,%e,%e,%e", txx, tyy, tzz, tyz, tzx, txy);
       }
       if(dump_vars & DumpVar::ParticleKE) {
-        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-        float msp = sp->m;
-        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+        const float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+        const float dt_2c = (sp->g->dt)/(2*sp->g->cvac);
+        const float msp = sp->m;
+
+        // Load interpolators, compiler should interleave with compute
+        const float f_ex     = interp(ii, interpolator_var::ex);
+        const float f_ey     = interp(ii, interpolator_var::ey);
+        const float f_ez     = interp(ii, interpolator_var::ez);
+
+#ifdef SHAPE_QS
+        const float f_dexdx  = interp(ii, interpolator_var::dexdx);
+        const float f_dexdy  = interp(ii, interpolator_var::dexdy);
+        const float f_dexdz  = interp(ii, interpolator_var::dexdz);
+        const float f_d2exdx = interp(ii, interpolator_var::d2exdx);
+        const float f_d2exdy = interp(ii, interpolator_var::d2exdy);
+        const float f_d2exdz = interp(ii, interpolator_var::d2exdz);
+        const float f_deydx  = interp(ii, interpolator_var::deydx);
+        const float f_deydy  = interp(ii, interpolator_var::deydy);
+        const float f_deydz  = interp(ii, interpolator_var::deydz);
+        const float f_d2eydx = interp(ii, interpolator_var::d2eydx);
+        const float f_d2eydy = interp(ii, interpolator_var::d2eydy);
+        const float f_d2eydz = interp(ii, interpolator_var::d2eydz);
+        const float f_dezdx  = interp(ii, interpolator_var::dezdx);
+        const float f_dezdy  = interp(ii, interpolator_var::dezdy);
+        const float f_dezdz  = interp(ii, interpolator_var::dezdz);
+        const float f_d2ezdx = interp(ii, interpolator_var::d2ezdx);
+        const float f_d2ezdy = interp(ii, interpolator_var::d2ezdy);
+        const float f_d2ezdz = interp(ii, interpolator_var::d2ezdz);
+#endif
+#ifdef EXTERNAL_FORCE
+        const float f_Ex0     = interp(ii, interpolator_var::Ex0);
+        const float f_Ey0     = interp(ii, interpolator_var::Ey0);
+        const float f_Ez0     = interp(ii, interpolator_var::Ez0);
+        const float f_Gx0     = interp(ii, interpolator_var::Gx0);
+        const float f_Gy0     = interp(ii, interpolator_var::Gy0);
+        const float f_Gz0     = interp(ii, interpolator_var::Gz0);
+#ifdef SHAPE_QS
+        const float f_dEx0dx  = interp(ii, interpolator_var::dEx0dx);
+        const float f_dEx0dy  = interp(ii, interpolator_var::dEx0dy);
+        const float f_dEx0dz  = interp(ii, interpolator_var::dEx0dz);
+        const float f_d2Ex0dx = interp(ii, interpolator_var::d2Ex0dx);
+        const float f_d2Ex0dy = interp(ii, interpolator_var::d2Ex0dy);
+        const float f_d2Ex0dz = interp(ii, interpolator_var::d2Ex0dz);
+        const float f_dEy0dx  = interp(ii, interpolator_var::dEy0dx);
+        const float f_dEy0dy  = interp(ii, interpolator_var::dEy0dy);
+        const float f_dEy0dz  = interp(ii, interpolator_var::dEy0dz);
+        const float f_d2Ey0dx = interp(ii, interpolator_var::d2Ey0dx);
+        const float f_d2Ey0dy = interp(ii, interpolator_var::d2Ey0dy);
+        const float f_d2Ey0dz = interp(ii, interpolator_var::d2Ey0dz);
+        const float f_dEz0dx  = interp(ii, interpolator_var::dEz0dx);
+        const float f_dEz0dy  = interp(ii, interpolator_var::dEz0dy);
+        const float f_dEz0dz  = interp(ii, interpolator_var::dEz0dz);
+        const float f_d2Ez0dx = interp(ii, interpolator_var::d2Ez0dx);
+        const float f_d2Ez0dy = interp(ii, interpolator_var::d2Ez0dy);
+        const float f_d2Ez0dz = interp(ii, interpolator_var::d2Ez0dz);
+        const float f_dGx0dx  = interp(ii, interpolator_var::dGx0dx);
+        const float f_dGx0dy  = interp(ii, interpolator_var::dGx0dy);
+        const float f_dGx0dz  = interp(ii, interpolator_var::dGx0dz);
+        const float f_d2Gx0dx = interp(ii, interpolator_var::d2Gx0dx);
+        const float f_d2Gx0dy = interp(ii, interpolator_var::d2Gx0dy);
+        const float f_d2Gx0dz = interp(ii, interpolator_var::d2Gx0dz);
+        const float f_dGy0dx  = interp(ii, interpolator_var::dGy0dx);
+        const float f_dGy0dy  = interp(ii, interpolator_var::dGy0dy);
+        const float f_dGy0dz  = interp(ii, interpolator_var::dGy0dz);
+        const float f_d2Gy0dx = interp(ii, interpolator_var::d2Gy0dx);
+        const float f_d2Gy0dy = interp(ii, interpolator_var::d2Gy0dy);
+        const float f_d2Gy0dz = interp(ii, interpolator_var::d2Gy0dz);
+        const float f_dGz0dx  = interp(ii, interpolator_var::dGz0dx);
+        const float f_dGz0dy  = interp(ii, interpolator_var::dGz0dy);
+        const float f_dGz0dz  = interp(ii, interpolator_var::dGz0dz);
+        const float f_d2Gz0dx = interp(ii, interpolator_var::d2Gz0dx);
+        const float f_d2Gz0dy = interp(ii, interpolator_var::d2Gz0dy);
+        const float f_d2Gz0dz = interp(ii, interpolator_var::d2Gz0dz);
+#endif
+#endif
+
+#ifdef SHAPE_NGP
+  #ifdef EXTERNAL_FORCE
+        float v0 = ux + qdt_2mc * (f_ex + f_Ex0) + dt_2c * f_Gx0;
+        float v1 = uy + qdt_2mc * (f_ey + f_Ey0) + dt_2c * f_Gy0;
+        float v2 = uz + qdt_2mc * (f_ez + f_Ez0) + dt_2c * f_Gz0;
+  #else
+        float v0 = ux + qdt_2mc * f_ex;
+        float v1 = uy + qdt_2mc * f_ey;
+        float v2 = uz + qdt_2mc * f_ez;
+  #endif
+#elif defined( SHAPE_QS )
+  #ifdef EXTERNAL_FORCE
+        float v0 = ux + qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
+                                       + dy*( f_dexdy + dy*f_d2exdy )
+                                       + dz*( f_dexdz + dz*f_d2exdz )
+                                  + f_Ex0 + dx*( f_dEx0dx + dx*f_d2Ex0dx )
+                                          + dy*( f_dEx0dy + dy*f_d2Ex0dy )
+                                          + dz*( f_dEx0dz + dz*f_d2Ex0dz ) );
+        float v1 = uy + qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
+                                       + dy*( f_deydy + dy*f_d2eydy )
+                                       + dz*( f_deydz + dz*f_d2eydz )
+                                  + f_Ey0 + dx*( f_dEy0dx + dx*f_d2Ey0dx )
+                                          + dy*( f_dEy0dy + dy*f_d2Ey0dy )
+                                          + dz*( f_dEy0dz + dz*f_d2Ey0dz ) );
+        float v2 = uz + qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
+                                       + dy*( f_dezdy + dy*f_d2ezdy )
+                                       + dz*( f_dezdz + dz*f_d2ezdz )
+                                  + f_Ez0 + dx*( f_dEz0dx + dx*f_d2Ez0dx )
+                                          + dy*( f_dEz0dy + dy*f_d2Ez0dy )
+                                          + dz*( f_dEz0dz + dz*f_d2Ez0dz ) );
+        v0 += dt_2c *( f_Gx0 + dx*( f_dGx0dx + dx*f_d2Gx0dx )
+                             + dy*( f_dGx0dy + dy*f_d2Gx0dy )
+                             + dz*( f_dGx0dz + dz*f_d2Gx0dz ) );
+        v1 += dt_2c *( f_Gy0 + dx*( f_dGy0dx + dx*f_d2Gy0dx )
+                             + dy*( f_dGy0dy + dy*f_d2Gy0dy )
+                             + dz*( f_dGy0dz + dz*f_d2Gy0dz ) );
+        v2 += dt_2c *( f_Gz0 + dx*( f_dGz0dx + dx*f_d2Gz0dx )
+                             + dy*( f_dGz0dy + dy*f_d2Gz0dy )
+                             + dz*( f_dGz0dz + dz*f_d2Gz0dz ) );
+  #else
+        float v0 = ux + qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
+                                       + dy*( f_dexdy + dy*f_d2exdy )
+                                       + dz*( f_dexdz + dz*f_d2exdz ) );
+        float v1 = uy + qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
+                                       + dy*( f_deydy + dy*f_d2eydy )
+                                       + dz*( f_deydz + dz*f_d2eydz ) );
+        float v2 = uz + qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
+                                       + dy*( f_dezdy + dy*f_d2ezdy )
+                                       + dz*( f_dezdz + dz*f_d2ezdz ) );
+  #endif
+#endif
+MESSAGE(("Computed ke\n"));
         v0 = v0*v0 + v1*v1 + v2*v2;
-        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+        //v0 = (msp * wt) * (v0 / (1 + sqrtf(1 + v0)));  // Relativistic kinetic energy
+        v0 *= 0.5 * (msp * wt);  // Non-relativistic kinetic energy
+
+//        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+//                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+//        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+//                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+//        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+//                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+//        v0 = v0*v0 + v1*v1 + v2*v2;
+//        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
         fileIO.print(",%e", v0);
       }
       // Print annotations
@@ -585,28 +719,157 @@ write_tracers(species_t* sp,
       auto ke_subview = Kokkos::subview(sp->tracer_buffer_h, slice, (int)tracer_buffer_var::ke);
       status = write_dataset(ke_subview, "ke", loc_id, H5T_IEEE_F32LE, dataspace_id, memspace_id, H5P_DEFAULT, es_id);
     } else {
-      float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-      float msp = sp->m;
+      const float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+      const float dt_2c = (sp->g->dt)/(2*sp->g->cvac);
+      const float msp = sp->m;
       Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space> ke_view = Kokkos::View<float*, Kokkos::LayoutLeft, host_memory_space>("KE Host View", num_particles);
       Kokkos::parallel_for("Calculate KE", pack_policy, KOKKOS_LAMBDA(const size_t i) {
-        float dx0 = dx_subview(i);
-        float dy0 = dy_subview(i);
-        float dz0 = dz_subview(i);
-        int   ii  = i_subview(i);
-        float ux0 = ux_subview(i);
-        float uy0 = uy_subview(i);
-        float uz0 = uz_subview(i);
-        float w0  = w_subview(i);
-        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-        float msp = sp->m;
-        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+        const float dx = dx_subview(i);
+        const float dy = dy_subview(i);
+        const float dz = dz_subview(i);
+        const int   ii = i_subview(i);
+        const float ux = ux_subview(i);
+        const float uy = uy_subview(i);
+        const float uz = uz_subview(i);
+        const float wt = w_subview(i);
+
+        // Load interpolators, compiler should interleave with compute
+        const float f_ex     = interp(ii, interpolator_var::ex);
+        const float f_ey     = interp(ii, interpolator_var::ey);
+        const float f_ez     = interp(ii, interpolator_var::ez);
+
+#ifdef SHAPE_QS
+        const float f_dexdx  = interp(ii, interpolator_var::dexdx);
+        const float f_dexdy  = interp(ii, interpolator_var::dexdy);
+        const float f_dexdz  = interp(ii, interpolator_var::dexdz);
+        const float f_d2exdx = interp(ii, interpolator_var::d2exdx);
+        const float f_d2exdy = interp(ii, interpolator_var::d2exdy);
+        const float f_d2exdz = interp(ii, interpolator_var::d2exdz);
+        const float f_deydx  = interp(ii, interpolator_var::deydx);
+        const float f_deydy  = interp(ii, interpolator_var::deydy);
+        const float f_deydz  = interp(ii, interpolator_var::deydz);
+        const float f_d2eydx = interp(ii, interpolator_var::d2eydx);
+        const float f_d2eydy = interp(ii, interpolator_var::d2eydy);
+        const float f_d2eydz = interp(ii, interpolator_var::d2eydz);
+        const float f_dezdx  = interp(ii, interpolator_var::dezdx);
+        const float f_dezdy  = interp(ii, interpolator_var::dezdy);
+        const float f_dezdz  = interp(ii, interpolator_var::dezdz);
+        const float f_d2ezdx = interp(ii, interpolator_var::d2ezdx);
+        const float f_d2ezdy = interp(ii, interpolator_var::d2ezdy);
+        const float f_d2ezdz = interp(ii, interpolator_var::d2ezdz);
+#endif
+#ifdef EXTERNAL_FORCE
+        const float f_Ex0     = interp(ii, interpolator_var::Ex0);
+        const float f_Ey0     = interp(ii, interpolator_var::Ey0);
+        const float f_Ez0     = interp(ii, interpolator_var::Ez0);
+        const float f_Gx0     = interp(ii, interpolator_var::Gx0);
+        const float f_Gy0     = interp(ii, interpolator_var::Gy0);
+        const float f_Gz0     = interp(ii, interpolator_var::Gz0);
+#ifdef SHAPE_QS
+        const float f_dEx0dx  = interp(ii, interpolator_var::dEx0dx);
+        const float f_dEx0dy  = interp(ii, interpolator_var::dEx0dy);
+        const float f_dEx0dz  = interp(ii, interpolator_var::dEx0dz);
+        const float f_d2Ex0dx = interp(ii, interpolator_var::d2Ex0dx);
+        const float f_d2Ex0dy = interp(ii, interpolator_var::d2Ex0dy);
+        const float f_d2Ex0dz = interp(ii, interpolator_var::d2Ex0dz);
+        const float f_dEy0dx  = interp(ii, interpolator_var::dEy0dx);
+        const float f_dEy0dy  = interp(ii, interpolator_var::dEy0dy);
+        const float f_dEy0dz  = interp(ii, interpolator_var::dEy0dz);
+        const float f_d2Ey0dx = interp(ii, interpolator_var::d2Ey0dx);
+        const float f_d2Ey0dy = interp(ii, interpolator_var::d2Ey0dy);
+        const float f_d2Ey0dz = interp(ii, interpolator_var::d2Ey0dz);
+        const float f_dEz0dx  = interp(ii, interpolator_var::dEz0dx);
+        const float f_dEz0dy  = interp(ii, interpolator_var::dEz0dy);
+        const float f_dEz0dz  = interp(ii, interpolator_var::dEz0dz);
+        const float f_d2Ez0dx = interp(ii, interpolator_var::d2Ez0dx);
+        const float f_d2Ez0dy = interp(ii, interpolator_var::d2Ez0dy);
+        const float f_d2Ez0dz = interp(ii, interpolator_var::d2Ez0dz);
+        const float f_dGx0dx  = interp(ii, interpolator_var::dGx0dx);
+        const float f_dGx0dy  = interp(ii, interpolator_var::dGx0dy);
+        const float f_dGx0dz  = interp(ii, interpolator_var::dGx0dz);
+        const float f_d2Gx0dx = interp(ii, interpolator_var::d2Gx0dx);
+        const float f_d2Gx0dy = interp(ii, interpolator_var::d2Gx0dy);
+        const float f_d2Gx0dz = interp(ii, interpolator_var::d2Gx0dz);
+        const float f_dGy0dx  = interp(ii, interpolator_var::dGy0dx);
+        const float f_dGy0dy  = interp(ii, interpolator_var::dGy0dy);
+        const float f_dGy0dz  = interp(ii, interpolator_var::dGy0dz);
+        const float f_d2Gy0dx = interp(ii, interpolator_var::d2Gy0dx);
+        const float f_d2Gy0dy = interp(ii, interpolator_var::d2Gy0dy);
+        const float f_d2Gy0dz = interp(ii, interpolator_var::d2Gy0dz);
+        const float f_dGz0dx  = interp(ii, interpolator_var::dGz0dx);
+        const float f_dGz0dy  = interp(ii, interpolator_var::dGz0dy);
+        const float f_dGz0dz  = interp(ii, interpolator_var::dGz0dz);
+        const float f_d2Gz0dx = interp(ii, interpolator_var::d2Gz0dx);
+        const float f_d2Gz0dy = interp(ii, interpolator_var::d2Gz0dy);
+        const float f_d2Gz0dz = interp(ii, interpolator_var::d2Gz0dz);
+#endif
+#endif
+
+#ifdef SHAPE_NGP
+  #ifdef EXTERNAL_FORCE
+        float v0 = ux + qdt_2mc * (f_ex + f_Ex0) + dt_2c * f_Gx0;
+        float v1 = uy + qdt_2mc * (f_ey + f_Ey0) + dt_2c * f_Gy0;
+        float v2 = uz + qdt_2mc * (f_ez + f_Ez0) + dt_2c * f_Gz0;
+  #else
+        float v0 = ux + qdt_2mc * f_ex;
+        float v1 = uy + qdt_2mc * f_ey;
+        float v2 = uz + qdt_2mc * f_ez;
+  #endif
+#elif defined( SHAPE_QS )
+  #ifdef EXTERNAL_FORCE
+        float v0 = ux + qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
+                                       + dy*( f_dexdy + dy*f_d2exdy )
+                                       + dz*( f_dexdz + dz*f_d2exdz )
+                                  + f_Ex0 + dx*( f_dEx0dx + dx*f_d2Ex0dx )
+                                          + dy*( f_dEx0dy + dy*f_d2Ex0dy )
+                                          + dz*( f_dEx0dz + dz*f_d2Ex0dz ) );
+        float v1 = uy + qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
+                                       + dy*( f_deydy + dy*f_d2eydy )
+                                       + dz*( f_deydz + dz*f_d2eydz )
+                                  + f_Ey0 + dx*( f_dEy0dx + dx*f_d2Ey0dx )
+                                          + dy*( f_dEy0dy + dy*f_d2Ey0dy )
+                                          + dz*( f_dEy0dz + dz*f_d2Ey0dz ) );
+        float v2 = uz + qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
+                                       + dy*( f_dezdy + dy*f_d2ezdy )
+                                       + dz*( f_dezdz + dz*f_d2ezdz )
+                                  + f_Ez0 + dx*( f_dEz0dx + dx*f_d2Ez0dx )
+                                          + dy*( f_dEz0dy + dy*f_d2Ez0dy )
+                                          + dz*( f_dEz0dz + dz*f_d2Ez0dz ) );
+        v0 += dt_2c *( f_Gx0 + dx*( f_dGx0dx + dx*f_d2Gx0dx )
+                             + dy*( f_dGx0dy + dy*f_d2Gx0dy )
+                             + dz*( f_dGx0dz + dz*f_d2Gx0dz ) );
+        v1 += dt_2c *( f_Gy0 + dx*( f_dGy0dx + dx*f_d2Gy0dx )
+                             + dy*( f_dGy0dy + dy*f_d2Gy0dy )
+                             + dz*( f_dGy0dz + dz*f_d2Gy0dz ) );
+        v2 += dt_2c *( f_Gz0 + dx*( f_dGz0dx + dx*f_d2Gz0dx )
+                             + dy*( f_dGz0dy + dy*f_d2Gz0dy )
+                             + dz*( f_dGz0dz + dz*f_d2Gz0dz ) );
+  #else
+        float v0 = ux + qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
+                                       + dy*( f_dexdy + dy*f_d2exdy )
+                                       + dz*( f_dexdz + dz*f_d2exdz ) );
+        float v1 = uy + qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
+                                       + dy*( f_deydy + dy*f_d2eydy )
+                                       + dz*( f_deydz + dz*f_d2eydz ) );
+        float v2 = uz + qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
+                                       + dy*( f_dezdy + dy*f_d2ezdy )
+                                       + dz*( f_dezdz + dz*f_d2ezdz ) );
+  #endif
+#endif
         v0 = v0*v0 + v1*v1 + v2*v2;
-        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+        //v0 = (msp * wt) * (v0 / (1 + sqrtf(1 + v0)));  // Relativistic kinetic energy
+        v0 *= 0.5 * (msp * wt);  // Non-relativistic kinetic energy
+
+//        float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+//        float msp = sp->m;
+//        float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+//                               dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+//        float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+//                               dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+//        float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+//                               dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+//        v0 = v0*v0 + v1*v1 + v2*v2;
+//        v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
         ke_view(i) = v0;
       });
       Kokkos::fence();
@@ -708,18 +971,19 @@ void buffer_tracers(species_t* sp,
   auto stress_buffer_d      = Kokkos::subview(sp->tracer_buffer_d, Kokkos::ALL, Kokkos::make_pair((int)tracer_buffer_var::txx, (int)tracer_buffer_var::txy+1));
   auto particle_ke_buffer_d = Kokkos::subview(sp->tracer_buffer_d, Kokkos::ALL, (int)tracer_buffer_var::ke);
   auto& hydro_d = ha->k_h_d;
-  float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-  float msp = sp->m;
+  const float qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+  const float dt_2c = (sp->g->dt)/(2*sp->g->cvac);
+  const float msp = sp->m;
 
   Kokkos::parallel_for("Buffer data", Kokkos::RangePolicy<size_t>(0, sp->np), KOKKOS_LAMBDA(const size_t i) {
-    float dx0 = particles(i, particle_var::dx);
-    float dy0 = particles(i, particle_var::dy);
-    float dz0 = particles(i, particle_var::dz);
-    float ux0 = particles(i, particle_var::ux);
-    float uy0 = particles(i, particle_var::uy);
-    float uz0 = particles(i, particle_var::uz);
-    float w0  = particles(i, particle_var::w);
-    int   ii  = particles_i(i);
+    float dx = particles(i, particle_var::dx);
+    float dy = particles(i, particle_var::dy);
+    float dz = particles(i, particle_var::dz);
+    float ux = particles(i, particle_var::ux);
+    float uy = particles(i, particle_var::uy);
+    float uz = particles(i, particle_var::uz);
+    float wt = particles(i, particle_var::w);
+    int   ii = particles_i(i);
     if(dump_vars & DumpVar::Efield) {
       e_buffer_d(nbuffered+i, 0) = interp(ii,interpolator_var::ex);
       e_buffer_d(nbuffered+i, 1) = interp(ii,interpolator_var::ey);
@@ -755,14 +1019,141 @@ void buffer_tracers(species_t* sp,
       stress_buffer_d(nbuffered+i, 5) = hydro_d(ii, hydro_var::txy);
     }
     if(dump_vars & DumpVar::ParticleKE) {
-      float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
-                             dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
-      float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
-                             dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
-      float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
-                             dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+      // Load interpolators, compiler should interleave with compute
+      const float f_ex     = interp(ii, interpolator_var::ex);
+      const float f_ey     = interp(ii, interpolator_var::ey);
+      const float f_ez     = interp(ii, interpolator_var::ez);
+
+#ifdef SHAPE_QS
+      const float f_dexdx  = interp(ii, interpolator_var::dexdx);
+      const float f_dexdy  = interp(ii, interpolator_var::dexdy);
+      const float f_dexdz  = interp(ii, interpolator_var::dexdz);
+      const float f_d2exdx = interp(ii, interpolator_var::d2exdx);
+      const float f_d2exdy = interp(ii, interpolator_var::d2exdy);
+      const float f_d2exdz = interp(ii, interpolator_var::d2exdz);
+      const float f_deydx  = interp(ii, interpolator_var::deydx);
+      const float f_deydy  = interp(ii, interpolator_var::deydy);
+      const float f_deydz  = interp(ii, interpolator_var::deydz);
+      const float f_d2eydx = interp(ii, interpolator_var::d2eydx);
+      const float f_d2eydy = interp(ii, interpolator_var::d2eydy);
+      const float f_d2eydz = interp(ii, interpolator_var::d2eydz);
+      const float f_dezdx  = interp(ii, interpolator_var::dezdx);
+      const float f_dezdy  = interp(ii, interpolator_var::dezdy);
+      const float f_dezdz  = interp(ii, interpolator_var::dezdz);
+      const float f_d2ezdx = interp(ii, interpolator_var::d2ezdx);
+      const float f_d2ezdy = interp(ii, interpolator_var::d2ezdy);
+      const float f_d2ezdz = interp(ii, interpolator_var::d2ezdz);
+#endif
+#ifdef EXTERNAL_FORCE
+      const float f_Ex0     = interp(ii, interpolator_var::Ex0);
+      const float f_Ey0     = interp(ii, interpolator_var::Ey0);
+      const float f_Ez0     = interp(ii, interpolator_var::Ez0);
+      const float f_Gx0     = interp(ii, interpolator_var::Gx0);
+      const float f_Gy0     = interp(ii, interpolator_var::Gy0);
+      const float f_Gz0     = interp(ii, interpolator_var::Gz0);
+#ifdef SHAPE_QS
+      const float f_dEx0dx  = interp(ii, interpolator_var::dEx0dx);
+      const float f_dEx0dy  = interp(ii, interpolator_var::dEx0dy);
+      const float f_dEx0dz  = interp(ii, interpolator_var::dEx0dz);
+      const float f_d2Ex0dx = interp(ii, interpolator_var::d2Ex0dx);
+      const float f_d2Ex0dy = interp(ii, interpolator_var::d2Ex0dy);
+      const float f_d2Ex0dz = interp(ii, interpolator_var::d2Ex0dz);
+      const float f_dEy0dx  = interp(ii, interpolator_var::dEy0dx);
+      const float f_dEy0dy  = interp(ii, interpolator_var::dEy0dy);
+      const float f_dEy0dz  = interp(ii, interpolator_var::dEy0dz);
+      const float f_d2Ey0dx = interp(ii, interpolator_var::d2Ey0dx);
+      const float f_d2Ey0dy = interp(ii, interpolator_var::d2Ey0dy);
+      const float f_d2Ey0dz = interp(ii, interpolator_var::d2Ey0dz);
+      const float f_dEz0dx  = interp(ii, interpolator_var::dEz0dx);
+      const float f_dEz0dy  = interp(ii, interpolator_var::dEz0dy);
+      const float f_dEz0dz  = interp(ii, interpolator_var::dEz0dz);
+      const float f_d2Ez0dx = interp(ii, interpolator_var::d2Ez0dx);
+      const float f_d2Ez0dy = interp(ii, interpolator_var::d2Ez0dy);
+      const float f_d2Ez0dz = interp(ii, interpolator_var::d2Ez0dz);
+      const float f_dGx0dx  = interp(ii, interpolator_var::dGx0dx);
+      const float f_dGx0dy  = interp(ii, interpolator_var::dGx0dy);
+      const float f_dGx0dz  = interp(ii, interpolator_var::dGx0dz);
+      const float f_d2Gx0dx = interp(ii, interpolator_var::d2Gx0dx);
+      const float f_d2Gx0dy = interp(ii, interpolator_var::d2Gx0dy);
+      const float f_d2Gx0dz = interp(ii, interpolator_var::d2Gx0dz);
+      const float f_dGy0dx  = interp(ii, interpolator_var::dGy0dx);
+      const float f_dGy0dy  = interp(ii, interpolator_var::dGy0dy);
+      const float f_dGy0dz  = interp(ii, interpolator_var::dGy0dz);
+      const float f_d2Gy0dx = interp(ii, interpolator_var::d2Gy0dx);
+      const float f_d2Gy0dy = interp(ii, interpolator_var::d2Gy0dy);
+      const float f_d2Gy0dz = interp(ii, interpolator_var::d2Gy0dz);
+      const float f_dGz0dx  = interp(ii, interpolator_var::dGz0dx);
+      const float f_dGz0dy  = interp(ii, interpolator_var::dGz0dy);
+      const float f_dGz0dz  = interp(ii, interpolator_var::dGz0dz);
+      const float f_d2Gz0dx = interp(ii, interpolator_var::d2Gz0dx);
+      const float f_d2Gz0dy = interp(ii, interpolator_var::d2Gz0dy);
+      const float f_d2Gz0dz = interp(ii, interpolator_var::d2Gz0dz);
+#endif
+#endif
+
+#ifdef SHAPE_NGP
+  #ifdef EXTERNAL_FORCE
+      float v0 = ux + qdt_2mc * (f_ex + f_Ex0) + dt_2c * f_Gx0;
+      float v1 = uy + qdt_2mc * (f_ey + f_Ey0) + dt_2c * f_Gy0;
+      float v2 = uz + qdt_2mc * (f_ez + f_Ez0) + dt_2c * f_Gz0;
+  #else
+      float v0 = ux + qdt_2mc * f_ex;
+      float v1 = uy + qdt_2mc * f_ey;
+      float v2 = uz + qdt_2mc * f_ez;
+  #endif
+#elif defined( SHAPE_QS )
+  #ifdef EXTERNAL_FORCE
+      float v0 = ux + qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
+                                     + dy*( f_dexdy + dy*f_d2exdy )
+                                     + dz*( f_dexdz + dz*f_d2exdz )
+                                + f_Ex0 + dx*( f_dEx0dx + dx*f_d2Ex0dx )
+                                        + dy*( f_dEx0dy + dy*f_d2Ex0dy )
+                                        + dz*( f_dEx0dz + dz*f_d2Ex0dz ) );
+      float v1 = uy + qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
+                                     + dy*( f_deydy + dy*f_d2eydy )
+                                     + dz*( f_deydz + dz*f_d2eydz )
+                                + f_Ey0 + dx*( f_dEy0dx + dx*f_d2Ey0dx )
+                                        + dy*( f_dEy0dy + dy*f_d2Ey0dy )
+                                        + dz*( f_dEy0dz + dz*f_d2Ey0dz ) );
+      float v2 = uz + qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
+                                     + dy*( f_dezdy + dy*f_d2ezdy )
+                                     + dz*( f_dezdz + dz*f_d2ezdz )
+                                + f_Ez0 + dx*( f_dEz0dx + dx*f_d2Ez0dx )
+                                        + dy*( f_dEz0dy + dy*f_d2Ez0dy )
+                                        + dz*( f_dEz0dz + dz*f_d2Ez0dz ) );
+      v0 += dt_2c *( f_Gx0 + dx*( f_dGx0dx + dx*f_d2Gx0dx )
+                           + dy*( f_dGx0dy + dy*f_d2Gx0dy )
+                           + dz*( f_dGx0dz + dz*f_d2Gx0dz ) );
+      v1 += dt_2c *( f_Gy0 + dx*( f_dGy0dx + dx*f_d2Gy0dx )
+                           + dy*( f_dGy0dy + dy*f_d2Gy0dy )
+                           + dz*( f_dGy0dz + dz*f_d2Gy0dz ) );
+      v2 += dt_2c *( f_Gz0 + dx*( f_dGz0dx + dx*f_d2Gz0dx )
+                           + dy*( f_dGz0dy + dy*f_d2Gz0dy )
+                           + dz*( f_dGz0dz + dz*f_d2Gz0dz ) );
+  #else
+      float v0 = ux + qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
+                                     + dy*( f_dexdy + dy*f_d2exdy )
+                                     + dz*( f_dexdz + dz*f_d2exdz ) );
+      float v1 = uy + qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
+                                     + dy*( f_deydy + dy*f_d2eydy )
+                                     + dz*( f_deydz + dz*f_d2eydz ) );
+      float v2 = uz + qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
+                                     + dy*( f_dezdy + dy*f_d2ezdy )
+                                     + dz*( f_dezdz + dz*f_d2ezdz ) );
+  #endif
+#endif
       v0 = v0*v0 + v1*v1 + v2*v2;
-      v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
+      //v0 = (msp * wt) * (v0 / (1 + sqrtf(1 + v0)));  // Relativistic kinetic energy
+      v0 *= 0.5 * (msp * wt);  // Non-relativistic kinetic energy
+
+//      float v0 = ux0 + qdt_2mc*( ( interp(ii, interpolator_var::ex)    + dy0*interp(ii, interpolator_var::dexdy)    ) +
+//                             dz0*( interp(ii, interpolator_var::dexdz) + dy0*interp(ii, interpolator_var::d2exdydz) ) );
+//      float v1 = uy0 + qdt_2mc*( ( interp(ii, interpolator_var::ey)    + dz0*interp(ii, interpolator_var::deydz)    ) +
+//                             dx0*( interp(ii, interpolator_var::deydx) + dz0*interp(ii, interpolator_var::d2eydzdx) ) );
+//      float v2 = uz0 + qdt_2mc*( ( interp(ii, interpolator_var::ez)    + dx0*interp(ii, interpolator_var::dezdx)    ) +
+//                             dy0*( interp(ii, interpolator_var::dezdy) + dx0*interp(ii, interpolator_var::d2ezdxdy) ) );
+//      v0 = v0*v0 + v1*v1 + v2*v2;
+//      v0 = (msp * w0) * (v0 / (1 + sqrtf(1 + v0)));
       particle_ke_buffer_d(nbuffered+i) = v0;
     }
   });

@@ -30,10 +30,13 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   /**/  hydro_t        * RESTRICT ALIGNED(128) h;
   const particle_t     * RESTRICT ALIGNED(128) p;
   const interpolator_t * RESTRICT ALIGNED(128) f;
-  float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
+  float c, qsp, msp, qdt_2mc, qdt_4mc, rV;
+#ifdef EXTERNAL_FORCE
+  float dt_2c;
+#endif
   size_t np, stride_10, stride_21, stride_43;
 
-  float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
+  float dx, dy, dz, ux, uy, uz, w;
   float w0, w1, w2, w3, w4, w5, w6, w7, t;
   int i; 
   size_t n;
@@ -47,10 +50,13 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
 
   c        = sp->g->cvac;
   qsp      = sp->q;
-  mspc     = sp->m*c;
-  qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
-  qdt_4mc2 = qdt_2mc / (2*c);
-  r8V      = sp->g->r8V;
+  //mspc     = sp->m*c;                   // rel push
+  //qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
+  //qdt_4mc2 = qdt_2mc / (2*c);
+  msp      = sp->m;                       // non-rel push
+  qdt_2mc  = (qsp*sp->g->dt)/(2*msp*c);
+  qdt_4mc  = qdt_2mc / 2;
+  rV        = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
 
   np        = sp->np;
   stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
@@ -72,24 +78,85 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     uz = p[n].uz;
     w  = p[n].w;
 
+#ifdef SHAPE_NGP
+  #ifdef EXTERNAL_FORCE
+    // Half advance E, E0, G0
+    ux += qdt_2mc*( f[i].ex + f[i].Ex0 ) + dt_2c * f[i].Gx0;
+    uy += qdt_2mc*( f[i].ey + f[i].Ey0 ) + dt_2c * f[i].Gy0;
+    uz += qdt_2mc*( f[i].ez + f[i].Ez0 ) + dt_2c * f[i].Gz0;
+  #else
     // Half advance E
-    ux += qdt_2mc*((f[i].ex)); //+dy*f[i].dexdy) + dz*(f[i].dexdz+dy*f[i].d2exdydz));
-    uy += qdt_2mc*((f[i].ey)); //+dz*f[i].deydz) + dx*(f[i].deydx+dz*f[i].d2eydzdx));
-    uz += qdt_2mc*((f[i].ez)); //+dx*f[i].dezdx) + dy*(f[i].dezdy+dx*f[i].d2ezdxdy));
-
+    ux += qdt_2mc*f[i].ex;
+    uy += qdt_2mc*f[i].ey;
+    uz += qdt_2mc*f[i].ez;
+  #endif
     // Boris rotation - Interpolate B field
-    w5 = f[i].cbx; // + dx*f[i].dcbxdx;
-    w6 = f[i].cby; // + dy*f[i].dcbydy;
-    w7 = f[i].cbz; // + dz*f[i].dcbzdz;
+    w5 = f[i].cbx;
+    w6 = f[i].cby;
+    w7 = f[i].cbz;
+#elif defined( SHAPE_QS )
+  #ifdef EXTERNAL_FORCE
+    // Half advance E, E0, G0
+    ux += qdt_2mc*( f[i].ex + dx*( f[i].dexdx + dx*f[i].d2exdx )
+                            + dy*( f[i].dexdy + dy*f[i].d2exdy )
+                            + dz*( f[i].dexdz + dz*f[i].d2exdz )
+                    + f[i].Ex0 + dx*( f[i].dEx0dx + dx*f[i].d2Ex0dx )
+                               + dy*( f[i].dEx0dy + dy*f[i].d2Ex0dy )
+                               + dz*( f[i].dEx0dz + dz*f[i].d2Ex0dz ) );
+    uy += qdt_2mc*( f[i].ey + dx*( f[i].deydx + dx*f[i].d2eydx )
+                            + dy*( f[i].deydy + dy*f[i].d2eydy )
+                            + dz*( f[i].deydz + dz*f[i].d2eydz )
+                    + f[i].Ey0 + dx*( f[i].dEy0dx + dx*f[i].d2Ey0dx )
+                               + dy*( f[i].dEy0dy + dy*f[i].d2Ey0dy )
+                               + dz*( f[i].dEy0dz + dz*f[i].d2Ey0dz ) );
+    uz += qdt_2mc*( f[i].ez + dx*( f[i].dezdx + dx*f[i].d2ezdx )
+                            + dy*( f[i].dezdy + dy*f[i].d2ezdy )
+                            + dz*( f[i].dezdz + dz*f[i].d2ezdz )
+                    + f[i].Ey0 + dx*( f[i].dEy0dx + dx*f[i].d2Ey0dx )
+                               + dy*( f[i].dEy0dy + dy*f[i].d2Ey0dy )
+                               + dz*( f[i].dEy0dz + dz*f[i].d2Ey0dz ) );
+    ux += dt_2c *( f[i].Gx0 + dx*( f[i].dGx0dx + dx*f[i].d2Gx0dx )
+                            + dy*( f[i].dGx0dy + dy*f[i].d2Gx0dy )
+                            + dz*( f[i].dGx0dz + dz*f[i].d2Gx0dz ) );
+    uy += dt_2c *( f[i].Gy0 + dx*( f[i].dGy0dx + dx*f[i].d2Gy0dx )
+                            + dy*( f[i].dGy0dy + dy*f[i].d2Gy0dy )
+                            + dz*( f[i].dGy0dz + dz*f[i].d2Gy0dz ) );
+    uz += dt_2c *( f[i].Gz0 + dx*( f[i].dGz0dx + dx*f[i].d2Gz0dx )
+                            + dy*( f[i].dGz0dy + dy*f[i].d2Gz0dy )
+                            + dz*( f[i].dGz0dz + dz*f[i].d2Gz0dz ) );
+  #else
+    // Half advance E
+    ux += qdt_2mc*( f[i].ex + dx*( f[i].dexdx + dx*f[i].d2exdx )
+                            + dy*( f[i].dexdy + dy*f[i].d2exdy )
+                            + dz*( f[i].dexdz + dz*f[i].d2exdz ) );
+    uy += qdt_2mc*( f[i].ey + dx*( f[i].deydx + dx*f[i].d2eydx )
+                            + dy*( f[i].deydy + dy*f[i].d2eydy )
+                            + dz*( f[i].deydz + dz*f[i].d2eydz ) );
+    uz += qdt_2mc*( f[i].ez + dx*( f[i].dezdx + dx*f[i].d2ezdx )
+                            + dy*( f[i].dezdy + dy*f[i].d2ezdy )
+                            + dz*( f[i].dezdz + dz*f[i].d2ezdz ) );
+  #endif
+    // Boris rotation - Interpolate B field
+    w5 = f[i].cbx + dx*( f[i].dcbxdx + dx*f[i].d2cbxdx )
+                  + dy*( f[i].dcbxdy + dy*f[i].d2cbxdy )
+                  + dz*( f[i].dcbxdz + dz*f[i].d2cbxdz );
+    w6 = f[i].cby + dx*( f[i].dcbydx + dx*f[i].d2cbydx )
+                  + dy*( f[i].dcbydy + dy*f[i].d2cbydy )
+                  + dz*( f[i].dcbydz + dz*f[i].d2cbydz );
+    w7 = f[i].cbz + dx*( f[i].dcbzdx + dx*f[i].d2cbzdx )
+                  + dy*( f[i].dcbzdy + dy*f[i].d2cbzdy )
+                  + dz*( f[i].dcbzdz + dz*f[i].d2cbzdz );
+#endif
 
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
     // is the numerically accurate way to compute gamma-1
-    ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
-    vz = 1;//sqrt(1+ke_mc);            // vz = gamma    (invariant)
-    ke_mc *= c/(vz+1);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
-    vz = c/vz;                     // vz = c/gamma
-    w0 = qdt_4mc2*vz;
+    //ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
+    //vz = 1;//sqrt(1+ke_mc);            // vz = gamma    (invariant)
+    //ke_mc *= c/(vz+1);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
+    //vz = c/vz;                     // vz = c/gamma
+    //w0 = qdt_4mc2*vz;
+    w0 = qdt_4mc;  // non-rel push
     w1 = w5*w5 + w6*w6 + w7*w7;    // |cB|^2
     w2 = w0*w0*w1;
     w3 = w0*(1+(1./3.)*w2*(1+0.4*w2));
@@ -105,41 +172,69 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     uy += w4*( w2*w5 - w0*w7 );
     uz += w4*( w0*w6 - w1*w5 );
 
-    // Compute physical velocities
-    vx  = ux*vz;
-    vy  = uy*vz;
-    vz *= uz;
+    // Compute physical three-velocities
+    //vx  = ux*vz;  // rel push
+    //vy  = uy*vz;
+    //vz *= uz;
+    ux *= c;        // non-rel push
+    uy *= c;
+    uz *= c;
 
     // Compute the trilinear coefficients
-    w0  = r8V*w;    // w0 = (1/8)(w/V)
-    dx *= w0;       // dx = (1/8)(w/V) x
-    w1  = w0+dx;    // w1 = (1/8)(w/V) + (1/8)(w/V)x = (1/8)(w/V)(1+x)
-    w0 -= dx;       // w0 = (1/8)(w/V) - (1/8)(w/V)x = (1/8)(w/V)(1-x)
-    w3  = 1+dy;     // w3 = 1+y
-    w2  = w0*w3;    // w2 = (1/8)(w/V)(1-x)(1+y)
-    w3 *= w1;       // w3 = (1/8)(w/V)(1+x)(1+y)
-    dy  = 1-dy;     // dy = 1-y
-    w0 *= dy;       // w0 = (1/8)(w/V)(1-x)(1-y)
-    w1 *= dy;       // w1 = (1/8)(w/V)(1+x)(1-y)
-    w7  = 1+dz;     // w7 = 1+z
-    w4  = w0*w7;    // w4 = (1/8)(w/V)(1-x)(1-y)(1+z) = (w/V) trilin_0 *Done
-    w5  = w1*w7;    // w5 = (1/8)(w/V)(1+x)(1-y)(1+z) = (w/V) trilin_1 *Done
-    w6  = w2*w7;    // w6 = (1/8)(w/V)(1-x)(1+y)(1+z) = (w/V) trilin_2 *Done
-    w7 *= w3;       // w7 = (1/8)(w/V)(1+x)(1+y)(1+z) = (w/V) trilin_3 *Done
-    dz  = 1-dz;     // dz = 1-z
-    w0 *= dz;       // w0 = (1/8)(w/V)(1-x)(1-y)(1-z) = (w/V) trilin_4 *Done
-    w1 *= dz;       // w1 = (1/8)(w/V)(1+x)(1-y)(1-z) = (w/V) trilin_5 *Done
-    w2 *= dz;       // w2 = (1/8)(w/V)(1-x)(1+y)(1-z) = (w/V) trilin_6 *Done
-    w3 *= dz;       // w3 = (1/8)(w/V)(1+x)(1+y)(1-z) = (w/V) trilin_7 *Done
+    //w0  = r8V*w;    // w0 = (1/8)(w/V)
+    //dx *= w0;       // dx = (1/8)(w/V) x
+    //w1  = w0+dx;    // w1 = (1/8)(w/V) + (1/8)(w/V)x = (1/8)(w/V)(1+x)
+    //w0 -= dx;       // w0 = (1/8)(w/V) - (1/8)(w/V)x = (1/8)(w/V)(1-x)
+    //w3  = 1+dy;     // w3 = 1+y
+    //w2  = w0*w3;    // w2 = (1/8)(w/V)(1-x)(1+y)
+    //w3 *= w1;       // w3 = (1/8)(w/V)(1+x)(1+y)
+    //dy  = 1-dy;     // dy = 1-y
+    //w0 *= dy;       // w0 = (1/8)(w/V)(1-x)(1-y)
+    //w1 *= dy;       // w1 = (1/8)(w/V)(1+x)(1-y)
+    //w7  = 1+dz;     // w7 = 1+z
+    //w4  = w0*w7;    // w4 = (1/8)(w/V)(1-x)(1-y)(1+z) = (w/V) trilin_0 *Done
+    //w5  = w1*w7;    // w5 = (1/8)(w/V)(1+x)(1-y)(1+z) = (w/V) trilin_1 *Done
+    //w6  = w2*w7;    // w6 = (1/8)(w/V)(1-x)(1+y)(1+z) = (w/V) trilin_2 *Done
+    //w7 *= w3;       // w7 = (1/8)(w/V)(1+x)(1+y)(1+z) = (w/V) trilin_3 *Done
+    //dz  = 1-dz;     // dz = 1-z
+    //w0 *= dz;       // w0 = (1/8)(w/V)(1-x)(1-y)(1-z) = (w/V) trilin_4 *Done
+    //w1 *= dz;       // w1 = (1/8)(w/V)(1+x)(1-y)(1-z) = (w/V) trilin_5 *Done
+    //w2 *= dz;       // w2 = (1/8)(w/V)(1-x)(1+y)(1-z) = (w/V) trilin_6 *Done
+    //w3 *= dz;       // w3 = (1/8)(w/V)(1+x)(1+y)(1-z) = (w/V) trilin_7 *Done
 
-    // Accumulate the hydro fields
+    // Hybrid-VPIC NGP shape
+    w0 = w*rV;
+
+    // Accumulate the hydro fields - relativistic version
+//#   define ACCUM_HYDRO( wn)                             \
+//    t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
+//    h[i].jx  += t*vx;                                   \
+//    h[i].jy  += t*vy;                                   \
+//    h[i].jz  += t*vz;                                   \
+//    h[i].rho += t;                                      \
+//    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
+//    dx = t*ux;          /* dx = (px w/V) trilin_n */    \
+//    dy = t*uy;                                          \
+//    dz = t*uz;                                          \
+//    h[i].px  += dx;                                     \
+//    h[i].py  += dy;                                     \
+//    h[i].pz  += dz;                                     \
+//    h[i].ke  += t*ke_mc;                                \
+//    h[i].txx += dx*vx;                                  \
+//    h[i].tyy += dy*vy;                                  \
+//    h[i].tzz += dz*vz;                                  \
+//    h[i].tyz += dy*vz;                                  \
+//    h[i].tzx += dz*vx;                                  \
+//    h[i].txy += dx*vy
+
+    // Accumulate the hydro fields - non-relativistic version
 #   define ACCUM_HYDRO( wn)                             \
     t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
-    h[i].jx  += t*vx;                                   \
-    h[i].jy  += t*vy;                                   \
-    h[i].jz  += t*vz;                                   \
+    h[i].jx  += t*ux;                                   \
+    h[i].jy  += t*uy;                                   \
+    h[i].jz  += t*uz;                                   \
     h[i].rho += t;                                      \
-    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
+    t  = msp*wn;        /* t = (msp w/V) trilin_n */    \
     dx = t*ux;          /* dx = (px w/V) trilin_n */    \
     dy = t*uy;                                          \
     dz = t*uz;                                          \
@@ -147,21 +242,21 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     h[i].py  += dy;                                     \
     h[i].pz  += dz;                                     \
     h[i].rho_m  += t; /* Prev. was *ke_mc; */           \
-    h[i].txx += dx*vx;                                  \
-    h[i].tyy += dy*vy;                                  \
-    h[i].tzz += dz*vz;                                  \
-    h[i].tyz += dy*vz;                                  \
-    h[i].tzx += dz*vx;                                  \
-    h[i].txy += dx*vy
+    h[i].txx += dx*ux;                                  \
+    h[i].tyy += dy*uy;                                  \
+    h[i].tzz += dz*uz;                                  \
+    h[i].tyz += dy*uz;                                  \
+    h[i].tzx += dz*ux;                                  \
+    h[i].txy += dx*uy
 
     /**/            ACCUM_HYDRO(w0); // Cell i,j,k
-    i += stride_10; ACCUM_HYDRO(w1); // Cell i+1,j,k
-    i += stride_21; ACCUM_HYDRO(w2); // Cell i,j+1,k
-    i += stride_10; ACCUM_HYDRO(w3); // Cell i+1,j+1,k
-    i += stride_43; ACCUM_HYDRO(w4); // Cell i,j,k+1
-    i += stride_10; ACCUM_HYDRO(w5); // Cell i+1,j,k+1
-    i += stride_21; ACCUM_HYDRO(w6); // Cell i,j+1,k+1
-    i += stride_10; ACCUM_HYDRO(w7); // Cell i+1,j+1,k+1
+//  i += stride_10; ACCUM_HYDRO(w1); // Cell i+1,j,k
+//  i += stride_21; ACCUM_HYDRO(w2); // Cell i,j+1,k
+//  i += stride_10; ACCUM_HYDRO(w3); // Cell i+1,j+1,k
+//  i += stride_43; ACCUM_HYDRO(w4); // Cell i,j,k+1
+//  i += stride_10; ACCUM_HYDRO(w5); // Cell i+1,j,k+1
+//  i += stride_21; ACCUM_HYDRO(w6); // Cell i,j+1,k+1
+//  i += stride_10; ACCUM_HYDRO(w7); // Cell i+1,j+1,k+1
 
 #   undef ACCUM_HYDRO
   }
@@ -201,7 +296,7 @@ accumulate_hydro_p_kokkos_nomove_ngp(
 #endif
   //r8V      = sp->g->r8V;
 
-  const int np        = sp->np;
+  const size_t np        = sp->np;
   //const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
   //                      VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
   //const int stride_21 = VOXEL(0,1,0, sp->g->nx,sp->g->ny,sp->g->nz) -
@@ -295,10 +390,13 @@ accumulate_hydro_p_kokkos(
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
 #ifdef VARIABLE_CHARGE
-  float c, qsp, mspc, dt_2mc, dt_4mc2, r8V;
+  float c, qsp, msp, dt_2mc, dt_4mc, rV, r12V;
 #else
-  float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
+  float c, qsp, msp, qdt_2mc, qdt_4mc, rV, r12V;
 #endif
+
+  constexpr float one=1.0f, two=2.0f, three=3.0f;
+
   //int np, stride_10, stride_21, stride_43;
 
   //float dx, dy, dz, ux, uy, uz, w, vx, vy, vz, ke_mc;
@@ -313,11 +411,14 @@ accumulate_hydro_p_kokkos(
 
   c        = sp->g->cvac;
   qsp      = sp->q;
-  mspc     = sp->m*c;
+  //mspc     = sp->m*c;                   // rel push
+  //qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
+  //qdt_4mc2 = qdt_2mc / (2*c);
+  msp      = sp->m;                       // non-rel push
 #ifdef VARIABLE_CHARGE
-  dt_2mc  = (sp->g->dt)/(2*mspc); // Multiply by particle q later
-  dt_4mc2 = dt_2mc / (2*c);
-  Kokkos::View<int*> particle_count("particle_count", nv);
+  dt_2mc   = (sp->g->dt)/(2*msp*c); // Multiply by particle q later
+  dt_4mc   = dt_2mc / 2;
+  Kokkos::View<int*, Kokkos::DefaultExecutionSpace> particle_count("particle_count", nv);
   Kokkos::deep_copy(particle_count, 0);
 
   // Set initial values to min_q
@@ -329,18 +430,25 @@ accumulate_hydro_p_kokkos(
     });
 
 #else
-  qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
-  qdt_4mc2 = qdt_2mc / (2*c);
+  qdt_2mc  = (qsp*sp->g->dt)/(2*msp*c);
+  qdt_4mc  = qdt_2mc / 2;
 #endif
-  r8V      = sp->g->r8V;
+#ifdef EXTERNAL_FORCE
+  float dt_2c = (sp->g->dt)/(2*c);
+#endif
+  rV        = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
+  r12V      = rV/12.;
+  const float r8V = sp->g->r8V;
 
-  const size_t np     = sp->np;
-  const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
-                        VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
-  const int stride_21 = VOXEL(0,1,0, sp->g->nx,sp->g->ny,sp->g->nz) -
-                        VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
-  const int stride_43 = VOXEL(0,0,1, sp->g->nx,sp->g->ny,sp->g->nz) -
-                        VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  const size_t np        = sp->np;
+  //const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
+  //                      VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  //const int stride_21 = VOXEL(0,1,0, sp->g->nx,sp->g->ny,sp->g->nz) -
+  //                      VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  //const int stride_43 = VOXEL(0,0,1, sp->g->nx,sp->g->ny,sp->g->nz) -
+  //                      VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
+  const int sy = sp->g->sy;
+  const int sz = sp->g->sz;
 
   //for( n=0; n<np; n++ ) {
   Kokkos::parallel_for("hydro_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace,size_t > (0LLU, np),
@@ -358,52 +466,177 @@ accumulate_hydro_p_kokkos(
 #ifdef VARIABLE_CHARGE
     const float qp = k_particles(p_index, particle_var::qp);
     const float qdt_2mc = qp*dt_2mc;
-    const float qdt_4mc2 = qp*dt_4mc2;
+    const float qdt_4mc = qp*dt_4mc;
 #endif
     const int ii = k_particles_i(p_index);
 
-    const float cbx = k_interp(ii, interpolator_var::cbx);
-    const float cby = k_interp(ii, interpolator_var::cby);
-    const float cbz = k_interp(ii, interpolator_var::cbz);
+    #define f_ex       k_interp(ii, interpolator_var::ex)
+    #define f_dexdx    k_interp(ii, interpolator_var::dexdx)
+    #define f_dexdy    k_interp(ii, interpolator_var::dexdy)
+    #define f_dexdz    k_interp(ii, interpolator_var::dexdz)
+    #define f_d2exdx   k_interp(ii, interpolator_var::d2exdx)
+    #define f_d2exdy   k_interp(ii, interpolator_var::d2exdy)
+    #define f_d2exdz   k_interp(ii, interpolator_var::d2exdz)
+    #define f_ey       k_interp(ii, interpolator_var::ey)
+    #define f_deydx    k_interp(ii, interpolator_var::deydx)
+    #define f_deydy    k_interp(ii, interpolator_var::deydy)
+    #define f_deydz    k_interp(ii, interpolator_var::deydz)
+    #define f_d2eydx   k_interp(ii, interpolator_var::d2eydx)
+    #define f_d2eydy   k_interp(ii, interpolator_var::d2eydy)
+    #define f_d2eydz   k_interp(ii, interpolator_var::d2eydz)
+    #define f_ez       k_interp(ii, interpolator_var::ez)
+    #define f_dezdx    k_interp(ii, interpolator_var::dezdx)
+    #define f_dezdy    k_interp(ii, interpolator_var::dezdy)
+    #define f_dezdz    k_interp(ii, interpolator_var::dezdz)
+    #define f_d2ezdx   k_interp(ii, interpolator_var::d2ezdx)
+    #define f_d2ezdy   k_interp(ii, interpolator_var::d2ezdy)
+    #define f_d2ezdz   k_interp(ii, interpolator_var::d2ezdz)
+    #define f_cbx      k_interp(ii, interpolator_var::cbx)
+    #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
+    #define f_dcbxdy   k_interp(ii, interpolator_var::dcbxdy)
+    #define f_dcbxdz   k_interp(ii, interpolator_var::dcbxdz)
+    #define f_d2cbxdx  k_interp(ii, interpolator_var::d2cbxdx)
+    #define f_d2cbxdy  k_interp(ii, interpolator_var::d2cbxdy)
+    #define f_d2cbxdz  k_interp(ii, interpolator_var::d2cbxdz)
+    #define f_cby      k_interp(ii, interpolator_var::cby)
+    #define f_dcbydx   k_interp(ii, interpolator_var::dcbydx)
+    #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
+    #define f_dcbydz   k_interp(ii, interpolator_var::dcbydz)
+    #define f_d2cbydx  k_interp(ii, interpolator_var::d2cbydx)
+    #define f_d2cbydy  k_interp(ii, interpolator_var::d2cbydy)
+    #define f_d2cbydz  k_interp(ii, interpolator_var::d2cbydz)
+    #define f_cbz      k_interp(ii, interpolator_var::cbz)
+    #define f_dcbzdx   k_interp(ii, interpolator_var::dcbzdx)
+    #define f_dcbzdy   k_interp(ii, interpolator_var::dcbzdy)
+    #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
+    #define f_d2cbzdx  k_interp(ii, interpolator_var::d2cbzdx)
+    #define f_d2cbzdy  k_interp(ii, interpolator_var::d2cbzdy)
+    #define f_d2cbzdz  k_interp(ii, interpolator_var::d2cbzdz)
 
-    const float ex = k_interp(ii, interpolator_var::ex);
-    const float ey = k_interp(ii, interpolator_var::ey);
-    const float ez = k_interp(ii, interpolator_var::ez);
+    #define f_Ex0       k_interp(ii, interpolator_var::Ex0)
+    #define f_dEx0dx    k_interp(ii, interpolator_var::dEx0dx)
+    #define f_dEx0dy    k_interp(ii, interpolator_var::dEx0dy)
+    #define f_dEx0dz    k_interp(ii, interpolator_var::dEx0dz)
+    #define f_d2Ex0dx   k_interp(ii, interpolator_var::d2Ex0dx)
+    #define f_d2Ex0dy   k_interp(ii, interpolator_var::d2Ex0dy)
+    #define f_d2Ex0dz   k_interp(ii, interpolator_var::d2Ex0dz)
+    #define f_Ey0       k_interp(ii, interpolator_var::Ey0)
+    #define f_dEy0dx    k_interp(ii, interpolator_var::dEy0dx)
+    #define f_dEy0dy    k_interp(ii, interpolator_var::dEy0dy)
+    #define f_dEy0dz    k_interp(ii, interpolator_var::dEy0dz)
+    #define f_d2Ey0dx   k_interp(ii, interpolator_var::d2Ey0dx)
+    #define f_d2Ey0dy   k_interp(ii, interpolator_var::d2Ey0dy)
+    #define f_d2Ey0dz   k_interp(ii, interpolator_var::d2Ey0dz)
+    #define f_Ez0       k_interp(ii, interpolator_var::Ez0)
+    #define f_dEz0dx    k_interp(ii, interpolator_var::dEz0dx)
+    #define f_dEz0dy    k_interp(ii, interpolator_var::dEz0dy)
+    #define f_dEz0dz    k_interp(ii, interpolator_var::dEz0dz)
+    #define f_d2Ez0dx   k_interp(ii, interpolator_var::d2Ez0dx)
+    #define f_d2Ez0dy   k_interp(ii, interpolator_var::d2Ez0dy)
+    #define f_d2Ez0dz   k_interp(ii, interpolator_var::d2Ez0dz)
 
-    //const float dexdy = k_interp(ii, interpolator_var::dexdy);
-    //const float deydz = k_interp(ii, interpolator_var::deydz);
-    //const float dezdx = k_interp(ii, interpolator_var::dezdx);
+    #define f_Gx0       k_interp(ii, interpolator_var::Gx0)
+    #define f_dGx0dx    k_interp(ii, interpolator_var::dGx0dx)
+    #define f_dGx0dy    k_interp(ii, interpolator_var::dGx0dy)
+    #define f_dGx0dz    k_interp(ii, interpolator_var::dGx0dz)
+    #define f_d2Gx0dx   k_interp(ii, interpolator_var::d2Gx0dx)
+    #define f_d2Gx0dy   k_interp(ii, interpolator_var::d2Gx0dy)
+    #define f_d2Gx0dz   k_interp(ii, interpolator_var::d2Gx0dz)
+    #define f_Gy0       k_interp(ii, interpolator_var::Gy0)
+    #define f_dGy0dx    k_interp(ii, interpolator_var::dGy0dx)
+    #define f_dGy0dy    k_interp(ii, interpolator_var::dGy0dy)
+    #define f_dGy0dz    k_interp(ii, interpolator_var::dGy0dz)
+    #define f_d2Gy0dx   k_interp(ii, interpolator_var::d2Gy0dx)
+    #define f_d2Gy0dy   k_interp(ii, interpolator_var::d2Gy0dy)
+    #define f_d2Gy0dz   k_interp(ii, interpolator_var::d2Gy0dz)
+    #define f_Gz0       k_interp(ii, interpolator_var::Gz0)
+    #define f_dGz0dx    k_interp(ii, interpolator_var::dGz0dx)
+    #define f_dGz0dy    k_interp(ii, interpolator_var::dGz0dy)
+    #define f_dGz0dz    k_interp(ii, interpolator_var::dGz0dz)
+    #define f_d2Gz0dx   k_interp(ii, interpolator_var::d2Gz0dx)
+    #define f_d2Gz0dy   k_interp(ii, interpolator_var::d2Gz0dy)
+    #define f_d2Gz0dz   k_interp(ii, interpolator_var::d2Gz0dz)
 
-    //const float dexdz = k_interp(ii, interpolator_var::dexdz);
-    //const float deydx = k_interp(ii, interpolator_var::deydx);
-    //const float dezdy = k_interp(ii, interpolator_var::dezdy);
-
-    //const float d2exdydz = k_interp(ii, interpolator_var::d2exdydz);
-    //const float d2eydzdx = k_interp(ii, interpolator_var::d2eydzdx);
-    //const float d2ezdxdy = k_interp(ii, interpolator_var::d2ezdxdy);
-
-    //const float dcbxdx = k_interp(ii, interpolator_var::dcbxdx);
-    //const float dcbydy = k_interp(ii, interpolator_var::dcbydy);
-    //const float dcbzdz = k_interp(ii, interpolator_var::dcbzdz);
-
+#ifdef SHAPE_NGP
+  #ifdef EXTERNAL_FORCE
+    // Half advance E, E0, G0
+    ux += qdt_2mc * ( f_ex + f_Ex0) + dt_2c * f_Gx0;
+    uy += qdt_2mc * ( f_ey + f_Ey0) + dt_2c * f_Gy0;
+    uz += qdt_2mc * ( f_ez + f_Ez0) + dt_2c * f_Gz0;
+  #else
     // Half advance E
-    ux += qdt_2mc*((ex)); //+dy*dexdy) + dz*(dexdz+dy*d2exdydz));
-    uy += qdt_2mc*((ey)); //+dz*deydz) + dx*(deydx+dz*d2eydzdx));
-    uz += qdt_2mc*((ez)); //+dx*dezdx) + dy*(dezdy+dx*d2ezdxdy));
-
+    ux += qdt_2mc * f_ex;
+    uy += qdt_2mc * f_ey;
+    uz += qdt_2mc * f_ez;
+  #endif
     // Boris rotation - Interpolate B field
-    float w5 = cbx; // + dx*dcbxdx;
-    float w6 = cby; // + dy*dcbydy;
-    float w7 = cbz; // + dz*dcbzdz;
+    float w5 = f_cbx;
+    float w6 = f_cby;
+    float w7 = f_cbz;
+#elif defined( SHAPE_QS )
+  #ifdef EXTERNAL_FORCE
+    // Half advance E, E0
+    ux += qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
+                         + dy*( f_dexdy + dy*f_d2exdy )
+                         + dz*( f_dexdz + dz*f_d2exdz )
+                    + f_Ex0 + dx*( f_dEx0dx + dx*f_d2Ex0dx )
+                            + dy*( f_dEx0dy + dy*f_d2Ex0dy )
+                            + dz*( f_dEx0dz + dz*f_d2Ex0dz ) );
+    uy += qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
+                         + dy*( f_deydy + dy*f_d2eydy )
+                         + dz*( f_deydz + dz*f_d2eydz )
+                    + f_Ey0 + dx*( f_dEy0dx + dx*f_d2Ey0dx )
+                            + dy*( f_dEy0dy + dy*f_d2Ey0dy )
+                            + dz*( f_dEy0dz + dz*f_d2Ey0dz ) );
+    uz += qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
+                         + dy*( f_dezdy + dy*f_d2ezdy )
+                         + dz*( f_dezdz + dz*f_d2ezdz )
+                    + f_Ez0 + dx*( f_dEz0dx + dx*f_d2Ez0dx )
+                            + dy*( f_dEz0dy + dy*f_d2Ez0dy )
+                            + dz*( f_dEz0dz + dz*f_d2Ez0dz ) );
+    // Half advance G0
+    ux += dt_2c *( f_Gx0 + dx*( f_dGx0dx + dx*f_d2Gx0dx )
+                         + dy*( f_dGx0dy + dy*f_d2Gx0dy )
+                         + dz*( f_dGx0dz + dz*f_d2Gx0dz ) );
+    uy += dt_2c *( f_Gy0 + dx*( f_dGy0dx + dx*f_d2Gy0dx )
+                         + dy*( f_dGy0dy + dy*f_d2Gy0dy )
+                         + dz*( f_dGy0dz + dz*f_d2Gy0dz ) );
+    uz += dt_2c *( f_Gz0 + dx*( f_dGz0dx + dx*f_d2Gz0dx )
+                         + dy*( f_dGz0dy + dy*f_d2Gz0dy )
+                         + dz*( f_dGz0dz + dz*f_d2Gz0dz ) );
+  #else
+    // Half advance E
+    ux += qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
+                         + dy*( f_dexdy + dy*f_d2exdy )
+                         + dz*( f_dexdz + dz*f_d2exdz ) );
+    uy += qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
+                         + dy*( f_deydy + dy*f_d2eydy )
+                         + dz*( f_deydz + dz*f_d2eydz ) );
+    uz += qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
+                         + dy*( f_dezdy + dy*f_d2ezdy )
+                         + dz*( f_dezdz + dz*f_d2ezdz ) );
+  #endif
+    // Boris rotation - Interpolate B field
+    float w5 = f_cbx + dx*( f_dcbxdx + dx*f_d2cbxdx )
+                     + dy*( f_dcbxdy + dy*f_d2cbxdy )
+                     + dz*( f_dcbxdz + dz*f_d2cbxdz );
+    float w6 = f_cby + dx*( f_dcbydx + dx*f_d2cbydx )
+                     + dy*( f_dcbydy + dy*f_d2cbydy )
+                     + dz*( f_dcbydz + dz*f_d2cbydz );
+    float w7 = f_cbz + dx*( f_dcbzdx + dx*f_d2cbzdx )
+                     + dy*( f_dcbzdy + dy*f_d2cbzdy )
+                     + dz*( f_dcbzdz + dz*f_d2cbzdz );
+#endif
 
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
     // is the numerically accurate way to compute gamma-1
     //float ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
-    float vz = 1; //sqrt(1.0+ke_mc);            // vz = gamma    (invariant)
+    //float vz = 1; //sqrt(1.0+ke_mc);            // vz = gamma    (invariant)
     //ke_mc *= c/(vz+1.0);             // ke_mc = c|u|^2/(gamma+1) = c*(gamma-1)
-    vz = c/vz;                     // vz = c/gamma
-    float w0 = qdt_4mc2*vz;
+    //vz = c/vz;                     // vz = c/gamma
+    //float w0 = qdt_4mc2*vz;
+    float w0 = qdt_4mc;  // non-rel push
     float w1 = w5*w5 + w6*w6 + w7*w7;    // |cB|^2
     float w2 = w0*w0*w1;
     float w3 = w0*(1.+(1./3.)*w2*(1.0+0.4*w2));
@@ -419,32 +652,50 @@ accumulate_hydro_p_kokkos(
     uy += w4*( w2*w5 - w0*w7 );
     uz += w4*( w0*w6 - w1*w5 );
 
-    // Compute physical velocities
-    float vx  = ux*vz;
-    float vy  = uy*vz;
-    vz *= uz;
+    // Compute physical three-velocities
+    //float vx  = ux*vz;  // rel push
+    //float vy  = uy*vz;
+    //vz *= uz;
+    ux *= c;              // non-rel push
+    uy *= c;
+    uz *= c;
 
     // Compute the trilinear coefficients
-    w0  = r8V*w;    // w0 = (1/8)(w/V)
-    dx *= w0;       // dx = (1/8)(w/V) x
-    w1  = w0+dx;    // w1 = (1/8)(w/V) + (1/8)(w/V)x = (1/8)(w/V)(1+x)
-    w0 -= dx;       // w0 = (1/8)(w/V) - (1/8)(w/V)x = (1/8)(w/V)(1-x)
-    w3  = 1.0+dy;   // w3 = 1+y
-    w2  = w0*w3;    // w2 = (1/8)(w/V)(1-x)(1+y)
-    w3 *= w1;       // w3 = (1/8)(w/V)(1+x)(1+y)
-    dy  = 1.0-dy;   // dy = 1-y
-    w0 *= dy;       // w0 = (1/8)(w/V)(1-x)(1-y)
-    w1 *= dy;       // w1 = (1/8)(w/V)(1+x)(1-y)
-    w7  = 1.0+dz;   // w7 = 1+z
-    w4  = w0*w7;    // w4 = (1/8)(w/V)(1-x)(1-y)(1+z) = (w/V) trilin_0 *Done
-    w5  = w1*w7;    // w5 = (1/8)(w/V)(1+x)(1-y)(1+z) = (w/V) trilin_1 *Done
-    w6  = w2*w7;    // w6 = (1/8)(w/V)(1-x)(1+y)(1+z) = (w/V) trilin_2 *Done
-    w7 *= w3;       // w7 = (1/8)(w/V)(1+x)(1+y)(1+z) = (w/V) trilin_3 *Done
-    dz  = 1.0-dz;   // dz = 1-z
-    w0 *= dz;       // w0 = (1/8)(w/V)(1-x)(1-y)(1-z) = (w/V) trilin_4 *Done
-    w1 *= dz;       // w1 = (1/8)(w/V)(1+x)(1-y)(1-z) = (w/V) trilin_5 *Done
-    w2 *= dz;       // w2 = (1/8)(w/V)(1-x)(1+y)(1-z) = (w/V) trilin_6 *Done
-    w3 *= dz;       // w3 = (1/8)(w/V)(1+x)(1+y)(1-z) = (w/V) trilin_7 *Done
+    //w0  = r8V*w;    // w0 = (1/8)(w/V)
+    //dx *= w0;       // dx = (1/8)(w/V) x
+    //w1  = w0+dx;    // w1 = (1/8)(w/V) + (1/8)(w/V)x = (1/8)(w/V)(1+x)
+    //w0 -= dx;       // w0 = (1/8)(w/V) - (1/8)(w/V)x = (1/8)(w/V)(1-x)
+    //w3  = 1.0+dy;     // w3 = 1+y
+    //w2  = w0*w3;    // w2 = (1/8)(w/V)(1-x)(1+y)
+    //w3 *= w1;       // w3 = (1/8)(w/V)(1+x)(1+y)
+    //dy  = 1.0-dy;     // dy = 1-y
+    //w0 *= dy;       // w0 = (1/8)(w/V)(1-x)(1-y)
+    //w1 *= dy;       // w1 = (1/8)(w/V)(1+x)(1-y)
+    //w7  = 1.0+dz;     // w7 = 1+z
+    //w4  = w0*w7;    // w4 = (1/8)(w/V)(1-x)(1-y)(1+z) = (w/V) trilin_0 *Done
+    //w5  = w1*w7;    // w5 = (1/8)(w/V)(1+x)(1-y)(1+z) = (w/V) trilin_1 *Done
+    //w6  = w2*w7;    // w6 = (1/8)(w/V)(1-x)(1+y)(1+z) = (w/V) trilin_2 *Done
+    //w7 *= w3;       // w7 = (1/8)(w/V)(1+x)(1+y)(1+z) = (w/V) trilin_3 *Done
+    //dz  = 1.0-dz;     // dz = 1-z
+    //w0 *= dz;       // w0 = (1/8)(w/V)(1-x)(1-y)(1-z) = (w/V) trilin_4 *Done
+    //w1 *= dz;       // w1 = (1/8)(w/V)(1+x)(1-y)(1-z) = (w/V) trilin_5 *Done
+    //w2 *= dz;       // w2 = (1/8)(w/V)(1-x)(1+y)(1-z) = (w/V) trilin_6 *Done
+    //w3 *= dz;       // w3 = (1/8)(w/V)(1+x)(1+y)(1-z) = (w/V) trilin_7 *Done
+
+    // Stencil weights omit species' electric charge.
+    // Charge is accounted for in ACCUM_HYDRO below, in order to distinguish
+    // electric-charge outputs (j, rho) from mass-charge outputs (p, Tij)
+#ifdef SHAPE_NGP
+    w0 = w*rV;
+#elif defined( SHAPE_QS )
+    w0 =  (w*r12V) * two*( three - dx*dx - dy*dy - dz*dz );
+    float wx =  (w*r12V) * ( dx + one )*( dx + one );
+    float wy =  (w*r12V) * ( dy + one )*( dy + one );
+    float wz =  (w*r12V) * ( dz + one )*( dz + one );
+    float wmx = (w*r12V) * ( dx - one )*( dx - one );
+    float wmy = (w*r12V) * ( dy - one )*( dy - one );
+    float wmz = (w*r12V) * ( dz - one )*( dz - one );
+#endif
 
     // TODO: This could easily be a loop?
 
@@ -484,53 +735,87 @@ accumulate_hydro_p_kokkos(
     float q = qsp;
 #endif
     
-    // Accumulate the hydro fields
-    #define ACCUM_HYDRO( wn, i )                                       \
-    t  = q*wn;        /* t  = (q w/V) trilin_n */                      \
-    k_hydro_access(i, hydro_var::jx)    += t*vx;                       \
-    k_hydro_access(i, hydro_var::jy)    += t*vy;                       \
-    k_hydro_access(i, hydro_var::jz)    += t*vz;                       \
-    k_hydro_access(i, hydro_var::rho)   += t;                          \
-    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */                 \
-    dx = t*ux;          /* dx = (px w/V) trilin_n */                   \
-    dy = t*uy;                                                         \
-    dz = t*uz;                                                         \
-    k_hydro_access(i, hydro_var::px)    += dx;                         \
-    k_hydro_access(i, hydro_var::py)    += dy;                         \
-    k_hydro_access(i, hydro_var::pz)    += dz;                         \
-    k_hydro_access(i, hydro_var::rho_m) += t; /* changed to mass density (previously ke_mc). Nb. for non-relativistic ke can be computed through trace of pressure tensor below;)*/       \
-    k_hydro_access(i, hydro_var::txx)   += dx*vx;                      \
-    k_hydro_access(i, hydro_var::tyy)   += dy*vy;                      \
-    k_hydro_access(i, hydro_var::tzz)   += dz*vz;                      \
-    k_hydro_access(i, hydro_var::tyz)   += dy*vz;                      \
-    k_hydro_access(i, hydro_var::tzx)   += dz*vx;                      \
-    k_hydro_access(i, hydro_var::txy)   += dx*vy;
+    // Accumulate the hydro fields - relativistic version
+//    #define ACCUM_HYDRO( wn, i )                        \
+//    t  = q*wn;        /* t  = (q w/V) trilin_n */		     \
+//    k_hydro_access(i, hydro_var::jx)  += t*vx;                       \
+//    k_hydro_access(i, hydro_var::jy)  += t*vy;                       \
+//    k_hydro_access(i, hydro_var::jz)  += t*vz;                       \
+//    k_hydro_access(i, hydro_var::rho) += t;                          \
+//    t  = mspc*wn;       /* t = (msp c w/V) trilin_n */  \
+//    dx = t*ux;          /* dx = (px w/V) trilin_n */    \
+//    dy = t*uy;                                          \
+//    dz = t*uz;                                          \
+//    k_hydro_access(i, hydro_var::px)  += dx;                         \
+//    k_hydro_access(i, hydro_var::py)  += dy;                         \
+//    k_hydro_access(i, hydro_var::pz)  += dz;                         \
+//    k_hydro_access(i, hydro_var::rho_m) += t; /* changed to mass density (previously ke_mc). Nb. for non-relativistic ke can be computed through trace of pressure tensor below;)*/		     \
+//    k_hydro_access(i, hydro_var::txx) += dx*vx;                      \
+//    k_hydro_access(i, hydro_var::tyy) += dy*vy;                      \
+//    k_hydro_access(i, hydro_var::tzz) += dz*vz;                      \
+//    k_hydro_access(i, hydro_var::tyz) += dy*vz;                      \
+//    k_hydro_access(i, hydro_var::tzx) += dz*vx;                      \
+//    k_hydro_access(i, hydro_var::txy) += dx*vy;
+
+    // Accumulate the hydro fields - non-relativistic version
+    #define ACCUM_HYDRO( wn, i )                        \
+    t  = q*wn;        /* t  = (q w/V) trilin_n */       \
+    k_hydro_access(i, hydro_var::jx)  += t*ux;          \
+    k_hydro_access(i, hydro_var::jy)  += t*uy;          \
+    k_hydro_access(i, hydro_var::jz)  += t*uz;          \
+    k_hydro_access(i, hydro_var::rho) += t;             \
+    t  = msp*wn;        /* t = (msp w/V) trilin_n */    \
+    dx = t*ux;          /* dx = (px w/V) trilin_n */    \
+    dy = t*uy;                                          \
+    dz = t*uz;                                          \
+    k_hydro_access(i, hydro_var::px)  += dx;            \
+    k_hydro_access(i, hydro_var::py)  += dy;            \
+    k_hydro_access(i, hydro_var::pz)  += dz;            \
+    k_hydro_access(i, hydro_var::rho_m) += t; /* changed to mass density (previously ke_mc). Nb. for non-relativistic ke can be computed through trace of pressure tensor below;)*/		     \
+    k_hydro_access(i, hydro_var::txx) += dx*ux;         \
+    k_hydro_access(i, hydro_var::tyy) += dy*uy;         \
+    k_hydro_access(i, hydro_var::tzz) += dz*uz;         \
+    k_hydro_access(i, hydro_var::tyz) += dy*uz;         \
+    k_hydro_access(i, hydro_var::tzx) += dz*ux;         \
+    k_hydro_access(i, hydro_var::txy) += dx*uy;
 
     // TODO: this serial adding to try and save adds is a bit sad
     // TODO: This is somehow going out of bounds right now
-    const int i0 = ii;
-    ACCUM_HYDRO(w0, i0); // Cell i,j,k
+//    const int i0 = ii;
+//    ACCUM_HYDRO(w0, i0); // Cell i,j,k
+//
+//    const int i1 = i0 + stride_10;
+//    ACCUM_HYDRO(w1, i1); // Cell i+1,j,k
+//
+//    const int i2 = i1 + stride_21;
+//    ACCUM_HYDRO(w2, i2); // Cell i,j+1,k
+//
+//    const int i3 = i2 + stride_10;
+//    ACCUM_HYDRO(w3, i3); // Cell i+1,j+1,k
+//
+//    const int i4 = i3 + stride_43;
+//    ACCUM_HYDRO(w4, i4); // Cell i,j,k+1
+//
+//    const int i5 = i4 + stride_10;
+//    ACCUM_HYDRO(w5, i5); // Cell i+1,j,k+1
+//
+//    const int i6 = i5 + stride_21;
+//    ACCUM_HYDRO(w6, i6); // Cell i,j+1,k+1
+//
+//    const int i7 = i6 + stride_10;
+//    ACCUM_HYDRO(w7, i7); // Cell i+1,j+1,k+1
 
-    const int i1 = i0 + stride_10;
-    ACCUM_HYDRO(w1, i1); // Cell i+1,j,k
-
-    const int i2 = i1 + stride_21;
-    ACCUM_HYDRO(w2, i2); // Cell i,j+1,k
-
-    const int i3 = i2 + stride_10;
-    ACCUM_HYDRO(w3, i3); // Cell i+1,j+1,k
-
-    const int i4 = i3 + stride_43;
-    ACCUM_HYDRO(w4, i4); // Cell i,j,k+1
-
-    const int i5 = i4 + stride_10;
-    ACCUM_HYDRO(w5, i5); // Cell i+1,j,k+1
-
-    const int i6 = i5 + stride_21;
-    ACCUM_HYDRO(w6, i6); // Cell i,j+1,k+1
-
-    const int i7 = i6 + stride_10;
-    ACCUM_HYDRO(w7, i7); // Cell i+1,j+1,k+1
+#ifdef SHAPE_NGP
+    ACCUM_HYDRO(w0, ii); // Cell i,j,k
+#elif defined( SHAPE_QS )
+    ACCUM_HYDRO(w0,  ii     ); // Cell i,j,k
+    ACCUM_HYDRO(wx,  ii +  1); // Cell i+1,j,k
+    ACCUM_HYDRO(wy,  ii + sy); // Cell i,j+1,k
+    ACCUM_HYDRO(wz,  ii + sz); // Cell i,j,k+1
+    ACCUM_HYDRO(wmx, ii -  1); // Cell i-1,j,k
+    ACCUM_HYDRO(wmy, ii - sy); // Cell i,j-1,k
+    ACCUM_HYDRO(wmz, ii - sz); // Cell i,j,k-1
+#endif
 
 #   undef ACCUM_HYDRO
   });
@@ -554,4 +839,93 @@ accumulate_hydro_p_kokkos(
   
   Kokkos::Experimental::contribute(k_hydro, k_hydro_sv);
   Kokkos::fence(); // TODO: Check if I need this to block the contribute
+
+  #undef f_ex
+  #undef f_dexdx
+  #undef f_dexdy
+  #undef f_dexdz
+  #undef f_d2exdx
+  #undef f_d2exdy
+  #undef f_d2exdz
+  #undef f_ey
+  #undef f_deydx
+  #undef f_deydy
+  #undef f_deydz
+  #undef f_d2eydx
+  #undef f_d2eydy
+  #undef f_d2eydz
+  #undef f_ez
+  #undef f_dezdx
+  #undef f_dezdy
+  #undef f_dezdz
+  #undef f_d2ezdx
+  #undef f_d2ezdy
+  #undef f_d2ezdz
+  #undef f_cbx
+  #undef f_dcbxdx
+  #undef f_dcbxdy
+  #undef f_dcbxdz
+  #undef f_d2cbxdx
+  #undef f_d2cbxdy
+  #undef f_d2cbxdz
+  #undef f_cby
+  #undef f_dcbydx
+  #undef f_dcbydy
+  #undef f_dcbydz
+  #undef f_d2cbydx
+  #undef f_d2cbydy
+  #undef f_d2cbydz
+  #undef f_cbz
+  #undef f_dcbzdx
+  #undef f_dcbzdy
+  #undef f_dcbzdz
+  #undef f_d2cbzdx
+  #undef f_d2cbzdy
+  #undef f_d2cbzdz
+
+  #undef f_Ex0
+  #undef f_dEx0dx
+  #undef f_dEx0dy
+  #undef f_dEx0dz
+  #undef f_d2Ex0dx
+  #undef f_d2Ex0dy
+  #undef f_d2Ex0dz
+  #undef f_Ey0
+  #undef f_dEy0dx
+  #undef f_dEy0dy
+  #undef f_dEy0dz
+  #undef f_d2Ey0dx
+  #undef f_d2Ey0dy
+  #undef f_d2Ey0dz
+  #undef f_Ez0
+  #undef f_dEz0dx
+  #undef f_dEz0dy
+  #undef f_dEz0dz
+  #undef f_d2Ez0dx
+  #undef f_d2Ez0dy
+  #undef f_d2Ez0dz
+
+  #undef f_Gx0
+  #undef f_dGx0dx
+  #undef f_dGx0dy
+  #undef f_dGx0dz
+  #undef f_d2Gx0dx
+  #undef f_d2Gx0dy
+  #undef f_d2Gx0dz
+  #undef f_Gy0
+  #undef f_dGy0dx
+  #undef f_dGy0dy
+  #undef f_dGy0dz
+  #undef f_d2Gy0dx
+  #undef f_d2Gy0dy
+  #undef f_d2Gy0dz
+  #undef f_Gz0
+  #undef f_dGz0dx
+  #undef f_dGz0dy
+  #undef f_dGz0dz
+  #undef f_d2Gz0dx
+  #undef f_d2Gz0dy
+  #undef f_d2Gz0dz
+
+  // Perform debug printing
 }

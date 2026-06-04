@@ -76,8 +76,8 @@ hyb_advance_b_kokkos( field_array_t * RESTRICT fa,
 void
 advance_e( field_array_t * RESTRICT fa,
            float                    frac );
-           void
-           
+
+void
 advance_eue( field_array_t * RESTRICT fa,
            float                    frac );
 
@@ -425,42 +425,44 @@ local_ghost_tang_b( field_t      * ALIGNED(128) f,
                     const grid_t *              g );
 
 void
-k_local_ghost_tang_b(field_array_t * RESTRICT f,
-                    const grid_t * g);
+k_local_ghost_tang_b( field_array_t * RESTRICT f,
+                       const grid_t *          g );
 
 void
 local_ghost_norm_e( field_t      * ALIGNED(128) f,
                     const grid_t *              g );
+
 void
-k_local_ghost_norm_e( field_array_t      * ALIGNED(128) f,
-                    const grid_t *              g );
+k_local_ghost_norm_e( field_array_t * ALIGNED(128) f,
+                       const grid_t *              g );
 
 void
 local_ghost_div_b( field_t      * ALIGNED(128) f,
                    const grid_t *              g );
 
 void
-k_local_ghost_div_b( field_array_t      * ALIGNED(128) f,
-                   const grid_t *              g );
+k_local_ghost_div_b( field_array_t * ALIGNED(128) f,
+                      const grid_t *              g );
 
 void
 local_adjust_tang_e( field_t      * ALIGNED(128) f,
                      const grid_t *              g );
 
 void
-k_local_adjust_tang_e(field_array_t* RESTRICT f,
-                        const grid_t* g);
+k_local_adjust_tang_e( field_array_t * RESTRICT f,
+                        const grid_t *          g );
 
 void
 local_adjust_div_e( field_t      * ALIGNED(128) f,
                     const grid_t *              g );
+
 void
-k_local_adjust_div_e( field_array_t      * ALIGNED(128) f,
-                    const grid_t *              g );
+k_local_adjust_div_e( field_array_t * ALIGNED(128) f,
+                       const grid_t *              g );
 
 void
 k_local_adjust_norm_b( field_array_t * RESTRICT fa,
-                     const grid_t *              g );
+                        const grid_t *           g );
 
 void
 local_adjust_norm_b( field_t      * ALIGNED(128) f,
@@ -482,36 +484,40 @@ local_adjust_rhob( field_t      * ALIGNED(128) f,
                    const grid_t *              g );
 
 void
-k_local_adjust_rhof(field_array_t* ALIGNED(128) f,
-                    const grid_t*               g);
+k_local_adjust_rhof( field_array_t * ALIGNED(128) f,
+                      const grid_t *              g );
 
 void
-k_local_adjust_rhob(field_array_t* ALIGNED(128) f,
-                    const grid_t*               g);
+k_local_adjust_rhob(field_array_t * ALIGNED(128) f,
+                     const grid_t *              g );
 
 void
-k_local_adjust_jf( field_array_t      * ALIGNED(128) f,
-                 const grid_t *              g );
+k_local_adjust_jf( field_array_t * ALIGNED(128) f,
+                    const grid_t *              g );
 
 void
-k_hyb_local_ghost_e( field_array_t      * RESTRICT f,
-		     const grid_t *              g );
+k_hyb_local_ghost_e( field_array_t * RESTRICT f,
+                      const grid_t *          g );
 
 void
-k_hyb_local_ghost_b( field_array_t      * RESTRICT f,
-		     const grid_t *              g );
-		     
-		     void
-k_hyb_local_ghost_jf( field_array_t      * RESTRICT f,
-		     const grid_t *              g );
-		     
-		     		     void
-k_hyb_local_ghost_ot( field_array_t      * RESTRICT f,
-		     const grid_t *              g );
-		     
-		     		     		     void
-k_hyb_local_ghost_lapl_b( field_array_t      * RESTRICT f,
-		     const grid_t *              g );
+k_hyb_local_ghost_b( field_array_t * RESTRICT f,
+                      const grid_t *          g );
+
+void
+k_hyb_local_ghost_jf( field_array_t * RESTRICT f,
+                       const grid_t *          g );
+
+void
+k_hyb_local_ghost_ot( field_array_t * RESTRICT f,
+                       const grid_t *          g );
+
+void
+k_hyb_local_ghost_lapl_b( field_array_t * RESTRICT f,
+                           const grid_t *          g );
+
+void
+k_hyb_local_adjust_jf( field_array_t * RESTRICT f,
+                        const grid_t *          g );
 
 // In remote.c
 
@@ -615,10 +621,19 @@ void
 k_begin_remote_ghost_hyb_o( field_array_t      * ALIGNED(128) f );
 void
 k_end_remote_ghost_hyb_o( field_array_t      * ALIGNED(128) f );
-void 
-begin_halo_exchange(field_array* fa, const int beg_var, const int end_var);
 
 void 
+begin_halo_exchange(field_array* fa, const int beg_var, const int end_var);
+void 
 end_halo_exchange(field_array* fa, const int beg_var, const int end_var);
+
+void
+k_begin_remote_edge_hyb_jf( field_array_t      * ALIGNED(128) f,
+                            const grid_t *              g,
+                            field_buffers_t& f_buffers );
+void
+k_end_remote_edge_hyb_jf( field_array_t      * ALIGNED(128) f,
+                        const grid_t *              g,
+                        field_buffers_t& f_buffers );
 
 #endif // _sfa_private_h_

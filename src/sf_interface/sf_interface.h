@@ -21,13 +21,44 @@
 // fi(0,:,:) or fi(nx+1,:,:)) are not used.
 
 typedef struct interpolator {
-  float ex, dexdy, dexdz, d2exdydz;
-  float ey, deydz, deydx, d2eydzdx;
-  float ez, dezdx, dezdy, d2ezdxdy;
-  float cbx, dcbxdx;
-  float cby, dcbydy;
-  float cbz, dcbzdz;
+#ifdef SHAPE_NGP
+  //float ex, dexdy, dexdz, d2exdydz;
+  //float ey, deydz, deydx, d2eydzdx;
+  //float ez, dezdx, dezdy, d2ezdxdy;
+  //float cbx, dcbxdx;
+  //float cby, dcbydy;
+  //float cbz, dcbzdz;
+  float ex, ey, ez;
+  float cbx, cby, cbz;
+  #ifdef EXTERNAL_FORCE
+  float Ex0, Ey0, Ez0;
+  float Gx0, Gy0, Gz0;
+  #else
   float _pad[2];  // 16-byte align
+  #endif
+#else
+#ifdef SHAPE_QS
+  // TODO(low-priority) TEST LAYOUT - is it better to interleave padding so ex,ey,ez;bx,by,bz
+  // are cleanly spaced on 32-byte boundaries, or only pad end of struct????
+  // --ATr,2024nov08
+  float ex,   dexdx,  dexdy,  dexdz,  d2exdx,  d2exdy,  d2exdz;
+  float ey,   deydx,  deydy,  deydz,  d2eydx,  d2eydy,  d2eydz;
+  float ez,   dezdx,  dezdy,  dezdz,  d2ezdx,  d2ezdy,  d2ezdz;
+  float cbx, dcbxdx, dcbxdy, dcbxdz, d2cbxdx, d2cbxdy, d2cbxdz;
+  float cby, dcbydx, dcbydy, dcbydz, d2cbydx, d2cbydy, d2cbydz;
+  float cbz, dcbzdx, dcbzdy, dcbzdz, d2cbzdx, d2cbzdy, d2cbzdz;
+  #ifdef EXTERNAL_FORCE
+  float Ex0, dEx0dx, dEx0dy, dEx0dz, d2Ex0dx, d2Ex0dy, d2Ex0dz;
+  float Ey0, dEy0dx, dEy0dy, dEy0dz, d2Ey0dx, d2Ey0dy, d2Ey0dz;
+  float Ez0, dEz0dx, dEz0dy, dEz0dz, d2Ez0dx, d2Ez0dy, d2Ez0dz;
+  float Gx0, dGx0dx, dGx0dy, dGx0dz, d2Gx0dx, d2Gx0dy, d2Gx0dz;
+  float Gy0, dGy0dx, dGy0dy, dGy0dz, d2Gy0dx, d2Gy0dy, d2Gy0dz;
+  float Gz0, dGz0dx, dGz0dy, dGz0dz, d2Gz0dx, d2Gz0dy, d2Gz0dz;
+  #else
+  float _pad[2]; // 16-byte align
+  #endif
+#endif
+#endif
 } interpolator_t;
 
 typedef struct interpolator_array {

@@ -166,6 +166,10 @@ typedef struct field {
   float ux, uy, uz, ue;                  // Electron bulk flow velocity
   float sx, sy, sz, se;                  // Electron momentum and energy sources
   float trad;
+  #ifdef EXTERNAL_FORCE
+  float Ex0, Ey0, Ez0, _pad1; // External electric field (mover only, exclude from Ohm's law)
+  float Gx0, Gy0, Gz0, _pad2; // External gravity field (mover only, exclude from Ohm's law)
+  #endif
   material_id ematx, ematy, ematz, nmat; // Material at edge centers and nodes
   material_id fmatx, fmaty, fmatz, cmat; // Material at face and cell centers
  

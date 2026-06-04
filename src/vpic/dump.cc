@@ -341,17 +341,35 @@ vpic_simulation::dump_fluids( const char *fsp_name,
  * New dump logic
  *---------------------------------------------------------------------------*/
 
-static FieldInfo fieldInfo[12] = {
-  { "Electric Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-  { "Electric Field Divergence Error", "SCALAR", "1", "FLOATING_POINT",
-    sizeof(float) },
-  { "Magnetic Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-  { "Magnetic Field Divergence Error", "SCALAR", "1", "FLOATING_POINT",
-    sizeof(float) },
-  { "TCA Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-  { "Bound Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
-  { "Free Current Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-  { "Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
+static FieldInfo fieldInfo[total_field_groups] = {
+  { "Electric Field",           "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // ex,ey,ez
+  { "Electric Field Divergence Error", "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // div_e_err
+  { "Magnetic Field",           "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // cbx,cby,cbz
+  { "Scalar Electron Pressure", "SCALAR", "1", "FLOATING POINT",  sizeof(float) }, // pe
+  { "External Magnetic Field",  "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // cbx0,cby0,cbz0
+  { "Initial Electron Temperature", "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // te0
+  { "TCA Field",                "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // tcax,tcay,tcaz
+  { "Bound Charge Density",     "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // rhob
+  { "Free Current Field",       "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // jfx,jfy,jfz
+  { "Charge Density",           "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // rhof
+  { "Old Free Current Field",   "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // jfxold,jfyold,jfzold
+  { "Old Charge Density",       "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // rhofold
+  { "Smoothed E Field",         "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // tx,ty,tz
+  { "Electron Temperature",     "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // te
+  { "Smoothed B Field",         "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // ox,oy,oz
+  { "oe",                       "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // oe
+  { "Electron Pressure",        "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // pex,pey,pez
+  { "Magnetic Field Divergence Error", "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // div_b_err
+  { "Electron Velocity",        "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // ux,uy,uz
+  { "ue",                       "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // ue
+  { "Electron Momentum Source", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // sx,sy,sz
+  { "Electron Energy Source",   "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // se
+#ifdef EXTERNAL_FORCE
+  { "External Electric Field",  "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // Ex0,Ey0,Ez0
+  { "_pad1",                    "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // _pad1
+  { "External Gravity Field",   "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // Gx0,Gy0,Gz0
+  { "_pad2",                    "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // _pad2
+#endif
   { "Edge Material", "VECTOR", "3", "INTEGER", sizeof(material_id) },
   { "Node Material", "SCALAR", "1", "INTEGER", sizeof(material_id) },
   { "Face Material", "VECTOR", "3", "INTEGER", sizeof(material_id) },

@@ -31,6 +31,22 @@ vpic_simulation::initialize( int argc,
   grid->eos_den       = 1.;
   grid->kappa         = 0;
 
+  // need isub=0 initialized for advance_b(...) to
+  // migrate QS shape currents from ghosts to live cells
+  grid->isub          = 0;
+
+#ifdef EXTERNAL_FORCE
+  // Initialize E0, G0 fields to default values
+  for (int ii = 0; ii < grid->nv; ii++) {
+    field(ii).Ex0 = 0.;
+    field(ii).Ey0 = 0.;
+    field(ii).Ez0 = 0.;
+    field(ii).Gx0 = 0.;
+    field(ii).Gy0 = 0.;
+    field(ii).Gz0 = 0.;
+  }
+#endif
+
   // Call the user initialize the simulation
 
   TIC user_initialization( argc, argv ); TOC( user_initialization, 1 );
@@ -120,6 +136,9 @@ vpic_simulation::initialize( int argc,
 
   // -----------------------------------------------
   // Setup remaining device data for evolution loop
+
+  // Smooth E/B fields interpolated to particles (but not fed into B advance)
+  FAK->hyb_smooth_eb_interp( field_array );
 
   if( rank()==0 ) MESSAGE(( "Initializing interpolators" ));
   if( species_list ) {

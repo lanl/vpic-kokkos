@@ -95,7 +95,7 @@ begin_initialization {
 
   double nppc  = 50;         // Average number of macro particle per cell per species 
   
-  double topology_x = 8; // Number of domains in x, y, and z
+  double topology_x = 1; // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 2;
 
@@ -586,7 +586,7 @@ sim_log( "Loading fields" );
    * Convenience functions for simlog output
    *------------------------------------------------------------------------*/
 
-  char varlist[512];
+  char varlist[1024]; // accommodate "allvars" for fields
   create_field_list(varlist, global->fdParams);
 
   sim_log ( "Fields variable list: " << varlist );

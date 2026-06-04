@@ -511,7 +511,12 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
               bz(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
                  buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
 
-              read(10)buffer   ! skip div_b error
+              read(10)buffer   ! skip pe
+
+              read(10)buffer   ! skip magnetic0
+              read(10)buffer   ! skip
+              read(10)buffer   ! skip
+              read(10)buffer   ! skip te0
 
               read(10)buffer   ! skip cb0
               read(10)buffer   ! skip 

@@ -1,0 +1,11 @@
+cd shock
+emacs -nw shock-hyb.cxx
+make
+srun -n 1 -N 1 ./shock-hyb.Linux 2>&1 | tee hvpic.out                 (or mpirun -np 1 ./shock..)
+ftn -o translate_shock translate_shock.f90
+mkdir data
+srun -n 1 ./translate_shock
+ftn -o ayprog ay_gda_integrate.f90
+./ayprog
+IDL gui: “module load idl”  “idl”  “diagnostic”. Python: “mkdir figs” “python plotfigs.py”.
+

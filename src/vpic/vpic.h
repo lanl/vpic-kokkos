@@ -53,34 +53,52 @@ class HDF5Dump;
 
 /* typedef FileIO FILETYPE; */
 
-const uint32_t allvars    (0xffffffff);
-const uint32_t electric   (1<<0 | 1<<1 | 1<<2);
-const uint32_t div_e_err  (1<<3);
-const uint32_t magnetic   (1<<4 | 1<<5 | 1<<6);
-const uint32_t pe         (1<<7);
-const uint32_t tca        (1<<8 | 1<<9 | 1<<10);
-const uint32_t rhob       (1<<11);
-const uint32_t current    (1<<12 | 1<<13 | 1<<14);
-const uint32_t rhof       (1<<15);
-const uint32_t currentold (1<<16 | 1<<17 | 1<<18);
-const uint32_t rhofold    (1<<19);
-const uint32_t magnetic0  (1<<20 | 1<<21 | 1<<22);
-const uint32_t te0        (1<<23);
-const uint32_t tempt      (1<<24 | 1<<25 | 1<<26);
-const uint32_t te         (1<<27);
-const uint32_t tempo      (1<<28 | 1<<29 | 1<<30);
-const uint32_t oe         (1u<<31);
-//const uint32_t tempp      (1<<32 | 1<<33 | 1<<34);
-//const uint32_t pe         (1<<35);
-//const uint32_t emat       (1<<36 | 1<<37 | 1<<38);
-//const uint32_t nmat       (1<<39);
-//const uint32_t fmat       (1<<40 | 1<<41 | 1<<42);
-//const uint32_t cmat       (1<<43);
+const uint64_t allvars      UINT64_MAX; //(0xffffffffffffffff);
+const uint64_t electric     (1ULL<<0 | 1ULL<<1 | 1ULL<<2);
+const uint64_t div_e_err    (1ULL<<3);
+const uint64_t magnetic     (1ULL<<4 | 1ULL<<5 | 1ULL<<6);
+const uint64_t pe           (1ULL<<7);
+const uint64_t magnetic0    (1ULL<<8 | 1ULL<<9 | 1ULL<<10);
+const uint64_t te0          (1ULL<<11);
+const uint64_t tca          (1ULL<<12 | 1ULL<<13 | 1ULL<<14);
+const uint64_t rhob         (1ULL<<15);
+const uint64_t current      (1ULL<<16 | 1ULL<<17 | 1ULL<<18);
+const uint64_t rhof         (1ULL<<19);
+const uint64_t currentold   (1ULL<<20 | 1ULL<<21 | 1ULL<<22);
+const uint64_t rhofold      (1ULL<<23);
+const uint64_t tempt        (1ULL<<24 | 1ULL<<25 | 1ULL<<26);
+const uint64_t te           (1ULL<<27);
+const uint64_t tempo        (1ULL<<28 | 1ULL<<29 | 1ULL<<30);
+const uint64_t oe           (1ULL<<31);
+const uint64_t tempp        (1ULL<<32 | 1ULL<<33 | 1ULL<<34);
+const uint64_t div_b_err    (1ULL<<35);
+const uint64_t uxyz         (1ULL<<36 | 1ULL<<37 | 1ULL<<38);
+const uint64_t ue           (1ULL<<39);
+const uint64_t sxyz         (1ULL<<40 | 1ULL<<41 | 1ULL<<42);
+const uint64_t se           (1ULL<<43);
+const uint64_t electric0    (1ULL<<44 | 1ULL<<45 | 1ULL<<46);
+//const uint64_t pad1       (1ULL<<47);
+const uint64_t gravity0     (1ULL<<48 | 1ULL<<49 | 1ULL<<50);
+//const uint64_t pad2       (1ULL<<51);
+//const uint64_t emat       (1ULL<<52 | 1ULL<<53 | 1ULL<<54);
+//const uint64_t nmat       (1ULL<<55);
+//const uint64_t fmat       (1ULL<<56 | 1ULL<<57 | 1ULL<<58);
+//const uint64_t cmat       (1ULL<<59);
+// 1ULL = unsigned long long ensures 64bits for bitshift operators
 
-const size_t total_field_variables(32);
-const size_t total_field_groups(16); // this counts vectors, tensors etc...
+#ifdef EXTERNAL_FORCE
+const size_t total_field_variables(60);
+const size_t total_field_groups(30); // this counts vectors, tensors etc...
 // These bits will be tested to determine which variables to output
-const size_t field_indeces[22] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31 };
+const size_t field_indeces[30] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31,
+                                   32, 35, 36, 39, 40, 43, 44, 47, 48, 51, 52, 55, 56, 59 };
+#else
+const size_t total_field_variables(52);
+const size_t total_field_groups(26); // this counts vectors, tensors etc...
+// These bits will be tested to determine which variables to output
+const size_t field_indeces[26] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31,
+                                   32, 35, 36, 39, 40, 43, 44, 47, 48, 51 };
+#endif
 
 struct FieldInfo {
   char name[128];
@@ -90,18 +108,17 @@ struct FieldInfo {
   size_t size;
 }; // struct FieldInfo
 
-const uint32_t current_density  (1<<0 | 1<<1 | 1<<2);
-const uint32_t charge_density   (1<<3);
-const uint32_t momentum_density (1<<4 | 1<<5 | 1<<6);
-const uint32_t mass_density     (1<<7);
-const uint32_t stress_tensor    (1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13);
+const uint64_t current_density  (1ULL<<0 | 1ULL<<1 | 1ULL<<2);
+const uint64_t charge_density   (1ULL<<3);
+const uint64_t momentum_density (1ULL<<4 | 1ULL<<5 | 1ULL<<6);
+const uint64_t mass_density     (1ULL<<7);
+const uint64_t stress_tensor    (1ULL<<8 | 1ULL<<9 | 1ULL<<10 | 1ULL<<11 | 1ULL<<12 | 1ULL<<13);
 #ifdef VARIABLE_CHARGE
-const uint32_t charge_diags     (1<<14 | 1<<15);
-const uint32_t charge_state_densities (1<<16 | 1<<17 | 1<<18 | 1<<19 | 1<<20 | 1<<21 );
+const uint64_t charge_diags     (1ULL<<14 | 1ULL<<15);
 #endif
 /* May want to use these instead
-const uint32_t stress_diagonal    (1<<8 | 1<<9 | 1<<10);
-const uint32_t stress_offdiagonal (1<<11 | 1<<12 | 1<<13);
+const uint64_t stress_diagonal      (1ULL<<8 | 1ULL<<9 | 1ULL<<10);
+const uint64_t stress_offdiagonal   (1ULL<<11 | 1ULL<<12 | 1ULL<<13);
 */
 
 #ifdef VARIABLE_CHARGE
@@ -163,7 +180,7 @@ enum DumpFormat {
 ----------------------------------------------------------------------------*/
 struct DumpParameters {
 
-  void output_variables(uint32_t mask) {
+  void output_variables(uint64_t mask) {
     output_vars.set(mask);
   } // output_variables
 
@@ -174,7 +191,7 @@ struct DumpParameters {
 
     format = band;
 
-    output_vars.set((0xffffffff));
+    output_vars.set(UINT64_MAX);  // same as 0xffffffffffffffff
 
     //    strcpy(baseDir, dumptype);
     //    strcpy(baseFileName, dumptype);
@@ -1273,6 +1290,12 @@ public:
     }
 #endif
   }
+
+  void
+  apply_artificial_loss_cone( species_t * sp,
+                              float tan2_alpha_lc,
+                              float dt_lc,
+                              float ML );
 
   //////////////////////////////////
   // Random number generator helpers
