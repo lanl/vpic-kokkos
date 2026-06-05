@@ -36,7 +36,7 @@ energy_p_pipeline( energy_p_pipeline_args_t * RESTRICT args,
     i   = p[n].i;
 
     float hax, hay, haz, cbx, cby, cbz;
-    interpolator_t* intp = &f[i];
+    const interpolator_t* intp = &f[i];
     
     interpolate_e(*intp, dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c); // Interpolate E
 
