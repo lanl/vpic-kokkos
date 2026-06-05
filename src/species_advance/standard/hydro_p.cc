@@ -222,7 +222,7 @@ accumulate_hydro_p_kokkos_nomove_ngp(
 {
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
-  float c, qsp, mspc, qdt_2mc, qdt_4mc2, r8V;
+  float c, mspc, qdt_2mc, qdt_4mc2, r8V;
 
   //int nv = sp->g->nv; // TODO: delete
 
@@ -231,7 +231,6 @@ accumulate_hydro_p_kokkos_nomove_ngp(
   }
 
   c        = sp->g->cvac;
-  qsp      = sp->q;
   mspc     = sp->m*c;
 //  qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
 //  qdt_4mc2 = qdt_2mc / (2*c);
@@ -239,6 +238,7 @@ accumulate_hydro_p_kokkos_nomove_ngp(
   float dt_2mc  = (sp->g->dt)/(2*mspc); // Multiply by particle q later
   float dt_4mc2 = dt_2mc / (2*c);
 #else
+  const float qsp      = sp->q;
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
 #endif
@@ -338,9 +338,9 @@ accumulate_hydro_p_kokkos(
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
 
 #ifdef VARIABLE_CHARGE
-  float c, qsp, msp, dt_2mc, dt_4mc, rV, r12V;
+  float c, msp, dt_2mc, dt_4mc, rV, r12V;
 #else
-  float c, qsp, msp, qdt_2mc, qdt_4mc, rV, r12V;
+  float c, msp, qdt_2mc, qdt_4mc, rV, r12V;
 #endif
 
   constexpr float one=1.0f, two=2.0f, three=3.0f;
@@ -358,10 +358,7 @@ accumulate_hydro_p_kokkos(
   }
 
   c        = sp->g->cvac;
-  qsp      = sp->q;
   //mspc     = sp->m*c;                   // rel push
-  //qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
-  //qdt_4mc2 = qdt_2mc / (2*c);
   msp      = sp->m;                       // non-rel push
 #ifdef VARIABLE_CHARGE
   dt_2mc   = (sp->g->dt)/(2*msp*c); // Multiply by particle q later
@@ -378,6 +375,7 @@ accumulate_hydro_p_kokkos(
     });
 
 #else
+  const float qsp = sp->q;
   qdt_2mc  = (qsp*sp->g->dt)/(2*msp*c);
   qdt_4mc  = qdt_2mc / 2;
 #endif

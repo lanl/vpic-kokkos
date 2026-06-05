@@ -141,8 +141,8 @@ struct binary_neutral_collision_pipeline {
     // Am I being paranoid?
     if( static_cast<size_t>(_spi->np)      > _spi_sortindex_ra.extent(0) || 
         static_cast<size_t>(_spi->g->nv)+1 != _spi_partition_ra.extent(0) ){
-      printf("_spi->np (=%d) ?= _spi_sortindex_ra.extent(0) (=%d)\n",_spi->np,_spi_sortindex_ra.extent(0));
-      printf("_spi->g->nv+1 (=%d) ?= _spi_partition_ra.extent(0) (=%d)\n",_spi->g->nv+1,_spi_partition_ra.extent(0));
+      printf("_spi->np (=%zu) ?= _spi_sortindex_ra.extent(0) (=%zu)\n",_spi->np,_spi_sortindex_ra.extent(0));
+      printf("_spi->g->nv+1 (=%d) ?= _spi_partition_ra.extent(0) (=%zu)\n",_spi->g->nv+1,_spi_partition_ra.extent(0));
       ERROR(("Bad spi sort products."));
     }
 
@@ -252,9 +252,9 @@ struct binary_neutral_collision_pipeline {
     auto const& model = _model;
     auto const& m_i   = _m_i;
     auto const& m_j   = _m_j;
-    auto const& mu_i  = _mu_i;
-    auto const& mu_j  = _mu_j;
-    auto const& mu    = _mu;
+    //auto const& mu_i  = _mu_i;
+    //auto const& mu_j  = _mu_j;
+    //auto const& mu    = _mu;
     auto const& dV    = _dV;
     auto const& nx    = _nx;
     auto const& ny    = _ny;
@@ -266,14 +266,14 @@ struct binary_neutral_collision_pipeline {
     auto const& spj_n = _spj_n;
     auto const& spi_p = _spi_p;
     auto const& spj_p = _spj_p;
-    auto const& spi_i = _spi_i;
-    auto const& spj_i = _spj_i;
+    //auto const& spi_i = _spi_i;
+    //auto const& spj_i = _spj_i;
     auto const& dtinterval = _dtinterval;
     auto const& spi_sortindex_ra = _spi_sortindex_ra;
     auto const& spj_sortindex_ra = _spj_sortindex_ra;
     auto const& spi_partition_ra = _spi_partition_ra;
     auto const& spj_partition_ra = _spj_partition_ra;
-    auto const& use_e_field = _use_e_field;
+    //auto const& use_e_field = _use_e_field;
 
     // Choose the collision function based on model.var_wt.
     // Both functions must be of the same signature.
@@ -503,8 +503,8 @@ void collide_variabl_wt(
   // Assign variables so that the h-group has more macroparticles than the l-group
   auto h0 = ij ? i_0 : j_0;
   auto l0 = ij ? j_0 : i_0;
-  auto mh = ij ? m_i : m_j;
-  auto ml = ij ? m_j : m_i;
+  //auto mh = ij ? m_i : m_j;
+  //auto ml = ij ? m_j : m_i;
   auto mu_h = ij ? mu_i : mu_j;
   auto mu_l = ij ? mu_j : mu_i;
   auto sph_p = ij ? spi_p : spj_p;
@@ -648,7 +648,7 @@ void collide_uniform_wt(
     // Binary Coulomb collision self-scattering needs a factor of two for the 
     // modified reduced mass.
     // 
-    float nu_modifier = 2.0;
+    //float nu_modifier = 2.0;
   }
 	
 	const int nmin = ni < nj ? ni : nj;

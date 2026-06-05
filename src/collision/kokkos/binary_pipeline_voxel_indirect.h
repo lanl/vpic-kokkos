@@ -303,7 +303,7 @@ struct binary_collision_pipeline {
 
     if constexpr (VariableWeight) {    
       Kokkos::parallel_for("binary_collision_pipeline::apply_model",
-       policy, KOKKOS_LAMBDA (member_type team_member) {
+       policy, KOKKOS_CLASS_LAMBDA (member_type team_member) {
       
        int ix, iy, iz;
        RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
@@ -339,7 +339,7 @@ struct binary_collision_pipeline {
     } else {
       Kokkos::parallel_for("binary_collision_pipeline::apply_model",
       policy,
-      KOKKOS_LAMBDA (member_type team_member) {
+      KOKKOS_CLASS_LAMBDA (member_type team_member) {
       
         int ix, iy, iz;
         RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
@@ -384,7 +384,7 @@ struct binary_collision_pipeline {
                           k_particle_sortindex_t_ra spi_sortindex_ra, 
                           k_particle_sortindex_t_ra spj_sortindex_ra, 
                           const kokkos_rng_pool_t& rp, 
-                          const Kokkos::TeamPolicy<>::member_type & team_member)
+                          const Kokkos::TeamPolicy<>::member_type & team_member) const
   {
     const float mu_i = m_j/(m_i+m_j);
     const float mu_j = m_i/(m_i+m_j);
@@ -458,7 +458,7 @@ struct binary_collision_pipeline {
                           k_particle_sortindex_t_ra spi_sortindex_ra, 
                           k_particle_sortindex_t_ra spj_sortindex_ra, 
                           const kokkos_rng_pool_t& rp, 
-                          const Kokkos::TeamPolicy<>::member_type & team)
+                          const Kokkos::TeamPolicy<>::member_type & team) const
   {
     kokkos_rng_state_t rg = rp.get_state();
     
@@ -620,7 +620,7 @@ struct binary_collision_pipeline {
                           k_particle_sortindex_t_ra spj_sortindex_ra, 
                           const kokkos_rng_pool_t& rp, 
                           const Kokkos::TeamPolicy<>::member_type & team, 
-                          const k_particles_c_t& spi_c, const k_particles_c_t& spj_c)
+                          const k_particles_c_t& spi_c, const k_particles_c_t& spj_c) const
   {
     float mu_i = m_j/(m_i+m_j);
     float mu_j = m_i/(m_i+m_j);
@@ -1067,7 +1067,7 @@ struct binary_collision_pipeline {
                           k_particle_sortindex_t_ra spi_sortindex_ra, 
                           k_particle_sortindex_t_ra spj_sortindex_ra, 
                           const kokkos_rng_pool_t& rp, 
-                          const Kokkos::TeamPolicy<>::member_type & team)
+                          const Kokkos::TeamPolicy<>::member_type & team) const
   {
     const float mu_i = m_j/(m_i+m_j);
     const float mu_j = m_i/(m_i+m_j);
@@ -1650,7 +1650,7 @@ struct binary_collision_pipeline {
     collision_model& model,
     kokkos_rng_state_t& rg,
     float ndt
-  )
+  ) const
   {
 
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];

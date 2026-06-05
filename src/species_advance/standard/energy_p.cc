@@ -183,7 +183,7 @@ energy_p_kernel(const k_interpolator_t& k_interp,
         const float qdt_2mc = _qdt_2mc;
 #endif
 
-        float hax, hay, haz, cbx, cby, cbz;
+        float hax, hay, haz;
         const interpolator_t intp = read_interpolator(k_interp, ii); // Load interpolators
     
         interpolate_e(intp, dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c); // Interpolate E

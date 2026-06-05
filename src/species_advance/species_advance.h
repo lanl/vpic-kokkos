@@ -560,14 +560,14 @@ move_p_kokkos(
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
-  float v0, v1, v2, v3, v4, v5, q;
+  float v0, v1, v2, v3, q;
   float w0, wx, wy, wz, wmx, wmy, wmz;
   int axis, face;
   int64_t neighbor;
   //int pi = int(local_pm_i);
   size_t pi = pm->i;
-  float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
-  constexpr float one=1., two=2., three=3., one_twelfth=1./12.;
+  float ux,uy,uz,x_half,y_half,z_half,fracdt;
+  constexpr float one=1., one_twelfth=1./12.;
   //const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
   const float rV = 1.0/gdx/gdy/gdz;
   const float rV12 = rV*one_twelfth;
@@ -915,10 +915,10 @@ move_p_kokkos_host_serial(
 {
   const int nx = g->nx;
   const int ny = g->ny;
-  const int nz = g->nz;
+  //const int nz = g->nz;
 
-  float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
-  constexpr float one=1., two=2., three=3., one_twelfth=1./12.;
+  float ux,uy,uz,x_half,y_half,z_half,fracdt;
+  constexpr float one=1., one_twelfth=1./12.;
   const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
   const float rV = g->rdx * g->rdy * g->rdz;
   const float rV12 = rV*one_twelfth;
@@ -948,7 +948,7 @@ move_p_kokkos_host_serial(
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
-  float v0, v1, v2, v3, v4, v5, q;
+  float v0, v1, v2, v3, q;
   float w0, wx, wy, wz, wmx, wmy, wmz;
   int axis, face;
   int64_t neighbor;

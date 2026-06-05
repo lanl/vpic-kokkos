@@ -423,7 +423,6 @@ struct StridedSortOrder {
 
     auto np_range = Kokkos::RangePolicy<size_t>(0,np);
 
-    Kokkos::MinMaxScalar<int> result;
     // Find max particle index
     size_t max_cell = 0;
     Kokkos::parallel_reduce("Get max cell ID", np_range, 
