@@ -106,7 +106,7 @@ vpic_simulation::dump_energies( const char *fname,
   hasnan_f = hasnan_f || (en_f[4] != en_f[4]);
   hasnan_f = hasnan_f || (en_f[5] != en_f[5]);
 
-#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
   std::map<std::string, double> energy_map;
   LIST_FOR_EACH(sp,species_list) {
     en_p = energy_p_kokkos( sp, interpolator_array );

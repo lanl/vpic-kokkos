@@ -23,19 +23,19 @@ struct center_p_kernel {
   KOKKOS_INLINE_FUNCTION 
   void 
   operator() (const int n) const {
-    //float dx, dy, dz, ux, uy, uz;
-    float ux, uy, uz;
+    float dx, dy, dz, ux, uy, uz;
     float hax, hay, haz, cbx, cby, cbz;
     float v0, v1, v2, v3, v4;
     int ii;
     constexpr float one            = 1.;
     constexpr float one_third      = 1./3.;
     constexpr float two_fifteenths = 2./15.;
+    const float dt_2c = (sp->g->dt)/(2*sp->g->cvac);
 
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
-//    dx   = sp->p[n].dx; // Load position
-//    dy   = sp->p[n].dy;
-//    dz   = sp->p[n].dz;
+    dx   = sp->p[n].dx; // Load position
+    dy   = sp->p[n].dy;
+    dz   = sp->p[n].dz;
 #ifdef VARIABLE_CHARGE
     const float qp   = sp->p[n].qp;
     const float qdt_2mc = qp*_qdt_2mc;
@@ -46,9 +46,9 @@ struct center_p_kernel {
 #endif
     ii   = sp->p[n].i;
 #else
-//    dx   = p(n, particle_var::dx); // Load position
-//    dy   = p(n, particle_var::dy);
-//    dz   = p(n, particle_var::dz);
+    dx   = p(n, particle_var::dx); // Load position
+    dy   = p(n, particle_var::dy);
+    dz   = p(n, particle_var::dz);
 #ifdef VARIABLE_CHARGE
     const float qp   = p(n, particle_var::qp);
     const float qdt_2mc = qp*_qdt_2mc;
@@ -59,12 +59,12 @@ struct center_p_kernel {
 #endif
     ii   = p_i(n);
 #endif
-    hax  = qdt_2mc * f(ii, interpolator_var::ex);  // Interpolate E  
-    hay  = qdt_2mc * f(ii, interpolator_var::ey);   
-    haz  = qdt_2mc * f(ii, interpolator_var::ez);   
-    cbx  = f(ii, interpolator_var::cbx); // Interpolate B
-    cby  = f(ii, interpolator_var::cby); 
-    cbz  = f(ii, interpolator_var::cbz); 
+    const interpolator_t intp = read_interpolator(f, ii); // Load interpolators
+
+    interpolate_e(intp, dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c); // Interpolate E
+                                
+    interpolate_b(intp, dx, dy, dz, cbx, cby, cbz); // Interpolate B
+
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     ux   = sp->p[n].ux; // Load momentum
     uy   = sp->p[n].uy;
@@ -150,69 +150,11 @@ center_p_pipeline( center_p_pipeline_args_t * args,
 #endif
     ii   = p->i;
     f    = f0 + ii;                             // Load interpolator
-#ifdef SHAPE_NGP
-  #ifdef EXTERNAL_FORCE
-    hax  = qdt_2mc*( f->ex + f->Ex0 ) + dt_2c * f->Gx0;        // Interpolate E, E0, G0
-    hay  = qdt_2mc*( f->ey + f->Ey0 ) + dt_2c * f->Gy0;
-    haz  = qdt_2mc*( f->ez + f->Ez0 ) + dt_2c * f->Gz0;
-  #else
-    hax  = qdt_2mc*(    ( f->ex     ) );        // Interpolate E
-    hay  = qdt_2mc*(    ( f->ey     ) );
-    haz  = qdt_2mc*(    ( f->ez     ) );
-  #endif
-    cbx  = f->cbx;// + dx*f->dcbxdx;            // Interpolate B
-    cby  = f->cby;// + dy*f->dcbydy;
-    cbz  = f->cbz;// + dz*f->dcbzdz;
-#elif defined( SHAPE_QS )
-  #ifdef EXTERNAL_FORCE
-    hax  = qdt_2mc*( f->ex + dx*( f->dexdx + dx*f->d2exdx )   // Interpolate E, E0
-                           + dy*( f->dexdy + dy*f->d2exdy )
-                           + dz*( f->dexdz + dz*f->d2exdz )
-                     + f->Ex0 + dx*( f->dEx0dx + dx*f->d2Ex0dx )
-                              + dy*( f->dEx0dy + dy*f->d2Ex0dy )
-                              + dz*( f->dEx0dz + dz*f->d2Ex0dz ) );
-    hay  = qdt_2mc*( f->ey + dx*( f->deydx + dx*f->d2eydx )
-                           + dy*( f->deydy + dy*f->d2eydy )
-                           + dz*( f->deydz + dz*f->d2eydz )
-                     + f->Ey0 + dx*( f->dEy0dx + dx*f->d2Ey0dx )
-                              + dy*( f->dEy0dy + dy*f->d2Ey0dy )
-                              + dz*( f->dEy0dz + dz*f->d2Ey0dz ) );
-    haz  = qdt_2mc*( f->ez + dx*( f->dezdx + dx*f->d2ezdx )
-                           + dy*( f->dezdy + dy*f->d2ezdy )
-                           + dz*( f->dezdz + dz*f->d2ezdz )
-                     + f->Ez0 + dx*( f->dEz0dx + dx*f->d2Ez0dx )
-                              + dy*( f->dEz0dy + dy*f->d2Ez0dy )
-                              + dz*( f->dEz0dz + dz*f->d2Ez0dz ) );
-    hax += dt_2c *( f->Gx0 + dx*( f->dGx0dx + dx*f->d2Gx0dx )   // Interpolate G0
-                           + dy*( f->dGx0dy + dy*f->d2Gx0dy )
-                           + dz*( f->dGx0dz + dz*f->d2Gx0dz ) );
-    hay += dt_2c *( f->Gy0 + dx*( f->dGy0dx + dx*f->d2Gy0dx )
-                           + dy*( f->dGy0dy + dy*f->d2Gy0dy )
-                           + dz*( f->dGy0dz + dz*f->d2Gy0dz ) );
-    haz += dt_2c *( f->Gz0 + dx*( f->dGz0dx + dx*f->d2Gz0dx )
-                           + dy*( f->dGz0dy + dy*f->d2Gz0dy )
-                           + dz*( f->dGz0dz + dz*f->d2Gz0dz ) );
-  #else
-    hax  = qdt_2mc*( f->ex + dx*( f->dexdx + dx*f->d2exdx )   // Interpolate E
-                           + dy*( f->dexdy + dy*f->d2exdy )
-                           + dz*( f->dexdz + dz*f->d2exdz ) );
-    hay  = qdt_2mc*( f->ey + dx*( f->deydx + dx*f->d2eydx )
-                           + dy*( f->deydy + dy*f->d2eydy )
-                           + dz*( f->deydz + dz*f->d2eydz ) );
-    haz  = qdt_2mc*( f->ez + dx*( f->dezdx + dx*f->d2ezdx )
-                           + dy*( f->dezdy + dy*f->d2ezdy )
-                           + dz*( f->dezdz + dz*f->d2ezdz ) );
-  #endif
-    cbx  = f->cbx + dx*( f->dcbxdx + dx*f->d2cbxdx )          // Interpolate B
-                  + dy*( f->dcbxdy + dy*f->d2cbxdy )
-                  + dz*( f->dcbxdz + dz*f->d2cbxdz );
-    cby  = f->cby + dx*( f->dcbydx + dx*f->d2cbydx )
-                  + dy*( f->dcbydy + dy*f->d2cbydy )
-                  + dz*( f->dcbydz + dz*f->d2cbydz );
-    cbz  = f->cbz + dx*( f->dcbzdx + dx*f->d2cbzdx )
-                  + dy*( f->dcbzdy + dy*f->d2cbzdy )
-                  + dz*( f->dcbzdz + dz*f->d2cbzdz );
-#endif
+
+    interpolate_e(*f, dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c); // Interpolate E
+                             
+    interpolate_b(*f, dx, dy, dz, cbx, cby, cbz); // Interpolate B
+
     ux   = p->ux;                            // Load momentum
     uy   = p->uy;
     uz   = p->uz;

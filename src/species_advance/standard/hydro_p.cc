@@ -54,6 +54,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   //qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   //qdt_4mc2 = qdt_2mc / (2*c);
   msp      = sp->m;                       // non-rel push
+  dt_2mc = (sp->g->dt)/(2*msp*c);
   qdt_2mc  = (qsp*sp->g->dt)/(2*msp*c);
   qdt_4mc  = qdt_2mc / 2;
   rV        = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
@@ -77,77 +78,25 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     uy = p[n].uy;
     uz = p[n].uz;
     w  = p[n].w;
-
-#ifdef SHAPE_NGP
-  #ifdef EXTERNAL_FORCE
-    // Half advance E, E0, G0
-    ux += qdt_2mc*( f[i].ex + f[i].Ex0 ) + dt_2c * f[i].Gx0;
-    uy += qdt_2mc*( f[i].ey + f[i].Ey0 ) + dt_2c * f[i].Gy0;
-    uz += qdt_2mc*( f[i].ez + f[i].Ez0 ) + dt_2c * f[i].Gz0;
-  #else
-    // Half advance E
-    ux += qdt_2mc*f[i].ex;
-    uy += qdt_2mc*f[i].ey;
-    uz += qdt_2mc*f[i].ez;
-  #endif
-    // Boris rotation - Interpolate B field
-    w5 = f[i].cbx;
-    w6 = f[i].cby;
-    w7 = f[i].cbz;
-#elif defined( SHAPE_QS )
-  #ifdef EXTERNAL_FORCE
-    // Half advance E, E0, G0
-    ux += qdt_2mc*( f[i].ex + dx*( f[i].dexdx + dx*f[i].d2exdx )
-                            + dy*( f[i].dexdy + dy*f[i].d2exdy )
-                            + dz*( f[i].dexdz + dz*f[i].d2exdz )
-                    + f[i].Ex0 + dx*( f[i].dEx0dx + dx*f[i].d2Ex0dx )
-                               + dy*( f[i].dEx0dy + dy*f[i].d2Ex0dy )
-                               + dz*( f[i].dEx0dz + dz*f[i].d2Ex0dz ) );
-    uy += qdt_2mc*( f[i].ey + dx*( f[i].deydx + dx*f[i].d2eydx )
-                            + dy*( f[i].deydy + dy*f[i].d2eydy )
-                            + dz*( f[i].deydz + dz*f[i].d2eydz )
-                    + f[i].Ey0 + dx*( f[i].dEy0dx + dx*f[i].d2Ey0dx )
-                               + dy*( f[i].dEy0dy + dy*f[i].d2Ey0dy )
-                               + dz*( f[i].dEy0dz + dz*f[i].d2Ey0dz ) );
-    uz += qdt_2mc*( f[i].ez + dx*( f[i].dezdx + dx*f[i].d2ezdx )
-                            + dy*( f[i].dezdy + dy*f[i].d2ezdy )
-                            + dz*( f[i].dezdz + dz*f[i].d2ezdz )
-                    + f[i].Ey0 + dx*( f[i].dEy0dx + dx*f[i].d2Ey0dx )
-                               + dy*( f[i].dEy0dy + dy*f[i].d2Ey0dy )
-                               + dz*( f[i].dEy0dz + dz*f[i].d2Ey0dz ) );
-    ux += dt_2c *( f[i].Gx0 + dx*( f[i].dGx0dx + dx*f[i].d2Gx0dx )
-                            + dy*( f[i].dGx0dy + dy*f[i].d2Gx0dy )
-                            + dz*( f[i].dGx0dz + dz*f[i].d2Gx0dz ) );
-    uy += dt_2c *( f[i].Gy0 + dx*( f[i].dGy0dx + dx*f[i].d2Gy0dx )
-                            + dy*( f[i].dGy0dy + dy*f[i].d2Gy0dy )
-                            + dz*( f[i].dGy0dz + dz*f[i].d2Gy0dz ) );
-    uz += dt_2c *( f[i].Gz0 + dx*( f[i].dGz0dx + dx*f[i].d2Gz0dx )
-                            + dy*( f[i].dGz0dy + dy*f[i].d2Gz0dy )
-                            + dz*( f[i].dGz0dz + dz*f[i].d2Gz0dz ) );
-  #else
-    // Half advance E
-    ux += qdt_2mc*( f[i].ex + dx*( f[i].dexdx + dx*f[i].d2exdx )
-                            + dy*( f[i].dexdy + dy*f[i].d2exdy )
-                            + dz*( f[i].dexdz + dz*f[i].d2exdz ) );
-    uy += qdt_2mc*( f[i].ey + dx*( f[i].deydx + dx*f[i].d2eydx )
-                            + dy*( f[i].deydy + dy*f[i].d2eydy )
-                            + dz*( f[i].deydz + dz*f[i].d2eydz ) );
-    uz += qdt_2mc*( f[i].ez + dx*( f[i].dezdx + dx*f[i].d2ezdx )
-                            + dy*( f[i].dezdy + dy*f[i].d2ezdy )
-                            + dz*( f[i].dezdz + dz*f[i].d2ezdz ) );
-  #endif
-    // Boris rotation - Interpolate B field
-    w5 = f[i].cbx + dx*( f[i].dcbxdx + dx*f[i].d2cbxdx )
-                  + dy*( f[i].dcbxdy + dy*f[i].d2cbxdy )
-                  + dz*( f[i].dcbxdz + dz*f[i].d2cbxdz );
-    w6 = f[i].cby + dx*( f[i].dcbydx + dx*f[i].d2cbydx )
-                  + dy*( f[i].dcbydy + dy*f[i].d2cbydy )
-                  + dz*( f[i].dcbydz + dz*f[i].d2cbydz );
-    w7 = f[i].cbz + dx*( f[i].dcbzdx + dx*f[i].d2cbzdx )
-                  + dy*( f[i].dcbzdy + dy*f[i].d2cbzdy )
-                  + dz*( f[i].dcbzdz + dz*f[i].d2cbzdz );
+#ifdef VARIABLE_CHARGE
+    const float qp = p[n].qp;
+    qdt_2mc = qp * dt_2mc;
 #endif
 
+    float hax, hay, haz, cbx, cby, cbz;
+    const interpolator_t* intp = &f[i];
+    interpolate_e(*intp, dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c); // Interpolate E
+    
+    // Half advance E
+    ux += hax;
+    uy += hay;
+    uz += haz;
+
+    interpolate_b(*intp, dx, dy, dz, cbx, cby, cbz); // Interpolate B
+    w5 = cbx;
+    w6 = cby;
+    w7 = cbz;
+    
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
     // is the numerically accurate way to compute gamma-1
@@ -433,9 +382,9 @@ accumulate_hydro_p_kokkos(
   qdt_2mc  = (qsp*sp->g->dt)/(2*msp*c);
   qdt_4mc  = qdt_2mc / 2;
 #endif
-#ifdef EXTERNAL_FORCE
-  float dt_2c = (sp->g->dt)/(2*c);
-#endif
+//#ifdef EXTERNAL_FORCE
+  const float dt_2c = (sp->g->dt)/(2*c);
+//#endif
   rV        = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
   r12V      = rV/12.;
   const float r8V = sp->g->r8V;
@@ -470,163 +419,20 @@ accumulate_hydro_p_kokkos(
 #endif
     const int ii = k_particles_i(p_index);
 
-    #define f_ex       k_interp(ii, interpolator_var::ex)
-    #define f_dexdx    k_interp(ii, interpolator_var::dexdx)
-    #define f_dexdy    k_interp(ii, interpolator_var::dexdy)
-    #define f_dexdz    k_interp(ii, interpolator_var::dexdz)
-    #define f_d2exdx   k_interp(ii, interpolator_var::d2exdx)
-    #define f_d2exdy   k_interp(ii, interpolator_var::d2exdy)
-    #define f_d2exdz   k_interp(ii, interpolator_var::d2exdz)
-    #define f_ey       k_interp(ii, interpolator_var::ey)
-    #define f_deydx    k_interp(ii, interpolator_var::deydx)
-    #define f_deydy    k_interp(ii, interpolator_var::deydy)
-    #define f_deydz    k_interp(ii, interpolator_var::deydz)
-    #define f_d2eydx   k_interp(ii, interpolator_var::d2eydx)
-    #define f_d2eydy   k_interp(ii, interpolator_var::d2eydy)
-    #define f_d2eydz   k_interp(ii, interpolator_var::d2eydz)
-    #define f_ez       k_interp(ii, interpolator_var::ez)
-    #define f_dezdx    k_interp(ii, interpolator_var::dezdx)
-    #define f_dezdy    k_interp(ii, interpolator_var::dezdy)
-    #define f_dezdz    k_interp(ii, interpolator_var::dezdz)
-    #define f_d2ezdx   k_interp(ii, interpolator_var::d2ezdx)
-    #define f_d2ezdy   k_interp(ii, interpolator_var::d2ezdy)
-    #define f_d2ezdz   k_interp(ii, interpolator_var::d2ezdz)
-    #define f_cbx      k_interp(ii, interpolator_var::cbx)
-    #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
-    #define f_dcbxdy   k_interp(ii, interpolator_var::dcbxdy)
-    #define f_dcbxdz   k_interp(ii, interpolator_var::dcbxdz)
-    #define f_d2cbxdx  k_interp(ii, interpolator_var::d2cbxdx)
-    #define f_d2cbxdy  k_interp(ii, interpolator_var::d2cbxdy)
-    #define f_d2cbxdz  k_interp(ii, interpolator_var::d2cbxdz)
-    #define f_cby      k_interp(ii, interpolator_var::cby)
-    #define f_dcbydx   k_interp(ii, interpolator_var::dcbydx)
-    #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
-    #define f_dcbydz   k_interp(ii, interpolator_var::dcbydz)
-    #define f_d2cbydx  k_interp(ii, interpolator_var::d2cbydx)
-    #define f_d2cbydy  k_interp(ii, interpolator_var::d2cbydy)
-    #define f_d2cbydz  k_interp(ii, interpolator_var::d2cbydz)
-    #define f_cbz      k_interp(ii, interpolator_var::cbz)
-    #define f_dcbzdx   k_interp(ii, interpolator_var::dcbzdx)
-    #define f_dcbzdy   k_interp(ii, interpolator_var::dcbzdy)
-    #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
-    #define f_d2cbzdx  k_interp(ii, interpolator_var::d2cbzdx)
-    #define f_d2cbzdy  k_interp(ii, interpolator_var::d2cbzdy)
-    #define f_d2cbzdz  k_interp(ii, interpolator_var::d2cbzdz)
-
-    #define f_Ex0       k_interp(ii, interpolator_var::Ex0)
-    #define f_dEx0dx    k_interp(ii, interpolator_var::dEx0dx)
-    #define f_dEx0dy    k_interp(ii, interpolator_var::dEx0dy)
-    #define f_dEx0dz    k_interp(ii, interpolator_var::dEx0dz)
-    #define f_d2Ex0dx   k_interp(ii, interpolator_var::d2Ex0dx)
-    #define f_d2Ex0dy   k_interp(ii, interpolator_var::d2Ex0dy)
-    #define f_d2Ex0dz   k_interp(ii, interpolator_var::d2Ex0dz)
-    #define f_Ey0       k_interp(ii, interpolator_var::Ey0)
-    #define f_dEy0dx    k_interp(ii, interpolator_var::dEy0dx)
-    #define f_dEy0dy    k_interp(ii, interpolator_var::dEy0dy)
-    #define f_dEy0dz    k_interp(ii, interpolator_var::dEy0dz)
-    #define f_d2Ey0dx   k_interp(ii, interpolator_var::d2Ey0dx)
-    #define f_d2Ey0dy   k_interp(ii, interpolator_var::d2Ey0dy)
-    #define f_d2Ey0dz   k_interp(ii, interpolator_var::d2Ey0dz)
-    #define f_Ez0       k_interp(ii, interpolator_var::Ez0)
-    #define f_dEz0dx    k_interp(ii, interpolator_var::dEz0dx)
-    #define f_dEz0dy    k_interp(ii, interpolator_var::dEz0dy)
-    #define f_dEz0dz    k_interp(ii, interpolator_var::dEz0dz)
-    #define f_d2Ez0dx   k_interp(ii, interpolator_var::d2Ez0dx)
-    #define f_d2Ez0dy   k_interp(ii, interpolator_var::d2Ez0dy)
-    #define f_d2Ez0dz   k_interp(ii, interpolator_var::d2Ez0dz)
-
-    #define f_Gx0       k_interp(ii, interpolator_var::Gx0)
-    #define f_dGx0dx    k_interp(ii, interpolator_var::dGx0dx)
-    #define f_dGx0dy    k_interp(ii, interpolator_var::dGx0dy)
-    #define f_dGx0dz    k_interp(ii, interpolator_var::dGx0dz)
-    #define f_d2Gx0dx   k_interp(ii, interpolator_var::d2Gx0dx)
-    #define f_d2Gx0dy   k_interp(ii, interpolator_var::d2Gx0dy)
-    #define f_d2Gx0dz   k_interp(ii, interpolator_var::d2Gx0dz)
-    #define f_Gy0       k_interp(ii, interpolator_var::Gy0)
-    #define f_dGy0dx    k_interp(ii, interpolator_var::dGy0dx)
-    #define f_dGy0dy    k_interp(ii, interpolator_var::dGy0dy)
-    #define f_dGy0dz    k_interp(ii, interpolator_var::dGy0dz)
-    #define f_d2Gy0dx   k_interp(ii, interpolator_var::d2Gy0dx)
-    #define f_d2Gy0dy   k_interp(ii, interpolator_var::d2Gy0dy)
-    #define f_d2Gy0dz   k_interp(ii, interpolator_var::d2Gy0dz)
-    #define f_Gz0       k_interp(ii, interpolator_var::Gz0)
-    #define f_dGz0dx    k_interp(ii, interpolator_var::dGz0dx)
-    #define f_dGz0dy    k_interp(ii, interpolator_var::dGz0dy)
-    #define f_dGz0dz    k_interp(ii, interpolator_var::dGz0dz)
-    #define f_d2Gz0dx   k_interp(ii, interpolator_var::d2Gz0dx)
-    #define f_d2Gz0dy   k_interp(ii, interpolator_var::d2Gz0dy)
-    #define f_d2Gz0dz   k_interp(ii, interpolator_var::d2Gz0dz)
-
-#ifdef SHAPE_NGP
-  #ifdef EXTERNAL_FORCE
-    // Half advance E, E0, G0
-    ux += qdt_2mc * ( f_ex + f_Ex0) + dt_2c * f_Gx0;
-    uy += qdt_2mc * ( f_ey + f_Ey0) + dt_2c * f_Gy0;
-    uz += qdt_2mc * ( f_ez + f_Ez0) + dt_2c * f_Gz0;
-  #else
+    // Load interpolator
+    const interpolator_t intp = read_interpolator(k_interp, ii);
+    float hax, hay, haz, cbx, cby, cbz;
+    // Interpolate E
+    interpolate_e(intp, dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c);
     // Half advance E
-    ux += qdt_2mc * f_ex;
-    uy += qdt_2mc * f_ey;
-    uz += qdt_2mc * f_ez;
-  #endif
+    ux += hax;
+    uy += hay;
+    uz += haz;
     // Boris rotation - Interpolate B field
-    float w5 = f_cbx;
-    float w6 = f_cby;
-    float w7 = f_cbz;
-#elif defined( SHAPE_QS )
-  #ifdef EXTERNAL_FORCE
-    // Half advance E, E0
-    ux += qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
-                         + dy*( f_dexdy + dy*f_d2exdy )
-                         + dz*( f_dexdz + dz*f_d2exdz )
-                    + f_Ex0 + dx*( f_dEx0dx + dx*f_d2Ex0dx )
-                            + dy*( f_dEx0dy + dy*f_d2Ex0dy )
-                            + dz*( f_dEx0dz + dz*f_d2Ex0dz ) );
-    uy += qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
-                         + dy*( f_deydy + dy*f_d2eydy )
-                         + dz*( f_deydz + dz*f_d2eydz )
-                    + f_Ey0 + dx*( f_dEy0dx + dx*f_d2Ey0dx )
-                            + dy*( f_dEy0dy + dy*f_d2Ey0dy )
-                            + dz*( f_dEy0dz + dz*f_d2Ey0dz ) );
-    uz += qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
-                         + dy*( f_dezdy + dy*f_d2ezdy )
-                         + dz*( f_dezdz + dz*f_d2ezdz )
-                    + f_Ez0 + dx*( f_dEz0dx + dx*f_d2Ez0dx )
-                            + dy*( f_dEz0dy + dy*f_d2Ez0dy )
-                            + dz*( f_dEz0dz + dz*f_d2Ez0dz ) );
-    // Half advance G0
-    ux += dt_2c *( f_Gx0 + dx*( f_dGx0dx + dx*f_d2Gx0dx )
-                         + dy*( f_dGx0dy + dy*f_d2Gx0dy )
-                         + dz*( f_dGx0dz + dz*f_d2Gx0dz ) );
-    uy += dt_2c *( f_Gy0 + dx*( f_dGy0dx + dx*f_d2Gy0dx )
-                         + dy*( f_dGy0dy + dy*f_d2Gy0dy )
-                         + dz*( f_dGy0dz + dz*f_d2Gy0dz ) );
-    uz += dt_2c *( f_Gz0 + dx*( f_dGz0dx + dx*f_d2Gz0dx )
-                         + dy*( f_dGz0dy + dy*f_d2Gz0dy )
-                         + dz*( f_dGz0dz + dz*f_d2Gz0dz ) );
-  #else
-    // Half advance E
-    ux += qdt_2mc*( f_ex + dx*( f_dexdx + dx*f_d2exdx )
-                         + dy*( f_dexdy + dy*f_d2exdy )
-                         + dz*( f_dexdz + dz*f_d2exdz ) );
-    uy += qdt_2mc*( f_ey + dx*( f_deydx + dx*f_d2eydx )
-                         + dy*( f_deydy + dy*f_d2eydy )
-                         + dz*( f_deydz + dz*f_d2eydz ) );
-    uz += qdt_2mc*( f_ez + dx*( f_dezdx + dx*f_d2ezdx )
-                         + dy*( f_dezdy + dy*f_d2ezdy )
-                         + dz*( f_dezdz + dz*f_d2ezdz ) );
-  #endif
-    // Boris rotation - Interpolate B field
-    float w5 = f_cbx + dx*( f_dcbxdx + dx*f_d2cbxdx )
-                     + dy*( f_dcbxdy + dy*f_d2cbxdy )
-                     + dz*( f_dcbxdz + dz*f_d2cbxdz );
-    float w6 = f_cby + dx*( f_dcbydx + dx*f_d2cbydx )
-                     + dy*( f_dcbydy + dy*f_d2cbydy )
-                     + dz*( f_dcbydz + dz*f_d2cbydz );
-    float w7 = f_cbz + dx*( f_dcbzdx + dx*f_d2cbzdx )
-                     + dy*( f_dcbzdy + dy*f_d2cbzdy )
-                     + dz*( f_dcbzdz + dz*f_d2cbzdz );
-#endif
+    interpolate_b(intp, dx, dy, dz, cbx, cby, cbz);
+    float w5 = cbx;
+    float w6 = cby;
+    float w7 = cbz;
 
     // Boris rotation - curl scalars (0.5 in v0 for half rotate) and
     // kinetic energy computation. Note: gamma-1 = |u|^2 / (gamma+1)
@@ -712,22 +518,16 @@ accumulate_hydro_p_kokkos(
     float w_ngp = 8.0*r8V*w;
     if (q==0) {
       k_hydro_access(ii, hydro_var::n_q0) += w_ngp;
-      //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q0), w_ngp); }
     } else if (q==1) {
       k_hydro_access(ii, hydro_var::n_q1) += w_ngp;
-      //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q1), w_ngp); }
     } else if (q==2) {
       k_hydro_access(ii, hydro_var::n_q2) += w_ngp;
-      //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q2), w_ngp); }
     } else if (q==3) {
       k_hydro_access(ii, hydro_var::n_q3) += w_ngp;
-      //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q3), w_ngp); }
     } else if (q==4) {
       k_hydro_access(ii, hydro_var::n_q4) += w_ngp;
-      //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q4), w_ngp); }
     } else if (q==5) {
       k_hydro_access(ii, hydro_var::n_q5) += w_ngp;
-      //      Kokkos::atomic_add(&k_hydro(ii, hydro_var::n_q5), w_ngp); }
     }
        
     Kokkos::atomic_inc(&particle_count(ii)); // number of particles in each cell
@@ -839,93 +639,4 @@ accumulate_hydro_p_kokkos(
   
   Kokkos::Experimental::contribute(k_hydro, k_hydro_sv);
   Kokkos::fence(); // TODO: Check if I need this to block the contribute
-
-  #undef f_ex
-  #undef f_dexdx
-  #undef f_dexdy
-  #undef f_dexdz
-  #undef f_d2exdx
-  #undef f_d2exdy
-  #undef f_d2exdz
-  #undef f_ey
-  #undef f_deydx
-  #undef f_deydy
-  #undef f_deydz
-  #undef f_d2eydx
-  #undef f_d2eydy
-  #undef f_d2eydz
-  #undef f_ez
-  #undef f_dezdx
-  #undef f_dezdy
-  #undef f_dezdz
-  #undef f_d2ezdx
-  #undef f_d2ezdy
-  #undef f_d2ezdz
-  #undef f_cbx
-  #undef f_dcbxdx
-  #undef f_dcbxdy
-  #undef f_dcbxdz
-  #undef f_d2cbxdx
-  #undef f_d2cbxdy
-  #undef f_d2cbxdz
-  #undef f_cby
-  #undef f_dcbydx
-  #undef f_dcbydy
-  #undef f_dcbydz
-  #undef f_d2cbydx
-  #undef f_d2cbydy
-  #undef f_d2cbydz
-  #undef f_cbz
-  #undef f_dcbzdx
-  #undef f_dcbzdy
-  #undef f_dcbzdz
-  #undef f_d2cbzdx
-  #undef f_d2cbzdy
-  #undef f_d2cbzdz
-
-  #undef f_Ex0
-  #undef f_dEx0dx
-  #undef f_dEx0dy
-  #undef f_dEx0dz
-  #undef f_d2Ex0dx
-  #undef f_d2Ex0dy
-  #undef f_d2Ex0dz
-  #undef f_Ey0
-  #undef f_dEy0dx
-  #undef f_dEy0dy
-  #undef f_dEy0dz
-  #undef f_d2Ey0dx
-  #undef f_d2Ey0dy
-  #undef f_d2Ey0dz
-  #undef f_Ez0
-  #undef f_dEz0dx
-  #undef f_dEz0dy
-  #undef f_dEz0dz
-  #undef f_d2Ez0dx
-  #undef f_d2Ez0dy
-  #undef f_d2Ez0dz
-
-  #undef f_Gx0
-  #undef f_dGx0dx
-  #undef f_dGx0dy
-  #undef f_dGx0dz
-  #undef f_d2Gx0dx
-  #undef f_d2Gx0dy
-  #undef f_d2Gx0dz
-  #undef f_Gy0
-  #undef f_dGy0dx
-  #undef f_dGy0dy
-  #undef f_dGy0dz
-  #undef f_d2Gy0dx
-  #undef f_d2Gy0dy
-  #undef f_d2Gy0dz
-  #undef f_Gz0
-  #undef f_dGz0dx
-  #undef f_dGz0dy
-  #undef f_dGz0dz
-  #undef f_d2Gz0dx
-  #undef f_d2Gz0dy
-  #undef f_d2Gz0dz
-
-  // Perform debug printing
 }
