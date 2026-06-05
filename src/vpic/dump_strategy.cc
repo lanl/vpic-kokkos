@@ -1010,7 +1010,7 @@ void HDF5Dump::dump_fields(
   if (field_dump_flag.flags["cbx"]) DUMP_FIELD_TO_HDF5("cbx", cbx, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["cby"]) DUMP_FIELD_TO_HDF5("cby", cby, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["cbz"]) DUMP_FIELD_TO_HDF5("cbz", cbz, H5T_NATIVE_FLOAT);
-  if (field_dump_flag.flags["pe"]) DUMP_FIELD_TO_HDF5("pe", div_b_err, H5T_NATIVE_FLOAT);
+  if (field_dump_flag.flags["pe"]) DUMP_FIELD_TO_HDF5("pe", pe, H5T_NATIVE_FLOAT);
 
   if (field_dump_flag.flags["cbx0"]) DUMP_FIELD_TO_HDF5("cbx0", cbx0, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["cby0"]) DUMP_FIELD_TO_HDF5("cby0", cby0, H5T_NATIVE_FLOAT);

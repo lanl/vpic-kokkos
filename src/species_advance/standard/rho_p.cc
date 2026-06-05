@@ -34,9 +34,7 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     /**/  field_t    * RESTRICT ALIGNED(128) f = fa->f;
     const particle_t * RESTRICT ALIGNED(128) p = sp->p;
 
-    const float q_8V  = sp->q*sp->g->r8V;
-    const float q_V   = sp->q*(sp->g->rdx*sp->g->rdy*sp->g->rdz);
-    const float q_12V = q_V * 1./12.;
+    const float q = sp->q, rV = 8.0*(sp->g->r8V);
     const size_t np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
@@ -45,21 +43,15 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     constexpr float two            = 2.;
     constexpr float one            = 1.;
 
-# if 1
     float ux, uy, uz; //, w3, w4, w5, w6, w7, dz;
     float dx, dy, dz;
-    float q, w0, wx, wy, wz, wmx, wmy, wmz;
-# else
-    using namespace v4;
-    v4float q, wl, wh, rl, rh;
-# endif
+    float w0, wx, wy, wz, wmx, wmy, wmz;
 
     size_t n, v;
 
     // Load the grid data
     for( n=0; n<np; n++ ) {
 
-#   if 1
         // After detailed experiments and studying of assembly dumps, it was
         // determined that if the platform does not support efficient 4-vector
         // SIMD memory gather/scatter operations, the savings from using
@@ -79,6 +71,12 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         //uy *= w3;
         //uz *= w3;
 
+        v  = p[n].i;
+#ifdef VARIABLE_CHARGE
+        const float q_V = p[n].w*p[n].qp*rV;
+#else
+        const float q_V = p[n].w*q*rV;
+#endif
         // Compute the trilinear weights
         // Though the PPE should have hardware fma/fmaf support, it was
         // measured to be more efficient _not_ to use it here.  (Maybe the
@@ -98,7 +96,7 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         // Reduce the particle charge to rhof
 
 #ifdef SHAPE_NGP
-        w0 = p[n].w * q_V;
+        w0 = q_V;
 
         f[v      ].jfx += w0*ux;
         f[v      ].jfy += w0*uy;
@@ -110,14 +108,13 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         dy = p[n].dy;
         dz = p[n].dz;
 
-        q = p[n].w * q_12V;
-        w0 =  q*two*( three - dx*dx - dy*dy - dz*dz );
-        wx =  q*( dx + one )*( dx + one );
-        wy =  q*( dy + one )*( dy + one );
-        wz =  q*( dz + one )*( dz + one );
-        wmx = q*( dx - one )*( dx - one );
-        wmy = q*( dy - one )*( dy - one );
-        wmz = q*( dz - one )*( dz - one );
+        w0 =  (q_V/12.f)*two*( three - dx*dx - dy*dy - dz*dz );
+        wx =  (q_V/12.f)*( dx + one )*( dx + one );
+        wy =  (q_V/12.f)*( dy + one )*( dy + one );
+        wz =  (q_V/12.f)*( dz + one )*( dz + one );
+        wmx = (q_V/12.f)*( dx - one )*( dx - one );
+        wmy = (q_V/12.f)*( dy - one )*( dy - one );
+        wmz = (q_V/12.f)*( dz - one )*( dz - one );
 
         f[v   ].jfx  += w0*ux;
         f[v   ].jfy  += w0*uy;
@@ -160,53 +157,14 @@ accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         //f[v   +sy].rhof += w2; f[v   +sy+1].rhof += w3;
         //f[v+sz   ].rhof += w4; f[v+sz   +1].rhof += w5;
         //f[v+sz+sy].rhof += w6; f[v+sz+sy+1].rhof += w7;
-
-#   else
-
-        // Gather rhof for this voxel
-
-        v = p[n].i;
-        rl = v4float( f[v      ].rhof, f[v      +1].rhof,
-                f[v   +sy].rhof, f[v   +sy+1].rhof);
-        rh = v4float( f[v+sz   ].rhof, f[v+sz   +1].rhof,
-                f[v+sz+sy].rhof, f[v+sz+sy+1].rhof);
-
-        // Compute the trilinear weights
-
-        load_4x1( &p[n].dx, wl );
-        trilinear( wl, wh );
-
-        // Reduce the particle charge to rhof and scatter the result
-
-        q = v4float( p[n].w*q_8V );
-        store_4x1_tr( fma(q,wl,rl), &f[v      ].rhof, &f[v      +1].rhof,
-                &f[v   +sy].rhof, &f[v   +sy+1].rhof );
-        store_4x1_tr( fma(q,wh,rh), &f[v+sz   ].rhof, &f[v+sz   +1].rhof,
-                &f[v+sz+sy].rhof, &f[v+sz+sy+1].rhof );
-
-#   endif
-
     }
 }
-
-#if 0
-using namespace v4;
-// Note: If part of the body of accumulate_rhob, under the hood
-// there is a check for initialization that occurs everytime
-// accumulate_rhob is called!
-static const v4float ax[4] = { v4float(1,1,1,1), v4float(2,1,2,1),
-    v4float(1,2,1,2), v4float(2,2,2,2) };
-static const v4float ay[4] = { v4float(1,1,1,1), v4float(2,2,1,1),
-    v4float(1,1,2,2), v4float(2,2,2,2) };
-#endif
 
 void
 accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
         const particle_t * RESTRICT ALIGNED(32)  p,
         const grid_t     * RESTRICT              g,
         const float                              qsp ) {
-# if 1
-
     // See note in rhof for why this variant is used.
     float w0 = p->dx, w1 = p->dy, w2, w3, w4, w5, w6, w7, dz = p->dz;
     int v = p->i, x, y, z, sy = g->sy, sz = g->sz;
@@ -246,46 +204,6 @@ accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
     f[v   +sy].rhob += w2; f[v   +sy+1].rhob += w3;
     f[v+sz   ].rhob += w4; f[v+sz   +1].rhob += w5;
     f[v+sz+sy].rhob += w6; f[v+sz+sy+1].rhob += w7;
-
-# else
-
-    v4float q, wl, wh, rl, rh;
-    int v, sy = g->sy, sz = g->sz;
-    int i, j;
-
-    // Gather rhob for this voxel
-
-    v = p->i;
-    rl = v4float( f[v      ].rhob, f[v      +1].rhob,
-            f[v   +sy].rhob, f[v   +sy+1].rhob);
-    rh = v4float( f[v+sz   ].rhob, f[v+sz   +1].rhob,
-            f[v+sz+sy].rhob, f[v+sz+sy+1].rhob);
-
-    // Compute the trilinear weights
-
-    load_4x1( &p->dx, wl );
-    trilinear( wl, wh );
-
-    // Adjust the weights for a corrected local accumulation of rhob.
-    // See note in synchronize_rho why we must do this for rhob and not
-    // for rhof.  Why yes, this code snippet is branchless and evil.
-
-    i = v;
-    j = i/sz; i -= sz*j;       load_4x1( &ax[(j==1    )?3:0], q ); wl *= q;
-    /**/                       load_4x1( &ax[(j==g->nz)?3:0], q ); wh *= q;
-    j = i/sy; i -= sy*j;
-    j = (j==1) + 2*(j==g->ny); load_4x1( &ay[j], q ); wl *= q; wh *= q;
-    i = (i==1) + 2*(i==g->nx); load_4x1( &ax[i], q ); wl *= q; wh *= q;
-
-    // Reduce the particle charge to rhof and scatter the result
-
-    q = v4float( (qsp*g->r8V)*p->w );
-    store_4x1_tr( fma(q,wl,rl), &f[v      ].rhob, &f[v      +1].rhob,
-            &f[v   +sy].rhob, &f[v   +sy+1].rhob );
-    store_4x1_tr( fma(q,wh,rh), &f[v+sz   ].rhob, &f[v+sz   +1].rhob,
-            &f[v+sz+sy].rhob, &f[v+sz+sy+1].rhob );
-
-# endif
 }
 #endif
 
@@ -531,9 +449,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     k_particles_t kparticles = sp->k_p_d;
     k_particles_i_t kparticles_i = sp->k_p_i_d;
 
-    const float q_8V = (sp->q)*(sp->g->r8V);
-    const float q_V   = sp->q*(sp->g->rdx*sp->g->rdy*sp->g->rdz);
-    const float q_12V = q_V * 1./12.;
+    const float q = sp->q, rV = 8.0*(sp->g->r8V);
     const size_t np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
@@ -549,51 +465,38 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
         //float w0, w1, w2, w3, w4, w5, w6, w7;
 
         // Hybrid
-        int ii = kparticles_i(n);
-        float dx  =            kparticles(n, particle_var::dx);
-        float dy  =            kparticles(n, particle_var::dy);
-        float dz  =            kparticles(n, particle_var::dz);
-        float ux  =            kparticles(n, particle_var::ux);
-        float uy  =            kparticles(n, particle_var::uy);
-        float uz  =            kparticles(n, particle_var::uz);
-        float p_w =            kparticles(n, particle_var::w);
-
+        int ii    = kparticles_i(n);
+        float dx  = kparticles(n, particle_var::dx);
+        float dy  = kparticles(n, particle_var::dy);
+        float dz  = kparticles(n, particle_var::dz);
+        float ux  = kparticles(n, particle_var::ux);
+        float uy  = kparticles(n, particle_var::uy);
+        float uz  = kparticles(n, particle_var::uz);
+        float wt  = kparticles(n, particle_var::w);
+#ifdef VARIABLE_CHARGE
+        float qp  = kparticles(n, particle_var::qp);
+        float q_V = qp * rV * wt;
+#else
+        float q_V = q * rV * wt;
+#endif
         auto scatter_view_access = scatter_view.access();
-
-//        scatter_view_access(v,         field_var::rhof) += w0;
-//        scatter_view_access(v+1,       field_var::rhof) += w1;
-//        scatter_view_access(v+sy,      field_var::rhof) += w2;
-//        scatter_view_access(v+sy+1,    field_var::rhof) += w3;
-//        scatter_view_access(v+sz,      field_var::rhof) += w4;
-//        scatter_view_access(v+sz+1,    field_var::rhof) += w5;
-//        scatter_view_access(v+sz+sy,   field_var::rhof) += w6;
-//        scatter_view_access(v+sz+sy+1, field_var::rhof) += w7;
-
-//        Kokkos::atomic_add(&kfield(v,         field_var::rhof), w0);
-//        Kokkos::atomic_add(&kfield(v+1,       field_var::rhof), w1);
-//        Kokkos::atomic_add(&kfield(v+sy,      field_var::rhof), w2);
-//        Kokkos::atomic_add(&kfield(v+sy+1,    field_var::rhof), w3);
-//        Kokkos::atomic_add(&kfield(v+sz,      field_var::rhof), w4);
-//        Kokkos::atomic_add(&kfield(v+sz+1,    field_var::rhof), w5);
-//        Kokkos::atomic_add(&kfield(v+sz+sy,   field_var::rhof), w6);
-//        Kokkos::atomic_add(&kfield(v+sz+sy+1, field_var::rhof), w7);
 
 #ifdef SHAPE_NGP
         // Hybrid, nearest-grid-point shape
-        float w0 = q_V * p_w;
-
+        float w0 = q_V;
         scatter_view_access(ii, field_var::jfx)  += w0 * ux;
         scatter_view_access(ii, field_var::jfy)  += w0 * uy;
         scatter_view_access(ii, field_var::jfz)  += w0 * uz;
         scatter_view_access(ii, field_var::rhof) += w0;
 #elif defined( SHAPE_QS )
-        float w0 =  (q_12V*p_w) * two*( three - dx*dx - dy*dy - dz*dz );
-        float wx =  (q_12V*p_w) * ( dx + one )*( dx + one );
-        float wy =  (q_12V*p_w) * ( dy + one )*( dy + one );
-        float wz =  (q_12V*p_w) * ( dz + one )*( dz + one );
-        float wmx = (q_12V*p_w) * ( dx - one )*( dx - one );
-        float wmy = (q_12V*p_w) * ( dy - one )*( dy - one );
-        float wmz = (q_12V*p_w) * ( dz - one )*( dz - one );
+        const float q_12V = q_V * 1./12.;
+        float w0 =  q_12V * two*( three - dx*dx - dy*dy - dz*dz );
+        float wx =  q_12V * ( dx + one )*( dx + one );
+        float wy =  q_12V * ( dy + one )*( dy + one );
+        float wz =  q_12V * ( dz + one )*( dz + one );
+        float wmx = q_12V * ( dx - one )*( dx - one );
+        float wmy = q_12V * ( dy - one )*( dy - one );
+        float wmz = q_12V * ( dz - one )*( dz - one );
 
         scatter_view_access(ii,    field_var::jfx)  += w0 * ux;
         scatter_view_access(ii,    field_var::jfy)  += w0 * uy;

@@ -85,7 +85,11 @@ vpic_simulation::inject_particle( species_t * sp,
   p->uz = (float)uz;
   p->w  = w;
 #ifdef VARIABLE_CHARGE
-  p->qp = (float)qp;
+  if(qp == std::numeric_limits<double>::infinity()) {
+    p->qp = sp->q;
+  } else {
+    p->qp = (float)qp;
+  }
 #endif
 #ifdef VPIC_ENABLE_TRACER_PARTICLES
   if(sp->is_tracer) {
@@ -118,7 +122,11 @@ vpic_simulation::inject_particle( species_t * sp,
   sp->k_p_h(idx, particle_var::w)  = w;
   sp->k_p_i_h(idx) = VOXEL(ix,iy,iz,nx,ny,nz);
 #ifdef VARIABLE_CHARGE
+  if(qp == std::numeric_limits<double>::infinity()) {
+    sp->k_p_h(idx, particle_var::qp) = sp->q;
+  } else {
     sp->k_p_h(idx, particle_var::qp) = static_cast<float>(qp);
+  }
 #endif
 
   if( update_rhob ) k_accumulate_rhob_single_cpu( field_array->k_f_rhob_accum_h, sp->k_p_h, sp->k_p_i_h, idx, grid, -sp->q);
@@ -219,7 +227,11 @@ vpic_simulation::inject_particle_r( species_t * sp,
   particle_recv(write_index, particle_var::uz) = (float)uz;
   particle_recv(write_index, particle_var::w)  = w;
 #ifdef VARIABLE_CHARGE
-  particle_recv(write_index, particle_var::qp) = (float)qp;
+  if(qp == std::numeric_limits<double>::infinity()) {
+    particle_recv(write_index, particle_var::qp) = sp->q;
+  } else {
+    particle_recv(write_index, particle_var::qp) = (float)qp;
+  }
 #endif
   
   int pii = VOXEL(ix,iy,iz, nx,ny,nz);
