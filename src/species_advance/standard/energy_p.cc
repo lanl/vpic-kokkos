@@ -13,9 +13,7 @@ energy_p_pipeline( energy_p_pipeline_args_t * RESTRICT args,
   const particle_t     * RESTRICT ALIGNED(32)  p = args->p;
   const float qdt_2mc = args->qdt_2mc;
   const float msp     = args->msp;
-//#ifdef EXTERNAL_FORCE
   const float dt_2c = args->dt_2c;
-//#endif
   const float one     = 1;
 
   float dx, dy, dz;
@@ -146,9 +144,7 @@ energy_p( const species_t            * RESTRICT sp,
   args->qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
   args->msp     = sp->m;
   args->np      = sp->np;
-#ifdef EXTERNAL_FORCE
   args->dt_2c   = (sp->g->dt)/(2*sp->g->cvac);
-#endif
 
   EXEC_PIPELINES( energy_p, args, 0 );
   WAIT_PIPELINES();

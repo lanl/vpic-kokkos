@@ -30,10 +30,8 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   /**/  hydro_t        * RESTRICT ALIGNED(128) h;
   const particle_t     * RESTRICT ALIGNED(128) p;
   const interpolator_t * RESTRICT ALIGNED(128) f;
-  float c, qsp, msp, qdt_2mc, qdt_4mc, rV;
-#ifdef EXTERNAL_FORCE
+  float c, qsp, msp, qdt_2mc, qdt_4mc, dt_2mc, rV;
   float dt_2c;
-#endif
   size_t np, stride_10, stride_21, stride_43;
 
   float dx, dy, dz, ux, uy, uz, w;
@@ -54,7 +52,8 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   //qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   //qdt_4mc2 = qdt_2mc / (2*c);
   msp      = sp->m;                       // non-rel push
-  dt_2mc = (sp->g->dt)/(2*msp*c);
+  dt_2c    = (sp->g->dt)/(2*c);
+  dt_2mc    = (sp->g->dt)/(2*msp*c);
   qdt_2mc  = (qsp*sp->g->dt)/(2*msp*c);
   qdt_4mc  = qdt_2mc / 2;
   rV        = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
@@ -382,9 +381,7 @@ accumulate_hydro_p_kokkos(
   qdt_2mc  = (qsp*sp->g->dt)/(2*msp*c);
   qdt_4mc  = qdt_2mc / 2;
 #endif
-//#ifdef EXTERNAL_FORCE
   const float dt_2c = (sp->g->dt)/(2*c);
-//#endif
   rV        = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
   r12V      = rV/12.;
   const float r8V = sp->g->r8V;

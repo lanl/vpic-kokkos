@@ -1163,10 +1163,7 @@ advance_p_kokkos_gpu(
   float rV = g->rdx*g->rdy*g->rdz;
   float rV12 = rV*one_twelfth;
   float gdx=g->dx, gdy=g->dy, gdz = g->dz, gdt = g->dt;
-
-//#ifdef EXTERNAL_FORCE
   const float dt_2c = (g->dt)/(2*g->cvac);
-//#endif
 
   // Process particles for this pipeline
 

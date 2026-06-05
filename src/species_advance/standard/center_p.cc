@@ -119,9 +119,7 @@ center_p_pipeline( center_p_pipeline_args_t * args,
   float qdt_2mc;
   float qdt_4mc;
 #endif
-#ifdef EXTERNAL_FORCE
   const float dt_2c = args->dt_2c;
-#endif
   const float one            = 1.;
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
@@ -204,9 +202,7 @@ center_p( /**/  species_t            * RESTRICT sp,
   args->f0      = ia->i;
   args->qdt_2mc = qdt_2mc;
   args->np      = sp->np;
-#ifdef EXTERNAL_FORCE
   args->dt_2c = (sp->g->dt)/(2*sp->g->cvac);
-#endif
 
   EXEC_PIPELINES( center_p, args, 0 );
   WAIT_PIPELINES();
