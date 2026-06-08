@@ -155,6 +155,9 @@ typedef struct grid {
   k_neighbor_t k_neighbor_d;                // kokkos neighbor view on device
   k_neighbor_t::HostMirror k_neighbor_h;    // kokkos neighbor view on host
 
+  k_curvilinear_mesh_t k_curvilinear_mesh_d; // kokkos view for curvilinear mesh quantities on device
+  k_curvilinear_mesh_t::HostMirror k_curvilinear_mesh_h; // kokkos view for curvilinear mesh quantities on host
+
   // We want to call this *only* once the neighbor is done
   void init_kokkos_grid(int num_neighbor)
   {
@@ -182,6 +185,63 @@ typedef struct grid {
       //        max_ports = 27;
       //      k_mpi_d = k_mpi_t("k_mpi_d");
       //      k_mpi_h = Kokkos::create_mirror_view(k_mpi_d);
+  }
+
+  using host_execution_policy_md = Kokkos::MDRangePolicy<
+    Kokkos::DefaultHostExecutionSpace,
+    Kokkos::Rank<3>,
+    static_sched,
+    Kokkos::IndexType<int>
+  >;
+
+  void init_curvilinear_grid()
+  {
+    //printf("nv=%d",nv);
+    int nv_cm = (nx+1)*(ny+1)*(nz+1);
+    k_curvilinear_mesh_d = k_curvilinear_mesh_t("k_curvilinear_mesh_d", nv_cm);
+    k_curvilinear_mesh_h = Kokkos::create_mirror_view(k_curvilinear_mesh_d);
+
+    Kokkos::parallel_for( "Fill curvilinear mesh view",
+                          host_execution_policy(0, nv_cm), KOKKOS_CLASS_LAMBDA (const int i) {
+
+      k_curvilinear_mesh_h(i, curv_mesh_var::h_1)  = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::h_2)  = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::h_3)  = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::jac) = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::e_1_u) = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::e_1_v) = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::e_1_w) = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::e_2_u) = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::e_2_v) = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::e_2_w) = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::e_3_u) = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::e_3_v) = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::e_3_w) = 1.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::xg)  = 0.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::yg)  = 0.0;
+      k_curvilinear_mesh_h(i, curv_mesh_var::zg)  = 0.0;
+    
+    });
+    
+
+    Kokkos::deep_copy(k_curvilinear_mesh_d, k_curvilinear_mesh_h);
+  }
+
+  void init_cylindrical_grid()
+  {
+    //printf("nv=%d",nv);
+    int nv_cm = (nx+1)*(ny+1)*(nz+1);
+    k_curvilinear_mesh_d = k_curvilinear_mesh_t("k_curvilinear_mesh_d", nv_cm);
+    k_curvilinear_mesh_h = Kokkos::create_mirror_view(k_curvilinear_mesh_d);
+
+    Kokkos::parallel_for(
+    "Fill curvilinear mesh view",
+    host_execution_policy_md({0, 0, 0}, {nx+1, ny+1, nz+1}),
+    KOKKOS_CLASS_LAMBDA (const int i, const int j, const int k) {
+    }
+    );
+
+    Kokkos::deep_copy(k_curvilinear_mesh_d, k_curvilinear_mesh_h);
   }
 
 

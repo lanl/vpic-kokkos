@@ -35,6 +35,7 @@
 #define HYDRO_SYNC_COUNT 14
 #define NUM_J_DIMS 4
 #define FLUID_VAR_COUNT 6+4
+#define CURVILINEAR_MESH_VAR_COUNT 16
 #define TRACER_BUFFER_VAR_COUNT 21
 
 #ifdef SHAPE_NGP
@@ -118,6 +119,8 @@ using k_particle_sortindex_t_ra = Kokkos::View<const Kokkos::DefaultExecutionSpa
                                                Kokkos::MemoryTraits<Kokkos::RandomAccess>>;
 
 using k_neighbor_t = Kokkos::View<int64_t*>;
+
+using k_curvilinear_mesh_t = Kokkos::View<float *[CURVILINEAR_MESH_VAR_COUNT]>;
 
 using k_interpolator_t = Kokkos::View<float *[INTERPOLATOR_VAR_COUNT]>;
 
@@ -484,6 +487,27 @@ namespace tracer_buffer_var {
       txy   = 19,
       ke    = 20,
     };
+};
+
+namespace curv_mesh_var {
+  enum cm_v {
+    h_1  = 0, // names of scale factors chosen to work within existing field advance macros.
+    h_2  = 1,
+    h_3  = 2,
+    jac = 3,
+    e_1_u = 4,
+    e_1_v = 5,
+    e_1_w = 6,
+    e_2_u = 7,
+    e_2_v = 8,
+    e_2_w = 9,
+    e_3_u = 10,
+    e_3_v = 11,
+    e_3_w = 12,
+    xg  = 13,
+    yg  = 14,
+    zg  = 15,
+  };
 };
 
 void print_particles_d(
