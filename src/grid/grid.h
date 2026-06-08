@@ -15,6 +15,7 @@
 #include "../vpic/kokkos_helpers.h"
 
 #define BOUNDARY(i,j,k) (13+(i)+3*(j)+9*(k)) /* FORTRAN -1:1,-1:1,-1:1 */
+#define CURVILINEAR_MESH_GHOST_COUNT 2
 
 enum grid_enums {
 
@@ -197,7 +198,7 @@ typedef struct grid {
   void init_curvilinear_grid()
   {
     //printf("nv=%d",nv);
-    int nv_cm = (nx+1)*(ny+1)*(nz+1);
+    int nv_cm = (nx+CURVILINEAR_MESH_GHOST_COUNT)*(ny+CURVILINEAR_MESH_GHOST_COUNT)*(nz+CURVILINEAR_MESH_GHOST_COUNT);
     k_curvilinear_mesh_d = k_curvilinear_mesh_t("k_curvilinear_mesh_d", nv_cm);
     k_curvilinear_mesh_h = Kokkos::create_mirror_view(k_curvilinear_mesh_d);
 
@@ -230,7 +231,7 @@ typedef struct grid {
   void init_cylindrical_grid()
   {
     //printf("nv=%d",nv);
-    int nv_cm = (nx+1)*(ny+1)*(nz+1);
+    int nv_cm = (nx+CURVILINEAR_MESH_GHOST_COUNT)*(ny+CURVILINEAR_MESH_GHOST_COUNT)*(nz+CURVILINEAR_MESH_GHOST_COUNT);
     k_curvilinear_mesh_d = k_curvilinear_mesh_t("k_curvilinear_mesh_d", nv_cm);
     k_curvilinear_mesh_h = Kokkos::create_mirror_view(k_curvilinear_mesh_d);
 
