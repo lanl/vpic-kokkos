@@ -10,35 +10,36 @@ typedef struct pipeline_args {
   double en[MAX_PIPELINE+1][6];
 } pipeline_args_t;
 
-#define DECLARE_STENCIL()                                                  \
-  const field_t                * ALIGNED(128) f = args->f;                 \
-  const material_coefficient_t * ALIGNED(128) m = args->p->mc;             \
-  const grid_t                 *              g = args->g;                 \
-  const int nx = g->nx, ny = g->ny, nz = g->nz;                            \
-                                                                           \
-  const field_t * ALIGNED(16) f0;                                          \
-  const field_t * ALIGNED(16) fx,  * ALIGNED(16) fy,  * ALIGNED(16) fz;    \
-  const field_t * ALIGNED(16) fyz, * ALIGNED(16) fzx, * ALIGNED(16) fxy;   \
-  double en_ex = 0, en_ey = 0, en_ez = 0, en_bx = 0, en_by = 0, en_bz = 0; \
+#define DECLARE_STENCIL()                                                    \
+  const field_t                * ALIGNED(128) f = args->f;                   \
+  /*const material_coefficient_t * ALIGNED(128) m = args->p->mc;*/           \
+  const grid_t                 *              g = args->g;                   \
+  const int nx = g->nx, ny = g->ny, nz = g->nz;                              \
+                                                                             \
+  const field_t * ALIGNED(16) f0;                                            \
+  /*const field_t * ALIGNED(16) fx,  * ALIGNED(16) fy,  * ALIGNED(16) fz;*/  \
+  /*const field_t * ALIGNED(16) fyz, * ALIGNED(16) fzx, * ALIGNED(16) fxy;*/ \
+  double en_ex = 0, en_ey = 0, en_ez = 0, en_bx = 0, en_by = 0, en_bz = 0;   \
   int x, y, z
 
 #define f(x,y,z) f[ VOXEL(x,y,z, nx,ny,nz) ]
 
 #define INIT_STENCIL()   \
   f0  = &f(x,  y,  z  ); \
-  fx  = &f(x+1,y,  z  ); \
-  fy  = &f(x,  y+1,z  ); \
-  fz  = &f(x,  y,  z+1); \
-  fyz = &f(x,  y+1,z+1); \
-  fzx = &f(x+1,y,  z+1); \
-  fxy = &f(x+1,y+1,z  )
 
-#define NEXT_STENCIL()                              \
-  f0++; fx++; fy++; fz++; fyz++; fzx++; fxy++; x++; \
-  if( x>nx ) {                                      \
-    /**/       y++;            x = 1;               \
-    if( y>ny ) z++; if( y>ny ) y = 1;               \
-    INIT_STENCIL();                                 \
+//  fx  = &f(x+1,y,  z  ); 
+//  fy  = &f(x,  y+1,z  ); 
+//  fz  = &f(x,  y,  z+1); 
+//  fyz = &f(x,  y+1,z+1); 
+//  fzx = &f(x+1,y,  z+1); 
+//  fxy = &f(x+1,y+1,z  )
+
+#define NEXT_STENCIL()                                  \
+  f0++; /*fx++; fy++; fz++; fyz++; fzx++; fxy++; x++;*/ \
+  if( x>nx ) {                                          \
+    /**/       y++;            x = 1;                   \
+    if( y>ny ) z++; if( y>ny ) y = 1;                   \
+    INIT_STENCIL();                                     \
   }
 
 #define REDUCE_EN()                                       \
@@ -135,12 +136,28 @@ struct field_reduce {
         en[0] += k_field(f0,  field_var::ex) * k_field(f0,  field_var::ex);
         en[1] += k_field(f0,  field_var::ey) * k_field(f0,  field_var::ey);
         en[2] += k_field(f0,  field_var::ez) * k_field(f0,  field_var::ez);
-        en[3] += (k_field(f0,  field_var::cbx) + k_field(f0, field_var::cbx0)) * (k_field(f0,  field_var::cbx) + k_field(f0, field_var::cbx0));
-        en[4] += (k_field(f0,  field_var::cby) + k_field(f0, field_var::cby0)) * (k_field(f0,  field_var::cby) + k_field(f0, field_var::cby0));
-        en[5] += (k_field(f0,  field_var::cbz) + k_field(f0, field_var::cbz0)) * (k_field(f0,  field_var::cbz) + k_field(f0, field_var::cbz0));
+        en[3] += (  (k_field(f0,field_var::cbx0) + k_field(f0,field_var::cbx))
+                   *(k_field(f0,field_var::cbx0) + k_field(f0,field_var::cbx)) );
+        en[4] += (  (k_field(f0,field_var::cby0) + k_field(f0,field_var::cby))
+                   *(k_field(f0,field_var::cby0) + k_field(f0,field_var::cby)) );
+        en[5] += (  (k_field(f0,field_var::cbz0) + k_field(f0,field_var::cbz))
+                   *(k_field(f0,field_var::cbz0) + k_field(f0,field_var::cbz)) );
+        // If background B0 >> dB, and floating-point error accumulated during
+        // reduction becomes large, we may lose precision in the measurement of
+        // fluctuating magnetic energy.  It may be necessary to separate
+        // (B0 + dB)^2 = B0^2 + 2*B0*dB + dB^2.
+        //en[3] += k_field(f0,  field_var::cbx) * k_field(f0,  field_var::cbx);
+        //en[4] += k_field(f0,  field_var::cby) * k_field(f0,  field_var::cby);
+        //en[5] += k_field(f0,  field_var::cbz) * k_field(f0,  field_var::cbz);
+        //en[6] += 2 * k_field(f0, field_var::cbx0) * k_field(f0, field_var::cbx);
+        //en[7] += 2 * k_field(f0, field_var::cby0) * k_field(f0, field_var::cby);
+        //en[8] += 2 * k_field(f0, field_var::cbz0) * k_field(f0, field_var::cbz);
+        //en[9]  += k_field(f0, field_var::cbx0) * k_field(f0, field_var::cbx0);
+        //en[10] += k_field(f0, field_var::cby0) * k_field(f0, field_var::cby0);
+        //en[11] += k_field(f0, field_var::cbz0) * k_field(f0, field_var::cbz0);
         }
 
-   KOKKOS_INLINE_FUNCTION void
+    KOKKOS_INLINE_FUNCTION void
     join(value_type dst, const value_type src) const {
         for(size_type i = 0; i < 6; i++) {
             dst[i] += src[i];

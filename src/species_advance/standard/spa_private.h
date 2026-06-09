@@ -57,8 +57,8 @@ typedef struct center_p_pipeline_args {
   MEM_PTR( const interpolator_t, 128 ) f0;      // Interpolator array
   float                                qdt_2mc; // Particle/field coupling
   size_t                               np;      // Number of particles
-
-  PAD_STRUCT( 2*SIZEOF_MEM_PTR + sizeof(float) + sizeof(int) )
+  float                                dt_2c;   // Particle/field coupling
+  PAD_STRUCT( 2*SIZEOF_MEM_PTR + 2*sizeof(float) + sizeof(int) )
 
 } center_p_pipeline_args_t;
 
@@ -76,9 +76,8 @@ typedef struct energy_p_pipeline_args {
   float                                qdt_2mc; // Particle/field coupling
   float                                msp;     // Species particle rest mass
   size_t                               np;      // Number of particles
-
-  PAD_STRUCT( 3*SIZEOF_MEM_PTR + 2*sizeof(float) + sizeof(int) )
-
+  float                                dt_2c;   // Particle/field coupling
+  PAD_STRUCT( 3*SIZEOF_MEM_PTR + 3*sizeof(float) + sizeof(int) )
 } energy_p_pipeline_args_t;
 
 PROTOTYPE_PIPELINE( energy_p, energy_p_pipeline_args_t );

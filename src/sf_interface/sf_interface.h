@@ -21,17 +21,50 @@
 // fi(0,:,:) or fi(nx+1,:,:)) are not used.
 
 typedef struct interpolator {
-  float ex, dexdy, dexdz, d2exdydz;
-  float ey, deydz, deydx, d2eydzdx;
-  float ez, dezdx, dezdy, d2ezdxdy;
-  float cbx, dcbxdx;
-  float cby, dcbydy;
-  float cbz, dcbzdz;
+#ifdef SHAPE_NGP
+  //float ex, dexdy, dexdz, d2exdydz;
+  //float ey, deydz, deydx, d2eydzdx;
+  //float ez, dezdx, dezdy, d2ezdxdy;
+  //float cbx, dcbxdx;
+  //float cby, dcbydy;
+  //float cbz, dcbzdz;
+  float ex, ey, ez;
+  float cbx, cby, cbz;
+  #ifdef EXTERNAL_FORCE
+  float Ex0, Ey0, Ez0;
+  float Gx0, Gy0, Gz0;
+  #else
   float _pad[2];  // 16-byte align
+  #endif
+#else
+#ifdef SHAPE_QS
+  // TODO(low-priority) TEST LAYOUT - is it better to interleave padding so ex,ey,ez;bx,by,bz
+  // are cleanly spaced on 32-byte boundaries, or only pad end of struct????
+  // --ATr,2024nov08
+  float ex,   dexdx,  dexdy,  dexdz,  d2exdx,  d2exdy,  d2exdz;
+  float ey,   deydx,  deydy,  deydz,  d2eydx,  d2eydy,  d2eydz;
+  float ez,   dezdx,  dezdy,  dezdz,  d2ezdx,  d2ezdy,  d2ezdz;
+  float cbx, dcbxdx, dcbxdy, dcbxdz, d2cbxdx, d2cbxdy, d2cbxdz;
+  float cby, dcbydx, dcbydy, dcbydz, d2cbydx, d2cbydy, d2cbydz;
+  float cbz, dcbzdx, dcbzdy, dcbzdz, d2cbzdx, d2cbzdy, d2cbzdz;
+  #ifdef EXTERNAL_FORCE
+  float Ex0, dEx0dx, dEx0dy, dEx0dz, d2Ex0dx, d2Ex0dy, d2Ex0dz;
+  float Ey0, dEy0dx, dEy0dy, dEy0dz, d2Ey0dx, d2Ey0dy, d2Ey0dz;
+  float Ez0, dEz0dx, dEz0dy, dEz0dz, d2Ez0dx, d2Ez0dy, d2Ez0dz;
+  float Gx0, dGx0dx, dGx0dy, dGx0dz, d2Gx0dx, d2Gx0dy, d2Gx0dz;
+  float Gy0, dGy0dx, dGy0dy, dGy0dz, d2Gy0dx, d2Gy0dy, d2Gy0dz;
+  float Gz0, dGz0dx, dGz0dy, dGz0dz, d2Gz0dx, d2Gz0dy, d2Gz0dz;
+  #else
+  float _pad[2]; // 16-byte align
+  #endif
+#endif
+#endif
 } interpolator_t;
 
 typedef struct interpolator_array {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   interpolator_t * ALIGNED(128) i;
+#endif
   grid_t * g;
   k_interpolator_t k_i_d;
   k_interpolator_t::HostMirror k_i_h;
@@ -78,6 +111,198 @@ void
 load_interpolator_array( /**/  interpolator_array_t * RESTRICT ia,
                          const field_array_t        * RESTRICT fa );
 
+template<typename InterpView>
+KOKKOS_INLINE_FUNCTION
+interpolator_t 
+read_interpolator(InterpView& interp, const size_t idx) {
+  return interpolator_t {
+#ifdef SHAPE_NGP
+    interp(idx, interpolator_var::ex),
+    interp(idx, interpolator_var::ey),
+    interp(idx, interpolator_var::ez),
+    interp(idx, interpolator_var::cbx),
+    interp(idx, interpolator_var::cby),
+    interp(idx, interpolator_var::cbz),
+  #ifdef EXTERNAL_FORCE
+    interp(idx, interpolator_var::Ex0),
+    interp(idx, interpolator_var::Ey0),
+    interp(idx, interpolator_var::Ez0),
+    interp(idx, interpolator_var::Gx0),
+    interp(idx, interpolator_var::Gy0),
+    interp(idx, interpolator_var::Gz0),
+  #endif
+#elif defined( SHAPE_QS )
+    interp(idx, interpolator_var::ex),
+    interp(idx, interpolator_var::dexdx),
+    interp(idx, interpolator_var::dexdy),
+    interp(idx, interpolator_var::dexdz),
+    interp(idx, interpolator_var::d2exdx),
+    interp(idx, interpolator_var::d2exdy),
+    interp(idx, interpolator_var::d2exdz),
+    interp(idx, interpolator_var::ey),
+    interp(idx, interpolator_var::deydx),
+    interp(idx, interpolator_var::deydy),
+    interp(idx, interpolator_var::deydz),
+    interp(idx, interpolator_var::d2eydx),
+    interp(idx, interpolator_var::d2eydy),
+    interp(idx, interpolator_var::d2eydz),
+    interp(idx, interpolator_var::ez),
+    interp(idx, interpolator_var::dezdx),
+    interp(idx, interpolator_var::dezdy),
+    interp(idx, interpolator_var::dezdz),
+    interp(idx, interpolator_var::d2ezdx),
+    interp(idx, interpolator_var::d2ezdy),
+    interp(idx, interpolator_var::d2ezdz),
+    interp(idx, interpolator_var::cbx),
+    interp(idx, interpolator_var::dcbxdx),
+    interp(idx, interpolator_var::dcbxdy),
+    interp(idx, interpolator_var::dcbxdz),
+    interp(idx, interpolator_var::d2cbxdx),
+    interp(idx, interpolator_var::d2cbxdy),
+    interp(idx, interpolator_var::d2cbxdz),
+    interp(idx, interpolator_var::cby),
+    interp(idx, interpolator_var::dcbydx),
+    interp(idx, interpolator_var::dcbydy),
+    interp(idx, interpolator_var::dcbydz),
+    interp(idx, interpolator_var::d2cbydx),
+    interp(idx, interpolator_var::d2cbydy),
+    interp(idx, interpolator_var::d2cbydz),
+    interp(idx, interpolator_var::cbz),
+    interp(idx, interpolator_var::dcbzdx),
+    interp(idx, interpolator_var::dcbzdy),
+    interp(idx, interpolator_var::dcbzdz),
+    interp(idx, interpolator_var::d2cbzdx),
+    interp(idx, interpolator_var::d2cbzdy),
+    interp(idx, interpolator_var::d2cbzdz),
+  #ifdef EXTERNAL_FORCE
+    interp(idx, interpolator_var::Ex0),
+    interp(idx, interpolator_var::dEx0dx),
+    interp(idx, interpolator_var::dEx0dy),
+    interp(idx, interpolator_var::dEx0dz),
+    interp(idx, interpolator_var::d2Ex0dx),
+    interp(idx, interpolator_var::d2Ex0dy),
+    interp(idx, interpolator_var::d2Ex0dz),
+    interp(idx, interpolator_var::Ey0),
+    interp(idx, interpolator_var::dEy0dx),
+    interp(idx, interpolator_var::dEy0dy),
+    interp(idx, interpolator_var::dEy0dz),
+    interp(idx, interpolator_var::d2Ey0dx),
+    interp(idx, interpolator_var::d2Ey0dy),
+    interp(idx, interpolator_var::d2Ey0dz),
+    interp(idx, interpolator_var::Ez0),
+    interp(idx, interpolator_var::dEz0dx),
+    interp(idx, interpolator_var::dEz0dy),
+    interp(idx, interpolator_var::dEz0dz),
+    interp(idx, interpolator_var::d2Ez0dx),
+    interp(idx, interpolator_var::d2Ez0dy),
+    interp(idx, interpolator_var::d2Ez0dz),
+    interp(idx, interpolator_var::Gx0),
+    interp(idx, interpolator_var::dGx0dx),
+    interp(idx, interpolator_var::dGx0dy),
+    interp(idx, interpolator_var::dGx0dz),
+    interp(idx, interpolator_var::d2Gx0dx),
+    interp(idx, interpolator_var::d2Gx0dy),
+    interp(idx, interpolator_var::d2Gx0dz),
+    interp(idx, interpolator_var::Gy0),
+    interp(idx, interpolator_var::dGy0dx),
+    interp(idx, interpolator_var::dGy0dy),
+    interp(idx, interpolator_var::dGy0dz),
+    interp(idx, interpolator_var::d2Gy0dx),
+    interp(idx, interpolator_var::d2Gy0dy),
+    interp(idx, interpolator_var::d2Gy0dz),
+    interp(idx, interpolator_var::Gz0),
+    interp(idx, interpolator_var::dGz0dx),
+    interp(idx, interpolator_var::dGz0dy),
+    interp(idx, interpolator_var::dGz0dz),
+    interp(idx, interpolator_var::d2Gz0dx),
+    interp(idx, interpolator_var::d2Gz0dy),
+    interp(idx, interpolator_var::d2Gz0dz),
+  #endif
+#endif
+  };
+}
+
+KOKKOS_INLINE_FUNCTION
+void 
+interpolate_e( const interpolator_t& f,
+               const float p_dx, const float p_dy, const float p_dz,
+               float& ex, float& ey, float& ez,
+               const float qdt_2mc, const float dt_2c ) {
+#ifdef SHAPE_NGP
+  #ifdef EXTERNAL_FORCE
+    ex = qdt_2mc * (f.ex + f.Ex0) + dt_2c * f.Gx0;
+    ey = qdt_2mc * (f.ey + f.Ey0) + dt_2c * f.Gy0;
+    ez = qdt_2mc * (f.ez + f.Ez0) + dt_2c * f.Gz0;
+  #else
+    ex = qdt_2mc * f.ex;
+    ey = qdt_2mc * f.ey;
+    ez = qdt_2mc * f.ez;
+  #endif
+#elif defined( SHAPE_QS )
+  #ifdef EXTERNAL_FORCE
+    ex = qdt_2mc*( f.ex + p_dx*( f.dexdx  + p_dx*f.d2exdx )
+                        + p_dy*( f.dexdy  + p_dy*f.d2exdy )
+                        + p_dz*( f.dexdz  + p_dz*f.d2exdz )
+                + f.Ex0 + p_dx*( f.dEx0dx + p_dx*f.d2Ex0dx )
+                        + p_dy*( f.dEx0dy + p_dy*f.d2Ex0dy )
+                        + p_dz*( f.dEx0dz + p_dz*f.d2Ex0dz ) );
+    ey = qdt_2mc*( f.ey + p_dx*( f.deydx  + p_dx*f.d2eydx )
+                        + p_dy*( f.deydy  + p_dy*f.d2eydy )
+                        + p_dz*( f.deydz  + p_dz*f.d2eydz )
+                + f.Ey0 + p_dx*( f.dEy0dx + p_dx*f.d2Ey0dx )
+                        + p_dy*( f.dEy0dy + p_dy*f.d2Ey0dy )
+                        + p_dz*( f.dEy0dz + p_dz*f.d2Ey0dz ) );
+    ez = qdt_2mc*( f.ez + p_dx*( f.dezdx  + p_dx*f.d2ezdx )
+                        + p_dy*( f.dezdy  + p_dy*f.d2ezdy )
+                        + p_dz*( f.dezdz  + p_dz*f.d2ezdz )
+                + f.Ez0 + p_dx*( f.dEz0dx + p_dx*f.d2Ez0dx )
+                        + p_dy*( f.dEz0dy + p_dy*f.d2Ez0dy )
+                        + p_dz*( f.dEz0dz + p_dz*f.d2Ez0dz ) );
+    ex += dt_2c *( f.Gx0 + p_dx*( f.dGx0dx + p_dx*f.d2Gx0dx )
+                         + p_dy*( f.dGx0dy + p_dy*f.d2Gx0dy )
+                         + p_dz*( f.dGx0dz + p_dz*f.d2Gx0dz ) );
+    ey += dt_2c *( f.Gy0 + p_dx*( f.dGy0dx + p_dx*f.d2Gy0dx )
+                         + p_dy*( f.dGy0dy + p_dy*f.d2Gy0dy )
+                         + p_dz*( f.dGy0dz + p_dz*f.d2Gy0dz ) );
+    ez += dt_2c *( f.Gz0 + p_dx*( f.dGz0dx + p_dx*f.d2Gz0dx )
+                         + p_dy*( f.dGz0dy + p_dy*f.d2Gz0dy )
+                         + p_dz*( f.dGz0dz + p_dz*f.d2Gz0dz ) );
+  #else
+    ex = qdt_2mc*( f.ex + p_dx*( f.dexdx + p_dx*f.d2exdx )
+                        + p_dy*( f.dexdy + p_dy*f.d2exdy )
+                        + p_dz*( f.dexdz + p_dz*f.d2exdz ) );
+    ey = qdt_2mc*( f.ey + p_dx*( f.deydx + p_dx*f.d2eydx )
+                        + p_dy*( f.deydy + p_dy*f.d2eydy )
+                        + p_dz*( f.deydz + p_dz*f.d2eydz ) );
+    ez = qdt_2mc*( f.ez + p_dx*( f.dezdx + p_dx*f.d2ezdx )
+                        + p_dy*( f.dezdy + p_dy*f.d2ezdy )
+                        + p_dz*( f.dezdz + p_dz*f.d2ezdz ) );
+  #endif
+#endif
+}
+
+KOKKOS_INLINE_FUNCTION
+void 
+interpolate_b( const interpolator_t& f,  
+               const float p_dx, const float p_dy, const float p_dz,
+               float& bx, float& by, float& bz ) {
+#ifdef SHAPE_NGP
+  bx = f.cbx;
+  by = f.cby;
+  bz = f.cbz;
+#elif defined( SHAPE_QS )
+  bx = f.cbx + p_dx*( f.dcbxdx + p_dx*f.d2cbxdx )
+             + p_dy*( f.dcbxdy + p_dy*f.d2cbxdy )
+             + p_dz*( f.dcbxdz + p_dz*f.d2cbxdz );
+  by = f.cby + p_dx*( f.dcbydx + p_dx*f.d2cbydx )
+             + p_dy*( f.dcbydy + p_dy*f.d2cbydy )
+             + p_dz*( f.dcbydz + p_dz*f.d2cbydz );
+  bz = f.cbz + p_dx*( f.dcbzdx + p_dx*f.d2cbzdx )
+             + p_dy*( f.dcbzdy + p_dy*f.d2cbzdy )
+             + p_dz*( f.dcbzdz + p_dz*f.d2cbzdz );
+#endif
+}
+
 /*****************************************************************************/
 
 // Accumulator arrays shall be a
@@ -105,23 +330,23 @@ typedef struct accumulator_array {
 
   k_accumulators_t k_a_d;
   k_accumulators_t::HostMirror k_a_h;
-  k_accumulators_sa_t k_a_sa;
+  k_accumulators_sv_t k_a_sv;
   //k_accumulators_sah_t k_a_sah;
   k_accumulators_t k_a_d_copy;
 
   accumulator_array(int _na)
   {
-      init_kokoks_accum(_na);
+    init_kokoks_accum(_na);
   }
 
   void init_kokoks_accum(int _na)
   {
-      na = _na;
+    na = _na;
 
-      k_a_d = k_accumulators_t("k_accumulators", _na);
-      k_a_d_copy = k_accumulators_t("k_accumulators_copy", _na);
-      k_a_sa = Kokkos::Experimental::create_scatter_view(k_a_d);
-      k_a_h  = Kokkos::create_mirror_view(k_a_d);
+    k_a_d = k_accumulators_t("k_accumulators", _na);
+    k_a_d_copy = k_accumulators_t("k_accumulators_copy", _na);
+    k_a_sv = Kokkos::Experimental::create_scatter_view(k_a_d);
+    k_a_h  = Kokkos::create_mirror_view(k_a_d);
   }
 
   /**
@@ -199,28 +424,30 @@ combine_accumulators( accumulator_array_t * RESTRICT aa );
 // hydro_var::var), with var being any member of a hydro_t.
 
 typedef struct hydro {
-  float jx, jy, jz, rho; // Current and charge density => <q v_i f>, <q f>
-  float px, py, pz, rho_m; // Momentum and mass density (changed from ke_density)
-  float txx, tyy, tzz;   // Stress diagonal            => <p_i v_j f>, i==j
-  float tyz, tzx, txy;   // Stress off-diagonal        => <p_i v_j f>, i!=j
+  double jx, jy, jz, rho; // Current and charge density => <q v_i f>, <q f>
+  double px, py, pz, rho_m; // Momentum and mass density (changed from ke_density)
+  double txx, tyy, tzz;   // Stress diagonal            => <p_i v_j f>, i==j
+  double tyz, tzx, txy;   // Stress off-diagonal        => <p_i v_j f>, i!=j
 #if VARIABLE_CHARGE
-  float qmin, qmax;      // Minimum and maximum charge within a cell
-  float n_q0, n_q1, n_q2, n_q3, n_q4, n_q5;
-  float _pad[2];
+  double qmin, qmax;      // Minimum and maximum charge within a cell
+  double n_q0, n_q1, n_q2, n_q3, n_q4, n_q5;
+  double _pad[2];
 #else
-  float _pad[2];         // 16-byte align
+  double _pad[2];         // 16-byte align
 #endif
 } hydro_t;
 
 typedef struct hydro_array {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   hydro_t * ALIGNED(128) h;
-  k_hydro_d_t k_h_d;
-  k_hydro_d_t::HostMirror k_h_h;
+#endif
+  k_hydro_t k_h_d;
+  k_hydro_t::HostMirror k_h_h;
   grid_t * g;
   
   hydro_array(int nv)
   {
-    k_h_d = k_hydro_d_t("k_hydro", nv);
+    k_h_d = k_hydro_t("k_hydro", nv);
     k_h_h = Kokkos::create_mirror_view(k_h_d);
   }
 
@@ -228,7 +455,11 @@ typedef struct hydro_array {
     * @brief Copies the hydro data to host legacy array
     */
   void copy_to_host(FILE *fp=nullptr,  const int step = 0);
-  // I don't think we need a copy_to_device, but I could write one easily.
+
+  /**
+    * @brief Copies the hydro data to device from the host legacy array 
+    */
+  void copy_to_device(FILE *fp=nullptr,  const int step = 0);
 
 } hydro_array_t;
 

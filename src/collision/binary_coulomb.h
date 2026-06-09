@@ -23,7 +23,7 @@ struct binary_coulomb_model : public collision_model<binary_coulomb_model<Functo
   const double cvar0;
   const bool var_wt;
   Functor sigma_cx;
-  binary_coulomb_model( Functor op, double cvar0, bool var_wt ) : sigma_cx(op), cvar0(cvar0), var_wt(var_wt) { };
+  binary_coulomb_model( Functor op, double cvar0, bool var_wt ) : cvar0(cvar0), var_wt(var_wt), sigma_cx(op) { };
 
 
   /**

@@ -242,7 +242,7 @@ begin_initialization {
   if ( ix==0 )
     set_domain_field_bc( BOUNDARY(-1,0,0), pec_fields );
   if ( ix==topology_x-1 )
-   set_domain_field_bc( BOUNDARY( 1,0,0), pec_fields );
+   set_domain_field_bc( BOUNDARY( 1,0,0), symmetric_fields );
 
   // ***** Set Particle Boundary Conditions *****
   if ( ix==0 )    set_domain_particle_bc( BOUNDARY(-1,0,0), reflect_particles );
@@ -255,8 +255,8 @@ begin_initialization {
   define_material( "vacuum", 1 );
 
   //  material_t * layer = define_material("layer",   1.0,10.0,1.0,
-  //				                  1.0,1.0, 1.0,
-  //				                  0.0,0.0, 0.0);
+  //                                                  1.0,1.0, 1.0,
+  //                                                  0.0,0.0, 0.0);
   
   //////////////////////////////////////////////////////////////////////////////                                                                                                                                                                                                       // Finalize Field Advance
   define_field_array(NULL); // second argument is damp, default to 0
@@ -350,7 +350,7 @@ sim_log( "Loading fields" );
 // Note: everywhere is a region that encompasses the entire simulation                                                                                                                   
 // In general, regions are specied as logical equations (i.e. x>0 && x+y<2) 
   set_region_field( everywhere, 0, -Vd*b0*sn, 0,
-		    b0*cs, 0, b0*sn ); // Magnetic field
+                    b0*cs, 0, b0*sn ); // Magnetic field
 
   set_region_te( everywhere, Te );
 
@@ -542,7 +542,7 @@ sim_log( "Loading fields" );
    * Convenience functions for simlog output
    *------------------------------------------------------------------------*/
 
-  char varlist[512];
+  char varlist[1024]; // accommodate "allvars" for fields
   create_field_list(varlist, global->fdParams);
 
   sim_log ( "Fields variable list: " << varlist );
@@ -737,15 +737,15 @@ begin_diagnostics {
       if(!global->rtoggle) {
         global->rtoggle = 1;
         //      BEGIN_TURNSTILE(NUM_TURNSTILES) {
-	checkpt("restore1/restore", 0);
-	DUMP_INJECTORS(1);
-	//    } END_TURNSTILE;
+        checkpt("restore1/restore", 0);
+        DUMP_INJECTORS(1);
+        //    } END_TURNSTILE;
       } else {
         global->rtoggle = 0;
         //      BEGIN_TURNSTILE(NUM_TURNSTILES) {
-	checkpt("restore0/restore", 0);
-	DUMP_INJECTORS(0);
-	//    } END_TURNSTILE;
+        checkpt("restore0/restore", 0);
+        DUMP_INJECTORS(0);
+        //    } END_TURNSTILE;
       } // if
 
       //    mp_barrier();
@@ -837,30 +837,30 @@ begin_particle_injection {
       // Intialize injectors
 
       if (global->right) {
-	if (rank() == 0) MESSAGE(("----------------Initializing the Right Particle Injectors-----------------")); 
-	DEFINE_INJECTOR(right,ny,nz);
-	if (step() == 0) { 
-	  for ( int n=1; n<=nsp; n++ ) { 
-	    for ( int k=1;k<=nz; k++ ) {
-	      for ( int j=1;j<=ny; j++ ) { 
-		bright(n,k,j) = 0;
-		nright(n,k,j) = global->npright[n]/nfac;
-		uright(1,n,k,j) = -global->ur;
-		uright(2,n,k,j) = 0;
-		uright(3,n,k,j) = 0;
-		pright(1,2,n,k,j)=pright(2,1,n,k,j)=pright(1,3,n,k,j)=pright(3,1,n,k,j)=pright(2,3,n,k,j)=pright(3,2,n,k,j)=0;
-		pright(1,1,n,k,j) = global->npright[n]*vth(n)*vth(n)/(2.0*nfac);
-		pright(2,2,n,k,j) = pright(1,1,n,k,j);
-		pright(3,3,n,k,j) = pright(1,1,n,k,j);
-	      }      
-	    }
-	  }  // end for	
-	} // endif
-	else {
+        if (rank() == 0) MESSAGE(("----------------Initializing the Right Particle Injectors-----------------")); 
+        DEFINE_INJECTOR(right,ny,nz);
+        if (step() == 0) { 
+          for ( int n=1; n<=nsp; n++ ) { 
+            for ( int k=1;k<=nz; k++ ) {
+              for ( int j=1;j<=ny; j++ ) { 
+                bright(n,k,j) = 0;
+                nright(n,k,j) = global->npright[n]/nfac;
+                uright(1,n,k,j) = -global->ur;
+                uright(2,n,k,j) = 0;
+                uright(3,n,k,j) = 0;
+                pright(1,2,n,k,j)=pright(2,1,n,k,j)=pright(1,3,n,k,j)=pright(3,1,n,k,j)=pright(2,3,n,k,j)=pright(3,2,n,k,j)=0;
+                pright(1,1,n,k,j) = global->npright[n]*vth(n)*vth(n)/(2.0*nfac);
+                pright(2,2,n,k,j) = pright(1,1,n,k,j);
+                pright(3,3,n,k,j) = pright(1,1,n,k,j);
+              }      
+            }
+          }  // end for
+        } // endif
+        else {
 
-      if (rank() == 0) MESSAGE(("----------------Reading the Particle Injectors-----------------")); 
-      READ_INJECTOR(right, ny, nz, 0);
-	}
+          if (rank() == 0) MESSAGE(("----------------Reading the Particle Injectors-----------------")); 
+          READ_INJECTOR(right, ny, nz, 0);
+        }
       } //end right boundary
 
       if (rank() == 0) MESSAGE(("-------------------------------------------------------------------"));
@@ -869,32 +869,32 @@ begin_particle_injection {
 
         if (global->right) {
       for ( int n=1; n<=nsp; n++ ) { 
-	species_t * species = find_species_id(n-1,species_list );  
-	for ( int k=1;k<=nz; k++ ) {
-	  for ( int j=1;j<=ny; j++ ) {
-	    vtherm = sqrt(2.0*pright(1,1,n,k,j)/nright(n,k,j));
-	    vd =  (global->ur)/vtherm;
-	    bright(n,k,j) = bright(n,k,j)+ dt*nright(n,k,j)*vtherm*(exp(-vd*vd)/sqpi+vd*(erf(vd)+1))/(2*hx);
-	    inject = (int) bright(n,k,j);
-	    bright(n,k,j) = bright(n,k,j) - (double) inject;
-	    double uflow[3] = {uright(1,n,k,j),uright(2,n,k,j),uright(3,n,k,j)};
-	    double press[9] = {pright(1,1,n,k,j),pright(1,2,n,k,j),pright(1,3,n,k,j),pright(2,1,n,k,j),pright(2,2,n,k,j),pright(2,3,n,k,j),pright(3,1,n,k,j),pright(3,2,n,k,j),pright(3,3,n,k,j)};	     
-
-	    //MESSAGE((" Injecting right  --> n= %i    inject=%i   nright=%e    vth=%e  vd=%e",n,inject,nright(n,k,j),vtherm,vd)); 
-	      // MESSAGE((" Injecting right  --> n= %i    inject=%i",n,inject)); 
-	    repeat(inject) {
-	      //MESSAGE((" Injecting right  --> n= %i    uvx=%e",inject,uv[0])); 
-
-	      compute_injection(uv,nright(n,k,j),uflow,press,-1,2,3,rng(0));
-	      x = grid->x1; 
-	      y = grid->y0 + hy*(j-1) + hy*uniform(rng(0), 0, 1); 
-	      z = grid->z0 + hz*(k-1) + hz*uniform(rng(0), 0, 1); 	    
-	      age = 0;
-	      //	      inject_particle(species, x, y, z, uv[0], uv[1], uv[2], abs(q(n)) , age, 0 );
-	      inject_particle_r(species, x, y, z, uv[0], uv[1], uv[2], abs(q(n)) , age, 0 );
-	    }
-	  }
-	}
+        species_t * species = find_species_id(n-1,species_list );  
+        for ( int k=1;k<=nz; k++ ) {
+          for ( int j=1;j<=ny; j++ ) {
+            vtherm = sqrt(2.0*pright(1,1,n,k,j)/nright(n,k,j));
+            vd =  (global->ur)/vtherm;
+            bright(n,k,j) = bright(n,k,j)+ dt*nright(n,k,j)*vtherm*(exp(-vd*vd)/sqpi+vd*(erf(vd)+1))/(2*hx);
+            inject = (int) bright(n,k,j);
+            bright(n,k,j) = bright(n,k,j) - (double) inject;
+            double uflow[3] = {uright(1,n,k,j),uright(2,n,k,j),uright(3,n,k,j)};
+            double press[9] = {pright(1,1,n,k,j),pright(1,2,n,k,j),pright(1,3,n,k,j),pright(2,1,n,k,j),pright(2,2,n,k,j),pright(2,3,n,k,j),pright(3,1,n,k,j),pright(3,2,n,k,j),pright(3,3,n,k,j)};     
+        
+            //MESSAGE((" Injecting right  --> n= %i    inject=%i   nright=%e    vth=%e  vd=%e",n,inject,nright(n,k,j),vtherm,vd)); 
+              // MESSAGE((" Injecting right  --> n= %i    inject=%i",n,inject)); 
+            repeat(inject) {
+              //MESSAGE((" Injecting right  --> n= %i    uvx=%e",inject,uv[0])); 
+        
+              compute_injection(uv,nright(n,k,j),uflow,press,-1,2,3,rng(0));
+              x = grid->x1; 
+              y = grid->y0 + hy*(j-1) + hy*uniform(rng(0), 0, 1); 
+              z = grid->z0 + hz*(k-1) + hz*uniform(rng(0), 0, 1);      
+              age = 0;
+              //       inject_particle(species, x, y, z, uv[0], uv[1], uv[2], abs(q(n)) , age, 0 );
+              inject_particle_r(species, x, y, z, uv[0], uv[1], uv[2], abs(q(n)) , age, 0 );
+            }
+          }
+        }
       }
     } // end right injector
 
@@ -911,23 +911,20 @@ begin_field_injection {
   const int nz=grid->nz;
   int x,y,z;
   double b0 = global->b0;
-  double sn = global->sn;
+  double sn = global->sn, cs = sqrt(1-sn*sn);
   double Vflow = global->ur, r=0.005;
 
   k_field_t& k_field = field_array->k_f_d;
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>> right_edge({1, 1}, {nz+1, ny+1});
-if(global->right){
-  Kokkos::parallel_for("Field injection", right_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
-      //k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbx) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbx) + r*b0*sqrt(1-sn*sn); // To-do: Don't think we should set interior cell? Also, precompute sqrt above.
-      //k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbx) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbx) + r*b0*sqrt(1-sn*sn);
-      //k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cby) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cby);
-      k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cby) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cby);
-      //k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbz) = (1.0-r)*k_field(VOXEL(nx-1,iy,iz,nx,ny,nz), field_var::cbz) + r*b0*sn;
-      k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbz) = (1.0-r)*k_field(VOXEL(nx,iy,iz,nx,ny,nz), field_var::cbz) + r*b0*sn;
-    });
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> right_edge({0, 0, nx}, {nz+2, ny+2, nx+2});
+#define F(i_,j_,k_,var) (k_field(VOXEL(i_,j_,k_,nx,ny,nz), field_var::var))
+  if(global->right){
+    Kokkos::parallel_for("Field injection", right_edge, KOKKOS_LAMBDA(const int iz, const int iy, const int ix) {
+        F(ix,iy,iz,cby) = (1.0-r)*F(ix,iy,iz,cby);
+        F(ix,iy,iz,cbz) = (1.0-r)*F(ix,iy,iz,cbz) + r*b0*sn;
+      });
   }
+#undef F
 }
-    
 
 //*******************  COLLISIONS ***************************
 begin_particle_collisions {

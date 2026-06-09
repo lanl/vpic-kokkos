@@ -31,7 +31,6 @@ typedef struct pipeline_args {
   float  uz = invrho*half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + \
                             hstep*( three*F(0,jfz) - F(0,jfzold)) );
 
-
 #define E(x_,y_,z_) \
   F(0,e##x_) =      \
     invrho * (F(0,cb##z_) + F(0,cb##z_##0)) * ( p##z_*( F(z_,cb##x_) - F(m##z_,cb##x_) ) - p##x_*( F(x_,cb##z_) - F(m##x_,cb##z_)) ) \

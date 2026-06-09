@@ -30,6 +30,13 @@
 #include "dumpmacros.h"
 #include "../particle_operations/sort.h"
 
+#ifdef VPIC_ENABLE_HDF5
+#include "hdf5.h"
+#endif
+#ifdef VPIC_ENABLE_HDF5_ASYNC
+#include "h5_async_vol.h"
+#endif
+
 #ifndef USER_GLOBAL_SIZE
 #define USER_GLOBAL_SIZE 16384
 #endif
@@ -46,55 +53,72 @@ class HDF5Dump;
 
 /* typedef FileIO FILETYPE; */
 
-const uint32_t allvars		(0xffffffff);
-const uint32_t electric		(1<<0 | 1<<1 | 1<<2);
-const uint32_t div_e_err	(1<<3);
-const uint32_t magnetic		(1<<4 | 1<<5 | 1<<6);
-const uint32_t pe  		(1<<7);
-const uint32_t tca			(1<<8 | 1<<9 | 1<<10);
-const uint32_t rhob			(1<<11);
-const uint32_t current		(1<<12 | 1<<13 | 1<<14);
-const uint32_t rhof			(1<<15);
-const uint32_t currentold	(1<<16 | 1<<17 | 1<<18);
-const uint32_t rhofold		(1<<19);
-const uint32_t magnetic0	(1<<20 | 1<<21 | 1<<22);
-const uint32_t te0		(1<<23);
-const uint32_t tempt		(1<<24 | 1<<25 | 1<<26);
-const uint32_t te			(1<<27);
-const uint32_t tempo		(1<<28 | 1<<29 | 1<<30);
-const uint32_t oe			(1<<31);
-//const uint32_t tempp		(1<<32 | 1<<33 | 1<<34);
-//const uint32_t pe			(1<<35);
-//const uint32_t emat			(1<<36 | 1<<37 | 1<<38);
-//const uint32_t nmat			(1<<39);
-//const uint32_t fmat			(1<<40 | 1<<41 | 1<<42);
-//const uint32_t cmat			(1<<43);
+const uint64_t allvars      UINT64_MAX; //(0xffffffffffffffff);
+const uint64_t electric     (1ULL<<0 | 1ULL<<1 | 1ULL<<2);
+const uint64_t div_e_err    (1ULL<<3);
+const uint64_t magnetic     (1ULL<<4 | 1ULL<<5 | 1ULL<<6);
+const uint64_t pe           (1ULL<<7);
+const uint64_t magnetic0    (1ULL<<8 | 1ULL<<9 | 1ULL<<10);
+const uint64_t te0          (1ULL<<11);
+const uint64_t tca          (1ULL<<12 | 1ULL<<13 | 1ULL<<14);
+const uint64_t rhob         (1ULL<<15);
+const uint64_t current      (1ULL<<16 | 1ULL<<17 | 1ULL<<18);
+const uint64_t rhof         (1ULL<<19);
+const uint64_t currentold   (1ULL<<20 | 1ULL<<21 | 1ULL<<22);
+const uint64_t rhofold      (1ULL<<23);
+const uint64_t tempt        (1ULL<<24 | 1ULL<<25 | 1ULL<<26);
+const uint64_t te           (1ULL<<27);
+const uint64_t tempo        (1ULL<<28 | 1ULL<<29 | 1ULL<<30);
+const uint64_t oe           (1ULL<<31);
+const uint64_t tempp        (1ULL<<32 | 1ULL<<33 | 1ULL<<34);
+const uint64_t div_b_err    (1ULL<<35);
+const uint64_t uxyz         (1ULL<<36 | 1ULL<<37 | 1ULL<<38);
+const uint64_t ue           (1ULL<<39);
+const uint64_t sxyz         (1ULL<<40 | 1ULL<<41 | 1ULL<<42);
+const uint64_t se           (1ULL<<43);
+const uint64_t electric0    (1ULL<<44 | 1ULL<<45 | 1ULL<<46);
+//const uint64_t pad1       (1ULL<<47);
+const uint64_t gravity0     (1ULL<<48 | 1ULL<<49 | 1ULL<<50);
+//const uint64_t pad2       (1ULL<<51);
+//const uint64_t emat       (1ULL<<52 | 1ULL<<53 | 1ULL<<54);
+//const uint64_t nmat       (1ULL<<55);
+//const uint64_t fmat       (1ULL<<56 | 1ULL<<57 | 1ULL<<58);
+//const uint64_t cmat       (1ULL<<59);
+// 1ULL = unsigned long long ensures 64bits for bitshift operators
 
-const size_t total_field_variables(32);
-const size_t total_field_groups(16); // this counts vectors, tensors etc...
+#ifdef EXTERNAL_FORCE
+const size_t total_field_variables(60);
+const size_t total_field_groups(30); // this counts vectors, tensors etc...
 // These bits will be tested to determine which variables to output
-const size_t field_indeces[22] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31 };
+const size_t field_indeces[30] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31,
+                                   32, 35, 36, 39, 40, 43, 44, 47, 48, 51, 52, 55, 56, 59 };
+#else
+const size_t total_field_variables(52);
+const size_t total_field_groups(26); // this counts vectors, tensors etc...
+// These bits will be tested to determine which variables to output
+const size_t field_indeces[26] = { 0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 24, 27, 28, 31,
+                                   32, 35, 36, 39, 40, 43, 44, 47, 48, 51 };
+#endif
 
 struct FieldInfo {
-	char name[128];
-	char degree[128];
-	char elements[128];
-	char type[128];
-	size_t size;
+  char name[128];
+  char degree[128];
+  char elements[128];
+  char type[128];
+  size_t size;
 }; // struct FieldInfo
 
-const uint32_t current_density	(1<<0 | 1<<1 | 1<<2);
-const uint32_t charge_density	(1<<3);
-const uint32_t momentum_density	(1<<4 | 1<<5 | 1<<6);
-const uint32_t mass_density		(1<<7);
-const uint32_t stress_tensor	(1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13);
+const uint64_t current_density  (1ULL<<0 | 1ULL<<1 | 1ULL<<2);
+const uint64_t charge_density   (1ULL<<3);
+const uint64_t momentum_density (1ULL<<4 | 1ULL<<5 | 1ULL<<6);
+const uint64_t mass_density     (1ULL<<7);
+const uint64_t stress_tensor    (1ULL<<8 | 1ULL<<9 | 1ULL<<10 | 1ULL<<11 | 1ULL<<12 | 1ULL<<13);
 #ifdef VARIABLE_CHARGE
-const uint32_t charge_diags     (1<<14 | 1<<15);
-const uint32_t charge_state_densities (1<<16 | 1<<17 | 1<<18 | 1<<19 | 1<<20 | 1<<21 );
+const uint64_t charge_diags     (1ULL<<14 | 1ULL<<15);
 #endif
 /* May want to use these instead
-const uint32_t stress_diagonal 		(1<<8 | 1<<9 | 1<<10);
-const uint32_t stress_offdiagonal	(1<<11 | 1<<12 | 1<<13);
+const uint64_t stress_diagonal      (1ULL<<8 | 1ULL<<9 | 1ULL<<10);
+const uint64_t stress_offdiagonal   (1ULL<<11 | 1ULL<<12 | 1ULL<<13);
 */
 
 #ifdef VARIABLE_CHARGE
@@ -109,12 +133,25 @@ const uint32_t stress_offdiagonal	(1<<11 | 1<<12 | 1<<13);
   const size_t hydro_indeces[5] = { 0, 3, 4, 7, 8 };
 #endif
 
+enum DumpVar {
+  GlobalPos       = (1<<0 | 1<<1 | 1<<2),
+  Efield          = (1<<3 | 1<<4 | 1<<5),
+  Bfield          = (1<<6 | 1<<7 | 1<<8),
+  ParticleKE      = (1<<9),
+  CurrentDensity  = (1<<10 | 1<<11 | 1<<12),
+  ChargeDensity   = (1<<13),
+  MomentumDensity = (1<<14 | 1<<15 | 1<<16),
+  MassDensity     = (1<<17),
+  StressTensor    = (1<<18 | 1<<19 | 1<<20 | 1<<21 | 1<<22 | 1<<23),
+  All             = 0xFFFFFFFF
+};
+
 struct HydroInfo {
-	char name[128];
-	char degree[128];
-	char elements[128];
-	char type[128];
-	size_t size;
+  char name[128];
+  char degree[128];
+  char elements[128];
+  char type[128];
+  size_t size;
 }; // struct FieldInfo
 
 // To-do: Add in groups for fluid variables
@@ -143,7 +180,7 @@ enum DumpFormat {
 ----------------------------------------------------------------------------*/
 struct DumpParameters {
 
-  void output_variables(uint32_t mask) {
+  void output_variables(uint64_t mask) {
     output_vars.set(mask);
   } // output_variables
 
@@ -154,7 +191,7 @@ struct DumpParameters {
 
     format = band;
 
-    output_vars.set((0xffffffff));
+    output_vars.set(UINT64_MAX);  // same as 0xffffffffffffffff
 
     //    strcpy(baseDir, dumptype);
     //    strcpy(baseFileName, dumptype);
@@ -290,6 +327,8 @@ public:
   species_t            * species_list;       // define_species /
                                              // species helpers
   fluid_species_t      * fluid_species_list; // fluid species
+  species_t            * tracers_list;       // define_tracers /
+                                             // species helpers
   particle_bc_t        * particle_bc_list;   // define_particle_bc /
                                              // boundary helpers
   emitter_t            * emitter_list;       // define_emitter /
@@ -334,6 +373,17 @@ public:
   void dump_materials( const char *fname );
   void dump_species( const char *fname );
   void dump_fluid_species( const char *fname );
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  void dump_tracers_buffered_csv( const char *sp_name, uint32_t dump_vars, 
+                                  const char *fbase, int fname_tag = 1 );
+  void dump_tracers_csv( const char *sp_name, uint32_t dump_vars, 
+                         const char *fbase, int fname_tag = 1 );
+  void dump_particles_csv( const char *sp_name,
+                           uint32_t dump_vars,
+                           const char *fbase,
+                           const int append=1,
+                           int ftag=1 );
+#endif
 
   // Binary dumps
   void dump_grid( const char *fbase );
@@ -343,7 +393,21 @@ public:
   void dump_particles( const char *sp_name, const char *fbase,
                        int fname_tag = 1 );
   void dump_fluids( const char *fsp_name, const char *fbase,
-		    int fname_tag = 1 );
+                    int fname_tag = 1 );
+
+  // HDF5 dumps
+#if defined( VPIC_ENABLE_HDF5 ) && defined( VPIC_ENABLE_TRACER_PARTICLES )
+  void dump_tracers(const char* sp_name, const uint32_t dump_vars, const char* fbase,
+                    const bool buffer_enabled=true, const bool async_enabled=false);
+  void dump_tracers_hdf5(const char* sp_name, const uint32_t dump_vars, const char*fbase);
+  void dump_tracers_buffered_hdf5( const char *sp_name, uint32_t dump_vars, 
+                                   const char *fbase);
+  void tracer_dump(const char* species_name, DumpParameters& dumpParams);
+#ifdef VPIC_ENABLE_HDF5_ASYNC
+  void dump_tracers_hdf5_async(const char* sp_name, const uint32_t dump_vars, const char*fbase);
+  void dump_tracers_buffered_hdf5_async( const char *sp_name, uint32_t dump_vars, const char *fbase );
+#endif
+#endif
 
   // convenience functions for simlog output
   void create_field_list(char * strlist, DumpParameters & dumpParams);
@@ -352,7 +416,7 @@ public:
 
   void print_hashed_comment(FileIO & fileIO, const char * comment);
   void global_header(const char * base,
-  	std::vector<DumpParameters *> dumpParams);
+                     std::vector<DumpParameters *> dumpParams);
 
   void field_header(const char * fbase, DumpParameters & dumpParams);
   void hydro_header(const char * speciesname, const char * hbase,
@@ -384,11 +448,6 @@ public:
    return grid->step;
   }
 
-  inline field_t &
-  field( const int v ) {
-    return field_array->f[ v ];
-  }
-
   inline int
   voxel( const int ix, const int iy, const int iz ) {
     return ix + grid->sy*iy + grid->sz*iz;
@@ -399,10 +458,17 @@ public:
     return ix + sy*iy +sz*iz;
   }
 
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+  inline field_t &
+  field( const int v ) {
+    return field_array->f[ v ];
+  }
+
   inline field_t &
   field( const int ix, const int iy, const int iz ) {
     return field_array->f[ voxel(ix,iy,iz) ];
   }
+//#endif
 
   inline k_field_t& get_field() {
       return field_array->k_f_d;
@@ -412,6 +478,7 @@ public:
       return field_array->k_f_d(voxel(ix,iy,iz), member);
   }
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   inline interpolator_t &
   interpolator( const int v ) {
     return interpolator_array->i[ v ];
@@ -430,6 +497,31 @@ public:
   inline hydro_t &
   hydro( const int ix, const int iy, const int iz ) {
     return hydro_array->h[ voxel(ix,iy,iz) ];
+  }
+#endif
+
+  inline k_interpolator_t& interpolator_d() {
+    return interpolator_array->k_i_d;
+  }
+
+  inline k_interpolator_t::HostMirror& interpolator_h() {
+    return interpolator_array->k_i_h;
+  }
+
+  inline float& interpolator_h( const int v, const int var ) {
+    return interpolator_array->k_i_h(v, var);
+  }
+
+  inline k_hydro_t& hydro_d() {
+    return hydro_array->k_h_d;
+  }
+
+  inline k_hydro_t::HostMirror& hydro_h() {
+    return hydro_array->k_h_h;
+  }
+ 
+  inline double& hydro_h( const int vox, const int var ) {
+    return hydro_array->k_h_h(vox, var);
   }
 
   //  inline float& k_fluid(const int ix, const int iy, const int iz, fluid_var::fl_v member) {
@@ -547,7 +639,7 @@ public:
                    double epsx,        double epsy,       double epsz,
                    double mux,         double muy,        double muz,
                    double sigmax,      double sigmay,     double sigmaz,
-		   double zetax = 0 ,  double zetay = 0,  double zetaz = 0 ) {
+                   double zetax = 0 ,  double zetay = 0,  double zetaz = 0 ) {
     return append_material( material( name,
                                       epsx,   epsy,   epsz,
                                       mux,    muy,    muz,
@@ -584,18 +676,37 @@ public:
     field_array        = fa ? fa :
                          new_standard_field_array( grid, material_list, damp );
 
+//#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     for(int k=0; k<=grid->nz+1; k++){
       for(int j=0; j<=grid->ny+1; j++){
-	      field_t * f = &field(0,j,k);
-	for(int i=0; i<=grid->nx+1; i++){
-	  f->tcax = 1.0;
-	  f->tcay = 1.0;
-	  f->tcaz = 1.0;
-	  f++;
-	}
+        field_t * f = &field(0,j,k);
+        for(int i=0; i<=grid->nx+1; i++){
+          f->tcax = 1.0;
+          f->tcay = 1.0;
+          f->tcaz = 1.0;
+          f++;
+        }
       }
     }
-
+//#else
+//    auto& fields = fa->k_f_h;
+//    int nx = grid->nx, ny = grid->ny, nz = grid->nz;
+//    auto tcax_view = Kokkos::subview(fa->k_f_h, Kokkos::ALL, (int)field_var::tcax);
+//    auto tcay_view = Kokkos::subview(fa->k_f_h, Kokkos::ALL, (int)field_var::tcay);
+//    auto tcaz_view = Kokkos::subview(fa->k_f_h, Kokkos::ALL, (int)field_var::tcaz);
+//    Kokkos::deep_copy(tcax_view, 1.0);
+//    Kokkos::deep_copy(tcay_view, 1.0);
+//    Kokkos::deep_copy(tcaz_view, 1.0);
+////    using PolicyType = Kokkos::MDRangePolicy<Kokkos::DefaultHostExecutionSpace, Kokkos::Rank<3>>;
+////    PolicyType fill_policy({0,0,0}, {nx+2, ny+2, nz+2});
+////
+////    Kokkos::parallel_for("Init field tca", fill_policy, 
+////      KOKKOS_LAMBDA(const int i, const int j, const int k) {
+////      fields(voxel(i,j,k), field_var::tcax) = 1.0;
+////      fields(voxel(i,j,k), field_var::tcay) = 1.0;
+////      fields(voxel(i,j,k), field_var::tcaz) = 1.0;
+////    });
+//#endif
     interpolator_array = new_interpolator_array( grid );
     hydro_array        = new_hydro_array( grid );
 
@@ -647,6 +758,402 @@ public:
                                     grid ), &species_list );
   }
 
+#if defined( VPIC_ENABLE_PARTICLE_ANNOTATIONS ) || defined( VPIC_ENABLE_TRACER_PARTICLES )
+  /**
+   * @brief Create empty tracer species 
+   *
+   * It is up to the user to provide any additional annotations and create the 
+   * tracer particles. Automatically adds TracerID 64-bit integer annotation 
+   * for tracers.  
+   * Tracer data can be buffered before I/O operations. The size of the buffer
+   * is user controllable and defaults to storing 10x the maximum number of local
+   * particles.
+   * User can allocate additional memory for safety by supplting a multiplicative 
+   * factor for the maximum number of local particles. If not factor is supplied 
+   * then the code will default to allocating an additional 10% of the particles.
+   * Species is automatically added to the tracer list.
+   *
+   * @param name The name of the tracer species
+   * @param q Species particle charge
+   * @param m Species particle rest mass
+   * @param max_local_np Maximum number of particles for a single process
+   * @param max_local_nm Maximum number of movers for a single process
+   * @param sort_interval Number of time steps between particle sorting
+   * @param sort_out_of_place Whether or not to sort out of place 
+   * @param num_particles_buffer Number of particles to buffer before writing (Optional)
+   * @param over_alloc_fact Multiplicative factor for allocating additional memory (Optional)
+   * @param annotations Additional annotation variables (Optional)
+   *
+   * @return Pointer to tracer species
+   */
+  inline species_t * 
+  define_tracer_species(const char* name,
+                        const float q,
+                        const float m,
+                        const int max_local_np,
+                        const int max_local_nm,
+                        const int sort_interval,
+                        const int sort_out_of_place,
+                        const int num_particles_buffer = -1,
+                        const float over_alloc_factor = 1.1,
+                        annotation_vars_t annotations = annotation_vars_t()) {
+    const int max_local_np_alloc = static_cast<int>(max_local_np * over_alloc_factor);
+    int local_nm;
+    if( max_local_nm<0 ) {
+      local_nm = 2*max_local_np/25;
+      if( local_nm<16*(MAX_PIPELINE+1) )
+        local_nm = 16*(MAX_PIPELINE+1);
+    }
+    const int max_local_nm_alloc = static_cast<int>(max_local_nm * over_alloc_factor);
+
+    // Create tracer species based on the original species
+    species_t* tracers = species( name, q, m, 
+                                  max_local_np_alloc,
+                                  max_local_nm_alloc,
+                                  sort_interval, sort_out_of_place, 
+                                  grid);
+    // Mark species as tracer
+    tracers->is_tracer = true;
+
+    // Add annotations for global tracer ID
+    annotations.add_annotation<int>(std::string("TracerID"));
+    tracers->init_annotations(max_local_np_alloc, max_local_nm_alloc, annotations);
+
+    // Set tracer type to move by default
+    tracers->tracer_type = TracerType::Move;
+
+    // Initialize IO buffers
+    int buffer_size = num_particles_buffer;
+    if(num_particles_buffer == -1)
+      buffer_size = max_local_np * 10;
+    tracers->init_io_buffers(buffer_size, over_alloc_factor);
+
+    return append_species(tracers, &tracers_list); 
+  }
+
+  /**
+   * @brief Create empty tracer species based on existing species
+   *
+   * It is up to the user to provide any additional annotations and create the 
+   * tracer particles. Automatically adds TracerID 64-bit integer annotation 
+   * for tracers.  
+   * Tracer data can be buffered before I/O operations. The size of the buffer
+   * is user controllable and defaults to storing 10x the maximum number of local
+   * particles.
+   * User can allocate additional memory for safety by supplting a multiplicative 
+   * factor for the maximum number of local particles. If not factor is supplied 
+   * then the code will default to allocating an additional 10% of the particles.
+   * Species is automatically added to the tracer list.
+   *
+   * @param name The name of the tracer species
+   * @param original_species Parent species that the tracer is based on
+   * @param max_local_np Maximum number of particles for a single process
+   * @param max_local_nm Maximum number of movers for a single process
+   * @param num_particles_buffer Number of particles to buffer before writing (Optional)
+   * @param over_alloc_fact Multiplicative factor for allocating additional memory (Optional)
+   * @param annotations Additional annotation variables (Optional)
+   *
+   * @return Pointer to tracer species
+   */
+  inline species_t * 
+  define_tracer_species(const char* name,
+                        species_t* original_species, 
+                        const int max_local_np,
+                        const int max_local_nm,
+                        const int num_particles_buffer = -1,
+                        const float over_alloc_factor = 1.1,
+                        annotation_vars_t annotations = annotation_vars_t()) {
+    const int max_local_np_alloc = static_cast<int>(max_local_np * over_alloc_factor);
+    int local_nm = max_local_nm;
+    if( max_local_nm<0 ) {
+      local_nm = 2*max_local_np/25;
+      if( local_nm<16*(MAX_PIPELINE+1) )
+        local_nm = 16*(MAX_PIPELINE+1);
+    }
+    const int max_local_nm_alloc = static_cast<int>(local_nm * over_alloc_factor);
+    // Create tracer species based on the original species
+    species_t* tracers = species( name, 
+                                  original_species->q, original_species->m, 
+                                  max_local_np_alloc,
+                                  max_local_nm_alloc,
+                                  original_species->sort_interval, original_species->sort_out_of_place, 
+                                  grid);
+    // Mark species as tracer
+    tracers->is_tracer = true;
+
+    // Add annotations for global tracer ID
+    annotations.add_annotation<int>(std::string("TracerID"));
+    tracers->init_annotations(max_local_np_alloc, max_local_nm_alloc, annotations);
+
+    // Set tracer type to move by default
+    tracers->tracer_type = TracerType::Move;
+
+    // Initialize IO buffers
+    int buffer_size = num_particles_buffer;
+    if(num_particles_buffer == -1)
+      buffer_size = max_local_np * 10;
+    tracers->init_io_buffers(buffer_size, over_alloc_factor);
+
+    // Set parent species pointer
+    tracers->parent_species = original_species;
+
+    return append_species(tracers, &tracers_list); 
+  }
+
+  /**
+   * @brief Create tracer species and copy/move every Nth particle from the parent
+   *
+   * Copies/Moves every Nth particle from the parent to the tracer species.
+   * Automatically adds TracerID 64-bit integer annotation for tracers.  
+   * It is up to the user to provide any additional annotations. 
+   * Tracer data can be buffered before I/O operations. The size of the buffer
+   * is user controllable and defaults to storing 10x the maximum number of local
+   * particles.
+   * User can allocate additional memory for safety by supplting a multiplicative 
+   * factor for the maximum number of local particles. If not factor is supplied 
+   * then the code will default to allocating an additional 10% of the particles.
+   * Species is automatically added to the tracer list.
+   *
+   * @param name The name of the tracer species
+   * @param original_species Parent species that the tracer is based on
+   * @param tracer_type Decide whether to move or copy particles from parent
+   * @param skip Number of particles to skip between copying/moving tracers
+   * @param num_particles_buffer Number of particles to buffer before writing (Optional)
+   * @param over_alloc_fact Multiplicative factor for allocating additional memory (Optional)
+   * @param annotations Additional annotation variables (Optional)
+   *
+   * @return Pointer to tracer species
+   */
+  inline species_t * 
+  define_tracer_species_by_nth( const char* name, 
+                                species_t* original_species, 
+                                const TracerType tracer_type, 
+                                const float skip,
+                                const int num_particles_buffer = -1,
+                                const float over_alloc_factor = 1.1,
+                                annotation_vars_t annotations = annotation_vars_t()) {
+
+    // Adjust amount of local particles/movers for tracers
+    int max_local_np = (static_cast<int>(static_cast<float>(original_species->max_np) * over_alloc_factor) / skip) + 1;
+    int max_local_nm = (static_cast<int>(static_cast<float>(original_species->max_nm) * over_alloc_factor) / skip) + 1;
+    
+    // Create tracer species based on the original species
+    species_t* tracers = species( name, 
+                                  original_species->q, original_species->m, 
+                                  max_local_np, max_local_nm, 
+                                  original_species->sort_interval, original_species->sort_out_of_place, 
+                                  grid);
+    
+    // Mark species as tracer
+    tracers->is_tracer = true;
+
+    // Add annotations for globas tracer ID
+    annotations.add_annotation<int>(std::string("TracerID"));
+    if(tracer_type == TracerType::Copy)
+      annotations.add_annotation<float>(std::string("Weight"));
+
+    // Copy any annotations from the parent species
+    if(original_species->using_annotations) {
+      annotations.combine(original_species->annotation_vars);
+    }
+
+    int buffer_size = num_particles_buffer;
+    if(num_particles_buffer == -1)
+      buffer_size = max_local_np * 10;
+
+    tracers->init_annotations(max_local_np, max_local_nm, annotations);
+    tracers->init_io_buffers(buffer_size, over_alloc_factor);
+
+    // Set parent species pointer
+    tracers->parent_species = original_species;
+
+    // Set tracer type
+    tracers->tracer_type = tracer_type;
+
+    // Copy of move particles to tracers
+    tracers->create_tracers_by_nth(original_species, tracer_type, skip, rank());
+
+    return append_species(tracers, &tracers_list); 
+  }
+
+  /**
+   * @brief Create tracer species and copy/move N particles from the parent
+   *
+   * Creates N tracers by selecting N evenly spaced particles from the parent.
+   * Automatically adds TracerID 64-bit integer annotation for tracers.  
+   * It is up to the user to provide any additional annotations. 
+   * Tracer data can be buffered before I/O operations. The size of the buffer
+   * is user controllable and defaults to storing 10x the maximum number of local
+   * particles.
+   * User can allocate additional memory for safety by supplting a multiplicative 
+   * factor for the maximum number of local particles. If not factor is supplied 
+   * then the code will default to allocating an additional 10% of the particles.
+   * Species is automatically added to the tracer list.
+   *
+   * @param name The name of the tracer species
+   * @param original_species Parent species that the tracer is based on
+   * @param tracer_type Decide whether to move or copy particles from parent
+   * @param ntracers Number of particles to copy/move tracers
+   * @param num_particles_buffer Number of particles to buffer before writing (Optional)
+   * @param over_alloc_fact Multiplicative factor for allocating additional memory (Optional)
+   * @param annotations Additional annotation variables (Optional)
+   *
+   * @return Pointer to tracer species
+   */
+  inline species_t * 
+  define_tracer_species_with_n( const char* name, 
+                                species_t* original_species, 
+                                const TracerType tracer_type, 
+                                const float ntracers,
+                                const int num_particles_buffer = -1,
+                                const float over_alloc_factor = 1.1,
+                                annotation_vars_t annotations = annotation_vars_t()) {
+    // Verify # of tracer is acceptable
+    if(ntracers < 1.0 || static_cast<int>(ntracers) > original_species->np)
+      ERROR(( "%f is a bad number of tracers. Should be in [%d,%d]", ntracers, 1, original_species->np));
+    return define_tracer_species_by_nth(name, original_species, tracer_type, original_species->np / ntracers, num_particles_buffer, over_alloc_factor, annotations);
+  }
+
+  /**
+   * @brief Create tracer species and N percent of the particles from the parent
+   *
+   * Creates tracers by selecting N percent of the particles from the parent 
+   * and copying/moving them to the tracers.
+   * Automatically adds TracerID 64-bit integer annotation for tracers.  
+   * It is up to the user to provide any additional annotations. 
+   * Tracer data can be buffered before I/O operations. The size of the buffer
+   * is user controllable and defaults to storing 10x the maximum number of local
+   * particles.
+   * User can allocate additional memory for safety by supplting a multiplicative 
+   * factor for the maximum number of local particles. If not factor is supplied 
+   * then the code will default to allocating an additional 10% of the particles.
+   * Species is automatically added to the tracer list.
+   *
+   * @param name The name of the tracer species
+   * @param original_species Parent species that the tracer is based on
+   * @param tracer_type Decide whether to move or copy particles from parent
+   * @param skip Number of particles to skip between copying/moving tracers
+   * @param num_particles_buffer Number of particles to buffer before writing (Optional)
+   * @param over_alloc_fact Multiplicative factor for allocating additional memory (Optional)
+   * @param annotations Additional annotation variables (Optional)
+   *
+   * @return Pointer to tracer species
+   */
+  inline species_t * 
+  define_tracer_species_by_percentage(const char* name,
+                                      species_t* original_species, 
+                                      const TracerType tracer_type, 
+                                      const float percentage, 
+                                      const int num_particles_buffer = -1,
+                                      const float over_alloc_factor = 1.1,
+                                      annotation_vars_t annotations = annotation_vars_t()) {
+    // Check if input percentage is valid
+    if((percentage < 0.0) || (percentage > 100.0))
+      ERROR(( "Percentage (%f) is not in [0,100]", percentage));
+
+    float skip = original_species->np / (static_cast<float>(original_species->np) * (percentage/100.0));
+    return define_tracer_species_by_nth(name, original_species, tracer_type, skip, 
+                                        num_particles_buffer, over_alloc_factor, annotations);
+  }
+
+  /**
+   * @brief Create tracer species from the parent by selecting based on the provided predicate 
+   *
+   * Copy/Move tracers from the parent based on the supplied filter function.
+   * Automatically adds TracerID 64-bit integer annotation for tracers.  
+   * It is up to the user to provide any additional annotations. 
+   * Tracer data can be buffered before I/O operations. The size of the buffer
+   * is user controllable and defaults to storing 10x the maximum number of local
+   * particles.
+   * User can allocate additional memory for safety by supplting a multiplicative 
+   * factor for the maximum number of local particles. If not factor is supplied 
+   * then the code will default to allocating an additional 10% of the particles.
+   * Species is automatically added to the tracer list.
+   *
+   * @param name The name of the tracer species
+   * @param original_species Parent species that the tracer is based on
+   * @param tracer_type Decide whether to move or copy particles from parent
+   * @param filter Filter function for selecting which particles to take from the parent 
+   * @param num_particles_buffer Number of particles to buffer before writing (Optional)
+   * @param over_alloc_fact Multiplicative factor for allocating additional memory (Optional)
+   * @param annotations Additional annotation variables (Optional)
+   *
+   * @return Pointer to tracer species
+   */
+  inline species_t * 
+  define_tracer_species_by_predicate( const char* name, 
+                                      species_t* original_species, 
+                                      const TracerType tracer_type, 
+                                      std::function <bool (particle_t)> filter,
+                                      const int num_particles_buffer = -1,
+                                      const float over_alloc_factor = 1.1,
+                                      annotation_vars_t annotations = annotation_vars_t()) {
+
+    // Adjust amount of local particles/movers for tracers
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+    const size_t count_true = std::count_if(original_species->p, original_species->p + original_species->np, filter);
+#else
+    auto parent_particles = original_species->k_p_h;
+    auto parent_cells = original_species->k_p_i_h;
+    size_t count_true = 0;
+    Kokkos::parallel_reduce("Count if", Kokkos::RangePolicy<size_t, Kokkos::DefaultHostExecutionSpace>(0LLU, original_species->np), 
+    KOKKOS_LAMBDA(const size_t idx, size_t& update) {
+      particle_t p{parent_particles(idx, particle_var::dx),
+                   parent_particles(idx, particle_var::dy),
+                   parent_particles(idx, particle_var::dz),
+                   parent_cells(idx),
+                   parent_particles(idx, particle_var::ux),
+                   parent_particles(idx, particle_var::uy),
+                   parent_particles(idx, particle_var::uz),
+                   parent_particles(idx, particle_var::w)
+                  };
+      if(filter(p))
+        update += 1;
+    }, count_true);
+#endif
+    const size_t max_local_np = ceil(original_species->max_np * over_alloc_factor * count_true/float(original_species->np)) + 1;
+    const size_t max_local_nm = ceil(original_species->max_nm * over_alloc_factor * count_true/float(original_species->np)) + 1;
+    
+    // Create tracer species based on the original species
+    species_t* tracers = species( name, 
+                                  original_species->q, original_species->m, 
+                                  max_local_np, max_local_nm, 
+                                  original_species->sort_interval, original_species->sort_out_of_place, 
+                                  grid);
+    
+    // Mark species as tracer
+    tracers->is_tracer = true;
+
+    // Add annotations for globas tracer ID
+    annotations.add_annotation<int>(std::string("TracerID"));
+    if(tracer_type == TracerType::Copy)
+      annotations.add_annotation<float>(std::string("Weight"));
+    // Copy any annotations from the parent species
+    if(original_species->using_annotations) {
+      annotations.combine(original_species->annotation_vars);
+    }
+
+    int buffer_size = num_particles_buffer;
+    if(num_particles_buffer == -1)
+      buffer_size = max_local_np * 10;
+
+    tracers->init_annotations(max_local_np, max_local_nm, annotations);
+    tracers->init_io_buffers(buffer_size, over_alloc_factor);
+
+    // Set parent species pointer
+    tracers->parent_species = original_species;
+
+    // Set tracer type
+    tracers->tracer_type = tracer_type;
+
+    // Copy of move particles to tracers
+    tracers->create_tracers_by_predicate(original_species, tracer_type, filter, rank());
+
+    return append_species(tracers, &tracers_list); 
+  }
+
+#endif
+
   inline species_t *
   find_species( const char *name ) {
      return find_species_name( name, species_list );
@@ -663,10 +1170,10 @@ public:
   // FIXME: SILLY PROMOTIONS
   inline fluid_species_t *
   define_fluid_species( const char *name,
-			double q,
-			double m ) {
+                        double q,
+                        double m ) {
     return append_fluid_species( fluid_species( name, (float)q, (float)m,
-						grid ), &fluid_species_list );
+                                 grid ), &fluid_species_list );
   }
 
   inline fluid_species_t *
@@ -692,18 +1199,18 @@ public:
                    double x,  double y,  double z,
                    double ux, double uy, double uz,
                    double w,  double age = 0, int update_rhob = 1,
-		   double qp = 0);
+                   double qp = std::numeric_limits<double>::infinity());
 
 
   // Inject particle on receive list (so gets passed to device).
   // Intended for user_particle_injection
   void
   inject_particle_r( species_t * sp,
-		     double x,  double y,  double z,
-		     double ux, double uy, double uz,
-		     double w,  double age = 0,
-		     int update_rhob = 0,
-		     double qp = 0);
+                     double x,  double y,  double z,
+                     double ux, double uy, double uz,
+                     double w,  double age = 0,
+                     int update_rhob = 0,
+                     double qp = std::numeric_limits<double>::infinity());
 
   // Inject particle raw is for power users!
   // No nannyism _at_ _all_:
@@ -718,9 +1225,21 @@ public:
   inject_particle_raw( species_t * RESTRICT sp,
                        float dx, float dy, float dz, int32_t i,
                        float ux, float uy, float uz, float w ) {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     particle_t * RESTRICT p = sp->p + (sp->np++);
     p->dx = dx; p->dy = dy; p->dz = dz; p->i = i;
     p->ux = ux; p->uy = uy; p->uz = uz; p->w = w;
+#else
+    int idx = sp->np++;
+    sp->k_p_h(idx, particle_var::dx) = dx;
+    sp->k_p_h(idx, particle_var::dy) = dy;
+    sp->k_p_h(idx, particle_var::dz) = dz;
+    sp->k_p_h(idx, particle_var::ux) = ux;
+    sp->k_p_h(idx, particle_var::uy) = uy;
+    sp->k_p_h(idx, particle_var::uz) = uz;
+    sp->k_p_h(idx, particle_var::w ) = w;
+    sp->k_p_i_h(idx) = i;
+#endif
   }
 
   // This variant does a raw inject and moves the particles
@@ -731,6 +1250,7 @@ public:
                        float ux, float uy, float uz, float w,
                        float dispx, float dispy, float dispz,
                        int update_rhob ) {
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     particle_t       * RESTRICT p  = sp->p  + (sp->np++);
     particle_mover_t * RESTRICT pm = sp->pm + sp->nm;
     p->dx = dx; p->dy = dy; p->dz = dz; p->i = i;
@@ -738,7 +1258,44 @@ public:
     pm->dispx = dispx; pm->dispy = dispy; pm->dispz = dispz; pm->i = sp->np-1;
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
     sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
+#else
+    int idx = sp->np++;
+    sp->k_p_h(idx, particle_var::dx) = dx;
+    sp->k_p_h(idx, particle_var::dy) = dy;
+    sp->k_p_h(idx, particle_var::dz) = dz;
+    sp->k_p_h(idx, particle_var::ux) = ux;
+    sp->k_p_h(idx, particle_var::uy) = uy;
+    sp->k_p_h(idx, particle_var::uz) = uz;
+    sp->k_p_h(idx, particle_var::w ) = w;
+    sp->k_p_i_h(idx) = i;
+    particle_mover_t local_pm;
+    local_pm.dispx = dispx;
+    local_pm.dispy = dispy;
+    local_pm.dispz = dispz;
+    local_pm.i     = sp->np-1;
+    if( update_rhob ) 
+      k_accumulate_rhob_single_cpu( field_array->k_f_rhob_accum_h,
+                                    sp->k_p_h, sp->k_p_i_h,
+                                    idx, grid, -sp->q );
+    if( move_p_kokkos_host_serial(sp->k_p_h, sp->k_p_i_h, &local_pm, 
+                                  field_array->k_jf_accum_h, 
+                                  grid, grid->k_neighbor_h, 
+                                  grid->rangel, grid->rangeh, sp->q) ) {
+      sp->nm += 1;
+      int pm_i = sp->nm;
+      sp->k_pm_h(pm_i, particle_mover_var::dispx) = local_pm.dispx;
+      sp->k_pm_h(pm_i, particle_mover_var::dispx) = local_pm.dispx;
+      sp->k_pm_h(pm_i, particle_mover_var::dispx) = local_pm.dispx;
+      sp->k_pm_i_h(pm_i) = local_pm.i;
+    }
+#endif
   }
+
+  void
+  apply_artificial_loss_cone( species_t * sp,
+                              float tan2_alpha_lc,
+                              float dt_lc,
+                              float ML );
 
   //////////////////////////////////
   // Random number generator helpers
@@ -830,7 +1387,7 @@ public:
 
   // Compute the Courant length on a regular mesh
   inline double courant_length( double lx, double ly, double lz,
-				double nx, double ny, double nz ) {
+                                double nx, double ny, double nz ) {
     double w0, w1 = 0;
     if( nx>1 ) w0 = nx/lx, w1 += w0*w0;
     if( ny>1 ) w0 = ny/ly, w1 += w0*w0;
@@ -904,8 +1461,6 @@ public:
    * checks only if a copy has already been done at some point during the
    * current step, but it will always work in user_diagnostics unless the loop
    * is modified or a user modifies particles during user_diagnostics.
-   *
-   * @param sp the species list to copy
    */
   void user_diagnostics_copy_all_particles_mem_to_host(species_t* species_list)
   {
@@ -923,8 +1478,18 @@ public:
  * @brief After a checkpoint restore, we must move the data back over to the
  * Kokkos objects. This currently must be done for all views
  */
-void restore_kokkos(vpic_simulation& simulation);
+void restore_kokkos(vpic_simulation& simulation, const char* fbase);
 // TODO: would this make more sense as a member function on vpic_simulation_t
+
+/**
+ * @brief The checkpoint macros will not work on the Kokkos views, so we bypass
+ * the checkpointing infrustructure and manually write this data to disk for
+ * all views without a legacy array.
+ *
+ * @param simulation The vpic_simulation that we are checkpointing
+ * @param fbase The base name for the checkpoint files
+ */
+void checkpt_kokkos(vpic_simulation& simulation, const char* fbase);
 
 
 #endif // vpic_h

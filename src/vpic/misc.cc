@@ -18,7 +18,7 @@ vpic_simulation::inject_particle( species_t * sp,
                                   double ux, double uy, double uz,
                                   double w,  double age,
                                   int update_rhob,
-				  double qp) {
+                                  double qp) {
   int ix, iy, iz;
 
   // Check input parameters
@@ -73,6 +73,7 @@ vpic_simulation::inject_particle( species_t * sp,
   if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
   iz++;                               // Adjust for mesh indexing
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   size_t p_index = Kokkos::atomic_fetch_inc(&(sp->np));
   particle_t * p = sp->p + p_index;
   p->dx = (float)x; // Note: Might be rounded to be on [-1,1]
@@ -84,7 +85,17 @@ vpic_simulation::inject_particle( species_t * sp,
   p->uz = (float)uz;
   p->w  = w;
 #ifdef VARIABLE_CHARGE
-  p->qp = (float)qp;
+  if(qp == std::numeric_limits<double>::infinity()) {
+    p->qp = sp->q;
+  } else {
+    p->qp = (float)qp;
+  }
+#endif
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  if(sp->is_tracer) {
+    int tracer_idx = sp->annotation_vars.get_annotation_index<int>(std::string("TracerID"));
+    sp->annotations_h.set<int>(p_index, tracer_idx, rank()*sp->max_np + p_index); 
+  }
 #endif
 
   if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
@@ -100,16 +111,52 @@ vpic_simulation::inject_particle( species_t * sp,
     pm->i     = sp->np-1;
     sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
   }
+#else
+  size_t idx = Kokkos::atomic_fetch_inc(&(sp->np));
+  sp->k_p_h(idx, particle_var::dx) = static_cast<float>(x);
+  sp->k_p_h(idx, particle_var::dy) = static_cast<float>(y);
+  sp->k_p_h(idx, particle_var::dz) = static_cast<float>(z);
+  sp->k_p_h(idx, particle_var::ux) = static_cast<float>(ux);
+  sp->k_p_h(idx, particle_var::uy) = static_cast<float>(uy);
+  sp->k_p_h(idx, particle_var::uz) = static_cast<float>(uz);
+  sp->k_p_h(idx, particle_var::w)  = w;
+  sp->k_p_i_h(idx) = VOXEL(ix,iy,iz,nx,ny,nz);
+#ifdef VARIABLE_CHARGE
+  if(qp == std::numeric_limits<double>::infinity()) {
+    sp->k_p_h(idx, particle_var::qp) = sp->q;
+  } else {
+    sp->k_p_h(idx, particle_var::qp) = static_cast<float>(qp);
+  }
+#endif
 
+  if( update_rhob ) k_accumulate_rhob_single_cpu( field_array->k_f_rhob_accum_h, sp->k_p_h, sp->k_p_i_h, idx, grid, -sp->q);
+
+  if( age!=0 ) {
+    if( sp->nm >= sp->max_nm )
+      WARNING(( "No movers available to age injected particle" ));
+    particle_mover_t * pm = sp->pm + sp->nm;
+    age *= grid->cvac*grid->dt/sqrt( ux*ux + uy*uy + uz*uz + 1 );
+    pm->dispx = ux*age*grid->rdx;
+    pm->dispy = uy*age*grid->rdy;
+    pm->dispz = uz*age*grid->rdz;
+    pm->i     = idx;
+
+    move_p_kokkos_host_serial( sp->k_p_h, sp->k_p_i_h, pm, 
+                               field_array->k_jf_accum_h, 
+                               grid, grid->k_neighbor_h, 
+                               grid->rangel, grid->rangeh, 
+                               sp->q );
+  }
+#endif
 }
 
 void
 vpic_simulation::inject_particle_r( species_t * sp,
-				    double x,  double y,  double z,
-				    double ux, double uy, double uz,
-				    double w,  double age,
-				    int update_rhob,
-				    double qp ) {
+                                    double x,  double y,  double z,
+                                    double ux, double uy, double uz,
+                                    double w,  double age,
+                                    int update_rhob,
+                                    double qp ) {
   int ix, iy, iz;
 
   // Check input parameters
@@ -180,7 +227,11 @@ vpic_simulation::inject_particle_r( species_t * sp,
   particle_recv(write_index, particle_var::uz) = (float)uz;
   particle_recv(write_index, particle_var::w)  = w;
 #ifdef VARIABLE_CHARGE
-  particle_recv(write_index, particle_var::qp) = (float)qp;
+  if(qp == std::numeric_limits<double>::infinity()) {
+    particle_recv(write_index, particle_var::qp) = sp->q;
+  } else {
+    particle_recv(write_index, particle_var::qp) = (float)qp;
+  }
 #endif
   
   int pii = VOXEL(ix,iy,iz, nx,ny,nz);
@@ -193,6 +244,75 @@ vpic_simulation::inject_particle_r( species_t * sp,
 
   if( age!=0 ) ERROR(( "Aging of injected particles not yet implemented." ));
 
+}
+
+
+void
+vpic_simulation::apply_artificial_loss_cone( species_t * sp,
+                                             float tan2_alpha_lc,
+                                             float dt_lc,
+                                             float ML ) {
+  if( !sp ) ERROR(( "apply_artificial_loss_cone: Invalid species" ));
+  if( tan2_alpha_lc < 0 ) ERROR(( "apply_artificial_loss_cone: tan2_alpha_lc < 0" ));
+
+  const int np = sp->np;
+  if( np <= 0 ) return;
+
+  auto kp  = sp->k_p_d;
+  auto kpi = sp->k_p_i_d;
+  auto kf  = field_array->k_f_d;
+
+  const int nv = grid->nv;
+
+  Kokkos::parallel_for(
+    "apply_artificial_loss_cone",
+    Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace>(0, np),
+    KOKKOS_LAMBDA (const int n) {
+
+      const float w = kp(n, particle_var::w);
+      if( w == 0.f ) return;
+
+      const int cell = kpi(n);
+      if( cell < 0 || cell >= nv ) return;
+
+      const float ux = kp(n, particle_var::ux);
+      const float uy = kp(n, particle_var::uy);
+      const float uz = kp(n, particle_var::uz);
+
+      const float Bx = kf(cell, field_var::cbx) + kf(cell, field_var::cbx0);
+      const float By = kf(cell, field_var::cby) + kf(cell, field_var::cby0);
+      const float Bz = kf(cell, field_var::cbz) + kf(cell, field_var::cbz0);
+
+      const float B2 = Bx*Bx + By*By + Bz*Bz;
+      if( B2 <= 0.f ) return;
+
+      const float invB = 1.f / sqrtf(B2);
+      const float bhx  = Bx * invB;
+      const float bhy  = By * invB;
+      const float bhz  = Bz * invB;
+
+      const float upar  = ux*bhx + uy*bhy + uz*bhz;
+      const float upar2 = upar*upar;
+      if( upar2 <= 0.f ) return;
+
+      const float u2 = ux*ux + uy*uy + uz*uz;
+      float uperp2 = u2 - upar2;
+      if( uperp2 < 0.f ) uperp2 = 0.f;
+
+      if( uperp2 < upar2 * tan2_alpha_lc ) {
+        // hard cut model
+        //kp(n, particle_var::w)  = 0.f;
+
+        //decay model
+        float wnew = w * Kokkos::exp( -dt_lc * Kokkos::abs(upar) / ML );
+        // if( wnew < 1e-12f ) {
+        //   wnew = 0.f;
+        // }
+        kp(n, particle_var::w) = wnew;
+      }
+    });
+
+  Kokkos::fence();
 }
 
 
@@ -330,17 +450,17 @@ void vpic_simulation::checksum_species(const char * species, CheckSum & cs) {
     const unsigned int csels = cs.length*nproc();
     unsigned char * sums(NULL);
 
-	if(rank() == 0) {
-    	sums = new unsigned char[csels];
-	} // if
+    if(rank() == 0) {
+      sums = new unsigned char[csels];
+    } // if
 
-	// gather sums from all ranks
-	mp_gather_uc(cs.value, sums, cs.length);
+    // gather sums from all ranks
+    mp_gather_uc(cs.value, sums, cs.length);
 
-	if(rank() == 0) {
-		checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
-		MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
-		delete[] sums;
+    if(rank() == 0) {
+      checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
+      MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
+      delete[] sums;
     } // if
   } // if
 } // vpic_simulation::checksum_species
@@ -358,20 +478,28 @@ void vpic_simulation::output_checksum_species(const char * species) {
     const unsigned int csels = cs.length*nproc();
     unsigned char * sums(NULL);
 
-	if( rank() == 0) {
-    	sums = new unsigned char[csels];
-	} // if
-
-	// gather sums from all ranks
-	mp_gather_uc(cs.value, sums, cs.length);
-
-	if( rank() == 0) {
-		checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
-		MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
-		delete[] sums;
+    if( rank() == 0) {
+      sums = new unsigned char[csels];
     } // if
-  }
-  else {
+
+    // gather sums from all ranks
+    mp_gather_uc(cs.value, sums, cs.length);
+
+    if( rank() == 0) {
+      checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
+      MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
+      delete[] sums;
+    } // if
+
+    // gather sums from all ranks
+    mp_gather_uc(cs.value, sums, cs.length);
+
+    if( rank() == 0) {
+      checkSumBuffer<unsigned char>(sums, csels, cs, "sha1");
+      MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
+      delete[] sums;
+    } // if
+  } else {
     MESSAGE(("SPECIES \"%s\" SHA1CHECKSUM: %s", species, cs.strvalue));
   } // if
 } // vpic_simulation::output_checksum_species

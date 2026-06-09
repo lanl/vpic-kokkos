@@ -36,8 +36,8 @@
 
 // Generic looping
 #define XYZ_LOOP(xl,xh,yl,yh,zl,zh) \
-  for( z=zl; z<=zh; z++ )	    \
-    for( y=yl; y<=yh; y++ )	    \
+  for( z=zl; z<=zh; z++ )           \
+    for( y=yl; y<=yh; y++ )         \
       for( x=xl; x<=xh; x++ )
 
 // yz_EDGE_LOOP => Loop over all non-ghost y-oriented edges at plane x
@@ -100,8 +100,8 @@ begin_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
     size = (1+n##Y*(n##Z+1)+n##Z*(n##Y+1))*sizeof(float);   \
     p = (float *)size_send_port( i, j, k, size, g );        \
     if( p ) {                                               \
-      (*(p++)) = g->d##X;				    \
-      face = (i+j+k)<0 ? 1 : n##X;			    \
+      (*(p++)) = g->d##X;                                   \
+      face = (i+j+k)<0 ? 1 : n##X;                          \
       Z##Y##_EDGE_LOOP(face) (*(p++)) = field(x,y,z).cb##Y; \
       Y##Z##_EDGE_LOOP(face) (*(p++)) = field(x,y,z).cb##Z; \
       begin_send_port( i, j, k, size, g );                  \
@@ -1053,8 +1053,8 @@ begin_remote_ghost_norm_e( field_t      * ALIGNED(128) field,
     size = ( 1+ (n##Y+1)*(n##Z+1) )*sizeof(float);          \
     p = (float *)size_send_port( i, j, k, size, g );        \
     if( p ) {                                               \
-      (*(p++)) = g->d##X;				    \
-      face = (i+j+k)<0 ? 1 : n##X;			    \
+      (*(p++)) = g->d##X;                                   \
+      face = (i+j+k)<0 ? 1 : n##X;                          \
       X##_NODE_LOOP(face) (*(p++)) = field(x,y,z).e##X;     \
       begin_send_port( i, j, k, size, g );                  \
     }                                                       \
@@ -1441,8 +1441,8 @@ begin_remote_ghost_div_b( field_t      * ALIGNED(128) field,
     size = ( 1 + n##Y*n##Z )*sizeof(float);                  \
     p = (float *)size_send_port( i, j, k, size, g );         \
     if( p ) {                                                \
-      (*(p++)) = g->d##X;				     \
-      face = (i+j+k)<0 ? 1 : n##X;			     \
+      (*(p++)) = g->d##X;                                    \
+      face = (i+j+k)<0 ? 1 : n##X;                           \
       X##_FACE_LOOP(face) (*(p++)) = field(x,y,z).div_b_err; \
       begin_send_port( i, j, k, size, g );                   \
     }                                                        \
@@ -1491,7 +1491,7 @@ end_recv_ghost_div_b(field_array_t* fa, const int i, const int j, const int k) {
     const int nx = g->nx, ny = g->ny, nz = g->nz;
 
 # define END_RECV(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                               \
-    face = (i+j+k)<0 ? 1 : n##X;			                                         \
+    face = (i+j+k)<0 ? 1 : n##X;                                               \
     float lw = rbuf_h(0);                                                      \
     float rw = (2. * g->d##X) / (lw + g->d##X);                                \
     lw = (lw - g->d##X) / (lw + g->d##X);                                      \
@@ -1729,7 +1729,7 @@ sync_comm_buffer(Kokkos::DualView<float*>& view) {
 #define COPY_FACE(x_,y_,z_,fields,i,j,k)                                       \
   const int x_##src = (i+j+k) < 0 ? 1 : n##x_;                                 \
   const int x_##dst = (i+j+k) < 0 ? n##x_+1 : 0;                               \
-  Kokkos::MDRangePolicy<Kokkos::Rank<3>> face_pol({1,1,0},\
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> face_pol({1,1,0},                     \
                                                      {n##y_+1,n##z_+1,nvar});  \
   Kokkos::parallel_for("copy_face_2_ghost<" #x_ #y_ #z_ ">", face_pol,         \
     KOKKOS_LAMBDA(const int y_##src, const int z_##src, const int v) {         \
@@ -1737,7 +1737,7 @@ sync_comm_buffer(Kokkos::DualView<float*>& view) {
       const int z_##dst = z_##src;                                             \
       fields(VOXEL(xdst,ydst,zdst,nx,ny,nz), beg_var+v)                        \
         = fields(VOXEL(xsrc,ysrc,zsrc,nx,ny,nz), beg_var+v);                   \
-    });									                            
+    });                                     
 
 /**
  * @brief Copy face to ghost cells of opposite face
@@ -1781,7 +1781,7 @@ copy_face(field_array* fa, const int beg_var, const int end_var) {
  * DO NOT USE DIRECTLY! Use the wrapper function for clearer error messages
  * and profiling.
  */
-#define PACK_FACE(x_,y_,z_,sbuf,i,j,k)                                    \
+#define PACK_FACE(x_,y_,z_,sbuf,i,j,k)                                         \
   const int x_ = (i+j+k)<0 ? 1 : n##x_;                                        \
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> face_policy({1,1,0},                  \
                                                      {n##y_+1,n##z_+1,nvar});  \
@@ -1789,7 +1789,7 @@ copy_face(field_array* fa, const int beg_var, const int end_var) {
     KOKKOS_LAMBDA(const int y_, const int z_, const int v) {                   \
       const int idx = v*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1);                   \
       sbuf(idx) = fields(VOXEL(x,y,z,nx,ny,nz), beg_var+v);                    \
-    });									                            
+    });                                     
 
 /**
  * @brief Serialize face to specific MPI communication buffer
@@ -1942,15 +1942,15 @@ begin_halo_exchange(field_array* fa, const int beg_var, const int end_var) {
  * DO NOT USE DIRECTLY! Use the wrapper function for clearer error messages
  * and profiling.
  */
-#define UNPACK_FACE(x_,y_,z_,rbuf,i,j,k)                                  \
-  const int x_ = (i+j+k) < 0 ? n##x_+1 : 0;				                             \
+#define UNPACK_FACE(x_,y_,z_,rbuf,i,j,k)                                       \
+  const int x_ = (i+j+k) < 0 ? n##x_+1 : 0;                                    \
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> face_policy({1,1,0},                  \
                                                      {n##y_+1,n##z_+1,nvar});  \
   Kokkos::parallel_for("end_recv_ghost<" #x_ #y_ #z_ ">", face_policy,         \
     KOKKOS_LAMBDA(const int y_, const int z_, const int v) {                   \
       const int idx = v*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1);                   \
       fields(VOXEL(x,y,z,nx,ny,nz), beg_var+v) = rbuf(idx);                    \
-    });									                            
+    });                                     
 
 
 /**
@@ -2074,9 +2074,9 @@ end_halo_exchange(field_array* fa, const int beg_var, const int end_var) {
 }
 
 //Hybrid JF
-#define BRP(x_,y_,z_)							                     \
-  const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;	 \
-  const int size = (4*n##y_*n##z_)*sizeof(float);			 \
+#define BRP(x_,y_,z_)                                  \
+  const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;  \
+  const int size = (4*n##y_*n##z_)*sizeof(float);      \
   BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
   
 
@@ -2118,17 +2118,18 @@ begin_recv_ghost_hyb_jf(field_array* fa, const int i, const int j, const int k) 
 
 #undef BRP
 
-#define BSP(x_,y_,z_)							                                                  \
-  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		                      \
-  const int size = (4*n##y_*n##z_)*sizeof(float);				                            \
-  const int face = (i+j+k)<0 ? 1 : n##x_;				                                    \
-  const k_field_t& k_field = fa->k_f_d;					                                    \
+#define BSP(x_,y_,z_)                                                               \
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;                         \
+  const int size = (4*n##y_*n##z_)*sizeof(float);                                   \
+  const int face = (i+j+k)<0 ? 1 : n##x_;                                           \
+  const k_field_t& k_field = fa->k_f_d;                                             \
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> x_##_face({1,1,0}, {n##z_+1, n##y_+1, 4}); \
   Kokkos::parallel_for("begin_send_ghost_hyb_jf<XYZ>", x_##_face,                   \
   KOKKOS_LAMBDA(const int z_, const int y_, const int var) {                        \
-      const int x_ = face;						                                              \
-      sbuf_d(var*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx+var); \
-    });									                                                            \
+      const int x_ = face;                                                          \
+      const size_t idx = var*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1);                   \
+      sbuf_d(idx) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx+var);             \
+    });                                                                             \
   sbuf.modify_device();                                                             \
   SYNC_MPI_BUFFER(sbuf_h, sbuf_d);                                                  \
   BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
@@ -2209,29 +2210,31 @@ k_begin_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa) {
 }
 
 
-#define ERP(x_,y_,z_)							                                                \
-  const grid_t* g = fa->g;						                                            \
+#define ERP(x_,y_,z_)                                                             \
+  const grid_t* g = fa->g;                                                        \
   float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));                  \
-  if(p) {								                                                          \
+  if(p) {                                                                         \
     field_buffers fb = *(fa->fb);                                                 \
-    Kokkos::DualView<float*> rbuf = fb.recv_buffer[BOUNDARY(i,j,k)];             \
+    Kokkos::DualView<float*> rbuf = fb.recv_buffer[BOUNDARY(i,j,k)];              \
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();                     \
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();                 \
                                                                                   \
-    const int nx = g->nx, ny = g->ny, nz = g->nz;			                            \
-    const int face = (i+j+k) < 0 ? n##x_+1 : 0;				                            \
-    const k_field_t& k_field = fa->k_f_d;				                                  \
+    const int nx = g->nx, ny = g->ny, nz = g->nz;                                 \
+    const int face = (i+j+k) < 0 ? n##x_+1 : 0;                                   \
+    const k_field_t& k_field = fa->k_f_d;                                         \
     SYNC_MPI_BUFFER(rbuf_d, rbuf_h);                                              \
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
     Kokkos::parallel_for("end_recv_ghost_hyb_jf<XYZ>", x_##_face,                 \
     KOKKOS_LAMBDA(const int z_, const int y_) {                                   \
-      const int x_ = face;						                                            \
-      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
-      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
-      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
-      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof)= rbuf_d(3*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
-      });								                                                          \
-  }									
+      const int x_ = face;                                                        \
+      const size_t voxel = VOXEL(x,y,z,nx,ny,nz);                                 \
+      const size_t offset = (z_-1)*n##y_ + (y_-1);                                \
+      k_field(voxel, field_var::jfx) = rbuf_d(                offset);            \
+      k_field(voxel, field_var::jfy) = rbuf_d(  n##y_*n##z_ + offset);            \
+      k_field(voxel, field_var::jfz) = rbuf_d(2*n##y_*n##z_ + offset);            \
+      k_field(voxel, field_var::rhof)= rbuf_d(3*n##y_*n##z_ + offset);            \
+      });                                                                         \
+  }
   
 /**
  * @brief End non blocking receive for sharing jf ghost cells. 
@@ -2332,7 +2335,7 @@ k_end_remote_ghost_hyb_jf(field_array_t* ALIGNED(128) fa) {
 }
 
 //Hybrid E
-#define BRP(x_,y_,z_)							                     \
+#define BRP(x_,y_,z_)                                  \
   const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;  \
   const int size = (3*n##y_*n##z_)*sizeof(float);      \
   BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
@@ -2375,20 +2378,22 @@ begin_recv_ghost_hyb_e(field_array* fa,
 
 #undef BRP
 
-#define BSP(x_,y_,z_)							\
-  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		\
-  const int size = (3*n##y_*n##z_)*sizeof(float);				\
-  const int face = (i+j+k)<0 ? 1 : n##x_;				\
-  const k_field_t& k_field = fa->k_f_d;					\
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
-  Kokkos::parallel_for("begin_send_ghost_hyb_e<XYZ>", \
-  x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
-      const int x_ = face;						\
-      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex); \
-      sbuf_d(n##y_*n##z_   + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey); \
-      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez); \
-    });									\
-  SYNC_MPI_BUFFER(sbuf_h, sbuf_d); \
+#define BSP(x_,y_,z_)                                                          \
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;                    \
+  const int size = (3*n##y_*n##z_)*sizeof(float);                              \
+  const int face = (i+j+k)<0 ? 1 : n##x_;                                      \
+  const k_field_t& k_field = fa->k_f_d;                                        \
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1,1}, {n##z_+1,n##y_+1});  \
+  Kokkos::parallel_for("begin_send_ghost_hyb_e<XYZ>",                          \
+  x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) {                       \
+      const int x_ = face;                                                     \
+      const size_t voxel = VOXEL(x,y,z,nx,ny,nz);                              \
+      const size_t offset = (z_-1)*n##y_ + (y_-1);                             \
+      sbuf_d(                offset) = k_field(voxel, field_var::ex);          \
+      sbuf_d(n##y_*n##z_   + offset) = k_field(voxel, field_var::ey);          \
+      sbuf_d(2*n##y_*n##z_ + offset) = k_field(voxel, field_var::ez);          \
+    });                                                                        \
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d);                                             \
   BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
 
 /**
@@ -2467,28 +2472,30 @@ k_begin_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa) {
 }
 
 
-#define ERP(x_,y_,z_)							                                \
-  const grid_t* g = fa->g;						                            \
-  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));  \
-  if(p) {                                                         \
+#define ERP(x_,y_,z_)                                                             \
+  const grid_t* g = fa->g;                                                        \
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));                  \
+  if(p) {                                                                         \
     field_buffers *fb = fa->fb;                                                   \
     Kokkos::DualView<float*> rbuf = fb->recv_buffer[BOUNDARY(i,j,k)];             \
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();                     \
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();                 \
                                                                                   \
-    const int nx = g->nx, ny = g->ny, nz = g->nz;			\
-    const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
-    const k_field_t& k_field = fa->k_f_d;				\
-    SYNC_MPI_BUFFER(rbuf_d, rbuf_h); \
+    const int nx = g->nx, ny = g->ny, nz = g->nz;                                 \
+    const int face = (i+j+k) < 0 ? n##x_+1 : 0;                                   \
+    const k_field_t& k_field = fa->k_f_d;                                         \
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h);                                              \
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
-    Kokkos::parallel_for("end_recv_ghost_hyb_e<XYZ>", x_##_face,  \
-    KOKKOS_LAMBDA(const int z_, const int y_) { \
-      const int x_ = face;						\
-      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ex) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
-      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ey) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
-      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ez) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
-      });								\
-  }									
+    Kokkos::parallel_for("end_recv_ghost_hyb_e<XYZ>", x_##_face,                  \
+    KOKKOS_LAMBDA(const int z_, const int y_) {                                   \
+      const int x_ = face;                                                        \
+      const size_t voxel = VOXEL(x,y,z,nx,ny,nz);                                 \
+      const size_t offset = (z_-1)*n##y_ + (y_-1);                                \
+      k_field(voxel, field_var::ex) = rbuf_d(                offset);             \
+      k_field(voxel, field_var::ey) = rbuf_d(  n##y_*n##z_ + offset);             \
+      k_field(voxel, field_var::ez) = rbuf_d(2*n##y_*n##z_ + offset);             \
+      });                                                                         \
+  }         
   
 /**
  * @brief End non blocking receive for sharing E field ghost cells. 
@@ -2590,7 +2597,7 @@ k_end_remote_ghost_hyb_e(field_array_t* ALIGNED(128) fa) {
 }
 
 //Hybrid Ue
-#define BRP(x_,y_,z_)							                     \
+#define BRP(x_,y_,z_)                                  \
   const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;  \
   const int size = (3*n##y_*n##z_)*sizeof(float);      \
   BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
@@ -2633,20 +2640,22 @@ begin_recv_ghost_hyb_ue(field_array* fa,
 
 #undef BRP
 
-#define BSP(x_,y_,z_)							\
-  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		\
-  const int size = (3*n##y_*n##z_)*sizeof(float);				\
-  const int face = (i+j+k)<0 ? 1 : n##x_;				\
-  const k_field_t& k_field = fa->k_f_d;					\
+#define BSP(x_,y_,z_)                                                           \
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;                     \
+  const int size = (3*n##y_*n##z_)*sizeof(float);                               \
+  const int face = (i+j+k)<0 ? 1 : n##x_;                                       \
+  const k_field_t& k_field = fa->k_f_d;                                         \
   Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
-  Kokkos::parallel_for("begin_send_ghost_hyb_ue<XYZ>", \
-  x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) { \
-      const int x_ = face;						\
-      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ux); \
-      sbuf_d(n##y_*n##z_   + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::uy); \
-      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::uz); \
-    });									\
-  SYNC_MPI_BUFFER(sbuf_h, sbuf_d); \
+  Kokkos::parallel_for("begin_send_ghost_hyb_ue<XYZ>",                          \
+  x_##_face, KOKKOS_LAMBDA(const int z_, const int y_) {                        \
+      const int x_ = face;                                                      \
+      const size_t voxel = VOXEL(x,y,z,nx,ny,nz);                               \
+      const size_t offset = (z_-1)*n##y_ + (y_-1);                              \
+      sbuf_d(                offset) = k_field(voxel, field_var::ux);           \
+      sbuf_d(n##y_*n##z_   + offset) = k_field(voxel, field_var::uy);           \
+      sbuf_d(2*n##y_*n##z_ + offset) = k_field(voxel, field_var::uz);           \
+    });                                                                         \
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d);                                              \
   BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
 
 /**
@@ -2666,7 +2675,7 @@ begin_recv_ghost_hyb_ue(field_array* fa,
  */
 template<typename Face> 
 void 
-begin_send_ghost_hyb_ue(field_array* fa, 
+begin_send_ghost_hyb_ue(field_array* fa,
                        const int i, const int j, const int k) {
   int dst = fa->g->bc[BOUNDARY(i,j,k)]; /**< Destination rank */
   // Only send cells if dst is a valid neighbor and not itself
@@ -2725,28 +2734,30 @@ k_begin_remote_ghost_hyb_ue(field_array_t* ALIGNED(128) fa) {
 }
 
 
-#define ERP(x_,y_,z_)							                                \
-  const grid_t* g = fa->g;						                            \
-  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));  \
-  if(p) {                                                         \
+#define ERP(x_,y_,z_)                                                             \
+  const grid_t* g = fa->g;                                                        \
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));                  \
+  if(p) {                                                                         \
     field_buffers *fb = fa->fb;                                                   \
     Kokkos::DualView<float*> rbuf = fb->recv_buffer[BOUNDARY(i,j,k)];             \
     auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();                     \
     auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();                 \
                                                                                   \
-    const int nx = g->nx, ny = g->ny, nz = g->nz;			\
-    const int face = (i+j+k) < 0 ? n##x_+1 : 0;				\
-    const k_field_t& k_field = fa->k_f_d;				\
-    SYNC_MPI_BUFFER(rbuf_d, rbuf_h); \
+    const int nx = g->nx, ny = g->ny, nz = g->nz;                                 \
+    const int face = (i+j+k) < 0 ? n##x_+1 : 0;                                   \
+    const k_field_t& k_field = fa->k_f_d;                                         \
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h);                                              \
     Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
-    Kokkos::parallel_for("end_recv_ghost_hyb_ue<XYZ>", x_##_face,  \
-    KOKKOS_LAMBDA(const int z_, const int y_) { \
-      const int x_ = face;						\
-      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ux) = rbuf_d(                (z_-1)*n##y_ + (y_-1)); \
-      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::uy) = rbuf_d(  n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
-      k_field(VOXEL(x,y,z,nx,ny,nz), field_var::uz) = rbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)); \
-      });								\
-  }									
+    Kokkos::parallel_for("end_recv_ghost_hyb_ue<XYZ>", x_##_face,                 \
+    KOKKOS_LAMBDA(const int z_, const int y_) {                                   \
+      const int x_ = face;                                                        \
+      const size_t voxel = VOXEL(x,y,z,nx,ny,nz);                                 \
+      const size_t offset = (z_-1)*n##y_ + (y_-1);                                \
+      k_field(voxel, field_var::ux) = rbuf_d(                offset);             \
+      k_field(voxel, field_var::uy) = rbuf_d(  n##y_*n##z_ + offset);             \
+      k_field(voxel, field_var::uz) = rbuf_d(2*n##y_*n##z_ + offset);             \
+      });                                                                         \
+  }         
   
 /**
  * @brief End non blocking receive for sharing Ue field ghost cells. 
@@ -2893,20 +2904,22 @@ begin_recv_ghost_hyb_curl_lpl_b(field_array* fa,
 
 #undef BRP
 
-#define BSP(x_,y_,z_)							\
-  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;		\
-  const int size = (3*n##y_*n##z_)*sizeof(float);				\
-  const int face = (i+j+k)<0 ? 1 : n##x_;				\
-  const k_field_t& k_field = fa->k_f_d;					\
+#define BSP(x_,y_,z_)                                                           \
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;                     \
+  const int size = (3*n##y_*n##z_)*sizeof(float);                               \
+  const int face = (i+j+k)<0 ? 1 : n##x_;                                       \
+  const k_field_t& k_field = fa->k_f_d;                                         \
   Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1, 1}, {n##z_+1, n##y_+1}); \
-  Kokkos::parallel_for("begin_send_ghost_hyb_curl_lpl_b<XYZ>", x_##_face, \
-  KOKKOS_LAMBDA(const int z_, const int y_) { \
-      const int x_ = face;						\
-      sbuf_d(                (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pex); \
-      sbuf_d(n##y_*n##z_   + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pey); \
-      sbuf_d(2*n##y_*n##z_ + (z_-1)*n##y_ + (y_-1)) = k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pez); \
-    });									\
-  SYNC_MPI_BUFFER(sbuf_h, sbuf_d); \
+  Kokkos::parallel_for("begin_send_ghost_hyb_curl_lpl_b<XYZ>", x_##_face,       \
+  KOKKOS_LAMBDA(const int z_, const int y_) {                                   \
+      const int x_ = face;                                                      \
+      const size_t voxel = VOXEL(x,y,z,nx,ny,nz);                               \
+      const size_t offset = (z_-1)*n##y_ + (y_-1);                              \
+      sbuf_d(                offset) = k_field(voxel, field_var::pex);          \
+      sbuf_d(n##y_*n##z_   + offset) = k_field(voxel, field_var::pey);          \
+      sbuf_d(2*n##y_*n##z_ + offset) = k_field(voxel, field_var::pez);          \
+    });                                                                         \
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d);                                              \
   BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
 
 
@@ -3849,6 +3862,305 @@ k_end_remote_ghost_hyb_o(field_array_t* ALIGNED(128) fa) {
 
   Kokkos::fence(); 
 #endif
+}
+
+/*****************************************************************************
+ * Edge value communications
+ *
+ * Like ghost communication routines, but opposite direction:
+ * Send ghost cell data, recv increment into live cells.
+ *****************************************************************************/
+
+//Hybrid edge JF
+#define BRP(x_,y_,z_)                                                   \
+  const int n##y_ = fa->g->n##y_, n##z_=fa->g->n##z_;                   \
+  const int size = (4*n##y_*n##z_)*sizeof(float);                       \
+  BEGIN_RECV_PORT_K(i,j,k,size,fa->g, rbuf_d, rbuf_h);
+
+/**
+ * @brief Begin non blocking receive for adding remote jf ghost cells into
+ * local jf edge cells, needed for quadratic-sum or higher-order particle
+ * shape.
+ *
+ * Calculates size of receive buffer based on which face and orientation.
+ * BRP macro adjusts calculations for different face directions. Template
+ * function wraps the BRP macro to make profiling clearer.
+ *
+ * @tparam Face Enum denoting the face and order of dimensions for calculations
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param i X-dim face coordinate (-1.0: neg. x, 0: origin, 1.0: pos. x)
+ * @param j Y-dim face coordinate (-1.0: neg. y, 0: origin, 1.0: pos. y)
+ * @param k Z-dim face coordinate (-1.0: neg. z, 0: origin, 1.0: pos. z)
+ * @param rbuf_d Receive buffer on the device
+ * @param rbuf_h Mirror of rbuf_d on the Host
+ */
+template<typename Face>
+void
+begin_recv_edge_hyb_jf(field_array* fa, const int i, const int j, const int k) {
+  int src = fa->g->bc[BOUNDARY(-i,-j,-k)]; /**< Source rank */
+  // Only recv cells if src is a valid neighbor and not itself
+  if( 0 <= src && src < world_size ) {
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
+    auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
+    auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      BRP(x,y,z);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      BRP(y,z,x);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      BRP(z,x,y);
+    }
+  }
+}
+
+#undef BRP
+
+#define BSP(x_,y_,z_)                                                          \
+  const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;                    \
+  const int size = (4*n##y_*n##z_)*sizeof(float);                              \
+  const int face = (i+j+k)<0 ? 0 : n##x_+1; /* send ghosts to edges */         \
+  const k_field_t& k_field = fa->k_f_d;                                        \
+  const int face_len = n##y_ * n##z_;                                          \
+  auto jfx_buff  = Kokkos::subview(sbuf_d, Kokkos::make_pair(0*face_len,       \
+                                                             1*face_len));     \
+  auto jfy_buff  = Kokkos::subview(sbuf_d, Kokkos::make_pair(1*face_len,       \
+                                                             2*face_len));     \
+  auto jfz_buff  = Kokkos::subview(sbuf_d, Kokkos::make_pair(2*face_len,       \
+                                                             3*face_len));     \
+  auto rhof_buff = Kokkos::subview(sbuf_d, Kokkos::make_pair(3*face_len,       \
+                                                             4*face_len));     \
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1,1}, {n##y_+1, n##z_+1}); \
+  Kokkos::parallel_for("begin_send_edge_hyb_jf<" #x_ #y_ #z_ ">", x_##_face,   \
+    KOKKOS_LAMBDA(const int y_, const int z_) {                                \
+      const int x_ = face;                                                     \
+      const int voxel = VOXEL(x,y,z,nx,ny,nz);                                 \
+      jfx_buff( (z_-1)*n##y_ + (y_-1)) = k_field(voxel, field_var::jfx);       \
+      jfy_buff( (z_-1)*n##y_ + (y_-1)) = k_field(voxel, field_var::jfy);       \
+      jfz_buff( (z_-1)*n##y_ + (y_-1)) = k_field(voxel, field_var::jfz);       \
+      rhof_buff((z_-1)*n##y_ + (y_-1)) = k_field(voxel, field_var::rhof);      \
+    });                                                                        \
+  SYNC_MPI_BUFFER(sbuf_h, sbuf_d);                                             \
+  BEGIN_SEND_PORT_K(i,j,k,size,fa->g, sbuf_d, sbuf_h);
+
+/**
+ * @brief Begin non blocking send for adding local jf ghost cells into remote
+ * jf edge cells, needed for quadratic-sum or higher-order particle shape.
+ *
+ * Serializes jf data in contiguous buffer and sends data to a neighbors
+ * ghost cells. BSP macro adjusts calculations for different face directions.
+ * Template function wraps the BRP macro to make profiling clearer.
+ *
+ * @tparam Face Enum denoting the face and order of dimensions for calculations
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param i X-dim face coordinate (-1.0: neg. x, 0: origin, 1.0: pos. x)
+ * @param j Y-dim face coordinate (-1.0: neg. y, 0: origin, 1.0: pos. y)
+ * @param k Z-dim face coordinate (-1.0: neg. z, 0: origin, 1.0: pos. z)
+ * @param sbuf_d Send buffer on the device
+ * @param sbuf_h Mirror of sbuf_d on the Host
+ */
+template<typename Face>
+void
+begin_send_edge_hyb_jf(field_array* fa, const int i, const int j, const int k) {
+  int dst = fa->g->bc[BOUNDARY(i,j,k)]; /**< Destination rank */
+  // Only send cells if dst is a valid neighbor and not itself
+  if( 0 <= dst && dst < world_size ) {
+    Kokkos::DualView<float*> sbuf = fa->fb->send_buffer[BOUNDARY(i,j,k)];
+    auto sbuf_d = sbuf.view<Kokkos::DefaultExecutionSpace>();
+    auto sbuf_h = sbuf.view<Kokkos::DefaultHostExecutionSpace>();
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      BSP(x,y,z);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      BSP(y,z,x);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      BSP(z,x,y);
+    }
+  }
+}
+
+#undef BSP
+
+/**
+ * @brief Begin exchanging jf ghost cells between all neighbors to increment
+ * edge cells for quadratic-sum or higher-order particle particle shape.
+ *
+ * Prepares receive buffers, packs face cells into contiguous buffers
+ * and starts non blocking communication with neighbors. Only performs
+ * communication when necessary. Will ignore cases where the process is on a
+ * boundary or if the process topology would make the exchange redundant
+ * (ex. 1D and 2D grids).
+ *
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param g Pointer to grid structure
+ * @param fb Reference to field buffers used for MPI communication
+ */
+void k_begin_remote_edge_hyb_jf(field_array_t* ALIGNED(128) fa,
+                                const grid_t* g,
+                                field_buffers_t& fb) {
+  // TODO halo exchange not yet implemented for ghost->edge summation.
+  // Need modified versions of begin/end_halo_exchange(...)
+  //         to pack local ghosts, unpack by adding to remote edges
+  // instead of pack local edges,  unpack by replacing remote ghosts.
+  // --ATr,2025aug30
+//#ifdef VPIC_ENABLE_HALO_EXCHANGE
+//  begin_halo_add_exchange(fa, field_var::jfx, field_var::rhof+1);
+//#else
+  // Start receiving
+  begin_recv_edge_hyb_jf<XYZ>(fa, -1,  0,  0);
+  begin_recv_edge_hyb_jf<YZX>(fa,  0, -1,  0);
+  begin_recv_edge_hyb_jf<ZXY>(fa,  0,  0, -1);
+  begin_recv_edge_hyb_jf<XYZ>(fa,  1,  0,  0);
+  begin_recv_edge_hyb_jf<YZX>(fa,  0,  1,  0);
+  begin_recv_edge_hyb_jf<ZXY>(fa,  0,  0,  1);
+
+  // Start sending
+  begin_send_edge_hyb_jf<XYZ>(fa, -1,  0,  0);
+  begin_send_edge_hyb_jf<YZX>(fa,  0, -1,  0);
+  begin_send_edge_hyb_jf<ZXY>(fa,  0,  0, -1);
+  begin_send_edge_hyb_jf<XYZ>(fa,  1,  0,  0);
+  begin_send_edge_hyb_jf<YZX>(fa,  0,  1,  0);
+  begin_send_edge_hyb_jf<ZXY>(fa,  0,  0,  1);
+//#endif
+}
+
+#define ERP(x_,y_,z_)                                                          \
+  const grid_t* g = fa->g;                                                     \
+  float* p = reinterpret_cast<float*>(end_recv_port_k(i,j,k,g));               \
+  if(p) {                                                                      \
+    const int nx = g->nx, ny = g->ny, nz = g->nz;                              \
+    const int face = (i+j+k) < 0 ? n##x_ : 1; /*add ghosts to edges*/          \
+    const k_field_t& k_field = fa->k_f_d;                                      \
+    const int face_len = n##y_ * n##z_;                                        \
+    auto jfx_buff  = Kokkos::subview(rbuf_d, Kokkos::make_pair(0*face_len,     \
+                                                               1*face_len));   \
+    auto jfy_buff  = Kokkos::subview(rbuf_d, Kokkos::make_pair(1*face_len,     \
+                                                               2*face_len));   \
+    auto jfz_buff  = Kokkos::subview(rbuf_d, Kokkos::make_pair(2*face_len,     \
+                                                               3*face_len));   \
+    auto rhof_buff = Kokkos::subview(rbuf_d, Kokkos::make_pair(3*face_len,     \
+                                                               4*face_len));   \
+    SYNC_MPI_BUFFER(rbuf_d, rbuf_h);                                           \
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> x_##_face({1,1},{n##y_+1,n##z_+1}); \
+    Kokkos::parallel_for("end_recv_edge_hyb_jf<" #x_ #y_ #z_ ">", x_##_face,   \
+      KOKKOS_LAMBDA(const int y_, const int z_) {                              \
+        const int x_ = face;                                                   \
+        const int voxel = VOXEL(x,y,z,nx,ny,nz);                               \
+        k_field(voxel, field_var::jfx)  += jfx_buff( (z_-1)*n##y_ + (y_-1));   \
+        k_field(voxel, field_var::jfy)  += jfy_buff( (z_-1)*n##y_ + (y_-1));   \
+        k_field(voxel, field_var::jfz)  += jfz_buff( (z_-1)*n##y_ + (y_-1));   \
+        k_field(voxel, field_var::rhof) += rhof_buff((z_-1)*n##y_ + (y_-1));   \
+      });                                                                      \
+  }
+
+/**
+ * @brief End non blocking receive for adding remote jf ghost cells into
+ * local jf edge cells, needed for quadratic-sum or higher-order particle
+ * shape.
+ *
+ * Wait for non blocking communication to complete and unpack the buffer into
+ * the local ranks edge cells. Wait and unpacking the buffer may be made to
+ * overlap between different faces in the future.
+ *
+ * @tparam Face Enum denoting the face and order of dimensions for calculations
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param i X-dim face coordinate (-1.0: neg. x, 0: origin, 1.0: pos. x)
+ * @param j Y-dim face coordinate (-1.0: neg. y, 0: origin, 1.0: pos. y)
+ * @param k Z-dim face coordinate (-1.0: neg. z, 0: origin, 1.0: pos. z)
+ * @param rbuf_d Receive buffer on the device
+ * @param rbuf_h Mirror of rbuf_d on the Host
+ */
+template<typename Face>
+void
+end_recv_edge_hyb_jf(field_array_t* fa, const int i, const int j, const int k) {
+  int src = fa->g->bc[BOUNDARY(-i,-j,-k)]; /**< Source rank */
+  // Only recv cells if src is a valid neighbor and not itself
+  if( 0 <= src && src < world_size ) {
+    Kokkos::DualView<float*> rbuf = fa->fb->recv_buffer[BOUNDARY(i,j,k)];
+    auto rbuf_d = rbuf.view<Kokkos::DefaultExecutionSpace>();
+    auto rbuf_h = rbuf.view<Kokkos::DefaultHostExecutionSpace>();
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      ERP(x,y,z);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      ERP(y,z,x);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      ERP(z,x,y);
+    }
+  }
+}
+
+#undef ERP
+
+/**
+ * @brief End non blocking send for adding local jf ghost cells into remote jf
+ * edge cells, needed for quadratic-sum or higher-order particle shape.
+ *
+ * Ensures the prior send operation is complete and unsets the send buffer.
+ *
+ * @tparam Face Enum denoting the face and order of dimensions for calculations
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param i X-dim face coordinate (-1.0: neg. x, 0: origin, 1.0: pos. x)
+ * @param j Y-dim face coordinate (-1.0: neg. y, 0: origin, 1.0: pos. y)
+ * @param k Z-dim face coordinate (-1.0: neg. z, 0: origin, 1.0: pos. z)
+ */
+template<typename Face>
+void
+end_send_edge_hyb_jf(field_array_t* fa, const int i, const int j, const int k) {
+  int dst = fa->g->bc[BOUNDARY(i,j,k)]; /**< Destination rank */
+  // Only send cells if dst is a valid neighbor and not itself
+  if( 0 <= dst && dst < world_size ) {
+    if constexpr (std::is_same<Face,XYZ>::value) {
+      end_send_port_k(i,j,k,fa->g);
+    } else if constexpr (std::is_same<Face,YZX>::value) {
+      end_send_port_k(i,j,k,fa->g);
+    } else if constexpr (std::is_same<Face,ZXY>::value) {
+      end_send_port_k(i,j,k,fa->g);
+    }
+  }
+}
+
+/**
+ * @brief End exchanging jf ghost cells between all neighbors to increment
+ * edge cells for quadratic-sum or higher-order particle particle shape.
+ *
+ * Wait until MPI communication is complete then unpack the buffers and
+ * fill in the ghost cells with the communicated smoothing variables. Only
+ * performs communication when necessary. Will ignore cases where the process
+ * is on a boundary or if the process topology would make the exchange redundant
+ * (ex. 1D and 2D grids).
+ *
+ * @param fa Pointer for field array structure containing field and grid data
+ * @param g Pointer to grid structure
+ * @param fb Reference to field buffers used for MPI communication
+ */
+void
+k_end_remote_edge_hyb_jf(field_array_t* ALIGNED(128) fa,
+                         const grid_t* g,
+                         field_buffers_t& fb) {
+  // TODO halo exchange not yet implemented for ghost->edge summation.
+  // Need modified versions of begin/end_halo_exchange(...)
+  //         to pack local ghosts, unpack by adding to remote edges
+  // instead of pack local edges,  unpack by replacing remote ghosts.
+  // --ATr,2025aug30
+//#ifdef VPIC_ENABLE_HALO_EXCHANGE
+//  end_halo_add_exchange(fa, field_var::jfx, field_var::rhof+1);
+//#else
+  // End receiving
+  end_recv_edge_hyb_jf<XYZ>(fa, -1,  0,  0);
+  end_recv_edge_hyb_jf<YZX>(fa,  0, -1,  0);
+  end_recv_edge_hyb_jf<ZXY>(fa,  0,  0, -1);
+  end_recv_edge_hyb_jf<XYZ>(fa,  1,  0,  0);
+  end_recv_edge_hyb_jf<YZX>(fa,  0,  1,  0);
+  end_recv_edge_hyb_jf<ZXY>(fa,  0,  0,  1);
+
+  // End sending
+  end_send_edge_hyb_jf<XYZ>(fa, -1,  0,  0);
+  end_send_edge_hyb_jf<YZX>(fa,  0, -1,  0);
+  end_send_edge_hyb_jf<ZXY>(fa,  0,  0, -1);
+  end_send_edge_hyb_jf<XYZ>(fa,  1,  0,  0);
+  end_send_edge_hyb_jf<YZX>(fa,  0,  1,  0);
+  end_send_edge_hyb_jf<ZXY>(fa,  0,  0,  1);
+
+  Kokkos::fence();
+//#endif
 }
 
 /*****************************************************************************

@@ -72,13 +72,25 @@ option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performn
 
 option(VPIC_ENABLE_HDF5 "Enable HDF5 for use during IO. VPIC does not help you install HDF5" OFF)
 
+option(VPIC_ENABLE_HDF5_ASYNC "Enable asynchronous support for HDF5 (EXPERIMENTAL!!!)" OFF)
+
+option(VPIC_ENABLE_PARTICLE_ANNOTATIONS "Enable particle annotations for additional per particle values" OFF)
+
+option(VPIC_ENABLE_TRACER_PARTICLES "Enable tracer particles" OFF)
+
 option(VPIC_ENABLE_VARIABLE_CHARGE "Enable variable charge for particles" OFF)
+
+option(VPIC_ENABLE_EXTERNAL_FORCE "Enable external force for particles" OFF)
 
 option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU-aware MPI. Allows GPUs to communicate with each other directly rather than going through the CPU. If VPIC_ENABLE_GPU_AWARE_MPI is enabled but not supported in MPI, the code may crash." OFF)
 
 option(VPIC_ENABLE_HALO_EXCHANGE "Enable halo exchange code path for remote communication. Temporary option until halo exchange code is accurately tested." ON)
 
-option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." OFF)
+option(VPIC_ENABLE_LEGACY_DATA_STRUCTURES "Enable use of legacy data structures for compatibility" ON)
+
+option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." ON)
+
+option(VPIC_SHAPE_QS "Use quadratic-sum particle shape" OFF)
 
 option(HYB_USE_STATIC_E "Use electrostatic hybrid field solver." OFF)
 
@@ -163,13 +175,9 @@ if(VPIC_ENABLE_HDF5)
     set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DVPIC_ENABLE_HDF5")
 
     # the hdf5 var we need changes based on version...
-    string(REPLACE ";" " " string_libraries "${HDF5_C_LIBRARY}")
-    set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-
-    # if (NOT "${HDF5_C_LIBRARY}" STREQUAL "")
-    #     string(REPLACE ";" " " string_libraries "${HDF5_C_LIBRARIES}")
-    #     set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-    # endif()
+    set(H5LIB "${HDF5_C_LIBRARY}")
+    cmake_path(GET H5LIB PARENT_PATH hdf5_path)
+    set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} -L${hdf5_path} -lhdf5")
 
     include_directories(${HDF5_INCLUDE_DIRS})
 
@@ -215,7 +223,7 @@ if(ENABLE_KOKKOS_CUDA)
     endif()
     set(Kokkos_ENABLE_CUDA ON CACHE BOOL "Use Cuda with Kokkos")
     set(Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL "Enable cuda lambda support")
-    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
 
     # turn off -std=gnu++ to avoid error: identifier "__float128" is undefined issue
     # see https://github.com/UoB-HPC/BabelStream/issues/16
@@ -351,6 +359,12 @@ if (VPIC_ENABLE_VARIABLE_CHARGE)
    message("--     VPIC: Enabled variable charge for particles")
 endif(VPIC_ENABLE_VARIABLE_CHARGE)
 
+if (VPIC_ENABLE_EXTERNAL_FORCE)
+   add_definitions(-DEXTERNAL_FORCE)
+   set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DEXTERNAL_FORCE")
+   message("--     VPIC: Enabled external force for particles")
+endif(VPIC_ENABLE_EXTERNAL_FORCE)
+
 if (VPIC_ENABLE_GPU_AWARE_MPI)
   add_definitions(-DVPIC_ENABLE_GPU_AWARE_MPI)
   message("--     VPIC: Enabled GPU-Aware MPI")
@@ -358,8 +372,36 @@ endif(VPIC_ENABLE_GPU_AWARE_MPI)
 
 if (VPIC_ENABLE_HALO_EXCHANGE)
   add_definitions(-DVPIC_ENABLE_HALO_EXCHANGE)
-  message("--     VPIC: Enabled Halo exchange path")
+  message("--     VPIC: Enabled halo exchange path")
 endif(VPIC_ENABLE_HALO_EXCHANGE)
+
+if (VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+  add_definitions(-DVPIC_ENABLE_PARTICLE_ANNOTATIONS)
+  set(ENABLE_ANNOTATIONS ON CACHE INTERNAL "")
+endif(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+
+if (VPIC_ENABLE_TRACER_PARTICLES)
+  add_definitions(-DVPIC_ENABLE_TRACER_PARTICLES -DVPIC_ENABLE_PARTICLE_ANNOTATIONS -DVPIC_ENABLE_HDF5)
+  set(ENABLE_ANNOTATIONS ON CACHE INTERNAL "")
+  set(ENABLE_TRACERS ON CACHE INTERNAL "")
+  set(ENABLE_HDF5 ON CACHE INTERNAL "")
+endif(VPIC_ENABLE_TRACER_PARTICLES)
+
+if (VPIC_ENABLE_LEGACY_DATA_STRUCTURES)
+  add_definitions(-DVPIC_ENABLE_LEGACY_DATA_STRUCTURES)
+  set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DVPIC_ENABLE_LEGACY_DATA_STRUCTURES")
+  message("--     VPIC: Enabled legacy data structures")
+endif(VPIC_ENABLE_LEGACY_DATA_STRUCTURES)
+
+if (VPIC_SHAPE_QS)
+  add_definitions(-DSHAPE_QS)
+  message("--     VPIC: Using quadratic-sum particle shape")
+  set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} -DSHAPE_QS")
+else()
+  add_definitions(-DSHAPE_NGP)
+  message("--     VPIC: Using nearest-grid-point particle shape")
+  set(VPIC_CXX_FLAGS "${VPIC_CXX_FLAGS} -DSHAPE_NGP")
+endif(VPIC_SHAPE_QS)
 
 if (HYB_USE_SEPARATE_PE)
    add_definitions(-DHYB_USE_SEPARATE_PE)
@@ -398,6 +440,13 @@ endif(USE_V4_SSE)
 if(ENABLE_OPENSSL)
   add_definitions(-DENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
+
+#------------------------------------------------------------------------------#
+# Add compile definitions
+#------------------------------------------------------------------------------#
+#set(EXTERNAL_DEFINITIONS_FILE ${PROJECT_BINARY_DIR}/external_definitions)
+get_directory_property( DirDefs DIRECTORY ${CMAKE_SOURCE_DIR} COMPILE_DEFINITIONS )
+string(REPLACE ";" " -D" DirDefs "-D${DirDefs}")
 
 #------------------------------------------------------------------------------#
 # Output log variables
@@ -512,6 +561,19 @@ else()
 endif()
 target_include_directories(vpic INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} ${HDF5_C_LIBRARIES} Kokkos::kokkos)
+
+#target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
+#if(VPIC_ENABLE_HDF5)
+#  if(VPIC_ENABLE_HDF5_ASYNC)
+#    target_link_directories(vpic INTERFACE "/vast/home/nphtan/vol-async/install/lib/" "/vast/home/nphtan/vol-async/argobots/install/lib")
+#    target_link_libraries(vpic PRIVATE ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} HDF5::HDF5 Kokkos::kokkos h5async asynchdf5 abt)
+#  else()
+#    target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} HDF5::HDF5 Kokkos::kokkos)
+#  endif()
+#else()
+#  target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
+#endif()
+
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
 if (HYB_USE_RADIATION)
   target_compile_definitions(vpic PUBLIC HYB_USE_RADIATION)
@@ -522,7 +584,13 @@ macro(build_a_vpic name deck)
     message(FATAL_ERROR "Could not find deck '${deck}'")
   endif()
   add_executable(${name} ${CMAKE_SOURCE_DIR}/deck/main.cc ${CMAKE_SOURCE_DIR}/deck/wrapper.cc ${VPIC_SRC})
-  target_link_libraries(${name} vpic Kokkos::kokkos)
+  target_link_directories(${name} PUBLIC "/vast/home/nphtan/vol-async/install/lib/")
+  target_compile_options(${name} PRIVATE ${KOKKOS_COMPILE_OPTIONS})
+  if(VPIC_ENABLE_HDF5)
+    target_link_libraries(${name} vpic Kokkos::kokkos HDF5::HDF5)
+  else()
+    target_link_libraries(${name} vpic Kokkos::kokkos)
+  endif()
   target_compile_definitions(${name} PRIVATE INPUT_DECK="${deck}")
 endmacro(build_a_vpic)
 
@@ -536,6 +604,12 @@ if(USER_DECKS)
     build_a_vpic(${NAME} ${DECK})
   endforeach()
 endif()
+
+#string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)
+#message("Build mode flags ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
+#message("Debug build flags ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
+#message("Release build flags ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
+#message("RelWithDebInfo build flags ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 
 #------------------------------------------------------------------------------#
 # Add VPIC integrated test mechanism

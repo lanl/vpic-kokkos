@@ -17,6 +17,16 @@
 #include "../sf_interface/sf_interface.h"
 #include "Kokkos_DualView.hpp"
 
+#ifdef VPIC_ENABLE_HDF5
+#include "hdf5.h"
+#endif
+#ifdef VPIC_ENABLE_HDF5_ASYNC
+#include "h5_async_vol.h"
+#endif
+#ifdef VPIC_ENABLE_PARTICLE_ANNOTATIONS
+#include "standard/annotations.h"
+#endif
+
 typedef int32_t species_id; // Must be 32-bit wide for particle_injector_t
 
 // FIXME: Eventually particle_t (definitely) and ther other formats
@@ -94,6 +104,8 @@ typedef struct pb_diagnostic {
 
 } pb_diagnostic_t;
 
+enum class TracerType { Copy, Move };
+
 class species_t {
     public:
 
@@ -102,27 +114,20 @@ class species_t {
         float m;                            // Species particle rest mass
 
         size_t np = 0, max_np = 0;             // Number and max local particles
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
         particle_t * ALIGNED(128) p;        // Array of particles for the species
+#endif
 
         // TODO: these could be unsigned?
         size_t nm = 0, max_nm = 0;             // Number and max local movers in use
 
         particle_mover_t * ALIGNED(128) pm; // Particle movers
 
-        int64_t last_sorted;                // Step when the particles were last
+        int64_t last_sorted;                // Step when the particles were last sorted.
         int64_t last_indexed;               // Step when the particles were last indexed.    
-        // sorted.
         int sort_interval;                  // How often to sort the species
         int sort_out_of_place;              // Sort method
         int * ALIGNED(128) partition;       // Static array indexed 0:
-
-        k_particle_partition_t k_partition_d;
-        k_particle_partition_t::HostMirror k_partition_h;
-
-        // Used for indirect sorts.
-        k_particle_sortindex_t k_sortindex_d;
-        k_particle_sortindex_t::HostMirror k_sortindex_h;
-
         /**/                                // (nx+2)*(ny+2)*(nz+2).  Each value
         /**/                                // corresponds to the associated particle
         /**/                                // array index of the first particle in
@@ -144,12 +149,23 @@ class species_t {
         /**/                                // Note: SFC NOT IN USE RIGHT NOW THUS
         /**/                                // g->sfc[i]=i ABOVE.
 
+        k_particle_partition_t k_partition_d;
+        k_particle_partition_t::HostMirror k_partition_h;
+
+        // Used for indirect sorts.
+        k_particle_sortindex_t k_sortindex_d;
+        k_particle_sortindex_t::HostMirror k_sortindex_h;
+
         grid_t * g;                         // Underlying grid
         species_id id;                      // Unique identifier for a species
         species_t* next = NULL;             // Next species in the list
 
         // Particle boundary diagnostic.
         pb_diagnostic_t * pb_diag = NULL;
+
+        // Tracer type
+        TracerType tracer_type;
+        species_t* parent_species = NULL;
 
 
         //// END CHECKPOINTED DATA, START KOKKOS //////
@@ -181,6 +197,35 @@ class species_t {
         k_counter_t k_nm_d;               // nm iterator
         k_counter_t::HostMirror k_nm_h;
 
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+#ifdef VPIC_ENABLE_HDF5_ASYNC
+        hid_t es_id;
+#endif
+        bool is_tracer = false;
+        bool using_annotations = false;
+        annotation_vars_t annotation_vars;
+        annotations_t<Kokkos::DefaultExecutionSpace>     annotations_d;
+        annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_h;
+        annotations_t<Kokkos::DefaultExecutionSpace>     annotations_copy_d;
+        annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_copy_h;
+        annotations_t<Kokkos::DefaultHostExecutionSpace> annotations_recv_h;
+
+        size_t np_buffered=0;
+        size_t np_buffered_max=0;
+        std::vector<std::pair<int64_t,int64_t>> np_per_ts; // (np, ts)
+
+        k_particles_t                                particle_io_buffer_d;
+        k_particles_i_t                              particle_cell_io_buffer_d;
+        annotations_t<Kokkos::DefaultExecutionSpace> annotations_io_buffer_d;
+        Kokkos::View<float**, Kokkos::LayoutLeft>    tracer_buffer_d;
+
+        k_particles_t::HostMirror                               particle_io_buffer_h;
+        k_particles_i_t::HostMirror                             particle_cell_io_buffer_h;
+        annotations_t<Kokkos::DefaultHostExecutionSpace>        annotations_io_buffer_h;
+        Kokkos::View<float**, Kokkos::LayoutLeft>::HostMirror   tracer_buffer_h;
+#endif
+
+
         // TODO: this should ultimatley be removeable.
         // This tracks the number of particles we need to move back to the device
         // And is basically the same as nm at certain times?
@@ -207,6 +252,8 @@ class species_t {
         Kokkos::View<size_t*> clean_up_to;
 
         // Init Kokkos Particle Arrays
+        species_t() = default;
+
         species_t(size_t n_particles, size_t n_pmovers)
         {
            init_kokkos_particles(n_particles, n_pmovers);
@@ -267,6 +314,55 @@ class species_t {
          */
         void copy_inbound_to_device();
 
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+        /**
+         *  @brief Create tracer particle from existing species
+         *
+         *  @param src_species    Species to create particle from
+         *  @param index          Index of particle to use
+         */
+        void create_tracer_from(species_t* src_species, const size_t index); 
+
+        /**
+         *  @brief Allocate memory for IO buffering tracers
+         *
+         *  @param N_particles       Number of particles to buffer before dumping
+         *  @param over_alloc_factor Multiplier for over allocating space
+         */
+        void init_io_buffers(const size_t N_particles, const float over_alloc_factor);
+        void init_io_buffers(const size_t N_particles);
+
+        /**
+         * @brief Add additional per particle annotations. 
+         *
+         * @param num_particles Number of particles using annotations
+         * @param num_movers    Number of movers that need annotations
+         * @param vars          Annotation variables
+         */
+        void init_annotations( const size_t num_particles, const size_t num_movers, annotation_vars_t& vars );
+
+        /**
+         * Create tracer particles from parent species using a predicate
+         *
+         * @param parent_species Species of particles to create tracers from
+         * @param tracer_type    Whether to Copy or Move particles to tracers
+         * @param filter         Generic function to decide whether particle is a tracer
+         */
+        void create_tracers_by_predicate( species_t* parent_species,
+                                          const TracerType tracer_type,
+                                          std::function <bool (particle_t)> filter, const int rank ); 
+
+        /**
+         * Create tracer particles from parent species. Select every Nth particle
+         *
+         * @param parent_species Species of particles to create tracers from
+         * @param tracer_type    Whether to Copy or Move particles to tracers
+         * @param skip           Amount of particles to skip between selections
+         */
+        void create_tracers_by_nth( species_t* parent_species,
+                                    const TracerType tracer_type,
+                                    float skip, int rank); 
+#endif
 };
 
 // In species_advance.c
@@ -352,9 +448,11 @@ energy_p_kokkos( const species_t            * RESTRICT sp,
 
 // In rho_p.cxx
 
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
 void
 accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
                   const species_t     * RESTRICT sp );
+#endif
 
 void
 accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
@@ -392,7 +490,7 @@ accumulate_hydro_p( /**/  hydro_array_t        * RESTRICT ha,
 void accumulate_hydro_p_kokkos(
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
-        k_hydro_d_t k_hydro,
+        k_hydro_t k_hydro,
         k_interpolator_t& k_interp,
         const species_t            * RESTRICT sp
 );
@@ -400,7 +498,7 @@ void accumulate_hydro_p_kokkos(
 void accumulate_hydro_p_kokkos_nomove_ngp(
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
-        k_hydro_d_t k_hydro,
+        k_hydro_t k_hydro,
         k_interpolator_t& k_interp,
         const species_t            * RESTRICT sp
 );
@@ -462,15 +560,17 @@ move_p_kokkos(
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
-  float v0, v1, v2, v3, v4, v5, q;
+  float v0, v1, v2, v3, q;
+  float w0, wx, wy, wz, wmx, wmy, wmz;
   int axis, face;
   int64_t neighbor;
   //int pi = int(local_pm_i);
   size_t pi = pm->i;
-  float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
-  const float one=1., two=2., three=3.;
+  float ux,uy,uz,x_half,y_half,z_half,fracdt;
+  constexpr float one=1., one_twelfth=1./12.;
   //const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
   const float rV = 1.0/gdx/gdy/gdz;
+  const float rV12 = rV*one_twelfth;
 //  auto  k_field_scatter_access = k_f_sa.access();
 //  auto accum_sa = accum_sv.access();
   auto scatter_access = scatter_view.access();
@@ -478,10 +578,11 @@ move_p_kokkos(
   //printf("in move_p %d \n", pi);
 
 #ifdef VARIABLE_CHARGE
-  q = rV*p_q*p_w;
+  q = p_q*p_w;
 #else
-  q = rV*qsp*p_w;
+  q = qsp*p_w;
 #endif
+
     //printf("in move %d \n", pi);
 
   for(;;) {
@@ -522,26 +623,85 @@ move_p_kokkos(
       y_half = s_midy + fracdt*uy*gdt/gdy; 
       z_half = s_midz + fracdt*uz*gdt/gdz;
       
-      if(x_half<=one && y_half<=one && z_half<=one
-	 && -x_half<=one && -y_half<=one && -z_half<=one) {
+      if( x_half<=one &&  y_half<=one &&  z_half<=one &&
+         -x_half<=one && -y_half<=one && -z_half<=one) {
         
 	// Accumulate the particle current density
-	
-	//int iii = ii;
-	//int zi = iii/((nx+2)*(ny+2));
-	//iii -= zi*(nx+2)*(ny+2);
-	//int yi = iii/(nx+2);
-	//int xi = iii-yi*(nx+2);
 	
 	//printf("move_p accumulate here");
 	
 	
 	//if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
 	  
-	  scatter_access(ii, field_var::jfx) += q*ux;
-	  scatter_access(ii, field_var::jfy) += q*uy;
-	  scatter_access(ii, field_var::jfz) += q*uz;
-	  scatter_access(ii, field_var::rhof) += q;
+#ifdef SHAPE_NGP
+          scatter_access(ii, field_var::jfx) += q*rV*ux;
+          scatter_access(ii, field_var::jfy) += q*rV*uy;
+          scatter_access(ii, field_var::jfz) += q*rV*uz;
+          scatter_access(ii, field_var::rhof) += q*rV;
+#elif defined( SHAPE_QS )
+          // stencil coefficients
+          // ... OLD hybrid-VPIC with QS shape, the accumulator stores
+          // ... ... p->w*qsp * two*(three - ...)
+          // ... ... hyb_unload_accumulator(...) applies factor rV/12.
+          // ... NEW HVPIC-K not using accumulator (yet), scatter directly to mesh,
+          // ... ... so include all factors
+          w0 =  q*rV12*2.f*( 3.f - x_half*x_half - y_half*y_half - z_half*z_half );
+          wx =  q*rV12*( x_half + 1.f )*( x_half + 1.f );
+          wy =  q*rV12*( y_half + 1.f )*( y_half + 1.f );
+          wz =  q*rV12*( z_half + 1.f )*( z_half + 1.f );
+          wmx = q*rV12*( x_half - 1.f )*( x_half - 1.f );
+          wmy = q*rV12*( y_half - 1.f )*( y_half - 1.f );
+          wmz = q*rV12*( z_half - 1.f )*( z_half - 1.f );
+
+          // Voxel indices
+          int iii = ii;
+          int zi = iii/((nx+2)*(ny+2));
+          iii -= zi*(nx+2)*(ny+2);
+          int yi = iii/(nx+2);
+          int xi = iii-yi*(nx+2);
+          // Neighboring voxel 1D (flattened) indices
+          int iix = VOXEL(xi+1,yi,zi,nx,ny,nz);
+          int iiy = VOXEL(xi,yi+1,zi,nx,ny,nz);
+          int iiz = VOXEL(xi,yi,zi+1,nx,ny,nz);
+          int iimx = VOXEL(xi-1,yi,zi,nx,ny,nz);
+          int iimy = VOXEL(xi,yi-1,zi,nx,ny,nz);
+          int iimz = VOXEL(xi,yi,zi-1,nx,ny,nz);
+
+          scatter_access(ii, field_var::jfx)  += w0*ux;
+          scatter_access(ii, field_var::jfy)  += w0*uy;
+          scatter_access(ii, field_var::jfz)  += w0*uz;
+          scatter_access(ii, field_var::rhof) += w0;
+
+          scatter_access(iix, field_var::jfx)  += wx*ux;
+          scatter_access(iix, field_var::jfy)  += wx*uy;
+          scatter_access(iix, field_var::jfz)  += wx*uz;
+          scatter_access(iix, field_var::rhof) += wx;
+
+          scatter_access(iiy, field_var::jfx)  += wy*ux;
+          scatter_access(iiy, field_var::jfy)  += wy*uy;
+          scatter_access(iiy, field_var::jfz)  += wy*uz;
+          scatter_access(iiy, field_var::rhof) += wy;
+
+          scatter_access(iiz, field_var::jfx)  += wz*ux;
+          scatter_access(iiz, field_var::jfy)  += wz*uy;
+          scatter_access(iiz, field_var::jfz)  += wz*uz;
+          scatter_access(iiz, field_var::rhof) += wz;
+
+          scatter_access(iimx, field_var::jfx)  += wmx*ux;
+          scatter_access(iimx, field_var::jfy)  += wmx*uy;
+          scatter_access(iimx, field_var::jfz)  += wmx*uz;
+          scatter_access(iimx, field_var::rhof) += wmx;
+
+          scatter_access(iimy, field_var::jfx)  += wmy*ux;
+          scatter_access(iimy, field_var::jfy)  += wmy*uy;
+          scatter_access(iimy, field_var::jfz)  += wmy*uz;
+          scatter_access(iimy, field_var::rhof) += wmy;
+
+          scatter_access(iimz, field_var::jfx)  += wmz*ux;
+          scatter_access(iimz, field_var::jfy)  += wmz*uy;
+          scatter_access(iimz, field_var::jfz)  += wmz*uz;
+          scatter_access(iimz, field_var::rhof) += wmz;
+#endif // defined(SHAPE_QS)
 	//}
 	
 	
@@ -662,14 +822,12 @@ move_p_kokkos(
     pm->dispy -= s_dispy;
     pm->dispz -= s_dispz;
 
-    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset
     p_dx += s_dispx+s_dispx;
     p_dy += s_dispy+s_dispy;
     p_dz += s_dispz+s_dispz;
 
     // If an end streak, return success (should be ~50% of the time)
-    //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
 
     if( axis==3 ) break;
 
@@ -703,7 +861,6 @@ move_p_kokkos(
       // Clearer and works with AMD GPUs
       float* disp = static_cast<float*>(&(pm->dispx));
       disp[axis] = -disp[axis];
-
       continue;
     }
 
@@ -713,7 +870,7 @@ move_p_kokkos(
       // displacement in the particle mover.
       pii = 8*pii + face;
       return 1; // Return "mover still in use"
-      }
+    }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
@@ -758,16 +915,17 @@ move_p_kokkos_host_serial(
 {
   const int nx = g->nx;
   const int ny = g->ny;
-  const int nz = g->nz;
+  //const int nz = g->nz;
 
-  float ux,uy,uz,u,absdisp,x_half,y_half,z_half,fracdt;
-  const float one=1., two=2., three=3.;
+  float ux,uy,uz,x_half,y_half,z_half,fracdt;
+  constexpr float one=1., one_twelfth=1./12.;
   const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
   const float rV = g->rdx * g->rdy * g->rdz;
+  const float rV12 = rV*one_twelfth;
 
-  float cx = 0.25 * g->rdy * g->rdz / g->dt;
-  float cy = 0.25 * g->rdz * g->rdx / g->dt;
-  float cz = 0.25 * g->rdx * g->rdy / g->dt;
+  //float cx = 0.25 * g->rdy * g->rdz / g->dt;
+  //float cy = 0.25 * g->rdz * g->rdx / g->dt;
+  //float cz = 0.25 * g->rdx * g->rdy / g->dt;
 
   #define p_dx    k_particles(pi, particle_var::dx)
   #define p_dy    k_particles(pi, particle_var::dy)
@@ -790,7 +948,8 @@ move_p_kokkos_host_serial(
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
-  float v0, v1, v2, v3, v4, v5, q;
+  float v0, v1, v2, v3, q;
+  float w0, wx, wy, wz, wmx, wmy, wmz;
   int axis, face;
   int64_t neighbor;
   //int pi = int(local_pm_i);
@@ -801,6 +960,7 @@ move_p_kokkos_host_serial(
 #else
   q = qsp*p_w;
 #endif
+
     //printf("in move %d \n", pi);
 
   for(;;) {
@@ -835,27 +995,87 @@ move_p_kokkos_host_serial(
     if(v2>fracdt) fracdt=v2;
     fracdt = 2.0*(fracdt-0.5);
 
-      if(fracdt>0){
+    if(fracdt>0){
 
       x_half = s_midx + fracdt*ux*gdt/gdx;
       y_half = s_midy + fracdt*uy*gdt/gdy; 
       z_half = s_midz + fracdt*uz*gdt/gdz;
       
-      if(x_half<=one && y_half<=one && z_half<=one
-	 && -x_half<=one && -y_half<=one && -z_half<=one) {
+      if( x_half<=one &&  y_half<=one &&  z_half<=one && 
+         -x_half<=one && -y_half<=one && -z_half<=one) {
         
 	// Accumulate the particle current density
-	
-      //int iii = ii;
-      //int zi = iii/((nx+2)*(ny+2));
-      //iii -= zi*(nx+2)*(ny+2);
-      //int yi = iii/(nx+2);
-      //int xi = iii-yi*(nx+2);
-      
-      k_jf_accum(ii, accumulator_var::jx) += rV*q*ux;
-      k_jf_accum(ii, accumulator_var::jy) += rV*q*uy;
-      k_jf_accum(ii, accumulator_var::jz) += rV*q*uz;
-      k_jf_accum(ii, accumulator_var::rho) += rV*q;
+
+#ifdef SHAPE_NGP
+        k_jf_accum(ii, accumulator_var::jx) += q*rV*ux;
+        k_jf_accum(ii, accumulator_var::jy) += q*rV*uy;
+        k_jf_accum(ii, accumulator_var::jz) += q*rV*uz;
+        k_jf_accum(ii, accumulator_var::rho) += q*rV;
+#elif defined( SHAPE_QS )
+        // stencil coefficients
+        // ... OLD hybrid-VPIC with QS shape, the accumulator stores
+        // ... ... p->w*qsp * two*(three - ...)
+        // ... ... hyb_unload_accumulator(...) applies factor rV/12.
+        // ... NEW HVPIC-K not using accumulator (yet), scatter directly to mesh,
+        // ... ... so include all factors
+        w0 =  q*rV12*2.f*( 3.f - x_half*x_half - y_half*y_half - z_half*z_half );
+        wx =  q*rV12*( x_half + 1.f )*( x_half + 1.f );
+        wy =  q*rV12*( y_half + 1.f )*( y_half + 1.f );
+        wz =  q*rV12*( z_half + 1.f )*( z_half + 1.f );
+        wmx = q*rV12*( x_half - 1.f )*( x_half - 1.f );
+        wmy = q*rV12*( y_half - 1.f )*( y_half - 1.f );
+        wmz = q*rV12*( z_half - 1.f )*( z_half - 1.f );
+
+        // Voxel indices
+        int iii = ii;
+        int zi = iii/((nx+2)*(ny+2));
+        iii -= zi*(nx+2)*(ny+2);
+        int yi = iii/(nx+2);
+        int xi = iii-yi*(nx+2);
+        // Neighboring voxel 1D (flattened) indices
+        int iix = VOXEL(xi+1,yi,zi,nx,ny,nz);
+        int iiy = VOXEL(xi,yi+1,zi,nx,ny,nz);
+        int iiz = VOXEL(xi,yi,zi+1,nx,ny,nz);
+        int iimx = VOXEL(xi-1,yi,zi,nx,ny,nz);
+        int iimy = VOXEL(xi,yi-1,zi,nx,ny,nz);
+        int iimz = VOXEL(xi,yi,zi-1,nx,ny,nz);
+
+        k_jf_accum(ii, accumulator_var::jx)  += w0*ux;
+        k_jf_accum(ii, accumulator_var::jy)  += w0*uy;
+        k_jf_accum(ii, accumulator_var::jz)  += w0*uz;
+        k_jf_accum(ii, accumulator_var::rho) += w0;
+
+        k_jf_accum(iix, accumulator_var::jx)  += wx*ux;
+        k_jf_accum(iix, accumulator_var::jy)  += wx*uy;
+        k_jf_accum(iix, accumulator_var::jz)  += wx*uz;
+        k_jf_accum(iix, accumulator_var::rho) += wx;
+
+        k_jf_accum(iiy, accumulator_var::jx)  += wy*ux;
+        k_jf_accum(iiy, accumulator_var::jy)  += wy*uy;
+        k_jf_accum(iiy, accumulator_var::jz)  += wy*uz;
+        k_jf_accum(iiy, accumulator_var::rho) += wy;
+
+        k_jf_accum(iiz, accumulator_var::jx)  += wz*ux;
+        k_jf_accum(iiz, accumulator_var::jy)  += wz*uy;
+        k_jf_accum(iiz, accumulator_var::jz)  += wz*uz;
+        k_jf_accum(iiz, accumulator_var::rho) += wz;
+
+        k_jf_accum(iimx, accumulator_var::jx)  += wmx*ux;
+        k_jf_accum(iimx, accumulator_var::jy)  += wmx*uy;
+        k_jf_accum(iimx, accumulator_var::jz)  += wmx*uz;
+        k_jf_accum(iimx, accumulator_var::rho) += wmx;
+
+        k_jf_accum(iimy, accumulator_var::jx)  += wmy*ux;
+        k_jf_accum(iimy, accumulator_var::jy)  += wmy*uy;
+        k_jf_accum(iimy, accumulator_var::jz)  += wmy*uz;
+        k_jf_accum(iimy, accumulator_var::rho) += wmy;
+
+        k_jf_accum(iimz, accumulator_var::jx)  += wmz*ux;
+        k_jf_accum(iimz, accumulator_var::jy)  += wmz*uy;
+        k_jf_accum(iimz, accumulator_var::jz)  += wmz*uz;
+        k_jf_accum(iimz, accumulator_var::rho) += wmz;
+#endif // defined(SHAPE_QS)
+
       } //if indbds
       
     } //ifmore than half dt left

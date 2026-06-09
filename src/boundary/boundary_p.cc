@@ -58,10 +58,10 @@ static const float dir[6] = { 1, 1, 1, -1, -1, -1 };
  */
 void
 boundary_p_kokkos(
-        particle_bc_t       * RESTRICT pbc_list,
-        species_t           * RESTRICT sp_list,
-        field_array_t       * RESTRICT fa
-      )
+                   particle_bc_t       * RESTRICT pbc_list,
+                   species_t           * RESTRICT sp_list,
+                   field_array_t       * RESTRICT fa
+                 )
 {
 
   // Temporary store for local particle injectors
@@ -109,6 +109,22 @@ boundary_p_kokkos(
 
   int bc[6], shared[6];
   int64_t range[6];
+
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+  int max_annotation_size = 0; // Size in bytes of annotations (for each particle)
+  LIST_FOR_EACH(sp, sp_list) {
+    int annotation_size = 0;
+    if(sp->using_annotations) {
+      annotation_size += sp->annotation_vars.i32_vars.size() * sizeof(int);
+      annotation_size += sp->annotation_vars.i64_vars.size() * sizeof(int64_t);
+      annotation_size += sp->annotation_vars.f32_vars.size() * sizeof(float);
+      annotation_size += sp->annotation_vars.f64_vars.size() * sizeof(double);
+    }
+    if(annotation_size > max_annotation_size) 
+      max_annotation_size = annotation_size;
+  }
+  //printf("Rank %d: Max annotation size: %d\n", world_rank, max_annotation_size);
+#endif
 
   for( face=0; face<6; face++ ) {
     bc[face] = g->bc[f2b[face]];
@@ -162,7 +178,12 @@ boundary_p_kokkos(
 
     for( face=0; face<6; face++ )
       if( shared[face] ) {
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+        mp_size_send_buffer( mp, f2b[face], 16+nm*(sizeof(particle_injector_t)+max_annotation_size) );
+//printf("Rank %d: Sending %lu bytes, %lu from annotations, to %d\n", world_rank, static_cast<size_t>(16+nm*(sizeof(particle_injector_t)+max_annotation_size)), static_cast<size_t>(nm*(max_annotation_size)), bc[face]);
+#else
         mp_size_send_buffer( mp, f2b[face], 16+nm*sizeof(particle_injector_t) );
+#endif
         pi_send[face] = (particle_injector_t *)(((char *)mp_send_buffer(mp,f2b[face]))+16);
         n_send[face] = 0;
       }
@@ -179,43 +200,65 @@ boundary_p_kokkos(
     // For each species, load the movers
     LIST_FOR_EACH( sp, sp_list )
     {
-        const auto& particle_send = sp->k_pc_i_h;
+      const auto& particle_send = sp->k_pc_i_h;
 
-        //const float   sp_q  = sp->q;
-        const int32_t sp_id = sp->id;
+      //const float   sp_q  = sp->q;
+      const int32_t sp_id = sp->id;
 
-        //particle_t * RESTRICT ALIGNED(128) p0 = sp->p;
-        //int np = sp->np;
+      //particle_t * RESTRICT ALIGNED(128) p0 = sp->p;
+      //int np = sp->np;
 
-        particle_mover_t * RESTRICT ALIGNED(16)  pm = sp->pm + sp->nm - 1;
-        nm = sp->nm;
+      particle_mover_t * RESTRICT ALIGNED(16)  pm = sp->pm + sp->nm - 1;
+      nm = sp->nm;
 
-        particle_injector_t * RESTRICT ALIGNED(16) pi;
+      particle_injector_t * RESTRICT ALIGNED(16) pi;
 
-        // Note that particle movers for each species are processed in
-        // reverse order.  This allows us to backfill holes in the
-        // particle list created by boundary conditions and/or
-        // communication.  This assumes particle on the mover list are
-        // monotonically increasing.  That is: pm[n].i > pm[n-1].i for
-        // n=1...nm-1.  advance_p and inject_particle create movers with
-        // property if all aged particle injection occurs after
-        // advance_p and before this
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+      annotation_vars_t var_counts = sp->annotation_vars;
+#endif
 
-        // Here we essentially need to remove all accesses of the particle 
-        // array (p0) and instead read from k_pc_h
-        for( ; nm; pm--, nm-- )
+      // Note that particle movers for each species are processed in
+      // reverse order.  This allows us to backfill holes in the
+      // particle list created by boundary conditions and/or
+      // communication.  This assumes particle on the mover list are
+      // monotonically increasing.  That is: pm[n].i > pm[n-1].i for
+      // n=1...nm-1.  advance_p and inject_particle create movers with
+      // property if all aged particle injection occurs after
+      // advance_p and before this
+
+      // Here we essentially need to remove all accesses of the particle array (p0) and instead read from k_pc_h
+      for( ; nm; pm--, nm-- )
+      {
+        //int i = pm->i;
+        int copy_index = nm -1;
+
+        //int voxel = p0[i].i;
+        int voxel = particle_send(copy_index);
+
+        int face = voxel & 7;
+        voxel >>= 3;
+
+        //p0[i].i = voxel;
+        particle_send(copy_index) = voxel;
+
+        int64_t nn = neighbor[ 6*voxel + face ];
+
+        // Absorb
+        if( nn==absorb_particles )
         {
-            //int i = pm->i;
-            size_t copy_index = nm -1;
+          absorbed++;
 
-            //int voxel = p0[i].i;
-            int voxel = particle_send(copy_index);
+          // Ideally, we would batch all rhob accumulations together
+          // for efficiency
+          const auto& krhob_accum_h = fa->k_f_rhob_accum_h;
+          const auto& kparticle_move_h = sp->k_pc_h;
+          const auto& kparticle_move_i_h = sp->k_pc_i_h;
 
-            int face = voxel & 7;
-            voxel >>= 3;
+          float qsp = sp->q;
 
-            //p0[i].i = voxel;
-            particle_send(copy_index) = voxel;
+          // Send the particle to the particle boundary diagnostic
+          if (sp->pb_diag->enable)
+              pbd_write_to_buffer(sp, kparticle_move_h, kparticle_move_i_h, copy_index);
 
             int64_t nn = neighbor[ 6*voxel + face ];
 
@@ -254,7 +297,14 @@ boundary_p_kokkos(
             // Send to a neighboring node
             if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
             {
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+                size_t injector_offset = n_send[face] * (sizeof(particle_injector_t) + max_annotation_size);
+                uint8_t* pi_send_face = reinterpret_cast<uint8_t*>(pi_send[face]);
+                pi = reinterpret_cast<particle_injector_t*>(pi_send_face + injector_offset);
+                n_send[face]++;
+#else
                 pi = &pi_send[face][n_send[face]++];
+#endif
 
                 //pi->dx=p0[i].dx;
                 //pi->dz=p0[i].dz;
@@ -274,15 +324,39 @@ boundary_p_kokkos(
                 //pi->w=p0[i].w;
                 pi->w = sp->k_pc_h(copy_index, particle_var::w);
 #ifdef VARIABLE_CHARGE
-		pi->qp = sp->k_pc_h(copy_index, particle_var::qp);
+                pi->qp = sp->k_pc_h(copy_index, particle_var::qp);
 #endif
-		
+
                 pi->dispx = pm->dispx; pi->dispy = pm->dispy; pi->dispz = pm->dispz;
                 pi->sp_id = sp_id;
 
                 (&pi->dx)[axis[face]] = dir[face];
                 pi->i                 = nn - range[face];
                 pi->sp_id             = sp_id;
+//printf("Rank %d: Sending particle ID %ld\n", world_rank, pi->i);
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+                // Load int annotations
+                int* int_offset = reinterpret_cast<int*>(reinterpret_cast<uint8_t*>(pi) + sizeof(particle_injector_t));
+                for(unsigned int j=0; j<var_counts.i32_vars.size(); j++) {
+                  int_offset[j] = sp->annotations_copy_h.get<int>(copy_index, j);
+                }
+                // Load int64_t annotations
+                int64_t* int64_offset = reinterpret_cast<int64_t*>(reinterpret_cast<uint8_t*>(int_offset) + var_counts.i32_vars.size()*sizeof(int));
+                for(unsigned int j=0; j<var_counts.i64_vars.size(); j++) {
+                  int64_offset[j] = sp->annotations_copy_h.get<int64_t>(copy_index, j);
+//printf("Rank %d: Sending tracer ID %ld\n", world_rank, int64_offset[j]);
+                }
+                // Load float annnotations
+                float* float_offset = reinterpret_cast<float*>(reinterpret_cast<uint8_t*>(int64_offset) + var_counts.i64_vars.size()*sizeof(int64_t));
+                for(unsigned int j=0; j<var_counts.f32_vars.size(); j++) {
+                  float_offset[j] = sp->annotations_copy_h.get<float>(copy_index, j);
+                }
+                // Load double annnotations
+                double* double_offset = reinterpret_cast<double*>(reinterpret_cast<uint8_t*>(float_offset) + var_counts.f32_vars.size()*sizeof(float));
+                for(unsigned int j=0; j<var_counts.f64_vars.size(); j++) {
+                  double_offset[j] = sp->annotations_copy_h.get<double>(copy_index, j);
+                }
+#endif
                 //goto backfill;
                 continue;
             }
@@ -334,12 +408,79 @@ boundary_p_kokkos(
             //np--;
             //p0[i] = p0[np];
 
+          continue;
         }
 
-        //printf(" would be np %d nm %d \n", sp->np, sp->nm);
-        //sp->np = np;
-        //printf("Writing sp->nm = 0 \n");
-        sp->nm = 0;
+        // Send to a neighboring node
+        if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
+        {
+          pi = &pi_send[face][n_send[face]++];
+
+          pi->dx = sp->k_pc_h(copy_index, particle_var::dx);
+          pi->dy = sp->k_pc_h(copy_index, particle_var::dy);
+          pi->dz = sp->k_pc_h(copy_index, particle_var::dz);
+
+          pi->i = nn - range[face];
+
+          pi->ux = sp->k_pc_h(copy_index, particle_var::ux);
+          pi->uy = sp->k_pc_h(copy_index, particle_var::uy);
+          pi->uz = sp->k_pc_h(copy_index, particle_var::uz);
+
+          pi->w = sp->k_pc_h(copy_index, particle_var::w);
+#ifdef VARIABLE_CHARGE
+          pi->qp = sp->k_pc_h(copy_index, particle_var::qp);
+#endif
+          pi->dispx = pm->dispx; pi->dispy = pm->dispy; pi->dispz = pm->dispz;
+          pi->sp_id = sp_id;
+
+          (&pi->dx)[axis[face]] = dir[face];
+          pi->i                 = nn - range[face];
+          pi->sp_id             = sp_id;
+          continue;
+        }
+
+        // User-defined handling
+
+        // After a particle interacts with a boundary it is removed
+        // from the local particle list.  Thus, if a boundary handler
+        // does not want a particle destroyed,  it is the boundary
+        // handler's job to append the destroyed particle to the list
+        // of particles to inject.
+        //
+        // Note that these destruction and creation processes do _not_
+        // adjust rhob by default.  Thus, a boundary handler is
+        // responsible for insuring that the rhob is updated
+        // appropriate for the incident particle it destroys and for
+        // any particles it injects as a result too.
+        //
+        // Since most boundary handlers do local reinjection and are
+        // charge neutral, this means most boundary handlers do
+        // nothing to rhob.
+        int64_t old_nn = nn;
+        nn = -nn - 3; // Assumes reflective/absorbing are -1, -2
+        /*
+           if( (nn>=0) & (nn<nb) ) {
+           Kokkos::abort("Custom boundary not implemented");
+        //n_ci += pbc_interact[nn]( pbc_params[nn], sp, p0+i, pm,
+        //ci+n_ci, 1, face );
+        continue;
+        }
+        */
+
+        // Uh-oh: We fell through
+        //if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) )
+        std::cout << "nn " << nn <<
+            " rangel " << rangel <<
+            " rangeh " << rangeh <<
+            " rangem " << rangem <<
+            " voxel " << face <<
+            " old_nn " << old_nn <<
+            std::endl;
+
+        WARNING(( "Unknown boundary interaction ... dropping particle "
+                    "(species=%s)", sp->name ));
+      }
+      sp->nm = 0;
     }
 
   } while(0);
@@ -361,16 +502,26 @@ boundary_p_kokkos(
     if( shared[face] ) {
       *((int *)mp_send_buffer( mp, f2b[face] )) = n_send[face];
       mp_begin_send( mp, f2b[face], sizeof(int), bc[face], f2b[face] );
+//printf("Rank %d: sending %d particles to %d\n", world_rank, n_send[face], bc[face]);
     }
 
   for( face=0; face<6; face++ )
     if( shared[face] )  {
       mp_end_recv( mp, f2b[face] );
       n_recv[face] = *((int *)mp_recv_buffer( mp, f2b[face] ));
+//printf("Rank %d: Receiving %d particles for face %d\n", world_rank, n_recv[face], face);
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+      mp_size_recv_buffer( mp, f2b[face],
+                           16+n_recv[face]*(sizeof(particle_injector_t)+max_annotation_size) );
+      mp_begin_recv( mp, f2b[face], 16+n_recv[face]*(sizeof(particle_injector_t)+max_annotation_size),
+                     bc[face], f2rb[face] );
+//printf("Rank %d: Receive buffer is %lu bytes, %lu from annotations, for port %d\n", world_rank, static_cast<size_t>(16+n_recv[face]*(sizeof(particle_injector_t)+max_annotation_size)), static_cast<size_t>(n_recv[face]*(max_annotation_size)), bc[face]);
+#else
       mp_size_recv_buffer( mp, f2b[face],
                            16+n_recv[face]*sizeof(particle_injector_t) );
       mp_begin_recv( mp, f2b[face], 16+n_recv[face]*sizeof(particle_injector_t),
                      bc[face], f2rb[face] );
+#endif
     }
 
   for( face=0; face<6; face++ )
@@ -379,8 +530,13 @@ boundary_p_kokkos(
       // FIXME: ASSUMES MP WON'T MUCK WITH REST OF SEND BUFFER. IF WE
       // DID MORE EFFICIENT MOVER ALLOCATION ABOVE, THIS WOULD BE
       // ROBUSTED AGAINST MP IMPLEMENTATION VAGARIES
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+      mp_begin_send( mp, f2b[face], 16+n_send[face]*(sizeof(particle_injector_t)+max_annotation_size),
+                     bc[face], f2b[face] );
+#else
       mp_begin_send( mp, f2b[face], 16+n_send[face]*sizeof(particle_injector_t),
                      bc[face], f2b[face] );
+#endif
     }
 
   do {
@@ -414,13 +570,20 @@ boundary_p_kokkos(
       particle_mover_t    * RESTRICT ALIGNED(16) pm;
       const particle_injector_t * RESTRICT ALIGNED(16) pi;
       size_t nm, n, id;
+      uint8_t* recv_buffer = NULL;
 
       face++; if( face==7 ) face = 0;
       if( face==6 ) pi = ci, n = n_ci;
       else if( shared[face] ) {
         mp_end_recv( mp, f2b[face] );
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+        recv_buffer = (uint8_t*)(mp_recv_buffer(mp, f2b[face])) + 16;
+        pi = (particle_injector_t *)
+          (((char *)recv_buffer));
+#else
         pi = (particle_injector_t *)
           (((char *)mp_recv_buffer(mp,f2b[face]))+16);
+#endif
         n  = n_recv[face];
       } else continue;
 
@@ -428,8 +591,15 @@ boundary_p_kokkos(
       // RECEIVED FROM OTHER NODES) HAVE VALID PARTICLE IDS.
 
       // FIXME: the benefit of doing this backwards goes away. Go forward?
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+      pi = (particle_injector_t*)(recv_buffer + (n-1)*(sizeof(particle_injector)+max_annotation_size));
+#else
       pi += n-1;
+#endif
       for( ; n; pi--, n-- ) {
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+        pi = (particle_injector_t*)(recv_buffer + (n-1)*(sizeof(particle_injector)+max_annotation_size));
+#endif
         id = pi->sp_id;
 
         pm = sp_pm[id];
@@ -461,11 +631,36 @@ boundary_p_kokkos(
         particle_recv(write_index, particle_var::uz) = pi->uz;
         particle_recv(write_index, particle_var::w)  = pi->w;
 #ifdef VARIABLE_CHARGE
-	particle_recv(write_index, particle_var::qp)  = pi->qp;
+        particle_recv(write_index, particle_var::qp) = pi->qp;
 #endif
-	
+
         int pii = pi->i;
         particle_recv_i(write_index) = pii;
+
+//printf("Rank %d: Receiving particle ID %ld\n", world_rank, pii);
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+        // Store int annotations
+        int* int_offset = (int*)((uint8_t*)(pi) + sizeof(particle_injector_t));
+        for(unsigned int j=0; j<sp_[id]->annotation_vars.i32_vars.size(); j++) {
+          sp_[id]->annotations_recv_h.set<int>(write_index, j, int_offset[j]);
+        }
+        // Store int64_t annotations
+        int64_t* int64_offset = (int64_t*)((uint8_t*)(int_offset) + sp_[id]->annotation_vars.i32_vars.size()*sizeof(int));
+        for(unsigned int j=0; j<sp_[id]->annotation_vars.i64_vars.size(); j++) {
+          sp_[id]->annotations_recv_h.set<int64_t>(write_index, j, int64_offset[j]);
+//printf("Rank %d: Receiving tracer ID %ld\n", world_rank, sp_[id]->annotations_recv_h.get<int64_t>(write_index, j));
+        }
+        // Store float annnotations
+        float* float_offset = (float*)((uint8_t*)(int64_offset) + sp_[id]->annotation_vars.i64_vars.size()*sizeof(int64_t));
+        for(unsigned int j=0; j<sp_[id]->annotation_vars.f32_vars.size(); j++) {
+          sp_[id]->annotations_recv_h.set<float>(write_index, j, float_offset[j]);
+        }
+        // Store double annnotations
+        double* double_offset = (double*)((uint8_t*)(float_offset) + sp_[id]->annotation_vars.f32_vars.size()*sizeof(float));
+        for(unsigned int j=0; j<sp_[id]->annotation_vars.f64_vars.size(); j++) {
+          sp_[id]->annotations_recv_h.set<double>(write_index, j, double_offset[j]);
+        }
+#endif
 
         // track how many particles we buffer up here
         sp_[id]->num_to_copy++;
@@ -500,7 +695,7 @@ boundary_p_kokkos(
             // We don't want to keep this guy, so nudge him off the end
             sp_[id]->num_to_copy--;
 
-            // And more him to the "send" array for next iter
+            // And move him to the "send" array for next iter
             particle_send(keep_id, particle_var::dx) = particle_recv(write_index, particle_var::dx);
             particle_send(keep_id, particle_var::dy) = particle_recv(write_index, particle_var::dy);
             particle_send(keep_id, particle_var::dz) = particle_recv(write_index, particle_var::dz);
@@ -509,9 +704,28 @@ boundary_p_kokkos(
             particle_send(keep_id, particle_var::uz) = particle_recv(write_index, particle_var::uz);
             particle_send(keep_id, particle_var::w)  = particle_recv(write_index, particle_var::w);
 #ifdef VARIABLE_CHARGE
-	    particle_send(keep_id, particle_var::qp) = particle_recv(write_index, particle_var::qp);
+            particle_send(keep_id, particle_var::qp) = particle_recv(write_index, particle_var::qp);
 #endif
             particle_send_i(keep_id)  = particle_recv_i(write_index);
+#if defined(VPIC_ENABLE_TRACER_PARTICLES) || defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS)
+            // Copy int annotations
+            for(unsigned int j=0; j<sp_[id]->annotation_vars.i32_vars.size(); j++) {
+              sp_[id]->annotations_copy_h.set<int>(keep_id, j, sp_[id]->annotations_recv_h.get<int>(write_index, j));
+            }
+            // Copy int64_t annotations
+            for(unsigned int j=0; j<sp_[id]->annotation_vars.i64_vars.size(); j++) {
+              sp_[id]->annotations_copy_h.set<int64_t>(keep_id, j, sp_[id]->annotations_recv_h.get<int64_t>(write_index, j));
+//printf("Rank %d: Sending tracer ID %ld again\n", world_rank, sp_[id]->annotations_copy_h.get<int64_t>(keep_id, j));
+            }
+            // Copy float annnotations
+            for(unsigned int j=0; j<sp_[id]->annotation_vars.f32_vars.size(); j++) {
+              sp_[id]->annotations_copy_h.set<float>(keep_id, j, sp_[id]->annotations_recv_h.get<float>(write_index, j));
+            }
+            // Copy double annnotations
+            for(unsigned int j=0; j<sp_[id]->annotation_vars.f64_vars.size(); j++) {
+              sp_[id]->annotations_copy_h.set<double>(keep_id, j, sp_[id]->annotations_recv_h.get<double>(write_index, j));
+            }
+#endif
         }
 
       }
@@ -532,464 +746,20 @@ boundary_p_kokkos(
   // Having the accumulator array saves us from copying rhob to the host every
   // step where a particle is absorbed.
   if (absorbed){
-      int n_fields = fa->g->nv;
-      auto& kfd = fa->k_f_d;
-      auto& kfad = fa->k_f_rhob_accum_d;
-      auto& kfah = fa->k_f_rhob_accum_h;
-      Kokkos::deep_copy(kfad, kfah);
+    int n_fields = fa->g->nv;
+    auto& kfd = fa->k_f_d;
+    auto& kfad = fa->k_f_rhob_accum_d;
+    auto& kfah = fa->k_f_rhob_accum_h;
+    Kokkos::deep_copy(kfad, kfah);
 
-      Kokkos::parallel_for("Add rhob accumulation to device rhob", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace > (0, n_fields), KOKKOS_LAMBDA (int i) {
-                kfd(i, field_var::rhob) += kfad(i);
-      });
+    auto field_policy = Kokkos::RangePolicy<>(0, n_fields);
+    Kokkos::parallel_for("Add rhob accumulation to device rhob", field_policy, 
+    KOKKOS_LAMBDA (int i) {
+      kfd(i, field_var::rhob) += kfad(i);
+    });
 
-      // Zero host accum array
-      Kokkos::deep_copy(kfah, 0.0f);
+    // Zero host accum array
+    Kokkos::deep_copy(kfah, 0.0f);
   }
 }
 
-void
-boundary_p( particle_bc_t       * RESTRICT pbc_list,
-            species_t           * RESTRICT sp_list,
-            field_array_t       * RESTRICT fa,
-            accumulator_array_t * RESTRICT aa ) {
-
-  // Gives the local mp port associated with a local face
-  static const int f2b[6]  = { BOUNDARY(-1, 0, 0),
-                               BOUNDARY( 0,-1, 0),
-                               BOUNDARY( 0, 0,-1),
-                               BOUNDARY( 1, 0, 0),
-                               BOUNDARY( 0, 1, 0),
-                               BOUNDARY( 0, 0, 1) };
-
-  // Gives the remote mp port associated with a local face
-  static const int f2rb[6] = { BOUNDARY( 1, 0, 0),
-                               BOUNDARY( 0, 1, 0),
-                               BOUNDARY( 0, 0, 1),
-                               BOUNDARY(-1, 0, 0),
-                               BOUNDARY( 0,-1, 0),
-                               BOUNDARY( 0, 0,-1) };
-
-  // Gives the axis associated with a local face
-  static const int axis[6]  = { 0, 1, 2,  0,  1,  2 };
-
-  // Gives the location of sending face on the receiver
-  static const float dir[6] = { 1, 1, 1, -1, -1, -1 };
-
-  // Temporary store for local particle injectors
-  // FIXME: Ugly static usage
-  static particle_injector_t * RESTRICT ALIGNED(16) ci = NULL;
-  static int max_ci = 0;
-
-  int n_send[6], n_recv[6], n_ci;
-
-  species_t * sp;
-  int face;
-
-  // Check input args
-
-  if( !sp_list ) return; // Nothing to do if no species
-  if( !fa || !aa || sp_list->g!=aa->g || fa->g!=aa->g )
-    ERROR(( "Bad args" ));
-
-  // Unpack the particle boundary conditions
-
-  particle_bc_func_t pbc_interact[MAX_PBC];
-  void * pbc_params[MAX_PBC];
-  const int nb = num_particle_bc( pbc_list );
-  if( nb>MAX_PBC ) ERROR(( "Update this to support more particle boundary conditions" ));
-  for( particle_bc_t * pbc=pbc_list; pbc; pbc=pbc->next ) {
-    pbc_interact[-pbc->id-3] = pbc->interact;
-    pbc_params[  -pbc->id-3] = pbc->params;
-   }
-
-  // Unpack fields
-
-  field_t * RESTRICT ALIGNED(128) f = fa->f;
-  grid_t  * RESTRICT              g = fa->g;
-
-  // Unpack accumulator
-
-  accumulator_t * RESTRICT ALIGNED(128) a0 = aa->a;
-
-  // Unpack the grid
-
-  const int64_t * RESTRICT ALIGNED(128) neighbor = g->neighbor;
-  /**/  mp_t    * RESTRICT              mp       = g->mp;
-  const int64_t rangel = g->rangel;
-  const int64_t rangeh = g->rangeh;
-  const int64_t rangem = g->range[world_size];
-  /*const*/ int bc[6], shared[6];
-  /*const*/ int64_t range[6];
-  for( face=0; face<6; face++ ) {
-    bc[face] = g->bc[f2b[face]];
-    shared[face] = (bc[face]>=0) && (bc[face]<world_size) &&
-                   (bc[face]!=world_rank);
-    if( shared[face] ) range[face] = g->range[bc[face]];
-  }
-
-  // Begin receiving the particle counts
-
-  for( face=0; face<6; face++ )
-    if( shared[face] ) {
-      mp_size_recv_buffer( mp, f2b[face], sizeof(int) );
-      mp_begin_recv( mp, f2b[face], sizeof(int), bc[face], f2rb[face] );
-    }
-
-  // Load the particle send and local injection buffers
-
-  do {
-
-    particle_injector_t * RESTRICT ALIGNED(16) pi_send[6];
-
-    // Presize the send and injection buffers
-    //
-    // Each buffer is large enough to hold one injector corresponding
-    // to every mover in use (worst case, but plausible scenario in
-    // beam simulations, is one buffer gets all the movers).
-    //
-    // FIXME: We could be several times more efficient in our particle
-    // injector buffer sizing here.  Namely, we could create on local
-    // injector buffer of nm is size.  All injection for all
-    // boundaries would be done here.  The local buffer would then be
-    // counted to determine the size of each send buffer.  The local
-    // buffer would then move all injectors into the approate send
-    // buffers (leaving only the local injectors).  This would require
-    // some extra data motion though.  (But would give a more robust
-    // implementation against variations in MP implementation.)
-    //
-    // FIXME: This presizing assumes that custom boundary conditions
-    // inject at most one particle per incident particle.  Currently,
-    // the invocation of pbc_interact[*] insures that assumption will
-    // be satisfied (if the handlers conform that it).  We should be
-    // more flexible though in the future (especially given above the
-    // above overalloc).
-
-    int nm = 0; LIST_FOR_EACH( sp, sp_list ) nm += sp->nm;
-
-    for( face=0; face<6; face++ )
-      if( shared[face] ) {
-        mp_size_send_buffer( mp, f2b[face], 16+nm*sizeof(particle_injector_t) );
-        pi_send[face] = (particle_injector_t *)(((char *)mp_send_buffer(mp,f2b[face]))+16);
-        n_send[face] = 0;
-      }
-
-    if( max_ci<nm ) {
-      particle_injector_t * new_ci = ci;
-      FREE_ALIGNED( new_ci );
-      MALLOC_ALIGNED( new_ci, nm, 16 );
-      ci     = new_ci;
-      max_ci = nm;
-    }
-    n_ci = 0;
-
-    // For each species, load the movers
-
-    LIST_FOR_EACH( sp, sp_list ) {
-      const float   sp_q  = sp->q;
-      const int32_t sp_id = sp->id;
-
-      particle_t * RESTRICT ALIGNED(128) p0 = sp->p;
-      int np = sp->np;
-
-      particle_mover_t * RESTRICT ALIGNED(16)  pm = sp->pm + sp->nm - 1;
-      nm = sp->nm;
-
-      particle_injector_t * RESTRICT ALIGNED(16) pi;
-      int64_t nn;
-
-      std::sort(sp->pm, sp->pm + sp->nm, compareParticleMovers<particle_mover_t>);
-
-      // Note that particle movers for each species are processed in
-      // reverse order.  This allows us to backfill holes in the
-      // particle list created by boundary conditions and/or
-      // communication.  This assumes particle on the mover list are
-      // monotonically increasing.  That is: pm[n].i > pm[n-1].i for
-      // n=1...nm-1.  advance_p and inject_particle create movers with
-      // property if all aged particle injection occurs after
-      // advance_p and before this
-
-      for( ; nm; pm--, nm-- )
-      {
-        int i = pm->i;
-        int voxel = p0[i].i;
-        face = voxel & 7;
-        voxel >>= 3;
-        p0[i].i = voxel;
-        nn = neighbor[ 6*voxel + face ];
-
-        // Absorb
-        if( nn==absorb_particles ) {
-          // Ideally, we would batch all rhob accumulations together
-          // for efficiency
-          accumulate_rhob( f, p0+i, g, sp_q );
-          goto backfill;
-        }
-
-        // Send to a neighboring node
-
-        if( ((nn>=0) & (nn< rangel)) | ((nn>rangeh) & (nn<=rangem)) ) {
-          pi = &pi_send[face][n_send[face]++];
-#         ifdef V4_ACCELERATION
-          copy_4x1( &pi->dx,    &p0[i].dx  );
-          copy_4x1( &pi->ux,    &p0[i].ux  );
-          copy_4x1( &pi->dispx, &pm->dispx );
-#         else
-          pi->dx=p0[i].dx; pi->dy=p0[i].dy; pi->dz=p0[i].dz;
-          pi->i =nn - range[face];
-          pi->ux=p0[i].ux; pi->uy=p0[i].uy; pi->uz=p0[i].uz; pi->w=p0[i].w;
-          pi->dispx = pm->dispx; pi->dispy = pm->dispy; pi->dispz = pm->dispz;
-          pi->sp_id = sp_id;
-#         endif
-          (&pi->dx)[axis[face]] = dir[face];
-          pi->i                 = nn - range[face];
-          pi->sp_id             = sp_id;
-          goto backfill;
-        }
-
-        // User-defined handling
-
-        // After a particle interacts with a boundary it is removed
-        // from the local particle list.  Thus, if a boundary handler
-        // does not want a particle destroyed,  it is the boundary
-        // handler's job to append the destroyed particle to the list
-        // of particles to inject.
-        //
-        // Note that these destruction and creation processes do _not_
-        // adjust rhob by default.  Thus, a boundary handler is
-        // responsible for insuring that the rhob is updated
-        // appropriate for the incident particle it destroys and for
-        // any particles it injects as a result too.
-        //
-        // Since most boundary handlers do local reinjection and are
-        // charge neutral, this means most boundary handlers do
-        // nothing to rhob.
-
-        nn = -nn - 3; // Assumes reflective/absorbing are -1, -2
-        if( (nn>=0) & (nn<nb) ) {
-          n_ci += pbc_interact[nn]( pbc_params[nn], sp, p0+i, pm,
-                                    ci+n_ci, 1, face );
-          goto backfill;
-        }
-
-        // Uh-oh: We fell through
-
-        WARNING(( "Unknown boundary interaction ... dropping particle "
-                  "(species=%s)", sp->name ));
-      backfill:
-
-        np--;
-#       ifdef V4_ACCELERATION
-        copy_4x1( &p0[i].dx, &p0[np].dx );
-        copy_4x1( &p0[i].ux, &p0[np].ux );
-#       else
-        p0[i] = p0[np];
-#       endif
-
-      }
-
-      sp->np = np;
-      sp->nm = 0;
-    }
-
-  } while(0);
-
-  // Finish exchanging particle counts and start exchanging actual
-  // particles.
-
-  // Note: This is wasteful of communications.  A better protocol
-  // would fuse the exchange of the counts with the exchange of the
-  // messages.  in a slightly more complex protocol.  However, the MP
-  // API prohibits such a model.  Unfortuantely, refining MP is not
-  // much help here.  Under the hood on Roadrunner, the DaCS API also
-  // prohibits such (specifically, in both, you can't do the
-  // equilvanet of a MPI_Getcount to determine how much data you
-  // actually received.
-
-  for( face=0; face<6; face++ )
-    if( shared[face] ) {
-      *((int *)mp_send_buffer( mp, f2b[face] )) = n_send[face];
-      mp_begin_send( mp, f2b[face], sizeof(int), bc[face], f2b[face] );
-    }
-
-  for( face=0; face<6; face++ )
-    if( shared[face] )  {
-      mp_end_recv( mp, f2b[face] );
-      n_recv[face] = *((int *)mp_recv_buffer( mp, f2b[face] ));
-      mp_size_recv_buffer( mp, f2b[face],
-                           16+n_recv[face]*sizeof(particle_injector_t) );
-      mp_begin_recv( mp, f2b[face], 16+n_recv[face]*sizeof(particle_injector_t),
-                     bc[face], f2rb[face] );
-    }
-
-  for( face=0; face<6; face++ )
-    if( shared[face] ) {
-      mp_end_send( mp, f2b[face] );
-      // FIXME: ASSUMES MP WON'T MUCK WITH REST OF SEND BUFFER. IF WE
-      // DID MORE EFFICIENT MOVER ALLOCATION ABOVE, THIS WOULD BE
-      // ROBUSTED AGAINST MP IMPLEMENTATION VAGARIES
-      mp_begin_send( mp, f2b[face], 16+n_send[face]*sizeof(particle_injector_t),
-                     bc[face], f2b[face] );
-    }
-
-# ifndef DISABLE_DYNAMIC_RESIZING
-  // Resize particle storage to accomodate worst case inject
-
-  do {
-    int n;
-
-    // Resize each species's particle and mover storage to be large
-    // enough to guarantee successful injection.  (If we broke down
-    // the n_recv[face] by species before sending it, we could be
-    // tighter on memory footprint here.)
-
-    int max_inj = n_ci;
-    for( face=0; face<6; face++ )
-      if( shared[face] ) max_inj += n_recv[face];
-
-    LIST_FOR_EACH( sp, sp_list ) {
-      particle_mover_t * new_pm;
-      particle_t * new_p;
-
-      n = sp->np + max_inj;
-      if( n>sp->max_np ) {
-        n = n + (n>>2) + (n>>4); // Increase by 31.25% (~<"silver
-        /**/                     // ratio") to minimize resizes (max
-        /**/                     // rate that avoids excessive heap
-        /**/                     // fragmentation)
-        WARNING(( "Resizing local %s particle storage from %i to %i",
-                  sp->name, sp->max_np, n ));
-        // FIXME: KOKKOS REALLOC AS WELL ALSO FAIL HERE UNTIL THIS IS DONE
-        assert(0)
-
-        MALLOC_ALIGNED( new_p, n, 128 );
-        COPY( new_p, sp->p, sp->np );
-        FREE_ALIGNED( sp->p );
-        sp->p = new_p, sp->max_np = n;
-      }
-
-      n = sp->nm + max_inj;
-      if( n>sp->max_nm ) {
-        n = n + (n>>2) + (n>>4); // See note above
-        WARNING(( "Resizing local %s mover storage from %i to %i",
-                  sp->name, sp->max_nm, n ));
-        MALLOC_ALIGNED( new_pm, n, 128 );
-        COPY( new_pm, sp->pm, sp->nm );
-        FREE_ALIGNED( sp->pm );
-        sp->pm = new_pm;
-        sp->max_nm = n;
-      }
-    }
-  } while(0);
-# endif
-
-  do {
-
-    // Unpack the species list for random acesss
-
-    particle_t       * RESTRICT ALIGNED(32) sp_p[ MAX_SP];
-    particle_mover_t * RESTRICT ALIGNED(32) sp_pm[MAX_SP];
-    float sp_q[MAX_SP];
-    int sp_np[MAX_SP];
-    int sp_nm[MAX_SP];
-
-#   ifdef DISABLE_DYNAMIC_RESIZING
-    int sp_max_np[64], n_dropped_particles[64];
-    int sp_max_nm[64], n_dropped_movers[64];
-#   endif
-
-    if( num_species( sp_list ) > MAX_SP )
-      ERROR(( "Update this to support more species" ));
-    LIST_FOR_EACH( sp, sp_list ) {
-      sp_p[  sp->id ] = sp->p;
-      sp_pm[ sp->id ] = sp->pm;
-      sp_q[  sp->id ] = sp->q;
-      sp_np[ sp->id ] = sp->np;
-      sp_nm[ sp->id ] = sp->nm;
-#     ifdef DISABLE_DYNAMIC_RESIZING
-      sp_max_np[sp->id]=sp->max_np; n_dropped_particles[sp->id]=0;
-      sp_max_nm[sp->id]=sp->max_nm; n_dropped_movers[sp->id]=0;
-#     endif
-    }
-
-    // Inject particles.  We do custom local injection first to
-    // increase message overlap opportunities.
-
-    face = 5;
-    do {
-      /**/  particle_t          * RESTRICT ALIGNED(32) p;
-      /**/  particle_mover_t    * RESTRICT ALIGNED(16) pm;
-      const particle_injector_t * RESTRICT ALIGNED(16) pi;
-      int np, nm, n, id;
-
-      face++; if( face==7 ) face = 0;
-      if( face==6 ) pi = ci, n = n_ci;
-      else if( shared[face] ) {
-        mp_end_recv( mp, f2b[face] );
-        pi = (const particle_injector_t *)
-          (((char *)mp_recv_buffer(mp,f2b[face]))+16);
-        n  = n_recv[face];
-      } else continue;
-
-      // Reverse order injection is done to reduce thrashing of the
-      // particle list (particles are removed reverse order so the
-      // overall impact of removal + injection is to keep injected
-      // particles in order).
-      //
-      // WARNING: THIS TRUSTS THAT THE INJECTORS (INCLUDING THOSE
-      // RECEIVED FROM OTHER NODES) HAVE VALID PARTICLE IDS.
-
-      pi += n-1;
-      for( ; n; pi--, n-- ) {
-        id = pi->sp_id;
-        p  = sp_p[id];  np = sp_np[id];
-        pm = sp_pm[id]; nm = sp_nm[id];
-
-#       ifdef DISABLE_DYNAMIC_RESIZING
-        if( np>=sp_max_np[id] ) { n_dropped_particles[id]++; continue; }
-#       endif
-#       ifdef V4_ACCELERATION
-        copy_4x1(  &p[np].dx,    &pi->dx    );
-        copy_4x1(  &p[np].ux,    &pi->ux    );
-#       else
-        p[np].dx=pi->dx; p[np].dy=pi->dy; p[np].dz=pi->dz; p[np].i=pi->i;
-        p[np].ux=pi->ux; p[np].uy=pi->uy; p[np].uz=pi->uz; p[np].w=pi->w;
-#       endif
-        sp_np[id] = np+1;
-
-#       ifdef DISABLE_DYNAMIC_RESIZING
-        if( nm>=sp_max_nm[id] ) { n_dropped_movers[id]++;    continue; }
-#       endif
-#       ifdef V4_ACCELERATION
-        copy_4x1( &pm[nm].dispx, &pi->dispx );
-        pm[nm].i = np;
-#       else
-        pm[nm].dispx=pi->dispx; pm[nm].dispy=pi->dispy; pm[nm].dispz=pi->dispz;
-        pm[nm].i=np;
-#       endif
-        sp_nm[id] = nm + move_p( p, pm+nm, fa->k_jf_accum_h, g, sp_q[id] );
-      }
-    } while(face!=5);
-
-    LIST_FOR_EACH( sp, sp_list ) {
-#     ifdef DISABLE_DYNAMIC_RESIZING
-      if( n_dropped_particles[sp->id] )
-        WARNING(( "Dropped %i particles from species \"%s\".  Use a larger "
-                  "local particle allocation in your simulation setup for "
-                  "this species on this node.",
-                  n_dropped_particles[sp->id], sp->name ));
-      if( n_dropped_movers[sp->id] )
-        WARNING(( "%i particles were not completed moved to their final "
-                  "location this timestep for species \"%s\".  Use a larger "
-                  "local particle mover buffer in your simulation setup "
-                  "for this species on this node.",
-                  n_dropped_movers[sp->id], sp->name ));
-#     endif
-      sp->np=sp_np[sp->id];
-      sp->nm=sp_nm[sp->id];
-    }
-
-  } while(0);
-
-  for( face=0; face<6; face++ )
-    if( shared[face] ) mp_end_send(mp,f2b[face]);
-}

@@ -1,0 +1,13 @@
+#!/bin/bash
+#SBATCH -t 6:00:00     # walltime,
+#SBATCH -N 4           # number of cluster nodes
+#SBATCH -n 144          # number of MPI ranks / Slurm tasks
+#SBATCH -o slurm%j.out # pathname of stdout file
+#SBATCH -e slurm%j.err # pathname of stderr file, using job and first node values
+#SBATCH -J mir
+# load modulefiles
+module load gcc openmpi
+
+# run the app
+srun -n 144 ./GDT-hybrid-full.Linux >& outfile
+##--restore restart0/restart.0  >& outfile2 

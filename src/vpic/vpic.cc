@@ -10,6 +10,7 @@
 
 #include "vpic.h"
 #include "dump_strategy.h"
+#include "mpi.h"
 
 /* Note that, when a vpic_simulation is created (and thus registered
    with the checkpt service), it is created empty; none of the simulation
@@ -34,6 +35,7 @@ checkpt_vpic_simulation( const vpic_simulation * vpic ) {
   CHECKPT_FPTR( vpic->hydro_array );
   CHECKPT_FPTR( vpic->species_list );
   CHECKPT_FPTR( vpic->fluid_species_list );
+  CHECKPT_FPTR( vpic->tracers_list );
   CHECKPT_FPTR( vpic->particle_bc_list );
   CHECKPT_FPTR( vpic->emitter_list );
   CHECKPT_FPTR( vpic->collision_op_list );
@@ -52,6 +54,7 @@ restore_vpic_simulation( void ) {
   RESTORE_FPTR( vpic->hydro_array );
   RESTORE_FPTR( vpic->species_list );
   RESTORE_FPTR( vpic->fluid_species_list );
+  RESTORE_FPTR( vpic->tracers_list );
   RESTORE_FPTR( vpic->particle_bc_list );
   RESTORE_FPTR( vpic->emitter_list );
   RESTORE_FPTR( vpic->collision_op_list );
@@ -72,6 +75,7 @@ reanimate_vpic_simulation( vpic_simulation * vpic ) {
   REANIMATE_FPTR( vpic->hydro_array );
   REANIMATE_FPTR( vpic->species_list );
   REANIMATE_FPTR( vpic->fluid_species_list );
+  REANIMATE_FPTR( vpic->tracers_list );
   REANIMATE_FPTR( vpic->particle_bc_list );
   REANIMATE_FPTR( vpic->emitter_list );
   REANIMATE_FPTR( vpic->collision_op_list );
@@ -117,6 +121,7 @@ vpic_simulation::~vpic_simulation() {
   delete_particle_bc_list( particle_bc_list );
   delete_species_list( species_list );
   delete_fluid_species_list( fluid_species_list );
+  delete_species_list( tracers_list );
   delete_hydro_array( hydro_array );
   delete_interpolator_array( interpolator_array );
   delete_field_array( field_array );
@@ -140,7 +145,7 @@ void vpic_simulation::print_run_details()
     if (rank() == 0)
     {
         species_t* sp = nullptr;
-	fluid_species_t* fsp = nullptr;
+        fluid_species_t* fsp = nullptr;
         // Read run details and print them out
         // Focus on performance detemring quantities, and allow the deck to print
         // physics focused params:
@@ -164,14 +169,14 @@ void vpic_simulation::print_run_details()
                 std::cout << "  # " << sp->name << " np " << sp->np << " max_np " << sp->max_np << std::endl;
             }
         }
-	if (fluid_species_list )
-	  {
-	    std::cout << "## Local Fluid Species: " <<  num_fluid_species( fluid_species_list ) << std::endl;
-	    LIST_FOR_EACH( fsp, fluid_species_list )
-	      {
-		std::cout << "  # " << fsp->name << std::endl;
-	      }
-	  }
+        if (fluid_species_list )
+        {
+            std::cout << "## Local Fluid Species: " <<  num_fluid_species( fluid_species_list ) << std::endl;
+            LIST_FOR_EACH( fsp, fluid_species_list )
+            {
+                std::cout << "  # " << fsp->name << std::endl;
+            }
+        }
         std::cout << "######### End Run Details ######" << std::endl;
         std::cout << std::endl; // blank line
     }
@@ -231,6 +236,93 @@ void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
 
 #endif
 
+#if defined( VPIC_ENABLE_TRACER_PARTICLES ) || defined( VPIC_ENABLE_ANNOTATIONS )
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  LIST_FOR_EACH_SPECIES( sp, simulation.species_list, simulation.tracers_list )
+  {
+    if(sp->using_annotations) {
+      sprintf( fname, "%s.%s.annotations", fbase, sp->name );
+      FileIOStatus status = fileIO.open(fname, io_write);
+      if(status == fail) ERROR(("Could not open \"%s\"", fname));
+
+      // Write annotation var map for each type 
+      auto& annot = sp->annotation_vars;
+      int n_i32_vars = annot.i32_vars.size();
+      fileIO.write(&n_i32_vars, 1);
+      if(n_i32_vars > 0) {
+        std::string i32_str;
+        for(int i=0; i<n_i32_vars; i++)
+          i32_str += annot.i32_vars[i] + std::string(";");
+        const int str_len = i32_str.size();
+        fileIO.write(&str_len, 1);
+        fileIO.write(i32_str.c_str(), i32_str.size());
+      }
+
+      int n_i64_vars = annot.i64_vars.size();
+      fileIO.write(&n_i64_vars, 1);
+      if(n_i64_vars > 0) {
+        std::string i64_str;
+        for(int i=0; i<n_i64_vars; i++)
+          i64_str += annot.i64_vars[i] + ";";
+        const int str_len = i64_str.size();
+        fileIO.write(&str_len, 1);
+        fileIO.write(i64_str.c_str(), i64_str.size());
+      }
+
+      int n_f32_vars = sp->annotation_vars.f32_vars.size();
+      fileIO.write(&n_f32_vars, 1);
+      if(n_f32_vars > 0) {
+        std::string f32_str;
+        for(int i=0; i<n_f32_vars; i++)
+          f32_str += annot.f32_vars[i] + ";";
+        const int str_len = f32_str.size();
+        fileIO.write(&str_len, 1);
+        fileIO.write(f32_str.c_str(), f32_str.size());
+      }
+
+      int n_f64_vars = sp->annotation_vars.f64_vars.size();
+      fileIO.write(&n_f64_vars, 1);
+      if(n_f64_vars > 0) {
+        std::string f64_str;
+        for(int i=0; i<n_f64_vars; i++)
+          f64_str += annot.f64_vars[i] + ";";
+        const int str_len = f64_str.size();
+        fileIO.write(&str_len, 1);
+        fileIO.write(f64_str.c_str(), f64_str.size());
+      }
+
+      // Write annotation data
+      if(n_i32_vars > 0) {
+        fileIO.write(sp->annotations_h.i32.data(), sp->annotations_h.i32.span());
+        fileIO.write(sp->annotations_copy_h.i32.data(), sp->annotations_copy_h.i32.span());
+        fileIO.write(sp->annotations_recv_h.i32.data(), sp->annotations_recv_h.i32.span());
+      }
+      if(n_i64_vars > 0) {
+        fileIO.write(sp->annotations_h.i64.data(), sp->annotations_h.i64.span());
+        fileIO.write(sp->annotations_copy_h.i64.data(), sp->annotations_copy_h.i64.span());
+        fileIO.write(sp->annotations_recv_h.i64.data(), sp->annotations_recv_h.i64.span());
+      }
+      if(n_f32_vars > 0) {
+        fileIO.write(sp->annotations_h.f32.data(), sp->annotations_h.f32.span());
+        fileIO.write(sp->annotations_copy_h.f32.data(), sp->annotations_copy_h.f32.span());
+        fileIO.write(sp->annotations_recv_h.f32.data(), sp->annotations_recv_h.f32.span());
+      }
+      if(n_f64_vars > 0) {
+        fileIO.write(sp->annotations_h.f64.data(), sp->annotations_h.f64.span());
+        fileIO.write(sp->annotations_copy_h.f64.data(), sp->annotations_copy_h.f64.span());
+        fileIO.write(sp->annotations_recv_h.f64.data(), sp->annotations_recv_h.f64.span());
+      }
+      // Write buffer data
+      fileIO.write(sp->tracer_buffer_h.data(), sp->tracer_buffer_h.span());
+      fileIO.write(sp->annotations_io_buffer_h.i32.data(), sp->annotations_io_buffer_h.i32.span());
+      fileIO.write(sp->annotations_io_buffer_h.i64.data(), sp->annotations_io_buffer_h.i64.span());
+      fileIO.write(sp->annotations_io_buffer_h.f32.data(), sp->annotations_io_buffer_h.f32.span());
+      fileIO.write(sp->annotations_io_buffer_h.f64.data(), sp->annotations_io_buffer_h.f64.span());
+      if( fileIO.close() ) ERROR(( "File close failed on checkpoint tracers!!!" ));
+    }
+  }
+#endif
 }
 
 /**
@@ -239,7 +331,7 @@ void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
  *
  * @param simulation The vpic_simulation that was restored
  */
-void restore_kokkos(vpic_simulation& simulation)
+void restore_kokkos(vpic_simulation& simulation, const char *fbase)
 {
     // The way the VPIC checkpoint/restore works is by copying raw bytes and
     // pointers.  It messes with the reference counting built into Kokkos, and
@@ -254,15 +346,16 @@ void restore_kokkos(vpic_simulation& simulation)
     // We may be able to do that one in one step, but this way is clearer
 
     // Restore Particles
+
     species_t* sp;
-    LIST_FOR_EACH( sp, simulation.species_list )
+    LIST_FOR_EACH_SPECIES( sp, simulation.species_list, simulation.tracers_list )
     {
         // TODO: we can bury this in the class
-	new(&sp->k_partition_d) k_particle_partition_t();
-	new(&sp->k_partition_h) k_particle_partition_t::HostMirror();
+        new(&sp->k_partition_d) k_particle_partition_t();
+        new(&sp->k_partition_h) k_particle_partition_t::HostMirror();
         new(&sp->k_sortindex_d) k_particle_sortindex_t();
-        new(&sp->k_sortindex_h) k_particle_sortindex_t::HostMirror();	
-	
+        new(&sp->k_sortindex_h) k_particle_sortindex_t::HostMirror();
+
         new(&sp->k_p_d) k_particles_t();
         new(&sp->k_p_i_d) k_particles_i_t();
         new(&sp->k_pc_d) k_particle_copy_t::HostMirror();
@@ -292,15 +385,151 @@ void restore_kokkos(vpic_simulation& simulation)
 
         sp->init_kokkos_particles();
 
+#if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
+        if(sp->using_annotations) {
+          new(&sp->annotation_vars) annotation_vars_t();
+          new(&sp->annotations_d) annotations_t<Kokkos::DefaultExecutionSpace>();
+          new(&sp->annotations_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
+          new(&sp->annotations_copy_d) annotations_t<Kokkos::DefaultExecutionSpace>();
+          new(&sp->annotations_copy_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
+          new(&sp->annotations_recv_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
+
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+          new(&sp->np_per_ts) std::vector<std::pair<int64_t,int64_t>>();
+
+          new(&sp->particle_io_buffer_d) k_particles_t();
+          new(&sp->particle_cell_io_buffer_d) k_particles_t();
+          new(&sp->annotations_io_buffer_d) annotations_t<Kokkos::DefaultExecutionSpace>();
+          new(&sp->tracer_buffer_d) Kokkos::View<float**, Kokkos::LayoutLeft>();
+
+          new(&sp->particle_io_buffer_h) k_particles_t::HostMirror();
+          new(&sp->particle_cell_io_buffer_h) k_particles_t::HostMirror();
+          new(&sp->annotations_io_buffer_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
+          new(&sp->tracer_buffer_h) Kokkos::View<float**, Kokkos::LayoutLeft>::HostMirror();
+#endif
+        }
+
+        if(!sp->using_annotations) {
+          sp->copy_to_device();
+        }
+#endif
         sp->copy_to_device();
     }
+#if defined( VPIC_ENABLE_TRACER_PARTICLES ) || defined( VPIC_ENABLE_PARTICLE_ANNOTATIONS )
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    LIST_FOR_EACH_SPECIES( sp, simulation.species_list, simulation.tracers_list )
+    {
+      if(sp->using_annotations) {
+        char fname[256];
+        FileIO fileIO;
+        sprintf(fname, "%s.%s.annotations", fbase, sp->name);
+        FileIOStatus status = fileIO.open(fname, io_read);
+        if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
+
+        annotation_vars_t annotation_vars;
+        // Read annotation var map for each type 
+        int n_i32_vars = 0, n_i64_vars=0, n_f32_vars=0, n_f64_vars=0;
+
+        // Read i32 var map
+        fileIO.read(&n_i32_vars, 1);
+        if(n_i32_vars > 0) {
+          int str_len;
+          fileIO.read(&str_len, 1);
+          std::string var_str(str_len, 'a');
+          fileIO.read(var_str.data(), str_len);
+          size_t next = 0, last = 0;
+          while((next = var_str.find(";", last)) != std::string::npos) {
+            annotation_vars.i32_vars.push_back(var_str.substr(last, next-last));
+            last = next+1;
+          }
+        }
+
+        // Read i64 var map
+        fileIO.read(&n_i64_vars, 1);
+        if(n_i64_vars > 0) {
+          int str_len;
+          fileIO.read(&str_len, 1);
+          std::string var_str(str_len, 'a');
+          fileIO.read(var_str.data(), str_len);
+          size_t next = 0, last = 0;
+          while((next = var_str.find(";", last)) != std::string::npos) {
+            annotation_vars.i64_vars.push_back(var_str.substr(last, next-last));
+            last = next+1;
+          }
+        }
+
+        // Read f32 var map
+        fileIO.read(&n_f32_vars, 1);
+        if(n_f32_vars > 0) {
+          int str_len;
+          fileIO.read(&str_len, 1);
+          std::string var_str(str_len, 'a');
+          fileIO.read(var_str.data(), str_len);
+          size_t next = 0, last = 0;
+          while((next = var_str.find(";", last)) != std::string::npos) {
+            annotation_vars.f32_vars.push_back(var_str.substr(last, next-last));
+            last = next+1;
+          }
+        }
+
+        // Read f64 var map
+        fileIO.read(&n_f64_vars, 1);
+        if(n_f64_vars > 0) {
+          int str_len;
+          fileIO.read(&str_len, 1);
+          std::string var_str(str_len, 'a');
+          fileIO.read(var_str.data(), str_len);
+          size_t next = 0, last = 0;
+          while((next = var_str.find(";", last)) != std::string::npos) {
+            annotation_vars.f64_vars.push_back(var_str.substr(last, next-last));
+            last = next+1;
+          }
+        }
+
+        // Initialize annotations and buffers
+        sp->init_annotations(sp->max_np, sp->max_nm, annotation_vars);
+        sp->init_io_buffers(sp->np_buffered_max);
+
+        // Read annotation data
+        if(n_i32_vars > 0) {
+          fileIO.read(sp->annotations_h.i32.data(), sp->annotations_h.i32.span());
+          fileIO.read(sp->annotations_copy_h.i32.data(), sp->annotations_copy_h.i32.span());
+          fileIO.read(sp->annotations_recv_h.i32.data(), sp->annotations_recv_h.i32.span());
+        }
+        if(n_i64_vars > 0) {
+          fileIO.read(sp->annotations_h.i64.data(), sp->annotations_h.i64.span());
+          fileIO.read(sp->annotations_copy_h.i64.data(), sp->annotations_copy_h.i64.span());
+          fileIO.read(sp->annotations_recv_h.i64.data(), sp->annotations_recv_h.i64.span());
+        }
+        if(n_f32_vars > 0) {
+          fileIO.read(sp->annotations_h.f32.data(), sp->annotations_h.f32.span());
+          fileIO.read(sp->annotations_copy_h.f32.data(), sp->annotations_copy_h.f32.span());
+          fileIO.read(sp->annotations_recv_h.f32.data(), sp->annotations_recv_h.f32.span());
+        }
+        if(n_f64_vars > 0) {
+          fileIO.read(sp->annotations_h.f64.data(), sp->annotations_h.f64.span());
+          fileIO.read(sp->annotations_copy_h.f64.data(), sp->annotations_copy_h.f64.span());
+          fileIO.read(sp->annotations_recv_h.f64.data(), sp->annotations_recv_h.f64.span());
+        }
+        // Read io buffers
+        fileIO.read(sp->tracer_buffer_h.data(), sp->tracer_buffer_h.span());
+        fileIO.read(sp->annotations_io_buffer_h.i32.data(), sp->annotations_io_buffer_h.i32.span());
+        fileIO.read(sp->annotations_io_buffer_h.i64.data(), sp->annotations_io_buffer_h.i64.span());
+        fileIO.read(sp->annotations_io_buffer_h.f32.data(), sp->annotations_io_buffer_h.f32.span());
+        fileIO.read(sp->annotations_io_buffer_h.f64.data(), sp->annotations_io_buffer_h.f64.span());
+        if( fileIO.close() ) ERROR(( "File close failed on restore tracers!!!" ));
+        sp->copy_to_device();
+      }
+    }
+#endif
 
     int nv = simulation.grid->nv;
 
     // Restore field array
     field_array_t* fa = simulation.field_array;
     new(&fa->k_f_d) k_field_t();
-    new(&fa->k_field_sa_d) k_field_sa_t();
+    new(&fa->k_field_sv_d) k_field_sv_t();
     new(&fa->k_fe_d) k_field_edge_t();
     new(&fa->k_f_h) k_field_t::HostMirror();
     new(&fa->k_fe_h) k_field_edge_t::HostMirror();
@@ -326,9 +555,9 @@ void restore_kokkos(vpic_simulation& simulation)
 
     // Restore hydro array
     hydro_array_t* ha = simulation.hydro_array;
-    new(&ha->k_h_d) k_hydro_d_t();
-    new(&ha->k_h_h) k_hydro_d_t::HostMirror();
-    ha->k_h_d = k_hydro_d_t("k_hydro", nv);
+    new(&ha->k_h_d) k_hydro_t();
+    new(&ha->k_h_h) k_hydro_t::HostMirror();
+    ha->k_h_d = k_hydro_t("k_hydro", nv);
     ha->k_h_h = Kokkos::create_mirror_view(ha->k_h_d);
     // No need to populate hydro
 
@@ -343,7 +572,7 @@ void restore_kokkos(vpic_simulation& simulation)
       fsp->init_kokkos_fluids( nv ); //, xyz_sz, yzx_sz, zxy_sz );
       fsp->copy_to_device();
     }
-	
+
     // Restore Material Data
     sfa_params_t* params = reinterpret_cast<sfa_params_t*>(fa->params);
     new(&params->k_mc_d) k_material_coefficient_t();

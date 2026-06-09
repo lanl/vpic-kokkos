@@ -17,12 +17,16 @@
 #include "vpic.h"
 #include "dumpmacros.h"
 #include "../util/io/FileUtils.h"
+#include <filesystem>
 
 /* -1 means no ranks talk */
 #define VERBOSE_rank -1
 
 // TODO: this should live somewhere more sensible
 std::unordered_map<species_id, size_t> tframe_map;
+#ifdef VPIC_ENABLE_HDF5
+#include "hdf5.h"
+#endif
 
 // FIXME: NEW FIELDS IN THE GRID READ/WRITE WAS HACKED UP TO BE BACKWARD
 // COMPATIBLE WITH EXISTING EXTERNAL 3RD PARTY VISUALIZATION SOFTWARE.
@@ -59,7 +63,6 @@ void vpic_simulation::enable_hdf5_dump()
 /*****************************************************************************
  * ASCII dump IO
  *****************************************************************************/
-
 void
 vpic_simulation::dump_energies( const char *fname,
                                 int append ) {
@@ -103,11 +106,38 @@ vpic_simulation::dump_energies( const char *fname,
   hasnan_f = hasnan_f || (en_f[4] != en_f[4]);
   hasnan_f = hasnan_f || (en_f[5] != en_f[5]);
 
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
+  std::map<std::string, double> energy_map;
+  LIST_FOR_EACH(sp,species_list) {
+    en_p = energy_p_kokkos( sp, interpolator_array );
+    if(rank() == 0 && status!=fail && !sp->is_tracer) {
+      std::string sp_name = std::string(sp->name);
+      energy_map[sp_name] = en_p;
+    }
+  }
+  LIST_FOR_EACH(sp,tracers_list) {
+    en_p = energy_p_kokkos( sp, interpolator_array );
+    if(rank() == 0 && status!=fail && (sp->parent_species == NULL)) {
+      std::string sp_name = std::string(sp->name);
+      energy_map[sp_name] = en_p;
+    } else if(rank() == 0 && status!=fail && sp->is_tracer) {
+      std::string sp_name = std::string(sp->parent_species->name);
+      energy_map[sp_name] += en_p;
+    }
+  }
+  LIST_FOR_EACH(sp,species_list) {
+    if( rank()==0 && !sp->is_tracer ) fileIO.print( " %e", energy_map[sp->name] );
+  }
+  LIST_FOR_EACH(sp,tracers_list) {
+    if( rank()==0 && (sp->parent_species == NULL) ) fileIO.print( " %e", energy_map[sp->name] );
+  }
+#else
   LIST_FOR_EACH(sp,species_list) {
     en_p = energy_p_kokkos( sp, interpolator_array );
     if( rank()==0 && status!=fail ) fileIO.print( " %e", en_p );
     hasnan_p = hasnan_p || (en_p != en_p);
   }
+#endif
 
   if( rank()==0 && status!=fail ) {
     fileIO.print( "\n" );
@@ -205,7 +235,6 @@ vpic_simulation::dump_materials( const char *fname ) {
                   m->sigmax, m->sigmay, m->sigmaz );
   if( fileIO.close() ) ERROR(( "File close failed on dump materials!!!" ));
 }
-
 
 /*****************************************************************************
  * Binary dump IO
@@ -312,17 +341,35 @@ vpic_simulation::dump_fluids( const char *fsp_name,
  * New dump logic
  *---------------------------------------------------------------------------*/
 
-static FieldInfo fieldInfo[12] = {
-  { "Electric Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-  { "Electric Field Divergence Error", "SCALAR", "1", "FLOATING_POINT",
-    sizeof(float) },
-  { "Magnetic Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-  { "Magnetic Field Divergence Error", "SCALAR", "1", "FLOATING_POINT",
-    sizeof(float) },
-  { "TCA Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-  { "Bound Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
-  { "Free Current Field", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
-  { "Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
+static FieldInfo fieldInfo[total_field_groups] = {
+  { "Electric Field",           "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // ex,ey,ez
+  { "Electric Field Divergence Error", "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // div_e_err
+  { "Magnetic Field",           "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // cbx,cby,cbz
+  { "Scalar Electron Pressure", "SCALAR", "1", "FLOATING POINT",  sizeof(float) }, // pe
+  { "External Magnetic Field",  "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // cbx0,cby0,cbz0
+  { "Initial Electron Temperature", "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // te0
+  { "TCA Field",                "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // tcax,tcay,tcaz
+  { "Bound Charge Density",     "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // rhob
+  { "Free Current Field",       "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // jfx,jfy,jfz
+  { "Charge Density",           "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // rhof
+  { "Old Free Current Field",   "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // jfxold,jfyold,jfzold
+  { "Old Charge Density",       "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // rhofold
+  { "Smoothed E Field",         "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // tx,ty,tz
+  { "Electron Temperature",     "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // te
+  { "Smoothed B Field",         "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // ox,oy,oz
+  { "oe",                       "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // oe
+  { "Electron Pressure",        "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // pex,pey,pez
+  { "Magnetic Field Divergence Error", "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // div_b_err
+  { "Electron Velocity",        "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // ux,uy,uz
+  { "ue",                       "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // ue
+  { "Electron Momentum Source", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // sx,sy,sz
+  { "Electron Energy Source",   "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // se
+#ifdef EXTERNAL_FORCE
+  { "External Electric Field",  "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // Ex0,Ey0,Ez0
+  { "_pad1",                    "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // _pad1
+  { "External Gravity Field",   "VECTOR", "3", "FLOATING_POINT", sizeof(float) }, // Gx0,Gy0,Gz0
+  { "_pad2",                    "SCALAR", "1", "FLOATING_POINT", sizeof(float) }, // _pad2
+#endif
   { "Edge Material", "VECTOR", "3", "INTEGER", sizeof(material_id) },
   { "Node Material", "SCALAR", "1", "INTEGER", sizeof(material_id) },
   { "Face Material", "VECTOR", "3", "INTEGER", sizeof(material_id) },
@@ -549,3 +596,26 @@ vpic_simulation::fluid_dump( const char * speciesname,
       fsp,
       grid);
 }
+
+#if defined( VPIC_ENABLE_HDF5 ) && defined( VPIC_ENABLE_TRACER_PARTICLES )
+void 
+vpic_simulation::tracer_dump(const char* species_name, 
+                             DumpParameters& dumpParams)
+{
+  std::string filename = std::string(dumpParams.baseDir) + std::string("/") 
+                       + std::string(dumpParams.baseFileName);
+  uint32_t dump_vars = 0;
+  for(uint32_t i=0; i<32; i++) {
+    if(dumpParams.output_vars.bitset(i)) {
+      dump_vars |= (1<<i);
+    }
+  }
+  species_t* sp = find_species_name( species_name, tracers_list );
+  // Dump tracers to buffer or file
+  if(sp->np_buffered_max > 0) {
+    dump_tracers_buffered_hdf5(species_name, dump_vars, filename.c_str());
+  } else {
+    dump_tracers_hdf5(species_name, dump_vars, filename.c_str());
+  }
+}
+#endif

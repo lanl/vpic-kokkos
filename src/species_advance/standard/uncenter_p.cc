@@ -1,12 +1,14 @@
 #define IN_spa
 #include "spa_private.h"
 
-void uncenter_p_kokkos(
+void 
+uncenter_p_kokkos(
         k_particles_t& k_particles,
         k_particles_i_t& k_particles_i,
         k_interpolator_t& k_interp,
         size_t np,
-        float qdt_2mc_c
+        float qdt_2mc_c,
+        float dt_2c
 )
 {
 #ifndef VARIABLE_CHARGE
@@ -15,6 +17,7 @@ void uncenter_p_kokkos(
 #else
   const float dt_2mc_c = qdt_2mc_c;
 #endif
+  const float minus_dt_2c    = -dt_2c; // For backwards half advance
   const float one            = 1.;
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
@@ -31,34 +34,9 @@ void uncenter_p_kokkos(
 #endif
   #define pii     k_particles_i(p_index)
 
-  // Interpolator Defines (f->x)
-  #define f_cbx k_interp(ii, interpolator_var::cbx)
-  #define f_cby k_interp(ii, interpolator_var::cby)
-  #define f_cbz k_interp(ii, interpolator_var::cbz)
-  #define f_ex  k_interp(ii, interpolator_var::ex)
-  #define f_ey  k_interp(ii, interpolator_var::ey)
-  #define f_ez  k_interp(ii, interpolator_var::ez)
-
-  #define f_dexdy    k_interp(ii, interpolator_var::dexdy)
-  #define f_dexdz    k_interp(ii, interpolator_var::dexdz)
-
-  #define f_d2exdydz k_interp(ii, interpolator_var::d2exdydz)
-  #define f_deydx    k_interp(ii, interpolator_var::deydx)
-  #define f_deydz    k_interp(ii, interpolator_var::deydz)
-
-  #define f_d2eydzdx k_interp(ii, interpolator_var::d2eydzdx)
-  #define f_dezdx    k_interp(ii, interpolator_var::dezdx)
-  #define f_dezdy    k_interp(ii, interpolator_var::dezdy)
-
-  #define f_d2ezdxdy k_interp(ii, interpolator_var::d2ezdxdy)
-  #define f_dcbxdx   k_interp(ii, interpolator_var::dcbxdx)
-  #define f_dcbydy   k_interp(ii, interpolator_var::dcbydy)
-  #define f_dcbzdz   k_interp(ii, interpolator_var::dcbzdz)
-
-
   // this goes to np using p_index
-  Kokkos::parallel_for("uncenter p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace >
-      (0, np), KOKKOS_LAMBDA (size_t p_index) {
+  Kokkos::parallel_for("uncenter p", Kokkos::RangePolicy <>(0, np), 
+    KOKKOS_LAMBDA (const size_t p_index) {
 
     int ii = pii;
     float hax, hay, haz, l_cbx, l_cby, l_cbz;
@@ -68,13 +46,13 @@ void uncenter_p_kokkos(
     float qdt_2mc = -dt_2mc_c*p_q; // For backwards half advance
     float qdt_4mc = 0.5*qdt_2mc;   // For backwards half rotation
 #endif
-    
-    hax  = qdt_2mc*(      ( f_ex    ) );
-    hay  = qdt_2mc*(      ( f_ey    ) );
-    haz  = qdt_2mc*(      ( f_ez    ) );
-    l_cbx  = f_cbx;// + p_dx*f_dcbxdx;            // Interpolate B
-    l_cby  = f_cby;// + p_dy*f_dcbydy;
-    l_cbz  = f_cbz;// + p_dz*f_dcbzdz;
+
+    const interpolator_t intp = read_interpolator(k_interp, ii); // Load interpolators
+
+    interpolate_e(intp, p_dx, p_dy, p_dz, hax, hay, haz, qdt_2mc, minus_dt_2c); // Interpolate E
+                                      
+    interpolate_b(intp, p_dx, p_dy, p_dz, l_cbx, l_cby, l_cbz); // Interpolate B
+
     v0   = qdt_4mc;///(float)sqrt(one + (p_ux*p_ux + (p_uy*p_uy + p_uz*p_uz)));
     /**/                                     // Boris - scalars
     v1    = l_cbx*l_cbx + (l_cby*l_cby + l_cbz*l_cbz);
@@ -111,5 +89,6 @@ uncenter_p( /**/  species_t            * RESTRICT sp,
 #else
   const float qdt_2mc          = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
 #endif
-  uncenter_p_kokkos(k_particles, k_particles_i, k_interp, np, qdt_2mc);
+  const float dt_2c            = (sp->g->dt)/(2*sp->g->cvac);
+  uncenter_p_kokkos(k_particles, k_particles_i, k_interp, np, qdt_2mc, dt_2c);
 }

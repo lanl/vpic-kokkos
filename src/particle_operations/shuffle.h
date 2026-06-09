@@ -47,6 +47,9 @@ void swap(const k_particles_t& particles, size_t i, size_t j) {
   auto uy_i = particles(i, particle_var::uy);
   auto uz_i = particles(i, particle_var::uz);
   auto w_i  = particles(i, particle_var::w);
+#ifdef VARIABLE_CHARGE
+  auto qp_i  = particles(i, particle_var::qp);
+#endif
 
   particles(i, particle_var::dx) = particles(j, particle_var::dx);
   particles(i, particle_var::dy) = particles(j, particle_var::dy);
@@ -55,6 +58,9 @@ void swap(const k_particles_t& particles, size_t i, size_t j) {
   particles(i, particle_var::uy) = particles(j, particle_var::uy);
   particles(i, particle_var::uz) = particles(j, particle_var::uz);
   particles(i, particle_var::w)  = particles(j, particle_var::w);
+#ifdef VARIABLE_CHARGE
+  particles(i, particle_var::qp) = particles(j, particle_var::qp);
+#endif
 
   particles(j, particle_var::dx) = dx_i;
   particles(j, particle_var::dy) = dy_i;
@@ -63,6 +69,9 @@ void swap(const k_particles_t& particles, size_t i, size_t j) {
   particles(j, particle_var::uy) = uy_i;
   particles(j, particle_var::uz) = uz_i;
   particles(j, particle_var::w)  = w_i;
+#ifdef VARIABLE_CHARGE
+  particles(j, particle_var::qp) = qp_i;
+#endif
 
 }
 

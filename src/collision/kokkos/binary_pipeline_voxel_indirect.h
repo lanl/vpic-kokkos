@@ -154,7 +154,7 @@ struct binary_collision_pipeline {
     if( static_cast<size_t>(_spj->np)      > _spj_sortindex_ra.extent(0) ||
         static_cast<size_t>(_spj->g->nv+1) != _spj_partition_ra.extent(0) ) {
       printf("_spi->np (=%zu) ?= _spj_sortindex_ra.extent(0) (=%lu)\n",_spj->np,_spj_sortindex_ra.extent(0));
-      printf("_spj->g->nv+1 (=%d) ?= _spj_partition_ra.extent(0) (=%lu)\n",_spj->g->nv+1,_spj_partition_ra.extent(0));	
+      printf("_spj->g->nv+1 (=%d) ?= _spj_partition_ra.extent(0) (=%lu)\n",_spj->g->nv+1,_spj_partition_ra.extent(0)); 
       ERROR(("Bad spj sort products."));
     }
 
@@ -296,14 +296,14 @@ struct binary_collision_pipeline {
     auto policy = Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO());
     if(model.var_wt){
       constexpr int n_int   = 1;
-      constexpr int n_float = 1;	
+      constexpr int n_float = 1;
       constexpr int level   = 0; //per team shared momery
       policy = policy.set_scratch_size(level, Kokkos::PerTeam(n_int*sizeof(int)+n_float*sizeof(float)));
     }
 
     if constexpr (VariableWeight) {    
       Kokkos::parallel_for("binary_collision_pipeline::apply_model",
-       policy, KOKKOS_LAMBDA (member_type team_member) {
+       policy, KOKKOS_CLASS_LAMBDA (member_type team_member) {
       
        int ix, iy, iz;
        RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
@@ -326,20 +326,20 @@ struct binary_collision_pipeline {
        
        // if(team_member.league_rank()==0 && team_member.team_rank()==0) printf("#call collide_variabl_wt()\n");
        if(spi_p == spj_p) {
-       	collide_self_varwt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, 
-                           dtinterval, spi_p, spj_p, model, spi_sortindex_ra, 
-                           spj_sortindex_ra, rp, team_member); 
+         collide_self_varwt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, 
+                            dtinterval, spi_p, spj_p, model, spi_sortindex_ra, 
+                            spj_sortindex_ra, rp, team_member); 
        } else {
-       	collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, 
-                           dtinterval, spi_p, spj_p, model, spi_sortindex_ra, 
-                           spj_sortindex_ra, rp, team_member);
+         collide_variabl_wt(m_i, m_j, density_i, density_j, dV, i0, j0, ni, nj, 
+                            dtinterval, spi_p, spj_p, model, spi_sortindex_ra, 
+                            spj_sortindex_ra, rp, team_member);
        }
       });
 
     } else {
       Kokkos::parallel_for("binary_collision_pipeline::apply_model",
       policy,
-      KOKKOS_LAMBDA (member_type team_member) {
+      KOKKOS_CLASS_LAMBDA (member_type team_member) {
       
         int ix, iy, iz;
         RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
@@ -384,7 +384,7 @@ struct binary_collision_pipeline {
                           k_particle_sortindex_t_ra spi_sortindex_ra, 
                           k_particle_sortindex_t_ra spj_sortindex_ra, 
                           const kokkos_rng_pool_t& rp, 
-                          const Kokkos::TeamPolicy<>::member_type & team_member)
+                          const Kokkos::TeamPolicy<>::member_type & team_member) const
   {
     const float mu_i = m_j/(m_i+m_j);
     const float mu_j = m_i/(m_i+m_j);
@@ -409,7 +409,7 @@ struct binary_collision_pipeline {
       nj = ni = ni/2;
       j0 = i0 + ni;
     }
-  	
+   
     const int nmin = ni < nj ? ni : nj;
   
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, nmin),
@@ -427,20 +427,20 @@ struct binary_collision_pipeline {
       up[6] = spj_p(j, particle_var::uy);
       up[7] = spj_p(j, particle_var::uz);
       up[8] = 1.0;
-      up[9] = 1.0;	
+      up[9] = 1.0; 
       #ifdef VARIABLE_CHARGE
       up[8] = spi_p(i, particle_var::qp);
       up[9] = spj_p(j, particle_var::qp);
-      #endif	
+      #endif 
       
       binary_collision(mu, mu_i, mu_j, up, model, rg, ndt);
       
       spi_p(i, particle_var::ux) = up[1];
       spi_p(i, particle_var::uy) = up[2];
-      spi_p(i, particle_var::uz) = up[3];	  
+      spi_p(i, particle_var::uz) = up[3];   
       spj_p(j, particle_var::ux) = up[5];
       spj_p(j, particle_var::uy) = up[6];
-      spj_p(j, particle_var::uz) = up[7];	  	 
+      spj_p(j, particle_var::uz) = up[7];     
     });
     // We *must* free generators.
     rp.free_state(rg);
@@ -458,7 +458,7 @@ struct binary_collision_pipeline {
                           k_particle_sortindex_t_ra spi_sortindex_ra, 
                           k_particle_sortindex_t_ra spj_sortindex_ra, 
                           const kokkos_rng_pool_t& rp, 
-                          const Kokkos::TeamPolicy<>::member_type & team)
+                          const Kokkos::TeamPolicy<>::member_type & team) const
   {
     kokkos_rng_state_t rg = rp.get_state();
     
@@ -499,7 +499,7 @@ struct binary_collision_pipeline {
       
       float up[10];
       up[8] = 1.0;
-      up[9] = 1.0;		    
+      up[9] = 1.0;      
           
       up[0] = sph_p(i, particle_var::w);
       up[1] = sph_p(i, particle_var::ux);
@@ -512,8 +512,8 @@ struct binary_collision_pipeline {
       #ifdef VARIABLE_CHARGE
       up[8] = sph_p(i, particle_var::qp);
       up[9] = spl_p(j, particle_var::qp);
-      #endif		 
-      	 
+      #endif   
+        
       float wp, ux, uy, uz;
       if(c < Np_hc) {
         wp = up[0];
@@ -526,7 +526,7 @@ struct binary_collision_pipeline {
         lsum.v[3] += wp*uz;
         lsum.v[4] += wp*ux*ux;
         lsum.v[5] += wp*uy*uy;
-        lsum.v[6] += wp*uz*uz;	     
+        lsum.v[6] += wp*uz*uz;      
       }
       if(c < Np_lc) {
         wp = up[4];
@@ -539,7 +539,7 @@ struct binary_collision_pipeline {
         lsum.v[16] += wp*uz;
         lsum.v[17] += wp*ux*ux;
         lsum.v[18] += wp*uy*uy;
-        lsum.v[19] += wp*uz*uz;	     
+        lsum.v[19] += wp*uz*uz;      
       }
       
       binary_collision(mu, mu_h, mu_l, up, model, rg, ndt);
@@ -574,7 +574,7 @@ struct binary_collision_pipeline {
         lsum.v[24] += wp*uy*uy;
         lsum.v[25] += wp*uz*uz;
       }
-    }, Dm);	 
+    }, Dm);  
  
     //Correcting conservation 
     auto tot_ms = ml*Dm.v[0];    
@@ -620,7 +620,7 @@ struct binary_collision_pipeline {
                           k_particle_sortindex_t_ra spj_sortindex_ra, 
                           const kokkos_rng_pool_t& rp, 
                           const Kokkos::TeamPolicy<>::member_type & team, 
-                          const k_particles_c_t& spi_c, const k_particles_c_t& spj_c)
+                          const k_particles_c_t& spi_c, const k_particles_c_t& spj_c) const
   {
     float mu_i = m_j/(m_i+m_j);
     float mu_j = m_i/(m_i+m_j);
@@ -659,7 +659,7 @@ struct binary_collision_pipeline {
     size_t Np_c, Np_hc, Np_lc;
     
     nmin = ij ? nj : ni; // note that in general the number of the other species can be >=< nmin
-    nmax = ij ? ni : nj;	
+    nmax = ij ? ni : nj; 
     
     // Allocate one integer in team scratch memory (slot 1 is used for the shared integer).
     typedef Kokkos::View<int*, Kokkos::MemoryTraits<Kokkos::Unmanaged>> scratch_int_view_t;
@@ -728,7 +728,7 @@ struct binary_collision_pipeline {
             sphc(i0+js) = jh; //js will collide with jh
             --js;
           }
-        }	
+        } 
         if (done) break;       // now break out of the `for`
         jh = j;
         // Map the local index j to a global index.
@@ -754,7 +754,7 @@ struct binary_collision_pipeline {
             splc(j0+js) = jl; //js will collide with jl
             --js;
           }
-        }	
+        } 
         if (done) break;       // now break out of the `for`
         jl = j;
         // Map the local index j to a global index.
@@ -795,19 +795,19 @@ struct binary_collision_pipeline {
     gmomType26 Dm;
     //inter-species
     Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, Np_c),
-    	                      [&](const size_t c, gmomType26 &lsum) {
-      //first pair update i				
+                            [&](const size_t c, gmomType26 &lsum) {
+      //first pair update i    
       int i;
       int j;
       float up[10];
       up[8] = 1.0;
-      up[9] = 1.0;		    
+      up[9] = 1.0;      
       
       float u2[10];
       u2[8] = 1.0;
-      u2[9] = 1.0;		    
+      u2[9] = 1.0;      
       
-      float wp, ux, uy, uz;	 
+      float wp, ux, uy, uz;  
 
       if(c < Np_hc) {
         i = sph_sortindex_ra(i0 + c);
@@ -824,7 +824,7 @@ struct binary_collision_pipeline {
           #ifdef VARIABLE_CHARGE
           up[8] = sph_p(i, particle_var::qp);
           up[9] = spl_p(j, particle_var::qp);
-          #endif		 
+          #endif   
         } else { //self-coll
           mu_h = 0.5;
           mu_l = 0.5;
@@ -840,7 +840,7 @@ struct binary_collision_pipeline {
           #ifdef VARIABLE_CHARGE
           up[8] = sph_p(i, particle_var::qp);
           up[9] = sph_p(j, particle_var::qp);
-          #endif		 		 
+          #endif      
         }
         if( (up[8] != 0) && (up[9] != 0) ) {
           wp = up[0];
@@ -877,7 +877,7 @@ struct binary_collision_pipeline {
           #ifdef VARIABLE_CHARGE
           u2[8] = sph_p(i2, particle_var::qp);
           u2[9] = spl_p(j2, particle_var::qp);
-          #endif		 		 		 
+          #endif         
         } else { //self-coll
           mu_h = 0.5;
           mu_l = 0.5;
@@ -894,9 +894,9 @@ struct binary_collision_pipeline {
           #ifdef VARIABLE_CHARGE
           u2[8] = spl_p(i2, particle_var::qp);
           u2[9] = spl_p(j2, particle_var::qp);
-          #endif		 		 		 		 
+          #endif            
         }
-        if( (u2[8] != 0) && (u2[9] != 0) ) {	     
+        if( (u2[8] != 0) && (u2[9] != 0) ) {      
           wp = u2[4];
           ux = u2[5];
           uy = u2[6];
@@ -910,7 +910,7 @@ struct binary_collision_pipeline {
           lsum.v[19] += wp*uz*uz;
         }
       }
-	 
+  
       //after setting the collsion-pairs
       if( (c < Np_hc) && (up[8] != 0) && (up[9] != 0) ) {
         auto ux0 = up[1];
@@ -957,7 +957,7 @@ struct binary_collision_pipeline {
           exit(1);
         }
       }
-    }, Dm);	 
+    }, Dm);  
 
     //correcting conservation (both species)
     float tot_ms =  mh*Dm.v[0] + ml*Dm.v[13];
@@ -1067,7 +1067,7 @@ struct binary_collision_pipeline {
                           k_particle_sortindex_t_ra spi_sortindex_ra, 
                           k_particle_sortindex_t_ra spj_sortindex_ra, 
                           const kokkos_rng_pool_t& rp, 
-                          const Kokkos::TeamPolicy<>::member_type & team)
+                          const Kokkos::TeamPolicy<>::member_type & team) const
   {
     const float mu_i = m_j/(m_i+m_j);
     const float mu_j = m_i/(m_i+m_j);
@@ -1394,7 +1394,7 @@ struct binary_collision_pipeline {
     nmax = ni_2>nj_2 ? ni_2 : nj_2;
     Np_lc = nmin;
     Np_hc = nmax;
-    Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc;	
+    Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc; 
 
     // gmomType26 Dm;
     
@@ -1424,7 +1424,7 @@ struct binary_collision_pipeline {
         lsum.v[3] += wp*uz;
         lsum.v[4] += wp*ux*ux;
         lsum.v[5] += wp*uy*uy;
-        lsum.v[6] += wp*uz*uz;	     
+        lsum.v[6] += wp*uz*uz;      
       }
       if(c < Np_lc) {
         wp = up[4];
@@ -1437,7 +1437,7 @@ struct binary_collision_pipeline {
         lsum.v[16] += wp*uz;
         lsum.v[17] += wp*ux*ux;
         lsum.v[18] += wp*uy*uy;
-        lsum.v[19] += wp*uz*uz;	     
+        lsum.v[19] += wp*uz*uz;      
       }
       
       binary_collision(mu, mu_h, mu_l, up, model, rg, ndt);
@@ -1517,7 +1517,7 @@ struct binary_collision_pipeline {
     nmax = ni_2>nj_2 ? ni_2 : nj_2;
     Np_lc = nmin;
     Np_hc = nmax;
-    Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc;	
+    Np_c  = Np_hc > Np_lc ? Np_hc : Np_lc; 
 
     // gmomType26 Dm;
     Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team, Np_c),
@@ -1546,7 +1546,7 @@ struct binary_collision_pipeline {
         lsum.v[3] += wp*uz;
         lsum.v[4] += wp*ux*ux;
         lsum.v[5] += wp*uy*uy;
-        lsum.v[6] += wp*uz*uz;	     
+        lsum.v[6] += wp*uz*uz;      
       }
       if(c < Np_lc) {
         wp = up[4];
@@ -1559,7 +1559,7 @@ struct binary_collision_pipeline {
         lsum.v[16] += wp*uz;
         lsum.v[17] += wp*ux*ux;
         lsum.v[18] += wp*uy*uy;
-        lsum.v[19] += wp*uz*uz;	     
+        lsum.v[19] += wp*uz*uz;      
       }
       
       binary_collision(mu, mu_h, mu_l, up, model, rg, ndt);
@@ -1650,7 +1650,7 @@ struct binary_collision_pipeline {
     collision_model& model,
     kokkos_rng_state_t& rg,
     float ndt
-  )
+  ) const
   {
 
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];

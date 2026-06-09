@@ -65,8 +65,8 @@ struct particle_bulk_collision_pipeline {
   //starting with _ in a lambda will likely throw and illegal
   //memory error. As convention we reccomend not using _varName
   //in an inline fucntion but rather just varName
-  species_t *_spi;
   kokkos_rng_pool_t& _rp;
+  species_t *_spi;
   k_density_t     _spi_n;//,  _spj_n;
   k_particles_t   _spi_p;//,  _spj_p;
   k_particles_i_t _spi_i;//,  _spj_i;
@@ -104,8 +104,8 @@ struct particle_bulk_collision_pipeline {
       _nx(spi->g->nx),
       _ny(spi->g->ny),
       _nz(spi->g->nz),
-      _spi(spi),
       _rp(rp),
+      _spi(spi),
       _spj(spj),
       _field(field),
       _spp(spp)
@@ -277,7 +277,7 @@ struct particle_bulk_collision_pipeline {
 
     Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
     Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
-    KOKKOS_LAMBDA (member_type team_member) {
+    KOKKOS_CLASS_LAMBDA (member_type team_member) {
 
       int ix, iy, iz;
       RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
@@ -352,7 +352,7 @@ struct particle_bulk_collision_pipeline {
 #endif
         spi_p(i, particle_var::ux) = ux_i;
         spi_p(i, particle_var::uy) = uy_i;
-        spi_p(i, particle_var::uz) = uz_i;	 
+        spi_p(i, particle_var::uz) = uz_i;  
 
         // Accumulate change in moments. Depends on collision type.
         float dn = 0.0, dux = 0.0, duy = 0.0, duz = 0.0, den = 0.0;
@@ -506,7 +506,7 @@ struct particle_bulk_collision_pipeline {
 
     Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
       Kokkos::TeamPolicy<Space>(nx*ny*nz, Kokkos::AUTO()),
-      KOKKOS_LAMBDA (member_type team_member) {
+      KOKKOS_CLASS_LAMBDA (member_type team_member) {
 
         int ix, iy, iz;
         RANK_TO_INDEX(team_member.league_rank(), ix, iy, iz, nx, ny, nz);
@@ -518,11 +518,11 @@ struct particle_bulk_collision_pipeline {
 
         if( ni <= 0 ) return; // Nothing to do
 
-	      const float dt = dtinterval;
-	
+        const float dt = dtinterval;
+  
         // Get a random generator. Do not leave without freeing it.
         kokkos_rng_state_t rg = rp.get_state();
-	
+ 
         // Extract fluid variables
         const float n_fl   = spj_fl(v, fluid_var::den);
         const float ux_fl  = spj_fl(v, fluid_var::ux);
@@ -533,9 +533,9 @@ struct particle_bulk_collision_pipeline {
 
         // Accumulate moments for each cell
         gmomType Dm; 
-	
+ 
         Kokkos::parallel_reduce(Kokkos::TeamThreadRange(team_member, ni),
-        [&](const int& k, gmomType &lsum) {
+        [&,this](const int& k, gmomType &lsum) {
 
           int i = spi_sortindex_ra(i0 + k);
 
@@ -550,7 +550,7 @@ struct particle_bulk_collision_pipeline {
                           spi_p(i, particle_var::ux),
                           spi_p(i, particle_var::uy),
                           spi_p(i, particle_var::uz) };
-#endif			      
+#endif         
 
           float wp   = up[0];
           float ux_n = up[1];
@@ -568,7 +568,7 @@ struct particle_bulk_collision_pipeline {
           } else {
             particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v, MC_col_occurred);
           }
-	    
+     
           float ux_i = up[1];
           float uy_i = up[2];
           float uz_i = up[3];
@@ -578,7 +578,7 @@ struct particle_bulk_collision_pipeline {
 #endif
           spi_p(i, particle_var::ux) = ux_i;
           spi_p(i, particle_var::uy) = uy_i;
-          spi_p(i, particle_var::uz) = uz_i;	 
+          spi_p(i, particle_var::uz) = uz_i;  
 
           // Accumulate change in moments. Depends on collision type.
           float dn = 0.0, dux = 0.0, duy = 0.0, duz = 0.0, den = 0.0;
@@ -609,10 +609,10 @@ struct particle_bulk_collision_pipeline {
                 spp_p(i_pr, particle_var::w)  = w_pr;
                 spp_p(i_pr, particle_var::ux) = ux_pr;
                 spp_p(i_pr, particle_var::uy) = uy_pr;
-                spp_p(i_pr, particle_var::uz) = uz_pr;	  
+                spp_p(i_pr, particle_var::uz) = uz_pr;  
                 spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
                 spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
-                spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
+                spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);   
                 spp_i(i_pr) = spi_i(i);
 #ifdef VARIABLE_CHARGE
                 spp_p(i_pr, particle_var::qp) = 1; // spj->q - dq;
@@ -653,10 +653,10 @@ struct particle_bulk_collision_pipeline {
                 spp_p(i_pr, particle_var::w)  = w_pr;
                 spp_p(i_pr, particle_var::ux) = ux_pr;
                 spp_p(i_pr, particle_var::uy) = uy_pr;
-                spp_p(i_pr, particle_var::uz) = uz_pr;	  
+                spp_p(i_pr, particle_var::uz) = uz_pr;   
                 spp_p(i_pr, particle_var::dx) = spi_p(i, particle_var::dx);
                 spp_p(i_pr, particle_var::dy) = spi_p(i, particle_var::dy);
-                spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);	  
+                spp_p(i_pr, particle_var::dz) = spi_p(i, particle_var::dz);   
                 spp_i(i_pr) = spi_i(i);
 #ifdef VARIABLE_CHARGE
                 // Currently only considering ionizing neutral fluid (0->1)
@@ -695,8 +695,8 @@ struct particle_bulk_collision_pipeline {
           lsum.add(3, duz);
           lsum.add(4, den);
           lsum.add(5, dn);
-	      }, Dm); // end Kokkos::parallel_reduce
-	
+        }, Dm); // end Kokkos::parallel_reduce
+
         if (team_member.team_rank() == 0) {
           // Code that runs once per team leader
           if( use_e_field ) {
@@ -709,7 +709,7 @@ struct particle_bulk_collision_pipeline {
               model.upload_moment_src( spj_fl, v, Dm, mi, mj, m_fluid_ttl );   
             }   
           }
-      	}
+        }
 
         // We *must* free generators.
         rp.free_state(rg);
@@ -752,7 +752,7 @@ struct particle_bulk_collision_pipeline {
     float dt,
     int ii,
     bool& MC_collision_occurred
-  )
+  ) const
   {
 
     float dd, ur, tx, ty, tz, t0, t1, t2, stack[3];

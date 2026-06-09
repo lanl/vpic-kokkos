@@ -2,7 +2,7 @@ import numpy as np
 import os
 import matplotlib
 import matplotlib.pyplot as plt
-import pywt
+#import pywt
 
 datadir = "./data/"
 nx = 64

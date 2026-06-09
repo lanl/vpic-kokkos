@@ -373,14 +373,14 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
   fnames(5) = 'data/By'
   fnames(6) = 'data/Bz'
 
-!  fnames(7) = 'data/Uix'
-!  fnames(8) = 'data/Uiy'
-!  fnames(9) = 'data/Uiz'
+  fnames(7) = 'data/Uix'
+  fnames(8) = 'data/Uiy'
+  fnames(9) = 'data/Uiz'
   fnames(10) = 'data/ni'
-  fnames(11) = 'data/Uix'
-  fnames(12) = 'data/Uiy'
-  fnames(13) = 'data/Uiz'
-  fnames(14) = 'data/niold'
+  !fnames(11) = 'data/Uix'
+  !fnames(12) = 'data/Uiy'
+  !fnames(13) = 'data/Uiz'
+  !fnames(14) = 'data/niold'
   fnames(15) = 'data/aniso'
   !fnames(16) = 'data/Pi-xy1'
 
@@ -513,16 +513,17 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
               bz(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
                  buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
 
-              read(10)buffer   ! skip div_b error
-              read(10)buffer   ! skip b0
-              read(10)buffer   ! skip 
-              read(10)buffer   ! skip 
-              read(10)buffer   ! skip 
-              
+              read(10)buffer   ! skip pe
+
+              read(10)buffer   ! skip magnetic0
+              read(10)buffer   ! skip
+              read(10)buffer   ! skip
+              read(10)buffer   ! skip te0
+
               read(10)buffer   ! skip tca
-              read(10)buffer   ! skip 
-              read(10)buffer   ! skip 
-              read(10)buffer   ! skip 
+              read(10)buffer   ! skip
+              read(10)buffer   ! skip
+              read(10)buffer   ! skip rhob
 
 
               read(10)buffer
@@ -542,23 +543,6 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
                  buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
 
 
-              read(10)buffer
-              ux(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
-                 buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
-
-              read(10)buffer
-              uy(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
-                 buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
-
-              read(10)buffer
-              uz(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
-                 buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
-
-              read(10)buffer
-              ne(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
-                 buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
-
-         
               close(10)
 
 
@@ -634,14 +618,14 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
      call MPI_FILE_WRITE_AT_ALL(fh(4), offset, bx, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(5), offset, by, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(6), offset, bz, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
-!     call MPI_FILE_WRITE_AT_ALL(fh(7), offset, jx, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
-!     call MPI_FILE_WRITE_AT_ALL(fh(8), offset, jy, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
-!     call MPI_FILE_WRITE_AT_ALL(fh(9), offset, jz, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
+     call MPI_FILE_WRITE_AT_ALL(fh(7), offset, jx, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
+     call MPI_FILE_WRITE_AT_ALL(fh(8), offset, jy, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
+     call MPI_FILE_WRITE_AT_ALL(fh(9), offset, jz, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(10), offset, rho, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
-     call MPI_FILE_WRITE_AT_ALL(fh(11), offset, ux, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
-     call MPI_FILE_WRITE_AT_ALL(fh(12), offset, uy, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
-     call MPI_FILE_WRITE_AT_ALL(fh(13), offset, uz, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
-     call MPI_FILE_WRITE_AT_ALL(fh(14), offset, ne, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
+!     call MPI_FILE_WRITE_AT_ALL(fh(11), offset, ux, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
+!     call MPI_FILE_WRITE_AT_ALL(fh(12), offset, uy, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
+!     call MPI_FILE_WRITE_AT_ALL(fh(13), offset, uz, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
+!     call MPI_FILE_WRITE_AT_ALL(fh(14), offset, ne, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
      call MPI_FILE_WRITE_AT_ALL(fh(15), offset, aniso, ht%nx*ht%ny*ht%nz, MPI_REAL4, status, ierror)
 
 

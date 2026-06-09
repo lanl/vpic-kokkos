@@ -94,7 +94,7 @@ begin_initialization {
   num_step             = 2;
   status_interval      = 1;
 
-  global->energies_interval  = status_interval;
+  global->energies_interval  = -1; //status_interval;
   global->fields_interval    = status_interval;
   global->ehydro_interval    = status_interval;
   global->ihydro_interval    = status_interval;

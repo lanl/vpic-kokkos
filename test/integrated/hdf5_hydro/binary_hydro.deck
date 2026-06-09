@@ -136,7 +136,7 @@ begin_initialization
         const double w = 1.;
         const double age = 0.;
         const int update_rhob = 0;
-        inject_particle(ion, x, y, z, ux, uy, uz, w, age, update_rhob);
+        inject_particle(ion, x, y, z, ux, uy, uz, w, age, update_rhob, 1);
         nparticle++;
       }
     }

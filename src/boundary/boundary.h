@@ -92,6 +92,15 @@ void pbd_write_to_buffer(species_t * RESTRICT sp,
         if(diag->write_posx) buff[store++] = global_pos_x;
         if(diag->write_posy) buff[store++] = global_pos_y;
         if(diag->write_posz) buff[store++] = global_pos_z;
+#undef nxg
+#undef nyg
+#undef nzg
+#undef i0
+#undef j0
+#undef k0
+#undef global_pos_x
+#undef global_pos_y
+#undef global_pos_z
     }
 
 
@@ -125,12 +134,6 @@ void
 finalize_pb_diagnostic(species_t * sp);
 
 /* In boundary_p.cxx */
-
-void
-boundary_p( particle_bc_t       * RESTRICT pbc_list,
-            species_t           * RESTRICT sp_list,
-            field_array_t       * RESTRICT fa,
-            accumulator_array_t * RESTRICT aa );
 
 void
 boundary_p_kokkos( particle_bc_t       * RESTRICT pbc_list,

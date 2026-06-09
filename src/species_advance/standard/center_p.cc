@@ -2,6 +2,106 @@
 #define HAS_V4_PIPELINE
 #include "spa_private.h"
 
+struct center_p_kernel {
+  species_t* sp;
+  k_particles_t::HostMirror p;
+  k_particles_i_t::HostMirror p_i;
+  k_interpolator_t::HostMirror f;
+  float _qdt_2mc, _qdt_4mc;
+
+  center_p_kernel(species_t* _sp,
+                  k_particles_t::HostMirror& _p, 
+                  const k_particles_i_t::HostMirror& _p_i, 
+                  const k_interpolator_t::HostMirror& _interp,
+                  const float _qdt_2mc_) : sp(_sp), p(_p), p_i(_p_i), f(_interp) {
+#ifndef VARIABLE_CHARGE
+    _qdt_2mc        =     _qdt_2mc_;
+    _qdt_4mc        = 0.5*_qdt_2mc_; // For half Boris rotate
+#endif
+  }
+  
+  KOKKOS_INLINE_FUNCTION 
+  void 
+  operator() (const int n) const {
+    float dx, dy, dz, ux, uy, uz;
+    float hax, hay, haz, cbx, cby, cbz;
+    float v0, v1, v2, v3, v4;
+    int ii;
+    constexpr float one            = 1.;
+    constexpr float one_third      = 1./3.;
+    constexpr float two_fifteenths = 2./15.;
+    const float dt_2c = (sp->g->dt)/(2*sp->g->cvac);
+
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+    dx   = sp->p[n].dx; // Load position
+    dy   = sp->p[n].dy;
+    dz   = sp->p[n].dz;
+#ifdef VARIABLE_CHARGE
+    const float qp   = sp->p[n].qp;
+    const float qdt_2mc = qp*_qdt_2mc;
+    const float qdt_4mc = 0.5*qdt_2mc;
+#else
+    const float qdt_2mc = _qdt_2mc;
+    const float qdt_4mc = _qdt_4mc;
+#endif
+    ii   = sp->p[n].i;
+#else
+    dx   = p(n, particle_var::dx); // Load position
+    dy   = p(n, particle_var::dy);
+    dz   = p(n, particle_var::dz);
+#ifdef VARIABLE_CHARGE
+    const float qp   = p(n, particle_var::qp);
+    const float qdt_2mc = qp*_qdt_2mc;
+    const float qdt_4mc = 0.5*qdt_2mc;
+#else
+    const float qdt_2mc = _qdt_2mc;
+    const float qdt_4mc = _qdt_4mc;
+#endif
+    ii   = p_i(n);
+#endif
+    const interpolator_t intp = read_interpolator(f, ii); // Load interpolators
+
+    interpolate_e(intp, dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c); // Interpolate E
+                                
+    interpolate_b(intp, dx, dy, dz, cbx, cby, cbz); // Interpolate B
+
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+    ux   = sp->p[n].ux; // Load momentum
+    uy   = sp->p[n].uy;
+    uz   = sp->p[n].uz;
+#else
+    ux   = p(n, particle_var::ux); // Load momentum
+    uy   = p(n, particle_var::uy);
+    uz   = p(n, particle_var::uz);
+#endif
+    ux  += hax; // Half advance E
+    uy  += hay;
+    uz  += haz;
+    v0   = qdt_4mc;///(float)sqrt(one + (ux*ux + (uy*uy + uz*uz)));
+    /**/                                     // Boris - scalars
+    v1   = cbx*cbx + (cby*cby + cbz*cbz);
+    v2   = (v0*v0)*v1;
+    v3   = v0*(one+v2*(one_third+v2*two_fifteenths));
+    v4   = v3/(one+v1*(v3*v3));
+    v4  += v4;
+    v0   = ux + v3*( uy*cbz - uz*cby );      // Boris - uprime
+    v1   = uy + v3*( uz*cbx - ux*cbz );
+    v2   = uz + v3*( ux*cby - uy*cbx );
+    ux  += v4*( v1*cbz - v2*cby );           // Boris - rotation
+    uy  += v4*( v2*cbx - v0*cbz );
+    uz  += v4*( v0*cby - v1*cbx );
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+    sp->p[n].ux = ux;             // Store momentum
+    sp->p[n].uy = uy;
+    sp->p[n].uz = uz;
+#else
+    p(n, particle_var::ux) = ux;             // Store momentum
+    p(n, particle_var::uy) = uy;
+    p(n, particle_var::uz) = uz;
+#endif
+  }
+};
+
 void
 center_p_pipeline( center_p_pipeline_args_t * args,
                    int pipeline_rank,
@@ -19,6 +119,7 @@ center_p_pipeline( center_p_pipeline_args_t * args,
   float qdt_2mc;
   float qdt_4mc;
 #endif
+  const float dt_2c = args->dt_2c;
   const float one            = 1.;
   const float one_third      = 1./3.;
   const float two_fifteenths = 2./15.;
@@ -46,13 +147,12 @@ center_p_pipeline( center_p_pipeline_args_t * args,
     qdt_4mc = 0.5*qdt_2mc;
 #endif
     ii   = p->i;
-    f    = f0 + ii;                          // Interpolate E
-    hax  = qdt_2mc*(    ( f->ex     ) );
-    hay  = qdt_2mc*(    ( f->ey     ) );
-    haz  = qdt_2mc*(    ( f->ez     ) );
-    cbx  = f->cbx;// + dx*f->dcbxdx;            // Interpolate B
-    cby  = f->cby;// + dy*f->dcbydy;
-    cbz  = f->cbz;// + dz*f->dcbzdz;
+    f    = f0 + ii;                             // Load interpolator
+
+    interpolate_e(*f, dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c); // Interpolate E
+                             
+    interpolate_b(*f, dx, dy, dz, cbx, cby, cbz); // Interpolate B
+
     ux   = p->ux;                            // Load momentum
     uy   = p->uy;
     uz   = p->uz;
@@ -78,101 +178,38 @@ center_p_pipeline( center_p_pipeline_args_t * args,
   }
 }
 
-#if 0 &&  defined(V4_ACCELERATION) && defined(HAS_V4_PIPELINE)
-
-using namespace v4;
-
-void
-center_p_pipeline_v4( center_p_pipeline_args_t * args,
-                      int pipeline_rank,
-                      int n_pipeline ) {
-  const interpolator_t * ALIGNED(128) f0 = args->f0;
-
-  particle_t           * ALIGNED(128) p;
-  const float          * ALIGNED(16)  vp0;
-  const float          * ALIGNED(16)  vp1;
-  const float          * ALIGNED(16)  vp2;
-  const float          * ALIGNED(16)  vp3;
-
-  const v4float qdt_2mc(    args->qdt_2mc);
-  const v4float qdt_4mc(0.5*args->qdt_2mc); // For half Boris rotate
-  const v4float one(1.);
-  const v4float one_third(1./3.);
-  const v4float two_fifteenths(2./15.);
-
-  v4float dx, dy, dz, ux, uy, uz, q;
-  v4float hax, hay, haz, cbx, cby, cbz;
-  v4float v0, v1, v2, v3, v4, v5;
-  v4int   ii;
-
-  int itmp, nq;
-
-  // Determine which particle quads this pipeline processes
-
-  DISTRIBUTE( args->np, 16, pipeline_rank, n_pipeline, itmp, nq );
-  p = args->p0 + itmp;
-  nq >>= 2;
-
-  // Process the particle quads for this pipeline
-
-  for( ; nq; nq--, p+=4 ) {
-    load_4x4_tr(&p[0].dx,&p[1].dx,&p[2].dx,&p[3].dx,dx,dy,dz,ii);
-
-    // Interpolate fields
-    vp0 = (const float * ALIGNED(16))(f0 + ii(0));
-    vp1 = (const float * ALIGNED(16))(f0 + ii(1));
-    vp2 = (const float * ALIGNED(16))(f0 + ii(2));
-    vp3 = (const float * ALIGNED(16))(f0 + ii(3));
-    load_4x4_tr(vp0,  vp1,  vp2,  vp3,  hax,v0,v1,v2); hax = qdt_2mc*fma( fma( dy, v2, v1 ), dz, fma( dy, v0, hax ) );
-    load_4x4_tr(vp0+4,vp1+4,vp2+4,vp3+4,hay,v3,v4,v5); hay = qdt_2mc*fma( fma( dz, v5, v4 ), dx, fma( dz, v3, hay ) );
-    load_4x4_tr(vp0+8,vp1+8,vp2+8,vp3+8,haz,v0,v1,v2); haz = qdt_2mc*fma( fma( dx, v2, v1 ), dy, fma( dx, v0, haz ) );
-    load_4x4_tr(vp0+12,vp1+12,vp2+12,vp3+12,cbx,v3,cby,v4); cbx = fma( v3, dx, cbx );
-    /**/                                                    cby = fma( v4, dy, cby );
-    load_4x2_tr(vp0+16,vp1+16,vp2+16,vp3+16,cbz,v5);        cbz = fma( v5, dz, cbz );
-
-    // Update momentum
-    load_4x4_tr(&p[0].ux,&p[1].ux,&p[2].ux,&p[3].ux,ux,uy,uz,q);
-    /**/                                             // Could use load_4x3_tr
-    ux += hax;
-    uy += hay;
-    uz += haz;
-    v0  = qdt_4mc*rsqrt( one + fma( ux,ux, fma( uy,uy, uz*uz ) ) );
-    v1  = fma( cbx,cbx, fma( cby,cby, cbz*cbz ) );
-    v2  = (v0*v0)*v1;
-    v3  = v0*fma( v2, fma( v2, two_fifteenths, one_third ), one );
-    v4  = v3*rcp( fma( v3*v3, v1, one ) ); v4 += v4;
-    v0  = fma( fms( uy,cbz, uz*cby ), v3, ux );
-    v1  = fma( fms( uz,cbx, ux*cbz ), v3, uy );
-    v2  = fma( fms( ux,cby, uy*cbx ), v3, uz );
-    ux  = fma( fms( v1,cbz, v2*cby ), v4, ux );
-    uy  = fma( fms( v2,cbx, v0*cbz ), v4, uy );
-    uz  = fma( fms( v0,cby, v1*cbx ), v4, uz );
-    store_4x4_tr(ux,uy,uz,q,&p[0].ux,&p[1].ux,&p[2].ux,&p[3].ux);
-    /**/                                             // Could use store_4x3_tr
-  }
-}
-
-#endif
-
 void
 center_p( /**/  species_t            * RESTRICT sp,
           const interpolator_array_t * RESTRICT ia ) {
-  DECLARE_ALIGNED_ARRAY( center_p_pipeline_args_t, 128, args, 1 );
 
   if( !sp || !ia || sp->g!=ia->g ) ERROR(( "Bad args" ));
+
+  float qdt_2mc;
+#ifdef VARIABLE_CHARGE
+  qdt_2mc = (sp->g->dt)/(2*sp->m*sp->g->cvac); // Multiply by qp in pipelines
+#else
+  qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
+#endif
+
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+  // Use legacy data structures for center_p
+  DECLARE_ALIGNED_ARRAY( center_p_pipeline_args_t, 128, args, 1 );
 
   // Have the pipelines do the bulk of particles in quads and have the
   // host do the final incomplete quad.
 
   args->p0      = sp->p;
   args->f0      = ia->i;
-#ifdef VARIABLE_CHARGE
-  args->qdt_2mc = (sp->g->dt)/(2*sp->m*sp->g->cvac); // Multiply by qp in pipelines
-#else
-  args->qdt_2mc = (sp->q*sp->g->dt)/(2*sp->m*sp->g->cvac);
-#endif
+  args->qdt_2mc = qdt_2mc;
   args->np      = sp->np;
+  args->dt_2c = (sp->g->dt)/(2*sp->g->cvac);
 
   EXEC_PIPELINES( center_p, args, 0 );
   WAIT_PIPELINES();
+
+#else
+  // Use host data structures for center_p_kernel
+  center_p_kernel center_particles(sp, sp->k_p_h, sp->k_p_i_h, ia->k_i_h, qdt_2mc);
+  Kokkos::parallel_for("center_p", Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, sp->np), center_particles);
+#endif
 }
