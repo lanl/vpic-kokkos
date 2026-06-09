@@ -123,7 +123,7 @@ const uint64_t stress_offdiagonal   (1ULL<<11 | 1ULL<<12 | 1ULL<<13);
 
 #ifdef VARIABLE_CHARGE
   const size_t total_hydro_variables(22);
-  const size_t total_hydro_groups(6); // this counts vectors, tensors etc...
+  const size_t total_hydro_groups(7); // this counts vectors, tensors etc...
   // These bits will be tested to determine which variables to output
   const size_t hydro_indeces[7] = { 0, 3, 4, 7, 8, 14, 16 };
 #else

@@ -424,12 +424,12 @@ struct StridedSortOrder {
     auto np_range = Kokkos::RangePolicy<size_t>(0,np);
 
     // Find max particle index
-    size_t max_cell = 0;
+    int max_cell = 0;
     Kokkos::parallel_reduce("Get max cell ID", np_range, 
-      KOKKOS_LAMBDA(const size_t& i, size_t& max_cell_id) {
+      KOKKOS_LAMBDA(const size_t& i, int& max_cell_id) {
       if(particles_i(i) > max_cell_id)
         max_cell_id = particles_i(i);
-    }, Kokkos::Max<size_t>(max_cell));
+    }, Kokkos::Max<int>(max_cell));
 
     Kokkos::deep_copy(bin_counter, 0);
     // Count number of particles in each cell and add an offset 
@@ -496,12 +496,12 @@ struct TiledSortOrder {
     auto np_range = Kokkos::RangePolicy<size_t>(0,np);
 
     // Find max particle index
-    size_t max_cell = 0;
+    int max_cell = 0;
     Kokkos::parallel_reduce("Get max cell ID", np_range, 
-    KOKKOS_LAMBDA(const size_t& i, size_t& max_cell_id) {
+    KOKKOS_LAMBDA(const size_t& i, int& max_cell_id) {
       if(part_i(i) > max_cell_id)
         max_cell_id = part_i(i);
-    }, Kokkos::Max<size_t>(max_cell));
+    }, Kokkos::Max<int>(max_cell));
 
     Kokkos::deep_copy(bin_counter, 0);
     // Count number of particles in each cell and add an offset 

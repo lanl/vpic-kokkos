@@ -1219,8 +1219,8 @@ advance_p_kokkos_gpu(
       size_t p_index = team_member.league_rank()*per_league + pindex;
       if(p_index < np) {
 #else
-  auto range_policy = Kokkos::RangePolicy<>(0,np);
-  Kokkos::parallel_for("advance_p", range_policy, KOKKOS_LAMBDA (int p_index) {
+  auto range_policy = Kokkos::RangePolicy<size_t>(0LLU,np);
+  Kokkos::parallel_for("advance_p", range_policy, KOKKOS_LAMBDA (size_t p_index) {
 #endif
       
     float v0, v1, v2, v3, v4, v5, v6;

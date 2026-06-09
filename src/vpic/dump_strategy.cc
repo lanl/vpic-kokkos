@@ -13,8 +13,6 @@ new_dump_strategy(DumpStrategyID dump_strategy_id,
                   vpic_simulation *vpic_simu)
 {
   Dump_Strategy *ds;
-  MALLOC(ds, 1);
-  //CLEAR(ds, 1);
 
   // Do any post init/restore simulation modifications
   switch (dump_strategy_id)
@@ -48,7 +46,7 @@ void delete_dump_strategy(Dump_Strategy *ds)
   if (!ds)
     return;
   UNREGISTER_OBJECT(ds);
-  FREE(ds);
+  delete(ds);
 }
 
 /*****************************************************************************
@@ -174,14 +172,14 @@ void BinaryDump::dump_hydro(
   fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
 #else
   hydro_t h[1];
+  double _pad[2] = {0};
   WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
   for(int i=0; i<dim[0]*dim[1]*dim[2]; i++) {
     for(int v=0; v<HYDRO_VAR_COUNT; v++) {
       fileIO.write(&hydro_array->k_h_h(i, v), 1);
     }
     // Additional padding to match legacy structures
-    double _pad = 0;
-    fileIO.write(&_pad, 2);
+    fileIO.write(&(_pad[0]), 2);
   }
 #endif
   if (fileIO.close())
@@ -480,8 +478,13 @@ void BinaryDump::field_dump(
       for(size_t k(0); k<nzout+2; k++) {
       for(size_t j(0); j<nyout+2; j++) {
       for(size_t i(0); i<nxout+2; i++) {
-              const uint32_t * fref = reinterpret_cast<uint32_t *>(&field_array->f(i,j,k));
-              fileIO.write(&fref[varlist[v]], 1);
+              if(v < FIELD_VAR_COUNT) {
+                const uint32_t * fref = reinterpret_cast<uint32_t *>(&field_array->f(i,j,k));
+                fileIO.write(&fref[varlist[v]], 1);
+              } else {
+                const uint16_t * fref = reinterpret_cast<uint16_t *>(&(field_array->f(i,j,k).ematx));
+                fileIO.write(&fref[varlist[v-FIELD_VAR_COUNT]], 1);
+              }
               if(rank==VERBOSE_rank) printf("%f ", field_array->f(i,j,k).ex);
               if(rank==VERBOSE_rank) std::cout << "(" << i << " " << j << " " << k << ")" << std::endl;
       } if(rank==VERBOSE_rank) std::cout << std::endl << "ROW_BREAK " << j << " " << k << std::endl;

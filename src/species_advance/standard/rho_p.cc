@@ -243,7 +243,7 @@ struct accum_rho_p_reduce {
     }
 
     KOKKOS_INLINE_FUNCTION
-    void join(volatile value_type dst, const volatile value_type src) const {
+    void join(value_type dst, const value_type src) const {
         for(int i=0; i<value_count; i++) {
             dst[i] += src[i];
         }

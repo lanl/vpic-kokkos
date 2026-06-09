@@ -72,7 +72,6 @@ vpic_simulation::inject_particle( species_t * sp,
   if( iz==nz ) z = 1;                 // On far wall ... conditional move
   if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
   iz++;                               // Adjust for mesh indexing
-
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   size_t p_index = Kokkos::atomic_fetch_inc(&(sp->np));
   particle_t * p = sp->p + p_index;
@@ -121,6 +120,8 @@ vpic_simulation::inject_particle( species_t * sp,
   sp->k_p_h(idx, particle_var::uz) = static_cast<float>(uz);
   sp->k_p_h(idx, particle_var::w)  = w;
   sp->k_p_i_h(idx) = VOXEL(ix,iy,iz,nx,ny,nz);
+if(sp->k_p_i_h(idx) == 0 || ix == 0 || iy == 0 || iz == 0)
+  printf("Injected particle ended up in ghost region: (%f,%f,%f) -> (%d,%d,%d)\n", x,y,z, ix, iy, iz);
 #ifdef VARIABLE_CHARGE
   if(qp == std::numeric_limits<double>::infinity()) {
     sp->k_p_h(idx, particle_var::qp) = sp->q;
@@ -210,8 +211,6 @@ vpic_simulation::inject_particle_r( species_t * sp,
   if( iz==nz ) z = 1;                 // On far wall ... conditional move
   if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
   iz++;                               // Adjust for mesh indexing
-
-  size_t p_index = Kokkos::atomic_fetch_inc(&(sp->np));
 
   // Add particle to receive list (on host), so it will be copied to
   // device along with the boundary_p particles.
