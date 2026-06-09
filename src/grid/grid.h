@@ -105,7 +105,7 @@ typedef struct grid {
   float den_floor_pe;     // Density floor for electron pressure update
   float eos_gamma, eos_den; // Electron fluid adiabatic index, reference density
   
-  float   time_sec, length_m, mass_kg density_SI; //For converting to physical units
+  float   time_sec, length_m, mass_kg, density_SI; //For converting to physical units
   
   int   bc[27];             // (-1:1,-1:1,-1:1) FORTRAN indexed array of
                             // boundary conditions to apply at domain edge
