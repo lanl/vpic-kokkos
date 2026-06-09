@@ -239,6 +239,39 @@ typedef struct grid {
     "Fill curvilinear mesh view",
     host_execution_policy_md({0, 0, 0}, {nx+1, ny+1, nz+1}),
     KOKKOS_CLASS_LAMBDA (const int i, const int j, const int k) {
+      int idx = i + (nx+CURVILINEAR_MESH_GHOST_COUNT)*(j + (ny+CURVILINEAR_MESH_GHOST_COUNT)*k);
+
+      float xi = x0 + i*dx;
+      float eta = y0 + j*dy;
+      float mu = z0 + k*dz;
+
+      float r = xi;
+      float theta = eta;
+      float z = mu;
+
+      k_curvilinear_mesh_h(idx, curv_mesh_var::h_1) = 1.0f;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::h_2) = r;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::h_3) = 1.0f;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::jac) = r;
+
+      float cos_theta = cosf(theta);
+      float sin_theta = sinf(theta);
+
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_u) = cos_theta;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_v) = sin_theta;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_w) = 0.0f;
+
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_u) = -sin_theta;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_v) = cos_theta;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_w) = 0.0f;
+
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_u) = 0.0f;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_v) = 0.0f;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_w) = 1.0f;
+
+      k_curvilinear_mesh_h(idx, curv_mesh_var::xg) = r * cos_theta;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::yg) = r * sin_theta;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::zg) = z;
     }
     );
 

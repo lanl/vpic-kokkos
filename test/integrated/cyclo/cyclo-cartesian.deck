@@ -33,8 +33,10 @@ begin_initialization {
   define_material("vacuum",1.0,1.0,0.0);
   define_field_array();
 
-  field(1,1,1).cbz0  = 1*M_PI / (double)nstep;
-  field(1,1,2).cbz0  = 1*M_PI / (double)nstep;
+  auto& k_field = field_array->k_f_h;
+  double cbz_val = 1*M_PI / (double)nstep;
+  k_field(VOXEL(1,1,1,1,1,1), field_var::cbz0) = cbz_val;
+  k_field(VOXEL(1,1,2,1,1,1), field_var::cbz0) = cbz_val;
 
   field_array->copy_to_device();
 
@@ -68,24 +70,23 @@ begin_initialization {
                 cos(2.*M_PI*(0.125*nstep)      /(double)nstep);
     double uy = sin(2.*M_PI*(0.125*nstep-(n+1))/(double)nstep) /
                 sin(2.*M_PI*(0.125*nstep)      /(double)nstep);
+    auto& k_p_h = this_sp->k_p_h;
+    auto& k_p_i_h = this_sp->k_p_i_h;
     for( int m=0; m<npart; m++ ) {
-      if( fabs(this_sp->p[m].ux-ux)>7e-7 ||
-          fabs(this_sp->p[m].uy-uy)>7e-7 ||
-          this_sp->p[m].uz != 1 ) {
+      float pux = k_p_h(m, particle_var::ux);
+      float puy = k_p_h(m, particle_var::uy);
+      float puz = k_p_h(m, particle_var::uz);
+      if( fabs(pux-ux)>7e-7 || fabs(puy-uy)>7e-7 || puz != 1 ) {
         failed++;
         sim_log( n << " " << m << " " <<
-                 this_sp->p[m].i  << " " <<
-                 this_sp->p[m].dx << " " <<
-                 this_sp->p[m].dy << " " <<
-                 this_sp->p[m].dz << " " <<
-                 this_sp->p[m].ux << " " <<
-                 this_sp->p[m].uy << " " <<
-                 this_sp->p[m].uz << " " <<
-                 this_sp->p[m].w  << " " <<
-                 ux << " " <<
-                 uy << " " <<
-                 this_sp->p[m].ux-ux << " " <<
-                 this_sp->p[m].uy-uy );
+                 k_p_i_h(m) << " " <<
+                 k_p_h(m, particle_var::dx) << " " <<
+                 k_p_h(m, particle_var::dy) << " " <<
+                 k_p_h(m, particle_var::dz) << " " <<
+                 pux << " " << puy << " " << puz << " " <<
+                 k_p_h(m, particle_var::w) << " " <<
+                 ux << " " << uy << " " <<
+                 pux-ux << " " << puy-uy );
       }
     }
   }
