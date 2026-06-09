@@ -120,8 +120,6 @@ vpic_simulation::inject_particle( species_t * sp,
   sp->k_p_h(idx, particle_var::uz) = static_cast<float>(uz);
   sp->k_p_h(idx, particle_var::w)  = w;
   sp->k_p_i_h(idx) = VOXEL(ix,iy,iz,nx,ny,nz);
-if(sp->k_p_i_h(idx) == 0 || ix == 0 || iy == 0 || iz == 0)
-  printf("Injected particle ended up in ghost region: (%f,%f,%f) -> (%d,%d,%d)\n", x,y,z, ix, iy, iz);
 #ifdef VARIABLE_CHARGE
   if(qp == std::numeric_limits<double>::infinity()) {
     sp->k_p_h(idx, particle_var::qp) = sp->q;
