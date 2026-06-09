@@ -88,7 +88,7 @@ option(VPIC_ENABLE_HALO_EXCHANGE "Enable halo exchange code path for remote comm
 
 option(VPIC_ENABLE_LEGACY_DATA_STRUCTURES "Enable use of legacy data structures for compatibility" ON)
 
-option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." ON)
+option(HYB_USE_SEPARATE_PE "Use separate electron energy equation instead of EoS." OFF)
 
 option(VPIC_SHAPE_QS "Use quadratic-sum particle shape" OFF)
 
