@@ -30,18 +30,18 @@ module list 2>&1 | tee modules.txt
 # wrappers and such.  I've worked around it with some ad hoc CMake magic, but
 # this line might be helpful when troubleshooting (run it when compiling user
 # decks too).
-#export NVCC_WRAPPER_DEFAULT_COMPILER=$(which CC)
+export NVCC_WRAPPER_DEFAULT_COMPILER=mpicxx
 
 CRAYPE_LINK_TYPE=dynamic cmake \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DENABLE_INTEGRATED_TESTS=OFF \
-  -DENABLE_UNIT_TESTS=OFF \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DENABLE_INTEGRATED_TESTS=ON \
+  -DENABLE_UNIT_TESTS=ON \
   -DBUILD_INTERNAL_KOKKOS=ON \
   -DENABLE_KOKKOS_CUDA=ON \
-  -DKokkos_ARCH_AMPERE80=ON \
-  -DKokkos_ARCH_ZEN2=OFF \
+  -DKokkos_ARCH_VOLTA70=ON \
+  -DKokkos_ARCH_NATIVE=ON \
   -DKokkos_ENABLE_OPENMP=ON \
-  -DCMAKE_CXX_COMPILER=/projects/maehem/maehem-HVPIC-K/kokkos/bin/nvcc_wrapper \
+  -DCMAKE_CXX_COMPILER=/vast/home/cgraham/vpic-kokkos/kokkos/bin/nvcc_wrapper \
   -DCMAKE_CXX_FLAGS="-g -rdynamic "\
   $src_dir
 

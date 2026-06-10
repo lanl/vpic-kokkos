@@ -33,6 +33,8 @@ begin_initialization {
   define_material("vacuum",1.0,1.0,0.0);
   define_field_array();
 
+  grid->init_cylindrical_grid();
+
   field(1,1,1).cbz0  = 1*M_PI / (double)nstep;
   field(1,1,2).cbz0  = 1*M_PI / (double)nstep;
 

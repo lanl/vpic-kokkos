@@ -204,6 +204,122 @@ contribute_current(TeamMember& team_member, field_sa_t& access, int i0, int i1, 
 #endif
 }
 
+// Quadratic B-spline basis functions and derivatives for curvilinear mesh
+// Input: xi in logical cordinate
+// Output: basis functions S and derivatives dS for three nodes (i-1, i, i+1)
+KOKKOS_INLINE_FUNCTION
+void compute_bspline_basis(float xi,
+                           float& S_m1, float& S_0, float& S_p1,
+                           float& dS_m1, float& dS_0, float& dS_p1) {
+  // Basis functions
+  S_m1 = 0.125f * (1.0f - xi) * (1.0f - xi);
+  S_0  = 0.25f * (3.0f - xi * xi);
+  S_p1 = 0.125f * (1.0f + xi) * (1.0f + xi);
+
+  // Derivatives
+  dS_m1 = 0.25f * (xi - 1.0f);
+  dS_0  = -0.5f * xi;
+  dS_p1 = 0.25f * (xi + 1.0f);
+}
+
+// using B-spline interpolation from grid nodes
+KOKKOS_INLINE_FUNCTION
+void compute_reciprocal_basis(
+    const k_curvilinear_mesh_t& k_curv,
+    float dx, float dy, float dz,  // Particle position in logical coords
+    int ii,                         //Base voxel index
+    int nx, int ny, int nz,
+    float gdx, float gdy, float gdz,
+    float& grad_xi_x, float& grad_xi_y, float& grad_xi_z,
+    float& grad_eta_x, float& grad_eta_y, float& grad_eta_z,
+    float& grad_mu_x, float& grad_mu_y, float& grad_mu_z,
+    float& jacobian)
+{
+  //Compute B-spline basis functions and derivatives
+  float Sx_m1, Sx_0, Sx_p1, dSx_m1, dSx_0, dSx_p1;
+  float Sy_m1, Sy_0, Sy_p1, dSy_m1, dSy_0, dSy_p1;
+  float Sz_m1, Sz_0, Sz_p1, dSz_m1, dSz_0, dSz_p1;
+
+  compute_bspline_basis(dx, Sx_m1, Sx_0, Sx_p1, dSx_m1, dSx_0, dSx_p1);
+  compute_bspline_basis(dy, Sy_m1, Sy_0, Sy_p1, dSy_m1, dSy_0, dSy_p1);
+  compute_bspline_basis(dz, Sz_m1, Sz_0, Sz_p1, dSz_m1, dSz_0, dSz_p1);
+
+  // Get voxel coordinates from linear index
+  int nxp2 = nx + 2;
+  int nyp2 = ny + 2;
+  int zi = ii / (nxp2 * nyp2);
+  int rem = ii % (nxp2 * nyp2);
+  int yi = rem / nxp2;
+  int xi = rem % nxp2;
+
+  // Node array dimensions
+  int nxp2_node = nx + 2;
+  int nyp2_node = ny + 2;
+
+  // Initialize Jacobian matrix elements
+  float dx_dxi = 0.0f, dy_dxi = 0.0f, dz_dxi = 0.0f;
+  float dx_deta = 0.0f, dy_deta = 0.0f, dz_deta = 0.0f;
+  float dx_dmu = 0.0f, dy_dmu = 0.0f, dz_dmu = 0.0f;
+
+  // Tri-linear interpolation using tensor product of B-splines
+  // Loop over 3x3x3 neighboring ndes
+  for (int kk = -1; kk <= 1; kk++) {
+    float Sz = (kk == -1) ? Sz_m1 : ((kk == 0) ? Sz_0 : Sz_p1);
+    float dSz = (kk == -1) ? dSz_m1 : ((kk == 0) ? dSz_0 : dSz_p1);
+
+    for (int jj = -1; jj <= 1; jj++) {
+      float Sy = (jj == -1) ? Sy_m1 : ((jj == 0) ? Sy_0 : Sy_p1);
+      float dSy = (jj == -1) ? dSy_m1 : ((jj == 0) ? dSy_0 : dSy_p1);
+
+      for (int ii_offset = -1; ii_offset <= 1; ii_offset++) {
+        float Sx = (ii_offset == -1) ? Sx_m1 : ((ii_offset == 0) ? Sx_0 : Sx_p1);
+        float dSx = (ii_offset == -1) ? dSx_m1 : ((ii_offset == 0) ? dSx_0 : dSx_p1);
+
+        // Compute node index in the curvilinear mesh array
+        int node_idx = (xi + ii_offset) + nxp2_node * ((yi + jj) + nyp2_node * (zi + kk));
+
+        // Get Cartesian positions at this node
+        float xg = k_curv(node_idx, curv_mesh_var::xg);
+        float yg = k_curv(node_idx, curv_mesh_var::yg);
+        float zg = k_curv(node_idx, curv_mesh_var::zg);
+
+        // Accumulate Jacobian matrix elements
+        dx_dxi += xg * dSx * Sy * Sz / gdx;
+        dy_dxi += yg * dSx * Sy * Sz / gdx;
+        dz_dxi += zg * dSx * Sy * Sz / gdx;
+
+        dx_deta += xg * Sx * dSy * Sz / gdy;
+        dy_deta += yg * Sx * dSy * Sz / gdy;
+        dz_deta += zg * Sx * dSy * Sz / gdy;
+
+        dx_dmu += xg * Sx * Sy * dSz / gdz;
+        dy_dmu += yg * Sx * Sy * dSz / gdz;
+        dz_dmu += zg * Sx * Sy * dSz / gdz;
+      }
+    }
+  }
+
+  // Compute Jacobian determinant
+  jacobian = dx_dxi * (dy_deta * dz_dmu - dy_dmu * dz_deta)
+           - dx_deta * (dy_dxi * dz_dmu - dy_dmu * dz_dxi)
+           + dx_dmu * (dy_dxi * dz_deta - dy_deta * dz_dxi);
+
+  float inv_jac = 1.0f / jacobian;
+
+  // Compute reciprocal basis vectors
+  grad_xi_x = inv_jac * (dy_deta * dz_dmu - dy_dmu * dz_deta);
+  grad_xi_y = inv_jac * (dx_dmu * dz_deta - dx_deta * dz_dmu);
+  grad_xi_z = inv_jac * (dx_deta * dy_dmu - dx_dmu * dy_deta);
+
+  grad_eta_x = inv_jac * (dy_dmu * dz_dxi - dy_dxi * dz_dmu);
+  grad_eta_y = inv_jac * (dx_dxi * dz_dmu - dx_dmu * dz_dxi);
+  grad_eta_z = inv_jac * (dx_dmu * dy_dxi - dx_dxi * dy_dmu);
+
+  grad_mu_x = inv_jac * (dy_dxi * dz_deta - dy_deta * dz_dxi);
+  grad_mu_y = inv_jac * (dx_deta * dz_dxi - dx_dxi * dz_deta);
+  grad_mu_z = inv_jac * (dx_dxi * dy_deta - dx_deta * dy_dxi);
+}
+
 // Detect whether all threads/vector lanes are processing particles belonging to the same cell
 template<class TeamMember, class IndexView, class BoundsView>
 int KOKKOS_INLINE_FUNCTION particles_in_same_cell(TeamMember& team_member, IndexView& ii, BoundsView& inbnds, const int num_lanes) {
@@ -1272,21 +1388,59 @@ advance_p_kokkos_gpu(
     p_uy = uy;
     p_uz = uz;
 
-    //v3   = one;///sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
+    float grad_xi_x, grad_xi_y, grad_xi_z;
+    float grad_eta_x, grad_eta_y, grad_eta_z;
+    float grad_mu_x, grad_mu_y, grad_mu_z;
+    float jac;
 
-    /**/                                      // Get norm displacement
-    v4  = ux*cdt_dx;
-    v5  = uy*cdt_dy;
-    v6  = uz*cdt_dz;
-    //v4  *= v3;
-    //v5  *= v3;
-    //v6  *= v3;
-    v0   = dx + v4;                           // Streak midpoint (inbnds)
-    v1   = dy + v5;
-    v2   = dz + v6;
-    dx   = v0 + v4;                           // New position
-    dy   = v1 + v5;
-    dz   = v2 + v6;
+    // Compute reciprocal basis at current position
+    compute_reciprocal_basis(
+        g->k_curvilinear_mesh_d,
+        dx, dy, dz, ii, nx, ny, nz,
+        gdx, gdy, gdz,
+        grad_xi_x, grad_xi_y, grad_xi_z,
+        grad_eta_x, grad_eta_y, grad_eta_z,
+        grad_mu_x, grad_mu_y, grad_mu_z,
+        jac);
+
+    float d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
+    float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
+    float d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
+
+    // Half-step position
+    float dx_pred = dx + 0.5f * d_xi_dt * cdt_dx;
+    float dy_pred = dy + 0.5f * d_eta_dt * cdt_dy;
+    float dz_pred = dz + 0.5f * d_mu_dt * cdt_dz;
+
+    // Rcompute reciprocal basis at predicted half-step position
+    compute_reciprocal_basis(
+        g->k_curvilinear_mesh_d,
+        dx_pred, dy_pred, dz_pred, ii, nx, ny, nz,
+        gdx, gdy, gdz,
+        grad_xi_x, grad_xi_y, grad_xi_z,
+        grad_eta_x, grad_eta_y, grad_eta_z,
+        grad_mu_x, grad_mu_y, grad_mu_z,
+        jac);
+
+    // Recompute using half-step reciprocal basis
+    d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
+    d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
+    d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
+
+    // Compute displacement increments
+    v4 = d_xi_dt * cdt_dx;
+    v5 = d_eta_dt * cdt_dy;
+    v6 = d_mu_dt * cdt_dz;
+
+    // Streak midpoint (for current deposition)
+    v0 = dx + 0.5f * v4;
+    v1 = dy + 0.5f * v5;
+    v2 = dz + 0.5f * v6;
+
+    // Final position
+    dx = dx + v4;
+    dy = dy + v5;
+    dz = dz + v6;
 
     // printf("Pushed a particle advance_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, dx, dy, dz, p_ux, p_uy, p_uz);
 
