@@ -43,6 +43,8 @@ begin_initialization {
                        gnx,gny,gnz,        // Resolution
                        topox,topoy,topoz); // Topology
 
+  grid->init_curvilinear_grid();
+
   // Space is by default filled with first material defined
   define_material("vacuum",1.0);
 

@@ -149,6 +149,8 @@ begin_initialization {
   //                        0.5*Lx, Ly, Lz,  // High corner
   //                        nx, ny, nz,      // Resolution
   //                        1, nproc(), 1 ); // Topology
+
+  grid->init_curvilinear_grid();
   define_periodic_grid(  0, -0.5*Ly, -0.5*Lz,    // Low corner
 			  Lx, 0.5*Ly, 0.5*Lz,     // High corner
 			  nx, ny, nz,             // Resolution

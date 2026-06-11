@@ -150,6 +150,8 @@ begin_initialization {
                          nx, ny, nz,             // Resolution
                          topology_x, topology_y, topology_z); // Topology
 
+  grid->init_curvilinear_grid();
+
   //  grid->te = Te;
   //  grid->den = 1.0;
   grid->eta = eta;

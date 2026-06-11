@@ -82,7 +82,7 @@ begin_initialization {
   double Lz    = 1.0*di;   // size of box in z dimension
 
   double nx = 64;
-  double ny = 1;
+  double ny = 4;
   double nz = 1;
 
   double nppc  = 100;// TODO testing github runner 10000;         // Average number of macro particle per cell per species
@@ -156,11 +156,18 @@ begin_initialization {
   define_units(1.0, 1.0);//c, eps0 );
   define_timestep( dt );
 
-  // Define the grid
-  define_periodic_grid(  -0.5*Lx, -0.5*Ly, -0.5*Lz,    // Low corner
-                          0.5*Lx,  0.5*Ly, 0.5*Lz,     // High corner
-                         nx, ny, nz,             // Resolution
+  // Define the grid in cylindrical coordinates (r, theta, z)
+  // Convert Cartesian box size to cylindrical: use r in [0, Lx], theta in [0, 2*pi]
+  define_periodic_grid(  0.0, 0.0, -0.5*Lz,           // Low corner (r_min, theta_min, z_min)
+                         Lx, 2*M_PI, 0.5*Lz,          // High corner (r_max, theta_max, z_max)
+                         nx, ny, nz,                  // Resolution
                          topology_x, topology_y, topology_z); // Topology
+
+  // Initialize cylindrical curvilinear mesh
+  grid->init_cylindrical_grid(0.0, Lx,              // r range
+                              0.0, 2*M_PI,          // theta range
+                              -0.5*Lz, 0.5*Lz,      // z range
+                              false, true, false);  // periodic in theta only
 
   //  grid->te = Te;
   //  grid->den = 1.0;
@@ -267,7 +274,8 @@ sim_log( "Loading fields" );
 
 // Note: everywhere is a region that encompasses the entire simulation
 // In general, regions are specied as logical equations (i.e. x>0 && x+y<2)
- set_region_field( everywhere, 0, 0, 0, 1.0, 0, 0);
+// In cylindrical coordinates, B field is in z direction: Br=0, Btheta=0, Bz=b0
+ set_region_field( everywhere, 0, 0, 0, 0, 0, b0);
  set_region_te( everywhere, Te);
 
  // LOAD PARTICLES
@@ -283,17 +291,19 @@ sim_log( "Loading fields" );
    sim_log( "-> Seeding particles" );
 
    repeat ( Ni/nproc() ) {
-     double x, y, z, ux, uy, uz, d0 ;
+     double r, theta, z, ux, uy, uz, d0 ;
 
-     x = uniform( rng(0), xmin, xmax );
-     y = uniform( rng(0), ymin, ymax );
-     z = uniform( rng(0), zmin, zmax );
+     // Sample uniformly in cylindrical coordinates
+     r = uniform( rng(0), xmin, xmax );         // r in [0, Lx]
+     theta = uniform( rng(0), ymin, ymax );     // theta in [0, 2*pi]
+     z = uniform( rng(0), zmin, zmax );         // z in [-Lz/2, Lz/2]
 
+     // Velocity in Cartesian coordinates (for gyration in B_z field)
      ux = normal( rng(0), 0, vthipar);
      uy = normal( rng(0), 0, vthiperp);
      uz = normal( rng(0), 0, vthiperp);
 
-     inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0);
+     inject_particle( ion, r, theta, z, ux, uy, uz, qi, 0, 0);
 
    }
 

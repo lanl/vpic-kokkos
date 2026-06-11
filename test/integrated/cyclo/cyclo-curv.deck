@@ -1,105 +1,452 @@
-// Test Cyclotron motion in a constant magnetic field
+//////////////////////////////////////////////////////
 //
-// Note:
-// wc = q B / m gamma ==> wc dt = q dt B / m gamma ==>
-// wc dt = q dt c B / m c gamma ==> wc dt = 2 ( q dt / 2 m c ) ( c B ) / gamma
+//   Cyclotron motion test in cylindrical coordinates
+//   Based on pcai.deck structure
 //
-// With c = 1, dt = 1, gamma = 2, q = 2, m = 1
-// wc dt = c B
-// 2 pi dt / tauc = c B
-// 2 pi / Nstep = c B
-//
-// This input deck was written by:
-//   Kevin J Bowers, Ph.D.
-//   Plasma Physics Group (X-1)
-//   Applied Physics Division
-//   Los Alamos National Lab
-// March/April 2004 - conversion of c++ test code into an input deck
+//////////////////////////////////////////////////////
 
 begin_globals {
+
+  int restart_interval;
+  int energies_interval;
+  int fields_interval;
+  int ehydro_interval;
+  int Hhydro_interval;
+  int eparticle_interval;
+  int Hparticle_interval;
+  int quota_check_interval;
+
+  int rtoggle;
+  int write_restart;
+  int write_end_restart;
+
+  double quota_sec;
+  double b0;
+  double v_A;
+  double topology_x;
+  double topology_y;
+  double topology_z;
+
+  // Output variables
+  DumpParameters fdParams;
+  DumpParameters hedParams;
+  DumpParameters hHdParams;
+  std::vector<DumpParameters *> outputParams;
+
 };
 
 begin_initialization {
-  double L  = 1e10;
-  int npart = 131;
-  int nstep = 64;
 
-  define_units( 1, 1 );
-  define_timestep( 1 );
-  define_periodic_grid( 0, 0, 0,   // Grid low corner
-                        L, L, L,   // Grid high corner
-                        1, 1, 1,   // Grid resolution
-                        1, 1, 1 ); // Processor configuration
-  define_material("vacuum",1.0,1.0,0.0);
-  define_field_array();
+  // Physical parameters for cyclotron test
+  double ec   = 1.0;
+  double mi   = 1.0;
+  double mu0  = 1.0;
+  double b0   = 10.0;  // Uniform axial B field
+  double n0   = 1.0;
 
-  grid->init_cylindrical_grid();
+  // Derived parameters
+  double v_A = b0/sqrt(mu0*n0*mi);
+  double wci = ec*b0/mi;
+  double di = v_A/wci;
 
-  auto& k_field = field_array->k_f_h;
-  double cbz_val = 1*M_PI / (double)nstep;
-  k_field(VOXEL(1,1,1,1,1,1), field_var::cbz) = cbz_val;
-  k_field(VOXEL(1,1,2,1,1,1), field_var::cbz) = cbz_val;
+  // Test parameters - single particle
 
-  field_array->copy_to_device();
+  // Numerical parameters
+  double taui    = 60;
+  double quota   = 23.5;
+  double quota_sec = quota*3600;
 
-  species_t* sp; // We use this to iterate over species
+  double Lr    = 2.0;   // Radial extent
+  double Lz    = 1.0;   // z extent
 
-  species_t * this_sp = define_species( "test_species", 2, 1, npart, npart, 0, 0 );
-  repeat(npart) inject_particle( this_sp,
-                                 uniform( rng(0), 0, L ),
-                                 uniform( rng(0), 0, L ),
-                                 uniform( rng(0), 0, L ),
-                                 1, 1, 1, // Gamma = 2
-                                 uniform( rng(0), 0, 1 ),
-                                 0, 0 );
+  double nr     = 21;
+  double ntheta = 21;
+  double nz     = 1;
 
-  LIST_FOR_EACH( sp, species_list ) {
-    sp->copy_to_device();
+  // double nppc  = 10;  // Match pcai.deck
+
+  double topology_x = 1;
+  double topology_y = 1;
+  double topology_z = 1;
+
+  // Derived numerical parameters
+  double hr = Lr/nr;
+  double htheta = 2*M_PI/ntheta;
+  double hz = Lz/nz;
+
+  double Ni  = 6000;
+  double Np  = n0*Lr*(2*M_PI)*Lz;
+  Ni = trunc_granular(Ni,nproc());
+  double qi = ec*Np/Ni;
+
+  // Time step
+  double dg = courant_length(Lr,2*M_PI,Lz,nr,ntheta,nz);
+  double dt = 0.001;
+
+  double sort_interval = 0;
+
+  // Intervals for output
+  int restart_interval = 3000;
+  int energies_interval = 0;
+  int interval = 10;
+  int fields_interval = 0;
+  int ehydro_interval = 0;
+  int Hhydro_interval = 0;
+  int eparticle_interval = 0;
+  int Hparticle_interval = 0;
+  int quota_check_interval = 100;
+
+  ///////////////////////////////////////////////
+  // Setup high level simulation parameters
+  num_step             = 100;
+  status_interval      = 10;
+  sync_shared_interval = status_interval/2;
+  clean_div_e_interval = status_interval/2;
+  clean_div_b_interval = status_interval/2;
+
+  global->restart_interval     = restart_interval;
+  global->energies_interval    = energies_interval;
+  global->fields_interval      = fields_interval;
+  global->ehydro_interval      = ehydro_interval;
+  global->Hhydro_interval      = Hhydro_interval;
+  global->eparticle_interval   = eparticle_interval;
+  global->Hparticle_interval   = Hparticle_interval;
+  global->quota_check_interval = quota_check_interval;
+  global->quota_sec            = quota_sec;
+  global->rtoggle              = 0;
+
+  global->b0  = b0;
+  global->v_A  = v_A;
+
+  global->topology_x  = topology_x;
+  global->topology_y  = topology_y;
+  global->topology_z  = topology_z;
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Setup the grid
+
+  define_units(1.0, 1.0);
+  define_timestep( dt );
+
+  // Define the grid in cylindrical coordinates (r, theta, z)
+  // Start with reflecting grid (r boundaries will be reflective)
+  define_reflecting_grid(  0.5, 0.0, -0.5*Lz,
+                         Lr, 2*M_PI, 0.5*Lz,
+                         nr, ntheta, nz,
+                         topology_x, topology_y, topology_z);
+
+  // Initialize cylindrical curvilinear mesh
+  grid->init_cylindrical_grid(0.5, Lr,
+                              0.0, 2*M_PI,
+                              -0.5*Lz, 0.5*Lz,
+                              false, true, false);
+  // join_domain( BOUNDARY(0,-1,0), 0 );
+  // join_domain( BOUNDARY(0, 1,0), 0 );
+
+  grid->eta = 0.0;
+
+  // ***** Set Field Boundary Conditions *****
+  sim_log("Reflecting boundaries in r, periodic in theta");
+
+  // ***** Set Particle Boundary Conditions *****
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Setup materials
+  sim_log("Setting up materials. ");
+  define_material( "vacuum", 1 );
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Finalize Field Advance
+  define_field_array(NULL);
+  sim_log("Finalized Field Advance");
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Setup the species
+  sim_log("Setting up species. ");
+  double nmax = 1.5*Ni/nproc();
+  double nmovers = 0.1*nmax;
+  double sort_method = 1;
+  species_t *ion = define_species("ion", ec, mi, nmax, nmovers, sort_interval, sort_method);
+
+  ///////////////////////////////////////////////////
+  // Log diagnostic information about this simulation
+
+  sim_log( "***********************************************" );
+  sim_log("* Topology:                       " << topology_x
+    << " " << topology_y << " " << topology_z);
+  sim_log ( "num_step = " << num_step );
+  sim_log ( "nr = " << nr );
+  sim_log ( "ntheta = " << ntheta );
+  sim_log ( "nz = " << nz );
+  sim_log ( "nproc = " << nproc ()  );
+  sim_log ( "b0 = " << b0 );
+  sim_log ( "v_A = " << v_A );
+  sim_log ( "di = " << di );
+  sim_log ( "Ni = " << Ni );
+  sim_log ( "total # of particles = " << Ni );
+  sim_log ( "dt*wci = " << wci*dt );
+
+  // Dump simulation information to file "info.bin"
+  if (rank() == 0 ) {
+    FileIO fp_info;
+    if ( ! (fp_info.open("info.bin", io_write)==ok) ) ERROR(("Cannot open file."));
+    fp_info.write(&topology_x, 1 );
+    fp_info.write(&topology_y, 1 );
+    fp_info.write(&topology_z, 1 );
+    fp_info.write(&Lr, 1 );
+    fp_info.write(&Lz, 1 );
+    fp_info.write(&nr, 1 );
+    fp_info.write(&ntheta, 1 );
+    fp_info.write(&nz, 1 );
+    fp_info.write(&dt, 1 );
+    fp_info.close();
   }
-  interpolator_array->copy_to_device();
-  // Hack into vpic internals
 
-  int failed = 0;
-  load_interpolator_array( interpolator_array, field_array );
-  for( int n=0; n<nstep; n++ ) {
-    advance_p( this_sp, interpolator_array, field_array );
+  ////////////////////////////
+  // Load fields
+  sim_log( "Loading fields" );
 
-    LIST_FOR_EACH( sp, species_list ) {
-      sp->copy_to_host();
-    }
+  // Uniform axial B field in cylindrical coordinates: Br=0, Btheta=0, Bz=b0
+  set_region_field( everywhere, 0, 0, 0, 0, 0, b0);
+  set_region_te( everywhere, 0.0);
 
-    double ux = cos(2.*M_PI*(0.125*nstep-(n+1))/(double)nstep) /
-                cos(2.*M_PI*(0.125*nstep)      /(double)nstep);
-    double uy = sin(2.*M_PI*(0.125*nstep-(n+1))/(double)nstep) /
-                sin(2.*M_PI*(0.125*nstep)      /(double)nstep);
-    auto& k_p_h = this_sp->k_p_h;
-    auto& k_p_i_h = this_sp->k_p_i_h;
-    for( int m=0; m<npart; m++ ) {
-      float pux = k_p_h(m, particle_var::ux);
-      float puy = k_p_h(m, particle_var::uy);
-      float puz = k_p_h(m, particle_var::uz);
-      if( fabs(pux-ux)>7e-7 || fabs(puy-uy)>7e-7 || puz != 1 ) {
-        failed++;
-        sim_log( n << " " << m << " " <<
-                 k_p_i_h(m) << " " <<
-                 k_p_h(m, particle_var::dx) << " " <<
-                 k_p_h(m, particle_var::dy) << " " <<
-                 k_p_h(m, particle_var::dz) << " " <<
-                 pux << " " << puy << " " << puz << " " <<
-                 k_p_h(m, particle_var::w) << " " <<
-                 ux << " " << uy << " " <<
-                 pux-ux << " " << puy-uy );
+  // LOAD PARTICLES
+  sim_log( "Loading particles" );
+
+  int rng_seed = 1;
+  seed_entropy( rank() );
+  double xmin = grid->x0, xmax = grid->x0 + (grid->dx)*(grid->nx);
+  double ymin = grid->y0, ymax = grid->y0 + (grid->dy)*(grid->ny);
+  double zmin = grid->z0, zmax = grid->z0 + (grid->dz)*(grid->nz);
+
+  sim_log( "-> Seeding particles" );
+
+  repeat ( Ni/nproc() ) {
+    double r, theta, z, ux, uy, uz;
+
+    // Sample uniformly in cylindrical coordinates
+    r = uniform( rng(0), xmin, xmax );
+    theta = uniform( rng(0), ymin, ymax );
+    z = uniform( rng(0), zmin, zmax );
+
+    // Small velocity for cyclotron motion
+    double v0 = ec/mi*b0*r;  // Initial velocity
+    ux = 0;
+    uy = v0;
+    uz = 0;
+
+    inject_particle( ion, r, theta, z, ux, uy, uz, qi, 0, 0);
+  }
+
+  sim_log( "Finished loading particles. ion->np = " << ion->np );
+
+  /*--------------------------------------------------------------------------
+   * New dump definition
+   *------------------------------------------------------------------------*/
+
+  global->fdParams.format = band;
+  sim_log ( "Fields output format = band" );
+
+  global->hedParams.format = band;
+  sim_log ( "Electron species output format = band" );
+
+  global->hHdParams.format = band;
+  sim_log ( "Ion species output format = band" );
+
+  sprintf(global->fdParams.baseDir, "fields/");
+  dump_mkdir("fields");
+  dump_mkdir(global->fdParams.baseDir);
+  sprintf(global->fdParams.baseFileName, "fields");
+
+  global->fdParams.stride_x = 1;
+  global->fdParams.stride_y = 1;
+  global->fdParams.stride_z = 1;
+
+  global->outputParams.push_back(&global->fdParams);
+
+  sim_log ( "Fields x-stride " << global->fdParams.stride_x );
+  sim_log ( "Fields y-stride " << global->fdParams.stride_y );
+  sim_log ( "Fields z-stride " << global->fdParams.stride_z );
+
+  sprintf(global->hHdParams.baseDir, "hydro");
+  dump_mkdir("hydro");
+  dump_mkdir(global->hHdParams.baseDir);
+  sprintf(global->hHdParams.baseFileName, "Hhydro");
+
+  global->hHdParams.stride_x = 1;
+  global->hHdParams.stride_y = 1;
+  global->hHdParams.stride_z = 1;
+
+  sim_log ( "Ion species x-stride " << global->hHdParams.stride_x );
+  sim_log ( "Ion species y-stride " << global->hHdParams.stride_y );
+  sim_log ( "Ion species z-stride " << global->hHdParams.stride_z );
+
+  global->outputParams.push_back(&global->hHdParams);
+
+  global->hedParams.output_variables( current_density | charge_density | stress_tensor );
+  global->hHdParams.output_variables( current_density | charge_density | stress_tensor );
+
+  const uint32_t allfields (0xffffffff);
+  global->fdParams.output_variables( allfields );
+
+  char varlist[1024];
+  create_field_list(varlist, global->fdParams);
+  sim_log ( "Fields variable list: " << varlist );
+
+  create_hydro_list(varlist, global->hHdParams);
+  sim_log ( "Ion species variable list: " << varlist );
+
+  sim_log("*** Finished with user-specified initialization ***");
+
+} //begin_initialization
+
+#define should_dump(x) \
+  (global->x##_interval>0 && remainder(step(), global->x##_interval) == 0)
+
+begin_diagnostics {
+
+  const int nx=grid->nx;
+  const int ny=grid->ny;
+  const int nz=grid->nz;
+
+  // Dump all particle positions every 10 steps
+  if (step() == 0) {
+    dump_mkdir("data");
+  }
+
+  if (step() % 10 == 0) {
+    species_t* ion = find_species_name("ion", species_list);
+    if (ion) {
+      ion->copy_to_host();
+
+      if (ion->np > 0) {
+        char filename[256];
+        sprintf(filename, "data/particle_positions_step_%06d.txt", step());
+
+        FileIO fp;
+        if (fp.open(filename, io_write) == ok) {
+          // Write header
+          fp.print("# step=%d np=%d\n", step(), ion->np);
+          fp.print("# x y z r theta ux uy uz\n");
+
+          int nxp2 = grid->nx + 2;
+          int nyp2 = grid->ny + 2;
+
+          for (int p = 0; p < ion->np; p++) {
+            int voxel = ion->p[p].i;
+            float dx = ion->p[p].dx;
+            float dy = ion->p[p].dy;
+            float dz = ion->p[p].dz;
+            float ux = ion->p[p].ux;
+            float uy = ion->p[p].uy;
+            float uz = ion->p[p].uz;
+
+            int iz = voxel / (nxp2 * nyp2);
+            int rem = voxel % (nxp2 * nyp2);
+            int iy = rem / nxp2;
+            int ix = rem % nxp2;
+
+            double r_relative = ((double)ix - 1.0) + 0.5 * ((double)dx + 1.0);
+            double theta_relative = ((double)iy - 1.0) + 0.5 * ((double)dy + 1.0);
+            double z_relative = ((double)iz - 1.0) + 0.5 * ((double)dz + 1.0);
+
+            double r = grid->x0 + r_relative * (grid->x1 - grid->x0) / (double)grid->nx;
+            double theta = grid->y0 + theta_relative * (grid->y1 - grid->y0) / (double)grid->ny;
+            double z = grid->z0 + z_relative * (grid->z1 - grid->z0) / (double)grid->nz;
+
+            double x_cart = r * cos(theta);
+            double y_cart = r * sin(theta);
+
+            fp.print("%e %e %e %e %e %e %e %e\n", x_cart, y_cart, z, r, theta, ux, uy, uz);
+          }
+
+          fp.close();
+        }
       }
     }
   }
-  if( failed ) { sim_log( "FAIL" ); abort(1); }
-  sim_log( "pass" );
-  halt_mp();
-  exit(0);
-}
 
-begin_diagnostics {
-}
+  /*--------------------------------------------------------------------------
+   * Normal rundata dump
+   *------------------------------------------------------------------------*/
+  if(step()==0) {
+    dump_mkdir("fields");
+    dump_mkdir("hydro");
+    dump_mkdir("rundata");
+    dump_mkdir("restore0");
+    dump_mkdir("restore1");
+    dump_mkdir("particle");
+    dump_mkdir("rundata");
+
+    dump_grid("rundata/grid");
+    dump_materials("rundata/materials");
+    dump_species("rundata/species");
+    global_header("global", global->outputParams);
+  }
+
+  /*--------------------------------------------------------------------------
+   * Normal rundata energies dump
+   *------------------------------------------------------------------------*/
+  if(should_dump(energies)) {
+    dump_energies("rundata/energies", step() == 0 ? 0 : 1);
+  }
+
+  /*--------------------------------------------------------------------------
+   * Field data output
+   *------------------------------------------------------------------------*/
+  if(step() == 1 || should_dump(fields)) field_dump(global->fdParams);
+
+  /*--------------------------------------------------------------------------
+   * Ion species output
+   *------------------------------------------------------------------------*/
+  if(should_dump(Hhydro)) hydro_dump("ion", global->hHdParams);
+
+  /*--------------------------------------------------------------------------
+   * Restart dump
+   *------------------------------------------------------------------------*/
+  if(step() && !(step()%global->restart_interval)) {
+    global->write_restart = 1;
+  } else {
+    if (global->write_restart) {
+      global->write_restart = 0;
+      double dumpstart = uptime();
+      if(!global->rtoggle) {
+        global->rtoggle = 1;
+	checkpt("restore1/restore", 0);
+      } else {
+        global->rtoggle = 0;
+	checkpt("restore0/restore", 0);
+      }
+      sim_log( "Restart dump completed");
+      double dumpelapsed = uptime() - dumpstart;
+      sim_log("Restart duration "<<dumpelapsed);
+    }
+  }
+
+  // Quota check
+  if ( (step()>0 && global->quota_check_interval>0
+        && (step() & global->quota_check_interval)==0 ) || (global->write_end_restart) ) {
+    if ( (global->write_end_restart) ) {
+      global->write_end_restart = 0;
+      sim_log( "Allowed runtime exceeded for this job.  Terminating....\n");
+      double dumpstart = uptime();
+      if(!global->rtoggle) {
+        global->rtoggle = 1;
+        checkpt("restore1", 0);
+      } else {
+        global->rtoggle = 0;
+        checkpt("restore0", 0);
+      }
+      mp_barrier();
+      sim_log( "Restart dump restart completed." );
+      double dumpelapsed = uptime() - dumpstart;
+      sim_log("Restart duration "<< dumpelapsed);
+      exit(0);
+    }
+    if( uptime() > global->quota_sec ) global->write_end_restart = 1;
+  }
+
+} // end diagnostics
 
 begin_particle_injection {
 }
@@ -113,4 +460,5 @@ begin_field_injection {
 begin_particle_collisions {
 }
 
-
+begin_radiation {
+}

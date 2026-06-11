@@ -110,6 +110,8 @@ begin_initialization {
                          nx, ny, nz,      // Resolution
                          1, nproc(), 1 ); // Topology
 
+  grid->init_curvilinear_grid();
+
   // Override some of the boundary conditions to put a particle reflecting
   // perfect electrical conductor on the -x and +x boundaries
   set_domain_field_bc( BOUNDARY(-1,0,0), pec_fields );

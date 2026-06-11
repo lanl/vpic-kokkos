@@ -4,7 +4,8 @@
 #include <Kokkos_Core.hpp>
 #include <iostream>
 
-void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const size_t nz, const size_t nv,
+void advance_b_kokkos(k_field_t k_field, const k_curvilinear_mesh_t& k_curv,
+                      const size_t nx, const size_t ny, const size_t nz, const size_t nv,
                       const float px, const float py, const float pz) {
 
   #define f0_cbx k_field(f0_index, field_var::cbx)
@@ -27,15 +28,36 @@ void advance_b_kokkos(k_field_t k_field, const size_t nx, const size_t ny, const
   #define fz_ey k_field(fz_index,   field_var::ey)
   #define fz_ez k_field(fz_index,   field_var::ez)
 
-  // WTF!  Under -ffast-math, gcc-4.1.1 thinks it is okay to treat the
-  // below as
-  //   f0->cbx = ( f0->cbx + py*( blah ) ) - pz*( blah )
-  // even with explicit parenthesis are in there!  Oh my ...
-  // -fno-unsafe-math-optimizations must be used
+  // Curvilinear
+  #define UPDATE_CBX() { \
+    float h_eta = k_curv(f0_index, curv_mesh_var::h_2); \
+    float h_mu = k_curv(f0_index, curv_mesh_var::h_3); \
+    float h_eta_fy = k_curv(fy_index, curv_mesh_var::h_2); \
+    float h_mu_fz = k_curv(fz_index, curv_mesh_var::h_3); \
+    f0_cbx -= (1.0f / (h_eta * h_mu)) * ( \
+        py * (h_mu * fy_ez - h_mu_fz * f0_ez) - \
+        pz * (h_eta * fz_ey - h_eta_fy * f0_ey)); \
+  }
 
-  #define UPDATE_CBX() f0_cbx -= ( py*( fy_ez-f0_ez ) - pz*( fz_ey-f0_ey ) );
-  #define UPDATE_CBY() f0_cby -= ( pz*( fz_ex-f0_ex ) - px*( fx_ez-f0_ez ) );
-  #define UPDATE_CBZ() f0_cbz -= ( px*( fx_ey-f0_ey ) - py*( fy_ex-f0_ex ) );
+  #define UPDATE_CBY() { \
+    float h_xi = k_curv(f0_index, curv_mesh_var::h_1); \
+    float h_mu = k_curv(f0_index, curv_mesh_var::h_3); \
+    float h_xi_fx = k_curv(fx_index, curv_mesh_var::h_1); \
+    float h_mu_fz = k_curv(fz_index, curv_mesh_var::h_3); \
+    f0_cby -= (1.0f / (h_mu * h_xi)) * ( \
+        pz * (h_xi * fz_ex - h_xi_fx * f0_ex) - \
+        px * (h_mu * fx_ez - h_mu_fz * f0_ez)); \
+  }
+
+  #define UPDATE_CBZ() { \
+    float h_xi = k_curv(f0_index, curv_mesh_var::h_1); \
+    float h_eta = k_curv(f0_index, curv_mesh_var::h_2); \
+    float h_xi_fx = k_curv(fx_index, curv_mesh_var::h_1); \
+    float h_eta_fy = k_curv(fy_index, curv_mesh_var::h_2); \
+    f0_cbz -= (1.0f / (h_xi * h_eta)) * ( \
+        px * (h_eta * fx_ey - h_eta_fy * f0_ey) - \
+        py * (h_xi * fy_ex - h_xi_fx * f0_ex)); \
+  }
 
   // Do the bulk of the magnetic fields in the pipelines.  The host
   // handles stragglers.
@@ -97,7 +119,7 @@ advance_b(field_array_t * RESTRICT fa,
   float  pz   = (nz>1) ? frac*g->cvac*g->dt*g->rdz : 0;
 //printf("Advance_B kernel\n");
 
-  advance_b_kokkos(k_field, nx, ny, nz, nv, px, py, pz);
+  advance_b_kokkos(k_field, g->k_curvilinear_mesh_d, nx, ny, nz, nv, px, py, pz);
 
   k_local_adjust_norm_b( fa, g );
 }

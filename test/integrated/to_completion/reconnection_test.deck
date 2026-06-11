@@ -203,6 +203,8 @@ begin_initialization {
             nx,         ny,         nz,  // Resolution
             topology_x, topology_y, topology_z); // Topology
 
+  grid->init_curvilinear_grid();
+
     // Setup materials
     sim_log("Setting up materials. ");
     define_material( "vacuum", 1 );

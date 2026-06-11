@@ -249,6 +249,8 @@ begin_initialization {
                          L,  L,  L,   // Grid high corner
                         10, 10, 10,   // Grid resolution
                          1,  1,  1 ); // Processor configuration
+
+  grid->init_curvilinear_grid();
   define_material("vacuum",1.0,1.0,0.0);
   define_field_array();
 
