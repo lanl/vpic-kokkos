@@ -272,9 +272,9 @@ typedef struct grid {
       k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_u) = 1.0;
       k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_v) = 1.0;
       k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_w) = 1.0;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::xi_g)  = x;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::zeta_g)  = y;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::mu_g)  = z;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::xg)  = x;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::yg)  = y;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::zg)  = z;
     
     });
     
@@ -358,9 +358,9 @@ typedef struct grid {
 
       
 
-      //double x = x_axis + r_i * cos_theta;
-      //double y = y_axis + r_i * sin_theta;
-      //double z = z_offset + z_k;
+      double x = x_axis + r_i * cos_theta;
+      double y = y_axis + r_i * sin_theta;
+      double z = z_offset + z_k;
 
       k_curvilinear_mesh_h(idx,curv_mesh_var::h_1) = 1.0;
       k_curvilinear_mesh_h(idx,curv_mesh_var::h_2) = r_i;
@@ -380,9 +380,9 @@ typedef struct grid {
       k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_v) = 0.0;         // ê_z · ŷ
       k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_w) = 1.0;         // ê_z · ẑ
 
-      k_curvilinear_mesh_h(idx,curv_mesh_var::xi_g) = r_i;
-      k_curvilinear_mesh_h(idx,curv_mesh_var::zeta_g) = theta_j;
-      k_curvilinear_mesh_h(idx,curv_mesh_var::mu_g) = z_k;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::xg) = x;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::yg) = y;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::zg) = z;
     }
     );
 
@@ -488,9 +488,9 @@ typedef struct grid {
       k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_v) = 0.0;         // ê_z · ŷ
       k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_w) = 1.0;         // ê_z · ẑ
 
-      k_curvilinear_mesh_h(idx,curv_mesh_var::xi_g) = x;
-      k_curvilinear_mesh_h(idx,curv_mesh_var::zeta_g) = y;
-      k_curvilinear_mesh_h(idx,curv_mesh_var::mu_g) = z;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::xg) = x;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::yg) = y;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::zg) = z;
     }
     );
 
