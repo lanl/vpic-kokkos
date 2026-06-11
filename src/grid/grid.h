@@ -259,22 +259,22 @@ typedef struct grid {
       double y = y_offset + y_j;
       double z = z_offset + z_k;
 
-      k_curvilinear_mesh_h(i, curv_mesh_var::h_1)  = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::h_2)  = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::h_3)  = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::jac) = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::e_1_u) = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::e_1_v) = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::e_1_w) = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::e_2_u) = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::e_2_v) = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::e_2_w) = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::e_3_u) = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::e_3_v) = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::e_3_w) = 1.0;
-      k_curvilinear_mesh_h(i, curv_mesh_var::xi_g)  = x;
-      k_curvilinear_mesh_h(i, curv_mesh_var::zeta_g)  = y;
-      k_curvilinear_mesh_h(i, curv_mesh_var::mu_g)  = z;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::h_1)  = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::h_2)  = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::h_3)  = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::jac) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_u) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_v) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_w) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_u) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_v) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_w) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_u) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_v) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_w) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::xi_g)  = x;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::zeta_g)  = y;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::mu_g)  = z;
     
     });
     
