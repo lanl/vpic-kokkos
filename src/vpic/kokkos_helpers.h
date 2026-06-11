@@ -504,9 +504,9 @@ namespace curv_mesh_var {
     e_3_u = 10,
     e_3_v = 11,
     e_3_w = 12,
-    xg  = 13,
-    yg  = 14,
-    zg  = 15,
+    xi_g  = 13,
+    zeta_g  = 14,
+    mu_g  = 15,
   };
 };
 
