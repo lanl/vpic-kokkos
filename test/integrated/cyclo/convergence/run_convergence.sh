@@ -4,7 +4,7 @@ export NVCC_WRAPPER_DEFAULT_COMPILER=mpicxx
 
 cd /vast/home/cgraham/vpic-kokkos/build
 
-dts=(0.1 1.0 10.0 100.0)
+dts=(0.001 0.01 0.1 1.0 10.0 100.0)
 
 output_file="convergence_results.txt"
 > $output_file

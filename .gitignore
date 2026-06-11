@@ -9,4 +9,5 @@ cmake_install.cmake
 build*
 run_build.sh
 run_deck.sh
+run_rebuild.sh
 modules.txt
