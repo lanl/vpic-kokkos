@@ -140,8 +140,8 @@ begin_initialization {
                               0.0, 2*M_PI,
                               -0.5*Lz, 0.5*Lz,
                               false, true, false);
-  // join_domain( BOUNDARY(0,-1,0), 0 );
-  // join_domain( BOUNDARY(0, 1,0), 0 );
+  join_domain( BOUNDARY(0,-1,0), 0 );
+  join_domain( BOUNDARY(0, 1,0), 0 );
 
   grid->eta = 0.0;
 
@@ -207,7 +207,7 @@ begin_initialization {
   sim_log( "Loading fields" );
 
   // Uniform axial B field in cylindrical coordinates: Br=0, Btheta=0, Bz=b0
-  set_region_field( everywhere, 0, 0, 0, 0, 0, b0);
+  set_region_bext( everywhere, 0, 0, b0);
   set_region_te( everywhere, 0.0);
 
   // LOAD PARTICLES
@@ -232,7 +232,7 @@ begin_initialization {
     // Small velocity for cyclotron motion
     double v0 = ec/mi*b0*r;  // Initial velocity
     ux = 0;
-    uy = v0;
+    uy = -v0;
     uz = 0;
 
     inject_particle( ion, r, theta, z, ux, uy, uz, qi, 0, 0);

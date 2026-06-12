@@ -20,7 +20,7 @@ begin_globals {
 };
 
 begin_initialization {
-  int nstep = 100/dt_test_value;
+  int nstep = 500/dt_test_value;
 
   define_units( 1, 1 );
   define_timestep( dt_test_value );

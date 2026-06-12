@@ -1,0 +1,180 @@
+// monopole, velocity should be exponential in theta and oscillate in phi
+
+begin_globals {
+};
+
+begin_initialization {
+  int nstep = 10000;
+  int nr = 20;
+  int nt = 20;
+  int np = 20;
+
+  // Monopole parameters - calculated to keep particle on sphere
+  double q = 1.0;    // particle charge
+  double m = 1.0;    // particle mass
+  double R = 10.0;   // sphere radius where particle orbits
+
+  // Radial magnetic field: B = C*r (monopole field)
+  // Choose field strength C and calculate corresponding velocity
+  double C = 0.1;   // field strength coefficient
+  double B_at_R = C * R;  // field magnitude at radius R
+
+  // For gyration on sphere, target gyroradius ~ R/3
+  // Gyroradius: r_g = m*v/(q*B), solving for v:
+  double target_rg = R / 3.0;
+  double v_tangential = target_rg * q * B_at_R / m;
+
+  // Cyclotron period for reference
+  double omega_c = q * B_at_R / m;
+  double T_cyclotron = 2.0 * M_PI / omega_c;
+
+  sim_log("Monopole test configuration:");
+  sim_log("  Charge q = " << q << ", mass m = " << m);
+  sim_log("  Orbit radius R = " << R);
+  sim_log("  Field coefficient C = " << C);
+  sim_log("  Field at R: |B| = " << B_at_R);
+  sim_log("  Tangential velocity v = " << v_tangential);
+  sim_log("  Target gyroradius = " << target_rg);
+  sim_log("  Cyclotron period T = " << T_cyclotron);
+
+  define_units( 1, 1 );
+  define_timestep( 0.01 );
+
+  // Grid in spherical: (r, theta, phi)
+  define_periodic_grid( 0.1, 0, 0,           // Grid low corner (r_min, theta_min, phi_min)
+                        20, 2*M_PI, 2*M_PI,  // Grid high corner (r_max, theta_max, phi_max)
+                        nr, nt, np,          // Grid resolution
+                        1, 1, 1 );           // Processor configuration
+  define_material("vacuum",1.0,1.0,0.0);
+  define_field_array();
+
+  grid->init_spherical_grid(0.1, 20,
+                              0, 2*M_PI,
+                              0, 2*M_PI,
+                              false, true, true);
+  grid->init_kokkos_grid(6*grid->nv);
+
+  // Set radial monopole field: B⃗ = C·r⃗
+  set_region_bext(everywhere, x*C, y*C, z*C);
+
+  field_array->copy_to_device();
+
+  species_t* sp; // We use this to iterate over species
+
+  species_t * this_sp = define_species( "test_species", q, m, 1, 1, 0, 0 );
+
+  // Inject particle at south pole (r=R, θ=π, φ=π)
+  // Position: (0, 0, -R)
+  // Initial velocity: tangential, combination of θ̂ and φ̂ directions for helical path
+  // At south pole: θ̂ = (0,0,1) northward, φ̂ = (0,-1,0) eastward
+  double v_north = v_tangential / sqrt(2.0);  // component in θ̂ direction
+  double v_east = v_tangential / sqrt(2.0);   // component in φ̂ direction
+  // Cartesian velocity at south pole:
+  double vx = 0.0;
+  double vy = -v_east;     // φ̂ component
+  double vz = v_north;     // θ̂ component
+
+  sim_log("Injecting particle at south pole:");
+  sim_log("  Position (spherical): r=" << R << ", θ=π, φ=π");
+  sim_log("  Position (Cartesian): (0, 0, " << -R << ")");
+  sim_log("  Velocity (Cartesian): vx=" << vx << ", vy=" << vy << ", vz=" << vz);
+  sim_log("  |v| = " << sqrt(vx*vx + vy*vy + vz*vz));
+
+  inject_particle( this_sp,
+                    R,     // r
+                    M_PI,  // theta (south pole)
+                    M_PI,  // phi
+                    vx, vy, vz, // Cartesian velocity
+                    1.0,   // weight
+                    0, 0 );
+
+  LIST_FOR_EACH( sp, species_list ) {
+    sp->copy_to_device();
+  }
+  interpolator_array->copy_to_device();
+
+  load_interpolator_array( interpolator_array, field_array );
+
+  // Open trajectory file for monopole test
+  FileIO traj_file;
+  if (rank() == 0) {
+    if (traj_file.open("monopole_trajectory.txt", io_write) != ok) {
+      ERROR(("Cannot open monopole trajectory file"));
+    }
+    traj_file.print("# step x y z r theta phi ux uy uz\n");
+  }
+
+  for( int n=0; n<nstep; n++ ) {
+
+    LIST_FOR_EACH( sp, species_list ) {
+      sp->copy_to_host();
+    }
+    // Decompose voxel index to get (ix, iy, iz)
+    int voxel = this_sp->p[0].i;
+    int ix, iy, iz;
+    UNVOXEL(voxel, ix, iy, iz, grid->nx, grid->ny, grid->nz);
+
+    float dx = this_sp->p[0].dx;
+    float dy = this_sp->p[0].dy;
+    float dz = this_sp->p[0].dz;
+
+    // Convert to physical spherical coordinates
+    // Voxel indices: ix, iy, iz (0 to nx+1, etc.) with 1 ghost layer
+    // Global voxel: subtract 1 to get global index (ix=1 -> global 0)
+    // Relative position within grid: (global_voxel + (dx+1)/2) where dx ∈ [-1,+1]
+    double r_relative = ((double)(ix - 1)) + 0.5 * ((double)dx + 1.0);
+    double theta_relative = ((double)(iy - 1)) + 0.5 * ((double)dy + 1.0);
+    double phi_relative = ((double)(iz - 1)) + 0.5 * ((double)dz + 1.0);
+
+    // Map to physical coordinates
+    double r_phys = grid->x0 + r_relative * (grid->x1 - grid->x0) / (double)grid->nx;
+    double theta_phys = grid->y0 + theta_relative * (grid->y1 - grid->y0) / (double)grid->ny;
+    double phi_phys = grid->z0 + phi_relative * (grid->z1 - grid->z0) / (double)grid->nz;
+
+    // Wrap periodic coordinates if needed
+    while (theta_phys < 0) theta_phys += 2.0 * M_PI;
+    while (theta_phys >= 2.0 * M_PI) theta_phys -= 2.0 * M_PI;
+    while (phi_phys < 0) phi_phys += 2.0 * M_PI;
+    while (phi_phys >= 2.0 * M_PI) phi_phys -= 2.0 * M_PI;
+
+    // Convert to Cartesian for logging / output
+    double x = r_phys * sin(theta_phys) * cos(phi_phys);
+    double y = r_phys * sin(theta_phys) * sin(phi_phys);
+    double z = r_phys * cos(theta_phys);
+
+    sim_log("step=" << n << " r=" << r_phys << " theta=" << theta_phys << " phi=" << phi_phys
+            << " x=" << x << " y=" << y << " z=" << z
+            << " ux=" << this_sp->p[0].ux << " uy=" << this_sp->p[0].uy << " uz=" << this_sp->p[0].uz);
+    // Write trajectory entry
+    if (rank() == 0) {
+      traj_file.print("%d %e %e %e %e %e %e %e %e %e\n", n, x, y, z, r_phys, theta_phys, phi_phys,
+                       this_sp->p[0].ux, this_sp->p[0].uy, this_sp->p[0].uz);
+    }
+
+    advance_p( this_sp, interpolator_array, field_array );
+
+    // Check for particle movers (boundary crossings)
+    if (this_sp->nm > 0) {
+      sim_log("nm=" << this_sp->nm << " particle movers detected at step " << n);
+    }
+  }
+  halt_mp();
+  exit(0);
+}
+
+begin_diagnostics {
+}
+
+begin_particle_injection {
+}
+
+begin_current_injection {
+}
+
+begin_field_injection {
+}
+
+begin_particle_collisions {
+}
+
+

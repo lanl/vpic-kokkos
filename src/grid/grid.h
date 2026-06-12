@@ -402,7 +402,7 @@ typedef struct grid {
     double phi_max,           // Ending angle (radians)
     bool wrap_r = false,    // Wrap in radial direction (usually false)
     bool wrap_theta = true, // Wrap in azimuthal direction (true for full sphere)
-    bool wrap_phi = false,    // Wrap in polar direction (true for full sphere)
+    bool wrap_phi = true,    // Wrap in polar direction (true for full sphere)
     double x_axis = 0.0,    // x-coordinate of spherical axis
     double y_axis = 0.0,    // y-coordinate of spherical axis
     double z_offset = 0.0   // z-offset if needed
@@ -450,43 +450,42 @@ typedef struct grid {
       int global_k_cell = global_k_base + k;
 
       double r_i = r_min + (global_i_cell + 0.5) * dr;
-      double theta_j = theta_max - (global_j_cell + 0.5) * dtheta;
+      double theta_j = theta_min + (global_j_cell + 0.5) * dtheta;
       double phi_k = phi_min + (global_k_cell + 0.5) * dphi;
 
-
       if (r_i < 0.0) {
-          r_i = -r_i;              // Reflect radius
-          theta_j = theta_j + M_PI; // Rotate by 180°
+          r_i = -r_i;
+          theta_j = theta_j + M_PI;
       }
 
       double cos_theta = Kokkos::cos(theta_j);
       double sin_theta = Kokkos::sin(theta_j);
-
       double cos_phi = Kokkos::cos(phi_k);
       double sin_phi = Kokkos::sin(phi_k);
-      
 
-      double x = x_axis + r_i * sin_phi * cos_theta;
-      double y = y_axis + r_i * sin_phi * sin_theta;
-      double z = z_offset + phi_k;
+      double x = x_axis + r_i * sin_theta * cos_phi;
+      double y = y_axis + r_i * sin_theta * sin_phi;
+      double z = z_offset + r_i * cos_theta;
 
-      k_curvilinear_mesh_h(idx,curv_mesh_var::h_1) = 1.0;
-      k_curvilinear_mesh_h(idx,curv_mesh_var::h_2) = r_i;
-      k_curvilinear_mesh_h(idx,curv_mesh_var::h_3) = 1.0;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::h_1) = 1.0;              // h_r
+      k_curvilinear_mesh_h(idx,curv_mesh_var::h_2) = r_i;              // h_theta
+      k_curvilinear_mesh_h(idx,curv_mesh_var::h_3) = r_i * sin_theta;  // h_phi
 
-      k_curvilinear_mesh_h(idx,curv_mesh_var::jac) = r_i;
+      // Jacobian
+      k_curvilinear_mesh_h(idx,curv_mesh_var::jac) = r_i * r_i * sin_theta;
 
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_1_u) = cos_theta;   // ê_r · x̂
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_1_v) = sin_theta;   // ê_r · ŷ
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_1_w) = 0.0;         // ê_r · ẑ
+      // Basis vectors in Cartesian components
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_1_u) = sin_theta * cos_phi;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_1_v) = sin_theta * sin_phi;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_1_w) = cos_theta;
 
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_2_u) = -sin_theta;  // ê_θ · x̂
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_2_v) = cos_theta;   // ê_θ · ŷ
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_2_w) = 0.0;         // ê_θ · ẑ
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_2_u) = cos_theta * cos_phi;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_2_v) = cos_theta * sin_phi;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_2_w) = -sin_theta; 
 
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_u) = 0.0;         // ê_z · x̂
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_v) = 0.0;         // ê_z · ŷ
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_w) = 1.0;         // ê_z · ẑ
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_u) = -sin_phi;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_v) = cos_phi;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_w) = 0.0;
 
       k_curvilinear_mesh_h(idx,curv_mesh_var::xg) = x;
       k_curvilinear_mesh_h(idx,curv_mesh_var::yg) = y;
