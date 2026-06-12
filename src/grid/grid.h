@@ -450,7 +450,7 @@ typedef struct grid {
       int global_k_cell = global_k_base + k;
 
       double r_i = r_min + (global_i_cell + 0.5) * dr;
-      double theta_j = theta_min + (global_j_cell + 0.5) * dtheta;
+      double theta_j = theta_max - (global_j_cell + 0.5) * dtheta;
       double phi_k = phi_min + (global_k_cell + 0.5) * dphi;
 
 
@@ -504,6 +504,34 @@ typedef struct grid {
 // voxel mesh resolution (nx,ny,nz), return the index of that voxel.
 
 #define VOXEL(x,y,z, nx,ny,nz) ((x) + ((nx)+2)*((y) + ((ny)+2)*(z)))
+
+// Convert voxel index back to (i,j,k) indices for the local grid
+#define UNVOXEL(v, i, j, k, nx, ny, nz) \
+  do { \
+    int _stride_y = (nx) + 2; \
+    int _stride_z = _stride_y * ((ny) + 2); \
+    (k) = (v) / _stride_z; \
+    int _rem = (v) % _stride_z; \
+    (j) = _rem / _stride_y; \
+    (i) = _rem % _stride_y; \
+  } while(0)
+
+// Convert grid voxel index to curvilinear mesh index
+// Grid has 1 ghost layer: (nx+2) × (ny+2) × (nz+2)
+// Mesh has 2 ghost layers: (nx+4) × (ny+4) × (nz+4)
+// Mesh cell indices are offset by +1 in each dimension
+#define VOXEL_TO_MESH(v, nx, ny, nz) \
+  (((v) % ((nx)+2) + 1) + \
+   ((nx)+4) * ((((v) / ((nx)+2)) % ((ny)+2) + 1) + \
+   ((ny)+4) * ((v) / (((nx)+2) * ((ny)+2)) + 1)))
+
+// Convert grid cell indices (i,j,k) to curvilinear mesh linear index
+// Grid: (nx+2) × (ny+2) × (nz+2) with 1 ghost layer
+// Mesh: (nx+4) × (ny+4) × (nz+4) with 2 ghost layers
+// Mesh indices are shifted by +1 in each dimension
+#define GRID_TO_MESH(i, j, k, nx, ny, nz) \
+  VOXEL((i)+1, (j)+1, (k)+1, (nx)+2, (ny)+2, (nz)+2)
+
 
 // Advance the voxel mesh index (v) and corresponding voxel mesh
 // coordinates (x,y,z) in a region with min- and max-corners of
