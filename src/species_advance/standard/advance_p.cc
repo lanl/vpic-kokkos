@@ -245,16 +245,8 @@ void compute_reciprocal_basis(
   compute_bspline_basis(dz, Sz_m1, Sz_0, Sz_p1, dSz_m1, dSz_0, dSz_p1);
 
   // Get voxel coordinates from linear index
-  int nxp2 = nx + 2;
-  int nyp2 = ny + 2;
-  int zi = ii / (nxp2 * nyp2);
-  int rem = ii % (nxp2 * nyp2);
-  int yi = rem / nxp2;
-  int xi = rem % nxp2;
-
-  // Node array dimensions
-  int nxp2_node = nx + 2;
-  int nyp2_node = ny + 2;
+  int xi, yi, zi;
+  UNVOXEL(ii,xi, yi, zi,nx,ny,nz);
 
   // Initialize Jacobian matrix elements
   float dx_dxi = 0.0f, dy_dxi = 0.0f, dz_dxi = 0.0f;
@@ -276,7 +268,7 @@ void compute_reciprocal_basis(
         float dSx = (ii_offset == -1) ? dSx_m1 : ((ii_offset == 0) ? dSx_0 : dSx_p1);
 
         // Compute node index in the curvilinear mesh array
-        int node_idx = (xi + ii_offset) + nxp2_node * ((yi + jj) + nyp2_node * (zi + kk));
+        int node_idx = GRID_TO_MESH(xi+ii_offset,yi+jj,zi+kk,nx,ny,nz);
 
         // Get Cartesian positions at this node
         float xg = k_curv(node_idx, curv_mesh_var::xg);
@@ -284,17 +276,17 @@ void compute_reciprocal_basis(
         float zg = k_curv(node_idx, curv_mesh_var::zg);
 
         // Accumulate Jacobian matrix elements
-        dx_dxi += xg * dSx * Sy * Sz / gdx;
-        dy_dxi += yg * dSx * Sy * Sz / gdx;
-        dz_dxi += zg * dSx * Sy * Sz / gdx;
+        dx_dxi += xg * dSx * Sy * Sz * 2.0f / gdx;
+        dy_dxi += yg * dSx * Sy * Sz * 2.0f / gdx;
+        dz_dxi += zg * dSx * Sy * Sz * 2.0f / gdx;
 
-        dx_deta += xg * Sx * dSy * Sz / gdy;
-        dy_deta += yg * Sx * dSy * Sz / gdy;
-        dz_deta += zg * Sx * dSy * Sz / gdy;
+        dx_deta += xg * Sx * dSy * Sz * 2.0f / gdy;
+        dy_deta += yg * Sx * dSy * Sz * 2.0f / gdy;
+        dz_deta += zg * Sx * dSy * Sz * 2.0f / gdy;
 
-        dx_dmu += xg * Sx * Sy * dSz / gdz;
-        dy_dmu += yg * Sx * Sy * dSz / gdz;
-        dz_dmu += zg * Sx * Sy * dSz / gdz;
+        dx_dmu += xg * Sx * Sy * dSz * 2.0f / gdz;
+        dy_dmu += yg * Sx * Sy * dSz * 2.0f / gdz;
+        dz_dmu += zg * Sx * Sy * dSz * 2.0f / gdz;
       }
     }
   }
@@ -304,7 +296,7 @@ void compute_reciprocal_basis(
            - dx_deta * (dy_dxi * dz_dmu - dy_dmu * dz_dxi)
            + dx_dmu * (dy_dxi * dz_deta - dy_deta * dz_dxi);
 
-  float inv_jac = 1.0f / jacobian;
+  float inv_jac = 1.0f / Kokkos::fabs(jacobian);
 
   // Compute reciprocal basis vectors
   grad_xi_x = inv_jac * (dy_deta * dz_dmu - dy_dmu * dz_deta);
