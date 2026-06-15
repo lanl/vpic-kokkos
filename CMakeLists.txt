@@ -580,6 +580,12 @@ target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LI
 #endif()
 
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
+#-- make some options public
+if (VPIC_SHAPE_QS)
+  target_compile_definitions(vpic PUBLIC SHAPE_QS)
+else()
+  target_compile_definitions(vpic PUBLIC SHAPE_NGP)
+endif(VPIC_SHAPE_QS)
 if (HYB_USE_RADIATION)
   target_compile_definitions(vpic PUBLIC HYB_USE_RADIATION)
   target_compile_definitions(vpic PUBLIC VPIC_ENABLE_HDF5)
