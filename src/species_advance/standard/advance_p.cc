@@ -296,7 +296,7 @@ void compute_reciprocal_basis(
            - dx_deta * (dy_dxi * dz_dmu - dy_dmu * dz_dxi)
            + dx_dmu * (dy_dxi * dz_deta - dy_deta * dz_dxi);
 
-  float inv_jac = 1.0f / Kokkos::fabs(jacobian);
+  float inv_jac = 1.0f / jacobian;
 
   // Compute reciprocal basis vectors
   grad_xi_x = inv_jac * (dy_deta * dz_dmu - dy_dmu * dz_deta);
@@ -1399,15 +1399,83 @@ advance_p_kokkos_gpu(
     float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
     float d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
 
+    float inv_jac = 1.0f / jac;
+
     // Half-step position
     float dx_pred = dx + 0.5f * d_xi_dt * cdt_dx;
     float dy_pred = dy + 0.5f * d_eta_dt * cdt_dy;
     float dz_pred = dz + 0.5f * d_mu_dt * cdt_dz;
 
-    // Rcompute reciprocal basis at predicted half-step position
+    // START GEO INTERPOLATION
+    // Determine which cell the predicted position is in
+    // If d_pred is outside [-1, 1], we need to use the neighbor cell's geometric data
+    int di = 0, dj = 0, dk = 0;
+    float dx_local = dx_pred;
+    float dy_local = dy_pred;
+    float dz_local = dz_pred;
+
+    // Check if we crossed into a neighbor cell
+    if (dx_pred > 1.0f) {
+      di = 1;
+      dx_local = dx_pred - 2.0f; // Shift to neighbor's local coords
+    } else if (dx_pred < -1.0f) {
+      di = -1;
+      dx_local = dx_pred + 2.0f;
+    }
+
+    if (dy_pred > 1.0f) {
+      dj = 1;
+      dy_local = dy_pred - 2.0f;
+    } else if (dy_pred < -1.0f) {
+      dj = -1;
+      dy_local = dy_pred + 2.0f;
+    }
+
+    if (dz_pred > 1.0f) {
+      dk = 1;
+      dz_local = dz_pred - 2.0f;
+    } else if (dz_pred < -1.0f) {
+      dk = -1;
+      dz_local = dz_pred + 2.0f;
+    }
+
+    // Check if we've moved too far (more than 1 cell away)
+    if (fabs(dx_local) > 1.0f || fabs(dy_local) > 1.0f || fabs(dz_local) > 1.0f) {
+      #ifndef __CUDA_ARCH__
+      WARNING(( "Particle predictor exceeded ghost coverage: dx_pred=%e dy_pred=%e dz_pred=%e at p_index=%d. "
+                "Velocity update may be inaccurate. Consider reducing timestep.",
+                dx_pred, dy_pred, dz_pred, p_index ));
+      #endif
+      // Clamp to valid range to avoid out-of-bounds access
+      // dx_local = fmaxf(-1.0f, fminf(1.0f, dx_local));
+      // dy_local = fmaxf(-1.0f, fminf(1.0f, dy_local));
+      // dz_local = fmaxf(-1.0f, fminf(1.0f, dz_local));
+    }
+
+    // Compute the neighbor cell index
+    int ii_pred = ii;
+    if (di != 0 || dj != 0 || dk != 0) {
+      // Decompose current cell index
+      int iii = ii;
+      int zi = iii / ((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii / (nx+2);
+      int xi = iii - yi*(nx+2);
+
+      // Add offset to get neighbor
+      xi += di;
+      yi += dj;
+      zi += dk;
+
+      // Recompute flat index
+      ii_pred = VOXEL(xi, yi, zi, nx, ny, nz);
+    }
+    // END GEO INTERPOLATION
+
+    // Compute reciprocal basis at predicted half-step position in the correct cell
     compute_reciprocal_basis(
         g->k_curvilinear_mesh_d,
-        dx_pred, dy_pred, dz_pred, ii, nx, ny, nz,
+        dx_local, dy_local, dz_local, ii_pred, nx, ny, nz, // use geo interp here
         gdx, gdy, gdz,
         grad_xi_x, grad_xi_y, grad_xi_z,
         grad_eta_x, grad_eta_y, grad_eta_z,
@@ -1418,6 +1486,8 @@ advance_p_kokkos_gpu(
     d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
     d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
     d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
+
+    inv_jac = 1.0f / jac;
 
     // Compute displacement increments
     v4 = d_xi_dt * cdt_dx;
@@ -1513,11 +1583,11 @@ advance_p_kokkos_gpu(
         //int xi = iii - yi*(nx+2);
       
 #ifdef SHAPE_NGP
-      q *= rV;
-      k_field_scatter_access(ii, field_var::jfx) += q*ux;
-      k_field_scatter_access(ii, field_var::jfy) += q*uy;
-      k_field_scatter_access(ii, field_var::jfz) += q*uz;
-      k_field_scatter_access(ii, field_var::rhof) += q;
+      q *= rV * inv_jac;
+      k_field_scatter_access(ii_pred, field_var::jfx) += q*d_xi_dt;
+      k_field_scatter_access(ii_pred, field_var::jfy) += q*d_eta_dt;
+      k_field_scatter_access(ii_pred, field_var::jfz) += q*d_mu_dt;
+      k_field_scatter_access(ii_pred, field_var::rhof) += q;
 #elif defined( SHAPE_QS )
       // stencil coefficients
       // ... OLD hybrid-VPIC with QS shape, the accumulator stores
@@ -1525,7 +1595,7 @@ advance_p_kokkos_gpu(
       // ... ... hyb_unload_accumulator(...) applies factor rV/12.
       // ... NEW HVPIC-K not using accumulator (yet), scatter directly to mesh,
       // ... ... so include all factors
-      q *= rV12;
+      q *= rV12 * inv_jac;
       w0 =  q*two*( three - v0*v0 - v1*v1 - v2*v2 );
       wx =  q*( v0 + one )*( v0 + one );
       wy =  q*( v1 + one )*( v1 + one );
@@ -1548,39 +1618,39 @@ advance_p_kokkos_gpu(
       int iimy = VOXEL(xi,yi-1,zi,nx,ny,nz);
       int iimz = VOXEL(xi,yi,zi-1,nx,ny,nz);
 
-      k_field_scatter_access(ii, field_var::jfx)  += w0*ux;
-      k_field_scatter_access(ii, field_var::jfy)  += w0*uy;
-      k_field_scatter_access(ii, field_var::jfz)  += w0*uz;
+      k_field_scatter_access(ii, field_var::jfx)  += w0*d_xi_dt;
+      k_field_scatter_access(ii, field_var::jfy)  += w0*d_eta_dt;
+      k_field_scatter_access(ii, field_var::jfz)  += w0*d_mu_dt;
       k_field_scatter_access(ii, field_var::rhof) += w0;
 
-      k_field_scatter_access(iix, field_var::jfx)  += wx*ux;
-      k_field_scatter_access(iix, field_var::jfy)  += wx*uy;
-      k_field_scatter_access(iix, field_var::jfz)  += wx*uz;
+      k_field_scatter_access(iix, field_var::jfx)  += wx*d_xi_dt;
+      k_field_scatter_access(iix, field_var::jfy)  += wx*d_eta_dt;
+      k_field_scatter_access(iix, field_var::jfz)  += wx*d_mu_dt;
       k_field_scatter_access(iix, field_var::rhof) += wx;
 
-      k_field_scatter_access(iiy, field_var::jfx)  += wy*ux;
-      k_field_scatter_access(iiy, field_var::jfy)  += wy*uy;
-      k_field_scatter_access(iiy, field_var::jfz)  += wy*uz;
+      k_field_scatter_access(iiy, field_var::jfx)  += wy*d_xi_dt;
+      k_field_scatter_access(iiy, field_var::jfy)  += wy*d_eta_dt;
+      k_field_scatter_access(iiy, field_var::jfz)  += wy*d_mu_dt;
       k_field_scatter_access(iiy, field_var::rhof) += wy;
 
-      k_field_scatter_access(iiz, field_var::jfx)  += wz*ux;
-      k_field_scatter_access(iiz, field_var::jfy)  += wz*uy;
-      k_field_scatter_access(iiz, field_var::jfz)  += wz*uz;
+      k_field_scatter_access(iiz, field_var::jfx)  += wz*d_xi_dt;
+      k_field_scatter_access(iiz, field_var::jfy)  += wz*d_eta_dt;
+      k_field_scatter_access(iiz, field_var::jfz)  += wz*d_mu_dt;
       k_field_scatter_access(iiz, field_var::rhof) += wz;
 
-      k_field_scatter_access(iimx, field_var::jfx)  += wmx*ux;
-      k_field_scatter_access(iimx, field_var::jfy)  += wmx*uy;
-      k_field_scatter_access(iimx, field_var::jfz)  += wmx*uz;
+      k_field_scatter_access(iimx, field_var::jfx)  += wmx*d_xi_dt;
+      k_field_scatter_access(iimx, field_var::jfy)  += wmx*d_eta_dt;
+      k_field_scatter_access(iimx, field_var::jfz)  += wmx*d_mu_dt;
       k_field_scatter_access(iimx, field_var::rhof) += wmx;
 
-      k_field_scatter_access(iimy, field_var::jfx)  += wmy*ux;
-      k_field_scatter_access(iimy, field_var::jfy)  += wmy*uy;
-      k_field_scatter_access(iimy, field_var::jfz)  += wmy*uz;
+      k_field_scatter_access(iimy, field_var::jfx)  += wmy*d_xi_dt;
+      k_field_scatter_access(iimy, field_var::jfy)  += wmy*d_eta_dt;
+      k_field_scatter_access(iimy, field_var::jfz)  += wmy*d_mu_dt;
       k_field_scatter_access(iimy, field_var::rhof) += wmy;
 
-      k_field_scatter_access(iimz, field_var::jfx)  += wmz*ux;
-      k_field_scatter_access(iimz, field_var::jfy)  += wmz*uy;
-      k_field_scatter_access(iimz, field_var::jfz)  += wmz*uz;
+      k_field_scatter_access(iimz, field_var::jfx)  += wmz*d_xi_dt;
+      k_field_scatter_access(iimz, field_var::jfy)  += wmz*d_eta_dt;
+      k_field_scatter_access(iimz, field_var::jfz)  += wmz*d_mu_dt;
       k_field_scatter_access(iimz, field_var::rhof) += wmz;
 
 #endif

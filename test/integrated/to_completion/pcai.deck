@@ -83,7 +83,7 @@ begin_initialization {
 
   double nx = 64;
   double ny = 4;
-  double nz = 1;
+  double nz = 2;
 
   double nppc  = 100;// TODO testing github runner 10000;         // Average number of macro particle per cell per species
 
@@ -277,6 +277,16 @@ sim_log( "Loading fields" );
 // In cylindrical coordinates, B field is in z direction: Br=0, Btheta=0, Bz=b0
  set_region_field( everywhere, 0, 0, 0, 0, 0, b0);
  set_region_te( everywhere, Te);
+
+ // Debug: Check field initialization
+ sim_log("Field initialization check:");
+ int test_voxel = VOXEL(5, 2, 1, grid->nx, grid->ny, grid->nz);
+ sim_log("  Before copy_to_device: voxel(" << 5 << "," << 2 << "," << 0 << ") = " << test_voxel
+         << " cbz=" << field_array->f[test_voxel].cbz);
+ field_array->copy_to_device();
+ field_array->copy_to_host();
+ sim_log("  After copy_to_device+host: voxel(" << 5 << "," << 2 << "," << 0 << ") = " << test_voxel
+         << " cbz=" << field_array->f[test_voxel].cbz);
 
  // LOAD PARTICLES
   sim_log( "Loading particles" );
@@ -623,6 +633,21 @@ begin_diagnostics {
   if(should_dump(energies)) {
     dump_energies("rundata/energies", step() == 0 ? 0 : 1);
   } // if
+
+  /*--------------------------------------------------------------------------
+   * Field debugging output
+   *------------------------------------------------------------------------*/
+  if (step() < 5) {
+    field_array->copy_to_host();
+    int test_voxel = VOXEL(5, 2, 0, grid->nx, grid->ny, grid->nz);
+    sim_log("Step " << step() << ": voxel(5,2,0)=" << test_voxel
+            << " cbx=" << field_array->f[test_voxel].cbx
+            << " cby=" << field_array->f[test_voxel].cby
+            << " cbz=" << field_array->f[test_voxel].cbz
+            << " ex=" << field_array->f[test_voxel].ex
+            << " ey=" << field_array->f[test_voxel].ey
+            << " ez=" << field_array->f[test_voxel].ez);
+  }
 
   /*--------------------------------------------------------------------------
    * Field data output

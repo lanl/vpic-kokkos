@@ -11,3 +11,4 @@ run_build.sh
 run_deck.sh
 run_rebuild.sh
 modules.txt
+*.png

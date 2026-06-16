@@ -11,6 +11,9 @@ typedef struct pipeline_args {
 
 #define F(ind,v) k_field(f##ind##_index, field_var::v)
 
+// Curvilinear scale factor helper
+#define H(ind, comp) k_curv(m##ind, curv_mesh_var::h_##comp)
+
 #define INIT_STENCIL()                                               \
   size_t f0_index  = VOXEL(x,   y,   z,    nx,ny,nz);                \
   size_t fx_index  = VOXEL(x+1, y,   z,    nx,ny,nz);                \
@@ -19,6 +22,34 @@ typedef struct pipeline_args {
   size_t fmx_index = VOXEL(x-1, y,   z,    nx,ny,nz);                \
   size_t fmy_index = VOXEL(x,   y-1, z,    nx,ny,nz);                \
   size_t fmz_index = VOXEL(x,   y,   z-1,  nx,ny,nz);                \
+  size_t m0  = VOXEL_TO_MESH(f0_index,  nx, ny, nz);                 \
+  size_t mx  = VOXEL_TO_MESH(fx_index,  nx, ny, nz);                 \
+  size_t my  = VOXEL_TO_MESH(fy_index,  nx, ny, nz);                 \
+  size_t mz  = VOXEL_TO_MESH(fz_index,  nx, ny, nz);                 \
+  size_t mmx = VOXEL_TO_MESH(fmx_index, nx, ny, nz);                 \
+  size_t mmy = VOXEL_TO_MESH(fmy_index, nx, ny, nz);                 \
+  size_t mmz = VOXEL_TO_MESH(fmz_index, nx, ny, nz);                 \
+  float h_xi = H(0, 1);                                              \
+  float h_eta = H(0, 2);                                             \
+  float h_mu = H(0, 3);                                              \
+  float h_xi_x = H(x, 1);                                            \
+  float h_eta_x = H(x, 2);                                           \
+  float h_mu_x = H(x, 3);                                            \
+  float h_xi_y = H(y, 1);                                            \
+  float h_eta_y = H(y, 2);                                           \
+  float h_mu_y = H(y, 3);                                            \
+  float h_xi_z = H(z, 1);                                            \
+  float h_eta_z = H(z, 2);                                           \
+  float h_mu_z = H(z, 3);                                            \
+  float h_xi_mx = H(mx, 1);                                          \
+  float h_eta_mx = H(mx, 2);                                         \
+  float h_mu_mx = H(mx, 3);                                          \
+  float h_xi_my = H(my, 1);                                          \
+  float h_eta_my = H(my, 2);                                         \
+  float h_mu_my = H(my, 3);                                          \
+  float h_xi_mz = H(mz, 1);                                          \
+  float h_eta_mz = H(mz, 2);                                         \
+  float h_mu_mz = H(mz, 3);                                          \
   float  rho = half*( (one-hstep)*( F(0,rhof) + F(0,rhofold) ) +     \
                       hstep*( three*F(0,rhof) - F(0,rhofold)) );     \
   rho = (rho > den_floor_ohm) ? rho :  den_floor_ohm;                \
@@ -31,8 +62,11 @@ typedef struct pipeline_args {
   float  uz = invrho*half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + \
                             hstep*( three*F(0,jfz) - F(0,jfzold)) );
 
+// Curvilinear E-field update - rotates through all three components
+// Scale factors indexed: h_1=h_xi(x), h_2=h_eta(y), h_3=h_mu(z)
+// E(x,y,z) computes Ex with y,z derivatives; E(y,z,x) computes Ey with z,x derivatives; etc.
 #define E(x_,y_,z_) \
-  F(0,e##x_) =      \
+  F(0,e##x_) = \
     invrho * (F(0,cb##z_) + F(0,cb##z_##0)) * ( p##z_*( F(z_,cb##x_) - F(m##z_,cb##x_) ) - p##x_*( F(x_,cb##z_) - F(m##x_,cb##z_)) ) \
   + invrho * (F(0,cb##y_) + F(0,cb##y_##0)) * ( p##y_*( F(y_,cb##x_) - F(m##y_,cb##x_) ) - p##x_*( F(x_,cb##y_) - F(m##x_,cb##y_)) ) \
        - u##y_ * (F(0,cb##z_)+F(0,cb##z_##0))  +   u##z_ * (F(0,cb##y_)+F(0,cb##y_##0)) \
@@ -128,12 +162,14 @@ void
 hyb_advance_e( field_array_t * RESTRICT fa,
                   float frac ) {
   if( !fa     ) ERROR(( "Bad args" ));
+  WARNING(("IT UPDATED"));
 
   pipeline_args_t args[1];
   args->f = fa->f;
   args->p = (sfa_params_t *)fa->params;
   args->g = fa->g;
   k_field_t k_field = fa->k_f_d;
+  k_curvilinear_mesh_t k_curv = fa->g->k_curvilinear_mesh_d;
   //const material_coefficient_t * ALIGNED(128) m = args->p->mc;
   const grid_t                 *              g = args->g;
   const size_t nx = g->nx, ny = g->ny, nz = g->nz;

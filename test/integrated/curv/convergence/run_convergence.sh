@@ -4,7 +4,7 @@ export NVCC_WRAPPER_DEFAULT_COMPILER=mpicxx
 
 cd /vast/home/cgraham/vpic-kokkos/build
 
-dts=(0.001 0.01 0.1 1.0 10.0 100.0)
+dts=(0.001 0.005 0.01 0.05 0.1)
 
 output_file="convergence_results.txt"
 > $output_file
@@ -13,7 +13,7 @@ for dt in "${dts[@]}"; do
   echo "Running with dt=$dt..."
 
   temp_deck="cyclo_temp_${dt}.deck"
-  sed "s/dt_test_value/$dt/g" ../test/integrated/cyclo/convergence/cyclo-convergence.deck > "$temp_deck"
+  sed "s/dt_test_value/$dt/g" ../test/integrated/curv/convergence/cyclo-convergence.deck > "$temp_deck"
   ./bin/vpic "$temp_deck" > cyclo_compile_${dt}.log 2>&1
 
   if [ -f cyclo_temp_${dt}.deck.Linux ]; then
@@ -28,6 +28,6 @@ done
 echo "Results written to $output_file"
 cat $output_file
 
-cd ../test/integrated/cyclo/convergence/
+cd ../test/integrated/curv/convergence/
 module load miniconda3
 python plot_convergence.py

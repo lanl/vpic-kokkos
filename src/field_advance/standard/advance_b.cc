@@ -30,33 +30,48 @@ void advance_b_kokkos(k_field_t k_field, const k_curvilinear_mesh_t& k_curv,
 
   // Curvilinear
   #define UPDATE_CBX() { \
-    float h_eta = k_curv(f0_index, curv_mesh_var::h_2); \
-    float h_mu = k_curv(f0_index, curv_mesh_var::h_3); \
-    float h_eta_fy = k_curv(fy_index, curv_mesh_var::h_2); \
-    float h_mu_fz = k_curv(fz_index, curv_mesh_var::h_3); \
+    size_t m0 = VOXEL_TO_MESH(f0_index, nx, ny, nz); \
+    size_t my = VOXEL_TO_MESH(fy_index, nx, ny, nz); \
+    size_t mz = VOXEL_TO_MESH(fz_index, nx, ny, nz); \
+    float h_eta = k_curv(m0, curv_mesh_var::h_2); \
+    float h_mu = k_curv(m0, curv_mesh_var::h_3); \
+    float h_eta_fy = k_curv(my, curv_mesh_var::h_2); \
+    float h_mu_fy = k_curv(my, curv_mesh_var::h_3); \
+    float h_eta_fz = k_curv(mz, curv_mesh_var::h_2); \
+    float h_mu_fz = k_curv(mz, curv_mesh_var::h_3); \
     f0_cbx -= (1.0f / (h_eta * h_mu)) * ( \
-        py * (h_mu * fy_ez - h_mu_fz * f0_ez) - \
-        pz * (h_eta * fz_ey - h_eta_fy * f0_ey)); \
+        py * (h_mu_fy * fy_ez - h_mu_fz * f0_ez) - \
+        pz * (h_eta_fz * fz_ey - h_eta_fy * f0_ey)); \
   }
 
   #define UPDATE_CBY() { \
-    float h_xi = k_curv(f0_index, curv_mesh_var::h_1); \
-    float h_mu = k_curv(f0_index, curv_mesh_var::h_3); \
-    float h_xi_fx = k_curv(fx_index, curv_mesh_var::h_1); \
-    float h_mu_fz = k_curv(fz_index, curv_mesh_var::h_3); \
+    size_t m0 = VOXEL_TO_MESH(f0_index, nx, ny, nz); \
+    size_t mx = VOXEL_TO_MESH(fx_index, nx, ny, nz); \
+    size_t mz = VOXEL_TO_MESH(fz_index, nx, ny, nz); \
+    float h_xi = k_curv(m0, curv_mesh_var::h_1); \
+    float h_mu = k_curv(m0, curv_mesh_var::h_3); \
+    float h_xi_fx = k_curv(mx, curv_mesh_var::h_1); \
+    float h_mu_fx = k_curv(mx, curv_mesh_var::h_3); \
+    float h_xi_fz = k_curv(mz, curv_mesh_var::h_1); \
+    float h_mu_fz = k_curv(mz, curv_mesh_var::h_3); \
     f0_cby -= (1.0f / (h_mu * h_xi)) * ( \
-        pz * (h_xi * fz_ex - h_xi_fx * f0_ex) - \
-        px * (h_mu * fx_ez - h_mu_fz * f0_ez)); \
+        pz * (h_xi_fz * fz_ex - h_xi_fx * f0_ex) - \
+        px * (h_mu_fx * fx_ez - h_mu_fz * f0_ez)); \
   }
 
   #define UPDATE_CBZ() { \
-    float h_xi = k_curv(f0_index, curv_mesh_var::h_1); \
-    float h_eta = k_curv(f0_index, curv_mesh_var::h_2); \
-    float h_xi_fx = k_curv(fx_index, curv_mesh_var::h_1); \
-    float h_eta_fy = k_curv(fy_index, curv_mesh_var::h_2); \
+    size_t m0 = VOXEL_TO_MESH(f0_index, nx, ny, nz); \
+    size_t mx = VOXEL_TO_MESH(fx_index, nx, ny, nz); \
+    size_t my = VOXEL_TO_MESH(fy_index, nx, ny, nz); \
+    float h_xi = k_curv(m0, curv_mesh_var::h_1); \
+    float h_eta = k_curv(m0, curv_mesh_var::h_2); \
+    float h_xi_fx = k_curv(mx, curv_mesh_var::h_1); \
+    float h_eta_fx = k_curv(mx, curv_mesh_var::h_2); \
+    float h_xi_fy = k_curv(my, curv_mesh_var::h_1); \
+    float h_eta_fy = k_curv(my, curv_mesh_var::h_2); \
     f0_cbz -= (1.0f / (h_xi * h_eta)) * ( \
-        px * (h_eta * fx_ey - h_eta_fy * f0_ey) - \
-        py * (h_xi * fy_ex - h_xi_fx * f0_ex)); \
+        px * (h_eta_fx * fx_ey - h_eta_fy * f0_ey) - \
+        py * (h_xi_fy * fy_ex - h_xi_fx * f0_ex)); \
   }
 
   // Do the bulk of the magnetic fields in the pipelines.  The host

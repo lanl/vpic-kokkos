@@ -1,0 +1,254 @@
+// Test Cyclotron motion in a constant magnetic field
+//
+// Note:
+// wc = q B / m gamma ==> wc dt = q dt B / m gamma ==>
+// wc dt = q dt c B / m c gamma ==> wc dt = 2 ( q dt / 2 m c ) ( c B ) / gamma
+//
+// With c = 1, dt = 1, gamma = 2, q = 2, m = 1
+// wc dt = c B
+// 2 pi dt / tauc = c B
+// 2 pi / Nstep = c B
+//
+// This input deck was written by:
+//   Kevin J Bowers, Ph.D.
+//   Plasma Physics Group (X-1)
+//   Applied Physics Division
+//   Los Alamos National Lab
+// March/April 2004 - conversion of c++ test code into an input deck
+
+begin_globals {
+};
+
+begin_initialization {
+  int nstep = 100;
+  int nr = 100;
+  int nt = 100;
+  int nz = 1;
+
+  define_units( 1, 1 );
+  define_timestep( 0.01 );
+  // Grid in cylindrical: (r, theta, z)
+  define_periodic_grid( 0.1, 0, 0,   // Grid low corner (r_min, theta_min, z_min)
+                        20.0, 2*M_PI, 1,   // Grid high corner (r_max, theta_max, z_max)
+                        nr, nt, nz,   // Grid resolution
+                        1, 1, 1 ); // Processor configuration
+  define_material("vacuum",1.0,1.0,0.0);
+  define_field_array();
+
+  grid->init_cylindrical_grid(0.1, 20.0,
+                              0, 2*M_PI,
+                              0, 1.0,
+                              false, true, false);
+  grid->init_kokkos_grid(6*grid->nv);
+
+  double q = 100;
+  double m = 1.0;
+  double R = 10.0;
+  double B = 0.1;
+  double v0 = q*B*R/m;
+
+  // Set background magnetic field
+  set_region_field(everywhere, 0, 0, 0,   // E field
+                   0, 0, B);              // B field
+
+  sim_log("Before copy_to_device: voxel(5,5,0) cbz=" << field_array->f[VOXEL(5,5,0,grid->nx,grid->ny,grid->nz)].cbz);
+  sim_log("Before copy_to_device: voxel(5,5,1) cbz=" << field_array->f[VOXEL(5,5,1,grid->nx,grid->ny,grid->nz)].cbz);
+
+  field_array->copy_to_device();
+
+  // Copy back immediately to verify
+  field_array->copy_to_host();
+  sim_log("After copy_to_device+host: voxel(5,5,0) cbz=" << field_array->f[VOXEL(5,5,0,grid->nx,grid->ny,grid->nz)].cbz);
+  sim_log("After copy_to_device+host: voxel(5,5,1) cbz=" << field_array->f[VOXEL(5,5,1,grid->nx,grid->ny,grid->nz)].cbz);
+  WARNING(("ERROR BIG ERROR"));
+
+  // Debug: check initial B field, index conversion, and scale factors at various locations
+  int voxel_idx = VOXEL(5, 5, 0, grid->nx, grid->ny, grid->nz);
+  int mesh_idx = VOXEL_TO_MESH(voxel_idx, grid->nx, grid->ny, grid->nz);
+  sim_log("Debug: voxel(5,5,0)=" << voxel_idx << " -> mesh=" << mesh_idx);
+  sim_log("  h_scale: h1=" << grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_1)
+          << " h2=" << grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_2)
+          << " h3=" << grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_3));
+
+  // Check scale factors at grid boundaries (i=1, j=1 is the first interior cell)
+  int voxel_boundary = VOXEL(1, 1, 1, grid->nx, grid->ny, grid->nz);
+  int mesh_boundary = VOXEL_TO_MESH(voxel_boundary, grid->nx, grid->ny, grid->nz);
+  sim_log("Boundary voxel(1,1,1)=" << voxel_boundary << " -> mesh=" << mesh_boundary);
+  sim_log("  h_scale: h1=" << grid->k_curvilinear_mesh_h(mesh_boundary, curv_mesh_var::h_1)
+          << " h2=" << grid->k_curvilinear_mesh_h(mesh_boundary, curv_mesh_var::h_2)
+          << " h3=" << grid->k_curvilinear_mesh_h(mesh_boundary, curv_mesh_var::h_3));
+
+  sim_log("Initial B field at voxel (5,5,0): cbz=" << field_array->f[voxel_idx].cbz);
+
+  species_t* sp; // We use this to iterate over species
+
+  species_t * this_sp = define_species( "test_species", q, m, 1, 1, 0, 0 );
+  // Inject particles in cylindrical coordinates (r, theta, z)
+  inject_particle( this_sp,
+                    R,  // r
+                    0,  // theta
+                    0.0,  // z
+                    0, -v0, 0, // cart vel
+                    1.0, // w
+                    0, 0 );
+
+  LIST_FOR_EACH( sp, species_list ) {
+    sp->copy_to_device();
+  }
+  interpolator_array->copy_to_device();
+
+  load_interpolator_array( interpolator_array, field_array );
+
+  // Open trajectory file
+  FileIO traj_file;
+  if (rank() == 0) {
+    if (traj_file.open("trajectory.txt", io_write) != ok) {
+      ERROR(("Cannot open trajectory file"));
+    }
+    traj_file.print("# step x y r theta ux uy\n");
+  }
+
+  for( int n=0; n<nstep; n++ ) {
+
+    LIST_FOR_EACH( sp, species_list ) {
+      sp->copy_to_host();
+    }
+
+    // int ix, iy, iz;
+    // UNVOXEL(this_sp->p[0].i, ix, iy, iz, grid->nx, grid->ny, grid->nz);
+    float dx = this_sp->p[0].dx;
+    float dy = this_sp->p[0].dy;
+    int mesh = VOXEL_TO_MESH(this_sp->p[0].i, grid->nx, grid->ny, grid->nz);
+    double x_center = grid->k_curvilinear_mesh_h(mesh, curv_mesh_var::xg);
+    double y_center = grid->k_curvilinear_mesh_h(mesh, curv_mesh_var::yg);
+    double r_center = grid->k_curvilinear_mesh_h(mesh, curv_mesh_var::h_2);
+    double r_phys = r_center + dx * grid->dx/2;
+    double theta_center = atan2(y_center, x_center);
+    double theta_phys = theta_center + dy * grid->dy/2;
+    double x = r_phys * cos(theta_phys);
+    double y = r_phys * sin(theta_phys);
+
+    sim_log("step=" << n << " r=" << r_phys << " theta=" << theta_phys
+            << " x=" << x << " y=" << y
+            << " ux=" << this_sp->p[0].ux << " uy=" << this_sp->p[0].uy);
+
+    // sim_log("|u| " << sqrt(this_sp->p[0].ux*this_sp->p[0].ux + this_sp->p[0].uy*this_sp->p[0].uy));
+
+    // Write to trajectory file
+    if (rank() == 0) {
+      traj_file.print("%d %e %e %e %e %e %e\n", n, x, y, r_phys, theta_phys,
+                      this_sp->p[0].ux, this_sp->p[0].uy);
+    }
+
+    // Clear current before advancing particles
+    field_array->kernel->clear_jf_kokkos(field_array);
+
+    // Advance particles (deposits current)
+    advance_p( this_sp, interpolator_array, field_array );
+
+    // Ensure particle advance completes before field advance
+    Kokkos::fence();
+
+    // Reduce scattered current contributions (may be no-op if using scatter-view)
+    field_array->kernel->k_reduce_jf(field_array);
+
+    // Field advance: B^n -> B^{n+1/2} -> E^{n+1} -> B^{n+1}
+    WARNING(("ABOUT TO ADVANCE"));
+    field_array->kernel->advance_b(field_array, 0.5);
+    field_array->kernel->advance_e(field_array, 1.0);
+    field_array->kernel->advance_b(field_array, 0.5);
+    WARNING(("FINISHED ADVANCE"));
+
+    // Copy fields to host for diagnostics
+    field_array->copy_to_host();
+
+    // Debug: check field at specific voxel before and after
+    int debug_voxel = VOXEL(5, 5, 0, grid->nx, grid->ny, grid->nz);
+    field_t *debug_f = &field_array->f[debug_voxel];
+    sim_log("Before field_array->copy_to_host: cbx=" << debug_f->cbx << " cby=" << debug_f->cby << " cbz=" << debug_f->cbz);
+
+    // Also check neighboring voxels used in field advance
+    int debug_voxel_xp1 = VOXEL(6, 5, 0, grid->nx, grid->ny, grid->nz);
+    int debug_voxel_yp1 = VOXEL(5, 6, 0, grid->nx, grid->ny, grid->nz);
+    sim_log("Neighbor x+1 cbz=" << field_array->f[debug_voxel_xp1].cbz << " y+1 cbz=" << field_array->f[debug_voxel_yp1].cbz);
+
+    sim_log("After copy_to_host at voxel(5,5,0): jfx=" << debug_f->jfx << " jfy=" << debug_f->jfy
+            << " ex=" << debug_f->ex << " ey=" << debug_f->ey
+            << " cbx=" << debug_f->cbx << " cby=" << debug_f->cby << " cbz=" << debug_f->cbz);
+
+    field_t *f = field_array->f;
+    float max_jfx = 0, max_jfy = 0, max_jfz = 0;
+    float max_ex = 0, max_ey = 0, max_ez = 0;
+    float max_cbx = 0, max_cby = 0, max_cbz = 0;
+
+    for (int k = 1; k <= grid->nz; k++) {
+      for (int j = 1; j <= grid->ny; j++) {
+        for (int i = 1; i <= grid->nx; i++) {
+          field_t *fld = &f[VOXEL(i, j, k, grid->nx, grid->ny, grid->nz)];
+          max_jfx = fmaxf(max_jfx, fabsf(fld->jfx));
+          max_jfy = fmaxf(max_jfy, fabsf(fld->jfy));
+          max_jfz = fmaxf(max_jfz, fabsf(fld->jfz));
+          max_ex = fmaxf(max_ex, fabsf(fld->ex));
+          max_ey = fmaxf(max_ey, fabsf(fld->ey));
+          max_ez = fmaxf(max_ez, fabsf(fld->ez));
+          max_cbx = fmaxf(max_cbx, fabsf(fld->cbx));
+          max_cby = fmaxf(max_cby, fabsf(fld->cby));
+          max_cbz = fmaxf(max_cbz, fabsf(fld->cbz));
+        }
+      }
+    }
+
+    LIST_FOR_EACH(sp, species_list) {
+      sim_log("Step " << step() << ": np=" << sp->np << " nm=" << sp->nm);
+    }
+    sim_log("  J=(" << max_jfx << "," << max_jfy << "," << max_jfz << ")");
+    sim_log("  E=(" << max_ex << "," << max_ey << "," << max_ez << ")");
+    sim_log("  B=(" << max_cbx << "," << max_cby << "," << max_cbz << ")");
+  }
+
+  // Write final field data
+  if (rank() == 0) {
+    FileIO field_file;
+    if (field_file.open("fields.txt", io_write) == ok) {
+      field_file.print("# i j k x y r theta jfx jfy ex ey cbx cby cbz\n");
+      for (int k = 1; k <= grid->nz; k++) {
+        for (int j = 1; j <= grid->ny; j++) {
+          for (int i = 1; i <= grid->nx; i++) {
+            int voxel_idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+            int mesh_idx = VOXEL_TO_MESH(voxel_idx, grid->nx, grid->ny, grid->nz);
+            double xc = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::xg);
+            double yc = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::yg);
+            double r = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_2);
+            double theta = atan2(yc, xc);
+            field_t *fld = &field_array->f[voxel_idx];
+            field_file.print("%d %d %d %e %e %e %e %e %e %e %e %e %e %e\n",
+                           i, j, k, xc, yc, r, theta,
+                           fld->jfx, fld->jfy, fld->ex, fld->ey,
+                           fld->cbx, fld->cby, fld->cbz);
+          }
+        }
+      }
+      field_file.close();
+    }
+    traj_file.close();
+  }
+  halt_mp();
+  exit(0);
+}
+
+begin_diagnostics {
+}
+
+begin_particle_injection {
+}
+
+begin_current_injection {
+}
+
+begin_field_injection {
+}
+
+begin_particle_collisions {
+}
+
+
