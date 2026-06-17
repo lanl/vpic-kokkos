@@ -21,24 +21,21 @@ begin_globals {
 
 begin_initialization {
   int nstep = 1000;
-  int nr = 100;
-  int nt = 100;
+  int nx = 100;
+  int ny = 100;
   int nz = 1;
 
   define_units( 1, 1 );
   define_timestep( 0.01 );
-  // Grid in cylindrical: (r, theta, z)
-  define_periodic_grid( 0.1, 0, 0,   // Grid low corner (r_min, theta_min, z_min)
-                        30.0, 2*M_PI, 1,   // Grid high corner (r_max, theta_max, z_max)
-                        nr, nt, nz,   // Grid resolution
-                        1, 1, 1 ); // Processor configuration
+  // Grid in Cartesian: (x, y, z)
+  define_periodic_grid( -30.0, -30.0, 0,   // Grid low corner (x_min, y_min, z_min)
+                        30.0, 30.0, 1,     // Grid high corner (x_max, y_max, z_max)
+                        nx, ny, nz,        // Grid resolution
+                        1, 1, 1 );         // Processor configuration
   define_material("vacuum",1.0,1.0,0.0);
   define_field_array();
 
-  grid->init_cylindrical_grid(0.1, 30.0,
-                              0, 2*M_PI,
-                              0, 1.0,
-                              false, true, false);
+  grid->init_curvilinear_grid(-30.0, 30.0, -30.0, 30.0, 0, 1);
   grid->init_kokkos_grid(6*grid->nv);
 
   double q = 1.0;
@@ -54,10 +51,10 @@ begin_initialization {
   species_t* sp; // We use this to iterate over species
 
   species_t * this_sp = define_species( "test_species", q, m, 1, 1, 0, 0 );
-  // Inject particles in cylindrical coordinates (r, theta, z)
+  // Inject particles in Cartesian coordinates (x, y, z)
   inject_particle( this_sp,
-                    R,  // r
-                    0,  // theta
+                    R,    // x
+                    0,    // y
                     0.0,  // z
                     0, -v0, 0, // cart vel
                     1.0, // w
@@ -92,10 +89,13 @@ begin_initialization {
     // Get particle data
     particle_t& p = this_sp->p[0];
 
-    double r_phys, theta_phys, z_curv;
-    grid->local_to_global(p.i, p.dx, p.dy, p.dz, r_phys, theta_phys, z_curv);
+    // Get particle position in Cartesian coordinates
     double x, y, z;
-    grid->local_to_global_cart(p.i, p.dx, p.dy, p.dz, x, y, z);
+    grid->local_to_global(p.i, p.dx, p.dy, p.dz, x, y, z);
+
+    // Convert to cylindrical for comparison
+    double r_phys = sqrt(x*x + y*y);
+    double theta_phys = atan2(y, x);
 
     sim_log("|Rerr| " << fabs(r_phys - R));
 
