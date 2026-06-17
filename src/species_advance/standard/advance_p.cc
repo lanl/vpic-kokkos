@@ -312,6 +312,58 @@ void compute_reciprocal_basis(
   grad_mu_z = inv_jac * (dx_dxi * dy_deta - dx_deta * dy_dxi);
 }
 
+// Interpolate scale factors using existing B-spline machinery
+KOKKOS_INLINE_FUNCTION
+void interpolate_scale_factors(
+    const k_curvilinear_mesh_t& k_curv,
+    float dx, float dy, float dz,  // Particle position in logical coords
+    int ii,                         // Base voxel index
+    int nx, int ny, int nz,
+    float& h_xi, float& h_eta, float& h_mu)
+{
+    // Compute B-spline basis functions (reuse existing function!)
+    float Sx_m1, Sx_0, Sx_p1, dSx_m1, dSx_0, dSx_p1;
+    float Sy_m1, Sy_0, Sy_p1, dSy_m1, dSy_0, dSy_p1;
+    float Sz_m1, Sz_0, Sz_p1, dSz_m1, dSz_0, dSz_p1;
+
+    compute_bspline_basis(dx, Sx_m1, Sx_0, Sx_p1, dSx_m1, dSx_0, dSx_p1);
+    compute_bspline_basis(dy, Sy_m1, Sy_0, Sy_p1, dSy_m1, dSy_0, dSy_p1);
+    compute_bspline_basis(dz, Sz_m1, Sz_0, Sz_p1, dSz_m1, dSz_0, dSz_p1);
+
+    // Get voxel coordinates
+    int xi, yi, zi;
+    UNVOXEL(ii, xi, yi, zi, nx, ny, nz);
+
+    // Initialize scale factors
+    h_xi = 0.0f;
+    h_eta = 0.0f;
+    h_mu = 0.0f;
+
+    // Interpolate using same 3x3x3 stencil as reciprocal basis
+    for (int kk = -1; kk <= 1; kk++) {
+        float Sz = (kk == -1) ? Sz_m1 : ((kk == 0) ? Sz_0 : Sz_p1);
+
+        for (int jj = -1; jj <= 1; jj++) {
+            float Sy = (jj == -1) ? Sy_m1 : ((jj == 0) ? Sy_0 : Sy_p1);
+
+            for (int ii_offset = -1; ii_offset <= 1; ii_offset++) {
+                float Sx = (ii_offset == -1) ? Sx_m1 : ((ii_offset == 0) ? Sx_0 : Sx_p1);
+
+                // Get mesh node index
+                int node_idx = GRID_TO_MESH(xi + ii_offset, yi + jj, zi + kk, nx, ny, nz);
+
+                // Weight for this node
+                float weight = Sx * Sy * Sz;
+
+                // Accumulate weighted scale factors
+                h_xi  += weight * k_curv(node_idx, curv_mesh_var::h_1) * 2.0f;
+                h_eta += weight * k_curv(node_idx, curv_mesh_var::h_2) * 2.0f;
+                h_mu  += weight * k_curv(node_idx, curv_mesh_var::h_3) * 2.0f;
+            }
+        }
+    }
+}
+
 // Detect whether all threads/vector lanes are processing particles belonging to the same cell
 template<class TeamMember, class IndexView, class BoundsView>
 int KOKKOS_INLINE_FUNCTION particles_in_same_cell(TeamMember& team_member, IndexView& ii, BoundsView& inbnds, const int num_lanes) {
@@ -1395,6 +1447,18 @@ advance_p_kokkos_gpu(
         grad_mu_x, grad_mu_y, grad_mu_z,
         jac);
 
+    // After computing reciprocal basis at initial position:
+    float h_xi, h_eta, h_mu;
+    interpolate_scale_factors(
+        g->k_curvilinear_mesh_d,
+        dx, dy, dz, ii, nx, ny, nz,
+        h_xi, h_eta, h_mu);
+
+    // Compute local inverse cell dimensions
+    float cdt_local_dx = g->cvac * g->dt / h_xi;
+    float cdt_local_dy = g->cvac * g->dt / h_eta;
+    float cdt_local_dz = g->cvac * g->dt / h_mu;
+    
     float d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
     float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
     float d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
@@ -1402,9 +1466,37 @@ advance_p_kokkos_gpu(
     float inv_jac = 1.0f / jac;
 
     // Half-step position
-    float dx_pred = dx + 0.5f * d_xi_dt * cdt_dx;
-    float dy_pred = dy + 0.5f * d_eta_dt * cdt_dy;
-    float dz_pred = dz + 0.5f * d_mu_dt * cdt_dz;
+    float dx_pred = dx + 0.5f * d_xi_dt * cdt_local_dx;
+    float dy_pred = dy + 0.5f * d_eta_dt * cdt_local_dy;
+    float dz_pred = dz + 0.5f * d_mu_dt * cdt_local_dz;
+
+    int i_pred, j_pred, k_pred;
+    UNVOXEL(ii,i_pred,j_pred,k_pred,nx,ny,nz);
+    if (Kokkos::abs(dx_pred) > 2.0f || Kokkos::abs(dy_pred) > 2.0f || Kokkos::abs(dz_pred) > 2.0f) {
+      //Throw error
+      printf("ERROR: Particle moved too fast!");
+    }
+    if (dx_pred > 1.0f) {
+      i_pred++;
+      dx_pred -= 2.0f;
+    } else if (dx_pred < 1.0f) {
+      i_pred--;
+      dx_pred += 2.0f;
+    }
+    if (dy_pred > 1.0f) {
+      j_pred++;
+      dy_pred -= 2.0f;
+    } else if (dy_pred < 1.0f) {
+      j_pred--;
+      dy_pred += 2.0f;
+    }
+    if (dz_pred > 1.0f) {
+      k_pred++;
+      dz_pred -= 2.0f;
+    } else if (dz_pred < 1.0f) {
+      k_pred--;
+      dz_pred += 2.0f;
+    }
 
     // START GEO INTERPOLATION
     // Determine which cell the predicted position is in
@@ -1475,24 +1567,43 @@ advance_p_kokkos_gpu(
     // Compute reciprocal basis at predicted half-step position in the correct cell
     compute_reciprocal_basis(
         g->k_curvilinear_mesh_d,
+<<<<<<< Updated upstream
         dx_local, dy_local, dz_local, ii_pred, nx, ny, nz, // use geo interp here
+=======
+        dx_pred, dy_pred, dz_pred, VOXEL(i_pred,j_pred,k_pred,nx,ny,nz), nx, ny, nz,
+>>>>>>> Stashed changes
         gdx, gdy, gdz,
         grad_xi_x, grad_xi_y, grad_xi_z,
         grad_eta_x, grad_eta_y, grad_eta_z,
         grad_mu_x, grad_mu_y, grad_mu_z,
         jac);
 
+    float h_xi_pred, h_eta_pred, h_mu_pred;
+    interpolate_scale_factors(
+      g->k_curvilinear_mesh_d,
+      dx_pred, dy_pred, dz_pred, 
+      VOXEL(i_pred, j_pred, k_pred, nx, ny, nz),
+      nx, ny, nz,
+      h_xi_pred, h_eta_pred, h_mu_pred);
+
     // Recompute using half-step reciprocal basis
     d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
     d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
     d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
 
+<<<<<<< Updated upstream
     inv_jac = 1.0f / jac;
+=======
+    // These are the "local inverse cell dimensions"
+    float cdt_local_dx_pred = g->cvac * g->dt / h_xi_pred;
+    float cdt_local_dy_pred = g->cvac * g->dt / h_eta_pred;
+    float cdt_local_dz_pred = g->cvac * g->dt / h_mu_pred;
+>>>>>>> Stashed changes
 
     // Compute displacement increments
-    v4 = d_xi_dt * cdt_dx;
-    v5 = d_eta_dt * cdt_dy;
-    v6 = d_mu_dt * cdt_dz;
+    v4 = d_xi_dt * cdt_local_dx_pred;
+    v5 = d_eta_dt * cdt_local_dy_pred;
+    v6 = d_mu_dt * cdt_local_dz_pred;
 
     // Streak midpoint (for current deposition)
     v0 = dx + 0.5f * v4;
