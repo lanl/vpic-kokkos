@@ -21,8 +21,8 @@ begin_globals {
 
 begin_initialization {
   int nstep = 1000;
-  int nx = 100;
-  int ny = 100;
+  int nx = 1;
+  int ny = 1;
   int nz = 1;
 
   define_units( 1, 1 );
@@ -56,7 +56,7 @@ begin_initialization {
                     R,    // x
                     0,    // y
                     0.0,  // z
-                    0, -v0, 0, // cart vel
+                    0, -v0/(15./ny), 0, // cart vel
                     1.0, // w
                     0, 0 );
   LIST_FOR_EACH( sp, species_list ) {
@@ -89,9 +89,8 @@ begin_initialization {
     // Get particle data
     particle_t& p = this_sp->p[0];
 
-    // Get particle position in Cartesian coordinates
     double x, y, z;
-    grid->local_to_global(p.i, p.dx, p.dy, p.dz, x, y, z);
+    grid->local_to_global_cart(p.i, p.dx, p.dy, p.dz, x, y, z);
 
     // Convert to cylindrical for comparison
     double r_phys = sqrt(x*x + y*y);

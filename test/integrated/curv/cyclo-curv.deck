@@ -59,7 +59,7 @@ begin_initialization {
                     R,  // r
                     0,  // theta
                     0.0,  // z
-                    0, -v0, 0, // cart vel
+                    0, -v0/(15./nt), 0, // cart vel
                     1.0, // w
                     0, 0 );
   LIST_FOR_EACH( sp, species_list ) {

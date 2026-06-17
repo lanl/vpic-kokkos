@@ -263,15 +263,15 @@ typedef struct grid {
       k_curvilinear_mesh_h(idx, curv_mesh_var::h_2)  = 1.0;
       k_curvilinear_mesh_h(idx, curv_mesh_var::h_3)  = 1.0;
       k_curvilinear_mesh_h(idx, curv_mesh_var::jac) = 1.0;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_u) = 1.0;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_v) = 1.0;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_w) = 1.0;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_u) = 1.0;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_v) = 1.0;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_w) = 1.0;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_u) = 1.0;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_v) = 1.0;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_w) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_u) = 1.0;  // ê_x · x̂
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_v) = 0.0;  // ê_x · ŷ
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_w) = 0.0;  // ê_x · ẑ
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_u) = 0.0;  // ê_y · x̂
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_v) = 1.0;  // ê_y · ŷ
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_w) = 0.0;  // ê_y · ẑ
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_u) = 0.0;  // ê_z · x̂
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_v) = 0.0;  // ê_z · ŷ
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_w) = 1.0;  // ê_z · ẑ
       k_curvilinear_mesh_h(idx, curv_mesh_var::xg)  = x;
       k_curvilinear_mesh_h(idx, curv_mesh_var::yg)  = y;
       k_curvilinear_mesh_h(idx, curv_mesh_var::zg)  = z;
@@ -496,6 +496,12 @@ typedef struct grid {
     Kokkos::deep_copy(k_curvilinear_mesh_d, k_curvilinear_mesh_h);
   }
 
+  // Helper function declarations - implementations after macros
+  void local_to_global_cart(int voxel_i, float dx, float dy, float dz,
+                          double& x_out, double& y_out, double& z_out) const;
+
+  void local_to_global(int voxel_i, float dx, float dy, float dz,
+                            double& xi_out, double& eta_out, double& mu_out) const;
 
 } grid_t;
 
@@ -557,6 +563,188 @@ typedef struct grid {
   if( (y)>(yh) ) (v) += ((ny)-(yh)+(yl)+1)*((nx)+2);       \
   if( (y)>(yh) ) (z)++;                                    \
   if( (y)>(yh) ) (y) = (yl)
+
+inline void grid_t::local_to_global_cart(int voxel_i, float dx_p, float dy_p, float dz_p,
+                                        double& x_out, double& y_out, double& z_out) const {
+  // Get voxel indices
+  int ix, iy, iz;
+  UNVOXEL(voxel_i, ix, iy, iz, nx, ny, nz);
+
+  int mesh_idx = VOXEL_TO_MESH(voxel_i, nx, ny, nz);
+
+  // Get cell center in Cartesian coordinates
+  double x_center = k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::xg);
+  double y_center = k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::yg);
+  double z_center = k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::zg);
+
+  // Convert logical coords to interpolation weights for trilinear interpolation
+  // dx_p in [-1, 1] -> weight in [0, 1] where 0 = left neighbor, 0.5 = center, 1 = right neighbor
+  double wx = (dx_p + 1.0) * 0.5;  // 0 at left edge, 0.5 at center, 1 at right edge
+  double wy = (dy_p + 1.0) * 0.5;
+  double wz = (dz_p + 1.0) * 0.5;
+
+  double wx0 = 1.0 - wx;  // Weight for left neighbor
+  double wy0 = 1.0 - wy;
+  double wz0 = 1.0 - wz;
+
+  // Get indices of 8 surrounding nodes
+  int idx000 = GRID_TO_MESH(ix-1, iy-1, iz-1, nx, ny, nz);
+  int idx100 = GRID_TO_MESH(ix,   iy-1, iz-1, nx, ny, nz);
+  int idx010 = GRID_TO_MESH(ix-1, iy,   iz-1, nx, ny, nz);
+  int idx110 = GRID_TO_MESH(ix,   iy,   iz-1, nx, ny, nz);
+  int idx001 = GRID_TO_MESH(ix-1, iy-1, iz,   nx, ny, nz);
+  int idx101 = GRID_TO_MESH(ix,   iy-1, iz,   nx, ny, nz);
+  int idx011 = GRID_TO_MESH(ix-1, iy,   iz,   nx, ny, nz);
+  int idx111 = GRID_TO_MESH(ix,   iy,   iz,   nx, ny, nz);
+
+  // Trilinear interpolation of scale factors
+  double h_xi =
+    wx0 * wy0 * wz0 * k_curvilinear_mesh_h(idx000, curv_mesh_var::h_1) +
+    wx  * wy0 * wz0 * k_curvilinear_mesh_h(idx100, curv_mesh_var::h_1) +
+    wx0 * wy  * wz0 * k_curvilinear_mesh_h(idx010, curv_mesh_var::h_1) +
+    wx  * wy  * wz0 * k_curvilinear_mesh_h(idx110, curv_mesh_var::h_1) +
+    wx0 * wy0 * wz  * k_curvilinear_mesh_h(idx001, curv_mesh_var::h_1) +
+    wx  * wy0 * wz  * k_curvilinear_mesh_h(idx101, curv_mesh_var::h_1) +
+    wx0 * wy  * wz  * k_curvilinear_mesh_h(idx011, curv_mesh_var::h_1) +
+    wx  * wy  * wz  * k_curvilinear_mesh_h(idx111, curv_mesh_var::h_1);
+
+  double h_eta =
+    wx0 * wy0 * wz0 * k_curvilinear_mesh_h(idx000, curv_mesh_var::h_2) +
+    wx  * wy0 * wz0 * k_curvilinear_mesh_h(idx100, curv_mesh_var::h_2) +
+    wx0 * wy  * wz0 * k_curvilinear_mesh_h(idx010, curv_mesh_var::h_2) +
+    wx  * wy  * wz0 * k_curvilinear_mesh_h(idx110, curv_mesh_var::h_2) +
+    wx0 * wy0 * wz  * k_curvilinear_mesh_h(idx001, curv_mesh_var::h_2) +
+    wx  * wy0 * wz  * k_curvilinear_mesh_h(idx101, curv_mesh_var::h_2) +
+    wx0 * wy  * wz  * k_curvilinear_mesh_h(idx011, curv_mesh_var::h_2) +
+    wx  * wy  * wz  * k_curvilinear_mesh_h(idx111, curv_mesh_var::h_2);
+
+  double h_mu =
+    wx0 * wy0 * wz0 * k_curvilinear_mesh_h(idx000, curv_mesh_var::h_3) +
+    wx  * wy0 * wz0 * k_curvilinear_mesh_h(idx100, curv_mesh_var::h_3) +
+    wx0 * wy  * wz0 * k_curvilinear_mesh_h(idx010, curv_mesh_var::h_3) +
+    wx  * wy  * wz0 * k_curvilinear_mesh_h(idx110, curv_mesh_var::h_3) +
+    wx0 * wy0 * wz  * k_curvilinear_mesh_h(idx001, curv_mesh_var::h_3) +
+    wx  * wy0 * wz  * k_curvilinear_mesh_h(idx101, curv_mesh_var::h_3) +
+    wx0 * wy  * wz  * k_curvilinear_mesh_h(idx011, curv_mesh_var::h_3) +
+    wx  * wy  * wz  * k_curvilinear_mesh_h(idx111, curv_mesh_var::h_3);
+
+  // Trilinear interpolation of unit basis vectors
+  double e1_x =
+    wx0 * wy0 * wz0 * k_curvilinear_mesh_h(idx000, curv_mesh_var::e_1_u) +
+    wx  * wy0 * wz0 * k_curvilinear_mesh_h(idx100, curv_mesh_var::e_1_u) +
+    wx0 * wy  * wz0 * k_curvilinear_mesh_h(idx010, curv_mesh_var::e_1_u) +
+    wx  * wy  * wz0 * k_curvilinear_mesh_h(idx110, curv_mesh_var::e_1_u) +
+    wx0 * wy0 * wz  * k_curvilinear_mesh_h(idx001, curv_mesh_var::e_1_u) +
+    wx  * wy0 * wz  * k_curvilinear_mesh_h(idx101, curv_mesh_var::e_1_u) +
+    wx0 * wy  * wz  * k_curvilinear_mesh_h(idx011, curv_mesh_var::e_1_u) +
+    wx  * wy  * wz  * k_curvilinear_mesh_h(idx111, curv_mesh_var::e_1_u);
+
+  double e1_y =
+    wx0 * wy0 * wz0 * k_curvilinear_mesh_h(idx000, curv_mesh_var::e_1_v) +
+    wx  * wy0 * wz0 * k_curvilinear_mesh_h(idx100, curv_mesh_var::e_1_v) +
+    wx0 * wy  * wz0 * k_curvilinear_mesh_h(idx010, curv_mesh_var::e_1_v) +
+    wx  * wy  * wz0 * k_curvilinear_mesh_h(idx110, curv_mesh_var::e_1_v) +
+    wx0 * wy0 * wz  * k_curvilinear_mesh_h(idx001, curv_mesh_var::e_1_v) +
+    wx  * wy0 * wz  * k_curvilinear_mesh_h(idx101, curv_mesh_var::e_1_v) +
+    wx0 * wy  * wz  * k_curvilinear_mesh_h(idx011, curv_mesh_var::e_1_v) +
+    wx  * wy  * wz  * k_curvilinear_mesh_h(idx111, curv_mesh_var::e_1_v);
+
+  double e1_z =
+    wx0 * wy0 * wz0 * k_curvilinear_mesh_h(idx000, curv_mesh_var::e_1_w) +
+    wx  * wy0 * wz0 * k_curvilinear_mesh_h(idx100, curv_mesh_var::e_1_w) +
+    wx0 * wy  * wz0 * k_curvilinear_mesh_h(idx010, curv_mesh_var::e_1_w) +
+    wx  * wy  * wz0 * k_curvilinear_mesh_h(idx110, curv_mesh_var::e_1_w) +
+    wx0 * wy0 * wz  * k_curvilinear_mesh_h(idx001, curv_mesh_var::e_1_w) +
+    wx  * wy0 * wz  * k_curvilinear_mesh_h(idx101, curv_mesh_var::e_1_w) +
+    wx0 * wy  * wz  * k_curvilinear_mesh_h(idx011, curv_mesh_var::e_1_w) +
+    wx  * wy  * wz  * k_curvilinear_mesh_h(idx111, curv_mesh_var::e_1_w);
+
+  double e2_x =
+    wx0 * wy0 * wz0 * k_curvilinear_mesh_h(idx000, curv_mesh_var::e_2_u) +
+    wx  * wy0 * wz0 * k_curvilinear_mesh_h(idx100, curv_mesh_var::e_2_u) +
+    wx0 * wy  * wz0 * k_curvilinear_mesh_h(idx010, curv_mesh_var::e_2_u) +
+    wx  * wy  * wz0 * k_curvilinear_mesh_h(idx110, curv_mesh_var::e_2_u) +
+    wx0 * wy0 * wz  * k_curvilinear_mesh_h(idx001, curv_mesh_var::e_2_u) +
+    wx  * wy0 * wz  * k_curvilinear_mesh_h(idx101, curv_mesh_var::e_2_u) +
+    wx0 * wy  * wz  * k_curvilinear_mesh_h(idx011, curv_mesh_var::e_2_u) +
+    wx  * wy  * wz  * k_curvilinear_mesh_h(idx111, curv_mesh_var::e_2_u);
+
+  double e2_y =
+    wx0 * wy0 * wz0 * k_curvilinear_mesh_h(idx000, curv_mesh_var::e_2_v) +
+    wx  * wy0 * wz0 * k_curvilinear_mesh_h(idx100, curv_mesh_var::e_2_v) +
+    wx0 * wy  * wz0 * k_curvilinear_mesh_h(idx010, curv_mesh_var::e_2_v) +
+    wx  * wy  * wz0 * k_curvilinear_mesh_h(idx110, curv_mesh_var::e_2_v) +
+    wx0 * wy0 * wz  * k_curvilinear_mesh_h(idx001, curv_mesh_var::e_2_v) +
+    wx  * wy0 * wz  * k_curvilinear_mesh_h(idx101, curv_mesh_var::e_2_v) +
+    wx0 * wy  * wz  * k_curvilinear_mesh_h(idx011, curv_mesh_var::e_2_v) +
+    wx  * wy  * wz  * k_curvilinear_mesh_h(idx111, curv_mesh_var::e_2_v);
+
+  double e2_z =
+    wx0 * wy0 * wz0 * k_curvilinear_mesh_h(idx000, curv_mesh_var::e_2_w) +
+    wx  * wy0 * wz0 * k_curvilinear_mesh_h(idx100, curv_mesh_var::e_2_w) +
+    wx0 * wy  * wz0 * k_curvilinear_mesh_h(idx010, curv_mesh_var::e_2_w) +
+    wx  * wy  * wz0 * k_curvilinear_mesh_h(idx110, curv_mesh_var::e_2_w) +
+    wx0 * wy0 * wz  * k_curvilinear_mesh_h(idx001, curv_mesh_var::e_2_w) +
+    wx  * wy0 * wz  * k_curvilinear_mesh_h(idx101, curv_mesh_var::e_2_w) +
+    wx0 * wy  * wz  * k_curvilinear_mesh_h(idx011, curv_mesh_var::e_2_w) +
+    wx  * wy  * wz  * k_curvilinear_mesh_h(idx111, curv_mesh_var::e_2_w);
+
+  double e3_x =
+    wx0 * wy0 * wz0 * k_curvilinear_mesh_h(idx000, curv_mesh_var::e_3_u) +
+    wx  * wy0 * wz0 * k_curvilinear_mesh_h(idx100, curv_mesh_var::e_3_u) +
+    wx0 * wy  * wz0 * k_curvilinear_mesh_h(idx010, curv_mesh_var::e_3_u) +
+    wx  * wy  * wz0 * k_curvilinear_mesh_h(idx110, curv_mesh_var::e_3_u) +
+    wx0 * wy0 * wz  * k_curvilinear_mesh_h(idx001, curv_mesh_var::e_3_u) +
+    wx  * wy0 * wz  * k_curvilinear_mesh_h(idx101, curv_mesh_var::e_3_u) +
+    wx0 * wy  * wz  * k_curvilinear_mesh_h(idx011, curv_mesh_var::e_3_u) +
+    wx  * wy  * wz  * k_curvilinear_mesh_h(idx111, curv_mesh_var::e_3_u);
+
+  double e3_y =
+    wx0 * wy0 * wz0 * k_curvilinear_mesh_h(idx000, curv_mesh_var::e_3_v) +
+    wx  * wy0 * wz0 * k_curvilinear_mesh_h(idx100, curv_mesh_var::e_3_v) +
+    wx0 * wy  * wz0 * k_curvilinear_mesh_h(idx010, curv_mesh_var::e_3_v) +
+    wx  * wy  * wz0 * k_curvilinear_mesh_h(idx110, curv_mesh_var::e_3_v) +
+    wx0 * wy0 * wz  * k_curvilinear_mesh_h(idx001, curv_mesh_var::e_3_v) +
+    wx  * wy0 * wz  * k_curvilinear_mesh_h(idx101, curv_mesh_var::e_3_v) +
+    wx0 * wy  * wz  * k_curvilinear_mesh_h(idx011, curv_mesh_var::e_3_v) +
+    wx  * wy  * wz  * k_curvilinear_mesh_h(idx111, curv_mesh_var::e_3_v);
+
+  double e3_z =
+    wx0 * wy0 * wz0 * k_curvilinear_mesh_h(idx000, curv_mesh_var::e_3_w) +
+    wx  * wy0 * wz0 * k_curvilinear_mesh_h(idx100, curv_mesh_var::e_3_w) +
+    wx0 * wy  * wz0 * k_curvilinear_mesh_h(idx010, curv_mesh_var::e_3_w) +
+    wx  * wy  * wz0 * k_curvilinear_mesh_h(idx110, curv_mesh_var::e_3_w) +
+    wx0 * wy0 * wz  * k_curvilinear_mesh_h(idx001, curv_mesh_var::e_3_w) +
+    wx  * wy0 * wz  * k_curvilinear_mesh_h(idx101, curv_mesh_var::e_3_w) +
+    wx0 * wy  * wz  * k_curvilinear_mesh_h(idx011, curv_mesh_var::e_3_w) +
+    wx  * wy  * wz  * k_curvilinear_mesh_h(idx111, curv_mesh_var::e_3_w);
+
+  // Convert to physical curvilinear displacement
+  double delta_xi = dx_p * dx / 2.0;
+  double delta_eta = dy_p * dy / 2.0;
+  double delta_mu = dz_p * dz / 2.0;
+
+  // Transform using interpolated metric at particle location
+  x_out = x_center + (h_xi * e1_x * delta_xi + h_eta * e2_x * delta_eta + h_mu * e3_x * delta_mu);
+  y_out = y_center + (h_xi * e1_y * delta_xi + h_eta * e2_y * delta_eta + h_mu * e3_y * delta_mu);
+  z_out = z_center + (h_xi * e1_z * delta_xi + h_eta * e2_z * delta_eta + h_mu * e3_z * delta_mu);
+}
+
+inline void grid_t::local_to_global(int voxel_i, float dx_p, float dy_p, float dz_p,
+                                          double& xi_out, double& eta_out, double& mu_out) const {
+  // Get local voxel indices
+  int ix, iy, iz;
+  UNVOXEL(voxel_i, ix, iy, iz, nx, ny, nz);
+
+  double xi_cell_center = x0 + (ix - 0.5) * dx;
+  double eta_cell_center = y0 + (iy - 0.5) * dy;
+  double mu_cell_center = z0 + (iz - 0.5) * dz;
+
+  // Add particle offset
+  xi_out = xi_cell_center + dx_p * dx / 2.0;
+  eta_out = eta_cell_center + dy_p * dy / 2.0;
+  mu_out = mu_cell_center + dz_p * dz / 2.0;
+}
 
 // In grid_structors.c
 
