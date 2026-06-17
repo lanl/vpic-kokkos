@@ -59,7 +59,7 @@ begin_initialization {
                     R,  // r
                     0,  // theta
                     0.0,  // z
-                    0, -v0*1.9, 0, // cart vel
+                    0, -v0, 0, // cart vel
                     1.0, // w
                     0, 0 );
   LIST_FOR_EACH( sp, species_list ) {
@@ -97,9 +97,9 @@ begin_initialization {
     double x_center = grid->k_curvilinear_mesh_h(mesh, curv_mesh_var::xg);
     double y_center = grid->k_curvilinear_mesh_h(mesh, curv_mesh_var::yg);
     double r_center = grid->k_curvilinear_mesh_h(mesh, curv_mesh_var::h_2);
-    double r_phys = r_center + dx * grid->dx/2.0;
+    double r_phys = r_center + dx * grid->dx/2.;
     double theta_center = atan2(y_center, x_center);
-    double theta_phys = theta_center + dy * grid->dy/2.0;
+    double theta_phys = theta_center + dy * grid->dy/2.;
     double x = r_phys * cos(theta_phys);
     double y = r_phys * sin(theta_phys);
 

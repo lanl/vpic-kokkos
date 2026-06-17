@@ -20,9 +20,9 @@ begin_globals {
 };
 
 begin_initialization {
-  int nstep = 100;
-  int nr = 100;
-  int nt = 100;
+  int nstep = 50;
+  int nr = 10;
+  int nt = 10;
   int nz = 1;
 
   define_units( 1, 1 );
@@ -41,44 +41,18 @@ begin_initialization {
                               false, true, false);
   grid->init_kokkos_grid(6*grid->nv);
 
-  double q = 100;
+  double q = 1.0;
   double m = 1.0;
   double R = 10.0;
   double B = 0.1;
   double v0 = q*B*R/m;
 
   // Set background magnetic field
-  set_region_field(everywhere, 0, 0, 0,   // E field
-                   0, 0, B);              // B field
-
-  sim_log("Before copy_to_device: voxel(5,5,0) cbz=" << field_array->f[VOXEL(5,5,0,grid->nx,grid->ny,grid->nz)].cbz);
-  sim_log("Before copy_to_device: voxel(5,5,1) cbz=" << field_array->f[VOXEL(5,5,1,grid->nx,grid->ny,grid->nz)].cbz);
+  // set_region_field(everywhere, 0, 0, 0,   // E field
+  //                  0, 0, B);              // B field
+  set_region_bext(everywhere, 0, 0, B);
 
   field_array->copy_to_device();
-
-  // Copy back immediately to verify
-  field_array->copy_to_host();
-  sim_log("After copy_to_device+host: voxel(5,5,0) cbz=" << field_array->f[VOXEL(5,5,0,grid->nx,grid->ny,grid->nz)].cbz);
-  sim_log("After copy_to_device+host: voxel(5,5,1) cbz=" << field_array->f[VOXEL(5,5,1,grid->nx,grid->ny,grid->nz)].cbz);
-  WARNING(("ERROR BIG ERROR"));
-
-  // Debug: check initial B field, index conversion, and scale factors at various locations
-  int voxel_idx = VOXEL(5, 5, 0, grid->nx, grid->ny, grid->nz);
-  int mesh_idx = VOXEL_TO_MESH(voxel_idx, grid->nx, grid->ny, grid->nz);
-  sim_log("Debug: voxel(5,5,0)=" << voxel_idx << " -> mesh=" << mesh_idx);
-  sim_log("  h_scale: h1=" << grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_1)
-          << " h2=" << grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_2)
-          << " h3=" << grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_3));
-
-  // Check scale factors at grid boundaries (i=1, j=1 is the first interior cell)
-  int voxel_boundary = VOXEL(1, 1, 1, grid->nx, grid->ny, grid->nz);
-  int mesh_boundary = VOXEL_TO_MESH(voxel_boundary, grid->nx, grid->ny, grid->nz);
-  sim_log("Boundary voxel(1,1,1)=" << voxel_boundary << " -> mesh=" << mesh_boundary);
-  sim_log("  h_scale: h1=" << grid->k_curvilinear_mesh_h(mesh_boundary, curv_mesh_var::h_1)
-          << " h2=" << grid->k_curvilinear_mesh_h(mesh_boundary, curv_mesh_var::h_2)
-          << " h3=" << grid->k_curvilinear_mesh_h(mesh_boundary, curv_mesh_var::h_3));
-
-  sim_log("Initial B field at voxel (5,5,0): cbz=" << field_array->f[voxel_idx].cbz);
 
   species_t* sp; // We use this to iterate over species
 
