@@ -1470,34 +1470,6 @@ advance_p_kokkos_gpu(
     float dy_pred = dy + 0.5f * d_eta_dt * cdt_local_dy;
     float dz_pred = dz + 0.5f * d_mu_dt * cdt_local_dz;
 
-    int i_pred, j_pred, k_pred;
-    UNVOXEL(ii,i_pred,j_pred,k_pred,nx,ny,nz);
-    if (Kokkos::abs(dx_pred) > 2.0f || Kokkos::abs(dy_pred) > 2.0f || Kokkos::abs(dz_pred) > 2.0f) {
-      //Throw error
-      printf("ERROR: Particle moved too fast!");
-    }
-    if (dx_pred > 1.0f) {
-      i_pred++;
-      dx_pred -= 2.0f;
-    } else if (dx_pred < 1.0f) {
-      i_pred--;
-      dx_pred += 2.0f;
-    }
-    if (dy_pred > 1.0f) {
-      j_pred++;
-      dy_pred -= 2.0f;
-    } else if (dy_pred < 1.0f) {
-      j_pred--;
-      dy_pred += 2.0f;
-    }
-    if (dz_pred > 1.0f) {
-      k_pred++;
-      dz_pred -= 2.0f;
-    } else if (dz_pred < 1.0f) {
-      k_pred--;
-      dz_pred += 2.0f;
-    }
-
     // START GEO INTERPOLATION
     // Determine which cell the predicted position is in
     // If d_pred is outside [-1, 1], we need to use the neighbor cell's geometric data
@@ -1567,11 +1539,7 @@ advance_p_kokkos_gpu(
     // Compute reciprocal basis at predicted half-step position in the correct cell
     compute_reciprocal_basis(
         g->k_curvilinear_mesh_d,
-<<<<<<< Updated upstream
         dx_local, dy_local, dz_local, ii_pred, nx, ny, nz, // use geo interp here
-=======
-        dx_pred, dy_pred, dz_pred, VOXEL(i_pred,j_pred,k_pred,nx,ny,nz), nx, ny, nz,
->>>>>>> Stashed changes
         gdx, gdy, gdz,
         grad_xi_x, grad_xi_y, grad_xi_z,
         grad_eta_x, grad_eta_y, grad_eta_z,
@@ -1582,7 +1550,7 @@ advance_p_kokkos_gpu(
     interpolate_scale_factors(
       g->k_curvilinear_mesh_d,
       dx_pred, dy_pred, dz_pred, 
-      VOXEL(i_pred, j_pred, k_pred, nx, ny, nz),
+      ii_pred,
       nx, ny, nz,
       h_xi_pred, h_eta_pred, h_mu_pred);
 
@@ -1591,14 +1559,11 @@ advance_p_kokkos_gpu(
     d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
     d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
 
-<<<<<<< Updated upstream
     inv_jac = 1.0f / jac;
-=======
     // These are the "local inverse cell dimensions"
     float cdt_local_dx_pred = g->cvac * g->dt / h_xi_pred;
     float cdt_local_dy_pred = g->cvac * g->dt / h_eta_pred;
     float cdt_local_dz_pred = g->cvac * g->dt / h_mu_pred;
->>>>>>> Stashed changes
 
     // Compute displacement increments
     v4 = d_xi_dt * cdt_local_dx_pred;
