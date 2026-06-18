@@ -276,17 +276,17 @@ void compute_reciprocal_basis(
         float zg = k_curv(node_idx, curv_mesh_var::zg);
 
         // Accumulate Jacobian matrix elements
-        dx_dxi += xg * dSx * Sy * Sz * 2.0f / gdx;
-        dy_dxi += yg * dSx * Sy * Sz * 2.0f / gdx;
-        dz_dxi += zg * dSx * Sy * Sz * 2.0f / gdx;
+        dx_dxi += xg * dSx * Sy * Sz;
+        dy_dxi += yg * dSx * Sy * Sz;
+        dz_dxi += zg * dSx * Sy * Sz;
 
-        dx_deta += xg * Sx * dSy * Sz * 2.0f / gdy;
-        dy_deta += yg * Sx * dSy * Sz * 2.0f / gdy;
-        dz_deta += zg * Sx * dSy * Sz * 2.0f / gdy;
+        dx_deta += xg * Sx * dSy * Sz;
+        dy_deta += yg * Sx * dSy * Sz;
+        dz_deta += zg * Sx * dSy * Sz;
 
-        dx_dmu += xg * Sx * Sy * dSz * 2.0f / gdz;
-        dy_dmu += yg * Sx * Sy * dSz * 2.0f / gdz;
-        dz_dmu += zg * Sx * Sy * dSz * 2.0f / gdz;
+        dx_dmu += xg * Sx * Sy * dSz;
+        dy_dmu += yg * Sx * Sy * dSz;
+        dz_dmu += zg * Sx * Sy * dSz;
       }
     }
   }
@@ -356,9 +356,9 @@ void interpolate_scale_factors(
                 float weight = Sx * Sy * Sz;
 
                 // Accumulate weighted scale factors
-                h_xi  += weight * k_curv(node_idx, curv_mesh_var::h_1) * 2.0f;
-                h_eta += weight * k_curv(node_idx, curv_mesh_var::h_2) * 2.0f;
-                h_mu  += weight * k_curv(node_idx, curv_mesh_var::h_3) * 2.0f;
+                h_xi  += weight * k_curv(node_idx, curv_mesh_var::h_1);
+                h_eta += weight * k_curv(node_idx, curv_mesh_var::h_2);
+                h_mu  += weight * k_curv(node_idx, curv_mesh_var::h_3);
             }
         }
     }
@@ -1323,6 +1323,7 @@ advance_p_kokkos_gpu(
   float rV = g->rdx*g->rdy*g->rdz;
   float rV12 = rV*one_twelfth;
   float gdx=g->dx, gdy=g->dy, gdz = g->dz, gdt = g->dt;
+  float cdt=g->cvac * g->dt;
   const float dt_2c = (g->dt)/(2*g->cvac);
 
   // Process particles for this pipeline
@@ -1446,18 +1447,6 @@ advance_p_kokkos_gpu(
         grad_eta_x, grad_eta_y, grad_eta_z,
         grad_mu_x, grad_mu_y, grad_mu_z,
         jac);
-
-    // After computing reciprocal basis at initial position:
-    float h_xi, h_eta, h_mu;
-    interpolate_scale_factors(
-        g->k_curvilinear_mesh_d,
-        dx, dy, dz, ii, nx, ny, nz,
-        h_xi, h_eta, h_mu);
-
-    // Compute local inverse cell dimensions
-    float cdt_local_dx = g->cvac * g->dt / h_xi;
-    float cdt_local_dy = g->cvac * g->dt / h_eta;
-    float cdt_local_dz = g->cvac * g->dt / h_mu;
     
     float d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
     float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
@@ -1466,9 +1455,9 @@ advance_p_kokkos_gpu(
     float inv_jac = 1.0f / jac;
 
     // Half-step position
-    float dx_pred = dx + 0.5f * d_xi_dt * cdt_local_dx;
-    float dy_pred = dy + 0.5f * d_eta_dt * cdt_local_dy;
-    float dz_pred = dz + 0.5f * d_mu_dt * cdt_local_dz;
+    float dx_pred = dx + 0.5f * d_xi_dt * cdt;
+    float dy_pred = dy + 0.5f * d_eta_dt * cdt;
+    float dz_pred = dz + 0.5f * d_mu_dt * cdt;
 
     // START GEO INTERPOLATION
     // Determine which cell the predicted position is in
@@ -1546,29 +1535,17 @@ advance_p_kokkos_gpu(
         grad_mu_x, grad_mu_y, grad_mu_z,
         jac);
 
-    float h_xi_pred, h_eta_pred, h_mu_pred;
-    interpolate_scale_factors(
-      g->k_curvilinear_mesh_d,
-      dx_pred, dy_pred, dz_pred, 
-      ii_pred,
-      nx, ny, nz,
-      h_xi_pred, h_eta_pred, h_mu_pred);
-
     // Recompute using half-step reciprocal basis
     d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
     d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
     d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
 
     inv_jac = 1.0f / jac;
-    // These are the "local inverse cell dimensions"
-    float cdt_local_dx_pred = g->cvac * g->dt / h_xi_pred;
-    float cdt_local_dy_pred = g->cvac * g->dt / h_eta_pred;
-    float cdt_local_dz_pred = g->cvac * g->dt / h_mu_pred;
 
     // Compute displacement increments
-    v4 = d_xi_dt * cdt_local_dx_pred;
-    v5 = d_eta_dt * cdt_local_dy_pred;
-    v6 = d_mu_dt * cdt_local_dz_pred;
+    v4 = d_xi_dt * cdt;
+    v5 = d_eta_dt * cdt;
+    v6 = d_mu_dt * cdt;
 
     // Streak midpoint (for current deposition)
     v0 = dx + 0.5f * v4;
