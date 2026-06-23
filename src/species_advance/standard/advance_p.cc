@@ -1535,6 +1535,29 @@ advance_p_kokkos_gpu(
         grad_mu_x, grad_mu_y, grad_mu_z,
         jac);
 
+    // ANALYTICAL OVERRIDE for cylindrical coordinates
+    #ifndef __CUDA_ARCH__
+    {
+      double x_cart, y_cart, z_cart;
+      g->local_to_global_cart(ii_pred, dx_local, dy_local, dz_local, x_cart, y_cart, z_cart);
+      double r_phys = sqrtf(x_cart*x_cart + y_cart*y_cart);
+      double theta_phys = atan2f(y_cart, x_cart);
+      double cos_th = cosf(theta_phys);
+      double sin_th = sinf(theta_phys);
+      // Analytical reciprocal basis for cylindrical
+      grad_xi_x = (2.0f / gdx) * cos_th;
+      grad_xi_y = (2.0f / gdx) * sin_th;
+      grad_xi_z = 0.0f;
+      grad_eta_x = (-2.0f / gdy) * sin_th / r_phys;
+      grad_eta_y = (2.0f / gdy) * cos_th / r_phys;
+      grad_eta_z = 0.0f;
+      grad_mu_x = 0.0f;
+      grad_mu_y = 0.0f;
+      grad_mu_z = 2.0f / gdz;
+      jac = r_phys * gdx * gdy * gdz / 8.0f;
+    }
+    #endif
+
     // Recompute using half-step reciprocal basis
     d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
     d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
@@ -1711,9 +1734,9 @@ advance_p_kokkos_gpu(
 } else {
       
       DECLARE_ALIGNED_ARRAY( particle_mover_t, 16, local_pm, 1 );
-      local_pm->dispx = v4;
-      local_pm->dispy = v5;
-      local_pm->dispz = v6;
+      local_pm->dispx = v4/2.0f;
+      local_pm->dispy = v5/2.0f;
+      local_pm->dispz = v6/2.0f;
       local_pm->i     = p_index;
       
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e uz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);

@@ -20,9 +20,9 @@ begin_globals {
 };
 
 begin_initialization {
-  int nstep = 1000;
-  int nr = 100;
-  int nt = 100;
+  int nstep = 50;
+  int nr = 10;
+  int nt = 10;
   int nz = 1;
 
   define_units( 1, 1 );
@@ -49,6 +49,15 @@ begin_initialization {
 
   set_region_bext(everywhere, 0, 0, B);
 
+  // this is how u inject e fields
+  // for (int k = 0; k <= nz+1; k++) {
+  //   for (int j = 0; j <= nt+1; j++) {
+  //     for (int i = 0; i <= nr+1; i++) {
+  //       field(i,j,k).tx = 10;
+  //     }
+  //   }
+  // }
+
   field_array->copy_to_device();
 
   species_t* sp; // We use this to iterate over species
@@ -59,7 +68,7 @@ begin_initialization {
                     R,  // r
                     0,  // theta
                     0.0,  // z
-                    0, -v0/(15./nt), 0, // cart vel
+                    0, -v0, 0, // cart vel
                     1.0, // w
                     0, 0 );
   LIST_FOR_EACH( sp, species_list ) {
@@ -71,7 +80,6 @@ begin_initialization {
     sp->copy_to_device();
   }
   interpolator_array->copy_to_device();
-
   load_interpolator_array( interpolator_array, field_array );
 
   // Open trajectory file

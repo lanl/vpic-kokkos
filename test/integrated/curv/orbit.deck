@@ -28,14 +28,15 @@ begin_initialization {
   define_units( 1, 1 );
   define_timestep( 0.01 );
   // Grid in cylindrical: (r, theta, z)
+  double rext = 1.0;
   define_periodic_grid( 0.1, 0, 0,   // Grid low corner (r_min, theta_min, z_min)
-                        20.0, 2*M_PI, 1,   // Grid high corner (r_max, theta_max, z_max)
+                        rext, 2*M_PI, 1,   // Grid high corn.  z.    er (r_max, theta_max, z_max)
                         nr, nt, nz,   // Grid resolution
                         1, 1, 1 ); // Processor configuration
   define_material("vacuum",1.0,1.0,0.0);
   define_field_array();
 
-  grid->init_cylindrical_grid(0.1, 20.0,
+  grid->init_cylindrical_grid(0.1, rext,
                               0, 2*M_PI,
                               0, 1.0,
                               false, true, false);
@@ -43,15 +44,9 @@ begin_initialization {
 
   double q = 1.0;
   double m = 1.0;
-  double R = 10.0;
-  double B = 0.1;
-  double v0 = q*B*R/m;
-
-  // Set background magnetic field
-  // set_region_field(everywhere, 0, 0, 0,   // E field
-  //                  0, 0, B);              // B field
-  set_region_bext(everywhere, 0, 0, B);
-
+  double R = rext/2;
+  double v0 = 1.0;
+  
   field_array->copy_to_device();
 
   species_t* sp; // We use this to iterate over species
@@ -76,7 +71,7 @@ begin_initialization {
   // Open trajectory file
   FileIO traj_file;
   if (rank() == 0) {
-    if (traj_file.open("trajectory.txt", io_write) != ok) {
+    if (traj_file.open("orbit_trajectory.txt", io_write) != ok) {
       ERROR(("Cannot open trajectory file"));
     }
     traj_file.print("# step x y r theta ux uy\n");
