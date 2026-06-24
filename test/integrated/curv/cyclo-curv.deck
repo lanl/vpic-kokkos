@@ -20,7 +20,7 @@ begin_globals {
 };
 
 begin_initialization {
-  int nstep = 50;
+  int nstep = 1000;
   int nr = 10;
   int nt = 10;
   int nz = 1;
