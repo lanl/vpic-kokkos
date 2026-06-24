@@ -520,7 +520,7 @@ public:
     return hydro_array->k_h_h;
   }
  
-  inline double& hydro_h( const int vox, const int var ) {
+  inline float& hydro_h( const int vox, const int var ) {
     return hydro_array->k_h_h(vox, var);
   }
 

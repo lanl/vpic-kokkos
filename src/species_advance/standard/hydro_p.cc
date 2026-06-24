@@ -336,6 +336,7 @@ accumulate_hydro_p_kokkos(
 )
 {
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
+  using hydro_scalar_t = k_hydro_t::non_const_value_type;
 
 #ifdef VARIABLE_CHARGE
   float c, msp, dt_2mc, dt_4mc, rV, r12V;
@@ -370,8 +371,8 @@ accumulate_hydro_p_kokkos(
   Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace, size_t>(0LLU, nv),
     KOKKOS_LAMBDA(size_t ii)
     {
-        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<k_hydro_t::non_const_value_type>::max();
-        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<k_hydro_t::non_const_value_type>::min();
+        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<hydro_scalar_t>::max();
+        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<hydro_scalar_t>::min();
     });
 
 #else
@@ -394,7 +395,6 @@ accumulate_hydro_p_kokkos(
   const int sy = sp->g->sy;
   const int sz = sp->g->sz;
 
-  //for( n=0; n<np; n++ ) {
   Kokkos::parallel_for("hydro_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace,size_t > (0LLU, np),
     KOKKOS_LAMBDA (const size_t p_index)
     {
@@ -626,8 +626,8 @@ accumulate_hydro_p_kokkos(
         //if (k_hydro(ii, hydro_var::min_q) == 0) printf("ii=%d, minq=%e",ii,k_hydro(ii, hydro_var::min_q));
       } else {
         //k_hydro(ii, hydro_var::avg_q) = std::numeric_limits<double>::quiet_NaN();
-        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<k_hydro_t::non_const_value_type>::quiet_NaN();
-        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<k_hydro_t::non_const_value_type>::quiet_NaN();
+        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<hydro_scalar_t>::quiet_NaN();
+        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<hydro_scalar_t>::quiet_NaN();
       }
     });
 #endif

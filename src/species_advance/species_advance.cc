@@ -287,9 +287,6 @@ species_t::copy_to_device()
   auto& k_particle_movers_h = k_pm_h;
   auto& k_particle_i_movers_h = k_pm_i_h;
   auto& movers = pm;
-#endif
-
-#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   Kokkos::parallel_for("copy particles to device",
     Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace, size_t>(0, np) ,
     KOKKOS_LAMBDA (const size_t i) {

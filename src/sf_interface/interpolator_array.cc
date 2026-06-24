@@ -35,7 +35,6 @@ new_interpolator_array( grid_t * g ) {
   interpolator_array_t * ia;
   if( !g ) ERROR(( "NULL grid" ));
   ia = new interpolator_array_t(g->nv);
-  //MALLOC( ia, 1 );
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   MALLOC_ALIGNED( ia->i, g->nv, 128 );
   CLEAR( ia->i, g->nv );
@@ -58,8 +57,8 @@ delete_interpolator_array( interpolator_array_t * ia ) {
 }
 
 void 
-load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field, 
-                               int nx, int ny, int nz) {
+load_interpolator_array_kokkos(k_interpolator_t& k_interp, k_field_t& k_field, 
+                               const int nx, const int ny, const int nz) {
 
   #define pi_ex       k_interp(pi_index, interpolator_var::ex)
   #define pi_dexdx    k_interp(pi_index, interpolator_var::dexdx)
@@ -479,149 +478,6 @@ load_interpolator_array_kokkos(k_interpolator_t k_interp, k_field_t k_field,
   #undef pi_d2Gz0dx
   #undef pi_d2Gz0dy
   #undef pi_d2Gz0dz
-
-/*
-    Kokkos::parallel_for("load interpolator", KOKKOS_TEAM_POLICY_DEVICE
-      (nz, Kokkos::AUTO),
-      KOKKOS_LAMBDA
-      (const KOKKOS_TEAM_POLICY_DEVICE::member_type &team_member) {
-    const unsigned int z = team_member.league_rank() + 1;
-
-    //for( z=1; z<=nz; z++ ) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, ny), [=] (int yi) {
-      const unsigned int y = yi + 1;
-
-      //for( x=1; x<=nx; x++ ) {
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_member, nx), [=] (int x) {
-
-        //pi = &fi(1,y,z);
-        int pi_index = VOXEL(1,   y,   z, nx,ny,nz) + x;
-
-        //pf0 = &f(1,y,z);
-        int pf0_index = VOXEL(1,  y,   z, nx,ny,nz) + x;
-
-        //pfx = &f(2,y,z);
-        int pfx_index = VOXEL(2,  y,   z, nx,ny,nz) + x;
-
-        //pfy = &f(1,y+1,z);
-        int pfy_index = VOXEL(1,  y+1, z, nx,ny,nz) + x;
-
-        //pfz = &f(1,y,z+1);
-        int pfz_index = VOXEL(1,  y,   z+1, nx,ny,nz) + x;
-
-        //pfyz = &f(1,y+1,z+1);
-        int pfyz_index = VOXEL(1, y+1, z+1, nx,ny,nz) + x;
-
-        //pfzx = &f(2,y,z+1);
-        int pfzx_index = VOXEL(2, y,   z+1, nx,ny,nz) + x;
-
-        //pfxy = &f(2,y+1,z);
-        int pfxy_index = VOXEL(2, y+1, z, nx,ny,nz) + x;
-
-        // ex interpolation coefficients
-        //w0 = pf0->ex;
-        #define w0 k_field(pf0_index, field_var::ex)
-        //w1 = pfy->ex;
-        #define w1 k_field(pfy_index, field_var::ex)
-        //w2 = pfz->ex;
-        #define w2 k_field(pfz_index, field_var::ex)
-        //w3 = pfyz->ex;
-        #define w3 k_field(pfyz_index, field_var::ex)
-
-        pi_ex       = fourth*( (w3 + w0) + (w1 + w2) );
-        pi_dexdy    = fourth*( (w3 - w0) + (w1 - w2) );
-        pi_dexdz    = fourth*( (w3 - w0) - (w1 - w2) );
-        pi_d2exdydz = fourth*( (w3 + w0) - (w1 + w2) );
-
-        #undef w0
-        #undef w1
-        #undef w2
-        #undef w3
-
-        // ey interpolation coefficients
-
-        //w0 = pf0->ey;
-        #define w0 k_field(pf0_index, field_var::ey)
-        //w1 = pfz->ey;
-        #define w1 k_field(pfz_index, field_var::ey)
-        //w2 = pfx->ey;
-        #define w2 k_field(pfx_index, field_var::ey)
-        //w3 = pfzx->ey;
-        #define w3 k_field(pfzx_index, field_var::ey)
-
-        pi_ey       = fourth*( (w3 + w0) + (w1 + w2) );
-        pi_deydz    = fourth*( (w3 - w0) + (w1 - w2) );
-        pi_deydx    = fourth*( (w3 - w0) - (w1 - w2) );
-        pi_d2eydzdx = fourth*( (w3 + w0) - (w1 + w2) );
-
-        #undef w0
-        #undef w1
-        #undef w2
-        #undef w3
-
-        // ez interpolation coefficients
-
-        // w0 = pf0->ez;
-        #define w0 k_field(pf0_index, field_var::ez)
-        // w1 = pfx->ez;
-        #define w1 k_field(pfx_index, field_var::ez)
-        // w2 = pfy->ez;
-        #define w2 k_field(pfy_index, field_var::ez)
-        // w3 = pfxy->ez;
-        #define w3 k_field(pfxy_index, field_var::ez)
-        pi_ez       = fourth*( (w3 + w0) + (w1 + w2) );
-        pi_dezdx    = fourth*( (w3 - w0) + (w1 - w2) );
-        pi_dezdy    = fourth*( (w3 - w0) - (w1 - w2) );
-        pi_d2ezdxdy = fourth*( (w3 + w0) - (w1 + w2) );
-
-        #undef w0
-        #undef w1
-        #undef w2
-        #undef w3
-
-        // bx interpolation coefficients
-
-        //w0 = pf0->cbx;
-        #define w0 k_field(pf0_index, field_var::cbx)
-        //w1 = pfx->cbx;
-        #define w1 k_field(pfx_index, field_var::cbx)
-        pi_cbx    = half*( w1 + w0 );
-        pi_dcbxdx = half*( w1 - w0 );
-
-        #undef w0
-        #undef w1
-
-        // by interpolation coefficients
-
-        // w0 = pf0->cby;
-        #define w0 k_field(pf0_index, field_var::cby)
-        // w1 = pfy->cby;
-        #define w1 k_field(pfy_index, field_var::cby)
-
-        pi_cby    = half*( w1 + w0 );
-        pi_dcbydy = half*( w1 - w0 );
-
-        #undef w0
-        #undef w1
-
-        // bz interpolation coefficients
-
-        // w0 = pf0->cbz;
-        #define w0 k_field(pf0_index, field_var::cbz)
-        // w1 = pfz->cbz;
-        #define w1 k_field(pfz_index, field_var::cbz)
-        pi_cbz    = half*( w1 + w0 );
-        pi_dcbzdz = half*( w1 - w0 );
-
-        #undef w0
-        #undef w1
-
-        //pi++; pf0++; pfx++; pfy++; pfz++; pfyz++; pfzx++; pfxy++;
-      });
-    }
-    );
-  });
-*/
 }
 
 void
@@ -692,6 +548,7 @@ interpolator_array_t::copy_to_host() {
       host_interp[i].d2ezdx  = k_interpolator_h(i, interpolator_var::d2ezdx );
       host_interp[i].d2ezdy  = k_interpolator_h(i, interpolator_var::d2ezdy );
       host_interp[i].d2ezdz  = k_interpolator_h(i, interpolator_var::d2ezdz );
+
       host_interp[i].cbx     = k_interpolator_h(i, interpolator_var::cbx    );
       host_interp[i].dcbxdx  = k_interpolator_h(i, interpolator_var::dcbxdx );
       host_interp[i].dcbxdy  = k_interpolator_h(i, interpolator_var::dcbxdy );
