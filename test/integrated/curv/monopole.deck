@@ -48,10 +48,7 @@ begin_initialization {
   define_material("vacuum",1.0,1.0,0.0);
   define_field_array();
 
-  grid->init_spherical_grid(0.1, 20,
-                              0, 2*M_PI,
-                              0, 2*M_PI,
-                              false, true, true);
+  grid->init_spherical_grid();
   grid->init_kokkos_grid(6*grid->nv);
 
   // Set radial monopole field: B⃗ = C·r⃗
@@ -118,29 +115,10 @@ begin_initialization {
     float dy = this_sp->p[0].dy;
     float dz = this_sp->p[0].dz;
 
-    // Convert to physical spherical coordinates
-    // Voxel indices: ix, iy, iz (0 to nx+1, etc.) with 1 ghost layer
-    // Global voxel: subtract 1 to get global index (ix=1 -> global 0)
-    // Relative position within grid: (global_voxel + (dx+1)/2) where dx ∈ [-1,+1]
-    double r_relative = ((double)(ix - 1)) + 0.5 * ((double)dx + 1.0);
-    double theta_relative = ((double)(iy - 1)) + 0.5 * ((double)dy + 1.0);
-    double phi_relative = ((double)(iz - 1)) + 0.5 * ((double)dz + 1.0);
-
-    // Map to physical coordinates
-    double r_phys = grid->x0 + r_relative * (grid->x1 - grid->x0) / (double)grid->nx;
-    double theta_phys = grid->y0 + theta_relative * (grid->y1 - grid->y0) / (double)grid->ny;
-    double phi_phys = grid->z0 + phi_relative * (grid->z1 - grid->z0) / (double)grid->nz;
-
-    // Wrap periodic coordinates if needed
-    while (theta_phys < 0) theta_phys += 2.0 * M_PI;
-    while (theta_phys >= 2.0 * M_PI) theta_phys -= 2.0 * M_PI;
-    while (phi_phys < 0) phi_phys += 2.0 * M_PI;
-    while (phi_phys >= 2.0 * M_PI) phi_phys -= 2.0 * M_PI;
-
-    // Convert to Cartesian for logging / output
-    double x = r_phys * sin(theta_phys) * cos(phi_phys);
-    double y = r_phys * sin(theta_phys) * sin(phi_phys);
-    double z = r_phys * cos(theta_phys);
+    double r_phys, theta_phys, phi_phys;
+    grid->local_to_global(voxel, dx, dy, dz, r_phys, theta_phys, phi_phys);
+    double x, y, z;
+    grid->local_to_global_cart(voxel, dx, dy, dz, x, y, z);
 
     sim_log("step=" << n << " r=" << r_phys << " theta=" << theta_phys << " phi=" << phi_phys
             << " x=" << x << " y=" << y << " z=" << z

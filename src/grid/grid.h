@@ -71,10 +71,19 @@ enum grid_enums {
 
 };
 
+enum grid_type {
+  CARTESIAN = 0,
+  CYLINDRICAL = 1,
+  SPHERICAL = 2,
+  GENERAL = 3
+};
+
 typedef struct grid {
 
   // System of units
   float dt, cvac, eps0;
+
+  grid_type type = grid_type::GENERAL;
 
   // Time stepper.  The simulation time is given by
   // t = g->t0 + (double)g->dt*(double)g->step
@@ -110,8 +119,11 @@ typedef struct grid {
                             // 0 ... nproc-1 ... comm boundary condition
                             // <0 ... locally applied boundary condition
 
-  int gpx, gpy, gpz = -1;   // Store global processor decomposition to let us figure
+  int gpx = -1, gpy = -1, gpz = -1;   // Store global processor decomposition to let us figure
                             // out where we are in the global decomposition
+  double gx0, gy0, gz0;  // Global domain min
+  double gx1, gy1, gz1;  // Global domain max
+  int gnx, gny, gnz;
   
   // Phase 3 grid data structures
   // NOTE: VOXEL INDEXING LIMITS NUMBER OF VOXELS TO 2^31 (INCLUDING
@@ -195,26 +207,13 @@ typedef struct grid {
   >;
 
   //Initiates the Curvilinear grid components to a default uniform Cartesian grid format.
-  void init_curvilinear_grid(
-    double x_min = 0.0,
-    double x_max = 100.0,
-    double y_min = 0.0,
-    double y_max = 100.0,
-    double z_min = 0.0,
-    double z_max = 100.0,
-    bool wrap_x = false,
-    bool wrap_y = false,
-    bool wrap_z = false,
-    double x_offset = 0.0,
-    double y_offset = 0.0,
-    double z_offset = 0.0
-    )
+  void init_curvilinear_grid()
   {
     // Grid dimensions for indexing
     const int ghost_layers_per_side = 2;
-    const int nx_total = nx + 2 * ghost_layers_per_side;
-    const int ny_total = ny + 2 * ghost_layers_per_side;
-    const int nz_total = nz + 2 * ghost_layers_per_side;
+    const int nx_total = gnx + 2 * ghost_layers_per_side;
+    const int ny_total = gny + 2 * ghost_layers_per_side;
+    const int nz_total = gnz + 2 * ghost_layers_per_side;
     
     //printf("nv=%d",nv);
     const int nv_cm = nx_total * ny_total * nz_total;
@@ -222,13 +221,13 @@ typedef struct grid {
     k_curvilinear_mesh_h = Kokkos::create_mirror_view(k_curvilinear_mesh_d);
 
     // Compute the total global grid dimensions.
-    const int global_nx = nx * gpx;
-    const int global_ny = ny * gpy;
-    const int global_nz = nz * gpz;
+    const int global_nx = gnx * gpx;
+    const int global_ny = gny * gpy;
+    const int global_nz = gnz * gpz;
 
-    const double dx = (x_max - x_min) / global_nx;
-    const double dy = (y_max - y_min) / global_ny;
-    const double dz = (z_max - z_min) / global_nz;
+    const double dx = (x1 - x0) / global_nx;
+    const double dy = (y1 - y0) / global_ny;
+    const double dz = (z1 - z0) / global_nz;
 
     // Compute this rank's low end 3D position in the processor grid
     const int rank_i = world_rank % gpx;
@@ -236,9 +235,9 @@ typedef struct grid {
     const int rank_k = world_rank / (gpx * gpy);
 
     // Compute the low end 3D global index for this rank including ghost cells.    
-    int global_i_base = nx * rank_i - ghost_layers_per_side;
-    int global_j_base = ny * rank_j - ghost_layers_per_side;
-    int global_k_base = nz * rank_k - ghost_layers_per_side;
+    int global_i_base = gnx * rank_i - ghost_layers_per_side;
+    int global_j_base = gny * rank_j - ghost_layers_per_side;
+    int global_k_base = gnz * rank_k - ghost_layers_per_side;
 
     Kokkos::parallel_for(
     "Fill curvilinear mesh view",
@@ -251,34 +250,34 @@ typedef struct grid {
       int global_j_cell = global_j_base + j;
       int global_k_cell = global_k_base + k;
 
-      double x_i = x_min + (global_i_cell + 0.5) * dx;
-      double y_j = y_min + (global_j_cell + 0.5) * dy;
-      double z_k = z_min + (global_k_cell + 0.5) * dz;
+      double x_i = x0 + (global_i_cell + 0.5) * dx;
+      double y_j = y0 + (global_j_cell + 0.5) * dy;
+      double z_k = z0 + (global_k_cell + 0.5) * dz;
 
-      double x = x_offset + x_i;
-      double y = y_offset + y_j;
-      double z = z_offset + z_k;
+      double x = 0 + x_i;
+      double y = 0 + y_j;
+      double z = 0 + z_k;
 
       k_curvilinear_mesh_h(idx, curv_mesh_var::h_1)  = 1.0;
       k_curvilinear_mesh_h(idx, curv_mesh_var::h_2)  = 1.0;
       k_curvilinear_mesh_h(idx, curv_mesh_var::h_3)  = 1.0;
       k_curvilinear_mesh_h(idx, curv_mesh_var::jac) = 1.0;
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_u) = 1.0;  // ê_x · x̂
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_v) = 0.0;  // ê_x · ŷ
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_w) = 0.0;  // ê_x · ẑ
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_u) = 0.0;  // ê_y · x̂
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_v) = 1.0;  // ê_y · ŷ
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_w) = 0.0;  // ê_y · ẑ
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_u) = 0.0;  // ê_z · x̂
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_v) = 0.0;  // ê_z · ŷ
-      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_w) = 1.0;  // ê_z · ẑ
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_u) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_v) = 0.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_w) = 0.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_u) = 0.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_v) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_w) = 0.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_u) = 0.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_v) = 0.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_w) = 1.0;
       k_curvilinear_mesh_h(idx, curv_mesh_var::xg)  = x;
       k_curvilinear_mesh_h(idx, curv_mesh_var::yg)  = y;
       k_curvilinear_mesh_h(idx, curv_mesh_var::zg)  = z;
     
     });
     
-
+    type = grid_type::CARTESIAN;
     Kokkos::deep_copy(k_curvilinear_mesh_d, k_curvilinear_mesh_h);
   }
 
@@ -286,41 +285,27 @@ typedef struct grid {
   // This function utilizes an existing grid for nx,ny,nz.
   // It does not use the Length, Width, or Height of the grid.
   // Nor does it use the defined grid cells in the grid.
-  void init_cylindrical_grid(
-    // Cylindrical grid parameters
-    double r_min,           // Inner radius
-    double r_max,           // Outer radius
-    double theta_min,       // Starting angle (radians)
-    double theta_max,       // Ending angle (radians)
-    double z_min,           // Bottom of domain
-    double z_max,           // Top of domain
-    bool wrap_r = false,    // Wrap in radial direction (usually false)
-    bool wrap_theta = true, // Wrap in azimuthal direction (true for full cylinder)
-    bool wrap_z = false,    // Wrap in axial direction (usually false)
-    double x_axis = 0.0,    // x-coordinate of cylindrical axis
-    double y_axis = 0.0,    // y-coordinate of cylindrical axis
-    double z_offset = 0.0   // z-offset if needed
-    )
+  void init_cylindrical_grid()
   {
     // Grid dimensions for indexing
     const int ghost_layers_per_side = 2;
-    const int nx_total = nx + 2 * ghost_layers_per_side;
-    const int ny_total = ny + 2 * ghost_layers_per_side;
-    const int nz_total = nz + 2 * ghost_layers_per_side;
+    const int nx_total = gnx + 2 * ghost_layers_per_side;
+    const int ny_total = gny + 2 * ghost_layers_per_side;
+    const int nz_total = gnz + 2 * ghost_layers_per_side;
     //printf("nv=%d",nv);
     const int nv_cm = nx_total * ny_total * nz_total;
     k_curvilinear_mesh_d = k_curvilinear_mesh_t("k_curvilinear_mesh_d", nv_cm);
     k_curvilinear_mesh_h = Kokkos::create_mirror_view(k_curvilinear_mesh_d);
 
     // Compute the total global grid dimensions.
-    const int global_nx = nx * gpx;
-    const int global_ny = ny * gpy;
-    const int global_nz = nz * gpz;
+    const int global_nx = gnx * gpx;
+    const int global_ny = gny * gpy;
+    const int global_nz = gnz * gpz;
 
     // Compute grid spacing
-    const double dr = (r_max - r_min) / (global_nx);
-    const double dtheta = (theta_max - theta_min) / (global_ny);
-    const double dz_cyl = (z_max - z_min) / (global_nz);
+    const double dr = (x1 - x0) / (global_nx);
+    const double dtheta = (y1 - y0) / (global_ny);
+    const double dz_cyl = (z1 - z0) / (global_nz);
 
     // Compute this rank's low end 3D position in the processor grid
     const int rank_i = world_rank % gpx;
@@ -328,9 +313,9 @@ typedef struct grid {
     const int rank_k = world_rank / (gpx * gpy);
 
     // Compute the low end 3D global index for this rank including ghost cells.    
-    int global_i_base = nx * rank_i - ghost_layers_per_side;
-    int global_j_base = ny * rank_j - ghost_layers_per_side;
-    int global_k_base = nz * rank_k - ghost_layers_per_side;
+    int global_i_base = gnx * rank_i - ghost_layers_per_side;
+    int global_j_base = gny * rank_j - ghost_layers_per_side;
+    int global_k_base = gnz * rank_k - ghost_layers_per_side;
 
     Kokkos::parallel_for(
     "Fill curvilinear mesh view",
@@ -343,24 +328,21 @@ typedef struct grid {
       int global_j_cell = global_j_base + j;
       int global_k_cell = global_k_base + k;
 
-      double r_i = r_min + (global_i_cell + 0.5) * dr;
-      double theta_j = theta_min + (global_j_cell + 0.5) * dtheta;
-      double z_k = z_min + (global_k_cell + 0.5) * dz_cyl;
-
+      double r_i = x0 + (global_i_cell + 0.5) * dr;
+      double theta_j = y0 + (global_j_cell + 0.5) * dtheta;
+      double z_k = z0 + (global_k_cell + 0.5) * dz_cyl;
 
       if (r_i < 0.0) {
           r_i = -r_i;              // Reflect radius
-          theta_j = theta_j + M_PI; // Rotate by 180°
+          theta_j = theta_j + M_PI; // Rotate by 180
       }
 
       double cos_theta = Kokkos::cos(theta_j);
       double sin_theta = Kokkos::sin(theta_j);
 
-      
-
-      double x = x_axis + r_i * cos_theta;
-      double y = y_axis + r_i * sin_theta;
-      double z = z_offset + z_k;
+      double x = 0 + r_i * cos_theta;
+      double y = 0 + r_i * sin_theta;
+      double z = 0 + z_k;
 
       k_curvilinear_mesh_h(idx,curv_mesh_var::h_1) = 1.0;
       k_curvilinear_mesh_h(idx,curv_mesh_var::h_2) = r_i;
@@ -368,65 +350,51 @@ typedef struct grid {
 
       k_curvilinear_mesh_h(idx,curv_mesh_var::jac) = r_i;
 
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_1_u) = cos_theta;   // ê_r · x̂
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_1_v) = sin_theta;   // ê_r · ŷ
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_1_w) = 0.0;         // ê_r · ẑ
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_1_u) = cos_theta;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_1_v) = sin_theta;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_1_w) = 0.0;
 
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_2_u) = -sin_theta;  // ê_θ · x̂
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_2_v) = cos_theta;   // ê_θ · ŷ
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_2_w) = 0.0;         // ê_θ · ẑ
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_2_u) = -sin_theta;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_2_v) = cos_theta;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_2_w) = 0.0;
 
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_u) = 0.0;         // ê_z · x̂
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_v) = 0.0;         // ê_z · ŷ
-      k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_w) = 1.0;         // ê_z · ẑ
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_u) = 0.0;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_v) = 0.0;
+      k_curvilinear_mesh_h(idx,curv_mesh_var::e_3_w) = 1.0;
 
       k_curvilinear_mesh_h(idx,curv_mesh_var::xg) = x;
       k_curvilinear_mesh_h(idx,curv_mesh_var::yg) = y;
       k_curvilinear_mesh_h(idx,curv_mesh_var::zg) = z;
     }
     );
-
+    type = grid_type::CYLINDRICAL;
     Kokkos::deep_copy(k_curvilinear_mesh_d, k_curvilinear_mesh_h);
   }
 
   // This function utilizes an existing grid for nx,ny,nz.
   // It does not use the Length, Width, or Height of the grid.
   // Nor does it use the defined grid cells in the grid.
-  void init_spherical_grid(
-    // Spherical grid parameters
-    double r_min,           // Inner radius
-    double r_max,           // Outer radius
-    double theta_min,       // Starting angle (radians)
-    double theta_max,       // Ending angle (radians)
-    double phi_min,           // Starting angle (radians)
-    double phi_max,           // Ending angle (radians)
-    bool wrap_r = false,    // Wrap in radial direction (usually false)
-    bool wrap_theta = true, // Wrap in azimuthal direction (true for full sphere)
-    bool wrap_phi = true,    // Wrap in polar direction (true for full sphere)
-    double x_axis = 0.0,    // x-coordinate of spherical axis
-    double y_axis = 0.0,    // y-coordinate of spherical axis
-    double z_offset = 0.0   // z-offset if needed
-    )
+  void init_spherical_grid()
   {
     // Grid dimensions for indexing
     const int ghost_layers_per_side = 2;
-    const int nx_total = nx + 2 * ghost_layers_per_side;
-    const int ny_total = ny + 2 * ghost_layers_per_side;
-    const int nz_total = nz + 2 * ghost_layers_per_side;
+    const int nx_total = gnx + 2 * ghost_layers_per_side;
+    const int ny_total = gny + 2 * ghost_layers_per_side;
+    const int nz_total = gnz + 2 * ghost_layers_per_side;
     //printf("nv=%d",nv);
     const int nv_cm = nx_total * ny_total * nz_total;
     k_curvilinear_mesh_d = k_curvilinear_mesh_t("k_curvilinear_mesh_d", nv_cm);
     k_curvilinear_mesh_h = Kokkos::create_mirror_view(k_curvilinear_mesh_d);
 
     // Compute the total global grid dimensions.
-    const int global_nx = nx * gpx;
-    const int global_ny = ny * gpy;
-    const int global_nz = nz * gpz;
+    const int global_nx = gnx * gpx;
+    const int global_ny = gny * gpy;
+    const int global_nz = gnz * gpz;
 
     // Compute grid spacing
-    const double dr = (r_max - r_min) / (global_nx);
-    const double dtheta = (theta_max - theta_min) / (global_ny);
-    const double dphi = (phi_max - phi_min) / (global_nz);
+    const double dr = (x1 - x0) / (global_nx);
+    const double dtheta = (y1 - y0) / (global_ny);
+    const double dphi = (z1 - z0) / (global_nz);
 
     // Compute this rank's low end 3D position in the processor grid
     const int rank_i = world_rank % gpx;
@@ -434,9 +402,9 @@ typedef struct grid {
     const int rank_k = world_rank / (gpx * gpy);
 
     // Compute the low end 3D global index for this rank including ghost cells.    
-    int global_i_base = nx * rank_i - ghost_layers_per_side;
-    int global_j_base = ny * rank_j - ghost_layers_per_side;
-    int global_k_base = nz * rank_k - ghost_layers_per_side;
+    int global_i_base = gnx * rank_i - ghost_layers_per_side;
+    int global_j_base = gny * rank_j - ghost_layers_per_side;
+    int global_k_base = gnz * rank_k - ghost_layers_per_side;
 
     Kokkos::parallel_for(
     "Fill curvilinear mesh view",
@@ -449,9 +417,9 @@ typedef struct grid {
       int global_j_cell = global_j_base + j;
       int global_k_cell = global_k_base + k;
 
-      double r_i = r_min + (global_i_cell + 0.5) * dr;
-      double theta_j = theta_min + (global_j_cell + 0.5) * dtheta;
-      double phi_k = phi_min + (global_k_cell + 0.5) * dphi;
+      double r_i = x0 + (global_i_cell + 0.5) * dr;
+      double theta_j = y1 + (global_j_cell + 0.5) * dtheta;
+      double phi_k = z0 + (global_k_cell + 0.5) * dphi;
 
       if (r_i < 0.0) {
           r_i = -r_i;
@@ -463,9 +431,9 @@ typedef struct grid {
       double cos_phi = Kokkos::cos(phi_k);
       double sin_phi = Kokkos::sin(phi_k);
 
-      double x = x_axis + r_i * sin_theta * cos_phi;
-      double y = y_axis + r_i * sin_theta * sin_phi;
-      double z = z_offset + r_i * cos_theta;
+      double x = 0 + r_i * sin_theta * cos_phi;
+      double y = 0 + r_i * sin_theta * sin_phi;
+      double z = 0 + r_i * cos_theta;
 
       k_curvilinear_mesh_h(idx,curv_mesh_var::h_1) = 1.0;              // h_r
       k_curvilinear_mesh_h(idx,curv_mesh_var::h_2) = r_i;              // h_theta
@@ -492,7 +460,7 @@ typedef struct grid {
       k_curvilinear_mesh_h(idx,curv_mesh_var::zg) = z;
     }
     );
-
+    type = grid_type::SPHERICAL;
     Kokkos::deep_copy(k_curvilinear_mesh_d, k_curvilinear_mesh_h);
   }
 
@@ -564,34 +532,100 @@ typedef struct grid {
   if( (y)>(yh) ) (z)++;                                    \
   if( (y)>(yh) ) (y) = (yl)
 
-inline void grid_t::local_to_global_cart(int voxel_i, float dx_p, float dy_p, float dz_p,
+KOKKOS_INLINE_FUNCTION
+void grid_t::local_to_global_cart(int voxel_i, float dx_p, float dy_p, float dz_p,
                                         double& x_out, double& y_out, double& z_out) const {
-    int i,j,k;
-    UNVOXEL(voxel_i,i,j,k,nx,ny,nz);
- 
-    float dx = dx_p;
-    float dy = dy_p;
- 
-    double dr = (x1 - x0) / nx;
-    double dtheta = (y1 - y0) / ny;
-    double dz = (1.0 - 0) / nz;
-    double r = x0 + (i - 1 +0.5) * dr;
-    double theta = y0 + (j - 1 +0.5) * dtheta;
-    double z = (k - 1 +0.5) * dz;
- 
-    double r_relative = 0.5 * dx * dr;
-    double theta_relative = 0.5 * dy * dtheta;
- 
- 
-    double r_phys = r + r_relative;
-    double theta_phys = theta + theta_relative;
-
-    x_out = r_phys*cosf(theta_phys);
-    y_out = r_phys*sinf(theta_phys);
-    z_out = 0.0f;
+    int i, j, k;
+    UNVOXEL(voxel_i, i, j, k, nx, ny, nz);
+    
+    if (type == grid_type::CARTESIAN) {
+        local_to_global(voxel_i, dx_p, dy_p, dz_p, x_out, y_out, z_out);
+    } else if (type == grid_type::CYLINDRICAL) {
+        // Cylindrical: (r, theta, z) -> (x, y, z)
+        double dr = (x1 - x0) / nx;
+        double dtheta = (y1 - y0) / ny;
+        double dz_grid = (z1 - z0) / nz;  // Fixed!
+        
+        double r = x0 + (i - 0.5) * dr;
+        double theta = y0 + (j - 0.5) * dtheta;
+        double z = z0 + (k - 0.5) * dz_grid;  // Fixed!
+        
+        double r_relative = 0.5 * dx_p * dr;
+        double theta_relative = 0.5 * dy_p * dtheta;
+        double z_relative = 0.5 * dz_p * dz_grid;  // Fixed!
+        
+        double r_phys = r + r_relative;
+        double theta_phys = theta + theta_relative;
+        double z_phys = z + z_relative;  // Fixed!
+        
+        x_out = r_phys * cosf(theta_phys);
+        y_out = r_phys * sinf(theta_phys);
+        z_out = z_phys;
+        
+    } else if (type == grid_type::SPHERICAL) {
+        // Spherical: (r, theta, phi) -> (x, y, z)
+        double dr = (x1 - x0) / nx;
+        double dtheta = (y1 - y0) / ny;
+        double dphi = (z1 - z0) / nz;
+        
+        double r = x0 + (i - 0.5) * dr;
+        double theta = y0 + (j - 0.5) * dtheta;
+        double phi = z0 + (k - 0.5) * dphi;
+        
+        double r_relative = 0.5 * dx_p * dr;
+        double theta_relative = 0.5 * dy_p * dtheta;
+        double phi_relative = 0.5 * dz_p * dphi;
+        
+        double r_phys = r + r_relative;
+        double theta_phys = theta + theta_relative;
+        double phi_phys = phi + phi_relative;
+        
+        x_out = r_phys * sinf(theta_phys) * cosf(phi_phys);
+        y_out = r_phys * sinf(theta_phys) * sinf(phi_phys);
+        z_out = r_phys * cosf(theta_phys);
+        
+    } else {
+        // Use B-spline interpolation from stored mesh data
+        float Sx_m1 = 0.125f * (1.0f - dx_p) * (1.0f - dx_p);
+        float Sx_0  = 0.75f - dx_p * dx_p;
+        float Sx_p1 = 0.125f * (1.0f + dx_p) * (1.0f + dx_p);
+        
+        float Sy_m1 = 0.125f * (1.0f - dy_p) * (1.0f - dy_p);
+        float Sy_0  = 0.75f - dy_p * dy_p;
+        float Sy_p1 = 0.125f * (1.0f + dy_p) * (1.0f + dy_p);
+        
+        float Sz_m1 = 0.125f * (1.0f - dz_p) * (1.0f - dz_p);
+        float Sz_0  = 0.75f - dz_p * dz_p;
+        float Sz_p1 = 0.125f * (1.0f + dz_p) * (1.0f + dz_p);
+        
+        x_out = 0.0;
+        y_out = 0.0;
+        z_out = 0.0;
+        
+        // 3x3x3 stencil interpolation
+        for (int kk = -1; kk <= 1; kk++) {
+            float Sz = (kk == -1) ? Sz_m1 : ((kk == 0) ? Sz_0 : Sz_p1);
+            
+            for (int jj = -1; jj <= 1; jj++) {
+                float Sy = (jj == -1) ? Sy_m1 : ((jj == 0) ? Sy_0 : Sy_p1);
+                
+                for (int ii = -1; ii <= 1; ii++) {
+                    float Sx = (ii == -1) ? Sx_m1 : ((ii == 0) ? Sx_0 : Sx_p1);
+                    
+                    int node_idx = GRID_TO_MESH(i + ii, j + jj, k + kk, nx, ny, nz);
+                    float weight = Sx * Sy * Sz;
+                    
+                    x_out += weight * k_curvilinear_mesh_h(node_idx, curv_mesh_var::xg);
+                    y_out += weight * k_curvilinear_mesh_h(node_idx, curv_mesh_var::yg);
+                    z_out += weight * k_curvilinear_mesh_h(node_idx, curv_mesh_var::zg);
+                }
+            }
+        }
+    }
 }
 
-inline void grid_t::local_to_global(int voxel_i, float dx_p, float dy_p, float dz_p,
+KOKKOS_INLINE_FUNCTION
+void grid_t::local_to_global(int voxel_i, float dx_p, float dy_p, float dz_p,
                                           double& xi_out, double& eta_out, double& mu_out) const {
   // Get local voxel indices
   int ix, iy, iz;

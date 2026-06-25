@@ -35,10 +35,7 @@ begin_initialization {
   define_material("vacuum",1.0,1.0,0.0);
   define_field_array();
 
-  grid->init_cylindrical_grid(0.1, 30.0,
-                              0, 2*M_PI,
-                              0, 1.0,
-                              false, true, false);
+  grid->init_cylindrical_grid();
   grid->init_kokkos_grid(6*grid->nv);
 
   double q = 1.0;

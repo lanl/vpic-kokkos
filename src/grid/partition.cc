@@ -41,6 +41,10 @@ partition_periodic_box( grid_t * g,
   double f;
   int rank, px, py, pz; 
 
+  g->gx0 = gx0; g->gy0 = gy0; g->gz0 = gz0;
+    g->gx1 = gx1; g->gy1 = gy1; g->gz1 = gz1;
+    g->gnx = gnx; g->gny = gny; g->gnz = gnz;
+
   // Make sure the grid can be setup
 
   if( !g ) ERROR(( "NULL grid" ));

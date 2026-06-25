@@ -1439,18 +1439,76 @@ advance_p_kokkos_gpu(
     float jac;
 
     // Compute reciprocal basis at current position
-    compute_reciprocal_basis(
-        g->k_curvilinear_mesh_d,
-        dx, dy, dz, ii, nx, ny, nz,
-        gdx, gdy, gdz,
-        grad_xi_x, grad_xi_y, grad_xi_z,
-        grad_eta_x, grad_eta_y, grad_eta_z,
-        grad_mu_x, grad_mu_y, grad_mu_z,
-        jac);
-    
+    if (g->type == grid_type::CARTESIAN) {
+        grad_xi_x = 2.0f / gdx;
+        grad_xi_y = 0.0f;
+        grad_xi_z = 0.0f;
+        grad_eta_x = 0.0f;
+        grad_eta_y = 2.0f / gdy;
+        grad_eta_z = 0.0f;
+        grad_mu_x = 0.0f;
+        grad_mu_y = 0.0f;
+        grad_mu_z = 2.0f / gdz;
+        jac = gdx * gdy * gdz / 8.0f;
+        
+    } else if (g->type == grid_type::CYLINDRICAL) {
+        double x_cart, y_cart, z_cart;
+        g->local_to_global_cart(ii, dx, dy, dz, x_cart, y_cart, z_cart);
+        
+        float r_phys = sqrtf(x_cart*x_cart + y_cart*y_cart);
+        float theta_phys = atan2f(y_cart, x_cart);
+        float cos_th = cosf(theta_phys);
+        float sin_th = sinf(theta_phys);
+        
+        grad_xi_x = (2.0f / gdx) * cos_th;
+        grad_xi_y = (2.0f / gdx) * sin_th;
+        grad_xi_z = 0.0f;
+        grad_eta_x = (-2.0f / gdy) * sin_th / r_phys;
+        grad_eta_y = (2.0f / gdy) * cos_th / r_phys;
+        grad_eta_z = 0.0f;
+        grad_mu_x = 0.0f;
+        grad_mu_y = 0.0f;
+        grad_mu_z = 2.0f / gdz;
+        jac = r_phys * gdx * gdy * gdz / 8.0f;
+        
+    } else if (g->type == grid_type::SPHERICAL) {
+        double x_cart, y_cart, z_cart;
+        g->local_to_global_cart(ii, dx, dy, dz, x_cart, y_cart, z_cart);
+        
+        float r_phys = sqrtf(x_cart*x_cart + y_cart*y_cart + z_cart*z_cart);
+        float theta_phys = acosf(z_cart / r_phys);
+        float phi_phys = atan2f(y_cart, x_cart);
+        float sin_theta = sinf(theta_phys);
+        float cos_theta = cosf(theta_phys);
+        float sin_phi = sinf(phi_phys);
+        float cos_phi = cosf(phi_phys);
+        
+        grad_xi_x = (2.0f / gdx) * sin_theta * cos_phi;
+        grad_xi_y = (2.0f / gdx) * sin_theta * sin_phi;
+        grad_xi_z = (2.0f / gdx) * cos_theta;
+        grad_eta_x = (2.0f / gdy) * cos_theta * cos_phi / r_phys;
+        grad_eta_y = (2.0f / gdy) * cos_theta * sin_phi / r_phys;
+        grad_eta_z = (2.0f / gdy) * (-sin_theta) / r_phys;
+        grad_mu_x = (2.0f / gdz) * (-sin_phi) / (r_phys * sin_theta);
+        grad_mu_y = (2.0f / gdz) * cos_phi / (r_phys * sin_theta);
+        grad_mu_z = 0.0f;
+        jac = r_phys * r_phys * sin_theta * gdx * gdy * gdz / 8.0f;
+        
+    } else {
+        compute_reciprocal_basis(
+            g->k_curvilinear_mesh_d,
+            dx, dy, dz, ii, nx, ny, nz,
+            gdx, gdy, gdz,
+            grad_xi_x, grad_xi_y, grad_xi_z,
+            grad_eta_x, grad_eta_y, grad_eta_z,
+            grad_mu_x, grad_mu_y, grad_mu_z,
+            jac);
+    }
+
     float d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
     float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
     float d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
+
 
     float inv_jac = 1.0f / jac;
 
@@ -1525,38 +1583,72 @@ advance_p_kokkos_gpu(
     }
     // END GEO INTERPOLATION
 
-    // Compute reciprocal basis at predicted half-step position in the correct cell
-    compute_reciprocal_basis(
-        g->k_curvilinear_mesh_d,
-        dx_local, dy_local, dz_local, ii_pred, nx, ny, nz, // use geo interp here
-        gdx, gdy, gdz,
-        grad_xi_x, grad_xi_y, grad_xi_z,
-        grad_eta_x, grad_eta_y, grad_eta_z,
-        grad_mu_x, grad_mu_y, grad_mu_z,
-        jac);
-
-    // ANALYTICAL OVERRIDE for cylindrical coordinates
-    // #ifndef __CUDA_ARCH__
-    // {
-    //   double x_cart, y_cart, z_cart;
-    //   g->local_to_global_cart(ii_pred, dx_local, dy_local, dz_local, x_cart, y_cart, z_cart);
-    //   double r_phys = sqrtf(x_cart*x_cart + y_cart*y_cart);
-    //   double theta_phys = atan2f(y_cart, x_cart);
-    //   double cos_th = cosf(theta_phys);
-    //   double sin_th = sinf(theta_phys);
-    //   // Analytical reciprocal basis for cylindrical
-    //   grad_xi_x = (2.0f / gdx) * cos_th;
-    //   grad_xi_y = (2.0f / gdx) * sin_th;
-    //   grad_xi_z = 0.0f;
-    //   grad_eta_x = (-2.0f / gdy) * sin_th / r_phys;
-    //   grad_eta_y = (2.0f / gdy) * cos_th / r_phys;
-    //   grad_eta_z = 0.0f;
-    //   grad_mu_x = 0.0f;
-    //   grad_mu_y = 0.0f;
-    //   grad_mu_z = 2.0f / gdz;
-    //   jac = r_phys * gdx * gdy * gdz / 8.0f;
-    // }
-    // #endif
+    //Recompute reciprocal basis at predicted half-step position
+        if (g->type == grid_type::CARTESIAN) {
+        grad_xi_x = 2.0f / gdx;
+        grad_xi_y = 0.0f;
+        grad_xi_z = 0.0f;
+        grad_eta_x = 0.0f;
+        grad_eta_y = 2.0f / gdy;
+        grad_eta_z = 0.0f;
+        grad_mu_x = 0.0f;
+        grad_mu_y = 0.0f;
+        grad_mu_z = 2.0f / gdz;
+        jac = gdx * gdy * gdz / 8.0f;
+        
+    } else if (g->type == grid_type::CYLINDRICAL) {
+        double x_cart, y_cart, z_cart;
+        g->local_to_global_cart(ii_pred, dx_local, dy_local, dz_local, x_cart, y_cart, z_cart);
+        
+        double r_phys = sqrtf(x_cart*x_cart + y_cart*y_cart);
+        double theta_phys = atan2f(y_cart, x_cart);
+        double cos_th = cosf(theta_phys);
+        double sin_th = sinf(theta_phys);
+        
+        grad_xi_x = (2.0f / gdx) * cos_th;
+        grad_xi_y = (2.0f / gdx) * sin_th;
+        grad_xi_z = 0.0f;
+        grad_eta_x = (-2.0f / gdy) * sin_th / r_phys;
+        grad_eta_y = (2.0f / gdy) * cos_th / r_phys;
+        grad_eta_z = 0.0f;
+        grad_mu_x = 0.0f;
+        grad_mu_y = 0.0f;
+        grad_mu_z = 2.0f / gdz;
+        jac = r_phys * gdx * gdy * gdz / 8.0f;
+        
+    } else if (g->type == grid_type::SPHERICAL) {
+        double x_cart, y_cart, z_cart;
+        g->local_to_global_cart(ii_pred, dx_local, dy_local, dz_local, x_cart, y_cart, z_cart);
+        
+        double r_phys = sqrtf(x_cart*x_cart + y_cart*y_cart + z_cart*z_cart);
+        double theta_phys = acosf(z_cart / r_phys);
+        double phi_phys = atan2f(y_cart, x_cart);
+        double sin_theta = sinf(theta_phys);
+        double cos_theta = cosf(theta_phys);
+        double sin_phi = sinf(phi_phys);
+        double cos_phi = cosf(phi_phys);
+        
+        grad_xi_x = (2.0f / gdx) * sin_theta * cos_phi;
+        grad_xi_y = (2.0f / gdx) * sin_theta * sin_phi;
+        grad_xi_z = (2.0f / gdx) * cos_theta;
+        grad_eta_x = (2.0f / gdy) * cos_theta * cos_phi / r_phys;
+        grad_eta_y = (2.0f / gdy) * cos_theta * sin_phi / r_phys;
+        grad_eta_z = (2.0f / gdy) * (-sin_theta) / r_phys;
+        grad_mu_x = (2.0f / gdz) * (-sin_phi) / (r_phys * sin_theta);
+        grad_mu_y = (2.0f / gdz) * cos_phi / (r_phys * sin_theta);
+        grad_mu_z = 0.0f;
+        jac = r_phys * r_phys * sin_theta * gdx * gdy * gdz / 8.0f;
+        
+    } else { // grid_type::GENERIC
+        compute_reciprocal_basis(
+            g->k_curvilinear_mesh_d,
+            dx_local, dy_local, dz_local, ii_pred, nx, ny, nz,
+            gdx, gdy, gdz,
+            grad_xi_x, grad_xi_y, grad_xi_z,
+            grad_eta_x, grad_eta_y, grad_eta_z,
+            grad_mu_x, grad_mu_y, grad_mu_z,
+            jac);
+    }
 
     // Recompute using half-step reciprocal basis
     d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
