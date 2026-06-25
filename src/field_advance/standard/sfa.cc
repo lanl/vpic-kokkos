@@ -234,7 +234,7 @@ new_standard_field_array( grid_t           * RESTRICT g,
   Kokkos::parallel_for("Clear rhob accumulation array on host", host_execution_policy(0, g->nv), KOKKOS_LAMBDA (int i) {
           fa->k_f_rhob_accum_h(i) = 0;
           });
-  if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for the fields ACTUALLY\n",
+  if(!world_rank) fprintf(stderr, "Mallocing %.4f GiB for the fields\n",
           (double (g->nv*sizeof(field_t)))/pow(2,30));
 
   MALLOC_ALIGNED( fa->f, g->nv, 128 );
@@ -242,22 +242,20 @@ new_standard_field_array( grid_t           * RESTRICT g,
   fa->g = g;
   fa->params = create_sfa_params( g, m_list, damp );
   fa->kernel[0] = sfa_kernels;
+  
+  fa->kernel->advance_b         = hyb_advance_b;
+  fa->kernel->advance_e         = hyb_advance_e;
 
-  // Use kokkos versions which have curvilinear coordinate support
-  fa->kernel->advance_b         = advance_b;
-  fa->kernel->advance_e         = advance_e_kokkos;  // Use kokkos version!
-
-// TEMPORARILY DISABLED: Use standard advance instead of hybrid for curvilinear testing
-//#ifdef HYB_USE_SEPARATE_PE
-//  fa->kernel->advance_b         = hyb_advance_bpe;
-//  fa->kernel->advance_e         = hyb_advance_eue;
-//  //  fa->kernel->hyb_init          = hyb_advance_b;
-//#endif
-//#ifdef HYB_USE_STATIC_E
-//  fa->kernel->advance_b         = hyb_advance_pe;
-//  fa->kernel->advance_e         = hyb_static_e;
-//#endif
-  fa->kernel->hyb_init          = advance_b;
+#ifdef HYB_USE_SEPARATE_PE
+  fa->kernel->advance_b         = hyb_advance_bpe;
+  fa->kernel->advance_e         = hyb_advance_eue;
+  //  fa->kernel->hyb_init          = hyb_advance_b;
+#endif
+#ifdef HYB_USE_STATIC_E
+  fa->kernel->advance_b         = hyb_advance_pe;
+  fa->kernel->advance_e         = hyb_static_e;
+#endif
+  fa->kernel->hyb_init          = hyb_advance_b;
   fa->kernel->hyb_smooth_b      = hyb_smooth_b;
   fa->kernel->hyb_smooth_eb_interp = hyb_smooth_eb_interp;
 

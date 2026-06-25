@@ -35,7 +35,7 @@ begin_initialization {
   define_material("vacuum",1.0,1.0,0.0);
   define_field_array();
 
-  grid->init_curvilinear_grid();
+  grid->init_cartesian_grid();
   grid->init_kokkos_grid(6*grid->nv);
 
   double q = 1.0;

@@ -207,7 +207,7 @@ typedef struct grid {
   >;
 
   //Initiates the Curvilinear grid components to a default uniform Cartesian grid format.
-  void init_curvilinear_grid()
+  void init_cartesian_grid()
   {
     // Grid dimensions for indexing
     const int ghost_layers_per_side = 2;
@@ -281,6 +281,10 @@ typedef struct grid {
     Kokkos::deep_copy(k_curvilinear_mesh_d, k_curvilinear_mesh_h);
   }
 
+  void init_curvilinear_grid()
+  {
+    init_cartesian_grid();
+  }
 
   // This function utilizes an existing grid for nx,ny,nz.
   // It does not use the Length, Width, or Height of the grid.
