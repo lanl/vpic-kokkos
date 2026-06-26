@@ -6,62 +6,59 @@
 
 #define F(ind,v) k_field(f##ind##_index, field_var::v)
 
-// Curvilinear scale factor helper
-#define H(ind, comp) k_curv(m##ind, curv_mesh_var::h_##comp)
+#define ROTEX()  ( inv_h2h3 * (                                    \
+    py * (h3_y * F(y,ez) - h3_my * F(my,ez)) -                     \
+    pz * (h2_z * F(z,ey) - h2_mz * F(mz,ey)) ) )
 
-// Curvilinear ROT macros with scale factors
-#define  ROTEX()  ( (1.0f / (h_eta * h_mu)) * ( \
-    py * (h_mu_y * F(y,ez) - h_mu_my * F(my,ez)) - \
-    pz * (h_eta_z * F(z,ey) - h_eta_mz * F(mz,ey)) ) )
+#define ROTEY()  ( inv_h1h3 * (                                    \
+    pz * (h1_z * F(z,ex) - h1_mz * F(mz,ex)) -                     \
+    px * (h3_x * F(x,ez) - h3_mx * F(mx,ez)) ) )
 
-#define  ROTEY()  ( (1.0f / (h_mu * h_xi)) * ( \
-    pz * (h_xi_z * F(z,ex) - h_xi_mz * F(mz,ex)) - \
-    px * (h_mu_x * F(x,ez) - h_mu_mx * F(mx,ez)) ) )
+#define ROTEZ()  ( inv_h1h2 * (                                    \
+    px * (h2_x * F(x,ey) - h2_mx * F(mx,ey)) -                     \
+    py * (h1_y * F(y,ex) - h1_my * F(my,ex)) ) )
 
-#define  ROTEZ()  ( (1.0f / (h_xi * h_eta)) * ( \
-    px * (h_eta_x * F(x,ey) - h_eta_mx * F(mx,ey)) - \
-    py * (h_xi_y * F(y,ex) - h_xi_my * F(my,ex)) ) )
-
-#define INIT_STENCIL()                                \
-  size_t f0_index  = VOXEL(x,   y,   z,    nx,ny,nz); \
-  size_t fx_index  = VOXEL(x+1, y,   z,    nx,ny,nz); \
-  size_t fy_index  = VOXEL(x,   y+1, z,    nx,ny,nz); \
-  size_t fz_index  = VOXEL(x,   y,   z+1,  nx,ny,nz); \
-  size_t fmx_index = VOXEL(x-1, y,   z,    nx,ny,nz); \
-  size_t fmy_index = VOXEL(x,   y-1, z,    nx,ny,nz); \
-  size_t fmz_index = VOXEL(x,   y,   z-1,  nx,ny,nz); \
-  size_t m0  = VOXEL_TO_MESH(f0_index,  nx, ny, nz); \
-  size_t mx  = VOXEL_TO_MESH(fx_index,  nx, ny, nz); \
-  size_t my  = VOXEL_TO_MESH(fy_index,  nx, ny, nz); \
-  size_t mz  = VOXEL_TO_MESH(fz_index,  nx, ny, nz); \
-  size_t mmx = VOXEL_TO_MESH(fmx_index, nx, ny, nz); \
-  size_t mmy = VOXEL_TO_MESH(fmy_index, nx, ny, nz); \
-  size_t mmz = VOXEL_TO_MESH(fmz_index, nx, ny, nz); \
-  float h_xi = H(0, 1); \
-  float h_eta = H(0, 2); \
-  float h_mu = H(0, 3); \
-  float h_xi_x = H(x, 1); \
-  float h_eta_x = H(x, 2); \
-  float h_mu_x = H(x, 3); \
-  float h_xi_y = H(y, 1); \
-  float h_eta_y = H(y, 2); \
-  float h_mu_y = H(y, 3); \
-  float h_xi_z = H(z, 1); \
-  float h_eta_z = H(z, 2); \
-  float h_mu_z = H(z, 3); \
-  float h_xi_mx = H(mx, 1); \
-  float h_eta_mx = H(mx, 2); \
-  float h_mu_mx = H(mx, 3); \
-  float h_xi_my = H(my, 1); \
-  float h_eta_my = H(my, 2); \
-  float h_mu_my = H(my, 3); \
-  float h_xi_mz = H(mz, 1); \
-  float h_eta_mz = H(mz, 2); \
-  float h_mu_mz = H(mz, 3); \
-  if (h_xi == 0.0f || h_eta == 0.0f || h_mu == 0.0f || \
-      isnan(h_xi) || isnan(h_eta) || isnan(h_mu)) { \
-    printf("ERROR at voxel(%d,%d,%d): h_xi=%e h_eta=%e h_mu=%e\n", x, y, z, h_xi, h_eta, h_mu); \
-  }
+#define INIT_STENCIL()                                               \
+  size_t f0_index  = VOXEL(x,   y,   z,    nx,ny,nz);               \
+  size_t fx_index  = VOXEL(x+1, y,   z,    nx,ny,nz);               \
+  size_t fy_index  = VOXEL(x,   y+1, z,    nx,ny,nz);               \
+  size_t fz_index  = VOXEL(x,   y,   z+1,  nx,ny,nz);               \
+  size_t fmx_index = VOXEL(x-1, y,   z,    nx,ny,nz);               \
+  size_t fmy_index = VOXEL(x,   y-1, z,    nx,ny,nz);               \
+  size_t fmz_index = VOXEL(x,   y,   z-1,  nx,ny,nz);               \
+  /* Curvilinear mesh data */                                        \
+  size_t m0_index  = GRID_TO_MESH(x,   y,   z,   nx, ny, nz);       \
+  size_t mx_index  = GRID_TO_MESH(x+1, y,   z,   nx, ny, nz);       \
+  size_t my_index  = GRID_TO_MESH(x,   y+1, z,   nx, ny, nz);       \
+  size_t mz_index  = GRID_TO_MESH(x,   y,   z+1, nx, ny, nz);       \
+  size_t mmx_index = GRID_TO_MESH(x-1, y,   z,   nx, ny, nz);       \
+  size_t mmy_index = GRID_TO_MESH(x,   y-1, z,   nx, ny, nz);       \
+  size_t mmz_index = GRID_TO_MESH(x,   y,   z-1, nx, ny, nz);       \
+  /* Load all scale factors */                                       \
+  float h1_0  = k_curv_mesh(m0_index,  curv_mesh_var::h_1);          \
+  float h2_0  = k_curv_mesh(m0_index,  curv_mesh_var::h_2);          \
+  float h3_0  = k_curv_mesh(m0_index,  curv_mesh_var::h_3);          \
+  float h1_x  = k_curv_mesh(mx_index,  curv_mesh_var::h_1);          \
+  float h2_x  = k_curv_mesh(mx_index,  curv_mesh_var::h_2);          \
+  float h3_x  = k_curv_mesh(mx_index,  curv_mesh_var::h_3);          \
+  float h1_mx = k_curv_mesh(mmx_index, curv_mesh_var::h_1);          \
+  float h2_mx = k_curv_mesh(mmx_index, curv_mesh_var::h_2);          \
+  float h3_mx = k_curv_mesh(mmx_index, curv_mesh_var::h_3);          \
+  float h1_y  = k_curv_mesh(my_index,  curv_mesh_var::h_1);          \
+  float h2_y  = k_curv_mesh(my_index,  curv_mesh_var::h_2);          \
+  float h3_y  = k_curv_mesh(my_index,  curv_mesh_var::h_3);          \
+  float h1_my = k_curv_mesh(mmy_index, curv_mesh_var::h_1);          \
+  float h2_my = k_curv_mesh(mmy_index, curv_mesh_var::h_2);          \
+  float h3_my = k_curv_mesh(mmy_index, curv_mesh_var::h_3);          \
+  float h1_z  = k_curv_mesh(mz_index,  curv_mesh_var::h_1);          \
+  float h2_z  = k_curv_mesh(mz_index,  curv_mesh_var::h_2);          \
+  float h3_z  = k_curv_mesh(mz_index,  curv_mesh_var::h_3);          \
+  float h1_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_1);          \
+  float h2_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_2);          \
+  float h3_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_3);          \
+  float inv_h2h3 = 1.0f / (h2_0 * h3_0);                             \
+  float inv_h1h3 = 1.0f / (h1_0 * h3_0);                             \
+  float inv_h1h2 = 1.0f / (h1_0 * h2_0);
 
 #define UPDATE_B(delt)               \
   F(0,cbx) = F(0,ox) - delt*ROTEX(); \
@@ -97,10 +94,9 @@ void
 hyb_advance_b(field_array_t * RESTRICT fa,
           float       frac) {
 
-  WARNING(("WE ACTUALLY UPDATED"));
   k_field_t k_field = fa->k_f_d;
-  k_curvilinear_mesh_t k_curv = fa->g->k_curvilinear_mesh_d;
-
+  k_curvilinear_mesh_t k_curv_mesh = fa->g->k_curvilinear_mesh_d;
+  
   grid_t *g   = fa->g;
   size_t nx   = g->nx;
   size_t ny   = g->ny;

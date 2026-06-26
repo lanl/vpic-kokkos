@@ -11,50 +11,53 @@ typedef struct pipeline_args {
 
 #define F(ind,v) k_field(f##ind##_index, field_var::v)
 
-// Curvilinear scale factor helper
-#define H(ind, comp) k_curv(m##ind, curv_mesh_var::h_##comp)
-
 #define INIT_STENCIL()                                               \
-  size_t f0_index  = VOXEL(x,   y,   z,    nx,ny,nz);                \
-  size_t fx_index  = VOXEL(x+1, y,   z,    nx,ny,nz);                \
-  size_t fy_index  = VOXEL(x,   y+1, z,    nx,ny,nz);                \
-  size_t fz_index  = VOXEL(x,   y,   z+1,  nx,ny,nz);                \
-  size_t fmx_index = VOXEL(x-1, y,   z,    nx,ny,nz);                \
-  size_t fmy_index = VOXEL(x,   y-1, z,    nx,ny,nz);                \
-  size_t fmz_index = VOXEL(x,   y,   z-1,  nx,ny,nz);                \
-  size_t m0  = VOXEL_TO_MESH(f0_index,  nx, ny, nz);                 \
-  size_t mx  = VOXEL_TO_MESH(fx_index,  nx, ny, nz);                 \
-  size_t my  = VOXEL_TO_MESH(fy_index,  nx, ny, nz);                 \
-  size_t mz  = VOXEL_TO_MESH(fz_index,  nx, ny, nz);                 \
-  size_t mmx = VOXEL_TO_MESH(fmx_index, nx, ny, nz);                 \
-  size_t mmy = VOXEL_TO_MESH(fmy_index, nx, ny, nz);                 \
-  size_t mmz = VOXEL_TO_MESH(fmz_index, nx, ny, nz);                 \
-  float h_xi = H(0, 1);                                              \
-  float h_eta = H(0, 2);                                             \
-  float h_mu = H(0, 3);                                              \
-  float h_xi_x = H(x, 1);                                            \
-  float h_eta_x = H(x, 2);                                           \
-  float h_mu_x = H(x, 3);                                            \
-  float h_xi_y = H(y, 1);                                            \
-  float h_eta_y = H(y, 2);                                           \
-  float h_mu_y = H(y, 3);                                            \
-  float h_xi_z = H(z, 1);                                            \
-  float h_eta_z = H(z, 2);                                           \
-  float h_mu_z = H(z, 3);                                            \
-  float h_xi_mx = H(mx, 1);                                          \
-  float h_eta_mx = H(mx, 2);                                         \
-  float h_mu_mx = H(mx, 3);                                          \
-  float h_xi_my = H(my, 1);                                          \
-  float h_eta_my = H(my, 2);                                         \
-  float h_mu_my = H(my, 3);                                          \
-  float h_xi_mz = H(mz, 1);                                          \
-  float h_eta_mz = H(mz, 2);                                         \
-  float h_mu_mz = H(mz, 3);                                          \
-  float  rho = half*( (one-hstep)*( F(0,rhof) + F(0,rhofold) ) +     \
-                      hstep*( three*F(0,rhof) - F(0,rhofold)) );     \
-  rho = (rho > den_floor_ohm) ? rho :  den_floor_ohm;                \
+  size_t f0_index  = VOXEL(x,   y,   z,    nx,ny,nz);               \
+  size_t fx_index  = VOXEL(x+1, y,   z,    nx,ny,nz);               \
+  size_t fy_index  = VOXEL(x,   y+1, z,    nx,ny,nz);               \
+  size_t fz_index  = VOXEL(x,   y,   z+1,  nx,ny,nz);               \
+  size_t fmx_index = VOXEL(x-1, y,   z,    nx,ny,nz);               \
+  size_t fmy_index = VOXEL(x,   y-1, z,    nx,ny,nz);               \
+  size_t fmz_index = VOXEL(x,   y,   z-1,  nx,ny,nz);               \
+  /* Load curvilinear mesh indices */                                \
+  size_t m0_index  = GRID_TO_MESH(x,   y,   z,   nx, ny, nz);       \
+  size_t mx_index  = GRID_TO_MESH(x+1, y,   z,   nx, ny, nz);       \
+  size_t my_index  = GRID_TO_MESH(x,   y+1, z,   nx, ny, nz);       \
+  size_t mz_index  = GRID_TO_MESH(x,   y,   z+1, nx, ny, nz);       \
+  size_t mmx_index = GRID_TO_MESH(x-1, y,   z,   nx, ny, nz);       \
+  size_t mmy_index = GRID_TO_MESH(x,   y-1, z,   nx, ny, nz);       \
+  size_t mmz_index = GRID_TO_MESH(x,   y,   z-1, nx, ny, nz);       \
+  /* Load all scale factors needed for curl */                       \
+  float h1_0  = k_curv_mesh(m0_index,  curv_mesh_var::h_1);          \
+  float h2_0  = k_curv_mesh(m0_index,  curv_mesh_var::h_2);          \
+  float h3_0  = k_curv_mesh(m0_index,  curv_mesh_var::h_3);          \
+  float h1_x  = k_curv_mesh(mx_index,  curv_mesh_var::h_1);          \
+  float h2_x  = k_curv_mesh(mx_index,  curv_mesh_var::h_2);          \
+  float h3_x  = k_curv_mesh(mx_index,  curv_mesh_var::h_3);          \
+  float h1_mx = k_curv_mesh(mmx_index, curv_mesh_var::h_1);          \
+  float h2_mx = k_curv_mesh(mmx_index, curv_mesh_var::h_2);          \
+  float h3_mx = k_curv_mesh(mmx_index, curv_mesh_var::h_3);          \
+  float h1_y  = k_curv_mesh(my_index,  curv_mesh_var::h_1);          \
+  float h2_y  = k_curv_mesh(my_index,  curv_mesh_var::h_2);          \
+  float h3_y  = k_curv_mesh(my_index,  curv_mesh_var::h_3);          \
+  float h1_my = k_curv_mesh(mmy_index, curv_mesh_var::h_1);          \
+  float h2_my = k_curv_mesh(mmy_index, curv_mesh_var::h_2);          \
+  float h3_my = k_curv_mesh(mmy_index, curv_mesh_var::h_3);          \
+  float h1_z  = k_curv_mesh(mz_index,  curv_mesh_var::h_1);          \
+  float h2_z  = k_curv_mesh(mz_index,  curv_mesh_var::h_2);          \
+  float h3_z  = k_curv_mesh(mz_index,  curv_mesh_var::h_3);          \
+  float h1_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_1);          \
+  float h2_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_2);          \
+  float h3_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_3);          \
+  /* Precompute inverse products for curl normalization */           \
+  float inv_h2h3 = 1.0f / (h2_0 * h3_0);                             \
+  float inv_h1h3 = 1.0f / (h1_0 * h3_0);                             \
+  float inv_h1h2 = 1.0f / (h1_0 * h2_0);                             \
+  /* Original fluid quantities */                                    \
+  float  rho = half*( (one-hstep)*( F(0,rhof) + F(0,rhofold) ) +    \
+                      hstep*( three*F(0,rhof) - F(0,rhofold)) );    \
+  rho = (rho > den_floor_ohm) ? rho :  den_floor_ohm;               \
   float  invrho = one/rho;                                           \
-  /*float hallinvrho = (rho > den_floor_ohm) ? invrho : 0 ;*/        \
   float  ux = invrho*half*( (one-hstep)*( F(0,jfx) + F(0,jfxold) ) + \
                             hstep*( three*F(0,jfx) - F(0,jfxold)) ); \
   float  uy = invrho*half*( (one-hstep)*( F(0,jfy) + F(0,jfyold) ) + \
@@ -62,17 +65,25 @@ typedef struct pipeline_args {
   float  uz = invrho*half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + \
                             hstep*( three*F(0,jfz) - F(0,jfzold)) );
 
-// Curvilinear E-field update - rotates through all three components
-// Scale factors indexed: h_1=h_xi(x), h_2=h_eta(y), h_3=h_mu(z)
-// E(x,y,z) computes Ex with y,z derivatives; E(y,z,x) computes Ey with z,x derivatives; etc.
 #define E(x_,y_,z_) \
-  F(0,e##x_) = \
-    invrho * (F(0,cb##z_) + F(0,cb##z_##0)) * ( p##z_*( F(z_,cb##x_) - F(m##z_,cb##x_) ) - p##x_*( F(x_,cb##z_) - F(m##x_,cb##z_)) ) \
-  + invrho * (F(0,cb##y_) + F(0,cb##y_##0)) * ( p##y_*( F(y_,cb##x_) - F(m##y_,cb##x_) ) - p##x_*( F(x_,cb##y_) - F(m##x_,cb##y_)) ) \
-       - u##y_ * (F(0,cb##z_)+F(0,cb##z_##0))  +   u##z_ * (F(0,cb##y_)+F(0,cb##y_##0)) \
-      - invrho * ( p##x_*( F(x_,pe) - F(m##x_,pe)) ) \
-    + do_eta*eta*F(0,tcay)*( p##y_*( F(y_,cb##z_) - F(m##y_,cb##z_) ) - p##z_*( F(z_,cb##y_) - F(m##z_,cb##y_) ) )\
-    - invrho * rVt * F(0,s##x_); \
+  F(0,e##x_) =      \
+    /* Hall term with metric factors */ \
+    invrho * (F(0,cb##z_) + F(0,cb##z_##0)) * inv_h1h2 * \
+      ( py * h1_y * (F(y_,cb##x_) - F(m##y_,cb##x_)) -   \
+        px * h2_x * (F(x_,cb##z_) - F(m##x_,cb##z_)) ) + \
+    invrho * (F(0,cb##y_) + F(0,cb##y_##0)) * inv_h1h3 * \
+      ( pz * h1_z * (F(z_,cb##x_) - F(m##z_,cb##x_)) -   \
+        px * h3_x * (F(x_,cb##y_) - F(m##x_,cb##y_)) ) - \
+    /* Bulk velocity term */ \
+    u##y_ * (F(0,cb##z_)+F(0,cb##z_##0)) + \
+    u##z_ * (F(0,cb##y_)+F(0,cb##y_##0)) - \
+    /* Pressure gradient with metric */ \
+    invrho * px / h1_0 * (F(x_,pe) - F(m##x_,pe)) + \
+    /* Resistive term */ \
+    do_eta*eta*F(0,tcay) * inv_h2h3 * \
+      ( py * h3_y * (F(y_,cb##z_) - F(m##y_,cb##z_)) -   \
+        pz * h2_z * (F(z_,cb##y_) - F(m##z_,cb##y_)) ) - \
+    invrho * rVt * F(0,s##x_); \
   F(0,e##x_) *= F(0,tcaz);
   
 /*
@@ -162,14 +173,13 @@ void
 hyb_advance_e( field_array_t * RESTRICT fa,
                   float frac ) {
   if( !fa     ) ERROR(( "Bad args" ));
-  WARNING(("IT UPDATED"));
 
   pipeline_args_t args[1];
   args->f = fa->f;
   args->p = (sfa_params_t *)fa->params;
   args->g = fa->g;
   k_field_t k_field = fa->k_f_d;
-  k_curvilinear_mesh_t k_curv = fa->g->k_curvilinear_mesh_d;
+  k_curvilinear_mesh_t k_curv_mesh = fa->g->k_curvilinear_mesh_d;
   //const material_coefficient_t * ALIGNED(128) m = args->p->mc;
   const grid_t                 *              g = args->g;
   const size_t nx = g->nx, ny = g->ny, nz = g->nz;

@@ -164,6 +164,7 @@ begin_initialization {
   grid->eta = eta;
   grid->hypereta = hypereta;
   grid->eos_gamma = gamma;
+  grid->init_cartesian_grid();
 
   grid->nsub = 1; // Number of substeps for field solve.
   grid->nsm = 2;  // Number of binomial smoothing passes (to fields & moments).
@@ -287,9 +288,9 @@ sim_log( "Loading fields" );
       y = uniform( rng(0), ymin, ymax );
       z = uniform( rng(0), zmin, zmax );
       
-      ux = normal( rng(0), 0, vthi );                                                                                                                                             
-      uy = normal( rng(0), 0, vthi );
-      uz = normal( rng(0), 0, vthi );
+      ux = 0;                                                                                                                                             
+      uy = 0;
+      uz = 0;
       inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0 );
     }
  }
@@ -687,6 +688,55 @@ begin_diagnostics {
   // be synchronized across processors. Note that this is only checked every
   // few timesteps to eliminate the expensive mp_elapsed call from every
   // timestep. mp_elapsed has an ALL_REDUCE in it!
+
+  if(step() % 10 == 0) {  
+    double kx = 2.0*M_PI/(16.0);
+    double cos_sum = 0.0;
+    double sin_sum = 0.0;
+    double total_weight = 0.0;
+    
+    species_t *ion = find_species_name("ion", species_list);
+    ion->copy_to_host();
+    for(int ip = 0; ip < ion->np; ip++) {
+      particle_t *p = &ion->p[ip];
+      double x, y, z;
+      grid->local_to_global_cart(p->i, p->dx, p->dy, p->dz, x, y, z);
+      
+      cos_sum += p->w * cos(kx * x);  // WEIGHT BY CHARGE!
+      sin_sum += p->w * sin(kx * x);
+      total_weight += p->w;
+    }
+    
+    cos_sum /= total_weight;
+    sin_sum /= total_weight;
+    
+    double amplitude = sqrt(cos_sum*cos_sum + sin_sum*sin_sum);
+    double phase = atan2(sin_sum, cos_sum);
+    double time = step() * grid->dt;
+    
+    // Electric field energy
+    double ex_energy = 0.0;
+    for(int v = 0; v < grid->nv; v++) {
+      ex_energy += 0.5 * field(v).ex * field(v).ex;
+    }
+    ex_energy *= grid->dx * grid->dy * grid->dz;
+    
+    if(rank() == 0) {
+      FILE *fp;
+      if(step() == 0) {
+        fp = fopen("landau_damping.txt", "w");
+        fprintf(fp, "# Landau Damping Data for Ion Acoustic Wave\n");
+        fprintf(fp, "# kx = %e\n", kx);
+        fprintf(fp, "# Ti = %e, Te = %e, cs = %e\n", 1.0/3.0, 1.0/3.0, 1.0);
+        fprintf(fp, "# Columns: time amplitude phase Ex_energy\n");
+      } else {
+        fp = fopen("landau_damping.txt", "a");
+      }
+      
+      fprintf(fp, "%e %e %e %e\n", time, amplitude, phase, ex_energy);
+      fclose(fp);
+    }
+  }
 
 
   if ( (step()>0 && global->quota_check_interval>0

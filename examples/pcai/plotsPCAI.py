@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 #import pywt
 
 datadir = "./data/"
-nx = 64
-nt = 300
+nx = 48
+nt = 101
 
 pi = np.pi
 
