@@ -51,15 +51,15 @@ hydro_dir = rundir + "/hydro/"
 nx = 64
 ny = 1
 nz = 1
-nt = 301
+nt = 151
 nfield_vars = 32
-nhydro_vars = 7
+nhydro_vars = 26
 
 pi = np.pi
 
 xv = np.linspace(0,10.5,num=nx)
 #tv = np.linspace(0,100,num=nt)
-tv = np.linspace(0,60,num=nt)
+tv = np.linspace(0,30,num=nt)
 if (nx>1): dx = xv[1]-xv[0]
 if (nt>1): dt = tv[1]-tv[0]
 
@@ -84,9 +84,9 @@ for t in range(0,nt):
     hydro_file = open(hydro_dir + "T." + str(step) + "/Hhydro." + str(step) + ".0", "rb")
     htemp = np.fromfile(hydro_file, dtype=np.float32, count=nhydro_vars*(nx+2)*(ny+2)*(nz+2), offset=123)
     htemp = np.reshape(htemp, (nx+2, ny+2, nz+2, nhydro_vars), order='F')
-    txx = htemp[1:nx+1, 1:ny+1, 1:nz+1, 4]
-    tyy = htemp[1:nx+1, 1:ny+1, 1:nz+1, 5]
-    tzz = htemp[1:nx+1, 1:ny+1, 1:nz+1, 6]
+    txx = htemp[1:nx+1, 1:ny+1, 1:nz+1, 21]
+    tyy = htemp[1:nx+1, 1:ny+1, 1:nz+1, 22]
+    tzz = htemp[1:nx+1, 1:ny+1, 1:nz+1, 23]
     data["aniso"][idx, :,:,:] = np.divide(np.add(tyy,tzz),(2.0*txx))
     field_file.close
     hydro_file.close
@@ -114,6 +114,7 @@ dby = np.sqrt(np.sum((Q["By"])*(Q["By"]),axis=0))
 dbz = np.sqrt(np.sum((Q["Bz"])*(Q["Bz"]),axis=0))
 
 aniso=np.mean(Q["aniso"],axis=0)
+#print(tv)
 #print(aniso)
 #print(dn)
 beg = 0
@@ -146,7 +147,7 @@ ax2.set_ylabel('d|Ui|')
 ax2.legend()
 
 #plt.xlim([0, 80])
-plt.xlim([0, 60])
+plt.xlim([0, 30])
 plt.ylim([-2, 1])
 
 
@@ -173,7 +174,7 @@ ax3.set_ylabel('P_perp/P_par')
 ax4.set_ylabel('d|B|')
 ax4.legend()
 
-plt.xlim([0, 60])
+plt.xlim([0, 30])
 plt.ylim([-2, 1])
 
 plt.show()
