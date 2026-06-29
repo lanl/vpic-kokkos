@@ -53,7 +53,7 @@ ny = 1
 nz = 1
 nt = 151
 nfield_vars = 32
-nhydro_vars = 26
+nhydro_vars = 10
 
 pi = np.pi
 
@@ -84,9 +84,9 @@ for t in range(0,nt):
     hydro_file = open(hydro_dir + "T." + str(step) + "/Hhydro." + str(step) + ".0", "rb")
     htemp = np.fromfile(hydro_file, dtype=np.float32, count=nhydro_vars*(nx+2)*(ny+2)*(nz+2), offset=123)
     htemp = np.reshape(htemp, (nx+2, ny+2, nz+2, nhydro_vars), order='F')
-    txx = htemp[1:nx+1, 1:ny+1, 1:nz+1, 21]
-    tyy = htemp[1:nx+1, 1:ny+1, 1:nz+1, 22]
-    tzz = htemp[1:nx+1, 1:ny+1, 1:nz+1, 23]
+    txx = htemp[1:nx+1, 1:ny+1, 1:nz+1, 4]
+    tyy = htemp[1:nx+1, 1:ny+1, 1:nz+1, 5]
+    tzz = htemp[1:nx+1, 1:ny+1, 1:nz+1, 6]
     data["aniso"][idx, :,:,:] = np.divide(np.add(tyy,tzz),(2.0*txx))
     field_file.close
     hydro_file.close
@@ -177,7 +177,7 @@ ax4.legend()
 plt.xlim([0, 30])
 plt.ylim([-2, 1])
 
-plt.show()
+#plt.show()
 
 if duy_valid and duz_valid and dby_valid and dbz_valid:
     sys.exit(0)

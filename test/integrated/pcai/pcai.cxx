@@ -391,8 +391,8 @@ sim_log( "Loading fields" );
   sim_log ( "Fields z-stride " << global->fdParams.stride_z );
 
   //  // relative path to electron species data from global header
-  //sprintf(global->hedParams.baseDir, "hydro");
-  //
+  sprintf(global->hedParams.baseDir, "hydro");
+  
 
   //  // relative path to electron species data from global header
   sprintf(global->hHdParams.baseDir, "hydro");
@@ -405,6 +405,7 @@ sim_log( "Loading fields" );
 
   // base file name for fields output
   sprintf(global->hHdParams.baseFileName, "Hhydro");
+  sprintf(global->hedParams.baseFileName, "ehydro");
 
   global->hHdParams.stride_x = 1;
   global->hHdParams.stride_y = 1;
@@ -453,7 +454,8 @@ sim_log( "Loading fields" );
    */
 
   //global->fdParams.output_variables( electric | magnetic );
-  global->hedParams.output_variables( current_density | charge_density | stress_tensor );
+  //global->hedParams.output_variables( current_density | charge_density | stress_tensor );
+  global->hedParams.output_variables( 0 );
   global->hHdParams.output_variables( current_density | charge_density | stress_tensor );
 
 
