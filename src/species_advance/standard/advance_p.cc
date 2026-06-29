@@ -1454,100 +1454,18 @@ advance_p_kokkos_gpu(
     float dy   = p_dy;
     float dz   = p_dz;
     int   ii   = pii;
+
+    float hax, hay, haz, cbx, cby, cbz;
+    const interpolator_t intp = read_interpolator(k_interp, ii); // Load interpolators
+
+    interpolate_e(intp, dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c); // Interpolate E
+
+    interpolate_b(intp, dx, dy, dz, cbx, cby, cbz); // Interpolate B
+
     float ux   = p_ux;                             // Load momentum
     float uy   = p_uy;
     float uz   = p_uz;
     float q    = p_w;
-
-    float grad_xi_x, grad_xi_y, grad_xi_z;
-    float grad_eta_x, grad_eta_y, grad_eta_z;
-    float grad_mu_x, grad_mu_y, grad_mu_z;
-    float jac;
-
-    // Compute reciprocal basis at current position
-    compute_reciprocal_basis(
-        g,
-        dx, dy, dz, ii, nx, ny, nz,
-        gdx, gdy, gdz,
-        grad_xi_x, grad_xi_y, grad_xi_z,
-        grad_eta_x, grad_eta_y, grad_eta_z,
-        grad_mu_x, grad_mu_y, grad_mu_z,
-        jac);
-
-    double v_xi_old  = grad_xi_x  * ux + grad_xi_y  * uy + grad_xi_z  * uz;
-    double v_eta_old = grad_eta_x * ux + grad_eta_y * uy + grad_eta_z * uz;
-    double v_mu_old  = grad_mu_x  * ux + grad_mu_y  * uy + grad_mu_z  * uz;
-
-
-    float inv_jac = 1.0f / jac;
-
-    // Half-step position
-    float dx_mid = dx + 0.5f * (v_xi_old * cdt);
-    float dy_mid = dy + 0.5f * (v_eta_old * cdt);
-    float dz_mid = dz + 0.5f * (v_mu_old * cdt);
-
-    // START GEO INTERPOLATION
-    // Determine which cell the predicted position is in
-    // If d_pred is outside [-1, 1], we need to use the neighbor cell's geometric data
-    int di = 0, dj = 0, dk = 0;
-    float dx_local = dx_mid;
-    float dy_local = dy_mid;
-    float dz_local = dz_mid;
-
-    // Check if we crossed into a neighbor cell
-    if (dx_mid > 1.0f) {
-      di = 1;
-      dx_local = dx_mid - 2.0f; // Shift to neighbor's local coords
-    } else if (dx_mid < -1.0f) {
-      di = -1;
-      dx_local = dx_mid + 2.0f;
-    }
-
-    if (dy_mid > 1.0f) {
-      dj = 1;
-      dy_local = dy_mid - 2.0f;
-    } else if (dy_mid < -1.0f) {
-      dj = -1;
-      dy_local = dy_mid + 2.0f;
-    }
-
-    if (dz_mid > 1.0f) {
-      dk = 1;
-      dz_local = dz_mid - 2.0f;
-    } else if (dz_mid < -1.0f) {
-      dk = -1;
-      dz_local = dz_mid + 2.0f;
-    }
-
-    // Check if we've moved too far (more than 1 cell away)
-    if (fabs(dx_local) > 1.0f || fabs(dy_local) > 1.0f || fabs(dz_local) > 1.0f) {
-      #ifndef __CUDA_ARCH__
-      WARNING(( "Particle predictor exceeded ghost coverage: dx_pred=%e dy_pred=%e dz_pred=%e at p_index=%d. "
-                "Velocity update may be inaccurate. Consider reducing timestep.",
-                dx_mid, dy_mid, dz_mid, p_index ));
-      #endif
-      // Clamp to valid range to avoid out-of-bounds access
-      // dx_local = fmaxf(-1.0f, fminf(1.0f, dx_local));
-      // dy_local = fmaxf(-1.0f, fminf(1.0f, dy_local));
-      // dz_local = fmaxf(-1.0f, fminf(1.0f, dz_local));
-    }
-
-    // Compute the neighbor cell index
-    int ii_pred;
-    int i,j,k;
-    UNVOXEL(ii,i,j,k,nx,ny,nz);
-    // END GEO INTERPOLATION
-    i += di;
-    j += dj;
-    k += dk;
-    ii_pred = VOXEL(i,j,k,nx,ny,nz);
-
-    float hax, hay, haz, cbx, cby, cbz;
-    const interpolator_t intp = read_interpolator(k_interp, ii_pred); // Load interpolators
-
-    interpolate_e(intp, dx_local, dy_local, dz_local, hax, hay, haz, qdt_2mc, dt_2c); // Interpolate E
-
-    interpolate_b(intp, dx_local, dy_local, dz_local, cbx, cby, cbz); // Interpolate B
     
     ux  += hax;                               // Half advance E
     uy  += hay;
@@ -1572,6 +1490,99 @@ advance_p_kokkos_gpu(
     p_uy = uy;
     p_uz = uz;
 
+    float grad_xi_x, grad_xi_y, grad_xi_z;
+    float grad_eta_x, grad_eta_y, grad_eta_z;
+    float grad_mu_x, grad_mu_y, grad_mu_z;
+    float jac;
+
+    // Compute reciprocal basis at current position
+    compute_reciprocal_basis(
+        g,
+        dx, dy, dz, ii, nx, ny, nz,
+        gdx, gdy, gdz,
+        grad_xi_x, grad_xi_y, grad_xi_z,
+        grad_eta_x, grad_eta_y, grad_eta_z,
+        grad_mu_x, grad_mu_y, grad_mu_z,
+        jac);
+
+    float d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
+    float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
+    float d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
+
+
+    float inv_jac = 1.0f / jac;
+
+    // Half-step position
+    float dx_pred = dx + 0.5f * d_xi_dt * cdt;
+    float dy_pred = dy + 0.5f * d_eta_dt * cdt;
+    float dz_pred = dz + 0.5f * d_mu_dt * cdt;
+
+    // START GEO INTERPOLATION
+    // Determine which cell the predicted position is in
+    // If d_pred is outside [-1, 1], we need to use the neighbor cell's geometric data
+    int di = 0, dj = 0, dk = 0;
+    float dx_local = dx_pred;
+    float dy_local = dy_pred;
+    float dz_local = dz_pred;
+
+    // Check if we crossed into a neighbor cell
+    if (dx_pred > 1.0f) {
+      di = 1;
+      dx_local = dx_pred - 2.0f; // Shift to neighbor's local coords
+    } else if (dx_pred < -1.0f) {
+      di = -1;
+      dx_local = dx_pred + 2.0f;
+    }
+
+    if (dy_pred > 1.0f) {
+      dj = 1;
+      dy_local = dy_pred - 2.0f;
+    } else if (dy_pred < -1.0f) {
+      dj = -1;
+      dy_local = dy_pred + 2.0f;
+    }
+
+    if (dz_pred > 1.0f) {
+      dk = 1;
+      dz_local = dz_pred - 2.0f;
+    } else if (dz_pred < -1.0f) {
+      dk = -1;
+      dz_local = dz_pred + 2.0f;
+    }
+
+    // Check if we've moved too far (more than 1 cell away)
+    if (fabs(dx_local) > 1.0f || fabs(dy_local) > 1.0f || fabs(dz_local) > 1.0f) {
+      #ifndef __CUDA_ARCH__
+      WARNING(( "Particle predictor exceeded ghost coverage: dx_pred=%e dy_pred=%e dz_pred=%e at p_index=%d. "
+                "Velocity update may be inaccurate. Consider reducing timestep.",
+                dx_pred, dy_pred, dz_pred, p_index ));
+      #endif
+      // Clamp to valid range to avoid out-of-bounds access
+      // dx_local = fmaxf(-1.0f, fminf(1.0f, dx_local));
+      // dy_local = fmaxf(-1.0f, fminf(1.0f, dy_local));
+      // dz_local = fmaxf(-1.0f, fminf(1.0f, dz_local));
+    }
+
+    // Compute the neighbor cell index
+    int ii_pred = ii;
+    if (di != 0 || dj != 0 || dk != 0) {
+      // Decompose current cell index
+      int iii = ii;
+      int zi = iii / ((nx+2)*(ny+2));
+      iii -= zi*(nx+2)*(ny+2);
+      int yi = iii / (nx+2);
+      int xi = iii - yi*(nx+2);
+
+      // Add offset to get neighbor
+      xi += di;
+      yi += dj;
+      zi += dk;
+
+      // Recompute flat index
+      ii_pred = VOXEL(xi, yi, zi, nx, ny, nz);
+    }
+    // END GEO INTERPOLATION
+
     //Recompute reciprocal basis at predicted half-step position
     compute_reciprocal_basis(
         g,
@@ -1582,26 +1593,27 @@ advance_p_kokkos_gpu(
         grad_mu_x, grad_mu_y, grad_mu_z,
         jac);
 
-    double v_xi  = grad_xi_x  * ux + grad_xi_y  * uy + grad_xi_z  * uz;
-    double v_eta = grad_eta_x * ux + grad_eta_y * uy + grad_eta_z * uz;
-    double v_mu  = grad_mu_x  * ux + grad_mu_y  * uy + grad_mu_z  * uz;
+    // Recompute using half-step reciprocal basis
+    d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
+    d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
+    d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
 
     inv_jac = 1.0f / jac;
 
     // Compute displacement increments
-    v4 = v_xi * cdt;
-    v5 = v_eta * cdt;
-    v6 = v_mu * cdt;
+    v4 = 0.5f * d_xi_dt * cdt;
+    v5 = 0.5f * d_eta_dt * cdt;
+    v6 = 0.5f * d_mu_dt * cdt;
 
     // Streak midpoint (for current deposition)
-    v0 = dx + v4 * 0.5f;
-    v1 = dy + v5 * 0.5f;
-    v2 = dz + v6 * 0.5f;
+    v0 = dx + v4;
+    v1 = dy + v5;
+    v2 = dz + v6;
 
     // Final position (now total displacement is 2*v4, matching cartesian)
-    dx += v4;
-    dy += v5;
-    dz += v6;
+    dx = v0 + v4;
+    dy = v1 + v5;
+    dz = v2 + v6;
 
     // printf("Pushed a particle advance_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, dx, dy, dz, p_ux, p_uy, p_uz);
 
@@ -1683,9 +1695,9 @@ advance_p_kokkos_gpu(
       
 #ifdef SHAPE_NGP
       q *= rV * inv_jac;
-      k_field_scatter_access(ii_pred, field_var::jfx) += q*v_xi;
-      k_field_scatter_access(ii_pred, field_var::jfy) += q*v_eta;
-      k_field_scatter_access(ii_pred, field_var::jfz) += q*v_mu;
+      k_field_scatter_access(ii_pred, field_var::jfx) += q*d_xi_dt;
+      k_field_scatter_access(ii_pred, field_var::jfy) += q*d_eta_dt;
+      k_field_scatter_access(ii_pred, field_var::jfz) += q*d_mu_dt;
       k_field_scatter_access(ii_pred, field_var::rhof) += q;
 #elif defined( SHAPE_QS )
       // stencil coefficients
@@ -1702,6 +1714,7 @@ advance_p_kokkos_gpu(
       wmx = q*( v0 - one )*( v0 - one );
       wmy = q*( v1 - one )*( v1 - one );
       wmz = q*( v2 - one )*( v2 - one );
+
       // Voxel indices
       int iii = ii;
       int zi = iii/((nx+2)*(ny+2));
@@ -1950,5 +1963,3 @@ advance_p( /**/  species_t            * RESTRICT sp,
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
   Kokkos::fence();
 }
-
-
