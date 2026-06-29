@@ -456,12 +456,14 @@ sim_log( "Loading fields" );
   //global->fdParams.output_variables( electric | magnetic );
   //global->hedParams.output_variables( current_density | charge_density | stress_tensor );
   global->hedParams.output_variables( 0 );
+  //global->hHdParams.output_variables( stress_tensor );
   global->hHdParams.output_variables( current_density | charge_density | stress_tensor );
 
 
   const uint32_t allfields      (0xffffffff);
   
-  global->fdParams.output_variables( allfields );
+//  global->fdParams.output_variables( allfields );
+  global->fdParams.output_variables( magnetic | current );
 // global->hedParams.output_variables( all );
 // global->hHdParams.output_variables( all );
 

@@ -52,7 +52,7 @@ nx = 64
 ny = 1
 nz = 1
 nt = 151
-nfield_vars = 32
+nfield_vars = 6
 nhydro_vars = 10
 
 pi = np.pi
@@ -76,10 +76,10 @@ for t in range(0,nt):
     ftemp = np.fromfile(field_file, dtype=np.float32, count=nfield_vars*(nx+2)*(ny+2)*(nz+2), offset=123)
     ftemp = np.reshape(ftemp, (nx+2, ny+2, nz+2, nfield_vars), order='F')
     idx = int(step / 20)
-    data["By"][idx, :,:,:]  = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 5]
-    data["Bz"][idx, :,:,:]  = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 6]
-    data["Uiy"][idx, :,:,:] = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 17]
-    data["Uiz"][idx, :,:,:] = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 18]
+    data["By"][idx, :,:,:]  = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 1]
+    data["Bz"][idx, :,:,:]  = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 2]
+    data["Uiy"][idx, :,:,:] = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 4]
+    data["Uiz"][idx, :,:,:] = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 5]
 
     hydro_file = open(hydro_dir + "T." + str(step) + "/Hhydro." + str(step) + ".0", "rb")
     htemp = np.fromfile(hydro_file, dtype=np.float32, count=nhydro_vars*(nx+2)*(ny+2)*(nz+2), offset=123)
@@ -114,8 +114,8 @@ dby = np.sqrt(np.sum((Q["By"])*(Q["By"]),axis=0))
 dbz = np.sqrt(np.sum((Q["Bz"])*(Q["Bz"]),axis=0))
 
 aniso=np.mean(Q["aniso"],axis=0)
-#print(tv)
-#print(aniso)
+print(tv)
+print(aniso)
 #print(dn)
 beg = 0
 end = len(tv)
