@@ -520,7 +520,6 @@ hydro_array_t::copy_to_host(FILE *fp, const int step /*=0*/) {
       Tz = ( Tz - vz * vz );
       
       auto T = (Tx+Ty+Tz)/3.0;
-      //fprintf(fp,"%d %.15e %.15e %.15e %.15e %.15e %.15e %d",step, h_l[i].txx,h_l[i].tyy,h_l[i].tzz,h_l[i].px,h_l[i].py,h_l[i].pz,i);
       fprintf(fp,"%d %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %d",step, 
               0.5*(square_sum), txx, tyy, tzz, vx, vy, vz,T,i);
     } 

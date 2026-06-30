@@ -423,21 +423,21 @@ combine_accumulators( accumulator_array_t * RESTRICT aa );
 // The kokkos hydro array is easily accessed as hydro_array->k_h_d(index,
 // hydro_var::var), with var being any member of a hydro_t.
 
-typedef struct hydro {
-  double jx, jy, jz, rho; // Current and charge density => <q v_i f>, <q f>
-  double px, py, pz, rho_m; // Momentum and mass density (changed from ke_density)
-  double txx, tyy, tzz;   // Stress diagonal            => <p_i v_j f>, i==j
-  double tyz, tzx, txy;   // Stress off-diagonal        => <p_i v_j f>, i!=j
+struct hydro_t {
+  float jx, jy, jz, rho; // Current and charge density => <q v_i f>, <q f>
+  float px, py, pz, rho_m; // Momentum and mass density (changed from ke_density)
+  float txx, tyy, tzz;   // Stress diagonal            => <p_i v_j f>, i==j
+  float tyz, tzx, txy;   // Stress off-diagonal        => <p_i v_j f>, i!=j
 #if VARIABLE_CHARGE
-  double qmin, qmax;      // Minimum and maximum charge within a cell
-  double n_q0, n_q1, n_q2, n_q3, n_q4, n_q5;
-  double _pad[2];
+  float qmin, qmax;      // Minimum and maximum charge within a cell
+  float n_q0, n_q1, n_q2, n_q3, n_q4, n_q5;
+  float _pad[2];
 #else
-  double _pad[2];         // 16-byte align
+  float _pad[2];         // 16-byte align
 #endif
-} hydro_t;
+};
 
-typedef struct hydro_array {
+struct hydro_array_t {
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   hydro_t * ALIGNED(128) h;
 #endif
@@ -445,7 +445,7 @@ typedef struct hydro_array {
   k_hydro_t::HostMirror k_h_h;
   grid_t * g;
   
-  hydro_array(int nv)
+  hydro_array_t(int nv)
   {
     k_h_d = k_hydro_t("k_hydro", nv);
     k_h_h = Kokkos::create_mirror_view(k_h_d);
@@ -461,7 +461,7 @@ typedef struct hydro_array {
     */
   void copy_to_device(FILE *fp=nullptr,  const int step = 0);
 
-} hydro_array_t;
+};
 
 // In hydro_array.c
 

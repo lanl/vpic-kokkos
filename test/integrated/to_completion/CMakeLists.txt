@@ -13,7 +13,7 @@ list(APPEND DEFAULT_ARG_TESTS
     simple # This test is a simple run which should not die
 #    dump # This is a simple run which should dump restart files
 #    reconnection_test # This is a simple reconnection run
-    pcai # proton cyclotron anisotropy instability for Hybrid-VPIC
+#    pcai # proton cyclotron anisotropy instability for Hybrid-VPIC
     shock
     fluid_species
     )

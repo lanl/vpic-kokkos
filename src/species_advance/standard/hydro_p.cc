@@ -57,6 +57,7 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
   qdt_2mc  = (qsp*sp->g->dt)/(2*msp*c);
   qdt_4mc  = qdt_2mc / 2;
   rV        = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
+  const float r12V = rV/12.f;
 
   np        = sp->np;
   stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
@@ -80,18 +81,20 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
 #ifdef VARIABLE_CHARGE
     const float qp = p[n].qp;
     qdt_2mc = qp * dt_2mc;
+    const double q = qp;
+#else
+    const double q = qsp;
 #endif
 
     float hax, hay, haz, cbx, cby, cbz;
-    const interpolator_t* intp = &f[i];
-    interpolate_e(*intp, dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c); // Interpolate E
+    interpolate_e(f[i], dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c); // Interpolate E
     
     // Half advance E
     ux += hax;
     uy += hay;
     uz += haz;
 
-    interpolate_b(*intp, dx, dy, dz, cbx, cby, cbz); // Interpolate B
+    interpolate_b(f[i], dx, dy, dz, cbx, cby, cbz); // Interpolate B
     w5 = cbx;
     w6 = cby;
     w7 = cbz;
@@ -151,7 +154,17 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     //w3 *= dz;       // w3 = (1/8)(w/V)(1+x)(1+y)(1-z) = (w/V) trilin_7 *Done
 
     // Hybrid-VPIC NGP shape
+#ifdef SHAPE_NGP
     w0 = w*rV;
+#elif defined( SHAPE_QS )
+    w0 =  (w*r12V) * 2.0f*( 3.0f - dx*dx - dy*dy - dz*dz );
+    float wx =  (w*r12V) * ( dx + 1.0f )*( dx + 1.0f );
+    float wy =  (w*r12V) * ( dy + 1.0f )*( dy + 1.0f );
+    float wz =  (w*r12V) * ( dz + 1.0f )*( dz + 1.0f );
+    float wmx = (w*r12V) * ( dx - 1.0f )*( dx - 1.0f );
+    float wmy = (w*r12V) * ( dy - 1.0f )*( dy - 1.0f );
+    float wmz = (w*r12V) * ( dz - 1.0f )*( dz - 1.0f );
+#endif
 
     // Accumulate the hydro fields - relativistic version
 //#   define ACCUM_HYDRO( wn)                             \
@@ -176,28 +189,28 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
 //    h[i].txy += dx*vy
 
     // Accumulate the hydro fields - non-relativistic version
-#   define ACCUM_HYDRO( wn)                             \
-    t  = qsp*wn;        /* t  = (qsp w/V) trilin_n */   \
-    h[i].jx  += t*ux;                                   \
-    h[i].jy  += t*uy;                                   \
-    h[i].jz  += t*uz;                                   \
-    h[i].rho += t;                                      \
-    t  = msp*wn;        /* t = (msp w/V) trilin_n */    \
-    dx = t*ux;          /* dx = (px w/V) trilin_n */    \
-    dy = t*uy;                                          \
-    dz = t*uz;                                          \
-    h[i].px  += dx;                                     \
-    h[i].py  += dy;                                     \
-    h[i].pz  += dz;                                     \
-    h[i].rho_m  += t; /* Prev. was *ke_mc; */           \
-    h[i].txx += dx*ux;                                  \
-    h[i].tyy += dy*uy;                                  \
-    h[i].tzz += dz*uz;                                  \
-    h[i].tyz += dy*uz;                                  \
-    h[i].tzx += dz*ux;                                  \
-    h[i].txy += dx*uy
+#   define ACCUM_HYDRO( wn, ii)                          \
+    t  = q*wn;        /* t  = (q w/V) trilin_n */        \
+    h[ii].jx  += t*ux;                                   \
+    h[ii].jy  += t*uy;                                   \
+    h[ii].jz  += t*uz;                                   \
+    h[ii].rho += t;                                      \
+    t  = msp*wn;        /* t = (msp w/V) trilin_n */     \
+    dx = t*ux;          /* dx = (px w/V) trilin_n */     \
+    dy = t*uy;                                           \
+    dz = t*uz;                                           \
+    h[ii].px  += dx;                                     \
+    h[ii].py  += dy;                                     \
+    h[ii].pz  += dz;                                     \
+    h[ii].rho_m  += t; /* Prev. was *ke_mc; */           \
+    h[ii].txx += dx*ux;                                  \
+    h[ii].tyy += dy*uy;                                  \
+    h[ii].tzz += dz*uz;                                  \
+    h[ii].tyz += dy*uz;                                  \
+    h[ii].tzx += dz*ux;                                  \
+    h[ii].txy += dx*uy
 
-    /**/            ACCUM_HYDRO(w0); // Cell i,j,k
+//  /**/            ACCUM_HYDRO(w0); // Cell i,j,k
 //  i += stride_10; ACCUM_HYDRO(w1); // Cell i+1,j,k
 //  i += stride_21; ACCUM_HYDRO(w2); // Cell i,j+1,k
 //  i += stride_10; ACCUM_HYDRO(w3); // Cell i+1,j+1,k
@@ -206,6 +219,17 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
 //  i += stride_21; ACCUM_HYDRO(w6); // Cell i,j+1,k+1
 //  i += stride_10; ACCUM_HYDRO(w7); // Cell i+1,j+1,k+1
 
+#ifdef SHAPE_NGP
+    ACCUM_HYDRO(w0, i); // Cell i,j,k
+#elif defined( SHAPE_QS )
+    ACCUM_HYDRO(w0,  i     ); // Cell i,j,k
+    ACCUM_HYDRO(wx,  i +  1); // Cell i+1,j,k
+    ACCUM_HYDRO(wy,  i + sy); // Cell i,j+1,k
+    ACCUM_HYDRO(wz,  i + sz); // Cell i,j,k+1
+    ACCUM_HYDRO(wmx, i -  1); // Cell i-1,j,k
+    ACCUM_HYDRO(wmy, i - sy); // Cell i,j-1,k
+    ACCUM_HYDRO(wmz, i - sz); // Cell i,j,k-1
+#endif
 #   undef ACCUM_HYDRO
   }
 }
@@ -336,6 +360,7 @@ accumulate_hydro_p_kokkos(
 )
 {
   k_hydro_sv_t k_hydro_sv = Kokkos::Experimental::create_scatter_view(k_hydro);
+  using hydro_scalar_t = k_hydro_t::non_const_value_type;
 
 #ifdef VARIABLE_CHARGE
   float c, msp, dt_2mc, dt_4mc, rV, r12V;
@@ -370,8 +395,8 @@ accumulate_hydro_p_kokkos(
   Kokkos::parallel_for("calculate_mean_q", Kokkos::RangePolicy<Kokkos::DefaultExecutionSpace, size_t>(0LLU, nv),
     KOKKOS_LAMBDA(size_t ii)
     {
-        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<k_hydro_t::non_const_value_type>::max();
-        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<k_hydro_t::non_const_value_type>::min();
+        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<hydro_scalar_t>::max();
+        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<hydro_scalar_t>::min();
     });
 
 #else
@@ -394,7 +419,6 @@ accumulate_hydro_p_kokkos(
   const int sy = sp->g->sy;
   const int sz = sp->g->sz;
 
-  //for( n=0; n<np; n++ ) {
   Kokkos::parallel_for("hydro_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace,size_t > (0LLU, np),
     KOKKOS_LAMBDA (const size_t p_index)
     {
@@ -626,8 +650,8 @@ accumulate_hydro_p_kokkos(
         //if (k_hydro(ii, hydro_var::min_q) == 0) printf("ii=%d, minq=%e",ii,k_hydro(ii, hydro_var::min_q));
       } else {
         //k_hydro(ii, hydro_var::avg_q) = std::numeric_limits<double>::quiet_NaN();
-        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<k_hydro_t::non_const_value_type>::quiet_NaN();
-        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<k_hydro_t::non_const_value_type>::quiet_NaN();
+        k_hydro(ii, hydro_var::qmin) = std::numeric_limits<hydro_scalar_t>::quiet_NaN();
+        k_hydro(ii, hydro_var::qmax) = std::numeric_limits<hydro_scalar_t>::quiet_NaN();
       }
     });
 #endif

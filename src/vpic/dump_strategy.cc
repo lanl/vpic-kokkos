@@ -172,7 +172,7 @@ void BinaryDump::dump_hydro(
   fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
 #else
   hydro_t h[1];
-  double _pad[2] = {0};
+  float _pad[2] = {0};
   WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
   for(int i=0; i<dim[0]*dim[1]*dim[2]; i++) {
     for(int v=0; v<HYDRO_VAR_COUNT; v++) {
@@ -652,9 +652,9 @@ void BinaryDump::hydro_dump(
     // More efficient for standard case
     if(istride == 1 && jstride == 1 && kstride == 1)
 
-      for(size_t v(0); v<numvars; v++)
-      for(size_t k(0); k<nzout+2; k++)
-      for(size_t j(0); j<nyout+2; j++)
+      for(size_t v(0); v<numvars; v++) {
+      for(size_t k(0); k<nzout+2; k++) {
+      for(size_t j(0); j<nyout+2; j++) {
       for(size_t i(0); i<nxout+2; i++) {
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
               const uint32_t * href = reinterpret_cast<uint32_t *>(&hydro(i,j,k));
@@ -662,6 +662,9 @@ void BinaryDump::hydro_dump(
 #else
               fileIO.write(&(hydro_array->k_h_h(VOXEL(i,j,k,grid->nx,grid->ny,grid->nz), varlist[v])), 1);
 #endif
+      }
+      }
+      }
       }
 
     else
@@ -1260,34 +1263,34 @@ void HDF5Dump::dump_hydro(
   hid_t dataspace_id;
 
   // write the data
-  if (hydro_dump_flag.flags["jx"]) DUMP_HYDRO_TO_HDF5("jx", jx, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["jy"]) DUMP_HYDRO_TO_HDF5("jy", jy, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["jz"]) DUMP_HYDRO_TO_HDF5("jz", jz, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["rho"]) DUMP_HYDRO_TO_HDF5("rho", rho, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["jx"]) DUMP_HYDRO_TO_HDF5("jx", jx, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["jy"]) DUMP_HYDRO_TO_HDF5("jy", jy, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["jz"]) DUMP_HYDRO_TO_HDF5("jz", jz, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["rho"]) DUMP_HYDRO_TO_HDF5("rho", rho, H5T_NATIVE_FLOAT);
 
-  if (hydro_dump_flag.flags["px"]) DUMP_HYDRO_TO_HDF5("px", px, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["py"]) DUMP_HYDRO_TO_HDF5("py", py, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["pz"]) DUMP_HYDRO_TO_HDF5("pz", pz, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["rho_m"]) DUMP_HYDRO_TO_HDF5("rho_m", rho_m, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["px"]) DUMP_HYDRO_TO_HDF5("px", px, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["py"]) DUMP_HYDRO_TO_HDF5("py", py, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["pz"]) DUMP_HYDRO_TO_HDF5("pz", pz, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["rho_m"]) DUMP_HYDRO_TO_HDF5("rho_m", rho_m, H5T_NATIVE_FLOAT);
 
-  if (hydro_dump_flag.flags["txx"]) DUMP_HYDRO_TO_HDF5("txx", txx, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["tyy"]) DUMP_HYDRO_TO_HDF5("tyy", tyy, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["tzz"]) DUMP_HYDRO_TO_HDF5("tzz", tzz, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["txx"]) DUMP_HYDRO_TO_HDF5("txx", txx, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["tyy"]) DUMP_HYDRO_TO_HDF5("tyy", tyy, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["tzz"]) DUMP_HYDRO_TO_HDF5("tzz", tzz, H5T_NATIVE_FLOAT);
 
-  if (hydro_dump_flag.flags["tyz"]) DUMP_HYDRO_TO_HDF5("tyz", tyz, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["tzx"]) DUMP_HYDRO_TO_HDF5("tzx", tzx, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["txy"]) DUMP_HYDRO_TO_HDF5("txy", txy, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["tyz"]) DUMP_HYDRO_TO_HDF5("tyz", tyz, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["tzx"]) DUMP_HYDRO_TO_HDF5("tzx", tzx, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["txy"]) DUMP_HYDRO_TO_HDF5("txy", txy, H5T_NATIVE_FLOAT);
 
 #ifdef VARIABLE_CHARGE
-  if (hydro_dump_flag.flags["qmin"]) DUMP_HYDRO_TO_HDF5("qmin", qmin, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["qmax"]) DUMP_HYDRO_TO_HDF5("qmax", qmax, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["qmin"]) DUMP_HYDRO_TO_HDF5("qmin", qmin, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["qmax"]) DUMP_HYDRO_TO_HDF5("qmax", qmax, H5T_NATIVE_FLOAT);
 
-  if (hydro_dump_flag.flags["n_q0"]) DUMP_HYDRO_TO_HDF5("n_q0", n_q0, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["n_q1"]) DUMP_HYDRO_TO_HDF5("n_q1", n_q1, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["n_q2"]) DUMP_HYDRO_TO_HDF5("n_q2", n_q2, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["n_q3"]) DUMP_HYDRO_TO_HDF5("n_q3", n_q3, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["n_q4"]) DUMP_HYDRO_TO_HDF5("n_q4", n_q4, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["n_q5"]) DUMP_HYDRO_TO_HDF5("n_q5", n_q5, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["n_q0"]) DUMP_HYDRO_TO_HDF5("n_q0", n_q0, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q1"]) DUMP_HYDRO_TO_HDF5("n_q1", n_q1, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q2"]) DUMP_HYDRO_TO_HDF5("n_q2", n_q2, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q3"]) DUMP_HYDRO_TO_HDF5("n_q3", n_q3, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q4"]) DUMP_HYDRO_TO_HDF5("n_q4", n_q4, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q5"]) DUMP_HYDRO_TO_HDF5("n_q5", n_q5, H5T_NATIVE_FLOAT);
 #endif
 
   el2 = uptime() - el2;

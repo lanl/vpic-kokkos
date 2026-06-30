@@ -53,7 +53,7 @@ for step_name in step_names:
     # Binary data
     bin_filename = "Hhydro." + step_name + ".0"
     with open(bin_filename, 'r') as fh:
-        hydro_data_bi_all = np.fromfile(bin_filename, dtype=np.float64, offset=123) # Changes to hydro made all hydro variables doubles
+        hydro_data_bi_all = np.fromfile(bin_filename, dtype=np.float32, offset=123) # Changes to hydro made all hydro variables doubles
         print(hydro_data_bi_all.shape)
 
     for ihydro, hydro_name in enumerate(hydro_names):
