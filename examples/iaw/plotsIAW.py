@@ -74,6 +74,9 @@ for slice in range(0,1):
 	#fig.colorbar(im2, ax=ax2)    
 
 print(Q["ni"])
+# plt.plot(Q["ni"][0,:])
+# plt.show()
+# plt.figure()
         
 gamma = -0.093196
 
