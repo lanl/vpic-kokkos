@@ -1845,6 +1845,7 @@ advance_p_kokkos_gpu(
 #endif
 
   Kokkos::Experimental::contribute(k_field, k_f_sv);
+  k_f_sv.reset();
   
   
     // TODO: abstract this manual data copy
