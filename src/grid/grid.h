@@ -104,6 +104,7 @@ typedef struct grid {
   float den_floor_ohm;    // Density floor for Ohm's law update
   float den_floor_pe;     // Density floor for electron pressure update
   float eos_gamma, eos_den; // Electron fluid adiabatic index, reference density
+  float eos_gamma_0;        //Adiabatic index for initializing profiles. 
   
   float   time_sec, length_m, mass_kg, density_SI; //For converting to physical units
   

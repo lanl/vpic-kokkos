@@ -84,7 +84,7 @@ begin_initialization {
 
   double nppc  = 150000;    // Average number of macro particle per cell per species 
   
-  double topology_x = 1; // Number of domains in x, y, and z
+  double topology_x = 16; // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 1;
 
@@ -164,6 +164,7 @@ begin_initialization {
   grid->eta = eta;
   grid->hypereta = hypereta;
   grid->eos_gamma = gamma;
+  grid->eos_gamma_0 = gamma;
 
   grid->nsub = 1; // Number of substeps for field solve.
   grid->nsm = 2;  // Number of binomial smoothing passes (to fields & moments).
