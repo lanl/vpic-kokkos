@@ -1694,10 +1694,10 @@ advance_p_kokkos_gpu(
         //int xi = iii - yi*(nx+2);
       
 #ifdef SHAPE_NGP
-      q *= rV * inv_jac;
-      k_field_scatter_access(ii_pred, field_var::jfx) += q*d_xi_dt;
-      k_field_scatter_access(ii_pred, field_var::jfy) += q*d_eta_dt;
-      k_field_scatter_access(ii_pred, field_var::jfz) += q*d_mu_dt;
+      q *= rV;
+      k_field_scatter_access(ii_pred, field_var::jfx) += q*ux;
+      k_field_scatter_access(ii_pred, field_var::jfy) += q*uy;
+      k_field_scatter_access(ii_pred, field_var::jfz) += q*uz;
       k_field_scatter_access(ii_pred, field_var::rhof) += q;
 #elif defined( SHAPE_QS )
       // stencil coefficients
@@ -1729,39 +1729,39 @@ advance_p_kokkos_gpu(
       int iimy = VOXEL(xi,yi-1,zi,nx,ny,nz);
       int iimz = VOXEL(xi,yi,zi-1,nx,ny,nz);
 
-      k_field_scatter_access(ii, field_var::jfx)  += w0*d_xi_dt;
-      k_field_scatter_access(ii, field_var::jfy)  += w0*d_eta_dt;
-      k_field_scatter_access(ii, field_var::jfz)  += w0*d_mu_dt;
+      k_field_scatter_access(ii, field_var::jfx)  += w0*ux;
+      k_field_scatter_access(ii, field_var::jfy)  += w0*uy;
+      k_field_scatter_access(ii, field_var::jfz)  += w0*uz;
       k_field_scatter_access(ii, field_var::rhof) += w0;
 
-      k_field_scatter_access(iix, field_var::jfx)  += wx*d_xi_dt;
-      k_field_scatter_access(iix, field_var::jfy)  += wx*d_eta_dt;
-      k_field_scatter_access(iix, field_var::jfz)  += wx*d_mu_dt;
+      k_field_scatter_access(iix, field_var::jfx)  += wx*ux;
+      k_field_scatter_access(iix, field_var::jfy)  += wx*uy;
+      k_field_scatter_access(iix, field_var::jfz)  += wx*uz;
       k_field_scatter_access(iix, field_var::rhof) += wx;
 
-      k_field_scatter_access(iiy, field_var::jfx)  += wy*d_xi_dt;
-      k_field_scatter_access(iiy, field_var::jfy)  += wy*d_eta_dt;
-      k_field_scatter_access(iiy, field_var::jfz)  += wy*d_mu_dt;
+      k_field_scatter_access(iiy, field_var::jfx)  += wy*ux;
+      k_field_scatter_access(iiy, field_var::jfy)  += wy*uy;
+      k_field_scatter_access(iiy, field_var::jfz)  += wy*uz;
       k_field_scatter_access(iiy, field_var::rhof) += wy;
 
-      k_field_scatter_access(iiz, field_var::jfx)  += wz*d_xi_dt;
-      k_field_scatter_access(iiz, field_var::jfy)  += wz*d_eta_dt;
-      k_field_scatter_access(iiz, field_var::jfz)  += wz*d_mu_dt;
+      k_field_scatter_access(iiz, field_var::jfx)  += wz*ux;
+      k_field_scatter_access(iiz, field_var::jfy)  += wz*uy;
+      k_field_scatter_access(iiz, field_var::jfz)  += wz*uz;
       k_field_scatter_access(iiz, field_var::rhof) += wz;
 
-      k_field_scatter_access(iimx, field_var::jfx)  += wmx*d_xi_dt;
-      k_field_scatter_access(iimx, field_var::jfy)  += wmx*d_eta_dt;
-      k_field_scatter_access(iimx, field_var::jfz)  += wmx*d_mu_dt;
+      k_field_scatter_access(iimx, field_var::jfx)  += wmx*ux;
+      k_field_scatter_access(iimx, field_var::jfy)  += wmx*uy;
+      k_field_scatter_access(iimx, field_var::jfz)  += wmx*uz;
       k_field_scatter_access(iimx, field_var::rhof) += wmx;
 
-      k_field_scatter_access(iimy, field_var::jfx)  += wmy*d_xi_dt;
-      k_field_scatter_access(iimy, field_var::jfy)  += wmy*d_eta_dt;
-      k_field_scatter_access(iimy, field_var::jfz)  += wmy*d_mu_dt;
+      k_field_scatter_access(iimy, field_var::jfx)  += wmy*ux;
+      k_field_scatter_access(iimy, field_var::jfy)  += wmy*uy;
+      k_field_scatter_access(iimy, field_var::jfz)  += wmy*uz;
       k_field_scatter_access(iimy, field_var::rhof) += wmy;
 
-      k_field_scatter_access(iimz, field_var::jfx)  += wmz*d_xi_dt;
-      k_field_scatter_access(iimz, field_var::jfy)  += wmz*d_eta_dt;
-      k_field_scatter_access(iimz, field_var::jfz)  += wmz*d_mu_dt;
+      k_field_scatter_access(iimz, field_var::jfx)  += wmz*ux;
+      k_field_scatter_access(iimz, field_var::jfy)  += wmz*uy;
+      k_field_scatter_access(iimz, field_var::jfz)  += wmz*uz;
       k_field_scatter_access(iimz, field_var::rhof) += wmz;
 
 #endif

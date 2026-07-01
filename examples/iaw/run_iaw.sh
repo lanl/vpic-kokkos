@@ -11,7 +11,7 @@ module load gcc/12.2.0 openmpi/4.1.5-gcc_12.2.0 cmake/3.29.2 cuda/12.9.1
 export NVCC_WAPPER_DEFAULT_COMPILER=mpicxx
 ./bin/vpic ../examples/iaw/iaw.cxx
 export OMP_PROC_BIND=true
-srun -N8 -n16 ./iaw.Linux
+srun -N8 -n2 ./iaw.Linux
 mpif90 -o translateIAW ../examples/iaw/translateIAW.f90
 mkdir data
 mpirun -np 1 ./translateIAW

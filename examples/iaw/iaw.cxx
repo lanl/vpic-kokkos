@@ -84,7 +84,7 @@ begin_initialization {
 
   double nppc  = 150000;    // Average number of macro particle per cell per species 
   
-  double topology_x = 16; // Number of domains in x, y, and z
+  double topology_x = 2; // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 1;
 
@@ -289,9 +289,9 @@ sim_log( "Loading fields" );
       y = uniform( rng(0), ymin, ymax );
       z = uniform( rng(0), zmin, zmax );
       
-      ux = 0;                                                                                                                                             
-      uy = 0;
-      uz = 0;
+      ux = normal( rng(0), 0, vthi );                                                                                                                                      
+      uy = normal( rng(0), 0, vthi );
+      uz = normal( rng(0), 0, vthi );
       inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0 );
     }
  }
@@ -606,11 +606,6 @@ begin_diagnostics {
     dump_species("rundata/species");
     global_header("global", global->outputParams);
   } // if
-
-  // field_array->kernel->clear_rhof( field_array );
-  // k_accumulate_rho_p( field_array, ion );
-  // field_array->kernel->k_synchronize_rho( field_array );
-  // field_array->copy_to_host();
 
   /*--------------------------------------------------------------------------
    * Normal rundata energies dump
