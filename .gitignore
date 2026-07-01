@@ -7,6 +7,5 @@ cmake_install.cmake
 *~
 .DS_Store
 build*
-run_*.sh
 modules.txt
 *.png

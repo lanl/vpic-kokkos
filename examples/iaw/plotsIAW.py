@@ -65,18 +65,17 @@ for slice in range(0,1):
 	
 	#bxw = wclean(arr=Q["den"],wavn="coif3",alpha=1)
 		
-	fig, (ax1,ax2) = plt.subplots(nrows=2)
+	fig, (ax1,ax2) = plt.subplots(nrows=2) 
 	im = ax1.pcolormesh(tv,xv,Q["ni"])
 	#im = ax1.pcolormesh(yv,xv,Q["ni"],cmap=cmap)
 	#fig.colorbar(im, ax=ax1)
 	#im = ax1.plot(xv,Q["ni"][:,0])
 	#im2 = ax2.pcolormesh(yv,xv,Q["Bx"],cmap=cmap)
-	#fig.colorbar(im2, ax=ax2)    
+	#fig.colorbar(im2, ax=ax2)    ≈
 
 print(Q["ni"])
 # plt.plot(Q["ni"][0,:])
 # plt.show()
-# plt.figure()
         
 gamma = -0.093196
 
@@ -86,6 +85,6 @@ im = ax2.plot(tv[0:50],np.log10(0.08*np.exp(gamma*tv[0:50])))
 ax1.set_ylabel('x/L')
 ax2.set_ylabel('|dn|')
 ax2.set_xlabel('t * C_s/L')
+plt.savefig('fig.png', dpi=300)
 plt.show()
-
 
