@@ -24,11 +24,12 @@ vpic_simulation::initialize( int argc,
   grid->den_floor_ohm = 0.;
   grid->den_floor_pe  = 0.;
 #ifdef HYB_USE_SEPARATE_PE
-  grid->eos_gamma     = 1; //5./3.;
+  grid->eos_gamma     = 5./3.;
 #else
   grid->eos_gamma     = 1.;
 #endif
   grid->eos_den       = 1.;
+  grid->eos_gamma_0   = 1.;
   grid->kappa         = 0;
 
   // need isub=0 initialized for advance_b(...) to
@@ -111,7 +112,7 @@ vpic_simulation::initialize( int argc,
   // E,B will be garbage because jf,rhof_old not set
 #ifdef HYB_USE_SEPARATE_PE
   float gamma_copy = grid->eos_gamma;
-  grid->eos_gamma=1.;
+  grid->eos_gamma=grid->eos_gamma_0.;
   FAK->hyb_init(field_array,0);
   grid->eos_gamma = gamma_copy;
 #else
@@ -127,7 +128,7 @@ vpic_simulation::initialize( int argc,
   // E,B will now be valid
 #ifdef HYB_USE_SEPARATE_PE
   gamma_copy = grid->eos_gamma;
-  grid->eos_gamma=1.;
+  grid->eos_gamma=grid->eos_gamma_0.;
   FAK->hyb_init(field_array,0);
   grid->eos_gamma = gamma_copy;
 #else

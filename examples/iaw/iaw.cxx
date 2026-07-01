@@ -164,6 +164,7 @@ begin_initialization {
   grid->eta = eta;
   grid->hypereta = hypereta;
   grid->eos_gamma = gamma;
+  grid->eos_gamma_0 = gamma;
   grid->init_cartesian_grid();
 
   grid->nsub = 1; // Number of substeps for field solve.
