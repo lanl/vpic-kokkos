@@ -577,6 +577,8 @@ target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LI
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
 if (HYB_USE_RADIATION)
   target_compile_definitions(vpic PUBLIC HYB_USE_RADIATION)
+  target_compile_definitions(vpic PUBLIC VPIC_ENABLE_HDF5)
+  target_compile_definitions(vpic PUBLIC VPIC_ENABLE_LEGACY_DATA_STRUCTURES)
 endif(HYB_USE_RADIATION)
 
 macro(build_a_vpic name deck)
