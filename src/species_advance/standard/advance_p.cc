@@ -1127,7 +1127,7 @@ advance_p_kokkos_gpu(
         k_particle_i_copy_t& k_particle_i_copy,
         k_particle_movers_t& k_particle_movers,
         k_particle_i_movers_t& k_particle_movers_i,
-        k_field_sv_t k_f_sv,
+        k_field_sv_t k_f_sv0,
         k_interpolator_t& k_interp,
         k_counter_t& k_nm,
         k_neighbor_t& k_neighbors,
@@ -1156,7 +1156,7 @@ advance_p_kokkos_gpu(
   constexpr float two_fifteenths = 2./15.;
   constexpr float one_twelfth    = 1./12.;
   k_field_t k_field = fa->k_f_d;
-  //k_field_sv_t k_f_sv = Kokkos::Experimental::create_scatter_view<>(k_field);
+  k_field_sv_t k_f_sv = Kokkos::Experimental::create_scatter_view<>(k_field);
   //float cx = 0.25 * g->rdy * g->rdz / g->dt;
   //float cy = 0.25 * g->rdz * g->rdx / g->dt;
   //float cz = 0.25 * g->rdx * g->rdy / g->dt;
