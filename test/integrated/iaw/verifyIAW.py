@@ -71,11 +71,11 @@ field_dir = rundir + "/fields/"
 nx = 48
 ny = 1
 nz = 1
-nt = 101
+nt = 51
 nfield_vars = 32
 
 xv = np.linspace(0,16,num=nx)
-tv = np.linspace(0,50,num=nt)
+tv = np.linspace(0,25,num=nt)
 if (nx>1): dx = xv[1]-xv[0]
 if (nt>1): dt = tv[1]-tv[0]
 
@@ -91,8 +91,8 @@ for t in range(0,nt):
     ftemp = np.reshape(ftemp, (nx+2, ny+2, nz+2, nfield_vars), order='F')
     idx = int(step / 25)
     data["Ex"][idx, :,:,:]  = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 0]
-    data["Uix"][idx, :,:,:] = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 20]
-    data["ni"][idx, :,:,:]  = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 23]
+    data["Uix"][idx, :,:,:] = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 16]
+    data["ni"][idx, :,:,:]  = ftemp[1:nx+1, 1:ny+1, 1:nz+1, 19]
 
 cmap = plt.get_cmap("Spectral")
 
@@ -140,7 +140,7 @@ if len(dn_peaks) > 0:
 #plt.xlim([0, 25])
 #plt.ylim([-2, 1])
 
-#plt.show()
+plt.show()
 
 if dn_valid:
     sys.exit(0)

@@ -105,13 +105,13 @@ begin_initialization {
   double dg = courant_length(Lx,Ly,Lz,nx,ny,nz);  // courant length
   double dt = 0.02;                               // time step
 
-  double sort_interval = 10;  // How often to sort particles
+  double sort_interval = 25;  // How often to sort particles
   
   // Intervals for output
-  num_step = int(taui/(wci*dt));
+  num_step = int(0.5*taui/(wci*dt));
   int restart_interval = -1; //20000;
   int energies_interval = 200;
-  int interval = num_step/100; //int(num_step/100);//0.2/(wci*dt));
+  int interval = 2*num_step/100; //int(num_step/100);//0.2/(wci*dt));
   int fields_interval = interval;
   int ehydro_interval = interval;
   int Hhydro_interval = interval;
@@ -122,7 +122,7 @@ begin_initialization {
 
   ///////////////////////////////////////////////
   // Setup high level simulation parameters
-  status_interval      = num_step/100;
+  status_interval      = 2*num_step/100;
   sync_shared_interval = status_interval;
   clean_div_e_interval = status_interval;
   clean_div_b_interval = status_interval;
