@@ -633,11 +633,9 @@ void BinaryDump::hydro_dump(
 
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
-    fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
 #else
     hydro_t h[1];
     WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
-    fileIO.write(hydro_array->k_h_h.data(), dim[0] * dim[1] * dim[2]);
 #endif
 
     /*
@@ -649,8 +647,9 @@ void BinaryDump::hydro_dump(
     for(size_t i(0), c(0); i<total_hydro_variables; i++)
       if( dumpParams.output_vars.bitset(i) ) varlist[c++] = i;
 
+
     // More efficient for standard case
-    if(istride == 1 && jstride == 1 && kstride == 1)
+    if(istride == 1 && jstride == 1 && kstride == 1) {
 
       for(size_t v(0); v<numvars; v++) {
       for(size_t k(0); k<nzout+2; k++) {
@@ -667,9 +666,9 @@ void BinaryDump::hydro_dump(
       }
       }
 
-    else
+    } else {
 
-      for(size_t v(0); v<numvars; v++)
+      for(size_t v(0); v<numvars; v++) {
       for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
       for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
       for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
@@ -682,6 +681,8 @@ void BinaryDump::hydro_dump(
       }
       }
       }
+      }
+    }
 
     delete[] varlist;
 
@@ -695,11 +696,9 @@ void BinaryDump::hydro_dump(
 
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
     WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
-    fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
 #else
     hydro_t h[1];
     WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
-    fileIO.write(hydro_array->k_h_h.data(), dim[0] * dim[1] * dim[2]);
 #endif
 
     if(istride == 1 && jstride == 1 && kstride == 1) {
@@ -729,7 +728,6 @@ void BinaryDump::hydro_dump(
 #endif
 
     } else {
-
       for(size_t k(0); k<nzout; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
       for(size_t j(0); j<nyout; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
       for(size_t i(0); i<nxout; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
