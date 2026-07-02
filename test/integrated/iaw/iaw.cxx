@@ -108,10 +108,10 @@ begin_initialization {
   double sort_interval = 10;  // How often to sort particles
   
   // Intervals for output
-  num_step = 0.5*int(taui/(wci*dt));
+  num_step = int(taui/(wci*dt));
   int restart_interval = -1; //20000;
   int energies_interval = 200;
-  int interval = int(taui/(wci*dt))/100; //int(num_step/100);//0.2/(wci*dt));
+  int interval = num_step/100; //int(num_step/100);//0.2/(wci*dt));
   int fields_interval = interval;
   int ehydro_interval = interval;
   int Hhydro_interval = interval;

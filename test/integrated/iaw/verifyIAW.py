@@ -120,6 +120,7 @@ ax1.set_ylabel('x/L')
 ax2.set_ylabel('|dn|')
 ax2.set_xlabel('t * C_s/L')
 ax1.set_xlim((0, 25))
+ax2.set_xlim((0, 25))
 
 beg = 0
 end = len(tv)
@@ -130,18 +131,16 @@ for idx in range(len(tv)):
   if tv[idx] >= 25:
     end = idx
     break
-print(beg)
-print(end)
 
 dn_peaks, dn_valid = check_var("|dn|", tv, dn_log10, expected, beg, end) 
 print(dn_peaks)
 if len(dn_peaks) > 0:
   im2d = ax2.plot(tv[dn_peaks], dn_log10[dn_peaks], 'x', color='blue')
 
-plt.xlim([0, 25])
+#plt.xlim([0, 25])
 #plt.ylim([-2, 1])
 
-plt.show()
+#plt.show()
 
 if dn_valid:
     sys.exit(0)
