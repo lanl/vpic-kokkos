@@ -5,14 +5,24 @@ import matplotlib.pyplot as plt
 #import pywt
 
 datadir = "./data/"
-nx = 48
-nt = 101
 
 pi = np.pi
 
-xv = np.linspace(0,10.5,num=nx)
-#tv = np.linspace(0,100,num=nt)
-tv = np.linspace(0,60,num=nt)
+# Grid size along the wave direction. Prefer reading it from the run's grid
+# info; fall back to a default. This must match the deck's nx.
+nx = 48
+Lx = 10.5      # physical box length (t * w_ci axis uses taui below)
+taui = 10      # simulation run time in w_ci^-1 (deck's taui)
+
+# Infer the number of time records from the actual file size so the script
+# never mismatches the deck (each .gda holds nt * nx float32 values).
+import os
+_ref = os.path.join(datadir, "By.gda")
+nt = os.path.getsize(_ref) // (4 * nx)
+print("nx=%d, nt=%d (inferred from %s)" % (nx, nt, _ref))
+
+xv = np.linspace(0, Lx, num=nx)
+tv = np.linspace(0, taui, num=nt)
 if (nx>1): dx = xv[1]-xv[0]
 if (nt>1): dt = tv[1]-tv[0]
 
@@ -62,7 +72,7 @@ ax2.set_ylabel('d|Ui|')
 ax2.legend()
 
 #plt.xlim([0, 80])
-plt.xlim([0, 60])
+plt.xlim([0, taui])
 plt.ylim([-2, 1])
 
 
@@ -78,7 +88,7 @@ ax3.set_ylabel('P_perp/P_par')
 ax4.set_ylabel('d|B|')
 ax4.legend()
 
-plt.xlim([0, 60])
+plt.xlim([0, taui])
 plt.ylim([-2, 1])
 
 plt.show()

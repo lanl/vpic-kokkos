@@ -49,10 +49,6 @@ typedef struct pipeline_args {
   float h1_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_1);          \
   float h2_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_2);          \
   float h3_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_3);          \
-  /* Precompute inverse products for curl normalization */           \
-  float inv_h2h3 = 1.0f / (h2_0 * h3_0);                             \
-  float inv_h1h3 = 1.0f / (h1_0 * h3_0);                             \
-  float inv_h1h2 = 1.0f / (h1_0 * h2_0);                             \
   /* Original fluid quantities */                                    \
   float  rho = half*( (one-hstep)*( F(0,rhof) + F(0,rhofold) ) +    \
                       hstep*( three*F(0,rhof) - F(0,rhofold)) );    \
@@ -65,33 +61,74 @@ typedef struct pipeline_args {
   float  uz = invrho*half*( (one-hstep)*( F(0,jfz) + F(0,jfzold) ) + \
                             hstep*( three*F(0,jfz) - F(0,jfzold)) );
 
+// ---------------------------------------------------------------------------
+// Covariant electric field (Ohm's law), fully general for orthogonal
+// curvilinear grids. Derived in Curvilinear.pdf; conventions:
+//   - E is stored COVARIANT (e_i),   B is CONTRAVARIANT (cb^i = cb + cb0),
+//   - u = jf/rho is the CONTRAVARIANT bulk velocity (see advance_p scatter),
+//   - the logical-coordinate derivative is P(d)*(F(d,.)-F(md,.)) with
+//     P(x)=px, P(y)=py, P(z)=pz (px=0.5*rdx, i.e. 0.5/dref, a LOGICAL deriv),
+//   - J = h1 h2 h3, g_ii = h_i^2.
+// The macro is written cyclically: E(x,y,z) builds E_x, and the (y,z,x) /
+// (z,x,y) rotations build E_y, E_z. Direction-tagged scale factors and the
+// P() selector all rotate with the arguments, so it is correct for
+// anisotropic reference spacing (rdx!=rdy!=rdz), not just isotropic.
+//
+// Term by term for E_x (indices 1,2,3 = x_,y_,z_):
+//   pressure : -(1/qn) d_1(pe)                         = -invrho*P(x_)*d1(pe)
+//   -u x B   : -(u x B)_1 = -J (u^2 B^3 - u^3 B^2)
+//   Hall     : +(1/qn)(curlB x B)_1, with (curlB)^j=(1/J)eps^{jab}d_a(h_b^2 B^b);
+//              the J cancels ->
+//              +invrho*[ ( d3(h1^2 B1) - d1(h3^2 B3) )*B3
+//                       -( d1(h2^2 B2) - d2(h1^2 B1) )*B2 ]
+//   resistive: +eta*tcay*(curlB)_1, (curlB)_i=g_ii(curlB)^i=(h_i^2/J)*(...)
+//              +do_eta*eta*tcay*(h1_0^2/J)*( d2(h3^2 B3) - d3(h2^2 B2) )
+//   source   : -invrho*rVt*s_x
+// All multiplied by tcaz. On CARTESIAN (h=1,J=1) every term reduces to the
+// original Cartesian Ohm's law.
+// ---------------------------------------------------------------------------
+
+// P(d): select the logical-derivative coefficient for direction d (x/y/z).
+#define P(d) P_##d
+#define P_x px
+#define P_y py
+#define P_z pz
+
+// H(comp, cell): the stored scale factor for component "comp" (x/y/z ->
+// h1/h2/h3) evaluated at bare-direction cell "cell" (0, x, mx, y, ...). This
+// lets the scale factors rotate with the cyclic macro arguments.
+#define HN_x 1
+#define HN_y 2
+#define HN_z 3
+#define HCAT(n,cell) h##n##_##cell
+#define HEXP(n,cell) HCAT(n,cell)
+#define H(comp,cell) HEXP(HN_##comp, cell)
+
+// Bf(cell, comp): contravariant B^comp (incl. external cb0) at bare-direction
+// cell.
+#define Bf(cell, comp) ( F(cell, cb##comp) + F(cell, cb##comp##0) )
+
+// BL(cell, comp): lowered covariant B_comp = h_comp^2 B^comp at "cell".
+#define BL(cell, comp) ( H(comp,cell)*H(comp,cell) * Bf(cell, comp) )
+
+// dBL(a, comp): centered logical derivative d_a( h_comp^2 B^comp ), with a and
+// comp direction letters. Uses the +a / -a neighbor cells (a and m##a).
+#define dBL(a, comp) ( P(a) * ( BL(a, comp) - BL(m##a, comp) ) )
+
 #define E(x_,y_,z_) \
   F(0,e##x_) =      \
-    /* Hall term with metric factors */ \
-    invrho * (F(0,cb##z_) + F(0,cb##z_##0)) * inv_h1h2 * \
-      ( py * h1_y * (F(y_,cb##x_) - F(m##y_,cb##x_)) -   \
-        px * h2_x * (F(x_,cb##z_) - F(m##x_,cb##z_)) ) + \
-    invrho * (F(0,cb##y_) + F(0,cb##y_##0)) * inv_h1h3 * \
-      ( pz * h1_z * (F(z_,cb##x_) - F(m##z_,cb##x_)) -   \
-        px * h3_x * (F(x_,cb##y_) - F(m##x_,cb##y_)) ) - \
-    /* Bulk velocity term -(u x B) as a COVARIANT component. u = jf/rho is \
-       the contravariant velocity u^i and B is contravariant B^i, so the   \
-       covariant cross-product component carries the Jacobian J=h1 h2 h3:   \
-       (u x B)_k = J eps_kij u^i B^j  (Curvilinear.pdf 1.3, eq 5-6).        \
-       On CARTESIAN J=1 so this is unchanged from the original. */          \
-    (h1_0*h2_0*h3_0) * u##y_ * (F(0,cb##z_)+F(0,cb##z_##0)) + \
-    (h1_0*h2_0*h3_0) * u##z_ * (F(0,cb##y_)+F(0,cb##y_##0)) - \
-    /* Pressure gradient: covariant E_a = -(1/qn) dp/dxi^a is a pure    \
-       coordinate derivative with NO scale factor (Curvilinear.pdf eq   \
-       57, first/coordinate-component form). The gather (transform_E,    \
-       grad xi = e/h^2) supplies all geometry. px = 0.5*rdx already      \
-       gives the coordinate derivative; h1_0 must NOT appear here. On    \
-       CARTESIAN h1_0=1 so this is unchanged from the original. */       \
-    invrho * px * (F(x_,pe) - F(m##x_,pe)) + \
-    /* Resistive term */ \
-    do_eta*eta*F(0,tcay) * inv_h2h3 * \
-      ( py * h3_y * (F(y_,cb##z_) - F(m##y_,cb##z_)) -   \
-        pz * h2_z * (F(z_,cb##y_) - F(m##z_,cb##y_)) ) - \
+    /* Hall: +invrho*[ (d_z(h_x^2 B_x) - d_x(h_z^2 B_z))*B_z                 \
+                      -(d_x(h_y^2 B_y) - d_y(h_x^2 B_x))*B_y ] */            \
+    invrho * (                                                              \
+      ( dBL(z_, x_) - dBL(x_, z_) ) * Bf(0, z_)                             \
+    - ( dBL(x_, y_) - dBL(y_, x_) ) * Bf(0, y_) ) +                         \
+    /* -(u x B)_x = -J (u^y B^z - u^z B^y) */                               \
+    (h1_0*h2_0*h3_0) * ( - u##y_ * Bf(0,z_) + u##z_ * Bf(0,y_) ) -          \
+    /* pressure: -(1/qn) d_x(pe) */                                         \
+    invrho * P(x_) * ( F(x_,pe) - F(m##x_,pe) ) +                           \
+    /* resistive: +do_eta*eta*tcay*(h_x^2/J)*( d_y(h_z^2 B_z)-d_z(h_y^2 B_y) ) */ \
+    do_eta*eta*F(0,tcay) * ( (H(x_,0)*H(x_,0))/(h1_0*h2_0*h3_0) ) * (       \
+        dBL(y_, z_) - dBL(z_, y_) ) -                                       \
     invrho * rVt * F(0,s##x_); \
   F(0,e##x_) *= F(0,tcaz);
   

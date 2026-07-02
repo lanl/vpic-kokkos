@@ -71,7 +71,7 @@ begin_initialization {
   double vthi = sqrt(Ti/mi);// Ion thermal velocity
 
   // Numerical parameters
-  double taui    = 50;      // Simulation run time in wci^-1.
+  double taui    = 10;      // Simulation run time in wci^-1.
   double quota   = 2.0;     // run quota in hours
   double quota_sec = quota*3600;  // Run quota in seconds
   
@@ -82,9 +82,9 @@ begin_initialization {
   double ny = 1;
   double nz = 1;
 
-  double nppc  = 15000;    // Average number of macro particle per cell per species 
+  double nppc  = 150;    // Average number of macro particle per cell per species 
   
-  double topology_x = 16; // Number of domains in x, y, and z
+  double topology_x = 12; // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 1;
 

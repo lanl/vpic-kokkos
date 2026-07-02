@@ -73,7 +73,7 @@ begin_initialization {
  
 
   // Numerical parameters
-  double taui    = 60;    // Simulation run time in wci^-1.
+  double taui    = 10;    // Simulation run time in wci^-1.
   double quota   = 23.5;   // run quota in hours
   double quota_sec = quota*3600;  // Run quota in seconds
   
@@ -81,13 +81,13 @@ begin_initialization {
   double Ly    = 1.0*di;   // size of box in y dimension
   double Lz    = 1.0*di;   // size of box in z dimension
 
-  double nx = 64;
+  double nx = 48;
   double ny = 1;
   double nz = 1;
 
   double nppc  = 10000;         // Average number of macro particle per cell per species 
   
-  double topology_x = 1; // Number of domains in x, y, and z
+  double topology_x = 4; // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 1;
 
@@ -167,7 +167,8 @@ begin_initialization {
   grid->init_cartesian_grid();
   grid->eta = eta;
   //  grid->hypereta = hypereta;
-  //  grid->gamma = gamma;
+   grid->gamma = gamma;
+   grid->gamma_0 = gamma;
 
   //  grid->nsub = 1;
   //  grid->nsm= 0;
