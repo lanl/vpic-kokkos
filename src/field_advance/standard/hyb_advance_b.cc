@@ -6,17 +6,25 @@
 
 #define F(ind,v) k_field(f##ind##_index, field_var::v)
 
-#define ROTEX()  ( inv_h2h3 * (                                    \
-    py * (h3_y * F(y,ez) - h3_my * F(my,ez)) -                     \
-    pz * (h2_z * F(z,ey) - h2_mz * F(mz,ey)) ) )
+// Faraday: dB^i/dt = -(curl E)^i. B is stored CONTRAVARIANT (cbx=B^1 etc) and
+// E is COVARIANT (ex=E_1 etc, matching hyb_advance_e and the interpolator
+// gather transform_E which uses grad xi = e/h^2). The contravariant curl of a
+// covariant field is
+//     (curl E)^i = (1/J) eps^{ijk} d_j E_k ,   J = h1 h2 h3 ,
+// with NO inner scale factors (those belong to the physical-vector curl). The
+// coordinate derivative d_j is py*(F(y,.)-F(my,.)) etc (py=0.5*rdy). On a
+// CARTESIAN grid h=1 so J=1 and this reduces to the standard centered curl.
+#define ROTEX()  ( inv_J * (                                       \
+    py * (F(y,ez) - F(my,ez)) -                                    \
+    pz * (F(z,ey) - F(mz,ey)) ) )
 
-#define ROTEY()  ( inv_h1h3 * (                                    \
-    pz * (h1_z * F(z,ex) - h1_mz * F(mz,ex)) -                     \
-    px * (h3_x * F(x,ez) - h3_mx * F(mx,ez)) ) )
+#define ROTEY()  ( inv_J * (                                       \
+    pz * (F(z,ex) - F(mz,ex)) -                                    \
+    px * (F(x,ez) - F(mx,ez)) ) )
 
-#define ROTEZ()  ( inv_h1h2 * (                                    \
-    px * (h2_x * F(x,ey) - h2_mx * F(mx,ey)) -                     \
-    py * (h1_y * F(y,ex) - h1_my * F(my,ex)) ) )
+#define ROTEZ()  ( inv_J * (                                       \
+    px * (F(x,ey) - F(mx,ey)) -                                    \
+    py * (F(y,ex) - F(my,ex)) ) )
 
 #define INIT_STENCIL()                                               \
   size_t f0_index  = VOXEL(x,   y,   z,    nx,ny,nz);               \
@@ -26,39 +34,13 @@
   size_t fmx_index = VOXEL(x-1, y,   z,    nx,ny,nz);               \
   size_t fmy_index = VOXEL(x,   y-1, z,    nx,ny,nz);               \
   size_t fmz_index = VOXEL(x,   y,   z-1,  nx,ny,nz);               \
-  /* Curvilinear mesh data */                                        \
+  /* Curvilinear mesh data: covariant curl only needs the Jacobian at the    \
+     cell center (E is already covariant, so no per-neighbor scale factors). */ \
   size_t m0_index  = GRID_TO_MESH(x,   y,   z,   nx, ny, nz);       \
-  size_t mx_index  = GRID_TO_MESH(x+1, y,   z,   nx, ny, nz);       \
-  size_t my_index  = GRID_TO_MESH(x,   y+1, z,   nx, ny, nz);       \
-  size_t mz_index  = GRID_TO_MESH(x,   y,   z+1, nx, ny, nz);       \
-  size_t mmx_index = GRID_TO_MESH(x-1, y,   z,   nx, ny, nz);       \
-  size_t mmy_index = GRID_TO_MESH(x,   y-1, z,   nx, ny, nz);       \
-  size_t mmz_index = GRID_TO_MESH(x,   y,   z-1, nx, ny, nz);       \
-  /* Load all scale factors */                                       \
   float h1_0  = k_curv_mesh(m0_index,  curv_mesh_var::h_1);          \
   float h2_0  = k_curv_mesh(m0_index,  curv_mesh_var::h_2);          \
   float h3_0  = k_curv_mesh(m0_index,  curv_mesh_var::h_3);          \
-  float h1_x  = k_curv_mesh(mx_index,  curv_mesh_var::h_1);          \
-  float h2_x  = k_curv_mesh(mx_index,  curv_mesh_var::h_2);          \
-  float h3_x  = k_curv_mesh(mx_index,  curv_mesh_var::h_3);          \
-  float h1_mx = k_curv_mesh(mmx_index, curv_mesh_var::h_1);          \
-  float h2_mx = k_curv_mesh(mmx_index, curv_mesh_var::h_2);          \
-  float h3_mx = k_curv_mesh(mmx_index, curv_mesh_var::h_3);          \
-  float h1_y  = k_curv_mesh(my_index,  curv_mesh_var::h_1);          \
-  float h2_y  = k_curv_mesh(my_index,  curv_mesh_var::h_2);          \
-  float h3_y  = k_curv_mesh(my_index,  curv_mesh_var::h_3);          \
-  float h1_my = k_curv_mesh(mmy_index, curv_mesh_var::h_1);          \
-  float h2_my = k_curv_mesh(mmy_index, curv_mesh_var::h_2);          \
-  float h3_my = k_curv_mesh(mmy_index, curv_mesh_var::h_3);          \
-  float h1_z  = k_curv_mesh(mz_index,  curv_mesh_var::h_1);          \
-  float h2_z  = k_curv_mesh(mz_index,  curv_mesh_var::h_2);          \
-  float h3_z  = k_curv_mesh(mz_index,  curv_mesh_var::h_3);          \
-  float h1_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_1);          \
-  float h2_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_2);          \
-  float h3_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_3);          \
-  float inv_h2h3 = 1.0f / (h2_0 * h3_0);                             \
-  float inv_h1h3 = 1.0f / (h1_0 * h3_0);                             \
-  float inv_h1h2 = 1.0f / (h1_0 * h2_0);
+  float inv_J = 1.0f / (h1_0 * h2_0 * h3_0);  /* 1/Jacobian at cell center */
 
 #define UPDATE_B(delt)               \
   F(0,cbx) = F(0,ox) - delt*ROTEX(); \

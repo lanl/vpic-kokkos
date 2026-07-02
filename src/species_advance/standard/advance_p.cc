@@ -1694,10 +1694,10 @@ advance_p_kokkos_gpu(
         //int xi = iii - yi*(nx+2);
       
 #ifdef SHAPE_NGP
-      q *= rV;
-      k_field_scatter_access(ii_pred, field_var::jfx) += q*ux;
-      k_field_scatter_access(ii_pred, field_var::jfy) += q*uy;
-      k_field_scatter_access(ii_pred, field_var::jfz) += q*uz;
+      q *= 0.125f * inv_jac;
+      k_field_scatter_access(ii_pred, field_var::jfx) += q*d_xi_dt;
+      k_field_scatter_access(ii_pred, field_var::jfy) += q*d_eta_dt;
+      k_field_scatter_access(ii_pred, field_var::jfz) += q*d_mu_dt;
       k_field_scatter_access(ii_pred, field_var::rhof) += q;
 #elif defined( SHAPE_QS )
       // stencil coefficients

@@ -74,11 +74,20 @@ typedef struct pipeline_args {
     invrho * (F(0,cb##y_) + F(0,cb##y_##0)) * inv_h1h3 * \
       ( pz * h1_z * (F(z_,cb##x_) - F(m##z_,cb##x_)) -   \
         px * h3_x * (F(x_,cb##y_) - F(m##x_,cb##y_)) ) - \
-    /* Bulk velocity term */ \
-    u##y_ * (F(0,cb##z_)+F(0,cb##z_##0)) + \
-    u##z_ * (F(0,cb##y_)+F(0,cb##y_##0)) - \
-    /* Pressure gradient with metric */ \
-    invrho * px / h1_0 * (F(x_,pe) - F(m##x_,pe)) + \
+    /* Bulk velocity term -(u x B) as a COVARIANT component. u = jf/rho is \
+       the contravariant velocity u^i and B is contravariant B^i, so the   \
+       covariant cross-product component carries the Jacobian J=h1 h2 h3:   \
+       (u x B)_k = J eps_kij u^i B^j  (Curvilinear.pdf 1.3, eq 5-6).        \
+       On CARTESIAN J=1 so this is unchanged from the original. */          \
+    (h1_0*h2_0*h3_0) * u##y_ * (F(0,cb##z_)+F(0,cb##z_##0)) + \
+    (h1_0*h2_0*h3_0) * u##z_ * (F(0,cb##y_)+F(0,cb##y_##0)) - \
+    /* Pressure gradient: covariant E_a = -(1/qn) dp/dxi^a is a pure    \
+       coordinate derivative with NO scale factor (Curvilinear.pdf eq   \
+       57, first/coordinate-component form). The gather (transform_E,    \
+       grad xi = e/h^2) supplies all geometry. px = 0.5*rdx already      \
+       gives the coordinate derivative; h1_0 must NOT appear here. On    \
+       CARTESIAN h1_0=1 so this is unchanged from the original. */       \
+    invrho * px * (F(x_,pe) - F(m##x_,pe)) + \
     /* Resistive term */ \
     do_eta*eta*F(0,tcay) * inv_h2h3 * \
       ( py * h3_y * (F(y_,cb##z_) - F(m##y_,cb##z_)) -   \

@@ -3,7 +3,7 @@ export NVCC_WRAPPER_DEFAULT_COMPILER=mpicxx
 mkdir build
 cd build
 ../arch/Darwin_Ampere
-make -j
+make -j$(nproc)
 
 #build/bin/vpic:
 # #! /usr/bin/env bash

@@ -75,7 +75,8 @@ enum grid_type {
   CARTESIAN = 0,
   CYLINDRICAL = 1,
   SPHERICAL = 2,
-  GENERAL = 3
+  GENERAL = 3,
+  // STRETCHED_CARTESIAN = 4
 };
 
 typedef struct grid {
@@ -210,35 +211,24 @@ typedef struct grid {
   //Initiates the Curvilinear grid components to a default uniform Cartesian grid format.
   void init_cartesian_grid()
   {
-    // Grid dimensions for indexing
+    // Per-rank LOCAL curvilinear mesh (sized with local nx,ny,nz), to match how
+    // advance_p/local_to_global_cart index it via GRID_TO_MESH. gnx,gny,gnz are
+    // GLOBAL; nx=gnx/gpx etc are local.
     const int ghost_layers_per_side = 2;
-    const int nx_total = gnx + 2 * ghost_layers_per_side;
-    const int ny_total = gny + 2 * ghost_layers_per_side;
-    const int nz_total = gnz + 2 * ghost_layers_per_side;
-    
+    const int nx_total = nx + 2 * ghost_layers_per_side;
+    const int ny_total = ny + 2 * ghost_layers_per_side;
+    const int nz_total = nz + 2 * ghost_layers_per_side;
+
     //printf("nv=%d",nv);
     const int nv_cm = nx_total * ny_total * nz_total;
     k_curvilinear_mesh_d = k_curvilinear_mesh_t("k_curvilinear_mesh_d", nv_cm);
     k_curvilinear_mesh_h = Kokkos::create_mirror_view(k_curvilinear_mesh_d);
 
-    // Compute the total global grid dimensions.
-    const int global_nx = gnx * gpx;
-    const int global_ny = gny * gpy;
-    const int global_nz = gnz * gpz;
-
-    const double dx = (x1 - x0) / global_nx;
-    const double dy = (y1 - y0) / global_ny;
-    const double dz = (z1 - z0) / global_nz;
-
-    // Compute this rank's low end 3D position in the processor grid
-    const int rank_i = world_rank % gpx;
-    const int rank_j = (world_rank / gpx) % gpy;
-    const int rank_k = world_rank / (gpx * gpy);
-
-    // Compute the low end 3D global index for this rank including ghost cells.    
-    int global_i_base = gnx * rank_i - ghost_layers_per_side;
-    int global_j_base = gny * rank_j - ghost_layers_per_side;
-    int global_k_base = gnz * rank_k - ghost_layers_per_side;
+    // Local (per-rank) uniform cell size. x0,x1 are this rank's bounds and
+    // nx is the local cell count, so (x1-x0)/nx is the physical cell size.
+    const double dx = (x1 - x0) / nx;
+    const double dy = (y1 - y0) / ny;
+    const double dz = (z1 - z0) / nz;
 
     Kokkos::parallel_for(
     "Fill curvilinear mesh view",
@@ -246,14 +236,12 @@ typedef struct grid {
     KOKKOS_CLASS_LAMBDA (const int i, const int j, const int k) {
       const int idx = i + j * nx_total + k * nx_total * ny_total;
 
-      // Compute global indices for this cell
-      int global_i_cell = global_i_base + i;
-      int global_j_cell = global_j_base + j;
-      int global_k_cell = global_k_base + k;
-
-      double x_i = x0 + (global_i_cell + 0.5) * dx;
-      double y_j = y0 + (global_j_cell + 0.5) * dy;
-      double z_k = z0 + (global_k_cell + 0.5) * dz;
+      // Physical position from this rank's local origin using the local mesh
+      // index (i - ghost). Ghost cells extrapolate beyond [x0,x1] onto the
+      // neighbor rank's interior, which is correct for a smooth global map.
+      double x_i = x0 + (i - ghost_layers_per_side + 0.5) * dx;
+      double y_j = y0 + (j - ghost_layers_per_side + 0.5) * dy;
+      double z_k = z0 + (k - ghost_layers_per_side + 0.5) * dz;
 
       double x = 0 + x_i;
       double y = 0 + y_j;
@@ -282,6 +270,134 @@ typedef struct grid {
     Kokkos::deep_copy(k_curvilinear_mesh_d, k_curvilinear_mesh_h);
   }
 
+  void init_stretched_cartesian_grid(double beta_x = 1.0, double beta_y = 1.0, double beta_z = 1.0)
+{
+    // The curvilinear mesh is a PER-RANK LOCAL array, sized with the local cell
+    // counts (nx,ny,nz), because advance_p/local_to_global_cart index it with
+    // GRID_TO_MESH using the local nx,ny,nz. Physical positions are still made
+    // globally consistent via this rank's global index offset. gnx,gny,gnz are
+    // the GLOBAL counts; nx=gnx/gpx etc are local.
+    const int ghost_layers_per_side = 2;
+    const int nx_total = nx + 2 * ghost_layers_per_side;
+    const int ny_total = ny + 2 * ghost_layers_per_side;
+    const int nz_total = nz + 2 * ghost_layers_per_side;
+
+    const int nv_cm = nx_total * ny_total * nz_total;
+    k_curvilinear_mesh_d = k_curvilinear_mesh_t("k_curvilinear_mesh_d", nv_cm);
+    k_curvilinear_mesh_h = Kokkos::create_mirror_view(k_curvilinear_mesh_d);
+
+    // Total global grid dimensions (local cells * processor count)
+    const int global_nx = nx * gpx;
+    const int global_ny = ny * gpy;
+    const int global_nz = nz * gpz;
+
+    // Uniform grid spacing (computational space)
+    const double dxi = 1.0 / global_nx;
+    const double deta = 1.0 / global_ny;
+    const double dzeta = 1.0 / global_nz;
+
+    // Compute this rank's low end 3D position in the processor grid
+    const int rank_i = world_rank % gpx;
+    const int rank_j = (world_rank / gpx) % gpy;
+    const int rank_k = world_rank / (gpx * gpy);
+
+    // Compute the low end 3D global index for this rank including ghost cells
+    int global_i_base = nx * rank_i - ghost_layers_per_side;
+    int global_j_base = ny * rank_j - ghost_layers_per_side;
+    int global_k_base = nz * rank_k - ghost_layers_per_side;
+
+    Kokkos::parallel_for(
+    "Fill stretched Cartesian mesh view",
+    host_execution_policy_md({0, 0, 0}, {nx_total, ny_total, nz_total}),
+    KOKKOS_CLASS_LAMBDA (const int i, const int j, const int k) {
+      const int idx = i + j * nx_total + k * nx_total * ny_total;
+
+      // Compute global indices for this cell
+      int global_i_cell = global_i_base + i;
+      int global_j_cell = global_j_base + j;
+      int global_k_cell = global_k_base + k;
+
+      // Computational coordinates (uniform [0,1])
+      double xi = (global_i_cell + 0.5) * dxi;
+      double eta = (global_j_cell + 0.5) * deta;
+      double zeta = (global_k_cell + 0.5) * dzeta;
+
+      // Apply stretching transformation: tanh-based stretching
+      double x_stretched, y_stretched, z_stretched;
+      double dx_dxi, dy_deta, dz_dzeta;
+
+      if (beta_x > 1e-10) {
+        x_stretched = Kokkos::tanh(beta_x * (xi - 0.5)) / Kokkos::tanh(beta_x * 0.5);
+        dx_dxi = beta_x / (Kokkos::tanh(beta_x * 0.5) * 
+                 Kokkos::pow(Kokkos::cosh(beta_x * (xi - 0.5)), 2));
+      } else {
+        x_stretched = 2.0 * xi - 1.0;
+        dx_dxi = 2.0;
+      }
+
+      if (beta_y > 1e-10) {
+        y_stretched = Kokkos::tanh(beta_y * (eta - 0.5)) / Kokkos::tanh(beta_y * 0.5);
+        dy_deta = beta_y / (Kokkos::tanh(beta_y * 0.5) * 
+                  Kokkos::pow(Kokkos::cosh(beta_y * (eta - 0.5)), 2));
+      } else {
+        y_stretched = 2.0 * eta - 1.0;
+        dy_deta = 2.0;
+      }
+
+      if (beta_z > 1e-10) {
+        z_stretched = Kokkos::tanh(beta_z * (zeta - 0.5)) / Kokkos::tanh(beta_z * 0.5);
+        dz_dzeta = beta_z / (Kokkos::tanh(beta_z * 0.5) * 
+                   Kokkos::pow(Kokkos::cosh(beta_z * (zeta - 0.5)), 2));
+      } else {
+        z_stretched = 2.0 * zeta - 1.0;
+        dz_dzeta = 2.0;
+      }
+
+      // Map stretched coordinate (range -1..1) to the GLOBAL physical domain
+      // [gx0,gx1]. The stretch and xi are defined globally, so the physical
+      // position must use the global bounds, not this rank's local x0/x1.
+      double x = gx0 + (gx1 - gx0) * (x_stretched + 1.0) * 0.5;
+      double y = gy0 + (gy1 - gy0) * (y_stretched + 1.0) * 0.5;
+      double z = gz0 + (gz1 - gz0) * (z_stretched + 1.0) * 0.5;
+
+      // Scale factors: dimensionless ratio of local to base (uniform) cell
+      // size, so h==1 is uniform (matches CARTESIAN convention). dx_dxi is the
+      // global derivative of the stretch map; 0.5*dx_dxi = 1 for beta=0.
+      double h1 = 0.5 * dx_dxi;
+      double h2 = 0.5 * dy_deta;
+      double h3 = 0.5 * dz_dzeta;
+
+      // Scale factors (metric coefficients)
+      k_curvilinear_mesh_h(idx, curv_mesh_var::h_1) = h1;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::h_2) = h2;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::h_3) = h3;
+
+      // Jacobian (volume element)
+      k_curvilinear_mesh_h(idx, curv_mesh_var::jac) = h1 * h2 * h3;
+
+      // Basis vectors (constant - Cartesian aligned)
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_u) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_v) = 0.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_1_w) = 0.0;
+
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_u) = 0.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_v) = 1.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_2_w) = 0.0;
+
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_u) = 0.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_v) = 0.0;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::e_3_w) = 1.0;
+
+      // Physical coordinates
+      k_curvilinear_mesh_h(idx, curv_mesh_var::xg) = x;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::yg) = y;
+      k_curvilinear_mesh_h(idx, curv_mesh_var::zg) = z;
+    });
+    
+    type = grid_type::GENERAL;
+    Kokkos::deep_copy(k_curvilinear_mesh_d, k_curvilinear_mesh_h);
+}
+
   void init_curvilinear_grid()
   {
     init_cartesian_grid();
@@ -292,35 +408,23 @@ typedef struct grid {
   // Nor does it use the defined grid cells in the grid.
   void init_cylindrical_grid()
   {
-    // Grid dimensions for indexing
+    // Per-rank LOCAL mesh (sized with local nx,ny,nz) to match GRID_TO_MESH
+    // indexing in advance_p / local_to_global_cart. Positions use this rank's
+    // local bounds x0,x1 and the local mesh index, matching the CYLINDRICAL
+    // branch of local_to_global_cart exactly.
     const int ghost_layers_per_side = 2;
-    const int nx_total = gnx + 2 * ghost_layers_per_side;
-    const int ny_total = gny + 2 * ghost_layers_per_side;
-    const int nz_total = gnz + 2 * ghost_layers_per_side;
+    const int nx_total = nx + 2 * ghost_layers_per_side;
+    const int ny_total = ny + 2 * ghost_layers_per_side;
+    const int nz_total = nz + 2 * ghost_layers_per_side;
     //printf("nv=%d",nv);
     const int nv_cm = nx_total * ny_total * nz_total;
     k_curvilinear_mesh_d = k_curvilinear_mesh_t("k_curvilinear_mesh_d", nv_cm);
     k_curvilinear_mesh_h = Kokkos::create_mirror_view(k_curvilinear_mesh_d);
 
-    // Compute the total global grid dimensions.
-    const int global_nx = gnx * gpx;
-    const int global_ny = gny * gpy;
-    const int global_nz = gnz * gpz;
-
-    // Compute grid spacing
-    const double dr = (x1 - x0) / (global_nx);
-    const double dtheta = (y1 - y0) / (global_ny);
-    const double dz_cyl = (z1 - z0) / (global_nz);
-
-    // Compute this rank's low end 3D position in the processor grid
-    const int rank_i = world_rank % gpx;
-    const int rank_j = (world_rank / gpx) % gpy;
-    const int rank_k = world_rank / (gpx * gpy);
-
-    // Compute the low end 3D global index for this rank including ghost cells.    
-    int global_i_base = gnx * rank_i - ghost_layers_per_side;
-    int global_j_base = gny * rank_j - ghost_layers_per_side;
-    int global_k_base = gnz * rank_k - ghost_layers_per_side;
+    // Local (per-rank) cell spacing in each curvilinear direction.
+    const double dr = (x1 - x0) / nx;
+    const double dtheta = (y1 - y0) / ny;
+    const double dz_cyl = (z1 - z0) / nz;
 
     Kokkos::parallel_for(
     "Fill curvilinear mesh view",
@@ -328,14 +432,12 @@ typedef struct grid {
     KOKKOS_CLASS_LAMBDA (const int i, const int j, const int k) {
       const int idx = i + j * nx_total + k * nx_total * ny_total;
 
-      // Compute global indices for this cell
-      int global_i_cell = global_i_base + i;
-      int global_j_cell = global_j_base + j;
-      int global_k_cell = global_k_base + k;
-
-      double r_i = x0 + (global_i_cell + 0.5) * dr;
-      double theta_j = y0 + (global_j_cell + 0.5) * dtheta;
-      double z_k = z0 + (global_k_cell + 0.5) * dz_cyl;
+      // Physical (r,theta,z) from this rank's local origin and the local mesh
+      // index (i - ghost). Matches local_to_global_cart's CYLINDRICAL branch:
+      // r = x0 + (voxel - 0.5)*dr, with voxel = i - ghost + 1 => (i-ghost+0.5).
+      double r_i = x0 + (i - ghost_layers_per_side + 0.5) * dr;
+      double theta_j = y0 + (j - ghost_layers_per_side + 0.5) * dtheta;
+      double z_k = z0 + (k - ghost_layers_per_side + 0.5) * dz_cyl;
 
       if (r_i < 0.0) {
           r_i = -r_i;              // Reflect radius
@@ -381,35 +483,21 @@ typedef struct grid {
   // Nor does it use the defined grid cells in the grid.
   void init_spherical_grid()
   {
-    // Grid dimensions for indexing
+    // Per-rank LOCAL mesh (sized with local nx,ny,nz) to match GRID_TO_MESH
+    // indexing. Positions use this rank's local bounds and the local mesh index.
     const int ghost_layers_per_side = 2;
-    const int nx_total = gnx + 2 * ghost_layers_per_side;
-    const int ny_total = gny + 2 * ghost_layers_per_side;
-    const int nz_total = gnz + 2 * ghost_layers_per_side;
+    const int nx_total = nx + 2 * ghost_layers_per_side;
+    const int ny_total = ny + 2 * ghost_layers_per_side;
+    const int nz_total = nz + 2 * ghost_layers_per_side;
     //printf("nv=%d",nv);
     const int nv_cm = nx_total * ny_total * nz_total;
     k_curvilinear_mesh_d = k_curvilinear_mesh_t("k_curvilinear_mesh_d", nv_cm);
     k_curvilinear_mesh_h = Kokkos::create_mirror_view(k_curvilinear_mesh_d);
 
-    // Compute the total global grid dimensions.
-    const int global_nx = gnx * gpx;
-    const int global_ny = gny * gpy;
-    const int global_nz = gnz * gpz;
-
-    // Compute grid spacing
-    const double dr = (x1 - x0) / (global_nx);
-    const double dtheta = (y1 - y0) / (global_ny);
-    const double dphi = (z1 - z0) / (global_nz);
-
-    // Compute this rank's low end 3D position in the processor grid
-    const int rank_i = world_rank % gpx;
-    const int rank_j = (world_rank / gpx) % gpy;
-    const int rank_k = world_rank / (gpx * gpy);
-
-    // Compute the low end 3D global index for this rank including ghost cells.    
-    int global_i_base = gnx * rank_i - ghost_layers_per_side;
-    int global_j_base = gny * rank_j - ghost_layers_per_side;
-    int global_k_base = gnz * rank_k - ghost_layers_per_side;
+    // Local (per-rank) cell spacing in each curvilinear direction.
+    const double dr = (x1 - x0) / nx;
+    const double dtheta = (y1 - y0) / ny;
+    const double dphi = (z1 - z0) / nz;
 
     Kokkos::parallel_for(
     "Fill curvilinear mesh view",
@@ -417,14 +505,10 @@ typedef struct grid {
     KOKKOS_CLASS_LAMBDA (const int i, const int j, const int k) {
       const int idx = i + j * nx_total + k * nx_total * ny_total;
 
-      // Compute global indices for this cell
-      int global_i_cell = global_i_base + i;
-      int global_j_cell = global_j_base + j;
-      int global_k_cell = global_k_base + k;
-
-      double r_i = x0 + (global_i_cell + 0.5) * dr;
-      double theta_j = y1 + (global_j_cell + 0.5) * dtheta;
-      double phi_k = z0 + (global_k_cell + 0.5) * dphi;
+      // Physical (r,theta,phi) from local origin and local mesh index (i-ghost).
+      double r_i = x0 + (i - ghost_layers_per_side + 0.5) * dr;
+      double theta_j = y1 + (j - ghost_layers_per_side + 0.5) * dtheta;
+      double phi_k = z0 + (k - ghost_layers_per_side + 0.5) * dphi;
 
       if (r_i < 0.0) {
           r_i = -r_i;
@@ -545,6 +629,17 @@ void grid_t::local_to_global_cart(int voxel_i, float dx_p, float dy_p, float dz_
     
     if (type == grid_type::CARTESIAN) {
         local_to_global(voxel_i, dx_p, dy_p, dz_p, x_out, y_out, z_out);
+    // } else if (type == grid_type::STRETCHED_CARTESIAN) {
+    //     int node_idx = GRID_TO_MESH(i, j, k, nx, ny, nz);
+    //     double x_center = k_curvilinear_mesh_h(node_idx, curv_mesh_var::xg);
+    //     double y_center = k_curvilinear_mesh_h(node_idx, curv_mesh_var::yg);
+    //     double z_center = k_curvilinear_mesh_h(node_idx, curv_mesh_var::zg);
+        
+    //     // Scale cell-center offset by local scale factors
+    //     x_out = x_center + 0.5 * dx_p * k_curvilinear_mesh_h(node_idx, curv_mesh_var::h_1);
+    //     y_out = y_center + 0.5 * dy_p * k_curvilinear_mesh_h(node_idx, curv_mesh_var::h_2);
+    //     z_out = z_center + 0.5 * dz_p * k_curvilinear_mesh_h(node_idx, curv_mesh_var::h_3);
+
     } else if (type == grid_type::CYLINDRICAL) {
         // Cylindrical: (r, theta, z) -> (x, y, z)
         double dr = (x1 - x0) / nx;
@@ -591,16 +686,17 @@ void grid_t::local_to_global_cart(int voxel_i, float dx_p, float dy_p, float dz_
         
     } else {
         // Use B-spline interpolation from stored mesh data
+        // Quadratic B-spline basis (must match compute_bspline_basis in advance_p.cc)
         float Sx_m1 = 0.125f * (1.0f - dx_p) * (1.0f - dx_p);
-        float Sx_0  = 0.75f - dx_p * dx_p;
+        float Sx_0  = 0.25f * (3.0f - dx_p * dx_p);
         float Sx_p1 = 0.125f * (1.0f + dx_p) * (1.0f + dx_p);
-        
+
         float Sy_m1 = 0.125f * (1.0f - dy_p) * (1.0f - dy_p);
-        float Sy_0  = 0.75f - dy_p * dy_p;
+        float Sy_0  = 0.25f * (3.0f - dy_p * dy_p);
         float Sy_p1 = 0.125f * (1.0f + dy_p) * (1.0f + dy_p);
-        
+
         float Sz_m1 = 0.125f * (1.0f - dz_p) * (1.0f - dz_p);
-        float Sz_0  = 0.75f - dz_p * dz_p;
+        float Sz_0  = 0.25f * (3.0f - dz_p * dz_p);
         float Sz_p1 = 0.125f * (1.0f + dz_p) * (1.0f + dz_p);
         
         x_out = 0.0;
