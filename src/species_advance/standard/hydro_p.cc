@@ -188,6 +188,15 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
 //    h[i].tzx += dz*vx;                                  \
 //    h[i].txy += dx*vy
 
+//  /**/            ACCUM_HYDRO(w0); // Cell i,j,k
+//  i += stride_10; ACCUM_HYDRO(w1); // Cell i+1,j,k
+//  i += stride_21; ACCUM_HYDRO(w2); // Cell i,j+1,k
+//  i += stride_10; ACCUM_HYDRO(w3); // Cell i+1,j+1,k
+//  i += stride_43; ACCUM_HYDRO(w4); // Cell i,j,k+1
+//  i += stride_10; ACCUM_HYDRO(w5); // Cell i+1,j,k+1
+//  i += stride_21; ACCUM_HYDRO(w6); // Cell i,j+1,k+1
+//  i += stride_10; ACCUM_HYDRO(w7); // Cell i+1,j+1,k+1
+
     // Accumulate the hydro fields - non-relativistic version
 #   define ACCUM_HYDRO( wn, ii)                          \
     t  = q*wn;        /* t  = (q w/V) trilin_n */        \
@@ -209,15 +218,6 @@ accumulate_hydro_p( hydro_array_t              * RESTRICT ha,
     h[ii].tyz += dy*uz;                                  \
     h[ii].tzx += dz*ux;                                  \
     h[ii].txy += dx*uy
-
-//  /**/            ACCUM_HYDRO(w0); // Cell i,j,k
-//  i += stride_10; ACCUM_HYDRO(w1); // Cell i+1,j,k
-//  i += stride_21; ACCUM_HYDRO(w2); // Cell i,j+1,k
-//  i += stride_10; ACCUM_HYDRO(w3); // Cell i+1,j+1,k
-//  i += stride_43; ACCUM_HYDRO(w4); // Cell i,j,k+1
-//  i += stride_10; ACCUM_HYDRO(w5); // Cell i+1,j,k+1
-//  i += stride_21; ACCUM_HYDRO(w6); // Cell i,j+1,k+1
-//  i += stride_10; ACCUM_HYDRO(w7); // Cell i+1,j+1,k+1
 
 #ifdef SHAPE_NGP
     ACCUM_HYDRO(w0, i); // Cell i,j,k
@@ -248,16 +248,12 @@ accumulate_hydro_p_kokkos_nomove_ngp(
 
   float c, mspc, qdt_2mc, qdt_4mc2, r8V;
 
-  //int nv = sp->g->nv; // TODO: delete
-
   if( !sp ) {
     ERROR(( "Bad args" ));
   }
 
   c        = sp->g->cvac;
   mspc     = sp->m*c;
-//  qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
-//  qdt_4mc2 = qdt_2mc / (2*c);
 #ifdef VARIABLE_CHARGE
   float dt_2mc  = (sp->g->dt)/(2*mspc); // Multiply by particle q later
   float dt_4mc2 = dt_2mc / (2*c);
@@ -266,16 +262,12 @@ accumulate_hydro_p_kokkos_nomove_ngp(
   qdt_2mc  = (qsp*sp->g->dt)/(2*mspc);
   qdt_4mc2 = qdt_2mc / (2*c);
 #endif
-  //r8V      = sp->g->r8V;
+  const float rV   = 1.0/(sp->g->dx*sp->g->dy*sp->g->dz);
+  const float r12V = rV/12.;
 
-  const size_t np        = sp->np;
-  //const int stride_10 = VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz) -
-  //                      VOXEL(0,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
-  //const int stride_21 = VOXEL(0,1,0, sp->g->nx,sp->g->ny,sp->g->nz) -
-  //                      VOXEL(1,0,0, sp->g->nx,sp->g->ny,sp->g->nz);
-  //const int stride_43 = VOXEL(0,0,1, sp->g->nx,sp->g->ny,sp->g->nz) -
-  //                      VOXEL(1,1,0, sp->g->nx,sp->g->ny,sp->g->nz);
-
+  const size_t np = sp->np;
+  const int sy = sp->g->sy;
+  const int sz = sp->g->sz;
 
   Kokkos::parallel_for("advance_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace,size_t > (0LLU, np),
     KOKKOS_LAMBDA (size_t p_index)
@@ -293,6 +285,9 @@ accumulate_hydro_p_kokkos_nomove_ngp(
     double qp  = 1.0;
 #ifdef VARIABLE_CHARGE
     qp = k_particles(p_index, particle_var::qp);
+    const double q = static_cast<double>(qp);
+#else
+    const double q = static_cast<double>(qsp);
 #endif
 
     double ke_mc = ux*ux + uy*uy + uz*uz; // ke_mc = |u|^2 (invariant)
@@ -306,11 +301,18 @@ accumulate_hydro_p_kokkos_nomove_ngp(
 
     double t = 0.0; // used in macro
     auto hydro_sa = k_hydro_sv.access();
-#ifdef VARIABLE_CHARGE
-    const float q = qp;
-#else
-    const float q = qsp;
-#endif
+
+//#ifdef SHAPE_NGP
+    float w0 = w*rV;
+//#elif defined( SHAPE_QS )
+//    float w0 =  (w*r12V) * 2.0f*( 3.0f - dx*dx - dy*dy - dz*dz );
+//    float wx =  (w*r12V) * ( dx + 1.0f )*( dx + 1.0f );
+//    float wy =  (w*r12V) * ( dy + 1.0f )*( dy + 1.0f );
+//    float wz =  (w*r12V) * ( dz + 1.0f )*( dz + 1.0f );
+//    float wmx = (w*r12V) * ( dx - 1.0f )*( dx - 1.0f );
+//    float wmy = (w*r12V) * ( dy - 1.0f )*( dy - 1.0f );
+//    float wmz = (w*r12V) * ( dz - 1.0f )*( dz - 1.0f );
+//#endif
 
     // Accumulate the hydro fields
     #define ACCUM_HYDRO( wn, i )                                 \
@@ -336,9 +338,22 @@ accumulate_hydro_p_kokkos_nomove_ngp(
 
     // TODO: this serial adding to try and save adds is a bit sad
     // TODO: This is somehow going out of bounds right now
-    const int i0 = ii;
-    if(qp!=0) {
-      ACCUM_HYDRO(w, i0); // Cell i,j,k
+//    const int i0 = ii;
+//    if(qp!=0) {
+//      ACCUM_HYDRO(w, i0); // Cell i,j,k
+//    }
+    if(q!=0) {
+//#ifdef SHAPE_NGP
+      ACCUM_HYDRO(w0, ii); // Cell i,j,k
+//#elif defined( SHAPE_QS )
+//      ACCUM_HYDRO(w0,  ii     ); // Cell i,j,k
+//      ACCUM_HYDRO(wx,  ii +  1); // Cell i+1,j,k
+//      ACCUM_HYDRO(wy,  ii + sy); // Cell i,j+1,k
+//      ACCUM_HYDRO(wz,  ii + sz); // Cell i,j,k+1
+//      ACCUM_HYDRO(wmx, ii -  1); // Cell i-1,j,k
+//      ACCUM_HYDRO(wmy, ii - sy); // Cell i,j-1,k
+//      ACCUM_HYDRO(wmz, ii - sz); // Cell i,j,k-1
+//#endif
     }
 #   undef ACCUM_HYDRO
   });

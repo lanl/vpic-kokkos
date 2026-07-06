@@ -520,12 +520,10 @@ hydro_array_t::copy_to_host(FILE *fp, const int step /*=0*/) {
       Tz = ( Tz - vz * vz );
       
       auto T = (Tx+Ty+Tz)/3.0;
-      fprintf(fp,"%d %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %d",step, 
+      fprintf(fp,"%d %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %d\n",step, 
               0.5*(square_sum), txx, tyy, tzz, vx, vy, vz,T,i);
     } 
   });
-  // printf("k_h_h.extent(0)=%d\n",k_h_h.extent(0));
-  if(fp && wr==0) fprintf(fp,"\n");
 }
 
 void
