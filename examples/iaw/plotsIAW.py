@@ -4,7 +4,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import pywt
 
-datadir = "./data/"
+datadir = "../../build/data/"
 nx = 48#96
 nt = 100
 

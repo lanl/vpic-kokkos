@@ -78,15 +78,15 @@ begin_initialization {
   double Lz    = 16.0;    // size of box in z dimension
   double kz = 2.0*M_PI/Lz;  // Wavenumber of perturbation.
 
-  double nx = 1;
-  double ny = 5;
+  double nx = 10;
+  double ny = 10;
   double nz = 48;
 
-  double nppc  = 150000;    // Average number of macro particle per cell per species 
+  double nppc  = 150;    // Average number of macro particle per cell per species 
   
   double topology_x = 1; // Number of domains in x, y, and z
   double topology_y = 1;
-  double topology_z = 16;
+  double topology_z = 1;
 
 
   // Derived numerical parameters
@@ -154,7 +154,7 @@ begin_initialization {
   define_timestep( dt );
 
   // Define the grid
-  define_periodic_grid(  0., -0.5*Ly, -0.5*Lz,    // Low corner
+  define_periodic_grid(  0.1, -0.5*Ly, -0.5*Lz,    // Low corner
                           Lx,  0.5*Ly, 0.5*Lz,     // High corner
                          nx, ny, nz,             // Resolution
                          topology_x, topology_y, topology_z); // Topology
@@ -278,22 +278,21 @@ sim_log( "Loading fields" );
 
  repeat( Ni ) {
     double x, y, z, r, ux, uy, uz, d0;
-    // rejection method, sine profile                                                                                                                                                                    
+    // Rejection sample z with the sinusoidal density perturbation along z
+    // (this is a z-directed ion-acoustic wave). r is the rejection variable.
     do {
       z = uniform( rng(0), -Lz/2, Lz/2 );
       r = uniform(rng(0) , 0   , 1.0+pert);
     } while( r > (1.0+pert*sin(kz*z))) ;
 
-    if (x>=xmin && x<= xmax) {
-      //      x = uniform( rng(0), xmin, xmax );
-      y = uniform( rng(0), ymin, ymax );
-      x = uniform( rng(0), xmin, xmax );
-      
-      ux = normal( rng(0), 0, vthi );                                                                                                                                      
-      uy = normal( rng(0), 0, vthi );
-      uz = normal( rng(0), 0, vthi );
-      inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0 );
-    }
+    // Uniformly fill the (r=x, theta=y) cross-section of this rank's subdomain.
+    x = uniform( rng(0), xmin, xmax );
+    y = uniform( rng(0), ymin, ymax );
+
+    ux = normal( rng(0), 0, vthi );
+    uy = normal( rng(0), 0, vthi );
+    uz = normal( rng(0), 0, vthi );
+    inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0 );
  }
 
  

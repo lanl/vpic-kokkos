@@ -9,12 +9,12 @@ rm -rf restore1
 rm -rf particle
 module load gcc/12.2.0 openmpi/4.1.5-gcc_12.2.0 cmake/3.29.2 cuda/12.9.1
 export NVCC_WAPPER_DEFAULT_COMPILER=mpicxx
-./bin/vpic ../examples/iaw/iaw_curv.cxx
+./bin/vpic ../examples/whistler/whistler.cxx
 export OMP_PROC_BIND=true
-srun -N1 -n1 ./iaw_curv.Linux
-mpif90 -o translateIAW ../examples/iaw/translateIAW.f90
+srun -N1 -n1 ./whistler.Linux
+mpif90 -o translateWhistler ../examples/whistler/translateWhistler.f90
 mkdir data
-mpirun -np 1 ./translateIAW
-cd ../examples/iaw
+mpirun -np 1 ./translateWhistler
+cd ../examples/whistler
 module load miniconda3
-python plotsIAW_curv.py
+python plotsWhistler.py

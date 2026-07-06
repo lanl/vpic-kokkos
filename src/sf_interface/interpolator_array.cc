@@ -86,23 +86,27 @@ void transform_E_to_cartesian(
     float e3_v = k_cmesh(mesh_index, curv_mesh_var::e_3_v);  // e₃ʸ
     float e3_w = k_cmesh(mesh_index, curv_mesh_var::e_3_w);  // e₃ᶻ
     
-    // Compute reciprocal basis: ∇ξⁱ = (1/hⁱ²) eⁱ
-    float inv_h1_sq = 1.0f / (h1 * h1);
-    float inv_h2_sq = 1.0f / (h2 * h2);
-    float inv_h3_sq = 1.0f / (h3 * h3);
-    
-    float grad_xi_x   = inv_h1_sq * e1_u;
-    float grad_xi_y   = inv_h1_sq * e1_v;
-    float grad_xi_z   = inv_h1_sq * e1_w;
-    
-    float grad_eta_x  = inv_h2_sq * e2_u;
-    float grad_eta_y  = inv_h2_sq * e2_v;
-    float grad_eta_z  = inv_h2_sq * e2_w;
-    
-    float grad_zeta_x = inv_h3_sq * e3_u;
-    float grad_zeta_y = inv_h3_sq * e3_v;
-    float grad_zeta_z = inv_h3_sq * e3_w;
-    
+    // The stored e_*_* are UNIT basis vectors ê_i (|ê_i|=1), so the reciprocal
+    // basis is ∇ξ^i = ê_i / h_i (ONE power of h). (Only if the e_* were the
+    // TANGENT basis e_i = h_i ê_i would it be e_i/h_i^2.) E is COVARIANT E_i,
+    // so the Cartesian field is E_cart = E_i ∇ξ^i = E_i (ê_i / h_i). On a
+    // uniform grid h=1 this is identity, matching Cartesian.
+    float inv_h1 = 1.0f / h1;
+    float inv_h2 = 1.0f / h2;
+    float inv_h3 = 1.0f / h3;
+
+    float grad_xi_x   = inv_h1 * e1_u;
+    float grad_xi_y   = inv_h1 * e1_v;
+    float grad_xi_z   = inv_h1 * e1_w;
+
+    float grad_eta_x  = inv_h2 * e2_u;
+    float grad_eta_y  = inv_h2 * e2_v;
+    float grad_eta_z  = inv_h2 * e2_w;
+
+    float grad_zeta_x = inv_h3 * e3_u;
+    float grad_zeta_y = inv_h3 * e3_v;
+    float grad_zeta_z = inv_h3 * e3_w;
+
     // Transform: E^α = E_ν (∇ξ^ν)^α
     Ex = E_xi * grad_xi_x + E_eta * grad_eta_x + E_zeta * grad_zeta_x;
     Ey = E_xi * grad_xi_y + E_eta * grad_eta_y + E_zeta * grad_zeta_y;
@@ -116,23 +120,28 @@ void transform_B_to_cartesian(
     float B_xi, float B_eta, float B_zeta,
     float& Bx, float& By, float& Bz)
 {
-    // Equation 63: B^α = B^ν (∂x/∂ξ^ν)^α
-    // We have the tangent basis vectors directly stored!
-    
-    // Load tangent basis vectors (∂x/∂ξⁱ)
-    float e1_u = k_cmesh(mesh_index, curv_mesh_var::e_1_u);  // (∂x/∂ξ)ˣ
-    float e1_v = k_cmesh(mesh_index, curv_mesh_var::e_1_v);  // (∂x/∂ξ)ʸ
-    float e1_w = k_cmesh(mesh_index, curv_mesh_var::e_1_w);  // (∂x/∂ξ)ᶻ
-    
-    float e2_u = k_cmesh(mesh_index, curv_mesh_var::e_2_u);  // (∂x/∂η)ˣ
-    float e2_v = k_cmesh(mesh_index, curv_mesh_var::e_2_v);  // (∂x/∂η)ʸ
-    float e2_w = k_cmesh(mesh_index, curv_mesh_var::e_2_w);  // (∂x/∂η)ᶻ
-    
-    float e3_u = k_cmesh(mesh_index, curv_mesh_var::e_3_u);  // (∂x/∂ζ)ˣ
-    float e3_v = k_cmesh(mesh_index, curv_mesh_var::e_3_v);  // (∂x/∂ζ)ʸ
-    float e3_w = k_cmesh(mesh_index, curv_mesh_var::e_3_w);  // (∂x/∂ζ)ᶻ
-    
-    // Transform: B^α = B^ν (∂x/∂ξ^ν)^α
+    // B is CONTRAVARIANT B^i, so the Cartesian field is B_cart = B^i e_i where
+    // e_i = ∂x/∂ξ^i is the TANGENT basis. The stored e_*_* are UNIT vectors ê_i,
+    // and the tangent basis is e_i = h_i ê_i, so we multiply by the scale
+    // factor h_i (ONE power of h). On a uniform grid h=1 this is identity.
+    float h1 = k_cmesh(mesh_index, curv_mesh_var::h_1);
+    float h2 = k_cmesh(mesh_index, curv_mesh_var::h_2);
+    float h3 = k_cmesh(mesh_index, curv_mesh_var::h_3);
+
+    // Tangent basis e_i = h_i * ê_i (unit vectors ê_i are stored).
+    float e1_u = h1 * k_cmesh(mesh_index, curv_mesh_var::e_1_u);
+    float e1_v = h1 * k_cmesh(mesh_index, curv_mesh_var::e_1_v);
+    float e1_w = h1 * k_cmesh(mesh_index, curv_mesh_var::e_1_w);
+
+    float e2_u = h2 * k_cmesh(mesh_index, curv_mesh_var::e_2_u);
+    float e2_v = h2 * k_cmesh(mesh_index, curv_mesh_var::e_2_v);
+    float e2_w = h2 * k_cmesh(mesh_index, curv_mesh_var::e_2_w);
+
+    float e3_u = h3 * k_cmesh(mesh_index, curv_mesh_var::e_3_u);
+    float e3_v = h3 * k_cmesh(mesh_index, curv_mesh_var::e_3_v);
+    float e3_w = h3 * k_cmesh(mesh_index, curv_mesh_var::e_3_w);
+
+    // Transform: B^α = B^ν (∂x/∂ξ^ν)^α = B^ν (h_ν ê_ν)^α
     Bx = B_xi * e1_u + B_eta * e2_u + B_zeta * e3_u;
     By = B_xi * e1_v + B_eta * e2_v + B_zeta * e3_v;
     Bz = B_xi * e1_w + B_eta * e2_w + B_zeta * e3_w;

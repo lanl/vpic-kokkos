@@ -82,9 +82,9 @@ begin_initialization {
   double ny = 1;
   double nz = 1;
 
-  double nppc  = 15000;    // Average number of macro particle per cell per species 
+  double nppc  = 150;    // Average number of macro particle per cell per species 
   
-  double topology_x = 12; // Number of domains in x, y, and z
+  double topology_x = 1; // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 1;
 
@@ -165,7 +165,7 @@ begin_initialization {
   grid->hypereta = hypereta;
   grid->eos_gamma = gamma;
   grid->eos_gamma_0 = gamma;
-  grid->init_cartesian_grid();
+  grid->init_stretched_cartesian_grid(2, 0, 0);
 
   grid->nsub = 1; // Number of substeps for field solve.
   grid->nsm = 2;  // Number of binomial smoothing passes (to fields & moments).
