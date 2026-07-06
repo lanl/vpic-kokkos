@@ -725,6 +725,173 @@ void grid_t::local_to_global_cart(int voxel_i, float dx_p, float dy_p, float dz_
     }
 }
 
+// Quadratic B-spline basis functions and derivatives for the curvilinear mesh.
+// Input:  xi in logical coordinate ([-1,1] within a cell)
+// Output: basis functions S and derivatives dS for three nodes (i-1, i, i+1)
+KOKKOS_INLINE_FUNCTION
+void compute_bspline_basis(float xi,
+                           float& S_m1, float& S_0, float& S_p1,
+                           float& dS_m1, float& dS_0, float& dS_p1) {
+  // Basis functions
+  S_m1 = 0.125f * (1.0f - xi) * (1.0f - xi);
+  S_0  = 0.25f * (3.0f - xi * xi);
+  S_p1 = 0.125f * (1.0f + xi) * (1.0f + xi);
+
+  // Derivatives
+  dS_m1 = 0.25f * (xi - 1.0f);
+  dS_0  = -0.5f * xi;
+  dS_p1 = 0.25f * (xi + 1.0f);
+}
+
+// Reciprocal basis vectors grad(xi^a) and the Jacobian at a particle position,
+// for each supported grid geometry. Used by both advance_p and move_p so the
+// current/charge deposit uses coordinate-consistent (contravariant) components.
+KOKKOS_INLINE_FUNCTION
+void compute_reciprocal_basis(
+    const grid_t* g,
+    float dx, float dy, float dz,  // Particle position in logical coords
+    int ii,                         //Base voxel index
+    int nx, int ny, int nz,
+    float gdx, float gdy, float gdz,
+    float& grad_xi_x, float& grad_xi_y, float& grad_xi_z,
+    float& grad_eta_x, float& grad_eta_y, float& grad_eta_z,
+    float& grad_mu_x, float& grad_mu_y, float& grad_mu_z,
+    float& jac)
+{
+  if (g->type == grid_type::CARTESIAN) {
+        grad_xi_x = 2.0f / gdx;
+        grad_xi_y = 0.0f;
+        grad_xi_z = 0.0f;
+        grad_eta_x = 0.0f;
+        grad_eta_y = 2.0f / gdy;
+        grad_eta_z = 0.0f;
+        grad_mu_x = 0.0f;
+        grad_mu_y = 0.0f;
+        grad_mu_z = 2.0f / gdz;
+        jac = gdx * gdy * gdz / 8.0f;
+
+    } else if (g->type == grid_type::CYLINDRICAL) {
+        double x_cart, y_cart, z_cart;
+        g->local_to_global_cart(ii, dx, dy, dz, x_cart, y_cart, z_cart);
+
+        float r_phys = sqrtf(x_cart*x_cart + y_cart*y_cart);
+        float theta_phys = atan2f(y_cart, x_cart);
+        float cos_th = cosf(theta_phys);
+        float sin_th = sinf(theta_phys);
+
+        grad_xi_x = (2.0f / gdx) * cos_th;
+        grad_xi_y = (2.0f / gdx) * sin_th;
+        grad_xi_z = 0.0f;
+        grad_eta_x = (-2.0f / gdy) * sin_th / r_phys;
+        grad_eta_y = (2.0f / gdy) * cos_th / r_phys;
+        grad_eta_z = 0.0f;
+        grad_mu_x = 0.0f;
+        grad_mu_y = 0.0f;
+        grad_mu_z = 2.0f / gdz;
+        jac = r_phys * gdx * gdy * gdz / 8.0f;
+
+    } else if (g->type == grid_type::SPHERICAL) {
+        double x_cart, y_cart, z_cart;
+        g->local_to_global_cart(ii, dx, dy, dz, x_cart, y_cart, z_cart);
+
+        float r_phys = sqrtf(x_cart*x_cart + y_cart*y_cart + z_cart*z_cart);
+        float theta_phys = acosf(z_cart / r_phys);
+        float phi_phys = atan2f(y_cart, x_cart);
+        float sin_theta = sinf(theta_phys);
+        float cos_theta = cosf(theta_phys);
+        float sin_phi = sinf(phi_phys);
+        float cos_phi = cosf(phi_phys);
+
+        grad_xi_x = (2.0f / gdx) * sin_theta * cos_phi;
+        grad_xi_y = (2.0f / gdx) * sin_theta * sin_phi;
+        grad_xi_z = (2.0f / gdx) * cos_theta;
+        grad_eta_x = (2.0f / gdy) * cos_theta * cos_phi / r_phys;
+        grad_eta_y = (2.0f / gdy) * cos_theta * sin_phi / r_phys;
+        grad_eta_z = (2.0f / gdy) * (-sin_theta) / r_phys;
+        grad_mu_x = (2.0f / gdz) * (-sin_phi) / (r_phys * sin_theta);
+        grad_mu_y = (2.0f / gdz) * cos_phi / (r_phys * sin_theta);
+        grad_mu_z = 0.0f;
+        jac = r_phys * r_phys * sin_theta * gdx * gdy * gdz / 8.0f;
+
+    } else {
+      //Compute B-spline basis functions and derivatives
+      float Sx_m1, Sx_0, Sx_p1, dSx_m1, dSx_0, dSx_p1;
+      float Sy_m1, Sy_0, Sy_p1, dSy_m1, dSy_0, dSy_p1;
+      float Sz_m1, Sz_0, Sz_p1, dSz_m1, dSz_0, dSz_p1;
+
+      compute_bspline_basis(dx, Sx_m1, Sx_0, Sx_p1, dSx_m1, dSx_0, dSx_p1);
+      compute_bspline_basis(dy, Sy_m1, Sy_0, Sy_p1, dSy_m1, dSy_0, dSy_p1);
+      compute_bspline_basis(dz, Sz_m1, Sz_0, Sz_p1, dSz_m1, dSz_0, dSz_p1);
+
+      // Get voxel coordinates from linear index
+      int xi, yi, zi;
+      UNVOXEL(ii,xi, yi, zi,nx,ny,nz);
+
+      // Initialize Jacobian matrix elements
+      float dx_dxi = 0.0f, dy_dxi = 0.0f, dz_dxi = 0.0f;
+      float dx_deta = 0.0f, dy_deta = 0.0f, dz_deta = 0.0f;
+      float dx_dmu = 0.0f, dy_dmu = 0.0f, dz_dmu = 0.0f;
+
+      // Tri-linear interpolation using tensor product of B-splines
+      // Loop over 3x3x3 neighboring ndes
+      for (int kk = -1; kk <= 1; kk++) {
+        float Sz = (kk == -1) ? Sz_m1 : ((kk == 0) ? Sz_0 : Sz_p1);
+        float dSz = (kk == -1) ? dSz_m1 : ((kk == 0) ? dSz_0 : dSz_p1);
+
+        for (int jj = -1; jj <= 1; jj++) {
+          float Sy = (jj == -1) ? Sy_m1 : ((jj == 0) ? Sy_0 : Sy_p1);
+          float dSy = (jj == -1) ? dSy_m1 : ((jj == 0) ? dSy_0 : dSy_p1);
+
+          for (int ii_offset = -1; ii_offset <= 1; ii_offset++) {
+            float Sx = (ii_offset == -1) ? Sx_m1 : ((ii_offset == 0) ? Sx_0 : Sx_p1);
+            float dSx = (ii_offset == -1) ? dSx_m1 : ((ii_offset == 0) ? dSx_0 : dSx_p1);
+
+            // Compute node index in the curvilinear mesh array
+            int node_idx = GRID_TO_MESH(xi+ii_offset,yi+jj,zi+kk,nx,ny,nz);
+
+            // Get Cartesian positions at this node
+            float xg = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::xg);
+            float yg = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::yg);
+            float zg = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::zg);
+
+            // Accumulate Jacobian matrix elements
+            dx_dxi += xg * dSx * Sy * Sz;
+            dy_dxi += yg * dSx * Sy * Sz;
+            dz_dxi += zg * dSx * Sy * Sz;
+
+            dx_deta += xg * Sx * dSy * Sz;
+            dy_deta += yg * Sx * dSy * Sz;
+            dz_deta += zg * Sx * dSy * Sz;
+
+            dx_dmu += xg * Sx * Sy * dSz;
+            dy_dmu += yg * Sx * Sy * dSz;
+            dz_dmu += zg * Sx * Sy * dSz;
+          }
+        }
+      }
+
+      // Compute Jacobian determinant
+      jac = dx_dxi * (dy_deta * dz_dmu - dy_dmu * dz_deta)
+              - dx_deta * (dy_dxi * dz_dmu - dy_dmu * dz_dxi)
+              + dx_dmu * (dy_dxi * dz_deta - dy_deta * dz_dxi);
+
+      float inv_jac = 1.0f / jac;
+
+      // Compute reciprocal basis vectors
+      grad_xi_x = inv_jac * (dy_deta * dz_dmu - dy_dmu * dz_deta);
+      grad_xi_y = inv_jac * (dx_dmu * dz_deta - dx_deta * dz_dmu);
+      grad_xi_z = inv_jac * (dx_deta * dy_dmu - dx_dmu * dy_deta);
+
+      grad_eta_x = inv_jac * (dy_dmu * dz_dxi - dy_dxi * dz_dmu);
+      grad_eta_y = inv_jac * (dx_dxi * dz_dmu - dx_dmu * dz_dxi);
+      grad_eta_z = inv_jac * (dx_dmu * dy_dxi - dx_dxi * dy_dmu);
+
+      grad_mu_x = inv_jac * (dy_dxi * dz_deta - dy_deta * dz_dxi);
+      grad_mu_y = inv_jac * (dx_deta * dz_dxi - dx_dxi * dz_deta);
+      grad_mu_z = inv_jac * (dx_dxi * dy_deta - dx_deta * dy_dxi);
+    }
+}
+
 KOKKOS_INLINE_FUNCTION
 void grid_t::local_to_global(int voxel_i, float dx_p, float dy_p, float dz_p,
                                           double& xi_out, double& eta_out, double& mu_out) const {

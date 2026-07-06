@@ -64,33 +64,27 @@ void transform_E_to_cartesian(
     float E_xi, float E_eta, float E_zeta,
     float& Ex, float& Ey, float& Ez)
 {
-    // Equation 62: E^α = E_ν (∇ξ^ν)^α
-    // For orthogonal coordinates: ∇ξⁱ = (1/hⁱ²) eⁱ
-    // where eⁱ = ∂x/∂ξⁱ are the tangent basis vectors
-    
     // Load scale factors
     float h1 = k_cmesh(mesh_index, curv_mesh_var::h_1);
     float h2 = k_cmesh(mesh_index, curv_mesh_var::h_2);
     float h3 = k_cmesh(mesh_index, curv_mesh_var::h_3);
-    
-    // Load tangent basis vectors (∂x/∂ξⁱ)
-    float e1_u = k_cmesh(mesh_index, curv_mesh_var::e_1_u);  // e₁ˣ
-    float e1_v = k_cmesh(mesh_index, curv_mesh_var::e_1_v);  // e₁ʸ
-    float e1_w = k_cmesh(mesh_index, curv_mesh_var::e_1_w);  // e₁ᶻ
-    
-    float e2_u = k_cmesh(mesh_index, curv_mesh_var::e_2_u);  // e₂ˣ
-    float e2_v = k_cmesh(mesh_index, curv_mesh_var::e_2_v);  // e₂ʸ
-    float e2_w = k_cmesh(mesh_index, curv_mesh_var::e_2_w);  // e₂ᶻ
-    
-    float e3_u = k_cmesh(mesh_index, curv_mesh_var::e_3_u);  // e₃ˣ
-    float e3_v = k_cmesh(mesh_index, curv_mesh_var::e_3_v);  // e₃ʸ
-    float e3_w = k_cmesh(mesh_index, curv_mesh_var::e_3_w);  // e₃ᶻ
-    
-    // The stored e_*_* are UNIT basis vectors ê_i (|ê_i|=1), so the reciprocal
-    // basis is ∇ξ^i = ê_i / h_i (ONE power of h). (Only if the e_* were the
-    // TANGENT basis e_i = h_i ê_i would it be e_i/h_i^2.) E is COVARIANT E_i,
-    // so the Cartesian field is E_cart = E_i ∇ξ^i = E_i (ê_i / h_i). On a
-    // uniform grid h=1 this is identity, matching Cartesian.
+
+    // Load unit basis vectors
+    float e1_u = k_cmesh(mesh_index, curv_mesh_var::e_1_u);
+    float e1_v = k_cmesh(mesh_index, curv_mesh_var::e_1_v);
+    float e1_w = k_cmesh(mesh_index, curv_mesh_var::e_1_w);
+
+    float e2_u = k_cmesh(mesh_index, curv_mesh_var::e_2_u);
+    float e2_v = k_cmesh(mesh_index, curv_mesh_var::e_2_v);
+    float e2_w = k_cmesh(mesh_index, curv_mesh_var::e_2_w);
+
+    float e3_u = k_cmesh(mesh_index, curv_mesh_var::e_3_u);
+    float e3_v = k_cmesh(mesh_index, curv_mesh_var::e_3_v);
+    float e3_w = k_cmesh(mesh_index, curv_mesh_var::e_3_w);
+
+    // Stored e_*_* are UNIT basis vectors ê_i, E is COVARIANT E_i, so the
+    // Cartesian field is E_cart = E_i ê_i / h_i. On a uniform grid h=1 this is
+    // identity, matching Cartesian.
     float inv_h1 = 1.0f / h1;
     float inv_h2 = 1.0f / h2;
     float inv_h3 = 1.0f / h3;
@@ -120,15 +114,13 @@ void transform_B_to_cartesian(
     float B_xi, float B_eta, float B_zeta,
     float& Bx, float& By, float& Bz)
 {
-    // B is CONTRAVARIANT B^i, so the Cartesian field is B_cart = B^i e_i where
-    // e_i = ∂x/∂ξ^i is the TANGENT basis. The stored e_*_* are UNIT vectors ê_i,
-    // and the tangent basis is e_i = h_i ê_i, so we multiply by the scale
-    // factor h_i (ONE power of h). On a uniform grid h=1 this is identity.
+    // B is CONTRAVARIANT B^i, Cartesian B_cart = B^i e_i with tangent basis
+    // e_i = h_i ê_i (stored ê_i are unit). On a uniform grid h=1 this is
+    // identity.
     float h1 = k_cmesh(mesh_index, curv_mesh_var::h_1);
     float h2 = k_cmesh(mesh_index, curv_mesh_var::h_2);
     float h3 = k_cmesh(mesh_index, curv_mesh_var::h_3);
 
-    // Tangent basis e_i = h_i * ê_i (unit vectors ê_i are stored).
     float e1_u = h1 * k_cmesh(mesh_index, curv_mesh_var::e_1_u);
     float e1_v = h1 * k_cmesh(mesh_index, curv_mesh_var::e_1_v);
     float e1_w = h1 * k_cmesh(mesh_index, curv_mesh_var::e_1_w);
@@ -148,10 +140,10 @@ void transform_B_to_cartesian(
 }
 
 void 
-load_interpolator_array_kokkos(k_interpolator_t k_interp, 
+load_interpolator_array_kokkos(k_interpolator_t k_interp,
                                k_field_t k_field,
                                k_curvilinear_mesh_t k_cmesh,  // ← NEW: Pass curvilinear mesh
-                               int nx, int ny, int nz) 
+                               int nx, int ny, int nz)
 {
   #define pi_ex       k_interp(pi_index, interpolator_var::ex)
   #define pi_dexdx    k_interp(pi_index, interpolator_var::dexdx)

@@ -4,25 +4,22 @@ import matplotlib
 import matplotlib.pyplot as plt
 #import pywt
 
-datadir = "./data/"
+datadir = "../../build/data/"
+nx = 64
+taui = 60          # full run time (t axis); nt inferred from file size for partial runs
+ndump_full = 300   # nominal dumps for a full run (each dump = taui/ndump_full)
 
 pi = np.pi
 
-# Grid size along the wave direction. Prefer reading it from the run's grid
-# info; fall back to a default. This must match the deck's nx.
-nx = 48
-Lx = 10.5      # physical box length (t * w_ci axis uses taui below)
-taui = 10      # simulation run time in w_ci^-1 (deck's taui)
+# Infer number of time records from the actual file size so partial/unfinished
+# runs still plot (each .gda holds nt*nx float32 values).
+_sz = os.path.getsize(datadir + "By.gda") // 4
+nt = _sz // nx
+print("nx=%d, nt=%d (inferred; %d floats)" % (nx, nt, _sz))
 
-# Infer the number of time records from the actual file size so the script
-# never mismatches the deck (each .gda holds nt * nx float32 values).
-import os
-_ref = os.path.join(datadir, "By.gda")
-nt = os.path.getsize(_ref) // (4 * nx)
-print("nx=%d, nt=%d (inferred from %s)" % (nx, nt, _ref))
-
-xv = np.linspace(0, Lx, num=nx)
-tv = np.linspace(0, taui, num=nt)
+xv = np.linspace(0,10.5,num=nx)
+# tv spans only the records we actually have: each dump is taui/ndump_full.
+tv = np.arange(nt) * (taui / float(ndump_full))
 if (nx>1): dx = xv[1]-xv[0]
 if (nt>1): dt = tv[1]-tv[0]
 
@@ -44,9 +41,21 @@ Q = {}
 for slice in range(0,1):
 	qs = ["Uiy","Uiz","aniso","By","Bz"]
 	for q in qs:
-		tmp = loadSlice(datadir,q,slice,nx,nt)
+		tmp = loadSlice(datadir,q,slice,nx,nt)   # shape (nx, nt)
 		Q[q] = tmp
-	
+
+# A killed run can leave the final dump partially written (NaN/inf or a blown-up
+# spike). Trim trailing time columns that are not finite (or absurdly large) in
+# By, and shrink tv to match, so the plot autoscale isn't wrecked.
+_finite = np.all(np.isfinite(Q["By"]), axis=0) & (np.max(np.abs(Q["By"]), axis=0) < 1e3)
+ngood = int(np.argmax(~_finite)) if (~_finite).any() else nt
+if ngood < 1: ngood = nt        # fallback: keep all if detection fails
+if ngood < nt:
+	print("trimming %d trailing bad/partial record(s); keeping %d" % (nt-ngood, ngood))
+	for q in qs:
+		Q[q] = Q[q][:, :ngood]
+	tv = tv[:ngood]
+
 fig, (ax1,ax2) = plt.subplots(nrows=2)
 im1 = ax1.pcolormesh(tv,xv,Q["Uiy"])
 #ax1.set_xlabel('t*w_ci')
@@ -72,7 +81,7 @@ ax2.set_ylabel('d|Ui|')
 ax2.legend()
 
 #plt.xlim([0, 80])
-plt.xlim([0, taui])
+plt.xlim([0, tv[-1]])
 plt.ylim([-2, 1])
 
 
@@ -88,7 +97,7 @@ ax3.set_ylabel('P_perp/P_par')
 ax4.set_ylabel('d|B|')
 ax4.legend()
 
-plt.xlim([0, taui])
+plt.xlim([0, tv[-1]])
 plt.ylim([-2, 1])
 
 plt.show()

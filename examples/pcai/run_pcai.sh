@@ -9,8 +9,9 @@ rm -rf restore0
 rm -rf restore1
 rm -rf particle
 ./bin/vpic ../examples/pcai/pcai.cxx
-srun -N1 -n1 ./pcai.Linux
+srun -N4 -n8 ./pcai.Linux
 mpif90 -o translate_pcai ../examples/pcai/translate_pcai.f90
 mkdir data
 mpirun -np 1 ./translate_pcai
-python3 ../examples/pcai/plotsPCAI.py
+cd ../examples/pcai
+python3 plotsPCAI.py

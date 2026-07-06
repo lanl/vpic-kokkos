@@ -104,6 +104,14 @@ typedef struct pipeline_args {
 #define HEXP(n,cell) HCAT(n,cell)
 #define H(comp,cell) HEXP(HN_##comp, cell)
 
+// HGD(dir): half the logical->physical cell size gd_dir/2 in direction dir
+// (x/y/z), for converting contravariant velocity to physical in the motional
+// term. Rotates with the cyclic macro arguments.
+#define HGD_x hgdx
+#define HGD_y hgdy
+#define HGD_z hgdz
+#define HGD(dir) HGD_##dir
+
 // Bf(cell, comp): contravariant B^comp (incl. external cb0) at bare-direction
 // cell.
 #define Bf(cell, comp) ( F(cell, cb##comp) + F(cell, cb##comp##0) )
@@ -122,8 +130,13 @@ typedef struct pipeline_args {
     invrho * (                                                              \
       ( dBL(z_, x_) - dBL(x_, z_) ) * Bf(0, z_)                             \
     - ( dBL(x_, y_) - dBL(y_, x_) ) * Bf(0, y_) ) +                         \
-    /* -(u x B)_x = -J (u^y B^z - u^z B^y) */                               \
-    (h1_0*h2_0*h3_0) * ( - u##y_ * Bf(0,z_) + u##z_ * Bf(0,y_) ) -          \
+    /* Motional -(u x B)_x, covariant. u=jf/rho is CONTRAVARIANT u^i; convert   \
+       each component to physical velocity u_phys_i = u^i * H_i, H_i=h_i*gd_i/2 \
+       (= H(i,0)*HGD(i)), then take the physical cross product with B (cb).      \
+       On CARTESIAN u^i*H_i = u_phys_i and h=1 so this reduces to the working    \
+       -u_phys_y*B_z + u_phys_z*B_y. */                                          \
+    ( - (u##y_ * H(y_,0)*HGD(y_)) * Bf(0,z_)                                  \
+      + (u##z_ * H(z_,0)*HGD(z_)) * Bf(0,y_) ) -                              \
     /* pressure: -(1/qn) d_x(pe) */                                         \
     invrho * P(x_) * ( F(x_,pe) - F(m##x_,pe) ) +                           \
     /* resistive: +do_eta*eta*tcay*(h_x^2/J)*( d_y(h_z^2 B_z)-d_z(h_y^2 B_y) ) */ \
@@ -233,6 +246,13 @@ hyb_advance_e( field_array_t * RESTRICT fa,
   const float px = (nx>1) ? 0.5*g->rdx : 0;
   const float py = (ny>1) ? 0.5*g->rdy : 0;
   const float pz = (nz>1) ? 0.5*g->rdz : 0;
+  // Half the logical->physical cell size in each direction, gd_i/2 (needed to
+  // convert the contravariant bulk velocity u^i = jf/rho into a physical
+  // velocity in the motional -u x B term: u_phys_i = u^i * H_i, H_i=h_i*gd_i/2).
+  // Uses g->dx directly (NOT p_i, which is zeroed in singleton directions).
+  const float hgdx = 0.5f * g->dx;
+  const float hgdy = 0.5f * g->dy;
+  const float hgdz = 0.5f * g->dz;
   const float eta = g->eta;
   const float den_floor_ohm = g->den_floor_ohm;
   const float rVt = g->rdx*g->rdy*g->rdz/g->dt;

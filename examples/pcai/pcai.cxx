@@ -1,4 +1,4 @@
-n_globals {
+begin_globals {
 
   int restart_interval;
   int energies_interval;
@@ -77,7 +77,7 @@ begin_initialization {
 
   double nppc  = 10000;         // Average number of macro particle per cell per species 
   
-  double topology_x = 1; // Number of domains in x, y, and z
+  double topology_x = 8; // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 1;
 
@@ -155,7 +155,7 @@ begin_initialization {
   //  grid->te = Te;
   //  grid->den = 1.0;
   grid->eta = eta;
-  grid->init_cartesian_grid()
+  grid->init_cartesian_grid();
   //  grid->hypereta = hypereta;
   //  grid->gamma = gamma;
 

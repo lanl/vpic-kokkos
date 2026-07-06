@@ -634,10 +634,24 @@ move_p_kokkos(
 	//if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
 	  
 #ifdef SHAPE_NGP
-          scatter_access(ii, field_var::jfx) += q*rV*ux;
-          scatter_access(ii, field_var::jfy) += q*rV*uy;
-          scatter_access(ii, field_var::jfz) += q*rV*uz;
-          scatter_access(ii, field_var::rhof) += q*rV;
+          // Coordinate-consistent (contravariant) deposit, matching advance_p.
+          // Density n = q/(8*jac); current is the CONTRAVARIANT bulk momentum
+          // jf^a = n*(v.grad xi^a). On CARTESIAN grad xi=2/gd, jac=gd^3/8 so
+          // 0.125*inv_jac = rV and v.grad xi = (2/gd)*u -> reduces to q*rV*u.
+          {
+            float gxx,gxy,gxz, gex,gey,gez, gmx,gmy,gmz, jacp;
+            compute_reciprocal_basis(g, x_half, y_half, z_half, ii, nx, ny, nz,
+                                     gdx, gdy, gdz,
+                                     gxx,gxy,gxz, gex,gey,gez, gmx,gmy,gmz, jacp);
+            float qn = q * 0.125f / jacp;
+            float d_xi_dt  = ux*gxx + uy*gxy + uz*gxz;
+            float d_eta_dt = ux*gex + uy*gey + uz*gez;
+            float d_mu_dt  = ux*gmx + uy*gmy + uz*gmz;
+            scatter_access(ii, field_var::jfx)  += qn*d_xi_dt;
+            scatter_access(ii, field_var::jfy)  += qn*d_eta_dt;
+            scatter_access(ii, field_var::jfz)  += qn*d_mu_dt;
+            scatter_access(ii, field_var::rhof) += qn;
+          }
 #elif defined( SHAPE_QS )
           // stencil coefficients
           // ... OLD hybrid-VPIC with QS shape, the accumulator stores
