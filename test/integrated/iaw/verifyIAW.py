@@ -140,7 +140,7 @@ if len(dn_peaks) > 0:
 #plt.xlim([0, 25])
 #plt.ylim([-2, 1])
 
-plt.show()
+#plt.show()
 
 if dn_valid:
     sys.exit(0)

@@ -405,7 +405,7 @@ sim_log( "Loading fields" );
 
   // base file name for fields output
   sprintf(global->hHdParams.baseFileName, "Hhydro");
-  sprintf(global->hedParams.baseFileName, "ehydro");
+  //sprintf(global->hedParams.baseFileName, "ehydro");
 
   global->hHdParams.stride_x = 1;
   global->hHdParams.stride_y = 1;
