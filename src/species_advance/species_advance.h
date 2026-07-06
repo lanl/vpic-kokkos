@@ -929,7 +929,7 @@ move_p_kokkos_host_serial(
 {
   const int nx = g->nx;
   const int ny = g->ny;
-  //const int nz = g->nz;
+  const int nz = g->nz;
 
   float ux,uy,uz,x_half,y_half,z_half,fracdt;
   constexpr float one=1., one_twelfth=1./12.;
@@ -1021,10 +1021,21 @@ move_p_kokkos_host_serial(
 	// Accumulate the particle current density
 
 #ifdef SHAPE_NGP
-        k_jf_accum(ii, accumulator_var::jx) += q*rV*ux;
-        k_jf_accum(ii, accumulator_var::jy) += q*rV*uy;
-        k_jf_accum(ii, accumulator_var::jz) += q*rV*uz;
-        k_jf_accum(ii, accumulator_var::rho) += q*rV;
+        // Coordinate-consistent (contravariant) deposit, matching move_p_kokkos
+        // and advance_p. Density n=q/(8*jac); current jf^a = n*(v.grad xi^a).
+        // On CARTESIAN reduces to q*rV*u (grad xi=2/gd, jac=gd^3/8 cancel to give
+        // the contravariant current the field solver expects).
+        {
+          float gxx,gxy,gxz, gex,gey,gez, gmx,gmy,gmz, jacp;
+          compute_reciprocal_basis(g, x_half, y_half, z_half, ii, nx, ny, nz,
+                                   gdx, gdy, gdz,
+                                   gxx,gxy,gxz, gex,gey,gez, gmx,gmy,gmz, jacp);
+          float qn = q * 0.125f / jacp;
+          k_jf_accum(ii, accumulator_var::jx)  += qn*(ux*gxx + uy*gxy + uz*gxz);
+          k_jf_accum(ii, accumulator_var::jy)  += qn*(ux*gex + uy*gey + uz*gez);
+          k_jf_accum(ii, accumulator_var::jz)  += qn*(ux*gmx + uy*gmy + uz*gmz);
+          k_jf_accum(ii, accumulator_var::rho) += qn;
+        }
 #elif defined( SHAPE_QS )
         // stencil coefficients
         // ... OLD hybrid-VPIC with QS shape, the accumulator stores
