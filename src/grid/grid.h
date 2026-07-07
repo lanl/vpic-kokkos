@@ -642,17 +642,14 @@ void grid_t::local_to_global_cart(int voxel_i, float dx_p, float dy_p, float dz_
 
     } else if (type == grid_type::CYLINDRICAL) {
         // Cylindrical: (r, theta, z) -> (x, y, z)
-        double dr = (x1 - x0) / nx;
-        double dtheta = (y1 - y0) / ny;
-        double dz_grid = (z1 - z0) / nz;  // Fixed!
         
-        double r = x0 + (i - 0.5) * dr;
-        double theta = y0 + (j - 0.5) * dtheta;
-        double z = z0 + (k - 0.5) * dz_grid;  // Fixed!
+        double r = x0 + (i - 0.5) * dx;
+        double theta = y0 + (j - 0.5) * dy;
+        double z = z0 + (k - 0.5) * dz;  // Fixed!
         
-        double r_relative = 0.5 * dx_p * dr;
-        double theta_relative = 0.5 * dy_p * dtheta;
-        double z_relative = 0.5 * dz_p * dz_grid;  // Fixed!
+        double r_relative = 0.5 * dx_p * dx;
+        double theta_relative = 0.5 * dy_p * dy;
+        double z_relative = 0.5 * dz_p * dz;  // Fixed!
         
         double r_phys = r + r_relative;
         double theta_phys = theta + theta_relative;
@@ -664,17 +661,14 @@ void grid_t::local_to_global_cart(int voxel_i, float dx_p, float dy_p, float dz_
         
     } else if (type == grid_type::SPHERICAL) {
         // Spherical: (r, theta, phi) -> (x, y, z)
-        double dr = (x1 - x0) / nx;
-        double dtheta = (y1 - y0) / ny;
-        double dphi = (z1 - z0) / nz;
         
-        double r = x0 + (i - 0.5) * dr;
-        double theta = y0 + (j - 0.5) * dtheta;
-        double phi = z0 + (k - 0.5) * dphi;
+        double r = x0 + (i - 0.5) * dx;
+        double theta = y0 + (j - 0.5) * dy;
+        double phi = z0 + (k - 0.5) * dz;
         
-        double r_relative = 0.5 * dx_p * dr;
-        double theta_relative = 0.5 * dy_p * dtheta;
-        double phi_relative = 0.5 * dz_p * dphi;
+        double r_relative = 0.5 * dx_p * dx;
+        double theta_relative = 0.5 * dy_p * dy;
+        double phi_relative = 0.5 * dz_p * dz;
         
         double r_phys = r + r_relative;
         double theta_phys = theta + theta_relative;
@@ -771,11 +765,17 @@ void compute_reciprocal_basis(
         jac = gdx * gdy * gdz / 8.0f;
 
     } else if (g->type == grid_type::CYLINDRICAL) {
-        double x_cart, y_cart, z_cart;
-        g->local_to_global_cart(ii, dx, dy, dz, x_cart, y_cart, z_cart);
+        int i, j, k;
+        UNVOXEL(ii, i, j, k, nx, ny, nz);
+        float r = g->x0 + (i - 0.5) * g->dx;
+        float theta = g->y0 + (j - 0.5) * g->dy;
+        
+        float r_relative = 0.5 * dx * g->dx;
+        float theta_relative = 0.5 * dy * g->dy;
+        
+        float r_phys = r + r_relative;
+        float theta_phys = theta + theta_relative;
 
-        float r_phys = sqrtf(x_cart*x_cart + y_cart*y_cart);
-        float theta_phys = atan2f(y_cart, x_cart);
         float cos_th = cosf(theta_phys);
         float sin_th = sinf(theta_phys);
 
