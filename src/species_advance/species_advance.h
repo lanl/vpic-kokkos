@@ -634,24 +634,10 @@ move_p_kokkos(
 	//if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
 	  
 #ifdef SHAPE_NGP
-          // Coordinate-consistent (contravariant) deposit, matching advance_p.
-          // Density n = q/(8*jac); current is the CONTRAVARIANT bulk momentum
-          // jf^a = n*(v.grad xi^a). On CARTESIAN grad xi=2/gd, jac=gd^3/8 so
-          // 0.125*inv_jac = rV and v.grad xi = (2/gd)*u -> reduces to q*rV*u.
-          {
-            float gxx,gxy,gxz, gex,gey,gez, gmx,gmy,gmz, jacp;
-            compute_reciprocal_basis(g, x_half, y_half, z_half, ii, nx, ny, nz,
-                                     gdx, gdy, gdz,
-                                     gxx,gxy,gxz, gex,gey,gez, gmx,gmy,gmz, jacp);
-            float qn = q * 0.125f / jacp;
-            float d_xi_dt  = ux*gxx + uy*gxy + uz*gxz;
-            float d_eta_dt = ux*gex + uy*gey + uz*gez;
-            float d_mu_dt  = ux*gmx + uy*gmy + uz*gmz;
-            scatter_access(ii, field_var::jfx)  += qn*d_xi_dt;
-            scatter_access(ii, field_var::jfy)  += qn*d_eta_dt;
-            scatter_access(ii, field_var::jfz)  += qn*d_mu_dt;
-            scatter_access(ii, field_var::rhof) += qn;
-          }
+          scatter_access(ii, field_var::jfx) += q*rV*ux;
+          scatter_access(ii, field_var::jfy) += q*rV*uy;
+          scatter_access(ii, field_var::jfz) += q*rV*uz;
+          scatter_access(ii, field_var::rhof) += q*rV;
 #elif defined( SHAPE_QS )
           // stencil coefficients
           // ... OLD hybrid-VPIC with QS shape, the accumulator stores
@@ -929,7 +915,7 @@ move_p_kokkos_host_serial(
 {
   const int nx = g->nx;
   const int ny = g->ny;
-  const int nz = g->nz;
+  //const int nz = g->nz;
 
   float ux,uy,uz,x_half,y_half,z_half,fracdt;
   constexpr float one=1., one_twelfth=1./12.;
@@ -1021,21 +1007,10 @@ move_p_kokkos_host_serial(
 	// Accumulate the particle current density
 
 #ifdef SHAPE_NGP
-        // Coordinate-consistent (contravariant) deposit, matching move_p_kokkos
-        // and advance_p. Density n=q/(8*jac); current jf^a = n*(v.grad xi^a).
-        // On CARTESIAN reduces to q*rV*u (grad xi=2/gd, jac=gd^3/8 cancel to give
-        // the contravariant current the field solver expects).
-        {
-          float gxx,gxy,gxz, gex,gey,gez, gmx,gmy,gmz, jacp;
-          compute_reciprocal_basis(g, x_half, y_half, z_half, ii, nx, ny, nz,
-                                   gdx, gdy, gdz,
-                                   gxx,gxy,gxz, gex,gey,gez, gmx,gmy,gmz, jacp);
-          float qn = q * 0.125f / jacp;
-          k_jf_accum(ii, accumulator_var::jx)  += qn*(ux*gxx + uy*gxy + uz*gxz);
-          k_jf_accum(ii, accumulator_var::jy)  += qn*(ux*gex + uy*gey + uz*gez);
-          k_jf_accum(ii, accumulator_var::jz)  += qn*(ux*gmx + uy*gmy + uz*gmz);
-          k_jf_accum(ii, accumulator_var::rho) += qn;
-        }
+        k_jf_accum(ii, accumulator_var::jx) += q*rV*ux;
+        k_jf_accum(ii, accumulator_var::jy) += q*rV*uy;
+        k_jf_accum(ii, accumulator_var::jz) += q*rV*uz;
+        k_jf_accum(ii, accumulator_var::rho) += q*rV;
 #elif defined( SHAPE_QS )
         // stencil coefficients
         // ... OLD hybrid-VPIC with QS shape, the accumulator stores
