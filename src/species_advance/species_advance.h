@@ -608,9 +608,27 @@ move_p_kokkos(
     //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
 
     //Find postition of particle at t_n+1/2
-    v0 = (ux==0) ? 0.0 : s_dispx/ux/gdt*gdx; //fraction of dt left to push
-    v1 = (uy==0) ? 0.0 : s_dispy/uy/gdt*gdy;  //should all be equal if not 0
-    v2 = (uz==0) ? 0.0 : s_dispz/uz/gdt*gdz;
+    float grad_xi_x, grad_xi_y, grad_xi_z;
+    float grad_eta_x, grad_eta_y, grad_eta_z;
+    float grad_mu_x, grad_mu_y, grad_mu_z;
+    float jac;
+
+    compute_reciprocal_basis(g, s_midx, s_midy, s_midz, ii, nx, ny, nz,
+                            gdx, gdy, gdz,
+                            grad_xi_x, grad_xi_y, grad_xi_z,
+                            grad_eta_x, grad_eta_y, grad_eta_z,
+                            grad_mu_x, grad_mu_y, grad_mu_z, jac);
+
+    // **NEW: Transform to logical velocities**
+    float d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
+    float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
+    float d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
+
+    // **MODIFIED: Use logical displacements for half-step**
+    v0 = (d_xi_dt==0) ? 0.0 : s_dispx/d_xi_dt/gdt;
+    v1 = (d_eta_dt==0) ? 0.0 : s_dispy/d_eta_dt/gdt;
+    v2 = (d_mu_dt==0) ? 0.0 : s_dispz/d_mu_dt/gdt;
+
 
     fracdt = v0;
     if(v1>fracdt) fracdt=v1;
@@ -619,9 +637,9 @@ move_p_kokkos(
     
     if(fracdt>0){
       
-      x_half = s_midx + fracdt*ux*gdt/gdx;
-      y_half = s_midy + fracdt*uy*gdt/gdy; 
-      z_half = s_midz + fracdt*uz*gdt/gdz;
+      x_half = s_midx + fracdt*d_xi_dt*gdt;
+      y_half = s_midy + fracdt*d_eta_dt*gdt;
+      z_half = s_midz + fracdt*d_mu_dt*gdt;
       
       if( x_half<=one &&  y_half<=one &&  z_half<=one &&
          -x_half<=one && -y_half<=one && -z_half<=one) {
@@ -634,10 +652,27 @@ move_p_kokkos(
 	//if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
 	  
 #ifdef SHAPE_NGP
-          scatter_access(ii, field_var::jfx) += q*rV*ux;
-          scatter_access(ii, field_var::jfy) += q*rV*uy;
-          scatter_access(ii, field_var::jfz) += q*rV*uz;
-          scatter_access(ii, field_var::rhof) += q*rV;
+          // Coordinate-consistent (contravariant) deposit, matching advance_p.
+          // Density n = q/(8*jac); current is the CONTRAVARIANT bulk momentum
+          // jf^a = n*(v.grad xi^a). On CARTESIAN grad xi=2/gd, jac=gd^3/8 so
+          // 0.125*inv_jac = rV and v.grad xi = (2/gd)*u -> reduces to q*rV*u.
+          {
+            float gxx_h, gxy_h, gxz_h, gex_h, gey_h, gez_h, gmx_h, gmy_h, gmz_h, jacp_h;
+          compute_reciprocal_basis(g, x_half, y_half, z_half, ii, nx, ny, nz,
+                                   gdx, gdy, gdz,
+                                   gxx_h, gxy_h, gxz_h, gex_h, gey_h, gez_h,
+                                   gmx_h, gmy_h, gmz_h, jacp_h);
+          float qn = q * 0.125f / jacp_h;
+          float d_xi_dt_curr  = ux*gxx_h + uy*gxy_h + uz*gxz_h;
+          float d_eta_dt_curr = ux*gex_h + uy*gey_h + uz*gez_h;
+          float d_mu_dt_curr  = ux*gmx_h + uy*gmy_h + uz*gmz_h;
+          
+          scatter_access(ii, field_var::jfx)  += qn*d_xi_dt_curr;
+          scatter_access(ii, field_var::jfy)  += qn*d_eta_dt_curr;
+          scatter_access(ii, field_var::jfz)  += qn*d_mu_dt_curr;
+          scatter_access(ii, field_var::rhof) += qn;
+
+          }
 #elif defined( SHAPE_QS )
           // stencil coefficients
           // ... OLD hybrid-VPIC with QS shape, the accumulator stores
@@ -915,13 +950,14 @@ move_p_kokkos_host_serial(
 {
   const int nx = g->nx;
   const int ny = g->ny;
-  //const int nz = g->nz;
+  const int nz = g->nz;
 
   float ux,uy,uz,x_half,y_half,z_half,fracdt;
   constexpr float one=1., one_twelfth=1./12.;
   const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
   const float rV = g->rdx * g->rdy * g->rdz;
   const float rV12 = rV*one_twelfth;
+  const float cdt = g->cvac * g->dt;
 
   //float cx = 0.25 * g->rdy * g->rdz / g->dt;
   //float cy = 0.25 * g->rdz * g->rdx / g->dt;
@@ -978,6 +1014,23 @@ move_p_kokkos_host_serial(
     //ux *= v0;
     //uy *= v0;
     //uz *= v0;
+
+    float grad_xi_x, grad_xi_y, grad_xi_z;
+    float grad_eta_x, grad_eta_y, grad_eta_z;
+    float grad_mu_x, grad_mu_y, grad_mu_z;
+    float jac;
+
+    compute_reciprocal_basis(g, s_midx, s_midy, s_midz, ii, nx, ny, nz,
+                            gdx, gdy, gdz,
+                            grad_xi_x, grad_xi_y, grad_xi_z,
+                            grad_eta_x, grad_eta_y, grad_eta_z,
+                            grad_mu_x, grad_mu_y, grad_mu_z, jac);
+
+    // **NEW: Transform velocity to logical coordinates**
+    float d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
+    float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
+    float d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
+
     
     s_dispx = pm->dispx;
     s_dispy = pm->dispy;
@@ -986,9 +1039,10 @@ move_p_kokkos_host_serial(
     //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
 
     //Find postition of particle at t_n+1/2
-    v0 = (ux==0) ? 0.0 : s_dispx/ux/gdt*gdx; //fraction of dt left to push
-    v1 = (uy==0) ? 0.0 : s_dispy/uy/gdt*gdy;  //should all be equal if not 0
-    v2 = (uz==0) ? 0.0 : s_dispz/uz/gdt*gdz;
+    v0 = (d_xi_dt==0) ? 0.0 : s_dispx/d_xi_dt/gdt;  // fraction of dt left
+    v1 = (d_eta_dt==0) ? 0.0 : s_dispy/d_eta_dt/gdt;
+    v2 = (d_mu_dt==0) ? 0.0 : s_dispz/d_mu_dt/gdt;
+
 
     fracdt = v0;
     if(v1>fracdt) fracdt=v1;
@@ -997,9 +1051,9 @@ move_p_kokkos_host_serial(
 
     if(fracdt>0){
 
-      x_half = s_midx + fracdt*ux*gdt/gdx;
-      y_half = s_midy + fracdt*uy*gdt/gdy; 
-      z_half = s_midz + fracdt*uz*gdt/gdz;
+      x_half = s_midx + fracdt*d_xi_dt*gdt;   // **MODIFIED**
+      y_half = s_midy + fracdt*d_eta_dt*gdt;  // **MODIFIED**
+      z_half = s_midz + fracdt*d_mu_dt*gdt;   
       
       if( x_half<=one &&  y_half<=one &&  z_half<=one && 
          -x_half<=one && -y_half<=one && -z_half<=one) {
@@ -1007,10 +1061,31 @@ move_p_kokkos_host_serial(
 	// Accumulate the particle current density
 
 #ifdef SHAPE_NGP
-        k_jf_accum(ii, accumulator_var::jx) += q*rV*ux;
-        k_jf_accum(ii, accumulator_var::jy) += q*rV*uy;
-        k_jf_accum(ii, accumulator_var::jz) += q*rV*uz;
-        k_jf_accum(ii, accumulator_var::rho) += q*rV;
+        // Coordinate-consistent (contravariant) deposit, matching move_p_kokkos
+        // and advance_p. Density n=q/(8*jac); current jf^a = n*(v.grad xi^a).
+        // On CARTESIAN reduces to q*rV*u (grad xi=2/gd, jac=gd^3/8 cancel to give
+        // the contravariant current the field solver expects).
+        {
+          float grad_xi_x_h, grad_xi_y_h, grad_xi_z_h;
+          float grad_eta_x_h, grad_eta_y_h, grad_eta_z_h;
+          float grad_mu_x_h, grad_mu_y_h, grad_mu_z_h;
+          float jac_h;
+          
+          compute_reciprocal_basis(g, x_half, y_half, z_half, ii, nx, ny, nz,
+                                  gdx, gdy, gdz,
+                                  grad_xi_x_h, grad_xi_y_h, grad_xi_z_h,
+                                  grad_eta_x_h, grad_eta_y_h, grad_eta_z_h,
+                                  grad_mu_x_h, grad_mu_y_h, grad_mu_z_h, jac_h);
+          
+          float qn = q * 0.125f / jac_h;
+          
+          // Current is contravariant: j^a = n*(v.grad xi^a)
+          k_jf_accum(ii, accumulator_var::jx)  += qn*(ux*grad_xi_x_h + uy*grad_xi_y_h + uz*grad_xi_z_h);
+          k_jf_accum(ii, accumulator_var::jy)  += qn*(ux*grad_eta_x_h + uy*grad_eta_y_h + uz*grad_eta_z_h);
+          k_jf_accum(ii, accumulator_var::jz)  += qn*(ux*grad_mu_x_h + uy*grad_mu_y_h + uz*grad_mu_z_h);
+          k_jf_accum(ii, accumulator_var::rho) += qn;
+
+        }
 #elif defined( SHAPE_QS )
         // stencil coefficients
         // ... OLD hybrid-VPIC with QS shape, the accumulator stores
