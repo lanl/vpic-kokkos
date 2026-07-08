@@ -461,7 +461,15 @@ accumulate_rhob( field_t          * RESTRICT ALIGNED(128) f,
                  const float                              qsp );
 void
 k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
-                  const species_t     * RESTRICT sp );
+                  const species_t     * RESTRICT sp,
+                const grid_t* g,
+              float gdx,
+    float gdy,
+    float gdz,
+    float gdt,
+    const int nx,
+    const int ny,
+    const int nz);
 
 void k_accumulate_rhob(
             k_field_t& kfield,

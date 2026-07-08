@@ -165,7 +165,7 @@ begin_initialization {
   grid->hypereta = hypereta;
   grid->eos_gamma = gamma;
   grid->eos_gamma_0 = gamma;
-  grid->init_stretched_cartesian_grid(2, 0, 0);
+  grid->init_cartesian_grid();
 
   grid->nsub = 1; // Number of substeps for field solve.
   grid->nsm = 2;  // Number of binomial smoothing passes (to fields & moments).

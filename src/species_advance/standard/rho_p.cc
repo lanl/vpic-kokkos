@@ -441,7 +441,16 @@ struct accum_rhob {
 
 void
 k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
-                  const species_t     * RESTRICT sp )
+                  const species_t     * RESTRICT sp,
+                const grid_t* g,
+              float gdx,
+    float gdy,
+    float gdz,
+    float gdt,
+    const int nx,
+    const int ny,
+    const int nz
+              )
 {
   if( !fa || !sp || fa->g!=sp->g ) ERROR(( "Bad args" ));
 
@@ -483,10 +492,31 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
 #ifdef SHAPE_NGP
         // Hybrid, nearest-grid-point shape
-        float w0 = q_V;
-        scatter_view_access(ii, field_var::jfx)  += w0 * ux;
-        scatter_view_access(ii, field_var::jfy)  += w0 * uy;
-        scatter_view_access(ii, field_var::jfz)  += w0 * uz;
+
+        float grad_xi_x, grad_xi_y, grad_xi_z;
+        float grad_eta_x, grad_eta_y, grad_eta_z;
+        float grad_mu_x, grad_mu_y, grad_mu_z;
+        float jac;
+
+        // Compute reciprocal basis at current position
+        compute_reciprocal_basis(
+            g,
+            dx, dy, dz, ii, nx, ny, nz,
+            gdx, gdy, gdz,
+            grad_xi_x, grad_xi_y, grad_xi_z,
+            grad_eta_x, grad_eta_y, grad_eta_z,
+            grad_mu_x, grad_mu_y, grad_mu_z,
+            jac);
+        float w0 = q * 0.125f / jac * wt;
+
+        float d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
+        float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
+        float d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
+
+
+        scatter_view_access(ii, field_var::jfx)  += w0 * d_xi_dt;
+        scatter_view_access(ii, field_var::jfy)  += w0 * d_eta_dt;
+        scatter_view_access(ii, field_var::jfz)  += w0 * d_mu_dt;
         scatter_view_access(ii, field_var::rhof) += w0;
 #elif defined( SHAPE_QS )
         const float q_12V = q_V * 1./12.;

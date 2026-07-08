@@ -106,8 +106,12 @@ vpic_simulation::initialize( int argc,
   // Initialize jf,rhof at t=0 (ghosts bad)
   // jf,rhof_old are garbage
   TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
-  LIST_FOR_EACH( sp, species_list ) TIC k_accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
-
+LIST_FOR_EACH( sp, species_list ) {
+  TIC k_accumulate_rho_p( field_array, sp, g, 
+                          g->dx, g->dy, g->dz, g->dt,
+                          g->nx, g->ny, g->nz ); 
+  TOC( accumulate_rho_p, 1 );
+}
   // Fix jf,rhof ghosts
   // E,B will be garbage because jf,rhof_old not set
 #ifdef HYB_USE_SEPARATE_PE
@@ -122,7 +126,12 @@ vpic_simulation::initialize( int argc,
   // Initialize jf,rhof_old at t=0
   // Re-initialize jf,rhof at t=0 (ghosts bad)
   TIC FAK->clear_jf_kokkos( field_array ); TOC( clear_jf, 1 );
-  LIST_FOR_EACH( sp, species_list ) TIC k_accumulate_rho_p( field_array, sp ); TOC( accumulate_rho_p, 1 );
+LIST_FOR_EACH( sp, species_list ) {
+  TIC k_accumulate_rho_p( field_array, sp, g,
+                          g->dx, g->dy, g->dz, g->dt,
+                          g->nx, g->ny, g->nz );
+  TOC( accumulate_rho_p, 1 );
+}
 
   // Fix jf,rhof ghosts
   // E,B will now be valid
