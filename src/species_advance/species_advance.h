@@ -520,6 +520,7 @@ move_p( particle_t       * ALIGNED(128) p0,
         const grid_t     *              g,
         const float                     qsp );
 
+// move_p_kokkos now supports curvilinear coordinates
 template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class scatter_view_t>
 int
 KOKKOS_INLINE_FUNCTION
@@ -527,15 +528,12 @@ move_p_kokkos(
     const particle_view_t& k_particles,
     const particle_i_view_t& k_particles_i,
     particle_mover_t* ALIGNED(16)  pm,
-    //accumulator_sa_t k_accumulators_sa,
     scatter_view_t scatter_view,
     const grid_t* g,
     neighbor_view_t& d_neighbor,
     int64_t rangel,
     int64_t rangeh,
     const float qsp,
-    //field_array_t* RESTRICT fa,
-    //field_view_t& k_field,
     float gdx,
     float gdy,
     float gdz,
@@ -558,40 +556,23 @@ move_p_kokkos(
 #endif
   #define pii     k_particles_i(pi)
 
-  //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
-  //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
-  //#define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
-  //#define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
-
-
-  //k_field_t& k_field = fa->k_f_d;
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
   float v0, v1, v2, v3, q;
-  float w0, wx, wy, wz, wmx, wmy, wmz;
   int axis, face;
   int64_t neighbor;
-  //int pi = int(local_pm_i);
   size_t pi = pm->i;
   float ux,uy,uz,x_half,y_half,z_half,fracdt;
-  constexpr float one=1., one_twelfth=1./12.;
-  //const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
-  const float rV = 1.0/gdx/gdy/gdz;
-  const float rV12 = rV*one_twelfth;
-//  auto  k_field_scatter_access = k_f_sa.access();
-//  auto accum_sa = accum_sv.access();
-  auto scatter_access = scatter_view.access();
+  constexpr float one=1.;
 
-  //printf("in move_p %d \n", pi);
+  auto scatter_access = scatter_view.access();
 
 #ifdef VARIABLE_CHARGE
   q = p_q*p_w;
 #else
   q = qsp*p_w;
 #endif
-
-    //printf("in move %d \n", pi);
 
   for(;;) {
     int ii = pii;
@@ -603,41 +584,54 @@ move_p_kokkos(
     uy = p_uy;
     uz = p_uz;
 
-    //v0 = one; // /   sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
-
-    //ux *= v0;
-    //uy *= v0;
-    //uz *= v0;
-
     s_dispx = pm->dispx;
     s_dispy = pm->dispy;
     s_dispz = pm->dispz;
 
-    //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
-
-    //Find postition of particle at t_n+1/2
     float grad_xi_x, grad_xi_y, grad_xi_z;
     float grad_eta_x, grad_eta_y, grad_eta_z;
     float grad_mu_x, grad_mu_y, grad_mu_z;
     float jac;
 
-    compute_reciprocal_basis(g, s_midx, s_midy, s_midz, ii, nx, ny, nz,
-                            gdx, gdy, gdz,
-                            grad_xi_x, grad_xi_y, grad_xi_z,
-                            grad_eta_x, grad_eta_y, grad_eta_z,
-                            grad_mu_x, grad_mu_y, grad_mu_z, jac);
+    compute_reciprocal_basis(
+        g,
+        s_midx, s_midy, s_midz, ii, nx, ny, nz,
+        gdx, gdy, gdz,
+        grad_xi_x, grad_xi_y, grad_xi_z,
+        grad_eta_x, grad_eta_y, grad_eta_z,
+        grad_mu_x, grad_mu_y, grad_mu_z,
+        jac);
 
-    // **NEW: Transform to logical velocities**
-    float d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
+    // Transform Cartesian velocities to contravariant logical velocities
+    float d_xi_dt  = ux * grad_xi_x  + uy * grad_xi_y  + uz * grad_xi_z;
     float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
-    float d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
+    float d_mu_dt  = ux * grad_mu_x  + uy * grad_mu_y  + uz * grad_mu_z;
 
-    // **MODIFIED: Use logical displacements for half-step**
-    v0 = (d_xi_dt==0) ? 0.0 : s_dispx/d_xi_dt/gdt;
-    v1 = (d_eta_dt==0) ? 0.0 : s_dispy/d_eta_dt/gdt;
-    v2 = (d_mu_dt==0) ? 0.0 : s_dispz/d_mu_dt/gdt;
+    // Find position of particle at t_n+1/2
+    v0 = (ux==0) ? 0.0 : s_dispx/d_xi_dt/gdt*2.;
+    v1 = (uy==0) ? 0.0 : s_dispy/d_eta_dt/gdt*2.;
+    v2 = (uz==0) ? 0.0 : s_dispz/d_mu_dt/gdt*2.;
+
+    //this is equivalent in cart:
+    // float d_xi_dt  = ux * grad_xi_x  + uy * grad_xi_y  + uz * grad_xi_z;
+    // float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
+    // float d_mu_dt  = ux * grad_mu_x  + uy * grad_mu_y  + uz * grad_mu_z;
+
+    // float h_xi  = 1.0f / sqrtf(grad_xi_x*grad_xi_x   + grad_xi_y*grad_xi_y   + grad_xi_z*grad_xi_z);
+    // float h_eta = 1.0f / sqrtf(grad_eta_x*grad_eta_x + grad_eta_y*grad_eta_y + grad_eta_z*grad_eta_z);
+    // float h_mu  = 1.0f / sqrtf(grad_mu_x*grad_mu_x   + grad_mu_y*grad_mu_y   + grad_mu_z*grad_mu_z);
+
+    // float u_phys_xi  = d_xi_dt  * h_xi;
+    // float u_phys_eta = d_eta_dt * h_eta;
+    // float u_phys_mu  = d_mu_dt  * h_mu;
 
 
+    // // Find position of particle at t_n+1/2
+    // v0 = (ux==0) ? 0.0 : s_dispx/u_phys_xi/gdt*gdx;
+    // v1 = (uy==0) ? 0.0 : s_dispy/u_phys_eta/gdt*gdy;
+    // v2 = (uz==0) ? 0.0 : s_dispz/u_phys_mu/gdt*gdz;
+
+    // WARNING(("gdx %e h_xi %e", gdx, h_xi));
     fracdt = v0;
     if(v1>fracdt) fracdt=v1;
     if(v2>fracdt) fracdt=v2;
@@ -645,116 +639,52 @@ move_p_kokkos(
     
     if(fracdt>0){
       
-      x_half = s_midx + fracdt*d_xi_dt*gdt;
-      y_half = s_midy + fracdt*d_eta_dt*gdt;
-      z_half = s_midz + fracdt*d_mu_dt*gdt;
+      x_half = s_midx + fracdt*d_xi_dt*gdt/2.;
+      y_half = s_midy + fracdt*d_eta_dt*gdt/2.; 
+      z_half = s_midz + fracdt*d_mu_dt*gdt/2.;
       
       if( x_half<=one &&  y_half<=one &&  z_half<=one &&
          -x_half<=one && -y_half<=one && -z_half<=one) {
         
-	// Accumulate the particle current density
-	
-	//printf("move_p accumulate here");
-	
-	
-	//if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
-	  
+        // Compute reciprocal basis vectors at half-step position
+        float grad_xi_x, grad_xi_y, grad_xi_z;
+        float grad_eta_x, grad_eta_y, grad_eta_z;
+        float grad_mu_x, grad_mu_y, grad_mu_z;
+        float jac;
+        
+        compute_reciprocal_basis(
+            g,
+            x_half, y_half, z_half, ii, nx, ny, nz,
+            gdx, gdy, gdz,
+            grad_xi_x, grad_xi_y, grad_xi_z,
+            grad_eta_x, grad_eta_y, grad_eta_z,
+            grad_mu_x, grad_mu_y, grad_mu_z,
+            jac);
+        
+        // Transform Cartesian velocity to contravariant logical velocity
+        float d_xi_dt  = ux * grad_xi_x  + uy * grad_xi_y  + uz * grad_xi_z;
+        float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
+        float d_mu_dt  = ux * grad_mu_x  + uy * grad_mu_y  + uz * grad_mu_z;
+        
+        // Compute proper volume scaling (inverse Jacobian)
+        float inv_jac = 1.0f / jac;
+        
 #ifdef SHAPE_NGP
-          // Coordinate-consistent (contravariant) deposit, matching advance_p.
-          // Density n = q/(8*jac); current is the CONTRAVARIANT bulk momentum
-          // jf^a = n*(v.grad xi^a). On CARTESIAN grad xi=2/gd, jac=gd^3/8 so
-          // 0.125*inv_jac = rV and v.grad xi = (2/gd)*u -> reduces to q*rV*u.
-          {
-            float gxx_h, gxy_h, gxz_h, gex_h, gey_h, gez_h, gmx_h, gmy_h, gmz_h, jacp_h;
-          compute_reciprocal_basis(g, x_half, y_half, z_half, ii, nx, ny, nz,
-                                   gdx, gdy, gdz,
-                                   gxx_h, gxy_h, gxz_h, gex_h, gey_h, gez_h,
-                                   gmx_h, gmy_h, gmz_h, jacp_h);
-          float qn = q * 0.125f / jacp_h;
-          float d_xi_dt_curr  = ux*gxx_h + uy*gxy_h + uz*gxz_h;
-          float d_eta_dt_curr = ux*gex_h + uy*gey_h + uz*gez_h;
-          float d_mu_dt_curr  = ux*gmx_h + uy*gmy_h + uz*gmz_h;
-          
-          scatter_access(ii, field_var::jfx)  += qn*d_xi_dt_curr;
-          scatter_access(ii, field_var::jfy)  += qn*d_eta_dt_curr;
-          scatter_access(ii, field_var::jfz)  += qn*d_mu_dt_curr;
-          scatter_access(ii, field_var::rhof) += qn;
-
-          }
-#elif defined( SHAPE_QS )
-          // stencil coefficients
-          // ... OLD hybrid-VPIC with QS shape, the accumulator stores
-          // ... ... p->w*qsp * two*(three - ...)
-          // ... ... hyb_unload_accumulator(...) applies factor rV/12.
-          // ... NEW HVPIC-K not using accumulator (yet), scatter directly to mesh,
-          // ... ... so include all factors
-          w0 =  q*rV12*2.f*( 3.f - x_half*x_half - y_half*y_half - z_half*z_half );
-          wx =  q*rV12*( x_half + 1.f )*( x_half + 1.f );
-          wy =  q*rV12*( y_half + 1.f )*( y_half + 1.f );
-          wz =  q*rV12*( z_half + 1.f )*( z_half + 1.f );
-          wmx = q*rV12*( x_half - 1.f )*( x_half - 1.f );
-          wmy = q*rV12*( y_half - 1.f )*( y_half - 1.f );
-          wmz = q*rV12*( z_half - 1.f )*( z_half - 1.f );
-
-          // Voxel indices
-          int iii = ii;
-          int zi = iii/((nx+2)*(ny+2));
-          iii -= zi*(nx+2)*(ny+2);
-          int yi = iii/(nx+2);
-          int xi = iii-yi*(nx+2);
-          // Neighboring voxel 1D (flattened) indices
-          int iix = VOXEL(xi+1,yi,zi,nx,ny,nz);
-          int iiy = VOXEL(xi,yi+1,zi,nx,ny,nz);
-          int iiz = VOXEL(xi,yi,zi+1,nx,ny,nz);
-          int iimx = VOXEL(xi-1,yi,zi,nx,ny,nz);
-          int iimy = VOXEL(xi,yi-1,zi,nx,ny,nz);
-          int iimz = VOXEL(xi,yi,zi-1,nx,ny,nz);
-
-          scatter_access(ii, field_var::jfx)  += w0*ux;
-          scatter_access(ii, field_var::jfy)  += w0*uy;
-          scatter_access(ii, field_var::jfz)  += w0*uz;
-          scatter_access(ii, field_var::rhof) += w0;
-
-          scatter_access(iix, field_var::jfx)  += wx*ux;
-          scatter_access(iix, field_var::jfy)  += wx*uy;
-          scatter_access(iix, field_var::jfz)  += wx*uz;
-          scatter_access(iix, field_var::rhof) += wx;
-
-          scatter_access(iiy, field_var::jfx)  += wy*ux;
-          scatter_access(iiy, field_var::jfy)  += wy*uy;
-          scatter_access(iiy, field_var::jfz)  += wy*uz;
-          scatter_access(iiy, field_var::rhof) += wy;
-
-          scatter_access(iiz, field_var::jfx)  += wz*ux;
-          scatter_access(iiz, field_var::jfy)  += wz*uy;
-          scatter_access(iiz, field_var::jfz)  += wz*uz;
-          scatter_access(iiz, field_var::rhof) += wz;
-
-          scatter_access(iimx, field_var::jfx)  += wmx*ux;
-          scatter_access(iimx, field_var::jfy)  += wmx*uy;
-          scatter_access(iimx, field_var::jfz)  += wmx*uz;
-          scatter_access(iimx, field_var::rhof) += wmx;
-
-          scatter_access(iimy, field_var::jfx)  += wmy*ux;
-          scatter_access(iimy, field_var::jfy)  += wmy*uy;
-          scatter_access(iimy, field_var::jfz)  += wmy*uz;
-          scatter_access(iimy, field_var::rhof) += wmy;
-
-          scatter_access(iimz, field_var::jfx)  += wmz*ux;
-          scatter_access(iimz, field_var::jfy)  += wmz*uy;
-          scatter_access(iimz, field_var::jfz)  += wmz*uz;
-          scatter_access(iimz, field_var::rhof) += wmz;
-#endif // defined(SHAPE_QS)
-	//}
-	
-	
-      } //if indbds
+        // Deposit contravariant logical current with proper volume weighting
+        // Note: Factor of 0.125 = 1/8 accounts for the cell volume normalization
+        // in logical coordinates (cell spans [-1,1]^3 = volume of 8)
+        float qfactor = q * 0.125f * inv_jac;
+        
+        scatter_access(ii, field_var::jfx)  += qfactor * d_xi_dt;
+        scatter_access(ii, field_var::jfy)  += qfactor * d_eta_dt;
+        scatter_access(ii, field_var::jfz)  += qfactor * d_mu_dt;
+        scatter_access(ii, field_var::rhof) += qfactor;
+#endif // SHAPE_NGP
+        
+      } //if inbnds
       
-    }
-    //ifmore than half dt left
+    } //if more than half dt left
     
-    //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
-
     s_dir[0] = (s_dispx>0) ? 1 : -1;
     s_dir[1] = (s_dispy>0) ? 1 : -1;
     s_dir[2] = (s_dispz>0) ? 1 : -1;
@@ -765,12 +695,7 @@ move_p_kokkos(
     v1 = (s_dispy==0) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
     v2 = (s_dispz==0) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
 
-    // Determine the fractional length and axis of current streak. The
-    // streak ends on either the first face intersected by the
-    // particle track or at the end of the particle track.
-    //
-    //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
-    //   axis 3        ... streak ends at end of the particle track
+    // Determine the fractional length and axis of current streak
     /**/      v3=2,  axis=3;
     if(v0<v3) v3=v0, axis=0;
     if(v1<v3) v3=v1, axis=1;
@@ -784,83 +709,8 @@ move_p_kokkos(
     s_midx += s_dispx;
     s_midy += s_dispy;
     s_midz += s_dispz;
-
-#if 0
-    // Accumulate the streak.  Note: accumulator values are 4 times
-    // the total physical charge that passed through the appropriate
-    // current quadrant in a time-step
-    v5 = q*s_dispx*s_dispy*s_dispz*(1.f/3.f);
-
-    //a = (float *)(&d_accumulators[ci]);
-
-#   define accumulate_j(X,Y,Z)                                        \
-    v4  = q*s_disp##X;    /* v2 = q ux                            */  \
-    v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
-    v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
-    v1 += v4;             /* v1 = q ux (1+dy)                     */  \
-    v4  = 1+s_mid##Z;     /* v4 = 1+dz                            */  \
-    v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
-    v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
-    v4  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
-    v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
-    v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
-    v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
-    v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
-    v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
-    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
-
-    //Kokkos::atomic_add(&a[0], v0);
-    //Kokkos::atomic_add(&a[1], v1);
-    //Kokkos::atomic_add(&a[2], v2);
-    //Kokkos::atomic_add(&a[3], v3);
-
-    if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
-      int iii = ii;
-      int zi = iii/((nx+2)*(ny+2));
-      iii -= zi*(nx+2)*(ny+2);
-      int yi = iii/(nx+2);
-      int xi = iii-yi*(nx+2);
-      accumulate_j(x,y,z);
-      scatter_access(ii, field_var::jfx) += cx*v0;
-      scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
-      scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
-      scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
-
-      accumulate_j(y,z,x);
-      scatter_access(ii, field_var::jfy) += cy*v0;
-      scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
-      scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
-      scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
-
-      accumulate_j(z,x,y);
-      scatter_access(ii, field_var::jfz) += cz*v0;
-      scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
-      scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
-      scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
-    } else {
-      accumulate_j(x,y,z);
-      scatter_access(ii, 0) += cx*v0;
-      scatter_access(ii, 1) += cx*v1;
-      scatter_access(ii, 2) += cx*v2;
-      scatter_access(ii, 3) += cx*v3;
-
-      accumulate_j(y,z,x);
-      scatter_access(ii, 4) += cy*v0;
-      scatter_access(ii, 5) += cy*v1;
-      scatter_access(ii, 6) += cy*v2;
-      scatter_access(ii, 7) += cy*v3;
-
-      accumulate_j(z,x,y);
-      scatter_access(ii, 8) += cz*v0;
-      scatter_access(ii, 9) += cz*v1;
-      scatter_access(ii, 10) += cz*v2;
-      scatter_access(ii, 11) += cz*v3;
-    }
-
-#   undef accumulate_j
-#endif
     
-    // Compute the remaining particle displacment
+    // Compute the remaining particle displacement
     pm->dispx -= s_dispx;
     pm->dispy -= s_dispy;
     pm->dispz -= s_dispz;
@@ -871,57 +721,35 @@ move_p_kokkos(
     p_dz += s_dispz+s_dispz;
 
     // If an end streak, return success (should be ~50% of the time)
-
     if( axis==3 ) break;
 
     // Determine if the particle crossed into a local cell or if it
     // hit a boundary and convert the coordinate system accordingly.
-    // Note: Crossing into a local cell should happen ~50% of the
-    // time; hitting a boundary is usually a rare event.  Note: the
-    // entry / exit coordinate for the particle is guaranteed to be
-    // +/-1 _exactly_ for the particle.
-
     v0 = s_dir[axis];
-    k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
-                           // _exactly_ on the boundary.
+    k_particles(pi, particle_var::dx + axis) = v0;
     face = axis; if( v0>0 ) face += 3;
 
-    // TODO: clean this fixed index to an enum
-    //neighbor = g->neighbor[ 6*ii + face ];
     neighbor = d_neighbor( 6*ii + face );
 
-    // TODO: these two if statements used to be marked UNLIKELY,
-    // but that intrinsic doesn't work on GPU.
-    // for performance portability, maybe specialize UNLIKELY
-    // for CUDA mode and put it back
-
-
     if( neighbor==reflect_particles ) {
-      // Hit a reflecting boundary condition.  Reflect the particle
-      // momentum and remaining displacement and keep moving the
-      // particle.
+      // Hit a reflecting boundary condition
       k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
-      // Clearer and works with AMD GPUs
       float* disp = static_cast<float*>(&(pm->dispx));
       disp[axis] = -disp[axis];
       continue;
     }
 
     if( neighbor<rangel || neighbor>rangeh ) {
-      // Cannot handle the boundary condition here.  Save the updated
-      // particle position, face it hit and update the remaining
-      // displacement in the particle mover.
+      // Cannot handle the boundary condition here
       pii = 8*pii + face;
       return 1; // Return "mover still in use"
     }
 
-    // Crossed into a normal voxel.  Update the voxel index, convert the
-    // particle coordinate system and keep moving the particle.
-
+    // Crossed into a normal voxel
     pii = neighbor - rangel;
-    /**/                         // Note: neighbor - rangel < 2^31 / 6
-    k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+    k_particles(pi, particle_var::dx + axis) = -v0;
   }
+  
   #undef p_dx
   #undef p_dy
   #undef p_dz
@@ -934,13 +762,10 @@ move_p_kokkos(
 #endif
   #undef pii
 
-  //#undef local_pm_dispx
-  //#undef local_pm_dispy
-  //#undef local_pm_dispz
-  //#undef local_pm_i
   return 0; // Return "mover not in use"
 }
 
+// this has no data race protection for write into the accumulators
 // this has no data race protection for write into the accumulators
 template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class accum_view_t>
 int
@@ -965,11 +790,6 @@ move_p_kokkos_host_serial(
   const float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
   const float rV = g->rdx * g->rdy * g->rdz;
   const float rV12 = rV*one_twelfth;
-  const float cdt = g->cvac * g->dt;
-
-  //float cx = 0.25 * g->rdy * g->rdz / g->dt;
-  //float cy = 0.25 * g->rdz * g->rdx / g->dt;
-  //float cz = 0.25 * g->rdx * g->rdy / g->dt;
 
   #define p_dx    k_particles(pi, particle_var::dx)
   #define p_dy    k_particles(pi, particle_var::dy)
@@ -983,12 +803,6 @@ move_p_kokkos_host_serial(
 #endif
   #define pii     k_particles_i(pi)
 
-  //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
-  //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
-  //#define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
-  //#define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
-
-
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
@@ -996,7 +810,6 @@ move_p_kokkos_host_serial(
   float w0, wx, wy, wz, wmx, wmy, wmz;
   int axis, face;
   int64_t neighbor;
-  //int pi = int(local_pm_i);
   size_t pi = pm->i;
 
 #ifdef VARIABLE_CHARGE
@@ -1004,8 +817,6 @@ move_p_kokkos_host_serial(
 #else
   q = qsp*p_w;
 #endif
-
-    //printf("in move %d \n", pi);
 
   for(;;) {
     int ii = pii;
@@ -1016,41 +827,34 @@ move_p_kokkos_host_serial(
     ux = p_ux;
     uy = p_uy;
     uz = p_uz;
-
-    //v0 = one;///sqrtf(one + (ux*ux+ (uy*uy + uz*uz)));
-
-    //ux *= v0;
-    //uy *= v0;
-    //uz *= v0;
+    
+    s_dispx = pm->dispx;
+    s_dispy = pm->dispy;
+    s_dispz = pm->dispz;
 
     float grad_xi_x, grad_xi_y, grad_xi_z;
     float grad_eta_x, grad_eta_y, grad_eta_z;
     float grad_mu_x, grad_mu_y, grad_mu_z;
     float jac;
 
-    compute_reciprocal_basis(g, s_midx, s_midy, s_midz, ii, nx, ny, nz,
-                            gdx, gdy, gdz,
-                            grad_xi_x, grad_xi_y, grad_xi_z,
-                            grad_eta_x, grad_eta_y, grad_eta_z,
-                            grad_mu_x, grad_mu_y, grad_mu_z, jac);
+    compute_reciprocal_basis(
+        g,
+        s_midx, s_midy, s_midz, ii, nx, ny, nz,
+        gdx, gdy, gdz,
+        grad_xi_x, grad_xi_y, grad_xi_z,
+        grad_eta_x, grad_eta_y, grad_eta_z,
+        grad_mu_x, grad_mu_y, grad_mu_z,
+        jac);
 
-    // **NEW: Transform velocity to logical coordinates**
-    float d_xi_dt = ux * grad_xi_x + uy * grad_xi_y + uz * grad_xi_z;
+    // Transform Cartesian velocities to contravariant logical velocities
+    float d_xi_dt  = ux * grad_xi_x  + uy * grad_xi_y  + uz * grad_xi_z;
     float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
-    float d_mu_dt = ux * grad_mu_x + uy * grad_mu_y + uz * grad_mu_z;
+    float d_mu_dt  = ux * grad_mu_x  + uy * grad_mu_y  + uz * grad_mu_z;
 
-    
-    s_dispx = pm->dispx;
-    s_dispy = pm->dispy;
-    s_dispz = pm->dispz;
-
-    //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
-
-    //Find postition of particle at t_n+1/2
-    v0 = (d_xi_dt==0) ? 0.0 : s_dispx/d_xi_dt/gdt;  // fraction of dt left
-    v1 = (d_eta_dt==0) ? 0.0 : s_dispy/d_eta_dt/gdt;
-    v2 = (d_mu_dt==0) ? 0.0 : s_dispz/d_mu_dt/gdt;
-
+    // Find position of particle at t_n+1/2
+    v0 = (ux==0) ? 0.0 : s_dispx/d_xi_dt/gdt*2.;
+    v1 = (uy==0) ? 0.0 : s_dispy/d_eta_dt/gdt*2.;
+    v2 = (uz==0) ? 0.0 : s_dispz/d_mu_dt/gdt*2.;
 
     fracdt = v0;
     if(v1>fracdt) fracdt=v1;
@@ -1059,48 +863,49 @@ move_p_kokkos_host_serial(
 
     if(fracdt>0){
 
-      x_half = s_midx + fracdt*d_xi_dt*gdt;   // **MODIFIED**
-      y_half = s_midy + fracdt*d_eta_dt*gdt;  // **MODIFIED**
-      z_half = s_midz + fracdt*d_mu_dt*gdt;   
+      x_half = s_midx + fracdt*d_xi_dt*gdt/2.;
+      y_half = s_midy + fracdt*d_eta_dt*gdt/2.; 
+      z_half = s_midz + fracdt*d_mu_dt*gdt/2.;
       
       if( x_half<=one &&  y_half<=one &&  z_half<=one && 
          -x_half<=one && -y_half<=one && -z_half<=one) {
         
-	// Accumulate the particle current density
-
 #ifdef SHAPE_NGP
-        // Coordinate-consistent (contravariant) deposit, matching move_p_kokkos
-        // and advance_p. Density n=q/(8*jac); current jf^a = n*(v.grad xi^a).
-        // On CARTESIAN reduces to q*rV*u (grad xi=2/gd, jac=gd^3/8 cancel to give
-        // the contravariant current the field solver expects).
-        {
-          float grad_xi_x_h, grad_xi_y_h, grad_xi_z_h;
-          float grad_eta_x_h, grad_eta_y_h, grad_eta_z_h;
-          float grad_mu_x_h, grad_mu_y_h, grad_mu_z_h;
-          float jac_h;
-          
-          compute_reciprocal_basis(g, x_half, y_half, z_half, ii, nx, ny, nz,
-                                  gdx, gdy, gdz,
-                                  grad_xi_x_h, grad_xi_y_h, grad_xi_z_h,
-                                  grad_eta_x_h, grad_eta_y_h, grad_eta_z_h,
-                                  grad_mu_x_h, grad_mu_y_h, grad_mu_z_h, jac_h);
-          
-          float qn = q * 0.125f / jac_h;
-          
-          // Current is contravariant: j^a = n*(v.grad xi^a)
-          k_jf_accum(ii, accumulator_var::jx)  += qn*(ux*grad_xi_x_h + uy*grad_xi_y_h + uz*grad_xi_z_h);
-          k_jf_accum(ii, accumulator_var::jy)  += qn*(ux*grad_eta_x_h + uy*grad_eta_y_h + uz*grad_eta_z_h);
-          k_jf_accum(ii, accumulator_var::jz)  += qn*(ux*grad_mu_x_h + uy*grad_mu_y_h + uz*grad_mu_z_h);
-          k_jf_accum(ii, accumulator_var::rho) += qn;
+        // Compute reciprocal basis vectors at half-step position
+        float grad_xi_x, grad_xi_y, grad_xi_z;
+        float grad_eta_x, grad_eta_y, grad_eta_z;
+        float grad_mu_x, grad_mu_y, grad_mu_z;
+        float jac;
+        
+        compute_reciprocal_basis(
+            g,
+            x_half, y_half, z_half, ii, nx, ny, nz,
+            gdx, gdy, gdz,
+            grad_xi_x, grad_xi_y, grad_xi_z,
+            grad_eta_x, grad_eta_y, grad_eta_z,
+            grad_mu_x, grad_mu_y, grad_mu_z,
+            jac);
+        
+        // Transform Cartesian velocity to contravariant logical velocity
+        float d_xi_dt  = ux * grad_xi_x  + uy * grad_xi_y  + uz * grad_xi_z;
+        float d_eta_dt = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
+        float d_mu_dt  = ux * grad_mu_x  + uy * grad_mu_y  + uz * grad_mu_z;
+        
+        // Compute proper volume scaling (inverse Jacobian)
+        float inv_jac = 1.0f / jac;
+        
+        // Deposit contravariant logical current with proper volume weighting
+        // Note: Factor of 0.125 = 1/8 accounts for the cell volume normalization
+        // in logical coordinates (cell spans [-1,1]^3 = volume of 8)
+        float qfactor = q * 0.125f * inv_jac;
+        
+        k_jf_accum(ii, accumulator_var::jx)  += qfactor * d_xi_dt;
+        k_jf_accum(ii, accumulator_var::jy)  += qfactor * d_eta_dt;
+        k_jf_accum(ii, accumulator_var::jz)  += qfactor * d_mu_dt;
+        k_jf_accum(ii, accumulator_var::rho) += qfactor;
 
-        }
 #elif defined( SHAPE_QS )
         // stencil coefficients
-        // ... OLD hybrid-VPIC with QS shape, the accumulator stores
-        // ... ... p->w*qsp * two*(three - ...)
-        // ... ... hyb_unload_accumulator(...) applies factor rV/12.
-        // ... NEW HVPIC-K not using accumulator (yet), scatter directly to mesh,
-        // ... ... so include all factors
         w0 =  q*rV12*2.f*( 3.f - x_half*x_half - y_half*y_half - z_half*z_half );
         wx =  q*rV12*( x_half + 1.f )*( x_half + 1.f );
         wy =  q*rV12*( y_half + 1.f )*( y_half + 1.f );
@@ -1159,13 +964,9 @@ move_p_kokkos_host_serial(
         k_jf_accum(iimz, accumulator_var::rho) += wmz;
 #endif // defined(SHAPE_QS)
 
-      } //if indbds
+      } //if inbds
       
-    } //ifmore than half dt left
-
-      //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
-
-      //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
+    } //if more than half dt left
 
     s_dir[0] = (s_dispx>0) ? 1 : -1;
     s_dir[1] = (s_dispy>0) ? 1 : -1;
@@ -1177,12 +978,7 @@ move_p_kokkos_host_serial(
     v1 = (s_dispy==0) ? 3.4e38f : (s_dir[1]-s_midy)/s_dispy;
     v2 = (s_dispz==0) ? 3.4e38f : (s_dir[2]-s_midz)/s_dispz;
 
-    // Determine the fractional length and axis of current streak. The
-    // streak ends on either the first face intersected by the
-    // particle track or at the end of the particle track.
-    //
-    //   axis 0,1 or 2 ... streak ends on a x,y or z-face respectively
-    //   axis 3        ... streak ends at end of the particle track
+    // Determine the fractional length and axis of current streak
     /**/      v3=2,  axis=3;
     if(v0<v3) v3=v0, axis=0;
     if(v1<v3) v3=v1, axis=1;
@@ -1197,121 +993,48 @@ move_p_kokkos_host_serial(
     s_midy += s_dispy;
     s_midz += s_dispz;
 
-#if 0
-    // Accumulate the streak.  Note: accumulator values are 4 times
-    // the total physical charge that passed through the appropriate
-    // current quadrant in a time-step
-    v5 = q*s_dispx*s_dispy*s_dispz*(1.f/3.f);
-
-    //a = (float *)(&d_accumulators[ci]);
-
-#   define accumulate_j(X,Y,Z)                                        \
-    v4  = q*s_disp##X;    /* v2 = q ux                            */  \
-    v1  = v4*s_mid##Y;    /* v1 = q ux dy                         */  \
-    v0  = v4-v1;          /* v0 = q ux (1-dy)                     */  \
-    v1 += v4;             /* v1 = q ux (1+dy)                     */  \
-    v4  = 1+s_mid##Z;     /* v4 = 1+dz                            */  \
-    v2  = v0*v4;          /* v2 = q ux (1-dy)(1+dz)               */  \
-    v3  = v1*v4;          /* v3 = q ux (1+dy)(1+dz)               */  \
-    v4  = 1-s_mid##Z;     /* v4 = 1-dz                            */  \
-    v0 *= v4;             /* v0 = q ux (1-dy)(1-dz)               */  \
-    v1 *= v4;             /* v1 = q ux (1+dy)(1-dz)               */  \
-    v0 += v5;             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */  \
-    v1 -= v5;             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */  \
-    v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
-    v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */ 
-
-    int iii = ii;
-    int zi = iii/((nx+2)*(ny+2));
-    iii -= zi*(nx+2)*(ny+2);
-    int yi = iii/(nx+2);
-    int xi = iii - yi*(nx+2);
-    accumulate_j(x,y,z);
-    k_jf_accum(ii, accumulator_var::jx) += cx*v0;
-    k_jf_accum(VOXEL(xi,yi+1,zi,nx,ny,nz), accumulator_var::jx) += cx*v1;
-    k_jf_accum(VOXEL(xi,yi,zi+1,nx,ny,nz), accumulator_var::jx) += cx*v2;
-    k_jf_accum(VOXEL(xi,yi+1,zi+1,nx,ny,nz), accumulator_var::jx) += cx*v3;
-
-    accumulate_j(y,z,x);
-    k_jf_accum(ii, accumulator_var::jy) += cy*v0;
-    k_jf_accum(VOXEL(xi,yi,zi+1,nx,ny,nz), accumulator_var::jy) += cy*v1;
-    k_jf_accum(VOXEL(xi+1,yi,zi,nx,ny,nz), accumulator_var::jy) += cy*v2;
-    k_jf_accum(VOXEL(xi+1,yi,zi+1,nx,ny,nz), accumulator_var::jy) += cy*v3;
-
-    accumulate_j(z,x,y);
-    k_jf_accum(ii, accumulator_var::jz) += cz*v0;
-    k_jf_accum(VOXEL(xi+1,yi,zi,nx,ny,nz), accumulator_var::jz) += cz*v1;
-    k_jf_accum(VOXEL(xi,yi+1,zi,nx,ny,nz), accumulator_var::jz) += cz*v2;
-    k_jf_accum(VOXEL(xi+1,yi+1,zi,nx,ny,nz), accumulator_var::jz) += cz*v3;
-
-#   undef accumulate_j
-#endif
-
-    // Compute the remaining particle displacment
+    // Compute the remaining particle displacement
     pm->dispx -= s_dispx;
     pm->dispy -= s_dispy;
     pm->dispz -= s_dispz;
 
-    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset
     p_dx += s_dispx+s_dispx;
     p_dy += s_dispy+s_dispy;
     p_dz += s_dispz+s_dispz;
 
     // If an end streak, return success (should be ~50% of the time)
-    //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
 
     if( axis==3 ) break;
 
     // Determine if the particle crossed into a local cell or if it
     // hit a boundary and convert the coordinate system accordingly.
-    // Note: Crossing into a local cell should happen ~50% of the
-    // time; hitting a boundary is usually a rare event.  Note: the
-    // entry / exit coordinate for the particle is guaranteed to be
-    // +/-1 _exactly_ for the particle.
 
     v0 = s_dir[axis];
-    k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
-                           // _exactly_ on the boundary.
+    k_particles(pi, particle_var::dx + axis) = v0;
     face = axis; if( v0>0 ) face += 3;
 
-    // TODO: clean this fixed index to an enum
-    //neighbor = g->neighbor[ 6*ii + face ];
     neighbor = d_neighbor( 6*ii + face );
 
-    // TODO: these two if statements used to be marked UNLIKELY,
-    // but that intrinsic doesn't work on GPU.
-    // for performance portability, maybe specialize UNLIKELY
-    // for CUDA mode and put it back
-
-
     if( neighbor==reflect_particles ) {
-      // Hit a reflecting boundary condition.  Reflect the particle
-      // momentum and remaining displacement and keep moving the
-      // particle.
+      // Hit a reflecting boundary condition
       k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
-      // Clearer and works with AMD GPUs
       float* disp = static_cast<float*>(&(pm->dispx));
       disp[axis] = -disp[axis];
-
       continue;
     }
 
     if( neighbor<rangel || neighbor>rangeh ) {
-      // Cannot handle the boundary condition here.  Save the updated
-      // particle position, face it hit and update the remaining
-      // displacement in the particle mover.
+      // Cannot handle the boundary condition here
       pii = 8*pii + face;
       return 1; // Return "mover still in use"
-      }
+    }
 
-    // Crossed into a normal voxel.  Update the voxel index, convert the
-    // particle coordinate system and keep moving the particle.
-
+    // Crossed into a normal voxel
     pii = neighbor - rangel;
-    /**/                         // Note: neighbor - rangel < 2^31 / 6
-    k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+    k_particles(pi, particle_var::dx + axis) = -v0;
   }
+  
   #undef p_dx
   #undef p_dy
   #undef p_dz
@@ -1324,10 +1047,6 @@ move_p_kokkos_host_serial(
 #endif
   #undef pii
 
-  //#undef local_pm_dispx
-  //#undef local_pm_dispy
-  //#undef local_pm_dispz
-  //#undef local_pm_i
   return 0; // Return "mover not in use"
 }
 

@@ -9,7 +9,7 @@ rm -rf restore0
 rm -rf restore1
 rm -rf particle
 ./bin/vpic ../examples/pcai/pcai.cxx
-./pcai.Linux
+srun -N4 -n8 ./pcai.Linux
 mpif90 -o translate_pcai ../examples/pcai/translate_pcai.f90
 mkdir data
 mpirun -np 1 ./translate_pcai

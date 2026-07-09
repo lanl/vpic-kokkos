@@ -82,9 +82,9 @@ begin_initialization {
   double ny = 1;
   double nz = 1;
 
-  double nppc  = 150;    // Average number of macro particle per cell per species 
+  double nppc  = 150000;    // Average number of macro particle per cell per species 
   
-  double topology_x = 1; // Number of domains in x, y, and z
+  double topology_x = 8; // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 1;
 
