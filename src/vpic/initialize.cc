@@ -64,6 +64,13 @@ vpic_simulation::initialize( int argc,
   auto g = species_list->g;
   auto nfaces_per_voxel = 6;
   g->init_kokkos_grid(nfaces_per_voxel*g->nv);
+  // Check if curvilinear mesh is initialized by user.
+  if (g->k_curvilinear_mesh_d.extent(0) == 0 || 
+      g->k_curvilinear_mesh_h.extent(0) == 0) {
+    ERROR(("Curvilinear mesh data not initialized! "
+          "Did you forget to call grid->init_curvilinear_grid()?"));
+    
+  }
 
   KOKKOS_TIC();
   LIST_FOR_EACH( sp, species_list ) {
