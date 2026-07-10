@@ -286,15 +286,36 @@ load_interpolator_array_kokkos(k_interpolator_t k_interp,
       pi_cbz = Bz;
       
 #ifdef EXTERNAL_FORCE
-      // External forces (assuming these are already in Cartesian coordinates)
-      // If they're in curvilinear coordinates, they need similar transformation
-      pi_Ex0 = k_field(pf0_index, field_var::Ex0);
-      pi_Ey0 = k_field(pf0_index, field_var::Ey0);
-      pi_Ez0 = k_field(pf0_index, field_var::Ez0);
+      // External forces are stored in curvilinear coordinates (more natural for curvilinear grids)
+      // Read curvilinear external E field (covariant components)
+      float E0_xi   = k_field(pf0_index, field_var::Ex0);
+      float E0_eta  = k_field(pf0_index, field_var::Ey0);
+      float E0_zeta = k_field(pf0_index, field_var::Ez0);
       
-      pi_Gx0 = k_field(pf0_index, field_var::Gx0);
-      pi_Gy0 = k_field(pf0_index, field_var::Gy0);
-      pi_Gz0 = k_field(pf0_index, field_var::Gz0);
+      // Transform external E field to Cartesian (same transformation as regular E field)
+      float Ex0, Ey0, Ez0;
+      transform_E_to_cartesian(k_cmesh, pm0_index,
+                               E0_xi, E0_eta, E0_zeta,
+                               Ex0, Ey0, Ez0);
+      
+      pi_Ex0 = Ex0;
+      pi_Ey0 = Ey0;
+      pi_Ez0 = Ez0;
+      
+      // Read curvilinear gravity field (covariant components - transforms like E field)
+      float G_xi   = k_field(pf0_index, field_var::Gx0);
+      float G_eta  = k_field(pf0_index, field_var::Gy0);
+      float G_zeta = k_field(pf0_index, field_var::Gz0);
+      
+      // Transform gravity field to Cartesian (force/acceleration is covariant like E field)
+      float Gx0, Gy0, Gz0;
+      transform_E_to_cartesian(k_cmesh, pm0_index,
+                               G_xi, G_eta, G_zeta,
+                               Gx0, Gy0, Gz0);
+      
+      pi_Gx0 = Gx0;
+      pi_Gy0 = Gy0;
+      pi_Gz0 = Gz0;
 #endif
 
 #elif defined( SHAPE_QS )
