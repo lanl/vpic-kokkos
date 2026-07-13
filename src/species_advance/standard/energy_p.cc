@@ -160,11 +160,18 @@ double
 energy_p_kernel(const k_interpolator_t& k_interp, 
                 const k_particles_t& k_particles, 
                 const k_particles_i_t& k_particles_i, 
+                const grid_t* g,  // Changed from k_curvilinear_mesh_t
                 const float q,
                 const float dt_2mc, 
                 const float dt_2c, 
                 const float msp, 
-                const size_t np) {
+                const size_t np,
+                const int nx,
+                const int ny,
+                const int nz,
+                const float gdx,
+                const float gdy,
+                const float gdz) {
     double en = 0;
     float _qdt_2mc = q*dt_2mc;
 
@@ -184,17 +191,51 @@ energy_p_kernel(const k_interpolator_t& k_interp,
 #endif
 
         float hax, hay, haz;
-        const interpolator_t intp = read_interpolator(k_interp, ii); // Load interpolators
+        const interpolator_t intp = read_interpolator(k_interp, ii);
     
-        interpolate_e(intp, dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c); // Interpolate E
+        interpolate_e(intp, dx, dy, dz, hax, hay, haz, qdt_2mc, dt_2c);
 
         float v0 = ux + hax;
         float v1 = uy + hay;
         float v2 = uz + haz;
     
+#ifdef SHAPE_NGP
+        // For curvilinear coordinates, compute reciprocal basis to get proper kinetic energy
+        float grad_xi_x, grad_xi_y, grad_xi_z;
+        float grad_eta_x, grad_eta_y, grad_eta_z;
+        float grad_mu_x, grad_mu_y, grad_mu_z;
+        float jac;
+        
+        compute_reciprocal_basis(
+            g,  // Pass grid pointer, not curvilinear mesh
+            dx, dy, dz, ii, nx, ny, nz,
+            gdx, gdy, gdz,
+            grad_xi_x, grad_xi_y, grad_xi_z,
+            grad_eta_x, grad_eta_y, grad_eta_z,
+            grad_mu_x, grad_mu_y, grad_mu_z,
+            jac);
+        
+        // Transform Cartesian velocities to contravariant logical velocities
+        float u_xi = v0 * grad_xi_x + v1 * grad_xi_y + v2 * grad_xi_z;
+        float u_eta = v0 * grad_eta_x + v1 * grad_eta_y + v2 * grad_eta_z;
+        float u_mu = v0 * grad_mu_x + v1 * grad_mu_y + v2 * grad_mu_z;
+        
+        // Compute scale factors
+        float h_xi = 1.0f / sqrtf(grad_xi_x*grad_xi_x + grad_xi_y*grad_xi_y + grad_xi_z*grad_xi_z);
+        float h_eta = 1.0f / sqrtf(grad_eta_x*grad_eta_x + grad_eta_y*grad_eta_y + grad_eta_z*grad_eta_z);
+        float h_mu = 1.0f / sqrtf(grad_mu_x*grad_mu_x + grad_mu_y*grad_mu_y + grad_mu_z*grad_mu_z);
+        
+        // Physical velocities: u_phys_i = u^i * h_i
+        float u_phys_xi = u_xi * h_xi;
+        float u_phys_eta = u_eta * h_eta;
+        float u_phys_mu = u_mu * h_mu;
+        
+        // Kinetic energy using physical velocities
+        v0 = u_phys_xi*u_phys_xi + u_phys_eta*u_phys_eta + u_phys_mu*u_phys_mu;
+#else
         v0 = v0*v0 + v1*v1 + v2*v2;
-        //v0 = (msp * k_particles(n, particle_var::w)) * (v0 / (1 + sqrtf(1 + v0)));  // Relativistic kinetic energy
-        v0 *= 0.5 * (msp * k_particles(n, particle_var::w));  // Non-relativistic kinetic energy
+#endif
+        v0 *= 0.5 * (msp * k_particles(n, particle_var::w));
         update += static_cast<double>(v0);
     }, en);
     return en;
@@ -245,8 +286,15 @@ energy_p_kokkos(const species_t* RESTRICT sp,
     const float msp = sp->m;
     const float q = sp->q;
     const size_t np = sp->np;
+    const float gdx = g->dx;
+    const float gdy = g->dy;
+    const float gdz = g->dz;
 
-    local = energy_p_kernel(ia->k_i_d, sp->k_p_d, sp->k_p_i_d, q, dt_2mc, dt_2c, msp, np);
+    local = energy_p_kernel(ia->k_i_d, sp->k_p_d, sp->k_p_i_d, 
+                           g,  // Pass grid pointer
+                           q, dt_2mc, dt_2c, msp, np,
+                           g->nx, g->ny, g->nz,
+                           gdx, gdy, gdz);
     Kokkos::fence();
 
     mp_allsum_d( &local, &global, 1 );

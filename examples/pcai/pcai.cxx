@@ -155,6 +155,7 @@ begin_initialization {
   //  grid->te = Te;
   //  grid->den = 1.0;
   grid->eta = eta;
+  // grid->init_stretched_cartesian_grid(3, 0, 0);
   grid->init_cartesian_grid();
   //  grid->hypereta = hypereta;
   //  grid->gamma = gamma;

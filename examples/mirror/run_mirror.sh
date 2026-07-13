@@ -9,6 +9,9 @@ rm -rf restore0
 rm -rf restore1
 rm -rf particle
 ./bin/vpic ../examples/mirror/mirror.cxx
-srun -N4 -n8 ./mirror.Linux
+srun -N4 -n16 ./mirror.Linux
+mpif90 -o translate_mirror ../examples/mirror/translate_mirror.f90
+mkdir data
+mpirun -np 1 ./translate_mirror
 cd ../examples/mirror
 python3 plotsMirror.py

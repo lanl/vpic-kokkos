@@ -19,36 +19,141 @@ typedef struct pipeline_args {
   size_t fmx_index = VOXEL(x-1, y,   z,    nx,ny,nz);     \
   size_t fmy_index = VOXEL(x,   y-1, z,    nx,ny,nz);     \
   size_t fmz_index = VOXEL(x,   y,   z-1,  nx,ny,nz);     \
+  /* Load curvilinear mesh indices */                      \
+  size_t m0_index  = GRID_TO_MESH(x,   y,   z,   nx, ny, nz);  \
+  size_t mx_index  = GRID_TO_MESH(x+1, y,   z,   nx, ny, nz);  \
+  size_t my_index  = GRID_TO_MESH(x,   y+1, z,   nx, ny, nz);  \
+  size_t mz_index  = GRID_TO_MESH(x,   y,   z+1, nx, ny, nz);  \
+  size_t mmx_index = GRID_TO_MESH(x-1, y,   z,   nx, ny, nz);  \
+  size_t mmy_index = GRID_TO_MESH(x,   y-1, z,   nx, ny, nz);  \
+  size_t mmz_index = GRID_TO_MESH(x,   y,   z-1, nx, ny, nz);  \
+  /* Load scale factors at all stencil points */           \
+  float h1_0  = k_curv_mesh(m0_index,  curv_mesh_var::h_1);  \
+  float h2_0  = k_curv_mesh(m0_index,  curv_mesh_var::h_2);  \
+  float h3_0  = k_curv_mesh(m0_index,  curv_mesh_var::h_3);  \
+  float h1_x  = k_curv_mesh(mx_index,  curv_mesh_var::h_1);  \
+  float h2_x  = k_curv_mesh(mx_index,  curv_mesh_var::h_2);  \
+  float h3_x  = k_curv_mesh(mx_index,  curv_mesh_var::h_3);  \
+  float h1_mx = k_curv_mesh(mmx_index, curv_mesh_var::h_1);  \
+  float h2_mx = k_curv_mesh(mmx_index, curv_mesh_var::h_2);  \
+  float h3_mx = k_curv_mesh(mmx_index, curv_mesh_var::h_3);  \
+  float h1_y  = k_curv_mesh(my_index,  curv_mesh_var::h_1);  \
+  float h2_y  = k_curv_mesh(my_index,  curv_mesh_var::h_2);  \
+  float h3_y  = k_curv_mesh(my_index,  curv_mesh_var::h_3);  \
+  float h1_my = k_curv_mesh(mmy_index, curv_mesh_var::h_1);  \
+  float h2_my = k_curv_mesh(mmy_index, curv_mesh_var::h_2);  \
+  float h3_my = k_curv_mesh(mmy_index, curv_mesh_var::h_3);  \
+  float h1_z  = k_curv_mesh(mz_index,  curv_mesh_var::h_1);  \
+  float h2_z  = k_curv_mesh(mz_index,  curv_mesh_var::h_2);  \
+  float h3_z  = k_curv_mesh(mz_index,  curv_mesh_var::h_3);  \
+  float h1_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_1);  \
+  float h2_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_2);  \
+  float h3_mz = k_curv_mesh(mmz_index, curv_mesh_var::h_3);  \
+  /* Compute Jacobians at all stencil points */             \
+  float J_0  = h1_0  * h2_0  * h3_0;                        \
+  float J_x  = h1_x  * h2_x  * h3_x;                        \
+  float J_mx = h1_mx * h2_mx * h3_mx;                       \
+  float J_y  = h1_y  * h2_y  * h3_y;                        \
+  float J_my = h1_my * h2_my * h3_my;                       \
+  float J_z  = h1_z  * h2_z  * h3_z;                        \
+  float J_mz = h1_mz * h2_mz * h3_mz;
 
-//modified version of old hypereta macro curlbXYZ -> pXYZ
-//note the pz here in the multiplier is NOT the curl
-/*
-#define LPL_B()\
-  F(0,pex) = 4.0*( px*px*( F(x,cbx) + F(mx,cbx) - 2.0*F(0,cbx) ) +  \
-                   py*py*( F(y,cbx) + F(my,cbx) - 2.0*F(0,cbx) ) +  \
-                   pz*pz*( F(z,cbx) + F(mz,cbx) - 2.0*F(0,cbx) ) ); \
-  F(0,pey) = 4.0*( px*px*( F(x,cby) + F(mx,cby) - 2.0*F(0,cby) ) +  \
-                   py*py*( F(y,cby) + F(my,cby) - 2.0*F(0,cby) ) +  \
-                   pz*pz*( F(z,cby) + F(mz,cby) - 2.0*F(0,cby) ) ); \
-  F(0,pez) = 4.0*( px*px*( F(x,cbz) + F(mx,cbz) - 2.0*F(0,cbz) ) +  \
-                   py*py*( F(y,cbz) + F(my,cbz) - 2.0*F(0,cbz) ) +  \
-                   pz*pz*( F(z,cbz) + F(mz,cbz) - 2.0*F(0,cbz) ) ); \
-*/
+// Laplacian in curvilinear coordinates for orthogonal grids:
+// ∇²B_x = (1/J) [ ∂_ξ(J/h_ξ² ∂_ξ B_x) + ∂_η(J/h_η² ∂_η B_x) + ∂_μ(J/h_μ² ∂_μ B_x) ]
+// Using centered finite differences with logical derivatives (px, py, pz)
+// For the ξ direction: ∂_ξ(J/h_ξ² ∂_ξ B_x) ≈ 
+//   px * [ (J_x/h1_x²)*(B_x - B_0) - (J_0/h1_0²)*(B_0 - B_mx) ]
+// And similarly for η and μ directions
+#define LPL_B()                                                             \
+  {                                                                         \
+    /* ξ direction contribution to ∇²B_x */                                \
+    float dxi_term_x = px * (                                               \
+      (J_x / (h1_x * h1_x)) * (F(x, cbx) - F(0, cbx)) -                    \
+      (J_0 / (h1_0 * h1_0)) * (F(0, cbx) - F(mx, cbx))                     \
+    );                                                                      \
+    /* η direction contribution */                                          \
+    float deta_term_x = py * (                                              \
+      (J_y / (h2_y * h2_y)) * (F(y, cbx) - F(0, cbx)) -                    \
+      (J_0 / (h2_0 * h2_0)) * (F(0, cbx) - F(my, cbx))                     \
+    );                                                                      \
+    /* μ direction contribution */                                          \
+    float dmu_term_x = pz * (                                               \
+      (J_z / (h3_z * h3_z)) * (F(z, cbx) - F(0, cbx)) -                    \
+      (J_0 / (h3_0 * h3_0)) * (F(0, cbx) - F(mz, cbx))                     \
+    );                                                                      \
+    F(0, pex) = (dxi_term_x + deta_term_x + dmu_term_x) / J_0;             \
+                                                                            \
+    /* ξ direction contribution to ∇²B_y */                                \
+    float dxi_term_y = px * (                                               \
+      (J_x / (h1_x * h1_x)) * (F(x, cby) - F(0, cby)) -                    \
+      (J_0 / (h1_0 * h1_0)) * (F(0, cby) - F(mx, cby))                     \
+    );                                                                      \
+    /* η direction contribution */                                          \
+    float deta_term_y = py * (                                              \
+      (J_y / (h2_y * h2_y)) * (F(y, cby) - F(0, cby)) -                    \
+      (J_0 / (h2_0 * h2_0)) * (F(0, cby) - F(my, cby))                     \
+    );                                                                      \
+    /* μ direction contribution */                                          \
+    float dmu_term_y = pz * (                                               \
+      (J_z / (h3_z * h3_z)) * (F(z, cby) - F(0, cby)) -                    \
+      (J_0 / (h3_0 * h3_0)) * (F(0, cby) - F(mz, cby))                     \
+    );                                                                      \
+    F(0, pey) = (dxi_term_y + deta_term_y + dmu_term_y) / J_0;             \
+                                                                            \
+    /* ξ direction contribution to ∇²B_z */                                \
+    float dxi_term_z = px * (                                               \
+      (J_x / (h1_x * h1_x)) * (F(x, cbz) - F(0, cbz)) -                    \
+      (J_0 / (h1_0 * h1_0)) * (F(0, cbz) - F(mx, cbz))                     \
+    );                                                                      \
+    /* η direction contribution */                                          \
+    float deta_term_z = py * (                                              \
+      (J_y / (h2_y * h2_y)) * (F(y, cbz) - F(0, cbz)) -                    \
+      (J_0 / (h2_0 * h2_0)) * (F(0, cbz) - F(my, cbz))                     \
+    );                                                                      \
+    /* μ direction contribution */                                          \
+    float dmu_term_z = pz * (                                               \
+      (J_z / (h3_z * h3_z)) * (F(z, cbz) - F(0, cbz)) -                    \
+      (J_0 / (h3_0 * h3_0)) * (F(0, cbz) - F(mz, cbz))                     \
+    );                                                                      \
+    F(0, pez) = (dxi_term_z + deta_term_z + dmu_term_z) / J_0;             \
+  }
 
-#define LPL_B()\
-  F(0,pex) = (px2*( F(x,cbx) + F(mx,cbx) - 2.0*F(0,cbx) ) +  \
-              py2*( F(y,cbx) + F(my,cbx) - 2.0*F(0,cbx) ) +  \
-              pz2*( F(z,cbx) + F(mz,cbx) - 2.0*F(0,cbx) ) ); \
-  F(0,pey) = (px2*( F(x,cby) + F(mx,cby) - 2.0*F(0,cby) ) +  \
-              py2*( F(y,cby) + F(my,cby) - 2.0*F(0,cby) ) +  \
-              pz2*( F(z,cby) + F(mz,cby) - 2.0*F(0,cby) ) ); \
-  F(0,pez) = (px2*( F(x,cbz) + F(mx,cbz) - 2.0*F(0,cbz) ) +  \
-              py2*( F(y,cbz) + F(my,cbz) - 2.0*F(0,cbz) ) +  \
-              pz2*( F(z,cbz) + F(mz,cbz) - 2.0*F(0,cbz) ) ); \
-
-#define CURL_LPL_B(x_,y_,z_)                                                            \
-  F(0,e##x_) -= hypereta*F(0,tcax)*F(0,tcaz)*( p##y_*( F(y_,pe##z_) - F(m##y_,pe##z_) ) \
-                                             - p##z_*( F(z_,pe##y_) - F(m##z_,pe##y_) ) )
+// Curl in curvilinear coordinates for orthogonal grids:
+// (∇×V)^i = (1/J) ε^ijk ∂_j(h_k V_k)
+// For the x-component (i=1, cyclic in j,k over 2,3):
+// (∇×∇²B)^x = (1/J) [∂_η(h_μ ∇²B_μ) - ∂_μ(h_η ∇²B_η)]
+// Using centered differences:
+#define CURL_LPL_B(x_,y_,z_)                                                \
+  {                                                                         \
+    /* Load scale factors at y± and z± neighbors */                        \
+    float h_y_p = (x_ == x) ? h2_y : ((x_ == y) ? h3_y : h1_y);            \
+    float h_y_m = (x_ == x) ? h2_my : ((x_ == y) ? h3_my : h1_my);         \
+    float h_z_p = (x_ == x) ? h3_z : ((x_ == y) ? h1_z : h2_z);            \
+    float h_z_m = (x_ == x) ? h3_mz : ((x_ == y) ? h1_mz : h2_mz);         \
+                                                                            \
+    /* Compute h*∇²B at neighboring points */                              \
+    float h_pe_yp = h_y_p * F(y_, pe##z_);                                 \
+    float h_pe_ym = h_y_m * F(m##y_, pe##z_);                              \
+    float h_pe_zp = h_z_p * F(z_, pe##y_);                                 \
+    float h_pe_zm = h_z_m * F(m##z_, pe##y_);                              \
+                                                                            \
+    /* Compute derivatives */                                              \
+    float d_eta_term, d_mu_term;                                           \
+    if (x_ == x) {                                                          \
+      d_eta_term = py * (h_pe_yp - h_pe_ym);                               \
+      d_mu_term  = pz * (h_pe_zp - h_pe_zm);                               \
+    } else if (x_ == y) {                                                   \
+      d_eta_term = pz * (h_pe_yp - h_pe_ym);                               \
+      d_mu_term  = px * (h_pe_zp - h_pe_zm);                               \
+    } else { /* x_ == z */                                                  \
+      d_eta_term = px * (h_pe_yp - h_pe_ym);                               \
+      d_mu_term  = py * (h_pe_zp - h_pe_zm);                               \
+    }                                                                       \
+                                                                            \
+    /* Apply curl and accumulate to E field */                             \
+    F(0, e##x_) -= hypereta * F(0, tcax) * F(0, tcaz) *                    \
+                   (d_eta_term - d_mu_term) / J_0;                          \
+  }
 
 void
 hyb_heta( field_array_t * RESTRICT fa ) {
@@ -59,45 +164,41 @@ hyb_heta( field_array_t * RESTRICT fa ) {
   args->p = (sfa_params_t *)fa->params;
   args->g = fa->g;
   k_field_t k_field = fa->k_f_d;
-  //const material_coefficient_t * ALIGNED(128) m = args->p->mc;
-  const grid_t                 *              g = args->g;
+  k_curvilinear_mesh_t k_curv_mesh = fa->g->k_curvilinear_mesh_d;
+  const grid_t *g = args->g;
   const int nx = g->nx, ny = g->ny, nz = g->nz;
 
   const float px = (nx>1) ? 0.5*g->rdx : 0;
   const float py = (ny>1) ? 0.5*g->rdy : 0;
   const float pz = (nz>1) ? 0.5*g->rdz : 0;
   const float hypereta = g->hypereta;
-  //const float den_floor_ohm = g->den_floor_ohm;
-
-  const float px2 = 4.0*px*px;
-  const float py2 = 4.0*py*py;
-  const float pz2 = 4.0*pz*pz;
 
   // Laplace B Loop
     
   // Write: pex, pey, pez
-  // Read: cbx, cby, cbz
+  // Read: cbx, cby, cbz, scale factors from k_curv_mesh
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> xyz_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
-  Kokkos::parallel_for("hyb_hypereta_lpl_b", xyz_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+  Kokkos::parallel_for("hyb_hypereta_lpl_b", xyz_policy, 
+    KOKKOS_LAMBDA(const int x, const int y, const int z) {
       INIT_STENCIL();
       LPL_B();
     });
     
   // Operations on the ghost cells
   k_begin_remote_ghost_hyb_curl_lpl_b(fa); // Read: pex, pey, pez
-  k_end_remote_ghost_hyb_curl_lpl_b(fa); // Write: pex, pey, pez
-  k_hyb_local_ghost_lapl_b(fa, fa->g); // R/W: pex, pey, pez
+  k_end_remote_ghost_hyb_curl_lpl_b(fa);   // Write: pex, pey, pez
+  k_hyb_local_ghost_lapl_b(fa, fa->g);     // R/W: pex, pey, pez
 
   // Curl Laplace B Loop
 
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> curl_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
-  // Read: tcax, tcay, tcaz, pex, pey, pez
+  // Read: tcax, tcaz, pex, pey, pez, scale factors from k_curv_mesh
   // Write: ex, ey, ez
-  Kokkos::parallel_for("hyb_hypereta_curl_lpl_b", curl_policy, KOKKOS_LAMBDA(const int x, const int y, const int z) {
+  Kokkos::parallel_for("hyb_hypereta_curl_lpl_b", curl_policy, 
+    KOKKOS_LAMBDA(const int x, const int y, const int z) {
       INIT_STENCIL();
       CURL_LPL_B(x,y,z);
       CURL_LPL_B(y,z,x);
       CURL_LPL_B(z,x,y); 
     });
-        
 }
