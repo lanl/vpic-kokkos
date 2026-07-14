@@ -2,7 +2,6 @@
 #define HAS_V4_PIPELINE
 #include "sf_interface_private.h"
 
-
 void
 checkpt_interpolator_array( const interpolator_array_t * ia ) {
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
@@ -35,7 +34,6 @@ new_interpolator_array( grid_t * g ) {
   interpolator_array_t * ia;
   if( !g ) ERROR(( "NULL grid" ));
   ia = new interpolator_array_t(g->nv);
-  //MALLOC( ia, 1 );
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   MALLOC_ALIGNED( ia->i, g->nv, 128 );
   CLEAR( ia->i, g->nv );
@@ -54,97 +52,13 @@ delete_interpolator_array( interpolator_array_t * ia ) {
   FREE_ALIGNED( ia->i );
 #endif
   delete(ia);
-  //FREE( ia );
-}
-
-KOKKOS_INLINE_FUNCTION
-void transform_E_to_cartesian(
-    const k_curvilinear_mesh_t& k_cmesh,
-    int mesh_index,
-    float E_xi, float E_eta, float E_zeta,
-    float& Ex, float& Ey, float& Ez)
-{
-    // Load scale factors
-    float h1 = k_cmesh(mesh_index, curv_mesh_var::h_1);
-    float h2 = k_cmesh(mesh_index, curv_mesh_var::h_2);
-    float h3 = k_cmesh(mesh_index, curv_mesh_var::h_3);
-
-    // Load unit basis vectors
-    float e1_u = k_cmesh(mesh_index, curv_mesh_var::e_1_u);
-    float e1_v = k_cmesh(mesh_index, curv_mesh_var::e_1_v);
-    float e1_w = k_cmesh(mesh_index, curv_mesh_var::e_1_w);
-
-    float e2_u = k_cmesh(mesh_index, curv_mesh_var::e_2_u);
-    float e2_v = k_cmesh(mesh_index, curv_mesh_var::e_2_v);
-    float e2_w = k_cmesh(mesh_index, curv_mesh_var::e_2_w);
-
-    float e3_u = k_cmesh(mesh_index, curv_mesh_var::e_3_u);
-    float e3_v = k_cmesh(mesh_index, curv_mesh_var::e_3_v);
-    float e3_w = k_cmesh(mesh_index, curv_mesh_var::e_3_w);
-
-    // Stored e_*_* are UNIT basis vectors ê_i, E is COVARIANT E_i, so the
-    // Cartesian field is E_cart = E_i ê_i / h_i. On a uniform grid h=1 this is
-    // identity, matching Cartesian.
-    float inv_h1 = 1.0f / h1;
-    float inv_h2 = 1.0f / h2;
-    float inv_h3 = 1.0f / h3;
-
-    float grad_xi_x   = inv_h1 * e1_u;
-    float grad_xi_y   = inv_h1 * e1_v;
-    float grad_xi_z   = inv_h1 * e1_w;
-
-    float grad_eta_x  = inv_h2 * e2_u;
-    float grad_eta_y  = inv_h2 * e2_v;
-    float grad_eta_z  = inv_h2 * e2_w;
-
-    float grad_zeta_x = inv_h3 * e3_u;
-    float grad_zeta_y = inv_h3 * e3_v;
-    float grad_zeta_z = inv_h3 * e3_w;
-
-    // Transform: E^α = E_ν (∇ξ^ν)^α
-    Ex = E_xi * grad_xi_x + E_eta * grad_eta_x + E_zeta * grad_zeta_x;
-    Ey = E_xi * grad_xi_y + E_eta * grad_eta_y + E_zeta * grad_zeta_y;
-    Ez = E_xi * grad_xi_z + E_eta * grad_eta_z + E_zeta * grad_zeta_z;
-}
-
-KOKKOS_INLINE_FUNCTION
-void transform_B_to_cartesian(
-    const k_curvilinear_mesh_t& k_cmesh,
-    int mesh_index,
-    float B_xi, float B_eta, float B_zeta,
-    float& Bx, float& By, float& Bz)
-{
-    // B is CONTRAVARIANT B^i, Cartesian B_cart = B^i e_i with tangent basis
-    // e_i = h_i ê_i (stored ê_i are unit). On a uniform grid h=1 this is
-    // identity.
-    float h1 = k_cmesh(mesh_index, curv_mesh_var::h_1);
-    float h2 = k_cmesh(mesh_index, curv_mesh_var::h_2);
-    float h3 = k_cmesh(mesh_index, curv_mesh_var::h_3);
-
-    float e1_u = h1 * k_cmesh(mesh_index, curv_mesh_var::e_1_u);
-    float e1_v = h1 * k_cmesh(mesh_index, curv_mesh_var::e_1_v);
-    float e1_w = h1 * k_cmesh(mesh_index, curv_mesh_var::e_1_w);
-
-    float e2_u = h2 * k_cmesh(mesh_index, curv_mesh_var::e_2_u);
-    float e2_v = h2 * k_cmesh(mesh_index, curv_mesh_var::e_2_v);
-    float e2_w = h2 * k_cmesh(mesh_index, curv_mesh_var::e_2_w);
-
-    float e3_u = h3 * k_cmesh(mesh_index, curv_mesh_var::e_3_u);
-    float e3_v = h3 * k_cmesh(mesh_index, curv_mesh_var::e_3_v);
-    float e3_w = h3 * k_cmesh(mesh_index, curv_mesh_var::e_3_w);
-
-    // Transform: B^α = B^ν (∂x/∂ξ^ν)^α = B^ν (h_ν ê_ν)^α
-    Bx = B_xi * e1_u + B_eta * e2_u + B_zeta * e3_u;
-    By = B_xi * e1_v + B_eta * e2_v + B_zeta * e3_v;
-    Bz = B_xi * e1_w + B_eta * e2_w + B_zeta * e3_w;
 }
 
 void 
-load_interpolator_array_kokkos(k_interpolator_t k_interp,
-                               k_field_t k_field,
-                               k_curvilinear_mesh_t k_cmesh,  // ← NEW: Pass curvilinear mesh
-                               int nx, int ny, int nz)
-{
+load_interpolator_array_kokkos(k_interpolator_t& k_interp, k_field_t& k_field,
+                               k_curvilinear_mesh_t& k_curv_mesh,
+                               const int nx, const int ny, const int nz) {
+
   #define pi_ex       k_interp(pi_index, interpolator_var::ex)
   #define pi_dexdx    k_interp(pi_index, interpolator_var::dexdx)
   #define pi_dexdy    k_interp(pi_index, interpolator_var::dexdy)
@@ -237,370 +151,440 @@ load_interpolator_array_kokkos(k_interpolator_t k_interp,
 
   Kokkos::MDRangePolicy<Kokkos::Rank<3>> load_policy({1, 1, 1}, {nx+1, ny+1, nz+1});
   Kokkos::parallel_for("load interpolator", load_policy, 
-      KOKKOS_LAMBDA(const int x, const int y, const int z) 
-  {
+  KOKKOS_LAMBDA(const int x, const int y, const int z) {
       const int pi_index   = VOXEL(x,   y,   z,   nx,ny,nz); 
       const int pf0_index  = VOXEL(x,   y,   z,   nx,ny,nz); 
-      const int pfx_index  = VOXEL(x+1, y,   z,   nx,ny,nz); 
-      const int pfy_index  = VOXEL(x,   y+1, z,   nx,ny,nz); 
-      const int pfz_index  = VOXEL(x,   y,   z+1, nx,ny,nz); 
-      const int pfmx_index = VOXEL(x-1, y,   z,   nx,ny,nz);
-      const int pfmy_index = VOXEL(x,   y-1, z,   nx,ny,nz);
-      const int pfmz_index = VOXEL(x,   y,   z-1, nx,ny,nz);
-
-      const int pm0_index  = VOXEL_TO_MESH(pf0_index, nx, ny, nz);
+      const int mesh_index = GRID_TO_MESH(x, y, z, nx, ny, nz);
 
 #ifdef SHAPE_NGP
-      // ====================================================================
-      // NGP: Transform curvilinear → Cartesian at this grid point
-      // ====================================================================
+      // Load covariant E (E_1, E_2, E_3 in logical coords)
+      float E_xi  = k_field(pf0_index, field_var::tx);
+      float E_eta = k_field(pf0_index, field_var::ty);
+      float E_mu  = k_field(pf0_index, field_var::tz);
+
+      // Load contravariant B (B^1, B^2, B^3 in logical coords)
+      float B_xi  = k_field(pf0_index, field_var::ox) + k_field(pf0_index, field_var::cbx0);
+      float B_eta = k_field(pf0_index, field_var::oy) + k_field(pf0_index, field_var::cby0);
+      float B_mu  = k_field(pf0_index, field_var::oz) + k_field(pf0_index, field_var::cbz0);
+
+      float h_1 = k_curv_mesh(mesh_index, curv_mesh_var::h_1);
+      float h_2 = k_curv_mesh(mesh_index, curv_mesh_var::h_2);
+      float h_3 = k_curv_mesh(mesh_index, curv_mesh_var::h_3);
       
-      // Read curvilinear E field (covariant components)
-      float E_xi   = k_field(pf0_index, field_var::tx);
-      float E_eta  = k_field(pf0_index, field_var::ty);
-      float E_zeta = k_field(pf0_index, field_var::tz);
+      // Unit tangent vectors (Cartesian components)
+      float e1_x = k_curv_mesh(mesh_index, curv_mesh_var::e_1_u);
+      float e1_y = k_curv_mesh(mesh_index, curv_mesh_var::e_1_v);
+      float e1_z = k_curv_mesh(mesh_index, curv_mesh_var::e_1_w);
       
-      // Transform to Cartesian using equation 62
-      float Ex, Ey, Ez;
-      transform_E_to_cartesian(k_cmesh, pm0_index, 
-                               E_xi, E_eta, E_zeta,
-                               Ex, Ey, Ez);
+      float e2_x = k_curv_mesh(mesh_index, curv_mesh_var::e_2_u);
+      float e2_y = k_curv_mesh(mesh_index, curv_mesh_var::e_2_v);
+      float e2_z = k_curv_mesh(mesh_index, curv_mesh_var::e_2_w);
       
-      pi_ex = Ex;
-      pi_ey = Ey;
-      pi_ez = Ez;
+      float e3_x = k_curv_mesh(mesh_index, curv_mesh_var::e_3_u);
+      float e3_y = k_curv_mesh(mesh_index, curv_mesh_var::e_3_v);
+      float e3_z = k_curv_mesh(mesh_index, curv_mesh_var::e_3_w);
+
+      float grad_xi_x  = e1_x;
+      float grad_xi_y  = e1_y;
+      float grad_xi_z  = e1_z;
       
-      // Read B field (contravariant components in curvilinear basis)
-      float B_xi   = k_field(pf0_index, field_var::ox) + k_field(pf0_index, field_var::cbx0);
-      float B_eta  = k_field(pf0_index, field_var::oy) + k_field(pf0_index, field_var::cby0);
-      float B_zeta = k_field(pf0_index, field_var::oz) + k_field(pf0_index, field_var::cbz0);
+      float grad_eta_x = e2_x;
+      float grad_eta_y = e2_y;
+      float grad_eta_z = e2_z;
       
-      // Transform to Cartesian using equation 63
-      float Bx, By, Bz;
-      transform_B_to_cartesian(k_cmesh, pm0_index,
-                               B_xi, B_eta, B_zeta,
-                               Bx, By, Bz);
+      float grad_mu_x  = e3_x;
+      float grad_mu_y  = e3_y;
+      float grad_mu_z  = e3_z;
       
-      pi_cbx = Bx;
-      pi_cby = By;
-      pi_cbz = Bz;
+      float dx_dxi  = e1_x;
+      float dy_dxi  = e1_y;
+      float dz_dxi  = e1_z;
       
+      float dx_deta = e2_x;
+      float dy_deta = e2_y;
+      float dz_deta = e2_z;
+      
+      float dx_dmu  = e3_x;
+      float dy_dmu  = e3_y;
+      float dz_dmu  = e3_z;
+
+      pi_ex = (E_xi * grad_xi_x + E_eta * grad_eta_x + E_mu * grad_mu_x);
+      pi_ey = (E_xi * grad_xi_y + E_eta * grad_eta_y + E_mu * grad_mu_y);
+      pi_ez = (E_xi * grad_xi_z + E_eta * grad_eta_z + E_mu * grad_mu_z);
+
+      pi_cbx = (B_xi * dx_dxi + B_eta * dx_deta + B_mu * dx_dmu);
+      pi_cby = (B_xi * dy_dxi + B_eta * dy_deta + B_mu * dy_dmu);
+      pi_cbz = (B_xi * dz_dxi + B_eta * dz_deta + B_mu * dz_dmu);
+
 #ifdef EXTERNAL_FORCE
-      // External forces are stored in curvilinear coordinates (more natural for curvilinear grids)
-      // Read curvilinear external E field (covariant components)
-      float E0_xi   = k_field(pf0_index, field_var::Ex0);
-      float E0_eta  = k_field(pf0_index, field_var::Ey0);
-      float E0_zeta = k_field(pf0_index, field_var::Ez0);
+      // Same transformation for external covariant E
+      float Ex0_xi  = k_field(pf0_index, field_var::Ex0);
+      float Ey0_eta = k_field(pf0_index, field_var::Ey0);
+      float Ez0_mu  = k_field(pf0_index, field_var::Ez0);
       
-      // Transform external E field to Cartesian (same transformation as regular E field)
-      float Ex0, Ey0, Ez0;
-      transform_E_to_cartesian(k_cmesh, pm0_index,
-                               E0_xi, E0_eta, E0_zeta,
-                               Ex0, Ey0, Ez0);
+      pi_Ex0 = Ex0_xi * grad_xi_x + Ey0_eta * grad_eta_x + Ez0_mu * grad_mu_x;
+      pi_Ey0 = Ex0_xi * grad_xi_y + Ey0_eta * grad_eta_y + Ez0_mu * grad_mu_y;
+      pi_Ez0 = Ex0_xi * grad_xi_z + Ey0_eta * grad_eta_z + Ez0_mu * grad_mu_z;
+
+      // Forces/gradients (covariant, transform similarly)
+      float Gx0_xi  = k_field(pf0_index, field_var::Gx0);
+      float Gy0_eta = k_field(pf0_index, field_var::Gy0);
+      float Gz0_mu  = k_field(pf0_index, field_var::Gz0);
       
-      pi_Ex0 = Ex0;
-      pi_Ey0 = Ey0;
-      pi_Ez0 = Ez0;
-      
-      // Read curvilinear gravity field (covariant components - transforms like E field)
-      float G_xi   = k_field(pf0_index, field_var::Gx0);
-      float G_eta  = k_field(pf0_index, field_var::Gy0);
-      float G_zeta = k_field(pf0_index, field_var::Gz0);
-      
-      // Transform gravity field to Cartesian (force/acceleration is covariant like E field)
-      float Gx0, Gy0, Gz0;
-      transform_E_to_cartesian(k_cmesh, pm0_index,
-                               G_xi, G_eta, G_zeta,
-                               Gx0, Gy0, Gz0);
-      
-      pi_Gx0 = Gx0;
-      pi_Gy0 = Gy0;
-      pi_Gz0 = Gz0;
-#endif
+            pi_Gy0 = Gx0_xi * grad_xi_y + Gy0_eta * grad_eta_y + Gz0_mu * grad_mu_y;
+      pi_Gz0 = Gx0_xi * grad_xi_z + Gy0_eta * grad_eta_z + Gz0_mu * grad_mu_z;
+#endif // EXTERNAL_FORCE
 
 #elif defined( SHAPE_QS )
-      // ====================================================================
-      // QS: Compute derivatives in curvilinear, then transform to Cartesian
-      // ====================================================================
+      // Load covariant E (E_1, E_2, E_3 in logical coords)
+      auto w0  = k_field(pf0_index,  field_var::tx);
+      auto wx  = k_field(pfx_index,  field_var::tx);
+      auto wy  = k_field(pfy_index,  field_var::tx);
+      auto wz  = k_field(pfz_index,  field_var::tx);
+      auto wmx = k_field(pfmx_index, field_var::tx);
+      auto wmy = k_field(pfmy_index, field_var::tx);
+      auto wmz = k_field(pfmz_index, field_var::tx);
       
-      // -------------------- E FIELD (all 3 components) --------------------
+      // Interpolate E_xi (covariant component in xi direction)
+      float E_xi = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
       
-      // E_xi component (covariant)
-      auto E_xi_0  = k_field(pf0_index,  field_var::tx);
-      auto E_xi_x  = k_field(pfx_index,  field_var::tx);
-      auto E_xi_y  = k_field(pfy_index,  field_var::tx);
-      auto E_xi_z  = k_field(pfz_index,  field_var::tx);
-      auto E_xi_mx = k_field(pfmx_index, field_var::tx);
-      auto E_xi_my = k_field(pfmy_index, field_var::tx);
-      auto E_xi_mz = k_field(pfmz_index, field_var::tx);
+      w0  = k_field(pf0_index,  field_var::ty);
+      wx  = k_field(pfx_index,  field_var::ty);
+      wy  = k_field(pfy_index,  field_var::ty);
+      wz  = k_field(pfz_index,  field_var::ty);
+      wmx = k_field(pfmx_index, field_var::ty);
+      wmy = k_field(pfmy_index, field_var::ty);
+      wmz = k_field(pfmz_index, field_var::ty);
       
-      float E_xi_interp     = twelfth*(6.f*E_xi_0 + E_xi_x + E_xi_y + E_xi_z + E_xi_mx + E_xi_my + E_xi_mz);
-      float dE_xi_dx        = sixth*(E_xi_x - E_xi_mx);
-      float dE_xi_dy        = sixth*(E_xi_y - E_xi_my);
-      float dE_xi_dz        = sixth*(E_xi_z - E_xi_mz);
-      float d2E_xi_dx       = twelfth*(E_xi_x + E_xi_mx - 2.f*E_xi_0);
-      float d2E_xi_dy       = twelfth*(E_xi_y + E_xi_my - 2.f*E_xi_0);
-      float d2E_xi_dz       = twelfth*(E_xi_z + E_xi_mz - 2.f*E_xi_0);
+      // Interpolate E_eta (covariant component in eta direction)
+      float E_eta = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
       
-      // E_eta component (covariant)
-      auto E_eta_0  = k_field(pf0_index,  field_var::ty);
-      auto E_eta_x  = k_field(pfx_index,  field_var::ty);
-      auto E_eta_y  = k_field(pfy_index,  field_var::ty);
-      auto E_eta_z  = k_field(pfz_index,  field_var::ty);
-      auto E_eta_mx = k_field(pfmx_index, field_var::ty);
-      auto E_eta_my = k_field(pfmy_index, field_var::ty);
-      auto E_eta_mz = k_field(pfmz_index, field_var::ty);
+      w0  = k_field(pf0_index,  field_var::tz);
+      wx  = k_field(pfx_index,  field_var::tz);
+      wy  = k_field(pfy_index,  field_var::tz);
+      wz  = k_field(pfz_index,  field_var::tz);
+      wmx = k_field(pfmx_index, field_var::tz);
+      wmy = k_field(pfmy_index, field_var::tz);
+      wmz = k_field(pfmz_index, field_var::tz);
       
-      float E_eta_interp    = twelfth*(6.f*E_eta_0 + E_eta_x + E_eta_y + E_eta_z + E_eta_mx + E_eta_my + E_eta_mz);
-      float dE_eta_dx       = sixth*(E_eta_x - E_eta_mx);
-      float dE_eta_dy       = sixth*(E_eta_y - E_eta_my);
-      float dE_eta_dz       = sixth*(E_eta_z - E_eta_mz);
-      float d2E_eta_dx      = twelfth*(E_eta_x + E_eta_mx - 2.f*E_eta_0);
-      float d2E_eta_dy      = twelfth*(E_eta_y + E_eta_my - 2.f*E_eta_0);
-      float d2E_eta_dz      = twelfth*(E_eta_z + E_eta_mz - 2.f*E_eta_0);
-      
-      // E_zeta component (covariant)
-      auto E_zeta_0  = k_field(pf0_index,  field_var::tz);
-      auto E_zeta_x  = k_field(pfx_index,  field_var::tz);
-      auto E_zeta_y  = k_field(pfy_index,  field_var::tz);
-      auto E_zeta_z  = k_field(pfz_index,  field_var::tz);
-      auto E_zeta_mx = k_field(pfmx_index, field_var::tz);
-      auto E_zeta_my = k_field(pfmy_index, field_var::tz);
-      auto E_zeta_mz = k_field(pfmz_index, field_var::tz);
-      
-      float E_zeta_interp   = twelfth*(6.f*E_zeta_0 + E_zeta_x + E_zeta_y + E_zeta_z + E_zeta_mx + E_zeta_my + E_zeta_mz);
-      float dE_zeta_dx      = sixth*(E_zeta_x - E_zeta_mx);
-      float dE_zeta_dy      = sixth*(E_zeta_y - E_zeta_my);
-      float dE_zeta_dz      = sixth*(E_zeta_z - E_zeta_mz);
-      float d2E_zeta_dx     = twelfth*(E_zeta_x + E_zeta_mx - 2.f*E_zeta_0);
-      float d2E_zeta_dy     = twelfth*(E_zeta_y + E_zeta_my - 2.f*E_zeta_0);
-      float d2E_zeta_dz     = twelfth*(E_zeta_z + E_zeta_mz - 2.f*E_zeta_0);
-      
-      // Transform E field to Cartesian (equation 62)
-      float Ex_cart, Ey_cart, Ez_cart;
-      transform_E_to_cartesian(k_cmesh, pf0_index,
-                               E_xi_interp, E_eta_interp, E_zeta_interp,
-                               Ex_cart, Ey_cart, Ez_cart);
-      
-      // Store Cartesian E field and derivatives
-      // NOTE: Derivatives are still in curvilinear coordinates (would need tensor transform for full correctness)
-      pi_ex     = Ex_cart;
-      pi_dexdx  = dE_xi_dx;   // Approximate - should be transformed
-      pi_dexdy  = dE_xi_dy;
-      pi_dexdz  = dE_xi_dz;
-      pi_d2exdx = d2E_xi_dx;
-      pi_d2exdy = d2E_xi_dy;
-      pi_d2exdz = d2E_xi_dz;
-      
-      pi_ey     = Ey_cart;
-      pi_deydx  = dE_eta_dx;
-      pi_deydy  = dE_eta_dy;
-      pi_deydz  = dE_eta_dz;
-      pi_d2eydx = d2E_eta_dx;
-      pi_d2eydy = d2E_eta_dy;
-      pi_d2eydz = d2E_eta_dz;
-      
-      pi_ez     = Ez_cart;
-      pi_dezdx  = dE_zeta_dx;
-      pi_dezdy  = dE_zeta_dy;
-      pi_dezdz  = dE_zeta_dz;
-      pi_d2ezdx = d2E_zeta_dx;
-      pi_d2ezdy = d2E_zeta_dy;
-      pi_d2ezdz = d2E_zeta_dz;
+      // Interpolate E_mu (covariant component in mu direction)
+      float E_mu = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
 
-      // -------------------- B FIELD (all 3 components) --------------------
+      // Load contravariant B (B^1, B^2, B^3 in logical coords)
+      w0  = k_field(pf0_index,  field_var::ox) + k_field(pf0_index,  field_var::cbx0);
+      wx  = k_field(pfx_index,  field_var::ox) + k_field(pfx_index,  field_var::cbx0);
+      wy  = k_field(pfy_index,  field_var::ox) + k_field(pfy_index,  field_var::cbx0);
+      wz  = k_field(pfz_index,  field_var::ox) + k_field(pfz_index,  field_var::cbx0);
+      wmx = k_field(pfmx_index, field_var::ox) + k_field(pfmx_index, field_var::cbx0);
+      wmy = k_field(pfmy_index, field_var::ox) + k_field(pfmy_index, field_var::cbx0);
+      wmz = k_field(pfmz_index, field_var::ox) + k_field(pfmz_index, field_var::cbx0);
       
-      // B^xi component (contravariant)
-      auto B_xi_0  = k_field(pf0_index,  field_var::ox) + k_field(pf0_index,  field_var::cbx0);
-      auto B_xi_x  = k_field(pfx_index,  field_var::ox) + k_field(pfx_index,  field_var::cbx0);
-      auto B_xi_y  = k_field(pfy_index,  field_var::ox) + k_field(pfy_index,  field_var::cbx0);
-      auto B_xi_z  = k_field(pfz_index,  field_var::ox) + k_field(pfz_index,  field_var::cbx0);
-      auto B_xi_mx = k_field(pfmx_index, field_var::ox) + k_field(pfmx_index, field_var::cbx0);
-      auto B_xi_my = k_field(pfmy_index, field_var::ox) + k_field(pfmy_index, field_var::cbx0);
-      auto B_xi_mz = k_field(pfmz_index, field_var::ox) + k_field(pfmz_index, field_var::cbx0);
+      // Interpolate B^xi (contravariant component in xi direction)
+      float B_xi = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
       
-      float B_xi_interp     = twelfth*(6.f*B_xi_0 + B_xi_x + B_xi_y + B_xi_z + B_xi_mx + B_xi_my + B_xi_mz);
-      float dB_xi_dx        = sixth*(B_xi_x - B_xi_mx);
-      float dB_xi_dy        = sixth*(B_xi_y - B_xi_my);
-      float dB_xi_dz        = sixth*(B_xi_z - B_xi_mz);
-      float d2B_xi_dx       = twelfth*(B_xi_x + B_xi_mx - 2.f*B_xi_0);
-      float d2B_xi_dy       = twelfth*(B_xi_y + B_xi_my - 2.f*B_xi_0);
-      float d2B_xi_dz       = twelfth*(B_xi_z + B_xi_mz - 2.f*B_xi_0);
+      w0  = k_field(pf0_index,  field_var::oy) + k_field(pf0_index,  field_var::cby0);
+      wx  = k_field(pfx_index,  field_var::oy) + k_field(pfx_index,  field_var::cby0);
+      wy  = k_field(pfy_index,  field_var::oy) + k_field(pfy_index,  field_var::cby0);
+      wz  = k_field(pfz_index,  field_var::oy) + k_field(pfz_index,  field_var::cby0);
+      wmx = k_field(pfmx_index, field_var::oy) + k_field(pfmx_index, field_var::cby0);
+      wmy = k_field(pfmy_index, field_var::oy) + k_field(pfmy_index, field_var::cby0);
+      wmz = k_field(pfmz_index, field_var::oy) + k_field(pfmz_index, field_var::cby0);
       
-      // B^eta component (contravariant)
-      auto B_eta_0  = k_field(pf0_index,  field_var::oy) + k_field(pf0_index,  field_var::cby0);
-      auto B_eta_x  = k_field(pfx_index,  field_var::oy) + k_field(pfx_index,  field_var::cby0);
-      auto B_eta_y  = k_field(pfy_index,  field_var::oy) + k_field(pfy_index,  field_var::cby0);
-      auto B_eta_z  = k_field(pfz_index,  field_var::oy) + k_field(pfz_index,  field_var::cby0);
-      auto B_eta_mx = k_field(pfmx_index, field_var::oy) + k_field(pfmx_index, field_var::cby0);
-      auto B_eta_my = k_field(pfmy_index, field_var::oy) + k_field(pfmy_index, field_var::cby0);
-      auto B_eta_mz = k_field(pfmz_index, field_var::oy) + k_field(pfmz_index, field_var::cby0);
+      // Interpolate B^eta (contravariant component in eta direction)
+      float B_eta = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
       
-      float B_eta_interp    = twelfth*(6.f*B_eta_0 + B_eta_x + B_eta_y + B_eta_z + B_eta_mx + B_eta_my + B_eta_mz);
-      float dB_eta_dx       = sixth*(B_eta_x - B_eta_mx);
-      float dB_eta_dy       = sixth*(B_eta_y - B_eta_my);
-      float dB_eta_dz       = sixth*(B_eta_z - B_eta_mz);
-      float d2B_eta_dx      = twelfth*(B_eta_x + B_eta_mx - 2.f*B_eta_0);
-      float d2B_eta_dy      = twelfth*(B_eta_y + B_eta_my - 2.f*B_eta_0);
-      float d2B_eta_dz      = twelfth*(B_eta_z + B_eta_mz - 2.f*B_eta_0);
+      w0  = k_field(pf0_index,  field_var::oz) + k_field(pf0_index,  field_var::cbz0);
+      wx  = k_field(pfx_index,  field_var::oz) + k_field(pfx_index,  field_var::cbz0);
+      wy  = k_field(pfy_index,  field_var::oz) + k_field(pfy_index,  field_var::cby0);
+      wz  = k_field(pfz_index,  field_var::oz) + k_field(pfz_index,  field_var::cbz0);
+      wmx = k_field(pfmx_index, field_var::oz) + k_field(pfmx_index, field_var::cbz0);
+      wmy = k_field(pfmy_index, field_var::oz) + k_field(pfmy_index, field_var::cby0);
+      wmz = k_field(pfmz_index, field_var::oz) + k_field(pfmz_index, field_var::cbz0);
       
-      // B^zeta component (contravariant)
-      auto B_zeta_0  = k_field(pf0_index,  field_var::oz) + k_field(pf0_index,  field_var::cbz0);
-      auto B_zeta_x  = k_field(pfx_index,  field_var::oz) + k_field(pfx_index,  field_var::cbz0);
-      auto B_zeta_y  = k_field(pfy_index,  field_var::oz) + k_field(pfy_index,  field_var::cbz0);
-      auto B_zeta_z  = k_field(pfz_index,  field_var::oz) + k_field(pfz_index,  field_var::cbz0);
-      auto B_zeta_mx = k_field(pfmx_index, field_var::oz) + k_field(pfmx_index, field_var::cbz0);
-      auto B_zeta_my = k_field(pfmy_index, field_var::oz) + k_field(pfmy_index, field_var::cbz0);
-      auto B_zeta_mz = k_field(pfmz_index, field_var::oz) + k_field(pfmz_index, field_var::cbz0);
+      // Interpolate B^mu (contravariant component in mu direction)
+      float B_mu = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+
+      // Load reciprocal basis vectors at cell center
+      float grad_xi_x  = (1.0f / h1_0) * e1_x;
+      float grad_xi_y  = (1.0f / h1_0) * e1_y;
+      float grad_xi_z  = (1.0f / h1_0) * e1_z;
       
-      float B_zeta_interp   = twelfth*(6.f*B_zeta_0 + B_zeta_x + B_zeta_y + B_zeta_z + B_zeta_mx + B_zeta_my + B_zeta_mz);
-      float dB_zeta_dx      = sixth*(B_zeta_x - B_zeta_mx);
-      float dB_zeta_dy      = sixth*(B_zeta_y - B_zeta_my);
-      float dB_zeta_dz      = sixth*(B_zeta_z - B_zeta_mz);
-      float d2B_zeta_dx     = twelfth*(B_zeta_x + B_zeta_mx - 2.f*B_zeta_0);
-      float d2B_zeta_dy     = twelfth*(B_zeta_y + B_zeta_my - 2.f*B_zeta_0);
-      float d2B_zeta_dz     = twelfth*(B_zeta_z + B_zeta_mz - 2.f*B_zeta_0);
+      float grad_eta_x = (1.0f / h2_0) * e2_x;
+      float grad_eta_y = (1.0f / h2_0) * e2_y;
+      float grad_eta_z = (1.0f / h2_0) * e2_z;
       
-      // Transform B field to Cartesian (equation 63)
-      float Bx_cart, By_cart, Bz_cart;
-      transform_B_to_cartesian(k_cmesh, pf0_index,
-                               B_xi_interp, B_eta_interp, B_zeta_interp,
-                               Bx_cart, By_cart, Bz_cart);
+      float grad_mu_x  = (1.0f / h3_0) * e3_x;
+      float grad_mu_y  = (1.0f / h3_0) * e3_y;
+      float grad_mu_z  = (1.0f / h3_0) * e3_z;
       
-      // Store Cartesian B field and derivatives
-      pi_cbx     = Bx_cart;
-      pi_dcbxdx  = dB_xi_dx;   // Approximate - should be transformed
-      pi_dcbxdy  = dB_xi_dy;
-      pi_dcbxdz  = dB_xi_dz;
-      pi_d2cbxdx = d2B_xi_dx;
-      pi_d2cbxdy = d2B_xi_dy;
-      pi_d2cbxdz = d2B_xi_dz;
+      // Tangent basis vectors for B transformation
+      float dx_dxi  = h1_0 * e1_x;
+      float dy_dxi  = h1_0 * e1_y;
+      float dz_dxi  = h1_0 * e1_z;
       
-      pi_cby     = By_cart;
-      pi_dcbydx  = dB_eta_dx;
-      pi_dcbydy  = dB_eta_dy;
-      pi_dcbydz  = dB_eta_dz;
-      pi_d2cbydx = d2B_eta_dx;
-      pi_d2cbydy = d2B_eta_dy;
-      pi_d2cbydz = d2B_eta_dz;
+      float dx_deta = h2_0 * e2_x;
+      float dy_deta = h2_0 * e2_y;
+      float dz_deta = h2_0 * e2_z;
       
-      pi_cbz     = Bz_cart;
-      pi_dcbzdx  = dB_zeta_dx;
-      pi_dcbzdy  = dB_zeta_dy;
-      pi_dcbzdz  = dB_zeta_dz;
-      pi_d2cbzdx = d2B_zeta_dx;
-      pi_d2cbzdy = d2B_zeta_dy;
-      pi_d2cbzdz = d2B_zeta_dz;
+      float dx_dmu  = h3_0 * e3_x;
+      float dy_dmu  = h3_0 * e3_y;
+      float dz_dmu  = h3_0 * e3_z;
+
+      // Transform E: covariant logical → Cartesian (PDF eq. 62)
+      pi_ex = E_xi * grad_xi_x + E_eta * grad_eta_x + E_mu * grad_mu_x;
+      pi_ey = E_xi * grad_xi_y + E_eta * grad_eta_y + E_mu * grad_mu_y;
+      pi_ez = E_xi * grad_xi_z + E_eta * grad_eta_z + E_mu * grad_mu_z;
+      
+      // For QS shape, we also need derivatives. These are approximated by
+      // finite differences in the logical space, then transformed
+      pi_dexdx  = sixth*(wx - wmx);
+      pi_dexdy  = sixth*(wy - wmy);
+      pi_dexdz  = sixth*(wz - wmz);
+      pi_d2exdx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2exdy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2exdz = twelfth*(wz + wmz - 2.f*w0);
+      
+      // Repeat for ey
+      w0  = k_field(pf0_index,  field_var::ty);
+      wx  = k_field(pfx_index,  field_var::ty);
+      wy  = k_field(pfy_index,  field_var::ty);
+      wz  = k_field(pfz_index,  field_var::ty);
+      wmx = k_field(pfmx_index, field_var::ty);
+      wmy = k_field(pfmy_index, field_var::ty);
+      wmz = k_field(pfmz_index, field_var::ty);
+      
+      pi_deydy  = sixth*(wy - wmy);
+      pi_deydx  = sixth*(wx - wmx);
+      pi_deydz  = sixth*(wz - wmz);
+      pi_d2eydx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2eydy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2eydz = twelfth*(wz + wmz - 2.f*w0);
+      
+      // Repeat for ez
+      w0  = k_field(pf0_index,  field_var::tz);
+      wx  = k_field(pfx_index,  field_var::tz);
+      wy  = k_field(pfy_index,  field_var::tz);
+      wz  = k_field(pfz_index,  field_var::tz);
+      wmx = k_field(pfmx_index, field_var::tz);
+      wmy = k_field(pfmy_index, field_var::tz);
+      wmz = k_field(pfmz_index, field_var::tz);
+      
+      pi_dezdx  = sixth*(wx - wmx);
+      pi_dezdy  = sixth*(wy - wmy);
+      pi_dezdz  = sixth*(wz - wmz);
+      pi_d2ezdx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2ezdy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2ezdz = twelfth*(wz + wmz - 2.f*w0);
+
+      // Transform B: contravariant logical → Cartesian (PDF eq. 63)
+      pi_cbx = B_xi * dx_dxi + B_eta * dx_deta + B_mu * dx_dmu;
+      pi_cby = B_xi * dy_dxi + B_eta * dy_deta + B_mu * dy_dmu;
+      pi_cbz = B_xi * dz_dxi + B_eta * dz_deta + B_mu * dz_dmu;
+      
+      // B derivatives (similar treatment as E)
+      w0  = k_field(pf0_index,  field_var::ox) + k_field(pf0_index,  field_var::cbx0);
+      wx  = k_field(pfx_index,  field_var::ox) + k_field(pfx_index,  field_var::cbx0);
+      wy  = k_field(pfy_index,  field_var::ox) + k_field(pfy_index,  field_var::cbx0);
+      wz  = k_field(pfz_index,  field_var::ox) + k_field(pfz_index,  field_var::cbx0);
+      wmx = k_field(pfmx_index, field_var::ox) + k_field(pfmx_index, field_var::cbx0);
+      wmy = k_field(pfmy_index, field_var::ox) + k_field(pfmy_index, field_var::cbx0);
+      wmz = k_field(pfmz_index, field_var::ox) + k_field(pfmz_index, field_var::cbx0);
+      
+      pi_dcbxdx  = sixth*(wx - wmx);
+      pi_dcbxdy  = sixth*(wy - wmy);
+      pi_dcbxdz  = sixth*(wz - wmz);
+      pi_d2cbxdx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2cbxdy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2cbxdz = twelfth*(wz + wmz - 2.f*w0);
+      
+      w0  = k_field(pf0_index,  field_var::oy) + k_field(pf0_index,  field_var::cby0);
+      wx  = k_field(pfx_index,  field_var::oy) + k_field(pfx_index,  field_var::cby0);
+      wy  = k_field(pfy_index,  field_var::oy) + k_field(pfy_index,  field_var::cby0);
+      wz  = k_field(pfz_index,  field_var::oy) + k_field(pfz_index,  field_var::cby0);
+      wmx = k_field(pfmx_index, field_var::oy) + k_field(pfmx_index, field_var::cby0);
+      wmy = k_field(pfmy_index, field_var::oy) + k_field(pfmy_index, field_var::cby0);
+      wmz = k_field(pfmz_index, field_var::oy) + k_field(pfmz_index, field_var::cby0);
+      
+      pi_dcbydx  = sixth*(wx - wmx);
+      pi_dcbydy  = sixth*(wy - wmy);
+      pi_dcbydz  = sixth*(wz - wmz);
+      pi_d2cbydx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2cbydy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2cbydz = twelfth*(wz + wmz - 2.f*w0);
+      
+      w0  = k_field(pf0_index,  field_var::oz) + k_field(pf0_index,  field_var::cbz0);
+      wx  = k_field(pfx_index,  field_var::oz) + k_field(pfx_index,  field_var::cbz0);
+      wy  = k_field(pfy_index,  field_var::oz) + k_field(pfy_index,  field_var::cby0);
+      wz  = k_field(pfz_index,  field_var::oz) + k_field(pfz_index,  field_var::cbz0);
+      wmx = k_field(pfmx_index, field_var::oz) + k_field(pfmx_index, field_var::cbz0);
+      wmy = k_field(pfmy_index, field_var::oz) + k_field(pfmy_index, field_var::cby0);
+      wmz = k_field(pfmz_index, field_var::oz) + k_field(pfmz_index, field_var::cbz0);
+      
+      pi_dcbzdx  = sixth*(wx - wmx);
+      pi_dcbzdy  = sixth*(wy - wmy);
+      pi_dcbzdz  = sixth*(wz - wmz);
+      pi_d2cbzdx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2cbzdy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2cbzdz = twelfth*(wz + wmz - 2.f*w0);
 
 #ifdef EXTERNAL_FORCE
-      // -------------------- EXTERNAL FORCES --------------------
-      // Same pattern for Ex0, Ey0, Ez0, Gx0, Gy0, Gz0
-      // (Assuming these are already in Cartesian or need similar transform)
+      // External force transformations for QS (same pattern as main fields)
+      w0  = k_field(pf0_index,  field_var::Ex0);
+      wx  = k_field(pfx_index,  field_var::Ex0);
+      wy  = k_field(pfy_index,  field_var::Ex0);
+      wz  = k_field(pfz_index,  field_var::Ex0);
+      wmx = k_field(pfmx_index, field_var::Ex0);
+      wmy = k_field(pfmy_index, field_var::Ex0);
+      wmz = k_field(pfmz_index, field_var::Ex0);
       
-      // Ex0 component
-      auto Ex0_0  = k_field(pf0_index,  field_var::Ex0);
-      auto Ex0_x  = k_field(pfx_index,  field_var::Ex0);
-      auto Ex0_y  = k_field(pfy_index,  field_var::Ex0);
-      auto Ex0_z  = k_field(pfz_index,  field_var::Ex0);
-      auto Ex0_mx = k_field(pfmx_index, field_var::Ex0);
-      auto Ex0_my = k_field(pfmy_index, field_var::Ex0);
-      auto Ex0_mz = k_field(pfmz_index, field_var::Ex0);
-      pi_Ex0     = twelfth*(6.f*Ex0_0 + Ex0_x + Ex0_y + Ex0_z + Ex0_mx + Ex0_my + Ex0_mz);
-      pi_dEx0dx  = sixth*(Ex0_x - Ex0_mx);
-      pi_dEx0dy  = sixth*(Ex0_y - Ex0_my);
-      pi_dEx0dz  = sixth*(Ex0_z - Ex0_mz);
-      pi_d2Ex0dx = twelfth*(Ex0_x + Ex0_mx - 2.f*Ex0_0);
-      pi_d2Ex0dy = twelfth*(Ex0_y + Ex0_my - 2.f*Ex0_0);
-      pi_d2Ex0dz = twelfth*(Ex0_z + Ex0_mz - 2.f*Ex0_0);
+      float Ex0_xi = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
       
-      // Ey0 component
-      auto Ey0_0  = k_field(pf0_index,  field_var::Ey0);
-      auto Ey0_x  = k_field(pfx_index,  field_var::Ey0);
-      auto Ey0_y  = k_field(pfy_index,  field_var::Ey0);
-      auto Ey0_z  = k_field(pfz_index,  field_var::Ey0);
-      auto Ey0_mx = k_field(pfmx_index, field_var::Ey0);
-      auto Ey0_my = k_field(pfmy_index, field_var::Ey0);
-      auto Ey0_mz = k_field(pfmz_index, field_var::Ey0);
-      pi_Ey0     = twelfth*(6.f*Ey0_0 + Ey0_x + Ey0_y + Ey0_z + Ey0_mx + Ey0_my + Ey0_mz);
-      pi_dEy0dx  = sixth*(Ey0_x - Ey0_mx);
-      pi_dEy0dy  = sixth*(Ey0_y - Ey0_my);
-      pi_dEy0dz  = sixth*(Ey0_z - Ey0_mz);
-      pi_d2Ey0dx = twelfth*(Ey0_x + Ey0_mx - 2.f*Ey0_0);
-      pi_d2Ey0dy = twelfth*(Ey0_y + Ey0_my - 2.f*Ey0_0);
-      pi_d2Ey0dz = twelfth*(Ey0_z + Ey0_mz - 2.f*Ey0_0);
+      w0  = k_field(pf0_index,  field_var::Ey0);
+      wx  = k_field(pfx_index,  field_var::Ey0);
+      wy  = k_field(pfy_index,  field_var::Ey0);
+      wz  = k_field(pfz_index,  field_var::Ey0);
+      wmx = k_field(pfmx_index, field_var::Ey0);
+      wmy = k_field(pfmy_index, field_var::Ey0);
+      wmz = k_field(pfmz_index, field_var::Ey0);
       
-      // Ez0 component
-      auto Ez0_0  = k_field(pf0_index,  field_var::Ez0);
-      auto Ez0_x  = k_field(pfx_index,  field_var::Ez0);
-      auto Ez0_y  = k_field(pfy_index,  field_var::Ez0);
-      auto Ez0_z  = k_field(pfz_index,  field_var::Ez0);
-      auto Ez0_mx = k_field(pfmx_index, field_var::Ez0);
-      auto Ez0_my = k_field(pfmy_index, field_var::Ez0);
-      auto Ez0_mz = k_field(pfmz_index, field_var::Ez0);
-      pi_Ez0     = twelfth*(6.f*Ez0_0 + Ez0_x + Ez0_y + Ez0_z + Ez0_mx + Ez0_my + Ez0_mz);
-      pi_dEz0dx  = sixth*(Ez0_x - Ez0_mx);
-      pi_dEz0dy  = sixth*(Ez0_y - Ez0_my);
-      pi_dEz0dz  = sixth*(Ez0_z - Ez0_mz);
-      pi_d2Ez0dx = twelfth*(Ez0_x + Ez0_mx - 2.f*Ez0_0);
-      pi_d2Ez0dy = twelfth*(Ez0_y + Ez0_my - 2.f*Ez0_0);
-      pi_d2Ez0dz = twelfth*(Ez0_z + Ez0_mz - 2.f*Ez0_0);
-            // Gx0 component
-      auto Gx0_0  = k_field(pf0_index,  field_var::Gx0);
-      auto Gx0_x  = k_field(pfx_index,  field_var::Gx0);
-      auto Gx0_y  = k_field(pfy_index,  field_var::Gx0);
-      auto Gx0_z  = k_field(pfz_index,  field_var::Gx0);
-      auto Gx0_mx = k_field(pfmx_index, field_var::Gx0);
-      auto Gx0_my = k_field(pfmy_index, field_var::Gx0);
-      auto Gx0_mz = k_field(pfmz_index, field_var::Gx0);
-      pi_Gx0     = twelfth*(6.f*Gx0_0 + Gx0_x + Gx0_y + Gx0_z + Gx0_mx + Gx0_my + Gx0_mz);
-      pi_dGx0dx  = sixth*(Gx0_x - Gx0_mx);
-      pi_dGx0dy  = sixth*(Gx0_y - Gx0_my);
-      pi_dGx0dz  = sixth*(Gx0_z - Gx0_mz);
-      pi_d2Gx0dx = twelfth*(Gx0_x + Gx0_mx - 2.f*Gx0_0);
-      pi_d2Gx0dy = twelfth*(Gx0_y + Gx0_my - 2.f*Gx0_0);
-      pi_d2Gx0dz = twelfth*(Gx0_z + Gx0_mz - 2.f*Gx0_0);
+      float Ey0_eta = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
       
-      // Gy0 component
-      auto Gy0_0  = k_field(pf0_index,  field_var::Gy0);
-      auto Gy0_x  = k_field(pfx_index,  field_var::Gy0);
-      auto Gy0_y  = k_field(pfy_index,  field_var::Gy0);
-      auto Gy0_z  = k_field(pfz_index,  field_var::Gy0);
-      auto Gy0_mx = k_field(pfmx_index, field_var::Gy0);
-      auto Gy0_my = k_field(pfmy_index, field_var::Gy0);
-      auto Gy0_mz = k_field(pfmz_index, field_var::Gy0);
-      pi_Gy0     = twelfth*(6.f*Gy0_0 + Gy0_x + Gy0_y + Gy0_z + Gy0_mx + Gy0_my + Gy0_mz);
-      pi_dGy0dx  = sixth*(Gy0_x - Gy0_mx);
-      pi_dGy0dy  = sixth*(Gy0_y - Gy0_my);
-      pi_dGy0dz  = sixth*(Gy0_z - Gy0_mz);
-      pi_d2Gy0dx = twelfth*(Gy0_x + Gy0_mx - 2.f*Gy0_0);
-      pi_d2Gy0dy = twelfth*(Gy0_y + Gy0_my - 2.f*Gy0_0);
-      pi_d2Gy0dz = twelfth*(Gy0_z + Gy0_mz - 2.f*Gy0_0);
+      w0  = k_field(pf0_index,  field_var::Ez0);
+      wx  = k_field(pfx_index,  field_var::Ez0);
+      wy  = k_field(pfy_index,  field_var::Ez0);
+      wz  = k_field(pfz_index,  field_var::Ez0);
+      wmx = k_field(pfmx_index, field_var::Ez0);
+      wmy = k_field(pfmy_index, field_var::Ez0);
+      wmz = k_field(pfmz_index, field_var::Ez0);
       
-      // Gz0 component
-      auto Gz0_0  = k_field(pf0_index,  field_var::Gz0);
-      auto Gz0_x  = k_field(pfx_index,  field_var::Gz0);
-      auto Gz0_y  = k_field(pfy_index,  field_var::Gz0);
-      auto Gz0_z  = k_field(pfz_index,  field_var::Gz0);
-      auto Gz0_mx = k_field(pfmx_index, field_var::Gz0);
-      auto Gz0_my = k_field(pfmy_index, field_var::Gz0);
-      auto Gz0_mz = k_field(pfmz_index, field_var::Gz0);
-      pi_Gz0     = twelfth*(6.f*Gz0_0 + Gz0_x + Gz0_y + Gz0_z + Gz0_mx + Gz0_my + Gz0_mz);
-      pi_dGz0dx  = sixth*(Gz0_x - Gz0_mx);
-      pi_dGz0dy  = sixth*(Gz0_y - Gz0_my);
-      pi_dGz0dz  = sixth*(Gz0_z - Gz0_mz);
-      pi_d2Gz0dx = twelfth*(Gz0_x + Gz0_mx - 2.f*Gz0_0);
-      pi_d2Gz0dy = twelfth*(Gz0_y + Gz0_my - 2.f*Gz0_0);
-      pi_d2Gz0dz = twelfth*(Gz0_z + Gz0_mz - 2.f*Gz0_0);
-#endif  // EXTERNAL_FORCE
+      float Ez0_mu = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      
+      pi_Ex0 = Ex0_xi * grad_xi_x + Ey0_eta * grad_eta_x + Ez0_mu * grad_mu_x;
+      pi_Ey0 = Ex0_xi * grad_xi_y + Ey0_eta * grad_eta_y + Ez0_mu * grad_mu_y;
+      pi_Ez0 = Ex0_xi * grad_xi_z + Ey0_eta * grad_eta_z + Ez0_mu * grad_mu_z;
+      
+      // Derivatives for Ex0
+      w0  = k_field(pf0_index,  field_var::Ex0);
+            wx  = k_field(pfx_index,  field_var::Ex0);
+      wy  = k_field(pfy_index,  field_var::Ex0);
+      wz  = k_field(pfz_index,  field_var::Ex0);
+      wmx = k_field(pfmx_index, field_var::Ex0);
+      wmy = k_field(pfmy_index, field_var::Ex0);
+      wmz = k_field(pfmz_index, field_var::Ex0);
+      
+      float Ex0_xi = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      
+      pi_dEx0dx  = sixth*(wx - wmx);
+      pi_dEx0dy  = sixth*(wy - wmy);
+      pi_dEx0dz  = sixth*(wz - wmz);
+      pi_d2Ex0dx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2Ex0dy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2Ex0dz = twelfth*(wz + wmz - 2.f*w0);
+      
+      // Ey0 interpolation coefficients
+      w0  = k_field(pf0_index,  field_var::Ey0);
+      wx  = k_field(pfx_index,  field_var::Ey0);
+      wy  = k_field(pfy_index,  field_var::Ey0);
+      wz  = k_field(pfz_index,  field_var::Ey0);
+      wmx = k_field(pfmx_index, field_var::Ey0);
+      wmy = k_field(pfmy_index, field_var::Ey0);
+      wmz = k_field(pfmz_index, field_var::Ey0);
+      
+      float Ey0_eta = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      
+      pi_dEy0dx  = sixth*(wx - wmx);
+      pi_dEy0dy  = sixth*(wy - wmy);
+      pi_dEy0dz  = sixth*(wz - wmz);
+      pi_d2Ey0dx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2Ey0dy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2Ey0dz = twelfth*(wz + wmz - 2.f*w0);
+      
+      // Ez0 interpolation coefficients
+      w0  = k_field(pf0_index,  field_var::Ez0);
+      wx  = k_field(pfx_index,  field_var::Ez0);
+      wy  = k_field(pfy_index,  field_var::Ez0);
+      wz  = k_field(pfz_index,  field_var::Ez0);
+      wmx = k_field(pfmx_index, field_var::Ez0);
+      wmy = k_field(pfmy_index, field_var::Ez0);
+      wmz = k_field(pfmz_index, field_var::Ez0);
+      
+      float Ez0_mu = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      
+      pi_dEz0dx  = sixth*(wx - wmx);
+      pi_dEz0dy  = sixth*(wy - wmy);
+      pi_dEz0dz  = sixth*(wz - wmz);
+      pi_d2Ez0dx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2Ez0dy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2Ez0dz = twelfth*(wz + wmz - 2.f*w0);
+      
+      // Transform external E: covariant logical → Cartesian (same as main E)
+      pi_Ex0 = Ex0_xi * grad_xi_x + Ey0_eta * grad_eta_x + Ez0_mu * grad_mu_x;
+      pi_Ey0 = Ex0_xi * grad_xi_y + Ey0_eta * grad_eta_y + Ez0_mu * grad_mu_y;
+      pi_Ez0 = Ex0_xi * grad_xi_z + Ey0_eta * grad_eta_z + Ez0_mu * grad_mu_z;
+      
+      // Gx0 interpolation coefficients (covariant forces/gradients)
+      w0  = k_field(pf0_index,  field_var::Gx0);
+      wx  = k_field(pfx_index,  field_var::Gx0);
+      wy  = k_field(pfy_index,  field_var::Gx0);
+      wz  = k_field(pfz_index,  field_var::Gx0);
+      wmx = k_field(pfmx_index, field_var::Gx0);
+      wmy = k_field(pfmy_index, field_var::Gx0);
+      wmz = k_field(pfmz_index, field_var::Gx0);
+      
+      float Gx0_xi = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      
+      pi_dGx0dx  = sixth*(wx - wmx);
+      pi_dGx0dy  = sixth*(wy - wmy);
+      pi_dGx0dz  = sixth*(wz - wmz);
+      pi_d2Gx0dx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2Gx0dy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2Gx0dz = twelfth*(wz + wmz - 2.f*w0);
+      
+      // Gy0 interpolation coefficients
+      w0  = k_field(pf0_index,  field_var::Gy0);
+      wx  = k_field(pfx_index,  field_var::Gy0);
+      wy  = k_field(pfy_index,  field_var::Gy0);
+      wz  = k_field(pfz_index,  field_var::Gy0);
+      wmx = k_field(pfmx_index, field_var::Gy0);
+      wmy = k_field(pfmy_index, field_var::Gy0);
+      wmz = k_field(pfmz_index, field_var::Gy0);
+      
+      float Gy0_eta = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      
+      pi_dGy0dx  = sixth*(wx - wmx);
+      pi_dGy0dy  = sixth*(wy - wmy);
+      pi_dGy0dz  = sixth*(wz - wmz);
+      pi_d2Gy0dx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2Gy0dy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2Gy0dz = twelfth*(wz + wmz - 2.f*w0);
+      
+      // Gz0 interpolation coefficients
+      w0  = k_field(pf0_index,  field_var::Gz0);
+      wx  = k_field(pfx_index,  field_var::Gz0);
+      wy  = k_field(pfy_index,  field_var::Gz0);
+      wz  = k_field(pfz_index,  field_var::Gz0);
+      wmx = k_field(pfmx_index, field_var::Gz0);
+      wmy = k_field(pfmy_index, field_var::Gz0);
+      wmz = k_field(pfmz_index, field_var::Gz0);
+      
+      float Gz0_mu = twelfth*(6.f*w0 + wx + wy + wz + wmx + wmy + wmz);
+      
+      pi_dGz0dx  = sixth*(wx - wmx);
+      pi_dGz0dy  = sixth*(wy - wmy);
+      pi_dGz0dz  = sixth*(wz - wmz);
+      pi_d2Gz0dx = twelfth*(wx + wmx - 2.f*w0);
+      pi_d2Gz0dy = twelfth*(wy + wmy - 2.f*w0);
+      pi_d2Gz0dz = twelfth*(wz + wmz - 2.f*w0);
+      
+      // Transform G forces: covariant logical → Cartesian (same pattern as E)
+      pi_Gx0 = Gx0_xi * grad_xi_x + Gy0_eta * grad_eta_x + Gz0_mu * grad_mu_x;
+      pi_Gy0 = Gx0_xi * grad_xi_y + Gy0_eta * grad_eta_y + Gz0_mu * grad_mu_y;
+      pi_Gz0 = Gx0_xi * grad_xi_z + Gy0_eta * grad_eta_z + Gz0_mu * grad_mu_z;
+#endif // EXTERNAL_FORCE
 
-#endif  // SHAPE_QS
-
+#endif // SHAPE_QS
   }); // end Kokkos::parallel_for("load interpolator")
 
-  // ============================================================================
-  // CLEANUP MACROS
-  // ============================================================================
-  
   #undef pi_ex
   #undef pi_dexdx
   #undef pi_dexdy
@@ -687,8 +671,7 @@ load_interpolator_array_kokkos(k_interpolator_t k_interp,
   #undef pi_d2Gz0dx
   #undef pi_d2Gz0dy
   #undef pi_d2Gz0dz
-  
-} // end load_interpolator_array_kokkos
+}
 
 void
 load_interpolator_array( /**/  interpolator_array_t * RESTRICT ia,
@@ -698,12 +681,13 @@ load_interpolator_array( /**/  interpolator_array_t * RESTRICT ia,
 
   k_interpolator_t k_interp = ia->k_i_d;
   k_field_t         k_field  = fa->k_f_d;
+  k_curvilinear_mesh_t k_curv_mesh = fa->g->k_curvilinear_mesh_d;
   grid_t *g = fa->g;
   int nx = g->nx;
   int ny = g->ny;
   int nz = g->nz;
 
-  load_interpolator_array_kokkos(k_interp, k_field, g->k_curvilinear_mesh_d, nx,ny,nz);
+  load_interpolator_array_kokkos(k_interp, k_field, k_curv_mesh, nx, ny, nz);
 }
 
 void
@@ -758,6 +742,7 @@ interpolator_array_t::copy_to_host() {
       host_interp[i].d2ezdx  = k_interpolator_h(i, interpolator_var::d2ezdx );
       host_interp[i].d2ezdy  = k_interpolator_h(i, interpolator_var::d2ezdy );
       host_interp[i].d2ezdz  = k_interpolator_h(i, interpolator_var::d2ezdz );
+
       host_interp[i].cbx     = k_interpolator_h(i, interpolator_var::cbx    );
       host_interp[i].dcbxdx  = k_interpolator_h(i, interpolator_var::dcbxdx );
       host_interp[i].dcbxdy  = k_interpolator_h(i, interpolator_var::dcbxdy );
@@ -784,20 +769,6 @@ interpolator_array_t::copy_to_host() {
       host_interp[i].Ex0      = k_interpolator_h(i, interpolator_var::Ex0     );
       host_interp[i].dEx0dx   = k_interpolator_h(i, interpolator_var::dEx0dx  );
       host_interp[i].dEx0dy   = k_interpolator_h(i, interpolator_var::dEx0dy  );
-      host_interp[i].dEx0dz   = k_interpolator_h(i, interpolator_var::dEx0dz  );
-      host_interp[i].d2Ex0dx  = k_interpolator_h(i, interpolator_var::d2Ex0dx );
-      host_interp[i].d2Ex0dy  = k_interpolator_h(i, interpolator_var::d2Ex0dy );
-      host_interp[i].d2Ex0dz  = k_interpolator_h(i, interpolator_var::d2Ex0dz );
-      host_interp[i].Ey0      = k_interpolator_h(i, interpolator_var::Ey0     );
-      host_interp[i].dEy0dx   = k_interpolator_h(i, interpolator_var::dEy0dx  );
-      host_interp[i].dEy0dy   = k_interpolator_h(i, interpolator_var::dEy0dy  );
-      host_interp[i].dEy0dz   = k_interpolator_h(i, interpolator_var::dEy0dz  );
-      host_interp[i].d2Ey0dx  = k_interpolator_h(i, interpolator_var::d2Ey0dx );
-      host_interp[i].d2Ey0dy  = k_interpolator_h(i, interpolator_var::d2Ey0dy );
-      host_interp[i].d2Ey0dz  = k_interpolator_h(i, interpolator_var::d2Ey0dz );
-      host_interp[i].Ez0      = k_interpolator_h(i, interpolator_var::Ez0     );
-      host_interp[i].dEz0dx   = k_interpolator_h(i, interpolator_var::dEz0dx  );
-      host_interp[i].dEz0dy   = k_interpolator_h(i, interpolator_var::dEz0dy  );
       host_interp[i].dEz0dz   = k_interpolator_h(i, interpolator_var::dEz0dz  );
       host_interp[i].d2Ez0dx  = k_interpolator_h(i, interpolator_var::d2Ez0dx );
       host_interp[i].d2Ez0dy  = k_interpolator_h(i, interpolator_var::d2Ez0dy );

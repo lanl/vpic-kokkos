@@ -76,7 +76,7 @@ enum grid_type {
   CYLINDRICAL = 1,
   SPHERICAL = 2,
   GENERAL = 3,
-  // STRETCHED_CARTESIAN = 4
+  STRETCHED_CARTESIAN = 4
 };
 
 typedef struct grid {
@@ -394,7 +394,7 @@ typedef struct grid {
       k_curvilinear_mesh_h(idx, curv_mesh_var::zg) = z;
     });
     
-    type = grid_type::GENERAL;
+    type = grid_type::STRETCHED_CARTESIAN;
     Kokkos::deep_copy(k_curvilinear_mesh_d, k_curvilinear_mesh_h);
 }
 
@@ -629,16 +629,16 @@ void grid_t::local_to_global_cart(int voxel_i, float dx_p, float dy_p, float dz_
     
     if (type == grid_type::CARTESIAN) {
         local_to_global(voxel_i, dx_p, dy_p, dz_p, x_out, y_out, z_out);
-    // } else if (type == grid_type::STRETCHED_CARTESIAN) {
-    //     int node_idx = GRID_TO_MESH(i, j, k, nx, ny, nz);
-    //     double x_center = k_curvilinear_mesh_h(node_idx, curv_mesh_var::xg);
-    //     double y_center = k_curvilinear_mesh_h(node_idx, curv_mesh_var::yg);
-    //     double z_center = k_curvilinear_mesh_h(node_idx, curv_mesh_var::zg);
+    } else if (type == grid_type::STRETCHED_CARTESIAN) {
+        int node_idx = GRID_TO_MESH(i, j, k, nx, ny, nz);
+        double x_center = k_curvilinear_mesh_h(node_idx, curv_mesh_var::xg);
+        double y_center = k_curvilinear_mesh_h(node_idx, curv_mesh_var::yg);
+        double z_center = k_curvilinear_mesh_h(node_idx, curv_mesh_var::zg);
         
-    //     // Scale cell-center offset by local scale factors
-    //     x_out = x_center + 0.5 * dx_p * k_curvilinear_mesh_h(node_idx, curv_mesh_var::h_1);
-    //     y_out = y_center + 0.5 * dy_p * k_curvilinear_mesh_h(node_idx, curv_mesh_var::h_2);
-    //     z_out = z_center + 0.5 * dz_p * k_curvilinear_mesh_h(node_idx, curv_mesh_var::h_3);
+        // Scale cell-center offset by local scale factors
+        x_out = x_center + 0.5 * dx_p * k_curvilinear_mesh_h(node_idx, curv_mesh_var::h_1);
+        y_out = y_center + 0.5 * dy_p * k_curvilinear_mesh_h(node_idx, curv_mesh_var::h_2);
+        z_out = z_center + 0.5 * dz_p * k_curvilinear_mesh_h(node_idx, curv_mesh_var::h_3);
 
     } else if (type == grid_type::CYLINDRICAL) {
         // Cylindrical: (r, theta, z) -> (x, y, z)
@@ -812,6 +812,36 @@ void compute_reciprocal_basis(
         grad_mu_y = (2.0f / gdz) * cos_phi / (r_phys * sin_theta);
         grad_mu_z = 0.0f;
         jac = r_phys * r_phys * sin_theta * gdx * gdy * gdz / 8.0f;
+
+    } else if (g->type == grid_type::STRETCHED_CARTESIAN) {
+        // For stretched Cartesian, basis vectors remain Cartesian-aligned,
+        // but scale factors vary with position. Reciprocal basis is simply
+        // the inverse of the scale factors.
+        int i, j, k;
+        UNVOXEL(ii, i, j, k, nx, ny, nz);
+        int node_idx = GRID_TO_MESH(i, j, k, nx, ny, nz);
+        
+        // Get local scale factors at this cell
+        float h1 = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::h_1);
+        float h2 = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::h_2);
+        float h3 = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::h_3);
+        
+        // Reciprocal basis vectors: grad(ξ^α) = ê^α / h_α
+        // Since basis vectors are Cartesian-aligned: ê^1 = x̂, ê^2 = ŷ, ê^3 = ẑ
+        grad_xi_x = 2.0f / (h1 * gdx);
+        grad_xi_y = 0.0f;
+        grad_xi_z = 0.0f;
+        
+        grad_eta_x = 0.0f;
+        grad_eta_y = 2.0f / (h2 * gdy);
+        grad_eta_z = 0.0f;
+        
+        grad_mu_x = 0.0f;
+        grad_mu_y = 0.0f;
+        grad_mu_z = 2.0f / (h3 * gdz);
+        
+        // Jacobian (already stored, but can compute as product of scale factors)
+        jac = h1 * h2 * h3 * gdx * gdy * gdz / 8.0f;
 
     } else {
       //Compute B-spline basis functions and derivatives

@@ -11,7 +11,7 @@ nt = 300
 pi = np.pi
 
 # Compute stretched grid scale factors
-beta_x = 3
+beta_x = 2
 dxi = 1.0 / nx
 xi = np.array([(i + 0.5) * dxi for i in range(nx)])
 if beta_x > 1e-10:
@@ -47,7 +47,11 @@ for slice in range(0,1):
 		tmp = loadSlice(datadir,q,slice,nx,nt)
 		Q[q] = tmp
 		if q == 'Uiy' or q == 'Uiz':
+			# tmp *= h1[:, np.newaxis]/2 // only for x
+			tmp *= 1/2
+		if q == 'Uix':
 			tmp *= h1[:, np.newaxis]/2
+			print(h1[:, np.newaxis])
 	
 fig, (ax1,ax2) = plt.subplots(nrows=2)
 im1 = ax1.pcolormesh(tv,xv,Q["Uiy"])
