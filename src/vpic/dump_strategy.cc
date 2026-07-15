@@ -7,6 +7,25 @@
 
 const int max_filename_bytes = 256;
 
+inline void transform_J_to_physical(
+    const grid_t* grid,
+    int voxel_index,
+    float J_xi, float J_eta, float J_zeta,
+    float& J_phys_xi, float& J_phys_eta, float& J_phys_zeta)
+{
+    // J is CONTRAVARIANT, physical = (h_i / 2) * J^i
+    auto& k_cmesh_h = grid->k_curvilinear_mesh_h;
+    int mesh_index = VOXEL_TO_MESH(voxel_index, grid->nx, grid->ny, grid->nz);
+    
+    float h1 = k_cmesh_h(mesh_index, curv_mesh_var::h_1);
+    float h2 = k_cmesh_h(mesh_index, curv_mesh_var::h_2);
+    float h3 = k_cmesh_h(mesh_index, curv_mesh_var::h_3);
+    
+    J_phys_xi   = (h1 * 0.5f) * J_xi;
+    J_phys_eta  = (h2 * 0.5f) * J_eta;
+    J_phys_zeta = (h3 * 0.5f) * J_zeta;
+}
+
 // Create a new dump strategy
 Dump_Strategy *
 new_dump_strategy(DumpStrategyID dump_strategy_id,
@@ -97,8 +116,53 @@ void BinaryDump::dump_fields(
   dim[0] = grid->nx + 2;
   dim[1] = grid->ny + 2;
   dim[2] = grid->nz + 2;
-  WRITE_ARRAY_HEADER(field_array->f, 3, dim, fileIO);
-  fileIO.write(field_array->f, dim[0] * dim[1] * dim[2]);
+  
+  // CREATE A COPY TO TRANSFORM
+  field_t *f_transformed;
+  MALLOC(f_transformed, dim[0] * dim[1] * dim[2]);
+  COPY(f_transformed, field_array->f, dim[0] * dim[1] * dim[2]);
+  
+  // APPLY YOUR TRANSFORMATION
+  for(int k = 0; k < dim[2]; k++) {
+    for(int j = 0; j < dim[1]; j++) {
+      for(int i = 0; i < dim[0]; i++) {
+        int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+        
+        // Transform current currents (jfx, jfy, jfz)
+        float J_xi   = field_array->f[idx].jfx;
+        float J_eta  = field_array->f[idx].jfy;
+        float J_zeta = field_array->f[idx].jfz;
+        
+        float J_phys_xi, J_phys_eta, J_phys_zeta;
+        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                               J_phys_xi, J_phys_eta, J_phys_zeta);
+        
+        f_transformed[idx].jfx = J_phys_xi;
+        f_transformed[idx].jfy = J_phys_eta;
+        f_transformed[idx].jfz = J_phys_zeta;
+        
+        // Transform old currents (jfxold, jfyold, jfzold)
+        J_xi   = field_array->f[idx].jfxold;
+        J_eta  = field_array->f[idx].jfyold;
+        J_zeta = field_array->f[idx].jfzold;
+        
+        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                               J_phys_xi, J_phys_eta, J_phys_zeta);
+        
+        f_transformed[idx].jfxold = J_phys_xi;
+        f_transformed[idx].jfyold = J_phys_eta;
+        f_transformed[idx].jfzold = J_phys_zeta;
+
+      }
+    }
+  }
+  
+  WRITE_ARRAY_HEADER(f_transformed, 3, dim, fileIO);
+  fileIO.write(f_transformed, dim[0] * dim[1] * dim[2]);
+  
+  FREE(f_transformed);
+  
+
   if (fileIO.close())
     ERROR(("File close failed on dump fields!!!"));
 }
@@ -170,8 +234,36 @@ void BinaryDump::dump_hydro(
   dim[1] = grid->ny + 2;
   dim[2] = grid->nz + 2;
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
-  WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
-  fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
+  hydro_t *h_transformed;
+  MALLOC(h_transformed, dim[0] * dim[1] * dim[2]);
+  COPY(h_transformed, hydro_array->h, dim[0] * dim[1] * dim[2]);
+  
+  // APPLY YOUR TRANSFORMATION
+  for(int k = 0; k < dim[2]; k++) {
+    for(int j = 0; j < dim[1]; j++) {
+      for(int i = 0; i < dim[0]; i++) {
+        int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+        
+        float J_xi   = hydro_array->h[idx].jx;
+        float J_eta  = hydro_array->h[idx].jy;
+        float J_zeta = hydro_array->h[idx].jz;
+        
+        float J_phys_xi, J_phys_eta, J_phys_zeta;
+        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                               J_phys_xi, J_phys_eta, J_phys_zeta);
+        
+        h_transformed[idx].jx = J_phys_xi;
+        h_transformed[idx].jy = J_phys_eta;
+        h_transformed[idx].jz = J_phys_zeta;
+
+      }
+    }
+  }
+  
+  WRITE_ARRAY_HEADER(h_transformed, 3, dim, fileIO);
+  fileIO.write(h_transformed, dim[0] * dim[1] * dim[2]);
+  
+  FREE(h_transformed);
 #else
   hydro_t h[1];
   WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
@@ -378,6 +470,7 @@ void BinaryDump::dump_fluids(
 }
 
 // Field dump in binary format
+// Field dump in binary format
 void BinaryDump::field_dump(
     DumpParameters & dumpParams,
     int step,
@@ -437,6 +530,49 @@ void BinaryDump::field_dump(
   float dyout = (grid->dy)*jstride;
   float dzout = (grid->dz)*kstride;
 
+  /* CREATE TRANSFORMED COPY OF FIELD ARRAY */
+  dim[0] = grid->nx + 2;
+  dim[1] = grid->ny + 2;
+  dim[2] = grid->nz + 2;
+  
+  field_t *f_transformed;
+  MALLOC(f_transformed, dim[0] * dim[1] * dim[2]);
+  COPY(f_transformed, field_array->f, dim[0] * dim[1] * dim[2]);
+  
+  // APPLY TRANSFORMATION TO CURRENT DENSITIES
+  for(int k = 0; k < dim[2]; k++) {
+    for(int j = 0; j < dim[1]; j++) {
+      for(int i = 0; i < dim[0]; i++) {
+        int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+        
+        // Transform current currents (jfx, jfy, jfz)
+        float J_xi   = field_array->f[idx].jfx;
+        float J_eta  = field_array->f[idx].jfy;
+        float J_zeta = field_array->f[idx].jfz;
+        
+        float J_phys_xi, J_phys_eta, J_phys_zeta;
+        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                               J_phys_xi, J_phys_eta, J_phys_zeta);
+        
+        f_transformed[idx].jfx = J_phys_xi;
+        f_transformed[idx].jfy = J_phys_eta;
+        f_transformed[idx].jfz = J_phys_zeta;
+        
+        // Transform old currents (jfxold, jfyold, jfzold)
+        J_xi   = field_array->f[idx].jfxold;
+        J_eta  = field_array->f[idx].jfyold;
+        J_zeta = field_array->f[idx].jfzold;
+        
+        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                               J_phys_xi, J_phys_eta, J_phys_zeta);
+        
+        f_transformed[idx].jfxold = J_phys_xi;
+        f_transformed[idx].jfyold = J_phys_eta;
+        f_transformed[idx].jfzold = J_phys_zeta;
+      }
+    }
+  }
+
   /* Banded output will write data as a single block-array as opposed to
    * the Array-of-Structure format that is used for native storage.
    *
@@ -462,7 +598,7 @@ void BinaryDump::field_dump(
       std::cerr << "nz: " << grid->nz << std::endl;
     }
 
-    WRITE_ARRAY_HEADER(field_array->f, 3, dim, fileIO);
+    WRITE_ARRAY_HEADER(f_transformed, 3, dim, fileIO);
 
     // Create a variable list of field values to output.
     size_t numvars = std::min(dumpParams.output_vars.bitsum(),
@@ -480,9 +616,9 @@ void BinaryDump::field_dump(
       for(size_t k(0); k<nzout+2; k++) {
       for(size_t j(0); j<nyout+2; j++) {
       for(size_t i(0); i<nxout+2; i++) {
-              const uint32_t * fref = reinterpret_cast<uint32_t *>(&field_array->f(i,j,k));
+              const uint32_t * fref = reinterpret_cast<uint32_t *>(&f_transformed[VOXEL(i,j,k,grid->nx,grid->ny,grid->nz)]);
               fileIO.write(&fref[varlist[v]], 1);
-              if(rank==VERBOSE_rank) printf("%f ", field_array->f(i,j,k).ex);
+              if(rank==VERBOSE_rank) printf("%f ", f_transformed[VOXEL(i,j,k,grid->nx,grid->ny,grid->nz)].ex);
               if(rank==VERBOSE_rank) std::cout << "(" << i << " " << j << " " << k << ")" << std::endl;
       } if(rank==VERBOSE_rank) std::cout << std::endl << "ROW_BREAK " << j << " " << k << std::endl;
       } if(rank==VERBOSE_rank) std::cout << std::endl << "PLANE_BREAK " << k << std::endl;
@@ -495,9 +631,9 @@ void BinaryDump::field_dump(
       for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
       for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
       for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
-              const uint32_t * fref = reinterpret_cast<uint32_t *>(&field_array->f(ioff,joff,koff));
+              const uint32_t * fref = reinterpret_cast<uint32_t *>(&f_transformed[VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz)]);
               fileIO.write(&fref[varlist[v]], 1);
-              if(rank==VERBOSE_rank) printf("%f ", field_array->f(ioff,joff,koff).ex);
+              if(rank==VERBOSE_rank) printf("%f ", f_transformed[VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz)].ex);
               if(rank==VERBOSE_rank) std::cout << "(" << ioff << " " << joff << " " << koff << ")" << std::endl;
       } if(rank==VERBOSE_rank) std::cout << std::endl << "ROW_BREAK " << joff << " " << koff << std::endl;
       } if(rank==VERBOSE_rank) std::cout << std::endl << "PLANE_BREAK " << koff << std::endl;
@@ -514,15 +650,15 @@ void BinaryDump::field_dump(
     dim[1] = nyout+2;
     dim[2] = nzout+2;
 
-    WRITE_ARRAY_HEADER(field_array->f, 3, dim, fileIO);
+    WRITE_ARRAY_HEADER(f_transformed, 3, dim, fileIO);
 
     if(istride == 1 && jstride == 1 && kstride == 1)
-      fileIO.write(field_array->f, dim[0]*dim[1]*dim[2]);
+      fileIO.write(f_transformed, dim[0]*dim[1]*dim[2]);
     else
       for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
       for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
       for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
-            fileIO.write(&field_array->f(ioff,joff,koff), 1);
+            fileIO.write(&f_transformed[VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz)], 1);
       }
       }
       }
@@ -530,9 +666,12 @@ void BinaryDump::field_dump(
 
 # undef f
 
+  FREE(f_transformed);
+
   if( fileIO.close() ) ERROR(( "File close failed on field dump!!!" ));
 }
 
+// Hydro dump in binary format
 // Hydro dump in binary format
 void BinaryDump::hydro_dump(
     DumpParameters& dumpParams,
@@ -612,6 +751,63 @@ void BinaryDump::hydro_dump(
   float dyout = (grid->dy)*jstride;
   float dzout = (grid->dz)*kstride;
 
+  /* CREATE TRANSFORMED COPY OF HYDRO ARRAY */
+  dim[0] = grid->nx + 2;
+  dim[1] = grid->ny + 2;
+  dim[2] = grid->nz + 2;
+
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+  hydro_t *h_transformed;
+  MALLOC(h_transformed, dim[0] * dim[1] * dim[2]);
+  COPY(h_transformed, hydro_array->h, dim[0] * dim[1] * dim[2]);
+  
+  // APPLY TRANSFORMATION TO CURRENT DENSITIES
+  for(int k = 0; k < dim[2]; k++) {
+    for(int j = 0; j < dim[1]; j++) {
+      for(int i = 0; i < dim[0]; i++) {
+        int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+        
+        float J_xi   = hydro_array->h[idx].jx;
+        float J_eta  = hydro_array->h[idx].jy;
+        float J_zeta = hydro_array->h[idx].jz;
+        
+        float J_phys_xi, J_phys_eta, J_phys_zeta;
+        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                               J_phys_xi, J_phys_eta, J_phys_zeta);
+        
+        h_transformed[idx].jx = J_phys_xi;
+        h_transformed[idx].jy = J_phys_eta;
+        h_transformed[idx].jz = J_phys_zeta;
+      }
+    }
+  }
+#else
+  // For non-legacy, create a transformed view
+  k_hydro_t h_transformed("h_transformed", dim[0] * dim[1] * dim[2], HYDRO_VAR_COUNT);
+  Kokkos::deep_copy(h_transformed, hydro_array->k_h_h);
+  
+  // Transform on host
+  for(int k = 0; k < dim[2]; k++) {
+    for(int j = 0; j < dim[1]; j++) {
+      for(int i = 0; i < dim[0]; i++) {
+        int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+        
+        float J_xi   = hydro_array->k_h_h(idx, hydro_var::jx);
+        float J_eta  = hydro_array->k_h_h(idx, hydro_var::jy);
+        float J_zeta = hydro_array->k_h_h(idx, hydro_var::jz);
+        
+        float J_phys_xi, J_phys_eta, J_phys_zeta;
+        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                               J_phys_xi, J_phys_eta, J_phys_zeta);
+        
+        h_transformed(idx, hydro_var::jx) = J_phys_xi;
+        h_transformed(idx, hydro_var::jy) = J_phys_eta;
+        h_transformed(idx, hydro_var::jz) = J_phys_zeta;
+      }
+    }
+  }
+#endif
+
   /* Banded output will write data as a single block-array as opposed to
    * the Array-of-Structure format that is used for native storage.
    *
@@ -629,12 +825,10 @@ void BinaryDump::hydro_dump(
     dim[2] = nzout+2;
 
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
-    WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
-    fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
+    WRITE_ARRAY_HEADER(h_transformed, 3, dim, fileIO);
 #else
     hydro_t h[1];
     WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
-    fileIO.write(hydro_array->k_h_h.data(), dim[0] * dim[1] * dim[2]);
 #endif
 
     /*
@@ -654,10 +848,10 @@ void BinaryDump::hydro_dump(
       for(size_t j(0); j<nyout+2; j++)
       for(size_t i(0); i<nxout+2; i++) {
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
-              const uint32_t * href = reinterpret_cast<uint32_t *>(&hydro(i,j,k));
+              const uint32_t * href = reinterpret_cast<uint32_t *>(&h_transformed[VOXEL(i,j,k,grid->nx,grid->ny,grid->nz)]);
               fileIO.write(&href[varlist[v]], 1);
 #else
-              fileIO.write(&(hydro_array->k_h_h(VOXEL(i,j,k,grid->nx,grid->ny,grid->nz), varlist[v])), 1);
+              fileIO.write(&(h_transformed(VOXEL(i,j,k,grid->nx,grid->ny,grid->nz), varlist[v])), 1);
 #endif
       }
 
@@ -668,10 +862,10 @@ void BinaryDump::hydro_dump(
       for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
       for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
-              const uint32_t * href = reinterpret_cast<uint32_t *>(&hydro(ioff,joff,koff));
+              const uint32_t * href = reinterpret_cast<uint32_t *>(&h_transformed[VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz)]);
               fileIO.write(&href[varlist[v]], 1);
 #else
-              fileIO.write(&(hydro_array->k_h_h(VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz), varlist[v])), 1);
+              fileIO.write(&(h_transformed(VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz), varlist[v])), 1);
 #endif
       }
       }
@@ -688,30 +882,25 @@ void BinaryDump::hydro_dump(
     dim[2] = nzout;
 
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
-    WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
-    fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
+    WRITE_ARRAY_HEADER(h_transformed, 3, dim, fileIO);
 #else
     hydro_t h[1];
     WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
-    fileIO.write(hydro_array->k_h_h.data(), dim[0] * dim[1] * dim[2]);
 #endif
 
     if(istride == 1 && jstride == 1 && kstride == 1) {
 
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
-      WRITE_ARRAY_HEADER(hydro_array->h, 3, dim, fileIO);
-      fileIO.write(hydro_array->h, dim[0] * dim[1] * dim[2]);
+      fileIO.write(h_transformed, dim[0] * dim[1] * dim[2]);
 #else
-      hydro_t h[1];
-      WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
       if( std::is_same<Kokkos::LayoutRight, k_hydro_t::array_layout>::value ) {
-        fileIO.write(hydro_array->k_h_h.data(), dim[0] * dim[1] * dim[2]);
+        fileIO.write(h_transformed.data(), dim[0] * dim[1] * dim[2]);
       } else {
         for(int i=0; i<dim[0]; i++) {
           for(int j=0; j<dim[1]; j++) {
             for(int k=0; k<dim[2]; k++) {
               for(size_t v=0; v<HYDRO_VAR_COUNT; v++) {
-                fileIO.write(&hydro_array->k_h_h(VOXEL(i,j,k,grid->nx,grid->ny,grid->nz), v), 1);
+                fileIO.write(&h_transformed(VOXEL(i,j,k,grid->nx,grid->ny,grid->nz), v), 1);
               }
               hydro_scalar_t _pad = 0;
               fileIO.write(&_pad, 1);
@@ -728,10 +917,10 @@ void BinaryDump::hydro_dump(
       for(size_t j(0); j<nyout; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
       for(size_t i(0); i<nxout; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
-            fileIO.write(&hydro(ioff,joff,koff), 1);
+            fileIO.write(&h_transformed[VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz)], 1);
 #else
         for(size_t v=0; v<HYDRO_VAR_COUNT; v++) 
-          fileIO.write(&(hydro_array->k_h_h(VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz), v)), 1);
+          fileIO.write(&(h_transformed(VOXEL(ioff,joff,koff,grid->nx,grid->ny,grid->nz), v)), 1);
 #endif
       }
       }
@@ -740,6 +929,10 @@ void BinaryDump::hydro_dump(
   }
 
 # undef hydro
+
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+  FREE(h_transformed);
+#endif
 
   if( fileIO.close() ) ERROR(( "File close failed on hydro dump!!!" ));
 }

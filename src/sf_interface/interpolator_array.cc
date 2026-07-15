@@ -184,7 +184,7 @@ load_interpolator_array_kokkos(k_interpolator_t& k_interp, k_field_t& k_field,
       float e3_y = k_curv_mesh(mesh_index, curv_mesh_var::e_3_v);
       float e3_z = k_curv_mesh(mesh_index, curv_mesh_var::e_3_w);
 
-      float grad_xi_x  = e1_x;
+      float grad_xi_x  = e1_x; // these should be /h but that breaks it for some reason
       float grad_xi_y  = e1_y;
       float grad_xi_z  = e1_z;
       
@@ -196,7 +196,7 @@ load_interpolator_array_kokkos(k_interpolator_t& k_interp, k_field_t& k_field,
       float grad_mu_y  = e3_y;
       float grad_mu_z  = e3_z;
       
-      float dx_dxi  = e1_x;
+      float dx_dxi  = e1_x; // these should be *h but that breaks it for some reason
       float dy_dxi  = e1_y;
       float dz_dxi  = e1_z;
       

@@ -46,12 +46,6 @@ for slice in range(0,1):
 	for q in qs:
 		tmp = loadSlice(datadir,q,slice,nx,nt)
 		Q[q] = tmp
-		if q == 'Uiy' or q == 'Uiz':
-			# tmp *= h1[:, np.newaxis]/2 // only for x
-			tmp *= 1/2
-		if q == 'Uix':
-			tmp *= h1[:, np.newaxis]/2
-			print(h1[:, np.newaxis])
 	
 fig, (ax1,ax2) = plt.subplots(nrows=2)
 im1 = ax1.pcolormesh(tv,xv,Q["Uiy"])
