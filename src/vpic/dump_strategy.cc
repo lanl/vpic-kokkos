@@ -1103,7 +1103,51 @@ void HDF5Dump::dump_fields(
   if (step > field_array->last_copied)
     field_array->copy_to_host();
 
-#define fpp(x, y, z) f[VOXEL(x, y, z, grid->nx, grid->ny, grid->nz)]
+  /* CREATE TRANSFORMED COPY OF FIELD ARRAY */
+  int dim[3];
+  dim[0] = grid->nx + 2;
+  dim[1] = grid->ny + 2;
+  dim[2] = grid->nz + 2;
+  
+  field_t *f_transformed;
+  MALLOC(f_transformed, dim[0] * dim[1] * dim[2]);
+  COPY(f_transformed, field_array->f, dim[0] * dim[1] * dim[2]);
+  
+  // APPLY TRANSFORMATION TO CURRENT DENSITIES
+  for(int k = 0; k < dim[2]; k++) {
+    for(int j = 0; j < dim[1]; j++) {
+      for(int i = 0; i < dim[0]; i++) {
+        int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+        
+        // Transform current currents (jfx, jfy, jfz)
+        float J_xi   = field_array->f[idx].jfx;
+        float J_eta  = field_array->f[idx].jfy;
+        float J_zeta = field_array->f[idx].jfz;
+        
+        float J_phys_xi, J_phys_eta, J_phys_zeta;
+        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                               J_phys_xi, J_phys_eta, J_phys_zeta);
+        
+        f_transformed[idx].jfx = J_phys_xi;
+        f_transformed[idx].jfy = J_phys_eta;
+        f_transformed[idx].jfz = J_phys_zeta;
+        
+        // Transform old currents (jfxold, jfyold, jfzold)
+        J_xi   = field_array->f[idx].jfxold;
+        J_eta  = field_array->f[idx].jfyold;
+        J_zeta = field_array->f[idx].jfzold;
+        
+        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                               J_phys_xi, J_phys_eta, J_phys_zeta);
+        
+        f_transformed[idx].jfxold = J_phys_xi;
+        f_transformed[idx].jfyold = J_phys_eta;
+        f_transformed[idx].jfzold = J_phys_zeta;
+      }
+    }
+  }
+
+#define fpp(x, y, z) f_transformed[VOXEL(x, y, z, grid->nx, grid->ny, grid->nz)]
 
 #define DUMP_FIELD_TO_HDF5(DSET_NAME, ATTRIBUTE_NAME, ELEMENT_TYPE)                                         \
 {                                                                                                           \
@@ -1115,7 +1159,7 @@ void HDF5Dump::dump_fields(
     {                                                                                                       \
       for (int k(stride_z); k < grid->nz + 1; k += stride_z)                                                \
       {                                                                                                     \
-        temp_buf[temp_buf_index] = field_array->fpp(i, j, k).ATTRIBUTE_NAME;                                \
+        temp_buf[temp_buf_index] = fpp(i, j, k).ATTRIBUTE_NAME;                                             \
         temp_buf_index = temp_buf_index + 1;                                                                \
       }                                                                                                     \
     }                                                                                                       \
@@ -1134,16 +1178,11 @@ void HDF5Dump::dump_fields(
   // create the directory and sub-directory
   std::string field_dir = "./fields_hdf5";
   FileUtils::makeDirectory(field_dir.c_str());
-  //sprintf(field_scratch, "./%s", "fields_hdf5");
-  //FileUtils::makeDirectory(field_scratch);
   std::string subfield_dir = field_dir + "/T." + std::to_string(step) + "/";
   FileUtils::makeDirectory(subfield_dir.c_str());
-  //sprintf(subfield_scratch, "%s/T.%d/", field_scratch, step);
-  //FileUtils::makeDirectory(subfield_scratch);
 
   // create the file
   std::string filename = subfield_dir + "/fields_" + std::to_string(step) + ".h5";
-  //sprintf(fname, "%s/%s_%d.h5", subfield_scratch, "fields", step);
   double el1 = uptime();
   hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
   H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
@@ -1152,7 +1191,6 @@ void HDF5Dump::dump_fields(
 
   // create the group for the time step
   std::string group_name = "Timestep_" + std::to_string(step);
-  //sprintf(fname, "Timestep_%d", step);
   hid_t group_id = H5Gcreate(file_id, group_name.c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   el1 = uptime() - el1;
@@ -1254,12 +1292,10 @@ void HDF5Dump::dump_fields(
   if (field_dump_flag.flags["Ex0"]) DUMP_FIELD_TO_HDF5("Ex0", Ex0, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["Ey0"]) DUMP_FIELD_TO_HDF5("Ey0", Ey0, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["Ez0"]) DUMP_FIELD_TO_HDF5("Ez0", Ez0, H5T_NATIVE_FLOAT);
-  //if (field_dump_flag.flags["_pad1"]) DUMP_FIELD_TO_HDF5("_pad1", _pad1, H5T_NATIVE_FLOAT);
 
   if (field_dump_flag.flags["Gx0"]) DUMP_FIELD_TO_HDF5("Gx0", Gx0, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["Gy0"]) DUMP_FIELD_TO_HDF5("Gy0", Gy0, H5T_NATIVE_FLOAT);
   if (field_dump_flag.flags["Gz0"]) DUMP_FIELD_TO_HDF5("Gz0", Gz0, H5T_NATIVE_FLOAT);
-  //if (field_dump_flag.flags["_pad2"]) DUMP_FIELD_TO_HDF5("_pad2", _pad2, H5T_NATIVE_FLOAT);
 #endif
 
   el2 = uptime() - el2;
@@ -1273,6 +1309,9 @@ void HDF5Dump::dump_fields(
   H5Pclose(plist_id);
   H5Gclose(group_id);
   H5Fclose(file_id);
+
+# undef fpp
+  FREE(f_transformed);
 
   el3 = uptime() - el3;
   if ( rank==0 ) log_printf("TimeHDF5Close: %.2f s\n", el3);
@@ -1296,8 +1335,6 @@ void HDF5Dump::dump_fields(
 
     int nframes = num_step / field_interval + 1;
     static int field_tframe = 0;
-    // TODO: this footer dumping is more likely better done in a
-    // destructor, rather than hoping a multiple division works out
     if (field_tframe >= 1) {
       if (field_tframe == (nframes - 1)) {
         invert_field_xml_item(output_xml_file, "fields", step, dimensions_4d, dimensions_3d, 1);
@@ -1317,6 +1354,7 @@ void HDF5Dump::dump_fields(
 }
 
 // Dump hydro in HDF5 format
+// Dump hydro in HDF5 format
 void HDF5Dump::dump_hydro(
     const char *fbase,
     int step,
@@ -1326,10 +1364,90 @@ void HDF5Dump::dump_hydro(
     interpolator_array_t *interpolator_array,
     int ftag)
 {
+  // prepare the data
+  if (!sp) ERROR(("Invalid species name: %s", sp->name));
+  if ( rank==0 ) log_printf("Dumping hydro for %s using HDF5\n", sp->name);
+
+  auto& particles = sp->k_p_d;
+  auto& particles_i = sp->k_p_i_d;
+  auto& interpolators_k = interpolator_array->k_i_d;
+
+  Kokkos::deep_copy(hydro_array->k_h_d, 0.0);
+  accumulate_hydro_p_kokkos(
+      particles,
+      particles_i,
+      hydro_array->k_h_d,
+      interpolators_k,
+      sp
+  );
+
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
-#define GET_HYDRO_VAR(HYDRO, VOXEL, VAR) HYDRO->h[VOXEL].VAR
+  hydro_array->copy_to_host();
+  synchronize_hydro_array( hydro_array );
 #else
-#define GET_HYDRO_VAR(HYDRO, VOXEL, VAR) HYDRO->k_h_h(VOXEL, hydro_var::VAR)
+  synchronize_hydro_array_kokkos(hydro_array);
+  hydro_array->copy_to_host();
+#endif
+
+  /* CREATE TRANSFORMED COPY OF HYDRO ARRAY */
+  /* CREATE TRANSFORMED COPY OF HYDRO ARRAY */
+  int dim[3];
+  dim[0] = grid->nx + 2;
+  dim[1] = grid->ny + 2;
+  dim[2] = grid->nz + 2;
+
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+  hydro_t *h_transformed;
+  MALLOC(h_transformed, dim[0] * dim[1] * dim[2]);
+  COPY(h_transformed, hydro_array->h, dim[0] * dim[1] * dim[2]);
+  
+  // APPLY TRANSFORMATION TO CURRENT DENSITIES
+  for(int k = 0; k < dim[2]; k++) {
+    for(int j = 0; j < dim[1]; j++) {
+      for(int i = 0; i < dim[0]; i++) {
+        int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+        
+        float J_xi   = hydro_array->h[idx].jx;
+        float J_eta  = hydro_array->h[idx].jy;
+        float J_zeta = hydro_array->h[idx].jz;
+        
+        float J_phys_xi, J_phys_eta, J_phys_zeta;
+        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                               J_phys_xi, J_phys_eta, J_phys_zeta);
+        
+        h_transformed[idx].jx = J_phys_xi;
+        h_transformed[idx].jy = J_phys_eta;
+        h_transformed[idx].jz = J_phys_zeta;
+      }
+    }
+  }
+#define GET_HYDRO_VAR(HYDRO, VOXEL, VAR) h_transformed[VOXEL].VAR
+#else
+  // For non-legacy, create a transformed view
+  k_hydro_t h_transformed("h_transformed", dim[0] * dim[1] * dim[2], HYDRO_VAR_COUNT);
+  Kokkos::deep_copy(h_transformed, hydro_array->k_h_h);
+  
+  // Transform on host
+  for(int k = 0; k < dim[2]; k++) {
+    for(int j = 0; j < dim[1]; j++) {
+      for(int i = 0; i < dim[0]; i++) {
+        int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+        
+        float J_xi   = hydro_array->k_h_h(idx, hydro_var::jx);
+        float J_eta  = hydro_array->k_h_h(idx, hydro_var::jy);
+        float J_zeta = hydro_array->k_h_h(idx, hydro_var::jz);
+        
+        float J_phys_xi, J_phys_eta, J_phys_zeta;
+        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                               J_phys_xi, J_phys_eta, J_phys_zeta);
+        
+        h_transformed(idx, hydro_var::jx) = J_phys_xi;
+        h_transformed(idx, hydro_var::jy) = J_phys_eta;
+        h_transformed(idx, hydro_var::jz) = J_phys_zeta;
+      }
+    }
+  }
+#define GET_HYDRO_VAR(HYDRO, VOXEL, VAR) h_transformed(VOXEL, hydro_var::VAR)
 #endif
 
 #define DUMP_HYDRO_TO_HDF5(DSET_NAME, ATTRIBUTE_NAME, ELEMENT_TYPE)                                         \
@@ -1354,50 +1472,14 @@ void HDF5Dump::dump_hydro(
   H5Sclose(dataspace_id);                                                                                   \
   H5Dclose(dset_id);                                                                                        \
 }
-  //
-  // prepare the data
-  if (!sp) ERROR(("Invalid species name: %s", sp->name));
-  if ( rank==0 ) log_printf("Dumping hydro for %s using HDF5\n", sp->name);
-
-  auto& particles = sp->k_p_d;
-  auto& particles_i = sp->k_p_i_d;
-  auto& interpolators_k = interpolator_array->k_i_d;
-
-  Kokkos::deep_copy(hydro_array->k_h_d, 0.0);
-  accumulate_hydro_p_kokkos(
-      particles,
-      particles_i,
-      hydro_array->k_h_d,
-      interpolators_k,
-      sp
-  );
-
-
-#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
-  hydro_array->copy_to_host();
-  synchronize_hydro_array( hydro_array );
-#else
-  // This does not give consistent results
-  synchronize_hydro_array_kokkos(hydro_array);
-  hydro_array->copy_to_host();
-#endif
-
-  //char hname[256];
-  //char hydro_scratch[128];
-  //char subhydro_scratch[128];
 
   // create the directory and sub-directory
   std::string hydro_dir = "./hydro_hdf5";
   std::string subhydro_dir = hydro_dir + "/T." + std::to_string(step) + "/";
   FileUtils::makeDirectory(hydro_dir.c_str());
   FileUtils::makeDirectory(subhydro_dir.c_str());
-  //sprintf(hydro_scratch, "./%s", "hydro_hdf5");
-  //FileUtils::makeDirectory(hydro_scratch);
-  //sprintf(subhydro_scratch, "%s/T.%d/", hydro_scratch, step);
-  //FileUtils::makeDirectory(subhydro_scratch);
 
   std::string hydro_fname = subhydro_dir + "/hydro_" + std::string(sp->name) + "_" + std::to_string(step) + ".h5";
-  //sprintf(hname, "%s/hydro_%s_%d.h5", subhydro_scratch, sp->name, step);
   double el1 = uptime();
   hid_t plist_id = H5Pcreate(H5P_FILE_ACCESS);
   H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
@@ -1405,7 +1487,6 @@ void HDF5Dump::dump_hydro(
   H5Pclose(plist_id);
 
   std::string hydro_gname = "Timestep_" + std::to_string(step);
-  //sprintf(hname, "Timestep_%d", step);
   hid_t group_id = H5Gcreate(file_id, hydro_gname.c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   el1 = uptime() - el1;
@@ -1491,6 +1572,11 @@ void HDF5Dump::dump_hydro(
   H5Pclose(plist_id);
   H5Gclose(group_id);
   H5Fclose(file_id);
+
+#undef GET_HYDRO_VAR
+#ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
+  FREE(h_transformed);
+#endif
 
   el3 = uptime() - el3;
   if ( rank==0 ) log_printf("TimeHDF5Close: %.2f s\n", el3);

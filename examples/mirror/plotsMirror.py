@@ -38,7 +38,7 @@ qs = ["ni"]
 
 
 
-dir = "./data/"
+dir = "../../build/data/"
 
 Lx=300
 Lz=30

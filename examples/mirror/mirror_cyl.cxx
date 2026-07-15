@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////
 //
-//   Gas Dynamic Trap
+//   Gas Dynamic Trap - Cylindrical
 //
 //////////////////////////////////////////////////////
 
@@ -133,38 +133,40 @@ begin_initialization {
   double di   = c/wpi;                  // ion inertial length
   double beta_i = beta_e*sqrt(TiTe);
 
-  // Simulation  parameters
+  // Simulation  parameters - CYLINDRICAL (R-Z)
 
   double nppc = 400;        // Average number of macro particle per cell per species
 
-  double Lx  = 300.*di;     // size of box in x dimension
-  double Ly  = 1*di;       // size of box in y dimension  (For 2D - this doesn't matter)
-  double Lz  = 30.*di;     // size of box in z dimension
+  double Lr  = 300.*di;     // size of box in r dimension (radial)
+  double Ltheta  = 2.0*M_PI; // full azimuthal range (single cell)
+  double Lz  = 30.*di;      // size of box in z dimension
 
-  double Lxp = Lx/4.5;
+  double Lxp = Lr/4.5;      // x now means r
   double Lzp = Lz/4.5;
   
-  double topology_x = 32;  // Number of domains in x, y, and z
-  double topology_y = 1; 
-  double topology_z = 4;  // 
+  double topology_x = 32;  // Number of domains in r, theta, and z
+  double topology_y = 1;   // Single cell in theta
+  double topology_z = 4;  
 
-  double nx = 1024;   // Number of cells in x-direction
-  double ny = 1;     //  Number of cells in y-direction
-  double nz = 104;   //  Number of cells in z-direction
+  double nr = 1024;   // Number of cells in r-direction
+  double ntheta = 1;  // Single cell in theta
+  double nz = 104;    // Number of cells in z-direction
 
-  double hx = Lx/nx;   // cell size in x
-  double hy = Ly/ny;   // cell size in y
-  double hz = Lz/nz;   // cell size in z
+  double r_min = 0.01*Lr;  // Small buffer at r=0 to avoid singularity
+  double hr = (Lr - r_min)/nr;   // cell size in r
+  double htheta = Ltheta/ntheta; // cell size in theta
+  double hz = Lz/nz;             // cell size in z
 
-  double Npart   = nppc*nx*ny*nz;  // total macro electrons in box
+  // Adjust for cylindrical geometry - use average radius for particle count
+  double r_avg = (r_min + Lr)/2.0;
+  double Npart   = nppc*nr*ntheta*nz;  // total macro particles in box
   Npart = trunc_granular(Npart,nproc()); // Make it divisible by number of processors
 
- double qe = -ec*Lx*Ly*Lz/Npart;  // Charge per macro electron
- double qi =  ec*Lx*Ly*Lz/Npart;  // Charge per macro electron       
- double nfac = qi/(hx*hy*hz);    // Convert density to particles per cell
+  double qe = -ec*M_PI*(Lr*Lr - r_min*r_min)*Lz/Npart;  // Charge per macro electron (cylindrical volume)
+  double qi =  ec*M_PI*(Lr*Lr - r_min*r_min)*Lz/Npart;  // Charge per macro ion
+  double nfac = qi/(2.0*M_PI*r_avg*hr*htheta*hz);       // Convert density to particles per cell (approximate)
       
   // Determine the time step
-
 
   double dt = 0.01/wci;            // time step
    
@@ -220,8 +222,8 @@ begin_initialization {
 
   int ix, iy, iz, left=0, right=0, top=0, bottom=0,center=0;
   RANK_TO_INDEX( int(rank()), ix, iy, iz ); 
-  if ( ix ==0 ) left=1;
-  if ( ix==topology_x-1) right=1;
+  if ( ix ==0 ) left=1;  // Inner radial boundary
+  if ( ix==topology_x-1) right=1;  // Outer radial boundary
   if ( iz ==0 ) bottom=1;
   if ( iz ==topology_z-1 ) top=1;
   if ( abs( float(ix) - (topology_x/2.-0.5) ) < 4. ) center=1;
@@ -260,7 +262,7 @@ begin_initialization {
   global-> vthi = vthi; 
   global-> qe = qe;
   global-> qi = qi; 
-  global-> Lx = Lx; 
+  global-> Lx = Lr;  // Now means Lr
   global-> Lxp = Lxp; 
   global-> Lzp = Lzp; 
 
@@ -312,11 +314,11 @@ begin_initialization {
 
 
   ////////////////////////////////////////////////////////////////////////////////////////////
-  // Setup the grid
+  // Setup the grid - CYLINDRICAL
 
   // Setup basic grid parameters
-  grid->dx = hx;
-  grid->dy = hy;
+  grid->dx = hr;
+  grid->dy = htheta;
   grid->dz = hz;
   grid->dt = dt;
   grid->cvac = c;
@@ -333,12 +335,13 @@ begin_initialization {
   grid->den_floor_ohm = 0.05;
   grid->den_floor_pe = 0.05;
 
- // Define periodic grid 
-  define_periodic_grid(  0.*Lx, -0.5*Ly, -0.5*Lz,    // Low corner
-			  1.0*Lx,  0.5*Ly, 0.5*Lz,     // High corner
-			  nx, ny, nz,             // Resolution
-			  topology_x, topology_y, topology_z); // Topology
-    grid->init_cartesian_grid();
+  // Define cylindrical grid (r, theta, z)
+  // r from r_min to Lr, theta full 2*pi (1 cell), z from -Lz/2 to Lz/2
+  define_periodic_grid(  r_min, 0.0, -0.5*Lz,    // Low corner (r_min, 0, -Lz/2)
+                         Lr, Ltheta, 0.5*Lz,      // High corner (Lr, 2*pi, Lz/2)
+                         nr, ntheta, nz,          // Resolution
+                         topology_x, topology_y, topology_z); // Topology
+  grid->init_cylindrical_grid();  // Initialize cylindrical grid
 
   ////////////////////////////////////////////////////////////////////////////////////////////
   // Setup materials
@@ -349,30 +352,36 @@ begin_initialization {
 
   define_field_array(NULL);// second argument is damp, default to 0
 
- // Now set boundary conditions as needed
-
-  sim_log("Conducting fields on all boundaries"); 
-  if ( ix==0 )            set_domain_field_bc( BOUNDARY(-1,0,0), pec_fields ); 
+  // Boundary conditions for cylindrical geometry
+  // Boundary conditions for cylindrical geometry
+  sim_log("Setting boundary conditions for cylindrical geometry"); 
+  
+  // Axis boundary (r=0) - handled internally by cylindrical grid
+  // Outer radial boundary (r=Lr)
   if ( ix==topology_x-1 ) set_domain_field_bc( BOUNDARY( 1,0,0), pec_fields ); 
+  // Z boundaries
   if ( iz==0 )            set_domain_field_bc( BOUNDARY(0,0,-1), pec_fields ); 
   if ( iz==topology_z-1 ) set_domain_field_bc( BOUNDARY( 0,0,1), pec_fields ); 
 
 
-  sim_log("Absorb particles on all boundaries"); 
-  if ( ix==0 )            set_domain_particle_bc( BOUNDARY(-1,0,0), absorb_particles );
+  sim_log("Absorb particles on radial and z boundaries"); 
   if ( ix==topology_x-1 ) set_domain_particle_bc( BOUNDARY(1,0,0), absorb_particles );
   if ( iz==0 )            set_domain_particle_bc( BOUNDARY(0,0,-1), absorb_particles );
   if ( iz==topology_z-1 ) set_domain_particle_bc( BOUNDARY(0,0,1), absorb_particles );
 
 
-// Reflecting inner BC
+// Reflecting inner BC - Coils in cylindrical geometry
+// Note: x, y, z in particle coordinates are r, theta, z
+// Coil positions need to be adapted for cylindrical geometry
 
-  double x_P1 = 0.15*Lx, x_P2 = 0.85*Lx, z_P = Lz/2, R_P = 0.25*Lz;
+  double r_P1 = 0.15*Lr, r_P2 = 0.85*Lr, z_P = Lz/2, R_P = 0.25*Lz;
 
-#define R2P1 ( 0.02*(x-x_P1)*(x-x_P1) + (z-z_P)*(z-z_P) )
-#define R2P2 ( 0.02*(x-x_P1)*(x-x_P1) + (z+z_P)*(z+z_P) )
-#define R2P3 ( 0.02*(x-x_P2)*(x-x_P2) + (z-z_P)*(z-z_P) )
-#define R2P4 ( 0.02*(x-x_P2)*(x-x_P2) + (z+z_P)*(z+z_P) )
+// In cylindrical coordinates, coils are rings at specific (r,z) locations
+// Using x (which is r) and z for coil positions
+#define R2P1 ( 0.02*(x-r_P1)*(x-r_P1) + (z-z_P)*(z-z_P) )
+#define R2P2 ( 0.02*(x-r_P1)*(x-r_P1) + (z+z_P)*(z+z_P) )
+#define R2P3 ( 0.02*(x-r_P2)*(x-r_P2) + (z-z_P)*(z-z_P) )
+#define R2P4 ( 0.02*(x-r_P2)*(x-r_P2) + (z+z_P)*(z+z_P) )
 
 # define INSIDE_COIL1 (R2P1 < R_P*R_P )
 # define INSIDE_COIL2 (R2P2 < R_P*R_P )
@@ -386,10 +395,10 @@ begin_initialization {
   set_region_bc(INSIDE_COIL4, reflect_particles, reflect_particles,reflect_particles);
 
 
-#define R21 ( 0.02*(x-x_P1)*(x-x_P1) + (z-z_P)*(z-z_P) )
-#define R22 ( 0.02*(x-x_P1)*(x-x_P1) + (z+z_P)*(z+z_P) )
-#define R23 ( 0.02*(x-x_P2)*(x-x_P2) + (z-z_P)*(z-z_P) )
-#define R24 ( 0.02*(x-x_P2)*(x-x_P2) + (z+z_P)*(z+z_P) )
+#define R21 ( 0.02*(x-r_P1)*(x-r_P1) + (z-z_P)*(z-z_P) )
+#define R22 ( 0.02*(x-r_P1)*(x-r_P1) + (z+z_P)*(z+z_P) )
+#define R23 ( 0.02*(x-r_P2)*(x-r_P2) + (z-z_P)*(z-z_P) )
+#define R24 ( 0.02*(x-r_P2)*(x-r_P2) + (z+z_P)*(z+z_P) )
 
 # define INSIDE_LAYER1 ( (R21 < 1.5*R_P*R_P) && (R2P1 > R_P*R_P)  )
 # define INSIDE_LAYER2 ( (R22 < 1.5*R_P*R_P) && (R2P2 > R_P*R_P)  )
@@ -406,8 +415,8 @@ begin_initialization {
   set_region_eta_multipliers(z>0.45*Lz, 1., 1., 0.);
   set_region_eta_multipliers(z<-0.45*Lz, 1., 1., 0.);
   
-  set_region_eta_multipliers(x<0.015*Lx, 1., 1., 0.);
-  set_region_eta_multipliers(x>0.985*Lx, 1., 1., 0.);
+  set_region_eta_multipliers(x<0.015*Lr, 1., 1., 0.);  // Near axis
+  set_region_eta_multipliers(x>0.985*Lr, 1., 1., 0.);  // Outer boundary
   
   set_region_eta_multipliers(INSIDE_COIL1, 1., 1., 0.);
   set_region_eta_multipliers(INSIDE_COIL2, 1., 1., 0.);
@@ -444,14 +453,13 @@ begin_initialization {
   sim_log ( "mi/me = " << mime );
   sim_log ( "taui = " << taui );
   sim_log ( "num_step = " << num_step );
-  sim_log ( "Lx/di = " << Lx/di );
-  sim_log ( "Lx/de = " << Lx/de );
-  sim_log ( "Ly/di = " << Ly/di );
-  sim_log ( "Ly/de = " << Ly/de );
+  sim_log ( "Lr/di = " << Lr/di );  // Changed from Lx
+  sim_log ( "Lr/de = " << Lr/de );
+  sim_log ( "Ltheta (radians) = " << Ltheta );
   sim_log ( "Lz/di = " << Lz/di );
   sim_log ( "Lz/de = " << Lz/de );
-  sim_log ( "nx = " << nx );
-  sim_log ( "ny = " << ny );
+  sim_log ( "nr = " << nr );  // Changed from nx
+  sim_log ( "ntheta = " << ntheta );  // Changed from ny
   sim_log ( "nz = " << nz ); 
   sim_log ( "nproc = " << nproc ()  );
   sim_log ( "nppc = " << nppc );
@@ -463,20 +471,21 @@ begin_initialization {
   sim_log ( "dt*wce = " << wce*dt );
   sim_log ( "dt*wci = " << wci*dt );
   sim_log ( " energies_interval: " << energies_interval );
-  sim_log ( "dx/de = " << Lx/(de*nx) );
-  sim_log ( "dy/de = " << Ly/(de*ny) );
+  sim_log ( "dr/de = " << Lr/(de*nr) );
+  sim_log ( "dtheta (radians) = " << Ltheta/ntheta );
   sim_log ( "dz/de = " << Lz/(de*nz) );
   //sim_log ( "dx/debye = " << (Lx/nx)/Ldeb  );
   sim_log ( "vthi/c = " << global->vthi/c );
   sim_log ( "vthe/c = " << global->vthe/c );
   sim_log ( "nu/wce = "<<nuei_wce);
   sim_log ( "nu*dt_coll = "<<nuei_wce/wpewce*dt_coll);
+  sim_log ( "r_min = " << r_min << " (buffer at axis)" );
   
   // Dump simulation information to file "info"
   if (rank() == 0 ) {
     FILE *fp_info;
     if ( ! (fp_info=fopen("info", "w")) ) ERROR(("Cannot open file."));
-    fprintf(fp_info, "           ***** Simulation parameters ***** \n");
+    fprintf(fp_info, "           ***** Simulation parameters (CYLINDRICAL) ***** \n");
     fprintf(fp_info, "		 beta_e	=		%e\n", beta_e);
     fprintf(fp_info, "		 beta_i	=		%e\n", beta_i);
     fprintf(fp_info, "		 Ti/Te	=		%e\n", TiTe );
@@ -484,14 +493,13 @@ begin_initialization {
     fprintf(fp_info, "		 mi/me =		%e\n", mime );
     fprintf(fp_info, "		 taui =			%e\n", taui );
     fprintf(fp_info, "		 num_step = 		%i\n", num_step );
-    fprintf(fp_info, "		 Lx/de = 		%e\n", Lx/de );
-    fprintf(fp_info, "		 Ly/de = 		%e\n", Ly/de );
+    fprintf(fp_info, "		 Lr/de = 		%e\n", Lr/de );
+    fprintf(fp_info, "		 Ltheta (rad) = 	%e\n", Ltheta );
     fprintf(fp_info, "		 Lz/de =		%e\n", Lz/de );
-    fprintf(fp_info, "		 Lx/di = 		%e\n", Lx/di );
-    fprintf(fp_info, "		 Ly/di = 		%e\n", Ly/di );
+    fprintf(fp_info, "		 Lr/di = 		%e\n", Lr/di );
     fprintf(fp_info, "		 Lz/di =		%e\n", Lz/di );
-    fprintf(fp_info, "		 nx = 			%e\n", nx );
-    fprintf(fp_info, "		 ny = 			%e\n", ny );
+    fprintf(fp_info, "		 nr = 			%e\n", nr );
+    fprintf(fp_info, "		 ntheta = 		%e\n", ntheta );
     fprintf(fp_info, "		 nz =			%e\n", nz );
     fprintf(fp_info, "		 nproc = 		%e\n", nproc() );
     fprintf(fp_info, "		 nppc = 		%e\n", nppc );
@@ -503,14 +511,14 @@ begin_initialization {
     fprintf(fp_info, "		 dt*wce = 		%e\n", wce*dt );
     fprintf(fp_info, "		 dt*wci = 		%e\n", wci*dt );
     fprintf(fp_info, "		 energies_interval: 	%i\n", energies_interval);
-    fprintf(fp_info, "		 dx/de =		%e\n", Lx/(de*nx) );
-    fprintf(fp_info, "		 dy/de =		%e\n", Ly/(de*ny) );
+    fprintf(fp_info, "		 dr/de =		%e\n", Lr/(de*nr) );
+    fprintf(fp_info, "		 dtheta (rad) =		%e\n", Ltheta/ntheta );
     fprintf(fp_info, "		 dz/de =		%e\n", Lz/(de*nz) );
- //   fprintf(fp_info, "		 dx/debye = 		%e\n", (Lx/nx)/Ldeb );
     fprintf(fp_info, "		 vthi/c =		%e\n", global->vthi/c );
     fprintf(fp_info, "		 vthe/c =		%e\n", global->vthe/c );
     fprintf(fp_info, "           nu/wce =               %e\n", nuei_wce);
     fprintf(fp_info, "           nu*dt_coll:            %e\n", nuei_wce/wpewce*dt_coll);
+    fprintf(fp_info, "           r_min =                %e\n", r_min);
     fprintf(fp_info, "		 ***************************\n");
     fclose(fp_info);
 }
@@ -529,12 +537,12 @@ begin_initialization {
     fp_info.write(&topology_y, 1 );
     fp_info.write(&topology_z, 1 );
 
-    fp_info.write(&Lx, 1 );
-    fp_info.write(&Ly, 1 );
+    fp_info.write(&Lr, 1 );
+    fp_info.write(&Ltheta, 1 );
     fp_info.write(&Lz, 1 );
 
-    fp_info.write(&nx, 1 );
-    fp_info.write(&ny, 1 );
+    fp_info.write(&nr, 1 );
+    fp_info.write(&ntheta, 1 );
     fp_info.write(&nz, 1 );
 
     fp_info.write(&dt, 1 );
@@ -548,49 +556,55 @@ begin_initialization {
 
 }
   ////////////////////////////
-  // Load fields
+  // Load fields - CYLINDRICAL MAGNETIC FIELD
 
-#define BXC(I,xc,zc,L) (-2.0*I/8.0/atan(L/2.0/zc)*(atan((x-xc)/(z-zc))+atan((L-x+xc)/(z-zc))-atan((x-xc)/(z+zc))-atan((L-x+xc)/(z+zc))) )
-#define BZC(I,xc,zc,L) ( I/8.0/atan(L/2.0/zc)*log(((x-xc)*(x-xc)+(z-zc)*(z-zc))*((L-x+xc)*(L-x+xc)+(z+zc)*(z+zc))/((((L-x+xc)*(L-x+xc)+(z-zc)*(z-zc)))*(((x-xc)*(x-xc)+(z+zc)*(z+zc))))) )
+// For cylindrical geometry with azimuthal symmetry, we need B_r and B_z
+// The field formulas need to be adapted for cylindrical coils (current loops)
 
-double Lcoil1 = 0.6*Lx;
-double Lcoil2 = 0.1*Lx;
+#define BXC(I,rc,zc,L) (-2.0*I/8.0/atan(L/2.0/zc)*(atan((x-rc)/(z-zc))+atan((L-x+rc)/(z-zc))-atan((x-rc)/(z+zc))-atan((L-x+rc)/(z+zc))) )
+#define BZC(I,rc,zc,L) ( I/8.0/atan(L/2.0/zc)*log(((x-rc)*(x-rc)+(z-zc)*(z-zc))*((L-x+rc)*(L-x+rc)+(z+zc)*(z+zc))/((((L-x+rc)*(L-x+rc)+(z-zc)*(z-zc)))*(((x-rc)*(x-rc)+(z+zc)*(z+zc))))) )
+
+double Lcoil1 = 0.6*Lr;
+double Lcoil2 = 0.1*Lr;
 
 double z1 = 0.55*Lz;
-double x1 = 0.2*Lx, x2 = 0.8*Lx, x3 = 0.1*Lx, x4 = 0.9*Lx; 
+double r1 = 0.2*Lr, r2 = 0.8*Lr, r3 = 0.1*Lr, r4 = 0.9*Lr; 
 
 
 double B0=0.5;
 double B1 = 0.1;
 double I1 = 1.45*B1, I2 = 2.0*B0-0.5*B1, I4 = 0.53*B1;
 
+// Note: x here means r in cylindrical coordinates
+// BX will be B_r, BZ will be B_z
+// B_theta is zero due to azimuthal symmetry
+#define BX ( BXC(I1,r1,z1,Lcoil1) + BXC(I2,r2,z1,Lcoil2) + BXC(I2,r3,z1,Lcoil2) + BXC(I4,r4,z1,Lcoil2) +  BXC(I4,r_min,z1,Lcoil2) )
+#define BZ ( BZC(I1,r1,z1,Lcoil1) + BZC(I2,r2,z1,Lcoil2) + BZC(I2,r3,z1,Lcoil2) + BZC(I4,r4,z1,Lcoil2) +  BZC(I4,r_min,z1,Lcoil2) )
 
-#define BX ( BXC(I1,x1,z1,Lcoil1) + BXC(I2,x2,z1,Lcoil2) + BXC(I2,x3,z1,Lcoil2) + BXC(I4,x4,z1,Lcoil2) +  BXC(I4,0,z1,Lcoil2) )
-#define BZ ( BZC(I1,x1,z1,Lcoil1) + BZC(I2,x2,z1,Lcoil2) + BZC(I2,x3,z1,Lcoil2) + BZC(I4,x4,z1,Lcoil2) +  BZC(I4,0,z1,Lcoil2) )
-
-  sim_log( "Loading fields" );
+  sim_log( "Loading fields (cylindrical geometry)" );
   set_region_field( everywhere, 0, 0, 0,       // Electric field
   		                0, 0 ,0 );    // Magnetic field
 
-  set_region_bext( everywhere,  BX, 0 ,BZ );    // External Magnetic field
+  set_region_bext( everywhere,  BX, 0 ,BZ );    // External Magnetic field (B_r, B_theta=0, B_z)
   set_region_te(everywhere, vthe*vthe);
 
-  // LOAD PARTICLES
+  // LOAD PARTICLES - CYLINDRICAL
 
-  sim_log( "Loading particles" );
+  sim_log( "Loading particles (cylindrical geometry)" );
 
   // Do a fast load of the particles
+  // Particle positions: x=r, y=theta, z=z
 
   //seed_rand( rng_seed*nproc() + rank() );  //Generators desynchronized
-  double xmin = grid->x0 , xmax = grid->x0+(grid->dx)*(grid->nx);
-  double ymin = grid->y0 , ymax = grid->y0+(grid->dy)*(grid->ny);
-  double zmin = grid->z0 , zmax = grid->z0+(grid->dz)*(grid->nz);
+  double xmin = grid->x0 , xmax = grid->x0+(grid->dx)*(grid->nx);  // r range
+  double ymin = grid->y0 , ymax = grid->y0+(grid->dy)*(grid->ny);  // theta range
+  double zmin = grid->z0 , zmax = grid->z0+(grid->dz)*(grid->nz);  // z range
   
   repeat ( Npart/nproc() ) {
 
-  double x = uniform(rng(0),xmin,xmax);
-  double y = uniform(rng(0),ymin,ymax);
-  double z = uniform(rng(0),zmin,zmax);
+  double x = uniform(rng(0),xmin,xmax);  // x is r
+  double y = uniform(rng(0),ymin,ymax);  // y is theta
+  double z = uniform(rng(0),zmin,zmax);  // z is z
 
  /* inject_particle( electron, x, y, z,
                       normal(rng(0),0,vthe),
@@ -598,8 +612,10 @@ double I1 = 1.45*B1, I2 = 2.0*B0-0.5*B1, I4 = 0.53*B1;
          	      normal(rng(0),0,vthe),-qe, 0, 0);
 */
 
-  if (abs(x-Lx/2.)< Lxp && (abs(z) < Lzp)){
+  // Injection region in (r, z) - note x is r here
+  if (abs(x-Lr/2.)< Lxp && (abs(z) < Lzp)){
     
+    // Velocities are in physical Cartesian (vx, vy, vz)
     inject_particle( ion, x, y, z,
 		     normal(rng(0),0,vthi),
 		     normal(rng(0),0,vthi),
@@ -674,7 +690,7 @@ double I1 = 1.45*B1, I2 = 2.0*B0-0.5*B1, I4 = 0.53*B1;
 	 * Note that grid extents in each dimension must be evenly divisible by
 	 * the stride for that dimension:
 	 *
-	 *   nx = 150;
+	 *   nr = 150;
 	 *   global->fdParams.stride_x = 10; // legal -> 150/10 = 15
 	 *
 	 *   global->fdParams.stride_x = 8; // illegal!!! -> 150/8 = 18.75
@@ -686,35 +702,18 @@ double I1 = 1.45*B1, I2 = 2.0*B0-0.5*B1, I4 = 0.53*B1;
 	// base file name for fields output
 	sprintf(global->fdParams.baseFileName, "fields");
 
-	global->fdParams.stride_x = 1;
-	global->fdParams.stride_y = 1;
-	global->fdParams.stride_z = 1;
+	global->fdParams.stride_x = 1;  // r-direction
+	global->fdParams.stride_y = 1;  // theta-direction (only 1 cell anyway)
+	global->fdParams.stride_z = 1;  // z-direction
 
 	// add field parameters to list
 	global->outputParams.push_back(&global->fdParams);
 
-	sim_log ( "Fields x-stride " << global->fdParams.stride_x );
-	sim_log ( "Fields y-stride " << global->fdParams.stride_y );
+	sim_log ( "Fields r-stride " << global->fdParams.stride_x );
+	sim_log ( "Fields theta-stride " << global->fdParams.stride_y );
 	sim_log ( "Fields z-stride " << global->fdParams.stride_z );
 
-	// relative path to electron species data from global header
-	//sprintf(global->hedParams.baseDir, "hydro");
-
-	// base file name for fields output
-	//sprintf(global->hedParams.baseFileName, "ehydro");
-
-	//global->hedParams.stride_x = 1;
-	//global->hedParams.stride_y = 1;
-	//global->hedParams.stride_z = 1;
-
-	// add electron species parameters to list
-	//global->outputParams.push_back(&global->hedParams);
-
-	//sim_log ( "Electron species x-stride " << global->hedParams.stride_x );
-	//sim_log ( "Electron species y-stride " << global->hedParams.stride_y );
-	//sim_log ( "Electron species z-stride " << global->hedParams.stride_z );
-
-	// relative path to electron species data from global header
+	// relative path to ion species data from global header
 	sprintf(global->hHdParams.baseDir, "hydro");
 
 	// base file name for fields output
@@ -724,18 +723,18 @@ double I1 = 1.45*B1, I2 = 2.0*B0-0.5*B1, I4 = 0.53*B1;
 	global->hHdParams.stride_y = 1;
 	global->hHdParams.stride_z = 1;
 
-	sim_log ( "Ion species x-stride " << global->hHdParams.stride_x );
-	sim_log ( "Ion species y-stride " << global->hHdParams.stride_y );
+	sim_log ( "Ion species r-stride " << global->hHdParams.stride_x );
+	sim_log ( "Ion species theta-stride " << global->hHdParams.stride_y );
 	sim_log ( "Ion species z-stride " << global->hHdParams.stride_z );
 
-	// add electron species parameters to list
+	// add ion species parameters to list
 	global->outputParams.push_back(&global->hHdParams);
 
 
 	// relative path to beam species data from global header
 	sprintf(global->hBdParams.baseDir, "hydro");
 
-	// base file name for beam hydro  output
+	// base file name for beam hydro output
 	sprintf(global->hBdParams.baseFileName, "Bhydro");
 
 	global->hBdParams.stride_x = 1;
@@ -782,13 +781,11 @@ double I1 = 1.45*B1, I2 = 2.0*B0-0.5*B1, I4 = 0.53*B1;
 
 	//  These have just the most useful things turned on
 	//   global->fdParams.output_variables( electric | magnetic | current | div_e_err );
-	//    global->hedParams.output_variables( current_density | charge_density | ke_density | stress_tensor);
 	//    global->hHdParams.output_variables( current_density | charge_density | ke_density | stress_tensor);
 	
-	// Here we are dumping everthing
+	// Here we are dumping everything
 
 	global->fdParams.output_variables( allvars );
-	//global->hedParams.output_variables( allvars );
 	global->hHdParams.output_variables( allvars );
 	global->hBdParams.output_variables( allvars );
 
@@ -801,21 +798,16 @@ double I1 = 1.45*B1, I2 = 2.0*B0-0.5*B1, I4 = 0.53*B1;
 
 	sim_log ( "Fields variable list: " << varlist );
 
-	//create_hydro_list(varlist, global->hedParams);
-
-	//sim_log ( "Electron species variable list: " << varlist );
-
 	create_hydro_list(varlist, global->hHdParams);
 
 	sim_log ( "Ion species variable list: " << varlist );
-
 
 	create_hydro_list(varlist, global->hBdParams);
 
 	sim_log ( "Beam species variable list: " << varlist );
 
 
-	sim_log("*** Finished with user-specified initialization ***");
+	sim_log("*** Finished with user-specified initialization (CYLINDRICAL) ***");
 
 
   // Upon completion of the initialization, the following occurs:
@@ -850,20 +842,7 @@ double I1 = 1.45*B1, I2 = 2.0*B0-0.5*B1, I4 = 0.53*B1;
 #define should_dump(x) \
 	(global->x##_interval>0 && remainder(step(), global->x##_interval) == 0)
 
-//#include <FileIO.hxx>
-
 begin_diagnostics {
-
-  //  Periodically Check if Memory is Low - Check at t=0 and after each restart
-
-  //  static int initted=0;
-  //if ( !initted || (step()%500)==0  ) {
-  //  if (rank() == 0) MESSAGE((" ******** Checking free Memory ********"));
-  //  initted=1;
-  // uint64_t free_memory = SystemRAM::available()/1000;
-  // if ( free_memory < 1500) MESSAGE((" *** Warning --> Low Memory on rank = %g   free = %ld", rank(),free_memory));
-    //    else  MESSAGE((" *** Available Memory on rank = %g   free = %ld", rank(),free_memory));
-  //  }
 
 	/*--------------------------------------------------------------------------
 	 * NOTE: YOU CANNOT DIRECTLY USE C FILE DESCRIPTORS OR SYSTEM CALLS ANYMORE
@@ -907,11 +886,6 @@ begin_diagnostics {
 	 * THE LOCATION OF THE GLOBAL HEADER!!!
      *------------------------------------------------------------------------*/
 
-  //if ( step()%100==0 ) sim_log( "Time step: " << step()); 
-
-  /*--------------------------------------------------------------------------
-   * Normal rundata dump
-   *------------------------------------------------------------------------*/
 	if(step()==0) {
 		dump_mkdir("fields");
 		dump_mkdir("hydro");
@@ -942,12 +916,6 @@ begin_diagnostics {
 	if(step() == 1 || should_dump(fields)) field_dump(global->fdParams);
 
 	/*--------------------------------------------------------------------------
-	 * Electron species output
-	 *------------------------------------------------------------------------*/
-
-	//if(should_dump(ehydro)) hydro_dump("electron", global->hedParams);
-
-	/*--------------------------------------------------------------------------
 	 * Ion species output
 	 *------------------------------------------------------------------------*/
 
@@ -965,24 +933,16 @@ begin_diagnostics {
 		if(!global->rtoggle) {
 			global->rtoggle = 1;
 			checkpt("restart1/restart", 0);
-                        //DUMP_INJECTORS(1);
 		}
 		else {
 			global->rtoggle = 0;
 			checkpt("restart2/restart", 0);
-                        //DUMP_INJECTORS(2);
 		} // if
 	} // if
 
   // Dump particle data
 
 	char subdir[36];
-	//if ( should_dump(eparticle) ) {
-	  //sprintf(subdir,"particles/T.%d",step()); 
-	  //dump_mkdir(subdir);
-	  //sprintf(subdir,"particles/T.%d/electron",step()); 
-	  //dump_particles("electron", subdir);
-	 //}
 	if ( should_dump(Hparticle) && step()>0 ) {
 	  sprintf(subdir,"particles/T.%d",step()); 
 	  dump_mkdir(subdir);
@@ -1001,17 +961,16 @@ begin_diagnostics {
   // few timesteps to eliminate the expensive mp_elapsed call from every
   // timestep. mp_elapsed has an ALL_REDUCE in it!
   
-  if( step()>0 && global->quota_check_interval>0 && (step()&global->quota_check_interval)==0 ) {
+  if( step()>0 && global->quota_check_interval>0 && (step()%global->quota_check_interval)==0 ) {
     if( uptime() > global->quota_sec ) {
       sim_log( "Allowed runtime exceeded for this job.  Terminating....\n");
 
       BEGIN_TURNSTILE(NUM_TURNSTILES){
       checkpt("restart0/restart",0);
-      DUMP_INJECTORS(0);
       } END_TURNSTILE;
 
-      sim_log( "Restart dump restart completed." );
-      exit(0); // Exit or abort?
+      sim_log( "Restart dump completed." );
+      exit(0);
 
     }
   }
@@ -1027,32 +986,46 @@ begin_current_injection {
 
 begin_field_injection {
 
- const int nx=grid->nx;
- const int ny=grid->ny;
+ const int nx=grid->nx;  // nr in cylindrical
+ const int ny=grid->ny;  // ntheta (=1)
  const int nz=grid->nz;
- int x,y,z;
- const int numcell = 5; //damp B field over this many cells
+ int x,y,z;  // Note: x is r, y is theta, z is z
+ const int numcell = 5; //damp B field over this many cells at boundaries
 
  const double r = 0.99;  //1-damp rate
 
-Kokkos::MDRangePolicy<Kokkos::Rank<3>> left_face({1, 1, 1}, {nz+1, ny+1, numcell+1});
-Kokkos::MDRangePolicy<Kokkos::Rank<3>> right_face({1, 1, nx+1-numcell}, {nz+1, ny+1, nx+1});
+// For cylindrical geometry:
+// - Inner radial boundary (r=r_min, near axis) - handled by grid
+// - Outer radial boundary (r=Lr)
+// - Z boundaries (top and bottom)
+
+Kokkos::MDRangePolicy<Kokkos::Rank<3>> right_face({1, 1, nx+1-numcell}, {nz+1, ny+1, nx+1});  // Outer r boundary
+Kokkos::MDRangePolicy<Kokkos::Rank<3>> bottom_face({1, 1, 1}, {numcell+1, ny+1, nx+1});       // Bottom z boundary
+Kokkos::MDRangePolicy<Kokkos::Rank<3>> top_face({nz+1-numcell, 1, 1}, {nz+1, ny+1, nx+1});    // Top z boundary
 
 k_field_t& k_field = field_array->k_f_d;
   
-  // LEFT Boundary
-  if (0*global->left) {
-		Kokkos::parallel_for("inject_fields: x_face_loop", left_face, KOKKOS_LAMBDA(const int z, const int y, const int x) {
-                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) *= r;
-                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) *= r;
+  // Outer Radial Boundary (r=Lr)
+  if (0*global->right) {
+		Kokkos::parallel_for("inject_fields: outer_r_boundary", right_face, KOKKOS_LAMBDA(const int z, const int y, const int x) {
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) *= r;  // B_theta
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) *= r;  // B_z
 	    	});
 	}
 	
-  // RIGHT Boundary
-  if (0*global->right) {
-		Kokkos::parallel_for("inject_fields: x_face_loop", right_face, KOKKOS_LAMBDA(const int z, const int y, const int x) {
-                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) *= r;
-                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbz) *= r;
+  // Bottom Z Boundary
+  if (0*global->bottom) {
+		Kokkos::parallel_for("inject_fields: bottom_z_boundary", bottom_face, KOKKOS_LAMBDA(const int z, const int y, const int x) {
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) *= r;  // B_r
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) *= r;  // B_theta
+	    	});
+	}
+
+  // Top Z Boundary
+  if (0*global->top) {
+		Kokkos::parallel_for("inject_fields: top_z_boundary", top_face, KOKKOS_LAMBDA(const int z, const int y, const int x) {
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cbx) *= r;  // B_r
+                    k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cby) *= r;  // B_theta
 	    	});
 	}
 
