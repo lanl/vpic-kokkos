@@ -144,9 +144,9 @@ begin_initialization {
   double Lxp = Lx/4.5;
   double Lzp = Lz/4.5;
   
-  double topology_x = 32;  // Number of domains in x, y, and z
+  double topology_x = 4;  // Number of domains in x, y, and z
   double topology_y = 1; 
-  double topology_z = 4;  // 
+  double topology_z = 1;  // 
 
   double nx = 1024;   // Number of cells in x-direction
   double ny = 1;     //  Number of cells in y-direction

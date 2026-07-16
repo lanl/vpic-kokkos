@@ -55,4 +55,5 @@ for slice in range(0,100,5):
 	im2 = ax2.pcolormesh(yv,xv,Q["Ex"],cmap=cmap)
 	fig.colorbar(im2, ax=ax2)    
 	plt.show()
+	plt.savefig('fig.png', dpi=300)
 

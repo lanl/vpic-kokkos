@@ -4,46 +4,37 @@ import matplotlib
 import matplotlib.pyplot as plt
 import struct
 
-######### loadinfo function - UPDATED FOR CYLINDRICAL
+######### loadinfo function
 def loadinfo(dir):
-    fstr = dir + "info.bin"
-    fd = open(fstr,"rb")
-    infocontent = fd.read()
-    fd.close()
-    
-    # Updated binary format for cylindrical: topology_r, topology_z, Lr, Lz, nr, nz, dt, mime, mi, vthe, vthi, status_interval
-    # Old format had 9 values for 3D: topology_x, topology_y, topology_z, Lx, Ly, Lz, nx, ny, nz
-    # New format has 6 values for 2D cylindrical: topology_r, topology_z, Lr, Lz, nr, nz
-    
-    arr = struct.unpack("dddddd", infocontent[:48])  # 6 doubles (8 bytes each = 48 bytes)
-    
-    infoarr = np.zeros(4)
-    infoarr[0] = arr[4]  # nr (number of cells in r)
-    infoarr[1] = arr[5]  # nz (number of cells in z)
-    infoarr[2] = arr[2]  # Lr (radial extent)
-    infoarr[3] = arr[3]  # Lz (axial extent)
-    
-    print("Grid dimensions (nr x nz):", int(infoarr[0]), "x", int(infoarr[1]))
-    print("Box size (Lr x Lz):", infoarr[2], "x", infoarr[3])
-    
-    return infoarr
+	fstr = dir + "info"
+	fd = open(fstr,"rb")
+	infocontent = fd.read()
+	fd.close
+	arr = struct.unpack("fIIIfffff", infocontent[:36]) 
+	infoarr=np.zeros(2);
+	infoarr[0] = arr[1]  # nr (was nx)
+	infoarr[1] = arr[3]  # nz (was ny, but now nz)
+	print("Grid: nr =", infoarr[0], ", nz =", infoarr[1])
+	return infoarr
 ######### end loadinfo
 
 
-######### loadSlice function - UPDATED FOR CYLINDRICAL
+######### loadSlice function  
 def loadSlice(dir, q, sl, nr, nz):
-    """
-    Load a slice of data for cylindrical (R-Z) geometry
-    Note: Data is now nr x nz (radial x axial)
-    """
-    fstr = dir + q + ".gda"
-    fd = open(fstr,"rb")
-    fd.seek(4*sl*nr*nz, 1)
-    arr = np.fromfile(fd, dtype=np.float32, count=nr*nz)
-    fd.close()
-    arr = np.reshape(arr, (nz, nr))  # nz is second dimension
-    arr = np.transpose(arr)
-    return arr
+	"""
+	Load a slice from cylindrical data
+	sl: theta slice index (usually 0 for axisymmetric)
+	nr: number of radial cells
+	nz: number of axial cells
+	"""
+	fstr = dir + q + ".gda"
+	fd = open(fstr,"rb")
+	fd.seek(4*sl*nr*nz, 1)
+	arr = np.fromfile(fd, dtype=np.float32, count=nr*nz)
+	fd.close
+	arr = np.reshape(arr, (nz, nr))  # Data stored as (z, r)
+	arr = np.transpose(arr)          # Transpose to (r, z)
+	return arr
 ######### end loadSlice
 
 cmap = plt.get_cmap("Spectral_r")
@@ -53,37 +44,65 @@ qs = ["ni"]
 
 dir = "../../build/data/"
 
-# Load grid info (returns [nr, nz, Lr, Lz])
-infoarr = loadinfo(dir)
-nr = int(infoarr[0])
-nz = int(infoarr[1])
-Lr = infoarr[2]
-Lz = infoarr[3]
+# CYLINDRICAL coordinates now: (r, theta, z)
+Lr = 30      # Radial extent (was Lz)
+Lz = 300     # Axial extent (was Lx)
 
-# Create coordinate vectors for cylindrical geometry
-rv = np.linspace(0, Lr, nr)   # Radial coordinate (0 to Lr)
-zv = np.linspace(-0.5*Lz, 0.5*Lz, nz)  # Axial coordinate (centered at 0)
+infoarr = loadinfo(dir)
+nr = int(infoarr[0])  # Radial cells
+nz = int(infoarr[1])  # Axial cells
+
+# Create coordinate arrays
+rv = np.linspace(0, Lr, nr)  # Radial coordinates
+zv = np.linspace(-Lz/2, Lz/2, nz)  # Axial coordinates (centered)
+
+# Create meshgrid for proper cylindrical plotting
+R, Z = np.meshgrid(rv, zv, indexing='ij')
 
 cnt = 0	
-for slice in range(0, 45, 1):	
-    for q in qs:
-        tmp = loadSlice(dir, q, slice, nr, nz)
-        Q[q] = tmp
-    
-    fig, (ax1) = plt.subplots(nrows=1, figsize=(10, 6))
-    
-    # Create meshgrid for proper plotting
-    R, Z = np.meshgrid(rv, zv, indexing='ij')
-    
-    # Plot with proper axis labels
-    im = ax1.pcolormesh(Z, R, Q["ni"], cmap=cmap, shading='auto')
-    ax1.set_xlabel('Z (axial)', fontsize=12)
-    ax1.set_ylabel('R (radial)', fontsize=12)
-    ax1.set_title(f'Ion Density - Cylindrical (R-Z), Slice {slice}', fontsize=14)
-    fig.colorbar(im, ax=ax1, label='Ion Density')
-    
-    # Optional: Add axis line at r=0
-    ax1.axhline(y=0, color='k', linestyle='--', linewidth=0.5, alpha=0.5)
-    
-    plt.tight_layout()
-    plt.show()
+for slice in range(0, 1, 1):  # Usually just slice=0 for axisymmetric
+	for q in qs:
+		tmp = loadSlice(dir, q, slice, nr, nz)
+		Q[q] = tmp
+	
+	fig, (ax1) = plt.subplots(nrows=1, figsize=(10, 4))
+	
+	# Plot in r-z plane (cylindrical cross-section)
+	im = ax1.pcolormesh(Z, R, Q["ni"], cmap=cmap, shading='auto')
+	
+	ax1.set_xlabel('z (axial position)')
+	ax1.set_ylabel('r (radial position)')
+	ax1.set_title(f'Ion Density - Cylindrical (r-z plane)')
+	ax1.set_aspect('equal')  # Equal aspect ratio
+	
+	fig.colorbar(im, ax=ax1, label='ni')
+	
+	plt.tight_layout()
+	plt.show()
+
+
+# Optional: Plot as a "full" cylindrical view (mirror top and bottom)
+def plot_cylindrical_full(Q, R, Z, quantity='ni'):
+	"""
+	Plot full cylindrical view by mirroring around axis
+	"""
+	fig, ax = plt.subplots(figsize=(10, 8))
+	
+	# Top half (positive r)
+	im1 = ax.pcolormesh(Z, R, Q[quantity], cmap=cmap, shading='auto')
+	
+	# Bottom half (negative r, mirrored)
+	im2 = ax.pcolormesh(Z, -R, Q[quantity], cmap=cmap, shading='auto')
+	
+	ax.set_xlabel('z (axial position)')
+	ax.set_ylabel('r (radial position)')
+	ax.set_title(f'{quantity} - Full Cylindrical View')
+	ax.axhline(y=0, color='k', linestyle='--', linewidth=0.5)
+	ax.set_aspect('equal')
+	
+	fig.colorbar(im1, ax=ax, label=quantity)
+	plt.tight_layout()
+	plt.show()
+
+# Uncomment to use full cylindrical plot:
+# plot_cylindrical_full(Q, R, Z, 'ni')

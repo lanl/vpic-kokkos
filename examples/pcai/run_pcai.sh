@@ -14,4 +14,4 @@ mpif90 -o translate_pcai ../examples/pcai/translate_pcai.f90
 mkdir data
 mpirun -np 1 ./translate_pcai
 cd ../examples/pcai
-python3 plotsPCAI_stretch.py
+python3 plotsPCAI.py

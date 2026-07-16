@@ -8,6 +8,6 @@ rm -rf rundata
 rm -rf restore0
 rm -rf restore1
 rm -rf particle
-./bin/vpic ../examples/mirror/mirror.cxx
+./bin/vpic ../examples/mirror/mirror_cyl.cxx
 sbatch ../examples/mirror/submit
 tail -f slurm.err
