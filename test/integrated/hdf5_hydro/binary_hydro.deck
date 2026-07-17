@@ -67,7 +67,7 @@ begin_initialization
                        nx, ny, nz,     // Resolution
                        1, nproc(), 1); // Topology
 
-  grid->init_curvilinear_grid();
+  grid->init_cartesian_grid();
 
   define_material("vacuum", 1);
   // Note: define_material defaults to isotropic materials with mu=1,sigma=0

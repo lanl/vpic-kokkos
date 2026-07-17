@@ -71,7 +71,7 @@ for slice in range(0,1):
 	#fig.colorbar(im, ax=ax1)
 	#im = ax1.plot(xv,Q["ni"][:,0])
 	#im2 = ax2.pcolormesh(yv,xv,Q["Bx"],cmap=cmap)
-	#fig.colorbar(im2, ax=ax2)    ≈
+	#fig.colorbar(im2, ax=ax2)    =
 
 print(Q["ni"])
 # plt.plot(Q["ni"][0,:])

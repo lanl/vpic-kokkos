@@ -203,7 +203,7 @@ begin_initialization {
             nx,         ny,         nz,  // Resolution
             topology_x, topology_y, topology_z); // Topology
 
-  grid->init_curvilinear_grid();
+  grid->init_cartesian_grid();
 
     // Setup materials
     sim_log("Setting up materials. ");

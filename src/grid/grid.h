@@ -579,8 +579,8 @@ typedef struct grid {
   } while(0)
 
 // Convert grid voxel index to curvilinear mesh index
-// Grid has 1 ghost layer: (nx+2) × (ny+2) × (nz+2)
-// Mesh has 2 ghost layers: (nx+4) × (ny+4) × (nz+4)
+// Grid has 1 ghost layer: (nx+2) x (ny+2) x (nz+2)
+// Mesh has 2 ghost layers: (nx+4) x (ny+4) x (nz+4)
 // Mesh cell indices are offset by +1 in each dimension
 #define VOXEL_TO_MESH(v, nx, ny, nz) \
   (((v) % ((nx)+2) + 1) + \
@@ -588,8 +588,8 @@ typedef struct grid {
    ((ny)+4) * ((v) / (((nx)+2) * ((ny)+2)) + 1)))
 
 // Convert grid cell indices (i,j,k) to curvilinear mesh linear index
-// Grid: (nx+2) × (ny+2) × (nz+2) with 1 ghost layer
-// Mesh: (nx+4) × (ny+4) × (nz+4) with 2 ghost layers
+// Grid: (nx+2) x (ny+2) x (nz+2) with 1 ghost layer
+// Mesh: (nx+4) x (ny+4) x (nz+4) with 2 ghost layers
 // Mesh indices are shifted by +1 in each dimension
 #define GRID_TO_MESH(i, j, k, nx, ny, nz) \
   VOXEL((i)+1, (j)+1, (k)+1, (nx)+2, (ny)+2, (nz)+2)
@@ -826,8 +826,8 @@ void compute_reciprocal_basis(
         float h2 = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::h_2);
         float h3 = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::h_3);
         
-        // Reciprocal basis vectors: grad(ξ^α) = ê^α / h_α
-        // Since basis vectors are Cartesian-aligned: ê^1 = x̂, ê^2 = ŷ, ê^3 = ẑ
+        // Reciprocal basis vectors: grad(xi^alpha) = ehat^alpha / h_alpha
+        // Since basis vectors are Cartesian-aligned: ehat^1 = xhat, ehat^2 = yhat, ehat^3 = zhat
         grad_xi_x = 2.0f / (h1 * gdx);
         grad_xi_y = 0.0f;
         grad_xi_z = 0.0f;

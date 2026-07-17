@@ -89,6 +89,7 @@ TEST_CASE( "Verify shuffler produces valid permutations", "[RandomShuffle]" )
   partition_periodic_box( g, xmin, ymin, zmin, xmax, ymax, zmax,
                           (int)Nx, (int)Ny, (int)Nz,
                           1, 1, 1 );
+  g->init_cartesian_grid();
 
 printf("Setup grid\n");
 

@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Read trajectory data
-data = np.loadtxt("../../../build/trajectory.txt")
+data = np.loadtxt("../../build/trajectory.txt")
 
 step = data[:, 0]
 x = data[:, 1]

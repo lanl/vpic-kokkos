@@ -382,6 +382,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
                         L, L, L,   // Grid high corner
                         N, N, N,   // Grid resolution
                         1, 1, 1 ); // Processor topology
+  grid->init_cartesian_grid();
 
   define_material( "vacuum", 1.0, 1.0, 0.0 );
   define_field_array();

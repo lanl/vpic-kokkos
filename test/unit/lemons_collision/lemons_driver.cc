@@ -195,9 +195,13 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 #define FAK field_array->kernel
   //Call accumulate_rho twice to set rho_old for extrapolation
   FAK->clear_jf_kokkos( field_array );
-  k_accumulate_rho_p( field_array, sp );
+  k_accumulate_rho_p( field_array, sp, grid,
+                          grid->dx, grid->dy, grid->dz, grid->dt,
+                          grid->nx, grid->ny, grid->nz );
   FAK->clear_jf_kokkos( field_array );
-  k_accumulate_rho_p( field_array, sp );
+  k_accumulate_rho_p( field_array, sp, grid,
+                          grid->dx, grid->dy, grid->dz, grid->dt,
+                          grid->nx, grid->ny, grid->nz );
   FAK->hyb_init(field_array,0);
   
   auto &k_field = field_array->k_f_d;

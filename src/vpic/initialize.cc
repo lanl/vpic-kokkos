@@ -67,9 +67,8 @@ vpic_simulation::initialize( int argc,
   // Check if curvilinear mesh is initialized by user.
   if (g->k_curvilinear_mesh_d.extent(0) == 0 || 
       g->k_curvilinear_mesh_h.extent(0) == 0) {
-    ERROR(("Curvilinear mesh data not initialized! "
-          "Did you forget to call grid->init_curvilinear_grid()?"));
-    
+    g->init_cartesian_grid();
+    MESSAGE(( "Initializing uniform cartesian mesh" ));
   }
 
   KOKKOS_TIC();

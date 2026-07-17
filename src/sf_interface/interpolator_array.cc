@@ -330,7 +330,7 @@ load_interpolator_array_kokkos(k_interpolator_t& k_interp, k_field_t& k_field,
       float dy_dmu  = h3_0 * e3_y;
       float dz_dmu  = h3_0 * e3_z;
 
-      // Transform E: covariant logical → Cartesian (PDF eq. 62)
+      // Transform E: covariant logical -> Cartesian (PDF eq. 62)
       pi_ex = E_xi * grad_xi_x + E_eta * grad_eta_x + E_mu * grad_mu_x;
       pi_ey = E_xi * grad_xi_y + E_eta * grad_eta_y + E_mu * grad_mu_y;
       pi_ez = E_xi * grad_xi_z + E_eta * grad_eta_z + E_mu * grad_mu_z;
@@ -376,7 +376,7 @@ load_interpolator_array_kokkos(k_interpolator_t& k_interp, k_field_t& k_field,
       pi_d2ezdy = twelfth*(wy + wmy - 2.f*w0);
       pi_d2ezdz = twelfth*(wz + wmz - 2.f*w0);
 
-      // Transform B: contravariant logical → Cartesian (PDF eq. 63)
+      // Transform B: contravariant logical -> Cartesian (PDF eq. 63)
       pi_cbx = B_xi * dx_dxi + B_eta * dx_deta + B_mu * dx_dmu;
       pi_cby = B_xi * dy_dxi + B_eta * dy_deta + B_mu * dy_dmu;
       pi_cbz = B_xi * dz_dxi + B_eta * dz_deta + B_mu * dz_dmu;
@@ -517,7 +517,7 @@ load_interpolator_array_kokkos(k_interpolator_t& k_interp, k_field_t& k_field,
       pi_d2Ez0dy = twelfth*(wy + wmy - 2.f*w0);
       pi_d2Ez0dz = twelfth*(wz + wmz - 2.f*w0);
       
-      // Transform external E: covariant logical → Cartesian (same as main E)
+      // Transform external E: covariant logical -> Cartesian (same as main E)
       pi_Ex0 = Ex0_xi * grad_xi_x + Ey0_eta * grad_eta_x + Ez0_mu * grad_mu_x;
       pi_Ey0 = Ex0_xi * grad_xi_y + Ey0_eta * grad_eta_y + Ez0_mu * grad_mu_y;
       pi_Ez0 = Ex0_xi * grad_xi_z + Ey0_eta * grad_eta_z + Ez0_mu * grad_mu_z;
@@ -576,7 +576,7 @@ load_interpolator_array_kokkos(k_interpolator_t& k_interp, k_field_t& k_field,
       pi_d2Gz0dy = twelfth*(wy + wmy - 2.f*w0);
       pi_d2Gz0dz = twelfth*(wz + wmz - 2.f*w0);
       
-      // Transform G forces: covariant logical → Cartesian (same pattern as E)
+      // Transform G forces: covariant logical -> Cartesian (same pattern as E)
       pi_Gx0 = Gx0_xi * grad_xi_x + Gy0_eta * grad_eta_x + Gz0_mu * grad_mu_x;
       pi_Gy0 = Gx0_xi * grad_xi_y + Gy0_eta * grad_eta_y + Gz0_mu * grad_mu_y;
       pi_Gz0 = Gx0_xi * grad_xi_z + Gy0_eta * grad_eta_z + Gz0_mu * grad_mu_z;

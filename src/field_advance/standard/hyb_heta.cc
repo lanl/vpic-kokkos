@@ -59,58 +59,58 @@ typedef struct pipeline_args {
   float J_mz = h1_mz * h2_mz * h3_mz;
 
 // Laplacian in curvilinear coordinates for orthogonal grids:
-// ∇²B_x = (1/J) [ ∂_ξ(J/h_ξ² ∂_ξ B_x) + ∂_η(J/h_η² ∂_η B_x) + ∂_μ(J/h_μ² ∂_μ B_x) ]
+// laplacianB_x = (1/J) [ d_xi(J/h_xi^2 d_xi B_x) + d_eta(J/h_eta^2 d_eta B_x) + d_mu(J/h_mu^2 d_mu B_x) ]
 // Using centered finite differences with logical derivatives (px, py, pz)
-// For the ξ direction: ∂_ξ(J/h_ξ² ∂_ξ B_x) ≈ 
-//   px * [ (J_x/h1_x²)*(B_x - B_0) - (J_0/h1_0²)*(B_0 - B_mx) ]
-// And similarly for η and μ directions
+// For the xi direction: d_xi(J/h_xi^2 d_xi B_x) = 
+//   px * [ (J_x/h1_x^2)*(B_x - B_0) - (J_0/h1_0^2)*(B_0 - B_mx) ]
+// And similarly for eta and mu directions
 #define LPL_B()                                                             \
   {                                                                         \
-    /* ξ direction contribution to ∇²B_x */                                \
+    /* xi direction contribution to laplacianB_x */                                \
     float dxi_term_x = px * (                                               \
       (J_x / (h1_x * h1_x)) * (F(x, cbx) - F(0, cbx)) -                    \
       (J_0 / (h1_0 * h1_0)) * (F(0, cbx) - F(mx, cbx))                     \
     );                                                                      \
-    /* η direction contribution */                                          \
+    /* eta direction contribution */                                          \
     float deta_term_x = py * (                                              \
       (J_y / (h2_y * h2_y)) * (F(y, cbx) - F(0, cbx)) -                    \
       (J_0 / (h2_0 * h2_0)) * (F(0, cbx) - F(my, cbx))                     \
     );                                                                      \
-    /* μ direction contribution */                                          \
+    /* mu direction contribution */                                          \
     float dmu_term_x = pz * (                                               \
       (J_z / (h3_z * h3_z)) * (F(z, cbx) - F(0, cbx)) -                    \
       (J_0 / (h3_0 * h3_0)) * (F(0, cbx) - F(mz, cbx))                     \
     );                                                                      \
     F(0, pex) = (dxi_term_x + deta_term_x + dmu_term_x) / J_0;             \
                                                                             \
-    /* ξ direction contribution to ∇²B_y */                                \
+    /* xi direction contribution to laplacianB_y */                                \
     float dxi_term_y = px * (                                               \
       (J_x / (h1_x * h1_x)) * (F(x, cby) - F(0, cby)) -                    \
       (J_0 / (h1_0 * h1_0)) * (F(0, cby) - F(mx, cby))                     \
     );                                                                      \
-    /* η direction contribution */                                          \
+    /* eta direction contribution */                                          \
     float deta_term_y = py * (                                              \
       (J_y / (h2_y * h2_y)) * (F(y, cby) - F(0, cby)) -                    \
       (J_0 / (h2_0 * h2_0)) * (F(0, cby) - F(my, cby))                     \
     );                                                                      \
-    /* μ direction contribution */                                          \
+    /* mu direction contribution */                                          \
     float dmu_term_y = pz * (                                               \
       (J_z / (h3_z * h3_z)) * (F(z, cby) - F(0, cby)) -                    \
       (J_0 / (h3_0 * h3_0)) * (F(0, cby) - F(mz, cby))                     \
     );                                                                      \
     F(0, pey) = (dxi_term_y + deta_term_y + dmu_term_y) / J_0;             \
                                                                             \
-    /* ξ direction contribution to ∇²B_z */                                \
+    /* xi direction contribution to laplacianB_z */                                \
     float dxi_term_z = px * (                                               \
       (J_x / (h1_x * h1_x)) * (F(x, cbz) - F(0, cbz)) -                    \
       (J_0 / (h1_0 * h1_0)) * (F(0, cbz) - F(mx, cbz))                     \
     );                                                                      \
-    /* η direction contribution */                                          \
+    /* eta direction contribution */                                          \
     float deta_term_z = py * (                                              \
       (J_y / (h2_y * h2_y)) * (F(y, cbz) - F(0, cbz)) -                    \
       (J_0 / (h2_0 * h2_0)) * (F(0, cbz) - F(my, cbz))                     \
     );                                                                      \
-    /* μ direction contribution */                                          \
+    /* mu direction contribution */                                          \
     float dmu_term_z = pz * (                                               \
       (J_z / (h3_z * h3_z)) * (F(z, cbz) - F(0, cbz)) -                    \
       (J_0 / (h3_0 * h3_0)) * (F(0, cbz) - F(mz, cbz))                     \
@@ -119,19 +119,19 @@ typedef struct pipeline_args {
   }
 
 // Curl in curvilinear coordinates for orthogonal grids:
-// (∇×V)^i = (1/J) ε^ijk ∂_j(h_k V_k)
+// (curlV)^i = (1/J) eps^ijk d_j(h_k V_k)
 // For the x-component (i=1, cyclic in j,k over 2,3):
-// (∇×∇²B)^x = (1/J) [∂_η(h_μ ∇²B_μ) - ∂_μ(h_η ∇²B_η)]
+// (curllaplacianB)^x = (1/J) [d_eta(h_mu laplacianB_mu) - d_mu(h_eta laplacianB_eta)]
 // Using centered differences:
 #define CURL_LPL_B(x_,y_,z_)                                                \
   {                                                                         \
-    /* Load scale factors at y± and z± neighbors */                        \
+    /* Load scale factors at y+- and z+- neighbors */                        \
     float h_y_p = (x_ == x) ? h2_y : ((x_ == y) ? h3_y : h1_y);            \
     float h_y_m = (x_ == x) ? h2_my : ((x_ == y) ? h3_my : h1_my);         \
     float h_z_p = (x_ == x) ? h3_z : ((x_ == y) ? h1_z : h2_z);            \
     float h_z_m = (x_ == x) ? h3_mz : ((x_ == y) ? h1_mz : h2_mz);         \
                                                                             \
-    /* Compute h*∇²B at neighboring points */                              \
+    /* Compute h*laplacianB at neighboring points */                              \
     float h_pe_yp = h_y_p * F(y_, pe##z_);                                 \
     float h_pe_ym = h_y_m * F(m##y_, pe##z_);                              \
     float h_pe_zp = h_z_p * F(z_, pe##y_);                                 \

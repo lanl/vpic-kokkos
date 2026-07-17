@@ -298,7 +298,7 @@ repeat( Ni ) {
   // Convert physical x to computational xi
   double xi_comp;
   if (beta_x > 1e-10) {
-    // Physical → stretched: x ∈ [gx0,gx1] → xi_comp ∈ [gx0,gx1]
+    // Physical -> stretched: x  [gx0,gx1] -> xi_comp  [gx0,gx1]
     double x_norm = (x_phys - grid->gx0) / (grid->gx1 - grid->gx0);  // [0,1]
     double x_stretched = 2.0 * x_norm - 1.0;  // [-1,1]
     

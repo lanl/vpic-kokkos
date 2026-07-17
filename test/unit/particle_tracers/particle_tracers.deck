@@ -250,7 +250,7 @@ begin_initialization {
                         10, 10, 10,   // Grid resolution
                          1,  1,  1 ); // Processor configuration
 
-  grid->init_curvilinear_grid();
+  grid->init_cartesian_grid();
   define_material("vacuum",1.0,1.0,0.0);
   define_field_array();
 

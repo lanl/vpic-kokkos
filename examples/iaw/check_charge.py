@@ -4,7 +4,7 @@
 #     Q(t) = Sum_cell rhof(cell) * Vphys(cell),   Vphys = 8*jac ∝ h1*h2*h3.
 # For a 1D x-stretch (ny=nz=1) Vphys(cell) ∝ h1(cell). We reconstruct the
 # relative cell volume from the equilibrium: at t=0 (uniform logical load)
-# ni0 = rhof(t=0) already ≈ q/(8 jac) up to a constant, so weight_cell = 1/ni0
+# ni0 = rhof(t=0) already = q/(8 jac) up to a constant, so weight_cell = 1/ni0
 # recovers Vphys and Q(t)=Sum ni(t)/ni0 should be constant.
 import numpy as np, os
 datadir="../../build/data/"; nx=48

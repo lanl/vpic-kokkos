@@ -115,7 +115,7 @@ begin_initialization {
                          nx, ny, nz,      // Resolution
                          1, nproc(), 1 ); // Topology
 
-  grid->init_curvilinear_grid();
+  grid->init_cartesian_grid();
 
   // Override some of the boundary conditions to put a particle reflecting
   // perfect electrical conductor on the -x and +x boundaries
