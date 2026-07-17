@@ -161,13 +161,14 @@ begin_initialization {
                           0.5*Lx,  0.5*Ly, 0.5*Lz,     // High corner
                          nx, ny, nz,             // Resolution
                          topology_x, topology_y, topology_z); // Topology
+  grid->init_cartesian_grid();
 
   //  grid->te = Te;
   //  grid->den = 1.0;
   //  grid->eta = eta;
   //  grid->hypereta = hypereta;
   //  grid->gamma = gamma;
-  grid->init_cartesian_grid();
+
   grid->nsub = 1; // Number of substeps for field solve.
 #if LOAD_PARTICLES
   grid->den_floor_ohm= .1;
@@ -289,72 +290,24 @@ sim_log( "Loading fields" );
  set_region_te(everywhere, 0*Te);
 
  // LOAD PARTICLES
-    // LOAD PARTICLES IN COMPUTATIONAL SPACE
-  sim_log( "Loading particles in computational space for stretched grid" );
+  sim_log( "Loading particles" );
 
   double xmin = grid->x0 , xmax = grid->x0+(grid->dx)*(grid->nx);
   double ymin = grid->y0 , ymax = grid->y0+(grid->dy)*(grid->ny);
   double zmin = grid->z0 , zmax = grid->z0+(grid->dz)*(grid->nz);
 
 #if LOAD_PARTICLES
-  // Stretching parameters (must match init_stretched_cartesian_grid call)
-  const double beta_x = 2.0;
-  const double beta_y = 2.0;
-  const double beta_z = 0.0;
-  
-  // Global domain bounds (for the transformation)
-  const double gx0 = -0.5*Lx;
-  const double gx1 = 0.5*Lx;
-  const double gy0 = -0.5*Ly;
-  const double gy1 = 0.5*Ly;
-  const double gz0 = -0.5*Lz;
-  const double gz1 = 0.5*Lz;
-
  repeat( Ni ) {
-    double x, y, z, ux, uy, uz;
-    
-    // Sample uniformly in computational space [0,1]
-    double xi = uniform(rng(0), 0.0, 1.0);
-    double eta = uniform(rng(0), 0.0, 1.0);
-    double zeta = uniform(rng(0), 0.0, 1.0);
-    
-    // Apply stretching transformation to get physical coordinates
-    double x_stretched, y_stretched, z_stretched;
-    
-    // X-direction stretching
-    if (beta_x > 1e-10) {
-      x_stretched = tanh(beta_x * (xi - 0.5)) / tanh(beta_x * 0.5);
-    } else {
-      x_stretched = 2.0 * xi - 1.0;
+    double x, y, z, r, ux, uy, uz, d0;
+     x = uniform( rng(0), xmin, xmax );
+     y = uniform( rng(0), ymin, ymax );
+     z = uniform( rng(0), zmin, zmax );
+      
+      ux =  - DrV*DBX;
+      uy =  - DrV*DBY;
+      uz =  - DrV*DBZ;
+      inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0 );
     }
-    
-    // Y-direction stretching
-    if (beta_y > 1e-10) {
-      y_stretched = tanh(beta_y * (eta - 0.5)) / tanh(beta_y * 0.5);
-    } else {
-      y_stretched = 2.0 * eta - 1.0;
-    }
-    
-    // Z-direction (no stretching with beta_z = 0)
-    if (beta_z > 1e-10) {
-      z_stretched = tanh(beta_z * (zeta - 0.5)) / tanh(beta_z * 0.5);
-    } else {
-      z_stretched = 2.0 * zeta - 1.0;
-    }
-    
-    // Map stretched coordinates [-1,1] to physical domain
-    x = gx0 + (gx1 - gx0) * (x_stretched + 1.0) * 0.5;
-    y = gy0 + (gy1 - gy0) * (y_stretched + 1.0) * 0.5;
-    z = gz0 + (gz1 - gz0) * (z_stretched + 1.0) * 0.5;
-    
-    // Compute velocities based on field perturbation at physical location
-    // (Using same formulas as before)
-    ux = -DrV*DBX;
-    uy = -DrV*DBY;
-    uz = -DrV*DBZ;
-    
-    inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0 );
-  }
 #endif
  
   sim_log( "Finished loading particles" );

@@ -26,6 +26,44 @@ inline void transform_J_to_physical(
     J_phys_zeta = (h3 * 0.5f) * J_zeta;
 }
 
+inline void transform_B_to_physical(
+    const grid_t* grid,
+    int voxel_index,
+    float B_xi, float B_eta, float B_zeta,
+    float& B_phys_xi, float& B_phys_eta, float& B_phys_zeta)
+{
+    // B is CONTRAVARIANT (like J), physical = (h_i / 2) * B^i
+    auto& k_cmesh_h = grid->k_curvilinear_mesh_h;
+    int mesh_index = VOXEL_TO_MESH(voxel_index, grid->nx, grid->ny, grid->nz);
+    
+    float h1 = k_cmesh_h(mesh_index, curv_mesh_var::h_1);
+    float h2 = k_cmesh_h(mesh_index, curv_mesh_var::h_2);
+    float h3 = k_cmesh_h(mesh_index, curv_mesh_var::h_3);
+    
+    B_phys_xi   = B_xi*h1;
+    B_phys_eta  = B_eta*h2;
+    B_phys_zeta = B_zeta*h3;
+}
+
+inline void transform_E_to_physical(
+    const grid_t* grid,
+    int voxel_index,
+    float E_xi, float E_eta, float E_zeta,
+    float& E_phys_xi, float& E_phys_eta, float& E_phys_zeta)
+{
+    // E is COVARIANT, physical = (2 / h_i) * E_i
+    auto& k_cmesh_h = grid->k_curvilinear_mesh_h;
+    int mesh_index = VOXEL_TO_MESH(voxel_index, grid->nx, grid->ny, grid->nz);
+    
+    float h1 = k_cmesh_h(mesh_index, curv_mesh_var::h_1);
+    float h2 = k_cmesh_h(mesh_index, curv_mesh_var::h_2);
+    float h3 = k_cmesh_h(mesh_index, curv_mesh_var::h_3);
+    
+    E_phys_xi   = E_xi/h1;
+    E_phys_eta  = E_eta/h2;
+    E_phys_zeta = E_zeta/h3;
+}
+
 // Create a new dump strategy
 Dump_Strategy *
 new_dump_strategy(DumpStrategyID dump_strategy_id,
@@ -122,40 +160,77 @@ void BinaryDump::dump_fields(
   MALLOC(f_transformed, dim[0] * dim[1] * dim[2]);
   COPY(f_transformed, field_array->f, dim[0] * dim[1] * dim[2]);
   
-  // APPLY YOUR TRANSFORMATION
-  for(int k = 0; k < dim[2]; k++) {
-    for(int j = 0; j < dim[1]; j++) {
-      for(int i = 0; i < dim[0]; i++) {
-        int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
-        
-        // Transform current currents (jfx, jfy, jfz)
-        float J_xi   = field_array->f[idx].jfx;
-        float J_eta  = field_array->f[idx].jfy;
-        float J_zeta = field_array->f[idx].jfz;
-        
-        float J_phys_xi, J_phys_eta, J_phys_zeta;
-        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
-                               J_phys_xi, J_phys_eta, J_phys_zeta);
-        
-        f_transformed[idx].jfx = J_phys_xi;
-        f_transformed[idx].jfy = J_phys_eta;
-        f_transformed[idx].jfz = J_phys_zeta;
-        
-        // Transform old currents (jfxold, jfyold, jfzold)
-        J_xi   = field_array->f[idx].jfxold;
-        J_eta  = field_array->f[idx].jfyold;
-        J_zeta = field_array->f[idx].jfzold;
-        
-        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
-                               J_phys_xi, J_phys_eta, J_phys_zeta);
-        
-        f_transformed[idx].jfxold = J_phys_xi;
-        f_transformed[idx].jfyold = J_phys_eta;
-        f_transformed[idx].jfzold = J_phys_zeta;
-
-      }
+  // APPLY TRANSFORMATION TO CURRENT DENSITIES, ELECTRIC AND MAGNETIC FIELDS
+for(int k = 0; k < dim[2]; k++) {
+  for(int j = 0; j < dim[1]; j++) {
+    for(int i = 0; i < dim[0]; i++) {
+      int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+      
+      // Transform electric field (COVARIANT: E)
+      float E_xi   = field_array->f[idx].ex;
+      float E_eta  = field_array->f[idx].ey;
+      float E_zeta = field_array->f[idx].ez;
+      
+      float E_phys_xi, E_phys_eta, E_phys_zeta;
+      transform_E_to_physical(grid, idx, E_xi, E_eta, E_zeta,
+                             E_phys_xi, E_phys_eta, E_phys_zeta);
+      
+      f_transformed[idx].ex = E_phys_xi;
+      f_transformed[idx].ey = E_phys_eta;
+      f_transformed[idx].ez = E_phys_zeta;
+      
+      // Transform magnetic field (CONTRAVARIANT: B)
+      float B_xi   = field_array->f[idx].cbx;
+      float B_eta  = field_array->f[idx].cby;
+      float B_zeta = field_array->f[idx].cbz;
+      
+      float B_phys_xi, B_phys_eta, B_phys_zeta;
+      transform_B_to_physical(grid, idx, B_xi, B_eta, B_zeta,
+                             B_phys_xi, B_phys_eta, B_phys_zeta);
+      
+      f_transformed[idx].cbx = B_phys_xi;
+      f_transformed[idx].cby = B_phys_eta;
+      f_transformed[idx].cbz = B_phys_zeta;
+      
+      // Transform old magnetic field (CONTRAVARIANT: B0)
+      B_xi   = field_array->f[idx].cbx0;
+      B_eta  = field_array->f[idx].cby0;
+      B_zeta = field_array->f[idx].cbz0;
+      
+      transform_B_to_physical(grid, idx, B_xi, B_eta, B_zeta,
+                             B_phys_xi, B_phys_eta, B_phys_zeta);
+      
+      f_transformed[idx].cbx0 = B_phys_xi;
+      f_transformed[idx].cby0 = B_phys_eta;
+      f_transformed[idx].cbz0 = B_phys_zeta;
+      
+      // Transform current currents (CONTRAVARIANT: J) - existing code
+      float J_xi   = field_array->f[idx].jfx;
+      float J_eta  = field_array->f[idx].jfy;
+      float J_zeta = field_array->f[idx].jfz;
+      
+      float J_phys_xi, J_phys_eta, J_phys_zeta;
+      transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                             J_phys_xi, J_phys_eta, J_phys_zeta);
+      
+      f_transformed[idx].jfx = J_phys_xi;
+      f_transformed[idx].jfy = J_phys_eta;
+      f_transformed[idx].jfz = J_phys_zeta;
+      
+      // Transform old currents (CONTRAVARIANT: Jold) - existing code
+      J_xi   = field_array->f[idx].jfxold;
+      J_eta  = field_array->f[idx].jfyold;
+      J_zeta = field_array->f[idx].jfzold;
+      
+      transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                             J_phys_xi, J_phys_eta, J_phys_zeta);
+      
+      f_transformed[idx].jfxold = J_phys_xi;
+      f_transformed[idx].jfyold = J_phys_eta;
+      f_transformed[idx].jfzold = J_phys_zeta;
     }
   }
+}
   
   WRITE_ARRAY_HEADER(f_transformed, 3, dim, fileIO);
   fileIO.write(f_transformed, dim[0] * dim[1] * dim[2]);
@@ -540,38 +615,77 @@ void BinaryDump::field_dump(
   COPY(f_transformed, field_array->f, dim[0] * dim[1] * dim[2]);
   
   // APPLY TRANSFORMATION TO CURRENT DENSITIES
-  for(int k = 0; k < dim[2]; k++) {
-    for(int j = 0; j < dim[1]; j++) {
-      for(int i = 0; i < dim[0]; i++) {
-        int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
-        
-        // Transform current currents (jfx, jfy, jfz)
-        float J_xi   = field_array->f[idx].jfx;
-        float J_eta  = field_array->f[idx].jfy;
-        float J_zeta = field_array->f[idx].jfz;
-        
-        float J_phys_xi, J_phys_eta, J_phys_zeta;
-        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
-                               J_phys_xi, J_phys_eta, J_phys_zeta);
-        
-        f_transformed[idx].jfx = J_phys_xi;
-        f_transformed[idx].jfy = J_phys_eta;
-        f_transformed[idx].jfz = J_phys_zeta;
-        
-        // Transform old currents (jfxold, jfyold, jfzold)
-        J_xi   = field_array->f[idx].jfxold;
-        J_eta  = field_array->f[idx].jfyold;
-        J_zeta = field_array->f[idx].jfzold;
-        
-        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
-                               J_phys_xi, J_phys_eta, J_phys_zeta);
-        
-        f_transformed[idx].jfxold = J_phys_xi;
-        f_transformed[idx].jfyold = J_phys_eta;
-        f_transformed[idx].jfzold = J_phys_zeta;
-      }
+  // APPLY TRANSFORMATION TO CURRENT DENSITIES, ELECTRIC AND MAGNETIC FIELDS
+for(int k = 0; k < dim[2]; k++) {
+  for(int j = 0; j < dim[1]; j++) {
+    for(int i = 0; i < dim[0]; i++) {
+      int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+      
+      // Transform electric field (COVARIANT: E)
+      float E_xi   = field_array->f[idx].ex;
+      float E_eta  = field_array->f[idx].ey;
+      float E_zeta = field_array->f[idx].ez;
+      
+      float E_phys_xi, E_phys_eta, E_phys_zeta;
+      transform_E_to_physical(grid, idx, E_xi, E_eta, E_zeta,
+                             E_phys_xi, E_phys_eta, E_phys_zeta);
+      
+      f_transformed[idx].ex = E_phys_xi;
+      f_transformed[idx].ey = E_phys_eta;
+      f_transformed[idx].ez = E_phys_zeta;
+      
+      // Transform magnetic field (CONTRAVARIANT: B)
+      float B_xi   = field_array->f[idx].cbx;
+      float B_eta  = field_array->f[idx].cby;
+      float B_zeta = field_array->f[idx].cbz;
+      
+      float B_phys_xi, B_phys_eta, B_phys_zeta;
+      transform_B_to_physical(grid, idx, B_xi, B_eta, B_zeta,
+                             B_phys_xi, B_phys_eta, B_phys_zeta);
+      
+      f_transformed[idx].cbx = B_phys_xi;
+      f_transformed[idx].cby = B_phys_eta;
+      f_transformed[idx].cbz = B_phys_zeta;
+      
+      // Transform old magnetic field (CONTRAVARIANT: B0)
+      B_xi   = field_array->f[idx].cbx0;
+      B_eta  = field_array->f[idx].cby0;
+      B_zeta = field_array->f[idx].cbz0;
+      
+      transform_B_to_physical(grid, idx, B_xi, B_eta, B_zeta,
+                             B_phys_xi, B_phys_eta, B_phys_zeta);
+      
+      f_transformed[idx].cbx0 = B_phys_xi;
+      f_transformed[idx].cby0 = B_phys_eta;
+      f_transformed[idx].cbz0 = B_phys_zeta;
+      
+      // Transform current currents (CONTRAVARIANT: J) - existing code
+      float J_xi   = field_array->f[idx].jfx;
+      float J_eta  = field_array->f[idx].jfy;
+      float J_zeta = field_array->f[idx].jfz;
+      
+      float J_phys_xi, J_phys_eta, J_phys_zeta;
+      transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                             J_phys_xi, J_phys_eta, J_phys_zeta);
+      
+      f_transformed[idx].jfx = J_phys_xi;
+      f_transformed[idx].jfy = J_phys_eta;
+      f_transformed[idx].jfz = J_phys_zeta;
+      
+      // Transform old currents (CONTRAVARIANT: Jold) - existing code
+      J_xi   = field_array->f[idx].jfxold;
+      J_eta  = field_array->f[idx].jfyold;
+      J_zeta = field_array->f[idx].jfzold;
+      
+      transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                             J_phys_xi, J_phys_eta, J_phys_zeta);
+      
+      f_transformed[idx].jfxold = J_phys_xi;
+      f_transformed[idx].jfyold = J_phys_eta;
+      f_transformed[idx].jfzold = J_phys_zeta;
     }
   }
+}
 
   /* Banded output will write data as a single block-array as opposed to
    * the Array-of-Structure format that is used for native storage.
@@ -1114,38 +1228,77 @@ void HDF5Dump::dump_fields(
   COPY(f_transformed, field_array->f, dim[0] * dim[1] * dim[2]);
   
   // APPLY TRANSFORMATION TO CURRENT DENSITIES
-  for(int k = 0; k < dim[2]; k++) {
-    for(int j = 0; j < dim[1]; j++) {
-      for(int i = 0; i < dim[0]; i++) {
-        int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
-        
-        // Transform current currents (jfx, jfy, jfz)
-        float J_xi   = field_array->f[idx].jfx;
-        float J_eta  = field_array->f[idx].jfy;
-        float J_zeta = field_array->f[idx].jfz;
-        
-        float J_phys_xi, J_phys_eta, J_phys_zeta;
-        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
-                               J_phys_xi, J_phys_eta, J_phys_zeta);
-        
-        f_transformed[idx].jfx = J_phys_xi;
-        f_transformed[idx].jfy = J_phys_eta;
-        f_transformed[idx].jfz = J_phys_zeta;
-        
-        // Transform old currents (jfxold, jfyold, jfzold)
-        J_xi   = field_array->f[idx].jfxold;
-        J_eta  = field_array->f[idx].jfyold;
-        J_zeta = field_array->f[idx].jfzold;
-        
-        transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
-                               J_phys_xi, J_phys_eta, J_phys_zeta);
-        
-        f_transformed[idx].jfxold = J_phys_xi;
-        f_transformed[idx].jfyold = J_phys_eta;
-        f_transformed[idx].jfzold = J_phys_zeta;
-      }
+  // APPLY TRANSFORMATION TO CURRENT DENSITIES, ELECTRIC AND MAGNETIC FIELDS
+for(int k = 0; k < dim[2]; k++) {
+  for(int j = 0; j < dim[1]; j++) {
+    for(int i = 0; i < dim[0]; i++) {
+      int idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+      
+      // Transform electric field (COVARIANT: E)
+      float E_xi   = field_array->f[idx].ex;
+      float E_eta  = field_array->f[idx].ey;
+      float E_zeta = field_array->f[idx].ez;
+      
+      float E_phys_xi, E_phys_eta, E_phys_zeta;
+      transform_E_to_physical(grid, idx, E_xi, E_eta, E_zeta,
+                             E_phys_xi, E_phys_eta, E_phys_zeta);
+      
+      f_transformed[idx].ex = E_phys_xi;
+      f_transformed[idx].ey = E_phys_eta;
+      f_transformed[idx].ez = E_phys_zeta;
+      
+      // Transform magnetic field (CONTRAVARIANT: B)
+      float B_xi   = field_array->f[idx].cbx;
+      float B_eta  = field_array->f[idx].cby;
+      float B_zeta = field_array->f[idx].cbz;
+      
+      float B_phys_xi, B_phys_eta, B_phys_zeta;
+      transform_B_to_physical(grid, idx, B_xi, B_eta, B_zeta,
+                             B_phys_xi, B_phys_eta, B_phys_zeta);
+      
+      f_transformed[idx].cbx = B_phys_xi;
+      f_transformed[idx].cby = B_phys_eta;
+      f_transformed[idx].cbz = B_phys_zeta;
+      
+      // Transform old magnetic field (CONTRAVARIANT: B0)
+      B_xi   = field_array->f[idx].cbx0;
+      B_eta  = field_array->f[idx].cby0;
+      B_zeta = field_array->f[idx].cbz0;
+      
+      transform_B_to_physical(grid, idx, B_xi, B_eta, B_zeta,
+                             B_phys_xi, B_phys_eta, B_phys_zeta);
+      
+      f_transformed[idx].cbx0 = B_phys_xi;
+      f_transformed[idx].cby0 = B_phys_eta;
+      f_transformed[idx].cbz0 = B_phys_zeta;
+      
+      // Transform current currents (CONTRAVARIANT: J)
+      float J_xi   = field_array->f[idx].jfx;
+      float J_eta  = field_array->f[idx].jfy;
+      float J_zeta = field_array->f[idx].jfz;
+      
+      float J_phys_xi, J_phys_eta, J_phys_zeta;
+      transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                             J_phys_xi, J_phys_eta, J_phys_zeta);
+      
+      f_transformed[idx].jfx = J_phys_xi;
+      f_transformed[idx].jfy = J_phys_eta;
+      f_transformed[idx].jfz = J_phys_zeta;
+      
+      // Transform old currents (CONTRAVARIANT: Jold)
+      J_xi   = field_array->f[idx].jfxold;
+      J_eta  = field_array->f[idx].jfyold;
+      J_zeta = field_array->f[idx].jfzold;
+      
+      transform_J_to_physical(grid, idx, J_xi, J_eta, J_zeta,
+                             J_phys_xi, J_phys_eta, J_phys_zeta);
+      
+      f_transformed[idx].jfxold = J_phys_xi;
+      f_transformed[idx].jfyold = J_phys_eta;
+      f_transformed[idx].jfzold = J_phys_zeta;
     }
   }
+}
 
 #define fpp(x, y, z) f_transformed[VOXEL(x, y, z, grid->nx, grid->ny, grid->nz)]
 

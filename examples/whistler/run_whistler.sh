@@ -17,4 +17,4 @@ mkdir data
 mpirun -np 1 ./translateWhistler
 cd ../examples/whistler
 module load miniconda3
-python plotsWhistler.py
+python plotsWhistler_stretch.py
