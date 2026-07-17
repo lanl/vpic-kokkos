@@ -46,6 +46,13 @@
   F(0,cbx) = F(0,ox) - delt*ROTEX(); \
   F(0,cby) = F(0,oy) - delt*ROTEY(); \
   F(0,cbz) = F(0,oz) - delt*ROTEZ(); \
+  // if (Kokkos::isnan(F(0,cbx)) || Kokkos::isnan(F(0,cby)) || Kokkos::isnan(F(0,cbz))) { \
+  //   printf("Warning: NaN detected in B field at (%d,%d,%d): cbx=%f, cby=%f, cbz=%f\n", \
+  //          x, y, z, F(0,cbx), F(0,cby), F(0,cbz));                    \
+  //   F(0,cbx) = F(0,ox);  /* Restore original values */               \
+  //   F(0,cby) = F(0,oy);                                              \
+  //   F(0,cbz) = F(0,oz);                                              \
+  // }
 
 #define UPDATE1()    \
   UPDATE_B(dt2);     \

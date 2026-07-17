@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -t 6:00:00     # walltime,
 #SBATCH -N 4           # number of cluster nodes
-#SBATCH -n 128          # number of MPI ranks / Slurm tasks
+#SBATCH -n 4          # number of MPI ranks / Slurm tasks
 #SBATCH -o slurm.out # pathname of stdout file
 #SBATCH -e slurm.err # pathname of stderr file, using job and first node values
 #SBATCH -J mir
@@ -16,5 +16,5 @@ export NVCC_WRAPPER_DEFAULT_COMPILER=mpicxx
 mkdir build
 cd build
 bash ../arch/Darwin_Ampere
-srun -n 128 /vast/home/cgraham/vpic-kokkos/build/mirror_cyl.Linux
+srun -n 4 /vast/home/cgraham/vpic-kokkos/build/mirror_cyl.Linux
 ##--restore restart0/restart.0  >& outfile2 

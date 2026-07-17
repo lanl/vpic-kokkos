@@ -124,38 +124,71 @@ struct field_reduce {
     k_field_t k_field;
     k_field_edge_t k_field_edge;
     k_material_coefficient_t k_mat;
+    k_curvilinear_mesh_t k_curv_mesh;  // Add curvilinear mesh
     int nx, ny, nz;
     size_type value_count;
 
-    field_reduce(const k_field_t k_field_, const k_field_edge_t k_field_edge_, const k_material_coefficient_t k_mat_, const int nx_, const int ny_, const int nz_) : k_field(k_field_), k_field_edge(k_field_edge_), k_mat(k_mat_), nx(nx_), ny(ny_), nz(nz_) {value_count = 6;}
+    field_reduce(const k_field_t k_field_, 
+                 const k_field_edge_t k_field_edge_, 
+                 const k_material_coefficient_t k_mat_,
+                 const k_curvilinear_mesh_t k_curv_mesh_,
+                 const int nx_, const int ny_, const int nz_) 
+        : k_field(k_field_), 
+          k_field_edge(k_field_edge_), 
+          k_mat(k_mat_),
+          k_curv_mesh(k_curv_mesh_),
+          nx(nx_), ny(ny_), nz(nz_) 
+    {
+        value_count = 6;
+    }
 
     KOKKOS_INLINE_FUNCTION void
     operator() (const size_type z, const size_type y, const size_type x, value_type en) const {
-        const int f0 =  VOXEL(x,   y,   z,   nx,ny,nz);
-      
-        en[0] += k_field(f0,  field_var::ex) * k_field(f0,  field_var::ex);
-        en[1] += k_field(f0,  field_var::ey) * k_field(f0,  field_var::ey);
-        en[2] += k_field(f0,  field_var::ez) * k_field(f0,  field_var::ez);
-        en[3] += (  (k_field(f0,field_var::cbx0) + k_field(f0,field_var::cbx))
-                   *(k_field(f0,field_var::cbx0) + k_field(f0,field_var::cbx)) );
-        en[4] += (  (k_field(f0,field_var::cby0) + k_field(f0,field_var::cby))
-                   *(k_field(f0,field_var::cby0) + k_field(f0,field_var::cby)) );
-        en[5] += (  (k_field(f0,field_var::cbz0) + k_field(f0,field_var::cbz))
-                   *(k_field(f0,field_var::cbz0) + k_field(f0,field_var::cbz)) );
-        // If background B0 >> dB, and floating-point error accumulated during
-        // reduction becomes large, we may lose precision in the measurement of
-        // fluctuating magnetic energy.  It may be necessary to separate
-        // (B0 + dB)^2 = B0^2 + 2*B0*dB + dB^2.
-        //en[3] += k_field(f0,  field_var::cbx) * k_field(f0,  field_var::cbx);
-        //en[4] += k_field(f0,  field_var::cby) * k_field(f0,  field_var::cby);
-        //en[5] += k_field(f0,  field_var::cbz) * k_field(f0,  field_var::cbz);
-        //en[6] += 2 * k_field(f0, field_var::cbx0) * k_field(f0, field_var::cbx);
-        //en[7] += 2 * k_field(f0, field_var::cby0) * k_field(f0, field_var::cby);
-        //en[8] += 2 * k_field(f0, field_var::cbz0) * k_field(f0, field_var::cbz);
-        //en[9]  += k_field(f0, field_var::cbx0) * k_field(f0, field_var::cbx0);
-        //en[10] += k_field(f0, field_var::cby0) * k_field(f0, field_var::cby0);
-        //en[11] += k_field(f0, field_var::cbz0) * k_field(f0, field_var::cbz0);
+        const int f0 = VOXEL(x, y, z, nx, ny, nz);
+        const int mesh_idx = GRID_TO_MESH(x, y, z, nx, ny, nz);
+        
+        // Load scale factors
+        float h1 = k_curv_mesh(mesh_idx, curv_mesh_var::h_1);
+        float h2 = k_curv_mesh(mesh_idx, curv_mesh_var::h_2);
+        float h3 = k_curv_mesh(mesh_idx, curv_mesh_var::h_3);
+        float jac = k_curv_mesh(mesh_idx, curv_mesh_var::jac);
+        
+        // Check for invalid scale factors (would cause NaN)
+        if (h1 <= 0.0f || h2 <= 0.0f || h3 <= 0.0f || jac <= 0.0f) {
+            // Skip this cell or use default values
+            return;
         }
+        
+        // Load logical coordinate field components
+        // E is COVARIANT (E_i)
+        float E_xi  = k_field(f0, field_var::ex);
+        float E_eta = k_field(f0, field_var::ey);
+        float E_mu  = k_field(f0, field_var::ez);
+        
+        // B is CONTRAVARIANT (B^i)
+        float B_xi  = k_field(f0, field_var::cbx) + k_field(f0, field_var::cbx0);
+        float B_eta = k_field(f0, field_var::cby) + k_field(f0, field_var::cby0);
+        float B_mu  = k_field(f0, field_var::cbz) + k_field(f0, field_var::cbz0);
+        
+        // Compute proper magnitudes using metric
+        // For E (covariant): E²_physical = g^{ij} E_i E_j = E_i²/h_i² (orthogonal coords)
+        float E_xi_contrib  = (E_xi * E_xi) / (h1 * h1);
+        float E_eta_contrib = (E_eta * E_eta) / (h2 * h2);
+        float E_mu_contrib  = (E_mu * E_mu) / (h3 * h3);
+        
+        // For B (contravariant): B²_physical = g_{ij} B^i B^j = h_i² (B^i)² (orthogonal coords)
+        float B_xi_contrib  = (B_xi * B_xi) * (h1 * h1);
+        float B_eta_contrib = (B_eta * B_eta) * (h2 * h2);
+        float B_mu_contrib  = (B_mu * B_mu) * (h3 * h3);
+        
+        // Accumulate energies with Jacobian (proper volume weighting)
+        en[0] += E_xi_contrib * jac;
+        en[1] += E_eta_contrib * jac;
+        en[2] += E_mu_contrib * jac;
+        en[3] += B_xi_contrib * jac;
+        en[4] += B_eta_contrib * jac;
+        en[5] += B_mu_contrib * jac;
+    }
 
     KOKKOS_INLINE_FUNCTION void
     join(value_type dst, const value_type src) const {
@@ -175,18 +208,41 @@ struct field_reduce {
 void energy_f_kokkos(double* global, const field_array_t* RESTRICT fa) {
     if( !fa ) ERROR(( "Bad args" ));
 
-    double en[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    double en[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
     const int nx = fa->g->nx, ny = fa->g->ny, nz = fa->g->nz;
     Kokkos::MDRangePolicy<Kokkos::Rank<3>> policy({1,1,1}, {nz+1,ny+1,nx+1});
     sfa_params_t* sfa = reinterpret_cast<sfa_params_t*>(fa->params);
 
-    field_reduce field_reducer(fa->k_f_d, fa->k_fe_d, sfa->k_mc_d, nx, ny, nz);
+    field_reduce field_reducer(fa->k_f_d, fa->k_fe_d, sfa->k_mc_d, 
+                                fa->g->k_curvilinear_mesh_d,  // Pass device mesh
+                                nx, ny, nz);
     Kokkos::parallel_reduce("field energy reduction", policy, field_reducer, en);
 
-    double v0 = 0.5*fa->g->dV;
+    // The logical volume element is dx*dy*dz (each dimension spans [-1,1], so 2*gdx etc.)
+    // But VPIC uses gdx = dx/2, so the logical cell volume is (2*gdx)*(2*gdy)*(2*gdz) = 8*gdx*gdy*gdz
+    // However, the Jacobian already accounts for the physical volume, so we just need eps0/2
+    double v0 = 0.5 * fa->g->eps0 * fa->g->dx * fa->g->dy * fa->g->dz;
+    
+    // Check for NaN in the sums
+    bool has_nan = false;
     for(int i=0; i<6; i++) {
+        if(std::isnan(en[i])) {
+            has_nan = true;
+            // WARNING(("NaN in energy component %d on rank %d: %e", i, world_rank, en[i]));
+        }
         en[i] *= v0;
     }
+    
+    // if(has_nan) {
+    //     ERROR(("NaN found in field energies before MPI reduction"));
+    // }
+    
     mp_allsum_d( en, global, 6 );
+    
+    // Final check after MPI reduction
+    // for(int i=0; i<6; i++) {
+    //     if(std::isnan(global[i])) {
+    //         ERROR(("NaN in global energy component %d: %e", i, global[i]));
+    //     }
+    // }
 }
-
