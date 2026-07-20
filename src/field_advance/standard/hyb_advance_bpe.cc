@@ -121,6 +121,18 @@ hyb_advance_bpe(field_array_t * RESTRICT fa,
   Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Smooth_Ion_Moments");
   //Only smooth on the first subcycle
   if (isub==0) {
+#ifndef SHAPE_NGP
+    //fix edge rho/currents for local BCs
+    //adds adjacent ghost rho/current to cell and sets BC ghosts to 0
+    k_hyb_local_adjust_jf(fa, fa->g);
+    //fix edge rho/currents everywhere else
+    //sends ghosts across ranks and adds ghosts to adjacent cells
+    k_begin_remote_edge_hyb_jf(fa, fa->g, *(fa->fb) );
+    k_end_remote_edge_hyb_jf  (fa, fa->g, *(fa->fb) );
+#else
+    // NGP accumulates only on live cells; ghosts empty.
+    // So no need to fix edge rho/currents
+#endif
     
     //smooth moments
     Kokkos::Profiling::pushRegion("HybyridAdvanceBPE::Smooth_Ion_Moments::Exchange_JF");

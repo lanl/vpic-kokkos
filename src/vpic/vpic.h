@@ -112,9 +112,12 @@ const uint64_t current_density  (1ULL<<0 | 1ULL<<1 | 1ULL<<2);
 const uint64_t charge_density   (1ULL<<3);
 const uint64_t momentum_density (1ULL<<4 | 1ULL<<5 | 1ULL<<6);
 const uint64_t mass_density     (1ULL<<7);
-const uint64_t stress_tensor    (1ULL<<8 | 1ULL<<9 | 1ULL<<10 | 1ULL<<11 | 1ULL<<12 | 1ULL<<13);
+const uint64_t stress_tensor    (1ULL<<8 | 1ULL<<9 | 1ULL<<10 | 
+                                 1ULL<<11 | 1ULL<<12 | 1ULL<<13);
 #ifdef VARIABLE_CHARGE
 const uint64_t charge_diags     (1ULL<<14 | 1ULL<<15);
+const uint64_t charge_state_densities (1ULL<<16 | 1ULL<<17 | 1ULL<<18 | 
+                                       1ULL<<19 | 1ULL<<20 | 1ULL<<21);
 #endif
 /* May want to use these instead
 const uint64_t stress_diagonal      (1ULL<<8 | 1ULL<<9 | 1ULL<<10);
@@ -123,7 +126,7 @@ const uint64_t stress_offdiagonal   (1ULL<<11 | 1ULL<<12 | 1ULL<<13);
 
 #ifdef VARIABLE_CHARGE
   const size_t total_hydro_variables(22);
-  const size_t total_hydro_groups(6); // this counts vectors, tensors etc...
+  const size_t total_hydro_groups(7); // this counts vectors, tensors etc...
   // These bits will be tested to determine which variables to output
   const size_t hydro_indeces[7] = { 0, 3, 4, 7, 8, 14, 16 };
 #else
@@ -520,7 +523,7 @@ public:
     return hydro_array->k_h_h;
   }
  
-  inline double& hydro_h( const int vox, const int var ) {
+  inline float& hydro_h( const int vox, const int var ) {
     return hydro_array->k_h_h(vox, var);
   }
 

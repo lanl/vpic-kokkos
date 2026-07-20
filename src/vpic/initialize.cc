@@ -31,6 +31,10 @@ vpic_simulation::initialize( int argc,
   grid->eos_den       = 1.;
   grid->eos_gamma_0   = 1.;
   grid->kappa         = 0;
+  grid->time_sec      = 1.;
+  grid->length_m      = 1.;
+  grid->mass_kg       = 1.;
+  grid->density_SI    = 1.; //Reference density 1/m^3
 
   // need isub=0 initialized for advance_b(...) to
   // migrate QS shape currents from ghosts to live cells

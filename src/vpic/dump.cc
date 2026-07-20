@@ -376,17 +376,21 @@ static FieldInfo fieldInfo[total_field_groups] = {
   { "Cell Material", "SCALAR", "1", "INTEGER", sizeof(material_id) }
 }; // fieldInfo
 
-static HydroInfo hydroInfo[5] = {
+static HydroInfo hydroInfo[7] = {
   { "Current Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
   { "Charge Density", "SCALAR", "1", "FLOATING_POINT", sizeof(float) },
   { "Momentum Density", "VECTOR", "3", "FLOATING_POINT", sizeof(float) },
   { "Kinetic Energy Density", "SCALAR", "1", "FLOATING_POINT",
     sizeof(float) },
-  { "Stress Tensor", "TENSOR", "6", "FLOATING_POINT", sizeof(float) }
+  { "Stress Tensor", "TENSOR", "6", "FLOATING_POINT", sizeof(float) },
   /*
   { "STRESS_DIAGONAL", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }
   { "STRESS_OFFDIAGONAL", "VECTOR", "3", "FLOATING_POINT", sizeof(float) }
   */
+#if VARIABLE_CHARGE
+  { "Charge Min/Max", "VECTOR", "2", "FLOATING_POINT", sizeof(float) },
+  { "Charge States", "VECTOR", "6", "FLOATING_POINT", sizeof(float) }
+#endif
 }; // hydroInfo
 
 void

@@ -70,8 +70,6 @@ new_dump_strategy(DumpStrategyID dump_strategy_id,
                   vpic_simulation *vpic_simu)
 {
   Dump_Strategy *ds;
-  MALLOC(ds, 1);
-  //CLEAR(ds, 1);
 
   // Do any post init/restore simulation modifications
   switch (dump_strategy_id)
@@ -105,7 +103,7 @@ void delete_dump_strategy(Dump_Strategy *ds)
   if (!ds)
     return;
   UNREGISTER_OBJECT(ds);
-  FREE(ds);
+  delete(ds);
 }
 
 /*****************************************************************************
@@ -341,14 +339,14 @@ void BinaryDump::dump_hydro(
   FREE(h_transformed);
 #else
   hydro_t h[1];
+  float _pad[2] = {0};
   WRITE_ARRAY_HEADER(h, 3, dim, fileIO);
   for(int i=0; i<dim[0]*dim[1]*dim[2]; i++) {
     for(int v=0; v<HYDRO_VAR_COUNT; v++) {
       fileIO.write(&hydro_array->k_h_h(i, v), 1);
     }
     // Additional padding to match legacy structures
-    double _pad = 0;
-    fileIO.write(&_pad, 2);
+    fileIO.write(&(_pad[0]), 2);
   }
 #endif
   if (fileIO.close())
@@ -730,8 +728,13 @@ for(int k = 0; k < dim[2]; k++) {
       for(size_t k(0); k<nzout+2; k++) {
       for(size_t j(0); j<nyout+2; j++) {
       for(size_t i(0); i<nxout+2; i++) {
-              const uint32_t * fref = reinterpret_cast<uint32_t *>(&f_transformed[VOXEL(i,j,k,grid->nx,grid->ny,grid->nz)]);
-              fileIO.write(&fref[varlist[v]], 1);
+              if(v < FIELD_VAR_COUNT) {
+                const uint32_t * fref = reinterpret_cast<uint32_t *>(&f_transformed[VOXEL(i,j,k,grid->nx,grid->ny,grid->nz)]);
+                fileIO.write(&fref[varlist[v]], 1);
+              } else {
+                const uint16_t * fref = reinterpret_cast<uint16_t *>(&(f_transformed[VOXEL(i,j,k,grid->nx,grid->ny,grid->nz)].ematx));
+                fileIO.write(&fref[varlist[v-FIELD_VAR_COUNT]], 1);
+              }
               if(rank==VERBOSE_rank) printf("%f ", f_transformed[VOXEL(i,j,k,grid->nx,grid->ny,grid->nz)].ex);
               if(rank==VERBOSE_rank) std::cout << "(" << i << " " << j << " " << k << ")" << std::endl;
       } if(rank==VERBOSE_rank) std::cout << std::endl << "ROW_BREAK " << j << " " << k << std::endl;
@@ -954,12 +957,13 @@ void BinaryDump::hydro_dump(
     for(size_t i(0), c(0); i<total_hydro_variables; i++)
       if( dumpParams.output_vars.bitset(i) ) varlist[c++] = i;
 
-    // More efficient for standard case
-    if(istride == 1 && jstride == 1 && kstride == 1)
 
-      for(size_t v(0); v<numvars; v++)
-      for(size_t k(0); k<nzout+2; k++)
-      for(size_t j(0); j<nyout+2; j++)
+    // More efficient for standard case
+    if(istride == 1 && jstride == 1 && kstride == 1) {
+
+      for(size_t v(0); v<numvars; v++) {
+      for(size_t k(0); k<nzout+2; k++) {
+      for(size_t j(0); j<nyout+2; j++) {
       for(size_t i(0); i<nxout+2; i++) {
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
               const uint32_t * href = reinterpret_cast<uint32_t *>(&h_transformed[VOXEL(i,j,k,grid->nx,grid->ny,grid->nz)]);
@@ -968,10 +972,13 @@ void BinaryDump::hydro_dump(
               fileIO.write(&(h_transformed(VOXEL(i,j,k,grid->nx,grid->ny,grid->nz), varlist[v])), 1);
 #endif
       }
+      }
+      }
+      }
 
-    else
+    } else {
 
-      for(size_t v(0); v<numvars; v++)
+      for(size_t v(0); v<numvars; v++) {
       for(size_t k(0); k<nzout+2; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
       for(size_t j(0); j<nyout+2; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
       for(size_t i(0); i<nxout+2; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
@@ -984,6 +991,8 @@ void BinaryDump::hydro_dump(
       }
       }
       }
+      }
+    }
 
     delete[] varlist;
 
@@ -1026,7 +1035,6 @@ void BinaryDump::hydro_dump(
 #endif
 
     } else {
-
       for(size_t k(0); k<nzout; k++) { const size_t koff = (k == 0) ? 0 : (k == nzout+1) ? grid->nz+1 : k*kstride;
       for(size_t j(0); j<nyout; j++) { const size_t joff = (j == 0) ? 0 : (j == nyout+1) ? grid->ny+1 : j*jstride;
       for(size_t i(0); i<nxout; i++) { const size_t ioff = (i == 0) ? 0 : (i == nxout+1) ? grid->nx+1 : i*istride;
@@ -1684,34 +1692,34 @@ void HDF5Dump::dump_hydro(
   hid_t dataspace_id;
 
   // write the data
-  if (hydro_dump_flag.flags["jx"]) DUMP_HYDRO_TO_HDF5("jx", jx, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["jy"]) DUMP_HYDRO_TO_HDF5("jy", jy, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["jz"]) DUMP_HYDRO_TO_HDF5("jz", jz, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["rho"]) DUMP_HYDRO_TO_HDF5("rho", rho, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["jx"]) DUMP_HYDRO_TO_HDF5("jx", jx, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["jy"]) DUMP_HYDRO_TO_HDF5("jy", jy, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["jz"]) DUMP_HYDRO_TO_HDF5("jz", jz, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["rho"]) DUMP_HYDRO_TO_HDF5("rho", rho, H5T_NATIVE_FLOAT);
 
-  if (hydro_dump_flag.flags["px"]) DUMP_HYDRO_TO_HDF5("px", px, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["py"]) DUMP_HYDRO_TO_HDF5("py", py, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["pz"]) DUMP_HYDRO_TO_HDF5("pz", pz, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["rho_m"]) DUMP_HYDRO_TO_HDF5("rho_m", rho_m, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["px"]) DUMP_HYDRO_TO_HDF5("px", px, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["py"]) DUMP_HYDRO_TO_HDF5("py", py, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["pz"]) DUMP_HYDRO_TO_HDF5("pz", pz, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["rho_m"]) DUMP_HYDRO_TO_HDF5("rho_m", rho_m, H5T_NATIVE_FLOAT);
 
-  if (hydro_dump_flag.flags["txx"]) DUMP_HYDRO_TO_HDF5("txx", txx, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["tyy"]) DUMP_HYDRO_TO_HDF5("tyy", tyy, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["tzz"]) DUMP_HYDRO_TO_HDF5("tzz", tzz, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["txx"]) DUMP_HYDRO_TO_HDF5("txx", txx, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["tyy"]) DUMP_HYDRO_TO_HDF5("tyy", tyy, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["tzz"]) DUMP_HYDRO_TO_HDF5("tzz", tzz, H5T_NATIVE_FLOAT);
 
-  if (hydro_dump_flag.flags["tyz"]) DUMP_HYDRO_TO_HDF5("tyz", tyz, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["tzx"]) DUMP_HYDRO_TO_HDF5("tzx", tzx, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["txy"]) DUMP_HYDRO_TO_HDF5("txy", txy, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["tyz"]) DUMP_HYDRO_TO_HDF5("tyz", tyz, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["tzx"]) DUMP_HYDRO_TO_HDF5("tzx", tzx, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["txy"]) DUMP_HYDRO_TO_HDF5("txy", txy, H5T_NATIVE_FLOAT);
 
 #ifdef VARIABLE_CHARGE
-  if (hydro_dump_flag.flags["qmin"]) DUMP_HYDRO_TO_HDF5("qmin", qmin, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["qmax"]) DUMP_HYDRO_TO_HDF5("qmax", qmax, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["qmin"]) DUMP_HYDRO_TO_HDF5("qmin", qmin, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["qmax"]) DUMP_HYDRO_TO_HDF5("qmax", qmax, H5T_NATIVE_FLOAT);
 
-  if (hydro_dump_flag.flags["n_q0"]) DUMP_HYDRO_TO_HDF5("n_q0", n_q0, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["n_q1"]) DUMP_HYDRO_TO_HDF5("n_q1", n_q1, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["n_q2"]) DUMP_HYDRO_TO_HDF5("n_q2", n_q2, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["n_q3"]) DUMP_HYDRO_TO_HDF5("n_q3", n_q3, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["n_q4"]) DUMP_HYDRO_TO_HDF5("n_q4", n_q4, H5T_NATIVE_DOUBLE);
-  if (hydro_dump_flag.flags["n_q5"]) DUMP_HYDRO_TO_HDF5("n_q5", n_q5, H5T_NATIVE_DOUBLE);
+  if (hydro_dump_flag.flags["n_q0"]) DUMP_HYDRO_TO_HDF5("n_q0", n_q0, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q1"]) DUMP_HYDRO_TO_HDF5("n_q1", n_q1, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q2"]) DUMP_HYDRO_TO_HDF5("n_q2", n_q2, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q3"]) DUMP_HYDRO_TO_HDF5("n_q3", n_q3, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q4"]) DUMP_HYDRO_TO_HDF5("n_q4", n_q4, H5T_NATIVE_FLOAT);
+  if (hydro_dump_flag.flags["n_q5"]) DUMP_HYDRO_TO_HDF5("n_q5", n_q5, H5T_NATIVE_FLOAT);
 #endif
 
   el2 = uptime() - el2;

@@ -1,8 +1,13 @@
 //////////////////////////////////////////////////////
 //
-//   Landau-damped Ion Acoustic Wave
+//   Proton Cyclotron Anisotropy Instability
 //
 //////////////////////////////////////////////////////
+//#define CATCH_CONFIG_RUNNER // We will provide a custom main
+//#include "catch.hpp"
+//#include "deck/wrapper.h"
+//#include "src/vpic/vpic.h"
+//#include "src/species_advance/species_advance.h"
 
 //#define NUM_TURNSTILES 16384
 
@@ -44,7 +49,7 @@ begin_initialization {
   double ec   = 1.0;  // Charge normalization
   double mi   = 1.0;  // Mass normalization
   double mu0  = 1.0;  // Magnetic constanst
-  double b0 = 1.0;    // Magnetic field. // Note for this problem B=0 (but we can still pick a reference field/units).
+  double b0 = 1.0;    // Magnetic field
   double n0 = 1.0;    // Density
 
   
@@ -55,36 +60,39 @@ begin_initialization {
 
   
   // Initial conditions for model:
-  double Ti = 1.0/3.0;      // Ion temperature
+  double betai_par = 1.0;   // Ratio of ion thermal to magnetic pressure.
+  double Tperp_Tpar = 3.0;  // Initial temperature anisotropy for ions.
   double gamma = 5.0/3.0;   // Ratio of specific heats.
-  double c_s = 1.0;         // Electron sound speed.
-  double pert = 0.02;       // Size of density perturbation.
-  double Lx = 16;           // Size of domain.
-  double kx = 2.0*M_PI/Lx;  // Wavenumber of perturbation.
-  
-  double eta = 0.0;         // Plasma resistivity.
-  double hypereta = 0.0;    // Plasma hyper-resistivity.
+  double Lx_di = 10.5;      // Domain size in ion skin depth.
+  double Tipar_Te = 1.0;    // Initial ratio of electron temperature to parallel ion temperature.
+
+  double eta = 0.0;      // Plasma resistivity.
+  double hypereta = 0.0; // Plasma hyper-resistivity.
 
   
   // Derived quantities for model:
-  double Te = c_s/(gamma);  // Electron temperature.
-  double vthi = sqrt(Ti/mi);// Ion thermal velocity
+  double Tipar = betai_par*b0*b0/2.0/n0;
+  double vthipar = sqrt(Tipar/mi);
+  double vthiperp = vthipar*sqrt(Tperp_Tpar);
+  double Te = Tipar/Tipar_Te;
+ 
 
   // Numerical parameters
-  double taui    = 50;      // Simulation run time in wci^-1.
-  double quota   = 2.0;     // run quota in hours
+  double taui    = 60;    // Simulation run time in wci^-1.
+  double quota   = 23.5;   // run quota in hours
   double quota_sec = quota*3600;  // Run quota in seconds
   
-  double Ly    = 1.0*di;    // size of box in y dimension
-  double Lz    = 1.0*di;    // size of box in z dimension
+  double Lx    = Lx_di*di; // size of box in x dimension
+  double Ly    = 1.0*di;   // size of box in y dimension
+  double Lz    = 1.0*di;   // size of box in z dimension
 
-  double nx = 48;
+  double nx = 64;
   double ny = 1;
   double nz = 1;
 
-  double nppc  = 150000;    // Average number of macro particle per cell per species 
+  double nppc  = 10000;         // Average number of macro particle per cell per species 
   
-  double topology_x = 16; // Number of domains in x, y, and z
+  double topology_x = 1; // Number of domains in x, y, and z
   double topology_y = 1;
   double topology_z = 1;
 
@@ -103,29 +111,29 @@ begin_initialization {
   
   // Determine the time step
   double dg = courant_length(Lx,Ly,Lz,nx,ny,nz);  // courant length
-  double dt = 0.02;                               // time step
+  double dt = 0.01/wci;                           // time step
 
   double sort_interval = 10;  // How often to sort particles
   
   // Intervals for output
-  num_step = int(taui/(wci*dt));
-  int restart_interval = 20000;
+  int restart_interval = -1; //3000;
   int energies_interval = 200;
-  int interval = int(num_step/100);//0.2/(wci*dt));
+  int interval = int(0.2/(wci*dt));
   int fields_interval = interval;
   int ehydro_interval = interval;
   int Hhydro_interval = interval;
-  int eparticle_interval = 0*interval;
+  int eparticle_interval = 40*interval;
   int Hparticle_interval = 0*interval;
   int quota_check_interval     = 100;
 
 
   ///////////////////////////////////////////////
   // Setup high level simulation parameters
-  status_interval      = num_step/100;
-  sync_shared_interval = status_interval;
-  clean_div_e_interval = status_interval;
-  clean_div_b_interval = status_interval;
+  num_step             = 0.5*int(taui/(wci*dt));
+  status_interval      = 200;
+  sync_shared_interval = status_interval/2;
+  clean_div_e_interval = status_interval/2;
+  clean_div_b_interval = status_interval/2;
 
   global->restart_interval     = restart_interval;
   global->energies_interval    = energies_interval;
@@ -160,18 +168,14 @@ begin_initialization {
                          topology_x, topology_y, topology_z); // Topology
 
   //  grid->te = Te;
-  grid->eos_den = 1.0;
+  //  grid->den = 1.0;
   grid->eta = eta;
-  grid->hypereta = hypereta;
-  grid->eos_gamma = gamma;
-  grid->eos_gamma_0 = gamma;
-  grid->init_cartesian_grid();
+  //  grid->hypereta = hypereta;
+  //  grid->gamma = gamma;
 
-  grid->nsub = 1; // Number of substeps for field solve.
-  grid->nsm = 2;  // Number of binomial smoothing passes (to fields & moments).
-  grid->nsmb = 0; // Timesteps between additional smooths of magnetic field (0 is off).
-  grid->den_floor_ohm = 0.05;
-  grid->den_floor_pe  = 0.05;
+  //  grid->nsub = 1;
+  //  grid->nsm= 0;
+
 
   // ***** Set Field Boundary Conditions *****
   sim_log("Periodic boundaries");
@@ -186,7 +190,7 @@ begin_initialization {
   define_material( "vacuum", 1 );
 
   
-  //////////////////////////////////////////////////////////////////////////////                                                                                                                                                                                                       // Finalize Field Advance
+  //////////////////////////////////////////////////////////////////////////////                                                                                                               // Finalize Field Advance
   define_field_array(NULL); // second argument is damp, default to 0
   sim_log("Finalized Field Advance");
 
@@ -206,15 +210,13 @@ begin_initialization {
   sim_log( "***********************************************" );
   sim_log("* Topology:                       " << topology_x
     << " " << topology_y << " " << topology_z);
+  sim_log ( "Lx_di   = " << Lx_di );
+  sim_log ( "Tipar/Te = " << Tipar_Te ) ;
   sim_log ( "taui = " << taui );
   sim_log ( "num_step = " << num_step );
-  sim_log ( "Lx = " << Lx/di );
-  sim_log ( "Ly = " << Ly/di );
-  sim_log ( "Lz = " << Lz/di );
-  sim_log ( "pert = " << pert );
-  sim_log ( "Ti = " << Ti );
-  sim_log ( "gamma = " << gamma );
-  sim_log ( "Te = " << Te );
+  sim_log ( "Lx/di = " << Lx/di );
+  sim_log ( "Ly/di = " << Ly/di );
+  sim_log ( "Lz/di = " << Lz/di );
   sim_log ( "nx = " << nx );
   sim_log ( "ny = " << ny );
   sim_log ( "nz = " << nz );
@@ -227,12 +229,15 @@ begin_initialization {
     sim_log ( "total # of particles = " << Ni );
   sim_log ( "dt*wci = " << wci*dt );
   sim_log ( "energies_interval: " << energies_interval );
-  sim_log ( "dx = " << Lx/(di*nx) );
-  sim_log ( "dy = " << Ly/(di*ny) );
-  sim_log ( "dz = " << Lz/(di*nz) );
+  sim_log ( "dx/di = " << Lx/(di*nx) );
+  sim_log ( "dy/di = " << Ly/(di*ny) );
+  sim_log ( "dz/di = " << Lz/(di*nz) );
   sim_log ( "n0 = " << n0 );
+  sim_log ( "vthipar/v_A = " << vthipar/v_A );
 
- // Dump simulation information to file "info.bin" for translate script
+
+
+  // Dump simulation information to file "info.bin" for translate script
   if (rank() == 0 ) {
 
     FileIO fp_info;
@@ -257,7 +262,8 @@ begin_initialization {
 
     fp_info.close();
 
-}
+  }
+
 
 
   ////////////////////////////
@@ -266,37 +272,36 @@ sim_log( "Loading fields" );
 
 // Note: everywhere is a region that encompasses the entire simulation                                                                                                                   
 // In general, regions are specied as logical equations (i.e. x>0 && x+y<2) 
- set_region_field( everywhere, 0, 0, 0, 0.0, 0, 0);
- set_region_te(everywhere, Te);
+ set_region_field( everywhere, 0, 0, 0, 1.0, 0, 0);
+ set_region_te( everywhere, Te);
 
  // LOAD PARTICLES
   sim_log( "Loading particles" );
 
+  // Do a fast load of the particles
+  int rng_seed     = 1;     // Random number seed increment 
+  seed_entropy( rank() );  //Generators desynchronized
   double xmin = grid->x0 , xmax = grid->x0+(grid->dx)*(grid->nx);
   double ymin = grid->y0 , ymax = grid->y0+(grid->dy)*(grid->ny);
   double zmin = grid->z0 , zmax = grid->z0+(grid->dz)*(grid->nz);
 
- repeat( Ni ) {
-    double x, y, z, r, ux, uy, uz, d0;
-    // rejection method, sine profile                                                                                                                                                                    
-    do {
-      x = uniform( rng(0), -Lx/2, Lx/2 );
-      r = uniform(rng(0) , 0   , 1.0+pert);
-    } while( r > (1.0+pert*sin(kx*x))) ;
+   sim_log( "-> Seeding particles" );
 
-    if (x>=xmin && x<= xmax) {
-      //      x = uniform( rng(0), xmin, xmax );
-      y = uniform( rng(0), ymin, ymax );
-      z = uniform( rng(0), zmin, zmax );
-      
-      ux = normal( rng(0), 0, vthi );                                                                                                                                      
-      uy = normal( rng(0), 0, vthi );
-      uz = normal( rng(0), 0, vthi );
-      inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0 );
-    }
- }
+   repeat ( Ni/nproc() ) {
+     double x, y, z, ux, uy, uz, d0 ;
 
- 
+     x = uniform( rng(0), xmin, xmax );
+     y = uniform( rng(0), ymin, ymax );
+     z = uniform( rng(0), zmin, zmax );
+
+     ux = normal( rng(0), 0, vthipar);
+     uy = normal( rng(0), 0, vthiperp);
+     uz = normal( rng(0), 0, vthiperp);
+
+     inject_particle( ion, x, y, z, ux, uy, uz, qi, 0, 0);
+
+   }
+
   sim_log( "Finished loading particles" );
 
   /*--------------------------------------------------------------------------
@@ -386,8 +391,8 @@ sim_log( "Loading fields" );
   sim_log ( "Fields z-stride " << global->fdParams.stride_z );
 
   //  // relative path to electron species data from global header
-  //sprintf(global->hedParams.baseDir, "hydro");
-  //
+  sprintf(global->hedParams.baseDir, "hydro");
+  
 
   //  // relative path to electron species data from global header
   sprintf(global->hHdParams.baseDir, "hydro");
@@ -400,6 +405,7 @@ sim_log( "Loading fields" );
 
   // base file name for fields output
   sprintf(global->hHdParams.baseFileName, "Hhydro");
+  //sprintf(global->hedParams.baseFileName, "ehydro");
 
   global->hHdParams.stride_x = 1;
   global->hHdParams.stride_y = 1;
@@ -444,17 +450,20 @@ sim_log( "Loading fields" );
                      emat     | nmat      | fmat     | cmat );
 
    output_variables( current_density  | charge_density |
-                     momentum_density | mass_density   | stress_tensor );
+                     momentum_density | mass_density     | stress_tensor );
    */
 
   //global->fdParams.output_variables( electric | magnetic );
-  global->hedParams.output_variables( current_density | charge_density | stress_tensor );
+  //global->hedParams.output_variables( current_density | charge_density | stress_tensor );
+  global->hedParams.output_variables( 0 );
+  //global->hHdParams.output_variables( stress_tensor );
   global->hHdParams.output_variables( current_density | charge_density | stress_tensor );
 
 
   const uint32_t allfields      (0xffffffff);
-
-  global->fdParams.output_variables( allfields );
+  
+//  global->fdParams.output_variables( allfields );
+  global->fdParams.output_variables( magnetic | current );
 // global->hedParams.output_variables( all );
 // global->hHdParams.output_variables( all );
 
@@ -509,7 +518,8 @@ sim_log( "Loading fields" );
 #define should_dump(x)                                                  \
   (global->x##_interval>0 && remainder(step(), global->x##_interval) == 0)
 
-begin_diagnostics {
+void
+vpic_simulation::user_diagnostics() {
 
   /*--------------------------------------------------------------------------
    * NOTE: YOU CANNOT DIRECTLY USE C FILE DESCRIPTORS OR SYSTEM CALLS ANYMORE
@@ -559,7 +569,7 @@ begin_diagnostics {
   //global->ehydro_interval = 1358;
   //global->Hhydro_interval = 1358;
 
-  global->restart_interval = 3000;
+  global->restart_interval = -1; //3000;
   global->quota_sec = 23.5*3600.0;
 
   //  const int nsp=global->nsp;
@@ -578,6 +588,8 @@ begin_diagnostics {
     dump_mkdir("restore1");  // 1st backup
     dump_mkdir("particle");
     dump_mkdir("rundata");
+
+    dump_mkdir("data");
 
     
     // Make subfolders for restart
@@ -618,7 +630,9 @@ begin_diagnostics {
    * Field data output
    *------------------------------------------------------------------------*/
 
-  if(step() == 1 || should_dump(fields)) field_dump(global->fdParams);
+  if(step() == 1 || should_dump(fields)) {
+    field_dump(global->fdParams);
+  }
 
   /*--------------------------------------------------------------------------
    * Electron species output
@@ -630,7 +644,9 @@ begin_diagnostics {
    * Ion species output
    *------------------------------------------------------------------------*/
 
-  if(should_dump(Hhydro)) hydro_dump("ion", global->hHdParams);
+  if(should_dump(Hhydro)) {
+    hydro_dump("ion", global->hHdParams);
+  }
 
 
   /*--------------------------------------------------------------------------
@@ -653,13 +669,13 @@ begin_diagnostics {
       double dumpstart = uptime();
       if(!global->rtoggle) {
         global->rtoggle = 1;
-        //      BEGIN_TURNSTILE(NUM_TURNSTILES) {
+        //    BEGIN_TURNSTILE(NUM_TURNSTILES) {
         checkpt("restore1/restore", 0);
         //      DUMP_INJECTORS(1);
         //    } END_TURNSTILE;
       } else {
         global->rtoggle = 0;
-        //      BEGIN_TURNSTILE(NUM_TURNSTILES) {
+        //    BEGIN_TURNSTILE(NUM_TURNSTILES) {
         checkpt("restore0/restore", 0);
         //      DUMP_INJECTORS(0);
         //    } END_TURNSTILE;
@@ -689,55 +705,6 @@ begin_diagnostics {
   // be synchronized across processors. Note that this is only checked every
   // few timesteps to eliminate the expensive mp_elapsed call from every
   // timestep. mp_elapsed has an ALL_REDUCE in it!
-
-  // if(step() % 10 == 0) {  
-  //   double kx = 2.0*M_PI/(16.0);
-  //   double cos_sum = 0.0;
-  //   double sin_sum = 0.0;
-  //   double total_weight = 0.0;
-    
-  //   species_t *ion = find_species_name("ion", species_list);
-  //   ion->copy_to_host();
-  //   for(int ip = 0; ip < ion->np; ip++) {
-  //     particle_t *p = &ion->p[ip];
-  //     double x, y, z;
-  //     grid->local_to_global_cart(p->i, p->dx, p->dy, p->dz, x, y, z);
-      
-  //     cos_sum += p->w * cos(kx * x);  // WEIGHT BY CHARGE!
-  //     sin_sum += p->w * sin(kx * x);
-  //     total_weight += p->w;
-  //   }
-    
-  //   cos_sum /= total_weight;
-  //   sin_sum /= total_weight;
-    
-  //   double amplitude = sqrt(cos_sum*cos_sum + sin_sum*sin_sum);
-  //   double phase = atan2(sin_sum, cos_sum);
-  //   double time = step() * grid->dt;
-    
-  //   // Electric field energy
-  //   double ex_energy = 0.0;
-  //   for(int v = 0; v < grid->nv; v++) {
-  //     ex_energy += 0.5 * field(v).ex * field(v).ex;
-  //   }
-  //   ex_energy *= grid->dx * grid->dy * grid->dz;
-    
-  //   if(rank() == 0) {
-  //     FILE *fp;
-  //     if(step() == 0) {
-  //       fp = fopen("landau_damping.txt", "w");
-  //       fprintf(fp, "# Landau Damping Data for Ion Acoustic Wave\n");
-  //       fprintf(fp, "# kx = %e\n", kx);
-  //       fprintf(fp, "# Ti = %e, Te = %e, cs = %e\n", 1.0/3.0, 1.0/3.0, 1.0);
-  //       fprintf(fp, "# Columns: time amplitude phase Ex_energy\n");
-  //     } else {
-  //       fp = fopen("landau_damping.txt", "a");
-  //     }
-      
-  //     fprintf(fp, "%e %e %e %e\n", time, amplitude, phase, ex_energy);
-  //     fclose(fp);
-  //   }
-  // }
 
 
   if ( (step()>0 && global->quota_check_interval>0

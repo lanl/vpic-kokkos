@@ -286,8 +286,13 @@ set(KOKKOS_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_includes)
 file(GENERATE OUTPUT ${KOKKOS_CORE_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 file(GENERATE OUTPUT ${KOKKOS_CONTAINER_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_CONTAINERS}")
 file(GENERATE OUTPUT ${KOKKOS_ALGORITHM_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_ALGORITHMS}")
-string(REPLACE ";" " " kokkos_compile_options "${KOKKOS_COMPILE_OPTIONS}")
-file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${kokkos_compile_options}")
+# restrict compile options file to C++ to avoid multi-language error (BUILD_INTERNAL_KOKKOS=OFF)
+file(GENERATE
+     OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE}
+     CONTENT "$<LIST:JOIN,$<LIST:TRANSFORM,$<TARGET_PROPERTY:INTERFACE_COMPILE_OPTIONS>,REPLACE,SHELL[:],>, >"
+     CONDITION $<COMPILE_LANGUAGE:CXX>
+     TARGET Kokkos::kokkoscore
+)
 if(NOT "${KOKKOS_INCLUDE_DIRS}" STREQUAL "${KOKKOS_INCLUDE_CONTAINERS}")
   set(KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS};${KOKKOS_INCLUDE_CONTAINERS}")
 endif()
@@ -575,8 +580,16 @@ target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LI
 #endif()
 
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
+#-- make some options public
+if (VPIC_SHAPE_QS)
+  target_compile_definitions(vpic PUBLIC SHAPE_QS)
+else()
+  target_compile_definitions(vpic PUBLIC SHAPE_NGP)
+endif(VPIC_SHAPE_QS)
 if (HYB_USE_RADIATION)
   target_compile_definitions(vpic PUBLIC HYB_USE_RADIATION)
+  target_compile_definitions(vpic PUBLIC VPIC_ENABLE_HDF5)
+  target_compile_definitions(vpic PUBLIC VPIC_ENABLE_LEGACY_DATA_STRUCTURES)
 endif(HYB_USE_RADIATION)
 
 macro(build_a_vpic name deck)

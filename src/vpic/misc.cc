@@ -72,7 +72,6 @@ vpic_simulation::inject_particle( species_t * sp,
   if( iz==nz ) z = 1;                 // On far wall ... conditional move
   if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
   iz++;                               // Adjust for mesh indexing
-
 #ifdef VPIC_ENABLE_LEGACY_DATA_STRUCTURES
   size_t p_index = Kokkos::atomic_fetch_inc(&(sp->np));
   particle_t * p = sp->p + p_index;
@@ -210,8 +209,6 @@ vpic_simulation::inject_particle_r( species_t * sp,
   if( iz==nz ) z = 1;                 // On far wall ... conditional move
   if( iz==nz ) iz = nz-1;             // On far wall ... conditional move
   iz++;                               // Adjust for mesh indexing
-
-  size_t p_index = Kokkos::atomic_fetch_inc(&(sp->np));
 
   // Add particle to receive list (on host), so it will be copied to
   // device along with the boundary_p particles.

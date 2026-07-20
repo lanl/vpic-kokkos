@@ -60,8 +60,6 @@ restore_vpic_simulation( void ) {
   RESTORE_FPTR( vpic->collision_op_list );
 
   vpic->dump_strategy = new_dump_strategy(vpic->dump_strategy_id, vpic);
-  //RESTORE_FPTR( vpic->collision_op_list );
-
   vpic->sorter = new ParticleSorter<>();
 
   return vpic;
@@ -129,8 +127,10 @@ vpic_simulation::~vpic_simulation() {
   delete_grid( grid );
   delete_rng_pool( sync_entropy );
   delete_rng_pool( entropy );
+  //delete_dump_strategy( dump_strategy );
   printf("#Running On Kokkos execution space %s\nKokkos::Finalize().\n",
             typeid (Kokkos::DefaultExecutionSpace).name ());
+  delete kokkos_rng;
   delete sorter;
   Kokkos::finalize();
 }
@@ -398,12 +398,12 @@ void restore_kokkos(vpic_simulation& simulation, const char *fbase)
           new(&sp->np_per_ts) std::vector<std::pair<int64_t,int64_t>>();
 
           new(&sp->particle_io_buffer_d) k_particles_t();
-          new(&sp->particle_cell_io_buffer_d) k_particles_t();
+          new(&sp->particle_cell_io_buffer_d) k_particles_i_t();
           new(&sp->annotations_io_buffer_d) annotations_t<Kokkos::DefaultExecutionSpace>();
           new(&sp->tracer_buffer_d) Kokkos::View<float**, Kokkos::LayoutLeft>();
 
           new(&sp->particle_io_buffer_h) k_particles_t::HostMirror();
-          new(&sp->particle_cell_io_buffer_h) k_particles_t::HostMirror();
+          new(&sp->particle_cell_io_buffer_h) k_particles_i_t::HostMirror();
           new(&sp->annotations_io_buffer_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
           new(&sp->tracer_buffer_h) Kokkos::View<float**, Kokkos::LayoutLeft>::HostMirror();
 #endif

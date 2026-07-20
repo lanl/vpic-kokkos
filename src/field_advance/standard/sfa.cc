@@ -123,8 +123,7 @@ create_sfa_params( grid_t           * g,
 
   // Allocate the sfa parameters
 
-    p = new sfa_params_t(n_mc);
-//  MALLOC( p, 1 );
+  p = new sfa_params_t(n_mc);
   MALLOC_ALIGNED( p->mc, n_mc+2, 128 );
   p->n_mc = n_mc;
   p->damp = damp;

@@ -129,8 +129,8 @@ using k_accumulators_t = Kokkos::View<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR
 
 using k_accumulators_sv_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH]>;
 
-using k_hydro_t = Kokkos::View<double* [HYDRO_VAR_COUNT]>;
-using k_hydro_sv_t = Kokkos::Experimental::ScatterView<double* [HYDRO_VAR_COUNT]>;
+using k_hydro_t = Kokkos::View<float* [HYDRO_VAR_COUNT]>;
+using k_hydro_sv_t = Kokkos::Experimental::ScatterView<float* [HYDRO_VAR_COUNT]>;
 
 using k_accumulators_svh_t = Kokkos::Experimental::ScatterView<float *[ACCUMULATOR_VAR_COUNT][ACCUMULATOR_ARRAY_LENGTH], Kokkos::LayoutRight, Kokkos::HostSpace, Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated, Kokkos::Experimental::ScatterNonAtomic>;
 
