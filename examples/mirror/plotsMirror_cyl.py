@@ -60,7 +60,7 @@ zv = np.linspace(-Lz/2, Lz/2, nz)  # Axial coordinates (centered)
 R, Z = np.meshgrid(rv, zv, indexing='ij')
 
 cnt = 0	
-for slice in range(0, 1, 1):  # Usually just slice=0 for axisymmetric
+for slice in range(0, 45, 1):  # Usually just slice=0 for axisymmetric
 	for q in qs:
 		tmp = loadSlice(dir, q, slice, nr, nz)
 		Q[q] = tmp

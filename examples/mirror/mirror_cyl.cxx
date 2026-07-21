@@ -141,28 +141,36 @@ begin_initialization {
   double Ltheta  = 2*M_PI;  // Full azimuthal extent (was Ly)
   double Lz  = 300.*di;     // Axial extent (was Lz, now much longer for trap axis)
 
-  double Lxp = Lr/4.5;      // Now radial injection size
-  double Lzp = Lz/4.5;      // Axial injection size
-  
+  double Lx_cart = 300.0*di;
+  double Lz_cart = 30.0*di;
+  double Lxp = Lz_cart/4.5;
+  double Lzp = Lx_cart/4.5;  
   double topology_x = 1;    // r direction
   double topology_y = 1;    // theta direction 
   double topology_z = 4;    // z direction (more decomposition along axis)
 
-  double nx = 104;          // Cells in r (was 1024)
+  double nx = 52;          // Cells in r (was 1024)
   double ny = 1;            // Cells in theta (keep 1 for 2D axisymmetric)
   double nz = 1024;         // Cells in z (was 104, now along trap axis)
 
-  double hx = Lr/nx;        // cell size in r
+  double Rmax = Lr;
+  double dr_nominal = Rmax/nx;
+
+  double rmin = 0.1*Lr;   // about 0.288 di
+  // or if still unstable:
+  // double rmin = 1.0*dr_nominal;
+
+  double hx = (Rmax - rmin)/nx;
   double hy = Ltheta/ny;    // cell size in theta
   double hz = Lz/nz;        // cell size in z
 
   double Npart   = nppc*nx*ny*nz;  // total macro electrons in box
   Npart = trunc_granular(Npart,nproc()); // Make it divisible by number of processors
 
- double qe = -ec*Lr*Ltheta*Lz/Npart;  // Charge per macro electron (volume now cylindrical)
- double qi =  ec*Lr*Ltheta*Lz/Npart;  // Charge per macro electron       
- double nfac = qi/(hx*hy*hz);         // Convert density to particles per cell
-      
+  double Vphys = 0.5*(Rmax*Rmax - rmin*rmin)*Ltheta*Lz;
+
+  double qe = -ec*Vphys/Npart;
+  double qi =  ec*Vphys/Npart;  double nfac = qi/(hx*hy*hz);      
   // Determine the time step
 
   double dt = 0.01/wci;            // time step
@@ -329,7 +337,7 @@ begin_initialization {
   grid->den_floor_pe = 0.05;
 
  // Define periodic CYLINDRICAL grid (periodic in theta only)
-  define_periodic_grid(  0.01*Lr, 0., -0.5*Lz,     // Low corner (r=0, theta=0, z_min)
+  define_periodic_grid(  rmin, 0., -0.5*Lz,     // Low corner (r=0, theta=0, z_min)
 			  Lr, Ltheta, 0.5*Lz,     // High corner (r_max, 2pi, z_max)
 			  nx, ny, nz,              // Resolution
 			  topology_x, topology_y, topology_z); // Topology
@@ -357,11 +365,19 @@ begin_initialization {
   if ( iz==topology_z-1 ) set_domain_field_bc( BOUNDARY( 0,0,1), pec_fields ); // z top
 
 
-  sim_log("Absorb particles on all boundaries"); 
-  if ( ix==0 )            set_domain_particle_bc( BOUNDARY(-1,0,0), absorb_particles ); // Axis
-  if ( ix==topology_x-1 ) set_domain_particle_bc( BOUNDARY(1,0,0), absorb_particles );  // Outer radius
-  if ( iz==0 )            set_domain_particle_bc( BOUNDARY(0,0,-1), absorb_particles ); // z bottom
-  if ( iz==topology_z-1 ) set_domain_particle_bc( BOUNDARY(0,0,1), absorb_particles );  // z top
+  sim_log("Reflect particles at cylindrical axis; absorb particles at outer/open boundaries");
+
+if ( ix==0 )
+  set_domain_particle_bc( BOUNDARY(-1,0,0), reflect_particles ); // r=0 axis symmetry
+
+if ( ix==topology_x-1 )
+  set_domain_particle_bc( BOUNDARY(1,0,0), absorb_particles );   // outer radius
+
+if ( iz==0 )
+  set_domain_particle_bc( BOUNDARY(0,0,-1), absorb_particles );  // axial lower end
+
+if ( iz==topology_z-1 )
+  set_domain_particle_bc( BOUNDARY(0,0,1), absorb_particles );   // axial upper end
 
 
 // Reflecting inner BC - NOW IN CYLINDRICAL
@@ -369,30 +385,23 @@ begin_initialization {
 // For axisymmetric case, coils are rings at specific (r, z) positions
 
   // Mirror coil positions in cylindrical coordinates
-  double r_coil = 0.25*Lr;   // Radial position of magnetic coils
-  double z_mirror1 = 0.35*Lz;  // First mirror position
-  double z_mirror2 = -0.35*Lz; // Second mirror position
-  double R_coil = 0.25*Lr;   // Coil size
+double x_P1_cart = 0.15*Lx_cart;
+double x_P2_cart = 0.85*Lx_cart;
 
-// Define coil regions in cylindrical coords (r, theta, z)
-// Remember: x->r, y->theta, z->z
-#define R2COIL1 ( (x-r_coil)*(x-r_coil) + (z-z_mirror1)*(z-z_mirror1) )
-#define R2COIL2 ( (x-r_coil)*(x-r_coil) + (z-z_mirror2)*(z-z_mirror2) )
+double r_coil    = 0.5*Lz_cart;    // Cartesian z_P = +15 di -> cylindrical r = 15 di
+double z_mirror1 = x_P1_cart - 0.5*Lx_cart;  // -105 di
+double z_mirror2 = x_P2_cart - 0.5*Lx_cart;  // +105 di
 
-# define INSIDE_COIL1 (R2COIL1 < R_coil*R_coil )
-# define INSIDE_COIL2 (R2COIL2 < R_coil*R_coil )
-
-
-  set_region_bc(INSIDE_COIL1, reflect_particles, reflect_particles,reflect_particles);
-  set_region_bc(INSIDE_COIL2, reflect_particles, reflect_particles,reflect_particles);
-
-
+double R_coil    = 0.25*Lz_cart;   // 7.5 di
 // Resistive layer around coils
-#define R21 ( (x-r_coil)*(x-r_coil) + (z-z_mirror1)*(z-z_mirror1) )
-#define R22 ( (x-r_coil)*(x-r_coil) + (z-z_mirror2)*(z-z_mirror2) )
+#define R2COIL1 ( 0.02*(z-z_mirror1)*(z-z_mirror1) + (x-r_coil)*(x-r_coil) )
+#define R2COIL2 ( 0.02*(z-z_mirror2)*(z-z_mirror2) + (x-r_coil)*(x-r_coil) )
 
-# define INSIDE_LAYER1 ( (R21 < 1.5*R_coil*R_coil) && (R2COIL1 > R_coil*R_coil)  )
-# define INSIDE_LAYER2 ( (R22 < 1.5*R_coil*R_coil) && (R2COIL2 > R_coil*R_coil)  )
+#define INSIDE_COIL1 ( R2COIL1 < R_coil*R_coil )
+#define INSIDE_COIL2 ( R2COIL2 < R_coil*R_coil )
+
+#define INSIDE_LAYER1 ( (R2COIL1 < 1.5*R_coil*R_coil) && (R2COIL1 > R_coil*R_coil) )
+#define INSIDE_LAYER2 ( (R2COIL2 < 1.5*R_coil*R_coil) && (R2COIL2 > R_coil*R_coil) )
 
 //Set resistive layer multipliers. set_region_eta_multipliers(REGION, hyper_eta mult., eta mult., E field mult.)
 
@@ -409,6 +418,9 @@ begin_initialization {
   
   set_region_eta_multipliers(INSIDE_COIL1, 1., 1., 0.);
   set_region_eta_multipliers(INSIDE_COIL2, 1., 1., 0.);
+
+  set_region_bc(INSIDE_COIL1, reflect_particles, reflect_particles, reflect_particles);
+  set_region_bc(INSIDE_COIL2, reflect_particles, reflect_particles, reflect_particles); 
 
   ////////////////////////////////////////////////////////////////////////////////////////////
   // Setup the species
@@ -538,99 +550,203 @@ begin_initialization {
     fp_info.close();
 
 }
-  ////////////////////////////
+ ////////////////////////////
+// Load fields - CYLINDRICAL VERSION MATCHING CARTESIAN COIL FIELD
+//
+// Cartesian reference deck:
+//   x_cart = axial coordinate, range [0, 300 di]
+//   z_cart = transverse coordinate, range [-15 di, 15 di]
+//
+// Cylindrical deck:
+//   x ≡ r
+//   y ≡ theta
+//   z ≡ axial coordinate, range [-150 di, 150 di]
+//
+// Coordinate mapping for equivalent positive-r half-plane:
+//
+//   x_cart = z_cyl + 0.5*Lx_cart
+//   z_cart = r
+//
+// Component mapping:
+//
+//   Cartesian Bx -> cylindrical Bz
+//   Cartesian Bz -> cylindrical Br
+//
+// Then store contravariant/logical components:
+//
+//   cbx0 = Br_phys / h_1
+//   cby0 = Btheta_phys / h_2
+//   cbz0 = Bz_phys / h_3
 ////////////////////////////
-// Load fields - CYLINDRICAL (axisymmetric)
 
-// For cylindrical: x≡r, y≡θ, z≡z
-// These macros compute PHYSICAL B_r and B_z components
-// NOTE: Keep variable names as 'x' and 'z' - VPIC interprets them as r and z in cylindrical mode
-#define BXC(I,xc,zc,L) (-2.0*I/8.0/atan(L/2.0/zc)*(atan((x-xc)/(z-zc))+atan((L-x+xc)/(z-zc))-atan((x-xc)/(z+zc))-atan((L-x+xc)/(z+zc))) )
-#define BZC(I,xc,zc,L) ( I/8.0/atan(L/2.0/zc)*log(((x-xc)*(x-xc)+(z-zc)*(z-zc))*((L-x+xc)*(L-x+xc)+(z+zc)*(z+zc))/((((L-x+xc)*(L-x+xc)+(z-zc)*(z-zc)))*(((x-xc)*(x-xc)+(z+zc)*(z+zc))))) )
+sim_log("Loading fields - cylindrical manual coil injection matched to Cartesian");
 
-// Coil dimensions (Lx now represents radial extent)
-const int Lx = Lr;
-const int Ly = Ltheta;
+// Use the original Cartesian reference dimensions explicitly.
+// This avoids confusing cylindrical Lr/Lz naming.
 
-double Lcoil1 = 0.6*Lx;
-double Lcoil2 = 0.1*Lx;
+double Rinj = Lz_cart/4.5;  // 6.67 di
+double Zinj = Lx_cart/4.5;  // 66.67 di
+// Coil dimensions exactly as in Cartesian deck
+double Lcoil1 = 0.6*Lx_cart;
+double Lcoil2 = 0.1*Lx_cart;
 
-double z1 = 0.55*Lz;
-double x1 = 0.2*Lx, x2 = 0.8*Lx, x3 = 0.1*Lx, x4 = 0.9*Lx; 
+double z1 = 0.55*Lz_cart;
 
-double B0=0.5;
+double x1 = 0.2*Lx_cart;
+double x2 = 0.8*Lx_cart;
+double x3 = 0.1*Lx_cart;
+double x4 = 0.9*Lx_cart;
+
+double B0 = 0.5;
 double B1 = 0.1;
-double I1 = 1.45*B1, I2 = 2.0*B0-0.5*B1, I4 = 0.53*B1;
 
-// These compute PHYSICAL field components B_r and B_z
-#define BX ( BXC(I1,x1,z1,Lcoil1) + BXC(I2,x2,z1,Lcoil2) + BXC(I2,x3,z1,Lcoil2) + BXC(I4,x4,z1,Lcoil2) + BXC(I4,0,z1,Lcoil2) )
-#define BZ ( BZC(I1,x1,z1,Lcoil1) + BZC(I2,x2,z1,Lcoil2) + BZC(I2,x3,z1,Lcoil2) + BZC(I4,x4,z1,Lcoil2) + BZC(I4,0,z1,Lcoil2) )
+double I1 = 1.45*B1;
+double I2 = 2.0*B0 - 0.5*B1;
+double I4 = 0.53*B1;
 
-sim_log( "Loading fields" );
-// Remove the old set_region_field calls and replace with explicit initialization
-sim_log( "Loading fields - Cylindrical Magnetic Mirror" );
+// Host-side evaluators for the exact Cartesian coil formulas.
+// X = Cartesian axial coordinate.
+// Z = Cartesian transverse coordinate.
+auto BXC_eval = [](double I, double xc, double zc, double L,
+                   double X, double Z) -> double {
 
-// Mirror parameters
-double z_mirror = 0.35*Lz;
-double B_mirror = 2.0;
-double B_center = 0.5;
+  return -2.0*I/8.0/atan(L/2.0/zc) *
+    (
+      atan((X - xc)/(Z - zc))
+    + atan((L - X + xc)/(Z - zc))
+    - atan((X - xc)/(Z + zc))
+    - atan((L - X + xc)/(Z + zc))
+    );
+};
 
-// Initialize fields cell by cell with proper coordinate transformation
+auto BZC_eval = [](double I, double xc, double zc, double L,
+                   double X, double Z) -> double {
+
+  double num =
+    ((X - xc)*(X - xc) + (Z - zc)*(Z - zc)) *
+    ((L - X + xc)*(L - X + xc) + (Z + zc)*(Z + zc));
+
+  double den =
+    ((L - X + xc)*(L - X + xc) + (Z - zc)*(Z - zc)) *
+    ((X - xc)*(X - xc) + (Z + zc)*(Z + zc));
+
+  return I/8.0/atan(L/2.0/zc) * log(num/den);
+};
+
+// First zero the dynamic fields, matching the Cartesian setup:
+//   set_region_field(everywhere, 0,0,0, 0,0,0)
+// but do it manually so the initialized external field is only in cb*0.
 for(int k=1; k<=grid->nz+1; k++) {
   for(int j=1; j<=grid->ny+1; j++) {
     for(int i=1; i<=grid->nx+1; i++) {
+
       int voxel_idx = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
-      int mesh_idx = GRID_TO_MESH(i, j, k, grid->nx, grid->ny, grid->nz);
-      
-      // Get PHYSICAL position from the curvilinear mesh
+      int mesh_idx  = GRID_TO_MESH(i, j, k, grid->nx, grid->ny, grid->nz);
+
+      // Embedded physical Cartesian coordinates of the cylindrical mesh point.
       double x_phys = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::xg);
       double y_phys = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::yg);
       double z_phys = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::zg);
-      
-      // Compute physical radius from Cartesian coordinates
+
+      // Cylindrical physical coordinates.
       double r_phys = sqrt(x_phys*x_phys + y_phys*y_phys);
-      
-      // Ensure minimum radius to avoid singularities
-      r_phys = fmax(r_phys, 0.001*Lr);  // Floor radius at 0.1% of Lr
-      
-      // Compute mirror field (now using physical coordinates)
-      double exp_term_1 = exp(-((z_phys - z_mirror)*(z_phys - z_mirror))/(0.1*Lz*Lz));
-      double exp_term_2 = exp(-((z_phys + z_mirror)*(z_phys + z_mirror))/(0.1*Lz*Lz));
-      
-      double Bz_val = B_center + (B_mirror - B_center)*(exp_term_1 + exp_term_2);
-      
-      double dBz_dz = (B_mirror - B_center) * (
-          -2.0*(z_phys - z_mirror)/(0.1*Lz*Lz) * exp_term_1 +
-          -2.0*(z_phys + z_mirror)/(0.1*Lz*Lz) * exp_term_2
-      );
-      
-      double Br_val = -0.5 * r_phys * dBz_dz;
-      
-      // Set the field values (these are CONTRAVARIANT components in logical coords)
-      // For cylindrical: B^r, B^theta, B^z
-      field_array->f[voxel_idx].cbx0 = Br_val / grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_1);
-      field_array->f[voxel_idx].cby0 = 0.0;  // No azimuthal component
-      field_array->f[voxel_idx].cbz0 = Bz_val / grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_3);
-      
-      // External field (if using split B)
-      // field_array->f[voxel_idx].cbx0 = field_array->f[voxel_idx].cbx;
-      // field_array->f[voxel_idx].cby0 = 0.0;
-      // field_array->f[voxel_idx].cbz0 = field_array->f[voxel_idx].cbz;
-      
-      // Check for NaN and report
-      // if(!isfinite(Br_val) || !isfinite(Bz_val)) {
-      //   sim_log("WARNING: NaN in field initialization at voxel (%d,%d,%d)", i, j, k);
-      //   sim_log("  Physical: r=%e z=%e", r_phys, z_phys);
-      //   sim_log("  Field: Br=%e Bz=%e", Br_val, Bz_val);
-      // }
+      double z_cyl  = z_phys;
+
+      // Map cylindrical coordinates to the Cartesian reference deck.
+      //
+      // Cartesian x was the long trap axis from 0 to Lx_cart.
+      // Cylindrical z is centered on 0, so shift it.
+      double X_cart = z_cyl + 0.5*Lx_cart;
+
+      // Cartesian z transverse coordinate is represented by cylindrical radius.
+      // This matches the positive-z half-plane of the Cartesian setup.
+      double Z_cart = r_phys;
+
+      // Evaluate Cartesian coil field at mapped point.
+      double BX_cart =
+          BXC_eval(I1, x1, z1, Lcoil1, X_cart, Z_cart)
+        + BXC_eval(I2, x2, z1, Lcoil2, X_cart, Z_cart)
+        + BXC_eval(I2, x3, z1, Lcoil2, X_cart, Z_cart)
+        + BXC_eval(I4, x4, z1, Lcoil2, X_cart, Z_cart)
+        + BXC_eval(I4, 0.0, z1, Lcoil2, X_cart, Z_cart);
+
+      double BZ_cart =
+          BZC_eval(I1, x1, z1, Lcoil1, X_cart, Z_cart)
+        + BZC_eval(I2, x2, z1, Lcoil2, X_cart, Z_cart)
+        + BZC_eval(I2, x3, z1, Lcoil2, X_cart, Z_cart)
+        + BZC_eval(I4, x4, z1, Lcoil2, X_cart, Z_cart)
+        + BZC_eval(I4, 0.0, z1, Lcoil2, X_cart, Z_cart);
+
+      // Cartesian-to-cylindrical physical component mapping:
+      //
+      //   Bx_cart, axial,       -> Bz_cyl
+      //   Bz_cart, transverse,  -> Br_cyl
+      //
+      // No azimuthal component for axisymmetric mirror field.
+      double Br_phys     = BZ_cart;
+      double Btheta_phys = 0.0;
+      double Bz_phys     = BX_cart;
+
+      // Curvilinear scale factors.
+      double h1 = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_1);
+      double h2 = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_2);
+      double h3 = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_3);
+
+      // Defensive protection for the theta scale factor near the axis.
+      // In this deck r starts at 0.1*Lr, so h2 should not be zero.
+      if(h2 == 0.0) h2 = 1.0;
+
+      // Zero electric field.
+      field_array->f[voxel_idx].ex = 0.0;
+      field_array->f[voxel_idx].ey = 0.0;
+      field_array->f[voxel_idx].ez = 0.0;
+
+      // Zero dynamic magnetic field.
+      field_array->f[voxel_idx].cbx = 0.0;
+      field_array->f[voxel_idx].cby = 0.0;
+      field_array->f[voxel_idx].cbz = 0.0;
+
+      // Store external magnetic field in CONTRAVARIANT logical components.
+      //
+      // This is the important part:
+      //
+      //   B^i_logical = B_i_physical / h_i
+      //
+      // For cylindrical:
+      //   h_1 = h_r     = 1
+      //   h_2 = h_theta = r
+      //   h_3 = h_z     = 1
+      //
+      // Therefore Br and Bz are numerically unchanged, but still divide by h_i.
+      field_array->f[voxel_idx].cbx0 = Br_phys     / h1;
+      field_array->f[voxel_idx].cby0 = 0.0;
+      field_array->f[voxel_idx].cbz0 = Bz_phys     / h3;
+
+      // Optional NaN guard.
+      if(!isfinite(field_array->f[voxel_idx].cbx0) ||
+         !isfinite(field_array->f[voxel_idx].cby0) ||
+         !isfinite(field_array->f[voxel_idx].cbz0)) {
+
+        sim_log("WARNING: non-finite initialized B field at voxel "
+                << i << " " << j << " " << k
+                << " r=" << r_phys
+                << " z_cyl=" << z_cyl
+                << " X_cart=" << X_cart
+                << " Z_cart=" << Z_cart
+                << " Br=" << Br_phys
+                << " Bz=" << Bz_phys
+                << " h1=" << h1
+                << " h2=" << h2
+                << " h3=" << h3);
+      }
     }
   }
 }
 
-// Set electron temperature
+// Electron temperature
 set_region_te(everywhere, vthe*vthe);
 
-// Copy to device
+// Push initialized host fields to device.
 field_array->copy_to_device();
 
 // For CYLINDRICAL coordinates, VPIC expects contravariant logical components:
@@ -656,24 +772,22 @@ field_array->copy_to_device();
   double zmin = grid->z0 , zmax = grid->z0+(grid->dz)*(grid->nz);  // z range
   
   repeat ( Npart/nproc() ) {
-
-  double r = uniform(rng(0),xmin,xmax);         // radial position
-  double theta = uniform(rng(0),ymin,ymax);     // azimuthal position
-  double z = uniform(rng(0),zmin,zmax);         // axial position
-
   // Inject in central region only
   // Now checking in cylindrical: small r, central z
-  if (r < Lxp && (abs(z) < Lzp)){
-    
-    // CRITICAL: Velocities are still in PHYSICAL Cartesian (vx, vy, vz)!
-    // Not in (vr, vtheta, vz)! VPIC handles the transformation internally.
+  double u = uniform(rng(0), 0.0, 1.0);
+  double r = sqrt(rmin*rmin + u*(Rmax*Rmax - rmin*rmin));
+
+  double theta = uniform(rng(0), ymin, ymax);
+  double z     = uniform(rng(0), zmin, zmax);
+
+  if ( r < Rinj && fabs(z) < Zinj ) {
     inject_particle( ion, r, theta, z,
-		     normal(rng(0),0,vthi),  // vx (Cartesian)
-		     normal(rng(0),0,vthi),  // vy (Cartesian)
-		     normal(rng(0),0,vthi),  // vz (Cartesian)
-		     qi, 0 ,0 );
+                    normal(rng(0),0,vthi),
+                    normal(rng(0),0,vthi), //maybe0
+                    normal(rng(0),0,vthi),
+                    qi, 0, 0 );
   }
-  }
+}
   sim_log( "Finished loading particles" );
 
    /*--------------------------------------------------------------------------

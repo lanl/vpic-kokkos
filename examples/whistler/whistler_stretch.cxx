@@ -274,63 +274,68 @@ sim_log( "Loading fields" );
 // In general, regions are specied as logical equations (i.e. x>0 && x+y<2)
 // In the field loading section, replace with:
 
+// USED TO HAVE TO SET CONTRAVARIANT LOGICAL B FIELD LIKE BELOW - NOW CAN JUST SET REGION FIELD CART
+// #define BX (1./sqrt(2.0))
+// #define BY (1./sqrt(2.0))
+// #define KdotX (kx*x + ky*y)
+// #define K (sqrt(kx*kx+ky*ky))
+
+// #define beta_x 2.0
+// #define beta_y 2.0
+// // Better approach: use a custom field initialization loop
+// sim_log("Loading fields with metric corrections");
+
+// for( int k=1; k<=grid->nz; k++ ) {
+//   for( int j=1; j<=grid->ny; j++ ) {
+//     for( int i=1; i<=grid->nx; i++ ) {
+//       int voxel = VOXEL(i,j,k,grid->nx,grid->ny,grid->nz);
+//       int mesh_idx = VOXEL_TO_MESH(voxel, grid->nx, grid->ny, grid->nz);
+      
+//       // Get physical position and scale factors
+//       double x = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::xg);
+//       double y = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::yg);
+//       double z = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::zg);
+      
+//       double h1 = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_1);
+//       double h2 = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_2);
+//       double h3 = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_3);
+      
+//       // Physical field values
+//       double KdotX_val = kx*x + ky*y;
+//       double Bx_phys = BX + (-pert*ky/K*cos(KdotX_val));
+//       double By_phys = BY + (+pert*kx/K*cos(KdotX_val));
+//       double Bz_phys = (-pert*sin(KdotX_val));
+      
+//       // Convert to coordinate components
+//       // B contravariant: multiply by scale factors
+//       field(i,j,k).cbx = Bx_phys / h1;
+//       field(i,j,k).cby = By_phys /h2;
+//       field(i,j,k).cbz = Bz_phys /h3;
+      
+//       // E covariant: divide by scale factors (if you had E fields)
+//       field(i,j,k).ex = 0;  // Would be: Ex_phys / h1
+//       field(i,j,k).ey = 0;  // Would be: Ey_phys / h2
+//       field(i,j,k).ez = 0;  // Would be: Ez_phys / h3
+//     }
+//   }
+// }
+
 #define BX (1./sqrt(2.0))
 #define BY (1./sqrt(2.0))
 #define KdotX (kx*x + ky*y)
 #define K (sqrt(kx*kx+ky*ky))
 
-// These are PHYSICAL field components
-#define DBX_phys (-pert*ky/K*cos(KdotX))
-#define DBY_phys (+pert*kx/K*cos(KdotX))
-#define DBZ_phys (-pert*sin(KdotX))
+#define DBX (-pert*ky/K*cos(KdotX))
+#define DBY (+pert*kx/K*cos(KdotX))
+#define DBZ (-pert*sin(KdotX))
 
 #define OMEGA (K * ( 0.5*K + sqrt(1 + 0.25*K*K)))
 #define DrV (K/OMEGA)
 
-// For stretched Cartesian: must convert physical to coordinate components
-// B is contravariant: B^i_coord = B^i_phys * h_i
-// E is covariant: E_i_coord = E_i_phys / h_i
-// But for field initialization, you need to loop over cells and apply scale factors
+set_region_field_cart( everywhere, 0,0,0,BX+DBX,BY+DBY,DBZ);
+set_region_te(everywhere, 0*Te);
 
-// Better approach: use a custom field initialization loop
-sim_log("Loading fields with metric corrections");
-
-for( int k=1; k<=grid->nz; k++ ) {
-  for( int j=1; j<=grid->ny; j++ ) {
-    for( int i=1; i<=grid->nx; i++ ) {
-      int voxel = VOXEL(i,j,k,grid->nx,grid->ny,grid->nz);
-      int mesh_idx = VOXEL_TO_MESH(voxel, grid->nx, grid->ny, grid->nz);
-      
-      // Get physical position and scale factors
-      double x = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::xg);
-      double y = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::yg);
-      double z = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::zg);
-      
-      double h1 = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_1);
-      double h2 = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_2);
-      double h3 = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::h_3);
-      
-      // Physical field values
-      double KdotX_val = kx*x + ky*y;
-      double Bx_phys = BX + (-pert*ky/K*cos(KdotX_val));
-      double By_phys = BY + (+pert*kx/K*cos(KdotX_val));
-      double Bz_phys = (-pert*sin(KdotX_val));
-      
-      // Convert to coordinate components
-      // B contravariant: multiply by scale factors
-      field(i,j,k).cbx = Bx_phys / h1;
-      field(i,j,k).cby = By_phys /h2;
-      field(i,j,k).cbz = Bz_phys /h3;
-      
-      // E covariant: divide by scale factors (if you had E fields)
-      field(i,j,k).ex = 0;  // Would be: Ex_phys / h1
-      field(i,j,k).ey = 0;  // Would be: Ey_phys / h2
-      field(i,j,k).ez = 0;  // Would be: Ez_phys / h3
-    }
-  }
-}
-
- set_region_te(everywhere, 0*Te);
+sim_log("Finished loading fields for stretched grid");
 
  // LOAD PARTICLES
   sim_log( "Loading particles" );

@@ -286,7 +286,7 @@ sim_log( "Loading fields" );
 #define OMEGA (K * ( 0.5*K + sqrt(1 + 0.25*K*K)))
 #define DrV (K/OMEGA)
 
- set_region_field( everywhere, 0,0,0,BX+DBX,BY+DBY,DBZ);
+ set_region_field_cart( everywhere, 0,0,0,BX+DBX,BY+DBY,DBZ);
  set_region_te(everywhere, 0*Te);
 
  // LOAD PARTICLES

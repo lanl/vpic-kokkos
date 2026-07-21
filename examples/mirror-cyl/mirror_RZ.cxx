@@ -29,15 +29,17 @@
 
 #define DUMP_WITH_HDF5
 
-#ifdef DUMP_WITH_HDF5
-#ifndef VPIC_ENABLE_HDF5
-#error "VPIC_ENABLE_HDF5" is required
-#endif
-#endif
+// #ifdef DUMP_WITH_HDF5
+// #ifndef VPIC_ENABLE_HDF5
+// #error "VPIC_ENABLE_HDF5" is required
+// #endif
+// #endif
 
-#include "sigma.h"
-#include "dsdOmega.h"
-#include "dump_info.cxx"
+// #include "sigma.h"
+// #include "dsdOmega.h"
+// #include "dump_info.cxx"
+#include <tr1/cmath>
+#define MATHLIB() std::tr1::
 
 enum BEAM_INJECTION_PLANE { X, Y, Z };
 
@@ -54,6 +56,8 @@ T SQR(T val) { return val*val; }
 #define ENABLE_FUSION_RXS 1
 #define ENABLE_ANISOTROPIC_FUSION 0
 #define INCLUDE_TRITIUM_FUEL 0
+#define CYL_FIELDS 1
+
 #define DO_COLLISIONS 0
 #define INJECT_BEAMS 0
 
@@ -262,12 +266,12 @@ begin_initialization {
   double hyb_b0  = b0_G/ref_b0;     // Constant By perpendicular to 1D domain
   double hyb_te  = Te_erg/ref_E0;   // Electron temperature kB*Te/(mi*vA0^2)
   double hyb_den = ni/ref_n0;       // Density corresponding to hyb_te (for hyb_gamma!=1)
-  double hyb_den_floor_ohm = 0.025; // Density floor for Ohm's law update
-  double hyb_den_floor_pe  = 0.025; // Density floor for electron pressure update
+  double hyb_den_floor_ohm = 0.1; // Density floor for Ohm's law update
+  double hyb_den_floor_pe  = 0.1; // Density floor for electron pressure update
   double hyb_eta      = 0;          // Resistivity
   double hyb_hypereta = 1e-5;       // Hyper-resistivity
   double hyb_gamma    = 1.0;        // Electron fluid adiabatic index
-  double hyb_nsub     = 220;        // Number of field subcycles
+  double hyb_nsub     = 10;        // Number of field subcycles
   int hyb_nsm         = 3;          // Smoothing passes per timestep for ion moments
   int hyb_nsmb        = 0;          // B-field smoothing interval; 0 disables
                                     // WARNING this diffuses energy, use only
@@ -277,7 +281,7 @@ begin_initialization {
   // Simulation domain parameters
   // --------------------------------------------------------------------------
 
-  double Lx = 36*di; // size of box in x dimension
+  double Lx = 36*di; // double size of box in x dimension
   double Ly = 4*di; // size of box in y dimension
   double Lz = 360*di; // size of box in z dimension, 36/320 = 0.1125
 
@@ -290,9 +294,9 @@ begin_initialization {
   // postprocessing script.  The translate script parses "info.bin" as an
   // unformatted binary stream and so cannot currently cope with mixed double
   // and int datatypes. --ATr,2023nov17
-  double nx = 256;          // Number of cells in x, y, and z
+  double nx = 256/4;          // Number of cells in x, y, and z
   double ny = 1;
-  double nz = 1024;
+  double nz = 1024/2;
 
   double topology_x = 1;    // Number of domains in x, y, and z
   double topology_y = 1;
@@ -332,7 +336,7 @@ begin_initialization {
   int status_interval_user  = 100;      // Stdout/stderr timer reports
   int quota_check_interval  = 100;      // Wall-clock runtime quota check
   int restart_interval      = 100000;     // Simulation restart dumps
-  int fields_interval       = 100;     // Fields/hydro dumps
+  int fields_interval       = 500;     // Fields/hydro dumps
   int particle_interval     = 10000;  // Particle dumps; 0 to disable
   int energies_interval     = 100;      // Scalar diagnostics
   int fields_stride         = 1;        // Stride for field/hydro dumps
@@ -369,7 +373,7 @@ begin_initialization {
   // --------------------------------------------------------------------------
   // Particle sampling and weights
   // --------------------------------------------------------------------------
-  double nppc = 200;            // Average number of macro particle per cell per species
+  double nppc = 400;            // Average number of macro particle per cell per species
   double sort_interval = 20; // Sort interval for particles, type double to match src/vpic/vpic.h
   double Npart  = nppc*nx*ny*nz;          // total macro electrons in box
   Npart = trunc_granular(Npart,nproc());  // Make divisible by number of processors; disabled to avoid int overflow risk --ATr,2025aug11
@@ -455,9 +459,9 @@ begin_initialization {
   // --------------------------------------------------------------------------
 
   // Setup basic grid parameters
-  grid->dx = Lx/nx;
-  grid->dy = Ly/ny;
-  grid->dz = Lz/nz;
+  //grid->dx = Lx/nx;
+  //grid->dy = Ly/ny;
+  //grid->dz = Lz/nz;
   grid->dt = dt;
   grid->cvac = c;
   grid->eps0 = eps0;
@@ -474,10 +478,11 @@ begin_initialization {
   grid->nsmb  = hyb_nsmb;
 
   // Partition a periodic box among the processors sliced uniformly along x,y,z
-  define_periodic_grid(-0.5*Lx, -0.5*Ly, -0.5*Lz,            // Low corner
+  define_periodic_grid( 0.01*Lx, -0.5*Ly, -0.5*Lz,            // Low corner
                         0.5*Lx,  0.5*Ly,  0.5*Lz,            // High corner
                         nx, ny, nz,                          // Resolution
                         topology_x, topology_y, topology_z); // Topology
+  grid->init_cartesian_grid();
 
   // Identify boundary domains
   int ix, iy, iz;
@@ -494,7 +499,7 @@ begin_initialization {
 
   // Absorbing particle boundaries
   sim_log("Absorb particles on all boundaries"); 
-  if ( ix==0 )            set_domain_particle_bc( BOUNDARY(-1,0,0), absorb_particles );
+  if ( ix==0 )            set_domain_particle_bc( BOUNDARY(-1,0,0), reflect_particles );
   if ( ix==topology_x-1 ) set_domain_particle_bc( BOUNDARY( 1,0,0), absorb_particles );
   // if ( iy==0 )            set_domain_particle_bc( BOUNDARY(0,-1,0), absorb_particles );
   // if ( iy==topology_y-1 ) set_domain_particle_bc( BOUNDARY(0, 1,0), absorb_particles );
@@ -596,7 +601,41 @@ begin_initialization {
   // take logical expressions phrased using global coordinates (x,y,z)
   // to initialize electric and magnetic fields.
   // --------------------------------------------------------------------------
+  
+  
+#if CYL_FIELDS  
+#define RHO() (sqrt(x*x + y*y))
+#define ALPHA(zc,rc) ( rc*rc + x*x + y*y + (z-zc)*(z-zc) - 2.0*rc*RHO() )
+#define BETA(zc,rc)  ( rc*rc + x*x + y*y + (z-zc)*(z-zc) + 2.0*rc*RHO() )
+#define K2(zc,rc)    ( sqrt(1.0 - ALPHA(zc,rc)/BETA(zc,rc)) )
+#define ELLIPK(zc,rc)( MATHLIB() comp_ellint_1 (K2(zc,rc)) )
+#define ELLIPE(zc,rc)( MATHLIB() comp_ellint_2 (K2(zc,rc)) )
 
+
+#define BXC(zc,rc,Ic) (2.0*Ic*rc/M_PI*(z-zc)/RHO()*x/RHO()/( 2.0*ALPHA(zc,rc)*sqrt(BETA(zc,rc)) )*( (rc*rc+x*x+y*y+(z-zc)*(z-zc))*ELLIPE(zc,rc) - ALPHA(zc,rc)*ELLIPK(zc,rc) ) ) 
+#define BYC(zc,rc,Ic) (2.0*Ic*rc/M_PI*(z-zc)/RHO()*y/RHO()/( 2.0*ALPHA(zc,rc)*sqrt(BETA(zc,rc)) )*( (rc*rc+x*x+y*y+(z-zc)*(z-zc))*ELLIPE(zc,rc) - ALPHA(zc,rc)*ELLIPK(zc,rc) ) )
+#define BZC(zc,rc,Ic) (2.0*Ic*rc/M_PI                     /( 2.0*ALPHA(zc,rc)*sqrt(BETA(zc,rc)) )*( (rc*rc+x*x+y*y+(z-zc)*(z-zc))*ELLIPE(zc,rc) + ALPHA(zc,rc)*ELLIPK(zc,rc) ) ) 
+
+  double zcoil1 = 0.3*Lz;
+  double zcoil2 = -0.3*Lz;
+  double rcoil  = 0.71*Lx;
+  
+  double B0=0.5;
+  double B1 = 0.1;
+  double BZ0 = B1/1.13;
+  double Icoil = 1.03*(B0-B1);
+
+#define BX ( BXC(zcoil1,rcoil,Icoil) +  BXC(zcoil2,rcoil,Icoil) )
+#define BY ( BYC(zcoil1,rcoil,Icoil) +  BYC(zcoil2,rcoil,Icoil) )
+#define BZ ( BZC(zcoil1,rcoil,Icoil) +  BZC(zcoil2,rcoil,Icoil) )
+
+  sim_log( "Loading fields" );
+  set_region_field( everywhere, 0, 0, 0,       // Electric field
+  		                0, 0 ,0 );    // Magnetic field
+
+  set_region_bext( everywhere,  BX, BY , BZ + BZ0 );    // External Magnetic field
+  
+#else
   double Lcoil1 = 0.6*Lz;
   double Lcoil2 = 0.1*Lz;
 
@@ -624,6 +663,7 @@ begin_initialization {
   set_region_field( everywhere, 0, 0, 0,    // Electric field
   		                          0, 0, 0 );  // Magnetic field
   set_region_bext( everywhere, BX, 0, BZ ); // External Magnetic field
+#endif 
 
   // --------------------------------------------------------------------------
   // Initialize species
@@ -666,10 +706,11 @@ begin_initialization {
   // Setup collisions
   // --------------------------------------------------------------------------
 
-
   bool var_wt = true;
   int collision_interval = (int)1*sort_interval; // interval for performing collisions
+
 #if DO_COLLISIONS
+
   // Charge exchange (particle-particle)
   // A^+N + B^+M -> A^(+N+dq) + B^(+M-dq)  
   int dq_cex = -1;
@@ -813,7 +854,9 @@ begin_initialization {
   p->last_indexed = -1;
   He3->last_indexed = -1;
   He4->last_indexed = -1;
+  
 #endif //DO_COLLISIONS
+  
   // --------------------------------------------------------------------------
   // Load particles
   // --------------------------------------------------------------------------
@@ -1034,7 +1077,7 @@ begin_initialization {
     dnms.push_back("/beam_inj_plane"); dvs.push_back( global->beam_inj_plane[0] );
 
     // Almost done, write out file to disk
-    dump_info("info.hdf5", ivs, inms, dvs, dnms);
+    // dump_info("info.hdf5", ivs, inms, dvs, dnms);
   }
 
   /*--------------------------------------------------------------------------

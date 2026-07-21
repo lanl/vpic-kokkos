@@ -29,15 +29,15 @@
 
 #define DUMP_WITH_HDF5
 
-#ifdef DUMP_WITH_HDF5
-#ifndef VPIC_ENABLE_HDF5
-#error "VPIC_ENABLE_HDF5" is required
-#endif
-#endif
+// #ifdef DUMP_WITH_HDF5
+// #ifndef VPIC_ENABLE_HDF5
+// #error "VPIC_ENABLE_HDF5" is required
+// #endif
+// #endif
 
-#include "sigma.h"
-#include "dsdOmega.h"
-#include "dump_info.cxx"
+// #include "sigma.h"
+// #include "dsdOmega.h"
+// #include "dump_info.cxx"
 #include <tr1/cmath>
 #define MATHLIB() std::tr1::
 
@@ -482,6 +482,7 @@ begin_initialization {
                         0.5*Lx,  0.5*Ly,  0.5*Lz,            // High corner
                         nx, ny, nz,                          // Resolution
                         topology_x, topology_y, topology_z); // Topology
+  grid->init_cylindrical_grid();
 
   // Identify boundary domains
   int ix, iy, iz;
@@ -659,9 +660,9 @@ begin_initialization {
 
 
   sim_log( "Loading fields" );
-  set_region_field( everywhere, 0, 0, 0,    // Electric field
+  set_region_field_cart( everywhere, 0, 0, 0,    // Electric field
   		                          0, 0, 0 );  // Magnetic field
-  set_region_bext( everywhere, BX, 0, BZ ); // External Magnetic field
+  set_region_bext_cart( everywhere, BX, 0, BZ ); // External Magnetic field
 #endif 
 
   // --------------------------------------------------------------------------
@@ -1076,7 +1077,7 @@ begin_initialization {
     dnms.push_back("/beam_inj_plane"); dvs.push_back( global->beam_inj_plane[0] );
 
     // Almost done, write out file to disk
-    dump_info("info.hdf5", ivs, inms, dvs, dnms);
+    // dump_info("info.hdf5", ivs, inms, dvs, dnms);
   }
 
   /*--------------------------------------------------------------------------

@@ -185,6 +185,7 @@ vpic_simulation::user_radiation( void )
   } while(0)
 
 // The equations are strictly evaluated inside the region
+
 #define set_point_region_field( rgn,                                     \
                                 eqn_ex, eqn_ey, eqn_ez,                  \
                                 eqn_bx, eqn_by, eqn_bz ) do {            \
@@ -195,14 +196,21 @@ vpic_simulation::user_radiation( void )
     for( int _k=0; _k<_nz+2; _k++ ) { const double _zn = _z0 + _dz*(_k-1), _zc = _z0 + _dz*(_k-0.5); \
     for( int _j=0; _j<_ny+2; _j++ ) { const double _yn = _y0 + _dy*(_j-1), _yc = _y0 + _dy*(_j-0.5); field_t * _f = &field(0,_j,_k); \
     for( int _i=0; _i<_nx+2; _i++ ) { const double _xn = _x0 + _dx*(_i-1), _xc = _x0 + _dx*(_i-0.5); double x, y, z; \
+          int _mesh_idx = GRID_TO_MESH(_i, _j, _k, _nx, _ny, _nz);      \
+          double _h1 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_1); \
+          double _h2 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_2); \
+          double _h3 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_3); \
+          if(_h1 == 0.0) _h1 = 1.0; /* Defensive */                      \
+          if(_h2 == 0.0) _h2 = 1.0; /* Defensive for axis */             \
+          if(_h3 == 0.0) _h3 = 1.0; /* Defensive */                      \
           x = _xn; y = _yn; z = _zn; /* No node fields */                \
-          x = _xc;                   if( (rgn) ) _f->ex  =    (eqn_ex);  \
-                   y = _yc;          if( (rgn) ) _f->cbz = _c*(eqn_bz);  \
+          x = _xc;                   if( (rgn) ) _f->ex  =    (eqn_ex)/_h1;  \
+                   y = _yc;          if( (rgn) ) _f->cbz = _c*(eqn_bz)/_h3;  \
                             z = _zc; /* No cell fields */                \
-                   y = _yn;          if( (rgn) ) _f->cby = _c*(eqn_by);  \
-          x = _xn;                   if( (rgn) ) _f->ez  =    (eqn_ez);  \
-                   y = _yc;          if( (rgn) ) _f->cbx = _c*(eqn_bx);  \
-                            z = _zn; if( (rgn) ) _f->ey  =    (eqn_ey);  \
+                   y = _yn;          if( (rgn) ) _f->cby = _c*(eqn_by)/_h2;  \
+          x = _xn;                   if( (rgn) ) _f->ez  =    (eqn_ez)/_h3;  \
+                   y = _yc;          if( (rgn) ) _f->cbx = _c*(eqn_bx)/_h1;  \
+                            z = _zn; if( (rgn) ) _f->ey  =    (eqn_ey)/_h2;  \
           _f++;                                                          \
     }}}                                                                  \
   } while(0)
@@ -385,7 +393,7 @@ vpic_simulation::user_radiation( void )
 // (This is not strictly inside the region)
 #define set_region_field( rgn,                                        \
                           eqn_ex, eqn_ey, eqn_ez,                     \
-                          eqn_bx, eqn_by, eqn_bz ) do {	      \
+                          eqn_bx, eqn_by, eqn_bz ) do {	              \
     const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;      \
     const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;      \
     const double _c  = grid->cvac;                                    \
@@ -399,20 +407,84 @@ vpic_simulation::user_radiation( void )
           x = _xc; y = _yl;          _rclc = (rgn);                   \
           x = _xl;                   _rllc = (rgn);                   \
           x = _xc; y = _yc; z = _zl; _rccl = (rgn);                   \
-          x = _xl;                   _rlcl = (rgn);			\
-          x = _xc; y = _yl;          _rcll = (rgn);			\
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc || _rccl || _rcll ) _f->ex  =    (eqn_ex); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl || _rlcc || _rlcl ) _f->ey  =    (eqn_ey); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc || _rclc || _rllc ) _f->ez  =    (eqn_ez); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->cbx = _c*(eqn_bx); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc )                   _f->cby = _c*(eqn_by); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl )                   _f->cbz = _c*(eqn_bz); \
-          _f++;								\
-    }}}									\
+          x = _xl;                   _rlcl = (rgn);			          \
+          x = _xc; y = _yl;          _rcll = (rgn);			          \
+          int _mesh_idx = GRID_TO_MESH(_i, _j, _k, _nx, _ny, _nz);   \
+          double _h1 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_1); \
+          double _h2 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_2); \
+          double _h3 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_3); \
+          if(_h1 == 0.0) _h1 = 1.0;                                   \
+          if(_h2 == 0.0) _h2 = 1.0;                                   \
+          if(_h3 == 0.0) _h3 = 1.0;                                   \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc || _rccl || _rcll ) _f->ex  =    (eqn_ex)*_h1; \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl || _rlcc || _rlcl ) _f->ey  =    (eqn_ey)*_h2; \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc || _rclc || _rllc ) _f->ez  =    (eqn_ez)*_h3; \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->cbx = _c*(eqn_bx)/_h1; \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc )                   _f->cby = _c*(eqn_by)/_h2; \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl )                   _f->cbz = _c*(eqn_bz)/_h3; \
+          _f++;								          \
+    }}}									          \
   } while(0)
 
-// The equations are only evaluated inside the mesh-mapped region
-// (This is not strictly inside the region)
+  // Evaluates region and field equations in Cartesian coordinates
+// Useful when you want to specify fields in physical (x,y,z) space
+#define set_region_field_cart( rgn,                                   \
+                               eqn_ex, eqn_ey, eqn_ez,                \
+                               eqn_bx, eqn_by, eqn_bz ) do {          \
+    const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;      \
+    const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;      \
+    const double _c  = grid->cvac;                                    \
+    const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;      \
+    for( int _k=0; _k<_nz+2; _k++ ) {                                 \
+    for( int _j=0; _j<_ny+2; _j++ ) { field_t *_f = &field(0,_j,_k);  \
+    for( int _i=0; _i<_nx+2; _i++ ) {                                 \
+          int _voxel = VOXEL(_i, _j, _k, _nx, _ny, _nz);              \
+          int _rccc, _rlcc, _rclc, _rllc, _rccl, _rlcl, _rcll;        \
+          double x, y, z;                                             \
+          /* Test region membership at Yee mesh locations */          \
+          /* Cell center (for reference) */                           \
+          grid->local_to_global_cart(_voxel, 0.0f, 0.0f, 0.0f, x, y, z); \
+          _rccc = (rgn);                                              \
+          /* -x neighbor cell center */                               \
+          grid->local_to_global_cart(_voxel, -2.0f, 0.0f, 0.0f, x, y, z); \
+          _rlcc = (rgn);                                              \
+          /* -y neighbor cell center */                               \
+          grid->local_to_global_cart(_voxel, 0.0f, -2.0f, 0.0f, x, y, z); \
+          _rclc = (rgn);                                              \
+          /* -x,-y neighbor cell center */                            \
+          grid->local_to_global_cart(_voxel, -2.0f, -2.0f, 0.0f, x, y, z); \
+          _rllc = (rgn);                                              \
+          /* -z neighbor cell center */                               \
+          grid->local_to_global_cart(_voxel, 0.0f, 0.0f, -2.0f, x, y, z); \
+          _rccl = (rgn);                                              \
+          /* -x,-z neighbor cell center */                            \
+          grid->local_to_global_cart(_voxel, -2.0f, 0.0f, -2.0f, x, y, z); \
+          _rlcl = (rgn);                                              \
+          /* -y,-z neighbor cell center */                            \
+          grid->local_to_global_cart(_voxel, 0.0f, -2.0f, -2.0f, x, y, z); \
+          _rcll = (rgn);                                              \
+          /* Get scale factors for this cell */                       \
+          int _mesh_idx = GRID_TO_MESH(_i, _j, _k, _nx, _ny, _nz);   \
+          double _h1 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_1); \
+          double _h2 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_2); \
+          double _h3 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_3); \
+          if(_h1 == 0.0) _h1 = 1.0; /* Defensive */                   \
+          if(_h2 == 0.0) _h2 = 1.0; /* Defensive for axis */          \
+          if(_h3 == 0.0) _h3 = 1.0; /* Defensive */                   \
+          /* Evaluate field equations at cell center in Cartesian coords */ \
+          grid->local_to_global_cart(_voxel, 0.0f, 0.0f, 0.0f, x, y, z); \
+          /* Set field components based on region tests */            \
+          if( _rccc || _rclc || _rccl || _rcll ) _f->ex  =    (eqn_ex)/_h1; \
+          if( _rccc || _rccl || _rlcc || _rlcl ) _f->ey  =    (eqn_ey)/_h2; \
+          if( _rccc || _rlcc || _rclc || _rllc ) _f->ez  =    (eqn_ez)/_h3; \
+          if( _rccc || _rlcc )                   _f->cbx = _c*(eqn_bx)/_h1; \
+          if( _rccc || _rclc )                   _f->cby = _c*(eqn_by)/_h2; \
+          if( _rccc || _rccl )                   _f->cbz = _c*(eqn_bz)/_h3; \
+          _f++;                                                       \
+    }}}                                                               \
+  } while(0)
+
+// Modified set_region_bext to divide by scale factors
 #define set_region_bext( rgn,                                        \
                          eqn_bx, eqn_by, eqn_bz ) do {       \
     const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;      \
@@ -430,13 +502,73 @@ vpic_simulation::user_radiation( void )
           x = _xc; y = _yc; z = _zl; _rccl = (rgn);                   \
           x = _xl;                   _rlcl = (rgn);                   \
           x = _xc; y = _yl;          _rcll = (rgn);                   \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->cbx0 = _c*(eqn_bx); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc )                   _f->cby0 = _c*(eqn_by); \
-          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl )                   _f->cbz0 = _c*(eqn_bz); \
+          int _mesh_idx = GRID_TO_MESH(_i, _j, _k, _nx, _ny, _nz);   \
+          double _h1 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_1); \
+          double _h2 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_2); \
+          double _h3 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_3); \
+          if(_h1 == 0.0) _h1 = 1.0;                                   \
+          if(_h2 == 0.0) _h2 = 1.0;                                   \
+          if(_h3 == 0.0) _h3 = 1.0;                                   \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rlcc )                   _f->cbx0 = _c*(eqn_bx)/_h1; \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rclc )                   _f->cby0 = _c*(eqn_by)/_h2; \
+          x = _xc; y = _yc; z = _zc; if( _rccc || _rccl )                   _f->cbz0 = _c*(eqn_bz)/_h3; \
           _f++;                                                       \
     }}}                                                               \
   } while(0)
 
+  // Evaluates region and external B field equations in Cartesian coordinates
+// Sets cbx0, cby0, cbz0 (external/guide magnetic field components)
+#define set_region_bext_cart( rgn,                                    \
+                            eqn_bx, eqn_by, eqn_bz ) do {           \
+  const double _x0 = grid->x0, _y0 = grid->y0, _z0 = grid->z0;      \
+  const double _dx = grid->dx, _dy = grid->dy, _dz = grid->dz;      \
+  const double _c  = grid->cvac;                                    \
+  const int    _nx = grid->nx, _ny = grid->ny, _nz = grid->nz;      \
+  for( int _k=0; _k<_nz+2; _k++ ) {                                 \
+  for( int _j=0; _j<_ny+2; _j++ ) { field_t *_f = &field(0,_j,_k);  \
+  for( int _i=0; _i<_nx+2; _i++ ) {                                 \
+        int _voxel = VOXEL(_i, _j, _k, _nx, _ny, _nz);              \
+        int _rccc, _rlcc, _rclc, _rllc, _rccl, _rlcl, _rcll;        \
+        double x, y, z;                                             \
+        /* Test region membership at Yee mesh locations */          \
+        /* Cell center (for reference) */                           \
+        grid->local_to_global_cart(_voxel, 0.0f, 0.0f, 0.0f, x, y, z); \
+        _rccc = (rgn);                                              \
+        /* -x neighbor cell center */                               \
+        grid->local_to_global_cart(_voxel, -2.0f, 0.0f, 0.0f, x, y, z); \
+        _rlcc = (rgn);                                              \
+        /* -y neighbor cell center */                               \
+        grid->local_to_global_cart(_voxel, 0.0f, -2.0f, 0.0f, x, y, z); \
+        _rclc = (rgn);                                              \
+        /* -x,-y neighbor cell center */                            \
+        grid->local_to_global_cart(_voxel, -2.0f, -2.0f, 0.0f, x, y, z); \
+        _rllc = (rgn);                                              \
+        /* -z neighbor cell center */                               \
+        grid->local_to_global_cart(_voxel, 0.0f, 0.0f, -2.0f, x, y, z); \
+        _rccl = (rgn);                                              \
+        /* -x,-z neighbor cell center */                            \
+        grid->local_to_global_cart(_voxel, -2.0f, 0.0f, -2.0f, x, y, z); \
+        _rlcl = (rgn);                                              \
+        /* -y,-z neighbor cell center */                            \
+        grid->local_to_global_cart(_voxel, 0.0f, -2.0f, -2.0f, x, y, z); \
+        _rcll = (rgn);                                              \
+        /* Get scale factors for this cell */                       \
+        int _mesh_idx = GRID_TO_MESH(_i, _j, _k, _nx, _ny, _nz);   \
+        double _h1 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_1); \
+        double _h2 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_2); \
+        double _h3 = grid->k_curvilinear_mesh_h(_mesh_idx, curv_mesh_var::h_3); \
+        if(_h1 == 0.0) _h1 = 1.0; /* Defensive */                   \
+        if(_h2 == 0.0) _h2 = 1.0; /* Defensive for axis */          \
+        if(_h3 == 0.0) _h3 = 1.0; /* Defensive */                   \
+        /* Evaluate field equations at cell center in Cartesian coords */ \
+        grid->local_to_global_cart(_voxel, 0.0f, 0.0f, 0.0f, x, y, z); \
+        /* Set external B field components based on region tests */ \
+        if( _rccc || _rlcc )                   _f->cbx0 = _c*(eqn_bx)/_h1; \
+        if( _rccc || _rclc )                   _f->cby0 = _c*(eqn_by)/_h2; \
+        if( _rccc || _rccl )                   _f->cbz0 = _c*(eqn_bz)/_h3; \
+        _f++;                                                       \
+  }}}                                                               \
+} while(0)
 
 // The equations are only evaluated inside the mesh-mapped region
 // (This is not strictly inside the region)
