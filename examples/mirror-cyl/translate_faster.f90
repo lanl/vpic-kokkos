@@ -58,6 +58,7 @@ program translate
   integer(kind=4)it,itype,ndim,ndomains,decomp,n,nc(3),record_length,ix,iy,iz,yidx, ib, f
   integer(kind=4)nx,ny,nz,nxstart,nxstop,output_record,tindex,nskip,nout,i,j,error,yslice,nzstop,nzstart,k
   integer(kind=4)tindex_new, tindex_start,tindex_stop
+  integer :: max_search, search_count
 
   integer dom_x, dom_y, dom_z
   integer(kind=4) httx,htty,httz
@@ -255,27 +256,29 @@ program translate
 ! Determine number of iterations between output files
 
 if (myid == master) then
-
   dfile=.false.
   tindex= tindex_start
-  do while(.not.dfile)
+  max_search = 10000  ! Safety: max timesteps to search
+  search_count = 0
+  
+  do while(.not.dfile .and. search_count < max_search)
      tindex=tindex+1
+     search_count = search_count + 1
      write(fname,"(A,I0,A,I0,A)")"fields/T.",tindex,"/fields.",tindex,".0"
      if (tindex .ne. 1) inquire(file=trim(fname),exist=dfile)
   enddo
+  
   nskip = 1
-  nout = (tindex-tindex_start)*nskip
-  !nout = 1 !1time part L.O.  
-
-! Total size of domain
-
-  print *,"---------------------------------------------------"
-  print *
-  print *,"xmax=",xmax,"   ymax=",ymax,"   zmax=",zmax
-  print *
-  print *,"Iterations between output=",nout
-  print *,"---------------------------------------------------"
-
+  
+  if (dfile) then
+    ! Found next timestep - calculate interval
+    nout = (tindex-tindex_start)*nskip
+    print *,"Auto-detected nout=",nout," (found T.",tindex,")"
+  else
+    ! No next timestep found - single timestep mode
+    nout = 1
+    print *,"Single timestep mode: nout=1 (only T.",tindex_start," found)"
+  endif
 endif
 
 call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)

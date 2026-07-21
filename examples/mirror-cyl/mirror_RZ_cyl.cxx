@@ -630,10 +630,10 @@ begin_initialization {
 #define BZ ( BZC(zcoil1,rcoil,Icoil) +  BZC(zcoil2,rcoil,Icoil) )
 
   sim_log( "Loading fields" );
-  set_region_field( everywhere, 0, 0, 0,       // Electric field
+  set_region_field_cart( everywhere, 0, 0, 0,       // Electric field
   		                0, 0 ,0 );    // Magnetic field
 
-  set_region_bext( everywhere,  BX, BY , BZ + BZ0 );    // External Magnetic field
+  set_region_bext_cart( everywhere,  BX, BY , BZ + BZ0 );    // External Magnetic field
   
 #else
   double Lcoil1 = 0.6*Lz;
@@ -872,7 +872,7 @@ begin_initialization {
   double vth_D = sqrt(Ti_erg / (m_D * ref_E0));
   double w_D = wi;
 
-#if INCLUDE_TRITIUM_FUEL == 1
+  #if INCLUDE_TRITIUM_FUEL == 1
   // Introduce tritium - weights are set so that the density remains constant
   double vth_T = sqrt(Ti_erg / (m_T * ref_E0));
   double w_T = wi / (1.0 + 1);
@@ -885,14 +885,25 @@ begin_initialization {
     z = uniform( rng(0), grid->z0, grid->z1 );
 
     if ( abs(z) < Lzp && (abs(x) < Lxp) ) {
+      // In cylindrical coords, x represents r
+      double r = abs(x);
+      
+      // Avoid division by very small r
+      if (r < 0.01 * grid->dx) {
+        r = 0.01 * grid->dx;
+      }
+      
+      // Adjust weight by 1/Jacobian to get uniform physical density
+      double weight_adjusted = w_T / r;
+      
       ux = normal( rng(0), 0, vth_T );
       uy = normal( rng(0), 0, vth_T );
       uz = normal( rng(0), 0, vth_T );
 
-      inject_particle( T, x, y, z, ux, uy, uz, w_T, 0, 0, T->q );
+      inject_particle( T, x, y, z, ux, uy, uz, weight_adjusted, 0, 0, T->q );
     }
   }
-#endif // include tritium
+  #endif // include tritium
 
   repeat ( Npart/nproc() ) {
     double x, y, z, ux, uy, uz;
@@ -901,15 +912,25 @@ begin_initialization {
     z = uniform( rng(0), grid->z0, grid->z1 );
 
     if ( abs(z) < Lzp && (abs(x) < Lxp) ) {
+      // In cylindrical coords, x represents r
+      double r = abs(x);
+      
+      // Avoid division by very small r (set floor at 1% of cell size)
+      if (r < 0.01 * grid->dx) {
+        r = 0.01 * grid->dx;
+      }
+      
+      // Adjust weight by 1/Jacobian to get uniform physical density
+      double weight_adjusted = w_D / r;
+      
       ux = normal( rng(0), 0, vth_D );
       uy = normal( rng(0), 0, vth_D );
       uz = normal( rng(0), 0, vth_D );
 
-      inject_particle( D_seed, x, y, z, ux, uy, uz, w_D, 0, 0, D_seed->q );
+      inject_particle( D_seed, x, y, z, ux, uy, uz, weight_adjusted, 0, 0, D_seed->q );
     }
   }
   sim_log( "Finished loading particles" );
-
   // --------------------------------------------------------------------------
   // Log diagnostic information about this simulation
   // --------------------------------------------------------------------------
@@ -1808,7 +1829,7 @@ begin_particle_injection {
     int iz1 = global->icell_beam[i_beam][5];
 
     int ppc = global->ppc_beam[i_beam];
-    double weight = global->w_beam[i_beam];
+    double weight_base = global->w_beam[i_beam];  // Base weight before radial correction
     double v_mag = global->v_mag[i_beam];
     double *v_th = global->v_thermal[i_beam];
     double rm[3][3];
@@ -1825,9 +1846,22 @@ begin_particle_injection {
 
           repeat(ppc) {
             // Sample location within cell
-            x = grid->x0 + hx * (ix + uniform(rng(0), 0 , 1));
-            y = grid->y0 + hy * (iy + uniform(rng(0), 0 , 1));
-            z = grid->z0 + hz * (iz + uniform(rng(0), 0 , 1));
+            x = grid->x0 + hx * (ix + uniform(rng(0), 0, 1));
+            y = grid->y0 + hy * (iy + uniform(rng(0), 0, 1));
+            z = grid->z0 + hz * (iz + uniform(rng(0), 0, 1));
+            
+            // *** CYLINDRICAL COORDINATE FIX ***
+            // In cylindrical coords, x represents r
+            double r = abs(x);
+            
+            // Avoid division by very small r (set floor at 1% of cell size)
+            if (r < 0.01 * grid->dx) {
+              r = 0.01 * grid->dx;
+            }
+            
+            // Adjust weight by 1/Jacobian to get uniform physical density
+            double weight = weight_base / r;
+            // *** END FIX ***
                 
             // Sample thermal velocity and add to beam velocity
             vx_th = normal(rng(0), 0, v_th[0]); // v_th from T_para
