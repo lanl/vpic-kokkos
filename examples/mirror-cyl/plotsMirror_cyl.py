@@ -3,6 +3,8 @@ import os
 import matplotlib
 import matplotlib.pyplot as plt
 import struct
+import sys
+
 
 ######### loadinfo function
 def loadinfo(dir):
@@ -59,6 +61,37 @@ zv = np.linspace(-Lz/2, Lz/2, nz)  # Axial coordinates (centered)
 # Create meshgrid for proper cylindrical plotting
 R, Z = np.meshgrid(rv, zv, indexing='ij')
 
+def loadFieldLines(dir, sl, nr, nz):
+	"""
+	Load magnetic field lines (Ay) from Fortran output
+	sl: time slice/record number
+	nr: number of radial cells (was nx in Fortran)
+	nz: number of axial cells (was nz in Fortran)
+	"""
+	fstr = dir + "Ay_int.gda"
+	
+	# Check if file exists
+	if not os.path.exists(fstr):
+		print(f"Warning: {fstr} not found. Run Fortran code first to generate field lines.")
+		return None
+	
+	try:
+		fd = open(fstr, "rb")
+		fd.seek(4*sl*nr*nz, 1)
+		arr = np.fromfile(fd, dtype=np.float32, count=nr*nz)
+		fd.close()
+		
+		if len(arr) != nr*nz:
+			print(f"Warning: Expected {nr*nz} values, got {len(arr)}")
+			return None
+			
+		arr = np.reshape(arr, (nz, nr))  # Data stored as (z, r)
+		arr = np.transpose(arr)          # Transpose to (r, z)
+		return arr
+	except Exception as e:
+		print(f"Error loading field lines: {e}")
+		return None
+
 def get_num_slices(dir, q, nr, nz):
     """
     Determine the number of theta slices available in the file
@@ -73,25 +106,54 @@ num_slices = get_num_slices(dir, "ni", nr, nz)
 print(f"Number of available slices: {num_slices}")
 
 cnt = 0	
-for slice in range(0, num_slices)[::-1]:  # Usually just slice=0 for axisymmetric
-	for q in qs:
-		tmp = loadSlice(dir, q, slice, nr, nz)
-		Q[q] = tmp
+slice = num_slices - 1
+if len(sys.argv) > 1:
+	slice = int(sys.argv[1])
+for q in qs:
+	tmp = loadSlice(dir, q, slice, nr, nz)
+	Q[q] = tmp
+
+# cartesian starts at ni = 0.06
+
+fig, (ax1) = plt.subplots(nrows=1, figsize=(10, 4))
+
+# Plot in r-z plane (cylindrical cross-section)
+im = ax1.pcolormesh(Z, R, Q["ni"], cmap=cmap, shading='auto')
+Ay = loadFieldLines(dir, slice, nr, nz)
+
+# Main plot with field lines
+fig, (ax1) = plt.subplots(nrows=1, figsize=(12, 5))
+
+# Plot density in r-z plane (cylindrical cross-section)
+im = ax1.pcolormesh(Z, R, Q["ni"], cmap=cmap, shading='auto')
+
+# Overlay field lines if available
+if Ay is not None:
+	# Number of field lines to draw
+	num_lines = 20
 	
-	fig, (ax1) = plt.subplots(nrows=1, figsize=(10, 4))
+	# Draw field lines as contours of constant Ay
+	contours = ax1.contour(Z, R, Ay, levels=num_lines, colors='black', 
+	                       linewidths=1.0, alpha=0.6, linestyles='solid')
 	
-	# Plot in r-z plane (cylindrical cross-section)
-	im = ax1.pcolormesh(Z, R, Q["ni"], cmap=cmap, shading='auto')
+	# Optional: add labels to some field lines
+	# ax1.clabel(contours, inline=True, fontsize=8, fmt='%1.2f')
 	
-	ax1.set_xlabel('z')
-	ax1.set_ylabel('r')
-	ax1.set_title(f'Ion Density - Cylindrical (r-z plane)')
-	ax1.set_aspect('equal')  # Equal aspect ratio
-	
-	fig.colorbar(im, ax=ax1, label='ni')
-	
-	plt.tight_layout()
-	plt.show()
+	print(f"Drew {num_lines} field lines")
+	print(f"Ay range: [{np.min(Ay):.3e}, {np.max(Ay):.3e}]")
+else:
+	print("Field lines not plotted - Ay data not available")
+
+ax1.set_xlabel('z')
+ax1.set_ylabel('r/x')
+ax1.set_title(f'density')
+ax1.set_aspect('equal')  # Equal aspect ratio
+
+fig.colorbar(im, ax=ax1, label='ni')
+
+fig.tight_layout()
+fig.savefig('plot.png', dpi=300)
+# plt.show()
 
 
 # Optional: Plot as a "full" cylindrical view (mirror top and bottom)
@@ -102,10 +164,10 @@ def plot_cylindrical_full(Q, R, Z, quantity='ni'):
 	fig, ax = plt.subplots(figsize=(10, 8))
 	
 	# Top half (positive r)
-	im1 = ax.pcolormesh(Z, R, Q[quantity], cmap=cmap, shading='auto')
+	im1 = ax.pcolormesh(Z, R, Q[quantity], cmap=cmap, shading='auto', vmin=0, vmax=1.0)
 	
 	# Bottom half (negative r, mirrored)
-	im2 = ax.pcolormesh(Z, -R, Q[quantity], cmap=cmap, shading='auto')
+	im2 = ax.pcolormesh(Z, -R, Q[quantity], cmap=cmap, shading='auto', vmin=0, vmax=1.0)
 	
 	ax.set_xlabel('z (axial position)')
 	ax.set_ylabel('r (radial position)')
@@ -113,7 +175,8 @@ def plot_cylindrical_full(Q, R, Z, quantity='ni'):
 	ax.axhline(y=0, color='k', linestyle='--', linewidth=0.5)
 	ax.set_aspect('equal')
 	
-	fig.colorbar(im1, ax=ax, label=quantity)
+	cbar = fig.colorbar(im1, ax=ax, label=quantity)
+	cbar.set_clim(0, 1)
 	plt.tight_layout()
 	plt.show()
 
