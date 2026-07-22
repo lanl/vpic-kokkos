@@ -13,7 +13,7 @@ for dt in "${dts[@]}"; do
   echo "Running with dt=$dt..."
 
   temp_deck="cyclo_temp_${dt}.deck"
-  sed "s/dt_test_value/$dt/g" ../test/integrated/curv/convergence/cyclo-convergence.deck > "$temp_deck"
+  sed "s/dt_test_value/$dt/g" ../examples/cyclo/convergence/cyclo-convergence.deck > "$temp_deck"
   ./bin/vpic "$temp_deck" > cyclo_compile_${dt}.log 2>&1
 
   if [ -f cyclo_temp_${dt}.deck.Linux ]; then
@@ -28,6 +28,6 @@ done
 echo "Results written to $output_file"
 cat $output_file
 
-cd ../test/integrated/curv/convergence/
+cd ../examples/cyclo/convergence/
 module load miniconda3
 python plot_convergence.py

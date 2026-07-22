@@ -20,31 +20,40 @@ begin_globals {
 };
 
 begin_initialization {
+  int nstep = 10 / dt_test_value;
   int nr = 10;
   int nt = 10;
   int nz = 1;
-  double dt = dt_test_value;
 
   define_units( 1, 1 );
-  define_timestep( dt );
+  define_timestep( dt_test_value );
   // Grid in cylindrical: (r, theta, z)
-  define_periodic_grid( -20.0, -20.0, 0,   // Grid low corner (r_min, theta_min, z_min)
-                        20.0, 20.0, 1,   // Grid high corner (r_max, theta_max, z_max)
+  define_periodic_grid( 0.1, 0, 0,   // Grid low corner (r_min, theta_min, z_min)
+                        30.0, 2*M_PI, 1,   // Grid high corner (r_max, theta_max, z_max)
                         nr, nt, nz,   // Grid resolution
                         1, 1, 1 ); // Processor configuration
   define_material("vacuum",1.0,1.0,0.0);
   define_field_array();
 
-  grid->init_cartesian_grid();
+  grid->init_cylindrical_grid();
   grid->init_kokkos_grid(6*grid->nv);
 
   double q = 1.0;
   double m = 1.0;
   double R = 10.0;
-  double B = 0.1;
+  double B = 1.0;
   double v0 = q*B*R/m;
 
   set_region_bext(everywhere, 0, 0, B);
+
+  // this is how u inject e fields
+  // for (int k = 0; k <= nz+1; k++) {
+  //   for (int j = 0; j <= nt+1; j++) {
+  //     for (int i = 0; i <= nr+1; i++) {
+  //       field(i,j,k).tx = 10;
+  //     }
+  //   }
+  // }
 
   field_array->copy_to_device();
 
@@ -52,9 +61,6 @@ begin_initialization {
 
   species_t * this_sp = define_species( "test_species", q, m, 1, 1, 0, 0 );
   // Inject particles in cylindrical coordinates (r, theta, z)
-  double freq = v0/R;
-  double period = 2.*M_PI/freq;
-  int nstep = 10/dt;
   inject_particle( this_sp,
                     R,  // r
                     0,  // theta
@@ -62,6 +68,8 @@ begin_initialization {
                     0, -v0, 0, // cart vel
                     1.0, // w
                     0, 0 );
+  interpolator_array->copy_to_device();
+  load_interpolator_array( interpolator_array, field_array );
   LIST_FOR_EACH( sp, species_list ) {
     KOKKOS_TIC();
     uncenter_p( sp, interpolator_array );
@@ -70,36 +78,29 @@ begin_initialization {
   LIST_FOR_EACH( sp, species_list ) {
     sp->copy_to_device();
   }
-  interpolator_array->copy_to_device();
 
-  load_interpolator_array( interpolator_array, field_array );
-
-  double r_phys, theta_phys, z_phys;
-  double total_r_err = 0.0;
+  double total_r_err = 0;
   for( int n=0; n<nstep; n++ ) {
 
     LIST_FOR_EACH( sp, species_list ) {
       sp->copy_to_host();
     }
-    advance_p( this_sp, interpolator_array, field_array );
 
-    // int ix, iy, iz;
-    int voxel_i = this_sp->p[0].i;
-    float dx = this_sp->p[0].dx;
-    float dy = this_sp->p[0].dy;
-    float dz = this_sp->p[0].dz;
+    // Get particle data
+    particle_t& p = this_sp->p[0];
+
+    double r_phys, theta_phys, z_curv;
+    grid->local_to_global(p.i, p.dx, p.dy, p.dz, r_phys, theta_phys, z_curv);
     double x, y, z;
-    grid->local_to_global(voxel_i, dx, dy, dz, x, y, z);
-    double r_phys = sqrt(x*x+y*y);
-    total_r_err += (r_phys - R)*(r_phys - R);
+    grid->local_to_global_cart(p.i, p.dx, p.dy, p.dz, x, y, z);
 
-    // sim_log("step=" << n << " r=" << r_phys << " theta=" << theta_phys
-    //         << " x=" << x << " y=" << y
-    //         << " ux=" << this_sp->p[0].ux << " uy=" << this_sp->p[0].uy);
+    total_r_err += fabs(r_phys - R)*fabs(r_phys - R);
+
+    advance_p( this_sp, interpolator_array, field_array );
   }
-
   double err = sqrt(total_r_err/nstep);
   sim_log( dt_test_value << " " << err );
+
   halt_mp();
   exit(0);
 }

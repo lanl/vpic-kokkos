@@ -3,7 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-data = np.loadtxt('../../../../build/convergence_results.txt')
+data = np.loadtxt('../../../build/convergence_results.txt')
 dt_array = data[:, 0]
 err_array = data[:, 1]
 
