@@ -12,8 +12,8 @@ nt = 100
 pi = np.pi
 
 # Stretched grid parameters (must match VPIC deck)
-beta_x = 2.0
-beta_y = 2.0
+beta_x = 5.0
+beta_y = 5.0
 beta_z = 0.0
 
 # Domain bounds (must match VPIC deck: -Lx/2 to Lx/2, -Ly/2 to Ly/2)

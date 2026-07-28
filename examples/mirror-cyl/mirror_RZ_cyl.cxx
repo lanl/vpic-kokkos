@@ -478,7 +478,7 @@ begin_initialization {
   grid->nsmb  = hyb_nsmb;
 
   // Partition a periodic box among the processors sliced uniformly along x,y,z
-  define_periodic_grid( 0.01*Lx, -0.5*Ly, -0.5*Lz,            // Low corner
+  define_periodic_grid( 0.1*Lx, -0.5*Ly, -0.5*Lz,            // Low corner
                         0.5*Lx,  0.5*Ly,  0.5*Lz,            // High corner
                         nx, ny, nz,                          // Resolution
                         topology_x, topology_y, topology_z); // Topology
@@ -489,20 +489,16 @@ begin_initialization {
   RANK_TO_INDEX( int(rank()), ix, iy, iz );
 
   // Override some of the boundary conditions (default is periodic)
-  sim_log("Conducting fields on all boundaries"); 
   if ( ix==0 )            set_domain_field_bc( BOUNDARY(-1,0,0), pec_fields );
   if ( ix==topology_x-1 ) set_domain_field_bc( BOUNDARY( 1,0,0), pec_fields );
-  // if ( iy==0 )            set_domain_field_bc( BOUNDARY(0,-1,0), pec_fields );
-  // if ( iy==topology_y-1 ) set_domain_field_bc( BOUNDARY(0, 1,0), pec_fields );
+  // NO y-boundary conditions - periodic by geometry
   if ( iz==0 )            set_domain_field_bc( BOUNDARY(0,0,-1), pec_fields );
   if ( iz==topology_z-1 ) set_domain_field_bc( BOUNDARY(0,0, 1), pec_fields );
 
-  // Absorbing particle boundaries
-  sim_log("Absorb particles on all boundaries"); 
+  sim_log("Particle boundaries");
   if ( ix==0 )            set_domain_particle_bc( BOUNDARY(-1,0,0), reflect_particles );
   if ( ix==topology_x-1 ) set_domain_particle_bc( BOUNDARY( 1,0,0), absorb_particles );
-  // if ( iy==0 )            set_domain_particle_bc( BOUNDARY(0,-1,0), absorb_particles );
-  // if ( iy==topology_y-1 ) set_domain_particle_bc( BOUNDARY(0, 1,0), absorb_particles );
+  // NO y-boundary conditions - periodic
   if ( iz==0 )            set_domain_particle_bc( BOUNDARY(0,0,-1), absorb_particles );
   if ( iz==topology_z-1 ) set_domain_particle_bc( BOUNDARY(0,0, 1), absorb_particles );
 
@@ -603,7 +599,6 @@ begin_initialization {
   // --------------------------------------------------------------------------
   
   
-#if CYL_FIELDS  
 #define RHO() (sqrt(x*x + y*y))
 #define ALPHA(zc,rc) ( rc*rc + x*x + y*y + (z-zc)*(z-zc) - 2.0*rc*RHO() )
 #define BETA(zc,rc)  ( rc*rc + x*x + y*y + (z-zc)*(z-zc) + 2.0*rc*RHO() )
@@ -634,36 +629,6 @@ begin_initialization {
   		                0, 0 ,0 );    // Magnetic field
 
   set_region_bext_cart( everywhere,  BX, BY , BZ + BZ0 );    // External Magnetic field
-  
-#else
-  double Lcoil1 = 0.6*Lz;
-  double Lcoil2 = 0.1*Lz;
-
-  double x1 = 0.55*Lx;
-  double z00 = -0.5*Lz;
-  double z1 = -0.3*Lz;
-  double z2 =  0.3*Lz;
-  double z3 = -0.4*Lz;
-  double z4 =  0.4*Lz;
-
-  double B0 = 1.0*hyb_b0; // 0.5
-  double B1 = 0.2*hyb_b0; // 0.1
-  double I1 = 1.45*B1;
-  double I2 = 2.0*B0-0.5*B1;
-  double I4 = 0.53*B1;
-
-#define BZC(I,xc,zc,L) (-2.0*I/8.0/atan(L/2.0/xc)*(atan((z-zc)/(x-xc))+atan((L-z+zc)/(x-xc))-atan((z-zc)/(x+xc))-atan((L-z+zc)/(x+xc))) )
-#define BXC(I,xc,zc,L) ( I/8.0/atan(L/2.0/xc)*log(((z-zc)*(z-zc)+(x-xc)*(x-xc))*((L-z+zc)*(L-z+zc)+(x+xc)*(x+xc))/((((L-z+zc)*(L-z+zc)+(x-xc)*(x-xc)))*(((z-zc)*(z-zc)+(x+xc)*(x+xc))))) )
-
-#define BX ( BXC(I1,x1,z1,Lcoil1) + BXC(I2,x1,z2,Lcoil2) + BXC(I2,x1,z3,Lcoil2) + BXC(I4,x1,z4,Lcoil2) +  BXC(I4,x1,z00,Lcoil2) )
-#define BZ ( BZC(I1,x1,z1,Lcoil1) + BZC(I2,x1,z2,Lcoil2) + BZC(I2,x1,z3,Lcoil2) + BZC(I4,x1,z4,Lcoil2) +  BZC(I4,x1,z00,Lcoil2) )
-
-
-  sim_log( "Loading fields" );
-  set_region_field_cart( everywhere, 0, 0, 0,    // Electric field
-  		                          0, 0, 0 );  // Magnetic field
-  set_region_bext_cart( everywhere, BX, 0, BZ ); // External Magnetic field
-#endif 
 
   // --------------------------------------------------------------------------
   // Initialize species
@@ -708,154 +673,6 @@ begin_initialization {
 
   bool var_wt = true;
   int collision_interval = (int)1*sort_interval; // interval for performing collisions
-
-#if DO_COLLISIONS
-
-  // Charge exchange (particle-particle)
-  // A^+N + B^+M -> A^(+N+dq) + B^(+M-dq)  
-  int dq_cex = -1;
-  DD_cex dd_cex_cs;
-  define_collision_op(binary_charge_exchange( "DsDb_cex", D_seed, D_beam, dq_cex, dd_cex_cs, collision_interval, var_wt ));
-  define_collision_op(binary_charge_exchange( "DsDs_cex", D_seed, D_seed, dq_cex, dd_cex_cs, collision_interval, var_wt ));
-  define_collision_op(binary_charge_exchange( "DbDb_cex", D_beam, D_beam, dq_cex, dd_cex_cs, collision_interval, var_wt ));
-
-  // Ion impact ionization (particle-particle)
-  // A^+N + B^+M -> A^+N + B^(+M+1) + e^-
-  double dE_ioniz_keV = 13.6 * 1.0e-3;
-  double dE_ioniz = dE_ioniz_keV * ERG_PER_KEV / ref_E0;
-  DD_ii_ioniz dd_ioniz_cs;
-  define_collision_op(binary_ion_impact_ioniz( "DsDb_ioniz", D_seed, D_beam, dE_ioniz, dd_ioniz_cs, collision_interval, var_wt ));
-  define_collision_op(binary_ion_impact_ioniz( "DsDs_ioniz", D_seed, D_seed, dE_ioniz, dd_ioniz_cs, collision_interval, var_wt ));
-  define_collision_op(binary_ion_impact_ioniz( "DbDb_ioniz", D_beam, D_beam, dE_ioniz, dd_ioniz_cs, collision_interval, var_wt ));
-
-  // Electron impact ionization (particle-electron fluid)
-  // A^+N + e^- -> A^(+N+1) + 2e^-
-  DD_ei_ioniz dd_eioniz_cs;
-  define_collision_op(electron_impact_ionization( "eDb_ioniz", D_beam, e_fl, dE_ioniz, dd_eioniz_cs, collision_interval, field_array ));
-  define_collision_op(electron_impact_ionization( "eDs_ioniz", D_seed, e_fl, dE_ioniz, dd_eioniz_cs, collision_interval, field_array ));
-  
-  // Coulomb collisions: ion-ion
-  // cvar0 = q1^2 * q2^2 * lnL / (8 * pi)
-  // in SI: cvar0 = (e^4*n0*Lambda)/(8*pi*eps0^2*m_e^2*c^3)
-  // Computed with nu normalized by w_pe and simulation units are
-  // normalized by w_ci, so multiply nu by (w_pe / w_ci) where w_ci is the 
-  // ion cyclotron frequency for singly-ionized oxygen
-  double ln_Lambda = 10.0;
-  double lnL_8pi = ln_Lambda / (8.0 * M_PI);
-  double wpe_wci = ref_wce / ref_wci;
-  // double cvar0_sb = (D_seed->q * D_seed->q) * (D_beam->q * D_beam->q) * lnL_8pi * wpe_wci;
-  double cvar0 = lnL_8pi * wpe_wci; // multiply cvar by qi^2*qj^2 in code for VARIABLE_CHARGE
-
-  CCModel ccm; // Dummy struct doesn't do anything but needed for constructor...
-  define_collision_op(binary_coulomb( "ta_sb", D_seed, D_beam, cvar0, ccm, collision_interval, var_wt ));
-  define_collision_op(binary_coulomb( "ta_ss", D_seed, D_seed, cvar0, ccm, collision_interval, var_wt ));
-  define_collision_op(binary_coulomb( "ta_bb", D_beam, D_beam, cvar0, ccm, collision_interval, var_wt ));
-
-  // This uses G. Chen's new binary Coulomb collision model
-  // define_collision_op(takizuka_abe( "ta_sb", D_seed, D_beam, cvar0_sb, collision_interval, var_wt));
-  // define_collision_op(takizuka_abe( "ta_ss", D_seed, D_seed, cvar0_ss, collision_interval, var_wt));
-  // define_collision_op(takizuka_abe( "ta_bb", D_beam, D_beam, cvar0_bb, collision_interval, var_wt));
-
-  // Coulomb collisions: electron-ion (still testing)
-  // double cvar0_es = lnL_8pi * wpe_wci;
-  // double cvar0_eb = lnL_8pi * wpe_wci;
-  // define_collision_op(lemons( "coulomb_es", D_seed, e_fl, cvar0_es, collision_interval, field_array ));
-  // define_collision_op(lemons( "coulomb_eb", D_beam, e_fl, cvar0_eb, collision_interval, field_array ));
-
-
-  // --------------------------------------------------------------------------
-  // Setup fusion reactions
-  // --------------------------------------------------------------------------
-
-#if ENABLE_FUSION_RXS == 1
-
-  int fusion_interval = (int)1*sort_interval; // interval for performing collisions
-  float pmult = 1000.0; // production multiplier (increase number of product macroparticles)
-  float pmult_DT = std::max(1.0, pmult / 10.0); // DT is more reactive so don't need as big of a multiplier
-
-  // Flag for creating one pair of products at center of mass of reactants or two pairs with 
-  // one pair at each of the locations of the reactants (latter improves charge conservation).
-  // Default is true.
-  bool one_product_pair = true; 
-
-  // D + D -> n + He3 + 3.269e6 eV
-  DD_nHe3_cs DD_nHe3_cs_model;
-  float dE_DD_nHe3_eV = 3.269e6;
-  float dE_DD_nHe3 = dE_DD_nHe3_eV * 1e-3 * ERG_PER_KEV / ref_E0;
-
-  // D + D -> p + T + 4.03e6 eV
-  DD_pT_cs DD_pT_cs_model;
-  float dE_DD_pT_eV = 4.03e6;
-  float dE_DD_pT = dE_DD_pT_eV * 1e-3 * ERG_PER_KEV / ref_E0;
-
-  // D + T -> n + He4 + 17.589e6 eV
-  DT_nHe4_cs DT_nHe4_cs_model;
-  float dE_DT_nHe4_eV = 17.589e6;
-  float dE_DT_nHe4 = dE_DT_nHe4_eV * 1e-3 * ERG_PER_KEV / ref_E0;
-
-#if ENABLE_ANISOTROPIC_FUSION == 1
-
-  dsdOmega DD_dsdOmega_model("DD_dsdomega_coefs.csv");
-  dsdOmega DT_dsdOmega_model("DT_dsdomega_coefs.csv");
-
-  // D + D -> n + He3 + 3.269e6 eV
-  define_collision_op(binary_fusion( "DsDs_nHe3_fusion", D_seed, D_seed, n, He3, 
-    dE_DD_nHe3, pmult, fusion_interval, one_product_pair, DD_nHe3_cs_model, DD_dsdOmega_model ));
-  define_collision_op(binary_fusion( "DbDb_nHe3_fusion", D_beam, D_beam, n, He3, 
-    dE_DD_nHe3, pmult, fusion_interval, one_product_pair, DD_nHe3_cs_model, DD_dsdOmega_model ));
-  define_collision_op(binary_fusion( "DbDs_nHe3_fusion", D_beam, D_seed, n, He3, 
-    dE_DD_nHe3, pmult, fusion_interval, one_product_pair, DD_nHe3_cs_model, DD_dsdOmega_model ));
-
-  // D + D -> p + T + 4.03e6 eV
-  define_collision_op(binary_fusion( "DsDs_pT_fusion", D_seed, D_seed, p, T, 
-    dE_DD_pT, pmult, fusion_interval, one_product_pair, DD_pT_cs_model, DD_dsdOmega_model ));
-  define_collision_op(binary_fusion( "DbDb_pT_fusion", D_beam, D_beam, p, T, 
-    dE_DD_pT, pmult, fusion_interval, one_product_pair, DD_pT_cs_model, DD_dsdOmega_model ));
-  define_collision_op(binary_fusion( "DbDs_pT_fusion", D_beam, D_seed, p, T, 
-    dE_DD_pT, pmult, fusion_interval, one_product_pair, DD_pT_cs_model, DD_dsdOmega_model ));
-
-  // D + T -> n + He4 + 17.589e6 eV
-  define_collision_op(binary_fusion( "DsT_nHe4_fusion", D_seed, T, n, He4,
-    dE_DT_nHe4, pmult, fusion_interval, one_product_pair, DT_nHe4_cs_model, DT_dsdOmega_model ));
-  define_collision_op(binary_fusion( "DbT_nHe4_fusion", D_beam, T, n, He4,
-    dE_DT_nHe4, pmult, fusion_interval, one_product_pair, DT_nHe4_cs_model, DT_dsdOmega_model ));
-
-#else // isotropic emission (default option, don't pass dsdOmega model)
-
-  // D + D -> n + He3 + 3.269e6 eV
-  define_collision_op(binary_fusion( "DsDs_nHe3_fusion", D_seed, D_seed, n, He3, 
-    dE_DD_nHe3, pmult, fusion_interval, one_product_pair, DD_nHe3_cs_model ));
-  define_collision_op(binary_fusion( "DbDb_nHe3_fusion", D_beam, D_beam, n, He3, 
-    dE_DD_nHe3, pmult, fusion_interval, one_product_pair, DD_nHe3_cs_model ));
-  define_collision_op(binary_fusion( "DbDs_nHe3_fusion", D_beam, D_seed, n, He3, 
-    dE_DD_nHe3, pmult, fusion_interval, one_product_pair, DD_nHe3_cs_model ));
-
-  // D + D -> p + T + 4.03e6 eV
-  define_collision_op(binary_fusion( "DsDs_pT_fusion", D_seed, D_seed, p, T, 
-    dE_DD_pT, pmult, fusion_interval, one_product_pair, DD_pT_cs_model ));
-  define_collision_op(binary_fusion( "DbDb_pT_fusion", D_beam, D_beam, p, T, 
-    dE_DD_pT, pmult, fusion_interval, one_product_pair, DD_pT_cs_model ));
-  define_collision_op(binary_fusion( "DbDs_pT_fusion", D_beam, D_seed, p, T, 
-    dE_DD_pT, pmult, fusion_interval, one_product_pair, DD_pT_cs_model ));
-
-  // D + T -> n + He4 + 17.589e6 eV
-  define_collision_op(binary_fusion( "DsT_nHe4_fusion", D_seed, T, n, He4,
-    dE_DT_nHe4, pmult, fusion_interval, one_product_pair, DT_nHe4_cs_model ));
-  define_collision_op(binary_fusion( "DbT_nHe4_fusion", D_beam, T, n, He4,
-    dE_DT_nHe4, pmult, fusion_interval, one_product_pair, DT_nHe4_cs_model ));
-
-#endif // anisotropic emission
-#endif // enable fusion reactions
-
-  D_beam->last_indexed = -1;
-  D_seed->last_indexed = -1;
-  T->last_indexed = -1;
-  n->last_indexed = -1;
-  p->last_indexed = -1;
-  He3->last_indexed = -1;
-  He4->last_indexed = -1;
-  
-#endif //DO_COLLISIONS
   
   // --------------------------------------------------------------------------
   // Load particles
@@ -872,12 +689,6 @@ begin_initialization {
   double vth_D = sqrt(Ti_erg / (m_D * ref_E0));
   double w_D = wi;
 
-  #if INCLUDE_TRITIUM_FUEL == 1
-  // Introduce tritium - weights are set so that the density remains constant
-  double vth_T = sqrt(Ti_erg / (m_T * ref_E0));
-  double w_T = wi / (1.0 + 1);
-  w_D = wi - w_T;
-
   repeat ( Npart/nproc() ) {
     double x, y, z, ux, uy, uz;
     x = uniform( rng(0), grid->x0, grid->x1 );
@@ -885,51 +696,30 @@ begin_initialization {
     z = uniform( rng(0), grid->z0, grid->z1 );
 
     if ( abs(z) < Lzp && (abs(x) < Lxp) ) {
-      // In cylindrical coords, x represents r
-      double r = abs(x);
-      
-      // Avoid division by very small r
-      if (r < 0.01 * grid->dx) {
-        r = 0.01 * grid->dx;
-      }
-      
-      // Adjust weight by 1/Jacobian to get uniform physical density
-      double weight_adjusted = w_T / r;
-      
-      ux = normal( rng(0), 0, vth_T );
-      uy = normal( rng(0), 0, vth_T );
-      uz = normal( rng(0), 0, vth_T );
-
-      inject_particle( T, x, y, z, ux, uy, uz, weight_adjusted, 0, 0, T->q );
-    }
-  }
-  #endif // include tritium
-
-  repeat ( Npart/nproc() ) {
-    double x, y, z, ux, uy, uz;
-    x = uniform( rng(0), grid->x0, grid->x1 );
-    y = uniform( rng(0), grid->y0, grid->y1 );
-    z = uniform( rng(0), grid->z0, grid->z1 );
-
-    if ( abs(z) < Lzp && (abs(x) < Lxp) ) {
-      // In cylindrical coords, x represents r
-      double r = abs(x);
-      
-      // Avoid division by very small r (set floor at 1% of cell size)
-      if (r < 0.01 * grid->dx) {
-        r = 0.01 * grid->dx;
-      }
-      
-      // Adjust weight by 1/Jacobian to get uniform physical density
-      double weight_adjusted = w_D / r;
-      
       ux = normal( rng(0), 0, vth_D );
       uy = normal( rng(0), 0, vth_D );
       uz = normal( rng(0), 0, vth_D );
 
-      inject_particle( D_seed, x, y, z, ux, uy, uz, weight_adjusted, 0, 0, D_seed->q );
+      inject_particle( D_seed, x, y, z, ux, uy, uz*x*2, w_D*x, 0, 0, D_seed->q );
+      // this is closest       inject_particle( D_seed, x, y, z, ux*x*x, uy, uz, w_D*x, 0, 0, D_seed->q );
     }
   }
+
+  // double prop = Lxp/(grid->x1-grid->x0) * Lzp/(grid->z1-grid->z0)*2;
+  // repeat ( Npart/nproc()*prop ) {
+  //   double x, y, z, ux, uy, uz;
+  //   y = uniform( rng(0), grid->y0, grid->y1 );
+  //   z = uniform( rng(0), -Lzp, Lzp );  // Sample directly in restricted z range
+  //   double u = uniform( rng(0), 0, 1 );
+  //   x = grid->x0 * pow(Lxp / grid->x0, u);  // Sample directly in restricted x range
+    
+  //   ux = normal( rng(0), 0, vth_D );
+  //   uy = normal( rng(0), 0, vth_D );
+  //   uz = normal( rng(0), 0, vth_D );
+
+  //   inject_particle( D_seed, x, y, z, ux, uy, uz, w_D, 0, 0, D_seed->q );
+  // }
+  // sim_log( "Finished loading particles" );
   sim_log( "Finished loading particles" );
   // --------------------------------------------------------------------------
   // Log diagnostic information about this simulation
@@ -1606,280 +1396,4 @@ begin_particle_collisions {
 
 
 begin_particle_injection {
-#if INJECT_BEAMS
-
-  const double dt = grid->dt;
-  const double hx = grid->dx;
-  const double hy = grid->dy;
-  const double hz = grid->dz;
-
-  const int n_beams = global->n_beams;
-  const int age = 0;
-
-  // Beam injection user-parameters in keV and MW (be careful normalizing)
-  const double mi_kg = 1.67262193e-27;
-  const double c_ms  = 2.99792458e8;
-  const double e_C   = 1.60217663e-19;
-
-  const double n0 = global->ref_n0 * 1.0e6; // m^-3
-  const double l0 = global->ref_di * 0.01;  // m
-  const double v0 = global->ref_vA0 * 0.01; // m/s
-  const double area0 = l0 * l0;
-  const double vol0 = l0 * l0 * l0;
-
-  // species_t * species = global->D_beam; // all beams populate same species  
-  species_t * species = find_species_id(1, species_list);  
-  double charge = 0.0; // neutral beam
-
-  // Initialize beam variables (determine range of cells and particles weights)
-  static int initted = 0;
-  if ( !initted ) {
-    initted = 1;
-
-    for (int i_beam = 0; i_beam < n_beams; i_beam++) {
-      double x = global->x_beam[i_beam][0];  // x-center
-      double y = global->x_beam[i_beam][1];  // y-center
-      double z = global->x_beam[i_beam][2];  // z-center
-      double r = global->r_beam[i_beam];     // radius
-      BEAM_INJECTION_PLANE plane = global->beam_inj_plane[i_beam];
-
-      // Find beam center
-      int ix_center = int((x / global->Lx + 0.5) * global->nx - 1);
-      int iy_center = int((y / global->Ly + 0.5) * global->ny - 1);
-      int iz_center = int((z / global->Lz + 0.5) * global->nz - 1);
-
-      // Initialize range of cell indices
-      global->icell_beam[i_beam][0] = ix_center; // ix0
-      global->icell_beam[i_beam][1] = ix_center; // ix1
-      global->icell_beam[i_beam][2] = iy_center; // iy0
-      global->icell_beam[i_beam][4] = iy_center; // iy1
-      global->icell_beam[i_beam][4] = iz_center; // iz0
-      global->icell_beam[i_beam][5] = iz_center; // iz1
-
-      switch(plane) {
-        case BEAM_INJECTION_PLANE::X:
-        {
-          global->icell_beam[i_beam][0] = int(((x-r) / global->Lx + 0.5) * global->nx - 1); // ix0
-          global->icell_beam[i_beam][1] = int(((x+r) / global->Lx + 0.5) * global->nx - 1); // ix1
-          break;
-        }
-        case BEAM_INJECTION_PLANE::Y:
-        {
-          global->icell_beam[i_beam][2] = int(((y-r) / global->Ly + 0.5) * global->ny - 1); // iy0
-          global->icell_beam[i_beam][3] = int(((y+r) / global->Ly + 0.5) * global->ny - 1); // iy1
-          break;
-        }
-        case BEAM_INJECTION_PLANE::Z:
-        {
-          global->icell_beam[i_beam][4] = int(((z-r) / global->Lz + 0.5) * global->nz - 1); // iz0
-          global->icell_beam[i_beam][5] = int(((z+r) / global->Lz + 0.5) * global->nz - 1); // iz1
-          break;
-        }
-      } // endswitch
-
-      // Number of cells for injection region
-      double nx_inj = global->icell_beam[i_beam][1] - global->icell_beam[i_beam][0] + 1;
-      double ny_inj = global->icell_beam[i_beam][3] - global->icell_beam[i_beam][2] + 1;
-      double nz_inj = global->icell_beam[i_beam][5] - global->icell_beam[i_beam][4] + 1;
-      
-      // Determine beam velocity based on direction and energy
-      // (E_beam in keV, need v_mag in vpic units)
-      double E_beam_J = global->E_beam[i_beam] * e_C * 1.0e3; // convert from keV to J
-      double m_sp_kg = species->m * mi_kg;
-      double v_beam_ms = c_ms * std::sqrt(1.0 - 1.0 / SQR(1.0 + E_beam_J / (m_sp_kg * SQR(c_ms))));
-      global->v_mag[i_beam] = v_beam_ms / v0;
-
-      // Determine thermal velocity parallel and perpendicular to beam
-      double T_J = global->T_beam_para[i_beam] * e_C * 1.0e3; // convert from keV to J
-      double vth_ms = sqrt(3.0 * T_J / m_sp_kg);
-      global->v_thermal[i_beam][0] = vth_ms / v0;
-
-      T_J = global->T_beam_perp[i_beam] * e_C * 1.0e3; // convert from keV to J
-      vth_ms = sqrt(3.0 * T_J / m_sp_kg);
-      global->v_thermal[i_beam][1] = vth_ms / v0;
-
-      double area_inject, dx_cell; 
-
-      switch(plane) {
-        case BEAM_INJECTION_PLANE::X:
-        {
-          area_inject = (nz_inj * hz) * (ny_inj * hy);
-          dx_cell = hx;
-          break;
-        }
-        case BEAM_INJECTION_PLANE::Y:
-        {
-          area_inject = (nx_inj * hx) * (nz_inj * hz);
-          dx_cell = hy;
-          break;
-        }
-        case BEAM_INJECTION_PLANE::Z:
-        {
-          area_inject = (nx_inj * hx) * (ny_inj * hy);
-          dx_cell = hz;
-          break;
-        }
-      } // endswitch
-
-      // Determine particle weights based on dt, power, and energy
-      double P_beam_W = global->P_beam[i_beam] * 1.0e6;
-
-      // double tau_inject_s = particle_injection_interval * grid->dt / w_ci_s; // injection interval, s
-
-      double n_cells = nx_inj * ny_inj * nz_inj;
-      double n_particles = n_cells * global->ppc_beam[i_beam];
-
-      double vol_inject_m3 = n_cells * hx * hy * hz * vol0;
-      double area_inject_m2 = area_inject * area0;
-      double n_beam_m3 = P_beam_W / (E_beam_J * v_beam_ms * area_inject_m2);
-
-      // Modify weight to account for time it takes for beam to cross cell
-      double w_adjust_time = 2.0 * global->v_mag[i_beam] * particle_injection_interval * grid->dt / dx_cell;
-
-      // Modify weight to account for injecting in 2D rather than 3D
-      // // area_1D = dy*dz, area_3D = pi*r^2, ratio = dy*dz / pi*r^2
-      // // double w_adjust_area = hy * hz / (M_PI * r * r);
-      // area_2D = 2*r*dy, area_3D = pi*r^2, ratio = 2*dy / np*r
-      double w_adjust_area = 2.0 * hy / (M_PI * r);
-
-      global->w_beam[i_beam] = w_adjust_time * w_adjust_area * \
-        (n_beam_m3 / n0) * (vol_inject_m3 / vol0) / n_particles;
-      
-      // Calculate rotation matrix, rotate x_hat by polar angle theta and azimuthal angle phi
-      double theta = global->theta_beam[i_beam];
-      double   phi = global->phi_beam[i_beam];
-
-      global->rotation_matrix[i_beam][0][0] = cos(phi) * cos(theta);
-      global->rotation_matrix[i_beam][0][1] = -sin(phi);
-      global->rotation_matrix[i_beam][0][2] = cos(phi) * sin(theta);
-
-      global->rotation_matrix[i_beam][1][0] = sin(phi) * cos(theta);
-      global->rotation_matrix[i_beam][1][1] = cos(phi);
-      global->rotation_matrix[i_beam][1][2] = sin(phi) * sin(theta);
-
-      global->rotation_matrix[i_beam][2][0] = -sin(theta);
-      global->rotation_matrix[i_beam][2][1] = 0.0;
-      global->rotation_matrix[i_beam][2][2] = cos(theta);
-
-      // Determine if rank contains injection region
-      // Initialize rank as not containing injection region
-      global->contains_injection_region[i_beam] = false;
-
-      // Loop through global zones and test if within rank
-      int ix0 = global->icell_beam[i_beam][0]; 
-      int ix1 = global->icell_beam[i_beam][1];
-      int iy0 = global->icell_beam[i_beam][2]; 
-      int iy1 = global->icell_beam[i_beam][3];
-      int iz0 = global->icell_beam[i_beam][4]; 
-      int iz1 = global->icell_beam[i_beam][5];
-
-      int ix0l = (int)1e8, iy0l = (int)1e8, iz0l = (int)1e8; // initialize to large number
-      int ix1l = -1, iy1l = -1, iz1l = -1; // initialize to small number
-
-      for (int iz=iz0; iz<=iz1; iz++) {
-        for (int iy=iy0; iy<=iy1; iy++) {
-          for (int ix=ix0; ix<=ix1; ix++) {
-
-            // Map zone to rank index
-            int irx = int(ix / grid->nx);
-            int iry = int(iy / grid->ny);
-            int irz = int(iz / grid->nz);
-            int target_rank = irx + global->topology_x*(iry + global->topology_y*irz);
-
-            if (int(rank()) == target_rank) {
-              // Mark as containing injection zone
-              global->contains_injection_region[i_beam] = true;
-
-              // Map global indices of beam injection region to local indices of rank
-              ix0l = std::min(ix % grid->nx, ix0l);
-              ix1l = std::max(ix % grid->nx, ix1l);
-              
-              iy0l = std::min(iy % grid->ny, iy0l);
-              iy1l = std::max(iy % grid->ny, iy1l);
-              
-              iz0l = std::min(iz % grid->nz, iz0l);
-              iz1l = std::max(iz % grid->nz, iz1l);
-            } // endif(rank=target_rank)
-
-          } // endfor(ix)
-        } // endfor(iy)
-      } // endfor(iz)
-
-      // Assign to global variable
-      global->icell_beam[i_beam][0] = ix0l; 
-      global->icell_beam[i_beam][1] = ix1l;
-      global->icell_beam[i_beam][2] = iy0l; 
-      global->icell_beam[i_beam][3] = iy1l;
-      global->icell_beam[i_beam][4] = iz0l; 
-      global->icell_beam[i_beam][5] = iz1l;
-      
-    } // endfor(i_beam)
-  } // endif(!initted)
-
-  // Loop over beams and inject particles
-  for (int i_beam = 0; i_beam < n_beams; i_beam++) {
-
-    if (!global->contains_injection_region[i_beam]) { continue; }
-
-    int ix0 = global->icell_beam[i_beam][0]; 
-    int ix1 = global->icell_beam[i_beam][1];
-    int iy0 = global->icell_beam[i_beam][2]; 
-    int iy1 = global->icell_beam[i_beam][3];
-    int iz0 = global->icell_beam[i_beam][4]; 
-    int iz1 = global->icell_beam[i_beam][5];
-
-    int ppc = global->ppc_beam[i_beam];
-    double weight_base = global->w_beam[i_beam];  // Base weight before radial correction
-    double v_mag = global->v_mag[i_beam];
-    double *v_th = global->v_thermal[i_beam];
-    double rm[3][3];
-
-    std::copy(&global->rotation_matrix[i_beam][0][0],
-              &global->rotation_matrix[i_beam][0][0] + 9,
-              &rm[0][0]);
-
-    double x, y, z, vx, vy, vz, vx_th, vy_th, vz_th;
-
-    for (int iz=iz0; iz<=iz1; iz++) {
-      for (int iy=iy0; iy<=iy1; iy++) {
-        for (int ix=ix0; ix<=ix1; ix++) {
-
-          repeat(ppc) {
-            // Sample location within cell
-            x = grid->x0 + hx * (ix + uniform(rng(0), 0, 1));
-            y = grid->y0 + hy * (iy + uniform(rng(0), 0, 1));
-            z = grid->z0 + hz * (iz + uniform(rng(0), 0, 1));
-            
-            // *** CYLINDRICAL COORDINATE FIX ***
-            // In cylindrical coords, x represents r
-            double r = abs(x);
-            
-            // Avoid division by very small r (set floor at 1% of cell size)
-            if (r < 0.01 * grid->dx) {
-              r = 0.01 * grid->dx;
-            }
-            
-            // Adjust weight by 1/Jacobian to get uniform physical density
-            double weight = weight_base / r;
-            // *** END FIX ***
-                
-            // Sample thermal velocity and add to beam velocity
-            vx_th = normal(rng(0), 0, v_th[0]); // v_th from T_para
-            vy_th = normal(rng(0), 0, v_th[1]); // v_th from T_perp
-            vz_th = normal(rng(0), 0, v_th[1]); // v_th from T_perp
-
-            // Rotate velocity
-            vx = rm[0][0] * (v_mag + vx_th) + rm[0][1] * vy_th + rm[0][2] * vz_th;
-            vy = rm[1][0] * (v_mag + vx_th) + rm[1][1] * vy_th + rm[1][2] * vz_th;
-            vz = rm[2][0] * (v_mag + vx_th) + rm[2][1] * vy_th + rm[2][2] * vz_th;
-
-            inject_particle_r(species, x, y, z, vx, vy, vz, weight, age, charge);
-          } // end repeat
-
-        } // endfor(ix)
-      } // endfor(iy)
-    } // endfor(iz)
-
-  } // endfor(i_beam)
-#endif
 } // end particle injection

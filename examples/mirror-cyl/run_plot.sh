@@ -1,5 +1,5 @@
 cd ../../build
-module load openmpi/4.1.4-intel_2022.1.0
+module load openmpi/4.1.4-intel_2022.1.0 miniconda3
 cp ../examples/mirror-cyl/conf.dat ./conf.dat
 mpif90 -o translate_faster ../examples/mirror-cyl/translate_faster.f90
 mkdir data

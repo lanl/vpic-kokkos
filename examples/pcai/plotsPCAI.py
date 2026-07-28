@@ -64,7 +64,7 @@ ax2.legend()
 #plt.xlim([0, 80])
 plt.xlim([0, 60])
 plt.ylim([-2, 1])
-plt.savefig('pcai2.png', dpi=300)
+plt.savefig('pcai3.png', dpi=300)
 
 
 
@@ -83,6 +83,6 @@ plt.xlim([0, 60])
 plt.ylim([-2, 1])
 
 plt.show()
-plt.savefig('pcai.png', dpi=300)
+plt.savefig('pcai4.png', dpi=300)
 
 

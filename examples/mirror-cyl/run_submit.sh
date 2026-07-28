@@ -1,4 +1,5 @@
 module load openmpi gcc/11.2.0
+scancel -n mir
 export OMP_PROC_BIND=true
 cd ../../build
 rm -rf hydro
@@ -10,4 +11,6 @@ rm -rf restore1
 rm -rf particle
 ./bin/vpic ../examples/mirror-cyl/mirror_RZ_cyl.cxx
 sbatch ../examples/mirror-cyl/submit
+rm slurm.err
+touch slurm.err
 tail -f slurm.err

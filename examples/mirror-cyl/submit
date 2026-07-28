@@ -13,8 +13,8 @@ module load gcc openmpi
 cd /vast/home/cgraham/vpic-kokkos/
 module load gcc/12.2.0 openmpi/4.1.5-gcc_12.2.0 cmake/3.29.2 cuda/12.9.1
 export NVCC_WRAPPER_DEFAULT_COMPILER=mpicxx
-mkdir build
+# mkdir build
 cd build
-bash ../arch/Darwin_Ampere
+# bash ../arch/Darwin_Ampere
 srun -n 4 /vast/home/cgraham/vpic-kokkos/build/mirror_RZ_cyl.Linux
 ##--restore restart0/restart.0  >& outfile2 

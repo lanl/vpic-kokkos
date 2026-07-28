@@ -478,7 +478,7 @@ begin_initialization {
   grid->nsmb  = hyb_nsmb;
 
   // Partition a periodic box among the processors sliced uniformly along x,y,z
-  define_periodic_grid( 0.01*Lx, -0.5*Ly, -0.5*Lz,            // Low corner
+  define_periodic_grid( 0.1*Lx, -0.5*Ly, -0.5*Lz,            // Low corner
                         0.5*Lx,  0.5*Ly,  0.5*Lz,            // High corner
                         nx, ny, nz,                          // Resolution
                         topology_x, topology_y, topology_z); // Topology

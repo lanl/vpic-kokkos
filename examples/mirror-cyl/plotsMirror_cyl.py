@@ -42,7 +42,7 @@ def loadSlice(dir, q, sl, nr, nz):
 cmap = plt.get_cmap("Spectral_r")
 
 Q = {}
-qs = ["ni"]
+qs = ["ni", "bx", "by", "bz", "ex", "ey", "ez"]  # All quantities we need
 
 dir = "../../build/data/"
 
@@ -55,7 +55,7 @@ nr = int(infoarr[0])  # Radial cells
 nz = int(infoarr[1])  # Axial cells
 
 # Create coordinate arrays
-rv = np.linspace(0, Lr, nr)  # Radial coordinates
+rv = np.linspace(0, Lr, nr)  # Radial coordinates  np.linspace(0.1*Lr, 0.5*Lr, nr)
 zv = np.linspace(-Lz/2, Lz/2, nz)  # Axial coordinates (centered)
 
 # Create meshgrid for proper cylindrical plotting
@@ -109,76 +109,85 @@ cnt = 0
 slice = num_slices - 1
 if len(sys.argv) > 1:
 	slice = int(sys.argv[1])
+
+# Load all quantities
 for q in qs:
 	tmp = loadSlice(dir, q, slice, nr, nz)
 	Q[q] = tmp
+	print(f"{q} range: [{np.min(Q[q]):.3e}, {np.max(Q[q]):.3e}]")
 
-# cartesian starts at ni = 0.06
-
-fig, (ax1) = plt.subplots(nrows=1, figsize=(10, 4))
-
-# Plot in r-z plane (cylindrical cross-section)
-im = ax1.pcolormesh(Z, R, Q["ni"], cmap=cmap, shading='auto')
+# Load field lines
 Ay = loadFieldLines(dir, slice, nr, nz)
 
-# Main plot with field lines
-fig, (ax1) = plt.subplots(nrows=1, figsize=(12, 5))
+# ============================================================
+# FIGURE 1: Ion Density with Field Lines
+# ============================================================
+fig1, ax1 = plt.subplots(figsize=(12, 5))
 
-# Plot density in r-z plane (cylindrical cross-section)
-im = ax1.pcolormesh(Z, R, Q["ni"], cmap=cmap, shading='auto')
+im1 = ax1.pcolormesh(Z, R, Q["ni"], cmap=cmap, shading='auto')
 
 # Overlay field lines if available
 if Ay is not None:
-	# Number of field lines to draw
 	num_lines = 20
-	
-	# Draw field lines as contours of constant Ay
 	contours = ax1.contour(Z, R, Ay, levels=num_lines, colors='black', 
 	                       linewidths=1.0, alpha=0.6, linestyles='solid')
-	
-	# Optional: add labels to some field lines
-	# ax1.clabel(contours, inline=True, fontsize=8, fmt='%1.2f')
-	
-	print(f"Drew {num_lines} field lines")
-	print(f"Ay range: [{np.min(Ay):.3e}, {np.max(Ay):.3e}]")
+	print(f"Drew {num_lines} field lines on density plot")
 else:
 	print("Field lines not plotted - Ay data not available")
 
-ax1.set_xlabel('z')
-ax1.set_ylabel('r/x')
-ax1.set_title(f'density')
-ax1.set_aspect('equal')  # Equal aspect ratio
+ax1.set_xlabel('z (axial position)', fontsize=12)
+ax1.set_ylabel('r (radial position)', fontsize=12)
+ax1.set_title(f'Ion Density (slice {slice})', fontsize=14)
+ax1.set_aspect('equal')
+cbar1 = fig1.colorbar(im1, ax=ax1, label='ni', shrink=0.8)
 
-fig.colorbar(im, ax=ax1, label='ni')
+fig1.tight_layout()
+fig1.savefig('plot_density.png', dpi=300)
+print("Saved density plot to plot_density.png")
 
-fig.tight_layout()
-fig.savefig('plot.png', dpi=300)
-# plt.show()
+# ============================================================
+# FIGURE 2: All Field Components (Bx, By, Bz, Ex, Ey, Ez)
+# ============================================================
+fig2, axes = plt.subplots(2, 3, figsize=(18, 5))
+axes = axes.flatten()
 
+# Define which fields to plot
+field_names = ['bx', 'by', 'bz', 'ex', 'ey', 'ez']
+field_titles = ['Bx', 'By', 'Bz', 'Ex', 'Ey', 'Ez']
+field_labels = ['Bx', 'By', 'Bz', 'Ex', 'Ey', 'Ez']
 
-# Optional: Plot as a "full" cylindrical view (mirror top and bottom)
-def plot_cylindrical_full(Q, R, Z, quantity='ni'):
-	"""
-	Plot full cylindrical view by mirroring around axis
-	"""
-	fig, ax = plt.subplots(figsize=(10, 8))
+# Color maps - use RdBu_r for diverging data (fields can be positive/negative)
+field_cmap = 'RdBu_r'
+
+# Plot each field component
+for idx, (field, title, label) in enumerate(zip(field_names, field_titles, field_labels)):
+	ax = axes[idx]
 	
-	# Top half (positive r)
-	im1 = ax.pcolormesh(Z, R, Q[quantity], cmap=cmap, shading='auto', vmin=0, vmax=1.0)
+	# Get symmetric color limits for better visualization
+	vmax = np.max(np.abs(Q[field]))
+	vmin = -vmax
 	
-	# Bottom half (negative r, mirrored)
-	im2 = ax.pcolormesh(Z, -R, Q[quantity], cmap=cmap, shading='auto', vmin=0, vmax=1.0)
+	im = ax.pcolormesh(Z, R, Q[field], cmap=field_cmap, shading='auto',
+	                   vmin=vmin, vmax=vmax)
 	
-	ax.set_xlabel('z (axial position)')
-	ax.set_ylabel('r (radial position)')
-	ax.set_title(f'{quantity} - Full Cylindrical View')
-	ax.axhline(y=0, color='k', linestyle='--', linewidth=0.5)
+	# Overlay field lines if available
+	if Ay is not None:
+		contours = ax.contour(Z, R, Ay, levels=15, colors='black', 
+		                      linewidths=0.5, alpha=0.4, linestyles='solid')
+	
+	ax.set_xlabel('z', fontsize=10)
+	ax.set_ylabel('r', fontsize=10)
+	ax.set_title(title, fontsize=12, pad=10)
 	ax.set_aspect('equal')
 	
-	cbar = fig.colorbar(im1, ax=ax, label=quantity)
-	cbar.set_clim(0, 1)
-	plt.tight_layout()
-	plt.show()
+	# Add colorbar with smaller size
+	cbar = fig2.colorbar(im, ax=ax, shrink=0.2, pad=0.02)
+	cbar.set_label(label, fontsize=9)
+	cbar.ax.tick_params(labelsize=8)
 
-# Uncomment to use full cylindrical plot:
-# plot_cylindrical_full(Q, R, Z, 'ni')
+fig2.suptitle(f'Electromagnetic Field Components (slice {slice})', fontsize=16, y=0.995)
+fig2.tight_layout()
+fig2.savefig('plot_fields.png', dpi=300)
+print("Saved field components plot to plot_fields.png")
+
+# plt.show()
