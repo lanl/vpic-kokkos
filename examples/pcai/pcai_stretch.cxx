@@ -260,7 +260,9 @@ sim_log( "Loading fields" );
 
 // Note: everywhere is a region that encompasses the entire simulation                                                                                                                   
 // In general, regions are specied as logical equations (i.e. x>0 && x+y<2) 
- set_region_field( everywhere, 0, 0, 0, 1.0, 0, 0);
+ for (int v = 0; v < grid->nv; v++) {
+  field(v).cbx = 1.0;
+ }
  set_region_te( everywhere, Te);
 
  // LOAD PARTICLES
