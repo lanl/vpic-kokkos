@@ -214,8 +214,8 @@ else()
 endif()
 
 if(ENABLE_KOKKOS_CUDA)
-  find_package(CUDA)
-  if (CUDA_FOUND)
+  find_package(CUDAToolkit)
+  if (CUDAToolkit_FOUND)
     add_definitions(-DENABLE_KOKKOS_CUDA)
     # If not on a Cray system, this can cause CMake to stall
     if(DEFINED ENV{CRAYPE_VERSION})
