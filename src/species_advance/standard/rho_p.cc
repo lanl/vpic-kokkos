@@ -462,6 +462,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
     const size_t np = sp->np;
     const int sy = sp->g->sy;
     const int sz = sp->g->sz;
+    const grid::grid_geom_t geom = sp->g->geom();
 
     constexpr float three          = 3.;
     constexpr float two            = 2.;
@@ -500,7 +501,7 @@ k_accumulate_rho_p( /**/  field_array_t * RESTRICT fa,
 
         // Compute reciprocal basis at current position
         compute_reciprocal_basis(
-            g,
+            geom,
             dx, dy, dz, ii, nx, ny, nz,
             gdx, gdy, gdz,
             grad_xi_x, grad_xi_y, grad_xi_z,

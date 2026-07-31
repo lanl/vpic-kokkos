@@ -98,9 +98,9 @@ begin_initialization {
     particle_t& p = this_sp->p[0];
 
     double r_phys, theta_phys, z_curv;
-    grid->local_to_global(p.i, p.dx, p.dy, p.dz, r_phys, theta_phys, z_curv);
+    grid->geom().local_to_global(p.i, p.dx, p.dy, p.dz, r_phys, theta_phys, z_curv);
     double x, y, z;
-    grid->local_to_global_cart(p.i, p.dx, p.dy, p.dz, x, y, z);
+    grid->geom().local_to_global_cart(p.i, p.dx, p.dy, p.dz, x, y, z);
 
     sim_log("|Rerr| " << fabs(r_phys - R));
 

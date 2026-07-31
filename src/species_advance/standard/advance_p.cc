@@ -643,6 +643,7 @@ advance_p_kokkos_unified(
   //float cz = 0.25 * g->rdx * g->rdy / g->dt;
   float rV = g->rdx * g->rdy * g->rdz;
   float gdx=g->dx, gdy=g->dy, gdz=g->dz, gdt=g->dt;
+  const grid::grid_geom_t geom = g->geom();
 
 #ifdef EXTERNAL_FORCE
   // Don't futz with interpolator loading code that we won't even use
@@ -1074,9 +1075,8 @@ advance_p_kokkos_unified(
           local_pm->dispy = uy[LANE];
           local_pm->dispz = uz[LANE];
           local_pm->i     = p_index;
-
           if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                             current_sv, g, k_neighbors, rangel, rangeh, qsp, gdx,gdy,gdz,gdt, nx, ny, nz ) )
+                             current_sv, geom, k_neighbors, rangel, rangeh, qsp, gdx,gdy,gdz,gdt, nx, ny, nz ) )
           {
             if( k_nm(0)<max_nm ) {
               const size_t nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
@@ -1220,6 +1220,7 @@ advance_p_kokkos_gpu(
   float gdx=g->dx, gdy=g->dy, gdz = g->dz, gdt = g->dt;
   float cdt=g->cvac * g->dt;
   const float dt_2c = (g->dt)/(2*g->cvac);
+  const grid::grid_geom_t geom = g->geom();
 
   // Process particles for this pipeline
 
@@ -1335,7 +1336,7 @@ advance_p_kokkos_gpu(
 
     // Compute reciprocal basis at current position
     compute_reciprocal_basis(
-        g,
+        geom,
         dx, dy, dz, ii, nx, ny, nz,
         gdx, gdy, gdz,
         grad_xi_x, grad_xi_y, grad_xi_z,
@@ -1423,7 +1424,7 @@ advance_p_kokkos_gpu(
 
     //Recompute reciprocal basis at predicted half-step position
     compute_reciprocal_basis(
-        g,
+        geom,
         dx_local, dy_local, dz_local, ii_pred, nx, ny, nz,
         gdx, gdy, gdz,
         grad_xi_x, grad_xi_y, grad_xi_z,
@@ -1614,7 +1615,7 @@ advance_p_kokkos_gpu(
       
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e uz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                         k_f_sv, g, k_neighbors, rangel, rangeh, qsp, gdx, gdy, gdz, gdt, nx, ny, nz ) )
+                         k_f_sv, geom, k_neighbors, rangel, rangeh, qsp, gdx, gdy, gdz, gdt, nx, ny, nz ) )
       {
         if( k_nm(0) < max_nm )
           {
@@ -1683,7 +1684,7 @@ advance_p_kokkos_gpu(
 #endif
 
   Kokkos::Experimental::contribute(k_field, k_f_sv);
-  k_f_sv.reset();
+//  k_f_sv.reset_except(fa->k_f_d);
   
   
     // TODO: abstract this manual data copy

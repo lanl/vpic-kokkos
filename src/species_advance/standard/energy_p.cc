@@ -160,7 +160,7 @@ double
 energy_p_kernel(const k_interpolator_t& k_interp, 
                 const k_particles_t& k_particles, 
                 const k_particles_i_t& k_particles_i, 
-                const grid_t* g,  // Changed from k_curvilinear_mesh_t
+                const grid::grid_geom_t& geom,
                 const float q,
                 const float dt_2mc, 
                 const float dt_2c, 
@@ -207,7 +207,7 @@ energy_p_kernel(const k_interpolator_t& k_interp,
         float jac;
         
         compute_reciprocal_basis(
-            g,  // Pass grid pointer, not curvilinear mesh
+            geom,
             dx, dy, dz, ii, nx, ny, nz,
             gdx, gdy, gdz,
             grad_xi_x, grad_xi_y, grad_xi_z,
@@ -289,9 +289,10 @@ energy_p_kokkos(const species_t* RESTRICT sp,
     const float gdx = g->dx;
     const float gdy = g->dy;
     const float gdz = g->dz;
+    const grid::grid_geom_t geom = g->geom();
 
     local = energy_p_kernel(ia->k_i_d, sp->k_p_d, sp->k_p_i_d, 
-                           g,  // Pass grid pointer
+                           geom,
                            q, dt_2mc, dt_2c, msp, np,
                            g->nx, g->ny, g->nz,
                            gdx, gdy, gdz);

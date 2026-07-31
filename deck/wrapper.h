@@ -443,25 +443,25 @@ vpic_simulation::user_radiation( void )
           double x, y, z;                                             \
           /* Test region membership at Yee mesh locations */          \
           /* Cell center (for reference) */                           \
-          grid->local_to_global_cart(_voxel, 0.0f, 0.0f, 0.0f, x, y, z); \
+          grid->geom().local_to_global_cart(_voxel, 0.0f, 0.0f, 0.0f, x, y, z); \
           _rccc = (rgn);                                              \
           /* -x neighbor cell center */                               \
-          grid->local_to_global_cart(_voxel, -2.0f, 0.0f, 0.0f, x, y, z); \
+          grid->geom().local_to_global_cart(_voxel, -2.0f, 0.0f, 0.0f, x, y, z); \
           _rlcc = (rgn);                                              \
           /* -y neighbor cell center */                               \
-          grid->local_to_global_cart(_voxel, 0.0f, -2.0f, 0.0f, x, y, z); \
+          grid->geom().local_to_global_cart(_voxel, 0.0f, -2.0f, 0.0f, x, y, z); \
           _rclc = (rgn);                                              \
           /* -x,-y neighbor cell center */                            \
-          grid->local_to_global_cart(_voxel, -2.0f, -2.0f, 0.0f, x, y, z); \
+          grid->geom().local_to_global_cart(_voxel, -2.0f, -2.0f, 0.0f, x, y, z); \
           _rllc = (rgn);                                              \
           /* -z neighbor cell center */                               \
-          grid->local_to_global_cart(_voxel, 0.0f, 0.0f, -2.0f, x, y, z); \
+          grid->geom().local_to_global_cart(_voxel, 0.0f, 0.0f, -2.0f, x, y, z); \
           _rccl = (rgn);                                              \
           /* -x,-z neighbor cell center */                            \
-          grid->local_to_global_cart(_voxel, -2.0f, 0.0f, -2.0f, x, y, z); \
+          grid->geom().local_to_global_cart(_voxel, -2.0f, 0.0f, -2.0f, x, y, z); \
           _rlcl = (rgn);                                              \
           /* -y,-z neighbor cell center */                            \
-          grid->local_to_global_cart(_voxel, 0.0f, -2.0f, -2.0f, x, y, z); \
+          grid->geom().local_to_global_cart(_voxel, 0.0f, -2.0f, -2.0f, x, y, z); \
           _rcll = (rgn);                                              \
           /* Get scale factors for this cell */                       \
           int _mesh_idx = GRID_TO_MESH(_i, _j, _k, _nx, _ny, _nz);   \
@@ -472,7 +472,7 @@ vpic_simulation::user_radiation( void )
           if(_h2 == 0.0) _h2 = 1.0; /* Defensive for axis */          \
           if(_h3 == 0.0) _h3 = 1.0; /* Defensive */                   \
           /* Evaluate field equations at cell center in Cartesian coords */ \
-          grid->local_to_global_cart(_voxel, 0.0f, 0.0f, 0.0f, x, y, z); \
+          grid->geom().local_to_global_cart(_voxel, 0.0f, 0.0f, 0.0f, x, y, z); \
           /* Set field components based on region tests */            \
           if( _rccc || _rclc || _rccl || _rcll ) _f->ex  =    (eqn_ex)/_h1; \
           if( _rccc || _rccl || _rlcc || _rlcl ) _f->ey  =    (eqn_ey)/_h2; \
@@ -532,25 +532,25 @@ vpic_simulation::user_radiation( void )
         double x, y, z;                                             \
         /* Test region membership at Yee mesh locations */          \
         /* Cell center (for reference) */                           \
-        grid->local_to_global_cart(_voxel, 0.0f, 0.0f, 0.0f, x, y, z); \
+        grid->geom().local_to_global_cart(_voxel, 0.0f, 0.0f, 0.0f, x, y, z); \
         _rccc = (rgn);                                              \
         /* -x neighbor cell center */                               \
-        grid->local_to_global_cart(_voxel, -2.0f, 0.0f, 0.0f, x, y, z); \
+        grid->geom().local_to_global_cart(_voxel, -2.0f, 0.0f, 0.0f, x, y, z); \
         _rlcc = (rgn);                                              \
         /* -y neighbor cell center */                               \
-        grid->local_to_global_cart(_voxel, 0.0f, -2.0f, 0.0f, x, y, z); \
+        grid->geom().local_to_global_cart(_voxel, 0.0f, -2.0f, 0.0f, x, y, z); \
         _rclc = (rgn);                                              \
         /* -x,-y neighbor cell center */                            \
-        grid->local_to_global_cart(_voxel, -2.0f, -2.0f, 0.0f, x, y, z); \
+        grid->geom().local_to_global_cart(_voxel, -2.0f, -2.0f, 0.0f, x, y, z); \
         _rllc = (rgn);                                              \
         /* -z neighbor cell center */                               \
-        grid->local_to_global_cart(_voxel, 0.0f, 0.0f, -2.0f, x, y, z); \
+        grid->geom().local_to_global_cart(_voxel, 0.0f, 0.0f, -2.0f, x, y, z); \
         _rccl = (rgn);                                              \
         /* -x,-z neighbor cell center */                            \
-        grid->local_to_global_cart(_voxel, -2.0f, 0.0f, -2.0f, x, y, z); \
+        grid->geom().local_to_global_cart(_voxel, -2.0f, 0.0f, -2.0f, x, y, z); \
         _rlcl = (rgn);                                              \
         /* -y,-z neighbor cell center */                            \
-        grid->local_to_global_cart(_voxel, 0.0f, -2.0f, -2.0f, x, y, z); \
+        grid->geom().local_to_global_cart(_voxel, 0.0f, -2.0f, -2.0f, x, y, z); \
         _rcll = (rgn);                                              \
         /* Get scale factors for this cell */                       \
         int _mesh_idx = GRID_TO_MESH(_i, _j, _k, _nx, _ny, _nz);   \
@@ -561,7 +561,7 @@ vpic_simulation::user_radiation( void )
         if(_h2 == 0.0) _h2 = 1.0; /* Defensive for axis */          \
         if(_h3 == 0.0) _h3 = 1.0; /* Defensive */                   \
         /* Evaluate field equations at cell center in Cartesian coords */ \
-        grid->local_to_global_cart(_voxel, 0.0f, 0.0f, 0.0f, x, y, z); \
+        grid->geom().local_to_global_cart(_voxel, 0.0f, 0.0f, 0.0f, x, y, z); \
         /* Set external B field components based on region tests */ \
         if( _rccc || _rlcc )                   _f->cbx0 = _c*(eqn_bx)/_h1; \
         if( _rccc || _rclc )                   _f->cby0 = _c*(eqn_by)/_h2; \

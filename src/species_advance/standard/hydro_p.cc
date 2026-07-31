@@ -423,8 +423,7 @@ accumulate_hydro_p_kokkos(
   const float gdy = sp->g->dy;
   const float gdz = sp->g->dz;
   const grid_t* g = sp->g;
-  
-  k_curvilinear_mesh_t k_curv_mesh = sp->g->k_curvilinear_mesh_d;
+  const grid::grid_geom_t geom = g->geom();
 
   Kokkos::parallel_for("hydro_p", Kokkos::RangePolicy < Kokkos::DefaultExecutionSpace,size_t > (0LLU, np),
     KOKKOS_LAMBDA (const size_t p_index)
@@ -480,7 +479,7 @@ accumulate_hydro_p_kokkos(
     float jac;
     
     compute_reciprocal_basis(
-        g,
+        geom,
         dx, dy, dz, ii, nx, ny, nz,
         gdx, gdy, gdz,
         grad_xi_x, grad_xi_y, grad_xi_z,

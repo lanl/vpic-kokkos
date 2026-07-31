@@ -167,7 +167,7 @@ begin_initialization {
   //  grid->eta = eta;
   //  grid->hypereta = hypereta;
   //  grid->gamma = gamma;
-  grid->init_stretched_cartesian_grid(5., 5., 0.);
+  grid->init_stretched_cartesian_grid(2., 2., 0.);
   grid->nsub = 1; // Number of substeps for field solve.
 #if LOAD_PARTICLES
   grid->den_floor_ohm= .1;

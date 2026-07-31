@@ -28,8 +28,7 @@ enum grid_enums {
 
   // Phase 3 boundary conditions
   reflect_particles = -1, // Cell boundary should reflect particles
-  absorb_particles  = -2,  // Cell boundary should absorb particles
-  tunnel_particles     = -3,
+  absorb_particles  = -2  // Cell boundary should absorb particles
 
   // Symmetry in the field boundary conditions refers to image charge
   // sign
@@ -79,6 +78,39 @@ enum grid_type {
   GENERAL = 3,
   STRETCHED_CARTESIAN = 4
 };
+
+
+// Given a voxel mesh coordinates (on 0:nx+1,0:ny+1,0:nz+1) and
+// voxel mesh resolution (nx,ny,nz), return the index of that voxel.
+
+#define VOXEL(x,y,z, nx,ny,nz) ((x) + ((nx)+2)*((y) + ((ny)+2)*(z)))
+
+// Convert voxel index back to (i,j,k) indices for the local grid
+#define UNVOXEL(v, i, j, k, nx, ny, nz) \
+  do { \
+    int _stride_y = (nx) + 2; \
+    int _stride_z = _stride_y * ((ny) + 2); \
+    (k) = (v) / _stride_z; \
+    int _rem = (v) % _stride_z; \
+    (j) = _rem / _stride_y; \
+    (i) = _rem % _stride_y; \
+  } while(0)
+
+// Convert grid voxel index to curvilinear mesh index
+// Grid has 1 ghost layer: (nx+2) x (ny+2) x (nz+2)
+// Mesh has 2 ghost layers: (nx+4) x (ny+4) x (nz+4)
+// Mesh cell indices are offset by +1 in each dimension
+#define VOXEL_TO_MESH(v, nx, ny, nz) \
+  (((v) % ((nx)+2) + 1) + \
+   ((nx)+4) * ((((v) / ((nx)+2)) % ((ny)+2) + 1) + \
+   ((ny)+4) * ((v) / (((nx)+2) * ((ny)+2)) + 1)))
+
+// Convert grid cell indices (i,j,k) to curvilinear mesh linear index
+// Grid: (nx+2) x (ny+2) x (nz+2) with 1 ghost layer
+// Mesh: (nx+4) x (ny+4) x (nz+4) with 2 ghost layers
+// Mesh indices are shifted by +1 in each dimension
+#define GRID_TO_MESH(i, j, k, nx, ny, nz) \
+  VOXEL((i)+1, (j)+1, (k)+1, (nx)+2, (ny)+2, (nz)+2)
 
 typedef struct grid {
 
@@ -556,46 +588,186 @@ typedef struct grid {
     Kokkos::deep_copy(k_curvilinear_mesh_d, k_curvilinear_mesh_h);
   }
 
-  // Helper function declarations - implementations after macros
-  void local_to_global_cart(int voxel_i, float dx, float dy, float dz,
-                          double& x_out, double& y_out, double& z_out) const;
+  // A tiny, value-copyable snapshot of the geometry needed on-device.
+  // Holds scalars + the DEVICE curvilinear-mesh View. Safe to capture
+  // by value into a KOKKOS_LAMBDA.
+  struct grid_geom_t {
+      int   type;
+      int   nx, ny, nz;
+      double x0, y0, z0;
+      double dx, dy, dz;
+      k_curvilinear_mesh_t mesh_d;   // the device View type (k_curvilinear_mesh_d)
+      k_curvilinear_mesh_t::HostMirror  mesh_h;
 
-  void local_to_global(int voxel_i, float dx, float dy, float dz,
-                            double& xi_out, double& eta_out, double& mu_out) const;
+      // Single accessor that resolves to the correct space at compile time.
+      // Returns a reference to the element; usable read-only here.
+      KOKKOS_INLINE_FUNCTION
+      float m(int n, int var) const {
+        KOKKOS_IF_ON_HOST(  ( return mesh_h(n, var); ) )
+        KOKKOS_IF_ON_DEVICE(( return mesh_d(n, var); ) )
+      }
+
+      KOKKOS_INLINE_FUNCTION
+      void local_to_global(int voxel_i, float dx_p, float dy_p, float dz_p,
+                            double& xi_out, double& eta_out, double& mu_out) const {
+        int ix, iy, iz;
+        UNVOXEL(voxel_i, ix, iy, iz, nx, ny, nz);
+        double xic = x0 + (ix - 0.5) * dx;
+        double etc = y0 + (iy - 0.5) * dy;
+        double muc = z0 + (iz - 0.5) * dz;
+        xi_out  = xic + dx_p * dx / 2.0;
+        eta_out = etc + dy_p * dy / 2.0;
+        mu_out  = muc + dz_p * dz / 2.0;
+      }
+      
+      /* KOKKOS_INLINE_FUNCTION
+      void local_to_global_cart(int voxel_i, float dx_p, float dy_p, float dz_p,
+                                double& x_out, double& y_out, double& z_out) const {
+        int i, j, k;
+        UNVOXEL(voxel_i, i, j, k, nx, ny, nz);
+        if (type == grid_type::CARTESIAN) {
+            local_to_global(voxel_i, dx_p, dy_p, dz_p, x_out, y_out, z_out);
+        } else if (type == grid_type::STRETCHED_CARTESIAN) {
+            int node_idx = GRID_TO_MESH(i, j, k, nx, ny, nz);
+            x_out = mesh(node_idx, curv_mesh_var::xg) + 0.5*dx_p*mesh(node_idx, curv_mesh_var::h_1);
+            y_out = mesh(node_idx, curv_mesh_var::yg) + 0.5*dy_p*mesh(node_idx, curv_mesh_var::h_2);
+            z_out = mesh(node_idx, curv_mesh_var::zg) + 0.5*dz_p*mesh(node_idx, curv_mesh_var::h_3);
+        } else if (type == grid_type::CYLINDRICAL) {
+            double r     = x0 + (i - 0.5)*dx + 0.5*dx_p*dx;
+            double theta = y0 + (j - 0.5)*dy + 0.5*dy_p*dy;
+            double z     = z0 + (k - 0.5)*dz + 0.5*dz_p*dz;
+            x_out = r*cos(theta);  y_out = r*sin(theta);  z_out = z;
+        } else if (type == grid_type::SPHERICAL) {
+            double r     = x0 + (i - 0.5)*dx + 0.5*dx_p*dx;
+            double theta = y0 + (j - 0.5)*dy + 0.5*dy_p*dy;
+            double phi   = z0 + (k - 0.5)*dz + 0.5*dz_p*dz;
+            x_out = r*sin(theta)*cos(phi);
+            y_out = r*sin(theta)*sin(phi);
+            z_out = r*cos(theta);
+        } else {
+            float Sx_m1=0.125f*(1-dx_p)*(1-dx_p), Sx_0=0.25f*(3-dx_p*dx_p), Sx_p1=0.125f*(1+dx_p)*(1+dx_p);
+            float Sy_m1=0.125f*(1-dy_p)*(1-dy_p), Sy_0=0.25f*(3-dy_p*dy_p), Sy_p1=0.125f*(1+dy_p)*(1+dy_p);
+            float Sz_m1=0.125f*(1-dz_p)*(1-dz_p), Sz_0=0.25f*(3-dz_p*dz_p), Sz_p1=0.125f*(1+dz_p)*(1+dz_p);
+            x_out=y_out=z_out=0.0;
+            for (int kk=-1;kk<=1;kk++){ float Sz=(kk==-1)?Sz_m1:((kk==0)?Sz_0:Sz_p1);
+              for (int jj=-1;jj<=1;jj++){ float Sy=(jj==-1)?Sy_m1:((jj==0)?Sy_0:Sy_p1);
+                for (int iio=-1;iio<=1;iio++){ float Sx=(iio==-1)?Sx_m1:((iio==0)?Sx_0:Sx_p1);
+                  int node_idx = GRID_TO_MESH(i+iio, j+jj, k+kk, nx, ny, nz);
+                  float w = Sx*Sy*Sz;
+                  x_out += w * mesh(node_idx, curv_mesh_var::xg);   // was ..._h
+                  y_out += w * mesh(node_idx, curv_mesh_var::yg);
+                  z_out += w * mesh(node_idx, curv_mesh_var::zg);
+                }}}
+        }
+      } */
+      KOKKOS_INLINE_FUNCTION
+      void local_to_global_cart(int voxel_i,
+              float dx_p, float dy_p, float dz_p,
+              double& x_out, double& y_out, double& z_out) const {
+          int i, j, k;
+          UNVOXEL(voxel_i, i, j, k, nx, ny, nz);
+
+          if (type == grid_type::CARTESIAN) {
+              local_to_global(voxel_i, dx_p, dy_p, dz_p, x_out, y_out, z_out);
+          } else if (type == grid_type::STRETCHED_CARTESIAN) {
+              int node_idx = GRID_TO_MESH(i, j, k, nx, ny, nz);
+              double x_center = m(node_idx, curv_mesh_var::xg);   // was ..._h
+              double y_center = m(node_idx, curv_mesh_var::yg);
+              double z_center = m(node_idx, curv_mesh_var::zg);
+              x_out = x_center + 0.5 * dx_p * m(node_idx, curv_mesh_var::h_1);
+              y_out = y_center + 0.5 * dy_p * m(node_idx, curv_mesh_var::h_2);
+              z_out = z_center + 0.5 * dz_p * m(node_idx, curv_mesh_var::h_3);
+
+          } else if (type == grid_type::CYLINDRICAL) {
+              // Cylindrical: (r, theta, z) -> (x, y, z)
+              
+              double r = x0 + (i - 0.5) * dx;
+              double theta = y0 + (j - 0.5) * dy;
+              double z = z0 + (k - 0.5) * dz;  // Fixed!
+              
+              double r_relative = 0.5 * dx_p * dx;
+              double theta_relative = 0.5 * dy_p * dy;
+              double z_relative = 0.5 * dz_p * dz;  // Fixed!
+              
+              double r_phys = r + r_relative;
+              double theta_phys = theta + theta_relative;
+              double z_phys = z + z_relative;  // Fixed!
+              
+              x_out = r_phys * cosf(theta_phys);
+              y_out = r_phys * sinf(theta_phys);
+              z_out = z_phys;
+              
+          } else if (type == grid_type::SPHERICAL) {
+              // Spherical: (r, theta, phi) -> (x, y, z)
+              
+              double r = x0 + (i - 0.5) * dx;
+              double theta = y0 + (j - 0.5) * dy;
+              double phi = z0 + (k - 0.5) * dz;
+              
+              double r_relative = 0.5 * dx_p * dx;
+              double theta_relative = 0.5 * dy_p * dy;
+              double phi_relative = 0.5 * dz_p * dz;
+              
+              double r_phys = r + r_relative;
+              double theta_phys = theta + theta_relative;
+              double phi_phys = phi + phi_relative;
+              
+              x_out = r_phys * sinf(theta_phys) * cosf(phi_phys);
+              y_out = r_phys * sinf(theta_phys) * sinf(phi_phys);
+              z_out = r_phys * cosf(theta_phys);
+              
+          } else {
+              // Use B-spline interpolation from stored mesh data
+              // Quadratic B-spline basis (must match compute_bspline_basis in advance_p.cc)
+              float Sx_m1 = 0.125f * (1.0f - dx_p) * (1.0f - dx_p);
+              float Sx_0  = 0.25f * (3.0f - dx_p * dx_p);
+              float Sx_p1 = 0.125f * (1.0f + dx_p) * (1.0f + dx_p);
+
+              float Sy_m1 = 0.125f * (1.0f - dy_p) * (1.0f - dy_p);
+              float Sy_0  = 0.25f * (3.0f - dy_p * dy_p);
+              float Sy_p1 = 0.125f * (1.0f + dy_p) * (1.0f + dy_p);
+
+              float Sz_m1 = 0.125f * (1.0f - dz_p) * (1.0f - dz_p);
+              float Sz_0  = 0.25f * (3.0f - dz_p * dz_p);
+              float Sz_p1 = 0.125f * (1.0f + dz_p) * (1.0f + dz_p);
+              
+              x_out = 0.0;
+              y_out = 0.0;
+              z_out = 0.0;
+              
+              // 3x3x3 stencil interpolation
+              for (int kk = -1; kk <= 1; kk++) {
+                  float Sz = (kk == -1) ? Sz_m1 : ((kk == 0) ? Sz_0 : Sz_p1);
+                  
+                  for (int jj = -1; jj <= 1; jj++) {
+                      float Sy = (jj == -1) ? Sy_m1 : ((jj == 0) ? Sy_0 : Sy_p1);
+                      
+                      for (int ii = -1; ii <= 1; ii++) {
+                          float Sx = (ii == -1) ? Sx_m1 : ((ii == 0) ? Sx_0 : Sx_p1);
+                          
+                          int node_idx = GRID_TO_MESH(i + ii, j + jj, k + kk, nx, ny, nz);
+                          float weight = Sx * Sy * Sz;
+                          
+                          x_out += weight * m(node_idx, curv_mesh_var::xg);
+                          y_out += weight * m(node_idx, curv_mesh_var::yg);
+                          z_out += weight * m(node_idx, curv_mesh_var::zg);
+                      }
+                  }
+              }
+          }
+      }
+  };
+
+  // member of grid_t, host-side
+  grid_geom_t geom() const {
+      return grid_geom_t{ type, nx, ny, nz, x0, y0, z0,
+                          dx, dy, dz, k_curvilinear_mesh_d, k_curvilinear_mesh_h };
+  }
 
 } grid_t;
 
-// Given a voxel mesh coordinates (on 0:nx+1,0:ny+1,0:nz+1) and
-// voxel mesh resolution (nx,ny,nz), return the index of that voxel.
 
-#define VOXEL(x,y,z, nx,ny,nz) ((x) + ((nx)+2)*((y) + ((ny)+2)*(z)))
 
-// Convert voxel index back to (i,j,k) indices for the local grid
-#define UNVOXEL(v, i, j, k, nx, ny, nz) \
-  do { \
-    int _stride_y = (nx) + 2; \
-    int _stride_z = _stride_y * ((ny) + 2); \
-    (k) = (v) / _stride_z; \
-    int _rem = (v) % _stride_z; \
-    (j) = _rem / _stride_y; \
-    (i) = _rem % _stride_y; \
-  } while(0)
-
-// Convert grid voxel index to curvilinear mesh index
-// Grid has 1 ghost layer: (nx+2) x (ny+2) x (nz+2)
-// Mesh has 2 ghost layers: (nx+4) x (ny+4) x (nz+4)
-// Mesh cell indices are offset by +1 in each dimension
-#define VOXEL_TO_MESH(v, nx, ny, nz) \
-  (((v) % ((nx)+2) + 1) + \
-   ((nx)+4) * ((((v) / ((nx)+2)) % ((ny)+2) + 1) + \
-   ((ny)+4) * ((v) / (((nx)+2) * ((ny)+2)) + 1)))
-
-// Convert grid cell indices (i,j,k) to curvilinear mesh linear index
-// Grid: (nx+2) x (ny+2) x (nz+2) with 1 ghost layer
-// Mesh: (nx+4) x (ny+4) x (nz+4) with 2 ghost layers
-// Mesh indices are shifted by +1 in each dimension
-#define GRID_TO_MESH(i, j, k, nx, ny, nz) \
-  VOXEL((i)+1, (j)+1, (k)+1, (nx)+2, (ny)+2, (nz)+2)
 
 
 // Advance the voxel mesh index (v) and corresponding voxel mesh
@@ -624,103 +796,7 @@ typedef struct grid {
   if( (y)>(yh) ) (z)++;                                    \
   if( (y)>(yh) ) (y) = (yl)
 
-KOKKOS_INLINE_FUNCTION
-void grid_t::local_to_global_cart(int voxel_i, float dx_p, float dy_p, float dz_p,
-                                        double& x_out, double& y_out, double& z_out) const {
-    int i, j, k;
-    UNVOXEL(voxel_i, i, j, k, nx, ny, nz);
-    
-    if (type == grid_type::CARTESIAN) {
-        local_to_global(voxel_i, dx_p, dy_p, dz_p, x_out, y_out, z_out);
-    } else if (type == grid_type::STRETCHED_CARTESIAN) {
-        int node_idx = GRID_TO_MESH(i, j, k, nx, ny, nz);
-        double x_center = k_curvilinear_mesh_h(node_idx, curv_mesh_var::xg);
-        double y_center = k_curvilinear_mesh_h(node_idx, curv_mesh_var::yg);
-        double z_center = k_curvilinear_mesh_h(node_idx, curv_mesh_var::zg);
-        
-        // Scale cell-center offset by local scale factors
-        x_out = x_center + 0.5 * dx_p * k_curvilinear_mesh_h(node_idx, curv_mesh_var::h_1);
-        y_out = y_center + 0.5 * dy_p * k_curvilinear_mesh_h(node_idx, curv_mesh_var::h_2);
-        z_out = z_center + 0.5 * dz_p * k_curvilinear_mesh_h(node_idx, curv_mesh_var::h_3);
 
-    } else if (type == grid_type::CYLINDRICAL) {
-        // Cylindrical: (r, theta, z) -> (x, y, z)
-        
-        double r = x0 + (i - 0.5) * dx;
-        double theta = y0 + (j - 0.5) * dy;
-        double z = z0 + (k - 0.5) * dz;  // Fixed!
-        
-        double r_relative = 0.5 * dx_p * dx;
-        double theta_relative = 0.5 * dy_p * dy;
-        double z_relative = 0.5 * dz_p * dz;  // Fixed!
-        
-        double r_phys = r + r_relative;
-        double theta_phys = theta + theta_relative;
-        double z_phys = z + z_relative;  // Fixed!
-        
-        x_out = r_phys * cosf(theta_phys);
-        y_out = r_phys * sinf(theta_phys);
-        z_out = z_phys;
-        
-    } else if (type == grid_type::SPHERICAL) {
-        // Spherical: (r, theta, phi) -> (x, y, z)
-        
-        double r = x0 + (i - 0.5) * dx;
-        double theta = y0 + (j - 0.5) * dy;
-        double phi = z0 + (k - 0.5) * dz;
-        
-        double r_relative = 0.5 * dx_p * dx;
-        double theta_relative = 0.5 * dy_p * dy;
-        double phi_relative = 0.5 * dz_p * dz;
-        
-        double r_phys = r + r_relative;
-        double theta_phys = theta + theta_relative;
-        double phi_phys = phi + phi_relative;
-        
-        x_out = r_phys * sinf(theta_phys) * cosf(phi_phys);
-        y_out = r_phys * sinf(theta_phys) * sinf(phi_phys);
-        z_out = r_phys * cosf(theta_phys);
-        
-    } else {
-        // Use B-spline interpolation from stored mesh data
-        // Quadratic B-spline basis (must match compute_bspline_basis in advance_p.cc)
-        float Sx_m1 = 0.125f * (1.0f - dx_p) * (1.0f - dx_p);
-        float Sx_0  = 0.25f * (3.0f - dx_p * dx_p);
-        float Sx_p1 = 0.125f * (1.0f + dx_p) * (1.0f + dx_p);
-
-        float Sy_m1 = 0.125f * (1.0f - dy_p) * (1.0f - dy_p);
-        float Sy_0  = 0.25f * (3.0f - dy_p * dy_p);
-        float Sy_p1 = 0.125f * (1.0f + dy_p) * (1.0f + dy_p);
-
-        float Sz_m1 = 0.125f * (1.0f - dz_p) * (1.0f - dz_p);
-        float Sz_0  = 0.25f * (3.0f - dz_p * dz_p);
-        float Sz_p1 = 0.125f * (1.0f + dz_p) * (1.0f + dz_p);
-        
-        x_out = 0.0;
-        y_out = 0.0;
-        z_out = 0.0;
-        
-        // 3x3x3 stencil interpolation
-        for (int kk = -1; kk <= 1; kk++) {
-            float Sz = (kk == -1) ? Sz_m1 : ((kk == 0) ? Sz_0 : Sz_p1);
-            
-            for (int jj = -1; jj <= 1; jj++) {
-                float Sy = (jj == -1) ? Sy_m1 : ((jj == 0) ? Sy_0 : Sy_p1);
-                
-                for (int ii = -1; ii <= 1; ii++) {
-                    float Sx = (ii == -1) ? Sx_m1 : ((ii == 0) ? Sx_0 : Sx_p1);
-                    
-                    int node_idx = GRID_TO_MESH(i + ii, j + jj, k + kk, nx, ny, nz);
-                    float weight = Sx * Sy * Sz;
-                    
-                    x_out += weight * k_curvilinear_mesh_h(node_idx, curv_mesh_var::xg);
-                    y_out += weight * k_curvilinear_mesh_h(node_idx, curv_mesh_var::yg);
-                    z_out += weight * k_curvilinear_mesh_h(node_idx, curv_mesh_var::zg);
-                }
-            }
-        }
-    }
-}
 
 // Quadratic B-spline basis functions and derivatives for the curvilinear mesh.
 // Input:  xi in logical coordinate ([-1,1] within a cell)
@@ -745,7 +821,7 @@ void compute_bspline_basis(float xi,
 // current/charge deposit uses coordinate-consistent (contravariant) components.
 KOKKOS_INLINE_FUNCTION
 void compute_reciprocal_basis(
-    const grid_t* g,
+    const grid::grid_geom_t& geom,
     float dx, float dy, float dz,  // Particle position in logical coords
     int ii,                         //Base voxel index
     int nx, int ny, int nz,
@@ -755,7 +831,7 @@ void compute_reciprocal_basis(
     float& grad_mu_x, float& grad_mu_y, float& grad_mu_z,
     float& jac)
 {
-  if (g->type == grid_type::CARTESIAN) {
+  if (geom.type == grid_type::CARTESIAN) {
         grad_xi_x = 2.0f / gdx;
         grad_xi_y = 0.0f;
         grad_xi_z = 0.0f;
@@ -767,14 +843,14 @@ void compute_reciprocal_basis(
         grad_mu_z = 2.0f / gdz;
         jac = gdx * gdy * gdz / 8.0f;
 
-    } else if (g->type == grid_type::CYLINDRICAL) {
-        int i, j, k;
+    } else if (geom.type == grid_type::CYLINDRICAL) {
+        [[maybe_unused]] int i, j, k;
         UNVOXEL(ii, i, j, k, nx, ny, nz);
-        float r = g->x0 + (i - 0.5) * g->dx;
-        float theta = g->y0 + (j - 0.5) * g->dy;
+        float r = geom.x0 + (i - 0.5) * gdx;
+        float theta = geom.y0 + (j - 0.5) * gdy;
         
-        float r_relative = 0.5 * dx * g->dx;
-        float theta_relative = 0.5 * dy * g->dy;
+        float r_relative = 0.5 * dx * gdx;
+        float theta_relative = 0.5 * dy * gdy;
         
         float r_phys = r + r_relative;
         float theta_phys = theta + theta_relative;
@@ -793,9 +869,9 @@ void compute_reciprocal_basis(
         grad_mu_z = 2.0f / gdz;
         jac = r_phys * gdx * gdy * gdz / 8.0f;
 
-    } else if (g->type == grid_type::SPHERICAL) {
+    } else if (geom.type == grid_type::SPHERICAL) {
         double x_cart, y_cart, z_cart;
-        g->local_to_global_cart(ii, dx, dy, dz, x_cart, y_cart, z_cart);
+        geom.local_to_global_cart(ii, dx, dy, dz, x_cart, y_cart, z_cart);
 
         float r_phys = sqrtf(x_cart*x_cart + y_cart*y_cart + z_cart*z_cart);
         float theta_phys = acosf(z_cart / r_phys);
@@ -816,7 +892,7 @@ void compute_reciprocal_basis(
         grad_mu_z = 0.0f;
         jac = r_phys * r_phys * sin_theta * gdx * gdy * gdz / 8.0f;
 
-    } else if (g->type == grid_type::STRETCHED_CARTESIAN) {
+    } else if (geom.type == grid_type::STRETCHED_CARTESIAN) {
         // For stretched Cartesian, basis vectors remain Cartesian-aligned,
         // but scale factors vary with position. Reciprocal basis is simply
         // the inverse of the scale factors.
@@ -825,9 +901,9 @@ void compute_reciprocal_basis(
         int node_idx = GRID_TO_MESH(i, j, k, nx, ny, nz);
         
         // Get local scale factors at this cell
-        float h1 = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::h_1);
-        float h2 = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::h_2);
-        float h3 = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::h_3);
+        float h1 = geom.m(node_idx, curv_mesh_var::h_1);
+        float h2 = geom.m(node_idx, curv_mesh_var::h_2);
+        float h3 = geom.m(node_idx, curv_mesh_var::h_3);
         
         // Reciprocal basis vectors: grad(xi^alpha) = ehat^alpha / h_alpha
         // Since basis vectors are Cartesian-aligned: ehat^1 = xhat, ehat^2 = yhat, ehat^3 = zhat
@@ -883,9 +959,9 @@ void compute_reciprocal_basis(
             int node_idx = GRID_TO_MESH(xi+ii_offset,yi+jj,zi+kk,nx,ny,nz);
 
             // Get Cartesian positions at this node
-            float xg = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::xg);
-            float yg = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::yg);
-            float zg = g->k_curvilinear_mesh_d(node_idx, curv_mesh_var::zg);
+            float xg = geom.m(node_idx, curv_mesh_var::xg);
+            float yg = geom.m(node_idx, curv_mesh_var::yg);
+            float zg = geom.m(node_idx, curv_mesh_var::zg);
 
             // Accumulate Jacobian matrix elements
             dx_dxi += xg * dSx * Sy * Sz;
@@ -923,23 +999,6 @@ void compute_reciprocal_basis(
       grad_mu_y = inv_jac * (dx_deta * dz_dxi - dx_dxi * dz_deta);
       grad_mu_z = inv_jac * (dx_dxi * dy_deta - dx_deta * dy_dxi);
     }
-}
-
-KOKKOS_INLINE_FUNCTION
-void grid_t::local_to_global(int voxel_i, float dx_p, float dy_p, float dz_p,
-                                          double& xi_out, double& eta_out, double& mu_out) const {
-  // Get local voxel indices
-  int ix, iy, iz;
-  UNVOXEL(voxel_i, ix, iy, iz, nx, ny, nz);
-
-  double xi_cell_center = x0 + (ix - 0.5) * dx;
-  double eta_cell_center = y0 + (iy - 0.5) * dy;
-  double mu_cell_center = z0 + (iz - 0.5) * dz;
-
-  // Add particle offset
-  xi_out = xi_cell_center + dx_p * dx / 2.0;
-  eta_out = eta_cell_center + dy_p * dy / 2.0;
-  mu_out = mu_cell_center + dz_p * dz / 2.0;
 }
 
 // In grid_structors.c
