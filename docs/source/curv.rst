@@ -10,6 +10,7 @@ VPIC includes several pre-defined mesh systems, including cartesian, cylindrical
 
 The following code initializes a cylindrical mesh with periodic boundaries. First call a define grid function to specify the bounds and resolution of your grid system. Then call `init_cylindrical_grid` to tell VPIC to interpret the first argument as radius, the second argument as theta, and the third argument as z.
   .. code-block:: c++
+
       define_periodic_grid( 0.1, 0, -0.5, // Low corner (min_r, min_theta, min_z)
                         0.5,  2.0*M_PI,  0.5, // High corner (max_r, max_theta, max_z)
                         nr, ntheta, nz, // Resolution
@@ -20,6 +21,7 @@ After calling `init_cylindrical_grid`, VPIC will interpret the first argument of
 
 The user can also define their own arbitrary mesh system by providing the metric factors for their system. The following example is provided for a spherical grid (which is already implemented as a helper function, but is redefined here for illustration):
   .. code-block:: c++
+
     void init_spherical_grid()
     {
       const int ghost_layers_per_side = 2;
@@ -97,6 +99,7 @@ After defining a grid system, the user can inject particles using that coordinat
 
 For example, after calling `init_cylindrical_grid`, the user can inject particles in cylindrical coordinates and VPIC will automatically interpret the positional arguments as being in cylindrical coordinates. By default, the velocity components are still interpreted as cartesian coordinates.
   .. code-block:: c++
+
       inject_particle( "ion", r, theta, z, ux, uy, uz, weight, 0, 0, q );
 
 The particle advance solver will then automatically account for your desired mesh system.
@@ -110,11 +113,13 @@ Field components are also interpreted as being in the user's defined coordinate 
 
 To inject fields in cylindrical coordinates, for example:
   .. code-block:: c++
+
     set_region_field(everywhere, Er, Etheta, Ez, Br, Btheta, Bz);
     set_region_bext(everywhere, Br, Btheta, Bz);
 
 Since VPIC interprets x as radius, y as theta, and z as z, if the user injects fields using an analytic equation they should use x, y, and z but understand that these will be interpreted as r, theta, and z. For example, to inject a helical magnetic field:
   .. code-block:: c++
+
     set_region_field(everywhere,
                 0, 0, 0 // no E field
                 0 // no Br
@@ -123,6 +128,7 @@ Since VPIC interprets x as radius, y as theta, and z as z, if the user injects f
 
 For convenience, VPIC also allows you to inject fields in cartesian coordinates as well, regardless of your mesh settings, using `set_region_field_cart`. In this case, if you use analytic equations, x y and z will indeed be interpreted as cartesian x y and z rather than in your coordinate system.
   .. code-block:: c++
+
     set_region_field(everywhere, Ex, Ey, Ez, Bx, By, Bz);
     set_region_bext(everywhere, Bx, By, Bz);
 
