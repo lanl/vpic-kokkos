@@ -217,6 +217,21 @@ if(ENABLE_KOKKOS_CUDA)
   find_package(CUDAToolkit)
   if (CUDAToolkit_FOUND)
     add_definitions(-DENABLE_KOKKOS_CUDA)
+
+    # --- Ensure the CUDA driver library (libcuda) is linked into deck builds ---
+    find_library(CUDA_DRIVER_LIB cuda
+      HINTS
+        ${CUDA_TOOLKIT_ROOT_DIR}/lib64/stubs${CUDA_TOOLKIT_ROOT_DIR}/targets/x86_64-linux/lib/stubs
+        /usr/lib64
+    )
+    if(CUDA_DRIVER_LIB)
+      get_filename_component(_cuda_dir "${CUDA_DRIVER_LIB}" DIRECTORY)
+      string(APPEND VPIC_CXX_LIBRARIES " -L${_cuda_dir} -lcuda ")
+      message(STATUS "Added CUDA driver lib: ${CUDA_DRIVER_LIB}")
+    else()
+      message(WARNING "libcuda not found; deck link may fail")
+    endif()
+
     # If not on a Cray system, this can cause CMake to stall
     if(DEFINED ENV{CRAYPE_VERSION})
       set(ENV{NVCC_WRAPPER_DEFAULT_COMPILER} ${CMAKE_CXX_COMPILER})
