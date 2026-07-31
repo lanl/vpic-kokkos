@@ -21,15 +21,16 @@ src_dir="${0%/*}/.."
 # Unable to find a safely writable symbol that corresponds to address 432af0
 # (the closest match was "(null)" from "./lpi_2d_F6_test.Linux").  Writing out
 # the raw address instead and keeping my fingers crossed.
+module load cmake gcc/12.2.0 openmpi/4.1.5-gcc_12.2.0 cuda/12.9.1
+export NVCC_WRAPPER_DEFAULT_COMPILER=mpicxx
 
 CXX=$src_dir/kokkos/bin/nvcc_wrapper cmake \
   -DCMAKE_BUILD_TYPE=Release \
-  -DENABLE_INTEGRATED_TESTS=ON \
-  -DENABLE_UNIT_TESTS=ON \
+  -DENABLE_INTEGRATED_TESTS=OFF \
+  -DENABLE_UNIT_TESTS=OFF \
   -DBUILD_INTERNAL_KOKKOS=ON \
   -DENABLE_KOKKOS_CUDA=ON \
-  -DKokkos_ARCH_BDW=ON \
-  -DKokkos_ARCH_TURING75=ON \
+  -DKokkos_ARCH_VOLTA70=ON \
   -DCMAKE_CXX_FLAGS="-rdynamic" \
   $src_dir
 

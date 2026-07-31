@@ -739,6 +739,53 @@ move_p_kokkos(
       continue;
     }
 
+    if( neighbor==tunnel_particles ) {
+      // Axis periodic boundary for cylindrical coordinates
+      if( axis == 0 ) {  // r-direction
+        // Reflect r-coordinate (already correct)
+        k_particles(pi, particle_var::dx) = -k_particles(pi, particle_var::dx);
+        
+        // Get current cell information
+        int i, j, k;
+        UNVOXEL(ii, i, j, k, nx, ny, nz);
+        
+        // Convert logical dy to physical theta
+        float dy_logical = k_particles(pi, particle_var::dy);
+        float dtheta = geom.dy;  // Physical cell size in theta direction
+        float y0 = geom.y0;      // Grid origin in theta
+        float theta_cell_center = y0 + (j - 0.5f) * dtheta;
+        float theta_current = theta_cell_center + 0.5f * dy_logical * dtheta;
+        
+        float theta_new = fmodf(theta_current + M_PI, 2.0f * M_PI);
+        if (theta_new < 0) theta_new += 2.0f * M_PI;  // Handle negative wraparound
+        
+        // Find which cell the new theta lands in
+        int j_new = static_cast<int>((theta_new - y0) / dtheta) + 1;  // +1 for ghost cell offset
+        if (j_new < 1) j_new = 1;
+        if (j_new > ny) j_new = ny;
+        
+        // Compute new logical coordinate within the new cell
+        float theta_new_cell_center = y0 + (j_new - 0.5f) * dtheta;
+        float dy_new = (theta_new - theta_new_cell_center) / (0.5f * dtheta);
+        
+        // Clamp to valid range [-1, 1]
+        dy_new = fmaxf(-1.0f, fminf(1.0f, dy_new));
+        
+        // Update particle position
+        k_particles(pi, particle_var::dy) = dy_new;
+        
+        // Update voxel index if we moved to a different cell
+        if (j_new != j) {
+          int ii_new = VOXEL(i, j_new, k, nx, ny, nz);
+          k_particles_i(pi) = ii_new;
+        }
+        
+        // Reverse radial displacement
+        pm->dispx = -pm->dispx;
+        continue;
+      }
+    }
+
     if( neighbor<rangel || neighbor>rangeh ) {
       // Cannot handle the boundary condition here
       pii = 8*pii + face;
@@ -1016,13 +1063,125 @@ move_p_kokkos_host_serial(
 
     neighbor = d_neighbor( 6*ii + face );
 
+    
     if( neighbor==reflect_particles ) {
-      // Hit a reflecting boundary condition
+      if( g->geom().type != grid_type::CARTESIAN ) {
+        
+        // Get basis vectors at particle location
+        float grad_xi_x, grad_xi_y, grad_xi_z;
+        float grad_eta_x, grad_eta_y, grad_eta_z;
+        float grad_mu_x, grad_mu_y, grad_mu_z;
+        float jac;
+        
+        compute_reciprocal_basis(
+            g->geom(),
+            k_particles(pi, particle_var::dx),
+            k_particles(pi, particle_var::dy),
+            k_particles(pi, particle_var::dz),
+            ii, nx, ny, nz, gdx, gdy, gdz,
+            grad_xi_x, grad_xi_y, grad_xi_z,
+            grad_eta_x, grad_eta_y, grad_eta_z,
+            grad_mu_x, grad_mu_y, grad_mu_z,
+            jac);
+        
+        // Get Cartesian velocities
+        float ux = k_particles(pi, particle_var::ux);
+        float uy = k_particles(pi, particle_var::uy);
+        float uz = k_particles(pi, particle_var::uz);
+        
+        // Convert to contravariant components
+        float u_xi  = ux * grad_xi_x  + uy * grad_xi_y  + uz * grad_xi_z;
+        float u_eta = ux * grad_eta_x + uy * grad_eta_y + uz * grad_eta_z;
+        float u_mu  = ux * grad_mu_x  + uy * grad_mu_y  + uz * grad_mu_z;
+        
+        // Reflect the component along the crossed axis
+        if(axis == 0) u_xi = -u_xi;
+        else if(axis == 1) u_eta = -u_eta;
+        else u_mu = -u_mu;
+        
+        // Get covariant basis vectors (inverse of reciprocal)
+        // For orthogonal coords: e_i = grad(xi^i) / |grad(xi^i)|^2
+        float h_xi  = 1.0f / sqrtf(grad_xi_x*grad_xi_x   + grad_xi_y*grad_xi_y   + grad_xi_z*grad_xi_z);
+        float h_eta = 1.0f / sqrtf(grad_eta_x*grad_eta_x + grad_eta_y*grad_eta_y + grad_eta_z*grad_eta_z);
+        float h_mu  = 1.0f / sqrtf(grad_mu_x*grad_mu_x   + grad_mu_y*grad_mu_y   + grad_mu_z*grad_mu_z);
+        
+        float e_xi_x  = grad_xi_x  * h_xi * h_xi;
+        float e_xi_y  = grad_xi_y  * h_xi * h_xi;
+        float e_xi_z  = grad_xi_z  * h_xi * h_xi;
+        float e_eta_x = grad_eta_x * h_eta * h_eta;
+        float e_eta_y = grad_eta_y * h_eta * h_eta;
+        float e_eta_z = grad_eta_z * h_eta * h_eta;
+        float e_mu_x  = grad_mu_x  * h_mu * h_mu;
+        float e_mu_y  = grad_mu_y  * h_mu * h_mu;
+        float e_mu_z  = grad_mu_z  * h_mu * h_mu;
+        
+        // Convert back to Cartesian
+        k_particles(pi, particle_var::ux) = u_xi*e_xi_x + u_eta*e_eta_x + u_mu*e_mu_x;
+        k_particles(pi, particle_var::uy) = u_xi*e_xi_y + u_eta*e_eta_y + u_mu*e_mu_y;
+        k_particles(pi, particle_var::uz) = u_xi*e_xi_z + u_eta*e_eta_z + u_mu*e_mu_z;
+        
+        // Reflect position and displacement
+        k_particles(pi, particle_var::dx + axis) = -k_particles(pi, particle_var::dx + axis);
+        float* disp = static_cast<float*>(&(pm->dispx));
+        disp[axis] = -disp[axis];
+        continue;
+      }
+      
+      // Cartesian case - simple reflection works
       k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
       float* disp = static_cast<float*>(&(pm->dispx));
       disp[axis] = -disp[axis];
       continue;
     }
+
+        if( neighbor==tunnel_particles ) {
+      // Axis periodic boundary for cylindrical coordinates
+      if( axis == 0 ) {  // r-direction
+        // Reflect r-coordinate (already correct)
+        k_particles(pi, particle_var::dx) = -k_particles(pi, particle_var::dx);
+        
+        // Get current cell information
+        int i, j, k;
+        UNVOXEL(ii, i, j, k, nx, ny, nz);
+        
+        // Convert logical dy to physical theta
+        float dy_logical = k_particles(pi, particle_var::dy);
+        float dtheta = g->geom().dy;  // Physical cell size in theta direction
+        float y0 = g->geom().y0;      // Grid origin in theta
+        float theta_cell_center = y0 + (j - 0.5f) * dtheta;
+        float theta_current = theta_cell_center + 0.5f * dy_logical * dtheta;
+        
+        // Add π and wrap to [0, 2π)
+        float theta_new = fmodf(theta_current + M_PI, 2.0f * M_PI);
+        if (theta_new < 0) theta_new += 2.0f * M_PI;  // Handle negative wraparound
+        
+        // Find which cell the new theta lands in
+        int j_new = static_cast<int>((theta_new - y0) / dtheta) + 1;  // +1 for ghost cell offset
+        if (j_new < 1) j_new = 1;
+        if (j_new > ny) j_new = ny;
+        
+        // Compute new logical coordinate within the new cell
+        float theta_new_cell_center = y0 + (j_new - 0.5f) * dtheta;
+        float dy_new = (theta_new - theta_new_cell_center) / (0.5f * dtheta);
+        
+        // Clamp to valid range [-1, 1]
+        dy_new = fmaxf(-1.0f, fminf(1.0f, dy_new));
+        
+        // Update particle position
+        k_particles(pi, particle_var::dy) = dy_new;
+        
+        // Update voxel index if we moved to a different cell
+        if (j_new != j) {
+          int ii_new = VOXEL(i, j_new, k, nx, ny, nz);
+          k_particles_i(pi) = ii_new;
+        }
+        
+        // Reverse radial displacement
+        pm->dispx = -pm->dispx;
+        continue;
+      }
+    }
+
 
     if( neighbor<rangel || neighbor>rangeh ) {
       // Cannot handle the boundary condition here

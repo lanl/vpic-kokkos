@@ -155,7 +155,10 @@ begin_initialization {
   //  grid->te = Te;
   //  grid->den = 1.0;
   grid->eta = eta;
-  grid->init_stretched_cartesian_grid(2.0, 0, 0);
+double beta_x = 2.0;
+double beta_y = 0.0;
+double beta_z = 0.0;
+  grid->init_stretched_cartesian_grid(beta_x, 0, 0);
   
   // grid->init_cartesian_grid();
   //  grid->hypereta = hypereta;
@@ -260,9 +263,7 @@ sim_log( "Loading fields" );
 
 // Note: everywhere is a region that encompasses the entire simulation                                                                                                                   
 // In general, regions are specied as logical equations (i.e. x>0 && x+y<2) 
- for (int v = 0; v < grid->nv; v++) {
-  field(v).cbx = 1.0;
- }
+ set_region_field_cart(everywhere, 0, 0, 0, 1.0, 0, 0);
  set_region_te( everywhere, Te);
 
  // LOAD PARTICLES
@@ -280,11 +281,6 @@ double ymin = grid->y0;
 double ymax = grid->y0 + grid->dy * grid->ny;
 double zmin = grid->z0;
 double zmax = grid->z0 + grid->dz * grid->nz;
-
-// Stretching parameters (must match init_stretched_cartesian_grid call)
-double beta_x = 2.0;
-double beta_y = 0.0;
-double beta_z = 0.0;
 
 // For stretched Cartesian, compute this rank's Cartesian volume by evaluating
 // the stretch map at the computational domain boundaries

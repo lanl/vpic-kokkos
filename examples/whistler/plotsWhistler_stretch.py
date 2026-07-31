@@ -5,15 +5,15 @@ import matplotlib.pyplot as plt
 import pywt
 
 datadir = "../../build/data/"
-nx = 48#96
+nx = 48  # 96
 ny = 48
 nt = 100
 
 pi = np.pi
 
 # Stretched grid parameters (must match VPIC deck)
-beta_x = 5.0
-beta_y = 5.0
+beta_x = 2.0
+beta_y = 2.0
 beta_z = 0.0
 
 # Domain bounds (must match VPIC deck: -Lx/2 to Lx/2, -Ly/2 to Ly/2)
@@ -71,21 +71,23 @@ h1_array, h2_array, h3 = compute_scale_factors(xi_uniform, eta_uniform, beta_x, 
 # Create 2D arrays of scale factors for field conversion
 H1, H2 = np.meshgrid(h1_array, h2_array, indexing='ij')
 
-tv = np.linspace(0,50,num=nt)
-if (nx>1): dx = xv[1]-xv[0]
-if (nt>1): dt = tv[1]-tv[0]
+tv = np.linspace(0, 50, num=nt)
+if (nx > 1): dx = xv[1] - xv[0]
+if (nt > 1): dt = tv[1] - tv[0]
 
-######### loadSlice function
-def loadSlice(dir,q,sl,nx,ny):
-	fstr = dir + q + ".gda"
-	fd = open(fstr,"rb")
-	fd.seek(4*sl*nx*ny,1)
-	arr = np.fromfile(fd,dtype=np.float32,count=nx*ny)
-	fd.close
-	arr = np.reshape(arr,( ny, nx))
-	arr = np.transpose(arr)
-	return arr
-######### end loadSlice
+# ============================================================================
+# Data Loading Function
+# ============================================================================
+def loadSlice(dir, q, sl, nx, ny):
+    """Load a 2D slice of data from binary file."""
+    fstr = dir + q + ".gda"
+    fd = open(fstr, "rb")
+    fd.seek(4 * sl * nx * ny, 1)
+    arr = np.fromfile(fd, dtype=np.float32, count=nx * ny)
+    fd.close()
+    arr = np.reshape(arr, (ny, nx))
+    arr = np.transpose(arr)
+    return arr
 
 def convert_to_physical(field_data, scale_factors, is_contravariant):
     """
@@ -106,33 +108,61 @@ def convert_to_physical(field_data, scale_factors, is_contravariant):
         # E is covariant: E_physical = E_i / h_i
         return field_data / scale_factors
 
-#yv,xv = np.meshgrid(np.linspace(0,7.5*pi,num=ny),
-#                np.linspace(0,5*pi,num=nx))
-
-cmap = plt.get_cmap("Spectral")
+# ============================================================================
+# Main Plotting Loop
+# ============================================================================
+cmap = plt.get_cmap("plasma")
 
 Q = {}
 
-for slice in range(0,100,5):
-	qs = ["By","Ex"]
-	for q in qs:
-		tmp = loadSlice(datadir,q,slice,nx,ny)
-		Q[q] = tmp
-	
-	# Convert to physical components
-	# By is contravariant (multiply by h2)
-	# Ex is covariant (divide by h1)
-	By_physical = Q["By"]
-	Ex_physical = Q["Ex"]
-	
-	#bxw = wclean(arr=Q["den"],wavn="coif3",alpha=1)
-		
-	fig, (ax1,ax2) = plt.subplots(nrows=2)
-	im = ax1.pcolormesh(xv,yv,By_physical)
-	#im = ax1.pcolormesh(yv,xv,Q["ni"],cmap=cmap)
-	fig.colorbar(im, ax=ax1)
-	#im = ax1.plot(xv,Q["ni"][:,0])
-	im2 = ax2.pcolormesh(yv,xv,Ex_physical,cmap=cmap)
-	fig.colorbar(im2, ax=ax2)    
-	plt.show()
-	plt.savefig('fig.png', dpi=300)
+print("Processing time slices...")
+for slice_idx in range(0, 100, 5):
+    print("Processing slice {} of 100".format(slice_idx))
+    
+    # Load data
+    quantities = ["By", "Ex"]
+    for q in quantities:
+        tmp = loadSlice(datadir, q, slice_idx, nx, ny)
+        Q[q] = tmp
+    
+    # Convert to physical components
+    # By is contravariant (multiply by h2)
+    # Ex is covariant (divide by h1)
+    By_physical = Q["By"]
+    Ex_physical = Q["Ex"]
+    
+    # Create figure with better formatting
+    fig = plt.figure(figsize=(5, 5))
+    
+    # Top panel: Magnetic field By
+    ax1 = plt.subplot(2, 1, 1)
+    im1 = ax1.pcolormesh(xv, yv, By_physical, cmap=cmap, shading='auto')
+    ax1.set_title('Magnetic field', fontsize=12)
+    ax1.set_aspect('equal')
+    cbar1 = fig.colorbar(im1, ax=ax1)
+    cbar1.set_label('By', rotation=270, labelpad=20)
+    ax1.grid(alpha=0.3, linestyle='--', linewidth=0.5)
+    
+    # Bottom panel: Electric field Ex
+    ax2 = plt.subplot(2, 1, 2)
+    im2 = ax2.pcolormesh(yv, xv, Ex_physical, cmap=cmap, shading='auto')
+    ax2.set_title('Electric field', fontsize=12)
+    ax2.set_aspect('equal')
+    cbar2 = fig.colorbar(im2, ax=ax2)
+    cbar2.set_label('Ex', rotation=270, labelpad=20)
+    ax2.grid(alpha=0.3, linestyle='--', linewidth=0.5)
+    
+    # Adjust layout
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    
+    # Save with slice number in filename
+    filename = 'electromagnetic_fields_slice_{:03d}.png'.format(slice_idx)
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    print("Saved: {}".format(filename))
+    
+    plt.close(fig)  # Close to save memory when processing multiple slices
+
+print("Processing complete!")
+
+# Optional: Display the last frame
+plt.show()

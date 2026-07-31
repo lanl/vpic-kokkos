@@ -204,13 +204,13 @@ vpic_simulation::user_radiation( void )
           if(_h2 == 0.0) _h2 = 1.0; /* Defensive for axis */             \
           if(_h3 == 0.0) _h3 = 1.0; /* Defensive */                      \
           x = _xn; y = _yn; z = _zn; /* No node fields */                \
-          x = _xc;                   if( (rgn) ) _f->ex  =    (eqn_ex)/_h1;  \
+          x = _xc;                   if( (rgn) ) _f->ex  =    (eqn_ex)*_h1;  \
                    y = _yc;          if( (rgn) ) _f->cbz = _c*(eqn_bz)/_h3;  \
                             z = _zc; /* No cell fields */                \
                    y = _yn;          if( (rgn) ) _f->cby = _c*(eqn_by)/_h2;  \
-          x = _xn;                   if( (rgn) ) _f->ez  =    (eqn_ez)/_h3;  \
+          x = _xn;                   if( (rgn) ) _f->ez  =    (eqn_ez)*_h3;  \
                    y = _yc;          if( (rgn) ) _f->cbx = _c*(eqn_bx)/_h1;  \
-                            z = _zn; if( (rgn) ) _f->ey  =    (eqn_ey)/_h2;  \
+                            z = _zn; if( (rgn) ) _f->ey  =    (eqn_ey)*_h2;  \
           _f++;                                                          \
     }}}                                                                  \
   } while(0)

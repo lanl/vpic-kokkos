@@ -282,7 +282,7 @@ begin_initialization {
   // --------------------------------------------------------------------------
 
   double Lx = 36*di; // double size of box in x dimension
-  double Ly = 4*di; // size of box in y dimension
+  double Ly = 2.0*M_PI; // size of box in y dimension
   double Lz = 360*di; // size of box in z dimension, 36/320 = 0.1125
 
   // Plasma region
@@ -373,7 +373,7 @@ begin_initialization {
   // --------------------------------------------------------------------------
   // Particle sampling and weights
   // --------------------------------------------------------------------------
-  double nppc = 400;            // Average number of macro particle per cell per species
+  double nppc = 400/40;            // Average number of macro particle per cell per species
   double sort_interval = 20; // Sort interval for particles, type double to match src/vpic/vpic.h
   double Npart  = nppc*nx*ny*nz;          // total macro electrons in box
   Npart = trunc_granular(Npart,nproc());  // Make divisible by number of processors; disabled to avoid int overflow risk --ATr,2025aug11
@@ -496,7 +496,7 @@ begin_initialization {
   if ( iz==topology_z-1 ) set_domain_field_bc( BOUNDARY(0,0, 1), pec_fields );
 
   sim_log("Particle boundaries");
-  if ( ix==0 )            set_domain_particle_bc( BOUNDARY(-1,0,0), reflect_particles );
+  if ( ix==0 )            set_domain_particle_bc( BOUNDARY(-1,0,0), tunnel_particles );
   if ( ix==topology_x-1 ) set_domain_particle_bc( BOUNDARY( 1,0,0), absorb_particles );
   // NO y-boundary conditions - periodic
   if ( iz==0 )            set_domain_particle_bc( BOUNDARY(0,0,-1), absorb_particles );
@@ -625,10 +625,10 @@ begin_initialization {
 #define BZ ( BZC(zcoil1,rcoil,Icoil) +  BZC(zcoil2,rcoil,Icoil) )
 
   sim_log( "Loading fields" );
-  set_region_field_cart( everywhere, 0, 0, 0,       // Electric field
+  set_region_field( everywhere, 0, 0, 0,       // Electric field
   		                0, 0 ,0 );    // Magnetic field
 
-  set_region_bext_cart( everywhere,  BX, BY , BZ + BZ0 );    // External Magnetic field
+  set_region_bext( everywhere,  BX, 0 , BZ + BZ0 );    // External Magnetic field
 
   // --------------------------------------------------------------------------
   // Initialize species
@@ -700,7 +700,7 @@ begin_initialization {
       uy = normal( rng(0), 0, vth_D );
       uz = normal( rng(0), 0, vth_D );
 
-      inject_particle( D_seed, x, y, z, ux, uy, uz*x*2, w_D*x, 0, 0, D_seed->q );
+      inject_particle( D_seed, x, y, z, ux, uy, uz, w_D/x, 0, 0, D_seed->q );
       // this is closest       inject_particle( D_seed, x, y, z, ux*x*x, uy, uz, w_D*x, 0, 0, D_seed->q );
     }
   }

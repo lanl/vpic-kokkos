@@ -144,6 +144,30 @@ typedef struct pipeline_args {
         dBL(y_, z_) - dBL(z_, y_) ) -                                       \
     invrho * rVt * F(0,s##x_); \
   F(0,e##x_) *= F(0,tcaz);
+
+// proposed fix
+// #define E(x_,y_,z_) \
+//   F(0,e##x_) =      \
+//     /* Hall: +invrho*[ (d_z(h_x^2 B_x) - d_x(h_z^2 B_z))*B_z                 \
+//                       -(d_x(h_y^2 B_y) - d_y(h_x^2 B_x))*B_y ] */            \
+//     invrho * (                                                              \
+//       ( dBL(z_, x_) - dBL(x_, z_) ) * Bf(0, z_)                             \
+//     - ( dBL(x_, y_) - dBL(y_, x_) ) * Bf(0, y_) ) +                         \
+//      /* Motional -(u x B)_x, covariant. u=jf/rho is CONTRAVARIANT u^i; convert   \
+//         each component to physical velocity u_phys_i = u^i * H_i, H_i=h_i*gd_i/2 \
+//         (= H(i,0)*HGD(i)), then take the physical cross product with B (cb).      \
+//         On CARTESIAN u^i*H_i = u_phys_i and h=1 so this reduces to the working    \
+//         -u_phys_y*B_z + u_phys_z*B_y. */                                          \
+//      ( - (u##y_ * H(y_,0)*HGD(y_)) * (Bf(0,z_) * H(z_,0))                      \
+//        + (u##z_ * H(z_,0)*HGD(z_)) * (Bf(0,y_) * H(y_,0)) ) -                  \
+//     /* pressure: -(1/qn) d_x(pe) */                                         \
+//     invrho * P(x_) * ( F(m##x_,pe) - F(x_,pe) ) +                           \
+//     /* resistive: +do_eta*eta*tcay*(h_x^2/J)*( d_y(h_z^2 B_z)-d_z(h_y^2 B_y) ) */ \
+//     do_eta*eta*F(0,tcay) * ( (H(x_,0)*H(x_,0))/(h1_0*h2_0*h3_0) ) * (       \
+//         dBL(y_, z_) - dBL(z_, y_) ) -                                       \
+//     invrho * rVt * F(0,s##x_); \
+//   F(0,e##x_) *= F(0,tcaz);
+  
   
 /*
   #define FIXEDGES()\

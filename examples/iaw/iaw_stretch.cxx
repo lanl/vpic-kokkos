@@ -303,8 +303,8 @@ repeat( Ni ) {
     double x_stretched = 2.0 * x_norm - 1.0;  // [-1,1]
     
     // Apply forward tanh stretch
-    double xi_stretched = tanh(beta_x * 0.5) * x_stretched;
-    double xi_norm = atanh(xi_stretched) / beta_x + 0.5;  // [0,1]
+    double xi_stretched = Kokkos::tanh(beta_x * 0.5) * x_stretched;
+    double xi_norm = Kokkos::atanh(xi_stretched) / beta_x + 0.5;  // [0,1]
     xi_comp = grid->gx0 + xi_norm * (grid->gx1 - grid->gx0);
   } else {
     xi_comp = x_phys;

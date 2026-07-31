@@ -124,13 +124,15 @@ Ay = loadFieldLines(dir, slice, nr, nz)
 # ============================================================
 fig1, ax1 = plt.subplots(figsize=(12, 5))
 
-im1 = ax1.pcolormesh(Z, R, Q["ni"], cmap=cmap, shading='auto')
+im1 = ax1.pcolormesh(Z, R, Q["ni"], cmap=cmap, shading='auto', vmin=0.01)
+# ax1.set_facecolor('black')
+
 
 # Overlay field lines if available
 if Ay is not None:
 	num_lines = 20
 	contours = ax1.contour(Z, R, Ay, levels=num_lines, colors='black', 
-	                       linewidths=1.0, alpha=0.6, linestyles='solid')
+	                       linewidths=0.1, linestyles='solid')
 	print(f"Drew {num_lines} field lines on density plot")
 else:
 	print("Field lines not plotted - Ay data not available")
@@ -139,7 +141,7 @@ ax1.set_xlabel('z (axial position)', fontsize=12)
 ax1.set_ylabel('r (radial position)', fontsize=12)
 ax1.set_title(f'Ion Density (slice {slice})', fontsize=14)
 ax1.set_aspect('equal')
-cbar1 = fig1.colorbar(im1, ax=ax1, label='ni', shrink=0.8)
+cbar1 = fig1.colorbar(im1, ax=ax1, label='ni', shrink=0.3)
 
 fig1.tight_layout()
 fig1.savefig('plot_density.png', dpi=300)
@@ -148,7 +150,7 @@ print("Saved density plot to plot_density.png")
 # ============================================================
 # FIGURE 2: All Field Components (Bx, By, Bz, Ex, Ey, Ez)
 # ============================================================
-fig2, axes = plt.subplots(2, 3, figsize=(18, 5))
+fig2, axes = plt.subplots(2, 3, figsize=(10, 2))
 axes = axes.flatten()
 
 # Define which fields to plot
