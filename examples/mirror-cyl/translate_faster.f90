@@ -378,7 +378,7 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
   fnames(13) = 'data/pi-zz'
   fnames(14) = 'data/pi-yz'
   fnames(15) = 'data/pi-xz'
-  fnames(16) = 'data/pi-xy'
+  fnames(16) = 'data/pe'
 
   fnames(17) = 'data/ui2x'
   fnames(18) = 'data/ui2y'
@@ -485,6 +485,8 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
                  buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
                  
              read(10)buffer    !skip pe
+              absB(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
+                   buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
 
               read(10)buffer
               jx(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
@@ -497,7 +499,18 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
               read(10)buffer
               jz(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
                  buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
-         
+             read(10)buffer    !skip pe
+             read(10)buffer    !skip pe
+             read(10)buffer    !skip pe
+             read(10)buffer    !skip pe
+             read(10)buffer    !skip pe
+             read(10)buffer    !skip pe
+             read(10)buffer    !skip pe
+             read(10)buffer    !skip pe
+              read(10)buffer
+              absJ(idxstart(n,1):idxstop(n,1), idxstart(n,2):idxstop(n,2), idxstart(n,3):idxstop(n,3)) = &
+                 buffer(2:nc(1)-1,2:nc(2)-1,2:nc(3)-1)
+
 
               close(10)
 
@@ -623,14 +636,14 @@ call MPI_BCAST(nout,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierr)
      call write_data(fnames(8),uy,tindex,output_record)
      call write_data(fnames(9),uz,tindex,output_record)
 
-     call write_data(fnames(10),ne,tindex,output_record)
+     call write_data(fnames(10),absJ,tindex,output_record)
 
      call write_data(fnames(11),pxx,tindex,output_record)
      call write_data(fnames(12),pyy,tindex,output_record)
      call write_data(fnames(13),pzz,tindex,output_record)
      call write_data(fnames(14),pyz,tindex,output_record)
      call write_data(fnames(15),pxz,tindex,output_record)
-     call write_data(fnames(16),pxy,tindex,output_record)
+     call write_data(fnames(16),absB,tindex,output_record)
 
 ! Repeat for ions
 

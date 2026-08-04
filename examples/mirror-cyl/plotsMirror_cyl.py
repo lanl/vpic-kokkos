@@ -42,7 +42,7 @@ def loadSlice(dir, q, sl, nr, nz):
 cmap = plt.get_cmap("Spectral_r")
 
 Q = {}
-qs = ["ni", "bx", "by", "bz", "ex", "ey", "ez"]  # All quantities we need
+qs = ["ni", "bx", "by", "bz", "ex", "ey", "ez", "pe"]  # All quantities we need
 
 dir = "../../build/data/"
 
@@ -124,7 +124,7 @@ Ay = loadFieldLines(dir, slice, nr, nz)
 # ============================================================
 fig1, ax1 = plt.subplots(figsize=(12, 5))
 
-im1 = ax1.pcolormesh(Z, R, Q["ni"], cmap=cmap, shading='auto', vmin=0.01)
+im1 = ax1.pcolormesh(Z, R, Q["ni"], cmap=cmap, shading='auto')
 # ax1.set_facecolor('black')
 
 

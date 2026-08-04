@@ -502,10 +502,13 @@ accumulate_hydro_p_kokkos(
     uy = u_phys_eta * c;
     uz = u_phys_mu * c;
     
-    // NGP shape with proper volume element: dV = J * d_xi * d_eta * d_mu
-    // The factor 1/(dx*dy*dz) in rV is for the logical volume element
-    // Multiply by Jacobian for proper physical volume
-    w0 = w * rV * jac;
+    // NGP density = w / (physical cell volume). compute_reciprocal_basis returns
+    // jac = physical_vol / logical_vol, and the logical cell [-1,1]^3 has volume 8,
+    // so physical_vol = 8*jac. Hence rho = w/(8*jac). On CARTESIAN jac=gd^3/8 so
+    // this reduces to w/gd^3 = rV*w (the original NGP weight); on CYLINDRICAL
+    // jac=r*gd^3/8 so rho = w/(r*gd^3), i.e. weight per PHYSICAL volume r*dr*dth*dz.
+    // (The previous w*rV*jac multiplied by r instead of dividing, inflating ni ~r.)
+    w0 = w / (8.0f * jac);
 #else
 #ifdef SHAPE_QS
     // QS shape - not modified per instructions

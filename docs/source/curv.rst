@@ -371,15 +371,6 @@ support, curvilinear meshes: they fetch the per-cell scale factors
    the scale factors (:math:`e_x \leftarrow e_x/h_1`, etc.) and the magnetic
    field by :math:`c/h`. Sets ``ex/ey/ez`` and ``cbx/cby/cbz``.
 
-   .. warning::
-
-      There is a known convention difference between this macro and
-      :c:macro:`set_region_field`: ``set_point_region_field`` **divides** E
-      by the scale factors, whereas ``set_region_field`` **multiplies** E by
-      them. This reflects the two macros' differing internal field
-      representations; pick the one that matches how you intend the equation
-      to be interpreted.
-
 .. c:macro:: set_region_field(rgn, eqn_ex, eqn_ey, eqn_ez, eqn_bx, eqn_by, eqn_bz)
 
    The workhorse field setter. Evaluates the region and field equations at
@@ -391,8 +382,6 @@ support, curvilinear meshes: they fetch the per-cell scale factors
    * :math:`e_x \leftarrow e_x \cdot h_1`, :math:`e_y \leftarrow e_y \cdot h_2`,
      :math:`e_z \leftarrow e_z \cdot h_3` (covariant E).
    * :math:`cb_x \leftarrow c\,b_x / h_1`, etc. (contravariant B).
-
-   Scale factors of ``0`` are defensively reset to ``1`` (e.g. on the axis).
 
 .. c:macro:: set_region_field_cart(rgn, eqn_ex, eqn_ey, eqn_ez, eqn_bx, eqn_by, eqn_bz)
 

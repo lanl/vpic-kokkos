@@ -1911,10 +1911,9 @@ template<typename T> void apply_hyb_local_e(int i, int j, int k,
       /*size_t ind2  = 2, ind1 = 1;*/					\
       Kokkos::parallel_for("apply_hyb_local_e: symmetric_fields", 	\
       x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
-        INIT_STENCIL();							\
-        E(x_,y_,z_);							\
-        E(y_,z_,x_);							\
-        E(z_,x_,y_); 							\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##x_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##x_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##y_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##y_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##z_) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##z_);\
         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##x_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##x_);\
         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##y_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##y_);\
         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##z_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##z_);\
