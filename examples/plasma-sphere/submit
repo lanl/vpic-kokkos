@@ -1,0 +1,15 @@
+#!/bin/bash
+#SBATCH -t 2:00:00     # walltime
+#SBATCH -N 1           # number of cluster nodes
+#SBATCH -n 1           # number of MPI ranks / Slurm tasks
+#SBATCH -o slurm.out   # stdout
+#SBATCH -e slurm.err   # stderr
+#SBATCH -J psphere
+#SBATCH -p volta-x86
+module load gcc openmpi
+
+cd /vast/home/cgraham/vpic-kokkos/
+module load gcc/12.2.0 openmpi/4.1.5-gcc_12.2.0 cmake/3.29.2 cuda/12.9.1
+export NVCC_WRAPPER_DEFAULT_COMPILER=mpicxx
+cd build
+srun -n 1 /vast/home/cgraham/vpic-kokkos/build/plasma_sphere.Linux

@@ -266,10 +266,10 @@ begin_initialization {
   double hyb_b0  = b0_G/ref_b0;     // Constant By perpendicular to 1D domain
   double hyb_te  = Te_erg/ref_E0;   // Electron temperature kB*Te/(mi*vA0^2)
   double hyb_den = ni/ref_n0;       // Density corresponding to hyb_te (for hyb_gamma!=1)
-  double hyb_den_floor_ohm = 0.2; // Density floor for Ohm's law update
+  double hyb_den_floor_ohm = 0.1; // Density floor for Ohm's law update
   double hyb_den_floor_pe  = 0.1; // Density floor for electron pressure update
   double hyb_eta      = 0;          // Resistivity
-  double hyb_hypereta = 1e-2;       // Hyper-resistivity
+  double hyb_hypereta = 1e-5;       // Hyper-resistivity
   double hyb_gamma    = 1.0;        // Electron fluid adiabatic index
   double hyb_nsub     = 10;        // Number of field subcycles
   int hyb_nsm         = 3;          // Smoothing passes per timestep for ion moments
@@ -611,79 +611,38 @@ begin_initialization {
   // --------------------------------------------------------------------------
   
   
-#if CYL_FIELDS  
-#define RHO() (sqrt(x*x + y*y))
-#define ALPHA(zc,rc) ( rc*rc + x*x + y*y + (z-zc)*(z-zc) - 2.0*rc*RHO() )
-#define BETA(zc,rc)  ( rc*rc + x*x + y*y + (z-zc)*(z-zc) + 2.0*rc*RHO() )
+#if CYL_FIELDS
+#define RHO() (x)
+#define ALPHA(zc,rc) ( rc*rc + x*x + (z-zc)*(z-zc) - 2.0*rc*RHO() )
+#define BETA(zc,rc)  ( rc*rc + x*x + (z-zc)*(z-zc) + 2.0*rc*RHO() )
 #define K2(zc,rc)    ( sqrt(1.0 - ALPHA(zc,rc)/BETA(zc,rc)) )
 #define ELLIPK(zc,rc)( MATHLIB() comp_ellint_1 (K2(zc,rc)) )
 #define ELLIPE(zc,rc)( MATHLIB() comp_ellint_2 (K2(zc,rc)) )
 
-
-#define BXC(zc,rc,Ic) (2.0*Ic*rc/M_PI*(z-zc)/RHO()*x/RHO()/( 2.0*ALPHA(zc,rc)*sqrt(BETA(zc,rc)) )*( (rc*rc+x*x+y*y+(z-zc)*(z-zc))*ELLIPE(zc,rc) - ALPHA(zc,rc)*ELLIPK(zc,rc) ) ) 
-#define BYC(zc,rc,Ic) (2.0*Ic*rc/M_PI*(z-zc)/RHO()*y/RHO()/( 2.0*ALPHA(zc,rc)*sqrt(BETA(zc,rc)) )*( (rc*rc+x*x+y*y+(z-zc)*(z-zc))*ELLIPE(zc,rc) - ALPHA(zc,rc)*ELLIPK(zc,rc) ) )
-#define BZC(zc,rc,Ic) (2.0*Ic*rc/M_PI                     /( 2.0*ALPHA(zc,rc)*sqrt(BETA(zc,rc)) )*( (rc*rc+x*x+y*y+(z-zc)*(z-zc))*ELLIPE(zc,rc) + ALPHA(zc,rc)*ELLIPK(zc,rc) ) ) 
+  // Radial (B_r) and axial (B_z) loop-field magnitudes in the (r,z) plane.
+#define BRC(zc,rc,Ic) (2.0*Ic*rc/M_PI*(z-zc)/RHO()/( 2.0*ALPHA(zc,rc)*sqrt(BETA(zc,rc)) )*( (rc*rc+x*x+(z-zc)*(z-zc))*ELLIPE(zc,rc) - ALPHA(zc,rc)*ELLIPK(zc,rc) ) )
+#define BZC(zc,rc,Ic) (2.0*Ic*rc/M_PI                /( 2.0*ALPHA(zc,rc)*sqrt(BETA(zc,rc)) )*( (rc*rc+x*x+(z-zc)*(z-zc))*ELLIPE(zc,rc) + ALPHA(zc,rc)*ELLIPK(zc,rc) ) )
 
   double zcoil1 = 0.3*Lz;
   double zcoil2 = -0.3*Lz;
   double rcoil  = 0.71*Lx;
-  
+
   double B0=0.5;
   double B1 = 0.1;
   double BZ0 = B1/1.13;
   double Icoil = 1.03*(B0-B1);
 
-#define BX ( BXC(zcoil1,rcoil,Icoil) +  BXC(zcoil2,rcoil,Icoil) )
-#define BY ( BYC(zcoil1,rcoil,Icoil) +  BYC(zcoil2,rcoil,Icoil) )
+#define BR ( BRC(zcoil1,rcoil,Icoil) +  BRC(zcoil2,rcoil,Icoil) )
 #define BZ ( BZC(zcoil1,rcoil,Icoil) +  BZC(zcoil2,rcoil,Icoil) )
 
   sim_log( "Loading fields" );
-  set_region_field_cart( everywhere, 0, 0, 0,       // Electric field
-  		                0, 0 ,0 );    // Magnetic field
+  set_region_field( everywhere, 0, 0, 0,   // Electric field (covariant storage)
+                    0, 0, 0 );             // dynamic B
 
-  // External B: project the physical Cartesian coil field onto the per-cell
-  // orthonormal basis (e_1,e_2,e_3), then divide by the scale factors to store
-  // true CONTRAVARIANT components cb0_i = (B_cart . e_i)/h_i. This matches the
-  // set_region_bext_cart / dump / solver contravariant convention, but is
-  // correct at every theta (the macro treats Cartesian x as radial, only valid
-  // at theta=0; with ny>1 that is wrong off-axis). Done deck-local so the shared
-  // macro (used by pcai/whistler) is untouched.
-  {
-    const double _c = grid->cvac;
-    for( int _k=0; _k<grid->nz+2; _k++ ) {
-    for( int _j=0; _j<grid->ny+2; _j++ ) {
-    for( int _i=0; _i<grid->nx+2; _i++ ) {
-      double x, y, z;
-      int _voxel = VOXEL(_i, _j, _k, grid->nx, grid->ny, grid->nz);
-      grid->geom().local_to_global_cart(_voxel, 0.0, 0.0, 0.0, x, y, z);
-      // Physical Cartesian external field at this cell center
-      double bx = ( BX );
-      double by = ( BY );
-      double bz = ( BZ+BZ0 );
-      // Per-cell orthonormal basis vectors (Cartesian components) and scale factors
-      int _m = GRID_TO_MESH(_i, _j, _k, grid->nx, grid->ny, grid->nz);
-      double e1x = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_1_u);
-      double e1y = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_1_v);
-      double e1z = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_1_w);
-      double e2x = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_2_u);
-      double e2y = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_2_v);
-      double e2z = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_2_w);
-      double e3x = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_3_u);
-      double e3y = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_3_v);
-      double e3z = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_3_w);
-      double h1 = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::h_1);
-      double h2 = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::h_2);
-      double h3 = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::h_3);
-      if(h1 == 0.0) h1 = 1.0;
-      if(h2 == 0.0) h2 = 1.0;  // defensive on axis
-      if(h3 == 0.0) h3 = 1.0;
-      // Store contravariant components (physical projection / h_i)
-      field(_i,_j,_k).cbx0 = _c*( bx*e1x + by*e1y + bz*e1z )/h1;
-      field(_i,_j,_k).cby0 = _c*( bx*e2x + by*e2y + bz*e2z )/h2;
-      field(_i,_j,_k).cbz0 = _c*( bx*e3x + by*e3y + bz*e3z )/h3;
-    }}}
-  }
-  
+  // External B in the grid (r,theta,z) frame: B_r = BR, B_theta = 0, B_z = BZ+BZ0.
+  // set_region_bext stores the contravariant components (divides by h_i).
+  set_region_bext( everywhere, BR, 0, BZ+BZ0 );
+
 #else
   double Lcoil1 = 0.6*Lz;
   double Lcoil2 = 0.1*Lz;
