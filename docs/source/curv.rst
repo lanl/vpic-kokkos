@@ -138,6 +138,34 @@ One caveat:
   * Internally, VPIC stores E in covariant logical components, B in contravariant logical components, and current in contravariant logical coordinates. This means they are not physical fields but rather unscaled by the scale factors of the cell they are in. If a user tries directly accessing any of these during runtime without a helper function they will encounter unphysical quantities. To convert these to physical quantities in their coordinate systems, simply multiply or divide each component by the scale factors corresponding to the cell that they are trying to access information from. For a covariant field, divide by scale factors and for a contravariant field multiply by scale factors to convert them back to physical components. Similarly, if a user tries to directly edit fields in a deck (say, by setting `field(i, j, k).cz0`), they should perform the opposite operation to convert to logical (unphysical) components. This is what the `set_region_field` macros do internally.
 
 
+.. _cyl-axis-bc:
+
+Axis Boundary Conditions
+================
+Curvilinear grids have a coordinate singularity at the axis, which is a geometric artifact rather than a physical wall. VPIC provides matching pairs of field and particle boundary conditions that reflect quantities across the axis for the hybrid solver.
+
+**Cylindrical axis (r=0).** The inner radial boundary of a cylindrical grid is the axis. Crossing it advances the azimuthal angle by pi (theta -> theta + pi), which flips the sign of the radial and azimuthal unit vectors while leaving z unchanged. Set the pair on the inner-r face of the domain (the boundary at x = x0, i.e. `BOUNDARY(-1,0,0)`):
+  .. code-block:: c++
+
+    if ( ix==0 ) set_domain_field_bc(    BOUNDARY(-1,0,0), cylindrical_axis_fields );
+    if ( ix==0 ) set_domain_particle_bc( BOUNDARY(-1,0,0), cylindrical_axis_particles );
+
+`cylindrical_axis_fields` reflects field ghosts across the axis: the radial and azimuthal components of every vector field flip sign, while z-components and scalars (density, pressure) are copied unchanged. `cylindrical_axis_particles` reflects particles that cross the axis instead of losing them: the particle's radial position is reflected and its angle is advanced by pi (moving it to the opposite theta cell). Particle velocities are stored in Cartesian components and are left untouched.
+
+**Spherical polar axis (theta=0 and theta=pi).** For a spherical grid the polar axis is a singularity on the theta boundaries. Crossing the pole advances the azimuthal angle by pi (phi -> phi + pi), flipping the sign of the theta and phi unit vectors while leaving the radial direction unchanged. Set the pair on the theta faces (`BOUNDARY(0,-1,0)` and `BOUNDARY(0,1,0)`):
+  .. code-block:: c++
+
+    if ( iy==0 )            set_domain_field_bc(    BOUNDARY(0,-1,0), spherical_axis_fields );
+    if ( iy==topology_y-1 ) set_domain_field_bc(    BOUNDARY(0, 1,0), spherical_axis_fields );
+    if ( iy==0 )            set_domain_particle_bc( BOUNDARY(0,-1,0), spherical_axis_particles );
+    if ( iy==topology_y-1 ) set_domain_particle_bc( BOUNDARY(0, 1,0), spherical_axis_particles );
+
+`spherical_axis_fields` negates the theta- and phi-components of vector ghosts (r-components and scalars copied), and `spherical_axis_particles` reflects a crossing particle across the pole with its Cartesian velocity untouched.
+
+Note:
+  * The reflection is only exact at the singularity, where the 1/r (or 1/(r sin theta)) metric factors diverge. Place the boundary on (or a small fraction of a cell off) the axis. The metric evaluation floors the sub-cell radius so these terms stay finite for particles that reach the innermost face.
+
+
 API Reference
 ================
 
@@ -434,6 +462,43 @@ support, curvilinear meshes: they fetch the per-cell scale factors
    Sets the density, temperature, and pressure (``den``, ``tmp``, ``prs``) of
    the named fluid species over the region, looked up via
    ``find_fluid_species_name``.
+
+
+Axis Boundary Conditions
+--------------------------------------
+
+Field and particle boundary conditions for the coordinate singularity at the
+radial axis. See :ref:`the conceptual overview <cyl-axis-bc>` for usage.
+
+.. c:var:: cylindrical_axis_fields
+
+   Field BC (enum ``-5``, ``grid.h``) for the cylindrical axis :math:`r=0`.
+   Reflects field ghosts across the axis: R- and theta-components negated,
+   z-components and scalars copied. Handled in the ``k_hyb_local_ghost_*`` and
+   ``k_hyb_local_adjust_jf`` routines (``field_advance/standard/local.cc``);
+   allow-listed in :cpp:func:`set_fbc` (``grid/ops.cc``).
+
+.. c:var:: cylindrical_axis_particles
+
+   Particle BC (enum ``-3``, ``grid.h``) for the cylindrical axis. Reflects a
+   crossing particle: radial ``dx``/``dispx`` negated, angle advanced
+   :math:`\theta\to\theta+\pi` (shifted into the opposite theta cell, sub-cell
+   ``dy`` preserved), Cartesian velocity unchanged. Handled in
+   :cpp:func:`move_p_kokkos` (``species_advance.h``).
+
+.. c:var:: spherical_axis_fields
+
+   Field BC (enum ``-6``, ``grid.h``) for the spherical polar axis
+   :math:`\theta=0,\pi`. Reflects field ghosts across the axis: theta- and
+   phi-components negated, r-components and scalars copied. Same handler
+   family as :c:var:`cylindrical_axis_fields`; allow-listed in
+   :cpp:func:`set_fbc`.
+
+.. c:var:: spherical_axis_particles
+
+   Particle BC (enum ``-4``, ``grid.h``) for the spherical polar axis.
+   Reflects a crossing particle across the pole (``phi -> phi + pi``),
+   Cartesian velocity unchanged. Handled in :cpp:func:`move_p_kokkos`.
 
 
 Particle Push and Current Deposit

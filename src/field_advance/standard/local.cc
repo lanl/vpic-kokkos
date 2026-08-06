@@ -1812,14 +1812,28 @@ template<typename T> void apply_hyb_local_b(int i, int j, int k,
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pe) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pe);\
 	});								\
       break;								\
+    case spherical_axis_fields:  /* polar axis on theta face: rotation makes */ \
+                                 /* x_=theta,y_=phi -> flips theta,phi keep r, */ \
+                                 /* identical body to the cylindrical case.   */ \
     case cylindrical_axis_fields:					\
-     /* R=0 axis: R(x_) and theta(y_) components flip sign, z(z_) unchanged, */ \
-     /* scalar pe unchanged. */						\
-     Kokkos::parallel_for("apply_hyb_local_b: cylindrical_axis_fields", \
+     /* Axis: x_ and y_ components flip sign, z_ unchanged, scalar pe copied. */ \
+     Kokkos::parallel_for("apply_hyb_local_b: axis_fields", \
       x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##x_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##x_);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##y_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##y_);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##z_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##z_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pe) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pe);\
+	});								\
+      break;								\
+    case spherical_center_fields:					\
+     /* r=0 center on r face (x_=r,y_=theta,z_=phi): flip r(x_) and phi(z_), */ \
+     /* keep theta(y_); scalar pe copied. NOTE: local flip only -- does not   */ \
+     /* apply the theta->pi-theta antipode cell remap. */		\
+     Kokkos::parallel_for("apply_hyb_local_b: spherical_center_fields", \
+      x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##x_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##x_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##y_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##y_);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::cb##z_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::cb##z_);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pe) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pe);\
 	});								\
       break;								\
@@ -1930,10 +1944,11 @@ template<typename T> void apply_hyb_local_e(int i, int j, int k,
         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##z_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##z_);\
       });}								\
       break;								\
+    case spherical_axis_fields:  /* polar axis (theta face): x_=theta,y_=phi */ \
+                                 /* -> flips theta,phi keep r; same body.    */ \
     case cylindrical_axis_fields:					\
-      /* R=0 axis: R(x_) and theta(y_) components of E and u flip sign, */ \
-      /* z(z_) components unchanged. */					\
-      Kokkos::parallel_for("apply_hyb_local_e: cylindrical_axis_fields", \
+      /* Axis: x_ and y_ components of E and u flip sign, z_ unchanged. */ \
+      Kokkos::parallel_for("apply_hyb_local_e: axis_fields", \
       x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##x_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##x_);\
         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##y_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##y_);\
@@ -1941,6 +1956,19 @@ template<typename T> void apply_hyb_local_e(int i, int j, int k,
         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##x_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##x_);\
         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##y_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##y_);\
         k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##z_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##z_);\
+      });								\
+      break;								\
+    case spherical_center_fields:					\
+      /* r=0 center (r face; x_=r,y_=theta,z_=phi): flip r(x_) and phi(z_), */ \
+      /* keep theta(y_). Local flip only (no theta antipode remap). */	\
+      Kokkos::parallel_for("apply_hyb_local_e: spherical_center_fields", \
+      x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##x_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##x_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##y_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##y_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::e##z_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::e##z_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##x_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##x_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##y_) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##y_);\
+        k_field(VOXEL(x,y,z,nx,ny,nz), field_var::u##z_) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::u##z_);\
       });								\
       break;								\
     default:								\
@@ -2004,13 +2032,32 @@ template<typename T> void apply_hyb_local_jf(int i, int j, int k,
 	});								\
       break;								\
     case cylindrical_axis_fields:					\
-      /* R=0 axis (only set on -x/R face): flip jfx(R), jfy(theta); keep */ \
-      /* jfz(z) and scalar rhof. */					\
+      /* Cyl R=0 axis (-x/R face): flip jfx(R), jfy(theta); keep jfz(z),rhof. */ \
       Kokkos::parallel_for("apply_hyb_local_jf: cylindrical_axis_fields", \
       x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::jfx);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::jfy);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::jfz);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::rhof);\
+	});								\
+      break;								\
+    case spherical_axis_fields:						\
+      /* Sph polar axis (theta face): flip jfy(theta), jfz(phi); keep jfx(r),rhof. */ \
+      Kokkos::parallel_for("apply_hyb_local_jf: spherical_axis_fields", \
+      x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::jfx);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::jfy);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::jfz);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::rhof);\
+	});								\
+      break;								\
+    case spherical_center_fields:					\
+      /* Sph center (r face): flip jfx(r), jfz(phi); keep jfy(theta),rhof. */ \
+      Kokkos::parallel_for("apply_hyb_local_jf: spherical_center_fields", \
+      x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfx) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::jfx);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfy) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::jfy);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::jfz) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::jfz);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::rhof) = k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::rhof);\
 	});								\
       break;								\
@@ -2087,6 +2134,30 @@ template<typename T> void apply_hyb_local_ot(int i, int j, int k,
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tz) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::tz);\
 	});								\
       break;								\
+    case spherical_axis_fields:						\
+      /* Sph polar axis (theta face): flip theta(y),phi(z) of o and t; keep r(x). */ \
+      Kokkos::parallel_for("apply_hyb_local_ot: spherical_axis_fields", \
+      x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ox) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ox);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::oy) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::oy);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::oz) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::oz);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tx) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::tx);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ty) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ty);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tz) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::tz);\
+	});								\
+      break;								\
+    case spherical_center_fields:					\
+      /* Sph center (r face): flip r(x),phi(z) of o and t; keep theta(y). */ \
+      Kokkos::parallel_for("apply_hyb_local_ot: spherical_center_fields", \
+      x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ox) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ox);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::oy) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::oy);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::oz) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::oz);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tx) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::tx);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::ty) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::ty);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::tz) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::tz);\
+	});								\
+      break;								\
     default:								\
       ERROR(("Bad boundary condition encountered."));			\
       break;								\
@@ -2150,6 +2221,24 @@ template<typename T> void apply_hyb_local_lapl_b(int i, int j, int k,
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pex) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pex);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pey) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pey);\
 	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pez) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pez);\
+	});								\
+      break;								\
+    case spherical_axis_fields:						\
+      /* Sph polar axis (theta face): flip theta(y),phi(z), keep r(x). */ \
+      Kokkos::parallel_for("apply_hyb_local_lapl_b: spherical_axis_fields", \
+      x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pex) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pex);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pey) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pey);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pez) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pez);\
+	});								\
+      break;								\
+    case spherical_center_fields:					\
+      /* Sph center (r face): flip r(x),phi(z), keep theta(y). */ \
+      Kokkos::parallel_for("apply_hyb_local_lapl_b: spherical_center_fields", \
+      x_##_face, KOKKOS_LAMBDA(const int y_, const int z_) {		\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pex) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pex);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pey) =  k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pey);\
+	  k_field(VOXEL(x,y,z,nx,ny,nz), field_var::pez) = -k_field(VOXEL(x-i,y-j,z-k,nx,ny,nz), field_var::pez);\
 	});								\
       break;								\
     default:								\
@@ -2216,16 +2305,35 @@ k_hyb_local_ghost_lapl_b( field_array_t      * RESTRICT f,
           k_field(ghost, field_var::rhof) = 0;                                 \
         });                                                                    \
       break;                                                                   \
+    case spherical_axis_fields:   /* polar axis (theta face): x_=theta,y_=phi */ \
+                                  /* -> subtract theta,phi add r; same body.  */ \
     case cylindrical_axis_fields:                                              \
-      /* R=0 axis image fold: R(x_)/theta(y_) current from the image adds with */ \
-      /* flipped sign; z(z_) current and scalar rhof add unchanged. */         \
-      Kokkos::parallel_for("adjust_hyb_local_jf: cylindrical_axis_fields", x_##_face, \
+      /* Axis image fold: x_/y_ current from the image adds with flipped sign; */ \
+      /* z_ current and scalar rhof add unchanged. */                          \
+      Kokkos::parallel_for("adjust_hyb_local_jf: axis_fields", x_##_face, \
                            KOKKOS_LAMBDA(const int y_, const int z_) {         \
           const int local = VOXEL(x,y,z,nx,ny,nz);                             \
           const int ghost = VOXEL(x+i,y+j,z+k,nx,ny,nz);                       \
           k_field(local, field_var::jf##x_) -= k_field(ghost, field_var::jf##x_); \
           k_field(local, field_var::jf##y_) -= k_field(ghost, field_var::jf##y_); \
           k_field(local, field_var::jf##z_) += k_field(ghost, field_var::jf##z_); \
+          k_field(local, field_var::rhof)   += k_field(ghost, field_var::rhof);  \
+          k_field(ghost, field_var::jfx)  = 0;                                 \
+          k_field(ghost, field_var::jfy)  = 0;                                 \
+          k_field(ghost, field_var::jfz)  = 0;                                 \
+          k_field(ghost, field_var::rhof) = 0;                                 \
+        });                                                                    \
+      break;                                                                   \
+    case spherical_center_fields:                                              \
+      /* Sph center (r face; x_=r,y_=theta,z_=phi): subtract r(x_),phi(z_) */  \
+      /* with flipped sign; theta(y_) and rhof add unchanged. */               \
+      Kokkos::parallel_for("adjust_hyb_local_jf: spherical_center_fields", x_##_face, \
+                           KOKKOS_LAMBDA(const int y_, const int z_) {         \
+          const int local = VOXEL(x,y,z,nx,ny,nz);                             \
+          const int ghost = VOXEL(x+i,y+j,z+k,nx,ny,nz);                       \
+          k_field(local, field_var::jf##x_) -= k_field(ghost, field_var::jf##x_); \
+          k_field(local, field_var::jf##y_) += k_field(ghost, field_var::jf##y_); \
+          k_field(local, field_var::jf##z_) -= k_field(ghost, field_var::jf##z_); \
           k_field(local, field_var::rhof)   += k_field(ghost, field_var::rhof);  \
           k_field(ghost, field_var::jfx)  = 0;                                 \
           k_field(ghost, field_var::jfy)  = 0;                                 \

@@ -753,14 +753,20 @@ move_p_kokkos(
         float dy_logical = k_particles(pi, particle_var::dy);
         float dtheta = geom.dy;  // Physical cell size in theta direction
         float y0 = geom.y0;      // Grid origin in theta
+        float Ltheta = dtheta * ny; // full azimuthal extent (should be 2*pi)
         float theta_cell_center = y0 + (j - 0.5f) * dtheta;
         float theta_current = theta_cell_center + 0.5f * dy_logical * dtheta;
-        
-        float theta_new = fmodf(theta_current + M_PI, 2.0f * M_PI);
-        if (theta_new < 0) theta_new += 2.0f * M_PI;  // Handle negative wraparound
-        
-        // Find which cell the new theta lands in
-        int j_new = static_cast<int>((theta_new - y0) / dtheta) + 1;  // +1 for ghost cell offset
+
+        // Axis crossing maps theta -> theta + pi, wrapped into the grid's
+        // actual azimuthal range [y0, y0+Ltheta). The previous fmod(...,2*pi)
+        // wrapped into [0,2*pi), which is WRONG when y0=-pi: it dumped every
+        // particle from the upper-half theta cells into the last cell.
+        float theta_new = theta_current + (float)M_PI;
+        while (theta_new >= y0 + Ltheta) theta_new -= Ltheta;
+        while (theta_new <  y0)          theta_new += Ltheta;
+
+        // Find which cell the new theta lands in (+1 for ghost cell offset)
+        int j_new = static_cast<int>((theta_new - y0) / dtheta) + 1;
         if (j_new < 1) j_new = 1;
         if (j_new > ny) j_new = ny;
         
@@ -780,6 +786,100 @@ move_p_kokkos(
           k_particles_i(pi) = ii_new;
         }
         
+        // Reverse radial displacement
+        pm->dispx = -pm->dispx;
+        continue;
+      }
+    }
+
+    if( neighbor==spherical_axis_particles ) {
+      // Polar axis (theta=0 or pi) for spherical coordinates. Crossing the pole
+      // reflects theta and advances phi by pi. Only handled on the theta (y) face.
+      if( axis == 1 ) {  // theta-direction
+        // Reflect theta logical coordinate
+        k_particles(pi, particle_var::dy) = -k_particles(pi, particle_var::dy);
+
+        int i, j, k;
+        UNVOXEL(ii, i, j, k, nx, ny, nz);
+
+        // phi lives in the z (k) index: phi -> phi + pi, wrapped into [z0, z0+Lphi)
+        float dz_logical = k_particles(pi, particle_var::dz);
+        float dphi = geom.dz;
+        float z0   = geom.z0;
+        float Lphi = dphi * nz;
+        float phi_cell_center = z0 + (k - 0.5f) * dphi;
+        float phi_current = phi_cell_center + 0.5f * dz_logical * dphi;
+
+        float phi_new = phi_current + (float)M_PI;
+        while (phi_new >= z0 + Lphi) phi_new -= Lphi;
+        while (phi_new <  z0)        phi_new += Lphi;
+
+        int k_new = static_cast<int>((phi_new - z0) / dphi) + 1;
+        if (k_new < 1) k_new = 1;
+        if (k_new > nz) k_new = nz;
+
+        float phi_new_cell_center = z0 + (k_new - 0.5f) * dphi;
+        float dz_new = (phi_new - phi_new_cell_center) / (0.5f * dphi);
+        dz_new = fmaxf(-1.0f, fminf(1.0f, dz_new));
+        k_particles(pi, particle_var::dz) = dz_new;
+
+        if (k_new != k) {
+          int ii_new = VOXEL(i, j, k_new, nx, ny, nz);
+          k_particles_i(pi) = ii_new;
+        }
+
+        // Reverse theta displacement
+        pm->dispy = -pm->dispy;
+        continue;
+      }
+    }
+
+    if( neighbor==spherical_center_particles ) {
+      // Center (r=0) for spherical coordinates. Crossing the center is the
+      // antipode map: r reflects, theta -> pi - theta, phi -> phi + pi. Only
+      // handled on the inner-r (x) face.
+      if( axis == 0 ) {  // r-direction
+        // Reflect r logical coordinate
+        k_particles(pi, particle_var::dx) = -k_particles(pi, particle_var::dx);
+
+        int i, j, k;
+        UNVOXEL(ii, i, j, k, nx, ny, nz);
+
+        // theta -> pi - theta  (y/j index).  theta range is [y0, y0+Ltheta).
+        float dtheta = geom.dy;
+        float y0 = geom.y0;
+        float Ltheta = dtheta * ny;
+        float theta_cc = y0 + (j - 0.5f) * dtheta;
+        float theta_cur = theta_cc + 0.5f * k_particles(pi, particle_var::dy) * dtheta;
+        float theta_new = (float)M_PI - theta_cur;
+        while (theta_new >= y0 + Ltheta) theta_new -= Ltheta;
+        while (theta_new <  y0)          theta_new += Ltheta;
+        int j_new = static_cast<int>((theta_new - y0) / dtheta) + 1;
+        if (j_new < 1) j_new = 1;
+        if (j_new > ny) j_new = ny;
+        float dy_new = (theta_new - (y0 + (j_new - 0.5f) * dtheta)) / (0.5f * dtheta);
+        k_particles(pi, particle_var::dy) = fmaxf(-1.0f, fminf(1.0f, dy_new));
+
+        // phi -> phi + pi  (z/k index).  phi range is [z0, z0+Lphi).
+        float dphi = geom.dz;
+        float z0 = geom.z0;
+        float Lphi = dphi * nz;
+        float phi_cc = z0 + (k - 0.5f) * dphi;
+        float phi_cur = phi_cc + 0.5f * k_particles(pi, particle_var::dz) * dphi;
+        float phi_new = phi_cur + (float)M_PI;
+        while (phi_new >= z0 + Lphi) phi_new -= Lphi;
+        while (phi_new <  z0)        phi_new += Lphi;
+        int k_new = static_cast<int>((phi_new - z0) / dphi) + 1;
+        if (k_new < 1) k_new = 1;
+        if (k_new > nz) k_new = nz;
+        float dz_new = (phi_new - (z0 + (k_new - 0.5f) * dphi)) / (0.5f * dphi);
+        k_particles(pi, particle_var::dz) = fmaxf(-1.0f, fminf(1.0f, dz_new));
+
+        if (j_new != j || k_new != k) {
+          int ii_new = VOXEL(i, j_new, k_new, nx, ny, nz);
+          k_particles_i(pi) = ii_new;
+        }
+
         // Reverse radial displacement
         pm->dispx = -pm->dispx;
         continue;
@@ -1134,49 +1234,116 @@ move_p_kokkos_host_serial(
       continue;
     }
 
-        if( neighbor==cylindrical_axis_particles ) {
-      // Axis periodic boundary for cylindrical coordinates
+    if( neighbor==cylindrical_axis_particles ) {
+      // Cylindrical axis (r=0): reflect r, remap theta -> theta + pi.
       if( axis == 0 ) {  // r-direction
-        // Reflect r-coordinate (already correct)
         k_particles(pi, particle_var::dx) = -k_particles(pi, particle_var::dx);
-        
-        // Get current cell information
+
         int i, j, k;
         UNVOXEL(ii, i, j, k, nx, ny, nz);
-        
-        // Convert logical dy to physical theta
-        float dy_logical = k_particles(pi, particle_var::dy);
-        float dtheta = g->geom().dy;  // Physical cell size in theta direction
-        float y0 = g->geom().y0;      // Grid origin in theta
+
+        float dtheta = g->geom().dy;
+        float y0 = g->geom().y0;
+        float Ltheta = dtheta * ny;
         float theta_cell_center = y0 + (j - 0.5f) * dtheta;
-        float theta_current = theta_cell_center + 0.5f * dy_logical * dtheta;
-        
-        // Add π and wrap to [0, 2π)
-        float theta_new = fmodf(theta_current + M_PI, 2.0f * M_PI);
-        if (theta_new < 0) theta_new += 2.0f * M_PI;  // Handle negative wraparound
-        
-        // Find which cell the new theta lands in
-        int j_new = static_cast<int>((theta_new - y0) / dtheta) + 1;  // +1 for ghost cell offset
+        float theta_current = theta_cell_center + 0.5f * k_particles(pi, particle_var::dy) * dtheta;
+
+        // Advance theta by pi, wrapped into the grid range [y0, y0+Ltheta).
+        float theta_new = theta_current + (float)M_PI;
+        while (theta_new >= y0 + Ltheta) theta_new -= Ltheta;
+        while (theta_new <  y0)          theta_new += Ltheta;
+
+        int j_new = static_cast<int>((theta_new - y0) / dtheta) + 1;
         if (j_new < 1) j_new = 1;
         if (j_new > ny) j_new = ny;
-        
-        // Compute new logical coordinate within the new cell
-        float theta_new_cell_center = y0 + (j_new - 0.5f) * dtheta;
-        float dy_new = (theta_new - theta_new_cell_center) / (0.5f * dtheta);
-        
-        // Clamp to valid range [-1, 1]
-        dy_new = fmaxf(-1.0f, fminf(1.0f, dy_new));
-        
-        // Update particle position
-        k_particles(pi, particle_var::dy) = dy_new;
-        
-        // Update voxel index if we moved to a different cell
+        float dy_new = (theta_new - (y0 + (j_new - 0.5f) * dtheta)) / (0.5f * dtheta);
+        k_particles(pi, particle_var::dy) = fmaxf(-1.0f, fminf(1.0f, dy_new));
+
         if (j_new != j) {
           int ii_new = VOXEL(i, j_new, k, nx, ny, nz);
           k_particles_i(pi) = ii_new;
         }
-        
-        // Reverse radial displacement
+
+        pm->dispx = -pm->dispx;
+        continue;
+      }
+    }
+
+    if( neighbor==spherical_axis_particles ) {
+      // Spherical polar axis (theta=0,pi): reflect theta, remap phi -> phi + pi.
+      if( axis == 1 ) {  // theta-direction
+        k_particles(pi, particle_var::dy) = -k_particles(pi, particle_var::dy);
+
+        int i, j, k;
+        UNVOXEL(ii, i, j, k, nx, ny, nz);
+
+        float dphi = g->geom().dz;
+        float z0   = g->geom().z0;
+        float Lphi = dphi * nz;
+        float phi_cell_center = z0 + (k - 0.5f) * dphi;
+        float phi_current = phi_cell_center + 0.5f * k_particles(pi, particle_var::dz) * dphi;
+
+        float phi_new = phi_current + (float)M_PI;
+        while (phi_new >= z0 + Lphi) phi_new -= Lphi;
+        while (phi_new <  z0)        phi_new += Lphi;
+
+        int k_new = static_cast<int>((phi_new - z0) / dphi) + 1;
+        if (k_new < 1) k_new = 1;
+        if (k_new > nz) k_new = nz;
+        float dz_new = (phi_new - (z0 + (k_new - 0.5f) * dphi)) / (0.5f * dphi);
+        k_particles(pi, particle_var::dz) = fmaxf(-1.0f, fminf(1.0f, dz_new));
+
+        if (k_new != k) {
+          int ii_new = VOXEL(i, j, k_new, nx, ny, nz);
+          k_particles_i(pi) = ii_new;
+        }
+
+        pm->dispy = -pm->dispy;
+        continue;
+      }
+    }
+
+    if( neighbor==spherical_center_particles ) {
+      // Spherical center (r=0): reflect r, remap theta -> pi-theta, phi -> phi+pi.
+      if( axis == 0 ) {  // r-direction
+        k_particles(pi, particle_var::dx) = -k_particles(pi, particle_var::dx);
+
+        int i, j, k;
+        UNVOXEL(ii, i, j, k, nx, ny, nz);
+
+        float dtheta = g->geom().dy;
+        float y0 = g->geom().y0;
+        float Ltheta = dtheta * ny;
+        float theta_cc = y0 + (j - 0.5f) * dtheta;
+        float theta_cur = theta_cc + 0.5f * k_particles(pi, particle_var::dy) * dtheta;
+        float theta_new = (float)M_PI - theta_cur;
+        while (theta_new >= y0 + Ltheta) theta_new -= Ltheta;
+        while (theta_new <  y0)          theta_new += Ltheta;
+        int j_new = static_cast<int>((theta_new - y0) / dtheta) + 1;
+        if (j_new < 1) j_new = 1;
+        if (j_new > ny) j_new = ny;
+        float dy_new = (theta_new - (y0 + (j_new - 0.5f) * dtheta)) / (0.5f * dtheta);
+        k_particles(pi, particle_var::dy) = fmaxf(-1.0f, fminf(1.0f, dy_new));
+
+        float dphi = g->geom().dz;
+        float z0 = g->geom().z0;
+        float Lphi = dphi * nz;
+        float phi_cc = z0 + (k - 0.5f) * dphi;
+        float phi_cur = phi_cc + 0.5f * k_particles(pi, particle_var::dz) * dphi;
+        float phi_new = phi_cur + (float)M_PI;
+        while (phi_new >= z0 + Lphi) phi_new -= Lphi;
+        while (phi_new <  z0)        phi_new += Lphi;
+        int k_new = static_cast<int>((phi_new - z0) / dphi) + 1;
+        if (k_new < 1) k_new = 1;
+        if (k_new > nz) k_new = nz;
+        float dz_new = (phi_new - (z0 + (k_new - 0.5f) * dphi)) / (0.5f * dphi);
+        k_particles(pi, particle_var::dz) = fmaxf(-1.0f, fminf(1.0f, dz_new));
+
+        if (j_new != j || k_new != k) {
+          int ii_new = VOXEL(i, j_new, k_new, nx, ny, nz);
+          k_particles_i(pi) = ii_new;
+        }
+
         pm->dispx = -pm->dispx;
         continue;
       }

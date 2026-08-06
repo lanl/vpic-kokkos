@@ -29,11 +29,22 @@ enum grid_enums {
                                 // sign across the boundary (theta -> theta+pi),
                                 // z-components and scalars unchanged. For the
                                 // hybrid solver's cylindrical inner (R) boundary.
+  spherical_axis_fields   = -6, // theta=0/pi polar axis: theta- and phi- vector
+                                // components flip sign across the boundary
+                                // (phi -> phi+pi), r-components and scalars
+                                // unchanged. Set on the theta (y) faces.
+  spherical_center_fields = -7, // r=0 center (point): r- and phi- vector
+                                // components flip sign across the boundary
+                                // (antipode theta->pi-theta, phi->phi+pi),
+                                // theta-components and scalars unchanged. Set
+                                // on the inner-r (x) face.
 
   // Phase 3 boundary conditions
   reflect_particles = -1, // Cell boundary should reflect particles
   absorb_particles  = -2,  // Cell boundary should absorb particles
-  cylindrical_axis_particles     = -3
+  cylindrical_axis_particles     = -3,
+  spherical_axis_particles       = -4, // spherical polar axis (theta faces)
+  spherical_center_particles     = -5  // spherical center r=0 (inner-r face)
 
 
   // Symmetry in the field boundary conditions refers to image charge
@@ -899,14 +910,26 @@ void compute_reciprocal_basis(
         float sin_phi = sinf(phi_phys);
         float cos_phi = cosf(phi_phys);
 
+        // Axis regularization. The reciprocal basis has 1/r_phys (center) and
+        // 1/(r_phys*sin_theta) (polar axis) factors that diverge at the r=0
+        // center and the theta=0,pi poles. Floor both to half a cell so a
+        // particle whose sub-cell position reaches the center/pole does not
+        // blow up (analogous to the cylindrical r_phys floor).
+        const float r_axis_min = 0.5f * gdx;
+        if (r_phys < r_axis_min) r_phys = r_axis_min;
+        const float sin_theta_min = 0.5f * gdy; // gdy = dtheta; floor |sin| near poles
+        float sin_theta_reg = (fabsf(sin_theta) < sin_theta_min)
+                            ? (sin_theta < 0.0f ? -sin_theta_min : sin_theta_min)
+                            : sin_theta;
+
         grad_xi_x = (2.0f / gdx) * sin_theta * cos_phi;
         grad_xi_y = (2.0f / gdx) * sin_theta * sin_phi;
         grad_xi_z = (2.0f / gdx) * cos_theta;
         grad_eta_x = (2.0f / gdy) * cos_theta * cos_phi / r_phys;
         grad_eta_y = (2.0f / gdy) * cos_theta * sin_phi / r_phys;
         grad_eta_z = (2.0f / gdy) * (-sin_theta) / r_phys;
-        grad_mu_x = (2.0f / gdz) * (-sin_phi) / (r_phys * sin_theta);
-        grad_mu_y = (2.0f / gdz) * cos_phi / (r_phys * sin_theta);
+        grad_mu_x = (2.0f / gdz) * (-sin_phi) / (r_phys * sin_theta_reg);
+        grad_mu_y = (2.0f / gdz) * cos_phi / (r_phys * sin_theta_reg);
         grad_mu_z = 0.0f;
         jac = r_phys * r_phys * sin_theta * gdx * gdy * gdz / 8.0f;
 

@@ -295,7 +295,7 @@ begin_initialization {
   // unformatted binary stream and so cannot currently cope with mixed double
   // and int datatypes. --ATr,2023nov17
   double nx = 256/4;          // Number of cells in x, y, and z
-  double ny = 8;
+  double ny = 16;
   double nz = 1024/2;
 
   double topology_x = 1;    // Number of domains in x, y, and z
@@ -483,7 +483,7 @@ begin_initialization {
   // the near-axis high-density/E spikes without needing a floor. The axis BC is
   // applied here; reflecting across r=0.5*dr instead of exactly 0 is a negligible
   // (half-cell) approximation.
-  define_periodic_grid( 0.5*(0.5*Lx/nx), -0.5*Ly, -0.5*Lz,   // Low corner (r0 = dr/2)
+  define_periodic_grid( 0.01*Lx, -0.5*Ly, -0.5*Lz,   // Low corner (r0 = dr/2)
                         0.5*Lx,           0.5*Ly,  0.5*Lz,    // High corner
                         nx, ny, nz,                           // Resolution
                         topology_x, topology_y, topology_z);  // Topology
@@ -507,7 +507,7 @@ begin_initialization {
   // Absorbing particle boundaries
   sim_log("Absorb particles on all boundaries");
   // Inner-r is the axis: particles crossing r=0 are remapped to theta+pi.
-  if ( ix==0 )            set_domain_particle_bc( BOUNDARY(-1,0,0), reflect_particles );
+  if ( ix==0 )            set_domain_particle_bc( BOUNDARY(-1,0,0), cylindrical_axis_particles );
   if ( ix==topology_x-1 ) set_domain_particle_bc( BOUNDARY( 1,0,0), absorb_particles );
   // if ( iy==0 )            set_domain_particle_bc( BOUNDARY(0,-1,0), absorb_particles );
   // if ( iy==topology_y-1 ) set_domain_particle_bc( BOUNDARY(0, 1,0), absorb_particles );
