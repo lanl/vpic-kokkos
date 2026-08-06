@@ -739,7 +739,7 @@ move_p_kokkos(
       continue;
     }
 
-    if( neighbor==tunnel_particles ) {
+    if( neighbor==cylindrical_axis_particles ) {
       // Axis periodic boundary for cylindrical coordinates
       if( axis == 0 ) {  // r-direction
         // Reflect r-coordinate (already correct)
@@ -1134,7 +1134,7 @@ move_p_kokkos_host_serial(
       continue;
     }
 
-        if( neighbor==tunnel_particles ) {
+        if( neighbor==cylindrical_axis_particles ) {
       // Axis periodic boundary for cylindrical coordinates
       if( axis == 0 ) {  // r-direction
         // Reflect r-coordinate (already correct)

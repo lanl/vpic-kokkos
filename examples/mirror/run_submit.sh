@@ -9,8 +9,8 @@ rm -rf rundata
 rm -rf restore0
 rm -rf restore1
 rm -rf particle
-./bin/vpic ../examples/mirror-cyl/mirror_RZ_cyl.cxx
-sbatch ../examples/mirror-cyl/submit
+./bin/vpic ../examples/mirror/mirror_cyl.cxx
+sbatch ../examples/mirror/submit
 rm slurm.err
 touch slurm.err
 tail -f slurm.err

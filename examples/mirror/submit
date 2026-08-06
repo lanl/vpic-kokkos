@@ -16,5 +16,5 @@ export NVCC_WRAPPER_DEFAULT_COMPILER=mpicxx
 # mkdir build
 cd build
 # bash ../arch/Darwin_Ampere
-srun -n 4 /vast/home/cgraham/vpic-kokkos/build/mirror_RZ_cyl.Linux
+srun -n 4 /vast/home/cgraham/vpic-kokkos/build/mirror_cyl.Linux
 ##--restore restart0/restart.0  >& outfile2 

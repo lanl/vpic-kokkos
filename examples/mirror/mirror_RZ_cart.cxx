@@ -482,7 +482,7 @@ begin_initialization {
                         0.5*Lx,  0.5*Ly,  0.5*Lz,            // High corner
                         nx, ny, nz,                          // Resolution
                         topology_x, topology_y, topology_z); // Topology
-  grid->init_cylindrical_grid();
+  grid->init_cartesian_grid();
 
   // Identify boundary domains
   int ix, iy, iz;
@@ -499,7 +499,7 @@ begin_initialization {
 
   // Absorbing particle boundaries
   sim_log("Absorb particles on all boundaries"); 
-  if ( ix==0 )            set_domain_particle_bc( BOUNDARY(-1,0,0), reflect_particles );
+  if ( ix==0 )            set_domain_particle_bc( BOUNDARY(-1,0,0), cylindrical_axis_particles );
   if ( ix==topology_x-1 ) set_domain_particle_bc( BOUNDARY( 1,0,0), absorb_particles );
   // if ( iy==0 )            set_domain_particle_bc( BOUNDARY(0,-1,0), absorb_particles );
   // if ( iy==topology_y-1 ) set_domain_particle_bc( BOUNDARY(0, 1,0), absorb_particles );
@@ -630,10 +630,10 @@ begin_initialization {
 #define BZ ( BZC(zcoil1,rcoil,Icoil) +  BZC(zcoil2,rcoil,Icoil) )
 
   sim_log( "Loading fields" );
-  set_region_field_cart( everywhere, 0, 0, 0,       // Electric field
+  set_region_field( everywhere, 0, 0, 0,       // Electric field
   		                0, 0 ,0 );    // Magnetic field
 
-  set_region_bext_cart( everywhere,  BX, BY , BZ + BZ0 );    // External Magnetic field
+  set_region_bext( everywhere,  BX, BY , BZ + BZ0 );    // External Magnetic field
   
 #else
   double Lcoil1 = 0.6*Lz;
@@ -660,9 +660,9 @@ begin_initialization {
 
 
   sim_log( "Loading fields" );
-  set_region_field_cart( everywhere, 0, 0, 0,    // Electric field
+  set_region_field( everywhere, 0, 0, 0,    // Electric field
   		                          0, 0, 0 );  // Magnetic field
-  set_region_bext_cart( everywhere, BX, 0, BZ ); // External Magnetic field
+  set_region_bext( everywhere, BX, 0, BZ ); // External Magnetic field
 #endif 
 
   // --------------------------------------------------------------------------
@@ -689,13 +689,13 @@ begin_initialization {
   double m_He4 = 4.002603 * mi;
 
   species_t *D_seed = define_species( "D_seed", ec, m_D, nmax, nmovers, sort_interval, sort_method );
-  species_t *D_beam = define_species( "D_beam", ec, m_D, 2, 2, sort_interval, sort_method );
+  species_t *D_beam = define_species( "D_beam", ec, m_D, nmax, nmovers, sort_interval, sort_method );
 
-  species_t *T   = define_species("Tritium",   ec, m_T,   2, 2, sort_interval, sort_method);
-  species_t *n   = define_species("Neutron",   ec, m_n,   2, 2, sort_interval, sort_method);
-  species_t *p   = define_species("Proton",    ec, m_p,   2, 2, sort_interval, sort_method);
-  species_t *He3 = define_species("Helium3",   ec, m_He3, 2, 2, sort_interval, sort_method);
-  species_t *He4 = define_species("Helium4",   ec, m_He4, 2, 2, sort_interval, sort_method);
+  species_t *T   = define_species("Tritium",   ec, m_T,   nmax_prod, nmovers_prod, sort_interval, sort_method);
+  species_t *n   = define_species("Neutron",   ec, m_n,   nmax_prod, nmovers_prod, sort_interval, sort_method);
+  species_t *p   = define_species("Proton",    ec, m_p,   nmax_prod, nmovers_prod, sort_interval, sort_method);
+  species_t *He3 = define_species("Helium3",   ec, m_He3, nmax_prod, nmovers_prod, sort_interval, sort_method);
+  species_t *He4 = define_species("Helium4",   ec, m_He4, nmax_prod, nmovers_prod, sort_interval, sort_method);
 
   // Create electron fluid species (use in electron impact ionization)
   float me = 1.0/1837.0;
@@ -905,7 +905,7 @@ begin_initialization {
       uy = normal( rng(0), 0, vth_D );
       uz = normal( rng(0), 0, vth_D );
 
-      inject_particle( D_seed, x, y, z, ux, uy, uz, w_D*x, 0, 0, D_seed->q );
+      inject_particle( D_seed, x, y, z, ux, uy, uz, w_D, 0, 0, D_seed->q );
     }
   }
   sim_log( "Finished loading particles" );

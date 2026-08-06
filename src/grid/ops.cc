@@ -177,7 +177,8 @@ set_fbc( grid_t * g,
 
   if( !g || boundary<0 || boundary>=27 || boundary==BOUNDARY(0,0,0) ||
       ( fbc!=anti_symmetric_fields && fbc!=symmetric_fields &&
-        fbc!=pmc_fields            && fbc!=absorb_fields    ) )
+        fbc!=pmc_fields            && fbc!=absorb_fields    &&
+        fbc!=cylindrical_axis_fields ) )
     ERROR(( "Bad args" ));
 
   g->bc[boundary] = fbc;

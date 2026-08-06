@@ -266,10 +266,10 @@ begin_initialization {
   double hyb_b0  = b0_G/ref_b0;     // Constant By perpendicular to 1D domain
   double hyb_te  = Te_erg/ref_E0;   // Electron temperature kB*Te/(mi*vA0^2)
   double hyb_den = ni/ref_n0;       // Density corresponding to hyb_te (for hyb_gamma!=1)
-  double hyb_den_floor_ohm = 0.1; // Density floor for Ohm's law update
+  double hyb_den_floor_ohm = 0.2; // Density floor for Ohm's law update
   double hyb_den_floor_pe  = 0.1; // Density floor for electron pressure update
   double hyb_eta      = 0;          // Resistivity
-  double hyb_hypereta = 1e-5;       // Hyper-resistivity
+  double hyb_hypereta = 1e-2;       // Hyper-resistivity
   double hyb_gamma    = 1.0;        // Electron fluid adiabatic index
   double hyb_nsub     = 10;        // Number of field subcycles
   int hyb_nsm         = 3;          // Smoothing passes per timestep for ion moments
@@ -282,7 +282,7 @@ begin_initialization {
   // --------------------------------------------------------------------------
 
   double Lx = 36*di; // double size of box in x dimension
-  double Ly = 4*di; // size of box in y dimension
+  double Ly = 2.0*M_PI; // size of box in y dimension
   double Lz = 360*di; // size of box in z dimension, 36/320 = 0.1125
 
   // Plasma region
@@ -295,7 +295,7 @@ begin_initialization {
   // unformatted binary stream and so cannot currently cope with mixed double
   // and int datatypes. --ATr,2023nov17
   double nx = 256/4;          // Number of cells in x, y, and z
-  double ny = 1;
+  double ny = 8;
   double nz = 1024/2;
 
   double topology_x = 1;    // Number of domains in x, y, and z
@@ -477,20 +477,27 @@ begin_initialization {
   grid->nsm   = hyb_nsm;
   grid->nsmb  = hyb_nsmb;
 
-  // Partition a periodic box among the processors sliced uniformly along x,y,z
-  define_periodic_grid( 0.1*Lx, -0.5*Ly, -0.5*Lz,            // Low corner
-                        0.5*Lx,  0.5*Ly,  0.5*Lz,            // High corner
-                        nx, ny, nz,                          // Resolution
-                        topology_x, topology_y, topology_z); // Topology
-  grid->init_cartesian_grid();
+  // Partition a periodic box among the processors sliced uniformly along x,y,z.
+  // Inner radial boundary is offset half a cell off the axis (r0 = 0.5*dr) so the
+  // innermost cell face never reaches r=0 -- this bounds the 1/r metric and kills
+  // the near-axis high-density/E spikes without needing a floor. The axis BC is
+  // applied here; reflecting across r=0.5*dr instead of exactly 0 is a negligible
+  // (half-cell) approximation.
+  define_periodic_grid( 0.5*(0.5*Lx/nx), -0.5*Ly, -0.5*Lz,   // Low corner (r0 = dr/2)
+                        0.5*Lx,           0.5*Ly,  0.5*Lz,    // High corner
+                        nx, ny, nz,                           // Resolution
+                        topology_x, topology_y, topology_z);  // Topology
+  grid->init_cylindrical_grid();
 
   // Identify boundary domains
   int ix, iy, iz;
   RANK_TO_INDEX( int(rank()), ix, iy, iz );
 
   // Override some of the boundary conditions (default is periodic)
-  sim_log("Conducting fields on all boundaries"); 
-  if ( ix==0 )            set_domain_field_bc( BOUNDARY(-1,0,0), pec_fields );
+  sim_log("Conducting fields on all boundaries");
+  // Inner-r is the cylindrical AXIS (r=0): R- and theta- vector field components
+  // flip sign across it (theta->theta+pi); z-components and scalars unchanged.
+  if ( ix==0 )            set_domain_field_bc( BOUNDARY(-1,0,0), cylindrical_axis_fields );
   if ( ix==topology_x-1 ) set_domain_field_bc( BOUNDARY( 1,0,0), pec_fields );
   // if ( iy==0 )            set_domain_field_bc( BOUNDARY(0,-1,0), pec_fields );
   // if ( iy==topology_y-1 ) set_domain_field_bc( BOUNDARY(0, 1,0), pec_fields );
@@ -498,7 +505,8 @@ begin_initialization {
   if ( iz==topology_z-1 ) set_domain_field_bc( BOUNDARY(0,0, 1), pec_fields );
 
   // Absorbing particle boundaries
-  sim_log("Absorb particles on all boundaries"); 
+  sim_log("Absorb particles on all boundaries");
+  // Inner-r is the axis: particles crossing r=0 are remapped to theta+pi.
   if ( ix==0 )            set_domain_particle_bc( BOUNDARY(-1,0,0), reflect_particles );
   if ( ix==topology_x-1 ) set_domain_particle_bc( BOUNDARY( 1,0,0), absorb_particles );
   // if ( iy==0 )            set_domain_particle_bc( BOUNDARY(0,-1,0), absorb_particles );
@@ -630,10 +638,51 @@ begin_initialization {
 #define BZ ( BZC(zcoil1,rcoil,Icoil) +  BZC(zcoil2,rcoil,Icoil) )
 
   sim_log( "Loading fields" );
-  set_region_field( everywhere, 0, 0, 0,       // Electric field
+  set_region_field_cart( everywhere, 0, 0, 0,       // Electric field
   		                0, 0 ,0 );    // Magnetic field
 
-  set_region_bext( everywhere,  BX, BY , BZ + BZ0 );    // External Magnetic field
+  // External B: project the physical Cartesian coil field onto the per-cell
+  // orthonormal basis (e_1,e_2,e_3), then divide by the scale factors to store
+  // true CONTRAVARIANT components cb0_i = (B_cart . e_i)/h_i. This matches the
+  // set_region_bext_cart / dump / solver contravariant convention, but is
+  // correct at every theta (the macro treats Cartesian x as radial, only valid
+  // at theta=0; with ny>1 that is wrong off-axis). Done deck-local so the shared
+  // macro (used by pcai/whistler) is untouched.
+  {
+    const double _c = grid->cvac;
+    for( int _k=0; _k<grid->nz+2; _k++ ) {
+    for( int _j=0; _j<grid->ny+2; _j++ ) {
+    for( int _i=0; _i<grid->nx+2; _i++ ) {
+      double x, y, z;
+      int _voxel = VOXEL(_i, _j, _k, grid->nx, grid->ny, grid->nz);
+      grid->geom().local_to_global_cart(_voxel, 0.0, 0.0, 0.0, x, y, z);
+      // Physical Cartesian external field at this cell center
+      double bx = ( BX );
+      double by = ( BY );
+      double bz = ( BZ+BZ0 );
+      // Per-cell orthonormal basis vectors (Cartesian components) and scale factors
+      int _m = GRID_TO_MESH(_i, _j, _k, grid->nx, grid->ny, grid->nz);
+      double e1x = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_1_u);
+      double e1y = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_1_v);
+      double e1z = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_1_w);
+      double e2x = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_2_u);
+      double e2y = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_2_v);
+      double e2z = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_2_w);
+      double e3x = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_3_u);
+      double e3y = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_3_v);
+      double e3z = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::e_3_w);
+      double h1 = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::h_1);
+      double h2 = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::h_2);
+      double h3 = grid->k_curvilinear_mesh_h(_m, curv_mesh_var::h_3);
+      if(h1 == 0.0) h1 = 1.0;
+      if(h2 == 0.0) h2 = 1.0;  // defensive on axis
+      if(h3 == 0.0) h3 = 1.0;
+      // Store contravariant components (physical projection / h_i)
+      field(_i,_j,_k).cbx0 = _c*( bx*e1x + by*e1y + bz*e1z )/h1;
+      field(_i,_j,_k).cby0 = _c*( bx*e2x + by*e2y + bz*e2z )/h2;
+      field(_i,_j,_k).cbz0 = _c*( bx*e3x + by*e3y + bz*e3z )/h3;
+    }}}
+  }
   
 #else
   double Lcoil1 = 0.6*Lz;
@@ -660,9 +709,9 @@ begin_initialization {
 
 
   sim_log( "Loading fields" );
-  set_region_field( everywhere, 0, 0, 0,    // Electric field
+  set_region_field_cart( everywhere, 0, 0, 0,    // Electric field
   		                          0, 0, 0 );  // Magnetic field
-  set_region_bext( everywhere, BX, 0, BZ ); // External Magnetic field
+  set_region_bext_cart( everywhere, 0, 0, BZ0 ); // External Magnetic field
 #endif 
 
   // --------------------------------------------------------------------------
@@ -689,13 +738,13 @@ begin_initialization {
   double m_He4 = 4.002603 * mi;
 
   species_t *D_seed = define_species( "D_seed", ec, m_D, nmax, nmovers, sort_interval, sort_method );
-  species_t *D_beam = define_species( "D_beam", ec, m_D, nmax, nmovers, sort_interval, sort_method );
+  species_t *D_beam = define_species( "D_beam", ec, m_D, 2, 2, sort_interval, sort_method );
 
-  species_t *T   = define_species("Tritium",   ec, m_T,   nmax_prod, nmovers_prod, sort_interval, sort_method);
-  species_t *n   = define_species("Neutron",   ec, m_n,   nmax_prod, nmovers_prod, sort_interval, sort_method);
-  species_t *p   = define_species("Proton",    ec, m_p,   nmax_prod, nmovers_prod, sort_interval, sort_method);
-  species_t *He3 = define_species("Helium3",   ec, m_He3, nmax_prod, nmovers_prod, sort_interval, sort_method);
-  species_t *He4 = define_species("Helium4",   ec, m_He4, nmax_prod, nmovers_prod, sort_interval, sort_method);
+  species_t *T   = define_species("Tritium",   ec, m_T,   2, 2, sort_interval, sort_method);
+  species_t *n   = define_species("Neutron",   ec, m_n,   2, 2, sort_interval, sort_method);
+  species_t *p   = define_species("Proton",    ec, m_p,   2, 2, sort_interval, sort_method);
+  species_t *He3 = define_species("Helium3",   ec, m_He3, 2, 2, sort_interval, sort_method);
+  species_t *He4 = define_species("Helium4",   ec, m_He4, 2, 2, sort_interval, sort_method);
 
   // Create electron fluid species (use in electron impact ionization)
   float me = 1.0/1837.0;
@@ -905,7 +954,7 @@ begin_initialization {
       uy = normal( rng(0), 0, vth_D );
       uz = normal( rng(0), 0, vth_D );
 
-      inject_particle( D_seed, x, y, z, ux, uy, uz, w_D, 0, 0, D_seed->q );
+      inject_particle( D_seed, x, y, z, ux, uy, uz, w_D*x, 0, 0, D_seed->q );
     }
   }
   sim_log( "Finished loading particles" );

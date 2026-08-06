@@ -25,11 +25,15 @@ enum grid_enums {
   symmetric_fields      = -2, // B_tang = 0, B_norm = 0
   pmc_fields            = -3, // B_tang = 0, B_norm floats
   absorb_fields         = -4, // Gamma = 0
+  cylindrical_axis_fields = -5, // R=0 axis: R- and theta- vector components flip
+                                // sign across the boundary (theta -> theta+pi),
+                                // z-components and scalars unchanged. For the
+                                // hybrid solver's cylindrical inner (R) boundary.
 
   // Phase 3 boundary conditions
   reflect_particles = -1, // Cell boundary should reflect particles
   absorb_particles  = -2,  // Cell boundary should absorb particles
-  tunnel_particles     = -3
+  cylindrical_axis_particles     = -3
 
 
   // Symmetry in the field boundary conditions refers to image charge
@@ -853,9 +857,21 @@ void compute_reciprocal_basis(
         
         float r_relative = 0.5 * dx * gdx;
         float theta_relative = 0.5 * dy * gdy;
-        
+
         float r_phys = r + r_relative;
         float theta_phys = theta + theta_relative;
+
+        // Axis (r=0) regularization. grad_eta ~ 1/r_phys and inv_jac ~ 1/r_phys
+        // both diverge at the axis, so a particle whose sub-cell r_phys lands near
+        // the inner face of the first cell (r_phys->0) would dump a huge
+        // inv_jac-weighted current/charge and blow up theta. Reflect across the
+        // axis (r->-r, theta->theta+pi), matching init_cylindrical_grid, then
+        // floor |r| to half a cell (the first cell-center radius) so 1/r_phys is
+        // bounded by 2/gdx -- a half-cell buffer that regularizes only the
+        // innermost half-cell and leaves larger r untouched.
+        if (r_phys < 0.0f) { r_phys = -r_phys; theta_phys += (float)M_PI; }
+        const float r_axis_min = 0.5f * gdx;
+        if (r_phys < r_axis_min) r_phys = r_axis_min;
 
         float cos_th = cosf(theta_phys);
         float sin_th = sinf(theta_phys);
