@@ -2,23 +2,12 @@
 //
 //   Plasma sphere - spherical-grid verification deck
 //
-//   A cold-ion plasma sphere on a spherical (r, theta, phi) grid with NO
+//   A cold-ion plasma sphere on a spherical (r, theta, phi) grid with n
 //   external E or B fields. The ions are loaded with a small radial density
 //   perturbation on top of a uniform background. With no confining fields the
 //   only restoring force is the electron-pressure gradient in Ohm's law, so
 //   the perturbation should oscillate (a spherical ion-acoustic breathing
 //   mode) rather than grow or run away.
-//
-//   Purpose: exercise the spherical curvilinear machinery end to end --
-//   metric/reciprocal basis, current deposit, hybrid field solve, and the
-//   spherical axis boundary conditions:
-//     * spherical_axis_fields / spherical_axis_particles  on the theta faces
-//       (polar axis, theta = 0 and pi)
-//     * spherical_center_fields / spherical_center_particles on the inner-r
-//       face (the r = 0 center)
-//
-//   Postprocess with translate_faster.f90 + plots_plasma_sphere.py, mirroring
-//   examples/mirror/.
 //
 //////////////////////////////////////////////////////////////////////////////
 
@@ -47,10 +36,6 @@ begin_globals {
 };
 
 begin_initialization {
-
-  // --------------------------------------------------------------------------
-  // Natural hybrid-PIC units
-  // --------------------------------------------------------------------------
   double ec   = 1.0;  // Charge normalization
   double mi   = 1.0;  // Mass normalization
   double mu0  = 1.0;  // Magnetic constant
@@ -61,9 +46,6 @@ begin_initialization {
   double wci = ec*b0/mi;           // Cyclotron freq.
   double di  = v_A/wci;            // Ion skin-depth
 
-  // --------------------------------------------------------------------------
-  // Model parameters
-  // --------------------------------------------------------------------------
   double Ti    = 1.0/3.0;    // Ion temperature
   double gamma = 5.0/3.0;    // Electron adiabatic index
   double c_s   = 1.0;        // Electron sound speed
@@ -72,14 +54,14 @@ begin_initialization {
 
   double pert   = 0.05;      // Fractional size of the density perturbation
   double eta      = 0.0;     // Resistivity
-  double hypereta = 1e-3;    // Hyper-resistivity (grid-scale dissipation)
+  double hypereta = 1e-5;    // Hyper-resistivity: raised 1e-2->1e-1 to test grid-mode damping
 
-  // --------------------------------------------------------------------------
-  // Spherical domain (x=r, y=theta, z=phi)
-  // --------------------------------------------------------------------------
   double Rmax  = 8.0*di;     // Outer radius
-  double Rmin  = 0.0;        // Inner radius = center (r=0)
-  double rpk   = 0.35*Rmax;  // Radius of the perturbation shell
+  double Rmin  = 0.25*Rmax;  // Inner radius (off-center: keeps near-center cells
+                             // well-populated; a smaller Rmin makes the tiny
+                             // r^2 sin(theta) cells under-resolved -> grad(pe)
+                             // noise -> field blow-up).
+  double rpk   = 0.55*Rmax;  // Radius of the perturbation shell (inside [Rmin,Rmax])
   double rwid  = 0.15*Rmax;  // Width of the perturbation shell
 
   double nx = 32;            // radial cells
@@ -97,11 +79,12 @@ begin_initialization {
   // --------------------------------------------------------------------------
   // Particles
   // --------------------------------------------------------------------------
-  double nppc = 200;                 // macro-particles per cell
+  double nppc = 800;                 // macro-particles per cell (high, so the
+                                     // small near-center cells stay well-populated)
   double Ni   = nppc*nx*ny*nz;       // total macro ions
   Ni = trunc_granular(Ni, nproc());  // divisible by ranks
-  // Physical background ions occupy the sphere volume (4/3 pi Rmax^3)
-  double Vol  = (4.0/3.0)*M_PI*Rmax*Rmax*Rmax;
+  // Physical background ions occupy the spherical SHELL Rmin<r<Rmax.
+  double Vol  = (4.0/3.0)*M_PI*(Rmax*Rmax*Rmax - Rmin*Rmin*Rmin);
   double Np   = n0*Vol;
   double qi   = ec*Np/Ni;            // charge per macro ion (uniform-density weight)
 
@@ -117,7 +100,7 @@ begin_initialization {
   double quota_sec = quota*3600;
 
   int restart_interval    = 200000;
-  int energies_interval   = 20;
+  int energies_interval   = 1;
   int interval            = int(num_step/100);
   if (interval < 1) interval = 1;
   int fields_interval     = interval;
@@ -165,8 +148,8 @@ begin_initialization {
   grid->nsub = 10;   // field subcycles
   grid->nsm  = 2;    // moment smoothing passes
   grid->nsmb = 0;
-  grid->den_floor_ohm = 0.05;
-  grid->den_floor_pe  = 0.05;
+  grid->den_floor_ohm = 0.2;
+  grid->den_floor_pe  = 0.2;
 
   // Identify boundary domains
   int ix, iy, iz;
@@ -174,7 +157,6 @@ begin_initialization {
   iy = (int(rank()) / int(topology_x)) % int(topology_y);
   iz = int(rank()) / (int(topology_x)*int(topology_y));
 
-  // ***** Field boundary conditions *****
   // Inner-r face = the center r=0 (point singularity).
   if ( ix==0 )              set_domain_field_bc( BOUNDARY(-1,0,0), spherical_center_fields );
   // Outer-r face = physical wall.
@@ -184,31 +166,21 @@ begin_initialization {
   if ( iy==topology_y-1 )   set_domain_field_bc( BOUNDARY(0, 1,0), spherical_axis_fields );
   // Phi faces are periodic (default) - do nothing.
 
-  // ***** Particle boundary conditions *****
   if ( ix==0 )              set_domain_particle_bc( BOUNDARY(-1,0,0), spherical_center_particles );
   if ( ix==topology_x-1 )   set_domain_particle_bc( BOUNDARY( 1,0,0), reflect_particles );
   if ( iy==0 )              set_domain_particle_bc( BOUNDARY(0,-1,0), spherical_axis_particles );
   if ( iy==topology_y-1 )   set_domain_particle_bc( BOUNDARY(0, 1,0), spherical_axis_particles );
 
-  // --------------------------------------------------------------------------
-  // Materials and field array
-  // --------------------------------------------------------------------------
   sim_log("Setting up materials.");
   define_material( "vacuum", 1 );
   define_field_array(NULL);
 
-  // --------------------------------------------------------------------------
-  // Species
-  // --------------------------------------------------------------------------
   sim_log("Setting up species.");
   double nmax    = 1.5*Ni/nproc();
   double nmovers = 0.1*nmax;
   double sort_method = 1;
   species_t *ion = define_species("ion", ec, mi, nmax, nmovers, sort_interval, sort_method);
 
-  // --------------------------------------------------------------------------
-  // Log
-  // --------------------------------------------------------------------------
   sim_log( "***********************************************" );
   sim_log( "Plasma sphere (spherical-grid verification)" );
   sim_log( "Topology: " << topology_x << " " << topology_y << " " << topology_z );
@@ -239,14 +211,10 @@ begin_initialization {
     fp_info.close();
   }
 
-  // --------------------------------------------------------------------------
-  // Load fields (all zero) and electron temperature
-  // --------------------------------------------------------------------------
   sim_log( "Loading fields" );
   set_region_field( everywhere, 0, 0, 0, 0, 0, 0 );  // no E, no B
   set_region_te( everywhere, Te );
 
-  // --------------------------------------------------------------------------
   // Load particles
   //
   // Uniform density in the sphere with a radial shell perturbation:
@@ -255,7 +223,6 @@ begin_initialization {
   // injected coordinates in the grid's coordinate system. To get uniform
   // sampling in physical volume we sample r with the r^2 sin(theta) weight via
   // rejection against the perturbed profile.
-  // --------------------------------------------------------------------------
   sim_log( "Loading particles" );
 
   double nmax_prof = 1.0 + pert;      // peak of the profile envelope for rejection
@@ -266,7 +233,8 @@ begin_initialization {
     // is proportional to n(r): pdf(r,theta) ~ r^2 sin(theta) * n(r).
     double accept, trial;
     do {
-      r     = Rmax * cbrt( uniform(rng(0), 0.0, 1.0) );  // ~ r^2 in volume
+      // Volume-uniform radius within the shell [Rmin,Rmax]: r^3 uniform.
+      r     = cbrt( uniform(rng(0), Rmin*Rmin*Rmin, Rmax*Rmax*Rmax) );
       theta = acos( uniform(rng(0), -1.0, 1.0) );        // ~ sin(theta)
       double prof = 1.0 + pert*exp( -((r-rpk)/rwid)*((r-rpk)/rwid) );
       accept = prof / nmax_prof;
@@ -309,7 +277,7 @@ begin_initialization {
   global->hHdParams.stride_z = 1;
   global->outputParams.push_back(&global->hHdParams);
 
-  global->hHdParams.output_variables( current_density | charge_density | stress_tensor );
+  global->hHdParams.output_variables( allvars );  // dump ALL hydro vars: translate_faster expects the full hydro layout
   const uint32_t allfields(0xffffffff);
   global->fdParams.output_variables( allfields );
 

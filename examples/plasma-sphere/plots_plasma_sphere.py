@@ -1,117 +1,129 @@
 #!/usr/bin/env python3
-# Visualization for the plasma-sphere verification deck.
-#
-# Reads the (r, theta, phi) .gda fields produced by translate_faster.f90 (same
-# 3D layout as examples/mirror). Produces:
-#   1. A poloidal (r,theta) slice of ion density ni at a chosen phi and time.
-#   2. The radial density profile n(r) (theta,phi-averaged) at several times.
-#   3. A time series of the perturbation amplitude, to show it oscillates
-#      rather than growing/running away.
-#
-# Usage:  python3 plots_plasma_sphere.py [time_slice]
 
 import numpy as np
-import os
-import struct
-import sys
+import os, re, struct, sys
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-dir = "../../build/data/"
+build = "../../build"
+fdir  = build + "/fields"
+hdir  = build + "/hydro"
 
-# ----------------------------------------------------------------------------
-def loadinfo(d):
-    """Read grid dims and physical extents from data/info (written by translate)."""
-    with open(d + "info", "rb") as fd:
-        arr = struct.unpack("fIIIfffff", fd.read()[:36])
-    nr, nth, nz = arr[1], arr[2], arr[3]   # nx=r, ny=theta, nz=phi
-    rmax, thmax, phimax = arr[6], arr[7], arr[8]
-    print(f"Grid: nr={nr} ntheta={nth} nphi={nz} | rmax={rmax} thetamax={thmax} phimax={phimax}")
-    return nr, nth, nz, rmax, thmax, phimax
+BOILER = 23
+BLKHDR = 24
 
-def num_time_slices(d, q, nr, nth, nz):
-    return os.path.getsize(d + q + ".gda") // (nr * nth * nz * 4)
+def read_dims_from_info():
+    """nr,ntheta,nphi and physical extents from build/data/info if present,
+    else fall back to reading nc from a dump header."""
+    info = build + "/data/info"
+    if os.path.exists(info):
+        with open(info, "rb") as fd:
+            arr = struct.unpack("fIIIfffff", fd.read()[:36])
+        return arr[1], arr[2], arr[3], arr[6], arr[7], arr[8]
+    return None
 
-def load_slice(d, q, tslice, nr, nth, nz, iphi=0):
-    """One phi-layer of a time slice. On-disk order is Fortran (r,theta,phi),
-    i.e. C-shape (nphi, ntheta, nr). Returns (r, theta) array."""
-    with open(d + q + ".gda", "rb") as fd:
-        fd.seek(4 * tslice * nr * nth * nz, 1)
-        a = np.fromfile(fd, dtype=np.float32, count=nr * nth * nz)
-    a = np.reshape(a, (nz, nth, nr))   # (phi, theta, r)
-    a = a[iphi, :, :]                  # (theta, r)
-    return np.transpose(a)             # (r, theta)
+def read_nc(path):
+    """Return GHOSTED cell counts (nx+2,ny+2,nz+2). The dump header stores the
+    interior (nx,ny,nz); on-disk arrays include one ghost layer per side, so the
+    array dims are nx+2 etc. (Verified vs file size: only nc+2 gives integer
+    variable count.)"""
+    with open(path, "rb") as fd:
+        fd.seek(BOILER + 4 + 4 + 4)   # skip v0,itype,ndim
+        nx, ny, nz = struct.unpack("3i", fd.read(12))
+    return nx + 2, ny + 2, nz + 2
 
-def radial_profile(d, q, tslice, nr, nth, nz):
-    """theta- and phi-averaged radial profile n(r)."""
-    with open(d + q + ".gda", "rb") as fd:
-        fd.seek(4 * tslice * nr * nth * nz, 1)
-        a = np.fromfile(fd, dtype=np.float32, count=nr * nth * nz)
-    a = np.reshape(a, (nz, nth, nr))   # (phi, theta, r)
-    return a.mean(axis=(0, 1))         # average over phi, theta -> (r,)
+def read_var(path, ivar, nc):
+    """Read variable index ivar (0-based) as a (ncz,ncy,ncx) array."""
+    ncx, ncy, ncz = nc
+    ncell = ncx * ncy * ncz
+    with open(path, "rb") as fd:
+        fd.seek(BOILER + BLKHDR + ivar * ncell * 4)
+        a = np.fromfile(fd, dtype=np.float32, count=ncell)
+    return a.reshape(ncz, ncy, ncx)
 
-# ----------------------------------------------------------------------------
-nr, nth, nz, rmax, thmax, phimax = loadinfo(dir)
-nt = num_time_slices(dir, "ni", nr, nth, nz)
-print(f"Number of time slices: {nt}")
+def time_indices(d):
+    """Sorted list of dump time indices from directory names T.<n>."""
+    ts = []
+    for name in os.listdir(d):
+        m = re.match(r"T\.(\d+)$", name)
+        if m:
+            ts.append(int(m.group(1)))
+    return sorted(ts)
 
-tslice = nt - 1
-if len(sys.argv) > 1:
-    tslice = int(sys.argv[1])
+IVAR_NE = 3
 
-rv  = np.linspace(0.0, rmax, nr)
+ts = time_indices(hdir)
+if not ts:
+    print("No hydro dumps found under", hdir); sys.exit(1)
+print(f"Found {len(ts)} time slices: T.{ts[0]} .. T.{ts[-1]}")
+
+# Grid dims from the first hydro dump header
+nc = read_nc(f"{hdir}/T.{ts[0]}/Hhydro.{ts[0]}.0")
+ncx, ncy, ncz = nc
+nr, nth, nphi = ncx - 2, ncy - 2, ncz - 2
+print(f"Grid (incl ghosts) nc = {nc} -> nr={nr} ntheta={nth} nphi={nphi}")
+
+info = read_dims_from_info()
+if info:
+    _, _, _, Rmax, thmax, phimax = info
+else:
+    Rmax, thmax, phimax = float(nr), np.pi, 2*np.pi
+rv  = np.linspace(0.0, Rmax, nr)
 thv = np.linspace(0.0, thmax, nth)
 
-# ============================================================
-# FIGURE 1: poloidal (r,theta) density slice at phi=0
-# ============================================================
-ni = load_slice(dir, "ni", tslice, nr, nth, nz, iphi=0)  # (r, theta)
-# Map (r,theta) -> Cartesian (R_cyl, Z) for a poloidal view: R=r sin th, Z=r cos th
+def hydro_ne(tidx):
+    """Interior density (r,theta,phi) for a time index."""
+    path = f"{hdir}/T.{tidx}/Hhydro.{tidx}.0"
+    ne = read_var(path, IVAR_NE, nc) 
+    return ne[1:1+nphi, 1:1+nth, 1:1+nr]
+
+def radial_profile(tidx):
+    ne = hydro_ne(tidx)
+    return ne.mean(axis=(0, 1))
+
+# time index to display
+tsel = ts[-1]
+if len(sys.argv) > 1:
+    want = int(sys.argv[1])
+    tsel = min(ts, key=lambda t: abs(t - want))
+
+ne = hydro_ne(tsel)              # (nphi, nth, nr)
+ni_rt = ne[0, :, :].T            # phi=0 layer -> (nr, nth)
 R, TH = np.meshgrid(rv, thv, indexing="ij")
 Xp = R * np.sin(TH)
 Zp = R * np.cos(TH)
 
 fig1, ax1 = plt.subplots(figsize=(6, 8))
-im1 = ax1.pcolormesh(Xp, Zp, ni, cmap="Spectral_r", shading="auto")
+im1 = ax1.pcolormesh(Xp, Zp, ni_rt, cmap="Spectral_r", shading="gouraud")
 ax1.set_xlabel("r sin(theta)")
 ax1.set_ylabel("r cos(theta)")
-ax1.set_title(f"Ion density ni  (phi=0 slice, t-slice {tslice})")
+ax1.set_title(f"Ion density  (phi=0, T.{tsel})")
 ax1.set_aspect("equal")
 fig1.colorbar(im1, ax=ax1, label="ni", shrink=0.6)
 fig1.tight_layout()
 fig1.savefig("plot_density_poloidal.png", dpi=200)
 print("Saved plot_density_poloidal.png")
 
-# ============================================================
-# FIGURE 2: radial profile n(r) at several times
-# ============================================================
 fig2, ax2 = plt.subplots(figsize=(8, 5))
-sample_ts = sorted(set(int(f) for f in np.linspace(0, nt - 1, min(nt, 6))))
-for ts in sample_ts:
-    prof = radial_profile(dir, "ni", ts, nr, nth, nz)
-    ax2.plot(rv, prof, label=f"t-slice {ts}")
-ax2.set_xlabel("r")
-ax2.set_ylabel("<ni>  (theta,phi averaged)")
+sample = [ts[i] for i in sorted(set(int(f) for f in np.linspace(0, len(ts)-1, min(len(ts), 6))))]
+for t in sample:
+    ax2.plot(rv, radial_profile(t), label=f"T.{t}")
+ax2.set_xlabel("r"); ax2.set_ylabel("<ni> (theta,phi avg)")
 ax2.set_title("Radial density profile vs time")
 ax2.legend(fontsize=8)
 fig2.tight_layout()
 fig2.savefig("plot_radial_profile.png", dpi=200)
 print("Saved plot_radial_profile.png")
 
-# ============================================================
-# FIGURE 3: perturbation amplitude time series (oscillation check)
-# ============================================================
-# Amplitude = max deviation of the radial profile from its time-mean baseline.
-profiles = np.array([radial_profile(dir, "ni", ts, nr, nth, nz) for ts in range(nt)])
+profiles = np.array([radial_profile(t) for t in ts])
 baseline = profiles.mean(axis=0)
-amp = np.sqrt(((profiles - baseline) ** 2).mean(axis=1))  # RMS radial perturbation
-tvec = np.arange(nt)
+amp = np.sqrt(((profiles - baseline) ** 2).mean(axis=1))
+tphys = np.array(ts)
 
 fig3, ax3 = plt.subplots(figsize=(8, 4))
-ax3.plot(tvec, amp, "-o", ms=3)
-ax3.set_xlabel("time slice")
-ax3.set_ylabel("RMS density perturbation")
+ax3.plot(tphys, amp, "-o", ms=3)
+ax3.set_xlabel("time step"); ax3.set_ylabel("RMS density perturbation")
 ax3.set_title("Perturbation amplitude vs time (should oscillate / stay bounded)")
 fig3.tight_layout()
 fig3.savefig("plot_amplitude_timeseries.png", dpi=200)

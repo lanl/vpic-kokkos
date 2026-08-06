@@ -559,13 +559,20 @@ typedef struct grid {
 
       // Physical (r,theta,phi) from local origin and local mesh index (i-ghost).
       double r_i = x0 + (i - ghost_layers_per_side + 0.5) * dr;
-      double theta_j = y1 + (j - ghost_layers_per_side + 0.5) * dtheta;
+      double theta_j = y0 + (j - ghost_layers_per_side + 0.5) * dtheta;
       double phi_k = z0 + (k - ghost_layers_per_side + 0.5) * dphi;
 
       if (r_i < 0.0) {
           r_i = -r_i;
           theta_j = theta_j + M_PI;
       }
+      // Polar-axis reflection for theta ghost cells: crossing theta=0 or theta=pi
+      // maps (theta,phi)->(-theta or 2pi-theta, phi+pi). This keeps sin(theta)>=0
+      // so the stored h_3 = r sin(theta) and jac = r^2 sin(theta) are non-negative
+      // in the ghosts (a negative jac there flips the sign of the field-solve
+      // curl/inv_J and drives an instability).
+      if (theta_j < 0.0)   { theta_j = -theta_j;            phi_k += M_PI; }
+      if (theta_j > M_PI)  { theta_j = 2.0*M_PI - theta_j;  phi_k += M_PI; }
 
       double cos_theta = Kokkos::cos(theta_j);
       double sin_theta = Kokkos::sin(theta_j);
@@ -903,21 +910,27 @@ void compute_reciprocal_basis(
         geom.local_to_global_cart(ii, dx, dy, dz, x_cart, y_cart, z_cart);
 
         float r_phys = sqrtf(x_cart*x_cart + y_cart*y_cart + z_cart*z_cart);
-        float theta_phys = acosf(z_cart / r_phys);
+
+        // Axis regularization. The reciprocal basis has 1/r_phys (center) and
+        // 1/(r_phys*sin_theta) (polar axis) factors that diverge at the r=0
+        // center and the theta=0,pi poles. Floor r_phys to half a cell FIRST --
+        // before it is used in acosf below -- so that at r=0 we do not evaluate
+        // acosf(z/0)=acosf(0/0)=NaN, and clamp the acosf argument into [-1,1] to
+        // guard against roundoff pushing it slightly out of domain.
+        const float r_axis_min = 0.5f * gdx;
+        if (r_phys < r_axis_min) r_phys = r_axis_min;
+
+        float cos_arg = z_cart / r_phys;
+        cos_arg = fmaxf(-1.0f, fminf(1.0f, cos_arg));
+        float theta_phys = acosf(cos_arg);
         float phi_phys = atan2f(y_cart, x_cart);
         float sin_theta = sinf(theta_phys);
         float cos_theta = cosf(theta_phys);
         float sin_phi = sinf(phi_phys);
         float cos_phi = cosf(phi_phys);
 
-        // Axis regularization. The reciprocal basis has 1/r_phys (center) and
-        // 1/(r_phys*sin_theta) (polar axis) factors that diverge at the r=0
-        // center and the theta=0,pi poles. Floor both to half a cell so a
-        // particle whose sub-cell position reaches the center/pole does not
-        // blow up (analogous to the cylindrical r_phys floor).
-        const float r_axis_min = 0.5f * gdx;
-        if (r_phys < r_axis_min) r_phys = r_axis_min;
-        const float sin_theta_min = 0.5f * gdy; // gdy = dtheta; floor |sin| near poles
+        // Floor |sin(theta)| near the poles so the 1/(r sin theta) terms stay finite.
+        const float sin_theta_min = 0.5f * gdy; // gdy = dtheta
         float sin_theta_reg = (fabsf(sin_theta) < sin_theta_min)
                             ? (sin_theta < 0.0f ? -sin_theta_min : sin_theta_min)
                             : sin_theta;
@@ -931,7 +944,7 @@ void compute_reciprocal_basis(
         grad_mu_x = (2.0f / gdz) * (-sin_phi) / (r_phys * sin_theta_reg);
         grad_mu_y = (2.0f / gdz) * cos_phi / (r_phys * sin_theta_reg);
         grad_mu_z = 0.0f;
-        jac = r_phys * r_phys * sin_theta * gdx * gdy * gdz / 8.0f;
+        jac = r_phys * r_phys * sin_theta_reg * gdx * gdy * gdz / 8.0f;
 
     } else if (geom.type == grid_type::STRETCHED_CARTESIAN) {
         // For stretched Cartesian, basis vectors remain Cartesian-aligned,

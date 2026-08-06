@@ -14,8 +14,10 @@ typedef struct pipeline_args {
 #define INIT_STENCIL()							\
   size_t f0_index  = VOXEL(x,   y,   z,    nx,ny,nz);			\
   float  rho = half*( (one-hstep)*( F(0,rhof) + F(0,rhofold) ) + hstep*( three*F(0,rhof) - F(0,rhofold)) ) ; \
-  
-  //rho = (rho > den_floor_pe) ? rho : den_floor_pe;
+  /* Floor the density BEFORE the pow() below. Without this, empty/edge cells */ \
+  /* with rho<=0 give pow(rho/eos_den, gamma)=NaN (gamma non-integer), which  */ \
+  /* poisons pe -> E -> the whole field. */                                     \
+  rho = (rho > den_floor_pe) ? rho : den_floor_pe;
 
 
 void
@@ -32,7 +34,7 @@ hyb_epress( field_array_t * RESTRICT fa,
   const grid_t                 *              g = args->g;
   const int nx = g->nx, ny = g->ny, nz = g->nz;
 
-  //const float den_floor_pe = g->den_floor_pe;
+  const float den_floor_pe = g->den_floor_pe;
 
   const float hstep = frac;
   const float half = 1./2., one = 1., three = 3.;
