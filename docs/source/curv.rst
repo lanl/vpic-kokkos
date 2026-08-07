@@ -142,7 +142,7 @@ One caveat:
 
 Axis Boundary Conditions
 ================
-Curvilinear grids have a coordinate singularity at the axis, which is a geometric artifact rather than a physical wall. VPIC provides matching pairs of field and particle boundary conditions that reflect quantities across the axis for the hybrid solver.
+VPIC provides field and particle boundary conditions that reflect quantities across the axis for the hybrid solver.
 
 **Cylindrical axis (r=0).** The inner radial boundary of a cylindrical grid is the axis. Crossing it advances the azimuthal angle by pi (theta -> theta + pi), which flips the sign of the radial and azimuthal unit vectors while leaving z unchanged. Set the pair on the inner-r face of the domain (the boundary at x = x0, i.e. `BOUNDARY(-1,0,0)`):
   .. code-block:: c++

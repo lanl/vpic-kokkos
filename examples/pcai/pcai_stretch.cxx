@@ -155,12 +155,7 @@ begin_initialization {
   //  grid->te = Te;
   //  grid->den = 1.0;
   grid->eta = eta;
-double beta_x = 2.0;
-double beta_y = 0.0;
-double beta_z = 0.0;
-  grid->init_stretched_cartesian_grid(beta_x, 0, 0);
-  
-  // grid->init_cartesian_grid();
+  grid->init_stretched_cartesian_grid(2.0, 0, 0);
   //  grid->hypereta = hypereta;
   //  grid->gamma = gamma;
 
@@ -262,134 +257,77 @@ double beta_z = 0.0;
 sim_log( "Loading fields" );
 
 // Note: everywhere is a region that encompasses the entire simulation                                                                                                                   
-// In general, regions are specied as logical equations (i.e. x>0 && x+y<2)
-// set_region_field(everywhere, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-// for (int v = 0; v < grid->nv; v++) {
-//   field(v).cbx = 1.0;
-// }
-set_region_field_cart(everywhere, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+// In general, regions are specied as logical equations (i.e. x>0 && x+y<2) 
+for (int v = 0; v < grid->nv; v++) {
+  field(v).cbx = 1.0;
+}
 set_region_te( everywhere, Te);
 
  // LOAD PARTICLES
 // LOAD PARTICLES
-// LOAD PARTICLES
 sim_log( "Loading particles" );
 
+// Find maximum Jacobian for rejection sampling
+double jac_max = 0.0;
+for (int v = 0; v < grid->nv; v++) {
+  int mesh_idx = VOXEL_TO_MESH(v, grid->nx, grid->ny, grid->nz);
+  double jac = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::jac);
+  if (jac > jac_max) jac_max = jac;
+}
+
+// Do a fast load of the particles with Jacobian weighting
 int rng_seed = 1;
 seed_entropy( rank() );
+double xmin = grid->x0, xmax = grid->x0 + (grid->dx)*(grid->nx);
+double ymin = grid->y0, ymax = grid->y0 + (grid->dy)*(grid->ny);
+double zmin = grid->z0, zmax = grid->z0 + (grid->dz)*(grid->nz);
 
-// Local contravariant bounds for this rank
-double xmin = grid->x0;
-double xmax = grid->x0 + grid->dx * grid->nx;
-double ymin = grid->y0;
-double ymax = grid->y0 + grid->dy * grid->ny;
-double zmin = grid->z0;
-double zmax = grid->z0 + grid->dz * grid->nz;
-
-// For stretched Cartesian, compute this rank's Cartesian volume by evaluating
-// the stretch map at the computational domain boundaries
-auto stretch_map = [](double xi_norm, double beta) -> double {
-  // xi_norm in [0,1] -> stretched coordinate in [-1,1]
-  if (beta > 1e-10) {
-    return tanh(beta * (xi_norm - 0.5)) / tanh(beta * 0.5);
-  } else {
-    return 2.0 * xi_norm - 1.0;
-  }
-};
-
-// Compute global computational coordinates for this rank's boundaries
-// This rank owns global cells [rank_i*nx, (rank_i+1)*nx) in x, etc.
-int rank_i = world_rank % int(topology_x);
-int rank_j = (world_rank / int(topology_x)) % int(topology_y);
-int rank_k = world_rank / (int(topology_x) * int(topology_y));
-
-double xi_min = double(rank_i * nx) / (topology_x * nx);  // = rank_i / topology_x
-double xi_max = double((rank_i + 1) * nx) / (topology_x * nx);  // = (rank_i+1) / topology_x
-double eta_min = double(rank_j * ny) / (topology_y * ny);
-double eta_max = double((rank_j + 1) * ny) / (topology_y * ny);
-double zeta_min = double(rank_k * nz) / (topology_z * nz);
-double zeta_max = double((rank_k + 1) * nz) / (topology_z * nz);
-
-// Map to stretched coordinates [-1,1]
-double x_stretched_min = stretch_map(xi_min, beta_x);
-double x_stretched_max = stretch_map(xi_max, beta_x);
-double y_stretched_min = stretch_map(eta_min, beta_y);
-double y_stretched_max = stretch_map(eta_max, beta_y);
-double z_stretched_min = stretch_map(zeta_min, beta_z);
-double z_stretched_max = stretch_map(zeta_max, beta_z);
-
-// Map to physical Cartesian coordinates
-double cart_xmin = -0.5*Lx + Lx * (x_stretched_min + 1.0) * 0.5;
-double cart_xmax = -0.5*Lx + Lx * (x_stretched_max + 1.0) * 0.5;
-double cart_ymin = -0.5*Ly + Ly * (y_stretched_min + 1.0) * 0.5;
-double cart_ymax = -0.5*Ly + Ly * (y_stretched_max + 1.0) * 0.5;
-double cart_zmin = -0.5*Lz + Lz * (z_stretched_min + 1.0) * 0.5;
-double cart_zmax = -0.5*Lz + Lz * (z_stretched_max + 1.0) * 0.5;
-
-double cart_volume = (cart_xmax - cart_xmin) * (cart_ymax - cart_ymin) * (cart_zmax - cart_zmin);
-double total_cart_volume = Lx * Ly * Lz;
-int target_particles = (int)((cart_volume / total_cart_volume) * Ni + 0.5);
-
-sim_log("Rank " << rank() << " Cartesian bounds: x=[" << cart_xmin << "," << cart_xmax << "], "
-        << "y=[" << cart_ymin << "," << cart_ymax << "], "
-        << "z=[" << cart_zmin << "," << cart_zmax << "]");
-sim_log("Rank " << rank() << " Cartesian volume fraction: " << cart_volume/total_cart_volume);
-sim_log("Target particles for rank " << rank() << ": " << target_particles);
+sim_log( "-> Seeding particles with Jacobian weighting" );
 
 int particles_injected = 0;
-int max_attempts = 10 * target_particles;  // Safety limit
-int attempts = 0;
+int target_particles = Ni/nproc();
 
-// Use acceptance-rejection with Jacobian weighting
-while (particles_injected < target_particles && attempts < max_attempts) {
-  attempts++;
+// Use rejection sampling - may need to generate more candidates than target
+while (particles_injected < target_particles) {
+  double x = uniform(rng(0), xmin, xmax);
+  double y = uniform(rng(0), ymin, ymax);
+  double z = uniform(rng(0), zmin, zmax);
+
+  // Find which voxel this particle is in
+  int i = (int)((x - grid->x0) / grid->dx) + 1;  // +1 for ghost cells
+  int j = (int)((y - grid->y0) / grid->dy) + 1;
+  int k = (int)((z - grid->z0) / grid->dz) + 1;
   
-  // Generate uniform position in LOCAL contravariant space
-  double x_contra = uniform(rng(0), xmin, xmax);
-  double y_contra = uniform(rng(0), ymin, ymax);
-  double z_contra = uniform(rng(0), zmin, zmax);
+  // Clamp to valid range
+  if (i < 1) i = 1;
+  if (i > grid->nx) i = grid->nx;
+  if (j < 1) j = 1;
+  if (j > grid->ny) j = grid->ny;
+  if (k < 1) k = 1;
+  if (k > grid->nz) k = grid->nz;
   
-  // Find which voxel this is in (voxels are 1:nx for non-ghost)
-  // Voxel i contains contravariant coordinates [x0+(i-1)*dx, x0+i*dx)
-  int i = (int)((x_contra - grid->x0) / grid->dx) + 1;
-  int j = (int)((y_contra - grid->y0) / grid->dy) + 1;
-  int k = (int)((z_contra - grid->z0) / grid->dz) + 1;
+  int voxel = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+  int mesh_idx = VOXEL_TO_MESH(voxel, grid->nx, grid->ny, grid->nz);
   
-  // Bounds check: must be in non-ghost voxels [1, nx]
-  if(i < 1 || i > grid->nx || j < 1 || j > grid->ny || k < 1 || k > grid->nz) {
-    continue;
+  // Get local Jacobian
+  double jac_local = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::jac);
+  
+  // Acceptance probability proportional to Jacobian
+  double accept_prob = jac_local / jac_max;
+  
+  if (uniform(rng(0), 0.0, 1.0) < accept_prob) {
+    // Accept this particle
+    double ux = normal(rng(0), 0, vthipar);
+    double uy = normal(rng(0), 0, vthiperp);
+    double uz = normal(rng(0), 0, vthiperp);
+    
+    inject_particle(ion, x, y, z, ux, uy, uz, qi, 0, 0);
+    particles_injected++;
   }
-  
-  // Get mesh index using GRID_TO_MESH macro (i,j,k) -> mesh_idx
-  int mesh_idx = GRID_TO_MESH(i, j, k, grid->nx, grid->ny, grid->nz);
-  
-  // Get the Jacobian (volume element) at this cell center
-  double jac = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::jac);
-  
-  // Accept with probability proportional to 1/Jacobian
-  // Smaller Jacobian = compressed cell = needs fewer particles for uniform Cartesian density
-  double mean_jac = (Lx * Ly * Lz) / (nx * ny * nz);
-  double accept_prob = mean_jac / jac;
-  
-  if(uniform(rng(0), 0.0, 1.0) > accept_prob) continue;
-  
-  // Generate velocity
-  double ux = normal(rng(0), 0, vthipar);
-  double uy = normal(rng(0), 0, vthiperp);
-  double uz = normal(rng(0), 0, vthiperp);
-  
-  // Inject particle at contravariant coordinates
-  inject_particle(ion, x_contra, y_contra, z_contra, ux, uy, uz, qi, 0, 0);
-  particles_injected++;
 }
 
-if (particles_injected < target_particles) {
-  sim_log("WARNING on rank " << rank() << ": Only injected " << particles_injected 
-          << " of " << target_particles << " particles after " << attempts << " attempts");
-}
-
-sim_log("Rank " << rank() << " loaded " << particles_injected 
-        << " particles uniformly in Cartesian space");
+sim_log( "Finished loading particles" );
+sim_log( "Particles per proc: " << particles_injected );
 
   /*--------------------------------------------------------------------------
    * New dump definition

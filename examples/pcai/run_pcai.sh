@@ -1,4 +1,4 @@
-#module load openmpi gcc/12.2.0
+module load openmpi gcc/11.2.0
 export OMP_PROC_BIND=true
 cd ../../build
 rm -rf hydro
