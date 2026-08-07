@@ -13,6 +13,7 @@ This documentation is very much a work in progress.  Most documentation is still
 
    intro
    comp
+   curv
    run
    porting
    tracers

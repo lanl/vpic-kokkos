@@ -19,7 +19,22 @@ The following code initializes a cylindrical mesh with periodic boundaries. Firs
 
 After calling `init_cylindrical_grid`, VPIC will interpret the first argument of most functions as the radial coordinate, the second argument as the azimuthal angle, and the third argument as the axial coordinate. The user can then define fields and inject particles in this cylindrical system. The only exception are the velocity components in `inject_particle`, which are taken to be in cartesian coordinates.
 
-The user can also define their own arbitrary mesh system by providing the metric factors for their system. The following example is provided for a spherical grid (which is already implemented as a helper function, but is redefined here for illustration):
+The user can also define their own arbitrary mesh system by providing the metric factors for their system.
+
+#. Allocate ``k_curvilinear_mesh_d`` / ``_h`` sized to
+   ``(nx+4)(ny+4)(nz+4)``.
+#. For every cell (including both ghost layers), fill the scale factors
+   (``h_1,h_2,h_3``), the Jacobian (``jac``), the three basis vectors in
+   Cartesian components (``e_1_u`` ... ``e_3_w``), and the Cartesian node
+   position (``xg,yg,zg``).
+#. Set ``type``. If it is not one of the analytic types, leave it as
+   ``GENERAL`` so :cpp:func:`compute_reciprocal_basis` and
+   :cpp:func:`grid_geom_t::local_to_global_cart` fall back to the B-spline
+   path, which reconstructs the reciprocal basis and Jacobian directly from
+   the stored ``xg,yg,zg`` with no analytic inverse required.
+#. ``deep_copy`` the host mesh to the device.
+
+The following example is provided for a spherical grid (which is already implemented as a helper function, but is redefined here for illustration):
   .. code-block:: c++
 
     void init_spherical_grid()
@@ -137,8 +152,6 @@ The field advance solver will then automatically account for your desired mesh s
 One caveat:
   * Internally, VPIC stores E in covariant logical components, B in contravariant logical components, and current in contravariant logical coordinates. This means they are not physical fields but rather unscaled by the scale factors of the cell they are in. If a user tries directly accessing any of these during runtime without a helper function they will encounter unphysical quantities. To convert these to physical quantities in their coordinate systems, simply multiply or divide each component by the scale factors corresponding to the cell that they are trying to access information from. For a covariant field, divide by scale factors and for a contravariant field multiply by scale factors to convert them back to physical components. Similarly, if a user tries to directly edit fields in a deck (say, by setting `field(i, j, k).cz0`), they should perform the opposite operation to convert to logical (unphysical) components. This is what the `set_region_field` macros do internally.
 
-
-.. _cyl-axis-bc:
 
 Axis Boundary Conditions
 ================
@@ -326,8 +339,8 @@ Device Geometry Snapshot (``grid_geom_t``)
    .. cpp:function:: void local_to_global(int voxel_i, float dx_p, float dy_p, float dz_p, double& xi_out, double& eta_out, double& mu_out) const
 
       Maps a particle's logical in-cell offset ``(dx_p,dy_p,dz_p)`` (each on
-      ``[-1,1]``) in voxel ``voxel_i`` to global **logical** coordinates
-      ``(xi,eta,mu)`` using the local origin and cell sizes.
+      ``[-1,1]``) in voxel ``voxel_i`` to global **physical** coordinates
+      ``(xi,eta,mu)`` in the user's defined coordinate system using the local origin and cell sizes.
 
    .. cpp:function:: void local_to_global_cart(int voxel_i, float dx_p, float dy_p, float dz_p, double& x_out, double& y_out, double& z_out) const
 
@@ -381,6 +394,7 @@ Curvilinear Kernels (free functions in ``grid.h``)
    convert between Cartesian particle momenta and contravariant logical
    velocities, ensuring the deposited current is coordinate-consistent.
 
+   We added specific paths for analytical grid types to greatly improve performance in this function, which is the main bottleneck of non-Cartesian setups. A user can also add their own analytic grid type by adding a new path to this function.
 
 Deck Region Setters (``vpic.h``)
 -----------------------------------
@@ -394,15 +408,11 @@ support, curvilinear meshes: they fetch the per-cell scale factors
 
 .. c:macro:: set_point_region_field(rgn, eqn_ex, eqn_ey, eqn_ez, eqn_bx, eqn_by, eqn_bz)
 
-   Strictly evaluates the region and field equations at the Yee-mesh
-   locations *inside* the region. Scales the electric field by dividing by
-   the scale factors (:math:`e_x \leftarrow e_x/h_1`, etc.) and the magnetic
-   field by :math:`c/h`. Sets ``ex/ey/ez`` and ``cbx/cby/cbz``.
+   And
 
 .. c:macro:: set_region_field(rgn, eqn_ex, eqn_ey, eqn_ez, eqn_bx, eqn_by, eqn_bz)
 
-   The workhorse field setter. Evaluates the region and field equations at
-   the mesh-mapped cell locations (not strictly inside the region) using the
+   Evaluates the region and field equations using the
    logical coordinates ``x,y,z`` (which the user interprets in their chosen
    coordinate system, e.g. ``x`` = radius for a cylindrical grid). Converts
    physical components to internal storage:
@@ -424,8 +434,8 @@ support, curvilinear meshes: they fetch the per-cell scale factors
 
 .. c:macro:: set_region_bext(rgn, eqn_bx, eqn_by, eqn_bz)
 
-   Sets the external/guide magnetic field ``cbx0/cby0/cbz0``, dividing each
-   component by the corresponding scale factor (and multiplying by ``c``), so
+   Sets the external magnetic field ``cbx0/cby0/cbz0``, dividing each
+   component by the corresponding scale factor, so
    the external field is stored in the same contravariant logical
    representation as the dynamic B field.
 
@@ -436,39 +446,11 @@ support, curvilinear meshes: they fetch the per-cell scale factors
    :cpp:func:`grid_geom_t::local_to_global_cart`; results are scaled by
    :math:`h` and written to ``cbx0/cby0/cbz0``.
 
-.. c:macro:: set_region_te(rgn, eqn_te)
-
-   Hybrid model: sets the electron temperature field ``te0`` (scaled by
-   ``c``) in the mesh-mapped region.
-
-.. c:macro:: set_region_ue(rgn, eqn_uex)
-
-   Hybrid model: sets the electron fluid velocity component ``ux`` in the
-   mesh-mapped region.
-
-.. c:macro:: set_region_ne(rgn, eqn_ne)
-
-   Hybrid model: sets the electron/free-charge density ``rhof`` in the
-   mesh-mapped region.
-
-.. c:macro:: set_region_eta_multipliers(rgn, eqn_tcax, eqn_tcay, eqn_tcaz)
-
-   Hybrid model: sets the per-component resistivity/hyper-resistivity
-   multiplier fields ``tcax/tcay/tcaz`` (applied to eta, hypereta, and E) at
-   cell centers inside the region.
-
-.. c:macro:: set_region_fluid(rgn, name, eqn_den, eqn_tmp, eqn_prs)
-
-   Sets the density, temperature, and pressure (``den``, ``tmp``, ``prs``) of
-   the named fluid species over the region, looked up via
-   ``find_fluid_species_name``.
-
-
 Axis Boundary Conditions
 --------------------------------------
 
 Field and particle boundary conditions for the coordinate singularity at the
-radial axis. See :ref:`the conceptual overview <cyl-axis-bc>` for usage.
+radial axis.
 
 .. c:var:: cylindrical_axis_fields
 
@@ -542,13 +524,6 @@ Jacobian, making deposition coordinate-consistent on curved meshes.
    logical, inverse-Jacobian weighted) and ``SHAPE_QS`` (quadratic-spline)
    deposit paths.
 
-.. cpp:function:: void advance_p_kokkos_unified(species_t* sp, ..., const grid_t* g, ...)
-
-   (In ``advance_p.cc``.) The portable/vectorized CPU push kernel. Now builds
-   ``const grid::grid_geom_t geom = g->geom();`` up front and passes it to
-   :cpp:func:`move_p_kokkos` for out-of-bounds particles, so boundary movement
-   uses the correct geometry.
-
 .. cpp:function:: void advance_p_kokkos_gpu(species_t* sp, ..., const grid_t* g, ...)
 
    (In ``advance_p.cc``.) The GPU push kernel, containing the primary
@@ -556,8 +531,8 @@ Jacobian, making deposition coordinate-consistent on curved meshes.
 
    #. Computes the reciprocal basis at the current position and transforms
       the Cartesian velocity into a contravariant logical velocity.
-   #. Forms a **predictor** half-step logical position, and — via the
-      "geo interpolation" block — determines whether the predictor crossed
+   #. Forms a predictor half-step logical position, and — via the
+      geometric interpolation block — determines whether the predictor crossed
       into a neighbor cell, selecting the neighbor voxel index ``ii_pred``
       and shifting to that cell's local logical coordinates. (A warning is
       emitted if the predictor exceeds the two-ghost-layer coverage.)
@@ -570,80 +545,14 @@ Jacobian, making deposition coordinate-consistent on curved meshes.
    Out-of-bounds particles are handed to :cpp:func:`move_p_kokkos` with the
    ``geom`` snapshot, exactly as in the unified kernel.
 
-   .. note::
-
-      ``advance_p`` currently dispatches to ``advance_p_kokkos_gpu`` for
-      **both** the ``USE_GPU`` and CPU builds (the ``advance_p_kokkos_unified``
-      path is commented out in the dispatch macro). Both kernels are
-      curvilinear-aware; the GPU kernel contains the reference predictor/
-      geo-interpolation logic.
-
-
-Top-Level Driver (``advance_p``)
------------------------------------
-
 .. cpp:function:: void advance_p(species_t* sp, interpolator_array_t* ia, field_array_t* fa)
 
-   Unchanged public entry point. It validates arguments, computes
-   ``qdt_2mc`` (or ``dt_2mc`` under ``VARIABLE_CHARGE``) and the
-   ``cdt_d{x,y,z}`` factors, then invokes the selected push kernel
-   (:cpp:func:`advance_p_kokkos_gpu`) with the species' Kokkos views, the
-   neighbor view, the field array, and the grid. After the push it copies
-   ``k_nm`` back to host and mirrors the newly-created movers (and, if
-   enabled, their annotations) to host for :cpp:func:`boundary_p`. No
-   curvilinear-specific arguments are added at this level — the geometry is
-   pulled from ``sp->g`` inside the kernels via :cpp:func:`grid_t::geom`.
+   Entry point, invokes the selected push kernel
+   (:cpp:func:`advance_p_kokkos_gpu`).
 
 
-Charge/Current Deposit Helpers (``advance_p.cc``)
-----------------------------------------------------
-
-These SIMD/team helpers were retained (and made geometry-agnostic) so the
-Cartesian fast paths still function. On curvilinear meshes the primary deposit
-happens through the inverse-Jacobian-weighted contravariant path inside the
-push kernel and :cpp:func:`move_p_kokkos`; these helpers service the
-accumulator/scatter bookkeeping.
-
-.. cpp:function:: void accumulate_current(CurrentScatterAccess& current_sa, int ii, int nx, int ny, int nz, float rV, float v0..v11)
-
-   Writes current/charge contributions into either a 12-component accumulator
-   (``VPIC_ENABLE_ACCUMULATORS``) or directly into the scatter-view field
-   (``jfx/jfy/jfz/rhof``). Handles both ``SHAPE_NGP`` (single-cell) and
-   ``SHAPE_QS`` (7-point quadratic-spline stencil) deposits.
-
-.. cpp:function:: void reduce_and_accumulate_current(TeamMember&, CurrentScatterAccess&, int num_iters, int ii, int nx, int ny, int nz, float rV, float* v0..v11)
-
-   Reduces the per-lane/per-thread current contributions before a single
-   :cpp:func:`accumulate_current` write, using ``omp simd`` reduction on CPU,
-   warp shuffles on CUDA, or Kokkos team reductions otherwise. Invoked when
-   :cpp:func:`particles_in_same_cell` reports that an entire team/vector block
-   targets the same voxel.
-
-.. cpp:function:: void contribute_current(TeamMember&, field_sa_t&, int i0, int i1, int i2, int i3, field_var j, float v0..v3)
-
-   Four-node variant used by the (currently disabled) team-reduction
-   Cartesian deposit path.
-
-.. cpp:function:: int particles_in_same_cell(TeamMember&, IndexView& ii, BoundsView& inbnds, int num_lanes)
-
-   Returns non-zero when every lane/thread in a team is processing a particle
-   in the same voxel and with the same in-bounds status, enabling the reduced
-   write path above.
-
-.. cpp:function:: void load_interpolators(...)
-
-   Templated (on ``NumLanes``) loader that gathers the interpolator
-   coefficients for a block of particles. Two overloads exist, selected by
-   ``SHAPE_NGP`` (6 fields: ``ex,ey,ez,cbx,cby,cbz``) or ``SHAPE_QS`` (42
-   fields including first/second derivatives). Uses a "same cell" fast path
-   plus a vectorized transpose load when ``VPIC_ENABLE_VECTORIZATION`` is set.
-
-
-Usage Notes and Conventions
+Usage Notes
 ==============================
-
-The following consolidates the invariants a deck author or developer must
-respect when working with the curvilinear machinery.
 
 Ghost layers and mesh sizing
 -------------------------------
@@ -653,9 +562,8 @@ Ghost layers and mesh sizing
 * The **curvilinear mesh** (``k_curvilinear_mesh_*``) carries **two** ghost
   layers per side: ``(nx+4)(ny+4)(nz+4)``. The extra layer supports the
   ``3x3x3`` B-spline stencil at domain-adjacent cells.
-* Always translate between the two with :c:macro:`GRID_TO_MESH` (or
-  :c:macro:`VOXEL_TO_MESH`); never index one array with the other's linear
-  index.
+* Translate between the two with :c:macro:`GRID_TO_MESH` (or
+  :c:macro:`VOXEL_TO_MESH`)
 * The mesh is **per-rank and local**: it is sized with the local ``nx,ny,nz``
   and filled using this rank's local bounds (``x0..z1``) and index offset. The
   ``STRETCHED_CARTESIAN`` map is the exception — its physical positions are
@@ -675,13 +583,26 @@ Field storage conventions
 * Scale factors of exactly ``0`` (e.g. on the cylindrical/spherical axis) are
   defensively reset to ``1`` inside the macros to avoid division by zero.
 
-Sign convention caveat
--------------------------
+Working Near Coordinate Singularities
+-------------------------------------
 
-``set_point_region_field`` **divides** E by the scale factors, while
-``set_region_field`` **multiplies** E by them (compare the ``_f->ex`` lines in
-each macro). These reflect two different internal interpretations; choose the
-macro that matches your intended field convention and be consistent.
+When working with coordinate systems that have singularities (such as r=0 in
+cylindrical coordinates or theta=0,pi in spherical coordinates), special care
+must be taken:
+
+* The scale factors approach zero at singularities (e.g., h_2 = r -> 0 as r->0
+  in cylindrical coordinates). To prevent division by zero, VPIC defensively
+  detects this inside the field and particle
+  boundary condition macros. You should be able to set the lower boundary to these singularities in most cases, but be aware of numerical instabilities. See examples/mirror and examples/plasma-sphere for examples.
+
+* The "geo interpolation" block in the particle pusher includes protections
+  against exceeding the two-ghost-layer coverage when predicting half-step
+  positions near singularities. If you see WARNING messages about predictor
+  exceeding coverage, reduce your timestep.
+
+* Boundary conditions like ``cylindrical_axis_fields`` and ``spherical_axis_fields``
+  are specifically designed to handle the coordinate singularities properly by
+  reflecting field components according to the coordinate transformation rules.
 
 Particle deposit weighting
 ----------------------------
@@ -705,26 +626,43 @@ interpolation" block). If the predictor lands more than one cell away
 builds. If you see this warning, **reduce the timestep** so that no particle
 advances more than one cell per half-step.
 
-Defining a custom mesh
-------------------------
+Examples
+====================
 
-To implement a new geometry, follow the pattern of
-:cpp:func:`grid_t::init_spherical_grid`:
+The VPIC repository includes several examples that demonstrate the use of
+general orthogonal coordinate systems. These examples are located in the
+``examples/`` directory.
 
-#. Allocate ``k_curvilinear_mesh_d`` / ``_h`` sized to
-   ``(nx+4)(ny+4)(nz+4)``.
-#. For every cell (including both ghost layers), fill the scale factors
-   (``h_1,h_2,h_3``), the Jacobian (``jac``), the three basis vectors in
-   Cartesian components (``e_1_u`` ... ``e_3_w``), and the Cartesian node
-   position (``xg,yg,zg``).
-#. Set ``type``. If it is not one of the analytic types, leave it as
-   ``GENERAL`` so :cpp:func:`compute_reciprocal_basis` and
-   :cpp:func:`grid_geom_t::local_to_global_cart` fall back to the B-spline
-   path, which reconstructs the reciprocal basis and Jacobian directly from
-   the stored ``xg,yg,zg`` — no analytic inverse required.
-#. ``deep_copy`` the host mesh to the device.
+IAW (examples/iaw/iaw_stretch.cxx)
+------------------------------------------------------
+This example demonstrates a stretched Cartesian grid where the grid
+spacing varies in the x-direction. It uses ``init_stretched_cartesian_grid``
+with a stretching parameter. When loading particles, the example shows
+how to sample in physical space and then convert to computational
+coordinates for injection, ensuring uniform density in physical space.
 
-Because the ``GENERAL`` path derives everything it needs from the stored
-Cartesian node positions, you only ever have to provide the *forward* map
-(logical → Cartesian) plus the scale factors and Jacobian; the reciprocal
-basis is computed for you.
+Whistler Wave (examples/whistler/whistler_stretch.cxx)
+----------------------------------
+This example uses a 2D tanh stretched Cartesian grid. It simulates Landau-damped ion acoustic
+waves. Particle injection is adjusted to weight by the jacobian. It uses ``set_region_field_cart`` to inject fields in physical space.
+
+PCAI (examples/pcai/pcai_stretch.cxx)
+----------------------
+This example uses a 1D tanh stretched Cartesian grid and shows how to inject particles in a non-uniform grid.
+
+Plasma Sphere (examples/plasma-sphere/plasma_sphere.cxx)
+---------------------------------------
+This example demonstrates a spherical coordinate system (r, theta, phi).
+It initializes a grid with ``init_spherical_grid()`` and loads particles
+with a radial density perturbation. Note that when injecting particles
+uniformly in physical space, each particle must be weighted by the cell
+Jacobian to account for the non-uniform volume of cells in spherical
+coordinates. It also demonstrates the use of the spherical axis boundary conditions for both r and theta (axis and pole).
+
+Magnetic Mirror (examples/mirror/mirror_cyl.cxx)
+---------------------------------
+This example uses a cylindrical coordinate system (r, theta, z) via
+``init_cylindrical_grid()``. It studies magnetic mirror confinement.
+The example shows how to
+handle the cylindrical axis boundary condition (r=0) where the radial
+and azimuthal field components flip sign.
