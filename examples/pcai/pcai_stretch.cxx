@@ -265,40 +265,66 @@ set_region_te( everywhere, Te);
 
  // LOAD PARTICLES
 // LOAD PARTICLES
+// LOAD PARTICLES
 sim_log( "Loading particles" );
 
-// Find maximum Jacobian for rejection sampling
+// Find maximum Jacobian for rejection sampling (only for local domain)
 double jac_max = 0.0;
-for (int v = 0; v < grid->nv; v++) {
-  int mesh_idx = VOXEL_TO_MESH(v, grid->nx, grid->ny, grid->nz);
-  double jac = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::jac);
-  if (jac > jac_max) jac_max = jac;
+for (int k = 1; k <= grid->nz; k++) {
+  for (int j = 1; j <= grid->ny; j++) {
+    for (int i = 1; i <= grid->nx; i++) {
+      int voxel = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
+      int mesh_idx = VOXEL_TO_MESH(voxel, grid->nx, grid->ny, grid->nz);
+      double jac = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::jac);
+      if (jac > jac_max) jac_max = jac;
+    }
+  }
 }
+
+// Find global maximum Jacobian across all ranks
+double global_jac_max;
+MPI_Allreduce(&jac_max, &global_jac_max, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+
+sim_log("Local jac_max = " << jac_max << ", Global jac_max = " << global_jac_max);
 
 // Do a fast load of the particles with Jacobian weighting
 int rng_seed = 1;
 seed_entropy( rank() );
-double xmin = grid->x0, xmax = grid->x0 + (grid->dx)*(grid->nx);
-double ymin = grid->y0, ymax = grid->y0 + (grid->dy)*(grid->ny);
-double zmin = grid->z0, zmax = grid->z0 + (grid->dz)*(grid->nz);
+
+// Each rank injects particles only in its LOCAL domain (no ghost cells)
+double xmin = grid->x0;
+double xmax = grid->x1;
+double ymin = grid->y0;
+double ymax = grid->y1;
+double zmin = grid->z0;
+double zmax = grid->z1;
 
 sim_log( "-> Seeding particles with Jacobian weighting" );
+sim_log( "   Local domain: x=[" << xmin << "," << xmax << "], y=[" << ymin << "," << ymax << "], z=[" << zmin << "," << zmax << "]");
 
 int particles_injected = 0;
 int target_particles = Ni/nproc();
 
+sim_log( "   Target particles for this rank: " << target_particles);
+
 // Use rejection sampling - may need to generate more candidates than target
-while (particles_injected < target_particles) {
+int max_attempts = 10 * target_particles; // Safety limit
+int attempts = 0;
+
+while (particles_injected < target_particles && attempts < max_attempts) {
+  attempts++;
+  
   double x = uniform(rng(0), xmin, xmax);
   double y = uniform(rng(0), ymin, ymax);
   double z = uniform(rng(0), zmin, zmax);
 
-  // Find which voxel this particle is in
-  int i = (int)((x - grid->x0) / grid->dx) + 1;  // +1 for ghost cells
+  // Find which LOCAL voxel this particle is in
+  // Voxels are indexed 1:nx, 1:ny, 1:nz (non-ghost)
+  int i = (int)((x - grid->x0) / grid->dx) + 1;
   int j = (int)((y - grid->y0) / grid->dy) + 1;
   int k = (int)((z - grid->z0) / grid->dz) + 1;
   
-  // Clamp to valid range
+  // Clamp to valid LOCAL range (non-ghost voxels)
   if (i < 1) i = 1;
   if (i > grid->nx) i = grid->nx;
   if (j < 1) j = 1;
@@ -306,6 +332,7 @@ while (particles_injected < target_particles) {
   if (k < 1) k = 1;
   if (k > grid->nz) k = grid->nz;
   
+  // Get voxel and mesh indices using LOCAL grid coordinates
   int voxel = VOXEL(i, j, k, grid->nx, grid->ny, grid->nz);
   int mesh_idx = VOXEL_TO_MESH(voxel, grid->nx, grid->ny, grid->nz);
   
@@ -313,7 +340,7 @@ while (particles_injected < target_particles) {
   double jac_local = grid->k_curvilinear_mesh_h(mesh_idx, curv_mesh_var::jac);
   
   // Acceptance probability proportional to Jacobian
-  double accept_prob = jac_local / jac_max;
+  double accept_prob = jac_local / global_jac_max;
   
   if (uniform(rng(0), 0.0, 1.0) < accept_prob) {
     // Accept this particle
@@ -326,9 +353,21 @@ while (particles_injected < target_particles) {
   }
 }
 
-sim_log( "Finished loading particles" );
-sim_log( "Particles per proc: " << particles_injected );
+if (attempts >= max_attempts) {
+  sim_log("WARNING: Reached maximum attempts for particle injection on rank " << rank());
+  sim_log("         Injected " << particles_injected << " out of " << target_particles << " particles");
+}
 
+// Report statistics across all ranks
+int total_particles_injected;
+MPI_Allreduce(&particles_injected, &total_particles_injected, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+sim_log( "Finished loading particles" );
+sim_log( "Particles on this rank: " << particles_injected );
+if (rank() == 0) {
+  sim_log( "Total particles across all ranks: " << total_particles_injected );
+  sim_log( "Target total particles: " << Ni );
+}
   /*--------------------------------------------------------------------------
    * New dump definition
    *------------------------------------------------------------------------*/
