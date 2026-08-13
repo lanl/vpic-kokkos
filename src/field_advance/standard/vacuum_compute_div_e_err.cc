@@ -314,8 +314,7 @@ vacuum_compute_div_e_err_kokkos( field_array_t * RESTRICT fa ) {
 
     // Begin setting normal e ghosts
 
-    //  k_begin_remote_ghost_norm_e( fa, fa->g );
-    kokkos_begin_remote_ghost_norm_e( fa, fa->g, *(fa->fb) );
+    k_begin_remote_ghost_norm_e( fa, fa->g );
 
     k_local_ghost_norm_e( fa, fa->g );
 
@@ -327,8 +326,7 @@ vacuum_compute_div_e_err_kokkos( field_array_t * RESTRICT fa ) {
     // of the local domain
 
     // Finish setting normal e ghosts
-    //  k_end_remote_ghost_norm_e( fa, fa->g );
-    kokkos_end_remote_ghost_norm_e( fa, fa->g, *(fa->fb) );
+    k_end_remote_ghost_norm_e( fa, fa->g );
 
     vacuum_compute_div_e_err_exterior_kokkos(fa, fa->g);
 

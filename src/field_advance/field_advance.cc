@@ -102,7 +102,7 @@ field_array_t::copy_to_host() {
   field_t * host_field = f;
 
   Kokkos::parallel_for("copy field to host",
-    host_execution_policy(0, g->nv - 1) ,
+    host_execution_policy(0, g->nv) ,
     KOKKOS_LAMBDA (int i) {
 
       host_field[i].ex = k_field(i, field_var::ex);
@@ -150,7 +150,7 @@ field_array_t::copy_to_device() {
   field_t * host_field = f;
 
   Kokkos::parallel_for("copy field to device",
-    host_execution_policy(0, g->nv - 1) ,
+    host_execution_policy(0, g->nv) ,
     KOKKOS_LAMBDA (int i) {
 
       k_field(i, field_var::ex) = host_field[i].ex;
