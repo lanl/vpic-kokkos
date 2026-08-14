@@ -730,21 +730,21 @@ begin_send_jf(field_array_t* fa) {
                        n##Z*(n##Y+1) + 1 )*sizeof(float);                      \
     const int face = (i+j+k)<0 ? 1 : n##X+1;                                   \
     const float d##X = fa->g->d##X;                                            \
-    Kokkos::MDRangePolicy<Kokkos::Rank<2>> Y##Z##_edge({1,1}, {n##Z+2,n##Y+1});\
-    Kokkos::MDRangePolicy<Kokkos::Rank<2>> Z##Y##_edge({1,1}, {n##Z+1,n##Y+2});\
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> Y##Z##_edge({1,1}, {n##Y+1,n##Z+2});\
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> Z##Y##_edge({1,1}, {n##Y+2,n##Z+1});\
     Kokkos::parallel_for("beg_send_jf<" #X #Y #Z "> " #Y #Z "_edge",           \
-      Y##Z##_edge, KOKKOS_LAMBDA(const int Z, const int Y) {                   \
+      Y##Z##_edge, KOKKOS_LAMBDA(const int Y, const int Z) {                   \
       const int X = face;                                                      \
-      const size_t offset = (Z-1)*n##Y + (Y-1);                                \
+      const size_t offset = 1 + (Z-1)*n##Y + (Y-1);                            \
       const size_t voxel = VOXEL(x,y,z,nx,ny,nz);                              \
-      sbuf_d(offset) = kfield(voxel, field_var::jf##y);                        \
+      sbuf_d(offset) = kfield(voxel, field_var::jf##Y);                        \
       if(offset == 1)                                                          \
         sbuf_d(0) = d##X;                                                      \
     });                                                                        \
     Kokkos::parallel_for("beg_send_jf<" #X #Y #Z "> " #Z #Y "_edge",           \
-      Z##Y##_edge, KOKKOS_LAMBDA(const int Z, const int Y) {                   \
+      Z##Y##_edge, KOKKOS_LAMBDA(const int Y, const int Z) {                   \
       const int X = face;                                                      \
-      const size_t offset = n##Y*(n##Z+1) + (Z-1)*(n##Y+1) + (Y-1);            \
+      const size_t offset = 1 + n##Y*(n##Z+1) + (Z-1)*(n##Y+1) + (Y-1);        \
       const size_t voxel = VOXEL(x,y,z,nx,ny,nz);                              \
       sbuf_d(offset) = kfield(voxel, field_var::jf##Z);                        \
     });                                                                        \
@@ -773,15 +773,15 @@ end_recv_jf(field_array_t* fa) {
 # define END_RECV(i,j,k,X,Y,Z) BEGIN_PRIMITIVE {                               \
     const int face = (i+j+k)<0 ? n##X+1 : 1; /* Twice weighted sum */          \
     float rw = rbuf_h(0);                                                      \
-    float lw  = rw + g->d##x;                                                  \
+    float lw  = rw + g->d##X;                                                  \
     rw /= lw;                                                                  \
-    lw  = g->d##x/lw;                                                          \
+    lw  = g->d##X/lw;                                                          \
     lw += lw;                                                                  \
     rw += rw;                                                                  \
-    Kokkos::MDRangePolicy<Kokkos::Rank<2>> Y##Z##_edge({1,1}, {n##Z+2,n##Y+1});\
-    Kokkos::MDRangePolicy<Kokkos::Rank<2>> Z##Y##_edge({1,1}, {n##Z+1,n##Y+2});\
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> Y##Z##_edge({1,1}, {n##Y+1,n##Z+2});\
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>> Z##Y##_edge({1,1}, {n##Y+2,n##Z+1});\
     Kokkos::parallel_for("end_recv_jf<" #X #Y #Z "> " #Y #Z "_edge",           \
-      Y##Z##_edge, KOKKOS_LAMBDA(const int Z, const int Y) {                   \
+      Y##Z##_edge, KOKKOS_LAMBDA(const int Y, const int Z) {                   \
       const int X = face;                                                      \
       const size_t offset = 1 + (Z-1)*n##Y + (Y-1);                            \
       const size_t voxel = VOXEL(x,y,z,nx,ny,nz);                              \
@@ -789,7 +789,7 @@ end_recv_jf(field_array_t* fa) {
       kfield(voxel, field_var::jf##Y) = lw*jf##Y + rw*rbuf_d(offset);          \
     });                                                                        \
     Kokkos::parallel_for("end_recv_jf<" #X #Y #Z "> " #Z #Y "_edge",           \
-      Z##Y##_edge, KOKKOS_LAMBDA(const int Z, const int Y) {                   \
+      Z##Y##_edge, KOKKOS_LAMBDA(const int Y, const int Z) {                   \
       const int X = face;                                                      \
       const size_t offset = 1 + n##Y*(n##Z+1) + (Z-1)*(n##Y+1) + (Y-1);        \
       const size_t voxel = VOXEL(x,y,z,nx,ny,nz);                              \
