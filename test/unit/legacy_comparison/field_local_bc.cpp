@@ -115,10 +115,10 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   fa_updated->copy_to_device();
 
   SECTION( "Local Ghost Tang B" ) {
-    local_ghost_tang_b(fa_legacy->f, g);
+    legacy_local_ghost_tang_b(fa_legacy->f, g);
     fa_legacy->copy_to_device();
 
-    k_local_ghost_tang_b(fa_updated, g);
+    local_ghost_tang_b(fa_updated, g);
     fa_updated->copy_to_host();
     
     verify_fields_match(fa_legacy, fa_updated, field_var::cbx);
@@ -127,10 +127,10 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   }
 
   SECTION( "Local Ghost Norm E" ) {
-    local_ghost_norm_e(fa_legacy->f, g);
+    legacy_local_ghost_norm_e(fa_legacy->f, g);
     fa_legacy->copy_to_device();
 
-    k_local_ghost_norm_e(fa_updated, g);
+    local_ghost_norm_e(fa_updated, g);
     fa_updated->copy_to_host();
     
     verify_fields_match(fa_legacy, fa_updated, field_var::ex);
@@ -142,20 +142,20 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   }
 
   SECTION( "Local Ghost Div B" ) {
-    local_ghost_div_b( fa_legacy->f, g );
+    legacy_local_ghost_div_b( fa_legacy->f, g );
     fa_legacy->copy_to_device();
 
-    k_local_ghost_div_b( fa_updated, g );
+    local_ghost_div_b( fa_updated, g );
     fa_updated->copy_to_host();
     
     verify_fields_match(fa_legacy, fa_updated, field_var::div_b_err);
   }
 
   SECTION( "Local Adjust Tang E" ) {
-    local_adjust_tang_e( fa_legacy->f, g );
+    legacy_local_adjust_tang_e( fa_legacy->f, g );
     fa_legacy->copy_to_device();
 
-    k_local_adjust_tang_e( fa_updated, g );
+    local_adjust_tang_e( fa_updated, g );
     fa_updated->copy_to_host();
     
     verify_fields_match(fa_legacy, fa_updated, field_var::ex);
@@ -167,10 +167,10 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   }
 
   SECTION( "Local Adjust Norm B" ) {
-    local_adjust_norm_b( fa_legacy->f, g );
+    legacy_local_adjust_norm_b( fa_legacy->f, g );
     fa_legacy->copy_to_device();
 
-    k_local_adjust_norm_b( fa_updated, g );
+    local_adjust_norm_b( fa_updated, g );
     fa_updated->copy_to_host();
     
     verify_fields_match(fa_legacy, fa_updated, field_var::cbx);
@@ -179,20 +179,20 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   }
 
   SECTION( "Local Adjust Div E" ) {
-    local_adjust_div_e( fa_legacy->f, g );
+    legacy_local_adjust_div_e( fa_legacy->f, g );
     fa_legacy->copy_to_device();
 
-    k_local_adjust_div_e( fa_updated, g );
+    local_adjust_div_e( fa_updated, g );
     fa_updated->copy_to_host();
     
     verify_fields_match(fa_legacy, fa_updated, field_var::div_e_err);
   }
 
   SECTION( "Local Adjust JF" ) {
-    local_adjust_jf( fa_legacy->f, g );
+    legacy_local_adjust_jf( fa_legacy->f, g );
     fa_legacy->copy_to_device();
 
-    k_local_adjust_jf( fa_updated, g );
+    local_adjust_jf( fa_updated, g );
     fa_updated->copy_to_host();
     
     verify_fields_match(fa_legacy, fa_updated, field_var::jfx);
@@ -201,20 +201,20 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   }
 
   SECTION( "Local Adjust Rhof" ) {
-    local_adjust_rhof( fa_legacy->f, g );
+    legacy_local_adjust_rhof( fa_legacy->f, g );
     fa_legacy->copy_to_device();
 
-    k_local_adjust_rhof( fa_updated, g );
+    local_adjust_rhof( fa_updated, g );
     fa_updated->copy_to_host();
     
     verify_fields_match(fa_legacy, fa_updated, field_var::rhof);
   }
 
   SECTION( "Local Adjust Rhob" ) {
-    local_adjust_rhob( fa_legacy->f, g );
+    legacy_local_adjust_rhob( fa_legacy->f, g );
     fa_legacy->copy_to_device();
 
-    k_local_adjust_rhob( fa_updated, g );
+    local_adjust_rhob( fa_updated, g );
     fa_updated->copy_to_host();
     
     verify_fields_match(fa_legacy, fa_updated, field_var::rhob);

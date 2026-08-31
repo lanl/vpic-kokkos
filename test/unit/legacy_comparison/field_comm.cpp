@@ -115,13 +115,13 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   fa_updated->copy_to_device();
 
   SECTION( "Exchange Ghost Tang B" ) {
-    begin_remote_ghost_tang_b( fa_legacy->f, g );
-    end_remote_ghost_tang_b( fa_legacy->f, g );
+    legacy_begin_remote_ghost_tang_b( fa_legacy->f, g );
+    legacy_end_remote_ghost_tang_b( fa_legacy->f, g );
     MPI_Barrier(MPI_COMM_WORLD);
     fa_legacy->copy_to_device();
 
-    k_begin_remote_ghost_tang_b( fa_updated, g );
-    k_end_remote_ghost_tang_b( fa_updated, g );
+    begin_remote_ghost_tang_b( fa_updated, g );
+    end_remote_ghost_tang_b( fa_updated, g );
     MPI_Barrier(MPI_COMM_WORLD);
     fa_updated->copy_to_host();
     
@@ -131,13 +131,13 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   }
 
   SECTION( "Exchange Ghost Norm E" ) {
-    begin_remote_ghost_norm_e( fa_legacy->f, g );
-    end_remote_ghost_norm_e( fa_legacy->f, g );
+    legacy_begin_remote_ghost_norm_e( fa_legacy->f, g );
+    legacy_end_remote_ghost_norm_e( fa_legacy->f, g );
     MPI_Barrier(MPI_COMM_WORLD);
     fa_legacy->copy_to_device();
 
-    k_begin_remote_ghost_norm_e( fa_updated, g );
-    k_end_remote_ghost_norm_e( fa_updated, g );
+    begin_remote_ghost_norm_e( fa_updated, g );
+    end_remote_ghost_norm_e( fa_updated, g );
     MPI_Barrier(MPI_COMM_WORLD);
     fa_updated->copy_to_host();
     
@@ -147,13 +147,13 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   }
 
   SECTION( "Exchange Ghost Div B" ) {
-    begin_remote_ghost_div_b( fa_legacy->f, g );
-    end_remote_ghost_div_b( fa_legacy->f, g );
+    legacy_begin_remote_ghost_div_b( fa_legacy->f, g );
+    legacy_end_remote_ghost_div_b( fa_legacy->f, g );
     MPI_Barrier(MPI_COMM_WORLD);
     fa_legacy->copy_to_device();
 
-    k_begin_remote_ghost_div_b( fa_updated, g );
-    k_end_remote_ghost_div_b( fa_updated, g );
+    begin_remote_ghost_div_b( fa_updated, g );
+    end_remote_ghost_div_b( fa_updated, g );
     MPI_Barrier(MPI_COMM_WORLD);
     fa_updated->copy_to_host();
     
@@ -161,11 +161,11 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   }
 
   SECTION( "Synchronize Tang E Norm B" ) {
-    const double leg_err = synchronize_tang_e_norm_b( fa_legacy );
+    const double leg_err = legacy_synchronize_tang_e_norm_b( fa_legacy );
     MPI_Barrier(MPI_COMM_WORLD);
     fa_legacy->copy_to_device();
 
-    const double upd_err = synchronize_tang_e_norm_b_kokkos( fa_updated );
+    const double upd_err = synchronize_tang_e_norm_b( fa_updated );
     MPI_Barrier(MPI_COMM_WORLD);
     fa_updated->copy_to_host();
     
@@ -182,11 +182,11 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   }
 
   SECTION( "Synchronize JF" ) {
-    synchronize_jf( fa_legacy );
+    legacy_synchronize_jf( fa_legacy );
     MPI_Barrier(MPI_COMM_WORLD);
     fa_legacy->copy_to_device();
 
-    k_synchronize_jf( fa_updated );
+    synchronize_jf( fa_updated );
     MPI_Barrier(MPI_COMM_WORLD);
     fa_updated->copy_to_host();
     
@@ -196,11 +196,11 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   }
 
   SECTION( "Synchronize Rho" ) {
-    synchronize_rho( fa_legacy );
+    legacy_synchronize_rho( fa_legacy );
     MPI_Barrier(MPI_COMM_WORLD);
     fa_legacy->copy_to_device();
 
-    k_synchronize_rho( fa_updated );
+    synchronize_rho( fa_updated );
     MPI_Barrier(MPI_COMM_WORLD);
     fa_updated->copy_to_host();
     
