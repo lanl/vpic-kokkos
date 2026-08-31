@@ -23,6 +23,8 @@ project(vpic CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_SHARED_LIBRARY_ENABLE_EXPORTS ON)
+set(CMAKE_EXECUTABLE_ENABLE_EXPORTS ON)
 
 #------------------------------------------------------------------------------#
 # MPI detection
@@ -71,6 +73,8 @@ option(VPIC_ENABLE_TEAM_REDUCTION "Enable team reduction for current accumulatio
 option(VPIC_ENABLE_VECTORIZATION "Enable improved vectorization for CPUs" OFF)
 
 option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performnace on CPUs" OFF)
+
+option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU aware MPI to speedup communication" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -304,6 +308,11 @@ endif(VPIC_ENABLE_HIERARCHICAL)
 if (VPIC_ENABLE_ACCUMULATORS)
   add_definitions(-DVPIC_DISABLE_AUTOSETTINGS -DVPIC_ENABLE_ACCUMULATORS)
   message("--     VPIC: Enabled accumulators")
+endif(VPIC_ENABLE_ACCUMULATORS)
+
+if (VPIC_ENABLE_ACCUMULATORS)
+  add_definitions(-DVPIC_ENABLE_GPU_AWARE_MPI)
+  message("--     VPIC: Enabled GPU-aware MPI")
 endif(VPIC_ENABLE_ACCUMULATORS)
 
 set(USE_V4)
