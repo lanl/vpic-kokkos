@@ -346,148 +346,157 @@ clean_div_b_kokkos( field_array_t * RESTRICT fa );
 
 // Internode functions
 
-// In remote.c
+// In legacy_remote.cc
+
+double
+legacy_synchronize_tang_e_norm_b( field_array_t * RESTRICT fa );
+
+void
+legacy_synchronize_jf( field_array_t * RESTRICT fa );
+
+void
+legacy_synchronize_rho( field_array_t * RESTRICT fa );
+
+// In remote.cc
 
 double
 synchronize_tang_e_norm_b( field_array_t * RESTRICT fa );
 
-double
-synchronize_tang_e_norm_b_kokkos( field_array_t * RESTRICT fa );
+void
+synchronize_rho(field_array_t* RESTRICT fa);
 
 void
 synchronize_jf( field_array_t * RESTRICT fa );
 
-void
-synchronize_rho( field_array_t * RESTRICT fa );
+// In legacy_local.cc
 
 void
-k_synchronize_rho(field_array_t* RESTRICT fa);
+legacy_local_ghost_tang_b( field_t      * ALIGNED(128) f,
+                           const grid_t *              g );
 
 void
-k_synchronize_jf( field_array_t * RESTRICT fa );
-
-// In local.c
+legacy_local_ghost_norm_e( field_t      * ALIGNED(128) f,
+                           const grid_t *              g );
 
 void
-local_ghost_tang_b( field_t      * ALIGNED(128) f,
+legacy_local_ghost_div_b( field_t      * ALIGNED(128) f,
+                          const grid_t *              g );
+
+void
+legacy_local_adjust_tang_e( field_t      * ALIGNED(128) f,
+                            const grid_t *              g );
+
+void
+legacy_local_adjust_div_e( field_t      * ALIGNED(128) f,
+                           const grid_t *              g );
+
+void
+legacy_local_adjust_norm_b( field_t      * ALIGNED(128) f,
+                            const grid_t *              g );
+
+void
+legacy_local_adjust_jf( field_t      * ALIGNED(128) f,
+                        const grid_t *              g );
+
+void
+legacy_local_adjust_rhof( field_t      * ALIGNED(128) f,
+                          const grid_t *              g );
+
+void
+legacy_local_adjust_rhob( field_t      * ALIGNED(128) f,
+                          const grid_t *              g );
+
+// In local.cc
+
+void
+local_ghost_tang_b(field_array_t * RESTRICT f,
+                  const grid_t * g);
+
+void
+local_ghost_norm_e( field_array_t      * ALIGNED(128) f,
                     const grid_t *              g );
 
 void
-k_local_ghost_tang_b(field_array_t * RESTRICT f,
-                    const grid_t * g);
-
-void
-local_ghost_norm_e( field_t      * ALIGNED(128) f,
-                    const grid_t *              g );
-void
-k_local_ghost_norm_e( field_array_t      * ALIGNED(128) f,
-                    const grid_t *              g );
-
-void
-local_ghost_div_b( field_t      * ALIGNED(128) f,
+local_ghost_div_b( field_array_t      * ALIGNED(128) f,
                    const grid_t *              g );
 
 void
-k_local_ghost_div_b( field_array_t      * ALIGNED(128) f,
-                   const grid_t *              g );
+local_adjust_tang_e(field_array_t* RESTRICT f,
+                    const grid_t* g);
 
 void
-local_adjust_tang_e( field_t      * ALIGNED(128) f,
+local_adjust_div_e( field_array_t      * ALIGNED(128) f,
+                    const grid_t *              g );
+
+void
+local_adjust_norm_b( field_array_t * RESTRICT fa,
                      const grid_t *              g );
 
 void
-k_local_adjust_tang_e(field_array_t* RESTRICT f,
-                        const grid_t* g);
+reduce_jf( field_array_t * RESTRICT fa );
 
 void
-local_adjust_div_e( field_t      * ALIGNED(128) f,
-                    const grid_t *              g );
-void
-k_local_adjust_div_e( field_array_t      * ALIGNED(128) f,
-                    const grid_t *              g );
+local_adjust_rhof(field_array_t* ALIGNED(128) f,
+                  const grid_t*               g);
 
 void
-k_local_adjust_norm_b( field_array_t * RESTRICT fa,
-                     const grid_t *              g );
+local_adjust_rhob(field_array_t* ALIGNED(128) f,
+                  const grid_t*               g);
 
 void
-local_adjust_norm_b( field_t      * ALIGNED(128) f,
-                     const grid_t *              g );
-
-void
-local_adjust_jf( field_t      * ALIGNED(128) f,
-                 const grid_t *              g );
-
-void
-k_reduce_jf( field_array_t * RESTRICT fa );
-
-void
-local_adjust_rhof( field_t      * ALIGNED(128) f,
-                   const grid_t *              g );
-
-void
-local_adjust_rhob( field_t      * ALIGNED(128) f,
-                   const grid_t *              g );
-
-void
-k_local_adjust_rhof(field_array_t* ALIGNED(128) f,
-                    const grid_t*               g);
-
-void
-k_local_adjust_rhob(field_array_t* ALIGNED(128) f,
-                    const grid_t*               g);
-
-void
-k_local_adjust_jf( field_array_t      * ALIGNED(128) f,
+local_adjust_jf( field_array_t      * ALIGNED(128) f,
                  const grid_t *              g );
 
 // In remote.c
 
 void
-begin_remote_ghost_tang_b( field_t      * ALIGNED(128) f,
+legacy_begin_remote_ghost_tang_b( field_t      * ALIGNED(128) f,
+                                  const grid_t *              g );
+
+void
+legacy_end_remote_ghost_tang_b( field_t      * ALIGNED(128) f,
+                                const grid_t *              g );
+
+void
+legacy_begin_remote_ghost_norm_e( field_t      * ALIGNED(128) f,
+                                  const grid_t *              g );
+
+void
+legacy_end_remote_ghost_norm_e( field_t      * ALIGNED(128) f,
+                                const grid_t *              g );
+
+void
+legacy_begin_remote_ghost_div_b( field_t      * ALIGNED(128) f,
+                                 const grid_t *              g );
+
+void
+legacy_end_remote_ghost_div_b( field_t      * ALIGNED(128) f,
+                               const grid_t *              g );
+
+// In remote.c
+
+void
+begin_remote_ghost_tang_b(field_array_t* RESTRICT f,
+                          const grid_t* g);
+
+void
+end_remote_ghost_tang_b(field_array_t* RESTRICT f,
+                        const grid_t* g);
+
+void
+begin_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
                            const grid_t *              g );
 
 void
-k_begin_remote_ghost_tang_b(field_array_t* RESTRICT f,
-                            const grid_t* g);
-
-void
-end_remote_ghost_tang_b( field_t      * ALIGNED(128) f,
+end_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
                          const grid_t *              g );
 
 void
-k_end_remote_ghost_tang_b(field_array_t* RESTRICT f,
-                            const grid_t* g);
-
-void
-begin_remote_ghost_norm_e( field_t      * ALIGNED(128) f,
-                           const grid_t *              g );
-
-void
-k_begin_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
-                           const grid_t *              g );
-void
-end_remote_ghost_norm_e( field_t      * ALIGNED(128) f,
-                         const grid_t *              g );
-
-void
-k_end_remote_ghost_norm_e( field_array_t      * ALIGNED(128) f,
-                         const grid_t *              g );
-
-void
-begin_remote_ghost_div_b( field_t      * ALIGNED(128) f,
+begin_remote_ghost_div_b( field_array_t      * ALIGNED(128) f,
                           const grid_t *              g );
 
 void
-k_begin_remote_ghost_div_b( field_array_t      * ALIGNED(128) f,
-                            const grid_t *              g );
-
-void
-end_remote_ghost_div_b( field_t      * ALIGNED(128) f,
-                        const grid_t *              g );
-
-void
-k_end_remote_ghost_div_b( field_array_t      * ALIGNED(128) f,
+end_remote_ghost_div_b( field_array_t      * ALIGNED(128) f,
                         const grid_t *              g );
 
 

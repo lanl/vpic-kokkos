@@ -11,10 +11,10 @@
 /******************************************************************************
  * local.c sets local boundary conditions. Functions are divided into two
  * categories:
- *   local_ghosts_xxx where xxx = tang_b, norm_e, div_b
+ *   legacy_local_ghosts_xxx where xxx = tang_b, norm_e, div_b
  *   - Sets ghosts values of the fields just interior to a local boundary
  *     condition
- *   local_adjust_xxx where xxx = norm_b, tang_e, rhof, rhob, div_e_err
+ *   legacy_local_adjust_xxx where xxx = norm_b, tang_e, rhof, rhob, div_e_err
  *   - Directly enforces local boundary conditions on fields
  *****************************************************************************/
 #define IN_sfa
@@ -51,7 +51,7 @@
  *****************************************************************************/
 
 void
-local_ghost_tang_b( field_t      * ALIGNED(128) f,
+legacy_local_ghost_tang_b( field_t      * ALIGNED(128) f,
                     const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   const float cdt_dx = g->cvac*g->dt*g->rdx;
@@ -124,12 +124,12 @@ local_ghost_tang_b( field_t      * ALIGNED(128) f,
   APPLY_LOCAL_TANG_B( 0, 0, 1,z,x,y);
 }
 
-// Note: local_adjust_div_e zeros the error on the boundaries for
+// Note: legacy_local_adjust_div_e zeros the error on the boundaries for
 // absorbing boundary conditions.  Thus, ghost norm e value is
 // irrevelant.
 
 void
-local_ghost_norm_e( field_t      * ALIGNED(128) f,
+legacy_local_ghost_norm_e( field_t      * ALIGNED(128) f,
                     const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int bc, face, x, y, z;
@@ -182,7 +182,7 @@ local_ghost_norm_e( field_t      * ALIGNED(128) f,
 }
 
 void
-local_ghost_div_b( field_t      * ALIGNED(128) f,
+legacy_local_ghost_div_b( field_t      * ALIGNED(128) f,
                    const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int bc, face, x, y, z;
@@ -225,7 +225,7 @@ local_ghost_div_b( field_t      * ALIGNED(128) f,
 // edges exclusively to handle concave domain geometries
 
 void
-local_adjust_tang_e( field_t      * ALIGNED(128) f,
+legacy_local_adjust_tang_e( field_t      * ALIGNED(128) f,
                      const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int bc, face, x, y, z;
@@ -267,7 +267,7 @@ local_adjust_tang_e( field_t      * ALIGNED(128) f,
 }
 
 void
-local_adjust_norm_b( field_t      * ALIGNED(128) f,
+legacy_local_adjust_norm_b( field_t      * ALIGNED(128) f,
                      const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int bc, face, x, y, z;
@@ -299,7 +299,7 @@ local_adjust_norm_b( field_t      * ALIGNED(128) f,
 }
 
 void
-local_adjust_div_e( field_t      * ALIGNED(128) f,
+legacy_local_adjust_div_e( field_t      * ALIGNED(128) f,
                     const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int bc, face, x, y, z;
@@ -336,7 +336,7 @@ local_adjust_div_e( field_t      * ALIGNED(128) f,
 // (rhob/jf_norm account for particles that hit boundary and reflect/stick)
 
 void
-local_adjust_jf( field_t      * ALIGNED(128) f,
+legacy_local_adjust_jf( field_t      * ALIGNED(128) f,
                  const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int bc, face, x, y, z;
@@ -377,7 +377,7 @@ local_adjust_jf( field_t      * ALIGNED(128) f,
 // (rhob/jf_norm account for particles that hit the boundary)
 
 void
-local_adjust_rhof( field_t      * ALIGNED(128) f,
+legacy_local_adjust_rhof( field_t      * ALIGNED(128) f,
                    const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int bc, face, x, y, z;
@@ -415,7 +415,7 @@ local_adjust_rhof( field_t      * ALIGNED(128) f,
 //                   correct)
 
 void
-local_adjust_rhob( field_t      * ALIGNED(128) f,
+legacy_local_adjust_rhob( field_t      * ALIGNED(128) f,
                    const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int bc, face, x, y, z;

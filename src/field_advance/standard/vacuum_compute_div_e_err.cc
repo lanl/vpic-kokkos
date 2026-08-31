@@ -90,9 +90,9 @@ vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
 
   // Begin setting normal e ghosts
 
-  begin_remote_ghost_norm_e( fa->f, fa->g );
+  legacy_begin_remote_ghost_norm_e( fa->f, fa->g );
 
-  local_ghost_norm_e( fa->f, fa->g );
+  legacy_local_ghost_norm_e( fa->f, fa->g );
 
   // Have pipelines compute interior of local domain
 
@@ -109,7 +109,7 @@ vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
   DECLARE_STENCIL();
 
   // Finish setting normal e ghosts
-  end_remote_ghost_norm_e( fa->f, fa->g );
+  legacy_end_remote_ghost_norm_e( fa->f, fa->g );
 
 
   // z faces, x edges, y edges and all corners
@@ -187,7 +187,7 @@ vacuum_compute_div_e_err( field_array_t * RESTRICT fa ) {
 
   WAIT_PIPELINES();
 
-  local_adjust_div_e( fa->f, fa->g );
+  legacy_local_adjust_div_e( fa->f, fa->g );
 }
 
 void vacuum_compute_div_e_err_interior_kokkos(field_array_t* fa, const grid_t* g) {
@@ -314,9 +314,9 @@ vacuum_compute_div_e_err_kokkos( field_array_t * RESTRICT fa ) {
 
     // Begin setting normal e ghosts
 
-    k_begin_remote_ghost_norm_e( fa, fa->g );
+    begin_remote_ghost_norm_e( fa, fa->g );
 
-    k_local_ghost_norm_e( fa, fa->g );
+    local_ghost_norm_e( fa, fa->g );
 
     // Have pipelines compute interior of local domain
 
@@ -326,11 +326,11 @@ vacuum_compute_div_e_err_kokkos( field_array_t * RESTRICT fa ) {
     // of the local domain
 
     // Finish setting normal e ghosts
-    k_end_remote_ghost_norm_e( fa, fa->g );
+    end_remote_ghost_norm_e( fa, fa->g );
 
     vacuum_compute_div_e_err_exterior_kokkos(fa, fa->g);
 
     // Finish up setting interior
 
-    k_local_adjust_div_e( fa, fa->g );
+    local_adjust_div_e( fa, fa->g );
 }

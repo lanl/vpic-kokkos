@@ -113,8 +113,8 @@ begin_send_tang_b(field_array_t* fa) {
 }
 
 void
-k_begin_remote_ghost_tang_b( field_array_t * RESTRICT fa,
-                             const grid_t * g) {
+begin_remote_ghost_tang_b( field_array_t * RESTRICT fa,
+                           const grid_t * g) {
   begin_recv_tang_b<-1, 0, 0>(fa);
   begin_recv_tang_b< 0,-1, 0>(fa);
   begin_recv_tang_b< 0, 0,-1>(fa);
@@ -193,8 +193,8 @@ end_send_tang_b(field_array_t* RESTRICT field) {
 }
 
 void
-k_end_remote_ghost_tang_b( field_array_t * RESTRICT field,
-                           const grid_t * g) {
+end_remote_ghost_tang_b( field_array_t * RESTRICT field,
+                         const grid_t * g) {
   end_recv_tang_b<-1, 0, 0>(field);
   end_recv_tang_b< 0,-1, 0>(field);
   end_recv_tang_b< 0, 0,-1>(field);
@@ -267,8 +267,8 @@ begin_send_ghost_norm_e(field_array_t* fa) {
 }
 
 void
-k_begin_remote_ghost_norm_e( field_array_t * ALIGNED(128) field,
-                             const grid_t * g) {
+begin_remote_ghost_norm_e( field_array_t * ALIGNED(128) field,
+                           const grid_t * g) {
   begin_recv_ghost_norm_e<-1,  0,  0>(field);
   begin_recv_ghost_norm_e< 0, -1,  0>(field);
   begin_recv_ghost_norm_e< 0,  0, -1>(field);
@@ -337,8 +337,8 @@ end_send_ghost_norm_e(field_array_t* RESTRICT field) {
 }
 
 void
-k_end_remote_ghost_norm_e( field_array_t * ALIGNED(128) field,
-                           const grid_t * g) {
+end_remote_ghost_norm_e( field_array_t * ALIGNED(128) field,
+                         const grid_t * g) {
   end_recv_ghost_norm_e<-1,  0,  0>(field);
   end_recv_ghost_norm_e< 0, -1,  0>(field);
   end_recv_ghost_norm_e< 0,  0, -1>(field);
@@ -411,7 +411,7 @@ begin_send_ghost_div_b(field_array_t* fa) {
 }
 
 void 
-k_begin_remote_ghost_div_b(field_array_t* ALIGNED(128) fa, const grid_t* g) {
+begin_remote_ghost_div_b(field_array_t* ALIGNED(128) fa, const grid_t* g) {
   begin_recv_ghost_div_b<-1,  0,  0>(fa);
   begin_recv_ghost_div_b< 0, -1,  0>(fa);
   begin_recv_ghost_div_b< 0,  0, -1>(fa);
@@ -481,7 +481,7 @@ end_send_ghost_div_b(field_array_t* RESTRICT field) {
   end_send_port_k(i,j,k, field->g);
 }
 
-void k_end_remote_ghost_div_b(field_array_t* ALIGNED(128) fa, const grid_t* g) {
+void end_remote_ghost_div_b(field_array_t* ALIGNED(128) fa, const grid_t* g) {
   end_recv_ghost_div_b<-1,  0,  0>(fa);
   end_recv_ghost_div_b< 0, -1,  0>(fa);
   end_recv_ghost_div_b< 0,  0, -1>(fa);
@@ -661,14 +661,14 @@ end_send_tang_e_norm_b(field_array_t* fa) {
 }
 
 double
-synchronize_tang_e_norm_b_kokkos( field_array_t * RESTRICT fa ) {
+synchronize_tang_e_norm_b( field_array_t * RESTRICT fa ) {
   const grid_t * RESTRICT g = fa->g;
   double err = 0, gerr;
 
   if( !fa ) ERROR(( "Bad args" ));
 
-  k_local_adjust_tang_e( fa, g );
-  k_local_adjust_norm_b( fa, g );
+  local_adjust_tang_e( fa, g );
+  local_adjust_norm_b( fa, g );
 
   // Exchange x-faces
   begin_recv_tang_e_norm_b<-1, 0, 0>( fa );
@@ -829,11 +829,11 @@ end_send_jf(field_array_t* fa) {
   end_send_port_k(i,j,k,fa->g);
 }
 
-void k_synchronize_jf(field_array_t* RESTRICT fa) {
+void synchronize_jf(field_array_t* RESTRICT fa) {
   if(!fa) ERROR(( "Bad args" ));
   grid_t* RESTRICT g = fa->g;
 
-  k_local_adjust_jf(fa, g);
+  local_adjust_jf(fa, g);
 
   // Exchange x-faces
   begin_recv_jf<-1, 0, 0>( fa );
@@ -1000,12 +1000,12 @@ end_send_rho(field_array* fa) {
   end_send_port_k(i,j,k,fa->g);
 }
 
-void k_synchronize_rho(field_array_t* RESTRICT fa) {
+void synchronize_rho(field_array_t* RESTRICT fa) {
   if(!fa) ERROR(( "Bad args" ));
   grid_t* RESTRICT g = fa->g;
 
-  k_local_adjust_rhof(fa, g);
-  k_local_adjust_rhob(fa, g);
+  local_adjust_rhof(fa, g);
+  local_adjust_rhob(fa, g);
 
   // Exchange x-faces
   begin_recv_rho<-1, 0, 0>( fa );

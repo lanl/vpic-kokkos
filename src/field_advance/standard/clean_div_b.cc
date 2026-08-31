@@ -220,8 +220,8 @@ clean_div_b( field_array_t * fa ) {
 # endif
 
   // Begin setting derr ghosts
-  begin_remote_ghost_div_b( f, g );
-  local_ghost_div_b( f, g);
+  legacy_begin_remote_ghost_div_b( f, g );
+  legacy_local_ghost_div_b( f, g);
 
   // Have pipelines do interior of the local domain
   args->f = f;
@@ -286,7 +286,7 @@ clean_div_b( field_array_t * fa ) {
 
   // Finish setting derr ghosts
 
-  end_remote_ghost_div_b( f, g );
+  legacy_end_remote_ghost_div_b( f, g );
 
   // Do Marder pass in exterior
 
@@ -350,7 +350,7 @@ clean_div_b( field_array_t * fa ) {
 
   WAIT_PIPELINES();
 
-  local_adjust_norm_b(f,g);
+  legacy_local_adjust_norm_b(f,g);
 }
 
 void
@@ -391,8 +391,8 @@ clean_div_b_kokkos( field_array_t * fa ) {
 # endif
 
     // Begin setting derr ghosts
-    k_begin_remote_ghost_div_b( fa, g );
-    k_local_ghost_div_b( fa, g);
+    begin_remote_ghost_div_b( fa, g );
+    local_ghost_div_b( fa, g);
 
     // Have pipelines do interior of the local domain
     const k_field_t& k_field = fa->k_f_d;
@@ -451,7 +451,7 @@ clean_div_b_kokkos( field_array_t * fa ) {
     });
     // Finish setting derr ghosts
 
-    k_end_remote_ghost_div_b( fa, g );
+    end_remote_ghost_div_b( fa, g );
 
     // Do Marder pass in exterior
 
@@ -491,5 +491,5 @@ clean_div_b_kokkos( field_array_t * fa ) {
         marder_cbz(k_field, pz, f0_high, fz_high);
     });
 
-    k_local_adjust_norm_b(fa,g);
+    local_adjust_norm_b(fa,g);
 }

@@ -192,9 +192,9 @@ typedef struct field_advance_kernels {
   // Accumulator interface
 
   void (*clear_jf       )( struct field_array * RESTRICT fa );
-  void (*synchronize_jf )( struct field_array * RESTRICT fa );
+  void (*legacy_synchronize_jf )( struct field_array * RESTRICT fa );
   void (*clear_rhof     )( struct field_array * RESTRICT fa );
-  void (*synchronize_rho)( struct field_array * RESTRICT fa );
+  void (*legacy_synchronize_rho)( struct field_array * RESTRICT fa );
 
   // Initialization interface
 
@@ -203,7 +203,7 @@ typedef struct field_advance_kernels {
 
   // Local/remote shared face cleaning
 
-  double (*synchronize_tang_e_norm_b)( struct field_array * RESTRICT fa );
+  double (*legacy_synchronize_tang_e_norm_b)( struct field_array * RESTRICT fa );
 
   // Electric field divergence cleaning interface
 
@@ -222,10 +222,10 @@ typedef struct field_advance_kernels {
                     const struct field_array * RESTRICT fa );
   void (*clear_jf_kokkos)( struct field_array * RESTRICT fa );
   void (*clear_rhof_kokkos     )( struct field_array * RESTRICT fa );
-  void (*k_synchronize_jf )( struct field_array * RESTRICT fa );
-  void (*k_reduce_jf )( struct field_array * RESTRICT fa );
-  void (*k_synchronize_rho)( struct field_array * RESTRICT fa );
-  double (*synchronize_tang_e_norm_b_kokkos)( struct field_array * RESTRICT fa );
+  void (*synchronize_jf )( struct field_array * RESTRICT fa );
+  void (*reduce_jf )( struct field_array * RESTRICT fa );
+  void (*synchronize_rho)( struct field_array * RESTRICT fa );
+  double (*synchronize_tang_e_norm_b)( struct field_array * RESTRICT fa );
 
   void   (*compute_div_e_err_kokkos  )( /**/  struct field_array * RESTRICT fa );
   double (*compute_rms_div_e_err_kokkos)(const struct field_array * RESTRICT fa);

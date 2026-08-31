@@ -149,7 +149,7 @@ apply_local_tang_b(const int nx, const int ny, const int nz,
 }
 
 void
-k_local_ghost_tang_b( field_array_t      * RESTRICT f,
+local_ghost_tang_b( field_array_t      * RESTRICT f,
                     const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   const float cdt_dx = g->cvac*g->dt*g->rdx;
@@ -230,7 +230,7 @@ apply_local_norm_e(field_array_t* RESTRICT f, const grid_t* g) {
 }
 
 void
-k_local_ghost_norm_e( field_array_t      * ALIGNED(128) f,
+local_ghost_norm_e( field_array_t      * ALIGNED(128) f,
                     const grid_t *              g ) {
   apply_local_norm_e<-1,  0,  0>(f, g);
   apply_local_norm_e< 0, -1,  0>(f, g);
@@ -292,7 +292,7 @@ apply_local_div_b(field_array_t* fa) {
 }
 
 void
-k_local_ghost_div_b( field_array_t      * ALIGNED(128) fa,
+local_ghost_div_b( field_array_t      * ALIGNED(128) fa,
                    const grid_t *              g ) {
     apply_local_div_b<-1,  0,  0>( fa );
     apply_local_div_b< 0, -1,  0>( fa );
@@ -350,7 +350,7 @@ adjust_tang_e(k_field_t& k_field, const grid_t* g, int nx, int ny, int nz) {
 }
 
 void
-k_local_adjust_tang_e( field_array_t      * RESTRICT f,
+local_adjust_tang_e( field_array_t      * RESTRICT f,
                      const grid_t *              g ) {
     const int nx = g->nx, ny = g->ny, nz = g->nz;
 
@@ -364,7 +364,7 @@ k_local_adjust_tang_e( field_array_t      * RESTRICT f,
 }
 
 void
-k_local_adjust_norm_b( field_array_t * RESTRICT fa,
+local_adjust_norm_b( field_array_t * RESTRICT fa,
                      const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
 
@@ -467,7 +467,7 @@ adjust_div_e_err(field_array_t* fa, const grid_t* g) {
 }
 
 void
-k_local_adjust_div_e( field_array_t      * ALIGNED(128) f,
+local_adjust_div_e( field_array_t      * ALIGNED(128) f,
                     const grid_t *              g ) {
   adjust_div_e_err<-1,  0,  0>(f, g);
   adjust_div_e_err< 0, -1,  0>(f, g);
@@ -530,7 +530,7 @@ adjust_jf(field_array_t* fa, const grid_t* g ) {
 #undef ADJUST_JF
 }
 
-void k_local_adjust_jf(field_array_t* fa, const grid_t* g) {
+void local_adjust_jf(field_array_t* fa, const grid_t* g) {
   adjust_jf<-1,  0,  0>(fa, g);
   adjust_jf< 0, -1,  0>(fa, g);
   adjust_jf< 0,  0, -1>(fa, g);
@@ -539,7 +539,7 @@ void k_local_adjust_jf(field_array_t* fa, const grid_t* g) {
   adjust_jf< 0,  0,  1>(fa, g);
 }
 
-void k_reduce_jf(field_array_t* RESTRICT fa ) {
+void reduce_jf(field_array_t* RESTRICT fa ) {
   int n_fields = fa->g->nv;
   auto& kad = fa->k_jf_accum_d;
   auto& kah = fa->k_jf_accum_h;
@@ -604,7 +604,7 @@ adjust_rhof(field_array_t* fa, const grid_t* g) {
 #undef ADJUST_RHOF
 }
 
-void k_local_adjust_rhof(field_array_t* fa, const grid_t* g) {
+void local_adjust_rhof(field_array_t* fa, const grid_t* g) {
   adjust_rhof<-1,  0,  0>(fa, g);
   adjust_rhof< 0, -1,  0>(fa, g);
   adjust_rhof< 0,  0, -1>(fa, g);
@@ -654,7 +654,7 @@ adjust_rhob(field_array_t* fa, const grid_t* g) {
 #undef ADJUST_RHOB
 }
 
-void k_local_adjust_rhob(field_array_t* fa, const grid_t* g) {
+void local_adjust_rhob(field_array_t* fa, const grid_t* g) {
   adjust_rhob<-1,  0,  0>(fa, g);
   adjust_rhob< 0, -1,  0>(fa, g);
   adjust_rhob< 0,  0, -1>(fa, g);

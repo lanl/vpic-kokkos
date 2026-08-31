@@ -59,7 +59,7 @@
  *****************************************************************************/
 
 void
-begin_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
+legacy_begin_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
                            const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int size, face, x, y, z;
@@ -96,7 +96,7 @@ begin_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
 }
 
 void
-end_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
+legacy_end_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
                          const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int face, x, y, z;
@@ -134,7 +134,7 @@ end_remote_ghost_tang_b( field_t      * ALIGNED(128) field,
 }
 
 void
-begin_remote_ghost_norm_e( field_t      * ALIGNED(128) field,
+legacy_begin_remote_ghost_norm_e( field_t      * ALIGNED(128) field,
                            const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int size, face, x, y, z;
@@ -170,7 +170,7 @@ begin_remote_ghost_norm_e( field_t      * ALIGNED(128) field,
 }
 
 void
-end_remote_ghost_norm_e( field_t      * ALIGNED(128) field,
+legacy_end_remote_ghost_norm_e( field_t      * ALIGNED(128) field,
                          const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int face, x, y, z;
@@ -206,7 +206,7 @@ end_remote_ghost_norm_e( field_t      * ALIGNED(128) field,
 }
 
 void
-begin_remote_ghost_div_b( field_t      * ALIGNED(128) field,
+legacy_begin_remote_ghost_div_b( field_t      * ALIGNED(128) field,
                           const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int size, face, x, y, z;
@@ -242,7 +242,7 @@ begin_remote_ghost_div_b( field_t      * ALIGNED(128) field,
 }
 
 void
-end_remote_ghost_div_b( field_t      * ALIGNED(128) field,
+legacy_end_remote_ghost_div_b( field_t      * ALIGNED(128) field,
                         const grid_t *              g ) {
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   int face, x, y, z;
@@ -296,7 +296,7 @@ end_remote_ghost_div_b( field_t      * ALIGNED(128) field,
  *****************************************************************************/
 
 double
-synchronize_tang_e_norm_b( field_array_t * RESTRICT fa ) {
+legacy_synchronize_tang_e_norm_b( field_array_t * RESTRICT fa ) {
   field_t * field, * f;
   grid_t * RESTRICT g;
   float * p;
@@ -307,8 +307,8 @@ synchronize_tang_e_norm_b( field_array_t * RESTRICT fa ) {
   field = fa->f;
   g     = fa->g;
 
-  local_adjust_tang_e( field, g );
-  local_adjust_norm_b( field, g );
+  legacy_local_adjust_tang_e( field, g );
+  legacy_local_adjust_norm_b( field, g );
 
   nx = g->nx;
   ny = g->ny;
@@ -415,7 +415,7 @@ synchronize_tang_e_norm_b( field_array_t * RESTRICT fa ) {
 }
 
 void
-synchronize_jf( field_array_t * RESTRICT fa ) {
+legacy_synchronize_jf( field_array_t * RESTRICT fa ) {
   field_t * field, * f;
   grid_t * RESTRICT g;
   int size, face, x, y, z, nx, ny, nz;
@@ -425,7 +425,7 @@ synchronize_jf( field_array_t * RESTRICT fa ) {
   field = fa->f;
   g     = fa->g;
 
-  local_adjust_jf( field, g );
+  legacy_local_adjust_jf( field, g );
 
   nx = g->nx;
   ny = g->ny;
@@ -532,7 +532,7 @@ synchronize_jf( field_array_t * RESTRICT fa ) {
 // form.
 
 void
-synchronize_rho( field_array_t * RESTRICT fa ) {
+legacy_synchronize_rho( field_array_t * RESTRICT fa ) {
   field_t * field, * f;
   grid_t * RESTRICT g;
   int size, face, x, y, z, nx, ny, nz;
@@ -542,8 +542,8 @@ synchronize_rho( field_array_t * RESTRICT fa ) {
   field = fa->f;
   g     = fa->g;
 
-  local_adjust_rhof( field, g );
-  local_adjust_rhob( field, g );
+  legacy_local_adjust_rhof( field, g );
+  legacy_local_adjust_rhob( field, g );
 
   nx = g->nx;
   ny = g->ny;

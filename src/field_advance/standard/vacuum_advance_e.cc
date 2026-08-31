@@ -209,8 +209,8 @@ vacuum_advance_e( field_array_t * RESTRICT fa,
    * Begin tangential B ghost setup
    ***************************************************************************/
 
-  begin_remote_ghost_tang_b( fa->f, fa->g );
-  local_ghost_tang_b( fa->f, fa->g );
+  legacy_begin_remote_ghost_tang_b( fa->f, fa->g );
+  legacy_local_ghost_tang_b( fa->f, fa->g );
 
   /***************************************************************************
    * Update interior fields
@@ -274,7 +274,7 @@ vacuum_advance_e( field_array_t * RESTRICT fa,
    * Finish tangential B ghost setup
    ***************************************************************************/
 
-  end_remote_ghost_tang_b( fa->f, fa->g );
+  legacy_end_remote_ghost_tang_b( fa->f, fa->g );
 
   /***************************************************************************
    * Update exterior fields
@@ -406,7 +406,7 @@ vacuum_advance_e( field_array_t * RESTRICT fa,
     }
   }
 
-  local_adjust_tang_e( fa->f, fa->g );
+  legacy_local_adjust_tang_e( fa->f, fa->g );
 }
 
 void vacuum_advance_e_interior_kokkos(k_field_t& k_field,
@@ -591,23 +591,23 @@ vacuum_advance_e_kokkos( field_array_t * RESTRICT fa,
    * Begin tangential B ghost setup
    ***************************************************************************/
 
-    k_begin_remote_ghost_tang_b( fa, fa->g );
+  begin_remote_ghost_tang_b( fa, fa->g );
 
-    k_local_ghost_tang_b( fa, fa->g );
+  local_ghost_tang_b( fa, fa->g );
 
-    vacuum_advance_e_interior_kokkos(k_field, nx, ny, nz, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, decayy, decayz, drivex, drivey, drivez, cj);
+  vacuum_advance_e_interior_kokkos(k_field, nx, ny, nz, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, decayy, decayz, drivex, drivey, drivez, cj);
 
   /***************************************************************************
    * Finish tangential B ghost setup
    ***************************************************************************/
 
-    k_end_remote_ghost_tang_b( fa, fa->g );
+  end_remote_ghost_tang_b( fa, fa->g );
 
   /***************************************************************************
    * Update exterior fields
    ***************************************************************************/
 
-    vacuum_advance_e_exterior_kokkos(k_field, nx, ny, nz, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, decayy, decayz, drivex, drivey, drivez, cj);
+  vacuum_advance_e_exterior_kokkos(k_field, nx, ny, nz, px_muy, px_muz, py_mux, py_muz, pz_mux, pz_muy, damp, decayx, decayy, decayz, drivex, drivey, drivez, cj);
 
-    k_local_adjust_tang_e( fa, fa->g );
+  local_adjust_tang_e( fa, fa->g );
 }
