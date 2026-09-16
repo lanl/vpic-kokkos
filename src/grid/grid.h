@@ -71,6 +71,13 @@ enum grid_enums {
 
 };
 
+struct units_SI {
+  double time_sec   = 1.0;
+  double length_m   = 1.0; 
+  double mass_kg    = 1.0;
+  double density_m3 = 1.0;
+};
+
 typedef struct grid {
 
   // System of units
@@ -105,6 +112,8 @@ typedef struct grid {
   float den_floor_pe;     // Density floor for electron pressure update
   float eos_gamma, eos_den; // Electron fluid adiabatic index, reference density
   float eos_gamma_0;        //Adiabatic index for initializing profiles. 
+  
+  units_SI units;           // Struct contains reference units in SI 
   
   float   time_sec, length_m, mass_kg, density_SI; //For converting to physical units
   

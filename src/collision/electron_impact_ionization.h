@@ -18,11 +18,12 @@ struct electron_ioniz_collision_op_t : public particle_bulk_collision_op_t {
 template<typename Functor>
 struct electron_ioniz_model : public collision_model<electron_ioniz_model<Functor>> {
   CollisionType collision_type = CollisionType::BulkElectronImpactIoniz;
+  units_SI units; 
   Functor sigma_cx;
   double dE;
 
-  electron_ioniz_model( Functor op, double dE) : 
-    sigma_cx(op), dE{dE} {};
+  electron_ioniz_model(units_SI units, Functor op, double dE) : 
+    units(units), sigma_cx(op), dE{dE} {};
 
   
   KOKKOS_INLINE_FUNCTION
@@ -43,7 +44,7 @@ struct electron_ioniz_model : public collision_model<electron_ioniz_model<Functo
       return 0.0;
     }
 
-    float sig = sigma_cx(vr, Z1);
+    float sig = sigma_cx(units, vr, Z1);
     return sig;
   }
   
@@ -74,16 +75,6 @@ struct electron_ioniz_model : public collision_model<electron_ioniz_model<Functo
     float value = 0;
     return value; // No scattering for now.
   }
-
-
-  // Incoming particle does not change charge
-  // KOKKOS_INLINE_FUNCTION
-  //   float modify_charge( ) const
-  // {
-  //   float delta_charge = dq; 
-  //   return delta_charge;
-  // }
-  
 
   /**
    * @brief Implemention of upload_moment_src_impl() for electron impact ionization
@@ -129,7 +120,7 @@ template<typename Functor>
 void
 apply_electron_ioniz_collision_op( collision_op_t * cop, kokkos_rng_pool_t& rng ) {
   electron_ioniz_collision_op_t<Functor> * electron_ioniz = (electron_ioniz_collision_op_t<Functor> *) cop;
-  electron_ioniz_model model(electron_ioniz->sigma_cx0, electron_ioniz->dE);
+  electron_ioniz_model model(electron_ioniz->spi->g->units, electron_ioniz->sigma_cx0, electron_ioniz->dE);
   apply_particle_bulk_collision_model_pipeline<true>((particle_bulk_collision_op_t *) cop, model, rng);
 }
 
@@ -173,6 +164,7 @@ electron_impact_ionization(
   
   electron_ioniz->spi         = spi;
   electron_ioniz->spj         = spj;
+  electron_ioniz->spp         = NULL;
   electron_ioniz->sigma_cx0   = sigmafunc;
   electron_ioniz->dE          = dE;
   electron_ioniz->interval    = interval;

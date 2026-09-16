@@ -20,10 +20,13 @@ struct binary_charge_exchange_collision_op_t : public binary_neutral_collision_o
 template<typename Functor>
 struct binary_charge_exchange_model : public collision_model<binary_charge_exchange_model<Functor>> {
   CollisionType collision_type = CollisionType::BinaryChargeExchange;
+  units_SI units;
   const int dq;
   const bool var_wt;
   Functor sigma_cx;
-  binary_charge_exchange_model( Functor op, int dq, bool var_wt ) : sigma_cx(op), dq(dq), var_wt(var_wt) { };
+
+  binary_charge_exchange_model( units_SI units, Functor op, int dq, bool var_wt) : 
+    units(units), sigma_cx(op), dq(dq), var_wt(var_wt) {};
 
 
   /**
@@ -39,7 +42,7 @@ struct binary_charge_exchange_model : public collision_model<binary_charge_excha
     float Z2=0  // Charge of particle
   ) const
   {
-    return sigma_cx(vr, Z1, Z2);
+    return sigma_cx(units, vr, Z1, Z2);
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -90,7 +93,7 @@ void
 apply_binary_charge_exchange_collision_op( collision_op_t * cop,
                                            kokkos_rng_pool_t& rng ) {
   binary_charge_exchange_collision_op_t<Functor> * cex = (binary_charge_exchange_collision_op_t<Functor> *) cop;
-  binary_charge_exchange_model model(cex->sigma_cx0, cex->dq, cex->var_wt);
+  binary_charge_exchange_model model(cex->spi->g->units, cex->sigma_cx0, cex->dq, cex->var_wt);
   if(cex->var_wt)
     apply_binary_neutral_collision_model_pipeline<true>((binary_neutral_collision_op_t *) cop, model, rng);
    else
@@ -117,8 +120,6 @@ binary_charge_exchange(
   Functor            sigma_func,
   const int          interval,
   const bool         var_wt
-  // species_t        * spp1=NULL,
-  // species_t        * spp2=NULL
 )
 {
 
@@ -136,8 +137,6 @@ binary_charge_exchange(
   
   cex->spi         = spi;
   cex->spj         = spj;
-  // cex->spp1        = spp1;
-  // cex->spp2        = spp2;
   cex->sigma_cx0   = sigma_func;
   cex->dq          = dq;
   cex->var_wt      = var_wt;

@@ -269,6 +269,11 @@ vpic_simulation::apply_artificial_loss_cone( species_t * sp,
       const float w = kp(n, particle_var::w);
       if( w == 0.f ) return;
 
+#ifdef VARIABLE_CHARGE
+      const float qi = kp(n, particle_var::qp);
+      if ( qi == 0.f ) return;
+#endif
+
       const int cell = kpi(n);
       if( cell < 0 || cell >= nv ) return;
 

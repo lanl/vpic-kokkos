@@ -65,8 +65,6 @@ struct binary_neutral_collision_op_t : public collision_op_t {
   species_t       * spj;
   field_array_t   * field=NULL; // field for electron collisions, can be NULL
   int               interval;
-  // species_t       * spp1=NULL; // product species (for fusion products)
-  // species_t       * spp2=NULL; // product species
 };
 
 
@@ -157,13 +155,6 @@ struct reduction_identity<gmomType26> {
     
 }
 
-struct collision_op {
-  char * name;
-  apply_collision_op_func_t  apply_cop;
-  delete_collision_op_func_t delete_cop;
-  collision_op_t * next;
-};
-
 /**
  * @brief Base collision model
  *
@@ -174,7 +165,6 @@ struct collision_op {
 template <typename DerivedT> 
 struct collision_model {
   CollisionType collision_type;
-  
   /**
    * @brief Tangent of half the polar scattering angle.
    *
@@ -269,6 +259,15 @@ struct collision_model {
       // default no-op
   }
     
+  /**
+    * @brief Function for modifying the likelihood of a reaction
+    */
+  KOKKOS_INLINE_FUNCTION
+  constexpr float modify_reaction_probability( float& P, float& multiplier ) const
+  {
+    return P;
+  }
+
 };
 
 // In collision.cc

@@ -326,10 +326,10 @@ struct particle_bulk_collision_pipeline {
                         spi_p(i, particle_var::uz) };
 #endif      
 
-        float wp   = up[0];
-        float ux_n = up[1];
-        float uy_n = up[2];
-        float uz_n = up[3];
+        const float wp   = up[0];
+        const float ux_n = up[1];
+        const float uy_n = up[2];
+        const float uz_n = up[3];
 
         float qp_n = 0.0, qp_i = 0.0;
 #ifdef VARIABLE_CHARGE
@@ -337,15 +337,17 @@ struct particle_bulk_collision_pipeline {
 #endif
 
         bool MC_col_occurred = false;
+        float P_collide = 0.0;
+        float U_MC = 1.0;
         if( use_e_field ) {
-          particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v, MC_col_occurred);
+          particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v, MC_col_occurred, P_collide, U_MC);
         } else {      
-          particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v, MC_col_occurred);
+          particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v, MC_col_occurred, P_collide, U_MC);
         }
     
-        float ux_i = up[1];
-        float uy_i = up[2];
-        float uz_i = up[3];
+        const float ux_i = up[1];
+        const float uy_i = up[2];
+        const float uz_i = up[3];
 #ifdef VARIABLE_CHARGE
         qp_i = up[4];
         spi_p(i, particle_var::qp) = qp_i;
@@ -366,7 +368,7 @@ struct particle_bulk_collision_pipeline {
             // When a particle undergoes charge exchange and 
             // the projectile particle captures an electron,
             // then decrement the neutral fluid density              
-            int dq = qp_i - qp_n;
+            const int dq = static_cast<int>(qp_i - qp_n);
             if (dq == -1) {
               // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
               dn = wp * rdV;
@@ -408,7 +410,7 @@ struct particle_bulk_collision_pipeline {
             dux = ( ux_i - ux_n ) * wp;
             duy = ( uy_i - uy_n ) * wp;
             duz = ( uz_i - uz_n ) * wp;
-            den = 0.5 * wp *
+            den = 0.5F * wp *
                 ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
                   ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
             break; // end case(drag)
@@ -418,10 +420,9 @@ struct particle_bulk_collision_pipeline {
             dux = ( ux_i - ux_n ) * wp;
             duy = ( uy_i - uy_n ) * wp;
             duz = ( uz_i - uz_n ) * wp;
-            den = 0.5 * static_cast<double>(wp)
-                      * ( static_cast<double>(ux_i)*ux_i
-                        + static_cast<double>(uy_i)*uy_i
-                        + static_cast<double>(uz_i)*uz_i );
+            den = 0.5 * wp *
+                ( ( ux_i * ux_i + uy_i * uy_i + uz_i * uz_i ) -
+                  ( ux_n * ux_n + uy_n * uy_n + uz_n * uz_n ) );
             break; // end case(lemons)
           }
           case CollisionType::BulkIonImpactIoniz: // only implemented for case with products
@@ -501,7 +502,7 @@ struct particle_bulk_collision_pipeline {
 
     // Number of particles in product group
     const size_t np_products0 = spp->np;
-    Kokkos::View<size_t*, Space::memory_space> dev_np_products("dev_np_products", 1);
+    const Kokkos::View<size_t*, Space::memory_space> dev_np_products("dev_np_products", 1);
     Kokkos::deep_copy(dev_np_products, 0);
 
     Kokkos::parallel_for("particle_fluid_collision_pipeline::apply_model",
@@ -516,7 +517,10 @@ struct particle_bulk_collision_pipeline {
         auto i0 = spi_partition_ra(v);
         auto ni = spi_partition_ra(v+1) - i0;
 
-        if( ni <= 0 ) return; // Nothing to do
+        if( ni <= 0 ) 
+        { 
+          return; // Nothing to do
+        }
 
         const float dt = dtinterval;
   
@@ -524,7 +528,7 @@ struct particle_bulk_collision_pipeline {
         kokkos_rng_state_t rg = rp.get_state();
  
         // Extract fluid variables
-        const float n_fl   = spj_fl(v, fluid_var::den);
+        //const float n_fl   = spj_fl(v, fluid_var::den);
         const float ux_fl  = spj_fl(v, fluid_var::ux);
         const float uy_fl  = spj_fl(v, fluid_var::uy);
         const float uz_fl  = spj_fl(v, fluid_var::uz);
@@ -552,10 +556,10 @@ struct particle_bulk_collision_pipeline {
                           spi_p(i, particle_var::uz) };
 #endif         
 
-          float wp   = up[0];
-          float ux_n = up[1];
-          float uy_n = up[2];
-          float uz_n = up[3];
+          const float wp   = up[0];
+          // float ux_n = up[1];
+          // float uy_n = up[2];
+          // float uz_n = up[3];
 
           float qp_n = 0.0, qp_i = 0.0;
 #ifdef VARIABLE_CHARGE
@@ -563,10 +567,12 @@ struct particle_bulk_collision_pipeline {
 #endif
 
           bool MC_col_occurred = false;
+          float P_collide = 0.0;
+          float U_MC = 0.0;
           if( use_e_field ) {
-            particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v, MC_col_occurred);
+            particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fd, model, rg, dt, v, MC_col_occurred, P_collide, U_MC);
           } else {
-            particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v, MC_col_occurred);
+            particle_bulk_collision(mi, mj, mu, mu_i, mu_j, up, spj_fl, model, rg, dt, v, MC_col_occurred, P_collide, U_MC);
           }
      
           float ux_i = up[1];
@@ -586,26 +592,39 @@ struct particle_bulk_collision_pipeline {
           switch (model.collision_type) {
             case CollisionType::BulkChargeExchange:
             {
-              if (!MC_col_occurred) { break; }
+              // Production multiplier increases/decreases likelihood of reaction
+              // and decreases/increases product weights so physically correct
+              // reaction rate is maintained. 
+              // 
+              // Note, this is slightly different that the multiplier used
+              // if particle-particle collisions. Here, we only modify the 
+              // probability that the neutral fluid responds to the reaction
+              // and creates a product with a modified weight
+              //
+              float prod_mult = 1.0;
+              model.modify_reaction_probability(P_collide, prod_mult);
 
-              // When a particle undergoes charge exchange and 
-              // the projectile particle captures an electron,
-              // then decrement the neutral fluid density              
-              int dq = qp_i - qp_n;
-              if (dq != -1) { break; }
+              if (U_MC < P_collide) {
+
+                // When a particle undergoes charge exchange and 
+                // the projectile particle captures an electron,
+                // then decrement the neutral fluid density              
+                int dq = qp_i - qp_n;
+                if (dq != -1) { break; }
+                  
+                // Ensure new particle does not exceed species particle count limit
+                if (dev_np_products(0) + np_products0 > static_cast<size_t>(0.98 * spp->max_np)) { break; }
                 
-              // The new kinetic particle takes the fluid bulk velociy plus a thermal component
-              float ux_pr = rg.normal(ux_fl, uth_fl);
-              float uy_pr = rg.normal(uy_fl, uth_fl);
-              float uz_pr = rg.normal(uz_fl, uth_fl);
-              float w_pr = wp;
+                // The new kinetic particle takes the fluid bulk velociy plus a thermal component
+                float ux_pr = rg.normal(ux_fl, uth_fl);
+                float uy_pr = rg.normal(uy_fl, uth_fl);
+                float uz_pr = rg.normal(uz_fl, uth_fl);
+                float w_pr = wp / prod_mult;
 
-              // Create kinetic particle. Get particle index and incremenent number of new products
-              size_t cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
-              size_t i_pr = np_products0 + cntr;
+                // Create kinetic particle. Get particle index and incremenent number of new products
+                size_t cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
+                size_t i_pr = np_products0 + cntr;
 
-              // Ensure new particle does not exceed species limit
-              if (i_pr < static_cast<size_t>(0.95 * spp->max_np)) {
                 spp_p(i_pr, particle_var::w)  = w_pr;
                 spp_p(i_pr, particle_var::ux) = ux_pr;
                 spp_p(i_pr, particle_var::uy) = uy_pr;
@@ -625,31 +644,32 @@ struct particle_bulk_collision_pipeline {
                 den = 0.5 * ( dux * dux + duy * duy + duz * duz ) / w_pr;
                 
                 // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
-                dn = wp * rdV;
+                dn = w_pr * rdV;
 
-              // } else { // endif (i_pr < spp->np)
-                // WARNING(("No room for addition products macroparticles"));
-                // std::cout << "WARNING: No room for addition products macroparticles" << std::endl;
-              }
+              } // endif U<P (including proudction multiplier)
 
               break; // end case(charge exchange)
             }
             case CollisionType::BulkIonImpactIoniz:
             {
-              if (!MC_col_occurred) { break; }
+              float prod_mult = 1.0;
+              model.modify_reaction_probability(P_collide, prod_mult);
+              
+              if (U_MC < P_collide) {
+                  
+                // Ensure new particle does not exceed species particle count limit
+                if (dev_np_products(0) + np_products0 > static_cast<size_t>(0.98 * spp->max_np)) { break; }
 
-              // The new kinetic particle takes the fluid bulk velociy plus a thermal component
-              float ux_pr = rg.normal(ux_fl, uth_fl);
-              float uy_pr = rg.normal(uy_fl, uth_fl);
-              float uz_pr = rg.normal(uz_fl, uth_fl);
-              float w_pr = wp;
+                // The new kinetic particle takes the fluid bulk velociy plus a thermal component
+                float ux_pr = rg.normal(ux_fl, uth_fl);
+                float uy_pr = rg.normal(uy_fl, uth_fl);
+                float uz_pr = rg.normal(uz_fl, uth_fl);
+                float w_pr = wp / prod_mult;
 
-              // Create kinetic particle. Get particle index and incremenent number of new products
-              size_t cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
-              size_t i_pr = np_products0 + cntr;
+                // Create kinetic particle. Get particle index and incremenent number of new products
+                size_t cntr = Kokkos::atomic_fetch_add(&dev_np_products(0), 1);
+                size_t i_pr = np_products0 + cntr;
 
-              // Ensure new particle does not exceed species limit
-              if (i_pr < static_cast<size_t>(0.95 * spp->max_np)) {
                 spp_p(i_pr, particle_var::w)  = w_pr;
                 spp_p(i_pr, particle_var::ux) = ux_pr;
                 spp_p(i_pr, particle_var::uy) = uy_pr;
@@ -667,14 +687,10 @@ struct particle_bulk_collision_pipeline {
                 dux = ux_pr * w_pr;
                 duy = uy_pr * w_pr;
                 duz = uz_pr * w_pr;
-                den = 0.5 * w_pr * ( ux_pr * ux_pr + uy_pr * uy_pr + uz_pr * uz_pr );
+                den = 0.5 * ( ux_pr * ux_pr + uy_pr * uy_pr + uz_pr * uz_pr ) / w_pr;
 
                 // Change in neutral density is dn=w_particle/vol_cell (accumulated in reduction)
-                dn = wp * rdV;
-
-              // } else { // endif (i_pr < spp->np)
-                // WARNING(("No room for addition products macroparticles"));
-                // std::cout << "WARNING: No room for addition products macroparticles" << std::endl;
+                dn = w_pr * rdV;
               }
 
               break; // end case(ion impact ionization)
@@ -722,6 +738,11 @@ struct particle_bulk_collision_pipeline {
     Kokkos::deep_copy(host_np_products, dev_np_products);
     spp->np += host_np_products(0);    
 
+    // Todo: only sort particles once per step for collisions. 
+    // Add new variable np_next that accumulates total number of products.
+    if (host_np_products(0) > 0) {
+      spp->last_indexed -= 1;
+    }
   } // end apply_model_products()
 
 
@@ -751,7 +772,9 @@ struct particle_bulk_collision_pipeline {
     kokkos_rng_state_t& rg,
     float dt,
     int ii,
-    bool& MC_collision_occurred
+    bool& MC_collision_occurred,
+    float& P_collide,
+    float& U_MC
   ) const
   {
 
@@ -842,13 +865,16 @@ struct particle_bulk_collision_pipeline {
     t1  = ur*ndt;   // n v dt  = Particles encountered per unit area
 
     // Monte-Carlo collision test
+    P_collide = 1.0; 
     if( MonteCarlo ) {
 
       // TODO : CPU VPIC warned when dd*t1 > 1 for under-resolved collisions.
       //        Would this be useful?
       dd = model.cross_section( rg, ur, t1, t2, qi, 0.0 );
 
-      if( rg.frand() > dd*t1 ) {
+      P_collide = dd * t1; // sigma * n * v * dt
+      U_MC = rg.frand();
+      if( U_MC > P_collide ) {
         MC_collision_occurred = false;
         return;
       } else {
@@ -886,13 +912,20 @@ struct particle_bulk_collision_pipeline {
         up[4] += 1.0;
         break;
       }
+      case CollisionType::BulkLemons:
+      {
+        // If variable_charge and ion charge is zero,
+        // then no electron-ion Coulomb collision
+        if (qi == 0.0) { return; };
+        break;
+      }
       default:
         break;
     }
 #endif
 
     // Compute collision angle and coefficient of restitution
-    float param[5] = {ur, ujth, ndt/(mi*mi), mi/mj, E0};
+    float param[6] = {ur, ujth, ndt/(mi*mi), mi/mj, E0, qi};
     const float rr = model.restitution(rg, param);
     dd = model.tan_theta_half(rg, param);
     PREVENT_BACKSCATTER(dd);

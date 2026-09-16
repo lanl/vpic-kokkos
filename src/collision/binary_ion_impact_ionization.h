@@ -20,11 +20,13 @@ struct binary_ion_impact_ioniz_collision_op_t : public binary_neutral_collision_
 template<typename Functor>
 struct binary_ion_impact_ioniz_model : public collision_model<binary_ion_impact_ioniz_model<Functor>> {
   CollisionType collision_type = CollisionType::BinaryIonImpactIoniz;
+  units_SI units;
   const float dE;
   const bool var_wt;
   Functor sigma_cx;
-  binary_ion_impact_ioniz_model( Functor op, float dE, bool var_wt ) : sigma_cx(op), dE(dE), var_wt(var_wt) { };
-
+  
+  binary_ion_impact_ioniz_model( units_SI units, Functor op, float dE, bool var_wt ) : 
+    units(units), sigma_cx(op), dE(dE), var_wt(var_wt) {};
 
   /**
    * @brief cross_section(E,nvdt,Z1,Z2)
@@ -39,7 +41,7 @@ struct binary_ion_impact_ioniz_model : public collision_model<binary_ion_impact_
     float Z2=0  // Charge of particle
   ) const
   {
-    return sigma_cx(vr, Z1, Z2);
+    return sigma_cx(units, vr, Z1, Z2);
   }
 
   /**
@@ -58,8 +60,6 @@ struct binary_ion_impact_ioniz_model : public collision_model<binary_ion_impact_
     // if (E0 < dE) { return 0.001; }
 
     auto Cr = std::sqrt((E0 - dE) / E0); // scale factor for change in velocity
-    // std::cout << "E0="<<E0 << " dE=" << dE << std::endl;
-    // std::cout << "Cr = " << Cr << "Cr2 = " << (E0 - dE) / E0 << " dE/E0 = " << dE/E0 << std::endl;
     return Cr;
   }
 
@@ -76,17 +76,6 @@ struct binary_ion_impact_ioniz_model : public collision_model<binary_ion_impact_
     float value = 0.0;
     return value;
   }
-
-  /**
-   * @brief modify_charge(). Don't use. Always increment charge 
-   * of second species by one.
-   */
-  // KOKKOS_INLINE_FUNCTION
-  // float modify_charge( ) const
-  // {
-  //   float delta_charge = dq; 
-  //   return delta_charge;
-  // }
 };
 
 
@@ -113,7 +102,7 @@ void
 apply_binary_ion_impact_ioniz_collision_op( collision_op_t * cop,
                                             kokkos_rng_pool_t& rng ) {
   binary_ion_impact_ioniz_collision_op_t<Functor> * ioniz = (binary_ion_impact_ioniz_collision_op_t<Functor> *) cop;
-  binary_ion_impact_ioniz_model model(ioniz->sigma_cx0, ioniz->dE, ioniz->var_wt);
+  binary_ion_impact_ioniz_model model(ioniz->spi->g->units, ioniz->sigma_cx0, ioniz->dE, ioniz->var_wt);
   if(ioniz->var_wt)
     apply_binary_neutral_collision_model_pipeline<true>((binary_neutral_collision_op_t *) cop, model, rng);
   else
@@ -140,8 +129,6 @@ binary_ion_impact_ioniz(
   Functor            sigma_func,
   const int          interval,
   const bool         var_wt
-  // species_t        * spp1=NULL,
-  // species_t        * spp2=NULL
 )
 {
 
@@ -159,8 +146,6 @@ binary_ion_impact_ioniz(
   
   ioniz->spi         = spi;
   ioniz->spj         = spj;
-  // ioniz->spp1        = spp1;
-  // ioniz->spp2        = spp2;
   ioniz->sigma_cx0   = sigma_func;
   ioniz->dE          = dE;
   ioniz->var_wt      = var_wt;

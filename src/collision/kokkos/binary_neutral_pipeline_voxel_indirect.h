@@ -428,7 +428,7 @@ void collide_self_varwt(
   
     wp1 = up[0];
     wp2 = up[4];
-    const double w_max = (wp1 > wp2) ? wp1 : wp2;
+    float w_max = (wp1 > wp2) ? wp1 : wp2;
     float ndt = w_max * np_min * dtinterval / dV * nu_modifier;
 
     bool MC_col_occurred;
@@ -438,8 +438,9 @@ void collide_self_varwt(
 
     // The larger weighted particle is updated with probability w_min/w_max
     // and the smaller weighted particle is always updated
-    const bool update_p1 = (rg.frand() < wp2 / w_max);
-    const bool update_p2 = (rg.frand() < wp1 / w_max);
+    const float u_rand = rg.frand();
+    const bool update_p1 = (u_rand < wp2 / w_max);
+    const bool update_p2 = (u_rand < wp1 / w_max);
 
     if (update_p1) {
       ux = up[1];
@@ -550,7 +551,7 @@ void collide_variabl_wt(
   
     wp1 = up[0];
     wp2 = up[4];
-    const double w_max = (wp1 > wp2) ? wp1 : wp2;
+    float w_max = (wp1 > wp2) ? wp1 : wp2;
     float ndt = w_max * np_min * dtinterval / dV;
 
     bool MC_col_occurred;
@@ -560,8 +561,9 @@ void collide_variabl_wt(
 
     // The larger weighted particle is updated with probability w_min/w_max
     // and the smaller weighted particle is always updated
-    const bool update_p1 = (rg.frand() < wp2 / w_max);
-    const bool update_p2 = (rg.frand() < wp1 / w_max);
+    const float u_rand = rg.frand();
+    const bool update_p1 = (u_rand < wp2 / w_max);
+    const bool update_p2 = (u_rand < wp1 / w_max);
 
     if (update_p1) {
       ux = up[1];

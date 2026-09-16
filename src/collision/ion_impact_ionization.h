@@ -9,7 +9,8 @@
 template<typename Functor>
 struct ion_ioniz_collision_op_t : public particle_bulk_collision_op_t {
   Functor sigma_cx0;
-  double dE;
+  double  dE;
+  float   production_multiplier;
 };
 
 /**
@@ -18,12 +19,17 @@ struct ion_ioniz_collision_op_t : public particle_bulk_collision_op_t {
 template<typename Functor>
 struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
   CollisionType collision_type = CollisionType::BulkIonImpactIoniz;
+  units_SI units; 
   Functor sigma_cx;
   double dE;
+  float production_multiplier;
 
-  ion_ioniz_model( Functor op, double dE) : 
-    sigma_cx(op), dE{dE} {};
-
+  ion_ioniz_model( units_SI units, Functor op, float dE, float production_multiplier ) : 
+    units(units), 
+    sigma_cx(op), 
+    dE{dE}, 
+    production_multiplier{production_multiplier} 
+    {};
   
   KOKKOS_INLINE_FUNCTION
   float cross_section(
@@ -35,7 +41,7 @@ struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
     float Z2=0  // Charge of particle
   ) const
   {
-    float sig = sigma_cx(vr, Z1, Z2);
+    float sig = sigma_cx(units, vr, Z1, Z2);
     return sig;
   }
   
@@ -51,7 +57,6 @@ struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
     // Removing energy only from particle assumes fluid is at rest
     auto E0 = param[4]; // projectile energy
     auto Cr = std::sqrt((E0 - dE) / E0); // scale factor for change in velocity
-    // std::cout << "Cr = " << Cr << "Cr2 = " << (E0 - dE_i) / E0 << " dE/E0 = " << dE_i/E0 << std::endl;
     return Cr;
   }
     
@@ -68,15 +73,28 @@ struct ion_ioniz_model : public collision_model<ion_ioniz_model<Functor>> {
     return value; // No scattering for now.
   }
 
-
-  // Incoming ion does not change charge
-  // KOKKOS_INLINE_FUNCTION
-  //   float modify_charge( ) const
-  // {
-  //   float delta_charge = dq; 
-  //   return delta_charge;
-  // }
-  
+  /**
+   * @brief Function for modifying the likelihood of a reaction such that 
+   *        more macroparticles are created (with smaller weights) and
+   *        the physically correct reaction rate is maintained
+   * @param P probability to scatter
+   * @param pr_mult production multiplier
+   */
+  KOKKOS_INLINE_FUNCTION
+  constexpr void modify_reaction_probability( float& P, float& pr_mult ) const
+  {
+    // Can tune likelihood of reaction using production_multiplier.
+    // But the method requires P<1 to resolve the reaction, so here we
+    // reduce the multiplier until the condition is satisfied
+    pr_mult = production_multiplier;
+    float p_scatter = P * pr_mult;
+    while (p_scatter > 1.0) {
+      pr_mult /= 2.0;
+      p_scatter = P * pr_mult;
+    }
+    P *= pr_mult;
+    return;
+  } // end modify_reaction_probability()  
 
   /**
    * @brief Implemention of upload_moment_src_impl() for ion impact ionization
@@ -129,7 +147,7 @@ void
 apply_ion_ioniz_collision_op( collision_op_t * cop,
 			kokkos_rng_pool_t& rng ) {
   ion_ioniz_collision_op_t<Functor> * ion_ioniz = (ion_ioniz_collision_op_t<Functor> *) cop;
-  ion_ioniz_model model(ion_ioniz->sigma_cx0, ion_ioniz->dE);
+  ion_ioniz_model model(ion_ioniz->spi->g->units, ion_ioniz->sigma_cx0, ion_ioniz->dE, ion_ioniz->production_multiplier);
   apply_particle_bulk_collision_model_pipeline<true>((particle_bulk_collision_op_t *) cop, model, rng); // To-do: Change MC to true!
 }
 
@@ -149,14 +167,20 @@ ion_impact_ionization(
   const char       * name,
   /**/  species_t  * spi,
   /**/  fluid_species_t  * spj,
-  const double       dE,
+  const float        dE,
   Functor            sigmafunc,
   const int          interval,
+  float        production_multiplier=1.0,
   species_t        * spp=NULL
 ) {
 
   if( !name || !spi || !spj || !spi->g || !spj->g || spi->g != spj->g || interval <= 0 )
     ERROR(("Bad args."));
+
+  if( production_multiplier > 1.0 ) {
+    WARNING(("Bad arg. production_multiplier valid for <=1. Reassigning to 1."));
+    production_multiplier = 1.0;
+  }
 
   ion_ioniz_collision_op_t<Functor> * ion_ioniz;
   MALLOC( ion_ioniz, 1);
@@ -168,6 +192,7 @@ ion_impact_ionization(
   ion_ioniz->spp         = spp;
   ion_ioniz->sigma_cx0   = sigmafunc;
   ion_ioniz->dE          = dE;
+  ion_ioniz->production_multiplier = production_multiplier;
   ion_ioniz->interval    = interval;
   ion_ioniz->apply_cop   = &apply_ion_ioniz_collision_op<Functor>;
   ion_ioniz->delete_cop  = &delete_ion_ioniz_collision_op<Functor>;

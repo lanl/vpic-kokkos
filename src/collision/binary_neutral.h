@@ -26,8 +26,6 @@ void apply_binary_neutral_collision_model_pipeline(
     cop->interval,
     rng,
     cop->field
-    // cop->spp1,
-    // cop->spp2
   );
 
   pipeline.dispatch(model);

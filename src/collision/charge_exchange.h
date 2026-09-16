@@ -8,8 +8,9 @@
  */
 template<typename Functor>
 struct cex_collision_op_t : public particle_bulk_collision_op_t {
-  double dq0;
+  float   dq0;
   Functor sigma_cx0;
+  float   production_multiplier;
 };
 
 /**
@@ -18,9 +19,17 @@ struct cex_collision_op_t : public particle_bulk_collision_op_t {
 template<typename Functor>
 struct cex_model : public collision_model<cex_model<Functor>> {
   CollisionType collision_type = CollisionType::BulkChargeExchange;
+  units_SI units;
   const float dq;
   Functor sigma_cx;
-  cex_model( Functor op, float dq ) : sigma_cx(op), dq(dq) { };
+  float production_multiplier;
+  
+  cex_model( units_SI units, Functor op, float dq, float production_multiplier ) : 
+    units(units), 
+    sigma_cx(op), 
+    dq(dq), 
+    production_multiplier{production_multiplier} 
+    {};
   
   KOKKOS_INLINE_FUNCTION
   float cross_section(
@@ -32,7 +41,7 @@ struct cex_model : public collision_model<cex_model<Functor>> {
     float Z2=0  // Charge of particle
   ) const
   {
-    float sig = sigma_cx(vr,Z1);
+    float sig = sigma_cx(units, vr, Z1);
     return sig;
   }
   
@@ -55,10 +64,31 @@ struct cex_model : public collision_model<cex_model<Functor>> {
     float modify_charge( ) const
   {
     float delta_charge = dq;
-    
     return delta_charge;
   }
   
+  /**
+   * @brief Function for modifying the likelihood of a reaction such that 
+   *        more macroparticles are created (with smaller weights) and
+   *        the physically correct reaction rate is maintained
+   * @param P probability to scatter
+   * @param pr_mult production multiplier
+   */
+  KOKKOS_INLINE_FUNCTION
+  constexpr void modify_reaction_probability( float& P, float& pr_mult ) const
+  {
+    // Can tune likelihood of reaction using production_multiplier.
+    // But the method requires P<1 to resolve the reaction, so here we
+    // reduce the multiplier until the condition is satisfied
+    pr_mult = production_multiplier;
+    float p_scatter = P * pr_mult;
+    while (p_scatter > 1.0) {
+      pr_mult /= 2.0;
+      p_scatter = P * pr_mult;
+    }
+    P *= pr_mult;
+    return;
+  } // end modify_reaction_probability()
 
   /**
    * @brief Implemention of upload_moment_src_impl() for charge exchange
@@ -112,7 +142,7 @@ void
 apply_cex_collision_op( collision_op_t * cop,
                         kokkos_rng_pool_t& rng ) {
   cex_collision_op_t<Functor> * cex = (cex_collision_op_t<Functor> *) cop;
-  cex_model model(cex->sigma_cx0,cex->dq0);
+  cex_model model(cex->spi->g->units, cex->sigma_cx0, cex->dq0, cex->production_multiplier);
   apply_particle_bulk_collision_model_pipeline<true>((particle_bulk_collision_op_t *) cop, model, rng); // To-do: Change MC to true!
 }
 
@@ -132,14 +162,20 @@ charge_exchange(
   const char       * name,
   /**/  species_t  * spi,
   /**/  fluid_species_t  * spj,
-  const double       dq0,
+  const float        dq0,
   Functor            sigmafunc,
   const int          interval,
+  float              production_multiplier=1.0,
   species_t        * spp=NULL
 ) {
 
   if( !name || !spi || !spj || !spi->g || !spj->g || spi->g != spj->g || interval <= 0 )
     ERROR(("Bad args."));
+
+  if( production_multiplier > 1.0 ) {
+    WARNING(("Bad arg. production_multiplier valid for <=1. Reassigning to 1."));
+    production_multiplier = 1.0;
+  }
 
   cex_collision_op_t<Functor> * cex;
   MALLOC( cex, 1);
@@ -151,7 +187,7 @@ charge_exchange(
   cex->spp         = spp;
   cex->sigma_cx0   = sigmafunc;
   cex->dq0         = dq0;
-  //  ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
+  cex->production_multiplier = production_multiplier;
   cex->interval    = interval;
   cex->apply_cop   = &apply_cex_collision_op<Functor>;
   cex->delete_cop  = &delete_cex_collision_op<Functor>;

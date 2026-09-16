@@ -8,7 +8,6 @@
  */
 template<typename Functor>
 struct drag_collision_op_t : public particle_bulk_collision_op_t {
-  //  double cvar0;
   Functor stopping_cx0;
 };
 
@@ -19,11 +18,11 @@ struct drag_collision_op_t : public particle_bulk_collision_op_t {
 template<typename Functor>
 struct drag_model : public collision_model<drag_model<Functor>> {
   CollisionType collision_type = CollisionType::BulkDrag;
-  // const float cvar;
-
+  units_SI units;
   Functor stopping_cx;
 
-  drag_model( Functor op ) : stopping_cx(op) { };
+  drag_model( units_SI units, Functor op ) : 
+    units(units), stopping_cx(op) {};
 
   /*
   KOKKOS_INLINE_FUNCTION
@@ -55,7 +54,7 @@ struct drag_model : public collision_model<drag_model<Functor>> {
 
     auto ndt_mi2 = param[2]; // Actually need n*dt/mi -> multiply by mi in stopping_cx.
     
-    float mS = stopping_cx(v0); 
+    float mS = stopping_cx(units, v0); 
 
     auto Cr = 1.0 - ndt_mi2*mS/v0;
 
@@ -134,7 +133,7 @@ void
 apply_drag_collision_op( collision_op_t * cop,
                         kokkos_rng_pool_t& rng ) {
   drag_collision_op_t<Functor> * drag = (drag_collision_op_t<Functor> *) cop;
-  drag_model model(drag->stopping_cx0);
+  drag_model model(drag->spi->g->units, drag->stopping_cx0);
   apply_particle_bulk_collision_model_pipeline<false>((particle_bulk_collision_op_t *) cop, model, rng); // To-do: MC false for drag only (for now)
 }
 
@@ -154,8 +153,7 @@ collision_op_t *
 drag(
   const char       * name,
   /**/  species_t  * spi,
-  /**/  fluid_species_t  * spj,
-  //  const double       cvar0,                                                                                                          
+  /**/  fluid_species_t  * spj,                                                                                                      
   Functor stoppingfunc,
   const int          interval
 ) {
@@ -171,7 +169,6 @@ drag(
   drag->spi         = spi;
   drag->spj         = spj;
   drag->stopping_cx0   = stoppingfunc;
-  //  ta->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
   drag->interval    = interval;
   drag->apply_cop   = &apply_drag_collision_op<Functor>;
   drag->delete_cop  = &delete_drag_collision_op<Functor>;

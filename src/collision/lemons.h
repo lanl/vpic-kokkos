@@ -33,7 +33,12 @@ struct lemons_model : public collision_model<lemons_model> {
     auto v = param[0];
     auto vjth = param[1];
     auto ndt_mi2 = param[2];
+#ifdef VARIABLE_CHARGE
+    auto qi = param[5];
+    auto cvar = d_cvar0*4.0*ndt_mi2*qi*qi;
+#else
     auto cvar = d_cvar0*4.0*ndt_mi2;
+#endif
     auto z = v/(vjth);
     auto erfz = erf( z );
     auto gz = ( erfz - z * d_twosqrtpi * exp( -z * z ) ) / ( 2.0 * z * z );
@@ -63,7 +68,12 @@ struct lemons_model : public collision_model<lemons_model> {
     auto mr = param[3]; //mi/mj
     
     auto mfact = 2.0*(1.0+mr);
+#ifdef VARIABLE_CHARGE
+    auto qi = param[5];
+    auto cvar = d_cvar0*4.0*ndt_mi2*qi*qi;
+#else
     auto cvar = d_cvar0*4.0*ndt_mi2;
+#endif
     auto z = v/(vjth);
     auto erfz = erf( z );
     auto gz = ( erfz - z * d_twosqrtpi * exp( -z * z ) ) / ( 2.0 * z * z );

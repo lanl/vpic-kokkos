@@ -67,7 +67,11 @@ lemons(
   
   le->spp = NULL;
 
+#ifdef VARIABLE_CHARGE
+  le->cvar0       = cvar0;
+#else
   le->cvar0       = cvar0 * spi->q * spi->q * spj->q * spj->q;
+#endif
   le->interval    = interval;
   le->apply_cop   = &apply_lemons_collision_op;
   le->delete_cop  = &delete_lemons_collision_op;

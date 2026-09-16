@@ -4,7 +4,7 @@
 #include "binary_neutral.h"
 
 /**
- * @brief Binary charge exchange collision operator.
+ * @brief Binary Coulomb collision operator.
  */
 template<typename Functor>
 struct binary_coulomb_collision_op_t : public binary_neutral_collision_op_t {
@@ -15,7 +15,7 @@ struct binary_coulomb_collision_op_t : public binary_neutral_collision_op_t {
 
 
 /**
- * @brief Binary charge exchange collision model.
+ * @brief Binary Coulomb collision model.
  */
 template<typename Functor>
 struct binary_coulomb_model : public collision_model<binary_coulomb_model<Functor>> {
@@ -23,7 +23,9 @@ struct binary_coulomb_model : public collision_model<binary_coulomb_model<Functo
   const double cvar0;
   const bool var_wt;
   Functor sigma_cx;
-  binary_coulomb_model( Functor op, double cvar0, bool var_wt ) : cvar0(cvar0), var_wt(var_wt), sigma_cx(op) { };
+
+  binary_coulomb_model( Functor op, double cvar0, bool var_wt ) : 
+    cvar0(cvar0), var_wt(var_wt), sigma_cx(op) { };
 
 
   /**
@@ -41,14 +43,6 @@ struct binary_coulomb_model : public collision_model<binary_coulomb_model<Functo
   {
     return sigma_cx(vr, Z1, Z2);
   }
-
-  // KOKKOS_INLINE_FUNCTION
-  // float modify_charge( ) const
-  // {
-  //   float delta_charge = dq; 
-  //   return delta_charge;
-  // }
-
 
   /**
    * @brief tan(theta/2) is normally distributed and variance scales ~ ur^-3/2.
@@ -118,8 +112,6 @@ binary_coulomb(
   Functor            sigma_func,
   const int          interval,
   const bool         var_wt
-  // species_t        * spp1=NULL,
-  // species_t        * spp2=NULL
 )
 {
 
@@ -137,8 +129,6 @@ binary_coulomb(
   
   coul->spi         = spi;
   coul->spj         = spj;
-  // coul->spp1        = spp1;
-  // coul->spp2        = spp2;
   coul->sigma_cx0   = sigma_func;
 #ifdef VARIABLE_CHARGE  
   coul->cvar0       = cvar0; //charges are to be multiplied by particles
