@@ -158,7 +158,7 @@ int vpic_simulation::advance(void)
     {
 Kokkos::Profiling::pushRegion("BoundaryP");
       //boundary_p( particle_bc_list, species_list, field_array, accumulator_array );
-      boundary_p_kokkos( particle_bc_list, species_list, field_array );
+      boundary_p( particle_bc_list, species_list, field_array );
 Kokkos::Profiling::popRegion();
     }
   TOC( boundary_p, num_comm_round );

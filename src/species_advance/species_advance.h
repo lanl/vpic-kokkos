@@ -449,11 +449,11 @@ move_p_kokkos(
 
   //k_field_t& k_field = fa->k_f_d;
   float s_midx, s_midy, s_midz;
-  float s_dispx, s_dispy, s_dispz;
-  float s_dir[3];
+  float s_dispx, s_dispy=0, s_dispz;
+  float s_dir[3] = {0.0f};
   float v0, v1, v2, v3, v4, v5, q;
   int axis, face;
-  int64_t neighbor;
+  int64_t neighbor=0;
   //int pi = int(local_pm_i);
   int pi = pm->i;
 //  auto  k_field_scatter_access = k_f_sa.access();
@@ -664,69 +664,42 @@ move_p_kokkos(
 }
 
 // this has no data race protection for write into the accumulators
-template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class accum_view_t>
+template<class neighbor_view_t, class accum_view_t>
 int
 move_p_kokkos_host_serial(
-    const particle_view_t& k_particles,
-    const particle_i_view_t& k_particles_i,
-    particle_mover_t* ALIGNED(16) pm,
+    particle_t& p,
+    particle_mover_t& pm,
     accum_view_t& k_jf_accum,
-    const grid_t* g,
     neighbor_view_t& d_neighbor,
     int64_t rangel,
     int64_t rangeh,
+    const int nx,
+    const int ny,
+    const int nz,
+    const float cx,
+    const float cy,
+    const float cz,
     const float qsp
 )
 {
-  const int nx = g->nx;
-  const int ny = g->ny;
-  const int nz = g->nz;
-  float cx = 0.25 * g->rdy * g->rdz / g->dt;
-  float cy = 0.25 * g->rdz * g->rdx / g->dt;
-  float cz = 0.25 * g->rdx * g->rdy / g->dt;
-
-  #define p_dx    k_particles(pi, particle_var::dx)
-  #define p_dy    k_particles(pi, particle_var::dy)
-  #define p_dz    k_particles(pi, particle_var::dz)
-  #define p_ux    k_particles(pi, particle_var::ux)
-  #define p_uy    k_particles(pi, particle_var::uy)
-  #define p_uz    k_particles(pi, particle_var::uz)
-  #define p_w     k_particles(pi, particle_var::w)
-  #define pii     k_particles_i(pi)
-
-  //#define local_pm_dispx  k_local_particle_movers(0, particle_mover_var::dispx)
-  //#define local_pm_dispy  k_local_particle_movers(0, particle_mover_var::dispy)
-  //#define local_pm_dispz  k_local_particle_movers(0, particle_mover_var::dispz)
-  //#define local_pm_i      k_local_particle_movers(0, particle_mover_var::pmi)
-
-
   float s_midx, s_midy, s_midz;
   float s_dispx, s_dispy, s_dispz;
   float s_dir[3];
   float v0, v1, v2, v3, v4, v5, q;
   int axis, face;
   int64_t neighbor;
-  //int pi = int(local_pm_i);
-  int pi = pm->i;
 
-  q = qsp*p_w;
-
-    //printf("in move %d \n", pi);
+  q = qsp*p.w;
 
   for(;;) {
-    int ii = pii;
-    s_midx = p_dx;
-    s_midy = p_dy;
-    s_midz = p_dz;
+    int ii = p.i;
+    s_midx = p.dx;
+    s_midy = p.dy;
+    s_midz = p.dz;
 
-
-    s_dispx = pm->dispx;
-    s_dispy = pm->dispy;
-    s_dispz = pm->dispz;
-
-    //printf("pre axis %d x %e y %e z %e \n", axis, p_dx, p_dy, p_dz);
-
-    //printf("disp x %e y %e z %e \n", s_dispx, s_dispy, s_dispz);
+    s_dispx = pm.dispx;
+    s_dispy = pm.dispy;
+    s_dispz = pm.dispz;
 
     s_dir[0] = (s_dispx>0) ? 1 : -1;
     s_dir[1] = (s_dispy>0) ? 1 : -1;
@@ -807,19 +780,16 @@ move_p_kokkos_host_serial(
 #   undef accumulate_j
 
     // Compute the remaining particle displacment
-    pm->dispx -= s_dispx;
-    pm->dispy -= s_dispy;
-    pm->dispz -= s_dispz;
+    pm.dispx -= s_dispx;
+    pm.dispy -= s_dispy;
+    pm.dispz -= s_dispz;
 
-    //printf("pre axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
     // Compute the new particle offset
-    p_dx += s_dispx+s_dispx;
-    p_dy += s_dispy+s_dispy;
-    p_dz += s_dispz+s_dispz;
+    p.dx += s_dispx+s_dispx;
+    p.dy += s_dispy+s_dispy;
+    p.dz += s_dispz+s_dispz;
 
     // If an end streak, return success (should be ~50% of the time)
-    //printf("axis %d x %e y %e z %e disp x %e y %e z %e\n", axis, p_dx, p_dy, p_dz, s_dispx, s_dispy, s_dispz);
-
     if( axis==3 ) break;
 
     // Determine if the particle crossed into a local cell or if it
@@ -830,8 +800,9 @@ move_p_kokkos_host_serial(
     // +/-1 _exactly_ for the particle.
 
     v0 = s_dir[axis];
-    k_particles(pi, particle_var::dx + axis) = v0; // Avoid roundoff fiascos--put the particle
-                           // _exactly_ on the boundary.
+    float* pos = static_cast<float*>(&(p.dx));
+    float* mom = static_cast<float*>(&(p.ux));
+    pos[axis] = v0; // Avoid roundoff fiascos--put the particle exactly on the boundary.
     face = axis; if( v0>0 ) face += 3;
 
     // TODO: clean this fixed index to an enum
@@ -842,15 +813,13 @@ move_p_kokkos_host_serial(
     // but that intrinsic doesn't work on GPU.
     // for performance portability, maybe specialize UNLIKELY
     // for CUDA mode and put it back
-
-
     if( neighbor==reflect_particles ) {
       // Hit a reflecting boundary condition.  Reflect the particle
       // momentum and remaining displacement and keep moving the
       // particle.
-      k_particles(pi, particle_var::ux + axis) = -k_particles(pi, particle_var::ux + axis);
+      mom[axis] = -mom[axis];
       // Clearer and works with AMD GPUs
-      float* disp = static_cast<float*>(&(pm->dispx));
+      float* disp = static_cast<float*>(&(pm.dispx));
       disp[axis] = -disp[axis];
 
       continue;
@@ -860,30 +829,17 @@ move_p_kokkos_host_serial(
       // Cannot handle the boundary condition here.  Save the updated
       // particle position, face it hit and update the remaining
       // displacement in the particle mover.
-      pii = 8*pii + face;
+      p.i = 8*p.i + face;
       return 1; // Return "mover still in use"
-      }
+    }
 
     // Crossed into a normal voxel.  Update the voxel index, convert the
     // particle coordinate system and keep moving the particle.
 
-    pii = neighbor - rangel;
+    p.i = neighbor - rangel;
     /**/                         // Note: neighbor - rangel < 2^31 / 6
-    k_particles(pi, particle_var::dx + axis) = -v0;      // Convert coordinate system
+    pos[axis] = -v0; // Convert coordinate system
   }
-  #undef p_dx
-  #undef p_dy
-  #undef p_dz
-  #undef p_ux
-  #undef p_uy
-  #undef p_uz
-  #undef p_w
-  #undef pii
-
-  //#undef local_pm_dispx
-  //#undef local_pm_dispy
-  //#undef local_pm_dispz
-  //#undef local_pm_i
   return 0; // Return "mover not in use"
 }
 
@@ -894,96 +850,90 @@ void k_accumulate_rhob_single_cpu(
         kp_t& kpart,
         kpi_t& kpart_i,
         const int i,
-        const grid_t* g,
-        const float qsp
+        const float qsp,
+        const float r8V, // Grid vars
+        const int nx, 
+        const int ny, 
+        const int nz, 
+        const int sy,
+        const int sz
 )
 {
-    // Extract grid vars
-    const float r8V = g->r8V;
-    const int nx = g->nx;
-    const int ny = g->ny;
-    const int nz = g->nz;
-    const int sy = g->sy;
-    const int sz = g->sz;
 
-    // Kernel
-    //float w0 = p->dx, w1 = p->dy, w2, w3, w4, w5, w6, w7, dz = p->dz;
-    //int v = p->i, x, y, z, sy = g->sy, sz = g->sz;
-    //w7 = (qsp*g->r8V)*p->w;
-    float w0 = kpart(i, particle_var::dx);
-    float w1 = kpart(i, particle_var::dy);
-    float w7 = (qsp * r8V) * kpart(i, particle_var::w);
-    float dz = kpart(i, particle_var::dz);
-    int v = kpart_i(i);
-    //printf("\n Vars are %g, %g, %g %g\n", w0, w1, w7, dz);
+  // Kernel
+  float w0, w1, w2, w3, w4, w5, w6, w7;
+  w0 = kpart(i, particle_var::dx);
+  w1 = kpart(i, particle_var::dy);
+  w7 = (qsp * r8V) * kpart(i, particle_var::w);
+  float dz = kpart(i, particle_var::dz);
+  int v = kpart_i(i);
 
-    float w6 = w7 - w0 * w7;
-    w7 = w7 + w0 * w7;
-    float w4 = w6 - w1 * w6;
-    float w5 = w7 - w1 * w7;
-    w6 = w6 + w1 * w6;
-    w7 = w7 + w1 * w7;
-    w0 = w4 - dz * w4;
-    w1 = w5 - dz * w5;
-    float w2 = w6 - dz * w6;
-    float w3 = w7 - dz * w7;
-    w4 = w4 + dz * w4;
-    w5 = w5 + dz * w5;
-    w6 = w6 + dz * w6;
-    w7 = w7 + dz * w7;
+  w6 = w7 - w0 * w7;
+  w7 = w7 + w0 * w7;
+  w4 = w6 - w1 * w6;
+  w5 = w7 - w1 * w7;
+  w6 = w6 + w1 * w6;
+  w7 = w7 + w1 * w7;
+  w0 = w4 - dz * w4;
+  w1 = w5 - dz * w5;
+  w2 = w6 - dz * w6;
+  w3 = w7 - dz * w7;
+  w4 = w4 + dz * w4;
+  w5 = w5 + dz * w5;
+  w6 = w6 + dz * w6;
+  w7 = w7 + dz * w7;
 
-    int x = v;
-    int z = x/sz;
-    if(z == 1) {
-        w0 += w0;
-        w1 += w1;
-        w2 += w2;
-        w3 += w3;
-    }
-    if(z == nz) {
-        w4 += w4;
-        w5 += w5;
-        w6 += w6;
-        w7 += w7;
-    }
-    x -= sz * z;
-    int y = x/sy;
-    if(y == 1) {
-        w0 += w0;
-        w1 += w1;
-        w4 += w4;
-        w5 += w5;
-    }
-    if(y == ny) {
-        w2 += w2;
-        w3 += w3;
-        w6 += w6;
-        w7 += w7;
-    }
-    x -= sy * y;
-    if(x == 1) {
-        w0 += w0;
-        w2 += w2;
-        w4 += w4;
-        w6 += w6;
-    }
-    if(x == nx) {
-        w1 += w1;
-        w3 += w3;
-        w5 += w5;
-        w7 += w7;
-    }
-    //printf("Absorbing %d into %d for %e %e %e %e %e %e %e %e \n", i, v, w0, w1, w2, w3, w4, w5, w6, w7);
-    // Save the bound charge to an accumulator array to be added to rhob on the
-    // device later
-    k_rhob_accum(v) += w0;
-    k_rhob_accum(v+1) += w1;
-    k_rhob_accum(v+sy) += w2;
-    k_rhob_accum(v+sy+1) += w3;
-    k_rhob_accum(v+sz) += w4;
-    k_rhob_accum(v+sz+1) += w5;
-    k_rhob_accum(v+sz+sy) += w6;
-    k_rhob_accum(v+sz+sy+1) += w7;
+  int x = v;
+  int z = x/sz;
+  if(z == 1) {
+    w0 += w0;
+    w1 += w1;
+    w2 += w2;
+    w3 += w3;
+  }
+  if(z == nz) {
+    w4 += w4;
+    w5 += w5;
+    w6 += w6;
+    w7 += w7;
+  }
+  x -= sz * z;
+  int y = x/sy;
+  if(y == 1) {
+    w0 += w0;
+    w1 += w1;
+    w4 += w4;
+    w5 += w5;
+  }
+  if(y == ny) {
+    w2 += w2;
+    w3 += w3;
+    w6 += w6;
+    w7 += w7;
+  }
+  x -= sy * y;
+  if(x == 1) {
+    w0 += w0;
+    w2 += w2;
+    w4 += w4;
+    w6 += w6;
+  }
+  if(x == nx) {
+    w1 += w1;
+    w3 += w3;
+    w5 += w5;
+    w7 += w7;
+  }
+  // Save the bound charge to an accumulator array to be added to rhob on the
+  // device later
+  k_rhob_accum(v)         += w0;
+  k_rhob_accum(v+1)       += w1;
+  k_rhob_accum(v+sy)      += w2;
+  k_rhob_accum(v+sy+1)    += w3;
+  k_rhob_accum(v+sz)      += w4;
+  k_rhob_accum(v+sz+1)    += w5;
+  k_rhob_accum(v+sz+sy)   += w6;
+  k_rhob_accum(v+sz+sy+1) += w7;
 }
 
 #endif // _species_advance_h_
