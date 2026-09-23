@@ -310,10 +310,10 @@ if (VPIC_ENABLE_ACCUMULATORS)
   message("--     VPIC: Enabled accumulators")
 endif(VPIC_ENABLE_ACCUMULATORS)
 
-if (VPIC_ENABLE_ACCUMULATORS)
+if (VPIC_ENABLE_GPU_AWARE_MPI)
   add_definitions(-DVPIC_ENABLE_GPU_AWARE_MPI)
   message("--     VPIC: Enabled GPU-aware MPI")
-endif(VPIC_ENABLE_ACCUMULATORS)
+endif(VPIC_ENABLE_GPU_AWARE_MPI)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)
