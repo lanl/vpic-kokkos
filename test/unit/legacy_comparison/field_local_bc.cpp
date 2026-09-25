@@ -24,7 +24,7 @@ void verify_fields_match(const field_array_t* fa_a, const field_array_t* fa_b, f
   }
 }
 
-TEST_CASE( "Verify field communication functions operate correctly", "[Field Communication]" )
+TEST_CASE( "Verify functions for setting local boundaries operate correctly", "[Local Boundaries]" )
 {
   double xmin = -0.5;
   double ymin = -0.5;
