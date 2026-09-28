@@ -23,6 +23,8 @@
 #include <string>
 #include "sfa_private.h"
 
+//#define LEGACY_TEST
+
 #define FIELD(voxel, var) k_field(voxel, field_var::var)
 
 #define XYZ_POLICY(xl,xh,yl,yh,zl,zh) Kokkos::MDRangePolicy<Kokkos::Rank<3>>({xl,yl,zl},{xh+1,yh+1,zh+1})
@@ -126,7 +128,7 @@ apply_local_tang_b(const int nx, const int ny, const int nz,
           float t2 = FIELD(f2_voxel, e##X);                                   \
           t2 = cdt_d##Y*( t2 - FIELD(f0_voxel, e##X) );                       \
           FIELD(g0_voxel, cb##Z) = decay*FIELD(g0_voxel, cb##Z)               \
-                                 + drive*FIELD(f0_voxel, cb##Z) - t1 + t2;    \
+                                 + drive*FIELD(f0_voxel, cb##Z) + t1 - t2;    \
         });                                                                   \
         break;                                                                \
       default:                                                                \
@@ -151,6 +153,7 @@ apply_local_tang_b(const int nx, const int ny, const int nz,
 void
 local_ghost_tang_b( field_array_t      * RESTRICT f,
                     const grid_t *              g ) {
+#ifndef LEGACY_TEST
   const int nx = g->nx, ny = g->ny, nz = g->nz;
   const float cdt_dx = g->cvac*g->dt*g->rdx;
   const float cdt_dy = g->cvac*g->dt*g->rdy;
@@ -167,6 +170,11 @@ local_ghost_tang_b( field_array_t      * RESTRICT f,
   apply_local_tang_b< 1, 0, 0>(nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
   apply_local_tang_b< 0, 1, 0>(nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
   apply_local_tang_b< 0, 0, 1>(nx,ny,nz,cdt_dx,cdt_dy,cdt_dz,higend,f,g);
+#else
+  f->copy_to_host();
+  legacy_local_ghost_tang_b(f->f, g);
+  f->copy_to_device();
+#endif
 }
 
 // Note: local_adjust_div_e zeros the error on the boundaries for
@@ -208,8 +216,8 @@ apply_local_norm_e(field_array_t* RESTRICT f, const grid_t* g) {
             const size_t v0 = VOXEL(x,y,z,nx,ny,nz);                        \
             const size_t v1 = VOXEL(x-i,y-j,z-k,nx,ny,nz);                  \
             const size_t v2 = VOXEL(x-i*2,y-j*2,z-k*2,nx,ny,nz);            \
-            FIELD(v0, e##X) = 2*FIELD(v1, e##X)   - FIELD(v2, e##X);        \
-            FIELD(v0, e##X) = 2*FIELD(v1, tca##X) - FIELD(v2, tca##X);      \
+            FIELD(v0, e##X)   = 2*FIELD(v1, e##X)   - FIELD(v2, e##X);      \
+            FIELD(v0, tca##X) = 2*FIELD(v1, tca##X) - FIELD(v2, tca##X);    \
           });                                                               \
         break;                                                              \
       default:                                                              \
@@ -232,12 +240,18 @@ apply_local_norm_e(field_array_t* RESTRICT f, const grid_t* g) {
 void
 local_ghost_norm_e( field_array_t      * ALIGNED(128) f,
                     const grid_t *              g ) {
+#ifndef LEGACY_TEST
   apply_local_norm_e<-1,  0,  0>(f, g);
   apply_local_norm_e< 0, -1,  0>(f, g);
   apply_local_norm_e< 0,  0, -1>(f, g);
   apply_local_norm_e< 1,  0,  0>(f, g);
   apply_local_norm_e< 0,  1,  0>(f, g);
   apply_local_norm_e< 0,  0,  1>(f, g);
+#else
+  f->copy_to_host();
+  legacy_local_ghost_norm_e(f->f, g);
+  f->copy_to_device();
+#endif
 }
 
 template<int i, int j, int k> 
@@ -294,12 +308,18 @@ apply_local_div_b(field_array_t* fa) {
 void
 local_ghost_div_b( field_array_t      * ALIGNED(128) fa,
                    const grid_t *              g ) {
-    apply_local_div_b<-1,  0,  0>( fa );
-    apply_local_div_b< 0, -1,  0>( fa );
-    apply_local_div_b< 0,  0, -1>( fa );
-    apply_local_div_b< 1,  0,  0>( fa );
-    apply_local_div_b< 0,  1,  0>( fa );
-    apply_local_div_b< 0,  0,  1>( fa );
+#ifndef LEGACY_TEST
+  apply_local_div_b<-1,  0,  0>( fa );
+  apply_local_div_b< 0, -1,  0>( fa );
+  apply_local_div_b< 0,  0, -1>( fa );
+  apply_local_div_b< 1,  0,  0>( fa );
+  apply_local_div_b< 0,  1,  0>( fa );
+  apply_local_div_b< 0,  0,  1>( fa );
+#else
+  fa->copy_to_host();
+  legacy_local_ghost_div_b(fa->f, g);
+  fa->copy_to_device();
+#endif
 }
 
 /*****************************************************************************
@@ -352,15 +372,21 @@ adjust_tang_e(k_field_t& k_field, const grid_t* g, int nx, int ny, int nz) {
 void
 local_adjust_tang_e( field_array_t      * RESTRICT f,
                      const grid_t *              g ) {
-    const int nx = g->nx, ny = g->ny, nz = g->nz;
+#ifndef LEGACY_TEST
+  const int nx = g->nx, ny = g->ny, nz = g->nz;
 
-    k_field_t& k_field = f->k_f_d;
-    adjust_tang_e<-1,  0,  0>(k_field, g, nx, ny, nz);
-    adjust_tang_e< 0, -1,  0>(k_field, g, nx, ny, nz);
-    adjust_tang_e< 0,  0, -1>(k_field, g, nx, ny, nz);
-    adjust_tang_e< 1,  0,  0>(k_field, g, nx, ny, nz);
-    adjust_tang_e< 0,  1,  0>(k_field, g, nx, ny, nz);
-    adjust_tang_e< 0,  0,  1>(k_field, g, nx, ny, nz);
+  k_field_t& k_field = f->k_f_d;
+  adjust_tang_e<-1,  0,  0>(k_field, g, nx, ny, nz);
+  adjust_tang_e< 0, -1,  0>(k_field, g, nx, ny, nz);
+  adjust_tang_e< 0,  0, -1>(k_field, g, nx, ny, nz);
+  adjust_tang_e< 1,  0,  0>(k_field, g, nx, ny, nz);
+  adjust_tang_e< 0,  1,  0>(k_field, g, nx, ny, nz);
+  adjust_tang_e< 0,  0,  1>(k_field, g, nx, ny, nz);
+#else
+  f->copy_to_host();
+  legacy_local_adjust_tang_e(f->f, g);
+  f->copy_to_device();
+#endif
 }
 
 void
@@ -387,33 +413,16 @@ local_adjust_norm_b( field_array_t * RESTRICT fa,
     bc = g->bc[BOUNDARY(i,j,k)];                                              \
     if( bc<0 || bc>=world_size ) {                                            \
       face = (i+j+k)<0 ? 1 : n##X+1;                                          \
+      const int nx = g->nx, ny = g->ny, nz = g->nz;                           \
+      k_field_t k_field = fa->k_f_d;                                          \
       switch(bc) {                                                            \
       case anti_symmetric_fields: case pmc_fields: case absorb_fields:        \
         break;                                                                \
       case symmetric_fields:                                                  \
-         switch(X) {                                                          \
-           case('x'):                                                         \
-             xl=face, xh=face, yl=1, yh=ny, zl=1, zh=nz;                      \
-             break;                                                           \
-           case('y'):                                                         \
-             xl=1, xh=nx, yl=face, yh=face, zl=1, zh=nz;                      \
-             break;                                                           \
-           case('z'):                                                         \
-             xl=1, xh=nx, yl=1, yh=ny, zl=face, zh=face;                      \
-             break;                                                           \
-           default:                                                           \
-             ERROR(("Bad boundary condition encountered."));                  \
-             break;                                                           \
-         }                                                                    \
-         assert(0);                                                           \
-         Kokkos::parallel_for(Kokkos::RangePolicy(zl, zh),                    \
-           KOKKOS_LAMBDA (const int z) {                                      \
-           for(int yi=yl; yi<=yh; yi++ ) {                                    \
-             for(int xj=xl; xj<=xh; xj++ ) {                                  \
-              (fa->k_f_h)(VOXEL(xj,yi,z, nx,ny,nz), field_var::cb##X) = 0;    \
-             }                                                                \
-           }                                                                  \
-         });                                                                  \
+        Kokkos::parallel_for("adjust_norm_b<" #X #Y #Z "> " #X "face",        \
+          X##_FACE_POLICY(face), KOKKOS_LAMBDA(const int x, const int y, const int z) { \
+            FIELD(VOXEL(x,y,z,nx,ny,nz), cb##X) = 0.0f;                       \
+        });                                                                   \
         break;                                                                \
       default:                                                                \
         ERROR(("Bad boundary condition encountered."));                       \
@@ -469,12 +478,18 @@ adjust_div_e_err(field_array_t* fa, const grid_t* g) {
 void
 local_adjust_div_e( field_array_t      * ALIGNED(128) f,
                     const grid_t *              g ) {
+#ifndef LEGACY_TEST
   adjust_div_e_err<-1,  0,  0>(f, g);
   adjust_div_e_err< 0, -1,  0>(f, g);
   adjust_div_e_err< 0,  0, -1>(f, g);
   adjust_div_e_err< 1,  0,  0>(f, g);
   adjust_div_e_err< 0,  1,  0>(f, g);
   adjust_div_e_err< 0,  0,  1>(f, g);
+#else
+  f->copy_to_host();
+  legacy_local_adjust_div_e(f->f, g);
+  f->copy_to_device();
+#endif
 }
 
 // anti_symmetric => Opposite sign image charges (zero jf_tang)
@@ -531,12 +546,18 @@ adjust_jf(field_array_t* fa, const grid_t* g ) {
 }
 
 void local_adjust_jf(field_array_t* fa, const grid_t* g) {
+#ifndef LEGACY_TEST
   adjust_jf<-1,  0,  0>(fa, g);
   adjust_jf< 0, -1,  0>(fa, g);
   adjust_jf< 0,  0, -1>(fa, g);
   adjust_jf< 1,  0,  0>(fa, g);
   adjust_jf< 0,  1,  0>(fa, g);
   adjust_jf< 0,  0,  1>(fa, g);
+#else
+  fa->copy_to_host();
+  legacy_local_adjust_jf(fa->f, g);
+  fa->copy_to_device();
+#endif
 }
 
 void reduce_jf(field_array_t* RESTRICT fa ) {
@@ -605,12 +626,18 @@ adjust_rhof(field_array_t* fa, const grid_t* g) {
 }
 
 void local_adjust_rhof(field_array_t* fa, const grid_t* g) {
+#ifndef LEGACY_TEST
   adjust_rhof<-1,  0,  0>(fa, g);
   adjust_rhof< 0, -1,  0>(fa, g);
   adjust_rhof< 0,  0, -1>(fa, g);
   adjust_rhof< 1,  0,  0>(fa, g);
   adjust_rhof< 0,  1,  0>(fa, g);
   adjust_rhof< 0,  0,  1>(fa, g);
+#else
+  fa->copy_to_host();
+  legacy_local_adjust_rhof(fa->f, g);
+  fa->copy_to_device();
+#endif
 }
 
 // anti_symmetric => Opposite sign image charges (zero rhob)
@@ -655,12 +682,18 @@ adjust_rhob(field_array_t* fa, const grid_t* g) {
 }
 
 void local_adjust_rhob(field_array_t* fa, const grid_t* g) {
+#ifndef LEGACY_TEST
   adjust_rhob<-1,  0,  0>(fa, g);
   adjust_rhob< 0, -1,  0>(fa, g);
   adjust_rhob< 0,  0, -1>(fa, g);
   adjust_rhob< 1,  0,  0>(fa, g);
   adjust_rhob< 0,  1,  0>(fa, g);
   adjust_rhob< 0,  0,  1>(fa, g);
+#else
+  fa->copy_to_host();
+  legacy_local_adjust_rhob(fa->f, g);
+  fa->copy_to_device();
+#endif
 }
 
 #undef FIELD

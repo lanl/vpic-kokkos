@@ -71,9 +71,9 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
   // Fill fields view. Each process starts with the same data and multiplies
   // it by its rank. This allows easy verification since each process knows
   // its neighbors rank along each face.
-  for(size_t i=0; i<nx+2; i++) {
-    for(size_t j=0; j<ny+2; j++) {
-      for(size_t k=0; k<nz+2; k++) {
+  for(int i=0; i<nx+2; i++) {
+    for(int j=0; j<ny+2; j++) {
+      for(int k=0; k<nz+2; k++) {
         int cell = VOXEL(i,j,k,nx,ny,nz);
         fa_legacy->f[cell].ex        = static_cast<float>((rank+1)*(cell+0));
         fa_legacy->f[cell].ey        = static_cast<float>((rank+1)*(cell+1));
@@ -92,22 +92,22 @@ TEST_CASE( "Verify field communication functions operate correctly", "[Field Com
         fa_legacy->f[cell].rhof      = static_cast<float>((rank+1)*(cell+14));
         fa_legacy->f[cell].rhob      = static_cast<float>((rank+1)*(cell+15));
 
-        fa_updated->f[cell].ex        = static_cast<float>((rank+1)*(cell+0));
-        fa_updated->f[cell].ey        = static_cast<float>((rank+1)*(cell+1));
-        fa_updated->f[cell].ez        = static_cast<float>((rank+1)*(cell+2));
-        fa_updated->f[cell].div_e_err = static_cast<float>((rank+1)*(cell+3));
-        fa_updated->f[cell].cbx       = static_cast<float>((rank+1)*(cell+4));
-        fa_updated->f[cell].cby       = static_cast<float>((rank+1)*(cell+5));
-        fa_updated->f[cell].cbz       = static_cast<float>((rank+1)*(cell+6));
-        fa_updated->f[cell].jfx       = static_cast<float>((rank+1)*(cell+7));
-        fa_updated->f[cell].jfy       = static_cast<float>((rank+1)*(cell+8));
-        fa_updated->f[cell].jfz       = static_cast<float>((rank+1)*(cell+9));
-        fa_updated->f[cell].tcax      = static_cast<float>((rank+1)*(cell+10));
-        fa_updated->f[cell].tcay      = static_cast<float>((rank+1)*(cell+11));
-        fa_updated->f[cell].tcaz      = static_cast<float>((rank+1)*(cell+12));
-        fa_updated->f[cell].div_b_err = static_cast<float>((rank+1)*(cell+13));
-        fa_updated->f[cell].rhof      = static_cast<float>((rank+1)*(cell+14));
-        fa_updated->f[cell].rhob      = static_cast<float>((rank+1)*(cell+15));
+        fa_updated->f[cell].ex        = fa_legacy->f[cell].ex;       
+        fa_updated->f[cell].ey        = fa_legacy->f[cell].ey;       
+        fa_updated->f[cell].ez        = fa_legacy->f[cell].ez;       
+        fa_updated->f[cell].div_e_err = fa_legacy->f[cell].div_e_err;
+        fa_updated->f[cell].cbx       = fa_legacy->f[cell].cbx;      
+        fa_updated->f[cell].cby       = fa_legacy->f[cell].cby;      
+        fa_updated->f[cell].cbz       = fa_legacy->f[cell].cbz;      
+        fa_updated->f[cell].jfx       = fa_legacy->f[cell].jfx;      
+        fa_updated->f[cell].jfy       = fa_legacy->f[cell].jfy;      
+        fa_updated->f[cell].jfz       = fa_legacy->f[cell].jfz;      
+        fa_updated->f[cell].tcax      = fa_legacy->f[cell].tcax;     
+        fa_updated->f[cell].tcay      = fa_legacy->f[cell].tcay;     
+        fa_updated->f[cell].tcaz      = fa_legacy->f[cell].tcaz;     
+        fa_updated->f[cell].div_b_err = fa_legacy->f[cell].div_b_err;
+        fa_updated->f[cell].rhof      = fa_legacy->f[cell].rhof;     
+        fa_updated->f[cell].rhob      = fa_legacy->f[cell].rhob;     
       }
     }
   }
