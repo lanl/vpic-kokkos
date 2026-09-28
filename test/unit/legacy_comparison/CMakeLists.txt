@@ -15,4 +15,4 @@ add_test(NAME field_comm_3x3x3 COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 27 --o
 
 add_executable(field_local_bc field_local_bc.cpp)
 target_link_libraries(field_local_bc vpic Kokkos::kokkos)
-add_test(NAME field_local_bc COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 8  ${MPIEXEC_PREFLAGS} ./field_local_bc ${MPIEXEC_POSTFLAGS} 2 2 2 --kokkos-num-threads=1 --kokkos-map-device-id-by=mpi_rank)
+add_test(NAME field_local_bc COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 8 --oversubscribe ${MPIEXEC_PREFLAGS} ./field_local_bc ${MPIEXEC_POSTFLAGS} 2 2 2 --kokkos-num-threads=1 --kokkos-map-device-id-by=mpi_rank)
