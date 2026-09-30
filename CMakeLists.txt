@@ -19,7 +19,7 @@ project(vpic CXX)
 # Kokkos build, feel free to try a lower standard.
 # Fixing the this capture requires C++17, but if you don't mind the warnings,
 # feel free to experiment with lower standards.
-# Kokkos 5.0 requires C++20.s
+# Kokkos 5.0 requires C++20.
 #------------------------------------------------------------------------------#
 
 set(CMAKE_CXX_STANDARD 20)

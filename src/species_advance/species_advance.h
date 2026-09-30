@@ -539,12 +539,12 @@ move_p_kokkos(
       iii -= zi*(nx+2)*(ny+2);
       int yi = iii/(nx+2);
       int xi = iii-yi*(nx+2);
-      const int ax  = VOXEL(xi-1, yi,   zi,   nx, ny, nz);
-      const int ay  = VOXEL(xi,   yi-1, zi,   nx, ny, nz);
-      const int az  = VOXEL(xi,   yi,   zi-1, nx, ny, nz);
-      const int ayz = VOXEL(xi,   yi-1, zi-1, nx, ny, nz);
-      const int azx = VOXEL(xi-1, yi,   zi-1, nx, ny, nz);
-      const int axy = VOXEL(xi-1, yi-1, zi,   nx, ny, nz);
+      const int ax  = VOXEL(xi+1, yi,   zi,   nx, ny, nz);
+      const int ay  = VOXEL(xi,   yi+1, zi,   nx, ny, nz);
+      const int az  = VOXEL(xi,   yi,   zi+1, nx, ny, nz);
+      const int ayz = VOXEL(xi,   yi+1, zi+1, nx, ny, nz);
+      const int azx = VOXEL(xi+1, yi,   zi+1, nx, ny, nz);
+      const int axy = VOXEL(xi+1, yi+1, zi,   nx, ny, nz);
       accumulate_j(x,y,z);
       scatter_access(ii,  field_var::jfx) += cx*v0;
       scatter_access(ay,  field_var::jfx) += cx*v1;
