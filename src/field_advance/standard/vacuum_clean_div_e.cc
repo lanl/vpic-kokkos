@@ -150,7 +150,7 @@ vacuum_clean_div_e( field_array_t * fa ) {
 
   WAIT_PIPELINES();
 
-  local_adjust_tang_e( fa->f, fa->g );
+  legacy_local_adjust_tang_e( fa->f, fa->g );
 }
 
 void
@@ -228,6 +228,6 @@ vacuum_clean_div_e_kokkos( field_array_t * fa ) {
         marder_ez(k_field, pz, f0, fz);
     });
 
-  k_local_adjust_tang_e( fa, fa->g );
+  local_adjust_tang_e( fa, fa->g );
 }
 
