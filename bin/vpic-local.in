@@ -1,5 +1,5 @@
 #! /usr/bin/env bash
-# This is the template vpic-local.in
+# This is made from the template vpic-local.in
 
 deck=`echo $1 | sed 's,\.cxx,,g;s,\.cc,,g;s,\.cpp,,g;s,.*\/,,g'`
 
@@ -39,4 +39,11 @@ KOKKOS_LIBS="-lkokkoscore -lkokkoscontainers -lkokkosalgorithms -lkokkossimd"
 echo "$1"
 set -x
 @CMAKE_CXX_COMPILER@ @VPIC_CPPFLAGS@ @CMAKE_CXX_FLAGS@ -I. -I@CMAKE_SOURCE_DIR@/src @VPIC_CXX_FLAGS@ $KOKKOS_COMPILE_OPTIONS -DINPUT_DECK='"'$1'"' @DirDefs@ @CMAKE_SOURCE_DIR@/deck/main.cc @CMAKE_SOURCE_DIR@/deck/wrapper.cc -o $deck.@CMAKE_SYSTEM_NAME@ -Wl,-rpath,@CMAKE_BINARY_DIR@ -L@CMAKE_BINARY_DIR@ -lvpic @VPIC_CXX_LIBRARIES@ -lpthread $KOKKOS_LIB_PATHS $KOKKOS_INCLUDES $KOKKOS_LIBS $KOKKOS_LINK_LIBS
+# Capture the compiler status before any other command overwrites $?
+status=$?
 set +x
+
+if [ $status -ne 0 ]; then
+    echo "ERROR: failed to build $deck.@CMAKE_SYSTEM_NAME@ (compiler exited $status)" 1>&2
+    exit $status
+fi

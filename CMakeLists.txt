@@ -80,10 +80,27 @@ option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU aware MPI to speedup communication"
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
+# Turn a single link item into something safe to paste on a compiler command
+# line. Bare library names (eg "dl", which an external Kokkos built with
+# Kokkos_ENABLE_LIBDL=ON puts in its INTERFACE_LINK_LIBRARIES) must become
+# "-ldl", or the linker treats them as file names and fails.
+function(normalize_link_item item output_var)
+    if(item MATCHES "^-" OR EXISTS ${item})
+        # Already a linker flag, or a real file on disk
+        set(${output_var} ${item} PARENT_SCOPE)
+    elseif(item MATCHES "^[A-Za-z0-9_.+-]+$")
+        # Prepend with "-l"
+        set(${output_var} "-l${item}" PARENT_SCOPE)
+    else()
+        # Anything else is irrelevant
+        set(${output_var} "" PARENT_SCOPE)
+    endif()
+endfunction()
+
 # Function to recursively resolve target libraries to actual paths
 function(resolve_target_libraries target output_var)
     set(resolved_libs "")
-    
+
     if(TARGET ${target})
         # Get the link libraries for this target
         get_target_property(target_libs ${target} INTERFACE_LINK_LIBRARIES)
@@ -94,12 +111,12 @@ function(resolve_target_libraries target output_var)
                     # Recursively resolve if it's a target
                     resolve_target_libraries(${lib} nested_libs)
                     list(APPEND resolved_libs ${nested_libs})
-                elseif(lib MATCHES "^-l" OR lib MATCHES "^-L" OR lib MATCHES "^-Wl,")
-                    # Keep linker flags as-is
-                    list(APPEND resolved_libs ${lib})
-                elseif(EXISTS ${lib})
-                    # Keep existing files as-is
-                    list(APPEND resolved_libs ${lib})
+                else()
+                    # Linker flags, file paths and bare library names
+                    normalize_link_item(${lib} normalized)
+                    if(normalized)
+                        list(APPEND resolved_libs ${normalized})
+                    endif()
                 endif()
             endforeach()
         endif()
@@ -129,7 +146,10 @@ function(resolve_target_libraries target output_var)
         endif()
     else()
         # Not a target, treat as a library name or path
-        list(APPEND resolved_libs ${target})
+        normalize_link_item(${target} normalized)
+        if(normalized)
+            list(APPEND resolved_libs ${normalized})
+        endif()
     endif()
     
     list(REMOVE_DUPLICATES resolved_libs)
