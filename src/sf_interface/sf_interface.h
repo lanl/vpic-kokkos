@@ -34,7 +34,7 @@ typedef struct interpolator_array {
   interpolator_t * ALIGNED(128) i;
   grid_t * g;
   k_interpolator_t k_i_d;
-  k_interpolator_t::HostMirror k_i_h;
+  k_interpolator_t::host_mirror_type k_i_h;
 
   interpolator_array(int nv)
   {
@@ -102,7 +102,7 @@ typedef struct accumulator_array {
   grid_t * g;
 
   k_accumulators_t k_a_d;
-  k_accumulators_t::HostMirror k_a_h;
+  k_accumulators_t::host_mirror_type k_a_h;
   k_accumulators_sa_t k_a_sa;
   //k_accumulators_sah_t k_a_sah;
   k_accumulators_t k_a_d_copy;
@@ -207,7 +207,7 @@ typedef struct hydro {
 typedef struct hydro_array {
   hydro_t * ALIGNED(128) h;
   k_hydro_d_t k_h_d;
-  k_hydro_d_t::HostMirror k_h_h;
+  k_hydro_d_t::host_mirror_type k_h_h;
   grid_t * g;
   
   hydro_array(int nv)

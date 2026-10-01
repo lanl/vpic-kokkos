@@ -19,9 +19,10 @@ project(vpic CXX)
 # Kokkos build, feel free to try a lower standard.
 # Fixing the this capture requires C++17, but if you don't mind the warnings,
 # feel free to experiment with lower standards.
+# Kokkos 5.0 requires C++20.
 #------------------------------------------------------------------------------#
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_SHARED_LIBRARY_ENABLE_EXPORTS ON)
 set(CMAKE_EXECUTABLE_ENABLE_EXPORTS ON)
@@ -72,12 +73,88 @@ option(VPIC_ENABLE_TEAM_REDUCTION "Enable team reduction for current accumulatio
 
 option(VPIC_ENABLE_VECTORIZATION "Enable improved vectorization for CPUs" OFF)
 
-option(VPIC_ENABLE_ACCUMULATOR "Enable explicit accumulators for better performnace on CPUs" OFF)
+option(VPIC_ENABLE_ACCUMULATORS "Enable explicit accumulators for better performnace on CPUs" OFF)
 
 option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU aware MPI to speedup communication" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
+
+# Turn a single link item into something safe to paste on a compiler command
+# line. Bare library names (eg "dl", which an external Kokkos built with
+# Kokkos_ENABLE_LIBDL=ON puts in its INTERFACE_LINK_LIBRARIES) must become
+# "-ldl", or the linker treats them as file names and fails.
+function(normalize_link_item item output_var)
+    if(item MATCHES "^-" OR EXISTS ${item})
+        # Already a linker flag, or a real file on disk
+        set(${output_var} ${item} PARENT_SCOPE)
+    elseif(item MATCHES "^[A-Za-z0-9_.+-]+$")
+        # Prepend with "-l"
+        set(${output_var} "-l${item}" PARENT_SCOPE)
+    else()
+        # Anything else is irrelevant
+        set(${output_var} "" PARENT_SCOPE)
+    endif()
+endfunction()
+
+# Function to recursively resolve target libraries to actual paths
+function(resolve_target_libraries target output_var)
+    set(resolved_libs "")
+
+    if(TARGET ${target})
+        # Get the link libraries for this target
+        get_target_property(target_libs ${target} INTERFACE_LINK_LIBRARIES)
+        
+        if(target_libs)
+            foreach(lib ${target_libs})
+                if(TARGET ${lib})
+                    # Recursively resolve if it's a target
+                    resolve_target_libraries(${lib} nested_libs)
+                    list(APPEND resolved_libs ${nested_libs})
+                else()
+                    # Linker flags, file paths and bare library names
+                    normalize_link_item(${lib} normalized)
+                    if(normalized)
+                        list(APPEND resolved_libs ${normalized})
+                    endif()
+                endif()
+            endforeach()
+        endif()
+        
+        # Also get the location of the target itself if it's a library
+        get_target_property(target_type ${target} TYPE)
+        if(target_type MATCHES "LIBRARY" OR target_type MATCHES "ARCHIVE")
+            get_target_property(target_location ${target} LOCATION)
+            if(target_location)
+                list(APPEND resolved_libs ${target_location})
+            endif()
+        endif()
+        
+        # Get imported location for imported targets
+        get_target_property(is_imported ${target} IMPORTED)
+        if(is_imported)
+            get_target_property(imported_location ${target} IMPORTED_LOCATION)
+            if(NOT imported_location)
+                get_target_property(imported_location ${target} IMPORTED_LOCATION_RELEASE)
+            endif()
+            if(NOT imported_location)
+                get_target_property(imported_location ${target} IMPORTED_LOCATION_RELWITHDEBINFO)
+            endif()
+            if(imported_location)
+                list(APPEND resolved_libs ${imported_location})
+            endif()
+        endif()
+    else()
+        # Not a target, treat as a library name or path
+        normalize_link_item(${target} normalized)
+        if(normalized)
+            list(APPEND resolved_libs ${normalized})
+        endif()
+    endif()
+    
+    list(REMOVE_DUPLICATES resolved_libs)
+    set(${output_var} ${resolved_libs} PARENT_SCOPE)
+endfunction()
 
 #------------------------------------------------------------------------------#
 # Create include and link aggregates
@@ -104,7 +181,7 @@ string(REPLACE ";" " -I" string_includes "${MPI_C_INCLUDE_PATH}")
 if(NOT ${string_includes} STREQUAL "")
   set(VPIC_CXX_FLAGS "-I${string_includes} ${MPI_C_LINK_FLAGS}")
 endif(NOT ${string_includes} STREQUAL "")
-set(VPIC_CXX_FLAGS "${CMAKE_CXX17_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
+set(VPIC_CXX_FLAGS "${CMAKE_CXX20_STANDARD_COMPILE_OPTION} ${VPIC_CXX_FLAGS}")
 
 # Add Debug flags to VPIC_CXX_FLAGS
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
@@ -255,6 +332,69 @@ file(GENERATE OUTPUT ${KOKKOS_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 # Libs
 string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
 set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
+
+# Get Kokkos link libraries - resolve all targets to actual paths
+get_target_property(KOKKOS_LINK_LIBS Kokkos::kokkoscore INTERFACE_LINK_LIBRARIES)
+if(NOT KOKKOS_LINK_LIBS)
+  set(KOKKOS_LINK_LIBS "")
+endif()
+
+message("KOKKOS_LINK_LIBS are ${KOKKOS_LINK_LIBS}")
+
+# Resolve all target dependencies to actual library paths
+set(KOKKOS_RESOLVED_LIBS "")
+foreach(lib ${KOKKOS_LINK_LIBS})
+    resolve_target_libraries(${lib} resolved)
+    list(APPEND KOKKOS_RESOLVED_LIBS ${resolved})
+endforeach()
+
+# For CUDA builds, explicitly add CUDA libraries
+if(ENABLE_KOKKOS_CUDA AND CUDA_FOUND)
+    if(CUDA_CUDA_LIBRARY)
+        list(APPEND KOKKOS_RESOLVED_LIBS ${CUDA_CUDA_LIBRARY})
+    endif()
+    if(CUDA_CUDART_LIBRARY)
+        list(APPEND KOKKOS_RESOLVED_LIBS ${CUDA_CUDART_LIBRARY})
+    endif()
+    # Also check for libraries in standard locations
+    find_library(CUDA_DRIVER_LIBRARY cuda HINTS ${CUDA_TOOLKIT_ROOT_DIR}/lib64 ${CUDA_TOOLKIT_ROOT_DIR}/lib/stubs)
+    if(CUDA_DRIVER_LIBRARY)
+        list(APPEND KOKKOS_RESOLVED_LIBS ${CUDA_DRIVER_LIBRARY})
+    endif()
+endif()
+
+# For HIP/ROCm builds
+if(Kokkos_ENABLE_HIP)
+    find_package(hip QUIET)
+    if(hip_FOUND)
+        list(APPEND KOKKOS_RESOLVED_LIBS ${HIP_LIBRARIES})
+    endif()
+    # Also try direct paths
+    find_library(AMDHIP64_LIBRARY amdhip64 HINTS /opt/rocm/lib)
+    if(AMDHIP64_LIBRARY)
+        list(APPEND KOKKOS_RESOLVED_LIBS ${AMDHIP64_LIBRARY})
+    endif()
+endif()
+
+# Add OpenMP libraries if found
+# This is redundant with the resolved libs above
+if(OPENMP_FOUND AND OpenMP_CXX_LIBRARIES)
+    list(APPEND KOKKOS_RESOLVED_LIBS ${OpenMP_CXX_LIBRARIES})
+endif()
+
+# Add other system libraries that Kokkos might need
+list(APPEND KOKKOS_RESOLVED_LIBS "-ldl")
+if(NOT APPLE)
+    list(APPEND KOKKOS_RESOLVED_LIBS "-lrt")
+endif()
+
+# Clean up the list
+list(REMOVE_DUPLICATES KOKKOS_RESOLVED_LIBS)
+
+# Save to file for vpic script
+set(KOKKOS_LINK_LIBS_FILE ${PROJECT_BINARY_DIR}/kokkos_link_libs)
+string(REPLACE ";" " " kokkos_link_libs_str "${KOKKOS_RESOLVED_LIBS}")
+file(GENERATE OUTPUT ${KOKKOS_LINK_LIBS_FILE} CONTENT "${kokkos_link_libs_str}")
 
 #------------------------------------------------------------------------------#
 # OpenSSL

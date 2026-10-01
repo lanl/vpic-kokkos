@@ -11,49 +11,49 @@
 // Write current values to either an accumulator or directly to the fields
 template<class CurrentScatterAccess>
 void KOKKOS_INLINE_FUNCTION
-accumulate_current(CurrentScatterAccess& current_sa, int ii,
+accumulate_current(CurrentScatterAccess& current_sa, const int ii,
                    const int nx, const int ny, const int nz, 
                    const float cx, const float cy, const float cz, 
                    const float v0, const float v1, const float v2, const float v3,
                    const float v4, const float v5, const float v6, const float v7,
                    const float v8, const float v9, const float v10, const float v11) {
-#ifdef VPIC_ENABLE_ACCUMULATORS
-  current_sa(ii, 0)  += cx*v0;
-  current_sa(ii, 1)  += cx*v1;
-  current_sa(ii, 2)  += cx*v2;
-  current_sa(ii, 3)  += cx*v3;
-  
-  current_sa(ii, 4)  += cy*v4;
-  current_sa(ii, 5)  += cy*v5;
-  current_sa(ii, 6)  += cy*v6;
-  current_sa(ii, 7)  += cy*v7;
-  
-  current_sa(ii, 8)  += cz*v8;
-  current_sa(ii, 9)  += cz*v9;
-  current_sa(ii, 10) += cz*v10;
-  current_sa(ii, 11) += cz*v11;
-#else
-  int iii = ii;
-  int zi = iii/((nx+2)*(ny+2));
-  iii -= zi*(nx+2)*(ny+2);
-  int yi = iii/(nx+2);
-  int xi = iii - yi*(nx+2);
-  
-  current_sa(ii, field_var::jfx)                           += cx*v0;
-  current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx)   += cx*v1;
-  current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx)   += cx*v2;
-  current_sa(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
-  
-  current_sa(ii, field_var::jfy)                           += cy*v4;
-  current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy)   += cy*v5;
-  current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy)   += cy*v6;
-  current_sa(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v7;
-  
-  current_sa(ii, field_var::jfz)                           += cz*v8;
-  current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz)   += cz*v9;
-  current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz)   += cz*v10;
-  current_sa(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v11;
-#endif
+  if constexpr (std::is_same_v<typename CurrentScatterAccess::view_type, k_field_sa_t>) {
+    int iii = ii;
+    const int zi = iii/((nx+2)*(ny+2));
+    iii -= zi*(nx+2)*(ny+2);
+    const int yi = iii/(nx+2);
+    const int xi = iii - yi*(nx+2);
+    
+    current_sa(ii, field_var::jfx)                           += cx*v0;
+    current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx)   += cx*v1;
+    current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx)   += cx*v2;
+    current_sa(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
+    
+    current_sa(ii, field_var::jfy)                           += cy*v4;
+    current_sa(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy)   += cy*v5;
+    current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy)   += cy*v6;
+    current_sa(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v7;
+    
+    current_sa(ii, field_var::jfz)                           += cz*v8;
+    current_sa(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz)   += cz*v9;
+    current_sa(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz)   += cz*v10;
+    current_sa(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v11;
+  } else {
+    current_sa(ii, accumulator_var::jx, 0) += cx*v0;
+    current_sa(ii, accumulator_var::jx, 1) += cx*v1;
+    current_sa(ii, accumulator_var::jx, 2) += cx*v2;
+    current_sa(ii, accumulator_var::jx, 3) += cx*v3;
+    
+    current_sa(ii, accumulator_var::jy, 0) += cy*v4;
+    current_sa(ii, accumulator_var::jy, 1) += cy*v5;
+    current_sa(ii, accumulator_var::jy, 2) += cy*v6;
+    current_sa(ii, accumulator_var::jy, 3) += cy*v7;
+    
+    current_sa(ii, accumulator_var::jz, 0) += cz*v8;
+    current_sa(ii, accumulator_var::jz, 1) += cz*v9;
+    current_sa(ii, accumulator_var::jz, 2) += cz*v10;
+    current_sa(ii, accumulator_var::jz, 3) += cz*v11;
+  }
 }
 
 // Reduce the current for all active threads/lanes to reduce the number of writes to memory
@@ -168,7 +168,9 @@ contribute_current(TeamMember& team_member, field_sa_t& access, int i0, int i1, 
 
 // Detect whether all threads/vector lanes are processing particles belonging to the same cell
 template<class TeamMember, class IndexView, class BoundsView>
-int KOKKOS_INLINE_FUNCTION particles_in_same_cell(TeamMember& team_member, IndexView& ii, BoundsView& inbnds, const int num_lanes) {
+int KOKKOS_INLINE_FUNCTION 
+particles_in_same_cell(const TeamMember& team_member, const IndexView& ii, 
+                       const BoundsView& inbnds, const int num_lanes) {
 #ifdef USE_GPU
   int min_inbnds = inbnds[0];
   int max_inbnds = inbnds[0];
@@ -181,7 +183,7 @@ int KOKKOS_INLINE_FUNCTION particles_in_same_cell(TeamMember& team_member, Index
   return min_inbnds == max_inbnds && min_index == max_index;
 #else
   for(int lane=0; lane<num_lanes; lane++) {
-    if(ii[0] != ii[lane] || inbnds[0] != inbnds[lane])
+    if( (ii[0] != ii[lane]) || (inbnds[0] != inbnds[lane]) )
       return 0;
   }
   return 1;
@@ -190,7 +192,8 @@ int KOKKOS_INLINE_FUNCTION particles_in_same_cell(TeamMember& team_member, Index
 
 // Load the interpolator for cell ii
 KOKKOS_INLINE_FUNCTION
-void simd_load_interpolator_var(float* v0, const int ii, const k_interpolator_t& k_interp, int len) {
+void 
+simd_load_interpolator_var(float* v0, const int ii, const k_interpolator_t& k_interp, const int len) {
   #pragma omp simd
   for(int i=0; i<len; i++) {
     v0[i] = k_interp(ii, i);
@@ -201,17 +204,19 @@ void simd_load_interpolator_var(float* v0, const int ii, const k_interpolator_t&
 // Necessary to avoid the looping/pointer overhead when loading interpolator data
 template<int N>
 KOKKOS_INLINE_FUNCTION
-void unrolled_simd_load(float* vals, const int* ii, const k_interpolator_t& k_interp, int len) {
+void unrolled_simd_load(float* vals, const int* ii, const k_interpolator_t& k_interp, const int len) {
   unrolled_simd_load<N-1>(vals, ii, k_interp, len);
   simd_load_interpolator_var(vals+(N-1)*18, ii[N-1], k_interp, len);
 }
 template<>
 KOKKOS_INLINE_FUNCTION
-void unrolled_simd_load<0>(float* vals, const int* ii, const k_interpolator_t& k_interp, int len) {}
+void unrolled_simd_load<0>(float* vals, const int* ii, const k_interpolator_t& k_interp, const int len) {}
 
 // Non forced unrolled version. Potentially less performance than the template version
 // This will work with arbitrary number of particles rather than having to use a multiple of the number of simd lanes
-void unrolled_simd_load(float* vals, const int* ii, const k_interpolator_t& k_interp, int num_var, int num_part) {
+void 
+unrolled_simd_load(float* vals, const int* ii, const k_interpolator_t& k_interp, 
+                   const int num_var, const int num_part) {
   for(int i=0; i<num_part; i++) {
     simd_load_interpolator_var(vals+i*num_var, ii[i], k_interp, num_var);
   }
@@ -254,9 +259,9 @@ void load_interpolators(
 
   // Try to reduce the number of loads if all particles are in the same cell
   if(same_cell) {
-    float vals[18];
+    float vals[INTERPOLATOR_VAR_COUNT];
 
-    simd_load_interpolator_var(vals, ii[0], k_interp, 18);
+    simd_load_interpolator_var(vals, ii[0], k_interp, INTERPOLATOR_VAR_COUNT);
     #pragma omp simd
     for(int i=0; i<NumLanes; i++) {
       fex[i]       = vals[0];
@@ -281,54 +286,53 @@ void load_interpolators(
   } else {
 
     // Efficient vectorized load
-    float vals[18*NumLanes];
-    unrolled_simd_load(vals, ii, k_interp, 18, num_part);
-//    unrolled_simd_load<NumLanes>(vals, ii, k_interp, 18);
+    float vals[INTERPOLATOR_VAR_COUNT*NumLanes];
+    unrolled_simd_load(vals, ii, k_interp, INTERPOLATOR_VAR_COUNT, num_part);
 
     // Essentially a transpose
     #pragma omp simd
     for(int i=0; i<num_part; i++) {
-      fex[i]       = vals[18*i];
-      fdexdy[i]    = vals[1+18*i];
-      fdexdz[i]    = vals[2+18*i];
-      fd2exdydz[i] = vals[3+18*i];
-      fey[i]       = vals[4+18*i];
-      fdeydz[i]    = vals[5+18*i];
-      fdeydx[i]    = vals[6+18*i];
-      fd2eydzdx[i] = vals[7+18*i];
-      fez[i]       = vals[8+18*i];
-      fdezdx[i]    = vals[9+18*i];
-      fdezdy[i]    = vals[10+18*i];
-      fd2ezdxdy[i] = vals[11+18*i];
-      fcbx[i]      = vals[12+18*i];
-      fdcbxdx[i]   = vals[13+18*i];
-      fcby[i]      = vals[14+18*i];
-      fdcbydy[i]   = vals[15+18*i];
-      fcbz[i]      = vals[16+18*i];
-      fdcbzdz[i]   = vals[17+18*i];
+      fex[i]       = vals[INTERPOLATOR_VAR_COUNT*i+0];
+      fdexdy[i]    = vals[INTERPOLATOR_VAR_COUNT*i+1];
+      fdexdz[i]    = vals[INTERPOLATOR_VAR_COUNT*i+2];
+      fd2exdydz[i] = vals[INTERPOLATOR_VAR_COUNT*i+3];
+      fey[i]       = vals[INTERPOLATOR_VAR_COUNT*i+4];
+      fdeydz[i]    = vals[INTERPOLATOR_VAR_COUNT*i+5];
+      fdeydx[i]    = vals[INTERPOLATOR_VAR_COUNT*i+6];
+      fd2eydzdx[i] = vals[INTERPOLATOR_VAR_COUNT*i+7];
+      fez[i]       = vals[INTERPOLATOR_VAR_COUNT*i+8];
+      fdezdx[i]    = vals[INTERPOLATOR_VAR_COUNT*i+9];
+      fdezdy[i]    = vals[INTERPOLATOR_VAR_COUNT*i+10];
+      fd2ezdxdy[i] = vals[INTERPOLATOR_VAR_COUNT*i+11];
+      fcbx[i]      = vals[INTERPOLATOR_VAR_COUNT*i+12];
+      fdcbxdx[i]   = vals[INTERPOLATOR_VAR_COUNT*i+13];
+      fcby[i]      = vals[INTERPOLATOR_VAR_COUNT*i+14];
+      fdcbydy[i]   = vals[INTERPOLATOR_VAR_COUNT*i+15];
+      fcbz[i]      = vals[INTERPOLATOR_VAR_COUNT*i+16];
+      fdcbzdz[i]   = vals[INTERPOLATOR_VAR_COUNT*i+17];
     }
   }
 #else
-  for(int lane=0; lane<NumLanes; lane++) {
+  for(int lane=0; lane<num_part; lane++) {
     // Load interpolators
-    fex[LANE]       = k_interp(ii[LANE], interpolator_var::ex);     
-    fdexdy[LANE]    = k_interp(ii[LANE], interpolator_var::dexdy);  
-    fdexdz[LANE]    = k_interp(ii[LANE], interpolator_var::dexdz);  
-    fd2exdydz[LANE] = k_interp(ii[LANE], interpolator_var::d2exdydz);
-    fey[LANE]       = k_interp(ii[LANE], interpolator_var::ey);     
-    fdeydz[LANE]    = k_interp(ii[LANE], interpolator_var::deydz);  
-    fdeydx[LANE]    = k_interp(ii[LANE], interpolator_var::deydx);  
-    fd2eydzdx[LANE] = k_interp(ii[LANE], interpolator_var::d2eydzdx);
-    fez[LANE]       = k_interp(ii[LANE], interpolator_var::ez);     
-    fdezdx[LANE]    = k_interp(ii[LANE], interpolator_var::dezdx);  
-    fdezdy[LANE]    = k_interp(ii[LANE], interpolator_var::dezdy);  
-    fd2ezdxdy[LANE] = k_interp(ii[LANE], interpolator_var::d2ezdxdy);
-    fcbx[LANE]      = k_interp(ii[LANE], interpolator_var::cbx);    
-    fdcbxdx[LANE]   = k_interp(ii[LANE], interpolator_var::dcbxdx); 
-    fcby[LANE]      = k_interp(ii[LANE], interpolator_var::cby);    
-    fdcbydy[LANE]   = k_interp(ii[LANE], interpolator_var::dcbydy); 
-    fcbz[LANE]      = k_interp(ii[LANE], interpolator_var::cbz);    
-    fdcbzdz[LANE]   = k_interp(ii[LANE], interpolator_var::dcbzdz); 
+    fex[lane]       = k_interp(ii[lane], interpolator_var::ex);     
+    fdexdy[lane]    = k_interp(ii[lane], interpolator_var::dexdy);  
+    fdexdz[lane]    = k_interp(ii[lane], interpolator_var::dexdz);  
+    fd2exdydz[lane] = k_interp(ii[lane], interpolator_var::d2exdydz);
+    fey[lane]       = k_interp(ii[lane], interpolator_var::ey);     
+    fdeydz[lane]    = k_interp(ii[lane], interpolator_var::deydz);  
+    fdeydx[lane]    = k_interp(ii[lane], interpolator_var::deydx);  
+    fd2eydzdx[lane] = k_interp(ii[lane], interpolator_var::d2eydzdx);
+    fez[lane]       = k_interp(ii[lane], interpolator_var::ez);     
+    fdezdx[lane]    = k_interp(ii[lane], interpolator_var::dezdx);  
+    fdezdy[lane]    = k_interp(ii[lane], interpolator_var::dezdy);  
+    fd2ezdxdy[lane] = k_interp(ii[lane], interpolator_var::d2ezdxdy);
+    fcbx[lane]      = k_interp(ii[lane], interpolator_var::cbx);    
+    fdcbxdx[lane]   = k_interp(ii[lane], interpolator_var::dcbxdx); 
+    fcby[lane]      = k_interp(ii[lane], interpolator_var::cby);    
+    fdcbydy[lane]   = k_interp(ii[lane], interpolator_var::dcbydy); 
+    fcbz[lane]      = k_interp(ii[lane], interpolator_var::cbz);    
+    fdcbzdz[lane]   = k_interp(ii[lane], interpolator_var::dcbzdz); 
   }
 #endif
 }
@@ -409,9 +413,10 @@ advance_p_kokkos_unified(
 
 // Determine whether to use accumulators
 #if defined( VPIC_ENABLE_ACCUMULATORS )
-  Kokkos::View<float*[12]> accumulator("Accumulator", k_field.extent(0));
+  Kokkos::View<float*[3][4]> accumulator("Accumulator", k_field.extent(0));
   Kokkos::deep_copy(accumulator, 0);
   auto current_sv = Kokkos::Experimental::create_scatter_view(accumulator);
+  k_field_sa_t jf_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
 #else
   k_field_sa_t current_sv = Kokkos::Experimental::create_scatter_view<>(k_field);;
 #endif
@@ -441,10 +446,9 @@ advance_p_kokkos_unified(
   KOKKOS_LAMBDA(const KOKKOS_TEAM_POLICY_DEVICE::member_type team_member) {
       auto current_sa = current_sv.access();
       const size_t chunk = team_member.league_rank();
-      size_t num_iters = chunk_size;
-      if((chunk+1)*chunk_size > np)
-        num_iters = np - chunk*chunk_size;
       const size_t pi_offset = chunk*chunk_size;
+      const size_t num_iters = ((chunk+1)*chunk_size > np) ? np-pi_offset 
+                                                           : chunk_size;
 #else
   auto policy = Kokkos::RangePolicy<size_t>(0,np);
   Kokkos::parallel_for("advance_p", policy, KOKKOS_LAMBDA (const size_t pi_offset) {
@@ -456,15 +460,8 @@ advance_p_kokkos_unified(
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team_member, num_iters), [&] (const size_t index) {
       const size_t pi_offset = chunk*chunk_size + index;
 #endif
-      size_t num_particles = num_lanes;
-      if(pi_offset+num_particles > np)
-        num_particles = np - pi_offset;
-      float v0[num_lanes];
-      float v1[num_lanes];
-      float v2[num_lanes];
-      float v3[num_lanes];
-      float v4[num_lanes];
-      float v5[num_lanes];
+      const size_t num_particles = pi_offset+num_lanes > np ? np-pi_offset 
+                                                            : num_lanes;
       float dx[num_lanes];
       float dy[num_lanes];
       float dz[num_lanes];
@@ -499,14 +496,21 @@ advance_p_kokkos_unified(
       float fdcbxdx[num_lanes];
       float fdcbydy[num_lanes];
       float fdcbzdz[num_lanes];
-      float *v6 = fex;
-      float *v7 = fdexdy;
-      float *v8 = fdexdz;
-      float *v9 = fd2exdydz;
-      float *v10 = fey;
-      float *v11 = fdeydz;
-      float *v12 = fdeydx;
-      float *v13 = fd2eydzdx;
+
+      float v0[num_lanes]; 
+      float v1[num_lanes]; 
+      float v2[num_lanes]; 
+      float v3[num_lanes]; 
+      float v4[num_lanes]; 
+      float v5[num_lanes]; 
+      float v6[num_lanes]; 
+      float v7[num_lanes]; 
+      float v8[num_lanes]; 
+      float v9[num_lanes]; 
+      float v10[num_lanes];
+      float v11[num_lanes];
+      float v12[num_lanes];
+      float v13[num_lanes];
 
       size_t p_index = pi_offset;
 
@@ -552,7 +556,7 @@ advance_p_kokkos_unified(
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
-        v0[LANE] = qdt_2mc/sqrtf(one + (ux[LANE]*ux[LANE] + (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE])));
+        v0[LANE] = qdt_2mc/Kokkos::sqrtf(one + (ux[LANE]*ux[LANE] + (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE])));
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
@@ -583,44 +587,39 @@ advance_p_kokkos_unified(
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
-        v0[LANE]   = one/sqrtf(one + (ux[LANE]*ux[LANE]+ (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE])));
+        v0[LANE] = one/Kokkos::sqrtf(one + (ux[LANE]*ux[LANE]+ (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE])));
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
-
         /**/                                      // Get norm displacement
-        ux[LANE]  *= cdt_dx;
-        uy[LANE]  *= cdt_dy;
-        uz[LANE]  *= cdt_dz;
-        ux[LANE]  *= v0[LANE];
-        uy[LANE]  *= v0[LANE];
-        uz[LANE]  *= v0[LANE];
-        v0[LANE]   = dx[LANE] + ux[LANE];                           // Streak midpoint (inbnds)
-        v1[LANE]   = dy[LANE] + uy[LANE];
-        v2[LANE]   = dz[LANE] + uz[LANE];
-        v3[LANE]   = v0[LANE] + ux[LANE];                           // New position
-        v4[LANE]   = v1[LANE] + uy[LANE];
-        v5[LANE]   = v2[LANE] + uz[LANE];
+        ux[LANE] *= cdt_dx;
+        uy[LANE] *= cdt_dy;
+        uz[LANE] *= cdt_dz;
+        ux[LANE] *= v0[LANE];
+        uy[LANE] *= v0[LANE];
+        uz[LANE] *= v0[LANE];
+        v0[LANE]  = dx[LANE] + ux[LANE];                           // Streak midpoint (inbnds)
+        v1[LANE]  = dy[LANE] + uy[LANE];
+        v2[LANE]  = dz[LANE] + uz[LANE];
+        v3[LANE]  = v0[LANE] + ux[LANE];                           // New position
+        v4[LANE]  = v1[LANE] + uy[LANE];
+        v5[LANE]  = v2[LANE] + uz[LANE];
   
         inbnds[LANE] = v3[LANE]<=one &&  v4[LANE]<=one &&  v5[LANE]<=one &&
                       -v3[LANE]<=one && -v4[LANE]<=one && -v5[LANE]<=one;
       } END_VECTOR_BLOCK;
     
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
-      int in_cell = particles_in_same_cell(team_member, ii, inbnds, num_iters);
+      const int same_cell = particles_in_same_cell(team_member, ii, inbnds, num_iters);
 #endif
 
       BEGIN_VECTOR_BLOCK {
         p_index = pi_offset + LANE;
 
-        //v3[LANE] = static_cast<float>(inbnds[LANE])*v3[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dx;
-        //v4[LANE] = static_cast<float>(inbnds[LANE])*v4[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dy;
-        //v5[LANE] = static_cast<float>(inbnds[LANE])*v5[LANE] + (1.0-static_cast<float>(inbnds[LANE]))*p_dz;
-        //q[LANE]  = static_cast<float>(inbnds[LANE])*q[LANE]*qsp;
         v3[LANE] = inbnds[LANE] ? v3[LANE] : p_dx;
         v4[LANE] = inbnds[LANE] ? v4[LANE] : p_dy;
         v5[LANE] = inbnds[LANE] ? v5[LANE] : p_dz;
-        q[LANE]  = static_cast<float>(inbnds[LANE])*q[LANE]*qsp;
+        q[LANE]  = inbnds[LANE] ? q[LANE]*qsp : 0.0f; //static_cast<float>(inbnds[LANE])*q[LANE]*qsp;
 
         p_dx = v3[LANE];
         p_dy = v4[LANE];
@@ -654,22 +653,22 @@ advance_p_kokkos_unified(
       } END_VECTOR_BLOCK;
 
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
-      if(in_cell) {
-        int first = ii[0];
-        reduce_and_accumulate_current(team_member, current_sa, num_iters, first, 
+      if(same_cell && (num_particles == num_lanes)) {
+        const int cell = ii[0];
+        reduce_and_accumulate_current(team_member, current_sa, num_iters, cell, 
                                       nx, ny, nz, cx, cy, cz,
                                       v6, v7, v8, v9,
                                       v10, v11, v12, v13,
                                       v0, v1, v2, v3);
       } else {
 #endif
-        BEGIN_VECTOR_BLOCK {
+        BEGIN_THREAD_BLOCK {
           accumulate_current(current_sa, ii[LANE],
                        nx, ny, nz, cx, cy, cz, 
-                       v6[LANE], v7[LANE], v8[LANE], v9[LANE],
+                       v6[LANE],  v7[LANE],  v8[LANE],  v9[LANE],
                        v10[LANE], v11[LANE], v12[LANE], v13[LANE],
-                       v0[LANE], v1[LANE], v2[LANE], v3[LANE]);
-        } END_VECTOR_BLOCK;
+                       v0[LANE],  v1[LANE],  v2[LANE],  v3[LANE]);
+        } END_THREAD_BLOCK;
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
       }
 #endif
@@ -685,7 +684,8 @@ advance_p_kokkos_unified(
           local_pm->i     = p_index;
 
           if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                             current_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
+                             current_sa, g, k_neighbors, rangel, rangeh, qsp, 
+                             cx, cy, cz, nx, ny, nz ) )
           {
             if( k_nm(0)<max_nm ) {
               const size_t nm = Kokkos::atomic_fetch_add( &k_nm(0), 1 );
@@ -715,31 +715,34 @@ advance_p_kokkos_unified(
   });
 
 #if defined( VPIC_ENABLE_ACCUMULATORS )
+  Kokkos::fence();
+  Kokkos::Experimental::contribute(k_field, jf_sv);
   Kokkos::Experimental::contribute(accumulator, current_sv);
-  Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nz+2, ny+2, nx+2});
+  Kokkos::MDRangePolicy<Kokkos::Rank<3>> unload_policy({1, 1, 1}, {nx+2, ny+2, nz+2});
   Kokkos::parallel_for("unload accumulator array", unload_policy, 
-  KOKKOS_LAMBDA(const int z, const int y, const int x) {
-      const int f0  = VOXEL(1, y, z, nx, ny, nz) + x-1;
-      const int a0  = VOXEL(1, y, z, nx, ny, nz) + x-1;
-      const int ax  = VOXEL(0, y, z, nx, ny, nz) + x-1;
-      const int ay  = VOXEL(1, y-1, z, nx, ny, nz) + x-1;
-      const int az  = VOXEL(1, y, z-1, nx, ny, nz) + x-1;
-      const int ayz = VOXEL(1, y-1, z-1, nx, ny, nz) + x-1;
-      const int azx = VOXEL(0, y, z-1, nx, ny, nz) + x-1;
-      const int axy = VOXEL(0, y-1, z, nx, ny, nz) + x-1;
-      k_field(f0, field_var::jfx) += ( accumulator(a0, 0) +
-                                       accumulator(ay, 1) +
-                                       accumulator(az, 2) +
-                                       accumulator(ayz, 3) );
-      k_field(f0, field_var::jfy) += ( accumulator(a0, 4) +
-                                       accumulator(az, 5) +
-                                       accumulator(ax, 6) +
-                                       accumulator(azx, 7) );
-      k_field(f0, field_var::jfz) += ( accumulator(a0, 8) +
-                                       accumulator(ax, 9) +
-                                       accumulator(ay, 10) +
-                                       accumulator(axy, 11) );
+  KOKKOS_LAMBDA(const int x, const int y, const int z) {
+    const int a0  = VOXEL(x,   y,   z,   nx, ny, nz);
+    const int ax  = VOXEL(x-1, y,   z,   nx, ny, nz);
+    const int ay  = VOXEL(x,   y-1, z,   nx, ny, nz);
+    const int az  = VOXEL(x,   y,   z-1, nx, ny, nz);
+    const int ayz = VOXEL(x,   y-1, z-1, nx, ny, nz);
+    const int azx = VOXEL(x-1, y,   z-1, nx, ny, nz);
+    const int axy = VOXEL(x-1, y-1, z,   nx, ny, nz);
+
+    k_field(a0, field_var::jfx) += ( accumulator(a0,  accumulator_var::jx, 0) +
+                                     accumulator(ay,  accumulator_var::jx, 1) +
+                                     accumulator(az,  accumulator_var::jx, 2) +
+                                     accumulator(ayz, accumulator_var::jx, 3) );
+    k_field(a0, field_var::jfy) += ( accumulator(a0,  accumulator_var::jy, 0) +
+                                     accumulator(az,  accumulator_var::jy, 1) +
+                                     accumulator(ax,  accumulator_var::jy, 2) +
+                                     accumulator(azx, accumulator_var::jy, 3) );
+    k_field(a0, field_var::jfz) += ( accumulator(a0,  accumulator_var::jz, 0) +
+                                     accumulator(ax,  accumulator_var::jz, 1) +
+                                     accumulator(ay,  accumulator_var::jz, 2) +
+                                     accumulator(axy, accumulator_var::jz, 3) );
   });
+  Kokkos::fence();
 #else
   Kokkos::Experimental::contribute(k_field, current_sv);
 #endif
@@ -1061,7 +1064,7 @@ advance_p_kokkos_gpu(
 
       //printf("Calling move_p index %d dx %e y %e z %e ux %e uy %e yz %e \n", p_index, ux, uy, uz, p_ux, p_uy, p_uz);
       if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
-                         k_f_sv, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
+                         k_field_scatter_access, g, k_neighbors, rangel, rangeh, qsp, cx, cy, cz, nx, ny, nz ) )
       {
         if( k_nm(0) < max_nm )
         {
@@ -1202,3 +1205,4 @@ advance_p( /**/  species_t            * RESTRICT sp,
 
   KOKKOS_TOC( PARTICLE_DATA_MOVEMENT, 1);
 }
+

@@ -211,7 +211,7 @@ begin_initialization {
   double Lz_SI = 30e-6;
   double t_stop = 1.2e-12 / time_to_SI; // Simulation run time
 
-  double T_e = 5. * e_SI; // Technically, this is k_B*T.  e_SI is eV to J.
+  double T_e = 5e3 * e_SI; // Technically, this is k_B*T.  e_SI is eV to J.
   double T_i = 5. * e_SI;
 
   double dist_to_focus = 10e-6;// For this run, put the origin at the focus

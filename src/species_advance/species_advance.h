@@ -143,28 +143,28 @@ class species_t {
         k_particles_t k_p_d;                 // kokkos particles view on device
         k_particles_i_t k_p_i_d;             // kokkos particles view on device
 
-        k_particles_t::HostMirror k_p_h;     // kokkos particles view on host
-        k_particles_i_t::HostMirror k_p_i_h; // kokkos particles view on host
+        k_particles_t::host_mirror_type k_p_h;     // kokkos particles view on host
+        k_particles_i_t::host_mirror_type k_p_i_h; // kokkos particles view on host
 
         k_particle_copy_t k_pc_d;            // kokkos particles copy for movers view on device
         k_particle_i_copy_t k_pc_i_d;        // kokkos particles copy for movers view on device
 
-        k_particle_copy_t::HostMirror k_pc_h;      // kokkos particles copy for movers view on host
-        k_particle_i_copy_t::HostMirror k_pc_i_h;  // kokkos particles i copy for movers view on host
+        k_particle_copy_t::host_mirror_type k_pc_h;      // kokkos particles copy for movers view on host
+        k_particle_i_copy_t::host_mirror_type k_pc_i_h;  // kokkos particles i copy for movers view on host
 
         // Only need host versions
-        k_particle_copy_t::HostMirror k_pr_h;      // kokkos particles copy for received particles
-        k_particle_i_copy_t::HostMirror k_pr_i_h;  // kokkos particles i copy for received particles
+        k_particle_copy_t::host_mirror_type k_pr_h;      // kokkos particles copy for received particles
+        k_particle_i_copy_t::host_mirror_type k_pr_i_h;  // kokkos particles i copy for received particles
 
         k_particle_movers_t k_pm_d;         // kokkos particle movers on device
         k_particle_i_movers_t k_pm_i_d;         // kokkos particle movers on device
 
-        k_particle_movers_t::HostMirror k_pm_h;  // kokkos particle movers on host
-        k_particle_i_movers_t::HostMirror k_pm_i_h;  // kokkos particle movers on host
+        k_particle_movers_t::host_mirror_type k_pm_h;  // kokkos particle movers on host
+        k_particle_i_movers_t::host_mirror_type k_pm_i_h;  // kokkos particle movers on host
 
         // TODO: what is an iterator here??
         k_counter_t k_nm_d;               // nm iterator
-        k_counter_t::HostMirror k_nm_h;
+        k_counter_t::host_mirror_type k_nm_h;
 
         // TODO: this should ultimatley be removeable.
         // This tracks the number of particles we need to move back to the device
@@ -187,7 +187,7 @@ class species_t {
         Kokkos::View<size_t*> unsafe_index;
         Kokkos::View<size_t> clean_up_to_count;
         Kokkos::View<size_t> clean_up_from_count;
-        Kokkos::View<size_t>::HostMirror clean_up_from_count_h;
+        Kokkos::View<size_t>::host_mirror_type clean_up_from_count_h;
         Kokkos::View<size_t*> clean_up_from;
         Kokkos::View<size_t*> clean_up_to;
 
@@ -207,8 +207,8 @@ class species_t {
             k_p_i_d = k_particles_i_t("k_particles_i", n_particles);
             k_pc_d = k_particle_copy_t("k_particle_copy_for_movers", n_pmovers);
             k_pc_i_d = k_particle_i_copy_t("k_particle_copy_for_movers_i", n_pmovers);
-            k_pr_h = k_particle_copy_t::HostMirror("k_particle_send_for_movers", n_pmovers);
-            k_pr_i_h = k_particle_i_copy_t::HostMirror("k_particle_send_for_movers_i", n_pmovers);
+            k_pr_h = k_particle_copy_t::host_mirror_type("k_particle_send_for_movers", n_pmovers);
+            k_pr_i_h = k_particle_i_copy_t::host_mirror_type("k_particle_send_for_movers_i", n_pmovers);
             k_pm_d = k_particle_movers_t("k_particle_movers", n_pmovers);
             k_pm_i_d = k_particle_i_movers_t("k_particle_movers_i", n_pmovers);
             k_nm_d = k_counter_t("k_nm"); // size 1 encoded in type
@@ -404,11 +404,11 @@ int
 move_p( particle_t       * ALIGNED(128) p0,
         particle_mover_t * ALIGNED(16)  pm,
         //accumulator_t    * ALIGNED(128) a0,
-        k_jf_accum_t::HostMirror& k_jf_accum,
+        k_jf_accum_t::host_mirror_type& k_jf_accum,
         const grid_t     *              g,
         const float                     qsp );
 
-template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class scatter_view_t>
+template<class particle_view_t, class particle_i_view_t, class neighbor_view_t, class scatter_access_t>
 int
 KOKKOS_INLINE_FUNCTION
 move_p_kokkos(
@@ -416,7 +416,7 @@ move_p_kokkos(
     const particle_i_view_t& k_particles_i,
     particle_mover_t* ALIGNED(16)  pm,
     //accumulator_sa_t k_accumulators_sa,
-    scatter_view_t scatter_view,
+    scatter_access_t& scatter_access,
     const grid_t* g,
     neighbor_view_t& d_neighbor,
     int64_t rangel,
@@ -459,7 +459,7 @@ move_p_kokkos(
   size_t pi = pm->i;
 //  auto  k_field_scatter_access = k_f_sa.access();
 //  auto accum_sa = accum_sv.access();
-  auto scatter_access = scatter_view.access();
+//  auto scatter_access = scatter_view.access();
 
   q = qsp*p_w;
 
@@ -533,52 +533,53 @@ move_p_kokkos(
     v2 -= v5;             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */  \
     v3 += v5;             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */  \
 
-    //Kokkos::atomic_add(&a[0], v0);
-    //Kokkos::atomic_add(&a[1], v1);
-    //Kokkos::atomic_add(&a[2], v2);
-    //Kokkos::atomic_add(&a[3], v3);
-
-    if (std::is_same<scatter_view_t,k_field_sa_t>::value) {
+    if constexpr (std::is_same_v<typename scatter_access_t::view_type, k_field_sa_t>) {
       int iii = ii;
       int zi = iii/((nx+2)*(ny+2));
       iii -= zi*(nx+2)*(ny+2);
       int yi = iii/(nx+2);
       int xi = iii-yi*(nx+2);
+      const int ax  = VOXEL(xi+1, yi,   zi,   nx, ny, nz);
+      const int ay  = VOXEL(xi,   yi+1, zi,   nx, ny, nz);
+      const int az  = VOXEL(xi,   yi,   zi+1, nx, ny, nz);
+      const int ayz = VOXEL(xi,   yi+1, zi+1, nx, ny, nz);
+      const int azx = VOXEL(xi+1, yi,   zi+1, nx, ny, nz);
+      const int axy = VOXEL(xi+1, yi+1, zi,   nx, ny, nz);
       accumulate_j(x,y,z);
-      scatter_access(ii, field_var::jfx) += cx*v0;
-      scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfx) += cx*v1;
-      scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfx) += cx*v2;
-      scatter_access(VOXEL(xi,yi+1,zi+1,nx,ny,nz), field_var::jfx) += cx*v3;
+      scatter_access(ii,  field_var::jfx) += cx*v0;
+      scatter_access(ay,  field_var::jfx) += cx*v1;
+      scatter_access(az,  field_var::jfx) += cx*v2;
+      scatter_access(ayz, field_var::jfx) += cx*v3;
 
       accumulate_j(y,z,x);
-      scatter_access(ii, field_var::jfy) += cy*v0;
-      scatter_access(VOXEL(xi,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v1;
-      scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfy) += cy*v2;
-      scatter_access(VOXEL(xi+1,yi,zi+1,nx,ny,nz), field_var::jfy) += cy*v3;
+      scatter_access(ii,  field_var::jfy) += cy*v0;
+      scatter_access(az,  field_var::jfy) += cy*v1;
+      scatter_access(ax,  field_var::jfy) += cy*v2;
+      scatter_access(azx, field_var::jfy) += cy*v3;
 
       accumulate_j(z,x,y);
-      scatter_access(ii, field_var::jfz) += cz*v0;
-      scatter_access(VOXEL(xi+1,yi,zi,nx,ny,nz), field_var::jfz) += cz*v1;
-      scatter_access(VOXEL(xi,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v2;
-      scatter_access(VOXEL(xi+1,yi+1,zi,nx,ny,nz), field_var::jfz) += cz*v3;
+      scatter_access(ii,  field_var::jfz) += cz*v0;
+      scatter_access(ax,  field_var::jfz) += cz*v1;
+      scatter_access(ay,  field_var::jfz) += cz*v2;
+      scatter_access(axy, field_var::jfz) += cz*v3;
     } else {
       accumulate_j(x,y,z);
-      scatter_access(ii, 0) += cx*v0;
-      scatter_access(ii, 1) += cx*v1;
-      scatter_access(ii, 2) += cx*v2;
-      scatter_access(ii, 3) += cx*v3;
+      scatter_access(ii, accumulator_var::jx, 0) += cx*v0;
+      scatter_access(ii, accumulator_var::jx, 1) += cx*v1;
+      scatter_access(ii, accumulator_var::jx, 2) += cx*v2;
+      scatter_access(ii, accumulator_var::jx, 3) += cx*v3;
 
       accumulate_j(y,z,x);
-      scatter_access(ii, 4) += cy*v0;
-      scatter_access(ii, 5) += cy*v1;
-      scatter_access(ii, 6) += cy*v2;
-      scatter_access(ii, 7) += cy*v3;
+      scatter_access(ii, accumulator_var::jy, 0) += cy*v0;
+      scatter_access(ii, accumulator_var::jy, 1) += cy*v1;
+      scatter_access(ii, accumulator_var::jy, 2) += cy*v2;
+      scatter_access(ii, accumulator_var::jy, 3) += cy*v3;
 
       accumulate_j(z,x,y);
-      scatter_access(ii, 8) += cz*v0;
-      scatter_access(ii, 9) += cz*v1;
-      scatter_access(ii, 10) += cz*v2;
-      scatter_access(ii, 11) += cz*v3;
+      scatter_access(ii, accumulator_var::jz, 0) += cz*v0;
+      scatter_access(ii, accumulator_var::jz, 1) += cz*v1;
+      scatter_access(ii, accumulator_var::jz, 2) += cz*v2;
+      scatter_access(ii, accumulator_var::jz, 3) += cz*v3;
     }
 
 #   undef accumulate_j
