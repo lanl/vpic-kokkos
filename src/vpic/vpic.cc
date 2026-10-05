@@ -327,7 +327,7 @@ void restore_kokkos(vpic_simulation& simulation, const char *fbase)
           new(&sp->np_per_ts_io_buffer) std::vector<std::pair<int64_t,int64_t>>();
 
           new(&sp->particle_io_buffer_d) k_particles_t();
-          new(&sp->particle_cell_io_buffer_d) k_particles_t();
+          new(&sp->particle_cell_io_buffer_d) k_particles_i_t();
           new(&sp->efields_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
           new(&sp->bfields_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
           new(&sp->current_dens_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
@@ -339,7 +339,7 @@ void restore_kokkos(vpic_simulation& simulation, const char *fbase)
           new(&sp->annotations_io_buffer_d) annotations_t<Kokkos::DefaultExecutionSpace>();
 
           new(&sp->particle_io_buffer_h) k_particles_t::HostMirror();
-          new(&sp->particle_cell_io_buffer_h) k_particles_t::HostMirror();
+          new(&sp->particle_cell_io_buffer_h) k_particles_i_t::HostMirror();
           new(&sp->efields_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
           new(&sp->bfields_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
           new(&sp->current_dens_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
