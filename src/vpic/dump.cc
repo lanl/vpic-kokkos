@@ -410,7 +410,7 @@ vpic_simulation::dump_particles( const char *sp_name,
 /*------------------------------------------------------------------------------
  * HDF5 Dumps
  *---------------------------------------------------------------------------*/
-#ifdef VPIC_ENABLE_HDF5
+#ifdef VPIC_ENABLE_TRACER_PARTICLES
 #ifdef VPIC_ENABLE_HDF5_ASYNC
 
 template<class Slice>
