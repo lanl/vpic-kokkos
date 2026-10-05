@@ -99,5 +99,5 @@ advance_b(field_array_t * RESTRICT fa,
 
   advance_b_kokkos(k_field, nx, ny, nz, nv, px, py, pz);
 
-  k_local_adjust_norm_b( fa, g );
+  local_adjust_norm_b( fa, g );
 }

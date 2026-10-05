@@ -237,7 +237,7 @@ begin_initialization {
   double ny = 100;
   double nz = 100;
 
-  double nppc = 100;
+  double nppc = 80;
 
   // Below is a bunch of stuff that was used for weak scaling tests.  You can
   // ignore it and still get somewhat fair results.

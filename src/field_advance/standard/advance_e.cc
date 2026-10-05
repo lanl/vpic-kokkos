@@ -436,8 +436,8 @@ advance_e( field_array_t * RESTRICT fa,
    * Begin tangential B ghost setup
    ***************************************************************************/
 
-  begin_remote_ghost_tang_b( fa->f, fa->g );
-  local_ghost_tang_b( fa->f, fa->g );
+  legacy_begin_remote_ghost_tang_b( fa->f, fa->g );
+  legacy_local_ghost_tang_b( fa->f, fa->g );
 
   /***************************************************************************
    * Update interior fields
@@ -501,7 +501,7 @@ advance_e( field_array_t * RESTRICT fa,
    * Finish tangential B ghost setup
    ***************************************************************************/
 
-  end_remote_ghost_tang_b( fa->f, fa->g );
+  legacy_end_remote_ghost_tang_b( fa->f, fa->g );
 
   /***************************************************************************
    * Update exterior fields
@@ -633,7 +633,7 @@ advance_e( field_array_t * RESTRICT fa,
     }
   }
 
-  local_adjust_tang_e( fa->f, fa->g );
+  legacy_local_adjust_tang_e( fa->f, fa->g );
 }
 
 void advance_e_kokkos(field_array_t* RESTRICT fa, float frac) {
@@ -665,9 +665,9 @@ void advance_e_kokkos(field_array_t* RESTRICT fa, float frac) {
     * Begin tangential B ghost setup
     ***************************************************************************/
 
-    kokkos_begin_remote_ghost_tang_b( fa, fa->g, *(fa->fb) );
+    begin_remote_ghost_tang_b( fa, fa->g );
 
-    k_local_ghost_tang_b( fa, fa->g );
+    local_ghost_tang_b( fa, fa->g );
 
     advance_e_interior_kokkos(k_field, k_field_edge, k_material_d, nx, ny, nz, px, py, pz, damp, cj);
 
@@ -675,7 +675,7 @@ void advance_e_kokkos(field_array_t* RESTRICT fa, float frac) {
     * Finish tangential B ghost setup
     ***************************************************************************/
 
-    kokkos_end_remote_ghost_tang_b( fa, fa->g, *(fa->fb) );
+    end_remote_ghost_tang_b( fa, fa->g );
 
     /***************************************************************************
     * Update exterior fields
@@ -683,6 +683,6 @@ void advance_e_kokkos(field_array_t* RESTRICT fa, float frac) {
 
     advance_e_exterior_kokkos(k_field, k_field_edge, k_material_d, nx, ny, nz, px, py, pz, damp, cj);
 
-    k_local_adjust_tang_e( fa, fa->g );
+    local_adjust_tang_e( fa, fa->g );
 }
 

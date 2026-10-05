@@ -77,8 +77,8 @@ compute_rhob( field_array_t * RESTRICT fa ) {
 
   // Begin setting normal e ghosts
 
-  begin_remote_ghost_norm_e( fa->f, fa->g );
-  local_ghost_norm_e( fa->f, fa->g );
+  legacy_begin_remote_ghost_norm_e( fa->f, fa->g );
+  legacy_local_ghost_norm_e( fa->f, fa->g );
 
   // Have pipelines compute interior of local domain
 
@@ -94,7 +94,7 @@ compute_rhob( field_array_t * RESTRICT fa ) {
   DECLARE_STENCIL();
 
   // Finish setting normal e ghosts
-  end_remote_ghost_norm_e( fa->f, fa->g );
+  legacy_end_remote_ghost_norm_e( fa->f, fa->g );
 
   // z faces, x edges, y edges and all corners
   for( y=1; y<=ny+1; y++ ) {
@@ -172,5 +172,5 @@ compute_rhob( field_array_t * RESTRICT fa ) {
 
   WAIT_PIPELINES();
 
-  local_adjust_rhob( fa->f, fa->g );
+  legacy_local_adjust_rhob( fa->f, fa->g );
 }

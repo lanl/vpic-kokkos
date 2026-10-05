@@ -13,7 +13,7 @@ cmake_policy(SET CMP0074 NEW)
 project(vpic CXX)
 
 #------------------------------------------------------------------------------#
-# If a C++14 compiler is available, then set the appropriate flags
+# If a C++17 compiler is available, then set the appropriate flags
 # Note: As of February 2021, VPIC requires only C++11, but requiring C++14
 # makes building Kokkos easier.  If you are adventurous and using your own
 # Kokkos build, feel free to try a lower standard.
@@ -23,6 +23,8 @@ project(vpic CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_SHARED_LIBRARY_ENABLE_EXPORTS ON)
+set(CMAKE_EXECUTABLE_ENABLE_EXPORTS ON)
 
 #------------------------------------------------------------------------------#
 # MPI detection
@@ -60,6 +62,8 @@ option(BUILD_INTERNAL_KOKKOS "Have VPIC build it's own Kokkos rather than look i
 
 option(VPIC_DUMP_ENERGIES "If the code should dump energies everytimestep for debugging" OFF)
 
+option(VPIC_USE_LEGACY_PARTICLE_ARRAY "Use the legacy particle array for compatibility" ON)
+
 option(VPIC_ENABLE_AUTO_TUNING "Enable automatic tuning based on architecture" ON)
 
 option(VPIC_ENABLE_HIERARCHICAL "Enable hierarchical parallelism" OFF)
@@ -77,6 +81,8 @@ option(VPIC_ENABLE_TRACER_PARTICLES "Enable tracer particles" OFF)
 option(VPIC_ENABLE_HDF5 "Enable HDF5 support for dumping" OFF)
 
 option(VPIC_ENABLE_HDF5_ASYNC "Enable asynchronous support for HDF5 (EXPERIMENTAL!!!)" OFF)
+
+option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU aware MPI to speedup communication" OFF)
 
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
@@ -228,46 +234,42 @@ endif(BUILD_INTERNAL_KOKKOS)
 get_target_property(KOKKOS_COMPILE_OPTIONS Kokkos::kokkoscore INTERFACE_COMPILE_OPTIONS)
 get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkoscore INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(KOKKOS_INCLUDE_CONTAINERS Kokkos::kokkoscontainers INTERFACE_INCLUDE_DIRECTORIES)
-
-#message(${KOKKOS_COMPILE_OPTIONS})
-# TODO: this gives the external include path
-#get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
-
-#get_target_property(KOKKOS_LIB_DIRS Kokkos::kokkos INTERFACE_LINK_DEPENDS)
-#get_target_property(KOKKOS_LIB_CONTAINERS Kokkos::kokkoscontainers INTERFACE_LINK_DEPENDS)
+get_target_property(KOKKOS_INCLUDE_ALGORITHMS Kokkos::kokkosalgorithms INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(KOKKOS_INCLUDE_SIMD Kokkos::kokkossimd INTERFACE_INCLUDE_DIRECTORIES)
 
 set(KOKKOS_CORE_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_core_includes)
 set(KOKKOS_CONTAINER_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_container_includes)
+set(KOKKOS_ALGORITHM_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_algorithm_includes)
 set(KOKKOS_COMPILE_OPTIONS_FILE ${PROJECT_BINARY_DIR}/kokkos_compile_options)
-#set(KOKKOS_CORE_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_core_lib)
-#set(KOKKOS_CONTAINER_LIB_FILE ${PROJECT_BINARY_DIR}/kokkos_container_lib)
+set(KOKKOS_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_includes)
 
-# For an "external" build these will be the same, but for an internal we need to gather both
-file(GENERATE OUTPUT ${KOKKOS_CORE_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
-file(GENERATE OUTPUT ${KOKKOS_CONTAINER_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_CONTAINERS}")
-# TODO: This removes the language generator expression from the Kokkos flags. 
-# This ideally should be evaluated rather than stripped from the options.
-string(REPLACE "$<$<COMPILE_LANGUAGE:CXX>:" "" kokkos_compile_options0 "${KOKKOS_COMPILE_OPTIONS}")
-string(REPLACE ">" "" kokkos_compile_options1 "${kokkos_compile_options0}")
-string(REPLACE ";" " " kokkos_compile_options "${kokkos_compile_options1}")
-file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${kokkos_compile_options}")
-
-# TODO: bad idea.. at best, this is just going to add it to the last one in the
-# array
-#link_directories(${KOKKOS_INCLUDE_DIRS}/../lib)
-#link_directories(${KOKKOS_INCLUDE_DIRS}/lib)
+## For an "external" build these will be the same, but for an internal we need to gather both
+#file(GENERATE OUTPUT ${KOKKOS_CORE_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
+#file(GENERATE OUTPUT ${KOKKOS_CONTAINER_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_CONTAINERS}")
+#file(GENERATE OUTPUT ${KOKKOS_ALGORITHM_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_ALGORITHMS}")
+#string(REPLACE ";" " " kokkos_compile_options "${KOKKOS_COMPILE_OPTIONS}")
+#file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${kokkos_compile_options}")
+# Restrict compile options file to C++ to avoid mulit-language errors
+file(GENERATE
+     OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE}
+     CONTENT "$<LIST:JOIN,$<LIST:TRANSFORM,$<TARGET_PROPERTY:INTERFACE_COMPILE_OPTIONS>,REPLACE,SHELL[:],>, >"
+     CONDITION $<COMPILE_LANGUAGE:CXX>
+     TARGET Kokkos::kokkoscore
+)
+if(NOT "${KOKKOS_INCLUDE_DIRS}" STREQUAL "${KOKKOS_INCLUDE_CONTAINERS}")
+  set(KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS};${KOKKOS_INCLUDE_CONTAINERS}")
+endif()
+if(NOT "${KOKKOS_INCLUDE_DIRS}" STREQUAL "${KOKKOS_INCLUDE_ALGORITHMS}")
+  set(KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS};${KOKKOS_INCLUDE_ALGORITHMS}")
+endif()
+if(NOT "${KOKKOS_INCLUDE_DIRS}" STREQUAL "${KOKKOS_INCLUDE_SIMD}")
+  set(KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS};${KOKKOS_INCLUDE_SIMD}")
+endif()
+file(GENERATE OUTPUT ${KOKKOS_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 
 # Libs
 string(REPLACE ";" " " string_libraries "${KOKKOS_LIBS} ${KOKKOS_LDFLAGS}")
 set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-
-# Includes (TODO: this is definitely abuse of the CXX variable..)
-#string(REPLACE ";" " -I" string_libraries "-I${KOKKOS_INCLUDE_DIRS}")
-#set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-
-#string(REPLACE ";" " -L" string_libraries "-L${KOKKOS_INCLUDE_DIRS}")
-#set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${string_libraries}")
-
 
 #------------------------------------------------------------------------------#
 # OpenSSL
@@ -317,11 +319,15 @@ endif(VPIC_ENABLE_HDF5 OR VPIC_ENABLE_TRACER_PARTICLES)
 # Act on build options set in project.cmake
 #------------------------------------------------------------------------------#
 
-message("-- VPIC Optimization Settings")
+if (VPIC_USE_LEGACY_PARTICLE_ARRAY)
+    add_definitions(-DUSE_LEGACY_PARTICLE_ARRAY)
+endif(VPIC_USE_LEGACY_PARTICLE_ARRAY)
+
 if (VPIC_DUMP_ENERGIES)
     add_definitions(-DDUMP_ENERGIES)
 endif(VPIC_DUMP_ENERGIES)
 
+message("-- VPIC Optimization Settings")
 if(VPIC_ENABLE_AUTO_TUNING)
   add_definitions(-DVPIC_ENABLE_AUTO_TUNING)
   message("--     VPIC: Enabled automatic tuning.  Optimizations will be selected during compilation.")
@@ -360,6 +366,11 @@ if (VPIC_ENABLE_TRACER_PARTICLES)
   set(ENABLE_TRACERS ON CACHE INTERNAL "")
   set(ENABLE_HDF5 ON CACHE INTERNAL "")
 endif(VPIC_ENABLE_TRACER_PARTICLES)
+
+if (VPIC_ENABLE_GPU_AWARE_MPI)
+  add_definitions(-DVPIC_ENABLE_GPU_AWARE_MPI)
+  message("--     VPIC: Enabled GPU-aware MPI")
+endif(VPIC_ENABLE_GPU_AWARE_MPI)
 
 set(USE_V4)
 if(USE_V4_ALTIVEC)
@@ -434,6 +445,10 @@ configure_file(
     ${CMAKE_SOURCE_DIR}/sample/Makefile.run.in
     ${CMAKE_BINARY_DIR}/bin/Makefile.run
 )
+
+#The compile definitions are associated with a directory, and won't automatically be available for the deck compile scripts.
+get_directory_property( DirDefs COMPILE_DEFINITIONS )
+string(REPLACE ";" " -D" DirDefs "-D${DirDefs}")
 
 # install script
 configure_file(
@@ -550,6 +565,12 @@ endif()
 
 if(ENABLE_INTEGRATED_TESTS)
   enable_testing()
+
+  # NOTE: This can also be done by a subdirectory (useful when we have multiple tests)
+  # Add includes for Catch2
+  set(TEST_DIR "./test/include")
+  include_directories(${TEST_DIR})
+
   add_subdirectory(test/integrated)
 
 endif(ENABLE_INTEGRATED_TESTS)

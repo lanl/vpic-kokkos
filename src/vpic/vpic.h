@@ -17,13 +17,15 @@
 #include <cmath>
 
 #include "../boundary/boundary.h"
-#include "../collision/collision.h"
+// TODO: Implement collisions with Kokkos
+//#include "../collision/collision.h"
 #include "../emitter/emitter.h"
 // FIXME: INCLUDES ONCE ALL IS CLEANED UP
 #include "../util/io/FileIO.h"
 #include "../util/bitfield.h"
 #include "../util/checksum.h"
 #include "../util/system.h"
+#include "../particle_operations/sort.h"
 
 #ifdef VPIC_ENABLE_HDF5
 #include "hdf5.h"
@@ -222,7 +224,12 @@ public:
                                              // boundary helpers
   emitter_t            * emitter_list;       // define_emitter /
                                              // emitter helpers
+  // TODO: Make collisions work with Kokkos
+#if 0
   collision_op_t       * collision_op_list;  // collision helpers
+#endif
+
+  ParticleSorter<>* sorter;
 
   // User defined checkpt preserved variables
   // Note: user_global is aliased with user_global_t (see deck_wrapper.cxx)
@@ -562,8 +569,10 @@ public:
       if( max_local_nm<16*(MAX_PIPELINE+1) )
         max_local_nm = 16*(MAX_PIPELINE+1);
     }
+    sorter->resize(max_local_np, grid->nv);
+
     return append_species( species( name, (float)q, (float)m,
-                                    (int)max_local_np, (int)max_local_nm,
+                                    (size_t)max_local_np, (size_t)max_local_nm,
                                     (int)sort_interval, (int)sort_out_of_place,
                                     grid ), &species_list );
   }
@@ -1019,6 +1028,8 @@ public:
   //   injection with displacement during initialization).
   // This injection is _ultra_ _fast_.
 
+  // TODO: Make Kokkos versions of these
+#ifdef USE_LEGACY_PARTICLE_ARRAY
   inline void
   inject_particle_raw( species_t * RESTRICT sp,
                        float dx, float dy, float dz, int32_t i,
@@ -1044,6 +1055,7 @@ public:
     if( update_rhob ) accumulate_rhob( field_array->f, p, grid, -sp->q );
     sp->nm += move_p( sp->p, pm, field_array->k_jf_accum_h, grid, sp->q );
   }
+#endif
 
   //////////////////////////////////
   // Random number generator helpers
@@ -1105,10 +1117,13 @@ public:
     return append_particle_bc( pbc, &particle_bc_list );
   }
 
+  // TODO: Make collisions work with Kokkos
+#if 0
   inline collision_op_t *
   define_collision_op( collision_op_t * cop ) {
     return append_collision_op( cop, &collision_op_list );
   }
+#endif
 
   ////////////////////////
   // Miscellaneous helpers
@@ -1118,7 +1133,7 @@ public:
   }
 
   // Truncate "a" to the nearest integer multiple of "b"
-  inline double trunc_granular( double a, double b ) { return b*int(a/b); }
+  inline double trunc_granular( double a, double b ) { return b*uint64_t(a/b); }
 
   // Compute the remainder of a/b
   inline double remainder( double a, double b ) { return std::remainder(a,b); }
@@ -1212,7 +1227,7 @@ public:
  * @brief After a checkpoint restore, we must move the data back over to the
  * Kokkos objects. This currently must be done for all views
  */
-void restore_kokkos(vpic_simulation& simulation, const char* fbase);
+void restore_kokkos(vpic_simulation& simulation, const char * fbase);
 // TODO: would this make more sense as a member function on vpic_simulation_t
 
 /**
@@ -1224,6 +1239,5 @@ void restore_kokkos(vpic_simulation& simulation, const char* fbase);
  * @param fbase The base name for the checkpoint files
  */
 void checkpt_kokkos(vpic_simulation& simulation, const char* fbase);
-
 
 #endif // vpic_h

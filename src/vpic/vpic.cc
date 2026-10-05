@@ -36,7 +36,7 @@ checkpt_vpic_simulation( const vpic_simulation * vpic ) {
   CHECKPT_FPTR( vpic->tracers_list );
   CHECKPT_FPTR( vpic->particle_bc_list );
   CHECKPT_FPTR( vpic->emitter_list );
-  CHECKPT_FPTR( vpic->collision_op_list );
+  //CHECKPT_FPTR( vpic->collision_op_list );
 }
 
 vpic_simulation *
@@ -54,7 +54,10 @@ restore_vpic_simulation( void ) {
   RESTORE_FPTR( vpic->tracers_list );
   RESTORE_FPTR( vpic->particle_bc_list );
   RESTORE_FPTR( vpic->emitter_list );
-  RESTORE_FPTR( vpic->collision_op_list );
+  //RESTORE_FPTR( vpic->collision_op_list );
+
+  vpic->sorter = new ParticleSorter<>();
+
   return vpic;
 }
 
@@ -68,7 +71,7 @@ reanimate_vpic_simulation( vpic_simulation * vpic ) {
   REANIMATE_FPTR( vpic->tracers_list );
   REANIMATE_FPTR( vpic->particle_bc_list );
   REANIMATE_FPTR( vpic->emitter_list );
-  REANIMATE_FPTR( vpic->collision_op_list );
+  //REANIMATE_FPTR( vpic->collision_op_list );
 }
 
 
@@ -92,6 +95,8 @@ vpic_simulation::vpic_simulation() {
   sync_entropy = new_rng_pool( n_rng, 0, 1 );
   grid = new_grid();
 
+  sorter = new ParticleSorter<>();
+
   REGISTER_OBJECT( this, checkpt_vpic_simulation,
                    restore_vpic_simulation, reanimate_vpic_simulation );
 }
@@ -109,6 +114,7 @@ vpic_simulation::~vpic_simulation() {
   delete_grid( grid );
   delete_rng_pool( sync_entropy );
   delete_rng_pool( entropy );
+  delete sorter;
   Kokkos::finalize();
 }
 
@@ -127,19 +133,22 @@ void vpic_simulation::print_run_details()
         // physics focused params:
         // num steps, nx, ny, nz, num particles per species
         std::cout << "######### Run Details ##########" << std::endl;
+        std::cout << "# MPI Ranks: " << _world_size << std::endl;
+        std::cout << "# Threads: " << thread.n_pipeline << std::endl;
         std::cout << "## Global:" << std::endl;
         std::cout << "  # Num Step " << num_step << std::endl;
         std::cout << "  # px " << px << " py " << py << " pz " << pz << std::endl;
         std::cout << "  # gnx " << px*grid->nx << " gny " << py*grid->ny << " gnz " << pz*grid->nz << std::endl;
+        std::cout << "  # dx " << grid->dx << " dy " << grid->dy << " dz " << grid->dz << std::endl;
+        std::cout << "  # dt " << grid->dt << " cvac " << grid->cvac << " eps0 " << grid->eps0 << std::endl;
         std::cout << "## Local:" << std::endl;
         std::cout << "  # nx " << grid->nx << " ny " << grid->ny << " nz " << grid->nz << std::endl;
-        std::cout << "  # dx " << grid->dx << " dy " << grid->dy << " dz " << grid->dz << std::endl;
         if (species_list )
         {
-            std::cout << "## Particle Species: " <<  num_species( species_list ) << std::endl;
+            std::cout << "## Local Particle Species: " <<  num_species( species_list ) << std::endl;
             LIST_FOR_EACH( sp, species_list )
             {
-                std::cout << "  # " << sp->name << " np " << sp->np << std::endl;
+                std::cout << "  # " << sp->name << " np " << sp->np << " max_np " << sp->max_np << std::endl;
             }
         }
         std::cout << "######### End Run Details ######" << std::endl;
@@ -152,21 +161,63 @@ void vpic_simulation::print_run_details()
  * the checkpointing infrustructure and manually write this data to disk for
  * all views without a legacy array.
  *
- * @param simulation The vpic_simulation that we are checkpointing
+ * @param simulation The vpic_simulation that was restored
  * @param fbase The base name for the checkpoint files
  */
-void checkpt_kokkos(vpic_simulation& simulation, const char* fbase) 
+void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
 {
-  char fname[256];
-  FileIO fileIO;
+# define PBUF_SIZE 32768 // 1MB of particles
+#ifndef USE_LEGACY_PARTICLE_ARRAY
+    char fname[256];
+    FileIO fileIO;
+    size_t buf_start;
+    static particle_t * ALIGNED(128) p_buf = NULL;
+    if( !p_buf ) MALLOC_ALIGNED( p_buf, PBUF_SIZE, 128 );
+    Kokkos::View<particle_t*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged> > pbuf(p_buf, PBUF_SIZE);
 
-  species_t* sp;
+    species_t* sp;
+    LIST_FOR_EACH( sp, simulation.species_list )
+    {
+        sprintf( fname, "%s.%s", fbase, sp->name );
+        FileIOStatus status = fileIO.open(fname, io_write);
+        if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
+
+        // Copy a PBUF_SIZE hunk of the particle list into the particle buffer,
+        // and write it out.  This is simplified from dump_particles since we
+        // don't need to call center_p.
+        size_t bufsize = PBUF_SIZE;
+        for( buf_start=0; buf_start<sp->np; buf_start += PBUF_SIZE ) {
+            if (buf_start + bufsize > sp->np) bufsize = sp->np - buf_start;
+            Kokkos::parallel_for("Populate particle dump buffer",
+                    host_execution_policy(0, bufsize),
+                    KOKKOS_LAMBDA (size_t i) {
+
+                    pbuf(i).dx = sp->k_p_h(buf_start + i, particle_var::dx);
+                    pbuf(i).dy = sp->k_p_h(buf_start + i, particle_var::dy);
+                    pbuf(i).dz = sp->k_p_h(buf_start + i, particle_var::dz);
+                    pbuf(i).ux = sp->k_p_h(buf_start + i, particle_var::ux);
+                    pbuf(i).uy = sp->k_p_h(buf_start + i, particle_var::uy);
+                    pbuf(i).uz = sp->k_p_h(buf_start + i, particle_var::uz);
+                    pbuf(i).w  = sp->k_p_h(buf_start + i, particle_var::w);
+                    pbuf(i).i  = sp->k_p_i_h(buf_start + i);
+
+            });
+            fileIO.write( p_buf, bufsize );
+        }
+        if( fileIO.close() ) ERROR(("File close failed on checkpt_kokkos particles!!!"));
+    }
+    FREE_ALIGNED(p_buf);
+
+#endif
+
 #if defined( VPIC_ENABLE_TRACER_PARTICLES ) || defined( VPIC_ENABLE_ANNOTATIONS )
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   LIST_FOR_EACH_SPECIES( sp, simulation.species_list, simulation.tracers_list )
   {
     if(sp->using_annotations) {
+      char fname[256];
+      FileIO fileIO;
       sprintf( fname, "%s.%s.annotations", fbase, sp->name );
       FileIOStatus status = fileIO.open(fname, io_write);
       if(status == fail) ERROR(("Could not open \"%s\"", fname));
@@ -257,6 +308,7 @@ void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
     }
   }
 #endif
+
 }
 
 /**
@@ -264,8 +316,9 @@ void checkpt_kokkos(vpic_simulation& simulation, const char* fbase)
  * Kokkos objects. This currently must be done for all views
  *
  * @param simulation The vpic_simulation that was restored
+ * @param fbase The base name for the checkpoint files
  */
-void restore_kokkos(vpic_simulation& simulation, const char *fbase)
+void restore_kokkos(vpic_simulation& simulation, const char * fbase)
 {
     // The way the VPIC checkpoint/restore works is by copying raw bytes and
     // pointers.  It messes with the reference counting built into Kokkos, and
@@ -279,7 +332,17 @@ void restore_kokkos(vpic_simulation& simulation, const char *fbase)
     // 2) Overwrite that be doing normal init
     // We may be able to do that one in one step, but this way is clearer
 
+#ifndef USE_LEGACY_PARTICLE_ARRAY
     // Restore Particles
+    char fname[256];
+    FileIO fileIO;
+    int buf_start;
+    static particle_t * ALIGNED(128) p_buf = NULL;
+    if( !p_buf ) MALLOC_ALIGNED( p_buf, PBUF_SIZE, 128 );
+    Kokkos::View< particle_t*, 
+                  Kokkos::HostSpace, 
+                  Kokkos::MemoryTraits<Kokkos::Unmanaged> > pbuf(p_buf, PBUF_SIZE);
+#endif
 
     species_t* sp;
     LIST_FOR_EACH_SPECIES( sp, simulation.species_list, simulation.tracers_list )
@@ -316,48 +379,79 @@ void restore_kokkos(vpic_simulation& simulation, const char *fbase)
 
 #if defined(VPIC_ENABLE_PARTICLE_ANNOTATIONS) || defined(VPIC_ENABLE_TRACER_PARTICLES)
         if(sp->using_annotations) {
-          new(&sp->annotation_vars) annotation_vars_t();
-          new(&sp->annotations_d) annotations_t<Kokkos::DefaultExecutionSpace>();
-          new(&sp->annotations_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
-          new(&sp->annotations_copy_d) annotations_t<Kokkos::DefaultExecutionSpace>();
-          new(&sp->annotations_copy_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
-          new(&sp->annotations_recv_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
+            new(&sp->annotation_vars) annotation_vars_t();
+            new(&sp->annotations_d) annotations_t<Kokkos::DefaultExecutionSpace>();
+            new(&sp->annotations_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
+            new(&sp->annotations_copy_d) annotations_t<Kokkos::DefaultExecutionSpace>();
+            new(&sp->annotations_copy_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
+            new(&sp->annotations_recv_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
 
 #ifdef VPIC_ENABLE_TRACER_PARTICLES
-          new(&sp->np_per_ts_io_buffer) std::vector<std::pair<int64_t,int64_t>>();
+            new(&sp->np_per_ts_io_buffer) std::vector<std::pair<int64_t,int64_t>>();
 
-          new(&sp->particle_io_buffer_d) k_particles_t();
-          new(&sp->particle_cell_io_buffer_d) k_particles_i_t();
-          new(&sp->efields_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
-          new(&sp->bfields_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
-          new(&sp->current_dens_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
-          new(&sp->charge_dens_io_buffer_d) Kokkos::View<float*>();
-          new(&sp->momentum_dens_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
-          new(&sp->ke_dens_io_buffer_d) Kokkos::View<float*>();
-          new(&sp->stress_tensor_io_buffer_d) Kokkos::View<float*[6], Kokkos::LayoutLeft>();
-          new(&sp->particle_ke_io_buffer_d) Kokkos::View<float*>();
-          new(&sp->annotations_io_buffer_d) annotations_t<Kokkos::DefaultExecutionSpace>();
+            new(&sp->particle_io_buffer_d) k_particles_t();
+            new(&sp->particle_cell_io_buffer_d) k_particles_i_t();
+            new(&sp->efields_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
+            new(&sp->bfields_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
+            new(&sp->current_dens_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
+            new(&sp->charge_dens_io_buffer_d) Kokkos::View<float*>();
+            new(&sp->momentum_dens_io_buffer_d) Kokkos::View<float*[3], Kokkos::LayoutLeft>();
+            new(&sp->ke_dens_io_buffer_d) Kokkos::View<float*>();
+            new(&sp->stress_tensor_io_buffer_d) Kokkos::View<float*[6], Kokkos::LayoutLeft>();
+            new(&sp->particle_ke_io_buffer_d) Kokkos::View<float*>();
+            new(&sp->annotations_io_buffer_d) annotations_t<Kokkos::DefaultExecutionSpace>();
 
-          new(&sp->particle_io_buffer_h) k_particles_t::HostMirror();
-          new(&sp->particle_cell_io_buffer_h) k_particles_i_t::HostMirror();
-          new(&sp->efields_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
-          new(&sp->bfields_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
-          new(&sp->current_dens_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
-          new(&sp->charge_dens_io_buffer_h) Kokkos::View<float*>::HostMirror();
-          new(&sp->momentum_dens_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
-          new(&sp->ke_dens_io_buffer_h) Kokkos::View<float*>::HostMirror();
-          new(&sp->stress_tensor_io_buffer_h) Kokkos::View<float*[6], Kokkos::LayoutLeft>::HostMirror();
-          new(&sp->particle_ke_io_buffer_h) Kokkos::View<float*>::HostMirror();
-          new(&sp->annotations_io_buffer_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
+            new(&sp->particle_io_buffer_h) k_particles_t::HostMirror();
+            new(&sp->particle_cell_io_buffer_h) k_particles_i_t::HostMirror();
+            new(&sp->efields_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
+            new(&sp->bfields_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
+            new(&sp->current_dens_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
+            new(&sp->charge_dens_io_buffer_h) Kokkos::View<float*>::HostMirror();
+            new(&sp->momentum_dens_io_buffer_h) Kokkos::View<float*[3], Kokkos::LayoutLeft>::HostMirror();
+            new(&sp->ke_dens_io_buffer_h) Kokkos::View<float*>::HostMirror();
+            new(&sp->stress_tensor_io_buffer_h) Kokkos::View<float*[6], Kokkos::LayoutLeft>::HostMirror();
+            new(&sp->particle_ke_io_buffer_h) Kokkos::View<float*>::HostMirror();
+            new(&sp->annotations_io_buffer_h) annotations_t<Kokkos::DefaultHostExecutionSpace>();
 #endif
         }
-
-      if(!sp->using_annotations) {
-        sp->copy_to_device();
-      }
 #endif
-      sp->copy_to_device();
     }
+
+#ifndef USE_LEGACY_PARTICLE_ARRAY
+    LIST_FOR_EACH( sp, simulation.species_list )
+    {
+        sprintf( fname, "%s.%s", fbase, sp->name );
+        FileIOStatus status = fileIO.open(fname, io_read);
+        if( status==fail ) ERROR(( "Could not open \"%s\"", fname ));
+
+        // Copy a PBUF_SIZE hunk of the particle list into the particle buffer,
+        // and write it out.  This is simplified from dump_particles since we
+        // don't need to call center_p.
+        int bufsize = PBUF_SIZE;
+        for( buf_start=0; buf_start<sp->np; buf_start += PBUF_SIZE ) {
+            if (buf_start + bufsize > sp->np) bufsize = sp->np - buf_start;
+            fileIO.read( p_buf, bufsize );
+            Kokkos::parallel_for("Populate particle dump buffer",
+                    host_execution_policy(0, bufsize),
+                    KOKKOS_LAMBDA (int i) {
+
+                    sp->k_p_h(buf_start + i, particle_var::dx) = pbuf(i).dx;
+                    sp->k_p_h(buf_start + i, particle_var::dy) = pbuf(i).dy;
+                    sp->k_p_h(buf_start + i, particle_var::dz) = pbuf(i).dz;
+                    sp->k_p_h(buf_start + i, particle_var::ux) = pbuf(i).ux;
+                    sp->k_p_h(buf_start + i, particle_var::uy) = pbuf(i).uy;
+                    sp->k_p_h(buf_start + i, particle_var::uz) = pbuf(i).uz;
+                    sp->k_p_h(buf_start + i, particle_var::w)  = pbuf(i).w ;
+                    sp->k_p_i_h(buf_start + i)                 = pbuf(i).i;
+
+            });
+        }
+        
+        if( fileIO.close() ) ERROR(("File close failed in restore_kokkos!!!"));
+        sp->copy_to_device();
+    }
+#endif
+
 #if defined( VPIC_ENABLE_TRACER_PARTICLES ) || defined( VPIC_ENABLE_PARTICLE_ANNOTATIONS )
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -475,6 +569,10 @@ void restore_kokkos(vpic_simulation& simulation, const char *fbase)
       }
     }
 #endif
+#ifndef USE_LEGACY_PARTICLE_ARRAY
+    FREE_ALIGNED(p_buf);
+#endif
+#undef PBUF_SIZE
 
     int nv = simulation.grid->nv;
 

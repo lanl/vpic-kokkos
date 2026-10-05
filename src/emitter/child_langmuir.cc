@@ -31,6 +31,8 @@ typedef struct child_langmuir {
 // - Particles are randomly distributed across the inject surface
 //   and have random ages.
 
+// TODO: Update to work with Kokkos
+#if 0
 void
 emit_child_langmuir( child_langmuir_t * RESTRICT              cl,
                      const int        * RESTRICT ALIGNED(128) component,
@@ -208,4 +210,4 @@ child_langmuir( /**/  species_t            * RESTRICT sp,
                                (restore_func_t)restore_child_langmuir,
                                NULL );
 }
-
+#endif

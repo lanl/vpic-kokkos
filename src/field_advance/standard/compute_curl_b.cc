@@ -160,8 +160,8 @@ compute_curl_b( field_array_t * RESTRICT fa ) {
    * Begin tangential B ghost setup
    ***************************************************************************/
   
-  begin_remote_ghost_tang_b( fa->f, fa->g );
-  local_ghost_tang_b( fa->f, fa->g );
+  legacy_begin_remote_ghost_tang_b( fa->f, fa->g );
+  legacy_local_ghost_tang_b( fa->f, fa->g );
 
   /***************************************************************************
    * Update interior fields
@@ -225,7 +225,7 @@ compute_curl_b( field_array_t * RESTRICT fa ) {
    * Finish tangential B ghost setup
    ***************************************************************************/
 
-  end_remote_ghost_tang_b( fa->f, fa->g );
+  legacy_end_remote_ghost_tang_b( fa->f, fa->g );
 
   /***************************************************************************
    * Update exterior fields
@@ -357,5 +357,5 @@ compute_curl_b( field_array_t * RESTRICT fa ) {
     }
   }
 
-  local_adjust_tang_e( fa->f, fa->g );
+  legacy_local_adjust_tang_e( fa->f, fa->g );
 }

@@ -16,7 +16,7 @@ int vpic_simulation::advance(void)
 
   // Use default policy, for now
   ParticleCompressor<> compressor;
-  ParticleSorter<> sorter;
+  //ParticleSorter<> sorter;
 
   // Determine if we are done ... see note below why this is done here
   if( num_step>0 && step()>=num_step ) return 0;
@@ -29,7 +29,7 @@ int vpic_simulation::advance(void)
       if( (sp->sort_interval>0) && ((step() % sp->sort_interval)==0) )
       {
           if( rank()==0 ) MESSAGE(( "Performance sorting \"%s\"", sp->name ));
-          sorter.sort( sp, grid->nv);
+          sorter->sort( sp, sp->np, grid->nv);
       }
   }
 
@@ -57,11 +57,11 @@ int vpic_simulation::advance(void)
   // order accurate factorization).
 
   //printf("Cleared jf\n");
-  if( collision_op_list )
-  {
-      Kokkos::abort("Collision is not supported");
-      TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
-  }
+  //if( collision_op_list )
+  //{
+  //    Kokkos::abort("Collision is not supported");
+  //    TIC apply_collision_op_list( collision_op_list ); TOC( collision_model, 1 );
+  //}
 
   // TODO: implement
   //TIC user_particle_collisions(); TOC( user_particle_collisions, 1 );
@@ -175,7 +175,7 @@ int vpic_simulation::advance(void)
   // Touches particles, particle_movers
   LIST_FOR_EACH_SPECIES( sp, species_list, tracers_list ) {
       KOKKOS_TIC(); // Time this data movement
-      const int nm = sp->k_nm_h(0);
+      const size_t nm = sp->k_nm_h(0);
 
       // TODO: this can be hoisted to the end of advance_p if desired
       compressor.compress(
@@ -221,10 +221,10 @@ int vpic_simulation::advance(void)
   // Must move all the current from boundary_p that is on the host to the device
   // TODO: The interior should all be zero, so it can be ignored.
   KOKKOS_TIC();
-  FAK->k_reduce_jf(field_array);
-  KOKKOS_TOCN( JF_ACCUM_DATA_MOVEMENT, 1);
+  FAK->reduce_jf(field_array);
+  KOKKOS_TOC( JF_ACCUM_DATA_MOVEMENT, 1);
   //  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
-  TIC FAK->k_synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
+  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
 
   // At this point, the particle currents are known at jf_{1/2}.
   // Let the user add their own current contributions. It is the users
@@ -316,7 +316,7 @@ int vpic_simulation::advance(void)
       }
 
       // TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
-      TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+      TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
 
       // HOST
       // Touches fields
@@ -363,7 +363,7 @@ int vpic_simulation::advance(void)
   if( (sync_shared_interval>0) && ((step() % sync_shared_interval)==0) ) {
     if( rank()==0 ) MESSAGE(( "Synchronizing shared tang e, norm b, rho_b" ));
     // TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
-    TIC err = FAK->synchronize_tang_e_norm_b_kokkos( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+    TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
     if( rank()==0 ) MESSAGE(( "Domain desynchronization error = %e (arb units)", err ));
   }
   // Fields are updated ... load the interpolator for next time step and
