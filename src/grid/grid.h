@@ -137,10 +137,10 @@ typedef struct grid {
   //  mp_kokkos_t* mp_k;
   //    int max_ports;
   //    k_mpi_t k_mpi_d;
-  //    k_mpi_t::HostMirror k_mpi_h;
+  //    k_mpi_t::host_mirror_type k_mpi_h;
 
   k_neighbor_t k_neighbor_d;                // kokkos neighbor view on device
-  k_neighbor_t::HostMirror k_neighbor_h;    // kokkos neighbor view on host
+  k_neighbor_t::host_mirror_type k_neighbor_h;    // kokkos neighbor view on host
 
   // We want to call this *only* once the neighbor is done
   void init_kokkos_grid(int num_neighbor)

@@ -55,6 +55,9 @@
       #define LEAGUE_SIZE 4096
       #define TEAM_SIZE 512
     #endif
+  #elif !defined( USE_GPU )
+    #define LEAGUE_SIZE Kokkos::num_threads()
+    #define TEAM_SIZE 1
   #else
     #define LEAGUE_SIZE ((g->nv)/4)
     #define TEAM_SIZE Kokkos::AUTO
