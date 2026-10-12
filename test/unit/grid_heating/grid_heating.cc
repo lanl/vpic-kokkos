@@ -49,19 +49,20 @@
    2D 10x10 box at 200 keV with dx = 0.5 c/omega_pe for 27k steps, and fit the
    electron energy only after step 10000.
 
-   The reference values are the mean and sample standard deviation of 100
-   seeds on each platform, measured on Darwin in October 2026: skylake-gold
-   (Xeon Gold 6152, OpenMP), amd-rome (EPYC 7702, OpenMP), volta-x86 (V100,
-   CUDA) and shared-grace-hopper (GH200, CUDA).  The platform means agree
-   within 1.2 standard errors.  (Plausibly different platforms should heat
-   differently as a result of different backend algorithms.)  For the symmetric
-   test amd-rome is left out of the pool, because it is bitwise identical to
-   skylake-gold for every seed.  The asymmetric test is not reproducible run to
-   run on CPU even with a fixed seed (the threaded particle sort is
-   nondeterministic), so all four platforms are independent there.
+   The reference values are the mean and sample standard deviation of 1000
+   seeds on each platform, measured on Darwin in October 2026 with Kokkos
+   5.2.2: skylake-gold (Xeon Gold 6152, OpenMP), amd-rome (EPYC 7702, OpenMP),
+   volta-x86 (V100, CUDA) and shared-grace-hopper (GH200, CUDA).  The platform
+   means agree within 1.2 standard errors (0.12%).  (Plausibly different
+   platforms should heat differently as a result of different backend
+   algorithms.)  For the symmetric test amd-rome is left out of the pool,
+   because it is bitwise identical to skylake-gold for every seed.  The
+   asymmetric test is not reproducible run to run on CPU even with a fixed seed
+   (the threaded particle sort is nondeterministic), so all four platforms are
+   independent there.
 
-       symmetric   1.1962e-4 +/- 2.39e-6 (2.00%), 300 runs, worst 3.4 std
-       asymmetric  1.1065e-4 +/- 2.58e-6 (2.33%), 400 runs, worst 3.2 std
+       symmetric   1.1949e-4 +/- 2.45e-6 (2.05%), 3000 runs, worst 3.3 std
+       asymmetric  1.1044e-4 +/- 2.40e-6 (2.17%), 4000 runs, worst 3.8 std
 
    The rates are close to normally distributed.  The test fails beyond 5 std
    from the reference and warns (but passes) beyond 3 std.
@@ -281,11 +282,11 @@ TEST_CASE( "Total energy numerical heating rate matches reference",
 
     // Reference from many seeds; see the header comment
 #ifndef GRID_HEATING_ASYMMETRIC
-    const double ref_total_rate = 1.1962e-4;
-    const double ref_total_std  = 2.39e-6;
+    const double ref_total_rate = 1.1949e-4;
+    const double ref_total_std  = 2.45e-6;
 #else
-    const double ref_total_rate = 1.1065e-4;
-    const double ref_total_std  = 2.58e-6;
+    const double ref_total_rate = 1.1044e-4;
+    const double ref_total_std  = 2.40e-6;
 #endif
 
     if( world_rank==0 ) {
