@@ -34,3 +34,13 @@ Once you have it installed, the following python should work with at least `samp
     >>> pyvpic.viewer.main('global.vpc', interleave=False, order='C')
 
 .. _pyvpic: https://github.com/PrincetonUniversity/pyvpic
+
+
+Energies Diagnostic
+*******************
+
+VPIC has a built-in energies diagnostic that calculates the total energy in each component of the fields and each particle species and writes it to a file.  To use it, call `dump_energies` in user diagnostics in your deck::
+
+    dump_energies( "rundata/energies", step() ==0 ? 0 : 1 );
+
+To quickly plot these data, use `post/energies_plot.py`. Call ``python energies_plot.py -h`` for usage instructions.
