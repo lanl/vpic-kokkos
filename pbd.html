@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" data-content_root="./">
 <head>
@@ -6,18 +8,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Particle Boundary Diagnostic &mdash; VPIC-Kokkos 2.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
   
-  <!--[if lt IE 9]>
-    <script src="_static/js/html5shiv.min.js"></script>
-  <![endif]-->
-  
-        <script src="_static/jquery.js?v=5d32c60e"></script>
-        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=60dbed4a"></script>
-        <script src="_static/doctools.js?v=9bcbadda"></script>
-        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=60dbed4a"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -49,6 +47,7 @@
 <li class="toctree-l1"><a class="reference internal" href="intro.html">Introduction</a></li>
 <li class="toctree-l1"><a class="reference internal" href="comp.html">Compiling VPIC</a></li>
 <li class="toctree-l1"><a class="reference internal" href="porting.html">How to port user decks to Kokkos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="units.html">Units in VPIC</a></li>
 <li class="toctree-l1"><a class="reference internal" href="vis.html">Postprocessing and Visualization</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Particle Boundary Diagnostic</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#enabling-the-diagnostic-in-your-deck">Enabling the diagnostic in your deck</a></li>
@@ -91,7 +90,7 @@
 <section id="enabling-the-diagnostic-in-your-deck">
 <h2>Enabling the diagnostic in your deck<a class="headerlink" href="#enabling-the-diagnostic-in-your-deck" title="Link to this heading"></a></h2>
 <p>The <cite>species_t</cite> class now has a <cite>pb_diagnostic</cite> struct as a member which controls the particle boundary diagnostic for that species.  You must, in your deck, tell the diagnostic what values to write and finalize the diagnostic to enable it.</p>
-<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="n">species_t</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">electron</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">define_species</span><span class="p">(</span><span class="s">&quot;electron&quot;</span><span class="p">,</span><span class="w"> </span><span class="mf">-1.</span><span class="o">*</span><span class="n">e_c</span><span class="p">,</span><span class="w"> </span><span class="n">m_e_c</span><span class="p">,</span><span class="w"> </span><span class="n">max_local_np_e</span><span class="p">,</span><span class="w"> </span><span class="n">max_local_nm_e</span><span class="p">,</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="n">species_t</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">electron</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">define_species</span><span class="p">(</span><span class="s">"electron"</span><span class="p">,</span><span class="w"> </span><span class="mf">-1.</span><span class="o">*</span><span class="n">e_c</span><span class="p">,</span><span class="w"> </span><span class="n">m_e_c</span><span class="p">,</span><span class="w"> </span><span class="n">max_local_np_e</span><span class="p">,</span><span class="w"> </span><span class="n">max_local_nm_e</span><span class="p">,</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
 <span class="n">electron</span><span class="o">-&gt;</span><span class="n">pb_diag</span><span class="o">-&gt;</span><span class="n">write_ux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
 <span class="n">electron</span><span class="o">-&gt;</span><span class="n">pb_diag</span><span class="o">-&gt;</span><span class="n">write_uy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
 <span class="n">electron</span><span class="o">-&gt;</span><span class="n">pb_diag</span><span class="o">-&gt;</span><span class="n">write_uz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>

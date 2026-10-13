@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" data-content_root="./">
 <head>
@@ -6,22 +8,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>How to port user decks to Kokkos &mdash; VPIC-Kokkos 2.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
   
-  <!--[if lt IE 9]>
-    <script src="_static/js/html5shiv.min.js"></script>
-  <![endif]-->
-  
-        <script src="_static/jquery.js?v=5d32c60e"></script>
-        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=60dbed4a"></script>
-        <script src="_static/doctools.js?v=9bcbadda"></script>
-        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=60dbed4a"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Postprocessing and Visualization" href="vis.html" />
+    <link rel="next" title="Units in VPIC" href="units.html" />
     <link rel="prev" title="Compiling VPIC" href="comp.html" /> 
 </head>
 
@@ -54,6 +52,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#how-to-port-user-kernels-to-kokkos">How to port user kernels to Kokkos</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="units.html">Units in VPIC</a></li>
 <li class="toctree-l1"><a class="reference internal" href="vis.html">Postprocessing and Visualization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="pbd.html">Particle Boundary Diagnostic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcnplink.html">Linking VPIC to MCNP</a></li>
@@ -143,7 +142,7 @@ k_field_t&amp; kfield = field_array-&gt;k_f_d; // Need local reference
 
 // Complex, fast, multiple dimension loop
 Kokkos::MDRangePolicy&lt;Kokkos::Rank&lt;2&gt;&gt; left_edge({1, 1}, {nz+2, ny+1}); // Top of the range is &lt;, not &lt;=.
-Kokkos::parallel_for(&quot;Field injection&quot;, left_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
+Kokkos::parallel_for("Field injection", left_edge, KOKKOS_LAMBDA(const int iz, const int iy) {
     auto DY = y0 + (iy-0.5)*dy - ycenter; // y0, dy, t, width, etc. all calculated locally above the loop
     auto DZ = z0 + (iz-1  )*dz - zcenter;
     auto R2 = DY*DY + DZ*DZ;
@@ -168,7 +167,7 @@ Kokkos::parallel_for(&quot;Field injection&quot;, left_edge, KOKKOS_LAMBDA(const
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="comp.html" class="btn btn-neutral float-left" title="Compiling VPIC" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="vis.html" class="btn btn-neutral float-right" title="Postprocessing and Visualization" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="units.html" class="btn btn-neutral float-right" title="Units in VPIC" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

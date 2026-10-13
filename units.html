@@ -1,0 +1,340 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Units in VPIC &mdash; VPIC-Kokkos 2.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=60dbed4a"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Postprocessing and Visualization" href="vis.html" />
+    <link rel="prev" title="How to port user decks to Kokkos" href="porting.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            VPIC-Kokkos
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="intro.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="comp.html">Compiling VPIC</a></li>
+<li class="toctree-l1"><a class="reference internal" href="porting.html">How to port user decks to Kokkos</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Units in VPIC</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#unit-conversions">Unit Conversions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#exceptions">Exceptions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#particle-momenta">Particle Momenta</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#magnetic-fields">Magnetic Fields</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#species-particle-weighting">Species &amp; Particle Weighting</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#choosing-charge-mass-ratio">Choosing Charge Mass Ratio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#choosing-macroparticle-weight">Choosing Macroparticle Weight</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#consequences-of-q-mathrm-s-neq-q-mathrm-p">Consequences of <span class="math notranslate nohighlight">\(q_{\mathrm{s}} \neq q_{\mathrm{p}}\)</span></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#examples-of-common-unit-systems">Examples of Common Unit Systems</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#electrostatic-plasma-units">Electrostatic Plasma Units</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#electromagnetic-plasma-units">Electromagnetic Plasma Units</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#laser-plasma-units">Laser-Plasma Units</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="vis.html">Postprocessing and Visualization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pbd.html">Particle Boundary Diagnostic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mcnplink.html">Linking VPIC to MCNP</a></li>
+<li class="toctree-l1"><a class="reference internal" href="issues.html">Known Issues</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dev.html">Developers</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">VPIC-Kokkos</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Units in VPIC</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/units.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="units-in-vpic">
+<h1>Units in VPIC<a class="headerlink" href="#units-in-vpic" title="Link to this heading"></a></h1>
+<p>Units in VPIC can be confusing.
+They are user-defined, which can make inheriting a deck confusing for new users.
+The reason for this flexibility is that common unit systems, such as SI, are not suitable for use in VPIC because of its use of IEEE 754 single precision floating point numbers.
+In single precision, the smallest number representable with full precision is <span class="math notranslate nohighlight">\(2^{-126} \approx 1.2\times 10^{-38}\)</span>.
+As an example, the SI value for <span class="math notranslate nohighlight">\(\hbar\)</span>, <span class="math notranslate nohighlight">\(1.05\times 10^{-34}\)</span>, is only four orders of magnitude away from losing precision.
+Multiply it by the electron mass, and you are hopelessly lost.</p>
+<p>To set up a simulation, the user provides VPIC with values for the time step, cell dimensions, speed of light in vacuum, and vacuum permittivity.
+This is either done by directly assigning to the <code class="docutils literal notranslate"><span class="pre">grid</span></code> struct or by using the functions <code class="docutils literal notranslate"><span class="pre">define_units</span></code>, <code class="docutils literal notranslate"><span class="pre">define_timestep</span></code>, and (for example) <code class="docutils literal notranslate"><span class="pre">define_periodic_grid</span></code>.
+Usually one or more species are defined too, which each require values for the species mass and charge.
+These are normally set using the <code class="docutils literal notranslate"><span class="pre">define_species</span></code> function.
+It is important to understand that VPIC solves the same equations regardless of which values it is given and the chosen unit system.</p>
+<p>We will assume here that two unit systems are in use.
+The first of these we will refer to as the <em>user</em> unit system, and is the user’s preferred unit system.
+This is often used initially to define parameters of interest to the user, such as the temperature and density of the plasma.
+The second we will refer to as the <em>code</em> unit system, which is used for values passed to VPIC itself.
+This document is concerned primarily with the code unit system.</p>
+<p>We will list some common unit systems for values supplied to VPIC later, but for now the primary concerns for choosing a system of units are twofold:</p>
+<ol class="arabic simple">
+<li><p>The units must be compatible with the SI <em>equation form</em> that is solved by VPIC, meaning that Gaussian units cannot be used.</p></li>
+<li><p>Values used by the code (including within calculations) should never exceed <span class="math notranslate nohighlight">\(\pm1.7\times 10^{38}\)</span>, and a value smaller than <span class="math notranslate nohighlight">\(\pm1.2\times 10^{-38}\)</span> should not be meaningfully different from zero.</p></li>
+</ol>
+<section id="unit-conversions">
+<h2>Unit Conversions<a class="headerlink" href="#unit-conversions" title="Link to this heading"></a></h2>
+<p>In order to calculate values in the code unit system to supply to VPIC, we need to know the unit conversions.
+Taking the base units as length, time, mass, and charge, we define conversion factors <span class="math notranslate nohighlight">\(L\)</span>, <span class="math notranslate nohighlight">\(T\)</span>, <span class="math notranslate nohighlight">\(M\)</span>, and <span class="math notranslate nohighlight">\(Q\)</span> so that a quantity <span class="math notranslate nohighlight">\(f_c\)</span> in the code unit system is converted to a value <span class="math notranslate nohighlight">\(f_u\)</span> in the user unit system using <span class="math notranslate nohighlight">\(f_u = Ff_c\)</span>.</p>
+<p>Each value supplied to VPIC can be used to constrain the unit system by writing an equation for its conversion from the user unit system to code units in terms of the base unit conversion factors.
+Therefore by picking a subset of these values, we can fully determine the unit system.</p>
+<p>To determine what the four base unit conversion factors are, we need four constraining equations.
+There are multiple sets of values we could choose.
+Given the base units, a straightforward choice would be the timestep, cell size, and species mass and charge.
+Here instead we pick the cell size <span class="math notranslate nohighlight">\(h\)</span>, speed of light <span class="math notranslate nohighlight">\(c\)</span>, vacuum permittivity <span class="math notranslate nohighlight">\(\varepsilon_0\)</span>, and the charge-mass ratio <span class="math notranslate nohighlight">\(r_{\alpha}\)</span> of some species <span class="math notranslate nohighlight">\(\alpha\)</span>.
+This is motivated by many common unit systems setting <span class="math notranslate nohighlight">\(\varepsilon_{0,\mathrm{c}} = 1\)</span> or <span class="math notranslate nohighlight">\(c_{\mathrm{c}} = 1\)</span>, as will be seen later.</p>
+<p>The constraining equations are then:</p>
+<div class="math notranslate nohighlight">
+\begin{align*}
+   h_{\mathrm{c}}L                               &amp;= h_{\mathrm{u}},             &amp;
+   c_{\mathrm{c}}\frac{L}{T}                     &amp;= c_{\mathrm{u}},             \\
+   \varepsilon_{0,\mathrm{c}}\frac{Q^2T^2}{ML^3} &amp;= \varepsilon_{0,\mathrm{u}}, &amp;
+   r_{\alpha,\mathrm{c}}\frac{Q}{M}              &amp;= r_{\alpha,\mathrm{u}}.
+\end{align*}</div><p>Solving for the conversion factors we find:</p>
+<div class="math notranslate nohighlight">
+\begin{align*}
+   L &amp;= \frac{h_{\mathrm{u}}}{h_{\mathrm{c}}}, \\
+   T &amp;= \frac{h_{\mathrm{u}}}{h_{\mathrm{c}}}\frac{c_{\mathrm{c}}}{c_{\mathrm{u}}}, \\
+   M &amp;= \frac{h_{\mathrm{u}}}{h_{\mathrm{c}}}\left(\frac{c_{\mathrm{u}}}{c_{\mathrm{c}}}\right)^2\frac{\varepsilon_{0,\mathrm{u}}}{\varepsilon_{0,\mathrm{c}}}\left(\frac{r_{\alpha,\mathrm{c}}}{r_{\alpha,\mathrm{u}}}\right)^2, \\
+   Q &amp;= \frac{h_{\mathrm{u}}}{h_{\mathrm{c}}}\left(\frac{c_{\mathrm{u}}}{c_{\mathrm{c}}}\right)^2\frac{\varepsilon_{0,\mathrm{u}}}{\varepsilon_{0,\mathrm{c}}}\frac{r_{\alpha,\mathrm{c}}}{r_{\alpha,\mathrm{u}}}.
+\end{align*}</div><p>These can then be combined into factors for other quantities.
+For example, the electric and magnetic field conversion factors <span class="math notranslate nohighlight">\(E\)</span> and <span class="math notranslate nohighlight">\(B\)</span> are given by</p>
+<div class="math notranslate nohighlight">
+\begin{align*}
+   E &amp;= \frac{ML}{QT^2} = \frac{h_{\mathrm{c}}}{h_{\mathrm{u}}}\frac{r_{\alpha,\mathrm{c}}}{r_{\alpha,\mathrm{u}}}\left(\frac{c_{\mathrm{u}}}{c_{\mathrm{c}}}\right)^2, \\
+   B &amp;= E\frac{T}{L} = \frac{h_{\mathrm{c}}}{h_{\mathrm{u}}}\frac{r_{\alpha,\mathrm{c}}}{r_{\alpha,\mathrm{u}}}\frac{c_{\mathrm{u}}}{c_{\mathrm{c}}}.
+\end{align*}</div><section id="exceptions">
+<h3>Exceptions<a class="headerlink" href="#exceptions" title="Link to this heading"></a></h3>
+<p>In addition to calculating the above conversion factors, the user should be aware of how VPIC normalises variables internally.</p>
+<section id="particle-momenta">
+<h4>Particle Momenta<a class="headerlink" href="#particle-momenta" title="Link to this heading"></a></h4>
+<p>VPIC stores relativistic momentum rather than velocity (which would cause numerical issues) for each particle.
+The momentum is stored in dimensionless form given by</p>
+<div class="math notranslate nohighlight">
+\[p_{\mathrm{norm}} = \frac{p}{m_\alpha c},\]</div>
+<p>where <span class="math notranslate nohighlight">\(m_\alpha\)</span> is the mass assigned to species <span class="math notranslate nohighlight">\(\alpha\)</span> and <span class="math notranslate nohighlight">\(c\)</span> is the speed of light in a vacuum.
+This is what must be supplied by the user when performing the particle load.</p>
+</section>
+<section id="magnetic-fields">
+<h4>Magnetic Fields<a class="headerlink" href="#magnetic-fields" title="Link to this heading"></a></h4>
+<p>For performance reasons, VPIC stores the scaled magnetic field <span class="math notranslate nohighlight">\(c\mathbf{B}\)</span> rather than <span class="math notranslate nohighlight">\(\mathbf{B}\)</span>.</p>
+</section>
+</section>
+</section>
+<section id="species-particle-weighting">
+<h2>Species &amp; Particle Weighting<a class="headerlink" href="#species-particle-weighting" title="Link to this heading"></a></h2>
+<p>To define a particle species in VPIC, the user specifies the species mass <span class="math notranslate nohighlight">\(m_{\mathrm{s}}\)</span> and charge <span class="math notranslate nohighlight">\(q_{\mathrm{s}}\)</span>.
+Additionally, each particle is individually assigned a weighting factor <span class="math notranslate nohighlight">\(w\)</span>.
+These must be consistent with each other and the above unit system to produce the desired behavior.</p>
+<section id="choosing-charge-mass-ratio">
+<h3>Choosing Charge Mass Ratio<a class="headerlink" href="#choosing-charge-mass-ratio" title="Link to this heading"></a></h3>
+<p>The motion of a physical particle with charge <span class="math notranslate nohighlight">\(q_{\mathrm{p}}\)</span> and mass <span class="math notranslate nohighlight">\(m_{\mathrm{p}}\)</span> in the EM fields only has explicit dependence on the charge-to-mass ratio <span class="math notranslate nohighlight">\(r \equiv q_{\mathrm{p}}/m_{\mathrm{p}}\)</span>.
+This is also the case for macroparticles in VPIC’s particle push.
+Therefore the corresponding macroparticle species must be defined such that its charge <span class="math notranslate nohighlight">\(q_{\mathrm{s}}\)</span> and mass <span class="math notranslate nohighlight">\(m_{\mathrm{s}}\)</span> satisfy <span class="math notranslate nohighlight">\(q_{\mathrm{s}}/m_{\mathrm{s}}=r\)</span>.</p>
+</section>
+<section id="choosing-macroparticle-weight">
+<h3>Choosing Macroparticle Weight<a class="headerlink" href="#choosing-macroparticle-weight" title="Link to this heading"></a></h3>
+<p>When calculating the fields generated by a macroparticle, the code uses the species charge and macroparticle weight to calculate a total charge for the macroparticle:</p>
+<div class="math notranslate nohighlight">
+\[q_{\mathrm{MP}} = wq_{\mathrm{s}}.\]</div>
+<p>For this to result in an amount of current deposition consistent with the desired physical particle density, the macroparticle weight should be defined such that the charge contained in volume <span class="math notranslate nohighlight">\(V\)</span> is the same for the macroparticles as for physical particles, i.e.</p>
+<div class="math notranslate nohighlight">
+\begin{align*}
+   q_{\mathrm{p}}n_{\mathrm{p}}V &amp;= q_{\mathrm{MP}}n_{\mathrm{MP}}V \\
+                                 &amp;= wq_{\mathrm{s}}n_{\mathrm{MP}}V,
+\end{align*}</div><p>where <span class="math notranslate nohighlight">\(n_{\mathrm{p}}\)</span> and <span class="math notranslate nohighlight">\(n_{\mathrm{MP}}\)</span> are the physical particle and macroparticle number densities (macroparticles per unit volume) respectively.
+So, the particle weight must satisfy</p>
+<div class="math notranslate nohighlight">
+\[w = \frac{q_{\mathrm{p}}n_{\mathrm{p}}}{q_{\mathrm{s}}n_{\mathrm{MP}}} = \frac{\rho_{\mathrm{p}}}{\rho_{\mathrm{s}}}.\]</div>
+<p>This illustrates that there is a degree of freedom available in that the species charge defined in the deck does not have to be the same as the physical species charge.</p>
+</section>
+<section id="consequences-of-q-mathrm-s-neq-q-mathrm-p">
+<h3>Consequences of <span class="math notranslate nohighlight">\(q_{\mathrm{s}} \neq q_{\mathrm{p}}\)</span><a class="headerlink" href="#consequences-of-q-mathrm-s-neq-q-mathrm-p" title="Link to this heading"></a></h3>
+<p>The possibility of <span class="math notranslate nohighlight">\(q_{\mathrm{s}} \neq q_{\mathrm{p}}\)</span> means that the code has no way of calculating numbers of physical particles since it doesn’t store the true particle charge.
+This for example is why the hydro dumps contain charge density rather than number density.
+Users should therefore also ensure that any custom diagnostics do not assume <span class="math notranslate nohighlight">\(q_{\mathrm{s}} = q_{\mathrm{p}}\)</span>.</p>
+</section>
+</section>
+<section id="examples-of-common-unit-systems">
+<h2>Examples of Common Unit Systems<a class="headerlink" href="#examples-of-common-unit-systems" title="Link to this heading"></a></h2>
+<p>Various choices are often made for the unit system, and we discuss a few of them here.
+In general, aside from ensuring that values do not exceed the limits for single-precision floating point numbers, it is often desirable to choose a unit system that eases interpretation of simulation results.
+Many of these unit systems allow the governing equations to be written in simpler form, which are convenient in theoretical analysis, and we will illustrate some of these cases here.
+As discussed above, the unit system has no bearing on the calculations performed by VPIC – it always solves the full system of equations.</p>
+<section id="electrostatic-plasma-units">
+<h3>Electrostatic Plasma Units<a class="headerlink" href="#electrostatic-plasma-units" title="Link to this heading"></a></h3>
+<p>In an electrostatic problem simulating an electron plasma, the natural length and time-scales are the Debye length <span class="math notranslate nohighlight">\(\lambda_{\mathrm{D}}\)</span> and inverse plasma frequency <span class="math notranslate nohighlight">\(\omega_{\mathrm{pe}}^{-1}\)</span>.
+These are also the typical scales for the grid and time-step.
+Then choosing the electron charge/mass ratio so that <span class="math notranslate nohighlight">\(e/m_e\)</span> becomes unity reduces the equation of motion of an electron to</p>
+<div class="math notranslate nohighlight">
+\[\ddot{\mathbf{r}} = \mathbf{E}.\]</div>
+<p>Finally setting <span class="math notranslate nohighlight">\(\varepsilon_0=1\)</span> means that Gauss’ law is also simplified</p>
+<div class="math notranslate nohighlight">
+\[\nabla \cdot \mathbf{E} = \rho.\]</div>
+<p>In the deck we would specify</p>
+<div class="math notranslate nohighlight">
+\begin{align*}
+   h_{\mathrm{c}}             &amp;= \frac{h_{\mathrm{u}}}{\lambda_{\mathrm{D}}}, &amp;
+   c_{\mathrm{c}}             &amp;= \frac{c}{v_{\mathrm{th}}},    \\
+   \varepsilon_{0,\mathrm{c}} &amp;= 1,                                           &amp;
+   r_{e,\mathrm{c}}           &amp;= -1,
+\end{align*}</div><p>giving the unit conversions as</p>
+<div class="math notranslate nohighlight">
+\begin{align*}
+   L &amp;= \lambda_{\mathrm{D}},                                &amp;
+   T &amp;= \omega_{\mathrm{pe}}^{-1},                           &amp;
+   M &amp;= N_{\mathrm{D}}m_e,                                   \\
+   Q &amp;= N_{\mathrm{D}}e,                                     &amp;
+   E &amp;= \frac{m_e}{e}v_{\mathrm{th}}\omega_{\mathrm{pe}},    &amp;
+   B &amp;= \frac{m_e}{e}\omega_{\mathrm{pe}},
+\end{align*}</div><p>where <span class="math notranslate nohighlight">\(N_{\mathrm{D}} \equiv n_e\lambda_{\mathrm{D}}^3\)</span> is the number of electrons in a “Debye cube”.</p>
+<p>This unit system allows for some convenient sanity checks.
+As mentioned above, the cell size and time-step must be around <span class="math notranslate nohighlight">\(1\)</span>.
+Additionally, if the electron mass in these units is not significantly smaller than 1, then the plasma is not ideal, and simulating it with VPIC is not appropriate.
+Interpretation of simulation results may also be more convenient.
+For example, the normalized electric field <span class="math notranslate nohighlight">\(E_c\)</span> is the electron quiver velocity in a plasma wave divided by the thermal velocity – an important parameter for determining whether wavebreaking will occur.
+Similarly, the wavenumber of a plasma wave is normalised such that <span class="math notranslate nohighlight">\(k_c = k\lambda_{\mathrm{D}}\)</span>, which determines the Landau damping rate.</p>
+</section>
+<section id="electromagnetic-plasma-units">
+<h3>Electromagnetic Plasma Units<a class="headerlink" href="#electromagnetic-plasma-units" title="Link to this heading"></a></h3>
+<p>For an electromagnetic problem, the electrostatic units above might be modified so that the length scale becomes the electron skin depth <span class="math notranslate nohighlight">\(l_e=c/\omega_{\mathrm{pe}}\)</span>.
+The Lorentz force and Maxwell’s equations become</p>
+<div class="math notranslate nohighlight">
+\[\ddot{\mathbf{r}} = \mathbf{E} + \mathbf{v} \times \mathbf{B},\]</div>
+<p>and</p>
+<div class="math notranslate nohighlight">
+\begin{align*}
+   \nabla \times \mathbf{E} &amp;= -\partial_t \mathbf{B}, \\
+   \nabla \times \mathbf{B} &amp;= \left(\mathbf{J} + \partial_t \mathbf{E}\right).
+\end{align*}</div><p>The deck assignments become:</p>
+<div class="math notranslate nohighlight">
+\begin{align*}
+   h_{\mathrm{c}}             &amp;= h_{\mathrm{u}}\frac{\omega_{\mathrm{pe}}}{c}, &amp;
+   c_{\mathrm{c}}             &amp;= 1, \\
+   \varepsilon_{0,\mathrm{c}} &amp;= 1, &amp;
+   r_{e,\mathrm{c}}           &amp;= -1,
+\end{align*}</div><p>so that the conversion factors are now</p>
+<div class="math notranslate nohighlight">
+\begin{align*}
+   L &amp;= \frac{c}{\omega_{\mathrm{pe}}},                   &amp;
+   T &amp;= \frac{1}{\omega_{\mathrm{pe}}},                   \\
+   M &amp;= n_e\frac{c^3}{\omega_{\mathrm{pe}}^3}m_e,         &amp;
+   Q &amp;= n_e\frac{c^3}{\omega_{\mathrm{pe}}^3}e,           \\
+   E &amp;= \frac{m_e}{e}\omega_{\mathrm{pe}} c,              &amp;
+   B &amp;= \frac{m_e}{e}\omega_{\mathrm{pe}}.
+\end{align*}</div><p>Note that by removing <span class="math notranslate nohighlight">\(\lambda_{\mathrm{D}}\)</span> from the unit system, there is no longer any dependence on the electron temperature used to calculate it.</p>
+</section>
+<section id="laser-plasma-units">
+<h3>Laser-Plasma Units<a class="headerlink" href="#laser-plasma-units" title="Link to this heading"></a></h3>
+<p>For laser-plasma interaction problems, the unit system can again be modified by replacing the time-scale with the inverse laser frequency, so that the unit system no longer depends on the electron density used to calculate <span class="math notranslate nohighlight">\(\omega_{\mathrm{pe}}\)</span> and is instead dependent purely on the laser frequency.
+In the deck the assignments are</p>
+<div class="math notranslate nohighlight">
+\begin{align*}
+   h_{\mathrm{c}}             &amp;= h_{\mathrm{u}}k_0, &amp;
+   c_{\mathrm{c}}             &amp;= 1,                 \\
+   \varepsilon_{0,\mathrm{c}} &amp;= 1,                 &amp;
+   r_{e,\mathrm{c}}           &amp;= -1,
+\end{align*}</div><p>where <span class="math notranslate nohighlight">\(k_0 \equiv \omega_0/c\)</span> is the vacuum laser wavenumber.</p>
+<p>The conversion factors then become</p>
+<div class="math notranslate nohighlight">
+\begin{align*}
+   L &amp;= \frac{1}{k_0},                       &amp;
+   T &amp;= \frac{1}{\omega_0},                  \\
+   M &amp;= \frac{n_{\mathrm{cr}}}{k_0^3}m_e,    &amp;
+   Q &amp;= \frac{n_{\mathrm{cr}}}{k_0^3}e,      \\
+   E &amp;= \frac{m_e}{e}\omega_0 c,             &amp;
+   B &amp;= \frac{m_e}{e}\omega_0,
+\end{align*}</div><p>where <span class="math notranslate nohighlight">\(n_{\mathrm{cr}} \equiv m_e\varepsilon_0\omega_0^2/e^2\)</span> is the critical density.
+In this unit system the simulation cell size and time step should satisfy <span class="math notranslate nohighlight">\(\Delta x \ll 1\)</span> and <span class="math notranslate nohighlight">\(\Delta t \ll 1\)</span> in order for the field solver to accurately model the laser.
+It is also necessary to verify that the cell size resolves the Debye length, which is often a more restrictive condition.
+Additionally, the normalized electric (or magnetic) field is the parameter <span class="math notranslate nohighlight">\(a_0\)</span>.
+For <span class="math notranslate nohighlight">\(a_0 \ll 1\)</span>, this is the electron quiver velocity divided by the speed of light, while <span class="math notranslate nohighlight">\(a_0 \gtrsim 1\)</span> indicates a relativistic field intensity which will lead to effects such as relativistically induced transparency and relativistic self-focusing.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="porting.html" class="btn btn-neutral float-left" title="How to port user decks to Kokkos" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="vis.html" class="btn btn-neutral float-right" title="Postprocessing and Visualization" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Los Alamos National Laboratory.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
