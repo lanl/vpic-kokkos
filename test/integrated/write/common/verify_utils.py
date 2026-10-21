@@ -187,21 +187,14 @@ def verify_hdf5_structure(fname, expected_datasets, dataset_type='field'):
         return False
         
     with h5py.File(fname, 'r') as f:
-        if dataset_type == 'particle':
-            if 'particles' not in f:
-                log_fail("Missing 'particles' dataset")
+        for ds in expected_datasets:
+            if ds not in f:
+                log_fail(f"Missing dataset: {ds}")
                 return False
-            # Check compound type fields
-            dtype_names = f['particles'].dtype.names
-            for ds in expected_datasets:
-                if ds not in dtype_names:
-                    log_fail(f"Missing particle field: {ds}")
-                    return False
-        else:
-            for ds in expected_datasets:
-                if ds not in f:
-                    log_fail(f"Missing dataset: {ds}")
-                    return False
+        if dataset_type == 'particle':
+            if f.attrs.get('schema_version') != 2 or 'momentum' not in f or 'weight' not in f:
+                log_fail("Missing versioned numeric particle schema")
+                return False
                     
     return True
 

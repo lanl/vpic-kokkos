@@ -76,10 +76,15 @@ begin_diagnostics {
     sim_log(" [HDF5-Single] Writing Particles...");
 
     // M2M Mode (one file per rank - here just rank 0)
-    write_particles_hdf5("particle/test_particles_m2m", "electron", false);
+    write_particles_hdf5("particle/test_particles_m2m", "electron", {ParticleCoordinates::Logical, OutputLayout::PerRank});
 
     // M2O Mode (single shared file - same output for 1 rank but tests the code path)
-    write_particles_hdf5("particle/test_particles_m2o", "electron", true);
+    write_particles_hdf5("particle/test_particles_m2o", "electron", {ParticleCoordinates::Logical, OutputLayout::Shared});
+
+    // Physical output is stored once in directly XDMF-readable numeric arrays.
+    write_particles_hdf5("particle/physical_m2m", "electron", {ParticleCoordinates::Physical, OutputLayout::PerRank});
+    write_particles_hdf5("particle/physical_m2o", "electron", {ParticleCoordinates::Physical, OutputLayout::Shared});
+    write_xdmf_timeseries("particle_series.xmf", {0}, "particle", "physical_m2m.electron");
 
     // =========================================================================
     // 2. FIELDS - Both Modes
@@ -129,7 +134,7 @@ begin_diagnostics {
     // =========================================================================
     sim_log(" [HDF5-Single] Zeroing fields for Hydro safety...");
     
-    // Zero fields to avoid E×B effects in hydro accumulation
+    // Zero fields to avoid EÃ—B effects in hydro accumulation
     for (int iz = 0; iz <= grid->nz + 1; ++iz) {
       for (int iy = 0; iy <= grid->ny + 1; ++iy) {
         for (int ix = 0; ix <= grid->nx + 1; ++ix) {

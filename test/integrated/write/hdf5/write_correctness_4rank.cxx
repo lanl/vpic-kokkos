@@ -1,9 +1,9 @@
 // =============================================================================
 // hdf5/write_correctness_4rank.cxx
 // =============================================================================
-// HDF5-Only Verification Deck (4 Ranks, 2×2×1 Topology)
+// HDF5-Only Verification Deck (4 Ranks, 2Ã—2Ã—1 Topology)
 // Tests: M2M (many-to-many) and M2O (many-to-one) parallel I/O modes
-// Grid: 8×8×4 global (4×4×4 local per rank)
+// Grid: 8Ã—8Ã—4 global (4Ã—4Ã—4 local per rank)
 //
 // This deck ONLY tests HDF5 writers - binary writers are tested separately
 // in binary/write_correctness_4rank.cxx
@@ -19,7 +19,7 @@ begin_initialization {
   // ---------------------------------------------------------------------------
   double L = 2.0;
   double nx = 8, ny = 8, nz = 4;  // Global grid dimensions
-  double px = 2, py = 2, pz = 1;  // Topology: 4 ranks (2×2×1)
+  double px = 2, py = 2, pz = 1;  // Topology: 4 ranks (2Ã—2Ã—1)
 
   define_units(1.0, 1.0);
   define_timestep(0.1);
@@ -30,7 +30,7 @@ begin_initialization {
   define_material("vacuum", 1.0);
   define_field_array(NULL, 0.0);
 
-  // Species with capacity for 64 particles per rank (4×4×4 = 64)
+  // Species with capacity for 64 particles per rank (4Ã—4Ã—4 = 64)
   species_t * electron = define_species("electron", -1.0, 1.0, 128, -1, 10, 1);
 
   // ---------------------------------------------------------------------------
@@ -91,10 +91,15 @@ begin_diagnostics {
     sim_log(" [HDF5-4Rank] Writing Particles...");
 
     // M2M Mode (one file per rank)
-    write_particles_hdf5("particle/test_particles_m2m", "electron", false);
+    write_particles_hdf5("particle/test_particles_m2m", "electron", {ParticleCoordinates::Logical, OutputLayout::PerRank});
 
     // M2O Mode (single shared file, requires parallel HDF5)
-    write_particles_hdf5("particle/test_particles_m2o", "electron", true);
+    write_particles_hdf5("particle/test_particles_m2o", "electron", {ParticleCoordinates::Logical, OutputLayout::Shared});
+
+    // Physical output is stored once in directly XDMF-readable numeric arrays.
+    write_particles_hdf5("particle/physical_m2m", "electron", {ParticleCoordinates::Physical, OutputLayout::PerRank});
+    write_particles_hdf5("particle/physical_m2o", "electron", {ParticleCoordinates::Physical, OutputLayout::Shared});
+    write_xdmf_timeseries("particle_series.xmf", {0}, "particle", "physical_m2m.electron");
 
     // =========================================================================
     // 2. FIELDS - Both Modes
@@ -159,7 +164,7 @@ begin_diagnostics {
     // =========================================================================
     sim_log(" [HDF5-4Rank] Zeroing fields for Hydro safety...");
     
-    // Zero fields to avoid E×B effects in hydro accumulation
+    // Zero fields to avoid EÃ—B effects in hydro accumulation
     for (int iz = 0; iz <= grid->nz + 1; ++iz) {
       for (int iy = 0; iy <= grid->ny + 1; ++iy) {
         for (int ix = 0; ix <= grid->nx + 1; ++ix) {

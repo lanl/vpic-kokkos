@@ -90,8 +90,8 @@ begin_diagnostics {
     write_hydro_binary(hedParams, hydro_array, "electron");
 
     // Particles (both modes)
-    write_particles_binary("particle/particles_logical", "electron", false);
-    write_particles_binary("particle/particles_physical", "electron", true);
+    write_particles_binary("particle/particles_logical", "electron", {ParticleCoordinates::Logical, OutputLayout::PerRank});
+    write_particles_binary("particle/particles_physical", "electron", {ParticleCoordinates::Physical, OutputLayout::PerRank});
 
     sim_log(" [Binary] Complete.");
     mp_barrier();

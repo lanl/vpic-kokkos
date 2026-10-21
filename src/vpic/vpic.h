@@ -118,6 +118,14 @@ struct DumpParameters {
 
 }; // struct DumpParameters
 
+// Named options have the same meaning for binary and HDF5 particle output.
+enum class ParticleCoordinates { Logical, Physical };
+enum class OutputLayout { PerRank, Shared };
+struct ParticleWriteOptions {
+  ParticleCoordinates coordinates = ParticleCoordinates::Logical;
+  OutputLayout layout = OutputLayout::PerRank;
+};
+
 class vpic_simulation {
 public:
   vpic_simulation();
@@ -290,17 +298,23 @@ public:
    * @brief Write particle data to binary format (M2M - one file per rank)
    * @param fbase Base filename (without extension)
    * @param species_name Species to dump
-   * @param compute_physical_position If true, output physical (x,y,z) coords; 
-   *                                   if false, output logical (dx,dy,dz) + voxel index
+   * @param options Named coordinates/layout; binary requires PerRank.
+   * Output name: fbase.species.STEP.RANK. Parent directories are created.
    */
-  void write_particles_binary(const char* fbase, 
-                              const char* species_name, 
-                              bool compute_physical_position = false);
+  void write_particles_binary(const char* fbase, const char* species_name,
+                              ParticleWriteOptions options = {});
+  // Source compatibility only: prefer named options in new decks.
+  [[deprecated("Use ParticleWriteOptions; particle filenames now include STEP.RANK")]]
+  void write_particles_binary(const char* fbase, const char* species_name, bool physical) {
+    write_particles_binary(fbase, species_name,
+      {physical ? ParticleCoordinates::Physical : ParticleCoordinates::Logical,
+       OutputLayout::PerRank});
+  }
 
   #ifdef VPIC_ENABLE_HDF5
 
   /**
- * @brief Generates XDMF time series master file using XInclude
+ * @brief Generates a temporal collection with relative HDF references
  * @param series_path Output .xmf filename (e.g., "fields_timeseries.xmf")
  * @param steps Vector of timesteps that were dumped
  * @param base_pattern Directory structure with %d placeholder (e.g., "fields/T.%d") 
@@ -342,15 +356,19 @@ void write_xdmf_timeseries(const char* series_path,
    * @brief Write particle data to HDF5 format
    * @param fbase Base filename (without extension)
    * @param species_name Species to dump
-   * @param single_file If true, use M2O (single shared file with parallel I/O);
-   *                    if false, use M2M (one file per rank)
-   * @param compute_physical_position If true, output physical (x,y,z) coords;
-   *                                   if false, output logical (dx,dy,dz) + voxel index
+   * @param options Named coordinates/layout. Both modes use numeric datasets.
+   * Output name: fbase.species.STEP[.RANK].h5. All ranks must participate.
    */
-  void write_particles_hdf5(const char* fbase, 
-                            const char* species_name, 
-                            bool single_file = false,
-                            bool compute_physical_position = false);
+  void write_particles_hdf5(const char* fbase, const char* species_name,
+                           ParticleWriteOptions options = {});
+  // Source compatibility only; historical booleans retain their old meanings.
+  [[deprecated("Use ParticleWriteOptions for coordinates and layout")]]
+  void write_particles_hdf5(const char* fbase, const char* species_name,
+                           bool single_file, bool physical = false) {
+    write_particles_hdf5(fbase, species_name,
+      {physical ? ParticleCoordinates::Physical : ParticleCoordinates::Logical,
+       single_file ? OutputLayout::Shared : OutputLayout::PerRank});
+  }
   #endif // VPIC_ENABLE_HDF5
 
   ///////////////////

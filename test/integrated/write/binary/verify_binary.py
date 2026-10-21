@@ -71,7 +71,7 @@ def verify_single():
     
     # Test 3: Particle Data (Logical Mode)
     def test_particle_data_logical():
-        particles = read_binary_particles("particle/particles_logical.electron.0")
+        particles = read_binary_particles("particle/particles_logical.electron.0.0")
         if particles is None:
             raise Exception("Failed to read logical particle data")
         
@@ -99,7 +99,7 @@ def verify_single():
 
     # Test 4: Particle Data (Physical Mode)
     def test_particle_data_physical():
-        particles = read_binary_particles("particle/particles_physical.electron.0")
+        particles = read_binary_particles("particle/particles_physical.electron.0.0")
         if particles is None:
             raise Exception("Failed to read physical particle data")
         
@@ -197,8 +197,8 @@ def verify_4rank():
             files = [
                 f"field/T.0/fields_bin.0.{rank}",
                 f"ehydro/T.0/hydro_bin.0.{rank}",
-                f"particle/particles_logical.electron.{rank}",
-                f"particle/particles_physical.electron.{rank}"
+                f"particle/particles_logical.electron.0.{rank}",
+                f"particle/particles_physical.electron.0.{rank}"
             ]
             for fname in files:
                 if not os.path.exists(fname):
@@ -236,7 +236,7 @@ def verify_4rank():
         all_ux_logical = []
         
         for rank in range(NUM_RANKS):
-            fname = f"particle/particles_logical.electron.{rank}"
+            fname = f"particle/particles_logical.electron.0.{rank}"
             particles = read_binary_particles(fname)
             if particles:
                 total_logical += len(particles['ux'])
@@ -247,7 +247,7 @@ def verify_4rank():
         all_ux_physical = []
         
         for rank in range(NUM_RANKS):
-            fname = f"particle/particles_physical.electron.{rank}"
+            fname = f"particle/particles_physical.electron.0.{rank}"
             particles = read_binary_particles(fname)
             if particles:
                 total_physical += len(particles['ux'])

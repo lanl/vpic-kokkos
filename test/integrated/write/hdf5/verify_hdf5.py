@@ -44,26 +44,106 @@ def read_hdf5_particles(fname):
     
     try:
         with h5py.File(fname, 'r') as f:
-            # New format: compound dataset named 'particles'
-            if 'particles' in f:
-                dset = f['particles']
-                return {
-                    'ux': dset['ux'][:],
-                    'uy': dset['uy'][:],
-                    'uz': dset['uz'][:]
-                }
-            # Fallback: individual datasets (legacy format)
-            elif 'ux' in f:
-                return {
-                    'ux': f['ux'][:],
-                    'uy': f['uy'][:],
-                    'uz': f['uz'][:]
-                }
-            else:
-                raise Exception("Unknown HDF5 particle format")
+            assert f.attrs['schema_version'] == 2
+            momentum = f['momentum'][:]
+            return {name:momentum[:,axis] for axis,name in enumerate(('ux','uy','uz'))}
     except Exception as e:
         print(f"    [ERR] Failed to read {fname}: {e}")
         return None
+
+def verify_physical_particle_layout(ranks):
+    """Both coordinate modes use one numeric payload with common momentum/weight."""
+    import xml.etree.ElementTree as ET
+    pairs = [(f"particle/physical_m2m.electron.0.{r}.h5",
+              f"particle/test_particles_m2m.electron.0.{r}.h5") for r in range(ranks)]
+    pairs.append(("particle/physical_m2o.electron.0.h5",
+                  "particle/test_particles_m2o.electron.0.h5"))
+    for physical, logical in pairs:
+        with h5py.File(physical) as f, h5py.File(logical) as old:
+            assert set(f) == {'position','momentum','weight'}
+            assert set(old) == {'cell_offset','cell_index','momentum','weight','particle_grid'}
+            n = len(old['weight'])
+            assert f['position'].shape == f['momentum'].shape == old['cell_offset'].shape == old['momentum'].shape == (n,3)
+            assert f['weight'].shape == old['weight'].shape == old['cell_index'].shape == (n,)
+            assert old['cell_index'].dtype == np.dtype('<i4')
+            for file, mode in [(f,'physical'),(old,'logical')]:
+                assert file.attrs['schema_version'] == 2
+                assert file.attrs['data_kind'].decode() == 'particles'
+                assert file.attrs['coordinate_system'].decode() == mode
+                assert file.attrs['species'].decode() == 'electron'
+                assert file.attrs['q_m'] == -1
+                for key in ('momentum','weight','position' if mode == 'physical' else 'cell_offset'):
+                    assert file[key].dtype == np.dtype('<f4')
+            assert sum(f[key].id.get_storage_size() for key in f) == n*28
+            assert sum(old[key].id.get_storage_size() for key in ('cell_offset','cell_index','momentum','weight')) == n*32
+            np.testing.assert_array_equal(f['momentum'][:], old['momentum'][:])
+            np.testing.assert_array_equal(f['weight'][:], old['weight'][:])
+            expected = np.empty((n,3))
+            for grid in old['particle_grid'][:]:
+                start, count = int(grid['offset']), int(grid['count'])
+                cells = old['cell_index'][start:start+count].astype(np.int64)
+                offsets = old['cell_offset'][start:start+count]
+                nx, ny = int(grid['nx']), int(grid['ny'])
+                indices = [cells%(nx+2), (cells//(nx+2))%(ny+2), cells//((nx+2)*(ny+2))]
+                for axis, name in enumerate('xyz'):
+                    expected[start:start+count,axis] = grid[name+'0'] + (indices[axis]-1+(1+offsets[:,axis])/2)*grid['d'+name]
+            np.testing.assert_allclose(f['position'][:], expected, atol=1e-6)
+            wrapper = ET.parse(physical[:-3]+'.xmf')
+            refs = wrapper.findall('.//DataItem[@Format="HDF"]')
+            assert {ref.text.split(':/')[1] for ref in refs} == set(f)
+            for ref in refs:
+                dataset = ref.text.split(':/')[1]
+                assert tuple(map(int,ref.attrib['Dimensions'].split())) == f[dataset].shape
+
+    series = ET.parse("particle_series.xmf")
+    assert not series.findall('.//{http://www.w3.org/2001/XInclude}include')
+    items = series.findall('.//DataItem[@Format="HDF"]')
+    assert len(items) == ranks*3
+    for item in items:
+        path, dataset = item.text.split(':/')
+        assert not os.path.isabs(path), 'Series paths must remain relocatable'
+        with h5py.File(path) as file:
+            assert tuple(map(int,item.attrib['Dimensions'].split())) == file[dataset].shape
+
+def verify_structured_xdmf(ranks):
+    """Check the CoRectMesh ZYX serialization against the decks' XYZ geometry."""
+    import xml.etree.ElementTree as ET
+    spacing = np.array([.25, .25, .25 if ranks == 1 else .5])
+    offsets = {'ex':(.5,0,0), 'ey':(0,.5,0), 'ez':(0,0,.5),
+               'cbx':(0,.5,.5), 'cby':(.5,0,.5), 'cbz':(.5,.5,0)}
+    for directory, kind in [('field','fields'), ('ehydro','hydro')]:
+        for shared in (False, True):
+            for rank in range(1 if shared else ranks):
+                suffix = '' if shared else f'.{rank}'
+                mode = 'm2o' if shared else 'm2m'
+                path = f'{directory}/T.0/test_{kind}_{mode}.0{suffix}.xmf'
+                origin = np.zeros(3) if shared else np.array([rank%2,rank//2,0])
+                expected_dims = (4,8,8) if shared and ranks == 4 else (4,4,4)
+                grids = ET.parse(path).findall('.//Grid[@GridType="Uniform"]')
+                assert grids, f'No structured meshes in {path}'
+                for grid in grids:
+                    name = grid.attrib['Name']
+                    topology = grid.find('Topology')
+                    assert topology.attrib['TopologyType'] == '3DCoRectMesh'
+                    assert tuple(map(int,topology.attrib['Dimensions'].split())) == expected_dims
+                    geometry = grid.find('Geometry')
+                    assert geometry.attrib['GeometryType'] == 'ORIGIN_DXDYDZ'
+                    items = geometry.findall('DataItem')
+                    expected_origin = origin + spacing*np.array(offsets.get(name,(0,0,0)))
+                    np.testing.assert_array_equal(np.fromstring(items[0].text,sep=' '), expected_origin[::-1])
+                    np.testing.assert_array_equal(np.fromstring(items[1].text,sep=' '), spacing[::-1])
+                    attr = grid.find('Attribute')
+                    assert attr.attrib['Center'] == 'Node'
+                    assert attr.find('DataItem').attrib['Dimensions'] == topology.attrib['Dimensions']
+                    with h5py.File(path[:-4]+'.h5') as f:
+                        assert f.attrs['schema_version'] == 2
+                        assert f.attrs['data_kind'].decode() == kind
+                        np.testing.assert_array_equal(f.attrs['origin'], origin)
+                        np.testing.assert_array_equal(f.attrs['spacing'], spacing)
+                        np.testing.assert_array_equal(f.attrs['dimensions'], expected_dims[::-1])
+                        np.testing.assert_array_equal(f[name].attrs['origin'], expected_origin)
+                        np.testing.assert_array_equal(f[name].attrs['sample_offset'], offsets.get(name,(0,0,0)))
+
 
 def read_hdf5_field_component(fname, component):
     """Read single field component from HDF5 file"""
@@ -89,6 +169,8 @@ def read_hdf5_hydro_component(fname, component):
 def verify_single():
     """Verify single-rank HDF5 output (M2M and M2O modes)"""
     suite = TestSuite("HDF5 Single-Rank")
+    suite.run_test("Structured XDMF sample geometry", lambda: verify_structured_xdmf(1))
+    suite.run_test("Physical particle arrays and XDMF", lambda: verify_physical_particle_layout(1))
     
     # Test 1: Particle M2M vs M2O Consistency
     def test_particle_consistency():
@@ -249,6 +331,8 @@ def verify_single():
 def verify_4rank():
     """Verify 4-rank HDF5 output (M2M and M2O modes)"""
     suite = TestSuite("HDF5 4-Rank")
+    suite.run_test("Structured XDMF sample geometry", lambda: verify_structured_xdmf(4))
+    suite.run_test("Physical particle arrays and XDMF", lambda: verify_physical_particle_layout(4))
     
     NX_L, NY_L, NZ_L = 4, 4, 4
     NX_G, NY_G, NZ_G = 8, 8, 4
@@ -261,7 +345,7 @@ def verify_4rank():
             files = [
                 f"field/T.0/test_fields_m2m.0.{rank}.h5",
                 f"ehydro/T.0/test_hydro_m2m.0.{rank}.h5",
-                f"particle/test_particles_m2m.electron.{rank}.0.h5"
+                f"particle/test_particles_m2m.electron.0.{rank}.h5"
             ]
             for fname in files:
                 if not os.path.exists(fname):
@@ -338,10 +422,10 @@ def verify_4rank():
     # Test 4: Particle M2O Global Distribution
     def test_particle_m2o():
         with h5py.File("particle/test_particles_m2o.electron.0.h5", 'r') as f:
-            if 'particles' not in f:
-                raise Exception("Missing particles dataset in M2O file")
+            if 'momentum' not in f:
+                raise Exception("Missing momentum dataset in M2O file")
             
-            dset = f['particles']
+            dset = f['momentum']
             total_particles = len(dset)
             expected_total = NX_G * NY_G * NZ_G
             
@@ -349,9 +433,9 @@ def verify_4rank():
                 raise Exception(f"Particle count mismatch: {total_particles} != {expected_total}")
             
             # Verify anisotropic pattern
-            ux = np.sort(dset['ux'][:])
-            uy = np.sort(dset['uy'][:])
-            uz = np.sort(dset['uz'][:])
+            ux = np.sort(dset[:,0])
+            uy = np.sort(dset[:,1])
+            uz = np.sort(dset[:,2])
             
             expected_base = []
             for iz in range(1, NZ_G+1):
@@ -374,19 +458,19 @@ def verify_4rank():
     def test_particle_aggregation():
         # Read M2O data
         with h5py.File("particle/test_particles_m2o.electron.0.h5", 'r') as f:
-            m2o_ux = np.sort(f['particles']['ux'][:])
-            m2o_uy = np.sort(f['particles']['uy'][:])
-            m2o_uz = np.sort(f['particles']['uz'][:])
+            m2o_ux = np.sort(f['momentum'][:,0])
+            m2o_uy = np.sort(f['momentum'][:,1])
+            m2o_uz = np.sort(f['momentum'][:,2])
         
         # Aggregate M2M data
         all_ux, all_uy, all_uz = [], [], []
         for rank in range(NUM_RANKS):
-            fname = f"particle/test_particles_m2m.electron.{rank}.0.h5"
+            fname = f"particle/test_particles_m2m.electron.0.{rank}.h5"
             with h5py.File(fname, 'r') as f:
-                dset = f['particles']
-                all_ux.extend(dset['ux'][:])
-                all_uy.extend(dset['uy'][:])
-                all_uz.extend(dset['uz'][:])
+                dset = f['momentum']
+                all_ux.extend(dset[:,0])
+                all_uy.extend(dset[:,1])
+                all_uz.extend(dset[:,2])
         
         m2m_ux = np.sort(np.array(all_ux))
         m2m_uy = np.sort(np.array(all_uy))
@@ -580,11 +664,11 @@ def main():
     # Final result
     print("\n" + "="*70)
     if success:
-        print("\033[92m✓ ALL TESTS PASSED\033[0m")
+        print("\033[92mâœ“ ALL TESTS PASSED\033[0m")
         print("="*70)
         return 0
     else:
-        print("\033[91m✗ TESTS FAILED\033[0m")
+        print("\033[91mâœ— TESTS FAILED\033[0m")
         print("="*70)
         return 1
 
