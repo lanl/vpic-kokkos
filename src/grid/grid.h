@@ -179,6 +179,17 @@ typedef struct grid {
 
 #define VOXEL(x,y,z, nx,ny,nz) ((x) + ((nx)+2)*((y) + ((ny)+2)*(z)))
 
+// Convert voxel index back to (i,j,k) indices for the local grid
+#define UNVOXEL(v, i, j, k, nx, ny, nz) \
+  do { \
+    int _stride_y = (nx) + 2; \
+    int _stride_z = _stride_y * ((ny) + 2); \
+    (k) = (v) / _stride_z; \
+    int _rem = (v) % _stride_z; \
+    (j) = _rem / _stride_y; \
+    (i) = _rem % _stride_y; \
+  } while(0)
+
 // Advance the voxel mesh index (v) and corresponding voxel mesh
 // coordinates (x,y,z) in a region with min- and max-corners of
 // (xl,yl,zl) and (xh,yh,zh) of a (nx,ny,nz) resolution voxel mesh in

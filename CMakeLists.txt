@@ -77,6 +77,10 @@ option(VPIC_ENABLE_ACCUMULATORS "Enable explicit accumulators for better perform
 
 option(VPIC_ENABLE_GPU_AWARE_MPI "Enable GPU aware MPI to speedup communication" OFF)
 
+option(VPIC_ENABLE_HDF5 "Enable HDF5 output support" OFF)
+option(VPIC_HDF5_SERIAL_ONLY "Enforce that HDF5 be loaded as serial" OFF)
+option(VPIC_ENABLE_HDF5_ASYNC "Enable HDF5 Async support (Experimental)" OFF)
+
 add_definitions(-DUSE_KOKKOS)
 set(VPIC_CPPFLAGS "${VPIC_CPPFLAGS} -DUSE_KOKKOS") # Set it here for ./deck/ files
 
@@ -244,9 +248,24 @@ else()
 endif()
 
 if(ENABLE_KOKKOS_CUDA)
-  find_package(CUDA)
-  if (CUDA_FOUND)
+  find_package(CUDAToolkit)
+  if (CUDAToolkit_FOUND)
     add_definitions(-DENABLE_KOKKOS_CUDA)
+
+    # --- Ensure the CUDA driver library (libcuda) is linked into deck builds ---
+    find_library(CUDA_DRIVER_LIB cuda
+      HINTS
+        ${CUDA_TOOLKIT_ROOT_DIR}/lib64/stubs${CUDA_TOOLKIT_ROOT_DIR}/targets/x86_64-linux/lib/stubs
+        /usr/lib64
+    )
+    if(CUDA_DRIVER_LIB)
+      get_filename_component(_cuda_dir "${CUDA_DRIVER_LIB}" DIRECTORY)
+      string(APPEND VPIC_CXX_LIBRARIES " -L${_cuda_dir} -lcuda ")
+      message(STATUS "Added CUDA driver lib: ${CUDA_DRIVER_LIB}")
+    else()
+      message(WARNING "libcuda not found; deck link may fail")
+    endif()
+
     # If not on a Cray system, this can cause CMake to stall
     if(DEFINED ENV{CRAYPE_VERSION})
       set(ENV{NVCC_WRAPPER_DEFAULT_COMPILER} ${CMAKE_CXX_COMPILER})
@@ -316,8 +335,13 @@ set(KOKKOS_INCLUDES_FILE ${PROJECT_BINARY_DIR}/kokkos_includes)
 file(GENERATE OUTPUT ${KOKKOS_CORE_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_DIRS}")
 file(GENERATE OUTPUT ${KOKKOS_CONTAINER_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_CONTAINERS}")
 file(GENERATE OUTPUT ${KOKKOS_ALGORITHM_INCLUDES_FILE} CONTENT "${KOKKOS_INCLUDE_ALGORITHMS}")
-string(REPLACE ";" " " kokkos_compile_options "${KOKKOS_COMPILE_OPTIONS}")
-file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${kokkos_compile_options}")
+# Flatten and strip COMPILE_LANGUAGE generator-expression wrappers so the
+# emitted file contains plain, tool-consumable flags (file(GENERATE) can't
+# evaluate$<COMPILE_LANGUAGE:...> outside a real compile context).
+string(REPLACE ";" " " kokkos_compile_options_raw "${KOKKOS_COMPILE_OPTIONS}")
+string(REPLACE "$<$<COMPILE_LANGUAGE:CXX>:" "" opts_no_start "${kokkos_compile_options_raw}")
+string(REPLACE ">" "" opts_clean "${opts_no_start}")
+file(GENERATE OUTPUT ${KOKKOS_COMPILE_OPTIONS_FILE} CONTENT "${opts_clean}")
 if(NOT "${KOKKOS_INCLUDE_DIRS}" STREQUAL "${KOKKOS_INCLUDE_CONTAINERS}")
   set(KOKKOS_INCLUDE_DIRS "${KOKKOS_INCLUDE_DIRS};${KOKKOS_INCLUDE_CONTAINERS}")
 endif()
@@ -409,6 +433,129 @@ if(ENABLE_OPENSSL)
 endif(ENABLE_OPENSSL)
 
 find_package(Threads REQUIRED)
+
+#----------------------------------------------------------------------------#
+# HDF5 Configuration
+#----------------------------------------------------------------------------#
+
+if(VPIC_ENABLE_HDF5)
+  enable_language(C)
+  # Check if user wants to force serial HDF5
+  if(VPIC_HDF5_SERIAL_ONLY)
+    message(STATUS "VPIC: Forcing serial HDF5 (VPIC_HDF5_SERIAL_ONLY=ON)")
+    set(HDF5_PREFER_PARALLEL OFF)
+    add_definitions(-DVPIC_HDF5_SERIAL_ONLY)
+  else()
+    set(HDF5_PREFER_PARALLEL ON)
+  endif()
+  
+  # Find HDF5 package
+  find_package(HDF5 COMPONENTS C HL REQUIRED)
+
+  add_definitions(-DVPIC_ENABLE_HDF5)
+  include_directories(${HDF5_INCLUDE_DIRS})
+
+  # -----------------------------------------------------------------------------
+  # RESOLVE HDF5 LIBRARIES (h5pcc Interrogation + CMake Fallback)
+  # -----------------------------------------------------------------------------
+  set(HDF5_VPIC_LIBS "")  # This will hold actual library objects for target_link_libraries
+
+  # Determine which wrapper to use based on serial-only flag
+  if(VPIC_HDF5_SERIAL_ONLY)
+    find_program(H5_WRAPPER_EXECUTABLE h5cc)
+    set(WRAPPER_NAME "h5cc")
+  else()
+    find_program(H5_WRAPPER_EXECUTABLE h5pcc)
+    set(WRAPPER_NAME "h5pcc")
+  endif()
+
+  if(H5_WRAPPER_EXECUTABLE)
+      execute_process(
+          COMMAND ${H5_WRAPPER_EXECUTABLE} -show
+          OUTPUT_VARIABLE H5_SHOW_OUTPUT
+          OUTPUT_STRIP_TRAILING_WHITESPACE
+      )
+      
+      message(STATUS "VPIC: ${WRAPPER_NAME} output: ${H5_SHOW_OUTPUT}")
+      
+      # Extract -L directory using regex (captures the path after -L)
+      string(REGEX MATCH "-L([^ ]+)" HDF5_L_MATCH "${H5_SHOW_OUTPUT}")
+      
+      if(CMAKE_MATCH_1)
+          set(HDF5_LIB_PATH "${CMAKE_MATCH_1}")
+          message(STATUS "VPIC: HDF5 library path extracted: ${HDF5_LIB_PATH}")
+          
+          # Try to find the actual library files
+          find_library(HDF5_HL_LIBRARY 
+                       NAMES hdf5_hl libhdf5_hl 
+                       PATHS ${HDF5_LIB_PATH} 
+                       NO_DEFAULT_PATH)
+          find_library(HDF5_LIBRARY 
+                       NAMES hdf5 libhdf5 
+                       PATHS ${HDF5_LIB_PATH} 
+                       NO_DEFAULT_PATH)
+          
+          if(HDF5_HL_LIBRARY AND HDF5_LIBRARY)
+              # Found actual paths - use them (best option, enables RPATH)
+              list(APPEND HDF5_VPIC_LIBS ${HDF5_HL_LIBRARY} ${HDF5_LIBRARY})
+              message(STATUS "VPIC: HDF5 libraries found:")
+              message(STATUS "  HL: ${HDF5_HL_LIBRARY}")
+              message(STATUS "  Core: ${HDF5_LIBRARY}")
+          else()
+              # find_library failed - let linker search using -L flag
+              message(WARNING "VPIC: find_library failed. Using linker flags.")
+              link_directories(${HDF5_LIB_PATH})
+              list(APPEND HDF5_VPIC_LIBS "hdf5_hl" "hdf5")
+          endif()
+      else()
+          message(WARNING "VPIC: Could not extract -L path from h5pcc output")
+          list(APPEND HDF5_VPIC_LIBS "hdf5_hl" "hdf5")
+      endif()
+  else()
+      # No h5pcc found - try CMake's discovered libraries
+      if(HDF5_LIBRARIES)
+          set(HDF5_VPIC_LIBS ${HDF5_LIBRARIES})
+          message(STATUS "VPIC: Using CMake-discovered HDF5 libraries: ${HDF5_LIBRARIES}")
+      else()
+          # Last resort: bare library names
+          list(APPEND HDF5_VPIC_LIBS "hdf5_hl" "hdf5")
+          message(WARNING "VPIC: h5pcc not found, using default library names")
+      endif()
+  endif()
+
+  # -----------------------------------------------------------------------------
+  # ADD TO SHELL WRAPPER (Keep existing behavior for bin/vpic script)
+  # -----------------------------------------------------------------------------
+  # Convert to space-separated string for the wrapper script
+  # Convert to space-separated string for the wrapper script
+  string(REPLACE ";" " " HDF5_LIB_STRING "${HDF5_VPIC_LIBS}")
+
+  # Determine the directory containing the HDF5 libs so we can bake an rpath.
+  # Prefer the path extracted from h5pcc; otherwise derive it from the
+  # resolved library file.
+  set(HDF5_RPATH_DIR "")
+  if(DEFINED HDF5_LIB_PATH)
+    set(HDF5_RPATH_DIR "${HDF5_LIB_PATH}")
+  elseif(HDF5_LIBRARY)
+    get_filename_component(HDF5_RPATH_DIR "${HDF5_LIBRARY}" DIRECTORY)
+  endif()
+
+  if(HDF5_RPATH_DIR)
+    set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} -L${HDF5_RPATH_DIR} -Wl,-rpath,${HDF5_RPATH_DIR} ${HDF5_LIB_STRING}")
+  else()
+    set(VPIC_CXX_LIBRARIES "${VPIC_CXX_LIBRARIES} ${HDF5_LIB_STRING}")
+  endif()
+
+  # Status Reporting
+  if(VPIC_HDF5_SERIAL_ONLY)
+    message(STATUS "VPIC: HDF5 Serial Forced by User (VPIC_HDF5_SERIAL_ONLY)")
+  elseif(HDF5_IS_PARALLEL)
+    message(STATUS "VPIC: HDF5 Parallel Enabled")
+    add_definitions(-DVPIC_HDF5_PARALLEL)
+  else()
+    message(STATUS "VPIC: HDF5 Serial Enabled")
+  endif()
+endif()
 
 #------------------------------------------------------------------------------#
 # Act on build options set in project.cmake
@@ -592,6 +739,10 @@ else()
 endif()
 target_include_directories(vpic INTERFACE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(vpic ${VPIC_EXPOSE} ${MPI_CXX_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} Kokkos::kokkos)
+# Link HDF5 if enabled
+if(VPIC_ENABLE_HDF5 AND HDF5_VPIC_LIBS)
+  target_link_libraries(vpic ${VPIC_EXPOSE} ${HDF5_VPIC_LIBS})
+endif()
 target_compile_options(vpic ${VPIC_EXPOSE} ${MPI_C_COMPILE_FLAGS} ${KOKKOS_COMPILE_OPTIONS})
 
 macro(build_a_vpic name deck)

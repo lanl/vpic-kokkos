@@ -29,12 +29,27 @@ void mp_allsum_i( int *local, int *global, int n ) {
   return MPWrapper::instance().mp_allsum_i( local, global, n );
 }
 
+void mp_allsum_l(long* local, long* global, int n) {
+  return MPWrapper::instance().mp_allsum_l(local, global, n);
+}
+
+void mp_allmin_d(double* local, double* global, int n) {
+  return MPWrapper::instance().mp_allmin_d(local, global, n);
+}
+void mp_allmax_d(double* local, double* global, int n) {
+  return MPWrapper::instance().mp_allmax_d(local, global, n);
+}
+
 void mp_allgather_i( int *sbuf, int *rbuf, int n ) {
   return MPWrapper::instance().mp_allgather_i( sbuf, rbuf, n );
 }
 
 void mp_allgather_i64( int64_t *sbuf, int64_t *rbuf, int n ) {
   return MPWrapper::instance().mp_allgather_i64( sbuf, rbuf, n );
+}
+
+void mp_scan_i64( int64_t *local, int64_t *global, int n ) {
+  MPWrapper::instance().mp_scan_i64( local, global, n );
 }
 
 void mp_gather_uc( unsigned char * sbuf, unsigned char * rbuf, int n ) {

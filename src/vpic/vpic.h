@@ -118,6 +118,14 @@ struct DumpParameters {
 
 }; // struct DumpParameters
 
+// Named options have the same meaning for binary and HDF5 particle output.
+enum class ParticleCoordinates { Logical, Physical };
+enum class OutputLayout { PerRank, Shared };
+struct ParticleWriteOptions {
+  ParticleCoordinates coordinates = ParticleCoordinates::Logical;
+  OutputLayout layout = OutputLayout::PerRank;
+};
+
 class vpic_simulation {
 public:
   vpic_simulation();
@@ -266,6 +274,102 @@ public:
 
   void field_dump(DumpParameters & dumpParams);
   void hydro_dump(const char * speciesname, DumpParameters & dumpParams);
+  
+  // =============================================================================
+  // BINARY WRITE INTERFACE
+  // =============================================================================
+
+  /**
+   * @brief Write electromagnetic fields to binary format (M2M - one file per rank)
+   * @param params Dump configuration (output variables, directory, filename)
+   * @param fa Field array containing E and B components
+   */
+  void write_fields_binary(DumpParameters& params, field_array_t* fa);
+
+  /**
+   * @brief Write hydrodynamic moments to binary format (M2M - one file per rank)
+   * @param params Dump configuration (output variables, directory, filename)
+   * @param ha Hydro array for moment storage
+   * @param species_name Species to compute moments for (triggers physics accumulation)
+   */
+  void write_hydro_binary(DumpParameters& params, hydro_array_t* ha, const char* species_name);
+
+  /**
+   * @brief Write particle data to binary format (M2M - one file per rank)
+   * @param fbase Base filename (without extension)
+   * @param species_name Species to dump
+   * @param options Named coordinates/layout; binary requires PerRank.
+   * Output name: fbase.species.STEP.RANK. Parent directories are created.
+   */
+  void write_particles_binary(const char* fbase, const char* species_name,
+                              ParticleWriteOptions options = {});
+  // Source compatibility only: prefer named options in new decks.
+  [[deprecated("Use ParticleWriteOptions; particle filenames now include STEP.RANK")]]
+  void write_particles_binary(const char* fbase, const char* species_name, bool physical) {
+    write_particles_binary(fbase, species_name,
+      {physical ? ParticleCoordinates::Physical : ParticleCoordinates::Logical,
+       OutputLayout::PerRank});
+  }
+
+  #ifdef VPIC_ENABLE_HDF5
+
+  /**
+ * @brief Generates a temporal collection with relative HDF references
+ * @param series_path Output .xmf filename (e.g., "fields_timeseries.xmf")
+ * @param steps Vector of timesteps that were dumped
+ * @param base_pattern Directory structure with %d placeholder (e.g., "fields/T.%d") 
+ * @param base_filename HDF5/XDMF base name (e.g., "fields")
+ */
+void write_xdmf_timeseries(const char* series_path,
+                                            const std::vector<int>& steps,
+                                            const char* base_pattern,
+                                            const char* base_filename);
+  // =============================================================================
+  // HDF5 WRITE INTERFACE
+  // =============================================================================
+
+  /**
+   * @brief Write electromagnetic fields to HDF5 format
+   * @param params Dump configuration (output variables, directory, filename)
+   * @param fa Field array containing E and B components
+   * @param single_file If true, use M2O (single shared file with parallel I/O);
+   *                    if false, use M2M (one file per rank)
+   */
+  void write_fields_hdf5(DumpParameters& params, 
+                        field_array_t* fa, 
+                        bool single_file = false);
+
+  /**
+   * @brief Write hydrodynamic moments to HDF5 format
+   * @param params Dump configuration (output variables, directory, filename)
+   * @param ha Hydro array for moment storage
+   * @param species_name Species to compute moments for (triggers physics accumulation)
+   * @param single_file If true, use M2O (single shared file with parallel I/O);
+   *                    if false, use M2M (one file per rank)
+   */
+  void write_hydro_hdf5(DumpParameters& params, 
+                        hydro_array_t* ha, 
+                        const char* species_name, 
+                        bool single_file = false);
+
+  /**
+   * @brief Write particle data to HDF5 format
+   * @param fbase Base filename (without extension)
+   * @param species_name Species to dump
+   * @param options Named coordinates/layout. Both modes use numeric datasets.
+   * Output name: fbase.species.STEP[.RANK].h5. All ranks must participate.
+   */
+  void write_particles_hdf5(const char* fbase, const char* species_name,
+                           ParticleWriteOptions options = {});
+  // Source compatibility only; historical booleans retain their old meanings.
+  [[deprecated("Use ParticleWriteOptions for coordinates and layout")]]
+  void write_particles_hdf5(const char* fbase, const char* species_name,
+                           bool single_file, bool physical = false) {
+    write_particles_hdf5(fbase, species_name,
+      {physical ? ParticleCoordinates::Physical : ParticleCoordinates::Logical,
+       single_file ? OutputLayout::Shared : OutputLayout::PerRank});
+  }
+  #endif // VPIC_ENABLE_HDF5
 
   ///////////////////
   // Useful accessors
@@ -489,8 +593,11 @@ public:
 
     // Pre-size communications buffers. This is done to get most memory
     // allocation over with before the simulation starts running
+    int nx2 = grid->nx + 2;
+    int ny2 = grid->ny + 2;
+    int nz2 = grid->nz + 2;
 
-    mp_size_recv_buffer(grid->mp,BOUNDARY(-1, 0, 0),ny1*nz1*sizeof(hydro_t));
+/*     mp_size_recv_buffer(grid->mp,BOUNDARY(-1, 0, 0),ny1*nz1*sizeof(hydro_t));
     mp_size_recv_buffer(grid->mp,BOUNDARY( 1, 0, 0),ny1*nz1*sizeof(hydro_t));
     mp_size_recv_buffer(grid->mp,BOUNDARY( 0,-1, 0),nz1*nx1*sizeof(hydro_t));
     mp_size_recv_buffer(grid->mp,BOUNDARY( 0, 1, 0),nz1*nx1*sizeof(hydro_t));
@@ -502,7 +609,20 @@ public:
     mp_size_send_buffer(grid->mp,BOUNDARY( 0,-1, 0),nz1*nx1*sizeof(hydro_t));
     mp_size_send_buffer(grid->mp,BOUNDARY( 0, 1, 0),nz1*nx1*sizeof(hydro_t));
     mp_size_send_buffer(grid->mp,BOUNDARY( 0, 0,-1),nx1*ny1*sizeof(hydro_t));
-    mp_size_send_buffer(grid->mp,BOUNDARY( 0, 0, 1),nx1*ny1*sizeof(hydro_t));
+    mp_size_send_buffer(grid->mp,BOUNDARY( 0, 0, 1),nx1*ny1*sizeof(hydro_t)); */
+    mp_size_recv_buffer(grid->mp,BOUNDARY(-1, 0, 0),ny2*nz2*sizeof(hydro_t)+ 128);
+    mp_size_recv_buffer(grid->mp,BOUNDARY( 1, 0, 0),ny2*nz2*sizeof(hydro_t)+ 128);
+    mp_size_recv_buffer(grid->mp,BOUNDARY( 0,-1, 0),nz2*nx2*sizeof(hydro_t)+ 128);
+    mp_size_recv_buffer(grid->mp,BOUNDARY( 0, 1, 0),nz2*nx2*sizeof(hydro_t)+ 128);
+    mp_size_recv_buffer(grid->mp,BOUNDARY( 0, 0,-1),nx2*ny2*sizeof(hydro_t)+ 128);
+    mp_size_recv_buffer(grid->mp,BOUNDARY( 0, 0, 1),nx2*ny2*sizeof(hydro_t)+ 128);
+
+    mp_size_send_buffer(grid->mp,BOUNDARY(-1, 0, 0),ny2*nz2*sizeof(hydro_t)+ 128);
+    mp_size_send_buffer(grid->mp,BOUNDARY( 1, 0, 0),ny2*nz2*sizeof(hydro_t)+ 128);
+    mp_size_send_buffer(grid->mp,BOUNDARY( 0,-1, 0),nz2*nx2*sizeof(hydro_t)+ 128);
+    mp_size_send_buffer(grid->mp,BOUNDARY( 0, 1, 0),nz2*nx2*sizeof(hydro_t)+ 128);
+    mp_size_send_buffer(grid->mp,BOUNDARY( 0, 0,-1),nx2*ny2*sizeof(hydro_t)+ 128);
+    mp_size_send_buffer(grid->mp,BOUNDARY( 0, 0, 1),nx2*ny2*sizeof(hydro_t)+ 128);
   }
 
   // Other field helpers are provided by macros in deck_wrapper.cxx

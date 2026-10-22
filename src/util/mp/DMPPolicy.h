@@ -153,6 +153,30 @@ struct DMPPolicy {
     TRAP( MPI_Allreduce( local, global, n, MPI_INT, MPI_SUM, world->comm ) );
   }
   
+  inline void 
+  mp_allsum_l( long* local, 
+               long* global, 
+               int n) {
+    if (!local || !global || n < 1) ERROR(("Bad args"));
+    TRAP(MPI_Allreduce(local, global, n, MPI_LONG, MPI_SUM, world->comm));
+}
+  
+  inline void 
+  mp_allmin_d(  double* local, 
+                double* global, 
+                int n) {
+    if (!local || !global || n < 1) ERROR(("Bad args"));
+    TRAP(MPI_Allreduce(local, global, n, MPI_DOUBLE, MPI_MIN, world->comm));
+  }
+
+  inline void 
+  mp_allmax_d(  double* local, 
+                double* global, 
+                int n) {
+    if (!local || !global || n < 1) ERROR(("Bad args"));
+    TRAP(MPI_Allreduce(local, global, n, MPI_DOUBLE, MPI_MAX, world->comm));
+  }
+  
   inline void
   mp_allgather_i( int * sbuf,
                   int * rbuf,
@@ -167,6 +191,15 @@ struct DMPPolicy {
                     int n ) {
     if( !sbuf || !rbuf || n<1 ) ERROR(( "Bad args" ));
     TRAP( MPI_Allgather( sbuf, n, MPI_LONG_LONG, rbuf, n, MPI_LONG_LONG, world->comm ) );
+  }
+  
+  inline void
+  mp_scan_i64( int64_t * local,
+               int64_t * global,
+               int n ) {
+    if( !local || !global || n<1 ) ERROR(( "Bad args" ));
+    // MPI_Scan is inclusive. We use MPI_LONG_LONG for int64_t.
+    TRAP( MPI_Scan( local, global, n, MPI_LONG_LONG, MPI_SUM, world->comm ) );
   }
   
   inline void

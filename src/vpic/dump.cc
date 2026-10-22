@@ -291,7 +291,7 @@ vpic_simulation::dump_particles( const char *sp_name,
                                  const char *fbase,
                                  int ftag )
 {
-
+    TIC {
     species_t *sp;
     char fname[max_filename_bytes];
     FileIO fileIO;
@@ -375,6 +375,29 @@ vpic_simulation::dump_particles( const char *sp_name,
 #undef PBUF_SIZE
 
     if( fileIO.close() ) ERROR(("File close failed on dump particles!!!"));
+    
+    // 1. Get exact local metrics
+    double t_local = wallclock() - _profile_tic;
+    
+    // Note: VPIC legacy particle dumps write 8 floats (32 bytes) per particle.
+    // Adjust 'p_count' if the legacy function uses a different variable name 
+    // for the number of valid particles written (e.g., out_sp->np).
+    double mb_local = (double)(sp_np * 32) / (1024.0 * 1024.0);
+
+    // 2. Global reductions via VPIC wrappers
+    double t_max = 0.0;
+    double mb_total = 0.0;
+    
+    mp_allmax_d(&t_local, &t_max, 1);
+    mp_allsum_d(&mb_local, &mb_total, 1);
+
+    if (rank() == 0) {
+        double throughput = mb_total / t_max;
+        MESSAGE(("[METRIC],dump_particles,%ld,%.4f,%.2f,%.2f", 
+                 (long)step(), t_max, mb_total, throughput));
+    }
+    
+    } TOC(dump_particles, 1);
 }
 
 /*------------------------------------------------------------------------------
@@ -575,7 +598,7 @@ vpic_simulation::global_header( const char * base,
 
 void
 vpic_simulation::field_dump( DumpParameters & dumpParams ) {
-
+  TIC {
     // Update the fields if necessary
     if (step() > field_array->last_copied)
       field_array->copy_to_host();
@@ -722,12 +745,38 @@ vpic_simulation::field_dump( DumpParameters & dumpParams ) {
 # undef f
 
   if( fileIO.close() ) ERROR(( "File close failed on field dump!!!" ));
+  
+  double t_local = wallclock() - _profile_tic;
+        
+    // Count how many variables were dumped
+    int num_vars = 0;
+    for(int i=0; i<32; i++) {
+        if(dumpParams.output_vars.bitset(i)) num_vars++;
+    }
+
+    // Grids are balanced: Local volume * num_vars * 4 bytes
+    double mb_local = (double)(grid->nx * grid->ny * grid->nz * num_vars * sizeof(float)) / (1024.0 * 1024.0);
+    
+    double t_max = 0.0;
+    double mb_total = 0.0;
+    mp_allmax_d(&t_local, &t_max, 1);
+    
+    // Multiply local by total ranks for grid data
+    mb_total = mb_local * nproc(); 
+
+    if (rank() == 0 && num_vars > 0) {
+        double throughput = mb_total / t_max;
+        MESSAGE(("[METRIC],field_dump,%ld,%.4f,%.2f,%.2f", 
+                 (long)step(), t_max, mb_total, throughput));
+    }
+  
+  } TOC (field_dump, 1);
 }
 
 void
 vpic_simulation::hydro_dump( const char * speciesname,
                              DumpParameters & dumpParams ) {
-
+  TIC {
   // Create directory for this time step
   char timeDir[max_filename_bytes];
   snprintf(timeDir, max_filename_bytes, "%s/T.%ld", dumpParams.baseDir, (long)step());
@@ -876,4 +925,30 @@ vpic_simulation::hydro_dump( const char * speciesname,
 # undef hydro
 
   if( fileIO.close() ) ERROR(( "File close failed on hydro dump!!!" ));
+  
+  double t_local = wallclock() - _profile_tic;
+        
+    // Count how many variables were dumped
+    int num_vars = 0;
+    for(int i=0; i<32; i++) {
+        if(dumpParams.output_vars.bitset(i)) num_vars++;
+    }
+
+    // Grids are balanced: Local volume * num_vars * 4 bytes
+    double mb_local = (double)(grid->nx * grid->ny * grid->nz * num_vars * sizeof(float)) / (1024.0 * 1024.0);
+    
+    double t_max = 0.0;
+    double mb_total = 0.0;
+    mp_allmax_d(&t_local, &t_max, 1);
+    
+    // Multiply local by total ranks for grid data
+    mb_total = mb_local * nproc(); 
+
+    if (rank() == 0 && num_vars > 0) {
+        double throughput = mb_total / t_max;
+        MESSAGE(("[METRIC],hydro_dump,%ld,%.4f,%.2f,%.2f", 
+                 (long)step(), t_max, mb_total, throughput));
+    }
+  
+  } TOC(hydro_dump, 1);
 }

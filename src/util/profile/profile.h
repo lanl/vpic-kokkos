@@ -51,7 +51,16 @@
   _( BACKFILL ) \
   _( BACKFILL_COMPRESS ) \
   _( user_data_movement ) \
-  _( user_diagnostics  )
+  _( user_diagnostics  ) \
+  _( field_dump          ) \
+  _( hydro_dump          ) \
+  _( dump_particles      ) \
+  _( write_fields_bin    ) \
+  _( write_hydro_bin     ) \
+  _( write_particles_bin ) \
+  _( write_fields_hdf5   ) \
+  _( write_hydro_hdf5    ) \
+  _( write_particles_hdf5)
 
 enum profile_internal_use_only_timers {
   profile_internal_use_only_invalid_timer = -1,

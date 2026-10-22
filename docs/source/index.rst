@@ -14,6 +14,7 @@ This documentation is very much a work in progress.  Most documentation is still
    intro
    comp
    porting
+   writer_output
    units
    vis
    pbd

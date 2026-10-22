@@ -72,6 +72,18 @@ void
 mp_allsum_i( int * local,
              int * global,
              int n );
+             
+void mp_allsum_l( long* local, 
+                  long* global, 
+                  int n);
+
+void mp_allmin_d( double* local, 
+                  double* global, 
+                  int n);
+                    
+void mp_allmax_d( double* local, 
+                  double* global, 
+                  int n);
 
 void
 mp_allgather_i( int * sbuf,
@@ -82,6 +94,11 @@ void
 mp_allgather_i64( int64_t * sbuf,
                   int64_t * rbuf,
                   int n );
+                  
+void
+mp_scan_i64( int64_t * local,
+             int64_t * global,
+             int n );
 
 // FIXME: THIS API SHOULD TAKE THE ROOT NODE
 void

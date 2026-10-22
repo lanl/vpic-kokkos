@@ -156,6 +156,24 @@ struct RelayPolicy {
     p2p.send( local,  request.count, request.tag );
     p2p.recv( global, request.count, request.tag, request.id );
   }
+  
+  inline void 
+  mp_allsum_l(long* local, long* global, int n) {
+    for(int i=0; i<n; i++) global[i] = local[i];
+  }
+  
+  inline void mp_allmin_d(  double* local, 
+                            double* global, 
+                            int n) {
+    // For serial, global min is just local min
+    for(int i=0; i<n; i++) global[i] = local[i];
+  }
+
+  inline void mp_allmax_d(  double* local, 
+                            double* global, 
+                            int n) {
+    for(int i=0; i<n; i++) global[i] = local[i];
+  }
 
   inline void
   mp_allgather_i( int *sbuf,
@@ -179,6 +197,17 @@ struct RelayPolicy {
     p2p.post( request );
     p2p.send( sbuf, request.count, request.tag );
     p2p.recv( rbuf, request.count*world_size, request.tag, request.id);
+  }
+  
+  inline void
+  mp_scan_i64( int64_t * local,
+               int64_t * global,
+               int n ) {
+    if( _world_size > 1 ) {
+        ERROR(( "mp_scan_i64 not implemented for RelayPolicy" ));
+    }
+    // Fallback for serial execution: Global IS Local
+    for( int i=0; i<n; i++ ) global[i] = local[i];
   }
 
   inline void
