@@ -18,9 +18,9 @@ static field_advance_kernels_t sfa_kernels = {
   // Accumulator interfaces
 
   clear_jf,
-  synchronize_jf,
+  legacy_synchronize_jf,
   clear_rhof,
-  synchronize_rho,
+  legacy_synchronize_rho,
 
   // Initialize interface
 
@@ -29,7 +29,7 @@ static field_advance_kernels_t sfa_kernels = {
 
   // Shared face cleaning interface
 
-  synchronize_tang_e_norm_b,
+  legacy_synchronize_tang_e_norm_b,
 
   // Electric field divergence cleaning interface
 
@@ -50,11 +50,11 @@ static field_advance_kernels_t sfa_kernels = {
 
   clear_rhof_kokkos,
 
-  k_synchronize_jf,
-  k_reduce_jf,
-  k_synchronize_rho,
+  synchronize_jf,
+  reduce_jf,
+  synchronize_rho,
 
-  synchronize_tang_e_norm_b_kokkos,
+  synchronize_tang_e_norm_b,
 
   compute_div_e_err_kokkos,
   compute_rms_div_e_err_kokkos,

@@ -425,10 +425,10 @@ BEGIN_PRIMITIVE {                                                               
   Kokkos::View<float*> sbuf_neg_d("Send buffer neg", 1+14*(ny+1)*(nz+1));
   Kokkos::View<float*> rbuf_pos_d("Recv buffer pos", 1+14*(ny+1)*(nz+1));
   Kokkos::View<float*> rbuf_neg_d("Recv buffer neg", 1+14*(ny+1)*(nz+1));
-  Kokkos::View<float*>::HostMirror sbuf_pos_h = Kokkos::create_mirror_view(sbuf_pos_d);
-  Kokkos::View<float*>::HostMirror sbuf_neg_h = Kokkos::create_mirror_view(sbuf_neg_d);
-  Kokkos::View<float*>::HostMirror rbuf_pos_h = Kokkos::create_mirror_view(rbuf_pos_d);
-  Kokkos::View<float*>::HostMirror rbuf_neg_h = Kokkos::create_mirror_view(rbuf_neg_d);
+  Kokkos::View<float*>::host_mirror_type sbuf_pos_h = Kokkos::create_mirror_view(sbuf_pos_d);
+  Kokkos::View<float*>::host_mirror_type sbuf_neg_h = Kokkos::create_mirror_view(sbuf_neg_d);
+  Kokkos::View<float*>::host_mirror_type rbuf_pos_h = Kokkos::create_mirror_view(rbuf_pos_d);
+  Kokkos::View<float*>::host_mirror_type rbuf_neg_h = Kokkos::create_mirror_view(rbuf_neg_d);
   BEGIN_SEND_KOKKOS(-1, 0, 0,x,y,z,sbuf_neg_d, sbuf_neg_h);
   BEGIN_SEND_KOKKOS( 1, 0, 0,x,y,z,sbuf_pos_d, sbuf_pos_h);
   BEGIN_RECV_KOKKOS(-1, 0, 0,x,y,z,rbuf_neg_h);

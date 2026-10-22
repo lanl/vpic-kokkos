@@ -150,7 +150,7 @@ vacuum_clean_div_e( field_array_t * fa ) {
 
   WAIT_PIPELINES();
 
-  local_adjust_tang_e( fa->f, fa->g );
+  legacy_local_adjust_tang_e( fa->f, fa->g );
 }
 
 void
@@ -162,7 +162,7 @@ vacuum_clean_div_e_kokkos( field_array_t * fa ) {
 
     const k_field_t& k_field = fa->k_f_d;
     sfa_params_t* sfa = reinterpret_cast<sfa_params_t *>(fa->params);
-    const k_material_coefficient_t::HostMirror& k_mat = sfa->k_mc_h;
+    const k_material_coefficient_t::host_mirror_type& k_mat = sfa->k_mc_h;
     const grid_t* g = fa->g;
     const int nx = g->nx, ny = g->ny, nz = g->nz;
     const float _rdx = (nx>1) ? g->rdx : 0;
@@ -228,6 +228,6 @@ vacuum_clean_div_e_kokkos( field_array_t * fa ) {
         marder_ez(k_field, pz, f0, fz);
     });
 
-  k_local_adjust_tang_e( fa, fa->g );
+  local_adjust_tang_e( fa, fa->g );
 }
 

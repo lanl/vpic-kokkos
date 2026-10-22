@@ -214,10 +214,10 @@ int vpic_simulation::advance(void)
   // Must move all the current from boundary_p that is on the host to the device
   // TODO: The interior should all be zero, so it can be ignored.
   KOKKOS_TIC();
-  FAK->k_reduce_jf(field_array);
+  FAK->reduce_jf(field_array);
   KOKKOS_TOC( JF_ACCUM_DATA_MOVEMENT, 1);
   //  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
-  TIC FAK->k_synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
+  TIC FAK->synchronize_jf( field_array ); TOC( synchronize_jf, 1 );
 
   // At this point, the particle currents are known at jf_{1/2}.
   // Let the user add their own current contributions. It is the users
@@ -299,7 +299,7 @@ int vpic_simulation::advance(void)
       }
 
       // TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
-      TIC FAK->k_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+      TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
 
       // HOST
       // Touches fields
@@ -346,7 +346,7 @@ int vpic_simulation::advance(void)
   if( (sync_shared_interval>0) && ((step() % sync_shared_interval)==0) ) {
     if( rank()==0 ) MESSAGE(( "Synchronizing shared tang e, norm b, rho_b" ));
     // TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
-    TIC err = FAK->synchronize_tang_e_norm_b_kokkos( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+    TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
     if( rank()==0 ) MESSAGE(( "Domain desynchronization error = %e (arb units)", err ));
   }
   // Fields are updated ... load the interpolator for next time step and
