@@ -199,4 +199,10 @@ void inline swap(particle_t & element) {
 } // namespace utils
 #endif // __cplusplus
 
+#if !defined(__GNUC__)
+	#undef bswap_16
+	#undef bswap_32
+	#undef bswap_64
+#endif // __GNUC__
+
 #endif // swap_h

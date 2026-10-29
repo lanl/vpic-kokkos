@@ -25,7 +25,7 @@ halt_services( void );
 // Give an estimate of the time when boot_timestamp was called
 // (in seconds since the epoch).  All processes agree on this.
 
-#define boot_timestamp (double)_boot_timestamp
+#define boot_timestamp ((double)_boot_timestamp)
 extern double _boot_timestamp;
 
 // Give an estimate of how many seconds since boot_services was

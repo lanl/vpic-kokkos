@@ -8,6 +8,21 @@
  *
  */
 
+// NOTE FOR DECK AUTHORS: this file defines short lowercase macros
+// (global, repeat, everywhere, sim_log, begin_*, set_region_*, ...).
+// Your deck is compiled after them (see wrapper.cc), so any header you
+// #include in your deck sees them too. Kokkos_Core, Kokkos_Sort and
+// Kokkos_ScatterView are already included above them via vpic.h and are
+// safe. Other system/Kokkos headers are usually fine, but CUDA/CCCL
+// headers are not: e.g. <cub/cub.cuh> fails because "global" rewrites
+// __global__. If you need such a header, add it to the includes below
+// (before the macros), or wrap it in your deck:
+//
+//   #pragma push_macro("global")
+//   #undef global
+//   #include <cub/cub.cuh>
+//   #pragma pop_macro("global")
+
 #include <iostream> // For std::cerr and friends
 
 #include "vpic/vpic.h"
@@ -104,7 +119,7 @@ vpic_simulation::user_particle_collisions( void )
 
 // Define a region that fills the whole simulation
 
-#define everywhere (x == x) && (y == y) && (z == z)
+#define everywhere ((x == x) && (y == y) && (z == z))
 //#define everywhere 1
 
 // Define a macro to allow different parts of a region to be selected.

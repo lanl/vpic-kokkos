@@ -84,6 +84,15 @@ void pbd_write_to_buffer(species_t * RESTRICT sp,
         if(diag->write_posx) buff[store++] = global_pos_x;
         if(diag->write_posy) buff[store++] = global_pos_y;
         if(diag->write_posz) buff[store++] = global_pos_z;
+#undef global_pos_z
+#undef global_pos_y
+#undef global_pos_x
+#undef k0
+#undef j0
+#undef i0
+#undef nzg
+#undef nyg
+#undef nxg
     }
 
 

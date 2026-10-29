@@ -2,7 +2,7 @@
 
 set(MPIEXEC_NUMPROC 1)
 
-# TODO: If would be good if we could detect that the machine supports the
+# TODO: It would be good if we could detect that the machine supports the
 # desired number of threads
 set(MPIEXEC_NUMPROC_PARALLEL 2)
 set(NUM_THREADS 8)
@@ -15,7 +15,7 @@ list(APPEND DEFAULT_ARG_TESTS
     reconnection_test # This is a simple reconnection run
     )
 
-list(APPEND SIMPLE_DECK simple) # Reuse existing deck and start half way
+list(APPEND SIMPLE_DECK simple) # Deck for the 2 stage compile tests
 list(APPEND RESTART_DECK dump) # Reuse existing deck and start half way
 list(APPEND RESTART_BINARY restore)
 list(APPEND CHECKPOINT_FILE "${CMAKE_CURRENT_BINARY_DIR}/checkpt_test.1")

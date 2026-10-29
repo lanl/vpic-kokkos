@@ -877,3 +877,17 @@ vpic_simulation::hydro_dump( const char * speciesname,
 
   if( fileIO.close() ) ERROR(( "File close failed on hydro dump!!!" ));
 }
+
+// dumpmacros.h is private to this file; don't let its generic names
+// (READ, WRITE, ABORT, ...) outlive it
+#undef ABORT
+#undef F_READ
+#undef F_WRITE
+#undef F_WRITE_ARRAY_HEADER
+#undef F_WRITE_HEADER_PAR
+#undef F_WRITE_HEADER_V0
+#undef READ
+#undef WRITE_STRING
+#undef WRITE
+#undef WRITE_ARRAY_HEADER
+#undef WRITE_HEADER_V0

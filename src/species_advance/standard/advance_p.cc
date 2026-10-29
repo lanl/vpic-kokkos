@@ -382,28 +382,28 @@ advance_p_kokkos_unified(
   #define p_w     k_particles(p_index, particle_var::w)
   #define pii     k_particles_i(p_index)
 
-  #define f_cbx k_interp(ii[LANE], interpolator_var::cbx)
-  #define f_cby k_interp(ii[LANE], interpolator_var::cby)
-  #define f_cbz k_interp(ii[LANE], interpolator_var::cbz)
-  #define f_ex  k_interp(ii[LANE], interpolator_var::ex)
-  #define f_ey  k_interp(ii[LANE], interpolator_var::ey)
-  #define f_ez  k_interp(ii[LANE], interpolator_var::ez)
+  #define f_cbx k_interp(ii[VPIC_LANE], interpolator_var::cbx)
+  #define f_cby k_interp(ii[VPIC_LANE], interpolator_var::cby)
+  #define f_cbz k_interp(ii[VPIC_LANE], interpolator_var::cbz)
+  #define f_ex  k_interp(ii[VPIC_LANE], interpolator_var::ex)
+  #define f_ey  k_interp(ii[VPIC_LANE], interpolator_var::ey)
+  #define f_ez  k_interp(ii[VPIC_LANE], interpolator_var::ez)
 
-  #define f_dexdy    k_interp(ii[LANE], interpolator_var::dexdy)
-  #define f_dexdz    k_interp(ii[LANE], interpolator_var::dexdz)
+  #define f_dexdy    k_interp(ii[VPIC_LANE], interpolator_var::dexdy)
+  #define f_dexdz    k_interp(ii[VPIC_LANE], interpolator_var::dexdz)
 
-  #define f_d2exdydz k_interp(ii[LANE], interpolator_var::d2exdydz)
-  #define f_deydx    k_interp(ii[LANE], interpolator_var::deydx)
-  #define f_deydz    k_interp(ii[LANE], interpolator_var::deydz)
+  #define f_d2exdydz k_interp(ii[VPIC_LANE], interpolator_var::d2exdydz)
+  #define f_deydx    k_interp(ii[VPIC_LANE], interpolator_var::deydx)
+  #define f_deydz    k_interp(ii[VPIC_LANE], interpolator_var::deydz)
 
-  #define f_d2eydzdx k_interp(ii[LANE], interpolator_var::d2eydzdx)
-  #define f_dezdx    k_interp(ii[LANE], interpolator_var::dezdx)
-  #define f_dezdy    k_interp(ii[LANE], interpolator_var::dezdy)
+  #define f_d2eydzdx k_interp(ii[VPIC_LANE], interpolator_var::d2eydzdx)
+  #define f_dezdx    k_interp(ii[VPIC_LANE], interpolator_var::dezdx)
+  #define f_dezdy    k_interp(ii[VPIC_LANE], interpolator_var::dezdy)
 
-  #define f_d2ezdxdy k_interp(ii[LANE], interpolator_var::d2ezdxdy)
-  #define f_dcbxdx   k_interp(ii[LANE], interpolator_var::dcbxdx)
-  #define f_dcbydy   k_interp(ii[LANE], interpolator_var::dcbydy)
-  #define f_dcbzdz   k_interp(ii[LANE], interpolator_var::dcbzdz)
+  #define f_d2ezdxdy k_interp(ii[VPIC_LANE], interpolator_var::d2ezdxdy)
+  #define f_dcbxdx   k_interp(ii[VPIC_LANE], interpolator_var::dcbxdx)
+  #define f_dcbydy   k_interp(ii[VPIC_LANE], interpolator_var::dcbydy)
+  #define f_dcbzdz   k_interp(ii[VPIC_LANE], interpolator_var::dcbzdz)
 
   const auto rangel = g->rangel;
   const auto rangeh = g->rangeh;
@@ -515,19 +515,19 @@ advance_p_kokkos_unified(
       size_t p_index = pi_offset;
 
       BEGIN_VECTOR_BLOCK {
-        p_index = pi_offset + LANE;
+        p_index = pi_offset + VPIC_LANE;
         // Load position
-        dx[LANE] = p_dx;
-        dy[LANE] = p_dy;
-        dz[LANE] = p_dz;
+        dx[VPIC_LANE] = p_dx;
+        dy[VPIC_LANE] = p_dy;
+        dz[VPIC_LANE] = p_dz;
         // Load momentum
-        ux[LANE] = p_ux;
-        uy[LANE] = p_uy;
-        uz[LANE] = p_uz;
+        ux[VPIC_LANE] = p_ux;
+        uy[VPIC_LANE] = p_uy;
+        uz[VPIC_LANE] = p_uz;
         // Load weight
-        q[LANE]  = p_w;
+        q[VPIC_LANE]  = p_w;
         // Load index
-        ii[LANE] = pii;
+        ii[VPIC_LANE] = pii;
       } END_VECTOR_BLOCK;
 
       load_interpolators<num_lanes>( fex, fdexdy, fdexdz, fd2exdydz,
@@ -540,73 +540,73 @@ advance_p_kokkos_unified(
 
       BEGIN_VECTOR_BLOCK {
         // Interpolate E
-        hax[LANE] = qdt_2mc*( (fex[LANE] + dy[LANE]*fdexdy[LANE] ) + dz[LANE]*(fdexdz[LANE] + dy[LANE]*fd2exdydz[LANE]) );
-        hay[LANE] = qdt_2mc*( (fey[LANE] + dz[LANE]*fdeydz[LANE] ) + dx[LANE]*(fdeydx[LANE] + dz[LANE]*fd2eydzdx[LANE]) );
-        haz[LANE] = qdt_2mc*( (fez[LANE] + dx[LANE]*fdezdx[LANE] ) + dy[LANE]*(fdezdy[LANE] + dx[LANE]*fd2ezdxdy[LANE]) );
+        hax[VPIC_LANE] = qdt_2mc*( (fex[VPIC_LANE] + dy[VPIC_LANE]*fdexdy[VPIC_LANE] ) + dz[VPIC_LANE]*(fdexdz[VPIC_LANE] + dy[VPIC_LANE]*fd2exdydz[VPIC_LANE]) );
+        hay[VPIC_LANE] = qdt_2mc*( (fey[VPIC_LANE] + dz[VPIC_LANE]*fdeydz[VPIC_LANE] ) + dx[VPIC_LANE]*(fdeydx[VPIC_LANE] + dz[VPIC_LANE]*fd2eydzdx[VPIC_LANE]) );
+        haz[VPIC_LANE] = qdt_2mc*( (fez[VPIC_LANE] + dx[VPIC_LANE]*fdezdx[VPIC_LANE] ) + dy[VPIC_LANE]*(fdezdy[VPIC_LANE] + dx[VPIC_LANE]*fd2ezdxdy[VPIC_LANE]) );
   
         // Interpolate B
-        cbx[LANE] = fcbx[LANE] + dx[LANE]*fdcbxdx[LANE];
-        cby[LANE] = fcby[LANE] + dy[LANE]*fdcbydy[LANE];
-        cbz[LANE] = fcbz[LANE] + dz[LANE]*fdcbzdz[LANE];
+        cbx[VPIC_LANE] = fcbx[VPIC_LANE] + dx[VPIC_LANE]*fdcbxdx[VPIC_LANE];
+        cby[VPIC_LANE] = fcby[VPIC_LANE] + dy[VPIC_LANE]*fdcbydy[VPIC_LANE];
+        cbz[VPIC_LANE] = fcbz[VPIC_LANE] + dz[VPIC_LANE]*fdcbzdz[VPIC_LANE];
   
         // Half advance e
-        ux[LANE] += hax[LANE];
-        uy[LANE] += hay[LANE];
-        uz[LANE] += haz[LANE];
+        ux[VPIC_LANE] += hax[VPIC_LANE];
+        uy[VPIC_LANE] += hay[VPIC_LANE];
+        uz[VPIC_LANE] += haz[VPIC_LANE];
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
-        v0[LANE] = qdt_2mc/Kokkos::sqrtf(one + (ux[LANE]*ux[LANE] + (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE])));
+        v0[VPIC_LANE] = qdt_2mc/Kokkos::sqrtf(one + (ux[VPIC_LANE]*ux[VPIC_LANE] + (uy[VPIC_LANE]*uy[VPIC_LANE] + uz[VPIC_LANE]*uz[VPIC_LANE])));
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
-        p_index = pi_offset + LANE;
+        p_index = pi_offset + VPIC_LANE;
 
         // Boris - scalars
-        v1[LANE] = cbx[LANE]*cbx[LANE] + (cby[LANE]*cby[LANE] + cbz[LANE]*cbz[LANE]);
-        v2[LANE] = (v0[LANE]*v0[LANE])*v1[LANE];
-        v3[LANE] = v0[LANE]*(one+v2[LANE]*(one_third+v2[LANE]*two_fifteenths));
-        v4[LANE] = v3[LANE]/(one+v1[LANE]*(v3[LANE]*v3[LANE]));
-        v4[LANE] += v4[LANE];
+        v1[VPIC_LANE] = cbx[VPIC_LANE]*cbx[VPIC_LANE] + (cby[VPIC_LANE]*cby[VPIC_LANE] + cbz[VPIC_LANE]*cbz[VPIC_LANE]);
+        v2[VPIC_LANE] = (v0[VPIC_LANE]*v0[VPIC_LANE])*v1[VPIC_LANE];
+        v3[VPIC_LANE] = v0[VPIC_LANE]*(one+v2[VPIC_LANE]*(one_third+v2[VPIC_LANE]*two_fifteenths));
+        v4[VPIC_LANE] = v3[VPIC_LANE]/(one+v1[VPIC_LANE]*(v3[VPIC_LANE]*v3[VPIC_LANE]));
+        v4[VPIC_LANE] += v4[VPIC_LANE];
         // Boris - uprime
-        v0[LANE] = ux[LANE] + v3[LANE]*(uy[LANE]*cbz[LANE] - uz[LANE]*cby[LANE]);
-        v1[LANE] = uy[LANE] + v3[LANE]*(uz[LANE]*cbx[LANE] - ux[LANE]*cbz[LANE]);
-        v2[LANE] = uz[LANE] + v3[LANE]*(ux[LANE]*cby[LANE] - uy[LANE]*cbx[LANE]);
+        v0[VPIC_LANE] = ux[VPIC_LANE] + v3[VPIC_LANE]*(uy[VPIC_LANE]*cbz[VPIC_LANE] - uz[VPIC_LANE]*cby[VPIC_LANE]);
+        v1[VPIC_LANE] = uy[VPIC_LANE] + v3[VPIC_LANE]*(uz[VPIC_LANE]*cbx[VPIC_LANE] - ux[VPIC_LANE]*cbz[VPIC_LANE]);
+        v2[VPIC_LANE] = uz[VPIC_LANE] + v3[VPIC_LANE]*(ux[VPIC_LANE]*cby[VPIC_LANE] - uy[VPIC_LANE]*cbx[VPIC_LANE]);
         // Boris - rotation
-        ux[LANE] += v4[LANE]*(v1[LANE]*cbz[LANE] - v2[LANE]*cby[LANE]);
-        uy[LANE] += v4[LANE]*(v2[LANE]*cbx[LANE] - v0[LANE]*cbz[LANE]);
-        uz[LANE] += v4[LANE]*(v0[LANE]*cby[LANE] - v1[LANE]*cbx[LANE]);
+        ux[VPIC_LANE] += v4[VPIC_LANE]*(v1[VPIC_LANE]*cbz[VPIC_LANE] - v2[VPIC_LANE]*cby[VPIC_LANE]);
+        uy[VPIC_LANE] += v4[VPIC_LANE]*(v2[VPIC_LANE]*cbx[VPIC_LANE] - v0[VPIC_LANE]*cbz[VPIC_LANE]);
+        uz[VPIC_LANE] += v4[VPIC_LANE]*(v0[VPIC_LANE]*cby[VPIC_LANE] - v1[VPIC_LANE]*cbx[VPIC_LANE]);
         // Half advance e
-        ux[LANE] += hax[LANE];
-        uy[LANE] += hay[LANE];
-        uz[LANE] += haz[LANE];
+        ux[VPIC_LANE] += hax[VPIC_LANE];
+        uy[VPIC_LANE] += hay[VPIC_LANE];
+        uz[VPIC_LANE] += haz[VPIC_LANE];
         // Store momentum
-        p_ux = ux[LANE];
-        p_uy = uy[LANE];
-        p_uz = uz[LANE];
+        p_ux = ux[VPIC_LANE];
+        p_uy = uy[VPIC_LANE];
+        p_uz = uz[VPIC_LANE];
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
-        v0[LANE] = one/Kokkos::sqrtf(one + (ux[LANE]*ux[LANE]+ (uy[LANE]*uy[LANE] + uz[LANE]*uz[LANE])));
+        v0[VPIC_LANE] = one/Kokkos::sqrtf(one + (ux[VPIC_LANE]*ux[VPIC_LANE]+ (uy[VPIC_LANE]*uy[VPIC_LANE] + uz[VPIC_LANE]*uz[VPIC_LANE])));
       } END_VECTOR_BLOCK;
 
       BEGIN_VECTOR_BLOCK {
         /**/                                      // Get norm displacement
-        ux[LANE] *= cdt_dx;
-        uy[LANE] *= cdt_dy;
-        uz[LANE] *= cdt_dz;
-        ux[LANE] *= v0[LANE];
-        uy[LANE] *= v0[LANE];
-        uz[LANE] *= v0[LANE];
-        v0[LANE]  = dx[LANE] + ux[LANE];                           // Streak midpoint (inbnds)
-        v1[LANE]  = dy[LANE] + uy[LANE];
-        v2[LANE]  = dz[LANE] + uz[LANE];
-        v3[LANE]  = v0[LANE] + ux[LANE];                           // New position
-        v4[LANE]  = v1[LANE] + uy[LANE];
-        v5[LANE]  = v2[LANE] + uz[LANE];
+        ux[VPIC_LANE] *= cdt_dx;
+        uy[VPIC_LANE] *= cdt_dy;
+        uz[VPIC_LANE] *= cdt_dz;
+        ux[VPIC_LANE] *= v0[VPIC_LANE];
+        uy[VPIC_LANE] *= v0[VPIC_LANE];
+        uz[VPIC_LANE] *= v0[VPIC_LANE];
+        v0[VPIC_LANE]  = dx[VPIC_LANE] + ux[VPIC_LANE];                           // Streak midpoint (inbnds)
+        v1[VPIC_LANE]  = dy[VPIC_LANE] + uy[VPIC_LANE];
+        v2[VPIC_LANE]  = dz[VPIC_LANE] + uz[VPIC_LANE];
+        v3[VPIC_LANE]  = v0[VPIC_LANE] + ux[VPIC_LANE];                           // New position
+        v4[VPIC_LANE]  = v1[VPIC_LANE] + uy[VPIC_LANE];
+        v5[VPIC_LANE]  = v2[VPIC_LANE] + uz[VPIC_LANE];
   
-        inbnds[LANE] = v3[LANE]<=one &&  v4[LANE]<=one &&  v5[LANE]<=one &&
-                      -v3[LANE]<=one && -v4[LANE]<=one && -v5[LANE]<=one;
+        inbnds[VPIC_LANE] = v3[VPIC_LANE]<=one &&  v4[VPIC_LANE]<=one &&  v5[VPIC_LANE]<=one &&
+                      -v3[VPIC_LANE]<=one && -v4[VPIC_LANE]<=one && -v5[VPIC_LANE]<=one;
       } END_VECTOR_BLOCK;
     
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
@@ -614,36 +614,36 @@ advance_p_kokkos_unified(
 #endif
 
       BEGIN_VECTOR_BLOCK {
-        p_index = pi_offset + LANE;
+        p_index = pi_offset + VPIC_LANE;
 
-        v3[LANE] = inbnds[LANE] ? v3[LANE] : p_dx;
-        v4[LANE] = inbnds[LANE] ? v4[LANE] : p_dy;
-        v5[LANE] = inbnds[LANE] ? v5[LANE] : p_dz;
-        q[LANE]  = inbnds[LANE] ? q[LANE]*qsp : 0.0f; //static_cast<float>(inbnds[LANE])*q[LANE]*qsp;
+        v3[VPIC_LANE] = inbnds[VPIC_LANE] ? v3[VPIC_LANE] : p_dx;
+        v4[VPIC_LANE] = inbnds[VPIC_LANE] ? v4[VPIC_LANE] : p_dy;
+        v5[VPIC_LANE] = inbnds[VPIC_LANE] ? v5[VPIC_LANE] : p_dz;
+        q[VPIC_LANE]  = inbnds[VPIC_LANE] ? q[VPIC_LANE]*qsp : 0.0f; //static_cast<float>(inbnds[VPIC_LANE])*q[VPIC_LANE]*qsp;
 
-        p_dx = v3[LANE];
-        p_dy = v4[LANE];
-        p_dz = v5[LANE];
-        dx[LANE] = v0[LANE];
-        dy[LANE] = v1[LANE];
-        dz[LANE] = v2[LANE];
-        v5[LANE] = q[LANE]*ux[LANE]*uy[LANE]*uz[LANE]*one_third;
+        p_dx = v3[VPIC_LANE];
+        p_dy = v4[VPIC_LANE];
+        p_dz = v5[VPIC_LANE];
+        dx[VPIC_LANE] = v0[VPIC_LANE];
+        dy[VPIC_LANE] = v1[VPIC_LANE];
+        dz[VPIC_LANE] = v2[VPIC_LANE];
+        v5[VPIC_LANE] = q[VPIC_LANE]*ux[VPIC_LANE]*uy[VPIC_LANE]*uz[VPIC_LANE]*one_third;
 
 #       define ACCUMULATE_J(X,Y,Z,v0,v1,v2,v3)                                              \
-        v4[LANE]  = q[LANE]*u##X[LANE];   /* v2 = q ux                            */        \
-        v1[LANE]  = v4[LANE]*d##Y[LANE];  /* v1 = q ux dy                         */        \
-        v0[LANE]  = v4[LANE]-v1[LANE];    /* v0 = q ux (1-dy)                     */        \
-        v1[LANE] += v4[LANE];             /* v1 = q ux (1+dy)                     */        \
-        v4[LANE]  = one+d##Z[LANE];       /* v4 = 1+dz                            */        \
-        v2[LANE]  = v0[LANE]*v4[LANE];    /* v2 = q ux (1-dy)(1+dz)               */        \
-        v3[LANE]  = v1[LANE]*v4[LANE];    /* v3 = q ux (1+dy)(1+dz)               */        \
-        v4[LANE]  = one-d##Z[LANE];       /* v4 = 1-dz                            */        \
-        v0[LANE] *= v4[LANE];             /* v0 = q ux (1-dy)(1-dz)               */        \
-        v1[LANE] *= v4[LANE];             /* v1 = q ux (1+dy)(1-dz)               */        \
-        v0[LANE] += v5[LANE];             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
-        v1[LANE] -= v5[LANE];             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
-        v2[LANE] -= v5[LANE];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
-        v3[LANE] += v5[LANE];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
+        v4[VPIC_LANE]  = q[VPIC_LANE]*u##X[VPIC_LANE];   /* v2 = q ux                            */        \
+        v1[VPIC_LANE]  = v4[VPIC_LANE]*d##Y[VPIC_LANE];  /* v1 = q ux dy                         */        \
+        v0[VPIC_LANE]  = v4[VPIC_LANE]-v1[VPIC_LANE];    /* v0 = q ux (1-dy)                     */        \
+        v1[VPIC_LANE] += v4[VPIC_LANE];             /* v1 = q ux (1+dy)                     */        \
+        v4[VPIC_LANE]  = one+d##Z[VPIC_LANE];       /* v4 = 1+dz                            */        \
+        v2[VPIC_LANE]  = v0[VPIC_LANE]*v4[VPIC_LANE];    /* v2 = q ux (1-dy)(1+dz)               */        \
+        v3[VPIC_LANE]  = v1[VPIC_LANE]*v4[VPIC_LANE];    /* v3 = q ux (1+dy)(1+dz)               */        \
+        v4[VPIC_LANE]  = one-d##Z[VPIC_LANE];       /* v4 = 1-dz                            */        \
+        v0[VPIC_LANE] *= v4[VPIC_LANE];             /* v0 = q ux (1-dy)(1-dz)               */        \
+        v1[VPIC_LANE] *= v4[VPIC_LANE];             /* v1 = q ux (1+dy)(1-dz)               */        \
+        v0[VPIC_LANE] += v5[VPIC_LANE];             /* v0 = q ux [ (1-dy)(1-dz) + uy*uz/3 ] */        \
+        v1[VPIC_LANE] -= v5[VPIC_LANE];             /* v1 = q ux [ (1+dy)(1-dz) - uy*uz/3 ] */        \
+        v2[VPIC_LANE] -= v5[VPIC_LANE];             /* v2 = q ux [ (1-dy)(1+dz) - uy*uz/3 ] */        \
+        v3[VPIC_LANE] += v5[VPIC_LANE];             /* v3 = q ux [ (1+dy)(1+dz) + uy*uz/3 ] */
 
         ACCUMULATE_J( x,y,z, v6,v7,v8,v9 );
 
@@ -663,24 +663,24 @@ advance_p_kokkos_unified(
       } else {
 #endif
         BEGIN_THREAD_BLOCK {
-          accumulate_current(current_sa, ii[LANE],
+          accumulate_current(current_sa, ii[VPIC_LANE],
                        nx, ny, nz, cx, cy, cz, 
-                       v6[LANE],  v7[LANE],  v8[LANE],  v9[LANE],
-                       v10[LANE], v11[LANE], v12[LANE], v13[LANE],
-                       v0[LANE],  v1[LANE],  v2[LANE],  v3[LANE]);
+                       v6[VPIC_LANE],  v7[VPIC_LANE],  v8[VPIC_LANE],  v9[VPIC_LANE],
+                       v10[VPIC_LANE], v11[VPIC_LANE], v12[VPIC_LANE], v13[VPIC_LANE],
+                       v0[VPIC_LANE],  v1[VPIC_LANE],  v2[VPIC_LANE],  v3[VPIC_LANE]);
         } END_THREAD_BLOCK;
 #ifdef VPIC_ENABLE_TEAM_REDUCTION
       }
 #endif
 #       undef ACCUMULATE_J
       BEGIN_THREAD_BLOCK {
-        if(!inbnds[LANE]) {
-          p_index = pi_offset + LANE;
+        if(!inbnds[VPIC_LANE]) {
+          p_index = pi_offset + VPIC_LANE;
 
           DECLARE_ALIGNED_ARRAY( particle_mover_t, 32, local_pm, 1 );
-          local_pm->dispx = ux[LANE];
-          local_pm->dispy = uy[LANE];
-          local_pm->dispz = uz[LANE];
+          local_pm->dispx = ux[VPIC_LANE];
+          local_pm->dispy = uy[VPIC_LANE];
+          local_pm->dispz = uz[VPIC_LANE];
           local_pm->i     = p_index;
 
           if( move_p_kokkos( k_particles, k_particles_i, local_pm, // Unlikely
