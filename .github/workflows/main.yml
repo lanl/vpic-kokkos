@@ -25,7 +25,7 @@ jobs:
     - name: Build kokkos
       working-directory: kokkos
       run: |
-        cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/kokkos -DCMAKE_CXX_STANDARD=20
+        cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/kokkos -DCMAKE_CXX_STANDARD=20 -DKokkos_ENABLE_OPENMP=ON
         cmake --build build --parallel 2
         cmake --install build
     #- uses: actions/checkout@v2
@@ -34,9 +34,12 @@ jobs:
     - name: make external
       run: cmake --build build
     - name: make check
-      run: ctest --output-on-failure
+      run: ctest --output-on-failure -j 2
       working-directory: build
     - name: configure with internal
       run: cmake -B build_internal -DBUILD_INTERNAL_KOKKOS=ON -DENABLE_UNIT_TESTS=ON -DENABLE_INTEGRATED_TESTS=ON -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing"
     - name: make internal
       run: cmake --build build_internal
+    - name: make check internal
+      run: ctest --output-on-failure -j 2
+      working-directory: build_internal

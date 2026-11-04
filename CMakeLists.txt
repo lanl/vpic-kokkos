@@ -618,6 +618,10 @@ endif()
 # Add VPIC integrated test mechanism
 #------------------------------------------------------------------------------#
 
+if(ENABLE_INTEGRATED_TESTS OR ENABLE_UNIT_TESTS)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/VpicTesting.cmake)
+endif()
+
 if(ENABLE_INTEGRATED_TESTS)
   enable_testing()
 
@@ -642,7 +646,7 @@ if(ENABLE_UNIT_TESTS)
   # Add tests individually
   if (USE_V4)
     add_executable(v4 src/util/v4/test/v4.cc)
-    add_test(NAME v4 COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ./v4)
+    vpic_add_test(NAME v4 COMMAND ./v4)
   endif(USE_V4)
 
   # RNG tests
@@ -650,7 +654,7 @@ if(ENABLE_UNIT_TESTS)
   target_link_libraries(rng vpic Kokkos::kokkos)
   get_target_property(OUT rng LINK_LIBRARIES)
 
-  add_test(NAME rng COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ./rng)
+  vpic_add_test(NAME rng COMMAND ./rng)
 
   add_subdirectory(test/unit)
 

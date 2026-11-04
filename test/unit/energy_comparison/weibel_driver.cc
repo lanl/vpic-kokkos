@@ -231,31 +231,40 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
   // Do a fast load of the particles
   //seed_rand( rng_seed*nproc() + rank() );  //Generators desynchronized
-  double xmin = grid->x0 , xmax = grid->x0+(grid->dx)*(grid->nx);
-  double ymin = grid->y0 , ymax = grid->y0+(grid->dy)*(grid->ny);
-  double zmin = grid->z0 , zmax = grid->z0+(grid->dz)*(grid->nz);
+  // Global (not local) bounds, see below
+  double xmin = 0 ,        xmax = Lx;
+  double ymin = -0.5*Ly ,  ymax = 0.5*Ly;
+  double zmin = -0.5*Lz ,  zmax = 0.5*Lz;
 
   sim_log( "-> Uniform Bi-Maxwellian" );
 
   double n1,n2,n3;
 
-  repeat ( Ne/nproc() ) {
+  // Make the load independent of the domain decomposition so the same gold
+  // energies apply at any rank count: every rank draws the full global
+  // particle set from one shared generator and inject_particle keeps only the
+  // particles inside the local domain.  Seed 4 is what rng(0) gets from
+  // seed_entropy(1) on one rank with one pipeline, so serial runs reproduce
+  // the gold file.
+  rng_t * load_rng = new_rng( 4 );
 
-      double x = uniform( rng(0), xmin, xmax );
-      double y = uniform( rng(0), ymin, ymax );
-      double z = uniform( rng(0), zmin, zmax );
-      n1 = normal(rng(0),0,vthex);
-      n2 = normal(rng(0),0,vthe );
-      n3 = normal(rng(0),0,vthe );
+  repeat ( Ne ) {
+
+      double x = uniform( load_rng, xmin, xmax );
+      double y = uniform( load_rng, ymin, ymax );
+      double z = uniform( load_rng, zmin, zmax );
+      n1 = normal(load_rng,0,vthex);
+      n2 = normal(load_rng,0,vthe );
+      n3 = normal(load_rng,0,vthe );
 
       inject_particle( electron, x, y, z,
               n1,
               n2,
               n3,we, 0, 0);
 
-      n1 = normal(rng(0),0,vthix);
-      n2 = normal(rng(0),0,vthi );
-      n3 = normal(rng(0),0,vthi );
+      n1 = normal(load_rng,0,vthix);
+      n2 = normal(load_rng,0,vthi );
+      n3 = normal(load_rng,0,vthi );
 
       inject_particle( ion, x, y, z,
               n1,
@@ -263,6 +272,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
               n3,wi, 0 ,0 );
 
   }
+  delete_rng( load_rng );
 
   sim_log( "Finished loading particles" );
 
