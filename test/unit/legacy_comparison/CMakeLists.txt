@@ -1,10 +1,12 @@
 if(VPIC_USE_LEGACY_PARTICLE_ARRAY)
-add_executable(rho_p ./rho_p.cc)
-target_link_libraries(rho_p vpic Kokkos::kokkos)
-vpic_add_test(NAME rho_p COMMAND ./rho_p)
-add_executable(hydro_p ./hydro_p.cc)
-target_link_libraries(hydro_p vpic Kokkos::kokkos)
-vpic_add_test(NAME hydro_p COMMAND ./hydro_p)
+# Each compares against an exact sum, so a threaded run (a different
+# summation order) must pass too
+foreach(test rho_p hydro_p)
+  add_executable(${test} ./${test}.cc)
+  target_link_libraries(${test} vpic Kokkos::kokkos)
+  vpic_add_test(NAME ${test} COMMAND ./${test})
+  vpic_add_test(NAME ${test}_t4 THREADS 4 COMMAND ./${test})
+endforeach()
 endif(VPIC_USE_LEGACY_PARTICLE_ARRAY)
 
 set(COMM_ARGS --kokkos-map-device-id-by=mpi_rank)
