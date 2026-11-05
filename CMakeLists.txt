@@ -12,6 +12,16 @@ cmake_policy(SET CMP0074 NEW)
 
 project(vpic CXX)
 
+# Default to an optimized build. Without a build type CMake adds no
+# optimization flags at all, which makes VPIC (and an internal Kokkos) -O0.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to 'Release' as none was specified.")
+  set(CMAKE_BUILD_TYPE Release CACHE STRING
+    "Choose the type of build: Debug, Release, RelWithDebInfo or MinSizeRel." FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+    Debug Release RelWithDebInfo MinSizeRel)
+endif()
+
 #------------------------------------------------------------------------------#
 # If a C++17 compiler is available, then set the appropriate flags
 # Note: As of February 2021, VPIC requires only C++11, but requiring C++14
