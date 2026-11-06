@@ -12,6 +12,16 @@ cmake_policy(SET CMP0074 NEW)
 
 project(vpic CXX)
 
+# Default to an optimized build. Without a build type CMake adds no
+# optimization flags at all, which makes VPIC (and an internal Kokkos) -O0.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to 'Release' as none was specified.")
+  set(CMAKE_BUILD_TYPE Release CACHE STRING
+    "Choose the type of build: Debug, Release, RelWithDebInfo or MinSizeRel." FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+    Debug Release RelWithDebInfo MinSizeRel)
+endif()
+
 #------------------------------------------------------------------------------#
 # If a C++17 compiler is available, then set the appropriate flags
 # Note: As of February 2021, VPIC requires only C++11, but requiring C++14
@@ -618,6 +628,10 @@ endif()
 # Add VPIC integrated test mechanism
 #------------------------------------------------------------------------------#
 
+if(ENABLE_INTEGRATED_TESTS OR ENABLE_UNIT_TESTS)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/VpicTesting.cmake)
+endif()
+
 if(ENABLE_INTEGRATED_TESTS)
   enable_testing()
 
@@ -642,7 +656,7 @@ if(ENABLE_UNIT_TESTS)
   # Add tests individually
   if (USE_V4)
     add_executable(v4 src/util/v4/test/v4.cc)
-    add_test(NAME v4 COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ./v4)
+    vpic_add_test(NAME v4 COMMAND ./v4)
   endif(USE_V4)
 
   # RNG tests
@@ -650,7 +664,7 @@ if(ENABLE_UNIT_TESTS)
   target_link_libraries(rng vpic Kokkos::kokkos)
   get_target_property(OUT rng LINK_LIBRARIES)
 
-  add_test(NAME rng COMMAND ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ./rng)
+  vpic_add_test(NAME rng COMMAND ./rng)
 
   add_subdirectory(test/unit)
 

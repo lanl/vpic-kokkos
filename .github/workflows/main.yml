@@ -8,35 +8,51 @@ on:
     branches:
       - '**'
 
+# Each job runs on its own runner, so the two builds proceed in parallel and
+# never compete for cores. Builds use every core the runner has.
+
 jobs:
-  build:
+  # VPIC builds its own Kokkos from the submodule, as the arch/ scripts do
+  internal-kokkos:
     runs-on: ubuntu-latest
 
     steps:
     - name: Install deps
       run: sudo apt-get update; sudo apt-get install gfortran openmpi-bin libopenmpi-dev
     - name: Checkout vpic and kokkos
-      uses: actions/checkout@v2
+      uses: actions/checkout@v7
       with:
         submodules: recursive
-        #repository: kokkos/kokkos
-        #ref: 3.1.00
-        #path: kokkos
+    - name: configure
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_INTERNAL_KOKKOS=ON -DENABLE_UNIT_TESTS=ON -DENABLE_INTEGRATED_TESTS=ON -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing"
+    - name: make
+      run: cmake --build build --parallel $(nproc)
+    - name: make check
+      run: ctest --output-on-failure -j 2
+      working-directory: build
+
+  # The same Kokkos submodule, installed separately and found with
+  # find_package, to cover that path and the 2-stage compile against it
+  external-kokkos:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Install deps
+      run: sudo apt-get update; sudo apt-get install gfortran openmpi-bin libopenmpi-dev
+    - name: Checkout vpic and kokkos
+      uses: actions/checkout@v7
+      with:
+        submodules: recursive
     - name: Build kokkos
       working-directory: kokkos
       run: |
-        cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/kokkos -DCMAKE_CXX_STANDARD=20
-        cmake --build build --parallel 2
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/kokkos -DCMAKE_CXX_STANDARD=20 -DKokkos_ENABLE_OPENMP=ON
+        cmake --build build --parallel $(nproc)
         cmake --install build
-    #- uses: actions/checkout@v2
-    - name: configure with external
-      run: cmake -B build -DCMAKE_PREFIX_PATH="$HOME/kokkos" -DENABLE_UNIT_TESTS=ON -DENABLE_INTEGRATED_TESTS=ON -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing"
-    - name: make external
-      run: cmake --build build
+    - name: configure
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$HOME/kokkos" -DENABLE_UNIT_TESTS=ON -DENABLE_INTEGRATED_TESTS=ON -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing"
+    - name: make
+      run: cmake --build build --parallel $(nproc)
     - name: make check
-      run: ctest --output-on-failure
+      run: ctest --output-on-failure -j 2
       working-directory: build
-    - name: configure with internal
-      run: cmake -B build_internal -DBUILD_INTERNAL_KOKKOS=ON -DENABLE_UNIT_TESTS=ON -DENABLE_INTEGRATED_TESTS=ON -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing"
-    - name: make internal
-      run: cmake --build build_internal
