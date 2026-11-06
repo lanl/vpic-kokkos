@@ -1,6 +1,9 @@
+#include <cmath>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
+#include <vector>
 
 #include <limits> // epsilon for limit
 #include <utility> // pair
@@ -338,6 +341,63 @@ bool compare_energies(
         return false;
     }
 
+}
+
+/**
+ * @brief Least-squares slope of ln(sum of masked fields) against step
+ *
+ * Uses the same line layout and field mask convention as compare_energies.
+ * Lines starting with '%' (headers) are skipped.
+ *
+ * @param file Energy file to read
+ * @param field_mask Fields to sum, with <step> as the LSB
+ * @param first_step First step of the fit (inclusive)
+ * @param end_step Last step of the fit (exclusive)
+ *
+ * @return The growth rate per step, or NaN if the file cannot be read or a
+ * summed value is not positive
+ */
+double growth_rate(
+        const std::string file,
+        const unsigned short field_mask,
+        const int first_step,
+        const int end_step
+)
+{
+    std::ifstream f(file);
+    if (!f)
+    {
+        std::cerr << "Unable to open file " << file << std::endl;
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    double n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    std::string line;
+    while (getline(f, line))
+    {
+        if (line.empty() || line[0] == '%') continue;
+
+        std::stringstream linestream(line);
+        std::string item;
+        int token = 0;
+        double step = -1, sum = 0;
+        while (getline(linestream, item, ' '))
+        {
+            if (item.empty()) continue;
+            if (token == 0) step = std::stod(item);
+            if ((1 << token) & field_mask) sum += std::stod(item);
+            token++;
+        }
+
+        if (step < first_step || step >= end_step) continue;
+        if (!(sum > 0)) return std::numeric_limits<double>::quiet_NaN();
+
+        const double y = std::log(sum);
+        n += 1; sx += step; sy += y; sxx += step*step; sxy += step*y;
+    }
+
+    if (n < 2) return std::numeric_limits<double>::quiet_NaN();
+    return (n*sxy - sx*sy) / (n*sxx - sx*sx);
 }
 
 } // namespace

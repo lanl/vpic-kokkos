@@ -114,7 +114,9 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   ////////////////////////////////////////
   // Setup high level simulation parmeters
 
-  num_step             = 700; //4000; // int(tauwpe/(wpe*dt));
+  // Only the linear growth phase is checked (see the TEST_CASE), so stop
+  // before saturation
+  num_step             = 160; //4000; // int(tauwpe/(wpe*dt));
   status_interval      = 0; //2000;
   sync_shared_interval = 0; //status_interval;
   clean_div_e_interval = 0; //turn off cleaning (GY)//status_interval;
@@ -244,8 +246,13 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   // energies apply at any rank count: every rank draws the full global
   // particle set from one shared generator and inject_particle keeps only the
   // particles inside the local domain.  Seed 4 is what rng(0) gets from
-  // seed_entropy(1) on one rank with one pipeline, so serial runs reproduce
-  // the gold file.
+  // seed_entropy(1) on one rank with one pipeline, so the particles are the
+  // same random draws as in weibel_legacy.cc, but not bitwise the same run:
+  // the bounds above are the box's double-precision limits, while the legacy
+  // load uses the grid's float members (x0 + dx*nx = 2.09439516 rather than
+  // Lx = 2.09439510), which shifts each x position by up to ~6e-8. That is why
+  // this test has its own gold file, energies_gold_driver, generated from
+  // this load; weibel_legacy.cc keeps the exact legacy run and energies_gold.
   rng_t * load_rng = new_rng( 4 );
 
   repeat ( Ne ) {
@@ -328,50 +335,46 @@ TEST_CASE( "Check if Weibel gives correct energy (within tol)", "[energy]" )
     std::cout << "Comparing " << energy_file_name << " to " <<
         energy_gold_file_name << std::endl;
 
-    // Compare energies to make sure everything worked out OK (within 1%)
+    // Only the linear growth phase is compared. Past about step 150 the
+    // instability heads into saturation and becomes chaotic: GPU current
+    // deposition uses atomics, so its rounding varies from run to run, and
+    // that noise grows until GPU runs no longer match the gold file or each
+    // other. Over steps 50-99, CPU and GPU runs stay within ~3e-5 of each
+    // other, while scaling a field-solve, current or push coefficient by
+    // (1+1e-5) moves the E energy by ~1e-4. The full saturated run is still
+    // checked by weibel_legacy.
     const unsigned short e_mask = 0b0000001110;
     const unsigned short b_mask = 0b0001110000;
     const unsigned short particle_mask = 0b011000000;
 
-    // Test just the step range 50-250, and have tight counts
+    // Test the sum of the e_field over steps 50-99
     REQUIRE(
             test_utils::compare_energies(energy_file_name, energy_gold_file_name,
-                0.001, e_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.e.tight.out", 50, 200)
+                6e-5, e_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.e.tight.out", 50, 50)
            );
 
-    // Test the sum of the b_field
+    // Test the sum of the b_field over steps 50-99
     REQUIRE(
             test_utils::compare_energies(energy_file_name, energy_gold_file_name,
-                0.001, b_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.b.tight.out", 50, 200)
+                6e-5, b_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.b.tight.out", 50, 50)
            );
 
-    // Test particle energies individually
+    // Test particle energies over steps 50-99. These change by less than the
+    // 7 digits the energy file keeps, so this only catches gross errors.
     REQUIRE(
             test_utils::compare_energies(energy_file_name, energy_gold_file_name,
-                0.0001, particle_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.p.tight.out", 50, 200)
+                0.0001, particle_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.p.tight.out", 50, 50)
            );
 
-
-    // Test the entire file, using lose bouinds
-
-    // Test the sum of the e_field
-    REQUIRE(
-            test_utils::compare_energies(energy_file_name, energy_gold_file_name,
-                0.38, e_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.e.out")
-           );
-
-    // Test the sum of the b_field
-    REQUIRE(
-            test_utils::compare_energies(energy_file_name, energy_gold_file_name,
-                0.06, b_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.b.out")
-           );
-
-    // Test particle energies individually
-    REQUIRE(
-            test_utils::compare_energies(energy_file_name, energy_gold_file_name,
-                0.01, particle_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.p.out")
-           );
-
+    // The growth rate of the magnetic energy during the linear phase is the
+    // physics of the instability. Compare a least-squares fit of ln(B energy)
+    // over steps 60-159 with the same fit of the gold file.
+    const double rate = test_utils::growth_rate(energy_file_name, b_mask, 60, 160);
+    const double gold_rate = test_utils::growth_rate(energy_gold_file_name, b_mask, 60, 160);
+    std::cout << "B energy growth rate " << rate << " per step, gold " << gold_rate
+              << ", relative difference " << std::abs(rate/gold_rate - 1)
+              << " (Threshold: 1e-5)" << std::endl;
+    REQUIRE( std::abs(rate/gold_rate - 1) < 1e-5 );
 }
 
 begin_particle_injection {
