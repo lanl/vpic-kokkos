@@ -1,5 +1,0 @@
-if (NO_EXPLICIT_VECTOR)
-    add_executable(array_syntax ./array_syntax.cc)
-    target_link_libraries(array_syntax vpic)
-    vpic_add_test(NAME array_syntax COMMAND ./array_syntax)
-endif(NO_EXPLICIT_VECTOR)

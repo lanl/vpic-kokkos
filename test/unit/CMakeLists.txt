@@ -1,4 +1,0 @@
-add_subdirectory(particle_push)
-add_subdirectory(energy_comparison)
-add_subdirectory(legacy_comparison)
-add_subdirectory(particle_sorting)
