@@ -1,7 +1,8 @@
-// Compare the Kokkos and legacy rho_p against a double-precision sum of the
-// same per-particle float charge weights. The double sum has its own rounding
-// error, but over a few hundred float terms it is many orders of magnitude
-// below the float tolerance used here, so it serves as the reference.
+// Compare the Kokkos rho_p, and the legacy one when the legacy particle array
+// is built, against a double-precision sum of the same per-particle float
+// charge weights. The double sum has its own rounding error, but over a few
+// hundred float terms it is many orders of magnitude below the float
+// tolerance used here, so it serves as the reference.
 //
 // Float summation error depends on the order of the additions, which differs
 // between the legacy loop, OpenMP (duplicated scatter) and GPUs (atomics), so
@@ -75,18 +76,19 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
 
     advance_p( sp, interpolator_array, field_array );
 
-    // advance_p moved the particles on the device; give the legacy array the
-    // same particles
+    // advance_p moved the particles on the device; copy them back for the
+    // reference (and the legacy array, when it is built)
     sp->copy_to_host();
 
-    // Call both functions
     k_accumulate_rho_p( field_array, sp );
+#ifdef USE_LEGACY_PARTICLE_ARRAY
     accumulate_rho_p( field_array, sp );
+#endif
 
     // Copy the data back to host view
     Kokkos::deep_copy(field_array->k_f_h, field_array->k_f_d);
 
-    // Reference: the same float weights as both implementations,
+    // Reference: the same float weights as the implementations under test,
     // accumulated in double, with the number of contributions to each grid node
     const float q_8V = sp->q*grid->r8V;
     const int sy = grid->sy;
@@ -123,37 +125,60 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     for (int i = 0; i < grid->nv; i++)
     {
         double kokkos = field_array->k_f_h(i, field_var::rhof);
+#ifdef USE_LEGACY_PARTICLE_ARRAY
         double legacy = field_array->f[i].rhof;
+#endif
 
         if (count[i] == 0)
         {
-            if (kokkos != 0 || legacy != 0)
+            if (kokkos != 0)
             {
                 std::cout << " Failed at " << i << ": no particles contribute, but kokkos "
-                          << kokkos << " legacy " << legacy << std::endl;
+                          << kokkos << std::endl;
                 failed++;
             }
+#ifdef USE_LEGACY_PARTICLE_ARRAY
+            if (legacy != 0)
+            {
+                std::cout << " Failed at " << i << ": no particles contribute, but legacy "
+                          << legacy << std::endl;
+                failed++;
+            }
+#endif
             continue;
         }
 
         // (n-1)*u bounds the summation, a few more ulps cover the weights
         const double tol = (count[i] + 8) * 0.5*FLT_EPSILON;
-        const double err_kokkos = std::abs(kokkos - reference[i]) / reference[i];
-        const double err_legacy = std::abs(legacy - reference[i]) / reference[i];
-        worst_kokkos = std::max(worst_kokkos, err_kokkos / tol);
-        worst_legacy = std::max(worst_legacy, err_legacy / tol);
 
-        if (err_kokkos > tol || err_legacy > tol)
+        const double err_kokkos = std::abs(kokkos - reference[i]) / reference[i];
+        worst_kokkos = std::max(worst_kokkos, err_kokkos / tol);
+        if (err_kokkos > tol)
         {
             std::cout << " Failed at " << i << " (" << count[i] << " contributions, tolerance "
-                      << tol << "): kokkos error " << err_kokkos << ", legacy error "
-                      << err_legacy << std::endl;
+                      << tol << "): kokkos error " << err_kokkos << std::endl;
             failed++;
         }
+
+#ifdef USE_LEGACY_PARTICLE_ARRAY
+        const double err_legacy = std::abs(legacy - reference[i]) / reference[i];
+        worst_legacy = std::max(worst_legacy, err_legacy / tol);
+        if (err_legacy > tol)
+        {
+            std::cout << " Failed at " << i << " (" << count[i] << " contributions, tolerance "
+                      << tol << "): legacy error " << err_legacy << std::endl;
+            failed++;
+        }
+#endif
     }
 
+#ifdef USE_LEGACY_PARTICLE_ARRAY
     std::cout << "Worst error as a fraction of the tolerance: kokkos " << worst_kokkos
               << ", legacy " << worst_legacy << std::endl;
+#else
+    std::cout << "Worst error as a fraction of the tolerance: kokkos " << worst_kokkos
+              << " (legacy particle array not built)" << std::endl;
+#endif
     if( failed )
     {  std::cout << "FAIL" << std::endl;
     }
@@ -162,7 +187,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
     std::cout << "pass" << std::endl;
 }
 
-TEST_CASE( "Kokkos and legacy rho_p match a double-precision sum", "[rho_p]" )
+TEST_CASE( "rho_p matches a double-precision sum", "[rho_p]" )
 {
     vpic_simulation* simulation = new vpic_simulation;
     simulation->initialize( 0, NULL );
