@@ -53,9 +53,16 @@ include_directories(${MPI_CXX_INCLUDE_PATH})
 # Add build options
 #------------------------------------------------------------------------------#
 
-option(ENABLE_INTEGRATED_TESTS "enable integrated tests" OFF)
+option(ENABLE_TESTS "Build the test suite (run it with ctest)" OFF)
 
-option(ENABLE_UNIT_TESTS "enable unit tests" OFF)
+# Deprecated: these used to enable two halves of the suite; either now
+# enables all of it
+option(ENABLE_INTEGRATED_TESTS "Deprecated, use ENABLE_TESTS" OFF)
+option(ENABLE_UNIT_TESTS "Deprecated, use ENABLE_TESTS" OFF)
+if(ENABLE_INTEGRATED_TESTS OR ENABLE_UNIT_TESTS)
+  message(DEPRECATION "ENABLE_UNIT_TESTS and ENABLE_INTEGRATED_TESTS are deprecated; use ENABLE_TESTS")
+  set(ENABLE_TESTS ON CACHE BOOL "Build the test suite (run it with ctest)" FORCE)
+endif()
 
 option(USE_V4_ALTIVEC "Enable V4 Altivec" OFF)
 
@@ -625,50 +632,28 @@ if(USER_DECKS)
 endif()
 
 #------------------------------------------------------------------------------#
-# Add VPIC integrated test mechanism
+# Tests
 #------------------------------------------------------------------------------#
 
-if(ENABLE_INTEGRATED_TESTS OR ENABLE_UNIT_TESTS)
+if(ENABLE_TESTS)
   include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/VpicTesting.cmake)
-endif()
-
-if(ENABLE_INTEGRATED_TESTS)
   enable_testing()
 
-  # NOTE: This can also be done by a subdirectory (useful when we have multiple tests)
-  # Add includes for Catch2
-  set(TEST_DIR "./test/include")
-  include_directories(${TEST_DIR})
-
-  add_subdirectory(test/integrated)
-
-endif(ENABLE_INTEGRATED_TESTS)
-
-if(ENABLE_UNIT_TESTS)
-
-  enable_testing()
-
-  # NOTE: This can also be done by a subdirectory (useful when we have multiple tests)
-  # Add includes for Catch2
-  set(TEST_DIR "./test/include")
-  include_directories(${TEST_DIR})
-
-  # Add tests individually
+  # These test utilities that may not stay in VPIC, so they live with their
+  # sources rather than under test/
+  set(VPIC_TEST_GROUP kernels)
+  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/test/include)
   if (USE_V4)
     add_executable(v4 src/util/v4/test/v4.cc)
-    vpic_add_test(NAME v4 COMMAND ./v4)
+    vpic_add_test(NAME v4 COMMAND v4)
   endif(USE_V4)
-
-  # RNG tests
   add_executable(rng src/util/rng/test/rng.cc)
   target_link_libraries(rng vpic Kokkos::kokkos)
-  get_target_property(OUT rng LINK_LIBRARIES)
+  vpic_add_test(NAME rng COMMAND rng)
+  unset(VPIC_TEST_GROUP)
 
-  vpic_add_test(NAME rng COMMAND ./rng)
-
-  add_subdirectory(test/unit)
-
-endif(ENABLE_UNIT_TESTS)
+  add_subdirectory(test)
+endif(ENABLE_TESTS)
 #~---------------------------------------------------------------------------~-#
 # vim: set tabstop=2 shiftwidth=2 expandtab :
 #~---------------------------------------------------------------------------~-#

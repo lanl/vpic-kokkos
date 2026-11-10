@@ -28,16 +28,24 @@ endif()
 set(VPIC_TEST_TIMEOUT 120 CACHE STRING "Timeout in seconds for each VPIC test")
 
 # vpic_add_test(NAME <name> [NP <ranks>] [THREADS <threads>]
+#               [WORKING_DIRECTORY <dir>]
 #               COMMAND <exe> [args...] [LABELS <labels...>])
 #
-# Runs <exe> under ${MPIEXEC_EXECUTABLE} with NP ranks (default 1).  When
-# THREADS is given, each rank runs that many Kokkos host threads; such tests
-# are skipped if Kokkos has no threaded host backend.  The test reserves
-# NP*THREADS ctest processors, so "ctest -j" does not oversubscribe the
-# machine, is labeled "serial", "mpi" and/or "threads" for "ctest -L", and
-# fails after VPIC_TEST_TIMEOUT seconds.
+# Runs <exe> (a target name or a path) under ${MPIEXEC_EXECUTABLE} with NP
+# ranks (default 1).  When THREADS is given, each rank runs that many Kokkos
+# host threads; such tests are skipped if Kokkos has no threaded host backend.
+# The test reserves NP*THREADS ctest processors, so "ctest -j" does not
+# oversubscribe the machine, and fails after VPIC_TEST_TIMEOUT seconds.
+#
+# Labels for "ctest -L": "serial", "mpi" and/or "threads", the group set by
+# VPIC_TEST_GROUP in the calling directory (kernels, communication, physics,
+# runs), and any given in LABELS.
+#
+# Each test runs in its own directory, <binary dir>/run/<name>, unless
+# WORKING_DIRECTORY is given, so tests that write files with the same names
+# do not overwrite each other under "ctest -j".
 function(vpic_add_test)
-  cmake_parse_arguments(VT "" "NAME;NP;THREADS" "COMMAND;LABELS" ${ARGN})
+  cmake_parse_arguments(VT "" "NAME;NP;THREADS;WORKING_DIRECTORY" "COMMAND;LABELS" ${ARGN})
   if(NOT VT_NAME OR NOT VT_COMMAND)
     message(FATAL_ERROR "vpic_add_test: NAME and COMMAND are required")
   endif()
@@ -45,7 +53,7 @@ function(vpic_add_test)
     set(VT_NP 1)
   endif()
 
-  set(labels ${VT_LABELS})
+  set(labels "")
   set(launch ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${VT_NP})
   set(thread_args "")
   set(nthreads 1)
@@ -75,13 +83,26 @@ function(vpic_add_test)
   if(NOT labels)
     set(labels serial)
   endif()
+  if(VPIC_TEST_GROUP)
+    list(APPEND labels ${VPIC_TEST_GROUP})
+  endif()
+  list(APPEND labels ${VT_LABELS})
+
+  if(NOT VT_WORKING_DIRECTORY)
+    set(VT_WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run/${VT_NAME})
+  endif()
+  file(MAKE_DIRECTORY ${VT_WORKING_DIRECTORY})
 
   list(GET VT_COMMAND 0 exe)
   list(REMOVE_AT VT_COMMAND 0)
+  if(TARGET ${exe})
+    set(exe $<TARGET_FILE:${exe}>)
+  endif()
 
   add_test(NAME ${VT_NAME}
     COMMAND ${launch} ${MPIEXEC_PREFLAGS} ${exe} ${MPIEXEC_POSTFLAGS}
-            ${VT_COMMAND} ${thread_args})
+            ${VT_COMMAND} ${thread_args}
+    WORKING_DIRECTORY ${VT_WORKING_DIRECTORY})
 
   math(EXPR nprocs "${VT_NP} * ${nthreads}")
   set_tests_properties(${VT_NAME} PROPERTIES

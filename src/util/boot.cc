@@ -83,16 +83,6 @@ boot_services( int * pargc,
         std::cout << "# VPIC Git Hash: "  << GIT_REVISION << std::endl;
         std::cout << "# Built on: "  << BUILD_TIMESTAMP << std::endl;
         std::cout << "## CMake options ##" << std::endl;
-# if defined ENABLE_INTEGRATED_TESTS
-        std::cout << "# ENABLE_INTEGRATED_TESTS: ON" << std::endl;
-# else
-        std::cout << "# ENABLE_INTEGRATED_TESTS: OFF" << std::endl;
-#endif
-# if defined ENABLE_UNIT_TESTS
-        std::cout << "# ENABLE_UNIT_TESTS: ON" << std::endl;
-# else
-        std::cout << "# ENABLE_UNIT_TESTS: OFF" << std::endl;
-#endif
 # if defined USE_V4_ALTIVEC
         std::cout << "# USE_V4_ALTIVEC: ON" << std::endl;
 # else

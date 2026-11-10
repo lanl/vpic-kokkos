@@ -27,8 +27,7 @@ pthreads=$builds/pthreads
 function vpic_cmake(){
 cmake \
   -DCMAKE_BUILD_TYPE=Release \
-  -DENABLE_INTEGRATED_TESTS=ON \
-  -DENABLE_UNIT_TESTS=ON \
+  -DENABLE_TESTS=ON \
   -DBUILD_INTERNAL_KOKKOS=ON \
   -DENABLE_KOKKOS_CUDA=ON \
   -DVPIC_ENABLE_TEAM_REDUCTION=$6 \

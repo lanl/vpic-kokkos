@@ -24,7 +24,7 @@ jobs:
       with:
         submodules: recursive
     - name: configure
-      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_INTERNAL_KOKKOS=ON -DENABLE_UNIT_TESTS=ON -DENABLE_INTEGRATED_TESTS=ON -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing"
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_INTERNAL_KOKKOS=ON -DENABLE_TESTS=ON -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing"
     - name: make
       run: cmake --build build --parallel $(nproc)
     - name: make check
@@ -50,7 +50,7 @@ jobs:
         cmake --build build --parallel $(nproc)
         cmake --install build
     - name: configure
-      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$HOME/kokkos" -DENABLE_UNIT_TESTS=ON -DENABLE_INTEGRATED_TESTS=ON -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing"
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$HOME/kokkos" -DENABLE_TESTS=ON -DCMAKE_CXX_FLAGS="-rdynamic -fno-strict-aliasing"
     - name: make
       run: cmake --build build --parallel $(nproc)
     - name: make check
