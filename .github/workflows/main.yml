@@ -10,15 +10,26 @@ on:
 
 # Each job runs on its own runner, so the two builds proceed in parallel and
 # never compete for cores. Builds use every core the runner has.
+#
+# The runner image is pinned so that the MPI version (Open MPI 5 on Ubuntu
+# 26.04) does not change under the tests; move to a newer image deliberately.
+#
+# The runner has fewer cores than the largest tests have ranks (up to 27).
+# The tests pass --oversubscribe when they detect Open MPI; this variable lets
+# Open MPI 5 (PRRTE) oversubscribe even if that detection fails.
+env:
+  PRTE_MCA_rmaps_default_mapping_policy: ":oversubscribe"
 
 jobs:
   # VPIC builds its own Kokkos from the submodule, as the arch/ scripts do
   internal-kokkos:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
     - name: Install deps
-      run: sudo apt-get update; sudo apt-get install gfortran openmpi-bin libopenmpi-dev
+      run: |
+        sudo apt-get update; sudo apt-get install gfortran openmpi-bin libopenmpi-dev
+        dpkg-query -W openmpi-bin; nproc; lscpu | grep -E "^(Core|Thread)"
     - name: Checkout vpic and kokkos
       uses: actions/checkout@v7
       with:
@@ -34,11 +45,13 @@ jobs:
   # The same Kokkos submodule, installed separately and found with
   # find_package, to cover that path and the 2-stage compile against it
   external-kokkos:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
     - name: Install deps
-      run: sudo apt-get update; sudo apt-get install gfortran openmpi-bin libopenmpi-dev
+      run: |
+        sudo apt-get update; sudo apt-get install gfortran openmpi-bin libopenmpi-dev
+        dpkg-query -W openmpi-bin; nproc; lscpu | grep -E "^(Core|Thread)"
     - name: Checkout vpic and kokkos
       uses: actions/checkout@v7
       with:

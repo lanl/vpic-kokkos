@@ -2,18 +2,29 @@
 # Helpers for registering VPIC tests that run under MPI and/or host threads
 #------------------------------------------------------------------------------#
 
-# Open MPI refuses to start more ranks than it detects cores unless told to
-# oversubscribe, and binds each rank to a single core by default, which
-# serializes host threads.  Detect it once so the flags below are only added
-# when they are understood.
+# Open MPI takes its slot count from the Slurm task count, or else from the
+# physical cores (not hyperthreads), so "srun -N1 ctest" gives it one slot.  It
+# refuses to start more ranks than slots unless told to oversubscribe, and it
+# binds each rank to a single core by default, which serializes host threads.
+# Detect it once so the flags below are only added when they are understood.
+#
+# Open MPI's mpi.h defines OPEN_MPI.  mpiexec --version is only a fallback:
+# Ubuntu's Open MPI 5 packages leave out PRRTE's help files, so it prints a
+# "Sorry! You were supposed to get help about: version" message instead.
 if(NOT DEFINED VPIC_MPI_IS_OPENMPI)
+  include(CheckCXXSymbolExists)
+  set(CMAKE_REQUIRED_LIBRARIES MPI::MPI_CXX)
+  set(CMAKE_REQUIRED_QUIET ON)
+  check_cxx_symbol_exists(OPEN_MPI "mpi.h" VPIC_MPI_H_IS_OPENMPI)
+  unset(CMAKE_REQUIRED_LIBRARIES)
+  unset(CMAKE_REQUIRED_QUIET)
   execute_process(COMMAND ${MPIEXEC_EXECUTABLE} --version
-    OUTPUT_VARIABLE mpiexec_version ERROR_VARIABLE mpiexec_version
-    RESULT_VARIABLE mpiexec_result)
+    OUTPUT_VARIABLE mpiexec_version ERROR_VARIABLE mpiexec_version)
   set(is_openmpi OFF)
-  if(mpiexec_result EQUAL 0 AND mpiexec_version MATCHES "Open MPI|OpenRTE")
+  if(VPIC_MPI_H_IS_OPENMPI OR mpiexec_version MATCHES "Open MPI|OpenRTE")
     set(is_openmpi ON)
   endif()
+  message(STATUS "mpiexec is Open MPI: ${is_openmpi}")
   set(VPIC_MPI_IS_OPENMPI ${is_openmpi} CACHE BOOL
     "mpiexec is Open MPI (adds --oversubscribe/--bind-to none to tests)")
 endif()
