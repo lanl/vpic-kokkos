@@ -1,29 +1,15 @@
-// Magnetic reconnection in a Harris equilibrium thin current sheet
-//
-// This input deck reproduces the PIC simulations found in:
-//   William Daughton. "Nonlinear dynamics of thin current sheets." Phys.
-//   Plasmas. 9(9): 3668-3678. September 2002.
-//
-// This input deck was written by:
-//   Kevin J Bowers, Ph.D.
-//   Plasma Physics Group (X-1)
-//   Applied Physics Division
-//   Los Alamos National Lab
-// August 2003      - original version
-// October 2003     - heavily revised to utilize input deck syntactic sugar
-// March/April 2004 - rewritten for domain decomposition V4PIC
+//#define CATCH_CONFIG_MAIN  // This tells Catch to provide a main()
+#define CATCH_CONFIG_RUNNER // We will provide a custom main
+#include "catch.hpp"
 
-// If you want to use global variables (for example, to store the dump
-// intervals for your diagnostics section), it must be done in the globals
-// section. Variables declared the globals section will be preserved across
-// restart dumps. For example, if the globals section is:
-//   begin_globals {
-//     double variable;
-//   } end_globals
-// the double "variable" will be visible to other input deck sections as
-// "global->variable". Note: Variables declared in the globals section are set
-// to zero before the user's initialization block is executed. Up to 16K
-// of global variables can be defined.
+// TODO: this import may ultimately be a bad idea, but it lets you paste an input deck in...
+
+#include "deck/wrapper.h"
+
+#include "src/species_advance/species_advance.h"
+#include "src/vpic/vpic.h"
+
+#include "compare_energies.h"
 
 begin_globals {
   double energies_interval;
@@ -35,7 +21,18 @@ begin_globals {
   double restart_interval;
 };
 
-begin_initialization {
+std::string energy_file_name = "./energies";
+
+std::string energy_gold_file_name = GOLD_ENERGY_FILE;
+
+void vpic_simulation::user_diagnostics() {
+    dump_energies(energy_file_name.c_str(), 1);
+}
+
+void
+vpic_simulation::user_initialization( int num_cmdline_arguments,
+                                      char ** cmdline_argument )
+{
   // At this point, there is an empty grid and the random number generator is
   // seeded with the rank. The grid, materials, species need to be defined.
   // Then the initial non-zero fields need to be loaded at time level 0 and the
@@ -117,7 +114,9 @@ begin_initialization {
   ////////////////////////////////////////
   // Setup high level simulation parmeters
 
-  num_step             = 700; //4000; // int(tauwpe/(wpe*dt));
+  // Only the linear growth phase is checked (see the TEST_CASE), so stop
+  // before saturation
+  num_step             = 160; //4000; // int(tauwpe/(wpe*dt));
   status_interval      = 0; //2000;
   sync_shared_interval = 0; //status_interval;
   clean_div_e_interval = 0; //turn off cleaning (GY)//status_interval;
@@ -234,31 +233,45 @@ begin_initialization {
 
   // Do a fast load of the particles
   //seed_rand( rng_seed*nproc() + rank() );  //Generators desynchronized
-  double xmin = grid->x0 , xmax = grid->x0+(grid->dx)*(grid->nx);
-  double ymin = grid->y0 , ymax = grid->y0+(grid->dy)*(grid->ny);
-  double zmin = grid->z0 , zmax = grid->z0+(grid->dz)*(grid->nz);
+  // Global (not local) bounds, see below
+  double xmin = 0 ,        xmax = Lx;
+  double ymin = -0.5*Ly ,  ymax = 0.5*Ly;
+  double zmin = -0.5*Lz ,  zmax = 0.5*Lz;
 
   sim_log( "-> Uniform Bi-Maxwellian" );
 
   double n1,n2,n3;
 
-  repeat ( Ne/nproc() ) {
+  // Make the load independent of the domain decomposition so the same gold
+  // energies apply at any rank count: every rank draws the full global
+  // particle set from one shared generator and inject_particle keeps only the
+  // particles inside the local domain.  Seed 4 is what rng(0) gets from
+  // seed_entropy(1) on one rank with one pipeline, so the particles are the
+  // same random draws as in weibel_legacy.cc, but not bitwise the same run:
+  // the bounds above are the box's double-precision limits, while the legacy
+  // load uses the grid's float members (x0 + dx*nx = 2.09439516 rather than
+  // Lx = 2.09439510), which shifts each x position by up to ~6e-8. That is why
+  // this test has its own gold file, energies_gold_driver, generated from
+  // this load; weibel_legacy.cc keeps the exact legacy run and energies_gold.
+  rng_t * load_rng = new_rng( 4 );
 
-      double x = uniform( rng(0), xmin, xmax );
-      double y = uniform( rng(0), ymin, ymax );
-      double z = uniform( rng(0), zmin, zmax );
-      n1 = normal(rng(0),0,vthex);
-      n2 = normal(rng(0),0,vthe );
-      n3 = normal(rng(0),0,vthe );
+  repeat ( Ne ) {
+
+      double x = uniform( load_rng, xmin, xmax );
+      double y = uniform( load_rng, ymin, ymax );
+      double z = uniform( load_rng, zmin, zmax );
+      n1 = normal(load_rng,0,vthex);
+      n2 = normal(load_rng,0,vthe );
+      n3 = normal(load_rng,0,vthe );
 
       inject_particle( electron, x, y, z,
               n1,
               n2,
               n3,we, 0, 0);
 
-      n1 = normal(rng(0),0,vthix);
-      n2 = normal(rng(0),0,vthi );
-      n3 = normal(rng(0),0,vthi );
+      n1 = normal(load_rng,0,vthix);
+      n2 = normal(load_rng,0,vthi );
+      n3 = normal(load_rng,0,vthi );
 
       inject_particle( ion, x, y, z,
               n1,
@@ -266,6 +279,7 @@ begin_initialization {
               n3,wi, 0 ,0 );
 
   }
+  delete_rng( load_rng );
 
   sim_log( "Finished loading particles" );
 
@@ -299,100 +313,68 @@ begin_initialization {
   // - (periodically) Print a status message
 }
 
-begin_diagnostics {
+TEST_CASE( "Check if Weibel gives correct energy (within tol)", "[energy]" )
+{
+    // Before we run this, we must make sure we remove the energy file
+    std::ofstream ofs;
+    ofs.open(energy_file_name, std::ofstream::out | std::ofstream::trunc);
+    ofs.close();
 
-# define should_dump(x) (global->x##_interval>0 && remainder(step(),global->x##_interval)==0)
+    // Init and run sim
+    vpic_simulation simulation = vpic_simulation();
 
-  if( step()==-10 ) {
-    // A grid dump contains all grid parameters, field boundary conditions,
-    // particle boundary conditions and domain connectivity information. This
-    // is stored in a binary format. Each rank makes a grid dump
-    dump_grid("grid");
+    // TODO: We should do this in a safer manner
+    simulation.initialize( 0, NULL );
 
-    // A materials dump contains all the materials parameters. This is in a
-    // text format. Only rank 0 makes the materials dump
-    dump_materials("materials");
+    while( simulation.advance() );
 
-    // A species dump contains the physics parameters of a species. This is in
-    // a text format. Only rank 0 makes the species dump
-    dump_species("species");
-  }
+    simulation.finalize();
 
-  // Energy dumps store all the energies in various directions of E and B
-  // and the total kinetic (not including rest mass) energies of each species
-  // species in a simple text format. By default, the energies are appended to
-  // the file. However, if a "0" is added to the dump_energies call, a new
-  // energies dump file will be created. The energies are in the units of the
-  // problem and are all time centered appropriately. Note: When restarting a
-  // simulation from a restart dump made at a prior time step to the last
-  // energies dump, the energies file will have a "hiccup" of intervening
-  // time levels. This "hiccup" will not occur if the simulation is aborted
-  // immediately following a restart dump. Energies dumps are in a text
-  // format and the layout is documented at the top of the file. Only rank 0
-  // makes makes an energies dump.
-  if( should_dump(energies) ) {
-    dump_energies( "energies", step()==0 ? 0 : 1 );
-  }
+    if( world_rank==0 ) log_printf( "normal exit\n" );
 
-  // Field dumps store the raw electromagnetic fields, sources and material
-  // placement and a number of auxilliary fields. E, B and RHOB are
-  // timecentered, JF and TCA are half a step old. Material fields are static
-  // and the remaining fields (DIV E ERR, DIV B ERR and RHOF) are for
-  // debugging purposes. By default, field dump filenames are tagged with
-  // step(). However, if a "0" is added to the call, the filename will not be
-  // tagged. The JF that gets stored is accumulated with a charge-conserving
-  // algorithm. As a result, JF is not valid until at least one timestep has
-  // been completed. Field dumps are in a binary format. Each rank makes a
-  // field dump.
-  if( step()==-10 )         dump_fields("fields"); // Get first valid total J
-  if( should_dump(fields) ) dump_fields("fields");
+    std::cout << "Comparing " << energy_file_name << " to " <<
+        energy_gold_file_name << std::endl;
 
-  // Hydro dumps store particle charge density, current density and
-  // stress-energy tensor. All these quantities are known at the time
-  // t = time().  All these quantities are accumulated trilinear
-  // node-centered. By default, species dump filenames are tagged with
-  // step(). However, if a "0" is added to the call, the filename will not
-  // be tagged. Note that the current density accumulated by this routine is
-  // purely diagnostic. It is not used by the simulation and it is not
-  // accumulated using a self-consistent charge-conserving method. Hydro dumps
-  // are in a binary format. Each rank makes a hydro dump.
-  if( should_dump(ehydro) ) dump_hydro("electron","ehydro");
-  if( should_dump(ihydro) ) dump_hydro("ion",     "ihydro");
+    // Only the linear growth phase is compared. Past about step 150 the
+    // instability heads into saturation and becomes chaotic: GPU current
+    // deposition uses atomics, so its rounding varies from run to run, and
+    // that noise grows until GPU runs no longer match the gold file or each
+    // other. Over steps 50-99, CPU and GPU runs stay within ~3e-5 of each
+    // other, while scaling a field-solve, current or push coefficient by
+    // (1+1e-5) moves the E energy by ~1e-4. The full saturated run is still
+    // checked by weibel_legacy.
+    const unsigned short e_mask = 0b0000001110;
+    const unsigned short b_mask = 0b0001110000;
+    const unsigned short particle_mask = 0b011000000;
 
-  // Particle dumps store the particle data for a given species. The data
-  // written is known at the time t = time().  By default, particle dumps
-  // are tagged with step(). However, if a "0" is added to the call, the
-  // filename will not be tagged. Particle dumps are in a binary format.
-  // Each rank makes a particle dump.
-  if( should_dump(eparticle) ) dump_particles("electron","eparticle");
-  if( should_dump(iparticle) ) dump_particles("ion",     "iparticle");
+    // Test the sum of the e_field over steps 50-99
+    REQUIRE(
+            test_utils::compare_energies(energy_file_name, energy_gold_file_name,
+                6e-5, e_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.e.tight.out", 50, 50)
+           );
 
-  // A checkpt is made by calling checkpt( fbase, tag ) where fname is a string
-  // and tag is an integer.  A typical usage is:
-  //   checkpt( "checkpt", step() ).
-  // This will cause each process to write their simulation state to a file
-  // whose name is based on fbase, tag and the node's rank.  For the above
-  // usage, if called on step 314 on a 4 process run, the four files:
-  //   checkpt.314.0, checkpt.314.1, checkpt.314.2, checkpt.314.3
-  // to be written.  The simulation can then be restarted from this point by
-  // invoking the application with "--restore checkpt.314".  checkpt must be
-  // the _VERY_ LAST_ diagnostic called.  If not, diagnostics performed after
-  // the checkpt but before the next timestep will be missed on restore.
-  // Restart dumps are in a binary format unique to the each simulation.
+    // Test the sum of the b_field over steps 50-99
+    REQUIRE(
+            test_utils::compare_energies(energy_file_name, energy_gold_file_name,
+                6e-5, b_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.b.tight.out", 50, 50)
+           );
 
-  if( should_dump(restart) ) checkpt( "checkpt", step() );
+    // Test particle energies over steps 50-99. These change by less than the
+    // 7 digits the energy file keeps, so this only catches gross errors.
+    REQUIRE(
+            test_utils::compare_energies(energy_file_name, energy_gold_file_name,
+                0.0001, particle_mask, test_utils::FIELD_ENUM::Sum, 1, "Weibel.p.tight.out", 50, 50)
+           );
 
-  // If you want to write a checkpt after a certain amount of simulation time,
-  // use uptime() in conjunction with checkpt.  For example, this will cause
-  // the simulation state to be written after 7.5 hours of running to the
-  // same file every time (useful for dealing with quotas on big machines).
-  //if( uptime()>=27000 ) {
-  //  checkpt( "timeout", 0 );
-  //  abort(0);
-  //}
-
-# undef should_dump
-
+    // The growth rate of the magnetic energy during the linear phase is the
+    // physics of the instability. Compare a least-squares fit of ln(B energy)
+    // over steps 60-159 with the same fit of the gold file.
+    const double rate = test_utils::growth_rate(energy_file_name, b_mask, 60, 160);
+    const double gold_rate = test_utils::growth_rate(energy_gold_file_name, b_mask, 60, 160);
+    std::cout << "B energy growth rate " << rate << " per step, gold " << gold_rate
+              << ", relative difference " << std::abs(rate/gold_rate - 1)
+              << " (Threshold: 1e-5)" << std::endl;
+    REQUIRE( std::abs(rate/gold_rate - 1) < 1e-5 );
 }
 
 begin_particle_injection {
@@ -417,4 +399,19 @@ begin_particle_collisions{
 
   // No collisions for this simulation
 
+}
+
+// Manually implement catch main
+int main( int argc, char* argv[] )
+{
+
+    // Setup
+    boot_services( &argc, &argv );
+
+    int result = Catch::Session().run( argc, argv );
+
+    // clean-up...
+    halt_services();
+
+    return result;
 }

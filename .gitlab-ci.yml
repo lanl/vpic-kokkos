@@ -26,8 +26,7 @@ stages:
     - CXX=/mnt/local/ssd/vpic/kokkos/bin/nvcc_wrapper cmake
       -DBUILD_INTERNAL_KOKKOS=ON
       -DENABLE_KOKKOS_CUDA=ON
-      -DENABLE_INTEGRATED_TESTS=ON
-      -DENABLE_UNIT_TESTS=ON
+      -DENABLE_TESTS=ON
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
       -DKOKKOS_ARCH=Kepler35
       ${DEFINES:+${DEFINES}}

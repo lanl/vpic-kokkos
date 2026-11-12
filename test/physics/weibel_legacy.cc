@@ -1,3 +1,9 @@
+// Legacy Weibel test: the deck, particle load and checks exactly as they were
+// before the decomposition-independent load was introduced in weibel_driver.cc.
+// It has caught problems other tests did not, so it is kept as is. Each rank
+// loads its own particles from its own generator, so the gold energies only
+// apply to a single rank; it is run serially.
+//
 //#define CATCH_CONFIG_MAIN  // This tells Catch to provide a main()
 #define CATCH_CONFIG_RUNNER // We will provide a custom main
 #include "catch.hpp"
@@ -296,7 +302,7 @@ vpic_simulation::user_initialization( int num_cmdline_arguments,
   // - (periodically) Print a status message
 }
 
-TEST_CASE( "Check if Weibel gives correct energy (within tol)", "[energy]" )
+TEST_CASE( "Legacy Weibel gives correct energy (within tol)", "[energy]" )
 {
     // Before we run this, we must make sure we remove the energy file
     std::ofstream ofs;
