@@ -20,8 +20,12 @@ vpic_simulation::initialize( int argc,
 
   // Do some consistency checks on user initialized fields
 
+  // The user initialized the fields on the host, and the host kernels below
+  // work on them there, so use the host (legacy_) synchronization functions
+  // until the fields are copied to the device.
+
   if( rank()==0 ) MESSAGE(( "Checking interdomain synchronization" ));
-  TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+  TIC err = FAK->legacy_synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
   if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
 
   if( rank()==0 ) MESSAGE(( "Checking magnetic field divergence" ));
@@ -59,7 +63,7 @@ vpic_simulation::initialize( int argc,
   KOKKOS_TOCN( FIELD_DATA_MOVEMENT, 1);
 #endif
 
-  TIC FAK->synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
+  TIC FAK->legacy_synchronize_rho( field_array ); TOC( synchronize_rho, 1 );
   TIC FAK->compute_rhob( field_array ); TOC( compute_rhob, 1 );
 
   // Internal sanity checks
@@ -72,11 +76,11 @@ vpic_simulation::initialize( int argc,
   TIC FAK->clean_div_e( field_array ); TOC( clean_div_e, 1 );
 
   if( rank()==0 ) MESSAGE(( "Rechecking interdomain synchronization" ));
-  TIC err = FAK->synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
+  TIC err = FAK->legacy_synchronize_tang_e_norm_b( field_array ); TOC( synchronize_tang_e_norm_b, 1 );
   if( rank()==0 ) MESSAGE(( "Error = %e (arb units)", err ));
 
   // We want to call this once the neighbor is done
-  auto g = species_list->g;
+  auto g = grid; // Not species_list->g, as there may be no species
   auto nfaces_per_voxel = 6;
   g->init_kokkos_grid(nfaces_per_voxel*g->nv);
 
