@@ -1,7 +1,13 @@
 #ifndef _rng_h_
 #define _rng_h_
 
+#include <Kokkos_Random.hpp>
 #include "../util_base.h"
+
+// Set Kokkos rng types for device-side rng
+
+using kokkos_rng_pool_t = Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace>;
+using kokkos_rng_state_t = Kokkos::Random_XorShift64<Kokkos::DefaultExecutionSpace>;
 
 /* rng_t opaque handle */
 
@@ -11,8 +17,9 @@ typedef struct rng rng_t;
 /* A rng_pool is a collection of random number generators. */
 
 typedef struct rng_pool {
-  rng_t ** rng; /* Random number generators (indexed 0:n_rng-1) */
-  int n_rng;    /* Number of random number generators in pool */
+  rng_t ** rng;                  /* Host random number generators (indexed 0:n_rng-1) */
+  int n_rng;                     /* Number of random number generators in host pool */
+  kokkos_rng_pool_t k_rng_pool;  /* Device rng pool */
 } rng_pool_t;
 
 /* In rng_pool.c. */
@@ -26,7 +33,7 @@ void
 delete_rng_pool( rng_pool_t * RESTRICT rp ); /* Pool to delete */
 
 /* In seed_rng_pool, seeding is done such that:
-     local_pool = seed_rng_pool( rp, seed, 0 );   
+     local_pool = seed_rng_pool( rp, seed, 0 );
      sync_pool  = seed_rng_pool( rp, seed, 1 );
    gives each local_pool rng and each sync_pool rng has a unique seed
    on all calling processes and that the sync pool rngs are
@@ -66,7 +73,7 @@ seed_rng( rng_t * RESTRICT r,      /* Generator to seed */
      [c,h,i,l,i8,i16,i32,i64,uc,uh,ui,ul,u8,u16,u32,u64]rand[,_fill]
 
    where the generated data type is:
-      c   => char,    uc  => unsigned char, 
+      c   => char,    uc  => unsigned char,
       h   => short,   uh  => unsigned short,
       i   => int,     ui  => unsigned int,
       l   => long,    ul  => unsigned long
@@ -118,7 +125,7 @@ _( i64, int64_t ) _( u64, uint64_t )
    - In the closed variant, 0 or 1 can both be returned.
    - In the half open at 1 variant, 1 can never be returned.
    - In the half open at 0 variant, 0 can never be returned.
-  
+
    There are single generators for each primitive floating point type
    and domain.  Each singleton generator has a corresponding mass
    production generator.  The singleton generators not error trapped
@@ -178,7 +185,7 @@ drandn_fill( rng_t  * RESTRICT r,        /* Generator to use */
 /* The exponential generators generate an exponentially distributed
    random number (f(x) = exp(-x) for x in [0,inf).  Based on the
    transformation method under the hood. */
-   
+
 float                         /* Returns sample deviate */
 frande( rng_t * RESTRICT r ); /* Generator to use */
 
